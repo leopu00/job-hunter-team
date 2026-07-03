@@ -1,21 +1,18 @@
 {
   "source": "betaD-kimi",
-  "tsRange": [
-    "2026-06-27 16:45:11",
-    "2026-07-01 10:21:09"
-  ],
+  "tsRange": ["2026-06-27 16:45:11", "2026-07-03 08:02:16"],
   "totals": {
-    "positions": 59,
-    "scored": 8,
-    "excluded": 21
+    "positions": 69,
+    "scored": 12,
+    "excluded": 23
   },
   "match": {
-    "scored": 40,
-    "avg": 66.2,
+    "scored": 44,
+    "avg": 66.8,
     "min": 39,
     "max": 96,
-    "strong70": 17,
-    "strong80": 9,
+    "strong70": 19,
+    "strong80": 10,
     "buckets": [
       {
         "label": "0-39",
@@ -27,22 +24,22 @@
       },
       {
         "label": "60-69",
-        "n": 6
-      },
-      {
-        "label": "70-79",
         "n": 8
       },
       {
-        "label": "80-100",
+        "label": "70-79",
         "n": 9
+      },
+      {
+        "label": "80-100",
+        "n": 10
       }
     ],
     "composition": [
       {
         "key": "stack",
         "label": "Competenze",
-        "avg": 24.0
+        "avg": 22.4
       },
       {
         "key": "exp",
@@ -57,75 +54,38 @@
       {
         "key": "remote",
         "label": "Modalita",
-        "avg": 18.9
+        "avg": 18.0
       },
       {
         "key": "salary",
         "label": "Retribuzione",
-        "avg": 7.1
+        "avg": 6.8
       }
     ],
     "scores": [
-      39,
-      40,
-      40,
-      41,
-      42,
-      47,
-      48,
-      48,
-      49,
-      55,
-      57,
-      57,
-      58,
-      58,
-      59,
-      59,
-      59,
-      60,
-      65,
-      66,
-      68,
-      68,
-      69,
-      70,
-      73,
-      73,
-      74,
-      74,
-      75,
-      76,
-      78,
-      81,
-      83,
-      86,
-      88,
-      89,
-      91,
-      93,
-      95,
-      96
+      39, 40, 40, 41, 42, 47, 48, 48, 49, 55, 57, 57, 58, 58, 59, 59, 59, 60,
+      65, 65, 66, 66, 68, 68, 69, 70, 72, 73, 73, 74, 74, 75, 76, 78, 81, 83,
+      86, 88, 88, 89, 91, 93, 95, 96
     ]
   },
   "categories": [
     {
       "name": "Luxury Hospitality Operations",
-      "count": 23,
-      "scored": 22,
-      "avg": 74.3
+      "count": 30,
+      "scored": 25,
+      "avg": 74.4
     },
     {
       "name": "Non categorizzato",
-      "count": 14,
+      "count": 16,
       "scored": 0,
       "avg": null
     },
     {
       "name": "Other",
-      "count": 10,
-      "scored": 9,
-      "avg": 54.9
+      "count": 11,
+      "scored": 10,
+      "avg": 55.9
     },
     {
       "name": "Events & Promotions / Hostess",
@@ -143,11 +103,11 @@
   "sources": [
     {
       "name": "linkedin",
-      "count": 26
+      "count": 30
     },
     {
       "name": "hosco",
-      "count": 12
+      "count": 14
     },
     {
       "name": "linkedin-guest",
@@ -158,12 +118,16 @@
       "count": 3
     },
     {
+      "name": "adventurework",
+      "count": 2
+    },
+    {
       "name": "bebee",
       "count": 2
     },
     {
-      "name": "adventurework",
-      "count": 1
+      "name": "resortwork",
+      "count": 2
     },
     {
       "name": "airline-careers",
@@ -178,11 +142,15 @@
       "count": 1
     },
     {
+      "name": "inmatch",
+      "count": 1
+    },
+    {
       "name": "oracle-hcm",
       "count": 1
     },
     {
-      "name": "resortwork",
+      "name": "Altre",
       "count": 1
     }
   ],
@@ -191,10 +159,9 @@
       "day": "2026-06-27",
       "counts": {
         "linkedin": 10,
-        "Altre": 2,
+        "Altre": 3,
         "wizzair": 3,
         "hosco": 9,
-        "emirates": 1,
         "bebee": 2,
         "airline-careers": 1
       }
@@ -203,7 +170,7 @@
       "day": "2026-06-28",
       "counts": {
         "linkedin": 9,
-        "Altre": 1,
+        "resortwork": 1,
         "adventurework": 1,
         "linkedin-guest": 1
       }
@@ -222,6 +189,16 @@
         "linkedin": 3,
         "hosco": 2
       }
+    },
+    {
+      "day": "2026-07-02",
+      "counts": {
+        "linkedin": 4,
+        "hosco": 2,
+        "adventurework": 1,
+        "Altre": 2,
+        "resortwork": 1
+      }
     }
   ],
   "sourcesDailyKeys": [
@@ -229,10 +206,10 @@
     "hosco",
     "linkedin-guest",
     "wizzair",
-    "bebee",
     "adventurework",
+    "bebee",
+    "resortwork",
     "airline-careers",
-    "emirates",
     "Altre"
   ],
   "sourcesScoreDaily": [
@@ -240,9 +217,8 @@
       "day": "2026-06-27",
       "score": {
         "linkedin": 70.0,
-        "Altre": 79.0,
+        "Altre": 77.0,
         "wizzair": 59.0,
-        "emirates": 73.0,
         "bebee": 95.0,
         "airline-careers": 70.0
       }
@@ -251,7 +227,7 @@
       "day": "2026-06-28",
       "score": {
         "linkedin": 62.1,
-        "Altre": 96.0,
+        "resortwork": 96.0,
         "adventurework": 89.0,
         "linkedin-guest": 68.0
       }
@@ -268,9 +244,20 @@
       "score": {
         "linkedin": 48.5
       }
+    },
+    {
+      "day": "2026-07-02",
+      "score": {
+        "linkedin": 72.8
+      }
     }
   ],
   "sourcesScore": [
+    {
+      "name": "resortwork",
+      "avg": 96.0,
+      "n": 1
+    },
     {
       "name": "bebee",
       "avg": 95.0,
@@ -283,13 +270,8 @@
     },
     {
       "name": "Altre",
-      "avg": 84.7,
+      "avg": 77.0,
       "n": 3
-    },
-    {
-      "name": "emirates",
-      "avg": 73.0,
-      "n": 1
     },
     {
       "name": "airline-careers",
@@ -298,8 +280,8 @@
     },
     {
       "name": "linkedin",
-      "avg": 64.9,
-      "n": 23
+      "avg": 66.1,
+      "n": 27
     },
     {
       "name": "wizzair",
@@ -316,7 +298,7 @@
     {
       "name": "Italy",
       "code": "IT",
-      "count": 30
+      "count": 38
     },
     {
       "name": "Italia",
@@ -344,6 +326,7 @@
     "analista-2",
     "analista-3",
     "analista-5",
+    "analista-6",
     "scorer-1",
     "scorer-3",
     "scorer-4",
@@ -1545,6 +1528,126 @@
       "ts": "2026-07-01T10:21:09Z",
       "agent": "scrittore-5",
       "action": "ready"
+    },
+    {
+      "ts": "2026-07-02T13:06:11Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-02T13:06:11Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-02T13:06:11Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-02T13:06:11Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-02T13:13:35Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-02T13:21:32Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-02T13:29:53Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-02T13:41:43Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-02T13:53:53Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-02T13:54:57Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-02T13:55:32Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-02T13:56:07Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-02T15:24:54Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-02T15:24:55Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-02T15:31:42Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-02T15:31:42Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-02T15:33:51Z",
+      "agent": "analista-6",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-02T16:04:06Z",
+      "agent": "analista-6",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-02T16:16:35Z",
+      "agent": "analista-6",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-02T16:34:26Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-02T17:35:55Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-03T07:37:43Z",
+      "agent": "analista-6",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-03T08:00:36Z",
+      "agent": "analista-6",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-03T08:02:16Z",
+      "agent": "analista-6",
+      "action": "checked"
     }
   ],
   "hourly": [
@@ -1793,6 +1896,52 @@
         "scrittore": 14
       },
       "cum": 87
+    },
+    {
+      "hour": "2026-07-02T13",
+      "counts": {
+        "scout": 4,
+        "analista": 4,
+        "scorer": 4
+      },
+      "cum": 92
+    },
+    {
+      "hour": "2026-07-02T15",
+      "counts": {
+        "scout": 4,
+        "analista": 1
+      },
+      "cum": 3
+    },
+    {
+      "hour": "2026-07-02T16",
+      "counts": {
+        "analista": 2,
+        "scout": 1
+      },
+      "cum": 4
+    },
+    {
+      "hour": "2026-07-02T17",
+      "counts": {
+        "scout": 1
+      },
+      "cum": 4
+    },
+    {
+      "hour": "2026-07-03T07",
+      "counts": {
+        "analista": 1
+      },
+      "cum": 8
+    },
+    {
+      "hour": "2026-07-03T08",
+      "counts": {
+        "analista": 2
+      },
+      "cum": 9
     }
   ],
   "funnelDaily": [
@@ -1827,20 +1976,28 @@
       "kept": 2,
       "scored": 1,
       "ready": 1
+    },
+    {
+      "day": "2026-07-02",
+      "found": 10,
+      "excluded": 2,
+      "kept": 8,
+      "scored": 4,
+      "ready": 0
     }
   ],
   "funnelTotals": {
-    "found": 59,
-    "excluded": 21,
-    "kept": 38,
-    "scored": 8,
+    "found": 69,
+    "excluded": 23,
+    "kept": 46,
+    "scored": 12,
     "ready": 30
   },
   "conversion": {
-    "found": 59,
-    "scored": 40,
-    "strong70": 17,
-    "strong80": 9
+    "found": 69,
+    "scored": 44,
+    "strong70": 19,
+    "strong80": 10
   },
   "scoreDaily": [
     {
@@ -1866,6 +2023,12 @@
       "scored": 2,
       "strong70": 0,
       "strong80": 0
+    },
+    {
+      "day": "2026-07-02",
+      "scored": 4,
+      "strong70": 2,
+      "strong80": 1
     }
   ],
   "usage": {
@@ -1901,21 +2064,25 @@
         "pct": 15,
         "cum": 89,
         "week": "2026-06-27"
+      },
+      {
+        "day": "2026-07-02",
+        "pct": 5.0,
+        "cum": 5,
+        "week": "2026-07-02"
+      },
+      {
+        "day": "2026-07-03",
+        "pct": 5,
+        "cum": 10,
+        "week": "2026-07-02"
       }
     ],
     "workingHours": {
       "timezone": "Europe/Rome",
       "windows": [
         {
-          "days": [
-            "mon",
-            "tue",
-            "wed",
-            "thu",
-            "fri",
-            "sat",
-            "sun"
-          ],
+          "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
           "start": "09:00",
           "end": "19:00"
         }
