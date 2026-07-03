@@ -3,7 +3,6 @@
 // Very first screen on a fresh install: big-title welcome + pitch, with
 // two entry points ("Start" for new users, "Sign in" for returning ones).
 export const STEP_WELCOME_INTRO = 'welcome-intro'
-export const STEP_LANGUAGE = 'language'
 export const STEP_WELCOME = 'welcome'
 export const STEP_LOCATION = 'location'
 export const STEP_SUPABASE_LOGIN = 'supabase-login'
