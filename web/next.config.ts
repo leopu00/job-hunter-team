@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 // Bundle analyzer: attivo solo con ANALYZE=true per non rallentare le
 // build normali. `npm run analyze` da web/ apre i report HTML in
 // .next/analyze/client.html e server.html (vedi
-// docs/internal/2026-05-22-vercel-quota-exhaustion.md insight #10).
+// docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md insight #10).
 const withBundleAnalyzer = withBundleAnalyzerInit({
   enabled: process.env.ANALYZE === 'true',
   openAnalyzer: false,
@@ -61,7 +61,6 @@ const nextConfig: NextConfig = {
       path.join(MONOREPO_ROOT, 'tui/**'),
       path.join(MONOREPO_ROOT, 'agents/**'),
       path.join(MONOREPO_ROOT, 'e2e/**'),
-      path.join(MONOREPO_ROOT, 'telegram-bridge/**'),
       path.join(MONOREPO_ROOT, 'tests/**'),
       path.join(MONOREPO_ROOT, 'docs/**'),
       path.join(MONOREPO_ROOT, 'scripts/**'),

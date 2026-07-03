@@ -65,5 +65,5 @@ e.g. "ran `jht doctor`", "wiped ~/.jht and re-ran setup",
 
 <!--
 Once submitted, expect a triage label within ~48h (see
-docs/internal/triage.md for the contract). No fix SLA in beta.
+docs/internal/ops/triage.md for the contract). No fix SLA in beta.
 -->

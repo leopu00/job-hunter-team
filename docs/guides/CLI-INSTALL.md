@@ -176,14 +176,14 @@ If `$JHT_BIN_DIR` is not on `$PATH`, the script warns and prints the
 
 ## 📜 Legacy onboarding: `setup.sh` / `setup.ps1`
 
-The repo also ships `setup.sh` (bash) and `setup.ps1` (PowerShell) at
-the root. **These are not the one-liner installer.** They both print a
+The repo also ships `scripts/setup.sh` (bash) and `scripts/setup.ps1`
+(PowerShell). **These are not the one-liner installer.** They both print a
 deprecation banner pointing at `https://jobhunterteam.ai/install.sh`.
 
 They exist for the case "I already cloned the repo and want a
 deterministic Python/Node onboarding from source": they create
 `.venv/`, install `requirements.txt`, copy `.env.example` →`.env`,
-copy `candidate_profile.yml.example` → `candidate_profile.yml`, run
+copy `docs/examples/candidate_profile.yml.example` → `candidate_profile.yml`, run
 `npm install` in `web/`, install the git pre-commit hook, init the
 SQLite DB, and print next steps.
 

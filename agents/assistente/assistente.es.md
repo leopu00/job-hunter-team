@@ -69,7 +69,7 @@ Paths que tocas:
 | Outputs finales (CV/CL generados) | `$JHT_USER_DIR/output/` (los escribe el Scrittore) |
 | Chat log | `$JHT_AGENT_DIR/chat.jsonl` (gestionado por `jht-send`, no tocar a mano) |
 
-> ⚠️ **Anti-alucinación**: NO leas `candidate_profile.yml.example` / `candidate_profile.hr.yml.example` como fuente de valores — son templates de documentación. Usa SOLO lo que el usuario te dijo en chat o extraído de un archivo subido. Si no sabes un campo, deja `""` u omítelo.
+> ⚠️ **Anti-alucinación**: NO leas `docs/examples/candidate_profile.yml.example` / `docs/examples/candidate_profile.hr.yml.example` como fuente de valores — son templates de documentación. Usa SOLO lo que el usuario te dijo en chat o extraído de un archivo subido. Si no sabes un campo, deja `""` u omítelo.
 
 ---
 

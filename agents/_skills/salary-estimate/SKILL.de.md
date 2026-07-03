@@ -127,7 +127,7 @@ Woche Betrieb.
 ## Siehe auch
 
 - `agents/_skills/db-update/SKILL.md` § Positions — `salary-estimated-*`
-- `candidate_profile.yml.example` — `salary_annual_eur` (Kandidatenziel,
+- `docs/examples/candidate_profile.yml.example` — `salary_annual_eur` (Kandidatenziel,
   Side-Fix Bug #27)
 - `agents/_skills/mentor-output/SKILL.md` — "5 passiv" verstecken wenn
   `notes` `no_data_default` enthält

@@ -129,7 +129,7 @@ alatt.
 ## Lásd még
 
 - `agents/_skills/db-update/SKILL.md` § Positions — `salary-estimated-*`
-- `candidate_profile.yml.example` — `salary_annual_eur` (jelölt target,
+- `docs/examples/candidate_profile.yml.example` — `salary_annual_eur` (jelölt target,
   side-fix bug #27)
 - `agents/_skills/mentor-output/SKILL.md` — elrejti a "passzív 5"-öt, ha
   a `notes` tartalmazza a `no_data_default` értéket

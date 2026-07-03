@@ -47,7 +47,7 @@ message, a missing explanation — anything. -->
 <!-- Free text. Tell us anything we didn't ask. -->
 
 <!--
-Triage SLA: a label within ~48h (see docs/internal/triage.md).
+Triage SLA: a label within ~48h (see docs/internal/ops/triage.md).
 You don't need to file a bug report separately — if we spot a bug
 inside your feedback, we'll tag and track it.
 -->

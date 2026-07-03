@@ -16,7 +16,7 @@ TARGET_BAND_CENTER fisso 92% nel pacing-bridge), e metadata per la UI.
 
 Provider-agnostic: ratio=None → fallback al target_band classico (Kimi);
 ratio>0 → distribuzione proporzionale alle ore ON del weekly cap (Codex,
-Claude). Vedi docs/internal/2026-05-25-work-hours-design.md.
+Claude). Vedi docs/internal/architecture/2026-05-25-work-hours-design.md.
 """
 from __future__ import annotations
 

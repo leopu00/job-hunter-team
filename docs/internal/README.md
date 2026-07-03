@@ -1,7 +1,8 @@
 # 📚 docs/internal — indice
 
 Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni.
-Organizzate per **categoria** in sotto-cartelle.
+Organizzate per **categoria** in sotto-cartelle. Come scrivere una nuova nota: vedi
+[Protocollo note interne](#-protocollo-note-interne) in fondo.
 
 > Per i doc utente-facing vedi `docs/about/`, `docs/guides/`, `docs/security/`.
 
@@ -12,14 +13,15 @@ Organizzate per **categoria** in sotto-cartelle.
 | Cartella | Contenuto |
 |---|---|
 | [`architecture/`](architecture/) | Spec & design di sistema (living docs + design lock) |
-| [`postmortems/`](postmortems/) | Incidenti, diagnosi e investigazioni datate |
+| [`postmortems/`](postmortems/) | Incidenti, diagnosi, investigazioni e osservazioni datate |
 | [`experiments/`](experiments/) | Simulazioni, studi, playbook, case study |
-| [`roadmap/`](roadmap/) | Piani tecnici, backlog, tracker |
+| [`roadmap/`](roadmap/) | Piani tecnici, backlog, tracker, idee parcheggiate |
 | [`ops/`](ops/) | Infra, VPS, release, triage, credenziali |
-| [`qa-reports/`](qa-reports/) | Report E2E/QA storici (run agenti) |
 | [`_archive/`](_archive/) | Note superate, conservate per git-blame |
 
-File di root: [`chronicles-canon.md`](chronicles-canon.md) (canon narrativo). Il log review è in [`../REVIEW-LOG.md`](../REVIEW-LOG.md).
+File di root: [`chronicles-canon.md`](chronicles-canon.md) (canone narrativo delle Cronache /chronicles) e
+[`landing-image-prompts.md`](landing-image-prompts.md) (prompt immagini del sito + rifiniture aperte).
+Il log review è in [`../REVIEW-LOG.md`](../REVIEW-LOG.md).
 
 ---
 
@@ -31,12 +33,21 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 |---|---|
 | [`cloud-sync-architecture.md`](architecture/cloud-sync-architecture.md) | Sync DB locale ↔ Supabase: cosa va in cloud, macro-event design |
 | [`2026-06-20-data-sync-and-dashboard-split-design.md`](architecture/2026-06-20-data-sync-and-dashboard-split-design.md) | 🔄 Sync on-access + "Sync now" (no polling), event-log push, corsia richieste async, split dashboard locale/cloud |
+| [`daemon-sync-redesign.md`](architecture/daemon-sync-redesign.md) | 🔌 Daemon: letture Supabase dirette (Fase 1) + event-driven Realtime (7/7 dietro flag `JHT_REALTIME_SYNC`); niente Fase 3 |
+| [`2026-06-15-interaction-planes-redesign-design.md`](architecture/2026-06-15-interaction-planes-redesign-design.md) | Piani di interazione: web cloud read-only, desktop cockpit (locale + tunnel SSH), Telegram opzionale |
 | [`candidate-profile-cloud-sync-redesign.md`](architecture/candidate-profile-cloud-sync-redesign.md) | Redesign sync profilo candidato |
 | [`file-bridge-on-demand.md`](architecture/file-bridge-on-demand.md) | Pull-on-demand file via Supabase Storage |
 | [`context-watchdog-spec.md`](architecture/context-watchdog-spec.md) | Restart periodico agenti via Dottore (anti context saturation) |
 | [`onboarding-flow.md`](architecture/onboarding-flow.md) | Sequenza canonica onboarding: location → sync → Telegram → provider |
-| [`team-commands-bus.md`](architecture/team-commands-bus.md) | Channel comandi web → VPS via `team_commands` table |
+| [`skill-distribution.md`](architecture/skill-distribution.md) | Isolamento skill per-agente: distribuzione launcher-driven (no walk-up), layout pool + punch list |
 | [`bot-telegram.md`](architecture/bot-telegram.md) | Design bot Telegram (3 bot obbligatori), ingest documenti, working hours |
+| [`bridges.md`](architecture/bridges.md) | Role-map dei 3 bridge (.launcher): sentinel / pacing / heartbeat |
+| [`2026-06-15-lean-comms-redesign.md`](architecture/2026-06-15-lean-comms-redesign.md) | Comunicazione interna team push→pull: notify solo a hand-off/safety, coordinamento via DB + capture-pane |
+| [`2026-06-25-bridge-to-sentinella-pull-model.md`](architecture/2026-06-25-bridge-to-sentinella-pull-model.md) | Pacing push→pull: il bridge notifica solo la Sentinella, il Capitano tira on-demand (premessa quantitativa ridimensionata 02/07) |
+| [`2026-06-26-capitano-graceful-scaling-paced-consumption.md`](architecture/2026-06-26-capitano-graceful-scaling-paced-consumption.md) | Scaling graduale del Capitano (skill `scaling-calc`), throttle floor sui worker, day-spread + riserva serale |
+| [`2026-06-28-weekly-pacing-redesign.md`](architecture/2026-06-28-weekly-pacing-redesign.md) | Weekly pacing: verdetto imperativo + valuta token (dev3) e debt-aware con `debt_pct` (dev6) — gated sul deploy |
+| [`2026-06-29-status-weekly-aware.md`](architecture/2026-06-29-status-weekly-aware.md) | `status` = vincolo binding dei 2 assi (5h ∧ weekly) — prototipo, non deployato |
+| [`2026-06-20-taxonomy-brain-driven-redesign.md`](architecture/2026-06-20-taxonomy-brain-driven-redesign.md) | Tassonomia brain-driven: analista promuove dai grappoli, Capitano arbitro (C-17), auto-pass rimosso — deployato |
 | [`2026-05-25-work-hours-design.md`](architecture/2026-05-25-work-hours-design.md) | Design working hours team |
 | [`2026-05-20-world-globe-feature.md`](architecture/2026-05-20-world-globe-feature.md) | Spec mappamondo dashboard (coordinate ufficio) |
 | [`2026-05-19-dashboard-routing-cases.md`](architecture/2026-05-19-dashboard-routing-cases.md) | Casi routing dashboard Next.js |
@@ -46,14 +57,34 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 | [`dottore-redesign-design.md`](architecture/dottore-redesign-design.md) | Ridisegno ruolo Dottore (context-refresh) |
 | [`usage-monitoring-redesign-design.md`](architecture/usage-monitoring-redesign-design.md) | Ridisegno monitoraggio usage (Sentinella ↔ Capitano) |
 | [`kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md) | 💰 Economia provider (living): coordinatori ~20% uguali · budget Kimi ~2× (non 17×) · €/token ≈ pari · vero limite = precisione |
-| [`bridges.md`](architecture/bridges.md) | Role-map dei 3 bridge (.launcher): sentinel / pacing / heartbeat |
 
 ## 📉 postmortems/
 
-Note datate su incidenti specifici, diagnosi, snapshot. **Non aggiornate dopo la chiusura** — la decisione live finisce nelle spec di `architecture/`.
+Note datate su incidenti specifici, diagnosi, investigazioni e osservazioni.
+**Non aggiornate dopo la chiusura** (correzioni = banner datato in testa) — la decisione live finisce nelle spec di `architecture/`.
 
 | Data | File | Topic |
 |---|---|---|
+| 2026-07-02 | [`2026-07-02-kimi-codex-token-forensics.md`](postmortems/2026-07-02-kimi-codex-token-forensics.md) | Misura token Kimi vs Codex in 2 passate: coordinatori ~20% uguali, budget ~2,7×, €/token ≈ pari → living doc economia |
+| 2026-07-02 | [`2026-07-02-daily-halt-standby-leak.md`](postmortems/2026-07-02-daily-halt-standby-leak.md) | Daily hard-stop su betaB: funziona ma lo standby perde ~1–2%/notte (risvegli da timer di throttle) — fix aperti |
+| 2026-07-01 | [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md) | Capitano Kimi `--no-thinking` inverte C-10 e ordina 30 CV mai richiesti → Capitano thinking ON (deployato) |
+| 2026-07-01 | [`2026-07-01-betaD-daily-hardstop-validated.md`](postmortems/2026-07-01-betaD-daily-hardstop-validated.md) | Prima attivazione live del daily hard-stop su betaD: catena completa validata end-to-end |
+| 2026-07-01 | [`2026-07-01-cv-quality-findings-beta3.md`](postmortems/2026-07-01-cv-quality-findings-beta3.md) | 4 difetti CV/CL beta-3 (lingue ripetute, registro dev, sources ignorate, titolo CL) + Critico lasco — 5 fix gated |
+| 2026-06-30 | [`2026-06-30-reset-always-full-date.md`](postmortems/2026-06-30-reset-always-full-date.md) | Classe di bug "HH:MM senza data" sul reset weekly: fonte di verità epoch + choke point `fmt_reset()` |
+| 2026-06-28 | [`2026-06-28-betaD-vps-budget-burn-investigation.md`](postmortems/2026-06-28-betaD-vps-budget-burn-investigation.md) | 39% weekly in <24h su betaD: coordinatori always-on, agente-fantasma `resume` (bug attribuzione), Dottore scagionato |
+| 2026-06-27 | [`2026-06-27-betaC-sentinel-bridge-crash.md`](postmortems/2026-06-27-betaC-sentinel-bridge-crash.md) | Sentinel-bridge morto ~8h senza supervisione → fix 4-layer (hardening, respawn watchdog, canary Mantenitore) |
+| 2026-06-26 | [`2026-06-26-sentinella-capitano-relationship-live.md`](postmortems/2026-06-26-sentinella-capitano-relationship-live.md) | Rapporto "Sentinella consiglia / Capitano verifica e decide" validato live + fix throttle che non scalava |
+| 2026-06-25 | [`2026-06-25-rollout-observation-betaB.md`](postmortems/2026-06-25-rollout-observation-betaB.md) | Rollout push→pull: il Capitano aspetta un tick che non arriverà mai e scavalca la Sentinella → gerarchia ribaltata |
+| 2026-06-25 | [`2026-06-25-desktop-team-integration-findings.md`](postmortems/2026-06-25-desktop-team-integration-findings.md) | Desktop↔team: `isLocalRequest` vs port-map Docker, controllo via `docker exec`, CSRF Electron, channel-awareness agenti |
+| 2026-06-24 | [`2026-06-24-betaB-kimi-fresh-weekly-monitor.md`](postmortems/2026-06-24-betaB-kimi-fresh-weekly-monitor.md) | Monitor live su account Kimi fresco: rabbit-hole Scout-6, kill/[RIPRENDI], fix batch≤5 + cap100 (diario a snapshot) |
+| 2026-06-24 | [`2026-06-24-betaA-weekly-milestones.md`](postmortems/2026-06-24-betaA-weekly-milestones.md) | Milestone weekly Codex: 99% su ciclo corto (18/06) e 100% pieno a 10 minuti dalla chiusura (24/06) |
+| 2026-06-24 | [`2026-06-24-vercel-cost-analysis-and-sync-fix.md`](postmortems/2026-06-24-vercel-cost-analysis-and-sync-fix.md) | Spesa Vercel guidata dal polling dei daemon (Observability 60%); mig 045; −45% dopo il ritiro poller v0.1.22 |
+| 2026-06-22 | [`2026-06-22-kimi-weekly-frontload-investigation.md`](postmortems/2026-06-22-kimi-weekly-frontload-investigation.md) | Causa-radice front-load Kimi: seed fossile `weekly_unlimited` in `provider_capacity.py` bypassa il ramo weekly-aware |
+| 2026-06-21 | [`2026-06-21-throttle-floor-5min-analysis.md`](postmortems/2026-06-21-throttle-floor-5min-analysis.md) | Analisi throttle-events: mille micro-freni <5min → floor 5min + ladder enforced nel codice |
+| 2026-06-21 | [`2026-06-21-betaA-daily-actions-drop-finding.md`](postmortems/2026-06-21-betaA-daily-actions-drop-finding.md) | Azioni/giorno 70→30: il pacing spalma il weekly + saturazione scout — work-limited, non budget-limited |
+| 2026-06-17 | [`2026-06-17-betaB-kimi-weekly-burn-finding.md`](postmortems/2026-06-17-betaB-kimi-weekly-burn-finding.md) | Weekly Kimi esaurito in 2,1 giorni: backfill storm dell'arretrato dopo il deploy RULE-12/13/14 |
+| 2026-06-16 | [`2026-06-16-betaA-taxonomy-collapse-finding.md`](postmortems/2026-06-16-betaA-taxonomy-collapse-finding.md) | Collasso tassonomia a 1 categoria su betaA (diagnosi in parte superata dal redesign brain-driven del 20/06) |
+| 2026-06-15 | [`2026-06-15-coordinator-burn-consumo-finding.md`](postmortems/2026-06-15-coordinator-burn-consumo-finding.md) | Coniato il "coordinator-burn": turno LLM per bridge-tick anche a no-op (quota poi ridimensionata il 02/07) |
 | 2026-06-14 | [`2026-06-14-betaA-risveglio-dottore-mantenitore-observation.md`](postmortems/2026-06-14-betaA-risveglio-dottore-mantenitore-observation.md) | Osservazione risveglio betaA (Dottore + Mantenitore in azione) |
 | 2026-06-14 | [`2026-06-14-betaB-team-panoramica.md`](postmortems/2026-06-14-betaB-team-panoramica.md) | Panoramica team betaB (Kimi) |
 | 2026-06-14 | [`2026-06-14-weekly-bind-not-enforced-finding.md`](postmortems/2026-06-14-weekly-bind-not-enforced-finding.md) | Weekly-bind non enforced: pacing su arco-5h, mai weekly |
@@ -91,17 +122,19 @@ Simulazioni, studi comparativi, playbook e case study.
 
 ## 🛣️ roadmap/
 
-Piani tecnici, backlog, tracker. Aggiornati finché aperti.
+Piani tecnici, backlog, tracker e idee parcheggiate. Aggiornati finché aperti.
 
 | File | Topic |
 |---|---|
-| [`2026-06-14-piano-dse3-parteB.md`](roadmap/2026-06-14-piano-dse3-parteB.md) | Piano dse3 Parte B (pacing + request-tables + recheck) |
+| [`MINOR-TRACKER.md`](roadmap/MINOR-TRACKER.md) | Tracker mini-fix e debt non-blocker (CI/lint, cross-platform, TODO inline, note) |
+| [`db-schema-optimization.md`](roadmap/db-schema-optimization.md) | Evoluzione schema jobs.db (position_events, critic rounds, captain_decisions) — alimenta la missione M7 |
+| [`2026-06-30-B1-deterministic-pacing-idea.md`](roadmap/2026-06-30-B1-deterministic-pacing-idea.md) | Idea B1: pacing deterministico ATTUA + LLM SUPERVISIONA (parcheggiata; partire da shadow-log) |
+| [`2026-06-25-pacing-future-ideas.md`](roadmap/2026-06-25-pacing-future-ideas.md) | Even-spread giornaliero (cap→target) + riserva budget per richieste utente (aperte) |
+| [`2026-06-20-proj-volatile-pacing-todo.md`](roadmap/2026-06-20-proj-volatile-pacing-todo.md) | `[PACING-PROJ-VOLATILE]`: gate del bridge su `proj` volatile — deferred, non toccare a caldo |
 | [`2026-06-06-idle-enrichment-roadmap.md`](roadmap/2026-06-06-idle-enrichment-roadmap.md) | Roadmap arricchimento durante idle |
-| [`2026-05-23-position-classifier-llm-roadmap.md`](roadmap/2026-05-23-position-classifier-llm-roadmap.md) | Roadmap classificatore posizioni LLM |
-| [`2026-05-20-supabase-perf-backlog.md`](roadmap/2026-05-20-supabase-perf-backlog.md) | Backlog performance Supabase |
 | [`2026-06-05-pacing-migration-plan.md`](roadmap/2026-06-05-pacing-migration-plan.md) | Piano migrazione pacing |
 | [`2026-06-04-pii-sanitization-plan.md`](roadmap/2026-06-04-pii-sanitization-plan.md) | Piano sanitizzazione PII storia repo |
-| [`MINOR-TRACKER.md`](roadmap/MINOR-TRACKER.md) | Tracker mini-fix (Prettier, debt, Windows dev) |
+| [`2026-05-23-position-classifier-llm-roadmap.md`](roadmap/2026-05-23-position-classifier-llm-roadmap.md) | Roadmap classificatore posizioni LLM |
 
 ## ⚙️ ops/
 
@@ -116,38 +149,41 @@ Infra, deploy, lifecycle, accessi.
 | [`access-and-credentials.md`](ops/access-and-credentials.md) | Accessi e credenziali |
 | [`MAINTAINERS.md`](ops/MAINTAINERS.md) | Coordinamento maintainer: Supabase, Vercel, OAuth, code signing |
 
-## 🧪 qa-reports/
-
-Report E2E/QA storici prodotti dagli agenti di test (marzo 2026). Formato `.txt`.
-
-| File | Topic |
-|---|---|
-| [`e2e-edge-cases-report.txt`](qa-reports/e2e-edge-cases-report.txt) | E2E edge cases & robustezza |
-| [`qa-onboarding-report.txt`](qa-reports/qa-onboarding-report.txt) | QA onboarding |
-| [`test-pipeline-e2e-nondev.txt`](qa-reports/test-pipeline-e2e-nondev.txt) | Pipeline E2E profilo non-dev |
-| [`test-profili-non-dev.txt`](qa-reports/test-profili-non-dev.txt) | Test 3 profili non-dev |
-| [`test-report-fresh-setup.txt`](qa-reports/test-report-fresh-setup.txt) | Fresh setup + multi-profilo |
-
 ## 🗄️ _archive/
 
 Note storiche superate o consolidate altrove. Conservate per git-blame e ricerca, non più aggiornate.
 
 | File | Motivo archive |
 |---|---|
-| [`_archive/2026-05-06-launch-infra-costs.md`](_archive/2026-05-06-launch-infra-costs.md) | Stima costi pre-launch superata |
-| [`_archive/2026-05-17-team-strategy-bugs.md`](_archive/2026-05-17-team-strategy-bugs.md) | Bug strategy team, fix applicati |
+| [`_archive/BACKLOG-2026-07-03-frozen.md`](_archive/BACKLOG-2026-07-03-frozen.md) | Snapshot integrale del BACKLOG pre-ristrutturazione (1487 righe): ogni [TAG] chiuso si risolve qui |
+| [`_archive/2026-06-14-piano-dse3-parteB.md`](_archive/2026-06-14-piano-dse3-parteB.md) | Piano dse3 Parte B — bozza mai implementata, superata |
+| [`_archive/2026-05-20-supabase-perf-backlog.md`](_archive/2026-05-20-supabase-perf-backlog.md) | Backlog perf Supabase — P0-P2 applicati 2026-05-31, resta solo monitoring pool (nel BACKLOG index) |
+| [`_archive/2026-06-29-coordinator-burn-kimi-vs-codex.md`](_archive/2026-06-29-coordinator-burn-kimi-vs-codex.md) | Snapshot congelato dell'indagine coordinator-burn; conclusioni quantitative superate dal living doc `architecture/kimi-vs-codex-economics.md` |
+| [`_archive/2026-06-29-dottore-offhours-burn-finding.md`](_archive/2026-06-29-dottore-offhours-burn-finding.md) | Finding errato (il gate off-hours del Dottore esisteva già); tenuto come lezione metodologica |
+| [`_archive/2026-06-15-sync-web-release-gate-finding.md`](_archive/2026-06-15-sync-web-release-gate-finding.md) | Gate release master→production superato dagli eventi (release effettuate fino a v0.1.22) |
 | [`_archive/2026-05-18-beta-tester-onboarding.md`](_archive/2026-05-18-beta-tester-onboarding.md) | Piano prep beta kick-off 2026-05-18 (behind-the-scenes maintainer); user guide → `guides/BETA.md` |
 | [`_archive/2026-05-01-bridge-and-token-monitoring.md`](_archive/2026-05-01-bridge-and-token-monitoring.md) | Brainstorming bridge V6 + token-monitoring; idee ora shipped (monitoring stack / work-hours / cloud-sync) |
-| [`_archive/2026-05-20-tour-persistence.md`](_archive/2026-05-20-tour-persistence.md) | Persistenza tour onboarding, implementata |
-| [`_archive/2026-05-20-vps-bootstrap-bugs.md`](_archive/2026-05-20-vps-bootstrap-bugs.md) | Bug bootstrap VPS, fix validati in `postmortems/2026-05-21-vps-bootstrap-fixes-validated.md` |
-| [`_archive/TODO-bridge-v7.md`](_archive/TODO-bridge-v7.md) | TODO bridge v7, completato |
 
 ---
 
-## 📝 Convenzioni
+## 📝 Protocollo note interne
 
-- **File datati** (`YYYY-MM-DD-<slug>.md`) = snapshot temporale. Non riscrivere la storia dopo la chiusura.
-- **File no-date** (`<topic>.md`) = spec/playbook live. Aggiornare in place.
-- Quando una nota datata diventa spec evergreen, **rinominare** droppando la data e spostarla in `architecture/`.
-- File obsoleti → `_archive/` con `git mv` per preservare history.
-- Nuovi file: scegliere la sotto-cartella per categoria (vedi tabella sopra).
+Regole pratiche per scrivere e mantenere questi doc senza doversi studiare la struttura.
+
+1. **Nuova nota → root, al volo.** Scrivi `YYYY-MM-DD-<slug>.md` direttamente in `docs/internal/`.
+   Non serve scegliere subito la categoria né aggiornare l'indice.
+2. **Smistamento periodico.** Quando in root si accumulano ~10 note (o a fine ciclo di lavoro) si
+   smistano nelle sotto-cartelle con `git mv` e si aggiorna questo README.
+3. **File datati = snapshot.** Dopo la chiusura non si riscrivono. Se una conclusione si rivela
+   sbagliata o superata, si aggiunge un **banner datato in testa** che rimanda alla verità nuova
+   (pattern già in uso, es. taxonomy-collapse, coordinator-burn).
+4. **File senza data = living doc.** Spec/playbook aggiornati in place, in `architecture/` o `ops/`.
+   Quando più snapshot convergono su una verità stabile, questa si consolida in un living doc
+   (pattern `kimi-vs-codex-economics.md`); gli snapshot restano come fonte.
+5. **Doc gemelli** (stesso tema, stessi giorni) → si unificano in un solo file: contenuto integrale
+   per parti, ogni parte con la nota `origine:` (pattern `daemon-sync-redesign.md`,
+   `2026-06-28-weekly-pacing-redesign.md`).
+6. **Superati o errati** → `_archive/` con `git mv` + motivo nella tabella qui sopra. Mai cancellare:
+   valgono come storia di come ci siamo arrivati.
+7. **Riferimenti nel codice.** Se un doc è citato in commenti di codice (`.launcher/`, `cli/`,
+   `agents/`, test, migration), aggiornare i path quando lo si sposta (`grep -rn` sul basename).

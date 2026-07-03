@@ -39,7 +39,7 @@
 # ║    -PairingToken     Token opaco per VPS pairing (skippa wizard)         ║
 # ║    -SkipOnboard      Non lanciare il wizard alla fine                    ║
 # ║                                                                          ║
-# ║  Riferimento design: docs/internal/vps.md                                ║
+# ║  Riferimento design: docs/internal/ops/vps.md                                ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 [CmdletBinding()]

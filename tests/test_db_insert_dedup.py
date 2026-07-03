@@ -1,7 +1,7 @@
 """Test dedup positions in shared/skills/db_insert.py.
 
 Focus: city normalization + synonym map che addresses anomalia #3 da
-docs/internal/2026-05-21-vps1-run-postmortem.md (7 (title, company)
+docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md (7 (title, company)
 duplicate quando stessa position arriva da source multipli).
 
 Eseguire:

@@ -266,7 +266,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
   // Poll adattivo: pausa quando tab non e' visibile, backoff esponenziale
   // se l'output non cambia. Pre-fix (2026-05-22): 1500ms fissi senza
   // visibility check → 2400 req/h × dashboard aperta H24 ≈ 30 GB egress
-  // mensili Vercel (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md).
+  // mensili Vercel (vedi docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md).
   const lastOutputRef = useRef('')
   const backoffRef = useRef(0)
 

@@ -127,7 +127,7 @@ semana de operación.
 ## Ver también
 
 - `agents/_skills/db-update/SKILL.md` § Positions — `salary-estimated-*`
-- `candidate_profile.yml.example` — `salary_annual_eur` (target del candidato,
+- `docs/examples/candidate_profile.yml.example` — `salary_annual_eur` (target del candidato,
   side-fix bug #27)
 - `agents/_skills/mentor-output/SKILL.md` — oculta "5 pasivo" cuando
   `notes` contiene `no_data_default`

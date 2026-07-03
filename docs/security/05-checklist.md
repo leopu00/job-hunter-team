@@ -203,7 +203,7 @@ Things to do gradually in the months after launch. No operational blocker.
   - Merged: d5d3842f
 
 - [x] Add `zizmor` for workflow security audit
-  - File: `.pre-commit-config.yaml` + `zizmor.yml` (OpenClaw template)
+  - File: `.pre-commit-config.yaml` + `.github/zizmor.yml` (OpenClaw template)
   - Effort: 1h
   - Merged: d5d3842f
 

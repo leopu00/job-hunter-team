@@ -2,7 +2,7 @@
  * Client minimale per Hetzner Cloud API.
  *
  * Scope: solo le operazioni di lifecycle che servono ai 3 bottoni
- * dashboard (`docs/internal/vps.md` § "Lifecycle e shutdown UX"):
+ * dashboard (`docs/internal/ops/vps.md` § "Lifecycle e shutdown UX"):
  *
  *   - listServers / findServerByIp  → resolve dell'ID a partire dall'IP
  *   - createSnapshot                → snapshot pre-destroy ("📸 Snapshot")

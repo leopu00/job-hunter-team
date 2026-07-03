@@ -1,7 +1,7 @@
 // supabase-direct.js
 //
 // Accesso DIRETTO a Supabase dal daemon VPS — Fase 1 di [JHT-DAEMON-SUPABASE-DIRECT].
-// Vedi docs/internal/2026-06-24-vps-daemon-supabase-direct-design.md.
+// Vedi docs/internal/architecture/daemon-sync-redesign.md.
 //
 // PERCHÉ: oggi ogni lettura di background (ticket, flag-sync, desired-state) passa
 // per le route HTTP di Vercel → 1 invocazione serverless + ~2,8 Observability Events

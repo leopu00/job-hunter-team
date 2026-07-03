@@ -319,6 +319,6 @@ Ordine post-fix:
 - `cli/src/commands/team/start.js` — bootstrap V7
 - `web/app/api/team/start-all/route.ts` — bootstrap V7 web
 - `cli/wizard/setup-steps.js` § `promptTelegramRequired` — wizard auto-chat-id
-- `telegram-bridge/src/` — codice bridge corrente
+- `.launcher/tg-bridge.py` — codice bridge corrente
 - `shared/channels/telegram-channel.ts` — abstraction lato shared
 - `BACKLOG.md` — `[JHT-VPS-FRIENDLY]`, `[JHT-DESKTOP-SYNC]`

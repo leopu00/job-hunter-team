@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reset positions stuck in `writing` o `checked` da troppo tempo.
 
-Origin: docs/internal/2026-05-21-vps1-run-postmortem.md anomalia #4:
+Origin: docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md anomalia #4:
 > 2 position in `writing` ancora bloccate al momento del HALT
 > (kill Scrittore-3 stamattina). Saranno state lasciate a metà —
 > controllare al resume per cleanup.

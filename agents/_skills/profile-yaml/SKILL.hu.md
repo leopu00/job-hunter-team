@@ -118,7 +118,7 @@ sector_details:
 
 A `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` kulcsokat a frontend szo szerint olvassa, hogy kitoltse a "Munkapreferenciak" szekci. Az alternativ nevek (`work_location`, `flexible`, `remote`) megmaradnak, de lathatatlanok a felhasznalo szamara.
 
-Teljes sema + peldak: `candidate_profile.yml.example` a repo gyokereben (dokumentaciohoz, **NE masold az ertekeket** — lasd anti-hallucinacio).
+Teljes sema + peldak: `docs/examples/candidate_profile.yml.example` a repo gyokereben (dokumentaciohoz, **NE masold az ertekeket** — lasd anti-hallucinacio).
 
 ## `sector_details` — szabad kulcsok a felhasznalo agazatahoz
 
@@ -203,7 +203,7 @@ Es ertesitsd a felhasznalot: "visszaallitottam a gombot varakozasra — tekintsu
 
 ## ⚠️ Anti-hallucinacio — a kritikus szabaly
 
-**SOHA ne olvasd a `candidate_profile.yml.example` vagy `candidate_profile.hr.yml.example` fajlt ertekforrasnak.** Ezek a fajlok a *strukturat* dokumentaljak, nem a jeloltet. Ha elolvasod oket, kockaztatod, hogy "Mario Rossi" / "mario.rossi@example.com" kerul a valos profilba.
+**SOHA ne olvasd a `docs/examples/candidate_profile.yml.example` vagy `docs/examples/candidate_profile.hr.yml.example` fajlt ertekforrasnak.** Ezek a fajlok a *strukturat* dokumentaljak, nem a jeloltet. Ha elolvasod oket, kockaztatod, hogy "Mario Rossi" / "mario.rossi@example.com" kerul a valos profilba.
 
 KIZAROLAG ezt hasznald:
 - amit a felhasznalo mondott neked a chatben

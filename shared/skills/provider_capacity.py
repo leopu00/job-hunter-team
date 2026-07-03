@@ -28,7 +28,7 @@ Quando il daemon parte, EMA blendato gradualmente con seed (peso w =
 min(1, days_observed/4)) → calibrazione auto in 3-4 giorni.
 
 Riferimenti:
-  - docs/internal/2026-05-25-work-hours-design.md § "Scalabilità"
+  - docs/internal/architecture/2026-05-25-work-hours-design.md § "Scalabilità"
   - docs/about/RESULTS.md (case study Codex Pro)
 """
 from __future__ import annotations

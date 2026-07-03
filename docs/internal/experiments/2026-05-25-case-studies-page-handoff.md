@@ -12,7 +12,7 @@ giorno) riprende la pagina.
 - Source of truth dati strutturati: SQLite locale `web/data/case-studies/case-studies.db`
   (rebuild: `./web/data/case-studies/init.sh`)
 - Snapshot raw VPSes: `~/jht-case-study-data/full-snapshot-20260524/` (337 MB) +
-  zip 89.7 MB. Riproducibile con `./tools/case-study-extract/extract_all.sh`.
+  zip 89.7 MB. Riproducibile con `./scripts/case-study-extract/extract_all.sh`.
 
 ## ✅ Cosa funziona
 
@@ -143,7 +143,7 @@ web/app/case-studies/
     ├── CoverageMatrix.tsx
     └── ContributeCta.tsx
 
-tools/case-study-extract/       # toolkit estrazione VPS read-only
+scripts/case-study-extract/     # toolkit estrazione VPS read-only
 ├── README.md
 ├── extract_all.sh              # orchestratore
 ├── dump_db_tables.py

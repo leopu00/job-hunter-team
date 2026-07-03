@@ -118,7 +118,7 @@ sector_details:
 
 Les clés `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` sont lues littéralement par le frontend pour remplir la section "Préférences de travail". Les noms alternatifs (`work_location`, `flexible`, `remote`) restent écrits mais invisibles pour l'utilisateur.
 
-Schéma complet + exemples : `candidate_profile.yml.example` à la racine du repo (pour documentation, **NE PAS copier les valeurs** — voir anti-hallucination).
+Schéma complet + exemples : `docs/examples/candidate_profile.yml.example` (pour documentation, **NE PAS copier les valeurs** — voir anti-hallucination).
 
 ## `sector_details` — clés libres pour le secteur de l'utilisateur
 
@@ -203,7 +203,7 @@ Et informez l'utilisateur : "j'ai remis le bouton en attente — revoyons ce poi
 
 ## ⚠️ Anti-hallucination — la règle critique
 
-**NE JAMAIS lire `candidate_profile.yml.example` ou `candidate_profile.hr.yml.example` comme source de valeurs.** Ces fichiers documentent la *structure*, pas le candidat. Si vous les lisez, vous risquez d'écrire "Mario Rossi" / "mario.rossi@example.com" dans le profil réel.
+**NE JAMAIS lire `docs/examples/candidate_profile.yml.example` ou `docs/examples/candidate_profile.hr.yml.example` comme source de valeurs.** Ces fichiers documentent la *structure*, pas le candidat. Si vous les lisez, vous risquez d'écrire "Mario Rossi" / "mario.rossi@example.com" dans le profil réel.
 
 Utilisez UNIQUEMENT :
 - ce que l'utilisateur vous a dit en chat
