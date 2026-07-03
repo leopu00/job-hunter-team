@@ -6,7 +6,7 @@ JHT (Job Hunter Team) is a **local-first desktop app for a single user**. It run
 
 **Do not open a public issue for security bugs.**
 
-Email **`leo_p00@gmail.com`** with:
+Email **`leopu00@gmail.com`** with:
 
 - Descriptive title and estimated severity (Critical / High / Medium / Low)
 - Path + function + line numbers of the vulnerable code
