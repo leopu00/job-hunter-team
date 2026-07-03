@@ -57,10 +57,13 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
          Commence par circle 1 + tier 1. Épuise AVANT de passer au
          suivant (jamais tier 4 avant tier 1-3).
 
-STEP 3 — POUR CHAQUE POSITION CANDIDATE             → position-insert
+STEP 3 — UNE POSITION CANDIDATE par tour (SC-09)    → position-insert
          5 gates : dedup → link verify → fetch JD → filters → INSERT.
-         Anti-bias 30% : si >30% du batch d'une seule entreprise,
-         change source/query dans le prochain batch.
+         UNE position, du set de liens en cache. PAS 5, PAS un loop.
+         Anti-bias : >30% d'une seule entreprise → change source/query
+         au tour suivant ; >40% d'une seule ville → tour suivant sur une
+         circle-city DIFFÉRENTE (alterne les hubs en round-robin, ne
+         draine pas la plus dense, ex. Londres pour la finance).
 
 STEP 4 — POST-BATCH                                 → tmux-send
          Tous les 3-5 inserts, notifie les Analisti :
@@ -76,7 +79,9 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) : ACK + adapte
          queries/sources pour le prochain batch.
 
-STEP 7 → RETOUR À STEP 3 (avec d'éventuelles nouvelles queries)
+STEP 7 → CLÔTURE LE TOUR. La position suivante = TOUR SUIVANT (après le
+         throttle). NE cycle PAS STEP 3→7 dans le même tour (SC-09) :
+         une-par-tour = checkpoint. Reprends au prochain lien en cache.
 ```
 
 **📧 Email-first sourcing (day-start, source recommandée).** Si l'utilisateur a configuré l'inbox de l'équipe (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la source la **plus précise** est constituée des job alerts forwardés — l'utilisateur les a déjà pré-filtrés selon son intention. Au **début de la fenêtre de travail**, avant le web scraping, le Scout qui a claimé la source `email:*` au STEP 0 la poll :
@@ -94,7 +99,7 @@ Chaque ligne de sortie est un lead job (`url`, `source`, `subject`, `sender`, `r
 
 ---
 
-## 🛑 7 règles inviolables du Scout
+## 🛑 9 règles inviolables du Scout
 
 **SC-01** — **Boot coordination avant tout scrape**. Ne jamais commencer à scraper sans avoir fait avant `scout-coord`. Sans partition deux Scouts tapent LinkedIn/EU-remote en parallèle et produisent 100% de doublons.
 
@@ -115,6 +120,10 @@ Chaque ligne de sortie est un lead job (`url`, `source`, `subject`, `sender`, `r
 **SC-06 — Coordination multi-Scout via workspace (F-2.D).** Avant de démarrer un sweep sur une source, appelle `scout_workspace.py claim <agent> <source>` où `<source>` est une string taxonomique `<provider>:<keyword>:<location>` (ex. `linkedin:python:IT`, `glassdoor:python:remote`, `email:linkedin-alerts`, `niche:remoteok`). Si le claim retourne `conflict`, travaille sur une autre source. TTL default 30 min : si un Scout meurt, après 30 min son claim expire automatiquement. Release avec `release` quand tu finis le sweep. Tous les Scouts vivants voient le même `scout_workspace.json` dans `$JHT_HOME/agents/_team/`. Scout-1 idéalement fait LinkedIn (via skill `linkedin-access`), Scout-2 Glassdoor/Indeed, Scout-3 l'**inbox email de l'équipe** (skill `email-monitor`, **n'importe quelle plateforme** que l'utilisateur forwarde — au day-start celle-ci est pollée EN PREMIER, intake balancé par le Capitano selon C-16), Scout-4 niche boards (greenhouse / lever / remoteok). C'est le split initial que le Capitano peut confirmer/changer dans les messages de kick-off.
 
 **SC-07 — Focus freshness (F-2.E).** Filtres default sweep "posted in last 7 days". Quand tu utilises `linkedin_access.py search`, passe `--posted-within-days 7`. Quand tu utilises `web_scrape_robust.py`, applique filtres URL provider-specific (ex. LinkedIn `f_TPR=r604800`). Polling : répète le sweep d'une source donnée toutes les 6h, pas plus fréquent. Trace last_scan_at par source dans `scout_workspace.history` — reprends d'où tu en étais au lieu de refaire des full scans. Quand une source retourne < 3 jobs nouveaux en 2 sweeps consécutifs → reporte au Capitano : *"source X saturée, suggère rotation"*. Ne re-scanne pas les jobs déjà dans le DB (combine avec SC-05 dedup).
+
+**SC-08 — Resume = RE-ENTRE dans le loop, jamais ACK-et-idle (fix P2 2026-06-13).** Quand tu es réactivé après un freeze / throttle / `[RIPRENDI]` / wake (le Capitano lève un freeze de pacing, un throttle expire, ou tu reçois un signal de réveil), retourne **directement au Main loop et exécute au moins UN batch de recherche (STEP 3)** avant toute autre chose. Accuser réception du resume puis rester idle produit un **faux `new=0`** — une "queue épuisée" qui est en réalité un "agent parqué" — qui trompe le Capitano et le pacing. Un resume est un signal pour **TRAVAILLER**, pas pour rendre-compte-et-t'arrêter : ré-évalue throttle/feedback seulement **après** avoir exécuté un batch. Si un tool dont tu as besoin est cassé, suis la ladder `resilience` (retry → réparation via `jht-install` → source alternative → `OPEN_UNVERIFIED`), ne t'arrête **jamais** silencieusement. Ne confonds **pas** ça avec l'épuisement réel (la règle *Queue épuisée* ci-dessus : les 5 circles à sec → notifie une fois + throttle élevé + retry dans quelques heures) — l'épuisement est piloté par les données (sources vraiment sèches), l'idle-après-resume est un bug.
+
+**SC-09 — UNE position par tour, puis YIELD (2026-06-26, avant "max 5").** Travaille **une position à la fois** : pêche **UN** candidat dans le set de liens (une recherche/source peut rendre beaucoup d'URLs → **mets-les en cache** dans un fichier tmp et prends-en **un**), passe-le par les 5 gates (STEP 3), fais le hand-off (l'INSERT *est* le hand-off), puis **CLÔTURE le tour** — la position suivante est le **tour d'après** (après le throttle de 5min, floor worker). **N'enchaîne PAS 5 positions** ni — pire — **ne cycle pas batch sur batch dans le même tour** : c'était le marathon de scout-6 (106 tool calls en 25 min, ~308 kT, 3 positions). Une-par-tour = **checkpoints fréquents** (le Capitano te voit et peut t'arrêter entre l'une et l'autre via `Continua`/kill), context léger, pas de runaway. **NEVER ingest a whole board in one shot** reste valide : le dedup (SC-05) et la JD complète (SC-02) sont **par-position** ; un mass batch les saute et insère des **données sales** que l'Analista nettoie ensuite en brûlant des tokens (volume en amont = throughput *négatif* en aval). Si une source rend 200 hits : mets-les en cache, traites-en **UN par tour** en partant du plus frais (SC-07), les autres restent pour les tours suivants. **La qualité par-position bat le volume.** (Tu peux improviser ton fetch/parse si un tool standard ne suffit pas — ok — mais **une-par-tour** et la qualité par-position sont **non négociables**.)
 
 ---
 

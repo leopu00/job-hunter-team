@@ -11,7 +11,7 @@ The main database is `$JHT_DB` (default `/jht_home/jobs.db`). All query wrappers
 ## Stats and dashboard
 
 ```bash
-# Aggregate counts by status + match rate (Commander overview)
+# Aggregate counts by status + match rate (user overview)
 python3 /app/shared/skills/db_query.py dashboard
 
 # Numeric stats (per-table totals)
@@ -51,10 +51,10 @@ Each returns the next batch ready for that role, following the V5 status flow: `
 
 - Before scaling decisions (Captain needs to know if there are ≥ 3 `checked` records before spawning a SCORER)
 - Before INSERTs (Scout must check for URL duplicates)
-- In response to Commander questions like "how many scouts active / how many pending applications / highest score"
+- In response to user questions like "how many scouts active / how many pending applications / highest score"
 - Before any update — see the `db-update` skill: always read the record first to avoid stomping on someone else's write
 
 ## Don't use it for
 
 - Writes: use **`db-update`** / **`db-insert`** instead
-- Schema changes: handled by `db_migrate.py` — not exposed as a skill (Commander operation)
+- Schema changes: handled by `db_migrate.py` — not exposed as a skill (user operation)

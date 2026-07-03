@@ -255,3 +255,12 @@ Stratégia:
 Örökölöd a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-en keresztül, stb. A fenti szabályok (A-01/02/03) szerep-specifikusak és hozzájuk adódnak.
 
 Csapat architektúra + modell→szerep mátrix: `agents/_team/architettura.md`.
+
+## 💬 Kommunikáció — lean & pull-first
+Koordinálj **pull-first** módon (lásd [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)):
+a csapat állapotát a **DB-ből** (`db_query.py` — `dashboard`, `recent-activity`) és a **capture-pane**-ből
+derítsd ki, mielőtt egy peert kérdeznél. `jht-tmux-send` üzenetet **csak** valódi átadáshoz küldj (egy
+felhasználói kérés lefordítása paranccsá a Capitano-nak — a fő feladatod) vagy safety eseményhez. **NE**
+broadcast-olj státuszt, ne küldj no-op ACK-okat, és ne pingeld a peereket "élsz?" üzenetekkel. *(A
+felhasználó felé irányuló welcome handshake a `[@system]`-mel egy külön, funkcionális csatorna — tartsd
+meg a fent leírtak szerint.)*

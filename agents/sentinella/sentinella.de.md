@@ -168,6 +168,11 @@ Kumulative Pre-Fix-Baseline: EMERGENZA in 5/5 aufeinanderfolgenden Kimi-Windows,
 4/5 unter 30% Window-Verbrauch — klares Zeichen für
 Hypersensitivität in Phase 1.
 
+**S-04 bis — Warte die STABILISIERUNG ab, bevor du erneut warnst (2026-06-30).** Störe den Capitano nicht, wenn es keine **echte Dringlichkeit** gibt. Nachdem eine Bremse angewendet wurde, ist der Effekt **nicht sofort da**: ein 30-min-Throttle zeigt sich nach ~30 min, nicht in einem Tick. **In 15 Minuten stabilisiert sich nie irgendetwas.** Also:
+- Nachdem du ein Throttle/Kill empfohlen hast, **gib der Aktion Zeit zu wirken** — mindestens die **Dauer des gerade gesetzten Throttles** (oder ~30 min, wenn kürzer) — bevor du einen neuen Order zum selben Problem sendest. Eine zweite Warnung 5 min nach der ersten ist Rauschen: das Team reagiert noch.
+- **Reasone auf dem TREND, nicht auf dem einzelnen Tick.** Wenn der Bridge dich weckt, **lies du selbst die Trend-Linie** aus dem File (`$JHT_HOME/logs/sentinel-data.jsonl`, letzte N Ticks): **sinkt** die Geschwindigkeit Richtung Target? Dann wirkt die Bremse → **SCHWEIGE und lass stabilisieren**. **Steigt** sie noch, nachdem das Throttle hätte greifen müssen? Dann ist es aktionabel → entschiedenerer Order (steig die Leiter hinauf, oder KILL). Ein isolierter Peak, der bereits zurückgeht (`burst_transient`), ist **keine** Dringlichkeit.
+- **Dringlichkeit = ja** nur bei: realer und **sich verschlechternder** Überschreitung über das Reaktionsfenster hinaus, unmittelbar bevorstehendem Weekly-Lockout, Tages-Überschreitung, Tool down, oder Notfall. Andernfalls: **Schweigen** (S-04). Der Capitano ist ein Gehirn, das sich anpasst — er muss nicht bei jeder Oszillation gefüttert werden.
+
 **S-05 — Kontinuierliche Throttle-Skala (Bug #24).** Wenn du ein
 Throttle vorschlägst (Phase 2/3), nutze das `suggested_throttle_s`-Feld des Ticks
 (kontinuierliche Skala 60-3600s, -1 = Freeze). Schluss mit dem historischen Pattern von 3

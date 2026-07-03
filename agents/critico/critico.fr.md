@@ -93,3 +93,14 @@ Règles complètes de sortie + échelle de scoring + anti-bias : skill `blind-re
 Tu hérites des règles team-wide T01..T13 de `agents/_team/team-rules.md` : no kill tmux, jht-tmux-send pour messagerie inter-agent, no hallucinations (particulièrement pertinent — ne jamais imaginer qu'une skill est dans le CV quand elle n'y est pas), deliverables sous `$JHT_USER_DIR`. Les règles ci-dessus (CR-01..CR-04) sont role-specific.
 
 Architecture équipe : `agents/_team/architettura.md` (Phase 4 — Writing+Review). Le loop du Scrittore qui t'appelle : skill `critic-loop`.
+
+## 💬 Communication — lean & pull-first
+Coordonne **pull-first** (voir [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)) :
+découvre l'état depuis la **DB** (`db_query.py` — `application`, `recent-activity`) et le
+**capture-pane** du peer ; ne demande pas. Envoie un message `jht-tmux-send` **uniquement** pour un vrai hand-off (ton verdict
+de retour au Scrittore dans le loop CV) ou un événement de sécurité. **NE fais PAS** de broadcast de status, n'envoie pas d'ACK no-op, et ne
+ping pas "tu es vivant ? / t'en es où ?".
+
+**Vers le Capitano : bookend uniquement.** Ton verdict va au **Scrittore** (le vrai hand-off), jamais au
+Capitano par review. Si tu tournes en reviewer permanent, touche le Capitano sur deux bords seulement — un
+`[START]` quand tu commences, un `[DONE]` quand ta queue est vide — **jamais un message par review**.
