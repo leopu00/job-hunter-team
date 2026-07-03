@@ -93,6 +93,7 @@ export default async function CaseStudyDetailPage({
     subscription: cs.subscription,
     profile: cs.profile,
     phases: cs.phases,
+    maintainerNote: cs.maintainerNote,
     run: { ...cs.run, events: [] }, // gli eventi servivano solo per l'attività
     activity,
   };
