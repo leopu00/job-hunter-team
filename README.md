@@ -32,17 +32,19 @@
 
 ---
 
-Point the system at your profile, start the team, and only review applications that clear the quality bar. The **worker** agents each specialize in one task — Scout finds positions, Analyst evaluates them, Scorer ranks them, Writer prepares documents, Critic reviews everything — all orchestrated by a **Captain**, with a support core alongside (see [The Team](#the-team) below).
+Job hunting is a second job you do on top of your job: scanning boards every day, qualifying listings, tailoring every single application. JHT hands that grind to a team of AI agents that runs around the clock — Scout finds positions, Analyst verifies them, Scorer ranks them against your profile, Writer prepares tailored documents, Critic blind-reviews everything — orchestrated by a **Captain** (see [The Team](#the-team)). You only review applications that clear the quality bar.
 
 The whole pipeline runs **locally in a container**, on your machine or your VPS — your profile, your data, your provider account. **AI on the side of workers, not against them.**
 
-> 💳 **What it costs, upfront:** JHT itself is free and never bills you — but it needs a **dedicated LLM subscription (~€40–200/mo)** to run: the team burns ~400M tokens/month, which is why it runs on flat-rate subscriptions instead of pay-per-use API keys (the same usage would cost $1,000–2,500/mo on the API). Full breakdown in [Install](#install) and [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
+> 💳 JHT itself is **free (MIT) and never bills you** — it runs on a **dedicated LLM subscription (~€40–200/mo)**. Full cost breakdown, and why subscriptions instead of API keys, in [Install](#install). Making it run on **local models (€0)** is an open mission: [M5](https://github.com/leopu00/job-hunter-team/issues/93).
 
 I originally built JHT for my own job hunt. It worked. So I rebuilt it as open source, so anyone could use it.
 
 > 📊 **From the original private build** — ~200 offers analyzed · ~20 tailored applications · **5 interview invites within a few weeks**. Full background in [`docs/about/STORY.md`](docs/about/STORY.md).
 
 > 📈 **From the public stack (June 2026)** — a Codex-powered team ran **one month unattended**: **658 positions found · 520 scored · 307 strong matches (score ≥70)**, closing its weekly budget at **99–100% for four straight weeks** with zero human interventions. Data in [`docs/about/RESULTS.md`](docs/about/RESULTS.md), live on [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies).
+
+> 🎯 **The metric that actually matters is hires — and I won't claim any yet.** The private build got *me* interviews; the public stack has so far been measured on search & scoring quality, not on signed offers. Closing that loop — from autonomous search to a real job — is exactly what this beta exists to validate.
 
 ## 🎬 Demo
 
@@ -73,6 +75,8 @@ Animated GIFs of the dashboard and onboarding are in the works.
 ## The Team
 
 The team has **no fixed headcount**: a stable core of always-on agents plus a **dynamic worker pool** the Captain scales from 1 to N per role based on flow rate and budget.
+
+**Why a team instead of one clever prompt?** Three practical reasons: each role keeps its own small context (a model that just read 50 job ads reasons measurably worse about CV tone); blind review only works if the Critic genuinely hasn't seen the Writer's reasoning; and the Captain can throttle or scale each role independently to keep a month of 24/7 operation inside a fixed subscription budget.
 
 **Always-on core**
 
@@ -148,13 +152,18 @@ Three subscriptions cover the ~400M tokens/month requirement:
 
 ---
 
-**One-liner (macOS / Linux / WSL)** — agents run in an isolated container by default:
+**Recommended: inspect first, then run** (macOS / Linux / WSL) — the installer is versioned in this repo ([`web/public/install.sh`](web/public/install.sh)) and previews every action before touching anything:
 
 ```bash
-curl -fsSL https://jobhunterteam.ai/install.sh | bash
+curl -fsSL https://jobhunterteam.ai/install.sh -o install.sh
+less install.sh              # read what it does
+bash install.sh --dry-run    # preview every action — no changes to your system
+bash install.sh
 ```
 
-> 🔍 **Don't trust `curl | bash`? Good instinct.** The script is versioned in this repo ([`web/public/install.sh`](web/public/install.sh)) — read it before running, or preview every action with `--dry-run`: `curl -fsSL https://jobhunterteam.ai/install.sh -o install.sh && less install.sh && bash install.sh --dry-run`. It writes exactly two things on the host — `~/.jht/runtime/docker-compose.yml` and the `~/.local/bin/jht` wrapper — and everything else (Node, Python, tmux, agents) runs inside the container. Only `~/.jht` and `~/Documents/Job Hunter Team` are mounted; the rest of your filesystem is invisible to it.
+Or, if you've read it and trust it, the one-liner: `curl -fsSL https://jobhunterteam.ai/install.sh | bash`
+
+> 🔍 **What it touches:** exactly two files on the host — `~/.jht/runtime/docker-compose.yml` and the `~/.local/bin/jht` wrapper. Everything else (Node, Python, tmux, agents) runs inside an isolated container; only `~/.jht` and `~/Documents/Job Hunter Team` are mounted. The rest of your filesystem is invisible to it.
 
 **Desktop app** — in development, not part of the beta. Unsupported preview builds land on [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases) for contributors, but the website's download page is intentionally disabled until the app is ready. State, gaps and roadmap in [`desktop/STATUS.md`](desktop/STATUS.md).
 
