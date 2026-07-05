@@ -7,7 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-*(nothing yet)*
+### Fixed
+- **Windows (Docker Desktop/WSL2):** the container could not write to the bind-mounted `/jht_home` / `/jht_user` (root-owned mounts + non-root `jht` user → `Permission denied` on startup). A new entrypoint wrapper probes the mounts and repairs their ownership through the existing sudo whitelist — agents still run as `jht`, no behavior change on macOS/Linux.
 
 ## [0.2.0] — 2026-07-03
 

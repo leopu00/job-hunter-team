@@ -203,5 +203,7 @@ EXPOSE 3000
 
 VOLUME ["/jht_home", "/jht_user"]
 
-ENTRYPOINT ["/usr/bin/tini", "-g", "--", "node", "/app/cli/bin/jht.js"]
+# Il wrapper (sempre utente jht) ripara l'ownership dei bind-mount quando il
+# host non la mappa (Docker Desktop su Windows/WSL2) e poi exec-a la CLI.
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/app/.launcher/entrypoint.sh"]
 CMD ["--help"]
