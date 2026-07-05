@@ -44,13 +44,11 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 
 > 📈 **From the public stack (June 2026)** — a Codex-powered team ran **one month unattended**: **658 positions found · 520 scored · 307 strong matches (score ≥70)**, closing its weekly budget at **99–100% for four straight weeks** with zero human interventions. Data in [`docs/about/RESULTS.md`](docs/about/RESULTS.md), live on [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies).
 
-> 🎯 **The metric that actually matters is hires — and I won't claim any yet.** The private build got *me* interviews; the public stack has so far been measured on search & scoring quality, not on signed offers. Closing that loop — from autonomous search to a real job — is exactly what this beta exists to validate.
-
 ## 🎬 Demo
 
 The best demo is real data: [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies) renders the live dashboards of the beta runs — including the month-long autonomous Codex run (658 positions found, 520 scored, weekly budget self-managed at 99–100%).
 
-> **Where the numbers come from** — every dashboard renders an anonymized snapshot of the team's event log, committed to this repo ([`web/data/case-studies/`](web/data/case-studies/)). Same data, same charts, reproducible from the JSON. Methodology and per-run breakdowns in [`docs/about/RESULTS.md`](docs/about/RESULTS.md). To be clear: these are **self-reported numbers from runs I operated** — the honest way to verify them is to run your own team and watch the same dashboards render your own data.
+> Numbers are self-reported snapshots of the team's event log, committed in [`web/data/case-studies/`](web/data/case-studies/). Methodology: [`docs/about/RESULTS.md`](docs/about/RESULTS.md).
 
 *The live case-studies dashboard — real, anonymized field data:*
 
