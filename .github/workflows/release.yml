@@ -232,12 +232,12 @@ jobs:
         with:
           name: "Job Hunter Team ${{ github.ref_name }}"
           body: |
-            ## Novità in ${{ github.ref_name }}
+            ## What's new in ${{ github.ref_name }}
 
             ${{ steps.changelog.outputs.notes }}
 
             ---
-            Vedi [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) per la storia completa.
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for the full history.
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |

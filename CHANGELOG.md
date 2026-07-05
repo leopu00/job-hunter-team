@@ -7,6 +7,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+*(nothing yet)*
+
+## [0.2.0] — 2026-07-03
+
+**First public release** — the version announced on Reddit. CLI-first beta, built for contributors.
+
+**What it is:** a self-hosted team of AI agents (Captain, Scout, Analyst, Scorer, Writer, Critic + support core) that runs your job search on your own LLM subscription. Everything below this section was previously tracked under *Unreleased* and shipped with this tag.
+
+**Highlights of the launch sprint (2026-07-02 → 03):**
+
+- 🧹 **Git history sanitized** with `git filter-repo` (three passes): application dossiers, employer names, e-mails, VPS IPs and identifying names purged or pseudonymized across every ref. Stated in `SECURITY.md`.
+- 🌍 **Public site fully internationalized** (7 languages), including the case-studies dashboards and the maintainer's notes; `install.sh` output translated to English.
+- 📊 **Case studies refreshed** to the 2026-07-03 snapshot: month-long autonomous Codex run — 658 positions found, 520 scored, 307 strong matches, weekly budget self-managed at 99–100%.
+- 📄 **Honest docs pass:** upfront cost callout, self-reported-numbers note, provider ToS note, solo-maintainer wording, screenshots + CI badges in the README.
+- 🧪 **Test suite made real:** root `npm test` now runs the actual runners (869 vitest + 425 pytest, all green); 11 stale pytest fixed; Kimi provider model IDs corrected.
+- 🤝 **Contributor on-ramp:** 7 `good first issue` tasks with context and done-criteria, 5 mission issues (M1–M5), 3 real bug reports, labels and templates in place.
+- 🖥️ **Desktop installers** for macOS/Windows/Linux attached as unsupported preview builds (the supported path is the CLI); three Windows-runner build bugs fixed along the way (electron-builder auto-publish, `npm.cmd` spawn, GNU tar vs `C:\` paths).
+
+> ℹ️ Historical entries below this point are a mixed Italian/English engineering log that predates the English-only policy (2026-07-03). They are kept verbatim as project history.
+
+
 ### 📚 Docs restructure: one-screen ROADMAP + slim BACKLOG index — 2026-07-03
 
 - **`docs/about/ROADMAP.md`** rewritten as a one-screen strategic view: verbal states instead of invented percentages (i18n was listed "~70%" with all 7 locales already shipped; "multi-cloud ~50%" had zero code behind it and is now an explicit scope-note), a theme table, and the contributor missions M1–M8. Unique content preserved, not deleted: the skill-distribution design moved to `docs/internal/architecture/skill-distribution.md`, the DB schema plan to `docs/internal/roadmap/db-schema-optimization.md`.
