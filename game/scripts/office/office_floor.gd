@@ -8,8 +8,10 @@ extends Node2D
 
 const GLASS_CORE := Color("#bfe3ff", 0.9)
 const SEED := 20260707
-## Texture dipinta consegnata da dev1-art; se assente, blockout procedurale.
+## Texture dipinte consegnate da dev1-art; se assenti, blockout procedurale.
 const FLOOR_TEX := "res://assets/gen-art/floor/floor_main.png"
+const WALL_TEX := "res://assets/gen-art/environment/wall_main.png"
+const WALL_H := 120.0  # altezza a schermo della fascia muro nord
 
 ## La texture va in un CanvasItem SEPARATO dalle primitive: mescolare
 ## draw_texture_rect con molte draw_line/draw_rect nello stesso item rompe
@@ -42,6 +44,20 @@ func _ready() -> void:
 		spr.scale = floor_rect.size / tex.get_size()
 		spr.show_behind_parent = true
 		add_child(spr)
+	if ResourceLoader.exists(WALL_TEX):
+		# fascia muro nord (faccia interna, battiscopa alla base sul pavimento)
+		var wtex: Texture2D = load(WALL_TEX)
+		var wall := Sprite2D.new()
+		wall.texture = wtex
+		wall.centered = false
+		wall.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+		wall.region_enabled = true
+		var wall_scale := WALL_H / wtex.get_size().y
+		wall.region_rect = Rect2(0, 0, floor_rect.size.x / wall_scale, wtex.get_size().y)
+		wall.scale = Vector2(wall_scale, wall_scale)
+		wall.position = Vector2(floor_rect.position.x, floor_rect.position.y - WALL_H)
+		wall.show_behind_parent = true
+		add_child(wall)
 
 func _draw() -> void:
 	var world := FurnitureDefs.WORLD
