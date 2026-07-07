@@ -106,10 +106,25 @@ Dal dossier (`RESEARCH-DOSSIER.md`) il prototipo integra tre pattern:
    sotto le lampade + neon freddo dei bordi vetro; poche luci, dipinte, con
    silhouette leggibili su pavimento a valore controllato.
 
-Rimandati a `ROADMAP.md`: loop invertito alla Yes, Your Grace (§9.4, gli
-agenti vengono alla scrivania del giocatore in coda visibile), onboarding
-diegetico "badge HR + ascensore" (§5), quest log/streak/corkboard (§6),
-camera follow su click agente (§9.8).
+Integrati nella sessione master (2026-07-07), oltre il piano iniziale:
+
+4. **Onboarding diegetico "foto badge"** (§5): il wizard è la foto per il
+   badge HR (flash+shutter), il badge esce "dalla stampante" e
+   l'ascensore si apre sulla box.
+5. **Loop invertito lite** (Yes, Your Grace §9.4): coda visite — Scout e
+   Scorer vengono alla tua posizione con l'indicatore "!" (Going Under),
+   riga "IN ARRIVO DA TE" nell'HUD, alberi di dialogo dedicati.
+6. **Meta loop** (§6): registro candidature su TAB (quest a stadi
+   inviata→screening→colloquio→offerta) + streak con freeze.
+7. **Asset pittorici gen-art** (pipeline con la sessione dev1-art):
+   pavimento dipinto + mobili sostituiscono progressivamente il blockout
+   procedurale (fallback automatico se il file manca). ⚠️ Nota tecnica:
+   su macOS/GLES3 non mescolare `draw_texture_rect` con molte primitive
+   nello stesso CanvasItem (batching rotto → item bianco): texture in
+   Sprite2D figli.
+
+Rimandati a `ROADMAP.md`: corkboard fisico, decisioni con risorse,
+camera follow su click agente (§9.8), chat LLM.
 
 ## Dialoghi
 
