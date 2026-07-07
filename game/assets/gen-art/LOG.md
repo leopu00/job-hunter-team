@@ -66,8 +66,11 @@ composito scuro → dehalo selettivo (banda bordo + quasi-bianco desaturato).
 |---|---|---|---|
 | Muro | environment/wall_main.png 2048x512 (md5 nel msg chat) | 1+pp | ✅ intonaco lavanda + battiscopa; giunzione orizzontale sistemata con wrap-blend (blur mascherato sulla vecchia giunzione dopo roll di w/2) |
 | Vetro box | environment/glass_box.png 1024x1024 | 1 | ✅ overlay alpha media 9.6% (spec 8-14), striature ≤20%, stretchabile |
-| Ologramma | furniture/hologram — in corso | — | globo wireframe #00e87a su piedistallo |
-| Title screen | — in coda | — | |
+| Ologramma | furniture/hologram.png 520x640 | 1+pp | ✅ globo reso semi-trasparente in post (alpha ~194, piedistallo 253) |
+| Title screen | environment/title_screen.png 1792x1024 | 1+pp | ✅ key art senza testo; warm boost +12% sulle pozze di lampada |
+
+**Coda brief COMPLETA**: (a) ritratti tutti gli agenti ✅ (b) floor/muro/vetro ✅
+(c) 11 mobili + ologramma ✅ (d) title screen ✅. In ascolto per nuovi ordini.
 
 ### 2026-07-07 — Ordine #3: ritratti Mentor 6 emozioni (1120x1520, mezzo busto, alpha)
 

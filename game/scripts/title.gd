@@ -1,6 +1,9 @@
 extends Control
 ## Title screen: wordmark JHT in stile terminale, "PREMI INVIO" lampeggiante.
 
+## Key art pittorica (gen-art); se assente, griglia terminale.
+const KEY_ART := "res://assets/gen-art/environment/title_screen.png"
+
 var _blink: Label
 var _time := 0.0
 
@@ -8,9 +11,24 @@ func _ready() -> void:
 	theme = TerminalTheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
-	var bg := GridBackground.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	var has_art := ResourceLoader.exists(KEY_ART)
+	if has_art:
+		var art := TextureRect.new()
+		art.texture = load(KEY_ART)
+		art.set_anchors_preset(Control.PRESET_FULL_RECT)
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(art)
+		var veil := ColorRect.new()
+		veil.color = Color(Palette.VOID.r, Palette.VOID.g, Palette.VOID.b, 0.30)
+		veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+		veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(veil)
+	else:
+		var bg := GridBackground.new()
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		add_child(bg)
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -20,6 +38,11 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 10)
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(box)
+	if has_art:
+		# spinge il wordmark nel terzo basso: la box dipinta resta la protagonista
+		var art_spacer := Control.new()
+		art_spacer.custom_minimum_size = Vector2(0, 620)
+		box.add_child(art_spacer)
 
 	var panel := BracketPanel.new()
 	panel.bracket_len = 22
