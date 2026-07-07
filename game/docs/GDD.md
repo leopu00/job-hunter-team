@@ -8,13 +8,21 @@ l'esperienza JHT vissuta in prima persona. Tutti i dati sono mock (vedi
 
 - Engine: Godot 4.x, GDScript. Risoluzione 1920×1080, stretch `canvas_items`,
   fullscreen all'avvio (Esc → menu pausa).
-- Stile: NON pixel art. Illustrazione flat/pulita fedele ai PNG `agents-*.png`
+- Stile (decisioni in `ANALISI-GIOCHI.md`): **vietati pixel art e 3D
+  cartone**. Ambienti **pittorici alla Disco Elysium** (riferimento
+  principale confermato; secondario Shadowrun Hong Kong): pozze di luce
+  dipinte, valori controllati, materia — non flat. Livello di resa minimo
+  fattibile: Yes, Your Grace. **Personaggi fedeli ai PNG `agents-*.png`**
   (occhiali tondi scuri = firma degli agenti; il giocatore NON li porta: è
   l'unico umano nella box). Palette dal brand (`web/app/globals.css`): dark
   lavanda `#060608→#16161d`, bordi `#252530`, testo `#b8b8d0→#f0f0fa`, verde
   `#00e87a` + mint `#7fffb2`, accenti giallo/blu/rosso/viola. Font JetBrains
   Mono ovunque. UI = terminale/HUD: bordi squadrati, brackets a L verdi,
   griglia di sfondo sottile.
+- Movimento: **"2D tridimensionato"** — 8 direzioni con profondità
+  (top-down/¾ + Y-sort). MAI side-scroller, mai 3D. Ambito: tutto al
+  chiuso, dentro la box (niente open map). Niente azione: **il gameplay è
+  parlare**.
 
 ## Macchina a stati
 
@@ -105,10 +113,14 @@ camera follow su click agente (§9.8).
 
 ## Dialoghi
 
-Alberi scriptati in `scripts/dialogue/dialogues.gd` (Dictionary): nodo =
-{speaker, text con tag emozione inline, choices|next}; il tag (`[saggio]`,
-`[severo]`, …) seleziona posa+espressione del ritratto. Typewriter JetBrains
-Mono con tick audio; scelte da tastiera (1-3 / frecce+INVIO) o mouse.
+Layout alla Going Under (`ANALISI-GIOCHI.md` §1): **personaggio in primo
+piano** (ritratto grande a destra) + **vignette in sequenza** — ogni battuta
+è una vignetta; le precedenti scalano verso l'alto attenuate, la corrente è
+piena. Alberi scriptati in `scripts/dialogue/dialogues.gd` (Dictionary):
+nodo = {text con tag emozione inline, pose?, choices|next}; il tag
+(`[caldo]`, `[severo]`, …) seleziona l'espressione del ritratto. Typewriter
+JetBrains Mono con tick audio; scelte da tastiera (1-3 / frecce+INVIO) o
+mouse.
 Prossimità: raggio per agente → prompt HUD "[E] Parla con …" a conferma
 esplicita (mai chat accidentali); da lontano, click = wave-to-summon. Contenuti mock sensati:
 Mentor = consiglio carriera (albero completo), Scout = 3 posizioni trovate

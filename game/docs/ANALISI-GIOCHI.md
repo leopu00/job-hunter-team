@@ -55,14 +55,48 @@ Steam: https://store.steampowered.com/app/1145360/Hades/
 
 **Verdetto (Leone):** non serve — le schermate del gioco sono tutta un'altra cosa (action/combattimento, gioco completamente diverso dal nostro). L'unico concetto eventualmente riutilizzabile (1 ritratto illustrato + poche varianti emotive per personaggio, già nel RESEARCH-DOSSIER §2) non si vede dalle schermate dello store e non è emerso nulla di nuovo.
 
-## 6. Disco Elysium — nord visivo isometrico noir ⬜ da analizzare
+## 6. Disco Elysium ⭐⭐ RIFERIMENTO PRINCIPALE (confermato da Leone)
 
 Steam: https://store.steampowered.com/app/632470/Disco_Elysium__The_Final_Cut/
 
-## 7. The Red Strings Club — parlare è il gameplay ⬜ da analizzare
+**Verdetto (Leone):** "Esattamente quello che stavo cercando" — uno dei suoi giochi preferiti, era la grafica che aveva in testa senza ricordare il nome. **Punto di riferimento principale del progetto, soprattutto per la grafica.**
 
-Steam: https://store.steampowered.com/app/589200/The_Red_Strings_Club/
+**Cosa ci piace (Leone):**
+- La grafica in toto: il vibe, i colori, il modo di disegnare (pittorico a mano). "Voglio prendere soprattutto da questo videogioco."
+- È il "2D tridimensionato" giusto: isometrico, cammini in tutte le direzioni con profondità reale, ma tutto dipinto, niente 3D vero né pixel.
 
-## 8. Two Point Hospital — leggibilità dall'alto, muri di vetro ⬜ da analizzare
+**Differenza col nostro (Leone):**
+- DE è una open map grande (quartieri, edifici, si cammina per la città). Noi restiamo **dentro la box**: un solo ufficio, anche se può essere grande.
 
-Steam: https://store.steampowered.com/app/535930/Two_Point_Hospital/
+**Note tecniche per replicare il look (dal RESEARCH-DOSSIER §3.1):**
+- Sfondi = scene 3D di blocco ridipinte a mano; normal map dipinte a mano per far cadere la luce "come pensa un illustratore"; camera fissa → ogni schermata art-directed come un quadro.
+- ⚠️ Da riconciliare col GDD: il GDD dice "illustrazione flat/pulita fedele agli agents-*.png". La direzione confermata da Leone è più pittorica/materica alla DE, almeno per gli **ambienti**; i personaggi restano fedeli agli agents-*.png. La sessione dev1 deve aggiornare il GDD in questo senso.
+
+## 7. The Red Strings Club ⏭️ saltato
+
+Pixel art → escluso su indicazione di Leone.
+
+## 8. Two Point Hospital ⏭️ saltato
+
+3D cartone → escluso; l'unico concetto utile (muri di vetro / leggibilità dall'alto) è già nel RESEARCH-DOSSIER §4.
+
+## 9. Shadowrun: Hong Kong ✅ analizzato — riferimento grafico secondario
+
+Steam: https://store.steampowered.com/app/346940/Shadowrun_Hong_Kong__Extended_Edition/
+
+**Verdetto (Leone):** carino, la grafica assomiglia a Disco Elysium — "il concetto del disegno è un po' questo, la direzione è questa". Riferimento grafico secondario.
+
+**Cosa NON c'entra col nostro:**
+- È uno sparatutto/tattico: c'è combattimento, mostri — noi siamo un gioco SENZA azione, solo conversazioni (come DE).
+- Tanti ambienti a campo aperto — noi praticamente tutto al chiuso, dentro la box.
+
+---
+
+# Sintesi decisioni (per la sessione dev1)
+
+1. **Riferimento grafico principale: Disco Elysium** — pittorico a mano, isometrico noir, vibe e colori. Secondario: Shadowrun Hong Kong. Il GDD ("flat/pulito") va aggiornato verso questa direzione per gli ambienti; personaggi fedeli agli `agents-*.png`.
+2. **Livello di resa minimo fattibile ora: Yes, Your Grace**; il 3D (alla Going Under) al massimo obiettivo futuro, non ora.
+3. **Movimento: "2D tridimensionato"** — 8 direzioni con profondità (top-down/¾ + Y-sort), NON side-scroller, NON 3D.
+4. **Conversazioni: personaggio in primo piano + vignette in sequenza** (pattern visto in Going Under, unico suo elemento buono).
+5. **Ambito: tutto al chiuso, dentro la box** (ufficio anche grande, ma niente open map).
+6. **Esclusi in blocco: pixel art e 3D cartone.** Niente azione/combattimento: il gameplay è parlare.

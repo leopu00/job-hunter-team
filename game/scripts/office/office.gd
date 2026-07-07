@@ -42,6 +42,8 @@ func _ready() -> void:
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(slug, nav)
+		# un agente convocato col click apre il dialogo appena arriva
+		agent.arrived_to_player.connect(_start_talk)
 		agents.append(agent)
 
 	_add_maintainers()
@@ -58,7 +60,6 @@ func _ready() -> void:
 	cam.make_current()
 
 	_add_hud()
-
 func _process(_delta: float) -> void:
 	_update_near_agent()
 
@@ -110,11 +111,15 @@ func _update_near_agent() -> void:
 		_prompt.text = UIStrings.t("hud.interact") % _near_agent.display_name
 
 func _start_talk(agent: AgentNPC) -> void:
+	if Game.dialogue_active:
+		return
 	agent.start_talk(player)
-	# M3 aprirà qui il dialogo a ritratti; intanto l'agente reagisce
-	var status: Dictionary = TeamData.agent_status().get(agent.slug, {})
-	agent.bubble.show_text(status.get("detail", "…"), 3.0)
-	Sfx.play_blip()
+	player.stop()
+	var ui := DialogueUI.new()
+	add_child(ui)
+	ui.open(agent.slug, agent.display_name)
+	ui.closed.connect(func() -> void:
+		agent.end_talk())
 
 # ── Costruzione scena ─────────────────────────────────────────────────
 
