@@ -12,6 +12,8 @@ const SEED := 20260707
 const FLOOR_TEX := "res://assets/gen-art/floor/floor_main.png"
 const WALL_TEX := "res://assets/gen-art/environment/wall_main.png"
 const WALL_H := 120.0  # altezza a schermo della fascia muro nord
+const GLASS_TEX := "res://assets/gen-art/environment/glass_box.png"
+const GLASS_H := 72.0  # vetrata sopra il parapetto nord
 
 ## La texture va in un CanvasItem SEPARATO dalle primitive: mescolare
 ## draw_texture_rect con molte draw_line/draw_rect nello stesso item rompe
@@ -58,6 +60,26 @@ func _ready() -> void:
 		wall.position = Vector2(floor_rect.position.x, floor_rect.position.y - WALL_H)
 		wall.show_behind_parent = true
 		add_child(wall)
+	if ResourceLoader.exists(GLASS_TEX):
+		var gtex: Texture2D = load(GLASS_TEX)
+		# vetrata della box sopra il parapetto nord (the-box: vetro su struttura bassa)
+		var band := Sprite2D.new()
+		band.texture = gtex
+		band.centered = false
+		band.position = Vector2(floor_rect.position.x, floor_rect.position.y - WALL_H - GLASS_H)
+		band.scale = Vector2(floor_rect.size.x, GLASS_H) / gtex.get_size()
+		band.show_behind_parent = true
+		add_child(band)
+		# velatura sul recinto di vetro del lab
+		var lab := Sprite2D.new()
+		lab.texture = gtex
+		lab.centered = false
+		lab.position = Vector2(FurnitureDefs.LAB_WALL_V.position.x, floor_rect.position.y)
+		lab.scale = Vector2(floor_rect.end.x - FurnitureDefs.LAB_WALL_V.position.x,
+				FurnitureDefs.LAB_WALL_H1.end.y - floor_rect.position.y) / gtex.get_size()
+		lab.modulate.a = 0.5
+		lab.show_behind_parent = true
+		add_child(lab)
 
 func _draw() -> void:
 	var world := FurnitureDefs.WORLD
