@@ -1,0 +1,35 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+
+config_version=5
+
+[application]
+
+config/name="JHT: The Office"
+config/description="Prototipo gamificato di Job Hunter Team: cammina nella box di vetro dove i tuoi agenti AI cercano lavoro per te."
+run/main_scene="res://scenes/title.tscn"
+config/features=PackedStringArray("4.7")
+boot_splash/bg_color=Color(0.0235294, 0.0235294, 0.0313726, 1)
+boot_splash/show_image=false
+config/icon="res://assets/icon.svg"
+
+[autoload]
+
+Game="*res://scripts/game.gd"
+TeamData="*res://scripts/data/team_data.gd"
+Sfx="*res://scripts/sfx.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/mode=3
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+anti_aliasing/quality/msaa_2d=2
