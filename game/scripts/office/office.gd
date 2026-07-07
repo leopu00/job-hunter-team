@@ -115,8 +115,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if _registry:
 		return  # col registro aperto, il mondo non riceve input
-	if event.is_action_pressed("interact") and _near_agent:
-		_start_talk(_near_agent)
+	if event.is_action_pressed("interact"):
+		if _near_agent:
+			_start_talk(_near_agent)
+		elif _near_corkboard():
+			_registry = RegistryPanel.new()
+			add_child(_registry)
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT \
 			and event.pressed:
@@ -155,9 +159,17 @@ func _update_near_agent() -> void:
 		if _near_agent:
 			_near_agent.set_highlight(true)
 			Sfx.play_tick()
-	_prompt.visible = _near_agent != null and not Game.dialogue_active
 	if _near_agent:
 		_prompt.text = UIStrings.t("hud.interact") % _near_agent.display_name
+	elif _near_corkboard():
+		_prompt.text = UIStrings.t("hud.corkboard")
+	_prompt.visible = (_near_agent != null or _near_corkboard()) \
+			and not Game.dialogue_active
+
+## Vicino alla bacheca-indagine sul muro nord (registro diegetico).
+func _near_corkboard() -> bool:
+	var board := FurnitureDefs.get_rect("corkboard").get_center() + Vector2(0, 60)
+	return player.global_position.distance_to(board) < 150.0
 
 func _start_talk(agent: AgentNPC) -> void:
 	if Game.dialogue_active:

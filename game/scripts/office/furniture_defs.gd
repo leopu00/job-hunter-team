@@ -19,7 +19,8 @@ const ITEMS := [
 	{"id": "lamp", "kind": "lamp", "rect": Rect2(300, 214, 44, 44)},
 	{"id": "plant_a", "kind": "plant", "rect": Rect2(630, 204, 56, 56)},
 
-	# ── Parete alta: libreria e angolo caffè ──
+	# ── Parete alta: bacheca-indagine, libreria e angolo caffè ──
+	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(730, 150, 150, 34)},
 	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(950, 190, 280, 70)},
 	{"id": "coffee_bar", "kind": "coffee", "rect": Rect2(1400, 190, 200, 80)},
 	{"id": "plant_c", "kind": "plant", "rect": Rect2(1700, 204, 56, 56)},

@@ -28,6 +28,7 @@ const S := {
 	"hud.interact": "[E] Parla con %s",
 	"hud.visit": "IN ARRIVO DA TE",
 	"hud.registry_hint": "TAB registro",
+	"hud.corkboard": "[E] Registro candidature",
 
 	# ── Registro candidature ──────────────────────────────────────────
 	"registry.title": "REGISTRO CANDIDATURE",

@@ -35,6 +35,7 @@ const GEN_ART := {
 	"blackboard": "res://assets/gen-art/furniture/blackboard.png",
 	"plant": "res://assets/gen-art/furniture/plant.png",
 	"lamp": "res://assets/gen-art/furniture/floor_lamp.png",
+	"corkboard": "res://assets/gen-art/furniture/corkboard.png",
 }
 
 var item: Dictionary
