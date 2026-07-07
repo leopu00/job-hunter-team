@@ -37,6 +37,18 @@ Il master (`mac-leone:dev1-game-master`) integra.
 
 **Batch 11/11 completo** — 9 pezzi al primo colpo; luci accese = sempre post-process.
 
+### 2026-07-07 — Ordine #3: ritratti Mentor 6 emozioni (1120x1520, mezzo busto, alpha)
+
+| emozione | file | iter | esito |
+|---|---|---|---|
+| neutro (àncora) | portraits/mentor/full_neutro.png | 3+pp | ✅ Il generatore tinge la pelle di olive (contaminazione tunica), NON corregge nemmeno con hex espliciti → remap canali in post (olive→tan #c8a17a) mascherato hue+poligono spaziale. Script riusabile: scratchpad/fix_mentor_skin.py |
+| caldo | — | — | in corso |
+| pensieroso/sorpreso/severo/divertito | — | — | in coda |
+
+Lezione: quando il modello ha un bias di palette persistente (3 iter uguali),
+smettere di re-promptare e correggere in post con maschere — il framing fisso
+dei ritratti rende le maschere spaziali riusabili tra le varianti.
+
 ## Note su come promptare Codex
 
 1. **Fargli aprire i riferimenti PRIMA di generare**: iniziare il prompt con

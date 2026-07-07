@@ -5,9 +5,13 @@ extends Control
 ## sinusoidale, micro-tilt, transizione 100-200ms a ogni battuta.
 
 const DIR := "res://assets/characters/gen/portraits/"
+## Ritratti pittorici full-image (gen-art, uno per emozione): se presenti
+## per lo slug, vincono sul sistema a layer SVG.
+const GEN_DIR := "res://assets/gen-art/portraits/"
 const SIZE := Vector2(560, 760)
 
 var _slug := ""
+var _full_mode := false
 var _base: TextureRect
 var _pose: TextureRect
 var _face: TextureRect
@@ -29,7 +33,12 @@ func setup(slug: String) -> void:
 	_slug = slug
 	_cur_pose = ""
 	_cur_face = ""
-	_base.texture = load(DIR + slug + "/base.svg")
+	_full_mode = ResourceLoader.exists(GEN_DIR + slug + "/full_neutro.png")
+	if _full_mode:
+		_base.texture = null
+		_pose.texture = null
+	else:
+		_base.texture = load(DIR + slug + "/base.svg")
 
 func has_face(face: String) -> bool:
 	return ResourceLoader.exists(DIR + _slug + "/face_%s.svg" % face)
@@ -39,6 +48,9 @@ func has_pose(pose: String) -> bool:
 
 ## Cambia posa/espressione con micro-transizione (chiamata a ogni battuta).
 func set_state(pose: String, face: String) -> void:
+	if _full_mode:
+		_set_full(face)
+		return
 	if not has_pose(pose):
 		pose = "a"
 	if not has_face(face):
@@ -64,6 +76,26 @@ func set_state(pose: String, face: String) -> void:
 		tw.tween_property(_face, "modulate:a", 1.0, 0.14)
 		tw.tween_property(_face_old, "modulate:a", 0.0, 0.14)
 	# piccolo "settle" a ogni battuta
+	var settle := create_tween()
+	position.y += 5.0
+	settle.tween_property(self, "position:y", position.y - 5.0, 0.18) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## Modalità pittorica: un'immagine intera per emozione, crossfade al cambio.
+func _set_full(face: String) -> void:
+	var path := GEN_DIR + _slug + "/full_%s.png" % face
+	if not ResourceLoader.exists(path):
+		path = GEN_DIR + _slug + "/full_neutro.png"
+	if face != _cur_face:
+		_cur_face = face
+		_face_old.texture = _face.texture
+		_face_old.modulate.a = 1.0 if _face.texture else 0.0
+		_face.texture = load(path)
+		_face.modulate.a = 0.0
+		var tw := create_tween()
+		tw.set_parallel()
+		tw.tween_property(_face, "modulate:a", 1.0, 0.16)
+		tw.tween_property(_face_old, "modulate:a", 0.0, 0.16)
 	var settle := create_tween()
 	position.y += 5.0
 	settle.tween_property(self, "position:y", position.y - 5.0, 0.18) \
