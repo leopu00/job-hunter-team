@@ -57,6 +57,38 @@ func _play(stream: AudioStreamWAV) -> void:
 	p.stream = stream
 	p.play()
 
+## Hum ambientale della box: bordone basso + soffio, loop senza giunture.
+## Chiamato dall'ufficio; ritorna il player così la scena lo gestisce.
+func make_ambient_hum() -> AudioStreamPlayer:
+	var dur := 4.0
+	var n := int(dur * MIX_RATE)
+	var data := PackedByteArray()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 42
+	var brown := 0.0
+	for i in n:
+		var t := float(i) / MIX_RATE
+		# bordone elettrico (55Hz + quinta lieve) + rumore browniano soffiato
+		var v := sin(TAU * 55.0 * t) * 0.5 + sin(TAU * 82.5 * t) * 0.18
+		brown = clampf(brown + rng.randf_range(-1.0, 1.0) * 0.02, -0.35, 0.35)
+		v = (v + brown) * 0.32
+		var s := int(clamp(v, -1.0, 1.0) * 32767.0)
+		data.append(s & 0xff)
+		data.append((s >> 8) & 0xff)
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = MIX_RATE
+	wav.stereo = false
+	wav.data = data
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_begin = 0
+	wav.loop_end = n
+	var p := AudioStreamPlayer.new()
+	p.stream = wav
+	p.volume_db = -30.0
+	p.autoplay = true
+	return p
+
 ## Scatto meccanico: burst di rumore bianco con decadimento rapidissimo.
 func _noise_burst(dur: float, vol_db: float) -> AudioStreamWAV:
 	var amp := db_to_linear(vol_db)

@@ -63,6 +63,7 @@ func _ready() -> void:
 
 	_add_maintainers()
 	_add_lights()
+	add_child(Sfx.make_ambient_hum())
 
 	var cam := Camera2D.new()
 	cam.limit_left = 0
