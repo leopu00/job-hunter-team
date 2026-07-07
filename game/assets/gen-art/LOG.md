@@ -42,8 +42,22 @@ Il master (`mac-leone:dev1-game-master`) integra.
 | emozione | file | iter | esito |
 |---|---|---|---|
 | neutro (àncora) | portraits/mentor/full_neutro.png | 3+pp | ✅ Il generatore tinge la pelle di olive (contaminazione tunica), NON corregge nemmeno con hex espliciti → remap canali in post (olive→tan #c8a17a) mascherato hue+poligono spaziale. Script riusabile: scratchpad/fix_mentor_skin.py |
-| caldo | — | — | in corso |
-| pensieroso/sorpreso/severo/divertito | — | — | in coda |
+| caldo | portraits/mentor/full_caldo.png | 1+pp | ✅ |
+| pensieroso | portraits/mentor/full_pensieroso.png | 1+pp | ✅ |
+| sorpreso | portraits/mentor/full_sorpreso.png | 1+pp | ✅ |
+| severo | portraits/mentor/full_severo.png | 1+pp | ✅ barba normalizzata (r-g 27.5→16.2) |
+| divertito | portraits/mentor/full_divertito.png | 1+pp | ✅ barba normalizzata |
+
+**Serie 6/6 completa** — contact sheet: portraits/mentor/_contact_sheet.png.
+⚠️ BUG ALPHA scoperto a fine serie: il matte chroma-key di Codex lasciava
+alpha ~40% sull'intera figura e bucava i dettagli inchiostrati scuri (alpha
+correlato al colore, non alla copertura). Su dark bg = fantasmi. Fix:
+ricostruzione alpha dalla silhouette (flood-fill dell'esterno con
+ImageDraw.floodfill — attenzione: serve `.copy()` dopo fromarray o non
+scrive — interno a 255 con erosione 2px, bordo = alpha originale x3).
+Tutti i 6 finali rigenerati da v1 con pipeline deterministica.
+**Check da fare SEMPRE sui PNG alpha di Codex: media alpha nella zona
+sicuramente opaca, non solo % di pixel trasparenti.**
 
 Lezione: quando il modello ha un bias di palette persistente (3 iter uguali),
 smettere di re-promptare e correggere in post con maschere — il framing fisso
