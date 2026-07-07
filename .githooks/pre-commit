@@ -32,7 +32,7 @@ fi
 
 # ── WHITELIST ESTENSIONI ─────────────────────────────────────
 # Solo queste estensioni sono permesse. Tutto il resto e' bloccato.
-ALLOWED_EXTENSIONS="ts|tsx|gd|uid|tscn|tres|godot|ttf|import|js|jsx|json|geojson|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|txt|example|gitkeep|gitignore|dockerignore|vercelignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist|list"
+ALLOWED_EXTENSIONS="ts|tsx|gd|uid|tscn|tres|godot|ttf|import|js|jsx|json|geojson|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|txt|example|gitkeep|gitignore|dockerignore|vercelignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist|list|jpg|jpeg"
 
 BLOCKED_FILES=""
 while IFS= read -r file; do

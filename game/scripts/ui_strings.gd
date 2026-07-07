@@ -31,6 +31,8 @@ const S := {
 
 	# ── Wizard ────────────────────────────────────────────────────
 	"wizard.title": "CONFIGURAZIONE INIZIALE",
+	"wizard.step": "PASSO %d/%d",
+	"wizard.step_welcome": "BENVENUTO",
 	"wizard.step_avatar": "AVATAR",
 	"wizard.step_cv": "CURRICULUM",
 	"wizard.step_team": "NOME TEAM",
@@ -38,10 +40,32 @@ const S := {
 	"wizard.avatar_hair": "CAPELLI",
 	"wizard.avatar_hair_color": "COLORE CAPELLI",
 	"wizard.avatar_outfit": "ABITO",
+	"wizard.avatar_turn": "GIRA ⟳",
 	"wizard.cv_pick": "SCEGLI FILE…",
 	"wizard.cv_none": "nessun file selezionato",
+	"wizard.cv_loaded": "CV acquisito: %s",
+	"wizard.team_label": "COME SI CHIAMA IL TUO TEAM?",
 	"wizard.team_placeholder": "es. Team Falco",
+	"wizard.team_default": "Team JHT",
 	"wizard.next": "AVANTI ▶",
 	"wizard.back": "◀ INDIETRO",
 	"wizard.done": "ENTRA NELL'UFFICIO ▶",
+
+	# battute dell'Assistente nel wizard (tag emozione inline)
+	"wizard.say_welcome": "[caldo] Benvenuto in Job Hunter Team. Io sono l'Assistente: penso io all'ingresso. Prima di aprirti la box, tre formalità veloci.",
+	"wizard.say_avatar": "[caldo] Per prima cosa: fatti vedere. Come vuoi entrare in ufficio?",
+	"wizard.say_avatar_2": "[divertito] Con calma, eh. Gli agenti indossano tutti gli stessi occhiali… tu almeno puoi scegliere i capelli.",
+	"wizard.say_cv": "[neutro] Ora il tuo curriculum. Me lo dai e lo passo al team: è da lì che partono Scout e Scorer.",
+	"wizard.say_cv_parsing": "[sorpreso] Ricevuto! Un momento che lo leggo…",
+	"wizard.say_cv_done": "[caldo] Fatto. C'è del buon materiale qui dentro — vedrai che lo Scorer sarà d'accordo.",
+	"wizard.say_team": "[caldo] Ultima cosa: il nome della squadra. È il tuo team, dopotutto.",
+	"wizard.say_done": "[divertito] Perfetto. Ti apro la box: il team è già al lavoro. Il Mentor è nel salotto, se cerchi un consiglio.",
+
+	# log finto del parsing CV
+	"wizard.parse_0": "apro il documento…",
+	"wizard.parse_1": "estraggo le competenze…",
+	"wizard.parse_2": "cerco i numeri nascosti nei paragrafi…",
+	"wizard.parse_3": "annoto le lingue e le città…",
+	"wizard.parse_4": "il Critico annuisce, ottimo segno…",
+	"wizard.parse_5": "profilo pronto per lo Scorer ✓",
 }

@@ -68,6 +68,20 @@ Steam: https://store.steampowered.com/app/632470/Disco_Elysium__The_Final_Cut/
 **Differenza col nostro (Leone):**
 - DE è una open map grande (quartieri, edifici, si cammina per la città). Noi restiamo **dentro la box**: un solo ufficio, anche se può essere grande.
 
+**Per la sessione dev1 — estrazione dello stile DE:**
+
+1. Scarica questi screenshot (URL stabili, CDN Steam) in `game/docs/refs/disco-elysium/` e **aprili/guardali** prima di toccare la grafica degli ambienti:
+   - https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/632470/ss_b3694e99ffdb686d1bbbbe16a540d3d2ccd509c4.1920x1080.jpg (esterno isometrico)
+   - https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/632470/ss_9125a718ee9ba85386ae5d4eb820f3266073fc97.1920x1080.jpg (layout dialogo con pannello laterale)
+   - https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/632470/ss_dec29c440fab2f7817d68c1380c019290eb1755e.1920x1080.jpg
+   - Altre: pagina Steam 632470 e artbook ufficiale (DLC "Soundtrack & Artbooklet").
+2. Caratteri del look da replicare (in ordine di importanza):
+   - **Pittorico con pennellate visibili**: niente riempimenti flat uniformi; texture da pittura a olio/acquerello sporco su pavimenti e muri.
+   - **Valore prima del colore**: scene scure e desaturate, la luce definisce le zone — pozze calde (lampade) su ambiente freddo. Contrasto di valore forte, colori smorzati con pochi accenti.
+   - **Bordi imperfetti**: contorni rotti/materici, non linee vettoriali pulite.
+   - **Camera fissa isometrica**: ogni inquadratura componibile come un quadro.
+3. In Godot: sfondi come **texture dipinte** (anche generate + paintover) invece di forme procedurali flat; grana/vignette a schermo intero; luci come gradienti additivi caldi. Gli SVG flat attuali vanno bene come blockout, non come resa finale.
+
 **Note tecniche per replicare il look (dal RESEARCH-DOSSIER §3.1):**
 - Sfondi = scene 3D di blocco ridipinte a mano; normal map dipinte a mano per far cadere la luce "come pensa un illustratore"; camera fissa → ogni schermata art-directed come un quadro.
 - ⚠️ Da riconciliare col GDD: il GDD dice "illustrazione flat/pulita fedele agli agents-*.png". La direzione confermata da Leone è più pittorica/materica alla DE, almeno per gli **ambienti**; i personaggi restano fedeli agli agents-*.png. La sessione dev1 deve aggiornare il GDD in questo senso.
