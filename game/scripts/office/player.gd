@@ -13,6 +13,7 @@ var is_moving := false
 
 var _path := PackedVector2Array()
 var _path_i := 0
+var _rig: CharacterRig
 
 func _ready() -> void:
 	var shape := CollisionShape2D.new()
@@ -21,6 +22,11 @@ func _ready() -> void:
 	shape.shape = circle
 	shape.position = Vector2(0, -12)
 	add_child(shape)
+	_rig = CharacterRig.new()
+	_rig.name = "Rig"
+	_rig.setup(CharacterDefs.player_textures(Game.profile))
+	add_child(_rig)
+	queue_redraw()
 
 func set_click_target(target: Vector2) -> void:
 	if nav == null:
@@ -54,6 +60,8 @@ func _physics_process(_delta: float) -> void:
 	is_moving = velocity.length() > 1.0
 	if is_moving:
 		_update_facing(velocity)
+	if _rig:
+		_rig.set_motion(facing, flip, "walk" if is_moving else "idle")
 	move_and_slide()
 
 ## Visual placeholder (M1): capsula col colore brand finché non c'è il rig SVG.

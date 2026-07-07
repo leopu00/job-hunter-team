@@ -79,12 +79,38 @@ BOOT → TITLE ──INVIO──▶ WIZARD ──fine──▶ OFFICE ◀──�
   (scelti nel wizard), senza occhiali scuri.
 - Formato asset e pipeline SVG→PNG@2x: vedi `ASSETS.md`.
 
+## Spunti integrati dal RESEARCH-DOSSIER
+
+Dal dossier (`RESEARCH-DOSSIER.md`) il prototipo integra tre pattern:
+
+1. **UX ufficio alla Gather** (§1.2): ogni agente ha una **status bubble**
+   sopra la testa che alterna stato di lavoro (da `TeamData.agent_status()`,
+   es. "sto scansionando LinkedIn…") e chiacchiere ambientali — è anche la
+   metà "ambientale" del modello Oxenfree (§2.3); **proximity ring** visibile
+   attorno all'agente interagibile più vicino; **wave-to-summon**: click su
+   un agente lontano → saluta e ti viene incontro, poi parte il dialogo.
+2. **Ritratti alla Hades / Night in the Woods** (§2): ogni battuta porta un
+   **tag emozione inline** (`[saggio]`, `[divertito]`, …) che il runner
+   mappa su posa+espressione; blink timer, respiro sinusoidale 1–2px,
+   slide-in dal bordo con settle. Il formato col tag emozione è già pronto
+   per l'output LLM futuro.
+3. **Luci alla Backbone / Disco Elysium** (§3): pozze di luce calda additive
+   sotto le lampade + neon freddo dei bordi vetro; poche luci, dipinte, con
+   silhouette leggibili su pavimento a valore controllato.
+
+Rimandati a `ROADMAP.md`: loop invertito alla Yes, Your Grace (§9.4, gli
+agenti vengono alla scrivania del giocatore in coda visibile), onboarding
+diegetico "badge HR + ascensore" (§5), quest log/streak/corkboard (§6),
+camera follow su click agente (§9.8).
+
 ## Dialoghi
 
 Alberi scriptati in `scripts/dialogue/dialogues.gd` (Dictionary): nodo =
-{speaker, text, pose, expression, choices|next}. Typewriter JetBrains Mono
-con tick audio; scelte da tastiera (1-3 / frecce+INVIO) o mouse. Prossimità:
-Area2D per agente → prompt HUD "[E] Parla con …". Contenuti mock sensati:
+{speaker, text con tag emozione inline, choices|next}; il tag (`[saggio]`,
+`[severo]`, …) seleziona posa+espressione del ritratto. Typewriter JetBrains
+Mono con tick audio; scelte da tastiera (1-3 / frecce+INVIO) o mouse.
+Prossimità: raggio per agente → prompt HUD "[E] Parla con …" a conferma
+esplicita (mai chat accidentali); da lontano, click = wave-to-summon. Contenuti mock sensati:
 Mentor = consiglio carriera (albero completo), Scout = 3 posizioni trovate
 oggi, Scorer = spiegazione di uno score 0-100 (solo numerico, mai etichette),
 Coordinatore/Analista/Assistente = brevi. Terminologia: sempre "utente",
