@@ -30,7 +30,12 @@ Il master (`mac-leone:dev1-game-master`) integra.
 | 5 | furniture/coffee_table.png 360x220 | 1 | ✅ consegnato |
 | 6 | furniture/bookshelf.png 560x260 | 1 | ✅ consegnato |
 | 7 | furniture/coffee_bar.png 400x260 | 2+pp | ✅ Codex non accendeva la spia in 2 iter → glow #f5c518 dipinto in post (PIL screen mascherato su alpha). Lezione: piccoli accenti luminosi conviene farli in post, non re-promptare |
-| 8-11 | lab_bench, blackboard, plant, floor_lamp | — | in coda |
+| 8 | furniture/lab_bench.png 660x320 | 1 | ✅ vetreria mint, microscopio |
+| 9 | furniture/blackboard.png 160x520 | 1+reframe | ✅ contenuto 160x366 ancorato bottom (ok per il renderer del master) |
+| 10 | furniture/plant.png 220x260 | 1 | ✅ monstera olive desaturata |
+| 11 | furniture/floor_lamp.png 160x320 | 1+pp | ✅ paralume acceso #ffb45c dipinto in post (tinta multiply + glow screen su alpha) |
+
+**Batch 11/11 completo** — 9 pezzi al primo colpo; luci accese = sempre post-process.
 
 ## Note su come promptare Codex
 
