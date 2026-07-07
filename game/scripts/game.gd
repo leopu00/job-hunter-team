@@ -27,6 +27,14 @@ func _enter_tree() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_register_inputs()
 
+func _ready() -> void:
+	# Scorciatoia per i test: JHT_SCENE=office|wizard|title salta il boot.
+	var target := OS.get_environment("JHT_SCENE")
+	if target == "office":
+		goto_office.call_deferred()
+	elif target == "wizard":
+		goto_wizard.call_deferred()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause") and not dialogue_active:
 		if get_tree().paused:

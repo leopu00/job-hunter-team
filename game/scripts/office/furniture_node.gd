@@ -45,11 +45,32 @@ func _draw() -> void:
 	var h := _rect.size.y
 	var top := Rect2(Vector2(-w / 2.0, -h), Vector2(w, h - FRONT_H))
 	var front := Rect2(Vector2(-w / 2.0, -FRONT_H), Vector2(w, FRONT_H))
-	# ombra a terra
-	draw_rect(Rect2(Vector2(-w / 2.0 - 4, -6), Vector2(w + 8, 12)), Color(0, 0, 0, 0.25))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(item["id"])
+	# ombra a terra morbida (tre passate concentriche, non un rettangolo netto)
+	for i in 3:
+		var grow := 4.0 + i * 9.0
+		draw_set_transform(Vector2(0, -2), 0.0, Vector2(1.0, 0.30))
+		draw_circle(Vector2.ZERO, w * 0.52 + grow, Color(0, 0, 0, 0.10 - i * 0.03))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	draw_rect(top, cols[0])
 	draw_rect(front, cols[1])
-	draw_rect(top, Color(0, 0, 0, 0.35), false, 1.5)
+	# usura pittorica sul piano: chiazze e graffi seedati per mobile
+	for i in 5:
+		var px := rng.randf_range(top.position.x + 10, top.end.x - 10)
+		var py := rng.randf_range(top.position.y + 8, top.end.y - 8)
+		var dark := rng.randf() < 0.65
+		var col := Color(0, 0, 0, rng.randf_range(0.06, 0.14)) if dark \
+				else Color(1, 1, 1, rng.randf_range(0.03, 0.06))
+		draw_set_transform(Vector2(px, py), rng.randf_range(0, TAU), Vector2(1.0, rng.randf_range(0.25, 0.6)))
+		draw_circle(Vector2.ZERO, rng.randf_range(8.0, w * 0.16), col)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# la luce delle lampade accende il bordo alto del piano
+	draw_line(top.position + Vector2(2, 1), Vector2(top.end.x - 2, top.position.y + 1),
+			Color(1, 1, 0.9, 0.10), 2.0)
+	# contorno rotto: due passate leggere e sfalsate, mai una linea pulita
+	draw_rect(top, Color(0, 0, 0, 0.22), false, 1.5)
+	draw_rect(top.grow(1.5), Color(0, 0, 0, 0.12), false, 1.0)
 	# dettaglio semplice per riconoscere il mobile a colpo d'occhio
 	match kind:
 		"desk", "desk_wide":
