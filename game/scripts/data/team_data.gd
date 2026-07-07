@@ -18,3 +18,9 @@ func score_explanation() -> Dictionary:
 
 func mentor_tip() -> String:
 	return source.get_mentor_tip()
+
+func applications() -> Array:
+	return source.get_applications()
+
+func streak() -> Dictionary:
+	return source.get_streak()

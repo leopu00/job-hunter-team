@@ -27,6 +27,17 @@ const S := {
 	"hud.budget": "BUDGET",
 	"hud.interact": "[E] Parla con %s",
 	"hud.visit": "IN ARRIVO DA TE",
+	"hud.registry_hint": "TAB registro",
+
+	# ── Registro candidature ──────────────────────────────────────────
+	"registry.title": "REGISTRO CANDIDATURE",
+	"registry.streak": "STREAK %d giorni · %d freeze",
+	"registry.empty": "nessuna candidatura ancora — parla con lo Scout",
+	"registry.stage_0": "inviata",
+	"registry.stage_1": "screening",
+	"registry.stage_2": "colloquio",
+	"registry.stage_3": "offerta",
+	"registry.close": "[TAB] chiudi",
 	"hud.dialogue_next": "[INVIO] continua",
 	"hud.dialogue_skip": "[ESC] chiudi",
 

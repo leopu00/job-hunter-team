@@ -75,36 +75,6 @@ func _ready() -> void:
 	cam.make_current()
 
 	_add_hud()
-	if Game.arrive_via_elevator:
-		Game.arrive_via_elevator = false
-		_elevator_intro()
-
-## L'ascensore si apre sulla box (onboarding diegetico).
-func _elevator_intro() -> void:
-	var layer := CanvasLayer.new()
-	layer.layer = 80
-	add_child(layer)
-	var doors: Array[ColorRect] = []
-	for i in 2:
-		var door := ColorRect.new()
-		door.color = Palette.DEEP
-		door.position = Vector2(960.0 * i, 0)
-		door.size = Vector2(960, 1080)
-		layer.add_child(door)
-		var edge := ColorRect.new()
-		edge.color = Palette.GREEN
-		edge.position = Vector2(957 if i == 0 else 0, 0)
-		edge.size = Vector2(3, 1080)
-		door.add_child(edge)
-		doors.append(door)
-	get_tree().create_timer(0.3).timeout.connect(Sfx.play_ding)
-	var tw := create_tween()
-	tw.set_parallel()
-	tw.tween_property(doors[0], "position:x", -990.0, 1.5) \
-			.set_delay(0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(doors[1], "position:x", 1950.0, 1.5) \
-			.set_delay(0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.chain().tween_callback(layer.queue_free)
 
 func _process(delta: float) -> void:
 	_update_near_agent()
@@ -128,9 +98,22 @@ func _tick_visits(delta: float) -> void:
 	if _team_hud:
 		_team_hud.set_visit(_active_visit.display_name if _active_visit else "")
 
+var _registry: RegistryPanel
+
 func _unhandled_input(event: InputEvent) -> void:
 	if Game.dialogue_active:
 		return
+	if event.is_action_pressed("registry"):
+		if _registry:
+			_registry.queue_free()
+			_registry = null
+			Sfx.play_back()
+		else:
+			_registry = RegistryPanel.new()
+			add_child(_registry)
+		return
+	if _registry:
+		return  # col registro aperto, il mondo non riceve input
 	if event.is_action_pressed("interact") and _near_agent:
 		_start_talk(_near_agent)
 		return
@@ -286,7 +269,7 @@ func _add_hud() -> void:
 	_team_hud = TeamHud.new()
 	theme_root.add_child(_team_hud)
 	var hint := TerminalTheme.label(
-			"WASD / frecce per muoverti · click per andare · ESC menu",
+			"WASD / frecce per muoverti · click per andare · TAB registro · ESC menu",
 			15, Palette.DIM)
 	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	hint.position = Vector2(-hint.size.x / 2.0, -30)

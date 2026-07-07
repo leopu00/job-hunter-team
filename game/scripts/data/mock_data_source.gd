@@ -64,3 +64,16 @@ func get_score_explanation() -> Dictionary:
 
 func get_mentor_tip() -> String:
 	return "Nei colloqui, racconta i risultati con i numeri: non «ho migliorato il sistema», ma «ho dimezzato i tempi di deploy»."
+
+const APPLICATIONS := [
+	{"title": "DevOps Engineer", "company": "Vetriera Systems", "score": 84, "stage": 3},
+	{"title": "Backend Engineer (Python)", "company": "Nordwind Logistics", "score": 82, "stage": 2},
+	{"title": "Data Platform Engineer", "company": "Brumaio Analytics", "score": 77, "stage": 1},
+	{"title": "Site Reliability Engineer", "company": "Chiaroscuro Cloud", "score": 61, "stage": 0},
+]
+
+func get_applications() -> Array:
+	return APPLICATIONS
+
+func get_streak() -> Dictionary:
+	return {"days": 5, "freezes": 1}

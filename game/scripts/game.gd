@@ -96,6 +96,7 @@ func _register_inputs() -> void:
 	_add_key_action("move_up", [KEY_W, KEY_UP])
 	_add_key_action("move_down", [KEY_S, KEY_DOWN])
 	_add_key_action("interact", [KEY_E])
+	_add_key_action("registry", [KEY_TAB])
 	_add_key_action("pause", [KEY_ESCAPE])
 
 func _add_key_action(action: String, keys: Array) -> void:

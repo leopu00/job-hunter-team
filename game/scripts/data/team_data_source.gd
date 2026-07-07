@@ -26,3 +26,12 @@ func get_score_explanation() -> Dictionary:
 ## Consiglio di carriera del giorno (per il Mentor): String
 func get_mentor_tip() -> String:
 	return ""
+
+## Candidature come quest a stadi (registro):
+## [{ title, company, score, stage: 0 inviata|1 screening|2 colloquio|3 offerta }]
+func get_applications() -> Array:
+	return []
+
+## Streak quotidiana con freeze alla Duolingo: { days: int, freezes: int }
+func get_streak() -> Dictionary:
+	return {}
