@@ -14,10 +14,10 @@ Le fonti tra parentesi rimandano a `RESEARCH-DOSSIER.md` (§) e
    reagisce. Input libero come oggetto diegetico (terminale), chip di
    risposte suggerite, attenzione alla prompt injection (gli agenti
    maneggiano dati reali).
-3. **Asset pittorici completi** (pipeline dev1-art già avviata in
-   `assets/gen-art/`): mobili restanti, ritratti Mentor 6 emozioni
-   pittoriche full (PortraitView supporta già swap completi), muri/quinte
-   della box, personaggi in-world ridipinti.
+3. **Asset pittorici restanti** (pipeline dev1-art in `assets/gen-art/`;
+   FATTI: 11 mobili + ritratti full per TUTTI e 6 gli agenti del slice):
+   muri/quinte della box, personaggi in-world ridipinti, ologramma e
+   props secondari, pose alternative per i ritratti.
 4. **Visite più profonde** (Yes, Your Grace): decisioni che spendono
    risorse (budget API, crediti CV), coda multi-agente visibile, eventi
    dalla giornata reale del team (weekly, hard-stop, throttle).

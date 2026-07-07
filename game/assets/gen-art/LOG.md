@@ -44,8 +44,14 @@ Il master (`mac-leone:dev1-game-master`) integra.
 | assistente 4/4 | portraits/assistente/full_{neutro,caldo,sorpreso,divertito}.png | ✅ consegnato — gpt-5.5 high post-reset: pelle e alpha nativi ok; unico pp = dehalo bordo (regioni bianche del matte attorno ai capelli, visibili solo su dark bg) |
 | coordinatore 3/3 | portraits/coordinatore/full_{neutro,caldo,severo}.png | ✅ tutti in 1 iterazione; dehalo su caldo+severo |
 | scout 3/3 | portraits/scout/full_{neutro,caldo,pensieroso}.png | ✅ tutti in 1 iterazione; dehalo su caldo+pensieroso |
-| scorer 0/3 | portraits/scorer/ | in corso (neutro; ref di profilo → chiesto fronte esplicito) |
-| analista 0/3 | — | in coda |
+| scorer 3/3 | portraits/scorer/full_{neutro,pensieroso,caldo}.png | ✅ ref di profilo → fronte; 2 stream-drop recuperati (Esc + prompt in coda) |
+| analista 3/3 | portraits/analista/full_{neutro,pensieroso,caldo}.png | ✅ donna (confermata dal master); dehalo SOLO capelli — col camice bianco l'euristica quasi-bianco mangia il camice (prima passata annullata, rifatta dalle v1) |
+
+**ORDINE #4 COMPLETO 16/16** — tutti i ritratti in 1 iterazione di generazione.
+Lezioni pipeline: (1) dehalo va ristretta spazialmente se il personaggio ha
+capi bianchi; (2) su stream-drop di Codex: se rientra da solo aspettare
+(Reconnecting n/5), se il turno muore re-promptare, se il file è già salvato
+e Codex continua a verificare → Esc libera il prompt in coda.
 
 Eventi Codex della sessione: limite 5h → auto-downgrade a gpt-5.4-mini
 (matte rotto: 81% camicia alpha<100, speckle RGB, bocciato) → usato 1 usage
