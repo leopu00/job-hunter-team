@@ -37,6 +37,21 @@ Il master (`mac-leone:dev1-game-master`) integra.
 
 **Batch 11/11 completo** — 9 pezzi al primo colpo; luci accese = sempre post-process.
 
+### 2026-07-07 — Ordine #4: ritratti dialogo 5 agenti (slug ITALIANI del runner)
+
+| set | file | esito |
+|---|---|---|
+| assistente 4/4 | portraits/assistente/full_{neutro,caldo,sorpreso,divertito}.png | ✅ consegnato — gpt-5.5 high post-reset: pelle e alpha nativi ok; unico pp = dehalo bordo (regioni bianche del matte attorno ai capelli, visibili solo su dark bg) |
+| coordinatore 0/3 | portraits/coordinatore/ | in corso (neutro) |
+| scout 0/3, scorer 0/3, analista 0/3 | — | in coda |
+
+Eventi Codex della sessione: limite 5h → auto-downgrade a gpt-5.4-mini
+(matte rotto: 81% camicia alpha<100, speckle RGB, bocciato) → usato 1 usage
+reset (ne resta 1, riservato ai casi blocking per direttiva master) →
+/model gpt-5.5 high + /new (contesto era al 18%).
+Check nuovi in pipeline: (1) alpha medio figura; (2) alone bianco su
+composito scuro → dehalo selettivo (banda bordo + quasi-bianco desaturato).
+
 ### 2026-07-07 — Ordine #3: ritratti Mentor 6 emozioni (1120x1520, mezzo busto, alpha)
 
 | emozione | file | iter | esito |
@@ -82,3 +97,12 @@ dei ritratti rende le maschere spaziali riusabili tra le varianti.
    background sul file di output invece di poll manuale.
 7. Il Godot editor aperto genera `.import` accanto ai PNG in assets/ — normale,
    non toccarli.
+8. **Solo ASCII nei prompt via tmux send-keys**: un carattere multibyte ha
+   spezzato il paste a metà (Codex ha ricevuto "120x1520" da "1120x1520").
+   Se Codex fa una domanda di chiarimento, rispondere nel pane — non re-inviare
+   tutto il prompt.
+9. Se Codex sfora ~15 min su un task già risolto altrove: Esc interrompe e
+   invia subito l'eventuale messaggio in coda.
+10. Occhio al modello nella status bar del pane: vicino al limite 5h Codex
+    auto-downgrada (gpt-5.5 high → gpt-5.4-mini). Giudicare il primo output
+    del mini prima di continuare la serie.
