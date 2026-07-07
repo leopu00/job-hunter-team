@@ -23,6 +23,7 @@ const ITEMS := [
 	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(730, 150, 150, 34)},
 	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(950, 190, 280, 70)},
 	{"id": "coffee_bar", "kind": "coffee", "rect": Rect2(1400, 190, 200, 80)},
+	{"id": "water_cooler", "kind": "water_cooler", "rect": Rect2(1625, 196, 54, 54)},
 	{"id": "plant_c", "kind": "plant", "rect": Rect2(1700, 204, 56, 56)},
 
 	# ── Lab (alto-dx, dentro i vetri): l'Analista ──

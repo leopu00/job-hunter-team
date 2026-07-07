@@ -14,6 +14,7 @@ const WALL_TEX := "res://assets/gen-art/environment/wall_main.png"
 const WALL_H := 120.0  # altezza a schermo della fascia muro nord
 const GLASS_TEX := "res://assets/gen-art/environment/glass_box.png"
 const GLASS_H := 72.0  # vetrata sopra il parapetto nord
+const RUG_TEX := "res://assets/gen-art/furniture/rug.png"
 
 ## La texture va in un CanvasItem SEPARATO dalle primitive: mescolare
 ## draw_texture_rect con molte draw_line/draw_rect nello stesso item rompe
@@ -80,6 +81,14 @@ func _ready() -> void:
 		lab.modulate.a = 0.5
 		lab.show_behind_parent = true
 		add_child(lab)
+	if ResourceLoader.exists(RUG_TEX):
+		# tappeto del lounge: piatto sul pavimento, niente collisioni né Y-sort
+		var rug := Sprite2D.new()
+		rug.texture = load(RUG_TEX)
+		rug.position = Vector2(490, 445)
+		rug.scale = Vector2(0.68, 0.68)
+		rug.show_behind_parent = true
+		add_child(rug)
 
 func _draw() -> void:
 	var world := FurnitureDefs.WORLD

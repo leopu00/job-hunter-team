@@ -70,7 +70,13 @@ composito scuro → dehalo selettivo (banda bordo + quasi-bianco desaturato).
 | Title screen | environment/title_screen.png 1792x1024 | 1+pp | ✅ key art senza testo; warm boost +12% sulle pozze di lampada |
 
 **Coda brief COMPLETA**: (a) ritratti tutti gli agenti ✅ (b) floor/muro/vetro ✅
-(c) 11 mobili + ologramma ✅ (d) title screen ✅. In ascolto per nuovi ordini.
+(c) 11 mobili + ologramma ✅ (d) title screen ✅.
+
+Batch props extra (ROADMAP): corkboard.png 480x360 (bacheca-indagine, per
+ROADMAP #5) + water_cooler.png 200x340 + rug.png 560x320 — tutti 1 iterazione.
+
+**Standby**: prossimi item (personaggi in-world ridipinti, pose alternative
+ritratti) richiedono specs formato dal master.
 
 ### 2026-07-07 — Ordine #3: ritratti Mentor 6 emozioni (1120x1520, mezzo busto, alpha)
 
