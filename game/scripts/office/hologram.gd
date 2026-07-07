@@ -3,13 +3,32 @@ extends Node2D
 ## L'ologramma verde al centro della box: pedana scura + globo wireframe
 ## che pulsa e ruota (il "cuore" della ricerca, come in the-box.png).
 
+const TEX := "res://assets/gen-art/furniture/hologram.png"
+
 var _rect: Rect2
 var _t := 0.0
+var _textured := false
 
 func _init(rect: Rect2) -> void:
 	_rect = rect
 	# origine sul fondo per lo Y-sort
 	position = Vector2(rect.get_center().x, rect.end.y)
+
+func _ready() -> void:
+	if not ResourceLoader.exists(TEX):
+		return
+	# base pittorica (gen-art) in un CanvasItem separato; l'animazione
+	# procedurale del _draw le pulsa sopra
+	var tex: Texture2D = load(TEX)
+	var spr := Sprite2D.new()
+	spr.texture = tex
+	spr.centered = false
+	var s := _rect.size.x * 1.06 / tex.get_size().x
+	spr.scale = Vector2(s, s)
+	spr.offset = Vector2(-tex.get_size().x / 2.0, -tex.get_size().y)
+	spr.show_behind_parent = true
+	add_child(spr)
+	_textured = true
 
 func _process(delta: float) -> void:
 	_t += delta
@@ -17,6 +36,22 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var w := _rect.size.x
+	if _textured:
+		# solo gli accenti animati sopra il dipinto: meridiani e battito
+		var pulse2 := 0.5 + 0.5 * sin(_t * 2.2)
+		var c2 := Vector2(0, -_rect.size.x * 1.06 / 520.0 * 640.0 * 0.62)
+		var r2 := w * 0.30
+		var g2 := Palette.GREEN
+		for k in 3:
+			var phase2 := fmod(_t * 0.5 + k / 3.0, 1.0)
+			var sx2: float = abs(cos(phase2 * PI))
+			draw_set_transform(c2, 0.0, Vector2(sx2 * 0.95 + 0.05, 1.0))
+			draw_arc(Vector2.ZERO, r2, 0, TAU, 48,
+					Color(g2.r, g2.g, g2.b, 0.20 + 0.18 * pulse2), 1.2)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		draw_circle(c2, r2 * 0.08,
+				Color(Palette.MINT.r, Palette.MINT.g, Palette.MINT.b, 0.35 + 0.3 * pulse2))
+		return
 	var pedestal_c := Vector2(0, -18)
 	# pedana ellittica scura con anello verde
 	draw_set_transform(pedestal_c, 0.0, Vector2(1.0, 0.42))
