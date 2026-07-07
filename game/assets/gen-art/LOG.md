@@ -42,8 +42,10 @@ Il master (`mac-leone:dev1-game-master`) integra.
 | set | file | esito |
 |---|---|---|
 | assistente 4/4 | portraits/assistente/full_{neutro,caldo,sorpreso,divertito}.png | ✅ consegnato — gpt-5.5 high post-reset: pelle e alpha nativi ok; unico pp = dehalo bordo (regioni bianche del matte attorno ai capelli, visibili solo su dark bg) |
-| coordinatore 0/3 | portraits/coordinatore/ | in corso (neutro) |
-| scout 0/3, scorer 0/3, analista 0/3 | — | in coda |
+| coordinatore 3/3 | portraits/coordinatore/full_{neutro,caldo,severo}.png | ✅ tutti in 1 iterazione; dehalo su caldo+severo |
+| scout 3/3 | portraits/scout/full_{neutro,caldo,pensieroso}.png | ✅ tutti in 1 iterazione; dehalo su caldo+pensieroso |
+| scorer 0/3 | portraits/scorer/ | in corso (neutro; ref di profilo → chiesto fronte esplicito) |
+| analista 0/3 | — | in coda |
 
 Eventi Codex della sessione: limite 5h → auto-downgrade a gpt-5.4-mini
 (matte rotto: 81% camicia alpha<100, speckle RGB, bocciato) → usato 1 usage
