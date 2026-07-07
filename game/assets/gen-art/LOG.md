@@ -19,6 +19,19 @@ Il master (`mac-leone:dev1-game-master`) integra.
 | Mentor 3 pose | portraits/mentor-frames.png (md5 658a2a6b) | 2 | ✅ approvato — v1 aveva un bastone duplicato in ogni frame e barba troppo corta; v2 corretta (versioni v1/v2 conservate) |
 | Pavimento pittorico | floor/floor_main.png (+copia environment/) (md5 1d2df362) | 1 | ✅ approvato — spec ordine #1 del master rispettata (2048x1110, lavanda scuro, no baked light); tiling 2x2 verificato senza giunzioni dure; upscale 1703→2048 Lanczos |
 
+### 2026-07-07 — Ordine #2: mobili batch 1 (11 pezzi, top-down 3/4, alpha, DE)
+
+| # | file | iter | esito |
+|---|---|---|---|
+| 1 | furniture/desk.png 500x360 | 1 | ✅ integrato dal master |
+| 2 | furniture/desk_wide.png 640x400 | 1 | ✅ integrato |
+| 3 | furniture/sofa.png + sofa_bright.png 600x340 | 1+pp | ✅ master ha scelto sofa_bright (navy più vicino a #333f5c) |
+| 4 | furniture/armchair.png 260x260 | 1 | ✅ integrato |
+| 5 | furniture/coffee_table.png 360x220 | 1 | ✅ consegnato |
+| 6 | furniture/bookshelf.png 560x260 | 1 | ✅ consegnato |
+| 7 | furniture/coffee_bar.png 400x260 | 2+pp | ✅ Codex non accendeva la spia in 2 iter → glow #f5c518 dipinto in post (PIL screen mascherato su alpha). Lezione: piccoli accenti luminosi conviene farli in post, non re-promptare |
+| 8-11 | lab_bench, blackboard, plant, floor_lamp | — | in coda |
+
 ## Note su come promptare Codex
 
 1. **Fargli aprire i riferimenti PRIMA di generare**: iniziare il prompt con
