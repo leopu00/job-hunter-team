@@ -41,6 +41,13 @@ const S := {
 	"wizard.avatar_hair_color": "COLORE CAPELLI",
 	"wizard.avatar_outfit": "ABITO",
 	"wizard.avatar_turn": "GIRA ⟳",
+	"wizard.photo_frame": "FOTO BADGE HR",
+	"wizard.photo_take": "SCATTA LA FOTO",
+	"wizard.photo_retake": "RISCATTA",
+	"wizard.badge_title": "JOB HUNTER TEAM",
+	"wizard.badge_role": "FONDATORE · BADGE N. 001",
+	"wizard.badge_enter": "ENTRA NELL'UFFICIO ▶",
+	"wizard.say_photo": "[divertito] Bella! Foto da badge, appunto: non doveva venire bene, doveva venire vera.",
 	"wizard.cv_pick": "SCEGLI FILE…",
 	"wizard.cv_none": "nessun file selezionato",
 	"wizard.cv_loaded": "CV acquisito: %s",
@@ -53,7 +60,7 @@ const S := {
 
 	# battute dell'Assistente nel wizard (tag emozione inline)
 	"wizard.say_welcome": "[caldo] Benvenuto in Job Hunter Team. Io sono l'Assistente: penso io all'ingresso. Prima di aprirti la box, tre formalità veloci.",
-	"wizard.say_avatar": "[caldo] Per prima cosa: fatti vedere. Come vuoi entrare in ufficio?",
+	"wizard.say_avatar": "[caldo] Per prima cosa, la foto per il badge. Sistemati pure: capelli, abito… poi scatto io.",
 	"wizard.say_avatar_2": "[divertito] Con calma, eh. Gli agenti indossano tutti gli stessi occhiali… tu almeno puoi scegliere i capelli.",
 	"wizard.say_cv": "[neutro] Ora il tuo curriculum. Me lo dai e lo passo al team: è da lì che partono Scout e Scorer.",
 	"wizard.say_cv_parsing": "[sorpreso] Ricevuto! Un momento che lo leggo…",

@@ -23,6 +23,7 @@ var _back_btn: Button
 
 var _preview_rig: CharacterRig
 var _preview_facing := 0  # 0 down, 1 side, 2 up
+var _photo_taken := false
 var _cv_path := ""
 var _parsing := false
 var _team_edit: LineEdit
@@ -154,6 +155,7 @@ func _enter_step(s: Step) -> void:
 		Step.AVATAR:
 			_say("wizard.say_avatar", "b")
 			_build_avatar_step()
+			_next_btn.visible = _photo_taken
 		Step.CV:
 			_say("wizard.say_cv", "b")
 			_build_cv_step()
@@ -179,14 +181,72 @@ func _go_back() -> void:
 	if step > Step.WELCOME:
 		_enter_step((step - 1) as Step)
 
+## Fine wizard: il badge esce "dalla stampante", poi l'ascensore.
 func _finish() -> void:
 	Game.profile["team_name"] = _team_edit.text.strip_edges()
 	if Game.profile["team_name"].is_empty():
 		Game.profile["team_name"] = UIStrings.t("wizard.team_default")
 	_next_btn.visible = false
 	_back_btn.visible = false
+	_footer.text = ""
+	for child in _content.get_children():
+		child.queue_free()
 	_say("wizard.say_done", "a")
-	get_tree().create_timer(2.6).timeout.connect(func() -> void:
+
+	var center := CenterContainer.new()
+	center.custom_minimum_size = Vector2(1020, 440)
+	_content.add_child(center)
+	var badge := BracketPanel.new()
+	badge.custom_minimum_size = Vector2(560, 320)
+	center.add_child(badge)
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 22)
+	badge.add_child(margin)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 30)
+	margin.add_child(row)
+	# la "foto": l'avatar appena scattato
+	var photo := Panel.new()
+	photo.custom_minimum_size = Vector2(170, 250)
+	row.add_child(photo)
+	var holder := Node2D.new()
+	holder.position = Vector2(85, 228)
+	holder.scale = Vector2(2.2, 2.2)
+	photo.add_child(holder)
+	var rig := CharacterRig.new()
+	rig.setup(CharacterDefs.player_textures(Game.profile))
+	holder.add_child(rig)
+	rig.set_motion("down", false, "idle")
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 10)
+	info.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_child(info)
+	info.add_child(TerminalTheme.label(UIStrings.t("wizard.badge_title"), 16, Palette.GREEN, "medium"))
+	info.add_child(TerminalTheme.label(Game.profile["team_name"].to_upper(), 30, Palette.WHITE, "xbold"))
+	info.add_child(TerminalTheme.label(UIStrings.t("wizard.badge_role"), 15, Palette.MUTED))
+	if not Game.profile["cv_name"].is_empty():
+		info.add_child(TerminalTheme.label("CV: " + Game.profile["cv_name"], 13, Palette.DIM))
+
+	# stampa: il badge scende con i tick della stampante
+	badge.modulate.a = 0.0
+	var tw := badge.create_tween()
+	badge.position.y -= 46
+	tw.set_parallel()
+	tw.tween_property(badge, "modulate:a", 1.0, 0.5)
+	tw.tween_property(badge, "position:y", badge.position.y + 46, 0.9) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	for i in 4:
+		get_tree().create_timer(0.18 * i).timeout.connect(Sfx.play_tick)
+	get_tree().create_timer(1.0).timeout.connect(Sfx.play_ding)
+
+	var enter := Button.new()
+	enter.text = UIStrings.t("wizard.badge_enter")
+	_content.add_child(enter)
+	enter.grab_focus.call_deferred()
+	enter.pressed.connect(func() -> void:
+		Sfx.play_confirm()
+		Game.arrive_via_elevator = true
 		Game.goto_office())
 
 # ── Passo avatar ──────────────────────────────────────────────────────
@@ -196,26 +256,41 @@ func _build_avatar_step() -> void:
 	row.add_theme_constant_override("separation", 40)
 	_content.add_child(row)
 
-	# anteprima live a sinistra
-	var preview := Panel.new()
-	preview.custom_minimum_size = Vector2(360, 430)
-	row.add_child(preview)
+	# anteprima live a sinistra: è l'inquadratura della foto badge
+	var preview_box := VBoxContainer.new()
+	preview_box.add_theme_constant_override("separation", 10)
+	row.add_child(preview_box)
+	var frame_label := TerminalTheme.label("▣ " + UIStrings.t("wizard.photo_frame"), 15, Palette.GREEN, "medium")
+	frame_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	preview_box.add_child(frame_label)
+	var preview := BracketPanel.new()
+	preview.custom_minimum_size = Vector2(360, 390)
+	preview_box.add_child(preview)
 	var holder := Node2D.new()
-	holder.position = Vector2(180, 390)
-	holder.scale = Vector2(3.4, 3.4)
+	holder.position = Vector2(180, 360)
+	holder.scale = Vector2(3.2, 3.2)
 	preview.add_child(holder)
 	_preview_rig = CharacterRig.new()
 	_preview_rig.setup(CharacterDefs.player_textures(Game.profile))
 	holder.add_child(_preview_rig)
 	_apply_preview_facing()
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 10)
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	preview_box.add_child(btn_row)
 	var turn := Button.new()
 	turn.text = UIStrings.t("wizard.avatar_turn")
-	turn.position = Vector2(115, 436)
 	turn.pressed.connect(func() -> void:
 		_preview_facing = (_preview_facing + 1) % 3
 		Sfx.play_blip()
 		_apply_preview_facing())
-	preview.add_child(turn)
+	btn_row.add_child(turn)
+	var shoot := Button.new()
+	shoot.text = UIStrings.t("wizard.photo_retake" if _photo_taken else "wizard.photo_take")
+	shoot.add_theme_color_override("font_color", Palette.GREEN)
+	shoot.pressed.connect(func() -> void:
+		_take_photo(shoot))
+	btn_row.add_child(shoot)
 
 	# opzioni a destra
 	var opts := VBoxContainer.new()
@@ -280,6 +355,26 @@ func _add_swatch_row(parent: Node, label_key: String, field: String, colors: Arr
 				st.border_color = Palette.GREEN if j == i else Palette.BORDER
 				group[j].add_theme_stylebox_override("normal", st)
 			_refresh_preview())
+
+## Lo scatto: flash bianco + shutter, poi si sblocca AVANTI.
+func _take_photo(shoot_btn: Button) -> void:
+	_preview_facing = 0
+	_apply_preview_facing()
+	var flash := ColorRect.new()
+	flash.color = Color(1, 1, 1, 0.0)
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(flash)
+	Sfx.play_shutter()
+	var tw := flash.create_tween()
+	tw.tween_property(flash, "color:a", 0.92, 0.05)
+	tw.tween_property(flash, "color:a", 0.0, 0.35)
+	tw.tween_callback(flash.queue_free)
+	if not _photo_taken:
+		_photo_taken = true
+		_next_btn.visible = true
+		shoot_btn.text = UIStrings.t("wizard.photo_retake")
+		_say("wizard.say_photo", "a")
 
 func _refresh_preview() -> void:
 	if not _preview_rig:

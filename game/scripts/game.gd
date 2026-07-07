@@ -10,6 +10,8 @@ const SCENE_OFFICE := "res://scenes/office.tscn"
 var state: State = State.TITLE
 ## True mentre un dialogo a ritratti è aperto (blocca movimento e pausa-rapida).
 var dialogue_active := false
+## Alzato dal wizard: l'ufficio si apre con le porte dell'ascensore.
+var arrive_via_elevator := false
 
 ## Profilo scelto nel wizard; solo in memoria, niente salvataggio (prototipo).
 var profile := {
@@ -30,6 +32,8 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	# Scorciatoia per i test: JHT_SCENE=office|wizard|title salta il boot.
 	var target := OS.get_environment("JHT_SCENE")
+	if OS.get_environment("JHT_ELEVATOR") == "1":
+		arrive_via_elevator = true
 	if target == "office":
 		goto_office.call_deferred()
 	elif target == "wizard":

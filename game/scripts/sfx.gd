@@ -9,6 +9,8 @@ var _blip: AudioStreamWAV
 var _confirm: AudioStreamWAV
 var _back: AudioStreamWAV
 var _deny: AudioStreamWAV
+var _shutter: AudioStreamWAV
+var _ding: AudioStreamWAV
 
 var _pool: Array[AudioStreamPlayer] = []
 var _next := 0
@@ -20,6 +22,8 @@ func _ready() -> void:
 	_confirm = _tone([[660.0, 0.05], [990.0, 0.07]], -10.0)
 	_back = _tone([[440.0, 0.05], [330.0, 0.06]], -12.0)
 	_deny = _tone([[220.0, 0.11]], -10.0)
+	_shutter = _noise_burst(0.05, -8.0)
+	_ding = _tone([[1318.5, 0.09], [1760.0, 0.22]], -12.0)
 	for i in 6:
 		var p := AudioStreamPlayer.new()
 		p.bus = "Master"
@@ -41,11 +45,38 @@ func play_back() -> void:
 func play_deny() -> void:
 	_play(_deny)
 
+func play_shutter() -> void:
+	_play(_shutter)
+
+func play_ding() -> void:
+	_play(_ding)
+
 func _play(stream: AudioStreamWAV) -> void:
 	var p := _pool[_next]
 	_next = (_next + 1) % _pool.size()
 	p.stream = stream
 	p.play()
+
+## Scatto meccanico: burst di rumore bianco con decadimento rapidissimo.
+func _noise_burst(dur: float, vol_db: float) -> AudioStreamWAV:
+	var amp := db_to_linear(vol_db)
+	var data := PackedByteArray()
+	var n := int(dur * MIX_RATE)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for i in n:
+		var t := float(i) / MIX_RATE
+		var env := exp(-t * 90.0)
+		var v := rng.randf_range(-1.0, 1.0) * amp * env
+		var s := int(clamp(v, -1.0, 1.0) * 32767.0)
+		data.append(s & 0xff)
+		data.append((s >> 8) & 0xff)
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = MIX_RATE
+	wav.stereo = false
+	wav.data = data
+	return wav
 
 ## segments = [[freq_hz, durata_s], …] suonati in sequenza, inviluppo a decadimento.
 func _tone(segments: Array, vol_db: float) -> AudioStreamWAV:
