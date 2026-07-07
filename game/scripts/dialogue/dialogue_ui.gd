@@ -26,10 +26,10 @@ var _visible_chars := 0.0
 var _typing := false
 var _tick_accum := 0
 
-func open(slug: String, display_name: String) -> void:
+func open(slug: String, display_name: String, tree_id := "") -> void:
 	_slug = slug
 	_display_name = display_name
-	_tree = Dialogues.TREES.get(slug, {})
+	_tree = Dialogues.TREES.get(tree_id if not tree_id.is_empty() else slug, {})
 	layer = 60
 	Game.dialogue_active = true
 

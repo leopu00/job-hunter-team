@@ -22,8 +22,24 @@ const KIND_COLORS := {
 	"plant": [Color("#2e6b47"), Color("#1e4a31"), Color("#3a2c20")],
 }
 
+## Sprite pittorici consegnati da dev1-art (gen-art); se assenti, blockout.
+const GEN_ART := {
+	"desk": "res://assets/gen-art/furniture/desk.png",
+	"desk_wide": "res://assets/gen-art/furniture/desk_wide.png",
+	"sofa": "res://assets/gen-art/furniture/sofa_bright.png",
+	"armchair": "res://assets/gen-art/furniture/armchair.png",
+	"table_low": "res://assets/gen-art/furniture/coffee_table.png",
+	"shelf_h": "res://assets/gen-art/furniture/bookshelf.png",
+	"coffee": "res://assets/gen-art/furniture/coffee_bar.png",
+	"lab_bench": "res://assets/gen-art/furniture/lab_bench.png",
+	"blackboard": "res://assets/gen-art/furniture/blackboard.png",
+	"plant": "res://assets/gen-art/furniture/plant.png",
+	"lamp": "res://assets/gen-art/furniture/floor_lamp.png",
+}
+
 var item: Dictionary
 var _rect: Rect2
+var _textured := false
 
 func _init(p_item: Dictionary) -> void:
 	item = p_item
@@ -37,6 +53,19 @@ func _ready() -> void:
 	shape.shape = box
 	shape.position = Vector2(0, -_rect.size.y / 2.0)
 	add_child(shape)
+	# la texture vive in un CanvasItem separato dalle primitive del _draw
+	# (mescolarle rompe il batching GLES3 su macOS: tutto bianco)
+	var path: String = GEN_ART.get(item["kind"], "")
+	if not path.is_empty() and ResourceLoader.exists(path):
+		var tex: Texture2D = load(path)
+		var spr := Sprite2D.new()
+		spr.texture = tex
+		spr.centered = false
+		var s := _rect.size.x * 1.06 / tex.get_size().x
+		spr.scale = Vector2(s, s)
+		spr.offset = Vector2(-tex.get_size().x / 2.0, -tex.get_size().y + 10.0 / s)
+		add_child(spr)
+		_textured = true
 
 func _draw() -> void:
 	var kind: String = item["kind"]
@@ -53,6 +82,8 @@ func _draw() -> void:
 		draw_set_transform(Vector2(0, -2), 0.0, Vector2(1.0, 0.30))
 		draw_circle(Vector2.ZERO, w * 0.52 + grow, Color(0, 0, 0, 0.10 - i * 0.03))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if _textured:
+		return  # lo sprite pittorico (figlio) fa il resto
 	draw_rect(top, cols[0])
 	draw_rect(front, cols[1])
 	# usura pittorica sul piano: chiazze e graffi seedati per mobile

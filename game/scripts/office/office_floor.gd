@@ -8,6 +8,40 @@ extends Node2D
 
 const GLASS_CORE := Color("#bfe3ff", 0.9)
 const SEED := 20260707
+## Texture dipinta consegnata da dev1-art; se assente, blockout procedurale.
+const FLOOR_TEX := "res://assets/gen-art/floor/floor_main.png"
+
+## La texture va in un CanvasItem SEPARATO dalle primitive: mescolare
+## draw_texture_rect con molte draw_line/draw_rect nello stesso item rompe
+## il batching GLES3 su macOS (tutto l'item rende bianco).
+func _ready() -> void:
+	var world := FurnitureDefs.WORLD
+	var floor_rect := FurnitureDefs.FLOOR
+	var ext := Polygon2D.new()
+	ext.polygon = PackedVector2Array([
+		world.position, Vector2(world.end.x, world.position.y),
+		world.end, Vector2(world.position.x, world.end.y),
+	])
+	ext.color = Palette.VOID
+	ext.show_behind_parent = true
+	add_child(ext)
+	var base := Polygon2D.new()
+	base.polygon = PackedVector2Array([
+		floor_rect.position, Vector2(floor_rect.end.x, floor_rect.position.y),
+		floor_rect.end, Vector2(floor_rect.position.x, floor_rect.end.y),
+	])
+	base.color = Color("#101016")
+	base.show_behind_parent = true
+	add_child(base)
+	if ResourceLoader.exists(FLOOR_TEX):
+		var tex: Texture2D = load(FLOOR_TEX)
+		var spr := Sprite2D.new()
+		spr.texture = tex
+		spr.centered = false
+		spr.position = floor_rect.position
+		spr.scale = floor_rect.size / tex.get_size()
+		spr.show_behind_parent = true
+		add_child(spr)
 
 func _draw() -> void:
 	var world := FurnitureDefs.WORLD
@@ -15,10 +49,36 @@ func _draw() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
 
-	# base del pavimento: cemento scuro a tinta lavanda
-	draw_rect(world, Palette.VOID)
-	draw_rect(floor_rect, Color("#101016"))
+	if not ResourceLoader.exists(FLOOR_TEX):
+		_procedural_floor(rng, floor_rect)
 
+	_floor_accents(rng, floor_rect)
+
+	# maschera: l'esterno resta void anche dove le macchie sbordano
+	draw_rect(Rect2(world.position, Vector2(world.size.x, floor_rect.position.y - world.position.y)), Palette.VOID)
+	draw_rect(Rect2(Vector2(world.position.x, floor_rect.end.y), Vector2(world.size.x, world.end.y - floor_rect.end.y)), Palette.VOID)
+	draw_rect(Rect2(world.position, Vector2(floor_rect.position.x - world.position.x, world.size.y)), Palette.VOID)
+	draw_rect(Rect2(Vector2(floor_rect.end.x, world.position.y), Vector2(world.end.x - floor_rect.end.x, world.size.y)), Palette.VOID)
+
+	# alone morbido attorno all'ologramma (luce verde sul pavimento)
+	var holo_c := FurnitureDefs.get_rect("hologram").get_center()
+	for i in 5:
+		var r := 90.0 + i * 34.0
+		draw_circle(holo_c, r, Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, 0.016))
+
+	# pareti di vetro perimetrali: tre passate per il glow ciano
+	_glass_rect(floor_rect, 1.0)
+
+	# vetri interni del lab (più discreti), con porta nella parete bassa
+	_glass_line(FurnitureDefs.LAB_WALL_V.get_center() - Vector2(0, FurnitureDefs.LAB_WALL_V.size.y / 2),
+			FurnitureDefs.LAB_WALL_V.get_center() + Vector2(0, FurnitureDefs.LAB_WALL_V.size.y / 2), 0.55)
+	_glass_line(Vector2(FurnitureDefs.LAB_WALL_H1.position.x, FurnitureDefs.LAB_WALL_H1.get_center().y),
+			Vector2(FurnitureDefs.LAB_WALL_H1.end.x, FurnitureDefs.LAB_WALL_H1.get_center().y), 0.55)
+	_glass_line(Vector2(FurnitureDefs.LAB_WALL_H2.position.x, FurnitureDefs.LAB_WALL_H2.get_center().y),
+			Vector2(FurnitureDefs.LAB_WALL_H2.end.x, FurnitureDefs.LAB_WALL_H2.get_center().y), 0.55)
+
+## Blockout pittorico procedurale (usato solo senza texture gen-art).
+func _procedural_floor(rng: RandomNumberGenerator, floor_rect: Rect2) -> void:
 	# 1. macchie tonali larghe (valore prima del colore: variazioni sotto il 6%)
 	var hues := [
 		Color("#1a1c26"), Color("#201b16"), Color("#171d19"),
@@ -68,7 +128,9 @@ func _draw() -> void:
 			draw_circle(Vector2.ZERO, rng.randf_range(28.0, 58.0), Color(0, 0, 0, 0.035))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	# 6. griglia piastrelle: sottile, con jitter (mai linee perfette)
+## Accenti comuni sopra il pavimento (dipinto o procedurale).
+func _floor_accents(rng: RandomNumberGenerator, floor_rect: Rect2) -> void:
+	# griglia piastrelle: sottile, con jitter (mai linee perfette)
 	var step := 64.0
 	var x := floor_rect.position.x + step
 	while x < floor_rect.end.x:
@@ -83,7 +145,7 @@ func _draw() -> void:
 				Color(1, 1, 1, rng.randf_range(0.010, 0.026)), 1.0)
 		y2 += step
 
-	# 7. riflessi freddi del vetro sul pavimento (strisce verticali morbide)
+	# riflessi freddi del vetro sul pavimento (strisce verticali morbide)
 	for i in 26:
 		var rx := rng.randf_range(floor_rect.position.x + 20, floor_rect.end.x - 20)
 		var top_h := rng.randf_range(40.0, 110.0)
@@ -93,29 +155,6 @@ func _draw() -> void:
 		var bot_h := rng.randf_range(30.0, 90.0)
 		draw_rect(Rect2(Vector2(bx, floor_rect.end.y - 2 - bot_h), Vector2(rng.randf_range(4, 14), bot_h)),
 				Color(Palette.BLUE.r, Palette.BLUE.g, Palette.BLUE.b, rng.randf_range(0.015, 0.04)))
-
-	# maschera: l'esterno resta void anche dove le macchie sbordano
-	draw_rect(Rect2(world.position, Vector2(world.size.x, floor_rect.position.y - world.position.y)), Palette.VOID)
-	draw_rect(Rect2(Vector2(world.position.x, floor_rect.end.y), Vector2(world.size.x, world.end.y - floor_rect.end.y)), Palette.VOID)
-	draw_rect(Rect2(world.position, Vector2(floor_rect.position.x - world.position.x, world.size.y)), Palette.VOID)
-	draw_rect(Rect2(Vector2(floor_rect.end.x, world.position.y), Vector2(world.end.x - floor_rect.end.x, world.size.y)), Palette.VOID)
-
-	# alone morbido attorno all'ologramma (luce verde sul pavimento)
-	var holo_c := FurnitureDefs.get_rect("hologram").get_center()
-	for i in 5:
-		var r := 90.0 + i * 34.0
-		draw_circle(holo_c, r, Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, 0.016))
-
-	# pareti di vetro perimetrali: tre passate per il glow ciano
-	_glass_rect(floor_rect, 1.0)
-
-	# vetri interni del lab (più discreti), con porta nella parete bassa
-	_glass_line(FurnitureDefs.LAB_WALL_V.get_center() - Vector2(0, FurnitureDefs.LAB_WALL_V.size.y / 2),
-			FurnitureDefs.LAB_WALL_V.get_center() + Vector2(0, FurnitureDefs.LAB_WALL_V.size.y / 2), 0.55)
-	_glass_line(Vector2(FurnitureDefs.LAB_WALL_H1.position.x, FurnitureDefs.LAB_WALL_H1.get_center().y),
-			Vector2(FurnitureDefs.LAB_WALL_H1.end.x, FurnitureDefs.LAB_WALL_H1.get_center().y), 0.55)
-	_glass_line(Vector2(FurnitureDefs.LAB_WALL_H2.position.x, FurnitureDefs.LAB_WALL_H2.get_center().y),
-			Vector2(FurnitureDefs.LAB_WALL_H2.end.x, FurnitureDefs.LAB_WALL_H2.get_center().y), 0.55)
 
 ## Macchia ellittica ruotata e schiacciata (pennellata larga).
 func _blotch(rng: RandomNumberGenerator, area: Rect2, color: Color, radius: float) -> void:

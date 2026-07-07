@@ -26,6 +26,7 @@ const S := {
 	"hud.avg_score": "SCORE MEDIO",
 	"hud.budget": "BUDGET",
 	"hud.interact": "[E] Parla con %s",
+	"hud.visit": "IN ARRIVO DA TE",
 	"hud.dialogue_next": "[INVIO] continua",
 	"hud.dialogue_skip": "[ESC] chiudi",
 

@@ -11,9 +11,24 @@ var world: Node2D
 var agents: Array[AgentNPC] = []
 var _near_agent: AgentNPC
 var _prompt: Label
+var _team_hud: TeamHud
+
+## Coda visite (loop invertito): dopo `delay` secondi l'agente viene da te.
+var _visit_plan := [
+	{"delay": 35.0, "slug": "scout", "tree": "scout_visit"},
+	{"delay": 150.0, "slug": "scorer", "tree": "scorer_visit"},
+]
+var _visit_clock := 0.0
+var _active_visit: AgentNPC
 
 func _ready() -> void:
 	add_child(OfficeFloor.new())
+	if OS.get_environment("JHT_ONLYFLOOR") == "1":  # TEST-AUTO
+		var c := Camera2D.new()
+		c.position = Vector2(1300, 750)
+		add_child(c)
+		c.make_current()
+		return
 
 	world = Node2D.new()
 	world.name = "World"
@@ -91,8 +106,27 @@ func _elevator_intro() -> void:
 			.set_delay(0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.chain().tween_callback(layer.queue_free)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_update_near_agent()
+	_tick_visits(delta)
+
+## Fa partire le visite in programma, una alla volta.
+func _tick_visits(delta: float) -> void:
+	_visit_clock += delta
+	if _active_visit and not _active_visit.is_visiting():
+		_active_visit = null
+	if _active_visit == null and not _visit_plan.is_empty() \
+			and _visit_clock >= float(_visit_plan[0]["delay"]) \
+			and not Game.dialogue_active:
+		var spec: Dictionary = _visit_plan.pop_front()
+		for agent in agents:
+			if agent.slug == spec["slug"]:
+				agent.start_visit(player, spec["tree"])
+				_active_visit = agent
+				Sfx.play_blip()
+				break
+	if _team_hud:
+		_team_hud.set_visit(_active_visit.display_name if _active_visit else "")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if Game.dialogue_active:
@@ -148,8 +182,10 @@ func _start_talk(agent: AgentNPC) -> void:
 	player.stop()
 	var ui := DialogueUI.new()
 	add_child(ui)
-	ui.open(agent.slug, agent.display_name)
+	ui.open(agent.slug, agent.display_name, agent.visit_tree)
 	ui.closed.connect(func() -> void:
+		if agent.is_visiting():
+			agent.visit_done()
 		agent.end_talk())
 
 # ── Costruzione scena ─────────────────────────────────────────────────
@@ -180,6 +216,8 @@ func _add_maintainers() -> void:
 ## Pozze di luce calde + neon freddo su ambiente buio (DE: la luce definisce
 ## le zone, il resto resta in penombra). Poche e dipinte.
 func _add_lights() -> void:
+	if OS.get_environment("JHT_NOFX") == "1":
+		return  # TEST-AUTO
 	var cm := CanvasModulate.new()
 	cm.color = Color(0.76, 0.77, 0.92)
 	add_child(cm)
@@ -245,7 +283,8 @@ func _add_hud() -> void:
 	theme_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme_root.theme = TerminalTheme.get_theme()
 	hud.add_child(theme_root)
-	theme_root.add_child(TeamHud.new())
+	_team_hud = TeamHud.new()
+	theme_root.add_child(_team_hud)
 	var hint := TerminalTheme.label(
 			"WASD / frecce per muoverti · click per andare · ESC menu",
 			15, Palette.DIM)

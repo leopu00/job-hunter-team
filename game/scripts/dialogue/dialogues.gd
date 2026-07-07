@@ -161,6 +161,47 @@ const TREES := {
 		},
 	},
 
+	# ── Visite proattive: l'agente viene alla TUA scrivania ──
+	"scout_visit": {
+		"start": {
+			"text": "[caldo] Scusa se ti inseguo per l'ufficio: il setaccio di oggi è buono e non volevo tenermelo.",
+			"choices": [
+				{"text": "Dimmi tutto.", "next": "list"},
+				{"text": "Ora no, torna dopo.", "next": "later"},
+			],
+		},
+		"list": {
+			"text": "[neutro] {positions}",
+			"next": "best",
+		},
+		"best": {
+			"text": "[pensieroso] La prima è la più solida: {score_title}, score {score}. Se fossi in te partirei da lì.",
+			"next": "end",
+		},
+		"later": {
+			"text": "[neutro] Ricevuto. Le lascio sulla lavagna: non scappano. …Le posizioni, non le aziende.",
+		},
+		"end": {
+			"text": "[caldo] Buona caccia. Io torno alle board.",
+		},
+	},
+	"scorer_visit": {
+		"start": {
+			"text": "[pensieroso] Ho appena chiuso una valutazione e c'è un numero che merita due parole: {score} su «{score_title}».",
+			"choices": [
+				{"text": "Perché proprio {score}?", "next": "why"},
+				{"text": "Mi fido, grazie.", "next": "end"},
+			],
+		},
+		"why": {
+			"text": "[neutro] {score_reasons}",
+			"next": "end",
+		},
+		"end": {
+			"text": "[caldo] Il numero è mio, la decisione è tua. Come dev'essere.",
+		},
+	},
+
 	"assistente": {
 		"start": {
 			"text": "[caldo] Tutto bene? Se cerchi un consiglio di carriera, il Mentor è nel salotto, vicino alla lampada.",

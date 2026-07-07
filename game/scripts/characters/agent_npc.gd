@@ -9,7 +9,7 @@ signal arrived_to_player(agent: AgentNPC)
 const SPEED := 150.0
 const SUMMON_SPEED := 240.0
 
-enum S { WORK, GO_OUT, OUT_IDLE, GO_BACK, SUMMONED, TALK }
+enum S { WORK, GO_OUT, OUT_IDLE, GO_BACK, SUMMONED, TALK, VISIT_WAIT }
 
 var slug := ""
 var display_name := ""
@@ -28,6 +28,12 @@ var _bubble_timer := 0.0
 var _highlight := false
 var _pulse := 0.0
 var _summon_target: Node2D
+
+## Visita proattiva (loop invertito): l'agente viene DA TE con qualcosa.
+var visit_tree := ""
+var _visiting := false
+var _visit_timeout := 0.0
+var _visit_repath := 0.0
 
 func setup(p_slug: String, p_nav: NavGrid) -> void:
 	slug = p_slug
@@ -71,6 +77,27 @@ func summon(target: Node2D) -> void:
 	bubble.show_text("arrivo…", 2.5)
 	_repath_to_summon()
 
+## L'agente parte verso il giocatore con una novità (coda visite).
+func start_visit(target: Node2D, tree: String) -> void:
+	if state == S.TALK:
+		return
+	_summon_target = target
+	visit_tree = tree
+	_visiting = true
+	_visit_timeout = 50.0
+	state = S.SUMMONED
+	bubble.show_text("ho novità per te", 3.0)
+	_repath_to_summon()
+
+func is_visiting() -> bool:
+	return _visiting
+
+## La visita è stata ascoltata (dialogo chiuso): si torna al lavoro.
+func visit_done() -> void:
+	visit_tree = ""
+	_visiting = false
+	queue_redraw()
+
 func start_talk(player: Node2D) -> void:
 	state = S.TALK
 	_path = PackedVector2Array()
@@ -97,6 +124,8 @@ func _physics_process(delta: float) -> void:
 	if _highlight:
 		queue_redraw()
 	_bubble_tick(delta)
+	if _visiting:
+		queue_redraw()  # l'indicatore "!" rimbalza anche in cammino
 	match state:
 		S.WORK:
 			velocity = Vector2.ZERO
@@ -124,11 +153,18 @@ func _physics_process(delta: float) -> void:
 						position = _spot
 						rig.set_motion("down", false, "work")
 					S.SUMMONED:
-						state = S.TALK
-						if _summon_target:
-							_face_point(_summon_target.global_position)
-						rig.set_motion(rig.facing, rig.flipped, "idle")
-						arrived_to_player.emit(self)
+						if _visiting:
+							state = S.VISIT_WAIT
+							if _summon_target:
+								_face_point(_summon_target.global_position)
+							rig.set_motion(rig.facing, rig.flipped, "idle")
+							bubble.show_text("[E] quando vuoi", 3.0)
+						else:
+							state = S.TALK
+							if _summon_target:
+								_face_point(_summon_target.global_position)
+							rig.set_motion(rig.facing, rig.flipped, "idle")
+							arrived_to_player.emit(self)
 		S.OUT_IDLE:
 			velocity = Vector2.ZERO
 			_state_timer -= delta
@@ -140,6 +176,22 @@ func _physics_process(delta: float) -> void:
 			velocity = Vector2.ZERO
 			if _summon_target:
 				_face_point(_summon_target.global_position)
+		S.VISIT_WAIT:
+			velocity = Vector2.ZERO
+			queue_redraw()  # indicatore "!" animato
+			_visit_timeout -= delta
+			_visit_repath -= delta
+			if _summon_target:
+				var dist := global_position.distance_to(_summon_target.global_position)
+				if dist > 280.0 and _visit_repath <= 0.0:
+					_visit_repath = 1.2  # ti segue se ti allontani
+					state = S.SUMMONED
+					_repath_to_summon()
+				else:
+					_face_point(_summon_target.global_position)
+			if _visit_timeout <= 0.0:  # si stanca di aspettare
+				visit_done()
+				end_talk()
 	move_and_slide()
 
 func _follow_path(speed: float) -> bool:
@@ -183,8 +235,15 @@ func _bubble_tick(delta: float) -> void:
 			lines.append(status["detail"])
 		bubble.show_text(lines[randi() % lines.size()])
 
-## Proximity ring (pattern Gather) ai piedi dell'agente interagibile.
+## Proximity ring (pattern Gather) + indicatore "!" delle visite.
 func _draw() -> void:
+	if _visiting:
+		# "ha qualcosa per te" (pattern Going Under): ! verde che rimbalza
+		var bob := absf(sin(_pulse * 3.5)) * -6.0
+		var base_y := -118.0 + bob
+		var g := Palette.GREEN
+		draw_rect(Rect2(Vector2(-2.5, base_y), Vector2(5, 13)), g)
+		draw_circle(Vector2(0, base_y + 19), 2.8, g)
 	if not _highlight:
 		return
 	var a := 0.55 + 0.25 * sin(_pulse * 5.0)
