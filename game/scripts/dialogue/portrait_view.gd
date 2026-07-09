@@ -33,7 +33,10 @@ func setup(slug: String) -> void:
 	_slug = slug
 	_cur_pose = ""
 	_cur_face = ""
-	_full_mode = ResourceLoader.exists(GEN_DIR + slug + "/full_neutro.png")
+	# exists() è true anche col solo .import: la modalità pittorica va attivata
+	# solo se il PNG carica davvero, altrimenti si usano i ritratti SVG.
+	var full_path := GEN_DIR + slug + "/full_neutro.png"
+	_full_mode = (load(full_path) if ResourceLoader.exists(full_path) else null) != null
 	if _full_mode:
 		_base.texture = null
 		_pose.texture = null

@@ -58,8 +58,11 @@ func _ready() -> void:
 	# la texture vive in un CanvasItem separato dalle primitive del _draw
 	# (mescolarle rompe il batching GLES3 su macOS: tutto bianco)
 	var path: String = GEN_ART.get(item["kind"], "")
-	if not path.is_empty() and ResourceLoader.exists(path):
-		var tex: Texture2D = load(path)
+	# ResourceLoader.exists() è true anche quando esiste solo il .import senza
+	# il binario importato: load() torna null → serve il guard, altrimenti si
+	# ricade con grazia sul disegno procedurale in _draw().
+	var tex: Texture2D = load(path) if (not path.is_empty() and ResourceLoader.exists(path)) else null
+	if tex != null:
 		var spr := Sprite2D.new()
 		spr.texture = tex
 		spr.centered = false

@@ -16,6 +16,15 @@ const GLASS_TEX := "res://assets/gen-art/environment/glass_box.png"
 const GLASS_H := 72.0  # vetrata sopra il parapetto nord
 const RUG_TEX := "res://assets/gen-art/furniture/rug.png"
 
+## True se il pavimento dipinto è stato caricato davvero; altrimenti _draw
+## disegna il blockout procedurale.
+var _floor_textured := false
+
+## exists() è true anche col solo file .import (senza binario importato):
+## load() torna null. Questo helper carica solo se la texture è reale.
+func _load_tex(path: String) -> Texture2D:
+	return load(path) if ResourceLoader.exists(path) else null
+
 ## La texture va in un CanvasItem SEPARATO dalle primitive: mescolare
 ## draw_texture_rect con molte draw_line/draw_rect nello stesso item rompe
 ## il batching GLES3 su macOS (tutto l'item rende bianco).
@@ -38,18 +47,19 @@ func _ready() -> void:
 	base.color = Color("#101016")
 	base.show_behind_parent = true
 	add_child(base)
-	if ResourceLoader.exists(FLOOR_TEX):
-		var tex: Texture2D = load(FLOOR_TEX)
+	var floor_tex := _load_tex(FLOOR_TEX)
+	if floor_tex != null:
+		_floor_textured = true
 		var spr := Sprite2D.new()
-		spr.texture = tex
+		spr.texture = floor_tex
 		spr.centered = false
 		spr.position = floor_rect.position
-		spr.scale = floor_rect.size / tex.get_size()
+		spr.scale = floor_rect.size / floor_tex.get_size()
 		spr.show_behind_parent = true
 		add_child(spr)
-	if ResourceLoader.exists(WALL_TEX):
+	var wtex := _load_tex(WALL_TEX)
+	if wtex != null:
 		# fascia muro nord (faccia interna, battiscopa alla base sul pavimento)
-		var wtex: Texture2D = load(WALL_TEX)
 		var wall := Sprite2D.new()
 		wall.texture = wtex
 		wall.centered = false
@@ -61,8 +71,8 @@ func _ready() -> void:
 		wall.position = Vector2(floor_rect.position.x, floor_rect.position.y - WALL_H)
 		wall.show_behind_parent = true
 		add_child(wall)
-	if ResourceLoader.exists(GLASS_TEX):
-		var gtex: Texture2D = load(GLASS_TEX)
+	var gtex := _load_tex(GLASS_TEX)
+	if gtex != null:
 		# vetrata della box sopra il parapetto nord (the-box: vetro su struttura bassa)
 		var band := Sprite2D.new()
 		band.texture = gtex
@@ -81,10 +91,11 @@ func _ready() -> void:
 		lab.modulate.a = 0.5
 		lab.show_behind_parent = true
 		add_child(lab)
-	if ResourceLoader.exists(RUG_TEX):
+	var rug_tex := _load_tex(RUG_TEX)
+	if rug_tex != null:
 		# tappeto del lounge: piatto sul pavimento, niente collisioni né Y-sort
 		var rug := Sprite2D.new()
-		rug.texture = load(RUG_TEX)
+		rug.texture = rug_tex
 		rug.position = Vector2(490, 445)
 		rug.scale = Vector2(0.68, 0.68)
 		rug.show_behind_parent = true
@@ -96,7 +107,7 @@ func _draw() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
 
-	if not ResourceLoader.exists(FLOOR_TEX):
+	if not _floor_textured:
 		_procedural_floor(rng, floor_rect)
 
 	_floor_accents(rng, floor_rect)

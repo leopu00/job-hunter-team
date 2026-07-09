@@ -11,10 +11,13 @@ func _ready() -> void:
 	theme = TerminalTheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
-	var has_art := ResourceLoader.exists(KEY_ART)
+	# exists() è true anche col solo .import: carichiamo e verifichiamo il null,
+	# così senza il binario dipinto parte il fallback a griglia (non uno schermo vuoto).
+	var art_tex: Texture2D = load(KEY_ART) if ResourceLoader.exists(KEY_ART) else null
+	var has_art := art_tex != null
 	if has_art:
 		var art := TextureRect.new()
-		art.texture = load(KEY_ART)
+		art.texture = art_tex
 		art.set_anchors_preset(Control.PRESET_FULL_RECT)
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED

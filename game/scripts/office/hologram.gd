@@ -15,11 +15,13 @@ func _init(rect: Rect2) -> void:
 	position = Vector2(rect.get_center().x, rect.end.y)
 
 func _ready() -> void:
-	if not ResourceLoader.exists(TEX):
+	# exists() è true col solo .import: senza binario load() torna null e va
+	# saltata la base pittorica (resta l'animazione procedurale del _draw).
+	var tex: Texture2D = load(TEX) if ResourceLoader.exists(TEX) else null
+	if tex == null:
 		return
 	# base pittorica (gen-art) in un CanvasItem separato; l'animazione
 	# procedurale del _draw le pulsa sopra
-	var tex: Texture2D = load(TEX)
 	var spr := Sprite2D.new()
 	spr.texture = tex
 	spr.centered = false
