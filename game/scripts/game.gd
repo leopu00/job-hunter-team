@@ -27,20 +27,17 @@ var _pause_menu: Node = null
 
 func _enter_tree() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	# Cap FPS + vsync: senza limite il gioco rende a migliaia di fps e su GPU
-	# integrata, in finestra, satura il compositor facendo laggare tutto il
-	# desktop. 60 fps con vsync è fluido e non ruba risorse al resto del sistema.
+	# Cap FPS a 60 + vsync. Con Vulkan il present in vsync (FIFO) è fluido e non
+	# blocca il resto del desktop come faceva OpenGL; niente tearing.
 	Engine.max_fps = 60
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 	_register_inputs()
+	# Geometria finestra applicata prima del primo frame: niente flash della
+	# finestra 1920x1080 dichiarata in project.godot.
+	# JHT_WINDOWED=1 avvia in finestra (comodo per test/screenshot).
+	_apply_fullscreen(OS.get_environment("JHT_WINDOWED") != "1")
 
 func _ready() -> void:
-	# Il fullscreen dichiarato in project.godot non sempre attecchisce all'avvio
-	# su Windows: lo forziamo a finestra pronta. JHT_WINDOWED=1 avvia in finestra
-	# (comodo per i test/screenshot senza coprire lo schermo).
-	if OS.get_environment("JHT_WINDOWED") != "1":
-		_apply_fullscreen.call_deferred(true)
-
 	# Scorciatoia per i test: JHT_SCENE=office|wizard|title salta il boot.
 	var target := OS.get_environment("JHT_SCENE")
 	if OS.get_environment("JHT_ELEVATOR") == "1":
@@ -93,27 +90,37 @@ func close_pause() -> void:
 		_pause_menu = null
 	get_tree().paused = false
 
+## Fullscreen nativo (MODE_FULLSCREEN, il borderless multiwindow di Godot).
+## MAI il trucco "borderless a misura schermo": Godot 4.7 su Windows lo rileva
+## e marca la finestra EXCLUSIVE_FULLSCREEN, flag che resta incastrato anche
+## dopo il resize (finestra dietro le altre, present esclusivo, lag).
+## Lo stato lo teniamo noi in _fullscreen: il getter Window.mode non è affidabile.
+var _fullscreen := false
+
 func is_fullscreen() -> bool:
-	var m := get_window().mode
-	return m == Window.MODE_FULLSCREEN or m == Window.MODE_EXCLUSIVE_FULLSCREEN
+	return _fullscreen
 
 func toggle_fullscreen() -> void:
-	_apply_fullscreen(not is_fullscreen())
+	_apply_fullscreen(not _fullscreen)
 
-## Applica in modo deterministico finestra/schermo intero e riallinea lo stretch.
 func _apply_fullscreen(on: bool) -> void:
+	_fullscreen = on
 	var win := get_window()
 	if on:
 		win.mode = Window.MODE_FULLSCREEN
 	else:
 		win.mode = Window.MODE_WINDOWED
-		# 90% dello schermo, mai più grande del monitor, poi centrata.
-		var screen := DisplayServer.screen_get_size(win.current_screen)
-		var target := Vector2i(1600, 900)
-		target.x = mini(target.x, int(screen.x * 0.9))
-		target.y = mini(target.y, int(screen.y * 0.9))
+		# Il cambio di modo su Windows è asincrono: se size/position si impostano
+		# nello stesso frame, il ripristino del rect pre-fullscreen le sovrascrive
+		# e la finestra resta grande quanto lo schermo. Geometria al frame dopo.
+		await get_tree().process_frame
+		# 90% dello schermo, mai più grande del monitor, centrata sul monitor corrente.
+		var scr := win.current_screen
+		var sp := DisplayServer.screen_get_position(scr)
+		var ss := DisplayServer.screen_get_size(scr)
+		var target := Vector2i(mini(1600, int(ss.x * 0.9)), mini(900, int(ss.y * 0.9)))
 		win.size = target
-		win.move_to_center()
+		win.position = sp + (ss - target) / 2
 
 # ── Input map via codice (niente sezione [input] nel project.godot) ──
 
