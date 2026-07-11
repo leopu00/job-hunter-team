@@ -102,13 +102,32 @@ def place(sheet: Image.Image, frame: Image.Image, row: int, col: int, scale: flo
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
-    ap.add_argument("--walk", required=True)
+    ap.add_argument("--walk")
     ap.add_argument("--idle")
     ap.add_argument("--work")
     ap.add_argument("--carry")
+    ap.add_argument("--sit", help="foglio SEPARATO 4x3 <slug>_sit.png (SIT_TRACKS)")
+    ap.add_argument("--sit-target-h", type=float, default=122.0,
+                    help="altezza del seduto: ~0.76 dello standing TARGET_H, "
+                         "così le proporzioni tornano col foglio principale")
     ap.add_argument("-o", "--out", required=True)
     args = ap.parse_args()
 
+    if args.sit:
+        # foglio seduto: griglia 4x3 autonoma, stesse celle e aggancio piedi
+        rows = load_grid(args.sit, 4)
+        sheet = Image.new("RGBA", (4 * CELL_W, 3 * CELL_H), (0, 0, 0, 0))
+        for r, frames in enumerate(rows):
+            med_h = float(np.median([f.size[1] for f in frames]))
+            scale = args.sit_target_h / med_h
+            for col, fr in enumerate(frames[:4]):
+                place(sheet, fr, r, col, scale)
+        sheet.save(args.out)
+        print(f"scritto {args.out} ({args.slug}, sit 4x3)")
+        return
+
+    if not args.walk:
+        sys.exit("serve --walk (o --sit per il foglio seduto)")
     grids = {"walk": load_grid(args.walk, 6)}
     if args.idle:
         grids["idle"] = load_grid(args.idle, 2)
