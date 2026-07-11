@@ -84,7 +84,12 @@ func _ready() -> void:
 		world.add_child(p)
 		PaperPile.inbox[dept_id] = p
 
+	# Ambientazione pre-backend SOBRIA (ordine Leone 18:0x): solo lead e
+	# core, niente folla. L'organico completo resta nel pool: coi dati
+	# veri la scena mostra esattamente chi è attivo sulla VPS.
 	for def in CharacterDefs.spawn_list():
+		if not def.get("lead", false):
+			continue
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(def, nav)
@@ -391,6 +396,7 @@ func _add_hud() -> void:
 	hud.add_child(theme_root)
 	_team_hud = TeamHud.new()
 	theme_root.add_child(_team_hud)
+	theme_root.add_child(SimBadge.new())  # SIMULAZIONE vs DATI REALI
 	var hint := TerminalTheme.label(
 			"trascina o WASD per la camera · rotella zoom · click su agenti e reparti · TAB registro · ESC menu",
 			15, Palette.DIM)

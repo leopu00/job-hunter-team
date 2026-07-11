@@ -28,6 +28,7 @@ var _last_chat_ts := ""
 
 
 func start(config: Dictionary) -> void:
+	live = true  # unica sorgente di dati REALI: spegne il badge SIMULAZIONE
 	_ip = str(config.get("ip", "")).strip_edges()
 	_key = str(config.get("key_path", "")).strip_edges()
 	_user = str(config.get("user", "root")).strip_edges()

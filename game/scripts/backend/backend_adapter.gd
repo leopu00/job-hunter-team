@@ -8,6 +8,10 @@ extends RefCounted
 
 var bus: Node  # il BackendBus, iniettato da set_backend()
 
+## true SOLO per le sorgenti che portano dati REALI (VpsBackend): pilota
+## il badge SIMULAZIONE/LIVE della scena (ordine Leone 18:0x).
+var live := false
+
 
 ## Avvia la sorgente (connessioni, timer, polling). Deve portare il bus
 ## a CONNECTED via bus.publish_state() quando i dati iniziano a fluire.
