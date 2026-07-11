@@ -128,6 +128,17 @@ A skill `critic-loop` regista a pontuação de cada rodada; aqui persiste o vere
 
 > ⚠️ **Regra de escritor único (bug #21).** `applications.status='ready'` é definido **apenas aqui, por si, após PASS do Critico**. O Critico nunca escreve `applications.status` diretamente — a sua única saída é `critic_verdict` + `critic_score`. Você é o dono da transição final.
 
+**`--critic-notes` É VISÍVEL PARA O UTILIZADOR** — é renderizado sob o cartão de Candidatura do candidato com o **mesmo markdown que a fundamentação do Scorer**, por isso escreve-o assim (scorer RULE-09), nunca a linha telegráfica abaixo:
+- **No idioma do utilizador** (RULE-T14 lista "critic feedback" como conteúdo user-locale). O ficheiro de review está em inglês — reformula-o para o candidato; não o deixes em inglês quando o idioma da equipa não o é.
+- **Markdown que fala AO candidato**: começa com o veredito e como a pontuação se moveu ao longo das 3 rodadas *em palavras*, depois `**negrito**` nos pontos decisivos, um par de pontos prós/contras, um emoji com parcimónia. Dois parágrafos curtos — sem muro de texto, sem lista de palavras-chave.
+- **Sem jargão interno** — nunca códigos de regras (`T10`, `RULE-*`), nomes de ferramentas (`WeasyPrint`/`pandoc`/`typst`) ou ids de sessão.
+- Quebras de linha reais via `$'...\n...'` (um `\n` literal é impresso como texto). Constrói-o uma vez antes da porta:
+
+```bash
+CRITIC_NOTES=$'**PASS · 7.5/10** — estável nas três rodadas, um encaixe honesto e sólido.\n\n**Pontos fortes**\n- ✅ <força concreta: CV vs este cargo>\n- ✅ <outra força real>\n\n**A ter em conta**\n- ⚠️ <uma lacuna real, dita com clareza>\n\n<uma frase de fecho>'
+# NEEDS_WORK/REJECT: mesma forma, mas indica o que falta e o que o elevaria.
+```
+
 ```bash
 # UPSERT final na application — veredito + pontuação + promoção ready/draft
 # `--reviewed-by` deve ser definido para o ID de sessão do ÚLTIMO Critico que spawnou
@@ -140,7 +151,7 @@ if [[ <final_verdict> == "PASS" ]]; then
     --critic-verdict PASS \
     --critic-score <X.X> \
     --critic-round 3 \
-    --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$LAST_CRITIC" \
     --status ready
 else
@@ -148,7 +159,7 @@ else
     --critic-verdict <NEEDS_WORK|REJECT> \
     --critic-score <X.X> \
     --critic-round 3 \
-    --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$LAST_CRITIC"
   # status permanece 'draft' — a application não está pronta para o utilizador.
 fi

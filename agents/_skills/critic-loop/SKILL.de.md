@@ -126,6 +126,17 @@ Status-Promotion zu `ready` (nur bei PASS). Die Promotion ist das, was das
 `/ready`-Dashboard des Nutzers liest; das Überspringen lässt die Zeile in `draft`
 und der CV wird unsichtbar (Bug #21).
 
+**`--critic-notes` IST NUTZERSICHTBAR** — es wird unter der Bewerbungskarte des Kandidaten mit dem **gleichen Markdown wie die Begründung des Scorer** gerendert, also schreibe es so (scorer RULE-09), niemals der telegrafische Einzeiler unten:
+- **In der Sprache des Nutzers** (RULE-T14 führt "critic feedback" als user-locale-Inhalt auf). Die Review-Datei ist auf Englisch — formuliere sie für den Kandidaten um; lass sie nicht auf Englisch, wenn die Teamsprache es nicht ist.
+- **Markdown, das ZUM Kandidaten spricht**: beginne mit dem Urteil und wie sich der Score über die 3 Runden bewegt hat *in Worten*, dann `**fett**` die entscheidenden Punkte, ein paar Pro/Contra-Punkte, ein sparsames Emoji. Zwei kurze Absätze — keine Textwand, kein Schlagwort-Dump.
+- **Kein interner Jargon** — niemals Regelcodes (`T10`, `RULE-*`), Tool-Namen (`WeasyPrint`/`pandoc`/`typst`) oder Session-IDs.
+- Echte Zeilenumbrüche via `$'...\n...'` (ein literales `\n` wird als Text ausgegeben). Baue es einmal vor dem Gate:
+
+```bash
+CRITIC_NOTES=$'**PASS · 7.5/10** — über alle drei Runden stabil, eine ehrliche und starke Passung.\n\n**Was überzeugt**\n- ✅ <konkrete Stärke: CV vs diese Rolle>\n- ✅ <eine weitere echte Stärke>\n\n**Gut zu wissen**\n- ⚠️ <eine echte Lücke, klar benannt>\n\n<ein abschließender Satz>'
+# NEEDS_WORK/REJECT: gleiche Form, aber benenne, was fehlt und was es anheben würde.
+```
+
 ```bash
 if [[ "<final_verdict>" == "PASS" ]]; then
   # PASS → Application wird nutzersichtbar
@@ -133,7 +144,7 @@ if [[ "<final_verdict>" == "PASS" ]]; then
     --critic-verdict PASS \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION" \
     --status ready
 else
@@ -142,7 +153,7 @@ else
     --critic-verdict FAIL \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION"
 fi
 ```
