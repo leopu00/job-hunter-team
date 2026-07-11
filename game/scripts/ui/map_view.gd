@@ -1,15 +1,22 @@
 class_name MapView
 extends Control
 ## La mappa delle offerte con i pin, migrata dalla vista map della
-## dashboard web: proiezione equirettangolare dell'Europa su griglia
-## terminale, un pin per posizione (città da TeamData, score colorato).
-## Usata dalla sezione Mappa della sidebar e dal click sul mappamondo.
+## dashboard web: carta geografica vera (countries.geojson, lo stesso
+## dataset del globo MapLibre del web) proiettata equirettangolare,
+## pin per città/coordinate con score colorato. Usata dalla sezione
+## Mappa della sidebar e dal click sul mappamondo.
 
-## Bounding box Europa: lon -11..26, lat 35..61 (equirettangolare).
-const LON_MIN := -11.0
-const LON_MAX := 26.0
-const LAT_MIN := 35.0
-const LAT_MAX := 61.0
+const GEOJSON_PATH := "res://assets/data/countries.geojson"
+
+## Bounding box Europa: lon -12..32, lat 34..62 (equirettangolare).
+const LON_MIN := -12.0
+const LON_MAX := 32.0
+const LAT_MIN := 34.0
+const LAT_MAX := 62.0
+
+## Poligoni dei paesi già proiettati in coordinate normalizzate 0..1
+## (statici: il geojson si parsa UNA volta per sessione, non per vista).
+static var _land: Array = []
 
 ## Coordinate delle città: servono sia al mock sia come FALLBACK per i
 ## dati veri — il geocode del team è on-demand e quasi nessuna posizione
@@ -71,9 +78,51 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(0, 480)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
+	clip_contents = true  # i poligoni fuori vista non sbordano dal pannello
+	_load_land()
 	_rebuild_pins()
 	BackendBus.positions_updated.connect(func(_l: Array) -> void: _rebuild_pins())
 	resized.connect(queue_redraw)
+
+## countries.geojson → array di ring normalizzati 0..1 nella vista.
+## Tiene solo i ring che intersecano il box (il resto del mondo è fuori).
+static func _load_land() -> void:
+	if not _land.is_empty():
+		return
+	var f := FileAccess.open(GEOJSON_PATH, FileAccess.READ)
+	if f == null:
+		return
+	var geo: Variant = JSON.parse_string(f.get_as_text())
+	if geo == null:
+		return
+	var view := Rect2(LON_MIN, LAT_MIN, LON_MAX - LON_MIN, LAT_MAX - LAT_MIN)
+	for feat in geo.get("features", []):
+		var geom: Dictionary = feat.get("geometry", {})
+		var polys: Array = []
+		match geom.get("type", ""):
+			"Polygon":
+				polys = [geom.get("coordinates", [])]
+			"MultiPolygon":
+				polys = geom.get("coordinates", [])
+		for poly in polys:
+			if poly.is_empty():
+				continue
+			var ring: Array = poly[0]  # solo il ring esterno: è una silhouette
+			var pts := PackedVector2Array()
+			var bounds := Rect2()
+			for i in ring.size():
+				var lon := float(ring[i][0])
+				var lat := float(ring[i][1])
+				var pt := Vector2(lon, lat)
+				bounds = Rect2(pt, Vector2.ZERO) if i == 0 else bounds.expand(pt)
+				pts.append(Vector2(
+						(lon - LON_MIN) / (LON_MAX - LON_MIN),
+						1.0 - (lat - LAT_MIN) / (LAT_MAX - LAT_MIN)))
+			if bounds.intersects(view) and pts.size() >= 3:
+				# le coastline sono concave: draw_colored_polygon (fan)
+				# le romperebbe — triangolazione precomputata una volta
+				var idx := Geometry2D.triangulate_polygon(pts)
+				_land.append({"pts": pts, "idx": idx})
 
 ## Pin dai dati VERI quando la VPS è collegata: office_lat/lon se il
 ## geocode c'è, altrimenti la città (cluster per città con conteggio,
@@ -144,6 +193,21 @@ func _draw() -> void:
 	while y < r.size.y:
 		draw_line(Vector2(0, y), Vector2(r.size.x, y), Color(1, 1, 1, 0.04), 1.0)
 		y += step
+	# la terra sotto i pin: silhouette dei paesi dal geojson del web
+	var fill := PackedColorArray([Color(0.16, 0.17, 0.22, 1.0)])
+	for land: Dictionary in _land:
+		var ring: PackedVector2Array = land["pts"]
+		var scaled := PackedVector2Array()
+		scaled.resize(ring.size())
+		for i in ring.size():
+			scaled[i] = ring[i] * r.size
+		var idx: PackedInt32Array = land["idx"]
+		if not idx.is_empty():
+			RenderingServer.canvas_item_add_triangle_array(
+					get_canvas_item(), idx, scaled, fill)
+		var outline := scaled.duplicate()
+		outline.append(scaled[0])
+		draw_polyline(outline, Color(0.32, 0.34, 0.45, 0.9), 1.0)
 	# pin: anello + punto + targhetta company/città + score
 	var font := TerminalTheme.get_theme().default_font
 	for pin in _pins:
