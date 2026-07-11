@@ -149,6 +149,15 @@ neutralizzano al ritaglio (defringe verso il grigio di luminanza);
 dipinge l'arredo dentro il frame; (5) driver bash seriale su tmux
 (/clear → prompt → poll file) regge batch da 20+ generazioni non presidiate.
 
+### 2026-07-11 alba — chiusura coda notturna
+
+Pack completato post-reset (limite usage 5:58, driver auto-ripartito alle 6):
+viste _side/_up per tutti i kind _a, carry scrittore/critico, bande
+exterior_night/day (integrate nel DayNight di dev2), verde (monstera, palma,
+mensola piante, tappeto, libreria) e sala relax completa (divano, arcade,
+ping-pong, kitchenette, vetro divisorio — un retry). Tutte le recensioni art
+della notte sono consegnate e integrate.
+
 ## Note su come promptare Codex
 
 1. **Fargli aprire i riferimenti PRIMA di generare**: iniziare il prompt con
