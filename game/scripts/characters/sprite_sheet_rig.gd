@@ -66,6 +66,17 @@ func _apply_track() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	_update_frame()
+	# respiro in idle: i fogli idle hanno 2 frame quasi uguali (o il
+	# fallback dal walk, statico) — il micro-bob dà vita comunque
+	_sprite.position.y = -FEET.y + (sin(_t * 1.7) * 1.4 if mode == "idle" else 0.0)
+
+## Ombra morbida ai piedi: àncora la figura al pavimento (profondità 2.5D).
+## Tre ellissi concentriche = bordo sfumato senza texture.
+func _draw() -> void:
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.38))
+	for i in 3:
+		draw_circle(Vector2.ZERO, 30.0 + i * 8.0, Color(0, 0, 0, 0.10 - i * 0.03))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _update_frame() -> void:
 	if _sprite == null:
