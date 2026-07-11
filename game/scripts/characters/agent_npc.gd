@@ -216,14 +216,15 @@ func _plan_trip() -> void:
 	elif roll < 0.80 and DepartmentDefs.FETCH_FROM.has(dept):
 		# ritiro: inbox del reparto a monte → inbox di casa → scrivania
 		var src: String = DepartmentDefs.FETCH_FROM[dept]
-		_legs = [
-			_leg_to(_jit(DepartmentDefs.DEPARTMENTS[src]["inbox"]), "walk",
-					randf_range(0.8, 1.6), "idle"),
-			_leg_to(_jit(DepartmentDefs.DEPARTMENTS[dept]["inbox"]), "carry",
-					randf_range(0.5, 1.0), "idle"),
-			# i fogli ritirati arrivano FINO alla scrivania (si accumulano lì)
-			_leg_to(_spot, "carry", 0.0, "work"),
-		]
+		# il ritiro si vede sulle pile: l'inbox a monte si svuota, quello
+		# di casa riceve una parte, il resto arriva FINO alla scrivania
+		var pick := _leg_to(_jit(DepartmentDefs.DEPARTMENTS[src]["inbox"]), "walk",
+				randf_range(0.8, 1.6), "idle")
+		pick["pile_take"] = src
+		var drop := _leg_to(_jit(DepartmentDefs.DEPARTMENTS[dept]["inbox"]), "carry",
+				randf_range(0.5, 1.0), "idle")
+		drop["pile_drop"] = dept
+		_legs = [pick, drop, _leg_to(_spot, "carry", 0.0, "work")]
 	elif roll < 0.88:
 		# pausa caffè / macchinetta (raro: i tick non aspettano)
 		var poi: Vector2 = pois["coffee"]["spot"] if randf() < 0.7 \
@@ -260,6 +261,11 @@ func _start_next_leg() -> void:
 	state = S.TRIP
 
 func _arrive_at_leg() -> void:
+	# movimenti di fogli sugli inbox di reparto (pile condivise)
+	if _leg.has("pile_take") and PaperPile.inbox.has(_leg["pile_take"]):
+		PaperPile.inbox[_leg["pile_take"]].take_sheets(randi_range(2, 3))
+	if _leg.has("pile_drop") and PaperPile.inbox.has(_leg["pile_drop"]):
+		PaperPile.inbox[_leg["pile_drop"]].add_sheets(randi_range(1, 2))
 	if float(_leg.get("pause", 0.0)) > 0.0:
 		_pause = _leg["pause"]
 		rig.set_motion(rig.facing, rig.flipped, _leg.get("pause_mode", "idle"))

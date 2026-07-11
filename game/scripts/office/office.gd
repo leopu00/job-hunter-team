@@ -14,6 +14,7 @@ var _camera: FreeCamera
 func _ready() -> void:
 	add_child(OfficeFloor.new())
 	add_child(DepartmentDressing.new())  # tinte/targhe dei 5 reparti (dev-art)
+	add_child(DeptRugs.new())  # tappetoni tondi colore-reparto (reference)
 	# giorno/notte sull'ora locale: esterno, lampade e luce dalle finestre.
 	# Va qui, PRIMA di mondo e maintainer, che devono disegnarsi sopra.
 	add_child(DayNight.new())
@@ -41,6 +42,8 @@ func _ready() -> void:
 	# kind "none" = seduta di un mobile condiviso (es. il tavolo lungo degli
 	# Analisti): conta per spot/ostacoli ma il visual è l'item in FurnitureDefs.
 	for d in DepartmentDefs.all_desks():
+		# micro-prop sul piano (anche sulle sedute del tavolo lungo)
+		world.add_child(DeskClutter.new(d["rect"], "%s:%d" % [d["dept"], d["index"]]))
 		if d["kind"] == "none":
 			continue
 		world.add_child(FurnitureNode.new({
@@ -59,6 +62,18 @@ func _ready() -> void:
 
 	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles()
 			+ DepartmentDefs.obstacles() + DepartmentDefs.GLASS_WALLS)
+
+	# pile degli inbox di reparto: il ritiro le svuota, le soste le
+	# riforniscono, e un restock lento simula l'upstream che stampa.
+	PaperPile.inbox = {}
+	for dept_id in DepartmentDefs.DEPT_ORDER:
+		var inbox_pos: Vector2 = DepartmentDefs.DEPARTMENTS[dept_id]["inbox"]
+		var p := PaperPile.new(Rect2(inbox_pos - Vector2(28, 16), Vector2(56, 32)))
+		# gli Scout producono e basta: il loro inbox si riempie più svelto
+		p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
+		p.add_sheets(randi_range(1, 6))
+		world.add_child(p)
+		PaperPile.inbox[dept_id] = p
 
 	for def in CharacterDefs.spawn_list():
 		var agent := AgentNPC.new()
