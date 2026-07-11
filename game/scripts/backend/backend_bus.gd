@@ -33,6 +33,8 @@ signal positions_updated(positions: Array)
 signal agent_chat_updated(agent: String, messages: Array)
 ## Esito dell'invio di send_user_chat (ok=false → error leggibile).
 signal user_chat_sent(agent: String, ok: bool, error: String)
+## live_settings è arrivata/cambiata (config team + usage reali).
+signal live_settings_updated(settings: Dictionary)
 
 enum { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
@@ -43,6 +45,10 @@ var state_detail := ""
 var agents: Array = []       # ultimo snapshot pubblicato (per chi arriva tardi)
 var positions: Array = []    # ultimo snapshot posizioni (idem)
 var transitions: Array = []  # ultime ~80 transizioni di stato (registro team)
+## Config team + usage reali (solo campi safe), per sezione della
+## sidebar: {provider|hours|email|advanced: [[etichetta, valore], …],
+## usage: {window_h, per_agent_kt, generated_at}}.
+var live_settings: Dictionary = {}
 
 var _backend: BackendAdapter
 
@@ -153,3 +159,8 @@ func publish_positions(list: Array) -> void:
 	positions = list
 	Log.debug("backend", "posizioni: %d dal jobs.db" % list.size())
 	positions_updated.emit(list)
+
+func publish_settings(settings: Dictionary) -> void:
+	live_settings = settings
+	Log.debug("backend", "config live: %s" % ", ".join(settings.keys()))
+	live_settings_updated.emit(settings)

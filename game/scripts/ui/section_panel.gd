@@ -114,10 +114,23 @@ func _build(page := "") -> void:
 		_:
 			_build_placeholder()
 
-## Sezioni config: coppie etichetta/valore dal contratto dati, SOLA
-## LETTURA — in linea col modello desktop-first (si modifica solo da lì).
+## Sezioni config: coppie etichetta/valore, SOLA LETTURA — in linea col
+## modello desktop-first. Con la VPS collegata mostrano la config VERA
+## del team (campi safe da jht.config.json), altrimenti il mock.
 func _build_config() -> void:
-	var rows: Array = TeamData.settings().get(section, [])
+	if not BackendBus.live_settings_updated.is_connected(_on_config_refresh):
+		BackendBus.live_settings_updated.connect(_on_config_refresh)
+	var rows: Array = []
+	if BackendBus.is_live():
+		# connessi: mostra la config VERA — mai il mock spacciato per reale
+		rows = BackendBus.live_settings.get(section, [])
+		if rows.is_empty():
+			_content.add_child(TerminalTheme.label(
+					"// config in arrivo dalla VPS…" if BackendBus.live_settings.is_empty()
+					else "// sezione non ancora esposta dal team", 14, Palette.DIM))
+			return
+	else:
+		rows = TeamData.settings().get(section, [])
 	if rows.is_empty():
 		_build_placeholder()
 		return
@@ -224,6 +237,11 @@ func _on_positions_refresh(_list: Array) -> void:
 
 func _on_dash_refresh(_list: Array) -> void:
 	if section == "dashboard" and is_instance_valid(_content):
+		_build()
+
+func _on_config_refresh(_settings: Dictionary) -> void:
+	if is_instance_valid(_content) and section in ["profile", "hours",
+			"provider", "docker", "account", "email", "language", "advanced"]:
 		_build()
 
 ## Posizioni filtrate da tutti i gruppi tranne `skip` (cross-filter).
@@ -1037,6 +1055,38 @@ func _build_stats() -> void:
 	_content.add_child(usage_btn)
 
 func _build_usage() -> void:
+	# con la VPS collegata: consumo VERO per agente (kt nella finestra)
+	var live: Dictionary = BackendBus.live_settings.get("usage", {})
+	if not live.is_empty():
+		_content.add_child(TerminalTheme.label("UTILIZZO — ULTIME %s ORE"
+				% str(live.get("window_h", "?")), 16, Palette.WHITE, "bold"))
+		var per_agent: Dictionary = live.get("per_agent_kt", {})
+		if per_agent.is_empty():
+			_content.add_child(TerminalTheme.label(
+					"nessun consumo registrato nella finestra", 14, Palette.DIM))
+		var keys: Array = per_agent.keys()
+		keys.sort()
+		for agent in keys:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 12)
+			_content.add_child(row)
+			var base := str(agent).split("-")[0]
+			var lbl := TerminalTheme.label("%s %s" % [ROLE_EMOJI.get(base, "•"), agent],
+					14, Palette.BASE)
+			lbl.custom_minimum_size = Vector2(220, 0)
+			row.add_child(lbl)
+			row.add_child(TerminalTheme.label("%.1f kt" % float(per_agent[agent]),
+					15, Palette.MINT, "bold"))
+		_content.add_child(TerminalTheme.label("aggiornato: %s"
+				% str(live.get("generated_at", "")).left(16), 12, Palette.DIM))
+		_content.add_child(HSeparator.new())
+		var back_live := Button.new()
+		back_live.text = "◀ STATISTICHE"
+		back_live.add_theme_font_size_override("font_size", 16)
+		back_live.add_theme_color_override("font_color", Palette.MUTED)
+		back_live.pressed.connect(func() -> void: _build())
+		_content.add_child(back_live)
+		return
 	var u: Dictionary = TeamData.usage()
 	_content.add_child(TerminalTheme.label("UTILIZZO", 16, Palette.WHITE, "bold"))
 	_kpi_row("PROVIDER", str(u.get("provider", "—")), Palette.BRIGHT)
