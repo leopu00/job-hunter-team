@@ -95,6 +95,32 @@ out['advanced'] = [
     ['Retention (giorni)', str(a.get('retention_days', '—'))],
 ]
 try:
+    import yaml
+    prof = yaml.safe_load(open('/jht_home/profile/candidate_profile.yml')) or {}
+    rows = []
+    for key, label in [('name', 'Nome'), ('target_role', 'Ruolo target'),
+                       ('location', 'Localita'), ('experience_years', 'Anni di esperienza'),
+                       ('seniority_target', 'Seniority target'), ('industry', 'Settore'),
+                       ('nationality', 'Nazionalita')]:
+        if prof.get(key) is not None:
+            rows.append([label, str(prof[key])])
+    skills = (prof.get('skills') or {}).get('primary') or []
+    if skills:
+        rows.append(['Skill primarie', ', '.join(map(str, skills[:8]))])
+    sal = prof.get('salary_target') or prof.get('salary') or {}
+    if isinstance(sal, dict) and sal:
+        lo = sal.get('min') or sal.get('lo')
+        hi = sal.get('max') or sal.get('hi')
+        cur = sal.get('currency') or 'EUR'
+        if lo or hi:
+            rows.append(['Salary target', str(lo) + ' - ' + str(hi) + ' ' + str(cur)])
+    elif sal:
+        rows.append(['Salary target', str(sal)[:80]])
+    if rows:
+        out['profile'] = rows
+except Exception:
+    pass
+try:
     u = json.load(open('/jht_home/logs/agent-usage-table.json'))
     tot = {}
     for row in u.get('series_kt_per_bucket', []):
