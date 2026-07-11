@@ -21,10 +21,12 @@ cd "$GAME_DIR"
 
 MODE="${1:-boot}"
 
-# mai due istanze sullo stesso progetto (cache corrotta garantita)
-if pgrep -f "godot .*--path $GAME_DIR" >/dev/null 2>&1 \
+# mai due istanze sullo stesso progetto (cache corrotta garantita), e mai
+# in parallelo a un ALTRO worktree: due finestre confondono i test utente
+# e lo shot ruba il focus col suo osascript (incrocio del 18:16, 11/07)
+if pgrep -f "godot --path.*job-hunter-team" >/dev/null 2>&1 \
 		|| pgrep -fl "godot" | grep -q "godot --path \.$" 2>/dev/null; then
-	echo "[run.sh] c'è già un godot su questo progetto: chiudilo prima (pkill -x godot)" >&2
+	echo "[run.sh] c'è già un godot del progetto (anche altro worktree): chiudilo prima (pkill -x godot)" >&2
 	exit 2
 fi
 
