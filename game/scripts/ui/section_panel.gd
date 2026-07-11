@@ -68,9 +68,14 @@ func _ready() -> void:
 	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(_content)
 	# TEST-AUTO: JHT_POS_DETAIL=<id> apre il dettaglio di quella posizione
-	# appena lo snapshot arriva (il refresh del bus rientra da solo).
+	# appena lo snapshot arriva (il refresh del bus rientra da solo);
+	# JHT_AGENT_PAGE=<slug> apre la pagina del singolo agente.
 	if section == "positions" and OS.get_environment("JHT_POS_DETAIL") != "":
 		_pos_detail_id = int(OS.get_environment("JHT_POS_DETAIL"))
+	if section == "agents" and OS.get_environment("JHT_AGENT_PAGE") != "":
+		_agent_detail = OS.get_environment("JHT_AGENT_PAGE")
+		_build("agent")
+		return
 	_build("detail" if _pos_detail_id != 0 else "")
 
 var _content: VBoxContainer
@@ -91,7 +96,10 @@ func _build(page := "") -> void:
 		"team":
 			_build_team()
 		"agents":
-			_build_agents()
+			if page == "agent" and _agent_detail != "":
+				_build_agent_page()
+			else:
+				_build_agents()
 		"activity":
 			_build_activity()
 		"apps":
@@ -241,7 +249,101 @@ func _on_dash_refresh(_list: Array) -> void:
 
 func _on_agents_refresh(_list: Array) -> void:
 	if section == "agents" and is_instance_valid(_content):
-		_build()
+		_build("agent" if _agent_detail != "" else "")
+
+var _agent_detail := ""
+
+func _on_agent_page_refresh(_settings: Dictionary) -> void:
+	if section == "agents" and _agent_detail != "" and is_instance_valid(_content):
+		_build("agent")
+
+## La pagina del singolo agente (/team/<slug> del web): stato live,
+## consumo nella finestra, le SUE ultime transizioni. Tutto dal bus.
+func _build_agent_page() -> void:
+	# refresh anche entrando qui direttamente (senza passare dalla lista)
+	if not BackendBus.agents_updated.is_connected(_on_agents_refresh):
+		BackendBus.agents_updated.connect(_on_agents_refresh)
+	if not BackendBus.live_settings_updated.is_connected(_on_agent_page_refresh):
+		BackendBus.live_settings_updated.connect(_on_agent_page_refresh)
+	var agent := {}
+	for a in BackendBus.agents:
+		if str(a.get("slug", "")) == _agent_detail:
+			agent = a
+			break
+	var back := Button.new()
+	back.flat = true
+	back.text = "◀ AGENTI"
+	back.add_theme_font_size_override("font_size", 14)
+	back.add_theme_color_override("font_color", Palette.MUTED)
+	back.add_theme_color_override("font_hover_color", Palette.GREEN)
+	back.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	back.pressed.connect(func() -> void:
+		_agent_detail = ""
+		Sfx.play_back()
+		_build())
+	_content.add_child(back)
+
+	var slug := _agent_detail
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 14)
+	_content.add_child(title_row)
+	title_row.add_child(TerminalTheme.label(ROLE_EMOJI.get(slug, "●"), 22, Palette.GREEN))
+	title_row.add_child(TerminalTheme.label(
+			str(agent.get("name", slug.capitalize())), 22, Palette.WHITE, "xbold"))
+	title_row.add_child(TerminalTheme.label(
+			str(agent.get("status", "offline")) if not agent.is_empty() else "non attivo ora",
+			15, Palette.MINT if not agent.is_empty() else Palette.DIM, "medium"))
+	_content.add_child(HSeparator.new())
+
+	# consumo dell'agente nella finestra usage (tutte le sue istanze)
+	var usage: Dictionary = BackendBus.live_settings.get("usage", {})
+	var per_agent: Dictionary = usage.get("per_agent_kt", {})
+	var kt := 0.0
+	var real := "capitano" if slug == "coordinatore" else slug
+	for key in per_agent:
+		if str(key).split("-")[0] == real:
+			kt += float(per_agent[key])
+	_kpi_row("CONSUMO (ULTIME %s ORE)" % str(usage.get("window_h", "?")),
+			"%.1f kt" % kt, Palette.MINT)
+
+	# le sue transizioni recenti (tutte le istanze del ruolo)
+	var mine: Array = []
+	for t in BackendBus.transitions:
+		var by := str(t.get("by_agent", "") if t.get("by_agent") else "")
+		if by.split("-")[0] == real:
+			mine.append(t)
+	_kpi_row("AZIONI NEL REGISTRO", str(mine.size()), Palette.BRIGHT)
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label("ULTIME ATTIVITÀ", 14, Palette.MUTED, "medium"))
+	if mine.is_empty():
+		_content.add_child(TerminalTheme.label(
+				"nessuna transizione recente a suo nome", 14, Palette.DIM))
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 8)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	for t in mine.slice(0, 30):
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 14)
+		list.add_child(row)
+		var when := TerminalTheme.label(str(t.get("ts", "")).left(16), 13, Palette.DIM)
+		when.custom_minimum_size = Vector2(140, 0)
+		row.add_child(when)
+		var who := TerminalTheme.label(str(t.get("by_agent", "?")), 13, Palette.MINT)
+		who.custom_minimum_size = Vector2(110, 0)
+		row.add_child(who)
+		var what := TerminalTheme.label("%s — %s" % [str(t.get("title", "?")),
+				str(t.get("company", ""))], 14, Palette.BASE)
+		what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		what.clip_text = true
+		row.add_child(what)
+		var to_st := str(t.get("to_state", "?"))
+		row.add_child(TerminalTheme.label("→ " + to_st, 13,
+				POS_STATUS_COLORS.get(to_st, Palette.MUTED), "medium"))
 
 func _on_config_refresh(_settings: Dictionary) -> void:
 	if is_instance_valid(_content) and section in ["profile", "hours",
@@ -789,10 +891,21 @@ func _build_agents() -> void:
 			_content.add_child(row)
 			var slug := str(a.get("slug", "?"))
 			row.add_child(TerminalTheme.label(ROLE_EMOJI.get(slug, "●"), 14, Palette.GREEN))
-			var name_lbl := TerminalTheme.label(str(a.get("name", slug)), 16,
-					Palette.BRIGHT, "medium")
-			name_lbl.custom_minimum_size = Vector2(220, 0)
-			row.add_child(name_lbl)
+			# il nome apre la pagina dell'agente (come /team/<slug> sul web)
+			var name_btn := Button.new()
+			name_btn.flat = true
+			name_btn.text = str(a.get("name", slug))
+			name_btn.add_theme_font_size_override("font_size", 16)
+			name_btn.add_theme_color_override("font_color", Palette.BRIGHT)
+			name_btn.add_theme_color_override("font_hover_color", Palette.GREEN)
+			name_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			name_btn.custom_minimum_size = Vector2(220, 0)
+			name_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+			name_btn.pressed.connect(func() -> void:
+				_agent_detail = slug
+				Sfx.play_tick()
+				_build("agent"))
+			row.add_child(name_btn)
 			var st := TerminalTheme.label(str(a.get("status", "working")), 14, Palette.MINT)
 			st.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
