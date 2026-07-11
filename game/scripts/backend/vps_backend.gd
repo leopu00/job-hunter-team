@@ -29,7 +29,8 @@ const POLL_CMD := "docker exec jht tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
 ## servirebbero allo script python passate via sys.argv.
 const POSITIONS_PY := "import sys,sqlite3,json; db=sqlite3.connect(sys.argv[1]); " \
 		+ "db.row_factory=sqlite3.Row; q=lambda s: [dict(r) for r in db.execute(s)]; " \
-		+ "print(json.dumps(dict(p=q(sys.argv[2]),h=q(sys.argv[3]),t=q(sys.argv[4]))))"
+		+ "print(json.dumps(dict(p=q(sys.argv[2]),h=q(sys.argv[3]),t=q(sys.argv[4])," \
+		+ "tr=q(sys.argv[5]))))"
 ## La lista serve i facet, il dettaglio tutto il resto (mai jd_text: enorme).
 const POSITIONS_SELECT := "SELECT p.id,p.title,p.company,p.status,p.role_family," \
 		+ "p.loc_country,p.loc_city,p.work_mode,p.source,p.url,p.jd_summary," \
@@ -48,6 +49,11 @@ const POSITIONS_SELECT := "SELECT p.id,p.title,p.company,p.status,p.role_family,
 const HIGHLIGHTS_SELECT := "SELECT position_id,type,text FROM position_highlights ORDER BY id"
 const TICKETS_SELECT := "SELECT position_id,request_text,kind,status,assigned_agent," \
 		+ "response_text,created_at FROM position_tickets ORDER BY id"
+## Il registro attività del team (/team/log del web): chi ha fatto cosa,
+## con attribuzione per-istanza (scout-2, scorer-1...).
+const TRANSITIONS_SELECT := "SELECT t.position_id,t.from_state,t.to_state,t.ts," \
+		+ "t.by_agent,p.title,p.company FROM position_state_transitions t " \
+		+ "LEFT JOIN positions p ON p.id=t.position_id ORDER BY t.id DESC LIMIT 80"
 
 const POSITIONS_EVERY := 4  # giri di poll tra due letture del jobs.db
 
@@ -122,7 +128,8 @@ func _run() -> void:
 func _fetch_positions() -> void:
 	var res := _ssh("docker exec -i jht python3 -c '" + POSITIONS_PY \
 			+ "' /jht_home/jobs.db '" + POSITIONS_SELECT + "' '" \
-			+ HIGHLIGHTS_SELECT + "' '" + TICKETS_SELECT + "'")
+			+ HIGHLIGHTS_SELECT + "' '" + TICKETS_SELECT + "' '" \
+			+ TRANSITIONS_SELECT + "'")
 	if _stop or res["code"] != 0:
 		if not _stop:
 			Log.call_deferred("debug", "backend", "fetch posizioni KO: code=%s %s" % [
@@ -134,6 +141,9 @@ func _fetch_positions() -> void:
 		if line.begins_with("{"):
 			var data: Variant = JSON.parse_string(line)
 			if data is Dictionary:
+				# transitions vanno sul bus PRIMA del segnale: le viste
+				# le leggono al positions_updated (unico tick dati)
+				bus.set_deferred("transitions", data.get("tr", []))
 				bus.call_deferred("publish_positions", _assemble_positions(data))
 			return
 
