@@ -157,7 +157,11 @@ static func make_rig(slug: String, variant := "a") -> Node2D:
 	var sheet_path := SHEETS + slug + "_" + variant + ".png"
 	if ResourceLoader.exists(sheet_path):
 		var rig := SpriteSheetRig.new()
-		rig.setup(load(sheet_path))
+		# foglio seduto opzionale (4x3, vedi SIT_TRACKS): se manca, il rig
+		# degrada "sit" a work da solo
+		var sit_path := SHEETS + slug + "_sit.png"
+		var sit: Texture2D = load(sit_path) if ResourceLoader.exists(sit_path) else null
+		rig.setup(load(sheet_path), sit)
 		return rig
 	# fallback SVG; per slug senza asset (ruoli nuovi) si presta lo scout
 	var svg_slug := slug if ResourceLoader.exists(GEN + slug + "/head_front.svg") else "scout"

@@ -21,18 +21,29 @@ const TRACKS := {
 	"carry_down": [9, 6, 10.0], "carry_up": [10, 6, 10.0], "carry_side": [11, 6, 10.0],
 }
 
+## "sit" vive in un foglio SEPARATO <slug>_sit.png (4×3, stessa cella):
+## righe down/up/side. Il contratto 6×12 del foglio principale non cambia.
+const SIT_COLS := 4
+const SIT_TRACKS := {
+	"sit_down": [0, 4, 8.0], "sit_up": [1, 4, 8.0], "sit_side": [2, 4, 8.0],
+}
+
 var mode := "idle"
 var facing := "down"       # down / up / side
 var flipped := false
 
 var _sprite: Sprite2D
+var _sheet: Texture2D
+var _sit_sheet: Texture2D
 var _row := 0
 var _frames := 2
 var _fps := 2.0
 var _t := 0.0
 
-func setup(sheet: Texture2D) -> void:
+func setup(sheet: Texture2D, sit_sheet: Texture2D = null) -> void:
 	scale = Vector2(RIG_SCALE, RIG_SCALE)
+	_sheet = sheet
+	_sit_sheet = sit_sheet
 	_sprite = Sprite2D.new()
 	_sprite.texture = sheet
 	_sprite.centered = false
@@ -48,15 +59,26 @@ func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 		return
 	facing = p_facing
 	flipped = p_flipped
-	# modi sconosciuti degradano a idle: il rig non deve mai rompersi
-	mode = p_mode if TRACKS.has(p_mode + "_down") else "idle"
+	# "sit" senza foglio seduto degrada a work (si digita in piedi finché
+	# l'arte non arriva); modi sconosciuti degradano a idle: mai rompersi
+	if p_mode == "sit":
+		mode = "sit" if _sit_sheet != null else "work"
+	else:
+		mode = p_mode if TRACKS.has(p_mode + "_down") else "idle"
 	_apply_track()
 
 func _apply_track() -> void:
+	var sitting := mode == "sit"
+	var tex := _sit_sheet if sitting else _sheet
+	if _sprite.texture != tex:
+		_sprite.texture = tex
+		_sprite.hframes = SIT_COLS if sitting else COLS
+		_sprite.vframes = 3 if sitting else 12
+	var table: Dictionary = SIT_TRACKS if sitting else TRACKS
 	var key := mode + "_" + facing
-	if not TRACKS.has(key):
+	if not table.has(key):
 		key = mode + "_down"
-	var track: Array = TRACKS[key]
+	var track: Array = table[key]
 	_row = track[0]
 	_frames = track[1]
 	_fps = track[2]
@@ -82,4 +104,4 @@ func _update_frame() -> void:
 	if _sprite == null:
 		return
 	var idx := int(_t * _fps) % _frames
-	_sprite.frame = _row * COLS + idx
+	_sprite.frame = _row * (SIT_COLS if mode == "sit" else COLS) + idx
