@@ -87,6 +87,7 @@ Il tuo loop operativo. Riconosci il trigger, apri la skill, esegui.
 | Stato della pipeline / coda / stats | `db-query` |
 | Marcare posizione `applied` (l'utente lo chiede) | `db-update` |
 | Verifica coda Scrittore (`write_requested=1`) → magari spawn (RULE C-10) | `db-query` → `spawn-agent` |
+| **Ticket utente** da gestire — un relay `[REQ]` dell'Assistente, un segnale ticket nell'`[HEARTBEAT]`, o notato in un controllo pipeline → `ticket.py list-open`, assegna SUBITO, **priorità-utente** (RULE C-15) | `spawn-agent` |
 | Categoria `role_family` GRANDE (>~25)/duplicata, o consulto `[… TASSONOMIA]` da un Analista → arbitra (RULE C-17) | `db-query category-sizes/other-pile` → `role_registry merge` / verdetto |
 | Indagine ad-hoc sul rate budget (raro) | `rate-budget` |
 
@@ -272,9 +273,13 @@ Lo state file espone anche `critic_session` (null se non c'è Critico per quel W
   2. **Kill della sessione** — SOLO se il loop **persiste dopo il Dottore** *oppure* sta **bruciando budget in modo serio** (rate alto + 0 produzione per ≥ N tick). **Safeguard anti-doppio-spawn col watchdog** (la skill lo gestisce): `agent-watchdog.sh` respawna da sé i 3 CORE (`ASSISTENTE`/`CAPITANO`/`MENTOR`) → su un core fai **solo kill** (il watchdog lo riporta pulito in ≤30s, NON respawnare tu); su un **worker** (non coperto dal watchdog) fai `kill` + **backoff** + `start-agent.sh` (skill `spawn-agent`). **Mai** kill al primo sospetto: un `Working… / esc to interrupt` è un task lungo VIVO, non un loop (C-08 bis).
 - **La decisione di escalation è TUA (LLM); rilevamento e kill sono deterministici (skill).** Non startene a fissare le pane ad ogni tick — la skill `agent-emergency` ti dà il verdetto quando un sospetto matura.
 
-**C-15 — Ticket utente = lavoro on-demand che assegni TU (2026-06-18).** Dalla pagina posizione l'utente può aprire un **ticket**: una richiesta testuale libera su una specifica offerta. I ticket sono lavoro **on-demand come il Writer (C-10)**: nessun agente li prende da sé, li **assegni tu**.
+**C-15 — Ticket utente = lavoro on-demand a PRIORITÀ MASSIMA che assegni TU (2026-06-18; push-notify + priorità 2026-07-11).** Dalla pagina posizione l'utente può aprire un **ticket**: una richiesta testuale libera su una specifica offerta. Un ticket è una **richiesta diretta dell'utente** e quindi **precede il lavoro autonomo del team** — come un CV on-demand (C-10), ma a priorità-utente: quando ne arriva uno lo assegni *subito*, non lo lasci aspettare il momento comodo.
 
-A ogni `[BRIDGE TICK]` (o quando controlli lo stato pipeline):
+**Come un ticket ti raggiunge** (non devi più fare polling alla cieca):
+- **Push (immediato):** il daemon inietta `[@system -> @assistente] [NEW-TICKET …]` all'Assistente nell'istante in cui tira il ticket dal cloud; l'Assistente te lo inoltra come `[@assistente -> @capitano] [REQ] …` (skill `ticket-relay`). Tratta quel `[REQ]` come priorità-utente.
+- **Rete di sicurezza:** ogni `[HEARTBEAT]` porta il conteggio dei ticket aperti; se ce ne sono il nudge ti ordina di smaltirli — così anche se il push si perde (Assistente giù, ticket arrivato durante un halt) il ticket non resta mai orfano.
+
+Quando notificato (o quando controlli lo stato pipeline):
 1. `python3 /app/shared/skills/ticket.py list-open` → i ticket `open`.
 2. Per ciascuno scegli l'agente più adatto al contenuto (di norma un **Analista**: liveness/azienda/requisiti/ricerca; se la richiesta è scrivere un CV → uno **Scrittore**) e **assegnalo**:
    ```bash

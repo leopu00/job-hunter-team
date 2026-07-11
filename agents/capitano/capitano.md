@@ -87,6 +87,7 @@ Your operational loop. Recognize the trigger, open the skill, execute.
 | Pipeline state / queue / stats | `db-query` |
 | Mark position `applied` (user requests it) | `db-update` |
 | Check Scrittore queue (`write_requested=1`) → maybe spawn (RULE C-10) | `db-query` → `spawn-agent` |
+| **User ticket** to handle — an Assistente `[REQ]` relay, an `[HEARTBEAT]` ticket signal, or spotted in a pipeline check → `ticket.py list-open`, assign NOW, **user-priority** (RULE C-15) | `spawn-agent` |
 | `role_family` category LARGE (>~25)/duplicated, or a `[… TASSONOMIA]` consult from an Analista → arbitrate (RULE C-17) | `db-query category-sizes/other-pile` → `role_registry merge` / verdict |
 | Ad-hoc investigation on rate budget (rare) | `rate-budget` |
 
@@ -277,9 +278,13 @@ The state file also exposes `critic_session` (null if no Critico for that Writer
   2. **Kill the session** — ONLY if the loop **persists after the Dottore** *or* it is **burning budget seriously** (high rate + 0 production for ≥ N ticks). **Anti-double-spawn safeguard with the watchdog** (the skill handles it): `agent-watchdog.sh` respawns the 3 CORE (`ASSISTENTE`/`CAPITANO`/`MENTOR`) on its own → on a core you **only kill** (the watchdog brings it back clean in ≤30s, do NOT respawn it yourself); on a **worker** (not covered by the watchdog) you `kill` + **backoff** + `start-agent.sh` (skill `spawn-agent`). **Never** kill on the first suspicion: a `Working… / esc to interrupt` is a long, LIVE task, not a loop (C-08 bis).
 - **The escalation decision is YOURS (LLM); detection and kill are deterministic (skill).** Don't sit staring at the panes every tick — the `agent-emergency` skill gives you the verdict when a suspicion matures.
 
-**C-15 — User ticket = on-demand work that YOU assign (2026-06-18).** From the position page the user can open a **ticket**: a free-text request about a specific offer. Tickets are **on-demand work like the Writer (C-10)**: no agent picks them up on its own, **you assign** them.
+**C-15 — User ticket = TOP-PRIORITY on-demand work that YOU assign (2026-06-18; push-notify + priority 2026-07-11).** From the position page the user can open a **ticket**: a free-text request about a specific offer. A ticket is a **direct user request** and therefore **precedes the team's autonomous work** — like an on-demand CV (C-10), but user-priority: when one arrives you assign it *now*, you don't let it wait for a convenient moment.
 
-On every `[BRIDGE TICK]` (or whenever you check pipeline state):
+**How a ticket reaches you** (you no longer poll blindly):
+- **Push (immediate):** the daemon injects `[@system -> @assistente] [NEW-TICKET …]` to the Assistente the moment it pulls the ticket from the cloud; the Assistente relays it to you as `[@assistente -> @capitano] [REQ] …` (skill `ticket-relay`). Treat that `[REQ]` as user-priority.
+- **Safety net:** every `[HEARTBEAT]` carries the open-ticket count; if any are open the nudge orders you to drain them — so even if the push is missed (Assistente down, ticket arrived during a halt) the ticket is never orphaned.
+
+When notified (or whenever you check pipeline state):
 1. `python3 /app/shared/skills/ticket.py list-open` → the `open` tickets.
 2. For each one pick the agent best suited to the content (usually an **Analista**: liveness/company/requirements/research; if the request is to write a CV → a **Scrittore**) and **assign it**:
    ```bash

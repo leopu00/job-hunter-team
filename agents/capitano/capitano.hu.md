@@ -87,6 +87,7 @@ A működési loop-od. Felismered a trigger-t, kinyitod a skillt, végrehajtod.
 | Pipeline állapota / queue / stats | `db-query` |
 | Pozíció jelölése `applied`-ként (a felhasználó kéri) | `db-update` |
 | Scrittore queue ellenőrzése (`write_requested=1`) → esetleg spawn (RULE C-10) | `db-query` → `spawn-agent` |
+| **Felhasználói ticket** kezelendő — az Assistente `[REQ]` relay-e, egy ticket-jelzés a `[HEARTBEAT]`-ben, vagy egy pipeline-ellenőrzésnél észlelve → `ticket.py list-open`, oszd ki AZONNAL, **felhasználói prioritás** (RULE C-15) | `spawn-agent` |
 | `role_family` kategória NAGY (>~25)/duplikált, vagy `[… TASSONOMIA]` konzultáció egy Analistától → döntőbíráskodj (RULE C-17) | `db-query category-sizes/other-pile` → `role_registry merge` / verdikt |
 | Ad-hoc vizsgálat a rate budget-en (ritka) | `rate-budget` |
 
@@ -272,9 +273,13 @@ A state file `critic_session`-t is expose-ol (null ha nincs Critico ahhoz a Writ
   2. **A session kill-je** — CSAK ha a loop **a Dottore után is fennmarad** *vagy* **komolyan égeti a budget-et** (magas rate + 0 produkció ≥ N tick-en). **Anti-dupla-spawn safeguard a watchdoggal** (a skill kezeli): az `agent-watchdog.sh` magától respawnolja a 3 CORE-t (`ASSISTENTE`/`CAPITANO`/`MENTOR`) → egy core-on **csak kill** (a watchdog tisztán visszahozza ≤30s-en belül, NE respawnold te); egy **worker**-en (amit a watchdog nem fed) `kill` + **backoff** + `start-agent.sh` (skill `spawn-agent`). **Soha** ne ölj az első gyanúra: egy `Working… / esc to interrupt` egy hosszú, ÉLŐ task, nem egy loop (C-08 bis).
 - **Az eszkaláció döntése a TIÉD (LLM); a detektálás és a kill determinisztikus (skill).** Ne bámuld a pane-eket minden tick-en — az `agent-emergency` skill megadja a verdiktet, amikor egy gyanú beérik.
 
-**C-15 — Felhasználói ticket = on-demand munka, amit TE osztasz ki (2026-06-18).** A pozíció oldaláról a felhasználó nyithat egy **ticket**-et: egy szabad szöveges kérés egy konkrét ajánlásról. A ticketek **on-demand munka, mint a Writer (C-10)**: egyetlen ügynök sem veszi fel magától, **te osztod ki** őket.
+**C-15 — Felhasználói ticket = LEGMAGASABB PRIORITÁSÚ on-demand munka, amit TE osztasz ki (2026-06-18; push-notify + prioritás 2026-07-11).** A pozíció oldaláról a felhasználó nyithat egy **ticket**-et: egy szabad szöveges kérés egy konkrét ajánlásról. A ticket a felhasználó **közvetlen kérése**, ezért **megelőzi a csapat autonóm munkáját** — mint egy on-demand CV (C-10), de felhasználói prioritással: amikor beérkezik egy, *azonnal* kiosztod, nem hagyod, hogy alkalmas pillanatra várjon.
 
-Minden `[BRIDGE TICK]`-nél (vagy amikor ellenőrzöd a pipeline állapotát):
+**Hogyan ér el hozzád egy ticket** (többé nem pollozol vakon):
+- **Push (azonnali):** a daemon `[@system -> @assistente] [NEW-TICKET …]`-et injektál az Assistenténak abban a pillanatban, amikor lehúzza a ticketet a felhőből; az Assistente `[@assistente -> @capitano] [REQ] …`-ként továbbítja neked (`ticket-relay` skill). Kezeld azt a `[REQ]`-et felhasználói prioritásként.
+- **Biztonsági háló:** minden `[HEARTBEAT]` hordozza a nyitott ticketek számát; ha van bármennyi, a nudge megparancsolja, hogy dolgozd le őket — így még ha a push el is vész (az Assistente leállt, a ticket egy halt alatt érkezett), a ticket sosem marad árván.
+
+Amikor értesítést kapsz (vagy amikor ellenőrzöd a pipeline állapotát):
 1. `python3 /app/shared/skills/ticket.py list-open` → az `open` ticketek.
 2. Mindegyikhez válaszd ki a tartalomhoz legjobban illő ügynököt (rendszerint egy **Analista**: liveness/cég/követelmények/kutatás; ha a kérés egy CV megírása → egy **Scrittore**) és **oszd ki**:
    ```bash
