@@ -383,6 +383,19 @@ func _name_of(uid: String) -> String:
 const MAX_TR_REACTIONS := 6   # per refresh: il resto resta solo nel registro
 const TR_REACT_GAP := 2.4     # secondi fra due reazioni (non un coro)
 
+## Gli stati VERI del jobs.db (SELECT DISTINCT to_state sulla VPS) come
+## frase parlata; uno stato nuovo cade sul generico "%s → stato".
+const TR_PHRASES := {
+	"new": "Nuova posizione: %s",
+	"checked": "Verificata: %s",
+	"scored": "Valutata: %s",
+	"writing": "CV in scrittura: %s",
+	"ready": "CV pronto: %s",
+	"excluded": "Esclusa: %s",
+}
+## Stati che accendono la stampante dell'ufficio (lavoro sul CV).
+const TR_PRINT := ["writing", "ready"]
+
 var _tr_seen: Dictionary = {}
 var _tr_baseline := false
 
@@ -442,8 +455,11 @@ func _react_to_transition(t: Dictionary) -> void:
 		what += " · " + company
 	elif what == "":
 		what = company if company != "" else "posizione #%s" % str(t.get("position_id", "?"))
-	actor.say("%s → %s" % [what, to_st])
-	actor.react_to_work(to_st.contains("writ"))
+	if TR_PHRASES.has(to_st):
+		actor.say(TR_PHRASES[to_st] % what)
+	else:
+		actor.say("%s → %s" % [what, to_st])
+	actor.react_to_work(to_st in TR_PRINT)
 	Log.debug("scene", "reazione %s: %s → %s" % [by, what, to_st])
 
 ## Primo snapshot backend: le postazioni tornano nel pool e il roster
