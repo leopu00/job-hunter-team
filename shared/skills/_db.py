@@ -270,6 +270,28 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
+    -- Bacheca del team: direttive/ordini PERMANENTI dell'utente (strategia,
+    -- formazione, policy operative) — es. "modalità mantenimento: CV solo 90+,
+    -- stop scouting". A differenza del captain-diary (per-giorno, lezioni di
+    -- pacing) queste PERSISTONO finché l'utente non le cambia, e il Capitano le
+    -- rilegge a ogni riavvio (handoff). Editabili da chat (Capitano/Assistente)
+    -- e — prossimo incremento — dalla dashboard web (cloud_id per il round-trip
+    -- Supabase, come position_tickets). Write-ops: shared/skills/team_directives.py.
+    CREATE TABLE IF NOT EXISTS team_directives (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        body TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'order' CHECK (kind IN (
+            'order','strategy','formation','note'
+        )),
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_by TEXT NOT NULL DEFAULT 'user',   -- user | capitano | assistente
+        cloud_id INTEGER,                          -- gemello Supabase (round-trip dashboard); NULL = solo locale
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        archived_at TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
     CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
     CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
@@ -285,6 +307,8 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_position_tickets_status ON position_tickets(status);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_position ON position_tickets(position_id);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_team_directives_status ON team_directives(status);
+    CREATE INDEX IF NOT EXISTS idx_team_directives_cloud_id ON team_directives(cloud_id) WHERE cloud_id IS NOT NULL;
 
     -- Bug #14: event-log delle transizioni di stato delle positions.
     -- `positions.status` è una colonna sovrascritta ad ogni UPDATE, quindi
