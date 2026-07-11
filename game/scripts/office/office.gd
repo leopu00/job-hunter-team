@@ -124,12 +124,18 @@ func _ready() -> void:
 				_open_agent_card(a)
 				break
 
-	# TEST-AUTO: JHT_BACKEND_TEST=1 simula il flusso del BackendBus senza
-	# VPS: sync a roster ridotto (despawn di massa), fumetti di chat in
-	# raffica, poi un rientro (materializzazione). Da fotografare con
-	# JHT_SHOT_DELAY a tempi diversi.
+	# La scena vive sul BackendBus: roster reale → spawn/despawn,
+	# chat del team → fumetti. Se un backend è già connesso (snapshot
+	# presente), la scena si allinea subito.
+	BackendBus.agents_updated.connect(sync_agents)
+	BackendBus.chat_message.connect(_on_chat_message)
+	if not BackendBus.agents.is_empty():
+		sync_agents(BackendBus.agents)
+
+	# TEST-AUTO: JHT_BACKEND_TEST=1 monta il simulatore (MockBackend):
+	# connessione, roster che va e viene, chat a fumetti — senza VPS.
 	if OS.get_environment("JHT_BACKEND_TEST") == "1":
-		_run_backend_selftest()
+		BackendBus.set_backend(MockBackend.new())
 
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
@@ -137,22 +143,8 @@ func _ready() -> void:
 	if shot != "":
 		_take_shot(shot)
 
-func _run_backend_selftest() -> void:
-	var roster := [
-		{"slug": "coordinatore-1", "role": "coordinatore", "name": "Coordinatore", "active": true, "status": "working"},
-		{"slug": "scout-1", "role": "scout", "name": "Scout Lead", "active": true, "status": "working"},
-		{"slug": "scout-2", "role": "scout", "name": "Scout 02", "active": true, "status": "idle"},
-		{"slug": "analista-1", "role": "analista", "name": "Analista Lead", "active": true, "status": "working"},
-	]
-	await get_tree().create_timer(1.0).timeout
-	sync_agents(roster)
-	await get_tree().create_timer(1.2).timeout
-	deliver_chat("scout-1", "all", "Trovate 6 posizioni nuove su 3 board: 2 senior backend a Berlino, il resto remoto EU.")
-	deliver_chat("coordinatore-1", "scout-2", "Riprendi il giro delle board: la coda analisti è vuota.")
-	deliver_chat("analista-1", "user", "Il report della mattinata è pronto: 4 aziende profilate.")
-	await get_tree().create_timer(3.0).timeout
-	roster.append({"slug": "scorer-1", "role": "scorer", "name": "Scorer Lead", "active": true, "status": "working"})
-	sync_agents(roster)
+func _on_chat_message(msg: Dictionary) -> void:
+	deliver_chat(msg.get("from", ""), msg.get("to", "all"), msg.get("text", ""))
 
 func _take_shot(path: String) -> void:
 	# JHT_SHOT_DELAY=N ritarda lo scatto: utile per fotografare la
