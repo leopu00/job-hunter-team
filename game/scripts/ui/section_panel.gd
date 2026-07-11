@@ -130,7 +130,9 @@ func _build(page := "") -> void:
 			_build_language()
 		"profile":
 			_build_profile()
-		"hours", "provider", "docker", "account", "email", "advanced":
+		"hours":
+			_build_hours()
+		"provider", "docker", "account", "email", "advanced":
 			_build_config()
 		_:
 			_build_placeholder()
@@ -171,6 +173,182 @@ func _build_config() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
+
+## Gli ORARI DI LAVORO del team: editabili QUI, con feedback DINAMICO
+## (feedback Leone 21:3x): cambi le finestre e vedi subito le ore
+## attive, la stima approssimativa di posizioni/giorno (rate storico
+## degli ultimi 7 giorni) e il budget riproporzionato.
+var _hours_tz: LineEdit
+var _hours_windows: Array = []   # working copy [{days, start, end}]
+var _hours_estimate_lbl: Label
+var _hours_status: Label
+var _hours_save_btn: Button
+var _hours_loaded := false
+
+func _build_hours() -> void:
+	if not BackendBus.hours_saved.is_connected(_on_hours_saved):
+		BackendBus.hours_saved.connect(_on_hours_saved)
+	var raw: Dictionary = BackendBus.live_settings.get("hours_raw", {})
+	if not BackendBus.is_live() or raw.is_empty():
+		_build_config()
+		return
+	if not _hours_loaded:
+		_hours_windows = []
+		for w in raw.get("windows", []):
+			_hours_windows.append({"days": ", ".join(PackedStringArray(w.get("days", []))),
+					"start": str(w.get("start", "09:00")), "end": str(w.get("end", "18:00"))})
+		_hours_loaded = true
+	_content.add_child(TerminalTheme.label(UIStrings.t("hours.intro"), 14, Palette.MUTED))
+	var tz_row := HBoxContainer.new()
+	tz_row.add_theme_constant_override("separation", 12)
+	_content.add_child(tz_row)
+	var tz_lbl := TerminalTheme.label(UIStrings.t("hours.tz"), 14, Palette.MUTED, "medium")
+	tz_lbl.custom_minimum_size = Vector2(220, 0)
+	tz_row.add_child(tz_lbl)
+	_hours_tz = LineEdit.new()
+	_hours_tz.text = str(raw.get("timezone", "Europe/Rome"))
+	_hours_tz.custom_minimum_size = Vector2(280, 0)
+	tz_row.add_child(_hours_tz)
+	_content.add_child(TerminalTheme.label(UIStrings.t("hours.windows"),
+			14, Palette.MUTED, "medium"))
+	for i in _hours_windows.size():
+		var w: Dictionary = _hours_windows[i]
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		_content.add_child(row)
+		var days := LineEdit.new()
+		days.text = str(w["days"])
+		days.placeholder_text = "mon, tue, wed…"
+		days.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(days)
+		var start := LineEdit.new()
+		start.text = str(w["start"])
+		start.custom_minimum_size = Vector2(100, 0)
+		row.add_child(start)
+		row.add_child(TerminalTheme.label("→", 14, Palette.DIM))
+		var end := LineEdit.new()
+		end.text = str(w["end"])
+		end.custom_minimum_size = Vector2(100, 0)
+		row.add_child(end)
+		var win: Dictionary = w
+		var sync := func() -> void:
+			win["days"] = days.text
+			win["start"] = start.text
+			win["end"] = end.text
+			_refresh_hours_estimate()
+		days.text_changed.connect(func(_t: String) -> void: sync.call())
+		start.text_changed.connect(func(_t: String) -> void: sync.call())
+		end.text_changed.connect(func(_t: String) -> void: sync.call())
+		var rm := Button.new()
+		rm.flat = true
+		rm.text = "✕"
+		rm.add_theme_color_override("font_color", Palette.RED)
+		var idx := i
+		rm.pressed.connect(func() -> void:
+			_hours_windows.remove_at(idx)
+			_build())
+		row.add_child(rm)
+	var add := Button.new()
+	add.flat = true
+	add.text = UIStrings.t("hours.add")
+	add.add_theme_color_override("font_color", Palette.GREEN)
+	add.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	add.pressed.connect(func() -> void:
+		_hours_windows.append({"days": "mon, tue, wed, thu, fri",
+				"start": "09:00", "end": "18:00"})
+		_build())
+	_content.add_child(add)
+	_content.add_child(HSeparator.new())
+	_hours_estimate_lbl = TerminalTheme.label("", 14, Palette.YELLOW)
+	_hours_estimate_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(_hours_estimate_lbl)
+	_refresh_hours_estimate()
+	_hours_save_btn = Button.new()
+	_hours_save_btn.text = UIStrings.t("hours.save")
+	_hours_save_btn.add_theme_font_size_override("font_size", 16)
+	_hours_save_btn.add_theme_color_override("font_color", Palette.GREEN)
+	_hours_save_btn.pressed.connect(_save_hours)
+	_content.add_child(_hours_save_btn)
+	_hours_status = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_hours_status)
+
+## Ore attive/settimana di una lista finestre del form.
+static func _hours_per_week(windows: Array) -> float:
+	var total := 0.0
+	for w in windows:
+		var days := 0
+		for d in str(w["days"]).split(","):
+			if d.strip_edges() != "":
+				days += 1
+		var s := _hhmm(str(w["start"]))
+		var e := _hhmm(str(w["end"]))
+		if e <= s:
+			e += 24.0  # attraversa la mezzanotte (o end 00:00 = 24:00)
+		total += (e - s) * days
+	return total
+
+static func _hhmm(t: String) -> float:
+	var parts := t.strip_edges().split(":")
+	if parts.size() < 2:
+		return 0.0
+	return float(parts[0].to_int()) + float(parts[1].to_int()) / 60.0
+
+## La stima dinamica: rate storico (posizioni degli ultimi 7 giorni per
+## ora attiva del config corrente) proiettato sulle ore del form.
+func _refresh_hours_estimate() -> void:
+	if not is_instance_valid(_hours_estimate_lbl):
+		return
+	var cur_raw: Dictionary = BackendBus.live_settings.get("hours_raw", {})
+	var cur_windows: Array = []
+	for w in cur_raw.get("windows", []):
+		cur_windows.append({"days": ", ".join(PackedStringArray(w.get("days", []))),
+				"start": str(w.get("start", "")), "end": str(w.get("end", ""))})
+	var cur_h := maxf(1.0, _hours_per_week(cur_windows))
+	var new_h := _hours_per_week(_hours_windows)
+	var week_ago := Time.get_unix_time_from_system() - 7 * 86400
+	var found7 := 0
+	for p in BackendBus.positions:
+		var ts := Time.get_unix_time_from_datetime_string(
+				str(p.get("found_at", "")).left(19))
+		if ts > 0 and float(ts) >= week_ago:
+			found7 += 1
+	var rate := float(found7) / cur_h          # posizioni per ora attiva
+	var est_day := rate * new_h / 7.0
+	_hours_estimate_lbl.text = UIStrings.t("hours.estimate") % [
+			new_h, est_day, int(round(new_h / cur_h * 100.0))]
+
+func _save_hours() -> void:
+	var windows: Array = []
+	for w in _hours_windows:
+		var days: Array = []
+		for d in str(w["days"]).split(","):
+			var day := d.strip_edges().to_lower()
+			if ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].has(day):
+				days.append(day)
+		if days.is_empty() or not str(w["start"]).contains(":") \
+				or not str(w["end"]).contains(":"):
+			_hours_status.text = UIStrings.t("hours.invalid")
+			_hours_status.add_theme_color_override("font_color", Palette.RED)
+			return
+		windows.append({"days": days, "start": str(w["start"]).strip_edges(),
+				"end": str(w["end"]).strip_edges()})
+	_hours_save_btn.disabled = true
+	_hours_status.text = UIStrings.t("prof.saving")
+	_hours_status.add_theme_color_override("font_color", Palette.DIM)
+	BackendBus.save_working_hours({
+		"timezone": _hours_tz.text.strip_edges(), "windows": windows})
+
+func _on_hours_saved(ok: bool, error: String) -> void:
+	if not is_instance_valid(_hours_status):
+		return
+	_hours_status.text = UIStrings.t("hours.saved") if ok \
+			else UIStrings.t("prof.save_err") % error
+	_hours_status.add_theme_color_override("font_color",
+			Palette.MINT if ok else Palette.RED)
+	if is_instance_valid(_hours_save_btn):
+		_hours_save_btn.disabled = false
+	if ok:
+		_hours_loaded = false  # al prossimo build ricarica dal config vero
 
 ## Il PROFILO dell'utente: editabile QUI (paradigma desktop app 21:26).
 ## I campi arrivano da profile_raw (chiavi vere del candidate_profile),
