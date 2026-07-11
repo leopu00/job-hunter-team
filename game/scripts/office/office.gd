@@ -181,6 +181,10 @@ func _ready() -> void:
 	elif OS.get_environment("JHT_CHAT_VIEW") != "":
 		_chat_selftest(OS.get_environment("JHT_CHAT_VIEW"), false)
 
+	# TEST-AUTO: JHT_CHATMENU=1 apre il menu delle chat 1-a-1 (tasto C)
+	if OS.get_environment("JHT_CHATMENU") == "1":
+		get_tree().create_timer(2.5).timeout.connect(_open_chat_menu)
+
 	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza subito i nuovi stati della
 	# missione pipeline: un agente in ricreazione (throttle lungo) e uno
 	# che esce dalla porta, senza aspettare il ciclo eventi del mock.
@@ -240,6 +244,12 @@ var _search: GlobalSearch
 
 func _unhandled_input(event: InputEvent) -> void:
 	if Game.dialogue_active:
+		return
+	# menu delle chat 1-a-1 (feedback test finale): C apre la lista agenti
+	if event is InputEventKey and event.pressed and event.keycode == KEY_C \
+			and not (event.meta_pressed or event.ctrl_pressed) \
+			and _chat_menu == null and _chat_panel == null and _agent_card == null:
+		_open_chat_menu()
 		return
 	# GlobalSearch del web: Cmd/Ctrl+K apre la ricerca sulle posizioni
 	if event is InputEventKey and event.pressed and event.keycode == KEY_K \
@@ -346,6 +356,19 @@ func _open_agent_card(agent: AgentNPC) -> void:
 			agent.end_talk())
 
 var _chat_panel: ChatPanel
+var _chat_menu: ChatMenu
+
+## Lista degli agenti in scena → chat individuale (tasto C).
+func _open_chat_menu() -> void:
+	Log.info("chat", "menu chat aperto (%d agenti)" % agents.size())
+	_chat_menu = ChatMenu.new(agents)
+	add_child(_chat_menu)
+	_chat_menu.closed.connect(func() -> void: _chat_menu = null)
+	_chat_menu.open_chat.connect(func(slug: String, display_name: String) -> void:
+		Log.info("chat", "pannello chat aperto dal menu con " + slug)
+		_chat_panel = ChatPanel.new(slug, display_name)
+		add_child(_chat_panel)
+		_chat_panel.closed.connect(func() -> void: _chat_panel = null))
 
 ## Chat REALE con l'agente: si apre con lo slug di gioco, il bus lo
 ## traduce nel nome del sistema reale (coordinatore → capitano).
@@ -386,9 +409,10 @@ func sync_agents(list: Array) -> void:
 	var wanted := {}
 	for item in list:
 		# un killed è di fatto fuori squadra: esce dalla porta come chi
-		# sparisce dal roster (missione pipeline 20:1x)
+		# sparisce dal roster (missione pipeline 20:1x). La chiave è
+		# l'UID per-istanza (contratto 1053f1ce: slug=ruolo, uid=istanza)
 		if item.get("active", true) and str(item.get("status", "")) != "killed":
-			wanted[item["slug"]] = item
+			wanted[str(item.get("uid", item.get("slug", "")))] = item
 	for agent in agents.duplicate():
 		if not wanted.has(agent.uid):
 			_despawn_agent(agent)
@@ -606,7 +630,7 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	var agent := AgentNPC.new()
 	world.add_child(agent)
 	agent.setup(live, nav)
-	agent.uid = item["slug"]
+	agent.uid = str(item.get("uid", item.get("slug", "")))
 	agent.set_meta("def", def)
 	agent.set_backend_status(item.get("status", "working"))
 	agent.materialize()
