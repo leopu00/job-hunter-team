@@ -137,6 +137,14 @@ func _ready() -> void:
 			if a.slug == card_test:
 				_open_agent_card(a)
 				break
+	# TEST-AUTO: JHT_REGISTRY=1 apre il registro candidature (TAB) —
+	# ritardato al primo snapshot così lo shot mostra i dati veri
+	if OS.get_environment("JHT_REGISTRY") == "1":
+		BackendBus.positions_updated.connect(func(_l: Array) -> void:
+			if _registry == null:
+				_registry = RegistryPanel.new()
+				add_child(_registry))
+
 	# TEST-AUTO: JHT_SEARCH=<query> apre la GlobalSearch precompilata
 	# (il refresh con le posizioni vere arriva col primo snapshot)
 	var search_test := OS.get_environment("JHT_SEARCH")
