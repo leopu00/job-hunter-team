@@ -773,8 +773,58 @@ func _build_agents() -> void:
 		st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(st)
 
-## Feed unico delle attività recenti di tutti i ruoli.
+## Emoji-ruolo per l'attribuzione per-istanza (scout-2, scorer-1…).
+const ROLE_EMOJI := {
+	"scout": "🔍", "analista": "🧠", "scorer": "🎯", "scrittore": "✍",
+	"critico": "🧐", "capitano": "🧭", "sentinella": "🛡", "assistente": "🤝",
+	"mentor": "🎓", "dottore": "🩺", "mantenitore": "🔧",
+}
+
+## Feed attività: il registro transizioni VERO quando la VPS è collegata
+## (chi ha fatto cosa, con l'istanza), altrimenti il mock.
 func _build_activity() -> void:
+	if not BackendBus.positions_updated.is_connected(_on_activity_refresh):
+		BackendBus.positions_updated.connect(_on_activity_refresh)
+	var transitions: Array = BackendBus.transitions
+	if not transitions.is_empty():
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.custom_minimum_size = Vector2(0, 520)
+		_content.add_child(scroll)
+		var list := VBoxContainer.new()
+		list.add_theme_constant_override("separation", 8)
+		list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(list)
+		for t in transitions:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 14)
+			list.add_child(row)
+			var when := TerminalTheme.label(str(t.get("ts", "")).left(16), 13, Palette.DIM)
+			when.custom_minimum_size = Vector2(140, 0)
+			row.add_child(when)
+			var by := str(t.get("by_agent", "?") if t.get("by_agent") else "?")
+			var base := by.split("-")[0]
+			var who := TerminalTheme.label("%s %s" % [ROLE_EMOJI.get(base, "•"), by],
+					13, Palette.MINT, "medium")
+			who.custom_minimum_size = Vector2(150, 0)
+			row.add_child(who)
+			var title_lbl := TerminalTheme.label("%s — %s" % [
+					str(t.get("title", "?")), str(t.get("company", ""))], 14, Palette.BASE)
+			title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			title_lbl.clip_text = true
+			row.add_child(title_lbl)
+			var from_st := str(t.get("from_state", "") if t.get("from_state") else "—")
+			row.add_child(TerminalTheme.label(from_st, 13,
+					POS_STATUS_COLORS.get(from_st, Palette.DIM)))
+			row.add_child(TerminalTheme.label("→", 13, Palette.DIM))
+			var to_st := str(t.get("to_state", "?"))
+			row.add_child(TerminalTheme.label(to_st, 13,
+					POS_STATUS_COLORS.get(to_st, Palette.MUTED), "medium"))
+			var pad := Control.new()
+			pad.custom_minimum_size = Vector2(14, 0)
+			row.add_child(pad)
+		return
 	for slug in ["scout", "analista", "scorer", "scrittore", "critico", "coordinatore"]:
 		for entry in TeamData.agent_activity(slug):
 			var row := HBoxContainer.new()
@@ -787,6 +837,10 @@ func _build_activity() -> void:
 			who.custom_minimum_size = Vector2(110, 0)
 			row.add_child(who)
 			row.add_child(TerminalTheme.label(entry["text"], 14, Palette.BASE))
+
+func _on_activity_refresh(_list: Array) -> void:
+	if section == "activity" and is_instance_valid(_content):
+		_build()
 
 ## Candidature a stadi (stessi dati del registro TAB).
 func _build_apps() -> void:
