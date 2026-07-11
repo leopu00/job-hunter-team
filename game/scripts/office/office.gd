@@ -32,6 +32,11 @@ func _ready() -> void:
 	# la porta dell'ufficio (perimetro sud, accanto all'entrata): da qui
 	# escono gli agenti killati/fermati — missione pipeline 20:1x
 	world.add_child(ExitDoor.new(EXIT_DOOR))
+	# lo scaffale dei CV PRONTI accanto alla porta (sezione output 3/3)
+	world.add_child(OutputShelf.new())
+	world.add_child(_invisible_wall(OutputShelf.RECT))
+	# bobine e fogli sul banco-test degli analisti (tavolo lungo del lab)
+	world.add_child(TestBench.new())
 
 	for item in FurnitureDefs.ITEMS:
 		if item["kind"] == "hologram":
@@ -64,7 +69,8 @@ func _ready() -> void:
 	_add_perimeter_walls()
 
 	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles()
-			+ DepartmentDefs.obstacles() + DepartmentDefs.GLASS_WALLS)
+			+ DepartmentDefs.obstacles() + DepartmentDefs.GLASS_WALLS
+			+ [OutputShelf.RECT])
 
 	# i macchinari si animano quando qualcuno li usa (ping da AgentNPC)
 	world.add_child(PrinterFx.new(FurnitureDefs.get_rect("printer")))
@@ -453,6 +459,7 @@ func _sync_piles() -> void:
 		if PaperPile.inbox.has(dept_id):
 			PaperPile.inbox[dept_id].set_target(
 					_pile_visual(int(counts[PILE_PHASE[dept_id]])))
+	OutputShelf.set_ready(int(counts["cv_ready"]))
 	Log.debug("scene", "pile agganciate ai counts: %s" % str(counts))
 
 ## Le transizioni di stato REALI muovono la scena: a ogni refresh del
