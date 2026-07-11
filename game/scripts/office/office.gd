@@ -139,6 +139,13 @@ func _on_world_click(target: Vector2) -> void:
 		_registry = RegistryPanel.new()
 		add_child(_registry)
 		return
+	# il mappamondo apre la mappa delle offerte coi pin (vista web migrata)
+	if FurnitureDefs.get_rect("hologram").grow(24).has_point(target):
+		Log.info("ui", "mappa offerte aperta dal mappamondo")
+		var map_panel := SectionPanel.new("map", 24.0)
+		add_child(map_panel)
+		map_panel.closed.connect(map_panel.queue_free)
+		return
 	var dept := DepartmentDefs.department_at(target)
 	if dept != "":
 		_open_dept(dept)

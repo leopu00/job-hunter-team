@@ -74,6 +74,8 @@ func _build(page := "") -> void:
 				_build_usage()
 			else:
 				_build_stats()
+		"map":
+			_content.add_child(MapView.new())
 		_:
 			_build_placeholder()
 
