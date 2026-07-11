@@ -39,6 +39,26 @@ const ITEMS := [
 	{"id": "desk_coordinator", "kind": "desk", "rect": Rect2(430, 720, 230, 100)},
 	{"id": "plant_c", "kind": "plant", "rect": Rect2(296, 930, 56, 56)},
 
+	# ── Sala relax (fascia ovest, sotto la lounge): footprint per gli asset
+	# amb_* di dev-art (rec_sofa/arcade/pingpong/kitchenette); il vetro
+	# divisorio ha la porta verso il corridoio (gap 1140..1240).
+	{"id": "rec_kitchenette", "kind": "kitchenette", "rect": Rect2(620, 1000, 230, 80)},
+	{"id": "rec_sofa", "kind": "rec_sofa", "rect": Rect2(330, 1040, 260, 100)},
+	{"id": "rec_bookshelf", "kind": "bookshelf_tall", "rect": Rect2(258, 1160, 56, 180)},
+	{"id": "rec_arcade", "kind": "rec_arcade", "rect": Rect2(350, 1290, 84, 66)},
+	{"id": "rec_pingpong", "kind": "rec_pingpong", "rect": Rect2(600, 1170, 240, 130)},
+	{"id": "rec_glass_a", "kind": "glass_divider", "rect": Rect2(930, 980, 12, 160)},
+	{"id": "rec_glass_b", "kind": "glass_divider", "rect": Rect2(930, 1240, 12, 160)},
+
+	# ── Verde sparso (reparti e corridoi, mai sulla nav principale) ──
+	{"id": "plant_palm_a", "kind": "plant_palm", "rect": Rect2(958, 1420, 56, 56)},
+	{"id": "plant_monstera_a", "kind": "plant_monstera", "rect": Rect2(1712, 892, 56, 56)},
+	{"id": "plant_shelf_a", "kind": "plant_shelf", "rect": Rect2(860, 186, 90, 50)},
+	{"id": "plant_monstera_b", "kind": "plant_monstera", "rect": Rect2(2378, 764, 56, 56)},
+	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1040, 1894, 56, 56)},
+	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(2384, 1444, 56, 56)},
+	{"id": "plant_palm_c", "kind": "plant_palm", "rect": Rect2(302, 1436, 56, 56)},
+
 	# ── Corridoio sud, tra Scrittori e Critici ──
 	# isola condivisa: tavolo lungo da 5 posti (asset dev-art, facing down)
 	{"id": "long_table", "kind": "long_table", "rect": Rect2(1100, 1510, 600, 110), "facing": "down"},

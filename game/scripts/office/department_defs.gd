@@ -110,6 +110,8 @@ const POIS := {
 	"hologram": {"spot": Vector2(1300, 930)},
 	# isola condivisa nel corridoio sud (tavolo lungo, 5 posti lato camera)
 	"long_table": {"spot": Vector2(1400, 1660)},
+	# sala relax a ovest (pausa vera: divano/arcade/ping-pong)
+	"rec_room": {"spot": Vector2(520, 1200)},
 }
 
 ## La catena del valore dei fogli: chi ritira dall'inbox di chi.

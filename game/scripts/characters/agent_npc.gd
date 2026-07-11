@@ -201,12 +201,18 @@ func _plan_trip() -> void:
 					randf_range(0.5, 1.0), "idle"),
 			_leg_to(_spot, "walk", 0.0, "work"),
 		]
-	elif roll < 0.90:
+	elif roll < 0.88:
 		# pausa caffè / macchinetta (raro: i tick non aspettano)
 		var poi: Vector2 = pois["coffee"]["spot"] if randf() < 0.7 \
 				else pois["water_cooler"]["spot"]
 		_legs = [
 			_leg_to(_jit(poi), "walk", randf_range(3.0, 7.0), "idle"),
+			_leg_to(_spot, "walk", 0.0, "work"),
+		]
+	elif roll < 0.94:
+		# pausa vera in sala relax (rarissima, ma il divano esiste apposta)
+		_legs = [
+			_leg_to(_jit(pois["rec_room"]["spot"]), "walk", randf_range(5.0, 10.0), "idle"),
 			_leg_to(_spot, "walk", 0.0, "work"),
 		]
 	else:
