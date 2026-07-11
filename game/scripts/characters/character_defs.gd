@@ -90,6 +90,18 @@ const AGENTS := {
 			"tengo io il registro del team",
 		],
 	},
+	"sentinella": {
+		"name": "La Sentinella",
+		"spot": Vector2(1490, 320),
+		# watchdog del team: la sua ronda tocca tutti gli angoli della box
+		"wander": [Vector2(2690, 790), Vector2(2690, 1825), Vector2(1120, 1740),
+				Vector2(470, 620), Vector2(1090, 330), Vector2(1965, 1400)],
+		"chatter": [
+			"ronda: processi tutti vivi",
+			"bridge attivo, heartbeat regolare",
+			"nessun flap nelle sessioni",
+		],
+	},
 }
 
 ## Organico dei reparti oltre ai lead: quali postazioni riempiono i
@@ -153,8 +165,15 @@ static func _desk_spot_of(dept_id: String, index: int) -> Vector2:
 ## Factory del rig: spritesheet pittorico se esiste (docs/SPRITES.md),
 ## altrimenti il vecchio rig a parti SVG. I chiamanti usano solo
 ## set_motion(facing, flipped, mode), identica su entrambi i rig.
+## Ruoli senza sheet proprio che vestono quello di un altro (pittorico,
+## mai SVG in scena): la sentinella usa il camice tecnico del maintainer
+## finché imagegen non riapre e le genera un foglio dedicato.
+const SHEET_LOANS := {"sentinella": "maintainer"}
+
 static func make_rig(slug: String, variant := "a") -> Node2D:
 	var sheet_path := SHEETS + slug + "_" + variant + ".png"
+	if not ResourceLoader.exists(sheet_path) and SHEET_LOANS.has(slug):
+		sheet_path = SHEETS + SHEET_LOANS[slug] + "_" + variant + ".png"
 	if ResourceLoader.exists(sheet_path):
 		var rig := SpriteSheetRig.new()
 		# foglio seduto opzionale (4x3, vedi SIT_TRACKS): se manca, il rig

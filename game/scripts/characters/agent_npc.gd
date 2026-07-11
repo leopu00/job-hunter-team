@@ -22,6 +22,7 @@ const TRIP_EVERY := {
 	"coordinatore": 170.0,  # il giro dei reparti è il suo lavoro
 	"mentor": 240.0,
 	"assistente": 300.0,
+	"sentinella": 140.0,  # il watchdog è quasi sempre in ronda
 }
 
 enum S { WORK, TRIP, TALK }
