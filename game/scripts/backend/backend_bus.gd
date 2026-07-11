@@ -13,6 +13,18 @@ extends Node
 ##         desk_hint: String ("" se il backend non sa dove siede) }
 ##     È SEMPRE lo snapshot completo del roster, non un delta: chi non
 ##     c'è più va despawnato.
+##     Estensione ADDITIVA (missione pipeline 11/07, nomi allineati al
+##     consumer di dev1 fdb3623a):
+##       uid: String — chiave per-istanza ("scout-2"), la stessa di
+##         by_agent nelle transitions e dei throttle del pacing.
+##       status guadagna "throttled" (pausa del pacing REALE in corso)
+##         e "killed" (solo mock: dal vivo l'agente sparisce e basta);
+##         breve/lungo lo decide la scena su throttle_secs (soglia 90s:
+##         breve = seduto in attesa, lungo = dado ricreazione).
+##       throttle_secs: float, stima secondi RIMANENTI di throttle;
+##       throttle_total: float, durata piena richiesta dal pacing.
+##     Agente sparito dal roster = killato/fermato: despawn con USCITA
+##     dalla porta (non è più in ufficio).
 ##   chat_message(msg)
 ##     msg = { ts: String ISO 8601, from: String, to: String, text: String }
 ##     from/to sono slug agente, oppure "user" oppure "all".
@@ -71,6 +83,11 @@ var _backend: BackendAdapter
 ## (per gli shot grafici che non devono toccare la rete).
 func _ready() -> void:
 	_fetch_fx_rates()
+	# TEST-AUTO: JHT_THROTTLE_TEST=1 valida il parse throttle→status con
+	# eventi sintetici (la modalità godot -s non compila gli autoload,
+	# quindi il test vive qui dentro al boot).
+	if OS.get_environment("JHT_THROTTLE_TEST") == "1":
+		_self_test_throttle()
 	if OS.get_environment("JHT_NOVPS") == "1":
 		return
 	var cfg := load_vps_config()
@@ -100,6 +117,61 @@ func _fetch_fx_rates() -> void:
 			fx_rates_updated.emit())
 	if req.request("https://api.frankfurter.dev/v1/latest") != OK:
 		req.queue_free()
+
+## Eventi sintetici → status attesi: throttle attivo → "throttled" coi
+## secondi giusti, scaduto/chiuso → "working", CAPITANO → coordinatore.
+func _self_test_throttle() -> void:
+	var now := Time.get_unix_time_from_system()
+	var raw := ""
+	for ev in [
+		{"event": "start", "agent": "analista-2", "applied_sec": 300.0, "ts_unix": now - 30.0},
+		{"event": "start", "agent": "scout-1", "applied_sec": 60.0, "ts_unix": now - 10.0},
+		{"event": "start", "agent": "scorer-1", "applied_sec": 120.0, "ts_unix": now - 500.0},
+		{"event": "start", "agent": "CAPITANO", "applied_sec": 300.0, "ts_unix": now - 20.0},
+		{"event": "end", "agent": "CAPITANO", "applied_sec": 300.0, "ts_unix": now - 5.0},
+	]:
+		raw += JSON.stringify(ev) + "\n"
+	var roster := "ANALISTA-2: 1 windows\nscout-1: 1 windows\nscorer-1: 1 windows\nCAPITANO: 1 windows\n"
+	var got := {}
+	for a in VpsBackend._parse_roster(roster, VpsBackend._parse_throttles(raw)):
+		got[a["uid"]] = [a["status"], a["throttle_secs"], a["throttle_total"]]
+	var ok: bool = str(got.get("analista-2", [""])[0]) == "throttled" \
+			and absf(float(got["analista-2"][1]) - 270.0) < 3.0 \
+			and str(got.get("scout-1", [""])[0]) == "throttled" \
+			and absf(float(got["scout-1"][1]) - 50.0) < 3.0 \
+			and str(got.get("scorer-1", [""])[0]) == "working" \
+			and str(got.get("coordinatore", [""])[0]) == "working"
+	print("THROTTLE-TEST ", "PASS " if ok else "FAIL ", JSON.stringify(got))
+
+
+## ── Pipeline reale (missione SIMULAZIONE PIPELINE, 11/07) ────────────
+## I contatori delle 5 fasi della dashboard, calcolati dallo snapshot
+## corrente: la scena proporziona pile di fogli e flussi su QUESTI
+## numeri, senza duplicare la logica di mapping status→fase.
+## cv_ready = scritte col PASS del critico (la sezione output).
+func pipeline_counts() -> Dictionary:
+	var c := {"to_analyze": 0, "analyzed": 0, "with_score": 0,
+			"to_write": 0, "written": 0, "cv_ready": 0}
+	for p in positions:
+		var status := str(p.get("status", ""))
+		var wr := int(p.get("write_requested", 0)
+				if p.get("write_requested") != null else 0) == 1
+		# stesso mapping della dashboard (vista Dashboard → pipeline)
+		if status == "new":
+			c["to_analyze"] += 1
+		elif status == "checked":
+			c["analyzed"] += 1
+		elif status == "scored" and not wr:
+			c["with_score"] += 1
+		elif status in ["scored", "writing", "review"] and wr:
+			c["to_write"] += 1
+		elif status == "ready":
+			c["written"] += 1
+			if str(p.get("critic_verdict", "") if p.get("critic_verdict") != null
+					else "") == "PASS":
+				c["cv_ready"] += 1
+	return c
+
 
 ## Converte un importo in EUR; ritorna -1.0 se il tasso manca.
 func to_eur(amount: float, currency: String) -> float:
