@@ -116,3 +116,13 @@ const ACTIVITY := {
 
 func get_agent_activity(slug: String) -> Array:
 	return ACTIVITY.get(slug, [])
+
+func get_usage() -> Dictionary:
+	return {
+		"provider": "Kimi K2.7",
+		"actions_today": 41,
+		"actions_week": 212,
+		"quota_week_pct": 0.64,
+		"tokens_today": "1.2M",
+		"budget_used_pct": 0.35,
+	}

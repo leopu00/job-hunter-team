@@ -40,3 +40,8 @@ func get_streak() -> Dictionary:
 ## [{ when: String, text: String }] — la più recente per prima.
 func get_agent_activity(_slug: String) -> Array:
 	return []
+
+## Utilizzo del team (pagina usage): { provider, actions_today, actions_week,
+## quota_week_pct: float 0..1, tokens_today, budget_used_pct: float 0..1 }
+func get_usage() -> Dictionary:
+	return {}

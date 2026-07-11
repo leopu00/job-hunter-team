@@ -27,3 +27,6 @@ func streak() -> Dictionary:
 
 func agent_activity(slug: String) -> Array:
 	return source.get_agent_activity(slug)
+
+func usage() -> Dictionary:
+	return source.get_usage()

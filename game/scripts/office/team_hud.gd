@@ -9,7 +9,9 @@ var _accum := 9.0  # aggiorna subito al primo frame
 
 func _ready() -> void:
 	super._ready()
-	position = Vector2(28, 24)
+	# in alto a DESTRA: a sinistra vive la sidebar stile desktop-app
+	set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 24)
+	grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 14)

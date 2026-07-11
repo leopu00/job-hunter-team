@@ -73,9 +73,15 @@ func _ready() -> void:
 	brand_pad.add_child(brand)
 	box.add_child(brand_pad)
 
-	# TEST-AUTO: JHT_SIDEBAR=1 apre il cassetto al boot (per gli screenshot)
+	# TEST-AUTO: JHT_SIDEBAR=1 apre il cassetto al boot (per gli screenshot);
+	# JHT_SECTION=<id> apre anche il pannello di quella sezione.
 	if OS.get_environment("JHT_SIDEBAR") == "1":
 		toggle.call_deferred()
+	var sec := OS.get_environment("JHT_SECTION")
+	if sec != "":
+		if not _open:
+			toggle.call_deferred()
+		_select.call_deferred(sec)
 
 	for group in SidebarDefs.GROUPS:
 		var gt := TerminalTheme.label((group["title"] as String).to_upper(), 12, Palette.DIM, "medium")
