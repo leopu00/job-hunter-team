@@ -143,8 +143,11 @@ func _ready() -> void:
 	# presente), la scena si allinea subito.
 	BackendBus.agents_updated.connect(sync_agents)
 	BackendBus.chat_message.connect(_on_chat_message)
+	BackendBus.positions_updated.connect(_on_transitions)
 	if not BackendBus.agents.is_empty():
 		sync_agents(BackendBus.agents)
+	if not BackendBus.transitions.is_empty():
+		_on_transitions([])  # snapshot già sul bus: assorbito come baseline
 
 	# TEST-AUTO: JHT_BACKEND_TEST=1 monta il simulatore (MockBackend):
 	# connessione, roster che va e viene, chat a fumetti — senza VPS.
@@ -374,6 +377,90 @@ func _name_of(uid: String) -> String:
 		if agent.uid == uid:
 			return agent.display_name
 	return uid
+
+## ── Scena reattiva al registro attività ──────────────────────────────
+
+const MAX_TR_REACTIONS := 6   # per refresh: il resto resta solo nel registro
+const TR_REACT_GAP := 2.4     # secondi fra due reazioni (non un coro)
+
+## Gli stati VERI del jobs.db (SELECT DISTINCT to_state sulla VPS) come
+## frase parlata; uno stato nuovo cade sul generico "%s → stato".
+const TR_PHRASES := {
+	"new": "Nuova posizione: %s",
+	"checked": "Verificata: %s",
+	"scored": "Valutata: %s",
+	"writing": "CV in scrittura: %s",
+	"ready": "CV pronto: %s",
+	"excluded": "Esclusa: %s",
+}
+## Stati che accendono la stampante dell'ufficio (lavoro sul CV).
+const TR_PRINT := ["writing", "ready"]
+
+var _tr_seen: Dictionary = {}
+var _tr_baseline := false
+
+## Le transizioni di stato REALI muovono la scena: a ogni refresh del
+## jobs.db (BackendBus.transitions è già aggiornato quando arriva
+## positions_updated) quelle mai viste diventano reazioni dell'agente
+## che le ha firmate. Il primo snapshot fa solo da baseline: lo storico
+## non va recitato all'avvio.
+func _on_transitions(_positions: Array) -> void:
+	var fresh: Array = []
+	for t in BackendBus.transitions:
+		var key := "%s|%s|%s|%s" % [str(t.get("position_id", "")),
+				str(t.get("ts", "")), str(t.get("to_state", "")),
+				str(t.get("by_agent", ""))]
+		if _tr_seen.has(key):
+			continue
+		_tr_seen[key] = true
+		fresh.append(t)
+	if not _tr_baseline:
+		_tr_baseline = true
+		return
+	fresh.reverse()  # il registro è DESC: si recita in ordine cronologico
+	if fresh.size() > MAX_TR_REACTIONS:
+		fresh = fresh.slice(fresh.size() - MAX_TR_REACTIONS)
+	var delay := 0.0
+	for t in fresh:
+		var tt: Dictionary = t
+		get_tree().create_timer(delay).timeout.connect(func() -> void:
+			_react_to_transition(tt))
+		delay += TR_REACT_GAP
+
+## L'agente giusto reagisce — per-istanza (by_agent "scout-2" → uid
+## "scout-2" in scena) o, se quell'istanza non c'è, un collega dello
+## stesso ruolo. Fumetto con la posizione lavorata + pulse del corpo;
+## una scrittura CV accende la stampante.
+func _react_to_transition(t: Dictionary) -> void:
+	var by := str(t.get("by_agent", "") if t.get("by_agent") else "")
+	if by == "":
+		return
+	var actor: AgentNPC = null
+	for agent in agents:
+		if agent.uid == by:
+			actor = agent
+			break
+	if actor == null:
+		var base := by.split("-")[0]
+		for agent in agents:
+			if agent.uid != "" and agent.uid.split("-")[0] == base:
+				actor = agent
+				break
+	if actor == null or actor.is_dissolving():
+		return
+	var to_st := str(t.get("to_state", "") if t.get("to_state") else "?")
+	var what := str(t.get("title", "") if t.get("title") else "")
+	var company := str(t.get("company", "") if t.get("company") else "")
+	if what != "" and company != "":
+		what += " · " + company
+	elif what == "":
+		what = company if company != "" else "posizione #%s" % str(t.get("position_id", "?"))
+	if TR_PHRASES.has(to_st):
+		actor.say(TR_PHRASES[to_st] % what)
+	else:
+		actor.say("%s → %s" % [what, to_st])
+	actor.react_to_work(to_st in TR_PRINT)
+	Log.debug("scene", "reazione %s: %s → %s" % [by, what, to_st])
 
 ## Primo snapshot backend: le postazioni tornano nel pool e il roster
 ## locale di ambientazione lascia la scena — comanda lo stato reale.
