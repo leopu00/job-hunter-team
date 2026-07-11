@@ -12,7 +12,9 @@ var _font: Font
 var _font_small: Font
 
 func _init() -> void:
-	z_index = -1  # sotto mobili e agenti, sopra OfficeFloor
+	# Niente z_index: a pari z vale l'ordine dei figli in office.gd
+	# (OfficeFloor → questo → World y-sortato). Con z -1 finiva SOTTO il
+	# pavimento e spariva.
 	_font = load(TerminalTheme.FONT_XBOLD)
 	_font_small = load(TerminalTheme.FONT_MEDIUM)
 
@@ -50,8 +52,11 @@ func _draw_zone(dept_id: String, zone: Rect2, col: Color, dname: String, tagline
 		var o: Vector2 = corner[0]
 		draw_line(o, o + corner[1] * BRACKET_LEN, bc, BRACKET_W)
 		draw_line(o, o + corner[2] * BRACKET_LEN, bc, BRACKET_W)
-	# targa del reparto all'angolo alto-sinistro della zona
+	# targa del reparto all'angolo alto-sinistro della zona; nel lab degli
+	# Analisti il muro di vetro copre la prima riga → targa in basso.
 	var name_pos := zone.position + Vector2(18, 34)
+	if dept_id == "analisti":
+		name_pos = Vector2(zone.position.x + 18, zone.end.y - 34)
 	var upper := dname.to_upper()
 	draw_string(_font, name_pos + Vector2(1, 1), upper,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(0, 0, 0, 0.55))
