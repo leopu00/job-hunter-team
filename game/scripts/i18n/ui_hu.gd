@@ -138,6 +138,7 @@ const S := {
 	"prof.saving": "mentés a VPS-re…",
 	"prof.saved": "✔ profil elmentve — a csapat a következő körtől használja",
 	"prof.save_err": "✘ mentés sikertelen: %s",
+	"map.hint": "húzd a mozgatáshoz · görgő/csippentés a zoomhoz · kattints egy városra a közelítéshez",
 	"hours.intro": "A csapat munkaidő-ablakai: szerkeszd és mentsd, a pacing alkalmazkodik.",
 	"hours.tz": "Időzóna",
 	"hours.windows": "ABLAKOK (napok · -tól → -ig)",

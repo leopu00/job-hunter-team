@@ -138,6 +138,7 @@ const S := {
 	"prof.saving": "Speichern auf der VPS…",
 	"prof.saved": "✔ Profil gespeichert — das Team nutzt es ab der nächsten Runde",
 	"prof.save_err": "✘ Speichern fehlgeschlagen: %s",
+	"map.hint": "ziehen zum Bewegen · Rad/Pinch zum Zoomen · Klick auf eine Stadt zum Annähern",
 	"hours.intro": "Die Fenster, in denen das Team arbeitet: bearbeiten und speichern, das Pacing passt sich an.",
 	"hours.tz": "Zeitzone",
 	"hours.windows": "FENSTER (Tage · von → bis)",
