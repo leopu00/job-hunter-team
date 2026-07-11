@@ -1208,24 +1208,11 @@ func _build_dashboard() -> void:
 ## Da analizzare → Analizzate → Con lo score → Da scrivere → Scritte.
 ## Ogni box conta dallo snapshot vero e apre le posizioni pre-filtrate.
 func _build_dash_pipeline() -> void:
-	var all: Array = BackendBus.positions
-	if all.is_empty():
+	if BackendBus.positions.is_empty():
 		return
-	var counts := {"to_analyze": 0, "analyzed": 0, "with_score": 0,
-			"to_write": 0, "written": 0}
-	for p in all:
-		var st := str(p.get("status", ""))
-		var wr := int(p.get("write_requested", 0) if p.get("write_requested") != null else 0) == 1
-		if st == "new":
-			counts["to_analyze"] += 1
-		elif st == "checked":
-			counts["analyzed"] += 1
-		elif st == "scored" and not wr:
-			counts["with_score"] += 1
-		elif st in ["scored", "writing", "review"] and wr:
-			counts["to_write"] += 1
-		elif st == "ready":
-			counts["written"] += 1
+	# il mapping status→fase vive in UN posto solo (lo usa anche la
+	# scena per il flusso fisico dei fogli)
+	var counts: Dictionary = BackendBus.pipeline_counts()
 	var boxes := [
 		["to_analyze", "dash.pl_to_analyze", Palette.MUTED, ["new"]],
 		["analyzed", "dash.pl_analyzed", Palette.BLUE, ["checked"]],
