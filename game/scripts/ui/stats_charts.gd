@@ -194,14 +194,81 @@ func _rebuild() -> void:
 	_block_salary(right, rows)
 	_block_matches(right, rows)
 
-## Tipi (role_family) — scope: location + score + salary.
+## Colori ciclici delle fette del donut (tipi di ruolo, come sul web).
+const DONUT_COLORS := [Palette.GREEN, Palette.BLUE, Palette.PURPLE,
+		Palette.YELLOW, Palette.ORANGE, Palette.RED, Palette.MINT]
+
+## Il donut dei tipi: archi proporzionali + legenda cliccabile accanto.
+class DonutChart:
+	extends Control
+	var slices: Array = []  # [{count: int, color: Color, selected: bool}]
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(150, 150)
+
+	func _draw() -> void:
+		var total := 0
+		for s in slices:
+			total += int(s["count"])
+		if total == 0:
+			return
+		var center := size / 2.0
+		var radius := minf(center.x, center.y) - 16.0
+		var start := -PI / 2.0
+		for s in slices:
+			var sweep := TAU * float(s["count"]) / float(total)
+			var col: Color = s["color"]
+			if not bool(s["selected"]):
+				col = Color(col.r, col.g, col.b, 0.45)
+			# -0.02 di respiro fra le fette: si leggono come spicchi
+			draw_arc(center, radius, start + 0.02, start + sweep - 0.02,
+					maxi(8, int(sweep * 24.0)), col, 26.0, true)
+			start += sweep
+
+## Tipi (role_family) — donut come sul web; scope: location+score+salary.
 func _block_families(into: VBoxContainer, rows: Array) -> void:
 	var counts := {}
 	for p in rows:
 		if _pass(p, "family"):
 			counts[_family_key(p)] = int(counts.get(_family_key(p), 0)) + 1
-	var plain := func(k: Variant) -> String: return str(k)
-	_bar_block(into, UIStrings.t("stats.types"), counts, "family", plain)
+	into.add_child(TerminalTheme.label(UIStrings.t("stats.types"),
+			14, Palette.MUTED, "medium"))
+	if counts.is_empty():
+		into.add_child(TerminalTheme.label(UIStrings.t("stats.empty"), 13, Palette.DIM))
+		return
+	var keys: Array = counts.keys()
+	keys.sort_custom(func(a: Variant, b: Variant) -> bool:
+		return int(counts[a]) > int(counts[b]))
+	var any_sel: bool = not _sel["family"].is_empty()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 20)
+	into.add_child(row)
+	var donut := DonutChart.new()
+	var legend := VBoxContainer.new()
+	legend.add_theme_constant_override("separation", 2)
+	legend.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for i in keys.size():
+		var k: Variant = keys[i]
+		var color: Color = DONUT_COLORS[i % DONUT_COLORS.size()]
+		var selected: bool = _sel["family"].has(k)
+		donut.slices.append({"count": int(counts[k]), "color": color,
+				"selected": selected or not any_sel})
+		var btn := Button.new()
+		btn.flat = true
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.clip_text = true
+		btn.text = "%s %s%s  ·  %d" % ["▰" if selected or not any_sel else "▱",
+				"▸ " if selected else "", str(k), int(counts[k])]
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.add_theme_color_override("font_color",
+				color if selected or not any_sel else Palette.DIM)
+		btn.add_theme_color_override("font_hover_color", Palette.MINT)
+		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		var key: Variant = k
+		btn.pressed.connect(func() -> void: _toggle("family", key))
+		legend.add_child(btn)
+	row.add_child(donut)
+	row.add_child(legend)
 
 ## Paesi — scope: family + score + salary (location esclusa).
 func _block_countries(into: VBoxContainer, rows: Array) -> void:
