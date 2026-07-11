@@ -11,12 +11,22 @@ signal closed
 
 const PANEL_W := 560.0
 
-var _slug := ""           # slug di gioco (es. "coordinatore")
+var _slug := ""           # uid di gioco (es. "coordinatore", "scout-2")
 var _display_name := ""
 var _list: VBoxContainer
 var _scroll: ScrollContainer
 var _input: LineEdit
 var _empty_note: Label
+var _waiting_label: Label
+var _waiting := false
+var _wait_t := 0.0
+
+func _process(delta: float) -> void:
+	if not _waiting or _waiting_label == null:
+		return
+	_wait_t += delta
+	_waiting_label.text = UIStrings.t("chat.waiting") \
+			+ "…".repeat(1 + int(_wait_t * 2.0) % 3)
 
 func _init(slug: String, display_name: String) -> void:
 	_slug = slug
@@ -58,6 +68,12 @@ func _ready() -> void:
 	var title := TerminalTheme.label(
 			UIStrings.t("chat.title") % _display_name.to_upper(), 20, Palette.WHITE, "xbold")
 	box.add_child(title)
+	# avviso best-effort: solo alcuni agenti hanno la skill di risposta
+	# in chat (bus.chat_replies); gli altri leggono ma possono tacere
+	if not BackendBus.chat_replies(_slug):
+		var warn := TerminalTheme.label(UIStrings.t("chat.besteffort"), 13, Palette.YELLOW)
+		warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(warn)
 	box.add_child(HSeparator.new())
 
 	_scroll = ScrollContainer.new()
@@ -68,6 +84,12 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list.add_theme_constant_override("separation", 8)
 	_scroll.add_child(_list)
+
+	# indicatore "in attesa della risposta…" (bus.chat_waiting): puntini
+	# animati finché l'agente non risponde — feedback test finale (2)
+	_waiting_label = TerminalTheme.label("", 14, Palette.YELLOW)
+	_waiting_label.visible = false
+	box.add_child(_waiting_label)
 
 	# input + invio
 	var send_row := HBoxContainer.new()
@@ -94,7 +116,10 @@ func _ready() -> void:
 	# del sistema reale, es. "capitano" per il coordinatore)
 	BackendBus.agent_chat_updated.connect(_on_updated)
 	BackendBus.user_chat_sent.connect(_on_sent)
+	BackendBus.chat_waiting_changed.connect(_on_waiting)
 	BackendBus.open_agent_chat(_slug)
+	if BackendBus.chat_waiting.has(_slug):
+		_on_waiting(_slug, true)  # attesa già in corso da prima
 	_input.grab_focus.call_deferred()
 	Sfx.play_blip()
 
@@ -104,6 +129,14 @@ func _on_updated(_agent: String, messages: Array) -> void:
 func _on_sent(_agent: String, ok: bool, error: String) -> void:
 	if not ok:
 		_append_line("⚠ " + error, Palette.RED)
+
+func _on_waiting(agent: String, waiting: bool) -> void:
+	if agent != _slug and not agent.begins_with(_slug):
+		return
+	_waiting = waiting
+	_wait_t = 0.0
+	if _waiting_label:
+		_waiting_label.visible = waiting
 
 ## La storia arriva COMPLETA a ogni giro: si ridisegna da zero.
 func _redraw(messages: Array) -> void:

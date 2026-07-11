@@ -245,8 +245,10 @@ func can_chat_with(slug_or_uid: String) -> bool:
 	return false
 
 ## La risposta in chat è garantita dal protocollo dell'agente?
+## (REPLY_CAPABLE elenca RUOLI: dall'uid istanza si torna al ruolo base,
+## altrimenti "coordinatore-1" non matchava mai — fix dev1 annunciato)
 func chat_replies(slug_or_uid: String) -> bool:
-	return REPLY_CAPABLE.has(_chat_uid(slug_or_uid))
+	return REPLY_CAPABLE.has(_chat_uid(slug_or_uid).split("-")[0])
 
 ## slug generico ("scout") → uid della prima istanza attiva ("scout-2");
 ## un uid passa invariato.
