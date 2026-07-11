@@ -71,6 +71,15 @@ func _ready() -> void:
 		ov.make_current()
 
 	_add_hud()
+	add_child(GameSidebar.new())  # sidebar stile desktop-app (linguetta ≡)
+
+	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
+			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
+
+	# TEST-AUTO: JHT_DEPT=<id> apre il pannello di quel reparto all'avvio.
+	var dept_test := OS.get_environment("JHT_DEPT")
+	if dept_test != "" and DepartmentDefs.DEPARTMENTS.has(dept_test):
+		_open_dept(dept_test)
 
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
@@ -82,7 +91,7 @@ func _take_shot(path: String) -> void:
 	await get_tree().create_timer(1.2).timeout
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(path)
-	print("JHT_SHOT salvato: ", path)
+	Log.info("test", "JHT_SHOT salvato: " + path)
 	get_tree().quit()
 
 func _process(_delta: float) -> void:
@@ -102,12 +111,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_registry = RegistryPanel.new()
 			add_child(_registry)
 
+var _dept_panel: DepartmentPanel
+
 ## Click "pulito" dalla FreeCamera: agente > bacheca > reparto.
 func _on_world_click(target: Vector2) -> void:
 	if Game.dialogue_active:
 		return
-	if _registry:
-		return  # col registro aperto, il mondo non riceve click
+	if _registry or _dept_panel:
+		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
 			_start_talk(agent)
@@ -118,9 +129,13 @@ func _on_world_click(target: Vector2) -> void:
 		return
 	var dept := DepartmentDefs.department_at(target)
 	if dept != "":
-		# pannello reparto in arrivo (M-reparti); intanto feedback sonoro
-		Sfx.play_tick()
-		print("[office] click sul reparto: ", dept)
+		_open_dept(dept)
+
+func _open_dept(dept: String) -> void:
+	Log.info("dept", "pannello reparto aperto: " + dept)
+	_dept_panel = DepartmentPanel.new(dept)
+	add_child(_dept_panel)
+	_dept_panel.closed.connect(func() -> void: _dept_panel = null)
 
 # ── Hover col mouse (evidenzia l'agente cliccabile) ───────────────────
 
@@ -143,6 +158,7 @@ func _update_hover() -> void:
 func _start_talk(agent: AgentNPC) -> void:
 	if Game.dialogue_active:
 		return
+	Log.info("agent", "dialogo aperto con " + agent.slug)
 	agent.start_talk()
 	var ui := DialogueUI.new()
 	add_child(ui)

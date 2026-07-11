@@ -42,10 +42,12 @@ func _unhandled_input(event: InputEvent) -> void:
 # ── Navigazione fra scene ─────────────────────────────────────────────
 
 func goto_title() -> void:
+	Log.info("scene", "→ TITLE")
 	state = State.TITLE
 	get_tree().change_scene_to_file(SCENE_TITLE)
 
 func goto_office() -> void:
+	Log.info("scene", "→ OFFICE")
 	state = State.OFFICE
 	get_tree().change_scene_to_file(SCENE_OFFICE)
 

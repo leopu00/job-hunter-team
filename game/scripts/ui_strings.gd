@@ -38,4 +38,9 @@ const S := {
 	"registry.close": "[TAB] chiudi",
 	"hud.dialogue_next": "[INVIO] continua",
 	"hud.dialogue_skip": "[ESC] chiudi",
+
+	# ── Pannello reparto ──────────────────────────────────────────
+	"dept.desks": "POSTAZIONI",
+	"dept.desk_free": "postazione libera",
+	"dept.close": "click fuori per chiudere",
 }
