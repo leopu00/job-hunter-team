@@ -19,6 +19,8 @@ const AGENTS := {
 	},
 	"scout": {
 		"name": "Lo Scout",
+		"dept": "scout",
+		"desk": 1,
 		"spot": Vector2(1361, 978),  # postazione r1c2 del reparto Scout
 		"wander": [Vector2(1000, 320), Vector2(1490, 320), Vector2(1600, 1250)],
 		"chatter": [
@@ -29,6 +31,8 @@ const AGENTS := {
 	},
 	"analista": {
 		"name": "L'Analista",
+		"dept": "analisti",
+		"desk": 0,
 		"spot": Vector2(1933, 214),  # postazione r1c1 del lab Analisti
 		"wander": [Vector2(1900, 520), Vector2(2100, 680)],
 		"chatter": [
@@ -39,6 +43,8 @@ const AGENTS := {
 	},
 	"scorer": {
 		"name": "Lo Scorer",
+		"dept": "scorer",
+		"desk": 1,
 		"spot": Vector2(2164, 970),  # il desk_wide col monitor curvo
 		"wander": [Vector2(2320, 1200), Vector2(1300, 960)],
 		"chatter": [
@@ -68,6 +74,15 @@ const AGENTS := {
 		],
 	},
 }
+
+## L'agente del roster assegnato alla postazione `index` del reparto
+## (vedi DepartmentDefs); "" se la scrivania è libera.
+static func desk_occupant(dept_id: String, index: int) -> String:
+	for slug in AGENTS:
+		var def: Dictionary = AGENTS[slug]
+		if def.get("dept", "") == dept_id and def.get("desk", -1) == index:
+			return slug
+	return ""
 
 ## Factory del rig: spritesheet pittorico se esiste (docs/SPRITES.md),
 ## altrimenti il vecchio rig a parti SVG. I chiamanti usano solo

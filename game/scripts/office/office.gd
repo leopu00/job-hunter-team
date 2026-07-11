@@ -72,6 +72,11 @@ func _ready() -> void:
 
 	_add_hud()
 
+	# TEST-AUTO: JHT_DEPT=<id> apre il pannello di quel reparto all'avvio.
+	var dept_test := OS.get_environment("JHT_DEPT")
+	if dept_test != "" and DepartmentDefs.DEPARTMENTS.has(dept_test):
+		_open_dept(dept_test)
+
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
 	var shot := OS.get_environment("JHT_SHOT")
@@ -102,12 +107,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_registry = RegistryPanel.new()
 			add_child(_registry)
 
+var _dept_panel: DepartmentPanel
+
 ## Click "pulito" dalla FreeCamera: agente > bacheca > reparto.
 func _on_world_click(target: Vector2) -> void:
 	if Game.dialogue_active:
 		return
-	if _registry:
-		return  # col registro aperto, il mondo non riceve click
+	if _registry or _dept_panel:
+		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
 			_start_talk(agent)
@@ -118,9 +125,12 @@ func _on_world_click(target: Vector2) -> void:
 		return
 	var dept := DepartmentDefs.department_at(target)
 	if dept != "":
-		# pannello reparto in arrivo (M-reparti); intanto feedback sonoro
-		Sfx.play_tick()
-		print("[office] click sul reparto: ", dept)
+		_open_dept(dept)
+
+func _open_dept(dept: String) -> void:
+	_dept_panel = DepartmentPanel.new(dept)
+	add_child(_dept_panel)
+	_dept_panel.closed.connect(func() -> void: _dept_panel = null)
 
 # ── Hover col mouse (evidenzia l'agente cliccabile) ───────────────────
 
