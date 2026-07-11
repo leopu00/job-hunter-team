@@ -98,6 +98,7 @@ const S := {
 	"pos.ticket_err": "✘ Ticket nicht erstellt: %s",
 	"pos.ticket_need_vps": "// verbinde die VPS, um Tickets mit dem Team zu öffnen",
 	"pos.found": "gefunden von %s · %s",
+	"pos.open_url": "Anzeige im Browser öffnen",
 	"pos.open_yes": "Anzeige bei der letzten Prüfung OFFEN",
 	"pos.open_no": "Anzeige NICHT MEHR OFFEN",
 
