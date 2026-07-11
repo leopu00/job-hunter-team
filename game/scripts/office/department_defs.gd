@@ -33,10 +33,12 @@ const DEPARTMENTS := {
 		"color": Color("#00e87a"),
 		"zone": Rect2(1000, 960, 880, 520),
 		"inbox": Vector2(1790, 1390),
-		# dado=2: tre isole a coppie, colleghi faccia a faccia
+		# dado=2: tre isole a coppie, colleghi faccia a faccia.
+		# desk 1 = STANDING DESK (dado 16:10: d6=5->una sola, d5=1 d6=2):
+		# il Lead Scout lavora in piedi, tutti gli altri siedono.
 		"desks": [
 			{"rect": Rect2(1040, 1000, 170, 78), "kind": "scout_a", "facing": "down"},
-			{"rect": Rect2(1040, 1086, 170, 78), "kind": "scout_a", "facing": "up"},
+			{"rect": Rect2(1040, 1086, 170, 78), "kind": "scout_a", "facing": "up", "standing": true},
 			{"rect": Rect2(1380, 1180, 170, 78), "kind": "scout_b", "facing": "down"},
 			{"rect": Rect2(1380, 1266, 170, 78), "kind": "scout_a", "facing": "up"},
 			{"rect": Rect2(1700, 1000, 170, 78), "kind": "scout_a", "facing": "down"},

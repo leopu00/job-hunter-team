@@ -38,6 +38,7 @@ var _spot := Vector2.ZERO
 var _desk_facing := "down"
 var pile: PaperPile  # i fogli accumulati sulla MIA scrivania
 var _consume_timer := 0.0
+var _standing := false  # standing desk (dado 16:10): lavora in piedi
 var _chatter: Array = []
 var _wander: Array = []  # solo core (mentor/coordinatore/assistente)
 
@@ -67,6 +68,7 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	if dept != "":
 		var desk: Dictionary = DepartmentDefs.DEPARTMENTS[dept]["desks"][def["desk"]]
 		_desk_facing = desk.get("facing", "down")
+		_standing = desk.get("standing", false)
 		# la pila di fogli vive sul piano della postazione (sibling nel
 		# World: setup() arriva quando siamo già nell'albero)
 		pile = PaperPile.new(desk["rect"])
@@ -156,14 +158,38 @@ func _cadence() -> float:
 	return TRIP_EVERY.get(slug, 260.0)
 
 ## Alterna digitazione (work) e pensiero (idle) alla postazione: il ritmo
-## dei tick veri. Circa 70% del tempo in work.
+## dei tick veri. Circa 70% del tempo in work. Da seduti la traccia è
+## una sola ("sit"): l'alternanza pilota solo lo smaltimento pila.
 func _tick_desk_pose(delta: float) -> void:
 	_pose_timer -= delta
 	if _pose_timer > 0.0:
 		return
 	_desk_working = not _desk_working
 	_pose_timer = randf_range(18.0, 40.0) if _desk_working else randf_range(6.0, 16.0)
-	_desk_motion("work" if _desk_working else "idle")
+	if _seated():
+		_desk_motion("sit")
+	else:
+		_desk_motion("work" if _desk_working else "idle")
+
+## Seduto alla postazione? Missione 16:10: la gran maggioranza SIEDE
+## quando lavora; in piedi solo chi ha lo standing desk. Gated sul
+## contratto rig (has_sit = lo sheet <slug>_sit.png esiste): senza
+## texture l'offset farebbe solo salire l'agente SULLA sedia.
+func _seated() -> bool:
+	return not _standing and rig != null and rig.get("has_sit") == true
+
+## Dove sta il corpo quando è seduto: infilato verso la scrivania per
+## combaciare con la sedia disegnata nelle texture dei desk.
+func _seat_offset() -> Vector2:
+	match _desk_facing:
+		"up":
+			return Vector2(0, -6)
+		"left":
+			return Vector2(-8, 0)
+		"right":
+			return Vector2(8, 0)
+		_:
+			return Vector2(0, 6)
 
 ## Lavorando la pila si smaltisce: un foglio ogni ~minuto di lavoro vero.
 func _consume_tick(delta: float) -> void:
@@ -285,7 +311,11 @@ func _end_trip() -> void:
 ## Alla scrivania: rivolto secondo la postazione (down = viso in camera).
 func _work_pose() -> void:
 	_desk_working = true
-	_desk_motion("work")
+	if _seated():
+		position = _spot + _seat_offset()
+		_desk_motion("sit")
+	else:
+		_desk_motion("work")
 
 func _follow_path(speed: float, mode := "walk") -> bool:
 	if _pi >= _path.size():

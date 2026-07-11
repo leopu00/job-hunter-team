@@ -35,17 +35,13 @@ const LAMPS := [
 	[Vector2(1300, 780), 330.0, MINT, 0.13],    # ologramma
 ]
 
-## Fuori dalla box, oltre i vetri nord: bokeh soffuso (ordine di Leone:
-## qualcosa ma NIENTE grattacieli; dado dev-art=6). Due sprite
-## sovrapposti, crossfade giorno/notte via modulate.
-const SKY_DAY := "res://assets/gen-art/environment/bokeh_day.png"
-const SKY_NIGHT := "res://assets/gen-art/environment/bokeh_night.png"
+## Fuori dalla box: TINTA UNITA (ordine di Leone, test 16:10: via il
+## bokeh, "luci strane") — il VOID slate di OfficeFloor fa da fondo e
+## la box la definiscono vetrata perimetrale + spigoli tesseract.
 
 var _cm: CanvasModulate
 var _lamps: Array = []      # [[LightPool, alpha_base], …]
 var _day_wash: Array = []   # luce dalle vetrate, accesa di giorno
-var _sky_day: Sprite2D
-var _sky_night: Sprite2D
 var _clock := 0.0
 
 func _ready() -> void:
@@ -54,11 +50,6 @@ func _ready() -> void:
 	_cm = CanvasModulate.new()
 	add_child(_cm)
 	add_child(ScreenGrade.new())
-	# skyline nella fascia cielo (texture in nodi separati dal _draw:
-	# mescolarle alle primitive rompe il batching GLES3 su macOS)
-	_sky_day = _make_sky(SKY_DAY)
-	_sky_night = _make_sky(SKY_NIGHT)
-
 	for spec in LAMPS:
 		var pool := LightPool.new(spec[0], spec[1], spec[2], spec[3])
 		add_child(pool)
@@ -81,29 +72,6 @@ func _ready() -> void:
 		add_child(wash)
 		_day_wash.append([wash, spec[2]])
 	_apply()
-
-## Sprite skyline: riempie la fascia cielo (da world.top al pavimento),
-## ripetuto in orizzontale a scala fissa per non deformare il disegno.
-func _make_sky(path: String) -> Sprite2D:
-	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
-	if tex == null:
-		return null
-	var w := FurnitureDefs.WORLD
-	var f := FurnitureDefs.FLOOR
-	var band_h := f.position.y - w.position.y
-	var spr := Sprite2D.new()
-	spr.texture = tex
-	spr.centered = false
-	# mirror: il bokeh è chiaro e il repeat secco mostrava la cucitura a
-	# ogni tile (con lo skyline scuro non si vedeva)
-	spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_MIRROR
-	spr.region_enabled = true
-	var s := band_h / tex.get_size().y
-	spr.region_rect = Rect2(0, 0, w.size.x / s, tex.get_size().y)
-	spr.scale = Vector2(s, s)
-	spr.position = w.position
-	add_child(spr)
-	return spr
 
 func _process(delta: float) -> void:
 	_clock += delta
@@ -136,10 +104,6 @@ func _apply() -> void:
 	for e in _day_wash:
 		e[0].modulate.a = e[1] * (1.0 - d)
 		e[0].visible = d < 0.97
-	if _sky_day:
-		_sky_day.modulate.a = 1.0 - d
-	if _sky_night:
-		_sky_night.modulate.a = d
 	queue_redraw()
 	Log.debug("scene", "giorno/notte: darkness=%.2f" % d)
 
