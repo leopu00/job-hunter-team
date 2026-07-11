@@ -5,7 +5,10 @@ extends Node2D
 ## 128×192 (arte a 2×, il rig scala 0.5), piedi a (64, 180), side = destra.
 ## API pubblica identica al vecchio rig: set_motion(facing, flipped, mode).
 
-const RIG_SCALE := 0.5
+# 0.5 rendeva gli agenti ~80px contro scrivanie da 190: sproporzione
+# bocciata da Leone. A 0.85 l'agente (~136px) sta alle desk ~170px come
+# nell'illustrazione the-box (persona ≈ larghezza scrivania).
+const RIG_SCALE := 0.85
 const COLS := 6
 const CELL := Vector2(128, 192)
 const FEET := Vector2(64, 180)

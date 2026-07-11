@@ -5,7 +5,9 @@ extends Node2D
 ## sono importate a 2×: il rig lavora in pixel-texture e scala 0.5.
 
 const ART_SCALE := 2.0     # svg/scale dell'import
-const RIG_SCALE := 0.5     # riporta alla dimensione artistica (64×96)
+# 0.5 = dimensione artistica 64×96; alzato a 0.7 per stare in proporzione
+# con gli agenti a spritesheet (RIG_SCALE 0.85 su figure da 160px).
+const RIG_SCALE := 0.7
 
 ## Animazione: "idle" respiro · "walk" camminata · "work" digitazione
 var mode := "idle"
