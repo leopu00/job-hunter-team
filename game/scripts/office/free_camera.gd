@@ -1,9 +1,10 @@
 class_name FreeCamera
 extends Camera2D
-## La regia della box senza personaggio: pan con WASD/frecce o trascinando
-## col mouse, zoom con la rotella (verso il cursore). Emette `clicked` per i
-## click "puliti" (press+release quasi fermi), così l'ufficio distingue un
-## click su agente/reparto da un pan.
+## La regia della box senza personaggio: pan con WASD/frecce, trascinando
+## col mouse o con lo scroll a due dita del trackpad; zoom con la rotella,
+## col pinch del trackpad (verso il cursore) o con i tasti +/- (verso il
+## centro). Emette `clicked` per i click "puliti" (press+release quasi
+## fermi), così l'ufficio distingue un click su agente/reparto da un pan.
 
 signal clicked(world_pos: Vector2)
 
@@ -32,6 +33,13 @@ func _ready() -> void:
 	zoom = Vector2(_zoom_min, _zoom_min)
 	position = world.get_center()
 	make_current()
+	# TEST-AUTO: JHT_ZOOM_TEST=<factor> spara un pinch sintetico al boot,
+	# così lo screenshot dimostra che la magnify gesture zooma davvero.
+	var zt := OS.get_environment("JHT_ZOOM_TEST")
+	if zt != "":
+		var g := InputEventMagnifyGesture.new()
+		g.factor = float(zt)
+		Input.parse_input_event.call_deferred(g)
 
 func _process(delta: float) -> void:
 	if Game.dialogue_active:
@@ -65,10 +73,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _drag_travel >= DRAG_CLICK_TOLERANCE:
 			position -= event.relative / zoom.x
 			_clamp_to_world()
+	# trackpad macOS: pinch = zoom, scroll a due dita = pan
+	elif event is InputEventMagnifyGesture:
+		_zoom_at(event.factor, get_global_mouse_position())
+	elif event is InputEventPanGesture:
+		position += event.delta * 18.0 / zoom.x
+		_clamp_to_world()
+	# fallback senza mouse né trackpad: +/- zoomano verso il centro vista
+	elif event is InputEventKey and event.pressed:
+		match event.keycode:
+			KEY_PLUS, KEY_EQUAL, KEY_KP_ADD:
+				_zoom_at(ZOOM_STEP, get_screen_center_position())
+			KEY_MINUS, KEY_KP_SUBTRACT:
+				_zoom_at(1.0 / ZOOM_STEP, get_screen_center_position())
 
 ## Zoom verso il cursore: il punto del mondo sotto il mouse resta sotto il mouse.
 func _zoom_at_mouse(factor: float) -> void:
-	var anchor := get_global_mouse_position()
+	_zoom_at(factor, get_global_mouse_position())
+
+## Zoom verso un punto-àncora del mondo, che resta fermo sullo schermo.
+func _zoom_at(factor: float, anchor: Vector2) -> void:
 	var old_z := zoom.x
 	var z := clampf(old_z * factor, _zoom_min, ZOOM_MAX)
 	if is_equal_approx(z, old_z):
