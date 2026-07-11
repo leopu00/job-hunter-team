@@ -71,6 +71,7 @@ func _ready() -> void:
 		ov.make_current()
 
 	_add_hud()
+	add_child(GameSidebar.new())  # sidebar stile desktop-app (linguetta ≡)
 
 	# TEST-AUTO: JHT_DEPT=<id> apre il pannello di quel reparto all'avvio.
 	var dept_test := OS.get_environment("JHT_DEPT")
