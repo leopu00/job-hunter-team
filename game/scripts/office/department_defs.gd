@@ -5,12 +5,14 @@ class_name DepartmentDefs
 ## kind→texture (vedi FurnitureNode.GEN_ART).
 ##
 ## Convenzioni:
-## - desk "facing" "down": l'agente sta DIETRO il rect (y = rect.y - 14) e
-##   guarda in camera, la scrivania gli copre le gambe (Y-sort);
-##   "up": sta DAVANTI (y = rect.end.y + 24), di spalle.
+## - desk "facing" = verso della scrivania; l'agente siede COERENTE al
+##   mobile (recensione R2): "down" sta dietro e guarda in camera,
+##   "up" sta davanti di spalle, "left"/"right" siedono di fianco rivolti
+##   nel verso del mobile. desk_spot() calcola il punto esatto.
 ## - kind desk_a..desk_f = varianti visive (scrivanie non tutte uguali,
 ##   ufficio caotico-creativo); desk_wide = monitor ultrawide dello Scorer.
-##   Finché una variante non ha texture, FurnitureNode disegna il blockout.
+##   Footprint 170×78 dal rapporto sprite (contratto proporzioni con
+##   dev-art). Finché una variante non ha texture, blockout procedurale.
 ## - "inbox" = punto dove si accumulano i fogli del reparto: è la meta dei
 ##   flussi cross-reparto (es. gli Analisti ritirano dall'inbox degli Scout).
 ##
@@ -29,12 +31,12 @@ const DEPARTMENTS := {
 		"zone": Rect2(1000, 960, 700, 430),
 		"inbox": Vector2(1640, 1365),
 		"desks": [
-			{"rect": Rect2(1032, 1004, 190, 85), "kind": "desk_b", "facing": "down"},
-			{"rect": Rect2(1266, 992, 190, 85), "kind": "desk_a", "facing": "down"},
-			{"rect": Rect2(1494, 1010, 190, 85), "kind": "desk_d", "facing": "down"},
-			{"rect": Rect2(1024, 1238, 190, 85), "kind": "desk_e", "facing": "down"},
-			{"rect": Rect2(1258, 1226, 190, 85), "kind": "desk_c", "facing": "down"},
-			{"rect": Rect2(1500, 1244, 190, 85), "kind": "desk_f", "facing": "down"},
+			{"rect": Rect2(1040, 1006, 170, 78), "kind": "desk_b", "facing": "down"},
+			{"rect": Rect2(1272, 990, 170, 78), "kind": "desk_a", "facing": "down"},
+			{"rect": Rect2(1496, 1012, 170, 78), "kind": "desk_d", "facing": "left"},
+			{"rect": Rect2(1030, 1240, 170, 78), "kind": "desk_e", "facing": "up"},
+			{"rect": Rect2(1262, 1228, 170, 78), "kind": "desk_c", "facing": "down"},
+			{"rect": Rect2(1498, 1246, 170, 78), "kind": "desk_f", "facing": "down"},
 		],
 	},
 	"analisti": {
@@ -44,12 +46,12 @@ const DEPARTMENTS := {
 		"zone": Rect2(1806, 150, 620, 580),  # il lab di vetro
 		"inbox": Vector2(2106, 790),  # fuori dalla porta del lab
 		"desks": [
-			{"rect": Rect2(1848, 228, 170, 75), "kind": "desk_c", "facing": "down"},
-			{"rect": Rect2(2132, 214, 170, 75), "kind": "desk_f", "facing": "down"},
-			{"rect": Rect2(1840, 402, 170, 75), "kind": "desk_a", "facing": "down"},
-			{"rect": Rect2(2146, 392, 170, 75), "kind": "desk_d", "facing": "down"},
-			{"rect": Rect2(1852, 570, 170, 75), "kind": "desk_b", "facing": "down"},
-			{"rect": Rect2(2128, 562, 170, 75), "kind": "desk_e", "facing": "down"},
+			{"rect": Rect2(1848, 228, 170, 78), "kind": "desk_c", "facing": "down"},
+			{"rect": Rect2(2132, 214, 170, 78), "kind": "desk_f", "facing": "down"},
+			{"rect": Rect2(1840, 402, 170, 78), "kind": "desk_a", "facing": "right"},
+			{"rect": Rect2(2146, 392, 170, 78), "kind": "desk_d", "facing": "down"},
+			{"rect": Rect2(1852, 570, 170, 78), "kind": "desk_b", "facing": "down"},
+			{"rect": Rect2(2128, 562, 170, 78), "kind": "desk_e", "facing": "down"},
 		],
 	},
 	"scorer": {
@@ -59,12 +61,12 @@ const DEPARTMENTS := {
 		"zone": Rect2(1740, 960, 680, 470),
 		"inbox": Vector2(1735, 1445),
 		"desks": [
-			{"rect": Rect2(1772, 1002, 190, 85), "kind": "desk_a", "facing": "down"},
-			{"rect": Rect2(2004, 984, 320, 120), "kind": "desk_wide", "facing": "down"},
-			{"rect": Rect2(1766, 1236, 190, 85), "kind": "desk_e", "facing": "down"},
-			{"rect": Rect2(2010, 1228, 190, 85), "kind": "desk_c", "facing": "down"},
-			{"rect": Rect2(2226, 1246, 190, 85), "kind": "desk_f", "facing": "down"},
-			{"rect": Rect2(1905, 1332, 190, 85), "kind": "desk_b", "facing": "up"},
+			{"rect": Rect2(1776, 1004, 170, 78), "kind": "desk_a", "facing": "down"},
+			{"rect": Rect2(2010, 986, 290, 110), "kind": "desk_wide", "facing": "down"},
+			{"rect": Rect2(1770, 1238, 170, 78), "kind": "desk_e", "facing": "down"},
+			{"rect": Rect2(2012, 1230, 170, 78), "kind": "desk_c", "facing": "up"},
+			{"rect": Rect2(2238, 1248, 170, 78), "kind": "desk_f", "facing": "down"},
+			{"rect": Rect2(1908, 1334, 170, 78), "kind": "desk_b", "facing": "up"},
 		],
 	},
 	"scrittori": {
@@ -74,12 +76,12 @@ const DEPARTMENTS := {
 		"zone": Rect2(320, 1480, 700, 430),
 		"inbox": Vector2(1060, 1700),
 		"desks": [
-			{"rect": Rect2(352, 1524, 190, 85), "kind": "desk_d", "facing": "down"},
-			{"rect": Rect2(584, 1512, 190, 85), "kind": "desk_b", "facing": "down"},
-			{"rect": Rect2(814, 1530, 190, 85), "kind": "desk_f", "facing": "down"},
-			{"rect": Rect2(344, 1758, 190, 85), "kind": "desk_a", "facing": "down"},
-			{"rect": Rect2(578, 1746, 190, 85), "kind": "desk_e", "facing": "down"},
-			{"rect": Rect2(808, 1764, 190, 85), "kind": "desk_c", "facing": "down"},
+			{"rect": Rect2(352, 1524, 170, 78), "kind": "desk_d", "facing": "down"},
+			{"rect": Rect2(586, 1512, 170, 78), "kind": "desk_b", "facing": "down"},
+			{"rect": Rect2(816, 1530, 170, 78), "kind": "desk_f", "facing": "right"},
+			{"rect": Rect2(346, 1758, 170, 78), "kind": "desk_a", "facing": "down"},
+			{"rect": Rect2(580, 1746, 170, 78), "kind": "desk_e", "facing": "up"},
+			{"rect": Rect2(812, 1764, 170, 78), "kind": "desk_c", "facing": "down"},
 		],
 	},
 	"critici": {
@@ -89,12 +91,12 @@ const DEPARTMENTS := {
 		"zone": Rect2(1740, 1480, 680, 430),
 		"inbox": Vector2(1700, 1700),
 		"desks": [
-			{"rect": Rect2(1770, 1522, 190, 85), "kind": "desk_e", "facing": "down"},
-			{"rect": Rect2(2002, 1510, 190, 85), "kind": "desk_c", "facing": "down"},
-			{"rect": Rect2(2226, 1528, 190, 85), "kind": "desk_a", "facing": "down"},
-			{"rect": Rect2(1764, 1756, 190, 85), "kind": "desk_f", "facing": "down"},
-			{"rect": Rect2(2008, 1748, 190, 85), "kind": "desk_b", "facing": "down"},
-			{"rect": Rect2(2222, 1766, 190, 85), "kind": "desk_d", "facing": "down"},
+			{"rect": Rect2(1772, 1522, 170, 78), "kind": "desk_e", "facing": "down"},
+			{"rect": Rect2(2004, 1510, 170, 78), "kind": "desk_c", "facing": "left"},
+			{"rect": Rect2(2228, 1528, 170, 78), "kind": "desk_a", "facing": "down"},
+			{"rect": Rect2(1766, 1756, 170, 78), "kind": "desk_f", "facing": "down"},
+			{"rect": Rect2(2010, 1748, 170, 78), "kind": "desk_b", "facing": "down"},
+			{"rect": Rect2(2224, 1766, 170, 78), "kind": "desk_d", "facing": "up"},
 		],
 	},
 }
@@ -108,12 +110,29 @@ const POIS := {
 	"hologram": {"spot": Vector2(1300, 930)},
 }
 
-## Dove sta l'agente assegnato alla scrivania (vedi convenzioni in testa).
+## La catena del valore dei fogli: chi ritira dall'inbox di chi.
+## (Gli Analisti passano dagli Scout a prendere il raccolto, ecc.
+## Gli Scout non ritirano: producono — vanno in stampa più spesso.)
+const FETCH_FROM := {
+	"analisti": "scout",
+	"scorer": "analisti",
+	"scrittori": "scorer",
+	"critici": "scrittori",
+}
+
+## Dove sta l'agente assegnato alla scrivania, coerente col verso del
+## mobile (vedi convenzioni in testa).
 static func desk_spot(desk: Dictionary) -> Vector2:
 	var r: Rect2 = desk["rect"]
-	if desk.get("facing", "down") == "up":
-		return Vector2(r.get_center().x, r.end.y + 24)
-	return Vector2(r.get_center().x, r.position.y - 14)
+	match desk.get("facing", "down"):
+		"up":
+			return Vector2(r.get_center().x, r.end.y + 24)
+		"left":
+			return Vector2(r.end.x + 14, r.end.y + 6)
+		"right":
+			return Vector2(r.position.x - 14, r.end.y + 6)
+		_:
+			return Vector2(r.get_center().x, r.position.y - 14)
 
 ## Tutte le scrivanie di tutti i reparti: [{dept, index, rect, kind, facing}].
 static func all_desks() -> Array:

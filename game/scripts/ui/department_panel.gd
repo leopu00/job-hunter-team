@@ -73,15 +73,15 @@ func _desk_row(index: int, accent: Color) -> Control:
 	var num := TerminalTheme.label("%02d" % (index + 1), 18, accent, "bold")
 	num.custom_minimum_size = Vector2(36, 0)
 	row.add_child(num)
-	var occupant := CharacterDefs.desk_occupant(dept_id, index)
+	var occupant := CharacterDefs.desk_occupant_name(dept_id, index)
 	if occupant.is_empty():
 		row.add_child(TerminalTheme.label(UIStrings.t("dept.desk_free"), 16, Palette.DIM))
 	else:
-		var def: Dictionary = CharacterDefs.AGENTS[occupant]
-		row.add_child(TerminalTheme.label(def["name"], 17, Palette.BRIGHT, "medium"))
-		var status: Dictionary = TeamData.agent_status().get(occupant, {})
-		if status.has("detail"):
-			var detail := TerminalTheme.label(status["detail"], 14, Palette.MUTED)
+		row.add_child(TerminalTheme.label(occupant, 17, Palette.BRIGHT, "medium"))
+		var role_slug := CharacterDefs.desk_occupant_slug(dept_id, index)
+		var status: Dictionary = TeamData.agent_status().get(role_slug, {})
+		if status.has("status"):
+			var detail := TerminalTheme.label(status["status"], 14, Palette.MUTED)
 			detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			row.add_child(detail)
