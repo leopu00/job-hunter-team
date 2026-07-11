@@ -173,6 +173,24 @@ func pipeline_counts() -> Dictionary:
 	return c
 
 
+## KPI di testata (HUD e dashboard): trovate oggi, score medio, totale.
+## Fonte unica, così HUD e viste non possono divergere.
+func kpi_summary() -> Dictionary:
+	var today := Time.get_date_string_from_system(true)  # UTC come found_at
+	var found_today := 0
+	var score_sum := 0.0
+	var score_n := 0
+	for p in positions:
+		if str(p.get("found_at", "")).begins_with(today):
+			found_today += 1
+		if p.get("total_score") != null:
+			score_sum += float(p["total_score"])
+			score_n += 1
+	return {"found_today": found_today,
+			"avg_score": int(round(score_sum / maxf(1.0, score_n))),
+			"total": positions.size()}
+
+
 ## Converte un importo in EUR; ritorna -1.0 se il tasso manca.
 func to_eur(amount: float, currency: String) -> float:
 	var cur := currency.strip_edges().to_upper()

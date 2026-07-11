@@ -988,13 +988,25 @@ func _build_placeholder() -> void:
 # ── Team / Agenti / Attività / Candidature / Dashboard ────────────────
 
 ## Il team per reparto: organico e postazioni libere, più i core.
+## Reparto della scena → slug ruolo del sistema reale.
+const DEPT_ROLE := {"scout": "scout", "analisti": "analista", "scorer": "scorer",
+		"scrittori": "scrittore", "critici": "critico"}
+
 func _build_team() -> void:
+	if not BackendBus.agents_updated.is_connected(_on_team_refresh):
+		BackendBus.agents_updated.connect(_on_team_refresh)
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]
 		var occupied := 0
-		for i in (dept["desks"] as Array).size():
-			if CharacterDefs.desk_occupant_name(dept_id, i) != "":
-				occupied += 1
+		if not BackendBus.agents.is_empty():
+			# postazioni = agenti VERI del ruolo attivi in questo momento
+			for a in BackendBus.agents:
+				if str(a.get("slug", "")) == str(DEPT_ROLE.get(dept_id, "")):
+					occupied += 1
+		else:
+			for i in (dept["desks"] as Array).size():
+				if CharacterDefs.desk_occupant_name(dept_id, i) != "":
+					occupied += 1
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
 		_content.add_child(row)
@@ -1135,6 +1147,10 @@ func _on_activity_refresh(_list: Array) -> void:
 	if section == "activity" and is_instance_valid(_content):
 		_build()
 
+func _on_team_refresh(_list: Array) -> void:
+	if section == "team" and is_instance_valid(_content):
+		_build()
+
 ## Candidature a stadi (stessi dati del registro TAB).
 ## Stadi reali di una candidatura (status del jobs.db → etichetta).
 const APP_STAGES := {"ready": "apps.ready", "applied": "apps.applied",
@@ -1217,22 +1233,11 @@ func _build_dashboard() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_dash_refresh):
 		BackendBus.positions_updated.connect(_on_dash_refresh)
 	_build_dash_pipeline()
-	var all: Array = BackendBus.positions
-	if not all.is_empty():
-		var today := Time.get_date_string_from_system(true)  # UTC come found_at
-		var found_today := 0
-		var score_sum := 0.0
-		var score_n := 0
-		for p in all:
-			if str(p.get("found_at", "")).begins_with(today):
-				found_today += 1
-			if p.get("total_score") != null:
-				score_sum += float(p["total_score"])
-				score_n += 1
-		_kpi_row(UIStrings.t("kpi.positions_today"), str(found_today), Palette.MINT)
-		_kpi_row(UIStrings.t("kpi.avg_score"),
-				str(int(round(score_sum / maxf(1.0, score_n)))), Palette.MINT)
-		_kpi_row(UIStrings.t("kpi.positions_total"), str(all.size()), Palette.BRIGHT)
+	if not BackendBus.positions.is_empty():
+		var kpi: Dictionary = BackendBus.kpi_summary()
+		_kpi_row(UIStrings.t("kpi.positions_today"), str(kpi["found_today"]), Palette.MINT)
+		_kpi_row(UIStrings.t("kpi.avg_score"), str(kpi["avg_score"]), Palette.MINT)
+		_kpi_row(UIStrings.t("kpi.positions_total"), str(kpi["total"]), Palette.BRIGHT)
 		return
 	var s: Dictionary = TeamData.summary()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
