@@ -187,6 +187,21 @@ const S := {
 	"search.no_match": "nessuna posizione trovata",
 	"search.need_vps": "collega la VPS per cercare tra le posizioni reali",
 
+	# ── Profilo (editabile: paradigma desktop app) ────────────────
+	"prof.name": "Nome",
+	"prof.target_role": "Ruolo target",
+	"prof.location": "Località",
+	"prof.experience": "Anni di esperienza",
+	"prof.seniority": "Seniority target",
+	"prof.industry": "Settore",
+	"prof.nationality": "Nazionalità",
+	"prof.skills": "SKILL PRIMARIE (separate da virgola)",
+	"prof.salary": "SALARY TARGET (min / max / valuta)",
+	"prof.save": "▶ SALVA PROFILO",
+	"prof.saving": "salvataggio sulla VPS…",
+	"prof.saved": "✔ profilo salvato — il team lo userà dal prossimo giro",
+	"prof.save_err": "✘ salvataggio fallito: %s",
+
 	# ── Impostazioni → Lingua ─────────────────────────────────────
 	"lang.intro": "Lingua dell'interfaccia — le 7 lingue del sito.",
 	"lang.note": "// si applica subito ai pannelli; riapri quelli già aperti per vederli tradotti",

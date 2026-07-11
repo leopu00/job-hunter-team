@@ -128,7 +128,9 @@ func _build(page := "") -> void:
 				_build_positions()
 		"language":
 			_build_language()
-		"profile", "hours", "provider", "docker", "account", "email", "advanced":
+		"profile":
+			_build_profile()
+		"hours", "provider", "docker", "account", "email", "advanced":
 			_build_config()
 		_:
 			_build_placeholder()
@@ -169,6 +171,106 @@ func _build_config() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
+
+## Il PROFILO dell'utente: editabile QUI (paradigma desktop app 21:26).
+## I campi arrivano da profile_raw (chiavi vere del candidate_profile),
+## il salvataggio riscrive il yml sulla VPS con backup. Offline: mock.
+const PROFILE_FIELDS := [
+	["name", "prof.name"], ["target_role", "prof.target_role"],
+	["location", "prof.location"], ["experience_years", "prof.experience"],
+	["seniority_target", "prof.seniority"], ["industry", "prof.industry"],
+	["nationality", "prof.nationality"],
+]
+
+var _prof_edits := {}
+var _prof_status: Label
+
+func _build_profile() -> void:
+	if not BackendBus.live_settings_updated.is_connected(_on_profile_refresh):
+		BackendBus.live_settings_updated.connect(_on_profile_refresh)
+	if not BackendBus.profile_saved.is_connected(_on_profile_saved):
+		BackendBus.profile_saved.connect(_on_profile_saved)
+	var raw: Dictionary = BackendBus.live_settings.get("profile_raw", {})
+	if not BackendBus.is_live() or raw.is_empty():
+		_build_config()  # offline: coppie mock; live-ma-vuoto: placeholder
+		return
+	_prof_edits.clear()
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 10)
+	_content.add_child(grid)
+	for f in PROFILE_FIELDS:
+		var lbl := TerminalTheme.label(UIStrings.t(f[1]), 14, Palette.MUTED, "medium")
+		lbl.custom_minimum_size = Vector2(220, 0)
+		grid.add_child(lbl)
+		var edit := LineEdit.new()
+		edit.text = str(raw.get(f[0], ""))
+		edit.custom_minimum_size = Vector2(560, 0)
+		edit.add_theme_font_size_override("font_size", 15)
+		grid.add_child(edit)
+		_prof_edits[f[0]] = edit
+	# skill su riga intera, salario su tre campi affiancati
+	_content.add_child(TerminalTheme.label(UIStrings.t("prof.skills"),
+			14, Palette.MUTED, "medium"))
+	var skills := LineEdit.new()
+	skills.text = str(raw.get("skills_primary", ""))
+	skills.add_theme_font_size_override("font_size", 15)
+	skills.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_content.add_child(skills)
+	_prof_edits["skills_primary"] = skills
+	var sal_row := HBoxContainer.new()
+	sal_row.add_theme_constant_override("separation", 12)
+	_content.add_child(sal_row)
+	sal_row.add_child(TerminalTheme.label(UIStrings.t("prof.salary"),
+			14, Palette.MUTED, "medium"))
+	for sf in ["salary_min", "salary_max", "salary_currency"]:
+		var e := LineEdit.new()
+		e.text = str(raw.get(sf, ""))
+		e.custom_minimum_size = Vector2(120 if sf != "salary_currency" else 70, 0)
+		e.add_theme_font_size_override("font_size", 15)
+		sal_row.add_child(e)
+		_prof_edits[sf] = e
+	_content.add_child(HSeparator.new())
+	var save := Button.new()
+	save.text = UIStrings.t("prof.save")
+	save.add_theme_font_size_override("font_size", 16)
+	save.add_theme_color_override("font_color", Palette.GREEN)
+	save.pressed.connect(func() -> void:
+		var fields := {}
+		for key in _prof_edits:
+			fields[key] = _prof_edits[key].text.strip_edges()
+		save.disabled = true
+		_prof_status.text = UIStrings.t("prof.saving")
+		_prof_status.add_theme_color_override("font_color", Palette.DIM)
+		BackendBus.save_user_profile(fields))
+	_content.add_child(save)
+	_prof_status = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_prof_status)
+	_prof_save_btn = save
+
+var _prof_save_btn: Button
+
+## Il refresh periodico non deve cancellare quello che stai scrivendo:
+## si ricostruisce solo se nessun campo del form ha il focus.
+func _on_profile_refresh(_settings: Dictionary) -> void:
+	if section != "profile" or not is_instance_valid(_content):
+		return
+	for key in _prof_edits:
+		var e: LineEdit = _prof_edits[key]
+		if is_instance_valid(e) and e.has_focus():
+			return
+	_build()
+
+func _on_profile_saved(ok: bool, error: String) -> void:
+	if not is_instance_valid(_prof_status):
+		return
+	_prof_status.text = UIStrings.t("prof.saved") if ok \
+			else UIStrings.t("prof.save_err") % error
+	_prof_status.add_theme_color_override("font_color",
+			Palette.MINT if ok else Palette.RED)
+	if is_instance_valid(_prof_save_btn):
+		_prof_save_btn.disabled = false
 
 ## Impostazioni → Lingua: le 7 lingue del web. Il cambio si applica
 ## subito a ciò che viene (ri)costruito; la scena intorno si aggiorna
@@ -448,7 +550,7 @@ func _build_agent_page() -> void:
 		row.add_child(_pos_paragraph(str(m.get("text", ""))))
 
 func _on_config_refresh(_settings: Dictionary) -> void:
-	if is_instance_valid(_content) and section in ["profile", "hours",
+	if is_instance_valid(_content) and section in ["hours",
 			"provider", "docker", "account", "email", "language", "advanced"]:
 		_build()
 
