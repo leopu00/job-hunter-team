@@ -35,6 +35,12 @@ func _enter_tree() -> void:
 				usable.position + usable.size - wsize - Vector2i(8, 8))
 
 func _ready() -> void:
+	# Shot-quiet: la finestrella resta cliccabile anche senza focus — un
+	# click VERO dell'utente al lavoro può aprire pannelli e falsare lo
+	# shot (successo: pagina Mentor aperta da sola in uno sweep). Sordi
+	# a mouse e tastiera per tutta la durata dello shot.
+	if OS.get_environment("JHT_SHOT_QUIET") == "1":
+		get_viewport().gui_disable_input = true
 	# Scorciatoia per i test: JHT_SCENE=office salta il boot.
 	if OS.get_environment("JHT_SCENE") == "office":
 		goto_office.call_deferred()
