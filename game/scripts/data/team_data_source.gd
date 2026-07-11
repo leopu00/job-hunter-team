@@ -45,3 +45,11 @@ func get_agent_activity(_slug: String) -> Array:
 ## quota_week_pct: float 0..1, tokens_today, budget_used_pct: float 0..1 }
 func get_usage() -> Dictionary:
 	return {}
+
+## Notifiche recenti: [{ when, level: info|warn, text }] — recente prima.
+func get_notifications() -> Array:
+	return []
+
+## Chat di team recente: [{ when, from, text }] — recente per ultima.
+func get_chat() -> Array:
+	return []

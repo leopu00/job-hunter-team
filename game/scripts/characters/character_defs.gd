@@ -13,7 +13,8 @@ const AGENTS := {
 		"spot": Vector2(545, 706),
 		# il giro dei reparti: passa a controllare gli inbox, come i C-tick
 		"wander": [Vector2(1600, 1180), Vector2(2106, 790), Vector2(1735, 1445),
-				Vector2(1060, 1700), Vector2(1700, 1700), Vector2(1300, 960)],
+				Vector2(1060, 1700), Vector2(1700, 1700), Vector2(1300, 960),
+				Vector2(1400, 1660)],  # sosta anche all'isola condivisa
 		"chatter": [
 			"ricalibro il ritmo del team…",
 			"il weekly è al 64%, tutto in linea",
