@@ -63,6 +63,7 @@ func _ready() -> void:
 		agents.append(agent)
 
 	_add_maintainers()
+	add_child(TesseractEdges.new())  # gli spigoli blu della box (trasparenti)
 	add_child(Sfx.make_ambient_hum())
 
 	_camera = FreeCamera.new()

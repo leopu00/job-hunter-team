@@ -9,7 +9,7 @@ signal clicked(world_pos: Vector2)
 
 const PAN_SPEED := 1100.0
 const ZOOM_STEP := 1.12
-const ZOOM_MAX := 1.5
+const ZOOM_MAX := 2.8  # zoom profondo: i dettagli minuti devono leggersi
 const DRAG_CLICK_TOLERANCE := 8.0
 
 ## Sotto questo zoom si vedrebbe il void oltre i vetri: calcolato in _ready
@@ -69,11 +69,12 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Zoom verso il cursore: il punto del mondo sotto il mouse resta sotto il mouse.
 func _zoom_at_mouse(factor: float) -> void:
 	var anchor := get_global_mouse_position()
-	var z := clampf(zoom.x * factor, _zoom_min, ZOOM_MAX)
-	if is_equal_approx(z, zoom.x):
+	var old_z := zoom.x
+	var z := clampf(old_z * factor, _zoom_min, ZOOM_MAX)
+	if is_equal_approx(z, old_z):
 		return
 	zoom = Vector2(z, z)
-	position = anchor + (position - anchor) * (zoom.x / z)
+	position = anchor + (position - anchor) * (old_z / z)
 	# il posizionamento sotto il mouse non deve "sbandare" con lo smoothing
 	reset_smoothing()
 	_clamp_to_world()
