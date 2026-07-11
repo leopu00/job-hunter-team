@@ -32,6 +32,13 @@ var mode := "idle"
 var facing := "down"       # down / up / side
 var flipped := false
 
+## true se il foglio seduto è caricato: i chiamanti (AgentNPC) applicano
+## l'offset-sedia solo quando la posa seduta esiste davvero (contratto
+## has_sit concordato in chat 16:1x).
+var has_sit: bool:
+	get:
+		return _sit_sheet != null
+
 var _sprite: Sprite2D
 var _sheet: Texture2D
 var _sit_sheet: Texture2D
