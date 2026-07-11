@@ -90,6 +90,8 @@ func _build(page := "") -> void:
 			_build_notifs()
 		"chat":
 			_build_chat()
+		"vps":
+			_build_vps()
 		"profile", "hours", "provider", "docker", "account", "email", "language", "advanced":
 			_build_config()
 		_:
@@ -113,6 +115,132 @@ func _build_config() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			"// sola lettura — si modifica dalla desktop app", 13, Palette.DIM))
+
+# ── Impostazioni → Collega VPS ────────────────────────────────────────
+
+var _vps_ip: LineEdit
+var _vps_key: LineEdit
+var _vps_state_lbl: Label
+var _vps_agents_box: VBoxContainer
+
+## Il form del PRIMO PASSO backend: IP + chiave SSH → VpsBackend reale.
+## Stato e roster arrivano live dal BackendBus (il collegamento resta
+## vivo anche a pannello chiuso: vive nell'autoload, non qui).
+func _build_vps() -> void:
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.intro"), 15, Palette.MUTED))
+	var cfg: Dictionary = BackendBus.load_vps_config()
+
+	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "203.0.113.10")
+	_vps_key = _vps_input(UIStrings.t("vps.key"), cfg.get("key_path", ""),
+			"~/.ssh/id_ed25519")
+	var browse := Button.new()
+	browse.text = UIStrings.t("vps.key_browse")
+	browse.add_theme_font_size_override("font_size", 14)
+	browse.add_theme_color_override("font_color", Palette.MUTED)
+	browse.pressed.connect(_browse_vps_key)
+	_vps_key.get_parent().add_child(browse)
+
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 16)
+	_content.add_child(actions)
+	var connect_btn := Button.new()
+	connect_btn.text = UIStrings.t("vps.connect")
+	connect_btn.add_theme_font_size_override("font_size", 16)
+	connect_btn.add_theme_color_override("font_color", Palette.GREEN)
+	connect_btn.pressed.connect(_connect_vps)
+	actions.add_child(connect_btn)
+	var disconnect_btn := Button.new()
+	disconnect_btn.text = UIStrings.t("vps.disconnect")
+	disconnect_btn.add_theme_font_size_override("font_size", 16)
+	disconnect_btn.add_theme_color_override("font_color", Palette.MUTED)
+	disconnect_btn.pressed.connect(func() -> void: BackendBus.disconnect_backend())
+	actions.add_child(disconnect_btn)
+
+	_vps_state_lbl = TerminalTheme.label("", 16, Palette.MUTED, "medium")
+	_content.add_child(_vps_state_lbl)
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.agents_live"),
+			14, Palette.MUTED, "medium"))
+	_vps_agents_box = VBoxContainer.new()
+	_vps_agents_box.add_theme_constant_override("separation", 6)
+	_content.add_child(_vps_agents_box)
+
+	BackendBus.connection_changed.connect(_on_vps_state)
+	BackendBus.agents_updated.connect(_on_vps_agents)
+	_on_vps_state(BackendBus.state, BackendBus.state_detail)
+	_on_vps_agents(BackendBus.agents)
+
+func _vps_input(label_text: String, value: String, placeholder: String) -> LineEdit:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	_content.add_child(row)
+	var lbl := TerminalTheme.label(label_text, 14, Palette.MUTED, "medium")
+	lbl.custom_minimum_size = Vector2(220, 0)
+	row.add_child(lbl)
+	var edit := LineEdit.new()
+	edit.text = value
+	edit.placeholder_text = placeholder
+	edit.custom_minimum_size = Vector2(360, 0)
+	edit.add_theme_font_size_override("font_size", 15)
+	row.add_child(edit)
+	return edit
+
+func _browse_vps_key() -> void:
+	var dlg := FileDialog.new()
+	dlg.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	dlg.access = FileDialog.ACCESS_FILESYSTEM
+	dlg.use_native_dialog = true
+	dlg.show_hidden_files = true
+	dlg.file_selected.connect(func(path: String) -> void: _vps_key.text = path)
+	add_child(dlg)
+	dlg.popup_centered()
+
+func _connect_vps() -> void:
+	var ip := _vps_ip.text.strip_edges()
+	var key := _vps_key.text.strip_edges().replace("~", OS.get_environment("HOME"))
+	if ip == "" or key == "":
+		_vps_state_lbl.text = "● " + UIStrings.t("vps.missing_fields")
+		_vps_state_lbl.add_theme_color_override("font_color", Palette.YELLOW)
+		return
+	BackendBus.save_vps_config(ip, key)
+	BackendBus.set_backend(VpsBackend.new(), {"ip": ip, "key_path": key})
+
+func _on_vps_state(state: int, detail: String) -> void:
+	if not is_instance_valid(_vps_state_lbl):
+		return
+	match state:
+		BackendBus.CONNECTED:
+			_vps_state_lbl.text = "● %s — %s" % [UIStrings.t("vps.state_connected"), detail]
+			_vps_state_lbl.add_theme_color_override("font_color", Palette.GREEN)
+		BackendBus.CONNECTING:
+			_vps_state_lbl.text = "◌ %s %s" % [UIStrings.t("vps.state_connecting"), detail]
+			_vps_state_lbl.add_theme_color_override("font_color", Palette.YELLOW)
+		BackendBus.ERROR:
+			_vps_state_lbl.text = "▲ %s: %s" % [UIStrings.t("vps.state_error"), detail]
+			_vps_state_lbl.add_theme_color_override("font_color", Palette.RED)
+		_:
+			_vps_state_lbl.text = "○ " + UIStrings.t("vps.state_disconnected")
+			_vps_state_lbl.add_theme_color_override("font_color", Palette.MUTED)
+
+func _on_vps_agents(agents: Array) -> void:
+	if not is_instance_valid(_vps_agents_box):
+		return
+	for child in _vps_agents_box.get_children():
+		child.queue_free()
+	if agents.is_empty():
+		_vps_agents_box.add_child(TerminalTheme.label(
+				UIStrings.t("vps.agents_none"), 14, Palette.DIM))
+		return
+	for a in agents:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		_vps_agents_box.add_child(row)
+		row.add_child(TerminalTheme.label("●", 13, Palette.GREEN))
+		var name_lbl := TerminalTheme.label(str(a.get("name", a.get("slug", "?"))),
+				15, Palette.BRIGHT)
+		name_lbl.custom_minimum_size = Vector2(220, 0)
+		row.add_child(name_lbl)
+		row.add_child(TerminalTheme.label(str(a.get("status", "working")), 14, Palette.MINT))
 
 func _build_placeholder() -> void:
 	_content.add_child(TerminalTheme.label(

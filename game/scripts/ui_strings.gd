@@ -50,4 +50,19 @@ const S := {
 	"agent.activity_none": "nessuna attività registrata",
 	"agent.talk": "▶ PARLA",
 	"agent.pile": "Fogli sulla scrivania: %d",
+
+	# ── Impostazioni → Collega VPS ────────────────────────────────
+	"vps.intro": "Collega la VPS del tuo team: IP e chiave SSH, al resto pensa il gioco.",
+	"vps.ip": "IP DELLA VPS",
+	"vps.key": "CHIAVE SSH (privata)",
+	"vps.key_browse": "SFOGLIA…",
+	"vps.connect": "▶ COLLEGA",
+	"vps.disconnect": "■ SCOLLEGA",
+	"vps.state_disconnected": "non collegato",
+	"vps.state_connecting": "collegamento in corso…",
+	"vps.state_connected": "COLLEGATO",
+	"vps.state_error": "ERRORE",
+	"vps.missing_fields": "inserisci IP e chiave SSH",
+	"vps.agents_live": "AGENTI ATTIVI SULLA VPS",
+	"vps.agents_none": "nessun agente attivo in questo momento",
 }

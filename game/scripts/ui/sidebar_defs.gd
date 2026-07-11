@@ -26,6 +26,7 @@ const GROUPS := [
 	{
 		"title": "Impostazioni",
 		"items": [
+			{"id": "vps", "icon": "🔌", "label": "Collega VPS"},
 			{"id": "profile", "icon": "📝", "label": "Profilo"},
 			{"id": "hours", "icon": "⏰", "label": "Orari"},
 			{"id": "provider", "icon": "🧠", "label": "Provider"},

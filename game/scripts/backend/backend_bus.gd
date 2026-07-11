@@ -32,6 +32,23 @@ var agents: Array = []  # ultimo snapshot pubblicato (per chi arriva tardi)
 var _backend: BackendAdapter
 
 
+## Una VPS già configurata si ricollega da sola all'avvio (il "collega
+## una volta, poi pensa a tutto il gioco" chiesto dal design). TEST-AUTO:
+## JHT_VPS_IP/JHT_VPS_KEY forzano una config, JHT_NOVPS=1 spegne tutto
+## (per gli shot grafici che non devono toccare la rete).
+func _ready() -> void:
+	if OS.get_environment("JHT_NOVPS") == "1":
+		return
+	var cfg := load_vps_config()
+	if OS.get_environment("JHT_VPS_IP") != "":
+		cfg = {
+			"ip": OS.get_environment("JHT_VPS_IP"),
+			"key_path": OS.get_environment("JHT_VPS_KEY"),
+		}
+	if str(cfg.get("ip", "")) != "" and str(cfg.get("key_path", "")) != "":
+		set_backend(VpsBackend.new(), cfg)
+
+
 ## ── Lato scene ───────────────────────────────────────────────────────
 
 ## Collega la sorgente eventi (MockBackend, VpsBackend). Sostituisce
