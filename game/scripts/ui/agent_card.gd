@@ -67,6 +67,10 @@ func _ready() -> void:
 			det.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			det.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			srow.add_child(det)
+	# la scrivania com'è ADESSO: la pila di fogli è simulazione viva
+	if _agent.pile:
+		box.add_child(TerminalTheme.label(
+				UIStrings.t("agent.pile") % _agent.pile.count, 14, Palette.MUTED))
 	box.add_child(HSeparator.new())
 
 	# cosa ha fatto: ultime attività

@@ -20,6 +20,7 @@ config/icon="res://assets/icon.svg"
 Log="*res://scripts/log.gd"
 Game="*res://scripts/game.gd"
 TeamData="*res://scripts/data/team_data.gd"
+BackendBus="*res://scripts/backend/backend_bus.gd"
 Sfx="*res://scripts/sfx.gd"
 
 [display]

@@ -50,6 +50,11 @@ func _ready() -> void:
 	title_row.add_child(TerminalTheme.label(
 			(dept["name"] as String).to_upper(), 26, Palette.WHITE, "xbold"))
 	box.add_child(TerminalTheme.label(dept["tagline"], 16, Palette.MUTED))
+	# l'inbox com'è ADESSO (pila condivisa della simulazione)
+	if PaperPile.inbox.has(dept_id):
+		box.add_child(TerminalTheme.label(
+				UIStrings.t("dept.inbox") % PaperPile.inbox[dept_id].count,
+				14, Palette.MUTED))
 	box.add_child(HSeparator.new())
 
 	box.add_child(TerminalTheme.label(UIStrings.t("dept.desks"), 15, Palette.MUTED, "medium"))
