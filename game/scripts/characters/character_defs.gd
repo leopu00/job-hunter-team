@@ -10,7 +10,8 @@ const SHEETS := "res://assets/characters/sheets/"
 const AGENTS := {
 	"coordinatore": {
 		"name": "Il Coordinatore",
-		"spot": Vector2(545, 706),
+		"spot": Vector2(545, 856),  # DAVANTI al desk (schermo verso camera)
+		"facing": "up",
 		# il giro dei reparti: passa a controllare gli inbox, come i C-tick
 		"wander": [Vector2(1790, 1390), Vector2(2690, 790), Vector2(1965, 1400),
 				Vector2(1120, 1740), Vector2(2690, 1825), Vector2(1300, 930)],
@@ -82,7 +83,8 @@ const AGENTS := {
 	},
 	"assistente": {
 		"name": "L'Assistente",
-		"spot": Vector2(1665, 1786),  # desk all'entrata sud (corridoio)
+		"spot": Vector2(1665, 1936),  # DAVANTI al desk all'entrata sud
+		"facing": "up",
 		"wander": [Vector2(850, 1250), Vector2(1490, 320), Vector2(1965, 1400)],
 		"chatter": [
 			"l'onboarding è completo",
