@@ -105,13 +105,16 @@ const AGENTS := {
 }
 
 ## Organico dei reparti oltre ai lead: quali postazioni riempiono i
-## lavoratori generati (le altre restano libere, l'ufficio respira).
+## lavoratori generati. TUTTE le sedie tranne quella del lead (missione
+## pipeline 20:1x, "più scrivanie dove serve"): il roster VPS arriva a
+## 5-6 istanze per ruolo e ogni istanza reale deve trovare posto —
+## l'ufficio respira comunque, in scena c'è solo chi è attivo davvero.
 const DEPT_ROLES := {
-	"scout": {"slug": "scout", "label": "Scout", "workers": [0, 2, 3, 4]},
-	"analisti": {"slug": "analista", "label": "Analista", "workers": [0, 2, 3]},
-	"scorer": {"slug": "scorer", "label": "Scorer", "workers": [0, 2, 3]},
-	"scrittori": {"slug": "scrittore", "label": "Scrittore", "workers": [0, 2, 3, 4]},
-	"critici": {"slug": "critico", "label": "Critico", "workers": [1, 2, 3]},
+	"scout": {"slug": "scout", "label": "Scout", "workers": [0, 2, 3, 4, 5]},
+	"analisti": {"slug": "analista", "label": "Analista", "workers": [0, 2, 3, 4, 5]},
+	"scorer": {"slug": "scorer", "label": "Scorer", "workers": [0, 2, 3, 4, 5]},
+	"scrittori": {"slug": "scrittore", "label": "Scrittore", "workers": [0, 2, 3, 4, 5]},
+	"critici": {"slug": "critico", "label": "Critico", "workers": [1, 2, 3, 4, 5]},
 }
 
 static var _spawn_cache: Array = []
