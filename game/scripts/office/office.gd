@@ -37,8 +37,12 @@ func _ready() -> void:
 			world.add_child(FurnitureNode.new(item))
 
 	# postazioni dei 5 reparti: stesso FurnitureNode dei mobili, kind variati;
-	# facing passa al visual (texture orientate _down/_side/_up, dev-art)
+	# facing passa al visual (texture orientate _down/_side/_up, dev-art).
+	# kind "none" = seduta di un mobile condiviso (es. il tavolo lungo degli
+	# Analisti): conta per spot/ostacoli ma il visual è l'item in FurnitureDefs.
 	for d in DepartmentDefs.all_desks():
+		if d["kind"] == "none":
+			continue
 		world.add_child(FurnitureNode.new({
 			"id": "desk_%s_%d" % [d["dept"], d["index"]],
 			"kind": d["kind"],

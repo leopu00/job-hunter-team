@@ -13,8 +13,7 @@ const AGENTS := {
 		"spot": Vector2(545, 706),
 		# il giro dei reparti: passa a controllare gli inbox, come i C-tick
 		"wander": [Vector2(1790, 1390), Vector2(2690, 790), Vector2(1965, 1400),
-				Vector2(1120, 1740), Vector2(2690, 1825), Vector2(1300, 930),
-				Vector2(1700, 1745)],  # sosta anche al tavolone condiviso
+				Vector2(1120, 1740), Vector2(2690, 1825), Vector2(1300, 930)],
 		"chatter": [
 			"ricalibro il ritmo del team…",
 			"il weekly è al 64%, tutto in linea",
@@ -34,7 +33,7 @@ const AGENTS := {
 	"analista": {
 		"name": "L'Analista",
 		"dept": "analisti",
-		"desk": 0,
+		"desk": 1,  # seduta centrale del bench a muro (il tavolo lungo)
 		"chatter": [
 			"verifico lo stipendio probabile…",
 			"questo annuncio ha dati mancanti",
@@ -84,7 +83,7 @@ const AGENTS := {
 	"assistente": {
 		"name": "L'Assistente",
 		"spot": Vector2(1665, 1786),  # desk all'entrata sud (corridoio)
-		"wander": [Vector2(850, 1250), Vector2(1490, 320), Vector2(1700, 1745)],
+		"wander": [Vector2(850, 1250), Vector2(1490, 320), Vector2(1965, 1400)],
 		"chatter": [
 			"l'onboarding è completo",
 			"se hai dubbi, chiedi pure a me",
@@ -97,7 +96,7 @@ const AGENTS := {
 ## lavoratori generati (le altre restano libere, l'ufficio respira).
 const DEPT_ROLES := {
 	"scout": {"slug": "scout", "label": "Scout", "workers": [0, 2, 3, 4]},
-	"analisti": {"slug": "analista", "label": "Analista", "workers": [1, 2, 3]},
+	"analisti": {"slug": "analista", "label": "Analista", "workers": [0, 2, 3]},
 	"scorer": {"slug": "scorer", "label": "Scorer", "workers": [0, 2, 3]},
 	"scrittori": {"slug": "scrittore", "label": "Scrittore", "workers": [0, 2, 3, 4]},
 	"critici": {"slug": "critico", "label": "Critico", "workers": [1, 2, 3]},

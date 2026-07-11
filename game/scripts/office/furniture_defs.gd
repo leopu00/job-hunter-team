@@ -61,9 +61,12 @@ const ITEMS := [
 	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3090, 1455, 56, 56)},
 	{"id": "plant_palm_c", "kind": "plant_palm", "rect": Rect2(302, 1436, 56, 56)},
 
+	# ── Lab analisti: il TAVOLO LUNGO è loro (Leone batte il dado; poi
+	# d6=5 tavolo a muro, d5=2 analisti) — bench a muro nord, 3 sedute
+	# di spalle (le sedute sono desks "none" in DepartmentDefs).
+	{"id": "long_table", "kind": "long_table", "rect": Rect2(2430, 180, 600, 110), "facing": "up"},
+
 	# ── Corridoio sud, tra Scrittori e Critici ──
-	# tavolone condiviso pieno di fogli (esito del dado d3=3, asset dev-art)
-	{"id": "long_table", "kind": "long_table", "rect": Rect2(1400, 1600, 600, 110), "facing": "down"},
 	{"id": "desk_assistant", "kind": "desk", "rect": Rect2(1550, 1800, 230, 100)},
 
 	# tavolino revisione al centro dell'anello dei Critici (dado=6)
