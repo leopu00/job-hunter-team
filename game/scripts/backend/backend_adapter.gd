@@ -22,3 +22,19 @@ func start(_config: Dictionary) -> void:
 ## Ferma tutto e libera le risorse. Il bus pubblica DISCONNECTED da sé.
 func stop() -> void:
 	pass
+
+
+## ── Chat bidirezionale (opzionale: il mock può simulare) ─────────────
+
+## Tieni d'occhio la conversazione con l'agente (nome del sistema reale,
+## es. "capitano") e pubblica bus.agent_chat_updated a ogni giro.
+func open_chat(_agent: String) -> void:
+	pass
+
+func close_chat() -> void:
+	pass
+
+## Invia il messaggio dell'utente all'agente reale. Esito su
+## bus.user_chat_sent(agent, ok, error).
+func send_chat(_agent: String, _text: String) -> void:
+	pass
