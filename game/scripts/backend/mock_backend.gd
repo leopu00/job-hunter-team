@@ -57,18 +57,23 @@ const TRANSITIONS := [
 	{"by_agent": "scrittore-1", "from_state": "writing", "to_state": "ready", "title": "Senior Backend Engineer", "company": "TechNova"},
 ]
 
-## Eventi di roster ciclici: i worker dinamici vanno e vengono.
-## op: spawn | despawn | status; il ciclo li applica in sequenza.
+## Eventi di roster ciclici: i worker dinamici vanno e vengono, e i
+## nuovi stati della missione pipeline si vedono tutti — throttle breve
+## (attesa seduta), throttle lungo (dado ricreazione), killed (esce
+## dalla porta). op: spawn | despawn | status; applicati in sequenza.
 const ROSTER_EVENTS := [
 	{"op": "status", "slug": "analista-2", "status": "working"},
+	{"op": "status", "slug": "scout-2", "status": "throttled", "throttle_secs": 240.0},
 	{"op": "spawn", "slug": "scout-3", "role": "scout", "name": "Scout 03"},
+	{"op": "status", "slug": "scout-2", "status": "working"},
+	{"op": "status", "slug": "scorer-1", "status": "throttled", "throttle_secs": 45.0},
 	{"op": "despawn", "slug": "scout-2"},
-	{"op": "status", "slug": "scorer-1", "status": "idle"},
-	{"op": "spawn", "slug": "scrittore-1", "role": "scrittore", "name": "Scrittore Lead"},
+	{"op": "spawn", "slug": "scrittore-2", "role": "scrittore", "name": "Scrittore 02"},
 	{"op": "status", "slug": "scorer-1", "status": "working"},
 	{"op": "spawn", "slug": "scout-2", "role": "scout", "name": "Scout 02"},
+	{"op": "status", "slug": "scout-3", "status": "killed"},
 	{"op": "despawn", "slug": "scout-3"},
-	{"op": "despawn", "slug": "scrittore-1"},
+	{"op": "despawn", "slug": "scrittore-2"},
 	{"op": "status", "slug": "analista-2", "status": "idle"},
 ]
 
@@ -137,6 +142,7 @@ func _roster_loop() -> void:
 				for a in _roster:
 					if a["slug"] == ev["slug"]:
 						a["status"] = ev["status"]
+						a["throttle_secs"] = ev.get("throttle_secs", 0.0)
 						break
 		bus.publish_agents(_roster.duplicate(true))
 
