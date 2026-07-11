@@ -66,6 +66,9 @@ const ITEMS := [
 	{"id": "long_table", "kind": "long_table", "rect": Rect2(1400, 1600, 600, 110), "facing": "down"},
 	{"id": "desk_assistant", "kind": "desk", "rect": Rect2(1550, 1800, 230, 100)},
 
+	# tavolino revisione al centro dell'anello dei Critici (dado=6)
+	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2590, 1690, 120, 100)},
+
 	{"id": "plant_b", "kind": "plant", "rect": Rect2(1950, 860, 56, 56)},
 ]
 # Rimossi (i reparti hanno postazioni proprie in DepartmentDefs): lab_bench,

@@ -13,7 +13,7 @@ const AGENTS := {
 		"spot": Vector2(545, 706),
 		# il giro dei reparti: passa a controllare gli inbox, come i C-tick
 		"wander": [Vector2(1790, 1390), Vector2(2690, 790), Vector2(1965, 1400),
-				Vector2(1120, 1740), Vector2(2660, 1755), Vector2(1300, 930),
+				Vector2(1120, 1740), Vector2(2690, 1825), Vector2(1300, 930),
 				Vector2(1700, 1745)],  # sosta anche al tavolone condiviso
 		"chatter": [
 			"ricalibro il ritmo del team…",

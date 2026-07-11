@@ -95,7 +95,7 @@ const DEPARTMENTS := {
 		"tagline": "Revisionano ogni riga prima dell'invio",
 		"color": Color("#ff4560"),
 		"zone": Rect2(2150, 1520, 1010, 440),
-		"inbox": Vector2(2660, 1755),  # la pila delle revisioni al centro
+		"inbox": Vector2(2690, 1825),  # accanto al tavolino centrale
 		# dado=6: anello rivolto al centro (spazio per un pezzo di dev-art)
 		"desks": [
 			{"rect": Rect2(2480, 1550, 170, 78), "kind": "critici_a", "facing": "down"},
