@@ -15,6 +15,20 @@ import { useCallback, useState } from "react";
  */
 type ButtonState = "idle" | "loading" | "error";
 
+// Scarica via <a> anchor invece di window.open: l'apertura del file avviene
+// DOPO il polling async (fuori dal gesto del click) e in quel contesto i
+// popup-blocker del browser fermano window.open. Un anchor senza target verso
+// una URL con Content-Disposition: attachment scarica il file senza aprire
+// finestre → nessun blocco.
+function triggerDownload(url: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export function CvDownloadButton({
   fileName,
   cloudMode,
@@ -57,7 +71,7 @@ export function CvDownloadButton({
         const pr = await fetch(`/api/profile/files/request/${data.requestId}`);
         const pd = await pr.json();
         if (pd.status === "ready" && pd.url) {
-          window.open(pd.url, "_blank", "noopener,noreferrer");
+          triggerDownload(pd.url);
           setState("idle");
           return;
         }
