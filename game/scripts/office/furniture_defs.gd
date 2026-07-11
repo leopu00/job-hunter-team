@@ -39,7 +39,9 @@ const ITEMS := [
 	{"id": "desk_coordinator", "kind": "desk", "rect": Rect2(430, 720, 230, 100)},
 	{"id": "plant_c", "kind": "plant", "rect": Rect2(296, 930, 56, 56)},
 
-	# ── Corridoio sud, tra Scrittori e Critici: l'Assistente all'entrata ──
+	# ── Corridoio sud, tra Scrittori e Critici ──
+	# isola condivisa: tavolo lungo da 5 posti (asset dev-art, facing down)
+	{"id": "long_table", "kind": "long_table", "rect": Rect2(1100, 1510, 600, 110), "facing": "down"},
 	{"id": "desk_assistant", "kind": "desk", "rect": Rect2(1180, 1740, 230, 100)},
 
 	{"id": "plant_b", "kind": "plant", "rect": Rect2(2360, 1240, 56, 56)},

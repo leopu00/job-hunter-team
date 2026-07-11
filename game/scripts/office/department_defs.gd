@@ -32,11 +32,11 @@ const DEPARTMENTS := {
 		"inbox": Vector2(1640, 1365),
 		"desks": [
 			{"rect": Rect2(1040, 1006, 170, 78), "kind": "scout_a", "facing": "down"},
-			{"rect": Rect2(1272, 990, 170, 78), "kind": "scout_a", "facing": "down"},
+			{"rect": Rect2(1272, 990, 170, 78), "kind": "scout_b", "facing": "down"},
 			{"rect": Rect2(1496, 1012, 170, 78), "kind": "desk_d", "facing": "left"},
 			{"rect": Rect2(1030, 1240, 170, 78), "kind": "desk_e", "facing": "up"},
 			{"rect": Rect2(1262, 1228, 170, 78), "kind": "scout_a", "facing": "down"},
-			{"rect": Rect2(1498, 1246, 170, 78), "kind": "scout_a", "facing": "down"},
+			{"rect": Rect2(1498, 1246, 170, 78), "kind": "scout_b", "facing": "down"},
 		],
 	},
 	"analisti": {
@@ -47,10 +47,10 @@ const DEPARTMENTS := {
 		"inbox": Vector2(2106, 790),  # fuori dalla porta del lab
 		"desks": [
 			{"rect": Rect2(1848, 228, 170, 78), "kind": "analisti_a", "facing": "down"},
-			{"rect": Rect2(2132, 214, 170, 78), "kind": "analisti_a", "facing": "down"},
+			{"rect": Rect2(2132, 214, 170, 78), "kind": "analisti_b", "facing": "down"},
 			{"rect": Rect2(1840, 402, 170, 78), "kind": "desk_a", "facing": "right"},
 			{"rect": Rect2(2146, 392, 170, 78), "kind": "analisti_a", "facing": "down"},
-			{"rect": Rect2(1852, 570, 170, 78), "kind": "analisti_a", "facing": "down"},
+			{"rect": Rect2(1852, 570, 170, 78), "kind": "analisti_b", "facing": "down"},
 			{"rect": Rect2(2128, 562, 170, 78), "kind": "analisti_a", "facing": "down"},
 		],
 	},
@@ -63,7 +63,7 @@ const DEPARTMENTS := {
 		"desks": [
 			{"rect": Rect2(1776, 1004, 170, 78), "kind": "scorer_a", "facing": "down"},
 			{"rect": Rect2(2010, 986, 290, 110), "kind": "desk_wide", "facing": "down"},
-			{"rect": Rect2(1770, 1238, 170, 78), "kind": "scorer_a", "facing": "down"},
+			{"rect": Rect2(1770, 1238, 170, 78), "kind": "scorer_b", "facing": "down"},
 			{"rect": Rect2(2012, 1230, 170, 78), "kind": "desk_c", "facing": "up"},
 			{"rect": Rect2(2238, 1248, 170, 78), "kind": "scorer_a", "facing": "down"},
 			{"rect": Rect2(1908, 1334, 170, 78), "kind": "desk_b", "facing": "up"},
@@ -77,11 +77,11 @@ const DEPARTMENTS := {
 		"inbox": Vector2(1060, 1700),
 		"desks": [
 			{"rect": Rect2(352, 1524, 170, 78), "kind": "scrittori_a", "facing": "down"},
-			{"rect": Rect2(586, 1512, 170, 78), "kind": "scrittori_a", "facing": "down"},
+			{"rect": Rect2(586, 1512, 170, 78), "kind": "scrittori_b", "facing": "down"},
 			{"rect": Rect2(816, 1530, 170, 78), "kind": "desk_f", "facing": "right"},
 			{"rect": Rect2(346, 1758, 170, 78), "kind": "scrittori_a", "facing": "down"},
 			{"rect": Rect2(580, 1746, 170, 78), "kind": "desk_e", "facing": "up"},
-			{"rect": Rect2(812, 1764, 170, 78), "kind": "scrittori_a", "facing": "down"},
+			{"rect": Rect2(812, 1764, 170, 78), "kind": "scrittori_b", "facing": "down"},
 		],
 	},
 	"critici": {
@@ -93,9 +93,9 @@ const DEPARTMENTS := {
 		"desks": [
 			{"rect": Rect2(1772, 1522, 170, 78), "kind": "critici_a", "facing": "down"},
 			{"rect": Rect2(2004, 1510, 170, 78), "kind": "desk_c", "facing": "left"},
-			{"rect": Rect2(2228, 1528, 170, 78), "kind": "critici_a", "facing": "down"},
+			{"rect": Rect2(2228, 1528, 170, 78), "kind": "critici_b", "facing": "down"},
 			{"rect": Rect2(1766, 1756, 170, 78), "kind": "critici_a", "facing": "down"},
-			{"rect": Rect2(2010, 1748, 170, 78), "kind": "critici_a", "facing": "down"},
+			{"rect": Rect2(2010, 1748, 170, 78), "kind": "critici_b", "facing": "down"},
 			{"rect": Rect2(2224, 1766, 170, 78), "kind": "desk_d", "facing": "up"},
 		],
 	},
@@ -108,6 +108,8 @@ const POIS := {
 	"coffee": {"spot": Vector2(1500, 310)},
 	"water_cooler": {"spot": Vector2(1635, 300)},
 	"hologram": {"spot": Vector2(1300, 930)},
+	# isola condivisa nel corridoio sud (tavolo lungo, 5 posti lato camera)
+	"long_table": {"spot": Vector2(1400, 1660)},
 }
 
 ## La catena del valore dei fogli: chi ritira dall'inbox di chi.
