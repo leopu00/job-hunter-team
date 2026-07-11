@@ -1,28 +1,19 @@
 extends Node2D
-## La box: pavimento, mobili, luci, navigazione, giocatore e agenti.
-## Il layout vive in FurnitureDefs, il roster in CharacterDefs.
-
-const INTERACT_RANGE := 130.0
-const TALK_RELEASE_RANGE := 240.0
+## La box: pavimento, mobili, luci, navigazione e agenti al lavoro.
+## Nessun personaggio-utente: si osserva con la FreeCamera e si clicca
+## su agenti e reparti. Il layout vive in FurnitureDefs + DepartmentDefs,
+## il roster in CharacterDefs.
 
 var nav := NavGrid.new()
-var player: Player
 var world: Node2D
 var agents: Array[AgentNPC] = []
-var _near_agent: AgentNPC
-var _prompt: Label
+var _hover_agent: AgentNPC
 var _team_hud: TeamHud
-
-## Coda visite (loop invertito): dopo `delay` secondi l'agente viene da te.
-var _visit_plan := [
-	{"delay": 35.0, "slug": "scout", "tree": "scout_visit"},
-	{"delay": 150.0, "slug": "scorer", "tree": "scorer_visit"},
-]
-var _visit_clock := 0.0
-var _active_visit: AgentNPC
+var _camera: FreeCamera
 
 func _ready() -> void:
 	add_child(OfficeFloor.new())
+	add_child(DepartmentDressing.new())  # tinte/targhe dei 5 reparti (dev-art)
 	if OS.get_environment("JHT_ONLYFLOOR") == "1":  # TEST-AUTO
 		var c := Camera2D.new()
 		c.position = Vector2(1300, 750)
@@ -56,32 +47,19 @@ func _ready() -> void:
 
 	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles() + DepartmentDefs.obstacles())
 
-	player = Player.new()
-	player.nav = nav
-	player.position = Vector2(820, 1240)
-	world.add_child(player)
-
 	for slug in CharacterDefs.AGENTS:
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(slug, nav)
-		# un agente convocato col click apre il dialogo appena arriva
-		agent.arrived_to_player.connect(_start_talk)
 		agents.append(agent)
 
 	_add_maintainers()
 	_add_lights()
 	add_child(Sfx.make_ambient_hum())
 
-	var cam := Camera2D.new()
-	cam.limit_left = 0
-	cam.limit_top = 0
-	cam.limit_right = int(FurnitureDefs.WORLD.size.x)
-	cam.limit_bottom = int(FurnitureDefs.WORLD.size.y)
-	cam.position_smoothing_enabled = true
-	cam.position_smoothing_speed = 6.0
-	player.add_child(cam)
-	cam.make_current()
+	_camera = FreeCamera.new()
+	add_child(_camera)
+	_camera.clicked.connect(_on_world_click)
 
 	if OS.get_environment("JHT_OVERVIEW") == "1":  # TEST-AUTO: tutta la box in un frame
 		var ov := Camera2D.new()
@@ -107,27 +85,8 @@ func _take_shot(path: String) -> void:
 	print("JHT_SHOT salvato: ", path)
 	get_tree().quit()
 
-func _process(delta: float) -> void:
-	_update_near_agent()
-	_tick_visits(delta)
-
-## Fa partire le visite in programma, una alla volta.
-func _tick_visits(delta: float) -> void:
-	_visit_clock += delta
-	if _active_visit and not _active_visit.is_visiting():
-		_active_visit = null
-	if _active_visit == null and not _visit_plan.is_empty() \
-			and _visit_clock >= float(_visit_plan[0]["delay"]) \
-			and not Game.dialogue_active:
-		var spec: Dictionary = _visit_plan.pop_front()
-		for agent in agents:
-			if agent.slug == spec["slug"]:
-				agent.start_visit(player, spec["tree"])
-				_active_visit = agent
-				Sfx.play_blip()
-				break
-	if _team_hud:
-		_team_hud.set_visit(_active_visit.display_name if _active_visit else "")
+func _process(_delta: float) -> void:
+	_update_hover()
 
 var _registry: RegistryPanel
 
@@ -142,76 +101,53 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_registry = RegistryPanel.new()
 			add_child(_registry)
+
+## Click "pulito" dalla FreeCamera: agente > bacheca > reparto.
+func _on_world_click(target: Vector2) -> void:
+	if Game.dialogue_active:
 		return
 	if _registry:
-		return  # col registro aperto, il mondo non riceve input
-	if event.is_action_pressed("interact"):
-		if _near_agent:
-			_start_talk(_near_agent)
-		elif _near_corkboard():
-			_registry = RegistryPanel.new()
-			add_child(_registry)
-		return
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT \
-			and event.pressed:
-		var target := get_global_mouse_position()
-		for agent in agents:
-			if agent.hit_by(target):
-				if agent.global_position.distance_to(player.global_position) <= INTERACT_RANGE:
-					_start_talk(agent)
-				else:
-					agent.summon(player)  # wave-to-summon alla Gather
-				return
-		if FurnitureDefs.FLOOR.has_point(target):
-			player.set_click_target(target)
-			var marker := ClickMarker.new()
-			marker.position = target
-			add_child(marker)
-
-# ── Interazione di prossimità ─────────────────────────────────────────
-
-func _update_near_agent() -> void:
-	var best: AgentNPC = null
-	var best_d := INTERACT_RANGE
+		return  # col registro aperto, il mondo non riceve click
 	for agent in agents:
-		var d := agent.global_position.distance_to(player.global_position)
-		if d < best_d:
-			best_d = d
-			best = agent
-		# un agente convocato o in ascolto torna al lavoro se ti allontani
-		if agent.is_talking() and not Game.dialogue_active \
-				and d > TALK_RELEASE_RANGE:
-			agent.end_talk()
-	if best != _near_agent:
-		if _near_agent:
-			_near_agent.set_highlight(false)
-		_near_agent = best
-		if _near_agent:
-			_near_agent.set_highlight(true)
-			Sfx.play_tick()
-	if _near_agent:
-		_prompt.text = UIStrings.t("hud.interact") % _near_agent.display_name
-	elif _near_corkboard():
-		_prompt.text = UIStrings.t("hud.corkboard")
-	_prompt.visible = (_near_agent != null or _near_corkboard()) \
-			and not Game.dialogue_active
+		if agent.hit_by(target):
+			_start_talk(agent)
+			return
+	if FurnitureDefs.get_rect("corkboard").grow(30).has_point(target):
+		_registry = RegistryPanel.new()
+		add_child(_registry)
+		return
+	var dept := DepartmentDefs.department_at(target)
+	if dept != "":
+		# pannello reparto in arrivo (M-reparti); intanto feedback sonoro
+		Sfx.play_tick()
+		print("[office] click sul reparto: ", dept)
 
-## Vicino alla bacheca-indagine sul muro nord (registro diegetico).
-func _near_corkboard() -> bool:
-	var board := FurnitureDefs.get_rect("corkboard").get_center() + Vector2(0, 60)
-	return player.global_position.distance_to(board) < 150.0
+# ── Hover col mouse (evidenzia l'agente cliccabile) ───────────────────
+
+func _update_hover() -> void:
+	var best: AgentNPC = null
+	if not Game.dialogue_active:
+		var mouse := get_global_mouse_position()
+		for agent in agents:
+			if agent.hit_by(mouse):
+				best = agent
+				break
+	if best != _hover_agent:
+		if _hover_agent:
+			_hover_agent.set_highlight(false)
+		_hover_agent = best
+		if _hover_agent:
+			_hover_agent.set_highlight(true)
+			Sfx.play_tick()
 
 func _start_talk(agent: AgentNPC) -> void:
 	if Game.dialogue_active:
 		return
-	agent.start_talk(player)
-	player.stop()
+	agent.start_talk()
 	var ui := DialogueUI.new()
 	add_child(ui)
-	ui.open(agent.slug, agent.display_name, agent.visit_tree)
+	ui.open(agent.slug, agent.display_name, "")
 	ui.closed.connect(func() -> void:
-		if agent.is_visiting():
-			agent.visit_done()
 		agent.end_talk())
 
 # ── Costruzione scena ─────────────────────────────────────────────────
@@ -227,8 +163,7 @@ func _add_maintainers() -> void:
 		holder.position = spec["pos"]
 		holder.modulate = Color(0.72, 0.75, 0.9)
 		add_child(holder)  # fuori dal World: niente Y-sort né collisioni
-		var rig := CharacterRig.new()
-		rig.setup(CharacterDefs.agent_textures("maintainer"))
+		var rig := CharacterDefs.make_rig("maintainer")
 		rig.scale *= 1.08
 		holder.add_child(rig)
 		rig.set_motion(spec["facing"], false, "idle")
@@ -312,19 +247,11 @@ func _add_hud() -> void:
 	_team_hud = TeamHud.new()
 	theme_root.add_child(_team_hud)
 	var hint := TerminalTheme.label(
-			"WASD / frecce per muoverti · click per andare · TAB registro · ESC menu",
+			"trascina o WASD per la camera · rotella zoom · click su agenti e reparti · TAB registro · ESC menu",
 			15, Palette.DIM)
 	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	hint.position = Vector2(-hint.size.x / 2.0, -30)
 	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	hud.add_child(hint)
-	_prompt = TerminalTheme.label("", 22, Palette.GREEN, "medium")
-	_prompt.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_prompt.position = Vector2(0, -76)
-	_prompt.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_prompt.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_prompt.visible = false
-	hud.add_child(_prompt)
 

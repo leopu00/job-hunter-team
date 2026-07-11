@@ -1,27 +1,14 @@
 extends Node
 ## Autoload `Game`: stato globale, profilo giocatore, cambio scena, pausa.
 
-enum State { TITLE, WIZARD, OFFICE }
+enum State { TITLE, OFFICE }
 
 const SCENE_TITLE := "res://scenes/title.tscn"
-const SCENE_WIZARD := "res://scenes/wizard.tscn"
 const SCENE_OFFICE := "res://scenes/office.tscn"
 
 var state: State = State.TITLE
 ## True mentre un dialogo a ritratti è aperto (blocca movimento e pausa-rapida).
 var dialogue_active := false
-## Alzato dal wizard: l'ufficio si apre con le porte dell'ascensore.
-var arrive_via_elevator := false
-
-## Profilo scelto nel wizard; solo in memoria, niente salvataggio (prototipo).
-var profile := {
-	"base": 0,          # indice corporatura avatar
-	"hair": 0,          # indice taglio capelli
-	"hair_color": 0,    # indice colore capelli
-	"outfit": 0,        # indice colore abito
-	"team_name": "",
-	"cv_name": "",      # nome file del CV "caricato"
-}
 
 var _pause_menu: Node = null
 
@@ -38,14 +25,9 @@ func _enter_tree() -> void:
 	_apply_fullscreen(OS.get_environment("JHT_WINDOWED") != "1")
 
 func _ready() -> void:
-	# Scorciatoia per i test: JHT_SCENE=office|wizard|title salta il boot.
-	var target := OS.get_environment("JHT_SCENE")
-	if OS.get_environment("JHT_ELEVATOR") == "1":
-		arrive_via_elevator = true
-	if target == "office":
+	# Scorciatoia per i test: JHT_SCENE=office salta il boot.
+	if OS.get_environment("JHT_SCENE") == "office":
 		goto_office.call_deferred()
-	elif target == "wizard":
-		goto_wizard.call_deferred()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("fullscreen"):
@@ -62,13 +44,6 @@ func _unhandled_input(event: InputEvent) -> void:
 func goto_title() -> void:
 	state = State.TITLE
 	get_tree().change_scene_to_file(SCENE_TITLE)
-
-func goto_wizard() -> void:
-	if not ResourceLoader.exists(SCENE_WIZARD):
-		goto_office()  # fallback finché il wizard non è implementato (M4)
-		return
-	state = State.WIZARD
-	get_tree().change_scene_to_file(SCENE_WIZARD)
 
 func goto_office() -> void:
 	state = State.OFFICE
@@ -129,7 +104,6 @@ func _register_inputs() -> void:
 	_add_key_action("move_right", [KEY_D, KEY_RIGHT])
 	_add_key_action("move_up", [KEY_W, KEY_UP])
 	_add_key_action("move_down", [KEY_S, KEY_DOWN])
-	_add_key_action("interact", [KEY_E])
 	_add_key_action("registry", [KEY_TAB])
 	_add_key_action("pause", [KEY_ESCAPE])
 	_add_key_action("fullscreen", [KEY_F11])

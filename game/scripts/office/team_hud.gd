@@ -5,15 +5,7 @@ extends BracketPanel
 var _positions: Label
 var _score: Label
 var _budget: ProgressBar
-var _visit_row: HBoxContainer
-var _visit_label: Label
 var _accum := 9.0  # aggiorna subito al primo frame
-
-## Mostra chi è in arrivo alla tua scrivania (coda visite).
-func set_visit(display_name: String) -> void:
-	_visit_row.visible = not display_name.is_empty()
-	if not display_name.is_empty():
-		_visit_label.text = display_name
 
 func _ready() -> void:
 	super._ready()
@@ -26,9 +18,7 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 6)
 	margin.add_child(box)
 
-	var team_name: String = Game.profile["team_name"]
-	if team_name.is_empty():
-		team_name = UIStrings.t("wizard.team_default")
+	var team_name := UIStrings.t("hud.team_default")
 	var title_row := HBoxContainer.new()
 	title_row.add_theme_constant_override("separation", 10)
 	box.add_child(title_row)
@@ -50,16 +40,6 @@ func _ready() -> void:
 	_budget.max_value = 1.0
 	_budget.show_percentage = false
 	budget_row.add_child(_budget)
-
-	_visit_row = HBoxContainer.new()
-	_visit_row.add_theme_constant_override("separation", 12)
-	_visit_row.visible = false
-	box.add_child(_visit_row)
-	var visit_tag := TerminalTheme.label(UIStrings.t("hud.visit"), 15, Palette.YELLOW, "medium")
-	visit_tag.custom_minimum_size = Vector2(190, 0)
-	_visit_row.add_child(visit_tag)
-	_visit_label = TerminalTheme.label("", 16, Palette.YELLOW, "bold")
-	_visit_row.add_child(_visit_label)
 
 func _process(delta: float) -> void:
 	_accum += delta

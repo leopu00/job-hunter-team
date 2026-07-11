@@ -6,12 +6,6 @@ class_name CharacterDefs
 const GEN := "res://assets/characters/gen/"
 const SHEETS := "res://assets/characters/sheets/"
 
-## Varianti avatar giocatore (usate dal rig e dal wizard M4).
-const PLAYER_BASES := ["a", "b", "c"]
-const PLAYER_HAIR_STYLES := ["short", "long", "curly"]
-const PLAYER_HAIR_COLORS := [Color("#2b2018"), Color("#6b4a2a"), Color("#b8863b"), Color("#8a8a92")]
-const PLAYER_OUTFIT_COLORS := [Color("#3d5a4a"), Color("#3a4258"), Color("#5a4a58"), Color("#4a4438")]
-
 const AGENTS := {
 	"coordinatore": {
 		"name": "Il Coordinatore",
@@ -104,25 +98,3 @@ static func agent_textures(slug: String) -> Dictionary:
 		t["leg_front"] = load(base + "leg_front.svg")
 		t["leg_side"] = load(base + "leg_side.svg")
 	return t
-
-## Texture + tinte del rig giocatore a partire dal profilo (Game.profile).
-static func player_textures(profile: Dictionary) -> Dictionary:
-	var base: String = PLAYER_BASES[clampi(profile["base"], 0, PLAYER_BASES.size() - 1)]
-	var style: String = PLAYER_HAIR_STYLES[clampi(profile["hair"], 0, PLAYER_HAIR_STYLES.size() - 1)]
-	var d := GEN + "player/"
-	return {
-		"head_front": load(d + "head_%s_front.svg" % base),
-		"head_side": load(d + "head_%s_side.svg" % base),
-		"head_back": load(d + "head_%s_back.svg" % base),
-		"torso_front": load(d + "torso_%s_front.svg" % base),
-		"torso_side": load(d + "torso_%s_side.svg" % base),
-		"leg_front": load(d + "leg_front.svg"),
-		"leg_side": load(d + "leg_side.svg"),
-		"hair_front": load(d + "hair_%s_front.svg" % style),
-		"hair_side": load(d + "hair_%s_side.svg" % style),
-		"hair_back": load(d + "hair_%s_back.svg" % style),
-		"jacket_front": load(d + "jacket_front.svg"),
-		"jacket_side": load(d + "jacket_side.svg"),
-		"hair_tint": PLAYER_HAIR_COLORS[clampi(profile["hair_color"], 0, PLAYER_HAIR_COLORS.size() - 1)],
-		"jacket_tint": PLAYER_OUTFIT_COLORS[clampi(profile["outfit"], 0, PLAYER_OUTFIT_COLORS.size() - 1)],
-	}
