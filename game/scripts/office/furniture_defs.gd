@@ -100,6 +100,10 @@ const ITEMS := [
 	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(1214, 1092, 60, 72)},
 	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(2100, 1058, 60, 72)},
 	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(774, 1545, 60, 72)},
+	# in coda da dev-art (post-reset Codex): footprint già pronti
+	{"id": "dartboard", "kind": "nc_dartboard", "rect": Rect2(254, 1010, 36, 36)},
+	{"id": "wall_art", "kind": "nc_wall_art", "rect": Rect2(2040, 150, 90, 60)},
+	{"id": "sideboard", "kind": "nc_sideboard", "rect": Rect2(1830, 1815, 180, 70)},
 ]
 # Rimossi (i reparti hanno postazioni proprie in DepartmentDefs): lab_bench,
 # lab_shelf, shelf_right, desk_scout, desk_pod, desk_scorer.
