@@ -71,6 +71,10 @@ func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
 func disconnect_backend() -> void:
 	set_backend(null)
 
+## Dati VERI in arrivo dalla VPS? (per il badge SIMULAZIONE / LIVE)
+func is_live() -> bool:
+	return state == CONNECTED and _backend != null and _backend.live
+
 
 ## ── Configurazione VPS (voce Impostazioni → Collega VPS) ─────────────
 

@@ -8,6 +8,10 @@ extends RefCounted
 
 var bus: Node  # il BackendBus, iniettato da set_backend()
 
+## true solo per i backend con dati VERI (VpsBackend): il badge
+## SIMULAZIONE del gioco si spegne quando l'adapter live è CONNECTED.
+var live := false
+
 
 ## Avvia la sorgente (connessioni, timer, polling). Deve portare il bus
 ## a CONNECTED via bus.publish_state() quando i dati iniziano a fluire.
