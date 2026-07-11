@@ -405,6 +405,11 @@ func _face_point(p: Vector2) -> void:
 func _bubble_tick(delta: float) -> void:
 	if state == S.TALK:
 		return
+	# coi dati VERI il chatter di ambientazione tace: sotto il badge
+	# "DATI REALI" parlano solo i messaggi autentici (SpeechBubble)
+	if BackendBus.is_live():
+		bubble.hide_now()
+		return
 	_bubble_timer -= delta
 	if _bubble_timer <= 0.0:
 		_bubble_timer = randf_range(8.0, 16.0)

@@ -65,6 +65,11 @@ func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
 func disconnect_backend() -> void:
 	set_backend(null)
 
+## true quando in scena scorrono dati REALI: VPS collegata e connessa.
+## Tutto il resto (mock, roster di ambientazione) è simulazione.
+func is_live() -> bool:
+	return state == CONNECTED and _backend != null and _backend.live
+
 
 ## ── Configurazione VPS (voce Impostazioni → Collega VPS) ─────────────
 
