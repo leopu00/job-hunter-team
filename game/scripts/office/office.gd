@@ -52,9 +52,13 @@ func _ready() -> void:
 
 	for r in [FurnitureDefs.LAB_WALL_V, FurnitureDefs.LAB_WALL_H1, FurnitureDefs.LAB_WALL_H2]:
 		world.add_child(_invisible_wall(r))
+	# vetrate dei reparti: collisioni sottili, il visual è in OfficeFloor
+	for r in DepartmentDefs.GLASS_WALLS:
+		world.add_child(_invisible_wall(r))
 	_add_perimeter_walls()
 
-	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles() + DepartmentDefs.obstacles())
+	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles()
+			+ DepartmentDefs.obstacles() + DepartmentDefs.GLASS_WALLS)
 
 	for def in CharacterDefs.spawn_list():
 		var agent := AgentNPC.new()

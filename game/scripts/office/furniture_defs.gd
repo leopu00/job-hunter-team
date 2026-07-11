@@ -73,6 +73,33 @@ const ITEMS := [
 	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2590, 1690, 120, 100)},
 
 	{"id": "plant_b", "kind": "plant", "rect": Rect2(1950, 860, 56, 56)},
+
+	# ── Ciclo grafica 11/07: "aggiungete, aggiungete, aggiungete" ──
+	# Props ufficio classico, kind nc_* (PNG in arrivo da dev-art con lo
+	# stesso nome: si vestono da soli, intanto blockout).
+	# Lavagne bianche: una per reparto, appoggiate alle vetrate/pareti.
+	{"id": "wb_scout", "kind": "nc_whiteboard", "rect": Rect2(1640, 856, 150, 34)},
+	{"id": "wb_analisti", "kind": "nc_whiteboard", "rect": Rect2(2340, 706, 150, 34)},
+	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(2050, 1446, 150, 34)},
+	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(380, 1414, 150, 34)},
+	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2800, 1446, 150, 34)},
+	# Sala relax: calcio balilla accanto al ping-pong (reference)
+	{"id": "rec_foosball", "kind": "nc_foosball", "rect": Rect2(430, 1165, 150, 90)},
+	# Scatoloni e schedari: l'ufficio vive
+	{"id": "boxes_printer", "kind": "nc_boxes", "rect": Rect2(1800, 200, 80, 66)},
+	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(3060, 1900, 80, 66)},
+	{"id": "boxes_scrittori", "kind": "nc_boxes", "rect": Rect2(1100, 1900, 80, 66)},
+	{"id": "filing_lab", "kind": "nc_filing_cabinet", "rect": Rect2(3080, 250, 70, 110)},
+	{"id": "filing_coord", "kind": "nc_filing_cabinet", "rect": Rect2(680, 700, 70, 110)},
+	# Dettagli: appendiabiti all'entrata sud, orologio a muro, cestini,
+	# cassettiere a fianco delle scrivanie
+	{"id": "coat_rack", "kind": "nc_coat_rack", "rect": Rect2(1500, 1780, 50, 50)},
+	{"id": "wall_clock", "kind": "nc_wall_clock", "rect": Rect2(1260, 150, 60, 60)},
+	{"id": "bin_printer", "kind": "nc_waste_bin", "rect": Rect2(1640, 250, 40, 40)},
+	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(1240, 1120, 40, 40)},
+	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(1214, 1092, 60, 72)},
+	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(2100, 1058, 60, 72)},
+	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(774, 1545, 60, 72)},
 ]
 # Rimossi (i reparti hanno postazioni proprie in DepartmentDefs): lab_bench,
 # lab_shelf, shelf_right, desk_scout, desk_pod, desk_scorer.

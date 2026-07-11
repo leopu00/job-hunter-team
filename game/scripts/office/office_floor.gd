@@ -144,6 +144,17 @@ func _draw() -> void:
 	_glass_line(Vector2(FurnitureDefs.LAB_WALL_H2.position.x, FurnitureDefs.LAB_WALL_H2.get_center().y),
 			Vector2(FurnitureDefs.LAB_WALL_H2.end.x, FurnitureDefs.LAB_WALL_H2.get_center().y), 0.55)
 
+	# vetrate dei reparti (layout reference; footprint in DepartmentDefs,
+	# stesso stile dei vetri del lab)
+	for r in DepartmentDefs.GLASS_WALLS:
+		var g: Rect2 = r
+		if g.size.x >= g.size.y:
+			_glass_line(Vector2(g.position.x, g.get_center().y),
+					Vector2(g.end.x, g.get_center().y), 0.55)
+		else:
+			_glass_line(Vector2(g.get_center().x, g.position.y),
+					Vector2(g.get_center().x, g.end.y), 0.55)
+
 ## Blockout pittorico procedurale (usato solo senza texture gen-art).
 func _procedural_floor(rng: RandomNumberGenerator, floor_rect: Rect2) -> void:
 	# 1. macchie tonali larghe (valore prima del colore: variazioni sotto il 6%)

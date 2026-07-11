@@ -113,6 +113,30 @@ const DEPARTMENTS := {
 	},
 }
 
+## Vetrate dei reparti (reference Codex, ciclo grafica 11/07): pannelli
+## PARZIALI di vetro con varchi larghi, mai gabbie chiuse. Regole nav
+## (celle 32px, margine 16): vetro ad almeno ~95px dalle scrivanie e
+## varchi >=160px, o si torna agli "agenti incastrati". La linea a
+## y=1480 è CONDIVISA: sud degli Scorer e nord dei Critici insieme.
+## Il lab degli Analisti ha già i suoi vetri (LAB_WALL_* in
+## FurnitureDefs). Visual: _glass_line in OfficeFloor, stesso stile lab.
+const GLASS_WALLS := [
+	# Scout: nord (varco centrale verso l'ologramma) + est (varco sud
+	# verso l'inbox); sud e ovest aperti sui corridoi
+	Rect2(1030, 896, 260, 12),
+	Rect2(1600, 896, 260, 12),
+	Rect2(1904, 976, 12, 264),
+	# linea condivisa Scorer/Critici con porta larga al centro
+	Rect2(1990, 1480, 460, 12),
+	Rect2(2660, 1480, 490, 12),
+	# Scrittori: nord (varco verso la sala relax) + est (porta sud)
+	Rect2(360, 1448, 340, 12),
+	Rect2(860, 1448, 300, 12),
+	Rect2(1204, 1560, 12, 160),
+	# Critici: ovest con porta sud
+	Rect2(2126, 1500, 12, 260),
+]
+
 ## POI condivisi dei behavior: mete dei viaggi "si vede che lavorano".
 ## "spot" = dove l'agente si ferma (punto camminabile davanti al prop).
 const POIS := {
