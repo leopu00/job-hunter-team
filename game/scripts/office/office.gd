@@ -429,12 +429,42 @@ const TR_PRINT := ["writing", "ready"]
 var _tr_seen: Dictionary = {}
 var _tr_baseline := false
 
+## Fase della pipeline → inbox di reparto: la pila fisica mostra il
+## contatore VERO (missione pipeline 2/3). L'inbox di un reparto è ciò
+## che ha PRODOTTO e che il reparto a valle viene a ritirare.
+const PILE_PHASE := {
+	"scout": "to_analyze",
+	"analisti": "analyzed",
+	"scorer": "with_score",
+	"scrittori": "to_write",
+	"critici": "written",
+}
+
+## Contatore reale → fogli visibili: scala in radice (i numeri veri
+## arrivano a decine) col cap della pila; 0 resta 0.
+static func _pile_visual(n: int) -> int:
+	if n <= 0:
+		return 0
+	return mini(int(ceil(sqrt(float(n)) * 1.9)), PaperPile.MAX_SHEETS)
+
+func _sync_piles() -> void:
+	var counts: Dictionary = BackendBus.pipeline_counts()
+	for dept_id in PILE_PHASE:
+		if PaperPile.inbox.has(dept_id):
+			PaperPile.inbox[dept_id].set_target(
+					_pile_visual(int(counts[PILE_PHASE[dept_id]])))
+	Log.debug("scene", "pile agganciate ai counts: %s" % str(counts))
+
 ## Le transizioni di stato REALI muovono la scena: a ogni refresh del
 ## jobs.db (BackendBus.transitions è già aggiornato quando arriva
 ## positions_updated) quelle mai viste diventano reazioni dell'agente
 ## che le ha firmate. Il primo snapshot fa solo da baseline: lo storico
 ## non va recitato all'avvio.
 func _on_transitions(_positions: Array) -> void:
+	# con uno snapshot VERO le pile seguono i contatori reali; senza
+	# posizioni (mock/offline) resta il teatro simulato del restock
+	if not BackendBus.positions.is_empty():
+		_sync_piles()
 	var fresh: Array = []
 	for t in BackendBus.transitions:
 		var key := "%s|%s|%s|%s" % [str(t.get("position_id", "")),
