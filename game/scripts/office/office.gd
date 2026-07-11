@@ -142,6 +142,11 @@ func _ready() -> void:
 	if OS.get_environment("JHT_BACKEND_TEST") == "1":
 		BackendBus.set_backend(MockBackend.new())
 
+	# TEST-AUTO: JHT_CHAT=<ruolo> apre il pannello chat col primo agente
+	# di quel ruolo e invia un messaggio di prova (eco + risposta mock).
+	if OS.get_environment("JHT_CHAT") != "":
+		_chat_selftest(OS.get_environment("JHT_CHAT"))
+
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
 	var shot := OS.get_environment("JHT_SHOT")
@@ -150,6 +155,18 @@ func _ready() -> void:
 
 func _on_chat_message(msg: Dictionary) -> void:
 	deliver_chat(msg.get("from", ""), msg.get("to", "all"), msg.get("text", ""))
+
+## Aspetta che il backend abbia popolato la scena, poi apre la chat e
+## scrive: il giro completo utente→canale→risposta si vede da solo.
+func _chat_selftest(role: String) -> void:
+	await get_tree().create_timer(2.5).timeout
+	for a in agents:
+		if a.slug == role or a.uid.begins_with(role):
+			_open_chat(a)
+			await get_tree().create_timer(0.5).timeout
+			BackendBus.send_chat(a.uid if a.uid != "" else a.slug,
+					"Come procede il lavoro?")
+			return
 
 func _take_shot(path: String) -> void:
 	# JHT_SHOT_DELAY=N ritarda lo scatto: utile per fotografare la
@@ -188,7 +205,7 @@ var _agent_card: AgentCard
 func _on_world_click(target: Vector2) -> void:
 	if Game.dialogue_active:
 		return
-	if _registry or _dept_panel or _agent_card:
+	if _registry or _dept_panel or _agent_card or _chat_panel:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
@@ -240,11 +257,26 @@ func _open_agent_card(agent: AgentNPC) -> void:
 	_agent_card = AgentCard.new(agent)
 	add_child(_agent_card)
 	_agent_card.talk_requested.connect(func() -> void: _start_talk(agent))
+	_agent_card.chat_requested.connect(func() -> void: _open_chat(agent))
 	_agent_card.closed.connect(func() -> void:
 		_agent_card = null
 		# l'agente può essersi dissolto (despawn backend) a scheda aperta
 		if is_instance_valid(agent) and not agent.is_dissolving() \
 				and not Game.dialogue_active:
+			agent.end_talk())
+
+var _chat_panel: ChatPanel
+
+## Chat REALE con l'agente: l'uid backend quando c'è (VPS), altrimenti
+## il ruolo — il canale (vero o mock) risolve il destinatario.
+func _open_chat(agent: AgentNPC) -> void:
+	var uid := agent.uid if agent.uid != "" else agent.slug
+	Log.info("chat", "pannello chat aperto con " + uid)
+	_chat_panel = ChatPanel.new(uid, agent.display_name)
+	add_child(_chat_panel)
+	_chat_panel.closed.connect(func() -> void:
+		_chat_panel = null
+		if is_instance_valid(agent) and not agent.is_dissolving():
 			agent.end_talk())
 
 func _start_talk(agent: AgentNPC) -> void:

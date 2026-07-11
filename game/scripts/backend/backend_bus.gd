@@ -34,6 +34,8 @@ var state: int = DISCONNECTED
 var state_detail := ""
 var agents: Array = []     # ultimo snapshot pubblicato (per chi arriva tardi)
 var positions: Array = []  # ultimo snapshot posizioni (idem)
+var chat_log: Array = []   # ultimi messaggi di chat (storico per i pannelli)
+const CHAT_LOG_MAX := 200
 
 var _backend: BackendAdapter
 
@@ -75,6 +77,18 @@ func disconnect_backend() -> void:
 func is_live() -> bool:
 	return state == CONNECTED and _backend != null and _backend.live
 
+## Invio utente → agente (contratto additivo, chat 19:0x): il messaggio
+## viene rieccheggiato subito sul bus (il pannello lo mostra senza
+## aspettare il giro ssh) e inoltrato all'adapter, che lo inietta nel
+## canale reale del team (tmux sulla VPS) o lo simula (mock).
+func send_chat(to_slug: String, text: String) -> void:
+	publish_chat({
+		"ts": Time.get_datetime_string_from_system(),
+		"from": "user", "to": to_slug, "text": text,
+	})
+	if _backend:
+		_backend.send_chat(to_slug, text)
+
 
 ## ── Configurazione VPS (voce Impostazioni → Collega VPS) ─────────────
 
@@ -112,6 +126,9 @@ func publish_agents(list: Array) -> void:
 func publish_chat(msg: Dictionary) -> void:
 	Log.debug("backend", "chat %s→%s: %s" % [msg.get("from", "?"),
 			msg.get("to", "?"), str(msg.get("text", "")).left(60)])
+	chat_log.append(msg)
+	while chat_log.size() > CHAT_LOG_MAX:
+		chat_log.pop_front()
 	chat_message.emit(msg)
 
 func publish_positions(list: Array) -> void:
