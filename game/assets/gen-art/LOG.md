@@ -104,6 +104,29 @@ Lezione: quando il modello ha un bias di palette persistente (3 iter uguali),
 smettere di re-promptare e correggere in post con maschere — il framing fisso
 dei ritratti rende le maschere spaziali riusabili tra le varianti.
 
+### 2026-07-11 — Spritesheet agenti in-world (missione reparti, sessione img-dev1-*)
+
+| sheet | file | iter | esito |
+|---|---|---|---|
+| Scout | characters/sheets/scout_a.png | 2 | ✅ v1 flat-vector con SCRIVANIA dipinta dentro i frame work; v2 pittorica, braccia leggibili, desk rimossa |
+| Analista | characters/sheets/analista_a.png | 1 | ✅ donna, chignon, camice bianco (dal ritratto) |
+| Scorer | characters/sheets/scorer_a.png | 1 | ✅ completo navy dal ritratto |
+| Scrittore | characters/sheets/scrittore_a.png | 1 | ✅ cardigan marrone + gilet oliva (da agents-writer.png) |
+| Critico | characters/sheets/critico_a.png | 1 | ✅ parrucca da giudice + toga (da agents-critic.png) |
+
+Contratto formato in `game/docs/SPRITES.md` (griglia 6×12, celle 128×192,
+piedi a (64,180), tracce idle/walk/work/carry × down/up/side). Audit
+automatizzato (scratchpad/audit_sheet.py): piedi ±6px ovunque, alpha torso
+≥250 (245-247 nelle side, bordo morbido nel campione: accettato).
+
+Lezioni nuove: (1) per SERIE di personaggi coerenti conviene UNA conversazione
+sola: prima un prototipo approvato, poi far parametrizzare a Codex lo stesso
+script (config per-personaggio) — 4 sheet successivi tutti al primo colpo,
+stile identico garantito; (2) nei prompt di pose "work/typing" specificare
+SENZA arredi: "standing at a desk" fa dipingere la scrivania nel frame;
+(3) l'Esc per liberare la coda interrompe ANCHE il messaggio appena inviato
+se il turno precedente è ancora vivo: dopo l'Esc controllare e re-inviare.
+
 ## Note su come promptare Codex
 
 1. **Fargli aprire i riferimenti PRIMA di generare**: iniziare il prompt con

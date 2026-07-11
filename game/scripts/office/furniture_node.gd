@@ -10,6 +10,14 @@ const FRONT_H := 26.0  # altezza della faccia frontale (effetto 3/4)
 const KIND_COLORS := {
 	"desk": [Color("#5e4a33"), Color("#453624"), Color("#16161d")],
 	"desk_wide": [Color("#3a3a46"), Color("#26262f"), Color("#16161d")],
+	# varianti reparto (ufficio caotico-creativo): legni e vernici diversi
+	"desk_a": [Color("#5e4a33"), Color("#453624"), Color("#16161d")],
+	"desk_b": [Color("#6b5a45"), Color("#4e4232"), Color("#16161d")],
+	"desk_c": [Color("#4a4438"), Color("#363228"), Color("#16161d")],
+	"desk_d": [Color("#543f35"), Color("#3d2e26"), Color("#16161d")],
+	"desk_e": [Color("#3d4a52"), Color("#2b363d"), Color("#16161d")],
+	"desk_f": [Color("#5a4a58"), Color("#423645"), Color("#16161d")],
+	"printer": [Color("#3a3a46"), Color("#26262f"), Color("#b8b8d0")],
 	"table_low": [Color("#4a3b29"), Color("#352a1d"), Color("#16161d")],
 	"sofa": [Color("#333f5c"), Color("#252e44"), Color("#1a2032")],
 	"armchair": [Color("#3c4866"), Color("#2a3349"), Color("#1a2032")],
@@ -37,6 +45,13 @@ const GEN_ART := {
 	"lamp": "res://assets/gen-art/furniture/floor_lamp.png",
 	"corkboard": "res://assets/gen-art/furniture/corkboard.png",
 	"water_cooler": "res://assets/gen-art/furniture/water_cooler.png",
+	"desk_a": "res://assets/gen-art/furniture/desk_a.png",
+	"desk_b": "res://assets/gen-art/furniture/desk_b.png",
+	"desk_c": "res://assets/gen-art/furniture/desk_c.png",
+	"desk_d": "res://assets/gen-art/furniture/desk_d.png",
+	"desk_e": "res://assets/gen-art/furniture/desk_e.png",
+	"desk_f": "res://assets/gen-art/furniture/desk_f.png",
+	"printer": "res://assets/gen-art/furniture/printer.png",
 }
 
 var item: Dictionary
@@ -108,12 +123,17 @@ func _draw() -> void:
 	draw_rect(top, Color(0, 0, 0, 0.22), false, 1.5)
 	draw_rect(top.grow(1.5), Color(0, 0, 0, 0.12), false, 1.0)
 	# dettaglio semplice per riconoscere il mobile a colpo d'occhio
+	if kind.begins_with("desk"):
+		# monitor sul piano (tutte le varianti desk_a..f e la wide)
+		var mw := w * 0.32
+		draw_rect(Rect2(Vector2(-mw / 2.0, -h + 8), Vector2(mw, 26)), cols[2])
+		draw_rect(Rect2(Vector2(-mw / 2.0 + 3, -h + 11), Vector2(mw - 6, 20)), Color("#0e1a14"))
+		return
 	match kind:
-		"desk", "desk_wide":
-			# monitor sul piano
-			var mw := w * 0.32
-			draw_rect(Rect2(Vector2(-mw / 2.0, -h + 8), Vector2(mw, 26)), cols[2])
-			draw_rect(Rect2(Vector2(-mw / 2.0 + 3, -h + 11), Vector2(mw - 6, 20)), Color("#0e1a14"))
+		"printer":
+			# vassoio carta + spia di stato
+			draw_rect(Rect2(Vector2(-w * 0.28, -h + 6), Vector2(w * 0.56, 12)), Color("#e8e8f0"))
+			draw_circle(Vector2(w * 0.30, -FRONT_H - 8), 3.5, Palette.GREEN)
 		"plant":
 			draw_circle(Vector2(0, -h - 10), w * 0.42, cols[0])
 			draw_circle(Vector2(-8, -h - 20), w * 0.3, Color("#38835a"))
