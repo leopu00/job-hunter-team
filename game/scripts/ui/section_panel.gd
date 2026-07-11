@@ -240,7 +240,11 @@ func _build_positions() -> void:
 
 func _on_positions_refresh(_list: Array) -> void:
 	if section == "positions" and is_instance_valid(_content):
-		# lo snapshot nuovo non deve buttarti fuori dal dettaglio aperto
+		# lo snapshot nuovo non deve buttarti fuori dal dettaglio aperto,
+		# né cancellare il ticket che stai scrivendo o aspettando
+		if is_instance_valid(_ticket_input) and (_ticket_input.text.strip_edges() != ""
+				or (is_instance_valid(_ticket_send) and _ticket_send.disabled)):
+			return
 		_build("detail" if _pos_detail_id != 0 else "")
 
 func _on_dash_refresh(_list: Array) -> void:
@@ -535,6 +539,11 @@ func _build_pos_detail() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.custom_minimum_size = Vector2(0, 540)
 	_content.add_child(scroll)
+	# TEST-AUTO: JHT_SCROLL_END=1 porta lo scroll in fondo (per gli shot
+	# delle sezioni basse del dettaglio: ticket, esclusioni)
+	if OS.get_environment("JHT_SCROLL_END") == "1":
+		scroll.get_v_scroll_bar().changed.connect(func() -> void:
+			scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value))
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -708,6 +717,67 @@ func _build_pos_detail() -> void:
 		trow.add_child(_pos_paragraph(str(t.get("request_text", ""))))
 		if t.get("response_text"):
 			box.add_child(_pos_paragraph("↳ " + str(t["response_text"])))
+	_build_ticket_form(box, int(p.get("id", 0)))
+
+## Form "nuovo ticket": la richiesta utente→team, l'unica scrittura
+## remota autorizzata (gate 1). L'esito arriva su ticket_created; la
+## lista sopra si aggiorna col fetch posizioni che il backend rilancia.
+func _build_ticket_form(box: VBoxContainer, pid: int) -> void:
+	if not BackendBus.is_live():
+		box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_need_vps"),
+				12, Palette.DIM))
+		return
+	if not BackendBus.ticket_created.is_connected(_on_ticket_created):
+		BackendBus.ticket_created.connect(_on_ticket_created)
+	var form := HBoxContainer.new()
+	form.add_theme_constant_override("separation", 10)
+	box.add_child(form)
+	_ticket_input = LineEdit.new()
+	_ticket_input.placeholder_text = UIStrings.t("pos.ticket_placeholder")
+	_ticket_input.max_length = 2000
+	_ticket_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	form.add_child(_ticket_input)
+	_ticket_send = Button.new()
+	_ticket_send.text = UIStrings.t("pos.ticket_send")
+	form.add_child(_ticket_send)
+	_ticket_status = TerminalTheme.label("", 12, Palette.DIM)
+	box.add_child(_ticket_status)
+	var submit := func() -> void:
+		var txt: String = _ticket_input.text.strip_edges()
+		if txt == "" or _ticket_send.disabled:
+			return
+		_ticket_send.disabled = true
+		_ticket_status.text = UIStrings.t("pos.ticket_sending")
+		_ticket_status.add_theme_color_override("font_color", Palette.DIM)
+		BackendBus.create_position_ticket(pid, txt)
+	_ticket_send.pressed.connect(submit)
+	_ticket_input.text_submitted.connect(func(_t: String) -> void: submit.call())
+	# TEST-AUTO: JHT_TICKET_TEST=<testo> invia un ticket appena il form
+	# esiste (una volta sola), per verificare il canale con lo shot.
+	if OS.get_environment("JHT_TICKET_TEST") != "" and not _ticket_test_done:
+		_ticket_test_done = true
+		_ticket_input.text = OS.get_environment("JHT_TICKET_TEST")
+		submit.call_deferred()
+
+static var _ticket_test_done := false
+
+var _ticket_input: LineEdit
+var _ticket_send: Button
+var _ticket_status: Label
+
+func _on_ticket_created(_pid: int, ok: bool, error: String) -> void:
+	if not is_instance_valid(_ticket_status):
+		return
+	if ok:
+		_ticket_status.text = UIStrings.t("pos.ticket_ok")
+		_ticket_status.add_theme_color_override("font_color", Palette.MINT)
+		if is_instance_valid(_ticket_input):
+			_ticket_input.text = ""
+	else:
+		_ticket_status.text = UIStrings.t("pos.ticket_err") % error
+		_ticket_status.add_theme_color_override("font_color", Palette.RED)
+	if is_instance_valid(_ticket_send):
+		_ticket_send.disabled = false
 
 ## Paragrafo a capo automatico; via i **grassetti** markdown del team.
 func _pos_paragraph(text: String) -> Label:

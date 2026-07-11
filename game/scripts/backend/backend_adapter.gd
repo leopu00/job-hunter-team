@@ -38,3 +38,11 @@ func close_chat() -> void:
 ## bus.user_chat_sent(agent, ok, error).
 func send_chat(_agent: String, _text: String) -> void:
 	pass
+
+
+## ── Ticket utente→team (l'unica scrittura remota autorizzata) ────────
+
+## Apre un ticket 'open' sulla posizione: la richiesta che il
+## Coordinatore smista sulla VPS. Esito su bus.ticket_created.
+func create_ticket(_position_id: int, _text: String) -> void:
+	pass

@@ -33,6 +33,10 @@ signal positions_updated(positions: Array)
 signal agent_chat_updated(agent: String, messages: Array)
 ## Esito dell'invio di send_user_chat (ok=false → error leggibile).
 signal user_chat_sent(agent: String, ok: bool, error: String)
+## Esito di create_position_ticket (l'unica scrittura remota autorizzata
+## da Leone, gate 1 dell'11/07: sì ai ticket verso il team, no alle
+## azioni che scrivono direttamente sul jobs.db).
+signal ticket_created(position_id: int, ok: bool, error: String)
 ## live_settings è arrivata/cambiata (config team + usage reali).
 signal live_settings_updated(settings: Dictionary)
 
@@ -151,6 +155,15 @@ func close_agent_chat() -> void:
 func send_user_chat(slug: String, text: String) -> void:
 	if _backend and CHATTABLE.has(slug):
 		_backend.send_chat(CHATTABLE[slug], text)
+
+
+## ── Ticket utente→team ───────────────────────────────────────────────
+
+## Apre un ticket sulla posizione (async: esito su ticket_created; la
+## lista ticket si aggiorna col prossimo snapshot posizioni).
+func create_position_ticket(position_id: int, text: String) -> void:
+	if _backend and position_id > 0 and text.strip_edges() != "":
+		_backend.create_ticket(position_id, text.strip_edges())
 
 
 ## ── Configurazione VPS (voce Impostazioni → Collega VPS) ─────────────
