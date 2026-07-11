@@ -15,8 +15,14 @@ La sorgente implementa il contratto `TeamDataSource`
 | `get_agent_status()` | `{ <slug>: { status: String, detail: String } }` | status bubble degli agenti |
 | `get_score_explanation()` | `{ title, company, score, reasons: [String] }` | dialogo Scorer |
 | `get_mentor_tip()` | `String` | dialogo Mentor, segnaposto `{mentor_tip}` |
+| `get_applications()` | `[{ title, company, score, stage: 0..3 }]` | registro TAB, sezione Candidature |
+| `get_streak()` | `{ days: int, freezes: int }` | registro TAB, Statistiche |
+| `get_agent_activity(slug)` | `[{ when, text }]` | scheda agente, pannello reparto, sezione Attività |
+| `get_usage()` | `{ provider, actions_today, actions_week, quota_week_pct, tokens_today, budget_used_pct }` | pagina Utilizzo (Statistiche) |
+| `get_notifications()` | `[{ when, level: info\|warn, text }]` | sezione Notifiche |
+| `get_chat()` | `[{ when, from, text }]` | sezione Chat (sola lettura) |
 
-Slug agente: `coordinatore · scout · analista · scorer · mentor · assistente`.
+Slug agente: `coordinatore · scout · analista · scorer · scrittore · critico · mentor · assistente`.
 
 ## Agganciare il backend reale (futuro)
 

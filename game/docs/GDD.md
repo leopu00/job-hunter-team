@@ -1,5 +1,24 @@
 # JHT: The Office — GDD sintetico (prototipo / vertical slice)
 
+> ⚠️ **AGGIORNAMENTO 2026-07-11 — il GDD sotto è STORICO.** Direzione attuale
+> (ordini di Leone, launch della missione videogioco):
+> - Il gioco è la **desktop app resa come box animata**: si migrano dentro le
+>   viste dell'app desktop/web una alla volta (sidebar `SidebarDefs` 1:1 con
+>   `desktop/renderer/index.html`).
+> - **Niente giocatore né wizard**: TITLE→OFFICE diretto, FreeCamera
+>   (drag/WASD/zoom), si clicca su agenti (scheda + dialogo), reparti
+>   (pannello), mappamondo (mappa pin), bacheca (registro).
+> - **5 reparti** (Scout→Analisti→Scorer→Scrittori→Critici) in
+>   `DepartmentDefs`: 6 postazioni orientate nei 4 versi, agenti lead+worker
+>   (`CharacterDefs.spawn_list()`), behavior a cadenze reali (`TRIP_EVERY`),
+>   catena del valore stampante/inbox, sala relax a ovest.
+> - **Stile**: gioioso/elegante/colorato, riferimento illustrazione ufficio
+>   della pagina pubblica (the-box) — NON più Disco Elysium scuro. Arredi e
+>   sprite via **imagegen di Codex** (mai Pillow), vedi `SPRITES.md`.
+> - **Giorno/notte** sull'ora locale (`DayNight`, JHT_HOUR per test).
+> - Avvio/test SOLO con `tools/run.sh boot|play|shot` (cache classi) e
+>   verifica su screenshot prima di dichiarare fatto.
+
 Un videogioco 2D top-down (2.5D via Y-sort) che gamifica Job Hunter Team: l'utente
 cammina dentro "la box" — l'ufficio di vetro del sito (`web/public/the-box.png`) —
 dove i suoi agenti AI lavorano, e ci parla da vicino. Non è un arcade: è
