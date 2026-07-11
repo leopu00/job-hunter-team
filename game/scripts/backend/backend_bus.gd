@@ -49,6 +49,9 @@ signal user_chat_sent(agent: String, ok: bool, error: String)
 ## da Leone, gate 1 dell'11/07: sì ai ticket verso il team, no alle
 ## azioni che scrivono direttamente sul jobs.db).
 signal ticket_created(position_id: int, ok: bool, error: String)
+## Esito del salvataggio del profilo utente (paradigma desktop app:
+## i DATI UTENTE si modificano da qui; il jobs.db resta via ticket).
+signal profile_saved(ok: bool, error: String)
 ## live_settings è arrivata/cambiata (config team + usage reali).
 signal live_settings_updated(settings: Dictionary)
 
@@ -295,6 +298,15 @@ func publish_chat_sent(agent: String, ok: bool, error: String) -> void:
 		chat_waiting.erase(agent)
 		chat_waiting_changed.emit(agent, false)
 	user_chat_sent.emit(agent, ok, error)
+
+
+## ── Profilo utente (editing pieno: paradigma desktop app) ────────────
+
+func save_user_profile(fields: Dictionary) -> void:
+	if _backend and _backend.has_method("save_profile"):
+		_backend.save_profile(fields)
+	else:
+		profile_saved.emit(false, "backend non collegato")
 
 
 ## ── Ticket utente→team ───────────────────────────────────────────────

@@ -123,6 +123,17 @@ try:
         rows.append(['Salary target', str(sal)[:80]])
     if rows:
         out['profile'] = rows
+    raw = {}
+    for key in ['name', 'target_role', 'location', 'experience_years',
+                'seniority_target', 'industry', 'nationality']:
+        if prof.get(key) is not None:
+            raw[key] = str(prof[key])
+    raw['skills_primary'] = ', '.join(map(str, skills))
+    if isinstance(sal, dict):
+        raw['salary_min'] = str(sal.get('min') or sal.get('lo') or '')
+        raw['salary_max'] = str(sal.get('max') or sal.get('hi') or '')
+        raw['salary_currency'] = str(sal.get('currency') or 'EUR')
+    out['profile_raw'] = raw
 except Exception:
     pass
 try:
@@ -408,6 +419,67 @@ func _do_send_chat(agent: String, text: String) -> void:
 
 func _chat_sent(agent: String, ok: bool, error: String) -> void:
 	bus.call_deferred("publish_chat_sent", agent, ok, error)
+
+## ── Profilo utente: editing PIENO (paradigma desktop app, 21:26) ─────
+## Il candidate_profile.yml è un dato dell'UTENTE: si modifica da qui.
+## I campi viaggiano BASE64 (json) dentro lo script python → file+stdin,
+## mai in una shell. Prima di riscrivere, backup timestampato sul posto.
+
+const PROFILE_SAVE_PY := """
+import json, base64, shutil, time, yaml
+data = json.loads(base64.b64decode('%s').decode('utf-8'))
+path = '/jht_home/profile/candidate_profile.yml'
+try:
+    prof = yaml.safe_load(open(path)) or {}
+except Exception:
+    prof = {}
+try:
+    shutil.copy2(path, path + '.bak-' + time.strftime('%%Y%%m%%dT%%H%%M%%S'))
+except Exception:
+    pass
+for key in ['name', 'target_role', 'location', 'experience_years',
+            'seniority_target', 'industry', 'nationality']:
+    if key in data and str(data[key]).strip() != '':
+        v = str(data[key]).strip()
+        # i numerici restano numeri nel yml (experience_years: 1, non '1')
+        try:
+            v = int(v)
+        except ValueError:
+            try:
+                v = float(v)
+            except ValueError:
+                pass
+        prof[key] = v
+if 'skills_primary' in data:
+    skills = [s.strip() for s in str(data['skills_primary']).split(',') if s.strip()]
+    prof.setdefault('skills', {})['primary'] = skills
+if data.get('salary_min') or data.get('salary_max'):
+    sal_key = 'salary_target' if 'salary_target' in prof or 'salary' not in prof else 'salary'
+    sal = prof.get(sal_key) if isinstance(prof.get(sal_key), dict) else {}
+    lo_key = 'lo' if 'lo' in sal else 'min'
+    hi_key = 'hi' if 'hi' in sal else 'max'
+    if data.get('salary_min'):
+        sal[lo_key] = int(float(data['salary_min']))
+    if data.get('salary_max'):
+        sal[hi_key] = int(float(data['salary_max']))
+    sal['currency'] = str(data.get('salary_currency', sal.get('currency', 'EUR')))
+    prof[sal_key] = sal
+yaml.safe_dump(prof, open(path, 'w'), allow_unicode=True, sort_keys=False)
+print(json.dumps(dict(ok=True)))
+"""
+
+func save_profile(fields: Dictionary) -> void:
+	WorkerThreadPool.add_task(_do_save_profile.bind(fields))
+
+func _do_save_profile(fields: Dictionary) -> void:
+	var b64 := Marshalls.utf8_to_base64(JSON.stringify(fields))
+	var res := _ssh_python(PROFILE_SAVE_PY % b64)
+	var ok: bool = res["code"] == 0 and str(res["out"]).contains("\"ok\": true")
+	bus.call_deferred("emit_signal", "profile_saved", ok,
+			"" if ok else _short_error(res))
+	if ok:
+		_fetch_settings()  # il profilo aggiornato rientra subito in vista
+
 
 ## ── Ticket utente→team (gate 1: l'unica scrittura sul jobs.db) ───────
 ## Stesso INSERT della route /api/positions/[id]/ticket del web: ticket
