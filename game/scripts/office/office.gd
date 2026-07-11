@@ -81,7 +81,6 @@ func _ready() -> void:
 		agent.setup(def, nav)
 		agents.append(agent)
 
-	_add_maintainers()
 	add_child(TesseractEdges.new())  # gli spigoli blu della box (trasparenti)
 	add_child(Sfx.make_ambient_hum())
 
@@ -228,31 +227,6 @@ func _start_talk(agent: AgentNPC) -> void:
 		agent.end_talk())
 
 # ── Costruzione scena ─────────────────────────────────────────────────
-
-## I due maintainer fuori dalla box (the-box.png): osservano, in penombra.
-func _add_maintainers() -> void:
-	var specs := [
-		{"pos": Vector2(148, 1085), "facing": "down", "clip": true},
-		{"pos": Vector2(200, 1240), "facing": "side", "clip": false},
-	]
-	for spec in specs:
-		var holder := Node2D.new()
-		holder.position = spec["pos"]
-		holder.modulate = Color(0.72, 0.75, 0.9)
-		add_child(holder)  # fuori dal World: niente Y-sort né collisioni
-		var rig := CharacterDefs.make_rig("maintainer")
-		rig.scale *= 1.08
-		holder.add_child(rig)
-		rig.set_motion(spec["facing"], false, "idle")
-		if spec["clip"]:
-			# clipboard pittorico (niente più SVG): piccolo, in mano destra
-			var clip := Sprite2D.new()
-			var tex: Texture2D = load("res://assets/gen-art/furniture/clipboard.png")
-			clip.texture = tex
-			clip.scale = Vector2.ONE * (44.0 / tex.get_size().x)
-			clip.position = Vector2(30, -92)
-			clip.rotation = 0.12
-			rig.add_child(clip)
 
 func _invisible_wall(r: Rect2) -> StaticBody2D:
 	var body := StaticBody2D.new()
