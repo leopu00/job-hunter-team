@@ -9,12 +9,22 @@ extends BackendAdapter
 
 const POLL_SECS := 8.0
 const SSH_TIMEOUT := 8
+const CHAT_BACKLOG := 3    # messaggi di storia mostrati al collegamento
+const CHAT_MARK := "---JHT-CHAT---"
+
+## Roster e chat in UN solo giro ssh. NIENTE quoting annidato qui dentro
+## (sh -c con apici e #{} si è già rotto una volta nel viaggio
+## OS.execute→ssh→shell remota): il ; lo interpreta la shell remota,
+## tmux ls resta in formato default e il nome sessione si estrae dai ':'.
+const POLL_CMD := "docker exec jht tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
+		+ "docker exec jht tail -n 30 /jht_home/logs/messages.jsonl 2>/dev/null"
 
 var _ip := ""
 var _key := ""
 var _user := "root"
 var _thread: Thread
 var _stop := false
+var _last_chat_ts := ""
 
 
 func start(config: Dictionary) -> void:
@@ -49,22 +59,70 @@ func _run() -> void:
 		return
 	_deferred_state(BackendBus.CONNECTED, _ip)
 
-	# poll del roster finché non ci fermano
+	# poll di roster + chat finché non ci fermano
 	var failures := 0
 	while not _stop:
-		var res := _ssh("docker exec jht tmux ls -F '#{session_name}' 2>/dev/null || true")
+		var res := _ssh(POLL_CMD)
 		if _stop:
 			return
 		if res["code"] == 0:
 			if failures > 0:
 				failures = 0
 				_deferred_state(BackendBus.CONNECTED, _ip)
-			bus.call_deferred("publish_agents", _parse_roster(res["out"]))
+			var parts: PackedStringArray = str(res["out"]).split(CHAT_MARK)
+			bus.call_deferred("publish_agents", _parse_roster(parts[0]))
+			if parts.size() > 1:
+				_ingest_chat(parts[1])
 		else:
 			failures += 1
 			if failures >= 2:  # un blip singolo non è un guasto
 				_deferred_state(BackendBus.ERROR, _short_error(res))
 		_sleep(POLL_SECS)
+
+
+## Coda di messages.jsonl → chat_message sul bus, solo il nuovo rispetto
+## al cursore (ts ISO UTC: il confronto lessicografico è cronologico).
+## Al primo giro passa solo un piccolo backlog, non tutta la storia.
+func _ingest_chat(raw: String) -> void:
+	var msgs: Array = []
+	for line in raw.split("\n"):
+		if line.strip_edges() == "":
+			continue
+		var d: Variant = JSON.parse_string(line)
+		if d == null or not (d is Dictionary):
+			continue
+		var m := _to_chat_msg(d)
+		if not m.is_empty() and str(m["ts"]) > _last_chat_ts:
+			msgs.append(m)
+	if msgs.is_empty():
+		return
+	if _last_chat_ts == "" and msgs.size() > CHAT_BACKLOG:
+		msgs = msgs.slice(msgs.size() - CHAT_BACKLOG)
+	_last_chat_ts = str(msgs[-1]["ts"])
+	for m in msgs:
+		bus.call_deferred("publish_chat", m)
+
+
+## Una riga di messages.jsonl → il contratto {ts, from, to, text}.
+## Scarta il rumore non-agente (tick del bridge/pacing senza mittente);
+## il testo del fumetto è il preview, compattato su una riga.
+static func _to_chat_msg(d: Dictionary) -> Dictionary:
+	var from := _slug_norm(str(d.get("from", "")))
+	if from == "" or from == "pacing" or from == "bridge":
+		return {}
+	var to := _slug_norm(str(d.get("to", "")))
+	if to == "":
+		to = _slug_norm(str(d.get("session", "")))
+	var text := str(d.get("preview", "")).replace("\n", " ").strip_edges()
+	if text == "":
+		return {}
+	return {"ts": str(d.get("ts", "")), "from": from, "to": to, "text": text.left(160)}
+
+
+## Nomi del sistema reale → slug del gioco (capitano → coordinatore).
+static func _slug_norm(name: String) -> String:
+	var s := name.strip_edges().to_lower().replace("-worker", "")
+	return "coordinatore" if s == "capitano" else s
 
 
 ## Un giro di ssh non interattivo. Ritorna {code, out} (stdout+stderr).
@@ -82,21 +140,23 @@ func _ssh(remote_cmd: String) -> Dictionary:
 	return {"code": code, "out": "\n".join(PackedStringArray(out))}
 
 
-## Sessioni tmux → snapshot roster per il contratto agents_updated.
-## CAPITANO → coordinatore; "scout-2" → slug scout, name "Scout 2";
-## i core tengono il proprio nome. status oggi è sempre "working":
-## la distinzione fine arriverà da /jht_home quando servirà.
+## Sessioni tmux (formato default "NOME: 1 windows …") → snapshot roster
+## per il contratto agents_updated. CAPITANO → coordinatore; "scout-2" →
+## slug scout, name "Scout 2"; i core tengono il proprio nome. status
+## oggi è sempre "working": la distinzione fine arriverà da /jht_home.
 static func _parse_roster(raw: String) -> Array:
 	var agents: Array = []
 	for line in raw.split("\n"):
-		var session := line.strip_edges()
+		if not line.contains(":"):
+			continue
+		var session := line.split(":")[0].strip_edges()
 		if session == "" or session.contains(" "):
 			continue
 		var base := session.to_lower().replace("-worker", "")
 		var num := ""
 		var parts := base.split("-")
-		if parts.size() > 1 and parts[-1].is_valid_int():
-			num = parts[-1]
+		if parts.size() > 1 and parts[parts.size() - 1].is_valid_int():
+			num = parts[parts.size() - 1]
 			base = "-".join(parts.slice(0, parts.size() - 1))
 		var slug := "coordinatore" if base == "capitano" else base
 		var name := slug.capitalize()
