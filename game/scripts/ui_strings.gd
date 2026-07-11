@@ -178,6 +178,9 @@ const S := {
 	"notifs.applied": "candidatura inviata: %s",
 	"notifs.response": "risposta ricevuta: %s",
 	"notifs.empty": "nessuna notifica recente dal team",
+	"agents.comms": "COMUNICAZIONI NEL TEAM",
+	"agents.no_comms": "nessuna comunicazione recente",
+	"agents.chat_besteffort": "(risposta non garantita: protocollo chat non nel suo prompt)",
 
 	# ── GlobalSearch (Cmd+K) ──────────────────────────────────────
 	"search.placeholder": "cerca posizioni: titolo, azienda, città…  (ESC chiude)",
