@@ -111,6 +111,11 @@ const S := {
 	"pos.open_yes": "annuncio APERTO all'ultima verifica",
 	"pos.open_no": "annuncio NON PIÙ APERTO",
 
+	# ── GlobalSearch (Cmd+K) ──────────────────────────────────────
+	"search.placeholder": "cerca posizioni: titolo, azienda, città…  (ESC chiude)",
+	"search.no_match": "nessuna posizione trovata",
+	"search.need_vps": "collega la VPS per cercare tra le posizioni reali",
+
 	# ── Dashboard: pipeline del flusso reale ──────────────────────
 	"dash.pipeline": "PIPELINE",
 	"dash.pl_to_analyze": "Da analizzare",
