@@ -23,8 +23,21 @@ var count := 0
 ## (l'upstream digitale che finisce in stampa). Solo per gli inbox.
 var restock := 0.0
 var _restock_timer := 0.0
+## Modalità DATI VERI (missione pipeline 20:1x): la pila insegue un
+## target proporzionale al contatore reale della sua fase — un foglio
+## alla volta, così il cambiamento si vede. -1 = comportamento simulato.
+var _target := -1
+var _drift_timer := 0.0
 var _sprite: Sprite2D
 var _has_tex := false
+
+## Aggancia la pila al dato vero: spegne il restock finto. I take/add
+## dei viaggi restano il teatro del flusso; il drift riporta sempre la
+## pila al livello che i contatori reali dicono.
+func set_target(n: int) -> void:
+	_target = n
+	restock = 0.0
+	set_process(true)
 
 func _init(desk_rect: Rect2) -> void:
 	# su un angolo del piano di lavoro, non al centro (lì c'è il monitor)
@@ -41,6 +54,13 @@ func _ready() -> void:
 	_refresh()
 
 func _process(delta: float) -> void:
+	if _target >= 0:
+		_drift_timer -= delta
+		if _drift_timer <= 0.0 and count != _target:
+			_drift_timer = randf_range(2.0, 4.0)
+			count += signi(_target - count)
+			_refresh()
+		return
 	if restock <= 0.0:
 		set_process(false)
 		return
