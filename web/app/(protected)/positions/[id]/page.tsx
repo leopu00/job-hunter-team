@@ -11,6 +11,9 @@ import { ExcludeButton } from "./ExcludeButton";
 import { RecheckButton } from "./RecheckButton";
 import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
+import { CvDownloadButton } from "./CvDownloadButton";
+import { isLocalRequest } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/workspace";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
 
@@ -195,6 +198,78 @@ const T: Record<string, Record<string, string>> = {
     fr: "Tour d'entretien",
     pt: "Ronda de entrevista",
   },
+  a_score: {
+    it: "Voto",
+    en: "Score",
+    hu: "Pontszám",
+    es: "Puntuación",
+    de: "Bewertung",
+    fr: "Note",
+    pt: "Pontuação",
+  },
+  a_critic_feedback: {
+    it: "Feedback del Critico",
+    en: "Critic feedback",
+    hu: "Kritikus visszajelzése",
+    es: "Comentarios del Crítico",
+    de: "Kritiker-Feedback",
+    fr: "Retour du Critique",
+    pt: "Feedback do Crítico",
+  },
+  as_draft: {
+    it: "Bozza",
+    en: "Draft",
+    hu: "Piszkozat",
+    es: "Borrador",
+    de: "Entwurf",
+    fr: "Brouillon",
+    pt: "Rascunho",
+  },
+  as_review: {
+    it: "In revisione",
+    en: "In review",
+    hu: "Ellenőrzés alatt",
+    es: "En revisión",
+    de: "In Prüfung",
+    fr: "En révision",
+    pt: "Em revisão",
+  },
+  as_ready: {
+    it: "CV pronto",
+    en: "CV ready",
+    hu: "Önéletrajz kész",
+    es: "CV listo",
+    de: "Lebenslauf bereit",
+    fr: "CV prêt",
+    pt: "CV pronto",
+  },
+  as_approved: {
+    it: "Approvata",
+    en: "Approved",
+    hu: "Jóváhagyva",
+    es: "Aprobada",
+    de: "Genehmigt",
+    fr: "Approuvée",
+    pt: "Aprovada",
+  },
+  as_applied: {
+    it: "Inviata",
+    en: "Applied",
+    hu: "Elküldve",
+    es: "Enviada",
+    de: "Beworben",
+    fr: "Envoyée",
+    pt: "Enviada",
+  },
+  as_response: {
+    it: "Risposta",
+    en: "Response",
+    hu: "Válasz",
+    es: "Respuesta",
+    de: "Antwort",
+    fr: "Réponse",
+    pt: "Resposta",
+  },
   cv_drive: {
     it: "CV (Drive)",
     en: "CV (Drive)",
@@ -212,6 +287,51 @@ const T: Record<string, Record<string, string>> = {
     de: "Anschreiben (Drive)",
     fr: "Lettre de motivation (Drive)",
     pt: "Carta de apresentação (Drive)",
+  },
+  download_cv: {
+    it: "Scarica CV (PDF)",
+    en: "Download CV (PDF)",
+    hu: "Önéletrajz letöltése (PDF)",
+    es: "Descargar CV (PDF)",
+    de: "Lebenslauf herunterladen (PDF)",
+    fr: "Télécharger le CV (PDF)",
+    pt: "Baixar CV (PDF)",
+  },
+  download_cl: {
+    it: "Scarica Cover Letter (PDF)",
+    en: "Download Cover Letter (PDF)",
+    hu: "Motivációs levél letöltése (PDF)",
+    es: "Descargar carta de presentación (PDF)",
+    de: "Anschreiben herunterladen (PDF)",
+    fr: "Télécharger la lettre de motivation (PDF)",
+    pt: "Baixar carta de apresentação (PDF)",
+  },
+  cv_preparing: {
+    it: "Preparazione…",
+    en: "Preparing…",
+    hu: "Előkészítés…",
+    es: "Preparando…",
+    de: "Wird vorbereitet…",
+    fr: "Préparation…",
+    pt: "Preparando…",
+  },
+  cv_dl_error: {
+    it: "Errore — riprova",
+    en: "Error — retry",
+    hu: "Hiba — újra",
+    es: "Error — reintentar",
+    de: "Fehler — erneut",
+    fr: "Erreur — réessayer",
+    pt: "Erro — repetir",
+  },
+  cv_bridge_hint: {
+    it: "Il PDF arriva dal dispositivo dove gira il team tramite un ponte temporaneo: non viene salvato nel cloud.",
+    en: "The PDF is fetched from the device running your team through a temporary bridge — it isn't stored in the cloud.",
+    hu: "A PDF a csapatot futtató eszközről érkezik egy ideiglenes hídon keresztül — nem tárolódik a felhőben.",
+    es: "El PDF se obtiene del dispositivo donde se ejecuta tu equipo mediante un puente temporal: no se guarda en la nube.",
+    de: "Das PDF wird über eine temporäre Brücke von dem Gerät geholt, auf dem dein Team läuft — es wird nicht in der Cloud gespeichert.",
+    fr: "Le PDF est récupéré depuis l'appareil qui exécute votre équipe via un pont temporaire — il n'est pas stocké dans le cloud.",
+    pt: "O PDF é obtido do dispositivo onde a equipa é executada através de uma ponte temporária — não é guardado na nuvem.",
   },
   response_received: {
     it: "Risposta ricevuta",
@@ -539,6 +659,23 @@ const STATUS_COLORS: Record<string, string> = {
   excluded: "var(--color-red)",
 };
 
+// Colori dello stato della CANDIDATURA (applications.status), distinto dallo
+// stato della posizione. 'ready' = CV finito e approvato dal Critico.
+const APP_STATUS_COLORS: Record<string, string> = {
+  draft: "var(--color-yellow)",
+  review: "var(--color-orange)",
+  ready: "var(--color-ready)",
+  approved: "var(--color-green)",
+  applied: "var(--color-green)",
+  response: "#58a6ff",
+};
+
+const VERDICT_COLORS: Record<string, string> = {
+  PASS: "var(--color-green)",
+  NEEDS_WORK: "var(--color-yellow)",
+  REJECT: "var(--color-red)",
+};
+
 function scoreColor(s: number | null) {
   if (!s) return "var(--color-dim)";
   if (s >= 75) return "var(--color-green)";
@@ -626,6 +763,14 @@ export default async function PositionDetailPage({ params }: PageProps) {
   };
 
   const statusColor = STATUS_COLORS[position.status] ?? "var(--color-dim)";
+
+  // Modalità di accesso ai file: cloud (web pubblico → bridge on-demand) vs
+  // local (desktop → link diretto). Stesso criterio di /api/profile/files.
+  const cloudMode = isSupabaseConfigured && !(await isLocalRequest());
+  // basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
+  // bridge e il file-serving locale risolvono per basename.
+  const cvFileName = application?.cv_pdf_path?.split("/").pop() || null;
+  const clFileName = application?.cl_pdf_path?.split("/").pop() || null;
 
   function formatSalary(
     min: number | null,
@@ -962,12 +1107,57 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {application && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-4">{t("application")}</div>
+
+              {/* Stato candidatura + verdetto + voto del Critico in evidenza */}
+              <div className="flex items-center gap-2.5 flex-wrap mb-4">
+                {(() => {
+                  const c =
+                    APP_STATUS_COLORS[application.status] ?? "var(--color-dim)";
+                  return (
+                    <span
+                      className="text-[10px] font-semibold px-3 py-1 rounded-full border"
+                      style={{
+                        color: c,
+                        borderColor: c,
+                        background: `${c}18`,
+                      }}
+                    >
+                      {T[`as_${application.status}`]
+                        ? t(`as_${application.status}`)
+                        : application.status}
+                    </span>
+                  );
+                })()}
+                {application.critic_verdict &&
+                  (() => {
+                    const c =
+                      VERDICT_COLORS[application.critic_verdict] ??
+                      "var(--color-dim)";
+                    return (
+                      <span
+                        className="text-[10px] font-semibold px-3 py-1 rounded-full border"
+                        style={{
+                          color: c,
+                          borderColor: c,
+                          background: `${c}14`,
+                        }}
+                      >
+                        {t("a_critic")}: {application.critic_verdict}
+                      </span>
+                    );
+                  })()}
+                {application.critic_score != null && (
+                  <span className="text-[11px] text-[var(--color-muted)]">
+                    {t("a_score")}:{" "}
+                    <span className="font-semibold text-[var(--color-base)] tabular-nums">
+                      {application.critic_score}/10
+                    </span>
+                  </span>
+                )}
+              </div>
+
+              {/* Date + canale + round colloquio */}
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <InfoRow label={t("a_status")} value={application.status} />
-                <InfoRow
-                  label={t("a_critic")}
-                  value={application.critic_verdict ?? "—"}
-                />
                 <InfoRow
                   label={t("a_written")}
                   value={
@@ -994,8 +1184,46 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   />
                 )}
               </div>
-              {/* Drive links */}
+
+              {/* Feedback completo del Critico (prima si vedeva solo il verdetto) */}
+              {application.critic_notes && (
+                <div className="mb-4 p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
+                  <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                    {t("a_critic_feedback")}
+                  </div>
+                  <MarkdownLite
+                    text={application.critic_notes}
+                    className="text-[11px] text-[var(--color-muted)] leading-relaxed"
+                  />
+                </div>
+              )}
+
+              {/* Download PDF via bridge on-demand + link Drive (legacy) */}
               <div className="flex gap-3 flex-wrap">
+                {cvFileName && (
+                  <CvDownloadButton
+                    fileName={cvFileName}
+                    cloudMode={cloudMode}
+                    color="var(--color-green)"
+                    labels={{
+                      idle: t("download_cv"),
+                      preparing: t("cv_preparing"),
+                      error: t("cv_dl_error"),
+                    }}
+                  />
+                )}
+                {clFileName && (
+                  <CvDownloadButton
+                    fileName={clFileName}
+                    cloudMode={cloudMode}
+                    color="var(--color-blue)"
+                    labels={{
+                      idle: t("download_cl"),
+                      preparing: t("cv_preparing"),
+                      error: t("cv_dl_error"),
+                    }}
+                  />
+                )}
                 {application.cv_drive_id && (
                   <a
                     href={`https://drive.google.com/file/d/${application.cv_drive_id}/view`}
@@ -1025,6 +1253,12 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   </a>
                 )}
               </div>
+              {(cvFileName || clFileName) && cloudMode && (
+                <p className="mt-2.5 text-[10px] text-[var(--color-dim)] leading-relaxed">
+                  {t("cv_bridge_hint")}
+                </p>
+              )}
+
               {application.response && (
                 <div className="mt-4 p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
                   <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-1">
