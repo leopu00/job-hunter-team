@@ -253,12 +253,13 @@ func _plan_trip() -> void:
 		_legs = [pick, drop, _leg_to(_spot, "carry", 0.0, "work")]
 	elif roll < 0.88:
 		# pausa caffè / macchinetta (raro: i tick non aspettano)
-		var poi: Vector2 = pois["coffee"]["spot"] if randf() < 0.7 \
+		var is_coffee := randf() < 0.7
+		var poi: Vector2 = pois["coffee"]["spot"] if is_coffee \
 				else pois["water_cooler"]["spot"]
-		_legs = [
-			_leg_to(_jit(poi), "walk", randf_range(3.0, 7.0), "idle"),
-			_leg_to(_spot, "walk", 0.0, "work"),
-		]
+		var cl := _leg_to(_jit(poi), "walk", randf_range(3.0, 7.0), "idle")
+		if is_coffee:
+			cl["fx_coffee"] = true  # il vapore sale finché è in pausa
+		_legs = [cl, _leg_to(_spot, "walk", 0.0, "work")]
 	elif roll < 0.94:
 		# pausa vera in sala relax (rarissima, ma il divano esiste apposta)
 		_legs = [
@@ -289,6 +290,8 @@ func _start_next_leg() -> void:
 func _arrive_at_leg() -> void:
 	if _leg.get("fx_printer", false):
 		PrinterFx.ping(float(_leg.get("pause", 2.0)))
+	if _leg.get("fx_coffee", false):
+		CoffeeFx.ping(float(_leg.get("pause", 4.0)))
 	# movimenti di fogli sugli inbox di reparto (pile condivise)
 	if _leg.has("pile_take") and PaperPile.inbox.has(_leg["pile_take"]):
 		PaperPile.inbox[_leg["pile_take"]].take_sheets(randi_range(2, 3))

@@ -63,10 +63,14 @@ func _ready() -> void:
 	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles()
 			+ DepartmentDefs.obstacles() + DepartmentDefs.GLASS_WALLS)
 
-	# la stampante si anima quando qualcuno stampa (ping da AgentNPC)
+	# i macchinari si animano quando qualcuno li usa (ping da AgentNPC)
 	world.add_child(PrinterFx.new(FurnitureDefs.get_rect("printer")))
-	if OS.get_environment("JHT_FX") == "printer":  # TEST-AUTO: stampa forzata
-		PrinterFx.ping(20.0)
+	world.add_child(CoffeeFx.new(FurnitureDefs.get_rect("coffee_bar")))
+	match OS.get_environment("JHT_FX"):  # TEST-AUTO: effetto forzato
+		"printer":
+			PrinterFx.ping(20.0)
+		"coffee":
+			CoffeeFx.ping(20.0)
 
 	# pile degli inbox di reparto: il ritiro le svuota, le soste le
 	# riforniscono, e un restock lento simula l'upstream che stampa.
