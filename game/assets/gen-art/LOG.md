@@ -127,6 +127,28 @@ SENZA arredi: "standing at a desk" fa dipingere la scrivania nel frame;
 (3) l'Esc per liberare la coda interrompe ANCHE il messaggio appena inviato
 se il turno precedente è ancora vivo: dopo l'Esc controllare e re-inviare.
 
+### 2026-07-11 notte — Pivot imagegen (ordine Leone) + restyle the-box
+
+Metodo cambiato dall'alto: **mai più Pillow, solo skill `imagegen`** (README
+image-generator aggiornato da Leone). Qualità incomparabile: sprite fedeli ai
+ritratti e arredi ricchi in un colpo.
+
+| batch | esito |
+|---|---|
+| Sprite 5 ruoli: walk/work/carry (fogli 6×3/4×3 su sfondo trasparente) | ✅ ritagliati con tools/slice_agent_sheet.py (segmentazione blob, defringe magenta) e rimontati nel contratto 6×12 invariato |
+| Pavimento+muro stile the-box.png | ✅ lastre blu-grigio eleganti; crop all'aspect del FLOOR per stiramento uniforme |
+| Postazioni per reparto `<kind>_<facing>` | ✅ blocco 1 (_a_down ×5), blocco 2 (_b_down ×5 + long_table 5 posti); _side/_up in coda |
+
+Lezioni nuove: (1) **l'auto-downgrade a gpt-5.4-mini NON degrada imagegen**
+(il modello guida solo la chiamata alla skill; primo output auditato: alpha
+core 255, semi 1.3%) — la coda notturna può correre sul mini; (2) imagegen
+NON centra i frame in celle esatte: mai ritagliare a griglia fissa,
+segmentare il profilo alpha; (3) i residui del chroma-key magenta si
+neutralizzano al ritaglio (defringe verso il grigio di luminanza);
+(4) per pose "typing" dire "invisible keyboard, NO desk": altrimenti
+dipinge l'arredo dentro il frame; (5) driver bash seriale su tmux
+(/clear → prompt → poll file) regge batch da 20+ generazioni non presidiate.
+
 ## Note su come promptare Codex
 
 1. **Fargli aprire i riferimenti PRIMA di generare**: iniziare il prompt con
