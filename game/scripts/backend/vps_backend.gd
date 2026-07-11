@@ -19,6 +19,25 @@ const CHAT_MARK := "---JHT-CHAT---"
 const POLL_CMD := "docker exec jht tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
 		+ "docker exec jht tail -n 30 /jht_home/logs/messages.jsonl 2>/dev/null"
 
+## Snapshot posizioni dal jobs.db (stesso dataset leggero dei facets del
+## web), letto con python3 nel container (sqlite3 CLI assente).
+##
+## ⚠️ GOTCHA OS.execute (macOS): gli argomenti vengono re-wrappati in
+## una sh -c con quoting naive — doppi apici, $, # e newline DENTRO un
+## argomento si corrompono SEMPRE. Ricetta obbligata per i comandi
+## remoti: solo apici singoli, una riga sola, e le stringhe che
+## servirebbero allo script python passate via sys.argv.
+const POSITIONS_PY := "import sys,sqlite3,json; db=sqlite3.connect(sys.argv[1]); " \
+		+ "db.row_factory=sqlite3.Row; rows=[dict(r) for r in db.execute(sys.argv[2])]; " \
+		+ "print(json.dumps(rows))"
+const POSITIONS_SELECT := "SELECT p.id,p.title,p.company,p.status,p.role_family," \
+		+ "p.loc_country,p.loc_city,p.work_mode,p.source,p.salary_estimated_min," \
+		+ "p.salary_estimated_max,p.salary_estimated_currency,s.total_score " \
+		+ "FROM positions p LEFT JOIN scores s ON s.position_id=p.id " \
+		+ "ORDER BY p.created_at DESC"
+
+const POSITIONS_EVERY := 4  # giri di poll tra due letture del jobs.db
+
 var _ip := ""
 var _key := ""
 var _user := "root"
@@ -28,7 +47,7 @@ var _last_chat_ts := ""
 
 
 func start(config: Dictionary) -> void:
-	live = true  # unica sorgente di dati REALI: spegne il badge SIMULAZIONE
+	live = true  # dati veri: spegne il badge SIMULAZIONE quando connesso
 	_ip = str(config.get("ip", "")).strip_edges()
 	_key = str(config.get("key_path", "")).strip_edges()
 	_user = str(config.get("user", "root")).strip_edges()
@@ -60,8 +79,9 @@ func _run() -> void:
 		return
 	_deferred_state(BackendBus.CONNECTED, _ip)
 
-	# poll di roster + chat finché non ci fermano
+	# poll di roster + chat (+ posizioni, più raro) finché non ci fermano
 	var failures := 0
+	var tick := 0
 	while not _stop:
 		var res := _ssh(POLL_CMD)
 		if _stop:
@@ -78,7 +98,29 @@ func _run() -> void:
 			failures += 1
 			if failures >= 2:  # un blip singolo non è un guasto
 				_deferred_state(BackendBus.ERROR, _short_error(res))
+		if tick % POSITIONS_EVERY == 0:
+			_fetch_positions()
+		tick += 1
 		_sleep(POLL_SECS)
+
+
+## jobs.db → positions_updated (snapshot completo, la vista filtra locale).
+func _fetch_positions() -> void:
+	var res := _ssh("docker exec -i jht python3 -c '" + POSITIONS_PY \
+			+ "' /jht_home/jobs.db '" + POSITIONS_SELECT + "'")
+	if _stop or res["code"] != 0:
+		if not _stop:
+			Log.call_deferred("debug", "backend", "fetch posizioni KO: code=%s %s" % [
+					res["code"], str(res["out"]).left(120)])
+		return
+	var raw := str(res["out"]).strip_edges()
+	# stdout può avere righe di warning attorno: il JSON è la riga con [
+	for line in raw.split("\n"):
+		if line.begins_with("["):
+			var data: Variant = JSON.parse_string(line)
+			if data is Array:
+				bus.call_deferred("publish_positions", data)
+			return
 
 
 ## Coda di messages.jsonl → chat_message sul bus, solo il nuovo rispetto
@@ -127,6 +169,7 @@ static func _slug_norm(name: String) -> String:
 
 
 ## Un giro di ssh non interattivo. Ritorna {code, out} (stdout+stderr).
+## Il remote_cmd deve rispettare la ricetta anti-quoting (vedi sopra).
 func _ssh(remote_cmd: String) -> Dictionary:
 	var out: Array = []
 	var code := OS.execute("ssh", [
