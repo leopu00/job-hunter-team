@@ -52,6 +52,8 @@ signal ticket_created(position_id: int, ok: bool, error: String)
 ## Esito del salvataggio del profilo utente (paradigma desktop app:
 ## i DATI UTENTE si modificano da qui; il jobs.db resta via ticket).
 signal profile_saved(ok: bool, error: String)
+## Esito del salvataggio degli orari di lavoro (working_hours).
+signal hours_saved(ok: bool, error: String)
 ## live_settings è arrivata/cambiata (config team + usage reali).
 signal live_settings_updated(settings: Dictionary)
 
@@ -309,6 +311,12 @@ func save_user_profile(fields: Dictionary) -> void:
 		_backend.save_profile(fields)
 	else:
 		profile_saved.emit(false, "backend non collegato")
+
+func save_working_hours(wh: Dictionary) -> void:
+	if _backend and _backend.has_method("save_working_hours"):
+		_backend.save_working_hours(wh)
+	else:
+		hours_saved.emit(false, "backend non collegato")
 
 
 ## ── Ticket utente→team ───────────────────────────────────────────────

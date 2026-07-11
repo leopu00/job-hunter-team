@@ -207,6 +207,16 @@ const S := {
 	"prof.saved": "✔ profilo salvato — il team lo userà dal prossimo giro",
 	"prof.save_err": "✘ salvataggio fallito: %s",
 
+	# ── Orari di lavoro (editabili, con stima dinamica) ───────────
+	"hours.intro": "Le finestre in cui il team lavora: modifica e salva, il pacing si adegua.",
+	"hours.tz": "Timezone",
+	"hours.windows": "FINESTRE (giorni · dalle → alle)",
+	"hours.add": "+ AGGIUNGI FINESTRA",
+	"hours.estimate": "≈ %.0f ore attive/settimana → stima ~%.1f posizioni nuove/giorno · budget riproporzionato al %d%% dell'attuale",
+	"hours.invalid": "✘ finestra non valida: giorni mon…sun e orari HH:MM",
+	"hours.save": "▶ SALVA ORARI",
+	"hours.saved": "✔ orari salvati — il pacing del team si adegua dal prossimo tick",
+
 	# ── Impostazioni → Lingua ─────────────────────────────────────
 	"lang.intro": "Lingua dell'interfaccia — le 7 lingue del sito.",
 	"lang.note": "// si applica subito ai pannelli; riapri quelli già aperti per vederli tradotti",

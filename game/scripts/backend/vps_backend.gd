@@ -88,6 +88,7 @@ out['hours'] = [
     ['Timezone', str(wh.get('timezone', '—'))],
     ['Finestre di lavoro', json.dumps(wh.get('windows', '—'), ensure_ascii=False)[:120]],
 ]
+out['hours_raw'] = wh
 n = c.get('notifications') or {}
 out['email'] = [
     ['Notifiche', 'attive' if n.get('enabled') else 'spente'],
@@ -479,6 +480,38 @@ func _do_save_profile(fields: Dictionary) -> void:
 			"" if ok else _short_error(res))
 	if ok:
 		_fetch_settings()  # il profilo aggiornato rientra subito in vista
+
+
+## ── Orari di lavoro: editing PIENO (paradigma desktop app) ───────────
+## working_hours vive in jht.config.json: si aggiorna SOLO quella
+## sezione (load→update→dump preserva tutto il resto, credenziali
+## incluse — che non lasciano mai il container), con backup prima.
+
+const HOURS_SAVE_PY := """
+import json, base64, shutil, time
+data = json.loads(base64.b64decode('%s').decode('utf-8'))
+path = '/jht_home/jht.config.json'
+c = json.load(open(path))
+try:
+    shutil.copy2(path, path + '.bak-' + time.strftime('%%Y%%m%%dT%%H%%M%%S'))
+except Exception:
+    pass
+c.setdefault('team', {})['working_hours'] = data
+json.dump(c, open(path, 'w'), indent=2, ensure_ascii=False)
+print(json.dumps(dict(ok=True)))
+"""
+
+func save_working_hours(wh: Dictionary) -> void:
+	WorkerThreadPool.add_task(_do_save_hours.bind(wh))
+
+func _do_save_hours(wh: Dictionary) -> void:
+	var b64 := Marshalls.utf8_to_base64(JSON.stringify(wh))
+	var res := _ssh_python(HOURS_SAVE_PY % b64)
+	var ok: bool = res["code"] == 0 and str(res["out"]).contains("\"ok\": true")
+	bus.call_deferred("emit_signal", "hours_saved", ok,
+			"" if ok else _short_error(res))
+	if ok:
+		_fetch_settings()
 
 
 ## ── Ticket utente→team (gate 1: l'unica scrittura sul jobs.db) ───────
