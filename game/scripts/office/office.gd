@@ -14,6 +14,7 @@ var _camera: FreeCamera
 func _ready() -> void:
 	add_child(OfficeFloor.new())
 	add_child(DepartmentDressing.new())  # tinte/targhe dei 5 reparti (dev-art)
+	add_child(DeptRugs.new())  # tappetoni tondi colore-reparto (reference)
 	# giorno/notte sull'ora locale: esterno, lampade e luce dalle finestre.
 	# Va qui, PRIMA di mondo e maintainer, che devono disegnarsi sopra.
 	add_child(DayNight.new())
