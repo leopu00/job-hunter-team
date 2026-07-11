@@ -33,7 +33,7 @@ const DEPARTMENTS := {
 		"desks": [
 			{"rect": Rect2(1040, 1006, 170, 78), "kind": "scout_a", "facing": "down"},
 			{"rect": Rect2(1272, 990, 170, 78), "kind": "scout_b", "facing": "down"},
-			{"rect": Rect2(1496, 1012, 170, 78), "kind": "desk_d", "facing": "left"},
+			{"rect": Rect2(1496, 1012, 170, 78), "kind": "scout_a", "facing": "left"},
 			{"rect": Rect2(1030, 1240, 170, 78), "kind": "desk_e", "facing": "up"},
 			{"rect": Rect2(1262, 1228, 170, 78), "kind": "scout_a", "facing": "down"},
 			{"rect": Rect2(1498, 1246, 170, 78), "kind": "scout_b", "facing": "down"},
@@ -48,7 +48,7 @@ const DEPARTMENTS := {
 		"desks": [
 			{"rect": Rect2(1848, 228, 170, 78), "kind": "analisti_a", "facing": "down"},
 			{"rect": Rect2(2132, 214, 170, 78), "kind": "analisti_b", "facing": "down"},
-			{"rect": Rect2(1840, 402, 170, 78), "kind": "desk_a", "facing": "right"},
+			{"rect": Rect2(1840, 402, 170, 78), "kind": "analisti_a", "facing": "right"},
 			{"rect": Rect2(2146, 392, 170, 78), "kind": "analisti_a", "facing": "down"},
 			{"rect": Rect2(1852, 570, 170, 78), "kind": "analisti_b", "facing": "down"},
 			{"rect": Rect2(2128, 562, 170, 78), "kind": "analisti_a", "facing": "down"},
