@@ -85,6 +85,13 @@ func _apply_facing() -> void:
 		_leg_r.position.x = (1.5 if facing == "side" else 6.0) * ART_SCALE
 	scale.x = -RIG_SCALE if (facing == "side" and flipped) else RIG_SCALE
 
+## Ombra a terra come SpriteSheetRig: stessa àncora visiva per i due rig.
+func _draw() -> void:
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.38))
+	for i in 3:
+		draw_circle(Vector2.ZERO, 26.0 + i * 7.0, Color(0, 0, 0, 0.10 - i * 0.03))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 func _process(delta: float) -> void:
 	_t += delta
 	var ph := _t * TAU + _phase_offset

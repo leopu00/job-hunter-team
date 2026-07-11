@@ -67,6 +67,14 @@ func _process(delta: float) -> void:
 	_t += delta
 	_update_frame()
 
+## Ombra morbida ai piedi: àncora la figura al pavimento (profondità 2.5D).
+## Tre ellissi concentriche = bordo sfumato senza texture.
+func _draw() -> void:
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.38))
+	for i in 3:
+		draw_circle(Vector2.ZERO, 30.0 + i * 8.0, Color(0, 0, 0, 0.10 - i * 0.03))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 func _update_frame() -> void:
 	if _sprite == null:
 		return
