@@ -207,6 +207,9 @@ const S := {
 	"prof.saved": "✔ profilo salvato — il team lo userà dal prossimo giro",
 	"prof.save_err": "✘ salvataggio fallito: %s",
 
+	# ── Mappa OSM ─────────────────────────────────────────────────
+	"map.hint": "trascina per muoverti · rotella/pinch per lo zoom · click su una città per avvicinarti",
+
 	# ── Orari di lavoro (editabili, con stima dinamica) ───────────
 	"hours.intro": "Le finestre in cui il team lavora: modifica e salva, il pacing si adegua.",
 	"hours.tz": "Timezone",

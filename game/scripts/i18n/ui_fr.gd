@@ -138,6 +138,7 @@ const S := {
 	"prof.saving": "enregistrement sur le VPS…",
 	"prof.saved": "✔ profil enregistré — l'équipe l'utilisera au prochain tour",
 	"prof.save_err": "✘ échec de l'enregistrement : %s",
+	"map.hint": "glissez pour vous déplacer · molette/pincement pour zoomer · cliquez sur une ville pour vous rapprocher",
 	"hours.intro": "Les fenêtres où l'équipe travaille : modifiez et enregistrez, le pacing s'adapte.",
 	"hours.tz": "Fuseau horaire",
 	"hours.windows": "FENÊTRES (jours · de → à)",

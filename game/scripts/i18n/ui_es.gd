@@ -138,6 +138,7 @@ const S := {
 	"prof.saving": "guardando en la VPS…",
 	"prof.saved": "✔ perfil guardado — el equipo lo usará desde la próxima ronda",
 	"prof.save_err": "✘ error al guardar: %s",
+	"map.hint": "arrastra para moverte · rueda/pellizco para el zoom · clic en una ciudad para acercarte",
 	"hours.intro": "Las ventanas en las que trabaja el equipo: edita y guarda, el pacing se adapta.",
 	"hours.tz": "Zona horaria",
 	"hours.windows": "VENTANAS (días · desde → hasta)",
