@@ -237,7 +237,9 @@ func _open_agent_card(agent: AgentNPC) -> void:
 	_agent_card.talk_requested.connect(func() -> void: _start_talk(agent))
 	_agent_card.closed.connect(func() -> void:
 		_agent_card = null
-		if not Game.dialogue_active:
+		# l'agente può essersi dissolto (despawn backend) a scheda aperta
+		if is_instance_valid(agent) and not agent.is_dissolving() \
+				and not Game.dialogue_active:
 			agent.end_talk())
 
 func _start_talk(agent: AgentNPC) -> void:
@@ -249,7 +251,8 @@ func _start_talk(agent: AgentNPC) -> void:
 	add_child(ui)
 	ui.open(agent.slug, agent.display_name, "")
 	ui.closed.connect(func() -> void:
-		agent.end_talk())
+		if is_instance_valid(agent) and not agent.is_dissolving():
+			agent.end_talk())
 
 # ── Roster dinamico dal backend (missione backend-integration) ────────
 # In modalità backend la scena mostra SOLO gli agenti attivi sulla VPS:
@@ -257,6 +260,7 @@ func _start_talk(agent: AgentNPC) -> void:
 
 var _desk_pool: Dictionary = {}  # role -> Array di def libere (postazioni)
 var _backend_mode := false
+var _unplaced_roles: Dictionary = {}  # ruoli senza postazione già segnalati
 
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
@@ -317,6 +321,9 @@ func _despawn_agent(agent: AgentNPC, refill_pool := true) -> void:
 	agents.erase(agent)
 	if _hover_agent == agent:
 		_hover_agent = null
+	# se l'utente lo stava esaminando, la scheda si chiude con lui
+	if _agent_card and _agent_card.get("_agent") == agent:
+		_agent_card.close(false)
 	if refill_pool and agent.has_meta("def"):
 		var def: Dictionary = agent.get_meta("def")
 		var role: String = def["slug"]
@@ -331,7 +338,9 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	var role: String = item.get("role", "")
 	var pool: Array = _desk_pool.get(role, [])
 	if pool.is_empty():
-		Log.warn("backend", "nessuna postazione libera per il ruolo " + role)
+		if not _unplaced_roles.has(role):  # es. sentinella: nessun posto in scena
+			_unplaced_roles[role] = true
+			Log.warn("backend", "nessuna postazione libera per il ruolo " + role)
 		return
 	var def: Dictionary = pool.pop_front()
 	var live := def.duplicate(true)
