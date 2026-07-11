@@ -13,7 +13,16 @@ const TEX_BASE := "res://assets/gen-art/furniture/paper_pile_"
 const MAX_SHEETS := 18
 const WIDTH := 56.0  # larghezza resa sulla scrivania
 
+## Le pile degli INBOX di reparto, registrate da office.gd: il flusso
+## dei fogli si vede end-to-end (il ritiro svuota l'inbox a monte, la
+## sosta all'inbox di casa lo rifornisce). Ripulito a ogni _ready scena.
+static var inbox: Dictionary = {}
+
 var count := 0
+## Se > 0: media in secondi tra un foglio "arrivato da solo" e l'altro
+## (l'upstream digitale che finisce in stampa). Solo per gli inbox.
+var restock := 0.0
+var _restock_timer := 0.0
 var _sprite: Sprite2D
 var _has_tex := false
 
@@ -24,19 +33,32 @@ func _init(desk_rect: Rect2) -> void:
 	z_index = 1  # sopra il mobile: la pila sta SUL piano
 
 func _ready() -> void:
+	_restock_timer = restock
 	_has_tex = ResourceLoader.exists(TEX_BASE + "1.png")
 	if _has_tex:
 		_sprite = Sprite2D.new()
 		add_child(_sprite)
 	_refresh()
 
+func _process(delta: float) -> void:
+	if restock <= 0.0:
+		set_process(false)
+		return
+	_restock_timer -= delta
+	if _restock_timer <= 0.0:
+		_restock_timer = restock * randf_range(0.7, 1.3)
+		add_sheets(1)
+
 func add_sheets(n: int) -> void:
 	count = mini(count + n, MAX_SHEETS)
 	_refresh()
 
 func take_sheet() -> void:
+	take_sheets(1)
+
+func take_sheets(n: int) -> void:
 	if count > 0:
-		count -= 1
+		count = maxi(0, count - n)
 		_refresh()
 
 ## 0 = niente pila, 1..4 = stato visivo crescente.
