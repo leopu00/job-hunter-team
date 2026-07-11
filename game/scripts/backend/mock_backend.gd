@@ -45,13 +45,16 @@ const CHATTER := [
 ## registro con by_agent per-istanza): la pipeline completa di una
 ## posizione, così la scena reagisce con l'agente giusto — la scrittura
 ## CV deve accendere la stampante.
+## Stati e firme come nel jobs.db VERO (SELECT DISTINCT sulla VPS:
+## to_state ∈ new/checked/scored/writing/ready/excluded, by_agent
+## per-istanza "scout-2"): il mock deve recitare il sistema reale.
 const TRANSITIONS := [
-	{"by_agent": "scout-2", "from_state": null, "to_state": "found", "title": "Senior Backend Engineer", "company": "TechNova"},
-	{"by_agent": "analista-1", "from_state": "found", "to_state": "analyzed", "title": "Senior Backend Engineer", "company": "TechNova"},
-	{"by_agent": "scorer-1", "from_state": "analyzed", "to_state": "scored", "title": "Senior Backend Engineer", "company": "TechNova"},
-	{"by_agent": "scout-1", "from_state": null, "to_state": "found", "title": "Staff Platform Engineer", "company": "Cloudreef"},
-	{"by_agent": "scrittore-1", "from_state": "scored", "to_state": "written", "title": "Senior Backend Engineer", "company": "TechNova"},
-	{"by_agent": "critico-1", "from_state": "written", "to_state": "reviewed", "title": "Senior Backend Engineer", "company": "TechNova"},
+	{"by_agent": "scout-2", "from_state": null, "to_state": "new", "title": "Senior Backend Engineer", "company": "TechNova"},
+	{"by_agent": "analista-1", "from_state": "new", "to_state": "checked", "title": "Senior Backend Engineer", "company": "TechNova"},
+	{"by_agent": "scorer-1", "from_state": "checked", "to_state": "scored", "title": "Senior Backend Engineer", "company": "TechNova"},
+	{"by_agent": "scout-1", "from_state": null, "to_state": "new", "title": "Staff Platform Engineer", "company": "Cloudreef"},
+	{"by_agent": "scrittore-1", "from_state": "scored", "to_state": "writing", "title": "Senior Backend Engineer", "company": "TechNova"},
+	{"by_agent": "scrittore-1", "from_state": "writing", "to_state": "ready", "title": "Senior Backend Engineer", "company": "TechNova"},
 ]
 
 ## Eventi di roster ciclici: i worker dinamici vanno e vengono.
@@ -149,7 +152,7 @@ func _transitions_loop() -> void:
 			return
 		var t: Dictionary = TRANSITIONS[i % TRANSITIONS.size()].duplicate()
 		i += 1
-		if t["to_state"] == "found":
+		if t["to_state"] == "new":
 			pos_id += 1
 		t["position_id"] = pos_id
 		t["ts"] = Time.get_datetime_string_from_system()
