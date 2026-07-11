@@ -101,9 +101,8 @@ func _build(page := "") -> void:
 			else:
 				_build_stats()
 		"map":
-			# la mappa VERA (tiles OSM); il disegno a mano resta il
-			# fallback quando si è offline senza cache
-			_content.add_child(OsmMap.new())
+			# l'esperienza mappa del web privato: globo → mappa piatta
+			_content.add_child(WorldMap.new())
 		"team":
 			_build_team()
 		"agents":
