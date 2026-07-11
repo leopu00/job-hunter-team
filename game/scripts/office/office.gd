@@ -42,11 +42,19 @@ func _ready() -> void:
 		else:
 			world.add_child(FurnitureNode.new(item))
 
+	# postazioni dei 5 reparti: stesso FurnitureNode dei mobili, kind variati
+	for d in DepartmentDefs.all_desks():
+		world.add_child(FurnitureNode.new({
+			"id": "desk_%s_%d" % [d["dept"], d["index"]],
+			"kind": d["kind"],
+			"rect": d["rect"],
+		}))
+
 	for r in [FurnitureDefs.LAB_WALL_V, FurnitureDefs.LAB_WALL_H1, FurnitureDefs.LAB_WALL_H2]:
 		world.add_child(_invisible_wall(r))
 	_add_perimeter_walls()
 
-	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles())
+	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles() + DepartmentDefs.obstacles())
 
 	player = Player.new()
 	player.nav = nav
@@ -75,7 +83,29 @@ func _ready() -> void:
 	player.add_child(cam)
 	cam.make_current()
 
+	if OS.get_environment("JHT_OVERVIEW") == "1":  # TEST-AUTO: tutta la box in un frame
+		var ov := Camera2D.new()
+		ov.position = FurnitureDefs.WORLD.get_center()
+		var vp := get_viewport_rect().size
+		var z := minf(vp.x / FurnitureDefs.WORLD.size.x, vp.y / FurnitureDefs.WORLD.size.y)
+		ov.zoom = Vector2(z, z)
+		add_child(ov)
+		ov.make_current()
+
 	_add_hud()
+
+	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
+	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
+	var shot := OS.get_environment("JHT_SHOT")
+	if shot != "":
+		_take_shot(shot)
+
+func _take_shot(path: String) -> void:
+	await get_tree().create_timer(1.2).timeout
+	var img := get_viewport().get_texture().get_image()
+	img.save_png(path)
+	print("JHT_SHOT salvato: ", path)
+	get_tree().quit()
 
 func _process(delta: float) -> void:
 	_update_near_agent()

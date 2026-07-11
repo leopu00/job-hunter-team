@@ -25,7 +25,7 @@ const AGENTS := {
 	},
 	"scout": {
 		"name": "Lo Scout",
-		"spot": Vector2(1205, 1046),
+		"spot": Vector2(1361, 978),  # postazione r1c2 del reparto Scout
 		"wander": [Vector2(1000, 320), Vector2(1490, 320), Vector2(1600, 1250)],
 		"chatter": [
 			"sto scansionando LinkedIn…",
@@ -35,7 +35,7 @@ const AGENTS := {
 	},
 	"analista": {
 		"name": "L'Analista",
-		"spot": Vector2(2115, 318),
+		"spot": Vector2(1933, 214),  # postazione r1c1 del lab Analisti
 		"wander": [Vector2(1900, 520), Vector2(2100, 680)],
 		"chatter": [
 			"verifico lo stipendio probabile…",
@@ -45,7 +45,7 @@ const AGENTS := {
 	},
 	"scorer": {
 		"name": "Lo Scorer",
-		"spot": Vector2(2140, 986),
+		"spot": Vector2(2164, 970),  # il desk_wide col monitor curvo
 		"wander": [Vector2(2320, 1200), Vector2(1300, 960)],
 		"chatter": [
 			"sto pesando i requisiti…",
@@ -65,7 +65,7 @@ const AGENTS := {
 	},
 	"assistente": {
 		"name": "L'Assistente",
-		"spot": Vector2(595, 1106),
+		"spot": Vector2(1295, 1726),  # desk all'entrata sud (corridoio)
 		"wander": [Vector2(850, 1250), Vector2(1490, 320)],
 		"chatter": [
 			"l'onboarding è completo",
