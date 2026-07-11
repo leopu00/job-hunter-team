@@ -11,16 +11,16 @@ var _running := false
 ## Roster simulato: parte un sottoinsieme realistico del team (i W dinamici
 ## si accendono e spengono durante la sessione, come sulla VPS vera).
 var _roster: Array = [
-	{"slug": "coordinatore-1", "role": "coordinatore", "name": "Coordinatore", "active": true, "status": "working", "desk_hint": ""},
-	{"slug": "scout-1", "role": "scout", "name": "Scout Lead", "active": true, "status": "working", "desk_hint": ""},
-	{"slug": "scout-2", "role": "scout", "name": "Scout 02", "active": true, "status": "working", "desk_hint": ""},
-	{"slug": "analista-1", "role": "analista", "name": "Analista Lead", "active": true, "status": "working", "desk_hint": ""},
-	{"slug": "analista-2", "role": "analista", "name": "Analista 02", "active": true, "status": "idle", "desk_hint": ""},
-	{"slug": "scorer-1", "role": "scorer", "name": "Scorer Lead", "active": true, "status": "working", "desk_hint": ""},
-	{"slug": "critico-1", "role": "critico", "name": "Critico Lead", "active": true, "status": "working", "desk_hint": ""},
-	{"slug": "scrittore-1", "role": "scrittore", "name": "Scrittore Lead", "active": true, "status": "working", "desk_hint": ""},
-	{"slug": "mentor-1", "role": "mentor", "name": "Mentor", "active": true, "status": "working", "desk_hint": ""},
-	{"slug": "assistente-1", "role": "assistente", "name": "Assistente", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "coordinatore", "uid": "coordinatore-1", "role": "coordinatore", "name": "Coordinatore", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "scout", "uid": "scout-1", "role": "scout", "name": "Scout Lead", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "scout", "uid": "scout-2", "role": "scout", "name": "Scout 02", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "analista", "uid": "analista-1", "role": "analista", "name": "Analista Lead", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "analista", "uid": "analista-2", "role": "analista", "name": "Analista 02", "active": true, "status": "idle", "desk_hint": ""},
+	{"slug": "scorer", "uid": "scorer-1", "role": "scorer", "name": "Scorer Lead", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "critico", "uid": "critico-1", "role": "critico", "name": "Critico Lead", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "scrittore", "uid": "scrittore-1", "role": "scrittore", "name": "Scrittore Lead", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "mentor", "uid": "mentor-1", "role": "mentor", "name": "Mentor", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "assistente", "uid": "assistente-1", "role": "assistente", "name": "Assistente", "active": true, "status": "working", "desk_hint": ""},
 ]
 
 ## Chat plausibile per ruolo: [from, to, testo]. "all" = broadcast,
@@ -130,17 +130,17 @@ func _roster_loop() -> void:
 		match ev["op"]:
 			"spawn":
 				if not _is_active(ev["slug"]):
-					_roster.append({"slug": ev["slug"], "role": ev["role"],
+					_roster.append({"slug": ev["role"], "uid": ev["slug"], "role": ev["role"],
 							"name": ev["name"], "active": true,
 							"status": "working", "desk_hint": ""})
 			"despawn":
 				for a in _roster:
-					if a["slug"] == ev["slug"]:
+					if a["uid"] == ev["slug"]:
 						_roster.erase(a)
 						break
 			"status":
 				for a in _roster:
-					if a["slug"] == ev["slug"]:
+					if a["uid"] == ev["slug"]:
 						a["status"] = ev["status"]
 						a["throttle_secs"] = ev.get("throttle_secs", 0.0)
 						break
@@ -169,9 +169,12 @@ func _transitions_loop() -> void:
 ## Stesso giro del canale vero: open → snapshot, send → eco utente +
 ## checkpoint "sta lavorando" (partial) + risposta finale (done).
 
+## Chiavi = uid di GIOCO (contratto 1053f1ce: il bus non traduce più
+## in "capitano"); il fallback copre ogni altro agente del roster.
 const REPLIES := {
-	"capitano": "Ricevuto. Il team è a regime: pacing regolare, nessun collo di bottiglia. Ti aggiorno al prossimo tick.",
-	"assistente": "Ricevuto! Lo segno subito nel registro del team.",
+	"coordinatore-1": "Ricevuto. Il team è a regime: pacing regolare, nessun collo di bottiglia. Ti aggiorno al prossimo tick.",
+	"assistente-1": "Ricevuto! Lo segno subito nel registro del team.",
+	"mentor-1": "Buona domanda: parliamone. Intanto ricorda che la ricerca è una maratona.",
 }
 
 var _chat_agent := ""
@@ -186,7 +189,7 @@ func close_chat() -> void:
 
 func send_chat(agent: String, text: String) -> void:
 	_chat_msgs.append({"role": "user", "text": text,
-			"ts": Time.get_datetime_string_from_system(), "done": true})
+			"ts": Time.get_unix_time_from_system(), "done": true})
 	bus.user_chat_sent.emit(agent, true, "")
 	_publish_chat_state(agent)
 	_mock_reply(agent)
@@ -196,7 +199,7 @@ func _mock_reply(agent: String) -> void:
 	if not _running or _chat_agent != agent:
 		return
 	_chat_msgs.append({"role": "assistant", "text": "ci sto lavorando…",
-			"ts": Time.get_datetime_string_from_system(), "partial": true})
+			"ts": Time.get_unix_time_from_system(), "partial": true})
 	_publish_chat_state(agent)
 	await _sleep(randf_range(2.0, 3.0))
 	if not _running or _chat_agent != agent:
@@ -205,7 +208,7 @@ func _mock_reply(agent: String) -> void:
 	_chat_msgs.pop_back()
 	_chat_msgs.append({"role": "assistant",
 			"text": REPLIES.get(agent, "Ricevuto."),
-			"ts": Time.get_datetime_string_from_system(), "done": true})
+			"ts": Time.get_unix_time_from_system(), "done": true})
 	_publish_chat_state(agent)
 
 func _publish_chat_state(agent: String) -> void:
@@ -214,7 +217,7 @@ func _publish_chat_state(agent: String) -> void:
 
 func _is_active(slug: String) -> bool:
 	for a in _roster:
-		if a["slug"] == slug and a.get("active", true):
+		if a["uid"] == slug and a.get("active", true):
 			return true
 	return false
 
