@@ -10,7 +10,10 @@ extends Node2D
 ## deve restarci sopra. Possiede l'unico CanvasModulate della scena.
 
 const DAY_CM := Color(0.98, 0.98, 1.0)
-const NIGHT_CM := Color(0.76, 0.77, 0.92)
+## La notte deve VEDERSI (rifinitura 19:3x): prima 0.76/0.77/0.92 era
+## quasi il giorno; ora scena notturna blu e scura, e le lampade emergono.
+const NIGHT_CM := Color(0.60, 0.63, 0.84)
+const NIGHT_LAMP_BOOST := 2.0  # le pozze raddoppiano col buio pieno
 const DAY_OUT := Color("#3d4453")    # fuori c'è luce (grigio-azzurro)
 const NIGHT_OUT := Color("#060608")  # fuori è notte fonda
 
@@ -99,7 +102,7 @@ func _apply() -> void:
 	if _cm:
 		_cm.color = DAY_CM.lerp(NIGHT_CM, d)
 	for e in _lamps:
-		e[0].modulate.a = e[1] * d
+		e[0].modulate.a = e[1] * d * NIGHT_LAMP_BOOST
 		e[0].visible = d > 0.03
 	for e in _day_wash:
 		e[0].modulate.a = e[1] * (1.0 - d)
