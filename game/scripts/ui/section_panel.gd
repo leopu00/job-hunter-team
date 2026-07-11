@@ -306,7 +306,8 @@ func _pos_chip_row(key: String, title: String, all: Array) -> void:
 			_build())
 		row.add_child(chip)
 
-## Una posizione in lista: score | titolo cliccabile — azienda | luogo | stato.
+## Una posizione in lista, tabellare full-width come la pagina web:
+## score | titolo — azienda (espande) | famiglia | luogo | salario | stato.
 func _pos_row(p: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -315,11 +316,8 @@ func _pos_row(p: Dictionary) -> Control:
 	var score_col: Color = Palette.DIM if score_v == null \
 			else (Palette.MINT if int(score_v) >= 70 else Palette.YELLOW)
 	var score := TerminalTheme.label(score_txt, 17, score_col, "bold")
-	score.custom_minimum_size = Vector2(40, 0)
+	score.custom_minimum_size = Vector2(44, 0)
 	row.add_child(score)
-	var text_col := VBoxContainer.new()
-	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(text_col)
 	# il titolo apre la pagina della posizione (come sul web)
 	var title_btn := Button.new()
 	title_btn.flat = true
@@ -328,24 +326,42 @@ func _pos_row(p: Dictionary) -> Control:
 	title_btn.add_theme_color_override("font_color", Palette.BRIGHT)
 	title_btn.add_theme_color_override("font_hover_color", Palette.GREEN)
 	title_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title_btn.clip_text = true
+	title_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	var pid := int(p.get("id", 0))
 	title_btn.pressed.connect(func() -> void:
 		_pos_detail_id = pid
 		Sfx.play_tick()
 		_build("detail"))
-	text_col.add_child(title_btn)
-	var place := "%s · %s" % [str(p.get("loc_city", "") if p.get("loc_city") else "—"),
-			_pos_value(p, "loc_country")]
-	text_col.add_child(TerminalTheme.label(place, 13, Palette.MUTED))
+	row.add_child(title_btn)
+	var family := TerminalTheme.label(_pos_value(p, "role_family"), 13, Palette.MUTED)
+	family.custom_minimum_size = Vector2(220, 0)
+	family.clip_text = true
+	row.add_child(family)
+	var place := TerminalTheme.label("%s · %s" % [
+			str(p.get("loc_city", "") if p.get("loc_city") else "—"),
+			_pos_value(p, "loc_country")], 13, Palette.MUTED)
+	place.custom_minimum_size = Vector2(200, 0)
+	place.clip_text = true
+	row.add_child(place)
+	var est: bool = p.get("salary_estimated_min") != null
+	var s_min: Variant = p.get("salary_estimated_min") if est else p.get("salary_declared_min")
+	var s_max: Variant = p.get("salary_estimated_max") if est else p.get("salary_declared_max")
+	var sal := "—" if s_min == null and s_max == null \
+			else "%s–%s" % [_fmt_k(s_min), _fmt_k(s_max)]
+	var sal_lbl := TerminalTheme.label(sal, 13,
+			Palette.BASE if sal != "—" else Palette.DIM)
+	sal_lbl.custom_minimum_size = Vector2(110, 0)
+	row.add_child(sal_lbl)
 	var st := _pos_value(p, "status")
 	var st_lbl := TerminalTheme.label(st, 13,
 			POS_STATUS_COLORS.get(st, Palette.MUTED), "medium")
-	st_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	st_lbl.custom_minimum_size = Vector2(90, 0)
 	row.add_child(st_lbl)
 	# aria a destra: la scrollbar non deve coprire lo stato
 	var pad := Control.new()
-	pad.custom_minimum_size = Vector2(18, 0)
+	pad.custom_minimum_size = Vector2(14, 0)
 	row.add_child(pad)
 	return row
 
