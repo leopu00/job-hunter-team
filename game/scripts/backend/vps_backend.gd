@@ -56,6 +56,57 @@ const TRANSITIONS_SELECT := "SELECT t.position_id,t.from_state,t.to_state,t.ts,"
 		+ "LEFT JOIN positions p ON p.id=t.position_id ORDER BY t.id DESC LIMIT 80"
 
 const POSITIONS_EVERY := 4  # giri di poll tra due letture del jobs.db
+const SETTINGS_EVERY := 8   # config/usage cambiano raramente
+
+## Config team + usage REALI, già in forma di coppie [etichetta, valore]
+## per le sezioni della sidebar. SOLO campi safe: mai chiavi/credenziali.
+const SETTINGS_PY := """
+import json
+out = {}
+try:
+    c = json.load(open('/jht_home/jht.config.json'))
+except Exception:
+    c = {}
+ap = str(c.get('active_provider', ''))
+p = (c.get('providers') or {}).get(ap, {}) or {}
+sub = p.get('subscription')
+if isinstance(sub, dict):
+    sub = sub.get('email') or ', '.join(str(v) for v in sub.values())
+out['provider'] = [
+    ['Provider attivo', ap or '—'],
+    ['Modello', str(p.get('model', '—'))],
+    ['Abbonamento', str(sub or '—')],
+    ['Autenticazione', str(p.get('auth_method', '—'))],
+]
+wh = ((c.get('team') or {}).get('working_hours') or {})
+out['hours'] = [
+    ['Timezone', str(wh.get('timezone', '—'))],
+    ['Finestre di lavoro', json.dumps(wh.get('windows', '—'), ensure_ascii=False)[:120]],
+]
+n = c.get('notifications') or {}
+out['email'] = [
+    ['Notifiche', 'attive' if n.get('enabled') else 'spente'],
+    ['Canali', ', '.join(map(str, n.get('channels') or [])) or '—'],
+]
+a = c.get('analytics') or {}
+out['advanced'] = [
+    ['Config version', str(c.get('version', '—'))],
+    ['Analytics', 'on' if a.get('enabled') else 'off'],
+    ['Retention (giorni)', str(a.get('retention_days', '—'))],
+]
+try:
+    u = json.load(open('/jht_home/logs/agent-usage-table.json'))
+    tot = {}
+    for row in u.get('series_kt_per_bucket', []):
+        for k, v in row.items():
+            if k != 'ts':
+                tot[k] = round(tot.get(k, 0) + float(v), 1)
+    out['usage'] = {'window_h': u.get('window_h'), 'per_agent_kt': tot,
+                    'generated_at': str(u.get('generated_at', ''))}
+except Exception:
+    pass
+print(json.dumps(out, ensure_ascii=False))
+"""
 
 var _ip := ""
 var _key := ""
@@ -121,6 +172,8 @@ func _run() -> void:
 				_deferred_state(BackendBus.ERROR, _short_error(res))
 		if tick % POSITIONS_EVERY == 0:
 			_fetch_positions()
+		if tick % SETTINGS_EVERY == 0:
+			_fetch_settings()
 		if _convo_agent != "":
 			_fetch_convo(_convo_agent)
 		tick += 1
@@ -152,6 +205,20 @@ func _fetch_positions() -> void:
 				bus.set_deferred("transitions", data.get("tr", []))
 				bus.call_deferred("publish_positions", _assemble_positions(data))
 			return
+
+## jht.config.json + usage table → BackendBus.live_settings (le sezioni
+## config della sidebar e la pagina Utilizzo mostrano il reale).
+func _fetch_settings() -> void:
+	var res := _ssh_python(SETTINGS_PY)
+	if _stop or res["code"] != 0:
+		return
+	for line in str(res["out"]).split("\n"):
+		if line.begins_with("{"):
+			var data: Variant = JSON.parse_string(line)
+			if data is Dictionary:
+				bus.call_deferred("publish_settings", data)
+			return
+
 
 ## Unisce le tre SELECT: highlights e ticket dentro la loro posizione.
 static func _assemble_positions(data: Dictionary) -> Array:
@@ -293,6 +360,20 @@ func _fetch_convo(agent: String) -> void:
 		if d is Dictionary and str(d.get("text", "")) != "":
 			msgs.append(d)
 	bus.call_deferred("emit_signal", "agent_chat_updated", agent, msgs)
+
+## Esegue uno script python DENTRO il container passandolo via stdin
+## (python3 -): nessun limite di quoting, script multi-linea liberi.
+func _ssh_python(script: String) -> Dictionary:
+	var buf := "/tmp/jht-game-py-%d-%d.py" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var f := FileAccess.open(buf, FileAccess.WRITE)
+	if f == null:
+		return {"code": -1, "out": "file temporaneo non scrivibile"}
+	f.store_string(script)
+	f.close()
+	var res := _ssh_stdin_file(buf, "docker exec -i jht python3 -")
+	DirAccess.remove_absolute(buf)
+	return res
+
 
 ## bash locale SOLO per il redirect < file: il comando non contiene mai
 ## testo utente né caratteri che il wrap naive di OS.execute corrompa.
