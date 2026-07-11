@@ -346,6 +346,31 @@ func _plan_trip() -> void:
 		return
 	var pois := DepartmentDefs.POIS
 	var roll := randf()
+	if dept == "analisti" and roll < 0.35:
+		# banco-test (missione pipeline 3/3): si va a verificare in piedi
+		# fra le bobine, poi si torna a scrivere il report alla scrivania
+		_legs = [
+			_leg_to(TestBench.work_spot(), "walk", randf_range(10.0, 20.0), "work"),
+			_leg_to(_spot, "walk", 0.0, "work"),
+		]
+		_start_next_leg()
+		return
+	if dept == "critici" and roll < 0.40:
+		# loop scrittore↔critico (3/3): il critico RITIRA fisicamente il
+		# CV dagli scrittori, lo esamina nel suo ufficio e lo RIDÀ
+		var wr_inbox: Vector2 = DepartmentDefs.DEPARTMENTS["scrittori"]["inbox"]
+		var pick := _leg_to(_jit(wr_inbox), "walk", randf_range(0.8, 1.4), "idle")
+		pick["pile_take"] = "scrittori"
+		var back := _leg_to(_jit(wr_inbox), "carry", randf_range(0.6, 1.2), "idle")
+		back["pile_drop"] = "scrittori"
+		_legs = [
+			pick,
+			_leg_to(_spot, "carry", randf_range(14.0, 24.0), "work"),
+			back,
+			_leg_to(_spot, "walk", 0.0, "work"),
+		]
+		_start_next_leg()
+		return
 	if roll < 0.45:
 		# stampa: vai alla stampante, aspetta il foglio, torna coi fogli
 		var pr := _leg_to(_jit(pois["printer"]["spot"]), "walk",
