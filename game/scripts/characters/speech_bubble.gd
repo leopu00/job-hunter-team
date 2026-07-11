@@ -12,6 +12,7 @@ const MAX_TEXT_W := 230.0
 const LINE_GAP := 3.0
 const GAP_BETWEEN := 0.3  # respiro tra due messaggi in coda
 const MAX_QUEUE := 6      # oltre, i più vecchi si perdono (raffiche estreme)
+const MAX_CHARS := 220    # la chat tmux vera può essere lunghissima: si tronca
 
 var _queue: Array = []           # [{text, to_label}]
 var _lines := PackedStringArray()
@@ -31,9 +32,12 @@ func _ready() -> void:
 ## Accoda un messaggio. to_label: "" = broadcast, altrimenti il nome
 ## del destinatario mostrato come riga "→ <nome>" sopra il testo.
 func say(text: String, to_label := "") -> void:
-	if text.strip_edges().is_empty():
+	var clean := text.strip_edges()
+	if clean.is_empty():
 		return
-	_queue.append({"text": text.strip_edges(), "to_label": to_label})
+	if clean.length() > MAX_CHARS:
+		clean = clean.left(MAX_CHARS - 1).strip_edges() + "…"
+	_queue.append({"text": clean, "to_label": to_label})
 	while _queue.size() > MAX_QUEUE:
 		_queue.pop_front()
 

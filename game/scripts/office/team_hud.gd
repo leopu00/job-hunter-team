@@ -5,6 +5,8 @@ extends BracketPanel
 var _positions: Label
 var _score: Label
 var _budget: ProgressBar
+var _dot: Label          # pallino di stato: riflette la connessione VPS
+var _conn_detail: Label  # dettaglio quando non si è CONNECTED
 var _accum := 9.0  # aggiorna subito al primo frame
 
 func _ready() -> void:
@@ -24,9 +26,16 @@ func _ready() -> void:
 	var title_row := HBoxContainer.new()
 	title_row.add_theme_constant_override("separation", 10)
 	box.add_child(title_row)
-	var dot := TerminalTheme.label("●", 15, Palette.GREEN)
-	title_row.add_child(dot)
+	_dot = TerminalTheme.label("●", 15, Palette.GREEN)
+	title_row.add_child(_dot)
 	title_row.add_child(TerminalTheme.label(team_name.to_upper(), 18, Palette.WHITE, "xbold"))
+
+	# stato della connessione VPS: colore del pallino + dettaglio testuale
+	_conn_detail = TerminalTheme.label("", 12, Palette.DIM)
+	_conn_detail.visible = false
+	box.add_child(_conn_detail)
+	BackendBus.connection_changed.connect(_on_connection_changed)
+	_on_connection_changed(BackendBus.state, BackendBus.state_detail)
 
 	_positions = _stat_row(box, UIStrings.t("hud.positions_today"))
 	_score = _stat_row(box, UIStrings.t("hud.avg_score"))
@@ -52,6 +61,24 @@ func _process(delta: float) -> void:
 	_positions.text = str(s["positions_today"])
 	_score.text = str(s["avg_score"])
 	_budget.value = s["budget_used_pct"]
+
+## Il pallino dell'HUD dice la verità sulla VPS: verde=collegata,
+## giallo=in collegamento, rosso=errore, grigio=scollegata. Il dettaglio
+## (host, errore ssh, "mock") appare sotto il titolo quando serve.
+func _on_connection_changed(state: int, detail: String) -> void:
+	var color: Color
+	match state:
+		BackendBus.CONNECTED:
+			color = Palette.GREEN
+		BackendBus.CONNECTING:
+			color = Palette.YELLOW
+		BackendBus.ERROR:
+			color = Palette.RED
+		_:
+			color = Palette.DIM
+	_dot.add_theme_color_override("font_color", color)
+	_conn_detail.text = detail
+	_conn_detail.visible = detail != "" and state != BackendBus.CONNECTED
 
 func _stat_row(parent: Node, label_text: String) -> Label:
 	var row := HBoxContainer.new()
