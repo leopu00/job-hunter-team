@@ -35,3 +35,13 @@ func get_applications() -> Array:
 ## Streak quotidiana con freeze alla Duolingo: { days: int, freezes: int }
 func get_streak() -> Dictionary:
 	return {}
+
+## Ultime attività di un agente (per la scheda "chi è / cosa ha fatto"):
+## [{ when: String, text: String }] — la più recente per prima.
+func get_agent_activity(_slug: String) -> Array:
+	return []
+
+## Utilizzo del team (pagina usage): { provider, actions_today, actions_week,
+## quota_week_pct: float 0..1, tokens_today, budget_used_pct: float 0..1 }
+func get_usage() -> Dictionary:
+	return {}

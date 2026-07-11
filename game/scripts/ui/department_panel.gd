@@ -57,6 +57,30 @@ func _ready() -> void:
 	for i in desks.size():
 		box.add_child(_desk_row(i, accent))
 
+	# tutto ciò che riguarda il reparto: stato del ruolo + ultime attività
+	var role_slug: String = CharacterDefs.DEPT_ROLES[dept_id]["slug"]
+	box.add_child(HSeparator.new())
+	var status: Dictionary = TeamData.agent_status().get(role_slug, {})
+	if status.has("detail"):
+		var srow := HBoxContainer.new()
+		srow.add_theme_constant_override("separation", 10)
+		box.add_child(srow)
+		srow.add_child(TerminalTheme.label("●", 14, accent))
+		srow.add_child(TerminalTheme.label(status.get("status", ""), 15, Palette.MINT, "medium"))
+		var det := TerminalTheme.label(status["detail"], 14, Palette.MUTED)
+		det.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		det.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		srow.add_child(det)
+	box.add_child(TerminalTheme.label(UIStrings.t("agent.activity"), 15, Palette.MUTED, "medium"))
+	for entry in TeamData.agent_activity(role_slug):
+		var arow := HBoxContainer.new()
+		arow.add_theme_constant_override("separation", 14)
+		box.add_child(arow)
+		var when := TerminalTheme.label(entry["when"], 14, Palette.DIM)
+		when.custom_minimum_size = Vector2(90, 0)
+		arow.add_child(when)
+		arow.add_child(TerminalTheme.label(entry["text"], 15, Palette.BASE))
+
 	var hint := TerminalTheme.label(UIStrings.t("dept.close"), 14, Palette.DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	box.add_child(hint)

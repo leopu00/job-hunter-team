@@ -43,4 +43,9 @@ const S := {
 	"dept.desks": "POSTAZIONI",
 	"dept.desk_free": "postazione libera",
 	"dept.close": "click fuori per chiudere",
+
+	# ── Scheda agente ─────────────────────────────────────────────
+	"agent.activity": "ULTIME ATTIVITÀ",
+	"agent.activity_none": "nessuna attività registrata",
+	"agent.talk": "▶ PARLA",
 }

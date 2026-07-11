@@ -24,3 +24,9 @@ func applications() -> Array:
 
 func streak() -> Dictionary:
 	return source.get_streak()
+
+func agent_activity(slug: String) -> Array:
+	return source.get_agent_activity(slug)
+
+func usage() -> Dictionary:
+	return source.get_usage()

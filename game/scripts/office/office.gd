@@ -80,10 +80,17 @@ func _ready() -> void:
 	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
 			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
 
-	# TEST-AUTO: JHT_DEPT=<id> apre il pannello di quel reparto all'avvio.
+	# TEST-AUTO: JHT_DEPT=<id> apre il pannello di quel reparto all'avvio;
+	# JHT_CARD=<slug> apre la scheda del primo agente con quel ruolo.
 	var dept_test := OS.get_environment("JHT_DEPT")
 	if dept_test != "" and DepartmentDefs.DEPARTMENTS.has(dept_test):
 		_open_dept(dept_test)
+	var card_test := OS.get_environment("JHT_CARD")
+	if card_test != "":
+		for a in agents:
+			if a.slug == card_test:
+				_open_agent_card(a)
+				break
 
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
@@ -116,20 +123,28 @@ func _unhandled_input(event: InputEvent) -> void:
 			add_child(_registry)
 
 var _dept_panel: DepartmentPanel
+var _agent_card: AgentCard
 
 ## Click "pulito" dalla FreeCamera: agente > bacheca > reparto.
 func _on_world_click(target: Vector2) -> void:
 	if Game.dialogue_active:
 		return
-	if _registry or _dept_panel:
+	if _registry or _dept_panel or _agent_card:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
-			_start_talk(agent)
+			_open_agent_card(agent)
 			return
 	if FurnitureDefs.get_rect("corkboard").grow(30).has_point(target):
 		_registry = RegistryPanel.new()
 		add_child(_registry)
+		return
+	# il mappamondo apre la mappa delle offerte coi pin (vista web migrata)
+	if FurnitureDefs.get_rect("hologram").grow(24).has_point(target):
+		Log.info("ui", "mappa offerte aperta dal mappamondo")
+		var map_panel := SectionPanel.new("map", 24.0)
+		add_child(map_panel)
+		map_panel.closed.connect(map_panel.queue_free)
 		return
 	var dept := DepartmentDefs.department_at(target)
 	if dept != "":
@@ -158,6 +173,18 @@ func _update_hover() -> void:
 		if _hover_agent:
 			_hover_agent.set_highlight(true)
 			Sfx.play_tick()
+
+## Scheda "chi è / cosa ha fatto"; da lì si passa al dialogo.
+func _open_agent_card(agent: AgentNPC) -> void:
+	Log.info("agent", "scheda aperta: %s (%s)" % [agent.display_name, agent.slug])
+	agent.start_talk()  # si ferma e guarda in camera mentre lo esamini
+	_agent_card = AgentCard.new(agent)
+	add_child(_agent_card)
+	_agent_card.talk_requested.connect(func() -> void: _start_talk(agent))
+	_agent_card.closed.connect(func() -> void:
+		_agent_card = null
+		if not Game.dialogue_active:
+			agent.end_talk())
 
 func _start_talk(agent: AgentNPC) -> void:
 	if Game.dialogue_active:
