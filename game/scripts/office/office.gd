@@ -128,6 +128,15 @@ func _ready() -> void:
 			if a.slug == card_test:
 				_open_agent_card(a)
 				break
+	# TEST-AUTO: JHT_SEARCH=<query> apre la GlobalSearch precompilata
+	# (il refresh con le posizioni vere arriva col primo snapshot)
+	var search_test := OS.get_environment("JHT_SEARCH")
+	if search_test != "":
+		_toggle_search()
+		_search.set_query.call_deferred(search_test)
+		BackendBus.positions_updated.connect(func(_l: Array) -> void:
+			if _search:
+				_search.set_query(search_test))
 
 	# La scena vive sul BackendBus: roster reale → spawn/despawn,
 	# chat del team → fumetti. Se un backend è già connesso (snapshot
@@ -184,9 +193,16 @@ func _process(_delta: float) -> void:
 	_update_hover()
 
 var _registry: RegistryPanel
+var _search: GlobalSearch
 
 func _unhandled_input(event: InputEvent) -> void:
 	if Game.dialogue_active:
+		return
+	# GlobalSearch del web: Cmd/Ctrl+K apre la ricerca sulle posizioni
+	if event is InputEventKey and event.pressed and event.keycode == KEY_K \
+			and (event.meta_pressed or event.ctrl_pressed):
+		_toggle_search()
+		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("registry"):
 		if _registry:
@@ -196,6 +212,28 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_registry = RegistryPanel.new()
 			add_child(_registry)
+
+func _toggle_search() -> void:
+	if _search:
+		_search.queue_free()
+		_search = null
+		Sfx.play_back()
+		return
+	_search = GlobalSearch.new()
+	add_child(_search)
+	Sfx.play_blip()
+	_search.closed.connect(func() -> void:
+		if _search:
+			_search.queue_free()
+			_search = null)
+	_search.open_position.connect(func(id: int) -> void:
+		_search.queue_free()
+		_search = null
+		# apre la sezione positions direttamente sul dettaglio
+		var panel := SectionPanel.new("positions", 24.0)
+		panel._pos_detail_id = id
+		add_child(panel)
+		panel.closed.connect(panel.queue_free))
 
 var _dept_panel: DepartmentPanel
 var _agent_card: AgentCard
