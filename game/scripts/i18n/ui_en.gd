@@ -45,6 +45,11 @@ const S := {
 	"chat.send": "SEND",
 	"chat.you": "YOU",
 	"chat.empty": "no messages yet: you write first",
+	"chat.waiting": "waiting for the reply",
+	"chat.besteffort": "◐ this agent reads messages but may not reply in chat",
+	"chat.menu": "AGENT CHATS",
+	"chat.replies": "replies in chat",
+	"chat.maybe": "reads, reply not guaranteed",
 
 	"vps.intro": "Connect your team's VPS: IP and SSH key, the game handles the rest.",
 	"vps.ip": "VPS IP",

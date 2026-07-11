@@ -45,6 +45,11 @@ const S := {
 	"chat.send": "KÜLDÉS",
 	"chat.you": "TE",
 	"chat.empty": "még nincs üzenet: írj te elsőként",
+	"chat.waiting": "válaszra várva",
+	"chat.besteffort": "◐ ez az ügynök olvassa az üzeneteket, de lehet, hogy nem válaszol a chatben",
+	"chat.menu": "ÜGYNÖK CHATEK",
+	"chat.replies": "válaszol a chatben",
+	"chat.maybe": "olvassa, a válasz nem garantált",
 
 	"vps.intro": "Kösd össze a csapatod VPS-ét: IP és SSH kulcs, a többit a játék intézi.",
 	"vps.ip": "A VPS IP-CÍME",
