@@ -472,8 +472,11 @@ func _pos_row(p: Dictionary) -> Control:
 	var est: bool = p.get("salary_estimated_min") != null
 	var s_min: Variant = p.get("salary_estimated_min") if est else p.get("salary_declared_min")
 	var s_max: Variant = p.get("salary_estimated_max") if est else p.get("salary_declared_max")
+	var cur_v: Variant = p.get("salary_estimated_currency") if est \
+			else p.get("salary_declared_currency")
+	var s_cur := str(cur_v) if cur_v != null else "EUR"
 	var sal := "—" if s_min == null and s_max == null \
-			else "%s–%s" % [_fmt_k(s_min), _fmt_k(s_max)]
+			else _fmt_salary_eur(s_min, s_max, s_cur)
 	var sal_lbl := TerminalTheme.label(sal, 13,
 			Palette.BASE if sal != "—" else Palette.DIM)
 	sal_lbl.custom_minimum_size = Vector2(110, 0)
@@ -571,7 +574,9 @@ func _build_pos_detail() -> void:
 				else p.get("salary_declared_currency"))
 		if cur == "" or cur == "<null>":
 			cur = "EUR"
-		var rng := "%s–%s %s" % [_fmt_k(s_min), _fmt_k(s_max), cur]
+		var rng := _fmt_salary_eur(s_min, s_max, cur)
+		if cur.to_upper() != "EUR":
+			rng += "  (%s–%s %s)" % [_fmt_k(s_min), _fmt_k(s_max), cur]
 		var srow := HBoxContainer.new()
 		srow.add_theme_constant_override("separation", 12)
 		box.add_child(srow)
@@ -715,6 +720,21 @@ static func _fmt_k(v: Variant) -> String:
 	if v == null:
 		return "?"
 	return "%dk" % int(round(float(v) / 1000.0)) if float(v) >= 1000.0 else str(int(v))
+
+## Range salariale in EUR quando il tasso c'è (multi-valuta come sul
+## web, tassi BCE), altrimenti valuta originale esplicitata.
+static func _fmt_salary_eur(s_min: Variant, s_max: Variant, cur: String) -> String:
+	var c := cur.strip_edges().to_upper()
+	if c == "" or c == "<NULL>":
+		c = "EUR"
+	if c == "EUR":
+		return "%s–%s" % [_fmt_k(s_min), _fmt_k(s_max)]
+	var lo := -1.0 if s_min == null else BackendBus.to_eur(float(s_min), c)
+	var hi := -1.0 if s_max == null else BackendBus.to_eur(float(s_max), c)
+	if lo >= 0.0 or hi >= 0.0:
+		return "~%s–%s €" % [_fmt_k(lo if lo >= 0.0 else null),
+				_fmt_k(hi if hi >= 0.0 else null)]
+	return "%s–%s %s" % [_fmt_k(s_min), _fmt_k(s_max), c]
 
 # ── Impostazioni → Collega VPS ────────────────────────────────────────
 
