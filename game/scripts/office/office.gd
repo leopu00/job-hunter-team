@@ -13,6 +13,7 @@ var _camera: FreeCamera
 
 func _ready() -> void:
 	add_child(OfficeFloor.new())
+	add_child(DepartmentDressing.new())  # tinte/targhe dei 5 reparti (dev-art)
 	if OS.get_environment("JHT_ONLYFLOOR") == "1":  # TEST-AUTO
 		var c := Camera2D.new()
 		c.position = Vector2(1300, 750)
