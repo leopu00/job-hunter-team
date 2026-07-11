@@ -53,7 +53,8 @@ case "$MODE" in
 		GPID=$!
 		sleep 3
 		osascript -e 'tell application "System Events" to set frontmost of (first process whose name is "godot") to true' >/dev/null 2>&1 || true
-		for _ in $(seq 1 30); do
+		# fino a ~4 minuti: JHT_SHOT_DELAY può ritardare lo scatto di molto
+		for _ in $(seq 1 120); do
 			[ -s "$OUT_PNG" ] && break
 			kill -0 "$GPID" 2>/dev/null || break
 			sleep 2

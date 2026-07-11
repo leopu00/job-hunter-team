@@ -66,6 +66,10 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 		var desk: Dictionary = DepartmentDefs.DEPARTMENTS[dept]["desks"][def["desk"]]
 		_desk_facing = desk.get("facing", "down")
 	position = _spot
+	# gli agenti NON collidono tra loro (si incastravano nei passaggi):
+	# restano solide solo le collisioni coi mobili (layer 1)
+	collision_layer = 2
+	collision_mask = 1
 	# primo viaggio sparso su tutta la cadenza: niente fuggi-fuggi al boot
 	_state_timer = _cadence() * randf_range(0.15, 1.0)
 	_pose_timer = randf_range(12.0, 35.0)

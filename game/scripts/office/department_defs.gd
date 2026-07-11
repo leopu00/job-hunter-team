@@ -16,10 +16,12 @@ class_name DepartmentDefs
 ## - "inbox" = punto dove si accumulano i fogli del reparto: è la meta dei
 ##   flussi cross-reparto (es. gli Analisti ritirano dall'inbox degli Scout).
 ##
-## Il mondo è 2560×2140 (FLOOR 240,140→2440,2000, vedi FurnitureDefs): la
-## fila nord (lounge, coffee, lab di vetro) è invariata, lo spazio nuovo è
-## a sud. Catena del valore in senso orario: Scout (centro) → Analisti
-## (lab) → Scorer (destra) → Scrittori (basso-sx) → Critici (basso-dx).
+## Il pavimento è largo (240,140→3160,2000, vedi FurnitureDefs) e le
+## DISPOSIZIONI vengono dalla REGOLA DEL DADO (feedback live 11/07, tiri
+## in chat): Scout = isole a coppie faccia-a-faccia, Analisti = ferro di
+## cavallo nel lab (angolo NE), Scorer = diagonale a scala, Scrittori =
+## ferro di cavallo aperto a est, Critici = anello con centro libero.
+## Catena del valore: Scout → Analisti → Scorer → Scrittori → Critici.
 
 const DEPT_ORDER := ["scout", "analisti", "scorer", "scrittori", "critici"]
 
@@ -28,75 +30,80 @@ const DEPARTMENTS := {
 		"name": "Scout",
 		"tagline": "Trovano le posizioni là fuori",
 		"color": Color("#00e87a"),
-		"zone": Rect2(1000, 960, 700, 430),
-		"inbox": Vector2(1640, 1365),
+		"zone": Rect2(1000, 960, 880, 520),
+		"inbox": Vector2(1790, 1390),
+		# dado=2: tre isole a coppie, colleghi faccia a faccia
 		"desks": [
-			{"rect": Rect2(1040, 1006, 170, 78), "kind": "scout_a", "facing": "down"},
-			{"rect": Rect2(1272, 990, 170, 78), "kind": "scout_b", "facing": "down"},
-			{"rect": Rect2(1496, 1012, 170, 78), "kind": "scout_a", "facing": "left"},
-			{"rect": Rect2(1030, 1240, 170, 78), "kind": "scout_a", "facing": "up"},
-			{"rect": Rect2(1262, 1228, 170, 78), "kind": "scout_a", "facing": "down"},
-			{"rect": Rect2(1498, 1246, 170, 78), "kind": "scout_b", "facing": "down"},
+			{"rect": Rect2(1040, 1000, 170, 78), "kind": "scout_a", "facing": "down"},
+			{"rect": Rect2(1040, 1086, 170, 78), "kind": "scout_a", "facing": "up"},
+			{"rect": Rect2(1380, 1180, 170, 78), "kind": "scout_b", "facing": "down"},
+			{"rect": Rect2(1380, 1266, 170, 78), "kind": "scout_a", "facing": "up"},
+			{"rect": Rect2(1700, 1000, 170, 78), "kind": "scout_a", "facing": "down"},
+			{"rect": Rect2(1700, 1086, 170, 78), "kind": "scout_a", "facing": "up"},
 		],
 	},
 	"analisti": {
 		"name": "Analisti",
 		"tagline": "Arricchiscono e verificano i dati",
 		"color": Color("#4d9fff"),
-		"zone": Rect2(1806, 150, 620, 580),  # il lab di vetro
-		"inbox": Vector2(2106, 790),  # fuori dalla porta del lab
+		"zone": Rect2(2312, 150, 848, 580),  # il lab di vetro, angolo NE
+		"inbox": Vector2(2690, 790),  # fuori dalla porta del lab
+		# dado=3: ferro di cavallo aperto verso la porta a sud
 		"desks": [
-			{"rect": Rect2(1848, 228, 170, 78), "kind": "analisti_a", "facing": "down"},
-			{"rect": Rect2(2132, 214, 170, 78), "kind": "analisti_b", "facing": "down"},
-			{"rect": Rect2(1840, 402, 170, 78), "kind": "analisti_a", "facing": "right"},
-			{"rect": Rect2(2146, 392, 170, 78), "kind": "analisti_a", "facing": "down"},
-			{"rect": Rect2(1852, 570, 170, 78), "kind": "analisti_b", "facing": "down"},
-			{"rect": Rect2(2128, 562, 170, 78), "kind": "analisti_a", "facing": "down"},
+			{"rect": Rect2(2450, 230, 170, 78), "kind": "analisti_a", "facing": "down"},
+			{"rect": Rect2(2800, 230, 170, 78), "kind": "analisti_b", "facing": "down"},
+			{"rect": Rect2(2360, 380, 170, 78), "kind": "analisti_a", "facing": "right"},
+			{"rect": Rect2(2360, 560, 170, 78), "kind": "analisti_a", "facing": "right"},
+			{"rect": Rect2(2890, 380, 170, 78), "kind": "analisti_a", "facing": "left"},
+			{"rect": Rect2(2890, 560, 170, 78), "kind": "analisti_a", "facing": "left"},
 		],
 	},
 	"scorer": {
 		"name": "Scorer",
 		"tagline": "Pesano il match profilo↔annuncio",
 		"color": Color("#f5c518"),
-		"zone": Rect2(1740, 960, 680, 470),
-		"inbox": Vector2(1735, 1445),
+		"zone": Rect2(1950, 960, 1210, 470),
+		"inbox": Vector2(1965, 1400),
+		# dado=4: diagonale a scala verso sud-est, monitor curvo al centro
 		"desks": [
-			{"rect": Rect2(1776, 1004, 170, 78), "kind": "scorer_a", "facing": "down"},
-			{"rect": Rect2(2010, 986, 290, 110), "kind": "desk_wide", "facing": "down"},
-			{"rect": Rect2(1770, 1238, 170, 78), "kind": "scorer_b", "facing": "down"},
-			{"rect": Rect2(2012, 1230, 170, 78), "kind": "scorer_a", "facing": "up"},
-			{"rect": Rect2(2238, 1248, 170, 78), "kind": "scorer_a", "facing": "down"},
-			{"rect": Rect2(1908, 1334, 170, 78), "kind": "scorer_a", "facing": "up"},
+			{"rect": Rect2(1980, 980, 170, 78), "kind": "scorer_a", "facing": "down"},
+			{"rect": Rect2(2180, 1052, 170, 78), "kind": "scorer_b", "facing": "down"},
+			{"rect": Rect2(2360, 1116, 290, 110), "kind": "desk_wide", "facing": "down"},
+			{"rect": Rect2(2680, 1196, 170, 78), "kind": "scorer_a", "facing": "down"},
+			{"rect": Rect2(2880, 1268, 170, 78), "kind": "scorer_b", "facing": "down"},
+			{"rect": Rect2(2980, 1340, 170, 78), "kind": "scorer_a", "facing": "up"},
 		],
 	},
 	"scrittori": {
 		"name": "Scrittori",
 		"tagline": "Preparano CV e lettere su misura",
 		"color": Color("#a855f7"),
-		"zone": Rect2(320, 1480, 700, 430),
-		"inbox": Vector2(1060, 1700),
+		"zone": Rect2(320, 1520, 860, 440),
+		"inbox": Vector2(1120, 1740),
+		# dado=3: ferro di cavallo aperto verso l'ufficio (est)
 		"desks": [
-			{"rect": Rect2(352, 1524, 170, 78), "kind": "scrittori_a", "facing": "down"},
-			{"rect": Rect2(586, 1512, 170, 78), "kind": "scrittori_b", "facing": "down"},
-			{"rect": Rect2(816, 1530, 170, 78), "kind": "scrittori_a", "facing": "right"},
-			{"rect": Rect2(346, 1758, 170, 78), "kind": "scrittori_a", "facing": "down"},
-			{"rect": Rect2(580, 1746, 170, 78), "kind": "scrittori_a", "facing": "up"},
-			{"rect": Rect2(812, 1764, 170, 78), "kind": "scrittori_b", "facing": "down"},
+			{"rect": Rect2(350, 1560, 170, 78), "kind": "scrittori_a", "facing": "right"},
+			{"rect": Rect2(350, 1740, 170, 78), "kind": "scrittori_a", "facing": "right"},
+			{"rect": Rect2(600, 1545, 170, 78), "kind": "scrittori_b", "facing": "down"},
+			{"rect": Rect2(600, 1830, 170, 78), "kind": "scrittori_a", "facing": "up"},
+			{"rect": Rect2(860, 1545, 170, 78), "kind": "scrittori_a", "facing": "down"},
+			{"rect": Rect2(860, 1830, 170, 78), "kind": "scrittori_a", "facing": "up"},
 		],
 	},
 	"critici": {
 		"name": "Critici",
 		"tagline": "Revisionano ogni riga prima dell'invio",
 		"color": Color("#ff4560"),
-		"zone": Rect2(1740, 1480, 680, 430),
-		"inbox": Vector2(1700, 1700),
+		"zone": Rect2(2150, 1520, 1010, 440),
+		"inbox": Vector2(2660, 1755),  # la pila delle revisioni al centro
+		# dado=6: anello rivolto al centro (spazio per un pezzo di dev-art)
 		"desks": [
-			{"rect": Rect2(1772, 1522, 170, 78), "kind": "critici_a", "facing": "down"},
-			{"rect": Rect2(2004, 1510, 170, 78), "kind": "critici_a", "facing": "left"},
-			{"rect": Rect2(2228, 1528, 170, 78), "kind": "critici_b", "facing": "down"},
-			{"rect": Rect2(1766, 1756, 170, 78), "kind": "critici_a", "facing": "down"},
-			{"rect": Rect2(2010, 1748, 170, 78), "kind": "critici_b", "facing": "down"},
-			{"rect": Rect2(2224, 1766, 170, 78), "kind": "critici_a", "facing": "up"},
+			{"rect": Rect2(2480, 1550, 170, 78), "kind": "critici_a", "facing": "down"},
+			{"rect": Rect2(2740, 1550, 170, 78), "kind": "critici_b", "facing": "down"},
+			{"rect": Rect2(2280, 1690, 170, 78), "kind": "critici_a", "facing": "right"},
+			{"rect": Rect2(2950, 1690, 170, 78), "kind": "critici_a", "facing": "left"},
+			{"rect": Rect2(2480, 1850, 170, 78), "kind": "critici_a", "facing": "up"},
+			{"rect": Rect2(2740, 1850, 170, 78), "kind": "critici_a", "facing": "up"},
 		],
 	},
 }
@@ -108,8 +115,8 @@ const POIS := {
 	"coffee": {"spot": Vector2(1500, 310)},
 	"water_cooler": {"spot": Vector2(1635, 300)},
 	"hologram": {"spot": Vector2(1300, 930)},
-	# isola condivisa nel corridoio sud (tavolo lungo, 5 posti lato camera)
-	"long_table": {"spot": Vector2(1400, 1660)},
+	# tavolone condiviso pieno di fogli, corridoio sud (esito del dado)
+	"long_table": {"spot": Vector2(1700, 1745)},
 	# sala relax a ovest (pausa vera: divano/arcade/ping-pong)
 	"rec_room": {"spot": Vector2(520, 1200)},
 }

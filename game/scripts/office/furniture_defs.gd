@@ -3,18 +3,18 @@ class_name FurnitureDefs
 ## Ogni voce: id univoco, kind (per il visual), rect in coordinate mondo.
 ## I rect sono anche gli ostacoli di collisione/navigazione.
 
-## Espanso a SUD per i 5 reparti (M-reparti): la fila nord (lounge, coffee,
-## lab) è invariata, le zone/scrivanie dei reparti vivono in DepartmentDefs.
-## Il margine NORD sale a -420: fascia cielo per lo skyline esterno
-## giorno/notte (DayNight, asset exterior_*.png).
-const WORLD := Rect2(0, -420, 2560, 2560)
-const FLOOR := Rect2(240, 140, 2200, 1860)
+## Espanso a SUD per i 5 reparti e a EST per il layout largo (feedback
+## live 11/07: "allargate l'ufficio"): la fila nord è invariata, le
+## zone/scrivanie dei reparti vivono in DepartmentDefs. Il margine NORD
+## sale a -420: fascia cielo per lo skyline esterno (DayNight).
+const WORLD := Rect2(0, -420, 3400, 2560)
+const FLOOR := Rect2(240, 140, 2920, 1860)
 
 ## Zona lab racchiusa da vetri interni (visual + collisioni sottili).
-## Allungata a sud: il lab è la casa dei 6 Analisti (DepartmentDefs).
-const LAB_WALL_V := Rect2(1794, 140, 12, 606)     # parete verticale
-const LAB_WALL_H1 := Rect2(1794, 740, 262, 12)    # tratto sx della parete bassa
-const LAB_WALL_H2 := Rect2(2156, 740, 284, 12)    # tratto dx (in mezzo: porta)
+## Spostato all'angolo NE del pavimento largo: casa dei 6 Analisti.
+const LAB_WALL_V := Rect2(2300, 140, 12, 606)     # parete verticale
+const LAB_WALL_H1 := Rect2(2300, 740, 330, 12)    # tratto sx della parete bassa
+const LAB_WALL_H2 := Rect2(2750, 740, 410, 12)    # tratto dx (in mezzo: porta)
 
 const ITEMS := [
 	# ── Lounge (alto-sx): la zona del Mentor ──
@@ -54,19 +54,19 @@ const ITEMS := [
 
 	# ── Verde sparso (reparti e corridoi, mai sulla nav principale) ──
 	{"id": "plant_palm_a", "kind": "plant_palm", "rect": Rect2(958, 1420, 56, 56)},
-	{"id": "plant_monstera_a", "kind": "plant_monstera", "rect": Rect2(1712, 892, 56, 56)},
+	{"id": "plant_monstera_a", "kind": "plant_monstera", "rect": Rect2(2200, 820, 56, 56)},
 	{"id": "plant_shelf_a", "kind": "plant_shelf", "rect": Rect2(860, 186, 90, 50)},
 	{"id": "plant_monstera_b", "kind": "plant_monstera", "rect": Rect2(2378, 764, 56, 56)},
-	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1040, 1894, 56, 56)},
-	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(2384, 1444, 56, 56)},
+	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1230, 1900, 56, 56)},
+	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3090, 1455, 56, 56)},
 	{"id": "plant_palm_c", "kind": "plant_palm", "rect": Rect2(302, 1436, 56, 56)},
 
 	# ── Corridoio sud, tra Scrittori e Critici ──
-	# isola condivisa: tavolo lungo da 5 posti (asset dev-art, facing down)
-	{"id": "long_table", "kind": "long_table", "rect": Rect2(1100, 1510, 600, 110), "facing": "down"},
-	{"id": "desk_assistant", "kind": "desk", "rect": Rect2(1180, 1740, 230, 100)},
+	# tavolone condiviso pieno di fogli (esito del dado d3=3, asset dev-art)
+	{"id": "long_table", "kind": "long_table", "rect": Rect2(1400, 1600, 600, 110), "facing": "down"},
+	{"id": "desk_assistant", "kind": "desk", "rect": Rect2(1550, 1800, 230, 100)},
 
-	{"id": "plant_b", "kind": "plant", "rect": Rect2(2360, 1240, 56, 56)},
+	{"id": "plant_b", "kind": "plant", "rect": Rect2(1950, 860, 56, 56)},
 ]
 # Rimossi (i reparti hanno postazioni proprie in DepartmentDefs): lab_bench,
 # lab_shelf, shelf_right, desk_scout, desk_pod, desk_scorer.

@@ -99,7 +99,13 @@ func _ready() -> void:
 		_take_shot(shot)
 
 func _take_shot(path: String) -> void:
-	await get_tree().create_timer(1.2).timeout
+	# JHT_SHOT_DELAY=N ritarda lo scatto: utile per fotografare la
+	# simulazione a regime (viaggi in corso) e scovare ingorghi.
+	var delay := 1.2
+	var delay_env := OS.get_environment("JHT_SHOT_DELAY")
+	if delay_env != "":
+		delay = maxf(0.5, float(delay_env))
+	await get_tree().create_timer(delay).timeout
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(path)
 	Log.info("test", "JHT_SHOT salvato: " + path)
