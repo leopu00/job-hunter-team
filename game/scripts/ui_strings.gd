@@ -122,6 +122,21 @@ const S := {
 	"search.no_match": "nessuna posizione trovata",
 	"search.need_vps": "collega la VPS per cercare tra le posizioni reali",
 
+	# ── Statistiche: grafici cross-filter (come la dashboard web) ─
+	"stats.hint": "// click su una barra per filtrare: gli altri grafici si aggiornano",
+	"stats.filters": "FILTRI ATTIVI: %d",
+	"stats.reset": "✕ AZZERA",
+	"stats.types": "TIPI DI RUOLO",
+	"stats.countries": "PAESI",
+	"stats.cities": "CITTÀ",
+	"stats.scores": "SCORE (fasce da 5)",
+	"stats.salaries": "STIPENDI (fasce da 20k €)",
+	"stats.matches": "POSIZIONI CORRISPONDENTI — %d",
+	"stats.no_city": "· senza città: %d",
+	"stats.no_country": "(senza paese)",
+	"stats.empty": "nessun dato con questi filtri",
+	"stats.need_vps": "collega la VPS per i grafici sui dati reali",
+
 	# ── Dashboard: pipeline del flusso reale ──────────────────────
 	"dash.pipeline": "PIPELINE",
 	"dash.pl_to_analyze": "Da analizzare",
