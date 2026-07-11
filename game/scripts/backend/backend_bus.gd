@@ -222,19 +222,48 @@ func is_live() -> bool:
 	return state == CONNECTED and _backend != null and _backend.live
 
 ## ── Chat bidirezionale utente ↔ agente ───────────────────────────────
+## Chat 1-a-1 con OGNI agente del roster (paradigma desktop app): il
+## backend risolve uid → sessione tmux e directory chat.jsonl. La
+## RISPOSTA persistita è garantita solo per chi ha la skill chat-web
+## nel proprio prompt (verificato sulla VPS: capitano, assistente,
+## mentor); gli altri ricevono il messaggio ma potrebbero rispondere
+## solo a schermo nel terminale del team — la UI lo dice.
+const REPLY_CAPABLE := ["coordinatore", "assistente", "mentor"]
 
-## Slug di gioco → agente chattabile del sistema reale (il protocollo
-## [CHAT] è supportato da Capitano e Assistente).
-const CHATTABLE := {"coordinatore": "capitano", "assistente": "assistente"}
+## In attesa di risposta: uid → ts unix dell'invio. La UI mostra
+## l'indicatore di caricamento su chat_waiting_changed.
+var chat_waiting := {}
+signal chat_waiting_changed(agent: String, waiting: bool)
 
-func can_chat_with(slug: String) -> bool:
-	return CHATTABLE.has(slug) and _backend != null
+func can_chat_with(slug_or_uid: String) -> bool:
+	if _backend == null:
+		return false
+	for a in agents:
+		if str(a.get("uid", a.get("slug", ""))) == slug_or_uid \
+				or str(a.get("slug", "")) == slug_or_uid:
+			return true
+	return false
+
+## La risposta in chat è garantita dal protocollo dell'agente?
+func chat_replies(slug_or_uid: String) -> bool:
+	return REPLY_CAPABLE.has(_chat_uid(slug_or_uid))
+
+## slug generico ("scout") → uid della prima istanza attiva ("scout-2");
+## un uid passa invariato.
+func _chat_uid(slug_or_uid: String) -> String:
+	for a in agents:
+		if str(a.get("uid", "")) == slug_or_uid:
+			return slug_or_uid
+	for a in agents:
+		if str(a.get("slug", "")) == slug_or_uid:
+			return str(a.get("uid", slug_or_uid))
+	return slug_or_uid
 
 ## Apre/chiude la conversazione: finché è aperta il backend polla il
-## chat.jsonl dell'agente e pubblica agent_chat_updated.
+## chat.jsonl dell'agente e pubblica publish_agent_chat.
 func open_agent_chat(slug: String) -> void:
-	if _backend and CHATTABLE.has(slug):
-		_backend.open_chat(CHATTABLE[slug])
+	if _backend:
+		_backend.open_chat(_chat_uid(slug))
 
 func close_agent_chat() -> void:
 	if _backend:
@@ -243,8 +272,29 @@ func close_agent_chat() -> void:
 ## Invia il messaggio dell'utente all'agente reale (async: l'esito
 ## arriva su user_chat_sent, la risposta su agent_chat_updated).
 func send_user_chat(slug: String, text: String) -> void:
-	if _backend and CHATTABLE.has(slug):
-		_backend.send_chat(CHATTABLE[slug], text)
+	if _backend and can_chat_with(slug):
+		var uid := _chat_uid(slug)
+		chat_waiting[uid] = Time.get_unix_time_from_system()
+		chat_waiting_changed.emit(uid, true)
+		_backend.send_chat(uid, text)
+
+## Il backend pubblica la conversazione da qui: spegne l'attesa quando
+## la risposta dell'agente (successiva all'invio) è arrivata.
+func publish_agent_chat(agent: String, messages: Array) -> void:
+	if chat_waiting.has(agent) and not messages.is_empty():
+		var last: Dictionary = messages[messages.size() - 1]
+		if str(last.get("role", "")) == "assistant" \
+				and float(last.get("ts", 0.0)) >= float(chat_waiting[agent]):
+			chat_waiting.erase(agent)
+			chat_waiting_changed.emit(agent, false)
+	agent_chat_updated.emit(agent, messages)
+
+## Invio fallito → niente più attesa (la UI toglie l'indicatore).
+func publish_chat_sent(agent: String, ok: bool, error: String) -> void:
+	if not ok and chat_waiting.has(agent):
+		chat_waiting.erase(agent)
+		chat_waiting_changed.emit(agent, false)
+	user_chat_sent.emit(agent, ok, error)
 
 
 ## ── Ticket utente→team ───────────────────────────────────────────────
