@@ -208,7 +208,8 @@ const S := {
 	"prof.save_err": "✘ salvataggio fallito: %s",
 
 	# ── Mappa OSM ─────────────────────────────────────────────────
-	"map.hint": "trascina per muoverti · rotella/pinch per lo zoom · click su una città per avvicinarti",
+	"map.hint": "trascina per muoverti · rotella/pinch per lo zoom · click su una città per avvicinarti · allontana per il globo",
+	"map.globe_hint": "trascina per ruotare il mondo · avvicinati con rotella/pinch per atterrare sulla mappa",
 
 	# ── Orari di lavoro (editabili, con stima dinamica) ───────────
 	"hours.intro": "Le finestre in cui il team lavora: modifica e salva, il pacing si adegua.",
