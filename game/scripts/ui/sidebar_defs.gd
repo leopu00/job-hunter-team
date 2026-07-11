@@ -17,6 +17,7 @@ const GROUPS := [
 		"title": "Lavoro",
 		"items": [
 			{"id": "dashboard", "icon": "📊", "label": "Dashboard"},
+			{"id": "positions", "icon": "🎯", "label": "Posizioni"},
 			{"id": "stats", "icon": "📈", "label": "Statistiche"},
 			{"id": "apps", "icon": "📨", "label": "Candidature"},
 			{"id": "map", "icon": "🗺", "label": "Mappa"},

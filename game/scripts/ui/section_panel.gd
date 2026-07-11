@@ -92,6 +92,8 @@ func _build(page := "") -> void:
 			_build_chat()
 		"vps":
 			_build_vps()
+		"positions":
+			_build_positions()
 		"profile", "hours", "provider", "docker", "account", "email", "language", "advanced":
 			_build_config()
 		_:
@@ -115,6 +117,198 @@ func _build_config() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			"// sola lettura — si modifica dalla desktop app", 13, Palette.DIM))
+
+# ── Posizioni: la pagina positions del web privato, dati veri ────────
+
+## Stessi colori-fase della pipeline web (status → colore).
+const POS_STATUS_COLORS := {
+	"new": Palette.MUTED, "checked": Palette.BLUE, "scored": Palette.PURPLE,
+	"writing": Palette.YELLOW, "review": Palette.ORANGE, "ready": Palette.MINT,
+	"applied": Palette.GREEN, "response": Palette.BLUE, "excluded": Palette.RED,
+}
+const POS_STATUS_ORDER := ["new", "checked", "scored", "writing", "review",
+		"ready", "applied", "response", "excluded"]
+const POS_LIST_MAX := 40
+
+## Filtri attivi (chip → set di valori). Persistono finché il pannello vive.
+var _pos_filters := {
+	"status": {}, "role_family": {}, "loc_country": {}, "work_mode": {},
+}
+
+## Cross-filtering come sul web: ogni gruppo di chip conta le posizioni
+## filtrate da TUTTI GLI ALTRI gruppi, la lista le filtra da tutti.
+func _build_positions() -> void:
+	var all: Array = BackendBus.positions
+	if all.is_empty():
+		_content.add_child(TerminalTheme.label(UIStrings.t("pos.need_vps"),
+				15, Palette.MUTED))
+		if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
+			BackendBus.positions_updated.connect(_on_positions_refresh)
+		return
+	if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
+		BackendBus.positions_updated.connect(_on_positions_refresh)
+
+	var visible_rows := _pos_filtered(all, "")
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 16)
+	_content.add_child(head)
+	var count := TerminalTheme.label(UIStrings.t("pos.count")
+			% [all.size(), visible_rows.size()], 15, Palette.MINT, "medium")
+	count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(count)
+	var any_filter := false
+	for key in _pos_filters:
+		if not (_pos_filters[key] as Dictionary).is_empty():
+			any_filter = true
+	if any_filter:
+		var clear := Button.new()
+		clear.text = UIStrings.t("pos.clear")
+		clear.add_theme_font_size_override("font_size", 13)
+		clear.add_theme_color_override("font_color", Palette.RED)
+		clear.pressed.connect(func() -> void:
+			for key in _pos_filters:
+				_pos_filters[key] = {}
+			_build())
+		head.add_child(clear)
+
+	_pos_chip_row("status", UIStrings.t("pos.f_status"), all)
+	_pos_chip_row("role_family", UIStrings.t("pos.f_family"), all)
+	_pos_chip_row("work_mode", UIStrings.t("pos.f_mode"), all)
+	_pos_chip_row("loc_country", UIStrings.t("pos.f_country"), all)
+	_content.add_child(HSeparator.new())
+
+	if visible_rows.is_empty():
+		_content.add_child(TerminalTheme.label(UIStrings.t("pos.no_match"),
+				15, Palette.DIM))
+		return
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 300)
+	_content.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 6)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	for p in visible_rows.slice(0, POS_LIST_MAX):
+		list.add_child(_pos_row(p))
+	if visible_rows.size() > POS_LIST_MAX:
+		list.add_child(TerminalTheme.label(
+				"… e altre %d" % (visible_rows.size() - POS_LIST_MAX), 13, Palette.DIM))
+
+func _on_positions_refresh(_list: Array) -> void:
+	if section == "positions" and is_instance_valid(_content):
+		_build()
+
+## Posizioni filtrate da tutti i gruppi tranne `skip` (cross-filter).
+func _pos_filtered(all: Array, skip: String) -> Array:
+	var out: Array = []
+	for p in all:
+		var ok := true
+		for key in _pos_filters:
+			if key == skip:
+				continue
+			var chosen: Dictionary = _pos_filters[key]
+			if chosen.is_empty():
+				continue
+			if not chosen.has(_pos_value(p, key)):
+				ok = false
+				break
+		if ok:
+			out.append(p)
+	return out
+
+func _pos_value(p: Dictionary, key: String) -> String:
+	var v := str(p.get(key, ""))
+	return v if v != "" and v != "<null>" else UIStrings.t("pos.uncategorized")
+
+## Una riga di chip per un gruppo di filtro, con conteggi cross-filtrati.
+func _pos_chip_row(key: String, title: String, all: Array) -> void:
+	var pool := _pos_filtered(all, key)
+	var counts := {}
+	for p in pool:
+		var v := _pos_value(p, key)
+		counts[v] = int(counts.get(v, 0)) + 1
+	var values: Array = counts.keys()
+	if key == "status":  # ordine di pipeline, non alfabetico
+		var ordered: Array = []
+		for st in POS_STATUS_ORDER:
+			if counts.has(st):
+				ordered.append(st)
+		for v in values:
+			if not POS_STATUS_ORDER.has(v):
+				ordered.append(v)
+		values = ordered
+	else:
+		values.sort()
+
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 8)
+	row.add_theme_constant_override("v_separation", 6)
+	_content.add_child(row)
+	var lbl := TerminalTheme.label(title, 13, Palette.DIM, "medium")
+	lbl.custom_minimum_size = Vector2(150, 0)
+	row.add_child(lbl)
+	var chosen: Dictionary = _pos_filters[key]
+	for v in values:
+		var chip := Button.new()
+		var active: bool = chosen.has(v)
+		chip.text = "%s %d" % [v, counts[v]]
+		chip.add_theme_font_size_override("font_size", 13)
+		var color: Color = POS_STATUS_COLORS.get(v, Palette.BASE) \
+				if key == "status" else Palette.BASE
+		chip.add_theme_color_override("font_color",
+				color if active or chosen.is_empty() else Palette.DIM)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(color.r, color.g, color.b, 0.18 if active else 0.0)
+		sb.border_color = color if active else Palette.BORDER
+		sb.set_border_width_all(1)
+		sb.content_margin_left = 8
+		sb.content_margin_right = 8
+		sb.content_margin_top = 2
+		sb.content_margin_bottom = 3
+		chip.add_theme_stylebox_override("normal", sb)
+		chip.add_theme_stylebox_override("hover", sb.duplicate())
+		chip.add_theme_stylebox_override("pressed", sb.duplicate())
+		chip.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		chip.pressed.connect(func() -> void:
+			if chosen.has(v):
+				chosen.erase(v)
+			else:
+				chosen[v] = true
+			Sfx.play_tick()
+			_build())
+		row.add_child(chip)
+
+## Una posizione in lista: score | titolo — azienda | luogo | stato.
+func _pos_row(p: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	var score_v: Variant = p.get("total_score")
+	var score_txt := "—" if score_v == null else str(int(score_v))
+	var score_col: Color = Palette.DIM if score_v == null \
+			else (Palette.MINT if int(score_v) >= 70 else Palette.YELLOW)
+	var score := TerminalTheme.label(score_txt, 17, score_col, "bold")
+	score.custom_minimum_size = Vector2(40, 0)
+	row.add_child(score)
+	var text_col := VBoxContainer.new()
+	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(text_col)
+	text_col.add_child(TerminalTheme.label("%s — %s" % [
+			_pos_value(p, "title"), _pos_value(p, "company")], 15, Palette.BRIGHT))
+	var place := "%s · %s" % [str(p.get("loc_city", "") if p.get("loc_city") else "—"),
+			_pos_value(p, "loc_country")]
+	text_col.add_child(TerminalTheme.label(place, 13, Palette.MUTED))
+	var st := _pos_value(p, "status")
+	var st_lbl := TerminalTheme.label(st, 13,
+			POS_STATUS_COLORS.get(st, Palette.MUTED), "medium")
+	st_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(st_lbl)
+	# aria a destra: la scrollbar non deve coprire lo stato
+	var pad := Control.new()
+	pad.custom_minimum_size = Vector2(18, 0)
+	row.add_child(pad)
+	return row
 
 # ── Impostazioni → Collega VPS ────────────────────────────────────────
 
