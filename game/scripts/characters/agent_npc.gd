@@ -150,6 +150,20 @@ func set_backend_status(status: String) -> void:
 	if state == S.WORK:
 		_work_pose()
 
+## Reazione a una transizione REALE del registro attività: il corpo
+## pulsa due volte (il lavoro vero si deve vedere in scena) e una
+## scrittura CV accende la stampante dell'ufficio. Il fumetto con la
+## posizione lavorata lo recapita office.gd via say().
+func react_to_work(print_job := false) -> void:
+	if _dissolving:
+		return
+	if print_job:
+		PrinterFx.ping(4.0)
+	var tw := create_tween()
+	for _i in 2:
+		tw.tween_property(rig, "modulate", Color(0.72, 1.3, 1.05), 0.16)
+		tw.tween_property(rig, "modulate", Color.WHITE, 0.45)
+
 func set_highlight(on: bool) -> void:
 	if _highlight != on:
 		_highlight = on
