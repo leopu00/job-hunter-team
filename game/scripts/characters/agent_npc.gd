@@ -235,10 +235,10 @@ func _plan_trip() -> void:
 	var roll := randf()
 	if roll < 0.45:
 		# stampa: vai alla stampante, aspetta il foglio, torna coi fogli
-		_legs = [
-			_leg_to(_jit(pois["printer"]["spot"]), "walk", randf_range(1.5, 3.0), "idle"),
-			_leg_to(_spot, "carry", 0.0, "work"),
-		]
+		var pr := _leg_to(_jit(pois["printer"]["spot"]), "walk",
+				randf_range(1.5, 3.0), "idle")
+		pr["fx_printer"] = true  # il macchinario si anima per la sosta
+		_legs = [pr, _leg_to(_spot, "carry", 0.0, "work")]
 	elif roll < 0.80 and DepartmentDefs.FETCH_FROM.has(dept):
 		# ritiro: inbox del reparto a monte → inbox di casa → scrivania
 		var src: String = DepartmentDefs.FETCH_FROM[dept]
@@ -287,6 +287,8 @@ func _start_next_leg() -> void:
 	state = S.TRIP
 
 func _arrive_at_leg() -> void:
+	if _leg.get("fx_printer", false):
+		PrinterFx.ping(float(_leg.get("pause", 2.0)))
 	# movimenti di fogli sugli inbox di reparto (pile condivise)
 	if _leg.has("pile_take") and PaperPile.inbox.has(_leg["pile_take"]):
 		PaperPile.inbox[_leg["pile_take"]].take_sheets(randi_range(2, 3))
