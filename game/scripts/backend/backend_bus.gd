@@ -52,6 +52,12 @@ var live_settings: Dictionary = {}
 var chat_log: Array = []     # ultimi messaggi (fumetti di dev1 + vista Chat)
 const CHAT_LOG_MAX := 200
 
+## Tassi di cambio "unità per 1 EUR" (stessa fonte del web: Frankfurter,
+## dati BCE, nessuna chiave). Vuoto finché il fetch non risponde o se
+## si è offline: chi formatta fa fallback alla valuta originale.
+var fx_rates: Dictionary = {}
+signal fx_rates_updated
+
 var _backend: BackendAdapter
 
 
@@ -60,6 +66,7 @@ var _backend: BackendAdapter
 ## JHT_VPS_IP/JHT_VPS_KEY forzano una config, JHT_NOVPS=1 spegne tutto
 ## (per gli shot grafici che non devono toccare la rete).
 func _ready() -> void:
+	_fetch_fx_rates()
 	if OS.get_environment("JHT_NOVPS") == "1":
 		return
 	var cfg := load_vps_config()
@@ -70,6 +77,34 @@ func _ready() -> void:
 		}
 	if str(cfg.get("ip", "")) != "" and str(cfg.get("key_path", "")) != "":
 		set_backend(VpsBackend.new(), cfg)
+
+
+## ── Multi-valuta (feature del web: salari confrontabili in EUR) ──────
+
+func _fetch_fx_rates() -> void:
+	var req := HTTPRequest.new()
+	add_child(req)
+	req.request_completed.connect(func(_r: int, code: int, _h: PackedStringArray,
+			body: PackedByteArray) -> void:
+		req.queue_free()
+		if code != 200:
+			return
+		var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+		if data is Dictionary and data.get("rates") is Dictionary:
+			fx_rates = data["rates"]
+			Log.info("backend", "tassi BCE caricati: %d valute" % fx_rates.size())
+			fx_rates_updated.emit())
+	if req.request("https://api.frankfurter.dev/v1/latest") != OK:
+		req.queue_free()
+
+## Converte un importo in EUR; ritorna -1.0 se il tasso manca.
+func to_eur(amount: float, currency: String) -> float:
+	var cur := currency.strip_edges().to_upper()
+	if cur == "EUR" or cur == "":
+		return amount
+	if fx_rates.has(cur) and float(fx_rates[cur]) > 0.0:
+		return amount / float(fx_rates[cur])
+	return -1.0
 
 
 ## ── Lato scene ───────────────────────────────────────────────────────
