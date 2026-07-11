@@ -18,9 +18,10 @@ class_name DepartmentDefs
 ##
 ## Il pavimento è largo (240,140→3160,2000, vedi FurnitureDefs) e le
 ## DISPOSIZIONI vengono dalla REGOLA DEL DADO (feedback live 11/07, tiri
-## in chat): Scout = isole a coppie faccia-a-faccia, Analisti = ferro di
-## cavallo nel lab (angolo NE), Scorer = diagonale a scala, Scrittori =
-## ferro di cavallo aperto a est, Critici = anello con centro libero.
+## in chat; il dado vale SOLO dove Leone non si è espresso): Scout = isole
+## a coppie faccia-a-faccia, Analisti = tavolo lungo a muro nel lab
+## (angolo NE) + laterali, Scorer = diagonale a scala, Scrittori = ferro
+## di cavallo aperto a est, Critici = anello con centro libero.
 ## Catena del valore: Scout → Analisti → Scorer → Scrittori → Critici.
 
 const DEPT_ORDER := ["scout", "analisti", "scorer", "scrittori", "critici"]
@@ -48,14 +49,18 @@ const DEPARTMENTS := {
 		"color": Color("#4d9fff"),
 		"zone": Rect2(2312, 150, 848, 580),  # il lab di vetro, angolo NE
 		"inbox": Vector2(2690, 790),  # fuori dalla porta del lab
-		# dado=3: ferro di cavallo aperto verso la porta a sud
+		# Il TAVOLO LUNGO è DI QUESTO reparto (parola di Leone batte il dado
+		# sul tavolone condiviso; poi d6=5 tavolo a muro, d5=2 analisti):
+		# bench a muro nord del lab, 3 sedute di spalle (kind "none" = la
+		# seduta è dell'item long_table in FurnitureDefs, niente visual
+		# proprio) + 3 scrivanie laterali del vecchio ferro di cavallo.
 		"desks": [
-			{"rect": Rect2(2450, 230, 170, 78), "kind": "analisti_a", "facing": "down"},
-			{"rect": Rect2(2800, 230, 170, 78), "kind": "analisti_b", "facing": "down"},
+			{"rect": Rect2(2430, 180, 200, 110), "kind": "none", "facing": "up"},
+			{"rect": Rect2(2630, 180, 200, 110), "kind": "none", "facing": "up"},
+			{"rect": Rect2(2830, 180, 200, 110), "kind": "none", "facing": "up"},
 			{"rect": Rect2(2360, 380, 170, 78), "kind": "analisti_a", "facing": "right"},
 			{"rect": Rect2(2360, 560, 170, 78), "kind": "analisti_a", "facing": "right"},
 			{"rect": Rect2(2890, 380, 170, 78), "kind": "analisti_a", "facing": "left"},
-			{"rect": Rect2(2890, 560, 170, 78), "kind": "analisti_a", "facing": "left"},
 		],
 	},
 	"scorer": {
@@ -115,8 +120,6 @@ const POIS := {
 	"coffee": {"spot": Vector2(1500, 310)},
 	"water_cooler": {"spot": Vector2(1635, 300)},
 	"hologram": {"spot": Vector2(1300, 930)},
-	# tavolone condiviso pieno di fogli, corridoio sud (esito del dado)
-	"long_table": {"spot": Vector2(1700, 1745)},
 	# sala relax a ovest (pausa vera: divano/arcade/ping-pong)
 	"rec_room": {"spot": Vector2(520, 1200)},
 }
