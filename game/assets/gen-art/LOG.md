@@ -186,3 +186,20 @@ della notte sono consegnate e integrate.
 10. Occhio al modello nella status bar del pane: vicino al limite 5h Codex
     auto-downgrada (gpt-5.5 high → gpt-5.4-mini). Giudicare il primo output
     del mini prima di continuare la serie.
+11. **Il limite usage è per ACCOUNT, non per sessione** (verificato due volte:
+    notte del 10 e pomeriggio dell'11): aprire più sessioni tmux moltiplica il
+    THROUGHPUT quando c'è quota, ma non aggira il muro. Al muro: TaskStop dei
+    driver, censimento file usciti/mancanti, lista di ripresa su file
+    (`coda_1913.txt` in scratchpad) e rilancio al reset.
+12. **Contratto naming coi footprint di dev2**: i blockout si vestono da soli
+    solo se nome file = kind ESATTO ack'ato in chat (batch nc_*). Confermare
+    il prefisso in chat PRIMA di installare, non dopo.
+13. **Confronto pavimenti in-game, non sul candidato**: lo swatch herringbone
+    era il più bello da solo, ma in gioco copriva le tinte-reparto del
+    DepartmentDressing; la pietra chiara del reference le fa respirare. Ogni
+    candidato pavimento va montato (tile 4x2 mirror + crop aspect FLOOR) e
+    giudicato a screenshot con gli arredi sopra.
+14. **Metodo screenshot→reference→elementi** (ordine di Leone, funziona):
+    screenshot del gioco a Codex → immagine reference "ufficio ideale" →
+    si estraggono gli elementi visti e si generano UNO A UNO con /clear tra
+    l'uno e l'altro. Il reference vive in game/docs/reference/.
