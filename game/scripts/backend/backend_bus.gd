@@ -26,15 +26,24 @@ signal chat_message(msg: Dictionary)
 ## VpsBackend, campi con i nomi delle colonne reali.
 signal positions_updated(positions: Array)
 
+## Conversazione utente ↔ agente (chat bidirezionale). messages = tail
+## di chat.jsonl dell'agente: [{role: "user"|"assistant", text, ts,
+## partial?}] in ordine cronologico. Emesso a ogni poll finché una
+## conversazione è aperta con open_agent_chat().
+signal agent_chat_updated(agent: String, messages: Array)
+## Esito dell'invio di send_user_chat (ok=false → error leggibile).
+signal user_chat_sent(agent: String, ok: bool, error: String)
+
 enum { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
 const CONFIG_PATH := "user://vps.cfg"
 
 var state: int = DISCONNECTED
 var state_detail := ""
-var agents: Array = []     # ultimo snapshot pubblicato (per chi arriva tardi)
-var positions: Array = []  # ultimo snapshot posizioni (idem)
-var chat_log: Array = []   # ultimi messaggi di chat (storico per i pannelli)
+var agents: Array = []       # ultimo snapshot pubblicato (per chi arriva tardi)
+var positions: Array = []    # ultimo snapshot posizioni (idem)
+var transitions: Array = []  # ultime ~80 transizioni di stato (registro team)
+var chat_log: Array = []     # ultimi messaggi di chat (storico per i fumetti)
 const CHAT_LOG_MAX := 200
 
 var _backend: BackendAdapter
@@ -77,17 +86,30 @@ func disconnect_backend() -> void:
 func is_live() -> bool:
 	return state == CONNECTED and _backend != null and _backend.live
 
-## Invio utente → agente (contratto additivo, chat 19:0x): il messaggio
-## viene rieccheggiato subito sul bus (il pannello lo mostra senza
-## aspettare il giro ssh) e inoltrato all'adapter, che lo inietta nel
-## canale reale del team (tmux sulla VPS) o lo simula (mock).
-func send_chat(to_slug: String, text: String) -> void:
-	publish_chat({
-		"ts": Time.get_datetime_string_from_system(),
-		"from": "user", "to": to_slug, "text": text,
-	})
+## ── Chat bidirezionale utente ↔ agente ───────────────────────────────
+
+## Slug di gioco → agente chattabile del sistema reale (il protocollo
+## [CHAT] è supportato da Capitano e Assistente).
+const CHATTABLE := {"coordinatore": "capitano", "assistente": "assistente"}
+
+func can_chat_with(slug: String) -> bool:
+	return CHATTABLE.has(slug) and _backend != null
+
+## Apre/chiude la conversazione: finché è aperta il backend polla il
+## chat.jsonl dell'agente e pubblica agent_chat_updated.
+func open_agent_chat(slug: String) -> void:
+	if _backend and CHATTABLE.has(slug):
+		_backend.open_chat(CHATTABLE[slug])
+
+func close_agent_chat() -> void:
 	if _backend:
-		_backend.send_chat(to_slug, text)
+		_backend.close_chat()
+
+## Invia il messaggio dell'utente all'agente reale (async: l'esito
+## arriva su user_chat_sent, la risposta su agent_chat_updated).
+func send_user_chat(slug: String, text: String) -> void:
+	if _backend and CHATTABLE.has(slug):
+		_backend.send_chat(CHATTABLE[slug], text)
 
 
 ## ── Configurazione VPS (voce Impostazioni → Collega VPS) ─────────────

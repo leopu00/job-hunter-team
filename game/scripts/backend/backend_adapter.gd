@@ -24,8 +24,17 @@ func stop() -> void:
 	pass
 
 
-## Messaggio dell'utente verso un agente (pannello chat). L'adapter lo
-## consegna al canale vero del team (tmux nel container) o lo simula;
-## la risposta dell'agente tornerà dal normale flusso chat_message.
-func send_chat(_to_slug: String, _text: String) -> void:
+## ── Chat bidirezionale (opzionale: il mock può simulare) ─────────────
+
+## Tieni d'occhio la conversazione con l'agente (nome del sistema reale,
+## es. "capitano") e pubblica bus.agent_chat_updated a ogni giro.
+func open_chat(_agent: String) -> void:
+	pass
+
+func close_chat() -> void:
+	pass
+
+## Invia il messaggio dell'utente all'agente reale. Esito su
+## bus.user_chat_sent(agent, ok, error).
+func send_chat(_agent: String, _text: String) -> void:
 	pass

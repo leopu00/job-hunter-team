@@ -164,8 +164,7 @@ func _chat_selftest(role: String) -> void:
 		if a.slug == role or a.uid.begins_with(role):
 			_open_chat(a)
 			await get_tree().create_timer(0.5).timeout
-			BackendBus.send_chat(a.uid if a.uid != "" else a.slug,
-					"Come procede il lavoro?")
+			BackendBus.send_user_chat(a.slug, "Come procede il lavoro?")
 			return
 
 func _take_shot(path: String) -> void:
@@ -267,12 +266,11 @@ func _open_agent_card(agent: AgentNPC) -> void:
 
 var _chat_panel: ChatPanel
 
-## Chat REALE con l'agente: l'uid backend quando c'è (VPS), altrimenti
-## il ruolo — il canale (vero o mock) risolve il destinatario.
+## Chat REALE con l'agente: si apre con lo slug di gioco, il bus lo
+## traduce nel nome del sistema reale (coordinatore → capitano).
 func _open_chat(agent: AgentNPC) -> void:
-	var uid := agent.uid if agent.uid != "" else agent.slug
-	Log.info("chat", "pannello chat aperto con " + uid)
-	_chat_panel = ChatPanel.new(uid, agent.display_name)
+	Log.info("chat", "pannello chat aperto con " + agent.slug)
+	_chat_panel = ChatPanel.new(agent.slug, agent.display_name)
 	add_child(_chat_panel)
 	_chat_panel.closed.connect(func() -> void:
 		_chat_panel = null
