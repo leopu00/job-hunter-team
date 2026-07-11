@@ -86,6 +86,10 @@ func _build(page := "") -> void:
 			_build_apps()
 		"dashboard":
 			_build_dashboard()
+		"notifs":
+			_build_notifs()
+		"chat":
+			_build_chat()
 		_:
 			_build_placeholder()
 
@@ -204,6 +208,37 @@ func _build_dashboard() -> void:
 				15, Palette.BRIGHT))
 		text_col.add_child(TerminalTheme.label("%s · %s" % [p["location"], p["salary"]],
 				13, Palette.MUTED))
+
+## Notifiche recenti del team.
+func _build_notifs() -> void:
+	for n in TeamData.notifications():
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 14)
+		_content.add_child(row)
+		var warn: bool = n.get("level", "info") == "warn"
+		row.add_child(TerminalTheme.label("▲" if warn else "●", 14,
+				Palette.YELLOW if warn else Palette.GREEN))
+		var when := TerminalTheme.label(n["when"], 13, Palette.DIM)
+		when.custom_minimum_size = Vector2(80, 0)
+		row.add_child(when)
+		row.add_child(TerminalTheme.label(n["text"], 15, Palette.BASE))
+
+## Chat del team (sola lettura: si scrive dalla desktop app).
+func _build_chat() -> void:
+	for msg in TeamData.chat():
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		_content.add_child(row)
+		var when := TerminalTheme.label(msg["when"], 13, Palette.DIM)
+		when.custom_minimum_size = Vector2(56, 0)
+		row.add_child(when)
+		var who := TerminalTheme.label(msg["from"], 14, Palette.MINT, "medium")
+		who.custom_minimum_size = Vector2(120, 0)
+		row.add_child(who)
+		row.add_child(TerminalTheme.label(msg["text"], 15, Palette.BASE))
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(
+			"// sola lettura — si scrive dalla desktop app", 13, Palette.DIM))
 
 # ── Statistiche + pagina Utilizzo ─────────────────────────────────────
 

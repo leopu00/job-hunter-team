@@ -30,3 +30,9 @@ func agent_activity(slug: String) -> Array:
 
 func usage() -> Dictionary:
 	return source.get_usage()
+
+func notifications() -> Array:
+	return source.get_notifications()
+
+func chat() -> Array:
+	return source.get_chat()

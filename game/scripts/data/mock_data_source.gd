@@ -126,3 +126,24 @@ func get_usage() -> Dictionary:
 		"tokens_today": "1.2M",
 		"budget_used_pct": 0.35,
 	}
+
+const NOTIFICATIONS := [
+	{"when": "5 min fa", "level": "info", "text": "Nuova posizione sopra soglia: Frontend Engineer @ Lumon (85)"},
+	{"when": "1 h fa", "level": "warn", "text": "Quota settimanale al 64%: pacing regolare"},
+	{"when": "2 h fa", "level": "info", "text": "CV approvato dal Critico per Data Analyst"},
+	{"when": "ieri", "level": "info", "text": "Candidatura passata allo stadio colloquio"},
+]
+
+const CHAT := [
+	{"when": "09:12", "from": "coordinatore", "text": "buongiorno team, weekly al 64%: ritmo buono"},
+	{"when": "09:31", "from": "scout", "text": "2 annunci nuovi da Berlino, li passo agli analisti"},
+	{"when": "10:02", "from": "analista", "text": "range salariale verificato su fonte doppia"},
+	{"when": "10:15", "from": "scorer", "text": "score 85 su Lumon: sopra soglia, notifica inviata"},
+	{"when": "10:40", "from": "critico", "text": "CV ok dopo due giri: si spedisce"},
+]
+
+func get_notifications() -> Array:
+	return NOTIFICATIONS
+
+func get_chat() -> Array:
+	return CHAT
