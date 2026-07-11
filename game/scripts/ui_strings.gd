@@ -65,4 +65,15 @@ const S := {
 	"vps.missing_fields": "inserisci IP e chiave SSH",
 	"vps.agents_live": "AGENTI ATTIVI SULLA VPS",
 	"vps.agents_none": "nessun agente attivo in questo momento",
+
+	# ── Posizioni (vista web migrata) ─────────────────────────────
+	"pos.need_vps": "Collega la VPS per vedere le posizioni reali del team (Impostazioni → Collega VPS).",
+	"pos.count": "%d posizioni · %d visibili",
+	"pos.clear": "✕ PULISCI FILTRI",
+	"pos.no_match": "nessuna posizione con questi filtri",
+	"pos.f_status": "STATO",
+	"pos.f_family": "FAMIGLIA DI RUOLO",
+	"pos.f_country": "PAESE",
+	"pos.f_mode": "MODALITÀ",
+	"pos.uncategorized": "senza categoria",
 }
