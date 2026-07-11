@@ -98,6 +98,7 @@ const S := {
 	"pos.ticket_err": "✘ a ticket nem jött létre: %s",
 	"pos.ticket_need_vps": "// kösd össze a VPS-t, hogy ticketet nyithass a csapattal",
 	"pos.found": "találta: %s · %s",
+	"pos.open_url": "hirdetés megnyitása a böngészőben",
 	"pos.open_yes": "a hirdetés az utolsó ellenőrzéskor NYITVA volt",
 	"pos.open_no": "a hirdetés MÁR NEM NYITOTT",
 

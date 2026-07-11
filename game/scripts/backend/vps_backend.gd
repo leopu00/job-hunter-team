@@ -11,7 +11,7 @@ extends BackendAdapter
 
 const POLL_SECS := 8.0
 const SSH_TIMEOUT := 8
-const CHAT_BACKLOG := 3    # messaggi di storia mostrati al collegamento
+const CHAT_BACKLOG := 60   # storia team mostrata al collegamento
 const CHAT_MARK := "---JHT-CHAT---"
 const THROTTLE_MARK := "---JHT-THROTTLE---"
 
@@ -20,7 +20,7 @@ const THROTTLE_MARK := "---JHT-THROTTLE---"
 ## OS.execute→ssh→shell remota): il ; lo interpreta la shell remota,
 ## tmux ls resta in formato default e il nome sessione si estrae dai ':'.
 const POLL_CMD := "docker exec jht tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
-		+ "docker exec jht tail -n 30 /jht_home/logs/messages.jsonl 2>/dev/null; " \
+		+ "docker exec jht tail -n 80 /jht_home/logs/messages.jsonl 2>/dev/null; " \
 		+ "echo ---JHT-THROTTLE---; " \
 		+ "docker exec jht tail -n 60 /jht_home/logs/throttle-events.jsonl 2>/dev/null"
 
@@ -206,8 +206,14 @@ func _run() -> void:
 				chat_raw = tail[0]
 				if tail.size() > 1:
 					throttle_raw = tail[1]
-			bus.call_deferred("publish_agents",
-					_parse_roster(parts[0], _parse_throttles(throttle_raw)))
+			var roster := _parse_roster(parts[0], _parse_throttles(throttle_raw))
+			# mappa uid → sessione tmux per la chat (dict nuovo assegnato
+			# in blocco: niente stati intermedi visti dagli altri thread)
+			var sessions := {}
+			for a in roster:
+				sessions[a["uid"]] = a["session"]
+			_agent_sessions = sessions
+			bus.call_deferred("publish_agents", roster)
 			if chat_raw != "":
 				_ingest_chat(chat_raw)
 		else:
@@ -305,8 +311,9 @@ func _ingest_chat(raw: String) -> void:
 
 
 ## Una riga di messages.jsonl → il contratto {ts, from, to, text}.
-## Scarta il rumore non-agente (tick del bridge/pacing senza mittente);
-## il testo del fumetto è il preview, compattato su una riga.
+## Scarta il rumore non-agente (tick del bridge/pacing senza mittente).
+## Il testo è COMPLETO (body quando c'è, mai troncato: feedback Leone
+## 21:2x): chi ha vincoli di spazio (i fumetti) accorcia da sé.
 static func _to_chat_msg(d: Dictionary) -> Dictionary:
 	var from := _slug_norm(str(d.get("from", "")))
 	if from == "" or from == "pacing" or from == "bridge":
@@ -314,10 +321,12 @@ static func _to_chat_msg(d: Dictionary) -> Dictionary:
 	var to := _slug_norm(str(d.get("to", "")))
 	if to == "":
 		to = _slug_norm(str(d.get("session", "")))
-	var text := str(d.get("preview", "")).replace("\n", " ").strip_edges()
+	var text := str(d.get("body", "")).strip_edges()
+	if text == "":
+		text = str(d.get("preview", "")).strip_edges()
 	if text == "":
 		return {}
-	return {"ts": str(d.get("ts", "")), "from": from, "to": to, "text": text.left(160)}
+	return {"ts": str(d.get("ts", "")), "from": from, "to": to, "text": text}
 
 
 ## Nomi del sistema reale → slug del gioco (capitano → coordinatore).
@@ -333,8 +342,18 @@ static func _slug_norm(name: String) -> String:
 ## una shell come argomento (gotcha OS.execute): viaggia su file
 ## temporaneo locale e arriva al remoto via stdin (bash-c col redirect,
 ## comandi senza caratteri velenosi; append remoto con tee -a, mai sh -c).
+## Chat 1-a-1 con OGNI agente del roster: l'uid del gioco si risolve in
+## directory (/jht_home/agents/<dir>/) e sessione tmux raw dal poll.
 
-const CHAT_SESSIONS := {"capitano": "CAPITANO", "assistente": "ASSISTENTE"}
+var _agent_sessions := {}  # uid → nome sessione tmux (dal roster)
+
+## uid del gioco → directory dell'agente sotto /jht_home/agents/
+## (il coordinatore del gioco è il capitano del sistema reale).
+static func _agent_dir(uid: String) -> String:
+	return "capitano" if uid == "coordinatore" else uid
+
+func _agent_session(uid: String) -> String:
+	return str(_agent_sessions.get(uid, _agent_dir(uid).to_upper()))
 
 func open_chat(agent: String) -> void:
 	_convo_agent = agent
@@ -343,15 +362,15 @@ func close_chat() -> void:
 	_convo_agent = ""
 
 func send_chat(agent: String, text: String) -> void:
-	if not CHAT_SESSIONS.has(agent) or text.strip_edges() == "":
+	if text.strip_edges() == "":
 		return
 	# thread one-shot: 3 giri ssh non devono congelare né la UI né il poll
 	WorkerThreadPool.add_task(_do_send_chat.bind(agent, text.strip_edges()))
 
 func _do_send_chat(agent: String, text: String) -> void:
-	var session: String = CHAT_SESSIONS[agent]
+	var session := _agent_session(agent)
 	var buf := "/tmp/jht-game-chat-%d-%d.txt" % [OS.get_process_id(), Time.get_ticks_usec()]
-	var chat_file := "/jht_home/agents/%s/chat.jsonl" % agent
+	var chat_file := "/jht_home/agents/%s/chat.jsonl" % _agent_dir(agent)
 
 	# 1) persisti il messaggio utente nel chat.jsonl dell'agente (stesso
 	# formato della skill chat-web: la UI lo rilegge come storia)
@@ -388,7 +407,7 @@ func _do_send_chat(agent: String, text: String) -> void:
 	_fetch_convo(agent)  # eco immediato del messaggio persistito
 
 func _chat_sent(agent: String, ok: bool, error: String) -> void:
-	bus.call_deferred("emit_signal", "user_chat_sent", agent, ok, error)
+	bus.call_deferred("publish_chat_sent", agent, ok, error)
 
 ## ── Ticket utente→team (gate 1: l'unica scrittura sul jobs.db) ───────
 ## Stesso INSERT della route /api/positions/[id]/ticket del web: ticket
@@ -446,10 +465,12 @@ func _do_create_ticket(position_id: int, text: String) -> void:
 		_fetch_positions()  # il ticket nuovo compare subito nel dettaglio
 
 
-## Tail del chat.jsonl dell'agente → agent_chat_updated (storia completa
-## recente, la UI ridisegna da zero: niente cursori da tenere in sync).
+## Tail del chat.jsonl dell'agente → publish_agent_chat (storia completa
+## recente, la UI ridisegna da zero: niente cursori da tenere in sync;
+## il bus spegne l'indicatore di attesa quando vede la risposta).
 func _fetch_convo(agent: String) -> void:
-	var res := _ssh("docker exec jht tail -n 60 /jht_home/agents/%s/chat.jsonl" % agent)
+	var res := _ssh("docker exec jht tail -n 120 /jht_home/agents/%s/chat.jsonl"
+			% _agent_dir(agent))
 	if _stop or res["code"] != 0:
 		return
 	var msgs: Array = []
@@ -459,7 +480,7 @@ func _fetch_convo(agent: String) -> void:
 		var d: Variant = JSON.parse_string(line)
 		if d is Dictionary and str(d.get("text", "")) != "":
 			msgs.append(d)
-	bus.call_deferred("emit_signal", "agent_chat_updated", agent, msgs)
+	bus.call_deferred("publish_agent_chat", agent, msgs)
 
 ## Esegue uno script python DENTRO il container passandolo via stdin
 ## (python3 -): nessun limite di quoting, script multi-linea liberi.
@@ -563,6 +584,7 @@ static func _parse_roster(raw: String, throttles: Dictionary = {}) -> Array:
 			status = "throttled"
 		agents.append({
 			"slug": slug, "role": slug, "name": name, "uid": uid,
+			"session": session,  # nome tmux RAW: serve alla chat 1-a-1
 			"active": true, "status": status, "desk_hint": "",
 			"throttle_secs": t_left, "throttle_total": t_total,
 		})
