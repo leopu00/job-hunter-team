@@ -66,6 +66,9 @@ func _apply_track() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	_update_frame()
+	# respiro in idle: i fogli idle hanno 2 frame quasi uguali (o il
+	# fallback dal walk, statico) — il micro-bob dà vita comunque
+	_sprite.position.y = -FEET.y + (sin(_t * 1.7) * 1.4 if mode == "idle" else 0.0)
 
 ## Ombra morbida ai piedi: àncora la figura al pavimento (profondità 2.5D).
 ## Tre ellissi concentriche = bordo sfumato senza texture.

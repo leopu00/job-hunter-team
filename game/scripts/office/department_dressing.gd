@@ -52,11 +52,10 @@ func _draw_zone(dept_id: String, zone: Rect2, col: Color, dname: String, tagline
 		var o: Vector2 = corner[0]
 		draw_line(o, o + corner[1] * BRACKET_LEN, bc, BRACKET_W)
 		draw_line(o, o + corner[2] * BRACKET_LEN, bc, BRACKET_W)
-	# targa del reparto all'angolo alto-sinistro della zona; nel lab degli
-	# Analisti il muro di vetro copre la prima riga → targa in basso.
-	var name_pos := zone.position + Vector2(18, 34)
-	if dept_id == "analisti":
-		name_pos = Vector2(zone.position.x + 18, zone.end.y - 34)
+	# targa del reparto in basso a sinistra della zona: le postazioni nuove
+	# sbordano in alto e coprivano le targhe messe all'angolo superiore
+	# (il vetro del lab copriva comunque quella degli Analisti).
+	var name_pos := Vector2(zone.position.x + 18, zone.end.y - 34)
 	var upper := dname.to_upper()
 	draw_string(_font, name_pos + Vector2(1, 1), upper,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(0, 0, 0, 0.55))
