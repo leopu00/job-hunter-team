@@ -77,3 +77,42 @@ func get_applications() -> Array:
 
 func get_streak() -> Dictionary:
 	return {"days": 5, "freezes": 1}
+
+## Attività recenti per ruolo: righe verosimili, coerenti con lo status.
+const ACTIVITY := {
+	"scout": [
+		{"when": "12 min fa", "text": "trovata posizione: Frontend Engineer @ Lumon"},
+		{"when": "41 min fa", "text": "scansione board: 2 annunci nuovi, 1 duplicato"},
+		{"when": "1 h fa", "text": "pagina careers nuova messa in osservazione"},
+	],
+	"analista": [
+		{"when": "8 min fa", "text": "verificato range salariale (fonte incrociata)"},
+		{"when": "35 min fa", "text": "arricchiti i dati sede: ufficio ibrido, 2 gg"},
+		{"when": "2 h fa", "text": "scartato annuncio: requisiti incoerenti"},
+	],
+	"scorer": [
+		{"when": "5 min fa", "text": "score 85: competenze coperte all'85%"},
+		{"when": "1 h fa", "text": "score 61: salario sotto soglia, segnalato"},
+	],
+	"scrittore": [
+		{"when": "20 min fa", "text": "bozza CV su misura per Frontend Engineer"},
+		{"when": "1 h fa", "text": "lettera rivista dopo le note del Critico"},
+	],
+	"critico": [
+		{"when": "15 min fa", "text": "revisione CV: 3 note, 1 refuso fermato"},
+		{"when": "2 h fa", "text": "approvata lettera per Data Analyst"},
+	],
+	"coordinatore": [
+		{"when": "3 min fa", "text": "giro dei reparti completato, ritmo ok"},
+		{"when": "30 min fa", "text": "pacing ricalibrato sul weekly (64%)"},
+	],
+	"mentor": [
+		{"when": "1 h fa", "text": "preparato il consiglio del giorno"},
+	],
+	"assistente": [
+		{"when": "10 min fa", "text": "registro candidature aggiornato"},
+	],
+}
+
+func get_agent_activity(slug: String) -> Array:
+	return ACTIVITY.get(slug, [])
