@@ -108,6 +108,16 @@ const POIS := {
 	"hologram": {"spot": Vector2(1300, 930)},
 }
 
+## La catena del valore dei fogli: chi ritira dall'inbox di chi.
+## (Gli Analisti passano dagli Scout a prendere il raccolto, ecc.
+## Gli Scout non ritirano: producono — vanno in stampa più spesso.)
+const FETCH_FROM := {
+	"analisti": "scout",
+	"scorer": "analisti",
+	"scrittori": "scorer",
+	"critici": "scrittori",
+}
+
 ## Dove sta l'agente assegnato alla scrivania (vedi convenzioni in testa).
 static func desk_spot(desk: Dictionary) -> Vector2:
 	var r: Rect2 = desk["rect"]

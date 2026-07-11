@@ -47,10 +47,10 @@ func _ready() -> void:
 
 	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles() + DepartmentDefs.obstacles())
 
-	for slug in CharacterDefs.AGENTS:
+	for def in CharacterDefs.spawn_list():
 		var agent := AgentNPC.new()
 		world.add_child(agent)
-		agent.setup(slug, nav)
+		agent.setup(def, nav)
 		agents.append(agent)
 
 	_add_maintainers()
