@@ -226,10 +226,13 @@ func _add_maintainers() -> void:
 		holder.add_child(rig)
 		rig.set_motion(spec["facing"], false, "idle")
 		if spec["clip"]:
+			# clipboard pittorico (niente più SVG): piccolo, in mano destra
 			var clip := Sprite2D.new()
-			clip.texture = load(CharacterDefs.GEN + "maintainer/clipboard.svg")
-			clip.centered = false
-			clip.offset = Vector2(-64, -188)
+			var tex: Texture2D = load("res://assets/gen-art/furniture/clipboard.png")
+			clip.texture = tex
+			clip.scale = Vector2.ONE * (44.0 / tex.get_size().x)
+			clip.position = Vector2(30, -92)
+			clip.rotation = 0.12
 			rig.add_child(clip)
 
 func _invisible_wall(r: Rect2) -> StaticBody2D:
