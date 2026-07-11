@@ -49,7 +49,8 @@ var transitions: Array = []  # ultime ~80 transizioni di stato (registro team)
 ## sidebar: {provider|hours|email|advanced: [[etichetta, valore], …],
 ## usage: {window_h, per_agent_kt, generated_at}}.
 var live_settings: Dictionary = {}
-var chat_history: Array = []  # ultimi ~100 chat_message (per la vista Chat)
+var chat_log: Array = []     # ultimi messaggi (fumetti di dev1 + vista Chat)
+const CHAT_LOG_MAX := 200
 
 var _backend: BackendAdapter
 
@@ -90,7 +91,6 @@ func disconnect_backend() -> void:
 ## Dati VERI in arrivo dalla VPS? (per il badge SIMULAZIONE / LIVE)
 func is_live() -> bool:
 	return state == CONNECTED and _backend != null and _backend.live
-
 
 ## ── Chat bidirezionale utente ↔ agente ───────────────────────────────
 
@@ -154,9 +154,9 @@ func publish_agents(list: Array) -> void:
 func publish_chat(msg: Dictionary) -> void:
 	Log.debug("backend", "chat %s→%s: %s" % [msg.get("from", "?"),
 			msg.get("to", "?"), str(msg.get("text", "")).left(60)])
-	chat_history.append(msg)
-	if chat_history.size() > 100:
-		chat_history = chat_history.slice(chat_history.size() - 100)
+	chat_log.append(msg)
+	while chat_log.size() > CHAT_LOG_MAX:
+		chat_log.pop_front()
 	chat_message.emit(msg)
 
 func publish_positions(list: Array) -> void:

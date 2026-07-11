@@ -19,10 +19,13 @@ import sys
 import numpy as np
 from PIL import Image
 
-CELL_W, CELL_H = 128, 192
+# Celle a 4x rispetto alla resa in scena (rig scala ~0.425): gli originali
+# imagegen (~300px di figura) entrano quasi 1:1 e a zoom profondo gli
+# agenti reggono il confronto con gli arredi full-res (feedback 18:2x).
+CELL_W, CELL_H = 256, 384
 COLS, ROWS = 6, 12
-FEET = (64, 180)
-TARGET_H = 160.0
+FEET = (128, 360)
+TARGET_H = 320.0
 # riga del contratto -> (traccia, direzione, n frame)
 LAYOUT = [
     ("idle", 0, 2), ("idle", 1, 2), ("idle", 2, 2),
@@ -90,8 +93,15 @@ def load_grid(path: str, cols: int):
 
 
 def place(sheet: Image.Image, frame: Image.Image, row: int, col: int, scale: float):
-    """Scala il frame e lo ancora coi piedi a (64,180) della cella."""
+    """Scala il frame e lo ancora coi piedi in fondo alla cella.
+
+    La scala arriva per-riga (mediana): un frame più alto della mediana
+    sforerebbe SOPRA la cella e la testa finirebbe tagliata nel rendering
+    (e fantasma nella riga sopra) — feedback Leone 18:2x. Clamp per-frame:
+    la figura sta sempre nella cella, con un filo di respiro.
+    """
     fw, fh = frame.size
+    scale = min(scale, (FEET[1] - 4) / fh)
     nw, nh = max(1, round(fw * scale)), max(1, round(fh * scale))
     fr = frame.resize((nw, nh), Image.LANCZOS)
     x = col * CELL_W + FEET[0] - nw // 2
@@ -107,7 +117,7 @@ def main() -> None:
     ap.add_argument("--work")
     ap.add_argument("--carry")
     ap.add_argument("--sit", help="foglio SEPARATO 4x3 <slug>_sit.png (SIT_TRACKS)")
-    ap.add_argument("--sit-target-h", type=float, default=122.0,
+    ap.add_argument("--sit-target-h", type=float, default=244.0,
                     help="altezza del seduto: ~0.76 dello standing TARGET_H, "
                          "così le proporzioni tornano col foglio principale")
     ap.add_argument("-o", "--out", required=True)
