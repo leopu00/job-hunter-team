@@ -288,7 +288,7 @@ func _block_matches(into: VBoxContainer, rows: Array) -> void:
 		into.add_child(btn)
 	if matches.size() > MATCH_MAX:
 		into.add_child(TerminalTheme.label(
-				"… e altre %d" % (matches.size() - MATCH_MAX), 13, Palette.DIM))
+				UIStrings.t("common.more") % (matches.size() - MATCH_MAX), 13, Palette.DIM))
 
 ## Un blocco di barre orizzontali cliccabili: titolo + una riga per voce
 ## (etichetta, barra proporzionale, conteggio). numeric_keys ordina per
