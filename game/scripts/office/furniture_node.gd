@@ -93,6 +93,12 @@ func _ready() -> void:
 			path = oriented
 	if path.is_empty():
 		path = GEN_ART.get(kind_str, "")
+	if path.is_empty():
+		# fallback generico: gli asset consegnati con nome file = kind
+		# (piante, sala relax, …) si agganciano senza toccare la mappa
+		var direct := "res://assets/gen-art/furniture/%s.png" % kind_str
+		if ResourceLoader.exists(direct):
+			path = direct
 	# ResourceLoader.exists() è true anche quando esiste solo il .import senza
 	# il binario importato: load() torna null → serve il guard, altrimenti si
 	# ricade con grazia sul disegno procedurale in _draw().
