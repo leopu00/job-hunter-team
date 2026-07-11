@@ -172,9 +172,14 @@ func _ready() -> void:
 		BackendBus.set_backend(MockBackend.new())
 
 	# TEST-AUTO: JHT_CHAT=<ruolo> apre il pannello chat col primo agente
-	# di quel ruolo e invia un messaggio di prova (eco + risposta mock).
+	# di quel ruolo e invia un messaggio di prova (eco + risposta mock;
+	# con la VPS il messaggio parte DAVVERO verso l'agente reale).
+	# JHT_CHAT_VIEW=<ruolo> apre solo il pannello senza inviare: per
+	# fotografare la risposta arrivata senza rimandare il messaggio.
 	if OS.get_environment("JHT_CHAT") != "":
-		_chat_selftest(OS.get_environment("JHT_CHAT"))
+		_chat_selftest(OS.get_environment("JHT_CHAT"), true)
+	elif OS.get_environment("JHT_CHAT_VIEW") != "":
+		_chat_selftest(OS.get_environment("JHT_CHAT_VIEW"), false)
 
 	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza subito i nuovi stati della
 	# missione pipeline: un agente in ricreazione (throttle lungo) e uno
@@ -192,14 +197,15 @@ func _on_chat_message(msg: Dictionary) -> void:
 	deliver_chat(msg.get("from", ""), msg.get("to", "all"), msg.get("text", ""))
 
 ## Aspetta che il backend abbia popolato la scena, poi apre la chat e
-## scrive: il giro completo utente→canale→risposta si vede da solo.
-func _chat_selftest(role: String) -> void:
+## (se send) scrive: il giro utente→canale→risposta si vede da solo.
+func _chat_selftest(role: String, send: bool) -> void:
 	await get_tree().create_timer(2.5).timeout
 	for a in agents:
 		if a.slug == role or a.uid.begins_with(role):
 			_open_chat(a)
-			await get_tree().create_timer(0.5).timeout
-			BackendBus.send_user_chat(a.slug, "Come procede il lavoro?")
+			if send:
+				await get_tree().create_timer(0.5).timeout
+				BackendBus.send_user_chat(a.slug, "Come procede il lavoro?")
 			return
 
 ## Forza i due comportamenti nuovi sul roster corrente (vedi _ready).
