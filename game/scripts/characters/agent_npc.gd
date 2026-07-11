@@ -36,6 +36,8 @@ var bubble: StatusBubble
 var state: S = S.WORK
 var _spot := Vector2.ZERO
 var _desk_facing := "down"
+var pile: PaperPile  # i fogli accumulati sulla MIA scrivania
+var _consume_timer := 0.0
 var _chatter: Array = []
 var _wander: Array = []  # solo core (mentor/coordinatore/assistente)
 
@@ -65,6 +67,11 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	if dept != "":
 		var desk: Dictionary = DepartmentDefs.DEPARTMENTS[dept]["desks"][def["desk"]]
 		_desk_facing = desk.get("facing", "down")
+		# la pila di fogli vive sul piano della postazione (sibling nel
+		# World: setup() arriva quando siamo già nell'albero)
+		pile = PaperPile.new(desk["rect"])
+		get_parent().add_child(pile)
+		pile.add_sheets(randi_range(0, 5))  # non si parte mai a tavolo vuoto
 	position = _spot
 	# gli agenti NON collidono tra loro (si incastravano nei passaggi):
 	# restano solide solo le collisioni coi mobili (layer 1)
@@ -74,6 +81,7 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	_state_timer = _cadence() * randf_range(0.15, 1.0)
 	_pose_timer = randf_range(12.0, 35.0)
 	_bubble_timer = randf_range(2.0, 12.0)
+	_consume_timer = randf_range(30.0, 70.0)
 
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
@@ -125,6 +133,7 @@ func _physics_process(delta: float) -> void:
 		S.WORK:
 			velocity = Vector2.ZERO
 			_tick_desk_pose(delta)
+			_consume_tick(delta)
 			_state_timer -= delta
 			if _state_timer <= 0.0:
 				_state_timer = _cadence() * randf_range(0.6, 1.4)
@@ -155,6 +164,15 @@ func _tick_desk_pose(delta: float) -> void:
 	_desk_working = not _desk_working
 	_pose_timer = randf_range(18.0, 40.0) if _desk_working else randf_range(6.0, 16.0)
 	_desk_motion("work" if _desk_working else "idle")
+
+## Lavorando la pila si smaltisce: un foglio ogni ~minuto di lavoro vero.
+func _consume_tick(delta: float) -> void:
+	if pile == null or not _desk_working:
+		return
+	_consume_timer -= delta
+	if _consume_timer <= 0.0:
+		_consume_timer = randf_range(40.0, 75.0)
+		pile.take_sheet()
 
 ## set_motion coerente col verso della scrivania (left/right = side+flip).
 func _desk_motion(mode: String) -> void:
@@ -203,7 +221,8 @@ func _plan_trip() -> void:
 					randf_range(0.8, 1.6), "idle"),
 			_leg_to(_jit(DepartmentDefs.DEPARTMENTS[dept]["inbox"]), "carry",
 					randf_range(0.5, 1.0), "idle"),
-			_leg_to(_spot, "walk", 0.0, "work"),
+			# i fogli ritirati arrivano FINO alla scrivania (si accumulano lì)
+			_leg_to(_spot, "carry", 0.0, "work"),
 		]
 	elif roll < 0.88:
 		# pausa caffè / macchinetta (raro: i tick non aspettano)
@@ -250,6 +269,9 @@ func _arrive_at_leg() -> void:
 		_start_next_leg()
 
 func _end_trip() -> void:
+	# se l'ultimo tratto era un carry, i fogli si depositano sulla pila
+	if pile and _leg.get("mode", "") == "carry":
+		pile.add_sheets(randi_range(2, 4))
 	state = S.WORK
 	position = _spot
 	_work_pose()
