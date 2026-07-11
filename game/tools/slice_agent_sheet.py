@@ -60,6 +60,20 @@ def _segments(profile: np.ndarray, min_w: int = 24):
             if on[a] and (b - a) >= min_w]
 
 
+def _crop_main_blob(cell: np.ndarray) -> np.ndarray:
+    """Tiene solo il blob verticale principale della cella: le figure
+    delle righe adiacenti che sforano la banda (teste/piedi fantasma,
+    audit scout_sit 20:1x) restano separate da un gap di trasparenza e
+    vengono scartate qui, senza rigenerare lo sheet."""
+    row_profile = (cell[:, :, 3] > 24).sum(axis=1)
+    row_profile[row_profile < 3] = 0
+    segs = _segments(row_profile, min_w=12)
+    if segs:  # SEMPRE il segmento maggiore: un residuo sotto min_w non
+        a, b = max(segs, key=lambda s: s[1] - s[0])  # fa segmento ma
+        cell = cell[a:b]  # finirebbe comunque nel bbox della cella
+    return cell
+
+
 def load_grid(path: str, cols: int):
     """Estrae i frame (PIL RGBA) da una griglia cols x 3 righe.
 
@@ -82,7 +96,7 @@ def load_grid(path: str, cols: int):
             segs = [(c * cw, (c + 1) * cw) for c in range(cols)]
         frames = []
         for c, (x0, x1) in enumerate(segs):
-            cell = band[:, x0:x1]
+            cell = _crop_main_blob(band[:, x0:x1])
             ys, xs = np.nonzero(cell[:, :, 3] > 24)
             if len(ys) == 0:
                 sys.exit(f"{path}: cella r{r}c{c} vuota")

@@ -38,7 +38,12 @@ var speech: SpeechBubble
 ## Stato riportato dal backend: working|idle|paused. Con idle/paused
 ## l'agente resta alla postazione senza viaggi né digitazione.
 var backend_status := "working"
+## Stima secondi di throttle rimanenti (contratto additivo col backend):
+## sotto REC_THROTTLE_SECS si aspetta SEDUTI, sopra si va in ricreazione.
+var throttle_secs := 0.0
+const REC_THROTTLE_SECS := 90.0
 var _dissolving := false
+var _exiting := false
 
 var state: S = S.WORK
 var _spot := Vector2.ZERO
@@ -141,14 +146,46 @@ func dissolve() -> void:
 			pile.queue_free()
 		queue_free())
 
-## Stato dal backend: con idle/paused niente viaggi né digitazione,
-## l'agente resta alla postazione in attesa.
+## Stato dal backend: con idle/paused/throttled niente viaggi né
+## digitazione, l'agente resta alla postazione in attesa (seduto se ha
+## lo sheet). Un throttle LUNGO manda invece in ricreazione (dado).
 func set_backend_status(status: String) -> void:
 	if backend_status == status:
 		return
 	backend_status = status
 	if state == S.WORK:
 		_work_pose()
+		if status == "throttled" and throttle_secs >= REC_THROTTLE_SECS:
+			_plan_recreation()
+
+func set_throttle(secs: float) -> void:
+	throttle_secs = secs
+
+## Uscita FISICA di scena (agente killato/fermato, missione pipeline
+## 20:1x): cammina fino alla porta dell'ufficio e svanisce oltre la
+## soglia — niente tesseract, semplicemente non è più in ufficio.
+func exit_through(door_spot: Vector2) -> void:
+	if _dissolving or _exiting:
+		return
+	_exiting = true
+	speech.clear_now()
+	bubble.hide_now()
+	var leg := _leg_to(door_spot, "walk", 0.0, "idle")
+	leg["exit"] = true
+	_legs = [leg]
+	_start_next_leg()
+
+## Throttle LUNGO: dado a 3 facce per l'attività ricreativa (ordine
+## Leone 20:1x) — divano, ping-pong o si va a cucinare qualcosa.
+func _plan_recreation() -> void:
+	var picks := ["rec_sofa", "rec_pingpong", "rec_kitchenette"]
+	var r := FurnitureDefs.get_rect(picks[randi() % picks.size()])
+	var spot := Vector2(r.get_center().x, r.end.y + 26.0)
+	_legs = [
+		_leg_to(_jit(spot), "walk", randf_range(25.0, 45.0), "idle"),
+		_leg_to(_spot, "walk", 0.0, "work"),
+	]
+	_start_next_leg()
 
 ## Reazione a una transizione REALE del registro attività: il corpo
 ## pulsa due volte (il lavoro vero si deve vedere in scena) e una
@@ -186,7 +223,7 @@ func is_talking() -> bool:
 	return state == S.TALK
 
 func is_dissolving() -> bool:
-	return _dissolving
+	return _dissolving or _exiting
 
 ## True se il punto (click) cade sul corpo dell'agente.
 func hit_by(point: Vector2) -> bool:
@@ -211,6 +248,11 @@ func _physics_process(delta: float) -> void:
 				_state_timer = _cadence() * randf_range(0.6, 1.4)
 				if backend_status == "working":
 					_plan_trip()
+				elif backend_status == "throttled" \
+						and throttle_secs >= REC_THROTTLE_SECS:
+					# throttle ancora lungo: nuovo giro di ricreazione
+					_state_timer = randf_range(70.0, 110.0)
+					_plan_recreation()
 		S.TRIP:
 			if _pause > 0.0:
 				velocity = Vector2.ZERO
@@ -359,6 +401,18 @@ func _start_next_leg() -> void:
 	state = S.TRIP
 
 func _arrive_at_leg() -> void:
+	if _leg.get("exit", false):
+		# sulla soglia: la porta scorre e l'agente svanisce oltre
+		ExitDoor.swing()
+		_dissolving = true
+		rig.set_motion("down", false, "idle")  # la porta è a sud
+		var tw := create_tween()
+		tw.tween_property(self, "modulate:a", 0.0, 0.55)
+		tw.tween_callback(func() -> void:
+			if pile:
+				pile.queue_free()
+			queue_free())
+		return
 	if _leg.get("fx_printer", false):
 		PrinterFx.ping(float(_leg.get("pause", 2.0)))
 	if _leg.get("fx_coffee", false):
