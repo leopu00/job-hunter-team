@@ -127,6 +127,18 @@ async function startActionContainer(agentArg, options = {}) {
       console.log(c.dim(`  ℹ ticket-sync non applicato: ${lastLine}`));
     }
 
+    // Sync bacheca (team_directives) cloud↔VPS PRIMA dello spawn: importa gli
+    // ordini/strategia editati dal dashboard così il Capitano li legge al primo
+    // giro (team_directives.py active), e pusha le direttive nate da chat.
+    const dirRes = execInContainer(
+      'node /app/cli/bin/jht.js cloud sync-directives --silent',
+      { timeoutMs: 15_000 },
+    );
+    if (dirRes.code !== 0 && dirRes.stderr && !/non abilitato/i.test(dirRes.stderr)) {
+      const lastLine = dirRes.stderr.trim().split('\n').slice(-1)[0];
+      console.log(c.dim(`  ℹ directive-sync non applicato: ${lastLine}`));
+    }
+
     // Pull profilo cloud → candidate_profile.yml se il file locale manca
     // (PC nuovo / container ricreato): chiude il cerchio cloud→locale. Only-if
     // -absent (non sovrascrive un profilo locale esistente). Best-effort 15s.

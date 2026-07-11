@@ -27,6 +27,9 @@ const CLOUD_PULL_CURSOR_FILE = join(JHT_HOME, '.cloud-pull-cursor.json');
 // { pull_since } = ultimo created_at importato dal cloud (ticket 'open' utente);
 // { push_since } = ultimo updated_at pushato in cloud (risoluzioni del team).
 const CLOUD_TICKETS_CURSOR_FILE = join(JHT_HOME, '.cloud-tickets-cursor.json');
+// Cursor sync bacheca (team_directives, round-trip cloud↔VPS): { pull_since,
+// push_since } su updated_at. Vedi handleDirectiveSync.
+const CLOUD_DIRECTIVES_CURSOR_FILE = join(JHT_HOME, '.cloud-directives-cursor.json');
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -755,6 +758,28 @@ async function saveTicketsCursor(cursor) {
     await writeFile(CLOUD_TICKETS_CURSOR_FILE, JSON.stringify(cursor, null, 2));
   } catch (err) {
     console.error(pc.yellow(`  warn: tickets cursor save failed (${err.message})`));
+  }
+}
+
+/** Cursor sync bacheca (team_directives). { pull_since, push_since } su updated_at. */
+function loadDirectivesCursor() {
+  if (!existsSync(CLOUD_DIRECTIVES_CURSOR_FILE)) return { pull_since: null, push_since: null };
+  try {
+    const p = JSON.parse(readFileSync(CLOUD_DIRECTIVES_CURSOR_FILE, 'utf-8'));
+    return {
+      pull_since: typeof p?.pull_since === 'string' ? p.pull_since : null,
+      push_since: typeof p?.push_since === 'string' ? p.push_since : null,
+    };
+  } catch {
+    return { pull_since: null, push_since: null };
+  }
+}
+
+async function saveDirectivesCursor(cursor) {
+  try {
+    await writeFile(CLOUD_DIRECTIVES_CURSOR_FILE, JSON.stringify(cursor, null, 2));
+  } catch (err) {
+    console.error(pc.yellow(`  warn: directives cursor save failed (${err.message})`));
   }
 }
 
@@ -1822,6 +1847,182 @@ async function handleTicketSync(options = {}) {
 }
 
 /**
+ * Sync bidirezionale della bacheca (team_directives) cloud↔VPS. Mirror di
+ * handleTicketSync per gli ordini PERMANENTI dell'utente:
+ *   PULL  cloud → locale : direttive create/modificate dall'utente sul web (edit
+ *         dal dashboard). cloud_id già locale → UPDATE la riga; nuovo → INSERT.
+ *         Il Capitano le legge via `team_directives.py active`.
+ *   PUSH  locale → cloud : direttive nate/modificate in locale (via chat) →
+ *         UPDATE per cloud_id, INSERT per cloud_id NULL (id_map write-back).
+ * Best-effort. Endpoint: GET/POST /api/cloud-sync/team-directives (Vercel; il
+ * direct-Supabase reader è un'ottimizzazione futura come per i ticket).
+ */
+async function handleDirectiveSync(options = {}) {
+  const silent = options.silent === true;
+  const log = (msg) => { if (!silent) console.log(msg); };
+
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) {
+    if (!silent) {
+      console.error(pc.red('Cloud sync non abilitato.'));
+      console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud login'));
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const dbPath = options.db || JHT_DB_PATH;
+  const dbExists = await stat(dbPath).then(() => true).catch(() => false);
+  if (!dbExists) {
+    log(pc.dim(`  directive-sync skip: SQLite locale non trovato (${dbPath}).`));
+    return;
+  }
+
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const cursor = options.full
+    ? { pull_since: null, push_since: null }
+    : loadDirectivesCursor();
+
+  let imported = 0;
+  let pushedUpdates = 0;
+  let pushedInserts = 0;
+  let db;
+  try {
+    db = new DatabaseSync(dbPath);
+    db.exec('PRAGMA foreign_keys = ON');
+
+    const hasTable = db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='team_directives'")
+      .get();
+    if (!hasTable) {
+      log(pc.dim('  directive-sync skip: tabella team_directives non ancora creata (team al primo boot).'));
+      db.close();
+      return;
+    }
+
+    // ---- PULL: direttive cambiate sul cloud → locale (via Vercel) ----
+    let pullResult = null;
+    {
+      const pullParams = new URLSearchParams();
+      if (cursor.pull_since) pullParams.set('since', cursor.pull_since);
+      try {
+        const res = await fetch(
+          `${baseUrl}/api/cloud-sync/team-directives?${pullParams.toString()}`,
+          { headers: { Authorization: `Bearer ${config.token}` } },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error(pc.yellow(`  directive pull warn: HTTP ${res.status} ${body.error || ''}`));
+        } else {
+          pullResult = { directives: Array.isArray(body.directives) ? body.directives : [], cursor: body.cursor };
+        }
+      } catch (err) {
+        console.error(pc.yellow(`  directive pull warn: ${err.message}`));
+      }
+    }
+    if (pullResult && Array.isArray(pullResult.directives)) {
+      const findByCloud = db.prepare('SELECT id FROM team_directives WHERE cloud_id = ?');
+      const ins = db.prepare(
+        `INSERT INTO team_directives
+           (body, kind, status, sort_order, created_by, cloud_id, created_at, updated_at, archived_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      const upd = db.prepare(
+        `UPDATE team_directives SET body = ?, kind = ?, status = ?, sort_order = ?,
+           updated_at = ?, archived_at = ? WHERE cloud_id = ?`
+      );
+      for (const cd of pullResult.directives) {
+        const cloudId = Number(cd.id);
+        if (!Number.isInteger(cloudId) || !cd.body) continue;
+        const kind = cd.kind || 'order';
+        const status = cd.status || 'active';
+        const so = Number.isInteger(Number(cd.sort_order)) ? Number(cd.sort_order) : 0;
+        if (findByCloud.get(cloudId)) {
+          upd.run(cd.body, kind, status, so, cd.updated_at || null, cd.archived_at || null, cloudId);
+        } else {
+          ins.run(cd.body, kind, status, so, cd.created_by || 'user', cloudId,
+                  cd.created_at || null, cd.updated_at || null, cd.archived_at || null);
+        }
+        imported++;
+      }
+      if (pullResult.cursor) cursor.pull_since = pullResult.cursor;
+    }
+
+    // ---- PUSH: direttive locali (nuove/modificate) → cloud ----
+    const selCols =
+      `id AS local_id, cloud_id, body, kind, status, sort_order, created_by,
+       created_at, archived_at, updated_at`;
+    const rows = cursor.push_since
+      ? db.prepare(
+          `SELECT ${selCols} FROM team_directives WHERE cloud_id IS NULL OR updated_at > ?`
+        ).all(cursor.push_since)
+      : db.prepare(`SELECT ${selCols} FROM team_directives`).all();
+
+    if (rows.length > 0) {
+      try {
+        const res = await fetch(`${baseUrl}/api/cloud-sync/team-directives`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ directives: rows }),
+        });
+        const pb = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error(pc.yellow(`  directive push warn: HTTP ${res.status} ${pb.error || ''}`));
+        } else {
+          pushedUpdates = pb.updated || 0;
+          pushedInserts = pb.inserted || 0;
+          if (pb.id_map && typeof pb.id_map === 'object') {
+            const setCloud = db.prepare('UPDATE team_directives SET cloud_id = ? WHERE id = ?');
+            for (const [localId, cloudId] of Object.entries(pb.id_map)) {
+              const ci = Number(cloudId);
+              const li = Number(localId);
+              if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
+            }
+          }
+          let maxU = cursor.push_since || null;
+          for (const r of rows) {
+            if (r.updated_at && (maxU === null || r.updated_at > maxU)) maxU = r.updated_at;
+          }
+          if (maxU) cursor.push_since = maxU;
+        }
+      } catch (err) {
+        console.error(pc.yellow(`  directive push warn: ${err.message}`));
+      }
+    }
+
+    db.close();
+  } catch (err) {
+    try { if (db) db.close(); } catch { /* già chiuso */ }
+    console.error(pc.red(`Errore directive-sync SQLite: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  await saveDirectivesCursor(cursor);
+
+  const total = imported + pushedUpdates + pushedInserts;
+  if (total > 0 || !silent) {
+    console.log(
+      pc.green(
+        `✓ Bacheca sync: ${imported} da cloud↓, ${pushedUpdates} aggiornate↑, ${pushedInserts} nuove↑`
+      )
+    );
+  }
+}
+
+/**
  * Rendezvous "Sync now" ([JHT-DATA-SYNC] fase 3): chiude il refresh on-demand
  * senza polling continuo dei browser. Il browser (apertura dashboard o pulsante
  * "Sync now") scrive `team_state.sync_requested_at`; qui il daemon lo rileva,
@@ -2181,7 +2382,7 @@ async function runRealtimeLoop({ config, isRunning }) {
 // per recuperare write_requested cliccato via web mentre container era
 // offline). Best-effort: il caller invoca con { silent: true } e ignora
 // process.exitCode così il boot prosegue anche se cloud è giù.
-export { handlePullDesiredState, handleTicketSync };
+export { handlePullDesiredState, handleTicketSync, handleDirectiveSync };
 
 /**
  * pull-profile — scarica il profilo dal cloud e ricostruisce
@@ -2300,6 +2501,14 @@ export function registerCloudCommand(program) {
     .option('--full', 'Ignora i cursor (pull lookback 7gg, push tutto)')
     .option('--silent', 'Output minimo (per il boot)')
     .action(handleTicketSync);
+
+  cloud
+    .command('sync-directives')
+    .description('Round-trip bacheca (team_directives) cloud<->VPS: importa gli edit dal dashboard, pusha le direttive locali')
+    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
+    .option('--full', 'Ignora i cursor (pull lookback 30gg, push tutto)')
+    .option('--silent', 'Output minimo (per il boot)')
+    .action(handleDirectiveSync);
 
   cloud
     .command('pull-profile')
