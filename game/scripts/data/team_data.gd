@@ -36,3 +36,6 @@ func notifications() -> Array:
 
 func chat() -> Array:
 	return source.get_chat()
+
+func settings() -> Dictionary:
+	return source.get_settings()

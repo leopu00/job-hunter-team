@@ -21,6 +21,7 @@ La sorgente implementa il contratto `TeamDataSource`
 | `get_usage()` | `{ provider, actions_today, actions_week, quota_week_pct, tokens_today, budget_used_pct }` | pagina Utilizzo (Statistiche) |
 | `get_notifications()` | `[{ when, level: info\|warn, text }]` | sezione Notifiche |
 | `get_chat()` | `[{ when, from, text }]` | sezione Chat (sola lettura) |
+| `get_settings()` | `{ <sezione>: [[etichetta, valore], …] }` | le 8 sezioni config (sola lettura) |
 
 Slug agente: `coordinatore · scout · analista · scorer · scrittore · critico · mentor · assistente`.
 
