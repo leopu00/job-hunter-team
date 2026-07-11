@@ -120,11 +120,35 @@ func _ready() -> void:
 				_open_agent_card(a)
 				break
 
+	# TEST-AUTO: JHT_BACKEND_TEST=1 simula il flusso del BackendBus senza
+	# VPS: sync a roster ridotto (despawn di massa), fumetti di chat in
+	# raffica, poi un rientro (materializzazione). Da fotografare con
+	# JHT_SHOT_DELAY a tempi diversi.
+	if OS.get_environment("JHT_BACKEND_TEST") == "1":
+		_run_backend_selftest()
+
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
 	var shot := OS.get_environment("JHT_SHOT")
 	if shot != "":
 		_take_shot(shot)
+
+func _run_backend_selftest() -> void:
+	var roster := [
+		{"slug": "coordinatore-1", "role": "coordinatore", "name": "Coordinatore", "active": true, "status": "working"},
+		{"slug": "scout-1", "role": "scout", "name": "Scout Lead", "active": true, "status": "working"},
+		{"slug": "scout-2", "role": "scout", "name": "Scout 02", "active": true, "status": "idle"},
+		{"slug": "analista-1", "role": "analista", "name": "Analista Lead", "active": true, "status": "working"},
+	]
+	await get_tree().create_timer(1.0).timeout
+	sync_agents(roster)
+	await get_tree().create_timer(1.2).timeout
+	deliver_chat("scout-1", "all", "Trovate 6 posizioni nuove su 3 board: 2 senior backend a Berlino, il resto remoto EU.")
+	deliver_chat("coordinatore-1", "scout-2", "Riprendi il giro delle board: la coda analisti è vuota.")
+	deliver_chat("analista-1", "user", "Il report della mattinata è pronto: 4 aziende profilate.")
+	await get_tree().create_timer(3.0).timeout
+	roster.append({"slug": "scorer-1", "role": "scorer", "name": "Scorer Lead", "active": true, "status": "working"})
+	sync_agents(roster)
 
 func _take_shot(path: String) -> void:
 	# JHT_SHOT_DELAY=N ritarda lo scatto: utile per fotografare la
@@ -230,6 +254,101 @@ func _start_talk(agent: AgentNPC) -> void:
 	ui.open(agent.slug, agent.display_name, "")
 	ui.closed.connect(func() -> void:
 		agent.end_talk())
+
+# ── Roster dinamico dal backend (missione backend-integration) ────────
+# In modalità backend la scena mostra SOLO gli agenti attivi sulla VPS:
+# sync_agents() confronta lo stato con la scena e materializza/dissolve.
+
+var _desk_pool: Dictionary = {}  # role -> Array di def libere (postazioni)
+var _backend_mode := false
+
+## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
+## list = [{slug: uid univoco, role, name, active, status}].
+func sync_agents(list: Array) -> void:
+	if not _backend_mode:
+		_enter_backend_mode()
+	var wanted := {}
+	for item in list:
+		if item.get("active", true):
+			wanted[item["slug"]] = item
+	for agent in agents.duplicate():
+		if not wanted.has(agent.uid):
+			_despawn_agent(agent)
+		else:
+			agent.set_backend_status(wanted[agent.uid].get("status", "working"))
+			wanted.erase(agent.uid)
+	for item_uid in wanted:
+		_spawn_backend_agent(wanted[item_uid])
+
+## Recapita un messaggio della chat di team come fumetto (contratto
+## BackendBus.chat_message): from/to sono uid agente, "user" o "all".
+func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
+	for agent in agents:
+		if agent.uid == from_uid and not agent.is_dissolving():
+			var to_label := ""
+			match to_uid:
+				"all":
+					to_label = ""
+				"user":
+					to_label = "te"
+				_:
+					to_label = _name_of(to_uid)
+			agent.say(text, to_label)
+			return
+
+func _name_of(uid: String) -> String:
+	for agent in agents:
+		if agent.uid == uid:
+			return agent.display_name
+	return uid
+
+## Primo snapshot backend: le postazioni tornano nel pool e il roster
+## locale di ambientazione lascia la scena — comanda lo stato reale.
+func _enter_backend_mode() -> void:
+	_backend_mode = true
+	_desk_pool = {}
+	for def in CharacterDefs.spawn_list():
+		var role: String = def["slug"]
+		if not _desk_pool.has(role):
+			_desk_pool[role] = []
+		_desk_pool[role].append(def)
+	for agent in agents.duplicate():
+		if agent.uid == "":
+			_despawn_agent(agent, false)
+	Log.info("backend", "modalità backend: in scena solo gli agenti attivi")
+
+func _despawn_agent(agent: AgentNPC, refill_pool := true) -> void:
+	agents.erase(agent)
+	if _hover_agent == agent:
+		_hover_agent = null
+	if refill_pool and agent.has_meta("def"):
+		var def: Dictionary = agent.get_meta("def")
+		var role: String = def["slug"]
+		# il lead rientra in testa: alla riattivazione riprende il suo posto
+		if def.get("lead", false):
+			_desk_pool[role].push_front(def)
+		else:
+			_desk_pool[role].append(def)
+	agent.dissolve()
+
+func _spawn_backend_agent(item: Dictionary) -> void:
+	var role: String = item.get("role", "")
+	var pool: Array = _desk_pool.get(role, [])
+	if pool.is_empty():
+		Log.warn("backend", "nessuna postazione libera per il ruolo " + role)
+		return
+	var def: Dictionary = pool.pop_front()
+	var live := def.duplicate(true)
+	if item.get("name", "") != "":
+		live["name"] = item["name"]
+	var agent := AgentNPC.new()
+	world.add_child(agent)
+	agent.setup(live, nav)
+	agent.uid = item["slug"]
+	agent.set_meta("def", def)
+	agent.set_backend_status(item.get("status", "working"))
+	agent.materialize()
+	agents.append(agent)
 
 # ── Costruzione scena ─────────────────────────────────────────────────
 

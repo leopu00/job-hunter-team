@@ -27,11 +27,17 @@ const TRIP_EVERY := {
 enum S { WORK, TRIP, TALK }
 
 var slug := ""
+var uid := ""  # id univoco lato backend (es. "scout-2"); "" = roster locale
 var display_name := ""
 var dept := ""
 var nav: NavGrid
 var rig  # CharacterRig o SpriteSheetRig: stessa interfaccia set_motion
 var bubble: StatusBubble
+var speech: SpeechBubble
+## Stato riportato dal backend: working|idle|paused. Con idle/paused
+## l'agente resta alla postazione senza viaggi né digitazione.
+var backend_status := "working"
+var _dissolving := false
 
 var state: S = S.WORK
 var _spot := Vector2.ZERO
@@ -100,6 +106,49 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	bubble.position = Vector2(0, -96)
 	add_child(bubble)
 
+	speech = SpeechBubble.new()
+	speech.position = Vector2(0, -100)
+	add_child(speech)
+
+## Fa dire all'agente un messaggio della chat reale (fumetto in coda).
+## to_label: "" per i broadcast, altrimenti il nome del destinatario.
+func say(text: String, to_label := "") -> void:
+	speech.say(text, to_label)
+
+## Entrata in scena: l'agente si materializza (energia tesseract) alla
+## postazione. Da chiamare subito dopo setup().
+func materialize() -> void:
+	modulate.a = 0.0
+	SpawnFx.burst(get_parent(), _spot)
+	var tw := create_tween()
+	tw.tween_interval(0.25)  # prima l'energia converge, poi il corpo appare
+	tw.tween_property(self, "modulate:a", 1.0, 0.4)
+
+## Uscita di scena: dissolve e si rimuove (con la sua pila di fogli).
+## L'FX è sibling, così sopravvive al queue_free dell'agente.
+func dissolve() -> void:
+	if _dissolving:
+		return
+	_dissolving = true
+	SpawnFx.burst(get_parent(), global_position, true)
+	speech.clear_now()
+	bubble.hide_now()
+	var tw := create_tween()
+	tw.tween_property(self, "modulate:a", 0.0, 0.45)
+	tw.tween_callback(func() -> void:
+		if pile:
+			pile.queue_free()
+		queue_free())
+
+## Stato dal backend: con idle/paused niente viaggi né digitazione,
+## l'agente resta alla postazione in attesa.
+func set_backend_status(status: String) -> void:
+	if backend_status == status:
+		return
+	backend_status = status
+	if state == S.WORK:
+		_work_pose()
+
 func set_highlight(on: bool) -> void:
 	if _highlight != on:
 		_highlight = on
@@ -121,12 +170,18 @@ func end_talk() -> void:
 func is_talking() -> bool:
 	return state == S.TALK
 
+func is_dissolving() -> bool:
+	return _dissolving
+
 ## True se il punto (click) cade sul corpo dell'agente.
 func hit_by(point: Vector2) -> bool:
 	return point.distance_to(global_position + Vector2(0, -44)) < 52 \
 			or point.distance_to(global_position) < 26
 
 func _physics_process(delta: float) -> void:
+	if _dissolving:
+		velocity = Vector2.ZERO
+		return
 	_pulse += delta
 	if _highlight:
 		queue_redraw()
@@ -139,7 +194,8 @@ func _physics_process(delta: float) -> void:
 			_state_timer -= delta
 			if _state_timer <= 0.0:
 				_state_timer = _cadence() * randf_range(0.6, 1.4)
-				_plan_trip()
+				if backend_status == "working":
+					_plan_trip()
 		S.TRIP:
 			if _pause > 0.0:
 				velocity = Vector2.ZERO
@@ -164,7 +220,7 @@ func _tick_desk_pose(delta: float) -> void:
 	_pose_timer -= delta
 	if _pose_timer > 0.0:
 		return
-	_desk_working = not _desk_working
+	_desk_working = not _desk_working and backend_status == "working"
 	_pose_timer = randf_range(18.0, 40.0) if _desk_working else randf_range(6.0, 16.0)
 	if _seated():
 		_desk_motion("sit")
@@ -312,12 +368,12 @@ func _end_trip() -> void:
 
 ## Alla scrivania: rivolto secondo la postazione (down = viso in camera).
 func _work_pose() -> void:
-	_desk_working = true
+	_desk_working = backend_status == "working"
 	if _seated():
 		position = _spot + _seat_offset()
 		_desk_motion("sit")
 	else:
-		_desk_motion("work")
+		_desk_motion("work" if _desk_working else "idle")
 
 func _follow_path(speed: float, mode := "walk") -> bool:
 	if _pi >= _path.size():
