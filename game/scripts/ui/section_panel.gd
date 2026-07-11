@@ -289,8 +289,15 @@ func _on_positions_refresh(_list: Array) -> void:
 		_build("detail" if _pos_detail_id != 0 else "")
 
 func _on_dash_refresh(_list: Array) -> void:
-	if section == "dashboard" and is_instance_valid(_content):
-		_build()
+	if section != "dashboard" or not is_instance_valid(_content):
+		return
+	# non azzerare i filtri che l'utente ha scelto nei grafici: coi
+	# filtri attivi i charts si aggiornano da soli, il resto aspetta
+	for c in _content.get_children():
+		if c is ScrollContainer and c.get_child_count() > 0 \
+				and c.get_child(0) is StatsCharts and c.get_child(0)._active_count() > 0:
+			return
+	_build()
 
 ## Il primo snapshot posizioni rimpiazza mock/placeholder coi grafici
 ## veri; una volta montati, StatsCharts si aggiorna da sé (e non va
@@ -347,6 +354,19 @@ func _build_agent_page() -> void:
 			str(agent.get("status", "offline")) if not agent.is_empty()
 					else UIStrings.t("agents.not_active"),
 			15, Palette.MINT if not agent.is_empty() else Palette.DIM, "medium"))
+	# la chat con l'agente si apre DA QUI (paradigma desktop app)
+	if BackendBus.can_chat_with(slug):
+		var chat_btn := Button.new()
+		chat_btn.text = UIStrings.t("agent.chat")
+		chat_btn.add_theme_font_size_override("font_size", 14)
+		chat_btn.add_theme_color_override("font_color", Palette.GREEN)
+		var display := str(agent.get("name", slug.capitalize()))
+		chat_btn.pressed.connect(func() -> void:
+			add_child(ChatPanel.new(slug, display)))
+		title_row.add_child(chat_btn)
+		if not BackendBus.chat_replies(slug):
+			title_row.add_child(TerminalTheme.label(
+					UIStrings.t("agents.chat_besteffort"), 12, Palette.DIM))
 	_content.add_child(HSeparator.new())
 
 	# consumo dell'agente nella finestra usage (tutte le sue istanze)
@@ -368,11 +388,6 @@ func _build_agent_page() -> void:
 			mine.append(t)
 	_kpi_row(UIStrings.t("agents.registry_actions"), str(mine.size()), Palette.BRIGHT)
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label(UIStrings.t("agent.activity"),
-			14, Palette.MUTED, "medium"))
-	if mine.is_empty():
-		_content.add_child(TerminalTheme.label(
-				UIStrings.t("agents.no_transitions"), 14, Palette.DIM))
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -381,6 +396,11 @@ func _build_agent_page() -> void:
 	list.add_theme_constant_override("separation", 8)
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
+	list.add_child(TerminalTheme.label(UIStrings.t("agent.activity"),
+			14, Palette.MUTED, "medium"))
+	if mine.is_empty():
+		list.add_child(TerminalTheme.label(
+				UIStrings.t("agents.no_transitions"), 14, Palette.DIM))
 	for t in mine.slice(0, 30):
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 14)
@@ -399,6 +419,33 @@ func _build_agent_page() -> void:
 		var to_st := str(t.get("to_state", "?"))
 		row.add_child(TerminalTheme.label("→ " + to_st, 13,
 				POS_STATUS_COLORS.get(to_st, Palette.MUTED), "medium"))
+
+	# le sue COMUNICAZIONI nel team (i core non lavorano posizioni, ma
+	# parlano: senza questo blocco la pagina di Assistente/Mentor è vuota)
+	var talks: Array = []
+	for m in BackendBus.chat_log:
+		if str(m.get("from", "")) == slug or str(m.get("to", "")) == slug:
+			talks.append(m)
+	list.add_child(HSeparator.new())
+	list.add_child(TerminalTheme.label(UIStrings.t("agents.comms"),
+			14, Palette.MUTED, "medium"))
+	if talks.is_empty():
+		list.add_child(TerminalTheme.label(UIStrings.t("agents.no_comms"),
+				14, Palette.DIM))
+	for i in range(maxi(0, talks.size() - 15), talks.size()):
+		var m: Dictionary = talks[i]
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 14)
+		list.add_child(row)
+		var when := TerminalTheme.label(
+				str(m.get("ts", "")).replace("T", " ").left(16), 13, Palette.DIM)
+		when.custom_minimum_size = Vector2(140, 0)
+		row.add_child(when)
+		var who := TerminalTheme.label("%s → %s" % [m.get("from", "?"),
+				m.get("to", "?")], 13, Palette.MINT, "medium")
+		who.custom_minimum_size = Vector2(210, 0)
+		row.add_child(who)
+		row.add_child(_pos_paragraph(str(m.get("text", ""))))
 
 func _on_config_refresh(_settings: Dictionary) -> void:
 	if is_instance_valid(_content) and section in ["profile", "hours",
@@ -1256,6 +1303,19 @@ func _build_dashboard() -> void:
 		_kpi_row(UIStrings.t("kpi.positions_today"), str(kpi["found_today"]), Palette.MINT)
 		_kpi_row(UIStrings.t("kpi.avg_score"), str(kpi["avg_score"]), Palette.MINT)
 		_kpi_row(UIStrings.t("kpi.positions_total"), str(kpi["total"]), Palette.BRIGHT)
+		_content.add_child(HSeparator.new())
+		# i grafici linked del web VIVONO nella dashboard (feedback
+		# Leone 21:2x: "dashboard senza grafici"), cross-filter incluso
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.custom_minimum_size = Vector2(0, 380)
+		_content.add_child(scroll)
+		var charts := StatsCharts.new()
+		charts.open_position.connect(func(pid: int) -> void:
+			pending_detail = pid
+			navigate.emit("positions"))
+		scroll.add_child(charts)
 		return
 	var s: Dictionary = TeamData.summary()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
