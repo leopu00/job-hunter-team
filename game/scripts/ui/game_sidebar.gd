@@ -147,6 +147,7 @@ func _select(section: String) -> void:
 	_panel = SectionPanel.new(section, WIDTH)
 	add_child(_panel)
 	_panel.closed.connect(_close_panel)
+	_panel.navigate.connect(_select)  # es. box pipeline → positions filtrate
 	_set_active(section)
 	Sfx.play_blip()
 

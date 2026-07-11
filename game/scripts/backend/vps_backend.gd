@@ -28,13 +28,26 @@ const POLL_CMD := "docker exec jht tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
 ## remoti: solo apici singoli, una riga sola, e le stringhe che
 ## servirebbero allo script python passate via sys.argv.
 const POSITIONS_PY := "import sys,sqlite3,json; db=sqlite3.connect(sys.argv[1]); " \
-		+ "db.row_factory=sqlite3.Row; rows=[dict(r) for r in db.execute(sys.argv[2])]; " \
-		+ "print(json.dumps(rows))"
+		+ "db.row_factory=sqlite3.Row; q=lambda s: [dict(r) for r in db.execute(s)]; " \
+		+ "print(json.dumps(dict(p=q(sys.argv[2]),h=q(sys.argv[3]),t=q(sys.argv[4]))))"
+## La lista serve i facet, il dettaglio tutto il resto (mai jd_text: enorme).
 const POSITIONS_SELECT := "SELECT p.id,p.title,p.company,p.status,p.role_family," \
-		+ "p.loc_country,p.loc_city,p.work_mode,p.source,p.salary_estimated_min," \
-		+ "p.salary_estimated_max,p.salary_estimated_currency,s.total_score " \
+		+ "p.loc_country,p.loc_city,p.work_mode,p.source,p.url,p.jd_summary," \
+		+ "p.found_by,p.found_at,p.last_checked,p.deadline,p.is_open,p.created_at," \
+		+ "p.write_requested,p.geocode_requested,p.recheck_requested," \
+		+ "p.user_excluded_reason,p.user_excluded_note," \
+		+ "p.salary_declared_min,p.salary_declared_max,p.salary_declared_currency," \
+		+ "p.salary_estimated_min,p.salary_estimated_max,p.salary_estimated_currency," \
+		+ "p.office_lat,p.office_lon," \
+		+ "s.total_score,s.stack_match,s.remote_fit,s.salary_fit,s.experience_fit," \
+		+ "s.strategic_fit,s.scored_by,s.scored_at,s.notes AS score_notes," \
+		+ "a.critic_score,a.critic_verdict,a.critic_notes,a.written_by,a.written_at " \
 		+ "FROM positions p LEFT JOIN scores s ON s.position_id=p.id " \
+		+ "LEFT JOIN applications a ON a.position_id=p.id " \
 		+ "ORDER BY p.created_at DESC"
+const HIGHLIGHTS_SELECT := "SELECT position_id,type,text FROM position_highlights ORDER BY id"
+const TICKETS_SELECT := "SELECT position_id,request_text,kind,status,assigned_agent," \
+		+ "response_text,created_at FROM position_tickets ORDER BY id"
 
 const POSITIONS_EVERY := 4  # giri di poll tra due letture del jobs.db
 
@@ -104,23 +117,41 @@ func _run() -> void:
 		_sleep(POLL_SECS)
 
 
-## jobs.db → positions_updated (snapshot completo, la vista filtra locale).
+## jobs.db → positions_updated: snapshot completo con highlights e
+## ticket già agganciati per posizione (la vista filtra e naviga locale).
 func _fetch_positions() -> void:
 	var res := _ssh("docker exec -i jht python3 -c '" + POSITIONS_PY \
-			+ "' /jht_home/jobs.db '" + POSITIONS_SELECT + "'")
+			+ "' /jht_home/jobs.db '" + POSITIONS_SELECT + "' '" \
+			+ HIGHLIGHTS_SELECT + "' '" + TICKETS_SELECT + "'")
 	if _stop or res["code"] != 0:
 		if not _stop:
 			Log.call_deferred("debug", "backend", "fetch posizioni KO: code=%s %s" % [
 					res["code"], str(res["out"]).left(120)])
 		return
 	var raw := str(res["out"]).strip_edges()
-	# stdout può avere righe di warning attorno: il JSON è la riga con [
+	# stdout può avere righe di warning attorno: il JSON è la riga con {
 	for line in raw.split("\n"):
-		if line.begins_with("["):
+		if line.begins_with("{"):
 			var data: Variant = JSON.parse_string(line)
-			if data is Array:
-				bus.call_deferred("publish_positions", data)
+			if data is Dictionary:
+				bus.call_deferred("publish_positions", _assemble_positions(data))
 			return
+
+## Unisce le tre SELECT: highlights e ticket dentro la loro posizione.
+static func _assemble_positions(data: Dictionary) -> Array:
+	var by_id := {}
+	var rows: Array = data.get("p", [])
+	for p in rows:
+		p["highlights"] = []
+		p["tickets"] = []
+		by_id[p["id"]] = p
+	for h in data.get("h", []):
+		if by_id.has(h.get("position_id")):
+			by_id[h["position_id"]]["highlights"].append(h)
+	for t in data.get("t", []):
+		if by_id.has(t.get("position_id")):
+			by_id[t["position_id"]]["tickets"].append(t)
+	return rows
 
 
 ## Coda di messages.jsonl → chat_message sul bus, solo il nuovo rispetto
