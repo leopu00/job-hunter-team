@@ -175,6 +175,19 @@ func exit_through(door_spot: Vector2) -> void:
 	_legs = [leg]
 	_start_next_leg()
 
+## Un CV nuovo è pronto: lo scrittore lo porta FISICAMENTE allo
+## scaffale output accanto alla porta (teatro sul dato vero, chiamato
+## dalla scena quando cv_ready cresce).
+func deliver_to_shelf() -> void:
+	if state != S.WORK or backend_status != "working" or is_dissolving():
+		return
+	_legs = [
+		_leg_to(OutputShelf.RECT.get_center() + Vector2(0, 46.0), "carry",
+				randf_range(1.0, 1.8), "idle"),
+		_leg_to(_spot, "walk", 0.0, "work"),
+	]
+	_start_next_leg()
+
 ## Throttle LUNGO: dado a 3 facce per l'attività ricreativa (ordine
 ## Leone 20:1x) — divano, ping-pong o si va a cucinare qualcosa.
 func _plan_recreation() -> void:

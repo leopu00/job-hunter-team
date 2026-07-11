@@ -453,13 +453,24 @@ static func _pile_visual(n: int) -> int:
 		return 0
 	return mini(int(ceil(sqrt(float(n)) * 1.9)), PaperPile.MAX_SHEETS)
 
+var _last_ready := -1
+
 func _sync_piles() -> void:
 	var counts: Dictionary = BackendBus.pipeline_counts()
 	for dept_id in PILE_PHASE:
 		if PaperPile.inbox.has(dept_id):
 			PaperPile.inbox[dept_id].set_target(
 					_pile_visual(int(counts[PILE_PHASE[dept_id]])))
-	OutputShelf.set_ready(int(counts["cv_ready"]))
+	var ready := int(counts["cv_ready"])
+	OutputShelf.set_ready(ready)
+	# un CV in più rispetto all'ultimo giro: uno scrittore lo porta
+	# fisicamente allo scaffale (teatro sopra il dato vero)
+	if _last_ready >= 0 and ready > _last_ready:
+		for agent in agents:
+			if agent.dept == "scrittori" and not agent.is_dissolving():
+				agent.deliver_to_shelf()
+				break
+	_last_ready = ready
 	Log.debug("scene", "pile agganciate ai counts: %s" % str(counts))
 
 ## Le transizioni di stato REALI muovono la scena: a ogni refresh del
