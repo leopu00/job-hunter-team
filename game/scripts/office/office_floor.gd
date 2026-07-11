@@ -100,6 +100,15 @@ func _ready() -> void:
 		rug.scale = Vector2(0.68, 0.68)
 		rug.show_behind_parent = true
 		add_child(rug)
+	var rec_rug_tex := _load_tex("res://assets/gen-art/furniture/rug_lounge.png")
+	if rec_rug_tex != null:
+		# tappeto blu/teal al centro della sala relax (piatto, come sopra)
+		var rec_rug := Sprite2D.new()
+		rec_rug.texture = rec_rug_tex
+		rec_rug.position = Vector2(600, 1230)
+		rec_rug.scale = Vector2(0.42, 0.42)
+		rec_rug.show_behind_parent = true
+		add_child(rec_rug)
 
 func _draw() -> void:
 	var world := FurnitureDefs.WORLD
