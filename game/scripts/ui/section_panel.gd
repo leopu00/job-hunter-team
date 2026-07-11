@@ -5,6 +5,13 @@ extends CanvasLayer
 ## desktop app. Si chiude con la ✕ o ricliccando la voce in sidebar.
 
 signal closed
+## Chiesto un salto a un'altra sezione (es. box pipeline → positions):
+## chi ospita il pannello (la sidebar) decide come aprirla.
+signal navigate(section: String)
+
+## Filtro status da applicare al prossimo pannello positions (i box
+## della pipeline pre-filtrano come i link del web). Consumato al build.
+static var pending_status: Array = []
 
 var section := ""
 var _sidebar_width := 0.0
@@ -58,8 +65,13 @@ func _ready() -> void:
 	box.add_child(HSeparator.new())
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 10)
+	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(_content)
-	_build()
+	# TEST-AUTO: JHT_POS_DETAIL=<id> apre il dettaglio di quella posizione
+	# appena lo snapshot arriva (il refresh del bus rientra da solo).
+	if section == "positions" and OS.get_environment("JHT_POS_DETAIL") != "":
+		_pos_detail_id = int(OS.get_environment("JHT_POS_DETAIL"))
+	_build("detail" if _pos_detail_id != 0 else "")
 
 var _content: VBoxContainer
 
@@ -93,7 +105,10 @@ func _build(page := "") -> void:
 		"vps":
 			_build_vps()
 		"positions":
-			_build_positions()
+			if page == "detail" and _pos_detail_id != 0:
+				_build_pos_detail()
+			else:
+				_build_positions()
 		"profile", "hours", "provider", "docker", "account", "email", "language", "advanced":
 			_build_config()
 		_:
@@ -138,6 +153,12 @@ var _pos_filters := {
 ## Cross-filtering come sul web: ogni gruppo di chip conta le posizioni
 ## filtrate da TUTTI GLI ALTRI gruppi, la lista le filtra da tutti.
 func _build_positions() -> void:
+	if not pending_status.is_empty():
+		var chosen := {}
+		for st in pending_status:
+			chosen[st] = true
+		_pos_filters["status"] = chosen
+		pending_status = []
 	var all: Array = BackendBus.positions
 	if all.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("pos.need_vps"),
@@ -198,6 +219,11 @@ func _build_positions() -> void:
 
 func _on_positions_refresh(_list: Array) -> void:
 	if section == "positions" and is_instance_valid(_content):
+		# lo snapshot nuovo non deve buttarti fuori dal dettaglio aperto
+		_build("detail" if _pos_detail_id != 0 else "")
+
+func _on_dash_refresh(_list: Array) -> void:
+	if section == "dashboard" and is_instance_valid(_content):
 		_build()
 
 ## Posizioni filtrate da tutti i gruppi tranne `skip` (cross-filter).
@@ -280,7 +306,7 @@ func _pos_chip_row(key: String, title: String, all: Array) -> void:
 			_build())
 		row.add_child(chip)
 
-## Una posizione in lista: score | titolo — azienda | luogo | stato.
+## Una posizione in lista: score | titolo cliccabile — azienda | luogo | stato.
 func _pos_row(p: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -294,8 +320,21 @@ func _pos_row(p: Dictionary) -> Control:
 	var text_col := VBoxContainer.new()
 	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(text_col)
-	text_col.add_child(TerminalTheme.label("%s — %s" % [
-			_pos_value(p, "title"), _pos_value(p, "company")], 15, Palette.BRIGHT))
+	# il titolo apre la pagina della posizione (come sul web)
+	var title_btn := Button.new()
+	title_btn.flat = true
+	title_btn.text = "%s — %s" % [_pos_value(p, "title"), _pos_value(p, "company")]
+	title_btn.add_theme_font_size_override("font_size", 15)
+	title_btn.add_theme_color_override("font_color", Palette.BRIGHT)
+	title_btn.add_theme_color_override("font_hover_color", Palette.GREEN)
+	title_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var pid := int(p.get("id", 0))
+	title_btn.pressed.connect(func() -> void:
+		_pos_detail_id = pid
+		Sfx.play_tick()
+		_build("detail"))
+	text_col.add_child(title_btn)
 	var place := "%s · %s" % [str(p.get("loc_city", "") if p.get("loc_city") else "—"),
 			_pos_value(p, "loc_country")]
 	text_col.add_child(TerminalTheme.label(place, 13, Palette.MUTED))
@@ -309,6 +348,233 @@ func _pos_row(p: Dictionary) -> Control:
 	pad.custom_minimum_size = Vector2(18, 0)
 	row.add_child(pad)
 	return row
+
+# ── Dettaglio posizione (la pagina del web privato) ───────────────────
+
+## Pesi del breakdown come sul web: fattore → massimo.
+const SCORE_WEIGHTS := [
+	["stack_match", "Stack", 40], ["remote_fit", "Remote", 25],
+	["salary_fit", "Salary", 20], ["experience_fit", "Experience", 10],
+	["strategic_fit", "Strategic", 15],
+]
+const VERDICT_COLORS := {
+	"PASS": Palette.GREEN, "NEEDS_WORK": Palette.YELLOW, "REJECT": Palette.RED,
+}
+
+var _pos_detail_id := 0
+
+func _build_pos_detail() -> void:
+	var p := {}
+	for row in BackendBus.positions:
+		if int(row.get("id", 0)) == _pos_detail_id:
+			p = row
+			break
+	if p.is_empty():
+		_build_positions()
+		return
+
+	var back := Button.new()
+	back.flat = true
+	back.text = UIStrings.t("pos.back")
+	back.add_theme_font_size_override("font_size", 14)
+	back.add_theme_color_override("font_color", Palette.MUTED)
+	back.add_theme_color_override("font_hover_color", Palette.GREEN)
+	back.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	back.pressed.connect(func() -> void:
+		_pos_detail_id = 0
+		Sfx.play_back()
+		_build())
+	_content.add_child(back)
+
+	# scroll unico: il dettaglio è lungo
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 540)
+	_content.add_child(scroll)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(box)
+
+	# ── intestazione ──
+	box.add_child(TerminalTheme.label(_pos_value(p, "title"), 22, Palette.WHITE, "xbold"))
+	var sub := HBoxContainer.new()
+	sub.add_theme_constant_override("separation", 14)
+	box.add_child(sub)
+	sub.add_child(TerminalTheme.label(_pos_value(p, "company"), 16, Palette.BRIGHT, "medium"))
+	sub.add_child(TerminalTheme.label("%s · %s · %s" % [
+			str(p.get("loc_city", "") if p.get("loc_city") else "—"),
+			_pos_value(p, "loc_country"), _pos_value(p, "work_mode")],
+			14, Palette.MUTED))
+	var st := _pos_value(p, "status")
+	sub.add_child(TerminalTheme.label(st, 14,
+			POS_STATUS_COLORS.get(st, Palette.MUTED), "bold"))
+	if p.get("found_by"):
+		box.add_child(TerminalTheme.label(UIStrings.t("pos.found") % [
+				str(p["found_by"]), str(p.get("found_at", "")).left(10)], 13, Palette.DIM))
+	if p.get("url"):
+		box.add_child(TerminalTheme.label(str(p["url"]), 13, Palette.BLUE))
+	var open_v: Variant = p.get("is_open")
+	if open_v != null:
+		box.add_child(TerminalTheme.label(
+				UIStrings.t("pos.open_yes") if int(open_v) == 1 else UIStrings.t("pos.open_no"),
+				13, Palette.MINT if int(open_v) == 1 else Palette.RED))
+	box.add_child(HSeparator.new())
+
+	# ── stipendio (stima del team se c'è, altrimenti il dichiarato) ──
+	var est: bool = p.get("salary_estimated_min") != null or p.get("salary_estimated_max") != null
+	var s_min: Variant = p.get("salary_estimated_min") if est else p.get("salary_declared_min")
+	var s_max: Variant = p.get("salary_estimated_max") if est else p.get("salary_declared_max")
+	if s_min != null or s_max != null:
+		var cur := str(p.get("salary_estimated_currency") if est \
+				else p.get("salary_declared_currency"))
+		if cur == "" or cur == "<null>":
+			cur = "EUR"
+		var rng := "%s–%s %s" % [_fmt_k(s_min), _fmt_k(s_max), cur]
+		var srow := HBoxContainer.new()
+		srow.add_theme_constant_override("separation", 12)
+		box.add_child(srow)
+		var slbl := TerminalTheme.label(UIStrings.t("pos.salary"), 14, Palette.MUTED, "medium")
+		slbl.custom_minimum_size = Vector2(220, 0)
+		srow.add_child(slbl)
+		srow.add_child(TerminalTheme.label(rng, 17, Palette.MINT, "bold"))
+		srow.add_child(TerminalTheme.label(
+				UIStrings.t("pos.salary_estimated") if est else UIStrings.t("pos.salary_declared"),
+				13, Palette.DIM))
+
+	# ── riassunto annuncio ──
+	if p.get("jd_summary"):
+		box.add_child(TerminalTheme.label(UIStrings.t("pos.summary"), 14, Palette.MUTED, "medium"))
+		box.add_child(_pos_paragraph(str(p["jd_summary"])))
+	box.add_child(HSeparator.new())
+
+	# ── score breakdown pesato ──
+	if p.get("total_score") != null:
+		box.add_child(TerminalTheme.label(
+				UIStrings.t("pos.score_title") % int(p["total_score"]), 17,
+				Palette.MINT if int(p["total_score"]) >= 70 else Palette.YELLOW, "bold"))
+		for w in SCORE_WEIGHTS:
+			var val: Variant = p.get(w[0])
+			if val == null:
+				continue
+			var wrow := HBoxContainer.new()
+			wrow.add_theme_constant_override("separation", 12)
+			box.add_child(wrow)
+			var wl := TerminalTheme.label("%s (su %d)" % [w[1], w[2]], 13, Palette.MUTED)
+			wl.custom_minimum_size = Vector2(220, 0)
+			wrow.add_child(wl)
+			var bar := ProgressBar.new()
+			bar.custom_minimum_size = Vector2(220, 12)
+			bar.max_value = float(w[2])
+			bar.value = float(val)
+			bar.show_percentage = false
+			bar.modulate = Palette.GREEN
+			wrow.add_child(bar)
+			wrow.add_child(TerminalTheme.label("%d/%d" % [int(val), w[2]],
+					13, Palette.BRIGHT, "medium"))
+		if p.get("score_notes"):
+			box.add_child(TerminalTheme.label(UIStrings.t("pos.score_rationale"),
+					13, Palette.MUTED, "medium"))
+			box.add_child(_pos_paragraph(str(p["score_notes"])))
+		if p.get("scored_by"):
+			box.add_child(TerminalTheme.label("— %s · %s" % [str(p["scored_by"]),
+					str(p.get("scored_at", "")).left(10)], 12, Palette.DIM))
+	else:
+		box.add_child(TerminalTheme.label(UIStrings.t("pos.score_none"), 14, Palette.DIM))
+	box.add_child(HSeparator.new())
+
+	# ── voto del critico (0-10, distinto dallo score) ──
+	if p.get("critic_score") != null:
+		var crow := HBoxContainer.new()
+		crow.add_theme_constant_override("separation", 14)
+		box.add_child(crow)
+		crow.add_child(TerminalTheme.label(
+				UIStrings.t("pos.critic_title") % float(p["critic_score"]),
+				16, Palette.BRIGHT, "bold"))
+		var verdict := str(p.get("critic_verdict", ""))
+		if verdict != "" and verdict != "<null>":
+			crow.add_child(TerminalTheme.label(verdict, 15,
+					VERDICT_COLORS.get(verdict, Palette.MUTED), "bold"))
+		if p.get("critic_notes"):
+			box.add_child(_pos_paragraph(str(p["critic_notes"])))
+	else:
+		box.add_child(TerminalTheme.label(UIStrings.t("pos.critic_none"), 14, Palette.DIM))
+	box.add_child(HSeparator.new())
+
+	# ── punti chiave ──
+	var highlights: Array = p.get("highlights", [])
+	if not highlights.is_empty():
+		box.add_child(TerminalTheme.label(UIStrings.t("pos.highlights"), 14,
+				Palette.MUTED, "medium"))
+		for h in highlights:
+			var kind := str(h.get("type", ""))
+			var good := kind.containsn("pro") or kind.containsn("plus") or kind.containsn("match")
+			var bad := kind.containsn("con") or kind.containsn("minus") or kind.containsn("risk")
+			var hrow := HBoxContainer.new()
+			hrow.add_theme_constant_override("separation", 10)
+			box.add_child(hrow)
+			hrow.add_child(TerminalTheme.label("▲" if good else ("▼" if bad else "•"), 13,
+					Palette.GREEN if good else (Palette.RED if bad else Palette.MUTED)))
+			hrow.add_child(_pos_paragraph(str(h.get("text", ""))))
+		box.add_child(HSeparator.new())
+
+	# ── esclusione utente ──
+	if p.get("user_excluded_reason"):
+		box.add_child(TerminalTheme.label(UIStrings.t("pos.excluded_title"), 14,
+				Palette.RED, "bold"))
+		var reason := str(p["user_excluded_reason"])
+		if p.get("user_excluded_note"):
+			reason += " — " + str(p["user_excluded_note"])
+		box.add_child(_pos_paragraph(reason))
+		box.add_child(HSeparator.new())
+
+	# ── stato delle azioni on-demand (per ora sola lettura) ──
+	box.add_child(TerminalTheme.label(UIStrings.t("pos.actions"), 14,
+			Palette.MUTED, "medium"))
+	for act in [["pos.act_write", "write_requested"],
+			["pos.act_geocode", "geocode_requested"],
+			["pos.act_recheck", "recheck_requested"]]:
+		var requested := int(p.get(act[1], 0) if p.get(act[1]) != null else 0) == 1
+		var arow := HBoxContainer.new()
+		arow.add_theme_constant_override("separation", 12)
+		box.add_child(arow)
+		var al := TerminalTheme.label(UIStrings.t(act[0]), 14, Palette.BASE)
+		al.custom_minimum_size = Vector2(280, 0)
+		arow.add_child(al)
+		arow.add_child(TerminalTheme.label(
+				UIStrings.t("pos.act_requested") if requested else UIStrings.t("pos.act_not_requested"),
+				13, Palette.YELLOW if requested else Palette.DIM, "medium"))
+	box.add_child(TerminalTheme.label(UIStrings.t("pos.act_note"), 12, Palette.DIM))
+	box.add_child(HSeparator.new())
+
+	# ── ticket col team ──
+	box.add_child(TerminalTheme.label(UIStrings.t("pos.tickets"), 14,
+			Palette.MUTED, "medium"))
+	var tickets: Array = p.get("tickets", [])
+	if tickets.is_empty():
+		box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_none"), 13, Palette.DIM))
+	for t in tickets:
+		var trow := HBoxContainer.new()
+		trow.add_theme_constant_override("separation", 12)
+		box.add_child(trow)
+		trow.add_child(TerminalTheme.label("[%s]" % str(t.get("status", "?")), 13,
+				Palette.MINT if str(t.get("status")) == "resolved" else Palette.YELLOW, "medium"))
+		trow.add_child(_pos_paragraph(str(t.get("request_text", ""))))
+		if t.get("response_text"):
+			box.add_child(_pos_paragraph("↳ " + str(t["response_text"])))
+
+## Paragrafo a capo automatico; via i **grassetti** markdown del team.
+func _pos_paragraph(text: String) -> Label:
+	var lbl := TerminalTheme.label(text.replace("**", ""), 14, Palette.BASE)
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return lbl
+
+static func _fmt_k(v: Variant) -> String:
+	if v == null:
+		return "?"
+	return "%dk" % int(round(float(v) / 1000.0)) if float(v) >= 1000.0 else str(int(v))
 
 # ── Impostazioni → Collega VPS ────────────────────────────────────────
 
@@ -528,8 +794,27 @@ func _build_apps() -> void:
 		row.add_child(TerminalTheme.label(names[clampi(stage, 0, 3)], 14,
 				Palette.GREEN if stage >= 2 else Palette.MUTED, "medium"))
 
-## Dashboard: riepilogo + posizioni di oggi.
+## Dashboard: pipeline e KPI reali (se la VPS è collegata) o il mock.
 func _build_dashboard() -> void:
+	if not BackendBus.positions_updated.is_connected(_on_dash_refresh):
+		BackendBus.positions_updated.connect(_on_dash_refresh)
+	_build_dash_pipeline()
+	var all: Array = BackendBus.positions
+	if not all.is_empty():
+		var today := Time.get_date_string_from_system(true)  # UTC come found_at
+		var found_today := 0
+		var score_sum := 0.0
+		var score_n := 0
+		for p in all:
+			if str(p.get("found_at", "")).begins_with(today):
+				found_today += 1
+			if p.get("total_score") != null:
+				score_sum += float(p["total_score"])
+				score_n += 1
+		_kpi_row("POSIZIONI OGGI", str(found_today), Palette.MINT)
+		_kpi_row("SCORE MEDIO", str(int(round(score_sum / maxf(1.0, score_n)))), Palette.MINT)
+		_kpi_row("POSIZIONI TOTALI", str(all.size()), Palette.BRIGHT)
+		return
 	var s: Dictionary = TeamData.summary()
 	_kpi_row("POSIZIONI OGGI", str(s.get("positions_today", 0)), Palette.MINT)
 	_kpi_row("SCORE MEDIO", str(s.get("avg_score", 0)), Palette.MINT)
@@ -551,6 +836,69 @@ func _build_dashboard() -> void:
 				15, Palette.BRIGHT))
 		text_col.add_child(TerminalTheme.label("%s · %s" % [p["location"], p["salary"]],
 				13, Palette.MUTED))
+
+## La pipeline a 5 box del dashboard web (flusso reale 2026-06-07):
+## Da analizzare → Analizzate → Con lo score → Da scrivere → Scritte.
+## Ogni box conta dallo snapshot vero e apre le posizioni pre-filtrate.
+func _build_dash_pipeline() -> void:
+	var all: Array = BackendBus.positions
+	if all.is_empty():
+		return
+	var counts := {"to_analyze": 0, "analyzed": 0, "with_score": 0,
+			"to_write": 0, "written": 0}
+	for p in all:
+		var st := str(p.get("status", ""))
+		var wr := int(p.get("write_requested", 0) if p.get("write_requested") != null else 0) == 1
+		if st == "new":
+			counts["to_analyze"] += 1
+		elif st == "checked":
+			counts["analyzed"] += 1
+		elif st == "scored" and not wr:
+			counts["with_score"] += 1
+		elif st in ["scored", "writing", "review"] and wr:
+			counts["to_write"] += 1
+		elif st == "ready":
+			counts["written"] += 1
+	var boxes := [
+		["to_analyze", "dash.pl_to_analyze", Palette.MUTED, ["new"]],
+		["analyzed", "dash.pl_analyzed", Palette.BLUE, ["checked"]],
+		["with_score", "dash.pl_with_score", Palette.PURPLE, ["scored"]],
+		["to_write", "dash.pl_to_write", Palette.YELLOW, ["scored", "writing", "review"]],
+		["written", "dash.pl_written", Palette.MINT, ["ready"]],
+	]
+	_content.add_child(TerminalTheme.label(UIStrings.t("dash.pipeline"), 14,
+			Palette.MUTED, "medium"))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+	for i in boxes.size():
+		var b: Array = boxes[i]
+		if i > 0:
+			row.add_child(TerminalTheme.label("▸", 16, Palette.DIM))
+		var btn := Button.new()
+		var color: Color = b[2]
+		btn.custom_minimum_size = Vector2(150, 64)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(color.r, color.g, color.b, 0.10)
+		sb.border_color = Color(color.r, color.g, color.b, 0.55)
+		sb.set_border_width_all(1)
+		btn.add_theme_stylebox_override("normal", sb)
+		var hover := sb.duplicate()
+		hover.border_color = color
+		btn.add_theme_stylebox_override("hover", hover)
+		btn.add_theme_stylebox_override("pressed", hover.duplicate())
+		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		btn.text = "%d\n%s" % [counts[b[0]], UIStrings.t(b[1])]
+		btn.add_theme_font_size_override("font_size", 15)
+		btn.add_theme_color_override("font_color", color)
+		var statuses: Array = b[3]
+		btn.pressed.connect(func() -> void:
+			pending_status = statuses
+			Sfx.play_tick()
+			navigate.emit("positions"))
+		row.add_child(btn)
+	_content.add_child(TerminalTheme.label(UIStrings.t("dash.pl_hint"), 12, Palette.DIM))
+	_content.add_child(HSeparator.new())
 
 ## Notifiche recenti del team.
 func _build_notifs() -> void:

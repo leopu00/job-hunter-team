@@ -398,7 +398,7 @@ func _add_hud() -> void:
 	theme_root.add_child(_team_hud)
 	theme_root.add_child(SimBadge.new())  # SIMULAZIONE vs DATI REALI
 	var hint := TerminalTheme.label(
-			"trascina o WASD per la camera · rotella zoom · click su agenti e reparti · TAB registro · ESC menu",
+			"trascina o WASD per la camera · zoom con rotella, pinch o +/- · click su agenti e reparti · TAB registro · ESC menu",
 			15, Palette.DIM)
 	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	hint.position = Vector2(-hint.size.x / 2.0, -30)
