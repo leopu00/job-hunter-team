@@ -160,7 +160,12 @@ func _build_config() -> void:
 		var lbl := TerminalTheme.label(str(pair[0]), 14, Palette.MUTED, "medium")
 		lbl.custom_minimum_size = Vector2(220, 0)
 		row.add_child(lbl)
-		row.add_child(TerminalTheme.label(str(pair[1]), 16, Palette.BRIGHT))
+		# a capo automatico: un valore lungo (es. lista skill) non deve
+		# allargare il pannello oltre lo schermo
+		var val := TerminalTheme.label(str(pair[1]), 16, Palette.BRIGHT)
+		val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		val.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(val)
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
