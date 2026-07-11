@@ -165,6 +165,19 @@ const S := {
 	"pos.open_yes": "annuncio APERTO all'ultima verifica",
 	"pos.open_no": "annuncio NON PIÙ APERTO",
 
+	# ── Candidature e Notifiche (dati reali) ──────────────────────
+	"apps.ready": "CV pronto",
+	"apps.applied": "inviata",
+	"apps.response": "risposta ricevuta",
+	"apps.empty_live": "nessuna candidatura ancora — i CV pronti compariranno qui",
+	"notifs.ticket_resolved": "ticket risolto: %s",
+	"notifs.ticket_assigned": "ticket in lavorazione: %s",
+	"notifs.scored": "valutata dallo Scorer: %s",
+	"notifs.cv_ready": "CV scritto: %s",
+	"notifs.applied": "candidatura inviata: %s",
+	"notifs.response": "risposta ricevuta: %s",
+	"notifs.empty": "nessuna notifica recente dal team",
+
 	# ── GlobalSearch (Cmd+K) ──────────────────────────────────────
 	"search.placeholder": "cerca posizioni: titolo, azienda, città…  (ESC chiude)",
 	"search.no_match": "nessuna posizione trovata",

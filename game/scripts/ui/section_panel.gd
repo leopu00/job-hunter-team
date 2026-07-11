@@ -988,13 +988,25 @@ func _build_placeholder() -> void:
 # ── Team / Agenti / Attività / Candidature / Dashboard ────────────────
 
 ## Il team per reparto: organico e postazioni libere, più i core.
+## Reparto della scena → slug ruolo del sistema reale.
+const DEPT_ROLE := {"scout": "scout", "analisti": "analista", "scorer": "scorer",
+		"scrittori": "scrittore", "critici": "critico"}
+
 func _build_team() -> void:
+	if not BackendBus.agents_updated.is_connected(_on_team_refresh):
+		BackendBus.agents_updated.connect(_on_team_refresh)
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]
 		var occupied := 0
-		for i in (dept["desks"] as Array).size():
-			if CharacterDefs.desk_occupant_name(dept_id, i) != "":
-				occupied += 1
+		if not BackendBus.agents.is_empty():
+			# postazioni = agenti VERI del ruolo attivi in questo momento
+			for a in BackendBus.agents:
+				if str(a.get("slug", "")) == str(DEPT_ROLE.get(dept_id, "")):
+					occupied += 1
+		else:
+			for i in (dept["desks"] as Array).size():
+				if CharacterDefs.desk_occupant_name(dept_id, i) != "":
+					occupied += 1
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
 		_content.add_child(row)
@@ -1135,8 +1147,61 @@ func _on_activity_refresh(_list: Array) -> void:
 	if section == "activity" and is_instance_valid(_content):
 		_build()
 
+func _on_team_refresh(_list: Array) -> void:
+	if section == "team" and is_instance_valid(_content):
+		_build()
+
 ## Candidature a stadi (stessi dati del registro TAB).
+## Stadi reali di una candidatura (status del jobs.db → etichetta).
+const APP_STAGES := {"ready": "apps.ready", "applied": "apps.applied",
+		"response": "apps.response"}
+
 func _build_apps() -> void:
+	if not BackendBus.positions_updated.is_connected(_on_apps_refresh):
+		BackendBus.positions_updated.connect(_on_apps_refresh)
+	# con la VPS: le candidature VERE (CV pronti, inviate, con risposta)
+	if not BackendBus.positions.is_empty():
+		var rows: Array = []
+		for p in BackendBus.positions:
+			if APP_STAGES.has(str(p.get("status", ""))):
+				rows.append(p)
+		if rows.is_empty():
+			_content.add_child(TerminalTheme.label(UIStrings.t("apps.empty_live"),
+					15, Palette.DIM))
+			return
+		for p in rows:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 14)
+			_content.add_child(row)
+			var score_v: Variant = p.get("total_score")
+			row.add_child(TerminalTheme.label(
+					"—" if score_v == null else str(int(score_v)), 18,
+					Palette.MINT if score_v != null and float(score_v) >= 70.0
+					else Palette.YELLOW, "bold"))
+			var btn := Button.new()
+			btn.flat = true
+			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			btn.clip_text = true
+			btn.text = "%s — %s" % [str(p.get("title", "?")), str(p.get("company", "?"))]
+			btn.add_theme_font_size_override("font_size", 15)
+			btn.add_theme_color_override("font_color", Palette.BRIGHT)
+			btn.add_theme_color_override("font_hover_color", Palette.GREEN)
+			btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var pid := int(p.get("id", 0))
+			btn.pressed.connect(func() -> void:
+				pending_detail = pid
+				navigate.emit("positions"))
+			row.add_child(btn)
+			var status := str(p.get("status", ""))
+			row.add_child(TerminalTheme.label(UIStrings.t(APP_STAGES[status]), 14,
+					POS_STATUS_COLORS.get(status, Palette.MUTED), "medium"))
+			var verdict := str(p.get("critic_verdict", "")
+					if p.get("critic_verdict") != null else "")
+			if verdict != "":
+				row.add_child(TerminalTheme.label(verdict, 13,
+						VERDICT_COLORS.get(verdict, Palette.MUTED), "bold"))
+		return
 	var apps: Array = TeamData.applications()
 	if apps.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("registry.empty"), 15, Palette.DIM))
@@ -1159,27 +1224,20 @@ func _build_apps() -> void:
 		row.add_child(TerminalTheme.label(names[clampi(stage, 0, 3)], 14,
 				Palette.GREEN if stage >= 2 else Palette.MUTED, "medium"))
 
+func _on_apps_refresh(_list: Array) -> void:
+	if section == "apps" and is_instance_valid(_content):
+		_build()
+
 ## Dashboard: pipeline e KPI reali (se la VPS è collegata) o il mock.
 func _build_dashboard() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_dash_refresh):
 		BackendBus.positions_updated.connect(_on_dash_refresh)
 	_build_dash_pipeline()
-	var all: Array = BackendBus.positions
-	if not all.is_empty():
-		var today := Time.get_date_string_from_system(true)  # UTC come found_at
-		var found_today := 0
-		var score_sum := 0.0
-		var score_n := 0
-		for p in all:
-			if str(p.get("found_at", "")).begins_with(today):
-				found_today += 1
-			if p.get("total_score") != null:
-				score_sum += float(p["total_score"])
-				score_n += 1
-		_kpi_row(UIStrings.t("kpi.positions_today"), str(found_today), Palette.MINT)
-		_kpi_row(UIStrings.t("kpi.avg_score"),
-				str(int(round(score_sum / maxf(1.0, score_n)))), Palette.MINT)
-		_kpi_row(UIStrings.t("kpi.positions_total"), str(all.size()), Palette.BRIGHT)
+	if not BackendBus.positions.is_empty():
+		var kpi: Dictionary = BackendBus.kpi_summary()
+		_kpi_row(UIStrings.t("kpi.positions_today"), str(kpi["found_today"]), Palette.MINT)
+		_kpi_row(UIStrings.t("kpi.avg_score"), str(kpi["avg_score"]), Palette.MINT)
+		_kpi_row(UIStrings.t("kpi.positions_total"), str(kpi["total"]), Palette.BRIGHT)
 		return
 	var s: Dictionary = TeamData.summary()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
@@ -1208,24 +1266,11 @@ func _build_dashboard() -> void:
 ## Da analizzare → Analizzate → Con lo score → Da scrivere → Scritte.
 ## Ogni box conta dallo snapshot vero e apre le posizioni pre-filtrate.
 func _build_dash_pipeline() -> void:
-	var all: Array = BackendBus.positions
-	if all.is_empty():
+	if BackendBus.positions.is_empty():
 		return
-	var counts := {"to_analyze": 0, "analyzed": 0, "with_score": 0,
-			"to_write": 0, "written": 0}
-	for p in all:
-		var st := str(p.get("status", ""))
-		var wr := int(p.get("write_requested", 0) if p.get("write_requested") != null else 0) == 1
-		if st == "new":
-			counts["to_analyze"] += 1
-		elif st == "checked":
-			counts["analyzed"] += 1
-		elif st == "scored" and not wr:
-			counts["with_score"] += 1
-		elif st in ["scored", "writing", "review"] and wr:
-			counts["to_write"] += 1
-		elif st == "ready":
-			counts["written"] += 1
+	# il mapping status→fase vive in UN posto solo (lo usa anche la
+	# scena per il flusso fisico dei fogli)
+	var counts: Dictionary = BackendBus.pipeline_counts()
 	var boxes := [
 		["to_analyze", "dash.pl_to_analyze", Palette.MUTED, ["new"]],
 		["analyzed", "dash.pl_analyzed", Palette.BLUE, ["checked"]],
@@ -1267,8 +1312,59 @@ func _build_dash_pipeline() -> void:
 	_content.add_child(TerminalTheme.label(UIStrings.t("dash.pl_hint"), 12, Palette.DIM))
 	_content.add_child(HSeparator.new())
 
-## Notifiche recenti del team.
+## Notifiche recenti del team. Con la VPS: gli eventi VERI che contano
+## per l'utente — ticket risolti/in lavorazione e i traguardi della
+## pipeline (valutata, CV scritto, inviata, risposta) dalle transizioni.
+const NOTIF_STATES := {"scored": "notifs.scored", "ready": "notifs.cv_ready",
+		"applied": "notifs.applied", "response": "notifs.response"}
+const NOTIF_MAX := 15
+
 func _build_notifs() -> void:
+	if not BackendBus.positions_updated.is_connected(_on_notifs_refresh):
+		BackendBus.positions_updated.connect(_on_notifs_refresh)
+	if not BackendBus.positions.is_empty():
+		var items: Array = []  # {ts, icon, color, text}
+		for t_pos in BackendBus.positions:
+			for t in t_pos.get("tickets", []):
+				var status := str(t.get("status", ""))
+				var req := str(t.get("request_text", "")).left(70)
+				if status == "resolved":
+					items.append({"ts": str(t.get("created_at", "")), "icon": "✔",
+							"color": Palette.MINT,
+							"text": UIStrings.t("notifs.ticket_resolved") % req})
+				elif status == "assigned":
+					items.append({"ts": str(t.get("created_at", "")), "icon": "●",
+							"color": Palette.YELLOW,
+							"text": UIStrings.t("notifs.ticket_assigned") % req})
+		for tr in BackendBus.transitions:
+			var to := str(tr.get("to_state", ""))
+			if not NOTIF_STATES.has(to):
+				continue
+			var what := "%s — %s" % [str(tr.get("title", "?")), str(tr.get("company", "?"))]
+			items.append({"ts": str(tr.get("ts", "")), "icon": "●",
+					"color": POS_STATUS_COLORS.get(to, Palette.GREEN),
+					"text": UIStrings.t(NOTIF_STATES[to]) % what})
+		items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return str(a["ts"]) > str(b["ts"]))
+		if items.is_empty():
+			_content.add_child(TerminalTheme.label(UIStrings.t("notifs.empty"),
+					15, Palette.DIM))
+			return
+		for i in mini(items.size(), NOTIF_MAX):
+			var n: Dictionary = items[i]
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 14)
+			_content.add_child(row)
+			row.add_child(TerminalTheme.label(str(n["icon"]), 14, n["color"]))
+			var when := TerminalTheme.label(
+					str(n["ts"]).replace("T", " ").left(16), 13, Palette.DIM)
+			when.custom_minimum_size = Vector2(130, 0)
+			row.add_child(when)
+			var txt := TerminalTheme.label(str(n["text"]), 15, Palette.BASE)
+			txt.clip_text = true
+			txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(txt)
+		return
 	for n in TeamData.notifications():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 14)
@@ -1280,6 +1376,10 @@ func _build_notifs() -> void:
 		when.custom_minimum_size = Vector2(80, 0)
 		row.add_child(when)
 		row.add_child(TerminalTheme.label(n["text"], 15, Palette.BASE))
+
+func _on_notifs_refresh(_list: Array) -> void:
+	if section == "notifs" and is_instance_valid(_content):
+		_build()
 
 ## Chat del team: con la VPS collegata i messaggi VERI che gli agenti
 ## si scambiano (stesso flusso dei fumetti), altrimenti il mock.
