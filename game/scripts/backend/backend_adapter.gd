@@ -22,3 +22,10 @@ func start(_config: Dictionary) -> void:
 ## Ferma tutto e libera le risorse. Il bus pubblica DISCONNECTED da sé.
 func stop() -> void:
 	pass
+
+
+## Messaggio dell'utente verso un agente (pannello chat). L'adapter lo
+## consegna al canale vero del team (tmux nel container) o lo simula;
+## la risposta dell'agente tornerà dal normale flusso chat_message.
+func send_chat(_to_slug: String, _text: String) -> void:
+	pass

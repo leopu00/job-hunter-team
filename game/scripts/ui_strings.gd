@@ -49,7 +49,15 @@ const S := {
 	"agent.activity": "ULTIME ATTIVITÀ",
 	"agent.activity_none": "nessuna attività registrata",
 	"agent.talk": "▶ PARLA",
+	"agent.chat": "▶ CHAT COL TEAM",
 	"agent.pile": "Fogli sulla scrivania: %d",
+
+	# ── Pannello chat con l'agente ────────────────────────────────
+	"chat.title": "CHAT — %s",
+	"chat.placeholder": "scrivi un messaggio…",
+	"chat.send": "INVIA",
+	"chat.you": "TU",
+	"chat.empty": "nessun messaggio ancora: scrivi tu per primo",
 
 	# ── Impostazioni → Collega VPS ────────────────────────────────
 	"vps.intro": "Collega la VPS del tuo team: IP e chiave SSH, al resto pensa il gioco.",

@@ -118,6 +118,35 @@ func _roster_loop() -> void:
 						break
 		bus.publish_agents(_roster.duplicate(true))
 
+## Risposte simulate del pannello chat, per ruolo (dal prefisso dello slug).
+const REPLIES := {
+	"coordinatore": "Ricevuto. Il team è a regime: te ne do conto al prossimo giro di tick.",
+	"scout": "Ricevuto, lo tengo presente nel prossimo giro di board.",
+	"analista": "Ok, lo integro nell'analisi in corso e ti aggiorno.",
+	"scorer": "Annotato: ne tengo conto nei prossimi score.",
+	"scrittore": "Ricevuto, lo rifletto nella prossima bozza.",
+	"critico": "Preso nota. Sarò severo come sempre.",
+	"mentor": "Buona domanda: ci torno con calma al prossimo consiglio.",
+	"assistente": "Ricevuto! Lo segno subito nel registro.",
+	"sentinella": "Ricevuto. La ronda continua, tutto sotto controllo.",
+}
+
+## L'utente scrive dal pannello: l'agente simulato risponde dopo un
+## attimo — stesso flusso chat_message del canale vero.
+func send_chat(to_slug: String, _text: String) -> void:
+	_reply_later(to_slug)
+
+func _reply_later(to_slug: String) -> void:
+	await _sleep(randf_range(2.0, 4.0))
+	if not _running or not _is_active(to_slug):
+		return
+	var role := to_slug.rstrip("-0123456789")
+	bus.publish_chat({
+		"ts": Time.get_datetime_string_from_system(),
+		"from": to_slug, "to": "user",
+		"text": REPLIES.get(role, "Ricevuto."),
+	})
+
 func _is_active(slug: String) -> bool:
 	for a in _roster:
 		if a["slug"] == slug and a.get("active", true):
