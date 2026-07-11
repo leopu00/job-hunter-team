@@ -92,6 +92,29 @@ const AGENTS := {
 			"tengo io il registro del team",
 		],
 	},
+	# one-shot/on-demand del sistema reale (roster barto li pubblica:
+	# senza un posto in scena sparivano con un warn — la scena deve
+	# mostrare TUTTI gli attivi veri)
+	"mantenitore": {
+		"name": "Il Mantenitore",
+		"spot": Vector2(860, 330),
+		"wander": [Vector2(1727, 300), Vector2(2690, 790), Vector2(1120, 1740)],
+		"chatter": [
+			"container sani, disco ok",
+			"aggiorno le dipendenze…",
+			"backup verificato, tutto al suo posto",
+		],
+	},
+	"dottore": {
+		"name": "Il Dottore",
+		"spot": Vector2(420, 320),
+		"wander": [Vector2(1790, 1390), Vector2(1965, 1400), Vector2(2690, 1825)],
+		"chatter": [
+			"visita di controllo agli agenti…",
+			"contesto in salute, nessun sintomo di burn",
+			"prescrivo un refresh leggero",
+		],
+	},
 	"sentinella": {
 		"name": "La Sentinella",
 		"spot": Vector2(1490, 320),
@@ -173,7 +196,11 @@ static func _desk_spot_of(dept_id: String, index: int) -> Vector2:
 ## Ruoli senza sheet proprio che vestono quello di un altro (pittorico,
 ## mai SVG in scena): la sentinella usa il camice tecnico del maintainer
 ## finché imagegen non riapre e le genera un foglio dedicato.
-const SHEET_LOANS := {"sentinella": "maintainer"}
+const SHEET_LOANS := {
+	"sentinella": "maintainer",
+	"mantenitore": "maintainer",  # il camice è davvero il suo
+	"dottore": "mentor",  # look da consigliere finché non ha un foglio suo
+}
 
 static func make_rig(slug: String, variant := "a") -> Node2D:
 	var sheet_path := SHEETS + slug + "_" + variant + ".png"
