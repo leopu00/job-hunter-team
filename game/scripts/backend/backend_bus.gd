@@ -20,6 +20,11 @@ extends Node
 signal connection_changed(state: int, detail: String)
 signal agents_updated(agents: Array)
 signal chat_message(msg: Dictionary)
+## Aggiunta post-contratto (annunciata in chat, additiva): snapshot
+## completo delle posizioni dal jobs.db della VPS, per le viste web
+## migrate (elenco+filtri, dettaglio, mappa). Righe = SELECT del
+## VpsBackend, campi con i nomi delle colonne reali.
+signal positions_updated(positions: Array)
 
 enum { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
@@ -27,7 +32,8 @@ const CONFIG_PATH := "user://vps.cfg"
 
 var state: int = DISCONNECTED
 var state_detail := ""
-var agents: Array = []  # ultimo snapshot pubblicato (per chi arriva tardi)
+var agents: Array = []     # ultimo snapshot pubblicato (per chi arriva tardi)
+var positions: Array = []  # ultimo snapshot posizioni (idem)
 
 var _backend: BackendAdapter
 
@@ -103,3 +109,8 @@ func publish_chat(msg: Dictionary) -> void:
 	Log.debug("backend", "chat %s→%s: %s" % [msg.get("from", "?"),
 			msg.get("to", "?"), str(msg.get("text", "")).left(60)])
 	chat_message.emit(msg)
+
+func publish_positions(list: Array) -> void:
+	positions = list
+	Log.debug("backend", "posizioni: %d dal jobs.db" % list.size())
+	positions_updated.emit(list)
