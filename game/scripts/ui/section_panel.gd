@@ -239,6 +239,10 @@ func _on_dash_refresh(_list: Array) -> void:
 	if section == "dashboard" and is_instance_valid(_content):
 		_build()
 
+func _on_agents_refresh(_list: Array) -> void:
+	if section == "agents" and is_instance_valid(_content):
+		_build()
+
 func _on_config_refresh(_settings: Dictionary) -> void:
 	if is_instance_valid(_content) and section in ["profile", "hours",
 			"provider", "docker", "account", "email", "language", "advanced"]:
@@ -770,8 +774,30 @@ func _build_team() -> void:
 	_content.add_child(TerminalTheme.label(
 			"Core: Il Coordinatore · Il Mentor · L'Assistente", 15, Palette.MUTED))
 
-## Tutti gli agenti in scena con stato del ruolo.
+## Tutti gli agenti in scena con stato del ruolo. Con la VPS collegata:
+## il roster VERO (sessioni tmux attive), aggiornato a ogni poll.
 func _build_agents() -> void:
+	if not BackendBus.agents_updated.is_connected(_on_agents_refresh):
+		BackendBus.agents_updated.connect(_on_agents_refresh)
+	if not BackendBus.agents.is_empty():
+		_content.add_child(TerminalTheme.label(
+				"%d agenti ATTIVI sulla VPS in questo momento" % BackendBus.agents.size(),
+				14, Palette.MUTED, "medium"))
+		for a in BackendBus.agents:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 12)
+			_content.add_child(row)
+			var slug := str(a.get("slug", "?"))
+			row.add_child(TerminalTheme.label(ROLE_EMOJI.get(slug, "●"), 14, Palette.GREEN))
+			var name_lbl := TerminalTheme.label(str(a.get("name", slug)), 16,
+					Palette.BRIGHT, "medium")
+			name_lbl.custom_minimum_size = Vector2(220, 0)
+			row.add_child(name_lbl)
+			var st := TerminalTheme.label(str(a.get("status", "working")), 14, Palette.MINT)
+			st.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			row.add_child(st)
+		return
 	for def in CharacterDefs.spawn_list():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
@@ -794,8 +820,8 @@ func _build_agents() -> void:
 ## Emoji-ruolo per l'attribuzione per-istanza (scout-2, scorer-1…).
 const ROLE_EMOJI := {
 	"scout": "🔍", "analista": "🧠", "scorer": "🎯", "scrittore": "✍",
-	"critico": "🧐", "capitano": "🧭", "sentinella": "🛡", "assistente": "🤝",
-	"mentor": "🎓", "dottore": "🩺", "mantenitore": "🔧",
+	"critico": "🧐", "capitano": "🧭", "coordinatore": "🧭", "sentinella": "🛡",
+	"assistente": "📋", "mentor": "🎓", "dottore": "🩺", "mantenitore": "🔧",
 }
 
 ## Feed attività: il registro transizioni VERO quando la VPS è collegata
@@ -1002,8 +1028,42 @@ func _build_notifs() -> void:
 		row.add_child(when)
 		row.add_child(TerminalTheme.label(n["text"], 15, Palette.BASE))
 
-## Chat del team (sola lettura: si scrive dalla desktop app).
+## Chat del team: con la VPS collegata i messaggi VERI che gli agenti
+## si scambiano (stesso flusso dei fumetti), altrimenti il mock.
 func _build_chat() -> void:
+	if not BackendBus.chat_message.is_connected(_on_teamchat_refresh):
+		BackendBus.chat_message.connect(_on_teamchat_refresh)
+	var live: Array = BackendBus.chat_history
+	if not live.is_empty():
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.custom_minimum_size = Vector2(0, 480)
+		_content.add_child(scroll)
+		var list := VBoxContainer.new()
+		list.add_theme_constant_override("separation", 8)
+		list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(list)
+		for msg in live:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 12)
+			list.add_child(row)
+			var when := TerminalTheme.label(
+					str(msg.get("ts", "")).replace("T", " ").left(16), 13, Palette.DIM)
+			when.custom_minimum_size = Vector2(130, 0)
+			row.add_child(when)
+			var base := str(msg.get("from", "?")).split("-")[0]
+			var who := TerminalTheme.label("%s %s → %s" % [ROLE_EMOJI.get(base, "•"),
+					msg.get("from", "?"), msg.get("to", "?")], 13, Palette.MINT, "medium")
+			who.custom_minimum_size = Vector2(230, 0)
+			row.add_child(who)
+			var txt := _pos_paragraph(str(msg.get("text", "")))
+			row.add_child(txt)
+			var pad := Control.new()
+			pad.custom_minimum_size = Vector2(14, 0)
+			row.add_child(pad)
+		scroll.set_deferred("scroll_vertical", 999999)  # parte dal fondo
+		return
 	for msg in TeamData.chat():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
@@ -1018,6 +1078,10 @@ func _build_chat() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			"// sola lettura — si scrive dalla desktop app", 13, Palette.DIM))
+
+func _on_teamchat_refresh(_msg: Dictionary) -> void:
+	if section == "chat" and is_instance_valid(_content):
+		_build()
 
 # ── Statistiche + pagina Utilizzo ─────────────────────────────────────
 

@@ -49,6 +49,7 @@ var transitions: Array = []  # ultime ~80 transizioni di stato (registro team)
 ## sidebar: {provider|hours|email|advanced: [[etichetta, valore], …],
 ## usage: {window_h, per_agent_kt, generated_at}}.
 var live_settings: Dictionary = {}
+var chat_history: Array = []  # ultimi ~100 chat_message (per la vista Chat)
 
 var _backend: BackendAdapter
 
@@ -153,6 +154,9 @@ func publish_agents(list: Array) -> void:
 func publish_chat(msg: Dictionary) -> void:
 	Log.debug("backend", "chat %s→%s: %s" % [msg.get("from", "?"),
 			msg.get("to", "?"), str(msg.get("text", "")).left(60)])
+	chat_history.append(msg)
+	if chat_history.size() > 100:
+		chat_history = chat_history.slice(chat_history.size() - 100)
 	chat_message.emit(msg)
 
 func publish_positions(list: Array) -> void:
