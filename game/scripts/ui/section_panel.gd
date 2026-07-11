@@ -12,6 +12,9 @@ signal navigate(section: String)
 ## Filtro status da applicare al prossimo pannello positions (i box
 ## della pipeline pre-filtrano come i link del web). Consumato al build.
 static var pending_status: Array = []
+## Dettaglio da aprire al prossimo pannello positions (click su una
+## posizione da un'altra sezione, es. grafici stats). Consumato al build.
+static var pending_detail := 0
 
 var section := ""
 var _sidebar_width := 0.0
@@ -72,6 +75,9 @@ func _ready() -> void:
 	# JHT_AGENT_PAGE=<slug> apre la pagina del singolo agente.
 	if section == "positions" and OS.get_environment("JHT_POS_DETAIL") != "":
 		_pos_detail_id = int(OS.get_environment("JHT_POS_DETAIL"))
+	if section == "positions" and pending_detail != 0:
+		_pos_detail_id = pending_detail
+		pending_detail = 0
 	if section == "agents" and OS.get_environment("JHT_AGENT_PAGE") != "":
 		_agent_detail = OS.get_environment("JHT_AGENT_PAGE")
 		_build("agent")
@@ -82,7 +88,10 @@ var _content: VBoxContainer
 
 ## Contenuto per sezione: le viste migrate hanno il loro builder, le altre
 ## mostrano il placeholder finché non vengono portate dalla desktop app.
+var _current_page := ""
+
 func _build(page := "") -> void:
+	_current_page = page
 	for child in _content.get_children():
 		child.queue_free()
 	match section:
@@ -249,6 +258,14 @@ func _on_positions_refresh(_list: Array) -> void:
 
 func _on_dash_refresh(_list: Array) -> void:
 	if section == "dashboard" and is_instance_valid(_content):
+		_build()
+
+## Il primo snapshot posizioni rimpiazza mock/placeholder coi grafici
+## veri; una volta montati, StatsCharts si aggiorna da sé (e non va
+## ricostruito: azzererebbe i filtri scelti). Mai mentre sei su Utilizzo.
+func _on_stats_refresh(_list: Array) -> void:
+	if section == "stats" and _current_page == "" and is_instance_valid(_content) \
+			and _content.get_child_count() > 0 and not (_content.get_child(0) is ScrollContainer):
 		_build()
 
 func _on_agents_refresh(_list: Array) -> void:
@@ -1289,6 +1306,32 @@ func _on_teamchat_refresh(_msg: Dictionary) -> void:
 # ── Statistiche + pagina Utilizzo ─────────────────────────────────────
 
 func _build_stats() -> void:
+	# con la VPS collegata: i grafici cross-filter del web sui dati veri
+	# (mai il mock spacciato per reale)
+	if not BackendBus.positions_updated.is_connected(_on_stats_refresh):
+		BackendBus.positions_updated.connect(_on_stats_refresh)
+	if BackendBus.is_live() and BackendBus.positions.is_empty():
+		_content.add_child(TerminalTheme.label(
+				"// dati in arrivo dalla VPS…", 14, Palette.DIM))
+		return
+	if not BackendBus.positions.is_empty():
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.custom_minimum_size = Vector2(0, 540)
+		_content.add_child(scroll)
+		var charts := StatsCharts.new()
+		charts.open_position.connect(func(pid: int) -> void:
+			pending_detail = pid
+			navigate.emit("positions"))
+		scroll.add_child(charts)
+		var usage_link := Button.new()
+		usage_link.text = "▶ UTILIZZO"
+		usage_link.add_theme_font_size_override("font_size", 16)
+		usage_link.add_theme_color_override("font_color", Palette.GREEN)
+		usage_link.pressed.connect(func() -> void: _build("usage"))
+		_content.add_child(usage_link)
+		return
 	var s: Dictionary = TeamData.summary()
 	var streak: Dictionary = TeamData.streak()
 	_kpi_row("POSIZIONI OGGI", str(s.get("positions_today", 0)), Palette.MINT)
