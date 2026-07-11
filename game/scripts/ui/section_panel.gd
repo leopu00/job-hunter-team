@@ -90,8 +90,29 @@ func _build(page := "") -> void:
 			_build_notifs()
 		"chat":
 			_build_chat()
+		"profile", "hours", "provider", "docker", "account", "email", "language", "advanced":
+			_build_config()
 		_:
 			_build_placeholder()
+
+## Sezioni config: coppie etichetta/valore dal contratto dati, SOLA
+## LETTURA — in linea col modello desktop-first (si modifica solo da lì).
+func _build_config() -> void:
+	var rows: Array = TeamData.settings().get(section, [])
+	if rows.is_empty():
+		_build_placeholder()
+		return
+	for pair in rows:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		_content.add_child(row)
+		var lbl := TerminalTheme.label(str(pair[0]), 14, Palette.MUTED, "medium")
+		lbl.custom_minimum_size = Vector2(220, 0)
+		row.add_child(lbl)
+		row.add_child(TerminalTheme.label(str(pair[1]), 16, Palette.BRIGHT))
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(
+			"// sola lettura — si modifica dalla desktop app", 13, Palette.DIM))
 
 func _build_placeholder() -> void:
 	_content.add_child(TerminalTheme.label(

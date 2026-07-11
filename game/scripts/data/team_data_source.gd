@@ -53,3 +53,10 @@ func get_notifications() -> Array:
 ## Chat di team recente: [{ when, from, text }] — recente per ultima.
 func get_chat() -> Array:
 	return []
+
+## Impostazioni (sezioni config della sidebar, SOLA LETTURA in gioco:
+## si modificano dalla desktop app). Chiave = id sezione (profile, hours,
+## provider, docker, account, email, language, advanced), valore = Array
+## di coppie [etichetta, valore] nell'ordine di visualizzazione.
+func get_settings() -> Dictionary:
+	return {}

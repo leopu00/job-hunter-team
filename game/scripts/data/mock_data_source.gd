@@ -147,3 +147,59 @@ func get_notifications() -> Array:
 
 func get_chat() -> Array:
 	return CHAT
+
+const SETTINGS := {
+	"profile": [
+		["Candidato", "Il Candidato"],
+		["Ruolo target", "Data Analyst / BI"],
+		["Città prioritaria", "Berlino"],
+		["Seniority", "mid"],
+		["Lingue", "IT · EN · DE"],
+		["Permesso di lavoro", "UE"],
+	],
+	"hours": [
+		["Attività team", "08:00 – 20:00"],
+		["Giorni", "lun – ven"],
+		["Pacing", "adattivo sul weekly"],
+		["Hard-stop giornaliero", "attivo"],
+	],
+	"provider": [
+		["Provider", "Kimi K2.7"],
+		["Chiave API", "configurata ✓"],
+		["Tier", "standard"],
+		["Fallback", "—"],
+	],
+	"docker": [
+		["Container", "jht"],
+		["Immagine", "jht:latest"],
+		["Stato", "in esecuzione"],
+		["Uptime", "3 h"],
+		["Salute", "verde ✓"],
+	],
+	"account": [
+		["Email", "c•••@esempio.dev"],
+		["Piano", "beta"],
+		["Sync cloud", "attivo"],
+		["Ultimo sync", "2 min fa"],
+	],
+	"email": [
+		["Casella team", "team-c4nd@jht.dev"],
+		["Monitor", "attivo"],
+		["Processate oggi", "6"],
+		["Ultima email", "1 h fa"],
+	],
+	"language": [
+		["Lingua interfaccia", "Italiano"],
+		["Lingua CV", "segue l'annuncio"],
+		["Disponibili", "IT · EN · DE · FR · ES · PT · NL"],
+	],
+	"advanced": [
+		["Livello log", "info"],
+		["Telemetria", "off"],
+		["Flag sperimentali", "—"],
+		["Cartella dati", "~/.jht"],
+	],
+}
+
+func get_settings() -> Dictionary:
+	return SETTINGS
