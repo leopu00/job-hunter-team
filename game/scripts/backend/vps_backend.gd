@@ -13,13 +13,16 @@ const POLL_SECS := 8.0
 const SSH_TIMEOUT := 8
 const CHAT_BACKLOG := 3    # messaggi di storia mostrati al collegamento
 const CHAT_MARK := "---JHT-CHAT---"
+const THROTTLE_MARK := "---JHT-THROTTLE---"
 
-## Roster e chat in UN solo giro ssh. NIENTE quoting annidato qui dentro
-## (sh -c con apici e #{} si è già rotto una volta nel viaggio
+## Roster, chat e throttle in UN solo giro ssh. NIENTE quoting annidato
+## qui dentro (sh -c con apici e #{} si è già rotto una volta nel viaggio
 ## OS.execute→ssh→shell remota): il ; lo interpreta la shell remota,
 ## tmux ls resta in formato default e il nome sessione si estrae dai ':'.
 const POLL_CMD := "docker exec jht tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
-		+ "docker exec jht tail -n 30 /jht_home/logs/messages.jsonl 2>/dev/null"
+		+ "docker exec jht tail -n 30 /jht_home/logs/messages.jsonl 2>/dev/null; " \
+		+ "echo ---JHT-THROTTLE---; " \
+		+ "docker exec jht tail -n 60 /jht_home/logs/throttle-events.jsonl 2>/dev/null"
 
 ## Snapshot posizioni dal jobs.db (stesso dataset leggero dei facets del
 ## web), letto con python3 nel container (sqlite3 CLI assente).
@@ -123,6 +126,11 @@ try:
 except Exception:
     pass
 try:
+    ps = json.load(open('/jht_home/logs/pacing-bridge-state.json'))
+    out['work_phase'] = str(ps.get('work_phase', ''))
+except Exception:
+    pass
+try:
     u = json.load(open('/jht_home/logs/agent-usage-table.json'))
     tot = {}
     for row in u.get('series_kt_per_bucket', []):
@@ -191,9 +199,17 @@ func _run() -> void:
 				failures = 0
 				_deferred_state(BackendBus.CONNECTED, _ip)
 			var parts: PackedStringArray = str(res["out"]).split(CHAT_MARK)
-			bus.call_deferred("publish_agents", _parse_roster(parts[0]))
+			var chat_raw := ""
+			var throttle_raw := ""
 			if parts.size() > 1:
-				_ingest_chat(parts[1])
+				var tail: PackedStringArray = parts[1].split(THROTTLE_MARK)
+				chat_raw = tail[0]
+				if tail.size() > 1:
+					throttle_raw = tail[1]
+			bus.call_deferred("publish_agents",
+					_parse_roster(parts[0], _parse_throttles(throttle_raw)))
+			if chat_raw != "":
+				_ingest_chat(chat_raw)
 		else:
 			failures += 1
 			if failures >= 2:  # un blip singolo non è un guasto
@@ -487,11 +503,39 @@ func _ssh(remote_cmd: String) -> Dictionary:
 	return {"code": code, "out": "\n".join(PackedStringArray(out))}
 
 
+## throttle-events.jsonl (start/end del pacing reale) → throttle ATTIVI
+## per istanza: {uid: {left: sec rimanenti, total: sec richiesti}}.
+## Le righe sono in ordine: per ogni agente conta l'ULTIMO evento — uno
+## start senza end la cui finestra copre "adesso" è un throttle in corso.
+static func _parse_throttles(raw: String) -> Dictionary:
+	var last := {}  # uid → ultimo evento
+	for line in raw.split("\n"):
+		if not line.begins_with("{"):
+			continue
+		var d: Variant = JSON.parse_string(line)
+		if d is Dictionary and str(d.get("agent", "")) != "":
+			last[_slug_norm(str(d["agent"]))] = d
+	var now := Time.get_unix_time_from_system()
+	var active := {}
+	for uid in last:
+		var ev: Dictionary = last[uid]
+		if str(ev.get("event", "")) != "start":
+			continue
+		var total := float(ev.get("applied_sec", 0.0))
+		var until := float(ev.get("ts_unix", 0.0)) + total
+		if until > now:
+			active[uid] = {"left": until - now, "total": total}
+	return active
+
 ## Sessioni tmux (formato default "NOME: 1 windows …") → snapshot roster
 ## per il contratto agents_updated. CAPITANO → coordinatore; "scout-2" →
-## slug scout, name "Scout 2"; i core tengono il proprio nome. status
-## oggi è sempre "working": la distinzione fine arriverà da /jht_home.
-static func _parse_roster(raw: String) -> Array:
+## slug scout, name "Scout 2", uid "scout-2" (chiave per-istanza, la
+## stessa dei throttle e delle transitions). status dal throttle REALE:
+## working (nessun throttle) | throttled (pausa del pacing in corso) —
+## la scelta seduto-vs-ricreazione è della scena, sulla stima
+## throttle_secs (secondi RIMANENTI; throttle_total = durata piena).
+## Un agente killato non compare proprio: despawn = uscita dalla porta.
+static func _parse_roster(raw: String, throttles: Dictionary = {}) -> Array:
 	var agents: Array = []
 	for line in raw.split("\n"):
 		if not line.contains(":"):
@@ -499,19 +543,28 @@ static func _parse_roster(raw: String) -> Array:
 		var session := line.split(":")[0].strip_edges()
 		if session == "" or session.contains(" "):
 			continue
-		var base := session.to_lower().replace("-worker", "")
+		var uid := _slug_norm(session)
+		var base := uid
 		var num := ""
 		var parts := base.split("-")
 		if parts.size() > 1 and parts[parts.size() - 1].is_valid_int():
 			num = parts[parts.size() - 1]
 			base = "-".join(parts.slice(0, parts.size() - 1))
-		var slug := "coordinatore" if base == "capitano" else base
+		var slug := base
 		var name := slug.capitalize()
 		if num != "":
 			name += " " + num
+		var status := "working"
+		var t_left := 0.0
+		var t_total := 0.0
+		if throttles.has(uid):
+			t_left = float(throttles[uid]["left"])
+			t_total = float(throttles[uid]["total"])
+			status = "throttled"
 		agents.append({
-			"slug": slug, "role": slug, "name": name,
-			"active": true, "status": "working", "desk_hint": "",
+			"slug": slug, "role": slug, "name": name, "uid": uid,
+			"active": true, "status": status, "desk_hint": "",
+			"throttle_secs": t_left, "throttle_total": t_total,
 		})
 	return agents
 
