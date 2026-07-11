@@ -9,7 +9,7 @@ extends Node2D
 ## GLES3: texture su Sprite2D figlio, primitive _draw solo su self e solo
 ## in modalità blockout — mai le due cose sullo stesso CanvasItem.
 
-const TEX_BASE := "res://assets/gen-art/furniture/pile_"
+const TEX_BASE := "res://assets/gen-art/furniture/paper_pile_"
 const MAX_SHEETS := 18
 const WIDTH := 56.0  # larghezza resa sulla scrivania
 

@@ -35,10 +35,11 @@ const LAMPS := [
 	[Vector2(1300, 780), 330.0, MINT, 0.13],    # ologramma
 ]
 
-## Skyline esterno oltre i vetri nord (asset dev-art, banda 2172×724):
-## due sprite sovrapposti, crossfade giorno/notte via modulate.
-const SKY_DAY := "res://assets/gen-art/environment/exterior_day.png"
-const SKY_NIGHT := "res://assets/gen-art/environment/exterior_night.png"
+## Fuori dalla box, oltre i vetri nord: bokeh soffuso (ordine di Leone:
+## qualcosa ma NIENTE grattacieli; dado dev-art=6). Due sprite
+## sovrapposti, crossfade giorno/notte via modulate.
+const SKY_DAY := "res://assets/gen-art/environment/bokeh_day.png"
+const SKY_NIGHT := "res://assets/gen-art/environment/bokeh_night.png"
 
 var _cm: CanvasModulate
 var _lamps: Array = []      # [[LightPool, alpha_base], …]
@@ -93,7 +94,9 @@ func _make_sky(path: String) -> Sprite2D:
 	var spr := Sprite2D.new()
 	spr.texture = tex
 	spr.centered = false
-	spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	# mirror: il bokeh è chiaro e il repeat secco mostrava la cucitura a
+	# ogni tile (con lo skyline scuro non si vedeva)
+	spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_MIRROR
 	spr.region_enabled = true
 	var s := band_h / tex.get_size().y
 	spr.region_rect = Rect2(0, 0, w.size.x / s, tex.get_size().y)
