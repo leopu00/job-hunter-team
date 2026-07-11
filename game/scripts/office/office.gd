@@ -29,6 +29,9 @@ func _ready() -> void:
 	world.name = "World"
 	world.y_sort_enabled = true
 	add_child(world)
+	# la porta dell'ufficio (perimetro sud, accanto all'entrata): da qui
+	# escono gli agenti killati/fermati — missione pipeline 20:1x
+	world.add_child(ExitDoor.new(EXIT_DOOR))
 
 	for item in FurnitureDefs.ITEMS:
 		if item["kind"] == "hologram":
@@ -159,6 +162,12 @@ func _ready() -> void:
 	if OS.get_environment("JHT_CHAT") != "":
 		_chat_selftest(OS.get_environment("JHT_CHAT"))
 
+	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza subito i nuovi stati della
+	# missione pipeline: un agente in ricreazione (throttle lungo) e uno
+	# che esce dalla porta, senza aspettare il ciclo eventi del mock.
+	if OS.get_environment("JHT_THROTTLE_TEST") == "1":
+		_throttle_selftest()
+
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
 	var shot := OS.get_environment("JHT_SHOT")
@@ -178,6 +187,17 @@ func _chat_selftest(role: String) -> void:
 			await get_tree().create_timer(0.5).timeout
 			BackendBus.send_user_chat(a.slug, "Come procede il lavoro?")
 			return
+
+## Forza i due comportamenti nuovi sul roster corrente (vedi _ready).
+func _throttle_selftest() -> void:
+	await get_tree().create_timer(4.0).timeout
+	if agents.size() < 2:
+		return
+	agents[1].set_throttle(240.0)
+	agents[1].set_backend_status("throttled")
+	_despawn_agent(agents[agents.size() - 1])
+	Log.info("test", "throttle selftest: %s in ricreazione, uno alla porta"
+			% agents[1].uid)
 
 func _take_shot(path: String) -> void:
 	# JHT_SHOT_DELAY=N ritarda lo scatto: utile per fotografare la
@@ -345,12 +365,17 @@ func sync_agents(list: Array) -> void:
 		_enter_backend_mode()
 	var wanted := {}
 	for item in list:
-		if item.get("active", true):
+		# un killed è di fatto fuori squadra: esce dalla porta come chi
+		# sparisce dal roster (missione pipeline 20:1x)
+		if item.get("active", true) and str(item.get("status", "")) != "killed":
 			wanted[item["slug"]] = item
 	for agent in agents.duplicate():
 		if not wanted.has(agent.uid):
 			_despawn_agent(agent)
 		else:
+			# throttle PRIMA dello status: la scelta seduto-vs-ricreazione
+			# al cambio di stato legge la durata già aggiornata
+			agent.set_throttle(float(wanted[agent.uid].get("throttle_secs", 0.0)))
 			agent.set_backend_status(wanted[agent.uid].get("status", "working"))
 			wanted.erase(agent.uid)
 	for item_uid in wanted:
@@ -379,6 +404,11 @@ func _name_of(uid: String) -> String:
 	return uid
 
 ## ── Scena reattiva al registro attività ──────────────────────────────
+
+## La porta d'uscita (perimetro sud, presso l'entrata/Assistente) e il
+## punto interno dove gli agenti in uscita camminano prima di svanire.
+const EXIT_DOOR := Vector2(1300, 2000)
+const EXIT_SPOT := Vector2(1300, 1952)
 
 const MAX_TR_REACTIONS := 6   # per refresh: il resto resta solo nel registro
 const TR_REACT_GAP := 2.4     # secondi fra due reazioni (non un coro)
@@ -474,10 +504,10 @@ func _enter_backend_mode() -> void:
 		_desk_pool[role].append(def)
 	for agent in agents.duplicate():
 		if agent.uid == "":
-			_despawn_agent(agent, false)
+			_despawn_agent(agent, false, false)
 	Log.info("backend", "modalità backend: in scena solo gli agenti attivi")
 
-func _despawn_agent(agent: AgentNPC, refill_pool := true) -> void:
+func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := true) -> void:
 	agents.erase(agent)
 	if _hover_agent == agent:
 		_hover_agent = null
@@ -492,7 +522,12 @@ func _despawn_agent(agent: AgentNPC, refill_pool := true) -> void:
 			_desk_pool[role].push_front(def)
 		else:
 			_desk_pool[role].append(def)
-	agent.dissolve()
+	# un agente fermato ESCE dalla porta (missione pipeline 20:1x); il
+	# dissolve tesseract resta per gli sfollamenti tecnici di massa
+	if via_door:
+		agent.exit_through(EXIT_SPOT)
+	else:
+		agent.dissolve()
 
 func _spawn_backend_agent(item: Dictionary) -> void:
 	var role: String = item.get("role", "")
