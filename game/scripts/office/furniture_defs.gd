@@ -5,7 +5,9 @@ class_name FurnitureDefs
 
 ## Espanso a SUD per i 5 reparti (M-reparti): la fila nord (lounge, coffee,
 ## lab) è invariata, le zone/scrivanie dei reparti vivono in DepartmentDefs.
-const WORLD := Rect2(0, 0, 2560, 2140)
+## Il margine NORD sale a -420: fascia cielo per lo skyline esterno
+## giorno/notte (DayNight, asset exterior_*.png).
+const WORLD := Rect2(0, -420, 2560, 2560)
 const FLOOR := Rect2(240, 140, 2200, 1860)
 
 ## Zona lab racchiusa da vetri interni (visual + collisioni sottili).
