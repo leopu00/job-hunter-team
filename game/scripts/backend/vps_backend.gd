@@ -2,6 +2,8 @@ class_name VpsBackend
 extends BackendAdapter
 ## Backend REALE: parla via SSH con una VPS del team (container Docker
 ## `jht`, stato in /jht_home). Legge, non scrive: l'app osserva il team.
+## Eccezioni autorizzate da Leone: la chat utente↔agente e il TICKET
+## utente→team (gate 1 dell'11/07) — mai scritture dirette sui dati.
 ##
 ## Ciclo: start() → CONNECTING → handshake ssh → CONNECTED → poll del
 ## roster (sessioni tmux nel container = agenti attivi) finché stop().
@@ -371,6 +373,62 @@ func _do_send_chat(agent: String, text: String) -> void:
 
 func _chat_sent(agent: String, ok: bool, error: String) -> void:
 	bus.call_deferred("emit_signal", "user_chat_sent", agent, ok, error)
+
+## ── Ticket utente→team (gate 1: l'unica scrittura sul jobs.db) ───────
+## Stesso INSERT della route /api/positions/[id]/ticket del web: ticket
+## 'open' kind 'custom' su position_tickets, che il Capitano nota e
+## smista (ticket.py list-open). Il testo utente è velenoso per la shell
+## (gotcha OS.execute) → viaggia BASE64 dentro lo script python, che a
+## sua volta arriva al container via file+stdin: niente quoting, mai.
+
+const TICKET_MAX_LEN := 2000  # stesso limite della route web
+
+const TICKET_PY := """
+import sqlite3, base64, json
+text = base64.b64decode('%s').decode('utf-8')
+pid = %d
+db = sqlite3.connect('/jht_home/jobs.db')
+try:
+    db.execute('PRAGMA journal_mode=WAL')
+    db.execute('PRAGMA foreign_keys=ON')
+    if db.execute('SELECT id FROM positions WHERE id=?', (pid,)).fetchone() is None:
+        print(json.dumps(dict(ok=False, error='posizione inesistente')))
+    else:
+        cur = db.execute(
+            "INSERT INTO position_tickets (position_id, request_text, kind, status) "
+            "VALUES (?, ?, 'custom', 'open')", (pid, text))
+        db.commit()
+        print(json.dumps(dict(ok=True, id=cur.lastrowid)))
+finally:
+    db.close()
+"""
+
+func create_ticket(position_id: int, text: String) -> void:
+	var t := text.strip_edges().left(TICKET_MAX_LEN)
+	if t == "" or position_id <= 0:
+		return
+	# thread one-shot: l'INSERT remoto non deve congelare UI né poll
+	WorkerThreadPool.add_task(_do_create_ticket.bind(position_id, t))
+
+func _do_create_ticket(position_id: int, text: String) -> void:
+	var res := _ssh_python(TICKET_PY % [Marshalls.utf8_to_base64(text), position_id])
+	var ok := false
+	var err := ""
+	if res["code"] != 0:
+		err = _short_error(res)
+	else:
+		err = "risposta illeggibile dalla VPS"
+		for line in str(res["out"]).split("\n"):
+			if line.begins_with("{"):
+				var d: Variant = JSON.parse_string(line)
+				if d is Dictionary:
+					ok = bool(d.get("ok", false))
+					err = str(d.get("error", ""))
+				break
+	bus.call_deferred("emit_signal", "ticket_created", position_id, ok, err)
+	if ok:
+		_fetch_positions()  # il ticket nuovo compare subito nel dettaglio
+
 
 ## Tail del chat.jsonl dell'agente → agent_chat_updated (storia completa
 ## recente, la UI ridisegna da zero: niente cursori da tenere in sync).

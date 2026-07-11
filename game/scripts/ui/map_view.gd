@@ -73,6 +73,11 @@ const CITY_COORDS := {
 }
 
 var _pins: Array = []  # [{pos_norm: Vector2, label: String, score: int}]
+## Posizioni SENZA coordinate (né geocode né città nota): per decisione
+## di Leone (gate 1, 11/07) niente geocode dall'app e niente pin
+## forzati — si mostrano comunque, in una lista sotto la mappa.
+var _no_coords: Array = []  # righe di testo già formattate
+const NO_COORDS_MAX := 6
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(0, 480)
@@ -129,6 +134,7 @@ static func _load_land() -> void:
 ## come i pin del web). Senza VPS resta la demo col mock.
 func _rebuild_pins() -> void:
 	_pins.clear()
+	_no_coords.clear()
 	if not BackendBus.positions.is_empty():
 		var clusters := {}  # città → {coord, count, best_score}
 		for p in BackendBus.positions:
@@ -139,6 +145,11 @@ func _rebuild_pins() -> void:
 				coord = _city_coord(str(p.get("loc_city", "") if p.get("loc_city") else ""))
 			if coord == Vector2.INF or coord.x < LON_MIN or coord.x > LON_MAX \
 					or coord.y < LAT_MIN or coord.y > LAT_MAX:
+				var where := str(p.get("loc_city", "") if p.get("loc_city") else "")
+				if where == "":
+					where = str(p.get("loc_country", "") if p.get("loc_country") else "?")
+				_no_coords.append("%s — %s · %s" % [str(p.get("title", "?")).left(48),
+						str(p.get("company", "?")), where])
 				continue
 			var city := str(p.get("loc_city", "?"))
 			if not clusters.has(city):
@@ -222,3 +233,21 @@ func _draw() -> void:
 	if _pins.is_empty():
 		draw_string(font, Vector2(24, 40), "nessuna posizione geolocalizzata oggi",
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
+	# le posizioni senza coordinate esistono comunque: lista in basso,
+	# niente pin inventati (il geocode è del team, non dell'app)
+	if not _no_coords.is_empty():
+		var shown := mini(_no_coords.size(), NO_COORDS_MAX)
+		var y0 := r.size.y - 16.0 - 18.0 * shown - (18.0 if _no_coords.size() > shown else 0.0)
+		# in basso a destra (Mediterraneo orientale: quasi solo mare, non
+		# copre pin), con un velo dietro: sotto passano coste e griglia
+		var x0 := r.size.x - 632.0
+		draw_rect(Rect2(x0 - 12, y0 - 26, 632, r.size.y - y0 + 20), Color(0.04, 0.05, 0.07, 0.88))
+		draw_string(font, Vector2(x0, y0 - 8), "SENZA COORDINATE (%d)" % _no_coords.size(),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.MUTED)
+		for i in shown:
+			draw_string(font, Vector2(x0, y0 + 12 + 18.0 * i), "· " + str(_no_coords[i]),
+					HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.DIM)
+		if _no_coords.size() > shown:
+			draw_string(font, Vector2(x0, y0 + 12 + 18.0 * shown),
+					"… e altre %d" % (_no_coords.size() - shown),
+					HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.DIM)
