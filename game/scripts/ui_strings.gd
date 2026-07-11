@@ -9,7 +9,6 @@ static func t(key: String) -> String:
 const S := {
 	# ── Title screen ──────────────────────────────────────────────
 	"title.wordmark": "JOB HUNTER TEAM",
-	"title.subtitle": "// THE OFFICE",
 	"title.press_enter": "▶ PREMI INVIO",
 	"title.footer": "prototipo — dati mock, nessun backend",
 	"title.hint_pause": "ESC menu",

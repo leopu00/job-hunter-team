@@ -6,6 +6,7 @@ const KEY_ART := "res://assets/gen-art/environment/title_screen.png"
 
 var _blink: Label
 var _time := 0.0
+var _leaving := false
 
 func _ready() -> void:
 	theme = TerminalTheme.get_theme()
@@ -68,10 +69,6 @@ func _ready() -> void:
 	word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pad_box.add_child(word)
 
-	var sub := TerminalTheme.label(UIStrings.t("title.subtitle"), 26, Palette.GREEN, "medium")
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pad_box.add_child(sub)
-
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 56)
 	box.add_child(spacer)
@@ -88,9 +85,25 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
-	_blink.visible = fmod(_time, 1.1) < 0.72
+	# Pulse via alpha, MAI via visible: il toggle di visibilità dentro il
+	# VBoxContainer collassa il label e il container ricentra tutto (il
+	# "titolo che oscilla" visto da Leone).
+	_blink.modulate.a = 0.35 + 0.65 * maxf(0.0, sin(_time * 2.6))
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_accept"):
+	if event.is_action_pressed("ui_accept") and not _leaving:
+		_leaving = true
 		Sfx.play_confirm()
-		Game.goto_wizard()
+		_fade_to_office()
+
+## Dissolvenza a nero sopra tutto, poi dritti in ufficio: niente flicker
+## del titolo, niente onboarding.
+func _fade_to_office() -> void:
+	var veil := ColorRect.new()
+	veil.color = Color(Palette.VOID.r, Palette.VOID.g, Palette.VOID.b, 0.0)
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(veil)
+	var tw := create_tween()
+	tw.tween_property(veil, "color:a", 1.0, 0.4)
+	tw.tween_callback(Game.goto_office)

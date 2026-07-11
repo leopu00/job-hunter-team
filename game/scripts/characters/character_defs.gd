@@ -4,6 +4,7 @@ class_name CharacterDefs
 ## Le posizioni sono coordinate mondo (vedi FurnitureDefs).
 
 const GEN := "res://assets/characters/gen/"
+const SHEETS := "res://assets/characters/sheets/"
 
 const AGENTS := {
 	"coordinatore": {
@@ -67,6 +68,21 @@ const AGENTS := {
 		],
 	},
 }
+
+## Factory del rig: spritesheet pittorico se esiste (docs/SPRITES.md),
+## altrimenti il vecchio rig a parti SVG. I chiamanti usano solo
+## set_motion(facing, flipped, mode), identica su entrambi i rig.
+static func make_rig(slug: String, variant := "a") -> Node2D:
+	var sheet_path := SHEETS + slug + "_" + variant + ".png"
+	if ResourceLoader.exists(sheet_path):
+		var rig := SpriteSheetRig.new()
+		rig.setup(load(sheet_path))
+		return rig
+	# fallback SVG; per slug senza asset (ruoli nuovi) si presta lo scout
+	var svg_slug := slug if ResourceLoader.exists(GEN + slug + "/head_front.svg") else "scout"
+	var legacy := CharacterRig.new()
+	legacy.setup(agent_textures(svg_slug))
+	return legacy
 
 ## Texture del rig per un agente del roster.
 static func agent_textures(slug: String) -> Dictionary:
