@@ -617,7 +617,20 @@ func _build_pos_detail() -> void:
 		box.add_child(TerminalTheme.label(UIStrings.t("pos.found") % [
 				str(p["found_by"]), str(p.get("found_at", "")).left(10)], 13, Palette.DIM))
 	if p.get("url"):
-		box.add_child(TerminalTheme.label(str(p["url"]), 13, Palette.BLUE))
+		# il link all'annuncio si APRE davvero, nel browser di sistema
+		var link := Button.new()
+		link.flat = true
+		link.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		link.clip_text = true
+		link.text = "↗ " + str(p["url"])
+		link.add_theme_font_size_override("font_size", 13)
+		link.add_theme_color_override("font_color", Palette.BLUE)
+		link.add_theme_color_override("font_hover_color", Palette.MINT)
+		link.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		link.tooltip_text = UIStrings.t("pos.open_url")
+		var url := str(p["url"])
+		link.pressed.connect(func() -> void: OS.shell_open(url))
+		box.add_child(link)
 	var open_v: Variant = p.get("is_open")
 	if open_v != null:
 		box.add_child(TerminalTheme.label(

@@ -98,6 +98,7 @@ const S := {
 	"pos.ticket_err": "✘ ticket not created: %s",
 	"pos.ticket_need_vps": "// connect the VPS to open tickets with the team",
 	"pos.found": "found by %s · %s",
+	"pos.open_url": "open the listing in your browser",
 	"pos.open_yes": "listing OPEN at last check",
 	"pos.open_no": "listing NO LONGER OPEN",
 
