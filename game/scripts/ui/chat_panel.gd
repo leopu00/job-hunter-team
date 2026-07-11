@@ -2,23 +2,24 @@ class_name ChatPanel
 extends CanvasLayer
 ## Conversazione BIDIREZIONALE con un agente del team (missione 19:0x):
 ## dal click sull'agente si apre questo pannello, l'utente scrive e il
-## messaggio parte sul canale REALE del team (BackendBus.send_chat →
-## adapter → tmux sulla VPS); le risposte arrivano dal normale flusso
-## chat_message e compaiono qui dentro, oltre che a fumetto in scena.
+## messaggio parte sul canale REALE del team ([CHAT] via tmux sulla VPS,
+## contratto BackendBus validato col Capitano vero). La conversazione
+## arriva su agent_chat_updated come storia completa: si ridisegna da
+## zero, i messaggi partial sono checkpoint "sta lavorando".
 
 signal closed
 
 const PANEL_W := 560.0
 
-var _uid := ""            # slug/uid dell'interlocutore (es. "coordinatore")
+var _slug := ""           # slug di gioco (es. "coordinatore")
 var _display_name := ""
 var _list: VBoxContainer
 var _scroll: ScrollContainer
 var _input: LineEdit
 var _empty_note: Label
 
-func _init(uid: String, display_name: String) -> void:
-	_uid = uid
+func _init(slug: String, display_name: String) -> void:
+	_slug = slug
 	_display_name = display_name
 	layer = 40
 
@@ -87,56 +88,67 @@ func _ready() -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	box.add_child(hint)
 
-	# storico della sessione + aggiornamenti live
-	var any := false
-	for msg in BackendBus.chat_log:
-		if _is_ours(msg):
-			_append(msg)
-			any = true
-	if not any:
-		_empty_note = TerminalTheme.label(UIStrings.t("chat.empty"), 14, Palette.DIM)
-		_empty_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_list.add_child(_empty_note)
-	BackendBus.chat_message.connect(_on_chat)
+	_redraw([])
+	# una sola conversazione aperta alla volta: mentre il pannello vive,
+	# ogni agent_chat_updated è per noi (l'agent del segnale è il nome
+	# del sistema reale, es. "capitano" per il coordinatore)
+	BackendBus.agent_chat_updated.connect(_on_updated)
+	BackendBus.user_chat_sent.connect(_on_sent)
+	BackendBus.open_agent_chat(_slug)
 	_input.grab_focus.call_deferred()
 	Sfx.play_blip()
 
-## Della conversazione fanno parte: i miei messaggi a LUI, e tutto ciò
-## che LUI dice a me, a tutti, o agli altri (è la sua voce nel team).
-func _is_ours(msg: Dictionary) -> bool:
-	var from := str(msg.get("from", ""))
-	var to := str(msg.get("to", ""))
-	return (from == "user" and to == _uid) or from == _uid
+func _on_updated(_agent: String, messages: Array) -> void:
+	_redraw(messages)
 
-func _on_chat(msg: Dictionary) -> void:
-	if _is_ours(msg):
+func _on_sent(_agent: String, ok: bool, error: String) -> void:
+	if not ok:
+		_append_line("⚠ " + error, Palette.RED)
+
+## La storia arriva COMPLETA a ogni giro: si ridisegna da zero.
+func _redraw(messages: Array) -> void:
+	for child in _list.get_children():
+		child.queue_free()
+	_empty_note = null
+	if messages.is_empty():
+		_empty_note = TerminalTheme.label(UIStrings.t("chat.empty"), 14, Palette.DIM)
+		_empty_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_list.add_child(_empty_note)
+		return
+	for msg in messages:
 		_append(msg)
+	_scroll_to_bottom.call_deferred()
 
 func _append(msg: Dictionary) -> void:
-	if _empty_note:
-		_empty_note.queue_free()
-		_empty_note = null
-	var mine := str(msg.get("from", "")) == "user"
+	var mine := str(msg.get("role", "")) == "user"
+	var partial: bool = msg.get("partial", false) or not msg.get("done", true)
 	var row := VBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 1)
-	var who_text := UIStrings.t("chat.you") if mine else _display_name.to_upper()
-	var to := str(msg.get("to", ""))
-	if not mine and to != "user" and to != "":
-		who_text += "  → " + to.to_upper()
-	var who := TerminalTheme.label(who_text, 12,
+	var who := TerminalTheme.label(
+			UIStrings.t("chat.you") if mine else _display_name.to_upper(), 12,
 			Palette.GREEN if mine else Palette.MUTED, "medium")
 	who.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if mine \
 			else HORIZONTAL_ALIGNMENT_LEFT
 	row.add_child(who)
-	var body := TerminalTheme.label(str(msg.get("text", "")), 15,
-			Palette.BRIGHT if mine else Palette.BASE)
+	var color: Color = Palette.BRIGHT if mine else Palette.BASE
+	if partial:
+		color = Palette.DIM  # checkpoint "sta lavorando"
+	var body := TerminalTheme.label(str(msg.get("text", "")), 15, color)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if mine \
 			else HORIZONTAL_ALIGNMENT_LEFT
 	row.add_child(body)
 	_list.add_child(row)
+
+func _append_line(text: String, color: Color) -> void:
+	if _empty_note:
+		_empty_note.queue_free()
+		_empty_note = null
+	var line := TerminalTheme.label(text, 14, color)
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_list.add_child(line)
 	_scroll_to_bottom.call_deferred()
 
 func _scroll_to_bottom() -> void:
@@ -148,10 +160,11 @@ func _send() -> void:
 	if text.is_empty():
 		return
 	_input.clear()
-	BackendBus.send_chat(_uid, text)
+	BackendBus.send_user_chat(_slug, text)
 	Sfx.play_tick()
 
 func close() -> void:
+	BackendBus.close_agent_chat()
 	Sfx.play_back()
 	closed.emit()
 	queue_free()

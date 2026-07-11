@@ -306,7 +306,8 @@ func _pos_chip_row(key: String, title: String, all: Array) -> void:
 			_build())
 		row.add_child(chip)
 
-## Una posizione in lista: score | titolo cliccabile — azienda | luogo | stato.
+## Una posizione in lista, tabellare full-width come la pagina web:
+## score | titolo — azienda (espande) | famiglia | luogo | salario | stato.
 func _pos_row(p: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -315,11 +316,8 @@ func _pos_row(p: Dictionary) -> Control:
 	var score_col: Color = Palette.DIM if score_v == null \
 			else (Palette.MINT if int(score_v) >= 70 else Palette.YELLOW)
 	var score := TerminalTheme.label(score_txt, 17, score_col, "bold")
-	score.custom_minimum_size = Vector2(40, 0)
+	score.custom_minimum_size = Vector2(44, 0)
 	row.add_child(score)
-	var text_col := VBoxContainer.new()
-	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(text_col)
 	# il titolo apre la pagina della posizione (come sul web)
 	var title_btn := Button.new()
 	title_btn.flat = true
@@ -328,24 +326,42 @@ func _pos_row(p: Dictionary) -> Control:
 	title_btn.add_theme_color_override("font_color", Palette.BRIGHT)
 	title_btn.add_theme_color_override("font_hover_color", Palette.GREEN)
 	title_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title_btn.clip_text = true
+	title_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	var pid := int(p.get("id", 0))
 	title_btn.pressed.connect(func() -> void:
 		_pos_detail_id = pid
 		Sfx.play_tick()
 		_build("detail"))
-	text_col.add_child(title_btn)
-	var place := "%s · %s" % [str(p.get("loc_city", "") if p.get("loc_city") else "—"),
-			_pos_value(p, "loc_country")]
-	text_col.add_child(TerminalTheme.label(place, 13, Palette.MUTED))
+	row.add_child(title_btn)
+	var family := TerminalTheme.label(_pos_value(p, "role_family"), 13, Palette.MUTED)
+	family.custom_minimum_size = Vector2(220, 0)
+	family.clip_text = true
+	row.add_child(family)
+	var place := TerminalTheme.label("%s · %s" % [
+			str(p.get("loc_city", "") if p.get("loc_city") else "—"),
+			_pos_value(p, "loc_country")], 13, Palette.MUTED)
+	place.custom_minimum_size = Vector2(200, 0)
+	place.clip_text = true
+	row.add_child(place)
+	var est: bool = p.get("salary_estimated_min") != null
+	var s_min: Variant = p.get("salary_estimated_min") if est else p.get("salary_declared_min")
+	var s_max: Variant = p.get("salary_estimated_max") if est else p.get("salary_declared_max")
+	var sal := "—" if s_min == null and s_max == null \
+			else "%s–%s" % [_fmt_k(s_min), _fmt_k(s_max)]
+	var sal_lbl := TerminalTheme.label(sal, 13,
+			Palette.BASE if sal != "—" else Palette.DIM)
+	sal_lbl.custom_minimum_size = Vector2(110, 0)
+	row.add_child(sal_lbl)
 	var st := _pos_value(p, "status")
 	var st_lbl := TerminalTheme.label(st, 13,
 			POS_STATUS_COLORS.get(st, Palette.MUTED), "medium")
-	st_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	st_lbl.custom_minimum_size = Vector2(90, 0)
 	row.add_child(st_lbl)
 	# aria a destra: la scrollbar non deve coprire lo stato
 	var pad := Control.new()
-	pad.custom_minimum_size = Vector2(18, 0)
+	pad.custom_minimum_size = Vector2(14, 0)
 	row.add_child(pad)
 	return row
 
@@ -757,8 +773,58 @@ func _build_agents() -> void:
 		st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(st)
 
-## Feed unico delle attività recenti di tutti i ruoli.
+## Emoji-ruolo per l'attribuzione per-istanza (scout-2, scorer-1…).
+const ROLE_EMOJI := {
+	"scout": "🔍", "analista": "🧠", "scorer": "🎯", "scrittore": "✍",
+	"critico": "🧐", "capitano": "🧭", "sentinella": "🛡", "assistente": "🤝",
+	"mentor": "🎓", "dottore": "🩺", "mantenitore": "🔧",
+}
+
+## Feed attività: il registro transizioni VERO quando la VPS è collegata
+## (chi ha fatto cosa, con l'istanza), altrimenti il mock.
 func _build_activity() -> void:
+	if not BackendBus.positions_updated.is_connected(_on_activity_refresh):
+		BackendBus.positions_updated.connect(_on_activity_refresh)
+	var transitions: Array = BackendBus.transitions
+	if not transitions.is_empty():
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.custom_minimum_size = Vector2(0, 520)
+		_content.add_child(scroll)
+		var list := VBoxContainer.new()
+		list.add_theme_constant_override("separation", 8)
+		list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(list)
+		for t in transitions:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 14)
+			list.add_child(row)
+			var when := TerminalTheme.label(str(t.get("ts", "")).left(16), 13, Palette.DIM)
+			when.custom_minimum_size = Vector2(140, 0)
+			row.add_child(when)
+			var by := str(t.get("by_agent", "?") if t.get("by_agent") else "?")
+			var base := by.split("-")[0]
+			var who := TerminalTheme.label("%s %s" % [ROLE_EMOJI.get(base, "•"), by],
+					13, Palette.MINT, "medium")
+			who.custom_minimum_size = Vector2(150, 0)
+			row.add_child(who)
+			var title_lbl := TerminalTheme.label("%s — %s" % [
+					str(t.get("title", "?")), str(t.get("company", ""))], 14, Palette.BASE)
+			title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			title_lbl.clip_text = true
+			row.add_child(title_lbl)
+			var from_st := str(t.get("from_state", "") if t.get("from_state") else "—")
+			row.add_child(TerminalTheme.label(from_st, 13,
+					POS_STATUS_COLORS.get(from_st, Palette.DIM)))
+			row.add_child(TerminalTheme.label("→", 13, Palette.DIM))
+			var to_st := str(t.get("to_state", "?"))
+			row.add_child(TerminalTheme.label(to_st, 13,
+					POS_STATUS_COLORS.get(to_st, Palette.MUTED), "medium"))
+			var pad := Control.new()
+			pad.custom_minimum_size = Vector2(14, 0)
+			row.add_child(pad)
+		return
 	for slug in ["scout", "analista", "scorer", "scrittore", "critico", "coordinatore"]:
 		for entry in TeamData.agent_activity(slug):
 			var row := HBoxContainer.new()
@@ -771,6 +837,10 @@ func _build_activity() -> void:
 			who.custom_minimum_size = Vector2(110, 0)
 			row.add_child(who)
 			row.add_child(TerminalTheme.label(entry["text"], 14, Palette.BASE))
+
+func _on_activity_refresh(_list: Array) -> void:
+	if section == "activity" and is_instance_valid(_content):
+		_build()
 
 ## Candidature a stadi (stessi dati del registro TAB).
 func _build_apps() -> void:

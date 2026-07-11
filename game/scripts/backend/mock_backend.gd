@@ -118,34 +118,52 @@ func _roster_loop() -> void:
 						break
 		bus.publish_agents(_roster.duplicate(true))
 
-## Risposte simulate del pannello chat, per ruolo (dal prefisso dello slug).
+## ── Chat bidirezionale simulata (contratto open/send/close) ──────────
+## Stesso giro del canale vero: open → snapshot, send → eco utente +
+## checkpoint "sta lavorando" (partial) + risposta finale (done).
+
 const REPLIES := {
-	"coordinatore": "Ricevuto. Il team è a regime: te ne do conto al prossimo giro di tick.",
-	"scout": "Ricevuto, lo tengo presente nel prossimo giro di board.",
-	"analista": "Ok, lo integro nell'analisi in corso e ti aggiorno.",
-	"scorer": "Annotato: ne tengo conto nei prossimi score.",
-	"scrittore": "Ricevuto, lo rifletto nella prossima bozza.",
-	"critico": "Preso nota. Sarò severo come sempre.",
-	"mentor": "Buona domanda: ci torno con calma al prossimo consiglio.",
-	"assistente": "Ricevuto! Lo segno subito nel registro.",
-	"sentinella": "Ricevuto. La ronda continua, tutto sotto controllo.",
+	"capitano": "Ricevuto. Il team è a regime: pacing regolare, nessun collo di bottiglia. Ti aggiorno al prossimo tick.",
+	"assistente": "Ricevuto! Lo segno subito nel registro del team.",
 }
 
-## L'utente scrive dal pannello: l'agente simulato risponde dopo un
-## attimo — stesso flusso chat_message del canale vero.
-func send_chat(to_slug: String, _text: String) -> void:
-	_reply_later(to_slug)
+var _chat_agent := ""
+var _chat_msgs: Array = []
 
-func _reply_later(to_slug: String) -> void:
-	await _sleep(randf_range(2.0, 4.0))
-	if not _running or not _is_active(to_slug):
+func open_chat(agent: String) -> void:
+	_chat_agent = agent
+	bus.agent_chat_updated.emit(agent, _chat_msgs.duplicate(true))
+
+func close_chat() -> void:
+	_chat_agent = ""
+
+func send_chat(agent: String, text: String) -> void:
+	_chat_msgs.append({"role": "user", "text": text,
+			"ts": Time.get_datetime_string_from_system(), "done": true})
+	bus.user_chat_sent.emit(agent, true, "")
+	_publish_chat_state(agent)
+	_mock_reply(agent)
+
+func _mock_reply(agent: String) -> void:
+	await _sleep(randf_range(1.0, 2.0))
+	if not _running or _chat_agent != agent:
 		return
-	var role := to_slug.rstrip("-0123456789")
-	bus.publish_chat({
-		"ts": Time.get_datetime_string_from_system(),
-		"from": to_slug, "to": "user",
-		"text": REPLIES.get(role, "Ricevuto."),
-	})
+	_chat_msgs.append({"role": "assistant", "text": "ci sto lavorando…",
+			"ts": Time.get_datetime_string_from_system(), "partial": true})
+	_publish_chat_state(agent)
+	await _sleep(randf_range(2.0, 3.0))
+	if not _running or _chat_agent != agent:
+		return
+	# il checkpoint intermedio viene sostituito dalla risposta vera
+	_chat_msgs.pop_back()
+	_chat_msgs.append({"role": "assistant",
+			"text": REPLIES.get(agent, "Ricevuto."),
+			"ts": Time.get_datetime_string_from_system(), "done": true})
+	_publish_chat_state(agent)
+
+func _publish_chat_state(agent: String) -> void:
+	if _chat_agent == agent:
+		bus.agent_chat_updated.emit(agent, _chat_msgs.duplicate(true))
 
 func _is_active(slug: String) -> bool:
 	for a in _roster:

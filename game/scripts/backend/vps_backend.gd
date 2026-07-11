@@ -63,6 +63,8 @@ var _user := "root"
 var _thread: Thread
 var _stop := false
 var _last_chat_ts := ""
+## Conversazione utente↔agente aperta ("capitano"/"assistente", "" = no).
+var _convo_agent := ""
 
 
 func start(config: Dictionary) -> void:
@@ -119,8 +121,12 @@ func _run() -> void:
 				_deferred_state(BackendBus.ERROR, _short_error(res))
 		if tick % POSITIONS_EVERY == 0:
 			_fetch_positions()
+		if _convo_agent != "":
+			_fetch_convo(_convo_agent)
 		tick += 1
-		_sleep(POLL_SECS)
+		# con una conversazione aperta il giro accorcia: la risposta
+		# dell'agente deve comparire in fretta, non dopo 8 secondi
+		_sleep(2.5 if _convo_agent != "" else POLL_SECS)
 
 
 ## jobs.db → positions_updated: snapshot completo con highlights e
@@ -207,6 +213,97 @@ static func _to_chat_msg(d: Dictionary) -> Dictionary:
 static func _slug_norm(name: String) -> String:
 	var s := name.strip_edges().to_lower().replace("-worker", "")
 	return "coordinatore" if s == "capitano" else s
+
+
+## ── Chat bidirezionale utente ↔ agente ───────────────────────────────
+## Invio = il canale della desktop app: persist del messaggio utente in
+## chat.jsonl + payload [@utente -> @<agent>] [CHAT] nella tmux
+## dell'agente via load-buffer/paste-buffer. Il testo NON attraversa mai
+## una shell come argomento (gotcha OS.execute): viaggia su file
+## temporaneo locale e arriva al remoto via stdin (bash-c col redirect,
+## comandi senza caratteri velenosi; append remoto con tee -a, mai sh -c).
+
+const CHAT_SESSIONS := {"capitano": "CAPITANO", "assistente": "ASSISTENTE"}
+
+func open_chat(agent: String) -> void:
+	_convo_agent = agent
+
+func close_chat() -> void:
+	_convo_agent = ""
+
+func send_chat(agent: String, text: String) -> void:
+	if not CHAT_SESSIONS.has(agent) or text.strip_edges() == "":
+		return
+	# thread one-shot: 3 giri ssh non devono congelare né la UI né il poll
+	WorkerThreadPool.add_task(_do_send_chat.bind(agent, text.strip_edges()))
+
+func _do_send_chat(agent: String, text: String) -> void:
+	var session: String = CHAT_SESSIONS[agent]
+	var buf := "/tmp/jht-game-chat-%d-%d.txt" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var chat_file := "/jht_home/agents/%s/chat.jsonl" % agent
+
+	# 1) persisti il messaggio utente nel chat.jsonl dell'agente (stesso
+	# formato della skill chat-web: la UI lo rilegge come storia)
+	var f := FileAccess.open(buf, FileAccess.WRITE)
+	if f == null:
+		_chat_sent(agent, false, "file temporaneo non scrivibile")
+		return
+	f.store_string(JSON.stringify({"role": "user", "text": text,
+			"ts": Time.get_unix_time_from_system()}) + "\n")
+	f.close()
+	var persist := _ssh_stdin_file(buf, "docker exec -i jht tee -a " + chat_file)
+	if persist["code"] != 0:
+		Log.call_deferred("warn", "backend", "chat: persist fallito (non blocco): "
+				+ _short_error(persist))
+
+	# 2) payload nella tmux dell'agente: load-buffer da stdin, poi paste
+	f = FileAccess.open(buf, FileAccess.WRITE)
+	f.store_string("[@utente -> @%s] [CHAT] %s" % [agent, text])
+	f.close()
+	var load := _ssh_stdin_file(buf, "docker exec -i jht tmux load-buffer -")
+	DirAccess.remove_absolute(buf)
+	if load["code"] != 0:
+		_chat_sent(agent, false, _short_error(load))
+		return
+	var paste := _ssh("docker exec jht tmux paste-buffer -t " + session)
+	if paste["code"] != 0:
+		_chat_sent(agent, false, _short_error(paste))
+		return
+	var enter := _ssh("docker exec jht tmux send-keys -t " + session + " Enter")
+	if enter["code"] != 0:
+		_chat_sent(agent, false, _short_error(enter))
+		return
+	_chat_sent(agent, true, "")
+	_fetch_convo(agent)  # eco immediato del messaggio persistito
+
+func _chat_sent(agent: String, ok: bool, error: String) -> void:
+	bus.call_deferred("emit_signal", "user_chat_sent", agent, ok, error)
+
+## Tail del chat.jsonl dell'agente → agent_chat_updated (storia completa
+## recente, la UI ridisegna da zero: niente cursori da tenere in sync).
+func _fetch_convo(agent: String) -> void:
+	var res := _ssh("docker exec jht tail -n 60 /jht_home/agents/%s/chat.jsonl" % agent)
+	if _stop or res["code"] != 0:
+		return
+	var msgs: Array = []
+	for line in str(res["out"]).split("\n"):
+		if not line.begins_with("{"):
+			continue
+		var d: Variant = JSON.parse_string(line)
+		if d is Dictionary and str(d.get("text", "")) != "":
+			msgs.append(d)
+	bus.call_deferred("emit_signal", "agent_chat_updated", agent, msgs)
+
+## bash locale SOLO per il redirect < file: il comando non contiene mai
+## testo utente né caratteri che il wrap naive di OS.execute corrompa.
+func _ssh_stdin_file(local_file: String, remote_cmd: String) -> Dictionary:
+	var out: Array = []
+	var cmdline := "ssh -i " + _key \
+			+ " -o BatchMode=yes -o IdentitiesOnly=yes" \
+			+ " -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new " \
+			+ _user + "@" + _ip + " " + remote_cmd + " < " + local_file
+	var code := OS.execute("bash", ["-c", cmdline], out, true)
+	return {"code": code, "out": "\n".join(PackedStringArray(out))}
 
 
 ## Un giro di ssh non interattivo. Ritorna {code, out} (stdout+stderr).
