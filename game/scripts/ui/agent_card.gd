@@ -90,8 +90,9 @@ func _ready() -> void:
 
 	# azioni
 	box.add_child(HSeparator.new())
-	# chat REALE col team (missione 19:0x): solo per gli agenti che
-	# supportano il protocollo [CHAT] (Capitano/Coordinatore, Assistente)
+	# chat REALE col team: dal canale 1053f1ce OGNI agente del roster è
+	# raggiungibile — il pulsante c'è sempre. Il vecchio PARLA (dialoghi
+	# finti) è stato TOLTO su ordine di Leone (test finale: "inutile").
 	if BackendBus.can_chat_with(_agent.slug):
 		var chat := Button.new()
 		chat.text = UIStrings.t("agent.chat")
@@ -101,15 +102,6 @@ func _ready() -> void:
 			chat_requested.emit()
 			close(false))
 		box.add_child(chat)
-	if Dialogues.TREES.has(_agent.slug):
-		var talk := Button.new()
-		talk.text = UIStrings.t("agent.talk")
-		talk.add_theme_font_size_override("font_size", 17)
-		talk.add_theme_color_override("font_color", Palette.MINT)
-		talk.pressed.connect(func() -> void:
-			talk_requested.emit()
-			close(false))
-		box.add_child(talk)
 
 	var hint := TerminalTheme.label(UIStrings.t("dept.close"), 13, Palette.DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

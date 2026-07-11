@@ -106,6 +106,11 @@ const S := {
 	"chat.send": "INVIA",
 	"chat.you": "TU",
 	"chat.empty": "nessun messaggio ancora: scrivi tu per primo",
+	"chat.waiting": "in attesa della risposta",
+	"chat.besteffort": "◐ questo agente legge i messaggi ma potrebbe non rispondere in chat",
+	"chat.menu": "CHAT AGENTI",
+	"chat.replies": "risponde in chat",
+	"chat.maybe": "legge, risposta non garantita",
 
 	# ── Impostazioni → Collega VPS ────────────────────────────────
 	"vps.intro": "Collega la VPS del tuo team: IP e chiave SSH, al resto pensa il gioco.",

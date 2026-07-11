@@ -11,7 +11,9 @@ signal clicked(world_pos: Vector2)
 const PAN_SPEED := 1100.0
 const ZOOM_STEP := 1.12
 const ZOOM_MAX := 2.8  # zoom profondo: i dettagli minuti devono leggersi
-const DRAG_CLICK_TOLERANCE := 8.0
+# 14px: su trackpad un tap viaggia di qualche pixel e con 8 il click
+# moriva come micro-drag (feedback test finale: click inaffidabili)
+const DRAG_CLICK_TOLERANCE := 14.0
 
 ## Sotto questo zoom si vedrebbe il void oltre i vetri: calcolato in _ready
 ## perché dipende dal viewport (a min zoom la box riempie sempre la larghezza).
