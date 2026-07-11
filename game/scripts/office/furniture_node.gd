@@ -72,7 +72,27 @@ func _ready() -> void:
 	add_child(shape)
 	# la texture vive in un CanvasItem separato dalle primitive del _draw
 	# (mescolarle rompe il batching GLES3 su macOS: tutto bianco)
-	var path: String = GEN_ART.get(item["kind"], "")
+	#
+	# Arredi ORIENTATI (recensione 2): se l'item porta un "facing", prima si
+	# cerca la variante con suffisso _down/_side/_up (left = _side flippata,
+	# stessa regola degli sprite agenti); senza variante si ricade sul kind.
+	var kind_str: String = item["kind"]
+	var facing: String = item.get("facing", "")
+	var flip_h := false
+	var path := ""
+	if facing != "":
+		var suffix := "down"
+		match facing:
+			"up": suffix = "up"
+			"right": suffix = "side"
+			"left":
+				suffix = "side"
+				flip_h = true
+		var oriented := "res://assets/gen-art/furniture/%s_%s.png" % [kind_str, suffix]
+		if ResourceLoader.exists(oriented) and load(oriented) != null:
+			path = oriented
+	if path.is_empty():
+		path = GEN_ART.get(kind_str, "")
 	# ResourceLoader.exists() è true anche quando esiste solo il .import senza
 	# il binario importato: load() torna null → serve il guard, altrimenti si
 	# ricade con grazia sul disegno procedurale in _draw().
@@ -82,8 +102,11 @@ func _ready() -> void:
 		spr.texture = tex
 		spr.centered = false
 		var s := _rect.size.x * 1.06 / tex.get_size().x
-		spr.scale = Vector2(s, s)
+		spr.scale = Vector2(-s if flip_h else s, s)
 		spr.offset = Vector2(-tex.get_size().x / 2.0, -tex.get_size().y + 10.0 / s)
+		if flip_h:
+			# con scale.x negativa l'offset va specchiato per restare centrato
+			spr.offset.x = -tex.get_size().x / 2.0
 		add_child(spr)
 		_textured = true
 

@@ -22,12 +22,26 @@ func _ready() -> void:
 	root.theme = TerminalTheme.get_theme()
 	add_child(root)
 
-	# linguetta sempre visibile (apre/chiude il cassetto)
+	# linguetta sempre visibile (apre/chiude il cassetto): cornice terminale
 	var tab := Button.new()
 	tab.text = "≡"
-	tab.flat = true
 	tab.add_theme_font_size_override("font_size", 26)
 	tab.add_theme_color_override("font_color", Palette.GREEN)
+	tab.add_theme_color_override("font_hover_color", Palette.MINT)
+	var tab_style := StyleBoxFlat.new()
+	tab_style.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.92)
+	tab_style.border_color = Palette.BORDER_GLOW
+	tab_style.set_border_width_all(1)
+	tab_style.content_margin_left = 12
+	tab_style.content_margin_right = 12
+	tab_style.content_margin_top = 4
+	tab_style.content_margin_bottom = 6
+	var tab_hover := tab_style.duplicate()
+	tab_hover.border_color = Palette.GREEN
+	tab.add_theme_stylebox_override("normal", tab_style)
+	tab.add_theme_stylebox_override("hover", tab_hover)
+	tab.add_theme_stylebox_override("pressed", tab_hover.duplicate())
+	tab.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	tab.position = Vector2(10, 150)
 	tab.pressed.connect(toggle)
 	root.add_child(tab)
@@ -59,6 +73,10 @@ func _ready() -> void:
 	brand_pad.add_child(brand)
 	box.add_child(brand_pad)
 
+	# TEST-AUTO: JHT_SIDEBAR=1 apre il cassetto al boot (per gli screenshot)
+	if OS.get_environment("JHT_SIDEBAR") == "1":
+		toggle.call_deferred()
+
 	for group in SidebarDefs.GROUPS:
 		var gt := TerminalTheme.label((group["title"] as String).to_upper(), 12, Palette.DIM, "medium")
 		var gt_pad := MarginContainer.new()
@@ -77,20 +95,40 @@ func toggle() -> void:
 		_close_panel()
 	Sfx.play_tick()
 
+## Stile riga di navigazione: sfondo pieno, accento verde a sinistra.
+## `bg_alpha` 0 = trasparente (normal); `accent` accende la barra 3px.
+static func _row_style(bg: Color, bg_alpha: float, accent: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(bg.r, bg.g, bg.b, bg_alpha)
+	sb.set_border_width_all(0)
+	if accent:
+		sb.border_width_left = 3
+		sb.border_color = Palette.GREEN
+	sb.content_margin_left = 14
+	sb.content_margin_right = 10
+	sb.content_margin_top = 7
+	sb.content_margin_bottom = 7
+	return sb
+
 func _nav_button(item: Dictionary) -> Control:
 	var btn := Button.new()
-	btn.flat = true
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	btn.text = "%s  %s" % [item["icon"], item["label"]]
 	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_font_override("font", load(TerminalTheme.FONT_MEDIUM))
 	btn.add_theme_color_override("font_color", Palette.BASE)
 	btn.add_theme_color_override("font_hover_color", Palette.WHITE)
 	btn.add_theme_color_override("font_pressed_color", Palette.GREEN)
+	btn.add_theme_stylebox_override("normal", _row_style(Palette.ROW, 0.0, false))
+	btn.add_theme_stylebox_override("hover", _row_style(Palette.ROW, 0.85, true))
+	btn.add_theme_stylebox_override("pressed", _row_style(Palette.DEEP, 1.0, true))
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.pressed.connect(func() -> void: _select(item["id"]))
 	_buttons[item["id"]] = btn
 	var pad := MarginContainer.new()
-	pad.add_theme_constant_override("margin_left", 10)
-	pad.add_theme_constant_override("margin_right", 10)
+	pad.add_theme_constant_override("margin_left", 8)
+	pad.add_theme_constant_override("margin_right", 8)
 	pad.add_child(btn)
 	return pad
 
@@ -115,5 +153,10 @@ func _close_panel() -> void:
 func _set_active(section: String) -> void:
 	for id in _buttons:
 		var b: Button = _buttons[id]
+		var active: bool = (id == section)
 		b.add_theme_color_override("font_color",
-				Palette.GREEN if id == section else Palette.BASE)
+				Palette.GREEN if active else Palette.BASE)
+		# la voce attiva tiene sfondo e barra accento anche fuori hover
+		b.add_theme_stylebox_override("normal",
+				_row_style(Palette.DEEP, 1.0, true) if active
+				else _row_style(Palette.ROW, 0.0, false))
