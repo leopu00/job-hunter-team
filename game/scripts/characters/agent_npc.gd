@@ -149,12 +149,18 @@ func _tick_desk_pose(delta: float) -> void:
 	if _pose_timer > 0.0:
 		return
 	_desk_working = not _desk_working
-	if _desk_working:
-		_pose_timer = randf_range(18.0, 40.0)
-		rig.set_motion(_desk_facing, false, "work")
-	else:
-		_pose_timer = randf_range(6.0, 16.0)
-		rig.set_motion(_desk_facing, false, "idle")
+	_pose_timer = randf_range(18.0, 40.0) if _desk_working else randf_range(6.0, 16.0)
+	_desk_motion("work" if _desk_working else "idle")
+
+## set_motion coerente col verso della scrivania (left/right = side+flip).
+func _desk_motion(mode: String) -> void:
+	match _desk_facing:
+		"left":
+			rig.set_motion("side", true, mode)
+		"right":
+			rig.set_motion("side", false, mode)
+		_:
+			rig.set_motion(_desk_facing, false, mode)
 
 # ── Viaggi di lavoro ──────────────────────────────────────────────────
 
@@ -240,7 +246,8 @@ func _end_trip() -> void:
 
 ## Alla scrivania: rivolto secondo la postazione (down = viso in camera).
 func _work_pose() -> void:
-	rig.set_motion(_desk_facing, false, "work")
+	_desk_working = true
+	_desk_motion("work")
 
 func _follow_path(speed: float, mode := "walk") -> bool:
 	if _pi >= _path.size():

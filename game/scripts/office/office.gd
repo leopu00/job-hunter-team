@@ -14,6 +14,9 @@ var _camera: FreeCamera
 func _ready() -> void:
 	add_child(OfficeFloor.new())
 	add_child(DepartmentDressing.new())  # tinte/targhe dei 5 reparti (dev-art)
+	# giorno/notte sull'ora locale: esterno, lampade e luce dalle finestre.
+	# Va qui, PRIMA di mondo e maintainer, che devono disegnarsi sopra.
+	add_child(DayNight.new())
 	if OS.get_environment("JHT_ONLYFLOOR") == "1":  # TEST-AUTO
 		var c := Camera2D.new()
 		c.position = Vector2(1300, 750)
@@ -33,12 +36,14 @@ func _ready() -> void:
 		else:
 			world.add_child(FurnitureNode.new(item))
 
-	# postazioni dei 5 reparti: stesso FurnitureNode dei mobili, kind variati
+	# postazioni dei 5 reparti: stesso FurnitureNode dei mobili, kind variati;
+	# facing passa al visual (texture orientate _down/_side/_up, dev-art)
 	for d in DepartmentDefs.all_desks():
 		world.add_child(FurnitureNode.new({
 			"id": "desk_%s_%d" % [d["dept"], d["index"]],
 			"kind": d["kind"],
 			"rect": d["rect"],
+			"facing": d.get("facing", "down"),
 		}))
 
 	for r in [FurnitureDefs.LAB_WALL_V, FurnitureDefs.LAB_WALL_H1, FurnitureDefs.LAB_WALL_H2]:
@@ -54,7 +59,6 @@ func _ready() -> void:
 		agents.append(agent)
 
 	_add_maintainers()
-	_add_lights()
 	add_child(Sfx.make_ambient_hum())
 
 	_camera = FreeCamera.new()
@@ -189,44 +193,6 @@ func _add_maintainers() -> void:
 			clip.centered = false
 			clip.offset = Vector2(-64, -188)
 			rig.add_child(clip)
-
-## Pozze di luce calde + neon freddo su ambiente buio (DE: la luce definisce
-## le zone, il resto resta in penombra). Poche e dipinte.
-func _add_lights() -> void:
-	if OS.get_environment("JHT_NOFX") == "1":
-		return  # TEST-AUTO
-	var cm := CanvasModulate.new()
-	cm.color = Color(0.76, 0.77, 0.92)
-	add_child(cm)
-	add_child(ScreenGrade.new())
-
-	var warm := Color("#ffb45c")
-	var cool := Color("#4d9fff")
-	var mint := Color("#7fffb2")
-	var pools := [
-		[Vector2(330, 260), 260.0, warm, 0.20],    # lampada lounge
-		[Vector2(1090, 230), 210.0, warm, 0.13],   # libreria
-		[Vector2(1500, 235), 240.0, warm, 0.18],   # angolo caffè
-		[Vector2(545, 760), 250.0, warm, 0.17],    # desk Coordinatore
-		[Vector2(595, 1160), 250.0, warm, 0.17],   # desk Assistente
-		[Vector2(1205, 1110), 250.0, warm, 0.17],  # desk Scout
-		[Vector2(1575, 1110), 200.0, warm, 0.10],  # desk pod
-		[Vector2(2140, 1055), 260.0, warm, 0.17],  # postazione Scorer
-		[Vector2(2115, 385), 260.0, mint, 0.12],   # lab (luce fredda)
-		[Vector2(1300, 780), 330.0, mint, 0.13],   # ologramma
-	]
-	for p in pools:
-		add_child(LightPool.new(p[0], p[1], p[2], p[3]))
-	# lavaggio neon lungo i vetri
-	var f := FurnitureDefs.FLOOR
-	var top_wash := LightPool.new(Vector2(f.get_center().x, f.position.y), 1150.0, cool, 0.05, 0.10)
-	var bottom_wash := LightPool.new(Vector2(f.get_center().x, f.end.y), 1150.0, cool, 0.05, 0.10)
-	var left_wash := LightPool.new(Vector2(f.position.x, f.get_center().y), 640.0, cool, 0.05, 0.16)
-	left_wash.rotation = PI / 2.0
-	var right_wash := LightPool.new(Vector2(f.end.x, f.get_center().y), 640.0, cool, 0.05, 0.16)
-	right_wash.rotation = PI / 2.0
-	for wash in [top_wash, bottom_wash, left_wash, right_wash]:
-		add_child(wash)
 
 func _invisible_wall(r: Rect2) -> StaticBody2D:
 	var body := StaticBody2D.new()
