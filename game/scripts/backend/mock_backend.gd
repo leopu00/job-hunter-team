@@ -18,6 +18,7 @@ var _roster: Array = [
 	{"slug": "analista-2", "role": "analista", "name": "Analista 02", "active": true, "status": "idle", "desk_hint": ""},
 	{"slug": "scorer-1", "role": "scorer", "name": "Scorer Lead", "active": true, "status": "working", "desk_hint": ""},
 	{"slug": "critico-1", "role": "critico", "name": "Critico Lead", "active": true, "status": "working", "desk_hint": ""},
+	{"slug": "scrittore-1", "role": "scrittore", "name": "Scrittore Lead", "active": true, "status": "working", "desk_hint": ""},
 	{"slug": "mentor-1", "role": "mentor", "name": "Mentor", "active": true, "status": "working", "desk_hint": ""},
 	{"slug": "assistente-1", "role": "assistente", "name": "Assistente", "active": true, "status": "working", "desk_hint": ""},
 ]
@@ -38,6 +39,22 @@ const CHATTER := [
 	["mentor-1", "user", "Consiglio del giorno: nelle candidature remote EU cita il fuso e la disponibilità overlap."],
 	["assistente-1", "user", "Ho archiviato 2 notifiche e aggiornato il registro candidature."],
 	["coordinatore-1", "user", "Il team è a regime: 6 nuove posizioni oggi, 3 in analisi, 1 in scrittura."],
+]
+
+## Transizioni di stato simulate (contratto bus.transitions: righe del
+## registro con by_agent per-istanza): la pipeline completa di una
+## posizione, così la scena reagisce con l'agente giusto — la scrittura
+## CV deve accendere la stampante.
+## Stati e firme come nel jobs.db VERO (SELECT DISTINCT sulla VPS:
+## to_state ∈ new/checked/scored/writing/ready/excluded, by_agent
+## per-istanza "scout-2"): il mock deve recitare il sistema reale.
+const TRANSITIONS := [
+	{"by_agent": "scout-2", "from_state": null, "to_state": "new", "title": "Senior Backend Engineer", "company": "TechNova"},
+	{"by_agent": "analista-1", "from_state": "new", "to_state": "checked", "title": "Senior Backend Engineer", "company": "TechNova"},
+	{"by_agent": "scorer-1", "from_state": "checked", "to_state": "scored", "title": "Senior Backend Engineer", "company": "TechNova"},
+	{"by_agent": "scout-1", "from_state": null, "to_state": "new", "title": "Staff Platform Engineer", "company": "Cloudreef"},
+	{"by_agent": "scrittore-1", "from_state": "scored", "to_state": "writing", "title": "Senior Backend Engineer", "company": "TechNova"},
+	{"by_agent": "scrittore-1", "from_state": "writing", "to_state": "ready", "title": "Senior Backend Engineer", "company": "TechNova"},
 ]
 
 ## Eventi di roster ciclici: i worker dinamici vanno e vengono.
@@ -69,8 +86,13 @@ func _boot() -> void:
 		return
 	bus.publish_state(BackendBus.CONNECTED, "VPS simulata (mock)")
 	bus.publish_agents(_roster.duplicate(true))
+	# baseline del registro attività (contratto: transitions sul bus
+	# PRIMA di positions_updated) — le reazioni partono dal refresh dopo
+	bus.transitions = []
+	bus.publish_positions([])
 	_chat_loop()
 	_roster_loop()
+	_transitions_loop()
 
 ## Un fumetto ogni 5-11 secondi, pescando dal pool ma SOLO fra chi è
 ## attivo in scena (un despawnato non parla).
@@ -117,6 +139,25 @@ func _roster_loop() -> void:
 						a["status"] = ev["status"]
 						break
 		bus.publish_agents(_roster.duplicate(true))
+
+## Una transizione nuova in testa al registro ogni 12-20 secondi (la
+## prima presto, per vederla subito nei test), poi refresh come farebbe
+## il poll del jobs.db vero: transitions sul bus + positions_updated.
+func _transitions_loop() -> void:
+	var i := 0
+	var pos_id := 4200
+	while _running:
+		await _sleep(6.0 if i == 0 else randf_range(12.0, 20.0))
+		if not _running:
+			return
+		var t: Dictionary = TRANSITIONS[i % TRANSITIONS.size()].duplicate()
+		i += 1
+		if t["to_state"] == "new":
+			pos_id += 1
+		t["position_id"] = pos_id
+		t["ts"] = Time.get_datetime_string_from_system()
+		bus.transitions.push_front(t)
+		bus.publish_positions(bus.positions)
 
 ## ── Chat bidirezionale simulata (contratto open/send/close) ──────────
 ## Stesso giro del canale vero: open → snapshot, send → eco utente +
