@@ -74,6 +74,7 @@ func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 	else:
 		mode = p_mode if TRACKS.has(p_mode + "_down") else "idle"
 	_apply_track()
+	queue_redraw()  # l'anello dell'ombra segue il modo (walk/carry)
 
 func _apply_track() -> void:
 	var sitting := mode == "sit"
@@ -100,12 +101,16 @@ func _process(delta: float) -> void:
 	# fallback dal walk, statico) — il micro-bob dà vita comunque
 	_sprite.position.y = -FEET.y + (sin(_t * 1.7) * 2.8 if mode == "idle" else 0.0)
 
-## Ombra morbida ai piedi: àncora la figura al pavimento (profondità 2.5D).
-## Tre ellissi concentriche = bordo sfumato senza texture.
+## Ombra ai piedi: àncora la figura al pavimento (profondità 2.5D).
+## Più marcata del primo giro (feedback test finale: in cammino gli
+## agenti si confondevano con lo sfondo) e con un anello netto quando
+## la figura si muove.
 func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.38))
 	for i in 3:
-		draw_circle(Vector2.ZERO, 60.0 + i * 16.0, Color(0, 0, 0, 0.10 - i * 0.03))
+		draw_circle(Vector2.ZERO, 60.0 + i * 16.0, Color(0, 0, 0, 0.16 - i * 0.045))
+	if mode == "walk" or mode == "carry":
+		draw_arc(Vector2.ZERO, 66.0, 0, TAU, 48, Color(0.65, 0.95, 1.0, 0.38), 3.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _update_frame() -> void:

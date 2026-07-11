@@ -86,6 +86,9 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 		pile = PaperPile.new(desk["rect"])
 		get_parent().add_child(pile)
 		pile.add_sheets(randi_range(0, 5))  # non si parte mai a tavolo vuoto
+	# i core con scrivania personale dichiarano il verso nel def (fix
+	# test finale: il Capitano sedeva DIETRO il desk invece che davanti)
+	_desk_facing = def.get("facing", _desk_facing)
 	position = _spot
 	# gli agenti NON collidono tra loro (si incastravano nei passaggi):
 	# restano solide solo le collisioni coi mobili (layer 1)
@@ -240,8 +243,10 @@ func is_dissolving() -> bool:
 
 ## True se il punto (click) cade sul corpo dell'agente.
 func hit_by(point: Vector2) -> bool:
-	return point.distance_to(global_position + Vector2(0, -44)) < 52 \
-			or point.distance_to(global_position) < 26
+	# generoso di proposito (feedback test finale: il click sull'agente
+	# "non fa nulla"): a zoom out il bersaglio su schermo è piccolo
+	return point.distance_to(global_position + Vector2(0, -44)) < 68 \
+			or point.distance_to(global_position) < 36
 
 func _physics_process(delta: float) -> void:
 	if _dissolving:
