@@ -289,8 +289,15 @@ func _on_positions_refresh(_list: Array) -> void:
 		_build("detail" if _pos_detail_id != 0 else "")
 
 func _on_dash_refresh(_list: Array) -> void:
-	if section == "dashboard" and is_instance_valid(_content):
-		_build()
+	if section != "dashboard" or not is_instance_valid(_content):
+		return
+	# non azzerare i filtri che l'utente ha scelto nei grafici: coi
+	# filtri attivi i charts si aggiornano da soli, il resto aspetta
+	for c in _content.get_children():
+		if c is ScrollContainer and c.get_child_count() > 0 \
+				and c.get_child(0) is StatsCharts and c.get_child(0)._active_count() > 0:
+			return
+	_build()
 
 ## Il primo snapshot posizioni rimpiazza mock/placeholder coi grafici
 ## veri; una volta montati, StatsCharts si aggiorna da sé (e non va
@@ -1296,6 +1303,19 @@ func _build_dashboard() -> void:
 		_kpi_row(UIStrings.t("kpi.positions_today"), str(kpi["found_today"]), Palette.MINT)
 		_kpi_row(UIStrings.t("kpi.avg_score"), str(kpi["avg_score"]), Palette.MINT)
 		_kpi_row(UIStrings.t("kpi.positions_total"), str(kpi["total"]), Palette.BRIGHT)
+		_content.add_child(HSeparator.new())
+		# i grafici linked del web VIVONO nella dashboard (feedback
+		# Leone 21:2x: "dashboard senza grafici"), cross-filter incluso
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.custom_minimum_size = Vector2(0, 380)
+		_content.add_child(scroll)
+		var charts := StatsCharts.new()
+		charts.open_position.connect(func(pid: int) -> void:
+			pending_detail = pid
+			navigate.emit("positions"))
+		scroll.add_child(charts)
 		return
 	var s: Dictionary = TeamData.summary()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
