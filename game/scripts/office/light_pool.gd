@@ -29,3 +29,6 @@ func _init(pos: Vector2, radius: float, color: Color, alpha: float,
 	position = pos
 	scale = Vector2(radius * 2.0 / 256.0, radius * 2.0 / 256.0 * squash)
 	modulate = Color(color.r, color.g, color.b, alpha)
+	# la luce investe TUTTA la scena (mobili e agenti compresi), non solo
+	# il pavimento: senza, di notte le pozze sparivano sotto il mondo
+	z_index = 30
