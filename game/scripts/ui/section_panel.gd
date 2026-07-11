@@ -1033,7 +1033,7 @@ func _build_notifs() -> void:
 func _build_chat() -> void:
 	if not BackendBus.chat_message.is_connected(_on_teamchat_refresh):
 		BackendBus.chat_message.connect(_on_teamchat_refresh)
-	var live: Array = BackendBus.chat_history
+	var live: Array = BackendBus.chat_log
 	if not live.is_empty():
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED

@@ -48,13 +48,22 @@ case "$MODE" in
 		exec godot --path "$GAME_DIR"
 		;;
 	shot)
+		# Shot di verifica SENZA rubare il focus (richiesta Leone 18:3x, un
+		# solo schermo): finestra DISCRETA — flag no-focus + angolo in basso
+		# a destra (JHT_SHOT_QUIET, vedi game.gd) e focus restituito subito
+		# all'app dell'utente. Il vero headless è stato provato e scartato:
+		# il DisplayServer headless di Godot non renderizza (PNG mai scritto).
+		# La finestra piena resta SOLO per i live-test di Leone (run.sh play).
 		OUT_PNG="${2:?uso: run.sh shot out.png [VAR=val …]}"
 		shift 2
-		env "$@" JHT_SCENE=office JHT_WINDOWED=1 JHT_SHOT="$OUT_PNG" \
-			godot --path "$GAME_DIR" >/dev/null 2>&1 &
+		FRONT_APP="$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>/dev/null || true)"
+		env "$@" JHT_SCENE=office JHT_WINDOWED=1 JHT_SHOT="$OUT_PNG" JHT_SHOT_QUIET=1 \
+			godot --path "$GAME_DIR" --resolution 1280x720 >/dev/null 2>&1 &
 		GPID=$!
-		sleep 3
-		osascript -e 'tell application "System Events" to set frontmost of (first process whose name is "godot") to true' >/dev/null 2>&1 || true
+		sleep 2
+		if [ -n "$FRONT_APP" ]; then
+			osascript -e "tell application \"$FRONT_APP\" to activate" >/dev/null 2>&1 || true
+		fi
 		# fino a ~4 minuti: JHT_SHOT_DELAY può ritardare lo scatto di molto
 		for _ in $(seq 1 120); do
 			[ -s "$OUT_PNG" ] && break
@@ -63,10 +72,10 @@ case "$MODE" in
 		done
 		sleep 1
 		kill "$GPID" 2>/dev/null || true
-		if [ -s "$OUT_PNG" ]; then
+		if [ -s "$OUT_PNG" ] && python3 "$GAME_DIR/tools/png_not_blank.py" "$OUT_PNG"; then
 			echo "[run.sh] SHOT OK: $OUT_PNG"
 		else
-			echo "[run.sh] SHOT KO (finestra occlusa? utente in fullscreen?)" >&2
+			echo "[run.sh] SHOT KO (PNG assente o nero: present congelato/finestra occlusa?)" >&2
 			exit 1
 		fi
 		;;

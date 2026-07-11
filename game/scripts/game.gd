@@ -23,6 +23,16 @@ func _enter_tree() -> void:
 	# finestra 1920x1080 dichiarata in project.godot.
 	# JHT_WINDOWED=1 avvia in finestra (comodo per test/screenshot).
 	_apply_fullscreen(OS.get_environment("JHT_WINDOWED") != "1")
+	# JHT_SHOT_QUIET=1 (shot di verifica, workflow Leone 18:3x): finestra
+	# DISCRETA — mai il focus, parcheggiata nell'angolo in basso a destra.
+	# Visibile quel minimo che serve a macOS per non congelare il present
+	# (una finestra del tutto occlusa smette di renderizzare).
+	if OS.get_environment("JHT_SHOT_QUIET") == "1":
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_NO_FOCUS, true)
+		var usable := DisplayServer.screen_get_usable_rect()
+		var wsize := DisplayServer.window_get_size()
+		DisplayServer.window_set_position(
+				usable.position + usable.size - wsize - Vector2i(8, 8))
 
 func _ready() -> void:
 	# Scorciatoia per i test: JHT_SCENE=office salta il boot.

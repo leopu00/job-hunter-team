@@ -2,16 +2,17 @@ class_name SpriteSheetRig
 extends Node2D
 ## Rig a spritesheet per gli agenti in-world (sostituisce il CharacterRig a
 ## parti SVG). Contratto del foglio in docs/SPRITES.md: griglia 6×12, cella
-## 128×192 (arte a 2×, il rig scala 0.5), piedi a (64, 180), side = destra.
+## 256×384 (arte quasi 1:1 con gli originali imagegen, il rig scala giù),
+## piedi a (128, 360), side = destra.
 ## API pubblica identica al vecchio rig: set_motion(facing, flipped, mode).
 
-# 0.5 rendeva gli agenti ~80px contro scrivanie da 190: sproporzione
-# bocciata da Leone. A 0.85 l'agente (~136px) sta alle desk ~170px come
-# nell'illustrazione the-box (persona ≈ larghezza scrivania).
-const RIG_SCALE := 0.85
+# La resa in scena è invariata dal 0.85 su celle 128×192 (agente ~136px,
+# persona ≈ larghezza scrivania, calibrato con Leone): celle raddoppiate
+# per pareggiare la definizione degli arredi → scala dimezzata.
+const RIG_SCALE := 0.425
 const COLS := 6
-const CELL := Vector2(128, 192)
-const FEET := Vector2(64, 180)
+const CELL := Vector2(256, 384)
+const FEET := Vector2(128, 360)
 
 ## riga nel foglio, frame usati e fps per ogni traccia mode+facing.
 const TRACKS := {
@@ -97,14 +98,14 @@ func _process(delta: float) -> void:
 	_update_frame()
 	# respiro in idle: i fogli idle hanno 2 frame quasi uguali (o il
 	# fallback dal walk, statico) — il micro-bob dà vita comunque
-	_sprite.position.y = -FEET.y + (sin(_t * 1.7) * 1.4 if mode == "idle" else 0.0)
+	_sprite.position.y = -FEET.y + (sin(_t * 1.7) * 2.8 if mode == "idle" else 0.0)
 
 ## Ombra morbida ai piedi: àncora la figura al pavimento (profondità 2.5D).
 ## Tre ellissi concentriche = bordo sfumato senza texture.
 func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.38))
 	for i in 3:
-		draw_circle(Vector2.ZERO, 30.0 + i * 8.0, Color(0, 0, 0, 0.10 - i * 0.03))
+		draw_circle(Vector2.ZERO, 60.0 + i * 16.0, Color(0, 0, 0, 0.10 - i * 0.03))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _update_frame() -> void:
