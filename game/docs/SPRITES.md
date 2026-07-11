@@ -61,3 +61,23 @@ Celle non usate = completamente trasparenti.
    di (64, 180) ±6 px — niente "scivolamento" verticale tra frame.
 3. **Identità**: occhiali tondi scuri SEMPRE (firma degli agenti);
    palette abiti coerente col ruolo; niente pixel art, niente flat vector.
+
+## Foglio seduto (opzionale): `<slug>_sit.png`
+
+La posa seduta vive in un foglio SEPARATO — il contratto 6×12 sopra non
+cambia. Griglia **4×3**, stessa cella 128×192 e stesso aggancio piedi:
+
+| riga | traccia | frame |
+| --- | --- | --- |
+| 0 | sit_down | 4 |
+| 1 | sit_up | 4 |
+| 2 | sit_side | 4 |
+
+- **sit**: seduto su una sedia invisibile (anche 90°, cosce orizzontali),
+  mani avanti che digitano; 8 fps. Altezza figura ~0.76 dello standing
+  (`slice_agent_sheet.py --sit sorgente.png --sit-target-h 122`).
+- Il rig espone la property `has_sit` (true se il foglio è caricato):
+  il behavior applica l'offset-sedia solo in quel caso. Senza foglio,
+  `set_motion(..., "sit")` degrada da solo a `work`.
+- La sedia NON è nello sprite: è disegnata nella texture della scrivania,
+  l'aggancio fine lo fa AgentNPC per-facing.
