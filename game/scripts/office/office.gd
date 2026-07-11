@@ -162,8 +162,7 @@ func _add_maintainers() -> void:
 		holder.position = spec["pos"]
 		holder.modulate = Color(0.72, 0.75, 0.9)
 		add_child(holder)  # fuori dal World: niente Y-sort né collisioni
-		var rig := CharacterRig.new()
-		rig.setup(CharacterDefs.agent_textures("maintainer"))
+		var rig := CharacterDefs.make_rig("maintainer")
 		rig.scale *= 1.08
 		holder.add_child(rig)
 		rig.set_motion(spec["facing"], false, "idle")

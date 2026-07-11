@@ -11,7 +11,7 @@ enum S { WORK, GO_OUT, OUT_IDLE, GO_BACK, TALK }
 var slug := ""
 var display_name := ""
 var nav: NavGrid
-var rig: CharacterRig
+var rig  # CharacterRig o SpriteSheetRig: stessa interfaccia set_motion
 var bubble: StatusBubble
 
 var state: S = S.WORK
@@ -44,8 +44,7 @@ func setup(p_slug: String, p_nav: NavGrid) -> void:
 	shape.position = Vector2(0, -12)
 	add_child(shape)
 
-	rig = CharacterRig.new()
-	rig.setup(CharacterDefs.agent_textures(slug))
+	rig = CharacterDefs.make_rig(slug)
 	add_child(rig)
 	rig.set_motion("down", false, "work")
 
