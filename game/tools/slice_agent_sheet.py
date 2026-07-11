@@ -48,17 +48,38 @@ def defringe_magenta(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
+def _segments(profile: np.ndarray, min_w: int = 24):
+    """Intervalli [a,b) dove il profilo è >0, ignorando i segmenti-briciola."""
+    on = profile > 0
+    edges = np.flatnonzero(np.diff(on.astype(int)))
+    bounds = [0] + (edges + 1).tolist() + [len(on)]
+    return [(a, b) for a, b in zip(bounds, bounds[1:])
+            if on[a] and (b - a) >= min_w]
+
+
 def load_grid(path: str, cols: int):
-    """Estrae i frame (PIL RGBA) da una griglia cols x 3 righe."""
+    """Estrae i frame (PIL RGBA) da una griglia cols x 3 righe.
+
+    imagegen non centra le figure in celle esatte: i frame si trovano
+    segmentando il profilo alpha per colonne dentro ogni banda-riga.
+    Se i blob trovati non sono `cols`, fallback alla griglia fissa.
+    """
     im = Image.open(path).convert("RGBA")
     arr = defringe_magenta(np.array(im))
     h, w = arr.shape[:2]
-    cw, ch = w // cols, h // 3
+    ch = h // 3
     rows = []
     for r in range(3):
+        band = arr[r * ch:(r + 1) * ch]
+        col_profile = (band[:, :, 3] > 24).sum(axis=0)
+        col_profile[col_profile < 3] = 0  # righe di rumore quasi-vuote
+        segs = _segments(col_profile)
+        if len(segs) != cols:  # blob fusi o spezzati: celle fisse
+            cw = w // cols
+            segs = [(c * cw, (c + 1) * cw) for c in range(cols)]
         frames = []
-        for c in range(cols):
-            cell = arr[r * ch:(r + 1) * ch, c * cw:(c + 1) * cw]
+        for c, (x0, x1) in enumerate(segs):
+            cell = band[:, x0:x1]
             ys, xs = np.nonzero(cell[:, :, 3] > 24)
             if len(ys) == 0:
                 sys.exit(f"{path}: cella r{r}c{c} vuota")
