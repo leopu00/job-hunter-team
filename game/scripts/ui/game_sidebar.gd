@@ -84,7 +84,8 @@ func _ready() -> void:
 		_select.call_deferred(sec)
 
 	for group in SidebarDefs.GROUPS:
-		var gt := TerminalTheme.label((group["title"] as String).to_upper(), 12, Palette.DIM, "medium")
+		var gt := TerminalTheme.label(
+				SidebarDefs.group_title(group).to_upper(), 12, Palette.DIM, "medium")
 		var gt_pad := MarginContainer.new()
 		gt_pad.add_theme_constant_override("margin_left", 14)
 		gt_pad.add_theme_constant_override("margin_top", 12)
@@ -119,7 +120,7 @@ static func _row_style(bg: Color, bg_alpha: float, accent: bool) -> StyleBoxFlat
 func _nav_button(item: Dictionary) -> Control:
 	var btn := Button.new()
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	btn.text = "%s  %s" % [item["icon"], item["label"]]
+	btn.text = "%s  %s" % [item["icon"], SidebarDefs.label_for(item["id"])]
 	btn.add_theme_font_size_override("font_size", 16)
 	btn.add_theme_font_override("font", load(TerminalTheme.FONT_MEDIUM))
 	btn.add_theme_color_override("font_color", Palette.BASE)

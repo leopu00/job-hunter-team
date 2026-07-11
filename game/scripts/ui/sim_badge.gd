@@ -30,8 +30,8 @@ func _notification(what: int) -> void:
 func _refresh() -> void:
 	var live: bool = BackendBus.is_live()
 	var color: Color = Palette.GREEN if live else Palette.YELLOW
-	_label.text = "● DATI REALI — VPS" if live \
-			else "◐ SIMULAZIONE — dati non reali"
+	_label.text = UIStrings.t("sim.live") if live \
+			else UIStrings.t("sim.mock")
 	_label.add_theme_color_override("font_color", color)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.92)

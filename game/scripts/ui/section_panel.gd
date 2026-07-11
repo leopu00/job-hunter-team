@@ -126,7 +126,9 @@ func _build(page := "") -> void:
 				_build_pos_detail()
 			else:
 				_build_positions()
-		"profile", "hours", "provider", "docker", "account", "email", "language", "advanced":
+		"language":
+			_build_language()
+		"profile", "hours", "provider", "docker", "account", "email", "advanced":
 			_build_config()
 		_:
 			_build_placeholder()
@@ -143,8 +145,8 @@ func _build_config() -> void:
 		rows = BackendBus.live_settings.get(section, [])
 		if rows.is_empty():
 			_content.add_child(TerminalTheme.label(
-					"// config in arrivo dalla VPS…" if BackendBus.live_settings.is_empty()
-					else "// sezione non ancora esposta dal team", 14, Palette.DIM))
+					UIStrings.t("config.incoming") if BackendBus.live_settings.is_empty()
+					else UIStrings.t("config.not_exposed"), 14, Palette.DIM))
 			return
 	else:
 		rows = TeamData.settings().get(section, [])
@@ -161,7 +163,31 @@ func _build_config() -> void:
 		row.add_child(TerminalTheme.label(str(pair[1]), 16, Palette.BRIGHT))
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
-			"// sola lettura — si modifica dalla desktop app", 13, Palette.DIM))
+			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
+
+## Impostazioni → Lingua: le 7 lingue del web. Il cambio si applica
+## subito a ciò che viene (ri)costruito; la scena intorno si aggiorna
+## man mano che i pannelli si riaprono.
+func _build_language() -> void:
+	_content.add_child(TerminalTheme.label(UIStrings.t("lang.intro"), 14, Palette.MUTED))
+	for l in UIStrings.LANGS:
+		var selected: bool = UIStrings.lang == l
+		var btn := Button.new()
+		btn.flat = true
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.text = ("▸ " if selected else "  ") + str(UIStrings.LANGS[l])
+		btn.add_theme_font_size_override("font_size", 16)
+		btn.add_theme_color_override("font_color",
+				Palette.GREEN if selected else Palette.BASE)
+		btn.add_theme_color_override("font_hover_color", Palette.MINT)
+		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		var code := str(l)
+		btn.pressed.connect(func() -> void:
+			UIStrings.set_lang(code)
+			_build())
+		_content.add_child(btn)
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(UIStrings.t("lang.note"), 13, Palette.DIM))
 
 # ── Posizioni: la pagina positions del web privato, dati veri ────────
 
@@ -245,7 +271,8 @@ func _build_positions() -> void:
 		list.add_child(_pos_row(p))
 	if visible_rows.size() > POS_LIST_MAX:
 		list.add_child(TerminalTheme.label(
-				"… e altre %d" % (visible_rows.size() - POS_LIST_MAX), 13, Palette.DIM))
+				UIStrings.t("common.more") % (visible_rows.size() - POS_LIST_MAX),
+				13, Palette.DIM))
 
 func _on_positions_refresh(_list: Array) -> void:
 	if section == "positions" and is_instance_valid(_content):
@@ -293,7 +320,7 @@ func _build_agent_page() -> void:
 			break
 	var back := Button.new()
 	back.flat = true
-	back.text = "◀ AGENTI"
+	back.text = UIStrings.t("agents.back")
 	back.add_theme_font_size_override("font_size", 14)
 	back.add_theme_color_override("font_color", Palette.MUTED)
 	back.add_theme_color_override("font_hover_color", Palette.GREEN)
@@ -312,7 +339,8 @@ func _build_agent_page() -> void:
 	title_row.add_child(TerminalTheme.label(
 			str(agent.get("name", slug.capitalize())), 22, Palette.WHITE, "xbold"))
 	title_row.add_child(TerminalTheme.label(
-			str(agent.get("status", "offline")) if not agent.is_empty() else "non attivo ora",
+			str(agent.get("status", "offline")) if not agent.is_empty()
+					else UIStrings.t("agents.not_active"),
 			15, Palette.MINT if not agent.is_empty() else Palette.DIM, "medium"))
 	_content.add_child(HSeparator.new())
 
@@ -324,7 +352,7 @@ func _build_agent_page() -> void:
 	for key in per_agent:
 		if str(key).split("-")[0] == real:
 			kt += float(per_agent[key])
-	_kpi_row("CONSUMO (ULTIME %s ORE)" % str(usage.get("window_h", "?")),
+	_kpi_row(UIStrings.t("agents.consumption") % str(usage.get("window_h", "?")),
 			"%.1f kt" % kt, Palette.MINT)
 
 	# le sue transizioni recenti (tutte le istanze del ruolo)
@@ -333,12 +361,13 @@ func _build_agent_page() -> void:
 		var by := str(t.get("by_agent", "") if t.get("by_agent") else "")
 		if by.split("-")[0] == real:
 			mine.append(t)
-	_kpi_row("AZIONI NEL REGISTRO", str(mine.size()), Palette.BRIGHT)
+	_kpi_row(UIStrings.t("agents.registry_actions"), str(mine.size()), Palette.BRIGHT)
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label("ULTIME ATTIVITÀ", 14, Palette.MUTED, "medium"))
+	_content.add_child(TerminalTheme.label(UIStrings.t("agent.activity"),
+			14, Palette.MUTED, "medium"))
 	if mine.is_empty():
 		_content.add_child(TerminalTheme.label(
-				"nessuna transizione recente a suo nome", 14, Palette.DIM))
+				UIStrings.t("agents.no_transitions"), 14, Palette.DIM))
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -951,9 +980,9 @@ func _on_vps_agents(agents: Array) -> void:
 
 func _build_placeholder() -> void:
 	_content.add_child(TerminalTheme.label(
-			"// sezione in migrazione dalla desktop app", 16, Palette.DIM))
+			UIStrings.t("section.migrating"), 16, Palette.DIM))
 	_content.add_child(TerminalTheme.label(
-			"I contenuti di «%s» verranno portati qui, un pezzo alla volta."
+			UIStrings.t("section.migrating_body")
 			% SidebarDefs.label_for(section), 15, Palette.MUTED))
 
 # ── Team / Agenti / Attività / Candidature / Dashboard ────────────────
@@ -973,15 +1002,14 @@ func _build_team() -> void:
 		var name_lbl := TerminalTheme.label(dept["name"], 17, Palette.BRIGHT, "medium")
 		name_lbl.custom_minimum_size = Vector2(160, 0)
 		row.add_child(name_lbl)
-		row.add_child(TerminalTheme.label("%d/%d postazioni" % [occupied,
+		row.add_child(TerminalTheme.label(UIStrings.t("team.desks") % [occupied,
 				(dept["desks"] as Array).size()], 15, Palette.MUTED))
 		var tag := TerminalTheme.label(dept["tagline"], 14, Palette.DIM)
 		tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(tag)
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label(
-			"Core: Il Coordinatore · Il Mentor · L'Assistente", 15, Palette.MUTED))
+	_content.add_child(TerminalTheme.label(UIStrings.t("team.core"), 15, Palette.MUTED))
 
 ## Tutti gli agenti in scena con stato del ruolo. Con la VPS collegata:
 ## il roster VERO (sessioni tmux attive), aggiornato a ogni poll.
@@ -990,7 +1018,7 @@ func _build_agents() -> void:
 		BackendBus.agents_updated.connect(_on_agents_refresh)
 	if not BackendBus.agents.is_empty():
 		_content.add_child(TerminalTheme.label(
-				"%d agenti ATTIVI sulla VPS in questo momento" % BackendBus.agents.size(),
+				UIStrings.t("agents.active_count") % BackendBus.agents.size(),
 				14, Palette.MUTED, "medium"))
 		for a in BackendBus.agents:
 			var row := HBoxContainer.new()
@@ -1032,7 +1060,8 @@ func _build_agents() -> void:
 		name_lbl.custom_minimum_size = Vector2(220, 0)
 		row.add_child(name_lbl)
 		var status: Dictionary = TeamData.agent_status().get(def["slug"], {})
-		var st := TerminalTheme.label(status.get("status", "operativo"), 14, Palette.MINT)
+		var st := TerminalTheme.label(
+				status.get("status", UIStrings.t("agents.status_default")), 14, Palette.MINT)
 		st.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(st)
@@ -1111,7 +1140,9 @@ func _build_apps() -> void:
 	var apps: Array = TeamData.applications()
 	if apps.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("registry.empty"), 15, Palette.DIM))
-	var names := ["inviata", "screening", "colloquio", "offerta"]
+	var names: Array = []
+	for i in 4:  # gli stessi stadi del registro TAB
+		names.append(UIStrings.t("registry.stage_%d" % i))
 	for app in apps:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 14)
@@ -1145,16 +1176,18 @@ func _build_dashboard() -> void:
 			if p.get("total_score") != null:
 				score_sum += float(p["total_score"])
 				score_n += 1
-		_kpi_row("POSIZIONI OGGI", str(found_today), Palette.MINT)
-		_kpi_row("SCORE MEDIO", str(int(round(score_sum / maxf(1.0, score_n)))), Palette.MINT)
-		_kpi_row("POSIZIONI TOTALI", str(all.size()), Palette.BRIGHT)
+		_kpi_row(UIStrings.t("kpi.positions_today"), str(found_today), Palette.MINT)
+		_kpi_row(UIStrings.t("kpi.avg_score"),
+				str(int(round(score_sum / maxf(1.0, score_n)))), Palette.MINT)
+		_kpi_row(UIStrings.t("kpi.positions_total"), str(all.size()), Palette.BRIGHT)
 		return
 	var s: Dictionary = TeamData.summary()
-	_kpi_row("POSIZIONI OGGI", str(s.get("positions_today", 0)), Palette.MINT)
-	_kpi_row("SCORE MEDIO", str(s.get("avg_score", 0)), Palette.MINT)
-	_bar_row("BUDGET USATO", s.get("budget_used_pct", 0.0), Palette.GREEN)
+	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
+	_kpi_row(UIStrings.t("kpi.avg_score"), str(s.get("avg_score", 0)), Palette.MINT)
+	_bar_row(UIStrings.t("kpi.budget_used"), s.get("budget_used_pct", 0.0), Palette.GREEN)
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label("POSIZIONI DI OGGI", 14, Palette.MUTED, "medium"))
+	_content.add_child(TerminalTheme.label(UIStrings.t("kpi.positions_list"),
+			14, Palette.MUTED, "medium"))
 	for p in TeamData.positions_today():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 14)
@@ -1297,7 +1330,7 @@ func _build_chat() -> void:
 		row.add_child(TerminalTheme.label(msg["text"], 15, Palette.BASE))
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
-			"// sola lettura — si scrive dalla desktop app", 13, Palette.DIM))
+			UIStrings.t("common.readonly_chat"), 13, Palette.DIM))
 
 func _on_teamchat_refresh(_msg: Dictionary) -> void:
 	if section == "chat" and is_instance_valid(_content):
@@ -1312,7 +1345,7 @@ func _build_stats() -> void:
 		BackendBus.positions_updated.connect(_on_stats_refresh)
 	if BackendBus.is_live() and BackendBus.positions.is_empty():
 		_content.add_child(TerminalTheme.label(
-				"// dati in arrivo dalla VPS…", 14, Palette.DIM))
+				UIStrings.t("common.data_incoming"), 14, Palette.DIM))
 		return
 	if not BackendBus.positions.is_empty():
 		var scroll := ScrollContainer.new()
@@ -1326,7 +1359,7 @@ func _build_stats() -> void:
 			navigate.emit("positions"))
 		scroll.add_child(charts)
 		var usage_link := Button.new()
-		usage_link.text = "▶ UTILIZZO"
+		usage_link.text = UIStrings.t("usage.open")
 		usage_link.add_theme_font_size_override("font_size", 16)
 		usage_link.add_theme_color_override("font_color", Palette.GREEN)
 		usage_link.pressed.connect(func() -> void: _build("usage"))
@@ -1334,18 +1367,21 @@ func _build_stats() -> void:
 		return
 	var s: Dictionary = TeamData.summary()
 	var streak: Dictionary = TeamData.streak()
-	_kpi_row("POSIZIONI OGGI", str(s.get("positions_today", 0)), Palette.MINT)
-	_kpi_row("SCORE MEDIO", str(s.get("avg_score", 0)), Palette.MINT)
-	_kpi_row("STREAK", "%d giorni · %d freeze" % [streak.get("days", 0),
-			streak.get("freezes", 0)], Palette.ORANGE)
-	_bar_row("BUDGET USATO", s.get("budget_used_pct", 0.0), Palette.GREEN)
+	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
+	_kpi_row(UIStrings.t("kpi.avg_score"), str(s.get("avg_score", 0)), Palette.MINT)
+	_kpi_row(UIStrings.t("kpi.streak"), UIStrings.t("kpi.streak_value")
+			% [streak.get("days", 0), streak.get("freezes", 0)], Palette.ORANGE)
+	_bar_row(UIStrings.t("kpi.budget_used"), s.get("budget_used_pct", 0.0), Palette.GREEN)
 	_content.add_child(HSeparator.new())
 	# candidature per stadio
 	var stages := [0, 0, 0, 0]
 	for app in TeamData.applications():
 		stages[clampi(int(app["stage"]), 0, 3)] += 1
-	_content.add_child(TerminalTheme.label("CANDIDATURE PER STADIO", 14, Palette.MUTED, "medium"))
-	var names := ["inviata", "screening", "colloquio", "offerta"]
+	_content.add_child(TerminalTheme.label(UIStrings.t("kpi.apps_by_stage"),
+			14, Palette.MUTED, "medium"))
+	var names: Array = []
+	for i in 4:  # gli stessi stadi del registro TAB
+		names.append(UIStrings.t("registry.stage_%d" % i))
 	for i in 4:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
@@ -1358,7 +1394,7 @@ func _build_stats() -> void:
 		row.add_child(TerminalTheme.label(str(stages[i]), 14, Palette.MUTED))
 	_content.add_child(HSeparator.new())
 	var usage_btn := Button.new()
-	usage_btn.text = "▶ UTILIZZO"
+	usage_btn.text = UIStrings.t("usage.open")
 	usage_btn.add_theme_font_size_override("font_size", 16)
 	usage_btn.add_theme_color_override("font_color", Palette.GREEN)
 	usage_btn.pressed.connect(func() -> void: _build("usage"))
@@ -1368,12 +1404,12 @@ func _build_usage() -> void:
 	# con la VPS collegata: consumo VERO per agente (kt nella finestra)
 	var live: Dictionary = BackendBus.live_settings.get("usage", {})
 	if not live.is_empty():
-		_content.add_child(TerminalTheme.label("UTILIZZO — ULTIME %s ORE"
+		_content.add_child(TerminalTheme.label(UIStrings.t("usage.title_window")
 				% str(live.get("window_h", "?")), 16, Palette.WHITE, "bold"))
 		var per_agent: Dictionary = live.get("per_agent_kt", {})
 		if per_agent.is_empty():
 			_content.add_child(TerminalTheme.label(
-					"nessun consumo registrato nella finestra", 14, Palette.DIM))
+					UIStrings.t("usage.none"), 14, Palette.DIM))
 		var keys: Array = per_agent.keys()
 		keys.sort()
 		for agent in keys:
@@ -1387,27 +1423,27 @@ func _build_usage() -> void:
 			row.add_child(lbl)
 			row.add_child(TerminalTheme.label("%.1f kt" % float(per_agent[agent]),
 					15, Palette.MINT, "bold"))
-		_content.add_child(TerminalTheme.label("aggiornato: %s"
+		_content.add_child(TerminalTheme.label(UIStrings.t("common.updated")
 				% str(live.get("generated_at", "")).left(16), 12, Palette.DIM))
 		_content.add_child(HSeparator.new())
 		var back_live := Button.new()
-		back_live.text = "◀ STATISTICHE"
+		back_live.text = UIStrings.t("usage.back")
 		back_live.add_theme_font_size_override("font_size", 16)
 		back_live.add_theme_color_override("font_color", Palette.MUTED)
 		back_live.pressed.connect(func() -> void: _build())
 		_content.add_child(back_live)
 		return
 	var u: Dictionary = TeamData.usage()
-	_content.add_child(TerminalTheme.label("UTILIZZO", 16, Palette.WHITE, "bold"))
-	_kpi_row("PROVIDER", str(u.get("provider", "—")), Palette.BRIGHT)
-	_kpi_row("AZIONI OGGI", str(u.get("actions_today", 0)), Palette.MINT)
-	_kpi_row("AZIONI SETTIMANA", str(u.get("actions_week", 0)), Palette.MINT)
-	_kpi_row("TOKEN OGGI", str(u.get("tokens_today", "—")), Palette.MINT)
-	_bar_row("QUOTA SETTIMANALE", u.get("quota_week_pct", 0.0), Palette.YELLOW)
-	_bar_row("BUDGET USATO", u.get("budget_used_pct", 0.0), Palette.GREEN)
+	_content.add_child(TerminalTheme.label(UIStrings.t("usage.title"), 16, Palette.WHITE, "bold"))
+	_kpi_row(UIStrings.t("kpi.provider"), str(u.get("provider", "—")), Palette.BRIGHT)
+	_kpi_row(UIStrings.t("kpi.actions_today"), str(u.get("actions_today", 0)), Palette.MINT)
+	_kpi_row(UIStrings.t("kpi.actions_week"), str(u.get("actions_week", 0)), Palette.MINT)
+	_kpi_row(UIStrings.t("kpi.tokens_today"), str(u.get("tokens_today", "—")), Palette.MINT)
+	_bar_row(UIStrings.t("kpi.quota_week"), u.get("quota_week_pct", 0.0), Palette.YELLOW)
+	_bar_row(UIStrings.t("kpi.budget_used"), u.get("budget_used_pct", 0.0), Palette.GREEN)
 	_content.add_child(HSeparator.new())
 	var back := Button.new()
-	back.text = "◀ STATISTICHE"
+	back.text = UIStrings.t("usage.back")
 	back.add_theme_font_size_override("font_size", 16)
 	back.add_theme_color_override("font_color", Palette.MUTED)
 	back.pressed.connect(func() -> void: _build())
