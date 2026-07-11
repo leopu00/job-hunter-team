@@ -91,11 +91,15 @@ func publish_state(new_state: int, detail := "") -> void:
 		return
 	state = new_state
 	state_detail = detail
+	Log.info("backend", "stato connessione → %d (%s)" % [state, detail])
 	connection_changed.emit(state, detail)
 
 func publish_agents(list: Array) -> void:
 	agents = list
+	Log.debug("backend", "roster: %d agenti attivi" % list.size())
 	agents_updated.emit(list)
 
 func publish_chat(msg: Dictionary) -> void:
+	Log.debug("backend", "chat %s→%s: %s" % [msg.get("from", "?"),
+			msg.get("to", "?"), str(msg.get("text", "")).left(60)])
 	chat_message.emit(msg)
