@@ -1,10 +1,58 @@
 class_name UIStrings
-## Tutte le stringhe UI del gioco, centralizzate e in italiano.
-## Il sito supporta 7 lingue: questo dizionario è il punto unico da
-## tradurre quando il prototipo verrà internazionalizzato.
+## Tutte le stringhe UI del gioco, centralizzate. L'italiano (S, sotto)
+## è la lingua di riferimento; le altre 6 lingue del web (en, hu, es,
+## de, fr, pt) vivono in scripts/i18n/ui_<lang>.gd con le STESSE chiavi
+## e fanno fallback sull'italiano se una chiave manca.
+
+const LANGS := {
+	"it": "Italiano", "en": "English", "hu": "Magyar", "es": "Español",
+	"de": "Deutsch", "fr": "Français", "pt": "Português",
+}
+const LANG_CFG := "user://lang.cfg"
+
+static var lang := "it"
+
+static func _static_init() -> void:
+	# TEST-AUTO: JHT_LANG forza la lingua per gli shot
+	var forced := OS.get_environment("JHT_LANG")
+	if LANGS.has(forced):
+		lang = forced
+		return
+	var cfg := ConfigFile.new()
+	if cfg.load(LANG_CFG) == OK:
+		var saved := str(cfg.get_value("ui", "lang", "it"))
+		if LANGS.has(saved):
+			lang = saved
+
+static func set_lang(l: String) -> void:
+	if not LANGS.has(l):
+		return
+	lang = l
+	var cfg := ConfigFile.new()
+	cfg.set_value("ui", "lang", l)
+	cfg.save(LANG_CFG)
 
 static func t(key: String) -> String:
+	if lang != "it":
+		var d: Dictionary = _translations().get(lang, {})
+		if d.has(key):
+			return d[key]
 	return S.get(key, key)
+
+## I dizionari tradotti, caricati pigramente (i preload in const
+## creerebbero un ciclo di parse se un file i18n mancasse in dev).
+static var _tr_cache := {}
+
+static func _translations() -> Dictionary:
+	if _tr_cache.is_empty():
+		for l in LANGS:
+			if l == "it":
+				continue
+			var path := "res://scripts/i18n/ui_%s.gd" % l
+			if ResourceLoader.exists(path):
+				var script: GDScript = load(path)
+				_tr_cache[l] = script.get_script_constant_map().get("S", {})
+	return _tr_cache
 
 const S := {
 	# ── Title screen ──────────────────────────────────────────────
@@ -122,6 +170,10 @@ const S := {
 	"search.no_match": "nessuna posizione trovata",
 	"search.need_vps": "collega la VPS per cercare tra le posizioni reali",
 
+	# ── Impostazioni → Lingua ─────────────────────────────────────
+	"lang.intro": "Lingua dell'interfaccia — le 7 lingue del sito.",
+	"lang.note": "// si applica subito ai pannelli; riapri quelli già aperti per vederli tradotti",
+
 	# ── Statistiche: grafici cross-filter (come la dashboard web) ─
 	"stats.hint": "// click su una barra per filtrare: gli altri grafici si aggiornano",
 	"stats.filters": "FILTRI ATTIVI: %d",
@@ -145,4 +197,87 @@ const S := {
 	"dash.pl_to_write": "Da scrivere",
 	"dash.pl_written": "Scritte",
 	"dash.pl_hint": "// click su un box per aprire le posizioni filtrate",
+
+	# ── Comuni (liste troncate, note sola-lettura, attese dati) ───────
+	"common.more": "… e altre %d",
+	"common.readonly_desktop": "// sola lettura — si modifica dalla desktop app",
+	"common.readonly_chat": "// sola lettura — si scrive dalla desktop app",
+	"common.data_incoming": "// dati in arrivo dalla VPS…",
+	"common.updated": "aggiornato: %s",
+
+	# ── Badge simulazione / dati reali ────────────────────────────────
+	"sim.live": "● DATI REALI — VPS",
+	"sim.mock": "◐ SIMULAZIONE — dati non reali",
+
+	# ── Ufficio (hint camera) ─────────────────────────────────────────
+	"office.camera_hint": "trascina o WASD per la camera · zoom con rotella, pinch o +/- · click su agenti e reparti · TAB registro · ESC menu",
+
+	# ── Sidebar: gruppi e voci (specchio della desktop app) ───────────
+	"side.group_team": "Team",
+	"side.group_work": "Lavoro",
+	"side.group_settings": "Impostazioni",
+	"side.team": "Team",
+	"side.agents": "Agenti",
+	"side.chat": "Chat",
+	"side.notifs": "Notifiche",
+	"side.dashboard": "Dashboard",
+	"side.positions": "Posizioni",
+	"side.stats": "Statistiche",
+	"side.apps": "Candidature",
+	"side.map": "Mappa",
+	"side.activity": "Attività",
+	"side.vps": "Collega VPS",
+	"side.profile": "Profilo",
+	"side.hours": "Orari",
+	"side.provider": "Provider",
+	"side.docker": "Docker",
+	"side.account": "Account",
+	"side.email": "Email",
+	"side.language": "Lingua",
+	"side.advanced": "Avanzate",
+
+	# ── Sezioni non ancora migrate / config sola lettura ──────────────
+	"section.migrating": "// sezione in migrazione dalla desktop app",
+	"section.migrating_body": "I contenuti di «%s» verranno portati qui, un pezzo alla volta.",
+	"config.incoming": "// config in arrivo dalla VPS…",
+	"config.not_exposed": "// sezione non ancora esposta dal team",
+
+	# ── Sezione Agenti (lista + pagina del singolo agente) ────────────
+	"agents.back": "◀ AGENTI",
+	"agents.not_active": "non attivo ora",
+	"agents.consumption": "CONSUMO (ULTIME %s ORE)",
+	"agents.registry_actions": "AZIONI NEL REGISTRO",
+	"agents.no_transitions": "nessuna transizione recente a suo nome",
+	"agents.active_count": "%d agenti ATTIVI sulla VPS in questo momento",
+	"agents.status_default": "operativo",
+
+	# ── Sezione Team ──────────────────────────────────────────────────
+	"team.desks": "%d/%d postazioni",
+	"team.core": "Core: Il Coordinatore · Il Mentor · L'Assistente",
+
+	# ── Titoli KPI (dashboard, statistiche, utilizzo) ─────────────────
+	"kpi.positions_today": "POSIZIONI OGGI",
+	"kpi.avg_score": "SCORE MEDIO",
+	"kpi.positions_total": "POSIZIONI TOTALI",
+	"kpi.positions_list": "POSIZIONI DI OGGI",
+	"kpi.budget_used": "BUDGET USATO",
+	"kpi.streak": "STREAK",
+	"kpi.streak_value": "%d giorni · %d freeze",
+	"kpi.apps_by_stage": "CANDIDATURE PER STADIO",
+	"kpi.provider": "PROVIDER",
+	"kpi.actions_today": "AZIONI OGGI",
+	"kpi.actions_week": "AZIONI SETTIMANA",
+	"kpi.tokens_today": "TOKEN OGGI",
+	"kpi.quota_week": "QUOTA SETTIMANALE",
+
+	# ── Pagina Utilizzo ───────────────────────────────────────────────
+	"usage.open": "▶ UTILIZZO",
+	"usage.title": "UTILIZZO",
+	"usage.title_window": "UTILIZZO — ULTIME %s ORE",
+	"usage.none": "nessun consumo registrato nella finestra",
+	"usage.back": "◀ STATISTICHE",
+
+	# ── Mappa ─────────────────────────────────────────────────────────
+	"map.no_coords": "SENZA COORDINATE (%d)",
+	"map.none_today": "nessuna posizione geolocalizzata oggi",
 }

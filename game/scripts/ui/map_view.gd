@@ -231,7 +231,7 @@ func _draw() -> void:
 		draw_string(font, pos + Vector2(20, 5), text,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Palette.BRIGHT)
 	if _pins.is_empty():
-		draw_string(font, Vector2(24, 40), "nessuna posizione geolocalizzata oggi",
+		draw_string(font, Vector2(24, 40), UIStrings.t("map.none_today"),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.DIM)
 	# le posizioni senza coordinate esistono comunque: lista in basso,
 	# niente pin inventati (il geocode è del team, non dell'app)
@@ -242,12 +242,12 @@ func _draw() -> void:
 		# copre pin), con un velo dietro: sotto passano coste e griglia
 		var x0 := r.size.x - 632.0
 		draw_rect(Rect2(x0 - 12, y0 - 26, 632, r.size.y - y0 + 20), Color(0.04, 0.05, 0.07, 0.88))
-		draw_string(font, Vector2(x0, y0 - 8), "SENZA COORDINATE (%d)" % _no_coords.size(),
+		draw_string(font, Vector2(x0, y0 - 8), UIStrings.t("map.no_coords") % _no_coords.size(),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.MUTED)
 		for i in shown:
 			draw_string(font, Vector2(x0, y0 + 12 + 18.0 * i), "· " + str(_no_coords[i]),
 					HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.DIM)
 		if _no_coords.size() > shown:
 			draw_string(font, Vector2(x0, y0 + 12 + 18.0 * shown),
-					"… e altre %d" % (_no_coords.size() - shown),
+					UIStrings.t("common.more") % (_no_coords.size() - shown),
 					HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.DIM)
