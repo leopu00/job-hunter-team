@@ -49,18 +49,22 @@ func _ready() -> void:
 	# facing passa al visual (texture orientate _down/_side/_up, dev-art).
 	# kind "none" = seduta di un mobile condiviso (es. il tavolo lungo degli
 	# Analisti): conta per spot/ostacoli ma il visual è l'item in FurnitureDefs.
+	FurnitureNode.desks = {}
 	for d in DepartmentDefs.all_desks():
 		# micro-prop sul piano (anche sulle sedute del tavolo lungo)
 		world.add_child(DeskClutter.new(d["rect"], "%s:%d" % [d["dept"], d["index"]]))
 		if d["kind"] == "none":
 			continue
-		world.add_child(FurnitureNode.new({
+		var desk_node := FurnitureNode.new({
 			"id": "desk_%s_%d" % [d["dept"], d["index"]],
 			"kind": d["kind"],
 			"rect": d["rect"],
 			"facing": d.get("facing", "down"),
 			"tex_facing": d.get("tex_facing", d.get("facing", "down")),
-		}))
+		})
+		world.add_child(desk_node)
+		# registry per lo scambio vuota/occupata quando l'agente si siede
+		FurnitureNode.desks["%s:%d" % [d["dept"], d["index"]]] = desk_node
 
 	for r in [FurnitureDefs.LAB_WALL_V, FurnitureDefs.LAB_WALL_H1, FurnitureDefs.LAB_WALL_H2]:
 		world.add_child(_invisible_wall(r))

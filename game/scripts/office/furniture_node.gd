@@ -58,6 +58,21 @@ var item: Dictionary
 var _rect: Rect2
 var _textured := false
 
+## Postazioni registrate da office.gd ("dept:index" → nodo): la scena
+## scambia la texture vuota/occupata quando l'agente si siede (ordine
+## Leone 04:2x: l'agente seduto va GENERATO nell'arte, non composto).
+static var desks: Dictionary = {}
+var _sprite: Sprite2D
+var _base_tex: Texture2D
+var _seated_tex: Texture2D
+
+func has_seated_art() -> bool:
+	return _seated_tex != null
+
+func set_occupied(on: bool) -> void:
+	if _sprite and _seated_tex:
+		_sprite.texture = _seated_tex if on else _base_tex
+
 func _init(p_item: Dictionary) -> void:
 	item = p_item
 	_rect = item["rect"]
@@ -118,6 +133,14 @@ func _ready() -> void:
 			spr.offset.x = -tex.get_size().x / 2.0
 		add_child(spr)
 		_textured = true
+		_sprite = spr
+		_base_tex = tex
+		# variante con l'agente seduto integrato: <stesso path>_seated.png
+		var seated_path := path.replace(".png", "_seated.png")
+		if ResourceLoader.exists(seated_path):
+			var st: Texture2D = load(seated_path)
+			if st != null:
+				_seated_tex = st
 
 func _draw() -> void:
 	var kind: String = item["kind"]
