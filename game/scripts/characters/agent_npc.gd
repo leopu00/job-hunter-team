@@ -51,6 +51,8 @@ var _desk_facing := "down"
 var pile: PaperPile  # i fogli accumulati sulla MIA scrivania
 var _consume_timer := 0.0
 var _standing := false  # standing desk (dado 16:10): lavora in piedi
+var _seat_sink := 46.0  # affondo della seduta nel desk (per-scrivania)
+var _desk_key := ""  # chiave nel registry FurnitureNode.desks
 var _chatter: Array = []
 var _wander: Array = []  # solo core (mentor/coordinatore/assistente)
 
@@ -81,6 +83,10 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 		var desk: Dictionary = DepartmentDefs.DEPARTMENTS[dept]["desks"][def["desk"]]
 		_desk_facing = desk.get("facing", "down")
 		_standing = desk.get("standing", false)
+		# affondo per-scrivania: le texture col fronte-camera alto (monitor
+		# multipli) chiedono più profondità del default
+		_seat_sink = float(desk.get("seat_sink", _seat_sink))
+		_desk_key = "%s:%d" % [dept, def["desk"]]
 		# la pila di fogli vive sul piano della postazione (sibling nel
 		# World: setup() arriva quando siamo già nell'albero)
 		pile = PaperPile.new(desk["rect"])
@@ -139,6 +145,7 @@ func dissolve() -> void:
 	if _dissolving:
 		return
 	_dissolving = true
+	_set_desk_occupied(false)
 	SpawnFx.burst(get_parent(), global_position, true)
 	speech.clear_now()
 	bubble.hide_now()
@@ -224,6 +231,7 @@ func set_highlight(on: bool) -> void:
 
 ## Interrogato con un click: si ferma e guarda in camera.
 func start_talk() -> void:
+	_set_desk_occupied(false)
 	state = S.TALK
 	_path = PackedVector2Array()
 	velocity = Vector2.ZERO
@@ -323,7 +331,7 @@ func _seat_offset() -> Vector2:
 		"right":
 			return Vector2(26, -2)
 		_:
-			return Vector2(0, 46)
+			return Vector2(0, _seat_sink)
 
 ## Lavorando la pila si smaltisce: un foglio ogni ~minuto di lavoro vero.
 func _consume_tick(delta: float) -> void:
@@ -441,6 +449,7 @@ func _start_next_leg() -> void:
 	if _legs.is_empty():
 		_end_trip()
 		return
+	_set_desk_occupied(false)  # ci si alza: il desk torna vuoto
 	_leg = _legs.pop_front()
 	_path = nav.path(global_position, _leg["target"])
 	_pi = 0
@@ -485,11 +494,23 @@ func _end_trip() -> void:
 	_work_pose()
 
 ## Alla scrivania: rivolto secondo la postazione (down = viso in camera).
+## Con la variante artistica "desk occupato" (ordine Leone 04:2x) il
+## corpo seduto vive NELLA texture della scrivania: il rig si nasconde
+## e il mobile scambia immagine. Senza variante, resta il rig seduto.
+func _set_desk_occupied(on: bool) -> void:
+	var node: FurnitureNode = FurnitureNode.desks.get(_desk_key)
+	if node and node.has_seated_art():
+		node.set_occupied(on)
+		rig.visible = not on
+	elif rig:
+		rig.visible = true
+
 func _work_pose() -> void:
 	_desk_working = backend_status == "working"
 	if _seated():
 		position = _spot + _seat_offset()
 		_desk_motion("sit")
+		_set_desk_occupied(true)
 	else:
 		_desk_motion("work" if _desk_working else "idle")
 

@@ -39,7 +39,7 @@ const DEPARTMENTS := {
 		"desks": [
 			{"rect": Rect2(1040, 1000, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "up"},
 			{"rect": Rect2(1040, 1086, 170, 78), "kind": "scout_a", "facing": "up", "standing": true},
-			{"rect": Rect2(1380, 1180, 170, 78), "kind": "scout_b", "facing": "down"},
+			{"rect": Rect2(1380, 1180, 170, 78), "kind": "scout_b", "facing": "down", "seat_sink": 70.0},
 			{"rect": Rect2(1380, 1266, 170, 78), "kind": "scout_a", "facing": "up"},
 			{"rect": Rect2(1700, 1000, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "up"},
 			{"rect": Rect2(1700, 1086, 170, 78), "kind": "scout_a", "facing": "up"},
@@ -73,11 +73,11 @@ const DEPARTMENTS := {
 		"inbox": Vector2(1965, 1400),
 		# dado=4: diagonale a scala verso sud-est, monitor curvo al centro
 		"desks": [
-			{"rect": Rect2(1980, 980, 170, 78), "kind": "scorer_a", "facing": "down"},
-			{"rect": Rect2(2180, 1052, 170, 78), "kind": "scorer_b", "facing": "down"},
-			{"rect": Rect2(2360, 1116, 290, 110), "kind": "desk_wide", "facing": "down"},
-			{"rect": Rect2(2680, 1196, 170, 78), "kind": "scorer_a", "facing": "down"},
-			{"rect": Rect2(2880, 1268, 170, 78), "kind": "scorer_b", "facing": "down"},
+			{"rect": Rect2(1980, 980, 170, 78), "kind": "scorer_a", "facing": "down", "seat_sink": 70.0},
+			{"rect": Rect2(2180, 1052, 170, 78), "kind": "scorer_b", "facing": "down", "seat_sink": 70.0},
+			{"rect": Rect2(2360, 1116, 290, 110), "kind": "desk_wide", "facing": "down", "seat_sink": 78.0},
+			{"rect": Rect2(2680, 1196, 170, 78), "kind": "scorer_a", "facing": "down", "seat_sink": 70.0},
+			{"rect": Rect2(2880, 1268, 170, 78), "kind": "scorer_b", "facing": "down", "seat_sink": 70.0},
 			{"rect": Rect2(2980, 1340, 170, 78), "kind": "scorer_a", "facing": "up"},
 		],
 	},
@@ -105,8 +105,8 @@ const DEPARTMENTS := {
 		"inbox": Vector2(2690, 1825),  # accanto al tavolino centrale
 		# dado=6: anello rivolto al centro (spazio per un pezzo di dev-art)
 		"desks": [
-			{"rect": Rect2(2480, 1550, 170, 78), "kind": "critici_a", "facing": "down"},
-			{"rect": Rect2(2740, 1550, 170, 78), "kind": "critici_b", "facing": "down"},
+			{"rect": Rect2(2480, 1550, 170, 78), "kind": "critici_a", "facing": "down", "seat_sink": 64.0},
+			{"rect": Rect2(2740, 1550, 170, 78), "kind": "critici_b", "facing": "down", "seat_sink": 64.0},
 			{"rect": Rect2(2280, 1690, 170, 78), "kind": "critici_a", "facing": "right"},
 			{"rect": Rect2(2950, 1690, 170, 78), "kind": "critici_a", "facing": "left"},
 			{"rect": Rect2(2480, 1850, 170, 78), "kind": "critici_a", "facing": "up"},
