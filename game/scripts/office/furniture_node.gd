@@ -77,7 +77,10 @@ func _ready() -> void:
 	# cerca la variante con suffisso _down/_side/_up (left = _side flippata,
 	# stessa regola degli sprite agenti); senza variante si ricade sul kind.
 	var kind_str: String = item["kind"]
-	var facing: String = item.get("facing", "")
+	# tex_facing scollega il VISUAL dal verso dell'agente (seat-audit
+	# 04:0x: alcune texture _down mostrano il FRONTE del desk — l'agente
+	# a nord ci finiva seduto sopra i monitor; col retro _up torna tutto)
+	var facing: String = item.get("tex_facing", item.get("facing", ""))
 	var flip_h := false
 	var path := ""
 	if facing != "":

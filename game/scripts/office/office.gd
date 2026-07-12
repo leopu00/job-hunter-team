@@ -59,6 +59,7 @@ func _ready() -> void:
 			"kind": d["kind"],
 			"rect": d["rect"],
 			"facing": d.get("facing", "down"),
+			"tex_facing": d.get("tex_facing", d.get("facing", "down")),
 		}))
 
 	for r in [FurnitureDefs.LAB_WALL_V, FurnitureDefs.LAB_WALL_H1, FurnitureDefs.LAB_WALL_H2]:

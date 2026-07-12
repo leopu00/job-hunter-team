@@ -37,11 +37,11 @@ const DEPARTMENTS := {
 		# desk 1 = STANDING DESK (dado 16:10: d6=5->una sola, d5=1 d6=2):
 		# il Lead Scout lavora in piedi, tutti gli altri siedono.
 		"desks": [
-			{"rect": Rect2(1040, 1000, 170, 78), "kind": "scout_a", "facing": "down"},
+			{"rect": Rect2(1040, 1000, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "up"},
 			{"rect": Rect2(1040, 1086, 170, 78), "kind": "scout_a", "facing": "up", "standing": true},
 			{"rect": Rect2(1380, 1180, 170, 78), "kind": "scout_b", "facing": "down"},
 			{"rect": Rect2(1380, 1266, 170, 78), "kind": "scout_a", "facing": "up"},
-			{"rect": Rect2(1700, 1000, 170, 78), "kind": "scout_a", "facing": "down"},
+			{"rect": Rect2(1700, 1000, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "up"},
 			{"rect": Rect2(1700, 1086, 170, 78), "kind": "scout_a", "facing": "up"},
 		],
 	},
@@ -89,8 +89,8 @@ const DEPARTMENTS := {
 		"inbox": Vector2(1120, 1740),
 		# dado=3: ferro di cavallo aperto verso l'ufficio (est)
 		"desks": [
-			{"rect": Rect2(350, 1560, 170, 78), "kind": "scrittori_a", "facing": "right"},
-			{"rect": Rect2(350, 1740, 170, 78), "kind": "scrittori_a", "facing": "right"},
+			{"rect": Rect2(350, 1560, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "right"},
+			{"rect": Rect2(350, 1740, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "right"},
 			{"rect": Rect2(600, 1545, 170, 78), "kind": "scrittori_b", "facing": "down"},
 			{"rect": Rect2(600, 1830, 170, 78), "kind": "scrittori_a", "facing": "up"},
 			{"rect": Rect2(860, 1545, 170, 78), "kind": "scrittori_a", "facing": "down"},
