@@ -105,6 +105,15 @@ func _ready() -> void:
 		set_backend(VpsBackend.new(), cfg)
 
 
+## Al quit il thread ssh del backend va JOINATO: lasciarlo vivo mentre
+## l'engine smonta gli autoload produce segfault in cleanup e ObjectDB
+## leak (visto negli shot con VPS attiva, 12/07).
+func _exit_tree() -> void:
+	if _backend:
+		_backend.stop()
+		_backend = null
+
+
 ## ── Multi-valuta (feature del web: salari confrontabili in EUR) ──────
 
 func _fetch_fx_rates() -> void:
