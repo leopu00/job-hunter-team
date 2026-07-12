@@ -323,7 +323,7 @@ func _seat_offset() -> Vector2:
 		"right":
 			return Vector2(26, -2)
 		_:
-			return Vector2(0, 40)
+			return Vector2(0, 46)
 
 ## Lavorando la pila si smaltisce: un foglio ogni ~minuto di lavoro vero.
 func _consume_tick(delta: float) -> void:
