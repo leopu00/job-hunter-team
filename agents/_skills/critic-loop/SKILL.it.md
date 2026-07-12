@@ -42,7 +42,7 @@ Hardcodare `claude` fa crashare il Critico quando il team gira su Codex o Kimi (
 ```bash
 PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
 case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model claude-sonnet-4-6 --effort high" ;;
+  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
   openai)              CRITICO_CMD="codex --yolo" ;;
   kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
   *)                   CRITICO_CMD="codex --yolo" ;;
