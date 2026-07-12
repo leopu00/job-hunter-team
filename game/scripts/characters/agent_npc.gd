@@ -309,18 +309,21 @@ func _tick_desk_pose(delta: float) -> void:
 func _seated() -> bool:
 	return not _standing and rig != null and rig.get("has_sit") == true
 
-## Dove sta il corpo quando è seduto: infilato verso la scrivania per
-## combaciare con la sedia disegnata nelle texture dei desk.
+## Dove sta il corpo quando è seduto: AFFONDATO verso la scrivania così
+## il piano copre le gambe e resta il busto dietro i monitor (feedback
+## Leone 03:5x: con l'offset timido gli agenti erano appollaiati a
+## mezz'aria SOPRA il mobile). Il y-sort fa il resto: il corpo resta a
+## nord della baseline del desk e viene occluso dove si sovrappone.
 func _seat_offset() -> Vector2:
 	match _desk_facing:
 		"up":
 			return Vector2(0, -6)
 		"left":
-			return Vector2(-8, 0)
+			return Vector2(-26, -2)
 		"right":
-			return Vector2(8, 0)
+			return Vector2(26, -2)
 		_:
-			return Vector2(0, 6)
+			return Vector2(0, 40)
 
 ## Lavorando la pila si smaltisce: un foglio ogni ~minuto di lavoro vero.
 func _consume_tick(delta: float) -> void:
