@@ -238,9 +238,14 @@ func _draw() -> void:
 					draw_texture_rect_region(parent, rect, sub)
 				else:
 					draw_rect(rect, Color(0.07, 0.08, 0.11))
-	# pin
+	# pin: prima tutti i punti, poi le targhette SENZA sovrapposizioni
+	# (priorità agli score alti — il web clusterizza, noi decolliidiamo)
 	var font := TerminalTheme.get_theme().default_font
-	for pin in _pins:
+	var by_score := _pins.duplicate()
+	by_score.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a["score"]) > int(b["score"]))
+	var used_rects: Array = []
+	for pin in by_score:
 		var pos := _to_screen(pin["norm"])
 		if pos.x < -60 or pos.x > size.x + 60 or pos.y < -60 or pos.y > size.y + 60:
 			continue
@@ -250,8 +255,16 @@ func _draw() -> void:
 		draw_arc(pos, 10.0, 0, TAU, 24, Color(col.r, col.g, col.b, 0.7), 2.0)
 		var text := "%s  [%d]" % [pin["label"], pin["score"]]
 		var tsize := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-		draw_rect(Rect2(pos + Vector2(14, -9), tsize + Vector2(10, 6)),
-				Color(0.04, 0.05, 0.07, 0.85))
+		var label_rect := Rect2(pos + Vector2(14, -9), tsize + Vector2(10, 6))
+		var collides := false
+		for r in used_rects:
+			if r.intersects(label_rect):
+				collides = true
+				break
+		if collides:
+			continue  # il punto resta, la targhetta cede il posto
+		used_rects.append(label_rect)
+		draw_rect(label_rect, Color(0.04, 0.05, 0.07, 0.85))
 		draw_string(font, pos + Vector2(19, 5), text,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Palette.BRIGHT)
 	# attribuzione (Carto richiede OSM + CARTO) e hint

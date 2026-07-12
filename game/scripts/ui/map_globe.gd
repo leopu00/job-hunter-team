@@ -18,6 +18,9 @@ const USER_AGENT := "User-Agent: JHT-desktop-prototype/0.1 (+https://github.com/
 const DIST_MAX := 3.1
 const DIST_MIN := 1.55    # sotto: dive nella mappa piatta
 const MERC_LAT_MAX := 85.05113
+## Orientamento iniziale: Europa in vista (tarato a shot, 12/07).
+const EUROPE_YAW := -195.0
+const EUROPE_PITCH := -35.0
 
 var _vp: SubViewport
 var _pivot: Node3D          # yaw+pitch: ruotare il mondo, non la camera
@@ -39,7 +42,6 @@ func _ready() -> void:
 	_load_or_fetch_texture()
 	_rebuild_pins()
 	BackendBus.positions_updated.connect(func(_l: Array) -> void: _rebuild_pins())
-	resized.connect(_sync_viewport)
 
 func _build_scene() -> void:
 	var holder := SubViewportContainer.new()
@@ -70,13 +72,14 @@ func _build_scene() -> void:
 	_sphere.material_override = mat
 	_pivot.add_child(_sphere)
 	# vista iniziale sull'Europa, come center [10, 45] del web
-	_pivot.rotation.y = -deg_to_rad(10.0 + 90.0)
-	_pivot.rotation.x = deg_to_rad(45.0 * 0.75)
-	_sync_viewport()
-
-func _sync_viewport() -> void:
-	if _vp:
-		_vp.size = Vector2i(maxi(64, int(size.x)), maxi(64, int(size.y)))
+	# (JHT_GLOBE_YAW/PITCH per la taratura sperimentale negli shot)
+	var yaw := float(OS.get_environment("JHT_GLOBE_YAW")) \
+			if OS.get_environment("JHT_GLOBE_YAW") != "" else EUROPE_YAW
+	var pitch := float(OS.get_environment("JHT_GLOBE_PITCH")) \
+			if OS.get_environment("JHT_GLOBE_PITCH") != "" else EUROPE_PITCH
+	_pivot.rotation.y = deg_to_rad(yaw)
+	_pivot.rotation.x = deg_to_rad(pitch)
+	# NB: niente set di _vp.size — con stretch=true lo gestisce il container
 
 ## ── Texture del mondo (Carto z2 → equirect) ──────────────────────────
 
@@ -135,11 +138,16 @@ func _apply_texture(img: Image) -> void:
 
 ## ── Pin come marker emissivi sulla sfera ─────────────────────────────
 
+## Offset di longitudine fra la texture equirect della SphereMesh e la
+## formula xyz: tarato a shot sui pin europei (12/07). Cambia SOLO se
+## cambia il mesh o il verso della texture.
+const PIN_LON_OFFSET := -85.0
+
 static func _lonlat_to_xyz(lonlat: Vector2) -> Vector3:
 	var lat := deg_to_rad(lonlat.y)
-	var lon := deg_to_rad(lonlat.x)
-	# SphereMesh Godot: U avvolge da -X verso +Z; questo mapping è
-	# stato tarato sui pin delle città note (Europa in vista iniziale)
+	var lon := deg_to_rad(lonlat.x + PIN_LON_OFFSET \
+			+ (float(OS.get_environment("JHT_PIN_OFF")) \
+			if OS.get_environment("JHT_PIN_OFF") != "" else 0.0))
 	return Vector3(-cos(lat) * cos(lon), sin(lat), cos(lat) * sin(lon))
 
 func _rebuild_pins() -> void:
@@ -207,9 +215,10 @@ func _zoom(dd: float) -> void:
 		dive_in.emit(_center_lonlat())
 
 ## Il punto del mondo al centro dello schermo (per atterrare lì).
+## Relazioni tarate a shot: lon_visibile = -yaw - 185, lat ≈ -pitch*1.2.
 func _center_lonlat() -> Vector2:
-	var lat := rad_to_deg(_pivot.rotation.x) / 0.75
-	var lon := -rad_to_deg(_pivot.rotation.y) - 90.0
+	var lat := -rad_to_deg(_pivot.rotation.x) * 1.2
+	var lon := -rad_to_deg(_pivot.rotation.y) - 185.0
 	return Vector2(wrapf(lon, -180.0, 180.0), clampf(lat, -75.0, 75.0))
 
 func _draw() -> void:
