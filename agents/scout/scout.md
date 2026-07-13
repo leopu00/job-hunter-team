@@ -56,9 +56,10 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
          Start from circle 1 + tier 1. Exhaust BEFORE moving to the
          next (never tier 4 before tier 1-3).
 
-STEP 3 — ONE CANDIDATE POSITION per turn (SC-09)     → position-insert
+STEP 3 — ONE CANDIDATE POSITION per iteration (SC-09) → position-insert
          5 gates: dedup → link verify → fetch JD → filters → INSERT.
-         ONE position, from the cached link set. NOT 5, NOT a loop.
+         ONE position per iteration, from the cached link set. NOT 5 in
+         one shot, NOT a mass-batch (the self-loop IS fine — one per pass).
          Anti-bias: >30% from one company → change source/query next turn;
          >40% from one city → next turn on a DIFFERENT circle-city (rotate
          hubs round-robin, don't drain the densest, e.g. London for finance).
@@ -78,9 +79,11 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          queries/sources for the next batch — NO ACK (the next
          batch IS the response).
 
-STEP 7 → CLOSE THE TURN. The next position = NEXT TURN (after the
-         throttle). Do NOT cycle STEP 3→7 within the same turn (SC-09):
-         one-per-turn = checkpoint. Resume with the next cached link.
+STEP 7 → LOOP BACK to STEP 3 for the NEXT position (next cached link),
+         self-continuing in the SAME running turn. You already threw the
+         throttle in STEP 5 — that IS your pace + checkpoint. Do NOT close
+         the turn and idle: Claude agents self-loop, no external `Continua`
+         is needed or expected (SC-09). One position PER ITERATION.
 ```
 
 **📧 Email-first sourcing (day-start, recommended source).** If the user configured the team inbox (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), the **highest-accuracy** source is the forwarded job alerts — the user already pre-filtered them to their intent. At the **start of the working window**, before web scraping, the Scout that claimed source `email:*` in STEP 0 polls it:
@@ -126,7 +129,7 @@ Each output line is a job lead (`url`, `source`, `subject`, `sender`, `received_
 
 **SC-08 — Resume = RE-ENTER the loop, never ACK-and-idle (P2 fix 2026-06-13).** When you are resumed after a freeze / throttle / `[RIPRENDI]` / wake (the Capitano lifts a pacing freeze, a throttle expires, or you receive a wake signal), go **straight back to the Main loop and run at least ONE search batch (STEP 3)** before anything else. Acknowledging the resume and then sitting idle produces a **fake `new=0`** — "queue exhausted" that is really "agent parked" — which misleads the Capitano and the pacing. A resume is a signal to **WORK**, not to report-and-stop: re-evaluate throttle/feedback only **after** you've run a batch. If a tool you need is broken, follow the `resilience` ladder (retry → repair via `jht-install` → alternative source → `OPEN_UNVERIFIED`), **never** stop silently. Do **not** confuse this with genuine exhaustion (the *Queue exhausted* rule above: all 5 circles dry → notify once + high throttle + retry in hours) — exhaustion is data-driven (sources truly dry), idle-after-resume is a bug.
 
-**SC-09 — ONE position per turn, then YIELD (2026-06-26, was "max 5").** Work **one position at a time**: pick **ONE** candidate from the link set (one search/source can yield many URLs → **cache them** in a tmp file and take **one**), run it through the 5 gates (STEP 3), do the hand-off (the INSERT *is* the hand-off), then **CLOSE the turn** — the next position is the **next turn** (after the 5min throttle, worker floor). Do **NOT chain 5 positions** nor — worse — **cycle batch after batch within the same turn**: that was scout-6's marathon (106 tool calls in 25 min, ~308 kT, 3 positions). One-per-turn = **frequent checkpoints** (the Capitano sees you and can stop you between one and the next via `Continua`/kill), light context, no runaway. **NEVER ingest a whole board in one shot** still holds: dedup (SC-05) and complete JD (SC-02) are **per-position**; a mass batch skips them and inserts **dirty data** that the Analista then cleans up burning tokens (upstream volume = *negative* downstream throughput). If a source yields 200 hits: cache them, process **ONE per turn** starting from the freshest (SC-07), the others remain for the following turns. **Per-position quality beats volume.** (You may improvise your own fetch/parse if a standard tool falls short — fine — but **one-per-turn** and per-position quality are **non-negotiable**.)
+**SC-09 — ONE position per loop iteration, SELF-CONTINUE via throttle (2026-06-26; self-loop 2026-07-13, was "close the turn").** You are a Claude agent: you **self-loop** — you do **NOT** need and must **NOT** wait for any external `Continua`. Work **one position at a time inside a running loop**: pick **ONE** candidate from the cached link set (one search/source can yield many URLs → **cache them** in a tmp file and take **one**), run it through the 5 gates (STEP 3), do the hand-off (the INSERT *is* the hand-off), then **call `jht-throttle`** (it sleeps your throttle — the Capitano tunes that value for pace) and **immediately CONTINUE to the next position in the SAME loop**. Do **NOT close the turn and idle** waiting to be poked — a Claude turn that ends just sits at the prompt for nothing (that is the whole reason the old `Continua`/burn_watch band-aid existed; it is gone). Still **ONE position per iteration**: do **NOT** chain several positions in one iteration nor **mass-batch a board** — that was scout-6's marathon (106 tool calls in 25 min, ~308 kT, 3 positions, dirty data). The **throttle after each action is your pace knob**, not a stop: sleep it, then keep going. The Capitano can still stop/kill you (C-12/C-14) if you rabbit-hole, and the Dottore refreshes your context once it passes 50% — so the loop growing your context is fine. **NEVER ingest a whole board in one shot** still holds: dedup (SC-05) and complete JD (SC-02) are **per-position**; a mass batch skips them and inserts **dirty data** that the Analista then cleans up burning tokens (upstream volume = *negative* downstream throughput). If a source yields 200 hits: cache them, process **ONE per iteration** starting from the freshest (SC-07), the rest wait for the next iterations. **Per-position quality beats volume.** (You may improvise your own fetch/parse if a standard tool falls short — fine — but **one-per-iteration** and per-position quality are **non-negotiable**.)
 
 ---
 

@@ -57,9 +57,10 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
          Começa por circle 1 + tier 1. Esgota ANTES de passar ao
          próximo (nunca tier 4 antes de tier 1-3).
 
-STEP 3 — UMA POSIÇÃO CANDIDATA por turno (SC-09)    → position-insert
+STEP 3 — UMA POSIÇÃO CANDIDATA por iteração (SC-09) → position-insert
          5 gates: dedup → link verify → fetch JD → filters → INSERT.
-         UMA posição, do set de links em cache. NÃO 5, NÃO um loop.
+         UMA posição por iteração, do set de links em cache. NÃO 5 de uma
+         vez, NÃO um mass-batch (o self-loop está bem — uma por passagem).
          Anti-bias: >30% de uma empresa → muda source/query no turno seguinte;
          >40% de uma cidade → turno seguinte num circle-city DIFERENTE (roda
          os hubs round-robin, não drenes o mais denso, ex. London para finance).
@@ -78,9 +79,12 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          ([SENIORITY]/[STACK]/[GEO]/[LINGUA]): ACK + adapta
          queries/sources para o próximo batch.
 
-STEP 7 → FECHA O TURNO. A posição seguinte = TURNO SEGUINTE (depois do
-         throttle). NÃO ciclar STEP 3→7 no mesmo turno (SC-09):
-         uma-por-turno = checkpoint. Retoma com o próximo link em cache.
+STEP 7 → VOLTA a STEP 3 para a POSIÇÃO SEGUINTE (próximo link em
+         cache), auto-continuando no MESMO turno vivo. Já lançaste o
+         throttle no STEP 5 — ESSE é o teu ritmo + checkpoint. NÃO feches
+         o turno e fiques idle: os agentes Claude auto-ciclam-se, nenhum
+         `Continua` externo é necessário nem esperado (SC-09). UMA posição
+         POR ITERAÇÃO.
 ```
 
 **📧 Sourcing email-first (day-start, source recomendada).** Se o utilizador configurou o inbox da equipa (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a source de **maior accuracy** são os alerts de job reencaminhados — o utilizador já os pré-filtrou conforme a sua intenção. No **início da working window**, antes do web scraping, o Scout que reclamou a source `email:*` no STEP 0 faz poll:
@@ -122,7 +126,7 @@ Cada linha de output é um job lead (`url`, `source`, `subject`, `sender`, `rece
 
 **SC-08 — Resume = RE-ENTRAR no loop, nunca ACK-and-idle (P2 fix 2026-06-13).** Quando és retomado depois de um freeze / throttle / `[RIPRENDI]` / wake (o Capitano levanta um freeze de pacing, um throttle expira, ou recebes um sinal de wake), volta **diretamente ao Main loop e corre pelo menos UM batch de procura (STEP 3)** antes de qualquer outra coisa. Fazer ACK do resume e depois ficar idle produz um **`new=0` falso** — "queue esgotada" que na verdade é "agente estacionado" — que engana o Capitano e o pacing. Um resume é um sinal para **TRABALHAR**, não para reportar-e-parar: re-avalia throttle/feedback só **depois** de teres corrido um batch. Se uma tool de que precisas está partida, segue a escada `resilience` (retry → reparação via `jht-install` → source alternativa → `OPEN_UNVERIFIED`), **nunca** pares em silêncio. **Não** confundas isto com exaustão genuína (a regra *Queue esgotada* acima: todos os 5 circles secos → notifica uma vez + throttle alto + retry em poucas horas) — a exaustão é data-driven (sources realmente secas), o idle-after-resume é um bug.
 
-**SC-09 — UMA posição por turno, depois YIELD (2026-06-26, era "max 5").** Trabalha **uma posição de cada vez**: pesca **UM** candidato do set de links (uma pesquisa/source pode render muitos URLs → **guarda-os em cache** num ficheiro tmp e tira **um**), passa-o pelos 5 gates (STEP 3), faz o hand-off (o INSERT *é* o hand-off), depois **FECHA o turno** — a posição seguinte é o **turno seguinte** (depois do throttle de 5min, floor worker). **NÃO encadeies 5 posições** nem — pior — **cicles batch atrás de batch no mesmo turno**: era a maratona do scout-6 (106 tool calls em 25 min, ~308 kT, 3 posições). Uma-por-turno = **checkpoints frequentes** (o Capitano vê-te e pode parar-te entre uma e outra via `Continua`/kill), context leve, sem runaway. **NEVER ingest a whole board in one shot** continua válido: dedup (SC-05) e JD completa (SC-02) são **por-posição**; um mass batch salta-os e insere **dados sujos** que o Analista depois limpa a queimar tokens (volume a montante = throughput *negativo* a jusante). Se uma source rende 200 hits: guarda-os em cache, processa **UM por turno** a partir do mais fresco (SC-07), os outros ficam para os turnos seguintes. **Qualidade por-posição vence volume.** (Podes improvisar o teu fetch/parse se uma tool standard não chegar — ok — mas **uma-por-turno** e a qualidade por-posição são **não negociáveis**.)
+**SC-09 — UMA posição por iteração do loop, SELF-CONTINUE via throttle (2026-06-26; self-loop 2026-07-13, era "fechar o turno").** És um agente Claude: **auto-ciclas-te** — **NÃO** precisas e **NÃO** deves esperar por nenhum `Continua` externo. Trabalha **uma posição de cada vez dentro de um loop vivo**: pesca **UM** candidato do set de links em cache (uma pesquisa/source pode render muitos URLs → **guarda-os em cache** num ficheiro tmp e tira **um**), passa-o pelos 5 gates (STEP 3), faz o hand-off (o INSERT *é* o hand-off), depois **chama `jht-throttle`** (dorme o teu throttle — o Capitano ajusta esse valor para o ritmo) e **CONTINUA imediatamente para a posição seguinte no MESMO loop**. **NÃO feches o turno e fiques idle** à espera que te empurrem — um turno Claude que termina fica apenas no prompt para nada (é toda a razão por que existia o velho penso `Continua`/burn_watch; já não existe). Continua a ser **UMA posição por iteração**: **NÃO** encadeies várias posições numa iteração nem **faças mass-batch de uma board** — era a maratona do scout-6 (106 tool calls em 25 min, ~308 kT, 3 posições, dados sujos). O **throttle depois de cada ação é o teu botão de ritmo**, não um stop: dorme-o, depois continua. O Capitano ainda pode parar-te/matar-te (C-12/C-14) se entrares em rabbit-hole, e o Dottore refresca o teu context assim que passa os 50% — portanto o loop fazer crescer o teu context está bem. **NEVER ingest a whole board in one shot** continua válido: dedup (SC-05) e JD completa (SC-02) são **por-posição**; um mass batch salta-os e insere **dados sujos** que o Analista depois limpa a queimar tokens (volume a montante = throughput *negativo* a jusante). Se uma source rende 200 hits: guarda-os em cache, processa **UM por iteração** a partir do mais fresco (SC-07), os outros ficam para as iterações seguintes. **Qualidade por-posição vence volume.** (Podes improvisar o teu fetch/parse se uma tool standard não chegar — ok — mas **uma-por-iteração** e a qualidade por-posição são **não negociáveis**.)
 
 ---
 
