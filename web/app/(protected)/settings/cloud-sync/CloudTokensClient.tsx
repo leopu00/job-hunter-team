@@ -74,7 +74,8 @@ const T: Record<
     never: "mai",
     revoke: "Revoca",
     revoking: "Revoco…",
-    confirmRevoke: "Revocare questo token? I dispositivi che lo usano si scollegano.",
+    confirmRevoke:
+      "Revocare questo token? I dispositivi che lo usano si scollegano.",
     errName: "Nome obbligatorio (1-100 caratteri).",
     errHttp: "Errore HTTP {status}",
     errNetwork: "Errore di rete",
@@ -128,7 +129,8 @@ const T: Record<
     never: "nunca",
     revoke: "Revocar",
     revoking: "Revocando…",
-    confirmRevoke: "¿Revocar este token? Los dispositivos que lo usan se desconectarán.",
+    confirmRevoke:
+      "¿Revocar este token? Los dispositivos que lo usan se desconectarán.",
     errName: "Nombre obligatorio (1-100 caracteres).",
     errHttp: "Error HTTP {status}",
     errNetwork: "Error de red",
@@ -155,7 +157,8 @@ const T: Record<
     never: "jamais",
     revoke: "Révoquer",
     revoking: "Révocation…",
-    confirmRevoke: "Révoquer ce token ? Les appareils qui l'utilisent seront déconnectés.",
+    confirmRevoke:
+      "Révoquer ce token ? Les appareils qui l'utilisent seront déconnectés.",
     errName: "Nom obligatoire (1-100 caractères).",
     errHttp: "Erreur HTTP {status}",
     errNetwork: "Erreur réseau",
@@ -182,7 +185,8 @@ const T: Record<
     never: "nie",
     revoke: "Widerrufen",
     revoking: "Widerrufe…",
-    confirmRevoke: "Diesen Token widerrufen? Geräte, die ihn nutzen, werden getrennt.",
+    confirmRevoke:
+      "Diesen Token widerrufen? Geräte, die ihn nutzen, werden getrennt.",
     errName: "Name erforderlich (1-100 Zeichen).",
     errHttp: "HTTP-Fehler {status}",
     errNetwork: "Netzwerkfehler",
@@ -209,7 +213,8 @@ const T: Record<
     never: "soha",
     revoke: "Visszavonás",
     revoking: "Visszavonás…",
-    confirmRevoke: "Visszavonod ezt a tokent? Az azt használó eszközök lecsatlakoznak.",
+    confirmRevoke:
+      "Visszavonod ezt a tokent? Az azt használó eszközök lecsatlakoznak.",
     errName: "Név kötelező (1-100 karakter).",
     errHttp: "HTTP {status} hiba",
     errNetwork: "Hálózati hiba",
@@ -236,7 +241,8 @@ const T: Record<
     never: "nunca",
     revoke: "Revogar",
     revoking: "A revogar…",
-    confirmRevoke: "Revogar este token? Os dispositivos que o usam serão desligados.",
+    confirmRevoke:
+      "Revogar este token? Os dispositivos que o usam serão desligados.",
     errName: "Nome obrigatório (1-100 caracteres).",
     errHttp: "Erro HTTP {status}",
     errNetwork: "Erro de rede",
@@ -289,11 +295,16 @@ export default function CloudTokensClient() {
       if (!res.ok) {
         setCreateState({
           kind: "error",
-          message: body.error || t.errHttp.replace("{status}", String(res.status)),
+          message:
+            body.error || t.errHttp.replace("{status}", String(res.status)),
         });
         return;
       }
-      setCreateState({ kind: "created", token: body.token, name: body.name ?? trimmed });
+      setCreateState({
+        kind: "created",
+        token: body.token,
+        name: body.name ?? trimmed,
+      });
       setName("");
       refresh();
     } catch (err) {
@@ -341,7 +352,10 @@ export default function CloudTokensClient() {
         onSubmit={handleCreate}
         className="p-5 border border-[var(--color-border)] bg-[var(--color-card)] mb-6"
       >
-        <label htmlFor="token_name" className="block text-[12px] text-[var(--color-bright)] font-medium mb-1">
+        <label
+          htmlFor="token_name"
+          className="block text-[12px] text-[var(--color-bright)] font-medium mb-1"
+        >
           {t.nameLabel}
         </label>
         <div className="flex gap-2">
@@ -364,7 +378,10 @@ export default function CloudTokensClient() {
         </div>
 
         {createState.kind === "error" && (
-          <div className="mt-3 text-[11px]" style={{ color: "var(--color-red)" }}>
+          <div
+            className="mt-3 text-[11px]"
+            style={{ color: "var(--color-red)" }}
+          >
             {createState.message}
           </div>
         )}
@@ -389,7 +406,9 @@ export default function CloudTokensClient() {
                 {copied ? t.copied : t.copyBtn}
               </button>
             </div>
-            <div className="text-[10px] text-[var(--color-dim)]">{t.cliBefore}</div>
+            <div className="text-[10px] text-[var(--color-dim)]">
+              {t.cliBefore}
+            </div>
             <code className="block break-all mt-1 px-2 py-1.5 bg-[rgba(0,0,0,0.4)] text-[11px] font-mono text-[var(--color-bright)]">
               jht cloud enable --token {createState.token}
             </code>
