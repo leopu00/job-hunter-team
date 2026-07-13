@@ -112,6 +112,12 @@ func _process(delta: float) -> void:
 			rotation = 0.0
 			# digitazione: micro-bob veloce del busto
 			bob = sin(_t * 16.0) * 0.7 * ART_SCALE
+		"still":
+			if _has_legs:
+				_leg_l.rotation = 0.0
+				_leg_r.rotation = 0.0
+			rotation = 0.0
+			bob = 0.0
 		_:
 			if _has_legs:
 				_leg_l.rotation = 0.0

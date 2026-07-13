@@ -41,12 +41,13 @@ case "$MODE" in
 		;;
 	boot)
 		OUT="$(JHT_SCENE=office godot --headless --quit-after 15 . 2>&1 || true)"
-		ERRS="$(printf '%s\n' "$OUT" | grep -E "SCRIPT ERROR|Parse Error" || true)"
+		ERRS="$(printf '%s\n' "$OUT" | grep -E "SCRIPT ERROR|Parse Error|ERROR:" || true)"
 		if [ -n "$ERRS" ]; then
 			printf '%s\n' "$ERRS" >&2
 			echo "[run.sh] BOOT KO" >&2
 			exit 1
 		fi
+		printf '%s\n' "$OUT" | grep -E "THROTTLE-TEST|SIMULATION-STATE-TEST" || true
 		echo "[run.sh] BOOT OK"
 		;;
 	play)

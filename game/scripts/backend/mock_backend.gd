@@ -79,6 +79,7 @@ const ROSTER_EVENTS := [
 
 func start(_config: Dictionary) -> void:
 	_running = true
+	_apply_scenario(OS.get_environment("JHT_SIM_STATE"))
 	_boot()
 
 func stop() -> void:
@@ -95,9 +96,50 @@ func _boot() -> void:
 	# PRIMA di positions_updated) — le reazioni partono dal refresh dopo
 	bus.transitions = []
 	bus.publish_positions([])
+	if OS.get_environment("JHT_SIM_STATE") != "":
+		return  # scenario fotografico deterministico: nessun evento casuale
 	_chat_loop()
 	_roster_loop()
 	_transitions_loop()
+
+## Scenari deterministici per l'audit stato→corpo. Lo snapshot contiene
+## ESCLUSIVAMENTE gli agenti che devono esistere nella scena.
+func _apply_scenario(scenario: String) -> void:
+	if scenario == "":
+		return
+	match scenario:
+		"working":
+			_roster = [_sim("scout-1", "scout", "working", 0.0, "turno in corso")]
+		"idle":
+			_roster = [_sim("analista-1", "analista", "idle", 0.0,
+					"sessione attiva, nessun turno in corso")]
+		"paused":
+			_roster = [_sim("scorer-1", "scorer", "paused", 0.0,
+					"in attesa di ripresa")]
+		"throttle_short":
+			_roster = [_sim("scrittore-1", "scrittore", "throttled", 45.0,
+					"pacing: pausa temporizzata")]
+		"throttle_long":
+			_roster = [_sim("critico-1", "critico", "throttled", 240.0,
+					"pacing: pausa temporizzata")]
+		"mixed":
+			_roster = [
+				_sim("scout-1", "scout", "working", 0.0, "turno in corso"),
+				_sim("analista-1", "analista", "idle", 0.0, "nessun turno in corso"),
+				_sim("scorer-1", "scorer", "paused", 0.0, "in attesa di ripresa"),
+				_sim("scrittore-1", "scrittore", "throttled", 45.0, "pacing"),
+				_sim("critico-1", "critico", "throttled", 240.0, "pacing"),
+			]
+		"minimal":
+			_roster = [_sim("mentor-1", "mentor", "idle", 0.0, "in attesa")]
+		_:
+			_roster = []
+
+func _sim(uid: String, role: String, status: String, throttle: float, detail: String) -> Dictionary:
+	return {"slug": role, "uid": uid, "role": role, "name": role.capitalize(),
+			"active": true, "status": status, "desk_hint": "",
+			"throttle_secs": throttle, "throttle_total": throttle,
+			"activity_detail": detail}
 
 ## Un fumetto ogni 5-11 secondi, pescando dal pool ma SOLO fra chi è
 ## attivo in scena (un despawnato non parla).
