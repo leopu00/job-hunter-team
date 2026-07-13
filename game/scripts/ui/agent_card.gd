@@ -55,14 +55,36 @@ func _ready() -> void:
 		title_row.add_child(TerminalTheme.label(
 				"▮ " + (dept["name"] as String).to_upper(), 16, dept["color"], "bold"))
 
-	# stato dal team data
-	var status: Dictionary = TeamData.agent_status().get(_agent.slug, {})
+	# Stato dell'ISTANZA reale, non il mock per ruolo. Corpo, badge e
+	# scheda devono leggere lo stesso snapshot BackendBus.
+	var status: Dictionary = {}
+	if _agent.uid != "":
+		var label := "IN ATTESA"
+		var color := Palette.MUTED
+		match _agent.backend_status:
+			"working":
+				label = "AL LAVORO"
+				color = Palette.GREEN
+			"paused":
+				label = "IN PAUSA"
+				color = Color("#ff7a65")
+			"throttled":
+				var total := int(ceil(_agent.throttle_secs))
+				label = "THROTTLE %d:%02d" % [total / 60, total % 60]
+				color = Color("#f5c518")
+			"resting":
+				label = "RIPOSO"
+				color = Color("#a855f7")
+		status = {"status": label, "detail": _agent.activity_detail, "color": color}
+	else:
+		status = TeamData.agent_status().get(_agent.slug, {})
 	if status.has("status"):
 		var srow := HBoxContainer.new()
 		srow.add_theme_constant_override("separation", 10)
 		box.add_child(srow)
-		srow.add_child(TerminalTheme.label("●", 14, Palette.GREEN))
-		srow.add_child(TerminalTheme.label(status["status"], 16, Palette.MINT, "medium"))
+		var status_color: Color = status.get("color", Palette.MINT)
+		srow.add_child(TerminalTheme.label("●", 14, status_color))
+		srow.add_child(TerminalTheme.label(status["status"], 16, status_color, "medium"))
 		if status.has("detail"):
 			var det := TerminalTheme.label(status["detail"], 14, Palette.MUTED)
 			det.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -76,7 +98,22 @@ func _ready() -> void:
 
 	# cosa ha fatto: ultime attività
 	box.add_child(TerminalTheme.label(UIStrings.t("agent.activity"), 15, Palette.MUTED, "medium"))
-	var activity: Array = TeamData.agent_activity(_agent.slug)
+	var activity: Array = []
+	if _agent.uid != "":
+		for transition in BackendBus.transitions:
+			if str(transition.get("by_agent", "")) != _agent.uid:
+				continue
+			var what := str(transition.get("title", ""))
+			var company := str(transition.get("company", ""))
+			if company != "":
+				what += (" · " if what != "" else "") + company
+			activity.append({"when": str(transition.get("ts", "")).replace("T", " ").left(16),
+					"text": "%s → %s" % [what if what != "" else "posizione",
+							str(transition.get("to_state", "?"))]})
+			if activity.size() >= 5:
+				break
+	else:
+		activity = TeamData.agent_activity(_agent.slug)
 	if activity.is_empty():
 		box.add_child(TerminalTheme.label(UIStrings.t("agent.activity_none"), 15, Palette.DIM))
 	for entry in activity:

@@ -33,16 +33,17 @@ const DEPARTMENTS := {
 		"color": Color("#00e87a"),
 		"zone": Rect2(1000, 960, 880, 520),
 		"inbox": Vector2(1790, 1390),
-		# dado=2: tre isole a coppie, colleghi faccia a faccia.
-		# desk 1 = STANDING DESK (dado 16:10: d6=5->una sola, d5=1 d6=2):
-		# il Lead Scout lavora in piedi, tutti gli altri siedono.
+		# Griglia 3×2: tutte le sedie sono sul lato camera e gli agenti
+		# mostrano la schiena mentre guardano davvero il monitor.
 		"desks": [
-			{"rect": Rect2(1040, 1000, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "up"},
-			{"rect": Rect2(1040, 1086, 170, 78), "kind": "scout_a", "facing": "up", "standing": true},
-			{"rect": Rect2(1380, 1180, 170, 78), "kind": "scout_b", "facing": "down", "seat_sink": 70.0},
-			{"rect": Rect2(1380, 1266, 170, 78), "kind": "scout_a", "facing": "up"},
-			{"rect": Rect2(1700, 1000, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "up"},
-			{"rect": Rect2(1700, 1086, 170, 78), "kind": "scout_a", "facing": "up"},
+			{"rect": Rect2(1040, 980, 170, 78), "kind": "scout_a", "facing": "up"},
+			{"rect": Rect2(1360, 980, 170, 78), "kind": "scout_a", "facing": "up"},
+			# scout_b esiste solo frontale: in vista up produrrebbe un fallback
+			# senza sedia. Tutte le postazioni di schiena usano l'asset completo.
+			{"rect": Rect2(1680, 980, 170, 78), "kind": "scout_a", "facing": "up"},
+			{"rect": Rect2(1040, 1230, 170, 78), "kind": "scout_a", "facing": "up"},
+			{"rect": Rect2(1360, 1230, 170, 78), "kind": "scout_a", "facing": "up"},
+			{"rect": Rect2(1680, 1230, 170, 78), "kind": "scout_a", "facing": "up"},
 		],
 	},
 	"analisti": {
@@ -51,18 +52,16 @@ const DEPARTMENTS := {
 		"color": Color("#4d9fff"),
 		"zone": Rect2(2312, 150, 848, 580),  # il lab di vetro, angolo NE
 		"inbox": Vector2(2690, 790),  # fuori dalla porta del lab
-		# Il TAVOLO LUNGO è DI QUESTO reparto (parola di Leone batte il dado
-		# sul tavolone condiviso; poi d6=5 tavolo a muro, d5=2 analisti):
-		# bench a muro nord del lab, 3 sedute di spalle (kind "none" = la
-		# seduta è dell'item long_table in FurnitureDefs, niente visual
-		# proprio) + 3 scrivanie laterali del vecchio ferro di cavallo.
+		# Tre postazioni complete a muro, ciascuna con la propria sedia.
+		# Il precedente tavolone condiviso non aveva sedute e componeva
+		# bobine/fogli flat sopra i corpi: gli Analisti risultavano sospesi.
 		"desks": [
-			{"rect": Rect2(2430, 180, 200, 110), "kind": "none", "facing": "up"},
-			{"rect": Rect2(2630, 180, 200, 110), "kind": "none", "facing": "up"},
-			{"rect": Rect2(2830, 180, 200, 110), "kind": "none", "facing": "up"},
-			{"rect": Rect2(2360, 380, 170, 78), "kind": "analisti_a", "facing": "right"},
-			{"rect": Rect2(2360, 560, 170, 78), "kind": "analisti_a", "facing": "right"},
-			{"rect": Rect2(2890, 380, 170, 78), "kind": "analisti_a", "facing": "left"},
+			{"rect": Rect2(2430, 180, 170, 78), "kind": "analisti_a", "facing": "up"},
+			{"rect": Rect2(2645, 180, 170, 78), "kind": "analisti_a", "facing": "up"},
+			{"rect": Rect2(2860, 180, 170, 78), "kind": "analisti_a", "facing": "up"},
+			{"rect": Rect2(2360, 380, 170, 78), "kind": "analisti_a", "facing": "right", "seat_offset": Vector2(43, -20)},
+			{"rect": Rect2(2360, 560, 170, 78), "kind": "analisti_a", "facing": "right", "seat_offset": Vector2(43, -20)},
+			{"rect": Rect2(2890, 380, 170, 78), "kind": "analisti_a", "facing": "left", "seat_offset": Vector2(-43, -20)},
 		],
 	},
 	"scorer": {
@@ -71,13 +70,16 @@ const DEPARTMENTS := {
 		"color": Color("#f5c518"),
 		"zone": Rect2(1950, 960, 1210, 470),
 		"inbox": Vector2(1965, 1400),
-		# dado=4: diagonale a scala verso sud-est, monitor curvo al centro
+		# Diagonale a scala: sedia sul lato camera, schiena verso chi guarda.
 		"desks": [
-			{"rect": Rect2(1980, 980, 170, 78), "kind": "scorer_a", "facing": "down", "seat_sink": 70.0},
-			{"rect": Rect2(2180, 1052, 170, 78), "kind": "scorer_b", "facing": "down", "seat_sink": 70.0},
-			{"rect": Rect2(2360, 1116, 290, 110), "kind": "desk_wide", "facing": "down", "seat_sink": 78.0},
-			{"rect": Rect2(2680, 1196, 170, 78), "kind": "scorer_a", "facing": "down", "seat_sink": 70.0},
-			{"rect": Rect2(2880, 1268, 170, 78), "kind": "scorer_b", "facing": "down", "seat_sink": 70.0},
+			{"rect": Rect2(1980, 980, 170, 78), "kind": "scorer_a", "facing": "up"},
+			{"rect": Rect2(2180, 1052, 170, 78), "kind": "scorer_a", "facing": "up"},
+			# La vecchia desk_wide non ha una sedia integrata: l'agente restava
+			# sospeso davanti al vano. Usiamo la postazione scorer completa,
+			# con schienale, braccioli e ruote leggibili dietro al corpo.
+			{"rect": Rect2(2420, 1116, 170, 78), "kind": "scorer_a", "facing": "up"},
+			{"rect": Rect2(2680, 1196, 170, 78), "kind": "scorer_a", "facing": "up"},
+			{"rect": Rect2(2880, 1268, 170, 78), "kind": "scorer_a", "facing": "up"},
 			{"rect": Rect2(2980, 1340, 170, 78), "kind": "scorer_a", "facing": "up"},
 		],
 	},
@@ -89,11 +91,11 @@ const DEPARTMENTS := {
 		"inbox": Vector2(1120, 1740),
 		# dado=3: ferro di cavallo aperto verso l'ufficio (est)
 		"desks": [
-			{"rect": Rect2(350, 1560, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "right"},
-			{"rect": Rect2(350, 1740, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "right"},
-			{"rect": Rect2(600, 1545, 170, 78), "kind": "scrittori_b", "facing": "down"},
+			{"rect": Rect2(350, 1560, 170, 78), "kind": "scrittori_a", "facing": "left", "seat_offset": Vector2(-44, -20)},
+			{"rect": Rect2(350, 1740, 170, 78), "kind": "scrittori_a", "facing": "left", "seat_offset": Vector2(-44, -20)},
+			{"rect": Rect2(600, 1545, 170, 78), "kind": "scrittori_a", "facing": "up"},
 			{"rect": Rect2(600, 1830, 170, 78), "kind": "scrittori_a", "facing": "up"},
-			{"rect": Rect2(860, 1545, 170, 78), "kind": "scrittori_a", "facing": "down"},
+			{"rect": Rect2(860, 1545, 170, 78), "kind": "scrittori_a", "facing": "up"},
 			{"rect": Rect2(860, 1830, 170, 78), "kind": "scrittori_a", "facing": "up"},
 		],
 	},
@@ -105,10 +107,10 @@ const DEPARTMENTS := {
 		"inbox": Vector2(2690, 1825),  # accanto al tavolino centrale
 		# dado=6: anello rivolto al centro (spazio per un pezzo di dev-art)
 		"desks": [
-			{"rect": Rect2(2480, 1550, 170, 78), "kind": "critici_a", "facing": "down", "seat_sink": 64.0},
-			{"rect": Rect2(2740, 1550, 170, 78), "kind": "critici_b", "facing": "down", "seat_sink": 64.0},
-			{"rect": Rect2(2280, 1690, 170, 78), "kind": "critici_a", "facing": "right"},
-			{"rect": Rect2(2950, 1690, 170, 78), "kind": "critici_a", "facing": "left"},
+			{"rect": Rect2(2480, 1550, 170, 78), "kind": "critici_a", "facing": "up"},
+			{"rect": Rect2(2740, 1550, 170, 78), "kind": "critici_a", "facing": "up"},
+			{"rect": Rect2(2280, 1690, 170, 78), "kind": "critici_a", "facing": "right", "seat_offset": Vector2(51, -20)},
+			{"rect": Rect2(2950, 1690, 170, 78), "kind": "critici_a", "facing": "left", "seat_offset": Vector2(-51, -20)},
 			{"rect": Rect2(2480, 1850, 170, 78), "kind": "critici_a", "facing": "up"},
 			{"rect": Rect2(2740, 1850, 170, 78), "kind": "critici_a", "facing": "up"},
 		],
