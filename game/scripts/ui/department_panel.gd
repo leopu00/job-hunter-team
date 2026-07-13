@@ -62,6 +62,16 @@ func _ready() -> void:
 	for i in desks.size():
 		box.add_child(_desk_row(i, accent))
 
+	# Gli Scout producono l'ingresso dell'intera pipeline: il pannello mostra
+	# l'andamento temporale reale delle posizioni trovate sulla VPS.
+	if dept_id == "scout":
+		box.add_child(HSeparator.new())
+		box.add_child(TerminalTheme.label("POSIZIONI TROVATE · ULTIMI 7 GIORNI",
+				15, Palette.MUTED, "medium"))
+		var timeline := PositionsTimeline.new(accent)
+		box.add_child(timeline)
+		BackendBus.positions_updated.connect(timeline.set_positions)
+
 	# tutto ciò che riguarda il reparto: stato del ruolo + ultime attività
 	var role_slug: String = CharacterDefs.DEPT_ROLES[dept_id]["slug"]
 	box.add_child(HSeparator.new())

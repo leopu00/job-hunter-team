@@ -133,7 +133,9 @@ func _build(page := "") -> void:
 			_build_profile()
 		"hours":
 			_build_hours()
-		"provider", "docker", "account", "email", "advanced":
+		"docker":
+			_build_system_dashboard()
+		"provider", "account", "email", "advanced":
 			_build_config()
 		_:
 			_build_placeholder()
@@ -174,6 +176,111 @@ func _build_config() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
+
+# ── Sistema VPS / container ──────────────────────────────────────────
+
+var _metric_values := {}
+var _metric_bars := {}
+var _cpu_chart: SystemMetricChart
+var _ram_chart: SystemMetricChart
+
+func _build_system_dashboard() -> void:
+	if not BackendBus.telemetry_updated.is_connected(_on_telemetry_updated):
+		BackendBus.telemetry_updated.connect(_on_telemetry_updated)
+	_content.add_child(TerminalTheme.label("SISTEMA VPS · LIVE", 18, Palette.BRIGHT, "bold"))
+	_content.add_child(TerminalTheme.label(
+			"Host e container jht · aggiornamento ogni 8 secondi", 13, Palette.MUTED))
+	_content.add_child(HSeparator.new())
+	_metric_row("cpu_pct", "CPU HOST", Palette.GREEN)
+	_metric_row("ram_pct", "RAM HOST", Palette.BLUE)
+	_metric_row("swap_pct", "SWAP", Palette.PURPLE)
+	_metric_row("disk_pct", "DISCO /", Palette.YELLOW)
+	_metric_row("container_cpu_pct", "CPU CONTAINER", Palette.MINT)
+	_metric_row("container_mem_pct", "RAM CONTAINER", Palette.MINT)
+	var charts := HBoxContainer.new()
+	charts.add_theme_constant_override("separation", 12)
+	_content.add_child(charts)
+	_cpu_chart = SystemMetricChart.new("cpu_pct", "CPU HOST · STORICO", Palette.GREEN)
+	_ram_chart = SystemMetricChart.new("ram_pct", "RAM HOST · STORICO", Palette.BLUE)
+	charts.add_child(_cpu_chart)
+	charts.add_child(_ram_chart)
+	_content.add_child(HSeparator.new())
+	for key_label in [
+		["container_status", "STATO CONTAINER"], ["container_mem", "MEMORIA JHT"],
+		["container_restarts", "RIAVVII"], ["load1", "LOAD 1 MIN"],
+		["uptime_s", "UPTIME VPS"], ["rx_bytes", "RETE RICEVUTA"],
+		["tx_bytes", "RETE INVIATA"],
+	]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		_content.add_child(row)
+		var lbl := TerminalTheme.label(key_label[1], 13, Palette.MUTED, "medium")
+		lbl.custom_minimum_size = Vector2(220, 0)
+		row.add_child(lbl)
+		var value := TerminalTheme.label("—", 15, Palette.BRIGHT)
+		row.add_child(value)
+		_metric_values[key_label[0]] = value
+	_refresh_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
+
+func _metric_row(key: String, label_text: String, col: Color) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	_content.add_child(row)
+	var lbl := TerminalTheme.label(label_text, 13, Palette.MUTED, "medium")
+	lbl.custom_minimum_size = Vector2(170, 0)
+	row.add_child(lbl)
+	var bar := ProgressBar.new()
+	bar.min_value = 0
+	bar.max_value = 100
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(360, 14)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color(col.r, col.g, col.b, 0.78)
+	bar.add_theme_stylebox_override("fill", fill)
+	row.add_child(bar)
+	var value := TerminalTheme.label("—", 14, col, "medium")
+	value.custom_minimum_size = Vector2(70, 0)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(value)
+	_metric_bars[key] = bar
+	_metric_values[key] = value
+
+func _on_telemetry_updated(sample: Dictionary, history: Array) -> void:
+	_refresh_telemetry(sample, history)
+
+func _refresh_telemetry(sample: Dictionary, history: Array) -> void:
+	if sample.is_empty():
+		return
+	for key in _metric_bars:
+		var v := float(sample.get(key, 0.0))
+		if is_instance_valid(_metric_bars[key]):
+			_metric_bars[key].value = v
+		if is_instance_valid(_metric_values.get(key)):
+			_metric_values[key].text = "%.1f%%" % v
+	_set_metric_text("container_status", str(sample.get("container_status", "—")).to_upper())
+	_set_metric_text("container_mem", str(sample.get("container_mem", "—")))
+	_set_metric_text("container_restarts", str(sample.get("container_restarts", 0)))
+	_set_metric_text("load1", str(sample.get("load1", "—")))
+	_set_metric_text("uptime_s", _fmt_uptime(float(sample.get("uptime_s", 0.0))))
+	_set_metric_text("rx_bytes", _fmt_bytes(float(sample.get("rx_bytes", 0.0))))
+	_set_metric_text("tx_bytes", _fmt_bytes(float(sample.get("tx_bytes", 0.0))))
+	if is_instance_valid(_cpu_chart): _cpu_chart.set_history(history)
+	if is_instance_valid(_ram_chart): _ram_chart.set_history(history)
+
+func _set_metric_text(key: String, text: String) -> void:
+	if is_instance_valid(_metric_values.get(key)):
+		_metric_values[key].text = text
+
+static func _fmt_bytes(n: float) -> String:
+	for unit in ["B", "KB", "MB", "GB", "TB"]:
+		if n < 1024.0 or unit == "TB": return "%.1f %s" % [n, unit]
+		n /= 1024.0
+	return "—"
+
+static func _fmt_uptime(seconds: float) -> String:
+	var total := int(seconds)
+	return "%d g  %02d:%02d" % [total / 86400, (total / 3600) % 24, (total / 60) % 60]
 
 ## Gli ORARI DI LAVORO del team: editabili QUI, con feedback DINAMICO
 ## (feedback Leone 21:3x): cambi le finestre e vedi subito le ore

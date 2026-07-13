@@ -62,6 +62,10 @@ var _textured := false
 ## scambia la texture vuota/occupata quando l'agente si siede (ordine
 ## Leone 04:2x: l'agente seduto va GENERATO nell'arte, non composto).
 static var desks: Dictionary = {}
+## Sedie frontali separate: le texture *_down mostrano il fronte del desk
+## ma, attraverso il vano centrale, la sedia deve esistere dietro l'agente.
+## Registry per non duplicarla quando il backend riassegna una postazione.
+static var front_chairs: Dictionary = {}
 var _sprite: Sprite2D
 var _base_tex: Texture2D
 var _seated_tex: Texture2D
@@ -102,8 +106,12 @@ func _ready() -> void:
 		var suffix := "down"
 		match facing:
 			"up": suffix = "up"
-			"right": suffix = "side"
-			"left":
+			# La sorgente _side ha la sedia a DESTRA e quindi accoglie un
+			# agente che guarda a sinistra. Per il verso opposto si specchia
+			# l'intera postazione. La vecchia mappatura era invertita: sedia
+			# e corpo finivano ai lati opposti della scrivania.
+			"left": suffix = "side"
+			"right":
 				suffix = "side"
 				flip_h = true
 		var oriented := "res://assets/gen-art/furniture/%s_%s.png" % [kind_str, suffix]

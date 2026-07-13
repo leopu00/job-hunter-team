@@ -11,9 +11,50 @@ extends BackendAdapter
 
 const POLL_SECS := 8.0
 const SSH_TIMEOUT := 8
-const CHAT_BACKLOG := 60   # storia team mostrata al collegamento
 const CHAT_MARK := "---JHT-CHAT---"
 const THROTTLE_MARK := "---JHT-THROTTLE---"
+
+## Stato EFFETTIVO del turno, non semplice presenza tmux. Le tre TUI
+## supportate mostrano un marker di interrupt mentre il modello/tool sta
+## lavorando; quando il composer è fermo il marker sparisce. In dubbio si
+## ritorna idle: è meglio un falso fermo che inventare lavoro e movimento.
+const AGENT_ACTIVITY_PY := """
+import json, subprocess
+
+def run(args):
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=4).stdout
+    except Exception:
+        return ''
+
+raw = run(['tmux', 'list-sessions', '-F', '#{session_name}'])
+out = {}
+for session in [x.strip() for x in raw.splitlines() if x.strip()]:
+    pane = run(['tmux', 'capture-pane', '-t', session, '-p'])
+    tail = '\\n'.join(pane.splitlines()[-14:]).lower()
+    busy = any(x in tail for x in (
+        'esc to interrupt', 'to interrupt', 'ctrl+c to stop',
+        'ctrl-c to stop', 'working (', 'thinking…', 'thinking...'))
+    paused = any(x in tail for x in (
+        'max number of steps reached', 'send another message to continue',
+        'usage limit reached', 'rate limit reached', 'paused'))
+    if busy:
+        status = 'working'
+        if any(x in tail for x in ('running tool', 'running command', 'web search', 'fetching')):
+            detail = 'tool in esecuzione'
+        elif 'thinking' in tail:
+            detail = 'elaborazione'
+        else:
+            detail = 'turno in corso'
+    elif paused:
+        status = 'paused'
+        detail = 'in attesa di ripresa'
+    else:
+        status = 'idle'
+        detail = 'sessione attiva, nessun turno in corso'
+    out[session] = {'status': status, 'detail': detail}
+print(json.dumps(out, ensure_ascii=False))
+"""
 
 ## Roster, chat e throttle in UN solo giro ssh. NIENTE quoting annidato
 ## qui dentro (sh -c con apici e #{} si è già rotto una volta nel viaggio
@@ -62,6 +103,55 @@ const TRANSITIONS_SELECT := "SELECT t.position_id,t.from_state,t.to_state,t.ts,"
 
 const POSITIONS_EVERY := 4  # giri di poll tra due letture del jobs.db
 const SETTINGS_EVERY := 8   # config/usage cambiano raramente
+const METRICS_EVERY := 1    # dashboard VPS: un campione ogni ~8 secondi
+
+## Metriche host + container, lette sulla VPS senza privilegi aggiuntivi e
+## senza scritture. Il doppio campione /proc/stat rende la CPU percentuale.
+const HOST_METRICS_PY := """
+import json, os, time, shutil, subprocess
+
+def cpu():
+    v = list(map(int, open('/proc/stat').readline().split()[1:]))
+    return sum(v), v[3] + (v[4] if len(v) > 4 else 0)
+
+def meminfo():
+    out = {}
+    for line in open('/proc/meminfo'):
+        k, v = line.split(':', 1)
+        out[k] = int(v.strip().split()[0]) * 1024
+    return out
+
+a_t, a_i = cpu(); time.sleep(0.18); b_t, b_i = cpu()
+cpu_pct = 100.0 * (1.0 - (b_i-a_i) / max(1, b_t-a_t))
+m = meminfo(); mt = m.get('MemTotal', 1); ma = m.get('MemAvailable', 0)
+st = m.get('SwapTotal', 0); sf = m.get('SwapFree', 0)
+d = shutil.disk_usage('/')
+rx = tx = 0
+for line in open('/proc/net/dev').read().splitlines()[2:]:
+    name, vals = line.split(':', 1)
+    if name.strip() == 'lo': continue
+    p = vals.split(); rx += int(p[0]); tx += int(p[8])
+sample = dict(
+    ts=time.time(), cpu_pct=round(cpu_pct, 1),
+    ram_pct=round(100*(mt-ma)/mt, 1), ram_used=mt-ma, ram_total=mt,
+    swap_pct=round(100*(st-sf)/st, 1) if st else 0,
+    disk_pct=round(100*d.used/d.total, 1), disk_used=d.used, disk_total=d.total,
+    load1=round(os.getloadavg()[0], 2), uptime_s=float(open('/proc/uptime').read().split()[0]),
+    rx_bytes=rx, tx_bytes=tx)
+try:
+    raw = subprocess.check_output(['docker','stats','--no-stream','--format','{{json .}}','jht'], text=True)
+    ds = json.loads(raw.strip())
+    sample['container_cpu_pct'] = float(str(ds.get('CPUPerc','0')).replace('%',''))
+    sample['container_mem_pct'] = float(str(ds.get('MemPerc','0')).replace('%',''))
+    sample['container_mem'] = str(ds.get('MemUsage','—'))
+    ins = json.loads(subprocess.check_output(['docker','inspect','jht'], text=True))[0]
+    sample['container_status'] = str(ins.get('State',{}).get('Status','?'))
+    sample['container_pids'] = int(ins.get('State',{}).get('Pid',0) != 0)
+    sample['container_restarts'] = int(ins.get('RestartCount',0))
+except Exception as e:
+    sample['container_status'] = 'errore metriche'
+print(json.dumps(sample))
+"""
 
 ## Config team + usage REALI, già in forma di coppie [etichetta, valore]
 ## per le sezioni della sidebar. SOLO campi safe: mai chiavi/credenziali.
@@ -218,7 +308,14 @@ func _run() -> void:
 				chat_raw = tail[0]
 				if tail.size() > 1:
 					throttle_raw = tail[1]
-			var roster := _parse_roster(parts[0], _parse_throttles(throttle_raw))
+			var activity := {}
+			var activity_res := _ssh_python(AGENT_ACTIVITY_PY)
+			if OS.get_environment("JHT_ROSTER_TRACE") == "1":
+				print("ACTIVITY-TRACE code=", activity_res["code"], " out=",
+						str(activity_res["out"]).left(2000))
+			if activity_res["code"] == 0:
+				activity = _parse_activity(str(activity_res["out"]))
+			var roster := _parse_roster(parts[0], _parse_throttles(throttle_raw), activity)
 			# mappa uid → sessione tmux per la chat (dict nuovo assegnato
 			# in blocco: niente stati intermedi visti dagli altri thread)
 			var sessions := {}
@@ -236,6 +333,8 @@ func _run() -> void:
 			_fetch_positions()
 		if tick % SETTINGS_EVERY == 0:
 			_fetch_settings()
+		if tick % METRICS_EVERY == 0:
+			_fetch_metrics()
 		if _convo_agent != "":
 			_fetch_convo(_convo_agent)
 		tick += 1
@@ -281,6 +380,17 @@ func _fetch_settings() -> void:
 				bus.call_deferred("publish_settings", data)
 			return
 
+func _fetch_metrics() -> void:
+	var res := _ssh_host_python(HOST_METRICS_PY)
+	if _stop or res["code"] != 0:
+		return
+	for line in str(res["out"]).split("\n"):
+		if line.begins_with("{"):
+			var data: Variant = JSON.parse_string(line)
+			if data is Dictionary:
+				bus.call_deferred("publish_telemetry", data)
+			return
+
 
 ## Unisce le tre SELECT: highlights e ticket dentro la loro posizione.
 static func _assemble_positions(data: Dictionary) -> Array:
@@ -301,7 +411,8 @@ static func _assemble_positions(data: Dictionary) -> Array:
 
 ## Coda di messages.jsonl → chat_message sul bus, solo il nuovo rispetto
 ## al cursore (ts ISO UTC: il confronto lessicografico è cronologico).
-## Al primo giro passa solo un piccolo backlog, non tutta la storia.
+## Il primo giro stabilisce soltanto il cursore: lo storico non deve
+## esplodere in una parete di fumetti appena si apre l'ufficio.
 func _ingest_chat(raw: String) -> void:
 	var msgs: Array = []
 	for line in raw.split("\n"):
@@ -315,8 +426,9 @@ func _ingest_chat(raw: String) -> void:
 			msgs.append(m)
 	if msgs.is_empty():
 		return
-	if _last_chat_ts == "" and msgs.size() > CHAT_BACKLOG:
-		msgs = msgs.slice(msgs.size() - CHAT_BACKLOG)
+	if _last_chat_ts == "":
+		_last_chat_ts = str(msgs[-1]["ts"])
+		return
 	_last_chat_ts = str(msgs[-1]["ts"])
 	for m in msgs:
 		bus.call_deferred("publish_chat", m)
@@ -600,6 +712,19 @@ func _ssh_python(script: String) -> Dictionary:
 	DirAccess.remove_absolute(buf)
 	return res
 
+## Come _ssh_python, ma sul sistema host della VPS: serve per /proc,
+## filesystem root e docker stats, invisibili dall'interno del container.
+func _ssh_host_python(script: String) -> Dictionary:
+	var buf := "/tmp/jht-game-host-py-%d-%d.py" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var f := FileAccess.open(buf, FileAccess.WRITE)
+	if f == null:
+		return {"code": -1, "out": "file temporaneo non scrivibile"}
+	f.store_string(script)
+	f.close()
+	var res := _ssh_stdin_file(buf, "python3 -")
+	DirAccess.remove_absolute(buf)
+	return res
+
 
 ## bash locale SOLO per il redirect < file: il comando non contiene mai
 ## testo utente né caratteri che il wrap naive di OS.execute corrompa.
@@ -653,15 +778,27 @@ static func _parse_throttles(raw: String) -> Dictionary:
 			active[uid] = {"left": until - now, "total": total}
 	return active
 
+## stdout dello script attività → sessione tmux → {status, detail}.
+## Warning esterni vengono ignorati: vale soltanto una riga JSON oggetto.
+static func _parse_activity(raw: String) -> Dictionary:
+	for line in raw.split("\n"):
+		if not line.begins_with("{"):
+			continue
+		var data: Variant = JSON.parse_string(line)
+		if data is Dictionary:
+			return data
+	return {}
+
 ## Sessioni tmux (formato default "NOME: 1 windows …") → snapshot roster
 ## per il contratto agents_updated. CAPITANO → coordinatore; "scout-2" →
 ## slug scout, name "Scout 2", uid "scout-2" (chiave per-istanza, la
-## stessa dei throttle e delle transitions). status dal throttle REALE:
-## working (nessun throttle) | throttled (pausa del pacing in corso) —
+## stessa dei throttle e delle transitions). status dall'osservazione del
+## pane: working solo col marker TUI di turno in corso, altrimenti idle;
+## throttled prevale quando c'è una pausa del pacing reale —
 ## la scelta seduto-vs-ricreazione è della scena, sulla stima
 ## throttle_secs (secondi RIMANENTI; throttle_total = durata piena).
 ## Un agente killato non compare proprio: despawn = uscita dalla porta.
-static func _parse_roster(raw: String, throttles: Dictionary = {}) -> Array:
+static func _parse_roster(raw: String, throttles: Dictionary = {}, activity: Dictionary = {}) -> Array:
 	var agents: Array = []
 	for line in raw.split("\n"):
 		if not line.contains(":"):
@@ -680,17 +817,23 @@ static func _parse_roster(raw: String, throttles: Dictionary = {}) -> Array:
 		var name := slug.capitalize()
 		if num != "":
 			name += " " + num
-		var status := "working"
+		var observed: Dictionary = activity.get(session, activity.get(uid, {}))
+		var status := str(observed.get("status", "idle"))
+		if status not in ["working", "idle", "paused"]:
+			status = "idle"
+		var detail := str(observed.get("detail", "sessione attiva, stato non osservato"))
 		var t_left := 0.0
 		var t_total := 0.0
 		if throttles.has(uid):
 			t_left = float(throttles[uid]["left"])
 			t_total = float(throttles[uid]["total"])
 			status = "throttled"
+			detail = "pacing: pausa temporizzata"
 		agents.append({
 			"slug": slug, "role": slug, "name": name, "uid": uid,
 			"session": session,  # nome tmux RAW: serve alla chat 1-a-1
 			"active": true, "status": status, "desk_hint": "",
+			"activity_detail": detail,
 			"throttle_secs": t_left, "throttle_total": t_total,
 		})
 	return agents
