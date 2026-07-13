@@ -371,15 +371,24 @@ func _open_chat_menu() -> void:
 	_chat_menu.closed.connect(func() -> void: _chat_menu = null)
 	_chat_menu.open_chat.connect(func(slug: String, display_name: String) -> void:
 		Log.info("chat", "pannello chat aperto dal menu con " + slug)
-		_chat_panel = ChatPanel.new(slug, display_name)
+		_chat_panel = ChatPanel.new(slug, display_name, _chat_roster())
 		add_child(_chat_panel)
 		_chat_panel.closed.connect(func() -> void: _chat_panel = null))
+
+## Roster per lo switcher del pannello chat: stesse coppie slug/nome del
+## menu (uid quando l'agente è backend-driven, es. "scout-2").
+func _chat_roster() -> Array:
+	var roster: Array = []
+	for a in agents:
+		roster.append({"slug": a.slug if a.uid == "" else a.uid,
+				"name": a.display_name})
+	return roster
 
 ## Chat REALE con l'agente: si apre con lo slug di gioco, il bus lo
 ## traduce nel nome del sistema reale (coordinatore → capitano).
 func _open_chat(agent: AgentNPC) -> void:
 	Log.info("chat", "pannello chat aperto con " + agent.slug)
-	_chat_panel = ChatPanel.new(agent.slug, agent.display_name)
+	_chat_panel = ChatPanel.new(agent.slug, agent.display_name, _chat_roster())
 	add_child(_chat_panel)
 	_chat_panel.closed.connect(func() -> void:
 		_chat_panel = null
