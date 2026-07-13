@@ -844,7 +844,19 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 			def = CharacterDefs.AGENTS[role].duplicate(true)
 			def["slug"] = role
 			def["lead"] = false
-			def["spot"] = Vector2(def["spot"]) + Vector2(84.0 * serial, 52.0 * (serial % 2))
+			if def.has("spot"):
+				def["spot"] = Vector2(def["spot"]) + Vector2(
+						84.0 * serial, 52.0 * (serial % 2))
+			else:
+				# Reparto oltre le sedie disponibili: non sovrapporre due corpi
+				# sulla stessa sedia e soprattutto non far fallire tutta la sync.
+				# L'istanza resta visibile come postazione mobile accanto all'inbox.
+				var overflow_dept := str(def.get("dept", ""))
+				def.erase("dept")
+				def.erase("desk")
+				var anchor: Vector2 = DepartmentDefs.DEPARTMENTS.get(
+						overflow_dept, {}).get("inbox", Vector2(1700, 1200))
+				def["spot"] = anchor + Vector2(58.0 * serial, 46.0 * (serial % 2))
 		else:
 			if not _unplaced_roles.has(role):
 				_unplaced_roles[role] = true

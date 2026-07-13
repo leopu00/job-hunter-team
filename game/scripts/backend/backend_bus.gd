@@ -111,15 +111,15 @@ func _ready() -> void:
 
 func _self_test_vps_contract() -> void:
 	var roster: Array = VpsBackend._parse_roster(
-			"SENTINELLA: 1 windows\nSENTINELLA-WORKER: 1 windows\nSCOUT-2: 1 windows\n")
+			"SENTINELLA: 1 windows\nSENTINELLA-WORKER: 1 windows\nSCOUT-2: 1 windows\nCRITICO-S1: 1 windows\n")
 	var uids: Array = roster.map(func(a: Dictionary) -> String: return str(a["uid"]))
 	var roles: Array = roster.map(func(a: Dictionary) -> String: return str(a["role"]))
 	var msg: Dictionary = VpsBackend._to_chat_msg({
 		"ts": "2026-07-13T03:00:00Z", "from": "sentinella-worker",
 		"to": "scout-2", "body": "[@sentinella-worker -> @scout-2] [INFO] controllo completato",
 	})
-	var ok: bool = uids == ["sentinella", "sentinella-worker", "scout-2"] \
-			and roles == ["sentinella", "sentinella", "scout"] \
+	var ok: bool = uids == ["sentinella", "sentinella-worker", "scout-2", "critico-s1"] \
+			and roles == ["sentinella", "sentinella", "scout", "critico"] \
 			and msg.get("from") == "sentinella-worker" \
 			and msg.get("to") == "scout-2" \
 			and msg.get("text") == "controllo completato"
