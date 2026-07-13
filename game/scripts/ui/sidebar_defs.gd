@@ -12,6 +12,7 @@ const GROUPS := [
 		"items": [
 			{"id": "team", "icon": "🚀", "label": "Team"},
 			{"id": "agents", "icon": "🤖", "label": "Agenti"},
+			{"id": "agent_metrics", "icon": "📉", "label": "Risorse agenti"},
 			{"id": "chat", "icon": "💬", "label": "Chat"},
 			{"id": "notifs", "icon": "🔔", "label": "Notifiche"},
 		],
