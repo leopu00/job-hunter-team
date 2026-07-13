@@ -219,6 +219,13 @@ func react_to_work(print_job := false) -> void:
 		return
 	if print_job:
 		PrinterFx.ping(4.0)
+	# col seated art il rig è nascosto (il corpo vive nella texture del
+	# desk): il lampo del lavoro reale pulsa sul mobile, non sul rig
+	if rig and not rig.visible:
+		var node: FurnitureNode = FurnitureNode.desks.get(_desk_key)
+		if node:
+			node.flash()
+		return
 	var tw := create_tween()
 	for _i in 2:
 		tw.tween_property(rig, "modulate", Color(0.72, 1.3, 1.05), 0.16)
