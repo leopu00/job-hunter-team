@@ -284,6 +284,11 @@ func start_talk() -> void:
 	state = S.TALK
 	_path = PackedVector2Array()
 	velocity = Vector2.ZERO
+	# da seduti la position è affondata nel desk (seat_sink/offset): il
+	# rig che riappare per il dialogo si alza in piedi alla postazione,
+	# non dentro il mobile
+	if _seated():
+		position = _spot
 	rig.set_motion("down", false, "idle")
 	bubble.hide_now()
 
