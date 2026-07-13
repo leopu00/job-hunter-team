@@ -291,6 +291,8 @@ var _agent_metric_rows := {}
 func _build_agent_metrics() -> void:
 	if not BackendBus.telemetry_updated.is_connected(_on_agent_metrics_updated):
 		BackendBus.telemetry_updated.connect(_on_agent_metrics_updated)
+	if not BackendBus.agents_updated.is_connected(_on_agent_metrics_roster):
+		BackendBus.agents_updated.connect(_on_agent_metrics_roster)
 	_content.add_child(TerminalTheme.label("RISORSE PER AGENTE · LIVE", 18,
 			Palette.BRIGHT, "bold"))
 	_content.add_child(TerminalTheme.label(
@@ -332,6 +334,10 @@ func _build_agent_metrics() -> void:
 
 func _on_agent_metrics_updated(sample: Dictionary, history: Array) -> void:
 	_refresh_agent_metrics(sample, history)
+
+func _on_agent_metrics_roster(_list: Array) -> void:
+	if section == "agent_metrics" and is_instance_valid(_content):
+		_build()
 
 func _refresh_agent_metrics(sample: Dictionary, history: Array) -> void:
 	if sample.is_empty(): return
