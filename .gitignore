@@ -51,6 +51,10 @@ shared/data/incoming/
 !web/app/**/*.png
 !assets/banner.png
 !desktop/assets/icon.png
+# Arte di gioco GENERATA (niente screenshot qui: zero PII by design)
+!game/assets/**/*.png
+# Reference visivi del gioco generati da Codex su dati mock (zero PII)
+!game/docs/reference/**/*.png
 # Session reports versionati (analisi grafici budget, throttle, ecc.)
 !docs/sessions/**/*.png
 
