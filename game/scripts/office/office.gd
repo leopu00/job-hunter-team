@@ -241,6 +241,9 @@ func _ready() -> void:
 	var pipeline_test := OS.get_environment("JHT_PIPELINE_TEST")
 	if pipeline_test != "":
 		_force_pipeline_trip.call_deferred(pipeline_test)
+	var pipeline_force_test := OS.get_environment("JHT_PIPELINE_FORCE_TEST")
+	if pipeline_force_test != "":
+		_pipeline_force_selftest.call_deferred(pipeline_force_test)
 	if _doctor_test != "":
 		_doctor_selftest.call_deferred(_doctor_test)
 
@@ -257,6 +260,39 @@ func _force_pipeline_trip(test_dept: String) -> void:
 			agent.set_backend_status("working")
 			agent.perform_pipeline_step()
 			return
+
+func _pipeline_force_selftest(test_dept: String) -> void:
+	await get_tree().create_timer(0.8).timeout
+	var actor: AgentNPC = null
+	for candidate in agents:
+		if candidate.dept == test_dept:
+			actor = candidate
+			break
+	if actor == null:
+		print("PIPELINE-FORCE-TEST FAIL no actor for ", test_dept)
+		get_tree().quit(1)
+		return
+	actor.set_backend_status("idle")
+	var baseline := int(actor.debug_snapshot().get("pipeline_trips", 0))
+	actor.perform_pipeline_step(true)
+	await get_tree().process_frame
+	var deadline := Time.get_ticks_msec() + 60000
+	while int(actor.debug_snapshot().get("pipeline_trips", 0)) < baseline + 1 \
+			and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	# Consenti alla posa seduta e alla maschera collisione di stabilizzarsi.
+	for _i in 3:
+		await get_tree().physics_frame
+	var snap := actor.debug_snapshot()
+	var ok := int(snap.get("pipeline_trips", 0)) == baseline + 1 \
+			and int(snap.get("pending_pipeline", -1)) == 0 \
+			and int(snap.get("state", -1)) == AgentNPC.S.WORK \
+			and not bool(snap.get("forced_trip", true)) \
+			and int(snap.get("collision_mask", -1)) == 0 \
+			and actor.global_position.distance_to(
+					snap.get("work_position", Vector2.INF)) < 1.0
+	print("PIPELINE-FORCE-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify(snap))
+	get_tree().quit(0 if ok else 1)
 
 func _doctor_selftest(target_ref: String) -> void:
 	await get_tree().create_timer(0.8).timeout
@@ -752,7 +788,9 @@ func _react_to_transition(t: Dictionary) -> void:
 	actor.react_to_work(to_st in TR_PRINT)
 	# Il dato reale non genera solo un pulse: mette fisicamente in moto il
 	# reparto che ha firmato la transizione e il suo foglio lungo la pipeline.
-	actor.perform_pipeline_step()
+	# La transizione nel jobs.db e prova autoritativa del lavoro: anche se il
+	# poll della TUI vede gia idle, il viaggio fisico deve ancora avvenire.
+	actor.perform_pipeline_step(true)
 	Log.debug("scene", "reazione %s: %s → %s" % [by, what, to_st])
 
 ## Primo snapshot backend: le postazioni tornano nel pool e il roster
