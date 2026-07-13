@@ -125,14 +125,14 @@ export default async function ProfilePage() {
     role?: string;
     company?: string;
     period?: string;
-    description?: string;
+    summary?: string; // campo canonico ExperienceSchema (NON "description")
   }[];
   // Ordine cronologico: più recente in cima (period grezzo parsato).
   const sortedExperience = [...experience].sort(
     (a, b) => experienceSortKey(b.period) - experienceSortKey(a.period),
   );
   const education = (pos.education ?? []) as {
-    title?: string;
+    degree?: string; // campo canonico EducationSchema (NON "title")
     institution?: string;
     year?: string | number;
   }[];
@@ -499,9 +499,9 @@ export default async function ProfilePage() {
                             {e.company}
                           </span>
                         )}
-                        {e.description && (
+                        {e.summary && (
                           <p className="text-[10px] text-[var(--color-dim)] mt-1 leading-relaxed">
-                            {e.description}
+                            {e.summary}
                           </p>
                         )}
                       </div>
@@ -549,7 +549,7 @@ export default async function ProfilePage() {
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <span className="text-[12px] text-[var(--color-bright)]">
-                              {e.title || "—"}
+                              {e.degree || "—"}
                             </span>
                             {e.institution && (
                               <div className="text-[10px] text-[var(--color-muted)]">

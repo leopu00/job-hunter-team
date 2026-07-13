@@ -5,14 +5,15 @@ extends Node2D
 ## (che mostra lo stato): multi-linea con word-wrap, coda FIFO per le
 ## raffiche, riga destinatario quando il messaggio non è un broadcast.
 
-const FONT_SIZE := 12
-const TO_SIZE := 11
+const FONT_SIZE := 14     # leggibile anche a zoom medio (ordine 03:3x)
+const TO_SIZE := 12
 const PAD := Vector2(9, 6)
-const MAX_TEXT_W := 180.0
+const MAX_TEXT_W := 220.0
 const LINE_GAP := 3.0
 const GAP_BETWEEN := 0.3  # respiro tra due messaggi in coda
-const MAX_QUEUE := 1      # in-world è un accenno; la storia vive nel registro
-const MAX_CHARS := 96     # mai più pannelli che coprono interi reparti
+const MAX_QUEUE := 4      # coda per agente: le raffiche si leggono in fila
+const MAX_CHARS := 140    # mai più pannelli che coprono interi reparti
+const MIN_HOLD := 60.0    # la chat vera resta leggibile almeno un minuto
 
 var _queue: Array = []           # [{text, to_label}]
 var _lines := PackedStringArray()
@@ -69,8 +70,9 @@ func _next_message() -> void:
 	var m: Dictionary = _queue.pop_front()
 	_lines = _wrap(m["text"])
 	_to_label = m["to_label"]
-	# tempo di lettura proporzionale al testo, dentro limiti da vignetta
-	_hold = clampf(2.2 + m["text"].length() * 0.05, 3.0, 9.0)
+	# la chat REALE va letta con calma: hold lungo, mai sotto MIN_HOLD
+	# (ordine 03:3x: vignette simultanee, nessuna corsa a leggerle)
+	_hold = maxf(MIN_HOLD, 2.2 + m["text"].length() * 0.05)
 	_gap = GAP_BETWEEN
 	_target_alpha = 1.0
 	queue_redraw()
