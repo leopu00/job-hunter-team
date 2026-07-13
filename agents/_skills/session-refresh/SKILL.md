@@ -1,6 +1,6 @@
 ---
 name: session-refresh
-description: "Doctor-only. Context-refresh round: for each agent session do a retrospective (age + wide capture + interview + analytics), append a dense synthesis to the growing daily journal, then KILL + recreate + resume the session with continuation context — so the agent's context window is cleared without losing where it was. Runs 2× per work window (at +30min and at mid). Skips fresh sessions and never restarts a session the Capitano deliberately parked."
+description: "Doctor-only. Context-refresh round: for each agent session read its real context occupancy (provider client-side command, zero tokens) and refresh ONLY sessions whose context window is >50% full — do a retrospective (capture + interview + analytics), append a dense synthesis to the growing daily journal, then KILL + recreate + resume the session with continuation context, so its context window is cleared without losing where it was. Runs 2× per work window (at +30min and at mid). Skips fresh, low-context (≤50%), and Capitano-parked sessions."
 allowed-tools: Bash(tmux *), Bash(python3 *), Bash(bash /app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
 
@@ -25,7 +25,30 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
 - **Order**: worker sessions FIRST (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), coordinators LAST and with care (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). "With care" means **capture their state well and compact them — NOT skip them** (they are the top consumers; see Rules). Never refresh `DOTTORE` / `DOCTOR-WATCHDOG` (yourself / the scheduler).
-- **FRESH skip**: `age = now - session_created`. If `age < 40 min` → SKIP entirely (nothing to summarize yet, and refreshing would throw away a session that just started). Log `action=skipped_fresh`.
+- **FRESH skip** (cheap pre-filter before the context check): `age = now - session_created`. If `age < 40 min` → SKIP entirely (nothing to summarize yet, and refreshing would throw away a session that just started). Log `action=skipped_fresh`. Everything that survives this pre-filter goes through **Step 1.5 (context check)** — that `>50%` measurement, not age, is what decides the refresh.
+
+## Step 1.5 — CONTEXT CHECK (the refresh trigger: **>50%**)
+**Refresh ONLY sessions whose context window is more than 50% full.** Read the real occupancy with the provider's **client-side** context command — it costs **zero tokens** (rendered locally, no LLM call) and is instant. Age is NOT the trigger anymore: an old-but-empty session (e.g. an idle Mentor at 2%) must be SKIPPED, a bloated session must be refreshed.
+
+Two hard requirements — ignore them and you *burn* budget instead of saving it:
+- The session MUST be **idle** (no active turn). If a spinner / `esc to interrupt` is showing, it's working → SKIP this round (the next Doctor catches it). Never send keys mid-turn.
+- **Clear the input line first.** Otherwise the command concatenates with residual text and gets submitted as an LLM prompt (burns tokens). Send `Escape` then `C-u` before typing.
+
+```bash
+S=<session>
+# provider → command:  claude → /context   ·   codex → /status   ·   kimi → (verify on its TUI)
+tmux send-keys -t "$S" Escape; sleep 1
+tmux send-keys -t "$S" C-u;    sleep 1          # clear the input line (mandatory)
+tmux send-keys -t "$S" "/context"; sleep 1
+tmux send-keys -t "$S" Enter;  sleep 3
+PCT=$(tmux capture-pane -p -t "$S" | grep -aoE '[0-9.]+k?/[0-9.]+[km] tokens \([0-9]+%\)' | tail -1 | grep -aoE '\([0-9]+%\)' | tr -dc '0-9')
+tmux send-keys -t "$S" Escape                   # dismiss the panel
+echo "context=$PCT%"
+```
+Decide from `$PCT` (parsed from a line like `24.9k/1m tokens (2%)`):
+- **`PCT` ≤ 50** → SKIP. Do NOT recreate, even if the session is old. Log `action=skipped_lowctx` with the measured `%`. Move to the next session.
+- **`PCT` > 50** → proceed to refresh (Steps 2–7).
+- **command didn't render / parse failed** → fall back to the age heuristic (`age ≥ 40min` → refresh) and log `ctx=unparsed`.
 
 ## Step 2 — per session: capture (wide + salient)
 Capture the WHOLE scrollback once, then the salient lines — do NOT load thousands of lines into your own context, grep the highlights:
@@ -70,7 +93,8 @@ entry = {
   "session": session, "role": "<role>", "session_age_h": 0.0,
   "analytics": { },              # paste the doctor_analytics.py JSON here
   "interview": {"intoppi": "...", "imparato": "...", "summary_denso": "..."},
-  "action": "recreated",         # recreated | skipped_parked | skipped_fresh
+  "action": "recreated",         # recreated | skipped_lowctx | skipped_parked | skipped_fresh
+  "context_pct": 0,              # measured context occupancy from Step 1.5 (the >50% gate)
   "resume_msg_sent": False,
 }
 with open(journal, "a") as f:
@@ -79,7 +103,7 @@ print("appended", session)
 PY
 ```
 
-## Step 7 — recreate + resume (only if NOT fresh and NOT parked)
+## Step 7 — recreate + resume (only if context **>50%**, NOT fresh, NOT parked)
 Atomic refresh — you already captured the context in Step 2, so killing is safe:
 ```bash
 ROLE=<role>; N=<instance>      # from analytics; recreate the SAME number (no dice — the die is for NEW spawns only)
@@ -92,8 +116,8 @@ Set `resume_msg_sent=True` in the journal entry. Then move to the next session (
 
 ## Rules
 - **One Doctor does all sessions this round** (user order: single Doctor for now). Use the file-based capture + grep so you never blow your own context window.
-- **CAPITANO & SENTINELLA are the TOP token consumers** (their context is almost always bloated — the Sentinella ticks every ~15min, the Capitano coordinates continuously). They are NOT exempt: **compact them every round** (last, after the workers). **Compact, don't reset** — the dense-synthesis refresh preserves continuity, a raw kill loses it.
+- **CAPITANO & SENTINELLA are the TOP token consumers** (their context is almost always bloated — the Sentinella ticks every ~15min, the Capitano coordinates continuously). They still go through the **>50% context gate** like everyone else (Step 1.5) — but in practice they measure well above 50%, so they get refreshed almost every round. Do them **last** (after the workers), and **compact, don't reset** — the dense-synthesis refresh preserves continuity, a raw kill loses it. If one measures ≤50% (rare), skip it that round like any other low-context session.
 - **CAPITANO**: it's the coordinator with in-flight state (worker assignments, active throttle config, last pacing order, pending decisions). In the interview (Step 5) explicitly capture that coordination state and put it in the seed (Step 7) so it doesn't lose the thread. Do it LAST; if it's handling a live EMERGENZA (visible orchestration in the pane right now), let it stabilize first, otherwise compact it.
 - **SENTINELLA**: it is **near-stateless** — its working state lives in the bridge/config and `sentinel-data.jsonl`, not in its chat. That makes it the **safest and highest-value to compact**: refresh it every round, last, with a minimal seed: `[RESUME] sei la Sentinella; il tuo stato vive nel bridge + sentinel-data.jsonl — riprendi il monitoraggio del pacing dal prossimo tick.` The `agent-watchdog` age-based recreate (past `JHT_SENTINELLA_MAX_CTX_AGE_H`, default 24h) stays only as a **fallback** for when the Dottore isn't running; since you now compact it every round it won't reach that age, so there is no race.
 - **Never** `tmux new-session` by hand — always `start-agent.sh` (see `spawn-agent`).
-- Log every action in the journal (`recreated`/`skipped_parked`/`skipped_fresh`) — the journal is the audit trail and grows every day.
+- Log every action in the journal (`recreated`/`skipped_lowctx`/`skipped_parked`/`skipped_fresh`) with the measured `context_pct` — the journal is the audit trail and grows every day.
