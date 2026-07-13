@@ -50,7 +50,7 @@ def find_stuck(conn, status, stale_hours):
         SELECT id, title, company, status, updated_at
         FROM positions
         WHERE status = ?
-          AND updated_at < ?
+          AND datetime(updated_at) < datetime(?)
         ORDER BY updated_at ASC
         """,
         (status, cutoff)
