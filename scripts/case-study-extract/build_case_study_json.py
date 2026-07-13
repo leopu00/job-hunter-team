@@ -249,6 +249,27 @@ if os.path.exists(SENTINEL):
     for ts, wu in samples:  # budget cum per ORA (ultimo sample dell'ora vince)
         hour_cum[ts[:13]] = wu
     day_last = collections.OrderedDict()  # day -> weekly_usage di fine giornata
+    # per il de-glitch opzionale (sotto): target di reset dichiarato + se ben formato,
+    # presi dall'ULTIMO sample del giorno (coerente con day_last). Riletti dal file.
+    day_reset = {}   # day -> weekly_reset_at_unix (fine giornata)
+    day_dated = {}   # day -> True se weekly_reset_at ha una DATA (post fix bridge 30/06)
+    def _dated(s):
+        return bool(s) and ("UTC" in str(s) or str(s)[:2] == "20")
+    for line in open(SENTINEL):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            e = json.loads(line)
+        except Exception:
+            continue
+        ts = e.get("ts", "")
+        if not ts or e.get("weekly_usage") is None:
+            continue
+        if (FROM and ts[:10] < FROM) or (TO and ts[:10] >= TO):
+            continue
+        day_reset[ts[:10]] = e.get("weekly_reset_at_unix")
+        day_dated[ts[:10]] = _dated(e.get("weekly_reset_at"))
     for ts, wu in samples:
         day_last[ts[:10]] = wu  # l'ultimo sample del giorno sovrascrive
     daily = []
@@ -269,6 +290,48 @@ if os.path.exists(SENTINEL):
         daily.append({"day": day, "pct": round(max(pct, 0), 1),
                       "cum": round(end, 1), "week": cycle})
         prev_day, prev_end = day, end
+
+    # ── de-glitch RESET SETTIMANALI SPURII (opt-in, JHT_CS_STITCH_WEEKLY=1) ──
+    # Solo per Codex: il weekly è un rolling-7d letto da OpenAI attraverso le
+    # sessioni Codex parallele (sentinel-bridge fetch_codex_rollout); a volte una
+    # sessione fresca riporta il weekly ~0 con reset "adesso+7g" → un AZZERAMENTO
+    # SPURIO, non un reset vero (osservato 10/07: due azzeramenti in 12h). Qui, se
+    # un inizio-ciclo BEN FORMATO cade ben prima del target dichiarato dal ciclo
+    # precedente, lo ricuce nel ciclo (offset sul cum) e segna il giorno per una
+    # marcatura nel grafico (riga rossa "lettura budget non affidabile"). Non tocca
+    # il periodo malformato (giugno) né gli altri provider. Default OFF → invariato.
+    stitched_resets = []
+    if os.environ.get("JHT_CS_STITCH_WEEKLY", "").strip() and daily:
+        def _epoch(d):
+            return datetime.datetime(*map(int, d.split("-")),
+                                     tzinfo=datetime.timezone.utc).timestamp()
+        eff_week = None
+        offset = 0.0
+        prev_scum = 0.0
+        prev_d = None
+        orig_prev_week = None
+        for rec in daily:
+            day, ocum, oweek = rec["day"], rec["cum"], rec["week"]
+            boundary = oweek != orig_prev_week
+            spurious = False
+            if boundary:
+                prev_target = day_reset.get(prev_d) if prev_d else None
+                # spurio: azzeramento ben formato > 1.5 giorni PRIMA del target dichiarato
+                spurious = (eff_week is not None and day_dated.get(day, False)
+                            and isinstance(prev_target, (int, float))
+                            and (prev_target - _epoch(day)) > 1.5 * 86400)
+                if spurious:
+                    offset += prev_scum          # continua: somma il picco raggiunto
+                    stitched_resets.append(day)
+                else:
+                    eff_week, offset = day, 0.0   # reset vero: nuovo ciclo
+            base_for_pct = 0.0 if (boundary and not spurious) else prev_scum
+            scum = ocum + offset
+            rec["cum"] = round(scum, 1)
+            rec["pct"] = round(max(scum - base_for_pct, 0), 1)
+            rec["week"] = eff_week or oweek
+            prev_scum, prev_d, orig_prev_week = scum, day, oweek
+
     # orario di lavoro configurato (contesto: su quali ore/giorni si spalma)
     working_hours = None
     CONFIG = "/root/.jht/jht.config.json"
@@ -289,6 +352,8 @@ if os.path.exists(SENTINEL):
     provider = os.environ.get("JHT_CS_PROVIDER", "").strip() or provider
     usage = {"provider": provider, "unit": "weekly_budget_pct",
              "daily": daily, "workingHours": working_hours}
+    if stitched_resets:  # giorni con azzeramento weekly spurio (marcatura grafico)
+        usage["stitchedResets"] = stitched_resets
 
 # ── attività + budget per ORA (per viste intraday su fasi corte, es. burst free-run) ──
 # Solo le ore con almeno una transizione (compatto). Ogni bucket:
