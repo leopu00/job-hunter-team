@@ -57,6 +57,12 @@ func _test_real_desk_routes() -> void:
 		if route.is_empty():
 			continue
 		_assert(nav.is_point_walkable(route[-1]), "%s endpoint remains blocked" % label)
+		var approach: Vector2 = nav.approach_point(start, spot)
+		var approach_route: PackedVector2Array = nav.path(start, approach)
+		_assert(not approach_route.is_empty(), "%s has no approach route" % label)
+		_assert(nav.is_point_walkable(approach), "%s approach is blocked" % label)
+		_assert(approach.distance_to(spot) >= 48.0,
+				"%s approach overlaps target (%0.1fpx)" % [label, approach.distance_to(spot)])
 
 func _assert(condition: bool, message: String) -> void:
 	if not condition:
