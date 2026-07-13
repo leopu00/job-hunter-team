@@ -50,6 +50,8 @@ const S := {
 	"chat.menu": "CHATS DOS AGENTES",
 	"chat.replies": "responde no chat",
 	"chat.maybe": "lê, resposta não garantida",
+	"chat.expand": "ECRÃ INTEIRO",
+	"chat.shrink": "REDUZIR",
 
 	"vps.intro": "Conecte a VPS da sua equipe: IP e chave SSH, o jogo cuida do resto.",
 	"vps.ip": "IP DA VPS",
