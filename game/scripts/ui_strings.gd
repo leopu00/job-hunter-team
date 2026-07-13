@@ -111,6 +111,8 @@ const S := {
 	"chat.menu": "CHAT AGENTI",
 	"chat.replies": "risponde in chat",
 	"chat.maybe": "legge, risposta non garantita",
+	"chat.expand": "SCHERMO INTERO",
+	"chat.shrink": "RIDUCI",
 
 	# ── Impostazioni → Collega VPS ────────────────────────────────
 	"vps.intro": "Collega la VPS del tuo team: IP e chiave SSH, al resto pensa il gioco.",
