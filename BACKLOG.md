@@ -2,12 +2,12 @@
 
 > **What this file is** (since the 2026-07-03 restructure): a slim, one-line-per-item index of the **open** tactical work, grouped by area. It intentionally contains no history:
 >
-> - **Strategy & themes** → [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md) (incl. contributor missions **M1–M8**)
+> - **Strategy & themes** → [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md) (incl. contributor missions **M1–M10**)
 > - **Shipped work** → [`CHANGELOG.md`](CHANGELOG.md)
 > - **Tech debt / minor fixes** → [`docs/internal/roadmap/MINOR-TRACKER.md`](docs/internal/roadmap/MINOR-TRACKER.md) · graphics polish → [`docs/internal/landing-image-prompts.md`](docs/internal/landing-image-prompts.md)
 > - **Everything this file used to contain** (1487 lines — every tag, postmortem and done-entry, unchanged) → [`docs/internal/_archive/BACKLOG-2026-07-03-frozen.md`](docs/internal/_archive/BACKLOG-2026-07-03-frozen.md)
 >
-> Items graduate to **GitHub Issues** as they get picked up (missions M1–M8 first). A `[TAG]` referenced from code or docs that is *not* listed here is **closed** — its full story is in the frozen archive.
+> Items graduate to **GitHub Issues** as they get picked up (missions M1–M10 first). A `[TAG]` referenced from code or docs that is *not* listed here is **closed** — its full story is in the frozen archive.
 >
 > Legend: 🔴 fix soon · 🟡 in progress / partial · ⬜ open · ⚪ parked idea · *(M#)* = feeds that contributor mission
 
