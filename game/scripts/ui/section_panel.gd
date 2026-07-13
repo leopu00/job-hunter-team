@@ -110,6 +110,8 @@ func _build(page := "") -> void:
 				_build_agent_page()
 			else:
 				_build_agents()
+		"agent_metrics":
+			_build_agent_metrics()
 		"activity":
 			_build_activity()
 		"apps":
@@ -281,6 +283,74 @@ static func _fmt_bytes(n: float) -> String:
 static func _fmt_uptime(seconds: float) -> String:
 	var total := int(seconds)
 	return "%d g  %02d:%02d" % [total / 86400, (total / 3600) % 24, (total / 60) % 60]
+
+# ── Risorse per singolo agente ───────────────────────────────────────
+
+var _agent_metric_rows := {}
+
+func _build_agent_metrics() -> void:
+	if not BackendBus.telemetry_updated.is_connected(_on_agent_metrics_updated):
+		BackendBus.telemetry_updated.connect(_on_agent_metrics_updated)
+	_content.add_child(TerminalTheme.label("RISORSE PER AGENTE · LIVE", 18,
+			Palette.BRIGHT, "bold"))
+	_content.add_child(TerminalTheme.label(
+			"RAM = processo tmux e discendenti · token = bucket reali del token-meter",
+			13, Palette.MUTED))
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	_content.add_child(header)
+	for spec in [["AGENTE", 170], ["RAM", 84], ["STORICO RAM", 180],
+			["TOKEN (2H)", 100], ["TOKEN / 5 MIN", 180]]:
+		var lbl := TerminalTheme.label(spec[0], 12, Palette.DIM, "medium")
+		lbl.custom_minimum_size = Vector2(spec[1], 0)
+		header.add_child(lbl)
+	_content.add_child(HSeparator.new())
+	_agent_metric_rows.clear()
+	for a in BackendBus.agents:
+		var session := str(a.get("session", a.get("uid", "?"))).to_lower()
+		var token_key := session.replace("-worker", "")
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		_content.add_child(row)
+		var name := TerminalTheme.label(str(a.get("name", session)), 14, Palette.BRIGHT, "medium")
+		name.custom_minimum_size = Vector2(170, 0)
+		row.add_child(name)
+		var ram := TerminalTheme.label("—", 13, Palette.BLUE)
+		ram.custom_minimum_size = Vector2(84, 0)
+		row.add_child(ram)
+		var ram_chart := AgentMetricSparkline.new(session, "ram", Palette.BLUE)
+		row.add_child(ram_chart)
+		var tokens := TerminalTheme.label("—", 13, Palette.GREEN)
+		tokens.custom_minimum_size = Vector2(100, 0)
+		row.add_child(tokens)
+		var token_chart := AgentMetricSparkline.new(token_key, "tokens", Palette.GREEN)
+		row.add_child(token_chart)
+		_agent_metric_rows[session] = {"ram": ram, "tokens": tokens,
+				"ram_chart": ram_chart, "token_chart": token_chart,
+				"token_key": token_key}
+	_refresh_agent_metrics(BackendBus.telemetry, BackendBus.telemetry_history)
+
+func _on_agent_metrics_updated(sample: Dictionary, history: Array) -> void:
+	_refresh_agent_metrics(sample, history)
+
+func _refresh_agent_metrics(sample: Dictionary, history: Array) -> void:
+	if sample.is_empty(): return
+	var ram_map: Dictionary = sample.get("agent_ram", {})
+	var token_series: Array = sample.get("token_series", [])
+	for session in _agent_metric_rows:
+		var widgets: Dictionary = _agent_metric_rows[session]
+		var ram_bytes := float(ram_map.get(session, 0.0))
+		if is_instance_valid(widgets["ram"]):
+			widgets["ram"].text = _fmt_bytes(ram_bytes)
+		var total := 0.0
+		for bucket in token_series:
+			total += float(bucket.get(widgets["token_key"], 0.0))
+		if is_instance_valid(widgets["tokens"]):
+			widgets["tokens"].text = "%.1fk" % total
+		if is_instance_valid(widgets["ram_chart"]):
+			widgets["ram_chart"].set_data(history, sample)
+		if is_instance_valid(widgets["token_chart"]):
+			widgets["token_chart"].set_data(history, sample)
 
 ## Gli ORARI DI LAVORO del team: editabili QUI, con feedback DINAMICO
 ## (feedback Leone 21:3x): cambi le finestre e vedi subito le ore

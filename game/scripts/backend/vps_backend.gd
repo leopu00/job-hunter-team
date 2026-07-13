@@ -153,6 +153,43 @@ except Exception as e:
 print(json.dumps(sample))
 """
 
+## RSS per sessione tmux (pane + intero albero discendenti) e serie token
+## reali già prodotte dal token-meter della VPS.
+const AGENT_METRICS_PY := """
+import json, subprocess
+
+def run(args):
+    try: return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL)
+    except Exception: return ''
+
+panes = {}
+for line in run(['tmux','list-panes','-a','-F','#{session_name}|#{pane_pid}']).splitlines():
+    try:
+        name, pid = line.split('|', 1); panes[name.lower()] = int(pid)
+    except Exception: pass
+procs = {}
+for line in run(['ps','-eo','pid=,ppid=,rss=']).splitlines():
+    try:
+        pid, ppid, rss = map(int, line.split()); procs[pid] = (ppid, rss)
+    except Exception: pass
+children = {}
+for pid, (ppid, rss) in procs.items(): children.setdefault(ppid, []).append(pid)
+def tree_rss(root):
+    todo=[root]; seen=set(); total=0
+    while todo:
+        pid=todo.pop()
+        if pid in seen: continue
+        seen.add(pid); total += procs.get(pid,(0,0))[1]; todo.extend(children.get(pid,[]))
+    return total * 1024
+agent_ram = {name: tree_rss(pid) for name,pid in panes.items()}
+series=[]
+try:
+    usage=json.load(open('/jht_home/logs/agent-usage-table.json'))
+    series=(usage.get('series_kt_per_bucket') or [])[-36:]
+except Exception: pass
+print(json.dumps({'agent_ram':agent_ram,'token_series':series}))
+"""
+
 ## Config team + usage REALI, già in forma di coppie [etichetta, valore]
 ## per le sezioni della sidebar. SOLO campi safe: mai chiavi/credenziali.
 const SETTINGS_PY := """
@@ -388,6 +425,14 @@ func _fetch_metrics() -> void:
 		if line.begins_with("{"):
 			var data: Variant = JSON.parse_string(line)
 			if data is Dictionary:
+				var agent_res := _ssh_python(AGENT_METRICS_PY)
+				if agent_res["code"] == 0:
+					for agent_line in str(agent_res["out"]).split("\n"):
+						if agent_line.begins_with("{"):
+							var agent_data: Variant = JSON.parse_string(agent_line)
+							if agent_data is Dictionary:
+								data.merge(agent_data, true)
+							break
 				bus.call_deferred("publish_telemetry", data)
 			return
 
