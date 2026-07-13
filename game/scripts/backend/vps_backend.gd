@@ -19,19 +19,21 @@ const THROTTLE_MARK := "---JHT-THROTTLE---"
 ## lavorando; quando il composer è fermo il marker sparisce. In dubbio si
 ## ritorna idle: è meglio un falso fermo che inventare lavoro e movimento.
 const AGENT_ACTIVITY_PY := """
-import json, subprocess
+import json, subprocess, time
 
 def run(args):
     try:
         return subprocess.run(args, capture_output=True, text=True, timeout=4).stdout
     except Exception:
-        return ''
+        return None
 
-raw = run(['tmux', 'list-sessions', '-F', '#{session_name}'])
-out = {}
-for session in [x.strip() for x in raw.splitlines() if x.strip()]:
+def tail_of(session):
     pane = run(['tmux', 'capture-pane', '-t', session, '-p'])
-    tail = '\\n'.join(pane.splitlines()[-14:]).lower()
+    if pane is None:
+        return None
+    return '\\n'.join(pane.splitlines()[-14:]).lower()
+
+def classify(tail):
     busy = any(x in tail for x in (
         'esc to interrupt', 'to interrupt', 'ctrl+c to stop',
         'ctrl-c to stop', 'working (', 'thinking…', 'thinking...'))
@@ -39,20 +41,40 @@ for session in [x.strip() for x in raw.splitlines() if x.strip()]:
         'max number of steps reached', 'send another message to continue',
         'usage limit reached', 'rate limit reached', 'paused'))
     if busy:
-        status = 'working'
         if any(x in tail for x in ('running tool', 'running command', 'web search', 'fetching')):
-            detail = 'tool in esecuzione'
-        elif 'thinking' in tail:
-            detail = 'elaborazione'
-        else:
-            detail = 'turno in corso'
-    elif paused:
-        status = 'paused'
-        detail = 'in attesa di ripresa'
-    else:
-        status = 'idle'
-        detail = 'sessione attiva, nessun turno in corso'
+            return 'working', 'tool in esecuzione'
+        if 'thinking' in tail:
+            return 'working', 'elaborazione'
+        return 'working', 'turno in corso'
+    if paused:
+        return 'paused', 'in attesa di ripresa'
+    return 'idle', 'sessione attiva, nessun turno in corso'
+
+raw = run(['tmux', 'list-sessions', '-F', '#{session_name}']) or ''
+out = {}
+retry = []
+for session in [x.strip() for x in raw.splitlines() if x.strip()]:
+    tail = tail_of(session)
+    if tail is None:
+        # cattura fallita: NON è idle, il client mantiene l'ultimo stato
+        out[session] = {'status': 'unknown', 'detail': 'pane non osservabile'}
+        continue
+    status, detail = classify(tail)
+    if status == 'idle':
+        retry.append(session)  # forse è il flicker della barra: ricontrolla
     out[session] = {'status': status, 'detail': detail}
+# Secondo campione per i soli 'idle' (falsi idle 03:5x): la TUI nasconde
+# il marker per un attimo tra due step dello stesso turno — se al secondo
+# sguardo il marker c'è, l'agente sta lavorando.
+if retry:
+    time.sleep(0.35)
+    for session in retry:
+        tail = tail_of(session)
+        if tail is None:
+            continue
+        status, detail = classify(tail)
+        if status != 'idle':
+            out[session] = {'status': status, 'detail': detail}
 print(json.dumps(out, ensure_ascii=False))
 """
 
@@ -351,7 +373,7 @@ func _run() -> void:
 				print("ACTIVITY-TRACE code=", activity_res["code"], " out=",
 						str(activity_res["out"]).left(2000))
 			if activity_res["code"] == 0:
-				activity = _parse_activity(str(activity_res["out"]))
+				activity = _smooth_activity(_parse_activity(str(activity_res["out"])))
 			var roster := _parse_roster(parts[0], _parse_throttles(throttle_raw), activity)
 			# mappa uid → sessione tmux per la chat (dict nuovo assegnato
 			# in blocco: niente stati intermedi visti dagli altri thread)
@@ -825,6 +847,39 @@ static func _parse_throttles(raw: String) -> Dictionary:
 
 ## stdout dello script attività → sessione tmux → {status, detail}.
 ## Warning esterni vengono ignorati: vale soltanto una riga JSON oggetto.
+## Isteresi anti-flicker (falsi idle 03:5x): un 'working' scade a 'idle'
+## solo dopo 2 poll consecutivi senza marker — la barra della TUI può
+## nascondere il marker nell'attimo della cattura anche a metà turno.
+## 'unknown' (cattura fallita) mantiene sempre l'ultimo stato osservato.
+## Vive nel thread di poll: nessun accesso concorrente.
+var _last_status := {}
+var _last_detail := {}
+var _idle_strikes := {}
+
+func _smooth_activity(activity: Dictionary) -> Dictionary:
+	var out := {}
+	for session in activity:
+		var obs: Dictionary = activity[session]
+		var status := str(obs.get("status", "idle"))
+		var prev := str(_last_status.get(session, ""))
+		if status == "unknown":
+			obs = {"status": prev if prev != "" else "idle",
+					"detail": str(_last_detail.get(session, "stato non osservato"))}
+		elif status == "idle" and prev == "working":
+			var strikes := int(_idle_strikes.get(session, 0)) + 1
+			if strikes < 2:
+				_idle_strikes[session] = strikes
+				obs = {"status": "working",
+						"detail": str(_last_detail.get(session, "turno in corso"))}
+			else:
+				_idle_strikes[session] = 0
+		else:
+			_idle_strikes[session] = 0
+		out[session] = obs
+		_last_status[session] = str(obs.get("status", "idle"))
+		_last_detail[session] = str(obs.get("detail", ""))
+	return out
+
 static func _parse_activity(raw: String) -> Dictionary:
 	for line in raw.split("\n"):
 		if not line.begins_with("{"):
