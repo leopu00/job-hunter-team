@@ -12,19 +12,24 @@ var _origin: Vector2
 var _cols := 0
 var _rows := 0
 var _walkable := {}
+var _floor_rect := Rect2()
+var _grown_obstacles: Array[Rect2] = []
 
 func build(floor_rect: Rect2, obstacle_rects: Array) -> void:
+	astar.clear()
+	_walkable.clear()
+	_floor_rect = floor_rect
 	_origin = floor_rect.position
 	_cols = int(floor_rect.size.x / CELL)
 	_rows = int(floor_rect.size.y / CELL)
-	var grown: Array = []
+	_grown_obstacles.clear()
 	for r in obstacle_rects:
-		grown.append((r as Rect2).grow(MARGIN))
+		_grown_obstacles.append((r as Rect2).grow(MARGIN))
 	for y in _rows:
 		for x in _cols:
 			var p := _origin + Vector2((x + 0.5) * CELL, (y + 0.5) * CELL)
 			var blocked := false
-			for r in grown:
+			for r in _grown_obstacles:
 				if (r as Rect2).has_point(p):
 					blocked = true
 					break
@@ -70,10 +75,22 @@ func random_point() -> Vector2:
 		return _origin
 	return astar.get_point_position(ids[randi() % ids.size()])
 
+## True solo per punti realmente dentro il pavimento e fuori dal margine
+## degli ostacoli. Non basta che la cella A* più vicina sia libera: le mete
+## delle postazioni cadono spesso a pochi pixel dal mobile.
+func is_point_walkable(p: Vector2) -> bool:
+	if not _floor_rect.has_point(p):
+		return false
+	for obstacle in _grown_obstacles:
+		if obstacle.has_point(p):
+			return false
+	return true
+
 func _clamp_to_walkable(p: Vector2) -> Vector2:
+	if is_point_walkable(p):
+		return p
 	var id := astar.get_closest_point(p)
-	var pos := astar.get_point_position(id)
-	return pos if pos.distance_to(p) > CELL else p
+	return astar.get_point_position(id)
 
 func _valid(x: int, y: int) -> bool:
 	return x >= 0 and y >= 0 and x < _cols and y < _rows
