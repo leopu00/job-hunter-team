@@ -151,7 +151,12 @@ func _ready() -> void:
 		if ResourceLoader.exists(seated_path):
 			var st: Texture2D = load(seated_path)
 			if st != null:
-				_seated_tex = st
+				if st.get_size() == tex.get_size():
+					_seated_tex = st
+				else:
+					push_warning("Seated art canvas mismatch: %s is %s, base %s is %s; using dynamic rig." % [
+						seated_path, st.get_size(), path, tex.get_size(),
+					])
 
 func _draw() -> void:
 	var kind: String = item["kind"]
