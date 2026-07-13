@@ -10,8 +10,10 @@ var agents: Array[AgentNPC] = []
 var _hover_agent: AgentNPC
 var _team_hud: TeamHud
 var _camera: FreeCamera
+var _seat_audit := ""
 
 func _ready() -> void:
+	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
 	add_child(OfficeFloor.new())
 	add_child(DepartmentDressing.new())  # tinte/targhe dei 5 reparti (dev-art)
 	add_child(DeptRugs.new())  # tappetoni tondi colore-reparto (reference)
@@ -35,9 +37,6 @@ func _ready() -> void:
 	# lo scaffale dei CV PRONTI accanto alla porta (sezione output 3/3)
 	world.add_child(OutputShelf.new())
 	world.add_child(_invisible_wall(OutputShelf.RECT))
-	# bobine e fogli sul banco-test degli analisti (tavolo lungo del lab)
-	world.add_child(TestBench.new())
-
 	for item in FurnitureDefs.ITEMS:
 		if item["kind"] == "hologram":
 			world.add_child(Hologram.new(item["rect"]))
@@ -47,12 +46,12 @@ func _ready() -> void:
 
 	# postazioni dei 5 reparti: stesso FurnitureNode dei mobili, kind variati;
 	# facing passa al visual (texture orientate _down/_side/_up, dev-art).
-	# kind "none" = seduta di un mobile condiviso (es. il tavolo lungo degli
-	# Analisti): conta per spot/ostacoli ma il visual è l'item in FurnitureDefs.
+	# Ogni postazione ha un visual completo con sedia nello stesso verso.
 	FurnitureNode.desks = {}
+	FurnitureNode.front_chairs = {}
 	for d in DepartmentDefs.all_desks():
-		# micro-prop sul piano (anche sulle sedute del tavolo lungo)
-		world.add_child(DeskClutter.new(d["rect"], "%s:%d" % [d["dept"], d["index"]]))
+		# Le scrivanie pittoriche sono già complete. Il vecchio DeskClutter
+		# duplicava tazze/fogli con icone flat sospese e senza prospettiva.
 		if d["kind"] == "none":
 			continue
 		var desk_node := FurnitureNode.new({
@@ -86,11 +85,19 @@ func _ready() -> void:
 		"coffee":
 			CoffeeFx.ping(20.0)
 
-	# pile degli inbox di reparto: il ritiro le svuota, le soste le
-	# riforniscono, e un restock lento simula l'upstream che stampa.
+	# Punti di consegna tra reparti. Ogni pila vive dentro una vaschetta
+	# fisica etichettata: Scout → Analisti → Scorer → Scrittori → Critici.
+	# Quella degli Scorer è il deposito unico richiesto dagli Scrittori.
 	PaperPile.inbox = {}
+	var handoff_to := {
+		"scout": "Analisti", "analisti": "Scorer", "scorer": "Scrittori",
+		"scrittori": "Critici", "critici": "Pronti",
+	}
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var inbox_pos: Vector2 = DepartmentDefs.DEPARTMENTS[dept_id]["inbox"]
+		var dept_color: Color = DepartmentDefs.DEPARTMENTS[dept_id]["color"]
+		world.add_child(HandoffStation.new(dept_id, inbox_pos,
+				handoff_to[dept_id], dept_color))
 		var p := PaperPile.new(Rect2(inbox_pos - Vector2(28, 16), Vector2(56, 32)))
 		# gli Scout producono e basta: il loro inbox si riempie più svelto
 		p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
@@ -98,11 +105,18 @@ func _ready() -> void:
 		world.add_child(p)
 		PaperPile.inbox[dept_id] = p
 
-	# Ambientazione pre-backend SOBRIA (ordine Leone 18:0x): solo lead e
-	# core, niente folla. L'organico completo resta nel pool: coi dati
-	# veri la scena mostra esattamente chi è attivo sulla VPS.
+	# Ambientazione offline sobria: solo lead e core. Se una VPS è già in
+	# connessione (o parte il mock), NON mostriamo comparse provvisorie:
+	# l'ufficio resta vuoto fino al primo snapshot autorevole.
+	var backend_expected := BackendBus.state != BackendBus.DISCONNECTED \
+			or OS.get_environment("JHT_BACKEND_TEST") == "1"
 	for def in CharacterDefs.spawn_list():
-		if not def.get("lead", false):
+		if _seat_audit != "":
+			var audit_parts := _seat_audit.split(":")
+			if audit_parts.size() != 2 or def.get("dept", "") != audit_parts[0] \
+					or int(def.get("desk", -1)) != int(audit_parts[1]):
+				continue
+		elif backend_expected or not def.get("lead", false):
 			continue
 		var agent := AgentNPC.new()
 		world.add_child(agent)
@@ -115,6 +129,18 @@ func _ready() -> void:
 	_camera = FreeCamera.new()
 	add_child(_camera)
 	_camera.clicked.connect(_on_world_click)
+	if _seat_audit != "":
+		var audit_parts := _seat_audit.split(":")
+		if audit_parts.size() == 2 and DepartmentDefs.DEPARTMENTS.has(audit_parts[0]):
+			var audit_desks: Array = DepartmentDefs.DEPARTMENTS[audit_parts[0]]["desks"]
+			var audit_i := int(audit_parts[1])
+			if audit_i >= 0 and audit_i < audit_desks.size():
+				var audit_cam := Camera2D.new()
+				var audit_rect: Rect2 = audit_desks[audit_i]["rect"]
+				audit_cam.position = audit_rect.get_center() + Vector2(0, 8)
+				audit_cam.zoom = Vector2(2.6, 2.6)
+				add_child(audit_cam)
+				audit_cam.make_current()
 
 	if OS.get_environment("JHT_OVERVIEW") == "1":  # TEST-AUTO: tutta la box in un frame
 		var ov := Camera2D.new()
@@ -124,9 +150,19 @@ func _ready() -> void:
 		ov.zoom = Vector2(z, z)
 		add_child(ov)
 		ov.make_current()
+	elif OS.get_environment("JHT_FOCUS_DEPT") != "":
+		var focus_id := OS.get_environment("JHT_FOCUS_DEPT")
+		if DepartmentDefs.DEPARTMENTS.has(focus_id):
+			var focus_cam := Camera2D.new()
+			var zone: Rect2 = DepartmentDefs.DEPARTMENTS[focus_id]["zone"]
+			focus_cam.position = zone.get_center()
+			focus_cam.zoom = Vector2(1.65, 1.65)
+			add_child(focus_cam)
+			focus_cam.make_current()
 
-	_add_hud()
-	add_child(GameSidebar.new())  # sidebar stile desktop-app (linguetta ≡)
+	if _seat_audit == "":
+		_add_hud()
+		add_child(GameSidebar.new())  # sidebar stile desktop-app (linguetta ≡)
 
 	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
 			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
@@ -163,18 +199,21 @@ func _ready() -> void:
 	# La scena vive sul BackendBus: roster reale → spawn/despawn,
 	# chat del team → fumetti. Se un backend è già connesso (snapshot
 	# presente), la scena si allinea subito.
-	BackendBus.agents_updated.connect(sync_agents)
-	BackendBus.chat_message.connect(_on_chat_message)
-	BackendBus.positions_updated.connect(_on_transitions)
-	if not BackendBus.agents.is_empty():
-		sync_agents(BackendBus.agents)
-	if not BackendBus.transitions.is_empty():
-		_on_transitions([])  # snapshot già sul bus: assorbito come baseline
+	if _seat_audit == "":
+		BackendBus.agents_updated.connect(sync_agents)
+		BackendBus.chat_message.connect(_on_chat_message)
+		BackendBus.positions_updated.connect(_on_transitions)
+		if not BackendBus.agents.is_empty():
+			sync_agents(BackendBus.agents)
+		if not BackendBus.transitions.is_empty():
+			_on_transitions([])  # snapshot già sul bus: assorbito come baseline
 
 	# TEST-AUTO: JHT_BACKEND_TEST=1 monta il simulatore (MockBackend):
 	# connessione, roster che va e viene, chat a fumetti — senza VPS.
 	if OS.get_environment("JHT_BACKEND_TEST") == "1":
 		BackendBus.set_backend(MockBackend.new())
+	if OS.get_environment("JHT_STATE_SELFTEST") == "1":
+		_state_selftest.call_deferred()
 
 	# TEST-AUTO: JHT_CHAT=<ruolo> apre il pannello chat col primo agente
 	# di quel ruolo e invia un messaggio di prova (eco + risposta mock;
@@ -190,17 +229,29 @@ func _ready() -> void:
 	if OS.get_environment("JHT_CHATMENU") == "1":
 		get_tree().create_timer(2.5).timeout.connect(_open_chat_menu)
 
-	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza subito i nuovi stati della
-	# missione pipeline: un agente in ricreazione (throttle lungo) e uno
-	# che esce dalla porta, senza aspettare il ciclo eventi del mock.
+	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza throttle e rimozione roster,
+	# senza aspettare il ciclo eventi del mock.
 	if OS.get_environment("JHT_THROTTLE_TEST") == "1":
 		_throttle_selftest()
+	# TEST-AUTO: forza un singolo giro completo della pipeline offline.
+	# Esempio JHT_PIPELINE_TEST=scout|analisti|scorer|scrittori.
+	var pipeline_test := OS.get_environment("JHT_PIPELINE_TEST")
+	if pipeline_test != "":
+		_force_pipeline_trip.call_deferred(pipeline_test)
 
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
 	var shot := OS.get_environment("JHT_SHOT")
 	if shot != "":
 		_take_shot(shot)
+
+func _force_pipeline_trip(test_dept: String) -> void:
+	await get_tree().create_timer(0.8).timeout
+	for agent in agents:
+		if agent.dept == test_dept:
+			agent.set_backend_status("working")
+			agent.perform_pipeline_step()
+			return
 
 func _on_chat_message(msg: Dictionary) -> void:
 	deliver_chat(msg.get("from", ""), msg.get("to", "all"), msg.get("text", ""))
@@ -243,6 +294,39 @@ func _take_shot(path: String) -> void:
 
 func _process(_delta: float) -> void:
 	_update_hover()
+
+## Test end-to-end del contratto visivo, dentro la scena vera: presenza,
+## motion track e velocità per i quattro stati backend.
+func _state_selftest() -> void:
+	var sample := [
+		{"uid": "scout-test", "slug": "scout", "role": "scout", "name": "Scout test",
+				"active": true, "status": "working", "activity_detail": "turno"},
+		{"uid": "analista-test", "slug": "analista", "role": "analista", "name": "Analista test",
+				"active": true, "status": "idle", "activity_detail": "attesa"},
+		{"uid": "scorer-test", "slug": "scorer", "role": "scorer", "name": "Scorer test",
+				"active": true, "status": "paused", "activity_detail": "pausa"},
+		{"uid": "scrittore-test", "slug": "scrittore", "role": "scrittore", "name": "Scrittore test",
+				"active": true, "status": "throttled", "throttle_secs": 180.0,
+				"activity_detail": "pacing"},
+	]
+	sync_agents(sample)
+	await get_tree().process_frame
+	var by := {}
+	for a in agents:
+		by[a.uid] = a.debug_snapshot()
+	var ok := agents.size() == 4 \
+			and str(by.get("scout-test", {}).get("motion", "")) == "sit" \
+			and str(by.get("analista-test", {}).get("motion", "")) == "sit_idle" \
+			and str(by.get("scorer-test", {}).get("motion", "")) == "sit_idle" \
+			and str(by.get("scrittore-test", {}).get("motion", "")) == "sit_idle"
+	for snap in by.values():
+		ok = ok and float(snap.get("speed", -1.0)) == 0.0
+	# Snapshot completo successivo: chi non compare viene rimosso subito
+	# dall'array di scena; non può restare sul divano o in corridoio.
+	sync_agents([sample[1]])
+	await get_tree().process_frame
+	ok = ok and agents.size() == 1 and agents[0].uid == "analista-test"
+	print("SIMULATION-STATE-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify(by))
 
 var _registry: RegistryPanel
 var _search: GlobalSearch
@@ -348,17 +432,14 @@ func _update_hover() -> void:
 ## Scheda "chi è / cosa ha fatto"; da lì si passa al dialogo.
 func _open_agent_card(agent: AgentNPC) -> void:
 	Log.info("agent", "scheda aperta: %s (%s)" % [agent.display_name, agent.slug])
-	agent.start_talk()  # si ferma e guarda in camera mentre lo esamini
+	# Osservare non modifica il sistema osservato: niente teletrasporto,
+	# standing pose o ritorno alla scrivania causati dall'apertura UI.
 	_agent_card = AgentCard.new(agent)
 	add_child(_agent_card)
 	_agent_card.talk_requested.connect(func() -> void: _start_talk(agent))
 	_agent_card.chat_requested.connect(func() -> void: _open_chat(agent))
 	_agent_card.closed.connect(func() -> void:
-		_agent_card = null
-		# l'agente può essersi dissolto (despawn backend) a scheda aperta
-		if is_instance_valid(agent) and not agent.is_dissolving() \
-				and not Game.dialogue_active:
-			agent.end_talk())
+		_agent_card = null)
 
 var _chat_panel: ChatPanel
 var _chat_menu: ChatMenu
@@ -434,16 +515,30 @@ func sync_agents(list: Array) -> void:
 			# throttle PRIMA dello status: la scelta seduto-vs-ricreazione
 			# al cambio di stato legge la durata già aggiornata
 			agent.set_throttle(float(wanted[agent.uid].get("throttle_secs", 0.0)))
+			agent.set_activity_detail(str(wanted[agent.uid].get("activity_detail", "")))
 			agent.set_backend_status(wanted[agent.uid].get("status", "working"))
 			wanted.erase(agent.uid)
 	for item_uid in wanted:
 		_spawn_backend_agent(wanted[item_uid])
+	# Il roster backend arriva dopo _ready: il test-card va riprovato qui,
+	# quando l'istanza richiesta esiste davvero.
+	var card_test := OS.get_environment("JHT_CARD")
+	if card_test != "" and _agent_card == null:
+		for a in agents:
+			if a.slug == card_test or a.uid == card_test:
+				_open_agent_card(a)
+				break
 
 ## Recapita un messaggio della chat di team come fumetto (contratto
 ## BackendBus.chat_message): from/to sono uid agente, "user" o "all".
 func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
 	for agent in agents:
 		if agent.uid == from_uid and not agent.is_dissolving():
+			# Un solo parlante alla volta: i poll possono consegnare una raffica,
+			# ma l'ufficio non deve diventare una parete di pannelli sovrapposti.
+			for other in agents:
+				if other != agent and other.speech:
+					other.speech.clear_now()
 			var to_label := ""
 			match to_uid:
 				"all":
@@ -590,6 +685,9 @@ func _react_to_transition(t: Dictionary) -> void:
 	else:
 		actor.say("%s → %s" % [what, to_st])
 	actor.react_to_work(to_st in TR_PRINT)
+	# Il dato reale non genera solo un pulse: mette fisicamente in moto il
+	# reparto che ha firmato la transizione e il suo foglio lungo la pipeline.
+	actor.perform_pipeline_step()
 	Log.debug("scene", "reazione %s: %s → %s" % [by, what, to_st])
 
 ## Primo snapshot backend: le postazioni tornano nel pool e il roster
@@ -607,7 +705,7 @@ func _enter_backend_mode() -> void:
 			_despawn_agent(agent, false, false)
 	Log.info("backend", "modalità backend: in scena solo gli agenti attivi")
 
-func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := true) -> void:
+func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := false) -> void:
 	agents.erase(agent)
 	if _hover_agent == agent:
 		_hover_agent = null
@@ -646,7 +744,9 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	agent.setup(live, nav)
 	agent.uid = str(item.get("uid", item.get("slug", "")))
 	agent.set_meta("def", def)
-	agent.set_backend_status(item.get("status", "working"))
+	agent.set_throttle(float(item.get("throttle_secs", 0.0)))
+	agent.set_activity_detail(str(item.get("activity_detail", "")))
+	agent.set_backend_status(item.get("status", "idle"))
 	agent.materialize()
 	agents.append(agent)
 
@@ -695,4 +795,3 @@ func _add_hud() -> void:
 	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	hud.add_child(hint)
-

@@ -5,14 +5,14 @@ extends Node2D
 ## (che mostra lo stato): multi-linea con word-wrap, coda FIFO per le
 ## raffiche, riga destinatario quando il messaggio non è un broadcast.
 
-const FONT_SIZE := 13
+const FONT_SIZE := 12
 const TO_SIZE := 11
 const PAD := Vector2(9, 6)
-const MAX_TEXT_W := 230.0
+const MAX_TEXT_W := 180.0
 const LINE_GAP := 3.0
 const GAP_BETWEEN := 0.3  # respiro tra due messaggi in coda
-const MAX_QUEUE := 6      # oltre, i più vecchi si perdono (raffiche estreme)
-const MAX_CHARS := 220    # la chat tmux vera può essere lunghissima: si tronca
+const MAX_QUEUE := 1      # in-world è un accenno; la storia vive nel registro
+const MAX_CHARS := 96     # mai più pannelli che coprono interi reparti
 
 var _queue: Array = []           # [{text, to_label}]
 var _lines := PackedStringArray()
