@@ -21,8 +21,15 @@ func set_data(history: Array, sample: Dictionary) -> void:
 		for row in history.slice(maxi(0, history.size() - 40)):
 			_values.append(float((row.get("agent_ram", {}) as Dictionary).get(key, 0.0)) / 1048576.0)
 	else:
+		var has_key := false
 		for row in sample.get("token_series", []):
-			_values.append(float(row.get(key, 0.0)))
+			if row.has(key):
+				has_key = true
+				_values.append(float(row[key]))
+			else:
+				_values.append(0.0)
+		if not has_key:
+			_values.clear()
 	queue_redraw()
 
 func _draw() -> void:

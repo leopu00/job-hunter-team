@@ -534,6 +534,7 @@ func _start_talk(agent: AgentNPC) -> void:
 var _desk_pool: Dictionary = {}  # role -> Array di def libere (postazioni)
 var _backend_mode := false
 var _unplaced_roles: Dictionary = {}  # ruoli senza postazione già segnalati
+var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-worker)
 
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
@@ -549,7 +550,7 @@ func sync_agents(list: Array) -> void:
 			wanted[str(item.get("uid", item.get("slug", "")))] = item
 	for agent in agents.duplicate():
 		if not wanted.has(agent.uid):
-			_despawn_agent(agent)
+			_despawn_agent(agent, true, true)
 		else:
 			# throttle PRIMA dello status: la scelta seduto-vs-ricreazione
 			# al cambio di stato legge la durata già aggiornata
@@ -595,6 +596,11 @@ func _find_agent(ref: String) -> AgentNPC:
 	for agent in agents:
 		if agent.uid == ref and ref != "":
 			return agent
+	# Con dati veri un UID assente e davvero assente: attribuire il suo
+	# messaggio a un'altra istanza dello stesso ruolo falsifica la scena.
+	# Il fallback posizionale resta utile soltanto nei self-test offline.
+	if BackendBus.is_live():
+		return null
 	var role := ref
 	var requested_index := 1
 	var dash := ref.rfind("-")
@@ -789,12 +795,25 @@ func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := false) -> 
 func _spawn_backend_agent(item: Dictionary) -> void:
 	var role: String = item.get("role", "")
 	var pool: Array = _desk_pool.get(role, [])
+	var def: Dictionary
 	if pool.is_empty():
-		if not _unplaced_roles.has(role):  # es. sentinella: nessun posto in scena
-			_unplaced_roles[role] = true
-			Log.warn("backend", "nessuna postazione libera per il ruolo " + role)
-		return
-	var def: Dictionary = pool.pop_front()
+		# I ruoli core non hanno una batteria di scrivanie, ma sulla VPS possono
+		# avere piu istanze (oggi: sentinella + sentinella-worker). Materializza
+		# anche le copie, con home sfalsata, invece di cancellarle dalla scena.
+		if CharacterDefs.AGENTS.has(role):
+			var serial := int(_core_overflow_serial.get(role, 0)) + 1
+			_core_overflow_serial[role] = serial
+			def = CharacterDefs.AGENTS[role].duplicate(true)
+			def["slug"] = role
+			def["lead"] = false
+			def["spot"] = Vector2(def["spot"]) + Vector2(84.0 * serial, 52.0 * (serial % 2))
+		else:
+			if not _unplaced_roles.has(role):
+				_unplaced_roles[role] = true
+				Log.warn("backend", "nessuna postazione libera per il ruolo " + role)
+			return
+	else:
+		def = pool.pop_front()
 	var live := def.duplicate(true)
 	if item.get("name", "") != "":
 		live["name"] = item["name"]

@@ -287,6 +287,10 @@ static func _fmt_uptime(seconds: float) -> String:
 # ── Risorse per singolo agente ───────────────────────────────────────
 
 var _agent_metric_rows := {}
+var _agent_metric_roster_signature := ""
+var _agent_metric_freshness: Label
+var _agent_token_total_header: Label
+var _agent_token_bucket_header: Label
 
 func _build_agent_metrics() -> void:
 	if not BackendBus.telemetry_updated.is_connected(_on_agent_metrics_updated):
@@ -298,19 +302,29 @@ func _build_agent_metrics() -> void:
 	_content.add_child(TerminalTheme.label(
 			"RAM = processo tmux e discendenti · token = bucket reali del token-meter",
 			13, Palette.MUTED))
+	_agent_metric_freshness = TerminalTheme.label("TOKEN · freschezza in attesa…",
+			12, Palette.DIM, "medium")
+	_content.add_child(_agent_metric_freshness)
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
 	_content.add_child(header)
 	for spec in [["AGENTE", 170], ["RAM", 84], ["STORICO RAM", 180],
-			["TOKEN (2H)", 100], ["TOKEN / 5 MIN", 180]]:
+			["TOKEN", 100], ["TOKEN / BUCKET", 180]]:
 		var lbl := TerminalTheme.label(spec[0], 12, Palette.DIM, "medium")
 		lbl.custom_minimum_size = Vector2(spec[1], 0)
 		header.add_child(lbl)
+		if spec[0] == "TOKEN":
+			_agent_token_total_header = lbl
+		elif spec[0] == "TOKEN / BUCKET":
+			_agent_token_bucket_header = lbl
 	_content.add_child(HSeparator.new())
 	_agent_metric_rows.clear()
+	_agent_metric_roster_signature = _agent_roster_signature(BackendBus.agents)
 	for a in BackendBus.agents:
 		var session := str(a.get("session", a.get("uid", "?"))).to_lower()
-		var token_key := session.replace("-worker", "")
+		# La serie appartiene all'istanza, non al ruolo: sentinella-worker non
+		# deve duplicare artificialmente i token di sentinella.
+		var token_key := session
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		_content.add_child(row)
@@ -336,27 +350,86 @@ func _on_agent_metrics_updated(sample: Dictionary, history: Array) -> void:
 	_refresh_agent_metrics(sample, history)
 
 func _on_agent_metrics_roster(_list: Array) -> void:
-	if section == "agent_metrics" and is_instance_valid(_content):
+	var signature := _agent_roster_signature(_list)
+	if section == "agent_metrics" and is_instance_valid(_content) \
+			and signature != _agent_metric_roster_signature:
 		_build()
+
+static func _agent_roster_signature(list: Array) -> String:
+	var sessions: PackedStringArray = []
+	for agent in list:
+		sessions.append(str(agent.get("session", agent.get("uid", "?"))).to_lower())
+	sessions.sort()
+	return "|".join(sessions)
 
 func _refresh_agent_metrics(sample: Dictionary, history: Array) -> void:
 	if sample.is_empty(): return
 	var ram_map: Dictionary = sample.get("agent_ram", {})
 	var token_series: Array = sample.get("token_series", [])
+	_refresh_agent_metric_metadata(sample)
 	for session in _agent_metric_rows:
 		var widgets: Dictionary = _agent_metric_rows[session]
 		var ram_bytes := float(ram_map.get(session, 0.0))
 		if is_instance_valid(widgets["ram"]):
 			widgets["ram"].text = _fmt_bytes(ram_bytes)
 		var total := 0.0
+		var has_token_data := false
 		for bucket in token_series:
-			total += float(bucket.get(widgets["token_key"], 0.0))
+			if bucket.has(widgets["token_key"]):
+				has_token_data = true
+				total += float(bucket[widgets["token_key"]])
 		if is_instance_valid(widgets["tokens"]):
-			widgets["tokens"].text = "%.1fk" % total
+			widgets["tokens"].text = "%.1fk" % total if has_token_data else "—"
 		if is_instance_valid(widgets["ram_chart"]):
 			widgets["ram_chart"].set_data(history, sample)
 		if is_instance_valid(widgets["token_chart"]):
 			widgets["token_chart"].set_data(history, sample)
+
+func _refresh_agent_metric_metadata(sample: Dictionary) -> void:
+	var window_h := float(sample.get("window_h", 0.0))
+	var bucket_sec := int(sample.get("bucket_sec", 0))
+	if is_instance_valid(_agent_token_total_header):
+		_agent_token_total_header.text = "TOKEN (%s)" % _metric_window_text(window_h)
+	if is_instance_valid(_agent_token_bucket_header):
+		_agent_token_bucket_header.text = "TOKEN / %s" % _metric_bucket_text(bucket_sec)
+	if not is_instance_valid(_agent_metric_freshness):
+		return
+	var generated := str(sample.get("generated_at", "")).strip_edges()
+	if generated == "":
+		_agent_metric_freshness.text = "TOKEN · sorgente non disponibile"
+		_agent_metric_freshness.add_theme_color_override("font_color", Palette.RED)
+		return
+	# Il producer usa ISO-8601 UTC con microsecondi; il parser Godot vuole
+	# la parte calendario senza frazioni/offset.
+	var generated_unix := Time.get_unix_time_from_datetime_string(generated.left(19))
+	var age_sec := maxi(0, int(Time.get_unix_time_from_system() - generated_unix))
+	var stale_after := maxi(900, bucket_sec * 3)
+	var stamp := generated.replace("T", " ").left(19) + " UTC"
+	if age_sec > stale_after:
+		_agent_metric_freshness.text = "TOKEN · %s · STALE DA %s" % [
+				stamp, _metric_age_text(age_sec)]
+		_agent_metric_freshness.add_theme_color_override("font_color", Palette.RED)
+	else:
+		_agent_metric_freshness.text = "TOKEN · aggiornati %s · %s fa" % [
+				stamp, _metric_age_text(age_sec)]
+		_agent_metric_freshness.add_theme_color_override("font_color", Palette.MINT)
+
+static func _metric_window_text(hours: float) -> String:
+	if hours <= 0.0: return "?"
+	if hours < 1.0: return "%d MIN" % int(round(hours * 60.0))
+	if is_equal_approx(hours, round(hours)):
+		return "%dH" % int(round(hours))
+	return "%.1fH" % hours
+
+static func _metric_bucket_text(seconds: int) -> String:
+	if seconds <= 0: return "BUCKET"
+	if seconds % 60 == 0: return "%d MIN" % (seconds / 60)
+	return "%d S" % seconds
+
+static func _metric_age_text(seconds: int) -> String:
+	if seconds < 60: return "%d s" % seconds
+	if seconds < 3600: return "%d min" % (seconds / 60)
+	return "%d h %02d min" % [seconds / 3600, (seconds / 60) % 60]
 
 ## Gli ORARI DI LAVORO del team: editabili QUI, con feedback DINAMICO
 ## (feedback Leone 21:3x): cambi le finestre e vedi subito le ore

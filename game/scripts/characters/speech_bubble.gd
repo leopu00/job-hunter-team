@@ -11,7 +11,10 @@ const PAD := Vector2(9, 6)
 const MAX_TEXT_W := 220.0
 const LINE_GAP := 3.0
 const GAP_BETWEEN := 0.3  # respiro tra due messaggi in coda
-const MAX_QUEUE := 4      # coda per agente: le raffiche si leggono in fila
+# Un minuto minimo per messaggio rende inevitabile una coda lunga durante i
+# burst del team reale. Quattro elementi perdevano quasi subito comunicazioni;
+# 32 copre una raffica intensa senza lasciare una backlog illimitata in RAM.
+const MAX_QUEUE := 32
 const MAX_CHARS := 140    # mai più pannelli che coprono interi reparti
 const MIN_HOLD := 60.0    # la chat vera resta leggibile almeno un minuto
 
@@ -24,6 +27,8 @@ var _hold := 0.0                 # tempo di lettura residuo del messaggio corren
 var _gap := 0.0
 var _font: Font
 var _font_med: Font
+var _current_text := ""
+var _dropped := 0
 
 func _ready() -> void:
 	_font = load(TerminalTheme.FONT_REGULAR)
@@ -41,6 +46,7 @@ func say(text: String, to_label := "") -> void:
 	_queue.append({"text": clean, "to_label": to_label})
 	while _queue.size() > MAX_QUEUE:
 		_queue.pop_front()
+		_dropped += 1
 
 func clear_now() -> void:
 	_queue.clear()
@@ -49,6 +55,20 @@ func clear_now() -> void:
 
 func is_speaking() -> bool:
 	return _hold > 0.0 or not _queue.is_empty()
+
+## Stato osservabile per self-test e diagnostica. Non altera il timer e non
+## espone i nodi di rendering ai chiamanti.
+func debug_snapshot() -> Dictionary:
+	return {
+		"queue_depth": _queue.size(),
+		"queue_capacity": MAX_QUEUE,
+		"current_text": _current_text,
+		"hold_sec": _hold,
+		"min_hold_sec": MIN_HOLD,
+		"alpha": _alpha,
+		"target_alpha": _target_alpha,
+		"dropped": _dropped,
+	}
 
 func _process(delta: float) -> void:
 	if _hold > 0.0:
@@ -68,11 +88,12 @@ func _process(delta: float) -> void:
 
 func _next_message() -> void:
 	var m: Dictionary = _queue.pop_front()
-	_lines = _wrap(m["text"])
+	_current_text = str(m["text"])
+	_lines = _wrap(_current_text)
 	_to_label = m["to_label"]
 	# la chat REALE va letta con calma: hold lungo, mai sotto MIN_HOLD
 	# (ordine 03:3x: vignette simultanee, nessuna corsa a leggerle)
-	_hold = maxf(MIN_HOLD, 2.2 + m["text"].length() * 0.05)
+	_hold = maxf(MIN_HOLD, 2.2 + _current_text.length() * 0.05)
 	_gap = GAP_BETWEEN
 	_target_alpha = 1.0
 	queue_redraw()
