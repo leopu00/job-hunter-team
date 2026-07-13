@@ -96,6 +96,8 @@ func _ready() -> void:
 	# quindi il test vive qui dentro al boot).
 	if OS.get_environment("JHT_THROTTLE_TEST") == "1":
 		_self_test_throttle()
+	if OS.get_environment("JHT_VPS_CONTRACT_TEST") == "1":
+		_self_test_vps_contract()
 	if OS.get_environment("JHT_NOVPS") == "1":
 		return
 	var cfg := load_vps_config()
@@ -106,6 +108,23 @@ func _ready() -> void:
 		}
 	if str(cfg.get("ip", "")) != "" and str(cfg.get("key_path", "")) != "":
 		set_backend(VpsBackend.new(), cfg)
+
+func _self_test_vps_contract() -> void:
+	var roster: Array = VpsBackend._parse_roster(
+			"SENTINELLA: 1 windows\nSENTINELLA-WORKER: 1 windows\nSCOUT-2: 1 windows\n")
+	var uids: Array = roster.map(func(a: Dictionary) -> String: return str(a["uid"]))
+	var roles: Array = roster.map(func(a: Dictionary) -> String: return str(a["role"]))
+	var msg: Dictionary = VpsBackend._to_chat_msg({
+		"ts": "2026-07-13T03:00:00Z", "from": "sentinella-worker",
+		"to": "scout-2", "body": "[@sentinella-worker -> @scout-2] [INFO] controllo completato",
+	})
+	var ok: bool = uids == ["sentinella", "sentinella-worker", "scout-2"] \
+			and roles == ["sentinella", "sentinella", "scout"] \
+			and msg.get("from") == "sentinella-worker" \
+			and msg.get("to") == "scout-2" \
+			and msg.get("text") == "controllo completato"
+	print("VPS-CONTRACT-TEST ", "PASS " if ok else "FAIL ",
+			JSON.stringify({"uids": uids, "roles": roles, "msg": msg}))
 
 
 ## Al quit il thread ssh del backend va JOINATO: lasciarlo vivo mentre

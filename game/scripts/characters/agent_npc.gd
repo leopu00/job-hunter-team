@@ -45,6 +45,8 @@ var activity_detail := ""
 var throttle_secs := 0.0
 var _dissolving := false
 var _exiting := false
+var _exit_pending := false
+var _pending_exit_spot := Vector2.ZERO
 
 var state: S = S.WORK
 var _spot := Vector2.ZERO
@@ -224,10 +226,23 @@ func set_activity_detail(detail: String) -> void:
 ## 20:1x): cammina fino alla porta dell'ufficio e svanisce oltre la
 ## soglia — niente tesseract, semplicemente non è più in ufficio.
 func exit_through(door_spot: Vector2) -> void:
-	if _dissolving or _exiting:
+	if _dissolving or _exiting or _exit_pending:
 		return
+	# Un messaggio gia mostrato mantiene il contratto di un minuto anche se
+	# la sessione tmux termina: l'avatar aspetta, poi esce fisicamente.
+	if speech and speech.is_speaking():
+		_exit_pending = true
+		_pending_exit_spot = door_spot
+		backend_status = "idle"
+		state = S.WORK
+		velocity = Vector2.ZERO
+		bubble.hide_now()
+		_work_pose()
+		return
+	_begin_exit(door_spot)
+
+func _begin_exit(door_spot: Vector2) -> void:
 	_exiting = true
-	speech.clear_now()
 	bubble.hide_now()
 	var leg := _leg_to(door_spot, "walk", 0.0, "idle")
 	leg["exit"] = true
@@ -334,6 +349,9 @@ func _physics_process(delta: float) -> void:
 	if _dissolving:
 		velocity = Vector2.ZERO
 		return
+	if _exit_pending and (speech == null or not speech.is_speaking()):
+		_exit_pending = false
+		_begin_exit(_pending_exit_spot)
 	_pulse += delta
 	if _highlight:
 		queue_redraw()
