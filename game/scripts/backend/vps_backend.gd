@@ -584,7 +584,7 @@ func send_chat(agent: String, text: String) -> void:
 
 func _do_send_chat(agent: String, text: String) -> void:
 	var session := _agent_session(agent)
-	var buf := "/tmp/jht-game-chat-%d-%d.txt" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var buf := _temp_path("jht-game-chat")
 	var chat_file := "/jht_home/agents/%s/chat.jsonl" % _agent_dir(agent)
 
 	# 1) persisti il messaggio utente nel chat.jsonl dell'agente (stesso
@@ -790,10 +790,16 @@ func _fetch_convo(agent: String) -> void:
 			msgs.append(d)
 	bus.call_deferred("publish_agent_chat", agent, msgs)
 
+## File temporaneo locale in una directory scrivibile su ogni OS: il
+## /tmp hardcodato non esiste su Windows (FileAccess.open → null).
+static func _temp_path(stem: String) -> String:
+	return OS.get_cache_dir().path_join(
+			"%s-%d-%d.tmp" % [stem, OS.get_process_id(), Time.get_ticks_usec()])
+
 ## Esegue uno script python DENTRO il container passandolo via stdin
 ## (python3 -): nessun limite di quoting, script multi-linea liberi.
 func _ssh_python(script: String) -> Dictionary:
-	var buf := "/tmp/jht-game-py-%d-%d.py" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var buf := _temp_path("jht-game-py")
 	var f := FileAccess.open(buf, FileAccess.WRITE)
 	if f == null:
 		return {"code": -1, "out": "file temporaneo non scrivibile"}
@@ -806,7 +812,7 @@ func _ssh_python(script: String) -> Dictionary:
 ## Come _ssh_python, ma sul sistema host della VPS: serve per /proc,
 ## filesystem root e docker stats, invisibili dall'interno del container.
 func _ssh_host_python(script: String) -> Dictionary:
-	var buf := "/tmp/jht-game-host-py-%d-%d.py" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var buf := _temp_path("jht-game-host-py")
 	var f := FileAccess.open(buf, FileAccess.WRITE)
 	if f == null:
 		return {"code": -1, "out": "file temporaneo non scrivibile"}
@@ -817,15 +823,23 @@ func _ssh_host_python(script: String) -> Dictionary:
 	return res
 
 
-## bash locale SOLO per il redirect < file: il comando non contiene mai
+## shell locale SOLO per il redirect < file: il comando non contiene mai
 ## testo utente né caratteri che il wrap naive di OS.execute corrompa.
+## Su Windows il redirect lo fa cmd.exe: "bash" potrebbe essere quello
+## di WSL, che non vede né i path C:/ né la chiave ssh.
 func _ssh_stdin_file(local_file: String, remote_cmd: String) -> Dictionary:
 	var out: Array = []
+	var on_windows := OS.get_name() == "Windows"
+	var lf := local_file.replace("/", "\\") if on_windows else local_file
 	var cmdline := "ssh -i " + _key \
 			+ " -o BatchMode=yes -o IdentitiesOnly=yes" \
 			+ " -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new " \
-			+ _user + "@" + _ip + " " + remote_cmd + " < " + local_file
-	var code := OS.execute("bash", ["-c", cmdline], out, true)
+			+ _user + "@" + _ip + " " + remote_cmd + " < " + lf
+	var code: int
+	if on_windows:
+		code = OS.execute("cmd", ["/c", cmdline], out, true)
+	else:
+		code = OS.execute("bash", ["-c", cmdline], out, true)
 	return {"code": code, "out": "\n".join(PackedStringArray(out))}
 
 
