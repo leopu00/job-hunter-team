@@ -843,27 +843,40 @@ save_pairing_token() {
   ok "Pairing token salvato in $token_file (mode 0644)"
 }
 
-run_host_setup_vps() {
-  # Quando install.sh arriva con --pairing-token, la macchina è una VPS
-  # provisionata dal desktop launcher: nessun utente al terminale, host-setup
-  # va lanciato non-interattivo per scrivere ~/.jht/host.env con
-  # JHT_HOST_TYPE=vps. Senza questo file il container parte in mode=local
-  # (default backwards-compat del compose) e pid1 salta il pair-on-boot.
-  [ -z "$PAIRING_TOKEN" ] && return 0
+run_host_setup() {
+  # host-setup.sh scrive ~/.jht/host.env con JHT_HOST_TYPE (+ JHT_LANG + swap).
+  # SENZA questo file il container parte in mode=local (default backwards-compat
+  # del compose) e pid1 SALTA tutto il blocco cloud — daemon push + pair-on-boot
+  # + gestore "Sync now" — quindi il cloud sync è silenziosamente morto. Va
+  # eseguito su ENTRAMBI i path d'installazione:
+  #   • desktop-provisioned (--pairing-token presente): forza --host-type=vps —
+  #     nessun utente al terminale per confermare l'auto-detection.
+  #   • manuale `curl install.sh | bash`: NESSUN flag → host-setup auto-rileva
+  #     (detect_vps) e, senza TTY, scrive il tipo rilevato senza prompt.
+  #     Regressione fixata 2026-07-09: questo path faceva `return 0` subito →
+  #     host.env mai scritto → container in mode=local → daemon cloud mai avviato.
   local hostsetup="$RUNTIME_DIR/host-setup.sh"
   if [ ! -x "$hostsetup" ]; then
-    warn "host-setup.sh non disponibile in $hostsetup — skip preflight VPS"
+    warn "host-setup.sh non disponibile in $hostsetup — skip preflight"
     return 0
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "dry-run: eseguirei $hostsetup --host-type=vps"
+    info "dry-run: eseguirei $hostsetup${PAIRING_TOKEN:+ --host-type=vps}"
     return 0
   fi
-  info "Eseguo host-setup.sh in modalità VPS (scrive host.env + swap)..."
-  if "$hostsetup" --host-type=vps </dev/null; then
-    ok "host-setup VPS completato"
+  info "Eseguo host-setup.sh (scrive ~/.jht/host.env + preflight swap)..."
+  if [ -n "$PAIRING_TOKEN" ]; then
+    if "$hostsetup" --host-type=vps </dev/null; then
+      ok "host-setup completato (vps forzato)"
+    else
+      warn "host-setup uscito con errore — proseguo (pair manuale potrebbe servire)"
+    fi
   else
-    warn "host-setup VPS uscito con errore — proseguo (pair manuale potrebbe servire)"
+    if "$hostsetup" </dev/null; then
+      ok "host-setup completato (tipo host auto-rilevato)"
+    else
+      warn "host-setup uscito con errore — proseguo"
+    fi
   fi
   # Allinea ownership di ~/.jht e ~/Documents/Job Hunter Team al UID del
   # container `jht` (1001, vedi Dockerfile `useradd jht`). Senza questo,
@@ -953,7 +966,7 @@ main() {
     main_native
   fi
   save_pairing_token
-  run_host_setup_vps
+  run_host_setup
   final_message
   maybe_onboard
 }

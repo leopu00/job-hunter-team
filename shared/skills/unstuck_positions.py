@@ -45,12 +45,17 @@ from _db import get_db, ensure_schema
 def find_stuck(conn, status, stale_hours):
     """Ritorna lista di (id, title, company, updated_at) stuck in `status`."""
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=stale_hours)).isoformat()
+    # datetime() normalizza i due formati che convivono in updated_at:
+    # ISO con 'T' (INSERT espliciti) e 'YYYY-MM-DD HH:MM:SS' col trigger
+    # positions_touch_updated_at. Il confronto lessicografico puro vedeva
+    # ogni riga formato-spazio con la stessa data del cutoff come stuck
+    # (spazio < 'T'), resettando anche righe fresche di minuti.
     cursor = conn.execute(
         """
         SELECT id, title, company, status, updated_at
         FROM positions
         WHERE status = ?
-          AND updated_at < ?
+          AND datetime(updated_at) < datetime(?)
         ORDER BY updated_at ASC
         """,
         (status, cutoff)

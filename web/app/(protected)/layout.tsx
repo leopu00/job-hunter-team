@@ -34,11 +34,15 @@ const DESKTOP_ONLY_PREFIXES = [
   "/cron",
   "/backup",
   "/setup",
-  "/cli-link",
+  // NB: /cli-link NON è desktop-only. È la pagina di pairing browser (flusso
+  // `jht cloud login` da VPS/PC) e per definizione vive sul CLOUD: se la
+  // rediriamo a /dashboard il pairing device-flow diventa impossibile in
+  // produzione. Reachable su entrambe le modalità (innocua su local).
 ];
 
 function isDesktopOnlyPath(p: string): boolean {
   if (p.startsWith("/settings/cloud-sync")) return false; // sync-infra resta cloud
+  if (p.startsWith("/cli-link")) return false; // pairing browser: vive sul cloud
   return DESKTOP_ONLY_PREFIXES.some(
     (pre) => p === pre || p.startsWith(pre + "/"),
   );

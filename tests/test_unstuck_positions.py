@@ -177,10 +177,17 @@ class TestUnstuckApply:
         _seed_positions(tmp_db_path, [
             ('Stuck Writing', 'Acme', 'writing', 4),
         ])
-        # Inject existing notes
+        # Inject existing notes. Il raw UPDATE fa scattare il trigger
+        # positions_touch_updated_at (updated_at = adesso) e la row non
+        # sarebbe più stuck: si rimette esplicitamente un timestamp
+        # vecchio — RICALCOLATO, quindi diverso da quello in riga: col
+        # valore identico il WHEN (IS) del trigger scatterebbe comunque.
+        stale_ts = (datetime.now(timezone.utc) - timedelta(hours=4)).isoformat()
         conn = sqlite3.connect(tmp_db_path)
         conn.execute(
-            "UPDATE positions SET notes='EXISTING_NOTE: scout flag' WHERE id=1"
+            "UPDATE positions SET notes='EXISTING_NOTE: scout flag', "
+            "updated_at=? WHERE id=1",
+            (stale_ts,)
         )
         conn.commit()
         conn.close()
@@ -192,6 +199,54 @@ class TestUnstuckApply:
         notes = rows[0][3] or ''
         assert 'EXISTING_NOTE: scout flag' in notes, "Original note lost"
         assert '[unstuck' in notes, "Audit note missing"
+
+
+class TestTimestampFormats:
+    """Nel DB convivono due formati di updated_at: ISO con 'T' (INSERT
+    espliciti) e 'YYYY-MM-DD HH:MM:SS' scritto dal trigger
+    positions_touch_updated_at. Il confronto deve essere temporale, non
+    lessicografico (spazio < 'T' rendeva stuck ogni riga formato-spazio
+    con la stessa data UTC del cutoff, anche fresca di minuti)."""
+
+    def test_trigger_touched_fresh_row_not_reset(self, tmp_db_path):
+        _seed_positions(tmp_db_path, [
+            ('Fresh Touched', 'Acme', 'writing', 4),
+        ])
+        # il raw UPDATE fa scattare il trigger: updated_at = ADESSO nel
+        # formato spazio. La riga è fresca e non va resettata.
+        # (Nota: senza fix il caso è visibile solo quando l'ora UTC ha
+        # superato stale-hours: qui 0.5h → cieco solo 00:00-00:30 UTC.)
+        conn = sqlite3.connect(tmp_db_path)
+        conn.execute("UPDATE positions SET notes='touch' WHERE id=1")
+        conn.commit()
+        conn.close()
+
+        import unstuck_positions
+        unstuck_positions.main(['--apply', '--stale-hours', '0.5'])
+
+        rows = _read_statuses(tmp_db_path)
+        assert rows[0][2] == 'writing', \
+            f"Fresh trigger-touched row reset: {rows[0]!r}"
+
+    def test_stale_space_format_row_reset(self, tmp_db_path):
+        _seed_positions(tmp_db_path, [
+            ('Stale Space', 'Acme', 'writing', 0),
+        ])
+        stale = (datetime.now(timezone.utc)
+                 - timedelta(hours=4)).strftime('%Y-%m-%d %H:%M:%S')
+        conn = sqlite3.connect(tmp_db_path)
+        conn.execute(
+            "UPDATE positions SET updated_at=? WHERE id=1", (stale,)
+        )
+        conn.commit()
+        conn.close()
+
+        import unstuck_positions
+        unstuck_positions.main(['--apply'])
+
+        rows = _read_statuses(tmp_db_path)
+        assert rows[0][2] == 'scored', \
+            f"Stale space-format row not reset: {rows[0]!r}"
 
 
 class TestUnstuckEmpty:

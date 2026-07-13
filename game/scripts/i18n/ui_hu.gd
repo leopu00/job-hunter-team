@@ -50,6 +50,8 @@ const S := {
 	"chat.menu": "ÜGYNÖK CHATEK",
 	"chat.replies": "válaszol a chatben",
 	"chat.maybe": "olvassa, a válasz nem garantált",
+	"chat.expand": "TELJES KÉPERNYŐ",
+	"chat.shrink": "KICSINYÍTÉS",
 
 	"vps.intro": "Kösd össze a csapatod VPS-ét: IP és SSH kulcs, a többit a játék intézi.",
 	"vps.ip": "A VPS IP-CÍME",

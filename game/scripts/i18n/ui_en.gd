@@ -50,6 +50,8 @@ const S := {
 	"chat.menu": "AGENT CHATS",
 	"chat.replies": "replies in chat",
 	"chat.maybe": "reads, reply not guaranteed",
+	"chat.expand": "FULL SCREEN",
+	"chat.shrink": "SHRINK",
 
 	"vps.intro": "Connect your team's VPS: IP and SSH key, the game handles the rest.",
 	"vps.ip": "VPS IP",

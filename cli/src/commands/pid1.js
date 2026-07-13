@@ -26,7 +26,7 @@
  */
 
 import { readFile, access } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, createWriteStream, mkdirSync, statSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
@@ -274,20 +274,64 @@ async function isCloudConfigured() {
 function spawnLabeled(label, cmd, args) {
   const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
   const prefix = `[${label}] `;
+
+  // Persisti l'output del figlio su file, OLTRE a docker logs. I docker logs
+  // ruotano (json-file default) e su crash veloce l'ultima riga bufferizzata
+  // si perde → un crash-loop breve (es. cloud-daemon 2026-07-09) diventava
+  // NON diagnosticabile: nessuno stack da nessuna parte. Il file su
+  // $JHT_HOME/logs/<label>.log e' bind-mountato → sopravvive a rotazione,
+  // restart e crash. Best-effort: se il file non e' apribile, si degrada al
+  // solo docker-logs (comportamento storico), non blocca lo spawn.
+  let fileStream = null;
+  try {
+    const logDir = join(JHT_HOME, 'logs');
+    mkdirSync(logDir, { recursive: true });
+    const logPath = join(logDir, `${label}.log`);
+    // Rotazione singola a ~5MB: evita crescita illimitata su respawn ripetuti.
+    try {
+      if (statSync(logPath).size > 5 * 1024 * 1024) {
+        renameSync(logPath, `${logPath}.old`);
+      }
+    } catch { /* file assente al primo spawn: normale */ }
+    fileStream = createWriteStream(logPath, { flags: 'a' });
+    fileStream.write(
+      `\n[${new Date().toISOString()}] === spawn: ${cmd} ${args.join(' ')} ===\n`,
+    );
+  } catch (err) {
+    console.log(`[pid1] log-capture per '${label}' disabilitato: ${err.message}`);
+  }
+
   const prefixStream = (stream, target) => {
     let buf = '';
     stream.on('data', (chunk) => {
       buf += chunk.toString('utf-8');
       const lines = buf.split('\n');
       buf = lines.pop() ?? '';
-      for (const line of lines) target.write(`${prefix}${line}\n`);
+      for (const line of lines) {
+        target.write(`${prefix}${line}\n`);
+        if (fileStream) fileStream.write(`${line}\n`);
+      }
     });
     stream.on('end', () => {
-      if (buf) target.write(`${prefix}${buf}\n`);
+      if (buf) {
+        target.write(`${prefix}${buf}\n`);
+        if (fileStream) fileStream.write(`${buf}\n`);
+      }
     });
   };
   prefixStream(child.stdout, process.stdout);
   prefixStream(child.stderr, process.stderr);
+
+  // 'close' (non 'exit'): scatta DOPO il drain di stdout/stderr, cosi' l'ultima
+  // riga del crash e' gia' scritta. Il codice di uscita finisce nel file anche
+  // se il pid1Log del chiamante va solo su docker logs.
+  child.on('close', (code, signal) => {
+    if (fileStream) {
+      fileStream.end(
+        `[${new Date().toISOString()}] === exited code=${code} signal=${signal} ===\n`,
+      );
+    }
+  });
   return child;
 }
 

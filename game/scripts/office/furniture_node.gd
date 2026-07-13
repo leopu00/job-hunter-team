@@ -77,6 +77,17 @@ func set_occupied(on: bool) -> void:
 	if _sprite and _seated_tex:
 		_sprite.texture = _seated_tex if on else _base_tex
 
+## Lampo di lavoro (react_to_work): quando l'agente è dipinto nella
+## texture del desk il rig è nascosto — il segnale del lavoro reale
+## deve pulsare sul mobile, stessa doppia pulsazione del rig.
+func flash() -> void:
+	if _sprite == null:
+		return
+	var tw := create_tween()
+	for _i in 2:
+		tw.tween_property(_sprite, "modulate", Color(0.72, 1.3, 1.05), 0.16)
+		tw.tween_property(_sprite, "modulate", Color.WHITE, 0.45)
+
 func _init(p_item: Dictionary) -> void:
 	item = p_item
 	_rect = item["rect"]
@@ -148,7 +159,12 @@ func _ready() -> void:
 		if ResourceLoader.exists(seated_path):
 			var st: Texture2D = load(seated_path)
 			if st != null:
-				_seated_tex = st
+				if st.get_size() == tex.get_size():
+					_seated_tex = st
+				else:
+					push_warning("Seated art canvas mismatch: %s is %s, base %s is %s; using dynamic rig." % [
+						seated_path, st.get_size(), path, tex.get_size(),
+					])
 
 func _draw() -> void:
 	var kind: String = item["kind"]

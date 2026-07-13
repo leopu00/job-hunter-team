@@ -252,6 +252,13 @@ func react_to_work(print_job := false) -> void:
 		return
 	if print_job:
 		PrinterFx.ping(4.0)
+	# col seated art il rig è nascosto (il corpo vive nella texture del
+	# desk): il lampo del lavoro reale pulsa sul mobile, non sul rig
+	if rig and not rig.visible:
+		var node: FurnitureNode = FurnitureNode.desks.get(_desk_key)
+		if node:
+			node.flash()
+		return
 	var tw := create_tween()
 	for _i in 2:
 		tw.tween_property(rig, "modulate", Color(0.72, 1.3, 1.05), 0.16)
@@ -277,6 +284,11 @@ func start_talk() -> void:
 	state = S.TALK
 	_path = PackedVector2Array()
 	velocity = Vector2.ZERO
+	# da seduti la position è affondata nel desk (seat_sink/offset): il
+	# rig che riappare per il dialogo si alza in piedi alla postazione,
+	# non dentro il mobile
+	if _seated():
+		position = _spot
 	rig.set_motion("down", false, "idle")
 	bubble.hide_now()
 
