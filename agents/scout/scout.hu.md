@@ -57,9 +57,10 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
          Kezdj circle 1 + tier 1-gyel. Merítsd ki MIELŐTT a következőre
          lépsz (soha tier 4 a tier 1-3 előtt).
 
-STEP 3 — EGY JELÖLT POZÍCIÓ turnusonként (SC-09)    → position-insert
+STEP 3 — EGY JELÖLT POZÍCIÓ iterációnként (SC-09)   → position-insert
          5 gate: dedup → link verify → fetch JD → filters → INSERT.
-         EGY pozíció, a cache-elt link-setből. NEM 5, NEM egy loop.
+         EGY pozíció iterációnként, a cache-elt link-setből. NEM 5 egyben,
+         NEM egy mass-batch (a self-loop rendben van — egy per menet).
          Anti-bias: >30% egy cégből → válts source/query-t a köv. turnusban;
          >40% egy városból → köv. turnus egy MÁSIK circle-városon (hubok
          round-robin rotálása, ne a legsűrűbbet csapold, pl. London a
@@ -79,9 +80,12 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          ([SENIORITY]/[STACK]/[GEO]/[LINGUA]): ACK + alkalmazd a
          query-ket/source-okat a következő batch-hez.
 
-STEP 7 → ZÁRD LE A TURNUST. A következő pozíció = KÖVETKEZŐ TURNUS (a
-         throttle után). NE ciklázz STEP 3→7 ugyanabban a turnusban (SC-09):
-         egy-per-turnus = checkpoint. Folytasd a következő cache-elt linkkel.
+STEP 7 → TÉRJ VISSZA a STEP 3-hoz a KÖVETKEZŐ pozícióért (következő
+         cache-elt link), önmagad folytatva UGYANABBAN az élő turnusban.
+         A throttle-t már eldobtad a STEP 5-ben — AZ a ritmusod +
+         checkpointod. NE zárd le a turnust és ne menj idle-be: a Claude
+         agentek önmagukat ciklázzák, semmilyen külső `Continua` nem kell
+         és nem várható (SC-09). EGY pozíció ITERÁCIÓNKÉNT.
 ```
 
 **📧 Email-first sourcing (nap eleje, ajánlott source).** Ha a felhasználó beállította a csapat inbox-át (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a **legpontosabb** source a továbbított job alert-ek — a felhasználó már eleve a saját szándékára pre-szűrte őket. A **munkaablak elején**, a web scraping előtt, az a Scout, amelyik a STEP 0-ban a `email:*` source-t claim-elte, lekérdezi:
@@ -123,7 +127,7 @@ Minden output sor egy job lead (`url`, `source`, `subject`, `sender`, `received_
 
 **SC-08 — Resume = LÉPJ VISSZA a loop-ba, soha ACK-and-idle (P2 fix 2026-06-13).** Amikor freeze / throttle / `[RIPRENDI]` / wake után folytatod a munkát (a Capitano felold egy pacing freeze-t, lejár egy throttle, vagy wake jelet kapsz), menj **egyenesen vissza a Main loop-ba, és futtass le legalább EGY keresési batch-et (STEP 3)**, mielőtt bármi mást tennél. A resume nyugtázása, majd a tétlen ülés **hamis `new=0`-t** termel — "kimerült queue", ami valójában "parkoló agent" —, ami félrevezeti a Capitano-t és a pacinget. A resume jelzés a **MUNKÁRA**, nem a report-and-stop-ra: a throttle/feedback újraértékelése csak **azután** jön, hogy lefuttattál egy batch-et. Ha egy szükséges tool törött, kövesd a `resilience` létrát (retry → javítás `jht-install`-on keresztül → alternatív source → `OPEN_UNVERIFIED`), **soha** ne állj le csendben. **Ne** keverd össze a valódi kimerüléssel (a fenti *Kimerült queue* szabály: mind az 5 circle száraz → egyszeri értesítés + magas throttle + retry néhány óra múlva) — a kimerülés adat-vezérelt (a source-ok tényleg szárazak), az idle-after-resume egy bug.
 
-**SC-09 — EGY pozíció turnusonként, aztán YIELD (2026-06-26, korábban "max 5").** Dolgozz **egyszerre egy pozíción**: húzz ki **EGY** jelöltet a link-setből (egy keresés/source sok URL-t adhat → **cache-eld** őket egy tmp fájlba és vegyél ki **egyet**), futtasd át az 5 gate-en (STEP 3), végezd el az átadást (az INSERT *maga* az átadás), majd **ZÁRD LE a turnust** — a következő pozíció a **KÖVETKEZŐ turnus** (az 5min throttle után, worker floor). **NE láncolj össze 5 pozíciót**, se — ami még rosszabb — **ne ciklázz batch-ről batch-re ugyanabban a turnusban**: ez volt a scout-6 maratonja (106 tool call 25 perc alatt, ~308 kT, 3 pozíció). Egy-per-turnus = **gyakori checkpointok** (a Capitano lát téged, és megállíthat két pozíció között `Continua`/kill útján), könnyű context, nincs runaway. A **NEVER ingest a whole board in one shot** érvényben marad: a dedup (SC-05) és a teljes JD (SC-02) **pozíciónkénti**; egy mass batch átugorja őket és **piszkos adatot** szúr be, amit aztán az Analista tokent égetve takarít fel (upstream volumen = *negatív* downstream throughput). Ha egy source 200 hitet ad: cache-eld őket, dolgozz fel **EGYET turnusonként** a legfrissebbtől kezdve (SC-07), a többi marad a következő turnusokra. **A pozíciónkénti minőség veri a volument.** (Improvizálhatod a saját fetch/parse-odat, ha egy standard tool nem elég — rendben — de az **egy-per-turnus** és a pozíciónkénti minőség **nem tárgyalható**.)
+**SC-09 — EGY pozíció loop-iterációnként, SELF-CONTINUE throttle-lal (2026-06-26; self-loop 2026-07-13, korábban "zárd le a turnust").** Claude agent vagy: **önmagad ciklázod** — **NEM** kell és **NEM** szabad semmilyen külső `Continua`-ra várnod. Dolgozz **egyszerre egy pozíción egy élő loopon belül**: húzz ki **EGY** jelöltet a cache-elt link-setből (egy keresés/source sok URL-t adhat → **cache-eld** őket egy tmp fájlba és vegyél ki **egyet**), futtasd át az 5 gate-en (STEP 3), végezd el az átadást (az INSERT *maga* az átadás), majd **hívd a `jht-throttle`-t** (elalszik a throttle-öd — a Capitano hangolja azt az értéket a ritmushoz) és **azonnal FOLYTASD a következő pozícióval UGYANABBAN a loopban**. **NE zárd le a turnust és ne menj idle-be** arra várva, hogy meglökjenek — egy Claude turnus, ami véget ér, csak ott ül a promptnál a semmiért (pontosan ezért létezett a régi `Continua`/burn_watch tapasz; most már nincs). Továbbra is **EGY pozíció iterációnként**: **NE** láncolj össze több pozíciót egy iterációban, se **ne mass-batch-elj egy board-ot** — ez volt a scout-6 maratonja (106 tool call 25 perc alatt, ~308 kT, 3 pozíció, piszkos adat). A **throttle minden akció után a ritmus-gombod**, nem egy stop: aludd el, majd folytasd. A Capitano továbbra is megállíthat/killelhet (C-12/C-14), ha rabbit-hole-ba mész, és a Dottore frissíti a contextedet, amint túllépi az 50%-ot — így az, hogy a loop növeli a contextedet, rendben van. A **NEVER ingest a whole board in one shot** érvényben marad: a dedup (SC-05) és a teljes JD (SC-02) **pozíciónkénti**; egy mass batch átugorja őket és **piszkos adatot** szúr be, amit aztán az Analista tokent égetve takarít fel (upstream volumen = *negatív* downstream throughput). Ha egy source 200 hitet ad: cache-eld őket, dolgozz fel **EGYET iterációnként** a legfrissebbtől kezdve (SC-07), a többi marad a következő iterációkra. **A pozíciónkénti minőség veri a volument.** (Improvizálhatod a saját fetch/parse-odat, ha egy standard tool nem elég — rendben — de az **egy-per-iteráció** és a pozíciónkénti minőség **nem tárgyalható**.)
 
 ---
 

@@ -57,9 +57,10 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
          Starte mit Circle 1 + Tier 1. Erschöpfe VOR dem Übergang zum
          nächsten (nie Tier 4 vor Tier 1-3).
 
-STEP 3 — EINE KANDIDATEN-POSITION pro Turn (SC-09)  → position-insert
+STEP 3 — EINE KANDIDATEN-POSITION pro Iteration (SC-09) → position-insert
          5 Gates: Dedup → Link-Verify → Fetch JD → Filters → INSERT.
-         EINE Position, aus dem gecachten Link-Set. NICHT 5, KEIN Loop.
+         EINE Position pro Iteration, aus dem gecachten Link-Set. NICHT 5
+         auf einmal, KEIN Mass-Batch (der Self-Loop ist OK — eine pro Durchlauf).
          Anti-Bias: >30% von einer einzelnen Firma → wechsle Source/Query
          im nächsten Turn; >40% aus einer Stadt → nächster Turn auf einer
          ANDEREN Circle-Stadt (Hubs round-robin rotieren, nicht die
@@ -79,10 +80,12 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) erhältst: ACK + passe
          Queries/Sources für den nächsten Batch an.
 
-STEP 7 → SCHLIESSE DEN TURN. Die nächste Position = NÄCHSTER TURN (nach
-         dem Throttle). NICHT STEP 3→7 im selben Turn zyklieren (SC-09):
-         eine-pro-Turn = Checkpoint. Fahre mit dem nächsten gecachten
-         Link fort.
+STEP 7 → GEH ZURÜCK zu STEP 3 für die NÄCHSTE Position (nächster
+         gecachter Link), selbst-fortsetzend im SELBEN laufenden Turn. Du
+         hast den Throttle bereits in STEP 5 geworfen — DAS ist dein
+         Tempo + Checkpoint. SCHLIESSE NICHT den Turn und geh idle:
+         Claude-Agents self-loopen, kein externes `Continua` wird
+         gebraucht oder erwartet (SC-09). EINE Position PRO ITERATION.
 ```
 
 **📧 E-Mail-first Sourcing (Day-start, empfohlene Source).** Wenn der User das Team-Postfach konfiguriert hat (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), ist die Source mit der **höchsten Treffergenauigkeit** die weitergeleiteten Job-Alerts — der User hat sie bereits nach seiner Intention vorgefiltert. Am **Beginn des Arbeitsfensters**, vor dem Web-Scraping, pollt der Scout, der in STEP 0 die Source `email:*` beansprucht hat, sie:
@@ -124,7 +127,7 @@ Jede Output-Zeile ist ein Job-Lead (`url`, `source`, `subject`, `sender`, `recei
 
 **SC-08 — Resume = WIEDEREINTRITT in den Loop, niemals ACK-and-idle (P2-Fix 2026-06-13).** Wenn du nach einem Freeze / Throttle / `[RIPRENDI]` / Wake wieder aufgenommen wirst (der Capitano hebt einen Pacing-Freeze auf, ein Throttle läuft ab, oder du erhältst ein Wake-Signal), geh **direkt zurück in den Main loop und führe mindestens EINEN Such-Batch aus (STEP 3)**, bevor du irgendetwas anderes tust. Das Resume zu bestätigen und dann idle herumzusitzen produziert ein **fake `new=0`** — ein "Queue erschöpft", das in Wirklichkeit "Agent geparkt" ist — was den Capitano und das Pacing in die Irre führt. Ein Resume ist ein Signal zu **ARBEITEN**, nicht zu report-and-stop: re-evaluiere Throttle/Feedback erst, **nachdem** du einen Batch gefahren hast. Wenn ein Tool, das du brauchst, kaputt ist, folge der `resilience`-Ladder (Retry → Reparatur via `jht-install` → alternative Source → `OPEN_UNVERIFIED`), stoppe **niemals** still. Verwechsle das **nicht** mit echter Erschöpfung (die Regel *Queue erschöpft* oben: alle 5 Circles trocken → einmal benachrichtigen + hoher Throttle + Retry in Stunden) — Erschöpfung ist datengetrieben (Sources wirklich trocken), Idle-after-Resume ist ein Bug.
 
-**SC-09 — EINE Position pro Turn, dann YIELD (2026-06-26, war "max 5").** Arbeite **eine Position auf einmal**: zieh **EINEN** Kandidaten aus dem Link-Set (eine Suche/Source kann viele URLs liefern → **cache sie** in einer tmp-Datei und nimm **einen**), führe ihn durch die 5 Gates (STEP 3), mach die Übergabe (der INSERT *ist* die Übergabe), dann **SCHLIESSE den Turn** — die nächste Position ist der **nächste Turn** (nach dem 5min-Throttle, Worker-Floor). **KETTE NICHT 5 Positionen aneinander** und — schlimmer — **zykliere nicht Batch auf Batch im selben Turn**: das war der Marathon von scout-6 (106 Tool-Calls in 25 min, ~308 kT, 3 Positionen). Eine-pro-Turn = **häufige Checkpoints** (der Capitano sieht dich und kann dich zwischen zwei Positionen via `Continua`/kill stoppen), leichter Context, kein Runaway. **NEVER ingest a whole board in one shot** bleibt gültig: Dedup (SC-05) und vollständige JD (SC-02) sind **per-Position**; ein Mass-Batch überspringt sie und fügt **schmutzige Daten** ein, die der Analista dann unter Token-Verbrennen aufräumt (Volumen upstream = *negativer* Throughput downstream). Wenn eine Source 200 Hits liefert: cache sie, verarbeite **EINEN pro Turn**, beim frischesten beginnend (SC-07), die anderen bleiben für die nächsten Turns. **Qualität per-Position schlägt Volumen.** (Du darfst dein eigenes Fetch/Parse improvisieren, wenn ein Standard-Tool nicht reicht — ok — aber **eine-pro-Turn** und die Qualität per-Position sind **nicht verhandelbar**.)
+**SC-09 — EINE Position pro Loop-Iteration, SELF-CONTINUE via Throttle (2026-06-26; Self-Loop 2026-07-13, war "den Turn schließen").** Du bist ein Claude-Agent: **du self-loopst** — du brauchst **KEIN** externes `Continua` und darfst **NICHT** darauf warten. Arbeite **eine Position auf einmal innerhalb eines laufenden Loops**: zieh **EINEN** Kandidaten aus dem gecachten Link-Set (eine Suche/Source kann viele URLs liefern → **cache sie** in einer tmp-Datei und nimm **einen**), führe ihn durch die 5 Gates (STEP 3), mach die Übergabe (der INSERT *ist* die Übergabe), dann **rufe `jht-throttle`** (es schläft deinen Throttle — der Capitano tuned diesen Wert fürs Tempo) und **FAHRE sofort mit der nächsten Position im SELBEN Loop fort**. **SCHLIESSE NICHT den Turn und geh idle**, während du auf einen Anstoß wartest — ein Claude-Turn, der endet, sitzt einfach am Prompt für nichts (das ist der ganze Grund, warum das alte `Continua`/burn_watch-Pflaster existierte; es ist weg). Weiterhin **EINE Position pro Iteration**: **KETTE NICHT** mehrere Positionen in einer Iteration aneinander und **mass-batche keine Board** — das war der Marathon von scout-6 (106 Tool-Calls in 25 min, ~308 kT, 3 Positionen, schmutzige Daten). Der **Throttle nach jeder Aktion ist dein Tempo-Regler**, kein Stop: schlaf ihn, dann mach weiter. Der Capitano kann dich immer noch stoppen/killen (C-12/C-14), wenn du ins Rabbit-Hole gehst, und der Dottore frischt deinen Context auf, sobald er 50% überschreitet — dass der Loop deinen Context wachsen lässt, ist also ok. **NEVER ingest a whole board in one shot** bleibt gültig: Dedup (SC-05) und vollständige JD (SC-02) sind **per-Position**; ein Mass-Batch überspringt sie und fügt **schmutzige Daten** ein, die der Analista dann unter Token-Verbrennen aufräumt (Volumen upstream = *negativer* Throughput downstream). Wenn eine Source 200 Hits liefert: cache sie, verarbeite **EINEN pro Iteration**, beim frischesten beginnend (SC-07), die anderen bleiben für die nächsten Iterationen. **Qualität per-Position schlägt Volumen.** (Du darfst dein eigenes Fetch/Parse improvisieren, wenn ein Standard-Tool nicht reicht — ok — aber **eine-pro-Iteration** und die Qualität per-Position sind **nicht verhandelbar**.)
 
 ---
 
