@@ -1,6 +1,6 @@
 ---
 name: session-refresh
-description: "Solo Dottore. Round di refresh del contesto: per ogni sessione agente esegui una retrospettiva (eta' + cattura ampia + intervista + analytics), accoda una sintesi densa al giornale giornaliero che cresce, poi KILL + ricrea + riprendi la sessione con il contesto di continuazione — cosi' la finestra di contesto dell'agente viene azzerata senza perdere il punto in cui si trovava. Gira 2 volte per finestra di lavoro (a +30min e a meta'). Salta le sessioni fresche e non riavvia mai una sessione che il Capitano ha deliberatamente parcheggiato."
+description: "Solo Dottore. Round di refresh del contesto: per ogni sessione agente leggi l'occupazione reale del contesto (comando client-side del provider, zero token) e rinfresca SOLO le sessioni con finestra di contesto piena oltre il 50% — esegui una retrospettiva (cattura + intervista + analytics), accoda una sintesi densa al giornale giornaliero che cresce, poi KILL + ricrea + riprendi la sessione con il contesto di continuazione, cosi' la finestra di contesto viene azzerata senza perdere il punto in cui si trovava. Gira 2 volte per finestra di lavoro (a +30min e a meta'). Salta le sessioni fresche, a basso contesto (≤50%) e quelle parcheggiate dal Capitano."
 allowed-tools: Bash(tmux *), Bash(python3 *), Bash(bash /app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
 
@@ -25,7 +25,30 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
 - **Ordine**: PRIMA le sessioni worker (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), i coordinatori per ULTIMI e con cura (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). "Con cura" significa **catturane bene lo stato e compattali — NON saltarli** (sono i top consumer; vedi Regole). Non rinfrescare mai `DOTTORE` / `DOCTOR-WATCHDOG` (te stesso / lo scheduler).
-- **Salto FRESH**: `age = now - session_created`. Se `age < 40 min` → SALTA del tutto (non c'e' ancora nulla da riassumere, e rinfrescarla butterebbe via una sessione appena partita). Logga `action=skipped_fresh`.
+- **Salto FRESH** (pre-filtro economico prima del controllo contesto): `age = now - session_created`. Se `age < 40 min` → SALTA del tutto (non c'e' ancora nulla da riassumere, e rinfrescarla butterebbe via una sessione appena partita). Logga `action=skipped_fresh`. Tutto cio' che supera questo pre-filtro passa per lo **Step 1.5 (controllo contesto)** — e' quella misura `>50%`, non l'eta', a decidere il refresh.
+
+## Step 1.5 — CONTROLLO CONTESTO (il trigger del refresh: **>50%**)
+**Rinfresca SOLO le sessioni con finestra di contesto piena oltre il 50%.** Leggi l'occupazione reale con il comando di contesto **client-side** del provider — costa **zero token** (reso in locale, nessuna chiamata all'LLM) ed e' istantaneo. L'eta' NON e' piu' il trigger: una sessione vecchia-ma-vuota (es. un Mentor idle al 2%) va SALTATA, una sessione gonfia va rinfrescata.
+
+Due requisiti tassativi — ignorarli fa *bruciare* budget invece di risparmiarlo:
+- La sessione DEVE essere **idle** (nessun turno attivo). Se c'e' uno spinner / `esc to interrupt`, sta lavorando → SALTA questo giro (la prende il prossimo Dottore). Mai inviare tasti a turno in corso.
+- **Svuota prima la riga di input.** Altrimenti il comando si concatena col testo residuo e viene inviato come prompt all'LLM (brucia token). Manda `Escape` poi `C-u` prima di digitare.
+
+```bash
+S=<session>
+# provider → comando:  claude → /context   ·   codex → /status   ·   kimi → (verifica sul suo TUI)
+tmux send-keys -t "$S" Escape; sleep 1
+tmux send-keys -t "$S" C-u;    sleep 1          # svuota la riga di input (obbligatorio)
+tmux send-keys -t "$S" "/context"; sleep 1
+tmux send-keys -t "$S" Enter;  sleep 3
+PCT=$(tmux capture-pane -p -t "$S" | grep -aoE '[0-9.]+k?/[0-9.]+[km] tokens \([0-9]+%\)' | tail -1 | grep -aoE '\([0-9]+%\)' | tr -dc '0-9')
+tmux send-keys -t "$S" Escape                   # chiudi il pannello
+echo "context=$PCT%"
+```
+Decidi da `$PCT` (estratto da una riga tipo `24.9k/1m tokens (2%)`):
+- **`PCT` ≤ 50** → SALTA. NON ricreare, anche se la sessione e' vecchia. Logga `action=skipped_lowctx` con la `%` misurata. Passa alla successiva.
+- **`PCT` > 50** → procedi al refresh (Step 2–7).
+- **comando non renderizzato / parse fallito** → ricadi sull'euristica dell'eta' (`age ≥ 40min` → refresh) e logga `ctx=unparsed`.
 
 ## Step 2 — per sessione: cattura (ampia + saliente)
 Cattura UNA volta l'intero scrollback, poi le righe salienti — NON caricare migliaia di righe nel tuo contesto, fai il grep degli highlight:
@@ -70,7 +93,8 @@ entry = {
   "session": session, "role": "<role>", "session_age_h": 0.0,
   "analytics": { },              # paste the doctor_analytics.py JSON here
   "interview": {"intoppi": "...", "imparato": "...", "summary_denso": "..."},
-  "action": "recreated",         # recreated | skipped_parked | skipped_fresh
+  "action": "recreated",         # recreated | skipped_lowctx | skipped_parked | skipped_fresh
+  "context_pct": 0,              # occupazione contesto misurata nello Step 1.5 (il gate >50%)
   "resume_msg_sent": False,
 }
 with open(journal, "a") as f:
@@ -79,7 +103,7 @@ print("appended", session)
 PY
 ```
 
-## Step 7 — ricrea + riprendi (solo se NON fresca e NON parcheggiata)
+## Step 7 — ricrea + riprendi (solo se contesto **>50%**, NON fresca, NON parcheggiata)
 Refresh atomico — hai gia' catturato il contesto nello Step 2, quindi il kill e' sicuro:
 ```bash
 ROLE=<role>; N=<instance>      # from analytics; recreate the SAME number (no dice — the die is for NEW spawns only)
@@ -92,8 +116,8 @@ Imposta `resume_msg_sent=True` nella voce del giornale. Poi passa alla sessione 
 
 ## Regole
 - **Un solo Dottore fa tutte le sessioni in questo round** (ordine dell'utente: per ora un solo Dottore). Usa la cattura su file + grep cosi' da non far mai esplodere la tua finestra di contesto.
-- **CAPITANO e SENTINELLA sono i TOP consumer di token** (il loro contesto è quasi sempre gonfio — la Sentinella ticchetta ogni ~15min, il Capitano coordina in continuazione). NON sono esenti: **compattali ogni giro** (per ultimi, dopo i worker). **Compatta, non resettare** — il refresh con sintesi densa preserva la continuità, un kill secco la perde.
+- **CAPITANO e SENTINELLA sono i TOP consumer di token** (il loro contesto è quasi sempre gonfio — la Sentinella ticchetta ogni ~15min, il Capitano coordina in continuazione). Passano comunque per il **gate del contesto >50%** come tutti gli altri (Step 1.5) — ma in pratica misurano ben oltre il 50%, quindi vengono rinfrescati quasi ogni giro. Falli per **ultimi** (dopo i worker) e **compatta, non resettare** — il refresh con sintesi densa preserva la continuità, un kill secco la perde. Se uno misura ≤50% (raro), saltalo quel giro come qualsiasi altra sessione a basso contesto.
 - **CAPITANO**: è il coordinatore con stato in-flight (assegnazioni worker, throttle attivo, ultimo ordine di pacing, decisioni pendenti). Nell'intervista (Step 5) cattura esplicitamente quello stato di coordinamento e mettilo nel seed (Step 7) così non perde il filo. Fallo per ULTIMO; se sta gestendo un'EMERGENZA dal vivo (orchestrazione visibile nel pane proprio ora), lascia che si stabilizzi prima, altrimenti compattalo.
 - **SENTINELLA**: è **near-stateless** — il suo stato operativo vive nel bridge/config e in `sentinel-data.jsonl`, non nella sua chat. Questo la rende la **più sicura e di maggior valore da compattare**: rinfrescala ogni giro, per ultima, con un seed minimo: `[RESUME] sei la Sentinella; il tuo stato vive nel bridge + sentinel-data.jsonl — riprendi il monitoraggio del pacing dal prossimo tick.` Il recreate per-età dell'`agent-watchdog` (oltre `JHT_SENTINELLA_MAX_CTX_AGE_H`, default 24h) resta solo come **fallback** per quando il Dottore non gira; dato che ora la compatti ogni giro non raggiungerà quell'età, quindi nessun race.
 - **Mai** `tmux new-session` a mano — sempre `start-agent.sh` (vedi `spawn-agent`).
-- Logga ogni azione nel giornale (`recreated`/`skipped_parked`/`skipped_fresh`) — il giornale e' la traccia d'audit e cresce ogni giorno.
+- Logga ogni azione nel giornale (`recreated`/`skipped_lowctx`/`skipped_parked`/`skipped_fresh`) con la `context_pct` misurata — il giornale e' la traccia d'audit e cresce ogni giorno.

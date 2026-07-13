@@ -1,6 +1,6 @@
 ---
 name: session-refresh
-description: "Réservé au Dottore. Tour de rafraîchissement du contexte : pour chaque session d'agent, faire une rétrospective (âge + capture large + entretien + analytics), ajouter une synthèse dense au journal quotidien qui s'enrichit au fil de la journée, puis TUER + recréer + reprendre la session avec un contexte de continuation — afin que la fenêtre de contexte de l'agent soit vidée sans perdre où il en était. S'exécute 2× par fenêtre de travail (à +30min et à mi-fenêtre). Ignore les sessions fraîches et ne redémarre jamais une session que le Capitano a délibérément mise en attente."
+description: "Réservé au Dottore. Tour de rafraîchissement du contexte : pour chaque session d'agent, lire l'occupation réelle de son contexte (commande client-side du fournisseur, zéro token) et ne rafraîchir QUE les sessions dont la fenêtre de contexte est remplie à plus de 50% — faire une rétrospective (capture + entretien + analytics), ajouter une synthèse dense au journal quotidien qui s'enrichit au fil de la journée, puis TUER + recréer + reprendre la session avec un contexte de continuation, afin que sa fenêtre de contexte soit vidée sans perdre où elle en était. S'exécute 2× par fenêtre de travail (à +30min et à mi-fenêtre). Ignore les sessions fraîches, à faible contexte (≤50%) et celles mises en attente par le Capitano."
 allowed-tools: Bash(tmux *), Bash(python3 *), Bash(bash /app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
 
@@ -25,7 +25,30 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
 - **Ordre** : les sessions de travailleurs D'ABORD (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), les coordinateurs EN DERNIER et avec précaution (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). « Avec précaution » veut dire **capturer bien leur état et les compacter — NE PAS les sauter** (ce sont les top consumers ; voir Règles). Ne rafraîchis jamais `DOTTORE` / `DOCTOR-WATCHDOG` (toi-même / le planificateur).
-- **Ignorer si FRESH** : `age = now - session_created`. Si `age < 40 min` → IGNORER entièrement (rien à résumer encore, et rafraîchir gaspillerait une session qui vient tout juste de démarrer). Journaliser `action=skipped_fresh`.
+- **Ignorer si FRESH** (pré-filtre économique avant la vérification du contexte) : `age = now - session_created`. Si `age < 40 min` → IGNORER entièrement (rien à résumer encore, et rafraîchir gaspillerait une session qui vient tout juste de démarrer). Journaliser `action=skipped_fresh`. Tout ce qui passe ce pré-filtre passe par l'**Étape 1.5 (vérification du contexte)** — c'est cette mesure `>50%`, et non l'âge, qui décide du rafraîchissement.
+
+## Étape 1.5 — VÉRIFICATION DU CONTEXTE (le déclencheur du rafraîchissement : **>50%**)
+**Ne rafraîchis QUE les sessions dont la fenêtre de contexte est remplie à plus de 50%.** Lis l'occupation réelle avec la commande de contexte **client-side** du fournisseur — elle coûte **zéro token** (rendue en local, aucun appel LLM) et est instantanée. L'âge n'est PLUS le déclencheur : une session vieille-mais-vide (p.ex. un Mentor inactif à 2%) doit être IGNORÉE, une session surchargée doit être rafraîchie.
+
+Deux exigences impératives — les ignorer *brûle* du budget au lieu d'en économiser :
+- La session DOIT être **inactive** (aucun tour en cours). Si un spinner / `esc to interrupt` s'affiche, elle travaille → IGNORE ce tour (le prochain Doctor la reprend). N'envoie jamais de touches en plein tour.
+- **Vide d'abord la ligne de saisie.** Sinon la commande se concatène au texte résiduel et est soumise comme prompt à l'LLM (brûle des tokens). Envoie `Escape` puis `C-u` avant de taper.
+
+```bash
+S=<session>
+# provider → command:  claude → /context   ·   codex → /status   ·   kimi → (verify on its TUI)
+tmux send-keys -t "$S" Escape; sleep 1
+tmux send-keys -t "$S" C-u;    sleep 1          # clear the input line (mandatory)
+tmux send-keys -t "$S" "/context"; sleep 1
+tmux send-keys -t "$S" Enter;  sleep 3
+PCT=$(tmux capture-pane -p -t "$S" | grep -aoE '[0-9.]+k?/[0-9.]+[km] tokens \([0-9]+%\)' | tail -1 | grep -aoE '\([0-9]+%\)' | tr -dc '0-9')
+tmux send-keys -t "$S" Escape                   # dismiss the panel
+echo "context=$PCT%"
+```
+Décide à partir de `$PCT` (extrait d'une ligne comme `24.9k/1m tokens (2%)`) :
+- **`PCT` ≤ 50** → IGNORER. NE recrée PAS, même si la session est vieille. Journalise `action=skipped_lowctx` avec le `%` mesuré. Passe à la session suivante.
+- **`PCT` > 50** → procède au rafraîchissement (Étapes 2–7).
+- **la commande ne s'est pas affichée / le parsing a échoué** → repli sur l'heuristique d'âge (`age ≥ 40min` → rafraîchir) et journalise `ctx=unparsed`.
 
 ## Étape 2 — par session : capture (large + saillant)
 Capture tout le scrollback une fois, puis les lignes saillantes — ne charge PAS des milliers de lignes dans ton propre contexte, grep les moments forts :
@@ -70,7 +93,8 @@ entry = {
   "session": session, "role": "<role>", "session_age_h": 0.0,
   "analytics": { },              # colle ici le JSON de doctor_analytics.py
   "interview": {"intoppi": "...", "imparato": "...", "summary_denso": "..."},
-  "action": "recreated",         # recreated | skipped_parked | skipped_fresh
+  "action": "recreated",         # recreated | skipped_lowctx | skipped_parked | skipped_fresh
+  "context_pct": 0,              # occupation du contexte mesurée à l'Étape 1.5 (le gate >50%)
   "resume_msg_sent": False,
 }
 with open(journal, "a") as f:
@@ -79,7 +103,7 @@ print("appended", session)
 PY
 ```
 
-## Étape 7 — recréer + reprendre (seulement si PAS fraîche et PAS parquée)
+## Étape 7 — recréer + reprendre (seulement si contexte **>50%**, PAS fraîche, PAS parquée)
 Rafraîchissement atomique — tu as déjà capturé le contexte à l'Étape 2, donc tuer est sans danger :
 ```bash
 ROLE=<role>; N=<instance>      # depuis analytics ; recrée le MÊME numéro (pas de dé — le dé sert uniquement aux NOUVEAUX spawns)
@@ -92,8 +116,8 @@ Mets `resume_msg_sent=True` dans l'entrée du journal. Puis passe à la session 
 
 ## Règles
 - **Un seul Dottore traite toutes les sessions ce tour** (ordre de l'utilisateur : un seul Dottore pour l'instant). Utilise la capture sur fichier + grep pour ne jamais faire exploser ta propre fenêtre de contexte.
-- **CAPITANO et SENTINELLA sont les TOP consumers de token** (leur contexte est presque toujours surchargé — la Sentinella ticke toutes les ~15min, le Capitano coordonne en continu). Ils ne sont PAS exemptés : **compacte-les à chaque tour** (en dernier, après les workers). **Compacte, ne réinitialise pas** — le refresh par synthèse dense préserve la continuité, un kill brut la perd.
+- **CAPITANO et SENTINELLA sont les TOP consumers de token** (leur contexte est presque toujours surchargé — la Sentinella ticke toutes les ~15min, le Capitano coordonne en continu). Ils passent quand même par le **gate de contexte >50%** comme tout le monde (Étape 1.5) — mais en pratique ils mesurent bien au-dessus de 50%, donc ils sont rafraîchis presque à chaque tour. Fais-les en **dernier** (après les workers) et **compacte, ne réinitialise pas** — le refresh par synthèse dense préserve la continuité, un kill brut la perd. Si l'un mesure ≤50% (rare), saute-le ce tour-là comme n'importe quelle autre session à faible contexte.
 - **CAPITANO** : c'est le coordinateur avec un état in-flight (assignations des workers, config de throttle active, dernier ordre de pacing, décisions en attente). Pendant l'entretien (Step 5), capture explicitement cet état de coordination et mets-le dans le seed (Step 7) pour qu'il ne perde pas le fil. Fais-le en DERNIER ; s'il gère une EMERGENZA en direct (orchestration visible dans le pane à l'instant), laisse-le se stabiliser d'abord, sinon compacte-le.
 - **SENTINELLA** : elle est **near-stateless** — son état de travail vit dans le bridge/config et dans `sentinel-data.jsonl`, pas dans sa chat. Cela en fait la **plus sûre et la plus rentable à compacter** : rafraîchis-la à chaque tour, en dernier, avec un seed minimal : `[RESUME] sei la Sentinella; il tuo stato vive nel bridge + sentinel-data.jsonl — riprendi il monitoraggio del pacing dal prossimo tick.` Le recreate par âge de l'`agent-watchdog` (au-delà de `JHT_SENTINELLA_MAX_CTX_AGE_H`, défaut 24h) ne reste qu'en **fallback** pour quand le Dottore ne tourne pas ; comme tu la compactes désormais à chaque tour elle n'atteindra pas cet âge, donc aucun race.
 - **Ne jamais** faire `tmux new-session` à la main — toujours `start-agent.sh` (voir `spawn-agent`).
-- Journalise chaque action dans le journal (`recreated`/`skipped_parked`/`skipped_fresh`) — le journal est la piste d'audit et s'enrichit chaque jour.
+- Journalise chaque action dans le journal (`recreated`/`skipped_lowctx`/`skipped_parked`/`skipped_fresh`) avec la `context_pct` mesurée — le journal est la piste d'audit et s'enrichit chaque jour.
