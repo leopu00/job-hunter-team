@@ -9,7 +9,7 @@ extends Node
 ##   agents_updated(agents)
 ##     agents = Array di Dictionary:
 ##       { slug: String, role: String, name: String, active: bool,
-##         status: String ("working"|"idle"|"paused", default "working"),
+##         status: String ("working"|"idle"|"paused"; default prudente idle),
 ##         desk_hint: String ("" se il backend non sa dove siede) }
 ##     È SEMPRE lo snapshot completo del roster, non un delta: chi non
 ##     c'è più va despawnato.
@@ -19,8 +19,7 @@ extends Node
 ##         by_agent nelle transitions e dei throttle del pacing.
 ##       status guadagna "throttled" (pausa del pacing REALE in corso)
 ##         e "killed" (solo mock: dal vivo l'agente sparisce e basta);
-##         breve/lungo lo decide la scena su throttle_secs (soglia 90s:
-##         breve = seduto in attesa, lungo = dado ricreazione).
+##         throttle_secs alimenta il countdown, senza movimento casuale.
 ##       throttle_secs: float, stima secondi RIMANENTI di throttle;
 ##       throttle_total: float, durata piena richiesta dal pacing.
 ##     Agente sparito dal roster = killato/fermato: despawn con USCITA
@@ -56,6 +55,8 @@ signal profile_saved(ok: bool, error: String)
 signal hours_saved(ok: bool, error: String)
 ## live_settings è arrivata/cambiata (config team + usage reali).
 signal live_settings_updated(settings: Dictionary)
+## Telemetria infrastrutturale VPS/container, campionata via SSH.
+signal telemetry_updated(sample: Dictionary, history: Array)
 
 enum { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
@@ -70,6 +71,8 @@ var transitions: Array = []  # ultime ~80 transizioni di stato (registro team)
 ## sidebar: {provider|hours|email|advanced: [[etichetta, valore], …],
 ## usage: {window_h, per_agent_kt, generated_at}}.
 var live_settings: Dictionary = {}
+var telemetry: Dictionary = {}
+var telemetry_history: Array = []
 var chat_log: Array = []     # ultimi messaggi (fumetti di dev1 + vista Chat)
 const CHAT_LOG_MAX := 200
 
@@ -146,15 +149,21 @@ func _self_test_throttle() -> void:
 	]:
 		raw += JSON.stringify(ev) + "\n"
 	var roster := "ANALISTA-2: 1 windows\nscout-1: 1 windows\nscorer-1: 1 windows\nCAPITANO: 1 windows\n"
+	var activity := {
+		"ANALISTA-2": {"status": "working", "detail": "turno in corso"},
+		"scout-1": {"status": "idle", "detail": "nessun turno"},
+		"scorer-1": {"status": "working", "detail": "turno in corso"},
+		"CAPITANO": {"status": "paused", "detail": "in attesa"},
+	}
 	var got := {}
-	for a in VpsBackend._parse_roster(roster, VpsBackend._parse_throttles(raw)):
+	for a in VpsBackend._parse_roster(roster, VpsBackend._parse_throttles(raw), activity):
 		got[a["uid"]] = [a["status"], a["throttle_secs"], a["throttle_total"]]
 	var ok: bool = str(got.get("analista-2", [""])[0]) == "throttled" \
 			and absf(float(got["analista-2"][1]) - 270.0) < 3.0 \
 			and str(got.get("scout-1", [""])[0]) == "throttled" \
 			and absf(float(got["scout-1"][1]) - 50.0) < 3.0 \
 			and str(got.get("scorer-1", [""])[0]) == "working" \
-			and str(got.get("coordinatore", [""])[0]) == "working"
+			and str(got.get("coordinatore", [""])[0]) == "paused"
 	print("THROTTLE-TEST ", "PASS " if ok else "FAIL ", JSON.stringify(got))
 
 
@@ -368,7 +377,21 @@ func publish_state(new_state: int, detail := "") -> void:
 func publish_agents(list: Array) -> void:
 	agents = list
 	Log.debug("backend", "roster: %d agenti attivi" % list.size())
+	if OS.get_environment("JHT_ROSTER_TRACE") == "1":
+		var trace: Array = []
+		for a in list:
+			trace.append({"uid": a.get("uid", ""), "status": a.get("status", ""),
+					"detail": a.get("activity_detail", ""),
+					"throttle": a.get("throttle_secs", 0.0)})
+		print("ROSTER-TRACE ", JSON.stringify(trace))
 	agents_updated.emit(list)
+
+func publish_telemetry(sample: Dictionary) -> void:
+	telemetry = sample
+	telemetry_history.append(sample.duplicate(true))
+	while telemetry_history.size() > 120:
+		telemetry_history.pop_front()
+	telemetry_updated.emit(telemetry, telemetry_history)
 
 func publish_chat(msg: Dictionary) -> void:
 	Log.debug("backend", "chat %s→%s: %s" % [msg.get("from", "?"),

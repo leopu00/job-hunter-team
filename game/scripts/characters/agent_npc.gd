@@ -35,13 +35,14 @@ var nav: NavGrid
 var rig  # CharacterRig o SpriteSheetRig: stessa interfaccia set_motion
 var bubble: StatusBubble
 var speech: SpeechBubble
+var state_tag: AgentStateTag
 ## Stato riportato dal backend: working|idle|paused. Con idle/paused
 ## l'agente resta alla postazione senza viaggi né digitazione.
 var backend_status := "working"
+var activity_detail := ""
 ## Stima secondi di throttle rimanenti (contratto additivo col backend):
-## sotto REC_THROTTLE_SECS si aspetta SEDUTI, sopra si va in ricreazione.
+## resta fermo alla postazione e il countdown spiega il motivo.
 var throttle_secs := 0.0
-const REC_THROTTLE_SECS := 90.0
 var _dissolving := false
 var _exiting := false
 
@@ -51,7 +52,9 @@ var _desk_facing := "down"
 var pile: PaperPile  # i fogli accumulati sulla MIA scrivania
 var _consume_timer := 0.0
 var _standing := false  # standing desk (dado 16:10): lavora in piedi
-var _seat_sink := 46.0  # affondo della seduta nel desk (per-scrivania)
+var _seat_sink := 90.0  # baseline appena dietro quella del desk
+var _custom_seat_offset := Vector2.ZERO
+var _has_custom_seat_offset := false
 var _desk_key := ""  # chiave nel registry FurnitureNode.desks
 var _chatter: Array = []
 var _wander: Array = []  # solo core (mentor/coordinatore/assistente)
@@ -86,12 +89,16 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 		# affondo per-scrivania: le texture col fronte-camera alto (monitor
 		# multipli) chiedono più profondità del default
 		_seat_sink = float(desk.get("seat_sink", _seat_sink))
+		if desk.has("seat_offset"):
+			_custom_seat_offset = desk["seat_offset"]
+			_has_custom_seat_offset = true
 		_desk_key = "%s:%d" % [dept, def["desk"]]
-		# la pila di fogli vive sul piano della postazione (sibling nel
-		# World: setup() arriva quando siamo già nell'albero)
-		pile = PaperPile.new(desk["rect"])
-		get_parent().add_child(pile)
-		pile.add_sheets(randi_range(0, 5))  # non si parte mai a tavolo vuoto
+		if _desk_facing == "down":
+			_ensure_front_chair(desk)
+		# Le texture delle postazioni contengono già strumenti e documenti.
+		# Una seconda PaperPile composta sopra il mobile produceva risme
+		# sospese e fuori prospettiva. Le pile animate restano soltanto negli
+		# inbox condivisi, dove hanno un significato nel flusso di lavoro.
 	# i core con scrivania personale dichiarano il verso nel def (fix
 	# test finale: il Capitano sedeva DIETRO il desk invece che davanti)
 	_desk_facing = def.get("facing", _desk_facing)
@@ -124,6 +131,34 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	speech = SpeechBubble.new()
 	speech.position = Vector2(0, -100)
 	add_child(speech)
+
+	state_tag = AgentStateTag.new()
+	state_tag.position = Vector2(0, -126)
+	add_child(state_tag)
+	state_tag.set_state(backend_status, throttle_secs, activity_detail)
+
+## Le viste frontali delle scrivanie non includono una sedia (nelle viste
+## up/side è già dipinta nella texture). La aggiungiamo come sibling y-sort:
+## sedia → agente → desk, tutti su baseline distinte di pochi pixel.
+func _ensure_front_chair(desk: Dictionary) -> void:
+	if FurnitureNode.front_chairs.has(_desk_key):
+		return
+	var path := "res://assets/gen-art/furniture/office_chair_front.png"
+	if not ResourceLoader.exists(path):
+		return
+	var tex: Texture2D = load(path)
+	if tex == null:
+		return
+	var r: Rect2 = desk["rect"]
+	var chair := Sprite2D.new()
+	chair.name = "FrontChair_%s" % _desk_key.replace(":", "_")
+	chair.texture = tex
+	chair.centered = false
+	chair.offset = Vector2(-tex.get_size().x / 2.0, -tex.get_size().y)
+	chair.scale = Vector2(0.12, 0.09)
+	chair.position = Vector2(r.get_center().x, r.end.y - 3.0)
+	get_parent().add_child(chair)
+	FurnitureNode.front_chairs[_desk_key] = chair
 
 ## Fa dire all'agente un messaggio della chat reale (fumetto in coda).
 ## to_label: "" per i broadcast, altrimenti il nome del destinatario.
@@ -158,18 +193,28 @@ func dissolve() -> void:
 
 ## Stato dal backend: con idle/paused/throttled niente viaggi né
 ## digitazione, l'agente resta alla postazione in attesa (seduto se ha
-## lo sheet). Un throttle LUNGO manda invece in ricreazione (dado).
+## lo sheet). Nessuna passeggiata ricreativa inventata dai dati.
 func set_backend_status(status: String) -> void:
-	if backend_status == status:
-		return
+	status = status if status in ["working", "idle", "paused", "throttled", "resting"] else "idle"
+	var changed := backend_status != status
 	backend_status = status
-	if state == S.WORK:
+	if state_tag:
+		state_tag.set_state(backend_status, throttle_secs, activity_detail)
+	if changed and state == S.WORK:
 		_work_pose()
-		if status == "throttled" and throttle_secs >= REC_THROTTLE_SECS:
-			_plan_recreation()
+	elif changed and state == S.TRIP and backend_status != "working":
+		velocity = Vector2.ZERO
+		rig.set_motion(rig.facing, rig.flipped, "still")
 
 func set_throttle(secs: float) -> void:
 	throttle_secs = secs
+	if state_tag:
+		state_tag.set_state(backend_status, throttle_secs, activity_detail)
+
+func set_activity_detail(detail: String) -> void:
+	activity_detail = detail
+	if state_tag:
+		state_tag.set_state(backend_status, throttle_secs, activity_detail)
 
 ## Uscita FISICA di scena (agente killato/fermato, missione pipeline
 ## 20:1x): cammina fino alla porta dell'ufficio e svanisce oltre la
@@ -198,18 +243,6 @@ func deliver_to_shelf() -> void:
 	]
 	_start_next_leg()
 
-## Throttle LUNGO: dado a 3 facce per l'attività ricreativa (ordine
-## Leone 20:1x) — divano, ping-pong o si va a cucinare qualcosa.
-func _plan_recreation() -> void:
-	var picks := ["rec_sofa", "rec_pingpong", "rec_kitchenette"]
-	var r := FurnitureDefs.get_rect(picks[randi() % picks.size()])
-	var spot := Vector2(r.get_center().x, r.end.y + 26.0)
-	_legs = [
-		_leg_to(_jit(spot), "walk", randf_range(25.0, 45.0), "idle"),
-		_leg_to(_spot, "walk", 0.0, "work"),
-	]
-	_start_next_leg()
-
 ## Reazione a una transizione REALE del registro attività: il corpo
 ## pulsa due volte (il lavoro vero si deve vedere in scena) e una
 ## scrittura CV accende la stampante dell'ufficio. Il fumetto con la
@@ -230,6 +263,15 @@ func react_to_work(print_job := false) -> void:
 	for _i in 2:
 		tw.tween_property(rig, "modulate", Color(0.72, 1.3, 1.05), 0.16)
 		tw.tween_property(rig, "modulate", Color.WHITE, 0.45)
+
+## Una transizione REALE della pipeline diventa un viaggio fisico. Non è un
+## giro casuale: ogni ruolo preleva l'output del precedente, lavora seduto e
+## deposita il foglio nella vaschetta destinata al reparto successivo.
+func perform_pipeline_step() -> void:
+	if state != S.WORK or backend_status != "working" or is_dissolving():
+		return
+	if _prepare_pipeline_trip():
+		_start_next_leg()
 
 func set_highlight(on: bool) -> void:
 	if _highlight != on:
@@ -279,15 +321,16 @@ func _physics_process(delta: float) -> void:
 			_state_timer -= delta
 			if _state_timer <= 0.0:
 				_state_timer = _cadence() * randf_range(0.6, 1.4)
-				if backend_status == "working":
+				# Con dati reali nessun tragitto inventato: il movimento nasce
+				# soltanto da attività/transizioni osservate. Il teatro casuale
+				# resta disponibile esclusivamente nella demo offline.
+				if backend_status == "working" and BackendBus.state != BackendBus.CONNECTED:
 					_plan_trip()
-				elif backend_status == "throttled" \
-						and throttle_secs >= REC_THROTTLE_SECS:
-					# throttle ancora lungo: nuovo giro di ricreazione
-					_state_timer = randf_range(70.0, 110.0)
-					_plan_recreation()
 		S.TRIP:
-			if _pause > 0.0:
+			if backend_status != "working" and not _exiting:
+				velocity = Vector2.ZERO
+				rig.set_motion(rig.facing, rig.flipped, "still")
+			elif _pause > 0.0:
 				velocity = Vector2.ZERO
 				_pause -= delta
 				if _pause <= 0.0:
@@ -307,6 +350,9 @@ func _cadence() -> float:
 ## dei tick veri. Circa 70% del tempo in work. Da seduti la traccia è
 ## una sola ("sit"): l'alternanza pilota solo lo smaltimento pila.
 func _tick_desk_pose(delta: float) -> void:
+	if backend_status != "working":
+		_desk_working = false
+		return
 	_pose_timer -= delta
 	if _pose_timer > 0.0:
 		return
@@ -315,7 +361,7 @@ func _tick_desk_pose(delta: float) -> void:
 	if _seated():
 		_desk_motion("sit")
 	else:
-		_desk_motion("work" if _desk_working else "idle")
+		_desk_motion("work")
 
 ## Seduto alla postazione? Missione 16:10: la gran maggioranza SIEDE
 ## quando lavora; in piedi solo chi ha lo standing desk. Gated sul
@@ -330,9 +376,15 @@ func _seated() -> bool:
 ## mezz'aria SOPRA il mobile). Il y-sort fa il resto: il corpo resta a
 ## nord della baseline del desk e viene occluso dove si sovrappone.
 func _seat_offset() -> Vector2:
+	if _has_custom_seat_offset:
+		return _custom_seat_offset
 	match _desk_facing:
 		"up":
-			return Vector2(0, -6)
+			# desk_spot(up) è r.end.y + 24; la sedia dipinta nella texture è
+			# invece ancorata a r.end.y. Allineando qui le due baseline, il
+			# bacino entra nel sedile e il corpo resta dentro braccioli/schienale,
+			# anziché 18 px davanti alla sedia.
+			return Vector2(0, -24)
 		"left":
 			return Vector2(-26, -2)
 		"right":
@@ -380,17 +432,13 @@ func _plan_trip() -> void:
 		]
 		_start_next_leg()
 		return
-	var pois := DepartmentDefs.POIS
-	var roll := randf()
-	if dept == "analisti" and roll < 0.35:
-		# banco-test (missione pipeline 3/3): si va a verificare in piedi
-		# fra le bobine, poi si torna a scrivere il report alla scrivania
-		_legs = [
-			_leg_to(TestBench.work_spot(), "walk", randf_range(10.0, 20.0), "work"),
-			_leg_to(_spot, "walk", 0.0, "work"),
-		]
+	# Nella demo offline usiamo la stessa catena causale della VPS. Le pause
+	# ricreative restano rare; il comportamento dominante è il lavoro.
+	if randf() < 0.90 and _prepare_pipeline_trip():
 		_start_next_leg()
 		return
+	var pois := DepartmentDefs.POIS
+	var roll := randf()
 	if dept == "critici" and roll < 0.40:
 		# loop scrittore↔critico (3/3): il critico RITIRA fisicamente il
 		# CV dagli scrittori, lo esamina nel suo ufficio e lo RIDÀ
@@ -448,6 +496,40 @@ func _plan_trip() -> void:
 		]
 	_start_next_leg()
 
+## Prepara, senza avviarlo, il percorso di produzione del ruolo corrente.
+## Le pile registrate in PaperPile.inbox sono OUTPUT: chi sta a valle prende
+## dal reparto precedente e deposita nel proprio punto di consegna.
+func _prepare_pipeline_trip() -> bool:
+	_legs = []
+	var home_out: Vector2 = DepartmentDefs.DEPARTMENTS[dept]["inbox"]
+	if dept == "scout":
+		var pr := _leg_to(DepartmentDefs.POIS["printer"]["spot"], "walk",
+				randf_range(1.8, 3.0), "idle")
+		pr["fx_printer"] = true
+		var read := _leg_to(_spot, "carry", randf_range(8.0, 14.0), "work")
+		read["desk_work"] = true
+		var deliver := _leg_to(home_out, "carry", randf_range(0.8, 1.4), "idle")
+		deliver["pile_drop"] = dept
+		_legs = [pr, read, deliver, _leg_to(_spot, "walk", 0.0, "work")]
+		return true
+	if not DepartmentDefs.FETCH_FROM.has(dept):
+		return false
+	var src: String = DepartmentDefs.FETCH_FROM[dept]
+	var pick := _leg_to(DepartmentDefs.DEPARTMENTS[src]["inbox"], "walk",
+			randf_range(0.8, 1.4), "idle")
+	pick["pile_take"] = src
+	var durations := {
+		"analisti": Vector2(10.0, 18.0), "scorer": Vector2(8.0, 15.0),
+		"scrittori": Vector2(14.0, 24.0), "critici": Vector2(9.0, 16.0),
+	}
+	var window: Vector2 = durations.get(dept, Vector2(8.0, 14.0))
+	var process := _leg_to(_spot, "carry", randf_range(window.x, window.y), "work")
+	process["desk_work"] = true
+	var deliver := _leg_to(home_out, "carry", randf_range(0.8, 1.4), "idle")
+	deliver["pile_drop"] = dept
+	_legs = [pick, process, deliver, _leg_to(_spot, "walk", 0.0, "work")]
+	return true
+
 ## Jitter sulla meta: trenta agenti sullo stesso pixel sembrano una coda.
 func _jit(p: Vector2) -> Vector2:
 	return p + Vector2(randf_range(-26, 26), randf_range(-14, 14))
@@ -486,7 +568,11 @@ func _arrive_at_leg() -> void:
 		PaperPile.inbox[_leg["pile_drop"]].add_sheets(randi_range(1, 2))
 	if float(_leg.get("pause", 0.0)) > 0.0:
 		_pause = _leg["pause"]
-		rig.set_motion(rig.facing, rig.flipped, _leg.get("pause_mode", "idle"))
+		if _leg.get("desk_work", false):
+			position = _spot + (_seat_offset() if _seated() else Vector2.ZERO)
+			_desk_motion("sit" if _seated() else "work")
+		else:
+			rig.set_motion(rig.facing, rig.flipped, _leg.get("pause_mode", "idle"))
 	elif _legs.is_empty():
 		_end_trip()
 	else:
@@ -501,25 +587,27 @@ func _end_trip() -> void:
 	_work_pose()
 
 ## Alla scrivania: rivolto secondo la postazione (down = viso in camera).
-## Con la variante artistica "desk occupato" (ordine Leone 04:2x) il
-## corpo seduto vive NELLA texture della scrivania: il rig si nasconde
-## e il mobile scambia immagine. Senza variante, resta il rig seduto.
+## L'agente resta SEMPRE un rig animato. Le vecchie varianti composite
+## "desk occupato" congelavano corpo e mani in un PNG statico.
 func _set_desk_occupied(on: bool) -> void:
-	var node: FurnitureNode = FurnitureNode.desks.get(_desk_key)
-	if node and node.has_seated_art():
-		node.set_occupied(on)
-		rig.visible = not on
-	elif rig:
+	if rig:
 		rig.visible = true
 
 func _work_pose() -> void:
 	_desk_working = backend_status == "working"
 	if _seated():
 		position = _spot + _seat_offset()
-		_desk_motion("sit")
+		_desk_motion("sit" if _desk_working else "sit_idle")
 		_set_desk_occupied(true)
 	else:
-		_desk_motion("work" if _desk_working else "idle")
+		_desk_motion("work" if _desk_working else "still")
+	if state_tag:
+		state_tag.set_state(backend_status, throttle_secs, activity_detail)
+
+func debug_snapshot() -> Dictionary:
+	return {"uid": uid, "status": backend_status, "state": int(state),
+			"motion": str(rig.mode if rig else ""), "speed": velocity.length(),
+			"visible": visible, "detail": activity_detail}
 
 func _follow_path(speed: float, mode := "walk") -> bool:
 	if _pi >= _path.size():

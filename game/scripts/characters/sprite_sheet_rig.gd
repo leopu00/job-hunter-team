@@ -17,6 +17,9 @@ const FEET := Vector2(128, 360)
 ## riga nel foglio, frame usati e fps per ogni traccia mode+facing.
 const TRACKS := {
 	"idle_down": [0, 2, 2.0], "idle_up": [1, 2, 2.0], "idle_side": [2, 2, 2.0],
+	# still = agente acceso ma senza turno in corso: un singolo frame,
+	# nessun respiro/bob. Non deve sembrare al lavoro se la VPS è idle.
+	"still_down": [0, 1, 0.0], "still_up": [1, 1, 0.0], "still_side": [2, 1, 0.0],
 	"walk_down": [3, 6, 10.0], "walk_up": [4, 6, 10.0], "walk_side": [5, 6, 10.0],
 	"work_down": [6, 4, 8.0], "work_up": [7, 4, 8.0], "work_side": [8, 4, 8.0],
 	"carry_down": [9, 6, 10.0], "carry_up": [10, 6, 10.0], "carry_side": [11, 6, 10.0],
@@ -27,6 +30,8 @@ const TRACKS := {
 const SIT_COLS := 4
 const SIT_TRACKS := {
 	"sit_down": [0, 4, 8.0], "sit_up": [1, 4, 8.0], "sit_side": [2, 4, 8.0],
+	"sit_idle_down": [0, 1, 0.0], "sit_idle_up": [1, 1, 0.0],
+	"sit_idle_side": [2, 1, 0.0],
 }
 
 var mode := "idle"
@@ -69,15 +74,15 @@ func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 	flipped = p_flipped
 	# "sit" senza foglio seduto degrada a work (si digita in piedi finché
 	# l'arte non arriva); modi sconosciuti degradano a idle: mai rompersi
-	if p_mode == "sit":
-		mode = "sit" if _sit_sheet != null else "work"
+	if p_mode == "sit" or p_mode == "sit_idle":
+		mode = p_mode if _sit_sheet != null else ("work" if p_mode == "sit" else "still")
 	else:
 		mode = p_mode if TRACKS.has(p_mode + "_down") else "idle"
 	_apply_track()
 	queue_redraw()  # l'anello dell'ombra segue il modo (walk/carry)
 
 func _apply_track() -> void:
-	var sitting := mode == "sit"
+	var sitting := mode == "sit" or mode == "sit_idle"
 	var tex := _sit_sheet if sitting else _sheet
 	if _sprite.texture != tex:
 		_sprite.texture = tex
@@ -106,6 +111,11 @@ func _process(delta: float) -> void:
 ## agenti si confondevano con lo sfondo) e con un anello netto quando
 ## la figura si muove.
 func _draw() -> void:
+	# La postazione pittorica contiene già sedia, base e ruote. L'ovale ai
+	# piedi è corretto in cammino ma, da seduti, crea un secondo appoggio
+	# staccato dal sedile e fa sembrare il corpo sospeso davanti alla sedia.
+	if mode == "sit" or mode == "sit_idle":
+		return
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.38))
 	for i in 3:
 		draw_circle(Vector2.ZERO, 60.0 + i * 16.0, Color(0, 0, 0, 0.16 - i * 0.045))
@@ -116,5 +126,6 @@ func _draw() -> void:
 func _update_frame() -> void:
 	if _sprite == null:
 		return
-	var idx := int(_t * _fps) % _frames
-	_sprite.frame = _row * (SIT_COLS if mode == "sit" else COLS) + idx
+	var idx := 0 if _fps <= 0.0 else int(_t * _fps) % _frames
+	var sitting := mode == "sit" or mode == "sit_idle"
+	_sprite.frame = _row * (SIT_COLS if sitting else COLS) + idx
