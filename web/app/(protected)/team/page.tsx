@@ -2,6 +2,7 @@ import { getTeamActivity } from "@/lib/queries";
 import ActivityCharts from "./ActivityCharts";
 import RangePicker from "./RangePicker";
 import { ActivityPageHeader } from "./ActivityHeader";
+import DirectivesPanel from "./DirectivesPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,12 @@ export default async function TeamActivityPage({ searchParams }: PageProps) {
       <RangePicker from={activity.from} to={activity.to} days={activity.days} />
 
       <ActivityCharts activity={activity} />
+
+      {/* 📋 Bacheca del team — ordini/strategia permanenti dell'utente. Il
+          Capitano le rilegge a ogni riavvio (team_directives.py active). */}
+      <section className="mx-auto w-full max-w-[900px] px-4 py-10">
+        <DirectivesPanel />
+      </section>
     </div>
   );
 }
