@@ -1,6 +1,6 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-07-03
+> Last updated: 2026-07-07 *(reprioritized on launch feedback — desktop setup first, local models up, two new horizon missions)*
 >
 > This is the **strategic, forward-looking** view — the themes in motion and where help is welcome. It is **not** a status ledger: shipped work lives in [`CHANGELOG.md`](../../CHANGELOG.md), tactical tasks in [GitHub Issues](https://github.com/leopu00/job-hunter-team/issues) (plus the slim [`BACKLOG.md`](../../BACKLOG.md) index), technical debt in [`docs/internal/roadmap/MINOR-TRACKER.md`](../internal/roadmap/MINOR-TRACKER.md). No percentages here — verbal states only.
 >
@@ -75,9 +75,9 @@ The maintainer's own sequencing (contributor missions below run in parallel and 
 
 | Horizon | Focus |
 |---|---|
-| **Now** *(weeks)* | Demo GIFs + launch assets for the README and download page · the two open pacing guards (reset-edge false-freeze, daily-halt standby leak) · publish the remaining case studies (the Kimi weekly-distributed run, the Claude Max re-run with proper instrumentation) · observe the two multi-week Kimi beta teams. |
-| **Next** *(1–2 months)* | **Desktop app toward public beta** — the gateway for non-technical users: dashboard parity, agent lifecycle UI, observability, auto-update + tray/notifications, recovery passphrase, macOS/Linux QA (ranked list in [`desktop/STATUS.md`](../../desktop/STATUS.md)) · **Kimi €40 out of beta** if the month-scale observation holds (that unlocks the honest "affordable for everyone" claim) · translator guide + native-speaker review pass · public project board fed by triaged issues. |
-| **Later** *(a quarter and beyond)* | The large missions as they attract contributors — mobile control (M2), local models (M5), pay-per-use €-budget (M8) · Mentor as a first-class surface (M6) · fine-grained team observability with a who-did-what-when timeline (M7, enabled by the [DB schema evolution](../internal/roadmap/db-schema-optimization.md)). |
+| **Now** *(weeks)* | **Desktop app first — the setup path above all**: test the team-setup flow end-to-end from the Electron app (install → wizard → provider login → team up) and make it hold on **all three OSes** (macOS/Windows/Linux QA). This is the gateway for non-technical users and the single loudest ask from launch feedback (every top comment + 83 visits to `/download` in launch week). Ranked list in [`desktop/STATUS.md`](../../desktop/STATUS.md) · the two open pacing guards (reset-edge false-freeze, daily-halt standby leak) · observe the two multi-week Kimi beta teams. |
+| **Next** *(1–2 months)* | **Desktop app to public beta** — dashboard parity, agent lifecycle UI, observability, auto-update + tray/notifications, recovery passphrase · **local models (M5) groundwork** — the #2 launch ask, with testers already volunteering hardware: start with a single role swap (Scorer) and measure against the case-study baselines · **Kimi €40 out of beta** if the month-scale observation holds · demo GIFs + remaining case studies · translator guide + native-speaker review pass · public project board fed by triaged issues. |
+| **Later** *(a quarter and beyond)* | The large missions as they attract contributors — mobile surface (M2 — the read-only web dashboard already covers the phone well, so full mobile *control* is deliberately not urgent; early community interest in a companion PWA exists) · pay-per-use €-budget (M8) · Mentor as a first-class surface (M6) · **interview practice agent (M9)** and an **opt-in auto-submit lane (M10)** — both born from launch feedback · fine-grained team observability with a who-did-what-when timeline (M7, enabled by the [DB schema evolution](../internal/roadmap/db-schema-optimization.md)). |
 
 ---
 
@@ -89,10 +89,11 @@ New here? These are the **missions** we'd love a hand with — bigger directions
   NOW                          NEXT                         LATER
   (core team)                  (great entry points)         (bigger builds)
   ────────────────────────     ────────────────────────     ────────────────────────
-  • launch assets              • M1 quick-feedback cards     • M2 mobile team control
-  • public site polish         • M4 cheaper tiers +          • M5 fully-local models
-  • case studies                  more providers
+  • desktop setup e2e          • M1 quick-feedback cards     • M2 mobile team control
+    (all three OSes)           • M4 cheaper tiers +          • M9 interview practice
+  • case studies                  more providers             • M10 opt-in auto-submit
                                • M3 harden security
+                               • M5 fully-local models ⭐
 ```
 
 | # | Mission | Good for | Size |
@@ -112,6 +113,8 @@ New here? These are the **missions** we'd love a hand with — bigger directions
 | **M6** | 🧙‍♂️ Mentor as a first-class citizen — dedicated web + desktop page, deeper tuning | The career-coach agent is live but buried in chat; it deserves its own surface. |
 | **M7** | 📊 Fine-grained observability + user feedback — full who-did-what-when timeline per offer | Builds on the [schema evolution plan](../internal/roadmap/db-schema-optimization.md) (`position_events` is the enabler). |
 | **M8** | 💳 Pay-per-use API mode with a **€-budget** the Sentinel enforces | Turns the budget guardian from "subscription %" into real money limits — and makes JHT usable without any subscription. |
+| **M9** | 🎤 Interview practice agent — mock interviews **tailored to a specific position** (its JD, seniority, company), with feedback after each round | Born from launch feedback: once JHT finds the right match, rehearsing for *that* interview is the natural next step. Extends the Mentor (pairs with M6). |
+| **M10** | 📮 Opt-in auto-submit lane — **off by default**, per-user explicit opt-in, hard caps, and only for drafts that clear the Critic gate | Requested repeatedly since launch. The quality-over-volume principle stays the default and the public stance; this is a bounded escape hatch for users who explicitly want it, never spam-by-design. |
 
 > Each mission gets a tracking issue with **good-first sub-tasks** — look for the `good first issue` and `help wanted` labels, or open a [Discussion](https://github.com/leopu00/job-hunter-team/discussions) and we'll help you scope a first slice.
 
