@@ -25,6 +25,12 @@ var _panel: BracketPanel
 var _stage: CenterContainer   # palco del ritratto, solo schermo intero
 var _portrait: PortraitView
 var _expand_btn: Button
+var _roster: Array = []       # [{slug, name}] per lo switcher fullscreen
+var _roster_col: ScrollContainer
+var _roster_buttons := {}     # slug → Button
+var _title: Label
+var _warn: Label
+var _plate_label: Label
 
 func _process(delta: float) -> void:
 	if not _waiting or _waiting_label == null:
@@ -33,9 +39,10 @@ func _process(delta: float) -> void:
 	_waiting_label.text = UIStrings.t("chat.waiting") \
 			+ "…".repeat(1 + int(_wait_t * 2.0) % 3)
 
-func _init(slug: String, display_name: String) -> void:
+func _init(slug: String, display_name: String, roster: Array = []) -> void:
 	_slug = slug
 	_display_name = display_name
+	_roster = roster
 	layer = 40
 
 func _ready() -> void:
@@ -71,6 +78,7 @@ func _ready() -> void:
 	var split := HBoxContainer.new()
 	split.add_theme_constant_override("separation", 24)
 	margin.add_child(split)
+	_build_roster(split)
 	_stage = CenterContainer.new()
 	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -84,10 +92,10 @@ func _ready() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 10)
 	box.add_child(head)
-	var title := TerminalTheme.label(
+	_title = TerminalTheme.label(
 			UIStrings.t("chat.title") % _display_name.to_upper(), 20, Palette.WHITE, "xbold")
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(title)
+	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(_title)
 	_expand_btn = Button.new()
 	_expand_btn.text = UIStrings.t("chat.expand")
 	_expand_btn.add_theme_font_size_override("font_size", 13)
@@ -95,11 +103,12 @@ func _ready() -> void:
 	_expand_btn.pressed.connect(func() -> void: _set_fullscreen(not _fullscreen))
 	head.add_child(_expand_btn)
 	# avviso best-effort: solo alcuni agenti hanno la skill di risposta
-	# in chat (bus.chat_replies); gli altri leggono ma possono tacere
-	if not BackendBus.chat_replies(_slug):
-		var warn := TerminalTheme.label(UIStrings.t("chat.besteffort"), 13, Palette.YELLOW)
-		warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		box.add_child(warn)
+	# in chat (bus.chat_replies); gli altri leggono ma possono tacere.
+	# Sempre creato: lo switcher fullscreen lo accende/spegne per agente.
+	_warn = TerminalTheme.label(UIStrings.t("chat.besteffort"), 13, Palette.YELLOW)
+	_warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_warn.visible = not BackendBus.chat_replies(_slug)
+	box.add_child(_warn)
 	box.add_child(HSeparator.new())
 
 	_scroll = ScrollContainer.new()
@@ -163,6 +172,7 @@ func _set_fullscreen(on: bool) -> void:
 	_panel.anchor_left = 0.0 if on else 1.0
 	_panel.offset_left = 24.0 if on else -PANEL_W - 24
 	_stage.visible = on
+	_roster_col.visible = on and _roster.size() > 1
 	_expand_btn.text = UIStrings.t("chat.shrink" if on else "chat.expand")
 	if on:
 		if _portrait == null:
@@ -171,6 +181,8 @@ func _set_fullscreen(on: bool) -> void:
 	Sfx.play_blip()
 
 func _build_portrait() -> void:
+	for old in _stage.get_children():
+		old.queue_free()
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 16)
 	_stage.add_child(col)
@@ -189,8 +201,72 @@ func _build_portrait() -> void:
 	pad.add_theme_constant_override("margin_top", 6)
 	pad.add_theme_constant_override("margin_bottom", 6)
 	plate.add_child(pad)
-	pad.add_child(TerminalTheme.label(
-			_display_name.to_upper(), 20, Palette.GREEN, "bold"))
+	_plate_label = TerminalTheme.label(
+			_display_name.to_upper(), 20, Palette.GREEN, "bold")
+	pad.add_child(_plate_label)
+
+## Colonna switcher (solo schermo intero): tutte le chat 1-a-1 del
+## roster in scena, si cambia conversazione senza chiudere il pannello.
+## Pallini ●/◐ con la stessa semantica del menu chat (bus.chat_replies).
+func _build_roster(split: HBoxContainer) -> void:
+	_roster_col = ScrollContainer.new()
+	_roster_col.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_roster_col.custom_minimum_size = Vector2(250, 0)
+	_roster_col.visible = false
+	split.add_child(_roster_col)
+	var vb := VBoxContainer.new()
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.add_theme_constant_override("separation", 4)
+	_roster_col.add_child(vb)
+	vb.add_child(TerminalTheme.label(UIStrings.t("chat.menu"), 15,
+			Palette.MUTED, "bold"))
+	vb.add_child(HSeparator.new())
+	for a in _roster:
+		var entry: Dictionary = a
+		var sure: bool = BackendBus.chat_replies(entry["slug"])
+		var btn := Button.new()
+		btn.set_meta("base", "%s  %s" % ["●" if sure else "◐", entry["name"]])
+		btn.set_meta("sure", sure)
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.add_theme_font_size_override("font_size", 15)
+		btn.pressed.connect(func() -> void:
+			_switch_to(entry["slug"], entry["name"]))
+		_roster_buttons[entry["slug"]] = btn
+		vb.add_child(btn)
+	_refresh_roster_highlight()
+
+func _refresh_roster_highlight() -> void:
+	for slug in _roster_buttons:
+		var btn: Button = _roster_buttons[slug]
+		var current: bool = slug == _slug
+		btn.text = ("▶ " if current else "") + str(btn.get_meta("base"))
+		btn.add_theme_color_override("font_color",
+				Palette.WHITE if current
+				else (Palette.GREEN if btn.get_meta("sure") else Palette.MUTED))
+
+## Cambio conversazione dallo switcher: si chiude il canale corrente,
+## si apre quello del nuovo agente; la storia arriva da sola sul solito
+## agent_chat_updated (una sola conversazione aperta alla volta).
+func _switch_to(slug: String, display_name: String) -> void:
+	if slug == _slug:
+		return
+	BackendBus.close_agent_chat()
+	_slug = slug
+	_display_name = display_name
+	_title.text = UIStrings.t("chat.title") % _display_name.to_upper()
+	_warn.visible = not BackendBus.chat_replies(_slug)
+	_waiting = false
+	_waiting_label.visible = false
+	_redraw([])
+	if _fullscreen:
+		_build_portrait()
+		_portrait.enter_anim()
+	_refresh_roster_highlight()
+	BackendBus.open_agent_chat(_slug)
+	if BackendBus.chat_waiting.has(_slug):
+		_on_waiting(_slug, true)
+	_input.grab_focus.call_deferred()
+	Sfx.play_blip()
 
 ## Cartella ritratto dal uid di gioco: "scout-2" → "scout"; se il ruolo
 ## non ha ritratti (né pittorici né SVG) si presta lo scout, come i rig.
