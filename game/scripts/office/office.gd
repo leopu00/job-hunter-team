@@ -534,11 +534,9 @@ func sync_agents(list: Array) -> void:
 func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
 	for agent in agents:
 		if agent.uid == from_uid and not agent.is_dissolving():
-			# Un solo parlante alla volta: i poll possono consegnare una raffica,
-			# ma l'ufficio non deve diventare una parete di pannelli sovrapposti.
-			for other in agents:
-				if other != agent and other.speech:
-					other.speech.clear_now()
+			# Vignette SIMULTANEE (ordine 03:3x): la chat vera del team resta
+			# in scena per tutti i parlanti insieme — ogni agente ha la sua
+			# coda FIFO nello SpeechBubble, nessuno cancella nessuno.
 			var to_label := ""
 			match to_uid:
 				"all":
