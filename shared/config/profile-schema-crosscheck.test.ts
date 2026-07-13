@@ -12,10 +12,7 @@ import { BLOCK_KINDS } from "./profile-schema.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PY = join(here, "../skills/validate_profile.py");
-const PROFILE_PAGE = join(
-  here,
-  "../../web/app/(protected)/profile/page.tsx",
-);
+const PROFILE_PAGE = join(here, "../../web/app/(protected)/profile/page.tsx");
 
 describe("cross-check zod ↔ python", () => {
   it("i BLOCK_KINDS coincidono tra profile-schema.ts e validate_profile.py", () => {
