@@ -20,6 +20,11 @@ var _empty_note: Label
 var _waiting_label: Label
 var _waiting := false
 var _wait_t := 0.0
+var _fullscreen := false
+var _panel: BracketPanel
+var _stage: CenterContainer   # palco del ritratto, solo schermo intero
+var _portrait: PortraitView
+var _expand_btn: Button
 
 func _process(delta: float) -> void:
 	if not _waiting or _waiting_label == null:
@@ -48,26 +53,47 @@ func _ready() -> void:
 	root.add_child(dim)
 
 	# colonna conversazione a destra, stile terminale
-	var panel := BracketPanel.new()
-	panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	panel.custom_minimum_size = Vector2(PANEL_W, 0)
-	panel.offset_left = -PANEL_W - 24
-	panel.offset_right = -24
-	panel.offset_top = 24
-	panel.offset_bottom = -24
-	root.add_child(panel)
+	_panel = BracketPanel.new()
+	_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	_panel.custom_minimum_size = Vector2(PANEL_W, 0)
+	_panel.offset_left = -PANEL_W - 24
+	_panel.offset_right = -24
+	_panel.offset_top = 24
+	_panel.offset_bottom = -24
+	root.add_child(_panel)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 20)
-	panel.add_child(margin)
+	_panel.add_child(margin)
+	# affiancamento: palco ritratto (visibile solo a schermo intero,
+	# metà sinistra) + colonna chat; in laterale la chat riempie tutto
+	var split := HBoxContainer.new()
+	split.add_theme_constant_override("separation", 24)
+	margin.add_child(split)
+	_stage = CenterContainer.new()
+	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_stage.visible = false
+	split.add_child(_stage)
 	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 10)
-	margin.add_child(box)
+	split.add_child(box)
 
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	box.add_child(head)
 	var title := TerminalTheme.label(
 			UIStrings.t("chat.title") % _display_name.to_upper(), 20, Palette.WHITE, "xbold")
-	box.add_child(title)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	_expand_btn = Button.new()
+	_expand_btn.text = UIStrings.t("chat.expand")
+	_expand_btn.add_theme_font_size_override("font_size", 13)
+	_expand_btn.add_theme_color_override("font_color", Palette.MUTED)
+	_expand_btn.pressed.connect(func() -> void: _set_fullscreen(not _fullscreen))
+	head.add_child(_expand_btn)
 	# avviso best-effort: solo alcuni agenti hanno la skill di risposta
 	# in chat (bus.chat_replies); gli altri leggono ma possono tacere
 	if not BackendBus.chat_replies(_slug):
@@ -122,9 +148,69 @@ func _ready() -> void:
 		_on_waiting(_slug, true)  # attesa già in corso da prima
 	_input.grab_focus.call_deferred()
 	Sfx.play_blip()
+	# TEST-AUTO: JHT_CHAT_FULL=1 apre già a schermo intero (per gli shot,
+	# si compone con JHT_CHAT/JHT_CHAT_VIEW di office.gd)
+	if OS.get_environment("JHT_CHAT_FULL") == "1":
+		_set_fullscreen(true)
+
+## Schermo intero: il pannello si allarga a tutta la scena e nella metà
+## sinistra compare il ritratto grande dell'agente (PortraitView, lo
+## stesso sistema animato dei dialoghi) con la targa del nome.
+func _set_fullscreen(on: bool) -> void:
+	if _fullscreen == on:
+		return
+	_fullscreen = on
+	_panel.anchor_left = 0.0 if on else 1.0
+	_panel.offset_left = 24.0 if on else -PANEL_W - 24
+	_stage.visible = on
+	_expand_btn.text = UIStrings.t("chat.shrink" if on else "chat.expand")
+	if on:
+		if _portrait == null:
+			_build_portrait()
+		_portrait.enter_anim()
+	Sfx.play_blip()
+
+func _build_portrait() -> void:
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 16)
+	_stage.add_child(col)
+	_portrait = PortraitView.new()
+	col.add_child(_portrait)
+	_portrait.setup(_portrait_slug(_slug))
+	_portrait.set_state("a", "neutro")
+	# targa nome sotto il ritratto, come nei dialoghi
+	var plate_row := CenterContainer.new()
+	col.add_child(plate_row)
+	var plate := BracketPanel.new()
+	plate_row.add_child(plate)
+	var pad := MarginContainer.new()
+	pad.add_theme_constant_override("margin_left", 14)
+	pad.add_theme_constant_override("margin_right", 14)
+	pad.add_theme_constant_override("margin_top", 6)
+	pad.add_theme_constant_override("margin_bottom", 6)
+	plate.add_child(pad)
+	pad.add_child(TerminalTheme.label(
+			_display_name.to_upper(), 20, Palette.GREEN, "bold"))
+
+## Cartella ritratto dal uid di gioco: "scout-2" → "scout"; se il ruolo
+## non ha ritratti (né pittorici né SVG) si presta lo scout, come i rig.
+static func _portrait_slug(slug: String) -> String:
+	var role := slug
+	var dash := slug.rfind("-")
+	if dash > 0 and slug.substr(dash + 1).is_valid_int():
+		role = slug.substr(0, dash)
+	if ResourceLoader.exists(PortraitView.GEN_DIR + role + "/full_neutro.png") \
+			or ResourceLoader.exists(PortraitView.DIR + role + "/base.svg"):
+		return role
+	return "scout"
 
 func _on_updated(_agent: String, messages: Array) -> void:
 	_redraw(messages)
+	# il ritratto reagisce all'ultima battuta dell'agente (crossfade
+	# emozione; se il ruolo non ha quella faccia resta sul neutro)
+	if _portrait and not messages.is_empty() \
+			and str(messages[-1].get("role", "")) != "user":
+		_portrait.set_state("a", "caldo")
 
 func _on_sent(_agent: String, ok: bool, error: String) -> void:
 	if not ok:
@@ -137,6 +223,8 @@ func _on_waiting(agent: String, waiting: bool) -> void:
 	_wait_t = 0.0
 	if _waiting_label:
 		_waiting_label.visible = waiting
+	if _portrait and waiting:
+		_portrait.set_state("a", "pensieroso")
 
 ## La storia arriva COMPLETA a ogni giro: si ridisegna da zero.
 func _redraw(messages: Array) -> void:

@@ -177,10 +177,17 @@ class TestUnstuckApply:
         _seed_positions(tmp_db_path, [
             ('Stuck Writing', 'Acme', 'writing', 4),
         ])
-        # Inject existing notes
+        # Inject existing notes. Il raw UPDATE fa scattare il trigger
+        # positions_touch_updated_at (updated_at = adesso) e la row non
+        # sarebbe più stuck: si rimette esplicitamente un timestamp
+        # vecchio — RICALCOLATO, quindi diverso da quello in riga: col
+        # valore identico il WHEN (IS) del trigger scatterebbe comunque.
+        stale_ts = (datetime.now(timezone.utc) - timedelta(hours=4)).isoformat()
         conn = sqlite3.connect(tmp_db_path)
         conn.execute(
-            "UPDATE positions SET notes='EXISTING_NOTE: scout flag' WHERE id=1"
+            "UPDATE positions SET notes='EXISTING_NOTE: scout flag', "
+            "updated_at=? WHERE id=1",
+            (stale_ts,)
         )
         conn.commit()
         conn.close()
