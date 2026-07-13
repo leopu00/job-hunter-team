@@ -58,7 +58,9 @@ const ITEMS := [
 	{"id": "plant_shelf_a", "kind": "plant_shelf", "rect": Rect2(860, 186, 90, 50)},
 	{"id": "plant_monstera_b", "kind": "plant_monstera", "rect": Rect2(2378, 764, 56, 56)},
 	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1230, 1900, 56, 56)},
-	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3090, 1455, 56, 56)},
+	# Lontana dal varco scorer: a y=1455 chiudeva il passaggio tra desk 5
+	# e vetrata, isolando la postazione dalla componente A* principale.
+	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3090, 1560, 56, 56)},
 	{"id": "plant_palm_c", "kind": "plant_palm", "rect": Rect2(302, 1436, 56, 56)},
 
 	# ── Lab analisti: il TAVOLO LUNGO è loro (Leone batte il dado; poi
@@ -82,7 +84,9 @@ const ITEMS := [
 	{"id": "wb_analisti", "kind": "nc_whiteboard", "rect": Rect2(2340, 706, 150, 34)},
 	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(2050, 1446, 150, 34)},
 	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(380, 1414, 150, 34)},
-	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2800, 1446, 150, 34)},
+	# Sul lato sud della vetrata: a y=1446 tagliava l'unica riga A* tra
+	# scorer:5 e l'apertura occidentale della parete condivisa.
+	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2800, 1510, 150, 34)},
 	# Sala relax: calcio balilla accanto al ping-pong (reference)
 	{"id": "rec_foosball", "kind": "nc_foosball", "rect": Rect2(430, 1165, 150, 90)},
 	# Scatoloni e schedari: l'ufficio vive
