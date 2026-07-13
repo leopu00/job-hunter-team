@@ -936,9 +936,16 @@ static func _parse_roster(raw: String, throttles: Dictionary = {}, activity: Dic
 		var base := uid.trim_suffix("-worker")
 		var num := ""
 		var parts := base.split("-")
-		if parts.size() > 1 and parts[parts.size() - 1].is_valid_int():
-			num = parts[parts.size() - 1]
-			base = "-".join(parts.slice(0, parts.size() - 1))
+		if parts.size() > 1:
+			var suffix: String = parts[parts.size() - 1]
+			if suffix.is_valid_int():
+				num = suffix
+				base = "-".join(parts.slice(0, parts.size() - 1))
+			elif suffix.begins_with("s") and suffix.substr(1).is_valid_int():
+				# Sub-agenti temporanei (critico-s1, ...): UID distinto,
+				# stesso ruolo/postazioni del reparto padre.
+				num = suffix.to_upper()
+				base = "-".join(parts.slice(0, parts.size() - 1))
 		var slug := base
 		var name := slug.capitalize()
 		if num != "":
