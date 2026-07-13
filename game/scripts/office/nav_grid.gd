@@ -5,7 +5,9 @@ extends RefCounted
 ## click-to-move del giocatore sia dal vagabondaggio degli agenti.
 
 const CELL := 32.0
-const MARGIN := 16.0  # quanto "crescono" gli ostacoli attorno ai mobili
+# Il collider agente è centrato 12px sopra i piedi con raggio 13px: 16px
+# lasciavano il corpo incastrato sulle vetrate pur seguendo una cella libera.
+const MARGIN := 28.0
 
 var astar := AStar2D.new()
 var _origin: Vector2
@@ -67,6 +69,31 @@ func path(from: Vector2, to: Vector2) -> PackedVector2Array:
 	if pts.size() > 0:
 		pts[pts.size() - 1] = _clamp_to_walkable(to)
 	return pts
+
+## Punto raggiungibile vicino a un altro agente, ma abbastanza distante da
+## non sovrapporre i due corpi. Prova gli otto lati e sceglie il tragitto più
+## corto; utile per visite, handoff e conversazioni fisiche.
+func approach_point(from: Vector2, around: Vector2, clearance := 72.0) -> Vector2:
+	var best := Vector2.INF
+	var best_cost := INF
+	for direction in [
+			Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP,
+			Vector2(1, 1).normalized(), Vector2(-1, 1).normalized(),
+			Vector2(1, -1).normalized(), Vector2(-1, -1).normalized(),
+	]:
+		var route := path(from, around + direction * clearance)
+		if route.is_empty():
+			continue
+		var endpoint := route[-1]
+		if endpoint.distance_to(around) < clearance * 0.68:
+			continue
+		var cost := from.distance_to(route[0])
+		for i in range(1, route.size()):
+			cost += route[i - 1].distance_to(route[i])
+		if cost < best_cost:
+			best_cost = cost
+			best = endpoint
+	return best if best != Vector2.INF else _clamp_to_walkable(around)
 
 ## Punto camminabile casuale (per il vagabondaggio degli agenti).
 func random_point() -> Vector2:

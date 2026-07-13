@@ -107,7 +107,9 @@ const AGENTS := {
 	},
 	"dottore": {
 		"name": "Il Dottore",
-		"spot": Vector2(420, 320),
+		# Punto libero della lounge: (420,320) era dentro il divano e la
+		# collisione lo espelleva a ogni rientro dalla visita.
+		"spot": Vector2(820, 520),
 		"wander": [Vector2(1790, 1390), Vector2(1965, 1400), Vector2(2690, 1825)],
 		"chatter": [
 			"visita di controllo agli agenti…",

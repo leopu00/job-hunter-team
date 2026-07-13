@@ -11,9 +11,11 @@ var _hover_agent: AgentNPC
 var _team_hud: TeamHud
 var _camera: FreeCamera
 var _seat_audit := ""
+var _doctor_test := ""
 
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
+	_doctor_test = OS.get_environment("JHT_DOCTOR_TEST")
 	add_child(OfficeFloor.new())
 	add_child(DepartmentDressing.new())  # tinte/targhe dei 5 reparti (dev-art)
 	add_child(DeptRugs.new())  # tappetoni tondi colore-reparto (reference)
@@ -108,8 +110,9 @@ func _ready() -> void:
 	# Ambientazione offline sobria: solo lead e core. Se una VPS è già in
 	# connessione (o parte il mock), NON mostriamo comparse provvisorie:
 	# l'ufficio resta vuoto fino al primo snapshot autorevole.
-	var backend_expected := BackendBus.state != BackendBus.DISCONNECTED \
-			or OS.get_environment("JHT_BACKEND_TEST") == "1"
+	var backend_expected := _doctor_test == "" and (\
+			BackendBus.state != BackendBus.DISCONNECTED \
+			or OS.get_environment("JHT_BACKEND_TEST") == "1")
 	for def in CharacterDefs.spawn_list():
 		if _seat_audit != "":
 			var audit_parts := _seat_audit.split(":")
@@ -160,7 +163,7 @@ func _ready() -> void:
 			add_child(focus_cam)
 			focus_cam.make_current()
 
-	if _seat_audit == "":
+	if _seat_audit == "" and _doctor_test == "":
 		_add_hud()
 		add_child(GameSidebar.new())  # sidebar stile desktop-app (linguetta ≡)
 
@@ -199,7 +202,7 @@ func _ready() -> void:
 	# La scena vive sul BackendBus: roster reale → spawn/despawn,
 	# chat del team → fumetti. Se un backend è già connesso (snapshot
 	# presente), la scena si allinea subito.
-	if _seat_audit == "":
+	if _seat_audit == "" and _doctor_test == "":
 		BackendBus.agents_updated.connect(sync_agents)
 		BackendBus.chat_message.connect(_on_chat_message)
 		BackendBus.positions_updated.connect(_on_transitions)
@@ -238,6 +241,8 @@ func _ready() -> void:
 	var pipeline_test := OS.get_environment("JHT_PIPELINE_TEST")
 	if pipeline_test != "":
 		_force_pipeline_trip.call_deferred(pipeline_test)
+	if _doctor_test != "":
+		_doctor_selftest.call_deferred(_doctor_test)
 
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
@@ -252,6 +257,40 @@ func _force_pipeline_trip(test_dept: String) -> void:
 			agent.set_backend_status("working")
 			agent.perform_pipeline_step()
 			return
+
+func _doctor_selftest(target_ref: String) -> void:
+	await get_tree().create_timer(0.8).timeout
+	var doctor: AgentNPC = _find_agent("dottore")
+	var target: AgentNPC = _find_agent(target_ref)
+	if doctor and target:
+		# Passa dallo stesso ingresso dei messaggi VPS: il test copre anche
+		# risoluzione uid/ruolo e dispatch chat-driven, non solo il movimento.
+		deliver_chat("dottore", target_ref, "Controllo contesto e carico operativo.")
+		await get_tree().process_frame
+	if doctor and target and bool(doctor.debug_snapshot().get("forced_trip", false)):
+		doctor.set_backend_status("idle")  # la visita deve comunque concludersi
+		target.set_backend_status("idle")
+		Log.info("test", "visita Dottore → %s avviata in idle" % target_ref)
+		var deadline := Time.get_ticks_msec() + 45000
+		while is_instance_valid(doctor) \
+				and bool(doctor.debug_snapshot().get("forced_trip", false)) \
+				and Time.get_ticks_msec() < deadline:
+			await get_tree().process_frame
+		if not is_instance_valid(doctor):
+			print("SIMULATION-DOCTOR-TEST FAIL doctor freed before return")
+			get_tree().quit(1)
+			return
+		var snap := doctor.debug_snapshot()
+		var ok := not bool(snap.get("forced_trip", true)) \
+				and doctor.global_position.distance_to(snap.get("home", Vector2.INF)) < 1.0 \
+				and int(snap.get("state", -1)) == AgentNPC.S.WORK \
+				and int(snap.get("investigations", 0)) == 1
+		print("SIMULATION-DOCTOR-TEST ", "PASS" if ok else "FAIL", " ",
+				JSON.stringify(snap))
+		get_tree().quit(0 if ok else 1)
+	else:
+		Log.warn("test", "visita Dottore non avviata: target=" + target_ref)
+		get_tree().quit(1)
 
 func _on_chat_message(msg: Dictionary) -> void:
 	deliver_chat(msg.get("from", ""), msg.get("to", "all"), msg.get("text", ""))
@@ -523,23 +562,46 @@ func sync_agents(list: Array) -> void:
 ## Recapita un messaggio della chat di team come fumetto (contratto
 ## BackendBus.chat_message): from/to sono uid agente, "user" o "all".
 func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
-	for agent in agents:
-		if agent.uid == from_uid and not agent.is_dissolving():
-			# Un solo parlante alla volta: i poll possono consegnare una raffica,
-			# ma l'ufficio non deve diventare una parete di pannelli sovrapposti.
-			for other in agents:
-				if other != agent and other.speech:
-					other.speech.clear_now()
-			var to_label := ""
-			match to_uid:
-				"all":
-					to_label = ""
-				"user":
-					to_label = "te"
-				_:
-					to_label = _name_of(to_uid)
-			agent.say(text, to_label)
+	var speaker := _find_agent(from_uid)
+	if speaker and not speaker.is_dissolving():
+		var target := _find_agent(to_uid) if to_uid not in ["all", "user"] else null
+		if speaker.slug == "dottore" and target \
+				and speaker.investigate_agent(target, text):
 			return
+		# Un solo parlante alla volta: i poll possono consegnare una raffica,
+		# ma l'ufficio non deve diventare una parete di pannelli sovrapposti.
+		for other in agents:
+			if other != speaker and other.speech:
+				other.speech.clear_now()
+		var to_label := ""
+		match to_uid:
+			"all":
+				to_label = ""
+			"user":
+				to_label = "te"
+			_:
+				to_label = _name_of(to_uid)
+		speaker.say(text, to_label)
+
+## Risolve uid reale o ruolo. Nei self-test offline "scout-4" sceglie la
+## quarta istanza del ruolo, mentre sulla VPS vince sempre l'uid esatto.
+func _find_agent(ref: String) -> AgentNPC:
+	for agent in agents:
+		if agent.uid == ref and ref != "":
+			return agent
+	var role := ref
+	var requested_index := 1
+	var dash := ref.rfind("-")
+	if dash > 0 and ref.substr(dash + 1).is_valid_int():
+		role = ref.substr(0, dash)
+		requested_index = maxi(1, int(ref.substr(dash + 1)))
+	var matches: Array[AgentNPC] = []
+	for agent in agents:
+		if agent.slug == role and not agent.is_dissolving():
+			matches.append(agent)
+	if matches.is_empty():
+		return null
+	return matches[mini(requested_index - 1, matches.size() - 1)]
 
 func _name_of(uid: String) -> String:
 	for agent in agents:
