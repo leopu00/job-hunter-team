@@ -18,8 +18,10 @@ const ZOOM_MAX := 16.0     # street level, come il volo su città del web
 const TILE_Z_MAX := 16
 const ZOOM_SPEED := 9.0    # lerp/s dell'animazione di zoom
 const NO_COORDS_MAX := 5
+const CARD_MAX := 8        # posizioni mostrate nella scheda di un pin
 
 signal zoomed_out          # sotto ZOOM_MIN: chi ospita può tornare al globo
+signal open_position(pid: int)  # click su una posizione della scheda pin
 
 ## Vista: centro in coordinate mercator NORMALIZZATE (0..1) + zoom
 ## frazionale. L'animazione insegue _target_*.
@@ -31,9 +33,16 @@ var _target_zoom := 4.0
 var _tiles := {}
 var _inflight := {}
 var _queue: Array = []
-var _pins: Array = []
-var _no_coords: Array = []
+var _pins: Array = []       # cluster di MapPins + "norm" precalcolato
+var _no_coords: Array = []  # righe già formattate per il box in alto
 var _dragging := false
+var _hover_key := ""
+var _selected_key := ""     # pin con la scheda aperta
+var _card: PanelContainer   # la scheda (vignette del web) del pin selezionato
+var _card_signature := ""   # per non ricostruirla a ogni snapshot uguale
+
+## Filtri condivisi con la vista Mappa (riferimento di WorldMap).
+var filters := {}
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(0, 520)
@@ -56,6 +65,8 @@ func _process(delta: float) -> void:
 		zoom_f = lerpf(zoom_f, _target_zoom, t)
 		center = center.lerp(_target_center, t)
 		queue_redraw()
+	if is_instance_valid(_card):
+		_place_card()
 
 ## ── Proiezione (mercator normalizzato 0..1) ──────────────────────────
 
@@ -125,34 +136,141 @@ func _on_tile(_result: int, code: int, _headers: PackedStringArray,
 ## ── Pin (cluster per città, come il web) ─────────────────────────────
 
 func _rebuild_pins() -> void:
-	_pins.clear()
+	var built := MapPins.build(filters)
+	_pins = built["clusters"]
 	_no_coords.clear()
-	var clusters := {}
-	for p in BackendBus.positions:
-		var coord := Vector2.INF
-		if p.get("office_lat") != null and p.get("office_lon") != null:
-			coord = Vector2(float(p["office_lon"]), float(p["office_lat"]))
-		else:
-			coord = MapView._city_coord(str(p.get("loc_city", "")
-					if p.get("loc_city") else ""))
-		if coord == Vector2.INF:
-			var where := str(p.get("loc_city", "") if p.get("loc_city") else "")
-			if where == "":
-				where = str(p.get("loc_country", "") if p.get("loc_country") else "?")
-			_no_coords.append("%s — %s · %s" % [str(p.get("title", "?")).left(44),
-					str(p.get("company", "?")), where])
-			continue
-		var city := str(p.get("loc_city", "?"))
-		if not clusters.has(city):
-			clusters[city] = {"coord": coord, "count": 0, "best": 0}
-		clusters[city]["count"] += 1
-		var sc := int(p.get("total_score") if p.get("total_score") != null else 0)
-		clusters[city]["best"] = maxi(clusters[city]["best"], sc)
-	for city in clusters:
-		var c: Dictionary = clusters[city]
-		_pins.append({"norm": lonlat_to_norm(c["coord"]), "count": int(c["count"]),
-				"score": int(c["best"]),
-				"label": "%s (%d)" % [city, c["count"]] if c["count"] > 1 else city})
+	for p in built["no_coords"]:
+		var where := str(p.get("loc_city", "") if p.get("loc_city") else "")
+		if where == "":
+			where = str(p.get("loc_country", "") if p.get("loc_country") else "?")
+		_no_coords.append("%s — %s · %s" % [str(p.get("title", "?")).left(44),
+				str(p.get("company", "?")), where])
+	for pin in _pins:
+		pin["norm"] = lonlat_to_norm(pin["lonlat"])
+		pin["label"] = "%s (%d)" % [str(pin["city"]), int(pin["count"])] \
+				if int(pin["count"]) > 1 else str(pin["city"])
+	# TEST-AUTO: JHT_MAP_PIN=<città> seleziona quel pin appena esiste
+	# (lo snapshot VPS arriva async: riprova a ogni rebuild finché c'è)
+	var want := OS.get_environment("JHT_MAP_PIN")
+	if want != "" and _selected_key == "":
+		for pin in _pins:
+			if str(pin["city"]).to_lower() == want.to_lower():
+				_target_center = pin["norm"]
+				_target_zoom = maxf(_target_zoom, 10.0)
+				_selected_key = str(pin["key"])
+				break
+	_rebuild_card()  # il pin selezionato può essere cambiato/sparito
+	queue_redraw()
+
+func _find_pin(key: String) -> Dictionary:
+	for pin in _pins:
+		if str(pin["key"]) == key:
+			return pin
+	return {}
+
+## ── La scheda del pin: le posizioni della città, cliccabili ──────────
+## (la vignette/popup del JobsGlobe web: titolo, azienda, score, apri →)
+
+func _rebuild_card() -> void:
+	var pin := _find_pin(_selected_key)
+	if pin.is_empty():
+		_selected_key = ""
+		_card_signature = ""
+		if is_instance_valid(_card):
+			_card.queue_free()
+			_card = null
+		return
+	# ricostruisci solo se il contenuto è cambiato davvero: lo snapshot
+	# periodico del bus non deve far lampeggiare la scheda sotto il mouse
+	var ids: Array = []
+	for p in pin["positions"]:
+		ids.append(int(p.get("id", 0)))
+	var signature := "%s·%s" % [_selected_key, str(ids)]
+	if signature == _card_signature and is_instance_valid(_card):
+		return
+	_card_signature = signature
+	if is_instance_valid(_card):
+		_card.queue_free()
+	_card = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.96)
+	sb.border_color = Palette.BORDER_GLOW
+	sb.set_border_width_all(1)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	_card.add_theme_stylebox_override("panel", sb)
+	add_child(_card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	_card.add_child(box)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	box.add_child(head)
+	var title := TerminalTheme.label(
+			"%s · %d" % [str(pin["city"]).to_upper(), int(pin["count"])],
+			15, Palette.WHITE, "bold")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close := Button.new()
+	close.flat = true
+	close.text = "✕"
+	close.add_theme_font_size_override("font_size", 14)
+	close.add_theme_color_override("font_color", Palette.MUTED)
+	close.add_theme_color_override("font_hover_color", Palette.RED)
+	close.pressed.connect(func() -> void:
+		_selected_key = ""
+		Sfx.play_back()
+		_rebuild_card()
+		queue_redraw())
+	head.add_child(close)
+	for p in (pin["positions"] as Array).slice(0, CARD_MAX):
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		box.add_child(row)
+		var score_v: Variant = p.get("total_score")
+		var score := TerminalTheme.label(
+				"—" if score_v == null else str(int(score_v)), 15,
+				MapPins.score_color(score_v), "bold")
+		score.custom_minimum_size = Vector2(34, 0)
+		row.add_child(score)
+		var btn := Button.new()
+		btn.flat = true
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.clip_text = true
+		btn.text = "%s — %s" % [str(p.get("title", "?")).left(40),
+				str(p.get("company", "?")).left(22)]
+		btn.add_theme_font_size_override("font_size", 14)
+		btn.add_theme_color_override("font_color", Palette.BRIGHT)
+		btn.add_theme_color_override("font_hover_color", Palette.GREEN)
+		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		btn.custom_minimum_size = Vector2(430, 0)
+		var pid := int(p.get("id", 0))
+		btn.pressed.connect(func() -> void:
+			Sfx.play_tick()
+			open_position.emit(pid))
+		row.add_child(btn)
+	if (pin["positions"] as Array).size() > CARD_MAX:
+		box.add_child(TerminalTheme.label(UIStrings.t("common.more")
+				% ((pin["positions"] as Array).size() - CARD_MAX), 12, Palette.DIM))
+	box.add_child(TerminalTheme.label(UIStrings.t("map.card_hint"), 11, Palette.DIM))
+	_place_card()
+
+## La scheda insegue il suo pin (come il popup riproiettato del web).
+func _place_card() -> void:
+	var pin := _find_pin(_selected_key)
+	if pin.is_empty() or not is_instance_valid(_card):
+		return
+	var pos := _to_screen(pin["norm"]) + Vector2(18, -24)
+	_card.position = pos.clamp(Vector2(8, 8),
+			(size - _card.size - Vector2(8, 8)).max(Vector2(8, 8)))
+
+## Selezione dall'esterno (il click su un pin del globo atterra qui).
+func select_key(key: String) -> void:
+	_selected_key = key
+	_card_signature = ""
+	_rebuild_card()
 	queue_redraw()
 
 ## ── Input ─────────────────────────────────────────────────────────────
@@ -168,11 +286,20 @@ func _gui_input(event: InputEvent) -> void:
 				_dragging = not _click_pin(event.position)
 			else:
 				_dragging = false
-	elif event is InputEventMouseMotion and _dragging:
-		center -= event.relative / _scale()
-		center.y = clampf(center.y, 0.0, 1.0)
-		_target_center = center
-		queue_redraw()
+	elif event is InputEventMouseMotion:
+		if _dragging:
+			center -= event.relative / _scale()
+			center.y = clampf(center.y, 0.0, 1.0)
+			_target_center = center
+			queue_redraw()
+		else:
+			var hover := _pin_near(event.position)
+			var key := str(hover.get("key", ""))
+			mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND \
+					if key != "" else Control.CURSOR_ARROW
+			if key != _hover_key:
+				_hover_key = key
+				queue_redraw()
 	elif event is InputEventMagnifyGesture:
 		_zoom_at(log(event.factor) / log(2.0) * 1.5, event.position)
 	elif event is InputEventPanGesture:
@@ -194,14 +321,33 @@ func _zoom_at(delta_z: float, anchor: Vector2) -> void:
 	_target_center.y = clampf(_target_center.y, 0.0, 1.0)
 	_target_zoom = new_target
 
-## Click su un pin → vola sulla città (come il click sui cluster web).
-func _click_pin(pos: Vector2) -> bool:
+func _pin_near(pos: Vector2) -> Dictionary:
+	var best := {}
+	var best_d := 16.0
 	for pin in _pins:
-		if _to_screen(pin["norm"]).distance_to(pos) < 16.0:
-			_target_center = pin["norm"]
-			_target_zoom = clampf(maxf(_target_zoom + 2.5, 11.0), ZOOM_MIN, ZOOM_MAX)
-			return true
-	return false
+		var d := _to_screen(pin["norm"]).distance_to(pos)
+		if d < best_d:
+			best_d = d
+			best = pin
+	return best
+
+## Click su un pin → vola sulla città E apre la sua scheda (il popup
+## del web). Click sul vuoto con la scheda aperta → la chiude.
+func _click_pin(pos: Vector2) -> bool:
+	var pin := _pin_near(pos)
+	if pin.is_empty():
+		if _selected_key != "":
+			_selected_key = ""
+			_rebuild_card()
+			queue_redraw()
+		return false
+	Sfx.play_tick()
+	_target_center = pin["norm"]
+	# città singola → zoom 11 (il flyTo del web); cluster → basta inquadrarla
+	_target_zoom = clampf(maxf(_target_zoom, 11.0 if int(pin["count"]) == 1 else 9.0),
+			ZOOM_MIN, ZOOM_MAX)
+	select_key(str(pin["key"]))
+	return true
 
 ## Vola a una posizione (per il passaggio dal globo alla mappa).
 func fly_to(lonlat: Vector2, z: float) -> void:
@@ -210,6 +356,31 @@ func fly_to(lonlat: Vector2, z: float) -> void:
 	zoom_f = clampf(z, ZOOM_MIN, ZOOM_MAX)
 	_target_zoom = zoom_f
 	queue_redraw()
+
+## Zoom animato verso un livello, ancorato al centro (post-atterraggio).
+func zoom_to(z: float) -> void:
+	_target_zoom = clampf(z, ZOOM_MIN, ZOOM_MAX)
+
+## Passo di zoom per il widget +/− della vista Mappa.
+func zoom_step(dz: float) -> void:
+	_zoom_at(dz, size / 2.0)
+
+## PANORAMICA: inquadra tutti i pin visibili (il fitBounds del web).
+func fit_all() -> void:
+	if _pins.is_empty():
+		fly_to(Vector2(10.0, 47.0), 4.0)  # l'Europa del boot
+		return
+	var lo := Vector2.INF
+	var hi := -Vector2.INF
+	for pin in _pins:
+		lo = lo.min(pin["norm"] as Vector2)
+		hi = hi.max(pin["norm"] as Vector2)
+	_target_center = (lo + hi) / 2.0
+	var extent := (hi - lo).max(Vector2(0.0005, 0.0005))
+	# scala tale che l'estensione occupi ~70% della vista
+	var zx := log(size.x * 0.7 / (TILE * extent.x)) / log(2.0)
+	var zy := log(size.y * 0.7 / (TILE * extent.y)) / log(2.0)
+	_target_zoom = clampf(minf(zx, zy), ZOOM_MIN, 12.0)
 
 ## ── Rendering ─────────────────────────────────────────────────────────
 
@@ -243,17 +414,25 @@ func _draw() -> void:
 	var font := TerminalTheme.get_theme().default_font
 	var by_score := _pins.duplicate()
 	by_score.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return int(a["score"]) > int(b["score"]))
+		return float(a["best"] if a["best"] != null else -1.0) \
+				> float(b["best"] if b["best"] != null else -1.0))
 	var used_rects: Array = []
 	for pin in by_score:
 		var pos := _to_screen(pin["norm"])
 		if pos.x < -60 or pos.x > size.x + 60 or pos.y < -60 or pos.y > size.y + 60:
 			continue
-		var col: Color = Palette.MINT if pin["score"] >= 70 else Palette.YELLOW
-		draw_circle(pos, 6.5, Color(0, 0, 0, 0.6))
-		draw_circle(pos, 5.0, col)
-		draw_arc(pos, 10.0, 0, TAU, 24, Color(col.r, col.g, col.b, 0.7), 2.0)
-		var text := "%s  [%d]" % [pin["label"], pin["score"]]
+		var col := MapPins.score_color(pin["best"])
+		var pr := 5.0 + 1.2 * clampf(log(float(pin["count"]) + 1.0) / log(2.0), 0.0, 4.0)
+		draw_circle(pos, pr + 1.5, Color(0, 0, 0, 0.6))
+		draw_circle(pos, pr, col)
+		draw_arc(pos, pr + 5.0, 0, TAU, 24, Color(col.r, col.g, col.b, 0.7), 2.0)
+		if str(pin["key"]) == _selected_key:
+			draw_arc(pos, pr + 9.0, 0, TAU, 32, Palette.WHITE, 2.0)
+		elif str(pin["key"]) == _hover_key:
+			draw_arc(pos, pr + 9.0, 0, TAU, 32,
+					Color(Palette.WHITE.r, Palette.WHITE.g, Palette.WHITE.b, 0.5), 1.5)
+		var text := "%s  [%d]" % [pin["label"], int(pin["best"])] \
+				if pin["best"] != null else str(pin["label"])
 		var tsize := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
 		var label_rect := Rect2(pos + Vector2(14, -9), tsize + Vector2(10, 6))
 		var collides := false
@@ -280,7 +459,7 @@ func _draw() -> void:
 		draw_rect(Rect2(8, 6, 600, 26 + 18.0 * (shown + (1 if _no_coords.size() > shown else 0))),
 				Color(0.04, 0.05, 0.07, 0.85))
 		draw_string(font, Vector2(16, y0),
-				"SENZA COORDINATE (%d)" % _no_coords.size(),
+				UIStrings.t("map.no_coords") % _no_coords.size(),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Palette.MUTED)
 		for i in shown:
 			draw_string(font, Vector2(16, y0 + 17 + 18.0 * i), "· " + str(_no_coords[i]),

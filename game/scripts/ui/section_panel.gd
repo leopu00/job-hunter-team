@@ -101,8 +101,13 @@ func _build(page := "") -> void:
 			else:
 				_build_stats()
 		"map":
-			# l'esperienza mappa del web privato: globo → mappa piatta
-			_content.add_child(WorldMap.new())
+			# l'esperienza mappa del web privato: globo → mappa piatta,
+			# filtri cross e schede pin che aprono il dettaglio posizione
+			var wm := WorldMap.new()
+			wm.open_position.connect(func(pid: int) -> void:
+				pending_detail = pid
+				navigate.emit("positions"))
+			_content.add_child(wm)
 		"team":
 			_build_team()
 		"agents":
