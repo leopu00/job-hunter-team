@@ -1,4 +1,4 @@
 # Godot: cache/import locali, mai in repo
 .godot/
 *.tmp
-export_presets.cfg
+builds/
