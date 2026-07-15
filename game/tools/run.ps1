@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $GameDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$IsWindowsHost = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
 $Godot = if ($env:JHT_GODOT_BIN) {
     $env:JHT_GODOT_BIN
 }
@@ -52,13 +53,65 @@ if (-not $HasMutex) {
     throw "Another JHT Godot run is already active on this Windows account."
 }
 
+function New-GodotProcessInfo {
+    param(
+        [string[]]$GodotArguments,
+        [bool]$CaptureOutput
+    )
+    $Info = [System.Diagnostics.ProcessStartInfo]::new()
+    $Info.FileName = $Godot
+    $Info.UseShellExecute = $false
+    # ProcessStartInfo.Arguments funziona anche su Windows PowerShell 5.1.
+    # Gli argomenti usati qui non terminano con backslash; quotiamo quelli con
+    # spazi per supportare checkout e home directory non banali.
+    $Info.Arguments = (($GodotArguments | ForEach-Object {
+        if ($_ -match '[\s"]') { '"' + $_.Replace('"', '\"') + '"' } else { $_ }
+    }) -join ' ')
+    $Info.RedirectStandardOutput = $CaptureOutput
+    $Info.RedirectStandardError = $CaptureOutput
+    return $Info
+}
+
 function Invoke-Godot {
     param([string[]]$GodotArguments)
-    & $Godot @GodotArguments
-    $ExitCode = $LASTEXITCODE
-    if ($null -eq $ExitCode -or $ExitCode -ne 0) {
+    if ($IsWindowsHost) {
+        $Process = [System.Diagnostics.Process]::Start(
+            (New-GodotProcessInfo -GodotArguments $GodotArguments -CaptureOutput $false)
+        )
+        $Process.WaitForExit()
+        $ExitCode = $Process.ExitCode
+        $Process.Dispose()
+    }
+    else {
+        & $Godot @GodotArguments
+        $ExitCode = $LASTEXITCODE
+    }
+    if ($ExitCode -ne 0) {
         throw "Godot exited with code $ExitCode"
     }
+}
+
+function Invoke-GodotCaptured {
+    param([string[]]$GodotArguments)
+    if ($IsWindowsHost) {
+        $Process = [System.Diagnostics.Process]::new()
+        $Process.StartInfo = New-GodotProcessInfo -GodotArguments $GodotArguments -CaptureOutput $true
+        if (-not $Process.Start()) { throw "Unable to start Godot" }
+        $Stdout = $Process.StandardOutput.ReadToEndAsync()
+        $Stderr = $Process.StandardError.ReadToEndAsync()
+        $Process.WaitForExit()
+        $ExitCode = $Process.ExitCode
+        $Output = $Stdout.GetAwaiter().GetResult() + $Stderr.GetAwaiter().GetResult()
+        $Process.Dispose()
+    }
+    else {
+        $Output = (& $Godot @GodotArguments 2>&1 | Out-String)
+        $ExitCode = $LASTEXITCODE
+    }
+    if ($ExitCode -ne 0) {
+        throw "Godot exited with code $ExitCode`n$Output"
+    }
+    return $Output
 }
 
 $LocationPushed = $false
@@ -75,21 +128,21 @@ try {
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/speech_bubble_selftest.gd")
 
             $env:JHT_VPS_CONTRACT_TEST = "1"
-            $out = (& $Godot --headless --quit-after 3 . 2>&1 | Out-String)
+            $out = Invoke-GodotCaptured -GodotArguments @("--headless", "--quit-after", "3", ".")
             Remove-Item Env:JHT_VPS_CONTRACT_TEST
-            if ($LASTEXITCODE -ne 0 -or $out -notmatch "VPS-CONTRACT-TEST PASS") { throw $out }
+            if ($out -notmatch "VPS-CONTRACT-TEST PASS") { throw $out }
 
             $env:JHT_SCENE = "office"
             $env:JHT_PIPELINE_FORCE_TEST = "scout"
-            $out = (& $Godot --headless . 2>&1 | Out-String)
+            $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
             Remove-Item Env:JHT_PIPELINE_FORCE_TEST
-            if ($LASTEXITCODE -ne 0 -or $out -notmatch "PIPELINE-FORCE-TEST PASS") { throw $out }
+            if ($out -notmatch "PIPELINE-FORCE-TEST PASS") { throw $out }
 
             $env:JHT_DOCTOR_TEST = "scout-4"
-            $out = (& $Godot --headless . 2>&1 | Out-String)
+            $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
             Remove-Item Env:JHT_DOCTOR_TEST
             Remove-Item Env:JHT_SCENE
-            if ($LASTEXITCODE -ne 0 -or $out -notmatch "SIMULATION-DOCTOR-TEST PASS") { throw $out }
+            if ($out -notmatch "SIMULATION-DOCTOR-TEST PASS") { throw $out }
             Write-Host "[run.ps1] TEST OK"
         }
         "boot" {
