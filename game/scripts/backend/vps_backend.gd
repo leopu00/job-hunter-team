@@ -322,6 +322,8 @@ var _user := "root"
 var _thread: Thread
 var _stop := false
 var _last_chat_ts := ""
+var _worker_tasks: Array[int] = []
+var _worker_tasks_mutex := Mutex.new()
 ## Conversazione utente↔agente aperta ("capitano"/"assistente", "" = no).
 var _convo_agent := ""
 
@@ -329,8 +331,17 @@ var _convo_agent := ""
 func start(config: Dictionary) -> void:
 	live = true  # dati veri: spegne il badge SIMULAZIONE quando connesso
 	_ip = str(config.get("ip", "")).strip_edges()
-	_key = str(config.get("key_path", "")).strip_edges()
+	_key = expand_user_path(str(config.get("key_path", "")))
 	_user = str(config.get("user", "root")).strip_edges()
+	if not FileAccess.file_exists(_key):
+		bus.publish_state(BackendBus.ERROR,
+				"chiave SSH non trovata: %s" % _key)
+		return
+	var ssh_version: Array = []
+	if OS.execute("ssh", ["-V"], ssh_version, true) == -1:
+		bus.publish_state(BackendBus.ERROR,
+				"client OpenSSH non installato o non presente nel PATH")
+		return
 	bus.publish_state(BackendBus.CONNECTING, "handshake ssh con %s…" % _ip)
 	_stop = false
 	_thread = Thread.new()
@@ -342,6 +353,42 @@ func stop() -> void:
 	if _thread and _thread.is_started():
 		_thread.wait_to_finish()
 	_thread = null
+	# Le scritture one-shot (chat/profilo/orari/ticket) vivono nel pool
+	# globale: se il backend viene distrutto prima del join, possono ancora
+	# dereferenziare `bus` durante il teardown dell'engine.
+	_worker_tasks_mutex.lock()
+	var pending := _worker_tasks.duplicate()
+	_worker_tasks.clear()
+	_worker_tasks_mutex.unlock()
+	for task_id: int in pending:
+		WorkerThreadPool.wait_for_task_completion(task_id)
+
+
+## Espande soltanto un vero prefisso home. Su Windows HOME spesso non
+## esiste: USERPROFILE e' la sorgente nativa (C:/Users/...).
+static func expand_user_path(path: String, home_override: String = "") -> String:
+	var value := path.strip_edges()
+	if not (value.begins_with("~/") or value.begins_with("~\\")):
+		return value
+	var home := home_override
+	if home == "":
+		home = OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" \
+				else OS.get_environment("HOME")
+	if home == "":
+		home = OS.get_environment("HOME") if OS.get_name() == "Windows" \
+				else OS.get_environment("USERPROFILE")
+	if home == "":
+		return value
+	return home.rstrip("/\\").path_join(value.substr(2))
+
+
+func _queue_worker(callable: Callable) -> void:
+	if _stop:
+		return
+	var task_id := WorkerThreadPool.add_task(callable)
+	_worker_tasks_mutex.lock()
+	_worker_tasks.append(task_id)
+	_worker_tasks_mutex.unlock()
 
 
 ## ── Thread di I/O ─────────────────────────────────────────────────────
@@ -555,8 +602,8 @@ static func _uid_norm(name: String) -> String:
 ## chat.jsonl + payload [@utente -> @<agent>] [CHAT] nella tmux
 ## dell'agente via load-buffer/paste-buffer. Il testo NON attraversa mai
 ## una shell come argomento (gotcha OS.execute): viaggia su file
-## temporaneo locale e arriva al remoto via stdin (bash-c col redirect,
-## comandi senza caratteri velenosi; append remoto con tee -a, mai sh -c).
+## temporaneo locale e arriva al remoto via stdin (pipe diretto a OpenSSH,
+## senza shell locale; append remoto con tee -a, mai sh -c).
 ## Chat 1-a-1 con OGNI agente del roster: l'uid del gioco si risolve in
 ## directory (/jht_home/agents/<dir>/) e sessione tmux raw dal poll.
 
@@ -580,7 +627,7 @@ func send_chat(agent: String, text: String) -> void:
 	if text.strip_edges() == "":
 		return
 	# thread one-shot: 3 giri ssh non devono congelare né la UI né il poll
-	WorkerThreadPool.add_task(_do_send_chat.bind(agent, text.strip_edges()))
+	_queue_worker(_do_send_chat.bind(agent, text.strip_edges()))
 
 func _do_send_chat(agent: String, text: String) -> void:
 	var session := _agent_session(agent)
@@ -673,7 +720,7 @@ print(json.dumps(dict(ok=True)))
 """
 
 func save_profile(fields: Dictionary) -> void:
-	WorkerThreadPool.add_task(_do_save_profile.bind(fields))
+	_queue_worker(_do_save_profile.bind(fields))
 
 func _do_save_profile(fields: Dictionary) -> void:
 	var b64 := Marshalls.utf8_to_base64(JSON.stringify(fields))
@@ -705,7 +752,7 @@ print(json.dumps(dict(ok=True)))
 """
 
 func save_working_hours(wh: Dictionary) -> void:
-	WorkerThreadPool.add_task(_do_save_hours.bind(wh))
+	_queue_worker(_do_save_hours.bind(wh))
 
 func _do_save_hours(wh: Dictionary) -> void:
 	var b64 := Marshalls.utf8_to_base64(JSON.stringify(wh))
@@ -751,7 +798,7 @@ func create_ticket(position_id: int, text: String) -> void:
 	if t == "" or position_id <= 0:
 		return
 	# thread one-shot: l'INSERT remoto non deve congelare UI né poll
-	WorkerThreadPool.add_task(_do_create_ticket.bind(position_id, t))
+	_queue_worker(_do_create_ticket.bind(position_id, t))
 
 func _do_create_ticket(position_id: int, text: String) -> void:
 	var res := _ssh_python(TICKET_PY % [Marshalls.utf8_to_base64(text), position_id])
@@ -823,24 +870,45 @@ func _ssh_host_python(script: String) -> Dictionary:
 	return res
 
 
-## shell locale SOLO per il redirect < file: il comando non contiene mai
-## testo utente né caratteri che il wrap naive di OS.execute corrompa.
-## Su Windows il redirect lo fa cmd.exe: "bash" potrebbe essere quello
-## di WSL, che non vede né i path C:/ né la chiave ssh.
+## Invia un file sullo stdin di OpenSSH senza passare da cmd.exe/bash.
+## I path della chiave e della cache possono contenere spazi (tipico su
+## Windows); argv + pipe evita sia rotture di quoting sia command injection.
+## Lo stdout remoto viene rediretto sul pipe stderr separato, cosi possiamo
+## chiudere stdin (EOF per `python3 -`) e continuare a raccogliere l'output.
 func _ssh_stdin_file(local_file: String, remote_cmd: String) -> Dictionary:
-	var out: Array = []
-	var on_windows := OS.get_name() == "Windows"
-	var lf := local_file.replace("/", "\\") if on_windows else local_file
-	var cmdline := "ssh -i " + _key \
-			+ " -o BatchMode=yes -o IdentitiesOnly=yes" \
-			+ " -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new " \
-			+ _user + "@" + _ip + " " + remote_cmd + " < " + lf
-	var code: int
-	if on_windows:
-		code = OS.execute("cmd", ["/c", cmdline], out, true)
-	else:
-		code = OS.execute("bash", ["-c", cmdline], out, true)
-	return {"code": code, "out": "\n".join(PackedStringArray(out))}
+	var payload := FileAccess.get_file_as_bytes(local_file)
+	if payload.is_empty() and FileAccess.get_open_error() != OK:
+		return {"code": -1, "out": "file temporaneo non leggibile"}
+	var args := PackedStringArray([
+		"-i", _key,
+		"-o", "BatchMode=yes",
+		"-o", "IdentitiesOnly=yes",
+		"-o", "ConnectTimeout=%d" % SSH_TIMEOUT,
+		"-o", "StrictHostKeyChecking=accept-new",
+		"%s@%s" % [_user, _ip],
+		remote_cmd + " 1>&2",
+	])
+	var process := OS.execute_with_pipe("ssh", args, true)
+	if process.is_empty():
+		return {"code": -1, "out": "client OpenSSH non avviabile"}
+	var stdio: FileAccess = process["stdio"]
+	var stderr: FileAccess = process["stderr"]
+	stdio.store_buffer(payload)
+	stdio.close()  # EOF: python3/tee/tmux possono terminare
+	# get_as_text() usa get_length(), che sui pipe vale 0: leggere a blocchi
+	# drena davvero il canale e impedisce anche il deadlock su output grandi.
+	var output_bytes := PackedByteArray()
+	while true:
+		var chunk := stderr.get_buffer(65536)
+		output_bytes.append_array(chunk)
+		if chunk.size() < 65536:
+			break
+	stderr.close()
+	var pid := int(process["pid"])
+	while OS.is_process_running(pid):
+		OS.delay_msec(5)
+	return {"code": OS.get_process_exit_code(pid),
+			"out": output_bytes.get_string_from_utf8()}
 
 
 ## Un giro di ssh non interattivo. Ritorna {code, out} (stdout+stderr).
