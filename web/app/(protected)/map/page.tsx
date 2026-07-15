@@ -28,24 +28,25 @@ export default async function MapPage() {
   const localRequest = isLocalRequestFromHeaders(hdrs);
   const demoMode = isDashboardDemoMode(hdrs.get("x-search"));
 
+  // Gate di routing ALLINEATO alla dashboard (vedi dashboard/page.tsx e
+  // docs/internal/architecture/2026-05-19-dashboard-routing-cases.md): un
+  // utente cloud loggato vede sempre la pagina, anche con onboarding_state
+  // incompleto. È il caso tipico degli account mirror / VPS-paired
+  // sincronizzati (posizioni presenti ma wizard-PC mai completato): la
+  // mappa mostra un globo vuoto se non c'è nulla, esattamente come la
+  // dashboard mostra stat a zero. Il redirect a /onboarding vale SOLO per il
+  // PC-standalone locale senza profilo.
+  //
+  // Prima qui c'era un gate su user_onboarding_state (vps_setup_completed_at
+  // / profile_configured_at) che, per gli utenti cloud con onboarding non
+  // completo al 100%, rediregeva a /dashboard → /map non si apriva MAI
+  // (nessun'altra pagina ha questo gate). Rimosso per coerenza.
   if (isSupabaseConfigured && !demoMode && !isLocalOnlyMode()) {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) {
-      const { data: onboarding } = await supabase
-        .from("user_onboarding_state")
-        .select("vps_setup_completed_at, profile_configured_at")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (
-        !onboarding?.vps_setup_completed_at ||
-        !onboarding?.profile_configured_at
-      ) {
-        redirect("/dashboard");
-      }
-    } else if (localRequest) {
+    if (!user && localRequest) {
       if (readWorkspaceProfile() === null) redirect("/onboarding");
     }
   } else if (!demoMode) {
