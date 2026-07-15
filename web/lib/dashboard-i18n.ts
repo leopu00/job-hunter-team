@@ -70,8 +70,8 @@ const T = {
     // (popolato dal team analyst), non più hardcoded qui.
 
     // Table
-    recent_positions: "Posizioni Recenti",
-    recent_positions_filtered: "Posizioni Filtrate",
+    recent_positions: "Le Migliori Posizioni",
+    recent_positions_filtered: "Le Migliori Posizioni Filtrate",
     view_all: "Vedi tutte →",
     col_id: "ID",
     col_title: "Titolo",
@@ -167,8 +167,8 @@ const T = {
     // Family labels now come from positions.role_family in the DB
     // (populated by the team analyst), not hardcoded here.
 
-    recent_positions: "Recent Positions",
-    recent_positions_filtered: "Filtered Positions",
+    recent_positions: "Top Positions",
+    recent_positions_filtered: "Top Filtered Positions",
     view_all: "View all →",
     col_id: "ID",
     col_title: "Title",
@@ -263,8 +263,8 @@ const T = {
     // A családneveket most a positions.role_family DB oszlop adja
     // (a team analyst populálja), nincs hardkódolva itt.
 
-    recent_positions: "Legutóbbi állások",
-    recent_positions_filtered: "Szűrt állások",
+    recent_positions: "A legjobb állások",
+    recent_positions_filtered: "A legjobb szűrt állások",
     view_all: "Összes megtekintése →",
     col_id: "ID",
     col_title: "Cím",
@@ -356,8 +356,8 @@ const T = {
     position_cities: "Ciudades",
     reset_filters: "limpiar",
 
-    recent_positions: "Posiciones Recientes",
-    recent_positions_filtered: "Posiciones Filtradas",
+    recent_positions: "Las Mejores Posiciones",
+    recent_positions_filtered: "Las Mejores Posiciones Filtradas",
     view_all: "Ver todas →",
     col_id: "ID",
     col_title: "Título",
@@ -449,8 +449,8 @@ const T = {
     position_cities: "Städte",
     reset_filters: "zurücksetzen",
 
-    recent_positions: "Neueste Stellen",
-    recent_positions_filtered: "Gefilterte Stellen",
+    recent_positions: "Die besten Stellen",
+    recent_positions_filtered: "Die besten gefilterten Stellen",
     view_all: "Alle anzeigen →",
     col_id: "ID",
     col_title: "Titel",
@@ -542,8 +542,8 @@ const T = {
     position_cities: "Villes",
     reset_filters: "réinit.",
 
-    recent_positions: "Postes récents",
-    recent_positions_filtered: "Postes filtrés",
+    recent_positions: "Les meilleurs postes",
+    recent_positions_filtered: "Les meilleurs postes filtrés",
     view_all: "Tout voir →",
     col_id: "ID",
     col_title: "Intitulé",
@@ -635,8 +635,8 @@ const T = {
     position_cities: "Cidades",
     reset_filters: "limpar",
 
-    recent_positions: "Vagas Recentes",
-    recent_positions_filtered: "Vagas Filtradas",
+    recent_positions: "As Melhores Vagas",
+    recent_positions_filtered: "As Melhores Vagas Filtradas",
     view_all: "Ver todas →",
     col_id: "ID",
     col_title: "Título",
