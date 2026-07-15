@@ -39,7 +39,7 @@ jobs:
             preset: Linux
             output: builds/linux/job-hunter-team.x86_64
             artifact: game-linux-x64
-            artifact_path: game/builds/linux/job-hunter-team.x86_64
+            artifact_path: game/builds/linux/job-hunter-team-linux-x64.tar.gz
     defaults:
       run:
         shell: bash
@@ -47,7 +47,7 @@ jobs:
       JHT_NOVPS: "1"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: chickensoft-games/setup-godot@v2.4.1
         with:
@@ -94,6 +94,13 @@ jobs:
               JHT_NOVPS=1 "$GAME_BIN" --headless --quit-after 3
               ;;
           esac
+
+      - name: Preserve Linux executable permissions
+        if: runner.os == 'Linux'
+        working-directory: game
+        run: |
+          tar -C builds/linux -czf builds/linux/job-hunter-team-linux-x64.tar.gz \
+            job-hunter-team.x86_64
 
       - uses: actions/upload-artifact@v7
         with:

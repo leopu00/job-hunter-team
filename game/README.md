@@ -28,5 +28,7 @@ godot --headless --export-release "Linux" builds/linux/job-hunter-team.x86_64
 
 The macOS preset deliberately keeps App Sandbox disabled: the live backend
 starts the system OpenSSH client, which sandboxed applications cannot execute.
-Production release signing/notarization credentials remain outside the tracked
-preset, as required by Godot.
+Tag releases require Apple Developer credentials, then CI signs, notarizes,
+staples and verifies the app before publishing it. CI refuses to publish an
+unsigned macOS game. Linux releases are wrapped in a `tar.gz` after `chmod +x`,
+so extracting the archive preserves the executable bit.

@@ -385,6 +385,18 @@ static func expand_user_path(path: String, home_override: String = "") -> String
 func _queue_worker(callable: Callable) -> void:
 	if _stop:
 		return
+	# Un task completato conserva il proprio slot finche non viene waited.
+	# Reap opportunistico: le sessioni lunghe con molta chat non accumulano ID.
+	var completed: Array[int] = []
+	_worker_tasks_mutex.lock()
+	for i in range(_worker_tasks.size() - 1, -1, -1):
+		var old_id := _worker_tasks[i]
+		if WorkerThreadPool.is_task_completed(old_id):
+			completed.append(old_id)
+			_worker_tasks.remove_at(i)
+	_worker_tasks_mutex.unlock()
+	for old_id: int in completed:
+		WorkerThreadPool.wait_for_task_completion(old_id)
 	var task_id := WorkerThreadPool.add_task(callable)
 	_worker_tasks_mutex.lock()
 	_worker_tasks.append(task_id)
