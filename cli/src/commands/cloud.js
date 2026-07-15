@@ -821,7 +821,7 @@ async function handlePush(options) {
     console.error(pc.red('Cloud sync non abilitato.'));
     console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
     process.exitCode = 1;
-    return;
+    return { ok: false, authFailed: false, skipped: 0 };
   }
 
   // Profile YAML: e' indipendente dal DB (esiste appena l'Assistente
@@ -837,7 +837,7 @@ async function handlePush(options) {
     console.error(pc.red(`Database non trovato: ${dbPath}`));
     console.error(pc.dim('Avvia il team almeno una volta o passa --db <path>'));
     process.exitCode = 1;
-    return;
+    return { ok: false, authFailed: false, skipped: 0 };
   }
 
   let DatabaseSync;
@@ -846,7 +846,7 @@ async function handlePush(options) {
   } catch {
     console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
     process.exitCode = 1;
-    return;
+    return { ok: false, authFailed: false, skipped: 0 };
   }
 
   let positions = [];
@@ -987,7 +987,7 @@ async function handlePush(options) {
     } catch (err) {
       console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
       process.exitCode = 1;
-      return;
+      return { ok: false, authFailed: false, skipped: 0 };
     }
   }
 
@@ -1018,7 +1018,9 @@ async function handlePush(options) {
   );
   if (options.dryRun) {
     console.log(pc.yellow('--dry-run: nulla viene pushato.'));
-    return;
+    // Nessun invio reale → non è un "sync completato": il chiamante non deve
+    // ackare. (Il rendezvous "Sync now" non usa mai dryRun.)
+    return { ok: false, authFailed: false, skipped: 0, dryRun: true };
   }
   if (
     positions.length === 0 && scores.length === 0 &&
@@ -1027,7 +1029,9 @@ async function handlePush(options) {
     tombstones.length === 0 && transitions.length === 0 && !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
-    return;
+    // Già in pari col cloud: niente da spedire = sync di fatto completa →
+    // il chiamante PUÒ ackare (nothingToSync). ok=true, skipped=0.
+    return { ok: true, authFailed: false, skipped: 0, nothingToSync: true };
   }
 
   // ── Push CHUNKED (anti-413) ────────────────────────────────────────────
@@ -1215,7 +1219,7 @@ async function handlePush(options) {
     // tick. Nessuna riga persa. Segnaliamo il fallimento al chiamante.
     console.error(pc.yellow(`Push interrotto dopo ${outcome.requests} richieste — cursore invariato, ritento al prossimo tick.`));
     process.exitCode = 1;
-    return { ok: false, authFailed: outcome.authFailed };
+    return { ok: false, authFailed: outcome.authFailed, skipped: outcome.skipped };
   }
 
   console.log(pc.green(`✓ Push completato in ${outcome.requests} richieste`));
@@ -1240,7 +1244,11 @@ async function handlePush(options) {
   set('transitions', safeCursor(transRes.confirmed, transRes.skipped, 'ts'));
   set('tombstones', safeCursor(tombRes.confirmed, tombRes.skipped, 'deleted_at'));
   await saveCloudCursor(newCursor);
-  return { ok: true, authFailed: false };
+  // ok=true anche con skipped>0: i chunk sono saliti e il cursore è avanzato in
+  // sicurezza (safeCursor lascia indietro le righe scartate → ritentate). Ma il
+  // sync NON è pieno → il chiamante (rendezvous) NON deve ackare finché
+  // skipped>0. Esponiamo skipped per far decidere il chiamante.
+  return { ok: true, authFailed: false, skipped: outcome.skipped };
 }
 
 /**
@@ -2052,8 +2060,30 @@ async function handleSyncRendezvous(options = {}) {
   // Push fresco ORA (resta su Vercel in Fase 1). Isolato dal counter del daemon.
   const prev = process.exitCode;
   process.exitCode = 0;
-  await handlePush({});
+  const pushResult = await handlePush({});
   process.exitCode = prev;
+
+  // Ack `sync_completed_at` SOLO su successo PIENO. Prima l'ack veniva scritto
+  // sempre → il web segnava "sincronizzato" anche quando il push falliva (o
+  // scartava righe dopo 413), mostrando un falso verde su dati non saliti.
+  //   • successo pieno (ok && skipped==0, incluso nothingToSync) → ACK.
+  //   • aborted / errore / auth-fail                             → NO ack.
+  //   • completato ma con righe scartate (skipped>0)             → NO ack:
+  //     il sync NON è integro; lasciando l'ack non scritto il pulsante resta
+  //     "in sospeso"/riprovabile e il prossimo tick ritenta le righe scartate
+  //     (che con safeCursor NON sono state superate dal cursore). Le righe
+  //     scartate sono già loggate in rosso da handlePush e intercettate dal
+  //     canary sync_health (Mantenitore) → segnale distinto senza nuovo stato.
+  const pushOk = !!pushResult && pushResult.ok === true && (pushResult.skipped || 0) === 0;
+  if (!pushOk) {
+    if (!silent) {
+      const why = pushResult && (pushResult.skipped || 0) > 0
+        ? `${pushResult.skipped} righe scartate`
+        : 'push non riuscito';
+      console.error(pc.yellow(`  sync-rendezvous: ack NON scritto (${why}) — il web resta "non sincronizzato", ritento al prossimo tick.`));
+    }
+    return;
+  }
 
   // Ack `sync_completed_at`: diretto se disponibile, altrimenti PATCH Vercel.
   const nowIso = new Date().toISOString();
