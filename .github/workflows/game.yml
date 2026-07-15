@@ -59,6 +59,7 @@ jobs:
         run: godot --headless --path game --import
 
       - name: Run deterministic game tests
+        if: runner.os != 'Windows'
         run: |
           godot --headless --path game --script res://tools/nav_grid_selftest.gd
           godot --headless --path game --script res://tools/speech_bubble_selftest.gd
@@ -68,6 +69,11 @@ jobs:
           printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
           DOCTOR_OUT="$(JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game 2>&1)"
           printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
+
+      - name: Run deterministic game tests through PowerShell
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./game/tools/run.ps1 test
 
       - name: Export native release
         working-directory: game
