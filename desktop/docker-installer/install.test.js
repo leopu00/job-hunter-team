@@ -277,7 +277,7 @@ test('ok=true when brew install + colima start + docker ps all succeed', async (
   assert.deepEqual(run.calls[0].args, ['install', 'colima', 'docker', 'docker-compose'])
   assert.deepEqual(run.calls[1].args, ['link', '--overwrite', 'docker'])
   assert.equal(run.calls[2].args[0], '-c') // bash -c '...compose plugin symlink...'
-  assert.deepEqual(run.calls[3].args, ['start'])
+  assert.deepEqual(run.calls[3].args, ['start', '--cpu', '4', '--memory', '4'])
   // Logs should have surfaced through the onLog callback.
   assert.ok(logs.some((l) => /brew install colima docker/.test(l)))
 })
