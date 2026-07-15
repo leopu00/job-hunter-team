@@ -6,6 +6,29 @@ param(
 $ErrorActionPreference = "Stop"
 $GameDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Godot = if ($env:JHT_GODOT_BIN) { $env:JHT_GODOT_BIN } else { "godot" }
+$EnvNames = @(
+    "JHT_NOVPS", "JHT_VPS_CONTRACT_TEST", "JHT_SCENE",
+    "JHT_PIPELINE_FORCE_TEST", "JHT_DOCTOR_TEST"
+)
+$SavedEnv = @{}
+foreach ($Name in $EnvNames) {
+    $SavedEnv[$Name] = if (Test-Path "Env:$Name") { (Get-Item "Env:$Name").Value } else { $null }
+}
+
+# Un mutex per utente protegge anche worktree diversi dalla corruzione della
+# cache Godot causata da import/test concorrenti sullo stesso PC Windows.
+$GodotMutex = [System.Threading.Mutex]::new($false, "JHTGameGodot")
+$HasMutex = $false
+try {
+    $HasMutex = $GodotMutex.WaitOne(0)
+}
+catch [System.Threading.AbandonedMutexException] {
+    $HasMutex = $true
+}
+if (-not $HasMutex) {
+    $GodotMutex.Dispose()
+    throw "Another JHT Godot run is already active on this Windows account."
+}
 
 function Invoke-Godot {
     param([string[]]$Arguments)
@@ -15,8 +38,10 @@ function Invoke-Godot {
     }
 }
 
-Push-Location $GameDir
+$LocationPushed = $false
 try {
+    Push-Location $GameDir
+    $LocationPushed = $true
     $env:JHT_NOVPS = "1"
     Write-Host "[run.ps1] import resources/class cache..."
     Invoke-Godot @("--headless", "--import", ".")
@@ -57,5 +82,15 @@ try {
     }
 }
 finally {
-    Pop-Location
+    if ($LocationPushed) { Pop-Location }
+    foreach ($Name in $EnvNames) {
+        if ($null -eq $SavedEnv[$Name]) {
+            Remove-Item "Env:$Name" -ErrorAction SilentlyContinue
+        }
+        else {
+            Set-Item "Env:$Name" $SavedEnv[$Name]
+        }
+    }
+    if ($HasMutex) { $GodotMutex.ReleaseMutex() }
+    $GodotMutex.Dispose()
 }

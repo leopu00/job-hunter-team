@@ -166,12 +166,13 @@ jobs:
             preset: Linux
             output: builds/linux/job-hunter-team.x86_64
             artifact_name: game-linux-release
-            artifact_path: game/builds/linux/job-hunter-team.x86_64
+            artifact_path: game/builds/linux/job-hunter-team-linux-x64.tar.gz
     defaults:
       run:
         shell: bash
     env:
       JHT_NOVPS: "1"
+      HAS_MAC_SIGNING: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.MACOS_CERTIFICATE_PWD != '' && secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -181,6 +182,19 @@ jobs:
           version: 4.7.0
           use-dotnet: false
           include-templates: true
+
+      - name: Require Apple release credentials
+        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING != 'true'
+        run: |
+          echo "::error::macOS game releases require signing and notarization credentials."
+          echo "::error::Configure MACOS_CERTIFICATE, MACOS_CERTIFICATE_PWD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID."
+          exit 1
+
+      - uses: apple-actions/import-codesign-certs@v7.0.0
+        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING == 'true'
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
+          p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
 
       - name: Import and test game
         run: |
@@ -199,6 +213,37 @@ jobs:
         run: |
           mkdir -p "$(dirname '${{ matrix.output }}')"
           godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
+
+      - name: Sign, notarize and staple macOS game
+        if: matrix.os == 'macos-14'
+        working-directory: game
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          SIGN_DIR="$RUNNER_TEMP/jht-game-sign"
+          rm -rf "$SIGN_DIR"
+          mkdir -p "$SIGN_DIR"
+          ditto -x -k "${{ matrix.output }}" "$SIGN_DIR"
+          GAME_APP="$(find "$SIGN_DIR" -type d -name '*.app' | head -n 1)"
+          test -n "$GAME_APP"
+          IDENTITY="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+          test -n "$IDENTITY"
+          codesign --deep --force --options runtime --timestamp --sign "$IDENTITY" "$GAME_APP"
+          codesign --verify --deep --strict --verbose=2 "$GAME_APP"
+          rm -f "${{ matrix.output }}"
+          ditto -c -k --sequesterRsrc --keepParent "$GAME_APP" "${{ matrix.output }}"
+          xcrun notarytool submit "${{ matrix.output }}" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$GAME_APP"
+          xcrun stapler validate "$GAME_APP"
+          spctl --assess --type execute --verbose=2 "$GAME_APP"
+          rm -f "${{ matrix.output }}"
+          ditto -c -k --sequesterRsrc --keepParent "$GAME_APP" "${{ matrix.output }}"
 
       - name: Smoke-test native game
         working-directory: game
@@ -219,6 +264,13 @@ jobs:
               JHT_NOVPS=1 "$GAME_BIN" --headless --quit-after 3
               ;;
           esac
+
+      - name: Preserve Linux executable permissions
+        if: runner.os == 'Linux'
+        working-directory: game
+        run: |
+          tar -C builds/linux -czf builds/linux/job-hunter-team-linux-x64.tar.gz \
+            job-hunter-team.x86_64
 
       - uses: actions/upload-artifact@v7
         with:
@@ -342,6 +394,6 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
             release-assets/*.zip
-            release-assets/*.x86_64
+            release-assets/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
