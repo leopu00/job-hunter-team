@@ -10,6 +10,7 @@ var _failures: Array[String] = []
 
 func _init() -> void:
 	_test_blocked_destination_is_clamped()
+	_test_writer_radial_layout()
 	_test_real_desk_routes()
 	if _failures.is_empty():
 		print("[nav-test] PASS: collision clamp + all desk routes")
@@ -63,6 +64,26 @@ func _test_real_desk_routes() -> void:
 		_assert(nav.is_point_walkable(approach), "%s approach is blocked" % label)
 		_assert(approach.distance_to(spot) >= 48.0,
 				"%s approach overlaps target (%0.1fpx)" % [label, approach.distance_to(spot)])
+
+func _test_writer_radial_layout() -> void:
+	var desks: Array = DepartmentDefsScript.DEPARTMENTS["scrittori"]["desks"]
+	_assert(desks.size() == 6, "writers must have exactly six radial desks")
+	if desks.size() != 6:
+		return
+	var center := Vector2(690, 1725)
+	var expected_facing := ["left", "left", "up", "down", "right", "right"]
+	var facing_vector := {
+		"up": Vector2.UP, "right": Vector2.RIGHT,
+		"down": Vector2.DOWN, "left": Vector2.LEFT,
+	}
+	for i in desks.size():
+		var desk: Dictionary = desks[i]
+		var facing: String = desk.get("facing", "")
+		_assert(facing == expected_facing[i],
+				"writer:%d facing=%s, expected=%s" % [i, facing, expected_facing[i]])
+		var radial: Vector2 = (desk["rect"] as Rect2).get_center() - center
+		_assert(radial.dot(facing_vector.get(facing, Vector2.ZERO)) > 80.0,
+				"writer:%d does not face outward (radial=%s facing=%s)" % [i, radial, facing])
 
 func _assert(condition: bool, message: String) -> void:
 	if not condition:
