@@ -70,7 +70,8 @@
 
 ## 🛠️ Infra & CLI
 
-- 🟡 **[INFRA-VERCEL-QUOTA]** — poll fold-in shipped (~75% idle reduction); residual: spending limit on Vercel (user action) until [JHT-CLOUD-INTERACTIVE-RETIRE] zeroes per-user pollers.
+- 🟡 **[INFRA-VERCEL-QUOTA]** — poll fold-in shipped (~75% idle reduction); residual: spending limit on Vercel (user action). The **file-bridge poller was re-enabled by default on the VPS (2026-07-11)** to serve on-demand CV/attachment downloads from the web (position-page "Download PDF" + profile CV preview): ~130 req/h per user at idle (index/purge at 5min, pending-poll ≤30s). Sustainable for beta — the structural fix is **[JHT-FILEBRIDGE-REALTIME]**.
+- ⬜ **[JHT-FILEBRIDGE-REALTIME]** — take the file-bridge off HTTP long-polling onto push/Realtime (Supabase Realtime subscription on `file_bridge_requests`, or fold into the event-driven [JHT-REALTIME-SCALE] channel) so idle cost → ~0 as users scale. Today the VPS poller polls `/api/cloud-sync/file-bridge` (~130 req/h/user idle); re-enabled 2026-07-11 in `cli/src/commands/pid1.js` (split out of the `JHT_CLOUD_CONTROL_POLLERS` gate).
 - 🟡 **[INFRA-SUPABASE-PERF]** — P0/P1/P2 advisor findings done; residual: connection-pool monitoring.
 - 🟡 **[BUG-INSTALL-BRANCH-MASTER-DEFAULT]** — `install.sh` still fetches runtime files from `master` when installed from a dev branch (mostly fixed).
 - 🟡 **[JHT-CLI-WIN-NATIVE]** — Windows-native CLI shipped; E2E validation pass remaining.

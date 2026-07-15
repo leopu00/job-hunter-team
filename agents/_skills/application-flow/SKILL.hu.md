@@ -128,6 +128,17 @@ A `critic-loop` skill rögzíti minden kör pontszámát; itt rögzíted az ít�
 
 > ⚠️ **Egyetlen-író szabály (bug #21).** Az `applications.status='ready'` értéket **csak itt, te állítod be, Critic PASS után**. A Critic soha nem írja közvetlenül az `applications.status`-t — egyetlen kimenete a `critic_verdict` + `critic_score`. A végső átmenet a te felelősséged.
 
+**A `--critic-notes` A FELHASZNÁLÓNAK SZÓL** — a jelölt Jelentkezési kártyája alatt jelenik meg, **ugyanazzal a markdownnal, mint a Scorer indoklása**, tehát úgy írd meg (scorer RULE-09), soha ne az alábbi távirati egysorost:
+- **A felhasználó nyelvén** (a RULE-T14 a "critic feedback"-et user-locale tartalomként sorolja fel). A review fájl angolul van — fogalmazd át a jelöltnek; ne hagyd angolul, amikor a csapat nyelve nem az.
+- **A jelölthöz beszélő markdown**: kezdd az ítélettel és azzal, hogyan mozgott a pontszám a 3 kör során *szavakban*, majd `**félkövér**` a döntő pontokra, néhány pró/kontra felsorolás, egy emoji mértékkel. Két rövid bekezdés — nincs szövegfal, nincs kulcsszó-felsorolás.
+- **Nincs belső zsargon** — soha ne szabálykódok (`T10`, `RULE-*`), eszköznevek (`WeasyPrint`/`pandoc`/`typst`) vagy session id-k.
+- Valódi sortörések `$'...\n...'`-rel (egy literális `\n` szövegként jelenik meg). Építsd fel egyszer a kapu előtt:
+
+```bash
+CRITIC_NOTES=$'**PASS · 7.5/10** — stabil mind a három körben, őszinte és erős illeszkedés.\n\n**Erősségek**\n- ✅ <konkrét erősség: CV vs ez a szerep>\n- ✅ <másik valódi erősség>\n\n**Jó tudni**\n- ⚠️ <egy valós hiányosság, világosan kimondva>\n\n<egy záró mondat>'
+# NEEDS_WORK/REJECT: ugyanez a forma, de nevezd meg, mi hiányzik és mi emelné.
+```
+
 ```bash
 # Végső UPSERT az application-re — ítélet + pontszám + ready/draft promóció
 # `--reviewed-by`-t az UTOLSÓ Critic session id-jára kell állítani
@@ -140,7 +151,7 @@ if [[ <final_verdict> == "PASS" ]]; then
     --critic-verdict PASS \
     --critic-score <X.X> \
     --critic-round 3 \
-    --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$LAST_CRITIC" \
     --status ready
 else
@@ -148,7 +159,7 @@ else
     --critic-verdict <NEEDS_WORK|REJECT> \
     --critic-score <X.X> \
     --critic-round 3 \
-    --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$LAST_CRITIC"
   # az állapot 'draft' marad — az application nem áll készen a felhasználónak.
 fi

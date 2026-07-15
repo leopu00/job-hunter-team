@@ -5,6 +5,7 @@ L'utente crea un ticket dalla pagina posizione (via web API → tabella
 `position_tickets`, status 'open'). Qui le operazioni del TEAM:
 
     python3 ticket.py list-open                      # coda del Capitano (ticket aperti)
+    python3 ticket.py count-open                      # solo il numero di aperti (heartbeat/monitor)
     python3 ticket.py assign <id> <agente>           # il Capitano assegna ('assigned')
     python3 ticket.py resolve <id> --response "..."  # l'agente risolve ('resolved')
     python3 ticket.py show <id>                       # ispezione singolo ticket
@@ -41,6 +42,15 @@ def list_open(conn) -> None:
     print(f"Ticket APERTI ({len(rows)}) — assegnali con: ticket.py assign <id> <agente>")
     for t in rows:
         print(_fmt(t))
+
+
+def count_open(conn) -> None:
+    """Stampa SOLO il numero di ticket aperti (monitor: heartbeat-bridge).
+    Output stabile e localizzazione-immune, a differenza di list-open."""
+    n = conn.execute(
+        "SELECT COUNT(*) FROM position_tickets WHERE status = 'open'"
+    ).fetchone()[0]
+    print(n)
 
 
 def assign(conn, ticket_id: int, agent: str) -> None:
@@ -104,6 +114,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Gestione ticket utente→team")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list-open")
+    sub.add_parser("count-open")
     a = sub.add_parser("assign")
     a.add_argument("id", type=int)
     a.add_argument("agent")
@@ -121,6 +132,8 @@ def main() -> None:
     try:
         if args.cmd == "list-open":
             list_open(conn)
+        elif args.cmd == "count-open":
+            count_open(conn)
         elif args.cmd == "assign":
             assign(conn, args.id, args.agent)
         elif args.cmd == "resolve":
