@@ -96,12 +96,14 @@ const DEPARTMENTS := {
 		# da Scrittore 4, resta alle ore 6) per non spostare gli UID live.
 		"desks": [
 			# indice 0..5 = ore 10, 8, 12, 6, 2, 4
-			{"rect": Rect2(345, 1584, 170, 78), "kind": "scrittori_a", "facing": "left", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(345, 1789, 170, 78), "kind": "scrittori_a", "facing": "left", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(605, 1481, 170, 78), "kind": "scrittori_a", "facing": "up"},
-			{"rect": Rect2(605, 1891, 170, 78), "kind": "scrittori_a", "facing": "down"},
-			{"rect": Rect2(865, 1584, 170, 78), "kind": "scrittori_a", "facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(865, 1789, 170, 78), "kind": "scrittori_a", "facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(345, 1584, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(380, 1768, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			# Le postazioni 12/6 rientrano entrambe sul tappeto mantenendo
+			# l'asse verticale e la vista retro/frontale richiesta.
+			{"rect": Rect2(605, 1538, 170, 78), "kind": "scrittori_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(605, 1830, 170, 78), "kind": "scrittori_a", "facing": "down", "tex_facing": "down"},
+			{"rect": Rect2(865, 1584, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(830, 1768, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"critici": {

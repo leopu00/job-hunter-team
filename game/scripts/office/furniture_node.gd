@@ -117,6 +117,12 @@ func _ready() -> void:
 		var suffix := "down"
 		match facing:
 			"up": suffix = "up"
+			# Diagonale bassa generata apposta per gli spicchi ore 4/8.
+			# La sorgente guarda verso down-right; down-left è lo specchio.
+			"down_right": suffix = "diag_down"
+			"down_left":
+				suffix = "diag_down"
+				flip_h = true
 			# La sorgente _side ha la sedia a DESTRA e quindi accoglie un
 			# agente che guarda a sinistra. Per il verso opposto si specchia
 			# l'intera postazione. La vecchia mappatura era invertita: sedia
