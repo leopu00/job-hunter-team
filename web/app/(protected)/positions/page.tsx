@@ -11,6 +11,7 @@ import {
 import { getServerLocale } from "@/lib/server-locale";
 import type { PositionWithScore } from "@/lib/types";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
+import UnseenDot from "@/app/components/UnseenDot";
 import PositionsShell from "./PositionsShell";
 import TableScrollSync from "./TableScrollSync";
 
@@ -205,6 +206,15 @@ const T: Record<string, Record<string, string>> = {
     de: "Stellen",
     fr: "Postes",
     pt: "Vagas",
+  },
+  unseen_marker: {
+    it: "Nuova — non ancora vista",
+    en: "New — not viewed yet",
+    hu: "Új — még nem megtekintett",
+    es: "Nueva — aún sin ver",
+    de: "Neu — noch nicht angesehen",
+    fr: "Nouvelle — pas encore vue",
+    pt: "Nova — ainda não vista",
   },
   remote_loc: {
     it: "Remote",
@@ -804,13 +814,16 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     </td>
                     {/* Titolo — una riga, troncato con … se troppo lungo */}
                     <td className="px-4 py-3 font-medium">
-                      <Link
-                        href={`/positions/${p.id}`}
-                        title={p.title ?? undefined}
-                        className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
-                      >
-                        {p.title}
-                      </Link>
+                      <span className="flex items-center gap-2">
+                        <UnseenDot id={p.id} label={tr("unseen_marker")} />
+                        <Link
+                          href={`/positions/${p.id}`}
+                          title={p.title ?? undefined}
+                          className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                        >
+                          {p.title}
+                        </Link>
+                      </span>
                     </td>
                     {/* Azienda */}
                     <td
