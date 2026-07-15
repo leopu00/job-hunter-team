@@ -3,47 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { DashboardPosition } from "@/lib/queries";
-import { formatFoundAt } from "@/lib/format-time";
-import { colorForFamily } from "@/lib/position-classifier";
-import {
-  convertCurrency,
-  currencySymbol,
-  formatMoneyCompact,
-  type Rates,
-} from "@/lib/exchange-rates";
-
-// Duplicato locale (stesso pattern di JobsGlobe/dashboard): la mappa è
-// piccola e specifica della UI, non vale un modulo condiviso.
-const STATUS_COLORS: Record<string, string> = {
-  new: "var(--color-muted)",
-  checked: "var(--color-blue)",
-  scored: "var(--color-purple)",
-  writing: "var(--color-yellow)",
-  review: "var(--color-orange)",
-  ready: "var(--color-ready)",
-  applied: "var(--color-green)",
-  response: "#58a6ff",
-  excluded: "var(--color-red)",
-};
-
-// Emoji per ruolo dell'ultima azione (colonna "Aggiornato da").
-// La chiave è last_action_by (ruolo), non il nome istanza.
-const ACTOR_EMOJI: Record<string, string> = {
-  scout: "🔍",
-  analista: "🔬",
-  scorer: "🎯",
-  scrittore: "✍️",
-  critico: "⚖️",
-  user: "👤",
-};
-
-// Verdetto critico → colore del voto (qui il colore È semantico: è un
-// giudizio di qualità, non come la modalità remote).
-const CRITIC_COLORS: Record<string, string> = {
-  PASS: "var(--color-green)",
-  NEEDS_WORK: "var(--color-yellow)",
-  REJECT: "var(--color-red)",
-};
 
 function scoreClass(s?: number | null) {
   if (!s) return "text-[var(--color-dim)]";
@@ -58,45 +17,16 @@ function scoreBg(s?: number | null) {
   return "var(--color-red)";
 }
 
-// Lordo mensile = lordo annuo / 12, convertito e in "k" con 1 decimale
-// (es. "€5.0–6.7k"). È una semplice divisione: NON è il netto.
-function formatMonthly(
-  min: number | null,
-  max: number | null,
-  from: string,
-  to: string,
-  rates: Rates,
-): string {
-  const sym = currencySymbol(to);
-  const m = (n: number) =>
-    formatMoneyCompact(convertCurrency(n, from, to, rates) / 12);
-  if (min != null && max != null)
-    return min === max ? `${sym}${m(min)}` : `${sym}${m(min)}–${m(max)}`;
-  if (min != null) return `${sym}≥${m(min)}`;
-  if (max != null) return `${sym}≤${m(max)}`;
-  return "—";
-}
-
 export type TableLabels = {
   title: string;
   titleFiltered: string;
   viewAll: string;
   noPositions: string;
-  colId: string;
-  colUpdated: string;
-  colUpdatedBy: string;
   colTitle: string;
   colCompany: string;
-  colCategory: string;
   colCountry: string;
   colCity: string;
-  colRemote: string;
   colScore: string;
-  colCritic: string;
-  colSalary: string;
-  colMonthly: string;
-  colSource: string;
-  colStatus: string;
 };
 
 type Props = {
@@ -106,9 +36,6 @@ type Props = {
   // Filtri cross-chart attivi → titolo + conteggio totale filtrato.
   filtered: boolean;
   totalFiltered: number;
-  // Conversione stipendio: tassi + valuta di visualizzazione corrente.
-  rates: Rates;
-  displayCurrency: string;
 };
 
 export default function RecentPositionsTable({
@@ -116,8 +43,6 @@ export default function RecentPositionsTable({
   labels,
   filtered,
   totalFiltered,
-  rates,
-  displayCurrency,
 }: Props) {
   // Doppia scrollbar orizzontale: una barra-proxy in cima sincronizzata con
   // il contenitore della tabella in fondo (utile con tabella larga + tante
@@ -147,13 +72,7 @@ export default function RecentPositionsTable({
 
   // Colonne "dati" allineate al centro (header + valore): le altre (testo:
   // titolo/azienda/paese…) restano a sinistra, che si legge meglio.
-  const centeredHeaders = new Set([
-    labels.colScore,
-    labels.colSalary,
-    labels.colMonthly,
-    labels.colUpdatedBy,
-    labels.colCritic,
-  ]);
+  const centeredHeaders = new Set([labels.colScore]);
 
   return (
     <div className="mb-8">
@@ -192,20 +111,11 @@ export default function RecentPositionsTable({
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {[
-                labels.colId,
-                labels.colUpdated,
                 labels.colTitle,
                 labels.colCompany,
-                labels.colCategory,
                 labels.colCountry,
                 labels.colCity,
-                labels.colRemote,
                 labels.colScore,
-                labels.colMonthly,
-                labels.colSource,
-                labels.colUpdatedBy,
-                labels.colCritic,
-                labels.colStatus,
               ].map((h) => (
                 <th
                   key={h}
@@ -222,7 +132,7 @@ export default function RecentPositionsTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={14}
+                  colSpan={5}
                   className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   {labels.noPositions}
@@ -240,14 +150,6 @@ export default function RecentPositionsTable({
                       i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
                   }}
                 >
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                    {p.legacy_id
-                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                      : p.id.slice(0, 8)}
-                  </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
-                    {formatFoundAt(p.last_action_at || p.found_at || "")}
-                  </td>
                   <td className="px-4 py-3 font-medium">
                     <Link
                       href={`/positions/${p.id}`}
@@ -259,23 +161,6 @@ export default function RecentPositionsTable({
                   </td>
                   <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
                     {p.company}
-                  </td>
-                  <td className="px-4 py-3 text-[11px] whitespace-nowrap">
-                    {p.role_family && p.role_family.trim() ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span
-                          className="inline-block w-2 h-2 rounded-full shrink-0"
-                          style={{
-                            background: colorForFamily(p.role_family.trim()),
-                          }}
-                        />
-                        <span className="text-[var(--color-base)]">
-                          {p.role_family.trim()}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-dim)]">—</span>
-                    )}
                   </td>
                   {(() => {
                     const country = (p.loc_country ?? "").trim();
@@ -305,11 +190,6 @@ export default function RecentPositionsTable({
                       </>
                     );
                   })()}
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-[10px] text-[var(--color-muted)]">
-                      {p.remote_type?.replace("_", " ") ?? "—"}
-                    </span>
-                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-center">
                       <span
@@ -330,67 +210,6 @@ export default function RecentPositionsTable({
                         />
                       </div>
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-center">
-                    {formatMonthly(
-                      p.salary_min,
-                      p.salary_max,
-                      p.salary_currency,
-                      displayCurrency,
-                      rates,
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap">
-                    {p.source ? (
-                      <span className="capitalize">
-                        {p.source.replace(/[-_]/g, " ")}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-dim)]">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">
-                    {p.last_action_actor ? (
-                      <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
-                        <span aria-hidden="true">
-                          {ACTOR_EMOJI[p.last_action_by] ?? "🤖"}
-                        </span>
-                        {p.last_action_actor}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-dim)]">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap tabular-nums text-center">
-                    {p.critic_score != null ? (
-                      <span
-                        className="text-[12px] font-semibold"
-                        style={{
-                          color:
-                            CRITIC_COLORS[p.critic_verdict ?? ""] ??
-                            "var(--color-muted)",
-                        }}
-                      >
-                        {p.critic_score.toFixed(1)}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-dim)] text-[11px]">
-                        —
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
-                      style={{
-                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                        borderColor:
-                          STATUS_COLORS[p.status] ?? "var(--color-border)",
-                        background: `${STATUS_COLORS[p.status]}18`,
-                      }}
-                    >
-                      {p.status}
-                    </span>
                   </td>
                 </tr>
               ))
