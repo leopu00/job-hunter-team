@@ -550,25 +550,37 @@ async function installColimaOnDarwin({
   // Homebrew's docker-compose formula doesn't wire the plugin into
   // ~/.docker/cli-plugins on its own (brew just prints a caveat), so
   // `docker compose` still fails after install. Do the symlink now.
-  // Best-effort: if the path layout is non-standard, we let it slide —
-  // the user can always invoke docker-compose as a standalone binary.
+  // Resolve the keg prefix with `brew --prefix` instead of hardcoding it:
+  // it lives under /opt/homebrew on Apple Silicon but /usr/local on Intel
+  // Macs — a hardcoded /opt/homebrew path left `docker compose` unavailable
+  // on Intel, so the container step dead-ended one step after a green
+  // `docker ps`. Best-effort: only link when the resolved binary exists.
   await run(
     'bash',
     [
       '-c',
-      'mkdir -p "$HOME/.docker/cli-plugins" && ln -sfn "/opt/homebrew/opt/docker-compose/bin/docker-compose" "$HOME/.docker/cli-plugins/docker-compose"',
+      'mkdir -p "$HOME/.docker/cli-plugins" && cbin="$(brew --prefix docker-compose 2>/dev/null)/bin/docker-compose" && [ -x "$cbin" ] && ln -sfn "$cbin" "$HOME/.docker/cli-plugins/docker-compose" || true',
     ],
     { onLog, env },
   )
   onStage('colima', 'ok')
 
   onStage('daemon', 'busy')
+  // Size the VM for the team: Colima's default is 2 GiB / 2 CPU, too tight
+  // for the 7-agent team plus the in-container Next.js server — `docker ps`
+  // reports green but the team can OOM at boot. Default to 4 GiB / 4 CPU
+  // (override via JHT_COLIMA_MEMORY / JHT_COLIMA_CPU on smaller hosts). The
+  // sizing applies when the VM is first created; a pre-existing Colima VM
+  // keeps whatever it was made with.
+  const vmMem = process.env.JHT_COLIMA_MEMORY || '4'
+  const vmCpu = process.env.JHT_COLIMA_CPU || '4'
+  const colimaStartArgs = ['start', '--cpu', vmCpu, '--memory', vmMem]
   // Try the fast default backend (VZ) first. If it fails — usually because
   // we're running inside a VM whose host doesn't expose nested Apple
   // Virtualization to the guest — fall back to QEMU emulation. QEMU is
   // slower but runs without nested virt, so the wizard doesn't dead-end
   // on developer/test machines that live inside Parallels/UTM/etc.
-  let start = await run('colima', ['start'], { onLog, env })
+  let start = await run('colima', colimaStartArgs, { onLog, env })
   if (!start.ok) {
     onLog('Colima start with VZ backend failed — falling back to QEMU…')
     // QEMU backend needs the qemu-img binary; install it lazily so real
@@ -586,7 +598,7 @@ async function installColimaOnDarwin({
         }
       }
     }
-    start = await run('colima', ['start', '--vm-type', 'qemu'], { onLog, env })
+    start = await run('colima', [...colimaStartArgs, '--vm-type', 'qemu'], { onLog, env })
   }
   if (!start.ok) {
     onStage('daemon', 'fail')
