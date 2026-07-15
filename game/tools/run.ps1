@@ -5,7 +5,29 @@ param(
 
 $ErrorActionPreference = "Stop"
 $GameDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$Godot = if ($env:JHT_GODOT_BIN) { $env:JHT_GODOT_BIN } else { "godot" }
+$Godot = if ($env:JHT_GODOT_BIN) {
+    $env:JHT_GODOT_BIN
+}
+elseif ($env:GODOT) {
+    $env:GODOT
+}
+else {
+    "godot"
+}
+
+# setup-godot espone su Windows un symlink senza estensione. Git Bash lo
+# esegue, mentre PowerShell non propaga in modo affidabile il relativo exit
+# code: dereferenziamo il vero .exe quando il comando e un link locale.
+if (Test-Path -LiteralPath $Godot) {
+    $GodotItem = Get-Item -LiteralPath $Godot
+    $GodotTarget = @($GodotItem.Target)[0]
+    if ($GodotTarget) {
+        if (-not [System.IO.Path]::IsPathRooted($GodotTarget)) {
+            $GodotTarget = Join-Path $GodotItem.DirectoryName $GodotTarget
+        }
+        $Godot = $GodotTarget
+    }
+}
 $EnvNames = @(
     "JHT_NOVPS", "JHT_VPS_CONTRACT_TEST", "JHT_SCENE",
     "JHT_PIPELINE_FORCE_TEST", "JHT_DOCTOR_TEST"
@@ -31,10 +53,11 @@ if (-not $HasMutex) {
 }
 
 function Invoke-Godot {
-    param([string[]]$Arguments)
-    & $Godot @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Godot exited with code $LASTEXITCODE"
+    param([string[]]$GodotArguments)
+    & $Godot @GodotArguments
+    $ExitCode = $LASTEXITCODE
+    if ($null -eq $ExitCode -or $ExitCode -ne 0) {
+        throw "Godot exited with code $ExitCode"
     }
 }
 
@@ -44,12 +67,12 @@ try {
     $LocationPushed = $true
     $env:JHT_NOVPS = "1"
     Write-Host "[run.ps1] import resources/class cache..."
-    Invoke-Godot @("--headless", "--import", ".")
+    Invoke-Godot -GodotArguments @("--headless", "--import", ".")
 
     switch ($Mode) {
         "test" {
-            Invoke-Godot @("--headless", "--script", "res://tools/nav_grid_selftest.gd")
-            Invoke-Godot @("--headless", "--script", "res://tools/speech_bubble_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/nav_grid_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/speech_bubble_selftest.gd")
 
             $env:JHT_VPS_CONTRACT_TEST = "1"
             $out = (& $Godot --headless --quit-after 3 . 2>&1 | Out-String)
@@ -71,13 +94,13 @@ try {
         }
         "boot" {
             $env:JHT_SCENE = "office"
-            Invoke-Godot @("--headless", "--quit-after", "15", ".")
+            Invoke-Godot -GodotArguments @("--headless", "--quit-after", "15", ".")
             Remove-Item Env:JHT_SCENE
             Write-Host "[run.ps1] BOOT OK"
         }
         "play" {
             Remove-Item Env:JHT_NOVPS
-            Invoke-Godot @("--path", $GameDir)
+            Invoke-Godot -GodotArguments @("--path", $GameDir)
         }
     }
 }
