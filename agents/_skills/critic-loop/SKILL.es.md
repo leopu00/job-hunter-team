@@ -42,7 +42,7 @@ Hardcodear `claude` hace que el Critic crashee cuando el equipo corre en Codex o
 ```bash
 PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
 case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model claude-sonnet-4-6 --effort high" ;;
+  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
   openai)              CRITICO_CMD="codex --yolo" ;;
   kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
   *)                   CRITICO_CMD="codex --yolo" ;;
@@ -123,6 +123,17 @@ Una puntuación que baja entre las rondas 1 y 2 es **normal** — un Critic fres
 
 Dos escrituras en la fila de application: veredicto + puntuación (siempre), y la promoción de estado a `ready` (solo en PASS). La promoción es lo que lee el dashboard `/ready` del usuario; saltarla deja la fila en `draft` y el CV invisible (bug #21).
 
+**`--critic-notes` ES VISIBLE PARA EL USUARIO** — se muestra bajo la tarjeta de Candidatura del candidato con el **mismo markdown que el razonamiento del Scorer**, así que escríbelo así (scorer RULE-09), nunca la línea telegráfica de abajo:
+- **En el idioma del usuario** (RULE-T14 lista "critic feedback" como contenido user-locale). El archivo de review está en inglés — reformúlalo para el candidato; no lo dejes en inglés cuando el idioma del equipo no lo es.
+- **Markdown que habla AL candidato**: empieza con el veredicto y cómo se movió la puntuación a lo largo de las 3 rondas *en palabras*, luego `**negrita**` en los puntos decisivos, un par de viñetas pro/contra, un emoji con moderación. Dos párrafos cortos — sin muro de texto, sin lista de palabras clave.
+- **Sin jerga interna** — nunca códigos de reglas (`T10`, `RULE-*`), nombres de herramientas (`WeasyPrint`/`pandoc`/`typst`) o ids de sesión.
+- Saltos de línea reales con `$'...\n...'` (un `\n` literal se imprime como texto). Constrúyelo una vez antes de la puerta:
+
+```bash
+CRITIC_NOTES=$'**PASS · 7.5/10** — estable en las tres rondas, un ajuste honesto y sólido.\n\n**Puntos fuertes**\n- ✅ <fortaleza concreta: CV vs este rol>\n- ✅ <otra fortaleza real>\n\n**A tener en cuenta**\n- ⚠️ <una carencia real, dicha con claridad>\n\n<una frase de cierre>'
+# NEEDS_WORK/REJECT: misma forma, pero indica qué falta y qué lo elevaría.
+```
+
 ```bash
 if [[ "<final_verdict>" == "PASS" ]]; then
   # PASS → la application se vuelve visible para el usuario
@@ -130,7 +141,7 @@ if [[ "<final_verdict>" == "PASS" ]]; then
     --critic-verdict PASS \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION" \
     --status ready
 else
@@ -139,7 +150,7 @@ else
     --critic-verdict FAIL \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION"
 fi
 ```

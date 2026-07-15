@@ -42,7 +42,7 @@ Hardcodare `claude` fa crashare il Critico quando il team gira su Codex o Kimi (
 ```bash
 PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
 case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model claude-sonnet-4-6 --effort high" ;;
+  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
   openai)              CRITICO_CMD="codex --yolo" ;;
   kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
   *)                   CRITICO_CMD="codex --yolo" ;;
@@ -126,6 +126,17 @@ promozione di status a `ready` (solo in caso di PASS). La promozione è ciò che
 la dashboard `/ready` dell'utente legge; saltarla lascia la riga in `draft`
 e il CV invisibile (bug #21).
 
+**`--critic-notes` è RIVOLTO ALL'UTENTE** — viene mostrato sotto la card Candidatura con lo **stesso markdown del razionale dello Scorer**, quindi scrivilo così (scorer RULE-09), mai la riga telegrafica qui sotto:
+- **Nella lingua dell'utente** (RULE-T14 elenca "critic feedback" tra i contenuti user-locale). Il file di review è in inglese — riformulalo per il candidato; non lasciarlo in inglese quando la lingua del team non lo è.
+- **Markdown che parla AL candidato**: apri con il verdetto e come il punteggio si è mosso nei 3 round *a parole*, poi `**grassetto**` sui punti decisivi, un paio di bullet pro/contro, un'emoji con parsimonia. Due paragrafi brevi — niente muro di testo, niente elenco di parole chiave.
+- **Nessun gergo interno** — mai sigle di regole (`T10`, `RULE-*`), nomi di tool (`WeasyPrint`/`pandoc`/`typst`) o id di sessione.
+- Newline reali con `$'...\n...'` (un `\n` letterale viene stampato come testo). Costruiscilo una volta prima del gate:
+
+```bash
+CRITIC_NOTES=$'**PASS · 7.5/10** — stabile in tutti e tre i round, un fit onesto e solido.\n\n**Punti di forza**\n- ✅ <forza concreta: CV vs questo ruolo>\n- ✅ <altra forza reale>\n\n**Da tenere presente**\n- ⚠️ <un gap reale, detto con chiarezza>\n\n<una frase di chiusura>'
+# NEEDS_WORK/REJECT: stessa forma, ma indica cosa manca e cosa lo alzerebbe.
+```
+
 ```bash
 if [[ "<final_verdict>" == "PASS" ]]; then
   # PASS → l'application diventa visibile all'utente
@@ -133,7 +144,7 @@ if [[ "<final_verdict>" == "PASS" ]]; then
     --critic-verdict PASS \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION" \
     --status ready
 else
@@ -142,7 +153,7 @@ else
     --critic-verdict FAIL \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION"
 fi
 ```

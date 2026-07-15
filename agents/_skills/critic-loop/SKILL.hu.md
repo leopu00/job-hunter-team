@@ -42,7 +42,7 @@ A `claude` kódba égetése a Critic-et összeomlatja, amikor a csapat Codex-en 
 ```bash
 PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
 case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model claude-sonnet-4-6 --effort high" ;;
+  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
   openai)              CRITICO_CMD="codex --yolo" ;;
   kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
   *)                   CRITICO_CMD="codex --yolo" ;;
@@ -126,6 +126,17 @@ Két írás az application soron: ítélet + pontszám (mindig), és a
 felhasználó `/ready` dashboardja olvas; kihagyása a sort `draft`-ban
 hagyja és a CV láthatatlan (bug #21).
 
+**A `--critic-notes` A FELHASZNÁLÓNAK SZÓL** — a jelölt Jelentkezési kártyája alatt jelenik meg, **ugyanazzal a markdownnal, mint a Scorer indoklása**, tehát úgy írd meg (scorer RULE-09), soha ne az alábbi távirati egysorost:
+- **A felhasználó nyelvén** (a RULE-T14 a "critic feedback"-et user-locale tartalomként sorolja fel). A review fájl angolul van — fogalmazd át a jelöltnek; ne hagyd angolul, amikor a csapat nyelve nem az.
+- **A jelölthöz beszélő markdown**: kezdd az ítélettel és azzal, hogyan mozgott a pontszám a 3 kör során *szavakban*, majd `**félkövér**` a döntő pontokra, néhány pró/kontra felsorolás, egy emoji mértékkel. Két rövid bekezdés — nincs szövegfal, nincs kulcsszó-felsorolás.
+- **Nincs belső zsargon** — soha ne szabálykódok (`T10`, `RULE-*`), eszköznevek (`WeasyPrint`/`pandoc`/`typst`) vagy session id-k.
+- Valódi sortörések `$'...\n...'`-rel (egy literális `\n` szövegként jelenik meg). Építsd fel egyszer a kapu előtt:
+
+```bash
+CRITIC_NOTES=$'**PASS · 7.5/10** — stabil mind a három körben, őszinte és erős illeszkedés.\n\n**Erősségek**\n- ✅ <konkrét erősség: CV vs ez a szerep>\n- ✅ <másik valódi erősség>\n\n**Jó tudni**\n- ⚠️ <egy valós hiányosság, világosan kimondva>\n\n<egy záró mondat>'
+# NEEDS_WORK/REJECT: ugyanez a forma, de nevezd meg, mi hiányzik és mi emelné.
+```
+
 ```bash
 if [[ "<final_verdict>" == "PASS" ]]; then
   # PASS → az application felhasználó által láthatóvá válik
@@ -133,7 +144,7 @@ if [[ "<final_verdict>" == "PASS" ]]; then
     --critic-verdict PASS \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION" \
     --status ready
 else
@@ -142,7 +153,7 @@ else
     --critic-verdict FAIL \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION"
 fi
 ```

@@ -86,9 +86,14 @@ const ALLOWED_POSITION_STATUS = new Set([
   "applied",
   "response",
 ]);
+// 'ready' = CV finito + Critic PASS (lo Scrittore lo setta nel gate finale,
+// single-writer). DEVE restare in whitelist: senza, normalizeApplicationStatus
+// lo degrada a 'draft' e la pagina posizione mostra "draft" pur avendo il CV
+// pronto — il CHECK cloud lo ammette già (mig 014_applications_status_ready).
 const ALLOWED_APPLICATION_STATUS = new Set([
   "draft",
   "review",
+  "ready",
   "approved",
   "applied",
   "response",

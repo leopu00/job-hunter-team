@@ -37,6 +37,11 @@ godot --headless --import . >/dev/null 2>&1 || true
 case "$MODE" in
 	test)
 		godot --headless --script res://tools/nav_grid_selftest.gd
+		godot --headless --script res://tools/speech_bubble_selftest.gd
+		VPS_OUT="$(JHT_NOVPS=1 JHT_VPS_CONTRACT_TEST=1 godot --headless --quit-after 3 . 2>&1)"
+		printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
+		PIPE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_PIPELINE_FORCE_TEST=scout godot --headless . 2>&1)"
+		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
 		echo "[run.sh] TEST OK"
 		;;
 	boot)

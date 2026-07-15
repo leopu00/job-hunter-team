@@ -23,3 +23,12 @@ cli/bin/** text eol=lf
 # Agent Skills source (SKILL.md + scripts) — letti dal container Linux
 .skills-source/** text eol=lf
 *.md text eol=lf
+
+# File testuali di Godot: l'editor li riscrive sempre LF, senza queste
+# rule ogni reimport su Windows produce centinaia di "M" fantasma.
+*.import text eol=lf
+*.gd text eol=lf
+*.tscn text eol=lf
+*.tres text eol=lf
+*.godot text eol=lf
+*.svg text eol=lf

@@ -19,19 +19,21 @@ const THROTTLE_MARK := "---JHT-THROTTLE---"
 ## lavorando; quando il composer è fermo il marker sparisce. In dubbio si
 ## ritorna idle: è meglio un falso fermo che inventare lavoro e movimento.
 const AGENT_ACTIVITY_PY := """
-import json, subprocess
+import json, subprocess, time
 
 def run(args):
     try:
         return subprocess.run(args, capture_output=True, text=True, timeout=4).stdout
     except Exception:
-        return ''
+        return None
 
-raw = run(['tmux', 'list-sessions', '-F', '#{session_name}'])
-out = {}
-for session in [x.strip() for x in raw.splitlines() if x.strip()]:
+def tail_of(session):
     pane = run(['tmux', 'capture-pane', '-t', session, '-p'])
-    tail = '\\n'.join(pane.splitlines()[-14:]).lower()
+    if pane is None:
+        return None
+    return '\\n'.join(pane.splitlines()[-14:]).lower()
+
+def classify(tail):
     busy = any(x in tail for x in (
         'esc to interrupt', 'to interrupt', 'ctrl+c to stop',
         'ctrl-c to stop', 'working (', 'thinking…', 'thinking...'))
@@ -39,20 +41,40 @@ for session in [x.strip() for x in raw.splitlines() if x.strip()]:
         'max number of steps reached', 'send another message to continue',
         'usage limit reached', 'rate limit reached', 'paused'))
     if busy:
-        status = 'working'
         if any(x in tail for x in ('running tool', 'running command', 'web search', 'fetching')):
-            detail = 'tool in esecuzione'
-        elif 'thinking' in tail:
-            detail = 'elaborazione'
-        else:
-            detail = 'turno in corso'
-    elif paused:
-        status = 'paused'
-        detail = 'in attesa di ripresa'
-    else:
-        status = 'idle'
-        detail = 'sessione attiva, nessun turno in corso'
+            return 'working', 'tool in esecuzione'
+        if 'thinking' in tail:
+            return 'working', 'elaborazione'
+        return 'working', 'turno in corso'
+    if paused:
+        return 'paused', 'in attesa di ripresa'
+    return 'idle', 'sessione attiva, nessun turno in corso'
+
+raw = run(['tmux', 'list-sessions', '-F', '#{session_name}']) or ''
+out = {}
+retry = []
+for session in [x.strip() for x in raw.splitlines() if x.strip()]:
+    tail = tail_of(session)
+    if tail is None:
+        # cattura fallita: NON è idle, il client mantiene l'ultimo stato
+        out[session] = {'status': 'unknown', 'detail': 'pane non osservabile'}
+        continue
+    status, detail = classify(tail)
+    if status == 'idle':
+        retry.append(session)  # forse è il flicker della barra: ricontrolla
     out[session] = {'status': status, 'detail': detail}
+# Secondo campione per i soli 'idle' (falsi idle 03:5x): la TUI nasconde
+# il marker per un attimo tra due step dello stesso turno — se al secondo
+# sguardo il marker c'è, l'agente sta lavorando.
+if retry:
+    time.sleep(0.35)
+    for session in retry:
+        tail = tail_of(session)
+        if tail is None:
+            continue
+        status, detail = classify(tail)
+        if status != 'idle':
+            out[session] = {'status': status, 'detail': detail}
 print(json.dumps(out, ensure_ascii=False))
 """
 
@@ -61,7 +83,10 @@ print(json.dumps(out, ensure_ascii=False))
 ## OS.execute→ssh→shell remota): il ; lo interpreta la shell remota,
 ## tmux ls resta in formato default e il nome sessione si estrae dai ':'.
 const POLL_CMD := "docker exec jht tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
-		+ "docker exec jht tail -n 80 /jht_home/logs/messages.jsonl 2>/dev/null; " \
+		# Un team in modalita intensiva puo produrre molte righe fra due poll:
+		# 500 evita che una raffica valida cada fuori dalla finestra prima che
+		# il cursore timestamp locale la osservi.
+		+ "docker exec jht tail -n 500 /jht_home/logs/messages.jsonl 2>/dev/null; " \
 		+ "echo ---JHT-THROTTLE---; " \
 		+ "docker exec jht tail -n 60 /jht_home/logs/throttle-events.jsonl 2>/dev/null"
 
@@ -151,6 +176,51 @@ try:
 except Exception as e:
     sample['container_status'] = 'errore metriche'
 print(json.dumps(sample))
+"""
+
+## RSS per sessione tmux (pane + intero albero discendenti) e serie token
+## reali già prodotte dal token-meter della VPS.
+const AGENT_METRICS_PY := """
+import json, subprocess
+
+def run(args):
+    try: return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL)
+    except Exception: return ''
+
+panes = {}
+for line in run(['tmux','list-panes','-a','-F','#{session_name}|#{pane_pid}']).splitlines():
+    try:
+        name, pid = line.split('|', 1); panes[name.lower()] = int(pid)
+    except Exception: pass
+procs = {}
+for line in run(['ps','-eo','pid=,ppid=,rss=']).splitlines():
+    try:
+        pid, ppid, rss = map(int, line.split()); procs[pid] = (ppid, rss)
+    except Exception: pass
+children = {}
+for pid, (ppid, rss) in procs.items(): children.setdefault(ppid, []).append(pid)
+def tree_rss(root):
+    todo=[root]; seen=set(); total=0
+    while todo:
+        pid=todo.pop()
+        if pid in seen: continue
+        seen.add(pid); total += procs.get(pid,(0,0))[1]; todo.extend(children.get(pid,[]))
+    return total * 1024
+agent_ram = {name: tree_rss(pid) for name,pid in panes.items()}
+series=[]
+generated_at=''
+window_h=0
+bucket_sec=0
+try:
+    usage=json.load(open('/jht_home/logs/agent-usage-table.json'))
+    series=(usage.get('series_kt_per_bucket') or [])[-36:]
+    generated_at=str(usage.get('generated_at') or '')
+    window_h=float(usage.get('window_h') or 0)
+    bucket_sec=int(usage.get('bucket_sec') or 0)
+except Exception: pass
+print(json.dumps({'agent_ram':agent_ram,'token_series':series,
+                  'generated_at':generated_at,'window_h':window_h,
+                  'bucket_sec':bucket_sec}))
 """
 
 ## Config team + usage REALI, già in forma di coppie [etichetta, valore]
@@ -314,7 +384,7 @@ func _run() -> void:
 				print("ACTIVITY-TRACE code=", activity_res["code"], " out=",
 						str(activity_res["out"]).left(2000))
 			if activity_res["code"] == 0:
-				activity = _parse_activity(str(activity_res["out"]))
+				activity = _smooth_activity(_parse_activity(str(activity_res["out"])))
 			var roster := _parse_roster(parts[0], _parse_throttles(throttle_raw), activity)
 			# mappa uid → sessione tmux per la chat (dict nuovo assegnato
 			# in blocco: niente stati intermedi visti dagli altri thread)
@@ -388,6 +458,14 @@ func _fetch_metrics() -> void:
 		if line.begins_with("{"):
 			var data: Variant = JSON.parse_string(line)
 			if data is Dictionary:
+				var agent_res := _ssh_python(AGENT_METRICS_PY)
+				if agent_res["code"] == 0:
+					for agent_line in str(agent_res["out"]).split("\n"):
+						if agent_line.begins_with("{"):
+							var agent_data: Variant = JSON.parse_string(agent_line)
+							if agent_data is Dictionary:
+								data.merge(agent_data, true)
+							break
 				bus.call_deferred("publish_telemetry", data)
 			return
 
@@ -439,23 +517,36 @@ func _ingest_chat(raw: String) -> void:
 ## Il testo è COMPLETO (body quando c'è, mai troncato: feedback Leone
 ## 21:2x): chi ha vincoli di spazio (i fumetti) accorcia da sé.
 static func _to_chat_msg(d: Dictionary) -> Dictionary:
-	var from := _slug_norm(str(d.get("from", "")))
+	var from := _uid_norm(str(d.get("from", "")))
 	if from == "" or from == "pacing" or from == "bridge":
 		return {}
-	var to := _slug_norm(str(d.get("to", "")))
+	var to := _uid_norm(str(d.get("to", "")))
 	if to == "":
-		to = _slug_norm(str(d.get("session", "")))
+		to = _uid_norm(str(d.get("session", "")))
 	var text := str(d.get("body", "")).strip_edges()
 	if text == "":
 		text = str(d.get("preview", "")).strip_edges()
 	if text == "":
 		return {}
+	# messages.jsonl conserva spesso anche l'envelope umano nel body:
+	# "[@a -> @b] [INFO] contenuto". From/to/type sono gia campi JSON;
+	# rimuoverli dal fumetto lascia spazio al messaggio vero.
+	if text.begins_with("[@"):
+		var close := text.find("]")
+		if close >= 0:
+			text = text.substr(close + 1).strip_edges()
+	if text.begins_with("["):
+		var type_close := text.find("]")
+		if type_close >= 0:
+			text = text.substr(type_close + 1).strip_edges()
 	return {"ts": str(d.get("ts", "")), "from": from, "to": to, "text": text}
 
 
-## Nomi del sistema reale → slug del gioco (capitano → coordinatore).
-static func _slug_norm(name: String) -> String:
-	var s := name.strip_edges().to_lower().replace("-worker", "")
+## Nomi del sistema reale → UID del gioco (capitano → coordinatore).
+## Il suffisso -worker e parte dell'identita d'istanza: SENTINELLA e
+## SENTINELLA-WORKER possono essere vive insieme e devono restare due avatar.
+static func _uid_norm(name: String) -> String:
+	var s := name.strip_edges().to_lower()
 	return "coordinatore" if s == "capitano" else s
 
 
@@ -493,7 +584,7 @@ func send_chat(agent: String, text: String) -> void:
 
 func _do_send_chat(agent: String, text: String) -> void:
 	var session := _agent_session(agent)
-	var buf := "/tmp/jht-game-chat-%d-%d.txt" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var buf := _temp_path("jht-game-chat")
 	var chat_file := "/jht_home/agents/%s/chat.jsonl" % _agent_dir(agent)
 
 	# 1) persisti il messaggio utente nel chat.jsonl dell'agente (stesso
@@ -699,10 +790,16 @@ func _fetch_convo(agent: String) -> void:
 			msgs.append(d)
 	bus.call_deferred("publish_agent_chat", agent, msgs)
 
+## File temporaneo locale in una directory scrivibile su ogni OS: il
+## /tmp hardcodato non esiste su Windows (FileAccess.open → null).
+static func _temp_path(stem: String) -> String:
+	return OS.get_cache_dir().path_join(
+			"%s-%d-%d.tmp" % [stem, OS.get_process_id(), Time.get_ticks_usec()])
+
 ## Esegue uno script python DENTRO il container passandolo via stdin
 ## (python3 -): nessun limite di quoting, script multi-linea liberi.
 func _ssh_python(script: String) -> Dictionary:
-	var buf := "/tmp/jht-game-py-%d-%d.py" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var buf := _temp_path("jht-game-py")
 	var f := FileAccess.open(buf, FileAccess.WRITE)
 	if f == null:
 		return {"code": -1, "out": "file temporaneo non scrivibile"}
@@ -715,7 +812,7 @@ func _ssh_python(script: String) -> Dictionary:
 ## Come _ssh_python, ma sul sistema host della VPS: serve per /proc,
 ## filesystem root e docker stats, invisibili dall'interno del container.
 func _ssh_host_python(script: String) -> Dictionary:
-	var buf := "/tmp/jht-game-host-py-%d-%d.py" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var buf := _temp_path("jht-game-host-py")
 	var f := FileAccess.open(buf, FileAccess.WRITE)
 	if f == null:
 		return {"code": -1, "out": "file temporaneo non scrivibile"}
@@ -726,15 +823,23 @@ func _ssh_host_python(script: String) -> Dictionary:
 	return res
 
 
-## bash locale SOLO per il redirect < file: il comando non contiene mai
+## shell locale SOLO per il redirect < file: il comando non contiene mai
 ## testo utente né caratteri che il wrap naive di OS.execute corrompa.
+## Su Windows il redirect lo fa cmd.exe: "bash" potrebbe essere quello
+## di WSL, che non vede né i path C:/ né la chiave ssh.
 func _ssh_stdin_file(local_file: String, remote_cmd: String) -> Dictionary:
 	var out: Array = []
+	var on_windows := OS.get_name() == "Windows"
+	var lf := local_file.replace("/", "\\") if on_windows else local_file
 	var cmdline := "ssh -i " + _key \
 			+ " -o BatchMode=yes -o IdentitiesOnly=yes" \
 			+ " -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new " \
-			+ _user + "@" + _ip + " " + remote_cmd + " < " + local_file
-	var code := OS.execute("bash", ["-c", cmdline], out, true)
+			+ _user + "@" + _ip + " " + remote_cmd + " < " + lf
+	var code: int
+	if on_windows:
+		code = OS.execute("cmd", ["/c", cmdline], out, true)
+	else:
+		code = OS.execute("bash", ["-c", cmdline], out, true)
 	return {"code": code, "out": "\n".join(PackedStringArray(out))}
 
 
@@ -765,7 +870,7 @@ static func _parse_throttles(raw: String) -> Dictionary:
 			continue
 		var d: Variant = JSON.parse_string(line)
 		if d is Dictionary and str(d.get("agent", "")) != "":
-			last[_slug_norm(str(d["agent"]))] = d
+			last[_uid_norm(str(d["agent"]))] = d
 	var now := Time.get_unix_time_from_system()
 	var active := {}
 	for uid in last:
@@ -780,6 +885,39 @@ static func _parse_throttles(raw: String) -> Dictionary:
 
 ## stdout dello script attività → sessione tmux → {status, detail}.
 ## Warning esterni vengono ignorati: vale soltanto una riga JSON oggetto.
+## Isteresi anti-flicker (falsi idle 03:5x): un 'working' scade a 'idle'
+## solo dopo 2 poll consecutivi senza marker — la barra della TUI può
+## nascondere il marker nell'attimo della cattura anche a metà turno.
+## 'unknown' (cattura fallita) mantiene sempre l'ultimo stato osservato.
+## Vive nel thread di poll: nessun accesso concorrente.
+var _last_status := {}
+var _last_detail := {}
+var _idle_strikes := {}
+
+func _smooth_activity(activity: Dictionary) -> Dictionary:
+	var out := {}
+	for session in activity:
+		var obs: Dictionary = activity[session]
+		var status := str(obs.get("status", "idle"))
+		var prev := str(_last_status.get(session, ""))
+		if status == "unknown":
+			obs = {"status": prev if prev != "" else "idle",
+					"detail": str(_last_detail.get(session, "stato non osservato"))}
+		elif status == "idle" and prev == "working":
+			var strikes := int(_idle_strikes.get(session, 0)) + 1
+			if strikes < 2:
+				_idle_strikes[session] = strikes
+				obs = {"status": "working",
+						"detail": str(_last_detail.get(session, "turno in corso"))}
+			else:
+				_idle_strikes[session] = 0
+		else:
+			_idle_strikes[session] = 0
+		out[session] = obs
+		_last_status[session] = str(obs.get("status", "idle"))
+		_last_detail[session] = str(obs.get("detail", ""))
+	return out
+
 static func _parse_activity(raw: String) -> Dictionary:
 	for line in raw.split("\n"):
 		if not line.begins_with("{"):
@@ -806,17 +944,28 @@ static func _parse_roster(raw: String, throttles: Dictionary = {}, activity: Dic
 		var session := line.split(":")[0].strip_edges()
 		if session == "" or session.contains(" "):
 			continue
-		var uid := _slug_norm(session)
-		var base := uid
+		var uid := _uid_norm(session)
+		# Il ruolo decide sprite/postazione; l'UID decide quale processo e
+		# quale vignetta. Un worker specializzato condivide il ruolo base.
+		var base := uid.trim_suffix("-worker")
 		var num := ""
 		var parts := base.split("-")
-		if parts.size() > 1 and parts[parts.size() - 1].is_valid_int():
-			num = parts[parts.size() - 1]
-			base = "-".join(parts.slice(0, parts.size() - 1))
+		if parts.size() > 1:
+			var suffix: String = parts[parts.size() - 1]
+			if suffix.is_valid_int():
+				num = suffix
+				base = "-".join(parts.slice(0, parts.size() - 1))
+			elif suffix.begins_with("s") and suffix.substr(1).is_valid_int():
+				# Sub-agenti temporanei (critico-s1, ...): UID distinto,
+				# stesso ruolo/postazioni del reparto padre.
+				num = suffix.to_upper()
+				base = "-".join(parts.slice(0, parts.size() - 1))
 		var slug := base
 		var name := slug.capitalize()
 		if num != "":
 			name += " " + num
+		elif uid.ends_with("-worker"):
+			name += " Worker"
 		var observed: Dictionary = activity.get(session, activity.get(uid, {}))
 		var status := str(observed.get("status", "idle"))
 		if status not in ["working", "idle", "paused"]:

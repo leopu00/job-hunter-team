@@ -1625,6 +1625,7 @@ async function handleTicketSync(options = {}) {
   let imported = 0;
   let pushedUpdates = 0;
   let pushedInserts = 0;
+  const importedTickets = [];   // { cloudId, posId, request } dei ticket appena tirati → notifica Assistente
   let db;
   try {
     db = new DatabaseSync(dbPath);
@@ -1688,16 +1689,37 @@ async function handleTicketSync(options = {}) {
         `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
          VALUES (?, ?, ?, 'open', ?, ?)`
       );
-      for (const ct of pullResult.tickets) {
+      // Ordina per created_at ASC così il cursore può avanzare in modo sicuro,
+      // fermandosi al PRIMO ticket rimandato (posizione non ancora locale).
+      const sortedTickets = [...pullResult.tickets].sort(
+        (a, b) => String(a.created_at || '').localeCompare(String(b.created_at || ''))
+      );
+      // Il cursore pull_since è ESCLUSIVO (query server: created_at > since). Se
+      // saltiamo un ticket perché la sua posizione non è ancora locale, NON
+      // dobbiamo far avanzare il cursore oltre di esso: al giro dopo non verrebbe
+      // mai più ri-tirato (bug perdita-dati). `cursorFrozen` blocca l'avanzamento
+      // al primo buco; i ticket a valle già visti restano idempotenti (findByCloud
+      // li scarta) e verranno ri-tirati finché la posizione mancante non arriva.
+      let safeCursor = cursor.pull_since;
+      let cursorFrozen = false;
+      for (const ct of sortedTickets) {
         const cloudId = Number(ct.id);
         const posId = Number(ct.position_legacy_id);
         if (!Number.isInteger(cloudId) || !Number.isInteger(posId)) continue;
-        if (findByCloud.get(cloudId)) continue;       // già importato
-        if (!posExists.get(posId)) continue;          // posizione non ancora locale → arriverà
+        if (findByCloud.get(cloudId)) {               // già importato
+          if (!cursorFrozen && ct.created_at) safeCursor = ct.created_at;
+          continue;
+        }
+        if (!posExists.get(posId)) {                  // posizione non ancora locale → riprova al giro dopo
+          cursorFrozen = true;
+          continue;
+        }
         ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
         imported++;
+        importedTickets.push({ cloudId, posId, request: ct.request_text || '' });
+        if (!cursorFrozen && ct.created_at) safeCursor = ct.created_at;
       }
-      if (pullResult.cursor) cursor.pull_since = pullResult.cursor;
+      if (safeCursor) cursor.pull_since = safeCursor;
     }
 
     // ---- PUSH: aggiornamenti team + INSERT locali → cloud ----
@@ -1758,6 +1780,36 @@ async function handleTicketSync(options = {}) {
   }
 
   await saveTicketsCursor(cursor);
+
+  // Notifica l'Assistente dei ticket appena tirati dal cloud: l'Assistente li
+  // inoltra al Capitano come richiesta PRIORITARIA (skill ticket-relay). Se
+  // l'Assistente non è ancora vivo (boot pre-spawn) la consegna fallisce in
+  // silenzio (jht-tmux-send exit 2): la rete di sicurezza (heartbeat
+  // q_tickets_open → C-15) recupera comunque il ticket `open` al giro dopo.
+  if (importedTickets.length > 0) {
+    try {
+      const { spawn } = await import('node:child_process');
+      const parts = importedTickets.slice(0, 5).map((t) => {
+        const req = (t.request || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+        return `#${t.cloudId} (pos ${t.posId}): "${req}"`;
+      });
+      const more = importedTickets.length > 5 ? ` … +${importedTickets.length - 5}` : '';
+      const message =
+        `[@system -> @assistente] [NEW-TICKET] ${importedTickets.length} ` +
+        `richiesta/e utente dalla pagina posizione: ${parts.join(' · ')}${more}. ` +
+        `Inoltrala SUBITO al Capitano come [REQ] PRIORITÀ (skill ticket-relay): ` +
+        `le richieste utente vanno in prima fila.`;
+      await new Promise((resolve) => {
+        const child = spawn('jht-tmux-send', ['ASSISTENTE', message], {
+          stdio: ['ignore', 'ignore', 'ignore'],
+        });
+        child.on('error', () => resolve());   // binario assente (fuori container) → best-effort
+        child.on('exit', () => resolve());
+      });
+    } catch {
+      /* best-effort: la notifica non deve mai far fallire il ticket-sync */
+    }
+  }
 
   const total = imported + pushedUpdates + pushedInserts;
   if (total > 0 || !silent) {

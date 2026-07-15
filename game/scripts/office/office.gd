@@ -241,6 +241,9 @@ func _ready() -> void:
 	var pipeline_test := OS.get_environment("JHT_PIPELINE_TEST")
 	if pipeline_test != "":
 		_force_pipeline_trip.call_deferred(pipeline_test)
+	var pipeline_force_test := OS.get_environment("JHT_PIPELINE_FORCE_TEST")
+	if pipeline_force_test != "":
+		_pipeline_force_selftest.call_deferred(pipeline_force_test)
 	if _doctor_test != "":
 		_doctor_selftest.call_deferred(_doctor_test)
 
@@ -257,6 +260,39 @@ func _force_pipeline_trip(test_dept: String) -> void:
 			agent.set_backend_status("working")
 			agent.perform_pipeline_step()
 			return
+
+func _pipeline_force_selftest(test_dept: String) -> void:
+	await get_tree().create_timer(0.8).timeout
+	var actor: AgentNPC = null
+	for candidate in agents:
+		if candidate.dept == test_dept:
+			actor = candidate
+			break
+	if actor == null:
+		print("PIPELINE-FORCE-TEST FAIL no actor for ", test_dept)
+		get_tree().quit(1)
+		return
+	actor.set_backend_status("idle")
+	var baseline := int(actor.debug_snapshot().get("pipeline_trips", 0))
+	actor.perform_pipeline_step(true)
+	await get_tree().process_frame
+	var deadline := Time.get_ticks_msec() + 60000
+	while int(actor.debug_snapshot().get("pipeline_trips", 0)) < baseline + 1 \
+			and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	# Consenti alla posa seduta e alla maschera collisione di stabilizzarsi.
+	for _i in 3:
+		await get_tree().physics_frame
+	var snap := actor.debug_snapshot()
+	var ok := int(snap.get("pipeline_trips", 0)) == baseline + 1 \
+			and int(snap.get("pending_pipeline", -1)) == 0 \
+			and int(snap.get("state", -1)) == AgentNPC.S.WORK \
+			and not bool(snap.get("forced_trip", true)) \
+			and int(snap.get("collision_mask", -1)) == 0 \
+			and actor.global_position.distance_to(
+					snap.get("work_position", Vector2.INF)) < 1.0
+	print("PIPELINE-FORCE-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify(snap))
+	get_tree().quit(0 if ok else 1)
 
 func _doctor_selftest(target_ref: String) -> void:
 	await get_tree().create_timer(0.8).timeout
@@ -491,15 +527,24 @@ func _open_chat_menu() -> void:
 	_chat_menu.closed.connect(func() -> void: _chat_menu = null)
 	_chat_menu.open_chat.connect(func(slug: String, display_name: String) -> void:
 		Log.info("chat", "pannello chat aperto dal menu con " + slug)
-		_chat_panel = ChatPanel.new(slug, display_name)
+		_chat_panel = ChatPanel.new(slug, display_name, _chat_roster())
 		add_child(_chat_panel)
 		_chat_panel.closed.connect(func() -> void: _chat_panel = null))
+
+## Roster per lo switcher del pannello chat: stesse coppie slug/nome del
+## menu (uid quando l'agente è backend-driven, es. "scout-2").
+func _chat_roster() -> Array:
+	var roster: Array = []
+	for a in agents:
+		roster.append({"slug": a.slug if a.uid == "" else a.uid,
+				"name": a.display_name})
+	return roster
 
 ## Chat REALE con l'agente: si apre con lo slug di gioco, il bus lo
 ## traduce nel nome del sistema reale (coordinatore → capitano).
 func _open_chat(agent: AgentNPC) -> void:
 	Log.info("chat", "pannello chat aperto con " + agent.slug)
-	_chat_panel = ChatPanel.new(agent.slug, agent.display_name)
+	_chat_panel = ChatPanel.new(agent.slug, agent.display_name, _chat_roster())
 	add_child(_chat_panel)
 	_chat_panel.closed.connect(func() -> void:
 		_chat_panel = null
@@ -525,6 +570,7 @@ func _start_talk(agent: AgentNPC) -> void:
 var _desk_pool: Dictionary = {}  # role -> Array di def libere (postazioni)
 var _backend_mode := false
 var _unplaced_roles: Dictionary = {}  # ruoli senza postazione già segnalati
+var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-worker)
 
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
@@ -540,7 +586,7 @@ func sync_agents(list: Array) -> void:
 			wanted[str(item.get("uid", item.get("slug", "")))] = item
 	for agent in agents.duplicate():
 		if not wanted.has(agent.uid):
-			_despawn_agent(agent)
+			_despawn_agent(agent, true, true)
 		else:
 			# throttle PRIMA dello status: la scelta seduto-vs-ricreazione
 			# al cambio di stato legge la durata già aggiornata
@@ -568,11 +614,8 @@ func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
 		if speaker.slug == "dottore" and target \
 				and speaker.investigate_agent(target, text):
 			return
-		# Un solo parlante alla volta: i poll possono consegnare una raffica,
-		# ma l'ufficio non deve diventare una parete di pannelli sovrapposti.
-		for other in agents:
-			if other != speaker and other.speech:
-				other.speech.clear_now()
+		# Vignette simultanee: ogni agente conserva la propria coda per almeno
+		# un minuto. L'indagine del Dottore resta il caso fisico speciale sopra.
 		var to_label := ""
 		match to_uid:
 			"all":
@@ -589,6 +632,11 @@ func _find_agent(ref: String) -> AgentNPC:
 	for agent in agents:
 		if agent.uid == ref and ref != "":
 			return agent
+	# Con dati veri un UID assente e davvero assente: attribuire il suo
+	# messaggio a un'altra istanza dello stesso ruolo falsifica la scena.
+	# Il fallback posizionale resta utile soltanto nei self-test offline.
+	if BackendBus.is_live():
+		return null
 	var role := ref
 	var requested_index := 1
 	var dash := ref.rfind("-")
@@ -740,7 +788,9 @@ func _react_to_transition(t: Dictionary) -> void:
 	actor.react_to_work(to_st in TR_PRINT)
 	# Il dato reale non genera solo un pulse: mette fisicamente in moto il
 	# reparto che ha firmato la transizione e il suo foglio lungo la pipeline.
-	actor.perform_pipeline_step()
+	# La transizione nel jobs.db e prova autoritativa del lavoro: anche se il
+	# poll della TUI vede gia idle, il viaggio fisico deve ancora avvenire.
+	actor.perform_pipeline_step(true)
 	Log.debug("scene", "reazione %s: %s → %s" % [by, what, to_st])
 
 ## Primo snapshot backend: le postazioni tornano nel pool e il roster
@@ -783,12 +833,37 @@ func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := false) -> 
 func _spawn_backend_agent(item: Dictionary) -> void:
 	var role: String = item.get("role", "")
 	var pool: Array = _desk_pool.get(role, [])
+	var def: Dictionary
 	if pool.is_empty():
-		if not _unplaced_roles.has(role):  # es. sentinella: nessun posto in scena
-			_unplaced_roles[role] = true
-			Log.warn("backend", "nessuna postazione libera per il ruolo " + role)
-		return
-	var def: Dictionary = pool.pop_front()
+		# I ruoli core non hanno una batteria di scrivanie, ma sulla VPS possono
+		# avere piu istanze (oggi: sentinella + sentinella-worker). Materializza
+		# anche le copie, con home sfalsata, invece di cancellarle dalla scena.
+		if CharacterDefs.AGENTS.has(role):
+			var serial := int(_core_overflow_serial.get(role, 0)) + 1
+			_core_overflow_serial[role] = serial
+			def = CharacterDefs.AGENTS[role].duplicate(true)
+			def["slug"] = role
+			def["lead"] = false
+			if def.has("spot"):
+				def["spot"] = Vector2(def["spot"]) + Vector2(
+						84.0 * serial, 52.0 * (serial % 2))
+			else:
+				# Reparto oltre le sedie disponibili: non sovrapporre due corpi
+				# sulla stessa sedia e soprattutto non far fallire tutta la sync.
+				# L'istanza resta visibile come postazione mobile accanto all'inbox.
+				var overflow_dept := str(def.get("dept", ""))
+				def.erase("dept")
+				def.erase("desk")
+				var anchor: Vector2 = DepartmentDefs.DEPARTMENTS.get(
+						overflow_dept, {}).get("inbox", Vector2(1700, 1200))
+				def["spot"] = anchor + Vector2(58.0 * serial, 46.0 * (serial % 2))
+		else:
+			if not _unplaced_roles.has(role):
+				_unplaced_roles[role] = true
+				Log.warn("backend", "nessuna postazione libera per il ruolo " + role)
+			return
+	else:
+		def = pool.pop_front()
 	var live := def.duplicate(true)
 	if item.get("name", "") != "":
 		live["name"] = item["name"]
