@@ -70,6 +70,7 @@ SCOUT_EXHAUST_LOOKBACK_H = float(
 )
 TARGET = os.environ.get("JHT_HEARTBEAT_SESSION", "CAPITANO")
 DB_QUERY = "/app/shared/skills/db_query.py"
+TICKET_PY = "/app/shared/skills/ticket.py"
 
 
 def _log(msg):
@@ -95,6 +96,19 @@ def _db_count(cmd):
         if s.startswith("#") or (s[:1].isdigit() and "|" in s):
             n += 1
     return n
+
+
+def _tickets_open():
+    """Conta i ticket utente APERTI (coda on-demand del Capitano, C-15).
+    int o None (campo omesso su errore, mai inventato)."""
+    try:
+        out = subprocess.run(
+            ["python3", TICKET_PY, "count-open"],
+            capture_output=True, text=True, timeout=30,
+        ).stdout.strip()
+    except Exception:
+        return None
+    return int(out) if out.isdigit() else None
 
 
 def _last_sentinel():
@@ -142,6 +156,7 @@ def gather_state():
         "work_phase": s.get("work_phase"),
         "q_analista": _db_count("next-for-analista"),
         "q_scorer": _db_count("next-for-scorer"),
+        "tickets_open": _tickets_open(),
         "top": _top_consumer(),
     }
 
@@ -212,6 +227,18 @@ def choose_nudge(state, now, last_theme):
     qa, qs = state.get("q_analista"), state.get("q_scorer")
     top = state.get("top")
     wk = state.get("weekly")
+
+    # 0) TICKET UTENTE APERTO — priorità ASSOLUTA (C-15). Una richiesta diretta
+    #    dell'utente dalla pagina posizione precede il lavoro autonomo del team:
+    #    l'utente sta aspettando. Consegnato come ORDINE, prima di ogni altra cosa.
+    tk = state.get("tickets_open")
+    if tk and tk > 0:
+        return ("ticket-utente",
+                f"[HEARTBEAT] {tk} ticket utente APERTO/I in coda (richieste dirette "
+                f"sulla pagina posizione). ORDINE (C-15): `ticket.py list-open`, assegna "
+                f"ORA l'agente adatto (Analista per verifica offerta/azienda/requisiti; "
+                f"Scrittore per un CV) — le richieste utente PRECEDONO il lavoro autonomo. "
+                f"L'agente risponde con `ticket.py resolve <id> --response \"…\"`.")
 
     # 1) SOURCING FERMO — priorità massima (fix #1/#2, 2026-07-01).
     #    Trigger: NESSUNO Scout attivo = nessuno sorge, a prescindere da 1-2 residui

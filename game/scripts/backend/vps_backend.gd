@@ -83,7 +83,10 @@ print(json.dumps(out, ensure_ascii=False))
 ## OS.execute→ssh→shell remota): il ; lo interpreta la shell remota,
 ## tmux ls resta in formato default e il nome sessione si estrae dai ':'.
 const POLL_CMD := "docker exec jht tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
-		+ "docker exec jht tail -n 80 /jht_home/logs/messages.jsonl 2>/dev/null; " \
+		# Un team in modalita intensiva puo produrre molte righe fra due poll:
+		# 500 evita che una raffica valida cada fuori dalla finestra prima che
+		# il cursore timestamp locale la osservi.
+		+ "docker exec jht tail -n 500 /jht_home/logs/messages.jsonl 2>/dev/null; " \
 		+ "echo ---JHT-THROTTLE---; " \
 		+ "docker exec jht tail -n 60 /jht_home/logs/throttle-events.jsonl 2>/dev/null"
 
@@ -205,11 +208,19 @@ def tree_rss(root):
     return total * 1024
 agent_ram = {name: tree_rss(pid) for name,pid in panes.items()}
 series=[]
+generated_at=''
+window_h=0
+bucket_sec=0
 try:
     usage=json.load(open('/jht_home/logs/agent-usage-table.json'))
     series=(usage.get('series_kt_per_bucket') or [])[-36:]
+    generated_at=str(usage.get('generated_at') or '')
+    window_h=float(usage.get('window_h') or 0)
+    bucket_sec=int(usage.get('bucket_sec') or 0)
 except Exception: pass
-print(json.dumps({'agent_ram':agent_ram,'token_series':series}))
+print(json.dumps({'agent_ram':agent_ram,'token_series':series,
+                  'generated_at':generated_at,'window_h':window_h,
+                  'bucket_sec':bucket_sec}))
 """
 
 ## Config team + usage REALI, già in forma di coppie [etichetta, valore]
@@ -506,23 +517,36 @@ func _ingest_chat(raw: String) -> void:
 ## Il testo è COMPLETO (body quando c'è, mai troncato: feedback Leone
 ## 21:2x): chi ha vincoli di spazio (i fumetti) accorcia da sé.
 static func _to_chat_msg(d: Dictionary) -> Dictionary:
-	var from := _slug_norm(str(d.get("from", "")))
+	var from := _uid_norm(str(d.get("from", "")))
 	if from == "" or from == "pacing" or from == "bridge":
 		return {}
-	var to := _slug_norm(str(d.get("to", "")))
+	var to := _uid_norm(str(d.get("to", "")))
 	if to == "":
-		to = _slug_norm(str(d.get("session", "")))
+		to = _uid_norm(str(d.get("session", "")))
 	var text := str(d.get("body", "")).strip_edges()
 	if text == "":
 		text = str(d.get("preview", "")).strip_edges()
 	if text == "":
 		return {}
+	# messages.jsonl conserva spesso anche l'envelope umano nel body:
+	# "[@a -> @b] [INFO] contenuto". From/to/type sono gia campi JSON;
+	# rimuoverli dal fumetto lascia spazio al messaggio vero.
+	if text.begins_with("[@"):
+		var close := text.find("]")
+		if close >= 0:
+			text = text.substr(close + 1).strip_edges()
+	if text.begins_with("["):
+		var type_close := text.find("]")
+		if type_close >= 0:
+			text = text.substr(type_close + 1).strip_edges()
 	return {"ts": str(d.get("ts", "")), "from": from, "to": to, "text": text}
 
 
-## Nomi del sistema reale → slug del gioco (capitano → coordinatore).
-static func _slug_norm(name: String) -> String:
-	var s := name.strip_edges().to_lower().replace("-worker", "")
+## Nomi del sistema reale → UID del gioco (capitano → coordinatore).
+## Il suffisso -worker e parte dell'identita d'istanza: SENTINELLA e
+## SENTINELLA-WORKER possono essere vive insieme e devono restare due avatar.
+static func _uid_norm(name: String) -> String:
+	var s := name.strip_edges().to_lower()
 	return "coordinatore" if s == "capitano" else s
 
 
@@ -560,7 +584,7 @@ func send_chat(agent: String, text: String) -> void:
 
 func _do_send_chat(agent: String, text: String) -> void:
 	var session := _agent_session(agent)
-	var buf := "/tmp/jht-game-chat-%d-%d.txt" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var buf := _temp_path("jht-game-chat")
 	var chat_file := "/jht_home/agents/%s/chat.jsonl" % _agent_dir(agent)
 
 	# 1) persisti il messaggio utente nel chat.jsonl dell'agente (stesso
@@ -766,10 +790,16 @@ func _fetch_convo(agent: String) -> void:
 			msgs.append(d)
 	bus.call_deferred("publish_agent_chat", agent, msgs)
 
+## File temporaneo locale in una directory scrivibile su ogni OS: il
+## /tmp hardcodato non esiste su Windows (FileAccess.open → null).
+static func _temp_path(stem: String) -> String:
+	return OS.get_cache_dir().path_join(
+			"%s-%d-%d.tmp" % [stem, OS.get_process_id(), Time.get_ticks_usec()])
+
 ## Esegue uno script python DENTRO il container passandolo via stdin
 ## (python3 -): nessun limite di quoting, script multi-linea liberi.
 func _ssh_python(script: String) -> Dictionary:
-	var buf := "/tmp/jht-game-py-%d-%d.py" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var buf := _temp_path("jht-game-py")
 	var f := FileAccess.open(buf, FileAccess.WRITE)
 	if f == null:
 		return {"code": -1, "out": "file temporaneo non scrivibile"}
@@ -782,7 +812,7 @@ func _ssh_python(script: String) -> Dictionary:
 ## Come _ssh_python, ma sul sistema host della VPS: serve per /proc,
 ## filesystem root e docker stats, invisibili dall'interno del container.
 func _ssh_host_python(script: String) -> Dictionary:
-	var buf := "/tmp/jht-game-host-py-%d-%d.py" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var buf := _temp_path("jht-game-host-py")
 	var f := FileAccess.open(buf, FileAccess.WRITE)
 	if f == null:
 		return {"code": -1, "out": "file temporaneo non scrivibile"}
@@ -793,15 +823,23 @@ func _ssh_host_python(script: String) -> Dictionary:
 	return res
 
 
-## bash locale SOLO per il redirect < file: il comando non contiene mai
+## shell locale SOLO per il redirect < file: il comando non contiene mai
 ## testo utente né caratteri che il wrap naive di OS.execute corrompa.
+## Su Windows il redirect lo fa cmd.exe: "bash" potrebbe essere quello
+## di WSL, che non vede né i path C:/ né la chiave ssh.
 func _ssh_stdin_file(local_file: String, remote_cmd: String) -> Dictionary:
 	var out: Array = []
+	var on_windows := OS.get_name() == "Windows"
+	var lf := local_file.replace("/", "\\") if on_windows else local_file
 	var cmdline := "ssh -i " + _key \
 			+ " -o BatchMode=yes -o IdentitiesOnly=yes" \
 			+ " -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new " \
-			+ _user + "@" + _ip + " " + remote_cmd + " < " + local_file
-	var code := OS.execute("bash", ["-c", cmdline], out, true)
+			+ _user + "@" + _ip + " " + remote_cmd + " < " + lf
+	var code: int
+	if on_windows:
+		code = OS.execute("cmd", ["/c", cmdline], out, true)
+	else:
+		code = OS.execute("bash", ["-c", cmdline], out, true)
 	return {"code": code, "out": "\n".join(PackedStringArray(out))}
 
 
@@ -832,7 +870,7 @@ static func _parse_throttles(raw: String) -> Dictionary:
 			continue
 		var d: Variant = JSON.parse_string(line)
 		if d is Dictionary and str(d.get("agent", "")) != "":
-			last[_slug_norm(str(d["agent"]))] = d
+			last[_uid_norm(str(d["agent"]))] = d
 	var now := Time.get_unix_time_from_system()
 	var active := {}
 	for uid in last:
@@ -906,17 +944,28 @@ static func _parse_roster(raw: String, throttles: Dictionary = {}, activity: Dic
 		var session := line.split(":")[0].strip_edges()
 		if session == "" or session.contains(" "):
 			continue
-		var uid := _slug_norm(session)
-		var base := uid
+		var uid := _uid_norm(session)
+		# Il ruolo decide sprite/postazione; l'UID decide quale processo e
+		# quale vignetta. Un worker specializzato condivide il ruolo base.
+		var base := uid.trim_suffix("-worker")
 		var num := ""
 		var parts := base.split("-")
-		if parts.size() > 1 and parts[parts.size() - 1].is_valid_int():
-			num = parts[parts.size() - 1]
-			base = "-".join(parts.slice(0, parts.size() - 1))
+		if parts.size() > 1:
+			var suffix: String = parts[parts.size() - 1]
+			if suffix.is_valid_int():
+				num = suffix
+				base = "-".join(parts.slice(0, parts.size() - 1))
+			elif suffix.begins_with("s") and suffix.substr(1).is_valid_int():
+				# Sub-agenti temporanei (critico-s1, ...): UID distinto,
+				# stesso ruolo/postazioni del reparto padre.
+				num = suffix.to_upper()
+				base = "-".join(parts.slice(0, parts.size() - 1))
 		var slug := base
 		var name := slug.capitalize()
 		if num != "":
 			name += " " + num
+		elif uid.ends_with("-worker"):
+			name += " Worker"
 		var observed: Dictionary = activity.get(session, activity.get(uid, {}))
 		var status := str(observed.get("status", "idle"))
 		if status not in ["working", "idle", "paused"]:

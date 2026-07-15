@@ -6,6 +6,7 @@
 #
 # Uso:
 #   tools/run.sh boot                  # check headless: exit 1 se script error
+#   tools/run.sh test                  # self-test collisioni/nav postazioni
 #   tools/run.sh play                  # lancia il gioco (fullscreen)
 #   tools/run.sh shot out.png [ENV..]  # screenshot autonomo e chiude
 #                                      #   es: JHT_OVERVIEW=1 JHT_DEPT=scout
@@ -34,6 +35,15 @@ echo "[run.sh] import risorse/cache classi…" >&2
 godot --headless --import . >/dev/null 2>&1 || true
 
 case "$MODE" in
+	test)
+		godot --headless --script res://tools/nav_grid_selftest.gd
+		godot --headless --script res://tools/speech_bubble_selftest.gd
+		VPS_OUT="$(JHT_NOVPS=1 JHT_VPS_CONTRACT_TEST=1 godot --headless --quit-after 3 . 2>&1)"
+		printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
+		PIPE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_PIPELINE_FORCE_TEST=scout godot --headless . 2>&1)"
+		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
+		echo "[run.sh] TEST OK"
+		;;
 	boot)
 		OUT="$(JHT_SCENE=office godot --headless --quit-after 15 . 2>&1 || true)"
 		ERRS="$(printf '%s\n' "$OUT" | grep -E "SCRIPT ERROR|Parse Error|ERROR:" || true)"
@@ -81,7 +91,7 @@ case "$MODE" in
 		fi
 		;;
 	*)
-		echo "uso: run.sh boot|play|shot" >&2
+		echo "uso: run.sh boot|test|play|shot" >&2
 		exit 64
 		;;
 esac

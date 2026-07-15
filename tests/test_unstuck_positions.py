@@ -83,6 +83,33 @@ class TestUnstuckDryRun:
         assert 'Stuck Writing' in captured.err
         assert 'dry-run' in captured.err
 
+    def test_sqlite_timestamp_format_is_not_misclassified_as_stale(
+            self, tmp_db_path, monkeypatch):
+        """SQLite usa uno spazio; il cutoff ISO usa ``T``: vanno parsati."""
+        _seed_positions(tmp_db_path, [
+            ('Fresh SQLite Timestamp', 'Acme', 'writing', 4),
+        ])
+        conn = sqlite3.connect(tmp_db_path)
+        conn.execute(
+            "UPDATE positions SET updated_at='2026-07-13 11:55:00' WHERE id=1"
+        )
+        conn.commit()
+        conn.close()
+
+        import unstuck_positions
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 7, 13, 12, 0, 0, tzinfo=timezone.utc)
+
+        monkeypatch.setattr(unstuck_positions, 'datetime', FixedDateTime)
+        conn = sqlite3.connect(tmp_db_path)
+        conn.row_factory = sqlite3.Row
+        rows = unstuck_positions.find_stuck(conn, 'writing', 2)
+        conn.close()
+        assert rows == [], "A position updated 5 minutes ago must not be stale"
+
 
 class TestUnstuckApply:
     def test_reset_writing_to_scored(self, tmp_db_path):
