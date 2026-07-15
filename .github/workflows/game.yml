@@ -73,7 +73,12 @@ jobs:
       - name: Run deterministic game tests through PowerShell
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./game/tools/run.ps1 test
+        run: |
+          $GodotExe = Get-ChildItem (Join-Path $HOME "godot") -Filter "Godot*.exe" -File |
+            Select-Object -First 1
+          if (-not $GodotExe) { throw "setup-godot executable not found" }
+          $env:JHT_GODOT_BIN = $GodotExe.FullName
+          ./game/tools/run.ps1 test
 
       - name: Export native release
         working-directory: game
