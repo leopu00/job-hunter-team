@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { DashboardPosition } from "@/lib/queries";
+import UnseenDot from "@/app/components/UnseenDot";
 
 function scoreClass(s?: number | null) {
   if (!s) return "text-[var(--color-dim)]";
@@ -22,6 +23,7 @@ export type TableLabels = {
   titleFiltered: string;
   viewAll: string;
   noPositions: string;
+  unseen: string;
   colId: string;
   colTitle: string;
   colCompany: string;
@@ -158,13 +160,16 @@ export default function RecentPositionsTable({
                       : p.id.slice(0, 8)}
                   </td>
                   <td className="px-4 py-3 font-medium">
-                    <Link
-                      href={`/positions/${p.id}`}
-                      title={p.title ?? undefined}
-                      className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
-                    >
-                      {p.title}
-                    </Link>
+                    <span className="flex items-center gap-2">
+                      <UnseenDot id={p.id} label={labels.unseen} />
+                      <Link
+                        href={`/positions/${p.id}`}
+                        title={p.title ?? undefined}
+                        className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                      >
+                        {p.title}
+                      </Link>
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
                     {p.company}

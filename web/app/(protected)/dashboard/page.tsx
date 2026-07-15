@@ -338,6 +338,7 @@ export default async function DashboardPage() {
                   titleFiltered: t.recent_positions_filtered,
                   viewAll: t.view_all,
                   noPositions: t.no_positions,
+                  unseen: t.unseen_marker,
                   colId: t.col_id,
                   colTitle: t.col_title,
                   colCompany: t.col_company,
