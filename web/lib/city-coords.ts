@@ -10,6 +10,8 @@
 // spirale attorno al centro, così non si sovrappongono e restano cliccabili una
 // per una.
 
+import { gazetteerCity } from "./city-gazetteer";
+
 export type GeoRow = {
   loc_country: string | null;
   loc_city: string | null;
@@ -58,7 +60,12 @@ export function resolveCityPins(
     const city = (r.loc_city ?? "").trim();
     if (!city) return null;
     const k = cityKey(r.loc_country, r.loc_city);
-    const c = centroid.get(k);
+    // Centro-città dai record con ufficio geocodificato; se la città non ha
+    // "semi" (account senza alcun office_lat — VPS fresca), ripiega sul
+    // gazetteer città→coordinate (lib/city-gazetteer.ts). Così paese+città
+    // basta a piazzare un pin. L'ufficio esatto (sopra) ha sempre la
+    // precedenza; il jitter per-città resta invariato (stessa chiave `k`).
+    const c = centroid.get(k) ?? gazetteerCity(r.loc_country, r.loc_city);
     if (!c) return null;
     const i = seen.get(k) ?? 0;
     seen.set(k, i + 1);
