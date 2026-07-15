@@ -1,7 +1,7 @@
 ---
 name: maintainer-sweep
 description: "Lo sweep di manutenzione INFRA del Mantenitore 👷‍♂️ (gemello del Dottore, scope infrastruttura non agenti). Una passata giornaliera one-shot: canary di liveness dei processi salva-vita del container (bridge/daemon/watchdog) via process_health.py, smoke-test dei tool mission-critical (browser/LinkedIn) via tool_health.py, audit/consolidamento deps fuori standard, GC di script e tmp orfani, de-dup di script ricorrenti, freschezza deps, trend disco/RAM. Single-writer: il Mantenitore è l'UNICO che ripara l'infra; le azioni DISTRUTTIVE (delete/archive) le PROPONE, il Capitano decide. Esito in append su mantenitore-logbook.jsonl."
-allowed-tools: Bash(python3 /app/shared/skills/process_health.py *), Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(bash /app/.launcher/start-agent.sh *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
+allowed-tools: Bash(python3 /app/shared/skills/process_health.py *), Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/sync_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(bash /app/.launcher/start-agent.sh *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
 ---
 
 # maintainer-sweep — tenere sana l'INFRA, in silenzio e a-prova-di-regressione
@@ -30,6 +30,31 @@ Stampa OK/DEAD per ogni processo atteso (bridge-suite, pid1-child, daemon, tg-br
 - **gruppo `pid1-child` / `daemon` / `core`** (agent-watchdog, doctor-watchdog, auto-report-loop, cloud-daemon, pid1) → questi DOVREBBE rispawnarli pid1: se sono morti è un problema più profondo → **ESCALA al Capitano** via `jht-tmux-send` (NON tentare di rispawnarli a mano: li orfaneresti). Mai lasciarlo silenzioso.
 
 Se tutti vivi → log `processes_health: all_ok` e prosegui. Questo è il gemello-per-i-PROCESSI dello smoke-test-per-i-TOOL dello step 1.
+
+### 0.5 ☁️ Canary della CLOUD-SYNC (pull + push)
+Subito dopo il canary dei processi. La sync locale↔cloud si è incantata due volte
+(pull churn: cursore congelato → riscriveva ~500 posizioni/tick; push 413:
+payload monolitico troppo grande → cursore mai avanzato → dashboard cloud ferma
+~14h). I bug di codice sono corretti, ma la vigilanza va resa STRUTTURALE.
+```bash
+python3 /app/shared/skills/sync_health.py summary        # oppure --json
+```
+Legge in sola lettura i cursori (`.cloud-sync-cursor.json`, `.cloud-pull-cursor.json`),
+`positions.updated_at` max nel DB e la coda di `logs/daemon.log`. Ritorna
+`problems[]` con severità. Esito:
+- **nessun problema** → log `sync_health: ok` e prosegui.
+- **push_behind / push_errors (HIGH)** → il push non arriva al cloud. NON è
+  riparabile da te a mano in sicurezza (single-writer sul DB = il team). **ESCALA
+  al Capitano** via `jht-tmux-send` col dettaglio del check (lag + conteggio 413).
+  Se il check suggerisce il drain di emergenza (`JHT_PUSH_POS_CHUNK=40`), gira la
+  proposta al Capitano, non agire di testa.
+- **pull_churn (MEDIUM)** → segnala al Capitano che il pull sta riapplicando
+  troppe righe (sintomo di cursore non convergente / fix non deployato).
+- **cursor_stale (MEDIUM)** → evidenza secondaria; includila nell'escalation solo
+  se accompagna un segnale HIGH.
+Log l'esito in `sync_health` nell'entry del logbook (vedi sotto). Regola d'oro
+invariata: **rileva + segnala, mai log-and-forget** (è lo stesso errore del bug
+libatk e del sentinel-bridge, qui sui CURSORI di sync).
 
 ### 1. 🩺 Smoke-test tool mission-critical (il cuore)
 ```bash
@@ -68,7 +93,8 @@ Ti dà **picco/media RAM+CPU + l'ORA del picco** delle ultime 24h. **Correla i p
 Ogni sweep scrive UNA entry densa in `/jht_home/logs/mantenitore-logbook.jsonl` (gemello del logbook Dottore), così il prossimo Mantenitore vede il trend:
 ```json
 {"ts":"ISO-UTC","slot":"maintainer-daily","processes_health":{"all_ok":true,"dead":[]},
- "processes_respawned":[...],"tools_health":{...},"repaired":[...],
+ "processes_respawned":[...],"sync_health":{"healthy":true,"problems":[]},
+ "tools_health":{...},"repaired":[...],
  "escalated":[...],"deps_consolidated":[...],"gc_proposed":[...],"dedup_proposed":[...],
  "disk":{"used_pct":N,"delta_vs_last":N},"ram":{...},"duration_sec":N,"capitano_ack":"..."}
 ```
@@ -83,6 +109,7 @@ Append con `>>`, mai overwrite. Sintesi densa (come le note di viaggio del Dotto
 
 ## See also
 - `shared/skills/process_health.py` — il canary di liveness dei processi salva-vita usato allo step 0 (rete di sicurezza giornaliera; gemello-per-i-processi del tool_health).
+- `shared/skills/sync_health.py` — il canary della cloud-sync usato allo step 0.5 (pull churn / push 413 / cursori stale); read-only, gemello-per-la-SYNC di process_health/tool_health.
 - `shared/skills/tool_health.py` — lo smoke-test riusato allo step 1 (anche gate build-time + tick).
 - `.launcher/agent-watchdog.sh` — il recovery VELOCE (ogni 30s, `maybe_respawn_bridges`) di cui lo step 0 è la rete di sicurezza giornaliera; vedi `docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md`.
 - `agents/mantenitore/mantenitore.md` — la persona/lifecycle del Mantenitore (dev3).
