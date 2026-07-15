@@ -72,6 +72,10 @@ func _test_writer_radial_layout() -> void:
 		return
 	var center := Vector2(690, 1725)
 	var expected_facing := ["left", "left", "up", "down", "right", "right"]
+	var expected_texture := ["left", "down_left", "up", "down", "right", "down_right"]
+	var diagonal_asset := "res://assets/gen-art/furniture/scrittori_a_diag_down.png"
+	_assert(ResourceLoader.exists(diagonal_asset),
+			"writers diagonal texture is missing: %s" % diagonal_asset)
 	var facing_vector := {
 		"up": Vector2.UP, "right": Vector2.RIGHT,
 		"down": Vector2.DOWN, "left": Vector2.LEFT,
@@ -81,6 +85,10 @@ func _test_writer_radial_layout() -> void:
 		var facing: String = desk.get("facing", "")
 		_assert(facing == expected_facing[i],
 				"writer:%d facing=%s, expected=%s" % [i, facing, expected_facing[i]])
+		_assert(str(desk.get("tex_facing", facing)) == expected_texture[i],
+				"writer:%d texture facing=%s, expected=%s" % [
+					i, desk.get("tex_facing", facing), expected_texture[i],
+				])
 		var radial: Vector2 = (desk["rect"] as Rect2).get_center() - center
 		_assert(radial.dot(facing_vector.get(facing, Vector2.ZERO)) > 80.0,
 				"writer:%d does not face outward (radial=%s facing=%s)" % [i, radial, facing])
