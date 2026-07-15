@@ -22,6 +22,7 @@ export type TableLabels = {
   titleFiltered: string;
   viewAll: string;
   noPositions: string;
+  colId: string;
   colTitle: string;
   colCompany: string;
   colCountry: string;
@@ -111,6 +112,7 @@ export default function RecentPositionsTable({
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {[
+                labels.colId,
                 labels.colTitle,
                 labels.colCompany,
                 labels.colCountry,
@@ -132,7 +134,7 @@ export default function RecentPositionsTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   {labels.noPositions}
@@ -150,6 +152,11 @@ export default function RecentPositionsTable({
                       i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
                   }}
                 >
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                    {p.legacy_id
+                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                      : p.id.slice(0, 8)}
+                  </td>
                   <td className="px-4 py-3 font-medium">
                     <Link
                       href={`/positions/${p.id}`}
