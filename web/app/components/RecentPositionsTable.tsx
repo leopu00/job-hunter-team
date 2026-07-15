@@ -161,7 +161,11 @@ export default function RecentPositionsTable({
                   </td>
                   <td className="px-4 py-3 font-medium">
                     <span className="flex items-center gap-2">
-                      <UnseenDot id={p.id} label={labels.unseen} />
+                      <UnseenDot
+                        id={p.id}
+                        label={labels.unseen}
+                        initialSeen={p.seen}
+                      />
                       <Link
                         href={`/positions/${p.id}`}
                         title={p.title ?? undefined}

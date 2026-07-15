@@ -981,7 +981,27 @@ export type DashboardPosition = {
   // ancora revisionata.
   critic_score: number | null;
   critic_verdict: string | null;
+  // true = già aperta dall'utente (position_views). undefined in local
+  // mode: lì decide il client via localStorage (vedi UnseenDot).
+  seen?: boolean;
 };
+
+// ── Posizioni viste (position_views, mig 055) ─────────────────────
+// Set degli id posizione già aperti dall'utente corrente: la RLS scopa
+// la select alla sessione, quindi niente .in() (con 1000 uuid la query
+// string esploderebbe). In local mode lo stato vive in localStorage lato
+// client (vedi lib/seen-positions) → set vuoto, decide il client.
+export async function getSeenPositionIds(): Promise<Set<string>> {
+  if (await ws()) return new Set();
+  if (!isSupabaseConfigured) return new Set();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("position_views")
+    .select("position_id")
+    .limit(10000);
+  if (error || !data) return new Set();
+  return new Set((data as any[]).map((r) => String(r.position_id)));
+}
 
 // Sceglie l'evento con timestamp più recente tra i candidati passati.
 // Usato sia dal path cloud sia (replicato) dal path locale per derivare
