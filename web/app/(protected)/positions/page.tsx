@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { getPositions, getSourceDistribution } from "@/lib/queries";
+import {
+  getPositions,
+  getSeenPositionIds,
+  getSourceDistribution,
+} from "@/lib/queries";
 import { colorForFamily } from "@/lib/position-classifier";
 import {
   getExchangeRates,
@@ -517,7 +521,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     : DEFAULT_PAGE_SIZE;
   const requestedPage = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
-  const [allPositions, sourceList] = await Promise.all([
+  const [allPositionsRaw, sourceList] = await Promise.all([
     getPositions({
       statuses: statuses.length ? statuses : undefined,
       remoteTypes: remotes.length ? remotes : undefined,
@@ -537,6 +541,13 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     }),
     getSourceDistribution(),
   ]);
+  // Marker "nuova": overlay del set position_views dell'utente (cloud).
+  // In local mode il set è vuoto e seen resta undefined → decide il
+  // client via localStorage (UnseenDot).
+  const seenIds = await getSeenPositionIds();
+  const allPositions = allPositionsRaw.map((p) =>
+    seenIds.has(String(p.id)) ? { ...p, seen: true } : p,
+  );
   const availableSources = sourceList.map((s) => s.source);
 
   // Tassi di cambio per le colonne Stipendio/Mensile (default valuta EUR,
@@ -815,7 +826,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     {/* Titolo — una riga, troncato con … se troppo lungo */}
                     <td className="px-4 py-3 font-medium">
                       <span className="flex items-center gap-2">
-                        <UnseenDot id={p.id} label={tr("unseen_marker")} />
+                        <UnseenDot
+                          id={String(p.id)}
+                          label={tr("unseen_marker")}
+                          initialSeen={p.seen}
+                        />
                         <Link
                           href={`/positions/${p.id}`}
                           title={p.title ?? undefined}
