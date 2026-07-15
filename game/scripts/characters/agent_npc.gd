@@ -45,6 +45,8 @@ var activity_detail := ""
 var throttle_secs := 0.0
 var _dissolving := false
 var _exiting := false
+var _exit_pending := false
+var _pending_exit_spot := Vector2.ZERO
 
 var state: S = S.WORK
 var _spot := Vector2.ZERO
@@ -76,6 +78,9 @@ var _highlight := false
 var _pulse := 0.0
 var _forced_trip := false  # visite chat-driven: finiscono anche se passa idle
 var _investigation_count := 0
+var _pending_pipeline: Array[bool] = []
+var _pipeline_trip_active := false
+var _pipeline_trip_count := 0
 
 func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	nav = p_nav
@@ -224,10 +229,23 @@ func set_activity_detail(detail: String) -> void:
 ## 20:1x): cammina fino alla porta dell'ufficio e svanisce oltre la
 ## soglia — niente tesseract, semplicemente non è più in ufficio.
 func exit_through(door_spot: Vector2) -> void:
-	if _dissolving or _exiting:
+	if _dissolving or _exiting or _exit_pending:
 		return
+	# Un messaggio gia mostrato mantiene il contratto di un minuto anche se
+	# la sessione tmux termina: l'avatar aspetta, poi esce fisicamente.
+	if speech and speech.is_speaking():
+		_exit_pending = true
+		_pending_exit_spot = door_spot
+		backend_status = "idle"
+		state = S.WORK
+		velocity = Vector2.ZERO
+		bubble.hide_now()
+		_work_pose()
+		return
+	_begin_exit(door_spot)
+
+func _begin_exit(door_spot: Vector2) -> void:
 	_exiting = true
-	speech.clear_now()
 	bubble.hide_now()
 	var leg := _leg_to(door_spot, "walk", 0.0, "idle")
 	leg["exit"] = true
@@ -271,10 +289,26 @@ func react_to_work(print_job := false) -> void:
 ## Una transizione REALE della pipeline diventa un viaggio fisico. Non è un
 ## giro casuale: ogni ruolo preleva l'output del precedente, lavora seduto e
 ## deposita il foglio nella vaschetta destinata al reparto successivo.
-func perform_pipeline_step() -> void:
-	if state != S.WORK or backend_status != "working" or is_dissolving():
+func perform_pipeline_step(force_observed := false) -> void:
+	if is_dissolving():
+		return
+	# Una raffica di transizioni dello stesso agente non deve perdersi mentre
+	# sta gia portando un foglio. La coda e corta ma causale e, per eventi
+	# reali osservati nel DB, resta valida anche se il pane e gia tornato idle.
+	if state != S.WORK:
+		_pending_pipeline.append(force_observed)
+		if _pending_pipeline.size() > 8:
+			_pending_pipeline.pop_front()
+		# Un evento DB autoritativo sblocca anche il viaggio gia in corso:
+		# altrimenti un poll idle lo congelerebbe prima di raggiungere la coda.
+		if force_observed and state == S.TRIP:
+			_forced_trip = true
+		return
+	if backend_status != "working" and not force_observed:
 		return
 	if _prepare_pipeline_trip():
+		_pipeline_trip_active = true
+		_forced_trip = force_observed
 		_start_next_leg()
 
 ## Una chat mirata del Dottore diventa una visita fisica: si ferma accanto
@@ -304,6 +338,11 @@ func start_talk() -> void:
 	state = S.TALK
 	_path = PackedVector2Array()
 	velocity = Vector2.ZERO
+	# da seduti la position è affondata nel desk (seat_sink/offset): il
+	# rig che riappare per il dialogo si alza in piedi alla postazione,
+	# non dentro il mobile
+	if _seated():
+		position = _spot
 	rig.set_motion("down", false, "idle")
 	bubble.hide_now()
 
@@ -329,6 +368,9 @@ func _physics_process(delta: float) -> void:
 	if _dissolving:
 		velocity = Vector2.ZERO
 		return
+	if _exit_pending and (speech == null or not speech.is_speaking()):
+		_exit_pending = false
+		_begin_exit(_pending_exit_spot)
 	_pulse += delta
 	if _highlight:
 		queue_redraw()
@@ -595,6 +637,7 @@ func _arrive_at_leg() -> void:
 		if _leg.get("desk_work", false):
 			position = _spot + (_seat_offset() if _seated() else Vector2.ZERO)
 			_desk_motion("sit" if _seated() else "work")
+			_set_desk_occupied(true)
 		else:
 			rig.set_motion(rig.facing, rig.flipped, _leg.get("pause_mode", "idle"))
 	elif _legs.is_empty():
@@ -606,10 +649,17 @@ func _end_trip() -> void:
 	# se l'ultimo tratto era un carry, i fogli si depositano sulla pila
 	if pile and _leg.get("mode", "") == "carry":
 		pile.add_sheets(randi_range(2, 4))
+	var completed_pipeline := _pipeline_trip_active
+	_pipeline_trip_active = false
 	_forced_trip = false
 	state = S.WORK
 	position = _spot
 	_work_pose()
+	if completed_pipeline:
+		_pipeline_trip_count += 1
+	if not _pending_pipeline.is_empty():
+		var force_next: bool = _pending_pipeline.pop_front()
+		perform_pipeline_step.call_deferred(force_next)
 
 ## Alla scrivania: rivolto secondo la postazione (down = viso in camera).
 ## L'agente resta SEMPRE un rig animato. Le vecchie varianti composite
@@ -617,10 +667,24 @@ func _end_trip() -> void:
 func _set_desk_occupied(on: bool) -> void:
 	if rig:
 		rig.visible = true
+	if _seated():
+		if on:
+			# Sedersi richiede la sovrapposizione col desk; senza maschera zero
+			# move_and_slide depenetra l'avatar fuori dalla sedia.
+			collision_mask = 0
+		else:
+			# Prima ci si rialza nel punto navigabile, poi tornano solide le pareti.
+			position = _spot
+			collision_mask = 1
+	else:
+		collision_mask = 1
 
 func _work_pose() -> void:
 	_desk_working = backend_status == "working"
 	if _seated():
+		# Il corpo seduto deve sovrapporsi volontariamente alla sagoma della
+		# scrivania. Lasciare attiva la collisione lo espelleva dal sedile al
+		# frame seguente (la causa degli avatar sospesi davanti alla sedia).
 		position = _spot + _seat_offset()
 		_desk_motion("sit" if _desk_working else "sit_idle")
 		_set_desk_occupied(true)
@@ -634,8 +698,12 @@ func debug_snapshot() -> Dictionary:
 			"motion": str(rig.mode if rig else ""), "speed": velocity.length(),
 			"visible": visible, "detail": activity_detail,
 			"forced_trip": _forced_trip, "home": _spot,
+			"work_position": _spot + (_seat_offset() if _seated() else Vector2.ZERO),
+			"collision_mask": collision_mask,
 			"position": global_position,
-			"investigations": _investigation_count}
+			"investigations": _investigation_count,
+			"pipeline_trips": _pipeline_trip_count,
+			"pending_pipeline": _pending_pipeline.size()}
 
 func _follow_path(speed: float, mode := "walk") -> bool:
 	if _pi >= _path.size():

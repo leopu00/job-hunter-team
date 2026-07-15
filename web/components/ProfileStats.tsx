@@ -150,7 +150,15 @@ export default function ProfileStats({ profile }: Props) {
         const pr = await fetch(`/api/profile/files/request/${data.requestId}`)
         const pd = await pr.json()
         if (pd.status === 'ready' && pd.url) {
-          window.open(pd.url, '_blank', 'noopener,noreferrer')
+          // <a> anchor invece di window.open: l'apertura post-polling (fuori dal
+          // gesto del click) viene fermata dai popup-blocker. La signed URL ha
+          // Content-Disposition: attachment → scarica senza aprire finestre.
+          const a = document.createElement('a')
+          a.href = pd.url
+          a.rel = 'noopener'
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
           setBridge(prev => { const n = { ...prev }; delete n[name]; return n })
           return
         }

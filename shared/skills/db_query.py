@@ -16,6 +16,8 @@ Uso:
   python3 db_query.py next-for-recheck      # posizioni da ri-verificare liveness (scadute)
   python3 db_query.py next-for-categorize   # posizioni senza role_family (backlog categoria)
   python3 db_query.py next-for-salary-precise # posizioni con salary preciso richiesto dall'utente
+  python3 db_query.py next-for-recheck-weekly  # MANUTENZIONE: recheck cadenzato (vive, score>=70, non verif. da >7gg)
+  python3 db_query.py next-for-geocode-missing # MANUTENZIONE: geocoding vive senza coordinate ufficio
   python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
                                             # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
@@ -362,7 +364,7 @@ def recent_activity(minutes=30, limit=40):
     conn.close()
 
 
-def next_for_role(role):
+def next_for_role(role, min_score=70, older_than_days=7):
     conn = get_db()
     ensure_schema(conn)
 
@@ -487,6 +489,46 @@ def next_for_role(role):
             ORDER BY p.salary_precise_requested_at ASC
         """).fetchall()
         label = "Posizioni con stima salary precisa richiesta dall'utente"
+
+    elif role == 'recheck-weekly':
+        # MAINTENANCE MODE (2026-07-13): recheck-liveness AUTONOMO ma cadenzato, per
+        # la modalità manutenzione (capitano-maintenance.json). NON è il vecchio
+        # recheck-continuo che causò il weekly burn (C-13): due gate lo tengono a bada —
+        # (1) solo posizioni VIVE con best-score >= min_score (default 70: le migliori,
+        # quelle che vale la pena tenere fresche); (2) cadenza SETTIMANALE per posizione
+        # (ricontrolla solo chi non è verificato da > older_than_days giorni, default 7,
+        # via last_checked). Una posizione verificata oggi esce dalla coda per una
+        # settimana → consumo limitato e prevedibile. L'Analista aggiorna last_checked
+        # col recheck-liveness. Da usare SOLO in maintenance mode.
+        rows = conn.execute("""
+            SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score
+            FROM positions p
+            JOIN (SELECT position_id, MAX(total_score) AS total_score
+                  FROM scores GROUP BY position_id) s ON s.position_id = p.id
+            WHERE p.status != 'excluded'
+              AND s.total_score >= ?
+              AND (p.last_checked IS NULL
+                   OR p.last_checked < datetime('now', ?))
+            ORDER BY (p.last_checked IS NOT NULL), p.last_checked ASC
+        """, (min_score, f'-{older_than_days} days')).fetchall()
+        label = (f"Recheck settimanale manutenzione "
+                 f"(vive, score>={min_score}, non verificate da >{older_than_days}gg)")
+
+    elif role == 'geocode-missing':
+        # MAINTENANCE MODE (2026-07-13): geocoding AUTONOMO delle coordinate ufficio per
+        # le posizioni VIVE che ne sono ancora sprovviste. A differenza di 'geocoding'
+        # (on-demand, flag geocode_requested dell'utente), qui l'Analista arricchisce in
+        # autonomia ogni posizione viva senza office_lat (per mappa / stima pendolarismo).
+        # Da usare SOLO in maintenance mode.
+        rows = conn.execute("""
+            SELECT p.id, p.title, p.company, p.location, p.loc_city, p.loc_country_code
+            FROM positions p
+            WHERE p.status != 'excluded'
+              AND (p.office_lat IS NULL
+                   OR p.office_geocoded IS NULL OR p.office_geocoded = 0)
+            ORDER BY p.found_at DESC
+        """).fetchall()
+        label = "Geocoding manutenzione (posizioni vive senza coordinate ufficio)"
 
     else:
         print(f"Ruolo sconosciuto: {role}")
@@ -629,6 +671,13 @@ def main():
     sub.add_parser('next-for-recheck')
     sub.add_parser('next-for-categorize')
     sub.add_parser('next-for-salary-precise')
+    # Maintenance-mode queues (2026-07-13): autonome ma cadenzate/gated (vedi next_for_role).
+    rw = sub.add_parser('next-for-recheck-weekly')
+    rw.add_argument('--min-score', type=int, default=70,
+                    help='Score minimo per il recheck settimanale di manutenzione (default 70).')
+    rw.add_argument('--older-than-days', type=int, default=7,
+                    help='Ricontrolla solo chi non è verificato da > N giorni (default 7 = 1x/settimana).')
+    sub.add_parser('next-for-geocode-missing')
 
     # active-categories <user_id> (tassonomia emergente): nomi role_family
     # ATTIVI del registro per l'utente. Consumato dal write-guard (db_update)
@@ -756,6 +805,9 @@ def main():
         flag = '  ⚠ DA CATEGORIZZARE SUBITO (next-for-categorize) — NULL non è una categoria' if uncat else ''
         print(f"  {uncat:>4}  NON categorizzate (role_family IS NULL){flag}")
         conn.close()
+    elif args.cmd == 'next-for-recheck-weekly':
+        next_for_role('recheck-weekly', min_score=args.min_score,
+                      older_than_days=args.older_than_days)
     elif args.cmd.startswith('next-for-'):
         role = args.cmd.replace('next-for-', '')
         next_for_role(role)

@@ -42,7 +42,7 @@ Coder en dur `claude` fait planter le Critico quand l'équipe tourne sur Codex o
 ```bash
 PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
 case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model claude-sonnet-4-6 --effort high" ;;
+  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
   openai)              CRITICO_CMD="codex --yolo" ;;
   kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
   *)                   CRITICO_CMD="codex --yolo" ;;
@@ -126,6 +126,17 @@ promotion de statut à `ready` (uniquement sur PASS). La promotion est ce que
 le tableau de bord `/ready` de l'utilisateur lit ; l'omettre laisse la ligne en `draft`
 et le CV invisible (bug #21).
 
+**`--critic-notes` EST VISIBLE PAR L'UTILISATEUR** — il s'affiche sous la carte de Candidature du candidat avec le **même markdown que le raisonnement du Scorer**, donc écrivez-le ainsi (scorer RULE-09), jamais la ligne télégraphique ci-dessous :
+- **Dans la langue de l'utilisateur** (RULE-T14 liste "critic feedback" comme contenu user-locale). Le fichier de review est en anglais — reformulez-le pour le candidat ; ne le laissez pas en anglais quand la langue de l'équipe ne l'est pas.
+- **Markdown qui parle AU candidat** : commencez par le verdict et comment le score a évolué au fil des 3 tours *en mots*, puis `**gras**` sur les points décisifs, quelques puces pour/contre, un emoji avec parcimonie. Deux courts paragraphes — pas de mur de texte, pas de liste de mots-clés.
+- **Pas de jargon interne** — jamais de codes de règles (`T10`, `RULE-*`), de noms d'outils (`WeasyPrint`/`pandoc`/`typst`) ou d'ids de session.
+- Sauts de ligne réels via `$'...\n...'` (un `\n` littéral s'imprime comme texte). Construisez-le une fois avant la porte :
+
+```bash
+CRITIC_NOTES=$'**PASS · 7.5/10** — stable sur les trois tours, une adéquation honnête et solide.\n\n**Points forts**\n- ✅ <force concrète : CV vs ce poste>\n- ✅ <une autre force réelle>\n\n**Bon à savoir**\n- ⚠️ <une vraie lacune, dite clairement>\n\n<une phrase de conclusion>'
+# NEEDS_WORK/REJECT : même forme, mais nommez ce qui manque et ce qui l'améliorerait.
+```
+
 ```bash
 if [[ "<final_verdict>" == "PASS" ]]; then
   # PASS → l'application devient visible pour l'utilisateur
@@ -133,7 +144,7 @@ if [[ "<final_verdict>" == "PASS" ]]; then
     --critic-verdict PASS \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION" \
     --status ready
 else
@@ -142,7 +153,7 @@ else
     --critic-verdict FAIL \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION"
 fi
 ```

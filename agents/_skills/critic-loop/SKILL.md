@@ -41,7 +41,7 @@ Hardcoding `claude` makes the Critic crash when the team runs on Codex or Kimi (
 ```bash
 PROVIDER=$(python3 -c "import json,os; print(json.load(open(os.environ.get('JHT_CONFIG','/jht_home/jht.config.json')))['active_provider'])" 2>/dev/null)
 case "$PROVIDER" in
-  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model claude-sonnet-4-6 --effort high" ;;
+  ""|anthropic|claude) CRITICO_CMD="unset CLAUDECODE && claude --dangerously-skip-permissions --model opus --effort medium" ;;
   openai)              CRITICO_CMD="codex --yolo" ;;
   kimi|moonshot)       CRITICO_CMD="kimi --yolo" ;;
   *)                   CRITICO_CMD="codex --yolo" ;;
@@ -125,6 +125,17 @@ status promotion to `ready` (only on PASS). The promotion is what the
 user's `/ready` dashboard reads; skipping it leaves the row in `draft`
 and the CV invisible (bug #21).
 
+**`--critic-notes` is USER-FACING** — it renders under the candidate's Application card with the **same markdown as the Scorer's rationale**, so write it that way (scorer RULE-09), never the telegraphic one-liner below:
+- **In the user's language** (RULE-T14 lists "critic feedback" as user-locale). The review file is English — rephrase it for the candidate; don't leave it English when the team language isn't.
+- **Markdown talking TO the candidate**: lead with the verdict and how the score moved across the 3 rounds *in words*, then `**bold**` the decisive points, a couple of pro/con bullets, one sparing emoji. Two short paragraphs — no wall of text, no keyword dump.
+- **No internal jargon** — never rule codes (`T10`, `RULE-*`), tool names (`WeasyPrint`/`pandoc`/`typst`) or session ids.
+- Real newlines via `$'...\n...'` (a literal `\n` prints as text). Build it once before the gate:
+
+```bash
+CRITIC_NOTES=$'**PASS · 7.5/10** — steady across all three rounds, an honest and strong fit.\n\n**What lands**\n- ✅ <concrete strength: CV vs this role>\n- ✅ <another real strength>\n\n**Worth knowing**\n- ⚠️ <a genuine gap, stated plainly>\n\n<one closing line>'
+# NEEDS_WORK/REJECT: same shape, but name what is missing and what would raise it.
+```
+
 ```bash
 if [[ "<final_verdict>" == "PASS" ]]; then
   # PASS → application becomes user-visible
@@ -132,7 +143,7 @@ if [[ "<final_verdict>" == "PASS" ]]; then
     --critic-verdict PASS \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION" \
     --status ready
 else
@@ -141,7 +152,7 @@ else
     --critic-verdict FAIL \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --critic-notes "$CRITIC_NOTES" \
     --reviewed-by "$CRITICO_SESSION"
 fi
 ```

@@ -52,10 +52,17 @@ export async function GET(
   }
 
   // Pronto: minta la signed download URL (service-role, bucket privato).
+  // `download: <basename>` forza Content-Disposition: attachment → il browser
+  // SCARICA il file invece di tentare di aprirlo in una nuova finestra. Così il
+  // client usa un <a> anchor (niente window.open, che i popup-blocker fermano
+  // perché parte dopo il polling async, fuori dal gesto del click).
+  const downloadName = row.storage_path.split("/").pop() || "cv.pdf";
   const admin = createAdminClient();
   const { data: signed, error: signErr } = await admin.storage
     .from(BUCKET)
-    .createSignedUrl(row.storage_path, DOWNLOAD_TTL_SECONDS);
+    .createSignedUrl(row.storage_path, DOWNLOAD_TTL_SECONDS, {
+      download: downloadName,
+    });
   if (signErr || !signed) {
     return NextResponse.json(
       { error: `signed url failed: ${signErr?.message || "unknown"}` },

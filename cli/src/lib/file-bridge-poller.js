@@ -40,8 +40,11 @@ const FILE_DIRS = [
 ];
 
 // Cadenza adattiva (vedi poll-tier.js): 5s solo quando c'è una richiesta file
-// recente, poi ≤30s. L'indice file + purge girano a tempo, ogni ~60s.
-const INDEX_EVERY_MS = 60000;
+// recente, poi ≤30s. L'indice file + purge NON sono latency-critical (l'indice
+// popola la CV Preview del profilo; il purge pulisce oggetti col TTL 10min):
+// girano a tempo ogni ~5min per contenere la quota Vercel per-utente. Il
+// download per-posizione risolve per basename e non dipende dall'indice.
+const INDEX_EVERY_MS = 300000;
 
 const MIME = {
   '.pdf': 'application/pdf',
