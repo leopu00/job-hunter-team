@@ -60,6 +60,7 @@ function New-GodotProcessInfo {
     )
     $Info = [System.Diagnostics.ProcessStartInfo]::new()
     $Info.FileName = $Godot
+    $Info.WorkingDirectory = $GameDir
     $Info.UseShellExecute = $false
     # ProcessStartInfo.Arguments funziona anche su Windows PowerShell 5.1.
     # Gli argomenti usati qui non terminano con backslash; quotiamo quelli con
