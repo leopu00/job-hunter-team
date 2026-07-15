@@ -178,6 +178,18 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
         `recheck_requested_at.gt.${since},salary_precise_requested_at.gt.${since},` +
         `user_excluded_at.gt.${since})`);
     }
+    // ORDER deterministico. Il filtro è un OR su 5 colonne timestamp diverse:
+    // PostgREST non sa ordinare per il GREATEST() delle 5 (non è una colonna),
+    // quindi non esiste una singola chiave che coincida col cursore lato client
+    // (che traccia il max dei 5 ts). Ordiniamo per la PK `legacy_id` (indicizzata):
+    // NON allinea l'ordine al cursore, ma rende il sottoinsieme sotto `limit`
+    // STABILE e ripetibile tick-su-tick (prima era arbitrario → il cursore non
+    // convergeva mai). Ogni riga restituita ha comunque almeno un ts > since,
+    // quindi il max lato client avanza e la convergenza è garantita finché il
+    // numero di cambi nella finestra sta sotto `limit` (caso normale). Fix
+    // completo sotto truncation = colonna materializzata `desired_state_changed_at`
+    // (max dei 5, mantenuta da trigger) da ordinare .asc → out of scope qui.
+    params.set('order', 'legacy_id.asc');
     params.set('limit', String(limit));
     const rows = await rest(`positions?${params.toString()}`);
     return Array.isArray(rows) ? rows : [];
