@@ -1,0 +1,101 @@
+name: Game — Native desktop matrix
+
+on:
+  push:
+    paths:
+      - "game/**"
+      - ".github/workflows/game.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "game/**"
+      - ".github/workflows/game.yml"
+  workflow_dispatch:
+
+jobs:
+  test-export:
+    name: ${{ matrix.label }} — test, export, smoke
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            label: Windows x64
+            preset: Windows Desktop
+            output: builds/windows/job-hunter-team.exe
+            artifact: game-windows-x64
+            artifact_path: game/builds/windows/job-hunter-team.exe
+          - os: macos-14
+            label: macOS Universal 2
+            preset: macOS
+            output: builds/macos/job-hunter-team.zip
+            artifact: game-macos-universal
+            artifact_path: game/builds/macos/job-hunter-team.zip
+          - os: ubuntu-22.04
+            label: Linux x64
+            preset: Linux
+            output: builds/linux/job-hunter-team.x86_64
+            artifact: game-linux-x64
+            artifact_path: game/builds/linux/job-hunter-team.x86_64
+    defaults:
+      run:
+        shell: bash
+    env:
+      JHT_NOVPS: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: chickensoft-games/setup-godot@v2.4.1
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: true
+
+      - name: Import and parse project
+        run: godot --headless --path game --import
+
+      - name: Run deterministic game tests
+        run: |
+          godot --headless --path game --script res://tools/nav_grid_selftest.gd
+          godot --headless --path game --script res://tools/speech_bubble_selftest.gd
+          VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
+          printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
+          PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
+          printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
+          DOCTOR_OUT="$(JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game 2>&1)"
+          printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
+
+      - name: Export native release
+        working-directory: game
+        run: |
+          mkdir -p "$(dirname '${{ matrix.output }}')"
+          godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
+
+      - name: Smoke-test exported runtime
+        working-directory: game
+        run: |
+          case "${{ runner.os }}" in
+            Windows)
+              JHT_NOVPS=1 "${{ matrix.output }}" --headless --quit-after 3
+              ;;
+            Linux)
+              chmod +x "${{ matrix.output }}"
+              JHT_NOVPS=1 "./${{ matrix.output }}" --headless --quit-after 3
+              ;;
+            macOS)
+              mkdir -p builds/macos/unpacked
+              ditto -x -k "${{ matrix.output }}" builds/macos/unpacked
+              GAME_BIN="$(find builds/macos/unpacked -type f -path '*/Contents/MacOS/*' | head -n 1)"
+              test -n "$GAME_BIN"
+              JHT_NOVPS=1 "$GAME_BIN" --headless --quit-after 3
+              ;;
+          esac
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact_path }}

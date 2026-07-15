@@ -34,8 +34,9 @@ Le fonti tra parentesi rimandano a `RESEARCH-DOSSIER.md` (§) e
 - Audio: musica ambient generativa, foley passi, brusio ufficio.
 - Zoom-band alla Two Point (lontano = piano leggibile, vicino = emote);
   camera follow su click agente (§9.8).
-- Export Windows/Linux; integrazione nell'app desktop Electron esistente
-  (finestra dedicata o modalità "gioco" della dashboard).
+- Integrazione opzionale nell'app desktop Electron esistente (finestra
+  dedicata o modalità "gioco" della dashboard). Gli export standalone
+  Windows/macOS/Linux sono ora parte della baseline e della CI.
 
 ## Esplicitamente esclusi (decisioni)
 

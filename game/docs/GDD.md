@@ -16,7 +16,8 @@
 >   della pagina pubblica (the-box) — NON più Disco Elysium scuro. Arredi e
 >   sprite via **imagegen di Codex** (mai Pillow), vedi `SPRITES.md`.
 > - **Giorno/notte** sull'ora locale (`DayNight`, JHT_HOUR per test).
-> - Avvio/test SOLO con `tools/run.sh boot|play|shot` (cache classi) e
+> - Avvio/test con `tools/run.sh boot|play` su macOS/Linux (`shot` su macOS)
+>   oppure `tools/run.ps1 boot|play` su Windows (cache classi) e
 >   verifica su screenshot prima di dichiarare fatto.
 
 Un videogioco 2D top-down (2.5D via Y-sort) che gamifica Job Hunter Team: l'utente

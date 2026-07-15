@@ -139,12 +139,99 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_glob }}
 
+  build-game:
+    name: Build Game — ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    needs: check-version
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            label: Windows x64
+            preset: Windows Desktop
+            output: builds/windows/job-hunter-team.exe
+            artifact_name: game-windows-release
+            artifact_path: game/builds/windows/job-hunter-team.exe
+          - os: macos-14
+            label: macOS Universal 2
+            preset: macOS
+            output: builds/macos/job-hunter-team.zip
+            artifact_name: game-macos-release
+            artifact_path: game/builds/macos/job-hunter-team.zip
+          - os: ubuntu-22.04
+            label: Linux x64
+            preset: Linux
+            output: builds/linux/job-hunter-team.x86_64
+            artifact_name: game-linux-release
+            artifact_path: game/builds/linux/job-hunter-team.x86_64
+    defaults:
+      run:
+        shell: bash
+    env:
+      JHT_NOVPS: "1"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: chickensoft-games/setup-godot@v2.4.1
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: true
+
+      - name: Import and test game
+        run: |
+          godot --headless --path game --import
+          godot --headless --path game --script res://tools/nav_grid_selftest.gd
+          godot --headless --path game --script res://tools/speech_bubble_selftest.gd
+          VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
+          printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
+          PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
+          printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
+          DOCTOR_OUT="$(JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game 2>&1)"
+          printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
+
+      - name: Export native game
+        working-directory: game
+        run: |
+          mkdir -p "$(dirname '${{ matrix.output }}')"
+          godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
+
+      - name: Smoke-test native game
+        working-directory: game
+        run: |
+          case "${{ runner.os }}" in
+            Windows)
+              JHT_NOVPS=1 "${{ matrix.output }}" --headless --quit-after 3
+              ;;
+            Linux)
+              chmod +x "${{ matrix.output }}"
+              JHT_NOVPS=1 "./${{ matrix.output }}" --headless --quit-after 3
+              ;;
+            macOS)
+              mkdir -p "$RUNNER_TEMP/jht-game"
+              ditto -x -k "${{ matrix.output }}" "$RUNNER_TEMP/jht-game"
+              GAME_BIN="$(find "$RUNNER_TEMP/jht-game" -type f -path '*/Contents/MacOS/*' | head -n 1)"
+              test -n "$GAME_BIN"
+              JHT_NOVPS=1 "$GAME_BIN" --headless --quit-after 3
+              ;;
+          esac
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+
   release:
     name: GitHub Release
     runs-on: ubuntu-latest
     needs:
       - check-version
       - build-desktop
+      - build-game
     permissions:
       contents: write
 
@@ -227,6 +314,13 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Download game artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: game-*-release
+          path: release-assets
+          merge-multiple: true
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -247,5 +341,7 @@ jobs:
             release-assets/*.deb
             release-assets/*.blockmap
             release-assets/*.yml
+            release-assets/*.zip
+            release-assets/*.x86_64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
