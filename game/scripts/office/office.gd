@@ -56,13 +56,16 @@ func _ready() -> void:
 		# duplicava tazze/fogli con icone flat sospese e senza prospettiva.
 		if d["kind"] == "none":
 			continue
-		var desk_node := FurnitureNode.new({
+		var desk_item := {
 			"id": "desk_%s_%d" % [d["dept"], d["index"]],
 			"kind": d["kind"],
 			"rect": d["rect"],
 			"facing": d.get("facing", "down"),
 			"tex_facing": d.get("tex_facing", d.get("facing", "down")),
-		})
+		}
+		if d.has("front_occlusion"):
+			desk_item["front_occlusion"] = d["front_occlusion"]
+		var desk_node := FurnitureNode.new(desk_item)
 		world.add_child(desk_node)
 		# registry per lo scambio vuota/occupata quando l'agente si siede
 		FurnitureNode.desks["%s:%d" % [d["dept"], d["index"]]] = desk_node
@@ -119,6 +122,8 @@ func _ready() -> void:
 			if audit_parts.size() != 2 or def.get("dept", "") != audit_parts[0] \
 					or int(def.get("desk", -1)) != int(audit_parts[1]):
 				continue
+		# Nel gioco offline normale bastano i lead; l'audit invece deve poter
+		# materializzare anche desk 0..5 e controllare davvero ogni seduta.
 		elif backend_expected or not def.get("lead", false):
 			continue
 		var agent := AgentNPC.new()
