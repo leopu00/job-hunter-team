@@ -77,17 +77,15 @@ export default function MessagesBanner({ unreadCount, latest }: Props) {
   if (count === 0) return null;
 
   const countLabel =
-    count === 1
-      ? tr("one_unread")
-      : tr("unread").replace("{n}", String(count));
+    count === 1 ? tr("one_unread") : tr("unread").replace("{n}", String(count));
 
   const info = latest ? agentInfo(latest.agent, locale) : null;
   // Anteprima a una riga: prima riga non vuota del body, troncata dal clamp.
   const preview = latest
-    ? normalizeBody(latest.body)
+    ? (normalizeBody(latest.body)
         .split("\n")
         .map((l) => l.trim())
-        .filter(Boolean)[0] ?? ""
+        .filter(Boolean)[0] ?? "")
     : "";
 
   async function handleAckAll() {

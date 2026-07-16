@@ -163,9 +163,7 @@ export default function MessagesList({ initialMessages }: Props) {
         }
         const now = new Date().toISOString();
         setMessages((ms) =>
-          ms.map((m) =>
-            m.id === id ? { ...m, acknowledged_at: now } : m,
-          ),
+          ms.map((m) => (m.id === id ? { ...m, acknowledged_at: now } : m)),
         );
       } catch (e) {
         setError((e as Error).message);
