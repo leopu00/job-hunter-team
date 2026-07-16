@@ -1784,6 +1784,59 @@ export async function getPendingMessages(
   return data as PendingMessage[];
 }
 
+// Storico completo per la pagina /messages: come getPendingMessages ma senza
+// il filtro acknowledged — i letti restano in lista, la pagina li mostra
+// separati. Cloud: RLS filtra per user_id implicito.
+export async function getMessagesHistory(
+  limit = 200,
+): Promise<PendingMessage[]> {
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getMessagesHistoryLocal(w, limit);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("pending_user_messages")
+    .select(
+      "id, agent, body, kind, related_position_id, delivered_via, delivered_at, " +
+        "acknowledged_at, user_reply, user_reply_at, agent_seen_reply_at, created_at",
+    )
+    .eq("delivered_via", "web")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return data as PendingMessage[];
+}
+
+// Conteggio esatto dei non letti per il banner in dashboard: la lista
+// limitata a 20 saturava il vecchio contatore ("20 non letti" anche con 50).
+export async function getPendingMessagesCount(): Promise<number> {
+  const w = await ws();
+  if (w) {
+    try {
+      return local.countPendingMessagesLocal(w);
+    } catch {
+      return 0;
+    }
+  }
+  if (!isSupabaseConfigured) return 0;
+
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("pending_user_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("delivered_via", "web")
+    .is("acknowledged_at", null);
+  if (error || count == null) return 0;
+  return count;
+}
+
 // ── Team activity (per-agente nel tempo) ───────────────────────────
 // Prefissi di ruolo validi per mappare by_agent (es. 'analista-2' → 'analista').
 const ROLE_PREFIX_SET = new Set<string>(TEAM_ACTIVITY_ROLES);

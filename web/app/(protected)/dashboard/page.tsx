@@ -7,6 +7,7 @@ import {
   getDashboardPositions,
   getSeenPositionIds,
   getPendingMessages,
+  getPendingMessagesCount,
   getTeamActivity,
 } from "@/lib/queries";
 import type { DashboardPosition } from "@/lib/queries";
@@ -25,7 +26,7 @@ import {
   getDemoDashboardData,
   isDashboardDemoMode,
 } from "@/lib/dashboard-demo";
-import PendingMessagesCard from "@/app/components/PendingMessagesCard";
+import MessagesBanner from "@/app/components/MessagesBanner";
 import VpsLifecycleCard from "@/app/components/VpsLifecycleCard";
 import OnboardingPopup from "@/app/components/OnboardingPopup";
 import CloudRefreshButton from "@/app/components/CloudRefreshButton";
@@ -122,22 +123,32 @@ export default async function DashboardPage() {
           (p as { critic_verdict?: string | null }).critic_verdict ?? null,
       }))
     : [];
-  const [stats, dashPositionsRaw, pendingMessages, rates, recentActivity] =
-    demoData
-      ? [
-          demoData.stats,
-          demoDashPositions,
-          demoData.pendingMessages,
-          { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
-          [] as RecentActivityEvent[],
-        ]
-      : await Promise.all([
-          getDashboardStats(),
-          getDashboardPositions(),
-          getPendingMessages(20),
-          getExchangeRates(),
-          getTeamActivity().then((a) => a.recent),
-        ]);
+  // Messaggi in dashboard: solo banner compatto (conteggio esatto + ultimo
+  // messaggio come anteprima); la lista completa vive in /messages.
+  const [
+    stats,
+    dashPositionsRaw,
+    pendingMessages,
+    rates,
+    recentActivity,
+    unreadMessagesCount,
+  ] = demoData
+    ? [
+        demoData.stats,
+        demoDashPositions,
+        demoData.pendingMessages,
+        { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
+        [] as RecentActivityEvent[],
+        demoData.pendingMessages.length,
+      ]
+    : await Promise.all([
+        getDashboardStats(),
+        getDashboardPositions(),
+        getPendingMessages(1),
+        getExchangeRates(),
+        getTeamActivity().then((a) => a.recent),
+        getPendingMessagesCount(),
+      ]);
 
   // Marker "nuova": overlay del set position_views dell'utente (cloud).
   // In local mode il set è vuoto e seen resta undefined → decide il
@@ -224,8 +235,11 @@ export default async function DashboardPage() {
           {/* ── Sync now (solo cloud): refresh dati on-demand, niente polling ─ */}
           <CloudRefreshButton />
 
-          {/* ── Messaggi del team (fallback web quando Telegram down) ─ */}
-          <PendingMessagesCard initialMessages={pendingMessages} />
+          {/* ── Messaggi del team: banner compatto, lista in /messages ─ */}
+          <MessagesBanner
+            unreadCount={unreadMessagesCount}
+            latest={pendingMessages[0] ?? null}
+          />
 
           {/* ── VPS lifecycle: 3 bottoni (pausa/snapshot/termina) ────
           Solo in VPS mode (JHT_HOST_TYPE=vps): in Local PC mode i

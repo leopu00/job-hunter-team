@@ -26,6 +26,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_reports: "Report",
     nav_profile: "Profilo",
     nav_team: "Team",
+    nav_messages: "Messaggi",
 
     // Breadcrumb labels
     bc_dashboard: "Dashboard",
@@ -205,6 +206,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_reports: "Report",
     nav_profile: "Profile",
     nav_team: "Team",
+    nav_messages: "Messages",
 
     // Breadcrumb labels
     bc_dashboard: "Dashboard",
@@ -384,6 +386,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_reports: "Jelentések",
     nav_profile: "Profil",
     nav_team: "Csapat",
+    nav_messages: "Üzenetek",
 
     // Breadcrumb labels
     bc_dashboard: "Irányítópult",
@@ -563,6 +566,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_reports: "Informes",
     nav_profile: "Perfil",
     nav_team: "Equipo",
+    nav_messages: "Mensajes",
 
     // Breadcrumb labels
     bc_dashboard: "Panel",
@@ -742,6 +746,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_reports: "Berichte",
     nav_profile: "Profil",
     nav_team: "Team",
+    nav_messages: "Nachrichten",
 
     // Breadcrumb labels
     bc_dashboard: "Dashboard",
@@ -921,6 +926,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_reports: "Rapports",
     nav_profile: "Profil",
     nav_team: "Équipe",
+    nav_messages: "Messages",
 
     // Breadcrumb labels
     bc_dashboard: "Tableau de bord",
@@ -1100,6 +1106,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     nav_reports: "Relatórios",
     nav_profile: "Perfil",
     nav_team: "Equipe",
+    nav_messages: "Mensagens",
 
     // Breadcrumb labels
     bc_dashboard: "Painel",

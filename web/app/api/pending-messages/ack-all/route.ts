@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth, isLocalRequest } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/workspace";
+import { isSupabaseConfigured, workspaceHasDb } from "@/lib/workspace";
 import { getWorkspacePath } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { ackAllPendingMessagesLocal } from "@/lib/local-queries";
@@ -17,7 +17,9 @@ export async function POST() {
   if (denied) return denied;
 
   // Local mode: SQLite. Lo stato verra' pushato al cloud al prossimo tick.
-  if (await isLocalRequest()) {
+  // Gate identico a ws() in lib/queries.ts (host locale + DB presente),
+  // vedi commento in [id]/ack/route.ts.
+  if ((await isLocalRequest()) && workspaceHasDb()) {
     const ws = await getWorkspacePath();
     if (!ws) {
       return NextResponse.json(
