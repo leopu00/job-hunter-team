@@ -22,6 +22,7 @@ const NAV_KEYS: { href: string; key: string; accent?: string }[] = [
   { href: '/map',          key: 'nav_map' },
   { href: '/positions',    key: 'nav_positions' },
   { href: '/team',         key: 'nav_team' },
+  { href: '/messages',     key: 'nav_messages' },
   { href: '/profile',      key: 'nav_profile' },
 ]
 
