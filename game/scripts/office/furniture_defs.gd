@@ -98,7 +98,9 @@ const ITEMS := [
 	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(1240, 1120, 40, 40)},
 	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(1214, 1092, 60, 72)},
 	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(2100, 1058, 60, 72)},
-	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(774, 1545, 60, 72)},
+	# Fuori dall'anello radiale: a (774,1545) intersecava la postazione
+	# Scrittori delle ore 12 e ne falsava collisione e lettura prospettica.
+	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(1080, 1550, 60, 72)},
 	# in coda da dev-art (post-reset Codex): footprint già pronti
 	{"id": "dartboard", "kind": "nc_dartboard", "rect": Rect2(254, 1010, 36, 36)},
 	{"id": "wall_art", "kind": "nc_wall_art", "rect": Rect2(2040, 150, 90, 60)},

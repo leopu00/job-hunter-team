@@ -3,7 +3,7 @@
 # Job Hunter Team — Pre-release version consistency check
 #
 # Verifies that the git tag matches the "version" field in both
-# package.json (root) and desktop/package.json. Run as the first
+# package.json files and all Godot game metadata. Run as the first
 # step of the release workflow: electron-builder uses desktop's
 # version for artifactName, so a mismatch produces assets named
 # after a stale version (e.g. tag v0.1.8 → asset 0.1.7-windows.exe).
@@ -61,13 +61,24 @@ read_version() {
 
 ROOT_PKG="$ROOT/package.json"
 DESKTOP_PKG="$ROOT/desktop/package.json"
+GAME_PROJECT="$ROOT/game/project.godot"
+GAME_PRESETS="$ROOT/game/export_presets.cfg"
 
 ROOT_VERSION="$(read_version "$ROOT_PKG")"
 DESKTOP_VERSION="$(read_version "$DESKTOP_PKG")"
+GAME_VERSION="$(awk -F'=' '/^config\/version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PROJECT")"
+GAME_MAC_SHORT="$(awk -F'=' '/^application\/short_version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
+GAME_MAC_VERSION="$(awk -F'=' '/^application\/version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
+GAME_WIN_FILE="$(awk -F'=' '/^application\/file_version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
+GAME_WIN_PRODUCT="$(awk -F'=' '/^application\/product_version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
+GAME_NUMERIC_VERSION="${TAG_VERSION%%-*}.0"
 
 info "tag:      $TAG (version $TAG_VERSION)"
 info "root:     $ROOT_VERSION  ($ROOT_PKG)"
 info "desktop:  $DESKTOP_VERSION  ($DESKTOP_PKG)"
+info "game:     $GAME_VERSION  ($GAME_PROJECT)"
+info "game mac: $GAME_MAC_SHORT / $GAME_MAC_VERSION"
+info "game win: $GAME_WIN_FILE / $GAME_WIN_PRODUCT"
 
 mismatch=0
 if [ "$ROOT_VERSION" != "$TAG_VERSION" ]; then
@@ -78,9 +89,20 @@ if [ "$DESKTOP_VERSION" != "$TAG_VERSION" ]; then
   error "desktop/package.json version ($DESKTOP_VERSION) does not match tag ($TAG_VERSION)"
   mismatch=1
 fi
+if [ "$GAME_VERSION" != "$TAG_VERSION" ] || \
+   [ "$GAME_MAC_SHORT" != "$TAG_VERSION" ] || \
+   [ "$GAME_MAC_VERSION" != "$TAG_VERSION" ]; then
+  error "Godot project/macOS metadata does not match tag ($TAG_VERSION)"
+  mismatch=1
+fi
+if [ "$GAME_WIN_FILE" != "$GAME_NUMERIC_VERSION" ] || \
+   [ "$GAME_WIN_PRODUCT" != "$GAME_NUMERIC_VERSION" ]; then
+  error "Godot Windows metadata must be numeric $GAME_NUMERIC_VERSION"
+  mismatch=1
+fi
 
 if [ "$mismatch" -ne 0 ]; then
-  error "bump the package.json files, commit, re-tag, and push the tag again"
+  error "bump package.json and Godot version metadata, commit, re-tag, and push again"
   exit 3
 fi
 

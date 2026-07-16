@@ -89,14 +89,21 @@ const DEPARTMENTS := {
 		"color": Color("#a855f7"),
 		"zone": Rect2(320, 1520, 860, 440),
 		"inbox": Vector2(1120, 1740),
-		# dado=3: ferro di cavallo aperto verso l'ufficio (est)
+		# Sei spicchi radiali sul tappeto, come un quadrante d'orologio.
+		# Ogni agente guarda verso l'ESTERNO: ore 12=schiena, ore 6=viso,
+		# i quattro intermedi usano le viste laterali disponibili. Gli indici
+		# storici restano nello stesso spicchio (in particolare desk 3, usata
+		# da Scrittore 4, resta alle ore 6) per non spostare gli UID live.
 		"desks": [
-			{"rect": Rect2(350, 1560, 170, 78), "kind": "scrittori_a", "facing": "left", "seat_offset": Vector2(-44, -20)},
-			{"rect": Rect2(350, 1740, 170, 78), "kind": "scrittori_a", "facing": "left", "seat_offset": Vector2(-44, -20)},
-			{"rect": Rect2(600, 1545, 170, 78), "kind": "scrittori_a", "facing": "up"},
-			{"rect": Rect2(600, 1830, 170, 78), "kind": "scrittori_a", "facing": "up"},
-			{"rect": Rect2(860, 1545, 170, 78), "kind": "scrittori_a", "facing": "up"},
-			{"rect": Rect2(860, 1830, 170, 78), "kind": "scrittori_a", "facing": "up"},
+			# indice 0..5 = ore 10, 8, 12, 6, 2, 4
+			{"rect": Rect2(345, 1584, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(380, 1768, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			# Le postazioni 12/6 rientrano entrambe sul tappeto mantenendo
+			# l'asse verticale e la vista retro/frontale richiesta.
+			{"rect": Rect2(605, 1538, 170, 78), "kind": "scrittori_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(605, 1830, 170, 78), "kind": "scrittori_a", "facing": "down", "tex_facing": "down"},
+			{"rect": Rect2(865, 1584, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(830, 1768, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"critici": {

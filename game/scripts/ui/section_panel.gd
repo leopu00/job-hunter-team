@@ -1535,7 +1535,7 @@ func _browse_vps_key() -> void:
 
 func _connect_vps() -> void:
 	var ip := _vps_ip.text.strip_edges()
-	var key := _vps_key.text.strip_edges().replace("~", OS.get_environment("HOME"))
+	var key := VpsBackend.expand_user_path(_vps_key.text)
 	if ip == "" or key == "":
 		_vps_state_lbl.text = "● " + UIStrings.t("vps.missing_fields")
 		_vps_state_lbl.add_theme_color_override("font_color", Palette.YELLOW)

@@ -34,7 +34,8 @@ File da studiare come riferimento visivo e di contenuto:
 - **Godot 4.x** (ultima stable), linguaggio **GDScript**. Se Godot non è installato: `brew install --cask godot`.
 - Progetto in `game/` con struttura pulita: `game/project.godot`, `game/scenes/`, `game/scripts/`, `game/assets/`, `game/docs/`.
 - **Fullscreen di default** all'avvio (Esc → menu pausa con toggle finestra/uscita). È un videogioco che si apre e si inizia, non una finestra fluttuante.
-- Target di test: **macOS** (l'utente sviluppa e prova su Mac). Niente export multi-piattaforma per ora.
+- Target desktop: **Windows, macOS e Linux**. Ogni modifica deve passare la
+  matrice CI nativa e mantenere riproducibili i tre export versionati.
 - Risoluzione di progetto 1920×1080 con stretch mode `canvas_items` (scala pulita su schermi diversi).
 
 ## Asset dei personaggi (parte critica — dedicagli cura)
@@ -66,7 +67,7 @@ Flusso completo, **tutto con dati mock** — nessuna chiamata a backend reale, n
 
 **Layer dati**: tutti i dati di gioco (agenti, posizioni, score, budget, stato team) passano da un'interfaccia unica `game/scripts/data/team_data_source.gd` con implementazione `MockDataSource`. Documenta in `game/docs/DATA-ADAPTER.md` il contratto, così in futuro si aggancia il backend reale (Supabase / API dashboard) senza toccare il gioco.
 
-**Fuori scope (non farlo, al massimo annotalo in `game/docs/ROADMAP.md`)**: versione 3D, chat LLM reale, collegamento a dati reali, multiplayer, altre stanze/piani, salvataggio cloud, export Windows/Linux, i18n completa (scrivi però tutte le stringhe UI in un unico file/dizionario centralizzato, in italiano, pronte per la traduzione — il sito supporta 7 lingue).
+**Fuori scope (non farlo, al massimo annotalo in `game/docs/ROADMAP.md`)**: versione 3D, multiplayer, altre stanze/piani e salvataggio cloud.
 
 ## Metodo di lavoro e norme repo (vincolanti)
 

@@ -32,23 +32,33 @@ if pgrep -f "godot --path.*job-hunter-team" >/dev/null 2>&1 \
 fi
 
 echo "[run.sh] import risorse/cache classi…" >&2
-godot --headless --import . >/dev/null 2>&1 || true
+if ! IMPORT_OUT="$(JHT_NOVPS=1 godot --headless --import . 2>&1)"; then
+	printf '%s\n' "$IMPORT_OUT" >&2
+	echo "[run.sh] IMPORT KO" >&2
+	exit 1
+fi
 
 case "$MODE" in
 	test)
-		godot --headless --script res://tools/nav_grid_selftest.gd
-		godot --headless --script res://tools/speech_bubble_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/nav_grid_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/speech_bubble_selftest.gd
 		VPS_OUT="$(JHT_NOVPS=1 JHT_VPS_CONTRACT_TEST=1 godot --headless --quit-after 3 . 2>&1)"
 		printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
 		PIPE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_PIPELINE_FORCE_TEST=scout godot --headless . 2>&1)"
 		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
+		DOCTOR_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_DOCTOR_TEST=scout-4 godot --headless . 2>&1)"
+		printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
 		echo "[run.sh] TEST OK"
 		;;
 	boot)
-		OUT="$(JHT_SCENE=office godot --headless --quit-after 15 . 2>&1 || true)"
+		set +e
+		OUT="$(JHT_SCENE=office JHT_NOVPS=1 godot --headless --quit-after 15 . 2>&1)"
+		BOOT_CODE=$?
+		set -e
 		ERRS="$(printf '%s\n' "$OUT" | grep -E "SCRIPT ERROR|Parse Error|ERROR:" || true)"
-		if [ -n "$ERRS" ]; then
-			printf '%s\n' "$ERRS" >&2
+		if [ "$BOOT_CODE" -ne 0 ] || [ -n "$ERRS" ]; then
+			printf '%s\n' "$OUT" >&2
+			echo "[run.sh] Godot exit $BOOT_CODE" >&2
 			echo "[run.sh] BOOT KO" >&2
 			exit 1
 		fi
