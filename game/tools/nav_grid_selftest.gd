@@ -11,6 +11,8 @@ var _failures: Array[String] = []
 func _init() -> void:
 	_test_blocked_destination_is_clamped()
 	_test_writer_radial_layout()
+	_test_all_department_radial_layouts()
+	_test_all_department_desk_textures()
 	_test_real_desk_routes()
 	if _failures.is_empty():
 		print("[nav-test] PASS: collision clamp + all desk routes")
@@ -73,9 +75,13 @@ func _test_writer_radial_layout() -> void:
 	var center := Vector2(690, 1725)
 	var expected_facing := ["left", "left", "up", "down", "right", "right"]
 	var expected_texture := ["left", "down_left", "up", "down", "right", "down_right"]
-	var diagonal_asset := "res://assets/gen-art/furniture/scrittori_a_diag_down.png"
-	_assert(ResourceLoader.exists(diagonal_asset),
-			"writers diagonal texture is missing: %s" % diagonal_asset)
+	var expected_asset := ["side", "diag_down", "up", "down", "side", "diag_down"]
+	var expected_flip := [false, true, false, false, true, false]
+	# Tutte le viste radiali devono esistere davvero. ResourceLoader.exists()
+	# da solo non basta: un .import orfano risulta presente ma load() fallisce.
+	for suffix in ["side", "up", "down", "diag_down"]:
+		var asset := "res://assets/gen-art/furniture/scrittori_a_%s.png" % suffix
+		_assert(_texture_loads(asset), "writers texture is missing or unloadable: %s" % asset)
 	var facing_vector := {
 		"up": Vector2.UP, "right": Vector2.RIGHT,
 		"down": Vector2.DOWN, "left": Vector2.LEFT,
@@ -89,9 +95,101 @@ func _test_writer_radial_layout() -> void:
 				"writer:%d texture facing=%s, expected=%s" % [
 					i, desk.get("tex_facing", facing), expected_texture[i],
 				])
+		var visual: Dictionary = _desk_visual(desk)
+		var wanted_path := "res://assets/gen-art/furniture/scrittori_a_%s.png" % expected_asset[i]
+		_assert(str(visual.get("path", "")) == wanted_path,
+				"writer:%d asset=%s, expected=%s" % [i, visual.get("path", ""), wanted_path])
+		_assert(bool(visual.get("flip_h", false)) == expected_flip[i],
+				"writer:%d flip_h=%s, expected=%s" % [
+					i, visual.get("flip_h", false), expected_flip[i],
+				])
 		var radial: Vector2 = (desk["rect"] as Rect2).get_center() - center
 		_assert(radial.dot(facing_vector.get(facing, Vector2.ZERO)) > 80.0,
 				"writer:%d does not face outward (radial=%s facing=%s)" % [i, radial, facing])
+
+## Ogni reparto ora condivide lo stesso contratto a sei spicchi: sedie verso
+## il centro, corpi verso l'esterno e quattro viste raster realmente importate.
+func _test_all_department_radial_layouts() -> void:
+	var centers := {
+		"scout": Vector2(1455, 1172),
+		"analisti": Vector2(2735, 430),
+		"scorer": Vector2(2565, 1200),
+		"scrittori": Vector2(690, 1725),
+		"critici": Vector2(2700, 1740),
+	}
+	var expected_facing := ["left", "left", "up", "down", "right", "right"]
+	var facing_vector := {
+		"up": Vector2.UP, "right": Vector2.RIGHT,
+		"down": Vector2.DOWN, "left": Vector2.LEFT,
+	}
+	for dept in DepartmentDefsScript.DEPT_ORDER:
+		var desks: Array = DepartmentDefsScript.DEPARTMENTS[dept]["desks"]
+		_assert(desks.size() == 6, "%s must have exactly six radial desks" % dept)
+		if desks.size() != 6:
+			continue
+		var kind := str(desks[0].get("kind", ""))
+		for suffix in ["side", "up", "down", "diag_down"]:
+			var asset := "res://assets/gen-art/furniture/%s_%s.png" % [kind, suffix]
+			_assert(_texture_loads(asset), "%s radial texture missing: %s" % [dept, asset])
+		for i in desks.size():
+			var desk: Dictionary = desks[i]
+			var facing := str(desk.get("facing", ""))
+			_assert(facing == expected_facing[i], "%s:%d facing=%s expected=%s" % [
+				dept, i, facing, expected_facing[i],
+			])
+			var radial: Vector2 = (desk["rect"] as Rect2).get_center() - centers[dept]
+			_assert(radial.dot(facing_vector.get(facing, Vector2.ZERO)) > 75.0,
+					"%s:%d does not face outward (radial=%s facing=%s)" % [dept, i, radial, facing])
+			if i == 3:
+				_assert(bool(desk.get("integrated_chair", false)),
+						"%s:3 must suppress the duplicate front chair" % dept)
+				var cut := float(desk.get("front_occlusion", 0.0))
+				_assert(cut >= 0.5 and cut <= 0.9,
+						"%s:3 needs a valid animated-rig front occlusion cut" % dept)
+
+## Contratto risorse dell'intero ufficio: ogni postazione deve risolvere alla
+## variante orientata usata da FurnitureNode e quella texture deve caricarsi.
+## Copre side/up/down/diag_down in tutti i reparti.
+func _test_all_department_desk_textures() -> void:
+	for desk in DepartmentDefsScript.all_desks():
+		var visual: Dictionary = _desk_visual(desk)
+		var label := "%s:%d" % [desk["dept"], desk["index"]]
+		var path := str(visual.get("path", ""))
+		_assert(not path.is_empty(), "%s has no desk texture path" % label)
+		if path.is_empty():
+			continue
+		_assert(_texture_loads(path), "%s texture is missing or unloadable: %s" % [label, path])
+
+## Specchio del resolver di FurnitureNode, mantenuto qui come contratto di
+## regressione: se cambia la convenzione di suffissi/flip, il test obbliga ad
+## aggiornare insieme dati e risorse invece di mostrare un fallback sbagliato.
+func _desk_visual(desk: Dictionary) -> Dictionary:
+	var kind := str(desk.get("kind", ""))
+	var facing := str(desk.get("tex_facing", desk.get("facing", "")))
+	var suffix := "down"
+	var flip_h := false
+	match facing:
+		"up": suffix = "up"
+		"down_right": suffix = "diag_down"
+		"down_left":
+			suffix = "diag_down"
+			flip_h = true
+		"left": suffix = "side"
+		"right":
+			suffix = "side"
+			flip_h = true
+	var oriented := "res://assets/gen-art/furniture/%s_%s.png" % [kind, suffix]
+	if _texture_loads(oriented):
+		return {"path": oriented, "flip_h": flip_h}
+	var direct := "res://assets/gen-art/furniture/%s.png" % kind
+	if _texture_loads(direct):
+		return {"path": direct, "flip_h": false}
+	return {"path": "", "flip_h": false}
+
+func _texture_loads(path: String) -> bool:
+	if not ResourceLoader.exists(path):
+		return false
+	return load(path) is Texture2D
 
 func _assert(condition: bool, message: String) -> void:
 	if not condition:

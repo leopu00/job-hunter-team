@@ -17,11 +17,11 @@ class_name DepartmentDefs
 ##   flussi cross-reparto (es. gli Analisti ritirano dall'inbox degli Scout).
 ##
 ## Il pavimento è largo (240,140→3160,2000, vedi FurnitureDefs) e le
-## DISPOSIZIONI vengono dalla REGOLA DEL DADO (feedback live 11/07, tiri
-## in chat; il dado vale SOLO dove Leone non si è espresso): Scout = isole
-## a coppie faccia-a-faccia, Analisti = tavolo lungo a muro nel lab
-## (angolo NE) + laterali, Scorer = diagonale a scala, Scrittori = ferro
-## di cavallo aperto a est, Critici = anello con centro libero.
+## DISPOSIZIONI: ogni reparto usa lo stesso anello a sei spicchi validato
+## per gli Scrittori. Le sedie sono sempre sul lato INTERNO del tappeto e
+## gli agenti guardano verso l'esterno (ore 12/2/4/6/8/10). Gli indici
+## restano nello stesso ordine storico 10/8/12/6/2/4, così il desk assegnato
+## a ciascun UID non cambia quando il backend reale ricostruisce il roster.
 ## Catena del valore: Scout → Analisti → Scorer → Scrittori → Critici.
 
 const DEPT_ORDER := ["scout", "analisti", "scorer", "scrittori", "critici"]
@@ -33,17 +33,14 @@ const DEPARTMENTS := {
 		"color": Color("#00e87a"),
 		"zone": Rect2(1000, 960, 880, 520),
 		"inbox": Vector2(1790, 1390),
-		# Griglia 3×2: tutte le sedie sono sul lato camera e gli agenti
-		# mostrano la schiena mentre guardano davvero il monitor.
+		# Anello radiale sul tappeto Scout; indice 0..5 = ore 10,8,12,6,2,4.
 		"desks": [
-			{"rect": Rect2(1040, 980, 170, 78), "kind": "scout_a", "facing": "up"},
-			{"rect": Rect2(1360, 980, 170, 78), "kind": "scout_a", "facing": "up"},
-			# scout_b esiste solo frontale: in vista up produrrebbe un fallback
-			# senza sedia. Tutte le postazioni di schiena usano l'asset completo.
-			{"rect": Rect2(1680, 980, 170, 78), "kind": "scout_a", "facing": "up"},
-			{"rect": Rect2(1040, 1230, 170, 78), "kind": "scout_a", "facing": "up"},
-			{"rect": Rect2(1360, 1230, 170, 78), "kind": "scout_a", "facing": "up"},
-			{"rect": Rect2(1680, 1230, 170, 78), "kind": "scout_a", "facing": "up"},
+			{"rect": Rect2(1064, 1012, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(1106, 1228, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(1370, 958, 170, 78), "kind": "scout_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(1370, 1301, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
+			{"rect": Rect2(1676, 1012, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(1634, 1228, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"analisti": {
@@ -52,16 +49,14 @@ const DEPARTMENTS := {
 		"color": Color("#4d9fff"),
 		"zone": Rect2(2312, 150, 848, 580),  # il lab di vetro, angolo NE
 		"inbox": Vector2(2690, 790),  # fuori dalla porta del lab
-		# Tre postazioni complete a muro, ciascuna con la propria sedia.
-		# Il precedente tavolone condiviso non aveva sedute e componeva
-		# bobine/fogli flat sopra i corpi: gli Analisti risultavano sospesi.
+		# Anello radiale adattato al tappeto più stretto del laboratorio.
 		"desks": [
-			{"rect": Rect2(2430, 180, 170, 78), "kind": "analisti_a", "facing": "up"},
-			{"rect": Rect2(2645, 180, 170, 78), "kind": "analisti_a", "facing": "up"},
-			{"rect": Rect2(2860, 180, 170, 78), "kind": "analisti_a", "facing": "up"},
-			{"rect": Rect2(2360, 380, 170, 78), "kind": "analisti_a", "facing": "right", "seat_offset": Vector2(43, -20)},
-			{"rect": Rect2(2360, 560, 170, 78), "kind": "analisti_a", "facing": "right", "seat_offset": Vector2(43, -20)},
-			{"rect": Rect2(2890, 380, 170, 78), "kind": "analisti_a", "facing": "left", "seat_offset": Vector2(-43, -20)},
+			{"rect": Rect2(2405, 293, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(2430, 468, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(2650, 249, 170, 78), "kind": "analisti_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(2650, 527, 170, 78), "kind": "analisti_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
+			{"rect": Rect2(2895, 293, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(2870, 468, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"scorer": {
@@ -70,17 +65,16 @@ const DEPARTMENTS := {
 		"color": Color("#f5c518"),
 		"zone": Rect2(1950, 960, 1210, 470),
 		"inbox": Vector2(1965, 1400),
-		# Diagonale a scala: sedia sul lato camera, schiena verso chi guarda.
+		# Anello radiale ampio; il deposito resta sul bordo ovest del reparto.
 		"desks": [
-			{"rect": Rect2(1980, 980, 170, 78), "kind": "scorer_a", "facing": "up"},
-			{"rect": Rect2(2180, 1052, 170, 78), "kind": "scorer_a", "facing": "up"},
-			# La vecchia desk_wide non ha una sedia integrata: l'agente restava
-			# sospeso davanti al vano. Usiamo la postazione scorer completa,
-			# con schienale, braccioli e ruote leggibili dietro al corpo.
-			{"rect": Rect2(2420, 1116, 170, 78), "kind": "scorer_a", "facing": "up"},
-			{"rect": Rect2(2680, 1196, 170, 78), "kind": "scorer_a", "facing": "up"},
-			{"rect": Rect2(2880, 1268, 170, 78), "kind": "scorer_a", "facing": "up"},
-			{"rect": Rect2(2980, 1340, 170, 78), "kind": "scorer_a", "facing": "up"},
+			# scorer_a_side nasce con la sedia a sinistra, al contrario degli
+			# altri reparti: scambiamo solo il verso della texture laterale.
+			{"rect": Rect2(2136, 1025, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "right", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(2182, 1268, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(2480, 964, 170, 78), "kind": "scorer_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(2480, 1350, 170, 78), "kind": "scorer_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.78},
+			{"rect": Rect2(2825, 1025, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "left", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(2778, 1268, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"scrittori": {
@@ -101,7 +95,7 @@ const DEPARTMENTS := {
 			# Le postazioni 12/6 rientrano entrambe sul tappeto mantenendo
 			# l'asse verticale e la vista retro/frontale richiesta.
 			{"rect": Rect2(605, 1538, 170, 78), "kind": "scrittori_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(605, 1830, 170, 78), "kind": "scrittori_a", "facing": "down", "tex_facing": "down"},
+			{"rect": Rect2(605, 1830, 170, 78), "kind": "scrittori_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.62},
 			{"rect": Rect2(865, 1584, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
 			{"rect": Rect2(830, 1768, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
@@ -111,15 +105,15 @@ const DEPARTMENTS := {
 		"tagline": "Revisionano ogni riga prima dell'invio",
 		"color": Color("#ff4560"),
 		"zone": Rect2(2150, 1520, 1010, 440),
-		"inbox": Vector2(2690, 1825),  # accanto al tavolino centrale
-		# dado=6: anello rivolto al centro (spazio per un pezzo di dev-art)
+		"inbox": Vector2(3100, 1820),  # deposito sul bordo est, fuori dall'anello
+		# Anello radiale con il centro sgombro per sedie, corpi e percorsi.
 		"desks": [
-			{"rect": Rect2(2480, 1550, 170, 78), "kind": "critici_a", "facing": "up"},
-			{"rect": Rect2(2740, 1550, 170, 78), "kind": "critici_a", "facing": "up"},
-			{"rect": Rect2(2280, 1690, 170, 78), "kind": "critici_a", "facing": "right", "seat_offset": Vector2(51, -20)},
-			{"rect": Rect2(2950, 1690, 170, 78), "kind": "critici_a", "facing": "left", "seat_offset": Vector2(-51, -20)},
-			{"rect": Rect2(2480, 1850, 170, 78), "kind": "critici_a", "facing": "up"},
-			{"rect": Rect2(2740, 1850, 170, 78), "kind": "critici_a", "facing": "up"},
+			{"rect": Rect2(2309, 1580, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(2351, 1796, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(2615, 1526, 170, 78), "kind": "critici_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(2615, 1869, 170, 78), "kind": "critici_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.80},
+			{"rect": Rect2(2921, 1580, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(2879, 1796, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 }

@@ -160,6 +160,12 @@ func _ready() -> void:
 		_textured = true
 		_sprite = spr
 		_base_tex = tex
+		# Nello spicchio ore 6 il rig frontale deve stare davanti alla parte
+		# alta del desk (testa/mani visibili), ma dietro alla fascia bassa
+		# (gambe nascoste dal mobile). Un secondo pass raster, ritagliato via
+		# shader, crea questa maschera senza congelare l'agente nella texture.
+		if item.has("front_occlusion"):
+			_add_front_occluder(spr, tex, float(item["front_occlusion"]))
 		# variante con l'agente seduto integrato: <stesso path>_seated.png
 		var seated_path := path.replace(".png", "_seated.png")
 		if ResourceLoader.exists(seated_path):
@@ -171,6 +177,37 @@ func _ready() -> void:
 					push_warning("Seated art canvas mismatch: %s is %s, base %s is %s; using dynamic rig." % [
 						seated_path, st.get_size(), path, tex.get_size(),
 					])
+
+func _add_front_occluder(source: Sprite2D, tex: Texture2D, cut: float) -> void:
+	var overlay := Sprite2D.new()
+	overlay.name = "FrontOccluder"
+	overlay.texture = tex
+	overlay.centered = source.centered
+	overlay.offset = source.offset
+	overlay.scale = source.scale
+	# Va aggiunto al contenitore y-sort come sibling del rig: come child del
+	# mobile il ramo veniva composto tutto insieme prima dell'agente.
+	# z assoluto: deve superare anche il rig, che è un sibling del mobile
+	# nel contenitore y-sortato, non soltanto gli altri child del mobile.
+	overlay.z_as_relative = false
+	overlay.z_index = 100
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+uniform float front_cut = 0.72;
+void fragment() {
+	vec4 pixel = texture(TEXTURE, UV);
+	if (UV.y < front_cut) { discard; }
+	COLOR = pixel * COLOR;
+}
+"""
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("front_cut", clampf(cut, 0.0, 1.0))
+	overlay.material = material
+	var layer := get_parent()
+	layer.add_child(overlay)
+	overlay.global_position = source.global_position
 
 func _draw() -> void:
 	var kind: String = item["kind"]
