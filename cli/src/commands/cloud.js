@@ -796,13 +796,57 @@ function maxUpdatedAt(rows) {
   return max;
 }
 
+/**
+ * Raggruppa `rows` per il valore della colonna `key` (Map key→row[]).
+ * Righe con key null/undefined vengono ignorate. Usato dal push chunked per
+ * legare scores/applications/highlights alla loro position (stesso batch =
+ * il server risolve la FK via legacyToUuid in-request).
+ */
+function groupBy(rows, key) {
+  const m = new Map();
+  for (const r of rows) {
+    const k = r?.[key];
+    if (k == null) continue;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(r);
+  }
+  return m;
+}
+
+/**
+ * Cursore SICURO su invio parziale/chunked. Dato l'insieme di righe CONFERMATE
+ * (HTTP 200) e quelle SCARTATE (413 su riga singola), ritorna il massimo
+ * `field` tale che TUTTE le righe con field <= esso siano state confermate:
+ * ovvero il max sul prefisso confermato che precede la prima riga scartata.
+ * Garanzia: il cursore non scavalca mai una riga non ancora sincronizzata →
+ * nessuna riga persa. `field` è 'updated_at' | 'deleted_at' | 'ts' a seconda
+ * della tabella. Confronto fra stringhe: i timestamp SQLite locali hanno tutti
+ * lo stesso formato (come già fa maxUpdatedAt), quindi lessicografico ==
+ * cronologico.
+ */
+function safeCursor(sent, skipped, field) {
+  let minSkip = null;
+  for (const r of skipped) {
+    const v = r?.[field];
+    if (v && (minSkip === null || v < minSkip)) minSkip = v;
+  }
+  let max = null;
+  for (const r of sent) {
+    const v = r?.[field];
+    if (!v) continue;
+    if (minSkip !== null && !(v < minSkip)) continue; // non superare il primo skip
+    if (max === null || v > max) max = v;
+  }
+  return max;
+}
+
 async function handlePush(options) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
     console.error(pc.red('Cloud sync non abilitato.'));
     console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
     process.exitCode = 1;
-    return;
+    return { ok: false, authFailed: false, skipped: 0 };
   }
 
   // Profile YAML: e' indipendente dal DB (esiste appena l'Assistente
@@ -818,7 +862,7 @@ async function handlePush(options) {
     console.error(pc.red(`Database non trovato: ${dbPath}`));
     console.error(pc.dim('Avvia il team almeno una volta o passa --db <path>'));
     process.exitCode = 1;
-    return;
+    return { ok: false, authFailed: false, skipped: 0 };
   }
 
   let DatabaseSync;
@@ -827,7 +871,7 @@ async function handlePush(options) {
   } catch {
     console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
     process.exitCode = 1;
-    return;
+    return { ok: false, authFailed: false, skipped: 0 };
   }
 
   let positions = [];
@@ -968,7 +1012,7 @@ async function handlePush(options) {
     } catch (err) {
       console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
       process.exitCode = 1;
-      return;
+      return { ok: false, authFailed: false, skipped: 0 };
     }
   }
 
@@ -999,7 +1043,9 @@ async function handlePush(options) {
   );
   if (options.dryRun) {
     console.log(pc.yellow('--dry-run: nulla viene pushato.'));
-    return;
+    // Nessun invio reale → non è un "sync completato": il chiamante non deve
+    // ackare. (Il rendezvous "Sync now" non usa mai dryRun.)
+    return { ok: false, authFailed: false, skipped: 0, dryRun: true };
   }
   if (
     positions.length === 0 && scores.length === 0 &&
@@ -1008,120 +1054,226 @@ async function handlePush(options) {
     tombstones.length === 0 && transitions.length === 0 && !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
-    return;
+    // Già in pari col cloud: niente da spedire = sync di fatto completa →
+    // il chiamante PUÒ ackare (nothingToSync). ok=true, skipped=0.
+    return { ok: true, authFailed: false, skipped: 0, nothingToSync: true };
   }
 
+  // ── Push CHUNKED (anti-413) ────────────────────────────────────────────
+  // Storia del bug: il push era un unico POST monolitico con TUTTE le tabelle.
+  // Un HTTP 413 (payload troppo grande) cadeva nel ramo generico !res.ok →
+  // cursore NON avanzato → al tick dopo la stessa delta + nuove righe → payload
+  // ancora più grande → altri 413 (loop irreversibile, dashboard ferma). Ora
+  // spezziamo il payload in richieste piccole con halving adattivo sul 413 e
+  // avanziamo il cursore per-tabella SOLO sul prefisso di righe confermate
+  // (safeCursor) → nessuna riga persa né saltata, e il backlog già gonfio
+  // (>500 positions) si drena in più richieste.
   const pushUrl = `${config.base_url}/api/cloud-sync/push`;
-  let res;
-  try {
-    res = await fetch(pushUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        positions, scores, applications,
-        companies,
-        position_highlights: highlights,
-        pending_user_messages: pendingMessages,
-        tombstones,
-        position_transitions: transitions,
-        ...(profilePayload ? { profile: profilePayload } : {}),
-      }),
+  const authHeaders = {
+    Authorization: `Bearer ${config.token}`,
+    'Content-Type': 'application/json',
+  };
+  // Chunk iniziali per tabella (il halving 413 scende sotto se serve). Scelti
+  // per stare comodamente sotto il body-limit tipico (~4MB Vercel): le
+  // positions sono le righe più pesanti (jd_text/jd_summary), quindi il chunk
+  // più piccolo. Override via env per il drain di emergenza.
+  const POS_CHUNK = Math.max(1, parseInt(process.env.JHT_PUSH_POS_CHUNK || '75', 10) || 75);
+  const ROW_CHUNK = Math.max(1, parseInt(process.env.JHT_PUSH_ROW_CHUNK || '250', 10) || 250);
+
+  async function postBatch(payload) {
+    try {
+      const r = await fetch(pushUrl, { method: 'POST', headers: authHeaders, body: JSON.stringify(payload) });
+      const b = await r.json().catch(() => ({}));
+      return { status: r.status, ok: r.ok, body: b };
+    } catch (err) {
+      return { status: 0, ok: false, body: { error: err.message }, network: true };
+    }
+  }
+
+  const outcome = {
+    aborted: false, authFailed: false, skipped: 0, requests: 0,
+    up: { positions: 0, scores: 0, applications: 0, companies: 0,
+          position_highlights: 0, pending_user_messages: 0, tombstones: 0,
+          position_transitions: 0 },
+  };
+  const addUp = (b) => {
+    outcome.up.positions += b.positions?.upserted ?? 0;
+    outcome.up.scores += b.scores?.upserted ?? 0;
+    outcome.up.applications += b.applications?.upserted ?? 0;
+    outcome.up.companies += b.companies?.upserted ?? 0;
+    outcome.up.position_highlights += b.position_highlights?.upserted ?? 0;
+    outcome.up.pending_user_messages += b.pending_user_messages?.upserted ?? 0;
+    outcome.up.tombstones += b.tombstones?.applied ?? 0;
+    outcome.up.position_transitions += b.position_transitions?.upserted ?? 0;
+  };
+
+  // Invia `items` (già in ordine cronologico crescente) a chunk di `chunkSize`,
+  // dimezzando ogni chunk che torna 413 fino alla riga singola; una riga
+  // singola che ancora 413 viene scartata (skip) e loggata, per drenare il
+  // resto. Ritorna { confirmed, skipped } (righe, per il cursore). Su
+  // errore non-413 / rete / auth / 409 setta outcome.aborted e ferma tutto.
+  async function sendChunked(items, chunkSize, build) {
+    const confirmed = [];
+    const skipped = [];
+    if (!items.length || outcome.aborted) return { confirmed, skipped };
+    for (let base = 0; base < items.length && !outcome.aborted; base += chunkSize) {
+      // Coda FIFO di range [s,e); le metà da 413 rientrano in testa → ordine.
+      const queue = [[base, Math.min(base + chunkSize, items.length)]];
+      while (queue.length && !outcome.aborted) {
+        const [s, e] = queue.shift();
+        if (s >= e) continue;
+        const res = await postBatch(build(items.slice(s, e)));
+        outcome.requests += 1;
+        if (res.ok) {
+          addUp(res.body);
+          for (let i = s; i < e; i++) confirmed.push(items[i]);
+          continue;
+        }
+        if (res.status === 401 || res.status === 403) {
+          outcome.aborted = true; outcome.authFailed = true;
+          console.error(pc.red(`Push auth fallita (HTTP ${res.status}): ${res.body.error || 'token?'}`));
+          return { confirmed, skipped };
+        }
+        if (res.status === 413) {
+          if (e - s <= 1) {
+            skipped.push(items[s]); outcome.skipped += 1;
+            console.error(pc.red(`Push 413 su riga singola (item #${s}): SCARTATA per drenare il resto — riga anomala, ritentata al prossimo tick.`));
+            continue;
+          }
+          const mid = s + Math.floor((e - s) / 2);
+          queue.unshift([mid, e]);
+          queue.unshift([s, mid]); // metà sinistra prima → confirmed resta ordinato
+          continue;
+        }
+        // 409 not_active_device o 5xx/altro: non recuperabile in questo giro.
+        outcome.aborted = true;
+        if (res.status === 409 && res.body.error === 'not_active_device') {
+          console.error(pc.red(`Push rifiutato (HTTP 409 not_active_device): un altro device ha il claim (active_device_id=${res.body.active_device_id ?? 'unknown'}).`));
+        } else {
+          console.error(pc.red(`Push fallito (HTTP ${res.status}): ${res.body.error || 'errore sconosciuto'}`));
+        }
+        return { confirmed, skipped };
+      }
+    }
+    return { confirmed, skipped };
+  }
+
+  // Ordina cronologicamente (updated_at asc) così il cursore avanza sul
+  // prefisso confermato senza scavalcare righe non inviate.
+  const byAsc = (field) => (a, b) => {
+    const x = a?.[field] || '', y = b?.[field] || '';
+    return x < y ? -1 : x > y ? 1 : 0;
+  };
+
+  // Bundle position→figli: scores/applications/highlights DEVONO viaggiare
+  // nello stesso POST della loro position (il server risolve position_id via
+  // legacyToUuid costruita SOLO dalle positions in-request — nessun lookup di
+  // fallback per scores/applications, vedi route push §2/§3).
+  const scoresByPos = groupBy(scores, 'position_id');
+  const appsByPos = groupBy(applications, 'position_id');
+  const hlByPos = groupBy(highlights, 'position_id');
+  const posIds = new Set(positions.map((p) => p.id));
+  const bundles = positions.slice().sort(byAsc('updated_at')).map((p) => ({
+    p,
+    scores: scoresByPos.get(p.id) || [],
+    apps: appsByPos.get(p.id) || [],
+    hls: hlByPos.get(p.id) || [],
+  }));
+  // Figli "orfani": la loro position non è nel delta di questo tick (position
+  // invariata ma figlio cambiato). Il server li scarterebbe comunque (come nel
+  // push monolitico odierno: position_id non risolvibile → drop), ma li
+  // inviamo lo stesso perché il cursore avanzi coerentemente col comportamento
+  // attuale. Vengono spediti con positions:[] → 200, 0 upsert, cursore avanza.
+  const orphanScores = scores.filter((s) => !posIds.has(s.position_id));
+  const orphanApps = applications.filter((a) => !posIds.has(a.position_id));
+  const orphanHls = highlights.filter((h) => !posIds.has(h.position_id));
+
+  // 1) Companies PRIMA delle positions: le positions risolvono company_id via
+  //    lookup su companies.legacy_id, ma averle già committate evita il
+  //    round-trip e mantiene la Company card popolata.
+  const compRes = await sendChunked(companies.slice().sort(byAsc('updated_at')), ROW_CHUNK,
+    (c) => ({ companies: c }));
+
+  // 2) Positions + figli in bundle.
+  const posRes = await sendChunked(bundles, POS_CHUNK, (slice) => ({
+    positions: slice.map((b) => b.p),
+    scores: slice.flatMap((b) => b.scores),
+    applications: slice.flatMap((b) => b.apps),
+    position_highlights: slice.flatMap((b) => b.hls),
+  }));
+  const sentScores = posRes.confirmed.flatMap((b) => b.scores);
+  const skipScores = posRes.skipped.flatMap((b) => b.scores);
+  const sentApps = posRes.confirmed.flatMap((b) => b.apps);
+  const skipApps = posRes.skipped.flatMap((b) => b.apps);
+  const sentHls = posRes.confirmed.flatMap((b) => b.hls);
+  const skipHls = posRes.skipped.flatMap((b) => b.hls);
+
+  // 3) Figli orfani (positions:[] → dropped server-side, cursore avanza).
+  const oSco = await sendChunked(orphanScores.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], scores: r }));
+  const oApp = await sendChunked(orphanApps.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], applications: r }));
+  const oHl = await sendChunked(orphanHls.slice().sort(byAsc('updated_at')), ROW_CHUNK, (r) => ({ positions: [], position_highlights: r }));
+
+  // 4) Transitions (position_legacy_id diretto, indipendenti), ordinate per ts.
+  const transRes = await sendChunked(transitions.slice().sort(byAsc('ts')), ROW_CHUNK, (t) => ({ position_transitions: t }));
+
+  // 5) Tombstones (lookup di fallback lato server), ordinate per deleted_at.
+  const tombRes = await sendChunked(tombstones.slice().sort(byAsc('deleted_at')), ROW_CHUNK, (t) => ({ tombstones: t }));
+
+  // 6) pending_user_messages (full-push, senza cursore) + profile (una volta).
+  //    Piccoli, ma chunkati per robustezza. Il profile viaggia col primo chunk.
+  let profileSent = false;
+  if (pendingMessages.length > 0) {
+    await sendChunked(pendingMessages, ROW_CHUNK, (m) => {
+      const payload = { pending_user_messages: m };
+      if (!profileSent && profilePayload) { payload.profile = profilePayload; profileSent = true; }
+      return payload;
     });
-  } catch (err) {
-    console.error(pc.red(`Errore di rete: ${err.message}`));
+  }
+  if (!profileSent && profilePayload && !outcome.aborted) {
+    const r = await postBatch({ profile: profilePayload });
+    outcome.requests += 1;
+    if (r.ok) addUp(r.body);
+    else if (r.status === 401 || r.status === 403) { outcome.aborted = true; outcome.authFailed = true; }
+    else { outcome.aborted = true; console.error(pc.red(`Push profile fallito (HTTP ${r.status}): ${r.body.error || ''}`)); }
+  }
+
+  // ── Report + cursore ────────────────────────────────────────────────────
+  if (outcome.aborted) {
+    // Non avanziamo ALCUN cursore: le richieste già andate a buon fine sono
+    // idempotenti (upsert per legacy_id), verranno ri-chunkate al prossimo
+    // tick. Nessuna riga persa. Segnaliamo il fallimento al chiamante.
+    console.error(pc.yellow(`Push interrotto dopo ${outcome.requests} richieste — cursore invariato, ritento al prossimo tick.`));
     process.exitCode = 1;
-    return { ok: false, authFailed: false };
+    return { ok: false, authFailed: outcome.authFailed, skipped: outcome.skipped };
   }
 
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    // 409 not_active_device → un altro device ha fatto claim del team.
-    // Questo push viene rifiutato deliberatamente (single-team enforcement,
-    // vedi mig 019/023 + docs/internal/ops/vps.md:392). Il daemon entra in
-    // consecutive-fails countdown (vedi handleDaemon: 3 warn / 5 shutdown),
-    // così non resta in loop infinito a sbattere la testa.
-    if (res.status === 409 && body.error === 'not_active_device') {
-      console.error(
-        pc.red(
-          `Push rifiutato (HTTP 409 not_active_device): un altro device ha il claim ` +
-          `(active_device_id=${body.active_device_id ?? 'unknown'}).`
-        )
-      );
-      console.error(
-        pc.dim(
-          `  Per riprendere: jht cloud claim --force (TODO) oppure spegni questo container.`
-        )
-      );
-    } else {
-      console.error(
-        pc.red(`Push fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`)
-      );
-    }
-    process.exitCode = 1;
-    // 401/403 = token revocato o malformato. Il daemon usa questo flag per
-    // contare gli auth-fail consecutivi (threshold 3 → killswitch + notifica
-    // pending_user_messages, vedi handleDaemon). Distinto dal counter
-    // generico consecutiveFails (5xx/network transient).
-    return { ok: false, authFailed: res.status === 401 || res.status === 403 };
+  console.log(pc.green(`✓ Push completato in ${outcome.requests} richieste`));
+  console.log(pc.dim(`  positions: ${outcome.up.positions} · scores: ${outcome.up.scores} · applications: ${outcome.up.applications} · companies: ${outcome.up.companies} · highlights: ${outcome.up.position_highlights} · pending: ${outcome.up.pending_user_messages} · tombstones: ${outcome.up.tombstones} · transitions: ${outcome.up.position_transitions}`));
+  if (outcome.skipped > 0) {
+    // Segnale forte: righe scartate = una riga singola supera il limite server.
+    // L'health-check del Mantenitore (Parte B) lo intercetta.
+    console.error(pc.red(`⚠ ${outcome.skipped} righe SCARTATE (riga singola > limite server): richiedono attenzione.`));
   }
 
-  console.log(pc.green('✓ Push completato'));
-  console.log(pc.dim(`  positions:        ${body.positions?.upserted ?? 0} upserted`));
-  console.log(pc.dim(`  scores:           ${body.scores?.upserted ?? 0} upserted`));
-  console.log(pc.dim(`  applications:     ${body.applications?.upserted ?? 0} upserted`));
-  if (companies.length > 0 || body.companies?.upserted) {
-    console.log(pc.dim(`  companies:        ${body.companies?.upserted ?? 0} upserted`));
-  }
-  if (highlights.length > 0 || body.position_highlights?.upserted) {
-    console.log(pc.dim(`  highlights:       ${body.position_highlights?.upserted ?? 0} upserted`));
-  }
-  console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
-  if (tombstones.length > 0 || body.tombstones?.applied) {
-    console.log(pc.dim(`  tombstones:       ${body.tombstones?.applied ?? 0} applied`));
-  }
-  if (transitions.length > 0 || body.position_transitions?.upserted) {
-    console.log(pc.dim(`  transitions:      ${body.position_transitions?.upserted ?? 0} new`));
-  }
-
-  // Aggiorna cursor delta-sync solo dopo HTTP 200: il prossimo tick
-  // selezionera' solo righe con updated_at > cursor. Se una qualsiasi
-  // tabella aveva almeno una riga pushata, avanziamo il suo cursor al
-  // MAX(updated_at) di quelle righe. Tabelle vuote nel tick: cursor
-  // invariato (mantenendo eventuale valore precedente).
+  // Cursore SICURO per-tabella: max sul prefisso confermato che precede la
+  // prima riga scartata (safeCursor). Su skip il cursore NON scavalca la riga
+  // → ritentata al tick dopo. Senza skip == max delle righe inviate (identico
+  // al comportamento pre-chunking).
   const newCursor = { ...cursor };
-  const posMax = maxUpdatedAt(positions);
-  const scoMax = maxUpdatedAt(scores);
-  const appMax = maxUpdatedAt(applications);
-  const compMax = maxUpdatedAt(companies);
-  const hlMax = maxUpdatedAt(highlights);
-  if (posMax) newCursor.positions = posMax;
-  if (scoMax) newCursor.scores = scoMax;
-  if (appMax) newCursor.applications = appMax;
-  if (compMax) newCursor.companies = compMax;
-  if (hlMax) newCursor.position_highlights = hlMax;
-  // Cursor tombstones: MAX(deleted_at) tra le tombstones inviate.
-  // Stesso pattern, ma il campo si chiama deleted_at non updated_at.
-  let tombMax = null;
-  for (const t of tombstones) {
-    if (t?.deleted_at && (tombMax === null || t.deleted_at > tombMax)) {
-      tombMax = t.deleted_at;
-    }
-  }
-  if (tombMax) newCursor.tombstones = tombMax;
-  // Cursor transitions: MAX(ts) tra le righe inviate (campo `ts`, non
-  // updated_at). `>` stretto al prossimo tick → no re-push a riposo.
-  let transMax = null;
-  for (const t of transitions) {
-    if (t?.ts && (transMax === null || t.ts > transMax)) transMax = t.ts;
-  }
-  if (transMax) newCursor.transitions = transMax;
-  // Salviamo anche se nulla e' cambiato: la prima volta crea il file e
-  // disabilita la modalita' "first-push" al prossimo tick. La 2a volta
-  // in poi e' no-op a livello di contenuto.
+  const set = (k, v) => { if (v) newCursor[k] = v; };
+  set('positions', safeCursor(posRes.confirmed.map((b) => b.p), posRes.skipped.map((b) => b.p), 'updated_at'));
+  set('scores', safeCursor([...sentScores, ...oSco.confirmed], [...skipScores, ...oSco.skipped], 'updated_at'));
+  set('applications', safeCursor([...sentApps, ...oApp.confirmed], [...skipApps, ...oApp.skipped], 'updated_at'));
+  set('position_highlights', safeCursor([...sentHls, ...oHl.confirmed], [...skipHls, ...oHl.skipped], 'updated_at'));
+  set('companies', safeCursor(compRes.confirmed, compRes.skipped, 'updated_at'));
+  set('transitions', safeCursor(transRes.confirmed, transRes.skipped, 'ts'));
+  set('tombstones', safeCursor(tombRes.confirmed, tombRes.skipped, 'deleted_at'));
   await saveCloudCursor(newCursor);
+  // ok=true anche con skipped>0: i chunk sono saliti e il cursore è avanzato in
+  // sicurezza (safeCursor lascia indietro le righe scartate → ritentate). Ma il
+  // sync NON è pieno → il chiamante (rendezvous) NON deve ackare finché
+  // skipped>0. Esponiamo skipped per far decidere il chiamante.
+  return { ok: true, authFailed: false, skipped: outcome.skipped };
 }
 
 /**
@@ -1392,11 +1544,21 @@ async function handlePullDesiredState(options = {}) {
         limit: options.limit || 500,
       });
       // cursor = MAX tra i timestamp dei flag (positions non ha updated_at).
+      // Confronto FRA DATE (getTime), non fra stringhe: il cloud restituisce ts
+      // Postgres tipo `2026-07-11T10:00:00.123456+00:00` mentre il cursore di
+      // default è `...Z` (toISOString) → il compare lessicografico è inaffidabile
+      // ('Z' 0x5A vs '+' 0x2B) e il cursore restava congelato. Teniamo comunque
+      // come `maxTs` la STRINGA originale del server (non riformattata) così il
+      // successivo filtro `.gt.${since}` usa lo stesso formato del DB.
       let maxTs = cursor.since;
+      let maxMs = maxTs ? Date.parse(maxTs) : NaN;
       for (const r of rows) {
         for (const ts of [r.write_requested_at, r.geocode_requested_at,
           r.recheck_requested_at, r.salary_precise_requested_at, r.user_excluded_at]) {
-          if (ts && (!maxTs || ts > maxTs)) maxTs = ts;
+          if (!ts) continue;
+          const ms = Date.parse(ts);
+          if (Number.isNaN(ms)) continue;
+          if (Number.isNaN(maxMs) || ms > maxMs) { maxMs = ms; maxTs = ts; }
         }
       }
       body = { positions: rows, cursor: maxTs };
@@ -1478,6 +1640,9 @@ async function handlePullDesiredState(options = {}) {
   try {
     const db = new DatabaseSync(dbPath);
     db.exec('PRAGMA foreign_keys = ON');
+    // Il daemon condivide il DB con gli agenti (WAL) e non è prioritario: diamo
+    // 5s di attesa sul lock invece di fallire subito con "database is locked".
+    db.exec('PRAGMA busy_timeout = 5000');
     // UPDATE multi-flag: scriviamo entrambi i flag desired-state
     // (write_requested + geocode_requested) in un solo statement per row.
     // Idempotente: se il cloud non li ha (NULL), li riportiamo invariati
@@ -1499,7 +1664,10 @@ async function handlePullDesiredState(options = {}) {
     // SELECT lo stato locale corrente: serve sia per il "missing" sia per la
     // sync NARROW dell'esclusione utente (sotto).
     const checkStmt = db.prepare(
-      'SELECT status, user_excluded_at, user_excluded_prev_status FROM positions WHERE id = ?'
+      'SELECT status, user_excluded_at, user_excluded_prev_status, ' +
+        'write_requested, write_requested_at, geocode_requested, geocode_requested_at, ' +
+        'recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at ' +
+        'FROM positions WHERE id = ?'
     );
     // Esclusione utente cloud→locale: applichiamo SOLO l'azione-utente
     // (user_excluded_at valorizzato lato cloud), MAI lo status generico (che
@@ -1536,8 +1704,25 @@ async function handlePullDesiredState(options = {}) {
       const rcAt = p.recheck_requested_at || null;
       const spFlag = p.salary_precise_requested === true || p.salary_precise_requested === 1 ? 1 : 0;
       const spAt = p.salary_precise_requested_at || null;
-      stmt.run(writeFlag, writeAt, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
-      updated++;
+      // Skip delle scritture no-op: l'UPDATE non tocca updated_at, quindi il
+      // trigger `positions_touch_updated_at` (AFTER UPDATE ... WHEN NEW.updated_at
+      // IS OLD.updated_at) rilancerebbe una UPDATE annidata su updated_at PER OGNI
+      // riga → churn di updated_at + doppio costo di scrittura anche quando nulla
+      // cambia. Confrontiamo i flag locali correnti con quelli in arrivo e
+      // scriviamo solo se qualcosa è realmente diverso.
+      const flagsChanged =
+        (local.write_requested ?? 0) !== writeFlag ||
+        (local.write_requested_at ?? null) !== writeAt ||
+        (local.geocode_requested ?? 0) !== geoFlag ||
+        (local.geocode_requested_at ?? null) !== geoAt ||
+        (local.recheck_requested ?? 0) !== rcFlag ||
+        (local.recheck_requested_at ?? null) !== rcAt ||
+        (local.salary_precise_requested ?? 0) !== spFlag ||
+        (local.salary_precise_requested_at ?? null) !== spAt;
+      if (flagsChanged) {
+        stmt.run(writeFlag, writeAt, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
+        updated++;
+      }
 
       // ── Sync NARROW dell'esclusione utente ──
       const cloudExcluded = !!p.user_excluded_at; // l'utente l'ha esclusa sul cloud
@@ -2076,8 +2261,30 @@ async function handleSyncRendezvous(options = {}) {
   // Push fresco ORA (resta su Vercel in Fase 1). Isolato dal counter del daemon.
   const prev = process.exitCode;
   process.exitCode = 0;
-  await handlePush({});
+  const pushResult = await handlePush({});
   process.exitCode = prev;
+
+  // Ack `sync_completed_at` SOLO su successo PIENO. Prima l'ack veniva scritto
+  // sempre → il web segnava "sincronizzato" anche quando il push falliva (o
+  // scartava righe dopo 413), mostrando un falso verde su dati non saliti.
+  //   • successo pieno (ok && skipped==0, incluso nothingToSync) → ACK.
+  //   • aborted / errore / auth-fail                             → NO ack.
+  //   • completato ma con righe scartate (skipped>0)             → NO ack:
+  //     il sync NON è integro; lasciando l'ack non scritto il pulsante resta
+  //     "in sospeso"/riprovabile e il prossimo tick ritenta le righe scartate
+  //     (che con safeCursor NON sono state superate dal cursore). Le righe
+  //     scartate sono già loggate in rosso da handlePush e intercettate dal
+  //     canary sync_health (Mantenitore) → segnale distinto senza nuovo stato.
+  const pushOk = !!pushResult && pushResult.ok === true && (pushResult.skipped || 0) === 0;
+  if (!pushOk) {
+    if (!silent) {
+      const why = pushResult && (pushResult.skipped || 0) > 0
+        ? `${pushResult.skipped} righe scartate`
+        : 'push non riuscito';
+      console.error(pc.yellow(`  sync-rendezvous: ack NON scritto (${why}) — il web resta "non sincronizzato", ritento al prossimo tick.`));
+    }
+    return;
+  }
 
   // Ack `sync_completed_at`: diretto se disponibile, altrimenti PATCH Vercel.
   const nowIso = new Date().toISOString();
