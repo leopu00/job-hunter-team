@@ -23,7 +23,15 @@ type Directive = {
 };
 
 const T: Record<string, Record<string, string>> = {
-  title: { it: "Bacheca del team", en: "Team board", es: "Tablón del equipo", fr: "Tableau de l'équipe", de: "Team-Board", hu: "Csapattábla", pt: "Quadro da equipa" },
+  title: {
+    it: "Bacheca del team",
+    en: "Team board",
+    es: "Tablón del equipo",
+    fr: "Tableau de l'équipe",
+    de: "Team-Board",
+    hu: "Csapattábla",
+    pt: "Quadro da equipa",
+  },
   subtitle: {
     it: "Ordini e strategia permanenti. Restano validi finché non li cambi; il Capitano li rilegge a ogni riavvio e li rispetta come policy.",
     en: "Permanent orders and strategy. They stay until you change them; the Captain re-reads them on every restart and honors them as policy.",
@@ -42,7 +50,15 @@ const T: Record<string, Record<string, string>> = {
     hu: "Új direktíva… (pl. Karbantartó mód: nincs új pozíció, önéletrajz csak 90+)",
     pt: "Nova diretiva… (ex. Modo manutenção: parar novas posições, CV só 90+)",
   },
-  add: { it: "Aggiungi", en: "Add", es: "Añadir", fr: "Ajouter", de: "Hinzufügen", hu: "Hozzáad", pt: "Adicionar" },
+  add: {
+    it: "Aggiungi",
+    en: "Add",
+    es: "Añadir",
+    fr: "Ajouter",
+    de: "Hinzufügen",
+    hu: "Hozzáad",
+    pt: "Adicionar",
+  },
   empty: {
     it: "Nessuna direttiva attiva. Aggiungine una qui sopra, oppure scrivila in chat al Capitano.",
     en: "No active directives. Add one above, or write it in chat to the Captain.",
@@ -52,21 +68,117 @@ const T: Record<string, Record<string, string>> = {
     hu: "Nincs aktív direktíva. Adj hozzá egyet fent, vagy írd meg a Kapitánynak a chatben.",
     pt: "Sem diretivas ativas. Adiciona uma acima, ou escreve-a no chat ao Capitão.",
   },
-  edit: { it: "Modifica", en: "Edit", es: "Editar", fr: "Modifier", de: "Bearbeiten", hu: "Szerkeszt", pt: "Editar" },
-  save: { it: "Salva", en: "Save", es: "Guardar", fr: "Enregistrer", de: "Speichern", hu: "Mentés", pt: "Guardar" },
-  cancel: { it: "Annulla", en: "Cancel", es: "Cancelar", fr: "Annuler", de: "Abbrechen", hu: "Mégse", pt: "Cancelar" },
-  archive: { it: "Archivia", en: "Archive", es: "Archivar", fr: "Archiver", de: "Archivieren", hu: "Archivál", pt: "Arquivar" },
-  added: { it: "Direttiva aggiunta", en: "Directive added", es: "Directiva añadida", fr: "Directive ajoutée", de: "Direktive hinzugefügt", hu: "Direktíva hozzáadva", pt: "Diretiva adicionada" },
-  archivedMsg: { it: "Direttiva archiviata", en: "Directive archived", es: "Directiva archivada", fr: "Directive archivée", de: "Direktive archiviert", hu: "Direktíva archiválva", pt: "Diretiva arquivada" },
-  archivedSection: { it: "Archiviate", en: "Archived", es: "Archivadas", fr: "Archivées", de: "Archiviert", hu: "Archivált", pt: "Arquivadas" },
-  errGeneric: { it: "Operazione fallita", en: "Operation failed", es: "Operación fallida", fr: "Opération échouée", de: "Vorgang fehlgeschlagen", hu: "A művelet sikertelen", pt: "Operação falhou" },
+  edit: {
+    it: "Modifica",
+    en: "Edit",
+    es: "Editar",
+    fr: "Modifier",
+    de: "Bearbeiten",
+    hu: "Szerkeszt",
+    pt: "Editar",
+  },
+  save: {
+    it: "Salva",
+    en: "Save",
+    es: "Guardar",
+    fr: "Enregistrer",
+    de: "Speichern",
+    hu: "Mentés",
+    pt: "Guardar",
+  },
+  cancel: {
+    it: "Annulla",
+    en: "Cancel",
+    es: "Cancelar",
+    fr: "Annuler",
+    de: "Abbrechen",
+    hu: "Mégse",
+    pt: "Cancelar",
+  },
+  archive: {
+    it: "Archivia",
+    en: "Archive",
+    es: "Archivar",
+    fr: "Archiver",
+    de: "Archivieren",
+    hu: "Archivál",
+    pt: "Arquivar",
+  },
+  added: {
+    it: "Direttiva aggiunta",
+    en: "Directive added",
+    es: "Directiva añadida",
+    fr: "Directive ajoutée",
+    de: "Direktive hinzugefügt",
+    hu: "Direktíva hozzáadva",
+    pt: "Diretiva adicionada",
+  },
+  archivedMsg: {
+    it: "Direttiva archiviata",
+    en: "Directive archived",
+    es: "Directiva archivada",
+    fr: "Directive archivée",
+    de: "Direktive archiviert",
+    hu: "Direktíva archiválva",
+    pt: "Diretiva arquivada",
+  },
+  archivedSection: {
+    it: "Archiviate",
+    en: "Archived",
+    es: "Archivadas",
+    fr: "Archivées",
+    de: "Archiviert",
+    hu: "Archivált",
+    pt: "Arquivadas",
+  },
+  errGeneric: {
+    it: "Operazione fallita",
+    en: "Operation failed",
+    es: "Operación fallida",
+    fr: "Opération échouée",
+    de: "Vorgang fehlgeschlagen",
+    hu: "A művelet sikertelen",
+    pt: "Operação falhou",
+  },
 };
 
 const KIND_LABEL: Record<string, Record<string, string>> = {
-  order: { it: "Ordine", en: "Order", es: "Orden", fr: "Ordre", de: "Anweisung", hu: "Utasítás", pt: "Ordem" },
-  strategy: { it: "Strategia", en: "Strategy", es: "Estrategia", fr: "Stratégie", de: "Strategie", hu: "Stratégia", pt: "Estratégia" },
-  formation: { it: "Formazione", en: "Formation", es: "Formación", fr: "Formation", de: "Formation", hu: "Felállás", pt: "Formação" },
-  note: { it: "Nota", en: "Note", es: "Nota", fr: "Note", de: "Notiz", hu: "Megjegyzés", pt: "Nota" },
+  order: {
+    it: "Ordine",
+    en: "Order",
+    es: "Orden",
+    fr: "Ordre",
+    de: "Anweisung",
+    hu: "Utasítás",
+    pt: "Ordem",
+  },
+  strategy: {
+    it: "Strategia",
+    en: "Strategy",
+    es: "Estrategia",
+    fr: "Stratégie",
+    de: "Strategie",
+    hu: "Stratégia",
+    pt: "Estratégia",
+  },
+  formation: {
+    it: "Formazione",
+    en: "Formation",
+    es: "Formación",
+    fr: "Formation",
+    de: "Formation",
+    hu: "Felállás",
+    pt: "Formação",
+  },
+  note: {
+    it: "Nota",
+    en: "Note",
+    es: "Nota",
+    fr: "Note",
+    de: "Notiz",
+    hu: "Megjegyzés",
+    pt: "Nota",
+  },
 };
 
 const KINDS = ["order", "strategy", "formation", "note"];
@@ -75,7 +187,8 @@ export default function DirectivesPanel() {
   const locale = useLocale();
   const { toast } = useToast();
   const t = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
-  const kindLabel = (k: string) => KIND_LABEL[k]?.[locale] ?? KIND_LABEL[k]?.en ?? k;
+  const kindLabel = (k: string) =>
+    KIND_LABEL[k]?.[locale] ?? KIND_LABEL[k]?.en ?? k;
 
   const [items, setItems] = useState<Directive[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +203,8 @@ export default function DirectivesPanel() {
     try {
       const res = await fetch("/api/team-directives");
       const data = await res.json();
-      if (res.ok) setItems(Array.isArray(data.directives) ? data.directives : []);
+      if (res.ok)
+        setItems(Array.isArray(data.directives) ? data.directives : []);
     } catch {
       /* silent — pannello best-effort */
     } finally {
@@ -145,7 +259,8 @@ export default function DirectivesPanel() {
     }
   };
 
-  const archive = (id: number) => post({ id, action: "archive" }, t("archivedMsg"));
+  const archive = (id: number) =>
+    post({ id, action: "archive" }, t("archivedMsg"));
 
   const active = items.filter((d) => d.status === "active");
   const archived = items.filter((d) => d.status === "archived");
@@ -154,9 +269,13 @@ export default function DirectivesPanel() {
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 sm:p-6">
       <div className="mb-1 flex items-center gap-2">
         <span aria-hidden>📋</span>
-        <h3 className="text-[15px] font-bold text-[var(--color-white)]">{t("title")}</h3>
+        <h3 className="text-[15px] font-bold text-[var(--color-white)]">
+          {t("title")}
+        </h3>
       </div>
-      <p className="mb-4 text-[12px] leading-relaxed text-[var(--color-muted)]">{t("subtitle")}</p>
+      <p className="mb-4 text-[12px] leading-relaxed text-[var(--color-muted)]">
+        {t("subtitle")}
+      </p>
 
       {/* form nuova direttiva */}
       <div className="mb-5 flex flex-col gap-2 sm:flex-row">
@@ -273,7 +392,8 @@ export default function DirectivesPanel() {
             onClick={() => setShowArchived((v) => !v)}
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-white)]"
           >
-            {showArchived ? "▾" : "▸"} {t("archivedSection")} ({archived.length})
+            {showArchived ? "▾" : "▸"} {t("archivedSection")} ({archived.length}
+            )
           </button>
           {showArchived && (
             <ul className="mt-2 flex flex-col gap-1.5">

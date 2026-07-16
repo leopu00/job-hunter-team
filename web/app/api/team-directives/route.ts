@@ -161,7 +161,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { userId, supabase } = resolved.user;
   const { data, error } = await supabase
     .from("team_directives")
-    .insert({ user_id: userId, body: text, kind, status: "active", created_by: "user" })
+    .insert({
+      user_id: userId,
+      body: text,
+      kind,
+      status: "active",
+      created_by: "user",
+    })
     .select("id")
     .single();
   if (error) {

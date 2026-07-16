@@ -40,10 +40,12 @@ export async function POST(req: NextRequest) {
 
   // Nel path token il client è service_role (bypassa RLS): user_id è
   // sempre esplicito, mai derivato lato DB.
-  const { error } = await supabase.from("position_views").upsert(
-    { user_id: userId, position_id: positionId },
-    { onConflict: "user_id,position_id", ignoreDuplicates: true },
-  );
+  const { error } = await supabase
+    .from("position_views")
+    .upsert(
+      { user_id: userId, position_id: positionId },
+      { onConflict: "user_id,position_id", ignoreDuplicates: true },
+    );
   if (error) {
     // FK violata = posizione inesistente/cancellata: per il client è
     // indifferente, niente 500 rumorosi su un fire-and-forget.
