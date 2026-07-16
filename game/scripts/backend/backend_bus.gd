@@ -122,7 +122,10 @@ func _self_test_vps_contract() -> void:
 			and roles == ["sentinella", "sentinella", "scout", "critico"] \
 			and msg.get("from") == "sentinella-worker" \
 			and msg.get("to") == "scout-2" \
-			and msg.get("text") == "controllo completato"
+			and msg.get("text") == "controllo completato" \
+			and VpsBackend.expand_user_path("~/keys/id", "/home/Jane Doe") \
+					== "/home/Jane Doe/keys/id" \
+			and VpsBackend.expand_user_path("/tmp/a~b", "/home/test") == "/tmp/a~b"
 	print("VPS-CONTRACT-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"uids": uids, "roles": roles, "msg": msg}))
 

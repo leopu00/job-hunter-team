@@ -8,6 +8,7 @@ config_version=5
 
 config/name="Job Hunter Team"
 config/description="Prototipo gamificato di Job Hunter Team: cammina nella box di vetro dove i tuoi agenti AI cercano lavoro per te."
+config/version="0.2.0"
 run/main_scene="res://scenes/title.tscn"
 run/max_fps=60
 config/features=PackedStringArray("4.7")
@@ -40,7 +41,9 @@ texture={
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
+renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method.web="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 anti_aliasing/quality/msaa_2d=2
 environment/defaults/default_clear_color=Color(0.0235294, 0.0235294, 0.0313726, 1)
