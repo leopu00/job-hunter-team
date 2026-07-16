@@ -409,17 +409,20 @@ export default function DashboardLinkedCharts({
     ],
   );
 
-  // Tabella: posizioni che soddisfano TUTTI i filtri attivi, già ordinate
-  // per recency (la query restituisce last_action_at desc). Top N.
+  // Tabella: posizioni che soddisfano TUTTI i filtri attivi, ordinate per
+  // score desc (senza score in fondo; a pari score vince la più recente,
+  // la query restituisce last_action_at desc e il sort è stabile). Top N.
   const tableMatches = useMemo(
     () =>
-      rows.filter(
-        (p) =>
-          passFamily(p) &&
-          passLocation(p) &&
-          passScore(p.score) &&
-          passSalary(p),
-      ),
+      rows
+        .filter(
+          (p) =>
+            passFamily(p) &&
+            passLocation(p) &&
+            passScore(p.score) &&
+            passSalary(p),
+        )
+        .sort((a, b) => (b.score ?? -1) - (a.score ?? -1)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       rows,
@@ -610,15 +613,13 @@ export default function DashboardLinkedCharts({
         />
       </div>
 
-      {/* Tabella collegata ai filtri: senza filtri = più recenti; con
-      filtri = più recenti tra quelle che soddisfano la selezione. */}
+      {/* Tabella collegata ai filtri: senza filtri = top per score; con
+      filtri = top per score tra quelle che soddisfano la selezione. */}
       <RecentPositionsTable
         rows={tableMatches.slice(0, tableLimit)}
         labels={labels.table}
         filtered={totalActive > 0}
         totalFiltered={tableMatches.length}
-        rates={rates}
-        displayCurrency={displayCurrency}
       />
     </div>
   );

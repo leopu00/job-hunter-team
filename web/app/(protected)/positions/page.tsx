@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { getPositions, getSourceDistribution } from "@/lib/queries";
+import {
+  getPositions,
+  getSeenPositionIds,
+  getSourceDistribution,
+} from "@/lib/queries";
 import { colorForFamily } from "@/lib/position-classifier";
 import {
   getExchangeRates,
@@ -10,7 +14,15 @@ import {
 } from "@/lib/exchange-rates";
 import { getServerLocale } from "@/lib/server-locale";
 import type { PositionWithScore } from "@/lib/types";
+import { cookies } from "next/headers";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
+import UnseenDot from "@/app/components/UnseenDot";
+import ColumnsPicker from "./ColumnsPicker";
+import {
+  POSITIONS_COLS_COOKIE,
+  parseColumnsCookie,
+  type PositionsColumnKey,
+} from "./columns";
 import PositionsShell from "./PositionsShell";
 import TableScrollSync from "./TableScrollSync";
 
@@ -205,6 +217,15 @@ const T: Record<string, Record<string, string>> = {
     de: "Stellen",
     fr: "Postes",
     pt: "Vagas",
+  },
+  unseen_marker: {
+    it: "Nuova — non ancora vista",
+    en: "New — not viewed yet",
+    hu: "Új — még nem megtekintett",
+    es: "Nueva — aún sin ver",
+    de: "Neu — noch nicht angesehen",
+    fr: "Nouvelle — pas encore vue",
+    pt: "Nova — ainda não vista",
   },
   remote_loc: {
     it: "Remote",
@@ -468,12 +489,38 @@ const T: Record<string, Record<string, string>> = {
     fr: "page",
     pt: "página",
   },
+  cols_button: {
+    it: "Colonne",
+    en: "Columns",
+    hu: "Oszlopok",
+    es: "Columnas",
+    de: "Spalten",
+    fr: "Colonnes",
+    pt: "Colunas",
+  },
+  cols_reset: {
+    it: "Ripristina predefinite",
+    en: "Reset to default",
+    hu: "Alapértelmezés visszaállítása",
+    es: "Restablecer predeterminadas",
+    de: "Standard wiederherstellen",
+    fr: "Réinitialiser par défaut",
+    pt: "Restaurar padrão",
+  },
 };
 
 export default async function PositionsPage({ searchParams }: PageProps) {
   const locale = getServerLocale();
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const params = await searchParams;
+
+  // Colonne visibili dal cookie (vedi columns.ts): il server renderizza
+  // solo quelle scelte, il picker riscrive il cookie e fa refresh.
+  const cookieStore = await cookies();
+  const visibleCols = parseColumnsCookie(
+    cookieStore.get(POSITIONS_COLS_COOKIE)?.value,
+  );
+  const show = (k: PositionsColumnKey) => visibleCols.has(k);
   const statuses = csv(params.status);
   const remotes = csv(params.remote);
   const sources = csv(params.source);
@@ -507,7 +554,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     : DEFAULT_PAGE_SIZE;
   const requestedPage = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
-  const [allPositions, sourceList] = await Promise.all([
+  const [allPositionsRaw, sourceList] = await Promise.all([
     getPositions({
       statuses: statuses.length ? statuses : undefined,
       remoteTypes: remotes.length ? remotes : undefined,
@@ -527,6 +574,13 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     }),
     getSourceDistribution(),
   ]);
+  // Marker "nuova": overlay del set position_views dell'utente (cloud).
+  // In local mode il set è vuoto e seen resta undefined → decide il
+  // client via localStorage (UnseenDot).
+  const seenIds = await getSeenPositionIds();
+  const allPositions = allPositionsRaw.map((p) =>
+    seenIds.has(String(p.id)) ? { ...p, seen: true } : p,
+  );
   const availableSources = sourceList.map((s) => s.source);
 
   // Tassi di cambio per le colonne Stipendio/Mensile (default valuta EUR,
@@ -676,6 +730,30 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 {size}
               </Link>
             ))}
+            <span
+              className="mx-1 h-3 w-px bg-[var(--color-border)]"
+              aria-hidden="true"
+            />
+            <ColumnsPicker
+              columns={[
+                { key: "id", label: "ID" },
+                { key: "last_action_at", label: tr("col_updated") },
+                { key: "title", label: tr("col_title") },
+                { key: "company", label: tr("col_company") },
+                { key: "role_family", label: tr("col_category") },
+                { key: "loc_country", label: tr("col_country") },
+                { key: "loc_city", label: tr("col_city") },
+                { key: "remote", label: tr("col_remote") },
+                { key: "score", label: tr("col_score") },
+                { key: "monthly", label: tr("col_monthly") },
+                { key: "source", label: tr("col_source") },
+                { key: "last_action_by", label: tr("col_updated_by") },
+                { key: "critic", label: tr("col_voto") },
+                { key: "status", label: tr("col_status") },
+              ]}
+              visible={[...visibleCols]}
+              texts={{ button: tr("cols_button"), reset: tr("cols_reset") }}
+            />
           </div>
         }
       >
@@ -738,7 +816,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     sortable: true,
                     center: true,
                   },
-                ].map(({ col, label, sortable, center }) => (
+                ]
+                  .filter(({ col }) => show(col as PositionsColumnKey))
+                  .map(({ col, label, sortable, center }) => (
                   <th
                     key={col}
                     scope="col"
@@ -772,7 +852,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
               {visiblePositions.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={visibleCols.size}
                     className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
                   >
                     {tr("no_positions_filtered")}
@@ -793,177 +873,214 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     }}
                   >
                     {/* ID */}
-                    <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                      {p.legacy_id
-                        ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                        : p.id.slice(0, 8)}
-                    </td>
+                    {show("id") && (
+                      <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                        {p.legacy_id
+                          ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                          : p.id.slice(0, 8)}
+                      </td>
+                    )}
                     {/* Aggiornato (ultima azione, fallback rilevazione) */}
-                    <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
-                      {formatFoundAt(p.last_action_at || p.found_at, locale)}
-                    </td>
+                    {show("last_action_at") && (
+                      <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
+                        {formatFoundAt(p.last_action_at || p.found_at, locale)}
+                      </td>
+                    )}
                     {/* Titolo — una riga, troncato con … se troppo lungo */}
                     <td className="px-4 py-3 font-medium">
-                      <Link
-                        href={`/positions/${p.id}`}
-                        title={p.title ?? undefined}
-                        className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
-                      >
-                        {p.title}
-                      </Link>
+                      <span className="flex items-center gap-2">
+                        <UnseenDot
+                          id={String(p.id)}
+                          label={tr("unseen_marker")}
+                          initialSeen={p.seen}
+                        />
+                        <Link
+                          href={`/positions/${p.id}`}
+                          title={p.title ?? undefined}
+                          className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                        >
+                          {p.title}
+                        </Link>
+                      </span>
                     </td>
                     {/* Azienda */}
-                    <td
-                      className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap"
-                      title={p.company}
-                    >
-                      {p.company}
-                    </td>
+                    {show("company") && (
+                      <td
+                        className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap"
+                        title={p.company}
+                      >
+                        {p.company}
+                      </td>
+                    )}
                     {/* Categoria */}
-                    <td
-                      className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap"
-                      title={p.role_family ?? undefined}
-                    >
-                      {p.role_family && p.role_family.trim() ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <span
-                            aria-hidden
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: "50%",
-                              background: colorForFamily(p.role_family.trim()),
-                              flexShrink: 0,
-                            }}
-                          />
-                          {p.role_family.trim()}
-                        </span>
-                      ) : (
-                        <span className="text-[var(--color-dim)]">—</span>
-                      )}
-                    </td>
-                    {/* Paese (Remote in corsivo se senza paese ma full remote) */}
-                    <td
-                      className="px-4 py-3 text-[11px] whitespace-nowrap"
-                      title={p.loc_country ?? undefined}
-                    >
-                      {p.loc_country && p.loc_country.trim() ? (
-                        <span className="text-[var(--color-base)]">
-                          {p.loc_country.trim()}
-                        </span>
-                      ) : p.remote_type === "full_remote" ? (
-                        <span className="italic text-[var(--color-dim)]">
-                          {tr("remote_loc")}
-                        </span>
-                      ) : (
-                        <span className="text-[var(--color-dim)]">—</span>
-                      )}
-                    </td>
-                    {/* Città */}
-                    <td
-                      className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap"
-                      title={p.loc_city ?? undefined}
-                    >
-                      {p.loc_city && p.loc_city.trim() ? (
-                        p.loc_city.trim()
-                      ) : (
-                        <span className="text-[var(--color-dim)]">—</span>
-                      )}
-                    </td>
-                    {/* Remote */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="text-[10px] text-[var(--color-muted)]">
-                        {p.remote_type?.replace("_", " ") ?? "—"}
-                      </span>
-                    </td>
-                    {/* Score */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 justify-center">
-                        <span
-                          className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
-                        >
-                          {p.score ?? "—"}
-                        </span>
-                        <div
-                          className="w-10 h-1 rounded-full overflow-hidden"
-                          style={{ background: "var(--color-border)" }}
-                        >
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${p.score ?? 0}%`,
-                              background: scoreBg(p.score),
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    {/* Stima lorda mensile */}
-                    <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
-                      {formatMonthly(
-                        p.salary_min,
-                        p.salary_max,
-                        p.salary_currency ?? "EUR",
-                        displayCurrency,
-                        rates,
-                      )}
-                    </td>
-                    {/* Fonte */}
-                    <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap">
-                      {p.source ? (
-                        <span className="capitalize">
-                          {p.source.replace(/[-_]/g, " ")}
-                        </span>
-                      ) : (
-                        <span className="text-[var(--color-dim)]">—</span>
-                      )}
-                    </td>
-                    {/* Aggiornato da */}
-                    <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">
-                      {p.last_action_actor ? (
-                        <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
-                          <span aria-hidden="true">
-                            {ACTOR_EMOJI[p.last_action_by ?? ""] ?? "🤖"}
+                    {show("role_family") && (
+                      <td
+                        className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap"
+                        title={p.role_family ?? undefined}
+                      >
+                        {p.role_family && p.role_family.trim() ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              aria-hidden
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                background: colorForFamily(
+                                  p.role_family.trim(),
+                                ),
+                                flexShrink: 0,
+                              }}
+                            />
+                            {p.role_family.trim()}
                           </span>
-                          {p.last_action_actor}
+                        ) : (
+                          <span className="text-[var(--color-dim)]">—</span>
+                        )}
+                      </td>
+                    )}
+                    {/* Paese (Remote in corsivo se senza paese ma full remote) */}
+                    {show("loc_country") && (
+                      <td
+                        className="px-4 py-3 text-[11px] whitespace-nowrap"
+                        title={p.loc_country ?? undefined}
+                      >
+                        {p.loc_country && p.loc_country.trim() ? (
+                          <span className="text-[var(--color-base)]">
+                            {p.loc_country.trim()}
+                          </span>
+                        ) : p.remote_type === "full_remote" ? (
+                          <span className="italic text-[var(--color-dim)]">
+                            {tr("remote_loc")}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)]">—</span>
+                        )}
+                      </td>
+                    )}
+                    {/* Città */}
+                    {show("loc_city") && (
+                      <td
+                        className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap"
+                        title={p.loc_city ?? undefined}
+                      >
+                        {p.loc_city && p.loc_city.trim() ? (
+                          p.loc_city.trim()
+                        ) : (
+                          <span className="text-[var(--color-dim)]">—</span>
+                        )}
+                      </td>
+                    )}
+                    {/* Remote */}
+                    {show("remote") && (
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-[10px] text-[var(--color-muted)]">
+                          {p.remote_type?.replace("_", " ") ?? "—"}
                         </span>
-                      ) : (
-                        <span className="text-[var(--color-dim)]">—</span>
-                      )}
-                    </td>
+                      </td>
+                    )}
+                    {/* Score */}
+                    {show("score") && (
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 justify-center">
+                          <span
+                            className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
+                          >
+                            {p.score ?? "—"}
+                          </span>
+                          <div
+                            className="w-10 h-1 rounded-full overflow-hidden"
+                            style={{ background: "var(--color-border)" }}
+                          >
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${p.score ?? 0}%`,
+                                background: scoreBg(p.score),
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                    )}
+                    {/* Stima lorda mensile */}
+                    {show("monthly") && (
+                      <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
+                        {formatMonthly(
+                          p.salary_min,
+                          p.salary_max,
+                          p.salary_currency ?? "EUR",
+                          displayCurrency,
+                          rates,
+                        )}
+                      </td>
+                    )}
+                    {/* Fonte */}
+                    {show("source") && (
+                      <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap">
+                        {p.source ? (
+                          <span className="capitalize">
+                            {p.source.replace(/[-_]/g, " ")}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)]">—</span>
+                        )}
+                      </td>
+                    )}
+                    {/* Aggiornato da */}
+                    {show("last_action_by") && (
+                      <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">
+                        {p.last_action_actor ? (
+                          <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
+                            <span aria-hidden="true">
+                              {ACTOR_EMOJI[p.last_action_by ?? ""] ?? "🤖"}
+                            </span>
+                            {p.last_action_actor}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)]">—</span>
+                        )}
+                      </td>
+                    )}
                     {/* Voto critico */}
-                    <td className="px-4 py-3 whitespace-nowrap tabular-nums text-center">
-                      {p.critic_score != null ? (
+                    {show("critic") && (
+                      <td className="px-4 py-3 whitespace-nowrap tabular-nums text-center">
+                        {p.critic_score != null ? (
+                          <span
+                            className="text-[12px] font-semibold"
+                            style={{
+                              color:
+                                CRITIC_COLORS[p.critic_verdict ?? ""] ??
+                                "var(--color-muted)",
+                            }}
+                          >
+                            {p.critic_score.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)] text-[11px]">
+                            —
+                          </span>
+                        )}
+                      </td>
+                    )}
+                    {/* Stato */}
+                    {show("status") && (
+                      <td className="px-4 py-3 text-center">
                         <span
-                          className="text-[12px] font-semibold"
+                          className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
                           style={{
                             color:
-                              CRITIC_COLORS[p.critic_verdict ?? ""] ??
-                              "var(--color-muted)",
+                              STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                            borderColor:
+                              STATUS_COLORS[p.status] ??
+                              "var(--color-border)",
+                            background: `${STATUS_COLORS[p.status]}18`,
                           }}
                         >
-                          {p.critic_score.toFixed(1)}
+                          {p.status}
                         </span>
-                      ) : (
-                        <span className="text-[var(--color-dim)] text-[11px]">
-                          —
-                        </span>
-                      )}
-                    </td>
-                    {/* Stato */}
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
-                        style={{
-                          color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                          borderColor:
-                            STATUS_COLORS[p.status] ?? "var(--color-border)",
-                          background: `${STATUS_COLORS[p.status]}18`,
-                        }}
-                      >
-                        {p.status}
-                      </span>
-                    </td>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

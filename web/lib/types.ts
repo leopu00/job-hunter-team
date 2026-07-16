@@ -249,6 +249,9 @@ export interface PositionWithScore extends Position {
   // Chi ha eseguito l'ultima azione (ruolo + istanza concreta).
   last_action_by?: string;
   last_action_actor?: string;
+  // true = già aperta dall'utente (position_views, mig 055). undefined in
+  // local mode: lì decide il client via localStorage (vedi UnseenDot).
+  seen?: boolean;
 }
 
 export interface ApplicationWithPosition extends Application {
