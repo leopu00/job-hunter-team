@@ -70,9 +70,10 @@ const T = {
     // (popolato dal team analyst), non più hardcoded qui.
 
     // Table
-    recent_positions: "Posizioni Recenti",
-    recent_positions_filtered: "Posizioni Filtrate",
+    recent_positions: "Le Migliori Posizioni",
+    recent_positions_filtered: "Le Migliori Posizioni Filtrate",
     view_all: "Vedi tutte →",
+    unseen_marker: "Nuova — non ancora vista",
     col_id: "ID",
     col_title: "Titolo",
     col_company: "Azienda",
@@ -167,9 +168,10 @@ const T = {
     // Family labels now come from positions.role_family in the DB
     // (populated by the team analyst), not hardcoded here.
 
-    recent_positions: "Recent Positions",
-    recent_positions_filtered: "Filtered Positions",
+    recent_positions: "Top Positions",
+    recent_positions_filtered: "Top Filtered Positions",
     view_all: "View all →",
+    unseen_marker: "New — not viewed yet",
     col_id: "ID",
     col_title: "Title",
     col_company: "Company",
@@ -263,9 +265,10 @@ const T = {
     // A családneveket most a positions.role_family DB oszlop adja
     // (a team analyst populálja), nincs hardkódolva itt.
 
-    recent_positions: "Legutóbbi állások",
-    recent_positions_filtered: "Szűrt állások",
+    recent_positions: "A legjobb állások",
+    recent_positions_filtered: "A legjobb szűrt állások",
     view_all: "Összes megtekintése →",
+    unseen_marker: "Új — még nem megtekintett",
     col_id: "ID",
     col_title: "Cím",
     col_company: "Cég",
@@ -356,9 +359,10 @@ const T = {
     position_cities: "Ciudades",
     reset_filters: "limpiar",
 
-    recent_positions: "Posiciones Recientes",
-    recent_positions_filtered: "Posiciones Filtradas",
+    recent_positions: "Las Mejores Posiciones",
+    recent_positions_filtered: "Las Mejores Posiciones Filtradas",
     view_all: "Ver todas →",
+    unseen_marker: "Nueva — aún sin ver",
     col_id: "ID",
     col_title: "Título",
     col_company: "Empresa",
@@ -449,9 +453,10 @@ const T = {
     position_cities: "Städte",
     reset_filters: "zurücksetzen",
 
-    recent_positions: "Neueste Stellen",
-    recent_positions_filtered: "Gefilterte Stellen",
+    recent_positions: "Die besten Stellen",
+    recent_positions_filtered: "Die besten gefilterten Stellen",
     view_all: "Alle anzeigen →",
+    unseen_marker: "Neu — noch nicht angesehen",
     col_id: "ID",
     col_title: "Titel",
     col_company: "Unternehmen",
@@ -542,9 +547,10 @@ const T = {
     position_cities: "Villes",
     reset_filters: "réinit.",
 
-    recent_positions: "Postes récents",
-    recent_positions_filtered: "Postes filtrés",
+    recent_positions: "Les meilleurs postes",
+    recent_positions_filtered: "Les meilleurs postes filtrés",
     view_all: "Tout voir →",
+    unseen_marker: "Nouvelle — pas encore vue",
     col_id: "ID",
     col_title: "Intitulé",
     col_company: "Entreprise",
@@ -635,9 +641,10 @@ const T = {
     position_cities: "Cidades",
     reset_filters: "limpar",
 
-    recent_positions: "Vagas Recentes",
-    recent_positions_filtered: "Vagas Filtradas",
+    recent_positions: "As Melhores Vagas",
+    recent_positions_filtered: "As Melhores Vagas Filtradas",
     view_all: "Ver todas →",
+    unseen_marker: "Nova — ainda não vista",
     col_id: "ID",
     col_title: "Título",
     col_company: "Empresa",

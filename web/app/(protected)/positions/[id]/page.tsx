@@ -12,6 +12,7 @@ import { RecheckButton } from "./RecheckButton";
 import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 import { CvDownloadButton } from "./CvDownloadButton";
+import MarkSeenAfterView from "@/app/components/MarkSeenAfterView";
 import { isLocalRequest } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
 
@@ -787,6 +788,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
+      {/* Dopo 2s di permanenza la posizione perde il marker "nuova"
+          (stato client-side, vedi lib/seen-positions). Si usa position.id
+          perché è lo stesso id dei link riga nelle tabelle. */}
+      <MarkSeenAfterView id={position.id} />
       {/* ── Breadcrumb ──────────────────────────────────────────── */}
       <div className="flex items-center gap-2 mb-6 text-[10px]">
         <Link

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import {
   getDashboardStats,
   getDashboardPositions,
+  getSeenPositionIds,
   getPendingMessages,
   getTeamActivity,
 } from "@/lib/queries";
@@ -121,7 +122,7 @@ export default async function DashboardPage() {
           (p as { critic_verdict?: string | null }).critic_verdict ?? null,
       }))
     : [];
-  const [stats, dashPositions, pendingMessages, rates, recentActivity] =
+  const [stats, dashPositionsRaw, pendingMessages, rates, recentActivity] =
     demoData
       ? [
           demoData.stats,
@@ -137,6 +138,14 @@ export default async function DashboardPage() {
           getExchangeRates(),
           getTeamActivity().then((a) => a.recent),
         ]);
+
+  // Marker "nuova": overlay del set position_views dell'utente (cloud).
+  // In local mode il set è vuoto e seen resta undefined → decide il
+  // client via localStorage (UnseenDot).
+  const seenIds = demoData ? new Set<string>() : await getSeenPositionIds();
+  const dashPositions = dashPositionsRaw.map((p) =>
+    seenIds.has(p.id) ? { ...p, seen: true } : p,
+  );
 
   const activeTotal = stats.total - stats.excluded;
 
@@ -338,21 +347,13 @@ export default async function DashboardPage() {
                   titleFiltered: t.recent_positions_filtered,
                   viewAll: t.view_all,
                   noPositions: t.no_positions,
+                  unseen: t.unseen_marker,
                   colId: t.col_id,
                   colTitle: t.col_title,
                   colCompany: t.col_company,
-                  colCategory: t.col_category,
                   colCountry: t.col_country,
                   colCity: t.col_city,
-                  colRemote: t.col_remote,
                   colScore: t.col_score,
-                  colCritic: t.col_critic,
-                  colSalary: t.col_salary,
-                  colMonthly: t.col_monthly,
-                  colSource: t.col_source,
-                  colStatus: t.col_status,
-                  colUpdated: t.col_updated,
-                  colUpdatedBy: t.col_updated_by,
                 },
               }}
             />
