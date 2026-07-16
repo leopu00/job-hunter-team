@@ -1611,6 +1611,60 @@ export function getPendingMessagesLocal(
   }));
 }
 
+// Storico completo per la pagina /messages: stessi campi dei pendenti ma
+// SENZA il filtro acknowledged (i letti restano visibili in coda alla lista).
+export function getMessagesHistoryLocal(
+  ws: string,
+  limit = 200,
+): PendingMessage[] {
+  const db = getDb(ws);
+  const rows = db
+    .prepare(
+      `
+    SELECT id, agent, body, kind, related_position_id,
+           delivered_via, delivered_at, acknowledged_at,
+           user_reply, user_reply_at, agent_seen_reply_at, created_at
+    FROM pending_user_messages
+    WHERE delivered_via = 'web'
+    ORDER BY created_at DESC
+    LIMIT ?
+  `,
+    )
+    .all(limit) as any[];
+
+  return rows.map((r) => ({
+    id: sid(r.id),
+    agent: r.agent,
+    body: r.body,
+    kind: r.kind,
+    related_position_id:
+      r.related_position_id != null ? sid(r.related_position_id) : null,
+    delivered_via: r.delivered_via,
+    delivered_at: r.delivered_at,
+    acknowledged_at: r.acknowledged_at,
+    user_reply: r.user_reply,
+    user_reply_at: r.user_reply_at,
+    agent_seen_reply_at: r.agent_seen_reply_at,
+    created_at: r.created_at,
+  }));
+}
+
+// Conteggio esatto dei non letti (il banner in dashboard non deve saturare
+// al limit della lista come faceva il vecchio "{n} non letti").
+export function countPendingMessagesLocal(ws: string): number {
+  const db = getDb(ws);
+  const row = db
+    .prepare(
+      `
+    SELECT COUNT(*) AS n
+    FROM pending_user_messages
+    WHERE delivered_via = 'web' AND acknowledged_at IS NULL
+  `,
+    )
+    .get() as { n: number };
+  return row?.n ?? 0;
+}
+
 export function ackPendingMessageLocal(ws: string, id: string): boolean {
   const db = getDb(ws);
   const result = db
