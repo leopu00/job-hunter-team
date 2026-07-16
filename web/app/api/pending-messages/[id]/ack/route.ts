@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, isLocalRequest } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/workspace";
+import { isSupabaseConfigured, workspaceHasDb } from "@/lib/workspace";
 import { getWorkspacePath } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { ackPendingMessageLocal } from "@/lib/local-queries";
@@ -24,7 +24,11 @@ export async function POST(
 
   // Local mode: scrive su SQLite. Lo stato verra' poi pushato al cloud
   // al prossimo tick del daemon — vedi handlePush in cli/src/commands/cloud.js.
-  if (await isLocalRequest()) {
+  // Gate identico a ws() in lib/queries.ts (host locale + DB presente): se il
+  // workspace non ha jobs.db le LETTURE vengono da Supabase, quindi anche
+  // l'ack deve andare li' — altrimenti scrive su un DB inesistente e il
+  // messaggio riappare a ogni reload.
+  if ((await isLocalRequest()) && workspaceHasDb()) {
     const ws = await getWorkspacePath();
     if (!ws) {
       return NextResponse.json(
