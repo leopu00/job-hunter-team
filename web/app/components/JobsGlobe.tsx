@@ -817,14 +817,14 @@ export default function JobsGlobe({
   const grouped = useMemo(() => {
     const groups = new Map<string, PositionCoord[]>();
     for (const p of displayData) {
-      // Raggruppa per CITTÀ (paese|città), non per coordinata: ogni città è
-      // un marker unico, mai fusa con città vicine. Fallback alla coord se
-      // manca la città (raro: geocodificata ma senza loc_city).
-      const cityKey = `${(p.loc_country ?? "").trim()}|${(p.loc_city ?? "").trim()}`;
-      const key =
-        (p.loc_city ?? "").trim() !== ""
-          ? cityKey
-          : `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
+      // Raggruppa per COORDINATA, non per città: un ufficio geocodato in modo
+      // esatto diventa il SUO pin alle sue coordinate reali (il team cerca
+      // l'indirizzo preciso dell'ufficio apposta perché si veda lì). Le
+      // posizioni senza indirizzo esatto condividono tutte la stessa
+      // coordinata-città (vedi resolveCityPins) → si aggregano in un unico
+      // pin-città. A zoom basso i pin vicini vengono fusi in un super-cluster
+      // (pixelClusterCities); il click li espande.
+      const key = `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
       const arr = groups.get(key);
       if (arr) arr.push(p);
       else groups.set(key, [p]);
