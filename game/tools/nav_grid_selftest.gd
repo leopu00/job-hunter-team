@@ -11,6 +11,7 @@ var _failures: Array[String] = []
 func _init() -> void:
 	_test_blocked_destination_is_clamped()
 	_test_writer_radial_layout()
+	_test_all_department_radial_layouts()
 	_test_all_department_desk_textures()
 	_test_real_desk_routes()
 	if _failures.is_empty():
@@ -106,9 +107,49 @@ func _test_writer_radial_layout() -> void:
 		_assert(radial.dot(facing_vector.get(facing, Vector2.ZERO)) > 80.0,
 				"writer:%d does not face outward (radial=%s facing=%s)" % [i, radial, facing])
 
+## Ogni reparto ora condivide lo stesso contratto a sei spicchi: sedie verso
+## il centro, corpi verso l'esterno e quattro viste raster realmente importate.
+func _test_all_department_radial_layouts() -> void:
+	var centers := {
+		"scout": Vector2(1455, 1172),
+		"analisti": Vector2(2735, 430),
+		"scorer": Vector2(2565, 1200),
+		"scrittori": Vector2(690, 1725),
+		"critici": Vector2(2700, 1740),
+	}
+	var expected_facing := ["left", "left", "up", "down", "right", "right"]
+	var facing_vector := {
+		"up": Vector2.UP, "right": Vector2.RIGHT,
+		"down": Vector2.DOWN, "left": Vector2.LEFT,
+	}
+	for dept in DepartmentDefsScript.DEPT_ORDER:
+		var desks: Array = DepartmentDefsScript.DEPARTMENTS[dept]["desks"]
+		_assert(desks.size() == 6, "%s must have exactly six radial desks" % dept)
+		if desks.size() != 6:
+			continue
+		var kind := str(desks[0].get("kind", ""))
+		for suffix in ["side", "up", "down", "diag_down"]:
+			var asset := "res://assets/gen-art/furniture/%s_%s.png" % [kind, suffix]
+			_assert(_texture_loads(asset), "%s radial texture missing: %s" % [dept, asset])
+		for i in desks.size():
+			var desk: Dictionary = desks[i]
+			var facing := str(desk.get("facing", ""))
+			_assert(facing == expected_facing[i], "%s:%d facing=%s expected=%s" % [
+				dept, i, facing, expected_facing[i],
+			])
+			var radial: Vector2 = (desk["rect"] as Rect2).get_center() - centers[dept]
+			_assert(radial.dot(facing_vector.get(facing, Vector2.ZERO)) > 75.0,
+					"%s:%d does not face outward (radial=%s facing=%s)" % [dept, i, radial, facing])
+			if i == 3:
+				_assert(bool(desk.get("integrated_chair", false)),
+						"%s:3 must suppress the duplicate front chair" % dept)
+				var cut := float(desk.get("front_occlusion", 0.0))
+				_assert(cut >= 0.5 and cut <= 0.9,
+						"%s:3 needs a valid animated-rig front occlusion cut" % dept)
+
 ## Contratto risorse dell'intero ufficio: ogni postazione deve risolvere alla
 ## variante orientata usata da FurnitureNode e quella texture deve caricarsi.
-## Copre side/up/down in tutti i reparti e diag_down nell'anello Scrittori.
+## Copre side/up/down/diag_down in tutti i reparti.
 func _test_all_department_desk_textures() -> void:
 	for desk in DepartmentDefsScript.all_desks():
 		var visual: Dictionary = _desk_visual(desk)

@@ -102,7 +102,9 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 			_custom_seat_offset = desk["seat_offset"]
 			_has_custom_seat_offset = true
 		_desk_key = "%s:%d" % [dept, def["desk"]]
-		if _desk_facing == "down":
+		# Alcune viste frontali nuove includono già la sedia sul lato interno.
+		# Non sovrapporre la vecchia sedia separata all'asset integrato.
+		if _desk_facing == "down" and not bool(desk.get("integrated_chair", false)):
 			_ensure_front_chair(desk)
 		# Le texture delle postazioni contengono già strumenti e documenti.
 		# Una seconda PaperPile composta sopra il mobile produceva risme
@@ -452,6 +454,12 @@ func _seat_offset() -> Vector2:
 			return Vector2(-26, -2)
 		"right":
 			return Vector2(26, -2)
+		"down":
+			# La vista ore 6 contiene la sedia sul lato nord del desk. La
+			# baseline del rig deve superare di pochi pixel quella del mobile:
+			# così il busto frontale resta visibile invece di sparire interamente
+			# dietro la fascia, mentre la posa seduta conserva gambe raccolte.
+			return Vector2(0, 95)
 		_:
 			return Vector2(0, _seat_sink)
 

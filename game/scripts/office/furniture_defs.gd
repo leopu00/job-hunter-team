@@ -60,14 +60,15 @@ const ITEMS := [
 	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1230, 1900, 56, 56)},
 	# Lontana dal varco scorer: a y=1455 chiudeva il passaggio tra desk 5
 	# e vetrata, isolando la postazione dalla componente A* principale.
-	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3090, 1560, 56, 56)},
+	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3090, 1700, 56, 56)},
 	{"id": "plant_palm_c", "kind": "plant_palm", "rect": Rect2(302, 1436, 56, 56)},
 
 	# ── Corridoio sud, tra Scrittori e Critici ──
 	{"id": "desk_assistant", "kind": "desk", "rect": Rect2(1550, 1800, 230, 100)},
 
-	# tavolino revisione al centro dell'anello dei Critici (dado=6)
-	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2590, 1690, 120, 100)},
+	# Tavolino revisione sul bordo ovest: il centro dell'anello resta libero
+	# per le sei sedie rivolte all'interno e per i viaggi della pipeline.
+	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2160, 1840, 120, 100)},
 
 	{"id": "plant_b", "kind": "plant", "rect": Rect2(1950, 860, 56, 56)},
 
@@ -81,12 +82,12 @@ const ITEMS := [
 	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(380, 1414, 150, 34)},
 	# Sul lato sud della vetrata: a y=1446 tagliava l'unica riga A* tra
 	# scorer:5 e l'apertura occidentale della parete condivisa.
-	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2800, 1510, 150, 34)},
+	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2160, 1510, 150, 34)},
 	# Sala relax: calcio balilla accanto al ping-pong (reference)
 	{"id": "rec_foosball", "kind": "nc_foosball", "rect": Rect2(430, 1165, 150, 90)},
 	# Scatoloni e schedari: l'ufficio vive
 	{"id": "boxes_printer", "kind": "nc_boxes", "rect": Rect2(1800, 200, 80, 66)},
-	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(3060, 1900, 80, 66)},
+	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(3060, 1920, 80, 66)},
 	{"id": "boxes_scrittori", "kind": "nc_boxes", "rect": Rect2(1100, 1900, 80, 66)},
 	{"id": "filing_lab", "kind": "nc_filing_cabinet", "rect": Rect2(3080, 250, 70, 110)},
 	{"id": "filing_coord", "kind": "nc_filing_cabinet", "rect": Rect2(680, 700, 70, 110)},
@@ -95,9 +96,9 @@ const ITEMS := [
 	{"id": "coat_rack", "kind": "nc_coat_rack", "rect": Rect2(1500, 1780, 50, 50)},
 	{"id": "wall_clock", "kind": "nc_wall_clock", "rect": Rect2(1260, 150, 60, 60)},
 	{"id": "bin_printer", "kind": "nc_waste_bin", "rect": Rect2(1640, 250, 40, 40)},
-	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(1240, 1120, 40, 40)},
-	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(1214, 1092, 60, 72)},
-	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(2100, 1058, 60, 72)},
+	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(1080, 1390, 40, 40)},
+	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(1010, 1370, 60, 72)},
+	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(2030, 1160, 60, 72)},
 	# Fuori dall'anello radiale: a (774,1545) intersecava la postazione
 	# Scrittori delle ore 12 e ne falsava collisione e lettura prospettica.
 	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(1080, 1550, 60, 72)},
