@@ -14,11 +14,26 @@ export default function LockBodyScroll() {
     const body = document.body;
     const prevHtml = html.style.overflow;
     const prevBody = body.style.overflow;
+    const prevAnchor = html.style.overflowAnchor;
+    // La navbar del sito è `sticky top-0`: su /map deve restare visibile in
+    // cima. Se si arriva qui con il documento GIÀ scrollato — dopo una nav
+    // client-side (con l'App Router + loading.tsx lo scroll-to-top a volte
+    // non scatta e resta la posizione della pagina precedente), o per uno
+    // scroll indotto dal canvas WebGL — bloccare l'overflow SENZA riportare
+    // lo scroll a 0 congela la pagina in quella posizione: la navbar finisce
+    // fuori schermo e non si può più tornare su ("pagina spostata verso
+    // l'alto, header sparito, impossibile interagire"). Quindi: prima
+    // riportiamo lo scroll in cima, poi blocchiamo. `overflow-anchor: none`
+    // evita che lo scroll-anchoring del browser risposti la pagina quando il
+    // globo monta in modo asincrono.
+    window.scrollTo(0, 0);
+    html.style.overflowAnchor = "none";
     html.style.overflow = "hidden";
     body.style.overflow = "hidden";
     return () => {
       html.style.overflow = prevHtml;
       body.style.overflow = prevBody;
+      html.style.overflowAnchor = prevAnchor;
     };
   }, []);
   return null;
