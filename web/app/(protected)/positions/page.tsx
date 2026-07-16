@@ -819,33 +819,33 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 ]
                   .filter(({ col }) => show(col as PositionsColumnKey))
                   .map(({ col, label, sortable, center }) => (
-                  <th
-                    key={col}
-                    scope="col"
-                    className={`px-4 py-3 ${center ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
-                    style={{
-                      color:
-                        sortable && sortCol === col
-                          ? "var(--color-bright)"
-                          : "var(--color-dim)",
-                    }}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      {sortable ? (
-                        <Link
-                          href={sortHref(col)}
-                          className="no-underline hover:text-[var(--color-green)] transition-colors"
-                          style={{ color: "inherit" }}
-                        >
-                          {label}
-                          <span aria-hidden="true">{sortIndicator(col)}</span>
-                        </Link>
-                      ) : (
-                        <span>{label}</span>
-                      )}
-                    </span>
-                  </th>
-                ))}
+                    <th
+                      key={col}
+                      scope="col"
+                      className={`px-4 py-3 ${center ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
+                      style={{
+                        color:
+                          sortable && sortCol === col
+                            ? "var(--color-bright)"
+                            : "var(--color-dim)",
+                      }}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        {sortable ? (
+                          <Link
+                            href={sortHref(col)}
+                            className="no-underline hover:text-[var(--color-green)] transition-colors"
+                            style={{ color: "inherit" }}
+                          >
+                            {label}
+                            <span aria-hidden="true">{sortIndicator(col)}</span>
+                          </Link>
+                        ) : (
+                          <span>{label}</span>
+                        )}
+                      </span>
+                    </th>
+                  ))}
               </tr>
             </thead>
             <tbody>
@@ -1072,8 +1072,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                             color:
                               STATUS_COLORS[p.status] ?? "var(--color-dim)",
                             borderColor:
-                              STATUS_COLORS[p.status] ??
-                              "var(--color-border)",
+                              STATUS_COLORS[p.status] ?? "var(--color-border)",
                             background: `${STATUS_COLORS[p.status]}18`,
                           }}
                         >
