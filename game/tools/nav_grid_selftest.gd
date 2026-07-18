@@ -111,9 +111,9 @@ func _test_writer_radial_layout() -> void:
 ## il centro, corpi verso l'esterno e quattro viste raster realmente importate.
 func _test_all_department_radial_layouts() -> void:
 	var centers := {
-		"scout": Vector2(1455, 1172),
+		"scout": Vector2(775, 560),
 		"analisti": Vector2(2735, 430),
-		"scorer": Vector2(2565, 1200),
+		"scorer": Vector2(1455, 1172),
 		"scrittori": Vector2(690, 1725),
 		"critici": Vector2(2700, 1740),
 	}

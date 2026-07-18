@@ -10,9 +10,9 @@ const TEX := "res://assets/gen-art/furniture/nc_rug_dept.png"
 
 ## Centro visivo del gruppo scrivanie e larghezza resa del tappeto.
 const RUGS := {
-	"scout": [Vector2(1455, 1172), 940.0],
+	"scout": [Vector2(775, 560), 940.0],
 	"analisti": [Vector2(2735, 430), 760.0],
-	"scorer": [Vector2(2565, 1200), 1060.0],
+	"scorer": [Vector2(1455, 1172), 940.0],
 	"scrittori": [Vector2(690, 1726), 800.0],
 	"critici": [Vector2(2700, 1740), 940.0],
 }
