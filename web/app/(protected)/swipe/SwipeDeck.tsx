@@ -8,43 +8,45 @@ import {
   IconCards,
   IconChat,
   IconCheckCircle,
+  IconChevronLeft,
+  IconChevronRight,
   IconMic,
   IconPin,
-  IconSkip,
   IconStar,
+  IconStarHalf,
   IconStop,
-  IconThumbsDown,
   IconThumbsUp,
-  IconUndo,
   IconX,
 } from "./icons";
 
-// [JHT-POSITIONS-SWIPE-TRIAGE] Deck di carte per il triage rapido del
-// backlog scored/ready. QUATTRO livelli di interesse (scelta utente 18/07)
+// [JHT-POSITIONS-SWIPE-TRIAGE] Sequenza di carte per il triage rapido del
+// backlog scored/ready, in ORDINE DI ARRIVO (dalla trovata meno di recente
+// alla più recente — scelta utente 18/07). QUATTRO livelli di interesse
 // mappati sui campi del mig 028 di position_feedback (score 1-5 +
 // direction), più un commento libero opzionale che parte insieme al
-// giudizio — scrivibile a tastiera o DETTATO a voce (Web Speech API del
-// browser: su iOS è la dettatura Apple, niente backend; se non supportata
-// il bottone microfono non compare).
+// giudizio — scrivibile a tastiera o DETTATO a voce nel pop-up dedicato
+// (Web Speech API del browser; se non supportata il microfono non compare).
 //
 // SOLO BOTTONI, niente gesture (scelta utente 18/07): tre dei quattro
 // giudizi sono "verso destra" e uno swipe manuale destro sarebbe ambiguo.
 // La card si anima da sola — vola a sinistra per 'non interessante', a
-// destra per gli altri tre; in basso per lo skip. Tastiera 1-4 sul
-// desktop, ↓ = salta, ⌫ = undo.
+// destra per gli altri tre.
+//
+// NAVIGAZIONE ‹ Precedente / Prossima › (scelta utente 18/07, sostituisce
+// skip+undo): si scorre la sequenza liberamente senza scrivere nulla; una
+// card già giudicata resta al suo posto e mostra il TIMBRO del giudizio
+// ricevuto, e si può ri-giudicare (cambio idea). Il ri-giudizio scrive un
+// nuovo evento feedback (l'event-log è append-only, l'ultimo prevale nei
+// consumatori "latest") e riconcilia l'esclusione: no→altro toglie
+// l'esclusione (DELETE), altro→no la aggiunge.
 //
 // Scritture — corsie ESISTENTI, nessuna route nuova:
 //   ogni giudizio      → POST /api/positions/[legacyId]/feedback
-//     (action + score + direction + comment: lo Scout consuma già la
-//      direction per il pattern steering; lo score alimenta la visione
-//      "Scorer re-score dai gusti reali")
 //   'non interessante' → in più POST /api/positions/[legacyId]/user-exclude
 //     (reason 'not_interested': status → excluded, il team ci smette di
-//      lavorare; reversibile con DELETE — usato dall'undo)
-// position_feedback è un event-log APPEND-ONLY: l'undo dei giudizi non-no
-// ripristina solo la carta nella UI, la riga resta (l'ultimo giudizio
-// prevale comunque nei consumatori "latest"). Ottimistico: la carta vola
-// subito, le POST viaggiano dietro; su errore toast non bloccante.
+//      lavorare; reversibile con DELETE)
+// Ottimistico: la carta vola subito, le POST viaggiano dietro; su errore
+// toast non bloccante.
 
 export type SwipeCardData = {
   id: string;
@@ -66,9 +68,6 @@ export type SwipeCardData = {
 };
 
 type Verdict = "no" | "review_low" | "review_ok" | "top";
-// Lo skip NON è un giudizio: nessuna scrittura, la carta va in fondo al
-// mazzo (e ricompare nei mazzi futuri finché non riceve un giudizio vero).
-type HistoryAction = Verdict | "skip";
 
 // Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
 // l'esclusione. Score 3 lasciato libero come neutro non usato. fly: solo
@@ -97,8 +96,9 @@ const VERDICTS: Record<
   // 'Poco interessante' NON è un dislike (scelta utente 18/07): la
   // posizione resta tenuta (niente esclusione) e non manda un segnale
   // less_like_this allo Scout — è un keep con entusiasmo basso (score 2).
+  // Icona: mezza stella ("interessante, ma poco"), non un pollice giù.
   review_low: {
-    Icon: IconThumbsDown,
+    Icon: IconStarHalf,
     color: "var(--color-orange)",
     action: "like",
     score: 2,
@@ -142,8 +142,8 @@ const T: Record<
     title: string;
     subtitle: string;
     verdicts: Record<Verdict, string>;
-    btnUndo: string;
-    btnSkip: string;
+    btnPrev: string;
+    btnNext: string;
     commentPh: string;
     commentClose: string;
     commentTitle: string;
@@ -171,8 +171,8 @@ const T: Record<
       review_ok: "Interessante",
       top: "Molto interessante",
     },
-    btnUndo: "Annulla ultima",
-    btnSkip: "Salta",
+    btnPrev: "Precedente",
+    btnNext: "Prossima",
     commentPh: "Aggiungi un commento (facoltativo)…",
     commentClose: "Chiudi il commento",
     commentTitle: "Commento",
@@ -189,7 +189,7 @@ const T: Record<
     details: "Dettagli",
     remote: { full_remote: "Remoto", hybrid: "Ibrido", onsite: "In sede" },
     saveError: "Errore di rete — azione non salvata per",
-    hintKeys: "Tastiera: 1–4 giudizio · ↓ salta · ⌫ annulla",
+    hintKeys: "Tastiera: 1–4 giudizio · ←/→ naviga",
   },
   en: {
     title: "Swipe",
@@ -200,8 +200,8 @@ const T: Record<
       review_ok: "Interesting",
       top: "Very interesting",
     },
-    btnUndo: "Undo last",
-    btnSkip: "Skip",
+    btnPrev: "Previous",
+    btnNext: "Next",
     commentPh: "Add a comment (optional)…",
     commentClose: "Close the comment",
     commentTitle: "Comment",
@@ -217,7 +217,7 @@ const T: Record<
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "On-site" },
     saveError: "Network error — action not saved for",
-    hintKeys: "Keyboard: 1–4 verdict · ↓ skip · ⌫ undo",
+    hintKeys: "Keyboard: 1–4 verdict · ←/→ navigate",
   },
   hu: {
     title: "Swipe",
@@ -228,8 +228,8 @@ const T: Record<
       review_ok: "Érdekes",
       top: "Nagyon érdekes",
     },
-    btnUndo: "Visszavonás",
-    btnSkip: "Kihagyás",
+    btnPrev: "Előző",
+    btnNext: "Következő",
     commentPh: "Megjegyzés hozzáadása (opcionális)…",
     commentClose: "Megjegyzés bezárása",
     commentTitle: "Megjegyzés",
@@ -246,7 +246,7 @@ const T: Record<
     details: "Részletek",
     remote: { full_remote: "Távoli", hybrid: "Hibrid", onsite: "Helyszíni" },
     saveError: "Hálózati hiba — nem mentett művelet:",
-    hintKeys: "Billentyűk: 1–4 ítélet · ↓ kihagyás · ⌫ visszavonás",
+    hintKeys: "Billentyűk: 1–4 ítélet · ←/→ navigálás",
   },
   es: {
     title: "Swipe",
@@ -257,8 +257,8 @@ const T: Record<
       review_ok: "Interesante",
       top: "Muy interesante",
     },
-    btnUndo: "Deshacer",
-    btnSkip: "Omitir",
+    btnPrev: "Anterior",
+    btnNext: "Siguiente",
     commentPh: "Añade un comentario (opcional)…",
     commentClose: "Cerrar el comentario",
     commentTitle: "Comentario",
@@ -275,7 +275,7 @@ const T: Record<
     details: "Detalles",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Error de red — acción no guardada para",
-    hintKeys: "Teclado: 1–4 juicio · ↓ omitir · ⌫ deshacer",
+    hintKeys: "Teclado: 1–4 juicio · ←/→ navegar",
   },
   de: {
     title: "Swipe",
@@ -286,8 +286,8 @@ const T: Record<
       review_ok: "Interessant",
       top: "Sehr interessant",
     },
-    btnUndo: "Rückgängig",
-    btnSkip: "Überspringen",
+    btnPrev: "Zurück",
+    btnNext: "Weiter",
     commentPh: "Kommentar hinzufügen (optional)…",
     commentClose: "Kommentar schließen",
     commentTitle: "Kommentar",
@@ -303,7 +303,7 @@ const T: Record<
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "Vor Ort" },
     saveError: "Netzwerkfehler — Aktion nicht gespeichert für",
-    hintKeys: "Tastatur: 1–4 Urteil · ↓ überspringen · ⌫ rückgängig",
+    hintKeys: "Tastatur: 1–4 Urteil · ←/→ navigieren",
   },
   fr: {
     title: "Swipe",
@@ -314,8 +314,8 @@ const T: Record<
       review_ok: "Intéressant",
       top: "Très intéressant",
     },
-    btnUndo: "Annuler",
-    btnSkip: "Passer",
+    btnPrev: "Précédent",
+    btnNext: "Suivant",
     commentPh: "Ajouter un commentaire (facultatif)…",
     commentClose: "Fermer le commentaire",
     commentTitle: "Commentaire",
@@ -336,7 +336,7 @@ const T: Record<
       onsite: "Sur site",
     },
     saveError: "Erreur réseau — action non enregistrée pour",
-    hintKeys: "Clavier : 1–4 avis · ↓ passer · ⌫ annuler",
+    hintKeys: "Clavier : 1–4 avis · ←/→ naviguer",
   },
   pt: {
     title: "Swipe",
@@ -347,8 +347,8 @@ const T: Record<
       review_ok: "Interessante",
       top: "Muito interessante",
     },
-    btnUndo: "Desfazer",
-    btnSkip: "Pular",
+    btnPrev: "Anterior",
+    btnNext: "Próxima",
     commentPh: "Adicione um comentário (opcional)…",
     commentClose: "Fechar o comentário",
     commentTitle: "Comentário",
@@ -365,7 +365,7 @@ const T: Record<
     details: "Detalhes",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Erro de rede — ação não salva para",
-    hintKeys: "Teclado: 1–4 julgamento · ↓ pular · ⌫ desfazer",
+    hintKeys: "Teclado: 1–4 julgamento · ←/→ navegar",
   },
 };
 
@@ -413,13 +413,11 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
 
-  const [deck, setDeck] = useState<SwipeCardData[]>(cards);
-  const [history, setHistory] = useState<
-    { card: SwipeCardData; verdict: HistoryAction }[]
-  >([]);
-  const [fly, setFly] = useState<{ x: number; y: number; rot: number } | null>(
-    null,
-  );
+  // Sequenza fissa + indice: le card giudicate restano al loro posto (col
+  // timbro) e ci si può tornare sopra con Precedente per cambiare idea.
+  const [idx, setIdx] = useState(0);
+  const [given, setGiven] = useState<Record<string, Verdict>>({});
+  const [fly, setFly] = useState<{ x: number; rot: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [commentOpen, setCommentOpen] = useState(false);
@@ -430,9 +428,9 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   const recRef = useRef<{ stop: () => void } | null>(null);
 
   const total = cards.length;
-  const done = total - deck.length;
+  const finished = idx >= total;
   const counts = VERDICT_ORDER.map(
-    (v) => [v, history.filter((h) => h.verdict === v).length] as const,
+    (v) => [v, Object.values(given).filter((g) => g === v).length] as const,
   );
 
   const showToast = useCallback((msg: string) => {
@@ -501,8 +499,15 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     rec.start();
   }, [comment, locale, showToast, t.voiceDenied, t.voiceError]);
 
+  // Scrive il giudizio; se la card era già stata giudicata riconcilia
+  // l'esclusione con la transizione (no→altro: DELETE; altro→no: POST).
   const persist = useCallback(
-    async (card: SwipeCardData, verdict: Verdict, note: string) => {
+    async (
+      card: SwipeCardData,
+      verdict: Verdict,
+      prev: Verdict | undefined,
+      note: string,
+    ) => {
       const v = VERDICTS[verdict];
       try {
         const res = await fetch(`/api/positions/${card.legacy_id}/feedback`, {
@@ -516,7 +521,8 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           }),
         });
         if (!res.ok) throw new Error(String(res.status));
-        if (v.exclude) {
+        const wasExcluded = prev ? Boolean(VERDICTS[prev].exclude) : false;
+        if (v.exclude && !wasExcluded) {
           const ex = await fetch(
             `/api/positions/${card.legacy_id}/user-exclude`,
             {
@@ -524,6 +530,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ reason: "not_interested" }),
             },
+          );
+          if (!ex.ok) throw new Error(String(ex.status));
+        } else if (!v.exclude && wasExcluded) {
+          const ex = await fetch(
+            `/api/positions/${card.legacy_id}/user-exclude`,
+            { method: "DELETE" },
           );
           if (!ex.ok) throw new Error(String(ex.status));
         }
@@ -534,68 +546,50 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     [showToast, t.saveError],
   );
 
-  const commit = useCallback(
+  const judge = useCallback(
     (verdict: Verdict) => {
-      if (flyingRef.current || deck.length === 0) return;
+      if (flyingRef.current || finished) return;
+      const card = cards[idx];
+      const prev = given[card.id];
       flyingRef.current = true;
       stopVoice();
-      const card = deck[0];
       const note = comment.trim().slice(0, 2000);
       const dir = VERDICTS[verdict].fly;
       const width = typeof window !== "undefined" ? window.innerWidth : 800;
-      setFly({ x: dir * (width + 200), y: 0, rot: dir * 22 });
+      setFly({ x: dir * (width + 200), rot: dir * 22 });
       setTimeout(() => {
-        setDeck((d) => d.slice(1));
-        setHistory((h) => [...h, { card, verdict }]);
+        setGiven((g) => ({ ...g, [card.id]: verdict }));
+        setIdx((i) => i + 1);
         setFly(null);
         setComment("");
         setCommentOpen(false);
         flyingRef.current = false;
       }, FLY_MS);
-      void persist(card, verdict, note);
+      // Se il giudizio non cambia, registra comunque l'evento (magari col
+      // commento nuovo); la riconciliazione esclusione è un no-op.
+      void persist(card, verdict, prev, note);
     },
-    [deck, comment, persist, stopVoice],
+    [cards, idx, given, finished, comment, persist, stopVoice],
   );
 
-  // Skip: nessuna scrittura, la carta scivola in basso e va in fondo al
-  // mazzo — la si rincontra a fine giro (e nei mazzi futuri).
-  const skip = useCallback(() => {
-    if (flyingRef.current || deck.length === 0) return;
-    flyingRef.current = true;
+  // Navigazione libera: nessuna scrittura, si scorre e basta.
+  const goPrev = useCallback(() => {
+    if (flyingRef.current || idx === 0) return;
     stopVoice();
-    const card = deck[0];
-    setFly({ x: 0, y: 700, rot: -3 });
-    setTimeout(() => {
-      setDeck((d) => [...d.slice(1), card]);
-      setHistory((h) => [...h, { card, verdict: "skip" }]);
-      setFly(null);
-      flyingRef.current = false;
-    }, FLY_MS);
-  }, [deck, stopVoice]);
+    setComment("");
+    setCommentOpen(false);
+    setIdx((i) => i - 1);
+  }, [idx, stopVoice]);
 
-  const undo = useCallback(() => {
-    if (flyingRef.current || history.length === 0) return;
-    const last = history[history.length - 1];
-    setHistory((h) => h.slice(0, -1));
-    // Dopo uno skip la carta sta in FONDO al mazzo: toglila da lì prima di
-    // rimetterla in cima (altrimenti duplicata).
-    setDeck((d) =>
-      last.verdict === "skip"
-        ? [last.card, ...d.slice(0, -1)]
-        : [last.card, ...d],
-    );
-    // Solo l'esclusione del 'no' è reversibile lato server (DELETE
-    // ripristina lo status). Le righe feedback sono event-log immutabile:
-    // restano, e l'eventuale giudizio successivo prevale nei "latest".
-    if (last.verdict !== "skip" && VERDICTS[last.verdict].exclude) {
-      void fetch(`/api/positions/${last.card.legacy_id}/user-exclude`, {
-        method: "DELETE",
-      }).catch(() => showToast(`${t.saveError} «${last.card.title}»`));
-    }
-  }, [history, showToast, t.saveError]);
+  const goNext = useCallback(() => {
+    if (flyingRef.current || finished) return;
+    stopVoice();
+    setComment("");
+    setCommentOpen(false);
+    setIdx((i) => i + 1);
+  }, [finished, stopVoice]);
 
-  // Tastiera per il desktop: 1-4 = giudizi, ↓ = salta, ⌫ = undo. Niente
-  // frecce laterali: i giudizi sono quattro, non due.
+  // Tastiera per il desktop: 1-4 = giudizi, ←/→ = precedente/prossima.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
@@ -610,16 +604,38 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         "3": "review_ok",
         "4": "top",
       };
-      if (byDigit[e.key]) commit(byDigit[e.key]);
-      else if (e.key === "ArrowDown") skip();
-      else if (e.key === "Backspace") {
-        e.preventDefault();
-        undo();
-      }
+      if (byDigit[e.key]) judge(byDigit[e.key]);
+      else if (e.key === "ArrowLeft") goPrev();
+      else if (e.key === "ArrowRight") goNext();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [commit, skip, undo]);
+  }, [judge, goPrev, goNext]);
+
+  const navPill = (
+    label: string,
+    onClick: () => void,
+    disabled: boolean,
+    left: boolean,
+  ) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border text-[12px] font-semibold"
+      style={{
+        borderColor: "var(--color-border)",
+        background: "transparent",
+        color: "var(--color-muted)",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.35 : 1,
+      }}
+    >
+      {left && <IconChevronLeft size={14} />}
+      {label}
+      {!left && <IconChevronRight size={14} />}
+    </button>
+  );
 
   return (
     // overflowX clip: la carta in volo esce dal viewport — senza clip
@@ -651,13 +667,13 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
             className="text-[11px] font-semibold tabular-nums"
             style={{ color: "var(--color-muted)" }}
           >
-            {done}/{total}
+            {Math.min(idx + 1, total)}/{total}
           </span>
         )}
       </div>
 
-      {/* Deck */}
-      {deck.length === 0 ? (
+      {/* Fine sequenza (o mazzo vuoto) */}
+      {finished ? (
         <div
           className="rounded-xl border px-6 py-14 text-center"
           style={{
@@ -683,7 +699,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           >
             {t.emptySubtitle}
           </p>
-          {history.length > 0 && (
+          {Object.keys(given).length > 0 && (
             <p
               className="text-[12px] font-semibold mb-4 flex items-center justify-center gap-4"
               style={{ color: "var(--color-base)" }}
@@ -702,29 +718,33 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               })}
             </p>
           )}
-          <Link
-            href="/positions"
-            className="inline-block text-[12px] font-semibold px-4 py-2 rounded no-underline"
-            style={{
-              background: "var(--color-row)",
-              color: "var(--color-bright)",
-              border: "1px solid var(--color-border)",
-            }}
-          >
-            {t.allPositions} →
-          </Link>
+          <div className="flex items-center justify-center gap-3">
+            {total > 0 && navPill(t.btnPrev, goPrev, idx === 0, true)}
+            <Link
+              href="/positions"
+              className="inline-block text-[12px] font-semibold px-4 py-2 rounded no-underline"
+              style={{
+                background: "var(--color-row)",
+                color: "var(--color-bright)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              {t.allPositions} →
+            </Link>
+          </div>
         </div>
       ) : (
         <>
           <div className="relative" style={{ height: "min(47dvh, 470px)" }}>
-            {/* Le 3 carte in cima, dal fondo verso la cima dello stack */}
-            {deck
-              .slice(0, 3)
+            {/* Card corrente + le 2 successive come stack */}
+            {cards
+              .slice(idx, idx + 3)
               .map((card, i) => {
                 const isTop = i === 0;
+                const verdictGiven = given[card.id];
                 const transform = isTop
                   ? fly
-                    ? `translate(${fly.x}px, ${fly.y}px) rotate(${fly.rot}deg)`
+                    ? `translate(${fly.x}px, 0) rotate(${fly.rot}deg)`
                     : "none"
                   : `translateY(${i * 10}px) scale(${1 - i * 0.035})`;
                 return (
@@ -742,6 +762,27 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                         : "none",
                     }}
                   >
+                    {/* Timbro del giudizio già dato (ri-giudicabile) */}
+                    {isTop && verdictGiven && (
+                      <div
+                        className="absolute top-3 right-3 px-2 py-1 rounded border-2 text-[10px] font-black tracking-widest flex items-center gap-1.5"
+                        style={{
+                          color: VERDICTS[verdictGiven].color,
+                          borderColor: VERDICTS[verdictGiven].color,
+                          background: "var(--color-card)",
+                          transform: "rotate(6deg)",
+                          zIndex: 20,
+                          opacity: 0.95,
+                        }}
+                      >
+                        {(() => {
+                          const { Icon } = VERDICTS[verdictGiven];
+                          return <Icon size={12} />;
+                        })()}
+                        {t.verdicts[verdictGiven].toUpperCase()}
+                      </div>
+                    )}
+
                     {/* Contenuto card */}
                     <div className="p-5 flex flex-col gap-3 flex-1 min-h-0">
                       <div className="flex items-start justify-between gap-3">
@@ -811,13 +852,15 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                         {card.role_family && <Chip>{card.role_family}</Chip>}
                       </div>
 
-                      {/* Sintesi JD */}
-                      {/* Scrollabile se non c'entra: senza gesture di
-                          drag il touch-scroll nella card non confligge. */}
+                      {/* Sintesi JD: scrollabile se non c'entra; pre-line
+                          per rispettare gli accapi del testo originale. */}
                       {card.jd_summary && (
                         <div
                           className="text-[12px] leading-relaxed flex-1 min-h-0 overflow-y-auto pr-1"
-                          style={{ color: "var(--color-base)" }}
+                          style={{
+                            color: "var(--color-base)",
+                            whiteSpace: "pre-line",
+                          }}
                         >
                           {stripMd(card.jd_summary)}
                         </div>
@@ -869,53 +912,22 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
             </button>
           </div>
 
-          {/* Bottoni giudizio + undo */}
+          {/* Bottoni giudizio */}
           <div className="flex items-start justify-center gap-3 mt-4">
-            {VERDICT_ORDER.slice(0, 2).map((v) => (
+            {VERDICT_ORDER.map((v) => (
               <VerdictButton
                 key={v}
                 verdict={v}
                 label={t.verdicts[v]}
-                onClick={() => commit(v)}
-              />
-            ))}
-            <div className="flex flex-col items-center gap-1">
-              <ActionCircle
-                label={t.btnUndo}
-                color="var(--color-yellow)"
-                size={40}
-                disabled={history.length === 0}
-                onClick={undo}
-              >
-                <IconUndo size={16} />
-              </ActionCircle>
-            </div>
-            {VERDICT_ORDER.slice(2).map((v) => (
-              <VerdictButton
-                key={v}
-                verdict={v}
-                label={t.verdicts[v]}
-                onClick={() => commit(v)}
+                onClick={() => judge(v)}
               />
             ))}
           </div>
 
-          {/* Skip: azione secondaria, nessun giudizio registrato */}
-          <div className="flex justify-center mt-3">
-            <button
-              type="button"
-              onClick={skip}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold"
-              style={{
-                borderColor: "var(--color-border)",
-                background: "transparent",
-                color: "var(--color-muted)",
-                cursor: "pointer",
-              }}
-            >
-              {t.btnSkip}
-              <IconSkip size={13} />
-            </button>
+          {/* Navigazione libera nella sequenza (nessuna scrittura) */}
+          <div className="flex items-center justify-center gap-3 mt-3">
+            {navPill(t.btnPrev, goPrev, idx === 0, true)}
+            {navPill(t.btnNext, goNext, false, false)}
           </div>
 
           <p
@@ -1096,10 +1108,24 @@ function VerdictButton({
 }) {
   const { Icon, color } = VERDICTS[verdict];
   return (
-    <div className="flex flex-col items-center gap-1 w-[72px]">
-      <ActionCircle label={label} color={color} size={52} onClick={onClick}>
+    <div className="flex flex-col items-center gap-1 w-[76px]">
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={onClick}
+        className="rounded-full border-2 flex items-center justify-center font-bold transition-transform active:scale-90"
+        style={{
+          width: 52,
+          height: 52,
+          color,
+          borderColor: color,
+          background: "var(--color-card)",
+          cursor: "pointer",
+        }}
+      >
         <Icon size={20} />
-      </ActionCircle>
+      </button>
       <span
         className="text-[9px] font-semibold text-center leading-tight"
         style={{ color: "var(--color-muted)" }}
@@ -1107,43 +1133,5 @@ function VerdictButton({
         {label}
       </span>
     </div>
-  );
-}
-
-function ActionCircle({
-  children,
-  label,
-  color,
-  size,
-  disabled,
-  onClick,
-}: {
-  children: React.ReactNode;
-  label: string;
-  color: string;
-  size: number;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="rounded-full border-2 flex items-center justify-center font-bold transition-transform active:scale-90"
-      style={{
-        width: size,
-        height: size,
-        color,
-        borderColor: color,
-        background: "var(--color-card)",
-        opacity: disabled ? 0.3 : 1,
-        cursor: disabled ? "default" : "pointer",
-      }}
-    >
-      {children}
-    </button>
   );
 }
