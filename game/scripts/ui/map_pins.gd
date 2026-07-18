@@ -81,10 +81,12 @@ static func build(filters: Dictionary) -> Dictionary:
 			no_coords.append(p)
 			continue
 		var city := str(p.get("loc_city", "?") if p.get("loc_city") else "?")
-		var key := "%s|%s" % [city, str(p.get("loc_country", "")
-				if p.get("loc_country") else "")]
+		var country := str(p.get("loc_country", "")
+				if p.get("loc_country") else UIStrings.t("pos.uncategorized"))
+		var key := "%s|%s" % [city, country]
 		if not clusters.has(key):
-			clusters[key] = {"key": key, "city": city, "lonlat": coord,
+			clusters[key] = {"key": key, "city": city, "country": country,
+					"lonlat": coord,
 					"count": 0, "best": null, "positions": []}
 		var c: Dictionary = clusters[key]
 		c["count"] += 1

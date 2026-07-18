@@ -152,6 +152,12 @@ func _ready() -> void:
 	_camera = FreeCamera.new()
 	add_child(_camera)
 	_camera.clicked.connect(_on_world_click)
+	if OS.get_environment("JHT_CAMERA_LOCK_TEST") == "1":
+		_camera_lock_selftest.call_deferred()
+	if OS.get_environment("JHT_POSITIONS_PANEL_TEST") == "1":
+		_positions_panel_selftest.call_deferred()
+	if OS.get_environment("JHT_MAP_PANEL_TEST") == "1":
+		_map_panel_selftest.call_deferred()
 	if _seat_audit != "":
 		var audit_parts := _seat_audit.split(":")
 		if audit_parts.size() == 2 and DepartmentDefs.DEPARTMENTS.has(audit_parts[0]):
@@ -224,6 +230,23 @@ func _ready() -> void:
 			if _registry == null:
 				_registry = RegistryPanel.new()
 				add_child(_registry))
+	# TEST-AUTO: apre l'archivio dello scaffale quando arriva lo snapshot.
+	if OS.get_environment("JHT_CV_SHELF") == "1":
+		if not BackendBus.positions.is_empty():
+			_open_cv_shelf.call_deferred()
+		else:
+			BackendBus.positions_updated.connect(func(_l: Array) -> void:
+				if _cv_shelf_panel == null:
+					_open_cv_shelf())
+	# TEST-AUTO: apre una delle cinque code fisiche col primo snapshot.
+	var queue_test := OS.get_environment("JHT_PIPELINE_QUEUE")
+	if DepartmentDefs.DEPT_ORDER.has(queue_test):
+		if not BackendBus.positions.is_empty():
+			_open_pipeline_queue.call_deferred(queue_test)
+		else:
+			BackendBus.positions_updated.connect(func(_l: Array) -> void:
+				if _queue_panel == null:
+					_open_pipeline_queue(queue_test))
 
 	# TEST-AUTO: JHT_SEARCH=<query> apre la GlobalSearch precompilata
 	# (il refresh con le posizioni vere arriva col primo snapshot)
@@ -291,6 +314,229 @@ func _ready() -> void:
 	var shot := OS.get_environment("JHT_SHOT")
 	if shot != "":
 		_take_shot(shot)
+
+## Regressione trackpad/overlay: una gesture consegnata direttamente alla
+## camera non deve cambiare né pan né zoom finché il gruppo modal è attivo.
+func _camera_lock_selftest() -> void:
+	var blocker := Node.new()
+	add_child(blocker)
+	blocker.add_to_group("camera_blocking_overlay")
+	var before_pos := _camera.position
+	var before_zoom := _camera.zoom
+	var pan := InputEventPanGesture.new()
+	pan.delta = Vector2(20, 15)
+	_camera._unhandled_input(pan)
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	_camera._unhandled_input(wheel)
+	var ok := _camera.position.is_equal_approx(before_pos) \
+			and _camera.zoom.is_equal_approx(before_zoom)
+	print("CAMERA-OVERLAY-LOCK-TEST ", "PASS" if ok else "FAIL")
+	blocker.queue_free()
+	get_tree().quit(0 if ok else 1)
+
+## Regressione della vista Posizioni dentro il boot normale (gli script `-s`
+## non hanno gli autoload): pagine vere e filtri compatti, mai più slice a 40.
+func _positions_panel_selftest() -> void:
+	var rows: Array = []
+	for i in 126:
+		rows.append({
+			"id": i + 1, "title": "Ruolo %03d" % (i + 1), "company": "Azienda",
+			"status": "scored" if i % 2 == 0 else "checked",
+			"total_score": 70 + i % 20,
+			"role_family": "AI Engineering" if i % 3 == 0 else "Backend Engineering",
+			"work_mode": "remote" if i % 2 == 0 else "hybrid",
+			"loc_city": "Roma", "loc_country": "Italy",
+		})
+	BackendBus.positions = rows
+	var panel := SectionPanel.new("positions", 24.0)
+	add_child(panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var ok := _ui_has_text(panel, "1–50 di 126") \
+			and _ui_has_text(panel, "PAGINA 1 / 3") \
+			and _ui_find_button(panel, "FILTRI (0)") != null \
+			and _ui_count_class(panel, "MenuButton") == 0
+	var next := _ui_find_button(panel, "SUCCESSIVA ▶")
+	ok = ok and next != null
+	if next:
+		next.pressed.emit()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		ok = ok and _ui_has_text(panel, "51–100 di 126") \
+				and _ui_has_text(panel, "PAGINA 2 / 3")
+	var size_25 := _ui_find_button(panel, "25")
+	ok = ok and size_25 != null
+	if size_25:
+		size_25.pressed.emit()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		ok = ok and _ui_has_text(panel, "1–25 di 126") \
+				and _ui_has_text(panel, "PAGINA 1 / 6")
+	var filters := _ui_find_button(panel, "FILTRI (0)")
+	ok = ok and filters != null
+	if filters:
+		filters.pressed.emit()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		ok = ok and _ui_count_class(panel, "MenuButton") == 4
+	print("POSITIONS-PANEL-TEST ", "PASS" if ok else "FAIL")
+	get_tree().quit(0 if ok else 1)
+
+## Test/preview deterministico della mappa: 14 offerte coincidenti a Stoccolma
+## devono essere tutte raggiungibili e i gesti devono seguire lo stesso asse.
+func _map_panel_selftest() -> void:
+	var rows: Array = []
+	for i in 14:
+		rows.append({
+			"id": i + 1, "title": "Ruolo Stockholm %02d" % (i + 1),
+			"company": "Azienda", "status": "scored", "total_score": 70 + i,
+			"role_family": "AI Engineering", "work_mode": "remote",
+			"loc_city": "Stockholm", "loc_country": "Sweden",
+			"office_lat": 59.3293, "office_lon": 18.0686,
+		})
+	for extra in [
+		{"city": "San Francisco", "country": "United States", "lat": 37.7749, "lon": -122.4194},
+		{"city": "Sydney", "country": "Australia", "lat": -33.8688, "lon": 151.2093},
+		{"city": "Tokyo", "country": "Japan", "lat": 35.6762, "lon": 139.6503},
+		{"city": "Milano", "country": "Italy", "lat": 45.4642, "lon": 9.1900},
+		{"city": "Bergamo", "country": "Italy", "lat": 45.6983, "lon": 9.6773},
+		{"city": "Roma", "country": "Italy", "lat": 41.9028, "lon": 12.4964},
+		{"city": "Torino", "country": "Italy", "lat": 45.0703, "lon": 7.6869},
+	]:
+		rows.append({
+			"id": rows.size() + 1, "title": "Ruolo " + str(extra["city"]),
+			"company": "Azienda", "status": "scored", "total_score": 78,
+			"role_family": "AI Engineering", "work_mode": "remote",
+			"loc_city": extra["city"], "loc_country": extra["country"],
+			"office_lat": extra["lat"], "office_lon": extra["lon"],
+		})
+	BackendBus.positions = rows
+	var panel := SectionPanel.new("map", 24.0)
+	add_child(panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var world := _ui_find_class_node(panel, "WorldMap") as WorldMap
+	if world == null:
+		print("MAP-PANEL-TEST FAIL no WorldMap")
+		get_tree().quit(1)
+		return
+	var overview_zoom: float = world._flat._target_zoom
+	if OS.get_environment("JHT_SHOT") != "" \
+			and OS.get_environment("JHT_MAP_CLUSTER_PREVIEW") == "1":
+		return
+	world._flat.zoom_f = 4.0
+	world._flat._target_zoom = 4.0
+	var italy_cluster := {}
+	for pin in world._flat._display_pins():
+		if bool(pin.get("is_cluster", false)) and str(pin["label"]).begins_with("Italy"):
+			italy_cluster = pin
+			break
+	var cluster_ok := not italy_cluster.is_empty() \
+			and int(italy_cluster["source_count"]) == 4
+	if cluster_ok:
+		world._flat._click_pin(world._flat._to_screen(italy_cluster["norm"]))
+		cluster_ok = world._flat._target_zoom > 5.0
+	world._flat.fly_to(Vector2(18.0686, 59.3293), 10.0)
+	world._flat.select_key("Stockholm|Sweden")
+	await get_tree().process_frame
+	# Con JHT_SHOT il medesimo scenario resta aperto per l'audit visivo.
+	if OS.get_environment("JHT_SHOT") != "":
+		return
+	var card_count := _ui_count_position_buttons(panel)
+	var hint_ok := _ui_has_text(panel,
+			"14 posizioni · scorri l’elenco e clicca per aprire la scheda")
+	var base_ok := card_count == 14 and hint_ok and world._flat.visible \
+			and _ui_find_class_node(panel, "MapGlobe") == null \
+			and overview_zoom < 5.0 and cluster_ok
+	var ok := base_ok
+	var flat_before: Vector2 = world._flat.center
+	var pan := InputEventPanGesture.new()
+	pan.delta = Vector2(2.0, 3.0)
+	world._flat._gui_input(pan)
+	ok = ok and world._flat.center.x < flat_before.x \
+			and world._flat.center.y < flat_before.y
+	# Percorso reale della sidebar: click riga → navigate("positions") con
+	# pending_detail → nuovo SectionPanel già sulla descrizione completa.
+	# Il dizionario è condiviso per riferimento con la lambda (gli scalari
+	# catturati da GDScript non propagano l'assegnazione al chiamante).
+	var route_state := {"section": ""}
+	panel.navigate.connect(func(next_section: String) -> void:
+		route_state["section"] = next_section)
+	var open_btn := _ui_find_position_button(panel, 14)
+	ok = ok and open_btn != null
+	if open_btn:
+		open_btn.pressed.emit()
+		await get_tree().process_frame
+		var route_ok := str(route_state["section"]) == "positions" \
+				and SectionPanel.pending_detail == 14
+		ok = ok and route_ok
+		var detail_panel := SectionPanel.new("positions", 24.0)
+		add_child(detail_panel)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var detail_ok := detail_panel._current_page == "detail" \
+				and detail_panel._pos_detail_id == 14 \
+				and _ui_has_text(detail_panel, "Ruolo Stockholm 14")
+		ok = ok and detail_ok
+		if not ok:
+			print("MAP-PANEL-TEST details base=", base_ok, " count=", card_count,
+					" hint=", hint_ok, " cluster=", cluster_ok,
+					" route=", route_ok, " requested=", route_state["section"],
+					" pending=", SectionPanel.pending_detail,
+					" detail=", detail_ok, " page=", detail_panel._current_page,
+					" id=", detail_panel._pos_detail_id)
+	print("MAP-PANEL-TEST ", "PASS" if ok else "FAIL")
+	get_tree().quit(0 if ok else 1)
+
+func _ui_has_text(node: Node, wanted: String) -> bool:
+	if node is Label and node.text == wanted:
+		return true
+	for child in node.get_children():
+		if _ui_has_text(child, wanted):
+			return true
+	return false
+
+func _ui_find_button(node: Node, wanted: String) -> Button:
+	if node is Button and node.text == wanted:
+		return node
+	for child in node.get_children():
+		var found := _ui_find_button(child, wanted)
+		if found:
+			return found
+	return null
+
+func _ui_find_class_node(node: Node, type_name: String) -> Node:
+	if node.get_class() == type_name or node.get_script() != null \
+			and node.get_script().get_global_name() == type_name:
+		return node
+	for child in node.get_children():
+		var found := _ui_find_class_node(child, type_name)
+		if found:
+			return found
+	return null
+
+func _ui_count_position_buttons(node: Node) -> int:
+	var count := 1 if node is Button and node.has_meta("position_id") else 0
+	for child in node.get_children():
+		count += _ui_count_position_buttons(child)
+	return count
+
+func _ui_find_position_button(node: Node, position_id: int) -> Button:
+	if node is Button and int(node.get_meta("position_id", 0)) == position_id:
+		return node
+	for child in node.get_children():
+		var found := _ui_find_position_button(child, position_id)
+		if found:
+			return found
+	return null
+
+func _ui_count_class(node: Node, type_name: String) -> int:
+	var count := 1 if node.get_class() == type_name else 0
+	for child in node.get_children():
+		count += _ui_count_class(child, type_name)
+	return count
 
 func _force_pipeline_trip(test_dept: String) -> void:
 	await get_tree().create_timer(0.8).timeout
@@ -451,6 +697,8 @@ func _state_selftest() -> void:
 
 var _registry: RegistryPanel
 var _search: GlobalSearch
+var _cv_shelf_panel: CvShelfPanel
+var _queue_panel: PipelineQueuePanel
 
 func _unhandled_input(event: InputEvent) -> void:
 	if Game.dialogue_active:
@@ -505,12 +753,20 @@ var _agent_card: AgentCard
 func _on_world_click(target: Vector2) -> void:
 	if Game.dialogue_active:
 		return
-	if _registry or _dept_panel or _agent_card or _chat_panel:
+	if _registry or _dept_panel or _agent_card or _chat_panel or _cv_shelf_panel \
+			or _queue_panel:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
 			_open_agent_card(agent)
 			return
+	var queue_dept := PaperPile.inbox_at(target)
+	if queue_dept != "":
+		_open_pipeline_queue(queue_dept)
+		return
+	if OutputShelf.hit_by(target):
+		_open_cv_shelf()
+		return
 	if FurnitureDefs.get_rect("corkboard").grow(30).has_point(target):
 		_registry = RegistryPanel.new()
 		add_child(_registry)
@@ -526,6 +782,34 @@ func _on_world_click(target: Vector2) -> void:
 	if dept != "":
 		_open_dept(dept)
 
+func _open_cv_shelf() -> void:
+	Log.info("ui", "archivio CV aperto dallo scaffale output")
+	_cv_shelf_panel = CvShelfPanel.new()
+	add_child(_cv_shelf_panel)
+	_cv_shelf_panel.closed.connect(func() -> void: _cv_shelf_panel = null)
+	_cv_shelf_panel.open_position.connect(func(position_id: int) -> void:
+		if _cv_shelf_panel:
+			_cv_shelf_panel.queue_free()
+			_cv_shelf_panel = null
+		var panel := SectionPanel.new("positions", 24.0)
+		panel._pos_detail_id = position_id
+		add_child(panel)
+		panel.closed.connect(panel.queue_free))
+
+func _open_pipeline_queue(source_dept: String) -> void:
+	Log.info("ui", "coda pipeline aperta dalla pila: " + source_dept)
+	_queue_panel = PipelineQueuePanel.new(source_dept)
+	add_child(_queue_panel)
+	_queue_panel.closed.connect(func() -> void: _queue_panel = null)
+	_queue_panel.open_position.connect(func(position_id: int) -> void:
+		if _queue_panel:
+			_queue_panel.queue_free()
+			_queue_panel = null
+		var panel := SectionPanel.new("positions", 24.0)
+		panel._pos_detail_id = position_id
+		add_child(panel)
+		panel.closed.connect(panel.queue_free))
+
 func _open_dept(dept: String) -> void:
 	Log.info("dept", "pannello reparto aperto: " + dept)
 	_dept_panel = DepartmentPanel.new(dept)
@@ -536,12 +820,22 @@ func _open_dept(dept: String) -> void:
 
 func _update_hover() -> void:
 	var best: AgentNPC = null
-	if not Game.dialogue_active:
+	var shelf_hovered := false
+	var queue_hovered := ""
+	if not Game.dialogue_active and not _registry and not _dept_panel \
+			and not _agent_card and not _chat_panel and not _cv_shelf_panel \
+			and not _queue_panel:
 		var mouse := get_global_mouse_position()
 		for agent in agents:
 			if agent.hit_by(mouse):
 				best = agent
 				break
+		if best == null:
+			queue_hovered = PaperPile.inbox_at(mouse)
+			if queue_hovered == "":
+				shelf_hovered = OutputShelf.hit_by(mouse)
+	PaperPile.highlight_inbox(queue_hovered)
+	OutputShelf.set_highlight(shelf_hovered)
 	if best != _hover_agent:
 		if _hover_agent:
 			_hover_agent.set_highlight(false)

@@ -18,6 +18,7 @@ const MAX_VISUAL := 14  # cartelline per ripiano x 2 ripiani
 var _real := 0     # il contatore vero, mostrato in cifra
 var _visual := 0   # cartelline disegnate (drift verso _real)
 var _drift := 0.0
+var _highlighted := false
 
 func _init() -> void:
 	position = RECT.get_center()
@@ -28,6 +29,17 @@ static func set_ready(n: int) -> void:
 	if instance:
 		instance._real = maxi(0, n)
 		instance.set_process(true)
+		instance.queue_redraw()
+
+## Il mobile e la targa formano un unico bersaglio cliccabile. Il grow
+## rende il click comodo anche con zoom molto bassi della FreeCamera.
+static func hit_by(point: Vector2) -> bool:
+	return RECT.grow(22.0).has_point(point)
+
+static func set_highlight(on: bool) -> void:
+	if instance and instance._highlighted != on:
+		instance._highlighted = on
+		instance.queue_redraw()
 
 func _process(delta: float) -> void:
 	var target := mini(_real, MAX_VISUAL)
@@ -42,6 +54,11 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var half := RECT.size / 2.0
+	if _highlighted:
+		draw_rect(Rect2(-half - Vector2(6, 6), RECT.size + Vector2(12, 12)),
+				Color(Palette.GREEN, 0.12))
+		draw_rect(Rect2(-half - Vector2(6, 6), RECT.size + Vector2(12, 12)),
+				Palette.GREEN, false, 2.0)
 	# corpo dello scaffale: due ripiani aperti
 	draw_rect(Rect2(-half, RECT.size), WOOD)
 	draw_rect(Rect2(-half, RECT.size), WOOD_EDGE, false, 2.0)
@@ -61,7 +78,8 @@ func _draw() -> void:
 	# targa sopra: etichetta + contatore VERO
 	draw_rect(Rect2(Vector2(-52, -half.y - 30), Vector2(104, 22)), Palette.PANEL)
 	draw_rect(Rect2(Vector2(-52, -half.y - 30), Vector2(104, 22)),
-			Color(Palette.GREEN, 0.7), false, 1.2)
+			Palette.GREEN if _highlighted else Color(Palette.GREEN, 0.7), false,
+			2.0 if _highlighted else 1.2)
 	draw_string(ThemeDB.fallback_font, Vector2(-45, -half.y - 14),
 			"CV PRONTI  %d" % _real, HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
 			Palette.GREEN)

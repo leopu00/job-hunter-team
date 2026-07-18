@@ -44,7 +44,8 @@ func _ready() -> void:
 		Input.parse_input_event.call_deferred(g)
 
 func _process(delta: float) -> void:
-	if Game.dialogue_active:
+	if _input_blocked():
+		_dragging = false
 		return
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if dir != Vector2.ZERO:
@@ -52,7 +53,8 @@ func _process(delta: float) -> void:
 	_clamp_to_world()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if Game.dialogue_active:
+	if _input_blocked():
+		_dragging = false
 		return
 	if event is InputEventMouseButton:
 		match event.button_index:
@@ -88,6 +90,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				_zoom_at(ZOOM_STEP, get_screen_center_position())
 			KEY_MINUS, KEY_KP_SUBTRACT:
 				_zoom_at(1.0 / ZOOM_STEP, get_screen_center_position())
+
+## Le gesture del trackpad possono arrivare a _unhandled_input anche se il
+## puntatore è sopra un Control. Gli overlay si registrano nel gruppo per
+## congelare pan, drag, zoom e WASD per tutta la loro durata.
+func _input_blocked() -> bool:
+	return Game.dialogue_active or get_tree().has_group(&"camera_blocking_overlay")
 
 ## Zoom verso il cursore: il punto del mondo sotto il mouse resta sotto il mouse.
 func _zoom_at_mouse(factor: float) -> void:

@@ -30,6 +30,33 @@ var _target := -1
 var _drift_timer := 0.0
 var _sprite: Sprite2D
 var _has_tex := false
+var _highlighted := false
+
+## Bersaglio preciso della risma, distinto dalla vaschetta e dalla zona
+## reparto. Le coordinate ricevute dalla FreeCamera sono world/global.
+func hit_by(point: Vector2) -> bool:
+	return Rect2(global_position - Vector2(34, 28), Vector2(68, 56)).has_point(point)
+
+func set_highlight(on: bool) -> void:
+	if _highlighted == on:
+		return
+	_highlighted = on
+	if _sprite:
+		_sprite.modulate = Color(0.72, 1.0, 0.82) if on else Color.WHITE
+	queue_redraw()
+
+static func inbox_at(point: Vector2) -> String:
+	for dept_id in inbox:
+		var pile: PaperPile = inbox[dept_id]
+		if is_instance_valid(pile) and pile.hit_by(point):
+			return str(dept_id)
+	return ""
+
+static func highlight_inbox(dept_id: String) -> void:
+	for key in inbox:
+		var pile: PaperPile = inbox[key]
+		if is_instance_valid(pile):
+			pile.set_highlight(str(key) == dept_id)
 
 ## Aggancia la pila al dato vero: spegne il restock finto. I take/add
 ## dei viaggi restano il teatro del flusso; il drift riporta sempre la
@@ -110,6 +137,11 @@ func _refresh() -> void:
 
 ## Blockout: foglietti bianchi sfalsati, la pila si alza con lo stato.
 func _draw() -> void:
+	if _highlighted:
+		draw_rect(Rect2(Vector2(-34, -28), Vector2(68, 56)),
+				Color(Palette.GREEN, 0.14))
+		draw_rect(Rect2(Vector2(-34, -28), Vector2(68, 56)),
+				Palette.GREEN, false, 2.0)
 	if _has_tex or count <= 0:
 		return
 	for i in _stage() * 2:
