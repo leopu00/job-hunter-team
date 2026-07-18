@@ -420,18 +420,49 @@ func _map_panel_selftest() -> void:
 	# Con JHT_SHOT il medesimo scenario resta aperto per l'audit visivo.
 	if OS.get_environment("JHT_SHOT") != "":
 		return
-	var ok := _ui_count_button_prefix(panel, "Ruolo Stockholm") == 14 \
-			and _ui_has_text(panel,
-					"14 posizioni · scorri l’elenco e clicca per aprire la scheda") \
-			and world._flat.visible \
+	var card_count := _ui_count_position_buttons(panel)
+	var hint_ok := _ui_has_text(panel,
+			"14 posizioni · scorri l’elenco e clicca per aprire la scheda")
+	var base_ok := card_count == 14 and hint_ok and world._flat.visible \
 			and _ui_find_class_node(panel, "MapGlobe") == null \
 			and overview_zoom < 5.0 and cluster_ok
+	var ok := base_ok
 	var flat_before: Vector2 = world._flat.center
 	var pan := InputEventPanGesture.new()
 	pan.delta = Vector2(2.0, 3.0)
 	world._flat._gui_input(pan)
 	ok = ok and world._flat.center.x < flat_before.x \
 			and world._flat.center.y < flat_before.y
+	# Percorso reale della sidebar: click riga → navigate("positions") con
+	# pending_detail → nuovo SectionPanel già sulla descrizione completa.
+	# Il dizionario è condiviso per riferimento con la lambda (gli scalari
+	# catturati da GDScript non propagano l'assegnazione al chiamante).
+	var route_state := {"section": ""}
+	panel.navigate.connect(func(next_section: String) -> void:
+		route_state["section"] = next_section)
+	var open_btn := _ui_find_position_button(panel, 14)
+	ok = ok and open_btn != null
+	if open_btn:
+		open_btn.pressed.emit()
+		await get_tree().process_frame
+		var route_ok := str(route_state["section"]) == "positions" \
+				and SectionPanel.pending_detail == 14
+		ok = ok and route_ok
+		var detail_panel := SectionPanel.new("positions", 24.0)
+		add_child(detail_panel)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var detail_ok := detail_panel._current_page == "detail" \
+				and detail_panel._pos_detail_id == 14 \
+				and _ui_has_text(detail_panel, "Ruolo Stockholm 14")
+		ok = ok and detail_ok
+		if not ok:
+			print("MAP-PANEL-TEST details base=", base_ok, " count=", card_count,
+					" hint=", hint_ok, " cluster=", cluster_ok,
+					" route=", route_ok, " requested=", route_state["section"],
+					" pending=", SectionPanel.pending_detail,
+					" detail=", detail_ok, " page=", detail_panel._current_page,
+					" id=", detail_panel._pos_detail_id)
 	print("MAP-PANEL-TEST ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
 
@@ -462,11 +493,20 @@ func _ui_find_class_node(node: Node, type_name: String) -> Node:
 			return found
 	return null
 
-func _ui_count_button_prefix(node: Node, prefix: String) -> int:
-	var count := 1 if node is Button and node.text.begins_with(prefix) else 0
+func _ui_count_position_buttons(node: Node) -> int:
+	var count := 1 if node is Button and node.has_meta("position_id") else 0
 	for child in node.get_children():
-		count += _ui_count_button_prefix(child, prefix)
+		count += _ui_count_position_buttons(child)
 	return count
+
+func _ui_find_position_button(node: Node, position_id: int) -> Button:
+	if node is Button and int(node.get_meta("position_id", 0)) == position_id:
+		return node
+	for child in node.get_children():
+		var found := _ui_find_position_button(child, position_id)
+		if found:
+			return found
+	return null
 
 func _ui_count_class(node: Node, type_name: String) -> int:
 	var count := 1 if node.get_class() == type_name else 0

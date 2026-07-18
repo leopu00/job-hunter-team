@@ -325,31 +325,51 @@ func _rebuild_card() -> void:
 	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(rows)
 	for p in positions:
+		var pid := int(p.get("id", 0))
+		# Un solo bersaglio cliccabile per tutta la riga: non devi centrare
+		# esattamente il titolo; score, testo, freccia e spazio vuoto aprono
+		# tutti la stessa scheda completa della posizione.
+		var row_btn := Button.new()
+		row_btn.flat = true
+		row_btn.custom_minimum_size = Vector2(500, 34)
+		row_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row_btn.tooltip_text = UIStrings.t("queue.open_position")
+		row_btn.set_meta("position_id", pid)
+		row_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		var hover := StyleBoxFlat.new()
+		hover.bg_color = Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, 0.10)
+		hover.border_color = Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, 0.35)
+		hover.set_border_width_all(1)
+		row_btn.add_theme_stylebox_override("hover", hover)
+		row_btn.add_theme_stylebox_override("pressed", hover.duplicate())
+		row_btn.pressed.connect(func() -> void:
+			Sfx.play_tick()
+			open_position.emit(pid))
+		rows.add_child(row_btn)
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
-		rows.add_child(row)
+		row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		row.offset_left = 7
+		row.offset_right = -7
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row_btn.add_child(row)
 		var score_v: Variant = p.get("total_score")
 		var score := TerminalTheme.label(
 				"—" if score_v == null else str(int(score_v)), 15,
 				MapPins.score_color(score_v), "bold")
 		score.custom_minimum_size = Vector2(34, 0)
+		score.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(score)
-		var btn := Button.new()
-		btn.flat = true
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.clip_text = true
-		btn.text = "%s — %s" % [str(p.get("title", "?")).left(40),
-				str(p.get("company", "?")).left(22)]
-		btn.add_theme_font_size_override("font_size", 14)
-		btn.add_theme_color_override("font_color", Palette.BRIGHT)
-		btn.add_theme_color_override("font_hover_color", Palette.GREEN)
-		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-		btn.custom_minimum_size = Vector2(430, 0)
-		var pid := int(p.get("id", 0))
-		btn.pressed.connect(func() -> void:
-			Sfx.play_tick()
-			open_position.emit(pid))
-		row.add_child(btn)
+		var position_title := TerminalTheme.label("%s — %s" % [
+				str(p.get("title", "?")).left(40),
+				str(p.get("company", "?")).left(22)], 14, Palette.BRIGHT)
+		position_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		position_title.clip_text = true
+		position_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(position_title)
+		var arrow := TerminalTheme.label("›", 18, Palette.GREEN, "bold")
+		arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(arrow)
 	box.add_child(TerminalTheme.label(UIStrings.t("map.card_hint_all")
 			% positions.size(), 11, Palette.DIM))
 	_place_card()
