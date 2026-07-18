@@ -841,7 +841,8 @@ function assertKnownVpsIp(ip) {
 // punta la finestra dashboard a localhost:<localPort>. Il container sulla VPS
 // serve lo stesso stack Next "locale"; via tunnel l'Host resta `localhost`,
 // quindi la VPS tratta le richieste come LOCALI → controllo pieno come se il
-// team girasse sul PC. Entra da /onboarding (self-routing, evita bounce auth).
+// team girasse sul PC. Entra da /dashboard ([JHT-ONBOARDING-IN-GAME 18/07]:
+// la pagina /onboarding non esiste più, l'onboarding vive nel videogioco).
 async function openVpsCockpit(ip) {
   const allow = assertKnownVpsIp(ip)
   if (!allow.ok) return { ok: false, error: allow.error }
@@ -850,7 +851,7 @@ async function openVpsCockpit(ip) {
     return { ok: false, error: res.error || 'tunnel non disponibile' }
   }
   try {
-    openDashboardWindow(`${res.url}/onboarding`)
+    openDashboardWindow(`${res.url}/dashboard`)
   } catch (err) {
     log.warn('vps-cockpit.window-failed', { err: err && (err.message || String(err)) })
     return { ok: false, error: err && (err.message || String(err)) }

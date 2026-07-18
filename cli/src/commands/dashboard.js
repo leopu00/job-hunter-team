@@ -181,10 +181,11 @@ async function handleDashboard(options) {
     console.log(`  ${DIM}Apri manualmente: ${url}${RESET}\n`);
   }
 
-  // Boot the assistant in the background so the first thing the user
-  // sees on /dashboard → /onboarding is the welcome chat. Only inside
-  // the container — on the host, team/start is the user-initiated
-  // entry point. Non-fatal if the script or tmux isn't there yet.
+  // Boot the assistant in the background so the onboarding chat (the
+  // game's wizard scene talks to it via BackendBus) is ready without a
+  // cold start. Only inside the container — on the host, team/start is
+  // the user-initiated entry point. Non-fatal if the script or tmux
+  // isn't there yet.
   if (isContainer() && ready) {
     try {
       const root = '/app';

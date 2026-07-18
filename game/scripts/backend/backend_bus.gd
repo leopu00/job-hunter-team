@@ -51,6 +51,18 @@ signal ticket_created(position_id: int, ok: bool, error: String)
 ## Esito del salvataggio del profilo utente (paradigma desktop app:
 ## i DATI UTENTE si modificano da qui; il jobs.db resta via ticket).
 signal profile_saved(ok: bool, error: String)
+## Estensione ADDITIVA (missione ONBOARDING in-game, 18/07): stato del
+## candidate_profile.yml + gate `ready` per il wizard. profile = vista
+## piatta dei campi (name, email, target_role, location,
+## experience_years, seniority_target, skills[], languages[]);
+## required = {campo: bool} con la STESSA checklist del web
+## (lib/profile-completion.ts); ready = ready.flag esiste OPPURE tutti
+## i required ok — identico a GET /api/profile del web.
+signal profile_status_updated(profile: Dictionary, required: Dictionary, ready: bool)
+## Esito dell'upload di un documento utente (CV) verso la drop-zone
+## allegati del container (/jht_user/allegati): il wizard poi passa il
+## path remoto all'assistente dentro il messaggio chat, come il web.
+signal document_uploaded(ok: bool, remote_path: String, error: String)
 ## Esito del salvataggio degli orari di lavoro (working_hours).
 signal hours_saved(ok: bool, error: String)
 ## live_settings è arrivata/cambiata (config team + usage reali).
@@ -342,6 +354,45 @@ func publish_chat_sent(agent: String, ok: bool, error: String) -> void:
 		chat_waiting.erase(agent)
 		chat_waiting_changed.emit(agent, false)
 	user_chat_sent.emit(agent, ok, error)
+
+
+## ── Onboarding (wizard in-game: il badge si compila con l'assistente) ─
+## Il wizard apre il "watch" del profilo: finché è aperto il backend
+## rilegge candidate_profile.yml + ready.flag a ogni giro di poll e
+## pubblica profile_status_updated. Metodi opzionali dell'adapter
+## (has_method), stesso pattern di save_profile.
+
+## Ultimo stato profilo pubblicato ({profile, required, ready}), per
+## chi si abbona dopo il primo giro.
+var profile_status: Dictionary = {}
+
+func open_profile_watch() -> void:
+	if _backend and _backend.has_method("open_profile_watch"):
+		_backend.open_profile_watch()
+
+func close_profile_watch() -> void:
+	if _backend and _backend.has_method("close_profile_watch"):
+		_backend.close_profile_watch()
+
+## Avvia l'agente assistente sul backend se non è già vivo (equivalente
+## di POST /api/assistente/start del web). Idempotente.
+func ensure_assistant() -> void:
+	if _backend and _backend.has_method("ensure_assistant"):
+		_backend.ensure_assistant()
+
+## Carica un documento locale (CV…) nella drop-zone allegati del
+## container. Esito su document_uploaded.
+func upload_user_document(local_path: String) -> void:
+	if _backend and _backend.has_method("upload_document"):
+		_backend.upload_document(local_path)
+	else:
+		document_uploaded.emit(false, "", "backend non collegato")
+
+## Il backend pubblica lo stato profilo da qui (thread → call_deferred).
+func publish_profile_status(status: Dictionary) -> void:
+	profile_status = status
+	profile_status_updated.emit(status.get("profile", {}),
+			status.get("required", {}), bool(status.get("ready", false)))
 
 
 ## ── Profilo utente (editing pieno: paradigma desktop app) ────────────

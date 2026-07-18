@@ -1,7 +1,6 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import {
   getDashboardStats,
   getDashboardPositions,
@@ -20,8 +19,6 @@ import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
-import { createClient } from "@/lib/supabase/server";
-import { isLocalRequestFromHeaders } from "@/lib/auth";
 import {
   getDemoDashboardData,
   isDashboardDemoMode,
@@ -63,32 +60,12 @@ export default async function DashboardPage() {
   const locale = getServerLocale();
   const t = getDashboardT(locale);
 
-  // Routing precedence (vedi docs/internal/architecture/2026-05-19-dashboard-routing-cases.md):
-  //   1. demo mode  → demo data (più sotto)
-  //   2. Supabase + utente loggato → 3-way cloud routing su user_onboarding_state,
-  //      ANCHE su localhost: se l'utente ha già fatto sign-in con un account
-  //      VPS-paired, il funnel onboarding-locale (pensato per PC standalone con
-  //      container Docker) non ha senso e fallisce su WSL.
-  //   3. Supabase + no user + localhost → PC standalone: check ~/.jht/profile/.
-  //   4. Supabase + no user + remote → il middleware redirecta a /login.
-  //   5. No Supabase env → pure local deploy: check ~/.jht/profile/.
+  // [JHT-ONBOARDING-IN-GAME 18/07] Niente più redirect a /onboarding: la
+  // pagina web è stata rimossa, l'onboarding vive nel wizard del videogioco
+  // (game/scenes/wizard.tscn). Senza profilo la dashboard mostra l'empty
+  // state con OnboardingPopup, su ogni deploy.
   const hdrs = await headers();
-  const localRequest = isLocalRequestFromHeaders(hdrs);
   const demoMode = isDashboardDemoMode(hdrs.get("x-search"));
-
-  // JHT-LOCAL-NO-API: salta auth check Supabase in local-only mode.
-  // Cade direttamente nel branch "no-Supabase" che legge solo dal workspace.
-  if (isSupabaseConfigured && !demoMode && !isLocalOnlyMode()) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user && localRequest) {
-      if (readWorkspaceProfile() === null) redirect("/onboarding");
-    }
-  } else if (!demoMode) {
-    if (readWorkspaceProfile() === null) redirect("/onboarding");
-  }
 
   const demoData = demoMode ? getDemoDashboardData() : null;
   // Demo: le posizioni demo non hanno role_family/loc strutturati → li

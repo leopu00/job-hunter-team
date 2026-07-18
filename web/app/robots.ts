@@ -11,9 +11,8 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/api/",
           "/auth",
-          // Onboarding / setup
+          // Setup
           "/setup",
-          "/onboarding",
           // Top nav
           "/dashboard",
           "/profile",

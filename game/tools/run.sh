@@ -48,6 +48,8 @@ case "$MODE" in
 		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
 		DOCTOR_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_DOCTOR_TEST=scout-4 godot --headless . 2>&1)"
 		printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
+		WIZ_OUT="$(JHT_SCENE=wizard JHT_NOVPS=1 JHT_WIZARD_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$WIZ_OUT" | grep "WIZARD-TEST PASS"
 		echo "[run.sh] TEST OK"
 		;;
 	boot)

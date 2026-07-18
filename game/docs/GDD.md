@@ -5,9 +5,16 @@
 > - Il gioco è la **desktop app resa come box animata**: si migrano dentro le
 >   viste dell'app desktop/web una alla volta (sidebar `SidebarDefs` 1:1 con
 >   `desktop/renderer/index.html`).
-> - **Niente giocatore né wizard**: TITLE→OFFICE diretto, FreeCamera
->   (drag/WASD/zoom), si clicca su agenti (scheda + dialogo), reparti
->   (pannello), mappamondo (mappa pin), bacheca (registro).
+> - **Niente giocatore**: FreeCamera (drag/WASD/zoom), si clicca su agenti
+>   (scheda + dialogo), reparti (pannello), mappamondo (mappa pin),
+>   bacheca (registro).
+> - **Wizard onboarding REALE (18/07)**: al primo avvio TITLE→WIZARD
+>   (`scenes/wizard.tscn`) — conversazione con l'Assistente vero via
+>   BackendBus (chat.jsonl del container), upload CV su /jht_user/allegati,
+>   badge profilo live dal candidate_profile.yml, gate `ready` identico al
+>   web; poi TITLE→OFFICE diretto (`user://onboarding.cfg`). Sostituisce la
+>   pagina web /onboarding (migrazione fuori dal web, ordine di Leone 18/07).
+>   Senza VPS: MockBackend recita lo stesso contratto (test in 3').
 > - **5 reparti** (Scout→Analisti→Scorer→Scrittori→Critici) in
 >   `DepartmentDefs`: 6 postazioni orientate nei 4 versi, agenti lead+worker
 >   (`CharacterDefs.spawn_list()`), behavior a cadenze reali (`TRIP_EVERY`),
