@@ -18,18 +18,19 @@ const LAB_WALL_H2 := Rect2(2750, 740, 410, 12)    # tratto dx (in mezzo: porta)
 
 const ITEMS := [
 	# ── Area comune (ex zona Scorer): lounge del Mentor ──
-	{"id": "coffee_table", "kind": "table_low", "rect": Rect2(2190, 1175, 180, 80)},
-	# Il Mentor e il divanetto sono un solo composito quando è seduto. La vista
-	# up mostra correttamente la schiena mentre legge; la base vuota ricompare
-	# soltanto quando si alza per il breve giro libreria/lavagna.
-	{"id": "mentor_sofa", "kind": "mentor_sofa", "rect": Rect2(2450, 1135, 180, 125),
-			"facing": "up", "registry_key": "core:mentor"},
-	{"id": "lamp", "kind": "lamp", "rect": Rect2(2110, 1060, 44, 44)},
-	{"id": "plant_a", "kind": "plant", "rect": Rect2(2250, 1035, 56, 56)},
+	{"id": "coffee_table", "kind": "table_low", "rect": Rect2(2410, 1195, 90, 45)},
+	# Poltrona frontale, riportata alla scala originale dell'ufficio: 110 px,
+	# come gli altri arredi individuali. L'arte occupata include Mentor+libro.
+	# Il canvas contiene margini per le gambe: 140 px di rect producono una
+	# sagoma effettiva di ~104 px, allineata alla scala degli agenti in piedi.
+	{"id": "mentor_armchair", "kind": "mentor_armchair", "rect": Rect2(2655, 1117, 140, 133),
+			"facing": "down", "registry_key": "core:mentor"},
+	{"id": "lamp", "kind": "lamp", "rect": Rect2(2290, 1060, 44, 44)},
+	{"id": "plant_a", "kind": "plant", "rect": Rect2(2440, 1035, 56, 56)},
 
 	# Bacheca e libreria seguono la lounge; l'angolo caffè resta condiviso a nord.
-	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(2350, 995, 150, 34)},
-	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2550, 970, 280, 70)},
+	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(2520, 995, 150, 34)},
+	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2720, 970, 280, 70)},
 	{"id": "coffee_bar", "kind": "coffee", "rect": Rect2(1400, 190, 200, 80)},
 	{"id": "water_cooler", "kind": "water_cooler", "rect": Rect2(1602, 196, 54, 54)},
 	# stampante condivisa sulla parete nord, tra coffee e lab: la meta dei
