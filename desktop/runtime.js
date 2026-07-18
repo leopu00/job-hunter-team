@@ -20,7 +20,7 @@ const HEALTH_TIMEOUT_MS = process.platform === 'win32' ? 180000 : 30000
 // pagine che l'utente apre per prime. Così quando il browser arriva,
 // non aspetta 5-15s di compile alla prima navigazione.
 const WARM_UP_TIMEOUT_MS = 45000
-const WARM_UP_PATHS = ['/onboarding', '/dashboard', '/team', '/capitano']
+const WARM_UP_PATHS = ['/dashboard', '/team', '/capitano']
 
 function getDefaultLogFile() {
   return path.join(os.tmpdir(), 'jht-desktop-launcher.log')
@@ -208,14 +208,13 @@ function createRuntimeManager(config = {}) {
   }
 
   function getUrl(port = state.port) {
-    // Open /onboarding — the authenticated split-screen view where
-    // the assistant greets the user and the profile form fills in
-    // live. It's the real entry point for a fresh desktop user. We
-    // used to open /dashboard but with Supabase env baked into the
-    // web image the cloud auth layer intercepts unauthenticated
-    // local requests and bounces them to /?login=true, which is not
-    // where the desktop user should land.
-    return `http://localhost:${port}/onboarding`
+    // [JHT-ONBOARDING-IN-GAME 18/07] Entry point /dashboard: la pagina
+    // web /onboarding non esiste più (l'onboarding vive nel wizard del
+    // videogioco, game/scenes/wizard.tscn). Il vecchio bounce auth che
+    // motivava l'ingresso da /onboarding non scatta: le richieste locali
+    // del container bypassano il web-login (localContext nel protected
+    // layout / middleware).
+    return `http://localhost:${port}/dashboard`
   }
 
   function appendLog(chunk) {
