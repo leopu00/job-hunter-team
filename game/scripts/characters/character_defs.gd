@@ -75,14 +75,15 @@ const AGENTS := {
 	},
 	"mentor": {
 		"name": "Il Mentor",
-		# Davanti al divanetto rivolto a nord: _seat_offset lo porta dentro il
-		# composito, che mostra la schiena e il libro come un unico elemento.
-		"spot": Vector2(2540, 1284),
-		"facing": "up",
+		# Il punto d'accesso resta sotto la poltrona e navigabile; l'offset porta
+		# il centro logico nel composito frontale senza ingrandire il personaggio.
+		"spot": Vector2(2725, 1274),
+		"facing": "down",
+		"seat_offset": Vector2(0, -24),
 		"workstation_key": "core:mentor",
 		# Ordine intenzionale della passeggiata: prende un volume, controlla la
 		# lavagna e torna a leggere. AgentNPC percorre entrambe le tappe.
-		"wander": [Vector2(2690, 1088), Vector2(2425, 1072)],
+		"wander": [Vector2(2860, 1088), Vector2(2595, 1072)],
 		"chatter": [
 			"un buon colloquio è una conversazione",
 			"i numeri raccontano i risultati",
@@ -106,8 +107,8 @@ const AGENTS := {
 	"mantenitore": {
 		"name": "Il Mantenitore",
 		# Lato sinistro dell'area comune, immediatamente accanto agli Scorer.
-		"spot": Vector2(2010, 1085),
-		"wander": [Vector2(1727, 300), Vector2(2060, 1015), Vector2(2040, 1220)],
+		"spot": Vector2(2170, 1085),
+		"wander": [Vector2(1727, 300), Vector2(2220, 1015), Vector2(2200, 1220)],
 		"chatter": [
 			"container sani, disco ok",
 			"aggiorno le dipendenze…",
@@ -117,7 +118,7 @@ const AGENTS := {
 	"dottore": {
 		"name": "Il Dottore",
 		# Stessa zona del Mantenitore ma più a sud, senza sovrapporsi al varco.
-		"spot": Vector2(2040, 1265),
+		"spot": Vector2(2210, 1265),
 		"wander": [Vector2(1110, 778), Vector2(1790, 1390), Vector2(2690, 1825)],
 		"chatter": [
 			"visita di controllo agli agenti…",

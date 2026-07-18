@@ -24,8 +24,8 @@ const DAYLIGHT := Color("#cfe4ff")
 
 ## Lampade interne: [pos, raggio, colore, alpha di base] — accese col buio.
 const LAMPS := [
-	[Vector2(2340, 1170), 280.0, WARM, 0.20],   # tappeto/lounge del Mentor
-	[Vector2(2690, 1010), 210.0, WARM, 0.13],   # libreria area comune
+	[Vector2(2500, 1170), 280.0, WARM, 0.20],   # tappeto/lounge del Mentor
+	[Vector2(2860, 1010), 210.0, WARM, 0.13],   # libreria area comune
 	[Vector2(1500, 235), 240.0, WARM, 0.18],    # angolo caffè
 	[Vector2(1727, 250), 190.0, COOL, 0.10],    # stampante
 	[Vector2(1495, 560), 250.0, WARM, 0.17],    # desk Coordinatore
