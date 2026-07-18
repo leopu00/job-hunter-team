@@ -31,6 +31,9 @@ Ce fichier est la RÉFÉRENCE OFFICIELLE du schéma de la base de données. Tous
 | analyzed_by | TEXT | | Qui l'a analysée (analista-1, etc.) |
 | analyzed_at | TIMESTAMP | CURRENT_TIMESTAMP | Quand elle a été analysée |
 | verdict | TEXT | | GO, CAUTIOUS, NO_GO |
+| logo | TEXT | | **mig 056** — data-URI base64 du logo (≤ ~35KB) — écrit UNIQUEMENT par `logo_fetch.py` |
+| logo_source | TEXT | | **mig 056** — URL source du logo (audit/refresh) |
+| logo_fetched | INTEGER | 0 | **mig 056** — 1 = extraction tentée (patron office_geocoded) ; file `next-for-logo-missing` |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — insertion de ligne |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — mis à jour automatiquement à chaque UPDATE via trigger |
 
