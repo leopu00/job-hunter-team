@@ -4,14 +4,29 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import {
+  IconCards,
+  IconChat,
+  IconCheckCircle,
+  IconClock,
+  IconEye,
+  IconMic,
+  IconPin,
+  IconStar,
+  IconStop,
+  IconUndo,
+  IconX,
+} from "./icons";
 
 // [JHT-POSITIONS-SWIPE-TRIAGE] Deck di carte per il triage rapido del
 // backlog scored/ready. Non un like/nope binario: QUATTRO giudizi (scelta
 // utente 18/07) mappati sui campi del mig 028 di position_feedback
 // (score 1-5 + direction), più un commento libero opzionale che parte
-// insieme al giudizio. Gli swipe coprono gli estremi (sinistra = no
-// assoluto, destra = molto interessante), i giudizi intermedi sono da
-// bottone; tastiera 1-4 sul desktop, ⌫ = undo.
+// insieme al giudizio — scrivibile a tastiera o DETTATO a voce (Web
+// Speech API del browser: su iOS è la dettatura Apple, niente backend;
+// se non supportata il bottone microfono non compare). Gli swipe coprono
+// gli estremi (sinistra = no assoluto, destra = molto interessante), i
+// giudizi intermedi sono da bottone; tastiera 1-4 sul desktop, ⌫ = undo.
 //
 // Scritture — corsie ESISTENTI, nessuna route nuova:
 //   ogni giudizio  → POST /api/positions/[legacyId]/feedback
@@ -52,7 +67,7 @@ type Verdict = "no" | "review_low" | "review_ok" | "top";
 const VERDICTS: Record<
   Verdict,
   {
-    icon: string;
+    Icon: (p: { size?: number }) => React.ReactElement;
     color: string;
     action: "like" | "dislike" | "star";
     score: number;
@@ -62,7 +77,7 @@ const VERDICTS: Record<
   }
 > = {
   no: {
-    icon: "✕",
+    Icon: IconX,
     color: "var(--color-red)",
     action: "dislike",
     score: 1,
@@ -71,7 +86,7 @@ const VERDICTS: Record<
     fly: -1,
   },
   review_low: {
-    icon: "😕",
+    Icon: IconClock,
     color: "var(--color-orange)",
     action: "dislike",
     score: 2,
@@ -79,7 +94,7 @@ const VERDICTS: Record<
     fly: -1,
   },
   review_ok: {
-    icon: "👀",
+    Icon: IconEye,
     color: "var(--color-blue)",
     action: "like",
     score: 4,
@@ -87,7 +102,7 @@ const VERDICTS: Record<
     fly: 1,
   },
   top: {
-    icon: "⭐",
+    Icon: IconStar,
     color: "var(--color-green)",
     action: "star",
     score: 5,
@@ -97,6 +112,17 @@ const VERDICTS: Record<
 };
 
 const VERDICT_ORDER: Verdict[] = ["no", "review_low", "review_ok", "top"];
+
+// BCP-47 per la dettatura (SpeechRecognition.lang) dal locale dell'app.
+const SPEECH_LANG: Record<Locale, string> = {
+  it: "it-IT",
+  en: "en-US",
+  hu: "hu-HU",
+  es: "es-ES",
+  de: "de-DE",
+  fr: "fr-FR",
+  pt: "pt-PT",
+};
 
 const T: Record<
   Locale,
@@ -108,7 +134,10 @@ const T: Record<
     verdicts: Record<Verdict, string>;
     btnUndo: string;
     commentPh: string;
-    commentBtn: string;
+    voiceStart: string;
+    voiceStop: string;
+    voiceListening: string;
+    voiceError: string;
     emptyTitle: string;
     emptySubtitle: string;
     allPositions: string;
@@ -131,7 +160,10 @@ const T: Record<
     },
     btnUndo: "Annulla ultima",
     commentPh: "Aggiungi un commento (facoltativo)…",
-    commentBtn: "Commento",
+    voiceStart: "Detta il commento",
+    voiceStop: "Ferma la dettatura",
+    voiceListening: "Ti ascolto…",
+    voiceError: "Dettatura non disponibile",
     emptyTitle: "Mazzo finito!",
     emptySubtitle: "Hai fatto il triage di tutte le posizioni in coda.",
     allPositions: "Tutte le posizioni",
@@ -153,7 +185,10 @@ const T: Record<
     },
     btnUndo: "Undo last",
     commentPh: "Add a comment (optional)…",
-    commentBtn: "Comment",
+    voiceStart: "Dictate the comment",
+    voiceStop: "Stop dictation",
+    voiceListening: "Listening…",
+    voiceError: "Dictation not available",
     emptyTitle: "Deck finished!",
     emptySubtitle: "You triaged every queued position.",
     allPositions: "All positions",
@@ -175,7 +210,10 @@ const T: Record<
     },
     btnUndo: "Visszavonás",
     commentPh: "Megjegyzés hozzáadása (opcionális)…",
-    commentBtn: "Megjegyzés",
+    voiceStart: "Megjegyzés diktálása",
+    voiceStop: "Diktálás leállítása",
+    voiceListening: "Hallgatlak…",
+    voiceError: "A diktálás nem érhető el",
     emptyTitle: "A pakli elfogyott!",
     emptySubtitle: "Minden sorban álló állást átnéztél.",
     allPositions: "Összes állás",
@@ -197,7 +235,10 @@ const T: Record<
     },
     btnUndo: "Deshacer",
     commentPh: "Añade un comentario (opcional)…",
-    commentBtn: "Comentario",
+    voiceStart: "Dictar el comentario",
+    voiceStop: "Detener el dictado",
+    voiceListening: "Escuchando…",
+    voiceError: "Dictado no disponible",
     emptyTitle: "¡Mazo terminado!",
     emptySubtitle: "Has revisado todas las posiciones en cola.",
     allPositions: "Todas las posiciones",
@@ -219,7 +260,10 @@ const T: Record<
     },
     btnUndo: "Rückgängig",
     commentPh: "Kommentar hinzufügen (optional)…",
-    commentBtn: "Kommentar",
+    voiceStart: "Kommentar diktieren",
+    voiceStop: "Diktat beenden",
+    voiceListening: "Ich höre zu…",
+    voiceError: "Diktat nicht verfügbar",
     emptyTitle: "Stapel geschafft!",
     emptySubtitle: "Du hast alle anstehenden Stellen durchgesehen.",
     allPositions: "Alle Stellen",
@@ -241,7 +285,10 @@ const T: Record<
     },
     btnUndo: "Annuler",
     commentPh: "Ajouter un commentaire (facultatif)…",
-    commentBtn: "Commentaire",
+    voiceStart: "Dicter le commentaire",
+    voiceStop: "Arrêter la dictée",
+    voiceListening: "Je vous écoute…",
+    voiceError: "Dictée non disponible",
     emptyTitle: "Paquet terminé !",
     emptySubtitle: "Vous avez trié tous les postes en attente.",
     allPositions: "Tous les postes",
@@ -263,7 +310,10 @@ const T: Record<
     },
     btnUndo: "Desfazer",
     commentPh: "Adicione um comentário (opcional)…",
-    commentBtn: "Comentário",
+    voiceStart: "Ditar o comentário",
+    voiceStop: "Parar o ditado",
+    voiceListening: "Ouvindo…",
+    voiceError: "Ditado não disponível",
     emptyTitle: "Baralho concluído!",
     emptySubtitle: "Você triou todas as vagas na fila.",
     allPositions: "Todas as vagas",
@@ -329,9 +379,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   const [toast, setToast] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [commentOpen, setCommentOpen] = useState(false);
+  const [speechOk, setSpeechOk] = useState(false);
+  const [recording, setRecording] = useState(false);
   const flyingRef = useRef(false);
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recRef = useRef<{ stop: () => void } | null>(null);
 
   const total = cards.length;
   const done = total - deck.length;
@@ -344,6 +397,59 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 4000);
   }, []);
+
+  // ── Dettatura vocale (Web Speech API) ────────────────────────────
+  // Feature-detect solo sul client (in SSR window non c'è: lo stato parte
+  // false su entrambi i lati, niente hydration mismatch).
+  useEffect(() => {
+    const w = window as unknown as Record<string, unknown>;
+    setSpeechOk(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition));
+    return () => recRef.current?.stop();
+  }, []);
+
+  const stopVoice = useCallback(() => {
+    recRef.current?.stop();
+  }, []);
+
+  const startVoice = useCallback(() => {
+    const w = window as unknown as Record<string, unknown>;
+    const Ctor = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
+      | (new () => {
+          lang: string;
+          continuous: boolean;
+          interimResults: boolean;
+          onresult: ((e: unknown) => void) | null;
+          onerror: (() => void) | null;
+          onend: (() => void) | null;
+          start: () => void;
+          stop: () => void;
+        })
+      | undefined;
+    if (!Ctor) return;
+    const rec = new Ctor();
+    recRef.current = rec;
+    rec.lang = SPEECH_LANG[locale] ?? "en-US";
+    rec.continuous = true;
+    rec.interimResults = true;
+    // La dettatura APPENDE al testo già presente (base congelata all'avvio).
+    const base = comment.trim() ? comment.trim() + " " : "";
+    rec.onresult = (e: unknown) => {
+      const ev = e as { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> };
+      let text = "";
+      for (let i = 0; i < ev.results.length; i++) {
+        text += ev.results[i][0].transcript;
+      }
+      setComment((base + text).slice(0, 2000));
+    };
+    rec.onerror = () => {
+      setRecording(false);
+      showToast(t.voiceError);
+    };
+    rec.onend = () => setRecording(false);
+    setCommentOpen(true);
+    setRecording(true);
+    rec.start();
+  }, [comment, locale, showToast, t.voiceError]);
 
   const persist = useCallback(
     async (card: SwipeCardData, verdict: Verdict, note: string) => {
@@ -382,6 +488,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     (verdict: Verdict) => {
       if (flyingRef.current || deck.length === 0) return;
       flyingRef.current = true;
+      stopVoice();
       const card = deck[0];
       const note = comment.trim().slice(0, 2000);
       const dir = VERDICTS[verdict].fly;
@@ -398,7 +505,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       }, FLY_MS);
       void persist(card, verdict, note);
     },
-    [deck, comment, persist],
+    [deck, comment, persist, stopVoice],
   );
 
   const undo = useCallback(() => {
@@ -474,14 +581,20 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
 
   return (
     <div className="max-w-md mx-auto select-none">
+      {/* Pulse del microfono in registrazione */}
+      <style>{`@keyframes swipe-rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }`}</style>
+
       {/* Header */}
       <div className="flex items-end justify-between mb-3">
         <div>
           <h1
-            className="text-lg font-bold tracking-wide"
+            className="text-lg font-bold tracking-wide flex items-center gap-2"
             style={{ color: "var(--color-white)" }}
           >
-            🃏 {t.title}
+            <span style={{ color: "var(--color-green)" }}>
+              <IconCards size={18} />
+            </span>
+            {t.title}
           </h1>
           <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
             {t.subtitle}
@@ -506,7 +619,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
             background: "var(--color-card)",
           }}
         >
-          <div className="text-3xl mb-3">🎉</div>
+          <div
+            className="flex justify-center mb-3"
+            style={{ color: "var(--color-green)" }}
+          >
+            <IconCheckCircle size={36} />
+          </div>
           <div
             className="text-base font-bold mb-1"
             style={{ color: "var(--color-white)" }}
@@ -518,14 +636,21 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           </p>
           {history.length > 0 && (
             <p
-              className="text-[12px] font-semibold mb-4 flex items-center justify-center gap-3"
+              className="text-[12px] font-semibold mb-4 flex items-center justify-center gap-4"
               style={{ color: "var(--color-base)" }}
             >
-              {counts.map(([v, n]) => (
-                <span key={v} style={{ color: VERDICTS[v].color }}>
-                  {VERDICTS[v].icon} {n}
-                </span>
-              ))}
+              {counts.map(([v, n]) => {
+                const { Icon, color } = VERDICTS[v];
+                return (
+                  <span
+                    key={v}
+                    className="inline-flex items-center gap-1"
+                    style={{ color }}
+                  >
+                    <Icon size={13} /> {n}
+                  </span>
+                );
+              })}
             </p>
           )}
           <Link
@@ -585,7 +710,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                     {isTop && (
                       <>
                         <div
-                          className="absolute top-5 left-4 px-2 py-1 rounded border-2 text-sm font-black tracking-widest"
+                          className="absolute top-5 left-4 px-2 py-1 rounded border-2 text-sm font-black tracking-widest flex items-center gap-1.5"
                           style={{
                             color: "var(--color-green)",
                             borderColor: "var(--color-green)",
@@ -594,10 +719,10 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                             zIndex: 20,
                           }}
                         >
-                          ⭐ {t.stampTop}
+                          <IconStar size={14} filled /> {t.stampTop}
                         </div>
                         <div
-                          className="absolute top-5 right-4 px-2 py-1 rounded border-2 text-sm font-black tracking-widest"
+                          className="absolute top-5 right-4 px-2 py-1 rounded border-2 text-sm font-black tracking-widest flex items-center gap-1.5"
                           style={{
                             color: "var(--color-red)",
                             borderColor: "var(--color-red)",
@@ -606,7 +731,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                             zIndex: 20,
                           }}
                         >
-                          ✕ {t.stampNo}
+                          <IconX size={14} /> {t.stampNo}
                         </div>
                       </>
                     )}
@@ -649,10 +774,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                       <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
                         {(card.loc_city || card.loc_country || card.location) && (
                           <Chip>
-                            📍{" "}
-                            {card.loc_city
-                              ? `${card.loc_city}${card.loc_country ? `, ${card.loc_country}` : ""}`
-                              : (card.loc_country ?? card.location)}
+                            <span className="inline-flex items-center gap-1">
+                              <IconPin size={11} />
+                              {card.loc_city
+                                ? `${card.loc_city}${card.loc_country ? `, ${card.loc_country}` : ""}`
+                                : (card.loc_country ?? card.location)}
+                            </span>
                           </Chip>
                         )}
                         {card.remote_type && (
@@ -712,39 +839,71 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               .reverse()}
           </div>
 
-          {/* Commento opzionale: parte col prossimo giudizio */}
-          <div className="mt-4">
-            {commentOpen ? (
-              <textarea
-                autoFocus
-                rows={2}
-                maxLength={2000}
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder={t.commentPh}
-                className="w-full rounded-lg border px-3 py-2 text-[12px] resize-none"
-                style={{
-                  borderColor: "var(--color-border)",
-                  background: "var(--color-row)",
-                  color: "var(--color-bright)",
-                  outline: "none",
-                }}
-              />
-            ) : (
+          {/* Commento opzionale (tastiera o dettatura): parte col prossimo
+              giudizio */}
+          <div className="mt-4 flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              {commentOpen ? (
+                <textarea
+                  autoFocus
+                  rows={2}
+                  maxLength={2000}
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder={recording ? t.voiceListening : t.commentPh}
+                  className="w-full rounded-lg border px-3 py-2 text-[12px] resize-none"
+                  style={{
+                    borderColor: recording
+                      ? "var(--color-red)"
+                      : "var(--color-border)",
+                    background: "var(--color-row)",
+                    color: "var(--color-bright)",
+                    outline: "none",
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCommentOpen(true)}
+                  className="w-full rounded-lg border px-3 py-2 text-[12px] text-left flex items-center gap-2"
+                  style={{
+                    borderColor: "var(--color-border)",
+                    background: "transparent",
+                    color: comment
+                      ? "var(--color-bright)"
+                      : "var(--color-dim)",
+                    cursor: "text",
+                  }}
+                >
+                  <IconChat size={13} />
+                  <span className="truncate">
+                    {comment ? comment : t.commentPh}
+                  </span>
+                </button>
+              )}
+            </div>
+            {speechOk && (
               <button
                 type="button"
-                onClick={() => setCommentOpen(true)}
-                className="w-full rounded-lg border px-3 py-2 text-[12px] text-left"
+                aria-label={recording ? t.voiceStop : t.voiceStart}
+                title={recording ? t.voiceStop : t.voiceStart}
+                onClick={recording ? stopVoice : startVoice}
+                className="shrink-0 rounded-lg border flex items-center justify-center"
                 style={{
-                  borderColor: "var(--color-border)",
-                  background: "transparent",
-                  color: comment
-                    ? "var(--color-bright)"
-                    : "var(--color-dim)",
-                  cursor: "text",
+                  width: 38,
+                  height: 38,
+                  color: recording ? "var(--color-red)" : "var(--color-muted)",
+                  borderColor: recording
+                    ? "var(--color-red)"
+                    : "var(--color-border)",
+                  background: "var(--color-card)",
+                  cursor: "pointer",
+                  animation: recording
+                    ? "swipe-rec-pulse 1.2s ease-in-out infinite"
+                    : undefined,
                 }}
               >
-                💬 {comment ? comment : t.commentPh}
+                {recording ? <IconStop size={16} /> : <IconMic size={16} />}
               </button>
             )}
           </div>
@@ -767,7 +926,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                 disabled={history.length === 0}
                 onClick={undo}
               >
-                ↩
+                <IconUndo size={16} />
               </ActionCircle>
             </div>
             {VERDICT_ORDER.slice(2).map((v) => (
@@ -837,11 +996,11 @@ function VerdictButton({
   label: string;
   onClick: () => void;
 }) {
-  const v = VERDICTS[verdict];
+  const { Icon, color } = VERDICTS[verdict];
   return (
     <div className="flex flex-col items-center gap-1 w-[72px]">
-      <ActionCircle label={label} color={v.color} size={52} onClick={onClick}>
-        {v.icon}
+      <ActionCircle label={label} color={color} size={52} onClick={onClick}>
+        <Icon size={20} />
       </ActionCircle>
       <span
         className="text-[9px] font-semibold text-center leading-tight"
@@ -879,7 +1038,6 @@ function ActionCircle({
       style={{
         width: size,
         height: size,
-        fontSize: size * 0.38,
         color,
         borderColor: color,
         background: "var(--color-card)",
