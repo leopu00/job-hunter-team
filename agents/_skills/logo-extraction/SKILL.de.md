@@ -98,6 +98,22 @@ python3 /app/shared/skills/logo_fetch.py "<Company>" --mark-attempted
 Fallback, das Unternehmen verlässt die Queue. NICHT über 3 Versuche
 hinaus insistieren.
 
+## Spar-Policy (enrichment-policy)
+
+Der autonome Fetch respektiert `$JHT_HOME/profile/enrichment-policy.json`
+(prüfe mit `python3 /app/shared/skills/enrichment_policy.py show`).
+Mögliche Antworten von `logo_fetch.py`:
+
+- `POLICY_DISABLED` — Sparmodus aktiv (`economy=true`) oder
+  `logo.enabled=false`: NICHT extrahieren, kein Fehler. Weitermachen.
+- `POLICY_SCORE_GATE` — die Firma hat noch keine lebende Position mit
+  Score ≥ `logo.min_score`: NICHT insistieren. Markiert `logo_fetched`
+  nicht: überschreitet der Scorer die Schwelle, kehrt die Firma von
+  selbst in die Queue zurück.
+
+`--force` umgeht die Policy: NUR auf explizite Anfrage des Nutzers
+verwenden, nie eigenmächtig.
+
 ## Erwartete Qualität
 
 - **Bevorzuge** quadratische Icons 96–256px (apple-touch-icon ist

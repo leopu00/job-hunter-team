@@ -99,6 +99,22 @@ python3 /app/shared/skills/logo_fetch.py "<Company>" --mark-attempted
 initiales, l'entreprise sort de la file. NE PAS insister au-delà de 3
 tentatives.
 
+## Policy d'économie (enrichment-policy)
+
+Le fetch autonome respecte `$JHT_HOME/profile/enrichment-policy.json`
+(vérifie avec `python3 /app/shared/skills/enrichment_policy.py show`).
+Réponses possibles de `logo_fetch.py` :
+
+- `POLICY_DISABLED` — économie active (`economy=true`) ou
+  `logo.enabled=false` : N'extrais PAS, ce n'est pas une erreur. Passe.
+- `POLICY_SCORE_GATE` — l'entreprise n'a pas encore de position vivante
+  avec score ≥ `logo.min_score` : N'insiste PAS. Ne marque pas
+  `logo_fetched` : quand le Scorer dépasse le seuil, l'entreprise
+  rentre toute seule dans la file.
+
+`--force` contourne la policy : utilise-le SEULEMENT sur demande
+explicite de l'utilisateur, jamais de ta propre initiative.
+
 ## Qualité attendue
 
 - **Préfère** des icônes carrées 96–256px (apple-touch-icon est

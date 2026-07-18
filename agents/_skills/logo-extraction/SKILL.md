@@ -92,6 +92,21 @@ python3 /app/shared/skills/logo_fetch.py "<Company>" --mark-attempted
 `logo_fetched=1` con logo NULL: la pagina web mostra il fallback a
 iniziali, l'azienda esce dalla coda. NON insistere oltre 3 tentativi.
 
+## Policy di risparmio (enrichment-policy)
+
+Il fetch autonomo rispetta `$JHT_HOME/profile/enrichment-policy.json`
+(controlla con `python3 /app/shared/skills/enrichment_policy.py show`).
+Risposte possibili di `logo_fetch.py`:
+
+- `POLICY_DISABLED` — risparmio attivo (`economy=true`) o
+  `logo.enabled=false`: NON estrarre, non è un errore. Vai avanti.
+- `POLICY_SCORE_GATE` — l'azienda non ha ancora posizioni vive con
+  score ≥ `logo.min_score`: NON insistere. Non marca `logo_fetched`:
+  quando lo Scorer supera la soglia, l'azienda rientra in coda da sola.
+
+`--force` scavalca la policy: usalo SOLO su richiesta esplicita
+dell'utente, mai in autonomia.
+
 ## Qualità attesa
 
 - **Preferisci** icone quadrate 96–256px (apple-touch-icon è l'ideale).
