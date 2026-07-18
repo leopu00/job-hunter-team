@@ -15,6 +15,7 @@ var _results: Array = []
 
 func _init() -> void:
 	layer = 30  # sopra sidebar e pannelli
+	add_to_group("camera_blocking_overlay")
 
 func _ready() -> void:
 	var root := Control.new()

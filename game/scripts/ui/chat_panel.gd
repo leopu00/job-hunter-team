@@ -44,6 +44,7 @@ func _init(slug: String, display_name: String, roster: Array = []) -> void:
 	_display_name = display_name
 	_roster = roster
 	layer = 40
+	add_to_group("camera_blocking_overlay")
 
 func _ready() -> void:
 	var root := Control.new()

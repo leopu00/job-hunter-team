@@ -147,6 +147,8 @@ func _ready() -> void:
 	_camera = FreeCamera.new()
 	add_child(_camera)
 	_camera.clicked.connect(_on_world_click)
+	if OS.get_environment("JHT_CAMERA_LOCK_TEST") == "1":
+		_camera_lock_selftest.call_deferred()
 	if _seat_audit != "":
 		var audit_parts := _seat_audit.split(":")
 		if audit_parts.size() == 2 and DepartmentDefs.DEPARTMENTS.has(audit_parts[0]):
@@ -205,15 +207,21 @@ func _ready() -> void:
 				add_child(_registry))
 	# TEST-AUTO: apre l'archivio dello scaffale quando arriva lo snapshot.
 	if OS.get_environment("JHT_CV_SHELF") == "1":
-		BackendBus.positions_updated.connect(func(_l: Array) -> void:
-			if _cv_shelf_panel == null:
-				_open_cv_shelf())
+		if not BackendBus.positions.is_empty():
+			_open_cv_shelf.call_deferred()
+		else:
+			BackendBus.positions_updated.connect(func(_l: Array) -> void:
+				if _cv_shelf_panel == null:
+					_open_cv_shelf())
 	# TEST-AUTO: apre una delle cinque code fisiche col primo snapshot.
 	var queue_test := OS.get_environment("JHT_PIPELINE_QUEUE")
 	if DepartmentDefs.DEPT_ORDER.has(queue_test):
-		BackendBus.positions_updated.connect(func(_l: Array) -> void:
-			if _queue_panel == null:
-				_open_pipeline_queue(queue_test))
+		if not BackendBus.positions.is_empty():
+			_open_pipeline_queue.call_deferred(queue_test)
+		else:
+			BackendBus.positions_updated.connect(func(_l: Array) -> void:
+				if _queue_panel == null:
+					_open_pipeline_queue(queue_test))
 
 	# TEST-AUTO: JHT_SEARCH=<query> apre la GlobalSearch precompilata
 	# (il refresh con le posizioni vere arriva col primo snapshot)
@@ -278,6 +286,27 @@ func _ready() -> void:
 	var shot := OS.get_environment("JHT_SHOT")
 	if shot != "":
 		_take_shot(shot)
+
+## Regressione trackpad/overlay: una gesture consegnata direttamente alla
+## camera non deve cambiare né pan né zoom finché il gruppo modal è attivo.
+func _camera_lock_selftest() -> void:
+	var blocker := Node.new()
+	add_child(blocker)
+	blocker.add_to_group("camera_blocking_overlay")
+	var before_pos := _camera.position
+	var before_zoom := _camera.zoom
+	var pan := InputEventPanGesture.new()
+	pan.delta = Vector2(20, 15)
+	_camera._unhandled_input(pan)
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	_camera._unhandled_input(wheel)
+	var ok := _camera.position.is_equal_approx(before_pos) \
+			and _camera.zoom.is_equal_approx(before_zoom)
+	print("CAMERA-OVERLAY-LOCK-TEST ", "PASS" if ok else "FAIL")
+	blocker.queue_free()
+	get_tree().quit(0 if ok else 1)
 
 func _force_pipeline_trip(test_dept: String) -> void:
 	await get_tree().create_timer(0.8).timeout

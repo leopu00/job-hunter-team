@@ -20,6 +20,9 @@ func _init() -> void:
 		"scout": [1], "analisti": [2], "scorer": [3],
 		"scrittori": [4, 5, 6], "critici": [7],
 	}
-	var ok := got == expected
+	var escaped_emoji := "\\" + "U0001F310"
+	var markdown := TerminalTheme._markdown_to_bbcode("**forte** [test] " + escaped_emoji)
+	var ok := got == expected \
+			and markdown == "[b]forte[/b] [lb]test[rb] 🌐"
 	print("PIPELINE-QUEUE-TEST ", "PASS " if ok else "FAIL ", JSON.stringify(got))
 	quit(0 if ok else 1)

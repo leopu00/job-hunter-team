@@ -13,6 +13,7 @@ var _agent: AgentNPC
 func _init(agent: AgentNPC) -> void:
 	_agent = agent
 	layer = 40
+	add_to_group("camera_blocking_overlay")
 
 func _ready() -> void:
 	var root := Control.new()

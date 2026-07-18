@@ -49,6 +49,8 @@ case "$MODE" in
 		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
 		DOCTOR_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_DOCTOR_TEST=scout-4 godot --headless . 2>&1)"
 		printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
+		CAMERA_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_CAMERA_LOCK_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$CAMERA_OUT" | grep "CAMERA-OVERLAY-LOCK-TEST PASS"
 		echo "[run.sh] TEST OK"
 		;;
 	boot)

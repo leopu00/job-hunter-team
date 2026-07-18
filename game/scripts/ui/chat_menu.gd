@@ -17,6 +17,7 @@ func _init(agents: Array) -> void:
 		_agents.append({"slug": a.slug if a.uid == "" else a.uid,
 				"name": a.display_name})
 	layer = 40
+	add_to_group("camera_blocking_overlay")
 
 func _ready() -> void:
 	var root := Control.new()

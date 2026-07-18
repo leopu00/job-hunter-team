@@ -6,8 +6,8 @@ extends CanvasLayer
 signal closed
 signal open_position(position_id: int)
 
-const PANEL_SIZE := Vector2(1080, 620)
-const LIST_WIDTH := 440.0
+const PANEL_MIN_SIZE := Vector2(1040, 560)
+const LIST_WIDTH := 500.0
 
 var source_dept := ""
 var _selected_id := 0
@@ -18,6 +18,7 @@ var _detail: VBoxContainer
 func _init(p_source_dept: String) -> void:
 	source_dept = p_source_dept
 	layer = 42
+	add_to_group("camera_blocking_overlay")
 
 func _ready() -> void:
 	var root := Control.new()
@@ -33,19 +34,26 @@ func _ready() -> void:
 			close())
 	root.add_child(dim)
 
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(center)
+	# Quasi fullscreen ma con respiro: cresce con il viewport invece di
+	# restare una finestra fissa troppo stretta sulle risoluzioni grandi.
+	var holder := MarginContainer.new()
+	holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	holder.add_theme_constant_override("margin_left", 64)
+	holder.add_theme_constant_override("margin_right", 64)
+	holder.add_theme_constant_override("margin_top", 42)
+	holder.add_theme_constant_override("margin_bottom", 42)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(holder)
 	var panel := BracketPanel.new()
-	panel.custom_minimum_size = PANEL_SIZE
-	center.add_child(panel)
+	panel.custom_minimum_size = PANEL_MIN_SIZE
+	holder.add_child(panel)
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 24)
 	panel.add_child(margin)
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 10)
+	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(_content)
 
 	if not BackendBus.positions_updated.is_connected(_on_positions_updated):
@@ -125,6 +133,8 @@ func _build_body() -> void:
 
 	var left := VBoxContainer.new()
 	left.custom_minimum_size = Vector2(LIST_WIDTH, 0)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_stretch_ratio = 1.15
 	left.add_theme_constant_override("separation", 7)
 	body.add_child(left)
 	left.add_child(TerminalTheme.label(UIStrings.t("queue.list"), 13,
@@ -147,21 +157,39 @@ func _build_body() -> void:
 
 	var detail_panel := PanelContainer.new()
 	detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail_panel.size_flags_stretch_ratio = 1.0
 	detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(detail_panel)
 	var detail_margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
 		detail_margin.add_theme_constant_override("margin_" + side, 16)
 	detail_panel.add_child(detail_margin)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 8)
+	detail_margin.add_child(right)
+	right.add_child(TerminalTheme.label(UIStrings.t("queue.detail"), 13,
+			Palette.MUTED, "medium"))
 	var detail_scroll := ScrollContainer.new()
 	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail_margin.add_child(detail_scroll)
+	right.add_child(detail_scroll)
 	_detail = VBoxContainer.new()
 	_detail.add_theme_constant_override("separation", 9)
 	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	detail_scroll.add_child(_detail)
 	_build_detail()
+	# Sempre visibile: solo il contenuto descrittivo scorre sopra di lui.
+	var open := Button.new()
+	open.text = UIStrings.t("queue.open_position")
+	open.add_theme_font_size_override("font_size", 13)
+	open.custom_minimum_size = Vector2(0, 42)
+	var selected := _selected()
+	open.disabled = selected.is_empty()
+	var pid := int(selected.get("id", 0))
+	open.pressed.connect(func() -> void:
+		if pid != 0:
+			open_position.emit(pid))
+	right.add_child(open)
 
 func _position_button(p: Dictionary) -> Button:
 	var pid := int(p.get("id", 0))
@@ -181,8 +209,6 @@ func _position_button(p: Dictionary) -> Button:
 	return btn
 
 func _build_detail() -> void:
-	_detail.add_child(TerminalTheme.label(UIStrings.t("queue.detail"), 13,
-			Palette.MUTED, "medium"))
 	var p := _selected()
 	if p.is_empty():
 		_detail.add_child(TerminalTheme.label(UIStrings.t("queue.select"), 14, Palette.DIM))
@@ -215,16 +241,7 @@ func _build_detail() -> void:
 	var summary := _text(p.get("jd_summary"))
 	if summary != "":
 		_detail.add_child(HSeparator.new())
-		var paragraph := TerminalTheme.label(summary, 12, Palette.MUTED)
-		paragraph.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		paragraph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_detail.add_child(paragraph)
-	var open := Button.new()
-	open.text = UIStrings.t("queue.open_position")
-	open.add_theme_font_size_override("font_size", 13)
-	var pid := int(p.get("id", 0))
-	open.pressed.connect(func() -> void: open_position.emit(pid))
-	_detail.add_child(open)
+		_detail.add_child(TerminalTheme.markdown_label(summary, 13, Palette.BASE))
 
 func _add_row(label_text: String, value: String, color: Color) -> void:
 	var row := HBoxContainer.new()
