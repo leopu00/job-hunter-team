@@ -1,13 +1,9 @@
 class_name WorldMap
 extends Control
-## La vista Mappa completa, con l'esperienza del web privato: si parte
-## dal GLOBO (JobsGlobe, projection globe) e avvicinandosi si atterra
-## sulla mappa piatta a tiles; allontanandosi dal piatto si torna al
-## globo. Sopra le due viste vivono i FILTRI cross (famiglia di ruolo,
-## score, modalità, paese, città — la pagina /map del web) e il widget
-## zoom −/panoramica/+. Il click su un pin apre la scheda delle sue
-## posizioni; da lì si naviga al dettaglio (open_position).
-## JHT_MAP_FLAT=1 / JHT_MAP_ZOOM=<z> aprono direttamente piatto (shot).
+## La vista Mappa completa del web privato: basemap piatta a tile, FILTRI
+## cross (famiglia, score, modalità, paese, città), zoom/panoramica e pin
+## che aprono tutte le posizioni del luogo. Nessuna fase globo: si entra
+## subito nella panoramica operativa e non si cambia rappresentazione.
 
 signal open_position(pid: int)
 
@@ -21,9 +17,8 @@ const FILTER_GROUPS := [
 ]
 const CHIP_MAX := 12  # chip per gruppo: i più frequenti, il resto tace
 
-var _globe: MapGlobe
 var _flat: OsmMap
-## Stato dei filtri, condiviso PER RIFERIMENTO con le due viste.
+## Stato dei filtri condiviso PER RIFERIMENTO con la mappa.
 var filters := {"role_family": {}, "score": {}, "work_mode": {},
 		"loc_country": {}, "loc_city": {}}
 
@@ -32,46 +27,34 @@ var _filter_btn: Button
 var _filter_panel: PanelContainer
 var _filter_box: VBoxContainer
 var _zoombar: HBoxContainer
+var _initial_fit_done := false
 
 func _ready() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_globe = MapGlobe.new()
-	_globe.filters = filters
-	_globe.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(_globe)
 	_flat = OsmMap.new()
 	_flat.filters = filters
 	_flat.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_flat.visible = false
 	add_child(_flat)
-	_globe.dive_in.connect(func(lonlat: Vector2) -> void:
-		_flat.fly_to(lonlat, 4.5)
-		_show_flat(true))
-	# click su un pin del globo → atterra sulla sua città CON la scheda
-	# aperta (il flyTo + popup del web)
-	_globe.pin_clicked.connect(func(pin: Dictionary) -> void:
-		_flat.fly_to(pin["lonlat"], 6.0)
-		_flat.zoom_to(10.5)
-		_show_flat(true)
-		_flat.select_key(str(pin["key"])))
-	_flat.zoomed_out.connect(func() -> void: _show_flat(false))
 	_flat.open_position.connect(func(pid: int) -> void: open_position.emit(pid))
-	if OS.get_environment("JHT_MAP_FLAT") == "1" \
-			or OS.get_environment("JHT_MAP_ZOOM") != "":
-		_show_flat(true)
+	_initial_fit_done = OS.get_environment("JHT_MAP_ZOOM") != "" \
+			or OS.get_environment("JHT_MAP_PIN") != ""
 	_build_overlays()
 	# TEST-AUTO: JHT_MAP_FILTERS=1 apre il pannello filtri (per gli shot)
 	if OS.get_environment("JHT_MAP_FILTERS") == "1":
 		_filter_panel.visible = true
 		_refresh_filter_panel()
 	BackendBus.positions_updated.connect(func(_l: Array) -> void:
+		_fit_initial_overview.call_deferred()
 		if _filter_panel.visible:
 			_refresh_filter_panel())
+	_fit_initial_overview.call_deferred()
 
-func _show_flat(flat: bool) -> void:
-	_flat.visible = flat
-	_globe.visible = not flat
+func _fit_initial_overview() -> void:
+	if _initial_fit_done or BackendBus.positions.is_empty():
+		return
+	_initial_fit_done = true
+	_flat.fit_all()
 
 ## Gli overlay non hanno anchors utili dentro un container: li teniamo
 ## a misura minima e li riposizioniamo noi (top-right e basso-centro).
@@ -131,10 +114,7 @@ func _build_overlays() -> void:
 	_style_widget_button(overview, Palette.BASE)
 	overview.pressed.connect(func() -> void:
 		Sfx.play_tick()
-		if _globe.visible:
-			_globe.fit_overview()
-		else:
-			_flat.fit_all())
+		_flat.fit_all())
 	_zoombar.add_child(overview)
 	var plus := Button.new()
 	plus.text = "+"
@@ -143,13 +123,8 @@ func _build_overlays() -> void:
 	plus.pressed.connect(func() -> void: _zoom_step(1.0))
 	_zoombar.add_child(plus)
 
-## Zoom del widget sulla vista visibile (sul globo il + oltre soglia
-## atterra sulla mappa, esattamente come la rotella).
 func _zoom_step(direction: float) -> void:
-	if _globe.visible:
-		_globe.zoom_step(-direction * 0.2)
-	else:
-		_flat.zoom_step(direction * 0.8)
+	_flat.zoom_step(direction * 0.8)
 
 static func _style_widget_button(btn: Button, col: Color) -> void:
 	btn.add_theme_color_override("font_color", col)
@@ -186,8 +161,8 @@ func _update_filter_btn() -> void:
 ## pannello i conteggi (cross-filter: ogni gruppo conta le posizioni
 ## filtrate da tutti GLI ALTRI, come sul web e nella vista positions).
 func _apply_filters() -> void:
-	_globe._rebuild_pins()
 	_flat._rebuild_pins()
+	_flat.fit_all()
 	_update_filter_btn()
 	if _filter_panel.visible:
 		_refresh_filter_panel()

@@ -151,6 +151,8 @@ func _ready() -> void:
 		_camera_lock_selftest.call_deferred()
 	if OS.get_environment("JHT_POSITIONS_PANEL_TEST") == "1":
 		_positions_panel_selftest.call_deferred()
+	if OS.get_environment("JHT_MAP_PANEL_TEST") == "1":
+		_map_panel_selftest.call_deferred()
 	if _seat_audit != "":
 		var audit_parts := _seat_audit.split(":")
 		if audit_parts.size() == 2 and DepartmentDefs.DEPARTMENTS.has(audit_parts[0]):
@@ -358,6 +360,81 @@ func _positions_panel_selftest() -> void:
 	print("POSITIONS-PANEL-TEST ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
 
+## Test/preview deterministico della mappa: 14 offerte coincidenti a Stoccolma
+## devono essere tutte raggiungibili e i gesti devono seguire lo stesso asse.
+func _map_panel_selftest() -> void:
+	var rows: Array = []
+	for i in 14:
+		rows.append({
+			"id": i + 1, "title": "Ruolo Stockholm %02d" % (i + 1),
+			"company": "Azienda", "status": "scored", "total_score": 70 + i,
+			"role_family": "AI Engineering", "work_mode": "remote",
+			"loc_city": "Stockholm", "loc_country": "Sweden",
+			"office_lat": 59.3293, "office_lon": 18.0686,
+		})
+	for extra in [
+		{"city": "San Francisco", "country": "United States", "lat": 37.7749, "lon": -122.4194},
+		{"city": "Sydney", "country": "Australia", "lat": -33.8688, "lon": 151.2093},
+		{"city": "Tokyo", "country": "Japan", "lat": 35.6762, "lon": 139.6503},
+		{"city": "Milano", "country": "Italy", "lat": 45.4642, "lon": 9.1900},
+		{"city": "Bergamo", "country": "Italy", "lat": 45.6983, "lon": 9.6773},
+		{"city": "Roma", "country": "Italy", "lat": 41.9028, "lon": 12.4964},
+		{"city": "Torino", "country": "Italy", "lat": 45.0703, "lon": 7.6869},
+	]:
+		rows.append({
+			"id": rows.size() + 1, "title": "Ruolo " + str(extra["city"]),
+			"company": "Azienda", "status": "scored", "total_score": 78,
+			"role_family": "AI Engineering", "work_mode": "remote",
+			"loc_city": extra["city"], "loc_country": extra["country"],
+			"office_lat": extra["lat"], "office_lon": extra["lon"],
+		})
+	BackendBus.positions = rows
+	var panel := SectionPanel.new("map", 24.0)
+	add_child(panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var world := _ui_find_class_node(panel, "WorldMap") as WorldMap
+	if world == null:
+		print("MAP-PANEL-TEST FAIL no WorldMap")
+		get_tree().quit(1)
+		return
+	var overview_zoom: float = world._flat._target_zoom
+	if OS.get_environment("JHT_SHOT") != "" \
+			and OS.get_environment("JHT_MAP_CLUSTER_PREVIEW") == "1":
+		return
+	world._flat.zoom_f = 4.0
+	world._flat._target_zoom = 4.0
+	var italy_cluster := {}
+	for pin in world._flat._display_pins():
+		if bool(pin.get("is_cluster", false)) and str(pin["label"]).begins_with("Italy"):
+			italy_cluster = pin
+			break
+	var cluster_ok := not italy_cluster.is_empty() \
+			and int(italy_cluster["source_count"]) == 4
+	if cluster_ok:
+		world._flat._click_pin(world._flat._to_screen(italy_cluster["norm"]))
+		cluster_ok = world._flat._target_zoom > 5.0
+	world._flat.fly_to(Vector2(18.0686, 59.3293), 10.0)
+	world._flat.select_key("Stockholm|Sweden")
+	await get_tree().process_frame
+	# Con JHT_SHOT il medesimo scenario resta aperto per l'audit visivo.
+	if OS.get_environment("JHT_SHOT") != "":
+		return
+	var ok := _ui_count_button_prefix(panel, "Ruolo Stockholm") == 14 \
+			and _ui_has_text(panel,
+					"14 posizioni · scorri l’elenco e clicca per aprire la scheda") \
+			and world._flat.visible \
+			and _ui_find_class_node(panel, "MapGlobe") == null \
+			and overview_zoom < 5.0 and cluster_ok
+	var flat_before: Vector2 = world._flat.center
+	var pan := InputEventPanGesture.new()
+	pan.delta = Vector2(2.0, 3.0)
+	world._flat._gui_input(pan)
+	ok = ok and world._flat.center.x < flat_before.x \
+			and world._flat.center.y < flat_before.y
+	print("MAP-PANEL-TEST ", "PASS" if ok else "FAIL")
+	get_tree().quit(0 if ok else 1)
+
 func _ui_has_text(node: Node, wanted: String) -> bool:
 	if node is Label and node.text == wanted:
 		return true
@@ -374,6 +451,22 @@ func _ui_find_button(node: Node, wanted: String) -> Button:
 		if found:
 			return found
 	return null
+
+func _ui_find_class_node(node: Node, type_name: String) -> Node:
+	if node.get_class() == type_name or node.get_script() != null \
+			and node.get_script().get_global_name() == type_name:
+		return node
+	for child in node.get_children():
+		var found := _ui_find_class_node(child, type_name)
+		if found:
+			return found
+	return null
+
+func _ui_count_button_prefix(node: Node, prefix: String) -> int:
+	var count := 1 if node is Button and node.text.begins_with(prefix) else 0
+	for child in node.get_children():
+		count += _ui_count_button_prefix(child, prefix)
+	return count
 
 func _ui_count_class(node: Node, type_name: String) -> int:
 	var count := 1 if node.get_class() == type_name else 0
