@@ -1027,10 +1027,12 @@ export async function getSwipeDeck(limit = 100): Promise<PositionWithScore[]> {
   const w = await ws();
   if (w) {
     try {
+      // Ordine: dalla trovata meno di recente alla più recente (scelta
+      // utente 18/07) — il triage smaltisce il backlog in ordine di arrivo.
       return local.getPositionsLocal(w, {
         statuses: ["scored", "ready"],
-        sort: "score",
-        dir: "desc",
+        sort: "found_at",
+        dir: "asc",
         limit,
       });
     } catch {
@@ -1048,6 +1050,9 @@ export async function getSwipeDeck(limit = 100): Promise<PositionWithScore[]> {
       )
       .in("status", ["scored", "ready"])
       .is("deleted_at", null)
+      // Ordine: dalla trovata meno di recente alla più recente (scelta
+      // utente 18/07) — il triage smaltisce il backlog in ordine di arrivo.
+      .order("found_at", { ascending: true })
       // Margine 2x: una parte verrà filtrata come già swipata.
       .limit(limit * 2),
     getSwipedLegacyIds(supabase),
@@ -1074,7 +1079,6 @@ export async function getSwipeDeck(limit = 100): Promise<PositionWithScore[]> {
           "EUR",
       } as PositionWithScore;
     })
-    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
     .slice(0, limit);
 }
 
@@ -1157,16 +1161,13 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       p.salary_estimated_min != null || p.salary_estimated_max != null;
     const salary_min =
       ((useEst ? p.salary_estimated_min : p.salary_declared_min) as
-        | number
-        | null) ?? null;
+        number | null) ?? null;
     const salary_max =
       ((useEst ? p.salary_estimated_max : p.salary_declared_max) as
-        | number
-        | null) ?? null;
+        number | null) ?? null;
     const salary_currency =
       ((useEst ? p.salary_estimated_currency : p.salary_declared_currency) as
-        | string
-        | null) ?? "EUR";
+        string | null) ?? "EUR";
     return {
       id: String(p.id),
       legacy_id: (p.legacy_id as number | null) ?? null,
