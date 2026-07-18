@@ -466,6 +466,8 @@ func _run() -> void:
 			_fetch_metrics()
 		if _convo_agent != "":
 			_fetch_convo(_convo_agent)
+		if _profile_watch:
+			_fetch_profile_status()
 		tick += 1
 		# con una conversazione aperta il giro accorcia: la risposta
 		# dell'agente deve comparire in fretta, non dopo 8 secondi
@@ -742,6 +744,156 @@ func _do_save_profile(fields: Dictionary) -> void:
 			"" if ok else _short_error(res))
 	if ok:
 		_fetch_settings()  # il profilo aggiornato rientra subito in vista
+
+
+## ── Onboarding in-game (wizard: il badge si compila con l'assistente) ─
+## Stato del profilo = STESSA semantica di GET /api/profile del web:
+## ready = ready.flag esiste OPPURE tutti i campi required ok. La
+## checklist required replica web/lib/profile-completion.ts (2026-06-06):
+## name, email, target_role, location, experience_years,
+## seniority_target, ≥2 skill, ≥1 lingua. Chi SCRIVE il profilo resta
+## l'agente assistente: il gioco osserva e basta, come la pagina web.
+
+const PROFILE_STATUS_PY := """
+import json, os
+prof = {}
+try:
+    import yaml
+    prof = yaml.safe_load(open('/jht_home/profile/candidate_profile.yml')) or {}
+except Exception:
+    pass
+def s(v):
+    return str(v).strip() if v is not None else ''
+skills = prof.get('skills') or {}
+skill_list = []
+if isinstance(skills, dict):
+    for v in skills.values():
+        if isinstance(v, list):
+            skill_list += [s(x) for x in v if s(x)]
+elif isinstance(skills, list):
+    skill_list = [s(x) for x in skills if s(x)]
+def lang_str(x):
+    if isinstance(x, dict):
+        return ' '.join(s(v) for v in x.values() if s(v))
+    return s(x)
+langs = prof.get('languages') or []
+if not isinstance(langs, list):
+    langs = [langs]
+langs = [lang_str(x) for x in langs if lang_str(x)]
+pos = prof.get('positioning') or {}
+contacts = pos.get('contacts') or {}
+email = s(prof.get('email')) or s(contacts.get('email'))
+seniority = s(prof.get('seniority_target')) or s(pos.get('seniority_target'))
+required = dict(
+    name=s(prof.get('name')) != '',
+    email=email != '',
+    target_role=s(prof.get('target_role')) != '',
+    location=s(prof.get('location')) != '',
+    experience_years=prof.get('experience_years') is not None,
+    seniority_target=seniority != '',
+    skills=len(skill_list) >= 2,
+    languages=len(langs) >= 1,
+)
+ready = os.path.exists('/jht_home/profile/ready.flag') or all(required.values())
+view = dict(
+    name=s(prof.get('name')), email=email,
+    target_role=s(prof.get('target_role')), location=s(prof.get('location')),
+    experience_years=s(prof.get('experience_years')),
+    seniority_target=seniority, skills=skill_list[:12], languages=langs[:8],
+)
+print(json.dumps(dict(profile=view, required=required, ready=ready),
+                 ensure_ascii=False))
+"""
+
+var _profile_watch := false
+
+func open_profile_watch() -> void:
+	_profile_watch = true
+
+func close_profile_watch() -> void:
+	_profile_watch = false
+
+func _fetch_profile_status() -> void:
+	var res := _ssh_python(PROFILE_STATUS_PY)
+	if _stop or res["code"] != 0:
+		return
+	for line in str(res["out"]).split("\n"):
+		if line.begins_with("{"):
+			var d: Variant = JSON.parse_string(line)
+			if d is Dictionary:
+				bus.call_deferred("publish_profile_status", d)
+			return
+
+## Avvio idempotente dell'assistente (equivalente di POST
+## /api/assistente/start): se la sessione ASSISTENTE non c'è, lancia
+## start-agent.sh dentro il container in detached. Niente quoting: solo
+## il || della shell remota, come nel POLL_CMD.
+func ensure_assistant() -> void:
+	_queue_worker(_do_ensure_assistant)
+
+func _do_ensure_assistant() -> void:
+	_ssh("docker exec jht tmux has-session -t ASSISTENTE 2>/dev/null " \
+			+ "|| docker exec -d jht bash /app/.launcher/start-agent.sh assistente")
+
+## Upload CV/documenti nella drop-zone del container (/jht_user/allegati,
+## stessa destinazione di POST /api/assistente/upload). Il file viaggia
+## binario su stdin di OpenSSH → tee nel container: mai in una shell come
+## argomento. Vincoli identici alla route web: estensioni note, max 10MB.
+
+const UPLOAD_DIR := "/jht_user/allegati"
+const UPLOAD_MAX_BYTES := 10 * 1024 * 1024
+const UPLOAD_EXTS := ["pdf", "doc", "docx", "txt", "md", "png", "jpg",
+		"jpeg", "csv", "xlsx", "xls", "json", "yaml", "yml"]
+
+func upload_document(local_path: String) -> void:
+	_queue_worker(_do_upload_document.bind(local_path))
+
+func _do_upload_document(local_path: String) -> void:
+	if not FileAccess.file_exists(local_path):
+		_doc_uploaded(false, "", "file non trovato: " + local_path)
+		return
+	var ext := local_path.get_extension().to_lower()
+	if not UPLOAD_EXTS.has(ext):
+		_doc_uploaded(false, "", "estensione non ammessa: ." + ext)
+		return
+	var f := FileAccess.open(local_path, FileAccess.READ)
+	if f == null:
+		_doc_uploaded(false, "", "file non leggibile")
+		return
+	var size := f.get_length()
+	f.close()
+	if size > UPLOAD_MAX_BYTES:
+		_doc_uploaded(false, "", "file oltre i 10 MB")
+		return
+	var safe := _safe_filename(local_path.get_file())
+	var remote := UPLOAD_DIR + "/" + safe
+	var mk := _ssh("docker exec jht mkdir -p " + UPLOAD_DIR)
+	if mk["code"] != 0:
+		_doc_uploaded(false, "", _short_error(mk))
+		return
+	var res := _ssh_stdin_file(local_path,
+			"docker exec -i jht tee " + remote + " >/dev/null")
+	if res["code"] != 0:
+		_doc_uploaded(false, "", _short_error(res))
+		return
+	_doc_uploaded(true, remote, "")
+
+func _doc_uploaded(ok: bool, remote_path: String, error: String) -> void:
+	bus.call_deferred("emit_signal", "document_uploaded", ok, remote_path, error)
+
+## Nome file sicuro per il viaggio in shell remota: solo [A-Za-z0-9._-],
+## il resto diventa _ (stessa igiene della route web di upload).
+static func _safe_filename(name: String) -> String:
+	var out := ""
+	for i in name.length():
+		var c := name[i]
+		var code := c.unicode_at(0)
+		var is_ok: bool = (code >= 48 and code <= 57) \
+				or (code >= 65 and code <= 90) or (code >= 97 and code <= 122) \
+				or c == "." or c == "_" or c == "-"
+		out += c if is_ok else "_"
+	out = out.lstrip(".")
+	return out if out != "" else "documento"
 
 
 ## ── Orari di lavoro: editing PIENO (paradigma desktop app) ───────────

@@ -28,7 +28,9 @@ Le fonti tra parentesi rimandano a `RESEARCH-DOSSIER.md` (§) e
 
 - Espansione ufficio: altre stanze/piani (archivio del Critico, stanza
   del Tesoriere), sempre al chiuso dentro la box.
-- Salvataggio profilo/avatar (oggi il wizard è in-memoria).
+- ~~Salvataggio profilo/avatar (oggi il wizard è in-memoria)~~ → FATTO 18/07:
+  il wizard è l'onboarding REALE (assistente via BackendBus, profilo nel
+  candidate_profile.yml del backend); resta eventuale avatar/nome team locale.
 - i18n: stringhe già centralizzate in `ui_strings.gd` + `dialogues.gd`
   (il sito supporta 7 lingue).
 - Audio: musica ambient generativa, foley passi, brusio ufficio.

@@ -1,10 +1,17 @@
 extends Node
 ## Autoload `Game`: stato globale, profilo giocatore, cambio scena, pausa.
 
-enum State { TITLE, OFFICE }
+enum State { TITLE, WIZARD, OFFICE }
 
 const SCENE_TITLE := "res://scenes/title.tscn"
+const SCENE_WIZARD := "res://scenes/wizard.tscn"
 const SCENE_OFFICE := "res://scenes/office.tscn"
+
+## Flag locale "onboarding completato": deciso dal wizard quando il
+## backend dichiara il profilo ready (o l'utente entra con profilo già
+## completo). Solo UX di routing: la verità sul profilo resta nel
+## candidate_profile.yml del backend.
+const ONBOARDING_CFG := "user://onboarding.cfg"
 
 var state: State = State.TITLE
 ## True mentre un dialogo a ritratti è aperto (blocca movimento e pausa-rapida).
@@ -41,9 +48,11 @@ func _ready() -> void:
 	# a mouse e tastiera per tutta la durata dello shot.
 	if OS.get_environment("JHT_SHOT_QUIET") == "1":
 		get_viewport().gui_disable_input = true
-	# Scorciatoia per i test: JHT_SCENE=office salta il boot.
+	# Scorciatoia per i test: JHT_SCENE=office|wizard salta il boot.
 	if OS.get_environment("JHT_SCENE") == "office":
 		goto_office.call_deferred()
+	elif OS.get_environment("JHT_SCENE") == "wizard":
+		goto_wizard.call_deferred()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("fullscreen"):
@@ -62,10 +71,30 @@ func goto_title() -> void:
 	state = State.TITLE
 	get_tree().change_scene_to_file(SCENE_TITLE)
 
+func goto_wizard() -> void:
+	Log.info("scene", "→ WIZARD")
+	state = State.WIZARD
+	get_tree().change_scene_to_file(SCENE_WIZARD)
+
 func goto_office() -> void:
 	Log.info("scene", "→ OFFICE")
 	state = State.OFFICE
 	get_tree().change_scene_to_file(SCENE_OFFICE)
+
+## ── Onboarding: flag di routing (title → wizard solo al primo giro) ──
+
+func onboarding_done() -> bool:
+	# TEST-AUTO: JHT_ONBOARDING=1 forza il wizard anche se già completato
+	if OS.get_environment("JHT_ONBOARDING") == "1":
+		return false
+	var cfg := ConfigFile.new()
+	return cfg.load(ONBOARDING_CFG) == OK \
+			and bool(cfg.get_value("onboarding", "done", false))
+
+func mark_onboarding_done() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("onboarding", "done", true)
+	cfg.save(ONBOARDING_CFG)
 
 # ── Pausa ─────────────────────────────────────────────────────────────
 
