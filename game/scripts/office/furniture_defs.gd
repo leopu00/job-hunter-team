@@ -17,16 +17,19 @@ const LAB_WALL_H1 := Rect2(2300, 740, 330, 12)    # tratto sx della parete bassa
 const LAB_WALL_H2 := Rect2(2750, 740, 410, 12)    # tratto dx (in mezzo: porta)
 
 const ITEMS := [
-	# ── Lounge (alto-sx): la zona del Mentor ──
-	{"id": "sofa", "kind": "sofa", "rect": Rect2(330, 300, 300, 110)},
-	{"id": "coffee_table", "kind": "table_low", "rect": Rect2(390, 480, 180, 80)},
-	{"id": "armchair", "kind": "armchair", "rect": Rect2(690, 330, 110, 100)},
-	{"id": "lamp", "kind": "lamp", "rect": Rect2(300, 214, 44, 44)},
-	{"id": "plant_a", "kind": "plant", "rect": Rect2(630, 204, 56, 56)},
+	# ── Area comune (ex zona Scorer): lounge del Mentor ──
+	{"id": "coffee_table", "kind": "table_low", "rect": Rect2(2190, 1175, 180, 80)},
+	# Il Mentor e il divanetto sono un solo composito quando è seduto. La vista
+	# up mostra correttamente la schiena mentre legge; la base vuota ricompare
+	# soltanto quando si alza per il breve giro libreria/lavagna.
+	{"id": "mentor_sofa", "kind": "mentor_sofa", "rect": Rect2(2450, 1135, 180, 125),
+			"facing": "up", "registry_key": "core:mentor"},
+	{"id": "lamp", "kind": "lamp", "rect": Rect2(2110, 1060, 44, 44)},
+	{"id": "plant_a", "kind": "plant", "rect": Rect2(2250, 1035, 56, 56)},
 
-	# ── Parete alta: bacheca-indagine, libreria e angolo caffè ──
-	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(730, 150, 150, 34)},
-	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(950, 190, 280, 70)},
+	# Bacheca e libreria seguono la lounge; l'angolo caffè resta condiviso a nord.
+	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(2350, 995, 150, 34)},
+	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2550, 970, 280, 70)},
 	{"id": "coffee_bar", "kind": "coffee", "rect": Rect2(1400, 190, 200, 80)},
 	{"id": "water_cooler", "kind": "water_cooler", "rect": Rect2(1602, 196, 54, 54)},
 	# stampante condivisa sulla parete nord, tra coffee e lab: la meta dei
@@ -36,26 +39,20 @@ const ITEMS := [
 	# ── Centro: l'ologramma della ricerca ──
 	{"id": "hologram", "kind": "hologram", "rect": Rect2(1200, 700, 200, 180)},
 
-	# ── Sinistra: lavagna score board + Coordinatore ──
-	{"id": "blackboard", "kind": "blackboard", "rect": Rect2(252, 640, 56, 260)},
-	{"id": "desk_coordinator", "kind": "desk", "rect": Rect2(430, 720, 230, 100)},
-	{"id": "plant_c", "kind": "plant", "rect": Rect2(296, 930, 56, 56)},
+	# ── Direzione, fascia nord: Capitano e Tesoriere guardano in camera ──
+	{"id": "desk_coordinator", "kind": "captain_desk", "rect": Rect2(1365, 500, 260, 108),
+			"facing": "down", "registry_key": "core:coordinatore"},
+	{"id": "desk_sentinella", "kind": "budgeteer_desk", "rect": Rect2(1745, 500, 320, 108),
+			"facing": "down", "registry_key": "core:sentinella"},
 
-	# ── Sala relax (fascia ovest, sotto la lounge): footprint per gli asset
-	# amb_* di dev-art (rec_sofa/arcade/pingpong/kitchenette); il vetro
-	# divisorio ha la porta verso il corridoio (gap 1140..1240).
-	{"id": "rec_kitchenette", "kind": "kitchenette", "rect": Rect2(620, 1000, 230, 80)},
-	{"id": "rec_sofa", "kind": "rec_sofa", "rect": Rect2(330, 1040, 260, 100)},
-	{"id": "rec_bookshelf", "kind": "bookshelf_tall", "rect": Rect2(258, 1160, 56, 180)},
-	{"id": "rec_arcade", "kind": "rec_arcade", "rect": Rect2(350, 1290, 84, 66)},
-	{"id": "rec_pingpong", "kind": "rec_pingpong", "rect": Rect2(600, 1170, 240, 130)},
-	{"id": "rec_glass_a", "kind": "glass_divider", "rect": Rect2(930, 980, 12, 160)},
-	{"id": "rec_glass_b", "kind": "glass_divider", "rect": Rect2(930, 1240, 12, 160)},
+	# ── Area comune: lavagna score board ──
+	{"id": "blackboard", "kind": "blackboard", "rect": Rect2(3070, 1030, 56, 260)},
+	{"id": "plant_c", "kind": "plant", "rect": Rect2(3030, 1340, 56, 56)},
 
 	# ── Verde sparso (reparti e corridoi, mai sulla nav principale) ──
 	{"id": "plant_palm_a", "kind": "plant_palm", "rect": Rect2(958, 1420, 56, 56)},
 	{"id": "plant_monstera_a", "kind": "plant_monstera", "rect": Rect2(2200, 820, 56, 56)},
-	{"id": "plant_shelf_a", "kind": "plant_shelf", "rect": Rect2(860, 186, 90, 50)},
+	{"id": "plant_shelf_a", "kind": "plant_shelf", "rect": Rect2(2340, 960, 90, 50)},
 	{"id": "plant_monstera_b", "kind": "plant_monstera", "rect": Rect2(2378, 764, 56, 56)},
 	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1230, 1900, 56, 56)},
 	# Lontana dal varco scorer: a y=1455 chiudeva il passaggio tra desk 5
@@ -76,29 +73,27 @@ const ITEMS := [
 	# Props ufficio classico, kind nc_* (PNG in arrivo da dev-art con lo
 	# stesso nome: si vestono da soli, intanto blockout).
 	# Lavagne bianche: una per reparto, appoggiate alle vetrate/pareti.
-	{"id": "wb_scout", "kind": "nc_whiteboard", "rect": Rect2(1640, 856, 150, 34)},
+	{"id": "wb_scout", "kind": "nc_whiteboard", "rect": Rect2(1030, 840, 150, 34)},
 	{"id": "wb_analisti", "kind": "nc_whiteboard", "rect": Rect2(2340, 706, 150, 34)},
-	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(2050, 1446, 150, 34)},
+	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(1640, 856, 150, 34)},
 	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(380, 1414, 150, 34)},
 	# Sul lato sud della vetrata: a y=1446 tagliava l'unica riga A* tra
 	# scorer:5 e l'apertura occidentale della parete condivisa.
 	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2160, 1510, 150, 34)},
-	# Sala relax: calcio balilla accanto al ping-pong (reference)
-	{"id": "rec_foosball", "kind": "nc_foosball", "rect": Rect2(430, 1165, 150, 90)},
 	# Scatoloni e schedari: l'ufficio vive
 	{"id": "boxes_printer", "kind": "nc_boxes", "rect": Rect2(1800, 200, 80, 66)},
 	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(3060, 1920, 80, 66)},
 	{"id": "boxes_scrittori", "kind": "nc_boxes", "rect": Rect2(1100, 1900, 80, 66)},
 	{"id": "filing_lab", "kind": "nc_filing_cabinet", "rect": Rect2(3080, 250, 70, 110)},
-	{"id": "filing_coord", "kind": "nc_filing_cabinet", "rect": Rect2(680, 700, 70, 110)},
+	{"id": "filing_coord", "kind": "nc_filing_cabinet", "rect": Rect2(2950, 1175, 70, 110)},
 	# Dettagli: appendiabiti all'entrata sud, orologio a muro, cestini,
 	# cassettiere a fianco delle scrivanie
 	{"id": "coat_rack", "kind": "nc_coat_rack", "rect": Rect2(1500, 1780, 50, 50)},
 	{"id": "wall_clock", "kind": "nc_wall_clock", "rect": Rect2(1260, 150, 60, 60)},
 	{"id": "bin_printer", "kind": "nc_waste_bin", "rect": Rect2(1640, 250, 40, 40)},
-	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(1080, 1390, 40, 40)},
-	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(1010, 1370, 60, 72)},
-	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(2030, 1160, 60, 72)},
+	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(400, 778, 40, 40)},
+	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(330, 758, 60, 72)},
+	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(1010, 1370, 60, 72)},
 	# Fuori dall'anello radiale: a (774,1545) intersecava la postazione
 	# Scrittori delle ore 12 e ne falsava collisione e lettura prospettica.
 	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(1080, 1550, 60, 72)},
@@ -107,8 +102,9 @@ const ITEMS := [
 	{"id": "wall_art", "kind": "nc_wall_art", "rect": Rect2(2040, 150, 90, 60)},
 	{"id": "sideboard", "kind": "nc_sideboard", "rect": Rect2(1830, 1815, 180, 70)},
 ]
-# Rimossi (i reparti hanno postazioni proprie in DepartmentDefs): lab_bench,
-# lab_shelf, shelf_right, desk_scout, desk_pod, desk_scorer.
+# Rimossi dal layout: sofa e sala relax; i reparti hanno postazioni proprie
+# in DepartmentDefs (lab_bench, lab_shelf, shelf_right, desk_scout, desk_pod,
+# desk_scorer).
 
 static func get_rect(id: String) -> Rect2:
 	for item in ITEMS:

@@ -93,23 +93,15 @@ func _ready() -> void:
 		add_child(lab)
 	var rug_tex := _load_tex(RUG_TEX)
 	if rug_tex != null:
-		# tappeto del lounge: piatto sul pavimento, niente collisioni né Y-sort
+		# Tappeto dell'area comune trasferita nella vecchia zona Scorer.
 		var rug := Sprite2D.new()
 		rug.texture = rug_tex
-		rug.position = Vector2(490, 445)
+		# Centro visivo dell'angolo comune: tavolino sul tappeto, figure di
+		# servizio a sinistra e divanetto del Mentor sul bordo destro.
+		rug.position = Vector2(2340, 1190)
 		rug.scale = Vector2(0.68, 0.68)
 		rug.show_behind_parent = true
 		add_child(rug)
-	var rec_rug_tex := _load_tex("res://assets/gen-art/furniture/rug_lounge.png")
-	if rec_rug_tex != null:
-		# tappeto blu/teal al centro della sala relax (piatto, come sopra)
-		var rec_rug := Sprite2D.new()
-		rec_rug.texture = rec_rug_tex
-		rec_rug.position = Vector2(600, 1230)
-		rec_rug.scale = Vector2(0.42, 0.42)
-		rec_rug.show_behind_parent = true
-		add_child(rec_rug)
-
 func _draw() -> void:
 	var world := FurnitureDefs.WORLD
 	var floor_rect := FurnitureDefs.FLOOR

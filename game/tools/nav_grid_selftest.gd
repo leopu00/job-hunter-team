@@ -5,6 +5,7 @@ extends SceneTree
 const NavGridScript = preload("res://scripts/office/nav_grid.gd")
 const DepartmentDefsScript = preload("res://scripts/office/department_defs.gd")
 const FurnitureDefsScript = preload("res://scripts/office/furniture_defs.gd")
+const CharacterDefsScript = preload("res://scripts/characters/character_defs.gd")
 
 var _failures: Array[String] = []
 
@@ -13,6 +14,8 @@ func _init() -> void:
 	_test_writer_radial_layout()
 	_test_all_department_radial_layouts()
 	_test_all_department_desk_textures()
+	_test_core_workstations()
+	_test_core_patrol_routes()
 	_test_real_desk_routes()
 	if _failures.is_empty():
 		print("[nav-test] PASS: collision clamp + all desk routes")
@@ -111,9 +114,9 @@ func _test_writer_radial_layout() -> void:
 ## il centro, corpi verso l'esterno e quattro viste raster realmente importate.
 func _test_all_department_radial_layouts() -> void:
 	var centers := {
-		"scout": Vector2(1455, 1172),
+		"scout": Vector2(775, 560),
 		"analisti": Vector2(2735, 430),
-		"scorer": Vector2(2565, 1200),
+		"scorer": Vector2(1455, 1172),
 		"scrittori": Vector2(690, 1725),
 		"critici": Vector2(2700, 1740),
 	}
@@ -159,6 +162,57 @@ func _test_all_department_desk_textures() -> void:
 		if path.is_empty():
 			continue
 		_assert(_texture_loads(path), "%s texture is missing or unloadable: %s" % [label, path])
+
+## Capitano e Tesoriere hanno una postazione personale frontale: la base e
+## l'arte occupata devono essere entrambe presenti e avere lo stesso canvas,
+## altrimenti lo swap durante la ronda produce un salto visibile.
+func _test_core_workstations() -> void:
+	var expected := {
+		"core:coordinatore": {"stem": "captain_desk_down", "facing": "down"},
+		"core:sentinella": {"stem": "budgeteer_desk_down", "facing": "down"},
+		"core:mentor": {"stem": "mentor_sofa_up", "facing": "up"},
+	}
+	var found: Dictionary = {}
+	for item in FurnitureDefsScript.ITEMS:
+		var key := str(item.get("registry_key", ""))
+		if key.is_empty():
+			continue
+		found[key] = true
+		var contract: Dictionary = expected.get(key, {})
+		_assert(not contract.is_empty(), "unexpected core workstation registry: %s" % key)
+		if contract.is_empty():
+			continue
+		_assert(str(item.get("facing", "")) == str(contract["facing"]),
+				"%s has the wrong facing" % key)
+		var stem := str(contract["stem"])
+		var base_path := "res://assets/gen-art/furniture/%s.png" % stem
+		var seated_path := "res://assets/gen-art/furniture/%s_seated_v2.png" % stem
+		_assert(_texture_loads(base_path), "%s base art missing" % key)
+		_assert(_texture_loads(seated_path), "%s occupied art missing" % key)
+		if _texture_loads(base_path) and _texture_loads(seated_path):
+			var base: Texture2D = load(base_path)
+			var seated: Texture2D = load(seated_path)
+			_assert(base.get_size() == seated.get_size(), "%s canvas mismatch" % key)
+	for key in expected:
+		_assert(found.has(key), "%s workstation is not registered" % key)
+	_assert(_texture_loads("res://assets/characters/sheets/sentinella_a.png"),
+			"Sentinel must use its own Treasurer sheet")
+
+func _test_core_patrol_routes() -> void:
+	var nav = NavGridScript.new()
+	var obstacles: Array = FurnitureDefsScript.obstacles()
+	obstacles.append_array(DepartmentDefsScript.obstacles())
+	obstacles.append_array(DepartmentDefsScript.GLASS_WALLS)
+	nav.build(FurnitureDefsScript.FLOOR, obstacles)
+	for slug in ["coordinatore", "sentinella", "mentor"]:
+		var def: Dictionary = CharacterDefsScript.AGENTS[slug]
+		var home: Vector2 = nav.approach_point(Vector2(1700, 900), def["spot"])
+		_assert(nav.is_point_walkable(home), "%s desk approach is blocked" % slug)
+		for target in def["wander"]:
+			var out_route: PackedVector2Array = nav.path(home, target)
+			var back_route: PackedVector2Array = nav.path(target, home)
+			_assert(not out_route.is_empty(), "%s cannot patrol to %s" % [slug, target])
+			_assert(not back_route.is_empty(), "%s cannot return from %s" % [slug, target])
 
 ## Specchio del resolver di FurnitureNode, mantenuto qui come contratto di
 ## regressione: se cambia la convenzione di suffissi/flip, il test obbliga ad

@@ -130,6 +130,21 @@ func _apply_scenario(scenario: String) -> void:
 				_sim("scrittore-1", "scrittore", "throttled", 45.0, "pacing"),
 				_sim("critico-1", "critico", "throttled", 240.0, "pacing"),
 			]
+		"writers_pair":
+			# Audit grafico deterministico delle prime due postazioni:
+			# lead→desk 1 diagonale, seconda istanza→desk 0 laterale.
+			_roster = [
+				_sim("scrittore-1", "scrittore", "working", 0.0, "CV in scrittura"),
+				_sim("scrittore-2", "scrittore", "working", 0.0, "lettera in scrittura"),
+			]
+		"all_seated":
+			# Audit grafico completo: sei istanze per ciascun reparto, una per
+			# postazione, tutte ferme al desk per controllare i 30 compositi.
+			_roster = []
+			for role in ["scout", "analista", "scorer", "scrittore", "critico"]:
+				for i in range(1, 7):
+					_roster.append(_sim("%s-%d" % [role, i], role, "working", 0.0,
+							"audit seduta"))
 		"minimal":
 			_roster = [_sim("mentor-1", "mentor", "idle", 0.0, "in attesa")]
 		_:
