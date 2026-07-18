@@ -205,8 +205,8 @@ export async function middleware(request: NextRequest) {
   const isApi = pathname.startsWith('/api/')
 
   // Espone il pathname ai server component via header: il layout
-  // (protected) lo legge per redirigere a /onboarding quando il
-  // profilo non è completo. Va propagato a tutte le NextResponse.next()
+  // (protected) lo usa per i redirect di routing (es. pagine
+  // desktop-only sul cloud). Va propagato a tutte le NextResponse.next()
   // chiamate in questa funzione clonando le request headers.
   // `x-search` espone anche la query string: il layout la usa per
   // costruire un `returnTo` completo quando l'utente non e' loggato,
@@ -337,8 +337,8 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/critico')
 
     // Bypass auth per richieste locali (desktop container): il login
-    // Supabase è opzionale in locale, "Continua senza" in /onboarding/cloud
-    // deve poter accedere a /dashboard senza account.
+    // Supabase è opzionale in locale — il container deve poter servire
+    // /dashboard senza account.
     // [JHT-DASHBOARD-SPLIT] Anche il deploy LOCAL (container desktop/VPS, build
     // NEXT_PUBLIC_JHT_DEPLOY=local) bypassa: via Docker port-map gli header
     // forwarded non sono loopback → localRequest può essere false anche su

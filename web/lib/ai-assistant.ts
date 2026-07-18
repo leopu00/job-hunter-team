@@ -96,7 +96,6 @@ function describeCurrentPage(pathname?: string): string {
 
   const sections: Array<[string, string]> = [
     ["/setup", "Configurazione iniziale dei provider AI e delle API key."],
-    ["/onboarding", "Onboarding guidato al primo uso della piattaforma."],
     ["/dashboard", "Vista riepilogativa del lavoro in corso."],
     ["/profile", "Profilo candidato e dati personali/professionali."],
     [
