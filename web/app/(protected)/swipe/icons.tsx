@@ -87,6 +87,37 @@ export function IconThumbsDown({ size }: { size?: number }) {
   );
 }
 
+export function IconStarHalf({ size }: { size?: number }) {
+  // Stella a metà: outline pieno + metà sinistra riempita — "interessante,
+  // ma poco" nel linguaggio dei rating.
+  return (
+    <Svg size={size}>
+      <path d="m12 3 2.7 5.8 6.3.8-4.7 4.3 1.3 6.2L12 17l-5.6 3.1 1.3-6.2L3 9.6l6.3-.8Z" />
+      <path
+        d="M12 3 9.3 8.8 3 9.6l4.7 4.3-1.3 6.2L12 17Z"
+        fill="currentColor"
+        stroke="none"
+      />
+    </Svg>
+  );
+}
+
+export function IconChevronLeft({ size }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <path d="m15 18-6-6 6-6" />
+    </Svg>
+  );
+}
+
+export function IconChevronRight({ size }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <path d="m9 18 6-6-6-6" />
+    </Svg>
+  );
+}
+
 export function IconUndo({ size }: { size?: number }) {
   return (
     <Svg size={size}>
