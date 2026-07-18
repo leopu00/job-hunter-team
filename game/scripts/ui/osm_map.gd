@@ -12,11 +12,13 @@ const TILE_URL := "https://%s.basemaps.cartocdn.com/dark_all/%d/%d/%d.png"
 const SUBDOMAINS := ["a", "b", "c", "d"]
 const USER_AGENT := "User-Agent: JHT-desktop-prototype/0.1 (+https://github.com/leopu00/job-hunter-team)"
 const CACHE_DIR := "user://tiles/carto"
-const MAX_INFLIGHT := 8
+const MAX_INFLIGHT := 12
+const TILE_REQUEST_TIMEOUT := 10.0
 const ZOOM_MIN := 2.0
 const ZOOM_MAX := 16.0     # street level, come il volo su città del web
 const TILE_Z_MAX := 16
 const ZOOM_SPEED := 9.0    # lerp/s dell'animazione di zoom
+const AUTO_CITY_ZOOM := 8.0 # il click apre la scheda senza un salto a livello strada
 const NO_COORDS_MAX := 5
 
 signal zoomed_out          # sotto ZOOM_MIN: chi ospita può tornare al globo
@@ -32,6 +34,7 @@ var _target_zoom := 4.0
 var _tiles := {}
 var _inflight := {}
 var _queue: Array = []
+var _target_tile_signature := ""
 var _pins: Array = []       # cluster di MapPins + "norm" precalcolato
 var _no_coords: Array = []  # righe già formattate per il box in alto
 var _dragging := false
@@ -53,16 +56,24 @@ func _ready() -> void:
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	clip_contents = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	# Le tile vengono scelte al livello superiore e ridotte: il filtro lineare
+	# è nitido e non richiede di generare mipmap costose per ogni risposta.
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	DirAccess.make_dir_recursive_absolute(CACHE_DIR)
 	_rebuild_pins()
 	BackendBus.positions_updated.connect(func(_l: Array) -> void: _rebuild_pins())
-	resized.connect(queue_redraw)
+	resized.connect(func() -> void:
+		_target_tile_signature = ""
+		queue_redraw())
 	if OS.get_environment("JHT_MAP_ZOOM") != "":
 		zoom_f = clampf(float(OS.get_environment("JHT_MAP_ZOOM")), ZOOM_MIN, ZOOM_MAX)
 		_target_zoom = zoom_f
 
 func _process(delta: float) -> void:
+	# Prepara subito le sole tile della destinazione. La vecchia implementazione
+	# accodava ogni livello attraversato dall'animazione e lasciava la vista
+	# finale in fondo a centinaia di richieste ormai inutili.
+	_ensure_target_tiles()
 	# zoom/center animati: l'inseguimento morbido è la fluidità chiesta
 	if absf(zoom_f - _target_zoom) > 0.001 or center.distance_to(_target_center) > 0.000001:
 		var t := clampf(delta * ZOOM_SPEED, 0.0, 1.0)
@@ -94,7 +105,8 @@ func _screen_to_norm(screen: Vector2) -> Vector2:
 
 ## ── Tiles ─────────────────────────────────────────────────────────────
 
-func _tile_texture(z: int, x: int, y: int) -> Texture2D:
+func _tile_texture(z: int, x: int, y: int,
+		request_if_missing := true) -> Texture2D:
 	var key := "%d/%d/%d" % [z, x, y]
 	if _tiles.has(key):
 		return _tiles[key]
@@ -102,21 +114,50 @@ func _tile_texture(z: int, x: int, y: int) -> Texture2D:
 	if FileAccess.file_exists(path):
 		var img := Image.new()
 		if img.load(path) == OK:
-			if not img.has_mipmaps():
-				img.generate_mipmaps()
 			var tex := ImageTexture.create_from_image(img)
 			_tiles[key] = tex
 			return tex
-	if not _inflight.has(key) and not _queue.has(key):
+	if request_if_missing and not _inflight.has(key) and not _queue.has(key):
 		_queue.append(key)
 		_pump_queue()
 	return null
+
+## Mantiene corta la coda e dà precedenza al centro della vista di arrivo.
+## Un margine di una tile rende immediato anche il primo piccolo pan.
+func _ensure_target_tiles() -> void:
+	if size.x < 2.0 or size.y < 2.0:
+		return
+	var z := clampi(int(ceil(_target_zoom)), 0, TILE_Z_MAX)
+	var n := 1 << z
+	var scale := TILE * pow(2.0, _target_zoom)
+	var tl := (_target_center - size / (2.0 * scale)) * n
+	var br := (_target_center + size / (2.0 * scale)) * n
+	var center_tile := _target_center * n
+	var signature := "%d:%d:%d:%d:%d:%d" % [z, floori(center_tile.x),
+			floori(center_tile.y), roundi(_target_zoom * 4.0),
+			roundi(size.x / TILE), roundi(size.y / TILE)]
+	if signature == _target_tile_signature:
+		return
+	_target_tile_signature = signature
+	_queue.clear() # elimina livelli/zone che non sono più la destinazione
+	var wanted: Array = []
+	for x in range(int(floor(tl.x)) - 1, int(ceil(br.x)) + 2):
+		for y in range(maxi(0, int(floor(tl.y)) - 1),
+				mini(n - 1, int(ceil(br.y)) + 1) + 1):
+			var wx := posmod(x, n)
+			wanted.append({"x": wx, "y": y,
+					"distance": Vector2(float(x), float(y)).distance_squared_to(center_tile)})
+	wanted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["distance"]) < float(b["distance"]))
+	for tile in wanted:
+		_tile_texture(z, int(tile["x"]), int(tile["y"]), true)
 
 func _pump_queue() -> void:
 	while _inflight.size() < MAX_INFLIGHT and not _queue.is_empty():
 		var key: String = _queue.pop_front()
 		var parts := key.split("/")
 		var req := HTTPRequest.new()
+		req.timeout = TILE_REQUEST_TIMEOUT
 		add_child(req)
 		_inflight[key] = req
 		req.request_completed.connect(_on_tile.bind(key, req))
@@ -134,8 +175,12 @@ func _on_tile(_result: int, code: int, _headers: PackedStringArray,
 		var img := Image.new()
 		if img.load_png_from_buffer(body) == OK:
 			var parts := key.split("/")
-			img.save_png("%s/%s_%s_%s.png" % [CACHE_DIR, parts[0], parts[1], parts[2]])
-			img.generate_mipmaps()
+			# Il body è già PNG: scriverlo direttamente evita una seconda codifica
+			# sincrona sul thread grafico per ogni tile.
+			var file := FileAccess.open("%s/%s_%s_%s.png" % [
+					CACHE_DIR, parts[0], parts[1], parts[2]], FileAccess.WRITE)
+			if file:
+				file.store_buffer(body)
 			_tiles[key] = ImageTexture.create_from_image(img)
 			queue_redraw()
 	_pump_queue()
@@ -471,9 +516,10 @@ func _click_pin(pos: Vector2) -> bool:
 				ZOOM_MIN, ZOOM_MAX)
 		queue_redraw()
 		return true
-	# città singola → zoom 11 (il flyTo del web); cluster → basta inquadrarla
-	_target_zoom = clampf(maxf(_target_zoom, 11.0 if int(pin["count"]) == 1 else 9.0),
-			ZOOM_MIN, ZOOM_MAX)
+	# La scheda è già utile senza arrivare automaticamente al livello strada.
+	# Mantieni eventuali zoom manuali più ravvicinati, ma da panoramica fermati
+	# a un livello regionale/cittadino rapido da caricare.
+	_target_zoom = clampf(maxf(_target_zoom, AUTO_CITY_ZOOM), ZOOM_MIN, ZOOM_MAX)
 	select_key(str(pin["key"]))
 	return true
 
@@ -527,18 +573,8 @@ func _draw() -> void:
 			var wx := posmod(x, n)
 			var pos := _to_screen(Vector2(float(x) / n, float(y) / n))
 			var rect := Rect2(pos, Vector2(tile_px + 0.6, tile_px + 0.6))
-			var tex := _tile_texture(base_z, wx, y)
-			if tex:
-				draw_texture_rect(tex, rect, false)
-			else:
-				# scala la tile del livello sopra: niente buchi neri
-				var parent := _tile_texture(maxi(0, base_z - 1), wx >> 1, y >> 1)
-				if parent:
-					var sub := Rect2(Vector2(wx % 2, y % 2) * TILE / 2.0,
-							Vector2(TILE / 2.0, TILE / 2.0))
-					draw_texture_rect_region(parent, rect, sub)
-				else:
-					draw_rect(rect, Color(0.07, 0.08, 0.11))
+			if not _draw_cached_tile_or_ancestor(rect, base_z, wx, y):
+				draw_rect(rect, Color(0.07, 0.08, 0.11))
 	# pin: prima tutti i punti, poi le targhette SENZA sovrapposizioni
 	# (priorità agli score alti — il web clusterizza, noi decolliidiamo)
 	var font := TerminalTheme.get_theme().default_font
@@ -599,3 +635,23 @@ func _draw() -> void:
 			draw_string(font, Vector2(16, y0 + 17 + 18.0 * shown),
 					"… +%d" % (_no_coords.size() - shown),
 					HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Palette.DIM)
+
+## Disegna la tile esatta, oppure la porzione corrispondente del migliore
+## antenato già in RAM/disco. Durante un salto di zoom la cartografia resta
+## quindi visibile (temporaneamente più morbida) invece di diventare vuota.
+func _draw_cached_tile_or_ancestor(rect: Rect2, z: int, x: int, y: int) -> bool:
+	for ancestor_z in range(z, -1, -1):
+		var levels := z - ancestor_z
+		var factor := 1 << levels
+		var tex := _tile_texture(ancestor_z, x >> levels, y >> levels, false)
+		if tex == null:
+			continue
+		if levels == 0:
+			draw_texture_rect(tex, rect, false)
+		else:
+			var region_size := TILE / float(factor)
+			var sub := Rect2(Vector2(x % factor, y % factor) * region_size,
+					Vector2(region_size, region_size))
+			draw_texture_rect_region(tex, rect, sub)
+		return true
+	return false

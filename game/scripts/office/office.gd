@@ -414,6 +414,27 @@ func _map_panel_selftest() -> void:
 	if cluster_ok:
 		world._flat._click_pin(world._flat._to_screen(italy_cluster["norm"]))
 		cluster_ok = world._flat._target_zoom > 5.0
+	# Un pin isolato aperto dalla panoramica non deve più fare il vecchio
+	# mega-zoom 11. La coda deve inoltre scartare una tile obsoleta e contenere
+	# soltanto il livello della destinazione corrente.
+	world._flat.zoom_f = 4.0
+	world._flat._target_zoom = 4.0
+	var single_pin := {}
+	for pin in world._flat._display_pins():
+		if str(pin.get("city", "")) == "San Francisco":
+			single_pin = pin
+			break
+	var auto_zoom_ok := not single_pin.is_empty()
+	if auto_zoom_ok:
+		world._flat._click_pin(world._flat._to_screen(single_pin["norm"]))
+		auto_zoom_ok = world._flat._target_zoom <= 8.01
+	world._flat._queue.append("3/0/0")
+	world._flat._target_tile_signature = ""
+	world._flat._ensure_target_tiles()
+	var target_prefix := "%d/" % int(ceil(world._flat._target_zoom))
+	var tile_queue_ok := world._flat._queue.size() < 100
+	for queued_key in world._flat._queue:
+		tile_queue_ok = tile_queue_ok and str(queued_key).begins_with(target_prefix)
 	world._flat.fly_to(Vector2(18.0686, 59.3293), 10.0)
 	world._flat.select_key("Stockholm|Sweden")
 	await get_tree().process_frame
@@ -425,7 +446,8 @@ func _map_panel_selftest() -> void:
 			"14 posizioni · scorri l’elenco e clicca per aprire la scheda")
 	var base_ok := card_count == 14 and hint_ok and world._flat.visible \
 			and _ui_find_class_node(panel, "MapGlobe") == null \
-			and overview_zoom < 5.0 and cluster_ok
+			and overview_zoom < 5.0 and cluster_ok and auto_zoom_ok \
+			and tile_queue_ok
 	var ok := base_ok
 	var flat_before: Vector2 = world._flat.center
 	var pan := InputEventPanGesture.new()
@@ -459,6 +481,7 @@ func _map_panel_selftest() -> void:
 		if not ok:
 			print("MAP-PANEL-TEST details base=", base_ok, " count=", card_count,
 					" hint=", hint_ok, " cluster=", cluster_ok,
+					" auto_zoom=", auto_zoom_ok, " tile_queue=", tile_queue_ok,
 					" route=", route_ok, " requested=", route_state["section"],
 					" pending=", SectionPanel.pending_detail,
 					" detail=", detail_ok, " page=", detail_panel._current_page,
