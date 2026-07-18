@@ -18,14 +18,18 @@ const LAB_WALL_H2 := Rect2(2750, 740, 410, 12)    # tratto dx (in mezzo: porta)
 
 const ITEMS := [
 	# ── Area comune (ex zona Scorer): lounge del Mentor ──
-	{"id": "coffee_table", "kind": "table_low", "rect": Rect2(2090, 1160, 180, 80)},
-	{"id": "armchair", "kind": "armchair", "rect": Rect2(2320, 1100, 110, 100)},
-	{"id": "lamp", "kind": "lamp", "rect": Rect2(2020, 980, 44, 44)},
-	{"id": "plant_a", "kind": "plant", "rect": Rect2(2260, 980, 56, 56)},
+	{"id": "coffee_table", "kind": "table_low", "rect": Rect2(2190, 1175, 180, 80)},
+	# Il Mentor e il divanetto sono un solo composito quando è seduto. La vista
+	# up mostra correttamente la schiena mentre legge; la base vuota ricompare
+	# soltanto quando si alza per il breve giro libreria/lavagna.
+	{"id": "mentor_sofa", "kind": "mentor_sofa", "rect": Rect2(2450, 1135, 180, 125),
+			"facing": "up", "registry_key": "core:mentor"},
+	{"id": "lamp", "kind": "lamp", "rect": Rect2(2110, 1060, 44, 44)},
+	{"id": "plant_a", "kind": "plant", "rect": Rect2(2250, 1035, 56, 56)},
 
 	# Bacheca e libreria seguono la lounge; l'angolo caffè resta condiviso a nord.
-	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(2080, 1010, 150, 34)},
-	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2440, 990, 280, 70)},
+	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(2350, 995, 150, 34)},
+	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2550, 970, 280, 70)},
 	{"id": "coffee_bar", "kind": "coffee", "rect": Rect2(1400, 190, 200, 80)},
 	{"id": "water_cooler", "kind": "water_cooler", "rect": Rect2(1602, 196, 54, 54)},
 	# stampante condivisa sulla parete nord, tra coffee e lab: la meta dei
@@ -35,9 +39,14 @@ const ITEMS := [
 	# ── Centro: l'ologramma della ricerca ──
 	{"id": "hologram", "kind": "hologram", "rect": Rect2(1200, 700, 200, 180)},
 
-	# ── Area comune: lavagna score board + Coordinatore ──
+	# ── Direzione, fascia nord: Capitano e Tesoriere guardano in camera ──
+	{"id": "desk_coordinator", "kind": "captain_desk", "rect": Rect2(1365, 500, 260, 108),
+			"facing": "down", "registry_key": "core:coordinatore"},
+	{"id": "desk_sentinella", "kind": "budgeteer_desk", "rect": Rect2(1745, 500, 320, 108),
+			"facing": "down", "registry_key": "core:sentinella"},
+
+	# ── Area comune: lavagna score board ──
 	{"id": "blackboard", "kind": "blackboard", "rect": Rect2(3070, 1030, 56, 260)},
-	{"id": "desk_coordinator", "kind": "desk", "rect": Rect2(2700, 1190, 230, 100)},
 	{"id": "plant_c", "kind": "plant", "rect": Rect2(3030, 1340, 56, 56)},
 
 	# ── Verde sparso (reparti e corridoi, mai sulla nav principale) ──

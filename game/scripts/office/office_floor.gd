@@ -96,7 +96,9 @@ func _ready() -> void:
 		# Tappeto dell'area comune trasferita nella vecchia zona Scorer.
 		var rug := Sprite2D.new()
 		rug.texture = rug_tex
-		rug.position = Vector2(2200, 1135)
+		# Centro visivo dell'angolo comune: tavolino sul tappeto, figure di
+		# servizio a sinistra e divanetto del Mentor sul bordo destro.
+		rug.position = Vector2(2340, 1190)
 		rug.scale = Vector2(0.68, 0.68)
 		rug.show_behind_parent = true
 		add_child(rug)
