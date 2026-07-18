@@ -149,6 +149,8 @@ func _ready() -> void:
 	_camera.clicked.connect(_on_world_click)
 	if OS.get_environment("JHT_CAMERA_LOCK_TEST") == "1":
 		_camera_lock_selftest.call_deferred()
+	if OS.get_environment("JHT_POSITIONS_PANEL_TEST") == "1":
+		_positions_panel_selftest.call_deferred()
 	if _seat_audit != "":
 		var audit_parts := _seat_audit.split(":")
 		if audit_parts.size() == 2 and DepartmentDefs.DEPARTMENTS.has(audit_parts[0]):
@@ -307,6 +309,77 @@ func _camera_lock_selftest() -> void:
 	print("CAMERA-OVERLAY-LOCK-TEST ", "PASS" if ok else "FAIL")
 	blocker.queue_free()
 	get_tree().quit(0 if ok else 1)
+
+## Regressione della vista Posizioni dentro il boot normale (gli script `-s`
+## non hanno gli autoload): pagine vere e filtri compatti, mai più slice a 40.
+func _positions_panel_selftest() -> void:
+	var rows: Array = []
+	for i in 126:
+		rows.append({
+			"id": i + 1, "title": "Ruolo %03d" % (i + 1), "company": "Azienda",
+			"status": "scored" if i % 2 == 0 else "checked",
+			"total_score": 70 + i % 20,
+			"role_family": "AI Engineering" if i % 3 == 0 else "Backend Engineering",
+			"work_mode": "remote" if i % 2 == 0 else "hybrid",
+			"loc_city": "Roma", "loc_country": "Italy",
+		})
+	BackendBus.positions = rows
+	var panel := SectionPanel.new("positions", 24.0)
+	add_child(panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var ok := _ui_has_text(panel, "1–50 di 126") \
+			and _ui_has_text(panel, "PAGINA 1 / 3") \
+			and _ui_find_button(panel, "FILTRI (0)") != null \
+			and _ui_count_class(panel, "MenuButton") == 0
+	var next := _ui_find_button(panel, "SUCCESSIVA ▶")
+	ok = ok and next != null
+	if next:
+		next.pressed.emit()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		ok = ok and _ui_has_text(panel, "51–100 di 126") \
+				and _ui_has_text(panel, "PAGINA 2 / 3")
+	var size_25 := _ui_find_button(panel, "25")
+	ok = ok and size_25 != null
+	if size_25:
+		size_25.pressed.emit()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		ok = ok and _ui_has_text(panel, "1–25 di 126") \
+				and _ui_has_text(panel, "PAGINA 1 / 6")
+	var filters := _ui_find_button(panel, "FILTRI (0)")
+	ok = ok and filters != null
+	if filters:
+		filters.pressed.emit()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		ok = ok and _ui_count_class(panel, "MenuButton") == 4
+	print("POSITIONS-PANEL-TEST ", "PASS" if ok else "FAIL")
+	get_tree().quit(0 if ok else 1)
+
+func _ui_has_text(node: Node, wanted: String) -> bool:
+	if node is Label and node.text == wanted:
+		return true
+	for child in node.get_children():
+		if _ui_has_text(child, wanted):
+			return true
+	return false
+
+func _ui_find_button(node: Node, wanted: String) -> Button:
+	if node is Button and node.text == wanted:
+		return node
+	for child in node.get_children():
+		var found := _ui_find_button(child, wanted)
+		if found:
+			return found
+	return null
+
+func _ui_count_class(node: Node, type_name: String) -> int:
+	var count := 1 if node.get_class() == type_name else 0
+	for child in node.get_children():
+		count += _ui_count_class(child, type_name)
+	return count
 
 func _force_pipeline_trip(test_dept: String) -> void:
 	await get_tree().create_timer(0.8).timeout

@@ -747,14 +747,17 @@ const POS_STATUS_COLORS := {
 }
 const POS_STATUS_ORDER := ["new", "checked", "scored", "writing", "review",
 		"ready", "applied", "response", "excluded"]
-const POS_LIST_MAX := 40
+const POS_PAGE_SIZES := [25, 50, 100, 200]
 
-## Filtri attivi (chip → set di valori). Persistono finché il pannello vive.
+## Filtri attivi (menu → set di valori). Persistono finché il pannello vive.
 var _pos_filters := {
 	"status": {}, "role_family": {}, "loc_country": {}, "work_mode": {},
 }
+var _pos_filters_open := false
+var _pos_page := 1
+var _pos_page_size := 50
 
-## Cross-filtering come sul web: ogni gruppo di chip conta le posizioni
+## Cross-filtering come sul web: ogni menu conta le posizioni
 ## filtrate da TUTTI GLI ALTRI gruppi, la lista le filtra da tutti.
 func _build_positions() -> void:
 	if not pending_status.is_empty():
@@ -763,6 +766,7 @@ func _build_positions() -> void:
 			chosen[st] = true
 		_pos_filters["status"] = chosen
 		pending_status = []
+		_pos_page = 1
 	var all: Array = BackendBus.positions
 	if all.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("pos.need_vps"),
@@ -774,6 +778,7 @@ func _build_positions() -> void:
 		BackendBus.positions_updated.connect(_on_positions_refresh)
 
 	var visible_rows := _pos_filtered(all, "")
+	var active_filters := _pos_active_filter_count()
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 16)
 	_content.add_child(head)
@@ -781,11 +786,18 @@ func _build_positions() -> void:
 			% [all.size(), visible_rows.size()], 15, Palette.MINT, "medium")
 	count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(count)
-	var any_filter := false
-	for key in _pos_filters:
-		if not (_pos_filters[key] as Dictionary).is_empty():
-			any_filter = true
-	if any_filter:
+	var filters_btn := Button.new()
+	filters_btn.text = UIStrings.t("pos.filters_hide") if _pos_filters_open \
+			else UIStrings.t("pos.filters") % active_filters
+	filters_btn.add_theme_font_size_override("font_size", 13)
+	filters_btn.add_theme_color_override("font_color",
+			Palette.GREEN if _pos_filters_open or active_filters > 0 else Palette.BASE)
+	filters_btn.pressed.connect(func() -> void:
+		_pos_filters_open = not _pos_filters_open
+		Sfx.play_tick()
+		_build())
+	head.add_child(filters_btn)
+	if active_filters > 0:
 		var clear := Button.new()
 		clear.text = UIStrings.t("pos.clear")
 		clear.add_theme_font_size_override("font_size", 13)
@@ -793,19 +805,30 @@ func _build_positions() -> void:
 		clear.pressed.connect(func() -> void:
 			for key in _pos_filters:
 				_pos_filters[key] = {}
+			_pos_page = 1
 			_build())
 		head.add_child(clear)
 
-	_pos_chip_row("status", UIStrings.t("pos.f_status"), all)
-	_pos_chip_row("role_family", UIStrings.t("pos.f_family"), all)
-	_pos_chip_row("work_mode", UIStrings.t("pos.f_mode"), all)
-	_pos_chip_row("loc_country", UIStrings.t("pos.f_country"), all)
+	if _pos_filters_open:
+		var filter_bar := HFlowContainer.new()
+		filter_bar.add_theme_constant_override("h_separation", 10)
+		filter_bar.add_theme_constant_override("v_separation", 8)
+		_content.add_child(filter_bar)
+		_pos_filter_menu(filter_bar, "status", UIStrings.t("pos.f_status"), all)
+		_pos_filter_menu(filter_bar, "role_family", UIStrings.t("pos.f_family"), all)
+		_pos_filter_menu(filter_bar, "work_mode", UIStrings.t("pos.f_mode"), all)
+		_pos_filter_menu(filter_bar, "loc_country", UIStrings.t("pos.f_country"), all)
 	_content.add_child(HSeparator.new())
 
 	if visible_rows.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("pos.no_match"),
 				15, Palette.DIM))
 		return
+	var page_count := maxi(1, int(ceil(float(visible_rows.size()) / _pos_page_size)))
+	_pos_page = clampi(_pos_page, 1, page_count)
+	var start := (_pos_page - 1) * _pos_page_size
+	var end := mini(start + _pos_page_size, visible_rows.size())
+
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -815,12 +838,9 @@ func _build_positions() -> void:
 	list.add_theme_constant_override("separation", 6)
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
-	for p in visible_rows.slice(0, POS_LIST_MAX):
+	for p in visible_rows.slice(start, end):
 		list.add_child(_pos_row(p))
-	if visible_rows.size() > POS_LIST_MAX:
-		list.add_child(TerminalTheme.label(
-				UIStrings.t("common.more") % (visible_rows.size() - POS_LIST_MAX),
-				13, Palette.DIM))
+	_pos_pagination(start, end, visible_rows.size(), page_count)
 
 func _on_positions_refresh(_list: Array) -> void:
 	if section == "positions" and is_instance_valid(_content):
@@ -1017,8 +1037,15 @@ func _pos_value(p: Dictionary, key: String) -> String:
 	var v := str(p.get(key, ""))
 	return v if v != "" and v != "<null>" else UIStrings.t("pos.uncategorized")
 
-## Una riga di chip per un gruppo di filtro, con conteggi cross-filtrati.
-func _pos_chip_row(key: String, title: String, all: Array) -> void:
+func _pos_active_filter_count() -> int:
+	var total := 0
+	for key in _pos_filters:
+		total += (_pos_filters[key] as Dictionary).size()
+	return total
+
+## Menu compatto multiselezione: conserva il cross-filtering del web senza
+## occupare tre righe di chip (i valori compaiono solo quando si apre il menu).
+func _pos_filter_menu(parent: Control, key: String, title: String, all: Array) -> void:
 	var pool := _pos_filtered(all, key)
 	var counts := {}
 	for p in pool:
@@ -1037,43 +1064,87 @@ func _pos_chip_row(key: String, title: String, all: Array) -> void:
 	else:
 		values.sort()
 
-	var row := HFlowContainer.new()
-	row.add_theme_constant_override("h_separation", 8)
-	row.add_theme_constant_override("v_separation", 6)
-	_content.add_child(row)
-	var lbl := TerminalTheme.label(title, 13, Palette.DIM, "medium")
-	lbl.custom_minimum_size = Vector2(150, 0)
-	row.add_child(lbl)
 	var chosen: Dictionary = _pos_filters[key]
-	for v in values:
-		var chip := Button.new()
-		var active: bool = chosen.has(v)
-		chip.text = "%s %d" % [v, counts[v]]
-		chip.add_theme_font_size_override("font_size", 13)
-		var color: Color = POS_STATUS_COLORS.get(v, Palette.BASE) \
-				if key == "status" else Palette.BASE
-		chip.add_theme_color_override("font_color",
-				color if active or chosen.is_empty() else Palette.DIM)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(color.r, color.g, color.b, 0.18 if active else 0.0)
-		sb.border_color = color if active else Palette.BORDER
-		sb.set_border_width_all(1)
-		sb.content_margin_left = 8
-		sb.content_margin_right = 8
-		sb.content_margin_top = 2
-		sb.content_margin_bottom = 3
-		chip.add_theme_stylebox_override("normal", sb)
-		chip.add_theme_stylebox_override("hover", sb.duplicate())
-		chip.add_theme_stylebox_override("pressed", sb.duplicate())
-		chip.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-		chip.pressed.connect(func() -> void:
-			if chosen.has(v):
-				chosen.erase(v)
+	var summary := UIStrings.t("pos.all")
+	if chosen.size() == 1:
+		summary = str(chosen.keys()[0])
+	elif chosen.size() > 1:
+		summary = UIStrings.t("pos.selected") % chosen.size()
+	var menu := MenuButton.new()
+	menu.text = "%s  ·  %s" % [title, summary]
+	menu.custom_minimum_size = Vector2(230, 34)
+	menu.clip_text = true
+	menu.add_theme_font_size_override("font_size", 13)
+	menu.add_theme_color_override("font_color",
+			Palette.GREEN if not chosen.is_empty() else Palette.BASE)
+	parent.add_child(menu)
+	var popup := menu.get_popup()
+	popup.add_check_item(UIStrings.t("pos.all") + "  (%d)" % pool.size(), 0)
+	popup.set_item_checked(0, chosen.is_empty())
+	popup.add_separator()
+	for i in values.size():
+		var value := str(values[i])
+		popup.add_check_item("%s  (%d)" % [value, counts[value]], i + 1)
+		popup.set_item_checked(popup.item_count - 1, chosen.has(value))
+	popup.id_pressed.connect(func(id: int) -> void:
+		if id == 0:
+			chosen.clear()
+		elif id - 1 < values.size():
+			var value := str(values[id - 1])
+			if chosen.has(value):
+				chosen.erase(value)
 			else:
-				chosen[v] = true
+				chosen[value] = true
+		_pos_page = 1
+		Sfx.play_tick()
+		_build())
+
+func _pos_pagination(start: int, end: int, total: int, page_count: int) -> void:
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 8)
+	_content.add_child(footer)
+	var range_label := TerminalTheme.label(UIStrings.t("pos.range") % [
+			start + 1, end, total], 13, Palette.MUTED, "medium")
+	range_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(range_label)
+	footer.add_child(TerminalTheme.label(UIStrings.t("pos.rows"), 12, Palette.DIM, "medium"))
+	for size in POS_PAGE_SIZES:
+		var size_btn := Button.new()
+		size_btn.text = str(size)
+		size_btn.flat = true
+		size_btn.add_theme_font_size_override("font_size", 13)
+		size_btn.add_theme_color_override("font_color",
+				Palette.GREEN if size == _pos_page_size else Palette.MUTED)
+		var selected_size: int = size
+		size_btn.pressed.connect(func() -> void:
+			_pos_page_size = selected_size
+			_pos_page = 1
 			Sfx.play_tick()
 			_build())
-		row.add_child(chip)
+		footer.add_child(size_btn)
+	var previous := Button.new()
+	previous.text = UIStrings.t("pos.previous")
+	previous.disabled = _pos_page <= 1
+	previous.add_theme_font_size_override("font_size", 13)
+	previous.pressed.connect(func() -> void:
+		_pos_page -= 1
+		Sfx.play_tick()
+		_build())
+	footer.add_child(previous)
+	var page_label := TerminalTheme.label(UIStrings.t("pos.page") % [
+			_pos_page, page_count], 13, Palette.BRIGHT, "medium")
+	page_label.custom_minimum_size = Vector2(120, 0)
+	page_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	footer.add_child(page_label)
+	var next := Button.new()
+	next.text = UIStrings.t("pos.next")
+	next.disabled = _pos_page >= page_count
+	next.add_theme_font_size_override("font_size", 13)
+	next.pressed.connect(func() -> void:
+		_pos_page += 1
+		Sfx.play_tick()
+		_build())
+	footer.add_child(next)
 
 ## Una posizione in lista, tabellare full-width come la pagina web:
 ## score | titolo — azienda (espande) | famiglia | luogo | salario | stato.
