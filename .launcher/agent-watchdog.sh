@@ -80,12 +80,22 @@ try:
 except Exception:
   sys.exit(1)
 prov = (d.get('active_provider') or '').strip().lower()
+# Accettiamo sia il nome-VENDOR del provider (openai/anthropic/kimi — quello che
+# scrive `jht providers use`) sia il nome-CLI storico (codex/claude). Mappano allo
+# stesso marker di credenziali. Un mismatch qui era una timebomb: active_provider=
+# "openai"/"anthropic" cadeva su markers.get(prov,'')='' -> os.path.exists('')=
+# False -> config_ready FALSE in SILENZIO -> il watchdog smetteva di rispawnare
+# CAPITANO/MENTOR dopo un reboot, senza una riga di log (ashley morta ~44h il
+# 2026-07-18, barto armata dopo lo switch a Codex).
+# Vedi docs/internal/postmortems/2026-07-18-provider-vendor-enum-config-ready.md
 markers = {
   # kimi-cli 1.47+ scrive le creds in .kimi/credentials/<plan>.json
   # (es. kimi-code.json), non piu' .kimi/kimi.json (allineato a sentinel-bridge).
-  'kimi':   f'{jht_home}/.kimi/credentials/kimi-code.json',
-  'claude': f'{jht_home}/.claude/.credentials.json',
-  'codex':  f'{jht_home}/.codex/auth.json',
+  'kimi':      f'{jht_home}/.kimi/credentials/kimi-code.json',
+  'claude':    f'{jht_home}/.claude/.credentials.json',
+  'anthropic': f'{jht_home}/.claude/.credentials.json',
+  'codex':     f'{jht_home}/.codex/auth.json',
+  'openai':    f'{jht_home}/.codex/auth.json',
 }
 has_creds = bool(prov) and os.path.exists(markers.get(prov, ''))
 sys.exit(0 if (prov and has_creds) else 1)
@@ -267,6 +277,11 @@ trap 'log "watchdog shutdown (SIGTERM)"; exit 0' TERM INT
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
 halt_log_tick=0
+# Contatore per rendere LOUD un config_ready=false PERSISTENTE (ramo else in fondo
+# al loop): al primo boot è normale (wizard non ancora finito), ma oltre la grace
+# è un guasto reale che NON deve restare invisibile. Grace ~5min @ 30s/tick.
+config_not_ready_tick=0
+CONFIG_NOT_READY_GRACE_TICKS="${JHT_CONFIG_NOT_READY_GRACE_TICKS:-10}"
 
 while true; do
   # Team-halted gate (set by team-state-reconciler quando user clicca Stop
@@ -291,6 +306,10 @@ while true; do
   fi
 
   if config_ready; then
+    if [ "$config_not_ready_tick" -gt 0 ]; then
+      log "config: tornata pronta dopo ${config_not_ready_tick} tick — riprendo respawn agenti"
+      config_not_ready_tick=0
+    fi
     # Refresh-per-età della Sentinella PRIMA del giro di ensure: se è troppo
     # vecchia la killa, poi ensure_agent la ricrea fresca nello stesso tick.
     maybe_refresh_sentinella
@@ -302,9 +321,18 @@ while true; do
     # fuori dal respawn-on-crash di pid1 (setsid), questo è il loro recovery.
     maybe_respawn_bridges
   else
-    # Soft log: config non pronta = wizard non ancora finito. Aspettiamo
-    # silenziosamente, niente spam.
-    :
+    # config non pronta. Al primo boot è NORMALE (il wizard la scrive post-pairing):
+    # restiamo silenziosi per i primi CONFIG_NOT_READY_GRACE_TICKS. Ma se PERSISTE
+    # oltre la grace è un guasto vero (active_provider fuori-mappa, credenziali
+    # mancanti) e NON deve più essere invisibile: quella silenziosità ha tenuto
+    # ashley morta ~44h il 2026-07-18 senza una riga di log. Escaliamo a log loud.
+    if [ "$config_not_ready_tick" -eq "$CONFIG_NOT_READY_GRACE_TICKS" ]; then
+      _prov="$(python3 -c "import json,sys; print((json.load(open(sys.argv[1])).get('active_provider') or '?').strip() or '?')" "$CONFIG" 2>/dev/null || echo '?')"
+      log "config NON pronta da ${CONFIG_NOT_READY_GRACE_TICKS} tick (~$((CONFIG_NOT_READY_GRACE_TICKS*INTERVAL_SEC/60))min): active_provider='${_prov}' senza marker credenziali valido — respawn CAPITANO/MENTOR SOSPESO. Se non è il wizard iniziale, verifica active_provider vs mappa in config_ready()."
+    elif [ "$config_not_ready_tick" -gt "$CONFIG_NOT_READY_GRACE_TICKS" ] && [ $((config_not_ready_tick % 60)) -eq 0 ]; then
+      log "config ancora NON pronta (tick=${config_not_ready_tick}) — respawn agenti tuttora sospeso"
+    fi
+    config_not_ready_tick=$((config_not_ready_tick + 1))
   fi
   sleep "$INTERVAL_SEC"
 done

@@ -68,7 +68,12 @@ export function readConfigFileSnapshot() {
  */
 export function validateConfigBeforeWrite(config) {
   const errors = [];
-  const validProviders = ['claude', 'openai', 'kimi'];
+  // Accettiamo sia il nome-VENDOR (openai/anthropic/kimi — quello che scrive
+  // `jht providers use`) sia il nome-CLI storico (codex/claude). Storicamente la
+  // lista mescolava i registri ('claude' CLI + 'openai' vendor): un active_provider
+  // vendor-canonico come 'anthropic' veniva rifiutato. Allineato a config_ready()
+  // in .launcher/agent-watchdog.sh. Vedi postmortem 2026-07-18-provider-vendor-enum-config-ready.
+  const validProviders = ['claude', 'anthropic', 'openai', 'codex', 'kimi'];
 
   if (typeof config.version !== 'number' || config.version < 1) {
     errors.push('version deve essere un numero positivo');
