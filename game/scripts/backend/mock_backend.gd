@@ -224,6 +224,11 @@ var _chat_msgs: Array = []
 
 func open_chat(agent: String) -> void:
 	_chat_agent = agent
+	# Onboarding: l'assistente accoglie per primo (nel sistema vero il
+	# welcome arriva dal boot dell'agente; qui lo recita il mock).
+	if _profile_watch and agent.begins_with("assistente") and _chat_msgs.is_empty():
+		_chat_msgs.append({"role": "assistant", "text": WIZ_REPLIES[0],
+				"ts": Time.get_unix_time_from_system(), "done": true})
 	bus.agent_chat_updated.emit(agent, _chat_msgs.duplicate(true))
 
 func close_chat() -> void:
@@ -248,14 +253,89 @@ func _mock_reply(agent: String) -> void:
 		return
 	# il checkpoint intermedio viene sostituito dalla risposta vera
 	_chat_msgs.pop_back()
-	_chat_msgs.append({"role": "assistant",
-			"text": REPLIES.get(agent, "Ricevuto."),
+	var reply: String = REPLIES.get(agent, "Ricevuto.")
+	# Onboarding: la risposta segue il passo del profilo (e lo avanza),
+	# così la conversazione col mock ricalca il flusso dell'assistente vero.
+	if _profile_watch and agent.begins_with("assistente"):
+		_wiz_advance(1)
+		reply = WIZ_REPLIES[mini(_wiz_step, WIZ_REPLIES.size() - 1)]
+	_chat_msgs.append({"role": "assistant", "text": reply,
 			"ts": Time.get_unix_time_from_system(), "done": true})
 	_publish_chat_state(agent)
 
 func _publish_chat_state(agent: String) -> void:
 	if _chat_agent == agent:
 		bus.agent_chat_updated.emit(agent, _chat_msgs.duplicate(true))
+
+## ── Onboarding simulato (wizard senza VPS) ───────────────────────────
+## Contratto opzionale dell'adapter (open_profile_watch / ensure_assistant
+## / upload_document) come sul backend vero. Il profilo si riempie a passi
+## deterministici: ogni messaggio all'assistente vale 1 passo, un upload
+## CV ne vale 2; a 4 passi il profilo è completo (ready). Così il flusso
+## intero si prova in un paio di minuti, senza rete.
+
+const WIZ_READY_STEP := 4
+
+const WIZ_REPLIES := [
+	"Benvenuto! Sono l'Assistente: costruiamo insieme il tuo profilo. Raccontami che ruolo cerchi e da dove parti — oppure carica direttamente il CV.",
+	"Perfetto, lo segno sul badge. Mi dici anche località, anni di esperienza e le lingue che parli?",
+	"Ottimo, il profilo prende forma: mancano solo le competenze principali. Se carichi il CV le estraggo io.",
+	"Ci siamo: il tuo badge è completo. Quando vuoi, entra in ufficio — il team ti aspetta.",
+]
+
+## Tappe del profilo finto: a ogni passo si aggiungono campi, come farebbe
+## l'assistente vero scrivendo il candidate_profile.yml.
+const WIZ_PROFILE_STEPS := [
+	{},
+	{"name": "Mario Rossi", "target_role": "Project Manager"},
+	{"location": "Firenze, IT", "experience_years": "5",
+			"languages": ["Italiano C2", "Inglese B2"], "email": "mario@example.com"},
+	{"seniority_target": "mid", "skills": ["Team leadership", "Budgeting"]},
+	{"skills": ["Team leadership", "Budgeting", "Public speaking"]},
+]
+
+var _profile_watch := false
+var _wiz_step := 0
+
+func open_profile_watch() -> void:
+	_profile_watch = true
+	_publish_profile_status()
+
+func close_profile_watch() -> void:
+	_profile_watch = false
+
+func ensure_assistant() -> void:
+	pass  # nel mock l'assistente è già nel roster
+
+func upload_document(local_path: String) -> void:
+	bus.document_uploaded.emit(true,
+			"/jht_user/allegati/" + local_path.get_file(), "")
+	_wiz_advance(2)
+
+func _wiz_advance(steps: int) -> void:
+	_wiz_step = mini(_wiz_step + steps, WIZ_READY_STEP)
+	_publish_profile_status()
+
+func _publish_profile_status() -> void:
+	if not _profile_watch:
+		return
+	var profile := {"name": "", "email": "", "target_role": "", "location": "",
+			"experience_years": "", "seniority_target": "",
+			"skills": [], "languages": []}
+	for i in range(mini(_wiz_step, WIZ_PROFILE_STEPS.size() - 1) + 1):
+		profile.merge(WIZ_PROFILE_STEPS[i], true)
+	var required := {
+		"name": str(profile["name"]) != "",
+		"email": str(profile["email"]) != "",
+		"target_role": str(profile["target_role"]) != "",
+		"location": str(profile["location"]) != "",
+		"experience_years": str(profile["experience_years"]) != "",
+		"seniority_target": str(profile["seniority_target"]) != "",
+		"skills": (profile["skills"] as Array).size() >= 2,
+		"languages": (profile["languages"] as Array).size() >= 1,
+	}
+	bus.publish_profile_status({"profile": profile, "required": required,
+			"ready": _wiz_step >= WIZ_READY_STEP})
 
 func _is_active(slug: String) -> bool:
 	for a in _roster:
