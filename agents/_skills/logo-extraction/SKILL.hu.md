@@ -96,6 +96,23 @@ python3 /app/shared/skills/logo_fetch.py "<Company>" --mark-attempted
 `logo_fetched=1`, logo NULL: a weboldal a monogram-fallbacket mutatja,
 a cég kikerül a sorból. NE erőltesd 3 próbálkozáson túl.
 
+## Takarékossági policy (enrichment-policy)
+
+Az autonóm fetch tiszteletben tartja a
+`$JHT_HOME/profile/enrichment-policy.json`-t (ellenőrizd:
+`python3 /app/shared/skills/enrichment_policy.py show`).
+A `logo_fetch.py` lehetséges válaszai:
+
+- `POLICY_DISABLED` — takarékos mód aktív (`economy=true`) vagy
+  `logo.enabled=false`: NE nyerd ki, nem hiba. Lépj tovább.
+- `POLICY_SCORE_GATE` — a cégnek még nincs élő pozíciója
+  `logo.min_score` ≥ score-ral: NE erőltesd. Nem jelöli a
+  `logo_fetched`-et: amikor a Scorer átlépi a küszöböt, a cég magától
+  visszakerül a sorba.
+
+A `--force` megkerüli a policy-t: CSAK a felhasználó kifejezett
+kérésére használd, soha önhatalmúlag.
+
 ## Elvárt minőség
 
 - **Részesítsd előnyben** a 96–256px négyzetes ikonokat (az
