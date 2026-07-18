@@ -98,7 +98,7 @@ func _ready() -> void:
 		rug.texture = rug_tex
 		# Centro visivo dell'angolo comune: tavolino sul tappeto, figure di
 		# servizio a sinistra e divanetto del Mentor sul bordo destro.
-		rug.position = Vector2(2340, 1190)
+		rug.position = Vector2(2500, 1190)
 		rug.scale = Vector2(0.68, 0.68)
 		rug.show_behind_parent = true
 		add_child(rug)

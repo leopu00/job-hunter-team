@@ -170,7 +170,7 @@ func _test_core_workstations() -> void:
 	var expected := {
 		"core:coordinatore": {"stem": "captain_desk_down", "facing": "down"},
 		"core:sentinella": {"stem": "budgeteer_desk_down", "facing": "down"},
-		"core:mentor": {"stem": "mentor_sofa_up", "facing": "up"},
+		"core:mentor": {"stem": "mentor_armchair", "facing": "down"},
 	}
 	var found: Dictionary = {}
 	for item in FurnitureDefsScript.ITEMS:

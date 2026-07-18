@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dvql84skpuvxm"
-path="res://.godot/imported/mentor_sofa_up.png-f002c6d480d830bae1ded3062c9b4947.ctex"
+uid="uid://dtq3d0shfumtq"
+path="res://.godot/imported/mentor_armchair_seated_v2.png-b2d3ae2ae6d4ae2219142fb89e6527be.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/gen-art/furniture/mentor_sofa_up.png"
-dest_files=["res://.godot/imported/mentor_sofa_up.png-f002c6d480d830bae1ded3062c9b4947.ctex"]
+source_file="res://assets/gen-art/furniture/mentor_armchair_seated_v2.png"
+dest_files=["res://.godot/imported/mentor_armchair_seated_v2.png-b2d3ae2ae6d4ae2219142fb89e6527be.ctex"]
 
 [params]
 
