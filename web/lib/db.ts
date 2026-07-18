@@ -104,6 +104,9 @@ CREATE TABLE IF NOT EXISTS companies (
   analyzed_by TEXT,
   analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   verdict TEXT,
+  logo TEXT,
+  logo_source TEXT,
+  logo_fetched INTEGER DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

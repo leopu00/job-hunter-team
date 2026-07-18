@@ -18,6 +18,7 @@ Uso:
   python3 db_query.py next-for-salary-precise # posizioni con salary preciso richiesto dall'utente
   python3 db_query.py next-for-recheck-weekly  # MANUTENZIONE: recheck cadenzato (vive, score>=70, non verif. da >7gg)
   python3 db_query.py next-for-geocode-missing # MANUTENZIONE: geocoding vive senza coordinate ufficio
+  python3 db_query.py next-for-logo-missing  # MANUTENZIONE: aziende (con posizioni vive) senza logo
   python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
                                             # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
@@ -530,6 +531,27 @@ def next_for_role(role, min_score=70, older_than_days=7):
         """).fetchall()
         label = "Geocoding manutenzione (posizioni vive senza coordinate ufficio)"
 
+    elif role == 'logo-missing':
+        # MAINTENANCE MODE (mig 056): logo aziendale per la pagina posizione web.
+        # Coda per AZIENDE (non posizioni): companies con almeno una posizione
+        # viva e logo mai tentato (logo_fetched 0/NULL — pattern office_geocoded:
+        # un tentativo fallito marca logo_fetched=1 via `logo_fetch.py
+        # --mark-attempted` e l'azienda esce dalla coda, niente retry a ogni
+        # sweep). Ordinata per numero di posizioni vive → prima le aziende più
+        # visibili sul sito. L'Analista esegue la skill `logo-extraction`.
+        # Da usare SOLO in maintenance mode.
+        rows = conn.execute("""
+            SELECT c.id, c.name AS company,
+                   COUNT(p.id) || ' posizioni vive · '
+                     || COALESCE(c.website, 'NO WEBSITE (cercalo prima)') AS title
+            FROM companies c
+            JOIN positions p ON p.company_id = c.id AND p.status != 'excluded'
+            WHERE (c.logo_fetched IS NULL OR c.logo_fetched = 0)
+            GROUP BY c.id
+            ORDER BY COUNT(p.id) DESC, c.name ASC
+        """).fetchall()
+        label = "Logo manutenzione (aziende con posizioni vive senza logo)"
+
     else:
         print(f"Ruolo sconosciuto: {role}")
         return
@@ -678,6 +700,7 @@ def main():
     rw.add_argument('--older-than-days', type=int, default=7,
                     help='Ricontrolla solo chi non è verificato da > N giorni (default 7 = 1x/settimana).')
     sub.add_parser('next-for-geocode-missing')
+    sub.add_parser('next-for-logo-missing')
 
     # active-categories <user_id> (tassonomia emergente): nomi role_family
     # ATTIVI del registro per l'utente. Consumato dal write-guard (db_update)
