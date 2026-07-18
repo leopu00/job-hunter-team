@@ -139,6 +139,7 @@ const T: Record<
     btnUndo: string;
     btnSkip: string;
     commentPh: string;
+    commentClose: string;
     voiceStart: string;
     voiceStop: string;
     voiceListening: string;
@@ -167,6 +168,7 @@ const T: Record<
     btnUndo: "Annulla ultima",
     btnSkip: "Salta",
     commentPh: "Aggiungi un commento (facoltativo)…",
+    commentClose: "Chiudi il commento",
     voiceStart: "Detta il commento",
     voiceStop: "Ferma la dettatura",
     voiceListening: "Ti ascolto…",
@@ -194,6 +196,7 @@ const T: Record<
     btnUndo: "Undo last",
     btnSkip: "Skip",
     commentPh: "Add a comment (optional)…",
+    commentClose: "Close the comment",
     voiceStart: "Dictate the comment",
     voiceStop: "Stop dictation",
     voiceListening: "Listening…",
@@ -221,6 +224,7 @@ const T: Record<
     btnUndo: "Visszavonás",
     btnSkip: "Kihagyás",
     commentPh: "Megjegyzés hozzáadása (opcionális)…",
+    commentClose: "Megjegyzés bezárása",
     voiceStart: "Megjegyzés diktálása",
     voiceStop: "Diktálás leállítása",
     voiceListening: "Hallgatlak…",
@@ -248,6 +252,7 @@ const T: Record<
     btnUndo: "Deshacer",
     btnSkip: "Omitir",
     commentPh: "Añade un comentario (opcional)…",
+    commentClose: "Cerrar el comentario",
     voiceStart: "Dictar el comentario",
     voiceStop: "Detener el dictado",
     voiceListening: "Escuchando…",
@@ -275,6 +280,7 @@ const T: Record<
     btnUndo: "Rückgängig",
     btnSkip: "Überspringen",
     commentPh: "Kommentar hinzufügen (optional)…",
+    commentClose: "Kommentar schließen",
     voiceStart: "Kommentar diktieren",
     voiceStop: "Diktat beenden",
     voiceListening: "Ich höre zu…",
@@ -302,6 +308,7 @@ const T: Record<
     btnUndo: "Annuler",
     btnSkip: "Passer",
     commentPh: "Ajouter un commentaire (facultatif)…",
+    commentClose: "Fermer le commentaire",
     voiceStart: "Dicter le commentaire",
     voiceStop: "Arrêter la dictée",
     voiceListening: "Je vous écoute…",
@@ -329,6 +336,7 @@ const T: Record<
     btnUndo: "Desfazer",
     btnSkip: "Pular",
     commentPh: "Adicione um comentário (opcional)…",
+    commentClose: "Fechar o comentário",
     voiceStart: "Ditar o comentário",
     voiceStop: "Parar o ditado",
     voiceListening: "Ouvindo…",
@@ -891,32 +899,63 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           </div>
 
           {/* Commento opzionale (tastiera o dettatura): parte col prossimo
-              giudizio */}
+              giudizio. La riga ha ALTEZZA FISSA: da aperta, la box si
+              espande VERSO L'ALTO come overlay sopra la card (position
+              absolute ancorata al bottom) senza spostare il layout; la X
+              nell'angolo la richiude alla riga compatta (testo conservato,
+              mostrato troncato). */}
           <div className="mt-4 flex items-start gap-2">
-            <div className="flex-1 min-w-0">
+            <div className="relative flex-1 min-w-0" style={{ height: 38 }}>
               {commentOpen ? (
-                <textarea
-                  autoFocus
-                  rows={2}
-                  maxLength={2000}
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder={recording ? t.voiceListening : t.commentPh}
-                  className="w-full rounded-lg border px-3 py-2 text-[12px] resize-none"
+                <div
+                  className="absolute left-0 right-0 bottom-0 rounded-lg border"
                   style={{
                     borderColor: recording
                       ? "var(--color-red)"
                       : "var(--color-border)",
-                    background: "var(--color-row)",
-                    color: "var(--color-bright)",
-                    outline: "none",
+                    background: "var(--color-panel)",
+                    zIndex: 30,
+                    boxShadow: "0 -10px 28px rgba(0,0,0,0.4)",
                   }}
-                />
+                >
+                  <textarea
+                    autoFocus
+                    rows={5}
+                    maxLength={2000}
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder={recording ? t.voiceListening : t.commentPh}
+                    className="w-full rounded-lg px-3 py-2 pr-9 text-[12px] resize-none block"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--color-bright)",
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    aria-label={t.commentClose}
+                    title={t.commentClose}
+                    onClick={() => setCommentOpen(false)}
+                    className="absolute top-1.5 right-1.5 rounded-full border flex items-center justify-center"
+                    style={{
+                      width: 22,
+                      height: 22,
+                      color: "var(--color-muted)",
+                      borderColor: "var(--color-border)",
+                      background: "var(--color-card)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <IconX size={11} />
+                  </button>
+                </div>
               ) : (
                 <button
                   type="button"
                   onClick={() => setCommentOpen(true)}
-                  className="w-full rounded-lg border px-3 py-2 text-[12px] text-left flex items-center gap-2"
+                  className="w-full h-full rounded-lg border px-3 text-[12px] text-left flex items-center gap-2"
                   style={{
                     borderColor: "var(--color-border)",
                     background: "transparent",
