@@ -173,7 +173,8 @@ const T: Record<
     voiceStop: "Ferma la dettatura",
     voiceListening: "Ti ascolto…",
     voiceError: "Dettatura non disponibile su questo dispositivo",
-    voiceDenied: "Permesso per il microfono negato — controlla le impostazioni del browser",
+    voiceDenied:
+      "Permesso per il microfono negato — controlla le impostazioni del browser",
     emptyTitle: "Mazzo finito!",
     emptySubtitle: "Hai fatto il triage di tutte le posizioni in coda.",
     allPositions: "Tutte le posizioni",
@@ -229,14 +230,16 @@ const T: Record<
     voiceStop: "Diktálás leállítása",
     voiceListening: "Hallgatlak…",
     voiceError: "A diktálás nem érhető el ezen az eszközön",
-    voiceDenied: "Mikrofonengedély megtagadva — ellenőrizd a böngésző beállításait",
+    voiceDenied:
+      "Mikrofonengedély megtagadva — ellenőrizd a böngésző beállításait",
     emptyTitle: "A pakli elfogyott!",
     emptySubtitle: "Minden sorban álló állást átnéztél.",
     allPositions: "Összes állás",
     details: "Részletek",
     remote: { full_remote: "Távoli", hybrid: "Hibrid", onsite: "Helyszíni" },
     saveError: "Hálózati hiba — nem mentett művelet:",
-    hintKeys: "Billentyűk: 1–4 ítélet · ← nem · → top · ↓ kihagyás · ⌫ visszavonás",
+    hintKeys:
+      "Billentyűk: 1–4 ítélet · ← nem · → top · ↓ kihagyás · ⌫ visszavonás",
   },
   es: {
     title: "Swipe",
@@ -257,7 +260,8 @@ const T: Record<
     voiceStop: "Detener el dictado",
     voiceListening: "Escuchando…",
     voiceError: "Dictado no disponible en este dispositivo",
-    voiceDenied: "Permiso de micrófono denegado — revisa la configuración del navegador",
+    voiceDenied:
+      "Permiso de micrófono denegado — revisa la configuración del navegador",
     emptyTitle: "¡Mazo terminado!",
     emptySubtitle: "Has revisado todas las posiciones en cola.",
     allPositions: "Todas las posiciones",
@@ -292,7 +296,8 @@ const T: Record<
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "Vor Ort" },
     saveError: "Netzwerkfehler — Aktion nicht gespeichert für",
-    hintKeys: "Tastatur: 1–4 Urteil · ← nein · → top · ↓ überspringen · ⌫ rückgängig",
+    hintKeys:
+      "Tastatur: 1–4 Urteil · ← nein · → top · ↓ überspringen · ⌫ rückgängig",
   },
   fr: {
     title: "Swipe",
@@ -313,12 +318,17 @@ const T: Record<
     voiceStop: "Arrêter la dictée",
     voiceListening: "Je vous écoute…",
     voiceError: "Dictée non disponible sur cet appareil",
-    voiceDenied: "Autorisation du micro refusée — vérifiez les réglages du navigateur",
+    voiceDenied:
+      "Autorisation du micro refusée — vérifiez les réglages du navigateur",
     emptyTitle: "Paquet terminé !",
     emptySubtitle: "Vous avez trié tous les postes en attente.",
     allPositions: "Tous les postes",
     details: "Détails",
-    remote: { full_remote: "Télétravail", hybrid: "Hybride", onsite: "Sur site" },
+    remote: {
+      full_remote: "Télétravail",
+      hybrid: "Hybride",
+      onsite: "Sur site",
+    },
     saveError: "Erreur réseau — action non enregistrée pour",
     hintKeys: "Clavier : 1–4 avis · ← non · → top · ↓ passer · ⌫ annuler",
   },
@@ -341,7 +351,8 @@ const T: Record<
     voiceStop: "Parar o ditado",
     voiceListening: "Ouvindo…",
     voiceError: "Ditado não disponível neste dispositivo",
-    voiceDenied: "Permissão do microfone negada — verifique as configurações do navegador",
+    voiceDenied:
+      "Permissão do microfone negada — verifique as configurações do navegador",
     emptyTitle: "Baralho concluído!",
     emptySubtitle: "Você triou todas as vagas na fila.",
     allPositions: "Todas as vagas",
@@ -464,7 +475,9 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     // La dettatura APPENDE al testo già presente (base congelata all'avvio).
     const base = comment.trim() ? comment.trim() + " " : "";
     rec.onresult = (e: unknown) => {
-      const ev = e as { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> };
+      const ev = e as {
+        results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }>;
+      };
       let text = "";
       for (let i = 0; i < ev.results.length; i++) {
         text += ev.results[i][0].transcript;
@@ -690,7 +703,10 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           >
             {t.emptyTitle}
           </div>
-          <p className="text-[12px] mb-1" style={{ color: "var(--color-muted)" }}>
+          <p
+            className="text-[12px] mb-1"
+            style={{ color: "var(--color-muted)" }}
+          >
             {t.emptySubtitle}
           </p>
           {history.length > 0 && (
@@ -831,7 +847,9 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
 
                       {/* Meta chips */}
                       <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
-                        {(card.loc_city || card.loc_country || card.location) && (
+                        {(card.loc_city ||
+                          card.loc_country ||
+                          card.location) && (
                           <Chip>
                             <span className="inline-flex items-center gap-1">
                               <IconPin size={11} />
@@ -842,7 +860,9 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                           </Chip>
                         )}
                         {card.remote_type && (
-                          <Chip>{t.remote[card.remote_type] ?? card.remote_type}</Chip>
+                          <Chip>
+                            {t.remote[card.remote_type] ?? card.remote_type}
+                          </Chip>
                         )}
                         {formatSalary(
                           card.salary_min,
@@ -959,9 +979,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                   style={{
                     borderColor: "var(--color-border)",
                     background: "transparent",
-                    color: comment
-                      ? "var(--color-bright)"
-                      : "var(--color-dim)",
+                    color: comment ? "var(--color-bright)" : "var(--color-dim)",
                     cursor: "text",
                   }}
                 >
