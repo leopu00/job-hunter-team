@@ -22,8 +22,8 @@ const TRIP_EVERY := {
 	"scorer": 300.0,
 	"scrittore": 280.0,
 	"critico": 320.0,
-	"coordinatore": 170.0,  # il giro dei reparti è il suo lavoro
-	"mentor": 240.0,
+	"coordinatore": 90.0,  # alterna spesso scrivania e giro dei reparti
+	"mentor": 1800.0,  # circa ogni mezz'ora: libro, lavagna, ritorno al divano
 	"assistente": 300.0,
 	"sentinella": 140.0,  # il watchdog è quasi sempre in ronda
 }
@@ -63,7 +63,7 @@ var _custom_seat_offset := Vector2.ZERO
 var _has_custom_seat_offset := false
 var _desk_key := ""  # chiave nel registry FurnitureNode.desks
 var _chatter: Array = []
-var _wander: Array = []  # solo core (mentor/coordinatore/assistente)
+var _wander: Array = []  # solo core (mentor/coordinatore/assistente/sentinella)
 
 ## Viaggio corrente: lista di tappe {target, mode, pause, pause_mode}.
 ## mode = walk|carry (animazione in cammino); pause_mode = idle|work.
@@ -90,10 +90,12 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	slug = def["slug"]
 	display_name = def["name"]
 	dept = def.get("dept", "")
-	_has_workstation = dept != "" or slug in ["coordinatore", "assistente"]
+	_has_workstation = dept != "" or def.has("workstation_key") \
+			or slug == "assistente"
 	_spot = def["spot"]
 	_chatter = def.get("chatter", [])
 	_wander = def.get("wander", [])
+	_desk_key = str(def.get("workstation_key", ""))
 	if dept != "":
 		var desk: Dictionary = DepartmentDefs.DEPARTMENTS[dept]["desks"][def["desk"]]
 		_desk_facing = desk.get("facing", "down")
@@ -150,6 +152,10 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	state_tag.position = STATE_TAG_POS
 	add_child(state_tag)
 	state_tag.set_state(backend_status, throttle_secs, activity_detail)
+	# _work_pose() viene eseguito prima che badge e fumetti esistano: ripeti
+	# l'aggancio ora, così l'offset del composito non viene perso al bootstrap.
+	if _seated():
+		_set_desk_occupied(true)
 
 ## Le viste frontali delle scrivanie non includono una sedia (nelle viste
 ## up/side è già dipinta nella texture). La aggiungiamo come sibling y-sort:
@@ -387,11 +393,15 @@ func _physics_process(delta: float) -> void:
 			_consume_tick(delta)
 			_state_timer -= delta
 			if _state_timer <= 0.0:
-				_state_timer = _cadence() * randf_range(0.6, 1.4)
+				_state_timer = _next_trip_delay()
 				# Con dati reali nessun tragitto inventato: il movimento nasce
 				# soltanto da attività/transizioni osservate. Il teatro casuale
 				# resta disponibile esclusivamente nella demo offline.
-				if backend_status == "working" and BackendBus.state != BackendBus.CONNECTED:
+				# Capitano, Tesoriere e Mentor pattugliano davvero anche in live. Il
+				# Mentor si muove molto meno: la sua cadenza media è mezz'ora.
+				var live_patrol := slug in ["coordinatore", "sentinella", "mentor"]
+				if backend_status == "working" and (live_patrol \
+						or BackendBus.state != BackendBus.CONNECTED):
 					_plan_trip()
 		S.TRIP:
 			if backend_status != "working" and not _exiting and not _forced_trip:
@@ -413,6 +423,13 @@ func _physics_process(delta: float) -> void:
 func _cadence() -> float:
 	return TRIP_EVERY.get(slug, 260.0)
 
+func _next_trip_delay() -> float:
+	# Il rituale del Mentor deve restare davvero vicino alla mezz'ora; il
+	# jitter largo degli altri agenti lo anticiperebbe anche a soli 18 minuti.
+	if slug == "mentor":
+		return _cadence() * randf_range(0.95, 1.05)
+	return _cadence() * randf_range(0.6, 1.4)
+
 ## Alterna digitazione (work) e pensiero (idle) alla postazione: il ritmo
 ## dei tick veri. Circa 70% del tempo in work. Da seduti la traccia è
 ## una sola ("sit"): l'alternanza pilota solo lo smaltimento pila.
@@ -432,11 +449,15 @@ func _tick_desk_pose(delta: float) -> void:
 
 ## Seduto alla postazione? Missione 16:10: la gran maggioranza SIEDE
 ## quando lavora; in piedi solo chi ha lo standing desk. Gated sul
-## contratto rig (has_sit = lo sheet <slug>_sit.png esiste): senza
-## texture l'offset farebbe solo salire l'agente SULLA sedia.
+## contratto rig (has_sit) oppure sull'illustrazione composita registrata.
+## Quest'ultima permette ai core senza sheet seduto di usare un asset unico.
 func _seated() -> bool:
-	return _has_workstation and not _standing and rig != null \
-			and rig.get("has_sit") == true
+	if not _has_workstation or _standing or rig == null:
+		return false
+	if rig.get("has_sit") == true:
+		return true
+	var desk_node: FurnitureNode = FurnitureNode.desks.get(_desk_key)
+	return desk_node != null and desk_node.has_seated_art()
 
 ## Dove sta il corpo quando è seduto: AFFONDATO verso la scrivania così
 ## il piano copre le gambe e resta il busto dietro i monitor (feedback
@@ -471,6 +492,10 @@ func _seat_offset() -> Vector2:
 ## base alla prospettiva. Questa correzione porta codino e badge sopra la
 ## testa per tutte le quattro viste usate dai cinque reparti.
 func _composite_overhead_delta() -> Vector2:
+	# I due desk direzionali hanno schienale e busto più alti delle postazioni
+	# radiali: il delta standard metterebbe il badge esattamente sul volto.
+	if _desk_key.begins_with("core:"):
+		return Vector2(0, -58)
 	if _has_custom_seat_offset:
 		var side := signf(_custom_seat_offset.x)
 		var diagonal := absf(_custom_seat_offset.y) > 20.0
@@ -516,15 +541,32 @@ func _desk_motion(mode: String) -> void:
 func _leg_to(target: Vector2, mode: String, pause: float, pause_mode: String) -> Dictionary:
 	return {"target": target, "mode": mode, "pause": pause, "pause_mode": pause_mode}
 
+## Avvio esplicito della ronda dei ruoli core; usato dal controllo visuale e
+## disponibile agli eventi reali senza esporre la costruzione delle tappe.
+func perform_patrol() -> void:
+	if dept == "" and not _wander.is_empty() and state == S.WORK:
+		_plan_trip()
+
 ## Sceglie il prossimo viaggio in base al ruolo. La cadenza è già rara
 ## (TRIP_EVERY): quando il timer scatta il motivo è quasi sempre di lavoro
 ## — stampa o ritiro fogli; caffè e ologramma sono l'eccezione.
 func _plan_trip() -> void:
 	_legs = []
 	if dept == "":
-		# core: il Coordinatore fa il giro dei reparti, gli altri due passi
+		# Il Mentor compie sempre il piccolo rituale completo: libreria,
+		# lavagna, poi divanetto. Non sceglie una sola meta casuale, così le
+		# diverse posizioni richieste restano tutte osservabili.
 		if _wander.is_empty():
 			return
+		if slug == "mentor" and _wander.size() >= 2:
+			_legs = [
+				_leg_to(_wander[0], "walk", randf_range(5.0, 8.0), "idle"),
+				_leg_to(_wander[1], "walk", randf_range(7.0, 12.0), "idle"),
+				_leg_to(_spot, "walk", 0.0, "work"),
+			]
+			_start_next_leg()
+			return
+		# Gli altri core scelgono una tappa della propria ronda e rientrano.
 		_legs = [
 			_leg_to(_jit(_wander[randi() % _wander.size()]), "walk",
 					randf_range(3.0, 7.0), "idle"),
@@ -703,8 +745,14 @@ func _set_desk_occupied(on: bool) -> void:
 		desk_node.set_occupied(on and use_composite)
 	if rig:
 		rig.visible = not (on and use_composite)
-	_set_overhead_delta(_composite_overhead_delta() if on and use_composite \
-			else Vector2.ZERO)
+	var overhead_delta := Vector2.ZERO
+	if on and use_composite:
+		overhead_delta = _composite_overhead_delta()
+	elif slug in ["coordinatore", "sentinella", "mentor", "mantenitore", "dottore"]:
+		# I fogli di cammino dei core sono più alti del roster standard: badge
+		# e vignette devono partire sopra la testa, mai dalla schiena.
+		overhead_delta = Vector2(0, -42)
+	_set_overhead_delta(overhead_delta)
 	if _seated():
 		if on:
 			# Sedersi richiede la sovrapposizione col desk; senza maschera zero

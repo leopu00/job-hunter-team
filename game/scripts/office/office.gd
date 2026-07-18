@@ -39,18 +39,23 @@ func _ready() -> void:
 	# lo scaffale dei CV PRONTI accanto alla porta (sezione output 3/3)
 	world.add_child(OutputShelf.new())
 	world.add_child(_invisible_wall(OutputShelf.RECT))
+	# Registry condiviso: oltre ai desk dei reparti contiene le postazioni
+	# personali dei core, che usano lo stesso swap vuota/occupata.
+	FurnitureNode.desks = {}
+	FurnitureNode.front_chairs = {}
 	for item in FurnitureDefs.ITEMS:
 		if item["kind"] == "hologram":
 			world.add_child(Hologram.new(item["rect"]))
 			world.add_child(_invisible_wall(item["rect"]))
 		else:
-			world.add_child(FurnitureNode.new(item))
+			var furniture := FurnitureNode.new(item)
+			world.add_child(furniture)
+			if item.has("registry_key"):
+				FurnitureNode.desks[item["registry_key"]] = furniture
 
 	# postazioni dei 5 reparti: stesso FurnitureNode dei mobili, kind variati;
 	# facing passa al visual (texture orientate _down/_side/_up, dev-art).
 	# Ogni postazione ha un visual completo con sedia nello stesso verso.
-	FurnitureNode.desks = {}
-	FurnitureNode.front_chairs = {}
 	for d in DepartmentDefs.all_desks():
 		# Le scrivanie pittoriche sono già complete. Il vecchio DeskClutter
 		# duplicava tazze/fogli con icone flat sospese e senza prospettiva.
@@ -168,6 +173,22 @@ func _ready() -> void:
 		ov.zoom = Vector2(z, z)
 		add_child(ov)
 		ov.make_current()
+	elif OS.get_environment("JHT_FOCUS_CORE") == "1":
+		# Audit delle due postazioni direzionali: entrambe nello stesso frame,
+		# abbastanza vicino da controllare volto, seduta e monitor.
+		var core_cam := Camera2D.new()
+		core_cam.position = Vector2(1700, 535)
+		core_cam.zoom = Vector2(1.45, 1.45)
+		add_child(core_cam)
+		core_cam.make_current()
+	elif OS.get_environment("JHT_FOCUS_LOUNGE") == "1":
+		# Inquadratura di controllo dell'intero angolo: Dottore/Mantenitore a
+		# sinistra, tappeto centrato e Mentor seduto di schiena sulla destra.
+		var lounge_cam := Camera2D.new()
+		lounge_cam.position = Vector2(2330, 1140)
+		lounge_cam.zoom = Vector2(1.45, 1.45)
+		add_child(lounge_cam)
+		lounge_cam.make_current()
 	elif OS.get_environment("JHT_FOCUS_DEPT") != "":
 		var focus_id := OS.get_environment("JHT_FOCUS_DEPT")
 		if DepartmentDefs.DEPARTMENTS.has(focus_id):
@@ -261,6 +282,9 @@ func _ready() -> void:
 		_pipeline_force_selftest.call_deferred(pipeline_force_test)
 	if _doctor_test != "":
 		_doctor_selftest.call_deferred(_doctor_test)
+	var core_patrol_test := OS.get_environment("JHT_CORE_PATROL_TEST")
+	if core_patrol_test != "":
+		_force_core_patrol.call_deferred(core_patrol_test)
 
 	# TEST-AUTO: JHT_SHOT=path.png → screenshot dopo un secondo e chiude.
 	# Con JHT_OVERVIEW=1 permette a noi agenti di verificare il layout da soli.
@@ -275,6 +299,13 @@ func _force_pipeline_trip(test_dept: String) -> void:
 			agent.set_backend_status("working")
 			agent.perform_pipeline_step()
 			return
+
+func _force_core_patrol(role: String) -> void:
+	await get_tree().create_timer(0.45).timeout
+	var actor := _find_agent(role)
+	if actor:
+		actor.set_backend_status("working")
+		actor.perform_patrol()
 
 func _pipeline_force_selftest(test_dept: String) -> void:
 	await get_tree().create_timer(0.8).timeout
@@ -859,6 +890,9 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 			def = CharacterDefs.AGENTS[role].duplicate(true)
 			def["slug"] = role
 			def["lead"] = false
+			# Le copie live dei core restano mobili: la postazione personale è
+			# riservata al lead e non può essere occupata da due texture insieme.
+			def.erase("workstation_key")
 			if def.has("spot"):
 				def["spot"] = Vector2(def["spot"]) + Vector2(
 						84.0 * serial, 52.0 * (serial % 2))

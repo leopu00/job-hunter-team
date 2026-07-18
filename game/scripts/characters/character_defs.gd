@@ -10,11 +10,13 @@ const SHEETS := "res://assets/characters/sheets/"
 const AGENTS := {
 	"coordinatore": {
 		"name": "Il Coordinatore",
-		"spot": Vector2(2815, 1326),  # DAVANTI al desk nell'area comune
-		"facing": "up",
+		"spot": Vector2(1495, 486),  # dietro il desk, volto verso la camera
+		"facing": "down",
+		"workstation_key": "core:coordinatore",
 		# il giro dei reparti: passa a controllare gli inbox, come i C-tick
-		"wander": [Vector2(1110, 778), Vector2(2690, 790), Vector2(1790, 1390),
-				Vector2(1120, 1740), Vector2(2690, 1825), Vector2(1300, 930)],
+		"wander": [Vector2(1320, 620), Vector2(1660, 650), Vector2(1110, 778),
+				Vector2(2690, 790), Vector2(1790, 1390), Vector2(1120, 1740),
+				Vector2(2690, 1825), Vector2(1300, 930)],
 		"chatter": [
 			"ricalibro il ritmo del team…",
 			"il weekly è al 64%, tutto in linea",
@@ -73,8 +75,14 @@ const AGENTS := {
 	},
 	"mentor": {
 		"name": "Il Mentor",
-		"spot": Vector2(2480, 1150),
-		"wander": [Vector2(2140, 1280), Vector2(2600, 1120), Vector2(1300, 930)],
+		# Davanti al divanetto rivolto a nord: _seat_offset lo porta dentro il
+		# composito, che mostra la schiena e il libro come un unico elemento.
+		"spot": Vector2(2540, 1284),
+		"facing": "up",
+		"workstation_key": "core:mentor",
+		# Ordine intenzionale della passeggiata: prende un volume, controlla la
+		# lavagna e torna a leggere. AgentNPC percorre entrambe le tappe.
+		"wander": [Vector2(2690, 1088), Vector2(2425, 1072)],
 		"chatter": [
 			"un buon colloquio è una conversazione",
 			"i numeri raccontano i risultati",
@@ -97,8 +105,9 @@ const AGENTS := {
 	# mostrare TUTTI gli attivi veri)
 	"mantenitore": {
 		"name": "Il Mantenitore",
-		"spot": Vector2(2600, 1120),
-		"wander": [Vector2(1727, 300), Vector2(2690, 790), Vector2(1120, 1740)],
+		# Lato sinistro dell'area comune, immediatamente accanto agli Scorer.
+		"spot": Vector2(2010, 1085),
+		"wander": [Vector2(1727, 300), Vector2(2060, 1015), Vector2(2040, 1220)],
 		"chatter": [
 			"container sani, disco ok",
 			"aggiorno le dipendenze…",
@@ -107,7 +116,8 @@ const AGENTS := {
 	},
 	"dottore": {
 		"name": "Il Dottore",
-		"spot": Vector2(2480, 1280),
+		# Stessa zona del Mantenitore ma più a sud, senza sovrapporsi al varco.
+		"spot": Vector2(2040, 1265),
 		"wander": [Vector2(1110, 778), Vector2(1790, 1390), Vector2(2690, 1825)],
 		"chatter": [
 			"visita di controllo agli agenti…",
@@ -116,11 +126,14 @@ const AGENTS := {
 		],
 	},
 	"sentinella": {
-		"name": "La Sentinella",
-		"spot": Vector2(1490, 320),
+		"name": "Il Tesoriere",
+		"spot": Vector2(1905, 486),  # postazione multi-schermo frontale
+		"facing": "down",
+		"workstation_key": "core:sentinella",
 		# watchdog del team: la sua ronda tocca tutti gli angoli della box
-		"wander": [Vector2(2690, 790), Vector2(2690, 1825), Vector2(1120, 1740),
-				Vector2(775, 820), Vector2(2600, 1120), Vector2(1790, 1390)],
+		"wander": [Vector2(1710, 650), Vector2(2110, 650), Vector2(2690, 790),
+				Vector2(2690, 1825), Vector2(1120, 1740), Vector2(775, 820),
+				Vector2(2600, 1120), Vector2(1790, 1390)],
 		"chatter": [
 			"ronda: processi tutti vivi",
 			"bridge attivo, heartbeat regolare",
@@ -194,10 +207,8 @@ static func _desk_spot_of(dept_id: String, index: int) -> Vector2:
 ## altrimenti il vecchio rig a parti SVG. I chiamanti usano solo
 ## set_motion(facing, flipped, mode), identica su entrambi i rig.
 ## Ruoli senza sheet proprio che vestono quello di un altro (pittorico,
-## mai SVG in scena): la sentinella usa il camice tecnico del maintainer
-## finché imagegen non riapre e le genera un foglio dedicato.
+## mai SVG in scena). La Sentinella/Tesoriere ha ora un foglio dedicato.
 const SHEET_LOANS := {
-	"sentinella": "maintainer",
 	"mantenitore": "maintainer",  # il camice è davvero il suo
 	"dottore": "mentor",  # look da consigliere finché non ha un foglio suo
 }
