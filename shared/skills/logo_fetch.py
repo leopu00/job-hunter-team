@@ -25,20 +25,30 @@ peso 200B..35KB, lato minimo >= 32px quando leggibile dall'header
 (PNG/ICO/WebP; JPEG accettato senza check dimensioni). Niente fiducia nel
 Content-Type del server.
 
+Enrichment-policy (risparmio, `enrichment_policy.py`): il fetch autonomo
+rispetta `$JHT_HOME/profile/enrichment-policy.json` A CODICE —
+  - economy=true o logo.enabled=false → POLICY_DISABLED (nessun fetch,
+    nessuna scrittura);
+  - logo.min_score=N → POLICY_SCORE_GATE se l'azienda non ha alcuna
+    posizione viva con best score >= N. NON marca logo_fetched: quando
+    lo Scorer supera la soglia, l'azienda rientra in coda da sola.
+`--force` scavalca la policy (intervento manuale esplicito).
+
 Uso (Analista, skill `logo-extraction`):
   python3 logo_fetch.py "Wizz Air"                     # website dalla riga companies
   python3 logo_fetch.py "Wizz Air" --website https://wizzair.com
   python3 logo_fetch.py "Wizz Air" --from-url https://.../logo.png
   python3 logo_fetch.py "Wizz Air" --mark-attempted    # nulla di usabile: flagga e basta
   python3 logo_fetch.py "Wizz Air" --dry-run           # valuta senza scrivere
-  python3 logo_fetch.py "Wizz Air" --force             # rifetch anche se logo presente
+  python3 logo_fetch.py "Wizz Air" --force             # rifetch/scavalca policy
 
 Output (single JSON line su stdout, exit 0 ok / 1 failure):
   {"ok": true, "company": "Wizz Air", "source": "https://...",
    "mime": "image/png", "bytes": 8123, "width": 180, "height": 180,
    "written": true}
   {"ok": false, "error": "...", "status_code": "NOT_FOUND" | "NO_WEBSITE"
-   | "NO_CANDIDATE" | "FETCH_ERROR" | "DB_ERROR"}
+   | "NO_CANDIDATE" | "FETCH_ERROR" | "DB_ERROR"
+   | "POLICY_DISABLED" | "POLICY_SCORE_GATE"}
 """
 
 import argparse
@@ -53,6 +63,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from _db import get_db, ensure_schema
+from enrichment_policy import disabled_reason, is_enabled, logo_min_score
 
 MAX_LOGO_BYTES = 35_000     # cap rigido: la riga companies resta piccola
 MIN_LOGO_BYTES = 200        # sotto: pixel-tracker / favicon vuota
@@ -257,6 +268,35 @@ def run(args: argparse.Namespace) -> dict:
             "note": "logo già presente (usa --force per rifetch)",
         }
 
+    # Enrichment-policy (risparmio): enforcement A CODICE, prima di ogni
+    # fetch. --force scavalca (intervento manuale esplicito, non autonomo).
+    if not args.force:
+        if not is_enabled("logo"):
+            return {
+                "ok": False,
+                "error": f"Fetch logo bloccato: {disabled_reason('logo')}",
+                "status_code": "POLICY_DISABLED",
+            }
+        ms = logo_min_score()
+        if ms is not None:
+            best = conn.execute(
+                """
+                SELECT MAX(s.total_score) FROM positions p
+                JOIN scores s ON s.position_id = p.id
+                WHERE p.company_id = ? AND p.status != 'excluded'
+                """,
+                (row["id"],),
+            ).fetchone()[0]
+            if best is None or best < ms:
+                # NIENTE logo_fetched=1: quando lo Scorer supererà la
+                # soglia, l'azienda rientra nella coda logo-missing.
+                return {
+                    "ok": False,
+                    "error": (f"Sotto soglia policy (logo.min_score={ms}, "
+                              f"best score azienda={best}): non estrarre ora"),
+                    "status_code": "POLICY_SCORE_GATE",
+                }
+
     picked: tuple[bytes, str, str] | None = None
     if args.from_url:
         raw = validate_image(fetch_bytes(args.from_url, MAX_LOGO_BYTES))
@@ -317,7 +357,8 @@ def main() -> None:
     p.add_argument("--website", help="Override del sito (default: colonna website)")
     p.add_argument("--from-url", help="URL immagine diretto (salta la ricerca)")
     p.add_argument("--force", action="store_true",
-                   help="Rifetch anche se il logo è già presente")
+                   help="Rifetch anche se già presente / scavalca la "
+                        "enrichment-policy (intervento manuale)")
     p.add_argument("--mark-attempted", action="store_true",
                    help="Su fallimento marca logo_fetched=1 (esce dalla coda)")
     p.add_argument("--dry-run", action="store_true",
