@@ -5,21 +5,26 @@ import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 
-// [JHT-POSITIONS-SWIPE-TRIAGE] Deck di carte stile Tinder per il triage
-// rapido del backlog scored/ready. Gesture pointer-based (touch + mouse),
-// bottoni e tastiera (←/→, Backspace = undo) per il desktop.
+// [JHT-POSITIONS-SWIPE-TRIAGE] Deck di carte per il triage rapido del
+// backlog scored/ready. Non un like/nope binario: QUATTRO giudizi (scelta
+// utente 18/07) mappati sui campi del mig 028 di position_feedback
+// (score 1-5 + direction), più un commento libero opzionale che parte
+// insieme al giudizio. Gli swipe coprono gli estremi (sinistra = no
+// assoluto, destra = molto interessante), i giudizi intermedi sono da
+// bottone; tastiera 1-4 sul desktop, ⌫ = undo.
 //
-// Scritture — riusa le corsie ESISTENTI, nessuna route nuova:
-//   swipe sinistra → POST /api/positions/[legacyId]/user-exclude
+// Scritture — corsie ESISTENTI, nessuna route nuova:
+//   ogni giudizio  → POST /api/positions/[legacyId]/feedback
+//     (action + score + direction + comment: lo Scout consuma già la
+//      direction per il pattern steering; lo score alimenta la visione
+//      "Scorer re-score dai gusti reali")
+//   'no' assoluto  → in più POST /api/positions/[legacyId]/user-exclude
 //     (reason 'not_interested': status → excluded, il team ci smette di
 //      lavorare; reversibile con DELETE — usato dall'undo)
-//   swipe destra   → POST /api/positions/[legacyId]/feedback
-//     (action 'like' + direction 'more_like_this': lo Scout lo consuma già
-//      come pattern steering. Event-log APPEND-ONLY: l'undo del like
-//      ripristina solo la carta nella UI, il like resta registrato — un
-//      eventuale swipe sinistra successivo prevale comunque via status.)
-// Ottimistico: la carta vola subito, la POST viaggia dietro; su errore
-// toast non bloccante con il titolo della posizione.
+// position_feedback è un event-log APPEND-ONLY: l'undo dei giudizi non-no
+// ripristina solo la carta nella UI, la riga resta (l'ultimo giudizio
+// prevale comunque nei consumatori "latest"). Ottimistico: la carta vola
+// subito, le POST viaggiano dietro; su errore toast non bloccante.
 
 export type SwipeCardData = {
   id: string;
@@ -40,22 +45,72 @@ export type SwipeCardData = {
   jd_summary: string | null;
 };
 
-type SwipeAction = "like" | "nope";
+type Verdict = "no" | "review_low" | "review_ok" | "top";
+
+// Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
+// l'esclusione. Score 3 lasciato libero come neutro non usato.
+const VERDICTS: Record<
+  Verdict,
+  {
+    icon: string;
+    color: string;
+    action: "like" | "dislike" | "star";
+    score: number;
+    direction: "more_like_this" | "less_like_this";
+    exclude?: boolean;
+    fly: -1 | 1;
+  }
+> = {
+  no: {
+    icon: "✕",
+    color: "var(--color-red)",
+    action: "dislike",
+    score: 1,
+    direction: "less_like_this",
+    exclude: true,
+    fly: -1,
+  },
+  review_low: {
+    icon: "😕",
+    color: "var(--color-orange)",
+    action: "dislike",
+    score: 2,
+    direction: "less_like_this",
+    fly: -1,
+  },
+  review_ok: {
+    icon: "👀",
+    color: "var(--color-blue)",
+    action: "like",
+    score: 4,
+    direction: "more_like_this",
+    fly: 1,
+  },
+  top: {
+    icon: "⭐",
+    color: "var(--color-green)",
+    action: "star",
+    score: 5,
+    direction: "more_like_this",
+    fly: 1,
+  },
+};
+
+const VERDICT_ORDER: Verdict[] = ["no", "review_low", "review_ok", "top"];
 
 const T: Record<
   Locale,
   {
     title: string;
     subtitle: string;
-    stampLike: string;
-    stampNope: string;
-    btnNope: string;
-    btnLike: string;
+    stampTop: string;
+    stampNo: string;
+    verdicts: Record<Verdict, string>;
     btnUndo: string;
+    commentPh: string;
+    commentBtn: string;
     emptyTitle: string;
     emptySubtitle: string;
-    doneKept: string;
-    doneDiscarded: string;
     allPositions: string;
     details: string;
     remote: Record<string, string>;
@@ -65,129 +120,157 @@ const T: Record<
 > = {
   it: {
     title: "Swipe",
-    subtitle: "Destra se ti interessa, sinistra per scartare",
-    stampLike: "INTERESSA",
-    stampNope: "SCARTA",
-    btnNope: "Scarta",
-    btnLike: "Mi interessa",
+    subtitle: "Quattro giudizi + commento — il team impara i tuoi gusti",
+    stampTop: "TOP",
+    stampNo: "NO",
+    verdicts: {
+      no: "Assolutamente no",
+      review_low: "Da rivedere, poco",
+      review_ok: "Da rivedere, interessante",
+      top: "Molto interessante",
+    },
     btnUndo: "Annulla ultima",
+    commentPh: "Aggiungi un commento (facoltativo)…",
+    commentBtn: "Commento",
     emptyTitle: "Mazzo finito!",
     emptySubtitle: "Hai fatto il triage di tutte le posizioni in coda.",
-    doneKept: "tenute",
-    doneDiscarded: "scartate",
     allPositions: "Tutte le posizioni",
     details: "Dettagli",
     remote: { full_remote: "Remoto", hybrid: "Ibrido", onsite: "In sede" },
     saveError: "Errore di rete — azione non salvata per",
-    hintKeys: "Tastiera: ← scarta · → interessa · ⌫ annulla",
+    hintKeys: "Tastiera: 1–4 giudizio · ← no · → top · ⌫ annulla",
   },
   en: {
     title: "Swipe",
-    subtitle: "Right if interested, left to discard",
-    stampLike: "LIKE",
-    stampNope: "NOPE",
-    btnNope: "Discard",
-    btnLike: "Interested",
+    subtitle: "Four verdicts + a comment — your team learns your taste",
+    stampTop: "TOP",
+    stampNo: "NO",
+    verdicts: {
+      no: "Hard no",
+      review_low: "Review later, meh",
+      review_ok: "Review later, interested",
+      top: "Very interesting",
+    },
     btnUndo: "Undo last",
+    commentPh: "Add a comment (optional)…",
+    commentBtn: "Comment",
     emptyTitle: "Deck finished!",
     emptySubtitle: "You triaged every queued position.",
-    doneKept: "kept",
-    doneDiscarded: "discarded",
     allPositions: "All positions",
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "On-site" },
     saveError: "Network error — action not saved for",
-    hintKeys: "Keyboard: ← discard · → like · ⌫ undo",
+    hintKeys: "Keyboard: 1–4 verdict · ← no · → top · ⌫ undo",
   },
   hu: {
     title: "Swipe",
-    subtitle: "Jobbra, ha érdekel — balra, ha nem",
-    stampLike: "ÉRDEKEL",
-    stampNope: "NEM",
-    btnNope: "Elvetés",
-    btnLike: "Érdekel",
+    subtitle: "Négy ítélet + megjegyzés — a csapat tanulja az ízlésedet",
+    stampTop: "TOP",
+    stampNo: "NEM",
+    verdicts: {
+      no: "Biztosan nem",
+      review_low: "Később, kevésbé érdekel",
+      review_ok: "Később, érdekel",
+      top: "Nagyon érdekes",
+    },
     btnUndo: "Visszavonás",
+    commentPh: "Megjegyzés hozzáadása (opcionális)…",
+    commentBtn: "Megjegyzés",
     emptyTitle: "A pakli elfogyott!",
     emptySubtitle: "Minden sorban álló állást átnéztél.",
-    doneKept: "megtartva",
-    doneDiscarded: "elvetve",
     allPositions: "Összes állás",
     details: "Részletek",
     remote: { full_remote: "Távoli", hybrid: "Hibrid", onsite: "Helyszíni" },
     saveError: "Hálózati hiba — nem mentett művelet:",
-    hintKeys: "Billentyűk: ← elvetés · → érdekel · ⌫ visszavonás",
+    hintKeys: "Billentyűk: 1–4 ítélet · ← nem · → top · ⌫ visszavonás",
   },
   es: {
     title: "Swipe",
-    subtitle: "Derecha si te interesa, izquierda para descartar",
-    stampLike: "ME INTERESA",
-    stampNope: "DESCARTAR",
-    btnNope: "Descartar",
-    btnLike: "Me interesa",
+    subtitle: "Cuatro juicios + comentario — tu equipo aprende tus gustos",
+    stampTop: "TOP",
+    stampNo: "NO",
+    verdicts: {
+      no: "No, para nada",
+      review_low: "Revisar, poco interés",
+      review_ok: "Revisar, me interesa",
+      top: "Muy interesante",
+    },
     btnUndo: "Deshacer",
+    commentPh: "Añade un comentario (opcional)…",
+    commentBtn: "Comentario",
     emptyTitle: "¡Mazo terminado!",
     emptySubtitle: "Has revisado todas las posiciones en cola.",
-    doneKept: "guardadas",
-    doneDiscarded: "descartadas",
     allPositions: "Todas las posiciones",
     details: "Detalles",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Error de red — acción no guardada para",
-    hintKeys: "Teclado: ← descartar · → me interesa · ⌫ deshacer",
+    hintKeys: "Teclado: 1–4 juicio · ← no · → top · ⌫ deshacer",
   },
   de: {
     title: "Swipe",
-    subtitle: "Nach rechts bei Interesse, nach links zum Aussortieren",
-    stampLike: "INTERESSANT",
-    stampNope: "WEG",
-    btnNope: "Aussortieren",
-    btnLike: "Interessant",
+    subtitle: "Vier Urteile + Kommentar — dein Team lernt deinen Geschmack",
+    stampTop: "TOP",
+    stampNo: "NEIN",
+    verdicts: {
+      no: "Klares Nein",
+      review_low: "Später ansehen, wenig",
+      review_ok: "Später ansehen, interessant",
+      top: "Sehr interessant",
+    },
     btnUndo: "Rückgängig",
+    commentPh: "Kommentar hinzufügen (optional)…",
+    commentBtn: "Kommentar",
     emptyTitle: "Stapel geschafft!",
     emptySubtitle: "Du hast alle anstehenden Stellen durchgesehen.",
-    doneKept: "behalten",
-    doneDiscarded: "aussortiert",
     allPositions: "Alle Stellen",
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "Vor Ort" },
     saveError: "Netzwerkfehler — Aktion nicht gespeichert für",
-    hintKeys: "Tastatur: ← aussortieren · → interessant · ⌫ rückgängig",
+    hintKeys: "Tastatur: 1–4 Urteil · ← nein · → top · ⌫ rückgängig",
   },
   fr: {
     title: "Swipe",
-    subtitle: "À droite si intéressé, à gauche pour écarter",
-    stampLike: "INTÉRESSÉ",
-    stampNope: "ÉCARTER",
-    btnNope: "Écarter",
-    btnLike: "Intéressé",
+    subtitle: "Quatre avis + un commentaire — votre équipe apprend vos goûts",
+    stampTop: "TOP",
+    stampNo: "NON",
+    verdicts: {
+      no: "Non catégorique",
+      review_low: "À revoir, peu d'intérêt",
+      review_ok: "À revoir, intéressé",
+      top: "Très intéressant",
+    },
     btnUndo: "Annuler",
+    commentPh: "Ajouter un commentaire (facultatif)…",
+    commentBtn: "Commentaire",
     emptyTitle: "Paquet terminé !",
     emptySubtitle: "Vous avez trié tous les postes en attente.",
-    doneKept: "gardés",
-    doneDiscarded: "écartés",
     allPositions: "Tous les postes",
     details: "Détails",
     remote: { full_remote: "Télétravail", hybrid: "Hybride", onsite: "Sur site" },
     saveError: "Erreur réseau — action non enregistrée pour",
-    hintKeys: "Clavier : ← écarter · → intéressé · ⌫ annuler",
+    hintKeys: "Clavier : 1–4 avis · ← non · → top · ⌫ annuler",
   },
   pt: {
     title: "Swipe",
-    subtitle: "Direita se interessar, esquerda para descartar",
-    stampLike: "INTERESSA",
-    stampNope: "DESCARTAR",
-    btnNope: "Descartar",
-    btnLike: "Interessa",
+    subtitle: "Quatro julgamentos + comentário — sua equipe aprende seu gosto",
+    stampTop: "TOP",
+    stampNo: "NÃO",
+    verdicts: {
+      no: "Não mesmo",
+      review_low: "Rever depois, pouco",
+      review_ok: "Rever depois, interessa",
+      top: "Muito interessante",
+    },
     btnUndo: "Desfazer",
+    commentPh: "Adicione um comentário (opcional)…",
+    commentBtn: "Comentário",
     emptyTitle: "Baralho concluído!",
     emptySubtitle: "Você triou todas as vagas na fila.",
-    doneKept: "mantidas",
-    doneDiscarded: "descartadas",
     allPositions: "Todas as vagas",
     details: "Detalhes",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Erro de rede — ação não salva para",
-    hintKeys: "Teclado: ← descartar · → interessa · ⌫ desfazer",
+    hintKeys: "Teclado: 1–4 julgamento · ← não · → top · ⌫ desfazer",
   },
 };
 
@@ -239,19 +322,22 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
 
   const [deck, setDeck] = useState<SwipeCardData[]>(cards);
   const [history, setHistory] = useState<
-    { card: SwipeCardData; action: SwipeAction }[]
+    { card: SwipeCardData; verdict: Verdict }[]
   >([]);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, dragging: false });
   const [fly, setFly] = useState<{ x: number; rot: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [comment, setComment] = useState("");
+  const [commentOpen, setCommentOpen] = useState(false);
   const flyingRef = useRef(false);
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const total = cards.length;
   const done = total - deck.length;
-  const kept = history.filter((h) => h.action === "like").length;
-  const discarded = history.filter((h) => h.action === "nope").length;
+  const counts = VERDICT_ORDER.map(
+    (v) => [v, history.filter((h) => h.verdict === v).length] as const,
+  );
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -260,24 +346,31 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   }, []);
 
   const persist = useCallback(
-    async (card: SwipeCardData, action: SwipeAction) => {
+    async (card: SwipeCardData, verdict: Verdict, note: string) => {
+      const v = VERDICTS[verdict];
       try {
-        const res =
-          action === "nope"
-            ? await fetch(`/api/positions/${card.legacy_id}/user-exclude`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reason: "not_interested" }),
-              })
-            : await fetch(`/api/positions/${card.legacy_id}/feedback`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  action: "like",
-                  direction: "more_like_this",
-                }),
-              });
+        const res = await fetch(`/api/positions/${card.legacy_id}/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: v.action,
+            score: v.score,
+            direction: v.direction,
+            ...(note ? { comment: note } : {}),
+          }),
+        });
         if (!res.ok) throw new Error(String(res.status));
+        if (v.exclude) {
+          const ex = await fetch(
+            `/api/positions/${card.legacy_id}/user-exclude`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reason: "not_interested" }),
+            },
+          );
+          if (!ex.ok) throw new Error(String(ex.status));
+        }
       } catch {
         showToast(`${t.saveError} «${card.title}»`);
       }
@@ -286,23 +379,26 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   );
 
   const commit = useCallback(
-    (action: SwipeAction) => {
+    (verdict: Verdict) => {
       if (flyingRef.current || deck.length === 0) return;
       flyingRef.current = true;
       const card = deck[0];
-      const dir = action === "like" ? 1 : -1;
+      const note = comment.trim().slice(0, 2000);
+      const dir = VERDICTS[verdict].fly;
       const width = typeof window !== "undefined" ? window.innerWidth : 800;
       setFly({ x: dir * (width + 200), rot: dir * 22 });
       setTimeout(() => {
         setDeck((d) => d.slice(1));
-        setHistory((h) => [...h, { card, action }]);
+        setHistory((h) => [...h, { card, verdict }]);
         setDrag({ dx: 0, dy: 0, dragging: false });
         setFly(null);
+        setComment("");
+        setCommentOpen(false);
         flyingRef.current = false;
       }, FLY_MS);
-      void persist(card, action);
+      void persist(card, verdict, note);
     },
-    [deck, persist],
+    [deck, comment, persist],
   );
 
   const undo = useCallback(() => {
@@ -310,16 +406,17 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     const last = history[history.length - 1];
     setHistory((h) => h.slice(0, -1));
     setDeck((d) => [last.card, ...d]);
-    // Solo lo scarto è reversibile lato server (DELETE ripristina lo status
-    // pre-esclusione). Il like è un event-log immutabile: resta registrato.
-    if (last.action === "nope") {
+    // Solo l'esclusione del 'no' è reversibile lato server (DELETE
+    // ripristina lo status). Le righe feedback sono event-log immutabile:
+    // restano, e l'eventuale giudizio successivo prevale nei "latest".
+    if (VERDICTS[last.verdict].exclude) {
       void fetch(`/api/positions/${last.card.legacy_id}/user-exclude`, {
         method: "DELETE",
       }).catch(() => showToast(`${t.saveError} «${last.card.title}»`));
     }
   }, [history, showToast, t.saveError]);
 
-  // Tastiera per il desktop.
+  // Tastiera per il desktop: 1-4 = giudizi, frecce = estremi, ⌫ = undo.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
@@ -328,8 +425,15 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         (el.tagName === "INPUT" || el.tagName === "TEXTAREA")
       )
         return;
-      if (e.key === "ArrowLeft") commit("nope");
-      else if (e.key === "ArrowRight") commit("like");
+      const byDigit: Record<string, Verdict> = {
+        "1": "no",
+        "2": "review_low",
+        "3": "review_ok",
+        "4": "top",
+      };
+      if (byDigit[e.key]) commit(byDigit[e.key]);
+      else if (e.key === "ArrowLeft") commit("no");
+      else if (e.key === "ArrowRight") commit("top");
       else if (e.key === "Backspace") {
         e.preventDefault();
         undo();
@@ -359,14 +463,14 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     const { dx } = drag;
     startRef.current = null;
     if (Math.abs(dx) > SWIPE_THRESHOLD) {
-      commit(dx > 0 ? "like" : "nope");
+      commit(dx > 0 ? "top" : "no");
     } else {
       setDrag({ dx: 0, dy: 0, dragging: false });
     }
   };
 
-  const likeOpacity = Math.min(Math.max(drag.dx, 0) / 90, 1);
-  const nopeOpacity = Math.min(Math.max(-drag.dx, 0) / 90, 1);
+  const topOpacity = Math.min(Math.max(drag.dx, 0) / 90, 1);
+  const noOpacity = Math.min(Math.max(-drag.dx, 0) / 90, 1);
 
   return (
     <div className="max-w-md mx-auto select-none">
@@ -412,18 +516,16 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           <p className="text-[12px] mb-1" style={{ color: "var(--color-muted)" }}>
             {t.emptySubtitle}
           </p>
-          {(kept > 0 || discarded > 0) && (
+          {history.length > 0 && (
             <p
-              className="text-[12px] font-semibold mb-4"
+              className="text-[12px] font-semibold mb-4 flex items-center justify-center gap-3"
               style={{ color: "var(--color-base)" }}
             >
-              <span style={{ color: "var(--color-green)" }}>
-                {kept} {t.doneKept}
-              </span>
-              {" · "}
-              <span style={{ color: "var(--color-red)" }}>
-                {discarded} {t.doneDiscarded}
-              </span>
+              {counts.map(([v, n]) => (
+                <span key={v} style={{ color: VERDICTS[v].color }}>
+                  {VERDICTS[v].icon} {n}
+                </span>
+              ))}
             </p>
           )}
           <Link
@@ -442,7 +544,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         <>
           <div
             className="relative"
-            style={{ height: "min(62dvh, 560px)", touchAction: "none" }}
+            style={{ height: "min(56dvh, 520px)", touchAction: "none" }}
           >
             {/* Le 3 carte in cima, dal fondo verso la cima dello stack */}
             {deck
@@ -479,7 +581,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                     onPointerUp={isTop ? onPointerUp : undefined}
                     onPointerCancel={isTop ? onPointerUp : undefined}
                   >
-                    {/* Stamps LIKE/NOPE sulla carta in cima */}
+                    {/* Timbri TOP/NO sulla carta in cima */}
                     {isTop && (
                       <>
                         <div
@@ -488,11 +590,11 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                             color: "var(--color-green)",
                             borderColor: "var(--color-green)",
                             transform: "rotate(-14deg)",
-                            opacity: likeOpacity,
+                            opacity: topOpacity,
                             zIndex: 20,
                           }}
                         >
-                          {t.stampLike}
+                          ⭐ {t.stampTop}
                         </div>
                         <div
                           className="absolute top-5 right-4 px-2 py-1 rounded border-2 text-sm font-black tracking-widest"
@@ -500,11 +602,11 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                             color: "var(--color-red)",
                             borderColor: "var(--color-red)",
                             transform: "rotate(14deg)",
-                            opacity: nopeOpacity,
+                            opacity: noOpacity,
                             zIndex: 20,
                           }}
                         >
-                          {t.stampNope}
+                          ✕ {t.stampNo}
                         </div>
                       </>
                     )}
@@ -579,7 +681,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                           style={{
                             color: "var(--color-base)",
                             display: "-webkit-box",
-                            WebkitLineClamp: 9,
+                            WebkitLineClamp: 8,
                             WebkitBoxOrient: "vertical",
                             overflow: "hidden",
                           }}
@@ -610,33 +712,72 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               .reverse()}
           </div>
 
-          {/* Bottoni azione */}
-          <div className="flex items-center justify-center gap-5 mt-5">
-            <ActionButton
-              label={t.btnNope}
-              color="var(--color-red)"
-              size={56}
-              onClick={() => commit("nope")}
-            >
-              ✕
-            </ActionButton>
-            <ActionButton
-              label={t.btnUndo}
-              color="var(--color-yellow)"
-              size={42}
-              disabled={history.length === 0}
-              onClick={undo}
-            >
-              ↩
-            </ActionButton>
-            <ActionButton
-              label={t.btnLike}
-              color="var(--color-green)"
-              size={56}
-              onClick={() => commit("like")}
-            >
-              ♥
-            </ActionButton>
+          {/* Commento opzionale: parte col prossimo giudizio */}
+          <div className="mt-4">
+            {commentOpen ? (
+              <textarea
+                autoFocus
+                rows={2}
+                maxLength={2000}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder={t.commentPh}
+                className="w-full rounded-lg border px-3 py-2 text-[12px] resize-none"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-row)",
+                  color: "var(--color-bright)",
+                  outline: "none",
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCommentOpen(true)}
+                className="w-full rounded-lg border px-3 py-2 text-[12px] text-left"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "transparent",
+                  color: comment
+                    ? "var(--color-bright)"
+                    : "var(--color-dim)",
+                  cursor: "text",
+                }}
+              >
+                💬 {comment ? comment : t.commentPh}
+              </button>
+            )}
+          </div>
+
+          {/* Bottoni giudizio + undo */}
+          <div className="flex items-start justify-center gap-3 mt-4">
+            {VERDICT_ORDER.slice(0, 2).map((v) => (
+              <VerdictButton
+                key={v}
+                verdict={v}
+                label={t.verdicts[v]}
+                onClick={() => commit(v)}
+              />
+            ))}
+            <div className="flex flex-col items-center gap-1">
+              <ActionCircle
+                label={t.btnUndo}
+                color="var(--color-yellow)"
+                size={40}
+                disabled={history.length === 0}
+                onClick={undo}
+              >
+                ↩
+              </ActionCircle>
+            </div>
+            {VERDICT_ORDER.slice(2).map((v) => (
+              <VerdictButton
+                key={v}
+                verdict={v}
+                label={t.verdicts[v]}
+                onClick={() => commit(v)}
+              />
+            ))}
           </div>
 
           <p
@@ -687,7 +828,32 @@ function Chip({
   );
 }
 
-function ActionButton({
+function VerdictButton({
+  verdict,
+  label,
+  onClick,
+}: {
+  verdict: Verdict;
+  label: string;
+  onClick: () => void;
+}) {
+  const v = VERDICTS[verdict];
+  return (
+    <div className="flex flex-col items-center gap-1 w-[72px]">
+      <ActionCircle label={label} color={v.color} size={52} onClick={onClick}>
+        {v.icon}
+      </ActionCircle>
+      <span
+        className="text-[9px] font-semibold text-center leading-tight"
+        style={{ color: "var(--color-muted)" }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function ActionCircle({
   children,
   label,
   color,
@@ -713,7 +879,7 @@ function ActionButton({
       style={{
         width: size,
         height: size,
-        fontSize: size * 0.4,
+        fontSize: size * 0.38,
         color,
         borderColor: color,
         background: "var(--color-card)",
