@@ -1017,7 +1017,7 @@ async function getSwipedLegacyIds(
   const { data, error } = await supabase
     .from("position_feedback")
     .select("position_legacy_id")
-    .in("action", ["like", "dislike", "hide"])
+    .in("action", ["like", "dislike", "hide", "star"])
     .limit(10000);
   if (error || !data) return new Set();
   return new Set((data as any[]).map((r) => String(r.position_legacy_id)));
