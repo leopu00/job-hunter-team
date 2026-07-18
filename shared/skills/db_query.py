@@ -501,6 +501,14 @@ def next_for_role(role, min_score=70, older_than_days=7):
         # via last_checked). Una posizione verificata oggi esce dalla coda per una
         # settimana → consumo limitato e prevedibile. L'Analista aggiorna last_checked
         # col recheck-liveness. Da usare SOLO in maintenance mode.
+        # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata —
+        # vedi enrichment_policy.py. Coda vuota per policy = stato voluto.
+        from enrichment_policy import is_enabled, disabled_reason
+        if not is_enabled('recheck_weekly'):
+            print(f"\nRecheck settimanale manutenzione: "
+                  f"OFF — {disabled_reason('recheck_weekly')}.")
+            conn.close()
+            return
         rows = conn.execute("""
             SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score
             FROM positions p
@@ -518,9 +526,16 @@ def next_for_role(role, min_score=70, older_than_days=7):
     elif role == 'geocode-missing':
         # MAINTENANCE MODE (2026-07-13): geocoding AUTONOMO delle coordinate ufficio per
         # le posizioni VIVE che ne sono ancora sprovviste. A differenza di 'geocoding'
-        # (on-demand, flag geocode_requested dell'utente), qui l'Analista arricchisce in
-        # autonomia ogni posizione viva senza office_lat (per mappa / stima pendolarismo).
+        # (on-demand, flag geocode_requested dell'utente — che NON passa dalla policy:
+        # se l'utente chiede, si fa), qui l'Analista arricchisce in autonomia.
         # Da usare SOLO in maintenance mode.
+        # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata.
+        from enrichment_policy import is_enabled, disabled_reason
+        if not is_enabled('geocode_missing'):
+            print(f"\nGeocoding manutenzione: "
+                  f"OFF — {disabled_reason('geocode_missing')}.")
+            conn.close()
+            return
         rows = conn.execute("""
             SELECT p.id, p.title, p.company, p.location, p.loc_city, p.loc_country_code
             FROM positions p
@@ -540,17 +555,39 @@ def next_for_role(role, min_score=70, older_than_days=7):
         # sweep). Ordinata per numero di posizioni vive → prima le aziende più
         # visibili sul sito. L'Analista esegue la skill `logo-extraction`.
         # Da usare SOLO in maintenance mode.
-        rows = conn.execute("""
+        # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata;
+        # con `logo.min_score` entrano SOLO le aziende con almeno una posizione
+        # viva a best-score >= soglia (il gate non marca logo_fetched → quando
+        # lo Scorer supera la soglia l'azienda rientra da sola).
+        from enrichment_policy import is_enabled, disabled_reason, logo_min_score
+        if not is_enabled('logo'):
+            print(f"\nLogo manutenzione: OFF — {disabled_reason('logo')}.")
+            conn.close()
+            return
+        ms = logo_min_score()
+        score_gate = ""
+        params: tuple = ()
+        if ms is not None:
+            score_gate = """
+              AND EXISTS (SELECT 1 FROM positions p2
+                          JOIN scores s2 ON s2.position_id = p2.id
+                          WHERE p2.company_id = c.id
+                            AND p2.status != 'excluded'
+                            AND s2.total_score >= ?)"""
+            params = (ms,)
+        rows = conn.execute(f"""
             SELECT c.id, c.name AS company,
                    COUNT(p.id) || ' posizioni vive · '
                      || COALESCE(c.website, 'NO WEBSITE (cercalo prima)') AS title
             FROM companies c
             JOIN positions p ON p.company_id = c.id AND p.status != 'excluded'
             WHERE (c.logo_fetched IS NULL OR c.logo_fetched = 0)
+              {score_gate}
             GROUP BY c.id
             ORDER BY COUNT(p.id) DESC, c.name ASC
-        """).fetchall()
-        label = "Logo manutenzione (aziende con posizioni vive senza logo)"
+        """, params).fetchall()
+        label = ("Logo manutenzione (aziende con posizioni vive senza logo"
+                 + (f", best-score >= {ms}" if ms is not None else "") + ")")
 
     else:
         print(f"Ruolo sconosciuto: {role}")
