@@ -47,6 +47,7 @@ export default function NavLinks() {
       <NavLink href="/dashboard" pathname={pathname} tour="dashboard">{t('nav_dashboard')}</NavLink>
       <NavLink href="/map" pathname={pathname}>{t('nav_map')}</NavLink>
       <NavLink href="/positions" pathname={pathname} tour="positions">{t('nav_positions')}</NavLink>
+      <NavLink href="/swipe" pathname={pathname}>{t('nav_swipe')}</NavLink>
       <NavLink href="/team" pathname={pathname} tour="team" badge={pending.team} badgeLabel={tr('setup_pending')}>{t('nav_team')}</NavLink>
       <NavLink href="/messages" pathname={pathname}>{t('nav_messages')}</NavLink>
       <NavLink href="/profile" pathname={pathname} badge={pending.profile} badgeLabel={tr('setup_pending')}>{t('nav_profile')}</NavLink>
