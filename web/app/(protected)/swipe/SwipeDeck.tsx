@@ -143,6 +143,7 @@ const T: Record<
     voiceStop: string;
     voiceListening: string;
     voiceError: string;
+    voiceDenied: string;
     emptyTitle: string;
     emptySubtitle: string;
     allPositions: string;
@@ -169,7 +170,8 @@ const T: Record<
     voiceStart: "Detta il commento",
     voiceStop: "Ferma la dettatura",
     voiceListening: "Ti ascolto…",
-    voiceError: "Dettatura non disponibile",
+    voiceError: "Dettatura non disponibile su questo dispositivo",
+    voiceDenied: "Permesso per il microfono negato — controlla le impostazioni del browser",
     emptyTitle: "Mazzo finito!",
     emptySubtitle: "Hai fatto il triage di tutte le posizioni in coda.",
     allPositions: "Tutte le posizioni",
@@ -195,7 +197,8 @@ const T: Record<
     voiceStart: "Dictate the comment",
     voiceStop: "Stop dictation",
     voiceListening: "Listening…",
-    voiceError: "Dictation not available",
+    voiceError: "Dictation not available on this device",
+    voiceDenied: "Microphone permission denied — check your browser settings",
     emptyTitle: "Deck finished!",
     emptySubtitle: "You triaged every queued position.",
     allPositions: "All positions",
@@ -221,7 +224,8 @@ const T: Record<
     voiceStart: "Megjegyzés diktálása",
     voiceStop: "Diktálás leállítása",
     voiceListening: "Hallgatlak…",
-    voiceError: "A diktálás nem érhető el",
+    voiceError: "A diktálás nem érhető el ezen az eszközön",
+    voiceDenied: "Mikrofonengedély megtagadva — ellenőrizd a böngésző beállításait",
     emptyTitle: "A pakli elfogyott!",
     emptySubtitle: "Minden sorban álló állást átnéztél.",
     allPositions: "Összes állás",
@@ -247,7 +251,8 @@ const T: Record<
     voiceStart: "Dictar el comentario",
     voiceStop: "Detener el dictado",
     voiceListening: "Escuchando…",
-    voiceError: "Dictado no disponible",
+    voiceError: "Dictado no disponible en este dispositivo",
+    voiceDenied: "Permiso de micrófono denegado — revisa la configuración del navegador",
     emptyTitle: "¡Mazo terminado!",
     emptySubtitle: "Has revisado todas las posiciones en cola.",
     allPositions: "Todas las posiciones",
@@ -273,7 +278,8 @@ const T: Record<
     voiceStart: "Kommentar diktieren",
     voiceStop: "Diktat beenden",
     voiceListening: "Ich höre zu…",
-    voiceError: "Diktat nicht verfügbar",
+    voiceError: "Diktat auf diesem Gerät nicht verfügbar",
+    voiceDenied: "Mikrofonzugriff verweigert — prüfe die Browser-Einstellungen",
     emptyTitle: "Stapel geschafft!",
     emptySubtitle: "Du hast alle anstehenden Stellen durchgesehen.",
     allPositions: "Alle Stellen",
@@ -299,7 +305,8 @@ const T: Record<
     voiceStart: "Dicter le commentaire",
     voiceStop: "Arrêter la dictée",
     voiceListening: "Je vous écoute…",
-    voiceError: "Dictée non disponible",
+    voiceError: "Dictée non disponible sur cet appareil",
+    voiceDenied: "Autorisation du micro refusée — vérifiez les réglages du navigateur",
     emptyTitle: "Paquet terminé !",
     emptySubtitle: "Vous avez trié tous les postes en attente.",
     allPositions: "Tous les postes",
@@ -325,7 +332,8 @@ const T: Record<
     voiceStart: "Ditar o comentário",
     voiceStop: "Parar o ditado",
     voiceListening: "Ouvindo…",
-    voiceError: "Ditado não disponível",
+    voiceError: "Ditado não disponível neste dispositivo",
+    voiceDenied: "Permissão do microfone negada — verifique as configurações do navegador",
     emptyTitle: "Baralho concluído!",
     emptySubtitle: "Você triou todas as vagas na fila.",
     allPositions: "Todas as vagas",
@@ -433,7 +441,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           continuous: boolean;
           interimResults: boolean;
           onresult: ((e: unknown) => void) | null;
-          onerror: (() => void) | null;
+          onerror: ((e: unknown) => void) | null;
           onend: (() => void) | null;
           start: () => void;
           stop: () => void;
@@ -455,15 +463,20 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       }
       setComment((base + text).slice(0, 2000));
     };
-    rec.onerror = () => {
+    rec.onerror = (e: unknown) => {
       setRecording(false);
-      showToast(t.voiceError);
+      // 'no-speech'/'aborted' non sono errori (silenzio o stop manuale).
+      // 'not-allowed' = permesso microfono; il resto = servizio assente
+      // (es. il simulatore iOS non ha la dettatura Apple).
+      const code = (e as { error?: string }).error;
+      if (code === "no-speech" || code === "aborted") return;
+      showToast(code === "not-allowed" ? t.voiceDenied : t.voiceError);
     };
     rec.onend = () => setRecording(false);
     setCommentOpen(true);
     setRecording(true);
     rec.start();
-  }, [comment, locale, showToast, t.voiceError]);
+  }, [comment, locale, showToast, t.voiceDenied, t.voiceError]);
 
   const persist = useCallback(
     async (card: SwipeCardData, verdict: Verdict, note: string) => {
