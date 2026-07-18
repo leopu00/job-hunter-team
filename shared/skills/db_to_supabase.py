@@ -203,6 +203,9 @@ def sync_companies(conn, sb_url, sb_key, user_id, dry_run=False):
             "culture_notes": r["culture_notes"],
             "analyzed_by": r["analyzed_by"],
             "verdict": r["verdict"],
+            "logo": r["logo"],
+            "logo_source": r["logo_source"],
+            "logo_fetched": bool(r["logo_fetched"]),
         }
         if r["analyzed_at"]:
             data["analyzed_at"] = r["analyzed_at"]

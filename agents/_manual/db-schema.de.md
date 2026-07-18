@@ -31,6 +31,9 @@ Diese Datei ist die OFFIZIELLE REFERENZ für das Datenbankschema. Alle Agenten m
 | analyzed_by | TEXT | | Wer analysiert hat (analista-1, etc.) |
 | analyzed_at | TIMESTAMP | CURRENT_TIMESTAMP | Wann analysiert wurde |
 | verdict | TEXT | | GO, CAUTIOUS, NO_GO |
+| logo | TEXT | | **mig 056** — base64-data-URI des Logos (≤ ~35KB) — schreibt NUR `logo_fetch.py` |
+| logo_source | TEXT | | **mig 056** — Quell-URL des Logos (Audit/Refresh) |
+| logo_fetched | INTEGER | 0 | **mig 056** — 1 = Extraktion versucht (office_geocoded-Muster); Queue `next-for-logo-missing` |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — Zeileneinfügung |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — automatisch aktualisiert bei jedem UPDATE via Trigger |
 

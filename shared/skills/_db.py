@@ -83,6 +83,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_jd_summary(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
+    _migrate_companies_logo(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,6 +98,9 @@ def ensure_schema(conn: sqlite3.Connection):
         analyzed_by TEXT,
         analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         verdict TEXT,
+        logo TEXT,
+        logo_source TEXT,
+        logo_fetched INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -973,6 +977,31 @@ def _migrate_positions_jd_summary(conn: sqlite3.Connection) -> None:
     if _column_exists(conn, 'positions', 'jd_summary'):
         return
     conn.execute("ALTER TABLE positions ADD COLUMN jd_summary TEXT")
+
+
+def _migrate_companies_logo(conn: sqlite3.Connection) -> None:
+    """Aggiunge `companies.logo`, `logo_source`, `logo_fetched`.
+
+    Logo aziendale mostrato sulla pagina posizione del web:
+    - `logo`: data-URI base64 (image/png|jpeg|webp|x-icon), max ~35KB raw.
+      Inline nella riga: viaggia con la sync companies esistente, nessuno
+      storage esterno, la CSP web permette già `data:` in img-src.
+    - `logo_source`: URL da cui è stato estratto (audit/refresh).
+    - `logo_fetched`: 0/1 "lavoro tentato" — pattern `office_geocoded`:
+      distingue "mai provato" (candidato per la coda logo-missing) da
+      "provato ma nessun logo utilizzabile" (non riprovare a ogni sweep).
+    Popolate dall'Analista via skill `logo-extraction` →
+    `shared/skills/logo_fetch.py`. Allinea SQLite a Supabase mig 056.
+    """
+    if not _table_exists(conn, 'companies'):
+        return
+    for name, decl in (
+        ('logo', 'TEXT'),
+        ('logo_source', 'TEXT'),
+        ('logo_fetched', 'INTEGER DEFAULT 0'),
+    ):
+        if not _column_exists(conn, 'companies', name):
+            conn.execute(f"ALTER TABLE companies ADD COLUMN {name} {decl}")
 
 
 def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:

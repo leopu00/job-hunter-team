@@ -209,6 +209,11 @@ interface CompanyIn {
   analyzed_by?: string | null;
   analyzed_at?: string | null;
   verdict?: string | null;
+  // Logo aziendale (mig 056): data-URI base64 ≤~35KB + URL sorgente + flag
+  // "estrazione tentata" (pattern office_geocoded).
+  logo?: string | null;
+  logo_source?: string | null;
+  logo_fetched?: number | boolean | null;
 }
 
 // Position highlights (mig 046): pro/contro del dettaglio posizione. `id` è
@@ -433,6 +438,9 @@ export async function POST(req: NextRequest) {
         analyzed_by: c.analyzed_by ?? null,
         analyzed_at: c.analyzed_at ?? null,
         verdict: c.verdict ?? null,
+        logo: c.logo ?? null,
+        logo_source: c.logo_source ?? null,
+        logo_fetched: !!c.logo_fetched,
       }));
 
     if (payload.length > 0) {

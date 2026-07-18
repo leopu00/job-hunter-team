@@ -15,6 +15,9 @@ export type AvatarProps = {
   size?: AvatarSize;
   color?: string; // colore iniziali personalizzato
   square?: boolean; // bordi squadrati invece di circolari
+  // "contain" per i loghi aziendali (mai croppare un logo rettangolare);
+  // default "cover" (avatar persone, comportamento storico).
+  imgFit?: "cover" | "contain";
   className?: string;
   onClick?: () => void;
 };
@@ -72,6 +75,7 @@ export function Avatar({
   size = "md",
   color,
   square = false,
+  imgFit = "cover",
   className,
   onClick,
 }: AvatarProps) {
@@ -102,7 +106,7 @@ export function Avatar({
           <img
             src={src}
             alt={name}
-            className="w-full h-full object-cover"
+            className={`w-full h-full ${imgFit === "contain" ? "object-contain" : "object-cover"}`}
             style={{ borderRadius: radius - cfg.border }}
             onError={() => setImgError(true)}
           />
