@@ -135,6 +135,11 @@ func _ready() -> void:
 		world.add_child(agent)
 		agent.setup(def, nav)
 		agents.append(agent)
+	# Audit visuale locale: con JHT_SEAT_AUDIT=<reparto>:<desk> mostra una
+	# vignetta reale sul singolo composito inquadrato, senza dipendere dalla VPS.
+	if _seat_audit != "" and OS.get_environment("JHT_SPEECH_AUDIT") == "1" \
+			and not agents.is_empty():
+		agents[0].say("Verifica ancoraggio sopra la testa")
 
 	add_child(TesseractEdges.new())  # gli spigoli blu della box (trasparenti)
 	add_child(Sfx.make_ambient_hum())
