@@ -118,6 +118,9 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	# i core con scrivania personale dichiarano il verso nel def (fix
 	# test finale: il Capitano sedeva DIETRO il desk invece che davanti)
 	_desk_facing = def.get("facing", _desk_facing)
+	if def.has("seat_offset"):
+		_custom_seat_offset = def["seat_offset"]
+		_has_custom_seat_offset = true
 	position = _spot
 	# gli agenti NON collidono tra loro (si incastravano nei passaggi):
 	# restano solide solo le collisioni coi mobili (layer 1)
@@ -492,6 +495,10 @@ func _seat_offset() -> Vector2:
 ## base alla prospettiva. Questa correzione porta codino e badge sopra la
 ## testa per tutte le quattro viste usate dai cinque reparti.
 func _composite_overhead_delta() -> Vector2:
+	# La poltrona del Mentor è volutamente piccola: il delta dei desk
+	# direzionali lascerebbe il badge sospeso troppo lontano dalla testa.
+	if _desk_key == "core:mentor":
+		return Vector2(0, -16)
 	# I due desk direzionali hanno schienale e busto più alti delle postazioni
 	# radiali: il delta standard metterebbe il badge esattamente sul volto.
 	if _desk_key.begins_with("core:"):

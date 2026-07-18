@@ -191,7 +191,7 @@ func _ready() -> void:
 		# Inquadratura di controllo dell'intero angolo: Dottore/Mantenitore a
 		# sinistra, tappeto centrato e Mentor seduto di schiena sulla destra.
 		var lounge_cam := Camera2D.new()
-		lounge_cam.position = Vector2(2330, 1140)
+		lounge_cam.position = Vector2(2490, 1140)
 		lounge_cam.zoom = Vector2(1.45, 1.45)
 		add_child(lounge_cam)
 		lounge_cam.make_current()
