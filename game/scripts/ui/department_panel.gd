@@ -10,6 +10,7 @@ var dept_id := ""
 func _init(p_dept: String) -> void:
 	dept_id = p_dept
 	layer = 40
+	add_to_group("camera_blocking_overlay")
 
 func _ready() -> void:
 	var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]

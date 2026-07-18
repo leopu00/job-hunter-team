@@ -7,6 +7,7 @@ const STAGES := 4
 
 func _init() -> void:
 	layer = 40
+	add_to_group("camera_blocking_overlay")
 
 func _ready() -> void:
 	var root := Control.new()

@@ -23,6 +23,7 @@ func _init(p_section: String, sidebar_width: float) -> void:
 	section = p_section
 	_sidebar_width = sidebar_width
 	layer = 19  # sotto la sidebar: la linguetta resta cliccabile
+	add_to_group("camera_blocking_overlay")
 
 func _ready() -> void:
 	var root := Control.new()
@@ -1432,12 +1433,9 @@ func _on_ticket_created(_pid: int, ok: bool, error: String) -> void:
 	if is_instance_valid(_ticket_send):
 		_ticket_send.disabled = false
 
-## Paragrafo a capo automatico; via i **grassetti** markdown del team.
-func _pos_paragraph(text: String) -> Label:
-	var lbl := TerminalTheme.label(text.replace("**", ""), 14, Palette.BASE)
-	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	return lbl
+## Paragrafo a capo automatico con il grassetto Markdown prodotto dal team.
+func _pos_paragraph(text: String) -> RichTextLabel:
+	return TerminalTheme.markdown_label(text, 14, Palette.BASE)
 
 static func _fmt_k(v: Variant) -> String:
 	if v == null:

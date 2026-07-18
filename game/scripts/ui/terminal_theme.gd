@@ -98,3 +98,51 @@ static func label(text: String, size: int, color: Color, weight := "regular") ->
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	return l
+
+## Paragrafo Markdown leggero per i testi prodotti dal team. Godot parla
+## BBCode: convertiamo il grassetto **...** e preserviamo le parentesi
+## quadre letterali, frequenti nelle job description.
+static func markdown_label(text: String, size: int, color: Color) -> RichTextLabel:
+	var rich := RichTextLabel.new()
+	rich.bbcode_enabled = true
+	rich.fit_content = true
+	rich.scroll_active = false
+	rich.selection_enabled = true
+	rich.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rich.add_theme_font_size_override("normal_font_size", size)
+	rich.add_theme_font_size_override("bold_font_size", size)
+	rich.add_theme_color_override("default_color", color)
+	rich.text = _markdown_to_bbcode(text)
+	return rich
+
+static func _markdown_to_bbcode(text: String) -> String:
+	var decoded := _decode_unicode_escapes(text)
+	var rendered := decoded.replace("[", "\uE000").replace("]", "[rb]") \
+			.replace("\uE000", "[lb]")
+	var bold := RegEx.new()
+	if bold.compile("\\*\\*([^*]+)\\*\\*") == OK:
+		rendered = bold.sub(rendered, "[b]$1[/b]", true)
+	return rendered
+
+## Alcuni jd_summary persistiti dal team contengono escape Python letterali
+## (es. "\\U0001F310") invece del codepoint Unicode. Le convertiamo solo
+## quando la forma è esattamente valida, lasciando intatto ogni altro slash.
+static func _decode_unicode_escapes(text: String) -> String:
+	var unicode_escape := RegEx.new()
+	if unicode_escape.compile("\\\\(?:U([0-9A-Fa-f]{8})|u([0-9A-Fa-f]{4}))") != OK:
+		return text
+	var result := ""
+	var cursor := 0
+	for found in unicode_escape.search_all(text):
+		result += text.substr(cursor, found.get_start() - cursor)
+		var digits := found.get_string(1)
+		if digits == "":
+			digits = found.get_string(2)
+		var codepoint := digits.hex_to_int()
+		if codepoint <= 0x10FFFF and not (codepoint >= 0xD800 and codepoint <= 0xDFFF):
+			result += String.chr(codepoint)
+		else:
+			result += found.get_string()
+		cursor = found.get_end()
+	result += text.substr(cursor)
+	return result
