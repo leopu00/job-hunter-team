@@ -210,19 +210,16 @@ func pipeline_counts() -> Dictionary:
 	var c := {"to_analyze": 0, "analyzed": 0, "with_score": 0,
 			"to_write": 0, "written": 0, "cv_ready": 0}
 	for p in positions:
-		var status := str(p.get("status", ""))
-		var wr := int(p.get("write_requested", 0)
-				if p.get("write_requested") != null else 0) == 1
-		# stesso mapping della dashboard (vista Dashboard → pipeline)
-		if status == "new":
+		# Un solo predicato serve contatori, pile cliccabili e relative liste.
+		if PipelineQueueDefs.matches("scout", p):
 			c["to_analyze"] += 1
-		elif status == "checked":
+		elif PipelineQueueDefs.matches("analisti", p):
 			c["analyzed"] += 1
-		elif status == "scored" and not wr:
+		elif PipelineQueueDefs.matches("scorer", p):
 			c["with_score"] += 1
-		elif status in ["scored", "writing", "review"] and wr:
+		elif PipelineQueueDefs.matches("scrittori", p):
 			c["to_write"] += 1
-		elif status == "ready":
+		elif PipelineQueueDefs.matches("critici", p):
 			c["written"] += 1
 			if str(p.get("critic_verdict", "") if p.get("critic_verdict") != null
 					else "") == "PASS":

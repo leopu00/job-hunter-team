@@ -42,6 +42,7 @@ case "$MODE" in
 	test)
 		JHT_NOVPS=1 godot --headless --script res://tools/nav_grid_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/speech_bubble_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/pipeline_queue_selftest.gd
 		VPS_OUT="$(JHT_NOVPS=1 JHT_VPS_CONTRACT_TEST=1 godot --headless --quit-after 3 . 2>&1)"
 		printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
 		PIPE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_PIPELINE_FORCE_TEST=scout godot --headless . 2>&1)"
@@ -50,6 +51,12 @@ case "$MODE" in
 		printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
 		WIZ_OUT="$(JHT_SCENE=wizard JHT_NOVPS=1 JHT_WIZARD_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$WIZ_OUT" | grep "WIZARD-TEST PASS"
+		CAMERA_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_CAMERA_LOCK_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$CAMERA_OUT" | grep "CAMERA-OVERLAY-LOCK-TEST PASS"
+		POSITIONS_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_POSITIONS_PANEL_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$POSITIONS_OUT" | grep "POSITIONS-PANEL-TEST PASS"
+		MAP_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_MAP_PANEL_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$MAP_OUT" | grep "MAP-PANEL-TEST PASS"
 		echo "[run.sh] TEST OK"
 		;;
 	boot)
