@@ -18,6 +18,7 @@ Uso:
   python3 db_query.py next-for-salary-precise # posizioni con salary preciso richiesto dall'utente
   python3 db_query.py next-for-recheck-weekly  # MANUTENZIONE: recheck cadenzato (vive, score>=70, non verif. da >7gg)
   python3 db_query.py next-for-geocode-missing # MANUTENZIONE: geocoding vive senza coordinate ufficio
+  python3 db_query.py next-for-logo-missing  # MANUTENZIONE: aziende (con posizioni vive) senza logo
   python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
                                             # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
@@ -500,6 +501,14 @@ def next_for_role(role, min_score=70, older_than_days=7):
         # via last_checked). Una posizione verificata oggi esce dalla coda per una
         # settimana → consumo limitato e prevedibile. L'Analista aggiorna last_checked
         # col recheck-liveness. Da usare SOLO in maintenance mode.
+        # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata —
+        # vedi enrichment_policy.py. Coda vuota per policy = stato voluto.
+        from enrichment_policy import is_enabled, disabled_reason
+        if not is_enabled('recheck_weekly'):
+            print(f"\nRecheck settimanale manutenzione: "
+                  f"OFF — {disabled_reason('recheck_weekly')}.")
+            conn.close()
+            return
         rows = conn.execute("""
             SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score
             FROM positions p
@@ -517,9 +526,16 @@ def next_for_role(role, min_score=70, older_than_days=7):
     elif role == 'geocode-missing':
         # MAINTENANCE MODE (2026-07-13): geocoding AUTONOMO delle coordinate ufficio per
         # le posizioni VIVE che ne sono ancora sprovviste. A differenza di 'geocoding'
-        # (on-demand, flag geocode_requested dell'utente), qui l'Analista arricchisce in
-        # autonomia ogni posizione viva senza office_lat (per mappa / stima pendolarismo).
+        # (on-demand, flag geocode_requested dell'utente — che NON passa dalla policy:
+        # se l'utente chiede, si fa), qui l'Analista arricchisce in autonomia.
         # Da usare SOLO in maintenance mode.
+        # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata.
+        from enrichment_policy import is_enabled, disabled_reason
+        if not is_enabled('geocode_missing'):
+            print(f"\nGeocoding manutenzione: "
+                  f"OFF — {disabled_reason('geocode_missing')}.")
+            conn.close()
+            return
         rows = conn.execute("""
             SELECT p.id, p.title, p.company, p.location, p.loc_city, p.loc_country_code
             FROM positions p
@@ -529,6 +545,49 @@ def next_for_role(role, min_score=70, older_than_days=7):
             ORDER BY p.found_at DESC
         """).fetchall()
         label = "Geocoding manutenzione (posizioni vive senza coordinate ufficio)"
+
+    elif role == 'logo-missing':
+        # MAINTENANCE MODE (mig 056): logo aziendale per la pagina posizione web.
+        # Coda per AZIENDE (non posizioni): companies con almeno una posizione
+        # viva e logo mai tentato (logo_fetched 0/NULL — pattern office_geocoded:
+        # un tentativo fallito marca logo_fetched=1 via `logo_fetch.py
+        # --mark-attempted` e l'azienda esce dalla coda, niente retry a ogni
+        # sweep). Ordinata per numero di posizioni vive → prima le aziende più
+        # visibili sul sito. L'Analista esegue la skill `logo-extraction`.
+        # Da usare SOLO in maintenance mode.
+        # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata;
+        # con `logo.min_score` entrano SOLO le aziende con almeno una posizione
+        # viva a best-score >= soglia (il gate non marca logo_fetched → quando
+        # lo Scorer supera la soglia l'azienda rientra da sola).
+        from enrichment_policy import is_enabled, disabled_reason, logo_min_score
+        if not is_enabled('logo'):
+            print(f"\nLogo manutenzione: OFF — {disabled_reason('logo')}.")
+            conn.close()
+            return
+        ms = logo_min_score()
+        score_gate = ""
+        params: tuple = ()
+        if ms is not None:
+            score_gate = """
+              AND EXISTS (SELECT 1 FROM positions p2
+                          JOIN scores s2 ON s2.position_id = p2.id
+                          WHERE p2.company_id = c.id
+                            AND p2.status != 'excluded'
+                            AND s2.total_score >= ?)"""
+            params = (ms,)
+        rows = conn.execute(f"""
+            SELECT c.id, c.name AS company,
+                   COUNT(p.id) || ' posizioni vive · '
+                     || COALESCE(c.website, 'NO WEBSITE (cercalo prima)') AS title
+            FROM companies c
+            JOIN positions p ON p.company_id = c.id AND p.status != 'excluded'
+            WHERE (c.logo_fetched IS NULL OR c.logo_fetched = 0)
+              {score_gate}
+            GROUP BY c.id
+            ORDER BY COUNT(p.id) DESC, c.name ASC
+        """, params).fetchall()
+        label = ("Logo manutenzione (aziende con posizioni vive senza logo"
+                 + (f", best-score >= {ms}" if ms is not None else "") + ")")
 
     else:
         print(f"Ruolo sconosciuto: {role}")
@@ -678,6 +737,7 @@ def main():
     rw.add_argument('--older-than-days', type=int, default=7,
                     help='Ricontrolla solo chi non è verificato da > N giorni (default 7 = 1x/settimana).')
     sub.add_parser('next-for-geocode-missing')
+    sub.add_parser('next-for-logo-missing')
 
     # active-categories <user_id> (tassonomia emergente): nomi role_family
     # ATTIVI del registro per l'utente. Consumato dal write-guard (db_update)

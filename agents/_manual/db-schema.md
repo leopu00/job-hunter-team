@@ -30,6 +30,9 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | analyzed_by | TEXT | | Chi l'ha analizzata (analista-1, etc.) |
 | analyzed_at | TIMESTAMP | CURRENT_TIMESTAMP | Quando analizzata |
 | verdict | TEXT | | GO, CAUTIOUS, NO_GO |
+| logo | TEXT | | **mig 056** — data-URI base64 del logo (≤ ~35KB) — scrive SOLO `logo_fetch.py` |
+| logo_source | TEXT | | **mig 056** — URL sorgente del logo (audit/refresh) |
+| logo_fetched | INTEGER | 0 | **mig 056** — 1 = estrazione tentata (pattern office_geocoded); coda `next-for-logo-missing` |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserimento riga |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — auto-touched ad ogni UPDATE via trigger |
 

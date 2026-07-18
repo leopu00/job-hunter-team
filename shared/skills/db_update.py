@@ -385,6 +385,9 @@ def update_company(args):
     if args.hq_country:
         updates.append("hq_country = ?")
         params.append(args.hq_country)
+    if args.website:
+        updates.append("website = ?")
+        params.append(args.website)
 
     if not updates:
         print("Nessun campo da aggiornare.")
@@ -603,6 +606,7 @@ def main():
     c.add_argument('--size')
     c.add_argument('--glassdoor-rating', type=float)
     c.add_argument('--analyzed-by')
+    c.add_argument('--website', help='Sito ufficiale (usato da logo-extraction)')
 
     # application
     a = sub.add_parser('application')

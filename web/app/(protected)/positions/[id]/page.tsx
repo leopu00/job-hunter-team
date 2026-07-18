@@ -13,6 +13,7 @@ import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 import { CvDownloadButton } from "./CvDownloadButton";
 import MarkSeenAfterView from "@/app/components/MarkSeenAfterView";
+import { Avatar } from "@/app/components/Avatar";
 import { isLocalRequest } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
 
@@ -818,34 +819,47 @@ export default async function PositionDetailPage({ params }: PageProps) {
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mb-1">
-              {position.title}
-            </h1>
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-[var(--color-base)] font-medium">
-                {position.company}
-              </span>
-              {position.location && (
-                <span className="text-[11px] text-[var(--color-muted)]">
-                  · {position.location}
+          <div className="flex items-start gap-4">
+            {/* Logo aziendale (mig 056, skill logo-extraction): data-URI dal
+                record companies; senza logo l'Avatar ripiega sulle iniziali
+                colorate del nome azienda. object-contain: mai croppare. */}
+            <Avatar
+              name={position.company}
+              src={company?.logo ?? undefined}
+              size="lg"
+              square
+              imgFit="contain"
+              className="mt-1"
+            />
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mb-1">
+                {position.title}
+              </h1>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[var(--color-base)] font-medium">
+                  {position.company}
                 </span>
-              )}
-              {position.remote_type && (
-                <span
-                  className="text-[10px]"
-                  style={{
-                    color:
-                      position.remote_type === "full_remote"
-                        ? "var(--color-green)"
-                        : position.remote_type === "hybrid"
-                          ? "var(--color-yellow)"
-                          : "var(--color-red)",
-                  }}
-                >
-                  {position.remote_type.replace("_", " ")}
-                </span>
-              )}
+                {position.location && (
+                  <span className="text-[11px] text-[var(--color-muted)]">
+                    · {position.location}
+                  </span>
+                )}
+                {position.remote_type && (
+                  <span
+                    className="text-[10px]"
+                    style={{
+                      color:
+                        position.remote_type === "full_remote"
+                          ? "var(--color-green)"
+                          : position.remote_type === "hybrid"
+                            ? "var(--color-yellow)"
+                            : "var(--color-red)",
+                    }}
+                  >
+                    {position.remote_type.replace("_", " ")}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -1350,7 +1364,18 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {/* Company */}
           {company && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-3">{t("company")}</div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="section-label">{t("company")}</div>
+                {company.logo && (
+                  <Avatar
+                    name={company.name}
+                    src={company.logo}
+                    size="sm"
+                    square
+                    imgFit="contain"
+                  />
+                )}
+              </div>
               <div className="space-y-2">
                 {company.verdict && (
                   <div className="flex items-center gap-2 mb-3">

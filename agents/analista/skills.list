@@ -8,4 +8,5 @@ db-update
 throttle
 location-enrichment
 office-geocoding
+logo-extraction
 recheck-liveness

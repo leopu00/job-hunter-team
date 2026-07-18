@@ -31,6 +31,9 @@ Este ficheiro é a REFERÊNCIA OFICIAL do esquema da base de dados. Todos os age
 | analyzed_by | TEXT | | Quem analisou (analista-1, etc.) |
 | analyzed_at | TIMESTAMP | CURRENT_TIMESTAMP | Quando foi analisada |
 | verdict | TEXT | | GO, CAUTIOUS, NO_GO |
+| logo | TEXT | | **mig 056** — data-URI base64 do logo (≤ ~35KB) — escrito SÓ pelo `logo_fetch.py` |
+| logo_source | TEXT | | **mig 056** — URL fonte do logo (audit/refresh) |
+| logo_fetched | INTEGER | 0 | **mig 056** — 1 = extração tentada (padrão office_geocoded); fila `next-for-logo-missing` |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserção de linha |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — atualizado automaticamente a cada UPDATE via trigger |
 

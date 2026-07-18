@@ -31,6 +31,9 @@ Ez a fájl a HIVATALOS REFERENCIA az adatbázis-sémához. Minden ügynöknek EZ
 | analyzed_by | TEXT | | Ki elemezte (analista-1, stb.) |
 | analyzed_at | TIMESTAMP | CURRENT_TIMESTAMP | Mikor lett elemezve |
 | verdict | TEXT | | GO, CAUTIOUS, NO_GO |
+| logo | TEXT | | **mig 056** — a logó base64 data-URI-ja (≤ ~35KB) — CSAK a `logo_fetch.py` írja |
+| logo_source | TEXT | | **mig 056** — a logó forrás-URL-je (audit/refresh) |
+| logo_fetched | INTEGER | 0 | **mig 056** — 1 = kinyerés megkísérelve (office_geocoded-minta); `next-for-logo-missing` sor |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — sor beszúrása |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — automatikusan frissítve minden UPDATE-nél trigger segítségével |
 

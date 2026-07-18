@@ -134,6 +134,9 @@ export interface Company {
   analyzed_by: string | null;
   analyzed_at: string | null;
   verdict: "GO" | "CAUTIOUS" | "NO_GO" | null;
+  // Logo aziendale (mig 056): data-URI base64 ≤~35KB estratto dall'Analista
+  // (skill logo-extraction). Null = non ancora estratto / non trovato.
+  logo: string | null;
 }
 
 // ── Application ────────────────────────────────────────────────────
