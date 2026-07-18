@@ -198,6 +198,17 @@ func _ready() -> void:
 			if _registry == null:
 				_registry = RegistryPanel.new()
 				add_child(_registry))
+	# TEST-AUTO: apre l'archivio dello scaffale quando arriva lo snapshot.
+	if OS.get_environment("JHT_CV_SHELF") == "1":
+		BackendBus.positions_updated.connect(func(_l: Array) -> void:
+			if _cv_shelf_panel == null:
+				_open_cv_shelf())
+	# TEST-AUTO: apre una delle cinque code fisiche col primo snapshot.
+	var queue_test := OS.get_environment("JHT_PIPELINE_QUEUE")
+	if DepartmentDefs.DEPT_ORDER.has(queue_test):
+		BackendBus.positions_updated.connect(func(_l: Array) -> void:
+			if _queue_panel == null:
+				_open_pipeline_queue(queue_test))
 
 	# TEST-AUTO: JHT_SEARCH=<query> apre la GlobalSearch precompilata
 	# (il refresh con le posizioni vere arriva col primo snapshot)
@@ -415,6 +426,8 @@ func _state_selftest() -> void:
 
 var _registry: RegistryPanel
 var _search: GlobalSearch
+var _cv_shelf_panel: CvShelfPanel
+var _queue_panel: PipelineQueuePanel
 
 func _unhandled_input(event: InputEvent) -> void:
 	if Game.dialogue_active:
@@ -469,12 +482,20 @@ var _agent_card: AgentCard
 func _on_world_click(target: Vector2) -> void:
 	if Game.dialogue_active:
 		return
-	if _registry or _dept_panel or _agent_card or _chat_panel:
+	if _registry or _dept_panel or _agent_card or _chat_panel or _cv_shelf_panel \
+			or _queue_panel:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
 			_open_agent_card(agent)
 			return
+	var queue_dept := PaperPile.inbox_at(target)
+	if queue_dept != "":
+		_open_pipeline_queue(queue_dept)
+		return
+	if OutputShelf.hit_by(target):
+		_open_cv_shelf()
+		return
 	if FurnitureDefs.get_rect("corkboard").grow(30).has_point(target):
 		_registry = RegistryPanel.new()
 		add_child(_registry)
@@ -490,6 +511,34 @@ func _on_world_click(target: Vector2) -> void:
 	if dept != "":
 		_open_dept(dept)
 
+func _open_cv_shelf() -> void:
+	Log.info("ui", "archivio CV aperto dallo scaffale output")
+	_cv_shelf_panel = CvShelfPanel.new()
+	add_child(_cv_shelf_panel)
+	_cv_shelf_panel.closed.connect(func() -> void: _cv_shelf_panel = null)
+	_cv_shelf_panel.open_position.connect(func(position_id: int) -> void:
+		if _cv_shelf_panel:
+			_cv_shelf_panel.queue_free()
+			_cv_shelf_panel = null
+		var panel := SectionPanel.new("positions", 24.0)
+		panel._pos_detail_id = position_id
+		add_child(panel)
+		panel.closed.connect(panel.queue_free))
+
+func _open_pipeline_queue(source_dept: String) -> void:
+	Log.info("ui", "coda pipeline aperta dalla pila: " + source_dept)
+	_queue_panel = PipelineQueuePanel.new(source_dept)
+	add_child(_queue_panel)
+	_queue_panel.closed.connect(func() -> void: _queue_panel = null)
+	_queue_panel.open_position.connect(func(position_id: int) -> void:
+		if _queue_panel:
+			_queue_panel.queue_free()
+			_queue_panel = null
+		var panel := SectionPanel.new("positions", 24.0)
+		panel._pos_detail_id = position_id
+		add_child(panel)
+		panel.closed.connect(panel.queue_free))
+
 func _open_dept(dept: String) -> void:
 	Log.info("dept", "pannello reparto aperto: " + dept)
 	_dept_panel = DepartmentPanel.new(dept)
@@ -500,12 +549,22 @@ func _open_dept(dept: String) -> void:
 
 func _update_hover() -> void:
 	var best: AgentNPC = null
-	if not Game.dialogue_active:
+	var shelf_hovered := false
+	var queue_hovered := ""
+	if not Game.dialogue_active and not _registry and not _dept_panel \
+			and not _agent_card and not _chat_panel and not _cv_shelf_panel \
+			and not _queue_panel:
 		var mouse := get_global_mouse_position()
 		for agent in agents:
 			if agent.hit_by(mouse):
 				best = agent
 				break
+		if best == null:
+			queue_hovered = PaperPile.inbox_at(mouse)
+			if queue_hovered == "":
+				shelf_hovered = OutputShelf.hit_by(mouse)
+	PaperPile.highlight_inbox(queue_hovered)
+	OutputShelf.set_highlight(shelf_hovered)
 	if best != _hover_agent:
 		if _hover_agent:
 			_hover_agent.set_highlight(false)

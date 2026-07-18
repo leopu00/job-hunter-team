@@ -1,0 +1,36 @@
+class_name PipelineQueueDefs
+## Mapping puro pile→fasi. Non dipende dalla scena né dagli autoload, così
+## può essere testato anche dal runner Godot --script.
+
+const QUEUES := {
+	"scout": {"consumer": "ANALISTI", "phase": "to_analyze"},
+	"analisti": {"consumer": "SCORER", "phase": "analyzed"},
+	"scorer": {"consumer": "SCRITTORI", "phase": "with_score"},
+	"scrittori": {"consumer": "CRITICI", "phase": "to_write"},
+	"critici": {"consumer": "PRONTI", "phase": "written"},
+}
+
+static func positions_for(dept_id: String, positions: Array) -> Array:
+	var result: Array = []
+	for raw in positions:
+		var p: Dictionary = raw
+		if matches(dept_id, p):
+			result.append(p)
+	return result
+
+static func matches(dept_id: String, p: Dictionary) -> bool:
+	var status := str(p.get("status", ""))
+	var requested := int(p.get("write_requested", 0)
+			if p.get("write_requested") != null else 0) == 1
+	match dept_id:
+		"scout":
+			return status == "new"
+		"analisti":
+			return status == "checked"
+		"scorer":
+			return status == "scored" and not requested
+		"scrittori":
+			return status in ["scored", "writing", "review"] and requested
+		"critici":
+			return status == "ready"
+	return false

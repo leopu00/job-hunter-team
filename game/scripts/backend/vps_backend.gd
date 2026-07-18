@@ -113,7 +113,9 @@ const POSITIONS_SELECT := "SELECT p.id,p.title,p.company,p.status,p.role_family,
 		+ "p.office_lat,p.office_lon," \
 		+ "s.total_score,s.stack_match,s.remote_fit,s.salary_fit,s.experience_fit," \
 		+ "s.strategic_fit,s.scored_by,s.scored_at,s.notes AS score_notes," \
-		+ "a.critic_score,a.critic_verdict,a.critic_notes,a.written_by,a.written_at " \
+		+ "a.critic_score,a.critic_verdict,a.critic_notes,a.written_by,a.written_at," \
+		+ "a.status AS application_status,a.cv_path,a.cv_pdf_path,a.cl_path,a.cl_pdf_path," \
+		+ "a.reviewed_by,a.critic_reviewed_at,a.applied_at " \
 		+ "FROM positions p LEFT JOIN scores s ON s.position_id=p.id " \
 		+ "LEFT JOIN applications a ON a.position_id=p.id " \
 		+ "ORDER BY p.created_at DESC"
