@@ -8,33 +8,37 @@ import {
   IconCards,
   IconChat,
   IconCheckCircle,
-  IconClock,
-  IconEye,
   IconMic,
   IconPin,
   IconSkip,
   IconStar,
   IconStop,
+  IconThumbsDown,
+  IconThumbsUp,
   IconUndo,
   IconX,
 } from "./icons";
 
 // [JHT-POSITIONS-SWIPE-TRIAGE] Deck di carte per il triage rapido del
-// backlog scored/ready. Non un like/nope binario: QUATTRO giudizi (scelta
-// utente 18/07) mappati sui campi del mig 028 di position_feedback
-// (score 1-5 + direction), più un commento libero opzionale che parte
-// insieme al giudizio — scrivibile a tastiera o DETTATO a voce (Web
-// Speech API del browser: su iOS è la dettatura Apple, niente backend;
-// se non supportata il bottone microfono non compare). Gli swipe coprono
-// gli estremi (sinistra = no assoluto, destra = molto interessante), i
-// giudizi intermedi sono da bottone; tastiera 1-4 sul desktop, ⌫ = undo.
+// backlog scored/ready. QUATTRO livelli di interesse (scelta utente 18/07)
+// mappati sui campi del mig 028 di position_feedback (score 1-5 +
+// direction), più un commento libero opzionale che parte insieme al
+// giudizio — scrivibile a tastiera o DETTATO a voce (Web Speech API del
+// browser: su iOS è la dettatura Apple, niente backend; se non supportata
+// il bottone microfono non compare).
+//
+// SOLO BOTTONI, niente gesture (scelta utente 18/07): tre dei quattro
+// giudizi sono "verso destra" e uno swipe manuale destro sarebbe ambiguo.
+// La card si anima da sola — vola a sinistra per 'non interessante', a
+// destra per gli altri tre; in basso per lo skip. Tastiera 1-4 sul
+// desktop, ↓ = salta, ⌫ = undo.
 //
 // Scritture — corsie ESISTENTI, nessuna route nuova:
-//   ogni giudizio  → POST /api/positions/[legacyId]/feedback
+//   ogni giudizio      → POST /api/positions/[legacyId]/feedback
 //     (action + score + direction + comment: lo Scout consuma già la
 //      direction per il pattern steering; lo score alimenta la visione
 //      "Scorer re-score dai gusti reali")
-//   'no' assoluto  → in più POST /api/positions/[legacyId]/user-exclude
+//   'non interessante' → in più POST /api/positions/[legacyId]/user-exclude
 //     (reason 'not_interested': status → excluded, il team ci smette di
 //      lavorare; reversibile con DELETE — usato dall'undo)
 // position_feedback è un event-log APPEND-ONLY: l'undo dei giudizi non-no
@@ -67,7 +71,8 @@ type Verdict = "no" | "review_low" | "review_ok" | "top";
 type HistoryAction = Verdict | "skip";
 
 // Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
-// l'esclusione. Score 3 lasciato libero come neutro non usato.
+// l'esclusione. Score 3 lasciato libero come neutro non usato. fly: solo
+// 'no' esce a sinistra, gli altri tre a destra.
 const VERDICTS: Record<
   Verdict,
   {
@@ -90,15 +95,15 @@ const VERDICTS: Record<
     fly: -1,
   },
   review_low: {
-    Icon: IconClock,
+    Icon: IconThumbsDown,
     color: "var(--color-orange)",
     action: "dislike",
     score: 2,
     direction: "less_like_this",
-    fly: -1,
+    fly: 1,
   },
   review_ok: {
-    Icon: IconEye,
+    Icon: IconThumbsUp,
     color: "var(--color-blue)",
     action: "like",
     score: 4,
@@ -133,8 +138,6 @@ const T: Record<
   {
     title: string;
     subtitle: string;
-    stampTop: string;
-    stampNo: string;
     verdicts: Record<Verdict, string>;
     btnUndo: string;
     btnSkip: string;
@@ -157,12 +160,10 @@ const T: Record<
   it: {
     title: "Swipe",
     subtitle: "Quattro giudizi + commento — il team impara i tuoi gusti",
-    stampTop: "TOP",
-    stampNo: "NO",
     verdicts: {
-      no: "Assolutamente no",
-      review_low: "Da rivedere, poco",
-      review_ok: "Da rivedere, interessante",
+      no: "Non interessante",
+      review_low: "Poco interessante",
+      review_ok: "Interessante",
       top: "Molto interessante",
     },
     btnUndo: "Annulla ultima",
@@ -181,17 +182,15 @@ const T: Record<
     details: "Dettagli",
     remote: { full_remote: "Remoto", hybrid: "Ibrido", onsite: "In sede" },
     saveError: "Errore di rete — azione non salvata per",
-    hintKeys: "Tastiera: 1–4 giudizio · ← no · → top · ↓ salta · ⌫ annulla",
+    hintKeys: "Tastiera: 1–4 giudizio · ↓ salta · ⌫ annulla",
   },
   en: {
     title: "Swipe",
     subtitle: "Four verdicts + a comment — your team learns your taste",
-    stampTop: "TOP",
-    stampNo: "NO",
     verdicts: {
-      no: "Hard no",
-      review_low: "Review later, meh",
-      review_ok: "Review later, interested",
+      no: "Not interesting",
+      review_low: "Slightly interesting",
+      review_ok: "Interesting",
       top: "Very interesting",
     },
     btnUndo: "Undo last",
@@ -209,17 +208,15 @@ const T: Record<
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "On-site" },
     saveError: "Network error — action not saved for",
-    hintKeys: "Keyboard: 1–4 verdict · ← no · → top · ↓ skip · ⌫ undo",
+    hintKeys: "Keyboard: 1–4 verdict · ↓ skip · ⌫ undo",
   },
   hu: {
     title: "Swipe",
     subtitle: "Négy ítélet + megjegyzés — a csapat tanulja az ízlésedet",
-    stampTop: "TOP",
-    stampNo: "NEM",
     verdicts: {
-      no: "Biztosan nem",
-      review_low: "Később, kevésbé érdekel",
-      review_ok: "Később, érdekel",
+      no: "Nem érdekes",
+      review_low: "Kevéssé érdekes",
+      review_ok: "Érdekes",
       top: "Nagyon érdekes",
     },
     btnUndo: "Visszavonás",
@@ -238,18 +235,15 @@ const T: Record<
     details: "Részletek",
     remote: { full_remote: "Távoli", hybrid: "Hibrid", onsite: "Helyszíni" },
     saveError: "Hálózati hiba — nem mentett művelet:",
-    hintKeys:
-      "Billentyűk: 1–4 ítélet · ← nem · → top · ↓ kihagyás · ⌫ visszavonás",
+    hintKeys: "Billentyűk: 1–4 ítélet · ↓ kihagyás · ⌫ visszavonás",
   },
   es: {
     title: "Swipe",
     subtitle: "Cuatro juicios + comentario — tu equipo aprende tus gustos",
-    stampTop: "TOP",
-    stampNo: "NO",
     verdicts: {
-      no: "No, para nada",
-      review_low: "Revisar, poco interés",
-      review_ok: "Revisar, me interesa",
+      no: "No interesante",
+      review_low: "Poco interesante",
+      review_ok: "Interesante",
       top: "Muy interesante",
     },
     btnUndo: "Deshacer",
@@ -268,17 +262,15 @@ const T: Record<
     details: "Detalles",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Error de red — acción no guardada para",
-    hintKeys: "Teclado: 1–4 juicio · ← no · → top · ↓ omitir · ⌫ deshacer",
+    hintKeys: "Teclado: 1–4 juicio · ↓ omitir · ⌫ deshacer",
   },
   de: {
     title: "Swipe",
     subtitle: "Vier Urteile + Kommentar — dein Team lernt deinen Geschmack",
-    stampTop: "TOP",
-    stampNo: "NEIN",
     verdicts: {
-      no: "Klares Nein",
-      review_low: "Später ansehen, wenig",
-      review_ok: "Später ansehen, interessant",
+      no: "Uninteressant",
+      review_low: "Wenig interessant",
+      review_ok: "Interessant",
       top: "Sehr interessant",
     },
     btnUndo: "Rückgängig",
@@ -296,18 +288,15 @@ const T: Record<
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "Vor Ort" },
     saveError: "Netzwerkfehler — Aktion nicht gespeichert für",
-    hintKeys:
-      "Tastatur: 1–4 Urteil · ← nein · → top · ↓ überspringen · ⌫ rückgängig",
+    hintKeys: "Tastatur: 1–4 Urteil · ↓ überspringen · ⌫ rückgängig",
   },
   fr: {
     title: "Swipe",
     subtitle: "Quatre avis + un commentaire — votre équipe apprend vos goûts",
-    stampTop: "TOP",
-    stampNo: "NON",
     verdicts: {
-      no: "Non catégorique",
-      review_low: "À revoir, peu d'intérêt",
-      review_ok: "À revoir, intéressé",
+      no: "Pas intéressant",
+      review_low: "Peu intéressant",
+      review_ok: "Intéressant",
       top: "Très intéressant",
     },
     btnUndo: "Annuler",
@@ -330,17 +319,15 @@ const T: Record<
       onsite: "Sur site",
     },
     saveError: "Erreur réseau — action non enregistrée pour",
-    hintKeys: "Clavier : 1–4 avis · ← non · → top · ↓ passer · ⌫ annuler",
+    hintKeys: "Clavier : 1–4 avis · ↓ passer · ⌫ annuler",
   },
   pt: {
     title: "Swipe",
     subtitle: "Quatro julgamentos + comentário — sua equipe aprende seu gosto",
-    stampTop: "TOP",
-    stampNo: "NÃO",
     verdicts: {
-      no: "Não mesmo",
-      review_low: "Rever depois, pouco",
-      review_ok: "Rever depois, interessa",
+      no: "Não interessante",
+      review_low: "Pouco interessante",
+      review_ok: "Interessante",
       top: "Muito interessante",
     },
     btnUndo: "Desfazer",
@@ -359,7 +346,7 @@ const T: Record<
     details: "Detalhes",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Erro de rede — ação não salva para",
-    hintKeys: "Teclado: 1–4 julgamento · ← não · → top · ↓ pular · ⌫ desfazer",
+    hintKeys: "Teclado: 1–4 julgamento · ↓ pular · ⌫ desfazer",
   },
 };
 
@@ -400,8 +387,6 @@ function scoreColor(score: number | null): string {
   return "var(--color-muted)";
 }
 
-// Soglia di commit dello swipe (px orizzontali).
-const SWIPE_THRESHOLD = 110;
 // Durata dell'animazione di uscita — deve combaciare con la transition CSS.
 const FLY_MS = 280;
 
@@ -413,7 +398,6 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   const [history, setHistory] = useState<
     { card: SwipeCardData; verdict: HistoryAction }[]
   >([]);
-  const [drag, setDrag] = useState({ dx: 0, dy: 0, dragging: false });
   const [fly, setFly] = useState<{ x: number; y: number; rot: number } | null>(
     null,
   );
@@ -423,7 +407,6 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   const [speechOk, setSpeechOk] = useState(false);
   const [recording, setRecording] = useState(false);
   const flyingRef = useRef(false);
-  const startRef = useRef<{ x: number; y: number } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recRef = useRef<{ stop: () => void } | null>(null);
 
@@ -541,11 +524,10 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       const note = comment.trim().slice(0, 2000);
       const dir = VERDICTS[verdict].fly;
       const width = typeof window !== "undefined" ? window.innerWidth : 800;
-      setFly({ x: dir * (width + 200), y: drag.dy, rot: dir * 22 });
+      setFly({ x: dir * (width + 200), y: 0, rot: dir * 22 });
       setTimeout(() => {
         setDeck((d) => d.slice(1));
         setHistory((h) => [...h, { card, verdict }]);
-        setDrag({ dx: 0, dy: 0, dragging: false });
         setFly(null);
         setComment("");
         setCommentOpen(false);
@@ -553,7 +535,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       }, FLY_MS);
       void persist(card, verdict, note);
     },
-    [deck, comment, drag.dy, persist, stopVoice],
+    [deck, comment, persist, stopVoice],
   );
 
   // Skip: nessuna scrittura, la carta scivola in basso e va in fondo al
@@ -567,7 +549,6 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     setTimeout(() => {
       setDeck((d) => [...d.slice(1), card]);
       setHistory((h) => [...h, { card, verdict: "skip" }]);
-      setDrag({ dx: 0, dy: 0, dragging: false });
       setFly(null);
       flyingRef.current = false;
     }, FLY_MS);
@@ -594,7 +575,8 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     }
   }, [history, showToast, t.saveError]);
 
-  // Tastiera per il desktop: 1-4 = giudizi, frecce = estremi, ⌫ = undo.
+  // Tastiera per il desktop: 1-4 = giudizi, ↓ = salta, ⌫ = undo. Niente
+  // frecce laterali: i giudizi sono quattro, non due.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
@@ -610,8 +592,6 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         "4": "top",
       };
       if (byDigit[e.key]) commit(byDigit[e.key]);
-      else if (e.key === "ArrowLeft") commit("no");
-      else if (e.key === "ArrowRight") commit("top");
       else if (e.key === "ArrowDown") skip();
       else if (e.key === "Backspace") {
         e.preventDefault();
@@ -622,37 +602,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [commit, skip, undo]);
 
-  // ── Gesture (pointer events: touch + mouse unificati) ────────────
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (flyingRef.current) return;
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    startRef.current = { x: e.clientX, y: e.clientY };
-    setDrag({ dx: 0, dy: 0, dragging: true });
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!startRef.current || flyingRef.current) return;
-    setDrag({
-      dx: e.clientX - startRef.current.x,
-      dy: e.clientY - startRef.current.y,
-      dragging: true,
-    });
-  };
-  const onPointerUp = () => {
-    if (!startRef.current) return;
-    const { dx } = drag;
-    startRef.current = null;
-    if (Math.abs(dx) > SWIPE_THRESHOLD) {
-      commit(dx > 0 ? "top" : "no");
-    } else {
-      setDrag({ dx: 0, dy: 0, dragging: false });
-    }
-  };
-
-  const topOpacity = Math.min(Math.max(drag.dx, 0) / 90, 1);
-  const noOpacity = Math.min(Math.max(-drag.dx, 0) / 90, 1);
-
   return (
-    <div className="max-w-md mx-auto select-none">
+    // overflowX clip: la carta in volo esce dal viewport — senza clip
+    // allargherebbe la pagina orizzontalmente (il layout "scappa" di lato
+    // su mobile, con l'intera schermata che si sposta). clip e non hidden:
+    // niente nuovo contesto di scroll.
+    <div className="max-w-md mx-auto select-none" style={{ overflowX: "clip" }}>
       {/* Pulse del microfono in registrazione */}
       <style>{`@keyframes swipe-rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }`}</style>
 
@@ -742,10 +697,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         </div>
       ) : (
         <>
-          <div
-            className="relative"
-            style={{ height: "min(47dvh, 470px)", touchAction: "none" }}
-          >
+          <div className="relative" style={{ height: "min(47dvh, 470px)" }}>
             {/* Le 3 carte in cima, dal fondo verso la cima dello stack */}
             {deck
               .slice(0, 3)
@@ -754,7 +706,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                 const transform = isTop
                   ? fly
                     ? `translate(${fly.x}px, ${fly.y}px) rotate(${fly.rot}deg)`
-                    : `translate(${drag.dx}px, ${drag.dy * 0.4}px) rotate(${drag.dx * 0.06}deg)`
+                    : "none"
                   : `translateY(${i * 10}px) scale(${1 - i * 0.035})`;
                 return (
                   <div
@@ -764,53 +716,13 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                       borderColor: "var(--color-border)",
                       background: "var(--color-card)",
                       transform,
-                      transition:
-                        isTop && (fly || !drag.dragging)
-                          ? `transform ${fly ? FLY_MS : 200}ms ease`
-                          : isTop
-                            ? "none"
-                            : "transform 200ms ease",
+                      transition: `transform ${isTop && fly ? FLY_MS : 200}ms ease`,
                       zIndex: 10 - i,
-                      cursor: isTop ? "grab" : "default",
                       boxShadow: isTop
                         ? "0 12px 32px rgba(0,0,0,0.35)"
                         : "none",
                     }}
-                    onPointerDown={isTop ? onPointerDown : undefined}
-                    onPointerMove={isTop ? onPointerMove : undefined}
-                    onPointerUp={isTop ? onPointerUp : undefined}
-                    onPointerCancel={isTop ? onPointerUp : undefined}
                   >
-                    {/* Timbri TOP/NO sulla carta in cima */}
-                    {isTop && (
-                      <>
-                        <div
-                          className="absolute top-5 left-4 px-2 py-1 rounded border-2 text-sm font-black tracking-widest flex items-center gap-1.5"
-                          style={{
-                            color: "var(--color-green)",
-                            borderColor: "var(--color-green)",
-                            transform: "rotate(-14deg)",
-                            opacity: topOpacity,
-                            zIndex: 20,
-                          }}
-                        >
-                          <IconStar size={14} filled /> {t.stampTop}
-                        </div>
-                        <div
-                          className="absolute top-5 right-4 px-2 py-1 rounded border-2 text-sm font-black tracking-widest flex items-center gap-1.5"
-                          style={{
-                            color: "var(--color-red)",
-                            borderColor: "var(--color-red)",
-                            transform: "rotate(14deg)",
-                            opacity: noOpacity,
-                            zIndex: 20,
-                          }}
-                        >
-                          <IconX size={14} /> {t.stampNo}
-                        </div>
-                      </>
-                    )}
-
                     {/* Contenuto card */}
                     <div className="p-5 flex flex-col gap-3 flex-1 min-h-0">
                       <div className="flex items-start justify-between gap-3">
@@ -906,7 +818,6 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                           target="_blank"
                           className="font-semibold no-underline"
                           style={{ color: "var(--color-blue)" }}
-                          onPointerDown={(e) => e.stopPropagation()}
                         >
                           {t.details} ↗
                         </Link>
