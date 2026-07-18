@@ -1046,7 +1046,7 @@ export async function getSwipeDeck(limit = 100): Promise<PositionWithScore[]> {
     supabase
       .from("positions")
       .select(
-        "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, jd_summary, scores ( total_score )",
+        "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, jd_summary, jd_text, scores ( total_score )",
       )
       .in("status", ["scored", "ready"])
       .is("deleted_at", null)
