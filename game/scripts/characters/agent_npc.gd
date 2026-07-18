@@ -670,11 +670,16 @@ func _end_trip() -> void:
 		perform_pipeline_step.call_deferred(force_next)
 
 ## Alla scrivania: rivolto secondo la postazione (down = viso in camera).
-## L'agente resta SEMPRE un rig animato. Le vecchie varianti composite
-## "desk occupato" congelavano corpo e mani in un PNG statico.
+## Le postazioni pilota possono sostituire il rig con un'unica illustrazione
+## desk+sedia+agente: quando si alza, torna il desk vuoto e il rig ricompare.
 func _set_desk_occupied(on: bool) -> void:
+	var desk_node: FurnitureNode = FurnitureNode.desks.get(_desk_key)
+	var use_composite := _seated() and desk_node != null \
+			and desk_node.has_seated_art()
+	if desk_node and desk_node.has_seated_art():
+		desk_node.set_occupied(on and use_composite)
 	if rig:
-		rig.visible = true
+		rig.visible = not (on and use_composite)
 	if _seated():
 		if on:
 			# Sedersi richiede la sovrapposizione col desk; senza maschera zero
