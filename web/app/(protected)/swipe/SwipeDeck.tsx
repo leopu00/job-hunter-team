@@ -80,7 +80,7 @@ const VERDICTS: Record<
     color: string;
     action: "like" | "dislike" | "star";
     score: number;
-    direction: "more_like_this" | "less_like_this";
+    direction: "more_like_this" | "less_like_this" | null;
     exclude?: boolean;
     fly: -1 | 1;
   }
@@ -94,12 +94,15 @@ const VERDICTS: Record<
     exclude: true,
     fly: -1,
   },
+  // 'Poco interessante' NON è un dislike (scelta utente 18/07): la
+  // posizione resta tenuta (niente esclusione) e non manda un segnale
+  // less_like_this allo Scout — è un keep con entusiasmo basso (score 2).
   review_low: {
     Icon: IconThumbsDown,
     color: "var(--color-orange)",
-    action: "dislike",
+    action: "like",
     score: 2,
-    direction: "less_like_this",
+    direction: null,
     fly: 1,
   },
   review_ok: {
@@ -143,6 +146,8 @@ const T: Record<
     btnSkip: string;
     commentPh: string;
     commentClose: string;
+    commentTitle: string;
+    commentDone: string;
     voiceStart: string;
     voiceStop: string;
     voiceListening: string;
@@ -170,6 +175,8 @@ const T: Record<
     btnSkip: "Salta",
     commentPh: "Aggiungi un commento (facoltativo)…",
     commentClose: "Chiudi il commento",
+    commentTitle: "Commento",
+    commentDone: "Fatto",
     voiceStart: "Detta il commento",
     voiceStop: "Ferma la dettatura",
     voiceListening: "Ti ascolto…",
@@ -197,6 +204,8 @@ const T: Record<
     btnSkip: "Skip",
     commentPh: "Add a comment (optional)…",
     commentClose: "Close the comment",
+    commentTitle: "Comment",
+    commentDone: "Done",
     voiceStart: "Dictate the comment",
     voiceStop: "Stop dictation",
     voiceListening: "Listening…",
@@ -223,6 +232,8 @@ const T: Record<
     btnSkip: "Kihagyás",
     commentPh: "Megjegyzés hozzáadása (opcionális)…",
     commentClose: "Megjegyzés bezárása",
+    commentTitle: "Megjegyzés",
+    commentDone: "Kész",
     voiceStart: "Megjegyzés diktálása",
     voiceStop: "Diktálás leállítása",
     voiceListening: "Hallgatlak…",
@@ -250,6 +261,8 @@ const T: Record<
     btnSkip: "Omitir",
     commentPh: "Añade un comentario (opcional)…",
     commentClose: "Cerrar el comentario",
+    commentTitle: "Comentario",
+    commentDone: "Hecho",
     voiceStart: "Dictar el comentario",
     voiceStop: "Detener el dictado",
     voiceListening: "Escuchando…",
@@ -277,6 +290,8 @@ const T: Record<
     btnSkip: "Überspringen",
     commentPh: "Kommentar hinzufügen (optional)…",
     commentClose: "Kommentar schließen",
+    commentTitle: "Kommentar",
+    commentDone: "Fertig",
     voiceStart: "Kommentar diktieren",
     voiceStop: "Diktat beenden",
     voiceListening: "Ich höre zu…",
@@ -303,6 +318,8 @@ const T: Record<
     btnSkip: "Passer",
     commentPh: "Ajouter un commentaire (facultatif)…",
     commentClose: "Fermer le commentaire",
+    commentTitle: "Commentaire",
+    commentDone: "Terminé",
     voiceStart: "Dicter le commentaire",
     voiceStop: "Arrêter la dictée",
     voiceListening: "Je vous écoute…",
@@ -334,6 +351,8 @@ const T: Record<
     btnSkip: "Pular",
     commentPh: "Adicione um comentário (opcional)…",
     commentClose: "Fechar o comentário",
+    commentTitle: "Comentário",
+    commentDone: "Concluído",
     voiceStart: "Ditar o comentário",
     voiceStop: "Parar o ditado",
     voiceListening: "Ouvindo…",
@@ -492,7 +511,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           body: JSON.stringify({
             action: v.action,
             score: v.score,
-            direction: v.direction,
+            ...(v.direction ? { direction: v.direction } : {}),
             ...(note ? { comment: note } : {}),
           }),
         });
@@ -793,19 +812,15 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                       </div>
 
                       {/* Sintesi JD */}
+                      {/* Scrollabile se non c'entra: senza gesture di
+                          drag il touch-scroll nella card non confligge. */}
                       {card.jd_summary && (
-                        <p
-                          className="text-[12px] leading-relaxed flex-1 min-h-0"
-                          style={{
-                            color: "var(--color-base)",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 8,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                          }}
+                        <div
+                          className="text-[12px] leading-relaxed flex-1 min-h-0 overflow-y-auto pr-1"
+                          style={{ color: "var(--color-base)" }}
                         >
                           {stripMd(card.jd_summary)}
-                        </p>
+                        </div>
                       )}
 
                       {/* Footer */}
@@ -829,102 +844,29 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               .reverse()}
           </div>
 
-          {/* Commento opzionale (tastiera o dettatura): parte col prossimo
-              giudizio. La riga ha ALTEZZA FISSA: da aperta, la box si
-              espande VERSO L'ALTO come overlay sopra la card (position
-              absolute ancorata al bottom) senza spostare il layout; la X
-              nell'angolo la richiude alla riga compatta (testo conservato,
-              mostrato troncato). */}
-          <div className="mt-4 flex items-start gap-2">
-            <div className="relative flex-1 min-w-0" style={{ height: 38 }}>
-              {commentOpen ? (
-                <div
-                  className="absolute left-0 right-0 bottom-0 rounded-lg border"
-                  style={{
-                    borderColor: recording
-                      ? "var(--color-red)"
-                      : "var(--color-border)",
-                    background: "var(--color-panel)",
-                    zIndex: 30,
-                    boxShadow: "0 -10px 28px rgba(0,0,0,0.4)",
-                  }}
-                >
-                  <textarea
-                    autoFocus
-                    rows={5}
-                    maxLength={2000}
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder={recording ? t.voiceListening : t.commentPh}
-                    className="w-full rounded-lg px-3 py-2 pr-9 text-[12px] resize-none block"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "var(--color-bright)",
-                      outline: "none",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    aria-label={t.commentClose}
-                    title={t.commentClose}
-                    onClick={() => setCommentOpen(false)}
-                    className="absolute top-1.5 right-1.5 rounded-full border flex items-center justify-center"
-                    style={{
-                      width: 22,
-                      height: 22,
-                      color: "var(--color-muted)",
-                      borderColor: "var(--color-border)",
-                      background: "var(--color-card)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <IconX size={11} />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setCommentOpen(true)}
-                  className="w-full h-full rounded-lg border px-3 text-[12px] text-left flex items-center gap-2"
-                  style={{
-                    borderColor: "var(--color-border)",
-                    background: "transparent",
-                    color: comment ? "var(--color-bright)" : "var(--color-dim)",
-                    cursor: "text",
-                  }}
-                >
-                  <IconChat size={13} />
-                  <span className="truncate">
-                    {comment ? comment : t.commentPh}
-                  </span>
-                </button>
-              )}
-            </div>
-            {speechOk && (
-              <button
-                type="button"
-                aria-label={recording ? t.voiceStop : t.voiceStart}
-                title={recording ? t.voiceStop : t.voiceStart}
-                onClick={recording ? stopVoice : startVoice}
-                className="shrink-0 rounded-lg border flex items-center justify-center"
-                style={{
-                  width: 38,
-                  height: 38,
-                  color: recording ? "var(--color-red)" : "var(--color-muted)",
-                  borderColor: recording
-                    ? "var(--color-red)"
-                    : "var(--color-border)",
-                  background: "var(--color-card)",
-                  cursor: "pointer",
-                  animation: recording
-                    ? "swipe-rec-pulse 1.2s ease-in-out infinite"
-                    : undefined,
-                }}
-              >
-                {recording ? <IconStop size={16} /> : <IconMic size={16} />}
-              </button>
-            )}
+          {/* Commento opzionale: SOLO un pulsante qui — l'input vive in un
+              pop-up dedicato (scelta utente 18/07). Il pulsante mostra
+              l'anteprima troncata se un commento è già pronto; il testo
+              parte col prossimo giudizio. */}
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setCommentOpen(true)}
+              className="w-full rounded-lg border px-3 py-2 text-[12px] text-left flex items-center gap-2"
+              style={{
+                borderColor: comment
+                  ? "var(--color-border-glow)"
+                  : "var(--color-border)",
+                background: "transparent",
+                color: comment ? "var(--color-bright)" : "var(--color-dim)",
+                cursor: "pointer",
+              }}
+            >
+              <IconChat size={13} />
+              <span className="truncate">
+                {comment ? comment : t.commentPh}
+              </span>
+            </button>
           </div>
 
           {/* Bottoni giudizio + undo */}
@@ -983,6 +925,125 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
             {t.hintKeys}
           </p>
         </>
+      )}
+
+      {/* Pop-up commento: finestra dedicata con textarea + dettatura.
+          Chiudere (X, Fatto o tap sul fondo) conserva il testo — verrà
+          inviato col prossimo giudizio. */}
+      {commentOpen && (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-5"
+          style={{ background: "rgba(0,0,0,0.55)", zIndex: 90 }}
+          onClick={() => {
+            stopVoice();
+            setCommentOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border p-4"
+            style={{
+              background: "var(--color-panel)",
+              borderColor: recording
+                ? "var(--color-red)"
+                : "var(--color-border-glow)",
+              boxShadow: "0 18px 48px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span
+                className="text-[13px] font-bold flex items-center gap-2"
+                style={{ color: "var(--color-white)" }}
+              >
+                <IconChat size={14} />
+                {t.commentTitle}
+              </span>
+              <button
+                type="button"
+                aria-label={t.commentClose}
+                title={t.commentClose}
+                onClick={() => {
+                  stopVoice();
+                  setCommentOpen(false);
+                }}
+                className="rounded-full border flex items-center justify-center"
+                style={{
+                  width: 24,
+                  height: 24,
+                  color: "var(--color-muted)",
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-card)",
+                  cursor: "pointer",
+                }}
+              >
+                <IconX size={12} />
+              </button>
+            </div>
+            <textarea
+              autoFocus
+              rows={6}
+              maxLength={2000}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder={recording ? t.voiceListening : t.commentPh}
+              className="w-full rounded-lg border px-3 py-2 text-[12px] resize-none block"
+              style={{
+                borderColor: recording
+                  ? "var(--color-red)"
+                  : "var(--color-border)",
+                background: "var(--color-row)",
+                color: "var(--color-bright)",
+                outline: "none",
+              }}
+            />
+            <div className="flex items-center justify-between mt-3">
+              {speechOk ? (
+                <button
+                  type="button"
+                  aria-label={recording ? t.voiceStop : t.voiceStart}
+                  title={recording ? t.voiceStop : t.voiceStart}
+                  onClick={recording ? stopVoice : startVoice}
+                  className="rounded-lg border flex items-center justify-center"
+                  style={{
+                    width: 38,
+                    height: 38,
+                    color: recording
+                      ? "var(--color-red)"
+                      : "var(--color-muted)",
+                    borderColor: recording
+                      ? "var(--color-red)"
+                      : "var(--color-border)",
+                    background: "var(--color-card)",
+                    cursor: "pointer",
+                    animation: recording
+                      ? "swipe-rec-pulse 1.2s ease-in-out infinite"
+                      : undefined,
+                  }}
+                >
+                  {recording ? <IconStop size={16} /> : <IconMic size={16} />}
+                </button>
+              ) : (
+                <span />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  stopVoice();
+                  setCommentOpen(false);
+                }}
+                className="px-4 py-2 rounded-lg text-[12px] font-bold"
+                style={{
+                  background: "var(--color-green)",
+                  color: "#04170c",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {t.commentDone}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Toast errori rete (non bloccante) */}
