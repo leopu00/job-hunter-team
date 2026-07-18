@@ -253,7 +253,7 @@ const S := {
 	"prof.save_err": "✘ salvataggio fallito: %s",
 
 	# ── Mappa OSM ─────────────────────────────────────────────────
-	"map.hint": "trascina per muoverti · rotella/pinch per lo zoom · click su un pin per le sue posizioni · allontana per il globo",
+	"map.hint": "trascina per muoverti · rotella/pinch per lo zoom · click su un pin per le sue posizioni",
 	"map.globe_hint": "trascina per ruotare il mondo · click su un pin per atterrarci · avvicinati per la mappa",
 	"map.filters": "FILTRI",
 	"map.f_score": "SCORE",
@@ -261,6 +261,8 @@ const S := {
 	"map.score_none": "senza punteggio",
 	"map.overview": "PANORAMICA",
 	"map.card_hint": "click su una posizione per aprire la scheda",
+	"map.card_hint_all": "%d posizioni · scorri l’elenco e clicca per aprire la scheda",
+	"map.cluster": "%d posizioni · %d località",
 
 	# ── Orari di lavoro (editabili, con stima dinamica) ───────────
 	"hours.intro": "Le finestre in cui il team lavora: modifica e salva, il pacing si adegua.",

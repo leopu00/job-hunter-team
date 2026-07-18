@@ -18,7 +18,6 @@ const ZOOM_MAX := 16.0     # street level, come il volo su città del web
 const TILE_Z_MAX := 16
 const ZOOM_SPEED := 9.0    # lerp/s dell'animazione di zoom
 const NO_COORDS_MAX := 5
-const CARD_MAX := 8        # posizioni mostrate nella scheda di un pin
 
 signal zoomed_out          # sotto ZOOM_MIN: chi ospita può tornare al globo
 signal open_position(pid: int)  # click su una posizione della scheda pin
@@ -40,6 +39,10 @@ var _hover_key := ""
 var _selected_key := ""     # pin con la scheda aperta
 var _card: PanelContainer   # la scheda (vignette del web) del pin selezionato
 var _card_signature := ""   # per non ricostruirla a ogni snapshot uguale
+var _cluster_cache: Array = []
+var _cluster_cache_zoom := -1
+var _pins_revision := 0
+var _cluster_cache_revision := -1
 
 ## Filtri condivisi con la vista Mappa (riferimento di WorldMap).
 var filters := {}
@@ -50,6 +53,7 @@ func _ready() -> void:
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	clip_contents = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	DirAccess.make_dir_recursive_absolute(CACHE_DIR)
 	_rebuild_pins()
 	BackendBus.positions_updated.connect(func(_l: Array) -> void: _rebuild_pins())
@@ -98,6 +102,8 @@ func _tile_texture(z: int, x: int, y: int) -> Texture2D:
 	if FileAccess.file_exists(path):
 		var img := Image.new()
 		if img.load(path) == OK:
+			if not img.has_mipmaps():
+				img.generate_mipmaps()
 			var tex := ImageTexture.create_from_image(img)
 			_tiles[key] = tex
 			return tex
@@ -127,9 +133,10 @@ func _on_tile(_result: int, code: int, _headers: PackedStringArray,
 	if code == 200:
 		var img := Image.new()
 		if img.load_png_from_buffer(body) == OK:
-			_tiles[key] = ImageTexture.create_from_image(img)
 			var parts := key.split("/")
 			img.save_png("%s/%s_%s_%s.png" % [CACHE_DIR, parts[0], parts[1], parts[2]])
+			img.generate_mipmaps()
+			_tiles[key] = ImageTexture.create_from_image(img)
 			queue_redraw()
 	_pump_queue()
 
@@ -149,6 +156,10 @@ func _rebuild_pins() -> void:
 		pin["norm"] = lonlat_to_norm(pin["lonlat"])
 		pin["label"] = "%s (%d)" % [str(pin["city"]), int(pin["count"])] \
 				if int(pin["count"]) > 1 else str(pin["city"])
+		pin["is_cluster"] = false
+		pin["source_count"] = 1
+	_pins_revision += 1
+	_cluster_cache_zoom = -1
 	# TEST-AUTO: JHT_MAP_PIN=<città> seleziona quel pin appena esiste
 	# (lo snapshot VPS arriva async: riprova a ogni rebuild finché c'è)
 	var want := OS.get_environment("JHT_MAP_PIN")
@@ -167,6 +178,79 @@ func _find_pin(key: String) -> Dictionary:
 		if str(pin["key"]) == key:
 			return pin
 	return {}
+
+## Clustering progressivo ispirato alla mappa web:
+##   zoom 2–4  → paese;
+##   zoom 5–9  → celle geografiche sempre più piccole;
+##   zoom 10+  → singole città.
+## Il bucket usa coordinate-mondo, non lo schermo: trascinare non fa saltare
+## i gruppi. Si ricostruisce solo quando cambia livello intero o snapshot.
+func _display_pins() -> Array:
+	var z := clampi(int(floor(zoom_f)), int(ZOOM_MIN), int(ZOOM_MAX))
+	if _cluster_cache_zoom == z and _cluster_cache_revision == _pins_revision:
+		return _cluster_cache
+	_cluster_cache_zoom = z
+	_cluster_cache_revision = _pins_revision
+	_cluster_cache = []
+	if z >= 10:
+		_cluster_cache = _pins.duplicate()
+		return _cluster_cache
+	var groups := {}
+	if z <= 4:
+		for pin in _pins:
+			var key := "country:" + str(pin.get("country", "?"))
+			if not groups.has(key):
+				groups[key] = []
+			(groups[key] as Array).append(pin)
+	else:
+		var world_scale := TILE * pow(2.0, z)
+		var cell_px := 140.0 - float(z - 5) * 20.0
+		for pin in _pins:
+			var norm: Vector2 = pin["norm"]
+			var cell := Vector2i(floori(norm.x * world_scale / cell_px),
+					floori(norm.y * world_scale / cell_px))
+			var key := "near:%d:%d:%d" % [z, cell.x, cell.y]
+			if not groups.has(key):
+				groups[key] = []
+			(groups[key] as Array).append(pin)
+	var keys: Array = groups.keys()
+	keys.sort()
+	for key in keys:
+		var members: Array = groups[key]
+		if members.size() == 1:
+			_cluster_cache.append(members[0])
+		else:
+			_cluster_cache.append(_merge_cluster(members, str(key), z <= 4))
+	return _cluster_cache
+
+func _merge_cluster(members: Array, key: String, country_level: bool) -> Dictionary:
+	var count := 0
+	var best: Variant = null
+	var positions: Array = []
+	var weighted_y := 0.0
+	var circle := Vector2.ZERO
+	for pin in members:
+		var weight := maxf(1.0, float(pin["count"]))
+		count += int(pin["count"])
+		positions.append_array(pin["positions"])
+		if pin["best"] != null and (best == null or float(pin["best"]) > float(best)):
+			best = pin["best"]
+		var norm: Vector2 = pin["norm"]
+		var angle := norm.x * TAU
+		circle += Vector2(cos(angle), sin(angle)) * weight
+		weighted_y += norm.y * weight
+	var norm_x := atan2(circle.y, circle.x) / TAU
+	if norm_x < 0.0:
+		norm_x += 1.0
+	var norm := Vector2(norm_x, weighted_y / maxf(1.0, float(count)))
+	var cluster_label := "%s · %d" % [str(members[0].get("country", "?")), count] \
+			if country_level else UIStrings.t("map.cluster") % [count, members.size()]
+	return {
+		"key": key, "city": cluster_label, "country": members[0].get("country", ""),
+		"lonlat": norm_to_lonlat(norm), "norm": norm, "count": count,
+		"best": best, "positions": positions, "label": cluster_label,
+		"is_cluster": true, "source_count": members.size(),
+	}
 
 ## ── La scheda del pin: le posizioni della città, cliccabili ──────────
 ## (la vignette/popup del JobsGlobe web: titolo, azienda, score, apri →)
@@ -201,6 +285,7 @@ func _rebuild_card() -> void:
 	sb.content_margin_top = 8
 	sb.content_margin_bottom = 8
 	_card.add_theme_stylebox_override("panel", sb)
+	_card.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_card)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
@@ -225,10 +310,24 @@ func _rebuild_card() -> void:
 		_rebuild_card()
 		queue_redraw())
 	head.add_child(close)
-	for p in (pin["positions"] as Array).slice(0, CARD_MAX):
+	var positions: Array = pin["positions"]
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	# La scheda del web consente di raggiungere ogni risultato. Qui la lista
+	# resta compatta ma scorre per intero: mai più “altre 6” senza accesso.
+	var max_list_height := maxf(120.0, minf(420.0, size.y - 150.0))
+	scroll.custom_minimum_size = Vector2(0,
+			minf(max_list_height, maxf(42.0, positions.size() * 38.0)))
+	box.add_child(scroll)
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 4)
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(rows)
+	for p in positions:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
-		box.add_child(row)
+		rows.add_child(row)
 		var score_v: Variant = p.get("total_score")
 		var score := TerminalTheme.label(
 				"—" if score_v == null else str(int(score_v)), 15,
@@ -251,10 +350,8 @@ func _rebuild_card() -> void:
 			Sfx.play_tick()
 			open_position.emit(pid))
 		row.add_child(btn)
-	if (pin["positions"] as Array).size() > CARD_MAX:
-		box.add_child(TerminalTheme.label(UIStrings.t("common.more")
-				% ((pin["positions"] as Array).size() - CARD_MAX), 12, Palette.DIM))
-	box.add_child(TerminalTheme.label(UIStrings.t("map.card_hint"), 11, Palette.DIM))
+	box.add_child(TerminalTheme.label(UIStrings.t("map.card_hint_all")
+			% positions.size(), 11, Palette.DIM))
 	_place_card()
 
 ## La scheda insegue il suo pin (come il popup riproiettato del web).
@@ -303,7 +400,7 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventMagnifyGesture:
 		_zoom_at(log(event.factor) / log(2.0) * 1.5, event.position)
 	elif event is InputEventPanGesture:
-		center += event.delta * 20.0 / _scale()
+		center -= event.delta * 20.0 / _scale()
 		center.y = clampf(center.y, 0.0, 1.0)
 		_target_center = center
 		queue_redraw()
@@ -324,7 +421,7 @@ func _zoom_at(delta_z: float, anchor: Vector2) -> void:
 func _pin_near(pos: Vector2) -> Dictionary:
 	var best := {}
 	var best_d := 16.0
-	for pin in _pins:
+	for pin in _display_pins():
 		var d := _to_screen(pin["norm"]).distance_to(pos)
 		if d < best_d:
 			best_d = d
@@ -343,6 +440,17 @@ func _click_pin(pos: Vector2) -> bool:
 		return false
 	Sfx.play_tick()
 	_target_center = pin["norm"]
+	if bool(pin.get("is_cluster", false)):
+		_selected_key = ""
+		_rebuild_card()
+		# Un gruppo-paese salta direttamente al livello regionale; un gruppo
+		# di prossimità avanza di due livelli. Al click successivo emergeranno
+		# città sempre più precise, fino alla scheda finale.
+		_target_zoom = clampf(5.2 if _target_zoom < 5.0 \
+				else maxf(_target_zoom + 2.0, float(_cluster_cache_zoom + 2)),
+				ZOOM_MIN, ZOOM_MAX)
+		queue_redraw()
+		return true
 	# città singola → zoom 11 (il flyTo del web); cluster → basta inquadrarla
 	_target_zoom = clampf(maxf(_target_zoom, 11.0 if int(pin["count"]) == 1 else 9.0),
 			ZOOM_MIN, ZOOM_MAX)
@@ -387,7 +495,9 @@ func fit_all() -> void:
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.045, 0.05, 0.075))
 	# livello tile intero più vicino allo zoom frazionale, scalato
-	var base_z := clampi(int(floor(zoom_f + 0.35)), 0, TILE_Z_MAX)
+	# Scegli il livello superiore e riducilo: ingrandire una tile del livello
+	# precedente era la causa delle etichette e delle strade sfocate.
+	var base_z := clampi(int(ceil(zoom_f)), 0, TILE_Z_MAX)
 	var n := 1 << base_z
 	var tile_px := _scale() / float(n)   # dimensione a schermo di una tile
 	var tl := _screen_to_norm(Vector2.ZERO) * n
@@ -412,7 +522,7 @@ func _draw() -> void:
 	# pin: prima tutti i punti, poi le targhette SENZA sovrapposizioni
 	# (priorità agli score alti — il web clusterizza, noi decolliidiamo)
 	var font := TerminalTheme.get_theme().default_font
-	var by_score := _pins.duplicate()
+	var by_score := _display_pins().duplicate()
 	by_score.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a["best"] if a["best"] != null else -1.0) \
 				> float(b["best"] if b["best"] != null else -1.0))
@@ -431,8 +541,9 @@ func _draw() -> void:
 		elif str(pin["key"]) == _hover_key:
 			draw_arc(pos, pr + 9.0, 0, TAU, 32,
 					Color(Palette.WHITE.r, Palette.WHITE.g, Palette.WHITE.b, 0.5), 1.5)
-		var text := "%s  [%d]" % [pin["label"], int(pin["best"])] \
-				if pin["best"] != null else str(pin["label"])
+		var text := str(pin["label"])
+		if not bool(pin.get("is_cluster", false)) and pin["best"] != null:
+			text += "  [%d]" % int(pin["best"])
 		var tsize := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
 		var label_rect := Rect2(pos + Vector2(14, -9), tsize + Vector2(10, 6))
 		var collides := false
