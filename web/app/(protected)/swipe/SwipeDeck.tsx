@@ -12,6 +12,7 @@ import {
   IconEye,
   IconMic,
   IconPin,
+  IconSkip,
   IconStar,
   IconStop,
   IconUndo,
@@ -61,6 +62,9 @@ export type SwipeCardData = {
 };
 
 type Verdict = "no" | "review_low" | "review_ok" | "top";
+// Lo skip NON è un giudizio: nessuna scrittura, la carta va in fondo al
+// mazzo (e ricompare nei mazzi futuri finché non riceve un giudizio vero).
+type HistoryAction = Verdict | "skip";
 
 // Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
 // l'esclusione. Score 3 lasciato libero come neutro non usato.
@@ -133,6 +137,7 @@ const T: Record<
     stampNo: string;
     verdicts: Record<Verdict, string>;
     btnUndo: string;
+    btnSkip: string;
     commentPh: string;
     voiceStart: string;
     voiceStop: string;
@@ -159,6 +164,7 @@ const T: Record<
       top: "Molto interessante",
     },
     btnUndo: "Annulla ultima",
+    btnSkip: "Salta",
     commentPh: "Aggiungi un commento (facoltativo)…",
     voiceStart: "Detta il commento",
     voiceStop: "Ferma la dettatura",
@@ -170,7 +176,7 @@ const T: Record<
     details: "Dettagli",
     remote: { full_remote: "Remoto", hybrid: "Ibrido", onsite: "In sede" },
     saveError: "Errore di rete — azione non salvata per",
-    hintKeys: "Tastiera: 1–4 giudizio · ← no · → top · ⌫ annulla",
+    hintKeys: "Tastiera: 1–4 giudizio · ← no · → top · ↓ salta · ⌫ annulla",
   },
   en: {
     title: "Swipe",
@@ -184,6 +190,7 @@ const T: Record<
       top: "Very interesting",
     },
     btnUndo: "Undo last",
+    btnSkip: "Skip",
     commentPh: "Add a comment (optional)…",
     voiceStart: "Dictate the comment",
     voiceStop: "Stop dictation",
@@ -195,7 +202,7 @@ const T: Record<
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "On-site" },
     saveError: "Network error — action not saved for",
-    hintKeys: "Keyboard: 1–4 verdict · ← no · → top · ⌫ undo",
+    hintKeys: "Keyboard: 1–4 verdict · ← no · → top · ↓ skip · ⌫ undo",
   },
   hu: {
     title: "Swipe",
@@ -209,6 +216,7 @@ const T: Record<
       top: "Nagyon érdekes",
     },
     btnUndo: "Visszavonás",
+    btnSkip: "Kihagyás",
     commentPh: "Megjegyzés hozzáadása (opcionális)…",
     voiceStart: "Megjegyzés diktálása",
     voiceStop: "Diktálás leállítása",
@@ -220,7 +228,7 @@ const T: Record<
     details: "Részletek",
     remote: { full_remote: "Távoli", hybrid: "Hibrid", onsite: "Helyszíni" },
     saveError: "Hálózati hiba — nem mentett művelet:",
-    hintKeys: "Billentyűk: 1–4 ítélet · ← nem · → top · ⌫ visszavonás",
+    hintKeys: "Billentyűk: 1–4 ítélet · ← nem · → top · ↓ kihagyás · ⌫ visszavonás",
   },
   es: {
     title: "Swipe",
@@ -234,6 +242,7 @@ const T: Record<
       top: "Muy interesante",
     },
     btnUndo: "Deshacer",
+    btnSkip: "Omitir",
     commentPh: "Añade un comentario (opcional)…",
     voiceStart: "Dictar el comentario",
     voiceStop: "Detener el dictado",
@@ -245,7 +254,7 @@ const T: Record<
     details: "Detalles",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Error de red — acción no guardada para",
-    hintKeys: "Teclado: 1–4 juicio · ← no · → top · ⌫ deshacer",
+    hintKeys: "Teclado: 1–4 juicio · ← no · → top · ↓ omitir · ⌫ deshacer",
   },
   de: {
     title: "Swipe",
@@ -259,6 +268,7 @@ const T: Record<
       top: "Sehr interessant",
     },
     btnUndo: "Rückgängig",
+    btnSkip: "Überspringen",
     commentPh: "Kommentar hinzufügen (optional)…",
     voiceStart: "Kommentar diktieren",
     voiceStop: "Diktat beenden",
@@ -270,7 +280,7 @@ const T: Record<
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "Vor Ort" },
     saveError: "Netzwerkfehler — Aktion nicht gespeichert für",
-    hintKeys: "Tastatur: 1–4 Urteil · ← nein · → top · ⌫ rückgängig",
+    hintKeys: "Tastatur: 1–4 Urteil · ← nein · → top · ↓ überspringen · ⌫ rückgängig",
   },
   fr: {
     title: "Swipe",
@@ -284,6 +294,7 @@ const T: Record<
       top: "Très intéressant",
     },
     btnUndo: "Annuler",
+    btnSkip: "Passer",
     commentPh: "Ajouter un commentaire (facultatif)…",
     voiceStart: "Dicter le commentaire",
     voiceStop: "Arrêter la dictée",
@@ -295,7 +306,7 @@ const T: Record<
     details: "Détails",
     remote: { full_remote: "Télétravail", hybrid: "Hybride", onsite: "Sur site" },
     saveError: "Erreur réseau — action non enregistrée pour",
-    hintKeys: "Clavier : 1–4 avis · ← non · → top · ⌫ annuler",
+    hintKeys: "Clavier : 1–4 avis · ← non · → top · ↓ passer · ⌫ annuler",
   },
   pt: {
     title: "Swipe",
@@ -309,6 +320,7 @@ const T: Record<
       top: "Muito interessante",
     },
     btnUndo: "Desfazer",
+    btnSkip: "Pular",
     commentPh: "Adicione um comentário (opcional)…",
     voiceStart: "Ditar o comentário",
     voiceStop: "Parar o ditado",
@@ -320,7 +332,7 @@ const T: Record<
     details: "Detalhes",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Erro de rede — ação não salva para",
-    hintKeys: "Teclado: 1–4 julgamento · ← não · → top · ⌫ desfazer",
+    hintKeys: "Teclado: 1–4 julgamento · ← não · → top · ↓ pular · ⌫ desfazer",
   },
 };
 
@@ -372,10 +384,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
 
   const [deck, setDeck] = useState<SwipeCardData[]>(cards);
   const [history, setHistory] = useState<
-    { card: SwipeCardData; verdict: Verdict }[]
+    { card: SwipeCardData; verdict: HistoryAction }[]
   >([]);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, dragging: false });
-  const [fly, setFly] = useState<{ x: number; rot: number } | null>(null);
+  const [fly, setFly] = useState<{ x: number; y: number; rot: number } | null>(
+    null,
+  );
   const [toast, setToast] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [commentOpen, setCommentOpen] = useState(false);
@@ -493,7 +507,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       const note = comment.trim().slice(0, 2000);
       const dir = VERDICTS[verdict].fly;
       const width = typeof window !== "undefined" ? window.innerWidth : 800;
-      setFly({ x: dir * (width + 200), rot: dir * 22 });
+      setFly({ x: dir * (width + 200), y: drag.dy, rot: dir * 22 });
       setTimeout(() => {
         setDeck((d) => d.slice(1));
         setHistory((h) => [...h, { card, verdict }]);
@@ -505,18 +519,41 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       }, FLY_MS);
       void persist(card, verdict, note);
     },
-    [deck, comment, persist, stopVoice],
+    [deck, comment, drag.dy, persist, stopVoice],
   );
+
+  // Skip: nessuna scrittura, la carta scivola in basso e va in fondo al
+  // mazzo — la si rincontra a fine giro (e nei mazzi futuri).
+  const skip = useCallback(() => {
+    if (flyingRef.current || deck.length === 0) return;
+    flyingRef.current = true;
+    stopVoice();
+    const card = deck[0];
+    setFly({ x: 0, y: 700, rot: -3 });
+    setTimeout(() => {
+      setDeck((d) => [...d.slice(1), card]);
+      setHistory((h) => [...h, { card, verdict: "skip" }]);
+      setDrag({ dx: 0, dy: 0, dragging: false });
+      setFly(null);
+      flyingRef.current = false;
+    }, FLY_MS);
+  }, [deck, stopVoice]);
 
   const undo = useCallback(() => {
     if (flyingRef.current || history.length === 0) return;
     const last = history[history.length - 1];
     setHistory((h) => h.slice(0, -1));
-    setDeck((d) => [last.card, ...d]);
+    // Dopo uno skip la carta sta in FONDO al mazzo: toglila da lì prima di
+    // rimetterla in cima (altrimenti duplicata).
+    setDeck((d) =>
+      last.verdict === "skip"
+        ? [last.card, ...d.slice(0, -1)]
+        : [last.card, ...d],
+    );
     // Solo l'esclusione del 'no' è reversibile lato server (DELETE
     // ripristina lo status). Le righe feedback sono event-log immutabile:
     // restano, e l'eventuale giudizio successivo prevale nei "latest".
-    if (VERDICTS[last.verdict].exclude) {
+    if (last.verdict !== "skip" && VERDICTS[last.verdict].exclude) {
       void fetch(`/api/positions/${last.card.legacy_id}/user-exclude`, {
         method: "DELETE",
       }).catch(() => showToast(`${t.saveError} «${last.card.title}»`));
@@ -541,6 +578,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       if (byDigit[e.key]) commit(byDigit[e.key]);
       else if (e.key === "ArrowLeft") commit("no");
       else if (e.key === "ArrowRight") commit("top");
+      else if (e.key === "ArrowDown") skip();
       else if (e.key === "Backspace") {
         e.preventDefault();
         undo();
@@ -548,7 +586,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [commit, undo]);
+  }, [commit, skip, undo]);
 
   // ── Gesture (pointer events: touch + mouse unificati) ────────────
   const onPointerDown = (e: React.PointerEvent) => {
@@ -669,7 +707,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         <>
           <div
             className="relative"
-            style={{ height: "min(56dvh, 520px)", touchAction: "none" }}
+            style={{ height: "min(47dvh, 470px)", touchAction: "none" }}
           >
             {/* Le 3 carte in cima, dal fondo verso la cima dello stack */}
             {deck
@@ -678,7 +716,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                 const isTop = i === 0;
                 const transform = isTop
                   ? fly
-                    ? `translate(${fly.x}px, ${drag.dy}px) rotate(${fly.rot}deg)`
+                    ? `translate(${fly.x}px, ${fly.y}px) rotate(${fly.rot}deg)`
                     : `translate(${drag.dx}px, ${drag.dy * 0.4}px) rotate(${drag.dx * 0.06}deg)`
                   : `translateY(${i * 10}px) scale(${1 - i * 0.035})`;
                 return (
@@ -937,6 +975,24 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                 onClick={() => commit(v)}
               />
             ))}
+          </div>
+
+          {/* Skip: azione secondaria, nessun giudizio registrato */}
+          <div className="flex justify-center mt-3">
+            <button
+              type="button"
+              onClick={skip}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold"
+              style={{
+                borderColor: "var(--color-border)",
+                background: "transparent",
+                color: "var(--color-muted)",
+                cursor: "pointer",
+              }}
+            >
+              {t.btnSkip}
+              <IconSkip size={13} />
+            </button>
           </div>
 
           <p

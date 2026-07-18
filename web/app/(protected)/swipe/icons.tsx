@@ -116,6 +116,15 @@ export function IconCards({ size }: { size?: number }) {
   );
 }
 
+export function IconSkip({ size }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <path d="m6 17 5-5-5-5" />
+      <path d="m13 17 5-5-5-5" />
+    </Svg>
+  );
+}
+
 export function IconCheckCircle({ size }: { size?: number }) {
   return (
     <Svg size={size}>
