@@ -94,11 +94,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_accept") and not _leaving:
 		_leaving = true
 		Sfx.play_confirm()
-		_fade_to_office()
+		_fade_out()
 
-## Dissolvenza a nero sopra tutto, poi dritti in ufficio: niente flicker
-## del titolo, niente onboarding.
-func _fade_to_office() -> void:
+## Dissolvenza a nero sopra tutto, poi via: al PRIMO avvio si passa dal
+## wizard (onboarding con l'assistente, la foto-badge del GDD §5); dai
+## giri successivi dritti in ufficio, niente flicker del titolo.
+func _fade_out() -> void:
 	var veil := ColorRect.new()
 	veil.color = Color(Palette.VOID.r, Palette.VOID.g, Palette.VOID.b, 0.0)
 	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -106,4 +107,5 @@ func _fade_to_office() -> void:
 	add_child(veil)
 	var tw := create_tween()
 	tw.tween_property(veil, "color:a", 1.0, 0.4)
-	tw.tween_callback(Game.goto_office)
+	tw.tween_callback(Game.goto_office if Game.onboarding_done()
+			else Game.goto_wizard)

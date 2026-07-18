@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
 import { isCloudDeploy, isLocalDeploy } from "@/lib/deploy-mode";
-import { readWorkspaceProfile, isProfileComplete } from "@/lib/profile-reader";
 import { isLocalRequestFromHeaders } from "@/lib/auth";
 import { isDashboardDemoMode } from "@/lib/dashboard-demo";
 import { getRequestLocale } from "@/lib/request-locale";
@@ -81,10 +80,14 @@ export default async function ProtectedLayout({
     redirect("/dashboard");
   }
 
-  // Tenta sessione Supabase prima di tutto. Se l'utente è loggato in
-  // cloud, prevale sul flusso locale (anche su localhost): mandarlo in
-  // /onboarding wizard-PC-locale ha senso solo per chi NON ha account.
+  // Tenta sessione Supabase prima di tutto: se l'utente è loggato in
+  // cloud, prevale sul flusso locale (anche su localhost).
   // Vedi docs/internal/architecture/2026-05-19-dashboard-routing-cases.md.
+  // [JHT-ONBOARDING-IN-GAME 18/07] Il vecchio gate "profilo locale
+  // incompleto → /onboarding" non esiste più: la pagina web è stata
+  // rimossa e l'onboarding vive nel wizard del videogioco
+  // (game/scenes/wizard.tscn). Senza profilo le pagine mostrano i loro
+  // empty state.
   let cloudUser: User | null = null;
   if (isSupabaseConfigured && !demoMode && !localOnly) {
     const supabase = await createClient();
@@ -92,21 +95,6 @@ export default async function ProtectedLayout({
       data: { user },
     } = await supabase.auth.getUser();
     cloudUser = user;
-  }
-
-  // Onboarding gate LOCALE: si applica solo se l'utente NON è loggato
-  // in cloud. Su localhost+cloud-user-loggato il profilo è su Supabase
-  // (candidate_profiles via cloud-sync), il wizard PC-locale è inutile.
-  if (
-    !cloudUser &&
-    localContext &&
-    pathname &&
-    !pathname.startsWith("/onboarding") &&
-    !demoMode
-  ) {
-    if (!isProfileComplete(readWorkspaceProfile())) {
-      redirect("/onboarding");
-    }
   }
 
   // Auth gate REMOTE: senza sessione e non-locale → /login. Skippato sul

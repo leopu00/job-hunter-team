@@ -1003,6 +1003,81 @@ export async function getSeenPositionIds(): Promise<Set<string>> {
   return new Set((data as any[]).map((r) => String(r.position_id)));
 }
 
+// ── Swipe triage deck ──────────────────────────────────────────────
+// [JHT-POSITIONS-SWIPE-TRIAGE] Mazzo per la pagina /swipe: triage rapido a
+// carte del backlog scored/ready, ordinato per score desc (le migliori
+// prima). Escluse le posizioni già swipate (position_feedback like/dislike/
+// hide, RLS filtra per utente): il mazzo mostra solo ciò che aspetta un
+// giudizio. Lo scarto (user-exclude) cambia status → esce dal mazzo da solo.
+// In local mode position_feedback non esiste in SQLite → nessun filtro like;
+// mazzo comunque coerente perché il like è un segnale cloud-only.
+async function getSwipedLegacyIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("position_feedback")
+    .select("position_legacy_id")
+    .in("action", ["like", "dislike", "hide", "star"])
+    .limit(10000);
+  if (error || !data) return new Set();
+  return new Set((data as any[]).map((r) => String(r.position_legacy_id)));
+}
+
+export async function getSwipeDeck(limit = 100): Promise<PositionWithScore[]> {
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getPositionsLocal(w, {
+        statuses: ["scored", "ready"],
+        sort: "score",
+        dir: "desc",
+        limit,
+      });
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
+
+  const supabase = await createClient();
+  const [positionsRes, swiped] = await Promise.all([
+    supabase
+      .from("positions")
+      .select(
+        "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, jd_summary, scores ( total_score )",
+      )
+      .in("status", ["scored", "ready"])
+      .is("deleted_at", null)
+      // Margine 2x: una parte verrà filtrata come già swipata.
+      .limit(limit * 2),
+    getSwipedLegacyIds(supabase),
+  ]);
+  const { data, error } = positionsRes;
+  if (error || !data) return [];
+
+  return (data as any[])
+    .filter((p) => p.legacy_id == null || !swiped.has(String(p.legacy_id)))
+    .map((p) => {
+      const s = firstRelated<any>(p.scores);
+      const useEst =
+        p.salary_estimated_min != null || p.salary_estimated_max != null;
+      return {
+        ...p,
+        score: p.score ?? s?.total_score ?? undefined,
+        scores: undefined,
+        salary_min:
+          (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null,
+        salary_max:
+          (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null,
+        salary_currency:
+          (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ??
+          "EUR",
+      } as PositionWithScore;
+    })
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+    .slice(0, limit);
+}
+
 // Sceglie l'evento con timestamp più recente tra i candidati passati.
 // Usato sia dal path cloud sia (replicato) dal path locale per derivare
 // last_action_at/by/actor in modo coerente con getRecentlyTouchedPositions.

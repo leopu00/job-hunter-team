@@ -111,7 +111,7 @@ const T: Record<Locale, Dict> = {
     firstRunTitle: "🎬 Your first run",
     firstRunIntro: "Whichever path you took:",
     fr1A: "Set up your profile.",
-    fr1B: " Chat with the Assistant at ",
+    fr1B: " Chat with the Assistant during the first-run onboarding",
     fr1C: " — it writes your ",
     fr2A: "Feed it your job alerts (optional but recommended) — see ",
     emailForwarding: "Email Forwarding",
@@ -170,7 +170,7 @@ const T: Record<Locale, Dict> = {
     firstRunTitle: "🎬 La tua prima esecuzione",
     firstRunIntro: "Qualunque percorso tu abbia scelto:",
     fr1A: "Configura il tuo profilo.",
-    fr1B: " Chatta con l'Assistente su ",
+    fr1B: " Chatta con l'Assistente nell'onboarding al primo avvio",
     fr1C: " — scriverà il tuo ",
     fr2A: "Forniscigli i tuoi avvisi di lavoro (opzionale ma consigliato) — vedi ",
     emailForwarding: "Inoltro email",
@@ -230,7 +230,7 @@ const T: Record<Locale, Dict> = {
     firstRunTitle: "🎬 Tu primera ejecución",
     firstRunIntro: "Sea cual sea la vía que hayas elegido:",
     fr1A: "Configura tu perfil.",
-    fr1B: " Chatea con el Asistente en ",
+    fr1B: " Chatea con el Asistente en el onboarding del primer arranque",
     fr1C: " — escribirá tu ",
     fr2A: "Aliméntalo con tus alertas de empleo (opcional pero recomendable) — consulta ",
     emailForwarding: "Reenvío de correo",
@@ -291,7 +291,7 @@ const T: Record<Locale, Dict> = {
     firstRunTitle: "🎬 Votre première exécution",
     firstRunIntro: "Quelle que soit la voie choisie :",
     fr1A: "Configurez votre profil.",
-    fr1B: " Discutez avec l'Assistant sur ",
+    fr1B: " Discutez avec l'Assistant lors de l'onboarding au premier démarrage",
     fr1C: " — il écrira votre ",
     fr2A: "Alimentez-le avec vos alertes d'emploi (facultatif mais recommandé) — voir ",
     emailForwarding: "Transfert d'e-mails",
@@ -351,7 +351,7 @@ const T: Record<Locale, Dict> = {
     firstRunTitle: "🎬 Dein erster Lauf",
     firstRunIntro: "Welchen Weg du auch gewählt hast:",
     fr1A: "Richte dein Profil ein.",
-    fr1B: " Chatte mit dem Assistenten unter ",
+    fr1B: " Chatte mit dem Assistenten im Onboarding beim ersten Start",
     fr1C: " — er schreibt deine ",
     fr2A: "Füttere es mit deinen Job-Benachrichtigungen (optional, aber empfohlen) — siehe ",
     emailForwarding: "E-Mail-Weiterleitung",
@@ -411,8 +411,8 @@ const T: Record<Locale, Dict> = {
     firstRunTitle: "🎬 Az első futtatásod",
     firstRunIntro: "Bármelyik utat is választottad:",
     fr1A: "Állítsd be a profilodat.",
-    fr1B: " Beszélgess az Asszisztenssel az ",
-    fr1C: " oldalon — megírja helyetted a ",
+    fr1B: " Beszélgess az Asszisztenssel az első indítás bevezetőjében",
+    fr1C: " — megírja helyetted a ",
     fr2A: "Tápláld be az állásértesítéseidet (nem kötelező, de ajánlott) — lásd ",
     emailForwarding: "E-mail-továbbítás",
     fr3A: "Kattints a Start gombra.",
@@ -471,7 +471,7 @@ const T: Record<Locale, Dict> = {
     firstRunTitle: "🎬 A tua primeira execução",
     firstRunIntro: "Seja qual for o caminho que escolheste:",
     fr1A: "Configura o teu perfil.",
-    fr1B: " Conversa com o Assistente em ",
+    fr1B: " Conversa com o Assistente no onboarding do primeiro arranque",
     fr1C: " — ele escreve o teu ",
     fr2A: "Alimenta-o com os teus alertas de emprego (opcional, mas recomendado) — vê ",
     emailForwarding: "Reencaminhamento de e-mail",
@@ -587,7 +587,6 @@ jht team status   # confirm it's running`}
         <LI>
           <strong>{t.fr1A}</strong>
           {t.fr1B}
-          <Code>/onboarding</Code>
           {t.fr1C}
           <Code>candidate_profile.yml</Code>.
         </LI>

@@ -3,9 +3,9 @@
 import { usePathname } from 'next/navigation'
 
 // Routes che occupano tutta la viewport — senza il wrapper `max-w-6xl`
-// del protected layout. Sono i flussi bloccanti (onboarding) o le dashboard
-// che gestiscono il proprio layout a piena larghezza.
-const FULLSCREEN_FLOWS = ['/onboarding', '/positions']
+// del protected layout: dashboard che gestiscono il proprio layout a
+// piena larghezza.
+const FULLSCREEN_FLOWS = ['/positions']
 // Hero flows: full-width senza padding (il globo del dashboard tocca
 // il navbar; il page gestisce il centering dei contenuti sottostanti).
 const HERO_FLOWS = ['/dashboard', '/map']
