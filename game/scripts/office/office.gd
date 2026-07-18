@@ -65,6 +65,11 @@ func _ready() -> void:
 		}
 		if d.has("front_occlusion"):
 			desk_item["front_occlusion"] = d["front_occlusion"]
+		# Override opzionale dell'arte occupata: normalmente FurnitureNode
+		# risolve la variante seduta dalla vista orientata; i prototipi già
+		# approvati possono fissare qui un path specifico.
+		if d.has("seated_art"):
+			desk_item["seated_art"] = d["seated_art"]
 		var desk_node := FurnitureNode.new(desk_item)
 		world.add_child(desk_node)
 		# registry per lo scambio vuota/occupata quando l'agente si siede

@@ -166,9 +166,18 @@ func _ready() -> void:
 		# shader, crea questa maschera senza congelare l'agente nella texture.
 		if item.has("front_occlusion"):
 			_add_front_occluder(spr, tex, float(item["front_occlusion"]))
-		# variante con l'agente seduto integrato: <stesso path>_seated.png
-		var seated_path := path.replace(".png", "_seated.png")
-		if ResourceLoader.exists(seated_path):
+		# Variante con agente+sedia+desk in un solo elemento grafico. Un path
+		# esplicito conserva i prototipi già approvati; altrimenti ogni vista
+		# cerca prima la nuova arte v2 e poi l'eventuale variante legacy.
+		var seated_path := str(item.get("seated_art", ""))
+		if seated_path.is_empty():
+			var v2_path := path.replace(".png", "_seated_v2.png")
+			var legacy_path := path.replace(".png", "_seated.png")
+			if ResourceLoader.exists(v2_path):
+				seated_path = v2_path
+			elif ResourceLoader.exists(legacy_path):
+				seated_path = legacy_path
+		if not seated_path.is_empty() and ResourceLoader.exists(seated_path):
 			var st: Texture2D = load(seated_path)
 			if st != null:
 				if st.get_size() == tex.get_size():
