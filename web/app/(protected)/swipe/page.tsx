@@ -27,7 +27,14 @@ export default async function SwipePage() {
       salary_min: p.salary_min ?? null,
       salary_max: p.salary_max ?? null,
       salary_currency: p.salary_currency ?? "EUR",
-      jd_summary: p.jd_summary ?? null,
+      // Fallback per le posizioni pre-mig-049 senza sintesi: il JD grezzo
+      // troncato — meglio del vuoto sulla card. \r\n normalizzati perché
+      // la card renderizza con white-space: pre-line.
+      jd_summary:
+        p.jd_summary ??
+        (p.jd_text
+          ? p.jd_text.replace(/\r\n/g, "\n").trim().slice(0, 1500)
+          : null),
     }));
 
   return (
