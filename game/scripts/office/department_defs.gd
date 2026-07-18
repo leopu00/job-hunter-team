@@ -31,16 +31,16 @@ const DEPARTMENTS := {
 		"name": "Scout",
 		"tagline": "Trovano le posizioni là fuori",
 		"color": Color("#00e87a"),
-		"zone": Rect2(1000, 960, 880, 520),
-		"inbox": Vector2(1790, 1390),
-		# Anello radiale sul tappeto Scout; indice 0..5 = ore 10,8,12,6,2,4.
+		"zone": Rect2(320, 348, 880, 520),
+		"inbox": Vector2(1110, 778),
+		# Anello radiale nell'angolo nord-ovest; indice 0..5 = ore 10,8,12,6,2,4.
 		"desks": [
-			{"rect": Rect2(1064, 1012, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(1106, 1228, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(1370, 958, 170, 78), "kind": "scout_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(1370, 1301, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
-			{"rect": Rect2(1676, 1012, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(1634, 1228, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(384, 400, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(426, 616, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(690, 346, 170, 78), "kind": "scout_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(690, 689, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
+			{"rect": Rect2(996, 400, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(954, 616, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"analisti": {
@@ -63,18 +63,18 @@ const DEPARTMENTS := {
 		"name": "Scorer",
 		"tagline": "Pesano il match profilo↔annuncio",
 		"color": Color("#f5c518"),
-		"zone": Rect2(1950, 960, 1210, 470),
-		"inbox": Vector2(1965, 1400),
-		# Anello radiale ampio; il deposito resta sul bordo ovest del reparto.
+		"zone": Rect2(1000, 960, 880, 520),
+		"inbox": Vector2(1790, 1390),
+		# Gli Scorer occupano l'anello centrale lasciato libero dagli Scout.
 		"desks": [
 			# scorer_a_side nasce con la sedia a sinistra, al contrario degli
 			# altri reparti: scambiamo solo il verso della texture laterale.
-			{"rect": Rect2(2136, 1025, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "right", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(2182, 1268, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(2480, 964, 170, 78), "kind": "scorer_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(2480, 1350, 170, 78), "kind": "scorer_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.78},
-			{"rect": Rect2(2825, 1025, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "left", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(2778, 1268, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(1064, 1012, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "right", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(1106, 1228, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(1370, 958, 170, 78), "kind": "scorer_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(1370, 1301, 170, 78), "kind": "scorer_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.78},
+			{"rect": Rect2(1676, 1012, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "left", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(1634, 1228, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"scrittori": {
@@ -126,12 +126,15 @@ const DEPARTMENTS := {
 ## Il lab degli Analisti ha già i suoi vetri (LAB_WALL_* in
 ## FurnitureDefs). Visual: _glass_line in OfficeFloor, stesso stile lab.
 const GLASS_WALLS := [
-	# Scout: nord (varco centrale verso l'ologramma) + est (varco sud
-	# verso l'inbox); sud e ovest aperti sui corridoi
+	# Scout nord-ovest: nord con varco centrale + est con uscita a sud.
+	Rect2(350, 284, 260, 12),
+	Rect2(920, 284, 260, 12),
+	Rect2(1224, 364, 12, 264),
+	# Scorer centrali: conservano i varchi dell'ex reparto Scout.
 	Rect2(1030, 896, 260, 12),
 	Rect2(1600, 896, 260, 12),
 	Rect2(1904, 976, 12, 264),
-	# linea condivisa Scorer/Critici con porta larga al centro
+	# Bordo nord dei Critici con porta larga al centro.
 	Rect2(1990, 1480, 460, 12),
 	Rect2(2660, 1480, 490, 12),
 	# Scrittori: nord (varco verso la sala relax) + est (porta sud)
@@ -149,8 +152,6 @@ const POIS := {
 	"coffee": {"spot": Vector2(1500, 310)},
 	"water_cooler": {"spot": Vector2(1635, 300)},
 	"hologram": {"spot": Vector2(1300, 930)},
-	# sala relax a ovest (pausa vera: divano/arcade/ping-pong)
-	"rec_room": {"spot": Vector2(520, 1200)},
 }
 
 ## La catena del valore dei fogli: chi ritira dall'inbox di chi.

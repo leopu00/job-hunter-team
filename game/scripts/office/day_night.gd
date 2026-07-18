@@ -24,15 +24,15 @@ const DAYLIGHT := Color("#cfe4ff")
 
 ## Lampade interne: [pos, raggio, colore, alpha di base] — accese col buio.
 const LAMPS := [
-	[Vector2(330, 260), 260.0, WARM, 0.20],     # lampada lounge
-	[Vector2(1090, 230), 210.0, WARM, 0.13],    # libreria
+	[Vector2(2200, 1070), 260.0, WARM, 0.20],   # lounge nell'area comune
+	[Vector2(2520, 1010), 210.0, WARM, 0.13],   # libreria area comune
 	[Vector2(1500, 235), 240.0, WARM, 0.18],    # angolo caffè
 	[Vector2(1727, 250), 190.0, COOL, 0.10],    # stampante
-	[Vector2(545, 760), 250.0, WARM, 0.17],     # desk Coordinatore
+	[Vector2(2815, 1240), 250.0, WARM, 0.17],   # desk Coordinatore
 	[Vector2(1295, 1790), 250.0, WARM, 0.15],   # desk Assistente (entrata)
-	[Vector2(1350, 1150), 300.0, WARM, 0.15],   # reparto Scout
+	[Vector2(775, 560), 300.0, WARM, 0.15],     # reparto Scout nord-ovest
 	[Vector2(2115, 430), 280.0, MINT, 0.12],    # lab Analisti (luce fredda)
-	[Vector2(2080, 1170), 290.0, WARM, 0.15],   # reparto Scorer
+	[Vector2(1455, 1172), 290.0, WARM, 0.15],   # reparto Scorer centrale
 	[Vector2(670, 1680), 290.0, WARM, 0.15],    # reparto Scrittori
 	[Vector2(2080, 1680), 290.0, WARM, 0.15],   # reparto Critici
 	[Vector2(1300, 780), 330.0, MINT, 0.13],    # ologramma
