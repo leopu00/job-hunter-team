@@ -10,10 +10,10 @@ const SHEETS := "res://assets/characters/sheets/"
 const AGENTS := {
 	"coordinatore": {
 		"name": "Il Coordinatore",
-		"spot": Vector2(545, 856),  # DAVANTI al desk (schermo verso camera)
+		"spot": Vector2(2815, 1326),  # DAVANTI al desk nell'area comune
 		"facing": "up",
 		# il giro dei reparti: passa a controllare gli inbox, come i C-tick
-		"wander": [Vector2(1790, 1390), Vector2(2690, 790), Vector2(1965, 1400),
+		"wander": [Vector2(1110, 778), Vector2(2690, 790), Vector2(1790, 1390),
 				Vector2(1120, 1740), Vector2(2690, 1825), Vector2(1300, 930)],
 		"chatter": [
 			"ricalibro il ritmo del team…",
@@ -73,8 +73,8 @@ const AGENTS := {
 	},
 	"mentor": {
 		"name": "Il Mentor",
-		"spot": Vector2(740, 480),
-		"wander": [Vector2(470, 620), Vector2(1090, 330), Vector2(1300, 960)],
+		"spot": Vector2(2480, 1150),
+		"wander": [Vector2(2140, 1280), Vector2(2600, 1120), Vector2(1300, 930)],
 		"chatter": [
 			"un buon colloquio è una conversazione",
 			"i numeri raccontano i risultati",
@@ -85,7 +85,7 @@ const AGENTS := {
 		"name": "L'Assistente",
 		"spot": Vector2(1665, 1936),  # DAVANTI al desk all'entrata sud
 		"facing": "up",
-		"wander": [Vector2(850, 1250), Vector2(1490, 320), Vector2(1965, 1400)],
+		"wander": [Vector2(1110, 778), Vector2(1490, 320), Vector2(1790, 1390)],
 		"chatter": [
 			"l'onboarding è completo",
 			"se hai dubbi, chiedi pure a me",
@@ -97,7 +97,7 @@ const AGENTS := {
 	# mostrare TUTTI gli attivi veri)
 	"mantenitore": {
 		"name": "Il Mantenitore",
-		"spot": Vector2(860, 330),
+		"spot": Vector2(2600, 1120),
 		"wander": [Vector2(1727, 300), Vector2(2690, 790), Vector2(1120, 1740)],
 		"chatter": [
 			"container sani, disco ok",
@@ -107,10 +107,8 @@ const AGENTS := {
 	},
 	"dottore": {
 		"name": "Il Dottore",
-		# Punto libero della lounge: (420,320) era dentro il divano e la
-		# collisione lo espelleva a ogni rientro dalla visita.
-		"spot": Vector2(820, 520),
-		"wander": [Vector2(1790, 1390), Vector2(1965, 1400), Vector2(2690, 1825)],
+		"spot": Vector2(2480, 1280),
+		"wander": [Vector2(1110, 778), Vector2(1790, 1390), Vector2(2690, 1825)],
 		"chatter": [
 			"visita di controllo agli agenti…",
 			"contesto in salute, nessun sintomo di burn",
@@ -122,7 +120,7 @@ const AGENTS := {
 		"spot": Vector2(1490, 320),
 		# watchdog del team: la sua ronda tocca tutti gli angoli della box
 		"wander": [Vector2(2690, 790), Vector2(2690, 1825), Vector2(1120, 1740),
-				Vector2(470, 620), Vector2(1090, 330), Vector2(1965, 1400)],
+				Vector2(775, 820), Vector2(2600, 1120), Vector2(1790, 1390)],
 		"chatter": [
 			"ronda: processi tutti vivi",
 			"bridge attivo, heartbeat regolare",

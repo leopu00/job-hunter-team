@@ -7,6 +7,9 @@ extends CharacterBody2D
 ## Mostra status bubble e si interroga con un click.
 
 const SPEED := 150.0
+const STATUS_BUBBLE_POS := Vector2(0, -96)
+const SPEECH_BUBBLE_POS := Vector2(0, -100)
+const STATE_TAG_POS := Vector2(0, -126)
 
 ## Cadenza MEDIA fra due viaggi, secondi di gioco, per ruolo (jitter ±40%).
 ## Ancorata ai dati veri esposti da TeamData: lo Scout fa ~3 visite/ora
@@ -136,15 +139,15 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	_work_pose()
 
 	bubble = StatusBubble.new()
-	bubble.position = Vector2(0, -96)
+	bubble.position = STATUS_BUBBLE_POS
 	add_child(bubble)
 
 	speech = SpeechBubble.new()
-	speech.position = Vector2(0, -100)
+	speech.position = SPEECH_BUBBLE_POS
 	add_child(speech)
 
 	state_tag = AgentStateTag.new()
-	state_tag.position = Vector2(0, -126)
+	state_tag.position = STATE_TAG_POS
 	add_child(state_tag)
 	state_tag.set_state(backend_status, throttle_secs, activity_detail)
 
@@ -463,6 +466,32 @@ func _seat_offset() -> Vector2:
 		_:
 			return Vector2(0, _seat_sink)
 
+## Il composito occupato è disegnato dal nodo scrivania, non dal rig agente:
+## il centro logico resta sul sedile ma la testa visibile cambia posizione in
+## base alla prospettiva. Questa correzione porta codino e badge sopra la
+## testa per tutte le quattro viste usate dai cinque reparti.
+func _composite_overhead_delta() -> Vector2:
+	if _has_custom_seat_offset:
+		var side := signf(_custom_seat_offset.x)
+		var diagonal := absf(_custom_seat_offset.y) > 20.0
+		return Vector2(-side * (14.0 if diagonal else 20.0),
+				-18.0 if diagonal else -30.0)
+	match _desk_facing:
+		"up":
+			return Vector2(0, -14)
+		"down":
+			return Vector2(0, -10)
+		_:
+			return Vector2.ZERO
+
+func _set_overhead_delta(delta: Vector2) -> void:
+	if bubble:
+		bubble.position = STATUS_BUBBLE_POS + delta
+	if speech:
+		speech.position = SPEECH_BUBBLE_POS + delta
+	if state_tag:
+		state_tag.position = STATE_TAG_POS + delta
+
 ## Lavorando la pila si smaltisce: un foglio ogni ~minuto di lavoro vero.
 func _consume_tick(delta: float) -> void:
 	if pile == null or not _desk_working:
@@ -553,12 +582,6 @@ func _plan_trip() -> void:
 		if is_coffee:
 			cl["fx_coffee"] = true  # il vapore sale finché è in pausa
 		_legs = [cl, _leg_to(_spot, "walk", 0.0, "work")]
-	elif roll < 0.94:
-		# pausa vera in sala relax (rarissima, ma il divano esiste apposta)
-		_legs = [
-			_leg_to(_jit(pois["rec_room"]["spot"]), "walk", randf_range(5.0, 10.0), "idle"),
-			_leg_to(_spot, "walk", 0.0, "work"),
-		]
 	else:
 		# un'occhiata all'ologramma della ricerca
 		_legs = [
@@ -680,6 +703,8 @@ func _set_desk_occupied(on: bool) -> void:
 		desk_node.set_occupied(on and use_composite)
 	if rig:
 		rig.visible = not (on and use_composite)
+	_set_overhead_delta(_composite_overhead_delta() if on and use_composite \
+			else Vector2.ZERO)
 	if _seated():
 		if on:
 			# Sedersi richiede la sovrapposizione col desk; senza maschera zero
