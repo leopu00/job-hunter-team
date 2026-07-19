@@ -53,7 +53,6 @@ export type SwipeCardData = {
   loc_country: string | null;
   remote_type: "full_remote" | "hybrid" | "onsite" | null;
   role_family: string | null;
-  source: string | null;
   found_at: string;
   score: number | null;
   salary_min: number | null;
@@ -829,7 +828,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       <style>{`@keyframes swipe-rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }`}</style>
 
       {/* Header minimo: una riga sola, la card vuole spazio */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-1.5">
         <span
           className="text-[13px] font-bold tracking-wide flex items-center gap-1.5"
           style={{ color: "var(--color-white)" }}
@@ -930,7 +929,9 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           <div
             ref={deckRef}
             className="relative"
-            style={{ height: "min(63dvh, 620px)" }}
+            // Tutta l'altezza che il viewport concede: 100dvh meno navbar,
+            // header pagina, bottoni giudizio e margini (~248px).
+            style={{ height: "min(calc(100dvh - 193px), 800px)" }}
           >
             {/* Card corrente + le 2 successive come stack */}
             {cards
@@ -993,8 +994,13 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                     <div className="p-5 flex flex-col gap-3 flex-1 min-h-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div
-                            className="text-[15px] font-bold leading-snug"
+                          {/* Titolo cliccabile = apre i dettagli (il vecchio
+                              link «Dettagli» del footer non esiste più). */}
+                          <Link
+                            href={`/positions/${card.id}`}
+                            target="_blank"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            className="block text-[15px] font-bold leading-snug no-underline"
                             style={{
                               color: "var(--color-white)",
                               display: "-webkit-box",
@@ -1004,7 +1010,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                             }}
                           >
                             {card.title}
-                          </div>
+                          </Link>
                           <div
                             className="text-[13px] font-semibold mt-0.5 truncate"
                             style={{ color: "var(--color-base)" }}
@@ -1012,14 +1018,45 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                             {card.company}
                           </div>
                         </div>
-                        <div
-                          className="shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center text-[14px] font-black tabular-nums"
-                          style={{
-                            color: scoreColor(card.score),
-                            borderColor: scoreColor(card.score),
-                          }}
-                        >
-                          {card.score ?? "—"}
+                        {/* Colonna destra: score + bottone commento */}
+                        <div className="shrink-0 flex flex-col items-center gap-1.5">
+                          <div
+                            className="w-11 h-11 rounded-full border-2 flex items-center justify-center text-[14px] font-black tabular-nums"
+                            style={{
+                              color: scoreColor(card.score),
+                              borderColor: scoreColor(card.score),
+                            }}
+                          >
+                            {card.score ?? "—"}
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={t.commentTitle}
+                            title={t.commentTitle}
+                            onClick={() => setCommentOpen(true)}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            className="rounded-full border flex items-center justify-center relative"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              color: comment
+                                ? "var(--color-bright)"
+                                : "var(--color-muted)",
+                              borderColor: comment
+                                ? "var(--color-border-glow)"
+                                : "var(--color-border)",
+                              background: "var(--color-row)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <IconChat size={13} />
+                            {comment && (
+                              <span
+                                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+                                style={{ background: "var(--color-green)" }}
+                              />
+                            )}
+                          </button>
                         </div>
                       </div>
 
@@ -1057,56 +1094,6 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                           {stripMd(card.jd_summary)}
                         </div>
                       )}
-
-                      {/* Footer: commento a sinistra, fonte + dettagli
-                          insieme a destra (scelta utente 19/07). */}
-                      <div className="mt-auto flex items-center justify-between text-[11px]">
-                        <button
-                          type="button"
-                          aria-label={t.commentTitle}
-                          title={t.commentTitle}
-                          onClick={() => setCommentOpen(true)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="shrink-0 rounded-full border flex items-center justify-center relative"
-                          style={{
-                            width: 28,
-                            height: 28,
-                            color: comment
-                              ? "var(--color-bright)"
-                              : "var(--color-muted)",
-                            borderColor: comment
-                              ? "var(--color-border-glow)"
-                              : "var(--color-border)",
-                            background: "var(--color-row)",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <IconChat size={13} />
-                          {comment && (
-                            <span
-                              className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-                              style={{ background: "var(--color-green)" }}
-                            />
-                          )}
-                        </button>
-                        <span className="flex items-center gap-2 min-w-0">
-                          <span
-                            className="truncate"
-                            style={{ color: "var(--color-dim)" }}
-                          >
-                            {card.source ?? ""}
-                          </span>
-                          <Link
-                            href={`/positions/${card.id}`}
-                            target="_blank"
-                            className="font-semibold no-underline shrink-0"
-                            style={{ color: "var(--color-blue)" }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            {t.details} ↗
-                          </Link>
-                        </span>
-                      </div>
                     </div>
                   </div>
                 );
