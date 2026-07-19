@@ -407,23 +407,19 @@ export default function PositionsFilterSidebar({
     () => [
       {
         key: "status" as DirectKey,
-        options: STATUS_OPTIONS.map(
-          (o): Option => ({
-            val: o.val,
-            label: tr(o.labelKey),
-            color: o.color,
-          }),
-        ),
+        options: STATUS_OPTIONS.map((o): Option => ({
+          val: o.val,
+          label: tr(o.labelKey),
+          color: o.color,
+        })),
       },
       {
         key: "remote" as DirectKey,
-        options: REMOTE_OPTIONS.map(
-          (o): Option => ({
-            val: o.val,
-            label: tr(o.labelKey),
-            color: o.color,
-          }),
-        ),
+        options: REMOTE_OPTIONS.map((o): Option => ({
+          val: o.val,
+          label: tr(o.labelKey),
+          color: o.color,
+        })),
       },
       {
         key: "source" as DirectKey,
@@ -671,7 +667,7 @@ export default function PositionsFilterSidebar({
   const treeTotal = locationTree.reduce((s, c) => s + c.count, 0);
 
   return (
-    <aside className="shrink-0 flex flex-col gap-4 pr-1" style={{ width: 300 }}>
+    <aside className="shrink-0 flex flex-col gap-4 pr-1 w-full md:w-[300px]">
       {/* Header sidebar — altezza fissa per allinearsi alla toolbar a destra,
           così la prima card e la tabella partono allo stesso livello. */}
       <div className="h-8 flex items-center justify-between">
