@@ -236,6 +236,8 @@ const REPLIES := {
 
 var _chat_agent := ""
 var _chat_msgs: Array = []
+var _terminal_agent := ""
+var _terminal_generation := 0
 
 func open_chat(agent: String) -> void:
 	_chat_agent = agent
@@ -248,6 +250,38 @@ func open_chat(agent: String) -> void:
 
 func close_chat() -> void:
 	_chat_agent = ""
+
+func open_terminal(agent: String) -> void:
+	_terminal_agent = agent
+	_terminal_generation += 1
+	_mock_terminal_loop(agent, _terminal_generation)
+
+func close_terminal() -> void:
+	_terminal_agent = ""
+	_terminal_generation += 1
+
+func _mock_terminal_loop(agent: String, generation: int) -> void:
+	var lines := PackedStringArray([
+		"$ tmux attach -t %s" % agent.to_upper(),
+		"Job Hunter Team · sessione agente attiva",
+		"────────────────────────────────────────────────────────────",
+		"[09:41:02] carico il contesto e controllo la coda assegnata",
+		"[09:41:05] jobs.db: snapshot ricevuto, 12 elementi candidati",
+		"[09:41:07] applico i vincoli del profilo e le regole di pacing",
+	])
+	if OS.get_environment("JHT_AGENT_UI_TEST") == "1":
+		for i in range(1, 141):
+			lines.append("[%03d] riga storica della sessione per test scrollback" % i)
+	var tick := 0
+	while _running and _terminal_agent == agent and generation == _terminal_generation:
+		bus.publish_agent_terminal(agent, "\n".join(lines), "")
+		await _sleep(1.8)
+		tick += 1
+		lines.append("[%s] tick %02d · %s" % [
+				Time.get_time_string_from_system(), tick,
+				["analisi in corso", "verifica completata", "attendo il prossimo evento"][tick % 3]])
+		if lines.size() > 80:
+			lines.remove_at(3)
 
 func send_chat(agent: String, text: String) -> void:
 	_chat_msgs.append({"role": "user", "text": text,
