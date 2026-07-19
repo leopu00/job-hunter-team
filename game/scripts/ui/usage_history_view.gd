@@ -150,10 +150,16 @@ func _render() -> void:
 	match group_key:
 		"velocity":
 			_main_chart.value_suffix = "%/h"
+			# due serie: la reale e l'ideale del pacing — la legenda
+			# cliccabile è l'interruttore per accenderle/spegnerle
 			main_series = [{"key": "velocity",
 					"label": UIStrings.t("usage.series_velocity"),
 					"color": Palette.ORANGE,
-					"points": _pluck(sentinel, "velocity")}]
+					"points": _pluck(sentinel, "velocity")},
+				{"key": "velocity_ideal",
+					"label": UIStrings.t("usage.series_velocity_ideal"),
+					"color": Palette.MINT,
+					"points": _pluck(sentinel, "velocity_ideal")}]
 		"tokens":
 			_main_chart.value_suffix = "kt"
 			main_series = [{"key": "weighted_kt",
@@ -182,14 +188,18 @@ func _render() -> void:
 	_mini_velocity.set_series([{"key": "velocity",
 			"label": UIStrings.t("usage.series_velocity"),
 			"color": Palette.ORANGE,
-			"points": _pluck(sentinel, "velocity")}], w[0], w[1])
+			"points": _pluck(sentinel, "velocity")},
+		{"key": "velocity_ideal",
+			"label": UIStrings.t("usage.series_velocity_ideal"),
+			"color": Palette.MINT,
+			"points": _pluck(sentinel, "velocity_ideal")}], w[0], w[1])
 	_mini_tokens.value_suffix = "kt"
 	_mini_tokens.set_series([{"key": "weighted_kt",
 			"label": UIStrings.t("usage.series_weighted"),
 			"color": Palette.YELLOW,
 			"points": _pluck(meter, "weighted_kt")}], w[0], w[1])
 	_mini_throttle.value_suffix = "s"
-	_mini_throttle.set_series([{"key": "throttle",
+	_mini_throttle.set_series([{"key": "throttle_s",
 			"label": UIStrings.t("usage.series_throttle"),
 			"color": Palette.RED,
-			"points": _pluck(sentinel, "throttle")}], w[0], w[1])
+			"points": _pluck(_data.get("throttle", []), "throttle_s")}], w[0], w[1])

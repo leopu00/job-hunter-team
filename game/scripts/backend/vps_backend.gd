@@ -248,7 +248,7 @@ def iso_to_unix(s):
 def bucket_of(t):
     return int(t // BUCKET) * BUCKET
 
-out = {'ok': True, 'sentinel': [], 'meter': [], 'agents': {}}
+out = {'ok': True, 'sentinel': [], 'meter': [], 'throttle': [], 'agents': {}}
 
 # ── sentinel-data.jsonl: usage%% finestra 5h, weekly, velocity, proj ──
 try:
@@ -262,14 +262,14 @@ try:
         if t < FROM_TS or t > TO_TS:
             continue
         b = acc.setdefault(bucket_of(t), {'n': 0, 'usage': 0.0, 'weekly': 0.0,
-                                          'velocity': 0.0, 'projection': 0.0,
-                                          'throttle': 0.0})
+                                          'velocity': 0.0, 'velocity_ideal': 0.0,
+                                          'projection': 0.0})
         b['n'] += 1
         b['usage'] += float(row.get('usage') or 0)
         b['weekly'] += float(row.get('weekly_usage') or 0)
         b['velocity'] += float(row.get('velocity_smooth') or 0)
+        b['velocity_ideal'] += float(row.get('velocity_ideal') or 0)
         b['projection'] += float(row.get('projection') or 0)
-        b['throttle'] = max(b['throttle'], float(row.get('throttle') or 0))
     for t in sorted(acc):
         b = acc[t]
         n = max(1, b['n'])
@@ -277,10 +277,32 @@ try:
             'usage': round(b['usage'] / n, 2),
             'weekly': round(b['weekly'] / n, 2),
             'velocity': round(b['velocity'] / n, 2),
-            'projection': round(b['projection'] / n, 2),
-            'throttle': b['throttle']})
+            'velocity_ideal': round(b['velocity_ideal'] / n, 2),
+            'projection': round(b['projection'] / n, 2)})
 except Exception as e:
     out['sentinel_error'] = str(e)
+
+# ── throttle-events.jsonl: secondi di pausa pacing per bucket ────────
+try:
+    acc = {}
+    for line in open('/jht_home/logs/throttle-events.jsonl'):
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if str(row.get('event')) != 'start':
+            continue
+        t = float(row.get('ts_unix') or 0)
+        if t < FROM_TS or t > TO_TS:
+            continue
+        b = acc.setdefault(bucket_of(t), {'throttle_s': 0.0, 'pauses': 0})
+        b['throttle_s'] += float(row.get('applied_sec') or 0)
+        b['pauses'] += 1
+    for t in sorted(acc):
+        d = dict(acc[t]); d['t'] = t
+        out['throttle'].append(d)
+except Exception as e:
+    out['throttle_error'] = str(e)
 
 # ── token-meter.csv: livello token pesati (finestra rolling 5h) ──────
 try:
