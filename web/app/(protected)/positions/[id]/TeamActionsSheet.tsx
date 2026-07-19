@@ -5,18 +5,19 @@ import { createPortal } from "react-dom";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 
-// Popup "Richieste al team": raccoglie in un'unica finestra tutte le azioni
-// utente→team della posizione (geocodifica, recheck, CV, esclusione) e i
-// ticket liberi. Su telefono sale dal basso come bottom-sheet, su desktop è
-// un modal centrato. Prima erano 4+ bottoni impilati nell'header.
+// Popup "Feedback e richieste": raccoglie in un'unica finestra il giudizio
+// dell'utente (scala a 4 come /swipe) e tutte le azioni utente→team della
+// posizione (geocodifica, recheck, CV, esclusione, ticket liberi). Su
+// telefono sale dal basso come bottom-sheet, su desktop è un modal centrato.
+// Prima erano 4+ bottoni impilati nell'header.
 const T: Record<Locale, { label: string; close: string }> = {
-  it: { label: "Richieste al team", close: "Chiudi" },
-  en: { label: "Team requests", close: "Close" },
-  es: { label: "Solicitudes al equipo", close: "Cerrar" },
-  fr: { label: "Demandes à l'équipe", close: "Fermer" },
-  de: { label: "Anfragen ans Team", close: "Schließen" },
-  hu: { label: "Kérések a csapathoz", close: "Bezárás" },
-  pt: { label: "Pedidos à equipa", close: "Fechar" },
+  it: { label: "Feedback e richieste", close: "Chiudi" },
+  en: { label: "Feedback & requests", close: "Close" },
+  es: { label: "Feedback y solicitudes", close: "Cerrar" },
+  fr: { label: "Feedback et demandes", close: "Fermer" },
+  de: { label: "Feedback & Anfragen", close: "Schließen" },
+  hu: { label: "Visszajelzés és kérések", close: "Bezárás" },
+  pt: { label: "Feedback e pedidos", close: "Fechar" },
 };
 
 function IconSend({ size = 15 }: { size?: number }) {
@@ -57,10 +58,14 @@ function IconClose({ size = 18 }: { size?: number }) {
 }
 
 export function TeamActionsSheet({
+  feedback,
   actions,
   tickets,
   active = false,
 }: {
+  // Sezione giudizio (FeedbackButtons) in testa al popup — assente in
+  // local mode, dove position_feedback non esiste.
+  feedback?: ReactNode;
   actions: ReactNode;
   tickets?: ReactNode;
   // true quando c'è già qualcosa in corso (flag richiesti o ticket aperti):
@@ -139,6 +144,11 @@ export function TeamActionsSheet({
                   <IconClose />
                 </button>
               </div>
+              {feedback && (
+                <div className="mb-4 pb-4 border-b border-[var(--color-border)]">
+                  {feedback}
+                </div>
+              )}
               {/* items-stretch sui wrapper dei bottoni (nascono items-end per
                 l'header largo): nel popup diventano righe a tutta larghezza. */}
               <div className="flex flex-col gap-2.5 [&>div]:items-stretch">
