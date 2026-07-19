@@ -176,7 +176,7 @@ async function handleUse(id) {
   }
 }
 
-// Spec di upgrade per ciascun provider. Allineato con desktop/provider-install.js
+// Spec di upgrade per ciascun provider. Consumata anche dal setup nativo Godot.
 // (stessa semantica, ma forziamo sempre install anche se già presente). Per
 // ogni provider: lista di step, ogni step diventa `docker compose run --rm
 // --no-deps --entrypoint <entrypoint> jht <args>` — eseguito in un container
@@ -201,7 +201,7 @@ const UPDATE_SPECS = {
 
 function resolveUpdateTarget(id) {
   // Accept user-facing aliases/normalised IDs and map to update spec keys
-  // (claude/codex/kimi). Mirrors normalizeId + desktop/provider-install.js.
+  // (claude/codex/kimi). Mantiene gli stessi id mostrati nel gioco.
   const lower = (id || '').trim().toLowerCase();
   if (lower === 'anthropic' || lower === 'claude') return 'claude';
   if (lower === 'openai' || lower === 'codex') return 'codex';

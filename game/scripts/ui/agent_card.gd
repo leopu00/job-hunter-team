@@ -131,7 +131,7 @@ func _ready() -> void:
 	# chat REALE col team: dal canale 1053f1ce OGNI agente del roster è
 	# raggiungibile — il pulsante c'è sempre. Il vecchio PARLA (dialoghi
 	# finti) è stato TOLTO su ordine di Leone (test finale: "inutile").
-	if BackendBus.can_chat_with(_agent.slug):
+	if BackendBus.can_chat_with(_agent.slug) or ScriptedOnboarding.supports(_agent.slug):
 		var chat := Button.new()
 		chat.text = UIStrings.t("agent.chat")
 		chat.add_theme_font_size_override("font_size", 17)

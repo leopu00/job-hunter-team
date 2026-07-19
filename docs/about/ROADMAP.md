@@ -1,6 +1,6 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-07-07 *(reprioritized on launch feedback — desktop setup first, local models up, two new horizon missions)*
+> Last updated: 2026-07-18 *(native Godot application replaces Electron)*
 >
 > This is the **strategic, forward-looking** view — the themes in motion and where help is welcome. It is **not** a status ledger: shipped work lives in [`CHANGELOG.md`](../../CHANGELOG.md), tactical tasks in [GitHub Issues](https://github.com/leopu00/job-hunter-team/issues) (plus the slim [`BACKLOG.md`](../../BACKLOG.md) index), technical debt in [`docs/internal/roadmap/MINOR-TRACKER.md`](../internal/roadmap/MINOR-TRACKER.md). No percentages here — verbal states only.
 >
@@ -12,7 +12,7 @@
 
 > 🧭 Product vision & design philosophy → [`VISION.md`](VISION.md) — agents-as-characters, the Mentor, the anti-goals. This section covers *deployment & stack* only.
 
-Job Hunter Team runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). The target: non-technical users download the Electron app; technical users clone the repo and use the CLI. *(During beta the supported entry point is the CLI — the desktop app is still in development, see [`desktop/STATUS.md`](../../desktop/STATUS.md).)* Either way, the agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service. **AI on the side of workers, not against them.**
+Job Hunter Team runs **locally** in a Docker container, with multiple interfaces (native office/web/CLI/TUI/Telegram). Non-technical users use the Godot office; technical users can also use the CLI. Either way, the agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service. **AI on the side of workers, not against them.**
 
 ```
                               👤 User
@@ -29,7 +29,7 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
          🖥️ Local PC      🏠 Dedicated PC    ☁️ Self-hosted VPS
 ```
 
-**Two interaction planes** (decision 2026-06-15): the **data plane** is one-way and read-only everywhere — container → Supabase → the public web dashboard (positions, scores, map, case studies; usable from a phone or a work PC). The **interaction plane** — chat, files, start/stop, config — always lives co-located with the team in the **desktop app** (browser to `localhost` for a local team, the same stack over an SSH tunnel for a VPS team). Telegram is the optional async channel. Full rationale: [`docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`](../internal/architecture/2026-06-15-interaction-planes-redesign-design.md).
+**Two interaction planes** (decision 2026-06-15): the **data plane** is one-way and read-only everywhere — container → Supabase → the public web dashboard (positions, scores, map, case studies; usable from a phone or a work PC). The **interaction plane** — chat, files, start/stop, config — lives in the native Godot office, connected directly to a local team or over SSH to a VPS. Telegram is the optional async channel. Full rationale: [`docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`](../internal/architecture/2026-06-15-interaction-planes-redesign-design.md).
 
 **Guiding principles** — the constraints every roadmap item respects:
 
@@ -42,7 +42,7 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 
 | Component | Technology | Rationale |
 |---|---|---|
-| Desktop app | **Electron** | Installer + lifecycle **+ interaction cockpit** (local via browser→localhost, VPS via SSH tunnel); the web dashboard stays view-only |
+| Native desktop app | **Godot 4.7** | Game-like office, onboarding, lifecycle and interaction cockpit; the web dashboard stays view-only |
 | Web dashboard | **Next.js 16 on Vercel** | CI/CD pipeline live |
 | Container runtime | **Docker + Docker Compose** | Isolation, reproducibility |
 | Structured data (cloud, opt-in) | **Supabase** | PostgreSQL + Google/GitHub auth |
@@ -57,8 +57,8 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 | Theme | State | What's open |
 |---|---|---|
 | 🔨 **Web platform** (read-only cloud dashboard) | **Shipped, hardening** | Live on [jobhunterteam.ai](https://jobhunterteam.ai) — 54 pages, 142 API routes on real data, E2E-tested. Open: pacing reset-edge guard, publish the remaining test-campaign cells ([`BETA.md`](../guides/BETA.md)). |
-| 🖥️ **Desktop app** (Electron, all-in-one) | **Works end-to-end, not yet public** | Installers (macOS/Windows/Linux), wizard, OAuth, encrypted cloud sync work — but the app is **not part of the beta**: `/download` is intentionally disabled, the CLI is the supported entry point, and the builds on GitHub Releases are unsupported previews. Open: dashboard parity with web, agent lifecycle UI, observability, auto-update + tray/notifications, cross-platform QA — full state in [`desktop/STATUS.md`](../../desktop/STATUS.md). Code signing deferred by choice (open source + community review as the trust signal). |
-| ☁️ **VPS provisioning** (bring-up via SSH) | **Shipped** | Desktop wizard brings a team up on any VPS (SSH key + IP, provider install, login PTY, Telegram step). Multi-cloud adapters deliberately not pursued — see the scope note below. |
+| 🖥️ **Native office** (Godot, all-in-one) | **Feature-complete migration, beta QA** | Office, onboarding, embedded provider console, local/VPS lifecycle, profile, email, Telegram, cloud sync, job data, map, agents and observability are native. Electron has been removed. Open: cross-platform QA, signing and installer polish. |
+| ☁️ **VPS provisioning** (bring-up via SSH) | **Shipped** | The native office brings a team up on any VPS (SSH key + IP, provider install, embedded login console, Telegram setup). Multi-cloud adapters deliberately not pursued — see the scope note below. |
 | 📡 **Budget monitoring** (Bridge + Sentinel) | **Proven at month scale on Codex** | Weekly-aware pacing closed 4 straight weekly cycles at 99–100% with zero overshoot ([case study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Open: Kimi projection precision (±10–15% → tier stays **beta**, two multi-week teams in observation), €20 entry tiers not viable yet (→ mission M4). |
 | 🌍 **Internationalization** (7 languages) | **Essentially done** | EN base + it/hu/es/de/fr/pt across agent prompts, UI, landing, docs pages. Open: `LOCALES` drift (`shared/i18n/types.ts` omits `hu`; API default `'it'` vs `DEFAULT_LOCALE='en'`), `mantenitore` agent overlays, translator-facing guide, native-speaker review. |
 | 💬 **Async channels** (Telegram · email) | **Telegram shipped & validated** | 3 Telegram bots (Assistant/Captain/Mentor) via wizard, skippable since 2026-06-15 — **field-validated, and the recommended channel for teams on a VPS or dedicated PC**. Email: job-alert sourcing shipped ([`EMAIL-FORWARDING.md`](../guides/EMAIL-FORWARDING.md)); two-way agent email is implemented but still untested. Horizon: per-agent 1:1 chat, directed messages (`@scout find python jobs in EU`), "team forum" view (→ mission M7), **WhatsApp** as an additional channel on the same three-door model. |
@@ -75,8 +75,8 @@ The maintainer's own sequencing (contributor missions below run in parallel and 
 
 | Horizon | Focus |
 |---|---|
-| **Now** *(weeks)* | **Desktop app first — the setup path above all**: test the team-setup flow end-to-end from the Electron app (install → wizard → provider login → team up) and make it hold on **all three OSes** (macOS/Windows/Linux QA). This is the gateway for non-technical users and the single loudest ask from launch feedback (every top comment + 83 visits to `/download` in launch week). Ranked list in [`desktop/STATUS.md`](../../desktop/STATUS.md) · the two open pacing guards (reset-edge false-freeze, daily-halt standby leak) · observe the two multi-week Kimi beta teams. |
-| **Next** *(1–2 months)* | **Desktop app to public beta** — dashboard parity, agent lifecycle UI, observability, auto-update + tray/notifications, recovery passphrase · **local models (M5) groundwork** — the #2 launch ask, with testers already volunteering hardware: start with a single role swap (Scorer) and measure against the case-study baselines · **Kimi €40 out of beta** if the month-scale observation holds · demo GIFs + remaining case studies · translator guide + native-speaker review pass · public project board fed by triaged issues. |
+| **Now** *(weeks)* | **Native onboarding QA above all**: test install → office → container → provider login → profile → team up on macOS/Windows/Linux; harden recovery paths and observe the two multi-week Kimi beta teams. |
+| **Next** *(1–2 months)* | **Native app public beta polish** — signing, installer/upgrade UX and notifications · **local models (M5) groundwork** — start with a single role swap (Scorer) and measure against the case-study baselines · **Kimi €40 out of beta** if month-scale observation holds. |
 | **Later** *(a quarter and beyond)* | The large missions as they attract contributors — mobile surface (M2 — the read-only web dashboard already covers the phone well, so full mobile *control* is deliberately not urgent; early community interest in a companion PWA exists) · pay-per-use €-budget (M8) · Mentor as a first-class surface (M6) · **interview practice agent (M9)** and an **opt-in auto-submit lane (M10)** — both born from launch feedback · fine-grained team observability with a who-did-what-when timeline (M7, enabled by the [DB schema evolution](../internal/roadmap/db-schema-optimization.md)). |
 
 ---
@@ -104,7 +104,7 @@ New here? These are the **missions** we'd love a hand with — bigger directions
 | **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — the blocker is projection precision and coordinator overhead, not raw budget; every new provider also stress-tests the pacing abstraction. | Integrations | 🟡 medium |
 | **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — start by swapping a single role (the Scorer is the most self-contained) and measure quality against the case-study baselines. | LLM / infra | 🔴 large |
 
-> 🖥️ **Desktop app** — the highest-impact contribution area right now, and the key to opening JHT to a non-technical audience: dashboard parity with web, agent lifecycle UI, observability panel, the three-door chat model, macOS/Linux QA. The ranked list with architecture orientation lives in [`desktop/STATUS.md`](../../desktop/STATUS.md).
+> 🖥️ **Native app** — the highest-impact contribution area right now: onboarding recovery, accessibility, packaging/signing and macOS/Windows/Linux QA live in [`game/`](../../game/).
 
 **On the horizon** — bigger directions we've scoped but not opened yet:
 

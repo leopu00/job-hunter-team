@@ -38,7 +38,7 @@ fi
 # ── Flag parser ──────────────────────────────────────────────────────────
 # --host-type=vps|local salta sia la lingua picker sia la detection prompt.
 # Usato da install.sh quando viene invocato con --pairing-token: il flusso
-# desktop VPS sa già che si tratta di una VPS, non c'è utente al terminale.
+# il setup VPS sa già che si tratta di una VPS, non c'è utente al terminale.
 FORCED_HOST_TYPE=""
 NON_INTERACTIVE=0
 while [ $# -gt 0 ]; do
@@ -58,7 +58,7 @@ esac
 
 # ── Language picker (first prompt) ───────────────────────────────────────
 # Default English (allineato con la regola lang_picker_default_english
-# del desktop): la grande maggioranza degli utenti non e' italiana, ed
+# dell'app nativa): la grande maggioranza degli utenti non e' italiana, ed
 # e' la lingua naturale di un setup terminale.
 # Persistiamo in ~/.jht/host.env come JHT_LANG=en|it cosi' il wizard Node
 # e i prossimi run di host-setup hanno il valore pronto. Il pre-fill
@@ -67,7 +67,7 @@ JHT_HOME_HOST="${JHT_HOME_HOST:-$HOME/.jht}"
 HOST_ENV_PATH="$JHT_HOME_HOST/host.env"
 JHT_LANG_DEFAULT=en
 # Priorità lookup: env JHT_LANG > host.env > default 'en'. L'env vince
-# perché il desktop wizard la passa esplicitamente quando rilancia
+# perché il setup in-game la passa esplicitamente quando rilancia
 # host-setup non-interactive (la scelta lingua viene fatta nel desktop).
 if [ -n "${JHT_LANG:-}" ]; then
   JHT_LANG_DEFAULT="$JHT_LANG"
@@ -182,7 +182,7 @@ printf "%s %b\n" "$(ts host_setup.detected 'Rilevato:')" "$DETECTED_LABEL"
 # Niente finta-checkbox `[V]`/`[ ]`: era ambigua (sembrava interattiva).
 # Il default va tra parentesi quadre nel prompt, premere Invio lo accetta.
 HOST_TYPE="$DETECTED"
-# Override esplicito via --host-type: il flusso desktop VPS lo passa per
+# Override esplicito via --host-type: il flusso VPS in-game lo passa per
 # evitare la prompt (non c'è utente al terminale durante install.sh remoto).
 if [ -n "$FORCED_HOST_TYPE" ]; then
   HOST_TYPE="$FORCED_HOST_TYPE"

@@ -1278,7 +1278,7 @@ async function handlePush(options) {
 
 /**
  * Decodifica un pairing-token base64 generato da
- * desktop/auth/index.js#getPairingToken. Formato:
+ * dal precedente launcher e ora dal pairing device-code in-game. Formato:
  *
  *   base64(JSON({ supabase_url, user_id, refresh_token, issued_at }))
  *
@@ -2660,7 +2660,7 @@ export function registerCloudCommand(program) {
     .action(handleLogin);
 
   // `pair` — non-interattivo: legge .pairing-token (salvato da install.sh
-  // dopo `desktop/vps/index.js#runInstall`) e si registra sul cloud come
+  // dopo il provisioning VPS) e si registra sul cloud come
   // device dell'utente. Pid1 lo invoca al primo boot del container su VPS.
   cloud
     .command('pair')
