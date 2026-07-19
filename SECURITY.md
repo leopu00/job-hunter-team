@@ -1,6 +1,6 @@
 # Security Policy
 
-JHT (Job Hunter Team) is a **local-first, single-user system** (CLI today; a desktop app is in development). It runs on your own machine, orchestrates AI agents in a Docker container, and reads/writes only files you control. The full threat model lives in [`docs/security/04-threat-model.md`](docs/security/04-threat-model.md) — this file is the short, public-facing version.
+JHT (Job Hunter Team) is a **local-first, single-user system** with a native Godot desktop app and a CLI. It runs on your own machine, orchestrates AI agents in a Docker container, and reads/writes only files you control. The full threat model lives in [`docs/security/04-threat-model.md`](docs/security/04-threat-model.md) — this file is the short, public-facing version.
 
 ## Reporting a vulnerability
 

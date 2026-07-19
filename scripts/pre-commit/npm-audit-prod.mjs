@@ -11,7 +11,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(new URL('../..', import.meta.url).pathname);
-const WORKSPACES = ['cli', 'desktop', 'tui', 'web'];
+const WORKSPACES = ['cli', 'tui', 'web'];
 const SKIP_DIRS = new Set();
 
 let failed = false;

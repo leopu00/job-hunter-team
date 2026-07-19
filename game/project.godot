@@ -7,7 +7,7 @@ config_version=5
 [application]
 
 config/name="Job Hunter Team"
-config/description="Prototipo gamificato di Job Hunter Team: cammina nella box di vetro dove i tuoi agenti AI cercano lavoro per te."
+config/description="Applicazione desktop nativa di Job Hunter Team: configura e osserva i tuoi agenti AI nel loro ufficio."
 config/version="0.2.0"
 run/main_scene="res://scenes/title.tscn"
 run/max_fps=60
@@ -22,6 +22,8 @@ Log="*res://scripts/log.gd"
 Game="*res://scripts/game.gd"
 TeamData="*res://scripts/data/team_data.gd"
 BackendBus="*res://scripts/backend/backend_bus.gd"
+SetupService="*res://scripts/setup/setup_service.gd"
+ScriptedOnboarding="*res://scripts/setup/scripted_onboarding.gd"
 Sfx="*res://scripts/sfx.gd"
 
 [display]

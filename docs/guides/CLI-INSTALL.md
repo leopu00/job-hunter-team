@@ -8,7 +8,7 @@ for **Path 3 (One-liner installer)** in the [Quickstart](QUICKSTART.md):
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
-The GUI / desktop app path is in development and not part of the beta — see [`desktop/STATUS.md`](../../desktop/STATUS.md).
+The visual path is the native Godot office in [`game/`](../../game/). This document remains the reference for CLI installation and recovery.
 For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps1`](#-legacy-onboarding-setupsh--setupps1).
 
 ---
@@ -24,7 +24,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | Default mode | Docker (macOS: Colima by default or your Docker Desktop via `--runtime`; native Docker on Linux/WSL2) |
 | Expert mode | `--no-docker` (clone + build from source) |
 | OS support | macOS · Linux (apt/dnf/pacman) · WSL2 |
-| Windows native | Not supported by this script — Windows users go via desktop launcher |
+| Windows native | Use [`install.ps1`](../../scripts/install.ps1) or the native Godot app |
 
 ---
 

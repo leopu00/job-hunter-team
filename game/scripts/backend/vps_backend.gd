@@ -228,7 +228,7 @@ print(json.dumps({'agent_ram':agent_ram,'token_series':series,
 ## Config team + usage REALI, già in forma di coppie [etichetta, valore]
 ## per le sezioni della sidebar. SOLO campi safe: mai chiavi/credenziali.
 const SETTINGS_PY := """
-import json
+import json, os
 out = {}
 try:
     c = json.load(open('/jht_home/jht.config.json'))
@@ -236,6 +236,19 @@ except Exception:
     c = {}
 ap = str(c.get('active_provider', ''))
 p = (c.get('providers') or {}).get(ap, {}) or {}
+auth_paths = {
+    'claude': ['/jht_home/.claude/.credentials.json'],
+    'anthropic': ['/jht_home/.claude/.credentials.json'],
+    'openai': ['/jht_home/.codex/auth.json', '/jht_home/.codex/credentials.json'],
+    'codex': ['/jht_home/.codex/auth.json', '/jht_home/.codex/credentials.json'],
+    'kimi': ['/jht_home/.kimi/credentials/kimi-code.json',
+             '/jht_home/.config/kimi-cli/credentials.json'],
+    'moonshot': ['/jht_home/.kimi/credentials/kimi-code.json',
+                 '/jht_home/.config/kimi-cli/credentials.json'],
+}
+out['active_provider'] = ap
+out['provider_auth_ready'] = any(os.path.isfile(x) and os.path.getsize(x) > 0
+                                 for x in auth_paths.get(ap.lower(), []))
 sub = p.get('subscription')
 if isinstance(sub, dict):
     sub = sub.get('email') or ', '.join(str(v) for v in sub.values())
@@ -256,6 +269,33 @@ out['email'] = [
     ['Notifiche', 'attive' if n.get('enabled') else 'spente'],
     ['Canali', ', '.join(map(str, n.get('channels') or [])) or '—'],
 ]
+try:
+    ec = json.load(open('/jht_home/credentials/email_monitor.json'))
+except Exception:
+    ec = {}
+out['email_account'] = {
+    'configured': bool(ec.get('user')),
+    'email': str(ec.get('user') or ''),
+    'host': str(ec.get('imap_host') or ''),
+}
+try:
+    cc = json.load(open('/jht_home/cloud.json'))
+except Exception:
+    cc = {}
+out['cloud_account'] = {
+    'configured': bool(cc.get('enabled') and cc.get('token')),
+    'base_url': str(cc.get('base_url') or ''),
+    'user_id': str(cc.get('user_id') or ''),
+    'token_name': str(cc.get('token_name') or ''),
+}
+tg = (((c.get('channels') or {}).get('telegram') or {}).get('bots') or {})
+out['telegram_bots'] = {
+    role: {
+        'configured': bool((tg.get(role) or {}).get('bot_token')),
+        'chat_ready': bool((tg.get(role) or {}).get('chat_id')),
+    }
+    for role in ('assistente', 'capitano', 'mentor')
+}
 a = c.get('analytics') or {}
 out['advanced'] = [
     ['Config version', str(c.get('version', '—'))],
@@ -287,11 +327,12 @@ try:
     if rows:
         out['profile'] = rows
     raw = {}
-    for key in ['name', 'target_role', 'location', 'experience_years',
+    for key in ['name', 'email', 'target_role', 'location', 'experience_years',
                 'seniority_target', 'industry', 'nationality']:
         if prof.get(key) is not None:
             raw[key] = str(prof[key])
     raw['skills_primary'] = ', '.join(map(str, skills))
+    raw['languages'] = ', '.join(map(str, prof.get('languages') or []))
     if isinstance(sal, dict):
         raw['salary_min'] = str(sal.get('min') or sal.get('lo') or '')
         raw['salary_max'] = str(sal.get('max') or sal.get('hi') or '')
@@ -704,8 +745,10 @@ try:
     shutil.copy2(path, path + '.bak-' + time.strftime('%%Y%%m%%dT%%H%%M%%S'))
 except Exception:
     pass
-for key in ['name', 'target_role', 'location', 'experience_years',
-            'seniority_target', 'industry', 'nationality']:
+for key in ['name', 'email', 'target_role', 'location', 'experience_years',
+            'seniority_target', 'industry', 'nationality', 'work_mode',
+            'runtime_location', 'career_priority', 'search_style',
+            'mentor_cadence']:
     if key in data and str(data[key]).strip() != '':
         v = str(data[key]).strip()
         # i numerici restano numeri nel yml (experience_years: 1, non '1')
@@ -720,6 +763,8 @@ for key in ['name', 'target_role', 'location', 'experience_years',
 if 'skills_primary' in data:
     skills = [s.strip() for s in str(data['skills_primary']).split(',') if s.strip()]
     prof.setdefault('skills', {})['primary'] = skills
+if 'languages' in data:
+    prof['languages'] = [s.strip() for s in str(data['languages']).split(',') if s.strip()]
 if data.get('salary_min') or data.get('salary_max'):
     sal_key = 'salary_target' if 'salary_target' in prof or 'salary' not in prof else 'salary'
     sal = prof.get(sal_key) if isinstance(prof.get(sal_key), dict) else {}

@@ -1,48 +1,29 @@
-# ROADMAP — oltre il vertical slice
+# Native application roadmap
 
-Cose deliberatamente FUORI dal prototipo, in ordine di valore stimato.
-Le fonti tra parentesi rimandano a `RESEARCH-DOSSIER.md` (§) e
-`ANALISI-GIOCHI.md`.
+The Electron-to-Godot migration, live data views, embedded console and
+choice-driven first-run are baseline features, not future work.
 
-## Prossimi passi naturali
+## Current hardening priorities
 
-1. **Dati reali** — `SupabaseDataSource` al posto del mock: il contratto è
-   già pronto (`DATA-ADAPTER.md`). Con i dati veri il registro, l'HUD, le
-   bubble e le visite diventano lo stato reale del team dell'utente.
-2. **Chat LLM negli agenti** (§7.4): il formato dialogo porta già i tag
-   emozione inline — un LLM può emettere battute + tag e il ritratto
-   reagisce. Input libero come oggetto diegetico (terminale), chip di
-   risposte suggerite, attenzione alla prompt injection (gli agenti
-   maneggiano dati reali).
-3. **Asset pittorici restanti** (pipeline dev1-art in `assets/gen-art/`;
-   FATTI: 11 mobili + ritratti full per TUTTI e 6 gli agenti del slice):
-   muri/quinte della box, personaggi in-world ridipinti, ologramma e
-   props secondari, pose alternative per i ritratti.
-4. **Visite più profonde** (Yes, Your Grace): decisioni che spendono
-   risorse (budget API, crediti CV), coda multi-agente visibile, eventi
-   dalla giornata reale del team (weekly, hard-stop, throttle).
-5. **Corkboard progressi** sul muro (§6): la mappa-città/bacheca delle
-   candidature come oggetto fisico in ufficio, non solo pannello TAB.
+1. Cross-platform first-install E2E on clean macOS, Windows and Linux machines.
+2. Accessibility: keyboard traversal, screen-reader labels and scalable text.
+3. Signing, notarization and upgrade/recovery polish for release artifacts.
+4. More localized authored onboarding copy beyond the Italian/English source
+   set (other locales currently use the Italian fallback for new dialogue).
+5. Stronger failure injection for offline Docker, interrupted SSH, expired
+   provider sessions and Telegram/email network failures.
 
-## Più avanti
+## Product expansion
 
-- Espansione ufficio: altre stanze/piani (archivio del Critico, stanza
-  del Tesoriere), sempre al chiuso dentro la box.
-- ~~Salvataggio profilo/avatar (oggi il wizard è in-memoria)~~ → FATTO 18/07:
-  il wizard è l'onboarding REALE (assistente via BackendBus, profilo nel
-  candidate_profile.yml del backend); resta eventuale avatar/nome team locale.
-- i18n: stringhe già centralizzate in `ui_strings.gd` + `dialogues.gd`
-  (il sito supporta 7 lingue).
-- Audio: musica ambient generativa, foley passi, brusio ufficio.
-- Zoom-band alla Two Point (lontano = piano leggibile, vicino = emote);
-  camera follow su click agente (§9.8).
-- Integrazione opzionale nell'app desktop Electron esistente (finestra
-  dedicata o modalità "gioco" della dashboard). Gli export standalone
-  Windows/macOS/Linux sono ora parte della baseline e della CI.
+- Rich Mentor review surfaces tied to real weekly outcomes.
+- Interview-practice missions linked to a selected position.
+- User feedback cards that teach ranking preferences.
+- Additional office rooms only when they expose useful workflow, never as
+  decoration disconnected from real data.
 
-## Esplicitamente esclusi (decisioni)
+## Explicit non-goals
 
-- 3D / 3D cartone e pixel art (ANALISI-GIOCHI, vietati).
-- Multiplayer / uffici virtuali puri (§1.2: i "virtual office" puri sono
-  morti; la differenza nostra è l'utility gamificata).
-- Azione/combattimento: il gameplay è parlare.
+- Reintroducing Electron or external terminal windows.
+- Multiplayer or a purely decorative virtual office.
+- Automatic mass application by default.
+- Hiding technical failures behind fictional game state.

@@ -80,7 +80,7 @@ Each agent is an autonomous AI session on one of the supported CLIs (Claude Code
 
 ## Install
 
-> 🧪 **Beta — CLI-first.** The supported path is the CLI below (or the [AI-agent path](#ai-agents-can-drive-jht)). The desktop app is not part of the beta yet ([`desktop/STATUS.md`](desktop/STATUS.md)). Hit a snag? [`docs/guides/BETA.md`](docs/guides/BETA.md).
+> 🧪 **Beta.** The native desktop application is now the Godot office in [`game/`](game/); the CLI remains available for automation and remote administration. Hit a snag? [`docs/guides/BETA.md`](docs/guides/BETA.md).
 
 **What it costs** — the team burns ~400M tokens/month, so it needs a flat-rate subscription **dedicated to the team** (a shared account hits rate limits): the same usage on pay-per-use APIs would be $1,000–2,500/mo. Reasoning: [ADR-0004](docs/adr/0004-subscription-only-no-api-keys.md) · details: [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
@@ -107,7 +107,7 @@ Full walkthrough, expert mode and contributor setup: [`docs/guides/QUICKSTART.md
 
 ## Interfaces
 
-**CLI** (`jht team start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Web dashboard** (Next.js) · **Telegram** (3 bots — the recommended channel for VPS teams) · **Desktop app** (Electron, in development)
+**Native desktop app** (the Godot office in [`game/`](game/)) · **CLI** (`jht team start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard** (Next.js) · **Telegram**
 
 ## AI agents can drive JHT
 
@@ -115,11 +115,11 @@ The `jht` CLI is designed to be driven by AI assistants, not just humans. Alread
 
 ## Stack & status
 
-**Stack** — Node.js/TypeScript + Python (agents, monitoring, skills) · Next.js 16 + Supabase (dashboard) · Electron (desktop) · Docker · SQLite · GitHub Actions + Vercel.
+**Stack** — Godot 4.7 (native desktop app and office) · Node.js/TypeScript + Python (agents, monitoring, skills) · Next.js 16 + Supabase (cloud dashboard) · Docker · SQLite · GitHub Actions + Vercel.
 
-**Status** — team + CLI + web dashboard shipped and tested end-to-end on all three providers, full UI i18n in 7 languages; 240 test files — 200 active (869 vitest + 425 pytest, green in CI) + 40 legacy parked in [`tests/js/tasks/_disabled/`](tests/js/tasks/_disabled/) (tracked debt, issue #102). In progress: desktop app toward public beta, Kimi tier hardening. Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
+**Status** — team, CLI, web dashboard and native Godot application are tested across all three providers; onboarding, operations and settings now live in the office. Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
-Monorepo: [`cli/`](cli/) · [`web/`](web/) · [`desktop/`](desktop/) · [`tui/`](tui/) · [`shared/`](shared/) · [`agents/`](agents/) · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — each has its own README; index in [`docs/README.md`](docs/README.md).
+Monorepo: [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`tui/`](tui/) · [`shared/`](shared/) · [`agents/`](agents/) · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
 
 ## Contributing
 
