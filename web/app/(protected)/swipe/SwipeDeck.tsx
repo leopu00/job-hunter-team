@@ -61,7 +61,7 @@ export type SwipeCardData = {
   jd_summary: string | null;
 };
 
-type Verdict = "no" | "review_low" | "review_ok" | "top";
+export type Verdict = "no" | "review_low" | "review_ok" | "top";
 
 // Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
 // l'esclusione. Score 3 lasciato libero come neutro non usato. fly: solo
@@ -145,6 +145,9 @@ const T: Record<
     voiceListening: string;
     voiceError: string;
     voiceDenied: string;
+    modePending: string;
+    modeReviewed: string;
+    reviewedEmpty: string;
     emptyTitle: string;
     emptySubtitle: string;
     allPositions: string;
@@ -176,6 +179,9 @@ const T: Record<
     voiceError: "Dettatura non disponibile su questo dispositivo",
     voiceDenied:
       "Permesso per il microfono negato — controlla le impostazioni del browser",
+    modePending: "Da giudicare",
+    modeReviewed: "Recensite",
+    reviewedEmpty: "Ancora nessuna posizione recensita.",
     emptyTitle: "Mazzo finito!",
     emptySubtitle: "Hai fatto il triage di tutte le posizioni in coda.",
     allPositions: "Tutte le posizioni",
@@ -205,6 +211,9 @@ const T: Record<
     voiceListening: "Listening…",
     voiceError: "Dictation not available on this device",
     voiceDenied: "Microphone permission denied — check your browser settings",
+    modePending: "Pending",
+    modeReviewed: "Reviewed",
+    reviewedEmpty: "No reviewed positions yet.",
     emptyTitle: "Deck finished!",
     emptySubtitle: "You triaged every queued position.",
     allPositions: "All positions",
@@ -235,6 +244,9 @@ const T: Record<
     voiceError: "A diktálás nem érhető el ezen az eszközön",
     voiceDenied:
       "Mikrofonengedély megtagadva — ellenőrizd a böngésző beállításait",
+    modePending: "Elbírálandó",
+    modeReviewed: "Elbírált",
+    reviewedEmpty: "Még nincs elbírált pozíció.",
     emptyTitle: "A pakli elfogyott!",
     emptySubtitle: "Minden sorban álló állást átnéztél.",
     allPositions: "Összes állás",
@@ -265,6 +277,9 @@ const T: Record<
     voiceError: "Dictado no disponible en este dispositivo",
     voiceDenied:
       "Permiso de micrófono denegado — revisa la configuración del navegador",
+    modePending: "Pendientes",
+    modeReviewed: "Revisadas",
+    reviewedEmpty: "Aún no hay posiciones revisadas.",
     emptyTitle: "¡Mazo terminado!",
     emptySubtitle: "Has revisado todas las posiciones en cola.",
     allPositions: "Todas las posiciones",
@@ -294,6 +309,9 @@ const T: Record<
     voiceListening: "Ich höre zu…",
     voiceError: "Diktat auf diesem Gerät nicht verfügbar",
     voiceDenied: "Mikrofonzugriff verweigert — prüfe die Browser-Einstellungen",
+    modePending: "Offen",
+    modeReviewed: "Bewertet",
+    reviewedEmpty: "Noch keine bewerteten Stellen.",
     emptyTitle: "Stapel geschafft!",
     emptySubtitle: "Du hast alle anstehenden Stellen durchgesehen.",
     allPositions: "Alle Stellen",
@@ -324,6 +342,9 @@ const T: Record<
     voiceError: "Dictée non disponible sur cet appareil",
     voiceDenied:
       "Autorisation du micro refusée — vérifiez les réglages du navigateur",
+    modePending: "À juger",
+    modeReviewed: "Évaluées",
+    reviewedEmpty: "Aucun poste évalué pour l\u2019instant.",
     emptyTitle: "Paquet terminé !",
     emptySubtitle: "Vous avez trié tous les postes en attente.",
     allPositions: "Tous les postes",
@@ -358,6 +379,9 @@ const T: Record<
     voiceError: "Ditado não disponível neste dispositivo",
     voiceDenied:
       "Permissão do microfone negada — verifique as configurações do navegador",
+    modePending: "Pendentes",
+    modeReviewed: "Avaliadas",
+    reviewedEmpty: "Ainda não há vagas avaliadas.",
     emptyTitle: "Baralho concluído!",
     emptySubtitle: "Você triou todas as vagas na fila.",
     allPositions: "Todas as vagas",
@@ -505,14 +529,28 @@ const FLY_MS = 280;
 // Trascinamento orizzontale oltre questa soglia = cambio card.
 const NAV_THRESHOLD = 90;
 
-export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
+export default function SwipeDeck({
+  pending,
+  reviewed,
+  initialVerdicts,
+}: {
+  pending: SwipeCardData[];
+  reviewed: SwipeCardData[];
+  initialVerdicts: Record<string, Verdict>;
+}) {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
 
-  // Sequenza fissa + indice: le card giudicate restano al loro posto (col
-  // timbro) e ci si può tornare sopra per cambiare idea.
-  const [idx, setIdx] = useState(0);
-  const [given, setGiven] = useState<Record<string, Verdict>>({});
+  // Due mazzi (scelta utente 19/07): 'pending' = da giudicare (le già
+  // recensite NON ricompaiono in sessione nuova), 'reviewed' = già
+  // recensite col loro timbro, ri-giudicabili. Indice separato per mazzo.
+  const [mode, setMode] = useState<"pending" | "reviewed">("pending");
+  const [idxP, setIdxP] = useState(0);
+  const [idxR, setIdxR] = useState(0);
+  const cards = mode === "pending" ? pending : reviewed;
+  const idx = mode === "pending" ? idxP : idxR;
+  // Timbri: i giudizi storici (dal DB) + quelli dati in sessione.
+  const [given, setGiven] = useState<Record<string, Verdict>>(initialVerdicts);
   const [chipAreaW, setChipAreaW] = useState(320);
   const [fly, setFly] = useState<{ x: number; rot: number } | null>(null);
   const [drag, setDrag] = useState(0);
@@ -535,6 +573,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   const dragXRef = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recRef = useRef<{ stop: () => void } | null>(null);
+
+  const setIdxCur = useCallback(
+    (f: (i: number) => number) =>
+      mode === "pending" ? setIdxP(f) : setIdxR(f),
+    [mode],
+  );
 
   const total = cards.length;
   const finished = idx >= total;
@@ -688,7 +732,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       setFly({ x: dir * (width + 200), rot: dir * 22 });
       setTimeout(() => {
         setGiven((g) => ({ ...g, [card.id]: verdict }));
-        setIdx((i) => i + 1);
+        setIdxCur((i) => i + 1);
         setFly(null);
         setDrag(0);
         setComment("");
@@ -699,7 +743,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       // commento nuovo); la riconciliazione esclusione è un no-op.
       void persist(card, verdict, prev, note);
     },
-    [cards, idx, given, finished, comment, persist, stopVoice],
+    [cards, idx, given, finished, comment, persist, stopVoice, setIdxCur],
   );
 
   // Navigazione: nessuna scrittura, si sfoglia e basta. delta = +1
@@ -714,7 +758,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       const width = typeof window !== "undefined" ? window.innerWidth : 800;
       setFly({ x: -delta * (width + 100), rot: -delta * 8 });
       setTimeout(() => {
-        setIdx((i) => i + delta);
+        setIdxCur((i) => i + delta);
         setFly(null);
         setDrag(0);
         setComment("");
@@ -722,7 +766,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         flyingRef.current = false;
       }, FLY_MS);
     },
-    [finished, idx, stopVoice],
+    [finished, idx, stopVoice, setIdxCur],
   );
 
   navRef.current = nav;
@@ -861,14 +905,46 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           </span>
           {t.title}
         </span>
-        {total > 0 && (
+        <span className="flex items-center gap-2">
+          {/* Switch mazzo: da giudicare ↔ già recensite */}
           <span
-            className="text-[11px] font-semibold tabular-nums"
-            style={{ color: "var(--color-muted)" }}
+            className="flex items-center rounded-full border p-0.5"
+            style={{ borderColor: "var(--color-border)" }}
           >
-            {Math.min(idx + 1, total)}/{total}
+            {(["pending", "reviewed"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => {
+                  if (m === mode || flyingRef.current) return;
+                  stopVoice();
+                  setDrag(0);
+                  setComment("");
+                  setCommentOpen(false);
+                  setMode(m);
+                }}
+                className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                style={{
+                  background: mode === m ? "var(--color-row)" : "transparent",
+                  color:
+                    mode === m ? "var(--color-bright)" : "var(--color-dim)",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {m === "pending" ? t.modePending : t.modeReviewed}
+              </button>
+            ))}
           </span>
-        )}
+          {total > 0 && (
+            <span
+              className="text-[11px] font-semibold tabular-nums"
+              style={{ color: "var(--color-muted)" }}
+            >
+              {Math.min(idx + 1, total)}/{total}
+            </span>
+          )}
+        </span>
       </div>
 
       {/* Fine sequenza (o mazzo vuoto) */}
@@ -896,7 +972,9 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
             className="text-[12px] mb-1"
             style={{ color: "var(--color-muted)" }}
           >
-            {t.emptySubtitle}
+            {mode === "reviewed" && total === 0
+              ? t.reviewedEmpty
+              : t.emptySubtitle}
           </p>
           {Object.keys(given).length > 0 && (
             <p
