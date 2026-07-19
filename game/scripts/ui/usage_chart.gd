@@ -16,6 +16,11 @@ var mode: int = Mode.LINE
 ## Formattatore del valore sull'asse Y e nell'hover (es. "%.0f kt").
 var value_suffix := ""
 var y_max_forced := 0.0   # 0 = autoscala sul massimo visibile
+## Multi-asse: ogni serie è normalizzata sul PROPRIO massimo (unità
+## diverse sullo stesso tempo — il grafico per-agente di Leone). L'asse
+## Y numerico sparisce: i valori veri vivono nell'hover e nella legenda
+## (max per serie); ogni serie può portare il suo "suffix".
+var multi_axis := false
 
 var _series: Array = []
 var _from_ts := 0.0
@@ -51,6 +56,11 @@ func set_series(series: Array, from_ts: float, to_ts: float) -> void:
 	_from_ts = from_ts
 	_to_ts = maxf(to_ts, from_ts + 1.0)
 	queue_redraw()
+
+## Accende/spegne una serie da fuori (gli interruttori TUTTE/NESSUNA
+## della scheda agente); la legenda resta l'interruttore per-serie.
+func set_muted(key: String, muted: bool) -> void:
+	_muted[key] = muted
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -109,6 +119,20 @@ func _peak_value() -> float:
 				peak = maxf(peak, float(p[1]))
 	return peak
 
+## Massimo della SINGOLA serie nella finestra (scala multi-asse).
+func _series_peak(s: Dictionary) -> float:
+	var peak := 0.000001
+	for p in _window_points(s, _from_ts, _to_ts):
+		peak = maxf(peak, float(p[1]))
+	return peak
+
+## Scala per una serie: propria in multi-asse, comune altrimenti.
+func _scale_for(s: Dictionary, common_peak: float) -> float:
+	return _series_peak(s) if multi_axis else common_peak
+
+func _series_suffix(s: Dictionary) -> String:
+	return str(s.get("suffix", value_suffix))
+
 ## ── Resa ──────────────────────────────────────────────────────────────
 
 func _draw() -> void:
@@ -145,7 +169,9 @@ func _draw_y_axis(plot: Rect2, peak: float) -> void:
 		var y := plot.end.y - plot.size.y * frac
 		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y),
 				Color(0.35, 0.37, 0.46, 0.30 if i == 0 else 0.16), 1.0)
-		if _font:
+		# in multi-asse l'etichetta numerica unica mentirebbe (ogni serie
+		# ha la sua scala): i valori veri stanno su hover e legenda
+		if _font and not multi_axis:
 			var txt := _fmt_value(peak * frac)
 			var w := _font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
 			draw_string(_font, Vector2(plot.position.x - w - 8, y + 4), txt,
@@ -178,11 +204,12 @@ func _draw_lines(plot: Rect2, peak: float, visible: Array) -> void:
 		var pts := _window_points(s, _from_ts, _to_ts)
 		if pts.is_empty():
 			continue
+		var scale := _scale_for(s, peak)
 		var color := _series_color(s)
 		var poly := PackedVector2Array()
 		for p in pts:
 			poly.append(Vector2(_x_for(float(p[0]), plot),
-					plot.end.y - plot.size.y * clampf(float(p[1]) / peak, 0.0, 1.0)))
+					plot.end.y - plot.size.y * clampf(float(p[1]) / scale, 0.0, 1.0)))
 		if poly.size() >= 2:
 			draw_polyline(poly, color, 2.0, true)
 		else:
@@ -293,11 +320,14 @@ func _draw_hover(plot: Rect2, peak: float, visible: Array) -> void:
 				var v := float(p[1])
 				total += v
 				lines.append("%s  %s" % [str(s.get("label", s.get("key", "?"))),
-						_fmt_value(v)])
+						_fmt_value(v, _series_suffix(s))])
 				draw_circle(Vector2(x, plot.end.y - plot.size.y * \
-						clampf(v / peak, 0.0, 1.0)), 3.4, _series_color(s))
+						clampf(v / _scale_for(s, peak), 0.0, 1.0)), 3.4,
+						_series_color(s))
 				break
-	if visible.size() > 1 and (mode == Mode.STACKED_AREA or mode == Mode.BARS):
+	# la somma ha senso solo a unità omogenee (mai in multi-asse)
+	if visible.size() > 1 and not multi_axis \
+			and (mode == Mode.STACKED_AREA or mode == Mode.BARS):
 		lines.append("Σ  %s" % _fmt_value(total))
 	# box tooltip, a destra o sinistra del crosshair a seconda dello spazio
 	var w := 0.0
@@ -335,6 +365,8 @@ func _draw_legend(plot: Rect2) -> void:
 		var key := str(s.get("key", ""))
 		var muted: bool = _muted.get(key, false)
 		var label := str(s.get("label", key))
+		if multi_axis and not muted:
+			label += " · max %s" % _fmt_value(_series_peak(s), _series_suffix(s))
 		var color := _series_color(s)
 		if muted:
 			color = Palette.DIM
@@ -362,7 +394,10 @@ func _series_color(s: Dictionary) -> Color:
 	var v: Variant = s.get("color")
 	return v if v is Color else Palette.GREEN
 
-func _fmt_value(v: float) -> String:
+## suffix_override: unità per-serie (multi-asse); vuoto = usa
+## value_suffix del grafico.
+func _fmt_value(v: float, suffix_override := "") -> String:
+	var suffix := suffix_override if suffix_override != "" else value_suffix
 	var txt: String
 	if absf(v) >= 100.0:
 		txt = "%.0f" % v
@@ -370,7 +405,7 @@ func _fmt_value(v: float) -> String:
 		txt = "%.1f" % v
 	else:
 		txt = "%.2f" % v
-	return txt + (" " + value_suffix if value_suffix != "" else "")
+	return txt + (" " + suffix if suffix != "" else "")
 
 static func _local_tz_offset() -> float:
 	return float(Time.get_time_zone_from_system().get("bias", 0)) * 60.0

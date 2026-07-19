@@ -821,10 +821,24 @@ func _usage_panel_selftest() -> void:
 		rank_btn.pressed.emit()
 		await get_tree().process_frame
 		agents_ok = agents_ok and stacked._series.size() == 1
-	var ok := history_ok and agents_ok
+	agents_panel.queue_free()
+	# deep-link dalla card: pending_agent → pagina agente col grafico
+	# storico multi-asse (e i suoi interruttori TUTTE/NESSUNA)
+	SectionPanel.pending_agent = "scout"
+	var page_panel := SectionPanel.new("agents", 24.0)
+	add_child(page_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var history := _ui_find_class_node(page_panel, "AgentHistoryChart")
+	var page_ok := page_panel._current_page == "agent" \
+			and page_panel._agent_detail == "scout" \
+			and SectionPanel.pending_agent == "" \
+			and history != null \
+			and _ui_find_button(page_panel, UIStrings.t("agent.history_all")) != null
+	var ok := history_ok and agents_ok and page_ok
 	if not ok:
 		print("USAGE-PANEL-TEST details history=", history_ok,
-				" agents=", agents_ok)
+				" agents=", agents_ok, " page=", page_ok)
 	print("USAGE-PANEL-TEST ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
 
@@ -1239,6 +1253,12 @@ func _open_agent_card(agent: AgentNPC) -> void:
 	_agent_card.talk_requested.connect(func() -> void: _start_talk(agent))
 	_agent_card.chat_requested.connect(func() -> void: _open_chat(agent))
 	_agent_card.thinking_requested.connect(func() -> void: _open_agent_thinking(agent))
+	# scheda completa: sezione Agenti sulla pagina del ruolo, con i
+	# grafici storici — stesso deep-link pattern di pending_detail
+	_agent_card.stats_requested.connect(func() -> void:
+		SectionPanel.pending_agent = agent.slug
+		ScriptedOnboarding.action_requested.emit("open_section",
+				{"section": "agents"}))
 	_agent_card.closed.connect(func() -> void:
 		_agent_card = null)
 
