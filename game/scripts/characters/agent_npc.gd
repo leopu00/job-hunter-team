@@ -7,6 +7,10 @@ extends CharacterBody2D
 ## Mostra status bubble e si interroga con un click.
 
 const SPEED := 150.0
+# Le consegne attraversano reparti opposti e devono leggere come un flusso
+# operativo, non come una passeggiata. I giri ambientali restano a SPEED;
+# solo il fascicolo in pipeline usa un passo svelto ma ancora naturale.
+const PIPELINE_SPEED := 185.0
 const STATUS_BUBBLE_POS := Vector2(0, -96)
 const SPEECH_BUBBLE_POS := Vector2(0, -100)
 const STATE_TAG_POS := Vector2(0, -126)
@@ -475,7 +479,8 @@ func _physics_process(delta: float) -> void:
 				_pause -= delta
 				if _pause <= 0.0:
 					_start_next_leg()
-			elif _follow_path(SPEED, _leg.get("mode", "walk")):
+			elif _follow_path(PIPELINE_SPEED if _pipeline_trip_active else SPEED,
+					_leg.get("mode", "walk")):
 				_arrive_at_leg()
 		S.TALK:
 			velocity = Vector2.ZERO
@@ -683,7 +688,7 @@ func _plan_trip() -> void:
 		var src: String = DepartmentDefs.FETCH_FROM[dept]
 		# il ritiro si vede sulle pile: l'inbox a monte si svuota, quello
 		# di casa riceve una parte, il resto arriva FINO alla scrivania
-		var pick := _leg_to(_jit(DepartmentDefs.handoff_spot(src)), "walk",
+		var pick := _leg_to(_jit(DepartmentDefs.handoff_spot(src, true)), "walk",
 				randf_range(0.8, 1.6), "idle")
 		pick["pile_take"] = src
 		if dept == "critici":
@@ -734,7 +739,7 @@ func _prepare_pipeline_trip(transition_state := "") -> bool:
 	if not DepartmentDefs.FETCH_FROM.has(dept):
 		return false
 	var src: String = DepartmentDefs.FETCH_FROM[dept]
-	var pick := _leg_to(DepartmentDefs.handoff_spot(src), "walk",
+	var pick := _leg_to(DepartmentDefs.handoff_spot(src, true), "walk",
 			randf_range(0.8, 1.4), "idle")
 	pick["pile_take"] = src
 	var durations := {
