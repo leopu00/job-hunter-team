@@ -1003,79 +1003,118 @@ export async function getSeenPositionIds(): Promise<Set<string>> {
   return new Set((data as any[]).map((r) => String(r.position_id)));
 }
 
-// ── Swipe triage deck ──────────────────────────────────────────────
-// [JHT-POSITIONS-SWIPE-TRIAGE] Mazzo per la pagina /swipe: triage rapido a
-// carte del backlog scored/ready, ordinato per score desc (le migliori
-// prima). Escluse le posizioni già swipate (position_feedback like/dislike/
-// hide, RLS filtra per utente): il mazzo mostra solo ciò che aspetta un
-// giudizio. Lo scarto (user-exclude) cambia status → esce dal mazzo da solo.
-// In local mode position_feedback non esiste in SQLite → nessun filtro like;
-// mazzo comunque coerente perché il like è un segnale cloud-only.
-async function getSwipedLegacyIds(
+// ── Swipe decks ────────────────────────────────────────────────────
+// [JHT-POSITIONS-SWIPE-TRIAGE] Due mazzi per la pagina /swipe, entrambi
+// in ordine di arrivo (found_at asc, scelta utente 19/07):
+//   pending  = scored/ready SENZA feedback → da giudicare. Le già
+//              recensite non ricompaiono: una nuova sessione riparte
+//              dalla più vecchia non giudicata.
+//   reviewed = posizioni CON feedback (qualunque status, incluse le
+//              escluse col "non interessante") + l'ultimo giudizio, per
+//              la modalità "rivedi e cambia idea".
+// In local mode position_feedback non esiste in SQLite → reviewed vuoto.
+export type SwipeReviewedRow = {
+  position: PositionWithScore;
+  action: string;
+  fb_score: number | null;
+};
+
+async function getLatestFeedbackByLegacyId(
   supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<Set<string>> {
+): Promise<Map<string, { action: string; score: number | null }>> {
   const { data, error } = await supabase
     .from("position_feedback")
-    .select("position_legacy_id")
+    .select("position_legacy_id, action, score, created_at")
     .in("action", ["like", "dislike", "hide", "star"])
+    .order("created_at", { ascending: false })
     .limit(10000);
-  if (error || !data) return new Set();
-  return new Set((data as any[]).map((r) => String(r.position_legacy_id)));
+  const map = new Map<string, { action: string; score: number | null }>();
+  if (error || !data) return map;
+  for (const r of data as any[]) {
+    const k = String(r.position_legacy_id);
+    if (!map.has(k)) map.set(k, { action: r.action, score: r.score ?? null });
+  }
+  return map;
 }
 
-export async function getSwipeDeck(limit = 100): Promise<PositionWithScore[]> {
+export async function getSwipeDecks(limit = 100): Promise<{
+  pending: PositionWithScore[];
+  reviewed: SwipeReviewedRow[];
+}> {
   const w = await ws();
   if (w) {
     try {
-      return local.getPositionsLocal(w, {
+      // Ordine: dalla trovata meno di recente alla più recente (scelta
+      // utente 18/07) — il triage smaltisce il backlog in ordine di arrivo.
+      const pending = local.getPositionsLocal(w, {
         statuses: ["scored", "ready"],
-        sort: "score",
-        dir: "desc",
+        sort: "found_at",
+        dir: "asc",
         limit,
       });
+      return { pending, reviewed: [] };
     } catch {
-      return [];
+      return { pending: [], reviewed: [] };
     }
   }
-  if (!isSupabaseConfigured) return [];
+  if (!isSupabaseConfigured) return { pending: [], reviewed: [] };
 
   const supabase = await createClient();
-  const [positionsRes, swiped] = await Promise.all([
+  const [positionsRes, feedback] = await Promise.all([
     supabase
       .from("positions")
       .select(
-        "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, jd_summary, scores ( total_score )",
+        "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, jd_summary, jd_text, scores ( total_score )",
       )
-      .in("status", ["scored", "ready"])
+      // 'excluded' incluso: le posizioni giudicate "non interessante"
+      // devono restare visitabili nel mazzo reviewed.
+      .in("status", ["scored", "ready", "excluded"])
       .is("deleted_at", null)
-      // Margine 2x: una parte verrà filtrata come già swipata.
-      .limit(limit * 2),
-    getSwipedLegacyIds(supabase),
+      .order("found_at", { ascending: true })
+      .limit(limit * 4),
+    getLatestFeedbackByLegacyId(supabase),
   ]);
   const { data, error } = positionsRes;
-  if (error || !data) return [];
+  if (error || !data) return { pending: [], reviewed: [] };
 
-  return (data as any[])
-    .filter((p) => p.legacy_id == null || !swiped.has(String(p.legacy_id)))
-    .map((p) => {
-      const s = firstRelated<any>(p.scores);
-      const useEst =
-        p.salary_estimated_min != null || p.salary_estimated_max != null;
-      return {
-        ...p,
-        score: p.score ?? s?.total_score ?? undefined,
-        scores: undefined,
-        salary_min:
-          (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null,
-        salary_max:
-          (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null,
-        salary_currency:
-          (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ??
-          "EUR",
-      } as PositionWithScore;
-    })
-    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
-    .slice(0, limit);
+  const mapRow = (p: any): PositionWithScore => {
+    const sc = firstRelated<any>(p.scores);
+    const useEst =
+      p.salary_estimated_min != null || p.salary_estimated_max != null;
+    return {
+      ...p,
+      score: p.score ?? sc?.total_score ?? undefined,
+      scores: undefined,
+      salary_min:
+        (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null,
+      salary_max:
+        (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null,
+      salary_currency:
+        (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ??
+        "EUR",
+    } as PositionWithScore;
+  };
+
+  const pending: PositionWithScore[] = [];
+  const reviewed: SwipeReviewedRow[] = [];
+  for (const p of data as any[]) {
+    const fb = p.legacy_id != null ? feedback.get(String(p.legacy_id)) : null;
+    if (fb) {
+      if (reviewed.length < limit)
+        reviewed.push({
+          position: mapRow(p),
+          action: fb.action,
+          fb_score: fb.score,
+        });
+    } else if (
+      (p.status === "scored" || p.status === "ready") &&
+      pending.length < limit
+    ) {
+      pending.push(mapRow(p));
+    }
+    if (pending.length >= limit && reviewed.length >= limit) break;
+  }
+  return { pending, reviewed };
 }
 
 // Sceglie l'evento con timestamp più recente tra i candidati passati.
@@ -1157,16 +1196,13 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       p.salary_estimated_min != null || p.salary_estimated_max != null;
     const salary_min =
       ((useEst ? p.salary_estimated_min : p.salary_declared_min) as
-        | number
-        | null) ?? null;
+        number | null) ?? null;
     const salary_max =
       ((useEst ? p.salary_estimated_max : p.salary_declared_max) as
-        | number
-        | null) ?? null;
+        number | null) ?? null;
     const salary_currency =
       ((useEst ? p.salary_estimated_currency : p.salary_declared_currency) as
-        | string
-        | null) ?? "EUR";
+        string | null) ?? "EUR";
     return {
       id: String(p.id),
       legacy_id: (p.legacy_id as number | null) ?? null,

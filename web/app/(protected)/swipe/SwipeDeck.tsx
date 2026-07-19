@@ -5,42 +5,43 @@ import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import {
+  IconCalendar,
   IconCards,
   IconChat,
   IconCheckCircle,
-  IconClock,
-  IconEye,
+  IconChevronLeft,
   IconMic,
   IconPin,
-  IconSkip,
   IconStar,
+  IconStarHalf,
   IconStop,
-  IconUndo,
+  IconThumbsUp,
   IconX,
 } from "./icons";
 
-// [JHT-POSITIONS-SWIPE-TRIAGE] Deck di carte per il triage rapido del
-// backlog scored/ready. Non un like/nope binario: QUATTRO giudizi (scelta
-// utente 18/07) mappati sui campi del mig 028 di position_feedback
-// (score 1-5 + direction), più un commento libero opzionale che parte
-// insieme al giudizio — scrivibile a tastiera o DETTATO a voce (Web
-// Speech API del browser: su iOS è la dettatura Apple, niente backend;
-// se non supportata il bottone microfono non compare). Gli swipe coprono
-// gli estremi (sinistra = no assoluto, destra = molto interessante), i
-// giudizi intermedi sono da bottone; tastiera 1-4 sul desktop, ⌫ = undo.
+// [JHT-POSITIONS-SWIPE-TRIAGE] Sequenza di carte per il triage rapido del
+// backlog scored/ready, in ORDINE DI ARRIVO (dalla trovata meno di recente
+// alla più recente). QUATTRO livelli di interesse mappati sui campi del
+// mig 028 di position_feedback (score 1-5 + direction), più un commento
+// libero opzionale che parte insieme al giudizio — icona nel footer della
+// card, input in un pop-up dedicato con dettatura vocale (Web Speech API).
+//
+// I GIUDIZI sono SOLO da bottone (tre dei quattro sono "verso destra",
+// uno swipe destro sarebbe ambiguo). Lo SWIPE però esiste ed è la
+// NAVIGAZIONE (scelta utente 19/07): trascina a sinistra = prossima
+// card, a destra = precedente — nessuna scrittura, si sfoglia e basta
+// (←/→ da tastiera). Una card già giudicata resta al suo posto col
+// TIMBRO e si può ri-giudicare: il ri-giudizio scrive un nuovo evento
+// feedback (append-only, l'ultimo prevale) e riconcilia l'esclusione
+// (no→altro DELETE, altro→no POST).
 //
 // Scritture — corsie ESISTENTI, nessuna route nuova:
-//   ogni giudizio  → POST /api/positions/[legacyId]/feedback
-//     (action + score + direction + comment: lo Scout consuma già la
-//      direction per il pattern steering; lo score alimenta la visione
-//      "Scorer re-score dai gusti reali")
-//   'no' assoluto  → in più POST /api/positions/[legacyId]/user-exclude
+//   ogni giudizio      → POST /api/positions/[legacyId]/feedback
+//   'non interessante' → in più POST /api/positions/[legacyId]/user-exclude
 //     (reason 'not_interested': status → excluded, il team ci smette di
-//      lavorare; reversibile con DELETE — usato dall'undo)
-// position_feedback è un event-log APPEND-ONLY: l'undo dei giudizi non-no
-// ripristina solo la carta nella UI, la riga resta (l'ultimo giudizio
-// prevale comunque nei consumatori "latest"). Ottimistico: la carta vola
-// subito, le POST viaggiano dietro; su errore toast non bloccante.
+//      lavorare; reversibile con DELETE)
+// Ottimistico: la carta vola subito, le POST viaggiano dietro; su errore
+// toast non bloccante.
 
 export type SwipeCardData = {
   id: string;
@@ -52,7 +53,6 @@ export type SwipeCardData = {
   loc_country: string | null;
   remote_type: "full_remote" | "hybrid" | "onsite" | null;
   role_family: string | null;
-  source: string | null;
   found_at: string;
   score: number | null;
   salary_min: number | null;
@@ -61,13 +61,11 @@ export type SwipeCardData = {
   jd_summary: string | null;
 };
 
-type Verdict = "no" | "review_low" | "review_ok" | "top";
-// Lo skip NON è un giudizio: nessuna scrittura, la carta va in fondo al
-// mazzo (e ricompare nei mazzi futuri finché non riceve un giudizio vero).
-type HistoryAction = Verdict | "skip";
+export type Verdict = "no" | "review_low" | "review_ok" | "top";
 
 // Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
-// l'esclusione. Score 3 lasciato libero come neutro non usato.
+// l'esclusione. Score 3 lasciato libero come neutro non usato. fly: solo
+// 'no' esce a sinistra, gli altri tre a destra.
 const VERDICTS: Record<
   Verdict,
   {
@@ -75,7 +73,7 @@ const VERDICTS: Record<
     color: string;
     action: "like" | "dislike" | "star";
     score: number;
-    direction: "more_like_this" | "less_like_this";
+    direction: "more_like_this" | "less_like_this" | null;
     exclude?: boolean;
     fly: -1 | 1;
   }
@@ -89,16 +87,20 @@ const VERDICTS: Record<
     exclude: true,
     fly: -1,
   },
+  // 'Poco interessante' NON è un dislike (scelta utente 18/07): la
+  // posizione resta tenuta (niente esclusione) e non manda un segnale
+  // less_like_this allo Scout — è un keep con entusiasmo basso (score 2).
+  // Icona: mezza stella ("interessante, ma poco"), non un pollice giù.
   review_low: {
-    Icon: IconClock,
+    Icon: IconStarHalf,
     color: "var(--color-orange)",
-    action: "dislike",
+    action: "like",
     score: 2,
-    direction: "less_like_this",
-    fly: -1,
+    direction: null,
+    fly: 1,
   },
   review_ok: {
-    Icon: IconEye,
+    Icon: IconThumbsUp,
     color: "var(--color-blue)",
     action: "like",
     score: 4,
@@ -132,19 +134,20 @@ const T: Record<
   Locale,
   {
     title: string;
-    subtitle: string;
-    stampTop: string;
-    stampNo: string;
     verdicts: Record<Verdict, string>;
-    btnUndo: string;
-    btnSkip: string;
+    btnPrev: string;
     commentPh: string;
     commentClose: string;
+    commentTitle: string;
+    commentDone: string;
     voiceStart: string;
     voiceStop: string;
     voiceListening: string;
     voiceError: string;
     voiceDenied: string;
+    modePending: string;
+    modeReviewed: string;
+    reviewedEmpty: string;
     emptyTitle: string;
     emptySubtitle: string;
     allPositions: string;
@@ -152,174 +155,196 @@ const T: Record<
     remote: Record<string, string>;
     saveError: string;
     hintKeys: string;
+    today: string;
+    yesterday: string;
+    daysAgo: string; // template con {n}
   }
 > = {
   it: {
     title: "Swipe",
-    subtitle: "Quattro giudizi + commento — il team impara i tuoi gusti",
-    stampTop: "TOP",
-    stampNo: "NO",
     verdicts: {
-      no: "Assolutamente no",
-      review_low: "Da rivedere, poco",
-      review_ok: "Da rivedere, interessante",
+      no: "Non interessante",
+      review_low: "Poco interessante",
+      review_ok: "Interessante",
       top: "Molto interessante",
     },
-    btnUndo: "Annulla ultima",
-    btnSkip: "Salta",
+    btnPrev: "Precedente",
     commentPh: "Aggiungi un commento (facoltativo)…",
     commentClose: "Chiudi il commento",
+    commentTitle: "Commento",
+    commentDone: "Fatto",
     voiceStart: "Detta il commento",
     voiceStop: "Ferma la dettatura",
     voiceListening: "Ti ascolto…",
     voiceError: "Dettatura non disponibile su questo dispositivo",
     voiceDenied:
       "Permesso per il microfono negato — controlla le impostazioni del browser",
+    modePending: "Da giudicare",
+    modeReviewed: "Recensite",
+    reviewedEmpty: "Ancora nessuna posizione recensita.",
     emptyTitle: "Mazzo finito!",
     emptySubtitle: "Hai fatto il triage di tutte le posizioni in coda.",
     allPositions: "Tutte le posizioni",
     details: "Dettagli",
     remote: { full_remote: "Remoto", hybrid: "Ibrido", onsite: "In sede" },
     saveError: "Errore di rete — azione non salvata per",
-    hintKeys: "Tastiera: 1–4 giudizio · ← no · → top · ↓ salta · ⌫ annulla",
+    hintKeys: "Tastiera: 1–4 giudizio · ←/→ naviga",
+    today: "oggi",
+    yesterday: "ieri",
+    daysAgo: "{n} giorni fa",
   },
   en: {
     title: "Swipe",
-    subtitle: "Four verdicts + a comment — your team learns your taste",
-    stampTop: "TOP",
-    stampNo: "NO",
     verdicts: {
-      no: "Hard no",
-      review_low: "Review later, meh",
-      review_ok: "Review later, interested",
+      no: "Not interesting",
+      review_low: "Slightly interesting",
+      review_ok: "Interesting",
       top: "Very interesting",
     },
-    btnUndo: "Undo last",
-    btnSkip: "Skip",
+    btnPrev: "Previous",
     commentPh: "Add a comment (optional)…",
     commentClose: "Close the comment",
+    commentTitle: "Comment",
+    commentDone: "Done",
     voiceStart: "Dictate the comment",
     voiceStop: "Stop dictation",
     voiceListening: "Listening…",
     voiceError: "Dictation not available on this device",
     voiceDenied: "Microphone permission denied — check your browser settings",
+    modePending: "Pending",
+    modeReviewed: "Reviewed",
+    reviewedEmpty: "No reviewed positions yet.",
     emptyTitle: "Deck finished!",
     emptySubtitle: "You triaged every queued position.",
     allPositions: "All positions",
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "On-site" },
     saveError: "Network error — action not saved for",
-    hintKeys: "Keyboard: 1–4 verdict · ← no · → top · ↓ skip · ⌫ undo",
+    hintKeys: "Keyboard: 1–4 verdict · ←/→ navigate",
+    today: "today",
+    yesterday: "yesterday",
+    daysAgo: "{n} days ago",
   },
   hu: {
     title: "Swipe",
-    subtitle: "Négy ítélet + megjegyzés — a csapat tanulja az ízlésedet",
-    stampTop: "TOP",
-    stampNo: "NEM",
     verdicts: {
-      no: "Biztosan nem",
-      review_low: "Később, kevésbé érdekel",
-      review_ok: "Később, érdekel",
+      no: "Nem érdekes",
+      review_low: "Kevéssé érdekes",
+      review_ok: "Érdekes",
       top: "Nagyon érdekes",
     },
-    btnUndo: "Visszavonás",
-    btnSkip: "Kihagyás",
+    btnPrev: "Előző",
     commentPh: "Megjegyzés hozzáadása (opcionális)…",
     commentClose: "Megjegyzés bezárása",
+    commentTitle: "Megjegyzés",
+    commentDone: "Kész",
     voiceStart: "Megjegyzés diktálása",
     voiceStop: "Diktálás leállítása",
     voiceListening: "Hallgatlak…",
     voiceError: "A diktálás nem érhető el ezen az eszközön",
     voiceDenied:
       "Mikrofonengedély megtagadva — ellenőrizd a böngésző beállításait",
+    modePending: "Elbírálandó",
+    modeReviewed: "Elbírált",
+    reviewedEmpty: "Még nincs elbírált pozíció.",
     emptyTitle: "A pakli elfogyott!",
     emptySubtitle: "Minden sorban álló állást átnéztél.",
     allPositions: "Összes állás",
     details: "Részletek",
     remote: { full_remote: "Távoli", hybrid: "Hibrid", onsite: "Helyszíni" },
     saveError: "Hálózati hiba — nem mentett művelet:",
-    hintKeys:
-      "Billentyűk: 1–4 ítélet · ← nem · → top · ↓ kihagyás · ⌫ visszavonás",
+    hintKeys: "Billentyűk: 1–4 ítélet · ←/→ navigálás",
+    today: "ma",
+    yesterday: "tegnap",
+    daysAgo: "{n} napja",
   },
   es: {
     title: "Swipe",
-    subtitle: "Cuatro juicios + comentario — tu equipo aprende tus gustos",
-    stampTop: "TOP",
-    stampNo: "NO",
     verdicts: {
-      no: "No, para nada",
-      review_low: "Revisar, poco interés",
-      review_ok: "Revisar, me interesa",
+      no: "No interesante",
+      review_low: "Poco interesante",
+      review_ok: "Interesante",
       top: "Muy interesante",
     },
-    btnUndo: "Deshacer",
-    btnSkip: "Omitir",
+    btnPrev: "Anterior",
     commentPh: "Añade un comentario (opcional)…",
     commentClose: "Cerrar el comentario",
+    commentTitle: "Comentario",
+    commentDone: "Hecho",
     voiceStart: "Dictar el comentario",
     voiceStop: "Detener el dictado",
     voiceListening: "Escuchando…",
     voiceError: "Dictado no disponible en este dispositivo",
     voiceDenied:
       "Permiso de micrófono denegado — revisa la configuración del navegador",
+    modePending: "Pendientes",
+    modeReviewed: "Revisadas",
+    reviewedEmpty: "Aún no hay posiciones revisadas.",
     emptyTitle: "¡Mazo terminado!",
     emptySubtitle: "Has revisado todas las posiciones en cola.",
     allPositions: "Todas las posiciones",
     details: "Detalles",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Error de red — acción no guardada para",
-    hintKeys: "Teclado: 1–4 juicio · ← no · → top · ↓ omitir · ⌫ deshacer",
+    hintKeys: "Teclado: 1–4 juicio · ←/→ navegar",
+    today: "hoy",
+    yesterday: "ayer",
+    daysAgo: "hace {n} días",
   },
   de: {
     title: "Swipe",
-    subtitle: "Vier Urteile + Kommentar — dein Team lernt deinen Geschmack",
-    stampTop: "TOP",
-    stampNo: "NEIN",
     verdicts: {
-      no: "Klares Nein",
-      review_low: "Später ansehen, wenig",
-      review_ok: "Später ansehen, interessant",
+      no: "Uninteressant",
+      review_low: "Wenig interessant",
+      review_ok: "Interessant",
       top: "Sehr interessant",
     },
-    btnUndo: "Rückgängig",
-    btnSkip: "Überspringen",
+    btnPrev: "Zurück",
     commentPh: "Kommentar hinzufügen (optional)…",
     commentClose: "Kommentar schließen",
+    commentTitle: "Kommentar",
+    commentDone: "Fertig",
     voiceStart: "Kommentar diktieren",
     voiceStop: "Diktat beenden",
     voiceListening: "Ich höre zu…",
     voiceError: "Diktat auf diesem Gerät nicht verfügbar",
     voiceDenied: "Mikrofonzugriff verweigert — prüfe die Browser-Einstellungen",
+    modePending: "Offen",
+    modeReviewed: "Bewertet",
+    reviewedEmpty: "Noch keine bewerteten Stellen.",
     emptyTitle: "Stapel geschafft!",
     emptySubtitle: "Du hast alle anstehenden Stellen durchgesehen.",
     allPositions: "Alle Stellen",
     details: "Details",
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "Vor Ort" },
     saveError: "Netzwerkfehler — Aktion nicht gespeichert für",
-    hintKeys:
-      "Tastatur: 1–4 Urteil · ← nein · → top · ↓ überspringen · ⌫ rückgängig",
+    hintKeys: "Tastatur: 1–4 Urteil · ←/→ navigieren",
+    today: "heute",
+    yesterday: "gestern",
+    daysAgo: "vor {n} Tagen",
   },
   fr: {
     title: "Swipe",
-    subtitle: "Quatre avis + un commentaire — votre équipe apprend vos goûts",
-    stampTop: "TOP",
-    stampNo: "NON",
     verdicts: {
-      no: "Non catégorique",
-      review_low: "À revoir, peu d'intérêt",
-      review_ok: "À revoir, intéressé",
+      no: "Pas intéressant",
+      review_low: "Peu intéressant",
+      review_ok: "Intéressant",
       top: "Très intéressant",
     },
-    btnUndo: "Annuler",
-    btnSkip: "Passer",
+    btnPrev: "Précédent",
     commentPh: "Ajouter un commentaire (facultatif)…",
     commentClose: "Fermer le commentaire",
+    commentTitle: "Commentaire",
+    commentDone: "Terminé",
     voiceStart: "Dicter le commentaire",
     voiceStop: "Arrêter la dictée",
     voiceListening: "Je vous écoute…",
     voiceError: "Dictée non disponible sur cet appareil",
     voiceDenied:
       "Autorisation du micro refusée — vérifiez les réglages du navigateur",
+    modePending: "À juger",
+    modeReviewed: "Évaluées",
+    reviewedEmpty: "Aucun poste évalué pour l\u2019instant.",
     emptyTitle: "Paquet terminé !",
     emptySubtitle: "Vous avez trié tous les postes en attente.",
     allPositions: "Tous les postes",
@@ -330,36 +355,43 @@ const T: Record<
       onsite: "Sur site",
     },
     saveError: "Erreur réseau — action non enregistrée pour",
-    hintKeys: "Clavier : 1–4 avis · ← non · → top · ↓ passer · ⌫ annuler",
+    hintKeys: "Clavier : 1–4 avis · ←/→ naviguer",
+    today: "aujourd’hui",
+    yesterday: "hier",
+    daysAgo: "il y a {n} jours",
   },
   pt: {
     title: "Swipe",
-    subtitle: "Quatro julgamentos + comentário — sua equipe aprende seu gosto",
-    stampTop: "TOP",
-    stampNo: "NÃO",
     verdicts: {
-      no: "Não mesmo",
-      review_low: "Rever depois, pouco",
-      review_ok: "Rever depois, interessa",
+      no: "Não interessante",
+      review_low: "Pouco interessante",
+      review_ok: "Interessante",
       top: "Muito interessante",
     },
-    btnUndo: "Desfazer",
-    btnSkip: "Pular",
+    btnPrev: "Anterior",
     commentPh: "Adicione um comentário (opcional)…",
     commentClose: "Fechar o comentário",
+    commentTitle: "Comentário",
+    commentDone: "Concluído",
     voiceStart: "Ditar o comentário",
     voiceStop: "Parar o ditado",
     voiceListening: "Ouvindo…",
     voiceError: "Ditado não disponível neste dispositivo",
     voiceDenied:
       "Permissão do microfone negada — verifique as configurações do navegador",
+    modePending: "Pendentes",
+    modeReviewed: "Avaliadas",
+    reviewedEmpty: "Ainda não há vagas avaliadas.",
     emptyTitle: "Baralho concluído!",
     emptySubtitle: "Você triou todas as vagas na fila.",
     allPositions: "Todas as vagas",
     details: "Detalhes",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Erro de rede — ação não salva para",
-    hintKeys: "Teclado: 1–4 julgamento · ← não · → top · ↓ pular · ⌫ desfazer",
+    hintKeys: "Teclado: 1–4 julgamento · ←/→ navegar",
+    today: "hoje",
+    yesterday: "ontem",
+    daysAgo: "há {n} dias",
   },
 };
 
@@ -400,37 +432,158 @@ function scoreColor(score: number | null): string {
   return "var(--color-muted)";
 }
 
-// Soglia di commit dello swipe (px orizzontali).
-const SWIPE_THRESHOLD = 110;
+// Data di ritrovamento + conteggio giorni passati (scelta utente 19/07).
+function foundInfo(
+  iso: string,
+  locale: string,
+  t: { today: string; yesterday: string; daysAgo: string },
+): { date: string; ago: string } | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const date = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    ...(d.getFullYear() !== new Date().getFullYear()
+      ? { year: "numeric" }
+      : {}),
+  }).format(d);
+  const days = Math.max(0, Math.floor((Date.now() - d.getTime()) / 86_400_000));
+  const ago =
+    days === 0
+      ? t.today
+      : days === 1
+        ? t.yesterday
+        : t.daysAgo.replace("{n}", String(days));
+  return { date, ago };
+}
+
+// ── Impacchettamento chips (scelta utente 19/07) ─────────────────────
+// Il flex-wrap ingenuo lasciava i tag grandi da soli su una riga (3 righe
+// totali). Qui: larghezza stimata dal font mono (larghezza carattere
+// costante) + first-fit decreasing sulle righe → i grandi si affiancano
+// ai piccoli e di norma bastano 2 righe.
+type ChipDef = {
+  key: string;
+  icon?: React.ReactElement;
+  text: string;
+  color?: string;
+};
+
+function buildChips(
+  card: SwipeCardData,
+  locale: string,
+  t: (typeof T)["en"],
+): ChipDef[] {
+  const out: ChipDef[] = [];
+  const loc = card.loc_city
+    ? `${card.loc_city}${card.loc_country ? `, ${card.loc_country}` : ""}`
+    : (card.loc_country ?? card.location);
+  if (loc) out.push({ key: "loc", icon: <IconPin size={11} />, text: loc });
+  if (card.remote_type)
+    out.push({
+      key: "remote",
+      text: t.remote[card.remote_type] ?? card.remote_type,
+    });
+  const sal = formatSalary(
+    card.salary_min,
+    card.salary_max,
+    card.salary_currency,
+  );
+  if (sal) out.push({ key: "sal", text: sal, color: "var(--color-green)" });
+  if (card.role_family) out.push({ key: "role", text: card.role_family });
+  const fi = foundInfo(card.found_at, locale, t);
+  if (fi)
+    out.push({
+      key: "date",
+      icon: <IconCalendar size={11} />,
+      text: `${fi.date} · ${fi.ago}`,
+    });
+  return out;
+}
+
+// JetBrains Mono ~11px: avanzamento carattere ≈ 6.9px; 18 = padding+bordo,
+// 15 = icona+gap.
+function chipWidth(c: ChipDef): number {
+  return 18 + (c.icon ? 15 : 0) + c.text.length * 6.9;
+}
+
+function packChips(defs: ChipDef[], maxW: number): ChipDef[][] {
+  const GAP = 6;
+  const sorted = [...defs].sort((a, b) => chipWidth(b) - chipWidth(a));
+  const rows: { items: ChipDef[]; w: number }[] = [];
+  for (const c of sorted) {
+    const w = chipWidth(c);
+    const row = rows.find((r) => r.w + GAP + w <= maxW);
+    if (row) {
+      row.items.push(c);
+      row.w += GAP + w;
+    } else {
+      rows.push({ items: [c], w });
+    }
+  }
+  return rows.map((r) => r.items);
+}
+
 // Durata dell'animazione di uscita — deve combaciare con la transition CSS.
 const FLY_MS = 280;
+// Trascinamento orizzontale oltre questa soglia = cambio card.
+const NAV_THRESHOLD = 90;
 
-export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
+export default function SwipeDeck({
+  pending,
+  reviewed,
+  initialVerdicts,
+}: {
+  pending: SwipeCardData[];
+  reviewed: SwipeCardData[];
+  initialVerdicts: Record<string, Verdict>;
+}) {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
 
-  const [deck, setDeck] = useState<SwipeCardData[]>(cards);
-  const [history, setHistory] = useState<
-    { card: SwipeCardData; verdict: HistoryAction }[]
-  >([]);
-  const [drag, setDrag] = useState({ dx: 0, dy: 0, dragging: false });
-  const [fly, setFly] = useState<{ x: number; y: number; rot: number } | null>(
-    null,
-  );
+  // Due mazzi (scelta utente 19/07): 'pending' = da giudicare (le già
+  // recensite NON ricompaiono in sessione nuova), 'reviewed' = già
+  // recensite col loro timbro, ri-giudicabili. Indice separato per mazzo.
+  const [mode, setMode] = useState<"pending" | "reviewed">("pending");
+  const [idxP, setIdxP] = useState(0);
+  const [idxR, setIdxR] = useState(0);
+  const cards = mode === "pending" ? pending : reviewed;
+  const idx = mode === "pending" ? idxP : idxR;
+  // Timbri: i giudizi storici (dal DB) + quelli dati in sessione.
+  const [given, setGiven] = useState<Record<string, Verdict>>(initialVerdicts);
+  const [chipAreaW, setChipAreaW] = useState(320);
+  const [fly, setFly] = useState<{ x: number; rot: number } | null>(null);
+  const [drag, setDrag] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [commentOpen, setCommentOpen] = useState(false);
   const [speechOk, setSpeechOk] = useState(false);
   const [recording, setRecording] = useState(false);
   const flyingRef = useRef(false);
-  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const deckRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  // Offset della pagina dall'alto del viewport (navbar + header, stabile).
+  // L'altezza vera è poi calc(100dvh - offset): è il dvh CSS a inseguire
+  // la barra di Safari, non i valori JS (innerHeight/visualViewport la
+  // ignorano su iOS e i bottoni finivano sommersi).
+  const [topOffset, setTopOffset] = useState<number | null>(null);
+  // Mirror per i listener touch nativi (chiusure senza stato stantio).
+  const navRef = useRef<(delta: 1 | -1) => void>(() => {});
+  const dragXRef = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recRef = useRef<{ stop: () => void } | null>(null);
 
+  const setIdxCur = useCallback(
+    (f: (i: number) => number) =>
+      mode === "pending" ? setIdxP(f) : setIdxR(f),
+    [mode],
+  );
+
   const total = cards.length;
-  const done = total - deck.length;
+  const finished = idx >= total;
   const counts = VERDICT_ORDER.map(
-    (v) => [v, history.filter((h) => h.verdict === v).length] as const,
+    (v) => [v, Object.values(given).filter((g) => g === v).length] as const,
   );
 
   const showToast = useCallback((msg: string) => {
@@ -446,6 +599,26 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     const w = window as unknown as Record<string, unknown>;
     setSpeechOk(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition));
     return () => recRef.current?.stop();
+  }, []);
+
+  // Misure: larghezza utile chips (card - padding) e altezza disponibile
+  // per l'intera colonna (viewport - top della pagina). visualViewport
+  // copre il collasso della barra di Safari.
+  useEffect(() => {
+    const measure = () => {
+      const w = deckRef.current?.clientWidth;
+      if (w) setChipAreaW(w - 40);
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (rect) setTopOffset(Math.max(0, rect.top + window.scrollY) + 8);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      vv?.removeEventListener("resize", measure);
+    };
   }, []);
 
   const stopVoice = useCallback(() => {
@@ -499,8 +672,15 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     rec.start();
   }, [comment, locale, showToast, t.voiceDenied, t.voiceError]);
 
+  // Scrive il giudizio; se la card era già stata giudicata riconcilia
+  // l'esclusione con la transizione (no→altro: DELETE; altro→no: POST).
   const persist = useCallback(
-    async (card: SwipeCardData, verdict: Verdict, note: string) => {
+    async (
+      card: SwipeCardData,
+      verdict: Verdict,
+      prev: Verdict | undefined,
+      note: string,
+    ) => {
       const v = VERDICTS[verdict];
       try {
         const res = await fetch(`/api/positions/${card.legacy_id}/feedback`, {
@@ -509,12 +689,13 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
           body: JSON.stringify({
             action: v.action,
             score: v.score,
-            direction: v.direction,
+            ...(v.direction ? { direction: v.direction } : {}),
             ...(note ? { comment: note } : {}),
           }),
         });
         if (!res.ok) throw new Error(String(res.status));
-        if (v.exclude) {
+        const wasExcluded = prev ? Boolean(VERDICTS[prev].exclude) : false;
+        if (v.exclude && !wasExcluded) {
           const ex = await fetch(
             `/api/positions/${card.legacy_id}/user-exclude`,
             {
@@ -522,6 +703,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ reason: "not_interested" }),
             },
+          );
+          if (!ex.ok) throw new Error(String(ex.status));
+        } else if (!v.exclude && wasExcluded) {
+          const ex = await fetch(
+            `/api/positions/${card.legacy_id}/user-exclude`,
+            { method: "DELETE" },
           );
           if (!ex.ok) throw new Error(String(ex.status));
         }
@@ -532,69 +719,142 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     [showToast, t.saveError],
   );
 
-  const commit = useCallback(
+  const judge = useCallback(
     (verdict: Verdict) => {
-      if (flyingRef.current || deck.length === 0) return;
+      if (flyingRef.current || finished) return;
+      const card = cards[idx];
+      const prev = given[card.id];
       flyingRef.current = true;
       stopVoice();
-      const card = deck[0];
       const note = comment.trim().slice(0, 2000);
       const dir = VERDICTS[verdict].fly;
       const width = typeof window !== "undefined" ? window.innerWidth : 800;
-      setFly({ x: dir * (width + 200), y: drag.dy, rot: dir * 22 });
+      setFly({ x: dir * (width + 200), rot: dir * 22 });
       setTimeout(() => {
-        setDeck((d) => d.slice(1));
-        setHistory((h) => [...h, { card, verdict }]);
-        setDrag({ dx: 0, dy: 0, dragging: false });
+        setGiven((g) => ({ ...g, [card.id]: verdict }));
+        setIdxCur((i) => i + 1);
         setFly(null);
+        setDrag(0);
         setComment("");
         setCommentOpen(false);
         flyingRef.current = false;
       }, FLY_MS);
-      void persist(card, verdict, note);
+      // Se il giudizio non cambia, registra comunque l'evento (magari col
+      // commento nuovo); la riconciliazione esclusione è un no-op.
+      void persist(card, verdict, prev, note);
     },
-    [deck, comment, drag.dy, persist, stopVoice],
+    [cards, idx, given, finished, comment, persist, stopVoice, setIdxCur],
   );
 
-  // Skip: nessuna scrittura, la carta scivola in basso e va in fondo al
-  // mazzo — la si rincontra a fine giro (e nei mazzi futuri).
-  const skip = useCallback(() => {
-    if (flyingRef.current || deck.length === 0) return;
-    flyingRef.current = true;
-    stopVoice();
-    const card = deck[0];
-    setFly({ x: 0, y: 700, rot: -3 });
-    setTimeout(() => {
-      setDeck((d) => [...d.slice(1), card]);
-      setHistory((h) => [...h, { card, verdict: "skip" }]);
-      setDrag({ dx: 0, dy: 0, dragging: false });
-      setFly(null);
-      flyingRef.current = false;
-    }, FLY_MS);
-  }, [deck, stopVoice]);
+  // Navigazione: nessuna scrittura, si sfoglia e basta. delta = +1
+  // (prossima, card esce a sinistra) o -1 (precedente, esce a destra).
+  const nav = useCallback(
+    (delta: 1 | -1) => {
+      if (flyingRef.current) return;
+      if (delta === 1 && finished) return;
+      if (delta === -1 && idx === 0) return;
+      flyingRef.current = true;
+      stopVoice();
+      const width = typeof window !== "undefined" ? window.innerWidth : 800;
+      setFly({ x: -delta * (width + 100), rot: -delta * 8 });
+      setTimeout(() => {
+        setIdxCur((i) => i + delta);
+        setFly(null);
+        setDrag(0);
+        setComment("");
+        setCommentOpen(false);
+        flyingRef.current = false;
+      }, FLY_MS);
+    },
+    [finished, idx, stopVoice, setIdxCur],
+  );
 
-  const undo = useCallback(() => {
-    if (flyingRef.current || history.length === 0) return;
-    const last = history[history.length - 1];
-    setHistory((h) => h.slice(0, -1));
-    // Dopo uno skip la carta sta in FONDO al mazzo: toglila da lì prima di
-    // rimetterla in cima (altrimenti duplicata).
-    setDeck((d) =>
-      last.verdict === "skip"
-        ? [last.card, ...d.slice(0, -1)]
-        : [last.card, ...d],
-    );
-    // Solo l'esclusione del 'no' è reversibile lato server (DELETE
-    // ripristina lo status). Le righe feedback sono event-log immutabile:
-    // restano, e l'eventuale giudizio successivo prevale nei "latest".
-    if (last.verdict !== "skip" && VERDICTS[last.verdict].exclude) {
-      void fetch(`/api/positions/${last.card.legacy_id}/user-exclude`, {
-        method: "DELETE",
-      }).catch(() => showToast(`${t.saveError} «${last.card.title}»`));
+  navRef.current = nav;
+
+  // ── Swipe di NAVIGAZIONE ─────────────────────────────────────────
+  // TOUCH: listener nativi non-passivi sul contenitore del mazzo con
+  // DIRECTION-LOCK — l'area di testo della card è scrollabile e su iOS
+  // WebKit si prende il gesto (la pagina "rubber-banda" invece di
+  // swipare). Ai primi pixel decidiamo l'asse: verticale → il browser
+  // scrolla il testo; orizzontale → preventDefault() (la pagina resta
+  // ferma) e trasciniamo la card. Il MOUSE usa i pointer events sotto.
+  useEffect(() => {
+    const el = deckRef.current;
+    if (!el) return;
+    let start: { x: number; y: number } | null = null;
+    let axis: "h" | "v" | null = null;
+    const onStart = (e: TouchEvent) => {
+      if (flyingRef.current || e.touches.length !== 1) return;
+      start = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      axis = null;
+      dragXRef.current = 0;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start || flyingRef.current) return;
+      const dx = e.touches[0].clientX - start.x;
+      const dy = e.touches[0].clientY - start.y;
+      if (!axis) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        axis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      }
+      if (axis === "h") {
+        e.preventDefault();
+        dragXRef.current = dx;
+        setDrag(dx);
+      }
+    };
+    const onEnd = () => {
+      if (!start) return;
+      const dx = dragXRef.current;
+      const wasH = axis === "h";
+      start = null;
+      axis = null;
+      dragXRef.current = 0;
+      if (wasH && Math.abs(dx) > NAV_THRESHOLD) {
+        navRef.current(dx < 0 ? 1 : -1);
+        return;
+      }
+      if (wasH) setDrag(0);
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return; // touch → listener nativi
+    if (flyingRef.current) return;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
+    if (!dragStart.current || flyingRef.current) return;
+    setDrag(e.clientX - dragStart.current.x);
+  };
+  const onPointerEnd = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
+    if (!dragStart.current) return;
+    dragStart.current = null;
+    if (Math.abs(drag) > NAV_THRESHOLD) {
+      // Trascino a sinistra → prossima; a destra → precedente.
+      const delta = drag < 0 ? 1 : -1;
+      if ((delta === 1 && !finished) || (delta === -1 && idx > 0)) {
+        nav(delta);
+        return;
+      }
     }
-  }, [history, showToast, t.saveError]);
+    setDrag(0);
+  };
 
-  // Tastiera per il desktop: 1-4 = giudizi, frecce = estremi, ⌫ = undo.
+  // Tastiera per il desktop: 1-4 = giudizi, ←/→ = precedente/prossima.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
@@ -609,81 +869,86 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         "3": "review_ok",
         "4": "top",
       };
-      if (byDigit[e.key]) commit(byDigit[e.key]);
-      else if (e.key === "ArrowLeft") commit("no");
-      else if (e.key === "ArrowRight") commit("top");
-      else if (e.key === "ArrowDown") skip();
-      else if (e.key === "Backspace") {
-        e.preventDefault();
-        undo();
-      }
+      if (byDigit[e.key]) judge(byDigit[e.key]);
+      else if (e.key === "ArrowLeft") nav(-1);
+      else if (e.key === "ArrowRight") nav(1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [commit, skip, undo]);
-
-  // ── Gesture (pointer events: touch + mouse unificati) ────────────
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (flyingRef.current) return;
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    startRef.current = { x: e.clientX, y: e.clientY };
-    setDrag({ dx: 0, dy: 0, dragging: true });
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!startRef.current || flyingRef.current) return;
-    setDrag({
-      dx: e.clientX - startRef.current.x,
-      dy: e.clientY - startRef.current.y,
-      dragging: true,
-    });
-  };
-  const onPointerUp = () => {
-    if (!startRef.current) return;
-    const { dx } = drag;
-    startRef.current = null;
-    if (Math.abs(dx) > SWIPE_THRESHOLD) {
-      commit(dx > 0 ? "top" : "no");
-    } else {
-      setDrag({ dx: 0, dy: 0, dragging: false });
-    }
-  };
-
-  const topOpacity = Math.min(Math.max(drag.dx, 0) / 90, 1);
-  const noOpacity = Math.min(Math.max(-drag.dx, 0) / 90, 1);
+  }, [judge, nav]);
 
   return (
-    <div className="max-w-md mx-auto select-none">
+    // overflowX clip: la carta in volo esce dal viewport — senza clip
+    // allargherebbe la pagina orizzontalmente (il layout "scappa" di lato
+    // su mobile, con l'intera schermata che si sposta). clip e non hidden:
+    // niente nuovo contesto di scroll.
+    <div
+      ref={rootRef}
+      className="max-w-md mx-auto select-none flex flex-col"
+      style={{
+        overflowX: "clip",
+        height: `calc(100dvh - ${topOffset ?? 170}px)`,
+        minHeight: 420,
+      }}
+    >
       {/* Pulse del microfono in registrazione */}
       <style>{`@keyframes swipe-rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }`}</style>
 
-      {/* Header */}
-      <div className="flex items-end justify-between mb-3">
-        <div>
-          <h1
-            className="text-lg font-bold tracking-wide flex items-center gap-2"
-            style={{ color: "var(--color-white)" }}
-          >
-            <span style={{ color: "var(--color-green)" }}>
-              <IconCards size={18} />
-            </span>
-            {t.title}
-          </h1>
-          <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-            {t.subtitle}
-          </p>
-        </div>
-        {total > 0 && (
-          <span
-            className="text-[11px] font-semibold tabular-nums"
-            style={{ color: "var(--color-muted)" }}
-          >
-            {done}/{total}
+      {/* Header minimo: una riga sola, la card vuole spazio */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span
+          className="text-[13px] font-bold tracking-wide flex items-center gap-1.5"
+          style={{ color: "var(--color-white)" }}
+        >
+          <span style={{ color: "var(--color-green)" }}>
+            <IconCards size={14} />
           </span>
-        )}
+          {t.title}
+        </span>
+        <span className="flex items-center gap-2">
+          {/* Switch mazzo: da giudicare ↔ già recensite */}
+          <span
+            className="flex items-center rounded-full border p-0.5"
+            style={{ borderColor: "var(--color-border)" }}
+          >
+            {(["pending", "reviewed"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => {
+                  if (m === mode || flyingRef.current) return;
+                  stopVoice();
+                  setDrag(0);
+                  setComment("");
+                  setCommentOpen(false);
+                  setMode(m);
+                }}
+                className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                style={{
+                  background: mode === m ? "var(--color-row)" : "transparent",
+                  color:
+                    mode === m ? "var(--color-bright)" : "var(--color-dim)",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {m === "pending" ? t.modePending : t.modeReviewed}
+              </button>
+            ))}
+          </span>
+          {total > 0 && (
+            <span
+              className="text-[11px] font-semibold tabular-nums"
+              style={{ color: "var(--color-muted)" }}
+            >
+              {Math.min(idx + 1, total)}/{total}
+            </span>
+          )}
+        </span>
       </div>
 
-      {/* Deck */}
-      {deck.length === 0 ? (
+      {/* Fine sequenza (o mazzo vuoto) */}
+      {finished ? (
         <div
           className="rounded-xl border px-6 py-14 text-center"
           style={{
@@ -707,9 +972,11 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
             className="text-[12px] mb-1"
             style={{ color: "var(--color-muted)" }}
           >
-            {t.emptySubtitle}
+            {mode === "reviewed" && total === 0
+              ? t.reviewedEmpty
+              : t.emptySubtitle}
           </p>
-          {history.length > 0 && (
+          {Object.keys(given).length > 0 && (
             <p
               className="text-[12px] font-semibold mb-4 flex items-center justify-center gap-4"
               style={{ color: "var(--color-base)" }}
@@ -728,33 +995,51 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               })}
             </p>
           )}
-          <Link
-            href="/positions"
-            className="inline-block text-[12px] font-semibold px-4 py-2 rounded no-underline"
-            style={{
-              background: "var(--color-row)",
-              color: "var(--color-bright)",
-              border: "1px solid var(--color-border)",
-            }}
-          >
-            {t.allPositions} →
-          </Link>
+          <div className="flex items-center justify-center gap-3">
+            {total > 0 && (
+              <button
+                type="button"
+                onClick={() => nav(-1)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border text-[12px] font-semibold"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "transparent",
+                  color: "var(--color-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                <IconChevronLeft size={14} />
+                {t.btnPrev}
+              </button>
+            )}
+            <Link
+              href="/positions"
+              className="inline-block text-[12px] font-semibold px-4 py-2 rounded no-underline"
+              style={{
+                background: "var(--color-row)",
+                color: "var(--color-bright)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              {t.allPositions} →
+            </Link>
+          </div>
         </div>
       ) : (
         <>
-          <div
-            className="relative"
-            style={{ height: "min(47dvh, 470px)", touchAction: "none" }}
-          >
-            {/* Le 3 carte in cima, dal fondo verso la cima dello stack */}
-            {deck
-              .slice(0, 3)
+          <div ref={deckRef} className="relative flex-1 min-h-0">
+            {/* Card corrente + le 2 successive come stack */}
+            {cards
+              .slice(idx, idx + 3)
               .map((card, i) => {
                 const isTop = i === 0;
+                const verdictGiven = given[card.id];
                 const transform = isTop
                   ? fly
-                    ? `translate(${fly.x}px, ${fly.y}px) rotate(${fly.rot}deg)`
-                    : `translate(${drag.dx}px, ${drag.dy * 0.4}px) rotate(${drag.dx * 0.06}deg)`
+                    ? `translate(${fly.x}px, 0) rotate(${fly.rot}deg)`
+                    : drag
+                      ? `translate(${drag}px, 0) rotate(${drag * 0.04}deg)`
+                      : "none"
                   : `translateY(${i * 10}px) scale(${1 - i * 0.035})`;
                 return (
                   <div
@@ -765,58 +1050,52 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                       background: "var(--color-card)",
                       transform,
                       transition:
-                        isTop && (fly || !drag.dragging)
-                          ? `transform ${fly ? FLY_MS : 200}ms ease`
-                          : isTop
-                            ? "none"
-                            : "transform 200ms ease",
+                        isTop && !fly && dragStart.current
+                          ? "none"
+                          : `transform ${isTop && fly ? FLY_MS : 200}ms ease`,
                       zIndex: 10 - i,
-                      cursor: isTop ? "grab" : "default",
                       boxShadow: isTop
                         ? "0 12px 32px rgba(0,0,0,0.35)"
                         : "none",
+                      touchAction: isTop ? "pan-y" : undefined,
                     }}
                     onPointerDown={isTop ? onPointerDown : undefined}
                     onPointerMove={isTop ? onPointerMove : undefined}
-                    onPointerUp={isTop ? onPointerUp : undefined}
-                    onPointerCancel={isTop ? onPointerUp : undefined}
+                    onPointerUp={isTop ? onPointerEnd : undefined}
+                    onPointerCancel={isTop ? onPointerEnd : undefined}
                   >
-                    {/* Timbri TOP/NO sulla carta in cima */}
-                    {isTop && (
-                      <>
-                        <div
-                          className="absolute top-5 left-4 px-2 py-1 rounded border-2 text-sm font-black tracking-widest flex items-center gap-1.5"
-                          style={{
-                            color: "var(--color-green)",
-                            borderColor: "var(--color-green)",
-                            transform: "rotate(-14deg)",
-                            opacity: topOpacity,
-                            zIndex: 20,
-                          }}
-                        >
-                          <IconStar size={14} filled /> {t.stampTop}
-                        </div>
-                        <div
-                          className="absolute top-5 right-4 px-2 py-1 rounded border-2 text-sm font-black tracking-widest flex items-center gap-1.5"
-                          style={{
-                            color: "var(--color-red)",
-                            borderColor: "var(--color-red)",
-                            transform: "rotate(14deg)",
-                            opacity: noOpacity,
-                            zIndex: 20,
-                          }}
-                        >
-                          <IconX size={14} /> {t.stampNo}
-                        </div>
-                      </>
+                    {/* Timbro del giudizio già dato (ri-giudicabile) */}
+                    {isTop && verdictGiven && (
+                      <div
+                        className="absolute top-[68px] right-2 px-2 py-1 rounded border-2 text-[10px] font-black tracking-widest flex items-center gap-1.5"
+                        style={{
+                          color: VERDICTS[verdictGiven].color,
+                          borderColor: VERDICTS[verdictGiven].color,
+                          background: "var(--color-card)",
+                          transform: "rotate(6deg)",
+                          zIndex: 20,
+                          opacity: 0.95,
+                        }}
+                      >
+                        {(() => {
+                          const { Icon } = VERDICTS[verdictGiven];
+                          return <Icon size={12} />;
+                        })()}
+                        {t.verdicts[verdictGiven].toUpperCase()}
+                      </div>
                     )}
 
                     {/* Contenuto card */}
                     <div className="p-5 flex flex-col gap-3 flex-1 min-h-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div
-                            className="text-[15px] font-bold leading-snug"
+                          {/* Titolo cliccabile = apre i dettagli (il vecchio
+                              link «Dettagli» del footer non esiste più). */}
+                          <Link
+                            href={`/positions/${card.id}`}
+                            target="_blank"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            className="block text-[15px] font-bold leading-snug no-underline"
                             style={{
                               color: "var(--color-white)",
                               display: "-webkit-box",
@@ -826,7 +1105,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                             }}
                           >
                             {card.title}
-                          </div>
+                          </Link>
                           <div
                             className="text-[13px] font-semibold mt-0.5 truncate"
                             style={{ color: "var(--color-base)" }}
@@ -845,72 +1124,40 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                         </div>
                       </div>
 
-                      {/* Meta chips */}
-                      <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
-                        {(card.loc_city ||
-                          card.loc_country ||
-                          card.location) && (
-                          <Chip>
-                            <span className="inline-flex items-center gap-1">
-                              <IconPin size={11} />
-                              {card.loc_city
-                                ? `${card.loc_city}${card.loc_country ? `, ${card.loc_country}` : ""}`
-                                : (card.loc_country ?? card.location)}
-                            </span>
-                          </Chip>
+                      {/* Meta chips: righe impacchettate (first-fit
+                          decreasing) — i tag grandi affiancati ai piccoli
+                          invece del wrap ingenuo su 3 righe. */}
+                      <div className="flex flex-col gap-1.5 text-[11px] font-semibold">
+                        {packChips(buildChips(card, locale, t), chipAreaW).map(
+                          (row, ri) => (
+                            <div key={ri} className="flex flex-wrap gap-1.5">
+                              {row.map((c) => (
+                                <Chip key={c.key} color={c.color}>
+                                  <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                    {c.icon}
+                                    {c.text}
+                                  </span>
+                                </Chip>
+                              ))}
+                            </div>
+                          ),
                         )}
-                        {card.remote_type && (
-                          <Chip>
-                            {t.remote[card.remote_type] ?? card.remote_type}
-                          </Chip>
-                        )}
-                        {formatSalary(
-                          card.salary_min,
-                          card.salary_max,
-                          card.salary_currency,
-                        ) && (
-                          <Chip color="var(--color-green)">
-                            {formatSalary(
-                              card.salary_min,
-                              card.salary_max,
-                              card.salary_currency,
-                            )}
-                          </Chip>
-                        )}
-                        {card.role_family && <Chip>{card.role_family}</Chip>}
                       </div>
 
-                      {/* Sintesi JD */}
+                      {/* Sintesi JD: scrollabile se non c'entra; pre-line
+                          per rispettare gli accapi del testo originale. */}
                       {card.jd_summary && (
-                        <p
-                          className="text-[12px] leading-relaxed flex-1 min-h-0"
+                        <div
+                          className="text-[12px] leading-relaxed flex-1 min-h-0 overflow-y-auto pr-1"
                           style={{
                             color: "var(--color-base)",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 8,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
+                            whiteSpace: "pre-line",
+                            overscrollBehavior: "contain",
                           }}
                         >
                           {stripMd(card.jd_summary)}
-                        </p>
+                        </div>
                       )}
-
-                      {/* Footer */}
-                      <div className="mt-auto flex items-center justify-between text-[11px]">
-                        <span style={{ color: "var(--color-dim)" }}>
-                          {card.source ?? ""}
-                        </span>
-                        <Link
-                          href={`/positions/${card.id}`}
-                          target="_blank"
-                          className="font-semibold no-underline"
-                          style={{ color: "var(--color-blue)" }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                        >
-                          {t.details} ↗
-                        </Link>
-                      </div>
                     </div>
                   </div>
                 );
@@ -918,160 +1165,178 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               .reverse()}
           </div>
 
-          {/* Commento opzionale (tastiera o dettatura): parte col prossimo
-              giudizio. La riga ha ALTEZZA FISSA: da aperta, la box si
-              espande VERSO L'ALTO come overlay sopra la card (position
-              absolute ancorata al bottom) senza spostare il layout; la X
-              nell'angolo la richiude alla riga compatta (testo conservato,
-              mostrato troncato). */}
-          <div className="mt-4 flex items-start gap-2">
-            <div className="relative flex-1 min-w-0" style={{ height: 38 }}>
-              {commentOpen ? (
-                <div
-                  className="absolute left-0 right-0 bottom-0 rounded-lg border"
-                  style={{
-                    borderColor: recording
-                      ? "var(--color-red)"
-                      : "var(--color-border)",
-                    background: "var(--color-panel)",
-                    zIndex: 30,
-                    boxShadow: "0 -10px 28px rgba(0,0,0,0.4)",
-                  }}
-                >
-                  <textarea
-                    autoFocus
-                    rows={5}
-                    maxLength={2000}
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder={recording ? t.voiceListening : t.commentPh}
-                    className="w-full rounded-lg px-3 py-2 pr-9 text-[12px] resize-none block"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "var(--color-bright)",
-                      outline: "none",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    aria-label={t.commentClose}
-                    title={t.commentClose}
-                    onClick={() => setCommentOpen(false)}
-                    className="absolute top-1.5 right-1.5 rounded-full border flex items-center justify-center"
-                    style={{
-                      width: 22,
-                      height: 22,
-                      color: "var(--color-muted)",
-                      borderColor: "var(--color-border)",
-                      background: "var(--color-card)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <IconX size={11} />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setCommentOpen(true)}
-                  className="w-full h-full rounded-lg border px-3 text-[12px] text-left flex items-center gap-2"
-                  style={{
-                    borderColor: "var(--color-border)",
-                    background: "transparent",
-                    color: comment ? "var(--color-bright)" : "var(--color-dim)",
-                    cursor: "text",
-                  }}
-                >
-                  <IconChat size={13} />
-                  <span className="truncate">
-                    {comment ? comment : t.commentPh}
-                  </span>
-                </button>
-              )}
-            </div>
-            {speechOk && (
+          {/* Bottoni: 4 giudizi + commento (quinto posto, scelta utente
+              19/07) */}
+          <div className="shrink-0 flex items-start justify-center gap-2 mt-3">
+            {VERDICT_ORDER.map((v) => (
+              <VerdictButton
+                key={v}
+                verdict={v}
+                label={t.verdicts[v]}
+                onClick={() => judge(v)}
+              />
+            ))}
+            <div className="flex flex-col items-center gap-1 w-[64px]">
               <button
                 type="button"
-                aria-label={recording ? t.voiceStop : t.voiceStart}
-                title={recording ? t.voiceStop : t.voiceStart}
-                onClick={recording ? stopVoice : startVoice}
-                className="shrink-0 rounded-lg border flex items-center justify-center"
+                aria-label={t.commentTitle}
+                title={t.commentTitle}
+                onClick={() => setCommentOpen(true)}
+                className="rounded-full border-2 flex items-center justify-center font-bold transition-transform active:scale-90 relative"
                 style={{
-                  width: 38,
-                  height: 38,
-                  color: recording ? "var(--color-red)" : "var(--color-muted)",
-                  borderColor: recording
-                    ? "var(--color-red)"
-                    : "var(--color-border)",
+                  width: 48,
+                  height: 48,
+                  color: comment ? "var(--color-bright)" : "var(--color-muted)",
+                  borderColor: comment
+                    ? "var(--color-bright)"
+                    : "var(--color-muted)",
                   background: "var(--color-card)",
                   cursor: "pointer",
-                  animation: recording
-                    ? "swipe-rec-pulse 1.2s ease-in-out infinite"
-                    : undefined,
                 }}
               >
-                {recording ? <IconStop size={16} /> : <IconMic size={16} />}
+                <IconChat size={18} />
+                {comment && (
+                  <span
+                    className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full"
+                    style={{ background: "var(--color-green)" }}
+                  />
+                )}
               </button>
-            )}
-          </div>
-
-          {/* Bottoni giudizio + undo */}
-          <div className="flex items-start justify-center gap-3 mt-4">
-            {VERDICT_ORDER.slice(0, 2).map((v) => (
-              <VerdictButton
-                key={v}
-                verdict={v}
-                label={t.verdicts[v]}
-                onClick={() => commit(v)}
-              />
-            ))}
-            <div className="flex flex-col items-center gap-1">
-              <ActionCircle
-                label={t.btnUndo}
-                color="var(--color-yellow)"
-                size={40}
-                disabled={history.length === 0}
-                onClick={undo}
+              <span
+                className="text-[9px] font-semibold text-center leading-tight"
+                style={{ color: "var(--color-muted)" }}
               >
-                <IconUndo size={16} />
-              </ActionCircle>
+                {t.commentTitle}
+              </span>
             </div>
-            {VERDICT_ORDER.slice(2).map((v) => (
-              <VerdictButton
-                key={v}
-                verdict={v}
-                label={t.verdicts[v]}
-                onClick={() => commit(v)}
-              />
-            ))}
-          </div>
-
-          {/* Skip: azione secondaria, nessun giudizio registrato */}
-          <div className="flex justify-center mt-3">
-            <button
-              type="button"
-              onClick={skip}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold"
-              style={{
-                borderColor: "var(--color-border)",
-                background: "transparent",
-                color: "var(--color-muted)",
-                cursor: "pointer",
-              }}
-            >
-              {t.btnSkip}
-              <IconSkip size={13} />
-            </button>
           </div>
 
           <p
-            className="hidden md:block text-center text-[10px] mt-3"
+            className="hidden md:block text-center text-[10px] mt-2"
             style={{ color: "var(--color-dim)" }}
           >
             {t.hintKeys}
           </p>
         </>
+      )}
+
+      {/* Pop-up commento: finestra dedicata con textarea + dettatura.
+          Chiudere (X, Fatto o tap sul fondo) conserva il testo — verrà
+          inviato col prossimo giudizio. */}
+      {commentOpen && (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-5"
+          style={{ background: "rgba(0,0,0,0.55)", zIndex: 90 }}
+          onClick={() => {
+            stopVoice();
+            setCommentOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border p-4"
+            style={{
+              background: "var(--color-panel)",
+              borderColor: recording
+                ? "var(--color-red)"
+                : "var(--color-border-glow)",
+              boxShadow: "0 18px 48px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span
+                className="text-[13px] font-bold flex items-center gap-2"
+                style={{ color: "var(--color-white)" }}
+              >
+                <IconChat size={14} />
+                {t.commentTitle}
+              </span>
+              <button
+                type="button"
+                aria-label={t.commentClose}
+                title={t.commentClose}
+                onClick={() => {
+                  stopVoice();
+                  setCommentOpen(false);
+                }}
+                className="rounded-full border flex items-center justify-center"
+                style={{
+                  width: 24,
+                  height: 24,
+                  color: "var(--color-muted)",
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-card)",
+                  cursor: "pointer",
+                }}
+              >
+                <IconX size={12} />
+              </button>
+            </div>
+            <textarea
+              autoFocus
+              rows={6}
+              maxLength={2000}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder={recording ? t.voiceListening : t.commentPh}
+              className="w-full rounded-lg border px-3 py-2 text-[12px] resize-none block"
+              style={{
+                borderColor: recording
+                  ? "var(--color-red)"
+                  : "var(--color-border)",
+                background: "var(--color-row)",
+                color: "var(--color-bright)",
+                outline: "none",
+              }}
+            />
+            <div className="flex items-center justify-between mt-3">
+              {speechOk ? (
+                <button
+                  type="button"
+                  aria-label={recording ? t.voiceStop : t.voiceStart}
+                  title={recording ? t.voiceStop : t.voiceStart}
+                  onClick={recording ? stopVoice : startVoice}
+                  className="rounded-lg border flex items-center justify-center"
+                  style={{
+                    width: 38,
+                    height: 38,
+                    color: recording
+                      ? "var(--color-red)"
+                      : "var(--color-muted)",
+                    borderColor: recording
+                      ? "var(--color-red)"
+                      : "var(--color-border)",
+                    background: "var(--color-card)",
+                    cursor: "pointer",
+                    animation: recording
+                      ? "swipe-rec-pulse 1.2s ease-in-out infinite"
+                      : undefined,
+                  }}
+                >
+                  {recording ? <IconStop size={16} /> : <IconMic size={16} />}
+                </button>
+              ) : (
+                <span />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  stopVoice();
+                  setCommentOpen(false);
+                }}
+                className="px-4 py-2 rounded-lg text-[12px] font-bold"
+                style={{
+                  background: "var(--color-green)",
+                  color: "#04170c",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {t.commentDone}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Toast errori rete (non bloccante) */}
@@ -1124,10 +1389,24 @@ function VerdictButton({
 }) {
   const { Icon, color } = VERDICTS[verdict];
   return (
-    <div className="flex flex-col items-center gap-1 w-[72px]">
-      <ActionCircle label={label} color={color} size={52} onClick={onClick}>
+    <div className="flex flex-col items-center gap-1 w-[64px]">
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={onClick}
+        className="rounded-full border-2 flex items-center justify-center font-bold transition-transform active:scale-90"
+        style={{
+          width: 48,
+          height: 48,
+          color,
+          borderColor: color,
+          background: "var(--color-card)",
+          cursor: "pointer",
+        }}
+      >
         <Icon size={20} />
-      </ActionCircle>
+      </button>
       <span
         className="text-[9px] font-semibold text-center leading-tight"
         style={{ color: "var(--color-muted)" }}
@@ -1135,43 +1414,5 @@ function VerdictButton({
         {label}
       </span>
     </div>
-  );
-}
-
-function ActionCircle({
-  children,
-  label,
-  color,
-  size,
-  disabled,
-  onClick,
-}: {
-  children: React.ReactNode;
-  label: string;
-  color: string;
-  size: number;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="rounded-full border-2 flex items-center justify-center font-bold transition-transform active:scale-90"
-      style={{
-        width: size,
-        height: size,
-        color,
-        borderColor: color,
-        background: "var(--color-card)",
-        opacity: disabled ? 0.3 : 1,
-        cursor: disabled ? "default" : "pointer",
-      }}
-    >
-      {children}
-    </button>
   );
 }
