@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { ActionRow, IconFileText } from "./ActionRow";
 
 interface Props {
   legacyId: number;
@@ -18,67 +19,67 @@ interface Props {
 const T: Record<
   Locale,
   {
-    writeCv: string;
-    sent: string;
-    cancelling: string;
-    requested: string;
+    title: string;
+    desc: string;
+    requestedDesc: string;
+    sending: string;
     unavailable: string;
     networkError: string;
   }
 > = {
   it: {
-    writeCv: "Scrivi CV",
-    sent: "Richiesta inviata…",
-    cancelling: "Annullando…",
-    requested: "CV richiesto · annulla",
+    title: "Richiedi il CV su misura",
+    desc: "Il team scrive CV e lettera di presentazione per questa offerta",
+    requestedDesc: "CV richiesto al team — tocca per annullare",
+    sending: "Un momento…",
     unavailable: "Non disponibile",
     networkError: "Errore di rete",
   },
   en: {
-    writeCv: "Write CV",
-    sent: "Request sent…",
-    cancelling: "Cancelling…",
-    requested: "CV requested · cancel",
+    title: "Request a tailored CV",
+    desc: "The team writes a CV and cover letter for this position",
+    requestedDesc: "CV requested from the team — tap to cancel",
+    sending: "One moment…",
     unavailable: "Not available",
     networkError: "Network error",
   },
   es: {
-    writeCv: "Escribir CV",
-    sent: "Solicitud enviada…",
-    cancelling: "Cancelando…",
-    requested: "CV solicitado · cancelar",
+    title: "Solicita un CV a medida",
+    desc: "El equipo redacta el CV y la carta de presentación para esta oferta",
+    requestedDesc: "CV solicitado al equipo — toca para cancelar",
+    sending: "Un momento…",
     unavailable: "No disponible",
     networkError: "Error de red",
   },
   fr: {
-    writeCv: "Rédiger le CV",
-    sent: "Demande envoyée…",
-    cancelling: "Annulation…",
-    requested: "CV demandé · annuler",
+    title: "Demander un CV sur mesure",
+    desc: "L'équipe rédige le CV et la lettre de motivation pour ce poste",
+    requestedDesc: "CV demandé à l'équipe — touchez pour annuler",
+    sending: "Un instant…",
     unavailable: "Non disponible",
     networkError: "Erreur réseau",
   },
   de: {
-    writeCv: "CV schreiben",
-    sent: "Anfrage gesendet…",
-    cancelling: "Wird abgebrochen…",
-    requested: "CV angefordert · abbrechen",
+    title: "Maßgeschneiderten Lebenslauf anfordern",
+    desc: "Das Team schreibt Lebenslauf und Anschreiben für diese Stelle",
+    requestedDesc: "Lebenslauf angefordert — zum Abbrechen tippen",
+    sending: "Einen Moment…",
     unavailable: "Nicht verfügbar",
     networkError: "Netzwerkfehler",
   },
   hu: {
-    writeCv: "CV írása",
-    sent: "Kérés elküldve…",
-    cancelling: "Megszakítás…",
-    requested: "CV kérve · mégse",
+    title: "Kérj testreszabott önéletrajzot",
+    desc: "A csapat önéletrajzot és motivációs levelet ír ehhez az álláshoz",
+    requestedDesc: "Önéletrajz kérve a csapattól — koppints a visszavonáshoz",
+    sending: "Egy pillanat…",
     unavailable: "Nem elérhető",
     networkError: "Hálózati hiba",
   },
   pt: {
-    writeCv: "Escrever CV",
-    sent: "Pedido enviado…",
-    cancelling: "Cancelando…",
-    requested: "CV solicitado · cancelar",
+    title: "Pede um CV à medida",
+    desc: "A equipa escreve o CV e a carta de apresentação para esta vaga",
+    requestedDesc: "CV solicitado à equipa — toca para cancelar",
+    sending: "Um momento…",
     unavailable: "Não disponível",
     networkError: "Erro de rede",
   },
@@ -122,49 +123,25 @@ export function WriteRequestButton({
     }
   };
 
-  if (disabled) {
-    return (
-      <button
-        type="button"
-        disabled
-        title={disabledReason ?? t.unavailable}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold opacity-40 cursor-not-allowed"
-        style={{
-          borderColor: "var(--color-border)",
-          color: "var(--color-dim)",
-        }}
-      >
-        {t.writeCv}
-      </button>
-    );
-  }
-
-  const label = isPending
-    ? requested
-      ? t.sent
-      : t.cancelling
-    : requested
-      ? t.requested
-      : t.writeCv;
-
-  const color = requested ? "var(--color-green)" : "var(--color-purple)";
-
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={isPending}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:opacity-60 disabled:cursor-wait"
-        style={{ borderColor: color, color }}
-      >
-        {requested ? "✓" : "🖊"} {label}
-      </button>
-      {error && (
-        <span className="text-[10px]" style={{ color: "var(--color-red)" }}>
-          {error}
-        </span>
-      )}
-    </div>
+    <ActionRow
+      icon={<IconFileText />}
+      title={t.title}
+      description={
+        disabled
+          ? (disabledReason ?? t.unavailable)
+          : isPending
+            ? t.sending
+            : requested
+              ? t.requestedDesc
+              : t.desc
+      }
+      accent="var(--color-purple)"
+      active={requested}
+      busy={isPending}
+      disabled={disabled}
+      onClick={toggle}
+      error={error}
+    />
   );
 }
