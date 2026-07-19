@@ -71,8 +71,9 @@ signal live_settings_updated(settings: Dictionary)
 signal telemetry_updated(sample: Dictionary, history: Array)
 ## Storico usage on-demand (finestre di monitoraggio risorse). query è
 ## l'eco della richiesta {from_ts, to_ts, bucket_sec}; data = {ok, error,
-## sentinel: [{t, usage, weekly, velocity, projection, throttle}, …],
+## sentinel: [{t, usage, weekly, velocity, velocity_ideal, projection}, …],
 ## meter: [{t, weighted_kt, events}, …],
+## throttle: [{t, throttle_s, pauses}, …]  (eventi pausa del pacing),
 ## agents: {names: [String], series: [{t, <agente>: kT_delta}, …],
 ##          totals_kt: {<agente>: kT}}} — t sempre unix epoch UTC.
 signal usage_history_updated(query: Dictionary, data: Dictionary)

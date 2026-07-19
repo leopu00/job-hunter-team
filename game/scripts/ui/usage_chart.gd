@@ -250,7 +250,7 @@ func _draw_bars(plot: Rect2, peak: float, visible: Array) -> void:
 		for s in visible:
 			var v := 0.0
 			for p in _window_points(s, _from_ts, _to_ts):
-				if is_equal_approx(float(p[0]), float(t)):
+				if absf(float(p[0]) - float(t)) < 0.5:
 					v = float(p[1])
 					break
 			if v <= 0.0:
@@ -286,7 +286,10 @@ func _draw_hover(plot: Rect2, peak: float, visible: Array) -> void:
 	var total := 0.0
 	for s in visible:
 		for p in _window_points(s, _from_ts, _to_ts):
-			if is_equal_approx(float(p[0]), best_ts):
+			# confronto ESATTO sul bucket: is_equal_approx su un unix ts
+			# ha tolleranza relativa (~mezz'ora su 1.7e9) e aggancia il
+			# bucket sbagliato — pallini fuori dalla linea, valori vecchi
+			if absf(float(p[0]) - best_ts) < 0.5:
 				var v := float(p[1])
 				total += v
 				lines.append("%s  %s" % [str(s.get("label", s.get("key", "?"))),

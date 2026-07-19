@@ -324,7 +324,8 @@ var _wiz_step := 0
 ## turni alternati. Deterministico (seed dal bucket): stessi grafici a
 ## ogni apertura, niente sfarfallio da showroom.
 func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
-	var data := {"ok": true, "sentinel": [], "meter": [], "agents": {}}
+	var data := {"ok": true, "sentinel": [], "meter": [], "throttle": [],
+			"agents": {}}
 	var names := ["scout-1", "scout-2", "analista-1", "scorer-1",
 			"scrittore-1", "critico-1", "capitano", "sentinella"]
 	var series: Array = []
@@ -341,8 +342,10 @@ func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
 				"usage": roundf(five_h * 62.0 * awake * 100.0) / 100.0,
 				"weekly": roundf(week_phase * 78.0 * 100.0) / 100.0,
 				"velocity": roundf((14.0 + 18.0 * wobble) * awake * 100.0) / 100.0,
-				"projection": roundf(five_h * 80.0 * awake * 100.0) / 100.0,
-				"throttle": 300.0 if wobble > 0.93 and awake > 0.5 else 0.0})
+				"velocity_ideal": 20.0,
+				"projection": roundf(five_h * 80.0 * awake * 100.0) / 100.0})
+		if wobble > 0.93 and awake > 0.5:
+			data["throttle"].append({"t": t, "throttle_s": 600.0, "pauses": 2})
 		data["meter"].append({"t": t,
 				"weighted_kt": roundf(five_h * 92000.0 * awake / 10.0) / 100.0,
 				"events": int(five_h * 4000.0 * awake)})
