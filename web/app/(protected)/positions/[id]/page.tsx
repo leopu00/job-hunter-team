@@ -462,6 +462,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Sur site",
     pt: "Presencial",
   },
+  open_in_maps: {
+    it: "Apri in Google Maps",
+    en: "Open in Google Maps",
+    hu: "Megnyitás a Google Térképen",
+    es: "Abrir en Google Maps",
+    de: "In Google Maps öffnen",
+    fr: "Ouvrir dans Google Maps",
+    pt: "Abrir no Google Maps",
+  },
   location: {
     it: "Località",
     en: "Location",
@@ -860,6 +869,20 @@ export default async function PositionDetailPage({ params }: PageProps) {
         ? gazetteerCity(locCountry, locCity)
         : null;
   const flag = countryFlag(position.loc_country_code ?? null, locCountry);
+  // Indirizzo ESATTO dell'ufficio (office-geocoding): mostrato solo quando è
+  // davvero un indirizzo (verificato o con civico) — il fallback città-paese
+  // duplicherebbe il testo della card. Il link apre Google Maps (universal
+  // link: app sul telefono, browser altrove) sulle NOSTRE coordinate.
+  const exactAddress =
+    position.office_address &&
+    position.office_lat != null &&
+    position.office_lon != null &&
+    (position.office_verified === true || /\d/.test(position.office_address))
+      ? position.office_address
+      : null;
+  const mapsUrl = exactAddress
+    ? `https://www.google.com/maps/search/?api=1&query=${position.office_lat},${position.office_lon}`
+    : null;
   // basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
   // bridge e il file-serving locale risolvono per basename.
   const cvFileName = application?.cv_pdf_path?.split("/").pop() || null;
@@ -989,22 +1012,37 @@ export default async function PositionDetailPage({ params }: PageProps) {
       className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors"
     >
       <div className="section-label mb-3">{t("location")}</div>
-      <div className={`flex items-center gap-2.5 ${mapCoords ? "mb-3" : ""}`}>
-        {flag && (
-          <span className="text-[24px] leading-none" aria-hidden="true">
-            {flag}
-          </span>
-        )}
-        <div className="min-w-0">
-          <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
-            {locCity ?? position.location}
-          </div>
-          {locCountry && (
-            <div className="text-[11px] text-[var(--color-muted)]">
-              {locCountry}
-            </div>
+      <div
+        className={`flex items-start justify-between gap-3 ${mapCoords ? "mb-3" : ""}`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          {flag && (
+            <span className="text-[24px] leading-none" aria-hidden="true">
+              {flag}
+            </span>
           )}
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
+              {locCity ?? position.location}
+            </div>
+            {locCountry && (
+              <div className="text-[11px] text-[var(--color-muted)]">
+                {locCountry}
+              </div>
+            )}
+          </div>
         </div>
+        {exactAddress && mapsUrl && (
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={t("open_in_maps")}
+            className="max-w-[55%] shrink-0 text-right text-[10px] leading-snug text-[var(--color-blue)] no-underline transition-colors hover:text-[var(--color-bright)]"
+          >
+            {exactAddress} ↗
+          </a>
+        )}
       </div>
       {mapCoords && (
         <PositionMapCardLazy lat={mapCoords.lat} lon={mapCoords.lon} />
