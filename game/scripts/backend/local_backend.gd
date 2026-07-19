@@ -47,14 +47,18 @@ func _ssh_stdin_file(local_file: String, command: String) -> Dictionary:
 	var stderr: FileAccess = process["stderr"]
 	stdio.store_buffer(payload)
 	stdio.close()
+	# Un read corto NON è EOF (stesso fix del trasporto SSH, 19/07): si
+	# legge finché il processo vive, poi si svuota il residuo del pipe.
+	var pid := int(process["pid"])
 	var output_bytes := PackedByteArray()
 	while true:
 		var chunk := stderr.get_buffer(65536)
 		output_bytes.append_array(chunk)
-		if chunk.size() < 65536:
-			break
+		if chunk.size() == 0:
+			if not OS.is_process_running(pid):
+				break
+			OS.delay_msec(5)
 	stderr.close()
-	var pid := int(process["pid"])
 	while OS.is_process_running(pid):
 		OS.delay_msec(5)
 	return {"code": OS.get_process_exit_code(pid),

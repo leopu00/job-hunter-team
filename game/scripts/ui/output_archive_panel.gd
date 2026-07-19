@@ -277,12 +277,14 @@ func _build_detail() -> void:
 	_detail.add_child(TerminalTheme.label(UIStrings.t("cv.artifacts"), 13,
 			Palette.MUTED, "medium"))
 	var artifact_count := 0
-	for artifact in [["CV", "cv_path"], ["CV PDF", "cv_pdf_path"],
-			["COVER LETTER", "cl_path"], ["COVER LETTER PDF", "cl_pdf_path"]]:
-		var path := _text(p.get(artifact[1]))
-		if path != "":
-			artifact_count += 1
-			_add_detail_row(str(artifact[0]), path.get_file(), Palette.MINT)
+	for doc in [["CV", "cv_path", "cv_pdf_path"],
+			["COVER LETTER", "cl_path", "cl_pdf_path"]]:
+		var md_path := _text(p.get(doc[1]))
+		var pdf_path := _text(p.get(doc[2]))
+		if md_path == "" and pdf_path == "":
+			continue
+		artifact_count += 1
+		_add_artifact_row(str(doc[0]), md_path, pdf_path, p)
 	if artifact_count == 0:
 		_detail.add_child(TerminalTheme.label("—", 13, Palette.DIM))
 	_detail.add_child(HSeparator.new())
@@ -295,6 +297,34 @@ func _build_detail() -> void:
 	var summary := _text(p.get("jd_summary"))
 	if summary != "":
 		_detail.add_child(_paragraph(summary, Palette.MUTED))
+
+## Riga documento cliccabile: apre l'anteprima in-game (markdown reso
+## nel tema terminale; il pdf passa dal viewer di sistema).
+func _add_artifact_row(label_text: String, md_path: String, pdf_path: String,
+		p: Dictionary) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	_detail.add_child(row)
+	var label := TerminalTheme.label(label_text, 11, Palette.MUTED, "medium")
+	label.custom_minimum_size = Vector2(150, 0)
+	row.add_child(label)
+	var display := md_path if md_path != "" else pdf_path
+	var btn := Button.new()
+	btn.flat = true
+	btn.clip_text = true
+	btn.text = "▸ " + display.get_file()
+	btn.tooltip_text = UIStrings.t("cv.preview")
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.add_theme_font_size_override("font_size", 13)
+	btn.add_theme_color_override("font_color", Palette.MINT)
+	btn.add_theme_color_override("font_hover_color", Palette.GREEN)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var doc_title := "%s · %s" % [_text_or(p.get("title"), "?"),
+			_text_or(p.get("company"), "?")]
+	btn.pressed.connect(func() -> void:
+		Sfx.play_tick()
+		add_child(DocPreviewPanel.new(md_path, pdf_path, doc_title)))
+	row.add_child(btn)
 
 func _add_detail_row(label_text: String, value: String, color: Color) -> void:
 	var row := HBoxContainer.new()
