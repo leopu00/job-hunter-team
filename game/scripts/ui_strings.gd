@@ -394,9 +394,11 @@ const S := {
 	"agent.hs_day": "consumo di oggi · % weekly cum.",
 	"agent.hs_throttle": "throttle s",
 	"agent.hs_db": "azioni db",
+	"agent.hs_cpu_agent": "cpu agente %",
+	"agent.hs_ram_agent": "ram agente MB",
 	"agent.hs_cpu": "cpu container %",
 	"agent.hs_ram": "ram container %",
-	"agent.history_ctx_note": "// cpu/ram sono dell'intero container: la telemetria per-agente storica non esiste (ancora)",
+	"agent.history_ctx_note": "// cpu/ram agente = sampler agent-vitals (dal prossimo lancio team); container = contesto",
 
 	# ── Dashboard: pipeline del flusso reale ──────────────────────
 	"dash.pipeline": "PIPELINE",

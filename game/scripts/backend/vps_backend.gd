@@ -519,6 +519,41 @@ try:
 except Exception as e:
     out['db_error'] = str(e)
 
+# ── cpu/rss VERI del ruolo da agent-vitals.jsonl (sampler 19/07:
+# attribuzione JHT_AGENT_NAME in /proc/*/environ, somma istanze,
+# media per bucket). Vuoto finche' il sampler non gira.
+try:
+    acc = {}
+    for line in open('/jht_home/logs/agent-vitals.jsonl'):
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        t = iso_to_unix(row.get('ts'))
+        if not (FROM_TS <= t <= TO_TS):
+            continue
+        cpu = rss = 0.0
+        hit = False
+        for name, v in (row.get('agents') or {}).items():
+            if mine(name):
+                hit = True
+                cpu += float(v.get('cpu_pct') or 0)
+                rss += float(v.get('rss_mb') or 0)
+        if not hit:
+            continue
+        b = acc.setdefault(bucket_of(t), {'n': 0, 'cpu': 0.0, 'rss': 0.0})
+        b['n'] += 1
+        b['cpu'] += cpu
+        b['rss'] += rss
+    out['series']['cpu_agent_pct'] = [
+        {'t': t, 'v': round(acc[t]['cpu'] / max(1, acc[t]['n']), 1)}
+        for t in sorted(acc)]
+    out['series']['ram_agent_mb'] = [
+        {'t': t, 'v': round(acc[t]['rss'] / max(1, acc[t]['n']), 1)}
+        for t in sorted(acc)]
+except Exception as e:
+    out['agent_vitals_error'] = str(e)
+
 # ── contesto container: cpu/ram %% da vitals.jsonl (media per bucket) ─
 try:
     acc = {}
