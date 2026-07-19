@@ -36,10 +36,14 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.022, 0.03, 0.78))
 	if not _font:
 		return
-	var text := UIStrings.t("usage.loading_veil") + ".".repeat(_dots)
+	# il centraggio usa SOLO il testo base: i puntini si aggiungono a
+	# destra senza spostare la scritta (feedback Leone: niente jitter)
+	var text := UIStrings.t("usage.loading_veil")
 	var w := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
 	var pos := Vector2((size.x - w) / 2.0, size.y / 2.0 - 4.0)
 	draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.GREEN)
+	draw_string(_font, pos + Vector2(w, 0), ".".repeat(_dots),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Palette.GREEN)
 	# barra di attività sotto la scritta: un segmento che scorre
 	var bar_w := minf(220.0, size.x * 0.4)
 	var bx := (size.x - bar_w) / 2.0
