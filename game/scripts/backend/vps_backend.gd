@@ -363,6 +363,189 @@ except Exception as e:
 print(json.dumps(out, separators=(',', ':')))
 """
 
+## Storico del SINGOLO RUOLO per la scheda agente: token per bucket
+## (tutte le istanze del ruolo), conversione in % delle finestre 5h e
+## weekly (ratio EMA del token-meter + window-ratio-meter), pause del
+## pacing, azioni sul jobs.db (transizioni + eventi scrittore/critico
+## dalle applications) e cpu/ram del CONTAINER da vitals.jsonl come
+## contesto (telemetria per-agente storica: non esiste, vedi report
+## 19/07). Placeholder: %d from, %d to, %d bucket, '%s' ruolo (validato
+## [a-z0-9-] dal chiamante — mai testo libero qui dentro).
+const AGENT_HISTORY_PY := """
+import csv, json, sqlite3, subprocess
+from datetime import datetime, timezone
+
+FROM_TS = float(%d)
+TO_TS = float(%d)
+BUCKET = max(60, int(%d))
+ROLE = '%s'
+
+def iso_to_unix(s):
+    # i ts di sqlite (CURRENT_TIMESTAMP) sono naive UTC: senza offset
+    # esplicito il fuso va imposto, non dedotto dal sistema
+    try:
+        d = datetime.fromisoformat(str(s).replace(' ', 'T').replace('Z', '+00:00'))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        return d.timestamp()
+    except Exception:
+        return 0.0
+
+def bucket_of(t):
+    return int(t // BUCKET) * BUCKET
+
+def mine(name):
+    n = str(name).lower()
+    return n == ROLE or n.startswith(ROLE + '-')
+
+def to_rows(acc, fn=lambda v: v):
+    return [{'t': t, 'v': fn(acc[t])} for t in sorted(acc)]
+
+out = {'ok': True, 'agent': ROLE, 'series': {}}
+
+# ── token kT per bucket (serie cumulativa della skill → delta) ───────
+try:
+    now = datetime.now(timezone.utc).timestamp()
+    since_min = max(5.0, (now - FROM_TS) / 60.0)
+    raw = subprocess.check_output(
+        ['python3', '/app/shared/skills/token-by-agent-series.py',
+         '--since-min', str(round(since_min, 1)),
+         '--bucket-sec', str(BUCKET)],
+        text=True, stderr=subprocess.DEVNULL, timeout=240)
+    data = json.loads(raw)
+    all_names = data.get('agents', [])
+    names = [a for a in all_names if mine(a)]
+    prev = {a: 0.0 for a in all_names}
+    acc = {}
+    team = {}
+    for row in data.get('series', []):
+        t = iso_to_unix(row.get('ts'))
+        keep = FROM_TS <= t <= TO_TS
+        for a in all_names:
+            cur = float(row.get(a) or 0)
+            delta = max(0.0, cur - prev[a])
+            prev[a] = cur
+            if keep and delta > 0:
+                team[bucket_of(t)] = team.get(bucket_of(t), 0.0) + delta
+                if a in names:
+                    acc[bucket_of(t)] = acc.get(bucket_of(t), 0.0) + delta
+    out['series']['tokens_kt'] = to_rows(acc, lambda v: round(v, 2))
+except Exception as e:
+    out['tokens_error'] = str(e)
+    acc, team = {}, {}
+
+# ── quota finestre: delta usage%% della sentinella x fetta token del
+# ruolo nel bucket. Auto-consistente: nessuna dipendenza dai pesi del
+# token-meter (che pesa i token diversamente dalla serie per-agente).
+try:
+    lv = {}
+    for line in open('/jht_home/logs/sentinel-data.jsonl'):
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        t = iso_to_unix(row.get('ts'))
+        # un bucket di margine PRIMA della finestra: il primo delta
+        # visibile ha bisogno del livello precedente
+        if t < FROM_TS - BUCKET or t > TO_TS:
+            continue
+        b = lv.setdefault(bucket_of(t), {'n': 0, 'u': 0.0, 'w': 0.0})
+        b['n'] += 1
+        b['u'] += float(row.get('usage') or 0)
+        b['w'] += float(row.get('weekly_usage') or 0)
+    ts_sorted = sorted(lv)
+    p5, pw = [], []
+    for i in range(1, len(ts_sorted)):
+        t0, t1 = ts_sorted[i - 1], ts_sorted[i]
+        if t1 < FROM_TS or t1 > TO_TS:
+            continue
+        a0, a1 = lv[t0], lv[t1]
+        du = max(0.0, a1['u'] / max(1, a1['n']) - a0['u'] / max(1, a0['n']))
+        dw = max(0.0, a1['w'] / max(1, a1['n']) - a0['w'] / max(1, a0['n']))
+        share = acc.get(t1, 0.0) / team[t1] if team.get(t1) else 0.0
+        if share > 0:
+            p5.append({'t': t1, 'v': round(du * share, 3)})
+            pw.append({'t': t1, 'v': round(dw * share, 4)})
+    out['series']['pct_5h'] = p5
+    out['series']['pct_weekly'] = pw
+except Exception as e:
+    out['pct_error'] = str(e)
+
+# ── pause pacing del ruolo ───────────────────────────────────────────
+try:
+    acc = {}
+    for line in open('/jht_home/logs/throttle-events.jsonl'):
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if str(row.get('event')) != 'start' or not mine(row.get('agent')):
+            continue
+        t = float(row.get('ts_unix') or 0)
+        if FROM_TS <= t <= TO_TS:
+            acc[bucket_of(t)] = acc.get(bucket_of(t), 0.0) + \
+                float(row.get('applied_sec') or 0)
+    out['series']['throttle_s'] = to_rows(acc)
+except Exception as e:
+    out['throttle_error'] = str(e)
+
+# ── azioni jobs.db del ruolo (conteggio per bucket) ──────────────────
+try:
+    acc = {}
+    def add_ts(s):
+        t = iso_to_unix(s)
+        if FROM_TS <= t <= TO_TS:
+            acc[bucket_of(t)] = acc.get(bucket_of(t), 0) + 1
+    db = sqlite3.connect('file:/jht_home/jobs.db?mode=ro', uri=True)
+    like = ROLE + '-%%'
+    for (ts,) in db.execute(
+            'SELECT ts FROM position_state_transitions '
+            'WHERE by_agent = ? OR by_agent LIKE ?', (ROLE, like)):
+        add_ts(ts)
+    # scrittore e critico non passano dalle transitions: i loro eventi
+    # vivono su applications (written_at / critic_reviewed_at)
+    if ROLE == 'scrittore':
+        for (ts,) in db.execute(
+                'SELECT written_at FROM applications '
+                'WHERE written_at IS NOT NULL'):
+            add_ts(ts)
+    if ROLE == 'critico':
+        for (ts,) in db.execute(
+                'SELECT critic_reviewed_at FROM applications '
+                'WHERE critic_reviewed_at IS NOT NULL'):
+            add_ts(ts)
+    db.close()
+    out['series']['db_actions'] = to_rows(acc)
+except Exception as e:
+    out['db_error'] = str(e)
+
+# ── contesto container: cpu/ram %% da vitals.jsonl (media per bucket) ─
+try:
+    acc = {}
+    for line in open('/jht_home/logs/vitals.jsonl'):
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        t = iso_to_unix(row.get('ts'))
+        if not (FROM_TS <= t <= TO_TS):
+            continue
+        b = acc.setdefault(bucket_of(t), {'n': 0, 'cpu': 0.0, 'ram': 0.0})
+        b['n'] += 1
+        b['cpu'] += float((row.get('cpu') or {}).get('pct') or 0)
+        b['ram'] += float((row.get('mem') or {}).get('pct') or 0)
+    out['series']['cpu_pct'] = [
+        {'t': t, 'v': round(acc[t]['cpu'] / max(1, acc[t]['n']), 1)}
+        for t in sorted(acc)]
+    out['series']['ram_pct'] = [
+        {'t': t, 'v': round(acc[t]['ram'] / max(1, acc[t]['n']), 1)}
+        for t in sorted(acc)]
+except Exception as e:
+    out['vitals_error'] = str(e)
+
+print(json.dumps(out, separators=(',', ':')))
+"""
+
 ## Config team + usage REALI, già in forma di coppie [etichetta, valore]
 ## per le sezioni della sidebar. SOLO campi safe: mai chiavi/credenziali.
 const SETTINGS_PY := """
@@ -1164,6 +1347,41 @@ func _do_fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> v
 					bus.call_deferred("publish_usage_history", query, data)
 					return
 	bus.call_deferred("publish_usage_history", query,
+			{"ok": false, "error": _short_error(res)})
+
+var _agent_history_busy := false
+
+## Ruolo SEMPRE validato prima dell'interpolazione nello script python:
+## niente testo libero dentro il payload remoto.
+func fetch_agent_history(agent: String, from_ts: float, to_ts: float,
+		bucket_sec: int) -> void:
+	var query := {"agent": agent, "from_ts": from_ts, "to_ts": to_ts,
+			"bucket_sec": bucket_sec}
+	var re := RegEx.create_from_string("^[a-z0-9-]{1,40}$")
+	if re.search(agent) == null:
+		bus.call_deferred("publish_agent_history", query,
+				{"ok": false, "error": "ruolo non valido"})
+		return
+	if _agent_history_busy:
+		return
+	_agent_history_busy = true
+	_queue_worker(_do_fetch_agent_history.bind(query))
+
+func _do_fetch_agent_history(query: Dictionary) -> void:
+	var res := _ssh_python(AGENT_HISTORY_PY % [int(query["from_ts"]),
+			int(query["to_ts"]), int(query["bucket_sec"]),
+			str(query["agent"])])
+	_agent_history_busy = false
+	if _stop:
+		return
+	if res["code"] == 0:
+		for line in str(res["out"]).split("\n"):
+			if line.begins_with("{"):
+				var data: Variant = JSON.parse_string(line)
+				if data is Dictionary:
+					bus.call_deferred("publish_agent_history", query, data)
+					return
+	bus.call_deferred("publish_agent_history", query,
 			{"ok": false, "error": _short_error(res)})
 
 func save_profile(fields: Dictionary) -> void:
