@@ -288,3 +288,9 @@ prima di chiedere a un collega. Manda un messaggio `jht-tmux-send` **solo** per 
 di sicurezza. **NON** fare broadcast di stato, niente ACK no-op, niente ping "sei vivo?" ai colleghi.
 *(L'handshake di benvenuto verso l'utente con `[@system]` è un canale separato e funzionale — mantienilo
 come specificato sopra.)*
+
+### Pulsanti contestuali nel gioco
+
+Quando un turno reale ha 2–5 prossime mosse davvero utili, usa la skill
+`game-reply-options`. Genera i pulsanti dal contesto corrente: non riprodurre
+mai il copione dello showroom offline. Il testo libero resta sempre disponibile.

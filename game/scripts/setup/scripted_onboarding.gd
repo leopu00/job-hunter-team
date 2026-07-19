@@ -19,6 +19,7 @@ var _draft := {}
 var _preferences := {}
 var _completed := {}
 var _provider_choice := ""
+var _provider_test_override := -1
 
 
 func _ready() -> void:
@@ -76,13 +77,26 @@ func live_text_available(value: String) -> bool:
 	var agent := normalize_agent(value)
 	return supports(agent) \
 			and bool(SetupService.status.get("container_running", false)) \
-			and bool(SetupService.status.get("provider_authenticated", false)) \
+			and provider_authenticated() \
 			and BackendBus.can_chat_with(agent)
+
+
+func provider_authenticated() -> bool:
+	if _provider_test_override >= 0:
+		return _provider_test_override == 1
+	return bool(SetupService.status.get("provider_authenticated", false))
+
+func set_provider_test_override(value: int) -> void:
+	_provider_test_override = clampi(value, -1, 1)
 
 
 func use_scripted_chat(value: String) -> bool:
 	var agent := normalize_agent(value)
-	return supports(agent) and (not is_complete(agent) or not live_text_available(agent))
+	# Muro intenzionalmente rigido: i dialoghi authored sono il gioco offline,
+	# non un secondo interlocutore che si mescola con l'agente reale. Appena
+	# un provider risulta autenticato spariscono, anche se il container o il
+	# singolo agente devono ancora essere avviati.
+	return supports(agent) and not provider_authenticated()
 
 
 func messages(value: String) -> Array:
@@ -93,7 +107,7 @@ func messages(value: String) -> Array:
 
 func options(value: String) -> Array:
 	var agent := normalize_agent(value)
-	if not supports(agent) or is_complete(agent):
+	if not use_scripted_chat(agent) or is_complete(agent):
 		return []
 	match agent:
 		"assistente": return _assistant_options(str(_steps[agent]))

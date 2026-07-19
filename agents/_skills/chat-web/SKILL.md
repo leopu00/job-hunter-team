@@ -133,5 +133,7 @@ History (do not repeat): agents tried `echo`-into-jsonl and `cat <<EOF` heredocs
 
 ## See also
 
+- `game-reply-options` — optional, context-generated clickable answers for a
+  small bounded decision in the game; never a fixed onboarding script.
 - `tmux-send` — for messages to **other agents** (different protocol, different channel).
 - `agents/assistente/assistente.md` — the Assistant has the deepest version of this protocol (multi-step onboarding flow with mandatory checkpoints); read only if you ever inherit Assistant duties.

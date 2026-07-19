@@ -166,7 +166,10 @@ RUN useradd --create-home --shell /bin/bash jht \
     # nello stesso folder (es. tmux-send/jht-tmux-send) senza perdere
     # l'esposizione su PATH.
     && for f in /app/agents/_skills/*/jht-*; do \
-         [ -x "$f" ] && ln -sf "$f" "/usr/local/bin/$(basename "$f")"; \
+	     if [ -x "$f" ]; then \
+	       name="$(basename "$f")"; name="${name%.py}"; \
+	       ln -sf "$f" "/usr/local/bin/$name"; \
+	     fi; \
        done \
     # Skill discovery: per-agente, popolato dal launcher.
     # `agents/_skills/` è la library (single source of truth). Il manifest

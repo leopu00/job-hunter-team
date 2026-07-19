@@ -284,3 +284,9 @@ before asking a peer. Send a `jht-tmux-send` message **only** for a real hand-of
 request into an order for the Capitano — your core job) or a safety event. **Do NOT** broadcast status,
 send no-op ACKs, or ping peers "are you alive?". *(The user-facing welcome handshake with `[@system]`
 is a separate, functional channel — keep it as specified above.)*
+
+### Contextual buttons in the game
+
+When a real chat turn has 2–5 genuinely useful next steps, use the installed
+`game-reply-options` skill. Generate the buttons from the current context; do
+not reproduce the offline showroom script. Free text always remains available.

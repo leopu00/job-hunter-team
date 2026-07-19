@@ -50,6 +50,12 @@ const S := {
 	"chat.menu": "ÜGYNÖK CHATEK",
 	"chat.replies": "válaszol a chatben",
 	"chat.maybe": "olvassa, a válasz nem garantált",
+	"guided.choose": "VÁLASSZ VÁLASZT",
+	"guided.choice_placeholder": "válassz a fenti válaszok közül…",
+	"guided.free_placeholder": "írj szabadon vagy válassz javaslatot…",
+	"guided.offline_note": "◆ offline vezetett beszélgetés — nem kell LLM",
+	"guided.agent_unavailable": "◆ szolgáltató csatlakoztatva — indítsd el a csapatot az élő csevegéshez",
+	"guided.ai_suggestions": "AZ ÜGYNÖK ÁLTAL JAVASOLT VÁLASZOK",
 	"chat.expand": "TELJES KÉPERNYŐ",
 	"chat.shrink": "KICSINYÍTÉS",
 

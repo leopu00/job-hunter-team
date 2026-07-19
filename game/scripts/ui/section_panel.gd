@@ -106,6 +106,10 @@ func _build(page := "") -> void:
 		"map":
 			# l'esperienza mappa del web privato: globo → mappa piatta,
 			# filtri cross e schede pin che aprono il dettaglio posizione
+			if BackendBus.positions_are_demo:
+				_content.add_child(TerminalTheme.label(
+						"◆ SHOWROOM · pin e offerte sono esempi fittizi",
+						13, Palette.YELLOW, "medium"))
 			var wm := WorldMap.new()
 			wm.open_position.connect(func(pid: int) -> void:
 				pending_detail = pid
@@ -1344,6 +1348,12 @@ func _build_positions() -> void:
 		return
 	if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
 		BackendBus.positions_updated.connect(_on_positions_refresh)
+	if BackendBus.positions_are_demo:
+		var demo_note := TerminalTheme.label(
+				"◆ SHOWROOM · 50 POSIZIONI FITTIZIE · nessun dato personale o link attivo",
+				13, Palette.YELLOW, "medium")
+		demo_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(demo_note)
 
 	var visible_rows := _pos_filtered(all, "")
 	var active_filters := _pos_active_filter_count()
