@@ -110,6 +110,14 @@ const S := {
 	"cv.open_pdf": "APRI PDF",
 	"cv.opening_pdf": "SCARICO…",
 	"cv.doc_close": "ESC o click fuori per tornare all'archivio",
+	"cv.tab_text": "TESTO",
+	"cv.tab_pdf": "ANTEPRIMA PDF",
+	"cv.pdf_rendering": "Preparo l'anteprima del PDF…",
+	"cv.pdf_no_tool": "Nessun renderizzatore PDF locale: usa APRI PDF per il viewer di sistema.",
+	"cv.pdf_first_page_only": "Anteprima limitata alla prima pagina (renderizzatore ridotto).",
+	"cv.reveal": "MOSTRA NELLA CARTELLA",
+	"cv.reveal_done": "Copia salvata in ",
+	"cv.open_failed": "Apertura fallita: ",
 
 	# ── Code delle pile di reparto ───────────────────────────────
 	"queue.title": "CODA %s",

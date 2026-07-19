@@ -2,20 +2,34 @@ class_name DocPreviewPanel
 extends CanvasLayer
 ## Anteprima in-game dei documenti scritti dal team (CV / cover letter).
 ## Il markdown vive sul container: arriva via BackendBus.fetch_artifact e
-## viene reso in BBCode nel tema terminale. Il PDF non si renderizza in
-## Godot: si scarica nella cache locale e si apre nel viewer di sistema.
+## viene reso in BBCode nel tema terminale. Il PDF ha tre strade: anteprima
+## in-game (rasterizzata in locale con pdftoppm/sips), apertura nel viewer
+## di sistema, e "mostra nella cartella" che salva una copia visibile in
+## Downloads/JHT-CV e la rivela nel Finder/Explorer.
 
 signal closed
 
 const PANEL_MIN_SIZE := Vector2(880, 620)
+const SHEET_WIDTH := 780.0          # larghezza utile del foglio (fit pagine)
+const EXPORT_DIR_NAME := "JHT-CV"   # sottocartella di Downloads per il reveal
 
 var _md_path := ""
 var _pdf_path := ""
 var _title := ""
+var _md_bytes := PackedByteArray()
+var _pdf_bytes := PackedByteArray()
+## Azione da eseguire quando i bytes del pdf arrivano:
+## "preview" | "open" | "reveal" | "".
+var _pdf_action := ""
+
 var _body: RichTextLabel
+var _pdf_box: VBoxContainer
 var _status: Label
-var _pdf_btn: Button
-var _pdf_requested := false
+var _tab_text: Button
+var _tab_pdf: Button
+var _open_btn: Button
+var _reveal_btn: Button
+var _pdf_pages_built := false
 
 func _init(md_path: String, pdf_path: String, doc_title: String) -> void:
 	_md_path = md_path
@@ -82,6 +96,18 @@ func _ready() -> void:
 	row.add_child(close_btn)
 	content.add_child(HSeparator.new())
 
+	# ── tab TESTO / ANTEPRIMA PDF (solo se esistono entrambe le viste) ──
+	if _md_path != "" and _pdf_path != "":
+		var tabs := HBoxContainer.new()
+		tabs.add_theme_constant_override("separation", 8)
+		content.add_child(tabs)
+		_tab_text = _tab_button(UIStrings.t("cv.tab_text"), true)
+		_tab_text.pressed.connect(func() -> void: _switch_view(false))
+		tabs.add_child(_tab_text)
+		_tab_pdf = _tab_button(UIStrings.t("cv.tab_pdf"), false)
+		_tab_pdf.pressed.connect(func() -> void: _switch_view(true))
+		tabs.add_child(_tab_pdf)
+
 	# ── foglio documento ──
 	var sheet := PanelContainer.new()
 	sheet.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -94,11 +120,15 @@ func _ready() -> void:
 	sheet_box.add_theme_constant_override("separation", 8)
 	sheet_margin.add_child(sheet_box)
 	_status = TerminalTheme.label("", 13, Palette.DIM)
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sheet_box.add_child(_status)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sheet_box.add_child(scroll)
+	var views := VBoxContainer.new()
+	views.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(views)
 	_body = RichTextLabel.new()
 	_body.bbcode_enabled = true
 	_body.fit_content = true
@@ -108,19 +138,24 @@ func _ready() -> void:
 	_body.add_theme_color_override("default_color", Palette.BASE)
 	_body.add_theme_font_size_override("normal_font_size", 14)
 	_body.add_theme_font_size_override("bold_font_size", 14)
-	scroll.add_child(_body)
+	views.add_child(_body)
+	_pdf_box = VBoxContainer.new()
+	_pdf_box.add_theme_constant_override("separation", 14)
+	_pdf_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pdf_box.visible = false
+	views.add_child(_pdf_box)
 
 	# ── azioni ──
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	content.add_child(actions)
 	if _pdf_path != "":
-		_pdf_btn = Button.new()
-		_pdf_btn.text = UIStrings.t("cv.open_pdf")
-		_pdf_btn.add_theme_font_size_override("font_size", 13)
-		_pdf_btn.custom_minimum_size = Vector2(0, 40)
-		_pdf_btn.pressed.connect(_open_pdf)
-		actions.add_child(_pdf_btn)
+		_open_btn = _action_button(UIStrings.t("cv.open_pdf"))
+		_open_btn.pressed.connect(func() -> void: _request_pdf("open"))
+		actions.add_child(_open_btn)
+	_reveal_btn = _action_button(UIStrings.t("cv.reveal"))
+	_reveal_btn.pressed.connect(_on_reveal_pressed)
+	actions.add_child(_reveal_btn)
 	var hint := TerminalTheme.label(UIStrings.t("cv.doc_close"), 12, Palette.DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -129,10 +164,11 @@ func _ready() -> void:
 
 	BackendBus.artifact_fetched.connect(_on_artifact)
 	if _md_path != "":
-		_status.text = UIStrings.t("cv.doc_loading")
+		_set_status(UIStrings.t("cv.doc_loading"), Palette.DIM)
 		BackendBus.fetch_artifact(_md_path)
 	else:
-		_status.text = UIStrings.t("cv.doc_pdf_only")
+		# solo pdf: l'anteprima rasterizzata è l'unica vista utile
+		_request_pdf("preview")
 	Sfx.play_blip()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -148,99 +184,186 @@ func close() -> void:
 func _display_file() -> String:
 	return _md_path.get_file() if _md_path != "" else _pdf_path.get_file()
 
+func _tab_button(text: String, active: bool) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.add_theme_color_override("font_color",
+			Palette.GREEN if active else Palette.MUTED)
+	return btn
+
+func _action_button(text: String) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.add_theme_font_size_override("font_size", 13)
+	btn.custom_minimum_size = Vector2(0, 40)
+	return btn
+
+func _set_status(text: String, color: Color) -> void:
+	_status.visible = text != ""
+	_status.text = text
+	_status.add_theme_color_override("font_color", color)
+
+func _switch_view(pdf: bool) -> void:
+	Sfx.play_tick()
+	if is_instance_valid(_tab_text):
+		_tab_text.add_theme_color_override("font_color",
+				Palette.MUTED if pdf else Palette.GREEN)
+	if is_instance_valid(_tab_pdf):
+		_tab_pdf.add_theme_color_override("font_color",
+				Palette.GREEN if pdf else Palette.MUTED)
+	_body.visible = not pdf
+	_pdf_box.visible = pdf
+	if pdf and not _pdf_pages_built:
+		_request_pdf("preview")
+
+## ── Flusso bytes PDF (fetch una sola volta, poi azioni locali) ───────
+
+func _request_pdf(action: String) -> void:
+	if _pdf_path == "":
+		return
+	if not _pdf_bytes.is_empty():
+		_run_pdf_action(action)
+		return
+	if _pdf_action != "":
+		_pdf_action = action  # l'ultima richiesta vince, il fetch è già in volo
+		return
+	_pdf_action = action
+	_set_buttons_busy(true)
+	_set_status(UIStrings.t("cv.doc_loading"), Palette.DIM)
+	BackendBus.fetch_artifact(_pdf_path)
+
 func _on_artifact(path: String, ok: bool, data: PackedByteArray, error: String) -> void:
 	if not is_instance_valid(_body):
 		return
 	if path == _md_path:
 		if ok:
-			_status.visible = false
-			_body.text = _md_doc_to_bbcode(data.get_string_from_utf8())
+			_md_bytes = data
+			_set_status("", Palette.DIM)
+			_body.text = DocRender.md_to_bbcode(data.get_string_from_utf8())
 		else:
-			_status.add_theme_color_override("font_color", Palette.RED)
-			_status.text = UIStrings.t("cv.doc_error") + error
-	elif path == _pdf_path and _pdf_requested:
-		_pdf_requested = false
-		if is_instance_valid(_pdf_btn):
-			_pdf_btn.disabled = false
-			_pdf_btn.text = UIStrings.t("cv.open_pdf")
-		if ok:
-			_shell_open_pdf(data)
-		else:
-			_status.visible = true
-			_status.add_theme_color_override("font_color", Palette.RED)
-			_status.text = UIStrings.t("cv.doc_error") + error
+			_set_status(UIStrings.t("cv.doc_error") + error, Palette.RED)
+	elif path == _pdf_path and _pdf_action != "":
+		var action := _pdf_action
+		_pdf_action = ""
+		_set_buttons_busy(false)
+		if not ok:
+			_set_status(UIStrings.t("cv.doc_error") + error, Palette.RED)
+			return
+		_pdf_bytes = data
+		_set_status("", Palette.DIM)
+		_run_pdf_action(action)
 
-## Il pdf arriva binario dal container: file nella cache locale e viewer
-## di sistema (in Godot non esiste un renderer pdf: scelta deliberata).
-func _open_pdf() -> void:
-	if _pdf_requested:
+func _set_buttons_busy(busy: bool) -> void:
+	if is_instance_valid(_open_btn):
+		_open_btn.disabled = busy
+	if is_instance_valid(_reveal_btn):
+		_reveal_btn.disabled = busy
+
+func _run_pdf_action(action: String) -> void:
+	match action:
+		"preview":
+			_build_pdf_preview()
+		"open":
+			_open_pdf_external()
+		"reveal":
+			_reveal_in_folder()
+
+## ── Anteprima PDF in-game (rasterizzazione locale) ───────────────────
+
+func _build_pdf_preview() -> void:
+	if _pdf_pages_built:
 		return
-	_pdf_requested = true
-	_pdf_btn.disabled = true
-	_pdf_btn.text = UIStrings.t("cv.opening_pdf")
-	Sfx.play_tick()
-	BackendBus.fetch_artifact(_pdf_path)
+	_set_status(UIStrings.t("cv.pdf_rendering"), Palette.DIM)
+	var pdf_local := _save_to(OS.get_cache_dir(), _pdf_path, _pdf_bytes)
+	if pdf_local == "":
+		_set_status(UIStrings.t("cv.doc_error") + "cache locale non scrivibile",
+				Palette.RED)
+		return
+	var result := DocRender.rasterize_pdf(pdf_local,
+			OS.get_cache_dir().path_join("jht-doc-page"))
+	var pages: Array = result["pages"]
+	if pages.is_empty():
+		# niente renderizzatore locale: il pdf resta apribile fuori dal gioco
+		_set_status(UIStrings.t("cv.pdf_no_tool"), Palette.YELLOW)
+		if _md_path != "":
+			_switch_view(false)
+		return
+	for page_path in pages:
+		var img := Image.new()
+		if img.load(page_path) != OK:
+			continue
+		var rect := TextureRect.new()
+		rect.texture = ImageTexture.create_from_image(img)
+		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var scale := minf(1.0, SHEET_WIDTH / maxf(1.0, img.get_width()))
+		rect.custom_minimum_size = Vector2(img.get_width() * scale,
+				img.get_height() * scale)
+		_pdf_box.add_child(rect)
+	_pdf_pages_built = _pdf_box.get_child_count() > 0
+	if not _pdf_pages_built:
+		_set_status(UIStrings.t("cv.doc_error") + "pagine non caricabili",
+				Palette.RED)
+		return
+	_set_status(UIStrings.t("cv.pdf_first_page_only") \
+			if result["first_page_only"] else "", Palette.DIM)
+	_body.visible = false
+	_pdf_box.visible = true
+	if is_instance_valid(_tab_text):
+		_switch_view(true)
 
-func _shell_open_pdf(data: PackedByteArray) -> void:
-	var local := OS.get_cache_dir().path_join(
-			VpsBackend._safe_filename(_pdf_path.get_file()))
+## ── Apertura esterna e reveal nella cartella ─────────────────────────
+
+func _open_pdf_external() -> void:
+	var local := _save_to(OS.get_cache_dir(), _pdf_path, _pdf_bytes)
+	if local == "":
+		_set_status(UIStrings.t("cv.doc_error") + "cache locale non scrivibile",
+				Palette.RED)
+		return
+	if not DocRender.open_externally(local):
+		_set_status(UIStrings.t("cv.open_failed") + local, Palette.RED)
+
+func _on_reveal_pressed() -> void:
+	# il reveal mostra il PDF se c'è, altrimenti il markdown
+	if _pdf_path != "":
+		_request_pdf("reveal")
+	elif not _md_bytes.is_empty():
+		_reveal_in_folder()
+	else:
+		_set_status(UIStrings.t("cv.doc_error") + "documento non ancora scaricato",
+				Palette.RED)
+
+## Copia visibile in Downloads/JHT-CV (md + pdf quando ci sono), poi
+## Finder/Explorer con il file selezionato.
+func _reveal_in_folder() -> void:
+	var downloads := OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
+	if downloads == "":
+		downloads = OS.get_cache_dir()
+	var folder := downloads.path_join(EXPORT_DIR_NAME)
+	DirAccess.make_dir_recursive_absolute(folder)
+	var target := ""
+	if not _md_bytes.is_empty():
+		target = _save_to(folder, _md_path, _md_bytes)
+	if not _pdf_bytes.is_empty():
+		var pdf_target := _save_to(folder, _pdf_path, _pdf_bytes)
+		if pdf_target != "":
+			target = pdf_target
+	if target == "":
+		_set_status(UIStrings.t("cv.doc_error") + "cartella non scrivibile",
+				Palette.RED)
+		return
+	_set_status(UIStrings.t("cv.reveal_done") + folder, Palette.MINT)
+	if not DocRender.reveal_file(target):
+		_set_status(UIStrings.t("cv.open_failed") + folder, Palette.RED)
+
+func _save_to(folder: String, remote_path: String, data: PackedByteArray) -> String:
+	if data.is_empty():
+		return ""
+	var local := folder.path_join(DocRender.safe_filename(remote_path.get_file()))
 	var f := FileAccess.open(local, FileAccess.WRITE)
 	if f == null:
-		_status.visible = true
-		_status.add_theme_color_override("font_color", Palette.RED)
-		_status.text = UIStrings.t("cv.doc_error") + "cache locale non scrivibile"
-		return
+		return ""
 	f.store_buffer(data)
 	f.close()
-	OS.shell_open(local)
-
-## ── Markdown documento → BBCode ──────────────────────────────────────
-## Conversione riga-per-riga pensata per i CV degli Scrittori: titoli
-## #/##/###, elenchi -/*, righelli, grassetto e enfasi. Niente italic
-## tipografico (JetBrains Mono è caricato solo dritto): l'enfasi diventa
-## colore. Le parentesi quadre restano letterali, come in markdown_label.
-static func _md_doc_to_bbcode(md: String) -> String:
-	var text := md.replace("[", "\uE000").replace("]", "[rb]") \
-			.replace("\uE000", "[lb]")
-	var bold := RegEx.new()
-	bold.compile("\\*\\*([^*]+)\\*\\*")
-	var emph := RegEx.new()
-	emph.compile("(?<!\\*)\\*([^*\\n]+)\\*(?!\\*)")
-	var white := "#" + Palette.WHITE.to_html(false)
-	var bright := "#" + Palette.BRIGHT.to_html(false)
-	var dim := "#" + Palette.DIM.to_html(false)
-	var green := "#" + Palette.GREEN.to_html(false)
-	var out := PackedStringArray()
-	for raw_line: String in text.split("\n"):
-		var line := raw_line.strip_edges(false, true)
-		var stripped := line.strip_edges()
-		if stripped.begins_with("### "):
-			out.append("[font_size=16][color=%s][b]%s[/b][/color][/font_size]"
-					% [white, _inline(stripped.substr(4), bold, emph, white, bright)])
-			continue
-		if stripped.begins_with("## "):
-			out.append("[font_size=18][color=%s][b]▸ %s[/b][/color][/font_size]"
-					% [green, _inline(stripped.substr(3), bold, emph, white, bright)])
-			continue
-		if stripped.begins_with("# "):
-			out.append("[font_size=22][color=%s][b]%s[/b][/color][/font_size]"
-					% [white, _inline(stripped.substr(2), bold, emph, white, bright)])
-			continue
-		if stripped != "" and stripped.count("-") == stripped.length() \
-				and stripped.length() >= 3:
-			out.append("[color=%s]────────────────────────────────[/color]" % dim)
-			continue
-		if stripped.begins_with("- ") or stripped.begins_with("* "):
-			out.append("  • " + _inline(stripped.substr(2), bold, emph, white, bright))
-			continue
-		if stripped.begins_with("> "):
-			out.append("[color=%s]│ %s[/color]"
-					% [dim, _inline(stripped.substr(2), bold, emph, white, bright)])
-			continue
-		out.append(_inline(line, bold, emph, white, bright))
-	return "\n".join(out)
-
-static func _inline(line: String, bold: RegEx, emph: RegEx, white: String,
-		bright: String) -> String:
-	var rendered := bold.sub(line, "[b][color=%s]$1[/color][/b]" % white, true)
-	return emph.sub(rendered, "[color=%s]$1[/color]" % bright, true)
+	return local
