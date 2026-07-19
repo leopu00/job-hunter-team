@@ -407,19 +407,23 @@ export default function PositionsFilterSidebar({
     () => [
       {
         key: "status" as DirectKey,
-        options: STATUS_OPTIONS.map((o): Option => ({
-          val: o.val,
-          label: tr(o.labelKey),
-          color: o.color,
-        })),
+        options: STATUS_OPTIONS.map(
+          (o): Option => ({
+            val: o.val,
+            label: tr(o.labelKey),
+            color: o.color,
+          }),
+        ),
       },
       {
         key: "remote" as DirectKey,
-        options: REMOTE_OPTIONS.map((o): Option => ({
-          val: o.val,
-          label: tr(o.labelKey),
-          color: o.color,
-        })),
+        options: REMOTE_OPTIONS.map(
+          (o): Option => ({
+            val: o.val,
+            label: tr(o.labelKey),
+            color: o.color,
+          }),
+        ),
       },
       {
         key: "source" as DirectKey,
