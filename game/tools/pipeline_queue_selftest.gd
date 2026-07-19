@@ -29,10 +29,13 @@ func _init() -> void:
 	pile.add_sheets(2)
 	exact_count = exact_count and pile.count == 11 \
 			and int(pile.debug_snapshot()["visual_sheets"]) == 11
+	pile.set_target(472, true)
+	var distributed := int(pile.debug_snapshot()["visual_sheets"]) == 472 \
+			and int(pile.debug_snapshot()["visual_stacks"]) == 12
 	pile.free()
 	var escaped_emoji := "\\" + "U0001F310"
 	var markdown := TerminalTheme._markdown_to_bbcode("**forte** [test] " + escaped_emoji)
-	var ok := got == expected and exact_count \
+	var ok := got == expected and exact_count and distributed \
 			and markdown == "[b]forte[/b] [lb]test[rb] 🌐"
 	print("PIPELINE-QUEUE-TEST ", "PASS " if ok else "FAIL ", JSON.stringify(got))
 	quit(0 if ok else 1)

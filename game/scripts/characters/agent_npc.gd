@@ -10,6 +10,20 @@ const SPEED := 150.0
 const STATUS_BUBBLE_POS := Vector2(0, -96)
 const SPEECH_BUBBLE_POS := Vector2(0, -100)
 const STATE_TAG_POS := Vector2(0, -126)
+const STATE_TAG_HEAD_CLEARANCE := 18.0  # mezza box (12) + 6 px sopra i capelli
+
+## Le postazioni core usano compositi desk+sedia+persona: il rig è nascosto,
+## quindi il bordo dei capelli non si può ricavare dal foglio di cammino.
+## Questi centri sono calibrati sull'arte integrata, sempre rispetto al punto
+## logico della seduta. I reparti continuano a usare il delta prospettico.
+const CORE_SEATED_TAG_Y := {
+	"core:coordinatore": -160.0,
+	"core:sentinella": -169.0,
+	"core:mentor": -146.0,
+	"core:assistente": -138.0,
+	"core:mantenitore": -135.0,
+	"core:dottore": -96.0,
+}
 
 ## Cadenza MEDIA fra due viaggi, secondi di gioco, per ruolo (jitter ±40%).
 ## Ancorata ai dati veri esposti da TeamData: lo Scout fa ~3 visite/ora
@@ -266,7 +280,7 @@ func set_backend_status(status: String) -> void:
 		_work_pose()
 	elif changed and state == S.TRIP and backend_status != "working" and not _forced_trip:
 		velocity = Vector2.ZERO
-		rig.set_motion(rig.facing, rig.flipped, "still")
+		_set_rig_motion(rig.facing, rig.flipped, "still")
 
 func set_throttle(secs: float) -> void:
 	throttle_secs = secs
@@ -406,7 +420,7 @@ func start_talk() -> void:
 	# non dentro il mobile
 	if _seated():
 		position = _spot
-	rig.set_motion("down", false, "idle")
+	_set_rig_motion("down", false, "idle")
 	bubble.hide_now()
 
 ## Fine dialogo: torna alla postazione (viaggio minimo) e riprende.
@@ -455,7 +469,7 @@ func _physics_process(delta: float) -> void:
 		S.TRIP:
 			if backend_status != "working" and not _exiting and not _forced_trip:
 				velocity = Vector2.ZERO
-				rig.set_motion(rig.facing, rig.flipped, "still")
+				_set_rig_motion(rig.facing, rig.flipped, "still")
 			elif _pause > 0.0:
 				velocity = Vector2.ZERO
 				_pause -= delta
@@ -572,7 +586,14 @@ func _set_overhead_delta(delta: Vector2) -> void:
 	if speech:
 		speech.position = SPEECH_BUBBLE_POS + delta
 	if state_tag:
-		state_tag.position = STATE_TAG_POS + delta
+		var tag_y := STATE_TAG_POS.y + delta.y
+		if rig and rig.visible and rig.has_method("visual_top_y"):
+			# In piedi o su una posa seduta dinamica: misura il primo pixel
+			# opaco del frame e lascia sempre lo stesso respiro sopra i capelli.
+			tag_y = float(rig.visual_top_y()) - STATE_TAG_HEAD_CLEARANCE
+		elif _desk_pose_active and CORE_SEATED_TAG_Y.has(_desk_key):
+			tag_y = float(CORE_SEATED_TAG_Y[_desk_key])
+		state_tag.position = Vector2(STATE_TAG_POS.x + delta.x, tag_y)
 
 ## Lavorando la pila si smaltisce: un foglio ogni ~minuto di lavoro vero.
 func _consume_tick(delta: float) -> void:
@@ -587,11 +608,24 @@ func _consume_tick(delta: float) -> void:
 func _desk_motion(mode: String) -> void:
 	match _desk_facing:
 		"left":
-			rig.set_motion("side", true, mode)
+			_set_rig_motion("side", true, mode)
 		"right":
-			rig.set_motion("side", false, mode)
+			_set_rig_motion("side", false, mode)
 		_:
-			rig.set_motion(_desk_facing, false, mode)
+			_set_rig_motion(_desk_facing, false, mode)
+
+## Unico ingresso per cambiare posa del rig: appena cambia foglio/direzione,
+## riallinea anche il badge al nuovo bordo opaco. Senza questo passaggio il
+## primo tratto a piedi conservava per qualche secondo l'ancora della posa
+## seduta, nonostante il personaggio fosse già in cammino.
+func _set_rig_motion(facing: String, flipped: bool, mode: String) -> void:
+	if rig == null:
+		return
+	var changed := str(rig.facing) != facing or bool(rig.flipped) != flipped \
+			or str(rig.mode) != mode
+	rig.set_motion(facing, flipped, mode)
+	if changed and state_tag and rig.visible and rig.has_method("visual_top_y"):
+		state_tag.position.y = float(rig.visual_top_y()) - STATE_TAG_HEAD_CLEARANCE
 
 # ── Viaggi di lavoro ──────────────────────────────────────────────────
 
@@ -755,7 +789,7 @@ func _arrive_at_leg() -> void:
 		# sulla soglia: la porta scorre e l'agente svanisce oltre
 		ExitDoor.swing()
 		_dissolving = true
-		rig.set_motion("down", false, "idle")  # la porta è a sud
+		_set_rig_motion("down", false, "idle")  # la porta è a sud
 		var tw := create_tween()
 		tw.tween_property(self, "modulate:a", 0.0, 0.55)
 		tw.tween_callback(func() -> void:
@@ -780,7 +814,7 @@ func _arrive_at_leg() -> void:
 			_begin_desk_pause(float(_leg["pause"]))
 		else:
 			_pause = _leg["pause"]
-			rig.set_motion(rig.facing, rig.flipped, _leg.get("pause_mode", "idle"))
+		_set_rig_motion(rig.facing, rig.flipped, _leg.get("pause_mode", "idle"))
 	elif _legs.is_empty():
 		_end_trip()
 	else:
@@ -857,8 +891,8 @@ func _set_desk_occupied(on: bool) -> void:
 	if on and use_composite:
 		overhead_delta = _composite_overhead_delta()
 	elif slug in ["coordinatore", "sentinella", "mentor", "assistente", "mantenitore", "dottore"]:
-		# I fogli di cammino dei core sono più alti del roster standard: badge
-		# e vignette devono partire sopra la testa, mai dalla schiena.
+		# Il badge dei core in cammino viene ora ancorato al primo pixel opaco
+		# del frame; resta solo il vecchio delta per fumetti e vignette.
 		overhead_delta = Vector2(0, -42)
 	_set_overhead_delta(overhead_delta)
 	if _seated():
@@ -916,15 +950,15 @@ func _follow_path(speed: float, mode := "walk") -> bool:
 		to_target = _path[_pi] - global_position
 	velocity = to_target.normalized() * speed
 	_face_point(global_position + velocity)
-	rig.set_motion(rig.facing, rig.flipped, mode)
+	_set_rig_motion(rig.facing, rig.flipped, mode)
 	return false
 
 func _face_point(p: Vector2) -> void:
 	var d := p - global_position
 	if absf(d.x) > absf(d.y):
-		rig.set_motion("side", d.x < 0, rig.mode)
+		_set_rig_motion("side", d.x < 0, rig.mode)
 	else:
-		rig.set_motion("down" if d.y > 0 else "up", false, rig.mode)
+		_set_rig_motion("down" if d.y > 0 else "up", false, rig.mode)
 
 func _bubble_tick(delta: float) -> void:
 	if state == S.TALK:
