@@ -456,6 +456,10 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   const [recording, setRecording] = useState(false);
   const flyingRef = useRef(false);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const deckRef = useRef<HTMLDivElement | null>(null);
+  // Mirror per i listener touch nativi (chiusure senza stato stantio).
+  const navRef = useRef<(delta: 1 | -1) => void>(() => {});
+  const dragXRef = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recRef = useRef<{ stop: () => void } | null>(null);
 
@@ -628,19 +632,78 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     [finished, idx, stopVoice],
   );
 
-  // ── Swipe di NAVIGAZIONE (pointer events, touch + mouse) ─────────
-  // touchAction pan-y sulla card: lo scroll verticale del testo resta al
-  // browser, il trascinamento orizzontale arriva qui.
+  navRef.current = nav;
+
+  // ── Swipe di NAVIGAZIONE ─────────────────────────────────────────
+  // TOUCH: listener nativi non-passivi sul contenitore del mazzo con
+  // DIRECTION-LOCK — l'area di testo della card è scrollabile e su iOS
+  // WebKit si prende il gesto (la pagina "rubber-banda" invece di
+  // swipare). Ai primi pixel decidiamo l'asse: verticale → il browser
+  // scrolla il testo; orizzontale → preventDefault() (la pagina resta
+  // ferma) e trasciniamo la card. Il MOUSE usa i pointer events sotto.
+  useEffect(() => {
+    const el = deckRef.current;
+    if (!el) return;
+    let start: { x: number; y: number } | null = null;
+    let axis: "h" | "v" | null = null;
+    const onStart = (e: TouchEvent) => {
+      if (flyingRef.current || e.touches.length !== 1) return;
+      start = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      axis = null;
+      dragXRef.current = 0;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start || flyingRef.current) return;
+      const dx = e.touches[0].clientX - start.x;
+      const dy = e.touches[0].clientY - start.y;
+      if (!axis) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        axis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      }
+      if (axis === "h") {
+        e.preventDefault();
+        dragXRef.current = dx;
+        setDrag(dx);
+      }
+    };
+    const onEnd = () => {
+      if (!start) return;
+      const dx = dragXRef.current;
+      const wasH = axis === "h";
+      start = null;
+      axis = null;
+      dragXRef.current = 0;
+      if (wasH && Math.abs(dx) > NAV_THRESHOLD) {
+        navRef.current(dx < 0 ? 1 : -1);
+        return;
+      }
+      if (wasH) setDrag(0);
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
   const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return; // touch → listener nativi
     if (flyingRef.current) return;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragStart.current = { x: e.clientX, y: e.clientY };
   };
   const onPointerMove = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
     if (!dragStart.current || flyingRef.current) return;
     setDrag(e.clientX - dragStart.current.x);
   };
-  const onPointerEnd = () => {
+  const onPointerEnd = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
     if (!dragStart.current) return;
     dragStart.current = null;
     if (Math.abs(drag) > NAV_THRESHOLD) {
@@ -785,7 +848,11 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         </div>
       ) : (
         <>
-          <div className="relative" style={{ height: "min(63dvh, 620px)" }}>
+          <div
+            ref={deckRef}
+            className="relative"
+            style={{ height: "min(63dvh, 620px)" }}
+          >
             {/* Card corrente + le 2 successive come stack */}
             {cards
               .slice(idx, idx + 3)
@@ -931,59 +998,61 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                           style={{
                             color: "var(--color-base)",
                             whiteSpace: "pre-line",
+                            overscrollBehavior: "contain",
                           }}
                         >
                           {stripMd(card.jd_summary)}
                         </div>
                       )}
 
-                      {/* Footer: commento (pop-up) · fonte · dettagli */}
+                      {/* Footer: commento a sinistra, fonte + dettagli
+                          insieme a destra (scelta utente 19/07). */}
                       <div className="mt-auto flex items-center justify-between text-[11px]">
+                        <button
+                          type="button"
+                          aria-label={t.commentTitle}
+                          title={t.commentTitle}
+                          onClick={() => setCommentOpen(true)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="shrink-0 rounded-full border flex items-center justify-center relative"
+                          style={{
+                            width: 28,
+                            height: 28,
+                            color: comment
+                              ? "var(--color-bright)"
+                              : "var(--color-muted)",
+                            borderColor: comment
+                              ? "var(--color-border-glow)"
+                              : "var(--color-border)",
+                            background: "var(--color-row)",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <IconChat size={13} />
+                          {comment && (
+                            <span
+                              className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+                              style={{ background: "var(--color-green)" }}
+                            />
+                          )}
+                        </button>
                         <span className="flex items-center gap-2 min-w-0">
-                          <button
-                            type="button"
-                            aria-label={t.commentTitle}
-                            title={t.commentTitle}
-                            onClick={() => setCommentOpen(true)}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            className="shrink-0 rounded-full border flex items-center justify-center relative"
-                            style={{
-                              width: 28,
-                              height: 28,
-                              color: comment
-                                ? "var(--color-bright)"
-                                : "var(--color-muted)",
-                              borderColor: comment
-                                ? "var(--color-border-glow)"
-                                : "var(--color-border)",
-                              background: "var(--color-row)",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <IconChat size={13} />
-                            {comment && (
-                              <span
-                                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-                                style={{ background: "var(--color-green)" }}
-                              />
-                            )}
-                          </button>
                           <span
                             className="truncate"
                             style={{ color: "var(--color-dim)" }}
                           >
                             {card.source ?? ""}
                           </span>
+                          <Link
+                            href={`/positions/${card.id}`}
+                            target="_blank"
+                            className="font-semibold no-underline shrink-0"
+                            style={{ color: "var(--color-blue)" }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            {t.details} ↗
+                          </Link>
                         </span>
-                        <Link
-                          href={`/positions/${card.id}`}
-                          target="_blank"
-                          className="font-semibold no-underline shrink-0"
-                          style={{ color: "var(--color-blue)" }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                        >
-                          {t.details} ↗
-                        </Link>
                       </div>
                     </div>
                   </div>
