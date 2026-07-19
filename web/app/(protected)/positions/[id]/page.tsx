@@ -408,6 +408,33 @@ const T: Record<string, Record<string, string>> = {
     fr: "Catégorie",
     pt: "Categoria",
   },
+  o_today: {
+    it: "oggi",
+    en: "today",
+    hu: "ma",
+    es: "hoy",
+    de: "heute",
+    fr: "aujourd'hui",
+    pt: "hoje",
+  },
+  o_yesterday: {
+    it: "ieri",
+    en: "yesterday",
+    hu: "tegnap",
+    es: "ayer",
+    de: "gestern",
+    fr: "hier",
+    pt: "ontem",
+  },
+  o_days_ago: {
+    it: "{n} giorni fa",
+    en: "{n} days ago",
+    hu: "{n} napja",
+    es: "hace {n} días",
+    de: "vor {n} Tagen",
+    fr: "il y a {n} jours",
+    pt: "há {n} dias",
+  },
   rt_full_remote: {
     it: "Da remoto",
     en: "Full remote",
@@ -444,15 +471,6 @@ const T: Record<string, Record<string, string>> = {
     fr: "Localisation",
     pt: "Localização",
   },
-  details: {
-    it: "Dettagli",
-    en: "Details",
-    hu: "Részletek",
-    es: "Detalles",
-    de: "Details",
-    fr: "Détails",
-    pt: "Detalhes",
-  },
   d_source: {
     it: "Fonte",
     en: "Source",
@@ -471,24 +489,6 @@ const T: Record<string, Record<string, string>> = {
     fr: "Trouvée",
     pt: "Encontrada",
   },
-  d_deadline: {
-    it: "Scadenza",
-    en: "Deadline",
-    hu: "Határidő",
-    es: "Fecha límite",
-    de: "Frist",
-    fr: "Échéance",
-    pt: "Prazo",
-  },
-  d_found_by: {
-    it: "Trovata da",
-    en: "Found by",
-    hu: "Megtalálta",
-    es: "Encontrada por",
-    de: "Gefunden von",
-    fr: "Trouvée par",
-    pt: "Encontrada por",
-  },
   d_salary_declared: {
     it: "Stipendio dichiarato",
     en: "Declared salary",
@@ -506,15 +506,6 @@ const T: Record<string, Record<string, string>> = {
     de: "Geschätztes Gehalt",
     fr: "Salaire estimé",
     pt: "Salário estimado",
-  },
-  view_original_offer: {
-    it: "Vedi offerta originale",
-    en: "View original offer",
-    hu: "Eredeti ajánlat megtekintése",
-    es: "Ver oferta original",
-    de: "Originalangebot ansehen",
-    fr: "Voir l'offre originale",
-    pt: "Ver oferta original",
   },
   company: {
     it: "Azienda",
@@ -905,6 +896,19 @@ export default async function PositionDetailPage({ params }: PageProps) {
       : position.remote_type === "hybrid"
         ? "var(--color-yellow)"
         : "var(--color-red)";
+  // "Trovata 2026-07-17 (2 giorni fa)" — età calcolata al render server;
+  // la pagina è force-dynamic quindi non resta congelata in una build.
+  const foundDate = position.found_at.slice(0, 10);
+  const foundDays = Math.max(
+    0,
+    Math.floor((Date.now() - Date.parse(foundDate)) / 86_400_000),
+  );
+  const foundAge =
+    foundDays === 0
+      ? t("o_today")
+      : foundDays === 1
+        ? t("o_yesterday")
+        : t("o_days_ago").replace("{n}", String(foundDays));
   const overviewCard =
     score ||
     salaryEst ||
@@ -964,6 +968,13 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 </span>
               </div>
             )}
+            {position.source && (
+              <InfoRow label={t("d_source")} value={position.source} />
+            )}
+            <InfoRow
+              label={t("d_found")}
+              value={`${foundDate} (${foundAge})`}
+            />
           </div>
         </div>
       </div>
@@ -1504,63 +1515,9 @@ export default async function PositionDetailPage({ params }: PageProps) {
               La versione CON mappa vive in cima alla colonna principale. */}
           {hasLocationCard && !mapCoords && locationCard}
 
-          {/* Details */}
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-            <div className="section-label mb-3">{t("details")}</div>
-            <div className="space-y-2">
-              {position.source && (
-                <InfoRow label={t("d_source")} value={position.source} />
-              )}
-              <InfoRow
-                label={t("d_found")}
-                value={position.found_at.slice(0, 10)}
-              />
-              {position.deadline && (
-                <InfoRow label={t("d_deadline")} value={position.deadline} />
-              )}
-              {position.found_by && (
-                <InfoRow label={t("d_found_by")} value={position.found_by} />
-              )}
-              {formatSalary(
-                position.salary_declared_min,
-                position.salary_declared_max,
-                position.salary_declared_currency,
-              ) && (
-                <InfoRow
-                  label={t("d_salary_declared")}
-                  value={formatSalary(
-                    position.salary_declared_min,
-                    position.salary_declared_max,
-                    position.salary_declared_currency,
-                  )!}
-                />
-              )}
-              {formatSalary(
-                position.salary_estimated_min,
-                position.salary_estimated_max,
-                position.salary_estimated_currency,
-              ) && (
-                <InfoRow
-                  label={t("d_salary_estimated")}
-                  value={formatSalary(
-                    position.salary_estimated_min,
-                    position.salary_estimated_max,
-                    position.salary_estimated_currency,
-                  )!}
-                />
-              )}
-            </div>
-            {position.url && (
-              <a
-                href={position.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-              >
-                {t("view_original_offer")} ↗
-              </a>
-            )}
-          </div>
+          {/* La vecchia card Dettagli è confluita nella Panoramica (19/07):
+              fonte e data lì; "trovata da" non interessa l'utente; il link
+              all'annuncio vive nell'header e nella card JD. */}
 
           {/* Company */}
           {company && (
