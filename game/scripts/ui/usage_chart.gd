@@ -361,10 +361,7 @@ func _series_color(s: Dictionary) -> Color:
 
 func _fmt_value(v: float) -> String:
 	var txt: String
-	if absf(v) >= 1000.0:
-		txt = "%.1fM" % (v / 1000.0) if value_suffix.begins_with("k") \
-				else "%.0f" % v
-	elif absf(v) >= 100.0:
+	if absf(v) >= 100.0:
 		txt = "%.0f" % v
 	elif absf(v) >= 10.0:
 		txt = "%.1f" % v

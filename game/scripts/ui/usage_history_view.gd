@@ -29,6 +29,7 @@ var _mini_throttle: UsageChart
 var _data: Dictionary = {}
 var _pending_query := {}
 var _refresh_timer: Timer
+var _veil: UsageLoadingVeil
 
 func _ready() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -84,7 +85,7 @@ func _ready() -> void:
 	_refresh_timer.wait_time = 60.0
 	_refresh_timer.timeout.connect(func() -> void:
 		if UsageRangeBar.to_ts == 0.0:
-			_request())
+			_request(true))
 	add_child(_refresh_timer)
 	_refresh_timer.start()
 
@@ -105,12 +106,16 @@ func _restyle_groups() -> void:
 		_group_buttons[key].add_theme_color_override("font_color",
 				Palette.GREEN if key == group_key else Palette.MUTED)
 
-func _request() -> void:
+## silent = refresh periodico in live: niente velo sopra il grafico,
+## i dati nuovi subentrano e basta. Ogni azione dell'utente invece
+## copre il grafico finché lo storico non arriva.
+func _request(silent := false) -> void:
 	var w := UsageRangeBar.window()
 	_pending_query = {"from_ts": w[0], "to_ts": w[1],
 			"bucket_sec": UsageRangeBar.bucket_seconds()}
-	_status.text = UIStrings.t("usage.loading")
-	_status.add_theme_color_override("font_color", Palette.DIM)
+	_status.text = ""
+	if not silent and not is_instance_valid(_veil):
+		_veil = UsageLoadingVeil.cover(_main_chart)
 	BackendBus.request_usage_history(w[0], w[1], UsageRangeBar.bucket_seconds())
 
 func _on_history(query: Dictionary, data: Dictionary) -> void:
@@ -120,6 +125,8 @@ func _on_history(query: Dictionary, data: Dictionary) -> void:
 	if not _pending_query.is_empty() \
 			and int(query.get("bucket_sec", 0)) != int(_pending_query["bucket_sec"]):
 		return
+	if is_instance_valid(_veil):
+		_veil.done()
 	if not bool(data.get("ok", false)):
 		_status.text = UIStrings.t("usage.error") % str(data.get("error", "?"))
 		_status.add_theme_color_override("font_color", Palette.RED)
