@@ -406,7 +406,8 @@ func _deliver_usage_history(query: Dictionary, data: Dictionary) -> void:
 func fetch_agent_history(agent: String, from_ts: float, to_ts: float,
 		bucket_sec: int) -> void:
 	var series := {"tokens_kt": [], "pct_5h": [], "pct_weekly": [],
-			"throttle_s": [], "db_actions": [], "cpu_pct": [], "ram_pct": []}
+			"throttle_s": [], "db_actions": [], "cpu_agent_pct": [],
+			"ram_agent_mb": [], "cpu_pct": [], "ram_pct": []}
 	var t := floorf(from_ts / bucket_sec) * bucket_sec
 	while t <= to_ts:
 		var day_phase := fposmod(t, 86400.0) / 86400.0
@@ -421,6 +422,8 @@ func fetch_agent_history(agent: String, from_ts: float, to_ts: float,
 			series["throttle_s"].append({"t": t, "v": 300.0})
 		if wave > 0.45 and int(t / bucket_sec) % 3 == 0:
 			series["db_actions"].append({"t": t, "v": 1 + int(wave * 3.0)})
+		series["cpu_agent_pct"].append({"t": t, "v": roundf(wave * 45.0 * 10.0) / 10.0})
+		series["ram_agent_mb"].append({"t": t, "v": roundf((420.0 + 300.0 * wave) * 10.0) / 10.0})
 		series["cpu_pct"].append({"t": t, "v": roundf((12.0 + 60.0 * wave) * 10.0) / 10.0})
 		series["ram_pct"].append({"t": t, "v": roundf((38.0 + 20.0 * wave) * 10.0) / 10.0})
 		t += bucket_sec

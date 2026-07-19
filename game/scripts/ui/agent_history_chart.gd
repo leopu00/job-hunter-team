@@ -24,8 +24,12 @@ const SERIES_DEFS := [
 		"color": Palette.RED, "suffix": "s"},
 	{"key": "db_actions", "label_key": "agent.hs_db",
 		"color": Palette.YELLOW, "suffix": "az"},
-	{"key": "cpu_pct", "label_key": "agent.hs_cpu",
+	{"key": "cpu_agent_pct", "label_key": "agent.hs_cpu_agent",
 		"color": Palette.ORANGE, "suffix": "%"},
+	{"key": "ram_agent_mb", "label_key": "agent.hs_ram_agent",
+		"color": Color("#e879f9"), "suffix": "MB"},
+	{"key": "cpu_pct", "label_key": "agent.hs_cpu",
+		"color": Color("#8a6a3a"), "suffix": "%"},
 	{"key": "ram_pct", "label_key": "agent.hs_ram",
 		"color": Palette.BASE, "suffix": "%"},
 ]
