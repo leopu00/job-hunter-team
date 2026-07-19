@@ -24,7 +24,7 @@ to be technical to file this.
 
 ## How did you install JHT?
 
-- [ ] DMG desktop app
+- [ ] Native Godot desktop app
 - [ ] CLI one-liner (`curl ... | bash`)
 - [ ] Source clone
 - [ ] Other:

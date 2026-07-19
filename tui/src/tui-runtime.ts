@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 
 /**
  * True quando il processo gira dentro un container JHT.
- * Convenzione condivisa con scripts/install.sh, desktop/runtime.js
+ * Convenzione condivisa con scripts/install.sh e il backend locale Godot.
  * e shared/runtime/container.js — non cambiare la logica senza
  * sincronizzarli.
  */

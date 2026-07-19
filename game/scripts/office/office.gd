@@ -158,6 +158,8 @@ func _ready() -> void:
 		_positions_panel_selftest.call_deferred()
 	if OS.get_environment("JHT_MAP_PANEL_TEST") == "1":
 		_map_panel_selftest.call_deferred()
+	if OS.get_environment("JHT_GUIDED_TEST") == "1":
+		_guided_onboarding_selftest.call_deferred()
 	if _seat_audit != "":
 		var audit_parts := _seat_audit.split(":")
 		if audit_parts.size() == 2 and DepartmentDefs.DEPARTMENTS.has(audit_parts[0]):
@@ -286,6 +288,14 @@ func _ready() -> void:
 		_chat_selftest(OS.get_environment("JHT_CHAT"), true)
 	elif OS.get_environment("JHT_CHAT_VIEW") != "":
 		_chat_selftest(OS.get_environment("JHT_CHAT_VIEW"), false)
+	# Preview/E2E del dialogo first-run anche senza backend o agente attivo.
+	var guided_chat := OS.get_environment("JHT_GUIDED_CHAT")
+	if guided_chat != "" and ScriptedOnboarding.supports(guided_chat):
+		var guided_names := {"assistente": "Assistente",
+				"coordinatore": "Coordinatore", "mentor": "Mentor"}
+		_chat_panel = ChatPanel.new(guided_chat,
+				str(guided_names.get(guided_chat, guided_chat.capitalize())), _chat_roster())
+		add_child(_chat_panel)
 
 	# TEST-AUTO: JHT_CHATMENU=1 apre il menu delle chat 1-a-1 (tasto C)
 	if OS.get_environment("JHT_CHATMENU") == "1":
@@ -334,6 +344,171 @@ func _camera_lock_selftest() -> void:
 			and _camera.zoom.is_equal_approx(before_zoom)
 	print("CAMERA-OVERLAY-LOCK-TEST ", "PASS" if ok else "FAIL")
 	blocker.queue_free()
+	get_tree().quit(0 if ok else 1)
+
+
+## First-run E2E senza rete: attraversa gli alberi scripted e monta il
+## pannello chat reale, prima offline e poi in modalità ibrida col mock.
+func _guided_onboarding_selftest() -> void:
+	var failures: Array[String] = []
+	var check := func(ok: bool, message: String) -> void:
+		if not ok:
+			failures.append(message)
+	ScriptedOnboarding.reset_for_test()
+	check.call(ScriptedOnboarding.messages("assistente").size() == 1,
+			"welcome Assistente assente")
+	check.call(ScriptedOnboarding.options("assistente").size() == 3,
+			"scelte Assistente errate")
+	for choice in ["start", "software", "mid", "remote", "europe"]:
+		ScriptedOnboarding.choose("assistente", choice)
+	var draft := ScriptedOnboarding.profile_draft()
+	check.call(draft.get("target_role") == "Software Engineering", "ruolo non raccolto")
+	check.call(draft.get("experience_years") == "3", "esperienza non raccolta")
+	check.call(draft.get("location") == "Europa", "località non raccolta")
+	check.call(ScriptedOnboarding.options("assistente").size() == 2,
+			"finale Assistente non raggiunto")
+	var guided_actions: Array = []
+	var capture_action := func(action: String, payload: Dictionary) -> void:
+		guided_actions.append({"action": action, "payload": payload})
+	ScriptedOnboarding.action_requested.connect(capture_action)
+	ScriptedOnboarding.choose("coordinatore", "explain")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 3,
+			"spiegazione Coordinatore non torna alla scelta")
+	ScriptedOnboarding.choose("coordinatore", "local")
+	ScriptedOnboarding.choose("coordinatore", "ready")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 4,
+			"scelta provider Coordinatore non raggiunta")
+	ScriptedOnboarding.choose("coordinatore", "compare")
+	ScriptedOnboarding.choose("coordinatore", "codex")
+	ScriptedOnboarding.choose("coordinatore", "login")
+	check.call(not guided_actions.is_empty() \
+			and str(guided_actions[-1].get("action", "")) == "open_section" \
+			and str(guided_actions[-1].get("payload", {}).get("section", "")) == "docker",
+			"gate container del Coordinatore non apre Docker")
+	ScriptedOnboarding.choose("coordinatore", "check")
+	ScriptedOnboarding.choose("coordinatore", "already")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 4,
+			"canali opzionali del Coordinatore assenti")
+	ScriptedOnboarding.choose("coordinatore", "telegram")
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "telegram",
+			"configurazione Telegram non raggiungibile dalla conversazione")
+	ScriptedOnboarding.choose("coordinatore", "skip_channels")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 3,
+			"attivazione team non raggiunta dopo i canali")
+	ScriptedOnboarding.action_requested.disconnect(capture_action)
+	for choice in ["growth", "balanced", "weekly", "done"]:
+		ScriptedOnboarding.choose("mentor", choice)
+	check.call(ScriptedOnboarding.is_complete("mentor"), "Mentor non completato")
+	check.call(ScriptedOnboarding.preferences().get("mentor_cadence") == "weekly",
+			"preferenza Mentor non salvata")
+
+	# Percorsi alternativi: uscita non bloccante, VPS, cambio provider,
+	# configurazioni opzionali e revisione delle preferenze del Mentor.
+	ScriptedOnboarding.reset_for_test()
+	guided_actions.clear()
+	ScriptedOnboarding.action_requested.connect(capture_action)
+	ScriptedOnboarding.choose("assistente", "later")
+	check.call(ScriptedOnboarding.options("assistente").size() == 3,
+			"esplora prima dovrebbe lasciare l'Assistente all'intro")
+	ScriptedOnboarding.choose("assistente", "profile")
+	check.call(not guided_actions.is_empty() \
+			and str(guided_actions[-1].get("payload", {}).get("section", "")) == "profile",
+			"profilo diretto Assistente non apre il modulo nativo")
+	ScriptedOnboarding.choose("assistente", "complete_profile")
+	check.call(ScriptedOnboarding.is_complete("assistente"),
+			"profilo diretto non completa il percorso Assistente")
+	ScriptedOnboarding.choose("coordinatore", "vps")
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "vps",
+			"ramo VPS Coordinatore non apre la pagina VPS")
+	ScriptedOnboarding.choose("coordinatore", "ready")
+	ScriptedOnboarding.choose("coordinatore", "kimi")
+	ScriptedOnboarding.choose("coordinatore", "different")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 4,
+			"cambio provider non torna alla selezione")
+	ScriptedOnboarding.choose("coordinatore", "claude")
+	ScriptedOnboarding.choose("coordinatore", "check")
+	ScriptedOnboarding.choose("coordinatore", "open_profile")
+	for section_choice in ["email", "cloud"]:
+		ScriptedOnboarding.choose("coordinatore", section_choice)
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "account",
+			"ramo cloud non apre Account")
+	ScriptedOnboarding.choose("coordinatore", "skip_channels")
+	ScriptedOnboarding.choose("coordinatore", "overview")
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "activation",
+			"checklist Coordinatore non apre Attivazione")
+	ScriptedOnboarding.choose("coordinatore", "mentor")
+	check.call(str(guided_actions[-1].get("action", "")) == "open_scripted_chat" \
+			and str(guided_actions[-1].get("payload", {}).get("agent", "")) == "mentor",
+			"handoff Coordinatore-Mentor assente")
+	for choice in ["salary", "ambitious", "milestones", "hours"]:
+		ScriptedOnboarding.choose("mentor", choice)
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "hours" \
+			and not ScriptedOnboarding.is_complete("mentor"),
+			"orari Mentor devono aprire la pagina senza chiudere il percorso")
+	ScriptedOnboarding.choose("mentor", "restart")
+	check.call(ScriptedOnboarding.options("mentor").size() == 4 \
+			and ScriptedOnboarding.preferences().get("mentor_cadence", "") == "",
+			"riavvio Mentor non azzera il percorso")
+	ScriptedOnboarding.action_requested.disconnect(capture_action)
+
+	# Monta la UI da zero e attiva davvero il primo Button: protegge anche da
+	# regressioni nelle closure create dal ciclo delle risposte suggerite.
+	ScriptedOnboarding.reset_for_test()
+	var panel := ChatPanel.new("assistente", "Assistente")
+	add_child(panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check.call(panel._choices.get_child_count() >= 2, "bottoni guided non renderizzati")
+	check.call(not panel._input.editable and panel._send_btn.disabled,
+			"testo libero acceso prima del provider")
+	var pressed_first := false
+	for child in panel._choices.get_children():
+		if child is Button:
+			(child as Button).pressed.emit()
+			pressed_first = true
+			break
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check.call(pressed_first and ScriptedOnboarding.options("assistente").size() == 4,
+			"il primo bottone della chat non avanza al ruolo")
+	for choice in ["software", "mid", "remote", "europe"]:
+		ScriptedOnboarding.choose("assistente", choice)
+	draft = ScriptedOnboarding.profile_draft()
+
+	BackendBus.set_backend(MockBackend.new())
+	await get_tree().create_timer(1.2).timeout
+	SetupService.status["container_running"] = true
+	SetupService.status["provider_authenticated"] = true
+	panel._refresh_chat_mode()
+	check.call(panel._input.editable and not panel._send_btn.disabled,
+			"testo libero non abilitato dopo provider + agente")
+	check.call(panel._choices.get_child_count() >= 2,
+			"risposte suggerite assenti nel modo ibrido")
+	# Il modulo profilo deve esistere anche senza LLM e includere proprio i
+	# campi che determinano il gate ready (email e lingue comprese).
+	BackendBus._backend.live = true
+	var profile_panel := SectionPanel.new("profile", 24.0)
+	add_child(profile_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check.call(profile_panel._prof_edits.has("email"), "campo email assente dal profilo nativo")
+	check.call(profile_panel._prof_edits.has("languages"), "campo lingue assente dal profilo nativo")
+	check.call(profile_panel._prof_edits.has("target_role") \
+			and profile_panel._prof_edits["target_role"].text == "Software Engineering",
+			"bozza scripted non precompila il profilo")
+	var ok := failures.is_empty()
+	print("GUIDED-ONBOARDING-TEST ", "PASS " if ok else "FAIL ",
+			JSON.stringify({"failures": failures, "draft": draft,
+					"mentor": ScriptedOnboarding.preferences()}))
+	panel.close(false)
+	profile_panel.queue_free()
+	BackendBus.disconnect_backend()
+	await get_tree().create_timer(1.1).timeout
+	# Il click reale sopra ha avviato il tick procedurale: rilascia lo stream
+	# dal player prima del quit headless, così il test resta leak-free.
+	for player in Sfx._pool:
+		player.stop()
+		player.stream = null
 	get_tree().quit(0 if ok else 1)
 
 ## Regressione della vista Posizioni dentro il boot normale (gli script `-s`

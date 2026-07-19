@@ -2,11 +2,8 @@
 # ──────────────────────────────────────────────────────────────────
 # Job Hunter Team — Pre-release version consistency check
 #
-# Verifies that the git tag matches the "version" field in both
-# package.json files and all Godot game metadata. Run as the first
-# step of the release workflow: electron-builder uses desktop's
-# version for artifactName, so a mismatch produces assets named
-# after a stale version (e.g. tag v0.1.8 → asset 0.1.7-windows.exe).
+# Verifies that the git tag matches the root package and every Godot
+# application metadata field. Godot is the only desktop application.
 #
 # Usage:
 #   scripts/check-release-version.sh [TAG]
@@ -60,12 +57,10 @@ read_version() {
 }
 
 ROOT_PKG="$ROOT/package.json"
-DESKTOP_PKG="$ROOT/desktop/package.json"
 GAME_PROJECT="$ROOT/game/project.godot"
 GAME_PRESETS="$ROOT/game/export_presets.cfg"
 
 ROOT_VERSION="$(read_version "$ROOT_PKG")"
-DESKTOP_VERSION="$(read_version "$DESKTOP_PKG")"
 GAME_VERSION="$(awk -F'=' '/^config\/version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PROJECT")"
 GAME_MAC_SHORT="$(awk -F'=' '/^application\/short_version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
 GAME_MAC_VERSION="$(awk -F'=' '/^application\/version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
@@ -75,7 +70,6 @@ GAME_NUMERIC_VERSION="${TAG_VERSION%%-*}.0"
 
 info "tag:      $TAG (version $TAG_VERSION)"
 info "root:     $ROOT_VERSION  ($ROOT_PKG)"
-info "desktop:  $DESKTOP_VERSION  ($DESKTOP_PKG)"
 info "game:     $GAME_VERSION  ($GAME_PROJECT)"
 info "game mac: $GAME_MAC_SHORT / $GAME_MAC_VERSION"
 info "game win: $GAME_WIN_FILE / $GAME_WIN_PRODUCT"
@@ -83,10 +77,6 @@ info "game win: $GAME_WIN_FILE / $GAME_WIN_PRODUCT"
 mismatch=0
 if [ "$ROOT_VERSION" != "$TAG_VERSION" ]; then
   error "root package.json version ($ROOT_VERSION) does not match tag ($TAG_VERSION)"
-  mismatch=1
-fi
-if [ "$DESKTOP_VERSION" != "$TAG_VERSION" ]; then
-  error "desktop/package.json version ($DESKTOP_VERSION) does not match tag ($TAG_VERSION)"
   mismatch=1
 fi
 if [ "$GAME_VERSION" != "$TAG_VERSION" ] || \

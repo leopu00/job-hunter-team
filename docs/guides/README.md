@@ -23,7 +23,7 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 
 | Guide | For whom |
 |---|---|
-| [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Non-tech — desktop wizard, zero-touch (Path 2) |
+| [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Non-tech — native office VPS setup (Path 2) |
 | [☁️ VPS-SETUP](VPS-SETUP.md) | Technical — manual Hetzner setup via SSH |
 
 ## 🧪 Beta & feedback

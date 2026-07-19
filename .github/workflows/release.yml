@@ -16,131 +16,8 @@ jobs:
       - name: Verify tag matches package.json versions
         run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
 
-  build-desktop:
-    name: Build Desktop — ${{ matrix.label }}
-    runs-on: ${{ matrix.os }}
-    needs: check-version
-    permissions:
-      contents: read
-    env:
-      HAS_MAC_SIGNING: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.MACOS_CERTIFICATE_PWD != '' && secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            label: macOS
-            build_script: dist:mac
-            artifact_name: desktop-mac-release
-            required_glob: desktop/dist/*.dmg
-            required_label: .dmg
-            artifact_glob: |
-              desktop/dist/*.dmg
-              desktop/dist/*.blockmap
-              desktop/dist/*.yml
-          - os: windows-2022
-            label: Windows
-            build_script: dist:win
-            artifact_name: desktop-windows-release
-            required_glob: desktop/dist/*.exe
-            required_label: .exe
-            artifact_glob: |
-              desktop/dist/*.exe
-              desktop/dist/*.blockmap
-              desktop/dist/*.yml
-          - os: ubuntu-22.04
-            label: Linux
-            build_script: dist:linux
-            artifact_name: desktop-linux-release
-            required_glob: desktop/dist/*.AppImage
-            required_label: .AppImage
-            artifact_glob: |
-              desktop/dist/*.AppImage
-              desktop/dist/*.deb
-              desktop/dist/*.blockmap
-              desktop/dist/*.yml
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          cache: "npm"
-          cache-dependency-path: |
-            desktop/package-lock.json
-            web/package-lock.json
-
-      - name: Install web dependencies
-        working-directory: web
-        run: npm ci
-
-      - name: Install desktop dependencies
-        working-directory: desktop
-        run: npm ci
-
-      - name: Run desktop runtime tests
-        working-directory: desktop
-        run: npm test
-
-      - name: Import macOS code signing certificate
-        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING == 'true'
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-        run: |
-          CERT_PATH="$RUNNER_TEMP/jht-signing-cert.p12"
-          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$CERT_PATH"
-          echo "CSC_LINK=$CERT_PATH" >> "$GITHUB_ENV"
-
-      - name: Warn about unsigned macOS build
-        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING != 'true'
-        run: |
-          echo "::warning::Apple signing secrets are not configured — producing an UNSIGNED DMG."
-          echo "::warning::End users will be blocked by Gatekeeper on first launch."
-          echo "::warning::See docs/release.md for the required secrets."
-
-      - name: Build desktop package
-        working-directory: desktop
-        run: npm run ${{ matrix.build_script }}
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ (matrix.os == 'macos-14' && env.HAS_MAC_SIGNING == 'true') && 'true' || 'false' }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-      - name: Verify macOS signature and Gatekeeper acceptance
-        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING == 'true'
-        run: |
-          DMG=$(ls desktop/dist/*.dmg | head -n 1)
-          if [ -z "$DMG" ]; then
-            echo "No DMG produced — cannot verify signature."
-            exit 1
-          fi
-          echo "Inspecting signature of $DMG"
-          codesign -dv --verbose=4 "$DMG" || true
-          echo "Asserting Gatekeeper acceptance"
-          spctl --assess --type open --context context:primary-signature --verbose "$DMG"
-
-      - name: Verify expected desktop artifact
-        run: |
-          if ! compgen -G "${{ matrix.required_glob }}" > /dev/null; then
-            echo "Missing expected desktop artifact: ${{ matrix.required_label }}"
-            find desktop/dist -maxdepth 1 -type f | sort || true
-            exit 1
-          fi
-
-      - name: Upload desktop artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_glob }}
-
   build-game:
-    name: Build Game — ${{ matrix.label }}
+    name: Build Desktop App (Godot) — ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     needs: check-version
     permissions:
@@ -153,19 +30,19 @@ jobs:
             label: Windows x64
             preset: Windows Desktop
             output: builds/windows/job-hunter-team.exe
-            artifact_name: game-windows-release
+            artifact_name: app-windows-release
             artifact_path: game/builds/windows/job-hunter-team.exe
           - os: macos-14
             label: macOS Universal 2
             preset: macOS
             output: builds/macos/job-hunter-team.zip
-            artifact_name: game-macos-release
+            artifact_name: app-macos-release
             artifact_path: game/builds/macos/job-hunter-team.zip
           - os: ubuntu-22.04
             label: Linux x64
             preset: Linux
             output: builds/linux/job-hunter-team.x86_64
-            artifact_name: game-linux-release
+            artifact_name: app-linux-release
             artifact_path: game/builds/linux/job-hunter-team-linux-x64.tar.gz
     defaults:
       run:
@@ -201,6 +78,8 @@ jobs:
           godot --headless --path game --import
           godot --headless --path game --script res://tools/nav_grid_selftest.gd
           godot --headless --path game --script res://tools/speech_bubble_selftest.gd
+          godot --headless --path game --script res://tools/pipeline_queue_selftest.gd
+          godot --headless --path game --script res://tools/embedded_terminal_selftest.gd
           VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
           printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
           PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
@@ -282,7 +161,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - check-version
-      - build-desktop
       - build-game
     permissions:
       contents: write
@@ -359,17 +237,10 @@ jobs:
           echo "$NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Download desktop artifacts
+      - name: Download desktop app artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: desktop-*-release
-          path: release-assets
-          merge-multiple: true
-
-      - name: Download game artifacts
-        uses: actions/download-artifact@v8
-        with:
-          pattern: game-*-release
+          pattern: app-*-release
           path: release-assets
           merge-multiple: true
 
@@ -387,12 +258,7 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
-            release-assets/*.dmg
             release-assets/*.exe
-            release-assets/*.AppImage
-            release-assets/*.deb
-            release-assets/*.blockmap
-            release-assets/*.yml
             release-assets/*.zip
             release-assets/*.tar.gz
         env:

@@ -11,6 +11,7 @@ var _drawer: Control
 var _panel: SectionPanel
 var _buttons := {}  # id sezione → Button
 var _open := false
+var _setup_cta: Button
 
 func _init() -> void:
 	layer = 20
@@ -21,6 +22,21 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.theme = TerminalTheme.get_theme()
 	add_child(root)
+
+	# Il primo avvio non sequestra l'utente in un wizard: l'ufficio è subito
+	# esplorabile. Questo CTA resta visibile finché i tre prerequisiti non sono
+	# completi e porta alla checklist senza nascondere il mondo di gioco.
+	_setup_cta = Button.new()
+	_setup_cta.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_setup_cta.position = Vector2(-190, 18)
+	_setup_cta.custom_minimum_size = Vector2(380, 44)
+	_setup_cta.add_theme_font_size_override("font_size", 14)
+	_setup_cta.add_theme_color_override("font_color", Palette.YELLOW)
+	_setup_cta.pressed.connect(_open_activation)
+	root.add_child(_setup_cta)
+	SetupService.status_changed.connect(_on_setup_status)
+	ScriptedOnboarding.action_requested.connect(_on_guided_action)
+	_on_setup_status(SetupService.status)
 
 	# linguetta sempre visibile (apre/chiude il cassetto): cornice terminale
 	var tab := Button.new()
@@ -168,3 +184,33 @@ func _set_active(section: String) -> void:
 		b.add_theme_stylebox_override("normal",
 				_row_style(Palette.DEEP, 1.0, true) if active
 				else _row_style(Palette.ROW, 0.0, false))
+
+
+func _open_activation() -> void:
+	if not _open:
+		toggle()
+	_select("activation")
+
+
+func _on_setup_status(status: Dictionary) -> void:
+	if not is_instance_valid(_setup_cta):
+		return
+	var ready := bool(status.get("ready", false))
+	var running := bool(status.get("team_running", false))
+	_setup_cta.visible = not (ready and running)
+	_setup_cta.text = "⚡  " + (UIStrings.t("setup.ready_to_start") if ready \
+			else UIStrings.t("setup.cta") % int(status.get("completed", 0)))
+	_setup_cta.add_theme_color_override("font_color",
+			Palette.GREEN if ready else Palette.YELLOW)
+
+
+func _on_guided_action(action: String, payload: Dictionary) -> void:
+	if OS.get_environment("JHT_GUIDED_TEST") == "1":
+		return
+	if action == "open_section":
+		if not _open:
+			toggle()
+		_select(str(payload.get("section", "activation")))
+	# Il passaggio Assistente → Coordinatore → Mentor nasce sempre da una chat
+	# già aperta: è ChatPanel a riusare la stessa finestra. Gestirlo anche qui
+	# creerebbe due overlay sovrapposti.
