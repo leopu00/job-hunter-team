@@ -1067,7 +1067,7 @@ export default function SwipeDeck({
                     {/* Timbro del giudizio già dato (ri-giudicabile) */}
                     {isTop && verdictGiven && (
                       <div
-                        className="absolute top-3 right-3 px-2 py-1 rounded border-2 text-[10px] font-black tracking-widest flex items-center gap-1.5"
+                        className="absolute top-[68px] right-2 px-2 py-1 rounded border-2 text-[10px] font-black tracking-widest flex items-center gap-1.5"
                         style={{
                           color: VERDICTS[verdictGiven].color,
                           borderColor: VERDICTS[verdictGiven].color,
