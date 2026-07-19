@@ -50,6 +50,12 @@ const S := {
 	"chat.menu": "CHATS DOS AGENTES",
 	"chat.replies": "responde no chat",
 	"chat.maybe": "lê, resposta não garantida",
+	"guided.choose": "ESCOLHA UMA RESPOSTA",
+	"guided.choice_placeholder": "escolha uma das respostas acima…",
+	"guided.free_placeholder": "escreva livremente ou use uma sugestão…",
+	"guided.offline_note": "◆ conversa guiada offline — nenhum LLM necessário",
+	"guided.agent_unavailable": "◆ provedor conectado — inicie a equipa para o chat ao vivo",
+	"guided.ai_suggestions": "RESPOSTAS SUGERIDAS PELO AGENTE",
 	"chat.expand": "ECRÃ INTEIRO",
 	"chat.shrink": "REDUZIR",
 

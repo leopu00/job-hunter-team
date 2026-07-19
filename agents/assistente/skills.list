@@ -5,6 +5,7 @@
 
 # User communication (web UI)
 chat-web
+game-reply-options
 
 # User communication (Telegram outbound — phone-side interface)
 telegram-send

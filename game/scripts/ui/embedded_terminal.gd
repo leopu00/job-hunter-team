@@ -17,6 +17,7 @@ var _stderr: FileAccess
 var _pid := -1
 var _closing := false
 var _finished := false
+var _process_exited := false
 var _pending_bytes := PackedByteArray()
 var _raw_bytes := PackedByteArray()
 var _last_url := ""
@@ -201,20 +202,18 @@ func _run_process() -> void:
 	while not _closing and is_instance_valid(_stderr) and not _stderr.eof_reached():
 		var one := _stderr.get_buffer(1)
 		if one.is_empty():
-			if not OS.is_process_running(_pid):
-				break
 			OS.delay_msec(2)
 			continue
 		if _stderr.eof_reached() and one[0] == 0:
 			break
 		call_deferred("_queue_byte", one[0])
-	var exit_code := -1
-	if _pid > 0:
-		while OS.is_process_running(_pid) and not _closing:
-			OS.delay_msec(10)
-		if not OS.is_process_running(_pid):
-			exit_code = OS.get_process_exit_code(_pid)
-	call_deferred("_process_finished", exit_code)
+	# EOF è già la conferma affidabile che il pipe figlio è terminato. Chiamare
+	# is_process_running/get_process_exit_code dopo che Godot lo ha raccolto
+	# genera un falso errore "PID is not a child" su macOS.
+	_mutex.lock()
+	_process_exited = true
+	_mutex.unlock()
+	call_deferred("_process_finished", -1 if _closing else 0)
 
 
 func _process_started() -> void:
@@ -314,7 +313,7 @@ func close() -> void:
 	if is_instance_valid(_stdio):
 		_stdio.store_8(3)
 		_stdio.flush()
-	if _pid > 0 and OS.is_process_running(_pid):
+	if _pid > 0 and not _process_exited:
 		OS.kill(_pid)
 	_mutex.unlock()
 	closed.emit()
