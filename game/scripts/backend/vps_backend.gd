@@ -359,6 +359,121 @@ except Exception:
 print(json.dumps(out, ensure_ascii=False))
 """
 
+## Le TUI fullscreen (in particolare Claude) usano l'alternate screen:
+## tmux vede soltanto l'altezza corrente della pane e history_size resta 0,
+## anche con capture-pane -S -. Lo storico visibile nel terminale e invece
+## persistito dal provider in JSONL. Ne costruiamo una vista testuale
+## read-only, limitata ma profonda, da anteporre alla pane live.
+##
+## Non esportiamo i blocchi `thinking` riservati del provider: la vista
+## replica l'attivita osservabile (testo, tool e relativi output), proprio
+## come il terminale, senza trasformarsi in un canale interattivo.
+const TERMINAL_HISTORY_PY := """
+import base64, json
+from collections import deque
+from pathlib import Path
+
+agent = base64.b64decode('%s').decode('utf-8')
+project = Path('/jht_home/.claude/projects') / ('-jht-home-agents-' + agent)
+files = list(project.glob('*.jsonl')) if project.is_dir() else []
+if not files:
+    print(json.dumps({'ok': False, 'text_b64': '', 'events': 0}))
+    raise SystemExit
+source = max(files, key=lambda p: p.stat().st_mtime)
+rows = deque(maxlen=1200)
+with source.open('r', encoding='utf-8', errors='replace') as handle:
+    for row in handle:
+        rows.append(row)
+
+def clean(value, limit):
+    if isinstance(value, str):
+        text = value
+    elif value is None:
+        return ''
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False)
+        except Exception:
+            text = str(value)
+    text = text.replace(chr(0), '').strip()
+    if len(text) > limit:
+        text = text[:limit] + '\u2026'
+    return text
+
+def content_text(value, limit):
+    if isinstance(value, str):
+        return clean(value, limit)
+    if isinstance(value, list):
+        parts = []
+        for item in value:
+            if isinstance(item, dict):
+                part = item.get('text', item.get('content', ''))
+            else:
+                part = item
+            rendered = clean(part, limit)
+            if rendered:
+                parts.append(rendered)
+        return clean('\\n'.join(parts), limit)
+    if isinstance(value, dict):
+        return clean(value.get('text', value.get('content', value)), limit)
+    return clean(value, limit)
+
+out = []
+events = 0
+for row in rows:
+    try:
+        item = json.loads(row)
+    except Exception:
+        continue
+    kind = str(item.get('type', ''))
+    message = item.get('message') or {}
+    blocks = message.get('content', []) if isinstance(message, dict) else []
+    if isinstance(blocks, str):
+        blocks = [{'type': 'text', 'text': blocks}]
+    if not isinstance(blocks, list):
+        continue
+    stamp = str(item.get('timestamp', ''))[11:19]
+    lead = ('[' + stamp + '] ') if stamp else ''
+    if kind == 'assistant':
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            block_kind = str(block.get('type', ''))
+            if block_kind == 'text':
+                body = clean(block.get('text', ''), 8000)
+                if body:
+                    out.append('\u25cf ' + lead + body)
+                    events += 1
+            elif block_kind == 'tool_use':
+                name = clean(block.get('name', 'tool'), 80)
+                data = block.get('input', {})
+                detail = ''
+                if isinstance(data, dict):
+                    for key in ('command', 'file_path', 'path', 'url', 'query', 'pattern'):
+                        if data.get(key):
+                            detail = clean(data.get(key), 1800)
+                            break
+                if not detail:
+                    detail = clean(data, 1000)
+                out.append('\u2514 ' + lead + name + (': ' + detail if detail else ''))
+                events += 1
+    elif kind == 'user':
+        for block in blocks:
+            if not isinstance(block, dict) or block.get('type') != 'tool_result':
+                continue
+            body = content_text(block.get('content', ''), 3000)
+            if body:
+                out.append('  ' + lead + 'output: ' + body)
+                events += 1
+
+text = '\\n\\n'.join(out)
+if len(text) > 450000:
+    text = '\u2026 storico precedente omesso \u2026\\n\\n' + text[-450000:]
+payload = base64.b64encode(text.encode('utf-8')).decode('ascii')
+print(json.dumps({'ok': True, 'text_b64': payload, 'events': events,
+                  'source': source.name}))
+"""
+
 var _ip := ""
 var _key := ""
 var _user := "root"
@@ -369,6 +484,12 @@ var _worker_tasks: Array[int] = []
 var _worker_tasks_mutex := Mutex.new()
 ## Conversazione utente↔agente aperta ("capitano"/"assistente", "" = no).
 var _convo_agent := ""
+## Sessione osservata dalla vista attività interna (mai interattiva).
+var _terminal_agent := ""
+var _terminal_history_agent := ""
+var _terminal_history_text := ""
+var _terminal_history_loaded := false
+var _terminal_history_tick := 0
 
 
 func start(config: Dictionary) -> void:
@@ -509,12 +630,14 @@ func _run() -> void:
 			_fetch_metrics()
 		if _convo_agent != "":
 			_fetch_convo(_convo_agent)
+		if _terminal_agent != "":
+			_fetch_terminal(_terminal_agent)
 		if _profile_watch:
 			_fetch_profile_status()
 		tick += 1
 		# con una conversazione aperta il giro accorcia: la risposta
 		# dell'agente deve comparire in fretta, non dopo 8 secondi
-		_sleep(2.5 if _convo_agent != "" else POLL_SECS)
+		_sleep(2.5 if (_convo_agent != "" or _terminal_agent != "") else POLL_SECS)
 
 
 ## jobs.db → positions_updated: snapshot completo con highlights e
@@ -679,6 +802,104 @@ func open_chat(agent: String) -> void:
 
 func close_chat() -> void:
 	_convo_agent = ""
+
+func open_terminal(agent: String) -> void:
+	_terminal_agent = agent
+	_terminal_history_agent = agent
+	_terminal_history_text = ""
+	_terminal_history_loaded = false
+	_terminal_history_tick = 0
+	# Primo frame senza attendere la fine dell'eventuale sleep del poll.
+	_queue_worker(_fetch_terminal.bind(agent))
+
+func close_terminal() -> void:
+	_terminal_agent = ""
+	_terminal_history_agent = ""
+	_terminal_history_text = ""
+	_terminal_history_loaded = false
+	_terminal_history_tick = 0
+
+func _fetch_terminal(agent: String) -> void:
+	if _stop or agent == "" or agent != _terminal_agent:
+		return
+	_terminal_history_tick += 1
+	# Lo storico provider e molto piu profondo della pane ma non serve
+	# rileggerne megabyte a ogni frame: prima apertura + refresh ~1/minuto.
+	if not _terminal_history_loaded or _terminal_history_tick >= 24:
+		var history := _fetch_terminal_history(agent)
+		if _stop or agent != _terminal_agent:
+			return
+		_terminal_history_agent = agent
+		_terminal_history_text = history
+		_terminal_history_loaded = true
+		_terminal_history_tick = 0
+	var session := _agent_session(agent)
+	if not _safe_tmux_session(session):
+		_terminal_result(agent, "", "nome sessione tmux non valido")
+		return
+	# `-S -` legge tutto lo scrollback disponibile (lo stesso contratto della
+	# dashboard privata quando l'utente chiede la vista top). Non usiamo -e:
+	# niente sequenze ANSI nella UI e, soprattutto, nessuna send-keys o
+	# paste-buffer.
+	# Base64 nasce dentro il container: alcune TUI lasciano celle NUL nella
+	# pane e farle attraversare direttamente OS.execute costringe Godot a
+	# decodificarle come testo, producendo warning e caratteri sostitutivi.
+	var res := _ssh("docker exec jht sh -lc 'tmux capture-pane -p -S - -t " \
+			+ session + " | base64'")
+	if _stop or agent != _terminal_agent:
+		return
+	if res["code"] != 0:
+		_terminal_result(agent, "", _short_error(res))
+		return
+	var encoded := str(res["out"]).replace("\n", "").replace("\r", "")
+	var raw := Marshalls.base64_to_raw(encoded)
+	var clean := PackedByteArray()
+	for byte in raw:
+		if byte != 0:
+			clean.append(byte)
+	var content := clean.get_string_from_utf8()
+	if content.length() > 500000:
+		content = "… output precedente omesso …\n" + content.right(500000)
+	var combined := content
+	if _terminal_history_agent == agent and _terminal_history_text != "":
+		combined = "── STORICO SESSIONE ─────────────────────────────\n\n" \
+				+ _terminal_history_text \
+				+ "\n\n── PANE TMUX LIVE ──────────────────────────────\n\n" \
+				+ content
+	_terminal_result(agent, combined, "")
+
+func _fetch_terminal_history(agent: String) -> String:
+	var agent_dir := _agent_dir(agent)
+	if not _safe_tmux_session(agent_dir):
+		return ""
+	var encoded_agent := Marshalls.utf8_to_base64(agent_dir)
+	var res := _ssh_python(TERMINAL_HISTORY_PY % encoded_agent)
+	if res["code"] != 0:
+		return ""
+	for line in str(res["out"]).split("\n"):
+		if not line.begins_with("{"):
+			continue
+		var parsed: Variant = JSON.parse_string(line)
+		if not (parsed is Dictionary) or not bool(parsed.get("ok", false)):
+			return ""
+		var payload := str(parsed.get("text_b64", ""))
+		if payload == "":
+			return ""
+		return Marshalls.base64_to_raw(payload).get_string_from_utf8()
+	return ""
+
+static func _safe_tmux_session(session: String) -> bool:
+	if session == "" or session.length() > 96:
+		return false
+	for code in session.to_ascii_buffer():
+		var c := int(code)
+		if not ((c >= 48 and c <= 57) or (c >= 65 and c <= 90) \
+				or (c >= 97 and c <= 122) or c in [45, 46, 95]):
+			return false
+	return true
+
+func _terminal_result(agent: String, text: String, error: String) -> void:
+	bus.call_deferred("publish_agent_terminal", agent, text, error)
 
 func send_chat(agent: String, text: String) -> void:
 	if text.strip_edges() == "":

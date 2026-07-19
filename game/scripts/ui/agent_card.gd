@@ -7,6 +7,7 @@ extends CanvasLayer
 signal closed
 signal talk_requested
 signal chat_requested
+signal thinking_requested
 
 var _agent: AgentNPC
 
@@ -128,6 +129,22 @@ func _ready() -> void:
 
 	# azioni
 	box.add_child(HSeparator.new())
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	box.add_child(actions)
+	var thinking := Button.new()
+	thinking.text = UIStrings.t("agent.thinking")
+	thinking.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	thinking.add_theme_font_size_override("font_size", 17)
+	thinking.add_theme_color_override("font_color",
+			_agent.accent_color() if _agent.uid != "" else Palette.DIM)
+	thinking.disabled = _agent.uid == "" or not BackendBus.can_chat_with(_agent.uid)
+	thinking.tooltip_text = UIStrings.t("agent.thinking_unavailable") \
+			if thinking.disabled else UIStrings.t("agent.thinking_tooltip")
+	thinking.pressed.connect(func() -> void:
+		thinking_requested.emit()
+		close(false))
+	actions.add_child(thinking)
 	# chat REALE col team: dal canale 1053f1ce OGNI agente del roster è
 	# raggiungibile — il pulsante c'è sempre. Il vecchio PARLA (dialoghi
 	# finti) è stato TOLTO su ordine di Leone (test finale: "inutile").
@@ -136,10 +153,11 @@ func _ready() -> void:
 		chat.text = UIStrings.t("agent.chat")
 		chat.add_theme_font_size_override("font_size", 17)
 		chat.add_theme_color_override("font_color", Palette.GREEN)
+		chat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		chat.pressed.connect(func() -> void:
 			chat_requested.emit()
 			close(false))
-		box.add_child(chat)
+		actions.add_child(chat)
 
 	var hint := TerminalTheme.label(UIStrings.t("dept.close"), 13, Palette.DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

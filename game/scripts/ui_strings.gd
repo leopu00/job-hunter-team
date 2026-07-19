@@ -133,6 +133,18 @@ const S := {
 	"agent.talk": "▶ PARLA",
 	"agent.chat": "▶ CHAT COL TEAM",
 	"agent.pile": "Fogli sulla scrivania: %d",
+	"agent.thinking": "◉ MOSTRA ATTIVITÀ INTERNA",
+	"agent.thinking_tooltip": "Osserva lo stream tmux dell'agente in sola lettura",
+	"agent.thinking_unavailable": "Disponibile quando l'agente reale è attivo",
+	"agent.thinking_title": "ATTIVITÀ INTERNA — %s",
+	"agent.thinking_subtitle": "Stream live della sessione tmux dell'agente",
+	"agent.thinking_loading": "● COLLEGAMENTO…",
+	"agent.thinking_waiting": "Attendo il primo snapshot del terminale…",
+	"agent.thinking_readonly": "SOLA LETTURA · NESSUN TASTO VIENE INVIATO",
+	"agent.thinking_bottom": "↓ TORNA IN FONDO",
+	"agent.thinking_error": "STREAM NON DISPONIBILE",
+	"agent.thinking_live": "STREAM LIVE",
+	"agent.thinking_empty": "La sessione è attiva ma non ha ancora prodotto output.",
 
 	# ── Pannello chat con l'agente ────────────────────────────────
 	"chat.title": "CHAT — %s",

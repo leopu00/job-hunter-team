@@ -44,6 +44,10 @@ signal positions_updated(positions: Array)
 signal agent_chat_updated(agent: String, messages: Array)
 ## Esito dell'invio di send_user_chat (ok=false → error leggibile).
 signal user_chat_sent(agent: String, ok: bool, error: String)
+## Snapshot della pane tmux di un agente, esclusivamente osservabile.
+## `error` e vuoto durante il flusso regolare; nessun metodo del bus inoltra
+## input o tasti alla sessione osservata.
+signal agent_terminal_updated(agent: String, text: String, error: String)
 ## Esito di create_position_ticket (l'unica scrittura remota autorizzata
 ## da Leone, gate 1 dell'11/07: sì ai ticket verso il team, no alle
 ## azioni che scrivono direttamente sul jobs.db).
@@ -157,7 +161,9 @@ func _self_test_vps_contract() -> void:
 			and msg.get("text") == "controllo completato" \
 			and VpsBackend.expand_user_path("~/keys/id", "/home/Jane Doe") \
 					== "/home/Jane Doe/keys/id" \
-			and VpsBackend.expand_user_path("/tmp/a~b", "/home/test") == "/tmp/a~b"
+			and VpsBackend.expand_user_path("/tmp/a~b", "/home/test") == "/tmp/a~b" \
+			and VpsBackend._safe_tmux_session("SCOUT-2") \
+			and not VpsBackend._safe_tmux_session("SCOUT-2; send-keys C-c")
 	print("VPS-CONTRACT-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"uids": uids, "roles": roles, "msg": msg}))
 
@@ -344,6 +350,19 @@ func open_agent_chat(slug: String) -> void:
 func close_agent_chat() -> void:
 	if _backend:
 		_backend.close_chat()
+
+## Apre/chiude una vista read-only sulla tmux dell'agente. Un solo viewer
+## alla volta e sufficiente per l'UI e mantiene leggero il polling remoto.
+func open_agent_terminal(slug_or_uid: String) -> void:
+	if _backend and can_chat_with(slug_or_uid):
+		_backend.open_terminal(_chat_uid(slug_or_uid))
+
+func close_agent_terminal() -> void:
+	if _backend:
+		_backend.close_terminal()
+
+func publish_agent_terminal(agent: String, text: String, error := "") -> void:
+	agent_terminal_updated.emit(agent, text, error)
 
 ## Invia il messaggio dell'utente all'agente reale (async: l'esito
 ## arriva su user_chat_sent, la risposta su agent_chat_updated).
