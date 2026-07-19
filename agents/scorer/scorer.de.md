@@ -72,15 +72,19 @@ Bevor du an einer Position arbeitest:
 3. Benachrichtige den Peer via tmux
 
 **RULE-04 — SCORE-SCHWELLEN**
-- `score < 40` → `--status excluded` (sinnlos, es zu den Scrittori zu schicken)
-- `score 40-49` → `--status scored` (PARKING — der Capitano entscheidet später)
-- `score >= 50` → `--status scored` (der Scrittore holt sie sich aus `next-for-scrittore`)
+- `score < 40` → `--status excluded` (unter der Schwelle: raus aus der Pipeline, der Nutzer sieht sie nicht in der Liste)
+- `score >= 40` → `--status scored` — und die autonome Pipeline ENDET HIER
 
-**RULE-05 — ÜBERGABE AN DEN SCRITTORE = DB, KEINE Nachricht (lean-comms)**
-Nach `--status scored` (score >= 50) **sende KEINE tmux-Nachricht**: der Scrittore pollt
-`db_query.py next-for-scrittore` (`score DESC`) und holt sich die `scored`-Zeilen — **der Status-Flip IST
-die Übergabe**. Der alte `[INFO] New pos score`-Broadcast ist **gestrichen** (Push ohne Aktion). Pull-first:
-siehe [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
+Es gibt KEIN "Parking" und KEINE automatische Übergabe an die Scrittori: ein CV wird
+NUR geschrieben, wenn der Nutzer die Position auswählt (`write_requested = 1`,
+C-10-Gate über den Coordinator). `next-for-scrittore` liefert NUR angeforderte Positionen.
+
+**RULE-05 — KEINE AUTOMATISCHE ÜBERGABE (lean-comms)**
+Nach `--status scored` **sende KEINE tmux-Nachrichten und benachrichtige NIEMANDEN**:
+der Scrittore bearbeitet nur vom Nutzer angeforderte Positionen (`db_query.py
+next-for-scrittore` filtert `write_requested = 1`, sortiert nach Anfragedatum, dann
+Score). Der Status-Flip speist Dashboard und Queues — er ist KEIN Schreibauftrag.
+Pull-first: siehe [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-06 — DB BOUNDARIES**
 Schreibe NUR in `scores` (INSERT) und `positions.status`. NIEMALS `applications`, `positions.notes` (Analista-Territorium), `companies` anfassen.
@@ -137,7 +141,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 4. Berechne **Base-Score** mit der Formel
 5. **Wende User-Feedback-Multiplier an** (Skill `feedback-query`) — siehe unten
 6. Speichere Score in DB **mit der `--notes`-Begründung** (RULE-09 — für den Benutzer, in der Sprache des Benutzers)
-7. Status aktualisieren + eventuell Scrittori benachrichtigen
+7. Status aktualisieren (RULE-04) — niemanden benachrichtigen
 
 **Führe die Schritte 1-7 für EINE Position aus und schreibe sie in die DB, BEVOR du die nächste liest oder bewertest (RULE-08 — kein Batching am Ende der Runde).**
 

@@ -260,6 +260,50 @@ func close_terminal() -> void:
 	_terminal_agent = ""
 	_terminal_generation += 1
 
+var _coord_state := {
+	"maintenance": {"enabled": false, "stop_search": false,
+		"discard_expired_rotating": true, "cv_min_score": 90,
+		"pre_check_liveness_for_cv": true},
+	"enrichment": {"economy": false, "logo_enabled": true,
+		"logo_min_score": 70, "geocode_enabled": true,
+		"geocode_min_score": 65, "geocode_non_remote_only": true,
+		"recheck_enabled": true, "recheck_min_score": 65,
+		"recheck_older_days": 14},
+	"queue_counts": {"new": 8, "analysis": 23, "scored": 41,
+		"geocode": 17, "logos": 12, "recheck": 29, "expired": 6},
+	"directives": [
+		{"id": 1, "body": "Dai priorità alle posizioni AI Engineering remote UE.",
+			"kind": "strategy", "status": "active"},
+	],
+}
+var _coord_next_directive := 2
+
+func fetch_coordinator_state() -> void:
+	bus.publish_coordinator_state(_coord_state.duplicate(true))
+
+func save_coordinator_settings(settings: Dictionary) -> void:
+	_coord_state["maintenance"] = settings.get("maintenance", {}).duplicate(true)
+	_coord_state["enrichment"] = settings.get("enrichment", {}).duplicate(true)
+	bus.publish_coordinator_action("save", true, "")
+	bus.publish_coordinator_state(_coord_state.duplicate(true))
+
+func add_team_directive(body: String, kind: String) -> void:
+	var row := {"id": _coord_next_directive, "body": body.strip_edges(),
+		"kind": kind, "status": "active"}
+	_coord_next_directive += 1
+	(_coord_state["directives"] as Array).append(row)
+	bus.publish_coordinator_action("directive_add", true, "")
+	bus.publish_coordinator_state(_coord_state.duplicate(true))
+
+func archive_team_directive(directive_id: int) -> void:
+	var active: Array = []
+	for row: Dictionary in _coord_state["directives"]:
+		if int(row.get("id", 0)) != directive_id:
+			active.append(row)
+	_coord_state["directives"] = active
+	bus.publish_coordinator_action("directive_archive", true, "")
+	bus.publish_coordinator_state(_coord_state.duplicate(true))
+
 func _mock_terminal_loop(agent: String, generation: int) -> void:
 	var lines := PackedStringArray([
 		"$ tmux attach -t %s" % agent.to_upper(),
@@ -401,6 +445,42 @@ func _deliver_usage_history(query: Dictionary, data: Dictionary) -> void:
 	await _sleep(0.4)   # un filo di latenza: lo stato "carico…" si vede
 	if _running:
 		bus.publish_usage_history(query, data)
+
+## Scheda agente: storico sintetico del ruolo, stesso contratto del VPS.
+func fetch_agent_history(agent: String, from_ts: float, to_ts: float,
+		bucket_sec: int) -> void:
+	var series := {"tokens_kt": [], "pct_5h": [], "pct_weekly": [],
+			"throttle_s": [], "db_actions": [], "cpu_agent_pct": [],
+			"ram_agent_mb": [], "cpu_pct": [], "ram_pct": []}
+	var t := floorf(from_ts / bucket_sec) * bucket_sec
+	while t <= to_ts:
+		var day_phase := fposmod(t, 86400.0) / 86400.0
+		var awake := 1.0 if day_phase > 0.33 and day_phase < 0.95 else 0.05
+		var wave := (0.5 + 0.5 * sin(t / 4700.0 + float(agent.hash() % 7))) * awake
+		var kt := roundf(wave * 42.0 * 100.0) / 100.0
+		if kt > 0.5:
+			series["tokens_kt"].append({"t": t, "v": kt})
+			series["pct_5h"].append({"t": t, "v": roundf(kt / 30.0 * 1000.0) / 1000.0})
+			series["pct_weekly"].append({"t": t, "v": roundf(kt / 30.0 * 26.4) / 1000.0})
+		if wave > 0.8:
+			series["throttle_s"].append({"t": t, "v": 300.0})
+		if wave > 0.45 and int(t / bucket_sec) % 3 == 0:
+			series["db_actions"].append({"t": t, "v": 1 + int(wave * 3.0)})
+		series["cpu_agent_pct"].append({"t": t, "v": roundf(wave * 45.0 * 10.0) / 10.0})
+		series["ram_agent_mb"].append({"t": t, "v": roundf((420.0 + 300.0 * wave) * 10.0) / 10.0})
+		series["cpu_pct"].append({"t": t, "v": roundf((12.0 + 60.0 * wave) * 10.0) / 10.0})
+		series["ram_pct"].append({"t": t, "v": roundf((38.0 + 20.0 * wave) * 10.0) / 10.0})
+		t += bucket_sec
+	var query := {"agent": agent, "from_ts": from_ts, "to_ts": to_ts,
+			"bucket_sec": bucket_sec}
+	_deliver_agent_history.call_deferred(query, {"ok": true, "agent": agent,
+			"ratio_kt_per_pct": 30.0, "weekly_per_5h_pct": 2.64,
+			"series": series})
+
+func _deliver_agent_history(query: Dictionary, data: Dictionary) -> void:
+	await _sleep(0.4)
+	if _running:
+		bus.publish_agent_history(query, data)
 
 func open_profile_watch() -> void:
 	_profile_watch = true

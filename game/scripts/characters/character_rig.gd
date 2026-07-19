@@ -53,6 +53,25 @@ func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 	mode = p_mode
 	_apply_facing()
 
+## Limite superiore opaco del rig legacy, nello spazio dell'AgentNPC. Anche
+## qui si misura l'arte invece di assumere che tutti gli SVG abbiano gli
+## stessi margini interni.
+func visual_top_y() -> float:
+	var top := INF
+	for child in get_children():
+		var sprite := child as Sprite2D
+		if sprite == null or sprite.texture == null or not sprite.visible:
+			continue
+		var image := sprite.texture.get_image()
+		if image == null or image.is_empty():
+			continue
+		var used := image.get_used_rect()
+		if used.size == Vector2i.ZERO:
+			continue
+		var local_top := sprite.position.y + sprite.offset.y + float(used.position.y)
+		top = minf(top, local_top * absf(scale.y))
+	return top if is_finite(top) else -112.0
+
 func _make_sprite(pos_art: Vector2, offset_art: Vector2) -> Sprite2D:
 	var s := Sprite2D.new()
 	s.centered = false

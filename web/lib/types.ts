@@ -52,6 +52,9 @@ export interface Position {
   role_family?: string | null;
   loc_country?: string | null;
   loc_city?: string | null;
+  // ISO-3166 alpha-2 (location-enrichment): alimenta la bandierina della
+  // card Località; null sulle righe pre-enrichment (fallback sul nome).
+  loc_country_code?: string | null;
   // V6 (2026-05-29) — Writer-on-demand: utente seleziona da dashboard
   // o /cv Telegram. Il Capitano spawna Scrittori solo quando = true.
   write_requested?: boolean;
@@ -141,12 +144,7 @@ export interface Company {
 
 // ── Application ────────────────────────────────────────────────────
 export type ApplicationStatus =
-  | "draft"
-  | "review"
-  | "approved"
-  | "applied"
-  | "response"
-  | "ready";
+  "draft" | "review" | "approved" | "applied" | "response" | "ready";
 
 export interface Application {
   id: string;
@@ -266,10 +264,7 @@ export interface ApplicationWithPosition extends Application {
 // su Supabase e mostrato sulla dashboard quando `delivered_via = 'web'`
 // (Telegram non configurato/down). L'utente puo' ack-are o rispondere.
 export type PendingMessageKind =
-  | "notification"
-  | "question"
-  | "digest"
-  | "alert";
+  "notification" | "question" | "digest" | "alert";
 export type PendingMessageDelivery = "telegram" | "web" | null;
 
 export interface PendingMessage {
