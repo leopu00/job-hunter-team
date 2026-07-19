@@ -158,7 +158,8 @@ export function WriteRequestButton({
         className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:opacity-60 disabled:cursor-wait"
         style={{ borderColor: color, color }}
       >
-        {requested ? "✓" : "🖊"} {label}
+        {requested ? "✓ " : ""}
+        {label}
       </button>
       {error && (
         <span className="text-[10px]" style={{ color: "var(--color-red)" }}>

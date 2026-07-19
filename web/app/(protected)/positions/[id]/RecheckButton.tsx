@@ -188,7 +188,8 @@ export function RecheckButton({
         style={{ borderColor: color, color }}
         title={checked ? t.titleWithCheck(checked) : t.titleNoCheck}
       >
-        {requested ? "✓" : "🔄"} {label}
+        {requested ? "✓ " : ""}
+        {label}
       </button>
       {checked && !requested && (
         <span className="text-[10px]" style={{ color: "var(--color-dim)" }}>
