@@ -10,6 +10,7 @@ import { gazetteerCity } from "@/lib/city-gazetteer";
 import { countryFlag } from "@/lib/country-flag";
 import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
+import { colorForFamily } from "@/lib/position-classifier";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
@@ -379,6 +380,60 @@ const T: Record<string, Record<string, string>> = {
     de: "Vollständige Beschreibung",
     fr: "Description complète",
     pt: "Descrição completa",
+  },
+  overview: {
+    it: "Panoramica",
+    en: "Overview",
+    hu: "Áttekintés",
+    es: "Resumen",
+    de: "Überblick",
+    fr: "Aperçu",
+    pt: "Resumo",
+  },
+  o_mode: {
+    it: "Modalità",
+    en: "Work mode",
+    hu: "Munkavégzés",
+    es: "Modalidad",
+    de: "Arbeitsmodus",
+    fr: "Mode de travail",
+    pt: "Modalidade",
+  },
+  o_category: {
+    it: "Categoria",
+    en: "Category",
+    hu: "Kategória",
+    es: "Categoría",
+    de: "Kategorie",
+    fr: "Catégorie",
+    pt: "Categoria",
+  },
+  rt_full_remote: {
+    it: "Da remoto",
+    en: "Full remote",
+    hu: "Teljesen távoli",
+    es: "Remoto",
+    de: "Vollständig remote",
+    fr: "Télétravail complet",
+    pt: "Remoto",
+  },
+  rt_hybrid: {
+    it: "Ibrido",
+    en: "Hybrid",
+    hu: "Hibrid",
+    es: "Híbrido",
+    de: "Hybrid",
+    fr: "Hybride",
+    pt: "Híbrido",
+  },
+  rt_onsite: {
+    it: "In sede",
+    en: "On-site",
+    hu: "Irodai",
+    es: "Presencial",
+    de: "Vor Ort",
+    fr: "Sur site",
+    pt: "Presencial",
   },
   location: {
     it: "Località",
@@ -832,6 +887,88 @@ export default async function PositionDetailPage({ params }: PageProps) {
     return null;
   }
 
+  // Card Panoramica (prima card in assoluto): score + stipendio stimato +
+  // modalità + categoria — i fatti decisivi tolti dall'header (19/07).
+  const salaryEst = formatSalary(
+    position.salary_estimated_min,
+    position.salary_estimated_max,
+    position.salary_estimated_currency,
+  );
+  const salaryDecl = formatSalary(
+    position.salary_declared_min,
+    position.salary_declared_max,
+    position.salary_declared_currency,
+  );
+  const modeColor =
+    position.remote_type === "full_remote"
+      ? "var(--color-green)"
+      : position.remote_type === "hybrid"
+        ? "var(--color-yellow)"
+        : "var(--color-red)";
+  const overviewCard =
+    score ||
+    salaryEst ||
+    salaryDecl ||
+    position.remote_type ||
+    position.role_family ? (
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+        <div className="section-label mb-3">{t("overview")}</div>
+        <div className="flex items-center gap-4">
+          {score && (
+            <div
+              className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
+              style={{
+                borderColor: scoreColor(score.total_score),
+                color: scoreColor(score.total_score),
+              }}
+            >
+              {score.total_score}
+            </div>
+          )}
+          <div className="flex-1 min-w-0 space-y-2">
+            {(salaryEst || salaryDecl) && (
+              <InfoRow
+                label={t(
+                  salaryEst ? "d_salary_estimated" : "d_salary_declared",
+                )}
+                value={(salaryEst ?? salaryDecl)!}
+              />
+            )}
+            {position.remote_type && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[10px] text-[var(--color-dim)] shrink-0">
+                  {t("o_mode")}
+                </span>
+                <span
+                  className="text-[11px] font-semibold text-right"
+                  style={{ color: modeColor }}
+                >
+                  {t(`rt_${position.remote_type}`)}
+                </span>
+              </div>
+            )}
+            {position.role_family && (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[10px] text-[var(--color-dim)] shrink-0">
+                  {t("o_category")}
+                </span>
+                <span className="text-[11px] text-[var(--color-base)] text-right inline-flex items-center gap-1.5 min-w-0">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{
+                      background: colorForFamily(position.role_family.trim()),
+                    }}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">{position.role_family}</span>
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    ) : null;
+
   // Card Località: città + paese (bandiera) + mini-mappa zoomabile col pin.
   // CON mappa → prima card della colonna principale (prima della JD, scelta
   // utente 19/07); senza mappa → tra i metadati della colonna destra.
@@ -894,65 +1031,36 @@ export default async function PositionDetailPage({ params }: PageProps) {
       </div>
 
       {/* ── Header ──────────────────────────────────────────────── */}
-      {/* Ridisegnato mobile-first (19/07): niente pillola di stato (l'utente
-          non ragiona per status interni), score allineato al titolo, e tutte
-          le azioni utente→team raccolte in un unico popup (TeamActionsSheet)
-          invece del muro di bottoni impilati. */}
+      {/* Ridisegnato mobile-first (19/07): titolo a tutta larghezza, sotto
+          il nome azienda con il logo alla sua destra (nessun placeholder
+          quando il logo manca). Score e modalità vivono nella card
+          Panoramica; le azioni nel popup TeamActionsSheet. */}
       <div className="mb-6 md:mb-8 pb-5 md:pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-start gap-3 md:gap-4">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[var(--color-white)] mb-1.5">
+          {position.title}
+        </h1>
+        <div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap">
+          <span className="text-[var(--color-base)] font-medium">
+            {position.company}
+          </span>
           {/* Logo aziendale (mig 056, skill logo-extraction): data-URI dal
-              record companies; senza logo l'Avatar ripiega sulle iniziali
-              colorate del nome azienda. object-contain: mai croppare. */}
-          <Avatar
-            name={position.company}
-            src={company?.logo ?? undefined}
-            size="lg"
-            square
-            imgFit="contain"
-            className="mt-1"
-          />
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[var(--color-white)] mb-1">
-              {position.title}
-            </h1>
-            <div className="flex items-center gap-x-3 gap-y-1 flex-wrap">
-              <span className="text-[var(--color-base)] font-medium">
-                {position.company}
-              </span>
-              {/* La dicitura località vive nella card Località (con mappa);
-                  qui resta solo come fallback quando la card non c'è. */}
-              {position.location && !hasLocationCard && (
-                <span className="text-[11px] text-[var(--color-muted)]">
-                  · {position.location}
-                </span>
-              )}
-              {position.remote_type && (
-                <span
-                  className="text-[10px]"
-                  style={{
-                    color:
-                      position.remote_type === "full_remote"
-                        ? "var(--color-green)"
-                        : position.remote_type === "hybrid"
-                          ? "var(--color-yellow)"
-                          : "var(--color-red)",
-                  }}
-                >
-                  {position.remote_type.replace("_", " ")}
-                </span>
-              )}
-            </div>
-          </div>
-          {score && (
-            <div
-              className="w-12 h-12 rounded-full border-2 flex items-center justify-center font-bold text-lg shrink-0 mt-0.5"
-              style={{
-                borderColor: scoreColor(score.total_score),
-                color: scoreColor(score.total_score),
-              }}
-            >
-              {score.total_score}
-            </div>
+              record companies, a destra del nome. object-contain: mai
+              croppare. Senza logo, niente — nessun fallback a iniziali. */}
+          {company?.logo && (
+            <Avatar
+              name={position.company}
+              src={company.logo}
+              size="sm"
+              square
+              imgFit="contain"
+            />
+          )}
+          {/* La dicitura località vive nella card Località (con mappa);
+              qui resta solo come fallback quando la card non c'è. */}
+          {position.location && !hasLocationCard && (
+            <span className="text-[11px] text-[var(--color-muted)]">
+              · {position.location}
+            </span>
           )}
         </div>
         {position.legacy_id != null && (
@@ -1057,7 +1165,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Left column ─────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Località CON mappa: primo elemento, prima della descrizione. */}
+          {/* Panoramica: score, stipendio, modalità, categoria. */}
+          {overviewCard}
+
+          {/* Località CON mappa: prima della descrizione. */}
           {mapCoords && locationCard}
 
           {/* Job description — sintesi ottimizzata dell'Analista (jd_summary,
