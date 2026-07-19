@@ -48,6 +48,10 @@ signal user_chat_sent(agent: String, ok: bool, error: String)
 ## `error` e vuoto durante il flusso regolare; nessun metodo del bus inoltra
 ## input o tasti alla sessione osservata.
 signal agent_terminal_updated(agent: String, text: String, error: String)
+## Console operativa del Coordinatore. state contiene maintenance,
+## enrichment, directives e queue_counts; action_done copre save/add/archive.
+signal coordinator_state_updated(state: Dictionary)
+signal coordinator_action_done(action: String, ok: bool, error: String)
 ## Esito di create_position_ticket (l'unica scrittura remota autorizzata
 ## da Leone, gate 1 dell'11/07: sì ai ticket verso il team, no alle
 ## azioni che scrivono direttamente sul jobs.db).
@@ -85,6 +89,13 @@ signal telemetry_updated(sample: Dictionary, history: Array)
 ## agents: {names: [String], series: [{t, <agente>: kT_delta}, …],
 ##          totals_kt: {<agente>: kT}}} — t sempre unix epoch UTC.
 signal usage_history_updated(query: Dictionary, data: Dictionary)
+## Storico del singolo RUOLO (scheda agente): query = {agent, from_ts,
+## to_ts, bucket_sec}; data = {ok, error, agent, series: {tokens_kt|
+## pct_5h|pct_weekly|throttle_s|db_actions|cpu_pct|ram_pct: [{t, v}, …]}}.
+## pct_* = delta usage% della sentinella × fetta token del ruolo nel
+## bucket; cpu/ram sono del CONTAINER (contesto): lo storico per-agente
+## di cpu/ram non esiste sulla VPS.
+signal agent_history_updated(query: Dictionary, data: Dictionary)
 
 enum { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
@@ -106,6 +117,7 @@ var telemetry_history: Array = []
 ## l'eco della query che l'ha prodotto.
 var usage_history: Dictionary = {}
 var usage_history_query: Dictionary = {}
+var coordinator_state: Dictionary = {}
 var chat_log: Array = []     # ultimi messaggi (fumetti di dev1 + vista Chat)
 const CHAT_LOG_MAX := 200
 
@@ -384,6 +396,40 @@ func close_agent_terminal() -> void:
 func publish_agent_terminal(agent: String, text: String, error := "") -> void:
 	agent_terminal_updated.emit(agent, text, error)
 
+
+## ── Console del Coordinatore ────────────────────────────────────────
+
+func request_coordinator_state() -> void:
+	if _backend:
+		_backend.fetch_coordinator_state()
+	else:
+		coordinator_action_done.emit("load", false, "backend non collegato")
+
+func save_coordinator_settings(settings: Dictionary) -> void:
+	if _backend:
+		_backend.save_coordinator_settings(settings)
+	else:
+		coordinator_action_done.emit("save", false, "backend non collegato")
+
+func add_team_directive(body: String, kind := "order") -> void:
+	if _backend:
+		_backend.add_team_directive(body, kind)
+	else:
+		coordinator_action_done.emit("directive_add", false, "backend non collegato")
+
+func archive_team_directive(directive_id: int) -> void:
+	if _backend:
+		_backend.archive_team_directive(directive_id)
+	else:
+		coordinator_action_done.emit("directive_archive", false, "backend non collegato")
+
+func publish_coordinator_state(next: Dictionary) -> void:
+	coordinator_state = next
+	coordinator_state_updated.emit(next)
+
+func publish_coordinator_action(action: String, ok: bool, error := "") -> void:
+	coordinator_action_done.emit(action, ok, error)
+
 ## Invia il messaggio dell'utente all'agente reale (async: l'esito
 ## arriva su user_chat_sent, la risposta su agent_chat_updated).
 func send_user_chat(slug: String, text: String) -> void:
@@ -484,6 +530,21 @@ func publish_usage_history(query: Dictionary, data: Dictionary) -> void:
 	usage_history_query = query
 	usage_history = data
 	usage_history_updated.emit(query, data)
+
+## Storico del singolo ruolo per la scheda agente. agent = slug di
+## ruolo minuscolo ([a-z0-9-]); risposta su agent_history_updated.
+func request_agent_history(agent: String, from_ts: float, to_ts: float,
+		bucket_sec: int) -> void:
+	var query := {"agent": agent, "from_ts": from_ts, "to_ts": to_ts,
+			"bucket_sec": bucket_sec}
+	if _backend and _backend.has_method("fetch_agent_history"):
+		_backend.fetch_agent_history(agent, from_ts, to_ts, bucket_sec)
+	else:
+		agent_history_updated.emit(query,
+				{"ok": false, "error": "backend non collegato"})
+
+func publish_agent_history(query: Dictionary, data: Dictionary) -> void:
+	agent_history_updated.emit(query, data)
 
 
 ## ── Documenti prodotti (anteprima CV in-game) ────────────────────────

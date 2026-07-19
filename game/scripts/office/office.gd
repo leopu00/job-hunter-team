@@ -122,9 +122,10 @@ func _ready() -> void:
 	for dept_id in handoff_to:
 		var inbox_pos: Vector2 = DepartmentDefs.DEPARTMENTS[dept_id]["inbox"]
 		var dept_color: Color = DepartmentDefs.DEPARTMENTS[dept_id]["color"]
-		world.add_child(HandoffStation.new(dept_id, inbox_pos,
-				handoff_to[dept_id], dept_color))
-		var p := PaperPile.new(inbox_pos + Vector2(0, -4))
+		var station := HandoffStation.new(dept_id, inbox_pos,
+				handoff_to[dept_id], dept_color)
+		world.add_child(station)
+		var p := PaperPile.new(station.pile_spot())
 		# gli Scout producono e basta: il loro inbox si riempie più svelto
 		p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
 		p.add_sheets(randi_range(1, 6))
@@ -821,10 +822,24 @@ func _usage_panel_selftest() -> void:
 		rank_btn.pressed.emit()
 		await get_tree().process_frame
 		agents_ok = agents_ok and stacked._series.size() == 1
-	var ok := history_ok and agents_ok
+	agents_panel.queue_free()
+	# deep-link dalla card: pending_agent → pagina agente col grafico
+	# storico multi-asse (e i suoi interruttori TUTTE/NESSUNA)
+	SectionPanel.pending_agent = "scout"
+	var page_panel := SectionPanel.new("agents", 24.0)
+	add_child(page_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var history := _ui_find_class_node(page_panel, "AgentHistoryChart")
+	var page_ok := page_panel._current_page == "agent" \
+			and page_panel._agent_detail == "scout" \
+			and SectionPanel.pending_agent == "" \
+			and history != null \
+			and _ui_find_button(page_panel, UIStrings.t("agent.history_all")) != null
+	var ok := history_ok and agents_ok and page_ok
 	if not ok:
 		print("USAGE-PANEL-TEST details history=", history_ok,
-				" agents=", agents_ok)
+				" agents=", agents_ok, " page=", page_ok)
 	print("USAGE-PANEL-TEST ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
 
@@ -1130,13 +1145,14 @@ func _toggle_search() -> void:
 var _dept_panel: DepartmentPanel
 var _agent_card: AgentCard
 var _thinking_panel: AgentThinkingPanel
+var _coordinator_panel: CoordinatorPanel
 
 ## Click "pulito" dalla FreeCamera: agente > bacheca > reparto.
 func _on_world_click(target: Vector2) -> void:
 	if Game.dialogue_active:
 		return
 	if _registry or _dept_panel or _agent_card or _chat_panel or _cv_shelf_panel \
-			or _queue_panel or _thinking_panel:
+			or _queue_panel or _thinking_panel or _coordinator_panel:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
@@ -1209,7 +1225,7 @@ func _update_hover() -> void:
 	var queue_hovered := ""
 	if not Game.dialogue_active and not _registry and not _dept_panel \
 			and not _agent_card and not _chat_panel and not _cv_shelf_panel \
-			and not _queue_panel and not _thinking_panel:
+			and not _queue_panel and not _thinking_panel and not _coordinator_panel:
 		var mouse := get_global_mouse_position()
 		for agent in agents:
 			if agent.hit_by(mouse):
@@ -1239,6 +1255,13 @@ func _open_agent_card(agent: AgentNPC) -> void:
 	_agent_card.talk_requested.connect(func() -> void: _start_talk(agent))
 	_agent_card.chat_requested.connect(func() -> void: _open_chat(agent))
 	_agent_card.thinking_requested.connect(func() -> void: _open_agent_thinking(agent))
+	# scheda completa: sezione Agenti sulla pagina del ruolo, con i
+	# grafici storici — stesso deep-link pattern di pending_detail
+	_agent_card.stats_requested.connect(func() -> void:
+		SectionPanel.pending_agent = agent.slug
+		ScriptedOnboarding.action_requested.emit("open_section",
+				{"section": "agents"}))
+	_agent_card.coordinator_requested.connect(func() -> void: _open_coordinator_panel(agent))
 	_agent_card.closed.connect(func() -> void:
 		_agent_card = null)
 
@@ -1251,6 +1274,16 @@ func _open_agent_thinking(agent: AgentNPC) -> void:
 	add_child(_thinking_panel)
 	_thinking_panel.closed.connect(func() -> void:
 		_thinking_panel = null)
+
+func _open_coordinator_panel(agent: AgentNPC) -> void:
+	if agent.slug != "coordinatore" or not BackendBus.can_chat_with(
+			agent.uid if agent.uid != "" else agent.slug):
+		return
+	Log.info("agent", "console operativa del Coordinatore aperta")
+	_coordinator_panel = CoordinatorPanel.new(agent.accent_color())
+	add_child(_coordinator_panel)
+	_coordinator_panel.closed.connect(func() -> void:
+		_coordinator_panel = null)
 
 var _chat_panel: ChatPanel
 var _chat_menu: ChatMenu
@@ -1323,6 +1356,7 @@ var _backend_mode := false
 var _unplaced_roles: Dictionary = {}  # ruoli senza postazione già segnalati
 var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-worker)
 var _agent_ui_test_started := false
+var _coordinator_test_started := false
 
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
@@ -1375,6 +1409,17 @@ func sync_agents(list: Array) -> void:
 			and _thinking_panel != null and not _agent_ui_test_started:
 		_agent_ui_test_started = true
 		_agent_ui_selftest.call_deferred()
+	var coordinator_preview := OS.get_environment("JHT_COORDINATOR_TEST") == "1" \
+			or OS.get_environment("JHT_COORDINATOR_PREVIEW") == "1"
+	if coordinator_preview and _coordinator_panel == null:
+		for a in agents:
+			if a.slug == "coordinatore":
+				_open_coordinator_panel(a)
+				break
+	if OS.get_environment("JHT_COORDINATOR_TEST") == "1" \
+			and _coordinator_panel != null and not _coordinator_test_started:
+		_coordinator_test_started = true
+		_coordinator_selftest.call_deferred()
 
 func _agent_ui_selftest() -> void:
 	await get_tree().create_timer(2.2).timeout
@@ -1419,6 +1464,66 @@ func _agent_ui_selftest() -> void:
 		"ground_layer": ground_layer_ok, "stream": stream_ok,
 		"scroll_lock": scroll_lock_ok, "hover": hover_ok,
 	}))
+	get_tree().quit(0 if ok else 1)
+
+func _coordinator_selftest() -> void:
+	await get_tree().create_timer(0.3).timeout
+	var panel_ok := _coordinator_panel != null \
+			and _coordinator_panel.is_in_group("camera_blocking_overlay")
+	var navigation_ok := false
+	var chat_ok := false
+	var thinking_ok := false
+	if panel_ok:
+		_coordinator_panel._show_view(1)
+		await get_tree().process_frame
+		navigation_ok = _coordinator_panel._tabs.current_tab == 1 \
+				and _coordinator_panel._monitor_built \
+				and _ui_find_class_node(_coordinator_panel,
+						"AgentHistoryChart") != null
+		_coordinator_panel._open_chat()
+		await get_tree().process_frame
+		chat_ok = _coordinator_panel._chat_panel != null \
+				and _coordinator_panel._chat_panel.layer == 70
+		if chat_ok:
+			_coordinator_panel._chat_panel.close(false)
+		await get_tree().process_frame
+		_coordinator_panel._open_thinking()
+		await get_tree().process_frame
+		thinking_ok = _coordinator_panel._thinking_panel != null \
+				and _coordinator_panel._thinking_panel.layer == 70
+		if thinking_ok:
+			_coordinator_panel._thinking_panel.close(false)
+		_coordinator_panel._show_view(0)
+		navigation_ok = navigation_ok \
+				and _coordinator_panel._tabs.current_tab == 0
+	var controls_ok := panel_ok and _coordinator_panel._geo_non_remote != null \
+			and _coordinator_panel._recheck_days != null \
+			and _coordinator_panel._directives.get_child_count() >= 1 \
+			and _coordinator_panel._queue_grid.get_child_count() == 7 \
+			and _coordinator_panel._stop_search.disabled \
+			and _coordinator_panel._geo_score.editable
+	if panel_ok:
+		_coordinator_panel._maintenance.button_pressed = true
+		_coordinator_panel._geo_score.value = 72
+		controls_ok = controls_ok and not _coordinator_panel._stop_search.disabled
+		_coordinator_panel._save_settings()
+	await get_tree().process_frame
+	var save_ok := bool(BackendBus.coordinator_state.get("maintenance", {}) \
+			.get("enabled", false)) \
+			and int(BackendBus.coordinator_state.get("enrichment", {}) \
+			.get("geocode_min_score", 0)) == 72
+	var before: int = BackendBus.coordinator_state.get("directives", []).size()
+	BackendBus.add_team_directive("Test direttiva console", "order")
+	await get_tree().process_frame
+	var directive_ok: bool = BackendBus.coordinator_state.get("directives", []).size() \
+			== before + 1
+	var ok: bool = panel_ok and navigation_ok and chat_ok and thinking_ok \
+			and controls_ok and save_ok and directive_ok
+	print("COORDINATOR-CONSOLE-TEST ", "PASS" if ok else "FAIL", " ",
+			JSON.stringify({"panel": panel_ok, "controls": controls_ok,
+				"navigation": navigation_ok, "chat": chat_ok,
+				"thinking": thinking_ok, "save": save_ok,
+				"directive": directive_ok}))
 	get_tree().quit(0 if ok else 1)
 
 ## Recapita un messaggio della chat di team come fumetto (contratto

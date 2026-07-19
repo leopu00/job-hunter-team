@@ -1037,6 +1037,35 @@ async function getLatestFeedbackByLegacyId(
   return map;
 }
 
+// true quando i dati arrivano da Supabase (e quindi il feedback utente —
+// position_feedback — è disponibile); false in local mode (workspace SQLite).
+// È la modalità DATI, distinta da isLocalRequest() che guarda la RICHIESTA.
+export async function isCloudDataMode(): Promise<boolean> {
+  return (await ws()) == null && isSupabaseConfigured;
+}
+
+// Ultimo evento feedback (like/dislike/hide/star) di UNA posizione — alimenta
+// i bottoni giudizio della pagina posizione (stessa semantica di /swipe:
+// event-log append-only, l'ultimo prevale). Cloud-only: in local mode il
+// feedback non è disponibile (position_feedback vive su Supabase).
+export async function getLatestFeedbackForLegacyId(
+  legacyId: number,
+): Promise<{ action: string; score: number | null } | null> {
+  const w = await ws();
+  if (w) return null;
+  if (!isSupabaseConfigured) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("position_feedback")
+    .select("action, score, created_at")
+    .eq("position_legacy_id", legacyId)
+    .in("action", ["like", "dislike", "hide", "star"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error || !data?.length) return null;
+  return { action: data[0].action, score: data[0].score ?? null };
+}
+
 export async function getSwipeDecks(limit = 100): Promise<{
   pending: PositionWithScore[];
   reviewed: SwipeReviewedRow[];
