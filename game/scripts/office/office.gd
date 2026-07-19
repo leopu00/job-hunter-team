@@ -171,6 +171,8 @@ func _ready() -> void:
 		_positions_panel_selftest.call_deferred()
 	if OS.get_environment("JHT_MAP_PANEL_TEST") == "1":
 		_map_panel_selftest.call_deferred()
+	if OS.get_environment("JHT_USAGE_PANEL_TEST") == "1":
+		_usage_panel_selftest.call_deferred()
 	if OS.get_environment("JHT_GUIDED_TEST") == "1":
 		_guided_onboarding_selftest.call_deferred()
 	if _seat_audit != "":
@@ -768,6 +770,62 @@ func _map_panel_selftest() -> void:
 					" detail=", detail_ok, " page=", detail_panel._current_page,
 					" id=", detail_panel._pos_detail_id)
 	print("MAP-PANEL-TEST ", "PASS" if ok else "FAIL")
+	get_tree().quit(0 if ok else 1)
+
+## Regressione delle finestre di monitoraggio risorse: storico sintetico
+## sul bus → finestra Usage con le tre quote e i controlli temporali,
+## poi Consumi agenti con classifica/donut coerenti e isolamento a click.
+func _usage_panel_selftest() -> void:
+	var now := Time.get_unix_time_from_system()
+	var sentinel: Array = []
+	var meter: Array = []
+	var rows: Array = []
+	var t := now - 18000.0
+	while t <= now:
+		sentinel.append({"t": t, "usage": 40.0, "weekly": 60.0,
+				"velocity": 12.0, "projection": 55.0, "throttle": 0.0})
+		meter.append({"t": t, "weighted_kt": 5000.0, "events": 120})
+		rows.append({"t": t, "critico": 30.0, "scout-1": 12.0})
+		t += 300.0
+	UsageRangeBar.span_idx = 0
+	UsageRangeBar.to_ts = 0.0
+	BackendBus.publish_usage_history(
+			{"from_ts": now - 18000.0, "to_ts": now, "bucket_sec": 300},
+			{"ok": true, "sentinel": sentinel, "meter": meter,
+				"agents": {"names": ["critico", "scout-1"], "series": rows,
+					"totals_kt": {"critico": 1830.0, "scout-1": 732.0}}})
+	var panel := SectionPanel.new("usage_history", 24.0)
+	add_child(panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var chart := _ui_find_class_node(panel, "UsageChart") as UsageChart
+	var history_ok := chart != null and chart._series.size() == 3 \
+			and _ui_find_button(panel, "QUOTE %") != null \
+			and _ui_find_button(panel, "5H") != null \
+			and _ui_find_button(panel, "ORA") != null
+	if history_ok:
+		for s in chart._series:
+			history_ok = history_ok and (s["points"] as Array).size() >= 60
+	panel.queue_free()
+	var agents_panel := SectionPanel.new("usage_agents", 24.0)
+	add_child(agents_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var stacked := _ui_find_class_node(agents_panel, "UsageChart") as UsageChart
+	var rank_btn := _ui_find_button(agents_panel, "critico")
+	# 1830 / (1830+732) = 71%: classifica e donut concordano
+	var agents_ok := stacked != null and stacked._series.size() == 2 \
+			and rank_btn != null \
+			and _ui_has_text(agents_panel, "critico · 71%")
+	if rank_btn:
+		rank_btn.pressed.emit()
+		await get_tree().process_frame
+		agents_ok = agents_ok and stacked._series.size() == 1
+	var ok := history_ok and agents_ok
+	if not ok:
+		print("USAGE-PANEL-TEST details history=", history_ok,
+				" agents=", agents_ok)
+	print("USAGE-PANEL-TEST ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
 
 func _ui_has_text(node: Node, wanted: String) -> bool:

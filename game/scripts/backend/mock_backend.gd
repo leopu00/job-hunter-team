@@ -353,6 +353,55 @@ const WIZ_PROFILE_STEPS := [
 var _profile_watch := false
 var _wiz_step := 0
 
+## Storico usage sintetico ma plausibile: curva 5h a dente di sega sui
+## reset, weekly che cresce nella settimana, consumi per-agente con
+## turni alternati. Deterministico (seed dal bucket): stessi grafici a
+## ogni apertura, niente sfarfallio da showroom.
+func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
+	var data := {"ok": true, "sentinel": [], "meter": [], "throttle": [],
+			"agents": {}}
+	var names := ["scout-1", "scout-2", "analista-1", "scorer-1",
+			"scrittore-1", "critico-1", "capitano", "sentinella"]
+	var series: Array = []
+	var totals := {}
+	var t := floorf(from_ts / bucket_sec) * bucket_sec
+	while t <= to_ts:
+		var day_phase := fposmod(t, 86400.0) / 86400.0
+		var five_h := fposmod(t, 18000.0) / 18000.0     # reset ogni 5h
+		var week_phase := fposmod(t, 604800.0) / 604800.0
+		# di notte il team dorme (working hours): consumo quasi zero
+		var awake := 1.0 if day_phase > 0.33 and day_phase < 0.95 else 0.08
+		var wobble := 0.5 + 0.5 * sin(t / 3600.0 * 2.1) * sin(t / 7200.0)
+		data["sentinel"].append({"t": t,
+				"usage": roundf(five_h * 62.0 * awake * 100.0) / 100.0,
+				"weekly": roundf(week_phase * 78.0 * 100.0) / 100.0,
+				"velocity": roundf((14.0 + 18.0 * wobble) * awake * 100.0) / 100.0,
+				"velocity_ideal": 20.0,
+				"projection": roundf(five_h * 80.0 * awake * 100.0) / 100.0})
+		if wobble > 0.93 and awake > 0.5:
+			data["throttle"].append({"t": t, "throttle_s": 600.0, "pauses": 2})
+		data["meter"].append({"t": t,
+				"weighted_kt": roundf(five_h * 92000.0 * awake / 10.0) / 100.0,
+				"events": int(five_h * 4000.0 * awake)})
+		var row := {"t": t}
+		for i in names.size():
+			# turni sfalsati: ogni agente ha la sua onda di attività
+			var mine := 0.5 + 0.5 * sin(t / 5400.0 + float(i) * 1.7)
+			if mine * awake > 0.42:
+				var kt := roundf(mine * awake * (26.0 + 14.0 * float(i % 3)) * 100.0) / 100.0
+				row[names[i]] = kt
+				totals[names[i]] = float(totals.get(names[i], 0.0)) + kt
+		series.append(row)
+		t += bucket_sec
+	data["agents"] = {"names": names, "series": series, "totals_kt": totals}
+	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec}
+	_deliver_usage_history.call_deferred(query, data)
+
+func _deliver_usage_history(query: Dictionary, data: Dictionary) -> void:
+	await _sleep(0.4)   # un filo di latenza: lo stato "carico…" si vede
+	if _running:
+		bus.publish_usage_history(query, data)
+
 func open_profile_watch() -> void:
 	_profile_watch = true
 	_publish_profile_status()
