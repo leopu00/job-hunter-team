@@ -180,6 +180,15 @@ export function IconSkip({ size }: { size?: number }) {
   );
 }
 
+export function IconCalendar({ size }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <rect x="3" y="5" width="18" height="17" rx="2" />
+      <path d="M16 2v5M8 2v5M3 11h18" />
+    </Svg>
+  );
+}
+
 export function IconCheckCircle({ size }: { size?: number }) {
   return (
     <Svg size={size}>
