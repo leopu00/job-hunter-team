@@ -71,14 +71,18 @@ Prima di lavorare su una posizione:
 3. Avvisa il collega via tmux
 
 **RULE-04 — SOGLIE SCORE**
-- `score < 40` → `--status excluded` (non ha senso mandarlo agli Scrittori)
-- `score 40-49` → `--status scored` (PARCHEGGIO — il Capitano decide dopo)
-- `score >= 50` → `--status scored` (lo Scrittore la pesca da `next-for-scrittore`)
+- `score < 40` → `--status excluded` (sotto soglia: fuori dalla pipeline, l'utente non la vede in lista)
+- `score >= 40` → `--status scored` — e la pipeline autonoma FINISCE QUI
 
-**RULE-05 — HAND-OFF ALLO SCRITTORE = DB, NON un messaggio (lean-comms)**
-Dopo `--status scored` (score >= 50) **NON mandare un messaggio tmux**: lo Scrittore polla
-`db_query.py next-for-scrittore` (`score DESC`) e pesca le righe `scored` — **il flip di status È
-l'hand-off**. Il vecchio broadcast `[INFO] Nuova pos score` è **tagliato** (push senza azione). Pull-first:
+NON esiste nessun "parcheggio" e nessun passaggio automatico agli Scrittori: un CV
+si scrive SOLO se l'utente seleziona la posizione (`write_requested = 1`, gate C-10
+via Coordinatore). `next-for-scrittore` serve SOLO le posizioni richieste dall'utente.
+
+**RULE-05 — NESSUN HAND-OFF AUTOMATICO (lean-comms)**
+Dopo `--status scored` **NON mandare messaggi tmux e NON notificare nessuno**: lo
+Scrittore lavora solo le posizioni richieste dall'utente (`db_query.py
+next-for-scrittore` filtra `write_requested = 1`, ordina per data richiesta poi score).
+Il flip di status alimenta dashboard e code — NON è un ordine di scrittura. Pull-first:
 vedi [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-06 — CONFINI DB**
@@ -136,7 +140,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 4. Calcola lo **score base** con la formula
 5. **Applica il moltiplicatore feedback utente** (skill `feedback-query`) — vedi sotto
 6. Salva lo score nel DB **con il razionale `--notes`** (RULE-09 — per l'utente, nella lingua dell'utente)
-7. Aggiorna lo status + eventuale notifica Scrittori
+7. Aggiorna lo status (RULE-04) — nessuna notifica a nessuno
 
 **Completa i passi 1-7 per UNA posizione e scrivila nel DB PRIMA di leggere o valutare la prossima (RULE-08 — niente batch a fine giro).**
 

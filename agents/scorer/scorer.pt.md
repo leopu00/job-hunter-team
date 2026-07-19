@@ -71,16 +71,20 @@ Antes de trabalhar numa posição:
 2. CLAIM: `python3 /app/shared/skills/db_update.py position <ID> --last-checked now`
 3. Notifica o peer via tmux
 
-**RULE-04 — UMBRALES DE SCORE**
-- `score < 40` → `--status excluded` (sem sentido enviá-lo aos Scrittori)
-- `score 40-49` → `--status scored` (PARKING — o Capitano decide depois)
-- `score >= 50` → `--status scored` (o Scrittore vai buscá-la a `next-for-scrittore`)
+**RULE-04 — LIMIARES DE SCORE**
+- `score < 40` → `--status excluded` (abaixo do limiar: fora da pipeline, o usuário não a vê na lista)
+- `score >= 40` → `--status scored` — e a pipeline autônoma TERMINA AQUI
 
-**RULE-05 — HAND-OFF AO SCRITTORE = DB, NÃO uma mensagem (lean-comms)**
-Depois de `--status scored` (score >= 50) **NÃO envies uma mensagem tmux**: o Scrittore faz poll de
-`db_query.py next-for-scrittore` (`score DESC`) e pega nas linhas `scored` — **o status flip É
-o hand-off**. O velho broadcast `[INFO] New pos score` está **cortado** (push sem ação). Pull-first:
-ver [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
+NÃO existe nenhum "parking" nem passagem automática aos Scrittori: um CV é escrito
+SÓ se o usuário selecionar a vaga (`write_requested = 1`, gate C-10 via
+Coordinator). `next-for-scrittore` serve SÓ vagas solicitadas pelo usuário.
+
+**RULE-05 — SEM HAND-OFF AUTOMÁTICO (lean-comms)**
+Depois de `--status scored`, **NÃO envies mensagens tmux e NÃO notifiques ninguém**: o
+Scrittore só trabalha vagas solicitadas pelo usuário (`db_query.py
+next-for-scrittore` filtra `write_requested = 1`, ordenado por data do pedido e
+depois score). O flip de status alimenta dashboard e filas — NÃO é uma ordem de
+escrita. Pull-first: ver [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-06 — DB BOUNDARIES**
 Escreve SÓ em `scores` (INSERT) e `positions.status`. NUNCA toques `applications`, `positions.notes` (território do Analista), `companies`.
@@ -137,7 +141,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 4. Calcula **base score** com a fórmula
 5. **Aplica multiplier feedback utilizador** (skill `feedback-query`) — ver abaixo
 6. Guarda score em DB **com o racional `--notes`** (RULE-09 — para o utilizador, na língua do utilizador)
-7. Atualiza status + possível notify aos Scrittori
+7. Atualiza o status (RULE-04) — sem notificar ninguém
 
 **Completa os passos 1-7 para UMA posição e escreve-a na DB ANTES de ler ou avaliar a próxima (RULE-08 — sem batching no fim da ronda).**
 

@@ -180,9 +180,13 @@ const T: Record<
 export function TicketPanel({
   legacyId,
   tickets,
+  hideTitle = false,
 }: {
   legacyId: number;
   tickets: PositionTicket[];
+  // Dentro TeamActionsSheet il titolo lo mette già l'header del popup:
+  // qui resta solo il bottone "+ Nuova richiesta".
+  hideTitle?: boolean;
 }) {
   const t = T[useLocale()];
   const router = useRouter();
@@ -223,7 +227,11 @@ export function TicketPanel({
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <span className="section-label">{t.sectionTitle}</span>
+        {hideTitle ? (
+          <span />
+        ) : (
+          <span className="section-label">{t.sectionTitle}</span>
+        )}
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
