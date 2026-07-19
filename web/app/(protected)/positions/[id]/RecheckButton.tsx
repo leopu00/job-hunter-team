@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { ActionRow, IconRefresh } from "./ActionRow";
 
-// Recheck/liveness ON-DEMAND. Il recheck NON è più autonomo: l'utente clicca qui
-// per chiedere all'Analista di ri-verificare se l'offerta è ancora attiva
+// Recheck/liveness ON-DEMAND. Il recheck NON è più autonomo: l'utente clicca
+// qui per chiedere all'Analista di ri-verificare se l'offerta è ancora attiva
 // (flag recheck_requested). Toggle come Geocodifica / Scrivi CV.
 interface Props {
   legacyId: number;
@@ -17,109 +18,85 @@ interface Props {
 const T: Record<
   Locale,
   {
+    title: string;
+    desc: string;
+    lastCheck: (age: string) => string;
+    requestedDesc: string;
+    sending: string;
     today: string;
     daysAgo: (n: number) => string;
-    sent: string;
-    cancelling: string;
-    requested: string;
-    recheck: string;
     networkError: string;
-    titleWithCheck: (age: string) => string;
-    titleNoCheck: string;
-    lastCheck: (age: string) => string;
   }
 > = {
   it: {
+    title: "Verifica che sia ancora aperta",
+    desc: "Il team ricontrolla che l'annuncio sia ancora online",
+    lastCheck: (age) => ` · ultima verifica: ${age}`,
+    requestedDesc: "Richiesta inviata al team — tocca per annullare",
+    sending: "Un momento…",
     today: "oggi",
     daysAgo: (n) => (n === 1 ? "1 giorno fa" : `${n} giorni fa`),
-    sent: "Richiesta inviata…",
-    cancelling: "Annullando…",
-    requested: "Recheck richiesto · annulla",
-    recheck: "Ricontrolla se attiva",
     networkError: "Errore di rete",
-    titleWithCheck: (age) =>
-      `Ultima verifica: ${age}. Il recheck non è automatico: chiedilo tu.`,
-    titleNoCheck: "Il recheck non è automatico: chiedilo tu.",
-    lastCheck: (age) => `ultima verifica: ${age}`,
   },
   en: {
+    title: "Check it's still open",
+    desc: "The team re-checks that the listing is still online",
+    lastCheck: (age) => ` · last check: ${age}`,
+    requestedDesc: "Request sent to the team — tap to cancel",
+    sending: "One moment…",
     today: "today",
     daysAgo: (n) => (n === 1 ? "1 day ago" : `${n} days ago`),
-    sent: "Request sent…",
-    cancelling: "Cancelling…",
-    requested: "Recheck requested · cancel",
-    recheck: "Recheck if active",
     networkError: "Network error",
-    titleWithCheck: (age) =>
-      `Last check: ${age}. Recheck is not automatic: ask for it.`,
-    titleNoCheck: "Recheck is not automatic: ask for it.",
-    lastCheck: (age) => `last check: ${age}`,
   },
   es: {
+    title: "Comprueba que siga abierta",
+    desc: "El equipo vuelve a comprobar que el anuncio siga en línea",
+    lastCheck: (age) => ` · última comprobación: ${age}`,
+    requestedDesc: "Solicitud enviada al equipo — toca para cancelar",
+    sending: "Un momento…",
     today: "hoy",
     daysAgo: (n) => (n === 1 ? "hace 1 día" : `hace ${n} días`),
-    sent: "Solicitud enviada…",
-    cancelling: "Cancelando…",
-    requested: "Reverificación solicitada · cancelar",
-    recheck: "Reverificar si está activa",
     networkError: "Error de red",
-    titleWithCheck: (age) =>
-      `Última comprobación: ${age}. La reverificación no es automática: pídela.`,
-    titleNoCheck: "La reverificación no es automática: pídela.",
-    lastCheck: (age) => `última comprobación: ${age}`,
   },
   fr: {
+    title: "Vérifier qu'elle est toujours ouverte",
+    desc: "L'équipe revérifie que l'annonce est toujours en ligne",
+    lastCheck: (age) => ` · dernière vérification : ${age}`,
+    requestedDesc: "Demande envoyée à l'équipe — touchez pour annuler",
+    sending: "Un instant…",
     today: "aujourd'hui",
     daysAgo: (n) => (n === 1 ? "il y a 1 jour" : `il y a ${n} jours`),
-    sent: "Demande envoyée…",
-    cancelling: "Annulation…",
-    requested: "Revérification demandée · annuler",
-    recheck: "Revérifier si active",
     networkError: "Erreur réseau",
-    titleWithCheck: (age) =>
-      `Dernière vérification : ${age}. La revérification n'est pas automatique : demandez-la.`,
-    titleNoCheck: "La revérification n'est pas automatique : demandez-la.",
-    lastCheck: (age) => `dernière vérification : ${age}`,
   },
   de: {
+    title: "Prüfen, ob sie noch offen ist",
+    desc: "Das Team prüft erneut, ob die Anzeige noch online ist",
+    lastCheck: (age) => ` · letzte Prüfung: ${age}`,
+    requestedDesc: "Anfrage ans Team gesendet — zum Abbrechen tippen",
+    sending: "Einen Moment…",
     today: "heute",
     daysAgo: (n) => (n === 1 ? "vor 1 Tag" : `vor ${n} Tagen`),
-    sent: "Anfrage gesendet…",
-    cancelling: "Wird abgebrochen…",
-    requested: "Erneute Prüfung angefordert · abbrechen",
-    recheck: "Erneut prüfen, ob aktiv",
     networkError: "Netzwerkfehler",
-    titleWithCheck: (age) =>
-      `Letzte Prüfung: ${age}. Die erneute Prüfung erfolgt nicht automatisch: bitte anfordern.`,
-    titleNoCheck:
-      "Die erneute Prüfung erfolgt nicht automatisch: bitte anfordern.",
-    lastCheck: (age) => `letzte Prüfung: ${age}`,
   },
   hu: {
+    title: "Ellenőrzés: még nyitott?",
+    desc: "A csapat újra ellenőrzi, hogy a hirdetés még elérhető-e",
+    lastCheck: (age) => ` · utolsó ellenőrzés: ${age}`,
+    requestedDesc: "Kérés elküldve a csapatnak — koppints a visszavonáshoz",
+    sending: "Egy pillanat…",
     today: "ma",
     daysAgo: (n) => `${n} napja`,
-    sent: "Kérés elküldve…",
-    cancelling: "Megszakítás…",
-    requested: "Újraellenőrzés kérve · mégse",
-    recheck: "Ellenőrizd újra, hogy aktív-e",
     networkError: "Hálózati hiba",
-    titleWithCheck: (age) =>
-      `Utolsó ellenőrzés: ${age}. Az újraellenőrzés nem automatikus: kérned kell.`,
-    titleNoCheck: "Az újraellenőrzés nem automatikus: kérned kell.",
-    lastCheck: (age) => `utolsó ellenőrzés: ${age}`,
   },
   pt: {
+    title: "Verifica se ainda está aberta",
+    desc: "A equipa verifica novamente se o anúncio ainda está online",
+    lastCheck: (age) => ` · última verificação: ${age}`,
+    requestedDesc: "Pedido enviado à equipa — toca para cancelar",
+    sending: "Um momento…",
     today: "hoje",
     daysAgo: (n) => (n === 1 ? "há 1 dia" : `há ${n} dias`),
-    sent: "Pedido enviado…",
-    cancelling: "Cancelando…",
-    requested: "Reverificação solicitada · cancelar",
-    recheck: "Reverificar se está ativa",
     networkError: "Erro de rede",
-    titleWithCheck: (age) =>
-      `Última verificação: ${age}. A reverificação não é automática: peça-a.`,
-    titleNoCheck: "A reverificação não é automática: peça-a.",
-    lastCheck: (age) => `última verificação: ${age}`,
   },
 };
 
@@ -168,39 +145,22 @@ export function RecheckButton({
   };
 
   const checked = ageLabel(lastOpenCheck, t);
-  const label = isPending
-    ? requested
-      ? t.sent
-      : t.cancelling
+  const description = isPending
+    ? t.sending
     : requested
-      ? t.requested
-      : t.recheck;
-
-  const color = requested ? "var(--color-green)" : "var(--color-purple)";
+      ? t.requestedDesc
+      : t.desc + (checked ? t.lastCheck(checked) : "");
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={isPending}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:opacity-60 disabled:cursor-wait"
-        style={{ borderColor: color, color }}
-        title={checked ? t.titleWithCheck(checked) : t.titleNoCheck}
-      >
-        {requested ? "✓ " : ""}
-        {label}
-      </button>
-      {checked && !requested && (
-        <span className="text-[10px]" style={{ color: "var(--color-dim)" }}>
-          {t.lastCheck(checked)}
-        </span>
-      )}
-      {error && (
-        <span className="text-[10px]" style={{ color: "var(--color-red)" }}>
-          {error}
-        </span>
-      )}
-    </div>
+    <ActionRow
+      icon={<IconRefresh />}
+      title={t.title}
+      description={description}
+      accent="var(--color-purple)"
+      active={requested}
+      busy={isPending}
+      onClick={toggle}
+      error={error}
+    />
   );
 }

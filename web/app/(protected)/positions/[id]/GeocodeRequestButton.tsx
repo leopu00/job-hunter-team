@@ -4,81 +4,82 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { ActionRow, IconMapPin } from "./ActionRow";
 
 interface Props {
   legacyId: number;
   initialRequested: boolean;
   // Quando il geocoding è gia' fatto mostriamo "Ricalcola" invece di
-  // "Geocodifica": l'utente puo' richiedere un refresh anche su
-  // posizioni già geocodate (city-level → precise).
+  // "Trova": l'utente puo' richiedere un refresh anche su posizioni già
+  // geocodate (city-level → precise).
   alreadyGeocoded?: boolean;
 }
 
 const T: Record<
   Locale,
   {
-    geocode: string;
-    recompute: string;
-    sent: string;
-    cancelling: string;
-    requested: (verb: string) => string;
+    title: string;
+    titleRecompute: string;
+    desc: string;
+    requestedDesc: string;
+    sending: string;
     networkError: string;
   }
 > = {
   it: {
-    geocode: "Geocodifica",
-    recompute: "Ricalcola",
-    sent: "Richiesta inviata…",
-    cancelling: "Annullando…",
-    requested: (verb) => `${verb} richiesto · annulla`,
+    title: "Trova l'ufficio sulla mappa",
+    titleRecompute: "Ricalcola la posizione dell'ufficio",
+    desc: "Il team cerca l'indirizzo esatto della sede e mette il pin preciso sulla mappa",
+    requestedDesc: "Richiesta inviata al team — tocca per annullare",
+    sending: "Un momento…",
     networkError: "Errore di rete",
   },
   en: {
-    geocode: "Geocode",
-    recompute: "Recompute",
-    sent: "Request sent…",
-    cancelling: "Cancelling…",
-    requested: (verb) => `${verb} requested · cancel`,
+    title: "Locate the office on the map",
+    titleRecompute: "Recompute the office location",
+    desc: "The team looks up the exact office address and pins it on the map",
+    requestedDesc: "Request sent to the team — tap to cancel",
+    sending: "One moment…",
     networkError: "Network error",
   },
   es: {
-    geocode: "Geocodificar",
-    recompute: "Recalcular",
-    sent: "Solicitud enviada…",
-    cancelling: "Cancelando…",
-    requested: (verb) => `${verb} solicitado · cancelar`,
+    title: "Ubicar la oficina en el mapa",
+    titleRecompute: "Recalcular la ubicación de la oficina",
+    desc: "El equipo busca la dirección exacta de la sede y la marca en el mapa",
+    requestedDesc: "Solicitud enviada al equipo — toca para cancelar",
+    sending: "Un momento…",
     networkError: "Error de red",
   },
   fr: {
-    geocode: "Géocoder",
-    recompute: "Recalculer",
-    sent: "Demande envoyée…",
-    cancelling: "Annulation…",
-    requested: (verb) => `${verb} demandé · annuler`,
+    title: "Localiser le bureau sur la carte",
+    titleRecompute: "Recalculer la position du bureau",
+    desc: "L'équipe recherche l'adresse exacte du bureau et la place sur la carte",
+    requestedDesc: "Demande envoyée à l'équipe — touchez pour annuler",
+    sending: "Un instant…",
     networkError: "Erreur réseau",
   },
   de: {
-    geocode: "Geokodieren",
-    recompute: "Neu berechnen",
-    sent: "Anfrage gesendet…",
-    cancelling: "Wird abgebrochen…",
-    requested: (verb) => `${verb} angefordert · abbrechen`,
+    title: "Büro auf der Karte finden",
+    titleRecompute: "Bürostandort neu berechnen",
+    desc: "Das Team ermittelt die genaue Büroadresse und setzt den Pin auf die Karte",
+    requestedDesc: "Anfrage ans Team gesendet — zum Abbrechen tippen",
+    sending: "Einen Moment…",
     networkError: "Netzwerkfehler",
   },
   hu: {
-    geocode: "Geokódolás",
-    recompute: "Újraszámítás",
-    sent: "Kérés elküldve…",
-    cancelling: "Megszakítás…",
-    requested: (verb) => `${verb} kérve · mégse`,
+    title: "Iroda megkeresése a térképen",
+    titleRecompute: "Irodahely újraszámítása",
+    desc: "A csapat megkeresi az iroda pontos címét és kiteszi a térképre",
+    requestedDesc: "Kérés elküldve a csapatnak — koppints a visszavonáshoz",
+    sending: "Egy pillanat…",
     networkError: "Hálózati hiba",
   },
   pt: {
-    geocode: "Geocodificar",
-    recompute: "Recalcular",
-    sent: "Pedido enviado…",
-    cancelling: "Cancelando…",
-    requested: (verb) => `${verb} solicitado · cancelar`,
+    title: "Localizar o escritório no mapa",
+    titleRecompute: "Recalcular a localização do escritório",
+    desc: "A equipa procura o endereço exato da sede e coloca o pin no mapa",
+    requestedDesc: "Pedido enviado à equipa — toca para cancelar",
+    sending: "Um momento…",
     networkError: "Erro de rede",
   },
 };
@@ -115,34 +116,16 @@ export function GeocodeRequestButton({
     }
   };
 
-  const verb = alreadyGeocoded ? t.recompute : t.geocode;
-  const label = isPending
-    ? requested
-      ? t.sent
-      : t.cancelling
-    : requested
-      ? t.requested(verb)
-      : verb;
-
-  const color = requested ? "var(--color-green)" : "var(--color-purple)";
-
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={isPending}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:opacity-60 disabled:cursor-wait"
-        style={{ borderColor: color, color }}
-      >
-        {requested ? "✓ " : ""}
-        {label}
-      </button>
-      {error && (
-        <span className="text-[10px]" style={{ color: "var(--color-red)" }}>
-          {error}
-        </span>
-      )}
-    </div>
+    <ActionRow
+      icon={<IconMapPin />}
+      title={alreadyGeocoded ? t.titleRecompute : t.title}
+      description={isPending ? t.sending : requested ? t.requestedDesc : t.desc}
+      accent="var(--color-purple)"
+      active={requested}
+      busy={isPending}
+      onClick={toggle}
+      error={error}
+    />
   );
 }
