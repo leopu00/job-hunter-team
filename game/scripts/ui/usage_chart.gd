@@ -217,12 +217,17 @@ func _draw_stacked(plot: Rect2, peak: float, visible: Array) -> void:
 			top_pts.append(Vector2(x, plot.end.y - plot.size.y * clampf(hi / peak, 0.0, 1.0)))
 		if top_pts.size() < 2:
 			continue
-		var polygon := PackedVector2Array()
-		polygon.append_array(bot_pts)
-		var rev := top_pts.duplicate()
-		rev.reverse()
-		polygon.append_array(rev)
-		draw_colored_polygon(polygon, Color(color.r, color.g, color.b, 0.42))
+		# Riempimento a trapezi per segmento: il poligono unico bot+top
+		# degenera (triangulation failed a ogni frame) appena una serie
+		# resta a zero per un tratto — bordo inferiore e superiore
+		# coincidono e il triangolatore rifiuta la sagoma.
+		var fill := Color(color.r, color.g, color.b, 0.42)
+		for i in range(top_pts.size() - 1):
+			if absf(top_pts[i].y - bot_pts[i].y) < 0.5 \
+					and absf(top_pts[i + 1].y - bot_pts[i + 1].y) < 0.5:
+				continue
+			draw_colored_polygon(PackedVector2Array([bot_pts[i],
+					bot_pts[i + 1], top_pts[i + 1], top_pts[i]]), fill)
 		draw_polyline(top_pts, color, 1.6, true)
 
 func _draw_bars(plot: Rect2, peak: float, visible: Array) -> void:
