@@ -52,6 +52,27 @@ func close_terminal() -> void:
 	pass
 
 
+## ── Console del Coordinatore ────────────────────────────────────────
+
+## Legge modalità operativa, enrichment policy, code di manutenzione e
+## bacheca persistente del team.
+func fetch_coordinator_state() -> void:
+	pass
+
+## Salva soltanto le chiavi validate dal backend nei due file canonici:
+## capitano-maintenance.json ed enrichment-policy.json.
+func save_coordinator_settings(_settings: Dictionary) -> void:
+	pass
+
+## CRUD minimo della bacheca permanente (add/archive). Il testo non passa
+## mai come argomento shell: gli adapter reali lo trasportano in base64/stdin.
+func add_team_directive(_body: String, _kind: String) -> void:
+	pass
+
+func archive_team_directive(_directive_id: int) -> void:
+	pass
+
+
 ## ── Ticket utente→team (l'unica scrittura remota autorizzata) ────────
 
 ## Apre un ticket 'open' sulla posizione: la richiesta che il

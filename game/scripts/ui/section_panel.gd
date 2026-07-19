@@ -15,6 +15,10 @@ static var pending_status: Array = []
 ## Dettaglio da aprire al prossimo pannello positions (click su una
 ## posizione da un'altra sezione, es. grafici stats). Consumato al build.
 static var pending_detail := 0
+## Pagina agente da aprire al prossimo pannello agents (click sulla
+## card di un agente in scena → scheda con i suoi grafici). Slug di
+## RUOLO, come _agent_detail. Consumato al build.
+static var pending_agent := ""
 
 var section := ""
 var _sidebar_width := 0.0
@@ -81,6 +85,11 @@ func _ready() -> void:
 		pending_detail = 0
 	if section == "agents" and OS.get_environment("JHT_AGENT_PAGE") != "":
 		_agent_detail = OS.get_environment("JHT_AGENT_PAGE")
+		_build("agent")
+		return
+	if section == "agents" and pending_agent != "":
+		_agent_detail = pending_agent
+		pending_agent = ""
 		_build("agent")
 		return
 	_build("detail" if _pos_detail_id != 0 else "")
@@ -1546,6 +1555,11 @@ func _build_agent_page() -> void:
 		if by.split("-")[0] == real:
 			mine.append(t)
 	_kpi_row(UIStrings.t("agents.registry_actions"), str(mine.size()), Palette.BRIGHT)
+	_content.add_child(HSeparator.new())
+	# il grafico storico del ruolo (token, quote finestre, throttle,
+	# azioni db, contesto container) — si autogestisce con cache: i
+	# rebuild live della pagina non rifanno il giro SSH
+	_content.add_child(AgentHistoryChart.new(real))
 	_content.add_child(HSeparator.new())
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
