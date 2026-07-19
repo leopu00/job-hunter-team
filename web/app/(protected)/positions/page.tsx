@@ -588,7 +588,19 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const rates = await getExchangeRates();
   const displayCurrency = "EUR";
 
-  const positions = allPositions;
+  // Default (scelta utente 19/07): SOLO posizioni con uno score e non
+  // escluse — le 'new'/'checked' senza analisi non dicono nulla di utile e
+  // le escluse sono rumore. La regola salta se l'utente sceglie stati
+  // espliciti dalla sidebar (es. vuole proprio le escluse) o chiede le
+  // senza-score (noscore=1).
+  // La soglia 40 rispecchia la RULE-04 dello Scorer (score<40 → excluded):
+  // copre anche le sbavature dell'agente sul bordo (36-39 lasciate scored).
+  const positions =
+    statuses.length || unscored || scoreBands.length
+      ? allPositions
+      : allPositions.filter(
+          (p) => p.score != null && p.score >= 40 && p.status !== "excluded",
+        );
 
   // Pagination computed values
   const totalResults = positions.length;
@@ -817,17 +829,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-[10px]">
                   <span className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="shrink-0 text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
-                      style={{
-                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                        borderColor:
-                          STATUS_COLORS[p.status] ?? "var(--color-border)",
-                        background: `${STATUS_COLORS[p.status]}18`,
-                      }}
-                    >
-                      {p.status}
-                    </span>
+                    {/* Niente stato sulla card (scelta utente 19/07):
+                        il default della pagina è già "con score, non
+                        escluse", lo status è rumore. */}
                     {p.role_family?.trim() && (
                       <span className="inline-flex items-center gap-1 truncate text-[var(--color-muted)]">
                         <span
