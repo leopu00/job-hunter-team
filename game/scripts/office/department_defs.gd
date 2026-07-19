@@ -26,7 +26,10 @@ class_name DepartmentDefs
 
 const DEPT_ORDER := ["scout", "analisti", "scorer", "scrittori", "critici"]
 const HANDOFF_DEPTS := ["scout", "analisti", "scorer", "scrittori"]
-const HANDOFF_SIZE := Vector2(220, 145)
+# Ingombro A* delle GAMBE, non dell'intera illustrazione alta 145 px. Usare
+# tutto il canvas saldava i tavoli a vetrate e desk vicini, creando muri
+# invisibili e deviazioni enormi pur con molto pavimento libero davanti.
+const HANDOFF_SIZE := Vector2(190, 60)
 
 const DEPARTMENTS := {
 	"scout": {
@@ -34,11 +37,11 @@ const DEPARTMENTS := {
 		"tagline": "Trovano le posizioni là fuori",
 		"color": Color("#00e87a"),
 		"zone": Rect2(320, 348, 880, 520),
-		# Tavolo Scout → Analisti sotto l'anello, ora libero dalla lavagna.
-		"inbox": Vector2(1110, 850),
-		# Si serve dal lato ovest: il lato sud obbligava a circumnavigare
-		# l'intero anello e allungava una singola consegna oltre un minuto.
-		"inbox_access": Vector2(950, 850),
+		# Tavolo Scout → Analisti: fronte orizzontale, allineato al bordo sud
+		# dell'anello e lontano dall'ologramma/corridoio centrale.
+		"inbox": Vector2(960, 900),
+		"inbox_drop_access": Vector2(800, 900),
+		"inbox_pickup_access": Vector2(1120, 900),
 		# Anello radiale nell'angolo nord-ovest; indice 0..5 = ore 10,8,12,6,2,4.
 		"desks": [
 			{"rect": Rect2(384, 400, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
@@ -57,7 +60,8 @@ const DEPARTMENTS := {
 		# Sotto il corridoio della porta: a y=850 il tavolo riempiva esattamente
 		# il varco fra LAB_WALL_H1/H2 e isolava tutte le sei postazioni.
 		"inbox": Vector2(2690, 970),
-		"inbox_access": Vector2(2690, 1042),
+		"inbox_drop_access": Vector2(2530, 970),
+		"inbox_pickup_access": Vector2(2530, 970),
 		# Anello radiale adattato al tappeto più stretto del laboratorio.
 		"desks": [
 			{"rect": Rect2(2405, 293, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
@@ -73,9 +77,11 @@ const DEPARTMENTS := {
 		"tagline": "Pesano il match profilo↔annuncio",
 		"color": Color("#f5c518"),
 		"zone": Rect2(1000, 960, 880, 520),
-		# Tavolo Scorer → Scrittori nel corridoio est, fuori dall'anello.
-		"inbox": Vector2(1960, 1420),
-		"inbox_access": Vector2(2090, 1420),
+		# Tavolo Scorer → Scrittori: sotto lo spicchio a ore 6, parallelo alla
+		# postazione frontale e fuori dalla strada verso la lounge.
+		"inbox": Vector2(1760, 1520),
+		"inbox_drop_access": Vector2(1600, 1520),
+		"inbox_pickup_access": Vector2(1920, 1520),
 		# Gli Scorer occupano l'anello centrale lasciato libero dagli Scout.
 		"desks": [
 			# scorer_a_side nasce con la sedia a sinistra, al contrario degli
@@ -93,9 +99,12 @@ const DEPARTMENTS := {
 		"tagline": "Preparano CV e lettere su misura",
 		"color": Color("#a855f7"),
 		"zone": Rect2(320, 1520, 860, 440),
-		# Tavolo Scrittori → Critici appena fuori dal varco orientale.
-		"inbox": Vector2(1325, 1810),
-		"inbox_access": Vector2(1455, 1810),
+		# Tavolo Scrittori → Critici sul bordo nord-est del reparto: spostato
+		# anche verso est, fuori dall'asse ingresso/uscita x=1300 e staccato
+		# dalla vetrata verticale. Scrittori a sinistra, Critici a destra.
+		"inbox": Vector2(1430, 1580),
+		"inbox_drop_access": Vector2(1270, 1580),
+		"inbox_pickup_access": Vector2(1590, 1580),
 		# Sei spicchi radiali sul tappeto, come un quadrante d'orologio.
 		# Ogni agente guarda verso l'ESTERNO: ore 12=schiena, ore 6=viso,
 		# i quattro intermedi usano le viste laterali disponibili. Gli indici
@@ -180,9 +189,10 @@ const FETCH_FROM := {
 
 ## Punto camminabile davanti alla pila. La pila resta ferma e leggibile:
 ## l'agente si affianca alla vaschetta invece di attraversarla o coprirla.
-static func handoff_spot(dept_id: String) -> Vector2:
+static func handoff_spot(dept_id: String, pickup := false) -> Vector2:
 	var def: Dictionary = DEPARTMENTS[dept_id]
-	return def.get("inbox_access", def["inbox"])
+	var key := "inbox_pickup_access" if pickup else "inbox_drop_access"
+	return def.get(key, def.get("inbox_access", def["inbox"]))
 
 ## Dove sta l'agente assegnato alla scrivania, coerente col verso del
 ## mobile (vedi convenzioni in testa).
