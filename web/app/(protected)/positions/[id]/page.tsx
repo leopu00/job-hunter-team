@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { getPositionById } from "@/lib/queries";
+import {
+  getPositionById,
+  getLatestFeedbackForLegacyId,
+  isCloudDataMode,
+} from "@/lib/queries";
+import { gazetteerCity } from "@/lib/city-gazetteer";
+import { countryFlag } from "@/lib/country-flag";
 import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
 import { MarkdownLite } from "@/lib/markdown-lite";
@@ -12,6 +18,8 @@ import { RecheckButton } from "./RecheckButton";
 import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 import { TeamActionsSheet } from "./TeamActionsSheet";
+import { FeedbackButtons, type Verdict } from "./FeedbackButtons";
+import PositionMapCardLazy from "./PositionMapCardLazy";
 import { CvDownloadButton } from "./CvDownloadButton";
 import MarkSeenAfterView from "@/app/components/MarkSeenAfterView";
 import { Avatar } from "@/app/components/Avatar";
@@ -372,6 +380,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Description complète",
     pt: "Descrição completa",
   },
+  location: {
+    it: "Località",
+    en: "Location",
+    hu: "Helyszín",
+    es: "Ubicación",
+    de: "Standort",
+    fr: "Localisation",
+    pt: "Localização",
+  },
   details: {
     it: "Dettagli",
     en: "Details",
@@ -667,6 +684,18 @@ const VERDICT_COLORS: Record<string, string> = {
   REJECT: "var(--color-red)",
 };
 
+// Ultimo evento feedback → giudizio della scala a 4 (stessa mappatura
+// inversa della pagina /swipe; i vecchi eventi senza score cadono sul
+// giudizio più vicino all'action).
+function verdictOf(action: string, score: number | null): Verdict {
+  if (action === "star") return "top";
+  if (action === "dislike" || action === "hide")
+    return score === 2 ? "review_low" : "no";
+  if (score != null && score <= 2) return "review_low";
+  if (score != null && score >= 5) return "top";
+  return "review_ok";
+}
+
 function scoreColor(s: number | null) {
   if (!s) return "var(--color-dim)";
   if (s >= 75) return "var(--color-green)";
@@ -756,6 +785,35 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // Modalità di accesso ai file: cloud (web pubblico → bridge on-demand) vs
   // local (desktop → link diretto). Stesso criterio di /api/profile/files.
   const cloudMode = isSupabaseConfigured && !(await isLocalRequest());
+
+  // Ultimo giudizio dell'utente (event-log condiviso con /swipe) →
+  // inizializza i bottoni feedback nel popup. Il gate è la modalità DATI
+  // (Supabase vs workspace locale), non cloudMode: quello guarda da dove
+  // arriva la RICHIESTA e in dev locale sarebbe sempre false.
+  const feedbackEnabled = await isCloudDataMode();
+  const fb =
+    feedbackEnabled && position.legacy_id != null
+      ? await getLatestFeedbackForLegacyId(position.legacy_id)
+      : null;
+  const initialVerdict: Verdict | null = fb
+    ? verdictOf(fb.action, fb.score)
+    : null;
+
+  // Card Località: mai per il full remote (nessun posto dove pinnare);
+  // pin a LIVELLO CITTÀ — ufficio esatto se geocodato, altrimenti
+  // gazetteer città→coordinate (scelta utente 19/07: niente zoom sulla via).
+  const isFullRemote = position.remote_type === "full_remote";
+  const locCity = (position.loc_city ?? "").trim() || null;
+  const locCountry = (position.loc_country ?? "").trim() || null;
+  const hasLocationCard =
+    !isFullRemote && Boolean(locCity || locCountry || position.location);
+  const mapCoords =
+    !isFullRemote && position.office_lat != null && position.office_lon != null
+      ? { lat: position.office_lat, lon: position.office_lon }
+      : !isFullRemote
+        ? gazetteerCity(locCountry, locCity)
+        : null;
+  const flag = countryFlag(position.loc_country_code ?? null, locCountry);
   // basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
   // bridge e il file-serving locale risolvono per basename.
   const cvFileName = application?.cv_pdf_path?.split("/").pop() || null;
@@ -829,7 +887,9 @@ export default async function PositionDetailPage({ params }: PageProps) {
               <span className="text-[var(--color-base)] font-medium">
                 {position.company}
               </span>
-              {position.location && (
+              {/* La dicitura località vive nella card Località (con mappa);
+                  qui resta solo come fallback quando la card non c'è. */}
+              {position.location && !hasLocationCard && (
                 <span className="text-[11px] text-[var(--color-muted)]">
                   · {position.location}
                 </span>
@@ -867,11 +927,20 @@ export default async function PositionDetailPage({ params }: PageProps) {
           <div className="mt-4 flex items-center gap-3">
             <TeamActionsSheet
               active={
+                initialVerdict != null ||
                 position.geocode_requested === true ||
                 position.recheck_requested === true ||
                 position.write_requested === true ||
                 !!position.user_excluded_reason ||
                 tickets.some((tk) => tk.status !== "resolved")
+              }
+              feedback={
+                feedbackEnabled ? (
+                  <FeedbackButtons
+                    legacyId={position.legacy_id}
+                    initialVerdict={initialVerdict}
+                  />
+                ) : undefined
               }
               actions={
                 <>
@@ -1286,6 +1355,40 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
         {/* ── Right column ────────────────────────────────────── */}
         <div className="space-y-4">
+          {/* Località: città + paese (bandiera) + mini-mappa con pin.
+              Mai per il full remote; senza coordinate risolvibili resta
+              la parte testuale. */}
+          {hasLocationCard && (
+            <div
+              id="location"
+              className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors"
+            >
+              <div className="section-label mb-3">{t("location")}</div>
+              <div
+                className={`flex items-center gap-2.5 ${mapCoords ? "mb-3" : ""}`}
+              >
+                {flag && (
+                  <span className="text-[24px] leading-none" aria-hidden="true">
+                    {flag}
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
+                    {locCity ?? position.location}
+                  </div>
+                  {locCountry && (
+                    <div className="text-[11px] text-[var(--color-muted)]">
+                      {locCountry}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {mapCoords && (
+                <PositionMapCardLazy lat={mapCoords.lat} lon={mapCoords.lon} />
+              )}
+            </div>
+          )}
+
           {/* Details */}
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
             <div className="section-label mb-3">{t("details")}</div>
