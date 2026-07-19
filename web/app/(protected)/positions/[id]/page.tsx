@@ -11,6 +11,7 @@ import { ExcludeButton } from "./ExcludeButton";
 import { RecheckButton } from "./RecheckButton";
 import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
+import { TeamActionsSheet } from "./TeamActionsSheet";
 import { CvDownloadButton } from "./CvDownloadButton";
 import MarkSeenAfterView from "@/app/components/MarkSeenAfterView";
 import { Avatar } from "@/app/components/Avatar";
@@ -649,18 +650,6 @@ const VAL: Record<string, Record<string, string>> = {
   },
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  new: "var(--color-muted)",
-  checked: "var(--color-blue)",
-  scored: "var(--color-purple)",
-  writing: "var(--color-yellow)",
-  review: "var(--color-orange)",
-  ready: "var(--color-ready)",
-  applied: "var(--color-green)",
-  response: "#58a6ff",
-  excluded: "var(--color-red)",
-};
-
 // Colori dello stato della CANDIDATURA (applications.status), distinto dallo
 // stato della posizione. 'ready' = CV finito e approvato dal Critico.
 const APP_STATUS_COLORS: Record<string, string> = {
@@ -764,8 +753,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
     return VAL[k]?.[locale] ?? VAL[k]?.en ?? v;
   };
 
-  const statusColor = STATUS_COLORS[position.status] ?? "var(--color-dim)";
-
   // Modalità di accesso ai file: cloud (web pubblico → bridge on-demand) vs
   // local (desktop → link diretto). Stesso criterio di /api/profile/files.
   const cloudMode = isSupabaseConfigured && !(await isLocalRequest());
@@ -817,81 +804,143 @@ export default async function PositionDetailPage({ params }: PageProps) {
       </div>
 
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-4">
-            {/* Logo aziendale (mig 056, skill logo-extraction): data-URI dal
-                record companies; senza logo l'Avatar ripiega sulle iniziali
-                colorate del nome azienda. object-contain: mai croppare. */}
-            <Avatar
-              name={position.company}
-              src={company?.logo ?? undefined}
-              size="lg"
-              square
-              imgFit="contain"
-              className="mt-1"
-            />
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mb-1">
-                {position.title}
-              </h1>
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-[var(--color-base)] font-medium">
-                  {position.company}
+      {/* Ridisegnato mobile-first (19/07): niente pillola di stato (l'utente
+          non ragiona per status interni), score allineato al titolo, e tutte
+          le azioni utente→team raccolte in un unico popup (TeamActionsSheet)
+          invece del muro di bottoni impilati. */}
+      <div className="mb-6 md:mb-8 pb-5 md:pb-6 border-b border-[var(--color-border)]">
+        <div className="flex items-start gap-3 md:gap-4">
+          {/* Logo aziendale (mig 056, skill logo-extraction): data-URI dal
+              record companies; senza logo l'Avatar ripiega sulle iniziali
+              colorate del nome azienda. object-contain: mai croppare. */}
+          <Avatar
+            name={position.company}
+            src={company?.logo ?? undefined}
+            size="lg"
+            square
+            imgFit="contain"
+            className="mt-1"
+          />
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[var(--color-white)] mb-1">
+              {position.title}
+            </h1>
+            <div className="flex items-center gap-x-3 gap-y-1 flex-wrap">
+              <span className="text-[var(--color-base)] font-medium">
+                {position.company}
+              </span>
+              {position.location && (
+                <span className="text-[11px] text-[var(--color-muted)]">
+                  · {position.location}
                 </span>
-                {position.location && (
-                  <span className="text-[11px] text-[var(--color-muted)]">
-                    · {position.location}
-                  </span>
-                )}
-                {position.remote_type && (
-                  <span
-                    className="text-[10px]"
-                    style={{
-                      color:
-                        position.remote_type === "full_remote"
-                          ? "var(--color-green)"
-                          : position.remote_type === "hybrid"
-                            ? "var(--color-yellow)"
-                            : "var(--color-red)",
-                    }}
-                  >
-                    {position.remote_type.replace("_", " ")}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <span
-              className="text-[10px] font-semibold px-3 py-1 rounded-full border"
-              style={{
-                color: statusColor,
-                borderColor: statusColor,
-                background: `${statusColor}18`,
-              }}
-            >
-              {position.status}
-            </span>
-            {score && (
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-12 h-12 rounded-full border-2 flex items-center justify-center font-bold text-lg"
+              )}
+              {position.remote_type && (
+                <span
+                  className="text-[10px]"
                   style={{
-                    borderColor: scoreColor(score.total_score),
-                    color: scoreColor(score.total_score),
+                    color:
+                      position.remote_type === "full_remote"
+                        ? "var(--color-green)"
+                        : position.remote_type === "hybrid"
+                          ? "var(--color-yellow)"
+                          : "var(--color-red)",
                   }}
                 >
-                  {score.total_score}
-                </div>
-              </div>
-            )}
+                  {position.remote_type.replace("_", " ")}
+                </span>
+              )}
+            </div>
+          </div>
+          {score && (
+            <div
+              className="w-12 h-12 rounded-full border-2 flex items-center justify-center font-bold text-lg shrink-0 mt-0.5"
+              style={{
+                borderColor: scoreColor(score.total_score),
+                color: scoreColor(score.total_score),
+              }}
+            >
+              {score.total_score}
+            </div>
+          )}
+        </div>
+        {position.legacy_id != null && (
+          <div className="mt-4 flex items-center gap-3">
+            <TeamActionsSheet
+              active={
+                position.geocode_requested === true ||
+                position.recheck_requested === true ||
+                position.write_requested === true ||
+                !!position.user_excluded_reason ||
+                tickets.some((tk) => tk.status !== "resolved")
+              }
+              actions={
+                <>
+                  {/* Geocoding-on-demand (V8): l'utente richiede coordinate
+                      ufficio precise. Sempre attivo: l'Analista skippa
+                      autonomamente quando non ha materiale geografico utile
+                      (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]). */}
+                  <GeocodeRequestButton
+                    legacyId={position.legacy_id}
+                    initialRequested={position.geocode_requested === true}
+                    alreadyGeocoded={position.office_geocoded === true}
+                  />
+                  {/* Recheck ON-DEMAND (mig 042): il recheck non è più
+                      automatico, l'utente lo richiede qui → l'Analista
+                      ri-verifica la liveness. */}
+                  <RecheckButton
+                    legacyId={position.legacy_id}
+                    initialRequested={position.recheck_requested === true}
+                    lastOpenCheck={position.last_open_check}
+                  />
+                  {(() => {
+                    // Writer-on-demand (V6): il button e' visibile solo se la
+                    // posizione e' nello stato giusto. Il Capitano spawna lo
+                    // Scrittore quando il flag e' acceso (vedi BACKLOG
+                    // [JHT-WRITER-ON-DEMAND]).
+                    const wrongStatus = position.status !== "scored";
+                    const alreadyWriting = application != null;
+                    const isDisabled = wrongStatus || alreadyWriting;
+                    const reason = alreadyWriting
+                      ? t("cv_in_progress")
+                      : wrongStatus
+                        ? t("cv_only_from_scored").replace(
+                            "{status}",
+                            position.status,
+                          )
+                        : undefined;
+                    return (
+                      <WriteRequestButton
+                        legacyId={position.legacy_id}
+                        initialRequested={position.write_requested === true}
+                        disabled={isDisabled}
+                        disabledReason={reason}
+                      />
+                    );
+                  })()}
+                  {/* Esclusione manuale utente (mig 041): l'utente esclude
+                      l'offerta con una causa → status 'excluded', gli agenti
+                      smettono di ri-verificarne la liveness. */}
+                  <ExcludeButton
+                    legacyId={position.legacy_id}
+                    status={position.status}
+                    initialReason={position.user_excluded_reason ?? null}
+                  />
+                </>
+              }
+              tickets={
+                <TicketPanel
+                  legacyId={position.legacy_id}
+                  tickets={tickets}
+                  hideTitle
+                />
+              }
+            />
             {position.url && (
               <a
                 href={position.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
                 style={{
                   borderColor: "var(--color-blue)",
                   color: "var(--color-blue)",
@@ -900,69 +949,68 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 {t("original_listing")} ↗
               </a>
             )}
-            {position.legacy_id != null && (
-              // Geocoding-on-demand (V8): l'utente richiede coordinate
-              // ufficio precise. Sempre attivo: l'Analista skippa
-              // autonomamente quando non ha materiale geografico utile
-              // (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]).
-              <GeocodeRequestButton
-                legacyId={position.legacy_id}
-                initialRequested={position.geocode_requested === true}
-                alreadyGeocoded={position.office_geocoded === true}
-              />
-            )}
-            {position.legacy_id != null && (
-              // Recheck ON-DEMAND (mig 042): il recheck non è più automatico,
-              // l'utente lo richiede qui → l'Analista ri-verifica la liveness.
-              <RecheckButton
-                legacyId={position.legacy_id}
-                initialRequested={position.recheck_requested === true}
-                lastOpenCheck={position.last_open_check}
-              />
-            )}
-            {position.legacy_id != null &&
-              (() => {
-                // Writer-on-demand (V6): il button e' visibile solo se la
-                // posizione e' nello stato giusto. Il Capitano spawna lo
-                // Scrittore quando il flag e' acceso (vedi BACKLOG
-                // [JHT-WRITER-ON-DEMAND]).
-                const wrongStatus = position.status !== "scored";
-                const alreadyWriting = application != null;
-                const isDisabled = wrongStatus || alreadyWriting;
-                const reason = alreadyWriting
-                  ? t("cv_in_progress")
-                  : wrongStatus
-                    ? t("cv_only_from_scored").replace(
-                        "{status}",
-                        position.status,
-                      )
-                    : undefined;
-                return (
-                  <WriteRequestButton
-                    legacyId={position.legacy_id}
-                    initialRequested={position.write_requested === true}
-                    disabled={isDisabled}
-                    disabledReason={reason}
-                  />
-                );
-              })()}
-            {position.legacy_id != null && (
-              // Esclusione manuale utente (mig 041): l'utente esclude l'offerta
-              // con una causa → status 'excluded', gli agenti smettono di
-              // ri-verificarne la liveness (esce da next-for-recheck).
-              <ExcludeButton
-                legacyId={position.legacy_id}
-                status={position.status}
-                initialReason={position.user_excluded_reason ?? null}
-              />
-            )}
           </div>
-        </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Left column ─────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Job description — sintesi ottimizzata dell'Analista (jd_summary,
+              markdown, lingua utente). Prima card: è la cosa che l'utente
+              apre la pagina per leggere. Fallback al testo grezzo per le
+              posizioni legacy non ancora ri-analizzate. */}
+          {(position.jd_summary ||
+            position.jd_text ||
+            position.requirements) && (
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
+              <div className="section-label mb-3">{t("job_description")}</div>
+              {position.jd_summary ? (
+                <>
+                  <MarkdownLite
+                    text={position.jd_summary}
+                    className="text-[12px] text-[var(--color-base)] leading-relaxed"
+                  />
+                  {position.url && (
+                    <a
+                      href={position.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                    >
+                      {t("original_listing")} ↗
+                    </a>
+                  )}
+                </>
+              ) : (
+                <>
+                  {position.requirements && (
+                    <div className="mb-4">
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("requirements")}
+                      </div>
+                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
+                        {position.requirements.slice(0, 2000)}
+                        {position.requirements.length > 2000 ? "…" : ""}
+                      </pre>
+                    </div>
+                  )}
+                  {position.jd_text && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("full_description")}
+                      </div>
+                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
+                        {position.jd_text.slice(0, 3000)}
+                        {position.jd_text.length > 3000 ? "…" : ""}
+                      </pre>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Pro/Con highlights */}
           {(pros.length > 0 || cons.length > 0) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1017,67 +1065,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     ))}
                   </ul>
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Richieste al team (ticket utente→team) */}
-          {position.legacy_id != null && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
-              <TicketPanel legacyId={position.legacy_id} tickets={tickets} />
-            </div>
-          )}
-
-          {/* Job description — sintesi ottimizzata dell'Analista (jd_summary,
-              markdown, lingua utente). Fallback al testo grezzo per le
-              posizioni legacy non ancora ri-analizzate. */}
-          {(position.jd_summary ||
-            position.jd_text ||
-            position.requirements) && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-3">{t("job_description")}</div>
-              {position.jd_summary ? (
-                <>
-                  <MarkdownLite
-                    text={position.jd_summary}
-                    className="text-[12px] text-[var(--color-base)] leading-relaxed"
-                  />
-                  {position.url && (
-                    <a
-                      href={position.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-                    >
-                      {t("original_listing")} ↗
-                    </a>
-                  )}
-                </>
-              ) : (
-                <>
-                  {position.requirements && (
-                    <div className="mb-4">
-                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                        {t("requirements")}
-                      </div>
-                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
-                        {position.requirements.slice(0, 2000)}
-                        {position.requirements.length > 2000 ? "…" : ""}
-                      </pre>
-                    </div>
-                  )}
-                  {position.jd_text && (
-                    <div>
-                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                        {t("full_description")}
-                      </div>
-                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
-                        {position.jd_text.slice(0, 3000)}
-                        {position.jd_text.length > 3000 ? "…" : ""}
-                      </pre>
-                    </div>
-                  )}
-                </>
               )}
             </div>
           )}
@@ -1323,13 +1310,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
               ) && (
                 <InfoRow
                   label={t("d_salary_declared")}
-                  value={
-                    formatSalary(
-                      position.salary_declared_min,
-                      position.salary_declared_max,
-                      position.salary_declared_currency,
-                    )!
-                  }
+                  value={formatSalary(
+                    position.salary_declared_min,
+                    position.salary_declared_max,
+                    position.salary_declared_currency,
+                  )!}
                 />
               )}
               {formatSalary(
@@ -1339,13 +1324,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
               ) && (
                 <InfoRow
                   label={t("d_salary_estimated")}
-                  value={
-                    formatSalary(
-                      position.salary_estimated_min,
-                      position.salary_estimated_max,
-                      position.salary_estimated_currency,
-                    )!
-                  }
+                  value={formatSalary(
+                    position.salary_estimated_min,
+                    position.salary_estimated_max,
+                    position.salary_estimated_currency,
+                  )!}
                 />
               )}
             </div>
