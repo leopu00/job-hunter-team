@@ -63,6 +63,9 @@ case "$MODE" in
 		printf '%s\n' "$POSITIONS_OUT" | grep "POSITIONS-PANEL-TEST PASS"
 		MAP_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_MAP_PANEL_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$MAP_OUT" | grep "MAP-PANEL-TEST PASS"
+		AGENT_UI_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_TEST=1 \
+			JHT_THINKING=scout JHT_AGENT_UI_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$AGENT_UI_OUT" | grep "AGENT-UI-TEST PASS"
 		echo "[run.sh] TEST OK"
 		;;
 	boot)

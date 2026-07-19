@@ -40,6 +40,18 @@ func send_chat(_agent: String, _text: String) -> void:
 	pass
 
 
+## ── Stream terminale agente (sola lettura) ──────────────────────────
+
+## Osserva il contenuto della pane tmux dell'agente. A differenza della
+## console di login, questo contratto non espone deliberatamente alcun metodo
+## di input: gli adapter possono soltanto pubblicare snapshot di testo.
+func open_terminal(_agent: String) -> void:
+	pass
+
+func close_terminal() -> void:
+	pass
+
+
 ## ── Ticket utente→team (l'unica scrittura remota autorizzata) ────────
 
 ## Apre un ticket 'open' sulla posizione: la richiesta che il

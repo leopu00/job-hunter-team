@@ -40,6 +40,7 @@ var bubble: StatusBubble
 var speech: SpeechBubble
 var state_tag: AgentStateTag
 var quest_marker: QuestMarker
+var aura: AgentAuraRing
 ## Stato riportato dal backend: working|idle|paused. Con idle/paused
 ## l'agente resta alla postazione senza viaggi né digitazione.
 var backend_status := "working"
@@ -80,7 +81,6 @@ var _pose_timer := 0.0     # alternanza work/idle alla scrivania
 var _desk_working := true
 var _bubble_timer := 0.0
 var _highlight := false
-var _pulse := 0.0
 var _forced_trip := false  # visite chat-driven: finiscono anche se passa idle
 var _investigation_count := 0
 var _pending_pipeline: Array[Dictionary] = []
@@ -142,20 +142,34 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	shape.position = Vector2(0, -12)
 	add_child(shape)
 
+	# L'aura appartiene al pavimento, non al piano grafico dell'agente. Lo z
+	# assoluto la tiene sopra tappeti/pavimento ma sotto TUTTO il mondo
+	# y-sortato: gambe, sedie, scrivanie e pile la mascherano naturalmente.
+	# In questo modo rimane visibile anche da seduti senza essere dipinta sui
+	# mobili davanti al personaggio.
+	aura = AgentAuraRing.new()
+	aura.z_as_relative = false
+	aura.z_index = -1
+	aura.setup(accent_color())
+	add_child(aura)
+
 	rig = CharacterDefs.make_rig(slug)
 	add_child(rig)
 	_work_pose()
 
 	bubble = StatusBubble.new()
 	bubble.position = STATUS_BUBBLE_POS
+	bubble.z_index = 3
 	add_child(bubble)
 
 	speech = SpeechBubble.new()
 	speech.position = SPEECH_BUBBLE_POS
+	speech.z_index = 3
 	add_child(speech)
 
 	state_tag = AgentStateTag.new()
 	state_tag.position = STATE_TAG_POS
+	state_tag.z_index = 3
 	add_child(state_tag)
 	state_tag.set_state(backend_status, throttle_secs, activity_detail)
 	# _work_pose() viene eseguito prima che badge e fumetti esistano: ripeti
@@ -166,6 +180,7 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 func set_story_marker(visible_now: bool, already_seen := false) -> void:
 	if visible_now and quest_marker == null:
 		quest_marker = QuestMarker.new()
+		quest_marker.z_index = 3
 		add_child(quest_marker)
 	if quest_marker:
 		quest_marker.visible = visible_now
@@ -363,7 +378,22 @@ func investigate_agent(target: AgentNPC, text: String) -> bool:
 func set_highlight(on: bool) -> void:
 	if _highlight != on:
 		_highlight = on
-		queue_redraw()
+		if aura:
+			aura.set_hovered(on)
+
+func accent_color() -> Color:
+	if dept != "" and DepartmentDefs.DEPARTMENTS.has(dept):
+		return DepartmentDefs.DEPARTMENTS[dept]["color"]
+	# I ruoli trasversali non abitano un reparto, ma mantengono una famiglia
+	# cromatica stabile e distinta nel resto dell'interfaccia.
+	return {
+		"coordinatore": Palette.GREEN,
+		"sentinella": Palette.BLUE,
+		"assistente": Palette.MINT,
+		"mentor": Palette.PURPLE,
+		"mantenitore": Palette.ORANGE,
+		"dottore": Palette.RED,
+	}.get(slug, Palette.MINT)
 
 ## Interrogato con un click: si ferma e guarda in camera.
 func start_talk() -> void:
@@ -404,9 +434,6 @@ func _physics_process(delta: float) -> void:
 	if _exit_pending and (speech == null or not speech.is_speaking()):
 		_exit_pending = false
 		_begin_exit(_pending_exit_spot)
-	_pulse += delta
-	if _highlight:
-		queue_redraw()
 	_bubble_tick(delta)
 	match state:
 		S.WORK:
@@ -916,14 +943,3 @@ func _bubble_tick(delta: float) -> void:
 			lines.append(status["detail"])
 		if not lines.is_empty():
 			bubble.show_text(lines[randi() % lines.size()])
-
-## Proximity ring (pattern Gather) sotto l'agente in hover.
-func _draw() -> void:
-	if not _highlight:
-		return
-	var a := 0.55 + 0.25 * sin(_pulse * 5.0)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
-	draw_arc(Vector2.ZERO, 30.0, 0, TAU, 40,
-			Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, a), 2.2)
-	draw_arc(Vector2.ZERO, 34.0, 0, TAU, 40,
-			Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, a * 0.35), 4.0)

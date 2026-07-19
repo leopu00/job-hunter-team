@@ -18,9 +18,18 @@ var _tour_visits := 0
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
 	_doctor_test = OS.get_environment("JHT_DOCTOR_TEST")
-	add_child(OfficeFloor.new())
-	add_child(DepartmentDressing.new())  # tinte/targhe dei 5 reparti (dev-art)
-	add_child(DeptRugs.new())  # tappetoni tondi colore-reparto (reference)
+	# Stratificazione globale: sfondo (-3), tinte e tappeti (-2), aure degli
+	# agenti (-1), mondo y-sortato (0+). Le aure risultano quindi davvero
+	# appoggiate al suolo e vengono coperte dagli arredi senza maschere ad hoc.
+	var floor_layer := OfficeFloor.new()
+	floor_layer.z_index = -3
+	add_child(floor_layer)
+	var dressing_layer := DepartmentDressing.new()
+	dressing_layer.z_index = -2
+	add_child(dressing_layer)  # tinte/targhe dei 5 reparti (dev-art)
+	var rugs_layer := DeptRugs.new()
+	rugs_layer.z_index = -2
+	add_child(rugs_layer)  # tappetoni tondi colore-reparto (reference)
 	# giorno/notte sull'ora locale: esterno, lampade e luce dalle finestre.
 	# Va qui, PRIMA di mondo e maintainer, che devono disegnarsi sopra.
 	add_child(DayNight.new())
@@ -1062,13 +1071,14 @@ func _toggle_search() -> void:
 
 var _dept_panel: DepartmentPanel
 var _agent_card: AgentCard
+var _thinking_panel: AgentThinkingPanel
 
 ## Click "pulito" dalla FreeCamera: agente > bacheca > reparto.
 func _on_world_click(target: Vector2) -> void:
 	if Game.dialogue_active:
 		return
 	if _registry or _dept_panel or _agent_card or _chat_panel or _cv_shelf_panel \
-			or _queue_panel:
+			or _queue_panel or _thinking_panel:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
@@ -1141,7 +1151,7 @@ func _update_hover() -> void:
 	var queue_hovered := ""
 	if not Game.dialogue_active and not _registry and not _dept_panel \
 			and not _agent_card and not _chat_panel and not _cv_shelf_panel \
-			and not _queue_panel:
+			and not _queue_panel and not _thinking_panel:
 		var mouse := get_global_mouse_position()
 		for agent in agents:
 			if agent.hit_by(mouse):
@@ -1170,8 +1180,19 @@ func _open_agent_card(agent: AgentNPC) -> void:
 	add_child(_agent_card)
 	_agent_card.talk_requested.connect(func() -> void: _start_talk(agent))
 	_agent_card.chat_requested.connect(func() -> void: _open_chat(agent))
+	_agent_card.thinking_requested.connect(func() -> void: _open_agent_thinking(agent))
 	_agent_card.closed.connect(func() -> void:
 		_agent_card = null)
+
+func _open_agent_thinking(agent: AgentNPC) -> void:
+	if agent.uid == "" or not BackendBus.can_chat_with(agent.uid):
+		return
+	Log.info("agent", "stream tmux read-only aperto: %s" % agent.uid)
+	_thinking_panel = AgentThinkingPanel.new(
+			agent.uid, agent.display_name, agent.accent_color())
+	add_child(_thinking_panel)
+	_thinking_panel.closed.connect(func() -> void:
+		_thinking_panel = null)
 
 var _chat_panel: ChatPanel
 var _chat_menu: ChatMenu
@@ -1243,6 +1264,7 @@ var _desk_pool: Dictionary = {}  # role -> Array di def libere (postazioni)
 var _backend_mode := false
 var _unplaced_roles: Dictionary = {}  # ruoli senza postazione già segnalati
 var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-worker)
+var _agent_ui_test_started := false
 
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
@@ -1283,6 +1305,63 @@ func sync_agents(list: Array) -> void:
 			if a.slug == card_test or a.uid == card_test:
 				_open_agent_card(a)
 				break
+	# Preview/test della vista tmux: si apre solo dopo il roster vero/mock,
+	# perché lo showroom non possiede sessioni da osservare.
+	var thinking_test := OS.get_environment("JHT_THINKING")
+	if thinking_test != "" and _thinking_panel == null:
+		for a in agents:
+			if a.slug == thinking_test or a.uid == thinking_test:
+				_open_agent_thinking(a)
+				break
+	if OS.get_environment("JHT_AGENT_UI_TEST") == "1" \
+			and _thinking_panel != null and not _agent_ui_test_started:
+		_agent_ui_test_started = true
+		_agent_ui_selftest.call_deferred()
+
+func _agent_ui_selftest() -> void:
+	await get_tree().create_timer(2.2).timeout
+	var colors := {}
+	var auras_ok := not agents.is_empty()
+	var ground_layer_ok := not agents.is_empty()
+	for agent in agents:
+		auras_ok = auras_ok and agent.aura != null and agent.aura.visible
+		ground_layer_ok = ground_layer_ok and agent.aura != null \
+				and not agent.aura.z_as_relative and agent.aura.z_index == -1 \
+				and agent.rig.z_index == 0
+		if agent.dept != "" and agent.aura:
+			colors[agent.dept] = agent.aura.accent.to_html(false)
+	var readonly_ok := _thinking_panel != null \
+			and _thinking_panel.find_children("*", "LineEdit", true, false).is_empty()
+	var stream_ok := _thinking_panel != null \
+			and str(_thinking_panel._output.text).contains("sessione agente attiva")
+	var scroll_lock_ok := false
+	if _thinking_panel != null:
+		var scroll_bar := _thinking_panel._output.get_v_scroll_bar()
+		_thinking_panel._scroll_guard = false
+		scroll_bar.value = 0.0
+		await get_tree().process_frame
+		var before_scroll := scroll_bar.value
+		var extra := str(_thinking_panel._output.text) + "\nnuovo tick live"
+		_thinking_panel._on_terminal_updated(
+				_thinking_panel._agent_key, extra, "")
+		await get_tree().process_frame
+		await get_tree().process_frame
+		scroll_lock_ok = not _thinking_panel._follow_tail \
+				and is_equal_approx(scroll_bar.value, before_scroll)
+	var hover_ok := false
+	if not agents.is_empty() and agents[0].aura:
+		agents[0].set_highlight(true)
+		hover_ok = agents[0].aura.hovered
+		agents[0].set_highlight(false)
+	var ok := auras_ok and ground_layer_ok and colors.size() >= 5 \
+			and readonly_ok and stream_ok \
+			and scroll_lock_ok and hover_ok
+	print("AGENT-UI-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify({
+		"departments": colors, "auras": auras_ok, "readonly": readonly_ok,
+		"ground_layer": ground_layer_ok, "stream": stream_ok,
+		"scroll_lock": scroll_lock_ok, "hover": hover_ok,
+	}))
+	get_tree().quit(0 if ok else 1)
 
 ## Recapita un messaggio della chat di team come fumetto (contratto
 ## BackendBus.chat_message): from/to sono uid agente, "user" o "all".
