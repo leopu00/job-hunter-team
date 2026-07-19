@@ -124,6 +124,10 @@ func _build(page := "") -> void:
 				_build_agents()
 		"agent_metrics":
 			_build_agent_metrics()
+		"usage_history":
+			_content.add_child(UsageHistoryView.new())
+		"usage_agents":
+			_content.add_child(AgentUsageView.new())
 		"activity":
 			_build_activity()
 		"apps":
