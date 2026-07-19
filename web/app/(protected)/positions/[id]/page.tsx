@@ -832,6 +832,38 @@ export default async function PositionDetailPage({ params }: PageProps) {
     return null;
   }
 
+  // Card Località: città + paese (bandiera) + mini-mappa zoomabile col pin.
+  // CON mappa → prima card della colonna principale (prima della JD, scelta
+  // utente 19/07); senza mappa → tra i metadati della colonna destra.
+  const locationCard = hasLocationCard ? (
+    <div
+      id="location"
+      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors"
+    >
+      <div className="section-label mb-3">{t("location")}</div>
+      <div className={`flex items-center gap-2.5 ${mapCoords ? "mb-3" : ""}`}>
+        {flag && (
+          <span className="text-[24px] leading-none" aria-hidden="true">
+            {flag}
+          </span>
+        )}
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
+            {locCity ?? position.location}
+          </div>
+          {locCountry && (
+            <div className="text-[11px] text-[var(--color-muted)]">
+              {locCountry}
+            </div>
+          )}
+        </div>
+      </div>
+      {mapCoords && (
+        <PositionMapCardLazy lat={mapCoords.lat} lon={mapCoords.lon} />
+      )}
+    </div>
+  ) : null;
+
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
       {/* Dopo 2s di permanenza la posizione perde il marker "nuova"
@@ -1025,9 +1057,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Left column ─────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Località CON mappa: primo elemento, prima della descrizione. */}
+          {mapCoords && locationCard}
+
           {/* Job description — sintesi ottimizzata dell'Analista (jd_summary,
-              markdown, lingua utente). Prima card: è la cosa che l'utente
-              apre la pagina per leggere. Fallback al testo grezzo per le
+              markdown, lingua utente). Fallback al testo grezzo per le
               posizioni legacy non ancora ri-analizzate. */}
           {(position.jd_summary ||
             position.jd_text ||
@@ -1355,39 +1389,9 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
         {/* ── Right column ────────────────────────────────────── */}
         <div className="space-y-4">
-          {/* Località: città + paese (bandiera) + mini-mappa con pin.
-              Mai per il full remote; senza coordinate risolvibili resta
-              la parte testuale. */}
-          {hasLocationCard && (
-            <div
-              id="location"
-              className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors"
-            >
-              <div className="section-label mb-3">{t("location")}</div>
-              <div
-                className={`flex items-center gap-2.5 ${mapCoords ? "mb-3" : ""}`}
-              >
-                {flag && (
-                  <span className="text-[24px] leading-none" aria-hidden="true">
-                    {flag}
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
-                    {locCity ?? position.location}
-                  </div>
-                  {locCountry && (
-                    <div className="text-[11px] text-[var(--color-muted)]">
-                      {locCountry}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {mapCoords && (
-                <PositionMapCardLazy lat={mapCoords.lat} lon={mapCoords.lon} />
-              )}
-            </div>
-          )}
+          {/* Località testuale (senza mappa): resta qui tra i metadati.
+              La versione CON mappa vive in cima alla colonna principale. */}
+          {hasLocationCard && !mapCoords && locationCard}
 
           {/* Details */}
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
