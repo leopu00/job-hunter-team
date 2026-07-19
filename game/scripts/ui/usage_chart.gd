@@ -181,6 +181,11 @@ func _draw_y_axis(plot: Rect2, peak: float) -> void:
 ## allineato a confini "umani" (ora piena, mezzanotte, lunedì…).
 func _draw_time_axis(plot: Rect2) -> void:
 	var span := _to_ts - _from_ts
+	# La vista può essere disegnata una volta mentre il tab monitoraggio è
+	# ancora nascosto e prima che AgentHistoryChart imposti la finestra.
+	# Evita coordinate infinite e warning del renderer in quel frame.
+	if span <= 0.0 or is_nan(span) or is_inf(span):
+		return
 	var step := _nice_time_step(span)
 	if step <= 0.0:
 		return

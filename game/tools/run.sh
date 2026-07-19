@@ -45,6 +45,7 @@ case "$MODE" in
 		JHT_NOVPS=1 godot --headless --script res://tools/pipeline_queue_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/embedded_terminal_selftest.gd
 		python3 tools/python_payload_syntax_test.py
+		python3 tools/coordinator_policy_selftest.py
 		GUIDED_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GUIDED_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
 		VPS_OUT="$(JHT_NOVPS=1 JHT_VPS_CONTRACT_TEST=1 godot --headless --quit-after 3 . 2>&1)"
@@ -68,6 +69,9 @@ case "$MODE" in
 		printf '%s\n' "$AGENT_UI_OUT" | grep "AGENT-UI-TEST PASS"
 		USAGE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_USAGE_PANEL_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$USAGE_OUT" | grep "USAGE-PANEL-TEST PASS"
+		COORD_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_TEST=1 \
+			JHT_COORDINATOR_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$COORD_OUT" | grep "COORDINATOR-CONSOLE-TEST PASS"
 		echo "[run.sh] TEST OK"
 		;;
 	boot)

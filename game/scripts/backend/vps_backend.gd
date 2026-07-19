@@ -830,6 +830,201 @@ print(json.dumps({'ok': True, 'text_b64': payload, 'events': events,
                   'source': source.name}))
 """
 
+## Snapshot per la console del Coordinatore: legge soltanto file di policy e
+## jobs.db. Le query sono contatori operativi, non modificano le posizioni.
+const COORDINATOR_STATE_PY := """
+import json, os, sqlite3, sys
+sys.path.insert(0, '/app/shared/skills')
+from _db import DB_PATH, ensure_schema
+from enrichment_policy import load_policy, logo_min_score
+
+profile = os.path.join(os.path.dirname(DB_PATH), 'profile')
+maintenance_path = os.path.join(profile, 'capitano-maintenance.json')
+maintenance_raw = {}
+try:
+    maintenance_raw = json.load(open(maintenance_path, encoding='utf-8'))
+except Exception:
+    pass
+orders = maintenance_raw.get('orders', {}) if isinstance(maintenance_raw, dict) else {}
+if not isinstance(orders, dict):
+    orders = {}
+maintenance = {
+    'enabled': maintenance_raw.get('mode') == 'maintenance',
+    'stop_search': bool(orders.get('stop_search', True)),
+    'discard_expired_rotating': bool(orders.get('discard_expired_rotating', True)),
+    'cv_min_score': int(orders.get('cv_min_score', 90)),
+    'pre_check_liveness_for_cv': bool(orders.get('pre_check_liveness_for_cv', True)),
+}
+
+policy = load_policy()
+# Compatibilità rolling-deploy: il gioco può essere più nuovo dell'immagine
+# container per qualche minuto. Le opzioni fini si leggono dal JSON già
+# normalizzato anche quando gli helper nuovi non sono ancora nell'immagine.
+geo_section = policy.get('geocode_missing', {})
+geo = {
+    'min_score': geo_section.get('min_score'),
+    'non_remote_only': bool(geo_section.get('non_remote_only', True)),
+}
+recheck_section = policy.get('recheck_weekly', {})
+recheck = {
+    'min_score': int(recheck_section.get('min_score', 70)),
+    'older_than_days': int(recheck_section.get('older_than_days', 7)),
+}
+enrichment = {
+    'economy': bool(policy.get('economy', False)),
+    'logo_enabled': bool(policy.get('logo', {}).get('enabled', True)),
+    'logo_min_score': logo_min_score(policy),
+    'geocode_enabled': bool(policy.get('geocode_missing', {}).get('enabled', True)),
+    'geocode_min_score': geo.get('min_score'),
+    'geocode_non_remote_only': bool(geo.get('non_remote_only', True)),
+    'recheck_enabled': bool(policy.get('recheck_weekly', {}).get('enabled', True)),
+    'recheck_min_score': int(recheck.get('min_score', 70)),
+    'recheck_older_days': int(recheck.get('older_than_days', 7)),
+}
+
+conn = sqlite3.connect(DB_PATH)
+conn.row_factory = sqlite3.Row
+ensure_schema(conn)
+def count(sql, params=()):
+    try:
+        return int(conn.execute(sql, params).fetchone()[0])
+    except Exception:
+        return 0
+
+queue_counts = {
+    'new': count("SELECT COUNT(*) FROM positions WHERE status='new'"),
+    'analysis': count("SELECT COUNT(*) FROM positions WHERE status='checked'"),
+    'scored': count("SELECT COUNT(*) FROM positions WHERE status='scored'"),
+    'expired': count("SELECT COUNT(*) FROM positions WHERE status!='excluded' AND expires_at IS NOT NULL AND expires_at < datetime('now')"),
+}
+geo_sql = ("SELECT COUNT(*) FROM positions p "
+           "WHERE p.status!='excluded' "
+           "AND (p.office_lat IS NULL OR p.office_geocoded IS NULL OR p.office_geocoded=0)")
+geo_params = []
+if geo.get('min_score') is not None:
+    geo_sql += " AND EXISTS (SELECT 1 FROM scores s WHERE s.position_id=p.id AND s.total_score>=?)"
+    geo_params.append(int(geo['min_score']))
+if geo.get('non_remote_only', True):
+    geo_sql += " AND LOWER(COALESCE(p.work_mode,''))!='remote'"
+queue_counts['geocode'] = count(geo_sql, tuple(geo_params))
+
+logo_score = logo_min_score(policy)
+logo_sql = ("SELECT COUNT(*) FROM companies c "
+            "WHERE (c.logo_fetched IS NULL OR c.logo_fetched=0) "
+            "AND EXISTS (SELECT 1 FROM positions p WHERE p.company_id=c.id AND p.status!='excluded')")
+logo_params = []
+if logo_score is not None:
+    logo_sql += " AND EXISTS (SELECT 1 FROM positions p JOIN scores s ON s.position_id=p.id WHERE p.company_id=c.id AND p.status!='excluded' AND s.total_score>=?)"
+    logo_params.append(int(logo_score))
+queue_counts['logos'] = count(logo_sql, tuple(logo_params))
+queue_counts['recheck'] = count("SELECT COUNT(DISTINCT p.id) FROM positions p "
+   "JOIN scores s ON s.position_id=p.id "
+   "WHERE p.status!='excluded' AND s.total_score>=? "
+   "AND (p.last_checked IS NULL OR p.last_checked < datetime('now', ?))",
+   (int(recheck['min_score']), '-' + str(int(recheck['older_than_days'])) + ' days'))
+
+directives = []
+for row in conn.execute("SELECT id,body,kind,status,sort_order,created_at,updated_at "
+                        "FROM team_directives WHERE status='active' "
+                        "ORDER BY sort_order,created_at"):
+    directives.append(dict(row))
+conn.close()
+print(json.dumps({'ok': True, 'maintenance': maintenance,
+                  'enrichment': enrichment, 'queue_counts': queue_counts,
+                  'directives': directives}, ensure_ascii=False))
+"""
+
+## Payload validato e scritto atomicamente nei due file canonici. Il JSON
+## arriva base64 nello script (mai interpolato in una shell).
+const COORDINATOR_SAVE_PY := """
+import base64, json, os, sys
+sys.path.insert(0, '/app/shared/skills')
+from _db import DB_PATH
+data = json.loads(base64.b64decode('%s').decode('utf-8'))
+profile = os.path.join(os.path.dirname(DB_PATH), 'profile')
+os.makedirs(profile, exist_ok=True)
+
+def boolean(value, default=False):
+    return value if isinstance(value, bool) else default
+def integer(value, default, lo, hi):
+    try: value = int(value)
+    except Exception: value = default
+    return max(lo, min(hi, value))
+def nullable_score(value):
+    if value is None or str(value).strip().lower() in ('', 'null', 'none'):
+        return None
+    return integer(value, 0, 0, 100)
+def atomic(path, value):
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as handle:
+        json.dump(value, handle, indent=2, ensure_ascii=False)
+        handle.write('\\n')
+    os.replace(tmp, path)
+
+m = data.get('maintenance', {})
+maintenance_path = os.path.join(profile, 'capitano-maintenance.json')
+if boolean(m.get('enabled')):
+    maintenance = {
+        'mode': 'maintenance',
+        'orders': {
+            'stop_search': boolean(m.get('stop_search'), True),
+            'discard_expired_rotating': boolean(m.get('discard_expired_rotating'), True),
+            'cv_min_score': integer(m.get('cv_min_score'), 90, 0, 100),
+            'pre_check_liveness_for_cv': boolean(m.get('pre_check_liveness_for_cv'), True),
+        },
+    }
+    atomic(maintenance_path, maintenance)
+else:
+    try: os.unlink(maintenance_path)
+    except FileNotFoundError: pass
+
+e = data.get('enrichment', {})
+policy = {
+    'economy': boolean(e.get('economy')),
+    'logo': {
+        'enabled': boolean(e.get('logo_enabled'), True),
+        'min_score': nullable_score(e.get('logo_min_score')),
+    },
+    'geocode_missing': {
+        'enabled': boolean(e.get('geocode_enabled'), True),
+        'min_score': nullable_score(e.get('geocode_min_score')),
+        'non_remote_only': boolean(e.get('geocode_non_remote_only'), True),
+    },
+    'recheck_weekly': {
+        'enabled': boolean(e.get('recheck_enabled'), True),
+        'min_score': integer(e.get('recheck_min_score'), 70, 0, 100),
+        'older_than_days': integer(e.get('recheck_older_days'), 7, 1, 365),
+    },
+}
+atomic(os.path.join(profile, 'enrichment-policy.json'), policy)
+print(json.dumps({'ok': True, 'maintenance': maintenance if boolean(m.get('enabled')) else None,
+                  'enrichment': policy}, ensure_ascii=False))
+"""
+
+const COORDINATOR_DIRECTIVE_PY := """
+import base64, json, sys
+sys.path.insert(0, '/app/shared/skills')
+from _db import get_db, ensure_schema
+data = json.loads(base64.b64decode('%s').decode('utf-8'))
+conn = get_db(); ensure_schema(conn)
+action = str(data.get('action', ''))
+if action == 'add':
+    body = str(data.get('body', '')).strip()
+    kind = str(data.get('kind', 'order'))
+    if not body or len(body) > 2000 or kind not in ('order','strategy','formation','note'):
+        raise ValueError('direttiva non valida')
+    order = conn.execute("SELECT COALESCE(MAX(sort_order),0)+1 FROM team_directives WHERE status='active'").fetchone()[0]
+    conn.execute("INSERT INTO team_directives(body,kind,status,sort_order,created_by) VALUES(?,?,'active',?,'user')", (body,kind,order))
+elif action == 'archive':
+    directive_id = int(data.get('id', 0))
+    if directive_id <= 0: raise ValueError('id non valido')
+    conn.execute("UPDATE team_directives SET status='archived', archived_at=datetime('now','localtime'), updated_at=datetime('now','localtime') WHERE id=? AND status='active'", (directive_id,))
+else:
+    raise ValueError('azione non valida')
+conn.commit(); conn.close()
+print(json.dumps({'ok': True, 'action': action}, ensure_ascii=False))
+"""
+
 var _ip := ""
 var _key := ""
 var _user := "root"
@@ -1256,6 +1451,90 @@ static func _safe_tmux_session(session: String) -> bool:
 
 func _terminal_result(agent: String, text: String, error: String) -> void:
 	bus.call_deferred("publish_agent_terminal", agent, text, error)
+
+
+## ── Console operativa del Coordinatore ──────────────────────────────
+
+func fetch_coordinator_state() -> void:
+	_queue_worker(_do_fetch_coordinator_state)
+
+func _do_fetch_coordinator_state() -> void:
+	var res := _ssh_python(COORDINATOR_STATE_PY)
+	if _stop:
+		return
+	var parsed := _json_result(res)
+	if parsed.is_empty() or not bool(parsed.get("ok", false)):
+		bus.call_deferred("publish_coordinator_action", "load", false,
+				_short_error(res) if res["code"] != 0 else "stato coordinatore non leggibile")
+		return
+	bus.call_deferred("publish_coordinator_state", parsed)
+
+func save_coordinator_settings(settings: Dictionary) -> void:
+	_queue_worker(_do_save_coordinator_settings.bind(settings.duplicate(true)))
+
+func _do_save_coordinator_settings(settings: Dictionary) -> void:
+	var payload := Marshalls.utf8_to_base64(JSON.stringify(settings))
+	var res := _ssh_python(COORDINATOR_SAVE_PY % payload)
+	if _stop:
+		return
+	var parsed := _json_result(res)
+	var ok: bool = res["code"] == 0 and bool(parsed.get("ok", false))
+	bus.call_deferred("publish_coordinator_action", "save", ok,
+			"" if ok else _short_error(res))
+	if not ok:
+		return
+	_do_fetch_coordinator_state()
+	# I file sono enforcement a codice; questo messaggio sveglia inoltre il
+	# Capitano e gli fa ricalcolare subito assegnazioni e code.
+	_do_send_chat("coordinatore",
+			"Impostazioni operative aggiornate dalla console. Rileggi " \
+			+ "/jht_home/profile/capitano-maintenance.json (se presente) e " \
+			+ "/jht_home/profile/enrichment-policy.json; applicale ora e " \
+			+ "ribilancia il team rispettando budget e code.")
+
+func add_team_directive(body: String, kind: String) -> void:
+	var clean := body.strip_edges()
+	if clean == "" or clean.length() > 2000:
+		bus.publish_coordinator_action("directive_add", false, "direttiva non valida")
+		return
+	_queue_worker(_do_team_directive.bind({"action": "add", "body": clean,
+			"kind": kind}))
+
+func archive_team_directive(directive_id: int) -> void:
+	if directive_id <= 0:
+		bus.publish_coordinator_action("directive_archive", false, "id non valido")
+		return
+	_queue_worker(_do_team_directive.bind({"action": "archive", "id": directive_id}))
+
+func _do_team_directive(action: Dictionary) -> void:
+	var payload := Marshalls.utf8_to_base64(JSON.stringify(action))
+	var res := _ssh_python(COORDINATOR_DIRECTIVE_PY % payload)
+	if _stop:
+		return
+	var parsed := _json_result(res)
+	var ok: bool = res["code"] == 0 and bool(parsed.get("ok", false))
+	var action_name := "directive_add" if str(action.get("action")) == "add" \
+			else "directive_archive"
+	bus.call_deferred("publish_coordinator_action", action_name, ok,
+			"" if ok else _short_error(res))
+	if not ok:
+		return
+	_do_fetch_coordinator_state()
+	_do_send_chat("coordinatore",
+			"La bacheca permanente del team è cambiata. Esegui " \
+			+ "python3 /app/shared/skills/team_directives.py active, " \
+			+ "poi applica le direttive attive.")
+
+static func _json_result(res: Dictionary) -> Dictionary:
+	if int(res.get("code", -1)) != 0:
+		return {}
+	for line in str(res.get("out", "")).split("\n"):
+		if not line.begins_with("{"):
+			continue
+		var parsed: Variant = JSON.parse_string(line)
+		if parsed is Dictionary:
+			return parsed
+	return {}
 
 func send_chat(agent: String, text: String) -> void:
 	if text.strip_edges() == "":

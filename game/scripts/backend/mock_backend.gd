@@ -260,6 +260,50 @@ func close_terminal() -> void:
 	_terminal_agent = ""
 	_terminal_generation += 1
 
+var _coord_state := {
+	"maintenance": {"enabled": false, "stop_search": false,
+		"discard_expired_rotating": true, "cv_min_score": 90,
+		"pre_check_liveness_for_cv": true},
+	"enrichment": {"economy": false, "logo_enabled": true,
+		"logo_min_score": 70, "geocode_enabled": true,
+		"geocode_min_score": 65, "geocode_non_remote_only": true,
+		"recheck_enabled": true, "recheck_min_score": 65,
+		"recheck_older_days": 14},
+	"queue_counts": {"new": 8, "analysis": 23, "scored": 41,
+		"geocode": 17, "logos": 12, "recheck": 29, "expired": 6},
+	"directives": [
+		{"id": 1, "body": "Dai priorità alle posizioni AI Engineering remote UE.",
+			"kind": "strategy", "status": "active"},
+	],
+}
+var _coord_next_directive := 2
+
+func fetch_coordinator_state() -> void:
+	bus.publish_coordinator_state(_coord_state.duplicate(true))
+
+func save_coordinator_settings(settings: Dictionary) -> void:
+	_coord_state["maintenance"] = settings.get("maintenance", {}).duplicate(true)
+	_coord_state["enrichment"] = settings.get("enrichment", {}).duplicate(true)
+	bus.publish_coordinator_action("save", true, "")
+	bus.publish_coordinator_state(_coord_state.duplicate(true))
+
+func add_team_directive(body: String, kind: String) -> void:
+	var row := {"id": _coord_next_directive, "body": body.strip_edges(),
+		"kind": kind, "status": "active"}
+	_coord_next_directive += 1
+	(_coord_state["directives"] as Array).append(row)
+	bus.publish_coordinator_action("directive_add", true, "")
+	bus.publish_coordinator_state(_coord_state.duplicate(true))
+
+func archive_team_directive(directive_id: int) -> void:
+	var active: Array = []
+	for row: Dictionary in _coord_state["directives"]:
+		if int(row.get("id", 0)) != directive_id:
+			active.append(row)
+	_coord_state["directives"] = active
+	bus.publish_coordinator_action("directive_archive", true, "")
+	bus.publish_coordinator_state(_coord_state.duplicate(true))
+
 func _mock_terminal_loop(agent: String, generation: int) -> void:
 	var lines := PackedStringArray([
 		"$ tmux attach -t %s" % agent.to_upper(),

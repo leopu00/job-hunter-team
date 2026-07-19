@@ -48,6 +48,10 @@ signal user_chat_sent(agent: String, ok: bool, error: String)
 ## `error` e vuoto durante il flusso regolare; nessun metodo del bus inoltra
 ## input o tasti alla sessione osservata.
 signal agent_terminal_updated(agent: String, text: String, error: String)
+## Console operativa del Coordinatore. state contiene maintenance,
+## enrichment, directives e queue_counts; action_done copre save/add/archive.
+signal coordinator_state_updated(state: Dictionary)
+signal coordinator_action_done(action: String, ok: bool, error: String)
 ## Esito di create_position_ticket (l'unica scrittura remota autorizzata
 ## da Leone, gate 1 dell'11/07: sì ai ticket verso il team, no alle
 ## azioni che scrivono direttamente sul jobs.db).
@@ -113,6 +117,7 @@ var telemetry_history: Array = []
 ## l'eco della query che l'ha prodotto.
 var usage_history: Dictionary = {}
 var usage_history_query: Dictionary = {}
+var coordinator_state: Dictionary = {}
 var chat_log: Array = []     # ultimi messaggi (fumetti di dev1 + vista Chat)
 const CHAT_LOG_MAX := 200
 
@@ -390,6 +395,40 @@ func close_agent_terminal() -> void:
 
 func publish_agent_terminal(agent: String, text: String, error := "") -> void:
 	agent_terminal_updated.emit(agent, text, error)
+
+
+## ── Console del Coordinatore ────────────────────────────────────────
+
+func request_coordinator_state() -> void:
+	if _backend:
+		_backend.fetch_coordinator_state()
+	else:
+		coordinator_action_done.emit("load", false, "backend non collegato")
+
+func save_coordinator_settings(settings: Dictionary) -> void:
+	if _backend:
+		_backend.save_coordinator_settings(settings)
+	else:
+		coordinator_action_done.emit("save", false, "backend non collegato")
+
+func add_team_directive(body: String, kind := "order") -> void:
+	if _backend:
+		_backend.add_team_directive(body, kind)
+	else:
+		coordinator_action_done.emit("directive_add", false, "backend non collegato")
+
+func archive_team_directive(directive_id: int) -> void:
+	if _backend:
+		_backend.archive_team_directive(directive_id)
+	else:
+		coordinator_action_done.emit("directive_archive", false, "backend non collegato")
+
+func publish_coordinator_state(next: Dictionary) -> void:
+	coordinator_state = next
+	coordinator_state_updated.emit(next)
+
+func publish_coordinator_action(action: String, ok: bool, error := "") -> void:
+	coordinator_action_done.emit(action, ok, error)
 
 ## Invia il messaggio dell'utente all'agente reale (async: l'esito
 ## arriva su user_chat_sent, la risposta su agent_chat_updated).
