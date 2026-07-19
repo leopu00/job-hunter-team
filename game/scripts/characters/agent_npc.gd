@@ -39,6 +39,7 @@ var rig  # CharacterRig o SpriteSheetRig: stessa interfaccia set_motion
 var bubble: StatusBubble
 var speech: SpeechBubble
 var state_tag: AgentStateTag
+var quest_marker: QuestMarker
 ## Stato riportato dal backend: working|idle|paused. Con idle/paused
 ## l'agente resta alla postazione senza viaggi né digitazione.
 var backend_status := "working"
@@ -159,6 +160,14 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	# l'aggancio ora, così l'offset del composito non viene perso al bootstrap.
 	if _seated():
 		_set_desk_occupied(true)
+
+func set_story_marker(visible_now: bool, already_seen := false) -> void:
+	if visible_now and quest_marker == null:
+		quest_marker = QuestMarker.new()
+		add_child(quest_marker)
+	if quest_marker:
+		quest_marker.visible = visible_now
+		quest_marker.set_seen(already_seen)
 
 ## Le viste frontali delle scrivanie non includono una sedia (nelle viste
 ## up/side è già dipinta nella texture). La aggiungiamo come sibling y-sort:

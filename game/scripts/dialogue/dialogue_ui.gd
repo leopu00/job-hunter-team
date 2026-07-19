@@ -84,6 +84,8 @@ func open(slug: String, display_name: String, tree_id := "") -> void:
 
 	Sfx.play_confirm()
 	_goto("start")
+	if OS.get_environment("JHT_DIALOGUE_INSTANT") == "1":
+		_finish_typing()
 
 func _goto(id: String) -> void:
 	if not _tree.has(id):

@@ -12,6 +12,8 @@ var _team_hud: TeamHud
 var _camera: FreeCamera
 var _seat_audit := ""
 var _doctor_test := ""
+var _story_seen := {}
+var _tour_visits := 0
 
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
@@ -120,25 +122,22 @@ func _ready() -> void:
 		world.add_child(p)
 		PaperPile.inbox[dept_id] = p
 
-	# Ambientazione offline sobria: solo lead e core. Se una VPS è già in
-	# connessione (o parte il mock), NON mostriamo comparse provvisorie:
-	# l'ufficio resta vuoto fino al primo snapshot autorevole.
-	var backend_expected := _doctor_test == "" and (\
-			BackendBus.state != BackendBus.DISCONNECTED \
-			or OS.get_environment("JHT_BACKEND_TEST") == "1")
-	for def in CharacterDefs.spawn_list():
+	# Primo avvio come showroom: tutti i ruoli fondamentali e due persone per
+	# reparto. Il primo snapshot reale li sostituisce senza mai presentare un
+	# ufficio vuoto a chi sta ancora configurando il prodotto.
+	var initial_defs: Array = CharacterDefs.spawn_list() if _seat_audit != "" \
+			else CharacterDefs.showroom_list()
+	for def in initial_defs:
 		if _seat_audit != "":
 			var audit_parts := _seat_audit.split(":")
 			if audit_parts.size() != 2 or def.get("dept", "") != audit_parts[0] \
 					or int(def.get("desk", -1)) != int(audit_parts[1]):
 				continue
-		# Nel gioco offline normale bastano i lead; l'audit invece deve poter
-		# materializzare anche desk 0..5 e controllare davvero ogni seduta.
-		elif backend_expected or not def.get("lead", false):
-			continue
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(def, nav)
+		agent.set_story_marker(_seat_audit == "" \
+				and not ScriptedOnboarding.provider_authenticated())
 		agents.append(agent)
 	# Audit visuale locale: con JHT_SEAT_AUDIT=<reparto>:<desk> mostra una
 	# vignetta reale sul singolo composito inquadrato, senza dipendere dalla VPS.
@@ -225,6 +224,12 @@ func _ready() -> void:
 			if a.slug == card_test:
 				_open_agent_card(a)
 				break
+	var tour_test := OS.get_environment("JHT_TOUR")
+	if tour_test != "":
+		for a in agents:
+			if a.slug == tour_test:
+				_start_talk(a)
+				break
 	# TEST-AUTO: JHT_REGISTRY=1 apre il registro candidature (TAB) —
 	# ritardato al primo snapshot così lo shot mostra i dati veri
 	if OS.get_environment("JHT_REGISTRY") == "1":
@@ -271,6 +276,8 @@ func _ready() -> void:
 			sync_agents(BackendBus.agents)
 		if not BackendBus.transitions.is_empty():
 			_on_transitions([])  # snapshot già sul bus: assorbito come baseline
+		SetupService.status_changed.connect(_on_setup_status_changed)
+		_on_setup_status_changed(SetupService.status)
 
 	# TEST-AUTO: JHT_BACKEND_TEST=1 monta il simulatore (MockBackend):
 	# connessione, roster che va e viene, chat a fumetti — senza VPS.
@@ -348,12 +355,56 @@ func _camera_lock_selftest() -> void:
 
 
 ## First-run E2E senza rete: attraversa gli alberi scripted e monta il
-## pannello chat reale, prima offline e poi in modalità ibrida col mock.
+## pannello chat reale: prima offline choice-only, poi live col mock e scelte
+## contestuali prodotte dall'agente (mai sovrapposte al copione authored).
 func _guided_onboarding_selftest() -> void:
 	var failures: Array[String] = []
+	var original_setup := SetupService.status.duplicate(true)
+	ScriptedOnboarding.set_provider_test_override(0)
+	SetupService.status["provider_authenticated"] = false
+	SetupService.status["container_running"] = false
+	_on_setup_status_changed(SetupService.status)
 	var check := func(ok: bool, message: String) -> void:
 		if not ok:
 			failures.append(message)
+	var demo := DemoPositions.build()
+	var families := {}
+	for position in demo:
+		families[str(position.get("role_family", ""))] = true
+	check.call(demo.size() == 50 and families.size() >= 12,
+			"catalogo showroom non contiene 50 ruoli trasversali")
+	check.call(CharacterDefs.showroom_list().size() == 16,
+			"roster showroom non contiene core + due persone per reparto")
+	var marker_count := 0
+	for showroom_agent in agents:
+		if showroom_agent.quest_marker != null and showroom_agent.quest_marker.visible:
+			marker_count += 1
+	check.call(agents.size() == 16 and marker_count == 16 \
+			and BackendBus.positions_are_demo and BackendBus.positions.size() == 50,
+			"showroom offline non materializzato end-to-end")
+	for role in ["coordinatore", "scout", "analista", "scorer", "scrittore",
+			"critico", "mentor", "assistente", "mantenitore", "dottore", "sentinella"]:
+		check.call(Dialogues.TREES.has(role), "dialogo showroom assente: " + role)
+	var dialogue_agent: AgentNPC = null
+	for candidate in agents:
+		if candidate.slug == "assistente":
+			dialogue_agent = candidate
+			break
+	if dialogue_agent:
+		_start_talk(dialogue_agent)
+		await get_tree().process_frame
+		var dialogue_ui: DialogueUI = null
+		for child in get_children():
+			if child is DialogueUI:
+				dialogue_ui = child
+				break
+		check.call(dialogue_ui != null, "click showroom non apre DialogueUI")
+		if dialogue_ui:
+			dialogue_ui._finish_typing()
+			check.call(dialogue_ui._choices_box.get_child_count() == 3,
+					"dialogo showroom non rende le scelte")
+			dialogue_ui._close()
+			await get_tree().process_frame
 	ScriptedOnboarding.reset_for_test()
 	check.call(ScriptedOnboarding.messages("assistente").size() == 1,
 			"welcome Assistente assente")
@@ -479,11 +530,23 @@ func _guided_onboarding_selftest() -> void:
 	await get_tree().create_timer(1.2).timeout
 	SetupService.status["container_running"] = true
 	SetupService.status["provider_authenticated"] = true
+	ScriptedOnboarding.set_provider_test_override(1)
 	panel._refresh_chat_mode()
+	await get_tree().process_frame
+	await get_tree().process_frame
 	check.call(panel._input.editable and not panel._send_btn.disabled,
 			"testo libero non abilitato dopo provider + agente")
-	check.call(panel._choices.get_child_count() >= 2,
-			"risposte suggerite assenti nel modo ibrido")
+	check.call(panel._choices.get_child_count() == 0,
+			"le risposte authored non spariscono dopo il login provider")
+	panel._on_updated("assistente", [{"role": "assistant", "text": "Scegli tu.",
+			"done": true, "choices": [
+				{"label": "Controlla il profilo", "value": "Controlla il profilo"},
+				{"label": "Mostra le posizioni", "value": "Mostra le posizioni"},
+			]}])
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check.call(panel._choices.get_child_count() == 3,
+			"risposte suggerite generate dall'agente non renderizzate")
 	# Il modulo profilo deve esistere anche senza LLM e includere proprio i
 	# campi che determinano il gate ready (email e lingue comprese).
 	BackendBus._backend.live = true
@@ -509,6 +572,8 @@ func _guided_onboarding_selftest() -> void:
 	for player in Sfx._pool:
 		player.stop()
 		player.stream = null
+	SetupService.status = original_setup
+	ScriptedOnboarding.set_provider_test_override(-1)
 	get_tree().quit(0 if ok else 1)
 
 ## Regressione della vista Posizioni dentro il boot normale (gli script `-s`
@@ -959,7 +1024,10 @@ func _on_world_click(target: Vector2) -> void:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
-			_open_agent_card(agent)
+			if not ScriptedOnboarding.provider_authenticated() and agent.uid == "":
+				_start_talk(agent)
+			else:
+				_open_agent_card(agent)
 			return
 	var queue_dept := PaperPile.inbox_at(target)
 	if queue_dept != "":
@@ -1067,6 +1135,12 @@ func _open_chat_menu() -> void:
 	add_child(_chat_menu)
 	_chat_menu.closed.connect(func() -> void: _chat_menu = null)
 	_chat_menu.open_chat.connect(func(slug: String, display_name: String) -> void:
+		if not ScriptedOnboarding.provider_authenticated():
+			for candidate in agents:
+				if candidate.uid == "" and candidate.slug == slug \
+						and candidate.display_name == display_name:
+					_start_talk(candidate)
+					return
 		Log.info("chat", "pannello chat aperto dal menu con " + slug)
 		_chat_panel = ChatPanel.new(slug, display_name, _chat_roster())
 		add_child(_chat_panel)
@@ -1096,6 +1170,14 @@ func _start_talk(agent: AgentNPC) -> void:
 	if Game.dialogue_active:
 		return
 	Log.info("agent", "dialogo aperto con " + agent.slug)
+	if not ScriptedOnboarding.provider_authenticated():
+		_story_seen[agent.slug] = true
+		_tour_visits += 1
+		agent.set_story_marker(true, true)
+		if _tour_visits == 3:
+			var helper := _find_agent("assistente")
+			if helper:
+				helper.say("Per domande libere e personali collega un provider dal setup. L'ufficio demo resta sempre esplorabile.")
 	agent.start_talk()
 	var ui := DialogueUI.new()
 	add_child(ui)
@@ -1116,6 +1198,13 @@ var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
 func sync_agents(list: Array) -> void:
+	if list.is_empty():
+		if _backend_mode:
+			for agent in agents.duplicate():
+				_despawn_agent(agent, false, false)
+			_backend_mode = false
+			_spawn_showroom()
+		return
 	if not _backend_mode:
 		_enter_backend_mode()
 	var wanted := {}
@@ -1348,6 +1437,38 @@ func _enter_backend_mode() -> void:
 		if agent.uid == "":
 			_despawn_agent(agent, false, false)
 	Log.info("backend", "modalità backend: in scena solo gli agenti attivi")
+
+func _spawn_showroom() -> void:
+	if world == null:
+		return
+	for def in CharacterDefs.showroom_list():
+		var exists := false
+		for current in agents:
+			if current.uid == "" and current.display_name == str(def["name"]):
+				exists = true
+				break
+		if exists:
+			continue
+		var agent := AgentNPC.new()
+		world.add_child(agent)
+		agent.setup(def, nav)
+		agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
+				bool(_story_seen.get(str(def["slug"]), false)))
+		agents.append(agent)
+
+func _on_setup_status_changed(status: Dictionary) -> void:
+	var authenticated := bool(status.get("provider_authenticated", false))
+	for agent in agents:
+		if agent.uid == "":
+			agent.set_story_marker(not authenticated,
+					bool(_story_seen.get(agent.slug, false)))
+	if authenticated:
+		for child in get_children():
+			if child is DialogueUI:
+				(child as DialogueUI)._close()
+		BackendBus.clear_demo_positions()
+	elif BackendBus.positions.is_empty() or BackendBus.positions_are_demo:
+		BackendBus.show_demo_positions()
 
 func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := false) -> void:
 	agents.erase(agent)

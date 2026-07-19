@@ -2,10 +2,11 @@
 
 ## Purpose
 
-The office must be understandable before Docker or an LLM is available. Three
-authored conversations provide orientation and collect configuration without
-network calls or token usage. They are a functional setup surface, not sample
-dialogue.
+The office must be understandable before Docker or an LLM is available. A
+repeatable showroom conversation exists for every visible role; the Assistant,
+Coordinator and Mentor also collect setup choices without network calls or
+token usage. Fifty clearly labelled fictional positions populate list, detail,
+filters and map without using personal or production data.
 
 ## State
 
@@ -20,7 +21,7 @@ preferences and completion flags in `user://guided_onboarding.cfg`.
 Every node offers two or more authored choices where a decision exists. Users
 can leave and return without losing state.
 
-## Choice-only and hybrid modes
+## Strict choice-only and live modes
 
 Free text is disabled until all of these are true:
 
@@ -28,10 +29,15 @@ Free text is disabled until all of these are true:
 2. a subscription provider is authenticated;
 3. the selected agent has a live backend session.
 
-When they become true, free text is enabled and routed through `BackendBus` to
-the real agent. If the authored flow is unfinished, its choices remain visible
-alongside free text. When it is complete, the panel becomes the normal live
-conversation.
+Provider authentication is a hard boundary. Before it, only authored choices
+exist. As soon as it succeeds, every authored choice disappears—even if the
+container or selected agent still needs to start. Once all three conditions are
+true, free text is routed through `BackendBus` to the real agent.
+
+Assistant, Coordinator and Mentor install `game-reply-options` at agent boot.
+They may emit 2–5 optional buttons generated for the current live context. Such
+buttons come from `chat.jsonl`, remain compatible with free text and disappear
+after the next user message; they are not a second hardcoded onboarding tree.
 
 ## Provider authorization
 
@@ -56,7 +62,8 @@ search preferences without invoking an agent.
 `JHT_GUIDED_TEST=1` exercises all three trees inside the normal Office scene,
 including VPS, provider-switch, optional-channel and Mentor-restart branches;
 it renders a real `ChatPanel`, presses a real authored-choice button, verifies
-choice-only mode, switches to a mock live agent, verifies hybrid mode and
+choice-only mode, switches to a mock live agent, verifies strict removal of
+authored choices plus agent-generated buttons, and
 checks that email/languages exist in the native profile editor. The embedded
 terminal test also verifies URL/input and provider-auth auto-close. Embedded
 Python payloads are separately syntax-compiled by

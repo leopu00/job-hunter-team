@@ -6,6 +6,7 @@
 # Inter-agent + user communication
 tmux-send
 chat-web
+game-reply-options
 # Phone-side outbound: notifiche batch + risposte all'utente sul bot Capitano
 telegram-send
 

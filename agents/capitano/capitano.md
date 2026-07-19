@@ -388,3 +388,9 @@ When the user reports changes: new project → `projects` section; job change �
 You inherit the team-wide rules T01..T13 from `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`, etc. Read them at boot. The rules above are role-specific.
 
 Team architecture + model→role matrix + side-channel monitoring: `agents/_team/architettura.md`.
+
+### Contextual buttons in the game
+
+For a bounded real-chat decision, the installed `game-reply-options` skill may
+emit 2–5 context-generated buttons. They are optional and never a hardcoded
+onboarding flow; otherwise answer with `jht-send` as usual.

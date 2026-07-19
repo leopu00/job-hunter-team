@@ -78,6 +78,7 @@ var state: int = DISCONNECTED
 var state_detail := ""
 var agents: Array = []       # ultimo snapshot pubblicato (per chi arriva tardi)
 var positions: Array = []    # ultimo snapshot posizioni (idem)
+var positions_are_demo := false
 var transitions: Array = []  # ultime ~80 transizioni di stato (registro team)
 ## Config team + usage reali (solo campi safe), per sezione della
 ## sidebar: {provider|hours|email|advanced: [[etichetta, valore], …],
@@ -491,9 +492,25 @@ func publish_chat(msg: Dictionary) -> void:
 	chat_message.emit(msg)
 
 func publish_positions(list: Array) -> void:
+	positions_are_demo = false
 	positions = list
 	Log.debug("backend", "posizioni: %d dal jobs.db" % list.size())
 	positions_updated.emit(list)
+
+func show_demo_positions() -> void:
+	if positions_are_demo and not positions.is_empty():
+		return
+	positions_are_demo = true
+	positions = DemoPositions.build()
+	Log.info("backend", "showroom: %d posizioni fittizie" % positions.size())
+	positions_updated.emit(positions)
+
+func clear_demo_positions() -> void:
+	if not positions_are_demo:
+		return
+	positions_are_demo = false
+	positions = []
+	positions_updated.emit(positions)
 
 func publish_settings(settings: Dictionary) -> void:
 	live_settings = settings
