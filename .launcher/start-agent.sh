@@ -87,6 +87,8 @@ if [ "$ROLE" = "worker" ]; then
   tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH'" C-m
   tmux send-keys -t "$WORKER_SESSION" "export IS_SANDBOX=1" C-m
+  # marcatore per agent_vitals.py: il worker era l'unico senza flag
+  tmux send-keys -t "$WORKER_SESSION" "export JHT_AGENT_NAME='sentinella-worker'" C-m
   tmux send-keys -t "$WORKER_SESSION" "claude --dangerously-skip-permissions" C-m
   # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
   # Enter. Claude Code 2.1.x mostra il "Bypass Permissions mode" warning
@@ -225,6 +227,25 @@ if [ "$ROLE" = "bridge" ]; then
     echo "⚠ $WRM_SCRIPT non trovato — calibrazione auto N/D (seed only)"
   fi
 
+  # Agent-vitals — CPU%/RSS PER-AGENTE nel tempo (richiesta Leone 19/07:
+  # il meccanismo AGENT_ID del monitor di claude-team, portato su
+  # /proc/*/environ via JHT_AGENT_NAME). Scrive agent-vitals.jsonl per
+  # la scheda agente del gioco. Stesso pattern: setsid + singleton.
+  AV_SCRIPT="/app/shared/skills/agent_vitals.py"
+  if [ -f "$AV_SCRIPT" ]; then
+    for _pid in $(grep -l agent_vitals.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -TERM "$_pid" 2>/dev/null || true
+    done
+    sleep 0.5
+    setsid sh -c "
+      JHT_HOME='${JHT_HOME:-/jht_home}' \
+        python3 -u $AV_SCRIPT >> /tmp/agent-vitals.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ agent-vitals partito (cpu/rss per-agente, log /tmp/agent-vitals.log)"
+  else
+    echo "⚠ $AV_SCRIPT non trovato — vitals per-agente N/D"
+  fi
+
   # Codex auth-healer (#6) — rileva "session has ended"/refresh-fail nei pane
   # degli agenti e li riavvia per ri-leggere la auth.json CONDIVISA fresca
   # (l'ultimo refresh valido è sempre nel file → un restart cura l'agente con
@@ -302,6 +323,28 @@ if [ "$ROLE" = "token-meter" ]; then
       python3 -u $METER_SCRIPT >> /tmp/token-meter.log 2>&1
   " >/dev/null 2>&1 < /dev/null &
   echo "✓ token-meter partito (log /tmp/token-meter.log)"
+  exit 0
+fi
+
+# ── Agent-vitals daemon (cpu/rss per-agente, 19/07) ───────────────────
+# Short-circuit per "agent-vitals": avvio manuale del sampler (parte
+# comunque da solo con la bridge-suite, vedi ROLE=bridge). Attribuzione
+# via JHT_AGENT_NAME in /proc/*/environ; storico su agent-vitals.jsonl.
+if [ "$ROLE" = "agent-vitals" ]; then
+  AV_SCRIPT="/app/shared/skills/agent_vitals.py"
+  if [ ! -f "$AV_SCRIPT" ]; then
+    echo "✗ $AV_SCRIPT non trovato — agent-vitals NON partito"
+    exit 1
+  fi
+  for _pid in $(grep -l agent_vitals.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+    kill -TERM "$_pid" 2>/dev/null || true
+  done
+  sleep 1
+  setsid sh -c "
+    JHT_HOME='${JHT_HOME:-/jht_home}' \
+      python3 -u $AV_SCRIPT >> /tmp/agent-vitals.log 2>&1
+  " >/dev/null 2>&1 < /dev/null &
+  echo "✓ agent-vitals partito (log /tmp/agent-vitals.log)"
   exit 0
 fi
 
