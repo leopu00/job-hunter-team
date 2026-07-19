@@ -16,8 +16,10 @@ Formato:
                                      # spegne TUTTO l'enrichment autonomo,
                                      # qualunque cosa dicano i flag fini
     "logo":            {"enabled": true, "min_score": null},
-    "geocode_missing": {"enabled": true},
-    "recheck_weekly":  {"enabled": true}
+    "geocode_missing": {"enabled": true, "min_score": null,
+                         "non_remote_only": true},
+    "recheck_weekly":  {"enabled": true, "min_score": 70,
+                         "older_than_days": 7}
   }
 
 `logo.min_score` (es. 70): estrai il logo solo per aziende con ALMENO
@@ -30,8 +32,8 @@ Enforcement A CODICE (filosofia maintenance-mode di C-18): le code in
 POLICY_DISABLED / POLICY_SCORE_GATE. I prompt spiegano solo che una
 coda vuota per policy è stato VOLUTO, non un bug.
 
-Chi scrive il file: l'utente (in futuro dalla desktop app via docker
-exec) o il Capitano SU ORDINE dell'utente («vai su risparmio» →
+Chi scrive il file: la Console del Coordinatore nel videogioco o il
+Capitano SU ORDINE dell'utente («vai su risparmio» →
 `enrichment_policy.py set economy true`). Mai di iniziativa propria.
 
 Uso CLI:
@@ -40,7 +42,11 @@ Uso CLI:
   python3 enrichment_policy.py set logo.enabled false
   python3 enrichment_policy.py set logo.min_score 70   # "" o null per togliere
   python3 enrichment_policy.py set geocode_missing.enabled false
+  python3 enrichment_policy.py set geocode_missing.min_score 65
+  python3 enrichment_policy.py set geocode_missing.non_remote_only true
   python3 enrichment_policy.py set recheck_weekly.enabled false
+  python3 enrichment_policy.py set recheck_weekly.min_score 65
+  python3 enrichment_policy.py set recheck_weekly.older_than_days 14
 
 Output: una riga JSON su stdout (exit 0 ok / 1 errore).
 """
@@ -55,8 +61,12 @@ from _db import DB_PATH
 DEFAULT_POLICY = {
     "economy": False,
     "logo": {"enabled": True, "min_score": None},
-    "geocode_missing": {"enabled": True},
-    "recheck_weekly": {"enabled": True},
+    "geocode_missing": {
+        "enabled": True, "min_score": None, "non_remote_only": True,
+    },
+    "recheck_weekly": {
+        "enabled": True, "min_score": 70, "older_than_days": 7,
+    },
 }
 
 # Chiavi settabili dalla CLI → (sezione, campo, parser)
@@ -65,7 +75,11 @@ _SETTABLE = {
     "logo.enabled": ("logo", "enabled", "bool"),
     "logo.min_score": ("logo", "min_score", "int_or_null"),
     "geocode_missing.enabled": ("geocode_missing", "enabled", "bool"),
+    "geocode_missing.min_score": ("geocode_missing", "min_score", "int_or_null"),
+    "geocode_missing.non_remote_only": ("geocode_missing", "non_remote_only", "bool"),
     "recheck_weekly.enabled": ("recheck_weekly", "enabled", "bool"),
+    "recheck_weekly.min_score": ("recheck_weekly", "min_score", "score"),
+    "recheck_weekly.older_than_days": ("recheck_weekly", "older_than_days", "days"),
 }
 
 
@@ -96,10 +110,19 @@ def load_policy() -> dict:
             continue
         if isinstance(sec.get("enabled"), bool):
             merged[section]["enabled"] = sec["enabled"]
-        if section == "logo":
+        if section in ("logo", "geocode_missing"):
             ms = sec.get("min_score")
-            if ms is None or isinstance(ms, int):
-                merged["logo"]["min_score"] = ms
+            if ms is None or (isinstance(ms, int) and 0 <= ms <= 100):
+                merged[section]["min_score"] = ms
+        if section == "geocode_missing" and isinstance(sec.get("non_remote_only"), bool):
+            merged[section]["non_remote_only"] = sec["non_remote_only"]
+        if section == "recheck_weekly":
+            score = sec.get("min_score")
+            days = sec.get("older_than_days")
+            if isinstance(score, int) and 0 <= score <= 100:
+                merged[section]["min_score"] = score
+            if isinstance(days, int) and 1 <= days <= 365:
+                merged[section]["older_than_days"] = days
     return merged
 
 
@@ -119,6 +142,26 @@ def logo_min_score(policy: dict | None = None):
     """Soglia score per il logo (None = nessun gate)."""
     p = policy or load_policy()
     return p.get("logo", {}).get("min_score")
+
+
+def geocode_options(policy: dict | None = None) -> dict:
+    """Gate dell'arricchimento geografico autonomo."""
+    p = policy or load_policy()
+    section = p.get("geocode_missing", {})
+    return {
+        "min_score": section.get("min_score"),
+        "non_remote_only": bool(section.get("non_remote_only", True)),
+    }
+
+
+def recheck_options(policy: dict | None = None) -> dict:
+    """Soglia e anzianità della coda di ricontrollo autonomo."""
+    p = policy or load_policy()
+    section = p.get("recheck_weekly", {})
+    return {
+        "min_score": int(section.get("min_score", 70)),
+        "older_than_days": int(section.get("older_than_days", 7)),
+    }
 
 
 def disabled_reason(kind: str, policy: dict | None = None) -> str:
@@ -149,11 +192,16 @@ def _parse_value(raw: str, how: str):
         if low in ("false", "0", "off", "no"):
             return False
         raise ValueError(f"valore booleano non valido: {raw!r}")
-    # int_or_null
+    # int_or_null / interi con range applicativo
     low = raw.strip().lower()
-    if low in ("", "null", "none", "off"):
+    if how == "int_or_null" and low in ("", "null", "none", "off"):
         return None
-    return int(raw)
+    value = int(raw)
+    if how == "score" and not 0 <= value <= 100:
+        raise ValueError("lo score deve essere fra 0 e 100")
+    if how == "days" and not 1 <= value <= 365:
+        raise ValueError("i giorni devono essere fra 1 e 365")
+    return value
 
 
 def main() -> None:
