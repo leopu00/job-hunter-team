@@ -1160,14 +1160,20 @@ func _ssh_stdin_file(local_file: String, remote_cmd: String) -> Dictionary:
 	stdio.close()  # EOF: python3/tee/tmux possono terminare
 	# get_as_text() usa get_length(), che sui pipe vale 0: leggere a blocchi
 	# drena davvero il canale e impedisce anche il deadlock su output grandi.
+	# Un read corto NON è EOF: il produttore può essere solo più lento del
+	# reader (JSON troncati "Unterminated string" coi b64 dell'anteprima
+	# CV, 19/07). Si legge finché il processo vive, poi si svuota il
+	# residuo: a scrittore morto read torna 0 solo a pipe davvero vuoto.
+	var pid := int(process["pid"])
 	var output_bytes := PackedByteArray()
 	while true:
 		var chunk := stderr.get_buffer(65536)
 		output_bytes.append_array(chunk)
-		if chunk.size() < 65536:
-			break
+		if chunk.size() == 0:
+			if not OS.is_process_running(pid):
+				break
+			OS.delay_msec(5)
 	stderr.close()
-	var pid := int(process["pid"])
 	while OS.is_process_running(pid):
 		OS.delay_msec(5)
 	return {"code": OS.get_process_exit_code(pid),
