@@ -10,7 +10,6 @@ import {
   IconChat,
   IconCheckCircle,
   IconChevronLeft,
-  IconChevronRight,
   IconMic,
   IconPin,
   IconStar,
@@ -22,24 +21,19 @@ import {
 
 // [JHT-POSITIONS-SWIPE-TRIAGE] Sequenza di carte per il triage rapido del
 // backlog scored/ready, in ORDINE DI ARRIVO (dalla trovata meno di recente
-// alla più recente — scelta utente 18/07). QUATTRO livelli di interesse
-// mappati sui campi del mig 028 di position_feedback (score 1-5 +
-// direction), più un commento libero opzionale che parte insieme al
-// giudizio — scrivibile a tastiera o DETTATO a voce nel pop-up dedicato
-// (Web Speech API del browser; se non supportata il microfono non compare).
+// alla più recente). QUATTRO livelli di interesse mappati sui campi del
+// mig 028 di position_feedback (score 1-5 + direction), più un commento
+// libero opzionale che parte insieme al giudizio — icona nel footer della
+// card, input in un pop-up dedicato con dettatura vocale (Web Speech API).
 //
-// SOLO BOTTONI, niente gesture (scelta utente 18/07): tre dei quattro
-// giudizi sono "verso destra" e uno swipe manuale destro sarebbe ambiguo.
-// La card si anima da sola — vola a sinistra per 'non interessante', a
-// destra per gli altri tre.
-//
-// NAVIGAZIONE ‹ Precedente / Prossima › (scelta utente 18/07, sostituisce
-// skip+undo): si scorre la sequenza liberamente senza scrivere nulla; una
-// card già giudicata resta al suo posto e mostra il TIMBRO del giudizio
-// ricevuto, e si può ri-giudicare (cambio idea). Il ri-giudizio scrive un
-// nuovo evento feedback (l'event-log è append-only, l'ultimo prevale nei
-// consumatori "latest") e riconcilia l'esclusione: no→altro toglie
-// l'esclusione (DELETE), altro→no la aggiunge.
+// I GIUDIZI sono SOLO da bottone (tre dei quattro sono "verso destra",
+// uno swipe destro sarebbe ambiguo). Lo SWIPE però esiste ed è la
+// NAVIGAZIONE (scelta utente 19/07): trascina a sinistra = prossima
+// card, a destra = precedente — nessuna scrittura, si sfoglia e basta
+// (←/→ da tastiera). Una card già giudicata resta al suo posto col
+// TIMBRO e si può ri-giudicare: il ri-giudizio scrive un nuovo evento
+// feedback (append-only, l'ultimo prevale) e riconcilia l'esclusione
+// (no→altro DELETE, altro→no POST).
 //
 // Scritture — corsie ESISTENTI, nessuna route nuova:
 //   ogni giudizio      → POST /api/positions/[legacyId]/feedback
@@ -141,10 +135,8 @@ const T: Record<
   Locale,
   {
     title: string;
-    subtitle: string;
     verdicts: Record<Verdict, string>;
     btnPrev: string;
-    btnNext: string;
     commentPh: string;
     commentClose: string;
     commentTitle: string;
@@ -168,7 +160,6 @@ const T: Record<
 > = {
   it: {
     title: "Swipe",
-    subtitle: "Quattro giudizi + commento — il team impara i tuoi gusti",
     verdicts: {
       no: "Non interessante",
       review_low: "Poco interessante",
@@ -176,7 +167,6 @@ const T: Record<
       top: "Molto interessante",
     },
     btnPrev: "Precedente",
-    btnNext: "Prossima",
     commentPh: "Aggiungi un commento (facoltativo)…",
     commentClose: "Chiudi il commento",
     commentTitle: "Commento",
@@ -200,7 +190,6 @@ const T: Record<
   },
   en: {
     title: "Swipe",
-    subtitle: "Four verdicts + a comment — your team learns your taste",
     verdicts: {
       no: "Not interesting",
       review_low: "Slightly interesting",
@@ -208,7 +197,6 @@ const T: Record<
       top: "Very interesting",
     },
     btnPrev: "Previous",
-    btnNext: "Next",
     commentPh: "Add a comment (optional)…",
     commentClose: "Close the comment",
     commentTitle: "Comment",
@@ -231,7 +219,6 @@ const T: Record<
   },
   hu: {
     title: "Swipe",
-    subtitle: "Négy ítélet + megjegyzés — a csapat tanulja az ízlésedet",
     verdicts: {
       no: "Nem érdekes",
       review_low: "Kevéssé érdekes",
@@ -239,7 +226,6 @@ const T: Record<
       top: "Nagyon érdekes",
     },
     btnPrev: "Előző",
-    btnNext: "Következő",
     commentPh: "Megjegyzés hozzáadása (opcionális)…",
     commentClose: "Megjegyzés bezárása",
     commentTitle: "Megjegyzés",
@@ -263,7 +249,6 @@ const T: Record<
   },
   es: {
     title: "Swipe",
-    subtitle: "Cuatro juicios + comentario — tu equipo aprende tus gustos",
     verdicts: {
       no: "No interesante",
       review_low: "Poco interesante",
@@ -271,7 +256,6 @@ const T: Record<
       top: "Muy interesante",
     },
     btnPrev: "Anterior",
-    btnNext: "Siguiente",
     commentPh: "Añade un comentario (opcional)…",
     commentClose: "Cerrar el comentario",
     commentTitle: "Comentario",
@@ -295,7 +279,6 @@ const T: Record<
   },
   de: {
     title: "Swipe",
-    subtitle: "Vier Urteile + Kommentar — dein Team lernt deinen Geschmack",
     verdicts: {
       no: "Uninteressant",
       review_low: "Wenig interessant",
@@ -303,7 +286,6 @@ const T: Record<
       top: "Sehr interessant",
     },
     btnPrev: "Zurück",
-    btnNext: "Weiter",
     commentPh: "Kommentar hinzufügen (optional)…",
     commentClose: "Kommentar schließen",
     commentTitle: "Kommentar",
@@ -326,7 +308,6 @@ const T: Record<
   },
   fr: {
     title: "Swipe",
-    subtitle: "Quatre avis + un commentaire — votre équipe apprend vos goûts",
     verdicts: {
       no: "Pas intéressant",
       review_low: "Peu intéressant",
@@ -334,7 +315,6 @@ const T: Record<
       top: "Très intéressant",
     },
     btnPrev: "Précédent",
-    btnNext: "Suivant",
     commentPh: "Ajouter un commentaire (facultatif)…",
     commentClose: "Fermer le commentaire",
     commentTitle: "Commentaire",
@@ -356,13 +336,12 @@ const T: Record<
     },
     saveError: "Erreur réseau — action non enregistrée pour",
     hintKeys: "Clavier : 1–4 avis · ←/→ naviguer",
-    today: "aujourd\u2019hui",
+    today: "aujourd’hui",
     yesterday: "hier",
     daysAgo: "il y a {n} jours",
   },
   pt: {
     title: "Swipe",
-    subtitle: "Quatro julgamentos + comentário — sua equipe aprende seu gosto",
     verdicts: {
       no: "Não interessante",
       review_low: "Pouco interessante",
@@ -370,7 +349,6 @@ const T: Record<
       top: "Muito interessante",
     },
     btnPrev: "Anterior",
-    btnNext: "Próxima",
     commentPh: "Adicione um comentário (opcional)…",
     commentClose: "Fechar o comentário",
     commentTitle: "Comentário",
@@ -458,22 +436,26 @@ function foundInfo(
 
 // Durata dell'animazione di uscita — deve combaciare con la transition CSS.
 const FLY_MS = 280;
+// Trascinamento orizzontale oltre questa soglia = cambio card.
+const NAV_THRESHOLD = 90;
 
 export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
 
   // Sequenza fissa + indice: le card giudicate restano al loro posto (col
-  // timbro) e ci si può tornare sopra con Precedente per cambiare idea.
+  // timbro) e ci si può tornare sopra per cambiare idea.
   const [idx, setIdx] = useState(0);
   const [given, setGiven] = useState<Record<string, Verdict>>({});
   const [fly, setFly] = useState<{ x: number; rot: number } | null>(null);
+  const [drag, setDrag] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [commentOpen, setCommentOpen] = useState(false);
   const [speechOk, setSpeechOk] = useState(false);
   const [recording, setRecording] = useState(false);
   const flyingRef = useRef(false);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recRef = useRef<{ stop: () => void } | null>(null);
 
@@ -611,6 +593,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         setGiven((g) => ({ ...g, [card.id]: verdict }));
         setIdx((i) => i + 1);
         setFly(null);
+        setDrag(0);
         setComment("");
         setCommentOpen(false);
         flyingRef.current = false;
@@ -622,22 +605,54 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     [cards, idx, given, finished, comment, persist, stopVoice],
   );
 
-  // Navigazione libera: nessuna scrittura, si scorre e basta.
-  const goPrev = useCallback(() => {
-    if (flyingRef.current || idx === 0) return;
-    stopVoice();
-    setComment("");
-    setCommentOpen(false);
-    setIdx((i) => i - 1);
-  }, [idx, stopVoice]);
+  // Navigazione: nessuna scrittura, si sfoglia e basta. delta = +1
+  // (prossima, card esce a sinistra) o -1 (precedente, esce a destra).
+  const nav = useCallback(
+    (delta: 1 | -1) => {
+      if (flyingRef.current) return;
+      if (delta === 1 && finished) return;
+      if (delta === -1 && idx === 0) return;
+      flyingRef.current = true;
+      stopVoice();
+      const width = typeof window !== "undefined" ? window.innerWidth : 800;
+      setFly({ x: -delta * (width + 100), rot: -delta * 8 });
+      setTimeout(() => {
+        setIdx((i) => i + delta);
+        setFly(null);
+        setDrag(0);
+        setComment("");
+        setCommentOpen(false);
+        flyingRef.current = false;
+      }, FLY_MS);
+    },
+    [finished, idx, stopVoice],
+  );
 
-  const goNext = useCallback(() => {
-    if (flyingRef.current || finished) return;
-    stopVoice();
-    setComment("");
-    setCommentOpen(false);
-    setIdx((i) => i + 1);
-  }, [finished, stopVoice]);
+  // ── Swipe di NAVIGAZIONE (pointer events, touch + mouse) ─────────
+  // touchAction pan-y sulla card: lo scroll verticale del testo resta al
+  // browser, il trascinamento orizzontale arriva qui.
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (flyingRef.current) return;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragStart.current || flyingRef.current) return;
+    setDrag(e.clientX - dragStart.current.x);
+  };
+  const onPointerEnd = () => {
+    if (!dragStart.current) return;
+    dragStart.current = null;
+    if (Math.abs(drag) > NAV_THRESHOLD) {
+      // Trascino a sinistra → prossima; a destra → precedente.
+      const delta = drag < 0 ? 1 : -1;
+      if ((delta === 1 && !finished) || (delta === -1 && idx > 0)) {
+        nav(delta);
+        return;
+      }
+    }
+    setDrag(0);
+  };
 
   // Tastiera per il desktop: 1-4 = giudizi, ←/→ = precedente/prossima.
   useEffect(() => {
@@ -655,37 +670,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         "4": "top",
       };
       if (byDigit[e.key]) judge(byDigit[e.key]);
-      else if (e.key === "ArrowLeft") goPrev();
-      else if (e.key === "ArrowRight") goNext();
+      else if (e.key === "ArrowLeft") nav(-1);
+      else if (e.key === "ArrowRight") nav(1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [judge, goPrev, goNext]);
-
-  const navPill = (
-    label: string,
-    onClick: () => void,
-    disabled: boolean,
-    left: boolean,
-  ) => (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border text-[12px] font-semibold"
-      style={{
-        borderColor: "var(--color-border)",
-        background: "transparent",
-        color: "var(--color-muted)",
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.35 : 1,
-      }}
-    >
-      {left && <IconChevronLeft size={14} />}
-      {label}
-      {!left && <IconChevronRight size={14} />}
-    </button>
-  );
+  }, [judge, nav]);
 
   return (
     // overflowX clip: la carta in volo esce dal viewport — senza clip
@@ -696,22 +686,17 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
       {/* Pulse del microfono in registrazione */}
       <style>{`@keyframes swipe-rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }`}</style>
 
-      {/* Header */}
-      <div className="flex items-end justify-between mb-3">
-        <div>
-          <h1
-            className="text-lg font-bold tracking-wide flex items-center gap-2"
-            style={{ color: "var(--color-white)" }}
-          >
-            <span style={{ color: "var(--color-green)" }}>
-              <IconCards size={18} />
-            </span>
-            {t.title}
-          </h1>
-          <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-            {t.subtitle}
-          </p>
-        </div>
+      {/* Header minimo: una riga sola, la card vuole spazio */}
+      <div className="flex items-center justify-between mb-2">
+        <span
+          className="text-[13px] font-bold tracking-wide flex items-center gap-1.5"
+          style={{ color: "var(--color-white)" }}
+        >
+          <span style={{ color: "var(--color-green)" }}>
+            <IconCards size={14} />
+          </span>
+          {t.title}
+        </span>
         {total > 0 && (
           <span
             className="text-[11px] font-semibold tabular-nums"
@@ -769,7 +754,22 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
             </p>
           )}
           <div className="flex items-center justify-center gap-3">
-            {total > 0 && navPill(t.btnPrev, goPrev, idx === 0, true)}
+            {total > 0 && (
+              <button
+                type="button"
+                onClick={() => nav(-1)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border text-[12px] font-semibold"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "transparent",
+                  color: "var(--color-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                <IconChevronLeft size={14} />
+                {t.btnPrev}
+              </button>
+            )}
             <Link
               href="/positions"
               className="inline-block text-[12px] font-semibold px-4 py-2 rounded no-underline"
@@ -785,7 +785,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         </div>
       ) : (
         <>
-          <div className="relative" style={{ height: "min(47dvh, 470px)" }}>
+          <div className="relative" style={{ height: "min(63dvh, 620px)" }}>
             {/* Card corrente + le 2 successive come stack */}
             {cards
               .slice(idx, idx + 3)
@@ -795,7 +795,9 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                 const transform = isTop
                   ? fly
                     ? `translate(${fly.x}px, 0) rotate(${fly.rot}deg)`
-                    : "none"
+                    : drag
+                      ? `translate(${drag}px, 0) rotate(${drag * 0.04}deg)`
+                      : "none"
                   : `translateY(${i * 10}px) scale(${1 - i * 0.035})`;
                 return (
                   <div
@@ -805,12 +807,20 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                       borderColor: "var(--color-border)",
                       background: "var(--color-card)",
                       transform,
-                      transition: `transform ${isTop && fly ? FLY_MS : 200}ms ease`,
+                      transition:
+                        isTop && !fly && dragStart.current
+                          ? "none"
+                          : `transform ${isTop && fly ? FLY_MS : 200}ms ease`,
                       zIndex: 10 - i,
                       boxShadow: isTop
                         ? "0 12px 32px rgba(0,0,0,0.35)"
                         : "none",
+                      touchAction: isTop ? "pan-y" : undefined,
                     }}
+                    onPointerDown={isTop ? onPointerDown : undefined}
+                    onPointerMove={isTop ? onPointerMove : undefined}
+                    onPointerUp={isTop ? onPointerEnd : undefined}
+                    onPointerCancel={isTop ? onPointerEnd : undefined}
                   >
                     {/* Timbro del giudizio già dato (ri-giudicabile) */}
                     {isTop && verdictGiven && (
@@ -927,16 +937,50 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                         </div>
                       )}
 
-                      {/* Footer */}
+                      {/* Footer: commento (pop-up) · fonte · dettagli */}
                       <div className="mt-auto flex items-center justify-between text-[11px]">
-                        <span style={{ color: "var(--color-dim)" }}>
-                          {card.source ?? ""}
+                        <span className="flex items-center gap-2 min-w-0">
+                          <button
+                            type="button"
+                            aria-label={t.commentTitle}
+                            title={t.commentTitle}
+                            onClick={() => setCommentOpen(true)}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            className="shrink-0 rounded-full border flex items-center justify-center relative"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              color: comment
+                                ? "var(--color-bright)"
+                                : "var(--color-muted)",
+                              borderColor: comment
+                                ? "var(--color-border-glow)"
+                                : "var(--color-border)",
+                              background: "var(--color-row)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <IconChat size={13} />
+                            {comment && (
+                              <span
+                                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+                                style={{ background: "var(--color-green)" }}
+                              />
+                            )}
+                          </button>
+                          <span
+                            className="truncate"
+                            style={{ color: "var(--color-dim)" }}
+                          >
+                            {card.source ?? ""}
+                          </span>
                         </span>
                         <Link
                           href={`/positions/${card.id}`}
                           target="_blank"
-                          className="font-semibold no-underline"
+                          className="font-semibold no-underline shrink-0"
                           style={{ color: "var(--color-blue)" }}
+                          onPointerDown={(e) => e.stopPropagation()}
                         >
                           {t.details} ↗
                         </Link>
@@ -948,33 +992,8 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               .reverse()}
           </div>
 
-          {/* Commento opzionale: SOLO un pulsante qui — l'input vive in un
-              pop-up dedicato (scelta utente 18/07). Il pulsante mostra
-              l'anteprima troncata se un commento è già pronto; il testo
-              parte col prossimo giudizio. */}
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => setCommentOpen(true)}
-              className="w-full rounded-lg border px-3 py-2 text-[12px] text-left flex items-center gap-2"
-              style={{
-                borderColor: comment
-                  ? "var(--color-border-glow)"
-                  : "var(--color-border)",
-                background: "transparent",
-                color: comment ? "var(--color-bright)" : "var(--color-dim)",
-                cursor: "pointer",
-              }}
-            >
-              <IconChat size={13} />
-              <span className="truncate">
-                {comment ? comment : t.commentPh}
-              </span>
-            </button>
-          </div>
-
           {/* Bottoni giudizio */}
-          <div className="flex items-start justify-center gap-3 mt-4">
+          <div className="flex items-start justify-center gap-3 mt-3">
             {VERDICT_ORDER.map((v) => (
               <VerdictButton
                 key={v}
@@ -985,14 +1004,8 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
             ))}
           </div>
 
-          {/* Navigazione libera nella sequenza (nessuna scrittura) */}
-          <div className="flex items-center justify-center gap-3 mt-3">
-            {navPill(t.btnPrev, goPrev, idx === 0, true)}
-            {navPill(t.btnNext, goNext, false, false)}
-          </div>
-
           <p
-            className="hidden md:block text-center text-[10px] mt-3"
+            className="hidden md:block text-center text-[10px] mt-2"
             style={{ color: "var(--color-dim)" }}
           >
             {t.hintKeys}
