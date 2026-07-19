@@ -17,6 +17,26 @@ const LAB_WALL_H1 := Rect2(2300, 740, 330, 12)    # tratto sx della parete bassa
 const LAB_WALL_H2 := Rect2(2750, 740, 410, 12)    # tratto dx (in mezzo: porta)
 
 const ITEMS := [
+	# ── Supporto operativo, lato OVEST degli Scorer ──
+	# Il Mantenitore lavora a una console tecnica frontale: monitor, utensili,
+	# ricambi e sedia sono un unico composito quando la postazione è occupata.
+	{"id": "maintainer_workbench", "kind": "maintainer_workbench",
+			# 215 px porta il corpo dipinto a ~127 px: la stessa altezza del
+			# Dottore seduto. Centro e baseline restano invariati.
+			"rect": Rect2(668, 960, 215, 93), "facing": "down",
+			"registry_key": "core:mantenitore"},
+	{"id": "maintainer_parts", "kind": "nc_boxes", "rect": Rect2(548, 1015, 72, 60)},
+	{"id": "maintainer_cabinet", "kind": "nc_filing_cabinet", "rect": Rect2(910, 935, 58, 92)},
+
+	# Il Dottore ha un'identità autonoma: poltrona clinica frontale (non il
+	# Mentor), banco con strumenti e cassettiera. Anche qui seduta+agente
+	# diventano un solo elemento grafico durante il lavoro.
+	{"id": "doctor_lab_desk", "kind": "lab_bench", "rect": Rect2(490, 1190, 220, 90)},
+	{"id": "doctor_drawers", "kind": "nc_drawer_unit", "rect": Rect2(712, 1265, 52, 68)},
+	{"id": "doctor_armchair", "kind": "doctor_armchair",
+			"rect": Rect2(780, 1230, 140, 133), "facing": "down",
+			"registry_key": "core:dottore"},
+
 	# ── Area comune (ex zona Scorer): lounge del Mentor ──
 	{"id": "coffee_table", "kind": "table_low", "rect": Rect2(2410, 1195, 90, 45)},
 	# Poltrona frontale, riportata alla scala originale dell'ufficio: 110 px,
@@ -43,7 +63,10 @@ const ITEMS := [
 	# ── Direzione, fascia nord: Capitano e Tesoriere guardano in camera ──
 	{"id": "desk_coordinator", "kind": "captain_desk", "rect": Rect2(1365, 500, 260, 108),
 			"facing": "down", "registry_key": "core:coordinatore"},
-	{"id": "desk_sentinella", "kind": "budgeteer_desk", "rect": Rect2(1745, 500, 320, 108),
+	# Il canvas del Budgeteer contiene una sagoma più piena: 280 px rendono
+	# l'agente alto ~149 px, uguale ai ~150 px del Capitano. Centro e baseline
+	# restano fermi, si riduce l'intero composito senza spostarlo.
+	{"id": "desk_sentinella", "kind": "budgeteer_desk", "rect": Rect2(1765, 513, 280, 95),
 			"facing": "down", "registry_key": "core:sentinella"},
 
 	# ── Area comune: lavagna score board ──
@@ -61,8 +84,12 @@ const ITEMS := [
 	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3090, 1700, 56, 56)},
 	{"id": "plant_palm_c", "kind": "plant_palm", "rect": Rect2(302, 1436, 56, 56)},
 
-	# ── Corridoio sud, tra Scrittori e Critici ──
-	{"id": "desk_assistant", "kind": "desk", "rect": Rect2(1550, 1800, 230, 100)},
+	# ── Reception all'uscita sud, tra Scrittori e Critici ──
+	# La texture occupata integra Assistente+sedia+scrivania in un solo elemento
+	# frontale; quando si alza resta visibile la stessa postazione vuota.
+	{"id": "desk_assistant", "kind": "assistant_desk",
+			"rect": Rect2(1550, 1800, 230, 100), "facing": "down",
+			"registry_key": "core:assistente"},
 
 	# Tavolino revisione sul bordo ovest: il centro dell'anello resta libero
 	# per le sei sedie rivolte all'interno e per i viaggi della pipeline.

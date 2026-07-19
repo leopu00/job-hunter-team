@@ -400,9 +400,9 @@ func _physics_process(delta: float) -> void:
 				# Con dati reali nessun tragitto inventato: il movimento nasce
 				# soltanto da attività/transizioni osservate. Il teatro casuale
 				# resta disponibile esclusivamente nella demo offline.
-				# Capitano, Tesoriere e Mentor pattugliano davvero anche in live. Il
-				# Mentor si muove molto meno: la sua cadenza media è mezz'ora.
-				var live_patrol := slug in ["coordinatore", "sentinella", "mentor"]
+				# Capitano, Tesoriere, Mentor e Assistente pattugliano anche in live.
+				# Il Mentor si muove molto meno: la sua cadenza media è mezz'ora.
+				var live_patrol := slug in ["coordinatore", "sentinella", "mentor", "assistente"]
 				if backend_status == "working" and (live_patrol \
 						or BackendBus.state != BackendBus.CONNECTED):
 					_plan_trip()
@@ -755,7 +755,7 @@ func _set_desk_occupied(on: bool) -> void:
 	var overhead_delta := Vector2.ZERO
 	if on and use_composite:
 		overhead_delta = _composite_overhead_delta()
-	elif slug in ["coordinatore", "sentinella", "mentor", "mantenitore", "dottore"]:
+	elif slug in ["coordinatore", "sentinella", "mentor", "assistente", "mantenitore", "dottore"]:
 		# I fogli di cammino dei core sono più alti del roster standard: badge
 		# e vignette devono partire sopra la testa, mai dalla schiena.
 		overhead_delta = Vector2(0, -42)
