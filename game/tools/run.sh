@@ -66,6 +66,8 @@ case "$MODE" in
 		AGENT_UI_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_TEST=1 \
 			JHT_THINKING=scout JHT_AGENT_UI_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$AGENT_UI_OUT" | grep "AGENT-UI-TEST PASS"
+		USAGE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_USAGE_PANEL_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$USAGE_OUT" | grep "USAGE-PANEL-TEST PASS"
 		echo "[run.sh] TEST OK"
 		;;
 	boot)
