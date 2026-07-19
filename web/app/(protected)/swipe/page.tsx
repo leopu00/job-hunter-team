@@ -21,7 +21,6 @@ export default async function SwipePage() {
       loc_country: p.loc_country ?? null,
       remote_type: p.remote_type,
       role_family: p.role_family ?? null,
-      source: p.source,
       found_at: p.found_at,
       score: p.score ?? null,
       salary_min: p.salary_min ?? null,
@@ -38,7 +37,10 @@ export default async function SwipePage() {
     }));
 
   return (
-    <div style={{ animation: "fade-in 0.35s ease both" }}>
+    <div
+      className="px-4 pt-2 pb-1"
+      style={{ animation: "fade-in 0.35s ease both" }}
+    >
       <SwipeDeck cards={cards} />
     </div>
   );
