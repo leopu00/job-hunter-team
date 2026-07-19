@@ -22,7 +22,7 @@ gap, not the proposed solution.
 ## Scope (which surface?)
 
 - [ ] CLI (`jht` command)
-- [ ] Desktop launcher (Electron app)
+- [ ] Native desktop office (Godot app)
 - [ ] Web dashboard (`web/`)
 - [ ] Agents (prompts, skills, pipeline)
 - [ ] Container / infra (Docker, launcher, monitoring)

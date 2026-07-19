@@ -12,6 +12,8 @@ var _team_hud: TeamHud
 var _camera: FreeCamera
 var _seat_audit := ""
 var _doctor_test := ""
+var _story_seen := {}
+var _tour_visits := 0
 
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
@@ -100,45 +102,47 @@ func _ready() -> void:
 		"coffee":
 			CoffeeFx.ping(20.0)
 
-	# Punti di consegna tra reparti. Ogni pila vive dentro una vaschetta
-	# fisica etichettata: Scout → Analisti → Scorer → Scrittori → Critici.
-	# Quella degli Scorer è il deposito unico richiesto dagli Scrittori.
+	# Punti di consegna tra reparti. Sono OUTPUT, non generici inbox:
+	# Scout → Analisti → Scorer → Scrittori → Critici. Il risultato dei
+	# Critici va invece nello scaffale CV PRONTI accanto all'uscita.
 	PaperPile.inbox = {}
 	var handoff_to := {
 		"scout": "Analisti", "analisti": "Scorer", "scorer": "Scrittori",
-		"scrittori": "Critici", "critici": "Pronti",
+		"scrittori": "Critici",
 	}
-	for dept_id in DepartmentDefs.DEPT_ORDER:
+	for dept_id in handoff_to:
 		var inbox_pos: Vector2 = DepartmentDefs.DEPARTMENTS[dept_id]["inbox"]
 		var dept_color: Color = DepartmentDefs.DEPARTMENTS[dept_id]["color"]
 		world.add_child(HandoffStation.new(dept_id, inbox_pos,
 				handoff_to[dept_id], dept_color))
-		var p := PaperPile.new(Rect2(inbox_pos - Vector2(28, 16), Vector2(56, 32)))
+		var p := PaperPile.new(inbox_pos + Vector2(0, -4))
 		# gli Scout producono e basta: il loro inbox si riempie più svelto
 		p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
 		p.add_sheets(randi_range(1, 6))
 		world.add_child(p)
 		PaperPile.inbox[dept_id] = p
 
-	# Ambientazione offline sobria: solo lead e core. Se una VPS è già in
-	# connessione (o parte il mock), NON mostriamo comparse provvisorie:
-	# l'ufficio resta vuoto fino al primo snapshot autorevole.
-	var backend_expected := _doctor_test == "" and (\
-			BackendBus.state != BackendBus.DISCONNECTED \
-			or OS.get_environment("JHT_BACKEND_TEST") == "1")
-	for def in CharacterDefs.spawn_list():
+	# Primo avvio come showroom: tutti i ruoli fondamentali e due persone per
+	# reparto. Il primo snapshot reale li sostituisce senza mai presentare un
+	# ufficio vuoto a chi sta ancora configurando il prodotto.
+	var initial_defs: Array = []
+	if _seat_audit != "" or _doctor_test != "":
+		initial_defs = CharacterDefs.spawn_list()
+	elif BackendBus.agents.is_empty():
+		initial_defs = CharacterDefs.showroom_list()
+	for def in initial_defs:
 		if _seat_audit != "":
 			var audit_parts := _seat_audit.split(":")
 			if audit_parts.size() != 2 or def.get("dept", "") != audit_parts[0] \
 					or int(def.get("desk", -1)) != int(audit_parts[1]):
 				continue
-		# Nel gioco offline normale bastano i lead; l'audit invece deve poter
-		# materializzare anche desk 0..5 e controllare davvero ogni seduta.
-		elif backend_expected or not def.get("lead", false):
-			continue
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(def, nav)
+		if _seat_audit == "" and _doctor_test == "":
+			agent.enter_through(ENTRY_SPOT)
+		agent.set_story_marker(_seat_audit == "" \
+				and not ScriptedOnboarding.provider_authenticated())
 		agents.append(agent)
 	# Audit visuale locale: con JHT_SEAT_AUDIT=<reparto>:<desk> mostra una
 	# vignetta reale sul singolo composito inquadrato, senza dipendere dalla VPS.
@@ -158,6 +162,8 @@ func _ready() -> void:
 		_positions_panel_selftest.call_deferred()
 	if OS.get_environment("JHT_MAP_PANEL_TEST") == "1":
 		_map_panel_selftest.call_deferred()
+	if OS.get_environment("JHT_GUIDED_TEST") == "1":
+		_guided_onboarding_selftest.call_deferred()
 	if _seat_audit != "":
 		var audit_parts := _seat_audit.split(":")
 		if audit_parts.size() == 2 and DepartmentDefs.DEPARTMENTS.has(audit_parts[0]):
@@ -223,6 +229,12 @@ func _ready() -> void:
 			if a.slug == card_test:
 				_open_agent_card(a)
 				break
+	var tour_test := OS.get_environment("JHT_TOUR")
+	if tour_test != "":
+		for a in agents:
+			if a.slug == tour_test:
+				_start_talk(a)
+				break
 	# TEST-AUTO: JHT_REGISTRY=1 apre il registro candidature (TAB) —
 	# ritardato al primo snapshot così lo shot mostra i dati veri
 	if OS.get_environment("JHT_REGISTRY") == "1":
@@ -269,6 +281,8 @@ func _ready() -> void:
 			sync_agents(BackendBus.agents)
 		if not BackendBus.transitions.is_empty():
 			_on_transitions([])  # snapshot già sul bus: assorbito come baseline
+		SetupService.status_changed.connect(_on_setup_status_changed)
+		_on_setup_status_changed(SetupService.status)
 
 	# TEST-AUTO: JHT_BACKEND_TEST=1 monta il simulatore (MockBackend):
 	# connessione, roster che va e viene, chat a fumetti — senza VPS.
@@ -286,6 +300,14 @@ func _ready() -> void:
 		_chat_selftest(OS.get_environment("JHT_CHAT"), true)
 	elif OS.get_environment("JHT_CHAT_VIEW") != "":
 		_chat_selftest(OS.get_environment("JHT_CHAT_VIEW"), false)
+	# Preview/E2E del dialogo first-run anche senza backend o agente attivo.
+	var guided_chat := OS.get_environment("JHT_GUIDED_CHAT")
+	if guided_chat != "" and ScriptedOnboarding.supports(guided_chat):
+		var guided_names := {"assistente": "Assistente",
+				"coordinatore": "Coordinatore", "mentor": "Mentor"}
+		_chat_panel = ChatPanel.new(guided_chat,
+				str(guided_names.get(guided_chat, guided_chat.capitalize())), _chat_roster())
+		add_child(_chat_panel)
 
 	# TEST-AUTO: JHT_CHATMENU=1 apre il menu delle chat 1-a-1 (tasto C)
 	if OS.get_environment("JHT_CHATMENU") == "1":
@@ -303,6 +325,9 @@ func _ready() -> void:
 	var pipeline_force_test := OS.get_environment("JHT_PIPELINE_FORCE_TEST")
 	if pipeline_force_test != "":
 		_pipeline_force_selftest.call_deferred(pipeline_force_test)
+	var entry_test := OS.get_environment("JHT_ENTRY_TEST")
+	if entry_test != "":
+		_entry_selftest.call_deferred(entry_test)
 	if _doctor_test != "":
 		_doctor_selftest.call_deferred(_doctor_test)
 	var core_patrol_test := OS.get_environment("JHT_CORE_PATROL_TEST")
@@ -334,6 +359,229 @@ func _camera_lock_selftest() -> void:
 			and _camera.zoom.is_equal_approx(before_zoom)
 	print("CAMERA-OVERLAY-LOCK-TEST ", "PASS" if ok else "FAIL")
 	blocker.queue_free()
+	get_tree().quit(0 if ok else 1)
+
+
+## First-run E2E senza rete: attraversa gli alberi scripted e monta il
+## pannello chat reale: prima offline choice-only, poi live col mock e scelte
+## contestuali prodotte dall'agente (mai sovrapposte al copione authored).
+func _guided_onboarding_selftest() -> void:
+	var failures: Array[String] = []
+	var original_setup := SetupService.status.duplicate(true)
+	ScriptedOnboarding.set_provider_test_override(0)
+	SetupService.status["provider_authenticated"] = false
+	SetupService.status["container_running"] = false
+	_on_setup_status_changed(SetupService.status)
+	var check := func(ok: bool, message: String) -> void:
+		if not ok:
+			failures.append(message)
+	var demo := DemoPositions.build()
+	var families := {}
+	for position in demo:
+		families[str(position.get("role_family", ""))] = true
+	check.call(demo.size() == 50 and families.size() >= 12,
+			"catalogo showroom non contiene 50 ruoli trasversali")
+	check.call(CharacterDefs.showroom_list().size() == 16,
+			"roster showroom non contiene core + due persone per reparto")
+	var marker_count := 0
+	for showroom_agent in agents:
+		if showroom_agent.quest_marker != null and showroom_agent.quest_marker.visible:
+			marker_count += 1
+	check.call(agents.size() == 16 and marker_count == 16 \
+			and BackendBus.positions_are_demo and BackendBus.positions.size() == 50,
+			"showroom offline non materializzato end-to-end")
+	for role in ["coordinatore", "scout", "analista", "scorer", "scrittore",
+			"critico", "mentor", "assistente", "mantenitore", "dottore", "sentinella"]:
+		check.call(Dialogues.TREES.has(role), "dialogo showroom assente: " + role)
+	var dialogue_agent: AgentNPC = null
+	for candidate in agents:
+		if candidate.slug == "assistente":
+			dialogue_agent = candidate
+			break
+	if dialogue_agent:
+		_start_talk(dialogue_agent)
+		await get_tree().process_frame
+		var dialogue_ui: DialogueUI = null
+		for child in get_children():
+			if child is DialogueUI:
+				dialogue_ui = child
+				break
+		check.call(dialogue_ui != null, "click showroom non apre DialogueUI")
+		if dialogue_ui:
+			dialogue_ui._finish_typing()
+			check.call(dialogue_ui._choices_box.get_child_count() == 3,
+					"dialogo showroom non rende le scelte")
+			dialogue_ui._close()
+			await get_tree().process_frame
+	ScriptedOnboarding.reset_for_test()
+	check.call(ScriptedOnboarding.messages("assistente").size() == 1,
+			"welcome Assistente assente")
+	check.call(ScriptedOnboarding.options("assistente").size() == 3,
+			"scelte Assistente errate")
+	for choice in ["start", "software", "mid", "remote", "europe"]:
+		ScriptedOnboarding.choose("assistente", choice)
+	var draft := ScriptedOnboarding.profile_draft()
+	check.call(draft.get("target_role") == "Software Engineering", "ruolo non raccolto")
+	check.call(draft.get("experience_years") == "3", "esperienza non raccolta")
+	check.call(draft.get("location") == "Europa", "località non raccolta")
+	check.call(ScriptedOnboarding.options("assistente").size() == 2,
+			"finale Assistente non raggiunto")
+	var guided_actions: Array = []
+	var capture_action := func(action: String, payload: Dictionary) -> void:
+		guided_actions.append({"action": action, "payload": payload})
+	ScriptedOnboarding.action_requested.connect(capture_action)
+	ScriptedOnboarding.choose("coordinatore", "explain")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 3,
+			"spiegazione Coordinatore non torna alla scelta")
+	ScriptedOnboarding.choose("coordinatore", "local")
+	ScriptedOnboarding.choose("coordinatore", "ready")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 4,
+			"scelta provider Coordinatore non raggiunta")
+	ScriptedOnboarding.choose("coordinatore", "compare")
+	ScriptedOnboarding.choose("coordinatore", "codex")
+	ScriptedOnboarding.choose("coordinatore", "login")
+	check.call(not guided_actions.is_empty() \
+			and str(guided_actions[-1].get("action", "")) == "open_section" \
+			and str(guided_actions[-1].get("payload", {}).get("section", "")) == "docker",
+			"gate container del Coordinatore non apre Docker")
+	ScriptedOnboarding.choose("coordinatore", "check")
+	ScriptedOnboarding.choose("coordinatore", "already")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 4,
+			"canali opzionali del Coordinatore assenti")
+	ScriptedOnboarding.choose("coordinatore", "telegram")
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "telegram",
+			"configurazione Telegram non raggiungibile dalla conversazione")
+	ScriptedOnboarding.choose("coordinatore", "skip_channels")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 3,
+			"attivazione team non raggiunta dopo i canali")
+	ScriptedOnboarding.action_requested.disconnect(capture_action)
+	for choice in ["growth", "balanced", "weekly", "done"]:
+		ScriptedOnboarding.choose("mentor", choice)
+	check.call(ScriptedOnboarding.is_complete("mentor"), "Mentor non completato")
+	check.call(ScriptedOnboarding.preferences().get("mentor_cadence") == "weekly",
+			"preferenza Mentor non salvata")
+
+	# Percorsi alternativi: uscita non bloccante, VPS, cambio provider,
+	# configurazioni opzionali e revisione delle preferenze del Mentor.
+	ScriptedOnboarding.reset_for_test()
+	guided_actions.clear()
+	ScriptedOnboarding.action_requested.connect(capture_action)
+	ScriptedOnboarding.choose("assistente", "later")
+	check.call(ScriptedOnboarding.options("assistente").size() == 3,
+			"esplora prima dovrebbe lasciare l'Assistente all'intro")
+	ScriptedOnboarding.choose("assistente", "profile")
+	check.call(not guided_actions.is_empty() \
+			and str(guided_actions[-1].get("payload", {}).get("section", "")) == "profile",
+			"profilo diretto Assistente non apre il modulo nativo")
+	ScriptedOnboarding.choose("assistente", "complete_profile")
+	check.call(ScriptedOnboarding.is_complete("assistente"),
+			"profilo diretto non completa il percorso Assistente")
+	ScriptedOnboarding.choose("coordinatore", "vps")
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "vps",
+			"ramo VPS Coordinatore non apre la pagina VPS")
+	ScriptedOnboarding.choose("coordinatore", "ready")
+	ScriptedOnboarding.choose("coordinatore", "kimi")
+	ScriptedOnboarding.choose("coordinatore", "different")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 4,
+			"cambio provider non torna alla selezione")
+	ScriptedOnboarding.choose("coordinatore", "claude")
+	ScriptedOnboarding.choose("coordinatore", "check")
+	ScriptedOnboarding.choose("coordinatore", "open_profile")
+	for section_choice in ["email", "cloud"]:
+		ScriptedOnboarding.choose("coordinatore", section_choice)
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "account",
+			"ramo cloud non apre Account")
+	ScriptedOnboarding.choose("coordinatore", "skip_channels")
+	ScriptedOnboarding.choose("coordinatore", "overview")
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "activation",
+			"checklist Coordinatore non apre Attivazione")
+	ScriptedOnboarding.choose("coordinatore", "mentor")
+	check.call(str(guided_actions[-1].get("action", "")) == "open_scripted_chat" \
+			and str(guided_actions[-1].get("payload", {}).get("agent", "")) == "mentor",
+			"handoff Coordinatore-Mentor assente")
+	for choice in ["salary", "ambitious", "milestones", "hours"]:
+		ScriptedOnboarding.choose("mentor", choice)
+	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "hours" \
+			and not ScriptedOnboarding.is_complete("mentor"),
+			"orari Mentor devono aprire la pagina senza chiudere il percorso")
+	ScriptedOnboarding.choose("mentor", "restart")
+	check.call(ScriptedOnboarding.options("mentor").size() == 4 \
+			and ScriptedOnboarding.preferences().get("mentor_cadence", "") == "",
+			"riavvio Mentor non azzera il percorso")
+	ScriptedOnboarding.action_requested.disconnect(capture_action)
+
+	# Monta la UI da zero e attiva davvero il primo Button: protegge anche da
+	# regressioni nelle closure create dal ciclo delle risposte suggerite.
+	ScriptedOnboarding.reset_for_test()
+	var panel := ChatPanel.new("assistente", "Assistente")
+	add_child(panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check.call(panel._choices.get_child_count() >= 2, "bottoni guided non renderizzati")
+	check.call(not panel._input.editable and panel._send_btn.disabled,
+			"testo libero acceso prima del provider")
+	var pressed_first := false
+	for child in panel._choices.get_children():
+		if child is Button:
+			(child as Button).pressed.emit()
+			pressed_first = true
+			break
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check.call(pressed_first and ScriptedOnboarding.options("assistente").size() == 4,
+			"il primo bottone della chat non avanza al ruolo")
+	for choice in ["software", "mid", "remote", "europe"]:
+		ScriptedOnboarding.choose("assistente", choice)
+	draft = ScriptedOnboarding.profile_draft()
+
+	BackendBus.set_backend(MockBackend.new())
+	await get_tree().create_timer(1.2).timeout
+	SetupService.status["container_running"] = true
+	SetupService.status["provider_authenticated"] = true
+	ScriptedOnboarding.set_provider_test_override(1)
+	panel._refresh_chat_mode()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check.call(panel._input.editable and not panel._send_btn.disabled,
+			"testo libero non abilitato dopo provider + agente")
+	check.call(panel._choices.get_child_count() == 0,
+			"le risposte authored non spariscono dopo il login provider")
+	panel._on_updated("assistente", [{"role": "assistant", "text": "Scegli tu.",
+			"done": true, "choices": [
+				{"label": "Controlla il profilo", "value": "Controlla il profilo"},
+				{"label": "Mostra le posizioni", "value": "Mostra le posizioni"},
+			]}])
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check.call(panel._choices.get_child_count() == 3,
+			"risposte suggerite generate dall'agente non renderizzate")
+	# Il modulo profilo deve esistere anche senza LLM e includere proprio i
+	# campi che determinano il gate ready (email e lingue comprese).
+	BackendBus._backend.live = true
+	var profile_panel := SectionPanel.new("profile", 24.0)
+	add_child(profile_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check.call(profile_panel._prof_edits.has("email"), "campo email assente dal profilo nativo")
+	check.call(profile_panel._prof_edits.has("languages"), "campo lingue assente dal profilo nativo")
+	check.call(profile_panel._prof_edits.has("target_role") \
+			and profile_panel._prof_edits["target_role"].text == "Software Engineering",
+			"bozza scripted non precompila il profilo")
+	var ok := failures.is_empty()
+	print("GUIDED-ONBOARDING-TEST ", "PASS " if ok else "FAIL ",
+			JSON.stringify({"failures": failures, "draft": draft,
+					"mentor": ScriptedOnboarding.preferences()}))
+	panel.close(false)
+	profile_panel.queue_free()
+	BackendBus.disconnect_backend()
+	await get_tree().create_timer(1.1).timeout
+	# Il click reale sopra ha avviato il tick procedurale: rilascia lo stream
+	# dal player prima del quit headless, così il test resta leak-free.
+	for player in Sfx._pool:
+		player.stop()
+		player.stream = null
+	SetupService.status = original_setup
+	ScriptedOnboarding.set_provider_test_override(-1)
 	get_tree().quit(0 if ok else 1)
 
 ## Regressione della vista Posizioni dentro il boot normale (gli script `-s`
@@ -592,9 +840,14 @@ func _pipeline_force_selftest(test_dept: String) -> void:
 	actor.perform_pipeline_step(true)
 	await get_tree().process_frame
 	var deadline := Time.get_ticks_msec() + 60000
+	var previous := actor.global_position
+	var max_step := 0.0
 	while int(actor.debug_snapshot().get("pipeline_trips", 0)) < baseline + 1 \
 			and Time.get_ticks_msec() < deadline:
-		await get_tree().process_frame
+		await get_tree().physics_frame
+		var step := actor.global_position.distance_to(previous)
+		max_step = maxf(max_step, step)
+		previous = actor.global_position
 	# Consenti alla posa seduta e alla maschera collisione di stabilizzarsi.
 	for _i in 3:
 		await get_tree().physics_frame
@@ -604,9 +857,44 @@ func _pipeline_force_selftest(test_dept: String) -> void:
 			and int(snap.get("state", -1)) == AgentNPC.S.WORK \
 			and not bool(snap.get("forced_trip", true)) \
 			and int(snap.get("collision_mask", -1)) == 0 \
+			# Il cambio seduto/in piedi può spostare fino a ~100 px; qualunque
+			# salto maggiore rivela un teletrasporto fra pila e scrivania.
+			and max_step < 130.0 \
 			and actor.global_position.distance_to(
 					snap.get("work_position", Vector2.INF)) < 1.0
+	snap["max_frame_step"] = max_step
 	print("PIPELINE-FORCE-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify(snap))
+	get_tree().quit(0 if ok else 1)
+
+func _entry_selftest(role: String) -> void:
+	await get_tree().create_timer(0.8).timeout
+	var actor := _find_agent(role)
+	if actor == null:
+		print("ENTRY-CONTINUITY-TEST FAIL no actor for ", role)
+		get_tree().quit(1)
+		return
+	actor.set_backend_status("idle")
+	actor.enter_through(ENTRY_SPOT)
+	await get_tree().physics_frame
+	var started_at_door := actor.global_position.distance_to(ENTRY_SPOT) < 60.0 \
+			and bool(actor.debug_snapshot().get("entering", false))
+	var previous := actor.global_position
+	var max_step := 0.0
+	var deadline := Time.get_ticks_msec() + 45000
+	while bool(actor.debug_snapshot().get("entering", false)) \
+			and Time.get_ticks_msec() < deadline:
+		await get_tree().physics_frame
+		max_step = maxf(max_step, actor.global_position.distance_to(previous))
+		previous = actor.global_position
+	var snap := actor.debug_snapshot()
+	var ok := started_at_door and max_step < 130.0 \
+			and not bool(snap.get("entering", true)) \
+			and bool(snap.get("desk_pose", false)) \
+			and actor.global_position.distance_to(
+					snap.get("work_position", Vector2.INF)) < 1.0
+	snap["max_frame_step"] = max_step
+	print("ENTRY-CONTINUITY-TEST ", "PASS" if ok else "FAIL", " ",
+			JSON.stringify(snap))
 	get_tree().quit(0 if ok else 1)
 
 func _doctor_selftest(target_ref: String) -> void:
@@ -633,7 +921,10 @@ func _doctor_selftest(target_ref: String) -> void:
 			return
 		var snap := doctor.debug_snapshot()
 		var ok := not bool(snap.get("forced_trip", true)) \
-				and doctor.global_position.distance_to(snap.get("home", Vector2.INF)) < 1.0 \
+				# Il Dottore ora rientra seduto nel composito della poltrona: la
+				# posizione di lavoro include l'offset del sedile, come i reparti.
+				and doctor.global_position.distance_to(
+						snap.get("work_position", Vector2.INF)) < 1.0 \
 				and int(snap.get("state", -1)) == AgentNPC.S.WORK \
 				and int(snap.get("investigations", 0)) == 1
 		print("SIMULATION-DOCTOR-TEST ", "PASS" if ok else "FAIL", " ",
@@ -781,7 +1072,10 @@ func _on_world_click(target: Vector2) -> void:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
-			_open_agent_card(agent)
+			if not ScriptedOnboarding.provider_authenticated() and agent.uid == "":
+				_start_talk(agent)
+			else:
+				_open_agent_card(agent)
 			return
 	var queue_dept := PaperPile.inbox_at(target)
 	if queue_dept != "":
@@ -889,6 +1183,12 @@ func _open_chat_menu() -> void:
 	add_child(_chat_menu)
 	_chat_menu.closed.connect(func() -> void: _chat_menu = null)
 	_chat_menu.open_chat.connect(func(slug: String, display_name: String) -> void:
+		if not ScriptedOnboarding.provider_authenticated():
+			for candidate in agents:
+				if candidate.uid == "" and candidate.slug == slug \
+						and candidate.display_name == display_name:
+					_start_talk(candidate)
+					return
 		Log.info("chat", "pannello chat aperto dal menu con " + slug)
 		_chat_panel = ChatPanel.new(slug, display_name, _chat_roster())
 		add_child(_chat_panel)
@@ -918,6 +1218,14 @@ func _start_talk(agent: AgentNPC) -> void:
 	if Game.dialogue_active:
 		return
 	Log.info("agent", "dialogo aperto con " + agent.slug)
+	if not ScriptedOnboarding.provider_authenticated():
+		_story_seen[agent.slug] = true
+		_tour_visits += 1
+		agent.set_story_marker(true, true)
+		if _tour_visits == 3:
+			var helper := _find_agent("assistente")
+			if helper:
+				helper.say("Per domande libere e personali collega un provider dal setup. L'ufficio demo resta sempre esplorabile.")
 	agent.start_talk()
 	var ui := DialogueUI.new()
 	add_child(ui)
@@ -928,7 +1236,8 @@ func _start_talk(agent: AgentNPC) -> void:
 
 # ── Roster dinamico dal backend (missione backend-integration) ────────
 # In modalità backend la scena mostra SOLO gli agenti attivi sulla VPS:
-# sync_agents() confronta lo stato con la scena e materializza/dissolve.
+# sync_agents() confronta lo stato con la scena: entra dalla porta chi nasce,
+# esce dalla porta chi non appartiene più allo snapshot.
 
 var _desk_pool: Dictionary = {}  # role -> Array di def libere (postazioni)
 var _backend_mode := false
@@ -938,6 +1247,13 @@ var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
 func sync_agents(list: Array) -> void:
+	if list.is_empty():
+		if _backend_mode:
+			for agent in agents.duplicate():
+				_despawn_agent(agent, false)
+			_backend_mode = false
+			_spawn_showroom()
+		return
 	if not _backend_mode:
 		_enter_backend_mode()
 	var wanted := {}
@@ -949,7 +1265,7 @@ func sync_agents(list: Array) -> void:
 			wanted[str(item.get("uid", item.get("slug", "")))] = item
 	for agent in agents.duplicate():
 		if not wanted.has(agent.uid):
-			_despawn_agent(agent, true, true)
+			_despawn_agent(agent, true)
 		else:
 			# throttle PRIMA dello status: la scelta seduto-vs-ricreazione
 			# al cambio di stato legge la durata già aggiornata
@@ -1026,6 +1342,7 @@ func _name_of(uid: String) -> String:
 ## punto interno dove gli agenti in uscita camminano prima di svanire.
 const EXIT_DOOR := Vector2(1300, 2000)
 const EXIT_SPOT := Vector2(1300, 1952)
+const ENTRY_SPOT := Vector2(1300, 1948)
 
 const MAX_TR_REACTIONS := 6   # per refresh: il resto resta solo nel registro
 const TR_REACT_GAP := 2.4     # secondi fra due reazioni (non un coro)
@@ -1053,32 +1370,28 @@ const PILE_PHASE := {
 	"scout": "to_analyze",
 	"analisti": "analyzed",
 	"scorer": "with_score",
-	"scrittori": "to_write",
-	"critici": "written",
+	"scrittori": "written",
 }
 
-## Contatore reale → fogli visibili: scala in radice (i numeri veri
-## arrivano a decine) col cap della pila; 0 resta 0.
-static func _pile_visual(n: int) -> int:
-	if n <= 0:
-		return 0
-	return mini(int(ceil(sqrt(float(n)) * 1.9)), PaperPile.MAX_SHEETS)
-
 var _last_ready := -1
+var _piles_synced := false
 
-func _sync_piles() -> void:
+func _sync_piles(hold_seconds := 0.0) -> void:
 	var counts: Dictionary = BackendBus.pipeline_counts()
 	for dept_id in PILE_PHASE:
 		if PaperPile.inbox.has(dept_id):
+			# Rapporto esatto 1:1. Il primo snapshot è immediato; i successivi
+			# aspettano il viaggio fisico dell'agente prima di riconciliarsi.
 			PaperPile.inbox[dept_id].set_target(
-					_pile_visual(int(counts[PILE_PHASE[dept_id]])))
+					int(counts[PILE_PHASE[dept_id]]), not _piles_synced, hold_seconds)
+	_piles_synced = true
 	var ready := int(counts["cv_ready"])
 	OutputShelf.set_ready(ready)
-	# un CV in più rispetto all'ultimo giro: uno scrittore lo porta
-	# fisicamente allo scaffale (teatro sopra il dato vero)
+	# Un PASS in più: è il Critico, ultimo anello, a portare il CV nello
+	# scaffale dei pronti. Lo Scrittore lo aveva lasciato sulla propria pila.
 	if _last_ready >= 0 and ready > _last_ready:
 		for agent in agents:
-			if agent.dept == "scrittori" and not agent.is_dissolving():
+			if agent.dept == "critici" and not agent.is_dissolving():
 				agent.deliver_to_shelf()
 				break
 	_last_ready = ready
@@ -1090,10 +1403,6 @@ func _sync_piles() -> void:
 ## che le ha firmate. Il primo snapshot fa solo da baseline: lo storico
 ## non va recitato all'avvio.
 func _on_transitions(_positions: Array) -> void:
-	# con uno snapshot VERO le pile seguono i contatori reali; senza
-	# posizioni (mock/offline) resta il teatro simulato del restock
-	if not BackendBus.positions.is_empty():
-		_sync_piles()
 	var fresh: Array = []
 	for t in BackendBus.transitions:
 		var key := "%s|%s|%s|%s" % [str(t.get("position_id", "")),
@@ -1103,6 +1412,11 @@ func _on_transitions(_positions: Array) -> void:
 			continue
 		_tr_seen[key] = true
 		fresh.append(t)
+	# Il primo snapshot allinea subito le pile. In seguito il nuovo target
+	# resta sospeso mentre gli agenti compiono davvero ritiro e consegna;
+	# dopo un minuto riconcilia eventuali raffiche o eventi senza attore.
+	if not BackendBus.positions.is_empty():
+		_sync_piles(65.0 if _tr_baseline and not fresh.is_empty() else 0.0)
 	if not _tr_baseline:
 		_tr_baseline = true
 		return
@@ -1153,7 +1467,7 @@ func _react_to_transition(t: Dictionary) -> void:
 	# reparto che ha firmato la transizione e il suo foglio lungo la pipeline.
 	# La transizione nel jobs.db e prova autoritativa del lavoro: anche se il
 	# poll della TUI vede gia idle, il viaggio fisico deve ancora avvenire.
-	actor.perform_pipeline_step(true)
+	actor.perform_pipeline_step(true, to_st)
 	Log.debug("scene", "reazione %s: %s → %s" % [by, what, to_st])
 
 ## Primo snapshot backend: le postazioni tornano nel pool e il roster
@@ -1168,10 +1482,43 @@ func _enter_backend_mode() -> void:
 		_desk_pool[role].append(def)
 	for agent in agents.duplicate():
 		if agent.uid == "":
-			_despawn_agent(agent, false, false)
+			_despawn_agent(agent, false)
 	Log.info("backend", "modalità backend: in scena solo gli agenti attivi")
 
-func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := false) -> void:
+func _spawn_showroom() -> void:
+	if world == null:
+		return
+	for def in CharacterDefs.showroom_list():
+		var exists := false
+		for current in agents:
+			if current.uid == "" and current.display_name == str(def["name"]):
+				exists = true
+				break
+		if exists:
+			continue
+		var agent := AgentNPC.new()
+		world.add_child(agent)
+		agent.setup(def, nav)
+		agent.enter_through(ENTRY_SPOT)
+		agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
+				bool(_story_seen.get(str(def["slug"]), false)))
+		agents.append(agent)
+
+func _on_setup_status_changed(status: Dictionary) -> void:
+	var authenticated := bool(status.get("provider_authenticated", false))
+	for agent in agents:
+		if agent.uid == "":
+			agent.set_story_marker(not authenticated,
+					bool(_story_seen.get(agent.slug, false)))
+	if authenticated:
+		for child in get_children():
+			if child is DialogueUI:
+				(child as DialogueUI)._close()
+		BackendBus.clear_demo_positions()
+	elif BackendBus.positions.is_empty() or BackendBus.positions_are_demo:
+		BackendBus.show_demo_positions()
+
+func _despawn_agent(agent: AgentNPC, refill_pool := true) -> void:
 	agents.erase(agent)
 	if _hover_agent == agent:
 		_hover_agent = null
@@ -1186,12 +1533,9 @@ func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := false) -> 
 			_desk_pool[role].push_front(def)
 		else:
 			_desk_pool[role].append(def)
-	# un agente fermato ESCE dalla porta (missione pipeline 20:1x); il
-	# dissolve tesseract resta per gli sfollamenti tecnici di massa
-	if via_door:
-		agent.exit_through(EXIT_SPOT)
-	else:
-		agent.dissolve()
+	# Un agente viene rimosso soltanto oltre la porta: nessun despawn tecnico
+	# può più dissolverlo nel mezzo dell'ufficio.
+	agent.exit_through(EXIT_SPOT)
 
 func _spawn_backend_agent(item: Dictionary) -> void:
 	var role: String = item.get("role", "")
@@ -1241,7 +1585,7 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	agent.set_throttle(float(item.get("throttle_secs", 0.0)))
 	agent.set_activity_detail(str(item.get("activity_detail", "")))
 	agent.set_backend_status(item.get("status", "idle"))
-	agent.materialize()
+	agent.enter_through(ENTRY_SPOT)
 	agents.append(agent)
 
 # ── Costruzione scena ─────────────────────────────────────────────────

@@ -42,9 +42,11 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_build_ui()
 
-	# Backend: se non c'è nulla di collegato (nessuna VPS configurata),
-	# si monta il simulatore — stesso contratto, onboarding provabile.
-	if BackendBus.state == BackendBus.DISCONNECTED:
+	# Il mock esiste soltanto per test/demo espliciti: su una nuova installazione
+	# non dobbiamo fingere un profilo pronto mentre il container è ancora spento.
+	if BackendBus.state == BackendBus.DISCONNECTED and (\
+			OS.get_environment("JHT_WIZARD_TEST") == "1" \
+			or OS.get_environment("JHT_MOCK_SETUP") == "1"):
 		BackendBus.set_backend(MockBackend.new())
 
 	BackendBus.connection_changed.connect(_on_connection)
@@ -171,8 +173,8 @@ func _build_ui() -> void:
 	_enter_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	foot.add_child(_enter_hint)
 	_enter_btn = Button.new()
-	_enter_btn.text = UIStrings.t("wizard.enter_office")
-	_enter_btn.disabled = true
+	_enter_btn.text = UIStrings.t("wizard.back_office")
+	_enter_btn.disabled = false
 	_enter_btn.add_theme_font_size_override("font_size", 18)
 	_enter_btn.add_theme_color_override("font_color", Palette.GREEN)
 	_enter_btn.pressed.connect(_enter_office)
@@ -407,7 +409,10 @@ func _on_connection(state: int, detail: String) -> void:
 		BackendBus.CONNECTED:
 			_refresh_status()
 		_:
-			_status.text = ""
+			_status.text = UIStrings.t("wizard.setup_required")
+			_input.editable = false
+			_send_btn.disabled = true
+			_upload_btn.disabled = true
 	_badge.text = "" if BackendBus.is_live() else UIStrings.t("wizard.sim_badge")
 
 func _on_agents(_agents: Array) -> void:
@@ -436,7 +441,9 @@ func _refresh_status() -> void:
 func _on_profile(profile: Dictionary, required: Dictionary, ready: bool) -> void:
 	_ready_flag = ready
 	_redraw_profile(profile, required)
-	_enter_btn.disabled = not ready
+	_enter_btn.disabled = false
+	_enter_btn.text = UIStrings.t("wizard.profile_done_back") if ready \
+			else UIStrings.t("wizard.back_office")
 	_enter_hint.text = UIStrings.t("wizard.ready_note" if ready
 			else "wizard.waiting_profile")
 	if ready:
@@ -482,10 +489,11 @@ func _selftest() -> void:
 	get_tree().quit()
 
 func _enter_office() -> void:
-	if _leaving or not _ready_flag:
+	if _leaving:
 		return
 	_leaving = true
-	Game.mark_onboarding_done()
+	if _ready_flag:
+		Game.mark_onboarding_done()
 	Sfx.play_confirm()
 	var veil := ColorRect.new()
 	veil.color = Color(Palette.VOID.r, Palette.VOID.g, Palette.VOID.b, 0.0)

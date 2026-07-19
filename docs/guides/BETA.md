@@ -14,7 +14,7 @@ Public users will ask: *"does it work for my role? on my provider? at my cost?"*
 - 💳 You can afford **at least one supported subscription** — see [`PROVIDERS.md`](../about/PROVIDERS.md). The Kimi €40 tier is our target for beta testers.
 - 💬 You're willing to **report back honestly** — what worked, what didn't, what was confusing
 
-**Comfort with a terminal required (for now).** During beta the supported setup is the CLI one-liner (or letting your own AI assistant drive the setup — see [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md)). The one-click desktop app exists but is **not part of the beta yet** ([`desktop/STATUS.md`](../../desktop/STATUS.md)); once it's ready, the program opens to non-technical testers too.
+**No external terminal is required by the native app.** The Godot office embeds provider and maintenance consoles; advanced testers can still use the CLI one-liner or let an AI assistant drive setup (see [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md)).
 
 ## What you get
 
@@ -74,7 +74,7 @@ Before signing up, set expectations:
 - ✅ Claude Max x20 is rock-solid; Codex ~€100 is proven over a full autonomous month ([case study #4](../about/RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run))
 - 🟡 Kimi €40 works but token monitoring still has rough edges (see [`MONITORING.md`](../about/MONITORING.md))
 - 🟠 CLI onboarding wizard still has rough edges — expect to ask for help once or twice
-- 🔴 The desktop app (one-click installers for macOS/Windows/Linux) is **not in the beta** — it works up to a point, but for now it's aimed at contributors only ([`desktop/STATUS.md`](../../desktop/STATUS.md))
+- 🟠 The native Godot app now contains the complete setup and interaction cockpit; cross-platform onboarding QA is still active beta work
 
 If "rough edges" doesn't scare you, you're the kind of beta tester we need.
 

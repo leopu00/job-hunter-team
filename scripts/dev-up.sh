@@ -2,7 +2,7 @@
 # dev-up.sh — Launch JHT dev mode: container (bind-mounts) + host Next su :3001.
 #
 # Cosa fa:
-#   1. Ferma/rimuove eventuale container `jht` esistente (anche se lanciato da Electron)
+#   1. Ferma/rimuove eventuale container `jht` esistente (anche se lanciato dal gioco)
 #   2. Crea il container tramite `docker compose up --no-start` (bind-mount di
 #      web/, agents/, shared/, .launcher/ presi dal compose alla repo root)
 #   3. Fixa l'ownership dell'anonymous volume `.next` (altrimenti Next crasha

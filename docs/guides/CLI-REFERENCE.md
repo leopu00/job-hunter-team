@@ -38,17 +38,17 @@ can use them simultaneously — that's the design:
 
 **Safe to mix freely**: read-only ops (`jht status`, `jht logs`,
 `jht positions list`, dashboard browsing) and team lifecycle (`jht team
-start/stop`) — Desktop polls and reflects the change within seconds.
+start/stop`) — the native office polls and reflects the change within seconds.
 
-**Avoid concurrent writes to `jht.config.json`**: only the Desktop
-wizard uses atomic read-merge-write; the CLI's `jht config set` and
-`jht setup` do last-write-wins. Don't run the Desktop wizard and a CLI
+**Avoid concurrent writes to `jht.config.json`**: the native office
+uses atomic read-merge-write; the CLI's `jht config set` and
+`jht setup` do last-write-wins. Don't save from the native office and a CLI
 setup at the same time — finish one before starting the other. Once
 setup is done, post-hoc edits to **different** config keys from
 different surfaces are fine.
 
 **Hard invariant — one team per user**: see [`docs/internal/architecture/onboarding-flow.md`](../internal/architecture/onboarding-flow.md).
-You cannot run Local (CLI on this PC) **and** VPS (Desktop pointing at
+You cannot run Local (CLI on this PC) **and** VPS (native office pointing at
 Hetzner) at the same time — it splits the source of truth and breaks
 cloud sync. Pick one location and stick to it for the session; switch
 via wipe + re-pair, not concurrent runs.
@@ -72,7 +72,7 @@ via wipe + re-pair, not concurrent runs.
 | Command                          | Layer | What it does                                                                            |
 |----------------------------------|-------|-----------------------------------------------------------------------------------------|
 | `jht setup [flags]`              | Both  | Host pre-flight (swap on low-RAM VPS, lang picker) → Node interactive wizard inside the container. |
-| `jht oauth-login` (alias `claude-login`) | Host  | `docker exec -it jht claude`. Forces a separate TTY for the provider's device-flow OAuth — useful when the wizard's inline OAuth step hits TTY issues. |
+| `jht oauth-login` (legacy alias `claude-login`) | Host  | Reads `active_provider` and opens the matching subscription flow: Claude TUI, Codex device code, or Kimi TUI. |
 | `jht doctor`                     | Node  | Surfaces Docker, Node, auth, DB checks. **Must** exit 0 before declaring setup done.    |
 | `jht health`                     | Node  | Granular service health (Supabase pairing, provider creds, bridge).                     |
 

@@ -163,14 +163,17 @@ func _test_all_department_desk_textures() -> void:
 			continue
 		_assert(_texture_loads(path), "%s texture is missing or unloadable: %s" % [label, path])
 
-## Capitano e Tesoriere hanno una postazione personale frontale: la base e
-## l'arte occupata devono essere entrambe presenti e avere lo stesso canvas,
+## Ogni ruolo core seduto ha una postazione personale frontale: base e arte
+## occupata devono essere entrambe presenti e avere lo stesso canvas,
 ## altrimenti lo swap durante la ronda produce un salto visibile.
 func _test_core_workstations() -> void:
 	var expected := {
 		"core:coordinatore": {"stem": "captain_desk_down", "facing": "down"},
 		"core:sentinella": {"stem": "budgeteer_desk_down", "facing": "down"},
 		"core:mentor": {"stem": "mentor_armchair", "facing": "down"},
+		"core:assistente": {"stem": "assistant_desk_down", "facing": "down"},
+		"core:mantenitore": {"stem": "maintainer_workbench_down", "facing": "down"},
+		"core:dottore": {"stem": "doctor_armchair", "facing": "down"},
 	}
 	var found: Dictionary = {}
 	for item in FurnitureDefsScript.ITEMS:
@@ -197,6 +200,8 @@ func _test_core_workstations() -> void:
 		_assert(found.has(key), "%s workstation is not registered" % key)
 	_assert(_texture_loads("res://assets/characters/sheets/sentinella_a.png"),
 			"Sentinel must use its own Treasurer sheet")
+	_assert(_texture_loads("res://assets/characters/sheets/dottore_a.png"),
+			"Doctor must use his own medical sheet")
 
 func _test_core_patrol_routes() -> void:
 	var nav = NavGridScript.new()
@@ -204,7 +209,7 @@ func _test_core_patrol_routes() -> void:
 	obstacles.append_array(DepartmentDefsScript.obstacles())
 	obstacles.append_array(DepartmentDefsScript.GLASS_WALLS)
 	nav.build(FurnitureDefsScript.FLOOR, obstacles)
-	for slug in ["coordinatore", "sentinella", "mentor"]:
+	for slug in ["coordinatore", "sentinella", "mentor", "assistente", "mantenitore", "dottore"]:
 		var def: Dictionary = CharacterDefsScript.AGENTS[slug]
 		var home: Vector2 = nav.approach_point(Vector2(1700, 900), def["spot"])
 		_assert(nav.is_point_walkable(home), "%s desk approach is blocked" % slug)

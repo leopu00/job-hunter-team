@@ -6,8 +6,8 @@ const QUEUES := {
 	"scout": {"consumer": "ANALISTI", "phase": "to_analyze"},
 	"analisti": {"consumer": "SCORER", "phase": "analyzed"},
 	"scorer": {"consumer": "SCRITTORI", "phase": "with_score"},
-	"scrittori": {"consumer": "CRITICI", "phase": "to_write"},
-	"critici": {"consumer": "PRONTI", "phase": "written"},
+	"scrittori": {"consumer": "CRITICI", "phase": "written"},
+	"critici": {"consumer": "PRONTI", "phase": "cv_ready"},
 }
 
 static func positions_for(dept_id: String, positions: Array) -> Array:
@@ -22,6 +22,8 @@ static func matches(dept_id: String, p: Dictionary) -> bool:
 	var status := str(p.get("status", ""))
 	var requested := int(p.get("write_requested", 0)
 			if p.get("write_requested") != null else 0) == 1
+	var verdict := str(p.get("critic_verdict", "")
+			if p.get("critic_verdict") != null else "").to_upper()
 	match dept_id:
 		"scout":
 			return status == "new"
@@ -30,7 +32,9 @@ static func matches(dept_id: String, p: Dictionary) -> bool:
 		"scorer":
 			return status == "scored" and not requested
 		"scrittori":
-			return status in ["scored", "writing", "review"] and requested
+			# Output degli Scrittori: CV terminato e lasciato ai Critici. Le
+			# posizioni claimed/in scrittura sono sulla scrivania, non sulla pila.
+			return status == "review" or (status == "ready" and verdict != "PASS")
 		"critici":
-			return status == "ready"
+			return status == "ready" and verdict == "PASS"
 	return false

@@ -24,7 +24,7 @@ Before opening: search existing issues for the same symptom.
 
 ## Environment
 
-- **Install path:** [ CLI one-liner / DMG desktop / source clone / VPS ]
+- **Install path:** [ native Godot app / CLI one-liner / source clone / VPS ]
 - **OS:** macOS / Linux / Windows (version + arch)
 - **JHT version or commit:** <!-- output of `jht --version` or `git log -1 --oneline` -->
 - **Docker:** running? version? Colima / Docker Desktop / native?

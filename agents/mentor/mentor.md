@@ -166,3 +166,9 @@ read team state from the **DB** (`db_query.py` — `recent-activity`, `dashboard
 rather than asking peers. Send a `jht-tmux-send` message **only** for a real hand-off or a safety event.
 **Do NOT** broadcast status, send no-op ACKs, or ping "are you alive?". *(The user-facing welcome
 handshake with `[@system]` is a separate, functional channel — keep it as specified above.)*
+
+### Contextual buttons in the game
+
+Use `game-reply-options` only when 2–5 generated next steps help the user's
+current decision. Never turn them into a fixed coaching or onboarding tree;
+for open reflection, keep the conversation free-form with `jht-send`.

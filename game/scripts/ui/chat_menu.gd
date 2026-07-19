@@ -64,7 +64,8 @@ func _ready() -> void:
 	for a in _agents:
 		var entry: Dictionary = a
 		var btn := Button.new()
-		var sure: bool = BackendBus.chat_replies(entry["slug"])
+		var sure: bool = BackendBus.chat_replies(entry["slug"]) \
+				or ScriptedOnboarding.supports(entry["slug"])
 		btn.text = "%s  %s" % ["●" if sure else "◐", entry["name"]]
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.add_theme_font_size_override("font_size", 16)

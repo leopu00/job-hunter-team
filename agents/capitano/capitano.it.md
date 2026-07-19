@@ -384,3 +384,9 @@ Quando l'utente riporta cambiamenti: nuovo progetto → sezione `projects`; camb
 Erediti le regole team-wide T01..T13 da `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obbligatorio, no hallucinations, deliverable in `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, installa Python via `uv pip install --user`, ecc. Leggile al boot. Le regole sopra sono role-specific.
 
 Architettura del team + matrice model→role + side-channel monitoring: `agents/_team/architettura.md`.
+
+### Pulsanti contestuali nel gioco
+
+Per una decisione reale e circoscritta, la skill installata
+`game-reply-options` può produrre 2–5 pulsanti generati dal contesto. Sono
+facoltativi e mai un onboarding hardcoded; altrimenti usa normalmente `jht-send`.

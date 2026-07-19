@@ -96,6 +96,8 @@ func _build(page := "") -> void:
 	for child in _content.get_children():
 		child.queue_free()
 	match section:
+		"activation":
+			_build_activation()
 		"stats":
 			if page == "usage":
 				_build_usage()
@@ -104,6 +106,10 @@ func _build(page := "") -> void:
 		"map":
 			# l'esperienza mappa del web privato: globo → mappa piatta,
 			# filtri cross e schede pin che aprono il dettaglio posizione
+			if BackendBus.positions_are_demo:
+				_content.add_child(TerminalTheme.label(
+						"◆ SHOWROOM · pin e offerte sono esempi fittizi",
+						13, Palette.YELLOW, "medium"))
 			var wm := WorldMap.new()
 			wm.open_position.connect(func(pid: int) -> void:
 				pending_detail = pid
@@ -142,9 +148,17 @@ func _build(page := "") -> void:
 		"hours":
 			_build_hours()
 		"docker":
-			_build_system_dashboard()
-		"provider", "account", "email", "advanced":
-			_build_config()
+			_build_container_setup()
+		"provider":
+			_build_provider_setup()
+		"telegram":
+			_build_telegram()
+		"account":
+			_build_account()
+		"email":
+			_build_email()
+		"advanced":
+			_build_advanced()
 		_:
 			_build_placeholder()
 
@@ -184,6 +198,530 @@ func _build_config() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
+
+
+# ── Servizi tecnici migrati dalla desktop app ───────────────────────
+
+func _build_account() -> void:
+	_listen_setup()
+	if not BackendBus.live_settings_updated.is_connected(_on_account_settings_refresh):
+		BackendBus.live_settings_updated.connect(_on_account_settings_refresh)
+	var cloud: Dictionary = SetupService.cloud_status()
+	var configured := bool(cloud.get("configured", false))
+	_content.add_child(TerminalTheme.label(
+			"Sincronizza posizioni, profilo e comandi con jobhunterteam.ai. L'account è opzionale: il team può restare completamente locale.",
+			14, Palette.MUTED))
+	_content.add_child(HSeparator.new())
+	_setup_state_row("ACCOUNT CLOUD", configured,
+			"collegato" if configured else "modalità locale / ospite")
+	if configured:
+		_setup_state_row("DISPOSITIVO", true,
+				str(cloud.get("token_name", "")) if str(cloud.get("token_name", "")) != "" else "associato")
+		_setup_state_row("SERVER", true, str(cloud.get("base_url", "—")))
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	_content.add_child(actions)
+	var login := Button.new()
+	login.text = "RIFAI PAIRING" if configured else "COLLEGA ACCOUNT  →"
+	login.disabled = not bool(SetupService.status.get("container_running", false))
+	login.add_theme_color_override("font_color", Palette.GREEN)
+	login.pressed.connect(SetupService.open_cloud_login)
+	actions.add_child(login)
+	for entry in [["STATO", "status"], ["SINCRONIZZA ORA", "push"],
+			["RECUPERA PROFILO", "pull-profile"]]:
+		var button := Button.new()
+		button.text = str(entry[0])
+		button.disabled = not configured
+		button.pressed.connect(SetupService.open_cloud_command.bind(str(entry[1])))
+		actions.add_child(button)
+	if configured:
+		var disable := Button.new()
+		disable.text = "DISABILITA SU QUESTO DISPOSITIVO"
+		disable.add_theme_color_override("font_color", Palette.RED)
+		disable.pressed.connect(SetupService.open_cloud_command.bind("disable"))
+		_content.add_child(disable)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
+
+
+func _on_account_settings_refresh(_settings: Dictionary) -> void:
+	if section == "account" and is_instance_valid(_content):
+		_build()
+
+
+func _build_email() -> void:
+	_listen_setup()
+	if not BackendBus.live_settings_updated.is_connected(_on_email_settings_refresh):
+		BackendBus.live_settings_updated.connect(_on_email_settings_refresh)
+	var state: Dictionary = SetupService.email_status()
+	var configured := bool(state.get("configured", false))
+	_content.add_child(TerminalTheme.label(
+			"Casella dedicata per i job alert. Lo Scout la controlla a inizio giornata e trasforma le email in posizioni da analizzare.",
+			14, Palette.MUTED))
+	_content.add_child(HSeparator.new())
+	_setup_state_row("STATO", configured,
+			"configurata · " + str(state.get("email", "")) if configured \
+			else "nessuna casella configurata")
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 10)
+	_content.add_child(grid)
+	grid.add_child(TerminalTheme.label("INDIRIZZO EMAIL", 13, Palette.MUTED, "medium"))
+	var email := LineEdit.new()
+	email.text = str(state.get("email", ""))
+	email.placeholder_text = "nome.jht@gmail.com"
+	email.custom_minimum_size = Vector2(560, 0)
+	grid.add_child(email)
+	grid.add_child(TerminalTheme.label("APP PASSWORD", 13, Palette.MUTED, "medium"))
+	var password := LineEdit.new()
+	password.secret = true
+	password.placeholder_text = "password specifica per l'app, mai la password principale"
+	password.custom_minimum_size = Vector2(560, 0)
+	grid.add_child(password)
+	var note := TerminalTheme.label(
+			"La password rimane in ~/.jht/credentials con permessi 0600 e non viene sincronizzata sul cloud.",
+			12, Palette.YELLOW)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(note)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	_content.add_child(actions)
+	var save := Button.new()
+	save.text = "SALVA E VERIFICA IMAP"
+	save.disabled = not bool(SetupService.status.get("container_running", false))
+	save.add_theme_color_override("font_color", Palette.GREEN)
+	save.pressed.connect(func() -> void:
+		SetupService.save_email(email.text, password.text)
+		password.clear())
+	actions.add_child(save)
+	var remove := Button.new()
+	remove.text = "RIMUOVI"
+	remove.disabled = not configured
+	remove.add_theme_color_override("font_color", Palette.RED)
+	remove.pressed.connect(SetupService.delete_email)
+	actions.add_child(remove)
+	var help := Button.new()
+	help.text = "COME CREARE UNA APP PASSWORD  ↗"
+	help.pressed.connect(func() -> void:
+		OS.shell_open("https://support.google.com/accounts/answer/185833"))
+	actions.add_child(help)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
+
+
+func _build_telegram() -> void:
+	_listen_setup()
+	var states: Dictionary = SetupService.telegram_status()
+	_content.add_child(TerminalTheme.label(
+			"Collega i tre bot privati usati dal team. I token restano nel runtime locale o sulla tua VPS e non vengono mai inviati al cloud JHT.",
+			14, Palette.MUTED))
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	_content.add_child(actions)
+	var botfather := Button.new()
+	botfather.text = "APRI BOTFATHER  ↗"
+	botfather.pressed.connect(func() -> void: OS.shell_open("https://t.me/BotFather"))
+	actions.add_child(botfather)
+	var guide := TerminalTheme.label(
+			"Crea un bot, incolla il token, apri la chat col bot e premi Start; poi usa SALVA E RILEVA CHAT.",
+			12, Palette.YELLOW)
+	guide.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	guide.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(guide)
+	_content.add_child(HSeparator.new())
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 12)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	var details := {
+		"assistente": "onboarding del profilo e documenti",
+		"capitano": "direzione del team e posizioni pronte",
+		"mentor": "coaching e strategia professionale",
+	}
+	for role in ["assistente", "capitano", "mentor"]:
+		var state: Dictionary = states.get(role, {}) \
+				if states.get(role, {}) is Dictionary else {}
+		var panel := BracketPanel.new()
+		list.add_child(panel)
+		var pad := MarginContainer.new()
+		for side in ["left", "right", "top", "bottom"]:
+			pad.add_theme_constant_override("margin_" + side, 14)
+		panel.add_child(pad)
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 8)
+		pad.add_child(col)
+		var head := HBoxContainer.new()
+		col.add_child(head)
+		head.add_child(TerminalTheme.label(role.to_upper(), 17, Palette.WHITE, "bold"))
+		var role_detail := TerminalTheme.label("  ·  " + str(details[role]), 13, Palette.MUTED)
+		role_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(role_detail)
+		head.add_child(TerminalTheme.label(
+				"● CONFIGURATO" if bool(state.get("configured", false)) \
+				else "○ DA COLLEGARE", 13,
+				Palette.GREEN if bool(state.get("configured", false)) else Palette.YELLOW,
+				"medium"))
+		var fields := HBoxContainer.new()
+		fields.add_theme_constant_override("separation", 10)
+		col.add_child(fields)
+		var token := LineEdit.new()
+		token.secret = true
+		token.placeholder_text = "token BotFather"
+		token.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fields.add_child(token)
+		var chat_id := LineEdit.new()
+		chat_id.placeholder_text = "chat_id (opzionale: rilevamento automatico)"
+		chat_id.custom_minimum_size = Vector2(360, 0)
+		fields.add_child(chat_id)
+		var save := Button.new()
+		save.text = "SALVA E RILEVA CHAT"
+		save.disabled = not bool(SetupService.status.get("container_running", false))
+		save.add_theme_color_override("font_color", Palette.GREEN)
+		save.pressed.connect(func() -> void:
+			SetupService.save_telegram_bot(role, token.text, chat_id.text)
+			token.clear())
+		fields.add_child(save)
+		if bool(state.get("configured", false)):
+			var remove := Button.new()
+			remove.text = "RIMUOVI"
+			remove.add_theme_color_override("font_color", Palette.RED)
+			remove.pressed.connect(SetupService.delete_telegram_bot.bind(role))
+			fields.add_child(remove)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
+
+
+func _on_email_settings_refresh(_settings: Dictionary) -> void:
+	if section == "email" and is_instance_valid(_content):
+		_build()
+
+
+func _build_advanced() -> void:
+	_listen_setup()
+	_content.add_child(TerminalTheme.label(
+			"Diagnostica e manutenzione del runtime. Ogni comando resta visibile dentro il gioco.",
+			14, Palette.MUTED))
+	_content.add_child(HSeparator.new())
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	_content.add_child(actions)
+	var doctor := Button.new()
+	doctor.text = "ESEGUI DIAGNOSTICA"
+	doctor.disabled = not bool(SetupService.status.get("container_running", false))
+	doctor.add_theme_color_override("font_color", Palette.GREEN)
+	doctor.pressed.connect(SetupService.open_doctor)
+	actions.add_child(doctor)
+	var setup := Button.new()
+	setup.text = "RIVEDI SETUP"
+	setup.pressed.connect(func() -> void: navigate.emit("activation"))
+	actions.add_child(setup)
+	var install := Button.new()
+	install.text = "REINSTALLA / AGGIORNA RUNTIME"
+	install.pressed.connect(SetupService.open_runtime_install)
+	actions.add_child(install)
+	var files := HBoxContainer.new()
+	files.add_theme_constant_override("separation", 10)
+	_content.add_child(files)
+	var open_data := Button.new()
+	open_data.text = "APRI DATI JHT"
+	open_data.pressed.connect(func() -> void:
+		OS.shell_open(SetupService._jht_home()))
+	files.add_child(open_data)
+	var open_log := Button.new()
+	open_log.text = "APRI LOG DEL GIOCO"
+	open_log.pressed.connect(func() -> void:
+		OS.shell_open(ProjectSettings.globalize_path("user://jht-game.log").get_base_dir()))
+	files.add_child(open_log)
+	var dashboard := Button.new()
+	dashboard.text = "APRI DASHBOARD WEB LOCALE  ↗"
+	dashboard.disabled = not bool(SetupService.status.get("container_running", false))
+	dashboard.pressed.connect(func() -> void: OS.shell_open("http://127.0.0.1:3000"))
+	files.add_child(dashboard)
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(
+			"Versione gioco %s · dati applicazione %s" % [
+					ProjectSettings.get_setting("application/config/version", "dev"),
+					SetupService._jht_home()], 12, Palette.DIM))
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
+
+
+# ── Attivazione iniziale (ufficio aperto, lavoro sotto gate) ─────────
+
+var _setup_message: Label
+
+func _listen_setup() -> void:
+	if not SetupService.status_changed.is_connected(_on_setup_refresh):
+		SetupService.status_changed.connect(_on_setup_refresh)
+	if not SetupService.action_changed.is_connected(_on_setup_action):
+		SetupService.action_changed.connect(_on_setup_action)
+
+
+func _build_activation() -> void:
+	_listen_setup()
+	var s: Dictionary = SetupService.status
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("setup.intro"), 16, Palette.BASE))
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("setup.office_open"), 13, Palette.MUTED))
+	var guided := HBoxContainer.new()
+	guided.add_theme_constant_override("separation", 10)
+	_content.add_child(guided)
+	var guided_label := TerminalTheme.label(
+			"TOUR CONVERSAZIONALE · %d/3 COMPLETATI" % ScriptedOnboarding.completed_count(),
+			13, Palette.MINT, "medium")
+	guided_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	guided.add_child(guided_label)
+	for entry in [["assistente", "ASSISTENTE"], ["coordinatore", "COORDINATORE"],
+			["mentor", "MENTOR"]]:
+		var chat := Button.new()
+		chat.text = ("✓ " if ScriptedOnboarding.is_complete(str(entry[0])) else "▶ ") \
+				+ str(entry[1])
+		chat.add_theme_color_override("font_color", Palette.GREEN)
+		chat.pressed.connect(func() -> void:
+			add_child(ChatPanel.new(str(entry[0]), str(entry[1]).capitalize())))
+		guided.add_child(chat)
+	var progress := HBoxContainer.new()
+	progress.add_theme_constant_override("separation", 12)
+	_content.add_child(progress)
+	_setup_gate(progress, "01", UIStrings.t("setup.container"),
+			bool(s.get("container_running", false)),
+			UIStrings.t("setup.container_ok") if bool(s.get("container_running", false))
+			else UIStrings.t("setup.container_todo"), "docker")
+	_setup_gate(progress, "02", UIStrings.t("setup.provider"),
+			bool(s.get("provider_authenticated", false)),
+			_provider_status_text(s), "provider")
+	_setup_gate(progress, "03", UIStrings.t("setup.profile"),
+			bool(s.get("profile_ready", false)),
+			UIStrings.t("setup.profile_ok") if bool(s.get("profile_ready", false))
+			else UIStrings.t("setup.profile_todo"), "profile")
+	_content.add_child(HSeparator.new())
+	var bottom := HBoxContainer.new()
+	bottom.add_theme_constant_override("separation", 14)
+	_content.add_child(bottom)
+	var summary := TerminalTheme.label(
+			UIStrings.t("setup.progress") % int(s.get("completed", 0)),
+			15, Palette.GREEN if bool(s.get("ready", false)) else Palette.YELLOW,
+			"bold")
+	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	summary.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bottom.add_child(summary)
+	var start := Button.new()
+	start.text = UIStrings.t("setup.team_running") if bool(s.get("team_running", false)) \
+			else UIStrings.t("setup.start_team")
+	start.disabled = not bool(s.get("ready", false)) or bool(s.get("team_running", false))
+	start.add_theme_font_size_override("font_size", 17)
+	start.add_theme_color_override("font_color", Palette.GREEN)
+	start.pressed.connect(SetupService.start_team)
+	bottom.add_child(start)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
+
+
+func _setup_gate(parent: HBoxContainer, number: String, title: String,
+		done: bool, detail: String, destination: String) -> void:
+	var panel := BracketPanel.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.custom_minimum_size = Vector2(260, 180)
+	parent.add_child(panel)
+	var pad := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 16)
+	panel.add_child(pad)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	pad.add_child(col)
+	col.add_child(TerminalTheme.label(number + "  " + ("✓" if done else "○"),
+			14, Palette.GREEN if done else Palette.YELLOW, "bold"))
+	col.add_child(TerminalTheme.label(title.to_upper(), 19, Palette.WHITE, "bold"))
+	var body := TerminalTheme.label(detail, 13, Palette.MUTED)
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(body)
+	var open := Button.new()
+	open.text = UIStrings.t("setup.review") if done else UIStrings.t("setup.configure")
+	open.add_theme_color_override("font_color", Palette.GREEN if done else Palette.YELLOW)
+	open.pressed.connect(func() -> void:
+		if destination == "profile":
+			Game.goto_wizard()
+		else:
+			navigate.emit(destination))
+	col.add_child(open)
+
+
+func _provider_status_text(s: Dictionary) -> String:
+	var id := str(s.get("active_provider", ""))
+	if id == "":
+		return UIStrings.t("setup.provider_todo")
+	var name := str(SetupService.PROVIDERS.get(id, {}).get("name", id))
+	return UIStrings.t("setup.provider_ok") % name \
+			if bool(s.get("provider_authenticated", false)) \
+			else UIStrings.t("setup.provider_login") % name
+
+
+func _build_container_setup() -> void:
+	_listen_setup()
+	var s: Dictionary = SetupService.status
+	_content.add_child(TerminalTheme.label(UIStrings.t("setup.container_lead"),
+			15, Palette.BASE))
+	_content.add_child(HSeparator.new())
+	_setup_state_row("DOCKER", bool(s.get("docker_running", false)),
+			UIStrings.t("setup.docker_ready") if bool(s.get("docker_running", false))
+			else UIStrings.t("setup.docker_missing"))
+	_setup_state_row("CONTAINER JHT", bool(s.get("container_running", false)),
+			str(s.get("container_state", "missing")))
+	_setup_state_row("TEAM", bool(s.get("team_running", false)),
+			UIStrings.t("setup.team_running") if bool(s.get("team_running", false))
+			else UIStrings.t("setup.team_stopped"))
+	_content.add_child(HSeparator.new())
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 12)
+	_content.add_child(actions)
+	var start := Button.new()
+	start.text = UIStrings.t("setup.container_recheck") \
+			if bool(s.get("container_running", false)) else UIStrings.t("setup.container_start")
+	start.add_theme_font_size_override("font_size", 16)
+	start.add_theme_color_override("font_color", Palette.GREEN)
+	start.pressed.connect(SetupService.refresh if bool(s.get("container_running", false)) \
+			else SetupService.start_container)
+	actions.add_child(start)
+	var back := Button.new()
+	back.text = UIStrings.t("setup.back_overview")
+	back.pressed.connect(func() -> void: navigate.emit("activation"))
+	actions.add_child(back)
+	var install := Button.new()
+	install.text = "INSTALLA / RIPARA RUNTIME"
+	install.add_theme_color_override("font_color", Palette.YELLOW)
+	install.pressed.connect(SetupService.open_runtime_install)
+	actions.add_child(install)
+	if bool(s.get("container_running", false)):
+		var stop := Button.new()
+		stop.text = "FERMA CONTAINER"
+		stop.add_theme_color_override("font_color", Palette.RED)
+		stop.pressed.connect(SetupService.stop_container)
+		actions.add_child(stop)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
+
+
+func _setup_state_row(label_text: String, ok: bool, detail: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	_content.add_child(row)
+	row.add_child(TerminalTheme.label("●", 15, Palette.GREEN if ok else Palette.YELLOW))
+	var label := TerminalTheme.label(label_text, 15, Palette.BRIGHT, "medium")
+	label.custom_minimum_size = Vector2(220, 0)
+	row.add_child(label)
+	var value := TerminalTheme.label(detail, 14, Palette.MUTED)
+	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(value)
+
+
+func _build_provider_setup() -> void:
+	_listen_setup()
+	var s: Dictionary = SetupService.status
+	_content.add_child(TerminalTheme.label(UIStrings.t("setup.provider_lead"),
+			15, Palette.BASE))
+	_content.add_child(TerminalTheme.label(UIStrings.t("setup.provider_note"),
+			13, Palette.YELLOW))
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 10)
+	scroll.add_child(list)
+	for provider in ["claude", "codex", "kimi"]:
+		_provider_card(list, provider, s)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
+
+
+func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> void:
+	var meta: Dictionary = SetupService.PROVIDERS[provider]
+	var active := str(s.get("active_provider", "")) == provider
+	var match := SetupService.auth_match(provider, SetupService._jht_home())
+	var authed := bool(s.get("provider_authenticated", false)) \
+			if active and bool(s.get("remote", false)) else match != ""
+	var panel := BracketPanel.new()
+	parent.add_child(panel)
+	var pad := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 14)
+	panel.add_child(pad)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	pad.add_child(row)
+	row.add_child(TerminalTheme.label("●", 16,
+			Palette.GREEN if authed else Palette.YELLOW))
+	var text_col := VBoxContainer.new()
+	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(text_col)
+	text_col.add_child(TerminalTheme.label(str(meta["name"]) \
+			+ ("  ·  ATTIVO" if active else ""), 18,
+			Palette.GREEN if active else Palette.WHITE, "bold"))
+	text_col.add_child(TerminalTheme.label(str(meta["vendor"]), 13, Palette.MUTED))
+	text_col.add_child(TerminalTheme.label(
+			UIStrings.t("setup.provider_connected") if authed \
+			else UIStrings.t("setup.provider_disconnected"), 13,
+			Palette.MINT if authed else Palette.YELLOW))
+	var actions := VBoxContainer.new()
+	actions.custom_minimum_size = Vector2(250, 0)
+	actions.add_theme_constant_override("separation", 5)
+	row.add_child(actions)
+	if not active:
+		var choose := Button.new()
+		choose.text = UIStrings.t("setup.provider_choose")
+		choose.pressed.connect(SetupService.select_provider.bind(provider))
+		actions.add_child(choose)
+	else:
+		var login := Button.new()
+		login.text = UIStrings.t("setup.provider_relogin") if authed \
+				else UIStrings.t("setup.provider_subscription_login")
+		login.disabled = not bool(s.get("container_running", false))
+		login.add_theme_color_override("font_color", Palette.GREEN)
+		login.pressed.connect(SetupService.open_provider_login.bind(provider))
+		actions.add_child(login)
+		var install := Button.new()
+		install.text = UIStrings.t("setup.provider_install")
+		install.disabled = not bool(s.get("container_running", false))
+		install.pressed.connect(SetupService.install_provider.bind(provider))
+		actions.add_child(install)
+		if authed:
+			var logout := Button.new()
+			logout.text = "DISCONNETTI ACCOUNT"
+			logout.add_theme_color_override("font_color", Palette.RED)
+			logout.pressed.connect(SetupService.logout_provider.bind(provider))
+			actions.add_child(logout)
+	var subscribe := Button.new()
+	subscribe.text = UIStrings.t("setup.provider_subscribe")
+	subscribe.flat = true
+	subscribe.pressed.connect(SetupService.open_subscription.bind(provider))
+	actions.add_child(subscribe)
+	if active:
+		var hint_key := "setup.login_hint_" + provider
+		var hint := TerminalTheme.label(UIStrings.t(hint_key), 12, Palette.DIM)
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text_col.add_child(hint)
+
+
+func _on_setup_refresh(_status: Dictionary) -> void:
+	if is_instance_valid(_content) and section in ["activation", "provider", "docker"]:
+		_build()
+
+
+func _on_setup_action(_action: String, running: bool, message: String, ok: bool) -> void:
+	if not is_instance_valid(_setup_message):
+		return
+	_setup_message.text = ("◌ " if running else ("✓ " if ok else "⚠ ")) + message
+	_setup_message.add_theme_color_override("font_color",
+			Palette.YELLOW if running else (Palette.GREEN if ok else Palette.RED))
 
 # ── Sistema VPS / container ──────────────────────────────────────────
 
@@ -617,10 +1155,11 @@ func _on_hours_saved(ok: bool, error: String) -> void:
 ## I campi arrivano da profile_raw (chiavi vere del candidate_profile),
 ## il salvataggio riscrive il yml sulla VPS con backup. Offline: mock.
 const PROFILE_FIELDS := [
-	["name", "prof.name"], ["target_role", "prof.target_role"],
+	["name", "prof.name"], ["email", "prof.email"],
+	["target_role", "prof.target_role"],
 	["location", "prof.location"], ["experience_years", "prof.experience"],
 	["seniority_target", "prof.seniority"], ["industry", "prof.industry"],
-	["nationality", "prof.nationality"],
+	["nationality", "prof.nationality"], ["languages", "prof.languages"],
 ]
 
 var _prof_edits := {}
@@ -632,9 +1171,11 @@ func _build_profile() -> void:
 	if not BackendBus.profile_saved.is_connected(_on_profile_saved):
 		BackendBus.profile_saved.connect(_on_profile_saved)
 	var raw: Dictionary = BackendBus.live_settings.get("profile_raw", {})
-	if not BackendBus.is_live() or raw.is_empty():
-		_build_config()  # offline: coppie mock; live-ma-vuoto: placeholder
+	if not BackendBus.is_live():
+		_build_profile_setup()
 		return
+	if raw.is_empty():
+		raw = ScriptedOnboarding.profile_draft()
 	_prof_edits.clear()
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -684,13 +1225,44 @@ func _build_profile() -> void:
 		save.disabled = true
 		_prof_status.text = UIStrings.t("prof.saving")
 		_prof_status.add_theme_color_override("font_color", Palette.DIM)
-		BackendBus.save_user_profile(fields))
+		BackendBus.save_user_profile(ScriptedOnboarding.enrich_profile_fields(fields)))
 	_content.add_child(save)
 	_prof_status = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_prof_status)
 	_prof_save_btn = save
 
 var _prof_save_btn: Button
+
+
+func _build_profile_setup() -> void:
+	_listen_setup()
+	var ready := bool(SetupService.status.get("profile_ready", false))
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("setup.profile_ready_lead") if ready \
+			else UIStrings.t("setup.profile_lead"), 16,
+			Palette.GREEN if ready else Palette.BASE))
+	var note := TerminalTheme.label(UIStrings.t("setup.profile_body"), 14, Palette.MUTED)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(note)
+	_content.add_child(HSeparator.new())
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	_content.add_child(row)
+	var assistant := Button.new()
+	assistant.text = UIStrings.t("setup.profile_open")
+	assistant.disabled = not bool(SetupService.status.get("container_running", false)) \
+			or not bool(SetupService.status.get("provider_authenticated", false))
+	assistant.add_theme_font_size_override("font_size", 16)
+	assistant.add_theme_color_override("font_color", Palette.GREEN)
+	assistant.pressed.connect(Game.goto_wizard)
+	row.add_child(assistant)
+	var activation := Button.new()
+	activation.text = UIStrings.t("setup.back_overview")
+	activation.pressed.connect(func() -> void: navigate.emit("activation"))
+	row.add_child(activation)
+	if assistant.disabled and not ready:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t("setup.profile_requires"), 13, Palette.YELLOW))
 
 ## Il refresh periodico non deve cancellare quello che stai scrivendo:
 ## si ricostruisce solo se nessun campo del form ha il focus.
@@ -776,6 +1348,12 @@ func _build_positions() -> void:
 		return
 	if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
 		BackendBus.positions_updated.connect(_on_positions_refresh)
+	if BackendBus.positions_are_demo:
+		var demo_note := TerminalTheme.label(
+				"◆ SHOWROOM · 50 POSIZIONI FITTIZIE · nessun dato personale o link attivo",
+				13, Palette.YELLOW, "medium")
+		demo_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(demo_note)
 
 	var visible_rows := _pos_filtered(all, "")
 	var active_filters := _pos_active_filter_count()
@@ -883,6 +1461,7 @@ func _on_agent_page_refresh(_settings: Dictionary) -> void:
 ## La pagina del singolo agente (/team/<slug> del web): stato live,
 ## consumo nella finestra, le SUE ultime transizioni. Tutto dal bus.
 func _build_agent_page() -> void:
+	_listen_setup()
 	# refresh anche entrando qui direttamente (senza passare dalla lista)
 	if not BackendBus.agents_updated.is_connected(_on_agents_refresh):
 		BackendBus.agents_updated.connect(_on_agents_refresh)
@@ -917,8 +1496,19 @@ func _build_agent_page() -> void:
 			str(agent.get("status", "offline")) if not agent.is_empty()
 					else UIStrings.t("agents.not_active"),
 			15, Palette.MINT if not agent.is_empty() else Palette.DIM, "medium"))
+	if not agent.is_empty():
+		var restart := Button.new()
+		restart.text = "RIAVVIA"
+		restart.add_theme_color_override("font_color", Palette.YELLOW)
+		restart.pressed.connect(SetupService.control_agent.bind(slug, true))
+		title_row.add_child(restart)
+		var stop := Button.new()
+		stop.text = "FERMA"
+		stop.add_theme_color_override("font_color", Palette.RED)
+		stop.pressed.connect(SetupService.control_agent.bind(slug, false))
+		title_row.add_child(stop)
 	# la chat con l'agente si apre DA QUI (paradigma desktop app)
-	if BackendBus.can_chat_with(slug):
+	if BackendBus.can_chat_with(slug) or ScriptedOnboarding.supports(slug):
 		var chat_btn := Button.new()
 		chat_btn.text = UIStrings.t("agent.chat")
 		chat_btn.add_theme_font_size_override("font_size", 14)
@@ -931,6 +1521,8 @@ func _build_agent_page() -> void:
 			title_row.add_child(TerminalTheme.label(
 					UIStrings.t("agents.chat_besteffort"), 12, Palette.DIM))
 	_content.add_child(HSeparator.new())
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
 
 	# consumo dell'agente nella finestra usage (tutte le sue istanze)
 	var usage: Dictionary = BackendBus.live_settings.get("usage", {})
@@ -1539,18 +2131,34 @@ var _vps_agents_box: VBoxContainer
 ## Stato e roster arrivano live dal BackendBus (il collegamento resta
 ## vivo anche a pannello chiuso: vive nell'autoload, non qui).
 func _build_vps() -> void:
+	_listen_setup()
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.intro"), 15, Palette.MUTED))
 	var cfg: Dictionary = BackendBus.load_vps_config()
 
 	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "167.233.135.77")
 	_vps_key = _vps_input(UIStrings.t("vps.key"), cfg.get("key_path", ""),
 			"~/.ssh/id_ed25519")
+	if _vps_key.text == "" and FileAccess.file_exists(SetupService.default_vps_key_path()):
+		_vps_key.text = SetupService.default_vps_key_path()
 	var browse := Button.new()
 	browse.text = UIStrings.t("vps.key_browse")
 	browse.add_theme_font_size_override("font_size", 14)
 	browse.add_theme_color_override("font_color", Palette.MUTED)
 	browse.pressed.connect(_browse_vps_key)
 	_vps_key.get_parent().add_child(browse)
+	var generate := Button.new()
+	generate.text = "GENERA CHIAVE"
+	generate.pressed.connect(func() -> void:
+		SetupService.generate_vps_key()
+		_vps_key.text = SetupService.default_vps_key_path())
+	_vps_key.get_parent().add_child(generate)
+	var copy_public := Button.new()
+	copy_public.text = "COPIA CHIAVE PUBBLICA"
+	copy_public.pressed.connect(func() -> void:
+		var pub := VpsBackend.expand_user_path(_vps_key.text) + ".pub"
+		if FileAccess.file_exists(pub):
+			DisplayServer.clipboard_set(FileAccess.get_file_as_string(pub).strip_edges()))
+	_vps_key.get_parent().add_child(copy_public)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 16)
@@ -1567,9 +2175,17 @@ func _build_vps() -> void:
 	disconnect_btn.add_theme_color_override("font_color", Palette.MUTED)
 	disconnect_btn.pressed.connect(func() -> void: BackendBus.disconnect_backend())
 	actions.add_child(disconnect_btn)
+	var install := Button.new()
+	install.text = "INSTALLA JHT SULLA VPS"
+	install.add_theme_color_override("font_color", Palette.YELLOW)
+	install.pressed.connect(func() -> void:
+		SetupService.open_vps_install(_vps_ip.text, _vps_key.text))
+	actions.add_child(install)
 
 	_vps_state_lbl = TerminalTheme.label("", 16, Palette.MUTED, "medium")
 	_content.add_child(_vps_state_lbl)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.agents_live"),
 			14, Palette.MUTED, "medium"))
@@ -1671,6 +2287,36 @@ const DEPT_ROLE := {"scout": "scout", "analisti": "analista", "scorer": "scorer"
 func _build_team() -> void:
 	if not BackendBus.agents_updated.is_connected(_on_team_refresh):
 		BackendBus.agents_updated.connect(_on_team_refresh)
+	_listen_setup()
+	if not bool(SetupService.status.get("ready", false)):
+		var banner := Button.new()
+		banner.text = UIStrings.t("setup.team_locked") % int(
+				SetupService.status.get("completed", 0))
+		banner.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		banner.add_theme_font_size_override("font_size", 15)
+		banner.add_theme_color_override("font_color", Palette.YELLOW)
+		banner.pressed.connect(func() -> void: navigate.emit("activation"))
+		_content.add_child(banner)
+		_content.add_child(HSeparator.new())
+	var controls := HBoxContainer.new()
+	controls.add_theme_constant_override("separation", 10)
+	_content.add_child(controls)
+	var running := not BackendBus.agents.is_empty() or bool(
+			SetupService.status.get("team_running", false))
+	var primary := Button.new()
+	primary.text = "FERMA TEAM" if running else "AVVIA TEAM"
+	primary.disabled = not bool(SetupService.status.get("ready", false)) and not running
+	primary.add_theme_color_override("font_color", Palette.RED if running else Palette.GREEN)
+	primary.pressed.connect(SetupService.stop_team if running else SetupService.start_team)
+	controls.add_child(primary)
+	var setup := Button.new()
+	setup.text = "SETUP E STATO"
+	setup.pressed.connect(func() -> void: navigate.emit("activation"))
+	controls.add_child(setup)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_setup_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	controls.add_child(_setup_message)
+	_content.add_child(HSeparator.new())
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]
 		var occupied := 0

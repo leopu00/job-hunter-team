@@ -119,12 +119,10 @@ Note: the set of **supported agent CLIs** (Claude Code, Codex, Kimi) is closed b
 
 ## Cutting a release (maintainers)
 
-Releases are published by pushing a `vX.Y.Z` tag to `master`. Bump both
-the root `package.json` and `desktop/package.json` before tagging —
-electron-builder names artifacts after the desktop version, so forgetting
-it ships assets labeled with the previous release number. The full
-checklist (including the version-consistency gate and the Windows x64 /
-ARM64 split) lives in [`docs/internal/ops/release.md`](../docs/internal/ops/release.md).
+Releases are published by pushing a `vX.Y.Z` tag to `master`. Bump the root
+`package.json`, `game/project.godot` and `game/export_presets.cfg` before
+tagging. Godot is the only native desktop artifact. The full checklist lives
+in [`docs/internal/ops/release.md`](../docs/internal/ops/release.md).
 
 ## Code of conduct
 

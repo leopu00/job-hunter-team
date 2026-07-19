@@ -2,7 +2,7 @@
 
 Get the team running in **about 10 minutes**, depending on the path you pick.
 
-> 🧪 JHT is in beta — **CLI-first**. The desktop app is in development and not yet publicly released ([`desktop/STATUS.md`](../../desktop/STATUS.md)). If anything goes wrong, see [`BETA.md`](BETA.md).
+> 🧪 JHT is in beta. The native desktop app is the Godot office in [`game/`](../../game/); the CLI remains available for automation and recovery. If anything goes wrong, see [`BETA.md`](BETA.md).
 
 ---
 
@@ -31,7 +31,7 @@ Pick the path that fits how you work:
 | 🦞 | [AI agent drives JHT](#-path-1-let-your-ai-agent-do-it) | You already use Claude Code / OpenClaw / Codex / Cursor | < 5 min |
 | 📦 | [One-liner installer](#-path-3-one-liner-installer-cli-users) | Comfortable with the terminal | ~10 min |
 | 🛠️ | [From source](#%EF%B8%8F-path-4-from-source-contributors) | Contributors, hackers | ~15 min |
-| 🖥️ | [Desktop app](#%EF%B8%8F-path-2-desktop-app-in-development) | 🚧 In development — contributors build from source | ~15 min |
+| 🖥️ | [Native app](#%EF%B8%8F-path-2-native-app) | The complete visual office | ~10 min |
 
 ---
 
@@ -45,22 +45,22 @@ If you already use a personal AI assistant (Claude Code, OpenClaw, Codex, Cursor
 
 ---
 
-## 🖥️ Path 2 — Desktop app (in development)
+## 🖥️ Path 2 — Native app
 
-> 🚧 The desktop app is **not part of the beta yet**: the website's download page is intentionally disabled and no public binaries are promoted. It works up to a point — the honest state, known gaps and contributor roadmap live in [`desktop/STATUS.md`](../../desktop/STATUS.md).
+The desktop application is the game-like Godot office. It exposes onboarding, provider login, runtime and VPS controls, profile, email, Telegram, cloud sync, agents and job data without an Electron or external-terminal wrapper.
 
-If you want to try it anyway (or help close the gaps), build it from source:
+To run it from source:
 
 ```bash
 git clone https://github.com/leopu00/job-hunter-team.git
-cd job-hunter-team/desktop
-npm install
-npm run dev          # run the app from source
+cd job-hunter-team
+./game/tools/run.sh dev       # macOS / Linux
+# game\tools\run.ps1 dev      # Windows PowerShell
 ```
 
-The app walks you through the same setup the CLI wizard covers — language, prerequisite install (Docker + Git), provider login (🟠 Claude / 🔵 Codex / 🌙 Kimi) in an embedded terminal, profile upload — then **Start** boots the team in the background.
+The office is visible immediately. **Attiva team** then guides you through the three required gates: container, provider login in the embedded console, and candidate profile. Optional email, Telegram, account sync and VPS setup live under **Impostazioni**.
 
-> 💡 The desktop app is designed to become the **interaction cockpit** for non-technical users: chat with the agents, upload files, start/stop — for a local team via a browser window to `localhost`, for a VPS team over an SSH tunnel. The **web dashboard is read-only** (positions, scores, map); **Telegram** is the optional async channel for when you're away.
+> 💡 The native office is the **interaction cockpit**. The web dashboard remains read-only; Telegram is the optional async channel for when you're away.
 
 ---
 
@@ -154,12 +154,24 @@ See [`docs/CLI-INSTALL.md`](CLI-INSTALL.md) for the full CLI reference.
 
 Whichever path you took:
 
-1. **Set up your candidate profile.** The Assistant agent can do this for you in conversation:
-   - Web: visit `/onboarding` and chat with the Assistant — it writes `candidate_profile.yml` for you
-   - Or edit `~/Documents/Job Hunter Team/candidate_profile.yml` by hand (see `docs/examples/candidate_profile.yml.example`)
-2. **Configure the team.** Pick the agents you want active, set the polling intervals, set your work hours.
-3. **Click Start.** The Captain dispatches orders to Scout → Analyst → Scorer → Writer → Critic. Sentinel and Bridge keep the team within the subscription window.
-4. **Review the output.** Applications marked "Ready to submit" land in `~/Documents/Job Hunter Team/applications/`. You decide what to send.
+1. **Open the Godot office.** The office and its agents are immediately
+   explorable; setup never traps you in a blocking wizard.
+2. **Talk to Assistant, Coordinator and Mentor.** Their first-run conversations
+   are authored in the app and require neither an LLM nor network access. Use
+   the suggested replies to prepare your profile, choose local/VPS runtime and
+   provider, and set search preferences.
+3. **Complete the native checklist.** Start the container, authorize Codex,
+   Claude or Kimi in the embedded console, and fill the Profile page. Provider
+   links may open in your browser, but codes and terminal interaction remain
+   wrapped inside the office.
+4. **Activate the team.** Once runtime, provider and profile are ready, the
+   Coordinator starts the agents. Free-text chat then becomes available next
+   to the authored replies.
+5. **Review the output.** Applications marked "Ready to submit" land in
+   `~/Documents/Job Hunter Team/applications/`. You decide what to send.
+
+See the detailed [first-run contract](../../game/docs/FIRST-RUN.md) and the
+[native VPS setup guide](VPS-SETUP-WIZARD.md).
 
 ---
 

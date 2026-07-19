@@ -127,6 +127,16 @@ try {
         "test" {
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/nav_grid_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/speech_bubble_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/pipeline_queue_selftest.gd")
+			Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/embedded_terminal_selftest.gd")
+			python tools/python_payload_syntax_test.py
+			if ($LASTEXITCODE -ne 0) { throw "Embedded Python payload test failed" }
+			$env:JHT_SCENE = "office"
+			$env:JHT_GUIDED_TEST = "1"
+			$out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
+			Remove-Item Env:JHT_GUIDED_TEST
+			Remove-Item Env:JHT_SCENE
+			if ($out -notmatch "GUIDED-ONBOARDING-TEST PASS") { throw $out }
 
             $env:JHT_VPS_CONTRACT_TEST = "1"
             $out = Invoke-GodotCaptured -GodotArguments @("--headless", "--quit-after", "3", ".")
