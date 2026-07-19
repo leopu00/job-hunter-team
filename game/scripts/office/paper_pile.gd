@@ -3,17 +3,21 @@ extends Node2D
 ## La pila di fogli sulla scrivania (ciclo grafica 11/07): quando un agente
 ## torna da stampante/inbox in modalità carry, i fogli si ACCUMULANO qui.
 ## Contratto quantitativo: una posizione in coda = un fascicolo visibile.
-## Non si usa più la vecchia scala a quattro stadi, che rendeva indistinguibili
-## code di dimensioni diverse. Oltre il limite fisico la torre resta alta e il
-## badge continua a mostrare il conteggio reale, senza troncare il dato.
+## Le code grandi non formano più una torre fino al soffitto: oltre quaranta
+## documenti nasce una nuova risma sul tavolo, fino a dodici risme. Se la coda
+## supera la capienza nominale, tutte le risme crescono insieme.
 ##
 ## GLES3: texture su Sprite2D figlio, primitive _draw solo su self e solo
 ## in modalità blockout — mai le due cose sullo stesso CanvasItem.
 
 const SHEET_TEX := "res://assets/gen-art/furniture/paper_pile_1.png"
-const MAX_VISUAL_SHEETS := 80
-const WIDTH := 54.0
-const SHEET_RISE := 1.65
+const SHEETS_PER_STACK := 40
+const MAX_STACKS := 12
+const STACK_COLUMNS := 6
+const WIDTH := 38.0
+const SHEET_RISE := 1.05
+const STACK_X_GAP := 32.0
+const STACK_Y_GAP := 30.0
 
 ## Le pile degli INBOX di reparto, registrate da office.gd: il flusso
 ## dei fogli si vede end-to-end (il ritiro svuota l'inbox a monte, la
@@ -38,9 +42,9 @@ var _highlighted := false
 ## Bersaglio preciso della risma, distinto dalla vaschetta e dalla zona
 ## reparto. Le coordinate ricevute dalla FreeCamera sono world/global.
 func hit_by(point: Vector2) -> bool:
-	var tower: float = float(mini(count, MAX_VISUAL_SHEETS)) * SHEET_RISE
-	return Rect2(global_position - Vector2(38, 32 + tower),
-			Vector2(76, 68 + tower)).has_point(point)
+	var tower := _max_stack_height() * SHEET_RISE
+	return Rect2(global_position - Vector2(105, 44 + tower),
+			Vector2(210, 92 + tower)).has_point(point)
 
 func set_highlight(on: bool) -> void:
 	if _highlighted == on:
@@ -121,10 +125,51 @@ func take_sheets(n: int) -> void:
 	_refresh()
 
 func debug_snapshot() -> Dictionary:
-	return {"count": count, "target": _target, "visual_sheets": _sheets.size()}
+	return {"count": count, "target": _target, "visual_sheets": _sheets.size(),
+			"visual_stacks": _stack_sizes().size()}
+
+func _stack_sizes() -> Array[int]:
+	if count <= 0:
+		return []
+	var stack_count := mini(MAX_STACKS,
+			int(ceil(float(count) / float(SHEETS_PER_STACK))))
+	var sizes: Array[int] = []
+	var remaining := count
+	for _i in stack_count:
+		var amount := mini(SHEETS_PER_STACK, remaining)
+		sizes.append(amount)
+		remaining -= amount
+	# Oltre 480 documenti il tavolo resta di dimensione fisica finita: il
+	# surplus viene distribuito uniformemente, così nessuna singola torre
+	# torna a crescere da sola fino al soffitto.
+	var cursor := 0
+	while remaining > 0:
+		var addition := mini(remaining, stack_count)
+		for i in addition:
+			sizes[(cursor + i) % stack_count] += 1
+		remaining -= addition
+		cursor = (cursor + addition) % stack_count
+	return sizes
+
+func _stack_base(index: int, total: int) -> Vector2:
+	var row := index / STACK_COLUMNS
+	var col := index % STACK_COLUMNS
+	var rows := int(ceil(float(total) / float(STACK_COLUMNS)))
+	var row_count := mini(STACK_COLUMNS, total - row * STACK_COLUMNS)
+	var x := (float(col) - float(row_count - 1) / 2.0) * STACK_X_GAP
+	var y := (float(row) - float(rows - 1) / 2.0) * STACK_Y_GAP
+	return Vector2(x, y)
+
+func _max_stack_height() -> float:
+	var maximum := 0
+	for amount in _stack_sizes():
+		maximum = maxi(maximum, amount)
+	return float(maximum)
 
 func _refresh() -> void:
-	var visible_count: int = mini(count, MAX_VISUAL_SHEETS)
+	# Esattamente un nodo-foglio per posizione: la silhouette e il numero
+	# raccontano la stessa quantità, anche per una coda da centinaia di job.
+	var visible_count := count
 	while _sheets.size() < visible_count:
 		var sheet := Sprite2D.new()
 		sheet.texture = _sheet_texture
@@ -135,23 +180,29 @@ func _refresh() -> void:
 		removed.queue_free()
 	if _sheet_texture:
 		var scale_factor: float = WIDTH / _sheet_texture.get_width()
-		for i in _sheets.size():
-			var sheet: Sprite2D = _sheets[i]
-			sheet.texture = _sheet_texture
-			sheet.scale = Vector2.ONE * scale_factor
-			# Ogni fascicolo aggiunge una linea e altezza reali alla torre.
-			sheet.position = Vector2(sin(float(i) * 2.17) * 1.6,
-					-float(i) * SHEET_RISE)
-			sheet.rotation = sin(float(i) * 1.31) * 0.012
-			sheet.modulate = Color(0.72, 1.0, 0.82) if _highlighted else Color.WHITE
+		var stack_sizes := _stack_sizes()
+		var sheet_i := 0
+		for stack_i in stack_sizes.size():
+			var base := _stack_base(stack_i, stack_sizes.size())
+			for level in stack_sizes[stack_i]:
+				var sheet: Sprite2D = _sheets[sheet_i]
+				sheet.texture = _sheet_texture
+				sheet.scale = Vector2.ONE * scale_factor
+				sheet.position = base + Vector2(
+						sin(float(sheet_i) * 2.17) * 1.2,
+						-float(level) * SHEET_RISE)
+				sheet.rotation = sin(float(sheet_i) * 1.31) * 0.012
+				sheet.modulate = Color(0.72, 1.0, 0.82) \
+						if _highlighted else Color.WHITE
+				sheet_i += 1
 	queue_redraw()
 
 func _draw() -> void:
-	var tower: float = float(mini(count, MAX_VISUAL_SHEETS)) * SHEET_RISE
+	var tower := _max_stack_height() * SHEET_RISE
 	if _highlighted:
-		draw_rect(Rect2(Vector2(-38, -32 - tower), Vector2(76, 68 + tower)),
+		draw_rect(Rect2(Vector2(-105, -44 - tower), Vector2(210, 92 + tower)),
 				Color(Palette.GREEN, 0.14))
-		draw_rect(Rect2(Vector2(-38, -32 - tower), Vector2(76, 68 + tower)),
+		draw_rect(Rect2(Vector2(-105, -44 - tower), Vector2(210, 92 + tower)),
 				Palette.GREEN, false, 2.0)
 	if count <= 0:
 		return
@@ -160,7 +211,7 @@ func _draw() -> void:
 	var label: String = str(count)
 	var label_size: Vector2 = ThemeDB.fallback_font.get_string_size(label,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
-	var label_pos := Vector2(29, -tower - 22)
+	var label_pos := Vector2(92, -tower - 28)
 	draw_rect(Rect2(label_pos - Vector2(5, 14), label_size + Vector2(10, 7)),
 			Color(0.04, 0.04, 0.06, 0.94))
 	draw_rect(Rect2(label_pos - Vector2(5, 14), label_size + Vector2(10, 7)),
