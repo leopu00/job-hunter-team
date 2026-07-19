@@ -434,6 +434,73 @@ function foundInfo(
   return { date, ago };
 }
 
+// ── Impacchettamento chips (scelta utente 19/07) ─────────────────────
+// Il flex-wrap ingenuo lasciava i tag grandi da soli su una riga (3 righe
+// totali). Qui: larghezza stimata dal font mono (larghezza carattere
+// costante) + first-fit decreasing sulle righe → i grandi si affiancano
+// ai piccoli e di norma bastano 2 righe.
+type ChipDef = {
+  key: string;
+  icon?: React.ReactElement;
+  text: string;
+  color?: string;
+};
+
+function buildChips(
+  card: SwipeCardData,
+  locale: string,
+  t: (typeof T)["en"],
+): ChipDef[] {
+  const out: ChipDef[] = [];
+  const loc = card.loc_city
+    ? `${card.loc_city}${card.loc_country ? `, ${card.loc_country}` : ""}`
+    : (card.loc_country ?? card.location);
+  if (loc) out.push({ key: "loc", icon: <IconPin size={11} />, text: loc });
+  if (card.remote_type)
+    out.push({
+      key: "remote",
+      text: t.remote[card.remote_type] ?? card.remote_type,
+    });
+  const sal = formatSalary(
+    card.salary_min,
+    card.salary_max,
+    card.salary_currency,
+  );
+  if (sal) out.push({ key: "sal", text: sal, color: "var(--color-green)" });
+  if (card.role_family) out.push({ key: "role", text: card.role_family });
+  const fi = foundInfo(card.found_at, locale, t);
+  if (fi)
+    out.push({
+      key: "date",
+      icon: <IconCalendar size={11} />,
+      text: `${fi.date} · ${fi.ago}`,
+    });
+  return out;
+}
+
+// JetBrains Mono ~11px: avanzamento carattere ≈ 6.9px; 18 = padding+bordo,
+// 15 = icona+gap.
+function chipWidth(c: ChipDef): number {
+  return 18 + (c.icon ? 15 : 0) + c.text.length * 6.9;
+}
+
+function packChips(defs: ChipDef[], maxW: number): ChipDef[][] {
+  const GAP = 6;
+  const sorted = [...defs].sort((a, b) => chipWidth(b) - chipWidth(a));
+  const rows: { items: ChipDef[]; w: number }[] = [];
+  for (const c of sorted) {
+    const w = chipWidth(c);
+    const row = rows.find((r) => r.w + GAP + w <= maxW);
+    if (row) {
+      row.items.push(c);
+      row.w += GAP + w;
+    } else {
+      rows.push({ items: [c], w });
+    }
+  }
+  return rows.map((r) => r.items);
+}
+
 // Durata dell'animazione di uscita — deve combaciare con la transition CSS.
 const FLY_MS = 280;
 // Trascinamento orizzontale oltre questa soglia = cambio card.
@@ -447,6 +514,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   // timbro) e ci si può tornare sopra per cambiare idea.
   const [idx, setIdx] = useState(0);
   const [given, setGiven] = useState<Record<string, Verdict>>({});
+  const [chipAreaW, setChipAreaW] = useState(320);
   const [fly, setFly] = useState<{ x: number; rot: number } | null>(null);
   const [drag, setDrag] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
@@ -482,6 +550,17 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     const w = window as unknown as Record<string, unknown>;
     setSpeechOk(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition));
     return () => recRef.current?.stop();
+  }, []);
+
+  // Larghezza utile per le righe di chips = card meno il padding p-5.
+  useEffect(() => {
+    const measure = () => {
+      const w = deckRef.current?.clientWidth;
+      if (w) setChipAreaW(w - 40);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
   const stopVoice = useCallback(() => {
@@ -944,50 +1023,24 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                         </div>
                       </div>
 
-                      {/* Meta chips */}
-                      <div className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
-                        {(card.loc_city ||
-                          card.loc_country ||
-                          card.location) && (
-                          <Chip>
-                            <span className="inline-flex items-center gap-1">
-                              <IconPin size={11} />
-                              {card.loc_city
-                                ? `${card.loc_city}${card.loc_country ? `, ${card.loc_country}` : ""}`
-                                : (card.loc_country ?? card.location)}
-                            </span>
-                          </Chip>
+                      {/* Meta chips: righe impacchettate (first-fit
+                          decreasing) — i tag grandi affiancati ai piccoli
+                          invece del wrap ingenuo su 3 righe. */}
+                      <div className="flex flex-col gap-1.5 text-[11px] font-semibold">
+                        {packChips(buildChips(card, locale, t), chipAreaW).map(
+                          (row, ri) => (
+                            <div key={ri} className="flex flex-wrap gap-1.5">
+                              {row.map((c) => (
+                                <Chip key={c.key} color={c.color}>
+                                  <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                    {c.icon}
+                                    {c.text}
+                                  </span>
+                                </Chip>
+                              ))}
+                            </div>
+                          ),
                         )}
-                        {card.remote_type && (
-                          <Chip>
-                            {t.remote[card.remote_type] ?? card.remote_type}
-                          </Chip>
-                        )}
-                        {formatSalary(
-                          card.salary_min,
-                          card.salary_max,
-                          card.salary_currency,
-                        ) && (
-                          <Chip color="var(--color-green)">
-                            {formatSalary(
-                              card.salary_min,
-                              card.salary_max,
-                              card.salary_currency,
-                            )}
-                          </Chip>
-                        )}
-                        {card.role_family && <Chip>{card.role_family}</Chip>}
-                        {(() => {
-                          const fi = foundInfo(card.found_at, locale, t);
-                          return fi ? (
-                            <Chip>
-                              <span className="inline-flex items-center gap-1">
-                                <IconCalendar size={11} />
-                                {fi.date} · {fi.ago}
-                              </span>
-                            </Chip>
-                          ) : null;
-                        })()}
                       </div>
 
                       {/* Sintesi JD: scrollabile se non c'entra; pre-line
