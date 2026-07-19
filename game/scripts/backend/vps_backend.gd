@@ -943,6 +943,58 @@ static func _safe_filename(name: String) -> String:
 	return out if out != "" else "documento"
 
 
+## ── Documenti prodotti (anteprima CV in-game) ────────────────────────
+## Lettura on-demand di un file registrato in cv_path/cl_path. Il path
+## arriva dal jobs.db ma resta input non fidato per la shell (gotcha
+## OS.execute): viaggia BASE64 dentro lo script python, e il contenuto
+## torna BASE64 (regge anche i pdf binari). Solo le aree dati note del
+## container, mai il filesystem libero.
+
+const ARTIFACT_MAX_BYTES := 10 * 1024 * 1024  # stesso tetto dell'upload
+
+const ARTIFACT_PY := """
+import base64, json, os
+path = base64.b64decode('%s').decode('utf-8')
+real = os.path.realpath(path)
+if not (real.startswith('/jht_user/') or real.startswith('/jht_home/')):
+    print(json.dumps(dict(ok=False, error='percorso fuori dalle aree dati')))
+elif not os.path.isfile(real):
+    print(json.dumps(dict(ok=False, error='file non trovato sul container')))
+elif os.path.getsize(real) > %d:
+    print(json.dumps(dict(ok=False, error='file oltre i 10 MB')))
+else:
+    with open(real, 'rb') as f:
+        print(json.dumps(dict(ok=True, b64=base64.b64encode(f.read()).decode())))
+"""
+
+func fetch_artifact(path: String) -> void:
+	# thread one-shot: un pdf da qualche centinaio di KB non deve
+	# congelare né la UI né il giro di poll
+	_queue_worker(_do_fetch_artifact.bind(path))
+
+func _do_fetch_artifact(path: String) -> void:
+	var res := _ssh_python(ARTIFACT_PY % [Marshalls.utf8_to_base64(path),
+			ARTIFACT_MAX_BYTES])
+	var ok := false
+	var data := PackedByteArray()
+	var err := ""
+	if res["code"] != 0:
+		err = _short_error(res)
+	else:
+		err = "risposta illeggibile dalla VPS"
+		for line in str(res["out"]).split("\n"):
+			if not line.begins_with("{"):
+				continue
+			var d: Variant = JSON.parse_string(line)
+			if d is Dictionary:
+				ok = bool(d.get("ok", false))
+				err = str(d.get("error", ""))
+				if ok:
+					data = Marshalls.base64_to_raw(str(d.get("b64", "")))
+			break
+	bus.call_deferred("publish_artifact", path, ok, data, err)
+
+
 ## ── Orari di lavoro: editing PIENO (paradigma desktop app) ───────────
 ## working_hours vive in jht.config.json: si aggiorna SOLO quella
 ## sezione (load→update→dump preserva tutto il resto, credenziali
