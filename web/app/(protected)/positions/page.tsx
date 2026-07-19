@@ -666,7 +666,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
+      <div className="mb-4 pb-3 md:mb-8 md:pb-6 border-b border-[var(--color-border)]">
         <nav
           aria-label={tr("breadcrumb")}
           className="flex items-center gap-2 mb-1"
@@ -687,7 +687,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             {tr("positions")}
           </span>
         </nav>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[var(--color-white)] mt-2 md:mt-3">
           {tr("positions")}
         </h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">
@@ -706,7 +706,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         filtersLabel={tr("filters")}
         rowsControl={
           <div className="flex items-center gap-1.5">
-            <span className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
+            <span className="hidden sm:inline text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
               {tr("rows_per_page")}
             </span>
             {PAGE_SIZE_OPTIONS.map((size) => (
@@ -730,362 +730,474 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 {size}
               </Link>
             ))}
-            <span
-              className="mx-1 h-3 w-px bg-[var(--color-border)]"
-              aria-hidden="true"
-            />
-            <ColumnsPicker
-              columns={[
-                { key: "id", label: "ID" },
-                { key: "last_action_at", label: tr("col_updated") },
-                { key: "title", label: tr("col_title") },
-                { key: "company", label: tr("col_company") },
-                { key: "role_family", label: tr("col_category") },
-                { key: "loc_country", label: tr("col_country") },
-                { key: "loc_city", label: tr("col_city") },
-                { key: "remote", label: tr("col_remote") },
-                { key: "score", label: tr("col_score") },
-                { key: "monthly", label: tr("col_monthly") },
-                { key: "source", label: tr("col_source") },
-                { key: "last_action_by", label: tr("col_updated_by") },
-                { key: "critic", label: tr("col_voto") },
-                { key: "status", label: tr("col_status") },
-              ]}
-              visible={[...visibleCols]}
-              texts={{ button: tr("cols_button"), reset: tr("cols_reset") }}
-            />
+            {/* Il picker colonne riguarda la TABELLA: su mobile c'è la
+                vista card, quindi niente separatore né picker. */}
+            <span className="hidden md:flex items-center gap-1.5">
+              <span
+                className="mx-1 h-3 w-px bg-[var(--color-border)]"
+                aria-hidden="true"
+              />
+              <ColumnsPicker
+                columns={[
+                  { key: "id", label: "ID" },
+                  { key: "last_action_at", label: tr("col_updated") },
+                  { key: "title", label: tr("col_title") },
+                  { key: "company", label: tr("col_company") },
+                  { key: "role_family", label: tr("col_category") },
+                  { key: "loc_country", label: tr("col_country") },
+                  { key: "loc_city", label: tr("col_city") },
+                  { key: "remote", label: tr("col_remote") },
+                  { key: "score", label: tr("col_score") },
+                  { key: "monthly", label: tr("col_monthly") },
+                  { key: "source", label: tr("col_source") },
+                  { key: "last_action_by", label: tr("col_updated_by") },
+                  { key: "critic", label: tr("col_voto") },
+                  { key: "status", label: tr("col_status") },
+                ]}
+                visible={[...visibleCols]}
+                texts={{ button: tr("cols_button"), reset: tr("cols_reset") }}
+              />
+            </span>
           </div>
         }
       >
-        {/* ── Table ───────────────────────────────────────────────── */}
+        {/* ── Card list (solo mobile) ─────────────────────────────
+            Sotto md la tabella è inutilizzabile (colonne fuori viewport):
+            stessa query, stessa paginazione, ma una card compatta per
+            posizione — titolo+score, azienda+località, stato+categoria+
+            data. Tap sulla card = pagina dettaglio. */}
+        <div className="md:hidden flex flex-col gap-2">
+          {visiblePositions.length === 0 ? (
+            <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-dim)] text-[11px]">
+              {tr("no_positions_filtered")}
+            </div>
+          ) : (
+            visiblePositions.map((p: PositionWithScore) => (
+              <Link
+                key={p.id}
+                href={`/positions/${p.id}`}
+                className="block rounded-lg border p-3 no-underline"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-card)",
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span className="flex items-start gap-2 min-w-0">
+                    <UnseenDot
+                      id={String(p.id)}
+                      label={tr("unseen_marker")}
+                      initialSeen={p.seen}
+                    />
+                    <span
+                      className="text-[13px] font-semibold leading-snug text-[var(--color-bright)]"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {p.title}
+                    </span>
+                  </span>
+                  <span
+                    className={`shrink-0 text-[13px] font-bold tabular-nums ${scoreClass(p.score)}`}
+                  >
+                    {p.score ?? "—"}
+                  </span>
+                </div>
+                <div className="mt-1 text-[11px] text-[var(--color-muted)] truncate">
+                  {p.company}
+                  {p.loc_city?.trim() || p.loc_country?.trim()
+                    ? ` · ${p.loc_city?.trim() || p.loc_country?.trim()}`
+                    : p.remote_type === "full_remote"
+                      ? ` · ${tr("remote_loc")}`
+                      : ""}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 text-[10px]">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="shrink-0 text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
+                      style={{
+                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                        borderColor:
+                          STATUS_COLORS[p.status] ?? "var(--color-border)",
+                        background: `${STATUS_COLORS[p.status]}18`,
+                      }}
+                    >
+                      {p.status}
+                    </span>
+                    {p.role_family?.trim() && (
+                      <span className="inline-flex items-center gap-1 truncate text-[var(--color-muted)]">
+                        <span
+                          aria-hidden
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: "50%",
+                            background: colorForFamily(p.role_family.trim()),
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span className="truncate">{p.role_family.trim()}</span>
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 font-mono tabular-nums text-[var(--color-dim)]">
+                    {formatFoundAt(p.last_action_at || p.found_at, locale)}
+                  </span>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+
+        {/* ── Table (da md in su) ─────────────────────────────────── */}
         {/* La pagina /positions è in MainChrome FULLSCREEN_FLOWS, quindi
           il main è già full-width con padding 48px. La tabella prende
           100% e ha scroll-x se eccede. */}
-        <TableScrollSync className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
-          <table
-            className="w-full text-[12px]"
-            style={{ borderCollapse: "collapse" }}
-            aria-label={tr("list_positions")}
-          >
-            <thead>
-              <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-                {[
-                  { col: "id", label: "ID", sortable: true },
-                  {
-                    col: "last_action_at",
-                    label: tr("col_updated"),
-                    sortable: true,
-                  },
-                  { col: "title", label: tr("col_title"), sortable: true },
-                  { col: "company", label: tr("col_company"), sortable: true },
-                  {
-                    col: "role_family",
-                    label: tr("col_category"),
-                    sortable: true,
-                  },
-                  {
-                    col: "loc_country",
-                    label: tr("col_country"),
-                    sortable: true,
-                  },
-                  { col: "loc_city", label: tr("col_city"), sortable: true },
-                  { col: "remote", label: tr("col_remote"), sortable: true },
-                  {
-                    col: "score",
-                    label: tr("col_score"),
-                    sortable: true,
-                    center: true,
-                  },
-                  { col: "monthly", label: tr("col_monthly"), sortable: true },
-                  { col: "source", label: tr("col_source"), sortable: true },
-                  {
-                    col: "last_action_by",
-                    label: tr("col_updated_by"),
-                    sortable: true,
-                    center: true,
-                  },
-                  {
-                    col: "critic",
-                    label: tr("col_voto"),
-                    sortable: true,
-                    center: true,
-                  },
-                  {
-                    col: "status",
-                    label: tr("col_status"),
-                    sortable: true,
-                    center: true,
-                  },
-                ]
-                  .filter(({ col }) => show(col as PositionsColumnKey))
-                  .map(({ col, label, sortable, center }) => (
-                    <th
-                      key={col}
-                      scope="col"
-                      className={`px-4 py-3 ${center ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
+        <div className="hidden md:block">
+          <TableScrollSync className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+            <table
+              className="w-full text-[12px]"
+              style={{ borderCollapse: "collapse" }}
+              aria-label={tr("list_positions")}
+            >
+              <thead>
+                <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
+                  {[
+                    { col: "id", label: "ID", sortable: true },
+                    {
+                      col: "last_action_at",
+                      label: tr("col_updated"),
+                      sortable: true,
+                    },
+                    { col: "title", label: tr("col_title"), sortable: true },
+                    {
+                      col: "company",
+                      label: tr("col_company"),
+                      sortable: true,
+                    },
+                    {
+                      col: "role_family",
+                      label: tr("col_category"),
+                      sortable: true,
+                    },
+                    {
+                      col: "loc_country",
+                      label: tr("col_country"),
+                      sortable: true,
+                    },
+                    { col: "loc_city", label: tr("col_city"), sortable: true },
+                    { col: "remote", label: tr("col_remote"), sortable: true },
+                    {
+                      col: "score",
+                      label: tr("col_score"),
+                      sortable: true,
+                      center: true,
+                    },
+                    {
+                      col: "monthly",
+                      label: tr("col_monthly"),
+                      sortable: true,
+                    },
+                    { col: "source", label: tr("col_source"), sortable: true },
+                    {
+                      col: "last_action_by",
+                      label: tr("col_updated_by"),
+                      sortable: true,
+                      center: true,
+                    },
+                    {
+                      col: "critic",
+                      label: tr("col_voto"),
+                      sortable: true,
+                      center: true,
+                    },
+                    {
+                      col: "status",
+                      label: tr("col_status"),
+                      sortable: true,
+                      center: true,
+                    },
+                  ]
+                    .filter(({ col }) => show(col as PositionsColumnKey))
+                    .map(({ col, label, sortable, center }) => (
+                      <th
+                        key={col}
+                        scope="col"
+                        className={`px-4 py-3 ${center ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
+                        style={{
+                          color:
+                            sortable && sortCol === col
+                              ? "var(--color-bright)"
+                              : "var(--color-dim)",
+                        }}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          {sortable ? (
+                            <Link
+                              href={sortHref(col)}
+                              className="no-underline hover:text-[var(--color-green)] transition-colors"
+                              style={{ color: "inherit" }}
+                            >
+                              {label}
+                              <span aria-hidden="true">
+                                {sortIndicator(col)}
+                              </span>
+                            </Link>
+                          ) : (
+                            <span>{label}</span>
+                          )}
+                        </span>
+                      </th>
+                    ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visiblePositions.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={visibleCols.size}
+                      className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
+                    >
+                      {tr("no_positions_filtered")}
+                    </td>
+                  </tr>
+                ) : (
+                  visiblePositions.map((p: PositionWithScore, i: number) => (
+                    <tr
+                      key={p.id}
+                      className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
                       style={{
-                        color:
-                          sortable && sortCol === col
-                            ? "var(--color-bright)"
-                            : "var(--color-dim)",
+                        borderBottomColor:
+                          i === visiblePositions.length - 1
+                            ? "transparent"
+                            : undefined,
+                        background:
+                          i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
                       }}
                     >
-                      <span className="inline-flex items-center gap-1.5">
-                        {sortable ? (
+                      {/* ID */}
+                      {show("id") && (
+                        <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                          {p.legacy_id
+                            ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                            : p.id.slice(0, 8)}
+                        </td>
+                      )}
+                      {/* Aggiornato (ultima azione, fallback rilevazione) */}
+                      {show("last_action_at") && (
+                        <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
+                          {formatFoundAt(
+                            p.last_action_at || p.found_at,
+                            locale,
+                          )}
+                        </td>
+                      )}
+                      {/* Titolo — una riga, troncato con … se troppo lungo */}
+                      <td className="px-4 py-3 font-medium">
+                        <span className="flex items-center gap-2">
+                          <UnseenDot
+                            id={String(p.id)}
+                            label={tr("unseen_marker")}
+                            initialSeen={p.seen}
+                          />
                           <Link
-                            href={sortHref(col)}
-                            className="no-underline hover:text-[var(--color-green)] transition-colors"
-                            style={{ color: "inherit" }}
+                            href={`/positions/${p.id}`}
+                            title={p.title ?? undefined}
+                            className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
                           >
-                            {label}
-                            <span aria-hidden="true">{sortIndicator(col)}</span>
+                            {p.title}
                           </Link>
-                        ) : (
-                          <span>{label}</span>
-                        )}
-                      </span>
-                    </th>
-                  ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visiblePositions.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={visibleCols.size}
-                    className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
-                  >
-                    {tr("no_positions_filtered")}
-                  </td>
-                </tr>
-              ) : (
-                visiblePositions.map((p: PositionWithScore, i: number) => (
-                  <tr
-                    key={p.id}
-                    className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
-                    style={{
-                      borderBottomColor:
-                        i === visiblePositions.length - 1
-                          ? "transparent"
-                          : undefined,
-                      background:
-                        i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
-                    }}
-                  >
-                    {/* ID */}
-                    {show("id") && (
-                      <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                        {p.legacy_id
-                          ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                          : p.id.slice(0, 8)}
-                      </td>
-                    )}
-                    {/* Aggiornato (ultima azione, fallback rilevazione) */}
-                    {show("last_action_at") && (
-                      <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
-                        {formatFoundAt(p.last_action_at || p.found_at, locale)}
-                      </td>
-                    )}
-                    {/* Titolo — una riga, troncato con … se troppo lungo */}
-                    <td className="px-4 py-3 font-medium">
-                      <span className="flex items-center gap-2">
-                        <UnseenDot
-                          id={String(p.id)}
-                          label={tr("unseen_marker")}
-                          initialSeen={p.seen}
-                        />
-                        <Link
-                          href={`/positions/${p.id}`}
-                          title={p.title ?? undefined}
-                          className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
-                        >
-                          {p.title}
-                        </Link>
-                      </span>
-                    </td>
-                    {/* Azienda */}
-                    {show("company") && (
-                      <td
-                        className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap"
-                        title={p.company}
-                      >
-                        {p.company}
-                      </td>
-                    )}
-                    {/* Categoria */}
-                    {show("role_family") && (
-                      <td
-                        className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap"
-                        title={p.role_family ?? undefined}
-                      >
-                        {p.role_family && p.role_family.trim() ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span
-                              aria-hidden
-                              style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: "50%",
-                                background: colorForFamily(
-                                  p.role_family.trim(),
-                                ),
-                                flexShrink: 0,
-                              }}
-                            />
-                            {p.role_family.trim()}
-                          </span>
-                        ) : (
-                          <span className="text-[var(--color-dim)]">—</span>
-                        )}
-                      </td>
-                    )}
-                    {/* Paese (Remote in corsivo se senza paese ma full remote) */}
-                    {show("loc_country") && (
-                      <td
-                        className="px-4 py-3 text-[11px] whitespace-nowrap"
-                        title={p.loc_country ?? undefined}
-                      >
-                        {p.loc_country && p.loc_country.trim() ? (
-                          <span className="text-[var(--color-base)]">
-                            {p.loc_country.trim()}
-                          </span>
-                        ) : p.remote_type === "full_remote" ? (
-                          <span className="italic text-[var(--color-dim)]">
-                            {tr("remote_loc")}
-                          </span>
-                        ) : (
-                          <span className="text-[var(--color-dim)]">—</span>
-                        )}
-                      </td>
-                    )}
-                    {/* Città */}
-                    {show("loc_city") && (
-                      <td
-                        className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap"
-                        title={p.loc_city ?? undefined}
-                      >
-                        {p.loc_city && p.loc_city.trim() ? (
-                          p.loc_city.trim()
-                        ) : (
-                          <span className="text-[var(--color-dim)]">—</span>
-                        )}
-                      </td>
-                    )}
-                    {/* Remote */}
-                    {show("remote") && (
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-[10px] text-[var(--color-muted)]">
-                          {p.remote_type?.replace("_", " ") ?? "—"}
                         </span>
                       </td>
-                    )}
-                    {/* Score */}
-                    {show("score") && (
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 justify-center">
-                          <span
-                            className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
-                          >
-                            {p.score ?? "—"}
-                          </span>
-                          <div
-                            className="w-10 h-1 rounded-full overflow-hidden"
-                            style={{ background: "var(--color-border)" }}
-                          >
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${p.score ?? 0}%`,
-                                background: scoreBg(p.score),
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                    )}
-                    {/* Stima lorda mensile */}
-                    {show("monthly") && (
-                      <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
-                        {formatMonthly(
-                          p.salary_min,
-                          p.salary_max,
-                          p.salary_currency ?? "EUR",
-                          displayCurrency,
-                          rates,
-                        )}
-                      </td>
-                    )}
-                    {/* Fonte */}
-                    {show("source") && (
-                      <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap">
-                        {p.source ? (
-                          <span className="capitalize">
-                            {p.source.replace(/[-_]/g, " ")}
-                          </span>
-                        ) : (
-                          <span className="text-[var(--color-dim)]">—</span>
-                        )}
-                      </td>
-                    )}
-                    {/* Aggiornato da */}
-                    {show("last_action_by") && (
-                      <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">
-                        {p.last_action_actor ? (
-                          <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
-                            <span aria-hidden="true">
-                              {ACTOR_EMOJI[p.last_action_by ?? ""] ?? "🤖"}
+                      {/* Azienda */}
+                      {show("company") && (
+                        <td
+                          className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap"
+                          title={p.company}
+                        >
+                          {p.company}
+                        </td>
+                      )}
+                      {/* Categoria */}
+                      {show("role_family") && (
+                        <td
+                          className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap"
+                          title={p.role_family ?? undefined}
+                        >
+                          {p.role_family && p.role_family.trim() ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                aria-hidden
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: "50%",
+                                  background: colorForFamily(
+                                    p.role_family.trim(),
+                                  ),
+                                  flexShrink: 0,
+                                }}
+                              />
+                              {p.role_family.trim()}
                             </span>
-                            {p.last_action_actor}
+                          ) : (
+                            <span className="text-[var(--color-dim)]">—</span>
+                          )}
+                        </td>
+                      )}
+                      {/* Paese (Remote in corsivo se senza paese ma full remote) */}
+                      {show("loc_country") && (
+                        <td
+                          className="px-4 py-3 text-[11px] whitespace-nowrap"
+                          title={p.loc_country ?? undefined}
+                        >
+                          {p.loc_country && p.loc_country.trim() ? (
+                            <span className="text-[var(--color-base)]">
+                              {p.loc_country.trim()}
+                            </span>
+                          ) : p.remote_type === "full_remote" ? (
+                            <span className="italic text-[var(--color-dim)]">
+                              {tr("remote_loc")}
+                            </span>
+                          ) : (
+                            <span className="text-[var(--color-dim)]">—</span>
+                          )}
+                        </td>
+                      )}
+                      {/* Città */}
+                      {show("loc_city") && (
+                        <td
+                          className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap"
+                          title={p.loc_city ?? undefined}
+                        >
+                          {p.loc_city && p.loc_city.trim() ? (
+                            p.loc_city.trim()
+                          ) : (
+                            <span className="text-[var(--color-dim)]">—</span>
+                          )}
+                        </td>
+                      )}
+                      {/* Remote */}
+                      {show("remote") && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="text-[10px] text-[var(--color-muted)]">
+                            {p.remote_type?.replace("_", " ") ?? "—"}
                           </span>
-                        ) : (
-                          <span className="text-[var(--color-dim)]">—</span>
-                        )}
-                      </td>
-                    )}
-                    {/* Voto critico */}
-                    {show("critic") && (
-                      <td className="px-4 py-3 whitespace-nowrap tabular-nums text-center">
-                        {p.critic_score != null ? (
+                        </td>
+                      )}
+                      {/* Score */}
+                      {show("score") && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 justify-center">
+                            <span
+                              className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
+                            >
+                              {p.score ?? "—"}
+                            </span>
+                            <div
+                              className="w-10 h-1 rounded-full overflow-hidden"
+                              style={{ background: "var(--color-border)" }}
+                            >
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${p.score ?? 0}%`,
+                                  background: scoreBg(p.score),
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      )}
+                      {/* Stima lorda mensile */}
+                      {show("monthly") && (
+                        <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
+                          {formatMonthly(
+                            p.salary_min,
+                            p.salary_max,
+                            p.salary_currency ?? "EUR",
+                            displayCurrency,
+                            rates,
+                          )}
+                        </td>
+                      )}
+                      {/* Fonte */}
+                      {show("source") && (
+                        <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap">
+                          {p.source ? (
+                            <span className="capitalize">
+                              {p.source.replace(/[-_]/g, " ")}
+                            </span>
+                          ) : (
+                            <span className="text-[var(--color-dim)]">—</span>
+                          )}
+                        </td>
+                      )}
+                      {/* Aggiornato da */}
+                      {show("last_action_by") && (
+                        <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">
+                          {p.last_action_actor ? (
+                            <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
+                              <span aria-hidden="true">
+                                {ACTOR_EMOJI[p.last_action_by ?? ""] ?? "🤖"}
+                              </span>
+                              {p.last_action_actor}
+                            </span>
+                          ) : (
+                            <span className="text-[var(--color-dim)]">—</span>
+                          )}
+                        </td>
+                      )}
+                      {/* Voto critico */}
+                      {show("critic") && (
+                        <td className="px-4 py-3 whitespace-nowrap tabular-nums text-center">
+                          {p.critic_score != null ? (
+                            <span
+                              className="text-[12px] font-semibold"
+                              style={{
+                                color:
+                                  CRITIC_COLORS[p.critic_verdict ?? ""] ??
+                                  "var(--color-muted)",
+                              }}
+                            >
+                              {p.critic_score.toFixed(1)}
+                            </span>
+                          ) : (
+                            <span className="text-[var(--color-dim)] text-[11px]">
+                              —
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      {/* Stato */}
+                      {show("status") && (
+                        <td className="px-4 py-3 text-center">
                           <span
-                            className="text-[12px] font-semibold"
+                            className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
                             style={{
                               color:
-                                CRITIC_COLORS[p.critic_verdict ?? ""] ??
-                                "var(--color-muted)",
+                                STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                              borderColor:
+                                STATUS_COLORS[p.status] ??
+                                "var(--color-border)",
+                              background: `${STATUS_COLORS[p.status]}18`,
                             }}
                           >
-                            {p.critic_score.toFixed(1)}
+                            {p.status}
                           </span>
-                        ) : (
-                          <span className="text-[var(--color-dim)] text-[11px]">
-                            —
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    {/* Stato */}
-                    {show("status") && (
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
-                          style={{
-                            color:
-                              STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                            borderColor:
-                              STATUS_COLORS[p.status] ?? "var(--color-border)",
-                            background: `${STATUS_COLORS[p.status]}18`,
-                          }}
-                        >
-                          {p.status}
-                        </span>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </TableScrollSync>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </TableScrollSync>
+        </div>
 
         {/* ── Pagination ──────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-3 mt-4 text-[11px] text-[var(--color-muted)]">
