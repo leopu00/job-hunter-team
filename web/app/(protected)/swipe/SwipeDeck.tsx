@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import {
+  IconCalendar,
   IconCards,
   IconChat,
   IconCheckCircle,
@@ -160,6 +161,9 @@ const T: Record<
     remote: Record<string, string>;
     saveError: string;
     hintKeys: string;
+    today: string;
+    yesterday: string;
+    daysAgo: string; // template con {n}
   }
 > = {
   it: {
@@ -190,6 +194,9 @@ const T: Record<
     remote: { full_remote: "Remoto", hybrid: "Ibrido", onsite: "In sede" },
     saveError: "Errore di rete — azione non salvata per",
     hintKeys: "Tastiera: 1–4 giudizio · ←/→ naviga",
+    today: "oggi",
+    yesterday: "ieri",
+    daysAgo: "{n} giorni fa",
   },
   en: {
     title: "Swipe",
@@ -218,6 +225,9 @@ const T: Record<
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "On-site" },
     saveError: "Network error — action not saved for",
     hintKeys: "Keyboard: 1–4 verdict · ←/→ navigate",
+    today: "today",
+    yesterday: "yesterday",
+    daysAgo: "{n} days ago",
   },
   hu: {
     title: "Swipe",
@@ -247,6 +257,9 @@ const T: Record<
     remote: { full_remote: "Távoli", hybrid: "Hibrid", onsite: "Helyszíni" },
     saveError: "Hálózati hiba — nem mentett művelet:",
     hintKeys: "Billentyűk: 1–4 ítélet · ←/→ navigálás",
+    today: "ma",
+    yesterday: "tegnap",
+    daysAgo: "{n} napja",
   },
   es: {
     title: "Swipe",
@@ -276,6 +289,9 @@ const T: Record<
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Error de red — acción no guardada para",
     hintKeys: "Teclado: 1–4 juicio · ←/→ navegar",
+    today: "hoy",
+    yesterday: "ayer",
+    daysAgo: "hace {n} días",
   },
   de: {
     title: "Swipe",
@@ -304,6 +320,9 @@ const T: Record<
     remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "Vor Ort" },
     saveError: "Netzwerkfehler — Aktion nicht gespeichert für",
     hintKeys: "Tastatur: 1–4 Urteil · ←/→ navigieren",
+    today: "heute",
+    yesterday: "gestern",
+    daysAgo: "vor {n} Tagen",
   },
   fr: {
     title: "Swipe",
@@ -337,6 +356,9 @@ const T: Record<
     },
     saveError: "Erreur réseau — action non enregistrée pour",
     hintKeys: "Clavier : 1–4 avis · ←/→ naviguer",
+    today: "aujourd\u2019hui",
+    yesterday: "hier",
+    daysAgo: "il y a {n} jours",
   },
   pt: {
     title: "Swipe",
@@ -366,6 +388,9 @@ const T: Record<
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
     saveError: "Erro de rede — ação não salva para",
     hintKeys: "Teclado: 1–4 julgamento · ←/→ navegar",
+    today: "hoje",
+    yesterday: "ontem",
+    daysAgo: "há {n} dias",
   },
 };
 
@@ -404,6 +429,31 @@ function scoreColor(score: number | null): string {
   if (score >= 70) return "var(--color-green)";
   if (score >= 50) return "var(--color-yellow)";
   return "var(--color-muted)";
+}
+
+// Data di ritrovamento + conteggio giorni passati (scelta utente 19/07).
+function foundInfo(
+  iso: string,
+  locale: string,
+  t: { today: string; yesterday: string; daysAgo: string },
+): { date: string; ago: string } | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const date = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    ...(d.getFullYear() !== new Date().getFullYear()
+      ? { year: "numeric" }
+      : {}),
+  }).format(d);
+  const days = Math.max(0, Math.floor((Date.now() - d.getTime()) / 86_400_000));
+  const ago =
+    days === 0
+      ? t.today
+      : days === 1
+        ? t.yesterday
+        : t.daysAgo.replace("{n}", String(days));
+  return { date, ago };
 }
 
 // Durata dell'animazione di uscita — deve combaciare con la transition CSS.
@@ -850,6 +900,17 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                           </Chip>
                         )}
                         {card.role_family && <Chip>{card.role_family}</Chip>}
+                        {(() => {
+                          const fi = foundInfo(card.found_at, locale, t);
+                          return fi ? (
+                            <Chip>
+                              <span className="inline-flex items-center gap-1">
+                                <IconCalendar size={11} />
+                                {fi.date} · {fi.ago}
+                              </span>
+                            </Chip>
+                          ) : null;
+                        })()}
                       </div>
 
                       {/* Sintesi JD: scrollabile se non c'entra; pre-line
