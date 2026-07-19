@@ -524,6 +524,12 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
   const flyingRef = useRef(false);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const deckRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  // Offset della pagina dall'alto del viewport (navbar + header, stabile).
+  // L'altezza vera è poi calc(100dvh - offset): è il dvh CSS a inseguire
+  // la barra di Safari, non i valori JS (innerHeight/visualViewport la
+  // ignorano su iOS e i bottoni finivano sommersi).
+  const [topOffset, setTopOffset] = useState<number | null>(null);
   // Mirror per i listener touch nativi (chiusure senza stato stantio).
   const navRef = useRef<(delta: 1 | -1) => void>(() => {});
   const dragXRef = useRef(0);
@@ -551,15 +557,24 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     return () => recRef.current?.stop();
   }, []);
 
-  // Larghezza utile per le righe di chips = card meno il padding p-5.
+  // Misure: larghezza utile chips (card - padding) e altezza disponibile
+  // per l'intera colonna (viewport - top della pagina). visualViewport
+  // copre il collasso della barra di Safari.
   useEffect(() => {
     const measure = () => {
       const w = deckRef.current?.clientWidth;
       if (w) setChipAreaW(w - 40);
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (rect) setTopOffset(Math.max(0, rect.top + window.scrollY) + 8);
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      vv?.removeEventListener("resize", measure);
+    };
   }, []);
 
   const stopVoice = useCallback(() => {
@@ -823,7 +838,15 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
     // allargherebbe la pagina orizzontalmente (il layout "scappa" di lato
     // su mobile, con l'intera schermata che si sposta). clip e non hidden:
     // niente nuovo contesto di scroll.
-    <div className="max-w-md mx-auto select-none" style={{ overflowX: "clip" }}>
+    <div
+      ref={rootRef}
+      className="max-w-md mx-auto select-none flex flex-col"
+      style={{
+        overflowX: "clip",
+        height: `calc(100dvh - ${topOffset ?? 170}px)`,
+        minHeight: 420,
+      }}
+    >
       {/* Pulse del microfono in registrazione */}
       <style>{`@keyframes swipe-rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }`}</style>
 
@@ -926,13 +949,7 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
         </div>
       ) : (
         <>
-          <div
-            ref={deckRef}
-            className="relative"
-            // Tutta l'altezza che il viewport concede: 100dvh meno navbar,
-            // header pagina, bottoni giudizio e margini (~248px).
-            style={{ height: "min(calc(100dvh - 193px), 800px)" }}
-          >
+          <div ref={deckRef} className="relative flex-1 min-h-0">
             {/* Card corrente + le 2 successive come stack */}
             {cards
               .slice(idx, idx + 3)
@@ -1018,45 +1035,14 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                             {card.company}
                           </div>
                         </div>
-                        {/* Colonna destra: score + bottone commento */}
-                        <div className="shrink-0 flex flex-col items-center gap-1.5">
-                          <div
-                            className="w-11 h-11 rounded-full border-2 flex items-center justify-center text-[14px] font-black tabular-nums"
-                            style={{
-                              color: scoreColor(card.score),
-                              borderColor: scoreColor(card.score),
-                            }}
-                          >
-                            {card.score ?? "—"}
-                          </div>
-                          <button
-                            type="button"
-                            aria-label={t.commentTitle}
-                            title={t.commentTitle}
-                            onClick={() => setCommentOpen(true)}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            className="rounded-full border flex items-center justify-center relative"
-                            style={{
-                              width: 28,
-                              height: 28,
-                              color: comment
-                                ? "var(--color-bright)"
-                                : "var(--color-muted)",
-                              borderColor: comment
-                                ? "var(--color-border-glow)"
-                                : "var(--color-border)",
-                              background: "var(--color-row)",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <IconChat size={13} />
-                            {comment && (
-                              <span
-                                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-                                style={{ background: "var(--color-green)" }}
-                              />
-                            )}
-                          </button>
+                        <div
+                          className="shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center text-[14px] font-black tabular-nums"
+                          style={{
+                            color: scoreColor(card.score),
+                            borderColor: scoreColor(card.score),
+                          }}
+                        >
+                          {card.score ?? "—"}
                         </div>
                       </div>
 
@@ -1101,8 +1087,9 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
               .reverse()}
           </div>
 
-          {/* Bottoni giudizio */}
-          <div className="flex items-start justify-center gap-3 mt-3">
+          {/* Bottoni: 4 giudizi + commento (quinto posto, scelta utente
+              19/07) */}
+          <div className="shrink-0 flex items-start justify-center gap-2 mt-3">
             {VERDICT_ORDER.map((v) => (
               <VerdictButton
                 key={v}
@@ -1111,6 +1098,39 @@ export default function SwipeDeck({ cards }: { cards: SwipeCardData[] }) {
                 onClick={() => judge(v)}
               />
             ))}
+            <div className="flex flex-col items-center gap-1 w-[64px]">
+              <button
+                type="button"
+                aria-label={t.commentTitle}
+                title={t.commentTitle}
+                onClick={() => setCommentOpen(true)}
+                className="rounded-full border-2 flex items-center justify-center font-bold transition-transform active:scale-90 relative"
+                style={{
+                  width: 48,
+                  height: 48,
+                  color: comment ? "var(--color-bright)" : "var(--color-muted)",
+                  borderColor: comment
+                    ? "var(--color-bright)"
+                    : "var(--color-muted)",
+                  background: "var(--color-card)",
+                  cursor: "pointer",
+                }}
+              >
+                <IconChat size={18} />
+                {comment && (
+                  <span
+                    className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full"
+                    style={{ background: "var(--color-green)" }}
+                  />
+                )}
+              </button>
+              <span
+                className="text-[9px] font-semibold text-center leading-tight"
+                style={{ color: "var(--color-muted)" }}
+              >
+                {t.commentTitle}
+              </span>
+            </div>
           </div>
 
           <p
@@ -1291,7 +1311,7 @@ function VerdictButton({
 }) {
   const { Icon, color } = VERDICTS[verdict];
   return (
-    <div className="flex flex-col items-center gap-1 w-[76px]">
+    <div className="flex flex-col items-center gap-1 w-[64px]">
       <button
         type="button"
         aria-label={label}
@@ -1299,8 +1319,8 @@ function VerdictButton({
         onClick={onClick}
         className="rounded-full border-2 flex items-center justify-center font-bold transition-transform active:scale-90"
         style={{
-          width: 52,
-          height: 52,
+          width: 48,
+          height: 48,
           color,
           borderColor: color,
           background: "var(--color-card)",
