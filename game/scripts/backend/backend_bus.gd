@@ -120,6 +120,25 @@ func _ready() -> void:
 		}
 	if str(cfg.get("ip", "")) != "" and str(cfg.get("key_path", "")) != "":
 		set_backend(VpsBackend.new(), cfg)
+	elif _local_container_running():
+		# Primo avvio locale: l'ufficio resta subito visibile e adotta il
+		# container se era già attivo. Se viene acceso più tardi dalla pagina
+		# Attivazione, SetupService chiama connect_local_backend().
+		set_backend(LocalBackend.new())
+
+
+func _local_container_running() -> bool:
+	var out: Array = []
+	return OS.execute("docker", ["inspect", "jht", "--format",
+			"{{.State.Running}}"], out, true) == 0 \
+			and "true" in "\n".join(PackedStringArray(out)).to_lower()
+
+
+func connect_local_backend() -> void:
+	if state == CONNECTED and _backend is LocalBackend:
+		return
+	if _local_container_running():
+		set_backend(LocalBackend.new())
 
 func _self_test_vps_contract() -> void:
 	var roster: Array = VpsBackend._parse_roster(

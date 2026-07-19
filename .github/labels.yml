@@ -14,13 +14,13 @@
 # ── Surfaces (one per issue, ideally) ──────────────────────────────────────
 - name: installer
   color: 1d76db
-  description: Installation, setup wizard, JHT Desktop installer
+  description: Installation and in-game setup
 - name: monitoring
   color: 1d76db
   description: Sentinel / Bridge / throttle / token usage
 - name: desktop
   color: 1d76db
-  description: Electron desktop launcher (desktop/)
+  description: Native Godot desktop application (game/)
 - name: web
   color: 1d76db
   description: Next.js dashboard (web/)

@@ -96,9 +96,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		Sfx.play_confirm()
 		_fade_out()
 
-## Dissolvenza a nero sopra tutto, poi via: al PRIMO avvio si passa dal
-## wizard (onboarding con l'assistente, la foto-badge del GDD §5); dai
-## giri successivi dritti in ufficio, niente flicker del titolo.
+## Dissolvenza a nero sopra tutto, poi sempre nell'ufficio. Il setup non è
+## più un tunnel prima del prodotto: container, provider e profilo si
+## completano dall'ufficio attraverso la checklist Attiva team.
 func _fade_out() -> void:
 	var veil := ColorRect.new()
 	veil.color = Color(Palette.VOID.r, Palette.VOID.g, Palette.VOID.b, 0.0)
@@ -107,5 +107,4 @@ func _fade_out() -> void:
 	add_child(veil)
 	var tw := create_tween()
 	tw.tween_property(veil, "color:a", 1.0, 0.4)
-	tw.tween_callback(Game.goto_office if Game.onboarding_done()
-			else Game.goto_wizard)
+	tw.tween_callback(Game.goto_office)

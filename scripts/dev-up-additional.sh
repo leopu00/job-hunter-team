@@ -13,7 +13,7 @@
 #   - vm_stat preflight: aborta se Pages free < 50000 (Mac M3 18 GB)
 #   - Esporta JHT_SHELL_VIA=docker:jht così il dev parla col container condiviso
 #   - Log dedicato per porta: .dev-logs/host-next-<port>.log
-#   - Stampa il PID al termine, così Electron lo può salvare per kill mirato
+#   - Stampa il PID al termine per consentire un arresto mirato
 
 set -euo pipefail
 
@@ -94,7 +94,7 @@ while [ "$(date +%s)" -lt "$DEADLINE" ]; do
   sleep 2
 done
 
-# ── Output structurato (parsato da Electron) ───────────────────────────────
+# ── Output strutturato (parsabile dagli strumenti di sviluppo) ─────────────
 echo "PID=$DEV_PID"
 echo "PORT=$PORT"
 echo "WORKTREE=$WORKTREE"

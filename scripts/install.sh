@@ -108,7 +108,7 @@ while [ $# -gt 0 ]; do
       ;;
     --branch=*) BRANCH="${1#*=}"; shift ;;
     --pairing-token)
-      # Token opaco generato dalla desktop app dalla session Supabase.
+      # Token opaco generato dal pairing dell'app nativa.
       # Decisione lockata 2026-05-13 #4: l'app passa qui il token, install.sh
       # lo salva in $HOME/.jht/.pairing-token (perms 0600) e salta il wizard
       # interattivo (no `jht cloud login` da rifare dentro la VPS). Il
@@ -849,7 +849,7 @@ run_host_setup() {
   # del compose) e pid1 SALTA tutto il blocco cloud — daemon push + pair-on-boot
   # + gestore "Sync now" — quindi il cloud sync è silenziosamente morto. Va
   # eseguito su ENTRAMBI i path d'installazione:
-  #   • desktop-provisioned (--pairing-token presente): forza --host-type=vps —
+  #   • app-provisioned (--pairing-token presente): forza --host-type=vps —
   #     nessun utente al terminale per confermare l'auto-detection.
   #   • manuale `curl install.sh | bash`: NESSUN flag → host-setup auto-rileva
   #     (detect_vps) e, senza TTY, scrive il tipo rilevato senza prompt.
@@ -907,10 +907,10 @@ maybe_onboard() {
   fi
   if [ -n "$PAIRING_TOKEN" ]; then
     # Pairing token presente → l'utente sta provisionando la VPS dal
-    # desktop launcher (decisione lockata 2026-05-13 #4). Niente wizard
+    # applicazione nativa (decisione lockata 2026-05-13 #4). Niente wizard
     # interattivo: il container far\u00E0 il pair non-interattivo al primo run
     # tramite il file .pairing-token. L'utente completer\u00E0 il provider
-    # login (Claude/Codex/Kimi) dal terminale embedded del desktop.
+    # login (Claude/Codex/Kimi) dalla console incorporata nel gioco.
     info "Pairing token presente: skip wizard interattivo."
     info "Il container completer\u00E0 il pairing al primo avvio."
     return 0

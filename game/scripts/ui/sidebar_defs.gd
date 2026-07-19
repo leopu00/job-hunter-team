@@ -1,7 +1,6 @@
 class_name SidebarDefs
-## Le sezioni della sidebar di gioco: SPECCHIO 1:1 della desktop app.
-## Fonte di verità: desktop/renderer/index.html (data-section, gruppi e
-## ordine) — non inventare voci, la migrazione porta qui quelle vere.
+## Le sezioni dell'unica applicazione desktop. Questa lista è ora la fonte di
+## verità per gruppi, voci e ordine della navigazione nativa.
 
 ## `label` resta il fallback italiano; a schermo passa da UIStrings
 ## con la chiave "side.<id>" (e "side.<group_key>" per i titoli gruppo).
@@ -10,6 +9,7 @@ const GROUPS := [
 		"title": "Team",
 		"key": "group_team",
 		"items": [
+			{"id": "activation", "icon": "⚡", "label": "Attiva team"},
 			{"id": "team", "icon": "🚀", "label": "Team"},
 			{"id": "agents", "icon": "🤖", "label": "Agenti"},
 			{"id": "agent_metrics", "icon": "📉", "label": "Risorse agenti"},
@@ -38,6 +38,7 @@ const GROUPS := [
 			{"id": "hours", "icon": "⏰", "label": "Orari"},
 			{"id": "provider", "icon": "🧠", "label": "Provider"},
 			{"id": "docker", "icon": "🐳", "label": "Docker"},
+			{"id": "telegram", "icon": "✈", "label": "Telegram"},
 			{"id": "account", "icon": "👤", "label": "Account"},
 			{"id": "email", "icon": "📧", "label": "Email"},
 			{"id": "language", "icon": "🌐", "label": "Lingua"},

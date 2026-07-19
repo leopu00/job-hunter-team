@@ -182,7 +182,7 @@ async function reconcile(baseUrl, token, state) {
 
 // [JHT-CLOUD-INTERACTIVE-RETIRE] reconcile should_run→start/stop RITIRATA 2026-06-25:
 // il controllo del team passa SOLO da desktop (`docker exec … jht team start/stop`,
-// anche su VPS via tunnel SSH — vedi desktop/main.js:150,948). Sul cloud should_run è
+// anche su VPS tramite il backend SSH del gioco). Sul cloud should_run è
 // gated (browser 403) e NESSUNO lo scrive più → leggerlo era dead weight (lo confermava
 // il design 2026-06-20: bus real-time di controllo + reconciler da ritirare). Qui resta
 // SOLO l'heartbeat "VPS online" (dato OSSERVATO, non controllo), scritto diretto su

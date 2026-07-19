@@ -198,5 +198,5 @@ top with markdown embeds: `![Desktop form](assets/email-01-desktop-form.png)`.
 ## 📚 Related
 
 - 🚀 [`QUICKSTART`](QUICKSTART.md) — install and first run
-- 🖥️ [`VPS-SETUP-WIZARD`](VPS-SETUP-WIZARD.md) — run the team on a VPS via the desktop wizard
+- 🖥️ [`VPS-SETUP-WIZARD`](VPS-SETUP-WIZARD.md) — run the team on a VPS from the native office
 - 🤖 [`docs/about/RESULTS`](../about/RESULTS.md) — case studies and metrics
