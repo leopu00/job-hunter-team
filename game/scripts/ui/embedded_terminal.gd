@@ -353,7 +353,7 @@ static func _terminal_text(raw: String) -> String:
 	var simple := RegEx.new()
 	if simple.compile("\\x1b[@-_]") == OK:
 		text = simple.sub(text, "", true)
-	text = text.replace("\u0000", "").replace("\b", "")
+	text = text.replace(String.chr(0), "").replace("\b", "")
 	var blank := RegEx.new()
 	if blank.compile("\\n{4,}") == OK:
 		text = blank.sub(text, "\n\n\n", true)
