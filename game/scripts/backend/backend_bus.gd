@@ -69,6 +69,13 @@ signal hours_saved(ok: bool, error: String)
 signal live_settings_updated(settings: Dictionary)
 ## Telemetria infrastrutturale VPS/container, campionata via SSH.
 signal telemetry_updated(sample: Dictionary, history: Array)
+## Storico usage on-demand (finestre di monitoraggio risorse). query è
+## l'eco della richiesta {from_ts, to_ts, bucket_sec}; data = {ok, error,
+## sentinel: [{t, usage, weekly, velocity, projection, throttle}, …],
+## meter: [{t, weighted_kt, events}, …],
+## agents: {names: [String], series: [{t, <agente>: kT_delta}, …],
+##          totals_kt: {<agente>: kT}}} — t sempre unix epoch UTC.
+signal usage_history_updated(query: Dictionary, data: Dictionary)
 
 enum { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
@@ -86,6 +93,10 @@ var transitions: Array = []  # ultime ~80 transizioni di stato (registro team)
 var live_settings: Dictionary = {}
 var telemetry: Dictionary = {}
 var telemetry_history: Array = []
+## Ultimo storico usage ricevuto (cache per chi riapre il pannello) e
+## l'eco della query che l'ha prodotto.
+var usage_history: Dictionary = {}
+var usage_history_query: Dictionary = {}
 var chat_log: Array = []     # ultimi messaggi (fumetti di dev1 + vista Chat)
 const CHAT_LOG_MAX := 200
 
@@ -425,6 +436,26 @@ func save_working_hours(wh: Dictionary) -> void:
 		_backend.save_working_hours(wh)
 	else:
 		hours_saved.emit(false, "backend non collegato")
+
+
+## ── Storico usage (finestre di monitoraggio risorse) ─────────────────
+
+## Chiede al backend lo storico usage per [from_ts, to_ts] (unix UTC)
+## aggregato per bucket_sec. Risposta asincrona su usage_history_updated;
+## il backend può impiegare secondi (ricostruzione per-agente dai log CLI).
+func request_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
+	var query := {"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec}
+	if _backend and _backend.has_method("fetch_usage_history"):
+		_backend.fetch_usage_history(from_ts, to_ts, bucket_sec)
+	else:
+		usage_history_updated.emit(query,
+				{"ok": false, "error": "backend non collegato"})
+
+## Il backend risponde da qui (thread → call_deferred).
+func publish_usage_history(query: Dictionary, data: Dictionary) -> void:
+	usage_history_query = query
+	usage_history = data
+	usage_history_updated.emit(query, data)
 
 
 ## ── Ticket utente→team ───────────────────────────────────────────────
