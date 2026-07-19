@@ -193,6 +193,23 @@ static func spawn_list() -> Array:
 			n += 1
 	return _spawn_cache
 
+## Cast del primo avvio: tutti i ruoli fondamentali e due volti per reparto
+## (lead + un collega). Fa percepire un ufficio vivo senza fingere che trenta
+## processi reali siano già attivi.
+static func showroom_list() -> Array:
+	var out: Array = []
+	var depts := {}
+	for def in spawn_list():
+		if def.get("lead", false):
+			out.append(def)
+			if str(def.get("dept", "")) != "":
+				depts[str(def["dept"])] = 1
+		elif str(def.get("dept", "")) != "" \
+				and int(depts.get(str(def["dept"]), 0)) < 2:
+			out.append(def)
+			depts[str(def["dept"])] = 2
+	return out
+
 ## Nome di chi occupa la postazione `index` del reparto ("" se libera).
 static func desk_occupant_name(dept_id: String, index: int) -> String:
 	for def in spawn_list():

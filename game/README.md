@@ -5,8 +5,9 @@ presets are versioned in `export_presets.cfg`; CI imports, tests, exports and
 smoke-runs the application on a native runner for every operating system.
 
 The first-run experience is documented in [`docs/FIRST-RUN.md`](docs/FIRST-RUN.md):
-three token-free scripted conversations become hybrid free-text chats after a
-provider and the real agents are connected.
+token-free showroom conversations cover every role. Provider authentication is
+a strict boundary: offline authored choices disappear before live free-text
+chat starts; real agents may generate contextual reply buttons.
 
 ## Development
 

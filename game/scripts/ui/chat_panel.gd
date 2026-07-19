@@ -34,6 +34,8 @@ var _title: Label
 var _warn: Label
 var _plate_label: Label
 var _backend_messages: Array = []
+var _live_choices: Array = []
+var _setup_signature := ""
 
 func _process(delta: float) -> void:
 	if not _waiting or _waiting_label == null:
@@ -161,6 +163,7 @@ func _ready() -> void:
 	BackendBus.chat_waiting_changed.connect(_on_waiting)
 	ScriptedOnboarding.conversation_changed.connect(_on_scripted_changed)
 	ScriptedOnboarding.action_requested.connect(_on_scripted_action)
+	SetupService.status_changed.connect(_on_setup_status_changed)
 	_refresh_chat_mode()
 	if BackendBus.chat_waiting.has(_slug):
 		_on_waiting(_slug, true)  # attesa già in corso da prima
@@ -267,6 +270,7 @@ func _switch_to(slug: String, display_name: String) -> void:
 	_waiting = false
 	_waiting_label.visible = false
 	_backend_messages.clear()
+	_live_choices.clear()
 	if _fullscreen:
 		_build_portrait()
 		_portrait.enter_anim()
@@ -289,9 +293,14 @@ static func _portrait_slug(slug: String) -> String:
 		return role
 	return "scout"
 
-func _on_updated(_agent: String, messages: Array) -> void:
+func _on_updated(agent: String, messages: Array) -> void:
+	if ScriptedOnboarding.normalize_agent(agent) \
+			!= ScriptedOnboarding.normalize_agent(_slug):
+		return
 	_backend_messages = messages.duplicate(true)
+	_live_choices = _latest_live_choices(_backend_messages)
 	_render_conversation()
+	_render_choices()
 	# il ritratto reagisce all'ultima battuta dell'agente (crossfade
 	# emozione; se il ruolo non ha quella faccia resta sul neutro)
 	if _portrait and not messages.is_empty() \
@@ -314,17 +323,23 @@ func _on_waiting(agent: String, waiting: bool) -> void:
 
 
 func _refresh_chat_mode() -> void:
+	_setup_signature = _chat_mode_signature()
 	var guided := ScriptedOnboarding.supports(_slug) \
 			and ScriptedOnboarding.use_scripted_chat(_slug)
 	var live_text := ScriptedOnboarding.live_text_available(_slug) \
-			if ScriptedOnboarding.supports(_slug) else BackendBus.can_chat_with(_slug)
+			if ScriptedOnboarding.supports(_slug) else (\
+			ScriptedOnboarding.provider_authenticated() \
+			and bool(SetupService.status.get("container_running", false)) \
+			and BackendBus.can_chat_with(_slug))
 	_input.editable = live_text
 	_send_btn.disabled = not live_text
 	_input.placeholder_text = UIStrings.t("guided.free_placeholder" if live_text \
 			else "guided.choice_placeholder")
 	if guided:
-		_warn.text = UIStrings.t("guided.offline_note") if not live_text \
-				else UIStrings.t("guided.hybrid_note")
+		_warn.text = UIStrings.t("guided.offline_note")
+		_warn.visible = true
+	elif ScriptedOnboarding.provider_authenticated() and not live_text:
+		_warn.text = UIStrings.t("guided.agent_unavailable")
 		_warn.visible = true
 	else:
 		_warn.text = UIStrings.t("chat.besteffort")
@@ -346,31 +361,71 @@ func _render_conversation() -> void:
 func _render_choices() -> void:
 	for child in _choices.get_children():
 		child.queue_free()
-	if not ScriptedOnboarding.supports(_slug) \
-			or not ScriptedOnboarding.use_scripted_chat(_slug):
-		return
-	var options := ScriptedOnboarding.options(_slug)
+	var guided := ScriptedOnboarding.supports(_slug) \
+			and ScriptedOnboarding.use_scripted_chat(_slug)
+	var options: Array = ScriptedOnboarding.options(_slug) if guided \
+			else _live_choices
 	if options.is_empty():
 		return
-	_choices.add_child(TerminalTheme.label(UIStrings.t("guided.choose"),
+	_choices.add_child(TerminalTheme.label(UIStrings.t(
+			"guided.choose" if guided else "guided.ai_suggestions"),
 			12, Palette.MUTED, "medium"))
 	for option in options:
-		var entry: Dictionary = option
+		var entry: Dictionary = option if option is Dictionary \
+				else {"label": str(option), "value": str(option)}
 		var button := Button.new()
 		button.text = "› " + str(entry.get("label", ""))
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.add_theme_font_size_override("font_size", 14)
 		button.add_theme_color_override("font_color", Palette.GREEN)
 		button.pressed.connect(func() -> void:
-			ScriptedOnboarding.choose(_slug, str(entry.get("id", "")))
+			if guided:
+				ScriptedOnboarding.choose(_slug, str(entry.get("id", "")))
+			else:
+				_send_text(str(entry.get("value", entry.get("label", ""))))
 			Sfx.play_tick())
 		_choices.add_child(button)
+
+
+## Suggerimenti REALI: sono accettati soltanto sull'ultima risposta completa
+## dell'agente e spariscono appena l'utente invia una battuta successiva.
+## Il formato additivo del JSONL è {choices:[{label,value}, ...]}.
+static func _latest_live_choices(messages: Array) -> Array:
+	if messages.is_empty():
+		return []
+	var last: Variant = messages[-1]
+	if not last is Dictionary or str(last.get("role", "")) == "user" \
+			or bool(last.get("partial", false)) or not bool(last.get("done", true)):
+		return []
+	var raw: Variant = last.get("choices", [])
+	if not raw is Array:
+		return []
+	var out: Array = []
+	for item in raw:
+		var label := str(item.get("label", "") if item is Dictionary else item).strip_edges()
+		var value := str(item.get("value", label) if item is Dictionary else item).strip_edges()
+		if not label.is_empty() and not value.is_empty() and out.size() < 5:
+			out.append({"label": label.left(120), "value": value.left(1000)})
+	return out
 
 
 func _on_scripted_changed(agent: String) -> void:
 	if ScriptedOnboarding.normalize_agent(agent) != ScriptedOnboarding.normalize_agent(_slug):
 		return
 	_refresh_chat_mode()
+
+func _on_setup_status_changed(_status: Dictionary) -> void:
+	# Il login provider è un cambio di regime immediato: nessuna scelta authored
+	# deve sopravvivere nel pannello già aperto.
+	if _chat_mode_signature() != _setup_signature:
+		_refresh_chat_mode()
+
+func _chat_mode_signature() -> String:
+	return "%s|%s|%s" % [
+		str(ScriptedOnboarding.provider_authenticated()),
+		str(bool(SetupService.status.get("container_running", false))),
+		str(BackendBus.can_chat_with(_slug)),
+	]
 
 
 func _on_scripted_action(action: String, payload: Dictionary) -> void:
@@ -437,6 +492,13 @@ func _send() -> void:
 	if text.is_empty():
 		return
 	_input.clear()
+	_send_text(text)
+
+func _send_text(text: String) -> void:
+	if text.strip_edges().is_empty() or not _input.editable:
+		return
+	_live_choices.clear()
+	_render_choices()
 	BackendBus.send_user_chat(_slug, text)
 	Sfx.play_tick()
 

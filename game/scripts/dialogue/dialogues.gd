@@ -139,26 +139,94 @@ const TREES := {
 
 	"coordinatore": {
 		"start": {
-			"text": "[neutro] Ritmo regolare: weekly al 64%, budget sotto la soglia. Nessun collo di bottiglia.",
-			"next": "n2",
+			"text": "[caldo] Benvenuto nella sala operativa. Vuoi capire il flusso o preparare l'attivazione del team?",
+			"choices": [
+				{"text": "Spiegami il flusso.", "next": "n2"},
+				{"text": "Cosa serve per attivare il team?", "next": "setup"},
+				{"text": "Faccio ancora un giro.", "next": "end"},
+			],
 		},
 		"n2": {
 			"text": "[severo] Se il Tesoriere alza un sopracciglio, rallento io prima che se ne accorga qualcuno.",
 			"next": "n3",
 		},
 		"n3": {
-			"text": "[caldo] Tu pensa a scegliere le posizioni: al ritmo penso io.",
+			"text": "[caldo] Tu scegli le posizioni: al ritmo penso io. Puoi tornare a chiedermelo quando vuoi.",
+			"next": "start",
+		},
+		"setup": {
+			"text": "[neutro] Tre cose: container attivo, login al provider e profilo personale con l'Assistente. Il pulsante giallo in alto tiene il conto.",
+			"next": "start",
+		},
+		"end": {
+			"text": "[caldo] Esplora pure. Nessuna procedura ti chiude fuori dall'ufficio.",
 		},
 	},
 
 	"analista": {
 		"start": {
-			"text": "[pensieroso] Sto incrociando tre fonti su uno stipendio che l'annuncio non dichiara. Qualcuno, qui, è ottimista.",
-			"next": "n2",
+			"text": "[pensieroso] Io verifico ciò che un annuncio sostiene. Cosa vuoi osservare?",
+			"choices": [
+				{"text": "Stipendio e sede.", "next": "n2"},
+				{"text": "Segnali di rischio.", "next": "risk"},
+				{"text": "Torno dopo.", "next": "end"},
+			],
 		},
 		"n2": {
-			"text": "[caldo] Quando un annuncio esagera, me ne accorgo. Quando mente, lo scrivo nella scheda.",
+			"text": "[caldo] Incrocio fonti, valuta, costo locale e modalità reale. Se manca una prova, la scheda lo dice chiaramente.",
+			"next": "start",
 		},
+		"risk": {
+			"text": "[severo] Titolo vago, requisiti contraddittori, salario opaco e dominio sospetto. Non invento certezze: espongo il dubbio.",
+			"next": "start",
+		},
+		"end": {"text": "[neutro] Le fonti restano qui. Torna quando vuoi."},
+	},
+
+	"scrittore": {
+		"start": {"text": "[caldo] Qui un CV generico diventa una risposta precisa. Da cosa vuoi partire?", "choices": [
+			{"text": "Come adatti il CV?", "next": "cv"},
+			{"text": "E la lettera?", "next": "letter"},
+			{"text": "Non ancora.", "next": "end"}]},
+		"cv": {"text": "[neutro] Porto in alto le prove rilevanti, uso le parole dell'annuncio senza copiarlo e non invento mai esperienza.", "next": "start"},
+		"letter": {"text": "[caldo] Una pagina, una motivazione concreta e due connessioni verificabili tra persona e ruolo.", "next": "start"},
+		"end": {"text": "[caldo] La pila resta qui: potrai aprirla e vedere ogni lavoro."},
+	},
+	"critico": {
+		"start": {"text": "[severo] Io sono l'ultimo controllo prima dell'uscita. Vuoi sapere cosa boccio?", "choices": [
+			{"text": "Sì, fammi l'elenco.", "next": "checks"},
+			{"text": "Cosa significa PASS?", "next": "pass"},
+			{"text": "Preferisco non saperlo.", "next": "end"}]},
+		"checks": {"text": "[neutro] Invenzioni, tono artificiale, requisiti ignorati, refusi e risultati senza prova. Anche una frase bella può essere sbagliata.", "next": "start"},
+		"pass": {"text": "[caldo] Significa pronto per la tua revisione, non spedito automaticamente. L'ultima parola resta tua.", "next": "start"},
+		"end": {"text": "[divertito] Saggia decisione. Io invece devo saperlo."},
+	},
+	"sentinella": {
+		"start": {"text": "[neutro] Sorveglio processi, code e limiti. Cosa vuoi controllare?", "choices": [
+			{"text": "Privacy e confini.", "next": "privacy"},
+			{"text": "Cosa accade se qualcosa cade?", "next": "health"},
+			{"text": "Continua la ronda.", "next": "end"}]},
+		"privacy": {"text": "[severo] Senza provider nessun testo libero parte. Con il provider, solo la chat scelta raggiunge il tuo runtime.", "next": "start"},
+		"health": {"text": "[caldo] Segnalo il guasto, fermo il ritmo e lascio al Dottore una diagnosi leggibile. Niente fallimenti silenziosi.", "next": "start"},
+		"end": {"text": "[neutro] Ronda ripresa."},
+	},
+	"dottore": {
+		"start": {"text": "[caldo] Io curo il sistema, non il candidato. Vuoi una visita rapida?", "choices": [
+			{"text": "Cosa controlli?", "next": "check"},
+			{"text": "Quando intervieni?", "next": "when"},
+			{"text": "Sto bene così.", "next": "end"}]},
+		"check": {"text": "[neutro] Contesto, log, dipendenze e processi bloccati. Propongo una cura prima di modificare qualcosa.", "next": "start"},
+		"when": {"text": "[pensieroso] Su richiesta o quando la Sentinella trova un sintomo ripetuto. Non disturbo un agente sano.", "next": "start"},
+		"end": {"text": "[caldo] Ottimo. La prevenzione migliore è capire la macchina."},
+	},
+	"mantenitore": {
+		"start": {"text": "[neutro] Tengo in ordine runtime, aggiornamenti e backup. Cosa ti incuriosisce?", "choices": [
+			{"text": "Il container.", "next": "container"},
+			{"text": "Gli aggiornamenti.", "next": "updates"},
+			{"text": "Torno più tardi.", "next": "end"}]},
+		"container": {"text": "[caldo] È il confine operativo del team: strumenti, skill e dati restano riproducibili e ispezionabili.", "next": "start"},
+		"updates": {"text": "[neutro] Un riavvio ricostruisce le skill dichiarate dagli agenti. Nessun pezzo nascosto in un terminale esterno.", "next": "start"},
+		"end": {"text": "[caldo] Io resto qui con la chiave inglese."},
 	},
 
 	# ── Visite proattive: l'agente viene alla TUA scrivania ──
@@ -204,13 +272,16 @@ const TREES := {
 
 	"assistente": {
 		"start": {
-			"text": "[caldo] Tutto bene? Se cerchi un consiglio di carriera, il Mentor è nel salotto, vicino alla lampada.",
-			"pose": "a", "next": "n2",
+			"text": "[caldo] Sono la tua guida nell'ufficio. Da dove vuoi cominciare?",
+			"pose": "a", "choices": [
+				{"text": "Fammi fare il tour.", "next": "tour"},
+				{"text": "Cosa serve per partire?", "next": "setup"},
+				{"text": "Voglio solo esplorare.", "next": "end"},
+			],
 		},
-		"n2": {
-			"text": "[divertito] …e sì, il caffè della macchina è gratis. Budget del team permettendo.",
-			"pose": "b",
-		},
+		"tour": {"text": "[neutro] Segui i diamanti: Scout trova, Analista verifica, Scorer pesa, Scrittore prepara e Critico revisiona. I ruoli centrali tengono il sistema sano.", "next": "start"},
+		"setup": {"text": "[caldo] Container, login al provider e profilo personale. Finché non colleghi il provider puoi parlare con noi solo tramite scelte sicure e ripetibili.", "next": "start"},
+		"end": {"text": "[divertito] Perfetto. Il caffè è gratis e ogni conversazione può ricominciare."},
 	},
 }
 

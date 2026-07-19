@@ -55,6 +55,8 @@ const S := {
 	"guided.free_placeholder": "write freely or use a suggested reply…",
 	"guided.offline_note": "◆ offline guided conversation — no tokens or LLM required",
 	"guided.hybrid_note": "◆ guide active — you can also write freely to the connected agent",
+	"guided.agent_unavailable": "◆ provider connected — start the team to use live chat",
+	"guided.ai_suggestions": "REPLIES SUGGESTED BY THE AGENT",
 	"chat.expand": "FULL SCREEN",
 	"chat.shrink": "SHRINK",
 

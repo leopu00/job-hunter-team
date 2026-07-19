@@ -30,7 +30,8 @@ conversations:
    optionally opens working hours.
 
 Before provider authentication, only authored reply choices are available and
-no LLM is called. State is persisted locally. After provider authentication
+no LLM is called. The representative showroom roster and 50 fictional jobs keep
+the office, list and map explorable. State is persisted locally. After provider authentication
 and agent startup, suggested replies remain available while free text is sent
 to the real agent. Details: [`FIRST-RUN.md`](FIRST-RUN.md).
 
@@ -68,6 +69,6 @@ email and Telegram credentials travel through stdin and remain under
 ## Verification
 
 - `tools/run.sh test` / `tools/run.ps1 test`: logic, UI and integration smoke.
-- `JHT_GUIDED_TEST=1`: scripted trees, offline choice-only UI, hybrid free-text
+- `JHT_GUIDED_TEST=1`: showroom catalog/trees, offline choice-only UI, strict live free-text
   transition and native profile-field coverage.
 - `JHT_GUIDED_CHAT=assistente JHT_CHAT_FULL=1`: visual first-run preview.
