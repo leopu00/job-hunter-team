@@ -39,6 +39,10 @@ EXPECTED = [
     ("heartbeat-bridge",   "heartbeat-bridge.py",   "bridge-suite"),
     ("window-ratio-meter", "window_ratio_meter.py", "bridge-suite"),
     ("codex-auth-healer",  "codex-auth-healer.sh",  "bridge-suite"),
+    # 19/07: token-meter era FUORI lista → morto 6 giorni in silenzio
+    # (13→19/07). Ora parte con la suite ed è risorvegliato come gli altri.
+    ("token-meter",        "token-meter.py",        "bridge-suite"),
+    ("agent-vitals",       "agent_vitals.py",       "bridge-suite"),
     ("agent-watchdog",     "agent-watchdog.sh",     "pid1-child"),
     ("doctor-watchdog",    "doctor-watchdog.sh",    "pid1-child"),
     ("auto-report-loop",   "auto-report-loop.sh",   "pid1-child"),

@@ -227,6 +227,24 @@ if [ "$ROLE" = "bridge" ]; then
     echo "⚠ $WRM_SCRIPT non trovato — calibrazione auto N/D (seed only)"
   fi
 
+  # Token-meter — nella suite dal 19/07: prima partiva SOLO a mano
+  # (start-agent.sh token-meter) e senza watchdog: morto il 13/07 è
+  # rimasto giù 6 giorni. Ora vive e muore con la bridge-suite.
+  METER_SCRIPT="/app/shared/skills/token-meter.py"
+  if [ -f "$METER_SCRIPT" ]; then
+    for _pid in $(grep -l token-meter.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -TERM "$_pid" 2>/dev/null || true
+    done
+    sleep 0.5
+    setsid sh -c "
+      JHT_HOME='${JHT_HOME:-/jht_home}' \
+        python3 -u $METER_SCRIPT >> /tmp/token-meter.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ token-meter partito (log /tmp/token-meter.log)"
+  else
+    echo "⚠ $METER_SCRIPT non trovato — token-meter N/D"
+  fi
+
   # Agent-vitals — CPU%/RSS PER-AGENTE nel tempo (richiesta Leone 19/07:
   # il meccanismo AGENT_ID del monitor di claude-team, portato su
   # /proc/*/environ via JHT_AGENT_NAME). Scrive agent-vitals.jsonl per
