@@ -18,6 +18,7 @@ Tracking temporale:
 """
 
 import argparse
+import re
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -93,7 +94,21 @@ def interpret_escapes(text):
     """
     if text is None:
         return None
-    return text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r")
+    text = text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r")
+
+    # Alcuni LLM scrivono le emoji come escape Python (\U0001F916 / ✨)
+    # invece che come caratteri: senza conversione arrivano LETTERALI in
+    # dashboard. Surrogates (D800-DFFF) e code point fuori range restano
+    # com'erano.
+    def _chr(m):
+        cp = int(m.group(1), 16)
+        if 0xD800 <= cp <= 0xDFFF or cp > 0x10FFFF:
+            return m.group(0)
+        return chr(cp)
+
+    text = re.sub(r"\\U([0-9A-Fa-f]{8})", _chr, text)
+    text = re.sub(r"\\u([0-9A-Fa-f]{4})", _chr, text)
+    return text
 
 
 def update_position(args):
