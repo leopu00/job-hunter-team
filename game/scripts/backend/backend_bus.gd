@@ -69,6 +69,10 @@ signal profile_status_updated(profile: Dictionary, required: Dictionary, ready: 
 signal document_uploaded(ok: bool, remote_path: String, error: String)
 ## Esito del salvataggio degli orari di lavoro (working_hours).
 signal hours_saved(ok: bool, error: String)
+## Contenuto di un documento prodotto dal team (CV/cover letter, md o
+## pdf), letto on-demand dal filesystem del container per l'anteprima
+## in-game. data = bytes del file (utf-8 per gli md, binari per i pdf).
+signal artifact_fetched(path: String, ok: bool, data: PackedByteArray, error: String)
 ## live_settings è arrivata/cambiata (config team + usage reali).
 signal live_settings_updated(settings: Dictionary)
 ## Telemetria infrastrutturale VPS/container, campionata via SSH.
@@ -480,6 +484,25 @@ func publish_usage_history(query: Dictionary, data: Dictionary) -> void:
 	usage_history_query = query
 	usage_history = data
 	usage_history_updated.emit(query, data)
+
+
+## ── Documenti prodotti (anteprima CV in-game) ────────────────────────
+
+## Chiede al backend i bytes di un documento registrato in cv_path/
+## cl_path (lettura pura, come il resto dell'osservazione). Esito su
+## artifact_fetched; il path fa da chiave di correlazione per la UI.
+func fetch_artifact(path: String) -> void:
+	var clean := path.strip_edges()
+	if _backend and _backend.has_method("fetch_artifact") and clean != "":
+		_backend.fetch_artifact(clean)
+	else:
+		artifact_fetched.emit(clean, false, PackedByteArray(),
+				"backend non collegato")
+
+## Il backend pubblica il documento da qui (thread → call_deferred).
+func publish_artifact(path: String, ok: bool, data: PackedByteArray,
+		error: String) -> void:
+	artifact_fetched.emit(path, ok, data, error)
 
 
 ## ── Ticket utente→team ───────────────────────────────────────────────

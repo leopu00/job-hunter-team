@@ -102,6 +102,14 @@ const S := {
 	"cv.match": "MATCH POSIZIONE",
 	"cv.open_position": "APRI SCHEDA COMPLETA DELLA POSIZIONE",
 	"cv.close": "ESC o click fuori per chiudere",
+	"cv.preview": "ANTEPRIMA",
+	"cv.preview_title": "ANTEPRIMA DOCUMENTO",
+	"cv.doc_loading": "Recupero il documento dal container…",
+	"cv.doc_error": "Documento non disponibile: ",
+	"cv.doc_pdf_only": "Per questo documento esiste solo il PDF: aprilo qui sotto.",
+	"cv.open_pdf": "APRI PDF",
+	"cv.opening_pdf": "SCARICO…",
+	"cv.doc_close": "ESC o click fuori per tornare all'archivio",
 
 	# ── Code delle pile di reparto ───────────────────────────────
 	"queue.title": "CODA %s",
