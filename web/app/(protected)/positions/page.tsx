@@ -593,10 +593,14 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // le escluse sono rumore. La regola salta se l'utente sceglie stati
   // espliciti dalla sidebar (es. vuole proprio le escluse) o chiede le
   // senza-score (noscore=1).
+  // La soglia 40 rispecchia la RULE-04 dello Scorer (score<40 → excluded):
+  // copre anche le sbavature dell'agente sul bordo (36-39 lasciate scored).
   const positions =
-    statuses.length || unscored
+    statuses.length || unscored || scoreBands.length
       ? allPositions
-      : allPositions.filter((p) => p.score != null && p.status !== "excluded");
+      : allPositions.filter(
+          (p) => p.score != null && p.score >= 40 && p.status !== "excluded",
+        );
 
   // Pagination computed values
   const totalResults = positions.length;
