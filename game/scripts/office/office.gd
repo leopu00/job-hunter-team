@@ -808,7 +808,10 @@ func _doctor_selftest(target_ref: String) -> void:
 			return
 		var snap := doctor.debug_snapshot()
 		var ok := not bool(snap.get("forced_trip", true)) \
-				and doctor.global_position.distance_to(snap.get("home", Vector2.INF)) < 1.0 \
+				# Il Dottore ora rientra seduto nel composito della poltrona: la
+				# posizione di lavoro include l'offset del sedile, come i reparti.
+				and doctor.global_position.distance_to(
+						snap.get("work_position", Vector2.INF)) < 1.0 \
 				and int(snap.get("state", -1)) == AgentNPC.S.WORK \
 				and int(snap.get("investigations", 0)) == 1
 		print("SIMULATION-DOCTOR-TEST ", "PASS" if ok else "FAIL", " ",
