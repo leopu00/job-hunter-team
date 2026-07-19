@@ -230,7 +230,8 @@ func pipeline_counts() -> Dictionary:
 	var c := {"to_analyze": 0, "analyzed": 0, "with_score": 0,
 			"to_write": 0, "written": 0, "cv_ready": 0}
 	for p in positions:
-		# Un solo predicato serve contatori, pile cliccabili e relative liste.
+		# Le quattro pile fisiche sono OUTPUT completati: ciò che è claimed o
+		# in lavorazione vive invece sulla scrivania dell'agente.
 		if PipelineQueueDefs.matches("scout", p):
 			c["to_analyze"] += 1
 		elif PipelineQueueDefs.matches("analisti", p):
@@ -238,12 +239,15 @@ func pipeline_counts() -> Dictionary:
 		elif PipelineQueueDefs.matches("scorer", p):
 			c["with_score"] += 1
 		elif PipelineQueueDefs.matches("scrittori", p):
-			c["to_write"] += 1
-		elif PipelineQueueDefs.matches("critici", p):
 			c["written"] += 1
-			if str(p.get("critic_verdict", "") if p.get("critic_verdict") != null
-					else "") == "PASS":
-				c["cv_ready"] += 1
+		elif PipelineQueueDefs.matches("critici", p):
+			c["cv_ready"] += 1
+		# KPI dashboard separato dalla pila: mostra anche il lavoro già claimed.
+		var status := str(p.get("status", ""))
+		var requested := int(p.get("write_requested", 0)
+				if p.get("write_requested") != null else 0) == 1
+		if (status == "scored" and requested) or status == "writing":
+			c["to_write"] += 1
 	return c
 
 

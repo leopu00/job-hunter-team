@@ -33,6 +33,7 @@ const DEPARTMENTS := {
 		"color": Color("#00e87a"),
 		"zone": Rect2(320, 348, 880, 520),
 		"inbox": Vector2(1110, 778),
+		"inbox_access": Vector2(1110, 838),
 		# Anello radiale nell'angolo nord-ovest; indice 0..5 = ore 10,8,12,6,2,4.
 		"desks": [
 			{"rect": Rect2(384, 400, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
@@ -49,6 +50,7 @@ const DEPARTMENTS := {
 		"color": Color("#4d9fff"),
 		"zone": Rect2(2312, 150, 848, 580),  # il lab di vetro, angolo NE
 		"inbox": Vector2(2690, 790),  # fuori dalla porta del lab
+		"inbox_access": Vector2(2690, 848),
 		# Anello radiale adattato al tappeto più stretto del laboratorio.
 		"desks": [
 			{"rect": Rect2(2405, 293, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
@@ -65,6 +67,7 @@ const DEPARTMENTS := {
 		"color": Color("#f5c518"),
 		"zone": Rect2(1000, 960, 880, 520),
 		"inbox": Vector2(1790, 1390),
+		"inbox_access": Vector2(1862, 1390),
 		# Gli Scorer occupano l'anello centrale lasciato libero dagli Scout.
 		"desks": [
 			# scorer_a_side nasce con la sedia a sinistra, al contrario degli
@@ -83,6 +86,7 @@ const DEPARTMENTS := {
 		"color": Color("#a855f7"),
 		"zone": Rect2(320, 1520, 860, 440),
 		"inbox": Vector2(1120, 1740),
+		"inbox_access": Vector2(1190, 1740),
 		# Sei spicchi radiali sul tappeto, come un quadrante d'orologio.
 		# Ogni agente guarda verso l'ESTERNO: ore 12=schiena, ore 6=viso,
 		# i quattro intermedi usano le viste laterali disponibili. Gli indici
@@ -106,6 +110,7 @@ const DEPARTMENTS := {
 		"color": Color("#ff4560"),
 		"zone": Rect2(2150, 1520, 1010, 440),
 		"inbox": Vector2(3100, 1820),  # deposito sul bordo est, fuori dall'anello
+		"inbox_access": Vector2(3130, 1755),
 		# Anello radiale con il centro sgombro per sedie, corpi e percorsi.
 		"desks": [
 			{"rect": Rect2(2309, 1580, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
@@ -163,6 +168,12 @@ const FETCH_FROM := {
 	"scrittori": "scorer",
 	"critici": "scrittori",
 }
+
+## Punto camminabile davanti alla pila. La pila resta ferma e leggibile:
+## l'agente si affianca alla vaschetta invece di attraversarla o coprirla.
+static func handoff_spot(dept_id: String) -> Vector2:
+	var def: Dictionary = DEPARTMENTS[dept_id]
+	return def.get("inbox_access", def["inbox"])
 
 ## Dove sta l'agente assegnato alla scrivania, coerente col verso del
 ## mobile (vedi convenzioni in testa).

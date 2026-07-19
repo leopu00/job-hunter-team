@@ -28,7 +28,7 @@ const TRIP_EVERY := {
 	"sentinella": 140.0,  # il watchdog è quasi sempre in ronda
 }
 
-enum S { WORK, TRIP, TALK }
+enum S { WORK, TRIP, TALK, SEATING }
 
 var slug := ""
 var uid := ""  # id univoco lato backend (es. "scout-2"); "" = roster locale
@@ -63,6 +63,7 @@ var _seat_sink := 90.0  # baseline appena dietro quella del desk
 var _custom_seat_offset := Vector2.ZERO
 var _has_custom_seat_offset := false
 var _desk_key := ""  # chiave nel registry FurnitureNode.desks
+var _desk_pose_active := false  # evita ritorni al desk fra due tratte esterne
 var _chatter: Array = []
 var _wander: Array = []  # solo core (mentor/coordinatore/assistente/sentinella)
 
@@ -82,9 +83,10 @@ var _highlight := false
 var _pulse := 0.0
 var _forced_trip := false  # visite chat-driven: finiscono anche se passa idle
 var _investigation_count := 0
-var _pending_pipeline: Array[bool] = []
+var _pending_pipeline: Array[Dictionary] = []
 var _pipeline_trip_active := false
 var _pipeline_trip_count := 0
+var _entering := false
 
 func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	nav = p_nav
@@ -197,8 +199,21 @@ func _ensure_front_chair(desk: Dictionary) -> void:
 func say(text: String, to_label := "") -> void:
 	speech.say(text, to_label)
 
-## Entrata in scena: l'agente si materializza (energia tesseract) alla
-## postazione. Da chiamare subito dopo setup().
+## Entrata fisica in scena: ogni nuovo processo appare oltre la soglia,
+## attraversa la porta e raggiunge a piedi la propria postazione. Funziona
+## anche se il backend lo pubblica idle: l'ingresso è un fatto, non lavoro.
+func enter_through(door_spot: Vector2) -> void:
+	if _dissolving or _exiting:
+		return
+	_set_desk_occupied(false)
+	_entering = true
+	_forced_trip = true
+	position = door_spot + Vector2(randf_range(-26.0, 26.0), randf_range(-4.0, 10.0))
+	ExitDoor.swing()
+	_legs = [_leg_to(_spot, "walk", 0.0, "work")]
+	_start_next_leg()
+
+## Legacy per preview isolate; gli spawn reali passano sempre dalla porta.
 func materialize() -> void:
 	modulate.a = 0.0
 	SpawnFx.burst(get_parent(), _spot)
@@ -279,14 +294,9 @@ func _begin_exit(door_spot: Vector2) -> void:
 ## scaffale output accanto alla porta (teatro sul dato vero, chiamato
 ## dalla scena quando cv_ready cresce).
 func deliver_to_shelf() -> void:
-	if state != S.WORK or backend_status != "working" or is_dissolving():
-		return
-	_legs = [
-		_leg_to(OutputShelf.RECT.get_center() + Vector2(0, 46.0), "carry",
-				randf_range(1.0, 1.8), "idle"),
-		_leg_to(_spot, "walk", 0.0, "work"),
-	]
-	_start_next_leg()
+	# Il PASS può arrivare mentre il Critico è in un'altra tratta o già idle:
+	# passa dalla stessa coda causale delle transizioni e non va mai perso.
+	perform_pipeline_step(true, "final")
 
 ## Reazione a una transizione REALE del registro attività: il corpo
 ## pulsa due volte (il lavoro vero si deve vedere in scena) e una
@@ -312,14 +322,14 @@ func react_to_work(print_job := false) -> void:
 ## Una transizione REALE della pipeline diventa un viaggio fisico. Non è un
 ## giro casuale: ogni ruolo preleva l'output del precedente, lavora seduto e
 ## deposita il foglio nella vaschetta destinata al reparto successivo.
-func perform_pipeline_step(force_observed := false) -> void:
+func perform_pipeline_step(force_observed := false, transition_state := "") -> void:
 	if is_dissolving():
 		return
 	# Una raffica di transizioni dello stesso agente non deve perdersi mentre
 	# sta gia portando un foglio. La coda e corta ma causale e, per eventi
 	# reali osservati nel DB, resta valida anche se il pane e gia tornato idle.
 	if state != S.WORK:
-		_pending_pipeline.append(force_observed)
+		_pending_pipeline.append({"forced": force_observed, "state": transition_state})
 		if _pending_pipeline.size() > 8:
 			_pending_pipeline.pop_front()
 		# Un evento DB autoritativo sblocca anche il viaggio gia in corso:
@@ -329,7 +339,7 @@ func perform_pipeline_step(force_observed := false) -> void:
 		return
 	if backend_status != "working" and not force_observed:
 		return
-	if _prepare_pipeline_trip():
+	if _prepare_pipeline_trip(transition_state):
 		_pipeline_trip_active = true
 		_forced_trip = force_observed
 		_start_next_leg()
@@ -427,6 +437,10 @@ func _physics_process(delta: float) -> void:
 			elif _follow_path(SPEED, _leg.get("mode", "walk")):
 				_arrive_at_leg()
 		S.TALK:
+			velocity = Vector2.ZERO
+		S.SEATING:
+			# Breve raccordo visivo fra ultimo passo e seduta: il Tween governa
+			# position, la fisica non deve riportare il corpo sul path.
 			velocity = Vector2.ZERO
 	move_and_slide()
 
@@ -597,22 +611,6 @@ func _plan_trip() -> void:
 		return
 	var pois := DepartmentDefs.POIS
 	var roll := randf()
-	if dept == "critici" and roll < 0.40:
-		# loop scrittore↔critico (3/3): il critico RITIRA fisicamente il
-		# CV dagli scrittori, lo esamina nel suo ufficio e lo RIDÀ
-		var wr_inbox: Vector2 = DepartmentDefs.DEPARTMENTS["scrittori"]["inbox"]
-		var pick := _leg_to(_jit(wr_inbox), "walk", randf_range(0.8, 1.4), "idle")
-		pick["pile_take"] = "scrittori"
-		var back := _leg_to(_jit(wr_inbox), "carry", randf_range(0.6, 1.2), "idle")
-		back["pile_drop"] = "scrittori"
-		_legs = [
-			pick,
-			_leg_to(_spot, "carry", randf_range(14.0, 24.0), "work"),
-			back,
-			_leg_to(_spot, "walk", 0.0, "work"),
-		]
-		_start_next_leg()
-		return
 	if roll < 0.45:
 		# stampa: vai alla stampante, aspetta il foglio, torna coi fogli
 		var pr := _leg_to(_jit(pois["printer"]["spot"]), "walk",
@@ -624,13 +622,21 @@ func _plan_trip() -> void:
 		var src: String = DepartmentDefs.FETCH_FROM[dept]
 		# il ritiro si vede sulle pile: l'inbox a monte si svuota, quello
 		# di casa riceve una parte, il resto arriva FINO alla scrivania
-		var pick := _leg_to(_jit(DepartmentDefs.DEPARTMENTS[src]["inbox"]), "walk",
+		var pick := _leg_to(_jit(DepartmentDefs.handoff_spot(src)), "walk",
 				randf_range(0.8, 1.6), "idle")
 		pick["pile_take"] = src
-		var drop := _leg_to(_jit(DepartmentDefs.DEPARTMENTS[dept]["inbox"]), "carry",
-				randf_range(0.5, 1.0), "idle")
-		drop["pile_drop"] = dept
-		_legs = [pick, drop, _leg_to(_spot, "carry", 0.0, "work")]
+		if dept == "critici":
+			var review := _leg_to(_spot, "carry", randf_range(9.0, 16.0), "work")
+			review["desk_work"] = true
+			_legs = [pick, review,
+					_leg_to(OutputShelf.RECT.get_center() + Vector2(0, 46.0),
+							"carry", randf_range(0.8, 1.4), "idle"),
+					_leg_to(_spot, "walk", 0.0, "work")]
+		else:
+			var drop := _leg_to(_jit(DepartmentDefs.handoff_spot(dept)), "carry",
+					randf_range(0.5, 1.0), "idle")
+			drop["pile_drop"] = dept
+			_legs = [pick, drop, _leg_to(_spot, "carry", 0.0, "work")]
 	elif roll < 0.88:
 		# pausa caffè / macchinetta (raro: i tick non aspettano)
 		var is_coffee := randf() < 0.7
@@ -651,9 +657,9 @@ func _plan_trip() -> void:
 ## Prepara, senza avviarlo, il percorso di produzione del ruolo corrente.
 ## Le pile registrate in PaperPile.inbox sono OUTPUT: chi sta a valle prende
 ## dal reparto precedente e deposita nel proprio punto di consegna.
-func _prepare_pipeline_trip() -> bool:
+func _prepare_pipeline_trip(transition_state := "") -> bool:
 	_legs = []
-	var home_out: Vector2 = DepartmentDefs.DEPARTMENTS[dept]["inbox"]
+	var home_out: Vector2 = DepartmentDefs.handoff_spot(dept)
 	if dept == "scout":
 		var pr := _leg_to(DepartmentDefs.POIS["printer"]["spot"], "walk",
 				randf_range(1.8, 3.0), "idle")
@@ -667,7 +673,7 @@ func _prepare_pipeline_trip() -> bool:
 	if not DepartmentDefs.FETCH_FROM.has(dept):
 		return false
 	var src: String = DepartmentDefs.FETCH_FROM[dept]
-	var pick := _leg_to(DepartmentDefs.DEPARTMENTS[src]["inbox"], "walk",
+	var pick := _leg_to(DepartmentDefs.handoff_spot(src), "walk",
 			randf_range(0.8, 1.4), "idle")
 	pick["pile_take"] = src
 	var durations := {
@@ -677,6 +683,27 @@ func _prepare_pipeline_trip() -> bool:
 	var window: Vector2 = durations.get(dept, Vector2(8.0, 14.0))
 	var process := _leg_to(_spot, "carry", randf_range(window.x, window.y), "work")
 	process["desk_work"] = true
+	# La transizione `writing` rappresenta il claim: lo Scrittore ritira la
+	# posizione e resta al desk. Solo `review/ready` deposita il CV finito.
+	if dept == "scrittori" and transition_state == "writing":
+		_legs = [pick, process]
+		return true
+	if dept == "scrittori" and transition_state in ["review", "ready"]:
+		var writer_drop := _leg_to(home_out, "carry", randf_range(0.8, 1.4), "idle")
+		writer_drop["pile_drop"] = dept
+		_legs = [writer_drop, _leg_to(_spot, "walk", 0.0, "work")]
+		return true
+	# I Critici sono l'ultimo reparto: ritirano dagli Scrittori, revisionano
+	# seduti e portano il PASS allo scaffale, non a una quinta pila fittizia.
+	if dept == "critici":
+		_legs = [
+			pick,
+			process,
+			_leg_to(OutputShelf.RECT.get_center() + Vector2(0, 46.0), "carry",
+					randf_range(0.8, 1.4), "idle"),
+			_leg_to(_spot, "walk", 0.0, "work"),
+		]
+		return true
 	var deliver := _leg_to(home_out, "carry", randf_range(0.8, 1.4), "idle")
 	deliver["pile_drop"] = dept
 	_legs = [pick, process, deliver, _leg_to(_spot, "walk", 0.0, "work")]
@@ -718,16 +745,14 @@ func _arrive_at_leg() -> void:
 		_investigation_count += 1
 	# movimenti di fogli sugli inbox di reparto (pile condivise)
 	if _leg.has("pile_take") and PaperPile.inbox.has(_leg["pile_take"]):
-		PaperPile.inbox[_leg["pile_take"]].take_sheets(randi_range(2, 3))
+		PaperPile.inbox[_leg["pile_take"]].take_sheet()
 	if _leg.has("pile_drop") and PaperPile.inbox.has(_leg["pile_drop"]):
-		PaperPile.inbox[_leg["pile_drop"]].add_sheets(randi_range(1, 2))
+		PaperPile.inbox[_leg["pile_drop"]].add_sheets(1)
 	if float(_leg.get("pause", 0.0)) > 0.0:
-		_pause = _leg["pause"]
 		if _leg.get("desk_work", false):
-			position = _spot + (_seat_offset() if _seated() else Vector2.ZERO)
-			_desk_motion("sit" if _seated() else "work")
-			_set_desk_occupied(true)
+			_begin_desk_pause(float(_leg["pause"]))
 		else:
+			_pause = _leg["pause"]
 			rig.set_motion(rig.facing, rig.flipped, _leg.get("pause_mode", "idle"))
 	elif _legs.is_empty():
 		_end_trip()
@@ -735,25 +760,64 @@ func _arrive_at_leg() -> void:
 		_start_next_leg()
 
 func _end_trip() -> void:
+	# Il path termina nel punto navigabile davanti alla sedia. Gli ultimi
+	# centimetri diventano una breve transizione visibile, non un set_position.
+	if _seated() and not _desk_pose_active:
+		var seat_target := _spot + _seat_offset()
+		if position.distance_to(seat_target) > 2.0:
+			state = S.SEATING
+			velocity = Vector2.ZERO
+			collision_mask = 0
+			_desk_motion("sit" if backend_status == "working" else "sit_idle")
+			var seat_tween := create_tween()
+			seat_tween.tween_property(self, "position", seat_target, 0.32) \
+					.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			seat_tween.tween_callback(_finish_trip)
+			return
+	_finish_trip()
+
+func _finish_trip() -> void:
 	# se l'ultimo tratto era un carry, i fogli si depositano sulla pila
 	if pile and _leg.get("mode", "") == "carry":
 		pile.add_sheets(randi_range(2, 4))
 	var completed_pipeline := _pipeline_trip_active
 	_pipeline_trip_active = false
 	_forced_trip = false
+	_entering = false
 	state = S.WORK
-	position = _spot
+	if not _seated():
+		position = _spot
 	_work_pose()
 	if completed_pipeline:
 		_pipeline_trip_count += 1
 	if not _pending_pipeline.is_empty():
-		var force_next: bool = _pending_pipeline.pop_front()
-		perform_pipeline_step.call_deferred(force_next)
+		var next_event: Dictionary = _pending_pipeline.pop_front()
+		perform_pipeline_step.call_deferred(bool(next_event.get("forced", false)),
+				str(next_event.get("state", "")))
+
+func _begin_desk_pause(duration: float) -> void:
+	if not _seated():
+		_pause = duration
+		_desk_motion("work")
+		return
+	state = S.SEATING
+	velocity = Vector2.ZERO
+	collision_mask = 0
+	_desk_motion("sit")
+	var target := _spot + _seat_offset()
+	var tween := create_tween()
+	tween.tween_property(self, "position", target, 0.28) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(func() -> void:
+		_pause = duration
+		state = S.TRIP
+		_set_desk_occupied(true))
 
 ## Alla scrivania: rivolto secondo la postazione (down = viso in camera).
 ## Le postazioni pilota possono sostituire il rig con un'unica illustrazione
 ## desk+sedia+agente: quando si alza, torna il desk vuoto e il rig ricompare.
 func _set_desk_occupied(on: bool) -> void:
+	var was_at_desk := _desk_pose_active
 	var desk_node: FurnitureNode = FurnitureNode.desks.get(_desk_key)
 	var use_composite := _seated() and desk_node != null \
 			and desk_node.has_seated_art()
@@ -761,6 +825,7 @@ func _set_desk_occupied(on: bool) -> void:
 		desk_node.set_occupied(on and use_composite)
 	if rig:
 		rig.visible = not (on and use_composite)
+	_desk_pose_active = on and _seated()
 	var overhead_delta := Vector2.ZERO
 	if on and use_composite:
 		overhead_delta = _composite_overhead_delta()
@@ -775,8 +840,11 @@ func _set_desk_occupied(on: bool) -> void:
 			# move_and_slide depenetra l'avatar fuori dalla sedia.
 			collision_mask = 0
 		else:
-			# Prima ci si rialza nel punto navigabile, poi tornano solide le pareti.
-			position = _spot
+			# Riallinea al punto in piedi SOLO quando lascia davvero la sedia.
+			# Prima scattava fra tutte le tratte e teletrasportava l'agente dalla
+			# pila alla scrivania prima ancora di iniziare il tratto successivo.
+			if was_at_desk:
+				position = _spot
 			collision_mask = 1
 	else:
 		collision_mask = 1
@@ -803,6 +871,7 @@ func debug_snapshot() -> Dictionary:
 			"work_position": _spot + (_seat_offset() if _seated() else Vector2.ZERO),
 			"collision_mask": collision_mask,
 			"position": global_position,
+			"entering": _entering, "desk_pose": _desk_pose_active,
 			"investigations": _investigation_count,
 			"pipeline_trips": _pipeline_trip_count,
 			"pending_pipeline": _pending_pipeline.size()}

@@ -102,20 +102,20 @@ func _ready() -> void:
 		"coffee":
 			CoffeeFx.ping(20.0)
 
-	# Punti di consegna tra reparti. Ogni pila vive dentro una vaschetta
-	# fisica etichettata: Scout → Analisti → Scorer → Scrittori → Critici.
-	# Quella degli Scorer è il deposito unico richiesto dagli Scrittori.
+	# Punti di consegna tra reparti. Sono OUTPUT, non generici inbox:
+	# Scout → Analisti → Scorer → Scrittori → Critici. Il risultato dei
+	# Critici va invece nello scaffale CV PRONTI accanto all'uscita.
 	PaperPile.inbox = {}
 	var handoff_to := {
 		"scout": "Analisti", "analisti": "Scorer", "scorer": "Scrittori",
-		"scrittori": "Critici", "critici": "Pronti",
+		"scrittori": "Critici",
 	}
-	for dept_id in DepartmentDefs.DEPT_ORDER:
+	for dept_id in handoff_to:
 		var inbox_pos: Vector2 = DepartmentDefs.DEPARTMENTS[dept_id]["inbox"]
 		var dept_color: Color = DepartmentDefs.DEPARTMENTS[dept_id]["color"]
 		world.add_child(HandoffStation.new(dept_id, inbox_pos,
 				handoff_to[dept_id], dept_color))
-		var p := PaperPile.new(Rect2(inbox_pos - Vector2(28, 16), Vector2(56, 32)))
+		var p := PaperPile.new(inbox_pos + Vector2(0, -4))
 		# gli Scout producono e basta: il loro inbox si riempie più svelto
 		p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
 		p.add_sheets(randi_range(1, 6))
@@ -125,8 +125,11 @@ func _ready() -> void:
 	# Primo avvio come showroom: tutti i ruoli fondamentali e due persone per
 	# reparto. Il primo snapshot reale li sostituisce senza mai presentare un
 	# ufficio vuoto a chi sta ancora configurando il prodotto.
-	var initial_defs: Array = CharacterDefs.spawn_list() if _seat_audit != "" \
-			else CharacterDefs.showroom_list()
+	var initial_defs: Array = []
+	if _seat_audit != "" or _doctor_test != "":
+		initial_defs = CharacterDefs.spawn_list()
+	elif BackendBus.agents.is_empty():
+		initial_defs = CharacterDefs.showroom_list()
 	for def in initial_defs:
 		if _seat_audit != "":
 			var audit_parts := _seat_audit.split(":")
@@ -136,6 +139,8 @@ func _ready() -> void:
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(def, nav)
+		if _seat_audit == "" and _doctor_test == "":
+			agent.enter_through(ENTRY_SPOT)
 		agent.set_story_marker(_seat_audit == "" \
 				and not ScriptedOnboarding.provider_authenticated())
 		agents.append(agent)
@@ -320,6 +325,9 @@ func _ready() -> void:
 	var pipeline_force_test := OS.get_environment("JHT_PIPELINE_FORCE_TEST")
 	if pipeline_force_test != "":
 		_pipeline_force_selftest.call_deferred(pipeline_force_test)
+	var entry_test := OS.get_environment("JHT_ENTRY_TEST")
+	if entry_test != "":
+		_entry_selftest.call_deferred(entry_test)
 	if _doctor_test != "":
 		_doctor_selftest.call_deferred(_doctor_test)
 	var core_patrol_test := OS.get_environment("JHT_CORE_PATROL_TEST")
@@ -832,9 +840,14 @@ func _pipeline_force_selftest(test_dept: String) -> void:
 	actor.perform_pipeline_step(true)
 	await get_tree().process_frame
 	var deadline := Time.get_ticks_msec() + 60000
+	var previous := actor.global_position
+	var max_step := 0.0
 	while int(actor.debug_snapshot().get("pipeline_trips", 0)) < baseline + 1 \
 			and Time.get_ticks_msec() < deadline:
-		await get_tree().process_frame
+		await get_tree().physics_frame
+		var step := actor.global_position.distance_to(previous)
+		max_step = maxf(max_step, step)
+		previous = actor.global_position
 	# Consenti alla posa seduta e alla maschera collisione di stabilizzarsi.
 	for _i in 3:
 		await get_tree().physics_frame
@@ -844,9 +857,44 @@ func _pipeline_force_selftest(test_dept: String) -> void:
 			and int(snap.get("state", -1)) == AgentNPC.S.WORK \
 			and not bool(snap.get("forced_trip", true)) \
 			and int(snap.get("collision_mask", -1)) == 0 \
+			# Il cambio seduto/in piedi può spostare fino a ~100 px; qualunque
+			# salto maggiore rivela un teletrasporto fra pila e scrivania.
+			and max_step < 130.0 \
 			and actor.global_position.distance_to(
 					snap.get("work_position", Vector2.INF)) < 1.0
+	snap["max_frame_step"] = max_step
 	print("PIPELINE-FORCE-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify(snap))
+	get_tree().quit(0 if ok else 1)
+
+func _entry_selftest(role: String) -> void:
+	await get_tree().create_timer(0.8).timeout
+	var actor := _find_agent(role)
+	if actor == null:
+		print("ENTRY-CONTINUITY-TEST FAIL no actor for ", role)
+		get_tree().quit(1)
+		return
+	actor.set_backend_status("idle")
+	actor.enter_through(ENTRY_SPOT)
+	await get_tree().physics_frame
+	var started_at_door := actor.global_position.distance_to(ENTRY_SPOT) < 60.0 \
+			and bool(actor.debug_snapshot().get("entering", false))
+	var previous := actor.global_position
+	var max_step := 0.0
+	var deadline := Time.get_ticks_msec() + 45000
+	while bool(actor.debug_snapshot().get("entering", false)) \
+			and Time.get_ticks_msec() < deadline:
+		await get_tree().physics_frame
+		max_step = maxf(max_step, actor.global_position.distance_to(previous))
+		previous = actor.global_position
+	var snap := actor.debug_snapshot()
+	var ok := started_at_door and max_step < 130.0 \
+			and not bool(snap.get("entering", true)) \
+			and bool(snap.get("desk_pose", false)) \
+			and actor.global_position.distance_to(
+					snap.get("work_position", Vector2.INF)) < 1.0
+	snap["max_frame_step"] = max_step
+	print("ENTRY-CONTINUITY-TEST ", "PASS" if ok else "FAIL", " ",
+			JSON.stringify(snap))
 	get_tree().quit(0 if ok else 1)
 
 func _doctor_selftest(target_ref: String) -> void:
@@ -1188,7 +1236,8 @@ func _start_talk(agent: AgentNPC) -> void:
 
 # ── Roster dinamico dal backend (missione backend-integration) ────────
 # In modalità backend la scena mostra SOLO gli agenti attivi sulla VPS:
-# sync_agents() confronta lo stato con la scena e materializza/dissolve.
+# sync_agents() confronta lo stato con la scena: entra dalla porta chi nasce,
+# esce dalla porta chi non appartiene più allo snapshot.
 
 var _desk_pool: Dictionary = {}  # role -> Array di def libere (postazioni)
 var _backend_mode := false
@@ -1201,7 +1250,7 @@ func sync_agents(list: Array) -> void:
 	if list.is_empty():
 		if _backend_mode:
 			for agent in agents.duplicate():
-				_despawn_agent(agent, false, false)
+				_despawn_agent(agent, false)
 			_backend_mode = false
 			_spawn_showroom()
 		return
@@ -1216,7 +1265,7 @@ func sync_agents(list: Array) -> void:
 			wanted[str(item.get("uid", item.get("slug", "")))] = item
 	for agent in agents.duplicate():
 		if not wanted.has(agent.uid):
-			_despawn_agent(agent, true, true)
+			_despawn_agent(agent, true)
 		else:
 			# throttle PRIMA dello status: la scelta seduto-vs-ricreazione
 			# al cambio di stato legge la durata già aggiornata
@@ -1293,6 +1342,7 @@ func _name_of(uid: String) -> String:
 ## punto interno dove gli agenti in uscita camminano prima di svanire.
 const EXIT_DOOR := Vector2(1300, 2000)
 const EXIT_SPOT := Vector2(1300, 1952)
+const ENTRY_SPOT := Vector2(1300, 1948)
 
 const MAX_TR_REACTIONS := 6   # per refresh: il resto resta solo nel registro
 const TR_REACT_GAP := 2.4     # secondi fra due reazioni (non un coro)
@@ -1320,32 +1370,28 @@ const PILE_PHASE := {
 	"scout": "to_analyze",
 	"analisti": "analyzed",
 	"scorer": "with_score",
-	"scrittori": "to_write",
-	"critici": "written",
+	"scrittori": "written",
 }
 
-## Contatore reale → fogli visibili: scala in radice (i numeri veri
-## arrivano a decine) col cap della pila; 0 resta 0.
-static func _pile_visual(n: int) -> int:
-	if n <= 0:
-		return 0
-	return mini(int(ceil(sqrt(float(n)) * 1.9)), PaperPile.MAX_SHEETS)
-
 var _last_ready := -1
+var _piles_synced := false
 
-func _sync_piles() -> void:
+func _sync_piles(hold_seconds := 0.0) -> void:
 	var counts: Dictionary = BackendBus.pipeline_counts()
 	for dept_id in PILE_PHASE:
 		if PaperPile.inbox.has(dept_id):
+			# Rapporto esatto 1:1. Il primo snapshot è immediato; i successivi
+			# aspettano il viaggio fisico dell'agente prima di riconciliarsi.
 			PaperPile.inbox[dept_id].set_target(
-					_pile_visual(int(counts[PILE_PHASE[dept_id]])))
+					int(counts[PILE_PHASE[dept_id]]), not _piles_synced, hold_seconds)
+	_piles_synced = true
 	var ready := int(counts["cv_ready"])
 	OutputShelf.set_ready(ready)
-	# un CV in più rispetto all'ultimo giro: uno scrittore lo porta
-	# fisicamente allo scaffale (teatro sopra il dato vero)
+	# Un PASS in più: è il Critico, ultimo anello, a portare il CV nello
+	# scaffale dei pronti. Lo Scrittore lo aveva lasciato sulla propria pila.
 	if _last_ready >= 0 and ready > _last_ready:
 		for agent in agents:
-			if agent.dept == "scrittori" and not agent.is_dissolving():
+			if agent.dept == "critici" and not agent.is_dissolving():
 				agent.deliver_to_shelf()
 				break
 	_last_ready = ready
@@ -1357,10 +1403,6 @@ func _sync_piles() -> void:
 ## che le ha firmate. Il primo snapshot fa solo da baseline: lo storico
 ## non va recitato all'avvio.
 func _on_transitions(_positions: Array) -> void:
-	# con uno snapshot VERO le pile seguono i contatori reali; senza
-	# posizioni (mock/offline) resta il teatro simulato del restock
-	if not BackendBus.positions.is_empty():
-		_sync_piles()
 	var fresh: Array = []
 	for t in BackendBus.transitions:
 		var key := "%s|%s|%s|%s" % [str(t.get("position_id", "")),
@@ -1370,6 +1412,11 @@ func _on_transitions(_positions: Array) -> void:
 			continue
 		_tr_seen[key] = true
 		fresh.append(t)
+	# Il primo snapshot allinea subito le pile. In seguito il nuovo target
+	# resta sospeso mentre gli agenti compiono davvero ritiro e consegna;
+	# dopo un minuto riconcilia eventuali raffiche o eventi senza attore.
+	if not BackendBus.positions.is_empty():
+		_sync_piles(65.0 if _tr_baseline and not fresh.is_empty() else 0.0)
 	if not _tr_baseline:
 		_tr_baseline = true
 		return
@@ -1420,7 +1467,7 @@ func _react_to_transition(t: Dictionary) -> void:
 	# reparto che ha firmato la transizione e il suo foglio lungo la pipeline.
 	# La transizione nel jobs.db e prova autoritativa del lavoro: anche se il
 	# poll della TUI vede gia idle, il viaggio fisico deve ancora avvenire.
-	actor.perform_pipeline_step(true)
+	actor.perform_pipeline_step(true, to_st)
 	Log.debug("scene", "reazione %s: %s → %s" % [by, what, to_st])
 
 ## Primo snapshot backend: le postazioni tornano nel pool e il roster
@@ -1435,7 +1482,7 @@ func _enter_backend_mode() -> void:
 		_desk_pool[role].append(def)
 	for agent in agents.duplicate():
 		if agent.uid == "":
-			_despawn_agent(agent, false, false)
+			_despawn_agent(agent, false)
 	Log.info("backend", "modalità backend: in scena solo gli agenti attivi")
 
 func _spawn_showroom() -> void:
@@ -1452,6 +1499,7 @@ func _spawn_showroom() -> void:
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(def, nav)
+		agent.enter_through(ENTRY_SPOT)
 		agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
 				bool(_story_seen.get(str(def["slug"]), false)))
 		agents.append(agent)
@@ -1470,7 +1518,7 @@ func _on_setup_status_changed(status: Dictionary) -> void:
 	elif BackendBus.positions.is_empty() or BackendBus.positions_are_demo:
 		BackendBus.show_demo_positions()
 
-func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := false) -> void:
+func _despawn_agent(agent: AgentNPC, refill_pool := true) -> void:
 	agents.erase(agent)
 	if _hover_agent == agent:
 		_hover_agent = null
@@ -1485,12 +1533,9 @@ func _despawn_agent(agent: AgentNPC, refill_pool := true, via_door := false) -> 
 			_desk_pool[role].push_front(def)
 		else:
 			_desk_pool[role].append(def)
-	# un agente fermato ESCE dalla porta (missione pipeline 20:1x); il
-	# dissolve tesseract resta per gli sfollamenti tecnici di massa
-	if via_door:
-		agent.exit_through(EXIT_SPOT)
-	else:
-		agent.dissolve()
+	# Un agente viene rimosso soltanto oltre la porta: nessun despawn tecnico
+	# può più dissolverlo nel mezzo dell'ufficio.
+	agent.exit_through(EXIT_SPOT)
 
 func _spawn_backend_agent(item: Dictionary) -> void:
 	var role: String = item.get("role", "")
@@ -1540,7 +1585,7 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	agent.set_throttle(float(item.get("throttle_secs", 0.0)))
 	agent.set_activity_detail(str(item.get("activity_detail", "")))
 	agent.set_backend_status(item.get("status", "idle"))
-	agent.materialize()
+	agent.enter_through(ENTRY_SPOT)
 	agents.append(agent)
 
 # ── Costruzione scena ─────────────────────────────────────────────────
