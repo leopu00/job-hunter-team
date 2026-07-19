@@ -13,6 +13,8 @@ const GROUPS := [
 			{"id": "team", "icon": "🚀", "label": "Team"},
 			{"id": "agents", "icon": "🤖", "label": "Agenti"},
 			{"id": "agent_metrics", "icon": "📉", "label": "Risorse agenti"},
+			{"id": "usage_history", "icon": "📈", "label": "Usage"},
+			{"id": "usage_agents", "icon": "🔥", "label": "Consumi agenti"},
 			{"id": "chat", "icon": "💬", "label": "Chat"},
 			{"id": "notifs", "icon": "🔔", "label": "Notifiche"},
 		],
