@@ -402,6 +402,39 @@ func _deliver_usage_history(query: Dictionary, data: Dictionary) -> void:
 	if _running:
 		bus.publish_usage_history(query, data)
 
+## Scheda agente: storico sintetico del ruolo, stesso contratto del VPS.
+func fetch_agent_history(agent: String, from_ts: float, to_ts: float,
+		bucket_sec: int) -> void:
+	var series := {"tokens_kt": [], "pct_5h": [], "pct_weekly": [],
+			"throttle_s": [], "db_actions": [], "cpu_pct": [], "ram_pct": []}
+	var t := floorf(from_ts / bucket_sec) * bucket_sec
+	while t <= to_ts:
+		var day_phase := fposmod(t, 86400.0) / 86400.0
+		var awake := 1.0 if day_phase > 0.33 and day_phase < 0.95 else 0.05
+		var wave := (0.5 + 0.5 * sin(t / 4700.0 + float(agent.hash() % 7))) * awake
+		var kt := roundf(wave * 42.0 * 100.0) / 100.0
+		if kt > 0.5:
+			series["tokens_kt"].append({"t": t, "v": kt})
+			series["pct_5h"].append({"t": t, "v": roundf(kt / 30.0 * 1000.0) / 1000.0})
+			series["pct_weekly"].append({"t": t, "v": roundf(kt / 30.0 * 26.4) / 1000.0})
+		if wave > 0.8:
+			series["throttle_s"].append({"t": t, "v": 300.0})
+		if wave > 0.45 and int(t / bucket_sec) % 3 == 0:
+			series["db_actions"].append({"t": t, "v": 1 + int(wave * 3.0)})
+		series["cpu_pct"].append({"t": t, "v": roundf((12.0 + 60.0 * wave) * 10.0) / 10.0})
+		series["ram_pct"].append({"t": t, "v": roundf((38.0 + 20.0 * wave) * 10.0) / 10.0})
+		t += bucket_sec
+	var query := {"agent": agent, "from_ts": from_ts, "to_ts": to_ts,
+			"bucket_sec": bucket_sec}
+	_deliver_agent_history.call_deferred(query, {"ok": true, "agent": agent,
+			"ratio_kt_per_pct": 30.0, "weekly_per_5h_pct": 2.64,
+			"series": series})
+
+func _deliver_agent_history(query: Dictionary, data: Dictionary) -> void:
+	await _sleep(0.4)
+	if _running:
+		bus.publish_agent_history(query, data)
+
 func open_profile_watch() -> void:
 	_profile_watch = true
 	_publish_profile_status()

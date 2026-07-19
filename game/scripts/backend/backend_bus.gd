@@ -85,6 +85,13 @@ signal telemetry_updated(sample: Dictionary, history: Array)
 ## agents: {names: [String], series: [{t, <agente>: kT_delta}, …],
 ##          totals_kt: {<agente>: kT}}} — t sempre unix epoch UTC.
 signal usage_history_updated(query: Dictionary, data: Dictionary)
+## Storico del singolo RUOLO (scheda agente): query = {agent, from_ts,
+## to_ts, bucket_sec}; data = {ok, error, agent, series: {tokens_kt|
+## pct_5h|pct_weekly|throttle_s|db_actions|cpu_pct|ram_pct: [{t, v}, …]}}.
+## pct_* = delta usage% della sentinella × fetta token del ruolo nel
+## bucket; cpu/ram sono del CONTAINER (contesto): lo storico per-agente
+## di cpu/ram non esiste sulla VPS.
+signal agent_history_updated(query: Dictionary, data: Dictionary)
 
 enum { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
@@ -484,6 +491,21 @@ func publish_usage_history(query: Dictionary, data: Dictionary) -> void:
 	usage_history_query = query
 	usage_history = data
 	usage_history_updated.emit(query, data)
+
+## Storico del singolo ruolo per la scheda agente. agent = slug di
+## ruolo minuscolo ([a-z0-9-]); risposta su agent_history_updated.
+func request_agent_history(agent: String, from_ts: float, to_ts: float,
+		bucket_sec: int) -> void:
+	var query := {"agent": agent, "from_ts": from_ts, "to_ts": to_ts,
+			"bucket_sec": bucket_sec}
+	if _backend and _backend.has_method("fetch_agent_history"):
+		_backend.fetch_agent_history(agent, from_ts, to_ts, bucket_sec)
+	else:
+		agent_history_updated.emit(query,
+				{"ok": false, "error": "backend non collegato"})
+
+func publish_agent_history(query: Dictionary, data: Dictionary) -> void:
+	agent_history_updated.emit(query, data)
 
 
 ## ── Documenti prodotti (anteprima CV in-game) ────────────────────────
