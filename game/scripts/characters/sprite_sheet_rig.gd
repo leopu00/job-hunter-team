@@ -81,6 +81,28 @@ func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 	_apply_track()
 	queue_redraw()  # l'anello dell'ombra segue il modo (walk/carry)
 
+## Limite superiore realmente occupato dal frame corrente, in coordinate del
+## nodo AgentNPC (origine ai piedi). I fogli non hanno tutti lo stesso margine
+## trasparente: usare un offset fisso faceva finire il badge sulla fronte di
+## alcuni agenti e molto lontano da altri.
+func visual_top_y() -> float:
+	if _sprite == null or _sprite.texture == null:
+		return -132.0
+	var image := _sprite.texture.get_image()
+	if image == null or image.is_empty():
+		return -132.0
+	var cols := maxi(1, _sprite.hframes)
+	var rows := maxi(1, _sprite.vframes)
+	var cell_w := image.get_width() / cols
+	var cell_h := image.get_height() / rows
+	var frame := _sprite.frame
+	var region := image.get_region(Rect2i((frame % cols) * cell_w,
+			(frame / cols) * cell_h, cell_w, cell_h))
+	var used := region.get_used_rect()
+	if used.size == Vector2i.ZERO:
+		return -132.0
+	return (_sprite.position.y + float(used.position.y)) * absf(scale.y)
+
 func _apply_track() -> void:
 	var sitting := mode == "sit" or mode == "sit_idle"
 	var tex := _sit_sheet if sitting else _sheet

@@ -122,9 +122,10 @@ func _ready() -> void:
 	for dept_id in handoff_to:
 		var inbox_pos: Vector2 = DepartmentDefs.DEPARTMENTS[dept_id]["inbox"]
 		var dept_color: Color = DepartmentDefs.DEPARTMENTS[dept_id]["color"]
-		world.add_child(HandoffStation.new(dept_id, inbox_pos,
-				handoff_to[dept_id], dept_color))
-		var p := PaperPile.new(inbox_pos + Vector2(0, -4))
+		var station := HandoffStation.new(dept_id, inbox_pos,
+				handoff_to[dept_id], dept_color)
+		world.add_child(station)
+		var p := PaperPile.new(station.pile_spot())
 		# gli Scout producono e basta: il loro inbox si riempie più svelto
 		p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
 		p.add_sheets(randi_range(1, 6))

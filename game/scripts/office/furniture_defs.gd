@@ -101,7 +101,8 @@ const ITEMS := [
 	# Props ufficio classico, kind nc_* (PNG in arrivo da dev-art con lo
 	# stesso nome: si vestono da soli, intanto blockout).
 	# Lavagne bianche: una per reparto, appoggiate alle vetrate/pareti.
-	{"id": "wb_scout", "kind": "nc_whiteboard", "rect": Rect2(1030, 840, 150, 34)},
+	# La lavagna Scout è stata rimossa: copriva il tavolo Scout → Analisti e
+	# rendeva il punto di consegna illeggibile dalla camera principale.
 	{"id": "wb_analisti", "kind": "nc_whiteboard", "rect": Rect2(2340, 706, 150, 34)},
 	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(1640, 856, 150, 34)},
 	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(380, 1414, 150, 34)},
