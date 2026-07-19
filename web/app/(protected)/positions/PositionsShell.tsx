@@ -28,7 +28,7 @@ export default function PositionsShell({
   const [collapsed, setCollapsed] = useState(true);
 
   return (
-    <div className="flex gap-6 items-start">
+    <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-stretch md:items-start">
       {!collapsed && (
         <PositionsFilterSidebar
           availableSources={availableSources}
