@@ -224,13 +224,28 @@ case "$SUB" in
   # ── OAuth login: lancia il CLI del provider (claude/codex/kimi) per il
   # device-flow OAuth. Comando dedicato perche' va eseguito in un terminale
   # separato durante il setup wizard (clack non rilascia bene il TTY).
-  # Per ora hardcode "claude" come provider beta. TODO: leggere active_provider
-  # da ~/.jht/jht.config.json e mappare claude/codex/kimi.
   oauth-login|claude-login)
     require_docker
     require_compose_file
     ensure_up
-    docker exec $EXEC_FLAGS "$CONTAINER" claude
+    provider="$(docker exec "$CONTAINER" node -e \
+      "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" \
+      2>/dev/null || true)"
+    provider_lc="$(printf '%s' "$provider" | tr '[:upper:]' '[:lower:]')"
+    case "$provider_lc" in
+      openai|codex)
+        docker exec $EXEC_FLAGS "$CONTAINER" codex login --device-auth
+        ;;
+      kimi|moonshot)
+        docker exec $EXEC_FLAGS "$CONTAINER" kimi --yolo
+        ;;
+      claude|anthropic|'')
+        docker exec $EXEC_FLAGS "$CONTAINER" claude --dangerously-skip-permissions
+        ;;
+      *)
+        die "provider attivo non riconosciuto: $provider"
+        ;;
+    esac
     ;;
 
   # ── Setup: host-side preflight (swap, VPS detect) prima del wizard ────

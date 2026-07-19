@@ -2,14 +2,14 @@
 
 ## Missione
 
-Costruisci da zero, nella cartella `game/` di questa monorepo, il prototipo di un **videogioco 2D "avanzato" (2.5D)** che gamifica l'esperienza utente di Job Hunter Team: l'utente è un personaggio che cammina in un ufficio dove lavorano gli agenti AI del suo team di ricerca lavoro, si avvicina a un agente e ci parla. Non è un arcade: è un'applicazione utile per cercare lavoro, ma vissuta come un videogioco full-immersion. Questo è un **prototipo standalone**: se piace, verrà mergiato in futuro con l'app desktop esistente.
+Il progetto `game/` è ora l'**unica applicazione desktop di Job Hunter Team**. Non è più un prototipo separato: onboarding, controllo del runtime, login provider, dati, chat e configurazione devono vivere nell'ufficio Godot. Non introdurre wrapper Electron o finestre terminale esterne.
 
 ## Contesto repo (leggi prima di scrivere codice)
 
 Job Hunter Team (JHT) è una piattaforma dove un team di agenti AI cerca lavoro per l'utente: trova posizioni, le analizza, le valuta con uno score 0-100, scrive CV su richiesta. La monorepo contiene già:
 
 - `web/` — sito pubblico Next.js + dashboard (7 lingue). **Solo lettura per te.**
-- `desktop/` — app Electron esistente. **Solo lettura per te.**
+- `game/` — applicazione nativa Godot e unica UI desktop.
 - `agents/` — prompt e skill degli agenti reali. **Solo lettura**, utile per capire personalità e ruoli.
 
 File da studiare come riferimento visivo e di contenuto:
@@ -71,7 +71,7 @@ Flusso completo, **tutto con dati mock** — nessuna chiamata a backend reale, n
 
 ## Metodo di lavoro e norme repo (vincolanti)
 
-- Lavora **solo dentro `game/`** (+ eventuale riga in `.gitignore` root per artefatti Godot come `game/.godot/`). Non toccare `web/`, `desktop/`, `agents/` né altri file root.
+- Mantieni `game/` come applicazione nativa, ma aggiorna anche script di build, CLI e web quando serve a preservare il contratto end-to-end.
 - Prima di scrivere codice, butta giù un **GDD sintetico** in `game/docs/GDD.md` (1-2 pagine: scene, mappa dell'ufficio in ASCII, macchina a stati del gioco, formato asset) e poi implementa per milestone: (1) progetto Godot + fullscreen + ufficio placeholder + movimento; (2) sistema personaggi SVG + agenti in scena; (3) dialoghi a ritratti; (4) setup wizard; (5) polish HUD/audio minimo.
 - **Verifica end-to-end a ogni milestone**: lancia davvero il gioco (`godot --path game/` o da editor), non fidarti solo dello script che compila. Fai screenshot quando utile.
 - Git: lavora sul branch dev della tua sessione, **mai su master**; messaggi di commit **in inglese**; commit sostanziosi (un commit = una milestone o un blocco coerente, niente micro-commit); **push subito dopo ogni commit**; nessun nome di agente/sessione nei branch (usa `feat/...`).

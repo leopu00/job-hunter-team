@@ -92,8 +92,10 @@ const AGENTS := {
 	},
 	"assistente": {
 		"name": "L'Assistente",
-		"spot": Vector2(1665, 1936),  # DAVANTI al desk all'entrata sud
-		"facing": "up",
+		# Reception accanto all'uscita: seduta frontale, senza dare le spalle.
+		"spot": Vector2(1665, 1786),
+		"facing": "down",
+		"workstation_key": "core:assistente",
 		"wander": [Vector2(1110, 778), Vector2(1490, 320), Vector2(1790, 1390)],
 		"chatter": [
 			"l'onboarding è completo",
@@ -106,9 +108,11 @@ const AGENTS := {
 	# mostrare TUTTI gli attivi veri)
 	"mantenitore": {
 		"name": "Il Mantenitore",
-		# Lato sinistro dell'area comune, immediatamente accanto agli Scorer.
-		"spot": Vector2(2170, 1085),
-		"wander": [Vector2(1727, 300), Vector2(2220, 1015), Vector2(2200, 1220)],
+		# Reparto tecnico sul lato ovest degli Scorer, opposto al Mentor.
+		"spot": Vector2(775, 946),
+		"facing": "down",
+		"workstation_key": "core:mantenitore",
+		"wander": [Vector2(1727, 300), Vector2(590, 1090), Vector2(950, 1070)],
 		"chatter": [
 			"container sani, disco ok",
 			"aggiorno le dipendenze…",
@@ -117,8 +121,10 @@ const AGENTS := {
 	},
 	"dottore": {
 		"name": "Il Dottore",
-		# Stessa zona del Mantenitore ma più a sud, senza sovrapporsi al varco.
-		"spot": Vector2(2210, 1265),
+		# Poltrona clinica e strumenti sul lato ovest degli Scorer.
+		"spot": Vector2(850, 1216),
+		"facing": "down",
+		"workstation_key": "core:dottore",
 		"wander": [Vector2(1110, 778), Vector2(1790, 1390), Vector2(2690, 1825)],
 		"chatter": [
 			"visita di controllo agli agenti…",
@@ -128,7 +134,7 @@ const AGENTS := {
 	},
 	"sentinella": {
 		"name": "Il Tesoriere",
-		"spot": Vector2(1905, 486),  # postazione multi-schermo frontale
+		"spot": Vector2(1905, 499),  # postazione multi-schermo frontale
 		"facing": "down",
 		"workstation_key": "core:sentinella",
 		# watchdog del team: la sua ronda tocca tutti gli angoli della box
@@ -187,6 +193,23 @@ static func spawn_list() -> Array:
 			n += 1
 	return _spawn_cache
 
+## Cast del primo avvio: tutti i ruoli fondamentali e due volti per reparto
+## (lead + un collega). Fa percepire un ufficio vivo senza fingere che trenta
+## processi reali siano già attivi.
+static func showroom_list() -> Array:
+	var out: Array = []
+	var depts := {}
+	for def in spawn_list():
+		if def.get("lead", false):
+			out.append(def)
+			if str(def.get("dept", "")) != "":
+				depts[str(def["dept"])] = 1
+		elif str(def.get("dept", "")) != "" \
+				and int(depts.get(str(def["dept"]), 0)) < 2:
+			out.append(def)
+			depts[str(def["dept"])] = 2
+	return out
+
 ## Nome di chi occupa la postazione `index` del reparto ("" se libera).
 static func desk_occupant_name(dept_id: String, index: int) -> String:
 	for def in spawn_list():
@@ -211,7 +234,6 @@ static func _desk_spot_of(dept_id: String, index: int) -> Vector2:
 ## mai SVG in scena). La Sentinella/Tesoriere ha ora un foglio dedicato.
 const SHEET_LOANS := {
 	"mantenitore": "maintainer",  # il camice è davvero il suo
-	"dottore": "mentor",  # look da consigliere finché non ha un foglio suo
 }
 
 static func make_rig(slug: String, variant := "a") -> Node2D:

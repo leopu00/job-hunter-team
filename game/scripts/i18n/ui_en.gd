@@ -50,6 +50,13 @@ const S := {
 	"chat.menu": "AGENT CHATS",
 	"chat.replies": "replies in chat",
 	"chat.maybe": "reads, reply not guaranteed",
+	"guided.choose": "CHOOSE A REPLY",
+	"guided.choice_placeholder": "choose one of the replies above…",
+	"guided.free_placeholder": "write freely or use a suggested reply…",
+	"guided.offline_note": "◆ offline guided conversation — no tokens or LLM required",
+	"guided.hybrid_note": "◆ guide active — you can also write freely to the connected agent",
+	"guided.agent_unavailable": "◆ provider connected — start the team to use live chat",
+	"guided.ai_suggestions": "REPLIES SUGGESTED BY THE AGENT",
 	"chat.expand": "FULL SCREEN",
 	"chat.shrink": "SHRINK",
 
@@ -153,12 +160,14 @@ const S := {
 	"search.need_vps": "connect the VPS to search the real positions",
 
 	"prof.name": "Name",
+	"prof.email": "Email",
 	"prof.target_role": "Target role",
 	"prof.location": "Location",
 	"prof.experience": "Years of experience",
 	"prof.seniority": "Target seniority",
 	"prof.industry": "Industry",
 	"prof.nationality": "Nationality",
+	"prof.languages": "LANGUAGES (comma separated)",
 	"prof.skills": "PRIMARY SKILLS (comma separated)",
 	"prof.salary": "SALARY TARGET (min / max / currency)",
 	"prof.save": "▶ SAVE PROFILE",
@@ -209,8 +218,8 @@ const S := {
 	"dash.pl_hint": "// click a box to open the filtered positions",
 
 	"common.more": "… and %d more",
-	"common.readonly_desktop": "// read-only — edit from the desktop app",
-	"common.readonly_chat": "// read-only — write from the desktop app",
+	"common.readonly_desktop": "// read-only in this view",
+	"common.readonly_chat": "// read-only — use the agent's native chat",
 	"common.data_incoming": "// data incoming from the VPS…",
 	"common.updated": "updated: %s",
 
@@ -242,7 +251,7 @@ const S := {
 	"side.language": "Language",
 	"side.advanced": "Advanced",
 
-	"section.migrating": "// section migrating from the desktop app",
+	"section.migrating": "// section not available yet",
 	"section.migrating_body": "The contents of «%s» will be brought here, one piece at a time.",
 	"config.incoming": "// config incoming from the VPS…",
 	"config.not_exposed": "// section not yet exposed by the team",

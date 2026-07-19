@@ -30,10 +30,10 @@
 - ⬜ **[JHT-WEB-02-CHECKSUM]** — SHA256 checksums on the download page.
 - ⬜ **[JHT-SETUP-LOCAL-FIRST]** — re-elevate Local PC to a first-class path; align execution-mode copy.
 
-## 🖥️ Desktop launcher
+## 🖥️ Applicazione nativa Godot
 
-- ⬜ **[JHT-DESKTOP-05]** — auto-update via electron-updater (code signing stays deferred by choice: open source + community review as the trust signal).
-- ⬜ Tray icon + native desktop notifications.
+- ⬜ Auto-update firmato per gli export Godot.
+- ⬜ Tray icon + notifiche native dal gioco.
 - ⬜ **[JHT-DESKTOP-RECOVERY]** — recovery passphrase BIP39 6-word (Argon2id KDF v2).
 - ⬜ Friendly error handling (ECONNREFUSED/401/tunnel-down → actionable cards).
 - ⬜ Embedded help/FAQ (context-sensitive "?" + offline FAQ).
@@ -41,7 +41,7 @@
 - ⬜ **[JHT-CLOUD-SYNC-THEME]** — theme/settings from localStorage to a synced `user_settings` table.
 - ⬜ **[JHT-DESKTOP-06]** — "dedicated computer" mode (JHT on a LAN PC via SSH/mDNS); unify with the VPS tunnel path.
 - ⬜ **[JHT-DESKTOP-07]** — container serves `next start` instead of `next dev`.
-- 🟡 **[PACK-INSTALLER-SIZE]** — desktop installers are 90–195 MB; slim the Electron bundle (the universal Windows exe is the worst offender).
+- 🟡 **[PACK-INSTALLER-SIZE]** — misurare e ottimizzare gli export Godot sui tre sistemi.
 
 ## 🤖 Team & agents
 

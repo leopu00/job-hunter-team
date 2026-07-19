@@ -78,6 +78,7 @@ var state: int = DISCONNECTED
 var state_detail := ""
 var agents: Array = []       # ultimo snapshot pubblicato (per chi arriva tardi)
 var positions: Array = []    # ultimo snapshot posizioni (idem)
+var positions_are_demo := false
 var transitions: Array = []  # ultime ~80 transizioni di stato (registro team)
 ## Config team + usage reali (solo campi safe), per sezione della
 ## sidebar: {provider|hours|email|advanced: [[etichetta, valore], …],
@@ -120,6 +121,25 @@ func _ready() -> void:
 		}
 	if str(cfg.get("ip", "")) != "" and str(cfg.get("key_path", "")) != "":
 		set_backend(VpsBackend.new(), cfg)
+	elif _local_container_running():
+		# Primo avvio locale: l'ufficio resta subito visibile e adotta il
+		# container se era già attivo. Se viene acceso più tardi dalla pagina
+		# Attivazione, SetupService chiama connect_local_backend().
+		set_backend(LocalBackend.new())
+
+
+func _local_container_running() -> bool:
+	var out: Array = []
+	return OS.execute("docker", ["inspect", "jht", "--format",
+			"{{.State.Running}}"], out, true) == 0 \
+			and "true" in "\n".join(PackedStringArray(out)).to_lower()
+
+
+func connect_local_backend() -> void:
+	if state == CONNECTED and _backend is LocalBackend:
+		return
+	if _local_container_running():
+		set_backend(LocalBackend.new())
 
 func _self_test_vps_contract() -> void:
 	var roster: Array = VpsBackend._parse_roster(
@@ -210,7 +230,8 @@ func pipeline_counts() -> Dictionary:
 	var c := {"to_analyze": 0, "analyzed": 0, "with_score": 0,
 			"to_write": 0, "written": 0, "cv_ready": 0}
 	for p in positions:
-		# Un solo predicato serve contatori, pile cliccabili e relative liste.
+		# Le quattro pile fisiche sono OUTPUT completati: ciò che è claimed o
+		# in lavorazione vive invece sulla scrivania dell'agente.
 		if PipelineQueueDefs.matches("scout", p):
 			c["to_analyze"] += 1
 		elif PipelineQueueDefs.matches("analisti", p):
@@ -218,12 +239,15 @@ func pipeline_counts() -> Dictionary:
 		elif PipelineQueueDefs.matches("scorer", p):
 			c["with_score"] += 1
 		elif PipelineQueueDefs.matches("scrittori", p):
-			c["to_write"] += 1
-		elif PipelineQueueDefs.matches("critici", p):
 			c["written"] += 1
-			if str(p.get("critic_verdict", "") if p.get("critic_verdict") != null
-					else "") == "PASS":
-				c["cv_ready"] += 1
+		elif PipelineQueueDefs.matches("critici", p):
+			c["cv_ready"] += 1
+		# KPI dashboard separato dalla pila: mostra anche il lavoro già claimed.
+		var status := str(p.get("status", ""))
+		var requested := int(p.get("write_requested", 0)
+				if p.get("write_requested") != null else 0) == 1
+		if (status == "scored" and requested) or status == "writing":
+			c["to_write"] += 1
 	return c
 
 
@@ -472,9 +496,25 @@ func publish_chat(msg: Dictionary) -> void:
 	chat_message.emit(msg)
 
 func publish_positions(list: Array) -> void:
+	positions_are_demo = false
 	positions = list
 	Log.debug("backend", "posizioni: %d dal jobs.db" % list.size())
 	positions_updated.emit(list)
+
+func show_demo_positions() -> void:
+	if positions_are_demo and not positions.is_empty():
+		return
+	positions_are_demo = true
+	positions = DemoPositions.build()
+	Log.info("backend", "showroom: %d posizioni fittizie" % positions.size())
+	positions_updated.emit(positions)
+
+func clear_demo_positions() -> void:
+	if not positions_are_demo:
+		return
+	positions_are_demo = false
+	positions = []
+	positions_updated.emit(positions)
 
 func publish_settings(settings: Dictionary) -> void:
 	live_settings = settings

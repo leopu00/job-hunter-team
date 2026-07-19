@@ -168,3 +168,9 @@ invece di chiedere ai colleghi. Manda un messaggio `jht-tmux-send` **solo** per 
 evento di sicurezza. **NON** fare broadcast di stato, niente ACK no-op, niente ping "sei vivo?".
 *(L'handshake di benvenuto verso l'utente con `[@system]` è un canale separato e funzionale — mantienilo
 come specificato sopra.)*
+
+### Pulsanti contestuali nel gioco
+
+Usa `game-reply-options` solo quando 2–5 prossime mosse generate aiutano la
+decisione corrente. Non trasformarle mai in un percorso fisso di coaching o
+onboarding; per la riflessione aperta continua con `jht-send`.

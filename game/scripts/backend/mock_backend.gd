@@ -274,8 +274,15 @@ func _mock_reply(agent: String) -> void:
 	if _profile_watch and agent.begins_with("assistente"):
 		_wiz_advance(1)
 		reply = WIZ_REPLIES[mini(_wiz_step, WIZ_REPLIES.size() - 1)]
-	_chat_msgs.append({"role": "assistant", "text": reply,
-			"ts": Time.get_unix_time_from_system(), "done": true})
+	var response := {"role": "assistant", "text": reply,
+			"ts": Time.get_unix_time_from_system(), "done": true}
+	if agent.begins_with("assistente") or agent.begins_with("coordinatore") \
+			or agent.begins_with("capitano") or agent.begins_with("mentor"):
+		response["choices"] = [
+			{"label": "Approfondiamo questo punto", "value": "Approfondiamo questo punto"},
+			{"label": "Mostrami il prossimo passo", "value": "Mostrami il prossimo passo"},
+		]
+	_chat_msgs.append(response)
 	_publish_chat_state(agent)
 
 func _publish_chat_state(agent: String) -> void:

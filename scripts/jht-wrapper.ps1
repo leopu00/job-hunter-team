@@ -191,13 +191,18 @@ switch ($Sub) {
     break
   }
 
-  # OAuth login: lancia il CLI del provider (claude/codex/kimi) per il
-  # device-flow OAuth. Per ora hardcode "claude" come da bash wrapper.
+  # OAuth login: legge il provider attivo e avvia il suo flusso reale.
   { $_ -in @('oauth-login', 'claude-login') } {
     Require-Docker
     Require-ComposeFile
     Ensure-Up
-    & docker exec @ExecFlags $Container claude
+    $Provider = (& docker exec $Container node -e "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" 2>$null)
+    switch (($Provider | Out-String).Trim().ToLowerInvariant()) {
+      { $_ -in @('openai', 'codex') } { & docker exec @ExecFlags $Container codex login --device-auth; break }
+      { $_ -in @('kimi', 'moonshot') } { & docker exec @ExecFlags $Container kimi --yolo; break }
+      { $_ -in @('', 'claude', 'anthropic') } { & docker exec @ExecFlags $Container claude --dangerously-skip-permissions; break }
+      default { throw "provider attivo non riconosciuto: $Provider" }
+    }
     break
   }
 
