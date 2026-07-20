@@ -48,7 +48,7 @@ function verdictOf(action: string, score: number | null): Verdict {
 }
 
 export default async function SwipePage() {
-  const { pending, reviewed } = await getSwipeDecks(100);
+  const { pending, reviewed } = await getSwipeDecks();
 
   const pendingCards = pending.filter((p) => p.legacy_id != null).map(toCard);
   const reviewedCards = reviewed
