@@ -6,11 +6,11 @@ export const dynamic = "force-dynamic";
 export default async function MessagesPage() {
   const messages = await getMessagesHistory(200);
 
+  // Niente wrapper con padding: la chat gestisce da sé l'altezza piena
+  // (selettore sezioni + thread scrollabile + composer centrato).
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
-      <div className="max-w-4xl mx-auto px-5 pt-8 pb-16">
-        <MessagesList initialMessages={messages} />
-      </div>
+      <MessagesList initialMessages={messages} />
     </div>
   );
 }

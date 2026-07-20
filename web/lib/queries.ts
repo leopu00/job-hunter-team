@@ -972,6 +972,9 @@ export type DashboardPosition = {
   salary_max: number | null;
   salary_currency: string;
   found_at: string | null;
+  // Quando lo Scorer ha assegnato lo score (scores.scored_at), null se
+  // non ancora valutata — alimenta la tabella "posizioni nuove".
+  scored_at: string | null;
   last_action_at: string;
   // Chi ha eseguito l'ultima azione: ruolo (scout/analista/scorer/scrittore/
   // critico/user) e nome istanza (es. 'scout-1', fallback al ruolo).
@@ -1283,6 +1286,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       salary_max: typeof salary_max === "number" ? salary_max : null,
       salary_currency,
       found_at: p.found_at ?? null,
+      scored_at: (s?.scored_at as string | null) ?? null,
       last_action_at: last_action_at || (p.found_at ?? ""),
       last_action_by,
       last_action_actor,

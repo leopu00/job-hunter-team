@@ -1,66 +1,102 @@
 "use client";
 
-import { useState, useTransition } from "react";
+// [JHT-MESSAGES-CHAT] /messages come chat stile messenger (scelta utente
+// 20/07): sidebar sinistra con le tre conversazioni — Assistente, Mentor,
+// Capitano — e, sotto, la presentazione dell'agente selezionato; a destra
+// il thread di bolle con composer centrato stile ChatGPT. La risposta
+// rapida aggancia l'ultimo messaggio dell'agente senza user_reply (l'API
+// di reply è per-messaggio); aprire una conversazione marca i suoi non
+// letti come letti, come nel drawer della navbar (MessagesDrawer).
+
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import {
   agentInfo,
   formatRelative,
   kindLabel,
-  normalizeBody,
   KIND_BORDER,
 } from "@/lib/message-display";
+import MessageBody from "@/app/components/MessageBody";
 import type { PendingMessage } from "@/lib/types";
 
 interface Props {
   initialMessages: PendingMessage[];
 }
 
+// Le tre conversazioni fisse, nell'ordine voluto dall'utente (20/07:
+// Assistente, Mentor, Capitano). Eventuali mittenti fuori roster
+// compaiono come voci extra in coda.
+const CORE_AGENTS = ["assistente", "mentor", "capitano"];
+
+// Presentazione dell'agente selezionato (prosa, niente etichette):
+// sintesi dei prompt in agents/{assistente,mentor,capitano}/*.md.
+const AGENT_BIO: Record<string, Record<string, string>> = {
+  assistente: {
+    it: "L'Assistente ti accompagna dalla configurazione in poi: costruisce e aggiorna il tuo profilo, smista i documenti che carichi e traduce le tue richieste in ordini per il resto del team.\n\nÈ la prima porta a cui bussare: chiedile di aggiornare il profilo, di spiegarti come funziona la piattaforma o di far arrivare un'istruzione al Capitano.",
+    en: "The Assistant walks you through setup and beyond: it builds and updates your profile, sorts the documents you upload and turns your requests into orders for the rest of the team.\n\nIt's the first door to knock on: ask it to update your profile, explain how the platform works, or pass an instruction along to the Captain.",
+    es: "La Asistente te acompaña desde la configuración en adelante: construye y actualiza tu perfil, organiza los documentos que subes y convierte tus peticiones en órdenes para el resto del equipo.\n\nEs la primera puerta a la que llamar: pídele actualizar el perfil, explicarte cómo funciona la plataforma o hacer llegar una instrucción al Capitán.",
+    fr: "L'Assistante vous accompagne depuis la configuration : elle construit et met à jour votre profil, trie les documents que vous téléversez et traduit vos demandes en ordres pour le reste de l'équipe.\n\nC'est la première porte à laquelle frapper : demandez-lui de mettre à jour le profil, d'expliquer le fonctionnement de la plateforme ou de transmettre une instruction au Capitaine.",
+    de: "Die Assistentin begleitet dich von der Einrichtung an: Sie baut und aktualisiert dein Profil, sortiert hochgeladene Dokumente und übersetzt deine Wünsche in Aufträge für den Rest des Teams.\n\nSie ist die erste Anlaufstelle: Bitte sie, das Profil zu aktualisieren, die Plattform zu erklären oder eine Anweisung an den Kapitän weiterzugeben.",
+    hu: "Az Asszisztens a beállítástól kezdve végigkísér: felépíti és frissíti a profilod, rendszerezi a feltöltött dokumentumokat, és a kéréseidet utasításokká fordítja a csapat többi tagja felé.\n\nŐ az első ajtó, amin kopogtass: kérd meg a profil frissítésére, a platform elmagyarázására, vagy hogy juttasson el egy utasítást a Kapitánynak.",
+    pt: "A Assistente acompanha você desde a configuração: constrói e atualiza seu perfil, organiza os documentos que você envia e transforma seus pedidos em ordens para o resto da equipe.\n\nÉ a primeira porta para bater: peça para atualizar o perfil, explicar como a plataforma funciona ou levar uma instrução ao Capitão.",
+  },
+  mentor: {
+    it: "Il Mentor è il tuo consigliere di carriera. Non tocca la pipeline: osserva l'insieme delle tue candidature, legge i pattern del mercato e ti dice cosa conviene — anche quando è scomodo.\n\nParlagli di obiettivi e dubbi di percorso: gap di skill da colmare, trend nelle risposte che ricevi, se una strada merita il tuo tempo.",
+    en: "The Mentor is your career adviser. It never touches the pipeline: it watches your applications as a whole, reads market patterns and tells you what pays off — even when it's uncomfortable.\n\nTalk to it about goals and doubts along the way: skill gaps to close, trends in the responses you get, whether a path deserves your time.",
+    es: "El Mentor es tu consejero de carrera. No toca la pipeline: observa el conjunto de tus candidaturas, lee los patrones del mercado y te dice qué conviene — aunque sea incómodo.\n\nHáblale de objetivos y dudas de camino: gaps de skills por cerrar, tendencias en las respuestas que recibes, si un camino merece tu tiempo.",
+    fr: "Le Mentor est votre conseiller de carrière. Il ne touche pas à la pipeline : il observe l'ensemble de vos candidatures, lit les tendances du marché et vous dit ce qui vaut le coup — même quand c'est inconfortable.\n\nParlez-lui d'objectifs et de doutes de parcours : lacunes de compétences à combler, tendances dans les réponses reçues, si une voie mérite votre temps.",
+    de: "Der Mentor ist dein Karriereberater. Er rührt die Pipeline nicht an: Er betrachtet deine Bewerbungen als Ganzes, liest Marktmuster und sagt dir, was sich lohnt — auch wenn es unbequem ist.\n\nSprich mit ihm über Ziele und Zweifel: Skill-Lücken, Trends in den Antworten, ob ein Weg deine Zeit verdient.",
+    hu: "A Mentor a karrier-tanácsadód. A pipeline-hoz nem nyúl: a jelentkezéseidet egészében nézi, kiolvassa a piaci mintázatokat, és megmondja, mi éri meg — akkor is, ha kényelmetlen.\n\nBeszélj vele célokról és kétségekről: pótolandó skill-hiányokról, a kapott válaszok trendjeiről, arról, hogy megér-e egy irány.",
+    pt: "O Mentor é seu conselheiro de carreira. Não toca na pipeline: observa suas candidaturas como um todo, lê os padrões do mercado e diz o que vale a pena — mesmo quando é desconfortável.\n\nFale com ele sobre objetivos e dúvidas de percurso: gaps de skills a fechar, tendências nas respostas que você recebe, se um caminho merece seu tempo.",
+  },
+  capitano: {
+    it: "Il Capitano coordina la pipeline: decide quanti Scout, Analisti, Scorer e Scrittori lavorano e su cosa, tenendo d'occhio budget e priorità.\n\nRivolgiti a lui per lo stato della ricerca, per cambiare le priorità o per mettere più forze su un fronte — ad esempio un altro Scout, o il CV di una posizione che hai scelto.",
+    en: "The Captain coordinates the pipeline: it decides how many Scouts, Analysts, Scorers and Writers work — and on what — while keeping an eye on budget and priorities.\n\nGo to it for the state of the search, to change priorities, or to put more force on a front — another Scout, say, or the CV for a position you picked.",
+    es: "El Capitán coordina la pipeline: decide cuántos Scouts, Analistas, Scorers y Redactores trabajan — y en qué — vigilando presupuesto y prioridades.\n\nAcude a él por el estado de la búsqueda, para cambiar prioridades o para poner más fuerza en un frente — otro Scout, por ejemplo, o el CV de una posición que elegiste.",
+    fr: "Le Capitaine coordonne la pipeline : il décide combien de Scouts, Analystes, Scorers et Rédacteurs travaillent — et sur quoi — en surveillant budget et priorités.\n\nAdressez-vous à lui pour l'état de la recherche, changer les priorités ou renforcer un front — un Scout de plus, par exemple, ou le CV d'un poste que vous avez choisi.",
+    de: "Der Kapitän koordiniert die Pipeline: Er entscheidet, wie viele Scouts, Analysten, Scorer und Schreiber woran arbeiten — mit Blick auf Budget und Prioritäten.\n\nWende dich an ihn für den Stand der Suche, geänderte Prioritäten oder mehr Kraft an einer Front — etwa ein weiterer Scout oder das CV für eine gewählte Stelle.",
+    hu: "A Kapitány koordinálja a pipeline-t: eldönti, hány Scout, Elemző, Scorer és Író dolgozik — és min —, közben figyeli a keretet és a prioritásokat.\n\nHozzá fordulj a keresés állapotáért, a prioritások módosításáért, vagy ha erősítést kérnél egy fronton — például még egy Scoutot, vagy CV-t egy kiválasztott állásra.",
+    pt: "O Capitão coordena a pipeline: decide quantos Scouts, Analistas, Scorers e Escritores trabalham — e em quê — de olho no orçamento e nas prioridades.\n\nProcure-o pelo estado da busca, para mudar prioridades ou reforçar uma frente — mais um Scout, por exemplo, ou o CV de uma vaga que você escolheu.",
+  },
+};
+
 const T: Record<string, Record<string, string>> = {
-  page_title: {
-    it: "Messaggi dal team",
-    en: "Messages from the team",
-    hu: "Üzenetek a csapattól",
-    es: "Mensajes del equipo",
-    de: "Nachrichten vom Team",
-    fr: "Messages de l'équipe",
-    pt: "Mensagens da equipe",
+  empty_agent: {
+    it: "Nessun messaggio da {name}, per ora.",
+    en: "No messages from {name} yet.",
+    hu: "Egyelőre nincs üzenet tőle: {name}.",
+    es: "Aún no hay mensajes de {name}.",
+    de: "Noch keine Nachrichten von {name}.",
+    fr: "Pas encore de messages de {name}.",
+    pt: "Ainda não há mensagens de {name}.",
   },
-  unread: {
-    it: "{n} non letti",
-    en: "{n} unread",
-    hu: "{n} olvasatlan",
-    es: "{n} sin leer",
-    de: "{n} ungelesen",
-    fr: "{n} non lus",
-    pt: "{n} não lidas",
+  reply_placeholder: {
+    it: "Scrivi una risposta…",
+    en: "Write a reply…",
+    hu: "Írj választ…",
+    es: "Escribe una respuesta…",
+    de: "Antwort schreiben…",
+    fr: "Écrivez une réponse…",
+    pt: "Escreva uma resposta…",
   },
-  read_section: {
-    it: "Letti",
-    en: "Read",
-    hu: "Olvasott",
-    es: "Leídos",
-    de: "Gelesen",
-    fr: "Lus",
-    pt: "Lidas",
+  no_reply_target: {
+    it: "Nessun messaggio in attesa di risposta",
+    en: "No message awaiting a reply",
+    hu: "Nincs válaszra váró üzenet",
+    es: "Ningún mensaje espera respuesta",
+    de: "Keine Nachricht wartet auf Antwort",
+    fr: "Aucun message en attente de réponse",
+    pt: "Nenhuma mensagem aguardando resposta",
   },
-  empty: {
-    it: "Nessun messaggio dal team, per ora.",
-    en: "No messages from the team yet.",
-    hu: "Egyelőre nincs üzenet a csapattól.",
-    es: "Aún no hay mensajes del equipo.",
-    de: "Noch keine Nachrichten vom Team.",
-    fr: "Pas encore de messages de l'équipe.",
-    pt: "Ainda não há mensagens da equipe.",
-  },
-  empty_reply: {
-    it: "Scrivi qualcosa prima di inviare.",
-    en: "Write something before sending.",
-    hu: "Írj valamit, mielőtt elküldöd.",
-    es: "Escribe algo antes de enviar.",
-    de: "Schreibe etwas, bevor du sendest.",
-    fr: "Écrivez quelque chose avant d'envoyer.",
-    pt: "Escreva algo antes de enviar.",
+  send: {
+    it: "Invia",
+    en: "Send",
+    hu: "Küldés",
+    es: "Enviar",
+    de: "Senden",
+    fr: "Envoyer",
+    pt: "Enviar",
   },
   see_position: {
     it: "→ vedi posizione",
@@ -71,379 +107,428 @@ const T: Record<string, Record<string, string>> = {
     fr: "→ voir le poste",
     pt: "→ ver vaga",
   },
-  reply_placeholder: {
-    it: "Scrivi la tua risposta...",
-    en: "Write your reply...",
-    hu: "Írd meg a válaszod...",
-    es: "Escribe tu respuesta...",
-    de: "Schreibe deine Antwort...",
-    fr: "Écrivez votre réponse...",
-    pt: "Escreva sua resposta...",
-  },
-  cancel: {
-    it: "Annulla",
-    en: "Cancel",
-    hu: "Mégse",
-    es: "Cancelar",
-    de: "Abbrechen",
-    fr: "Annuler",
-    pt: "Cancelar",
-  },
-  send_reply: {
-    it: "Invia risposta",
-    en: "Send reply",
-    hu: "Válasz küldése",
-    es: "Enviar respuesta",
-    de: "Antwort senden",
-    fr: "Envoyer la réponse",
-    pt: "Enviar resposta",
-  },
-  mark_read: {
-    it: "Segna come letto",
-    en: "Mark as read",
-    hu: "Megjelölés olvasottként",
-    es: "Marcar como leído",
-    de: "Als gelesen markieren",
-    fr: "Marquer comme lu",
-    pt: "Marcar como lido",
-  },
-  mark_all_read: {
-    it: "Segna tutti come letti",
-    en: "Mark all as read",
-    hu: "Összes megjelölése olvasottként",
-    es: "Marcar todo como leído",
-    de: "Alle als gelesen markieren",
-    fr: "Tout marquer comme lu",
-    pt: "Marcar tudo como lido",
-  },
-  reply: {
-    it: "Rispondi →",
-    en: "Reply →",
-    hu: "Válasz →",
-    es: "Responder →",
-    de: "Antworten →",
-    fr: "Répondre →",
-    pt: "Responder →",
-  },
-  your_reply: {
-    it: "La tua risposta",
-    en: "Your reply",
-    hu: "A válaszod",
-    es: "Tu respuesta",
-    de: "Deine Antwort",
-    fr: "Votre réponse",
-    pt: "Sua resposta",
+  you: {
+    it: "Tu",
+    en: "You",
+    hu: "Te",
+    es: "Tú",
+    de: "Du",
+    fr: "Vous",
+    pt: "Você",
   },
 };
 
 export default function MessagesList({ initialMessages }: Props) {
   const [messages, setMessages] = useState<PendingMessage[]>(initialMessages);
-  const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
   const locale = useLocale();
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  const unread = messages.filter((m) => !m.acknowledged_at);
-  const read = messages.filter((m) => m.acknowledged_at);
+  // Altezza del pannello MISURATA: (viewport - top del pannello) / zoom
+  // effettivo, derivato dal rapporto rect/offset del pannello stesso.
+  // Robusto rispetto alle diverse semantiche zoom×dvh dei Chromium (il
+  // calc statico 100dvh/--zoom tornava ~150px in più su Chrome Canary →
+  // pagina scrollabile con vuoto nero sotto il composer).
+  const [panelH, setPanelH] = useState<number | null>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const apply = () => {
+      const rect = el.getBoundingClientRect();
+      const zoom = el.offsetWidth > 0 ? rect.width / el.offsetWidth : 1;
+      const topDoc = rect.top + window.scrollY;
+      setPanelH(Math.max(320, Math.floor((window.innerHeight - topDoc) / zoom)));
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, []);
 
-  // Ack in place: il messaggio passa nella sezione "Letti" invece di sparire
-  // (in dashboard spariva; qui la pagina È lo storico).
-  async function handleAck(id: string) {
-    setError(null);
-    startTransition(async () => {
-      try {
-        const res = await fetch(`/api/pending-messages/${id}/ack`, {
-          method: "POST",
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `HTTP ${res.status}`);
-        }
-        const now = new Date().toISOString();
-        setMessages((ms) =>
-          ms.map((m) => (m.id === id ? { ...m, acknowledged_at: now } : m)),
-        );
-      } catch (e) {
-        setError((e as Error).message);
-      }
-    });
-  }
+  // Conversazioni: le tre core sempre presenti + eventuali mittenti extra.
+  const agents = useMemo(() => {
+    const extra = Array.from(new Set(messages.map((m) => m.agent))).filter(
+      (a) => !CORE_AGENTS.includes(a),
+    );
+    return [...CORE_AGENTS, ...extra];
+  }, [messages]);
 
-  async function handleAckAll() {
-    setError(null);
-    startTransition(async () => {
-      try {
-        const res = await fetch(`/api/pending-messages/ack-all`, {
-          method: "POST",
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `HTTP ${res.status}`);
-        }
-        const now = new Date().toISOString();
-        setMessages((ms) =>
-          ms.map((m) =>
-            m.acknowledged_at ? m : { ...m, acknowledged_at: now },
-          ),
-        );
-      } catch (e) {
-        setError((e as Error).message);
-      }
-    });
-  }
+  // Conversazione iniziale: l'agente col messaggio più recente, altrimenti
+  // l'Assistente (prima voce).
+  const [activeAgent, setActiveAgent] = useState<string>(() => {
+    const latest = [...initialMessages].sort((a, b) =>
+      b.created_at.localeCompare(a.created_at),
+    )[0];
+    return latest?.agent ?? "assistente";
+  });
 
-  async function handleReply(id: string) {
-    const reply = replyText.trim();
-    if (!reply) {
-      setError(tr("empty_reply"));
-      return;
+  const thread = useMemo(
+    () =>
+      messages
+        .filter((m) => m.agent === activeAgent)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    [messages, activeAgent],
+  );
+
+  const unreadBy = (agent: string) =>
+    messages.filter((m) => m.agent === agent && !m.acknowledged_at).length;
+
+  // Aprire una conversazione marca i suoi non letti (stile messenger, come
+  // nel drawer): ottimista + fire-and-forget, il server riallinea al reload.
+  function ackAgent(agent: string) {
+    const ids = messages
+      .filter((m) => m.agent === agent && !m.acknowledged_at)
+      .map((m) => m.id);
+    if (ids.length === 0) return;
+    const now = new Date().toISOString();
+    setMessages((ms) =>
+      ms.map((m) =>
+        m.agent === agent && !m.acknowledged_at
+          ? { ...m, acknowledged_at: now }
+          : m,
+      ),
+    );
+    for (const id of ids) {
+      void fetch(`/api/pending-messages/${id}/ack`, { method: "POST" }).catch(
+        () => {},
+      );
     }
+  }
+
+  // Ack anche della conversazione aperta di default al primo mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => ackAgent(activeAgent), [activeAgent]);
+
+  // Scroll in fondo SOLO dentro il contenitore del thread: scrollIntoView
+  // scrollava anche gli antenati (documento incluso) creando il "vuoto
+  // nero" sotto il composer.
+  useEffect(() => {
+    const el = threadScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [activeAgent, messages.length]);
+
+  const replyTarget = [...thread].reverse().find((m) => !m.user_reply);
+
+  async function handleSend() {
+    if (!replyTarget) return;
+    const reply = replyText.trim();
+    if (!reply) return;
+    setSending(true);
     setError(null);
-    startTransition(async () => {
-      try {
-        const res = await fetch(`/api/pending-messages/${id}/reply`, {
+    try {
+      const res = await fetch(
+        `/api/pending-messages/${replyTarget.id}/reply`,
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reply }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `HTTP ${res.status}`);
-        }
-        const now = new Date().toISOString();
-        setMessages((ms) =>
-          ms.map((m) =>
-            m.id === id
-              ? {
-                  ...m,
-                  user_reply: reply,
-                  user_reply_at: now,
-                  acknowledged_at: m.acknowledged_at ?? now,
-                }
-              : m,
-          ),
+        },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          (body as { error?: string }).error ?? `HTTP ${res.status}`,
         );
-        setActiveReplyId(null);
-        setReplyText("");
-      } catch (e) {
-        setError((e as Error).message);
       }
-    });
+      const now = new Date().toISOString();
+      setMessages((ms) =>
+        ms.map((m) =>
+          m.id === replyTarget.id
+            ? {
+                ...m,
+                user_reply: reply,
+                user_reply_at: now,
+                acknowledged_at: m.acknowledged_at ?? now,
+              }
+            : m,
+        ),
+      );
+      setReplyText("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSending(false);
+    }
   }
 
-  function renderCard(m: PendingMessage, isRead: boolean) {
-    const info = agentInfo(m.agent, locale);
-    const kindBorder = isRead ? "var(--color-border)" : KIND_BORDER[m.kind];
-    const isReplying = activeReplyId === m.id;
+  const activeInfo = agentInfo(activeAgent, locale);
+  const activeBio =
+    AGENT_BIO[activeAgent]?.[locale] ?? AGENT_BIO[activeAgent]?.en;
 
+  // Voce della lista agenti (sidebar desktop + riga mobile).
+  function agentButton(agent: string, compact: boolean) {
+    const info = agentInfo(agent, locale);
+    const unread = unreadBy(agent);
+    const active = agent === activeAgent;
     return (
-      <li
-        key={m.id}
-        className="bg-[var(--color-card)] rounded-lg p-4 border-l-2"
+      <button
+        key={agent}
+        type="button"
+        onClick={() => setActiveAgent(agent)}
+        aria-pressed={active}
+        className={
+          compact
+            ? "flex items-center gap-2 px-4 py-3 cursor-pointer transition-colors"
+            : "w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer rounded-lg transition-colors"
+        }
         style={{
-          borderColor: kindBorder,
-          borderLeftColor: kindBorder,
-          borderLeftWidth: 3,
-          opacity: isRead ? 0.65 : 1,
+          color: active ? info.color : "var(--color-muted)",
+          background:
+            !compact && active ? "var(--color-card)" : "transparent",
+          boxShadow:
+            compact && active ? `inset 0 -2px 0 0 ${info.color}` : undefined,
         }}
       >
-        <div className="flex items-start gap-3">
-          <span className="text-xl shrink-0" aria-hidden>
-            {info.emoji}
+        <span
+          aria-hidden
+          className={
+            compact
+              ? "text-[15px] leading-none"
+              : "w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-[18px] leading-none"
+          }
+          style={
+            compact
+              ? undefined
+              : {
+                  background: `color-mix(in srgb, ${info.color} 14%, var(--color-panel))`,
+                  border: `1px solid color-mix(in srgb, ${info.color} 55%, transparent)`,
+                }
+          }
+        >
+          {info.emoji}
+        </span>
+        <span className="text-[11px] font-bold tracking-wide flex-1 min-w-0 truncate">
+          {info.name}
+        </span>
+        {unread > 0 && (
+          <span
+            className="min-w-[15px] h-[15px] px-0.5 rounded-full flex items-center justify-center text-[8px] font-bold leading-none"
+            style={{
+              background: "var(--color-yellow)",
+              color: "var(--color-void)",
+            }}
+          >
+            {unread > 9 ? "9+" : unread}
           </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span
-                className="text-[11px] font-bold"
-                style={{ color: info.color }}
-              >
-                {info.name}
-              </span>
-              <span
-                className="text-[8px] font-semibold tracking-[0.14em] uppercase px-1.5 py-0.5 rounded"
-                style={{
-                  color: KIND_BORDER[m.kind],
-                  border: `1px solid ${KIND_BORDER[m.kind]}`,
-                }}
-              >
-                {kindLabel(m.kind, locale)}
-              </span>
-              <span className="text-[10px] text-[var(--color-dim)]">
-                {formatRelative(m.created_at, locale)}
-              </span>
-            </div>
-            <p
-              className="text-[12px] text-[var(--color-base)] m-0 mb-2 leading-relaxed"
-              style={{ whiteSpace: "pre-wrap" }}
-            >
-              {normalizeBody(m.body)}
-            </p>
-            {m.related_position_id && (
-              <Link
-                href={`/positions/${m.related_position_id}`}
-                className="text-[10px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-              >
-                {tr("see_position")}
-              </Link>
-            )}
-
-            {m.user_reply && (
-              <div
-                className="mt-3 px-3 py-2 rounded border-l-2 text-[11px]"
-                style={{
-                  background: "var(--color-panel)",
-                  borderLeftColor: "var(--color-green)",
-                  color: "var(--color-muted)",
-                }}
-              >
-                <span className="block text-[9px] font-semibold tracking-widest uppercase mb-1 text-[var(--color-dim)]">
-                  {tr("your_reply")}
-                </span>
-                <span style={{ whiteSpace: "pre-wrap" }}>
-                  {normalizeBody(m.user_reply)}
-                </span>
-              </div>
-            )}
-
-            {isReplying ? (
-              <div className="mt-3 flex flex-col gap-2">
-                <textarea
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  rows={3}
-                  maxLength={4000}
-                  placeholder={tr("reply_placeholder")}
-                  className="w-full px-3 py-2 text-[12px] bg-[var(--color-panel)] border border-[var(--color-border)] rounded resize-y text-[var(--color-base)]"
-                  autoFocus
-                />
-                <div className="flex items-center gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveReplyId(null);
-                      setReplyText("");
-                    }}
-                    disabled={pending}
-                    className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors disabled:opacity-50"
-                  >
-                    {tr("cancel")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleReply(m.id)}
-                    disabled={pending || replyText.trim().length === 0}
-                    className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border transition-colors disabled:opacity-50"
-                    style={{
-                      color: "var(--color-green)",
-                      borderColor: "var(--color-green)",
-                    }}
-                  >
-                    {tr("send_reply")}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              (!isRead || !m.user_reply) && (
-                <div className="mt-3 flex items-center gap-3">
-                  {!isRead && (
-                    <button
-                      type="button"
-                      onClick={() => handleAck(m.id)}
-                      disabled={pending}
-                      className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors disabled:opacity-50"
-                    >
-                      {tr("mark_read")}
-                    </button>
-                  )}
-                  {!m.user_reply && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveReplyId(m.id);
-                        setReplyText("");
-                        setError(null);
-                      }}
-                      disabled={pending}
-                      className="text-[10px] font-semibold tracking-widest uppercase transition-colors disabled:opacity-50"
-                      style={{ color: "var(--color-blue)" }}
-                    >
-                      {tr("reply")}
-                    </button>
-                  )}
-                </div>
-              )
-            )}
-          </div>
-        </div>
-      </li>
+        )}
+      </button>
     );
   }
 
   return (
-    <div style={{ animation: "fade-in 0.35s ease both" }}>
-      <div className="flex items-center justify-between mb-4">
-        <span className="section-label">{tr("page_title")}</span>
-        <div className="flex items-center gap-3">
-          {unread.length > 0 && (
-            <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-              {tr("unread").replace("{n}", String(unread.length))}
-            </span>
-          )}
-          {unread.length > 1 && (
-            <button
-              type="button"
-              onClick={handleAckAll}
-              disabled={pending}
-              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors disabled:opacity-50"
+    // Altezza piena sotto la navbar: valore SSR di partenza col calc
+    // 100dvh/--zoom, poi corretto dalla misura a runtime (vedi sopra).
+    <div
+      ref={rootRef}
+      className="flex flex-col md:flex-row"
+      style={{
+        height:
+          panelH != null
+            ? panelH
+            : "calc(100dvh / var(--zoom, 1) - 56px)",
+      }}
+    >
+      {/* ── Sidebar sinistra: conversazioni + presentazione ────────── */}
+      <aside className="hidden md:flex w-[280px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-panel)]">
+        <div className="p-3 flex flex-col gap-1">
+          {agents.map((a) => agentButton(a, false))}
+        </div>
+        {/* Presentazione dell'agente selezionato: usa lo spazio restante. */}
+        {activeBio && (
+          <div className="flex-1 min-h-0 overflow-y-auto border-t border-[var(--color-border)] px-5 py-5">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span aria-hidden className="text-[22px] leading-none">
+                {activeInfo.emoji}
+              </span>
+              <span
+                className="text-[13px] font-bold"
+                style={{ color: activeInfo.color }}
+              >
+                {activeInfo.name}
+              </span>
+            </div>
+            <p
+              className="m-0 text-[11.5px] leading-relaxed text-[var(--color-muted)]"
+              style={{ whiteSpace: "pre-wrap" }}
             >
-              {tr("mark_all_read")}
-            </button>
-          )}
+              {activeBio}
+            </p>
+          </div>
+        )}
+      </aside>
+
+      {/* ── Selettore mobile (la sidebar sparisce sotto md) ────────── */}
+      <div className="md:hidden shrink-0 border-b border-[var(--color-border)] bg-[var(--color-panel)]">
+        <div className="flex items-stretch justify-center gap-1">
+          {agents.map((a) => agentButton(a, true))}
         </div>
       </div>
 
-      {error && (
+      {/* ── Colonna chat ───────────────────────────────────────────── */}
+      <div className="flex-1 min-w-0 flex flex-col">
         <div
-          className="mb-3 px-3 py-2 rounded border text-[11px]"
-          style={{
-            background: "var(--color-red-bg, rgba(255,80,80,0.08))",
-            borderColor: "var(--color-red)",
-            color: "var(--color-red)",
-          }}
-          role="alert"
+          ref={threadScrollRef}
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
         >
-          {error}
-        </div>
-      )}
-
-      {messages.length === 0 && (
-        <p className="text-[12px] text-[var(--color-muted)]">{tr("empty")}</p>
-      )}
-
-      {unread.length > 0 && (
-        <ul className="flex flex-col gap-3 list-none p-0 m-0">
-          {unread.map((m) => renderCard(m, false))}
-        </ul>
-      )}
-
-      {read.length > 0 && (
-        <>
-          <div className="flex items-center gap-3 mt-8 mb-4">
-            <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-              {tr("read_section")}
-            </span>
-            <div
-              className="flex-1 h-px"
-              style={{ background: "var(--color-border)" }}
-            />
+          <div
+            className="max-w-3xl mx-auto px-5 py-6 flex flex-col gap-4"
+            style={{ animation: "fade-in 0.25s ease both" }}
+          >
+            {thread.length === 0 && (
+              <p className="text-[12px] text-[var(--color-muted)] text-center py-12 m-0">
+                {tr("empty_agent").replace("{name}", activeInfo.name)}
+              </p>
+            )}
+            {thread.map((m) => (
+              <div key={m.id} className="flex flex-col gap-2">
+                {/* Bolla dell'agente */}
+                <div className="flex items-end gap-2 max-w-[85%] self-start">
+                  <span aria-hidden className="text-[16px] leading-none mb-1">
+                    {agentInfo(m.agent, locale).emoji}
+                  </span>
+                  <div
+                    className="rounded-lg rounded-bl-sm px-4 py-3 border-l-2 min-w-0"
+                    style={{
+                      background: "var(--color-card)",
+                      borderLeftColor: KIND_BORDER[m.kind],
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {m.kind !== "notification" && (
+                        <span
+                          className="text-[7.5px] font-semibold tracking-[0.14em] uppercase px-1 py-px rounded"
+                          style={{
+                            color: KIND_BORDER[m.kind],
+                            border: `1px solid ${KIND_BORDER[m.kind]}`,
+                          }}
+                        >
+                          {kindLabel(m.kind, locale)}
+                        </span>
+                      )}
+                      <span className="text-[9px] text-[var(--color-dim)]">
+                        {formatRelative(m.created_at, locale)}
+                      </span>
+                    </div>
+                    <MessageBody
+                      text={m.body}
+                      className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
+                    />
+                    {m.related_position_id && (
+                      <Link
+                        href={`/positions/${m.related_position_id}`}
+                        className="inline-block mt-1.5 text-[10px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                      >
+                        {tr("see_position")}
+                      </Link>
+                    )}
+                  </div>
+                </div>
+                {/* Risposta dell'utente */}
+                {m.user_reply && (
+                  <div
+                    className="max-w-[85%] self-end rounded-lg rounded-br-sm px-4 py-3"
+                    style={{
+                      background:
+                        "color-mix(in srgb, var(--color-green) 10%, var(--color-card))",
+                      border:
+                        "1px solid color-mix(in srgb, var(--color-green) 30%, transparent)",
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5 justify-end">
+                      <span className="text-[9px] font-semibold text-[var(--color-green)]">
+                        {tr("you")}
+                      </span>
+                      {m.user_reply_at && (
+                        <span className="text-[9px] text-[var(--color-dim)]">
+                          {formatRelative(m.user_reply_at, locale)}
+                        </span>
+                      )}
+                    </div>
+                    <MessageBody
+                      text={m.user_reply}
+                      className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-          <ul className="flex flex-col gap-3 list-none p-0 m-0">
-            {read.map((m) => renderCard(m, true))}
-          </ul>
-        </>
-      )}
+        </div>
+
+        {/* ── Composer centrato, stile ChatGPT ──────────────────────── */}
+        <div className="shrink-0 px-5 pb-5 pt-2">
+          <div className="max-w-2xl mx-auto">
+            {error && (
+              <div
+                className="mb-2 px-3 py-1.5 rounded border text-[10px]"
+                style={{
+                  borderColor: "var(--color-red)",
+                  color: "var(--color-red)",
+                }}
+                role="alert"
+              >
+                {error}
+              </div>
+            )}
+            <div
+              className="flex items-end gap-2 rounded-2xl border px-3 py-2 transition-colors focus-within:border-[var(--color-border-glow)]"
+              style={{
+                background: "var(--color-card)",
+                borderColor: "var(--color-border)",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+              }}
+            >
+              <textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
+                }}
+                rows={1}
+                maxLength={4000}
+                disabled={!replyTarget || sending}
+                placeholder={
+                  replyTarget ? tr("reply_placeholder") : tr("no_reply_target")
+                }
+                className="flex-1 px-2 py-1.5 text-[12.5px] bg-transparent border-none resize-none text-[var(--color-base)] disabled:opacity-50 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => void handleSend()}
+                disabled={
+                  !replyTarget || sending || replyText.trim().length === 0
+                }
+                aria-label={tr("send")}
+                className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-default"
+                style={{
+                  background: "var(--color-green)",
+                  color: "var(--color-void)",
+                }}
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

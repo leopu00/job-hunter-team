@@ -18,6 +18,8 @@ export type TableLabels = {
   colCountry: string;
   colCity: string;
   colScore: string;
+  // Etichetta della colonna timestamp (variante firstCol="scored").
+  colScored?: string;
 };
 
 type Props = {
@@ -27,13 +29,27 @@ type Props = {
   // Filtri cross-chart attivi → titolo + conteggio totale filtrato.
   filtered: boolean;
   totalFiltered: number;
+  // Prima colonna: "id" (storico) oppure "scored" = timestamp dello score
+  // (tabella "ultime posizioni valutate").
+  firstCol?: "id" | "scored";
 };
+
+// Timestamp compatto "20/07 09:57" per la colonna della variante "scored".
+function formatScoredAt(iso: string | null): string {
+  if (!iso) return "—";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "—";
+  const d = new Date(t);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function RecentPositionsTable({
   rows,
   labels,
   filtered,
   totalFiltered,
+  firstCol = "id",
 }: Props) {
   // Doppia scrollbar orizzontale: una barra-proxy in cima sincronizzata con
   // il contenitore della tabella in fondo (utile con tabella larga + tante
@@ -102,7 +118,9 @@ export default function RecentPositionsTable({
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {[
-                labels.colId,
+                firstCol === "scored"
+                  ? (labels.colScored ?? labels.colId)
+                  : labels.colId,
                 labels.colTitle,
                 labels.colCompany,
                 labels.colCountry,
@@ -142,11 +160,23 @@ export default function RecentPositionsTable({
                       i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
                   }}
                 >
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                    {p.legacy_id
-                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                      : p.id.slice(0, 8)}
-                  </td>
+                  {firstCol === "scored" ? (
+                    // suppressHydrationWarning: il timestamp è formattato in
+                    // timezone locale — server e browser possono divergere.
+                    <td
+                      className="px-4 py-3 text-[10px] tabular-nums text-[var(--color-muted)] whitespace-nowrap"
+                      title={p.scored_at ?? undefined}
+                      suppressHydrationWarning
+                    >
+                      {formatScoredAt(p.scored_at)}
+                    </td>
+                  ) : (
+                    <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                      {p.legacy_id
+                        ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                        : p.id.slice(0, 8)}
+                    </td>
+                  )}
                   <td className="px-4 py-3 font-medium">
                     <span className="flex items-center gap-2">
                       <Link
