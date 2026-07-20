@@ -16,7 +16,7 @@ import {
   IconMic,
   IconPin,
   IconStar,
-  IconStarHalf,
+  IconThumbsMeh,
   IconStop,
   IconThumbsUp,
   IconX,
@@ -96,7 +96,7 @@ const VERDICTS: Record<
   // less_like_this allo Scout — è un keep con entusiasmo basso (score 2).
   // Icona: mezza stella ("interessante, ma poco"), non un pollice giù.
   review_low: {
-    Icon: IconStarHalf,
+    Icon: IconThumbsMeh,
     color: "var(--color-orange)",
     action: "like",
     score: 2,

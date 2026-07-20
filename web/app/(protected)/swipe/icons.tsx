@@ -87,17 +87,16 @@ export function IconThumbsDown({ size }: { size?: number }) {
   );
 }
 
-export function IconStarHalf({ size }: { size?: number }) {
-  // Stella a metà: outline pieno + metà sinistra riempita — "interessante,
-  // ma poco" nel linguaggio dei rating.
+export function IconThumbsMeh({ size }: { size?: number }) {
+  // Pollice ORIZZONTALE ("così così"): il giudizio 'poco interessante'.
+  // La mezza stella non si capiva (scelta utente 20/07); questo è lo
+  // stesso pollice di 'interessante' ruotato di 90°.
   return (
     <Svg size={size}>
-      <path d="m12 3 2.7 5.8 6.3.8-4.7 4.3 1.3 6.2L12 17l-5.6 3.1 1.3-6.2L3 9.6l6.3-.8Z" />
-      <path
-        d="M12 3 9.3 8.8 3 9.6l4.7 4.3-1.3 6.2L12 17Z"
-        fill="currentColor"
-        stroke="none"
-      />
+      <g transform="rotate(90 12 12)">
+        <path d="M7 10v12" />
+        <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+      </g>
     </Svg>
   );
 }
