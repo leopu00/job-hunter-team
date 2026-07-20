@@ -674,15 +674,16 @@ export default function SwipeDeck({
     Array.from(
       new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean)),
     ).sort();
+  const deckForLists = mode === "pending" ? pending : reviewed;
   const countries = useMemo(
-    () => distinct([...pending, ...reviewed].map((c) => c.loc_country)),
+    () => distinct(deckForLists.map((c) => c.loc_country)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pending, reviewed],
+    [deckForLists],
   );
   const cities = useMemo(
     () =>
       distinct(
-        [...pending, ...reviewed]
+        deckForLists
           .filter(
             (c) =>
               !filters.countries.length ||
@@ -691,23 +692,22 @@ export default function SwipeDeck({
           .map((c) => c.loc_city),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pending, reviewed, filters.countries],
+    [deckForLists, filters.countries],
   );
   const sources = useMemo(
-    () => distinct([...pending, ...reviewed].map((c) => c.source)),
+    () => distinct(deckForLists.map((c) => c.source)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pending, reviewed],
+    [deckForLists],
   );
   const families = useMemo(
     () =>
       Array.from(
         new Set(
-          [...pending, ...reviewed]
-            .map((c) => (c.role_family ?? "").trim())
-            .filter(Boolean),
+          deckForLists.map((c) => (c.role_family ?? "").trim()).filter(Boolean),
         ),
       ).sort(),
-    [pending, reviewed],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deckForLists],
   );
   // skip = criterio da ignorare: serve a istogrammi e contatori chip, che
   // mostrano il PROPRIO asse con gli ALTRI filtri applicati (stile Airbnb).
@@ -1752,11 +1752,7 @@ export default function SwipeDeck({
                   {
                     key: "modes" as const,
                     label: t.fMode,
-                    vals: ["full_remote", "hybrid", "onsite"].filter(
-                      (m) =>
-                        (modeCounts.get(m) ?? 0) > 0 ||
-                        filters.modes.includes(m),
-                    ),
+                    vals: ["full_remote", "hybrid", "onsite"],
                     counts: modeCounts,
                     text: (v: string) => t.remote[v] ?? v,
                   },
@@ -1805,44 +1801,50 @@ export default function SwipeDeck({
                       onToggle={() => toggleSec(sec.key)}
                     >
                       <div className="flex flex-wrap gap-2">
-                        {sec.vals.map((v) => {
-                          const on = filters[sec.key].includes(v);
-                          const n = sec.counts.get(v) ?? 0;
-                          return (
-                            <button
-                              key={v}
-                              type="button"
-                              onClick={() =>
-                                setFilters((f) => ({
-                                  ...f,
-                                  [sec.key]: on
-                                    ? f[sec.key].filter((x) => x !== v)
-                                    : [...f[sec.key], v],
-                                }))
-                              }
-                              className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
-                              style={{
-                                borderColor: on
-                                  ? "var(--color-purple)"
-                                  : "var(--color-border)",
-                                color: on
-                                  ? "var(--color-purple)"
-                                  : "var(--color-muted)",
-                                background: on
-                                  ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
-                                  : "transparent",
-                              }}
-                            >
-                              {sec.text(v)}
-                              <span
-                                className="ml-1.5 font-normal tabular-nums"
-                                style={{ opacity: 0.65 }}
+                        {sec.vals
+                          .filter(
+                            (v) =>
+                              (sec.counts.get(v) ?? 0) > 0 ||
+                              filters[sec.key].includes(v),
+                          )
+                          .map((v) => {
+                            const on = filters[sec.key].includes(v);
+                            const n = sec.counts.get(v) ?? 0;
+                            return (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() =>
+                                  setFilters((f) => ({
+                                    ...f,
+                                    [sec.key]: on
+                                      ? f[sec.key].filter((x) => x !== v)
+                                      : [...f[sec.key], v],
+                                  }))
+                                }
+                                className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                                style={{
+                                  borderColor: on
+                                    ? "var(--color-purple)"
+                                    : "var(--color-border)",
+                                  color: on
+                                    ? "var(--color-purple)"
+                                    : "var(--color-muted)",
+                                  background: on
+                                    ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
+                                    : "transparent",
+                                }}
                               >
-                                {n}
-                              </span>
-                            </button>
-                          );
-                        })}
+                                {sec.text(v)}
+                                <span
+                                  className="ml-1.5 font-normal tabular-nums"
+                                  style={{ opacity: 0.65 }}
+                                >
+                                  {n}
+                                </span>
+                              </button>
+                            );
+                          })}
                       </div>
                     </FilterSection>
                   ),
