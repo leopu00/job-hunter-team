@@ -647,13 +647,15 @@ export default function SwipeDeck({
       ).sort(),
     [pending, reviewed],
   );
+  // skip = criterio da ignorare: serve agli istogrammi, che mostrano la
+  // distribuzione del PROPRIO asse con gli ALTRI filtri applicati.
   const matches = useCallback(
-    (c: SwipeCardData) => {
-      if (filters.sMin > 0 || filters.sMax < 100) {
+    (c: SwipeCardData, skip?: "score" | "salary") => {
+      if (skip !== "score" && (filters.sMin > 0 || filters.sMax < 100)) {
         if (c.score == null || c.score < filters.sMin || c.score > filters.sMax)
           return false;
       }
-      if (filters.salMin > 0 || filters.salMax < 200) {
+      if (skip !== "salary" && (filters.salMin > 0 || filters.salMax < 200)) {
         const lo = c.salary_min ?? c.salary_max;
         const hi = c.salary_max ?? c.salary_min;
         if (lo == null || hi == null) return false;
@@ -671,11 +673,35 @@ export default function SwipeDeck({
     },
     [filters],
   );
-  const fPending = useMemo(() => pending.filter(matches), [pending, matches]);
+  const fPending = useMemo(
+    () => pending.filter((c) => matches(c)),
+    [pending, matches],
+  );
   const fReviewed = useMemo(
-    () => reviewed.filter(matches),
+    () => reviewed.filter((c) => matches(c)),
     [reviewed, matches],
   );
+  // Istogrammi dei filtri (bin = step degli slider) sul mazzo corrente.
+  const histoBase = mode === "pending" ? pending : reviewed;
+  const scoreHisto = useMemo(() => {
+    const bins = new Array(20).fill(0) as number[];
+    for (const c of histoBase) {
+      if (c.score == null || !matches(c, "score")) continue;
+      bins[Math.min(19, Math.floor(c.score / 5))]++;
+    }
+    return bins;
+  }, [histoBase, matches]);
+  const salHisto = useMemo(() => {
+    const bins = new Array(40).fill(0) as number[];
+    for (const c of histoBase) {
+      const lo = c.salary_min ?? c.salary_max;
+      const hi = c.salary_max ?? c.salary_min;
+      if (lo == null || hi == null || !matches(c, "salary")) continue;
+      const mid = (lo + hi) / 2 / 1000;
+      bins[Math.max(0, Math.min(39, Math.floor(mid / 5)))]++;
+    }
+    return bins;
+  }, [histoBase, matches]);
   // Cambio filtri = mazzo diverso → si riparte dalla prima card.
   useEffect(() => {
     setIdxP(0);
@@ -1548,35 +1574,16 @@ export default function SwipeDeck({
                     {filters.sMin} – {filters.sMax}
                   </span>
                 </div>
-                <input
-                  type="range"
+                <DualRange
                   min={0}
                   max={100}
                   step={5}
-                  value={filters.sMin}
-                  onChange={(e) =>
-                    setFilters((f) => ({
-                      ...f,
-                      sMin: Math.min(Number(e.target.value), f.sMax),
-                    }))
+                  lo={filters.sMin}
+                  hi={filters.sMax}
+                  histo={scoreHisto}
+                  onChange={(lo, hi) =>
+                    setFilters((f) => ({ ...f, sMin: lo, sMax: hi }))
                   }
-                  className="w-full"
-                  style={{ accentColor: "var(--color-purple)" }}
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={filters.sMax}
-                  onChange={(e) =>
-                    setFilters((f) => ({
-                      ...f,
-                      sMax: Math.max(Number(e.target.value), f.sMin),
-                    }))
-                  }
-                  className="w-full"
-                  style={{ accentColor: "var(--color-purple)" }}
                 />
               </div>
 
@@ -1590,35 +1597,16 @@ export default function SwipeDeck({
                     {filters.salMin}k – {filters.salMax}k
                   </span>
                 </div>
-                <input
-                  type="range"
+                <DualRange
                   min={0}
                   max={200}
                   step={5}
-                  value={filters.salMin}
-                  onChange={(e) =>
-                    setFilters((f) => ({
-                      ...f,
-                      salMin: Math.min(Number(e.target.value), f.salMax),
-                    }))
+                  lo={filters.salMin}
+                  hi={filters.salMax}
+                  histo={salHisto}
+                  onChange={(lo, hi) =>
+                    setFilters((f) => ({ ...f, salMin: lo, salMax: hi }))
                   }
-                  className="w-full"
-                  style={{ accentColor: "var(--color-purple)" }}
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={200}
-                  step={5}
-                  value={filters.salMax}
-                  onChange={(e) =>
-                    setFilters((f) => ({
-                      ...f,
-                      salMax: Math.max(Number(e.target.value), f.salMin),
-                    }))
-                  }
-                  className="w-full"
-                  style={{ accentColor: "var(--color-purple)" }}
                 />
               </div>
 
@@ -1772,6 +1760,135 @@ export default function SwipeDeck({
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+// Slider a DOPPIO cursore su una traccia sola (l'HTML nativo non ce l'ha:
+// due <input type=range> sovrapposti con traccia trasparente e pointer-events
+// solo sui pomelli) + istogramma della distribuzione sopra la traccia, con i
+// bin dentro il range selezionato evidenziati (stile filtro-prezzo Airbnb).
+function DualRange({
+  min,
+  max,
+  step,
+  lo,
+  hi,
+  onChange,
+  histo,
+}: {
+  min: number;
+  max: number;
+  step: number;
+  lo: number;
+  hi: number;
+  onChange: (lo: number, hi: number) => void;
+  histo?: number[];
+}) {
+  const pct = (v: number) => ((v - min) / (max - min)) * 100;
+  const maxBin = histo && histo.length ? Math.max(...histo, 1) : 1;
+  return (
+    <div>
+      {histo && (
+        <div className="mb-1 flex h-10 items-end gap-[2px] px-1">
+          {histo.map((n, i) => {
+            const bLo = min + i * ((max - min) / histo.length);
+            const bHi = bLo + (max - min) / histo.length;
+            const inRange = bHi > lo && bLo < hi;
+            return (
+              <div
+                key={i}
+                className="flex-1 rounded-sm"
+                style={{
+                  height: `${Math.max((n / maxBin) * 100, n > 0 ? 8 : 2)}%`,
+                  background: inRange
+                    ? "var(--color-purple)"
+                    : "var(--color-border)",
+                  opacity: inRange ? 0.9 : 0.7,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+      <div className="relative h-9">
+        <div
+          className="absolute left-1 right-1 top-1/2 h-1.5 -translate-y-1/2 rounded-full"
+          style={{ background: "var(--color-border)" }}
+        />
+        <div
+          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
+          style={{
+            left: `${pct(lo)}%`,
+            right: `${100 - pct(hi)}%`,
+            background: "var(--color-purple)",
+          }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={lo}
+          aria-label="min"
+          onChange={(e) => onChange(Math.min(Number(e.target.value), hi), hi)}
+          className="jht-dualrange absolute inset-0 h-full w-full"
+          // Se entrambi i pomelli sono a fondo scala destro, il min deve
+          // stare sopra per restare afferrabile.
+          style={{ zIndex: lo > min + (max - min) / 2 ? 5 : 3 }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={hi}
+          aria-label="max"
+          onChange={(e) => onChange(lo, Math.max(Number(e.target.value), lo))}
+          className="jht-dualrange absolute inset-0 h-full w-full"
+          style={{ zIndex: 4 }}
+        />
+      </div>
+      <style>{`
+        .jht-dualrange {
+          -webkit-appearance: none;
+          appearance: none;
+          background: transparent;
+          pointer-events: none;
+          margin: 0;
+          border: none;
+          outline: none;
+        }
+        .jht-dualrange::-webkit-slider-runnable-track {
+          -webkit-appearance: none;
+          background: transparent;
+        }
+        .jht-dualrange::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          pointer-events: auto;
+          width: 24px;
+          height: 24px;
+          margin-top: 6px;
+          border-radius: 9999px;
+          background: #fff;
+          border: 1px solid var(--color-border);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+          cursor: pointer;
+        }
+        .jht-dualrange::-moz-range-track {
+          background: transparent;
+        }
+        .jht-dualrange::-moz-range-thumb {
+          pointer-events: auto;
+          width: 22px;
+          height: 22px;
+          border-radius: 9999px;
+          background: #fff;
+          border: 1px solid var(--color-border);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 }
