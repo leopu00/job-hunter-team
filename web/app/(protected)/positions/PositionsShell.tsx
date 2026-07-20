@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import PositionsFilterSidebar from "./PositionsFilterSidebar";
+import SortPicker from "./SortPicker";
 
 /**
  * Layout della pagina /positions: gestisce il collapse della sidebar filtri.
@@ -40,25 +41,30 @@ export default function PositionsShell({
             pagina a destra. h-8 + mb-4 = stessa altezza/margine della header
             sidebar, così la tabella si allinea con la prima card. */}
         <div className="mb-4 h-8 flex items-center justify-between gap-3">
-          {collapsed ? (
-            <button
-              type="button"
-              onClick={() => setCollapsed(false)}
-              title={filtersLabel}
-              aria-label={filtersLabel}
-              className="h-8 px-3 inline-flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] uppercase rounded-lg border cursor-pointer transition-colors"
-              style={{
-                borderColor: "var(--color-border)",
-                color: "var(--color-base)",
-                background: "var(--color-card)",
-              }}
-            >
-              <span aria-hidden>⚙</span>
-              {filtersLabel}
-            </button>
-          ) : (
-            <span />
-          )}
+          <span className="flex items-center gap-2">
+            {collapsed ? (
+              <button
+                type="button"
+                onClick={() => setCollapsed(false)}
+                title={filtersLabel}
+                aria-label={filtersLabel}
+                className="h-8 px-3 inline-flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] uppercase rounded-lg border cursor-pointer transition-colors"
+                style={{
+                  borderColor: "var(--color-border)",
+                  color: "var(--color-base)",
+                  background: "var(--color-card)",
+                }}
+              >
+                <span aria-hidden>⚙</span>
+                {filtersLabel}
+              </button>
+            ) : (
+              <span />
+            )}
+            {/* Ordinamento per la vista a card (mobile): niente header di
+                colonna lì — stesso sort/dir URL della tabella. */}
+            <SortPicker />
+          </span>
           {rowsControl}
         </div>
         {children}

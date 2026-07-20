@@ -1,5 +1,6 @@
 "use client";
 
+import { scoreSpectrumCss } from "@/lib/score-color";
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import AgentInteraction from "@/components/AgentInteraction";
@@ -432,10 +433,8 @@ function verdictLabel(v: string | null) {
 }
 
 function scoreColor(s: number | null) {
-  if (s == null) return "var(--color-dim)";
-  if (s >= 7) return "var(--color-green)";
-  if (s >= 5.5) return "var(--color-yellow)";
-  return "var(--color-red)";
+  // Voto del Critico 0-10 → stessa scala spettro 0-100.
+  return s == null ? "var(--color-dim)" : scoreSpectrumCss(s * 10);
 }
 
 // ── Sub-components ─────────────────────────────────────────────────
