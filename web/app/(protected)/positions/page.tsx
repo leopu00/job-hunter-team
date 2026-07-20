@@ -865,11 +865,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
               >
                 <div className="flex items-start justify-between gap-3">
                   <span className="flex items-start gap-2 min-w-0">
-                    <UnseenDot
-                      id={String(p.id)}
-                      label={tr("unseen_marker")}
-                      initialSeen={p.seen}
-                    />
                     <span
                       className="text-[13px] font-semibold leading-snug text-[var(--color-bright)]"
                       style={{
@@ -881,6 +876,12 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     >
                       {p.title}
                     </span>
+                    {/* Un giudizio dato = letta: il NEW non ha senso lì. */}
+                    <UnseenDot
+                      id={String(p.id)}
+                      label={tr("unseen_marker")}
+                      initialSeen={p.seen || verdictOfP(p) != null}
+                    />
                   </span>
                   <span className="shrink-0 flex items-center gap-1.5">
                     {(() => {
@@ -1087,11 +1088,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Titolo — una riga, troncato con … se troppo lungo */}
                       <td className="px-4 py-3 font-medium">
                         <span className="flex items-center gap-2">
-                          <UnseenDot
-                            id={String(p.id)}
-                            label={tr("unseen_marker")}
-                            initialSeen={p.seen}
-                          />
                           <Link
                             href={`/positions/${p.id}`}
                             title={p.title ?? undefined}
@@ -1099,6 +1095,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           >
                             {p.title}
                           </Link>
+                          <UnseenDot
+                            id={String(p.id)}
+                            label={tr("unseen_marker")}
+                            initialSeen={p.seen || verdictOfP(p) != null}
+                          />
                           {(() => {
                             const v = verdictOfP(p);
                             const tag = v ? FB_TAG[v] : null;

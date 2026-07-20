@@ -13,9 +13,10 @@ type Props = {
   initialSeen?: boolean;
 };
 
-// Pallino "non ancora vista" accanto al titolo. Parte nascosto anche
-// lato client e compare solo dopo il mount: localStorage non esiste in
-// SSR e un render speculativo darebbe hydration mismatch.
+// Tag "NEW" in coda al titolo per le posizioni non ancora viste (era un
+// pallino, poco leggibile e disallineato — scelta utente 20/07). Parte
+// nascosto anche lato client e compare solo dopo il mount: localStorage
+// non esiste in SSR e un render speculativo darebbe hydration mismatch.
 export default function UnseenDot({ id, label, initialSeen }: Props) {
   const [unseen, setUnseen] = useState(false);
 
@@ -38,8 +39,14 @@ export default function UnseenDot({ id, label, initialSeen }: Props) {
     <span
       title={label}
       aria-label={label}
-      className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-      style={{ background: "var(--color-green)" }}
-    />
+      className="inline-block shrink-0 self-center rounded border px-1 text-[8px] font-bold uppercase tracking-wider leading-[13px]"
+      style={{
+        color: "var(--color-green)",
+        borderColor: "var(--color-green)",
+        background: "color-mix(in srgb, var(--color-green) 10%, transparent)",
+      }}
+    >
+      NEW
+    </span>
   );
 }
