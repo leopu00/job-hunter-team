@@ -222,7 +222,7 @@ const T: Record<
     fNoResults: "Nessuna posizione corrisponde ai filtri.",
     fSort: "Ordinamento",
     sortLabels: {
-      oldest: "Più vecchie prima",
+      oldest: "Meno recenti prima",
       newest: "Più recenti prima",
       score_desc: "Score: dal più alto",
       score_asc: "Score: dal più basso",
