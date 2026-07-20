@@ -53,9 +53,12 @@ const ITEMS := [
 	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2720, 970, 280, 70)},
 	{"id": "coffee_bar", "kind": "coffee", "rect": Rect2(1400, 190, 200, 80)},
 	{"id": "water_cooler", "kind": "water_cooler", "rect": Rect2(1602, 196, 54, 54)},
-	# stampante condivisa sulla parete nord, tra coffee e lab: la meta dei
-	# viaggi "vado a stampare" di tutti i reparti (spot in DepartmentDefs).
-	{"id": "printer", "kind": "printer", "rect": Rect2(1672, 190, 110, 78)},
+	# stampante condivisa contro la parete nord, davanti al varco del
+	# reparto Scout (vetrata 610..920): la meta dei viaggi "vado a
+	# stampare" di tutti i reparti (spot in DepartmentDefs). Accanto,
+	# una monstera grande da interno chiude la composizione sul varco.
+	{"id": "printer", "kind": "printer", "rect": Rect2(710, 155, 110, 78)},
+	{"id": "plant_monstera_printer", "kind": "plant_monstera", "rect": Rect2(830, 150, 84, 84)},
 
 	# ── Centro: l'ologramma della ricerca ──
 	{"id": "hologram", "kind": "hologram", "rect": Rect2(1200, 700, 200, 180)},
