@@ -59,8 +59,9 @@ const ITEMS := [
 	{"id": "printer", "kind": "printer", "rect": Rect2(1218, 185, 95, 70)},
 	{"id": "plant_printer", "kind": "plant_palm", "rect": Rect2(1330, 190, 110, 100)},
 
-	# ── Centro: l'ologramma della ricerca ──
-	{"id": "hologram", "kind": "hologram", "rect": Rect2(1200, 700, 200, 180)},
+	# ── Centro del tappeto Scout: l'ologramma della ricerca ──
+	# Il centro del rect coincide con DeptRugs.RUGS["scout"] = (775, 560).
+	{"id": "hologram", "kind": "hologram", "rect": Rect2(675, 470, 200, 180)},
 
 	# ── Direzione, fascia nord: Capitano e Tesoriere guardano in camera ──
 	{"id": "desk_coordinator", "kind": "captain_desk", "rect": Rect2(1365, 500, 260, 108),
@@ -107,8 +108,12 @@ const ITEMS := [
 	# Lavagne bianche: una per reparto, appoggiate alle vetrate/pareti.
 	# La lavagna Scout è stata rimossa: copriva il tavolo Scout → Analisti e
 	# rendeva il punto di consegna illeggibile dalla camera principale.
-	{"id": "wb_analisti", "kind": "nc_whiteboard", "rect": Rect2(2340, 706, 150, 34)},
-	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(1640, 856, 150, 34)},
+	# Le due lavagne prima sparse tra Analisti e Scorer ora incorniciano la
+	# postazione del Capitano dalla parete nord. La seconda è specchiata per
+	# evitare l'effetto copia-incolla e mantenere il centro visivo libero.
+	{"id": "wb_analisti", "kind": "nc_whiteboard", "rect": Rect2(1255, 400, 150, 34)},
+	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(1585, 400, 150, 34),
+			"flip_h": true},
 	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(380, 1414, 150, 34)},
 	# Sul lato sud della vetrata: a y=1446 tagliava l'unica riga A* tra
 	# scorer:5 e l'apertura occidentale della parete condivisa.
