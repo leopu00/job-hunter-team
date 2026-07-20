@@ -3,19 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c4a8t2iridrgv"
-path="res://.godot/imported/analisti_a_up.png-522afcdbc30aa725a8e7650f828a27fe.ctex"
+path.s3tc="res://.godot/imported/analisti_a_up.png-522afcdbc30aa725a8e7650f828a27fe.s3tc.ctex"
+path.etc2="res://.godot/imported/analisti_a_up.png-522afcdbc30aa725a8e7650f828a27fe.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/gen-art/furniture/analisti_a_up.png"
-dest_files=["res://.godot/imported/analisti_a_up.png-522afcdbc30aa725a8e7650f828a27fe.ctex"]
+dest_files=["res://.godot/imported/analisti_a_up.png-522afcdbc30aa725a8e7650f828a27fe.s3tc.ctex", "res://.godot/imported/analisti_a_up.png-522afcdbc30aa725a8e7650f828a27fe.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -23,7 +25,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
