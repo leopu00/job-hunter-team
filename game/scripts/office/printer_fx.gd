@@ -25,6 +25,7 @@ func _init(printer_rect: Rect2) -> void:
 static func ping(secs: float) -> void:
 	if instance:
 		instance._busy = maxf(instance._busy, secs)
+		instance.set_process(true)
 
 func _process(delta: float) -> void:
 	_t += delta
@@ -35,6 +36,8 @@ func _process(delta: float) -> void:
 	elif _was_busy:
 		_was_busy = false
 		queue_redraw()  # un ultimo frame per pulire LED e foglio
+	else:
+		set_process(false)  # a riposo dorme: lo risveglia il prossimo ping
 
 func _draw() -> void:
 	if _busy <= 0.0:

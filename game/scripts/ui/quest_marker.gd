@@ -5,6 +5,7 @@ extends Node2D
 
 var seen := false
 var _time := 0.0
+var _redraw_acc := 0.0
 
 func _ready() -> void:
 	z_index = 40
@@ -12,8 +13,14 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	# Il galleggiamento è una trasformata (gratis); solo la pulsazione del
+	# glow richiede _draw → ridisegno a ~15 Hz, non a ogni frame (uno per
+	# NPC showroom: a pieno organico erano 16 ri-tessellazioni a frame).
 	position.y = -164.0 + sin(_time * 2.4) * 7.0
-	queue_redraw()
+	_redraw_acc += delta
+	if _redraw_acc >= 0.066:
+		_redraw_acc = 0.0
+		queue_redraw()
 
 func set_seen(value: bool) -> void:
 	seen = value

@@ -52,6 +52,9 @@ var _row := 0
 var _frames := 2
 var _fps := 2.0
 var _t := 0.0
+## Cache di visual_top_y per (texture, frame): get_image() è un readback
+## GPU→CPU con scan dei pixel — a regime NON deve mai ripetersi.
+var _top_cache := {}
 
 func setup(sheet: Texture2D, sit_sheet: Texture2D = null) -> void:
 	scale = Vector2(RIG_SCALE, RIG_SCALE)
@@ -88,6 +91,14 @@ func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 func visual_top_y() -> float:
 	if _sprite == null or _sprite.texture == null:
 		return -132.0
+	var cache_key := str(_sprite.texture.get_rid()) + ":" + str(_sprite.frame)
+	if _top_cache.has(cache_key):
+		return _top_cache[cache_key]
+	var result := _measure_top_y()
+	_top_cache[cache_key] = result
+	return result
+
+func _measure_top_y() -> float:
 	var image := _sprite.texture.get_image()
 	if image == null or image.is_empty():
 		return -132.0
@@ -120,6 +131,9 @@ func _apply_track() -> void:
 	_fps = track[2]
 	scale.x = -RIG_SCALE if (facing == "side" and flipped) else RIG_SCALE
 	_update_frame()
+	# Tracce a frame fisso (still/sit_idle) senza bob: il rig dorme del tutto.
+	# Con 16 agenti per lo più fermi sono 16 _process a frame in meno.
+	set_process(_fps > 0.0 or mode == "idle")
 
 func _process(delta: float) -> void:
 	_t += delta
