@@ -1066,7 +1066,9 @@ export async function getLatestFeedbackForLegacyId(
   return { action: data[0].action, score: data[0].score ?? null };
 }
 
-export async function getSwipeDecks(limit = 100): Promise<{
+// limit = tetto di SICUREZZA payload (e max righe per request di Supabase),
+// non un cap voluto del mazzo: l'utente scorre tutto il backlog (20/07).
+export async function getSwipeDecks(limit = 1000): Promise<{
   pending: PositionWithScore[];
   reviewed: SwipeReviewedRow[];
 }> {
@@ -1093,14 +1095,17 @@ export async function getSwipeDecks(limit = 100): Promise<{
     supabase
       .from("positions")
       .select(
-        "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, jd_summary, jd_text, scores ( total_score )",
+        // NIENTE jd_summary/jd_text: senza cap il mazzo supera le 900 card e
+        // i testi inline affossavano SSR/hydration — la card li scarica
+        // on-demand da /api/positions/[legacyId]/summary.
+        "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, scores ( total_score )",
       )
       // 'excluded' incluso: le posizioni giudicate "non interessante"
       // devono restare visitabili nel mazzo reviewed.
       .in("status", ["scored", "ready", "excluded"])
       .is("deleted_at", null)
       .order("found_at", { ascending: true })
-      .limit(limit * 4),
+      .limit(limit),
     getLatestFeedbackByLegacyId(supabase),
   ]);
   const { data, error } = positionsRes;
