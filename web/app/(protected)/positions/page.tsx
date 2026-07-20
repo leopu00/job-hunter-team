@@ -3,6 +3,7 @@ import {
   getPositions,
   getSeenPositionIds,
   getSourceDistribution,
+  getVerdictMapByLegacyId,
 } from "@/lib/queries";
 import { colorForFamily } from "@/lib/position-classifier";
 import {
@@ -97,6 +98,7 @@ interface PageProps {
     cscore?: string; // "lo-hi" range voto critico (0-10)
     cnoscore?: string; // "1" = includi posizioni senza voto
     writereq?: string; // "1" = solo selezionate (write_requested); "0" = solo non
+    fb?: string; // CSV giudizi utente: top,review_ok,review_low,no,none
     sort?: string;
     dir?: string;
     page?: string;
@@ -525,6 +527,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const remotes = csv(params.remote);
   const sources = csv(params.source);
   const verdicts = csv(params.verdict);
+  const fbSel = csv(params.fb);
   const families = csv(params.family);
   const countries = csv(params.country);
   const cities = csv(params.city);
@@ -595,10 +598,26 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // senza-score (noscore=1).
   // La soglia sotto-40 NON vive qui: è la RULE-04 dello Scorer (score<40 →
   // excluded) e va rispettata NEI DATI — la vista non maschera niente.
-  const positions =
+  let positions =
     statuses.length || unscored
       ? allPositions
-      : allPositions.filter((p) => p.score != null && p.status !== "excluded");
+      : allPositions.filter(
+          (p) =>
+            p.score != null &&
+            // "Non interessante" implica escluse: col filtro fb=no attivo
+            // il default nascondi-escluse si allenta, sennò risultato vuoto.
+            (p.status !== "excluded" || fbSel.includes("no")),
+        );
+
+  // Filtro "Il tuo feedback": giudizio dallo swipe/pagina posizione
+  // (event-log, ultimo prevale); "none" = senza alcun giudizio.
+  if (fbSel.length) {
+    const vmap = await getVerdictMapByLegacyId();
+    positions = positions.filter((p) => {
+      const v = p.legacy_id != null ? vmap[String(p.legacy_id)] : undefined;
+      return v ? fbSel.includes(v) : fbSel.includes("none");
+    });
+  }
 
   // Pagination computed values
   const totalResults = positions.length;
@@ -616,6 +635,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     if (remotes.length) merged.remote = remotes.join(",");
     if (sources.length) merged.source = sources.join(",");
     if (verdicts.length) merged.verdict = verdicts.join(",");
+    if (fbSel.length) merged.fb = fbSel.join(",");
     if (families.length) merged.family = families.join(",");
     if (countries.length) merged.country = countries.join(",");
     if (cities.length) merged.city = cities.join(",");

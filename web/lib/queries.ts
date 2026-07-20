@@ -1066,6 +1066,35 @@ export async function getLatestFeedbackForLegacyId(
   return { action: data[0].action, score: data[0].score ?? null };
 }
 
+// Mappa legacy_id → giudizio a 4 livelli (ultimo evento feedback) per il
+// filtro "Il tuo feedback" della pagina posizioni. Stessa mappatura inversa
+// di /swipe. Cloud-only: {} in local mode.
+export async function getVerdictMapByLegacyId(): Promise<
+  Record<string, "top" | "review_ok" | "review_low" | "no">
+> {
+  const w = await ws();
+  if (w) return {};
+  if (!isSupabaseConfigured) return {};
+  const supabase = await createClient();
+  const fb = await getLatestFeedbackByLegacyId(supabase);
+  const out: Record<string, "top" | "review_ok" | "review_low" | "no"> = {};
+  for (const [k, v] of fb) {
+    out[k] =
+      v.action === "star"
+        ? "top"
+        : v.action === "dislike" || v.action === "hide"
+          ? v.score === 2
+            ? "review_low"
+            : "no"
+          : v.score != null && v.score <= 2
+            ? "review_low"
+            : v.score != null && v.score >= 5
+              ? "top"
+              : "review_ok";
+  }
+  return out;
+}
+
 // limit = tetto di SICUREZZA payload (e max righe per request di Supabase),
 // non un cap voluto del mazzo: l'utente scorre tutto il backlog (20/07).
 export async function getSwipeDecks(limit = 1000): Promise<{
