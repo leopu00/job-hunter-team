@@ -83,7 +83,9 @@ signal hours_saved(ok: bool, error: String)
 signal artifact_fetched(path: String, ok: bool, data: PackedByteArray, error: String)
 ## live_settings è arrivata/cambiata (config team + usage reali).
 signal live_settings_updated(settings: Dictionary)
-## Telemetria infrastrutturale VPS/container, campionata via SSH.
+## Telemetria infrastrutturale VPS/container, campionata via SSH. Il campione
+## include anche agent_cpu {uid: cpu_pct} e agent_vitals_age_s dal daemon
+## agent-vitals: è la fonte live del LED sugli agenti in ufficio.
 signal telemetry_updated(sample: Dictionary, history: Array)
 ## Storico usage on-demand (finestre di monitoraggio risorse). query è
 ## l'eco della richiesta {from_ts, to_ts, bucket_sec}; data = {ok, error,

@@ -306,6 +306,10 @@ func set_activity_detail(detail: String) -> void:
 	if state_tag:
 		state_tag.set_state(backend_status, throttle_secs, activity_detail)
 
+func set_cpu_activity(cpu_pct: float, known := true) -> void:
+	if state_tag:
+		state_tag.set_cpu_activity(cpu_pct, known)
+
 ## Uscita FISICA di scena (agente killato/fermato, missione pipeline
 ## 20:1x): cammina fino alla porta dell'ufficio e svanisce oltre la
 ## soglia — niente tesseract, semplicemente non è più in ufficio.

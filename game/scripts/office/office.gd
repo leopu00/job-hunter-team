@@ -291,10 +291,13 @@ func _ready() -> void:
 		BackendBus.agents_updated.connect(sync_agents)
 		BackendBus.chat_message.connect(_on_chat_message)
 		BackendBus.positions_updated.connect(_on_transitions)
+		BackendBus.telemetry_updated.connect(_on_agent_cpu_telemetry)
 		if not BackendBus.agents.is_empty():
 			sync_agents(BackendBus.agents)
 		if not BackendBus.transitions.is_empty():
 			_on_transitions([])  # snapshot già sul bus: assorbito come baseline
+		if not BackendBus.telemetry.is_empty():
+			_on_agent_cpu_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
 		SetupService.status_changed.connect(_on_setup_status_changed)
 		_on_setup_status_changed(SetupService.status)
 
@@ -1431,6 +1434,8 @@ var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-
 var _agent_ui_test_started := false
 var _coordinator_test_started := false
 
+const AGENT_CPU_STALE_AFTER := 75.0  # sampler 30s: poco più di due tick
+
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
 func sync_agents(list: Array) -> void:
@@ -1462,6 +1467,8 @@ func sync_agents(list: Array) -> void:
 			wanted.erase(agent.uid)
 	for item_uid in wanted:
 		_spawn_backend_agent(wanted[item_uid])
+	if not BackendBus.telemetry.is_empty():
+		_on_agent_cpu_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
 	# Il roster backend arriva dopo _ready: il test-card va riprovato qui,
 	# quando l'istanza richiesta esiste davvero.
 	var card_test := OS.get_environment("JHT_CARD")
@@ -1493,6 +1500,29 @@ func sync_agents(list: Array) -> void:
 			and _coordinator_panel != null and not _coordinator_test_started:
 		_coordinator_test_started = true
 		_coordinator_selftest.call_deferred()
+
+## Liveness operativa: il roster dice che il processo esiste, il sampler CPU
+## dice se sta davvero elaborando. Dati mancanti o più vecchi di 75 secondi
+## spengono il LED: non si conserva mai un falso verde all'infinito.
+func _on_agent_cpu_telemetry(sample: Dictionary, _history: Array) -> void:
+	var cpu_map: Dictionary = sample.get("agent_cpu", {})
+	var age := float(sample.get("agent_vitals_age_s", -1.0))
+	var fresh := age >= 0.0 and age <= AGENT_CPU_STALE_AFTER
+	for agent in agents:
+		var candidates: Array[String] = []
+		if not agent.uid.is_empty():
+			candidates.append(agent.uid.to_lower())
+		candidates.append(agent.slug.to_lower())
+		if agent.slug == "coordinatore":
+			candidates.append("capitano")
+		var found := false
+		var cpu := 0.0
+		for key in candidates:
+			if cpu_map.has(key):
+				cpu = float(cpu_map[key])
+				found = true
+				break
+		agent.set_cpu_activity(cpu, fresh and found)
 
 func _agent_ui_selftest() -> void:
 	await get_tree().create_timer(2.2).timeout
@@ -1529,13 +1559,41 @@ func _agent_ui_selftest() -> void:
 		agents[0].set_highlight(true)
 		hover_ok = agents[0].aura.hovered
 		agents[0].set_highlight(false)
+	var cpu_threshold_ok := false
+	var cpu_blink_ok := false
+	var cpu_mapping_ok := false
+	var cpu_stale_ok := false
+	if not agents.is_empty():
+		var probe: AgentNPC = agents[0]
+		probe.set_cpu_activity(0.3, true)
+		var at_threshold: Dictionary = probe.state_tag.debug_cpu_led()
+		probe.set_cpu_activity(0.31, true)
+		var above_threshold: Dictionary = probe.state_tag.debug_cpu_led()
+		var lit_before := bool(above_threshold.get("lit", false))
+		probe.state_tag._process(0.5)
+		var lit_after := bool(probe.state_tag.debug_cpu_led().get("lit", true))
+		cpu_threshold_ok = not bool(at_threshold.get("active", true)) \
+				and bool(above_threshold.get("active", false))
+		cpu_blink_ok = lit_before and not lit_after
+		_on_agent_cpu_telemetry({"agent_cpu": {"capitano": 0.4},
+				"agent_vitals_age_s": 0.0}, [])
+		var captain := _find_agent("coordinatore")
+		cpu_mapping_ok = captain != null \
+				and bool(captain.state_tag.debug_cpu_led().get("active", false))
+		_on_agent_cpu_telemetry({"agent_cpu": {"capitano": 50.0},
+				"agent_vitals_age_s": AGENT_CPU_STALE_AFTER + 1.0}, [])
+		cpu_stale_ok = captain != null \
+				and not bool(captain.state_tag.debug_cpu_led().get("active", true))
 	var ok := auras_ok and ground_layer_ok and colors.size() >= 5 \
 			and readonly_ok and stream_ok \
-			and scroll_lock_ok and hover_ok
+			and scroll_lock_ok and hover_ok and cpu_threshold_ok \
+			and cpu_blink_ok and cpu_mapping_ok and cpu_stale_ok
 	print("AGENT-UI-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify({
 		"departments": colors, "auras": auras_ok, "readonly": readonly_ok,
 		"ground_layer": ground_layer_ok, "stream": stream_ok,
 		"scroll_lock": scroll_lock_ok, "hover": hover_ok,
+		"cpu_threshold": cpu_threshold_ok, "cpu_blink": cpu_blink_ok,
+		"cpu_mapping": cpu_mapping_ok, "cpu_stale": cpu_stale_ok,
 	}))
 	get_tree().quit(0 if ok else 1)
 
