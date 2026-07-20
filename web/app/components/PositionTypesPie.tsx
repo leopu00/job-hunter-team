@@ -130,7 +130,7 @@ export default function PositionTypesPie({
       : null;
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+    <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-4">
         <span className="section-label">{title}</span>
         {total > 0 && (
@@ -140,7 +140,7 @@ export default function PositionTypesPie({
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+      <div className="flex-1 min-h-0 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
         <div
           className="relative shrink-0 self-center sm:self-auto"
           style={{ width: size, maxWidth: "100%", aspectRatio: "1 / 1" }}
@@ -207,7 +207,9 @@ export default function PositionTypesPie({
               style={{
                 // ~diametro del foro relativo al donut (scala col responsive)
                 maxWidth: `${((INNER * 2) / SIZE) * 100}%`,
-                fontSize: 14,
+                // Font proporzionali al donut: tarati sul 360px storico,
+                // restano leggibili anche nella variante compatta.
+                fontSize: Math.max(10, Math.round(size * 0.04)),
                 color: focused ? focused.color : "var(--color-dim)",
               }}
               title={centerLabel}
@@ -215,15 +217,21 @@ export default function PositionTypesPie({
               {centerLabel}
             </div>
             <div
-              className="font-bold leading-none text-[var(--color-bright)]"
-              style={{ fontSize: 32, marginTop: 4 }}
+              className="font-bold leading-none tabular-nums text-[var(--color-bright)]"
+              style={{
+                fontSize: Math.max(18, Math.round(size * 0.09)),
+                marginTop: 3,
+              }}
             >
               {centerValue}
             </div>
             {centerPct != null && (
               <div
                 className="text-[var(--color-muted)]"
-                style={{ fontSize: 13, marginTop: 2 }}
+                style={{
+                  fontSize: Math.max(9, Math.round(size * 0.036)),
+                  marginTop: 2,
+                }}
               >
                 {centerPct}%
               </div>
@@ -231,14 +239,17 @@ export default function PositionTypesPie({
           </div>
         </div>
 
+        {/* Legenda scrollabile (stesso pattern di LocationBarList): quando il
+        parent vincola l'altezza della card, la lista scorre invece di
+        allungarla; l'header colonne resta sticky in cima allo scroll. */}
         <ul
-          className="space-y-3 min-w-0 flex-1"
+          className="space-y-2.5 min-w-0 flex-1 min-h-0 sm:self-stretch overflow-y-auto pr-1"
           onMouseLeave={() => setHovered(null)}
         >
           {/* Header: didascalia colonne. Colonna 'tipo' a larghezza limitata +
                 colonna barra flessibile (1fr) che riempie lo spazio prima vuoto. */}
           <li
-            className="grid grid-cols-[minmax(90px,14rem)_1fr_2.75rem_2.75rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            className="sticky top-0 z-10 bg-[var(--color-card)] grid grid-cols-[minmax(90px,14rem)_1fr_2.75rem_2.75rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
             <span>{t.type}</span>
