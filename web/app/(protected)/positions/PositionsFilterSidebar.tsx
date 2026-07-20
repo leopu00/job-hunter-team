@@ -27,7 +27,7 @@ const SCORE_STEP = 5;
 const CRITIC_STEP = 0.5;
 
 // ── Filtri "diretti" (ex-wizard): toggle semplici, niente cross-filtering ──
-type DirectKey = "status" | "remote" | "source";
+type DirectKey = "status" | "remote" | "source" | "fb";
 type Option = { val: string; label: string; color?: string };
 // Variante interna con chiave di traduzione (risolta a runtime via locale).
 type OptionKey = { val: string; labelKey: string; color?: string };
@@ -53,11 +53,22 @@ const REMOTE_OPTIONS: OptionKey[] = [
   { val: "onsite", labelKey: "rm_onsite" },
 ];
 
+// Giudizio utente (event-log feedback, stessa scala di /swipe); 'none' =
+// nessun giudizio dato.
+const FB_OPTIONS: OptionKey[] = [
+  { val: "top", labelKey: "fb_top", color: "var(--color-green)" },
+  { val: "review_ok", labelKey: "fb_ok", color: "var(--color-blue)" },
+  { val: "review_low", labelKey: "fb_low", color: "var(--color-orange)" },
+  { val: "no", labelKey: "fb_no", color: "var(--color-red)" },
+  { val: "none", labelKey: "fb_none" },
+];
+
 // Chiave i18n per il titolo di ogni gruppo diretto.
 const DIRECT_LABEL_KEYS: Record<DirectKey, string> = {
   status: "g_status",
   remote: "g_mode",
   source: "g_source",
+  fb: "g_feedback",
 };
 
 // ── i18n inline (7 lingue) — stesso pattern di DashboardI18n/useLocale ──
@@ -134,6 +145,60 @@ const T: Record<string, Record<Locale, string>> = {
     de: "Quelle",
     fr: "Source",
     pt: "Fonte",
+  },
+  g_feedback: {
+    it: "Il tuo feedback",
+    en: "Your feedback",
+    hu: "Visszajelzésed",
+    es: "Tu feedback",
+    de: "Dein Feedback",
+    fr: "Votre feedback",
+    pt: "O teu feedback",
+  },
+  fb_top: {
+    it: "Molto interessante",
+    en: "Very interesting",
+    hu: "Nagyon érdekes",
+    es: "Muy interesante",
+    de: "Sehr interessant",
+    fr: "Très intéressant",
+    pt: "Muito interessante",
+  },
+  fb_ok: {
+    it: "Interessante",
+    en: "Interesting",
+    hu: "Érdekes",
+    es: "Interesante",
+    de: "Interessant",
+    fr: "Intéressant",
+    pt: "Interessante",
+  },
+  fb_low: {
+    it: "Poco interessante",
+    en: "Slightly interesting",
+    hu: "Kevéssé érdekes",
+    es: "Poco interesante",
+    de: "Wenig interessant",
+    fr: "Peu intéressant",
+    pt: "Pouco interessante",
+  },
+  fb_no: {
+    it: "Non interessante",
+    en: "Not interesting",
+    hu: "Nem érdekes",
+    es: "No interesante",
+    de: "Uninteressant",
+    fr: "Pas intéressant",
+    pt: "Não interessante",
+  },
+  fb_none: {
+    it: "Senza feedback",
+    en: "No feedback",
+    hu: "Visszajelzés nélkül",
+    es: "Sin feedback",
+    de: "Ohne Feedback",
+    fr: "Sans feedback",
+    pt: "Sem feedback",
   },
   // Status options
   st_new: {
@@ -397,6 +462,7 @@ export default function PositionsFilterSidebar({
       status: csv(sp.get("status")),
       remote: csv(sp.get("remote")),
       source: csv(sp.get("source")),
+      fb: csv(sp.get("fb")),
     }),
     [sp],
   );
@@ -405,6 +471,14 @@ export default function PositionsFilterSidebar({
   // Le label degli option vengono risolte dalla locale corrente.
   const directGroups = useMemo(
     () => [
+      {
+        key: "fb" as DirectKey,
+        options: FB_OPTIONS.map((o): Option => ({
+          val: o.val,
+          label: tr(o.labelKey),
+          color: o.color,
+        })),
+      },
       {
         key: "status" as DirectKey,
         options: STATUS_OPTIONS.map((o): Option => ({
@@ -511,6 +585,7 @@ export default function PositionsFilterSidebar({
       "status",
       "remote",
       "source",
+      "fb",
       "verdict",
       "tier",
     ].forEach((k) => next.delete(k));
