@@ -935,76 +935,102 @@ export default async function PositionDetailPage({ params }: PageProps) {
       : foundDays === 1
         ? t("o_yesterday")
         : t("o_days_ago").replace("{n}", String(foundDays));
-  const overviewCard =
-    score ||
-    salaryEst ||
-    salaryDecl ||
-    position.remote_type ||
-    position.role_family ? (
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-        <div className="section-label mb-3">{t("overview")}</div>
-        <div className="flex items-center gap-4">
-          {score && (
-            <div
-              className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
-              style={{
-                borderColor: scoreColor(score.total_score),
-                color: scoreColor(score.total_score),
-              }}
-            >
-              {score.total_score}
+  // Panoramica SEMPRE presente: da 20/07 ospita anche titolo e azienda
+  // (l'header nudo è sparito) e la fila dei giudizi in coda.
+  const overviewCard = (
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+      <div className="section-label mb-3">{t("overview")}</div>
+      <h1 className="text-lg md:text-xl font-bold tracking-tight text-[var(--color-white)] mb-1">
+        {position.title}
+      </h1>
+      <div className="mb-3 flex items-center gap-x-2.5 gap-y-1 flex-wrap">
+        <span className="text-[13px] text-[var(--color-base)] font-medium">
+          {position.company}
+        </span>
+        {/* Logo aziendale (mig 056): a destra del nome; senza logo,
+            nessun placeholder. */}
+        {company?.logo && (
+          <Avatar
+            name={position.company}
+            src={company.logo}
+            size="sm"
+            square
+            imgFit="contain"
+          />
+        )}
+        {position.location && !hasLocationCard && (
+          <span className="text-[11px] text-[var(--color-muted)]">
+            · {position.location}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-4">
+        {score && (
+          <div
+            className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
+            style={{
+              borderColor: scoreColor(score.total_score),
+              color: scoreColor(score.total_score),
+            }}
+          >
+            {score.total_score}
+          </div>
+        )}
+        <div className="flex-1 min-w-0 space-y-2">
+          {(salaryEst || salaryDecl) && (
+            <InfoRow
+              label={t(salaryEst ? "d_salary_estimated" : "d_salary_declared")}
+              value={(salaryEst ?? salaryDecl)!}
+            />
+          )}
+          {position.remote_type && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
+                {t("o_mode")}
+              </span>
+              <span
+                className="text-[11px] font-semibold text-right"
+                style={{ color: modeColor }}
+              >
+                {t(`rt_${position.remote_type}`)}
+              </span>
             </div>
           )}
-          <div className="flex-1 min-w-0 space-y-2">
-            {(salaryEst || salaryDecl) && (
-              <InfoRow
-                label={t(
-                  salaryEst ? "d_salary_estimated" : "d_salary_declared",
-                )}
-                value={(salaryEst ?? salaryDecl)!}
-              />
-            )}
-            {position.remote_type && (
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[10px] text-[var(--color-dim)] shrink-0">
-                  {t("o_mode")}
-                </span>
+          {position.role_family && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
+                {t("o_category")}
+              </span>
+              <span className="text-[11px] text-[var(--color-base)] text-right inline-flex items-center gap-1.5 min-w-0">
                 <span
-                  className="text-[11px] font-semibold text-right"
-                  style={{ color: modeColor }}
-                >
-                  {t(`rt_${position.remote_type}`)}
-                </span>
-              </div>
-            )}
-            {position.role_family && (
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[10px] text-[var(--color-dim)] shrink-0">
-                  {t("o_category")}
-                </span>
-                <span className="text-[11px] text-[var(--color-base)] text-right inline-flex items-center gap-1.5 min-w-0">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{
-                      background: colorForFamily(position.role_family.trim()),
-                    }}
-                    aria-hidden="true"
-                  />
-                  <span className="truncate">{position.role_family}</span>
-                </span>
-              </div>
-            )}
-            {position.source && (
-              <InfoRow label={t("d_source")} value={position.source} />
-            )}
-            <InfoRow
-              label={t("d_found")}
-              value={`${foundDate} (${foundAge})`}
-            />
-          </div>
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{
+                    background: colorForFamily(position.role_family.trim()),
+                  }}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{position.role_family}</span>
+              </span>
+            </div>
+          )}
+          {position.source && (
+            <InfoRow label={t("d_source")} value={position.source} />
+          )}
+          <InfoRow label={t("d_found")} value={`${foundDate} (${foundAge})`} />
         </div>
       </div>
-    ) : null;
+      {/* Giudizio rapido in coda alla Panoramica: stessa fila di /swipe
+            (evidenzia quello già dato; resta anche nel popup). */}
+      {feedbackEnabled && position.legacy_id != null && (
+        <div className="mt-4 border-t border-[var(--color-border)] pt-4">
+          <FeedbackButtons
+            legacyId={position.legacy_id}
+            initialVerdict={initialVerdict}
+          />
+        </div>
+      )}
+    </div>
+  );
 
   // Card Località: città + paese (bandiera) + mini-mappa zoomabile col pin.
   // CON mappa → prima card della colonna principale (prima della JD, scelta
@@ -1082,45 +1108,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
         </span>
       </div>
 
-      {/* ── Header ──────────────────────────────────────────────── */}
-      {/* Ridisegnato mobile-first (19/07): titolo a tutta larghezza, sotto
-          il nome azienda con il logo alla sua destra (nessun placeholder
-          quando il logo manca). Score e modalità vivono nella card
-          Panoramica; le azioni nel popup TeamActionsSheet. */}
-      <div className="mb-6 md:mb-8 pb-5 md:pb-6 border-b border-[var(--color-border)]">
-        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[var(--color-white)] mb-1.5">
-          {position.title}
-        </h1>
-        <div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap">
-          <span className="text-[var(--color-base)] font-medium">
-            {position.company}
-          </span>
-          {/* Logo aziendale (mig 056, skill logo-extraction): data-URI dal
-              record companies, a destra del nome. object-contain: mai
-              croppare. Senza logo, niente — nessun fallback a iniziali. */}
-          {company?.logo && (
-            <Avatar
-              name={position.company}
-              src={company.logo}
-              size="sm"
-              square
-              imgFit="contain"
-            />
-          )}
-          {/* La dicitura località vive nella card Località (con mappa);
-              qui resta solo come fallback quando la card non c'è. */}
-          {position.location && !hasLocationCard && (
-            <span className="text-[11px] text-[var(--color-muted)]">
-              · {position.location}
-            </span>
-          )}
-        </div>
-        {/* Precedente/Prossima nella sequenza della lista (filtri e
-            ordinamento correnti, via sessionStorage): si scorre senza
-            tornare a /positions. I bottoni azione vivono in fondo. */}
-        <div className="mt-4">
-          <PrevNextNav id={position.id} />
-        </div>
+      {/* Precedente/Prossima SUBITO sotto il breadcrumb (scelta utente
+          20/07): sequenza della lista con filtri e ordinamento correnti.
+          Titolo e azienda vivono nella card Panoramica. */}
+      <div className="mb-5 -mt-2">
+        <PrevNextNav id={position.id} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
