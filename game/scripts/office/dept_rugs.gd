@@ -13,10 +13,10 @@ const RUGS := {
 	"scout": [Vector2(775, 560), 940.0],
 	# Il laboratorio riempie meglio la propria campata; gli Scorer occupano
 	# davvero l'asse centrale del pavimento (FLOOR center.x = 1700).
-	"analisti": [Vector2(2735, 430), 880.0],
+	"analisti": [Vector2(2655, 430), 880.0],
 	"scorer": [Vector2(1700, 1120), 1080.0],
 	"scrittori": [Vector2(690, 1726), 800.0],
-	"critici": [Vector2(2700, 1740), 940.0],
+	"critici": [Vector2(2625, 1740), 940.0],
 }
 
 func _ready() -> void:

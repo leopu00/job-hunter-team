@@ -12,9 +12,9 @@ const FLOOR := Rect2(240, 140, 2920, 1860)
 
 ## Zona lab racchiusa da vetri interni (visual + collisioni sottili).
 ## Spostato all'angolo NE del pavimento largo: casa dei 6 Analisti.
-const LAB_WALL_V := Rect2(2300, 140, 12, 606)     # parete verticale
-const LAB_WALL_H1 := Rect2(2300, 740, 330, 12)    # tratto sx della parete bassa
-const LAB_WALL_H2 := Rect2(2750, 740, 410, 12)    # tratto dx (in mezzo: porta)
+const LAB_WALL_V := Rect2(2220, 140, 12, 606)     # parete verticale
+const LAB_WALL_H1 := Rect2(2220, 740, 330, 12)    # tratto sx della parete bassa
+const LAB_WALL_H2 := Rect2(2670, 740, 410, 12)    # tratto dx (in mezzo: porta)
 
 const ITEMS := [
 	# ── Supporto operativo, lato OVEST degli Scorer ──
@@ -86,7 +86,7 @@ const ITEMS := [
 	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1230, 1900, 56, 56)},
 	# Lontana dal varco scorer: a y=1455 chiudeva il passaggio tra desk 5
 	# e vetrata, isolando la postazione dalla componente A* principale.
-	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3090, 1700, 56, 56)},
+	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3015, 1700, 56, 56)},
 	{"id": "plant_palm_c", "kind": "plant_palm", "rect": Rect2(302, 1436, 56, 56)},
 
 	# ── Reception all'uscita sud, tra Scrittori e Critici ──
@@ -98,7 +98,7 @@ const ITEMS := [
 
 	# Tavolino revisione sul bordo ovest: il centro dell'anello resta libero
 	# per le sei sedie rivolte all'interno e per i viaggi della pipeline.
-	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2160, 1840, 120, 100)},
+	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2085, 1840, 120, 100)},
 
 	{"id": "plant_b", "kind": "plant", "rect": Rect2(1950, 860, 56, 56)},
 
@@ -117,11 +117,11 @@ const ITEMS := [
 	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(380, 1414, 150, 34)},
 	# Sul lato sud della vetrata: a y=1446 tagliava l'unica riga A* tra
 	# scorer:5 e l'apertura occidentale della parete condivisa.
-	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2160, 1510, 150, 34)},
+	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2085, 1510, 150, 34)},
 	# Scatoloni e schedari: l'ufficio vive
-	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(3060, 1920, 80, 66)},
+	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(2985, 1920, 80, 66)},
 	{"id": "boxes_scrittori", "kind": "nc_boxes", "rect": Rect2(1100, 1900, 80, 66)},
-	{"id": "filing_lab", "kind": "nc_filing_cabinet", "rect": Rect2(3080, 250, 70, 110)},
+	{"id": "filing_lab", "kind": "nc_filing_cabinet", "rect": Rect2(3000, 250, 70, 110)},
 	{"id": "filing_coord", "kind": "nc_filing_cabinet", "rect": Rect2(2950, 1175, 70, 110)},
 	# Dettagli: appendiabiti all'entrata sud, cestini e cassettiere a fianco
 	# delle scrivanie. La fascia nord della stampante resta intenzionalmente

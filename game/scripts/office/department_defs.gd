@@ -56,21 +56,21 @@ const DEPARTMENTS := {
 		"name": "Analisti",
 		"tagline": "Arricchiscono e verificano i dati",
 		"color": Color("#4d9fff"),
-		"zone": Rect2(2312, 150, 848, 580),  # il lab di vetro, angolo NE
+		"zone": Rect2(2232, 150, 848, 580),  # lab rientrato dal bordo est
 		# Più vicino alle scrivanie, ma spostato a destra del varco centrale:
 		# salire in asse col portale isolerebbe nuovamente il laboratorio.
-		"inbox": Vector2(2880, 850),
-		"inbox_drop_access": Vector2(2720, 850),
-		"inbox_pickup_access": Vector2(3040, 850),
+		"inbox": Vector2(2800, 850),
+		"inbox_drop_access": Vector2(2640, 850),
+		"inbox_pickup_access": Vector2(2960, 850),
 		# Anello radiale allargato insieme al tappeto: riempie il laboratorio
 		# senza toccare vetri, schedario o varco meridionale.
 		"desks": [
-			{"rect": Rect2(2366, 278, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(2395, 480, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(2650, 227, 170, 78), "kind": "analisti_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(2650, 548, 170, 78), "kind": "analisti_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
-			{"rect": Rect2(2934, 278, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(2905, 480, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(2286, 278, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(2315, 480, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(2570, 227, 170, 78), "kind": "analisti_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(2570, 548, 170, 78), "kind": "analisti_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
+			{"rect": Rect2(2854, 278, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(2825, 480, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"scorer": {
@@ -126,17 +126,17 @@ const DEPARTMENTS := {
 		"name": "Critici",
 		"tagline": "Revisionano ogni riga prima dell'invio",
 		"color": Color("#ff4560"),
-		"zone": Rect2(2150, 1520, 1010, 440),
-		"inbox": Vector2(3100, 1820),  # deposito sul bordo est, fuori dall'anello
-		"inbox_access": Vector2(3130, 1755),
+		"zone": Rect2(2075, 1520, 1010, 440),
+		"inbox": Vector2(3025, 1820),  # deposito sul bordo est, fuori dall'anello
+		"inbox_access": Vector2(3055, 1755),
 		# Anello radiale con il centro sgombro per sedie, corpi e percorsi.
 		"desks": [
-			{"rect": Rect2(2309, 1580, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(2351, 1796, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(2615, 1526, 170, 78), "kind": "critici_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(2615, 1869, 170, 78), "kind": "critici_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.80},
-			{"rect": Rect2(2921, 1580, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(2879, 1796, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(2234, 1580, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(2276, 1796, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(2540, 1526, 170, 78), "kind": "critici_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(2540, 1869, 170, 78), "kind": "critici_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.80},
+			{"rect": Rect2(2846, 1580, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(2804, 1796, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 }
@@ -159,14 +159,14 @@ const GLASS_WALLS := [
 	Rect2(1890, 840, 370, 12),
 	Rect2(2260, 920, 12, 400),
 	# Bordo nord dei Critici con porta larga al centro.
-	Rect2(1990, 1480, 460, 12),
-	Rect2(2660, 1480, 490, 12),
+	Rect2(1915, 1480, 460, 12),
+	Rect2(2585, 1480, 490, 12),
 	# Scrittori: nord (varco verso la sala relax) + est (porta sud)
 	Rect2(360, 1448, 340, 12),
 	Rect2(860, 1448, 300, 12),
 	Rect2(1204, 1560, 12, 160),
 	# Critici: ovest con porta sud
-	Rect2(2126, 1500, 12, 260),
+	Rect2(2051, 1500, 12, 260),
 ]
 
 ## POI condivisi dei behavior: mete dei viaggi "si vede che lavorano".
