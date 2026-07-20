@@ -1,6 +1,6 @@
 {
   "name": "jht-desktop",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Desktop launcher for Job Hunter Team",
   "author": {
@@ -120,6 +120,7 @@
     },
     "win": {
       "artifactName": "job-hunter-team-${version}-windows-${arch}.${ext}",
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "nsis",
