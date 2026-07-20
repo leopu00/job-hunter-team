@@ -141,7 +141,9 @@ export default function MessagesList({ initialMessages }: Props) {
       const rect = el.getBoundingClientRect();
       const zoom = el.offsetWidth > 0 ? rect.width / el.offsetWidth : 1;
       const topDoc = rect.top + window.scrollY;
-      setPanelH(Math.max(320, Math.floor((window.innerHeight - topDoc) / zoom)));
+      setPanelH(
+        Math.max(320, Math.floor((window.innerHeight - topDoc) / zoom)),
+      );
     };
     apply();
     window.addEventListener("resize", apply);
@@ -219,14 +221,11 @@ export default function MessagesList({ initialMessages }: Props) {
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/pending-messages/${replyTarget.id}/reply`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reply }),
-        },
-      );
+      const res = await fetch(`/api/pending-messages/${replyTarget.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reply }),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(
@@ -276,8 +275,7 @@ export default function MessagesList({ initialMessages }: Props) {
         }
         style={{
           color: active ? info.color : "var(--color-muted)",
-          background:
-            !compact && active ? "var(--color-card)" : "transparent",
+          background: !compact && active ? "var(--color-card)" : "transparent",
           boxShadow:
             compact && active ? `inset 0 -2px 0 0 ${info.color}` : undefined,
         }}
@@ -326,9 +324,7 @@ export default function MessagesList({ initialMessages }: Props) {
       className="flex flex-col md:flex-row"
       style={{
         height:
-          panelH != null
-            ? panelH
-            : "calc(100dvh / var(--zoom, 1) - 56px)",
+          panelH != null ? panelH : "calc(100dvh / var(--zoom, 1) - 56px)",
       }}
     >
       {/* ── Sidebar sinistra: conversazioni + presentazione ────────── */}

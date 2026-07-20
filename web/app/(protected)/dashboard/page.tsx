@@ -213,7 +213,10 @@ export default async function DashboardPage() {
       >
         <div className="max-w-6xl mx-auto px-5 pt-8 pb-8">
           {/* ── Header di pagina: titolo + conteggi ──────────────────── */}
-          <div className="mb-6" style={{ animation: "fade-in 0.35s ease both" }}>
+          <div
+            className="mb-6"
+            style={{ animation: "fade-in 0.35s ease both" }}
+          >
             <h1
               className="text-xl font-bold uppercase tracking-[0.18em] leading-none mb-2"
               style={{ color: "var(--color-white)" }}

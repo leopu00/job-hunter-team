@@ -18,9 +18,7 @@ import {
   normalizeBody,
   KIND_BORDER,
 } from "@/lib/message-display";
-import MessageBody, {
-  stripInlineMarkdown,
-} from "@/app/components/MessageBody";
+import MessageBody, { stripInlineMarkdown } from "@/app/components/MessageBody";
 import type { PendingMessage } from "@/lib/types";
 
 const T: Record<string, Record<string, string>> = {
@@ -293,14 +291,11 @@ export default function MessagesDrawer() {
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/pending-messages/${replyTarget.id}/reply`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reply }),
-        },
-      );
+      const res = await fetch(`/api/pending-messages/${replyTarget.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reply }),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(
