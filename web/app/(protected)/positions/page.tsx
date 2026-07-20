@@ -7,7 +7,7 @@ import {
 } from "@/lib/queries";
 import { colorForFamily } from "@/lib/position-classifier";
 import { scoreSpectrumCss } from "@/lib/score-color";
-import { IconStar, IconStarHalf, IconThumbsUp, IconX } from "../swipe/icons";
+import { IconStar, IconThumbsMeh, IconThumbsUp, IconX } from "../swipe/icons";
 import {
   getExchangeRates,
   convertCurrency,
@@ -93,7 +93,7 @@ const FB_TAG: Record<
 > = {
   top: { color: "var(--color-green)", Icon: IconStar },
   review_ok: { color: "var(--color-blue)", Icon: IconThumbsUp },
-  review_low: { color: "var(--color-orange)", Icon: IconStarHalf },
+  review_low: { color: "var(--color-orange)", Icon: IconThumbsMeh },
   no: { color: "var(--color-red)", Icon: IconX },
 };
 
