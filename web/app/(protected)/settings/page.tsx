@@ -9,6 +9,7 @@ import WorkHoursPicker from "../../components/WorkHoursPicker";
 import { DarkModeToggle } from "@/app/theme-provider";
 import { AVAILABLE_CURRENCIES, BASE_CURRENCIES } from "@/lib/exchange-rates";
 import { useLocale } from "@/lib/use-locale";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
 const T: Record<string, Record<string, string>> = {
@@ -354,6 +355,33 @@ const T: Record<string, Record<string, string>> = {
     fr: "Supprime tous les fichiers dans ~/.jht/cache/",
     pt: "Elimina todos os ficheiros em ~/.jht/cache/",
   },
+  cloud_sync: {
+    it: "Sincronizzazione cloud",
+    en: "Cloud sync",
+    hu: "Felhő-szinkron",
+    es: "Sincronización en la nube",
+    de: "Cloud-Synchronisierung",
+    fr: "Synchronisation cloud",
+    pt: "Sincronização na nuvem",
+  },
+  cloud_sync_desc: {
+    it: "Gestisci i token di sincronizzazione dei tuoi dispositivi",
+    en: "Manage the sync tokens of your devices",
+    hu: "Kezeld az eszközeid szinkron-tokenjeit",
+    es: "Gestiona los tokens de sincronización de tus dispositivos",
+    de: "Verwalte die Sync-Tokens deiner Geräte",
+    fr: "Gérez les jetons de synchronisation de vos appareils",
+    pt: "Gerencie os tokens de sincronização dos seus dispositivos",
+  },
+  open: {
+    it: "Apri →",
+    en: "Open →",
+    hu: "Megnyitás →",
+    es: "Abrir →",
+    de: "Öffnen →",
+    fr: "Ouvrir →",
+    pt: "Abrir →",
+  },
 };
 
 type NotifKey = "telegram" | "email" | "desktop";
@@ -493,6 +521,11 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const locale = useLocale();
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  // [JHT-DASHBOARD-SPLIT rivisto 20/07] La pagina non è più desktop-only:
+  // sul cloud si riduce alle sole sezioni che lì funzionano davvero (tema,
+  // client-side, + link a cloud-sync). Le tab di config locale (jht.config,
+  // orari, valute, notifiche, danger) restano solo su desktop/locale.
+  const isCloud = useIsCloud();
 
   useEffect(() => {
     fetch("/api/settings")
@@ -561,6 +594,87 @@ export default function SettingsPage() {
     },
     [toast],
   );
+
+  // Variante CLOUD: solo ciò che sul cloud funziona ed è utile — tema
+  // (preferenza client) e gestione token di sincronizzazione.
+  if (isCloud === true)
+    return (
+      <main
+        className="min-h-screen px-6 py-10"
+        style={{ animation: "fade-in 0.35s ease both" }}
+      >
+        <div className="max-w-2xl mx-auto flex flex-col gap-6">
+          <div>
+            <nav
+              aria-label="Breadcrumb"
+              className="flex items-center gap-2 mb-3"
+            >
+              <Link
+                href="/dashboard"
+                className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
+              >
+                {tr("dashboard")}
+              </Link>
+              <span className="text-[var(--color-border)]" aria-hidden="true">
+                /
+              </span>
+              <span
+                className="text-[10px] text-[var(--color-muted)]"
+                aria-current="page"
+              >
+                {tr("settings")}
+              </span>
+            </nav>
+            <h1
+              className="text-xl font-bold"
+              style={{ color: "var(--color-white)" }}
+            >
+              {tr("settings")}
+            </h1>
+          </div>
+
+          <div
+            className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg"
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "var(--color-card)",
+            }}
+          >
+            <p
+              className="m-0 text-[11px] font-semibold"
+              style={{ color: "var(--color-muted)" }}
+            >
+              {tr("theme")}
+            </p>
+            <DarkModeToggle />
+          </div>
+
+          <Link
+            href="/settings/cloud-sync"
+            className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg no-underline transition-colors hover:border-[var(--color-border-glow)]"
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "var(--color-card)",
+            }}
+          >
+            <div>
+              <p
+                className="m-0 text-[11px] font-semibold"
+                style={{ color: "var(--color-muted)" }}
+              >
+                {tr("cloud_sync")}
+              </p>
+              <p className="m-0 text-[10px]" style={{ color: "var(--color-dim)" }}>
+                {tr("cloud_sync_desc")}
+              </p>
+            </div>
+            <span className="text-[10px] font-semibold tracking-widest uppercase shrink-0 text-[var(--color-green)]">
+              {tr("open")}
+            </span>
+          </Link>
+        </div>
+      </main>
+    );
 
   if (loading)
     return (

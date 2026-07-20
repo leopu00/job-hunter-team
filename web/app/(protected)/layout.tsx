@@ -24,7 +24,9 @@ export const metadata: Metadata = {
 // a sparire, non la pagina. Eccezione: /settings/cloud-sync è gestione token
 // sync-infra → resta cloud (vedi [JHT-WEB-READONLY] 1b, è ANCHE sicurezza).
 const DESKTOP_ONLY_PREFIXES = [
-  "/settings",
+  // NB: /settings NON è più desktop-only (20/07): sul cloud la pagina si
+  // riduce da sé alle sole sezioni utili (tema + cloud-sync), le tab di
+  // config locale restano desktop (vedi settings/page.tsx).
   "/credentials",
   "/secrets",
   "/channels",
@@ -40,7 +42,6 @@ const DESKTOP_ONLY_PREFIXES = [
 ];
 
 function isDesktopOnlyPath(p: string): boolean {
-  if (p.startsWith("/settings/cloud-sync")) return false; // sync-infra resta cloud
   if (p.startsWith("/cli-link")) return false; // pairing browser: vive sul cloud
   return DESKTOP_ONLY_PREFIXES.some(
     (pre) => p === pre || p.startsWith(pre + "/"),
