@@ -664,7 +664,10 @@ export default function SettingsPage() {
               >
                 {tr("cloud_sync")}
               </p>
-              <p className="m-0 text-[10px]" style={{ color: "var(--color-dim)" }}>
+              <p
+                className="m-0 text-[10px]"
+                style={{ color: "var(--color-dim)" }}
+              >
                 {tr("cloud_sync_desc")}
               </p>
             </div>
