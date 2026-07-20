@@ -23,6 +23,7 @@ func _init(center: Vector2) -> void:
 static func swing() -> void:
 	if instance:
 		instance._hold = 1.6
+		instance.set_process(true)
 
 func _process(delta: float) -> void:
 	var target := 1.0 if _hold > 0.0 else 0.0
@@ -31,6 +32,8 @@ func _process(delta: float) -> void:
 	if not is_equal_approx(next, _open):
 		_open = next
 		queue_redraw()
+	elif _hold <= 0.0:
+		set_process(false)  # ante ferme: dorme fino al prossimo swing
 
 func _draw() -> void:
 	var half := W / 2.0

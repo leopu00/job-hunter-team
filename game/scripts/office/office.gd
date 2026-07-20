@@ -1284,6 +1284,9 @@ func _open_dept(dept: String) -> void:
 
 # ── Hover col mouse (evidenzia l'agente cliccabile) ───────────────────
 
+var _last_queue_hover := ""
+var _last_shelf_hover := false
+
 func _update_hover() -> void:
 	var best: AgentNPC = null
 	var shelf_hovered := false
@@ -1300,8 +1303,14 @@ func _update_hover() -> void:
 			queue_hovered = PaperPile.inbox_at(mouse)
 			if queue_hovered == "":
 				shelf_hovered = OutputShelf.hit_by(mouse)
-	PaperPile.highlight_inbox(queue_hovered)
-	OutputShelf.set_highlight(shelf_hovered)
+	# Broadcast solo al cambio: prima si rifacevano i giri su pile e
+	# scaffale a ogni frame anche col mouse fermo nel vuoto.
+	if queue_hovered != _last_queue_hover:
+		_last_queue_hover = queue_hovered
+		PaperPile.highlight_inbox(queue_hovered)
+	if shelf_hovered != _last_shelf_hover:
+		_last_shelf_hover = shelf_hovered
+		OutputShelf.set_highlight(shelf_hovered)
 	if best != _hover_agent:
 		if _hover_agent:
 			_hover_agent.set_highlight(false)
