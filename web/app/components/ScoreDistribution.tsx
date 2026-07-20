@@ -1,5 +1,7 @@
 "use client";
 
+import { scoreSpectrumCss } from "@/lib/score-color";
+
 import { useMemo, useState } from "react";
 
 type Props = {
@@ -31,12 +33,8 @@ const PAD_TOP = 12;
 const PAD_BOTTOM = 22;
 
 function colorForFraction(frac: number): string {
-  // frac = score / maxScore in [0..1]
-  if (frac >= 0.75) return "var(--color-green)";
-  if (frac >= 0.6) return "var(--color-ready)";
-  if (frac >= 0.45) return "var(--color-yellow)";
-  if (frac >= 0.3) return "var(--color-orange)";
-  return "var(--color-red)";
+  // frac = score / maxScore in [0..1] → spettro continuo condiviso.
+  return scoreSpectrumCss(frac * 100);
 }
 
 function niceTickStep(span: number, target: number): number {

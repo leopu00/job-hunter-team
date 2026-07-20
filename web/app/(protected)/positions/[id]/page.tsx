@@ -11,6 +11,7 @@ import { countryFlag } from "@/lib/country-flag";
 import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
 import { colorForFamily } from "@/lib/position-classifier";
+import { scoreSpectrumCss } from "@/lib/score-color";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
@@ -753,10 +754,7 @@ function verdictOf(action: string, score: number | null): Verdict {
 }
 
 function scoreColor(s: number | null) {
-  if (!s) return "var(--color-dim)";
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
+  return scoreSpectrumCss(s);
 }
 
 // Colore di un sotto-punteggio relativo al SUO massimo (stack /40, remote

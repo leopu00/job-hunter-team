@@ -1,5 +1,7 @@
 "use client";
 
+import { scoreSpectrumCss } from "@/lib/score-color";
+
 import { useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
@@ -376,14 +378,7 @@ export default function PositionTypesPie({
                   className="tabular-nums text-center"
                   title={t.avgScoreScoredOnly}
                   style={{
-                    color:
-                      d.avgScore == null
-                        ? "var(--color-dim)"
-                        : d.avgScore >= 75
-                          ? "var(--color-green)"
-                          : d.avgScore >= 55
-                            ? "var(--color-yellow)"
-                            : "var(--color-red)",
+                    color: scoreSpectrumCss(d.avgScore),
                   }}
                 >
                   {d.avgScore == null ? "—" : `${Math.round(d.avgScore)}`}

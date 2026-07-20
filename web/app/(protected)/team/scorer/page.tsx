@@ -1,3 +1,4 @@
+import { scoreSpectrumCss } from "@/lib/score-color";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { getScorerStats } from "@/lib/queries";
@@ -256,12 +257,7 @@ export default async function ScorerPage() {
               "var(--color-yellow)",
             ];
             const color = colors[i % colors.length];
-            const avgColor =
-              s.avgScore >= 70
-                ? "var(--color-green)"
-                : s.avgScore >= 40
-                  ? "var(--color-yellow)"
-                  : "var(--color-orange)";
+            const avgColor = scoreSpectrumCss(s.avgScore);
             return (
               <div
                 key={s.scorer}
