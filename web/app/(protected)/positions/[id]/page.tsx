@@ -21,6 +21,7 @@ import { GeocodeRequestButton } from "./GeocodeRequestButton";
 import { TeamActionsSheet } from "./TeamActionsSheet";
 import { FeedbackButtons, type Verdict } from "./FeedbackButtons";
 import PositionMapCardLazy from "./PositionMapCardLazy";
+import PrevNextNav from "./PrevNextNav";
 import { CvDownloadButton } from "./CvDownloadButton";
 import MarkSeenAfterView from "@/app/components/MarkSeenAfterView";
 import { Avatar } from "@/app/components/Avatar";
@@ -1114,103 +1115,12 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </span>
           )}
         </div>
-        {position.legacy_id != null && (
-          <div className="mt-4 flex items-center gap-3">
-            <TeamActionsSheet
-              active={
-                initialVerdict != null ||
-                position.geocode_requested === true ||
-                position.recheck_requested === true ||
-                position.write_requested === true ||
-                !!position.user_excluded_reason ||
-                tickets.some((tk) => tk.status !== "resolved")
-              }
-              feedback={
-                feedbackEnabled ? (
-                  <FeedbackButtons
-                    legacyId={position.legacy_id}
-                    initialVerdict={initialVerdict}
-                  />
-                ) : undefined
-              }
-              actions={
-                <>
-                  {/* Geocoding-on-demand (V8): l'utente richiede coordinate
-                      ufficio precise. Sempre attivo: l'Analista skippa
-                      autonomamente quando non ha materiale geografico utile
-                      (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]). */}
-                  <GeocodeRequestButton
-                    legacyId={position.legacy_id}
-                    initialRequested={position.geocode_requested === true}
-                    alreadyGeocoded={position.office_geocoded === true}
-                  />
-                  {/* Recheck ON-DEMAND (mig 042): il recheck non è più
-                      automatico, l'utente lo richiede qui → l'Analista
-                      ri-verifica la liveness. */}
-                  <RecheckButton
-                    legacyId={position.legacy_id}
-                    initialRequested={position.recheck_requested === true}
-                    lastOpenCheck={position.last_open_check}
-                  />
-                  {(() => {
-                    // Writer-on-demand (V6): il button e' visibile solo se la
-                    // posizione e' nello stato giusto. Il Capitano spawna lo
-                    // Scrittore quando il flag e' acceso (vedi BACKLOG
-                    // [JHT-WRITER-ON-DEMAND]).
-                    const wrongStatus = position.status !== "scored";
-                    const alreadyWriting = application != null;
-                    const isDisabled = wrongStatus || alreadyWriting;
-                    const reason = alreadyWriting
-                      ? t("cv_in_progress")
-                      : wrongStatus
-                        ? t("cv_only_from_scored").replace(
-                            "{status}",
-                            position.status,
-                          )
-                        : undefined;
-                    return (
-                      <WriteRequestButton
-                        legacyId={position.legacy_id}
-                        initialRequested={position.write_requested === true}
-                        disabled={isDisabled}
-                        disabledReason={reason}
-                      />
-                    );
-                  })()}
-                  {/* Esclusione manuale utente (mig 041): l'utente esclude
-                      l'offerta con una causa → status 'excluded', gli agenti
-                      smettono di ri-verificarne la liveness. */}
-                  <ExcludeButton
-                    legacyId={position.legacy_id}
-                    status={position.status}
-                    initialReason={position.user_excluded_reason ?? null}
-                  />
-                </>
-              }
-              tickets={
-                <TicketPanel
-                  legacyId={position.legacy_id}
-                  tickets={tickets}
-                  hideTitle
-                />
-              }
-            />
-            {position.url && (
-              <a
-                href={position.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
-                style={{
-                  borderColor: "var(--color-blue)",
-                  color: "var(--color-blue)",
-                }}
-              >
-                {t("original_listing")} ↗
-              </a>
-            )}
-          </div>
-        )}
+        {/* Precedente/Prossima nella sequenza della lista (filtri e
+            ordinamento correnti, via sessionStorage): si scorre senza
+            tornare a /positions. I bottoni azione vivono in fondo. */}
+        <div className="mt-4">
+          <PrevNextNav id={position.id} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1742,6 +1652,109 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Azioni di coda (scelta utente 20/07): Feedback e richieste +
+          annuncio originale come ULTIMI elementi, più prev/next ripetuto. */}
+      <div className="mt-6 space-y-4">
+        {position.legacy_id != null && (
+          <div className="mt-4 flex items-center gap-3">
+            <TeamActionsSheet
+              active={
+                initialVerdict != null ||
+                position.geocode_requested === true ||
+                position.recheck_requested === true ||
+                position.write_requested === true ||
+                !!position.user_excluded_reason ||
+                tickets.some((tk) => tk.status !== "resolved")
+              }
+              feedback={
+                feedbackEnabled ? (
+                  <FeedbackButtons
+                    legacyId={position.legacy_id}
+                    initialVerdict={initialVerdict}
+                  />
+                ) : undefined
+              }
+              actions={
+                <>
+                  {/* Geocoding-on-demand (V8): l'utente richiede coordinate
+                      ufficio precise. Sempre attivo: l'Analista skippa
+                      autonomamente quando non ha materiale geografico utile
+                      (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]). */}
+                  <GeocodeRequestButton
+                    legacyId={position.legacy_id}
+                    initialRequested={position.geocode_requested === true}
+                    alreadyGeocoded={position.office_geocoded === true}
+                  />
+                  {/* Recheck ON-DEMAND (mig 042): il recheck non è più
+                      automatico, l'utente lo richiede qui → l'Analista
+                      ri-verifica la liveness. */}
+                  <RecheckButton
+                    legacyId={position.legacy_id}
+                    initialRequested={position.recheck_requested === true}
+                    lastOpenCheck={position.last_open_check}
+                  />
+                  {(() => {
+                    // Writer-on-demand (V6): il button e' visibile solo se la
+                    // posizione e' nello stato giusto. Il Capitano spawna lo
+                    // Scrittore quando il flag e' acceso (vedi BACKLOG
+                    // [JHT-WRITER-ON-DEMAND]).
+                    const wrongStatus = position.status !== "scored";
+                    const alreadyWriting = application != null;
+                    const isDisabled = wrongStatus || alreadyWriting;
+                    const reason = alreadyWriting
+                      ? t("cv_in_progress")
+                      : wrongStatus
+                        ? t("cv_only_from_scored").replace(
+                            "{status}",
+                            position.status,
+                          )
+                        : undefined;
+                    return (
+                      <WriteRequestButton
+                        legacyId={position.legacy_id}
+                        initialRequested={position.write_requested === true}
+                        disabled={isDisabled}
+                        disabledReason={reason}
+                      />
+                    );
+                  })()}
+                  {/* Esclusione manuale utente (mig 041): l'utente esclude
+                      l'offerta con una causa → status 'excluded', gli agenti
+                      smettono di ri-verificarne la liveness. */}
+                  <ExcludeButton
+                    legacyId={position.legacy_id}
+                    status={position.status}
+                    initialReason={position.user_excluded_reason ?? null}
+                  />
+                </>
+              }
+              tickets={
+                <TicketPanel
+                  legacyId={position.legacy_id}
+                  tickets={tickets}
+                  hideTitle
+                />
+              }
+            />
+            {position.url && (
+              <a
+                href={position.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
+                style={{
+                  borderColor: "var(--color-blue)",
+                  color: "var(--color-blue)",
+                }}
+              >
+                {t("original_listing")} ↗
+              </a>
+            )}
+          </div>
+        )}
+        <PrevNextNav id={position.id} />
       </div>
     </div>
   );
