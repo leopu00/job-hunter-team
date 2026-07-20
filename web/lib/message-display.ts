@@ -37,7 +37,9 @@ const AGENT_LABELS: Record<string, LocaleDict> = {
 };
 
 const AGENT_META: Record<string, { emoji: string; color: string }> = {
-  capitano: { emoji: "🎯", color: "var(--color-yellow)" },
+  // Stesso pilota usato ovunque nel resto dell'app (team/capitano,
+  // BetaTeamFlow, api/team/status): 👨‍✈️, non il bersaglio.
+  capitano: { emoji: "👨‍✈️", color: "var(--color-yellow)" },
   mentor: { emoji: "🧙‍♂️", color: "var(--color-purple)" },
   assistente: { emoji: "👩‍💼", color: "var(--color-blue)" },
 };

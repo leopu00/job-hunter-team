@@ -1,7 +1,5 @@
 "use client";
 
-import { scoreSpectrumCss } from "@/lib/score-color";
-
 import { useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
@@ -13,71 +11,15 @@ const T: Record<
     selected: string;
     total: string;
     type: string;
-    avgScoreRange: string;
-    avgScoreScoredOnly: string;
   }
 > = {
-  it: {
-    selected: "selezionate",
-    total: "totale",
-    type: "tipo",
-    avgScoreRange: "Score medio (0-100)",
-    avgScoreScoredOnly: "Score medio (0-100, solo posizioni scorate)",
-  },
-  en: {
-    selected: "selected",
-    total: "total",
-    type: "type",
-    avgScoreRange: "Average score (0-100)",
-    avgScoreScoredOnly: "Average score (0-100, scored positions only)",
-  },
-  es: {
-    selected: "seleccionadas",
-    total: "total",
-    type: "tipo",
-    avgScoreRange: "Score medio (0-100)",
-    avgScoreScoredOnly: "Score medio (0-100, solo posiciones puntuadas)",
-  },
-  fr: {
-    selected: "sélectionnées",
-    total: "total",
-    type: "type",
-    avgScoreRange: "Score moyen (0-100)",
-    avgScoreScoredOnly: "Score moyen (0-100, postes notés uniquement)",
-  },
-  de: {
-    selected: "ausgewählt",
-    total: "Gesamt",
-    type: "Typ",
-    avgScoreRange: "Durchschnitts-Score (0-100)",
-    avgScoreScoredOnly: "Durchschnitts-Score (0-100, nur bewertete Stellen)",
-  },
-  hu: {
-    selected: "kiválasztva",
-    total: "összesen",
-    type: "típus",
-    avgScoreRange: "Átlagos score (0-100)",
-    avgScoreScoredOnly: "Átlagos score (0-100, csak pontozott pozíciók)",
-  },
-  pt: {
-    selected: "selecionadas",
-    total: "total",
-    type: "tipo",
-    avgScoreRange: "Score médio (0-100)",
-    avgScoreScoredOnly: "Score médio (0-100, apenas posições pontuadas)",
-  },
-};
-
-// Etichetta colonna "score medio" della legenda (è la media, non lo score di
-// una singola posizione). Compatta per stare nella colonna stretta.
-const AVG_LABEL: Record<string, string> = {
-  it: "media score",
-  en: "avg score",
-  hu: "átl. pont",
-  es: "media score",
-  de: "Ø score",
-  fr: "score moy",
-  pt: "média score",
+  it: { selected: "selezionate", total: "totale", type: "tipo" },
+  en: { selected: "selected", total: "total", type: "type" },
+  es: { selected: "seleccionadas", total: "total", type: "tipo" },
+  fr: { selected: "sélectionnées", total: "total", type: "type" },
+  de: { selected: "ausgewählt", total: "Gesamt", type: "Typ" },
+  hu: { selected: "kiválasztva", total: "összesen", type: "típus" },
+  pt: { selected: "selecionadas", total: "total", type: "tipo" },
 };
 
 type Props = {
@@ -150,7 +92,6 @@ export default function PositionTypesPie({
   const [hovered, setHovered] = useState<string | null>(null);
   const locale = useLocale();
   const t = T[locale];
-  const avgLabel = AVG_LABEL[locale] ?? AVG_LABEL.en;
   const labelFor = (family: string) => labels?.[family] ?? family;
   const total = data.reduce((a, d) => a + d.count, 0);
   // Per la barra proporzionale di ogni riga (riempie lo spazio orizzontale
@@ -189,7 +130,7 @@ export default function PositionTypesPie({
       : null;
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+    <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-4">
         <span className="section-label">{title}</span>
         {total > 0 && (
@@ -199,7 +140,7 @@ export default function PositionTypesPie({
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+      <div className="flex-1 min-h-0 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
         <div
           className="relative shrink-0 self-center sm:self-auto"
           style={{ width: size, maxWidth: "100%", aspectRatio: "1 / 1" }}
@@ -266,7 +207,9 @@ export default function PositionTypesPie({
               style={{
                 // ~diametro del foro relativo al donut (scala col responsive)
                 maxWidth: `${((INNER * 2) / SIZE) * 100}%`,
-                fontSize: 14,
+                // Font proporzionali al donut: tarati sul 360px storico,
+                // restano leggibili anche nella variante compatta.
+                fontSize: Math.max(10, Math.round(size * 0.04)),
                 color: focused ? focused.color : "var(--color-dim)",
               }}
               title={centerLabel}
@@ -274,15 +217,21 @@ export default function PositionTypesPie({
               {centerLabel}
             </div>
             <div
-              className="font-bold leading-none text-[var(--color-bright)]"
-              style={{ fontSize: 32, marginTop: 4 }}
+              className="font-bold leading-none tabular-nums text-[var(--color-bright)]"
+              style={{
+                fontSize: Math.max(18, Math.round(size * 0.09)),
+                marginTop: 3,
+              }}
             >
               {centerValue}
             </div>
             {centerPct != null && (
               <div
                 className="text-[var(--color-muted)]"
-                style={{ fontSize: 13, marginTop: 2 }}
+                style={{
+                  fontSize: Math.max(9, Math.round(size * 0.036)),
+                  marginTop: 2,
+                }}
               >
                 {centerPct}%
               </div>
@@ -290,23 +239,23 @@ export default function PositionTypesPie({
           </div>
         </div>
 
+        {/* Legenda scrollabile (stesso pattern di LocationBarList): quando il
+        parent vincola l'altezza della card, la lista scorre invece di
+        allungarla; l'header colonne resta sticky in cima allo scroll. */}
         <ul
-          className="space-y-3 min-w-0 flex-1"
+          className="space-y-2.5 min-w-0 flex-1 min-h-0 sm:self-stretch overflow-y-auto pr-1"
           onMouseLeave={() => setHovered(null)}
         >
           {/* Header: didascalia colonne. Colonna 'tipo' a larghezza limitata +
                 colonna barra flessibile (1fr) che riempie lo spazio prima vuoto. */}
           <li
-            className="grid grid-cols-[minmax(90px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            className="sticky top-0 z-10 bg-[var(--color-card)] grid grid-cols-[minmax(90px,14rem)_1fr_2.75rem_2.75rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
             <span>{t.type}</span>
             <span />
             <span>n</span>
             <span>%</span>
-            <span className="text-center leading-tight" title={t.avgScoreRange}>
-              {avgLabel}
-            </span>
           </li>
           {data.map((d) => {
             const pct = Math.round((d.count / total) * 100);
@@ -320,7 +269,7 @@ export default function PositionTypesPie({
                 key={d.family}
                 onMouseEnter={() => setHovered(d.family)}
                 onClick={() => onToggleType?.(d.family)}
-                className="grid grid-cols-[minmax(90px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
+                className="grid grid-cols-[minmax(90px,14rem)_1fr_2.75rem_2.75rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
                 style={{
                   cursor: onToggleType ? "pointer" : "default",
                   background: isSelected
@@ -373,15 +322,6 @@ export default function PositionTypesPie({
                 </span>
                 <span className="tabular-nums text-[var(--color-dim)]">
                   {pct}%
-                </span>
-                <span
-                  className="tabular-nums text-center"
-                  title={t.avgScoreScoredOnly}
-                  style={{
-                    color: scoreSpectrumCss(d.avgScore),
-                  }}
-                >
-                  {d.avgScore == null ? "—" : `${Math.round(d.avgScore)}`}
                 </span>
               </li>
             );
