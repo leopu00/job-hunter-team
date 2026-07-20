@@ -154,7 +154,7 @@ func _ready() -> void:
 		world.add_child(agent)
 		agent.setup(def, nav)
 		if _seat_audit == "" and _doctor_test == "":
-			_stage_agent_entry(agent)
+			agent.enter_through(ENTRY_SPOT)
 		agent.set_story_marker(_seat_audit == "" \
 				and not ScriptedOnboarding.provider_authenticated())
 		agents.append(agent)
@@ -1880,15 +1880,6 @@ func _enter_backend_mode() -> void:
 			_despawn_agent(agent, false)
 	Log.info("backend", "modalità backend: in scena solo gli agenti attivi")
 
-## Ingresso a ondate: cinque corsie affiancate e una nuova fila ogni 0,9 s.
-## Tutti gli agenti restano disponibili subito per la sync, ma non formano
-## più la colonna di corpi sovrapposti che sembrava uno sprite sdoppiato.
-func _stage_agent_entry(agent: AgentNPC) -> void:
-	var index := agents.size()
-	var wave := index / 5
-	var lane := posmod(index, 5) - 2
-	agent.enter_through(ENTRY_SPOT, float(wave) * 0.9, float(lane))
-
 func _spawn_showroom() -> void:
 	if world == null:
 		return
@@ -1903,7 +1894,7 @@ func _spawn_showroom() -> void:
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(def, nav)
-		_stage_agent_entry(agent)
+		agent.enter_through(ENTRY_SPOT)
 		agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
 				bool(_story_seen.get(str(def["slug"]), false)))
 		agents.append(agent)
@@ -1989,7 +1980,7 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	agent.set_throttle(float(item.get("throttle_secs", 0.0)))
 	agent.set_activity_detail(str(item.get("activity_detail", "")))
 	agent.set_backend_status(item.get("status", "idle"))
-	_stage_agent_entry(agent)
+	agent.enter_through(ENTRY_SPOT)
 	agents.append(agent)
 
 # ── Costruzione scena ─────────────────────────────────────────────────
