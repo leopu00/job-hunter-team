@@ -77,6 +77,10 @@ func _measure_top_y() -> float:
 		var image := sprite.texture.get_image()
 		if image == null or image.is_empty():
 			continue
+		if image.is_compressed():
+			# Texture VRAM-compressed: get_used_rect lavora solo su
+			# formati raw — decompressione una tantum (risultato in cache).
+			image.decompress()
 		var used := image.get_used_rect()
 		if used.size == Vector2i.ZERO:
 			continue

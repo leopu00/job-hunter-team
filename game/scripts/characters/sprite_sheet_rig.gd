@@ -102,6 +102,11 @@ func _measure_top_y() -> float:
 	var image := _sprite.texture.get_image()
 	if image == null or image.is_empty():
 		return -132.0
+	if image.is_compressed():
+		# I fogli sono VRAM-compressed (BCn): get_region/blit non lavorano
+		# su formati compressi — si decomprime SOLO per questa misura una
+		# tantum (il risultato finisce in _top_cache).
+		image.decompress()
 	var cols := maxi(1, _sprite.hframes)
 	var rows := maxi(1, _sprite.vframes)
 	var cell_w := image.get_width() / cols
