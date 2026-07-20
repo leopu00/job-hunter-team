@@ -45,28 +45,23 @@ export default function PrevNextNav({ id }: { id: string }) {
 
   if (!nav || (!nav.prev && !nav.next)) return null;
 
-  const btnCls =
-    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]";
+  // Link testuali senza bordi (scelta utente 20/07): la sottolineatura
+  // arriva dall'a:hover globale al tap/hover, come ogni altro link.
+  const cls = "inline-flex items-center gap-1 text-[12px] font-semibold";
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between gap-4">
       {nav.prev ? (
         <Link
           href={`/positions/${nav.prev}`}
-          className={btnCls}
-          style={{
-            borderColor: "var(--color-border)",
-            color: "var(--color-base)",
-          }}
+          className={cls}
+          style={{ color: "var(--color-base)" }}
         >
           ‹ {t.prev}
         </Link>
       ) : (
         <span
-          className={`${btnCls} opacity-40`}
-          style={{
-            borderColor: "var(--color-border)",
-            color: "var(--color-dim)",
-          }}
+          className={`${cls} opacity-40`}
+          style={{ color: "var(--color-dim)" }}
         >
           ‹ {t.prev}
         </span>
@@ -74,21 +69,15 @@ export default function PrevNextNav({ id }: { id: string }) {
       {nav.next ? (
         <Link
           href={`/positions/${nav.next}`}
-          className={btnCls}
-          style={{
-            borderColor: "var(--color-green)",
-            color: "var(--color-green)",
-          }}
+          className={cls}
+          style={{ color: "var(--color-green)" }}
         >
           {t.next} ›
         </Link>
       ) : (
         <span
-          className={`${btnCls} opacity-40`}
-          style={{
-            borderColor: "var(--color-border)",
-            color: "var(--color-dim)",
-          }}
+          className={`${cls} opacity-40`}
+          style={{ color: "var(--color-dim)" }}
         >
           {t.next} ›
         </span>
