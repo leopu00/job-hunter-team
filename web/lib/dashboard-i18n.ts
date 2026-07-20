@@ -72,6 +72,8 @@ const T = {
     // Table
     recent_positions: "Le Migliori Posizioni",
     recent_positions_filtered: "Le Migliori Posizioni Filtrate",
+    new_positions: "Le Ultime Posizioni Valutate",
+    col_scored: "Valutata",
     view_all: "Vedi tutte →",
     unseen_marker: "Nuova — non ancora vista",
     col_id: "ID",
@@ -170,6 +172,8 @@ const T = {
 
     recent_positions: "Top Positions",
     recent_positions_filtered: "Top Filtered Positions",
+    new_positions: "Latest Scored Positions",
+    col_scored: "Scored",
     view_all: "View all →",
     unseen_marker: "New — not viewed yet",
     col_id: "ID",
@@ -267,6 +271,8 @@ const T = {
 
     recent_positions: "A legjobb állások",
     recent_positions_filtered: "A legjobb szűrt állások",
+    new_positions: "A legfrissebben értékelt állások",
+    col_scored: "Értékelve",
     view_all: "Összes megtekintése →",
     unseen_marker: "Új — még nem megtekintett",
     col_id: "ID",
@@ -361,6 +367,8 @@ const T = {
 
     recent_positions: "Las Mejores Posiciones",
     recent_positions_filtered: "Las Mejores Posiciones Filtradas",
+    new_positions: "Las Últimas Posiciones Puntuadas",
+    col_scored: "Puntuada",
     view_all: "Ver todas →",
     unseen_marker: "Nueva — aún sin ver",
     col_id: "ID",
@@ -455,6 +463,8 @@ const T = {
 
     recent_positions: "Die besten Stellen",
     recent_positions_filtered: "Die besten gefilterten Stellen",
+    new_positions: "Zuletzt bewertete Stellen",
+    col_scored: "Bewertet",
     view_all: "Alle anzeigen →",
     unseen_marker: "Neu — noch nicht angesehen",
     col_id: "ID",
@@ -549,6 +559,8 @@ const T = {
 
     recent_positions: "Les meilleurs postes",
     recent_positions_filtered: "Les meilleurs postes filtrés",
+    new_positions: "Les derniers postes notés",
+    col_scored: "Notée",
     view_all: "Tout voir →",
     unseen_marker: "Nouvelle — pas encore vue",
     col_id: "ID",
@@ -643,6 +655,8 @@ const T = {
 
     recent_positions: "As Melhores Vagas",
     recent_positions_filtered: "As Melhores Vagas Filtradas",
+    new_positions: "As Últimas Vagas Pontuadas",
+    col_scored: "Pontuada",
     view_all: "Ver todas →",
     unseen_marker: "Nova — ainda não vista",
     col_id: "ID",
