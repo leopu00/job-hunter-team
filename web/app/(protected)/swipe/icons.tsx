@@ -88,14 +88,15 @@ export function IconThumbsDown({ size }: { size?: number }) {
 }
 
 export function IconThumbsMeh({ size }: { size?: number }) {
-  // Pollice ORIZZONTALE ("così così"): il giudizio 'poco interessante'.
-  // La mezza stella non si capiva (scelta utente 20/07); questo è lo
-  // stesso pollice di 'interessante' ruotato di 90°.
+  // Pollice ORIZZONTALE che punta a SINISTRA ("così così", versante
+  // negativo della scala): il giudizio 'poco interessante'. È il pollice
+  // VERSO ruotato di 90° in senso orario — la mezza stella non si capiva
+  // e il pollice-su ruotato pendeva dal lato sbagliato (utente 20/07).
   return (
     <Svg size={size}>
       <g transform="rotate(90 12 12)">
-        <path d="M7 10v12" />
-        <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+        <path d="M17 14V2" />
+        <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
       </g>
     </Svg>
   );
