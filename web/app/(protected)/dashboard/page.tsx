@@ -7,11 +7,9 @@ import {
   getSeenPositionIds,
   getPendingMessages,
   getPendingMessagesCount,
-  getTeamActivity,
 } from "@/lib/queries";
 import type { DashboardPosition } from "@/lib/queries";
-import type { RecentActivityEvent } from "@/lib/team-activity";
-import RecentActivityFeed from "@/app/components/RecentActivityFeed";
+import RecentPositionsTable from "@/app/components/RecentPositionsTable";
 import { getExchangeRates } from "@/lib/exchange-rates";
 import { getDisplayCurrencies } from "@/lib/dashboard-currencies";
 import DashboardLinkedCharts from "@/app/components/DashboardLinkedCharts";
@@ -89,6 +87,14 @@ export default async function DashboardPage() {
         salary_max: p.salary_declared_max ?? null,
         salary_currency: "EUR",
         found_at: p.found_at ?? null,
+        // Demo: come proxy dello scored_at usa l'ultima azione (le demo
+        // non hanno il timestamp dello Scorer).
+        scored_at:
+          (p.score ?? null) != null
+            ? ((p as { last_action_at?: string }).last_action_at ??
+              p.found_at ??
+              null)
+            : null,
         last_action_at:
           (p as { last_action_at?: string }).last_action_at ?? p.found_at ?? "",
         // Demo: attore plausibile dedotto dallo stato corrente.
@@ -102,30 +108,22 @@ export default async function DashboardPage() {
     : [];
   // Messaggi in dashboard: solo banner compatto (conteggio esatto + ultimo
   // messaggio come anteprima); la lista completa vive in /messages.
-  const [
-    stats,
-    dashPositionsRaw,
-    pendingMessages,
-    rates,
-    recentActivity,
-    unreadMessagesCount,
-  ] = demoData
-    ? [
-        demoData.stats,
-        demoDashPositions,
-        demoData.pendingMessages,
-        { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
-        [] as RecentActivityEvent[],
-        demoData.pendingMessages.length,
-      ]
-    : await Promise.all([
-        getDashboardStats(),
-        getDashboardPositions(),
-        getPendingMessages(1),
-        getExchangeRates(),
-        getTeamActivity().then((a) => a.recent),
-        getPendingMessagesCount(),
-      ]);
+  const [stats, dashPositionsRaw, pendingMessages, rates, unreadMessagesCount] =
+    demoData
+      ? [
+          demoData.stats,
+          demoDashPositions,
+          demoData.pendingMessages,
+          { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
+          demoData.pendingMessages.length,
+        ]
+      : await Promise.all([
+          getDashboardStats(),
+          getDashboardPositions(),
+          getPendingMessages(1),
+          getExchangeRates(),
+          getPendingMessagesCount(),
+        ]);
 
   // Marker "nuova": overlay del set position_views dell'utente (cloud).
   // In local mode il set è vuoto e seen resta undefined → decide il
@@ -136,6 +134,19 @@ export default async function DashboardPage() {
   );
 
   const activeTotal = stats.total - stats.excluded;
+
+  // "Le ultime posizioni valutate": score OBBLIGATORIO, mai escluse (la
+  // query già le filtra, il predicato resta per il ramo demo), ordinate
+  // per scored_at più recente. Stesse colonne della tabella "migliori",
+  // ma con il timestamp dello score al posto dell'ID.
+  const newestScored = dashPositions
+    .filter(
+      (p) => p.status !== "excluded" && p.score != null && p.scored_at != null,
+    )
+    .sort(
+      (a, b) => Date.parse(b.scored_at ?? "") - Date.parse(a.scored_at ?? ""),
+    )
+    .slice(0, 8);
 
   // Check if profile exists for onboarding status
   let hasProfile = false;
@@ -209,6 +220,19 @@ export default async function DashboardPage() {
         }}
       >
         <div className="max-w-6xl mx-auto px-5 pt-8 pb-8">
+          {/* ── Header di pagina: titolo + conteggi ──────────────────── */}
+          <div className="mb-6" style={{ animation: "fade-in 0.35s ease both" }}>
+            <h1
+              className="text-xl font-bold uppercase tracking-[0.18em] leading-none mb-2"
+              style={{ color: "var(--color-white)" }}
+            >
+              {t.title}
+            </h1>
+            <div className="text-[11px] text-[var(--color-muted)]">
+              {t.total_positions(stats.total, stats.excluded, activeTotal)}
+            </div>
+          </div>
+
           {/* ── Sync now (solo cloud): refresh dati on-demand, niente polling ─ */}
           <CloudRefreshButton />
 
@@ -260,9 +284,19 @@ export default async function DashboardPage() {
                 <Link
                   key={step.key}
                   href={step.href}
-                  className="min-h-[112px] flex flex-col justify-between bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] hover:bg-[var(--color-row)] transition-colors text-left no-underline"
+                  className="relative overflow-hidden min-h-[112px] flex flex-col justify-between bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] hover:bg-[var(--color-row)] hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(0,0,0,0.35)] transition-all duration-200 text-left no-underline"
                   style={{ animation: `fade-in 0.4s ease ${i * 0.04}s both` }}
                 >
+                  {/* Hairline superiore nel colore dello stato: lega la card
+                  alla fase della pipeline senza appesantire il layout. */}
+                  <span
+                    aria-hidden
+                    className="absolute top-0 left-0 right-0 h-[2px]"
+                    style={{
+                      background: `linear-gradient(90deg, ${step.color}, transparent 75%)`,
+                      opacity: 0.55,
+                    }}
+                  />
                   <div>
                     <div
                       className="text-[9px] font-semibold tracking-[0.14em] uppercase mb-3 leading-tight min-h-[24px]"
@@ -272,8 +306,11 @@ export default async function DashboardPage() {
                       {step.label}
                     </div>
                     <div
-                      className="text-3xl font-bold leading-none tracking-tight"
-                      style={{ color: step.color }}
+                      className="text-3xl font-bold leading-none tracking-tight tabular-nums"
+                      style={{
+                        color: step.color,
+                        textShadow: `0 0 24px color-mix(in srgb, ${step.color} 40%, transparent)`,
+                      }}
                     >
                       {step.count}
                     </div>
@@ -288,10 +325,11 @@ export default async function DashboardPage() {
                         width: `${Math.min(percent, 100)}%`,
                         background: step.color,
                         opacity: 0.8,
+                        boxShadow: `0 0 8px color-mix(in srgb, ${step.color} 60%, transparent)`,
                       }}
                     />
                   </div>
-                  <div className="text-[9px] text-[var(--color-dim)]">
+                  <div className="text-[9px] tabular-nums text-[var(--color-dim)]">
                     {`${percent}%`}
                   </div>
                 </Link>
@@ -299,20 +337,32 @@ export default async function DashboardPage() {
             })}
           </div>
 
-          {/* ── Attività recente del team (sotto la Pipeline) ──────────── */}
-          {recentActivity.length > 0 && (
-            <div
-              className="mb-8"
-              style={{ animation: "fade-in 0.35s ease both 0.06s" }}
-            >
-              <RecentActivityFeed
-                recent={recentActivity}
-                max={8}
-                viewAllHref="/team/log"
-                scroll={false}
-              />
-            </div>
-          )}
+          {/* ── Le ultime posizioni valutate (al posto del feed attività):
+          stesse colonne della tabella "migliori", timestamp al posto
+          dell'ID, 8 righe con score obbligatorio ordinate per score più
+          recente. ─────────────────────────────────────────────────── */}
+          <div style={{ animation: "fade-in 0.35s ease both 0.06s" }}>
+            <RecentPositionsTable
+              rows={newestScored}
+              firstCol="scored"
+              filtered={false}
+              totalFiltered={newestScored.length}
+              labels={{
+                title: t.new_positions,
+                titleFiltered: t.new_positions,
+                viewAll: t.view_all,
+                noPositions: t.no_positions,
+                unseen: t.unseen_marker,
+                colId: t.col_id,
+                colScored: t.col_scored,
+                colTitle: t.col_title,
+                colCompany: t.col_company,
+                colCountry: t.col_country,
+                colCity: t.col_city,
+                colScore: t.col_score,
+              }}
+            />
+          </div>
 
           {/* ── Grafici collegati: Types + Score + Paesi + Città ─────────
           Cliccando una sezione di un grafico si filtrano gli altri
