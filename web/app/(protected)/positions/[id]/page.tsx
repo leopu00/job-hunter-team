@@ -872,7 +872,9 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // Indirizzo ESATTO dell'ufficio (office-geocoding): mostrato solo quando è
   // davvero un indirizzo (verificato o con civico) — il fallback città-paese
   // duplicherebbe il testo della card. Il link apre Google Maps (universal
-  // link: app sul telefono, browser altrove) sulle NOSTRE coordinate.
+  // link: app sul telefono, browser altrove) cercando l'INDIRIZZO testuale,
+  // non le coordinate: così Maps mostra la via col civico, non un punto
+  // anonimo "41°24'16.9\"N" (feedback utente 20/07).
   const exactAddress =
     position.office_address &&
     position.office_lat != null &&
@@ -881,7 +883,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
       ? position.office_address
       : null;
   const mapsUrl = exactAddress
-    ? `https://www.google.com/maps/search/?api=1&query=${position.office_lat},${position.office_lon}`
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(exactAddress)}`
     : null;
   // basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
   // bridge e il file-serving locale risolvono per basename.
