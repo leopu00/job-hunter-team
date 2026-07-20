@@ -91,7 +91,11 @@ func _process(delta: float) -> void:
 	_blink.modulate.a = 0.35 + 0.65 * maxf(0.0, sin(_time * 2.6))
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_accept") and not _leaving:
+	# INVIO oppure click/tap: su desktop il mouse è il gesto naturale e
+	# "PREMI INVIO" da solo lasciava utenti fermi al titolo.
+	var clicked := event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT
+	if (event.is_action_pressed("ui_accept") or clicked) and not _leaving:
 		_leaving = true
 		Sfx.play_confirm()
 		_fade_out()
