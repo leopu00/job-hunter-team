@@ -48,14 +48,16 @@ const ITEMS := [
 	{"id": "lamp", "kind": "lamp", "rect": Rect2(2290, 1060, 44, 44)},
 	{"id": "plant_a", "kind": "plant", "rect": Rect2(2440, 1035, 56, 56)},
 
-	# Bacheca e libreria seguono la lounge; l'angolo caffè resta condiviso a nord.
+	# Bacheca e libreria seguono la lounge.
 	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(2520, 995, 150, 34)},
 	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2720, 970, 280, 70)},
-	{"id": "coffee_bar", "kind": "coffee", "rect": Rect2(1400, 190, 200, 80)},
-	{"id": "water_cooler", "kind": "water_cooler", "rect": Rect2(1602, 196, 54, 54)},
-	# stampante condivisa sulla parete nord, tra coffee e lab: la meta dei
-	# viaggi "vado a stampare" di tutti i reparti (spot in DepartmentDefs).
-	{"id": "printer", "kind": "printer", "rect": Rect2(1672, 190, 110, 78)},
+	# Un solo elemento operativo sulla parete nord: la stampante condivisa.
+	# Il nuovo sprite verticale sostituisce il vecchio blockout e tutto il
+	# gruppo decorativo (bar, dispenser, scatole, cestino e orologio).
+	# Scala reale: ~110 cm, circa due terzi dell'altezza di un agente. Il
+	# gruppo è sulla parete nord, appena fuori dal varco orientale Scout.
+	{"id": "printer", "kind": "printer", "rect": Rect2(1218, 185, 95, 70)},
+	{"id": "plant_printer", "kind": "plant_palm", "rect": Rect2(1330, 190, 110, 100)},
 
 	# ── Centro: l'ologramma della ricerca ──
 	{"id": "hologram", "kind": "hologram", "rect": Rect2(1200, 700, 200, 180)},
@@ -74,7 +76,9 @@ const ITEMS := [
 	{"id": "plant_c", "kind": "plant", "rect": Rect2(3030, 1340, 56, 56)},
 
 	# ── Verde sparso (reparti e corridoi, mai sulla nav principale) ──
-	{"id": "plant_palm_a", "kind": "plant_palm", "rect": Rect2(958, 1420, 56, 56)},
+	# Fuori dalla proiezione del tavolo Scrittori → Critici e sopra la
+	# vetrata: la chioma non deve più spuntare attraverso il piano.
+	{"id": "plant_palm_a", "kind": "plant_palm", "rect": Rect2(760, 1370, 56, 56)},
 	{"id": "plant_monstera_a", "kind": "plant_monstera", "rect": Rect2(2200, 820, 56, 56)},
 	{"id": "plant_shelf_a", "kind": "plant_shelf", "rect": Rect2(2340, 960, 90, 50)},
 	{"id": "plant_monstera_b", "kind": "plant_monstera", "rect": Rect2(2378, 764, 56, 56)},
@@ -110,22 +114,20 @@ const ITEMS := [
 	# scorer:5 e l'apertura occidentale della parete condivisa.
 	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2160, 1510, 150, 34)},
 	# Scatoloni e schedari: l'ufficio vive
-	{"id": "boxes_printer", "kind": "nc_boxes", "rect": Rect2(1800, 200, 80, 66)},
 	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(3060, 1920, 80, 66)},
 	{"id": "boxes_scrittori", "kind": "nc_boxes", "rect": Rect2(1100, 1900, 80, 66)},
 	{"id": "filing_lab", "kind": "nc_filing_cabinet", "rect": Rect2(3080, 250, 70, 110)},
 	{"id": "filing_coord", "kind": "nc_filing_cabinet", "rect": Rect2(2950, 1175, 70, 110)},
-	# Dettagli: appendiabiti all'entrata sud, orologio a muro, cestini,
-	# cassettiere a fianco delle scrivanie
+	# Dettagli: appendiabiti all'entrata sud, cestini e cassettiere a fianco
+	# delle scrivanie. La fascia nord della stampante resta intenzionalmente
+	# pulita e leggibile.
 	{"id": "coat_rack", "kind": "nc_coat_rack", "rect": Rect2(1500, 1780, 50, 50)},
-	{"id": "wall_clock", "kind": "nc_wall_clock", "rect": Rect2(1260, 150, 60, 60)},
-	{"id": "bin_printer", "kind": "nc_waste_bin", "rect": Rect2(1640, 250, 40, 40)},
 	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(400, 778, 40, 40)},
 	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(330, 758, 60, 72)},
-	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(1010, 1370, 60, 72)},
+	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(940, 920, 60, 72)},
 	# Fuori dall'anello radiale: a (774,1545) intersecava la postazione
 	# Scrittori delle ore 12 e ne falsava collisione e lettura prospettica.
-	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(1080, 1550, 60, 72)},
+	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(250, 1840, 60, 72)},
 	# in coda da dev-art (post-reset Codex): footprint già pronti
 	{"id": "dartboard", "kind": "nc_dartboard", "rect": Rect2(254, 1010, 36, 36)},
 	{"id": "wall_art", "kind": "nc_wall_art", "rect": Rect2(2040, 150, 90, 60)},

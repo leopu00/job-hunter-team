@@ -6,6 +6,7 @@ const NavGridScript = preload("res://scripts/office/nav_grid.gd")
 const DepartmentDefsScript = preload("res://scripts/office/department_defs.gd")
 const FurnitureDefsScript = preload("res://scripts/office/furniture_defs.gd")
 const CharacterDefsScript = preload("res://scripts/characters/character_defs.gd")
+const HandoffStationScript = preload("res://scripts/office/handoff_station.gd")
 
 var _failures: Array[String] = []
 
@@ -17,6 +18,8 @@ func _init() -> void:
 	_test_core_workstations()
 	_test_core_patrol_routes()
 	_test_real_desk_routes()
+	_test_handoff_routes()
+	_test_writer_handoff_visual_clearance()
 	if _failures.is_empty():
 		print("[nav-test] PASS: collision clamp + all desk routes")
 		quit(0)
@@ -69,6 +72,68 @@ func _test_real_desk_routes() -> void:
 		_assert(nav.is_point_walkable(approach), "%s approach is blocked" % label)
 		_assert(approach.distance_to(spot) >= 48.0,
 				"%s approach overlaps target (%0.1fpx)" % [label, approach.distance_to(spot)])
+
+## Ogni tavolo di passaggio deve essere raggiungibile sia dal reparto che
+## consegna sia da quello che ritira. È il contratto che consente di muovere
+## liberamente i tavoli senza creare un layout bello ma non percorribile.
+func _test_handoff_routes() -> void:
+	var nav = NavGridScript.new()
+	var obstacles: Array = FurnitureDefsScript.obstacles()
+	obstacles.append_array(DepartmentDefsScript.obstacles())
+	obstacles.append_array(DepartmentDefsScript.GLASS_WALLS)
+	nav.build(FurnitureDefsScript.FLOOR, obstacles)
+	var order: Array = DepartmentDefsScript.DEPT_ORDER
+	for dept_id in DepartmentDefsScript.HANDOFF_DEPTS:
+		var producer_i := order.find(dept_id)
+		var consumer_id: String = str(order[producer_i + 1])
+		var producer_desk: Dictionary = DepartmentDefsScript.DEPARTMENTS[dept_id]["desks"][0]
+		var consumer_desk: Dictionary = DepartmentDefsScript.DEPARTMENTS[consumer_id]["desks"][0]
+		var drop: Vector2 = DepartmentDefsScript.handoff_spot(dept_id, false)
+		var pickup: Vector2 = DepartmentDefsScript.handoff_spot(dept_id, true)
+		_assert(nav.is_point_walkable(drop), "%s drop access is blocked: %s" % [dept_id, drop])
+		_assert(nav.is_point_walkable(pickup), "%s pickup access is blocked: %s" % [dept_id, pickup])
+		var producer_start: Vector2 = DepartmentDefsScript.desk_spot(producer_desk)
+		var consumer_start: Vector2 = DepartmentDefsScript.desk_spot(consumer_desk)
+		_assert(not nav.path(producer_start, drop).is_empty(),
+				"%s producer cannot reach drop access" % dept_id)
+		_assert(not nav.path(consumer_start, pickup).is_empty(),
+				"%s consumer cannot reach pickup access" % dept_id)
+
+## Le collisioni possono essere separate mentre i canvas pittorici si
+## sovrappongono. Protegge il tavolo Scrittori dai tre props alti che lo
+## attraversavano visivamente pur avendo footprint distinti.
+func _test_writer_handoff_visual_clearance() -> void:
+	var pos: Vector2 = DepartmentDefsScript.DEPARTMENTS["scrittori"]["inbox"]
+	var table_tex: Texture2D = load(HandoffStationScript.TABLE_TEXTURES["scrittori"])
+	var table_w: float = HandoffStationScript.TABLE_WIDTH
+	var table_h: float = table_w * table_tex.get_height() / table_tex.get_width()
+	var table_rect := Rect2(pos - Vector2(table_w / 2.0, table_h),
+			Vector2(table_w, table_h))
+	for item_id in ["plant_palm_a", "drawer_scorer", "drawer_scrittori"]:
+		var item: Dictionary = {}
+		for candidate in FurnitureDefsScript.ITEMS:
+			if str(candidate["id"]) == item_id:
+				item = candidate
+				break
+		_assert(not item.is_empty(), "%s is missing from furniture" % item_id)
+		if item.is_empty():
+			continue
+		var kind := str(item["kind"])
+		var texture_path := "res://assets/gen-art/furniture/%s.png" % kind
+		var texture: Texture2D = load(texture_path)
+		_assert(texture != null, "%s visual is missing" % item_id)
+		if texture == null:
+			continue
+		var footprint: Rect2 = item["rect"]
+		var visual_w := footprint.size.x * 1.06
+		var visual_h := visual_w * texture.get_height() / texture.get_width()
+		var visual_rect := Rect2(
+				Vector2(footprint.get_center().x - visual_w / 2.0,
+						footprint.end.y - visual_h + 10.0),
+				Vector2(visual_w, visual_h))
+		_assert(not table_rect.intersects(visual_rect),
+				"writers handoff overlaps %s visual (%s vs %s)" % [
+						item_id, table_rect, visual_rect])
 
 func _test_writer_radial_layout() -> void:
 	var desks: Array = DepartmentDefsScript.DEPARTMENTS["scrittori"]["desks"]

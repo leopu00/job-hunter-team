@@ -37,11 +37,11 @@ const DEPARTMENTS := {
 		"tagline": "Trovano le posizioni là fuori",
 		"color": Color("#00e87a"),
 		"zone": Rect2(320, 348, 880, 520),
-		# Tavolo Scout → Analisti: fronte orizzontale, allineato al bordo sud
-		# dell'anello e lontano dall'ologramma/corridoio centrale.
-		"inbox": Vector2(960, 900),
-		"inbox_drop_access": Vector2(800, 900),
-		"inbox_pickup_access": Vector2(1120, 900),
+		# Tavolo Scout → Analisti: più vicino all'ologramma e appena più in
+		# alto, ma senza toccarne l'ingombro. Il ritiro avviene dal basso.
+		"inbox": Vector2(1080, 840),
+		"inbox_drop_access": Vector2(900, 840),
+		"inbox_pickup_access": Vector2(1080, 960),
 		# Anello radiale nell'angolo nord-ovest; indice 0..5 = ore 10,8,12,6,2,4.
 		"desks": [
 			{"rect": Rect2(384, 400, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
@@ -57,11 +57,11 @@ const DEPARTMENTS := {
 		"tagline": "Arricchiscono e verificano i dati",
 		"color": Color("#4d9fff"),
 		"zone": Rect2(2312, 150, 848, 580),  # il lab di vetro, angolo NE
-		# Sotto il corridoio della porta: a y=850 il tavolo riempiva esattamente
-		# il varco fra LAB_WALL_H1/H2 e isolava tutte le sei postazioni.
-		"inbox": Vector2(2690, 970),
-		"inbox_drop_access": Vector2(2530, 970),
-		"inbox_pickup_access": Vector2(2530, 970),
+		# Più vicino alle scrivanie, ma spostato a destra del varco centrale:
+		# salire in asse col portale isolerebbe nuovamente il laboratorio.
+		"inbox": Vector2(2880, 850),
+		"inbox_drop_access": Vector2(2720, 850),
+		"inbox_pickup_access": Vector2(3040, 850),
 		# Anello radiale adattato al tappeto più stretto del laboratorio.
 		"desks": [
 			{"rect": Rect2(2405, 293, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
@@ -77,11 +77,11 @@ const DEPARTMENTS := {
 		"tagline": "Pesano il match profilo↔annuncio",
 		"color": Color("#f5c518"),
 		"zone": Rect2(1000, 960, 880, 520),
-		# Tavolo Scorer → Scrittori: sotto lo spicchio a ore 6, parallelo alla
-		# postazione frontale e fuori dalla strada verso la lounge.
-		"inbox": Vector2(1760, 1520),
-		"inbox_drop_access": Vector2(1600, 1520),
-		"inbox_pickup_access": Vector2(1920, 1520),
+		# Tavolo Scorer → Scrittori al centro esatto del tappeto. Gli accessi
+		# verticali lasciano liberi i desk laterali dell'anello.
+		"inbox": Vector2(1440, 1220),
+		"inbox_drop_access": Vector2(1440, 1120),
+		"inbox_pickup_access": Vector2(1440, 1270),
 		# Gli Scorer occupano l'anello centrale lasciato libero dagli Scout.
 		"desks": [
 			# scorer_a_side nasce con la sedia a sinistra, al contrario degli
@@ -99,12 +99,11 @@ const DEPARTMENTS := {
 		"tagline": "Preparano CV e lettere su misura",
 		"color": Color("#a855f7"),
 		"zone": Rect2(320, 1520, 860, 440),
-		# Tavolo Scrittori → Critici sul bordo nord-est del reparto: spostato
-		# anche verso est, fuori dall'asse ingresso/uscita x=1300 e staccato
-		# dalla vetrata verticale. Scrittori a sinistra, Critici a destra.
-		"inbox": Vector2(1430, 1580),
-		"inbox_drop_access": Vector2(1270, 1580),
-		"inbox_pickup_access": Vector2(1590, 1580),
+		# Tavolo Scrittori → Critici riportato verso il reparto Scrittori,
+		# lasciando comunque un varco netto dalla vetrata verticale.
+		"inbox": Vector2(1080, 1535),
+		"inbox_drop_access": Vector2(900, 1535),
+		"inbox_pickup_access": Vector2(1250, 1535),
 		# Sei spicchi radiali sul tappeto, come un quadrante d'orologio.
 		# Ogni agente guarda verso l'ESTERNO: ore 12=schiena, ore 6=viso,
 		# i quattro intermedi usano le viste laterali disponibili. Gli indici
@@ -171,9 +170,7 @@ const GLASS_WALLS := [
 ## POI condivisi dei behavior: mete dei viaggi "si vede che lavorano".
 ## "spot" = dove l'agente si ferma (punto camminabile davanti al prop).
 const POIS := {
-	"printer": {"rect": Rect2(1672, 190, 110, 78), "spot": Vector2(1727, 300)},
-	"coffee": {"spot": Vector2(1500, 310)},
-	"water_cooler": {"spot": Vector2(1635, 300)},
+	"printer": {"rect": Rect2(1218, 185, 95, 70), "spot": Vector2(1265, 300)},
 	"hologram": {"spot": Vector2(1300, 930)},
 }
 
