@@ -60,15 +60,6 @@ const T: Record<string, Record<string, string>> = {
     fr: "Retour",
     pt: "Voltar",
   },
-  open_full: {
-    it: "Panoramica completa →",
-    en: "Full overview →",
-    hu: "Teljes áttekintés →",
-    es: "Vista completa →",
-    de: "Gesamtübersicht →",
-    fr: "Vue complète →",
-    pt: "Visão completa →",
-  },
   empty: {
     it: "Nessun messaggio dal team, per ora.",
     en: "No messages from the team yet.",
@@ -445,13 +436,6 @@ export default function MessagesDrawer() {
                 <span className="section-label">{tr("title")}</span>
               )}
               <span className="ml-auto flex items-center gap-3 shrink-0">
-                <Link
-                  href="/messages"
-                  onClick={() => setOpen(false)}
-                  className="text-[9px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] no-underline transition-colors"
-                >
-                  {tr("open_full")}
-                </Link>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
@@ -547,7 +531,7 @@ export default function MessagesDrawer() {
             {/* ── Vista chat ──────────────────────────────────────── */}
             {active && (
               <>
-                <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4 flex flex-col gap-3">
                   {active.messages.map((m) => (
                     <div key={m.id} className="flex flex-col gap-2">
                       {/* Bolla dell'agente */}
