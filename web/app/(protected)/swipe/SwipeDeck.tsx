@@ -173,6 +173,8 @@ const T: Record<
     fReset: string;
     fCount: string; // template con {n}
     fNoResults: string;
+    fSort: string;
+    sortLabels: Record<string, string>;
   }
 > = {
   it: {
@@ -218,6 +220,15 @@ const T: Record<
     fReset: "Azzera filtri",
     fCount: "{n} posizioni",
     fNoResults: "Nessuna posizione corrisponde ai filtri.",
+    fSort: "Ordinamento",
+    sortLabels: {
+      oldest: "Più vecchie prima",
+      newest: "Più recenti prima",
+      score_desc: "Score: dal più alto",
+      score_asc: "Score: dal più basso",
+      salary_desc: "Stipendio: dal più alto",
+      shuffle: "Casuale (shuffle)",
+    },
   },
   en: {
     title: "Swipe",
@@ -261,6 +272,15 @@ const T: Record<
     fReset: "Reset filters",
     fCount: "{n} positions",
     fNoResults: "No positions match the filters.",
+    fSort: "Sorting",
+    sortLabels: {
+      oldest: "Oldest first",
+      newest: "Newest first",
+      score_desc: "Score: highest first",
+      score_asc: "Score: lowest first",
+      salary_desc: "Salary: highest first",
+      shuffle: "Random (shuffle)",
+    },
   },
   hu: {
     title: "Swipe",
@@ -305,6 +325,15 @@ const T: Record<
     fReset: "Szűrők törlése",
     fCount: "{n} pozíció",
     fNoResults: "Nincs a szűrőknek megfelelő pozíció.",
+    fSort: "Rendezés",
+    sortLabels: {
+      oldest: "Legrégebbi elöl",
+      newest: "Legújabb elöl",
+      score_desc: "Pontszám: legmagasabb elöl",
+      score_asc: "Pontszám: legalacsonyabb elöl",
+      salary_desc: "Fizetés: legmagasabb elöl",
+      shuffle: "Véletlenszerű (shuffle)",
+    },
   },
   es: {
     title: "Swipe",
@@ -349,6 +378,15 @@ const T: Record<
     fReset: "Restablecer filtros",
     fCount: "{n} posiciones",
     fNoResults: "Ninguna posición coincide con los filtros.",
+    fSort: "Orden",
+    sortLabels: {
+      oldest: "Más antiguas primero",
+      newest: "Más recientes primero",
+      score_desc: "Puntuación: de mayor a menor",
+      score_asc: "Puntuación: de menor a mayor",
+      salary_desc: "Salario: de mayor a menor",
+      shuffle: "Aleatorio (shuffle)",
+    },
   },
   de: {
     title: "Swipe",
@@ -392,6 +430,15 @@ const T: Record<
     fReset: "Filter zurücksetzen",
     fCount: "{n} Stellen",
     fNoResults: "Keine Stellen entsprechen den Filtern.",
+    fSort: "Sortierung",
+    sortLabels: {
+      oldest: "Älteste zuerst",
+      newest: "Neueste zuerst",
+      score_desc: "Score: höchste zuerst",
+      score_asc: "Score: niedrigste zuerst",
+      salary_desc: "Gehalt: höchstes zuerst",
+      shuffle: "Zufällig (Shuffle)",
+    },
   },
   fr: {
     title: "Swipe",
@@ -440,6 +487,15 @@ const T: Record<
     fReset: "Réinitialiser les filtres",
     fCount: "{n} postes",
     fNoResults: "Aucun poste ne correspond aux filtres.",
+    fSort: "Tri",
+    sortLabels: {
+      oldest: "Plus anciens d'abord",
+      newest: "Plus récents d'abord",
+      score_desc: "Score : du plus haut",
+      score_asc: "Score : du plus bas",
+      salary_desc: "Salaire : du plus haut",
+      shuffle: "Aléatoire (shuffle)",
+    },
   },
   pt: {
     title: "Swipe",
@@ -484,6 +540,15 @@ const T: Record<
     fReset: "Repor filtros",
     fCount: "{n} vagas",
     fNoResults: "Nenhuma vaga corresponde aos filtros.",
+    fSort: "Ordenação",
+    sortLabels: {
+      oldest: "Mais antigas primeiro",
+      newest: "Mais recentes primeiro",
+      score_desc: "Pontuação: da mais alta",
+      score_asc: "Pontuação: da mais baixa",
+      salary_desc: "Salário: do mais alto",
+      shuffle: "Aleatório (shuffle)",
+    },
   },
 };
 
@@ -824,6 +889,16 @@ export default function SwipeDeck({
     () => countBy((c) => c.source, "sources"),
     [countBy],
   );
+  // Ordinamento del mazzo. shuffleNonce: rimescolare = ricliccare la chip;
+  // il seed tiene il mazzo stabile tra i render (niente Math.random in render).
+  const [sortMode, setSortMode] = useState<
+    "oldest" | "newest" | "score_desc" | "score_asc" | "salary_desc" | "shuffle"
+  >("oldest");
+  const [shuffleNonce, setShuffleNonce] = useState(1);
+  // Sintesi JD on-demand (il deck arriva senza testi, vedi getSwipeDecks):
+  // cache per id + set richieste in volo. null = fetch fatta, nessun testo.
+  const [summaries, setSummaries] = useState<Record<string, string | null>>({});
+  const summaryInflight = useRef<Set<string>>(new Set());
   // Sezioni collassabili: slider aperti di default, chip chiuse.
   const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({
     score: true,
@@ -842,14 +917,67 @@ export default function SwipeDeck({
     }
     return bins;
   }, [histoBase, matches]);
-  // Cambio filtri = mazzo diverso → si riparte dalla prima card.
+  // Cambio filtri o ordinamento = mazzo diverso → dalla prima card.
   useEffect(() => {
     setIdxP(0);
     setIdxR(0);
-  }, [filters]);
+  }, [filters, sortMode, shuffleNonce]);
 
-  const cards = mode === "pending" ? fPending : fReviewed;
+  const cards = useMemo(() => {
+    const base = mode === "pending" ? fPending : fReviewed;
+    if (sortMode === "oldest") return base; // ordine server: found_at asc
+    const arr = [...base];
+    const mid = (c: SwipeCardData) => {
+      const lo = c.salary_min ?? c.salary_max;
+      const hi = c.salary_max ?? c.salary_min;
+      return lo == null || hi == null ? null : (lo + hi) / 2;
+    };
+    switch (sortMode) {
+      case "newest":
+        return arr.reverse();
+      case "score_desc":
+        return arr.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+      case "score_asc":
+        return arr.sort((a, b) => (a.score ?? 101) - (b.score ?? 101));
+      case "salary_desc":
+        return arr.sort((a, b) => (mid(b) ?? -1) - (mid(a) ?? -1));
+      case "shuffle": {
+        // Fisher-Yates su PRNG seedato (mulberry32) dal nonce.
+        let seed = shuffleNonce * 0x9e3779b9;
+        const rnd = () => {
+          seed |= 0;
+          seed = (seed + 0x6d2b79f5) | 0;
+          let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(rnd() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+    }
+  }, [mode, fPending, fReviewed, sortMode, shuffleNonce]);
   const idx = mode === "pending" ? idxP : idxR;
+
+  // Prefetch della sintesi per la card corrente e le prossime tre.
+  useEffect(() => {
+    for (let i = idx; i < Math.min(idx + 4, cards.length); i++) {
+      const c = cards[i];
+      if (!c || c.jd_summary != null) continue;
+      if (c.id in summaries || summaryInflight.current.has(c.id)) continue;
+      summaryInflight.current.add(c.id);
+      fetch(`/api/positions/${c.legacy_id}/summary`)
+        .then((r) => (r.ok ? r.json() : { summary: null }))
+        .catch(() => ({ summary: null }))
+        .then((b: { summary?: string | null }) => {
+          summaryInflight.current.delete(c.id);
+          setSummaries((m) => ({ ...m, [c.id]: b.summary ?? null }));
+        });
+    }
+  }, [idx, cards, summaries]);
+
   // Timbri: i giudizi storici (dal DB) + quelli dati in sessione.
   const [given, setGiven] = useState<Record<string, Verdict>>(initialVerdicts);
   const [chipAreaW, setChipAreaW] = useState(320);
@@ -1474,19 +1602,42 @@ export default function SwipeDeck({
                       </div>
 
                       {/* Sintesi JD: scrollabile se non c'entra; pre-line
-                          per rispettare gli accapi del testo originale. */}
-                      {card.jd_summary && (
-                        <div
-                          className="text-[12px] leading-relaxed flex-1 min-h-0 overflow-y-auto pr-1"
-                          style={{
-                            color: "var(--color-base)",
-                            whiteSpace: "pre-line",
-                            overscrollBehavior: "contain",
-                          }}
-                        >
-                          {stripMd(card.jd_summary)}
-                        </div>
-                      )}
+                          per rispettare gli accapi. Arriva on-demand (cache
+                          summaries); undefined = fetch in corso → skeleton. */}
+                      {(() => {
+                        const text = card.jd_summary ?? summaries[card.id];
+                        if (text) {
+                          return (
+                            <div
+                              className="text-[12px] leading-relaxed flex-1 min-h-0 overflow-y-auto pr-1"
+                              style={{
+                                color: "var(--color-base)",
+                                whiteSpace: "pre-line",
+                                overscrollBehavior: "contain",
+                              }}
+                            >
+                              {stripMd(text)}
+                            </div>
+                          );
+                        }
+                        if (text === undefined) {
+                          return (
+                            <div className="flex-1 min-h-0 space-y-2 pt-1">
+                              {[92, 100, 78, 96, 60].map((w, i) => (
+                                <div
+                                  key={i}
+                                  className="h-3 rounded animate-pulse"
+                                  style={{
+                                    width: `${w}%`,
+                                    background: "var(--color-border)",
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                 );
@@ -1703,6 +1854,55 @@ export default function SwipeDeck({
                   <IconX size={18} />
                 </button>
               </div>
+
+              {/* Ordinamento del mazzo (singola scelta) */}
+              <FilterSection
+                label={t.fSort}
+                meta={t.sortLabels[sortMode]}
+                metaActive={sortMode !== "oldest"}
+                open={openSecs.sort ?? false}
+                onToggle={() => toggleSec("sort")}
+              >
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      "oldest",
+                      "newest",
+                      "score_desc",
+                      "score_asc",
+                      "salary_desc",
+                      "shuffle",
+                    ] as const
+                  ).map((k) => {
+                    const on = sortMode === k;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => {
+                          setSortMode(k);
+                          // Ri-cliccare shuffle rimescola di nuovo.
+                          if (k === "shuffle") setShuffleNonce((n) => n + 1);
+                        }}
+                        className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                        style={{
+                          borderColor: on
+                            ? "var(--color-purple)"
+                            : "var(--color-border)",
+                          color: on
+                            ? "var(--color-purple)"
+                            : "var(--color-muted)",
+                          background: on
+                            ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
+                            : "transparent",
+                        }}
+                      >
+                        {t.sortLabels[k]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FilterSection>
 
               {/* Range score */}
               <FilterSection
