@@ -9,6 +9,9 @@ var _seconds := 0.0
 var _detail := ""
 var _font: Font
 var _shown_second := -1
+var _message := ""
+var _message_seconds := 0.0
+var _suppressed := false
 
 func _ready() -> void:
 	z_index = 52
@@ -20,10 +23,26 @@ func set_state(status: String, seconds: float, detail := "") -> void:
 	_seconds = maxf(0.0, seconds)
 	_shown_second = int(ceil(_seconds))
 	_detail = detail
-	visible = true
+	visible = not _suppressed
+	queue_redraw()
+
+func set_suppressed(on: bool) -> void:
+	_suppressed = on
+	visible = not on
+
+## Riusa la stessa targa dello stato per un evento breve ricevuto da un altro
+## agente: nessun secondo rettangolo sovrapposto a volto o vignetta.
+func show_message(text: String, seconds := 6.0) -> void:
+	_message = text.strip_edges().to_upper()
+	_message_seconds = maxf(0.0, seconds)
 	queue_redraw()
 
 func _process(delta: float) -> void:
+	if _message_seconds > 0.0:
+		_message_seconds = maxf(0.0, _message_seconds - delta)
+		if _message_seconds <= 0.0:
+			_message = ""
+			queue_redraw()
 	if _status != "throttled" or _seconds <= 0.0:
 		return
 	_seconds = maxf(0.0, _seconds - delta)
@@ -33,6 +52,8 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 func _label() -> String:
+	if _message_seconds > 0.0 and not _message.is_empty():
+		return _message
 	match _status:
 		"working":
 			return "AL LAVORO"
@@ -47,12 +68,20 @@ func _label() -> String:
 			return "IN ATTESA"
 
 func _color() -> Color:
+	if _message_seconds > 0.0 and not _message.is_empty():
+		return Palette.MINT
 	match _status:
 		"working": return Color("#58e68b")
 		"throttled": return Color("#f5c518")
 		"paused": return Color("#ff7a65")
 		"resting": return Color("#a855f7")
 		_: return Color("#7a7a96")
+
+func debug_label() -> String:
+	return _label()
+
+func debug_suppressed() -> bool:
+	return _suppressed
 
 func _draw() -> void:
 	if not visible or _font == null:

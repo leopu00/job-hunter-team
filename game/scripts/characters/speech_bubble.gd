@@ -54,7 +54,9 @@ func clear_now() -> void:
 	_target_alpha = 0.0
 
 func is_speaking() -> bool:
-	return _hold > 0.0 or not _queue.is_empty()
+	# Include il breve fade-out: lo stato ordinario non deve ricomparire sotto
+	# una vignetta ancora visibile, nemmeno per uno o due frame.
+	return _hold > 0.0 or not _queue.is_empty() or _alpha > 0.02
 
 ## Stato osservabile per self-test e diagnostica. Non altera il timer e non
 ## espone i nodi di rendering ai chiamanti.

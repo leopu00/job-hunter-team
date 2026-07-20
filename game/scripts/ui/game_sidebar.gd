@@ -7,11 +7,14 @@ extends CanvasLayer
 
 const WIDTH := 232.0
 
+signal chat_requested
+
 var _drawer: Control
 var _panel: SectionPanel
 var _buttons := {}  # id sezione → Button
 var _open := false
 var _setup_cta: Button
+var _tab: Button
 
 func _init() -> void:
 	layer = 20
@@ -39,11 +42,11 @@ func _ready() -> void:
 	_on_setup_status(SetupService.status)
 
 	# linguetta sempre visibile (apre/chiude il cassetto): cornice terminale
-	var tab := Button.new()
-	tab.text = "≡"
-	tab.add_theme_font_size_override("font_size", 26)
-	tab.add_theme_color_override("font_color", Palette.GREEN)
-	tab.add_theme_color_override("font_hover_color", Palette.MINT)
+	_tab = Button.new()
+	_tab.text = "≡"
+	_tab.add_theme_font_size_override("font_size", 26)
+	_tab.add_theme_color_override("font_color", Palette.GREEN)
+	_tab.add_theme_color_override("font_hover_color", Palette.MINT)
 	var tab_style := StyleBoxFlat.new()
 	tab_style.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.92)
 	tab_style.border_color = Palette.BORDER_GLOW
@@ -54,13 +57,13 @@ func _ready() -> void:
 	tab_style.content_margin_bottom = 6
 	var tab_hover := tab_style.duplicate()
 	tab_hover.border_color = Palette.GREEN
-	tab.add_theme_stylebox_override("normal", tab_style)
-	tab.add_theme_stylebox_override("hover", tab_hover)
-	tab.add_theme_stylebox_override("pressed", tab_hover.duplicate())
-	tab.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	tab.position = Vector2(10, 150)
-	tab.pressed.connect(toggle)
-	root.add_child(tab)
+	_tab.add_theme_stylebox_override("normal", tab_style)
+	_tab.add_theme_stylebox_override("hover", tab_hover)
+	_tab.add_theme_stylebox_override("pressed", tab_hover.duplicate())
+	_tab.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_tab.position = Vector2(10, 150)
+	_tab.pressed.connect(toggle)
+	root.add_child(_tab)
 
 	_drawer = PanelContainer.new()
 	var style := StyleBoxFlat.new()
@@ -110,6 +113,9 @@ func _ready() -> void:
 		box.add_child(gt_pad)
 		for item in group["items"]:
 			box.add_child(_nav_button(item))
+	BackendBus.chat_unread_changed.connect(func(_unread: Dictionary) -> void:
+		_refresh_chat_badges())
+	_refresh_chat_badges()
 
 func toggle() -> void:
 	_open = not _open
@@ -148,6 +154,8 @@ func _nav_button(item: Dictionary) -> Control:
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.pressed.connect(func() -> void: _select(item["id"]))
+	btn.set_meta("icon", item["icon"])
+	btn.set_meta("label", SidebarDefs.label_for(item["id"]))
 	_buttons[item["id"]] = btn
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_left", 8)
@@ -157,6 +165,10 @@ func _nav_button(item: Dictionary) -> Control:
 
 ## Apre (o richiude, se già attiva) la sezione richiesta.
 func _select(section: String) -> void:
+	if section == "chat":
+		_close_panel()
+		chat_requested.emit()
+		return
 	if _panel and _panel.section == section:
 		_close_panel()
 		return
@@ -178,12 +190,25 @@ func _set_active(section: String) -> void:
 	for id in _buttons:
 		var b: Button = _buttons[id]
 		var active: bool = (id == section)
-		b.add_theme_color_override("font_color",
-				Palette.GREEN if active else Palette.BASE)
+		var unread: bool = id == "chat" and BackendBus.total_chat_unread() > 0
+		b.add_theme_color_override("font_color", Palette.GREEN if active \
+				else (Palette.YELLOW if unread else Palette.BASE))
 		# la voce attiva tiene sfondo e barra accento anche fuori hover
 		b.add_theme_stylebox_override("normal",
 				_row_style(Palette.DEEP, 1.0, true) if active
 				else _row_style(Palette.ROW, 0.0, false))
+
+func _refresh_chat_badges() -> void:
+	var total := BackendBus.total_chat_unread()
+	if _tab:
+		_tab.text = "≡  ● %d" % total if total > 0 else "≡"
+		_tab.add_theme_color_override("font_color",
+				Palette.YELLOW if total > 0 else Palette.GREEN)
+	if _buttons.has("chat"):
+		var btn: Button = _buttons["chat"]
+		btn.text = "%s  %s%s" % [btn.get_meta("icon"), btn.get_meta("label"),
+				"  ● %d" % total if total > 0 else ""]
+	_set_active(_panel.section if _panel else "")
 
 
 func _open_activation() -> void:
