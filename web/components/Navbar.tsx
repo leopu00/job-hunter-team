@@ -8,6 +8,7 @@ import NavbarMobile from './NavbarMobile'
 import UserMenu from './UserMenu'
 
 const LanguageSwitcher = dynamic(() => import('@/app/components/LanguageSwitcher'))
+const MessagesDrawer = dynamic(() => import('@/app/components/MessagesDrawer'))
 
 const T: Record<Locale, { navAria: string }> = {
   it: { navAria: 'Navigazione app' },
@@ -61,11 +62,13 @@ export default function Navbar({ user, locale }: NavbarProps) {
         {user ? (
           <div className="flex items-center gap-3 flex-shrink-0 ml-auto md:ml-0">
             <LanguageSwitcher direction="down" />
+            <MessagesDrawer />
             <UserMenu avatarUrl={avatarUrl} fullName={fullName} email={email} />
           </div>
         ) : (
           <div className="flex items-center gap-3 flex-shrink-0 ml-auto md:ml-0">
             <LanguageSwitcher direction="down" />
+            <MessagesDrawer />
             <LoginButton />
           </div>
         )}
