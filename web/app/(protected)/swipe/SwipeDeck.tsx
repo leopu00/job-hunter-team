@@ -55,6 +55,7 @@ export type SwipeCardData = {
   loc_country: string | null;
   remote_type: "full_remote" | "hybrid" | "onsite" | null;
   role_family: string | null;
+  source: string | null;
   found_at: string;
   score: number | null;
   salary_min: number | null;
@@ -165,6 +166,9 @@ const T: Record<
     fSalary: string;
     fCategory: string;
     fMode: string;
+    fCountry: string;
+    fCity: string;
+    fSource: string;
     fReset: string;
     fCount: string; // template con {n}
     fNoResults: string;
@@ -207,6 +211,9 @@ const T: Record<
     fSalary: "Stipendio (k€ / anno)",
     fCategory: "Categoria",
     fMode: "Modalità",
+    fCountry: "Paese",
+    fCity: "Città",
+    fSource: "Fonte",
     fReset: "Azzera filtri",
     fCount: "{n} posizioni",
     fNoResults: "Nessuna posizione corrisponde ai filtri.",
@@ -247,6 +254,9 @@ const T: Record<
     fSalary: "Salary (k€ / yr)",
     fCategory: "Category",
     fMode: "Work mode",
+    fCountry: "Country",
+    fCity: "City",
+    fSource: "Source",
     fReset: "Reset filters",
     fCount: "{n} positions",
     fNoResults: "No positions match the filters.",
@@ -288,6 +298,9 @@ const T: Record<
     fSalary: "Fizetés (k€ / év)",
     fCategory: "Kategória",
     fMode: "Munkavégzés",
+    fCountry: "Ország",
+    fCity: "Város",
+    fSource: "Forrás",
     fReset: "Szűrők törlése",
     fCount: "{n} pozíció",
     fNoResults: "Nincs a szűrőknek megfelelő pozíció.",
@@ -329,6 +342,9 @@ const T: Record<
     fSalary: "Salario (k€ / año)",
     fCategory: "Categoría",
     fMode: "Modalidad",
+    fCountry: "País",
+    fCity: "Ciudad",
+    fSource: "Fuente",
     fReset: "Restablecer filtros",
     fCount: "{n} posiciones",
     fNoResults: "Ninguna posición coincide con los filtros.",
@@ -369,6 +385,9 @@ const T: Record<
     fSalary: "Gehalt (k€ / Jahr)",
     fCategory: "Kategorie",
     fMode: "Arbeitsmodus",
+    fCountry: "Land",
+    fCity: "Stadt",
+    fSource: "Quelle",
     fReset: "Filter zurücksetzen",
     fCount: "{n} Stellen",
     fNoResults: "Keine Stellen entsprechen den Filtern.",
@@ -414,6 +433,9 @@ const T: Record<
     fSalary: "Salaire (k€ / an)",
     fCategory: "Catégorie",
     fMode: "Mode de travail",
+    fCountry: "Pays",
+    fCity: "Ville",
+    fSource: "Source",
     fReset: "Réinitialiser les filtres",
     fCount: "{n} postes",
     fNoResults: "Aucun poste ne correspond aux filtres.",
@@ -455,6 +477,9 @@ const T: Record<
     fSalary: "Salário (k€ / ano)",
     fCategory: "Categoria",
     fMode: "Modalidade",
+    fCountry: "País",
+    fCity: "Cidade",
+    fSource: "Fonte",
     fReset: "Repor filtros",
     fCount: "{n} vagas",
     fNoResults: "Nenhuma vaga corresponde aos filtros.",
@@ -625,6 +650,9 @@ export default function SwipeDeck({
     salMax: 200,
     fams: [] as string[],
     modes: [] as string[],
+    countries: [] as string[],
+    cities: [] as string[],
+    sources: [] as string[],
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -635,7 +663,40 @@ export default function SwipeDeck({
     filters.salMin > 0 ||
     filters.salMax < 200 ||
     filters.fams.length > 0 ||
-    filters.modes.length > 0;
+    filters.modes.length > 0 ||
+    filters.countries.length > 0 ||
+    filters.cities.length > 0 ||
+    filters.sources.length > 0;
+  // Valori distinti per le chip (dal mazzo completo). Le città si
+  // restringono ai paesi selezionati, come l'albero location di /positions.
+  const distinct = (vals: (string | null)[]) =>
+    Array.from(
+      new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean)),
+    ).sort();
+  const countries = useMemo(
+    () => distinct([...pending, ...reviewed].map((c) => c.loc_country)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pending, reviewed],
+  );
+  const cities = useMemo(
+    () =>
+      distinct(
+        [...pending, ...reviewed]
+          .filter(
+            (c) =>
+              !filters.countries.length ||
+              filters.countries.includes((c.loc_country ?? "").trim()),
+          )
+          .map((c) => c.loc_city),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pending, reviewed, filters.countries],
+  );
+  const sources = useMemo(
+    () => distinct([...pending, ...reviewed].map((c) => c.source)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pending, reviewed],
+  );
   const families = useMemo(
     () =>
       Array.from(
@@ -668,6 +729,21 @@ export default function SwipeDeck({
       )
         return false;
       if (filters.modes.length && !filters.modes.includes(c.remote_type ?? ""))
+        return false;
+      if (
+        filters.countries.length &&
+        !filters.countries.includes((c.loc_country ?? "").trim())
+      )
+        return false;
+      if (
+        filters.cities.length &&
+        !filters.cities.includes((c.loc_city ?? "").trim())
+      )
+        return false;
+      if (
+        filters.sources.length &&
+        !filters.sources.includes((c.source ?? "").trim())
+      )
         return false;
       return true;
     },
@@ -1692,6 +1768,61 @@ export default function SwipeDeck({
                 </div>
               )}
 
+              {/* Paese / Città / Fonte — stesse chip, liste dal mazzo */}
+              {(
+                [
+                  {
+                    key: "countries" as const,
+                    label: t.fCountry,
+                    vals: countries,
+                  },
+                  { key: "cities" as const, label: t.fCity, vals: cities },
+                  { key: "sources" as const, label: t.fSource, vals: sources },
+                ] as const
+              ).map(
+                (sec) =>
+                  sec.vals.length > 0 && (
+                    <div className="mb-5" key={sec.key}>
+                      <div className="mb-2 text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
+                        {sec.label}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {sec.vals.map((v) => {
+                          const on = filters[sec.key].includes(v);
+                          return (
+                            <button
+                              key={v}
+                              type="button"
+                              onClick={() =>
+                                setFilters((f) => ({
+                                  ...f,
+                                  [sec.key]: on
+                                    ? f[sec.key].filter((x) => x !== v)
+                                    : [...f[sec.key], v],
+                                }))
+                              }
+                              className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                              style={{
+                                borderColor: on
+                                  ? "var(--color-purple)"
+                                  : "var(--color-border)",
+                                color: on
+                                  ? "var(--color-purple)"
+                                  : "var(--color-muted)",
+                                background: on
+                                  ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
+                                  : "transparent",
+                              }}
+                            >
+                              {v}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ),
+              )}
+
               <div
                 className="flex items-center justify-between border-t pt-4"
                 style={{ borderColor: "var(--color-border)" }}
@@ -1706,6 +1837,9 @@ export default function SwipeDeck({
                       salMax: 200,
                       fams: [],
                       modes: [],
+                      countries: [],
+                      cities: [],
+                      sources: [],
                     })
                   }
                   disabled={!filterActive}
