@@ -171,7 +171,8 @@ const GLASS_WALLS := [
 ## "spot" = dove l'agente si ferma (punto camminabile davanti al prop).
 const POIS := {
 	"printer": {"rect": Rect2(1218, 185, 95, 70), "spot": Vector2(1265, 300)},
-	"hologram": {"spot": Vector2(1300, 930)},
+	# Lato ovest del globo, nel corridoio libero tra le scrivanie Scout.
+	"hologram": {"spot": Vector2(625, 560)},
 }
 
 ## La catena del valore dei fogli: chi ritira dall'inbox di chi.
