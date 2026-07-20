@@ -56,7 +56,12 @@ export default function MessageBody({
   style?: CSSProperties;
 }) {
   return (
-    <p className={className} style={{ whiteSpace: "pre-wrap", ...style }}>
+    // overflowWrap anywhere: URL e token lunghi non devono mai produrre
+    // scroll orizzontale nelle bolle chat.
+    <p
+      className={className}
+      style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", ...style }}
+    >
       {renderInlineMarkdown(normalizeBody(text))}
     </p>
   );
