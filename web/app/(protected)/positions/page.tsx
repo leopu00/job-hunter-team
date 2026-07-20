@@ -6,6 +6,7 @@ import {
   getVerdictMapByLegacyId,
 } from "@/lib/queries";
 import { colorForFamily } from "@/lib/position-classifier";
+import { IconStar, IconStarHalf, IconThumbsUp, IconX } from "../swipe/icons";
 import {
   getExchangeRates,
   convertCurrency,
@@ -82,6 +83,18 @@ function formatFoundAt(ts: string | null | undefined, locale: string) {
     minute: "2-digit",
   });
 }
+
+// Mini-tag del giudizio utente sulle righe/card (stessi colori/icone di
+// /swipe): rende visibile il feedback direttamente in lista.
+const FB_TAG: Record<
+  string,
+  { color: string; Icon: (p: { size?: number }) => React.ReactElement }
+> = {
+  top: { color: "var(--color-green)", Icon: IconStar },
+  review_ok: { color: "var(--color-blue)", Icon: IconThumbsUp },
+  review_low: { color: "var(--color-orange)", Icon: IconStarHalf },
+  no: { color: "var(--color-red)", Icon: IconX },
+};
 
 interface PageProps {
   searchParams: Promise<{
@@ -228,6 +241,42 @@ const T: Record<string, Record<string, string>> = {
     de: "Neu — noch nicht angesehen",
     fr: "Nouvelle — pas encore vue",
     pt: "Nova — ainda não vista",
+  },
+  fb_top: {
+    it: "Molto interessante",
+    en: "Very interesting",
+    hu: "Nagyon érdekes",
+    es: "Muy interesante",
+    de: "Sehr interessant",
+    fr: "Très intéressant",
+    pt: "Muito interessante",
+  },
+  fb_review_ok: {
+    it: "Interessante",
+    en: "Interesting",
+    hu: "Érdekes",
+    es: "Interesante",
+    de: "Interessant",
+    fr: "Intéressant",
+    pt: "Interessante",
+  },
+  fb_review_low: {
+    it: "Poco interessante",
+    en: "Slightly interesting",
+    hu: "Kevéssé érdekes",
+    es: "Poco interesante",
+    de: "Wenig interessant",
+    fr: "Peu intéressant",
+    pt: "Pouco interessante",
+  },
+  fb_no: {
+    it: "Non interessante",
+    en: "Not interesting",
+    hu: "Nem érdekes",
+    es: "No interesante",
+    de: "Uninteressant",
+    fr: "Pas intéressant",
+    pt: "Não interessante",
   },
   remote_loc: {
     it: "Remote",
@@ -609,12 +658,14 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             (p.status !== "excluded" || fbSel.includes("no")),
         );
 
-  // Filtro "Il tuo feedback": giudizio dallo swipe/pagina posizione
-  // (event-log, ultimo prevale); "none" = senza alcun giudizio.
+  // Giudizi utente (event-log, ultimo prevale): servono sia al filtro
+  // "Il tuo feedback" sia ai mini-tag sulle righe/card.
+  const vmap = await getVerdictMapByLegacyId();
+  const verdictOfP = (p: PositionWithScore) =>
+    p.legacy_id != null ? vmap[String(p.legacy_id)] : undefined;
   if (fbSel.length) {
-    const vmap = await getVerdictMapByLegacyId();
     positions = positions.filter((p) => {
-      const v = p.legacy_id != null ? vmap[String(p.legacy_id)] : undefined;
+      const v = verdictOfP(p);
       return v ? fbSel.includes(v) : fbSel.includes("none");
     });
   }
@@ -831,10 +882,25 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {p.title}
                     </span>
                   </span>
-                  <span
-                    className={`shrink-0 text-[13px] font-bold tabular-nums ${scoreClass(p.score)}`}
-                  >
-                    {p.score ?? "—"}
+                  <span className="shrink-0 flex items-center gap-1.5">
+                    {(() => {
+                      const v = verdictOfP(p);
+                      const tag = v ? FB_TAG[v] : null;
+                      return tag ? (
+                        <span
+                          style={{ color: tag.color }}
+                          title={tr(`fb_${v}`)}
+                          aria-label={tr(`fb_${v}`)}
+                        >
+                          <tag.Icon size={13} />
+                        </span>
+                      ) : null;
+                    })()}
+                    <span
+                      className={`text-[13px] font-bold tabular-nums ${scoreClass(p.score)}`}
+                    >
+                      {p.score ?? "—"}
+                    </span>
                   </span>
                 </div>
                 <div className="mt-1 text-[11px] text-[var(--color-muted)] truncate">
@@ -1033,6 +1099,20 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           >
                             {p.title}
                           </Link>
+                          {(() => {
+                            const v = verdictOfP(p);
+                            const tag = v ? FB_TAG[v] : null;
+                            return tag ? (
+                              <span
+                                className="shrink-0"
+                                style={{ color: tag.color }}
+                                title={tr(`fb_${v}`)}
+                                aria-label={tr(`fb_${v}`)}
+                              >
+                                <tag.Icon size={12} />
+                              </span>
+                            ) : null;
+                          })()}
                         </span>
                       </td>
                       {/* Azienda */}
