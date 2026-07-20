@@ -1813,14 +1813,17 @@ function DualRange({
       )}
       <div className="relative h-9">
         <div
-          className="absolute left-1 right-1 top-1/2 h-1.5 -translate-y-1/2 rounded-full"
-          style={{ background: "var(--color-border)" }}
+          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
+          style={{ left: 12, right: 12, background: "var(--color-border)" }}
         />
+        {/* Il centro del pomello viaggia tra 12px e (100% - 12px), non da
+            bordo a bordo: il riempimento segue la STESSA geometria, sennò
+            sborda oltre i pomelli. */}
         <div
           className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
           style={{
-            left: `${pct(lo)}%`,
-            right: `${100 - pct(hi)}%`,
+            left: `calc((100% - 24px) * ${pct(lo) / 100} + 12px)`,
+            right: `calc((100% - 24px) * ${(100 - pct(hi)) / 100} + 12px)`,
             background: "var(--color-purple)",
           }}
         />
