@@ -93,8 +93,10 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# INVIO oppure click/tap: su desktop il mouse è il gesto naturale e
 	# "PREMI INVIO" da solo lasciava utenti fermi al titolo.
-	var clicked := event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT
+	var clicked := false
+	var mb := event as InputEventMouseButton
+	if mb != null:
+		clicked = mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT
 	if (event.is_action_pressed("ui_accept") or clicked) and not _leaving:
 		_leaving = true
 		Sfx.play_confirm()

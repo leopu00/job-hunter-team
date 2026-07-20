@@ -74,12 +74,63 @@ func goto_title() -> void:
 func goto_wizard() -> void:
 	Log.info("scene", "→ WIZARD")
 	state = State.WIZARD
-	get_tree().change_scene_to_file(SCENE_WIZARD)
+	_change_scene_with_veil(SCENE_WIZARD)
 
 func goto_office() -> void:
 	Log.info("scene", "→ OFFICE")
 	state = State.OFFICE
-	get_tree().change_scene_to_file(SCENE_OFFICE)
+	_change_scene_with_veil(SCENE_OFFICE)
+
+## Velo "CARICAMENTO…" sopra tutto durante i cambi scena pesanti: su
+## hardware lento l'ufficio impiega secondi a costruirsi e uno schermo
+## nero muto sembra un crash (feedback Leone, test Windows 20/07).
+var _loading_veil: CanvasLayer = null
+
+func _change_scene_with_veil(path: String) -> void:
+	_show_loading()
+	# Due frame: il velo deve arrivare DAVVERO a schermo prima che il
+	# caricamento blocchi il main thread.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	get_tree().change_scene_to_file(path)
+	# Il cambio scena è deferred: dopo due frame la nuova scena ha
+	# completato _ready e sta renderizzando.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_hide_loading()
+
+func _show_loading() -> void:
+	if _loading_veil:
+		return
+	_loading_veil = CanvasLayer.new()
+	_loading_veil.layer = 90
+	var rect := ColorRect.new()
+	rect.color = Color(0.024, 0.024, 0.031)
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_loading_veil.add_child(rect)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_loading_veil.add_child(center)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 14)
+	center.add_child(box)
+	var label := Label.new()
+	label.text = "CARICAMENTO…"
+	label.add_theme_font_size_override("font_size", 26)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(label)
+	var bar := ProgressBar.new()
+	bar.custom_minimum_size = Vector2(320, 10)
+	bar.show_percentage = false
+	bar.indeterminate = true
+	box.add_child(bar)
+	get_tree().root.add_child(_loading_veil)
+
+func _hide_loading() -> void:
+	if _loading_veil:
+		_loading_veil.queue_free()
+		_loading_veil = null
 
 ## ── Onboarding: flag di routing (title → wizard solo al primo giro) ──
 
