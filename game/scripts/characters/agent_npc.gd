@@ -3,7 +3,7 @@ extends CharacterBody2D
 ## Un agente del team in ufficio: sta alla sua postazione (alterna digitare
 ## e pensare, come i tick veri) e OGNI TANTO — a cadenza calibrata sui dati
 ## di attività reali — parte per un viaggio di lavoro visibile: stampante
-## (torna coi fogli), ritiro dall'inbox del reparto a monte, raro caffè.
+## (torna coi fogli), ritiro dall'inbox del reparto a monte e ispezioni.
 ## Mostra status bubble e si interroga con un click.
 
 const SPEED := 150.0
@@ -703,15 +703,6 @@ func _plan_trip() -> void:
 					randf_range(0.5, 1.0), "idle")
 			drop["pile_drop"] = dept
 			_legs = [pick, drop, _leg_to(_spot, "carry", 0.0, "work")]
-	elif roll < 0.88:
-		# pausa caffè / macchinetta (raro: i tick non aspettano)
-		var is_coffee := randf() < 0.7
-		var poi: Vector2 = pois["coffee"]["spot"] if is_coffee \
-				else pois["water_cooler"]["spot"]
-		var cl := _leg_to(_jit(poi), "walk", randf_range(3.0, 7.0), "idle")
-		if is_coffee:
-			cl["fx_coffee"] = true  # il vapore sale finché è in pausa
-		_legs = [cl, _leg_to(_spot, "walk", 0.0, "work")]
 	else:
 		# un'occhiata all'ologramma della ricerca
 		_legs = [
@@ -804,8 +795,6 @@ func _arrive_at_leg() -> void:
 		return
 	if _leg.get("fx_printer", false):
 		PrinterFx.ping(float(_leg.get("pause", 2.0)))
-	if _leg.get("fx_coffee", false):
-		CoffeeFx.ping(float(_leg.get("pause", 4.0)))
 	if _leg.has("investigation_text"):
 		say(str(_leg["investigation_text"]), str(_leg.get("investigation_target", "")))
 		_investigation_count += 1
