@@ -473,11 +473,13 @@ export default function PositionsFilterSidebar({
     () => [
       {
         key: "fb" as DirectKey,
-        options: FB_OPTIONS.map((o): Option => ({
-          val: o.val,
-          label: tr(o.labelKey),
-          color: o.color,
-        })),
+        options: FB_OPTIONS.map(
+          (o): Option => ({
+            val: o.val,
+            label: tr(o.labelKey),
+            color: o.color,
+          }),
+        ),
       },
       {
         key: "status" as DirectKey,
