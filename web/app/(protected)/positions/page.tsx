@@ -7,6 +7,7 @@ import {
 } from "@/lib/queries";
 import { colorForFamily } from "@/lib/position-classifier";
 import { scoreSpectrumCss } from "@/lib/score-color";
+import DeckSaver from "./DeckSaver";
 import { IconStar, IconThumbsMeh, IconThumbsUp, IconX } from "../swipe/icons";
 import {
   getExchangeRates,
@@ -848,6 +849,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             stessa query, stessa paginazione, ma una card compatta per
             posizione — titolo+score, azienda+località, stato+categoria+
             data. Tap sulla card = pagina dettaglio. */}
+        {/* Sequenza corrente (filtri+ordinamento) per prev/next nel
+            dettaglio: tutte le posizioni filtrate, non solo la pagina. */}
+        <DeckSaver ids={positions.map((p) => String(p.id))} />
         <div className="md:hidden flex flex-col gap-2">
           {visiblePositions.length === 0 ? (
             <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-dim)] text-[11px]">
