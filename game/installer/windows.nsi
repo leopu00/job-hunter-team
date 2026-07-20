@@ -18,7 +18,11 @@ OutFile "..\builds\windows\job-hunter-team-${VERSION}-windows-x64-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\Job Hunter Team"
 InstallDirRegKey HKCU "Software\Job Hunter Team" "InstallDir"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+; zlib e niente pre-scan CRC: LZMA+CRC su un payload da ~340MB tenevano
+; l'installer "muto" per decine di secondi su hardware vecchio (T440s).
+; L'integrità del download la garantisce lo SHA-256 pubblicato, non il CRC.
+SetCompressor zlib
+CRCCheck off
 
 ; Metadati del file installer (proprietà → dettagli)
 VIProductVersion "${VERSION}.0"
