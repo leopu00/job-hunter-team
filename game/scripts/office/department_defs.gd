@@ -171,7 +171,7 @@ const GLASS_WALLS := [
 ## POI condivisi dei behavior: mete dei viaggi "si vede che lavorano".
 ## "spot" = dove l'agente si ferma (punto camminabile davanti al prop).
 const POIS := {
-	"printer": {"rect": Rect2(710, 155, 110, 78), "spot": Vector2(765, 262)},
+	"printer": {"rect": Rect2(1672, 190, 110, 78), "spot": Vector2(1727, 300)},
 	"coffee": {"spot": Vector2(1500, 310)},
 	"water_cooler": {"spot": Vector2(1635, 300)},
 	"hologram": {"spot": Vector2(1300, 930)},
