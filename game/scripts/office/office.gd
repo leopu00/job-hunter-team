@@ -104,12 +104,9 @@ func _ready() -> void:
 
 	# i macchinari si animano quando qualcuno li usa (ping da AgentNPC)
 	world.add_child(PrinterFx.new(FurnitureDefs.get_rect("printer")))
-	world.add_child(CoffeeFx.new(FurnitureDefs.get_rect("coffee_bar")))
 	match OS.get_environment("JHT_FX"):  # TEST-AUTO: effetto forzato
 		"printer":
 			PrinterFx.ping(20.0)
-		"coffee":
-			CoffeeFx.ping(20.0)
 
 	# Punti di consegna tra reparti. Sono OUTPUT, non generici inbox:
 	# Scout → Analisti → Scorer → Scrittori → Critici. Il risultato dei
@@ -131,6 +128,13 @@ func _ready() -> void:
 		p.add_sheets(randi_range(1, 6))
 		world.add_child(p)
 		PaperPile.inbox[dept_id] = p
+	# L'anteprima va applicata anche prima del primo snapshot del backend:
+	# in modalità NOVPS la pila altrimenti conserva il seme casuale iniziale.
+	var pile_preview := OS.get_environment("JHT_PILE_PREVIEW").split(":", false, 1)
+	if pile_preview.size() == 2 and PaperPile.inbox.has(pile_preview[0]) \
+			and str(pile_preview[1]).is_valid_int():
+		PaperPile.inbox[pile_preview[0]].set_target(
+				maxi(0, int(pile_preview[1])), true)
 
 	# Primo avvio come showroom: tutti i ruoli fondamentali e due persone per
 	# reparto. Il primo snapshot reale li sostituisce senza mai presentare un
@@ -1753,6 +1757,13 @@ var _piles_synced := false
 
 func _sync_piles(hold_seconds := 0.0) -> void:
 	var counts: Dictionary = BackendBus.pipeline_counts()
+	# Hook esclusivamente visivo per gli screenshot di regressione: permette di
+	# verificare l'ingombro/prospettiva di una coda grande senza dipendere dai
+	# dati della VPS. Formato: JHT_PILE_PREVIEW=scorer:517.
+	var preview := OS.get_environment("JHT_PILE_PREVIEW").split(":", false, 1)
+	if preview.size() == 2 and PILE_PHASE.has(preview[0]) \
+			and str(preview[1]).is_valid_int():
+		counts[PILE_PHASE[preview[0]]] = maxi(0, int(preview[1]))
 	for dept_id in PILE_PHASE:
 		if PaperPile.inbox.has(dept_id):
 			# Rapporto esatto 1:1. Il primo snapshot è immediato; i successivi
