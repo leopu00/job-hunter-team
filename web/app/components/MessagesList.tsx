@@ -23,9 +23,245 @@ interface Props {
   initialMessages: PendingMessage[];
 }
 
-// Le tre conversazioni fisse, nell'ordine voluto dall'utente. Eventuali
-// mittenti fuori roster compaiono come sezioni extra in coda.
-const CORE_AGENTS = ["mentor", "capitano", "assistente"];
+// Le tre conversazioni fisse, nell'ordine voluto dall'utente (20/07:
+// Assistente, Mentor, Capitano). Eventuali mittenti fuori roster
+// compaiono come sezioni extra in coda.
+const CORE_AGENTS = ["assistente", "mentor", "capitano"];
+
+// Mini-guida per sezione: cosa fa l'agente, cosa chiedergli e cosa no.
+// Sintesi dei prompt in agents/{assistente,mentor,capitano}/*.md.
+type AgentGuide = { role: string; ask: string[]; dont: string[] };
+const AGENT_GUIDE: Record<string, Record<string, AgentGuide>> = {
+  assistente: {
+    it: {
+      role: "Configura il sistema e cura il tuo profilo: è il ponte conversazionale tra te e il team.",
+      ask: [
+        "aggiornare profilo e documenti",
+        "come funziona la piattaforma",
+        "passare ordini al team",
+      ],
+      dont: ["scrivere CV o lettere (Scrittori)", "valutare posizioni (Scorer)"],
+    },
+    en: {
+      role: "Sets up the system and maintains your profile: the conversational bridge between you and the team.",
+      ask: [
+        "update your profile and documents",
+        "how the platform works",
+        "relay orders to the team",
+      ],
+      dont: ["writing CVs or letters (Writers)", "scoring positions (Scorer)"],
+    },
+    es: {
+      role: "Configura el sistema y cuida tu perfil: es el puente conversacional entre tú y el equipo.",
+      ask: [
+        "actualizar perfil y documentos",
+        "cómo funciona la plataforma",
+        "pasar órdenes al equipo",
+      ],
+      dont: ["escribir CV o cartas (Redactores)", "puntuar posiciones (Scorer)"],
+    },
+    fr: {
+      role: "Configure le système et entretient votre profil : le pont conversationnel entre vous et l'équipe.",
+      ask: [
+        "mettre à jour profil et documents",
+        "comment fonctionne la plateforme",
+        "transmettre des ordres à l'équipe",
+      ],
+      dont: ["rédiger CV ou lettres (Rédacteurs)", "noter des postes (Scorer)"],
+    },
+    de: {
+      role: "Richtet das System ein und pflegt dein Profil: die Gesprächsbrücke zwischen dir und dem Team.",
+      ask: [
+        "Profil und Dokumente aktualisieren",
+        "wie die Plattform funktioniert",
+        "Aufträge ans Team weitergeben",
+      ],
+      dont: [
+        "Lebensläufe oder Anschreiben (Schreiber)",
+        "Stellen bewerten (Scorer)",
+      ],
+    },
+    hu: {
+      role: "Beállítja a rendszert és karbantartja a profilod: a beszélgetős híd közted és a csapat között.",
+      ask: [
+        "profil és dokumentumok frissítése",
+        "hogyan működik a platform",
+        "utasítások továbbítása a csapatnak",
+      ],
+      dont: ["önéletrajz vagy levél írása (Írók)", "állások pontozása (Scorer)"],
+    },
+    pt: {
+      role: "Configura o sistema e cuida do seu perfil: a ponte de conversa entre você e a equipe.",
+      ask: [
+        "atualizar perfil e documentos",
+        "como a plataforma funciona",
+        "repassar ordens à equipe",
+      ],
+      dont: ["escrever CV ou cartas (Escritores)", "pontuar vagas (Scorer)"],
+    },
+  },
+  mentor: {
+    it: {
+      role: "Il tuo consigliere di carriera: legge i pattern nelle tue candidature e ti dice cosa conviene, anche quando è scomodo.",
+      ask: [
+        "consigli di carriera e gap di skill",
+        "trend delle tue candidature",
+        "se un percorso vale la pena",
+      ],
+      dont: [
+        "CV e cover letter",
+        "score di singole posizioni",
+        "modifiche dirette al profilo",
+      ],
+    },
+    en: {
+      role: "Your career adviser: reads the patterns in your applications and tells you what pays off, even when it's uncomfortable.",
+      ask: [
+        "career advice and skill gaps",
+        "trends across your applications",
+        "whether a path is worth it",
+      ],
+      dont: [
+        "CVs and cover letters",
+        "scores for single positions",
+        "direct profile edits",
+      ],
+    },
+    es: {
+      role: "Tu consejero de carrera: lee los patrones en tus candidaturas y te dice qué conviene, aunque sea incómodo.",
+      ask: [
+        "consejos de carrera y gaps de skills",
+        "tendencias de tus candidaturas",
+        "si un camino vale la pena",
+      ],
+      dont: [
+        "CV y cartas de presentación",
+        "score de posiciones concretas",
+        "cambios directos al perfil",
+      ],
+    },
+    fr: {
+      role: "Votre conseiller de carrière : il lit les tendances de vos candidatures et vous dit ce qui vaut le coup, même quand c'est inconfortable.",
+      ask: [
+        "conseils de carrière et lacunes de compétences",
+        "tendances de vos candidatures",
+        "si une voie en vaut la peine",
+      ],
+      dont: [
+        "CV et lettres de motivation",
+        "notes de postes individuels",
+        "modifications directes du profil",
+      ],
+    },
+    de: {
+      role: "Dein Karriereberater: liest die Muster in deinen Bewerbungen und sagt dir, was sich lohnt — auch wenn es unbequem ist.",
+      ask: [
+        "Karriereberatung und Skill-Lücken",
+        "Trends deiner Bewerbungen",
+        "ob sich ein Weg lohnt",
+      ],
+      dont: [
+        "Lebensläufe und Anschreiben",
+        "Scores einzelner Stellen",
+        "direkte Profiländerungen",
+      ],
+    },
+    hu: {
+      role: "A karrier-tanácsadód: kiolvassa a mintázatokat a jelentkezéseidből, és megmondja, mi éri meg — akkor is, ha kényelmetlen.",
+      ask: [
+        "karriertanács és skill-hiányok",
+        "jelentkezéseid trendjei",
+        "megéri-e egy irány",
+      ],
+      dont: [
+        "önéletrajz és motivációs levél",
+        "egyes állások pontozása",
+        "közvetlen profilmódosítás",
+      ],
+    },
+    pt: {
+      role: "Seu conselheiro de carreira: lê os padrões nas suas candidaturas e diz o que vale a pena, mesmo quando é desconfortável.",
+      ask: [
+        "conselhos de carreira e gaps de skills",
+        "tendências das suas candidaturas",
+        "se um caminho vale a pena",
+      ],
+      dont: [
+        "CV e cartas de apresentação",
+        "score de vagas específicas",
+        "mudanças diretas no perfil",
+      ],
+    },
+  },
+  capitano: {
+    it: {
+      role: "Coordina la pipeline e il budget: decide quanti agenti lavorano e su cosa.",
+      ask: [
+        "stato della pipeline",
+        "priorità di ricerca",
+        "più Scout, o un CV per una posizione scelta",
+      ],
+      dont: [
+        "consigli di carriera (Mentor)",
+        "modifiche al profilo (Assistente)",
+      ],
+    },
+    en: {
+      role: "Coordinates the pipeline and the budget: decides how many agents work, and on what.",
+      ask: [
+        "pipeline status",
+        "search priorities",
+        "more Scouts, or a CV for a chosen position",
+      ],
+      dont: ["career advice (Mentor)", "profile changes (Assistant)"],
+    },
+    es: {
+      role: "Coordina la pipeline y el presupuesto: decide cuántos agentes trabajan y en qué.",
+      ask: [
+        "estado de la pipeline",
+        "prioridades de búsqueda",
+        "más Scouts, o un CV para una posición elegida",
+      ],
+      dont: ["consejos de carrera (Mentor)", "cambios de perfil (Asistente)"],
+    },
+    fr: {
+      role: "Coordonne la pipeline et le budget : décide combien d'agents travaillent, et sur quoi.",
+      ask: [
+        "état de la pipeline",
+        "priorités de recherche",
+        "plus de Scouts, ou un CV pour un poste choisi",
+      ],
+      dont: ["conseils de carrière (Mentor)", "modifications du profil (Assistant)"],
+    },
+    de: {
+      role: "Koordiniert Pipeline und Budget: entscheidet, wie viele Agenten woran arbeiten.",
+      ask: [
+        "Pipeline-Status",
+        "Suchprioritäten",
+        "mehr Scouts, oder ein CV für eine gewählte Stelle",
+      ],
+      dont: ["Karriereberatung (Mentor)", "Profiländerungen (Assistent)"],
+    },
+    hu: {
+      role: "A pipeline-t és a keretet koordinálja: eldönti, hány ügynök dolgozik és min.",
+      ask: [
+        "pipeline állapota",
+        "keresési prioritások",
+        "több Scout, vagy CV egy kiválasztott állásra",
+      ],
+      dont: ["karriertanács (Mentor)", "profilmódosítás (Asszisztens)"],
+    },
+    pt: {
+      role: "Coordena a pipeline e o orçamento: decide quantos agentes trabalham e em quê.",
+      ask: [
+        "status da pipeline",
+        "prioridades de busca",
+        "mais Scouts, ou um CV para uma vaga escolhida",
+      ],
+      dont: ["conselhos de carreira (Mentor)", "mudanças de perfil (Assistente)"],
+    },
+  },
+};
 
 const T: Record<string, Record<string, string>> = {
   empty_agent: {
@@ -82,6 +318,24 @@ const T: Record<string, Record<string, string>> = {
     fr: "Vous",
     pt: "Você",
   },
+  ask_label: {
+    it: "Chiedigli",
+    en: "Ask about",
+    hu: "Kérdezd erről",
+    es: "Pregúntale",
+    de: "Frag nach",
+    fr: "Demandez-lui",
+    pt: "Pergunte sobre",
+  },
+  dont_label: {
+    it: "Non chiedergli",
+    en: "Don't ask for",
+    hu: "Ne kérd tőle",
+    es: "No le pidas",
+    de: "Nicht fragen nach",
+    fr: "Ne lui demandez pas",
+    pt: "Não peça",
+  },
 };
 
 export default function MessagesList({ initialMessages }: Props) {
@@ -101,14 +355,13 @@ export default function MessagesList({ initialMessages }: Props) {
     return [...CORE_AGENTS, ...extra];
   }, [messages]);
 
-  // Sezione iniziale: l'agente col messaggio più recente, altrimenti Mentor.
+  // Sezione iniziale: l'agente col messaggio più recente, altrimenti
+  // l'Assistente (prima sezione).
   const [activeAgent, setActiveAgent] = useState<string>(() => {
     const latest = [...initialMessages].sort((a, b) =>
       b.created_at.localeCompare(a.created_at),
     )[0];
-    return latest?.agent && CORE_AGENTS.includes(latest.agent)
-      ? latest.agent
-      : (latest?.agent ?? "mentor");
+    return latest?.agent ?? "assistente";
   });
 
   const thread = useMemo(
@@ -253,6 +506,40 @@ export default function MessagesList({ initialMessages }: Props) {
           })}
         </div>
       </div>
+
+      {/* ── Mini-guida dell'agente attivo: cosa fa, cosa (non) chiedergli ── */}
+      {AGENT_GUIDE[activeAgent] && (
+        <div
+          className="shrink-0 border-b border-[var(--color-border)]"
+          style={{ background: "var(--color-panel)" }}
+        >
+          {(() => {
+            const guide =
+              AGENT_GUIDE[activeAgent][locale] ?? AGENT_GUIDE[activeAgent].en;
+            return (
+              <div className="max-w-3xl mx-auto px-5 py-2.5">
+                <p className="m-0 mb-1 text-[10.5px] leading-relaxed text-[var(--color-muted)]">
+                  {guide.role}
+                </p>
+                <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-[10px] leading-relaxed">
+                  <span className="text-[var(--color-dim)]">
+                    <span className="font-semibold text-[var(--color-green)]">
+                      {tr("ask_label")}:
+                    </span>{" "}
+                    {guide.ask.join(" · ")}
+                  </span>
+                  <span className="text-[var(--color-dim)]">
+                    <span className="font-semibold text-[var(--color-red)]">
+                      {tr("dont_label")}:
+                    </span>{" "}
+                    {guide.dont.join(" · ")}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* ── Thread ──────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
