@@ -11,6 +11,7 @@ import { countryFlag } from "@/lib/country-flag";
 import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
 import { colorForFamily } from "@/lib/position-classifier";
+import { scoreSpectrumCss } from "@/lib/score-color";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
@@ -21,6 +22,7 @@ import { GeocodeRequestButton } from "./GeocodeRequestButton";
 import { TeamActionsSheet } from "./TeamActionsSheet";
 import { FeedbackButtons, type Verdict } from "./FeedbackButtons";
 import PositionMapCardLazy from "./PositionMapCardLazy";
+import PrevNextNav from "./PrevNextNav";
 import { CvDownloadButton } from "./CvDownloadButton";
 import MarkSeenAfterView from "@/app/components/MarkSeenAfterView";
 import { Avatar } from "@/app/components/Avatar";
@@ -462,6 +464,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Sur site",
     pt: "Presencial",
   },
+  open_in_maps: {
+    it: "Apri in Google Maps",
+    en: "Open in Google Maps",
+    hu: "Megnyitás a Google Térképen",
+    es: "Abrir en Google Maps",
+    de: "In Google Maps öffnen",
+    fr: "Ouvrir dans Google Maps",
+    pt: "Abrir no Google Maps",
+  },
   location: {
     it: "Località",
     en: "Location",
@@ -743,10 +754,7 @@ function verdictOf(action: string, score: number | null): Verdict {
 }
 
 function scoreColor(s: number | null) {
-  if (!s) return "var(--color-dim)";
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
+  return scoreSpectrumCss(s);
 }
 
 // Colore di un sotto-punteggio relativo al SUO massimo (stack /40, remote
@@ -860,6 +868,22 @@ export default async function PositionDetailPage({ params }: PageProps) {
         ? gazetteerCity(locCountry, locCity)
         : null;
   const flag = countryFlag(position.loc_country_code ?? null, locCountry);
+  // Indirizzo ESATTO dell'ufficio (office-geocoding): mostrato solo quando è
+  // davvero un indirizzo (verificato o con civico) — il fallback città-paese
+  // duplicherebbe il testo della card. Il link apre Google Maps (universal
+  // link: app sul telefono, browser altrove) cercando l'INDIRIZZO testuale,
+  // non le coordinate: così Maps mostra la via col civico, non un punto
+  // anonimo "41°24'16.9\"N" (feedback utente 20/07).
+  const exactAddress =
+    position.office_address &&
+    position.office_lat != null &&
+    position.office_lon != null &&
+    (position.office_verified === true || /\d/.test(position.office_address))
+      ? position.office_address
+      : null;
+  const mapsUrl = exactAddress
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(exactAddress)}`
+    : null;
   // basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
   // bridge e il file-serving locale risolvono per basename.
   const cvFileName = application?.cv_pdf_path?.split("/").pop() || null;
@@ -909,76 +933,102 @@ export default async function PositionDetailPage({ params }: PageProps) {
       : foundDays === 1
         ? t("o_yesterday")
         : t("o_days_ago").replace("{n}", String(foundDays));
-  const overviewCard =
-    score ||
-    salaryEst ||
-    salaryDecl ||
-    position.remote_type ||
-    position.role_family ? (
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-        <div className="section-label mb-3">{t("overview")}</div>
-        <div className="flex items-center gap-4">
-          {score && (
-            <div
-              className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
-              style={{
-                borderColor: scoreColor(score.total_score),
-                color: scoreColor(score.total_score),
-              }}
-            >
-              {score.total_score}
+  // Panoramica SEMPRE presente: da 20/07 ospita anche titolo e azienda
+  // (l'header nudo è sparito) e la fila dei giudizi in coda.
+  const overviewCard = (
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+      <div className="section-label mb-3">{t("overview")}</div>
+      <h1 className="text-lg md:text-xl font-bold tracking-tight text-[var(--color-white)] mb-1">
+        {position.title}
+      </h1>
+      <div className="mb-3 flex items-center gap-x-2.5 gap-y-1 flex-wrap">
+        <span className="text-[13px] text-[var(--color-base)] font-medium">
+          {position.company}
+        </span>
+        {/* Logo aziendale (mig 056): a destra del nome; senza logo,
+            nessun placeholder. */}
+        {company?.logo && (
+          <Avatar
+            name={position.company}
+            src={company.logo}
+            size="sm"
+            square
+            imgFit="contain"
+          />
+        )}
+        {position.location && !hasLocationCard && (
+          <span className="text-[11px] text-[var(--color-muted)]">
+            · {position.location}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-4">
+        {score && (
+          <div
+            className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
+            style={{
+              borderColor: scoreColor(score.total_score),
+              color: scoreColor(score.total_score),
+            }}
+          >
+            {score.total_score}
+          </div>
+        )}
+        <div className="flex-1 min-w-0 space-y-2">
+          {(salaryEst || salaryDecl) && (
+            <InfoRow
+              label={t(salaryEst ? "d_salary_estimated" : "d_salary_declared")}
+              value={(salaryEst ?? salaryDecl)!}
+            />
+          )}
+          {position.remote_type && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
+                {t("o_mode")}
+              </span>
+              <span
+                className="text-[11px] font-semibold text-right"
+                style={{ color: modeColor }}
+              >
+                {t(`rt_${position.remote_type}`)}
+              </span>
             </div>
           )}
-          <div className="flex-1 min-w-0 space-y-2">
-            {(salaryEst || salaryDecl) && (
-              <InfoRow
-                label={t(
-                  salaryEst ? "d_salary_estimated" : "d_salary_declared",
-                )}
-                value={(salaryEst ?? salaryDecl)!}
-              />
-            )}
-            {position.remote_type && (
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[10px] text-[var(--color-dim)] shrink-0">
-                  {t("o_mode")}
-                </span>
+          {position.role_family && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
+                {t("o_category")}
+              </span>
+              <span className="text-[11px] text-[var(--color-base)] text-right inline-flex items-center gap-1.5 min-w-0">
                 <span
-                  className="text-[11px] font-semibold text-right"
-                  style={{ color: modeColor }}
-                >
-                  {t(`rt_${position.remote_type}`)}
-                </span>
-              </div>
-            )}
-            {position.role_family && (
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[10px] text-[var(--color-dim)] shrink-0">
-                  {t("o_category")}
-                </span>
-                <span className="text-[11px] text-[var(--color-base)] text-right inline-flex items-center gap-1.5 min-w-0">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{
-                      background: colorForFamily(position.role_family.trim()),
-                    }}
-                    aria-hidden="true"
-                  />
-                  <span className="truncate">{position.role_family}</span>
-                </span>
-              </div>
-            )}
-            {position.source && (
-              <InfoRow label={t("d_source")} value={position.source} />
-            )}
-            <InfoRow
-              label={t("d_found")}
-              value={`${foundDate} (${foundAge})`}
-            />
-          </div>
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{
+                    background: colorForFamily(position.role_family.trim()),
+                  }}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{position.role_family}</span>
+              </span>
+            </div>
+          )}
+          {position.source && (
+            <InfoRow label={t("d_source")} value={position.source} />
+          )}
+          <InfoRow label={t("d_found")} value={`${foundDate} (${foundAge})`} />
         </div>
       </div>
-    ) : null;
+      {/* Giudizio rapido in coda alla Panoramica: stessa fila di /swipe
+            (evidenzia quello già dato; resta anche nel popup). */}
+      {feedbackEnabled && position.legacy_id != null && (
+        <div className="mt-4 border-t border-[var(--color-border)] pt-4">
+          <FeedbackButtons
+            legacyId={position.legacy_id}
+            initialVerdict={initialVerdict}
+          />
+        </div>
+      )}
+    </div>
+  );
 
   // Card Località: città + paese (bandiera) + mini-mappa zoomabile col pin.
   // CON mappa → prima card della colonna principale (prima della JD, scelta
@@ -989,22 +1039,37 @@ export default async function PositionDetailPage({ params }: PageProps) {
       className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors"
     >
       <div className="section-label mb-3">{t("location")}</div>
-      <div className={`flex items-center gap-2.5 ${mapCoords ? "mb-3" : ""}`}>
-        {flag && (
-          <span className="text-[24px] leading-none" aria-hidden="true">
-            {flag}
-          </span>
-        )}
-        <div className="min-w-0">
-          <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
-            {locCity ?? position.location}
-          </div>
-          {locCountry && (
-            <div className="text-[11px] text-[var(--color-muted)]">
-              {locCountry}
-            </div>
+      <div
+        className={`flex items-start justify-between gap-3 ${mapCoords ? "mb-3" : ""}`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          {flag && (
+            <span className="text-[24px] leading-none" aria-hidden="true">
+              {flag}
+            </span>
           )}
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
+              {locCity ?? position.location}
+            </div>
+            {locCountry && (
+              <div className="text-[11px] text-[var(--color-muted)]">
+                {locCountry}
+              </div>
+            )}
+          </div>
         </div>
+        {exactAddress && mapsUrl && (
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={t("open_in_maps")}
+            className="max-w-[55%] shrink-0 text-right text-[10px] leading-snug text-[var(--color-blue)] no-underline transition-colors hover:text-[var(--color-bright)]"
+          >
+            {exactAddress} ↗
+          </a>
+        )}
       </div>
       {mapCoords && (
         <PositionMapCardLazy lat={mapCoords.lat} lon={mapCoords.lon} />
@@ -1041,136 +1106,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
         </span>
       </div>
 
-      {/* ── Header ──────────────────────────────────────────────── */}
-      {/* Ridisegnato mobile-first (19/07): titolo a tutta larghezza, sotto
-          il nome azienda con il logo alla sua destra (nessun placeholder
-          quando il logo manca). Score e modalità vivono nella card
-          Panoramica; le azioni nel popup TeamActionsSheet. */}
-      <div className="mb-6 md:mb-8 pb-5 md:pb-6 border-b border-[var(--color-border)]">
-        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[var(--color-white)] mb-1.5">
-          {position.title}
-        </h1>
-        <div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap">
-          <span className="text-[var(--color-base)] font-medium">
-            {position.company}
-          </span>
-          {/* Logo aziendale (mig 056, skill logo-extraction): data-URI dal
-              record companies, a destra del nome. object-contain: mai
-              croppare. Senza logo, niente — nessun fallback a iniziali. */}
-          {company?.logo && (
-            <Avatar
-              name={position.company}
-              src={company.logo}
-              size="sm"
-              square
-              imgFit="contain"
-            />
-          )}
-          {/* La dicitura località vive nella card Località (con mappa);
-              qui resta solo come fallback quando la card non c'è. */}
-          {position.location && !hasLocationCard && (
-            <span className="text-[11px] text-[var(--color-muted)]">
-              · {position.location}
-            </span>
-          )}
-        </div>
-        {position.legacy_id != null && (
-          <div className="mt-4 flex items-center gap-3">
-            <TeamActionsSheet
-              active={
-                initialVerdict != null ||
-                position.geocode_requested === true ||
-                position.recheck_requested === true ||
-                position.write_requested === true ||
-                !!position.user_excluded_reason ||
-                tickets.some((tk) => tk.status !== "resolved")
-              }
-              feedback={
-                feedbackEnabled ? (
-                  <FeedbackButtons
-                    legacyId={position.legacy_id}
-                    initialVerdict={initialVerdict}
-                  />
-                ) : undefined
-              }
-              actions={
-                <>
-                  {/* Geocoding-on-demand (V8): l'utente richiede coordinate
-                      ufficio precise. Sempre attivo: l'Analista skippa
-                      autonomamente quando non ha materiale geografico utile
-                      (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]). */}
-                  <GeocodeRequestButton
-                    legacyId={position.legacy_id}
-                    initialRequested={position.geocode_requested === true}
-                    alreadyGeocoded={position.office_geocoded === true}
-                  />
-                  {/* Recheck ON-DEMAND (mig 042): il recheck non è più
-                      automatico, l'utente lo richiede qui → l'Analista
-                      ri-verifica la liveness. */}
-                  <RecheckButton
-                    legacyId={position.legacy_id}
-                    initialRequested={position.recheck_requested === true}
-                    lastOpenCheck={position.last_open_check}
-                  />
-                  {(() => {
-                    // Writer-on-demand (V6): il button e' visibile solo se la
-                    // posizione e' nello stato giusto. Il Capitano spawna lo
-                    // Scrittore quando il flag e' acceso (vedi BACKLOG
-                    // [JHT-WRITER-ON-DEMAND]).
-                    const wrongStatus = position.status !== "scored";
-                    const alreadyWriting = application != null;
-                    const isDisabled = wrongStatus || alreadyWriting;
-                    const reason = alreadyWriting
-                      ? t("cv_in_progress")
-                      : wrongStatus
-                        ? t("cv_only_from_scored").replace(
-                            "{status}",
-                            position.status,
-                          )
-                        : undefined;
-                    return (
-                      <WriteRequestButton
-                        legacyId={position.legacy_id}
-                        initialRequested={position.write_requested === true}
-                        disabled={isDisabled}
-                        disabledReason={reason}
-                      />
-                    );
-                  })()}
-                  {/* Esclusione manuale utente (mig 041): l'utente esclude
-                      l'offerta con una causa → status 'excluded', gli agenti
-                      smettono di ri-verificarne la liveness. */}
-                  <ExcludeButton
-                    legacyId={position.legacy_id}
-                    status={position.status}
-                    initialReason={position.user_excluded_reason ?? null}
-                  />
-                </>
-              }
-              tickets={
-                <TicketPanel
-                  legacyId={position.legacy_id}
-                  tickets={tickets}
-                  hideTitle
-                />
-              }
-            />
-            {position.url && (
-              <a
-                href={position.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
-                style={{
-                  borderColor: "var(--color-blue)",
-                  color: "var(--color-blue)",
-                }}
-              >
-                {t("original_listing")} ↗
-              </a>
-            )}
-          </div>
-        )}
+      {/* Precedente/Prossima SUBITO sotto il breadcrumb (scelta utente
+          20/07): sequenza della lista con filtri e ordinamento correnti.
+          Titolo e azienda vivono nella card Panoramica. */}
+      <div className="mb-5 -mt-2">
+        <PrevNextNav id={position.id} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1702,6 +1642,109 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Azioni di coda (scelta utente 20/07): Feedback e richieste +
+          annuncio originale come ULTIMI elementi, più prev/next ripetuto. */}
+      <div className="mt-6 space-y-4">
+        {position.legacy_id != null && (
+          <div className="mt-4 flex items-center gap-3">
+            <TeamActionsSheet
+              active={
+                initialVerdict != null ||
+                position.geocode_requested === true ||
+                position.recheck_requested === true ||
+                position.write_requested === true ||
+                !!position.user_excluded_reason ||
+                tickets.some((tk) => tk.status !== "resolved")
+              }
+              feedback={
+                feedbackEnabled ? (
+                  <FeedbackButtons
+                    legacyId={position.legacy_id}
+                    initialVerdict={initialVerdict}
+                  />
+                ) : undefined
+              }
+              actions={
+                <>
+                  {/* Geocoding-on-demand (V8): l'utente richiede coordinate
+                      ufficio precise. Sempre attivo: l'Analista skippa
+                      autonomamente quando non ha materiale geografico utile
+                      (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]). */}
+                  <GeocodeRequestButton
+                    legacyId={position.legacy_id}
+                    initialRequested={position.geocode_requested === true}
+                    alreadyGeocoded={position.office_geocoded === true}
+                  />
+                  {/* Recheck ON-DEMAND (mig 042): il recheck non è più
+                      automatico, l'utente lo richiede qui → l'Analista
+                      ri-verifica la liveness. */}
+                  <RecheckButton
+                    legacyId={position.legacy_id}
+                    initialRequested={position.recheck_requested === true}
+                    lastOpenCheck={position.last_open_check}
+                  />
+                  {(() => {
+                    // Writer-on-demand (V6): il button e' visibile solo se la
+                    // posizione e' nello stato giusto. Il Capitano spawna lo
+                    // Scrittore quando il flag e' acceso (vedi BACKLOG
+                    // [JHT-WRITER-ON-DEMAND]).
+                    const wrongStatus = position.status !== "scored";
+                    const alreadyWriting = application != null;
+                    const isDisabled = wrongStatus || alreadyWriting;
+                    const reason = alreadyWriting
+                      ? t("cv_in_progress")
+                      : wrongStatus
+                        ? t("cv_only_from_scored").replace(
+                            "{status}",
+                            position.status,
+                          )
+                        : undefined;
+                    return (
+                      <WriteRequestButton
+                        legacyId={position.legacy_id}
+                        initialRequested={position.write_requested === true}
+                        disabled={isDisabled}
+                        disabledReason={reason}
+                      />
+                    );
+                  })()}
+                  {/* Esclusione manuale utente (mig 041): l'utente esclude
+                      l'offerta con una causa → status 'excluded', gli agenti
+                      smettono di ri-verificarne la liveness. */}
+                  <ExcludeButton
+                    legacyId={position.legacy_id}
+                    status={position.status}
+                    initialReason={position.user_excluded_reason ?? null}
+                  />
+                </>
+              }
+              tickets={
+                <TicketPanel
+                  legacyId={position.legacy_id}
+                  tickets={tickets}
+                  hideTitle
+                />
+              }
+            />
+            {position.url && (
+              <a
+                href={position.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
+                style={{
+                  borderColor: "var(--color-blue)",
+                  color: "var(--color-blue)",
+                }}
+              >
+                {t("original_listing")} ↗
+              </a>
+            )}
+          </div>
+        )}
+        <PrevNextNav id={position.id} />
       </div>
     </div>
   );

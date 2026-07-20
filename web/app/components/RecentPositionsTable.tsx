@@ -4,19 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { DashboardPosition } from "@/lib/queries";
 import UnseenDot from "@/app/components/UnseenDot";
-
-function scoreClass(s?: number | null) {
-  if (!s) return "text-[var(--color-dim)]";
-  if (s >= 75) return "text-[var(--color-green)]";
-  if (s >= 55) return "text-[var(--color-yellow)]";
-  return "text-[var(--color-red)]";
-}
-function scoreBg(s?: number | null) {
-  if (!s) return "var(--color-border)";
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
-}
+import { scoreSpectrumCss } from "@/lib/score-color";
 
 export type TableLabels = {
   title: string;
@@ -161,11 +149,6 @@ export default function RecentPositionsTable({
                   </td>
                   <td className="px-4 py-3 font-medium">
                     <span className="flex items-center gap-2">
-                      <UnseenDot
-                        id={p.id}
-                        label={labels.unseen}
-                        initialSeen={p.seen}
-                      />
                       <Link
                         href={`/positions/${p.id}`}
                         title={p.title ?? undefined}
@@ -173,6 +156,11 @@ export default function RecentPositionsTable({
                       >
                         {p.title}
                       </Link>
+                      <UnseenDot
+                        id={p.id}
+                        label={labels.unseen}
+                        initialSeen={p.seen}
+                      />
                     </span>
                   </td>
                   <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
@@ -209,7 +197,8 @@ export default function RecentPositionsTable({
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-center">
                       <span
-                        className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
+                        className="text-[12px] font-semibold w-6 text-right tabular-nums"
+                        style={{ color: scoreSpectrumCss(p.score) }}
                       >
                         {p.score ?? "—"}
                       </span>
@@ -221,7 +210,7 @@ export default function RecentPositionsTable({
                           className="h-full rounded-full"
                           style={{
                             width: `${p.score ?? 0}%`,
-                            background: scoreBg(p.score),
+                            background: scoreSpectrumCss(p.score),
                           }}
                         />
                       </div>

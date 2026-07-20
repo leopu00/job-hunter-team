@@ -87,17 +87,17 @@ export function IconThumbsDown({ size }: { size?: number }) {
   );
 }
 
-export function IconStarHalf({ size }: { size?: number }) {
-  // Stella a metà: outline pieno + metà sinistra riempita — "interessante,
-  // ma poco" nel linguaggio dei rating.
+export function IconThumbsMeh({ size }: { size?: number }) {
+  // Pollice ORIZZONTALE che punta a SINISTRA ("così così", versante
+  // negativo della scala): il giudizio 'poco interessante'. È il pollice
+  // VERSO ruotato di 90° in senso orario — la mezza stella non si capiva
+  // e il pollice-su ruotato pendeva dal lato sbagliato (utente 20/07).
   return (
     <Svg size={size}>
-      <path d="m12 3 2.7 5.8 6.3.8-4.7 4.3 1.3 6.2L12 17l-5.6 3.1 1.3-6.2L3 9.6l6.3-.8Z" />
-      <path
-        d="M12 3 9.3 8.8 3 9.6l4.7 4.3-1.3 6.2L12 17Z"
-        fill="currentColor"
-        stroke="none"
-      />
+      <g transform="rotate(90 12 12)">
+        <path d="M17 14V2" />
+        <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
+      </g>
     </Svg>
   );
 }
@@ -185,6 +185,14 @@ export function IconCalendar({ size }: { size?: number }) {
     <Svg size={size}>
       <rect x="3" y="5" width="18" height="17" rx="2" />
       <path d="M16 2v5M8 2v5M3 11h18" />
+    </Svg>
+  );
+}
+
+export function IconFilter({ size }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <path d="M22 3H2l8 9.5V21l4-2v-6.5L22 3Z" />
     </Svg>
   );
 }

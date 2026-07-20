@@ -2,6 +2,7 @@
 
 // Formattazione condivisa del feed/log attività: stessa resa "parlante" per
 // ruolo in dashboard (RecentActivityFeed) e nella pagina log (ActivityLogTable).
+import { scoreSpectrumCss } from "@/lib/score-color";
 import Link from "next/link";
 import type { RecentActivityEvent } from "@/lib/team-activity";
 import { ROLE_META, timeAgo, dmhm } from "@/lib/team-activity-meta";
@@ -114,9 +115,7 @@ const LEAD_KEY: Record<string, keyof ActivityStrings> = {
 
 // Colore del punteggio (stessa scala di MapCharts/dashboard).
 export function scoreColor(s: number): string {
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
+  return scoreSpectrumCss(s);
 }
 
 // Nomi "belli" delle fonti note; per le altre prettify generico.

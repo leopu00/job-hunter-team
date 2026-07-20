@@ -6,7 +6,7 @@ import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import {
   IconX,
-  IconStarHalf,
+  IconThumbsMeh,
   IconThumbsUp,
   IconStar,
 } from "@/app/(protected)/swipe/icons";
@@ -40,7 +40,7 @@ const VERDICTS: Record<
     exclude: true,
   },
   review_low: {
-    Icon: IconStarHalf,
+    Icon: IconThumbsMeh,
     color: "var(--color-orange)",
     action: "like",
     score: 2,
