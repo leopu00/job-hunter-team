@@ -3,19 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://71fpbod3v1wy"
-path="res://.godot/imported/long_table_up.png-431f7de6d81a9dae7846d6ec2ff665f7.ctex"
+path.s3tc="res://.godot/imported/long_table_up.png-431f7de6d81a9dae7846d6ec2ff665f7.s3tc.ctex"
+path.etc2="res://.godot/imported/long_table_up.png-431f7de6d81a9dae7846d6ec2ff665f7.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/gen-art/furniture/long_table_up.png"
-dest_files=["res://.godot/imported/long_table_up.png-431f7de6d81a9dae7846d6ec2ff665f7.ctex"]
+dest_files=["res://.godot/imported/long_table_up.png-431f7de6d81a9dae7846d6ec2ff665f7.s3tc.ctex", "res://.godot/imported/long_table_up.png-431f7de6d81a9dae7846d6ec2ff665f7.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -23,7 +25,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

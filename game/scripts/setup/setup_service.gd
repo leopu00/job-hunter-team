@@ -282,23 +282,47 @@ static func _do_stop_container(vps: Dictionary) -> Dictionary:
 			else "Arresto container fallito: " + str(result.get("out", "")).right(220)}
 
 
+## Flusso "ATTIVA CONTAINER" (porting della logica desktop Electron,
+## regola detect-first): daemon giù → avvia il runtime installato e POLLA
+## finché risponde (2s × 120s, progresso a video) → `docker start jht` →
+## container assente → compose imbarcato + `compose up` nel terminale
+## visibile (il pull dell'immagine GHCR è lungo: l'utente deve vederlo).
 func _do_start_container() -> Dictionary:
+	Log.call_deferred("info", "setup", "attiva container: probe del daemon Docker")
 	var daemon := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Server.Version}}"] ))
 	if daemon["code"] != 0:
-		_start_docker_runtime()
-		return {"ok": false, "message": "Runtime Docker avviato: attendi qualche secondo e riprova"}
+		var launch := _launch_docker_runtime()
+		if not bool(launch["ok"]):
+			return launch
+		_progress("container", str(launch["message"]))
+		var waited := 0
+		while waited < 120:
+			OS.delay_msec(2000)
+			waited += 2
+			daemon = _run("docker", PackedStringArray(["version", "--format",
+					"{{.Server.Version}}"] ))
+			if daemon["code"] == 0:
+				break
+			_progress("container", "Avvio di Docker in corso… (%ds)" % waited)
+		if daemon["code"] != 0:
+			Log.call_deferred("warn", "setup", "docker non risponde dopo 120s")
+			return {"ok": false, "message": "Docker non risponde dopo 2 minuti. " \
+					+ "Aprilo manualmente (al primo avvio chiede di accettare i termini), poi riprova."}
+		Log.call_deferred("info", "setup", "daemon Docker pronto (%ds)" % waited)
 	var start := _run("docker", PackedStringArray(["start", "jht"] ))
 	if start["code"] == 0:
+		Log.call_deferred("info", "setup", "container jht avviato")
 		return {"ok": true, "message": "Container JHT attivo"}
-	var compose := _find_compose_file()
+	# Il container non esiste ancora: prima attivazione via compose.
+	var compose := _ensure_compose_file()
 	if compose == "":
-		return {"ok": false, "message": "Runtime JHT non trovato. Reinstalla l'app per scaricare il container."}
-	var up := _run("docker", PackedStringArray(["compose", "-f", compose,
-			"up", "-d", "jht"] ))
-	return {"ok": up["code"] == 0,
-			"message": "Container JHT creato e avviato" if up["code"] == 0 \
-			else "Avvio container fallito: " + str(up["out"]).right(240)}
+		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
+	_ensure_host_dirs()
+	Log.call_deferred("info", "setup", "prima attivazione: compose up da " + compose)
+	call_deferred("_open_compose_terminal", compose)
+	return {"ok": true, "message": "Prima attivazione: scarico l'immagine del team nel " \
+			+ "terminale. Al termine la spia CONTAINER diventa verde da sola."}
 
 
 static func _find_compose_file() -> String:
@@ -314,16 +338,110 @@ static func _find_compose_file() -> String:
 	return ""
 
 
-static func _start_docker_runtime() -> void:
+## Il compose di produzione è image-only (GHCR): basta scriverlo su disco,
+## niente payload da spedire. Copia funzionale di /docker-compose.yml.
+const RUNTIME_COMPOSE := """# Job Hunter Team — runtime container (scritto dal gioco)
+# Copia funzionale di docker-compose.yml del repo (image-only, GHCR).
+services:
+  jht:
+    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}
+    container_name: jht
+    command: ["pid1"]
+    environment:
+      - HOME=/jht_home
+      - JHT_HOME=/jht_home
+      - JHT_USER_DIR=/jht_user
+      - JHT_HOST_TYPE=${JHT_HOST_TYPE:-}
+      - JHT_LANG=${JHT_LANG:-en}
+      - JHT_USER_TZ=${JHT_USER_TZ:-UTC}
+      - IS_CONTAINER=1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+      - NEXT_PUBLIC_JHT_DEPLOY=${NEXT_PUBLIC_JHT_DEPLOY:-local}
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - TURBOPACK_WATCH_POLL=true
+    volumes:
+      - ${HOME}/.jht:/jht_home
+      - ${HOME}/Documents/Job Hunter Team:/jht_user
+    ports:
+      - "127.0.0.1:3000:3000"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+"""
+
+
+static func _ensure_compose_file() -> String:
+	var found := _find_compose_file()
+	if found != "":
+		return found
+	var path := _jht_home().path_join("runtime/docker-compose.yml")
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return ""
+	f.store_string(RUNTIME_COMPOSE)
+	f.close()
+	return path
+
+
+static func _ensure_host_dirs() -> void:
+	# I bind-mount del compose: creati dall'app, non dal daemon (che su
+	# alcune piattaforme li creerebbe con owner sbagliato).
+	DirAccess.make_dir_recursive_absolute(_jht_home())
+	var docs := OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" \
+			else OS.get_environment("HOME")
+	DirAccess.make_dir_recursive_absolute(
+			docs.rstrip("/\\").path_join("Documents/Job Hunter Team"))
+
+
+func _open_compose_terminal(compose: String) -> void:
+	var inner := "docker compose -f " + _shell_quote(compose) + " up -d jht"
+	var command := inner
+	if OS.get_name() == "Windows":
+		# ${HOME} nel compose non esiste nell'ambiente Windows: iniettato qui.
+		command = "set \"HOME=%USERPROFILE%\" && " + inner
+	terminal_requested.emit("container-setup", embedded_terminal_spec(
+			"Prima attivazione del container",
+			"Scarico l'immagine del team (qualche GB, dipende dalla rete). " \
+			+ "Quando il comando termina puoi chiudere la console: la checklist si aggiorna da sola.",
+			command))
+
+
+const DOCKER_DESKTOP_WIN := "C:/Program Files/Docker/Docker/Docker Desktop.exe"
+
+## Avvia il runtime Docker installato (mai installarne uno se un altro può
+## già rispondere — regola detect-first, ADR-0006). Ritorna ok=false con
+## istruzioni quando non c'è nulla da avviare.
+static func _launch_docker_runtime() -> Dictionary:
 	match OS.get_name():
-		"macOS":
-			if _run("colima", PackedStringArray(["status"] ))["code"] != -1:
-				OS.create_process("colima", PackedStringArray(["start"]))
-			else:
-				OS.create_process("open", PackedStringArray(["-a", "Docker"]))
 		"Windows":
-			OS.create_process("cmd.exe", PackedStringArray(["/c", "start", "", 
-					"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"]))
+			if not FileAccess.file_exists(DOCKER_DESKTOP_WIN):
+				return {"ok": false, "message": "Docker Desktop non è installato. " \
+						+ "Usa INSTALLA / RIPARA RUNTIME qui sotto."}
+			OS.create_process(DOCKER_DESKTOP_WIN, PackedStringArray())
+			return {"ok": true, "message": "Docker Desktop avviato: attendo il motore…"}
+		"macOS":
+			if _run("colima", PackedStringArray(["version"] ))["code"] != -1:
+				OS.create_process("colima", PackedStringArray(["start"]))
+				return {"ok": true, "message": "Colima avviato: attendo il motore…"}
+			if DirAccess.dir_exists_absolute("/Applications/Docker.app"):
+				OS.create_process("open", PackedStringArray(["-a", "Docker"]))
+				return {"ok": true, "message": "Docker Desktop avviato: attendo il motore…"}
+			return {"ok": false, "message": "Nessun runtime Docker trovato. " \
+					+ "Usa INSTALLA / RIPARA RUNTIME qui sotto."}
+		_:
+			return {"ok": false, "message": "Il servizio Docker è spento. " \
+					+ "Avvialo con: sudo systemctl start docker"}
+
+
+## Progresso intermedio di un'azione, emesso dal worker thread.
+func _progress(action: String, message: String) -> void:
+	call_deferred("emit_signal", "action_changed", action, true, message, true)
 
 
 func install_provider(provider: String) -> void:
@@ -449,6 +567,21 @@ func open_doctor() -> void:
 
 
 func open_runtime_install() -> void:
+	Log.info("setup", "installa runtime richiesto (%s)" % OS.get_name())
+	if OS.get_name() == "Windows":
+		# Niente bash su Windows: winget se c'è (gestisce lui il prompt UAC),
+		# altrimenti la pagina ufficiale di download nel browser.
+		var command := "where winget >nul 2>&1 && " \
+				+ "(winget install -e --id Docker.DockerDesktop " \
+				+ "--accept-package-agreements --accept-source-agreements) || " \
+				+ "(echo winget non disponibile: apro la pagina di download di Docker Desktop... " \
+				+ "& start https://www.docker.com/products/docker-desktop/)"
+		terminal_requested.emit("runtime-install", embedded_terminal_spec(
+				"Installazione Docker Desktop",
+				"Conferma l'autorizzazione di Windows se appare. Al termine avvia Docker Desktop " \
+				+ "una prima volta (accetta i termini), poi torna qui e premi ATTIVA CONTAINER.",
+				command))
+		return
 	var command := "curl -fsSL https://jobhunterteam.ai/install.sh | " \
 			+ "JHT_SKIP_ONBOARD=1 bash"
 	terminal_requested.emit("runtime-install", embedded_terminal_spec(
@@ -899,6 +1032,7 @@ static func _run_cli(vps: Dictionary, args: PackedStringArray) -> Dictionary:
 
 func _start_action(action: String, callable: Callable) -> void:
 	_action_running = true
+	Log.info("setup", "azione avviata: " + action)
 	action_changed.emit(action, true, "operazione in corso…", true)
 	WorkerThreadPool.add_task(_run_action.bind(action, callable))
 
@@ -910,6 +1044,9 @@ func _run_action(action: String, callable: Callable) -> void:
 
 func _finish_action(action: String, result: Dictionary) -> void:
 	_action_running = false
+	Log.info("setup", "azione %s → %s: %s" % [action,
+			"ok" if bool(result.get("ok", false)) else "FALLITA",
+			str(result.get("message", ""))])
 	action_changed.emit(action, false, str(result.get("message", "")),
 			bool(result.get("ok", false)))
 	refresh()
