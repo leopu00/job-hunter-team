@@ -4,6 +4,7 @@ extends SceneTree
 
 const NavGridScript = preload("res://scripts/office/nav_grid.gd")
 const DepartmentDefsScript = preload("res://scripts/office/department_defs.gd")
+const DeptRugsScript = preload("res://scripts/office/dept_rugs.gd")
 const FurnitureDefsScript = preload("res://scripts/office/furniture_defs.gd")
 const CharacterDefsScript = preload("res://scripts/characters/character_defs.gd")
 const HandoffStationScript = preload("res://scripts/office/handoff_station.gd")
@@ -178,13 +179,11 @@ func _test_writer_radial_layout() -> void:
 ## Ogni reparto ora condivide lo stesso contratto a sei spicchi: sedie verso
 ## il centro, corpi verso l'esterno e quattro viste raster realmente importate.
 func _test_all_department_radial_layouts() -> void:
-	var centers := {
-		"scout": Vector2(775, 560),
-		"analisti": Vector2(2735, 430),
-		"scorer": Vector2(1455, 1172),
-		"scrittori": Vector2(690, 1725),
-		"critici": Vector2(2700, 1740),
-	}
+	# La sorgente della verità è il tappeto: così un reparto spostato non
+	# può continuare a passare il test rispetto a un vecchio centro hardcoded.
+	var centers := {}
+	for dept in DepartmentDefsScript.DEPT_ORDER:
+		centers[dept] = DeptRugsScript.RUGS[dept][0]
 	var expected_facing := ["left", "left", "up", "down", "right", "right"]
 	var facing_vector := {
 		"up": Vector2.UP, "right": Vector2.RIGHT,
