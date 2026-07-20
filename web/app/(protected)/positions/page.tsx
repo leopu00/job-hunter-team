@@ -854,21 +854,22 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             </div>
           ) : (
             visiblePositions.map((p: PositionWithScore) => (
-              <Link
+              <div
                 key={p.id}
-                href={`/positions/${p.id}`}
-                className="block rounded-lg border p-3 no-underline hover:no-underline"
+                className="rounded-lg border p-3"
                 style={{
                   borderColor: "var(--color-border)",
                   background: "var(--color-card)",
-                  // La card è un "pulsante": niente flash/underline di tap
-                  // su iOS — l'unico testo in stile link è il titolo.
-                  WebkitTapHighlightColor: "transparent",
                 }}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <span
-                    className="min-w-0 text-[13px] font-semibold leading-snug"
+                  {/* SOLO il titolo è il link: la card-link intera al tap
+                      sottolineava ogni riga (a:hover globale; su touch la
+                      variante hover: di Tailwind non esiste — media query
+                      hover:hover — quindi non è sovrascrivibile lì). */}
+                  <Link
+                    href={`/positions/${p.id}`}
+                    className="min-w-0 text-[13px] font-semibold leading-snug no-underline"
                     style={{
                       color: "var(--color-green)",
                       display: "-webkit-box",
@@ -878,15 +879,14 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     }}
                   >
                     {p.title}{" "}
-                    {/* NEW dentro il flusso del titolo: da flex-sibling
-                        finiva spinto al bordo destro coi titoli a 2 righe.
-                        Un giudizio dato = letta: lì il NEW non compare. */}
+                    {/* NEW inline nel flusso del titolo (inline-block: non
+                        eredita l'underline). Giudicata = letta: niente NEW. */}
                     <UnseenDot
                       id={String(p.id)}
                       label={tr("unseen_marker")}
                       initialSeen={p.seen || verdictOfP(p) != null}
                     />
-                  </span>
+                  </Link>
                   <span className="shrink-0 flex items-center gap-1.5">
                     {(() => {
                       const v = verdictOfP(p);
@@ -941,7 +941,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     {formatFoundAt(p.last_action_at || p.found_at, locale)}
                   </span>
                 </div>
-              </Link>
+              </div>
             ))
           )}
         </div>
