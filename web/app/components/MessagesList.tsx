@@ -28,8 +28,10 @@ interface Props {
 // compaiono come sezioni extra in coda.
 const CORE_AGENTS = ["assistente", "mentor", "capitano"];
 
-// Mini-guida per sezione: cosa fa l'agente, cosa chiedergli e cosa no.
+// Mini-guida per sezione: cosa fa l'agente e cosa chiedergli.
 // Sintesi dei prompt in agents/{assistente,mentor,capitano}/*.md.
+// (Il "cosa non chiedergli" è stato tolto su richiesta utente 20/07;
+// i dont restano nei dati ma non vengono renderizzati.)
 type AgentGuide = { role: string; ask: string[]; dont: string[] };
 const AGENT_GUIDE: Record<string, Record<string, AgentGuide>> = {
   assistente: {
@@ -521,19 +523,11 @@ export default function MessagesList({ initialMessages }: Props) {
                 <p className="m-0 mb-1 text-[10.5px] leading-relaxed text-[var(--color-muted)]">
                   {guide.role}
                 </p>
-                <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-[10px] leading-relaxed">
-                  <span className="text-[var(--color-dim)]">
-                    <span className="font-semibold text-[var(--color-green)]">
-                      {tr("ask_label")}:
-                    </span>{" "}
-                    {guide.ask.join(" · ")}
-                  </span>
-                  <span className="text-[var(--color-dim)]">
-                    <span className="font-semibold text-[var(--color-red)]">
-                      {tr("dont_label")}:
-                    </span>{" "}
-                    {guide.dont.join(" · ")}
-                  </span>
+                <div className="text-[10px] leading-relaxed text-[var(--color-dim)]">
+                  <span className="font-semibold text-[var(--color-green)]">
+                    {tr("ask_label")}:
+                  </span>{" "}
+                  {guide.ask.join(" · ")}
                 </div>
               </div>
             );
