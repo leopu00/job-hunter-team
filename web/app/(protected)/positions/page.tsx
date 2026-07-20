@@ -6,6 +6,7 @@ import {
   getVerdictMapByLegacyId,
 } from "@/lib/queries";
 import { colorForFamily } from "@/lib/position-classifier";
+import { scoreSpectrumCss } from "@/lib/score-color";
 import { IconStar, IconStarHalf, IconThumbsUp, IconX } from "../swipe/icons";
 import {
   getExchangeRates,
@@ -902,7 +903,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       ) : null;
                     })()}
                     <span
-                      className={`text-[13px] font-bold tabular-nums ${scoreClass(p.score)}`}
+                      className="flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
+                      style={{
+                        color: scoreSpectrumCss(p.score),
+                        borderColor: scoreSpectrumCss(p.score),
+                      }}
                     >
                       {p.score ?? "—"}
                     </span>
@@ -1201,7 +1206,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 justify-center">
                             <span
-                              className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
+                              className="text-[12px] font-semibold w-6 text-right tabular-nums"
+                              style={{ color: scoreSpectrumCss(p.score) }}
                             >
                               {p.score ?? "—"}
                             </span>
