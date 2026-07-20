@@ -183,7 +183,9 @@ print(json.dumps(sample))
 ## RSS per sessione tmux (pane + intero albero discendenti) e serie token
 ## reali già prodotte dal token-meter della VPS.
 const AGENT_METRICS_PY := """
-import json, subprocess
+import json, subprocess, time
+from collections import deque
+from datetime import datetime
 
 def run(args):
     try: return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL)
@@ -209,6 +211,21 @@ def tree_rss(root):
         seen.add(pid); total += procs.get(pid,(0,0))[1]; todo.extend(children.get(pid,[]))
     return total * 1024
 agent_ram = {name: tree_rss(pid) for name,pid in panes.items()}
+agent_cpu={}
+agent_vitals_ts=''
+agent_vitals_age_s=-1
+try:
+    with open('/jht_home/logs/agent-vitals.jsonl') as f:
+        tail=deque((line for line in f if line.strip()), maxlen=1)
+    if tail:
+        vitals=json.loads(tail[0])
+        agent_vitals_ts=str(vitals.get('ts') or '')
+        for name, values in (vitals.get('agents') or {}).items():
+            agent_cpu[str(name).lower()]=float((values or {}).get('cpu_pct') or 0)
+        if agent_vitals_ts:
+            sampled=datetime.fromisoformat(agent_vitals_ts.replace('Z','+00:00')).timestamp()
+            agent_vitals_age_s=max(0, round(time.time()-sampled, 1))
+except Exception: pass
 series=[]
 generated_at=''
 window_h=0
@@ -220,7 +237,10 @@ try:
     window_h=float(usage.get('window_h') or 0)
     bucket_sec=int(usage.get('bucket_sec') or 0)
 except Exception: pass
-print(json.dumps({'agent_ram':agent_ram,'token_series':series,
+print(json.dumps({'agent_ram':agent_ram,'agent_cpu':agent_cpu,
+                  'agent_vitals_ts':agent_vitals_ts,
+                  'agent_vitals_age_s':agent_vitals_age_s,
+                  'token_series':series,
                   'generated_at':generated_at,'window_h':window_h,
                   'bucket_sec':bucket_sec}))
 """
