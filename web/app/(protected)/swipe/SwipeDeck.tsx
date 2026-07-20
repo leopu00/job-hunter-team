@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
+import { scoreSpectrumCss } from "@/lib/score-color";
 import type { Locale } from "@/i18n/config";
 import {
   IconCalendar,
@@ -583,10 +584,7 @@ function stripMd(s: string): string {
 }
 
 function scoreColor(score: number | null): string {
-  if (score == null) return "var(--color-dim)";
-  if (score >= 70) return "var(--color-green)";
-  if (score >= 50) return "var(--color-yellow)";
-  return "var(--color-muted)";
+  return scoreSpectrumCss(score);
 }
 
 // Data di ritrovamento + conteggio giorni passati (scelta utente 19/07).

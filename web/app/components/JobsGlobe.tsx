@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
-import { scoreToRgb } from "@/lib/score-color";
+import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
 
 // Stringhe UI hardcoded localizzate (chart/empty/aria/popup).
 const T: Record<string, Record<string, string>> = {
@@ -666,10 +666,7 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
 
 // Colore del match score (fasce allineate alla pagina Posizioni).
 function matchScoreColor(s: number | null): string {
-  if (s == null) return "var(--color-dim)";
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
+  return scoreSpectrumCss(s ?? null);
 }
 
 // Data "trovata il" leggibile (gg/mm/aaaa). Solo client (la vignetta

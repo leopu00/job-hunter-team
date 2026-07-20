@@ -1,5 +1,7 @@
 "use client";
 
+import { scoreSpectrumCss } from "@/lib/score-color";
+
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocale } from "@/lib/use-locale";
 import {
@@ -204,10 +206,7 @@ type CoordItem = {
 const REMOTE_LABEL = "Remote";
 
 function scoreColor(s: number | null): string {
-  if (s == null) return "var(--color-dim)";
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
+  return scoreSpectrumCss(s);
 }
 
 // Tree gerarchico restituito da /api/positions/locations
