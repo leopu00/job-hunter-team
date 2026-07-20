@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
@@ -10,6 +11,7 @@ import {
   IconChat,
   IconCheckCircle,
   IconChevronLeft,
+  IconFilter,
   IconMic,
   IconPin,
   IconStar,
@@ -158,6 +160,14 @@ const T: Record<
     today: string;
     yesterday: string;
     daysAgo: string; // template con {n}
+    filters: string;
+    fScore: string;
+    fSalary: string;
+    fCategory: string;
+    fMode: string;
+    fReset: string;
+    fCount: string; // template con {n}
+    fNoResults: string;
   }
 > = {
   it: {
@@ -179,7 +189,7 @@ const T: Record<
     voiceError: "Dettatura non disponibile su questo dispositivo",
     voiceDenied:
       "Permesso per il microfono negato — controlla le impostazioni del browser",
-    modePending: "Da giudicare",
+    modePending: "Da recensire",
     modeReviewed: "Recensite",
     reviewedEmpty: "Ancora nessuna posizione recensita.",
     emptyTitle: "Mazzo finito!",
@@ -192,6 +202,14 @@ const T: Record<
     today: "oggi",
     yesterday: "ieri",
     daysAgo: "{n} giorni fa",
+    filters: "Filtri",
+    fScore: "Score",
+    fSalary: "Stipendio (k€ / anno)",
+    fCategory: "Categoria",
+    fMode: "Modalità",
+    fReset: "Azzera filtri",
+    fCount: "{n} posizioni",
+    fNoResults: "Nessuna posizione corrisponde ai filtri.",
   },
   en: {
     title: "Swipe",
@@ -211,7 +229,7 @@ const T: Record<
     voiceListening: "Listening…",
     voiceError: "Dictation not available on this device",
     voiceDenied: "Microphone permission denied — check your browser settings",
-    modePending: "Pending",
+    modePending: "To review",
     modeReviewed: "Reviewed",
     reviewedEmpty: "No reviewed positions yet.",
     emptyTitle: "Deck finished!",
@@ -224,6 +242,14 @@ const T: Record<
     today: "today",
     yesterday: "yesterday",
     daysAgo: "{n} days ago",
+    filters: "Filters",
+    fScore: "Score",
+    fSalary: "Salary (k€ / yr)",
+    fCategory: "Category",
+    fMode: "Work mode",
+    fReset: "Reset filters",
+    fCount: "{n} positions",
+    fNoResults: "No positions match the filters.",
   },
   hu: {
     title: "Swipe",
@@ -257,6 +283,14 @@ const T: Record<
     today: "ma",
     yesterday: "tegnap",
     daysAgo: "{n} napja",
+    filters: "Szűrők",
+    fScore: "Pontszám",
+    fSalary: "Fizetés (k€ / év)",
+    fCategory: "Kategória",
+    fMode: "Munkavégzés",
+    fReset: "Szűrők törlése",
+    fCount: "{n} pozíció",
+    fNoResults: "Nincs a szűrőknek megfelelő pozíció.",
   },
   es: {
     title: "Swipe",
@@ -277,7 +311,7 @@ const T: Record<
     voiceError: "Dictado no disponible en este dispositivo",
     voiceDenied:
       "Permiso de micrófono denegado — revisa la configuración del navegador",
-    modePending: "Pendientes",
+    modePending: "Por revisar",
     modeReviewed: "Revisadas",
     reviewedEmpty: "Aún no hay posiciones revisadas.",
     emptyTitle: "¡Mazo terminado!",
@@ -290,6 +324,14 @@ const T: Record<
     today: "hoy",
     yesterday: "ayer",
     daysAgo: "hace {n} días",
+    filters: "Filtros",
+    fScore: "Puntuación",
+    fSalary: "Salario (k€ / año)",
+    fCategory: "Categoría",
+    fMode: "Modalidad",
+    fReset: "Restablecer filtros",
+    fCount: "{n} posiciones",
+    fNoResults: "Ninguna posición coincide con los filtros.",
   },
   de: {
     title: "Swipe",
@@ -309,7 +351,7 @@ const T: Record<
     voiceListening: "Ich höre zu…",
     voiceError: "Diktat auf diesem Gerät nicht verfügbar",
     voiceDenied: "Mikrofonzugriff verweigert — prüfe die Browser-Einstellungen",
-    modePending: "Offen",
+    modePending: "Zu bewerten",
     modeReviewed: "Bewertet",
     reviewedEmpty: "Noch keine bewerteten Stellen.",
     emptyTitle: "Stapel geschafft!",
@@ -322,6 +364,14 @@ const T: Record<
     today: "heute",
     yesterday: "gestern",
     daysAgo: "vor {n} Tagen",
+    filters: "Filter",
+    fScore: "Score",
+    fSalary: "Gehalt (k€ / Jahr)",
+    fCategory: "Kategorie",
+    fMode: "Arbeitsmodus",
+    fReset: "Filter zurücksetzen",
+    fCount: "{n} Stellen",
+    fNoResults: "Keine Stellen entsprechen den Filtern.",
   },
   fr: {
     title: "Swipe",
@@ -342,7 +392,7 @@ const T: Record<
     voiceError: "Dictée non disponible sur cet appareil",
     voiceDenied:
       "Autorisation du micro refusée — vérifiez les réglages du navigateur",
-    modePending: "À juger",
+    modePending: "À évaluer",
     modeReviewed: "Évaluées",
     reviewedEmpty: "Aucun poste évalué pour l\u2019instant.",
     emptyTitle: "Paquet terminé !",
@@ -359,6 +409,14 @@ const T: Record<
     today: "aujourd’hui",
     yesterday: "hier",
     daysAgo: "il y a {n} jours",
+    filters: "Filtres",
+    fScore: "Score",
+    fSalary: "Salaire (k€ / an)",
+    fCategory: "Catégorie",
+    fMode: "Mode de travail",
+    fReset: "Réinitialiser les filtres",
+    fCount: "{n} postes",
+    fNoResults: "Aucun poste ne correspond aux filtres.",
   },
   pt: {
     title: "Swipe",
@@ -379,7 +437,7 @@ const T: Record<
     voiceError: "Ditado não disponível neste dispositivo",
     voiceDenied:
       "Permissão do microfone negada — verifique as configurações do navegador",
-    modePending: "Pendentes",
+    modePending: "Por avaliar",
     modeReviewed: "Avaliadas",
     reviewedEmpty: "Ainda não há vagas avaliadas.",
     emptyTitle: "Baralho concluído!",
@@ -392,6 +450,14 @@ const T: Record<
     today: "hoje",
     yesterday: "ontem",
     daysAgo: "há {n} dias",
+    filters: "Filtros",
+    fScore: "Pontuação",
+    fSalary: "Salário (k€ / ano)",
+    fCategory: "Categoria",
+    fMode: "Modalidade",
+    fReset: "Repor filtros",
+    fCount: "{n} vagas",
+    fNoResults: "Nenhuma vaga corresponde aos filtros.",
   },
 };
 
@@ -547,7 +613,76 @@ export default function SwipeDeck({
   const [mode, setMode] = useState<"pending" | "reviewed">("pending");
   const [idxP, setIdxP] = useState(0);
   const [idxR, setIdxR] = useState(0);
-  const cards = mode === "pending" ? pending : reviewed;
+
+  // ── Filtri (client-side, sul mazzo già caricato) ─────────────────
+  // Stessa famiglia di filtri della pagina posizioni: range score, range
+  // stipendio (k€, il grosso del dataset è EUR), categorie, modalità.
+  // Con un filtro attivo le card senza il dato corrispondente escono.
+  const [filters, setFilters] = useState({
+    sMin: 0,
+    sMax: 100,
+    salMin: 0,
+    salMax: 200,
+    fams: [] as string[],
+    modes: [] as string[],
+  });
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const filterActive =
+    filters.sMin > 0 ||
+    filters.sMax < 100 ||
+    filters.salMin > 0 ||
+    filters.salMax < 200 ||
+    filters.fams.length > 0 ||
+    filters.modes.length > 0;
+  const families = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [...pending, ...reviewed]
+            .map((c) => (c.role_family ?? "").trim())
+            .filter(Boolean),
+        ),
+      ).sort(),
+    [pending, reviewed],
+  );
+  const matches = useCallback(
+    (c: SwipeCardData) => {
+      if (filters.sMin > 0 || filters.sMax < 100) {
+        if (c.score == null || c.score < filters.sMin || c.score > filters.sMax)
+          return false;
+      }
+      if (filters.salMin > 0 || filters.salMax < 200) {
+        const lo = c.salary_min ?? c.salary_max;
+        const hi = c.salary_max ?? c.salary_min;
+        if (lo == null || hi == null) return false;
+        if (hi / 1000 < filters.salMin || lo / 1000 > filters.salMax)
+          return false;
+      }
+      if (
+        filters.fams.length &&
+        !filters.fams.includes((c.role_family ?? "").trim())
+      )
+        return false;
+      if (filters.modes.length && !filters.modes.includes(c.remote_type ?? ""))
+        return false;
+      return true;
+    },
+    [filters],
+  );
+  const fPending = useMemo(() => pending.filter(matches), [pending, matches]);
+  const fReviewed = useMemo(
+    () => reviewed.filter(matches),
+    [reviewed, matches],
+  );
+  // Cambio filtri = mazzo diverso → si riparte dalla prima card.
+  useEffect(() => {
+    setIdxP(0);
+    setIdxR(0);
+  }, [filters]);
+
+  const cards = mode === "pending" ? fPending : fReviewed;
   const idx = mode === "pending" ? idxP : idxR;
   // Timbri: i giudizi storici (dal DB) + quelli dati in sessione.
   const [given, setGiven] = useState<Record<string, Verdict>>(initialVerdicts);
@@ -936,6 +1071,32 @@ export default function SwipeDeck({
               </button>
             ))}
           </span>
+          {/* Filtri del mazzo (score/stipendio/categoria/modalità) */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen(true)}
+            aria-label={t.filters}
+            className="relative flex h-7 w-7 items-center justify-center rounded-full border"
+            style={{
+              borderColor: filterActive
+                ? "var(--color-purple)"
+                : "var(--color-border)",
+              color: filterActive
+                ? "var(--color-purple)"
+                : "var(--color-muted)",
+              background: "transparent",
+              cursor: "pointer",
+            }}
+          >
+            <IconFilter size={14} />
+            {filterActive && (
+              <span
+                className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full"
+                style={{ background: "var(--color-purple)" }}
+                aria-hidden="true"
+              />
+            )}
+          </button>
           {total > 0 && (
             <span
               className="text-[11px] font-semibold tabular-nums"
@@ -972,9 +1133,11 @@ export default function SwipeDeck({
             className="text-[12px] mb-1"
             style={{ color: "var(--color-muted)" }}
           >
-            {mode === "reviewed" && total === 0
-              ? t.reviewedEmpty
-              : t.emptySubtitle}
+            {filterActive && total === 0
+              ? t.fNoResults
+              : mode === "reviewed" && total === 0
+                ? t.reviewedEmpty
+                : t.emptySubtitle}
           </p>
           {Object.keys(given).length > 0 && (
             <p
@@ -1338,6 +1501,262 @@ export default function SwipeDeck({
           </div>
         </div>
       )}
+
+      {/* Schermata filtri — portal su body (il wrapper di pagina è animato
+          con transform e intrappolerebbe il fixed, vedi TeamActionsSheet).
+          I filtri si applicano dal vivo; contatore in basso. */}
+      {filtersOpen &&
+        mounted &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.filters}
+          >
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setFiltersOpen(false)}
+            />
+            <div
+              className="relative w-full sm:max-w-md max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-2xl border p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]"
+              style={{
+                borderColor: "var(--color-border)",
+                background: "var(--color-card)",
+              }}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <div className="section-label">{t.filters}</div>
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen(false)}
+                  aria-label={t.commentClose}
+                  className="rounded-lg p-1.5 transition-colors hover:bg-[var(--color-row)]"
+                  style={{ color: "var(--color-dim)" }}
+                >
+                  <IconX size={18} />
+                </button>
+              </div>
+
+              {/* Range score */}
+              <div className="mb-5">
+                <div className="mb-1.5 flex items-baseline justify-between">
+                  <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
+                    {t.fScore}
+                  </span>
+                  <span className="text-[11px] font-semibold tabular-nums text-[var(--color-base)]">
+                    {filters.sMin} – {filters.sMax}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={filters.sMin}
+                  onChange={(e) =>
+                    setFilters((f) => ({
+                      ...f,
+                      sMin: Math.min(Number(e.target.value), f.sMax),
+                    }))
+                  }
+                  className="w-full"
+                  style={{ accentColor: "var(--color-purple)" }}
+                />
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={filters.sMax}
+                  onChange={(e) =>
+                    setFilters((f) => ({
+                      ...f,
+                      sMax: Math.max(Number(e.target.value), f.sMin),
+                    }))
+                  }
+                  className="w-full"
+                  style={{ accentColor: "var(--color-purple)" }}
+                />
+              </div>
+
+              {/* Range stipendio (k€) */}
+              <div className="mb-5">
+                <div className="mb-1.5 flex items-baseline justify-between">
+                  <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
+                    {t.fSalary}
+                  </span>
+                  <span className="text-[11px] font-semibold tabular-nums text-[var(--color-base)]">
+                    {filters.salMin}k – {filters.salMax}k
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={200}
+                  step={5}
+                  value={filters.salMin}
+                  onChange={(e) =>
+                    setFilters((f) => ({
+                      ...f,
+                      salMin: Math.min(Number(e.target.value), f.salMax),
+                    }))
+                  }
+                  className="w-full"
+                  style={{ accentColor: "var(--color-purple)" }}
+                />
+                <input
+                  type="range"
+                  min={0}
+                  max={200}
+                  step={5}
+                  value={filters.salMax}
+                  onChange={(e) =>
+                    setFilters((f) => ({
+                      ...f,
+                      salMax: Math.max(Number(e.target.value), f.salMin),
+                    }))
+                  }
+                  className="w-full"
+                  style={{ accentColor: "var(--color-purple)" }}
+                />
+              </div>
+
+              {/* Modalità */}
+              <div className="mb-5">
+                <div className="mb-2 text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
+                  {t.fMode}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(["full_remote", "hybrid", "onsite"] as const).map((m) => {
+                    const on = filters.modes.includes(m);
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() =>
+                          setFilters((f) => ({
+                            ...f,
+                            modes: on
+                              ? f.modes.filter((x) => x !== m)
+                              : [...f.modes, m],
+                          }))
+                        }
+                        className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                        style={{
+                          borderColor: on
+                            ? "var(--color-purple)"
+                            : "var(--color-border)",
+                          color: on
+                            ? "var(--color-purple)"
+                            : "var(--color-muted)",
+                          background: on
+                            ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
+                            : "transparent",
+                        }}
+                      >
+                        {t.remote[m]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Categorie */}
+              {families.length > 0 && (
+                <div className="mb-5">
+                  <div className="mb-2 text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
+                    {t.fCategory}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {families.map((fam) => {
+                      const on = filters.fams.includes(fam);
+                      return (
+                        <button
+                          key={fam}
+                          type="button"
+                          onClick={() =>
+                            setFilters((f) => ({
+                              ...f,
+                              fams: on
+                                ? f.fams.filter((x) => x !== fam)
+                                : [...f.fams, fam],
+                            }))
+                          }
+                          className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                          style={{
+                            borderColor: on
+                              ? "var(--color-purple)"
+                              : "var(--color-border)",
+                            color: on
+                              ? "var(--color-purple)"
+                              : "var(--color-muted)",
+                            background: on
+                              ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
+                              : "transparent",
+                          }}
+                        >
+                          {fam}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div
+                className="flex items-center justify-between border-t pt-4"
+                style={{ borderColor: "var(--color-border)" }}
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFilters({
+                      sMin: 0,
+                      sMax: 100,
+                      salMin: 0,
+                      salMax: 200,
+                      fams: [],
+                      modes: [],
+                    })
+                  }
+                  disabled={!filterActive}
+                  className="text-[11px] font-semibold disabled:opacity-40"
+                  style={{
+                    color: "var(--color-red)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.fReset}
+                </button>
+                <span className="text-[11px] font-semibold tabular-nums text-[var(--color-muted)]">
+                  {t.fCount.replace(
+                    "{n}",
+                    String(
+                      mode === "pending" ? fPending.length : fReviewed.length,
+                    ),
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen(false)}
+                  className="rounded-lg border px-4 py-2 text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)]"
+                  style={{
+                    borderColor: "var(--color-purple)",
+                    color: "var(--color-purple)",
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.commentDone}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* Toast errori rete (non bloccante) */}
       {toast && (

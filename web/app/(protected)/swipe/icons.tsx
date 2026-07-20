@@ -189,6 +189,14 @@ export function IconCalendar({ size }: { size?: number }) {
   );
 }
 
+export function IconFilter({ size }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <path d="M22 3H2l8 9.5V21l4-2v-6.5L22 3Z" />
+    </Svg>
+  );
+}
+
 export function IconCheckCircle({ size }: { size?: number }) {
   return (
     <Svg size={size}>
