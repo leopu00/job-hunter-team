@@ -12,9 +12,9 @@ const FLOOR := Rect2(240, 140, 2920, 1860)
 
 ## Zona lab racchiusa da vetri interni (visual + collisioni sottili).
 ## Spostato all'angolo NE del pavimento largo: casa dei 6 Analisti.
-const LAB_WALL_V := Rect2(2300, 140, 12, 606)     # parete verticale
-const LAB_WALL_H1 := Rect2(2300, 740, 330, 12)    # tratto sx della parete bassa
-const LAB_WALL_H2 := Rect2(2750, 740, 410, 12)    # tratto dx (in mezzo: porta)
+const LAB_WALL_V := Rect2(2220, 140, 12, 606)     # parete verticale
+const LAB_WALL_H1 := Rect2(2220, 740, 330, 12)    # tratto sx della parete bassa
+const LAB_WALL_H2 := Rect2(2670, 740, 410, 12)    # tratto dx (in mezzo: porta)
 
 const ITEMS := [
 	# ── Supporto operativo, lato OVEST degli Scorer ──
@@ -48,17 +48,20 @@ const ITEMS := [
 	{"id": "lamp", "kind": "lamp", "rect": Rect2(2290, 1060, 44, 44)},
 	{"id": "plant_a", "kind": "plant", "rect": Rect2(2440, 1035, 56, 56)},
 
-	# Bacheca e libreria seguono la lounge; l'angolo caffè resta condiviso a nord.
+	# Bacheca e libreria seguono la lounge.
 	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(2520, 995, 150, 34)},
 	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2720, 970, 280, 70)},
-	{"id": "coffee_bar", "kind": "coffee", "rect": Rect2(1400, 190, 200, 80)},
-	{"id": "water_cooler", "kind": "water_cooler", "rect": Rect2(1602, 196, 54, 54)},
-	# stampante condivisa sulla parete nord, tra coffee e lab: la meta dei
-	# viaggi "vado a stampare" di tutti i reparti (spot in DepartmentDefs).
-	{"id": "printer", "kind": "printer", "rect": Rect2(1672, 190, 110, 78)},
+	# Un solo elemento operativo sulla parete nord: la stampante condivisa.
+	# Il nuovo sprite verticale sostituisce il vecchio blockout e tutto il
+	# gruppo decorativo (bar, dispenser, scatole, cestino e orologio).
+	# Scala reale: ~110 cm, circa due terzi dell'altezza di un agente. Il
+	# gruppo è sulla parete nord, appena fuori dal varco orientale Scout.
+	{"id": "printer", "kind": "printer", "rect": Rect2(1218, 185, 95, 70)},
+	{"id": "plant_printer", "kind": "plant_palm", "rect": Rect2(1330, 190, 110, 100)},
 
-	# ── Centro: l'ologramma della ricerca ──
-	{"id": "hologram", "kind": "hologram", "rect": Rect2(1200, 700, 200, 180)},
+	# ── Centro del tappeto Scout: l'ologramma della ricerca ──
+	# Il centro del rect coincide con DeptRugs.RUGS["scout"] = (775, 560).
+	{"id": "hologram", "kind": "hologram", "rect": Rect2(675, 470, 200, 180)},
 
 	# ── Direzione, fascia nord: Capitano e Tesoriere guardano in camera ──
 	{"id": "desk_coordinator", "kind": "captain_desk", "rect": Rect2(1365, 500, 260, 108),
@@ -74,14 +77,16 @@ const ITEMS := [
 	{"id": "plant_c", "kind": "plant", "rect": Rect2(3030, 1340, 56, 56)},
 
 	# ── Verde sparso (reparti e corridoi, mai sulla nav principale) ──
-	{"id": "plant_palm_a", "kind": "plant_palm", "rect": Rect2(958, 1420, 56, 56)},
+	# Fuori dalla proiezione del tavolo Scrittori → Critici e sopra la
+	# vetrata: la chioma non deve più spuntare attraverso il piano.
+	{"id": "plant_palm_a", "kind": "plant_palm", "rect": Rect2(760, 1370, 56, 56)},
 	{"id": "plant_monstera_a", "kind": "plant_monstera", "rect": Rect2(2200, 820, 56, 56)},
 	{"id": "plant_shelf_a", "kind": "plant_shelf", "rect": Rect2(2340, 960, 90, 50)},
 	{"id": "plant_monstera_b", "kind": "plant_monstera", "rect": Rect2(2378, 764, 56, 56)},
 	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1230, 1900, 56, 56)},
 	# Lontana dal varco scorer: a y=1455 chiudeva il passaggio tra desk 5
 	# e vetrata, isolando la postazione dalla componente A* principale.
-	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3090, 1700, 56, 56)},
+	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3015, 1700, 56, 56)},
 	{"id": "plant_palm_c", "kind": "plant_palm", "rect": Rect2(302, 1436, 56, 56)},
 
 	# ── Reception all'uscita sud, tra Scrittori e Critici ──
@@ -93,7 +98,7 @@ const ITEMS := [
 
 	# Tavolino revisione sul bordo ovest: il centro dell'anello resta libero
 	# per le sei sedie rivolte all'interno e per i viaggi della pipeline.
-	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2160, 1840, 120, 100)},
+	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2085, 1840, 120, 100)},
 
 	{"id": "plant_b", "kind": "plant", "rect": Rect2(1950, 860, 56, 56)},
 
@@ -103,29 +108,31 @@ const ITEMS := [
 	# Lavagne bianche: una per reparto, appoggiate alle vetrate/pareti.
 	# La lavagna Scout è stata rimossa: copriva il tavolo Scout → Analisti e
 	# rendeva il punto di consegna illeggibile dalla camera principale.
-	{"id": "wb_analisti", "kind": "nc_whiteboard", "rect": Rect2(2340, 706, 150, 34)},
-	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(1640, 856, 150, 34)},
+	# Le due lavagne prima sparse tra Analisti e Scorer ora incorniciano la
+	# postazione del Capitano dalla parete nord. La seconda è specchiata per
+	# evitare l'effetto copia-incolla e mantenere il centro visivo libero.
+	{"id": "wb_analisti", "kind": "nc_whiteboard", "rect": Rect2(1255, 400, 150, 34)},
+	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(1585, 400, 150, 34),
+			"flip_h": true},
 	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(380, 1414, 150, 34)},
 	# Sul lato sud della vetrata: a y=1446 tagliava l'unica riga A* tra
 	# scorer:5 e l'apertura occidentale della parete condivisa.
-	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2160, 1510, 150, 34)},
+	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2085, 1510, 150, 34)},
 	# Scatoloni e schedari: l'ufficio vive
-	{"id": "boxes_printer", "kind": "nc_boxes", "rect": Rect2(1800, 200, 80, 66)},
-	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(3060, 1920, 80, 66)},
+	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(2985, 1920, 80, 66)},
 	{"id": "boxes_scrittori", "kind": "nc_boxes", "rect": Rect2(1100, 1900, 80, 66)},
-	{"id": "filing_lab", "kind": "nc_filing_cabinet", "rect": Rect2(3080, 250, 70, 110)},
+	{"id": "filing_lab", "kind": "nc_filing_cabinet", "rect": Rect2(3000, 250, 70, 110)},
 	{"id": "filing_coord", "kind": "nc_filing_cabinet", "rect": Rect2(2950, 1175, 70, 110)},
-	# Dettagli: appendiabiti all'entrata sud, orologio a muro, cestini,
-	# cassettiere a fianco delle scrivanie
+	# Dettagli: appendiabiti all'entrata sud, cestini e cassettiere a fianco
+	# delle scrivanie. La fascia nord della stampante resta intenzionalmente
+	# pulita e leggibile.
 	{"id": "coat_rack", "kind": "nc_coat_rack", "rect": Rect2(1500, 1780, 50, 50)},
-	{"id": "wall_clock", "kind": "nc_wall_clock", "rect": Rect2(1260, 150, 60, 60)},
-	{"id": "bin_printer", "kind": "nc_waste_bin", "rect": Rect2(1640, 250, 40, 40)},
 	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(400, 778, 40, 40)},
 	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(330, 758, 60, 72)},
-	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(1010, 1370, 60, 72)},
+	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(940, 920, 60, 72)},
 	# Fuori dall'anello radiale: a (774,1545) intersecava la postazione
 	# Scrittori delle ore 12 e ne falsava collisione e lettura prospettica.
-	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(1080, 1550, 60, 72)},
+	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(250, 1840, 60, 72)},
 	# in coda da dev-art (post-reset Codex): footprint già pronti
 	{"id": "dartboard", "kind": "nc_dartboard", "rect": Rect2(254, 1010, 36, 36)},
 	{"id": "wall_art", "kind": "nc_wall_art", "rect": Rect2(2040, 150, 90, 60)},

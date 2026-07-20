@@ -111,7 +111,9 @@ func _ready() -> void:
 	# 04:0x: alcune texture _down mostrano il FRONTE del desk — l'agente
 	# a nord ci finiva seduto sopra i monitor; col retro _up torna tutto)
 	var facing: String = item.get("tex_facing", item.get("facing", ""))
-	var flip_h := false
+	# Alcuni arredi decorativi condividono lo stesso asset ma richiedono una
+	# composizione specchiata (per esempio le due lavagne del Capitano).
+	var flip_h := bool(item.get("flip_h", false))
 	var path := ""
 	if facing != "":
 		var suffix := "down"

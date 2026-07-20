@@ -16,8 +16,12 @@ const MAX_STACKS := 12
 const STACK_COLUMNS := 6
 const WIDTH := 38.0
 const SHEET_RISE := 1.05
-const STACK_X_GAP := 32.0
-const STACK_Y_GAP := 30.0
+# Assi prospettici ricavati dai bordi del piano del tavolo: procedendo verso
+# destra si scende, mentre procedendo verso il fronte si scende e si va a
+# sinistra. Le risme formano così lo stesso parallelogramma del ripiano e non
+# sembrano più una griglia orizzontale appoggiata sopra una superficie obliqua.
+const STACK_BASIS_X := Vector2(32.0, 8.5)
+const STACK_BASIS_Y := Vector2(-36.0, 30.0)
 
 ## Le pile degli INBOX di reparto, registrate da office.gd: il flusso
 ## dei fogli si vede end-to-end (il ritiro svuota l'inbox a monte, la
@@ -156,9 +160,9 @@ func _stack_base(index: int, total: int) -> Vector2:
 	var col := index % STACK_COLUMNS
 	var rows := int(ceil(float(total) / float(STACK_COLUMNS)))
 	var row_count := mini(STACK_COLUMNS, total - row * STACK_COLUMNS)
-	var x := (float(col) - float(row_count - 1) / 2.0) * STACK_X_GAP
-	var y := (float(row) - float(rows - 1) / 2.0) * STACK_Y_GAP
-	return Vector2(x, y)
+	var across := float(col) - float(row_count - 1) / 2.0
+	var depth := float(row) - float(rows - 1) / 2.0
+	return STACK_BASIS_X * across + STACK_BASIS_Y * depth
 
 func _max_stack_height() -> float:
 	var maximum := 0
