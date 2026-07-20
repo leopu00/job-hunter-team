@@ -42,20 +42,6 @@ const STATUS_COLORS: Record<string, string> = {
   excluded: "var(--color-red)",
 };
 
-function scoreClass(s?: number) {
-  if (!s) return "text-[var(--color-dim)]";
-  if (s >= 75) return "text-[var(--color-green)]";
-  if (s >= 55) return "text-[var(--color-yellow)]";
-  return "text-[var(--color-red)]";
-}
-
-function scoreBg(s?: number) {
-  if (!s) return "var(--color-border)";
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
-}
-
 const LOCALE_TAG: Record<string, string> = {
   it: "it-IT",
   en: "en-US",
@@ -1223,7 +1209,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                                 className="h-full rounded-full"
                                 style={{
                                   width: `${p.score ?? 0}%`,
-                                  background: scoreBg(p.score),
+                                  background: scoreSpectrumCss(p.score),
                                 }}
                               />
                             </div>
