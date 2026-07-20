@@ -18,6 +18,9 @@ import {
   normalizeBody,
   KIND_BORDER,
 } from "@/lib/message-display";
+import MessageBody, {
+  stripInlineMarkdown,
+} from "@/app/components/MessageBody";
 import type { PendingMessage } from "@/lib/types";
 
 const T: Record<string, Record<string, string>> = {
@@ -165,8 +168,8 @@ function buildConversations(messages: PendingMessage[]): Conversation[] {
   return convs;
 }
 
-// Pallino-avatar dell'agente: iniziale sul colore del ruolo (niente emoji
-// nella UI di prodotto). size in px.
+// Pallino-avatar dell'agente: l'emoji del ruolo come foto profilo (scelta
+// utente 20/07), su anello del colore del ruolo. size in px.
 function AgentDot({
   agent,
   locale,
@@ -180,17 +183,17 @@ function AgentDot({
   return (
     <span
       aria-hidden
-      className="shrink-0 rounded-full flex items-center justify-center font-bold"
+      className="shrink-0 rounded-full flex items-center justify-center"
       style={{
         width: size,
         height: size,
-        fontSize: Math.round(size * 0.38),
-        color: info.color,
+        fontSize: Math.round(size * 0.52),
+        lineHeight: 1,
         background: `color-mix(in srgb, ${info.color} 14%, var(--color-panel))`,
         border: `1px solid color-mix(in srgb, ${info.color} 55%, transparent)`,
       }}
     >
-      {info.name.slice(0, 1).toUpperCase()}
+      {info.emoji}
     </span>
   );
 }
@@ -482,11 +485,12 @@ export default function MessagesDrawer() {
                 <ul className="list-none m-0 p-0">
                   {conversations.map((c) => {
                     const info = agentInfo(c.agent, locale);
-                    const preview =
+                    const preview = stripInlineMarkdown(
                       normalizeBody(c.latest.body)
                         .split("\n")
                         .map((l) => l.trim())
-                        .filter(Boolean)[0] ?? "";
+                        .filter(Boolean)[0] ?? "",
+                    );
                     return (
                       <li key={c.agent}>
                         <button
@@ -570,12 +574,10 @@ export default function MessagesDrawer() {
                             {formatRelative(m.created_at, locale)}
                           </span>
                         </div>
-                        <p
+                        <MessageBody
+                          text={m.body}
                           className="m-0 text-[11.5px] leading-relaxed text-[var(--color-base)]"
-                          style={{ whiteSpace: "pre-wrap" }}
-                        >
-                          {normalizeBody(m.body)}
-                        </p>
+                        />
                         {m.related_position_id && (
                           <Link
                             href={`/positions/${m.related_position_id}`}
@@ -607,12 +609,10 @@ export default function MessagesDrawer() {
                               </span>
                             )}
                           </div>
-                          <p
+                          <MessageBody
+                            text={m.user_reply}
                             className="m-0 text-[11.5px] leading-relaxed text-[var(--color-base)]"
-                            style={{ whiteSpace: "pre-wrap" }}
-                          >
-                            {normalizeBody(m.user_reply)}
-                          </p>
+                          />
                         </div>
                       )}
                     </div>

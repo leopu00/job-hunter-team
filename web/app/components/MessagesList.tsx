@@ -10,6 +10,9 @@ import {
   normalizeBody,
   KIND_BORDER,
 } from "@/lib/message-display";
+import MessageBody, {
+  renderInlineMarkdown,
+} from "@/app/components/MessageBody";
 import type { PendingMessage } from "@/lib/types";
 
 interface Props {
@@ -274,12 +277,10 @@ export default function MessagesList({ initialMessages }: Props) {
                 {formatRelative(m.created_at, locale)}
               </span>
             </div>
-            <p
+            <MessageBody
+              text={m.body}
               className="text-[12px] text-[var(--color-base)] m-0 mb-2 leading-relaxed"
-              style={{ whiteSpace: "pre-wrap" }}
-            >
-              {normalizeBody(m.body)}
-            </p>
+            />
             {m.related_position_id && (
               <Link
                 href={`/positions/${m.related_position_id}`}
@@ -302,7 +303,7 @@ export default function MessagesList({ initialMessages }: Props) {
                   {tr("your_reply")}
                 </span>
                 <span style={{ whiteSpace: "pre-wrap" }}>
-                  {normalizeBody(m.user_reply)}
+                  {renderInlineMarkdown(normalizeBody(m.user_reply))}
                 </span>
               </div>
             )}
