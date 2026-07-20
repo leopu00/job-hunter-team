@@ -11,11 +11,20 @@ signal closed
 const PANEL_W := 380.0
 
 var _agents: Array = []  # [{slug, name}]
+var _buttons: Dictionary = {}
+var _closing := false
 
 func _init(agents: Array) -> void:
 	for a in agents:
-		_agents.append({"slug": a.slug if a.uid == "" else a.uid,
-				"name": a.display_name})
+		var entry: Dictionary
+		if a is Dictionary:
+			entry = {"slug": str(a.get("slug", "")), "name": str(a.get("name", ""))}
+		else:
+			entry = {"slug": a.slug if a.uid == "" else a.uid,
+					"name": a.display_name}
+		if BackendBus.chat_replies(entry["slug"]) \
+				or ScriptedOnboarding.supports(entry["slug"]):
+			_agents.append(entry)
 	layer = 40
 	add_to_group("camera_blocking_overlay")
 
@@ -49,8 +58,18 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 8)
 	margin.add_child(box)
 
-	box.add_child(TerminalTheme.label(UIStrings.t("chat.menu"), 20,
-			Palette.WHITE, "xbold"))
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var title := TerminalTheme.label(UIStrings.t("chat.menu"), 20,
+			Palette.WHITE, "xbold")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.tooltip_text = "Chiudi [Esc]"
+	close_btn.add_theme_color_override("font_color", Palette.MUTED)
+	close_btn.pressed.connect(close)
+	head.add_child(close_btn)
 	box.add_child(HSeparator.new())
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -74,7 +93,11 @@ func _ready() -> void:
 		btn.pressed.connect(func() -> void:
 			open_chat.emit(entry["slug"], entry["name"])
 			close(false))
+		_buttons[entry["slug"]] = btn
 		list.add_child(btn)
+	_refresh_unread()
+	BackendBus.chat_unread_changed.connect(func(_unread: Dictionary) -> void:
+		_refresh_unread())
 
 	# legenda pallini
 	box.add_child(HSeparator.new())
@@ -89,7 +112,26 @@ func _ready() -> void:
 	Sfx.play_blip()
 
 func close(sound := true) -> void:
+	if _closing:
+		return
+	_closing = true
 	if sound:
 		Sfx.play_back()
 	closed.emit()
 	queue_free()
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode in [KEY_ESCAPE, KEY_C]:
+		get_viewport().set_input_as_handled()
+		close()
+
+func _refresh_unread() -> void:
+	for slug in _buttons:
+		var btn: Button = _buttons[slug]
+		var count := BackendBus.chat_unread_count(slug)
+		var entry: Dictionary = _agents.filter(func(a: Dictionary) -> bool:
+			return a["slug"] == slug)[0]
+		btn.text = "●  %s%s" % [entry["name"], "  [%d]" % count if count > 0 else ""]
+		btn.add_theme_color_override("font_color",
+				Palette.YELLOW if count > 0 else Palette.GREEN)

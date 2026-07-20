@@ -231,6 +231,16 @@ func _ensure_front_chair(desk: Dictionary) -> void:
 ## to_label: "" per i broadcast, altrimenti il nome del destinatario.
 func say(text: String, to_label := "") -> void:
 	speech.say(text, to_label)
+	if bubble:
+		bubble.hide_now()
+	if state_tag:
+		state_tag.set_suppressed(true)
+
+## Feedback sul destinatario senza creare una seconda vignetta: la targa di
+## stato diventa per pochi secondi "MESSAGGIO DA …", poi torna allo stato.
+func show_received_message(from_label: String) -> void:
+	if state_tag:
+		state_tag.show_message("MESSAGGIO DA " + from_label, 6.0)
 
 ## Entrata fisica in scena: ogni nuovo processo appare oltre la soglia,
 ## attraversa la porta e raggiunge a piedi la propria postazione. Funziona
@@ -295,6 +305,10 @@ func set_activity_detail(detail: String) -> void:
 	activity_detail = detail
 	if state_tag:
 		state_tag.set_state(backend_status, throttle_secs, activity_detail)
+
+func set_cpu_activity(cpu_pct: float, known := true) -> void:
+	if state_tag:
+		state_tag.set_cpu_activity(cpu_pct, known)
 
 ## Uscita FISICA di scena (agente killato/fermato, missione pipeline
 ## 20:1x): cammina fino alla porta dell'ufficio e svanisce oltre la
@@ -453,6 +467,8 @@ func _physics_process(delta: float) -> void:
 		_exit_pending = false
 		_begin_exit(_pending_exit_spot)
 	_bubble_tick(delta)
+	if state_tag and speech:
+		state_tag.set_suppressed(speech.is_speaking())
 	match state:
 		S.WORK:
 			velocity = Vector2.ZERO
@@ -956,6 +972,9 @@ func _face_point(p: Vector2) -> void:
 
 func _bubble_tick(delta: float) -> void:
 	if state == S.TALK:
+		return
+	if speech and speech.is_speaking():
+		bubble.hide_now()
 		return
 	# coi dati VERI il chatter di ambientazione tace: sotto il badge
 	# "DATI REALI" parlano solo i messaggi autentici (SpeechBubble)

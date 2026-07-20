@@ -229,7 +229,9 @@ func _ready() -> void:
 
 	if _seat_audit == "" and _doctor_test == "":
 		_add_hud()
-		add_child(GameSidebar.new())  # sidebar stile desktop-app (linguetta ≡)
+		var sidebar := GameSidebar.new()
+		add_child(sidebar)  # sidebar stile desktop-app (linguetta ≡)
+		sidebar.chat_requested.connect(_toggle_chat_access)
 
 	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
 			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
@@ -293,10 +295,13 @@ func _ready() -> void:
 		BackendBus.agents_updated.connect(sync_agents)
 		BackendBus.chat_message.connect(_on_chat_message)
 		BackendBus.positions_updated.connect(_on_transitions)
+		BackendBus.telemetry_updated.connect(_on_agent_cpu_telemetry)
 		if not BackendBus.agents.is_empty():
 			sync_agents(BackendBus.agents)
 		if not BackendBus.transitions.is_empty():
 			_on_transitions([])  # snapshot già sul bus: assorbito come baseline
+		if not BackendBus.telemetry.is_empty():
+			_on_agent_cpu_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
 		SetupService.status_changed.connect(_on_setup_status_changed)
 		_on_setup_status_changed(SetupService.status)
 
@@ -328,6 +333,8 @@ func _ready() -> void:
 	# TEST-AUTO: JHT_CHATMENU=1 apre il menu delle chat 1-a-1 (tasto C)
 	if OS.get_environment("JHT_CHATMENU") == "1":
 		get_tree().create_timer(2.5).timeout.connect(_open_chat_menu)
+	if OS.get_environment("JHT_CHAT_UI_TEST") == "1":
+		_chat_ui_selftest.call_deferred()
 
 	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza throttle e rimozione roster,
 	# senza aspettare il ciclo eventi del mock.
@@ -1035,6 +1042,61 @@ func _chat_selftest(role: String, send: bool) -> void:
 				BackendBus.send_user_chat(a.slug, "Come procede il lavoro?")
 			return
 
+func _chat_ui_selftest() -> void:
+	await get_tree().process_frame
+	BackendBus.clear_chat_unread()
+	BackendBus.publish_chat({"ts": "ui-1", "from": "coordinatore",
+			"to": "user", "text": "Aggiornamento per te"})
+	await get_tree().process_frame
+	var sidebar: GameSidebar
+	for child in get_children():
+		if child is GameSidebar:
+			sidebar = child
+			break
+	var badge_ok := sidebar != null and "1" in sidebar._tab.text
+	_open_chat_menu()
+	await get_tree().process_frame
+	var menu_ok := _chat_menu != null and _chat_menu._agents.size() == 3
+	var coordinator := _find_agent("coordinatore")
+	if _chat_menu:
+		_chat_menu.close(false)
+	await get_tree().process_frame
+	if coordinator:
+		_open_chat(coordinator)
+	await get_tree().process_frame
+	var read_ok := BackendBus.chat_unread_count("capitano") == 0 \
+			and _chat_panel != null
+	if _chat_panel:
+		_chat_panel.close(false)
+	await get_tree().process_frame
+	var close_ok := _chat_panel == null
+	_toggle_chat_access()
+	await get_tree().process_frame
+	var reopen_ok := _chat_menu != null
+	_toggle_chat_access()
+	await get_tree().process_frame
+	var toggle_close_ok := _chat_menu == null
+	if coordinator:
+		deliver_chat("coordinatore", "user", "Aggiornamento per te")
+	await get_tree().process_frame
+	var overlap_ok := coordinator != null \
+			and coordinator.state_tag.debug_suppressed() \
+			and not coordinator.state_tag.visible
+	var assistant := _find_agent("assistente")
+	if coordinator and assistant:
+		deliver_chat("coordinatore", "assistente", "Passaggio completato")
+	var received_ok := assistant != null \
+			and assistant.state_tag.debug_label().begins_with("MESSAGGIO DA")
+	var ok := badge_ok and menu_ok and read_ok and close_ok and reopen_ok \
+			and toggle_close_ok and overlap_ok and received_ok
+	print("CHAT-UI-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify({
+			"badge": badge_ok, "menu": menu_ok, "read": read_ok,
+			"close": close_ok, "reopen": reopen_ok,
+			"toggle_close": toggle_close_ok, "overlap": overlap_ok,
+			"received": received_ok}))
+	BackendBus.clear_chat_unread()
+	get_tree().quit(0 if ok else 1)
+
 ## Forza i due comportamenti nuovi sul roster corrente (vedi _ready).
 func _throttle_selftest() -> void:
 	await get_tree().create_timer(4.0).timeout
@@ -1105,9 +1167,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	# menu delle chat 1-a-1 (feedback test finale): C apre la lista agenti
 	if event is InputEventKey and event.pressed and event.keycode == KEY_C \
-			and not (event.meta_pressed or event.ctrl_pressed) \
-			and _chat_menu == null and _chat_panel == null and _agent_card == null:
-		_open_chat_menu()
+			and not (event.meta_pressed or event.ctrl_pressed):
+		_toggle_chat_access()
 		return
 	# GlobalSearch del web: Cmd/Ctrl+K apre la ricerca sulle posizioni
 	if event is InputEventKey and event.pressed and event.keycode == KEY_K \
@@ -1294,8 +1355,10 @@ var _chat_menu: ChatMenu
 
 ## Lista degli agenti in scena → chat individuale (tasto C).
 func _open_chat_menu() -> void:
+	if _chat_menu or _chat_panel:
+		return
 	Log.info("chat", "menu chat aperto (%d agenti)" % agents.size())
-	_chat_menu = ChatMenu.new(agents)
+	_chat_menu = ChatMenu.new(_chat_roster())
 	add_child(_chat_menu)
 	_chat_menu.closed.connect(func() -> void: _chat_menu = null)
 	_chat_menu.open_chat.connect(func(slug: String, display_name: String) -> void:
@@ -1315,9 +1378,22 @@ func _open_chat_menu() -> void:
 func _chat_roster() -> Array:
 	var roster: Array = []
 	for a in agents:
-		roster.append({"slug": a.slug if a.uid == "" else a.uid,
-				"name": a.display_name})
+		var ref: String = a.slug if a.uid == "" else a.uid
+		if BackendBus.chat_replies(ref) or ScriptedOnboarding.supports(a.slug):
+			roster.append({"slug": ref, "name": a.display_name})
 	return roster
+
+## Un solo gesto apre o chiude l'accesso rapido. La X/Esc del singolo overlay
+## usa gli stessi close(), quindi i riferimenti tornano sempre null.
+func _toggle_chat_access() -> void:
+	if _chat_panel:
+		_chat_panel.close()
+		return
+	if _chat_menu:
+		_chat_menu.close()
+		return
+	if _agent_card == null:
+		_open_chat_menu()
 
 ## Chat REALE con l'agente: si apre con lo slug di gioco, il bus lo
 ## traduce nel nome del sistema reale (coordinatore → capitano).
@@ -1362,6 +1438,8 @@ var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-
 var _agent_ui_test_started := false
 var _coordinator_test_started := false
 
+const AGENT_CPU_STALE_AFTER := 75.0  # sampler 30s: poco più di due tick
+
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
 func sync_agents(list: Array) -> void:
@@ -1393,6 +1471,8 @@ func sync_agents(list: Array) -> void:
 			wanted.erase(agent.uid)
 	for item_uid in wanted:
 		_spawn_backend_agent(wanted[item_uid])
+	if not BackendBus.telemetry.is_empty():
+		_on_agent_cpu_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
 	# Il roster backend arriva dopo _ready: il test-card va riprovato qui,
 	# quando l'istanza richiesta esiste davvero.
 	var card_test := OS.get_environment("JHT_CARD")
@@ -1424,6 +1504,29 @@ func sync_agents(list: Array) -> void:
 			and _coordinator_panel != null and not _coordinator_test_started:
 		_coordinator_test_started = true
 		_coordinator_selftest.call_deferred()
+
+## Liveness operativa: il roster dice che il processo esiste, il sampler CPU
+## dice se sta davvero elaborando. Dati mancanti o più vecchi di 75 secondi
+## spengono il LED: non si conserva mai un falso verde all'infinito.
+func _on_agent_cpu_telemetry(sample: Dictionary, _history: Array) -> void:
+	var cpu_map: Dictionary = sample.get("agent_cpu", {})
+	var age := float(sample.get("agent_vitals_age_s", -1.0))
+	var fresh := age >= 0.0 and age <= AGENT_CPU_STALE_AFTER
+	for agent in agents:
+		var candidates: Array[String] = []
+		if not agent.uid.is_empty():
+			candidates.append(agent.uid.to_lower())
+		candidates.append(agent.slug.to_lower())
+		if agent.slug == "coordinatore":
+			candidates.append("capitano")
+		var found := false
+		var cpu := 0.0
+		for key in candidates:
+			if cpu_map.has(key):
+				cpu = float(cpu_map[key])
+				found = true
+				break
+		agent.set_cpu_activity(cpu, fresh and found)
 
 func _agent_ui_selftest() -> void:
 	await get_tree().create_timer(2.2).timeout
@@ -1460,13 +1563,41 @@ func _agent_ui_selftest() -> void:
 		agents[0].set_highlight(true)
 		hover_ok = agents[0].aura.hovered
 		agents[0].set_highlight(false)
+	var cpu_threshold_ok := false
+	var cpu_blink_ok := false
+	var cpu_mapping_ok := false
+	var cpu_stale_ok := false
+	if not agents.is_empty():
+		var probe: AgentNPC = agents[0]
+		probe.set_cpu_activity(0.3, true)
+		var at_threshold: Dictionary = probe.state_tag.debug_cpu_led()
+		probe.set_cpu_activity(0.31, true)
+		var above_threshold: Dictionary = probe.state_tag.debug_cpu_led()
+		var lit_before := bool(above_threshold.get("lit", false))
+		probe.state_tag._process(0.5)
+		var lit_after := bool(probe.state_tag.debug_cpu_led().get("lit", true))
+		cpu_threshold_ok = not bool(at_threshold.get("active", true)) \
+				and bool(above_threshold.get("active", false))
+		cpu_blink_ok = lit_before and not lit_after
+		_on_agent_cpu_telemetry({"agent_cpu": {"capitano": 0.4},
+				"agent_vitals_age_s": 0.0}, [])
+		var captain := _find_agent("coordinatore")
+		cpu_mapping_ok = captain != null \
+				and bool(captain.state_tag.debug_cpu_led().get("active", false))
+		_on_agent_cpu_telemetry({"agent_cpu": {"capitano": 50.0},
+				"agent_vitals_age_s": AGENT_CPU_STALE_AFTER + 1.0}, [])
+		cpu_stale_ok = captain != null \
+				and not bool(captain.state_tag.debug_cpu_led().get("active", true))
 	var ok := auras_ok and ground_layer_ok and colors.size() >= 5 \
 			and readonly_ok and stream_ok \
-			and scroll_lock_ok and hover_ok
+			and scroll_lock_ok and hover_ok and cpu_threshold_ok \
+			and cpu_blink_ok and cpu_mapping_ok and cpu_stale_ok
 	print("AGENT-UI-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify({
 		"departments": colors, "auras": auras_ok, "readonly": readonly_ok,
 		"ground_layer": ground_layer_ok, "stream": stream_ok,
 		"scroll_lock": scroll_lock_ok, "hover": hover_ok,
+		"cpu_threshold": cpu_threshold_ok, "cpu_blink": cpu_blink_ok,
+		"cpu_mapping": cpu_mapping_ok, "cpu_stale": cpu_stale_ok,
 	}))
 	get_tree().quit(0 if ok else 1)
 
@@ -1546,10 +1677,12 @@ func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
 			"all":
 				to_label = ""
 			"user":
-				to_label = "te"
+				to_label = "MESSAGGIO PER TE"
 			_:
 				to_label = _name_of(to_uid)
 		speaker.say(text, to_label)
+		if target and not target.is_dissolving():
+			target.show_received_message(speaker.display_name)
 
 ## Risolve uid reale o ruolo. Nei self-test offline "scout-4" sceglie la
 ## quarta istanza del ruolo, mentre sulla VPS vince sempre l'uid esatto.

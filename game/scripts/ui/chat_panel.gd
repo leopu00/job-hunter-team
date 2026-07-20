@@ -36,6 +36,7 @@ var _plate_label: Label
 var _backend_messages: Array = []
 var _live_choices: Array = []
 var _setup_signature := ""
+var _closing := false
 
 func _process(delta: float) -> void:
 	if not _waiting or _waiting_label == null:
@@ -52,6 +53,7 @@ func _init(slug: String, display_name: String, roster: Array = []) -> void:
 	add_to_group("camera_blocking_overlay")
 
 func _ready() -> void:
+	BackendBus.mark_chat_read(_slug)
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.theme = TerminalTheme.get_theme()
@@ -108,6 +110,12 @@ func _ready() -> void:
 	_expand_btn.add_theme_color_override("font_color", Palette.MUTED)
 	_expand_btn.pressed.connect(func() -> void: _set_fullscreen(not _fullscreen))
 	head.add_child(_expand_btn)
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.tooltip_text = "Chiudi [Esc]"
+	close_btn.add_theme_color_override("font_color", Palette.MUTED)
+	close_btn.pressed.connect(close)
+	head.add_child(close_btn)
 	# avviso best-effort: solo alcuni agenti hanno la skill di risposta
 	# in chat (bus.chat_replies); gli altri leggono ma possono tacere.
 	# Sempre creato: lo switcher fullscreen lo accende/spegne per agente.
@@ -264,6 +272,7 @@ func _switch_to(slug: String, display_name: String) -> void:
 		return
 	BackendBus.close_agent_chat()
 	_slug = slug
+	BackendBus.mark_chat_read(_slug)
 	_display_name = display_name
 	_title.text = UIStrings.t("chat.title") % _display_name.to_upper()
 	_warn.visible = not BackendBus.chat_replies(_slug)
@@ -503,8 +512,17 @@ func _send_text(text: String) -> void:
 	Sfx.play_tick()
 
 func close(sound := true) -> void:
+	if _closing:
+		return
+	_closing = true
 	BackendBus.close_agent_chat()
 	if sound:
 		Sfx.play_back()
 	closed.emit()
 	queue_free()
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode == KEY_ESCAPE:
+		get_viewport().set_input_as_handled()
+		close()
