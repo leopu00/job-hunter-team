@@ -125,7 +125,28 @@ export default function MessagesList({ initialMessages }: Props) {
   const [error, setError] = useState<string | null>(null);
   const locale = useLocale();
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
-  const threadEndRef = useRef<HTMLDivElement>(null);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Altezza del pannello MISURATA: (viewport - top del pannello) / zoom
+  // effettivo, derivato dal rapporto rect/offset del pannello stesso.
+  // Robusto rispetto alle diverse semantiche zoom×dvh dei Chromium (il
+  // calc statico 100dvh/--zoom tornava ~150px in più su Chrome Canary →
+  // pagina scrollabile con vuoto nero sotto il composer).
+  const [panelH, setPanelH] = useState<number | null>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const apply = () => {
+      const rect = el.getBoundingClientRect();
+      const zoom = el.offsetWidth > 0 ? rect.width / el.offsetWidth : 1;
+      const topDoc = rect.top + window.scrollY;
+      setPanelH(Math.max(320, Math.floor((window.innerHeight - topDoc) / zoom)));
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, []);
 
   // Conversazioni: le tre core sempre presenti + eventuali mittenti extra.
   const agents = useMemo(() => {
@@ -181,8 +202,12 @@ export default function MessagesList({ initialMessages }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => ackAgent(activeAgent), [activeAgent]);
 
+  // Scroll in fondo SOLO dentro il contenitore del thread: scrollIntoView
+  // scrollava anche gli antenati (documento incluso) creando il "vuoto
+  // nero" sotto il composer.
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ block: "end" });
+    const el = threadScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [activeAgent, messages.length]);
 
   const replyTarget = [...thread].reverse().find((m) => !m.user_reply);
@@ -294,12 +319,17 @@ export default function MessagesList({ initialMessages }: Props) {
   }
 
   return (
-    // Altezza piena sotto la navbar (h-14): sidebar a sinistra, thread
-    // scrollabile + composer a destra. Il body ha `zoom: var(--zoom)`
-    // (globals.css): i dvh NON scalano con lo zoom, quindi vanno divisi.
+    // Altezza piena sotto la navbar: valore SSR di partenza col calc
+    // 100dvh/--zoom, poi corretto dalla misura a runtime (vedi sopra).
     <div
+      ref={rootRef}
       className="flex flex-col md:flex-row"
-      style={{ height: "calc(100dvh / var(--zoom, 1) - 56px)" }}
+      style={{
+        height:
+          panelH != null
+            ? panelH
+            : "calc(100dvh / var(--zoom, 1) - 56px)",
+      }}
     >
       {/* ── Sidebar sinistra: conversazioni + presentazione ────────── */}
       <aside className="hidden md:flex w-[280px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-panel)]">
@@ -339,7 +369,10 @@ export default function MessagesList({ initialMessages }: Props) {
 
       {/* ── Colonna chat ───────────────────────────────────────────── */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+        <div
+          ref={threadScrollRef}
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        >
           <div
             className="max-w-3xl mx-auto px-5 py-6 flex flex-col gap-4"
             style={{ animation: "fade-in 0.25s ease both" }}
@@ -422,7 +455,6 @@ export default function MessagesList({ initialMessages }: Props) {
                 )}
               </div>
             ))}
-            <div ref={threadEndRef} />
           </div>
         </div>
 
