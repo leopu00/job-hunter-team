@@ -11,6 +11,7 @@ import {
   IconChat,
   IconCheckCircle,
   IconChevronLeft,
+  IconChevronRight,
   IconFilter,
   IconMic,
   IconPin,
@@ -708,10 +709,20 @@ export default function SwipeDeck({
       ).sort(),
     [pending, reviewed],
   );
-  // skip = criterio da ignorare: serve agli istogrammi, che mostrano la
-  // distribuzione del PROPRIO asse con gli ALTRI filtri applicati.
+  // skip = criterio da ignorare: serve a istogrammi e contatori chip, che
+  // mostrano il PROPRIO asse con gli ALTRI filtri applicati (stile Airbnb).
   const matches = useCallback(
-    (c: SwipeCardData, skip?: "score" | "salary") => {
+    (
+      c: SwipeCardData,
+      skip?:
+        | "score"
+        | "salary"
+        | "fams"
+        | "modes"
+        | "countries"
+        | "cities"
+        | "sources",
+    ) => {
       if (skip !== "score" && (filters.sMin > 0 || filters.sMax < 100)) {
         if (c.score == null || c.score < filters.sMin || c.score > filters.sMax)
           return false;
@@ -724,23 +735,31 @@ export default function SwipeDeck({
           return false;
       }
       if (
+        skip !== "fams" &&
         filters.fams.length &&
         !filters.fams.includes((c.role_family ?? "").trim())
       )
         return false;
-      if (filters.modes.length && !filters.modes.includes(c.remote_type ?? ""))
+      if (
+        skip !== "modes" &&
+        filters.modes.length &&
+        !filters.modes.includes(c.remote_type ?? "")
+      )
         return false;
       if (
+        skip !== "countries" &&
         filters.countries.length &&
         !filters.countries.includes((c.loc_country ?? "").trim())
       )
         return false;
       if (
+        skip !== "cities" &&
         filters.cities.length &&
         !filters.cities.includes((c.loc_city ?? "").trim())
       )
         return false;
       if (
+        skip !== "sources" &&
         filters.sources.length &&
         !filters.sources.includes((c.source ?? "").trim())
       )
@@ -767,6 +786,51 @@ export default function SwipeDeck({
     }
     return bins;
   }, [histoBase, matches]);
+  // Conteggi per chip: quante card del mazzo corrente (con gli ALTRI
+  // filtri applicati) hanno quel valore.
+  const countBy = useCallback(
+    (
+      get: (c: SwipeCardData) => string | null,
+      skip: "fams" | "modes" | "countries" | "cities" | "sources",
+    ) => {
+      const m = new Map<string, number>();
+      for (const c of histoBase) {
+        if (!matches(c, skip)) continue;
+        const k = (get(c) ?? "").trim();
+        if (!k) continue;
+        m.set(k, (m.get(k) ?? 0) + 1);
+      }
+      return m;
+    },
+    [histoBase, matches],
+  );
+  const famCounts = useMemo(
+    () => countBy((c) => c.role_family, "fams"),
+    [countBy],
+  );
+  const modeCounts = useMemo(
+    () => countBy((c) => c.remote_type, "modes"),
+    [countBy],
+  );
+  const countryCounts = useMemo(
+    () => countBy((c) => c.loc_country, "countries"),
+    [countBy],
+  );
+  const cityCounts = useMemo(
+    () => countBy((c) => c.loc_city, "cities"),
+    [countBy],
+  );
+  const sourceCounts = useMemo(
+    () => countBy((c) => c.source, "sources"),
+    [countBy],
+  );
+  // Sezioni collassabili: slider aperti di default, chip chiuse.
+  const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({
+    score: true,
+    salary: true,
+  });
+  const toggleSec = (k: string) =>
+    setOpenSecs((o) => ({ ...o, [k]: !(o[k] ?? false) }));
   const salHisto = useMemo(() => {
     const bins = new Array(40).fill(0) as number[];
     for (const c of histoBase) {
@@ -1641,15 +1705,13 @@ export default function SwipeDeck({
               </div>
 
               {/* Range score */}
-              <div className="mb-5">
-                <div className="mb-1.5 flex items-baseline justify-between">
-                  <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-                    {t.fScore}
-                  </span>
-                  <span className="text-[11px] font-semibold tabular-nums text-[var(--color-base)]">
-                    {filters.sMin} – {filters.sMax}
-                  </span>
-                </div>
+              <FilterSection
+                label={t.fScore}
+                meta={`${filters.sMin} – ${filters.sMax}`}
+                metaActive={filters.sMin > 0 || filters.sMax < 100}
+                open={openSecs.score ?? false}
+                onToggle={() => toggleSec("score")}
+              >
                 <DualRange
                   min={0}
                   max={100}
@@ -1661,18 +1723,16 @@ export default function SwipeDeck({
                     setFilters((f) => ({ ...f, sMin: lo, sMax: hi }))
                   }
                 />
-              </div>
+              </FilterSection>
 
               {/* Range stipendio (k€) */}
-              <div className="mb-5">
-                <div className="mb-1.5 flex items-baseline justify-between">
-                  <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-                    {t.fSalary}
-                  </span>
-                  <span className="text-[11px] font-semibold tabular-nums text-[var(--color-base)]">
-                    {filters.salMin}k – {filters.salMax}k
-                  </span>
-                </div>
+              <FilterSection
+                label={t.fSalary}
+                meta={`${filters.salMin}k – ${filters.salMax}k`}
+                metaActive={filters.salMin > 0 || filters.salMax < 200}
+                open={openSecs.salary ?? false}
+                onToggle={() => toggleSec("salary")}
+              >
                 <DualRange
                   min={0}
                   max={200}
@@ -1684,111 +1744,70 @@ export default function SwipeDeck({
                     setFilters((f) => ({ ...f, salMin: lo, salMax: hi }))
                   }
                 />
-              </div>
+              </FilterSection>
 
-              {/* Modalità */}
-              <div className="mb-5">
-                <div className="mb-2 text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-                  {t.fMode}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(["full_remote", "hybrid", "onsite"] as const).map((m) => {
-                    const on = filters.modes.includes(m);
-                    return (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() =>
-                          setFilters((f) => ({
-                            ...f,
-                            modes: on
-                              ? f.modes.filter((x) => x !== m)
-                              : [...f.modes, m],
-                          }))
-                        }
-                        className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
-                        style={{
-                          borderColor: on
-                            ? "var(--color-purple)"
-                            : "var(--color-border)",
-                          color: on
-                            ? "var(--color-purple)"
-                            : "var(--color-muted)",
-                          background: on
-                            ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
-                            : "transparent",
-                        }}
-                      >
-                        {t.remote[m]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Categorie */}
-              {families.length > 0 && (
-                <div className="mb-5">
-                  <div className="mb-2 text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-                    {t.fCategory}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {families.map((fam) => {
-                      const on = filters.fams.includes(fam);
-                      return (
-                        <button
-                          key={fam}
-                          type="button"
-                          onClick={() =>
-                            setFilters((f) => ({
-                              ...f,
-                              fams: on
-                                ? f.fams.filter((x) => x !== fam)
-                                : [...f.fams, fam],
-                            }))
-                          }
-                          className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
-                          style={{
-                            borderColor: on
-                              ? "var(--color-purple)"
-                              : "var(--color-border)",
-                            color: on
-                              ? "var(--color-purple)"
-                              : "var(--color-muted)",
-                            background: on
-                              ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
-                              : "transparent",
-                          }}
-                        >
-                          {fam}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Paese / Città / Fonte — stesse chip, liste dal mazzo */}
+              {/* Sezioni a chip: Modalità / Categoria / Paese / Città / Fonte */}
               {(
                 [
+                  {
+                    key: "modes" as const,
+                    label: t.fMode,
+                    vals: ["full_remote", "hybrid", "onsite"].filter(
+                      (m) =>
+                        (modeCounts.get(m) ?? 0) > 0 ||
+                        filters.modes.includes(m),
+                    ),
+                    counts: modeCounts,
+                    text: (v: string) => t.remote[v] ?? v,
+                  },
+                  {
+                    key: "fams" as const,
+                    label: t.fCategory,
+                    vals: families,
+                    counts: famCounts,
+                    text: (v: string) => v,
+                  },
                   {
                     key: "countries" as const,
                     label: t.fCountry,
                     vals: countries,
+                    counts: countryCounts,
+                    text: (v: string) => v,
                   },
-                  { key: "cities" as const, label: t.fCity, vals: cities },
-                  { key: "sources" as const, label: t.fSource, vals: sources },
+                  {
+                    key: "cities" as const,
+                    label: t.fCity,
+                    vals: cities,
+                    counts: cityCounts,
+                    text: (v: string) => v,
+                  },
+                  {
+                    key: "sources" as const,
+                    label: t.fSource,
+                    vals: sources,
+                    counts: sourceCounts,
+                    text: (v: string) => v,
+                  },
                 ] as const
               ).map(
                 (sec) =>
                   sec.vals.length > 0 && (
-                    <div className="mb-5" key={sec.key}>
-                      <div className="mb-2 text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-                        {sec.label}
-                      </div>
+                    <FilterSection
+                      key={sec.key}
+                      label={sec.label}
+                      meta={
+                        filters[sec.key].length
+                          ? String(filters[sec.key].length)
+                          : undefined
+                      }
+                      metaActive={filters[sec.key].length > 0}
+                      open={openSecs[sec.key] ?? false}
+                      onToggle={() => toggleSec(sec.key)}
+                    >
                       <div className="flex flex-wrap gap-2">
                         {sec.vals.map((v) => {
                           const on = filters[sec.key].includes(v);
+                          const n = sec.counts.get(v) ?? 0;
                           return (
                             <button
                               key={v}
@@ -1814,12 +1833,18 @@ export default function SwipeDeck({
                                   : "transparent",
                               }}
                             >
-                              {v}
+                              {sec.text(v)}
+                              <span
+                                className="ml-1.5 font-normal tabular-nums"
+                                style={{ opacity: 0.65 }}
+                              >
+                                {n}
+                              </span>
                             </button>
                           );
                         })}
                       </div>
-                    </div>
+                    </FilterSection>
                   ),
               )}
 
@@ -1894,6 +1919,67 @@ export default function SwipeDeck({
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+// Sezione collassabile della schermata filtri: header con label,
+// valore/selezione corrente a destra (viola quando il filtro è attivo)
+// e chevron che ruota. Solo gli slider partono aperti.
+function FilterSection({
+  label,
+  meta,
+  metaActive = false,
+  open,
+  onToggle,
+  children,
+}: {
+  label: string;
+  meta?: string;
+  metaActive?: boolean;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-b" style={{ borderColor: "var(--color-border)" }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between py-3"
+        style={{ background: "none", border: "none", cursor: "pointer" }}
+        aria-expanded={open}
+      >
+        <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
+          {label}
+        </span>
+        <span className="flex items-center gap-2">
+          {meta && (
+            <span
+              className="text-[11px] font-semibold tabular-nums"
+              style={{
+                color: metaActive
+                  ? "var(--color-purple)"
+                  : "var(--color-muted)",
+              }}
+            >
+              {meta}
+            </span>
+          )}
+          <span
+            style={{
+              color: "var(--color-dim)",
+              display: "inline-flex",
+              transform: open ? "rotate(90deg)" : "none",
+              transition: "transform 0.15s ease",
+            }}
+            aria-hidden="true"
+          >
+            <IconChevronRight size={14} />
+          </span>
+        </span>
+      </button>
+      {open && <div className="pb-4">{children}</div>}
     </div>
   );
 }
