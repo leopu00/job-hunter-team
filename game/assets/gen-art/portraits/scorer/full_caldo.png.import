@@ -3,19 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://08dr2n2wq7hj"
-path="res://.godot/imported/full_caldo.png-6f6be815f2960e3bea42883202eed543.ctex"
+path.s3tc="res://.godot/imported/full_caldo.png-6f6be815f2960e3bea42883202eed543.s3tc.ctex"
+path.etc2="res://.godot/imported/full_caldo.png-6f6be815f2960e3bea42883202eed543.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/gen-art/portraits/scorer/full_caldo.png"
-dest_files=["res://.godot/imported/full_caldo.png-6f6be815f2960e3bea42883202eed543.ctex"]
+dest_files=["res://.godot/imported/full_caldo.png-6f6be815f2960e3bea42883202eed543.s3tc.ctex", "res://.godot/imported/full_caldo.png-6f6be815f2960e3bea42883202eed543.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -23,7 +25,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
