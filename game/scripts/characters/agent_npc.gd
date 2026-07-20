@@ -7,6 +7,9 @@ extends CharacterBody2D
 ## Mostra status bubble e si interroga con un click.
 
 const SPEED := 150.0
+## Ruoli che pattugliano anche in live (const: niente Array allocato a ogni
+## frame di WORK dentro _physics_process).
+const LIVE_PATROL := ["coordinatore", "sentinella", "mentor", "assistente"]
 # Le consegne attraversano reparti opposti e devono leggere come un flusso
 # operativo, non come una passeggiata. I giri ambientali restano a SPEED;
 # solo il fascicolo in pipeline usa un passo svelto ma ancora naturale.
@@ -466,7 +469,7 @@ func _physics_process(delta: float) -> void:
 				# resta disponibile esclusivamente nella demo offline.
 				# Capitano, Tesoriere, Mentor e Assistente pattugliano anche in live.
 				# Il Mentor si muove molto meno: la sua cadenza media è mezz'ora.
-				var live_patrol := slug in ["coordinatore", "sentinella", "mentor", "assistente"]
+				var live_patrol := slug in LIVE_PATROL
 				if backend_status == "working" and (live_patrol \
 						or BackendBus.state != BackendBus.CONNECTED):
 					_plan_trip()
@@ -488,7 +491,10 @@ func _physics_process(delta: float) -> void:
 			# Breve raccordo visivo fra ultimo passo e seduta: il Tween governa
 			# position, la fisica non deve riportare il corpo sul path.
 			velocity = Vector2.ZERO
-	move_and_slide()
+	# A velocità zero move_and_slide è puro overhead: con 16 agenti per lo più
+	# seduti sono 16 slide-and-collide a frame risparmiati (T440s, 2 core).
+	if velocity != Vector2.ZERO:
+		move_and_slide()
 
 # ── Scrivania: si lavora a tick, non di continuo ─────────────────────
 

@@ -8,6 +8,7 @@ const TEX := "res://assets/gen-art/furniture/hologram.png"
 var _rect: Rect2
 var _t := 0.0
 var _textured := false
+var _redraw_acc := 0.0
 
 func _init(rect: Rect2) -> void:
 	_rect = rect
@@ -15,6 +16,14 @@ func _init(rect: Rect2) -> void:
 	position = Vector2(rect.get_center().x, rect.end.y)
 
 func _ready() -> void:
+	# Con la camera libera l'ologramma è spesso fuori inquadratura: lì
+	# l'animazione si ferma del tutto (niente _draw, niente _process).
+	var vis := VisibleOnScreenNotifier2D.new()
+	vis.rect = Rect2(-_rect.size.x, -_rect.size.y * 3.0,
+			_rect.size.x * 2.0, _rect.size.y * 3.5)
+	vis.screen_entered.connect(set_process.bind(true))
+	vis.screen_exited.connect(set_process.bind(false))
+	add_child(vis)
 	# exists() è true col solo .import: senza binario load() torna null e va
 	# saltata la base pittorica (resta l'animazione procedurale del _draw).
 	var tex: Texture2D = load(TEX) if ResourceLoader.exists(TEX) else null
@@ -33,8 +42,13 @@ func _ready() -> void:
 	_textured = true
 
 func _process(delta: float) -> void:
+	# 20 Hz bastano: meridiani lenti (0.5 giri/s) e battito morbido. A pieno
+	# framerate erano 4+ draw_arc ri-tessellati 60 volte al secondo.
 	_t += delta
-	queue_redraw()
+	_redraw_acc += delta
+	if _redraw_acc >= 0.05:
+		_redraw_acc = 0.0
+		queue_redraw()
 
 func _draw() -> void:
 	var w := _rect.size.x

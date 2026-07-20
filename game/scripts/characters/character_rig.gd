@@ -56,7 +56,19 @@ func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 ## Limite superiore opaco del rig legacy, nello spazio dell'AgentNPC. Anche
 ## qui si misura l'arte invece di assumere che tutti gli SVG abbiano gli
 ## stessi margini interni.
+## Cache per facing: le texture cambiano solo con _apply_facing e
+## get_image() è un readback GPU→CPU da non ripetere mai a regime.
+var _top_cache := {}
+
 func visual_top_y() -> float:
+	var cache_key := facing + ("_f" if flipped else "")
+	if _top_cache.has(cache_key):
+		return _top_cache[cache_key]
+	var result := _measure_top_y()
+	_top_cache[cache_key] = result
+	return result
+
+func _measure_top_y() -> float:
 	var top := INF
 	for child in get_children():
 		var sprite := child as Sprite2D
