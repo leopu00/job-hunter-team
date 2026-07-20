@@ -94,6 +94,11 @@ var _pause := 0.0
 
 var _path := PackedVector2Array()
 var _pi := 0
+# Corsia visuale deterministica lungo i tratti condivisi. Gli agenti non
+# collidono fra loro (evita deadlock nei corridoi), ma senza questo piccolo
+# scarto percorrevano lo stesso identico asse e due corpi sembravano un unico
+# sprite sdoppiato, soprattutto durante le ondate di ingresso/uscita.
+var _path_lane := 0.0
 var _state_timer := 0.0
 var _pose_timer := 0.0     # alternanza work/idle alla scrivania
 var _desk_working := true
@@ -143,6 +148,10 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 		_custom_seat_offset = def["seat_offset"]
 		_has_custom_seat_offset = true
 	position = _spot
+	# Cinque corsie strette, stabili per identità/postazione: abbastanza per
+	# separare le silhouette senza spingere nessuno dentro mobili o vetrate.
+	var lane_seed := hash("%s|%s|%.0f|%.0f" % [slug, display_name, _spot.x, _spot.y])
+	_path_lane = float(posmod(lane_seed, 5) - 2) * 8.0
 	# gli agenti NON collidono tra loro (si incastravano nei passaggi):
 	# restano solide solo le collisioni coi mobili (layer 1)
 	collision_layer = 2
@@ -245,13 +254,23 @@ func show_received_message(from_label: String) -> void:
 ## Entrata fisica in scena: ogni nuovo processo appare oltre la soglia,
 ## attraversa la porta e raggiunge a piedi la propria postazione. Funziona
 ## anche se il backend lo pubblica idle: l'ingresso è un fatto, non lavoro.
-func enter_through(door_spot: Vector2) -> void:
+func enter_through(door_spot: Vector2, delay_seconds := 0.0,
+		entry_lane := 0.0) -> void:
 	if _dissolving or _exiting:
 		return
 	_set_desk_occupied(false)
 	_entering = true
 	_forced_trip = true
-	position = door_spot + Vector2(randf_range(-26.0, 26.0), randf_range(-4.0, 10.0))
+	position = door_spot + Vector2(entry_lane * 32.0 + randf_range(-3.0, 3.0),
+			randf_range(-4.0, 10.0))
+	if delay_seconds > 0.0:
+		# Non ammassare l'intero roster sulla soglia al primo frame. Il nodo
+		# esiste già per la sync, ma compare solo quando arriva il suo turno.
+		visible = false
+		await get_tree().create_timer(delay_seconds).timeout
+		if _dissolving or _exiting or not is_inside_tree():
+			return
+		visible = true
 	ExitDoor.swing()
 	_legs = [_leg_to(_spot, "walk", 0.0, "work")]
 	_start_next_leg()
@@ -468,7 +487,9 @@ func _physics_process(delta: float) -> void:
 		_begin_exit(_pending_exit_spot)
 	_bubble_tick(delta)
 	if state_tag and speech:
-		state_tag.set_suppressed(speech.is_speaking())
+		# Durante le ondate porta↔ufficio le targhe identiche si coprivano più
+		# dei corpi stessi, amplificando l'effetto "sprite duplicato".
+		state_tag.set_suppressed(speech.is_speaking() or _entering or _exiting)
 	match state:
 		S.WORK:
 			velocity = Vector2.ZERO
@@ -937,7 +958,7 @@ func _work_pose() -> void:
 func debug_snapshot() -> Dictionary:
 	return {"uid": uid, "status": backend_status, "state": int(state),
 			"motion": str(rig.mode if rig else ""), "speed": velocity.length(),
-			"visible": visible, "detail": activity_detail,
+			"visible": visible, "detail": activity_detail, "path_lane": _path_lane,
 			"forced_trip": _forced_trip, "home": _spot,
 			"work_position": _spot + (_seat_offset() if _seated() else Vector2.ZERO),
 			"collision_mask": collision_mask,
@@ -950,18 +971,34 @@ func debug_snapshot() -> Dictionary:
 func _follow_path(speed: float, mode := "walk") -> bool:
 	if _pi >= _path.size():
 		return true
-	var target := _path[_pi]
+	var target := _path_target(_pi)
 	var to_target := target - global_position
 	if to_target.length() < 10.0:
 		_pi += 1
 		if _pi >= _path.size():
 			velocity = Vector2.ZERO
 			return true
-		to_target = _path[_pi] - global_position
+		target = _path_target(_pi)
+		to_target = target - global_position
 	velocity = to_target.normalized() * speed
 	_face_point(global_position + velocity)
 	_set_rig_motion(rig.facing, rig.flipped, mode)
 	return false
+
+func _path_target(index: int) -> Vector2:
+	var target := _path[index]
+	# I waypoint intermedi vengono percorsi su corsie parallele. La meta finale
+	# resta esatta (sedia, stampante, inbox), quindi il contratto funzionale non
+	# cambia. Se lo scarto uscisse dalla navmesh, si usa il nodo originale.
+	if _path_lane != 0.0 and index > 0 and index < _path.size() - 1:
+		var before := _path[index - 1]
+		var after := _path[index + 1]
+		var tangent := (after - before).normalized()
+		if tangent != Vector2.ZERO:
+			var lane_target := target + Vector2(-tangent.y, tangent.x) * _path_lane
+			if nav.is_point_walkable(lane_target):
+				target = lane_target
+	return target
 
 func _face_point(p: Vector2) -> void:
 	var d := p - global_position
@@ -972,6 +1009,9 @@ func _face_point(p: Vector2) -> void:
 
 func _bubble_tick(delta: float) -> void:
 	if state == S.TALK:
+		return
+	if _entering or _exiting:
+		bubble.hide_now()
 		return
 	if speech and speech.is_speaking():
 		bubble.hide_now()
