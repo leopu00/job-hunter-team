@@ -69,6 +69,24 @@ AS $$
       user_reply_at       = COALESCE(pending_user_messages.user_reply_at, EXCLUDED.user_reply_at),
       -- agent_seen_reply_at: locale autoritativo (lo scrive l'agente sulla VPS).
       agent_seen_reply_at = COALESCE(EXCLUDED.agent_seen_reply_at, pending_user_messages.agent_seen_reply_at)
+    -- Skip dei no-op: il full-push rimanda TUTTE le righe a ogni tick — senza
+    -- questa WHERE ogni riga verrebbe riscritta identica (churn di updated_at,
+    -- eventi Realtime spurii verso i browser sottoscritti, write amplification
+    -- su Supabase). Si aggiorna solo se il merge cambierebbe davvero qualcosa.
+    WHERE pending_user_messages.agent IS DISTINCT FROM EXCLUDED.agent
+       OR pending_user_messages.body  IS DISTINCT FROM EXCLUDED.body
+       OR pending_user_messages.kind  IS DISTINCT FROM EXCLUDED.kind
+       OR (EXCLUDED.related_position_id IS NOT NULL
+           AND pending_user_messages.related_position_id IS DISTINCT FROM EXCLUDED.related_position_id)
+       OR (EXCLUDED.delivered_via IS NOT NULL
+           AND pending_user_messages.delivered_via IS DISTINCT FROM EXCLUDED.delivered_via)
+       OR (EXCLUDED.delivered_at IS NOT NULL
+           AND pending_user_messages.delivered_at IS DISTINCT FROM EXCLUDED.delivered_at)
+       OR (pending_user_messages.acknowledged_at IS NULL AND EXCLUDED.acknowledged_at IS NOT NULL)
+       OR (pending_user_messages.user_reply IS NULL AND EXCLUDED.user_reply IS NOT NULL)
+       OR (pending_user_messages.user_reply_at IS NULL AND EXCLUDED.user_reply_at IS NOT NULL)
+       OR (EXCLUDED.agent_seen_reply_at IS NOT NULL
+           AND pending_user_messages.agent_seen_reply_at IS DISTINCT FROM EXCLUDED.agent_seen_reply_at)
     RETURNING 1
   )
   SELECT COUNT(*)::integer FROM upserted;
