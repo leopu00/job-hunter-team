@@ -106,10 +106,54 @@ export async function GET(req: NextRequest) {
       ? positions[positions.length - 1].updated_at
       : since.toISOString();
 
+  // [JHT-MSG-BACKFLOW] Reply/ack scritti dall'utente sulla chat web: vanno
+  // riportati alla SQLite locale, dove l'agente li legge (filtro
+  // user_reply_at NOT NULL AND agent_seen_reply_at NULL nel prompt). Cursore
+  // dedicato `messages_since` sui timestamp delle azioni-utente (updated_at
+  // qui è inutilizzabile: il full-push VPS lo bumpa a ogni tick). Best-effort:
+  // un errore qui non rompe il pull dei flag posizione.
+  const msgSinceParam = url.searchParams.get("messages_since");
+  const msgSince = msgSinceParam
+    ? new Date(msgSinceParam)
+    : new Date(Date.now() - DEFAULT_LOOKBACK_MS);
+  let pendingReplies: Record<string, unknown>[] = [];
+  let messagesCursor = Number.isNaN(msgSince.getTime())
+    ? null
+    : msgSince.toISOString();
+  if (messagesCursor) {
+    const iso = msgSince.toISOString();
+    const { data: msgData, error: msgError } = await admin
+      .from("pending_user_messages")
+      .select("legacy_id, acknowledged_at, user_reply, user_reply_at")
+      .eq("user_id", userId)
+      .or(`user_reply_at.gt.${iso},acknowledged_at.gt.${iso}`)
+      .order("legacy_id", { ascending: true })
+      .limit(500);
+    if (!msgError && msgData) {
+      pendingReplies = msgData;
+      // Confronto fra DATE (Date.parse), non fra stringhe: Postgres emette
+      // `+00:00` mentre toISOString emette `Z` → il compare lessicografico
+      // è inaffidabile (stessa trappola del cursore pull congelato, 15/07).
+      let maxMs = Date.parse(messagesCursor);
+      for (const m of msgData) {
+        for (const ts of [m.user_reply_at, m.acknowledged_at]) {
+          if (typeof ts !== "string") continue;
+          const ms = Date.parse(ts);
+          if (!Number.isNaN(ms) && ms > maxMs) {
+            maxMs = ms;
+            messagesCursor = ts;
+          }
+        }
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     positions,
     cursor,
     has_more: hasMore,
+    pending_replies: pendingReplies,
+    messages_cursor: messagesCursor,
   });
 }
