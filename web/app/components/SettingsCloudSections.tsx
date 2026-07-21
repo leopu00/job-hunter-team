@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { FLAGS } from "@/app/components/LanguageSwitcher";
 import { localeLabels, type Locale } from "@/i18n/config";
 import { useLocale } from "@/lib/use-locale";
-import { AVAILABLE_CURRENCIES } from "@/lib/exchange-rates";
+import { AVAILABLE_CURRENCIES, currencySymbol } from "@/lib/exchange-rates";
 import { DISPLAY_CURRENCY_COOKIE } from "@/lib/display-currency";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
@@ -224,7 +224,7 @@ export function LanguageCard() {
       >
         {tr("language")}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap justify-center gap-2">
         {(Object.keys(localeLabels) as Locale[]).map((code) => {
           const Flag = FLAGS[code];
           const on = code === locale;
@@ -287,11 +287,19 @@ export function CurrencyCard() {
             fontFamily: "var(--font-mono)",
           }}
         >
-          {AVAILABLE_CURRENCIES.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.code} — {c.name}
-            </option>
-          ))}
+          {AVAILABLE_CURRENCIES.map((c) => {
+            // Simbolo davanti a codice e nome ("€ EUR — Euro"); per le
+            // valute senza simbolo univoco currencySymbol torna il codice
+            // stesso → lo omettiamo per non doppiare ("CHF CHF").
+            const sym = currencySymbol(c.code).trim();
+            const pre = sym !== c.code ? `${sym} ` : "";
+            return (
+              <option key={c.code} value={c.code}>
+                {pre}
+                {c.code} — {c.name}
+              </option>
+            );
+          })}
         </select>
       </div>
       <p className="m-0 mt-2 text-[10px]" style={{ color: "var(--color-dim)" }}>
