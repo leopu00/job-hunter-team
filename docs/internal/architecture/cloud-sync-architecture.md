@@ -5,6 +5,34 @@
 > refactor team_state 2026-05-23 (bidirezionalità a desired-state) + writer-on-demand
 > 2026-05-29, stato implementazione a oggi. Aggiornare a ogni shift architetturale.
 >
+> ⚡ **Shift 2026-07-21 — Realtime-first per il browser + backflow messaggi** (dev5,
+> commit `0f5b66ae…19982d37`). Tre decisioni:
+> **(1) Il canale live browser↔dati è Supabase Realtime (websocket diretto), MAI
+> polling su Vercel.** Ogni fetch/poll dal browser passa dalle function Vercel e
+> si paga per invocazione + Observability (~2,8 eventi/chiamata: è la voce che ha
+> fatturato $14/mese di soli 11,7M eventi a giugno con 1-2 utenti). Il websocket
+> Realtime va diretto browser↔Supabase: **0 invocazioni Vercel**, incluso nel Pro
+> plan (500 connessioni concorrenti + 5M messaggi/mese), costa solo quando succede
+> qualcosa e nulla a tab chiuso. **Webhook valutati e scartati per questo uso**: un
+> webhook (pg_net/trigger → endpoint) serve per fan-out server-side (email, push
+> notification) — non può raggiungere un browser aperto, che avrebbe comunque
+> bisogno di un canale in ascolto; e ogni webhook→Vercel è un'invocazione pagata.
+> Restano l'opzione giusta per notifiche out-of-band future, non per la UI live.
+> **(2) Segnale "dati freschi" gratuito**: la route di push timbra
+> `team_state.sync_completed_at` a ogni push che porta dati dashboard → i browser
+> sottoscritti auto-aggiornano (throttle 90s, solo tab visibile, flash "Dati
+> aggiornati") senza pulsante né reload. Il pulsante "Sync now" resta per il
+> refresh esplicito; fix dei suoi 3 bug (setAuth mancante → RLS silenziava gli
+> eventi; confronto con l'orologio del BROWSER; timeout 60s < poll deep-idle 120s
+> della VPS). `sync_requested_at` ora timbrato server-side.
+> **(3) Messaggi bidirezionali riparati**: il full-push VPS sovrascriveva
+> reply/ack web con i NULL locali (mig 057 = merge RPC per-campo + skip no-op) e
+> non esisteva il ritorno cloud→VPS (ora: lane `pending_replies` in
+> `pull-desired-state` + apply in SQLite locale via supabase-direct, zero Vercel).
+> Chat drawer + /messages ricevono INSERT/UPDATE live via `usePendingMessagesLive`.
+> **Deploy**: web = release production (gated utente); CLI = redeploy container
+> VPS (gated utente). La mig 057 è GIÀ applicata a prod (additiva, RPC).
+>
 > 🔄 **Shift 2026-06-20** — direzione target rivista in [`2026-06-20-data-sync-and-dashboard-split-design.md`](2026-06-20-data-sync-and-dashboard-split-design.md): **sync dati on-access + pulsante "Sync now", niente polling continuo** (unico poller = la VPS, adattivo); **`position_transitions` da aggiungere al push** (mig 044 esiste, mai cablata → event-log fossile); **corsia richieste async** (ticket+azioni-posizione) mantenuta sul cloud e **pullata** dalla VPS; **bus real-time di controllo** (`team_state`/reconciler, chat poller, `team_commands`) candidato a ritiro. Le sezioni "desired-state bidirezionale" qui sotto descrivono lo stato *attuale*, in parte superato da quel design.
 >
 > 🔀 **Shift 2026-06-15 (interaction planes)** — l'interazione (start/stop, chat, upload, config) è **desktop-first** (locale via browser→`localhost`, VPS via tunnel SSH); il **web è sola lettura** (data plane). La "vision web-first" citata più sotto (es. *"il browser deve mostrare team vivo come localhost"*) è **superata**: il path cloud interattivo (`team_state`/reconciler, chat poller, `team_commands`) è in ritiro. Vedi [`2026-06-15-interaction-planes-redesign-design.md`](2026-06-15-interaction-planes-redesign-design.md).
