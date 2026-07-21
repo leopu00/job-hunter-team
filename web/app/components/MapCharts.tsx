@@ -1092,7 +1092,7 @@ function MobileFilterPill({
       }}
     >
       {open && chips.length > 0 && (
-        <ChipsBanner chips={chips} clearAll={clearAll} tr={tr} />
+        <ChipsBanner chips={chips} clearAll={clearAll} tr={tr} align="right" />
       )}
 
       <div
@@ -1207,10 +1207,15 @@ function ChipsBanner({
   chips,
   clearAll,
   tr,
+  align = "center",
 }: {
   chips: FilterChipDesc[];
   clearAll: () => void;
   tr: Tr;
+  // "center" (desktop: pill in mezzo alla riga) | "right" (mobile: la
+  // pill sta a destra e il banner centrato sbordava dallo schermo —
+  // ancorato al bordo destro della pill si apre verso sinistra).
+  align?: "center" | "right";
 }) {
   return (
     <div
@@ -1218,11 +1223,14 @@ function ChipsBanner({
       style={{
         position: "absolute",
         bottom: "calc(100% + 8px)",
-        left: "50%",
-        transform: "translateX(-50%)",
+        ...(align === "center"
+          ? { left: "50%", transform: "translateX(-50%)" }
+          : { right: 0 }),
         padding: 10,
         width: 360,
-        maxWidth: "calc(100vw - 48px)",
+        // NB niente unità viewport (ambigue sotto zoom, vedi page.tsx):
+        // su mobile il cap fisso tiene il banner dentro lo schermo.
+        maxWidth: align === "right" ? 300 : "calc(100vw - 48px)",
         maxHeight: 240,
         overflowY: "auto",
         overscrollBehavior: "contain",
