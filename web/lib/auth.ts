@@ -89,6 +89,14 @@ export function hasUntrustedForwardedHeaders(hdrs: Headers): boolean {
  * `Headers` siano gia' disponibili senza dover chiamare `headers()`.
  */
 export function isLocalRequestFromHeaders(hdrs: Headers): boolean {
+  // [JHT-DASHBOARD-SPLIT] Su un deploy CLOUD nessuna richiesta è mai
+  // "locale", qualunque sia l'host: le corsie locali (SQLite, tmux,
+  // filesystem ~/.jht) su quel deploy non esistono. Senza questo guard un
+  // dev server in modalità cloud raggiunto via localhost imboccava le
+  // corsie desktop e mostrava dati vuoti/sbagliati (profilo, 21/07) —
+  // classe di bug intera, non caso singolo. In produzione Vercel è già
+  // così di fatto (host = dominio); qui diventa deterministico.
+  if (isCloudDeploy()) return false;
   // Header `Host` deve essere localhost. Su deploy pubblico questo è
   // riscritto al dominio reale dal reverse proxy, quindi un attaccante
   // remoto che setta `Host: localhost` viene comunque bloccato qui.

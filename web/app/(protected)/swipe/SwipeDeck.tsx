@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
+import { currencySymbol, formatMoneyCompact } from "@/lib/exchange-rates";
 import { scoreSpectrumCss } from "@/lib/score-color";
 import type { Locale } from "@/i18n/config";
 import {
@@ -63,6 +64,9 @@ export type SwipeCardData = {
   salary_min: number | null;
   salary_max: number | null;
   salary_currency: string;
+  // true = importi convertiti nella valuta di visualizzazione (server-side,
+  // vedi toCard in page.tsx): la chip li mostra con "≈".
+  salary_converted?: boolean;
   jd_summary: string | null;
 };
 
@@ -114,7 +118,9 @@ const VERDICTS: Record<
   },
   top: {
     Icon: IconStar,
-    color: "var(--color-green)",
+    // Giallo oro (scelta utente 21/07): la stella "Molto interessante"
+    // è oro ovunque, non verde.
+    color: "var(--color-yellow)",
     action: "star",
     score: 5,
     direction: "more_like_this",
@@ -553,25 +559,21 @@ const T: Record<
   },
 };
 
-const CURRENCY_SYMBOL: Record<string, string> = {
-  EUR: "€",
-  USD: "$",
-  GBP: "£",
-  CHF: "CHF",
-  HUF: "Ft",
-};
-
 function formatSalary(
   min: number | null,
   max: number | null,
   currency: string,
+  converted?: boolean,
 ): string | null {
   if (min == null && max == null) return null;
-  const sym = CURRENCY_SYMBOL[currency] ?? currency;
-  const k = (v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v));
+  // "≈" quando l'importo è stato convertito nella valuta di visualizzazione
+  // (preferenza Impostazioni): non è il numero dell'annuncio.
+  const pre = converted ? "≈ " : "";
+  const sym = currencySymbol(currency).trim();
+  const k = formatMoneyCompact;
   if (min != null && max != null && min !== max)
-    return `${sym} ${k(min)}–${k(max)}`;
-  return `${sym} ${k((min ?? max)!)}`;
+    return `${pre}${sym} ${k(min)}–${k(max)}`;
+  return `${pre}${sym} ${k((min ?? max)!)}`;
 }
 
 // jd_summary arriva in markdown leggero (grassetti, heading): sulla card lo
@@ -643,6 +645,7 @@ function buildChips(
     card.salary_min,
     card.salary_max,
     card.salary_currency,
+    card.salary_converted,
   );
   if (sal) out.push({ key: "sal", text: sal, color: "var(--color-green)" });
   if (card.role_family) out.push({ key: "role", text: card.role_family });
@@ -688,10 +691,16 @@ export default function SwipeDeck({
   pending,
   reviewed,
   initialVerdicts,
+  salaryAxisMaxK = 200,
 }: {
   pending: SwipeCardData[];
   reviewed: SwipeCardData[];
   initialVerdicts: Record<string, Verdict>;
+  // Tetto dell'asse stipendio (slider + istogramma) in MIGLIAIA della
+  // valuta di visualizzazione: 200 va bene per EUR/USD/GBP, ma con la
+  // preferenza valuta (es. HUF) la scala cambia — lo calcola il server
+  // come equivalente di 200k EUR (vedi page.tsx).
+  salaryAxisMaxK?: number;
 }) {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
@@ -705,13 +714,14 @@ export default function SwipeDeck({
 
   // ── Filtri (client-side, sul mazzo già caricato) ─────────────────
   // Stessa famiglia di filtri della pagina posizioni: range score, range
-  // stipendio (k€, il grosso del dataset è EUR), categorie, modalità.
-  // Con un filtro attivo le card senza il dato corrispondente escono.
+  // stipendio (in migliaia della valuta di visualizzazione — gli importi
+  // arrivano già convertiti dal server), categorie, modalità. Con un
+  // filtro attivo le card senza il dato corrispondente escono.
   const [filters, setFilters] = useState({
     sMin: 0,
     sMax: 100,
     salMin: 0,
-    salMax: 200,
+    salMax: salaryAxisMaxK,
     fams: [] as string[],
     modes: [] as string[],
     countries: [] as string[],
@@ -725,7 +735,7 @@ export default function SwipeDeck({
     filters.sMin > 0 ||
     filters.sMax < 100 ||
     filters.salMin > 0 ||
-    filters.salMax < 200 ||
+    filters.salMax < salaryAxisMaxK ||
     filters.fams.length > 0 ||
     filters.modes.length > 0 ||
     filters.countries.length > 0 ||
@@ -790,7 +800,10 @@ export default function SwipeDeck({
         if (c.score == null || c.score < filters.sMin || c.score > filters.sMax)
           return false;
       }
-      if (skip !== "salary" && (filters.salMin > 0 || filters.salMax < 200)) {
+      if (
+        skip !== "salary" &&
+        (filters.salMin > 0 || filters.salMax < salaryAxisMaxK)
+      ) {
         const lo = c.salary_min ?? c.salary_max;
         const hi = c.salary_max ?? c.salary_min;
         if (lo == null || hi == null) return false;
@@ -829,7 +842,7 @@ export default function SwipeDeck({
         return false;
       return true;
     },
-    [filters],
+    [filters, salaryAxisMaxK],
   );
   const fPending = useMemo(
     () => pending.filter((c) => matches(c)),
@@ -906,15 +919,16 @@ export default function SwipeDeck({
     setOpenSecs((o) => ({ ...o, [k]: !(o[k] ?? false) }));
   const salHisto = useMemo(() => {
     const bins = new Array(40).fill(0) as number[];
+    const binK = salaryAxisMaxK / 40;
     for (const c of histoBase) {
       const lo = c.salary_min ?? c.salary_max;
       const hi = c.salary_max ?? c.salary_min;
       if (lo == null || hi == null || !matches(c, "salary")) continue;
       const mid = (lo + hi) / 2 / 1000;
-      bins[Math.max(0, Math.min(39, Math.floor(mid / 5)))]++;
+      bins[Math.max(0, Math.min(39, Math.floor(mid / binK)))]++;
     }
     return bins;
-  }, [histoBase, matches]);
+  }, [histoBase, matches, salaryAxisMaxK]);
   // Cambio filtri o ordinamento = mazzo diverso → dalla prima card.
   useEffect(() => {
     setIdxP(0);
@@ -1923,18 +1937,20 @@ export default function SwipeDeck({
                 />
               </FilterSection>
 
-              {/* Range stipendio (k€) */}
+              {/* Range stipendio (migliaia della valuta di visualizzazione) */}
               <FilterSection
                 label={t.fSalary}
-                meta={`${filters.salMin}k – ${filters.salMax}k`}
-                metaActive={filters.salMin > 0 || filters.salMax < 200}
+                meta={`${formatMoneyCompact(filters.salMin * 1000)} – ${formatMoneyCompact(filters.salMax * 1000)}`}
+                metaActive={
+                  filters.salMin > 0 || filters.salMax < salaryAxisMaxK
+                }
                 open={openSecs.salary ?? false}
                 onToggle={() => toggleSec("salary")}
               >
                 <DualRange
                   min={0}
-                  max={200}
-                  step={5}
+                  max={salaryAxisMaxK}
+                  step={salaryAxisMaxK / 40}
                   lo={filters.salMin}
                   hi={filters.salMax}
                   histo={salHisto}
@@ -2059,7 +2075,7 @@ export default function SwipeDeck({
                       sMin: 0,
                       sMax: 100,
                       salMin: 0,
-                      salMax: 200,
+                      salMax: salaryAxisMaxK,
                       fams: [],
                       modes: [],
                       countries: [],

@@ -10,8 +10,25 @@ import { useEffect } from "react";
 // mappa. Blocchiamo lo scroll di html/body finché /map è montata.
 export default function LockBodyScroll() {
   useEffect(() => {
+    // Vale anche su mobile: lì la colonna .map-shell è alta esattamente
+    // la viewport e scorre INTERNAMENTE (overflow-y auto) — il documento
+    // sotto non deve muoversi comunque.
     const html = document.documentElement;
     const body = document.body;
+    // --map-vh: altezza VISIBILE reale in px (numero puro), per la shell
+    // mobile. Le unità CSS vh/dvh dentro il contesto zoom (--zoom) sono
+    // ambigue: Safari le scala per lo zoom, Chromium no — qualunque
+    // formula pura-CSS è giusta su un motore e sbagliata sull'altro.
+    // visualViewport.height invece è sempre in px non zoomati (e segue
+    // la barra dinamica di Safari via evento resize).
+    const setVh = () =>
+      html.style.setProperty(
+        "--map-vh",
+        String(window.visualViewport?.height ?? window.innerHeight),
+      );
+    setVh();
+    window.visualViewport?.addEventListener("resize", setVh);
+    window.addEventListener("resize", setVh);
     const prevHtml = html.style.overflow;
     const prevBody = body.style.overflow;
     const prevAnchor = html.style.overflowAnchor;
@@ -34,6 +51,9 @@ export default function LockBodyScroll() {
       html.style.overflow = prevHtml;
       body.style.overflow = prevBody;
       html.style.overflowAnchor = prevAnchor;
+      html.style.removeProperty("--map-vh");
+      window.visualViewport?.removeEventListener("resize", setVh);
+      window.removeEventListener("resize", setVh);
     };
   }, []);
   return null;

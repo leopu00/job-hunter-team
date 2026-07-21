@@ -277,16 +277,19 @@ function createGroupBeamsImageData(
   const baseY = halfH;
 
   // Top-score → tinta halo/core. È il primo elemento di sortedDesc.
+  // topSal: come per i beam, il gruppo il cui MIGLIOR score è basso ha
+  // halo/core smorzati — solo i cluster buoni "brillano" a terra.
   const topScore = sortedDesc[0];
   const [hr, hg, hb] = scoreToRgb(topScore);
   const haloBase = `rgba(${hr},${hg},${hb},`;
+  const topSal = 0.4 + 0.6 * scoreNormHeight(topScore);
 
   // Halo: ellisse tenue al centro (più piccolo + meno opaco rispetto
   // alle prime versioni). Suggerisce il "terreno" senza dominare.
   const haloR = Math.max(28, halfW * 0.55);
   const haloGrad = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, haloR);
-  haloGrad.addColorStop(0, `${haloBase}0.30)`);
-  haloGrad.addColorStop(0.5, `${haloBase}0.1)`);
+  haloGrad.addColorStop(0, `${haloBase}${0.3 * topSal})`);
+  haloGrad.addColorStop(0.5, `${haloBase}${0.1 * topSal})`);
   haloGrad.addColorStop(1, `${haloBase}0)`);
   ctx.fillStyle = haloGrad;
   ctx.beginPath();
@@ -308,13 +311,25 @@ function createGroupBeamsImageData(
     const y0 = baseY + yOff;
     const topY = y0 - height;
     const topW = 0.8;
-    const [r, g, b] = scoreToRgb(score);
+    // Salienza ∝ score (feedback utente 21/07, SOLO globo — i grafici
+    // tengono lo spettro pieno): con lo spettro al posto della scala
+    // solo-verde, i beam rossi/ARANCIONI (score medio-bassi) attiravano
+    // l'occhio più dei verdi. Alpha e saturazione crescono con lo score
+    // su curve ripide (esponente > 1): la fascia arancione 45-65 si
+    // spegne davvero, i verdi alti restano pieni e vivi.
+    const [r0, g0, b0] = scoreToRgb(score);
+    const sal = 0.22 + 0.78 * Math.pow(norm, 1.7);
+    const keep = 0.4 + 0.6 * Math.pow(norm, 1.3);
+    const gray = (r0 + g0 + b0) / 3;
+    const r = Math.round(gray + (r0 - gray) * keep);
+    const g = Math.round(gray + (g0 - gray) * keep);
+    const b = Math.round(gray + (b0 - gray) * keep);
     const base = `rgba(${r},${g},${b},`;
 
     const grad = ctx.createLinearGradient(x, y0, x, topY);
-    grad.addColorStop(0, `${base}1)`);
-    grad.addColorStop(0.12, `${base}0.92)`);
-    grad.addColorStop(0.5, `${base}0.4)`);
+    grad.addColorStop(0, `${base}${sal})`);
+    grad.addColorStop(0.12, `${base}${0.92 * sal})`);
+    grad.addColorStop(0.5, `${base}${0.4 * sal})`);
     grad.addColorStop(1, `${base}0)`);
     ctx.fillStyle = grad;
     ctx.beginPath();
@@ -328,11 +343,11 @@ function createGroupBeamsImageData(
 
   // Core luminoso al centro (più piccolo e meno saturo): un puntino
   // di luce sulla coordinata, non più un "faro" grande.
-  const coreLight = `rgba(${Math.min(255, hr + 50)},${Math.min(255, hg + 50)},${Math.min(255, hb + 50)},0.55)`;
+  const coreLight = `rgba(${Math.min(255, hr + 50)},${Math.min(255, hg + 50)},${Math.min(255, hb + 50)},${0.55 * topSal})`;
   const coreR = 11;
   const coreGrad = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, coreR);
   coreGrad.addColorStop(0, coreLight);
-  coreGrad.addColorStop(0.5, `${haloBase}0.28)`);
+  coreGrad.addColorStop(0.5, `${haloBase}${0.28 * topSal})`);
   coreGrad.addColorStop(1, `${haloBase}0)`);
   ctx.fillStyle = coreGrad;
   ctx.beginPath();
@@ -893,9 +908,15 @@ export default function JobsGlobe({
       // Attribution (obbligo licenza OSM/CARTO): parte COLLASSATA sulla
       // sola (i) — maplibre a volte la inizializza espansa (-show). Il
       // credito riappare al click sulla (i) o su hover (vedi CSS sotto).
-      container
-        .querySelector(".maplibregl-ctrl-attrib")
-        ?.classList.remove("maplibregl-compact-show");
+      const collapseAttrib = () =>
+        container
+          .querySelector(".maplibregl-ctrl-attrib")
+          ?.classList.remove("maplibregl-compact-show");
+      collapseAttrib();
+      // I resize successivi (es. il box mobile che prende la sua altezza
+      // dopo il mount) la riespandono: ricollassa quando la mappa si
+      // assesta. once() = il click utente sulla (i) dopo resta rispettato.
+      map.once("idle", collapseAttrib);
       // Tinta theme-aware sui layer base.
       tintMap(map, themeRef.current);
       // Aggiungo source + layer per i pin. WebGL native = follow-mappa

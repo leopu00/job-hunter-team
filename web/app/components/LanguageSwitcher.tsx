@@ -83,7 +83,8 @@ function FlagPT() {
   );
 }
 
-const FLAGS: Record<string, () => React.JSX.Element> = {
+// Esportata: le Impostazioni (sezione Lingua) riusano le stesse bandierine.
+export const FLAGS: Record<string, () => React.JSX.Element> = {
   it: FlagIT,
   en: FlagEN,
   hu: FlagHU,

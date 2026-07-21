@@ -56,7 +56,8 @@ const REMOTE_OPTIONS: OptionKey[] = [
 // Giudizio utente (event-log feedback, stessa scala di /swipe); 'none' =
 // nessun giudizio dato.
 const FB_OPTIONS: OptionKey[] = [
-  { val: "top", labelKey: "fb_top", color: "var(--color-green)" },
+  // Stella = giallo oro, come i bottoni giudizio (21/07).
+  { val: "top", labelKey: "fb_top", color: "var(--color-yellow)" },
   { val: "review_ok", labelKey: "fb_ok", color: "var(--color-blue)" },
   { val: "review_low", labelKey: "fb_low", color: "var(--color-orange)" },
   { val: "no", labelKey: "fb_no", color: "var(--color-red)" },
@@ -473,33 +474,27 @@ export default function PositionsFilterSidebar({
     () => [
       {
         key: "fb" as DirectKey,
-        options: FB_OPTIONS.map(
-          (o): Option => ({
-            val: o.val,
-            label: tr(o.labelKey),
-            color: o.color,
-          }),
-        ),
+        options: FB_OPTIONS.map((o): Option => ({
+          val: o.val,
+          label: tr(o.labelKey),
+          color: o.color,
+        })),
       },
       {
         key: "status" as DirectKey,
-        options: STATUS_OPTIONS.map(
-          (o): Option => ({
-            val: o.val,
-            label: tr(o.labelKey),
-            color: o.color,
-          }),
-        ),
+        options: STATUS_OPTIONS.map((o): Option => ({
+          val: o.val,
+          label: tr(o.labelKey),
+          color: o.color,
+        })),
       },
       {
         key: "remote" as DirectKey,
-        options: REMOTE_OPTIONS.map(
-          (o): Option => ({
-            val: o.val,
-            label: tr(o.labelKey),
-            color: o.color,
-          }),
-        ),
+        options: REMOTE_OPTIONS.map((o): Option => ({
+          val: o.val,
+          label: tr(o.labelKey),
+          color: o.color,
+        })),
       },
       {
         key: "source" as DirectKey,

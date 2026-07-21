@@ -65,8 +65,12 @@ export default async function ProfilePage() {
 
   // In locale (desktop container su localhost) il profilo vive nel
   // workspace YAML, Supabase non viene interpellato — coerente con il
-  // bypass auth in (protected)/layout.tsx e proxy.ts.
-  if (isSupabaseConfigured && !(await isLocalRequest())) {
+  // bypass auth in (protected)/layout.tsx e proxy.ts. Sul deploy CLOUD
+  // invece la fonte è SEMPRE Supabase, anche se la richiesta arriva da
+  // localhost (dev server in modalità cloud): decidere per origine
+  // richiesta mandava il dev :3002 sul workspace vuoto → "nessun
+  // profilo" con dati presenti sul cloud (21/07).
+  if (isSupabaseConfigured && (isCloudDeploy() || !(await isLocalRequest()))) {
     const supabase = await createClient();
     const {
       data: { user },
