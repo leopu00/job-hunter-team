@@ -316,6 +316,14 @@ export default function MapCharts({
   // OR-uniti (selezioni multiple).
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  // Conteggio filtri attivi per il badge del toggle mobile (su mobile la
+  // pill-chips FilterButton non c'è: questo è l'unico indicatore).
+  const activeFilterCount =
+    selectedTypes.length +
+    selectedRanges.length +
+    (unscoredSelected ? 1 : 0) +
+    selectedCountries.length +
+    selectedCities.length;
   const [noCoords, setNoCoords] = useState<NoCoordItem[]>([]);
   // Posizioni con coordinate ufficio — fetched per ricomputare
   // donut/histogram in base al filtro location.
@@ -705,6 +713,22 @@ export default function MapCharts({
                 >
                   <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
                 </svg>
+                {activeFilterCount > 0 && (
+                  <span
+                    className="rounded-full text-[9px] font-bold tabular-nums"
+                    style={{
+                      background: "var(--color-green)",
+                      color: "var(--color-void)",
+                      minWidth: 15,
+                      height: 15,
+                      lineHeight: "15px",
+                      textAlign: "center",
+                      padding: "0 3px",
+                    }}
+                  >
+                    {activeFilterCount}
+                  </span>
+                )}
                 {/* Caret: giù = li nasconderà, su = li mostrerà */}
                 <svg
                   width="11"
@@ -1117,10 +1141,13 @@ function FilterButton({
   if (chips.length === 0) return null;
 
   return (
+    // hidden md:flex — su mobile questa pill NON esiste: il ruolo
+    // "filtri" ce l'ha il toggle pannelli (che mostra anche il
+    // conteggio); due pill imbuto affiancate confondevano (21/07).
     <div
+      className="hidden md:flex"
       style={{
         position: "relative",
-        display: "flex",
         flexDirection: "column",
         alignItems: "center",
         pointerEvents: "auto",
