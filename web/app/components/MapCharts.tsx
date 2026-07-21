@@ -110,6 +110,24 @@ const T: Record<string, Record<string, string>> = {
     fr: "Filtres",
     pt: "Filtros",
   },
+  panels_show: {
+    it: "Mostra filtri",
+    en: "Show filters",
+    hu: "Szűrők megjelenítése",
+    es: "Mostrar filtros",
+    de: "Filter anzeigen",
+    fr: "Afficher les filtres",
+    pt: "Mostrar filtros",
+  },
+  panels_hide: {
+    it: "Nascondi filtri",
+    en: "Hide filters",
+    hu: "Szűrők elrejtése",
+    es: "Ocultar filtros",
+    de: "Filter ausblenden",
+    fr: "Masquer les filtres",
+    pt: "Ocultar filtros",
+  },
   filters_active: {
     it: "Filtri attivi",
     en: "Active filters",
@@ -270,6 +288,12 @@ export default function MapCharts({
   }>({ location: true, score: true, donut: true, remote: true });
   const toggleCollapse = (k: "location" | "score" | "donut" | "remote") =>
     setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+  // MOBILE: nasconde in blocco la colonna delle 4 card (classe
+  // map-card-offscreen, attiva solo nella media query di page.tsx) —
+  // stesso pulsante per mostrare/nascondere, così il globo può prendersi
+  // tutto lo schermo (scelta utente 21/07). Su desktop non ha effetto.
+  const [panelsHidden, setPanelsHidden] = useState(false);
+  const offscreen = panelsHidden ? " map-card-offscreen" : "";
   // Richiesta di "focus" su un pin: cliccando una posizione (con
   // coordinate) nella card Posizioni, la mappa ci zooma sopra e la
   // seleziona. `tick` permette di ri-triggerare lo stesso id.
@@ -648,66 +672,122 @@ export default function MapCharts({
             typeDist.map((d) => [d.family, d.color ?? "var(--color-muted)"]),
           )}
           bottomCenterExtra={
-            <FilterButton
-              chips={(() => {
-                const arr: FilterChipDesc[] = [];
-                for (const t of selectedTypes) {
-                  arr.push({
-                    key: `t-${t}`,
-                    label: labels[t] ?? String(t),
-                    color: typeDist.find((d) => d.family === t)?.color,
-                    onRemove: () => toggleType(t),
-                  });
-                }
-                for (const r of selectedRanges) {
-                  arr.push({
-                    key: `r-${r.lo}-${r.hi}`,
-                    label: `${r.lo}–${r.hi}`,
-                    onRemove: () => toggleRange(r),
-                  });
-                }
-                if (unscoredSelected) {
-                  arr.push({
-                    key: "unscored",
-                    label: tr("no_score"),
-                    onRemove: () => setUnscoredSelected(false),
-                  });
-                }
-                for (const c of selectedCountries) {
-                  arr.push({
-                    key: `co-${c}`,
-                    label: c,
-                    onRemove: () => toggleCountry(c),
-                  });
-                }
-                for (const ck of selectedCities) {
-                  // Mostra "City" (Country implicito) nel chip per brevità.
-                  const [country, city] = ck.split("|");
-                  arr.push({
-                    key: `ci-${ck}`,
-                    label:
-                      city === "(country-only)" ? country : (city ?? country),
-                    onRemove: () => toggleCity(ck),
-                  });
-                }
-                return arr;
-              })()}
-              clearAll={() => {
-                setSelectedTypes([]);
-                setSelectedRanges([]);
-                setUnscoredSelected(false);
-                setSelectedCountries([]);
-                setSelectedCities([]);
-              }}
-              tr={tr}
-            />
+            <>
+              {/* Toggle colonna filtri (SOLO mobile): stesso pulsante per
+                  alzare e nascondere i 4 pannelli sotto il globo. */}
+              <button
+                type="button"
+                onClick={() => setPanelsHidden((v) => !v)}
+                aria-label={tr(panelsHidden ? "panels_show" : "panels_hide")}
+                title={tr(panelsHidden ? "panels_show" : "panels_hide")}
+                className="md:hidden flex items-center gap-1.5 rounded-full border transition-colors"
+                style={{
+                  background: "var(--color-panel)",
+                  borderColor: "var(--color-border)",
+                  color: "var(--color-bright)",
+                  padding: "8px 12px",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+                  pointerEvents: "auto",
+                }}
+              >
+                {/* Imbuto */}
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                {/* Caret: giù = li nasconderà, su = li mostrerà */}
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                  style={{
+                    transition: "transform 0.2s",
+                    transform: panelsHidden ? "rotate(180deg)" : "none",
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <FilterButton
+                chips={(() => {
+                  const arr: FilterChipDesc[] = [];
+                  for (const t of selectedTypes) {
+                    arr.push({
+                      key: `t-${t}`,
+                      label: labels[t] ?? String(t),
+                      color: typeDist.find((d) => d.family === t)?.color,
+                      onRemove: () => toggleType(t),
+                    });
+                  }
+                  for (const r of selectedRanges) {
+                    arr.push({
+                      key: `r-${r.lo}-${r.hi}`,
+                      label: `${r.lo}–${r.hi}`,
+                      onRemove: () => toggleRange(r),
+                    });
+                  }
+                  if (unscoredSelected) {
+                    arr.push({
+                      key: "unscored",
+                      label: tr("no_score"),
+                      onRemove: () => setUnscoredSelected(false),
+                    });
+                  }
+                  for (const c of selectedCountries) {
+                    arr.push({
+                      key: `co-${c}`,
+                      label: c,
+                      onRemove: () => toggleCountry(c),
+                    });
+                  }
+                  for (const ck of selectedCities) {
+                    // Mostra "City" (Country implicito) nel chip per brevità.
+                    const [country, city] = ck.split("|");
+                    arr.push({
+                      key: `ci-${ck}`,
+                      label:
+                        city === "(country-only)" ? country : (city ?? country),
+                      onRemove: () => toggleCity(ck),
+                    });
+                  }
+                  return arr;
+                })()}
+                clearAll={() => {
+                  setSelectedTypes([]);
+                  setSelectedRanges([]);
+                  setUnscoredSelected(false);
+                  setSelectedCountries([]);
+                  setSelectedCities([]);
+                }}
+                tr={tr}
+              />
+            </>
           }
         />
       </div>
 
       {/* Card Score top-right: header collassabile + grafico. */}
       <div
-        className="map-float-card map-card-score bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        className={
+          "map-float-card map-card-score bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+          offscreen
+        }
         style={{
           position: "absolute",
           top: CARD_TOP,
@@ -760,7 +840,10 @@ export default function MapCharts({
           posizione con coordinate → zoom sul pin in mappa; remote →
           apre il dettaglio. */}
       <div
-        className="map-float-card map-card-positions bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        className={
+          "map-float-card map-card-positions bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+          offscreen
+        }
         style={{
           position: "absolute",
           bottom: CARD_BOTTOM,
@@ -896,6 +979,7 @@ export default function MapCharts({
           tree={effectiveLocationTree}
           tr={tr}
           collapsed={collapsed.location}
+          extraClass={offscreen}
           onToggleCollapse={() => toggleCollapse("location")}
           onPositionClick={openPosition}
           openCountry={openCountry}
@@ -943,7 +1027,10 @@ export default function MapCharts({
       {/* Position Types donut — overlay bottom-left. Header collassabile
           + donut/legenda. È il riferimento dimensionale delle 4 card. */}
       <div
-        className="map-float-card map-card-donut bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        className={
+          "map-float-card map-card-donut bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+          offscreen
+        }
         style={{
           position: "absolute",
           bottom: CARD_BOTTOM,
@@ -1261,6 +1348,7 @@ function LocationTree({
   tree,
   tr,
   collapsed,
+  extraClass,
   onToggleCollapse,
   openCountry,
   openCity,
@@ -1275,6 +1363,9 @@ function LocationTree({
   tree: LocationCountry[];
   tr: Tr;
   collapsed: boolean;
+  // Classe extra dal parent (es. map-card-offscreen quando i pannelli
+  // sono nascosti su mobile).
+  extraClass: string;
   onToggleCollapse: () => void;
   openCountry: string | null;
   openCity: string | null;
@@ -1293,7 +1384,10 @@ function LocationTree({
   const total = tree.reduce((s, c) => s + c.count, 0);
   return (
     <div
-      className="map-float-card map-card-location bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+      className={
+        "map-float-card map-card-location bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+        extraClass
+      }
       style={{
         position: "absolute",
         // Angolo in alto a sinistra, stessa dimensione fissa delle altre
