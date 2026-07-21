@@ -118,6 +118,7 @@ export default async function MapPage() {
 
   return (
     <div
+      className="map-shell"
       style={{
         position: "relative",
         width: "100%",
@@ -133,16 +134,52 @@ export default async function MapPage() {
       }}
     >
       {/* Blocca lo scroll del documento: /map è full-viewport, lo
-          scroll su una card finiva sul documento creando la banda nera. */}
+          scroll su una card finiva sul documento creando la banda nera.
+          (Solo desktop: su mobile la pagina scorre, vedi CSS sotto.) */}
       <LockBodyScroll />
       {/* Scoped reset: chart components hanno wrapper card built-in
           (bg-[var(--color-card)] + border + p-5). In /map li vogliamo
-          "bare", solo grafico su sfondo trasparente. */}
+          "bare", solo grafico su sfondo trasparente.
+
+          Layout MOBILE (≤767px, scelta utente 21/07): le 4 card d'angolo
+          sovrapposte al globo erano inutilizzabili al tocco (larghe 50vw,
+          si coprivano a vicenda). Qui diventano una colonna di card
+          collassabili SOTTO il globo, in flusso normale: si scrolla giù,
+          si impostano i filtri, si torna su a interagire col globo. Le
+          regole sono !important perché devono vincere sugli stili inline
+          desktop (position:absolute ecc.). Ordine: globo → Location →
+          Score → Tipologie → Posizioni. Desktop invariato. */}
       <style>{`
         .map-bare-chart > div:first-child {
           background: transparent !important;
           border-color: transparent !important;
           padding: 0 !important;
+        }
+        @media (max-width: 767px) {
+          .map-shell {
+            height: auto !important;
+            overflow: visible !important;
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 24px;
+          }
+          .map-globe-layer {
+            position: relative !important;
+            inset: auto !important;
+            height: 52dvh;
+            order: 0;
+          }
+          .map-float-card {
+            position: static !important;
+            width: auto !important;
+            max-width: none !important;
+            margin: 12px 16px 0;
+            box-shadow: none !important;
+          }
+          .map-card-location { order: 1; }
+          .map-card-score { order: 2; }
+          .map-card-donut { order: 3; }
+          .map-card-positions { order: 4; }
         }
       `}</style>
 

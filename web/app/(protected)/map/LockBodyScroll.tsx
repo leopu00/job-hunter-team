@@ -10,6 +10,10 @@ import { useEffect } from "react";
 // mappa. Blocchiamo lo scroll di html/body finché /map è montata.
 export default function LockBodyScroll() {
   useEffect(() => {
+    // Su MOBILE (≤767px) la pagina /map SCORRE (globo in alto, card dei
+    // filtri in colonna sotto — vedi CSS .map-shell in page.tsx): niente
+    // lock. Il breakpoint deve combaciare con quella media query.
+    if (window.matchMedia("(max-width: 767px)").matches) return;
     const html = document.documentElement;
     const body = document.body;
     const prevHtml = html.style.overflow;

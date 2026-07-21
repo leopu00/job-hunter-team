@@ -893,9 +893,15 @@ export default function JobsGlobe({
       // Attribution (obbligo licenza OSM/CARTO): parte COLLASSATA sulla
       // sola (i) — maplibre a volte la inizializza espansa (-show). Il
       // credito riappare al click sulla (i) o su hover (vedi CSS sotto).
-      container
-        .querySelector(".maplibregl-ctrl-attrib")
-        ?.classList.remove("maplibregl-compact-show");
+      const collapseAttrib = () =>
+        container
+          .querySelector(".maplibregl-ctrl-attrib")
+          ?.classList.remove("maplibregl-compact-show");
+      collapseAttrib();
+      // I resize successivi (es. il box mobile che prende la sua altezza
+      // dopo il mount) la riespandono: ricollassa quando la mappa si
+      // assesta. once() = il click utente sulla (i) dopo resta rispettato.
+      map.once("idle", collapseAttrib);
       // Tinta theme-aware sui layer base.
       tintMap(map, themeRef.current);
       // Aggiungo source + layer per i pin. WebGL native = follow-mappa

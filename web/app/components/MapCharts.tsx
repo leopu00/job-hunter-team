@@ -632,7 +632,10 @@ export default function MapCharts({
           è passata come bottomCenterExtra così sta nella STESSA riga
           flex dei controlli mappa (Vista generale + zoom) in basso-
           centro → l'insieme si ricentra da solo quando compare. */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
+      <div
+        className="map-globe-layer"
+        style={{ position: "absolute", inset: 0, zIndex: 0 }}
+      >
         <JobsGlobeLazy
           fullscreen
           selectedTypes={selectedTypes}
@@ -704,7 +707,7 @@ export default function MapCharts({
 
       {/* Card Score top-right: header collassabile + grafico. */}
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        className="map-float-card map-card-score bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
         style={{
           position: "absolute",
           top: CARD_TOP,
@@ -757,7 +760,7 @@ export default function MapCharts({
           posizione con coordinate → zoom sul pin in mappa; remote →
           apre il dettaglio. */}
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        className="map-float-card map-card-positions bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
         style={{
           position: "absolute",
           bottom: CARD_BOTTOM,
@@ -940,7 +943,7 @@ export default function MapCharts({
       {/* Position Types donut — overlay bottom-left. Header collassabile
           + donut/legenda. È il riferimento dimensionale delle 4 card. */}
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        className="map-float-card map-card-donut bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
         style={{
           position: "absolute",
           bottom: CARD_BOTTOM,
@@ -1290,7 +1293,7 @@ function LocationTree({
   const total = tree.reduce((s, c) => s + c.count, 0);
   return (
     <div
-      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+      className="map-float-card map-card-location bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
       style={{
         position: "absolute",
         // Angolo in alto a sinistra, stessa dimensione fissa delle altre
