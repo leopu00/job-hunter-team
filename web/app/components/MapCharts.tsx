@@ -316,14 +316,6 @@ export default function MapCharts({
   // OR-uniti (selezioni multiple).
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
-  // Conteggio filtri attivi per il badge del toggle mobile (su mobile la
-  // pill-chips FilterButton non c'è: questo è l'unico indicatore).
-  const activeFilterCount =
-    selectedTypes.length +
-    selectedRanges.length +
-    (unscoredSelected ? 1 : 0) +
-    selectedCountries.length +
-    selectedCities.length;
   const [noCoords, setNoCoords] = useState<NoCoordItem[]>([]);
   // Posizioni con coordinate ufficio — fetched per ricomputare
   // donut/histogram in base al filtro location.
@@ -658,6 +650,55 @@ export default function MapCharts({
       cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key],
     );
 
+  // Chips dei filtri attivi (banner rimozione rapida) — condivise dalla
+  // pill desktop (FilterButton) e dalla pill mobile a due zone.
+  const filterChips: FilterChipDesc[] = [];
+  for (const t of selectedTypes) {
+    filterChips.push({
+      key: `t-${t}`,
+      label: labels[t] ?? String(t),
+      color: typeDist.find((d) => d.family === t)?.color,
+      onRemove: () => toggleType(t),
+    });
+  }
+  for (const r of selectedRanges) {
+    filterChips.push({
+      key: `r-${r.lo}-${r.hi}`,
+      label: `${r.lo}–${r.hi}`,
+      onRemove: () => toggleRange(r),
+    });
+  }
+  if (unscoredSelected) {
+    filterChips.push({
+      key: "unscored",
+      label: tr("no_score"),
+      onRemove: () => setUnscoredSelected(false),
+    });
+  }
+  for (const c of selectedCountries) {
+    filterChips.push({
+      key: `co-${c}`,
+      label: c,
+      onRemove: () => toggleCountry(c),
+    });
+  }
+  for (const ck of selectedCities) {
+    // Mostra "City" (Country implicito) nel chip per brevità.
+    const [country, city] = ck.split("|");
+    filterChips.push({
+      key: `ci-${ck}`,
+      label: city === "(country-only)" ? country : (city ?? country),
+      onRemove: () => toggleCity(ck),
+    });
+  }
+  const clearAllFilters = () => {
+    setSelectedTypes([]);
+    setSelectedRanges([]);
+    setUnscoredSelected(false);
+    setSelectedCountries([]);
+    setSelectedCities([]);
+  };
+
   return (
     <>
       {/* Globo — riceve tutte le selezioni di filtro. La pill "Filtri"
@@ -681,124 +722,16 @@ export default function MapCharts({
           )}
           bottomCenterExtra={
             <>
-              {/* Toggle colonna filtri (SOLO mobile): stesso pulsante per
-                  alzare e nascondere i 4 pannelli sotto il globo. */}
-              <button
-                type="button"
-                onClick={() => setPanelsHidden((v) => !v)}
-                aria-label={tr(panelsHidden ? "panels_show" : "panels_hide")}
-                title={tr(panelsHidden ? "panels_show" : "panels_hide")}
-                className="md:hidden flex items-center gap-1.5 rounded-full border transition-colors"
-                style={{
-                  background: "var(--color-panel)",
-                  borderColor: "var(--color-border)",
-                  color: "var(--color-bright)",
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-                  pointerEvents: "auto",
-                }}
-              >
-                {/* Imbuto */}
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-                </svg>
-                {activeFilterCount > 0 && (
-                  <span
-                    className="rounded-full text-[9px] font-bold tabular-nums"
-                    style={{
-                      background: "var(--color-green)",
-                      color: "var(--color-void)",
-                      minWidth: 15,
-                      height: 15,
-                      lineHeight: "15px",
-                      textAlign: "center",
-                      padding: "0 3px",
-                    }}
-                  >
-                    {activeFilterCount}
-                  </span>
-                )}
-                {/* Caret: giù = li nasconderà, su = li mostrerà */}
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                  style={{
-                    transition: "transform 0.2s",
-                    transform: panelsHidden ? "rotate(180deg)" : "none",
-                  }}
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
+              <MobileFilterPill
+                chips={filterChips}
+                clearAll={clearAllFilters}
+                panelsHidden={panelsHidden}
+                onTogglePanels={() => setPanelsHidden((v) => !v)}
+                tr={tr}
+              />
               <FilterButton
-                chips={(() => {
-                  const arr: FilterChipDesc[] = [];
-                  for (const t of selectedTypes) {
-                    arr.push({
-                      key: `t-${t}`,
-                      label: labels[t] ?? String(t),
-                      color: typeDist.find((d) => d.family === t)?.color,
-                      onRemove: () => toggleType(t),
-                    });
-                  }
-                  for (const r of selectedRanges) {
-                    arr.push({
-                      key: `r-${r.lo}-${r.hi}`,
-                      label: `${r.lo}–${r.hi}`,
-                      onRemove: () => toggleRange(r),
-                    });
-                  }
-                  if (unscoredSelected) {
-                    arr.push({
-                      key: "unscored",
-                      label: tr("no_score"),
-                      onRemove: () => setUnscoredSelected(false),
-                    });
-                  }
-                  for (const c of selectedCountries) {
-                    arr.push({
-                      key: `co-${c}`,
-                      label: c,
-                      onRemove: () => toggleCountry(c),
-                    });
-                  }
-                  for (const ck of selectedCities) {
-                    // Mostra "City" (Country implicito) nel chip per brevità.
-                    const [country, city] = ck.split("|");
-                    arr.push({
-                      key: `ci-${ck}`,
-                      label:
-                        city === "(country-only)" ? country : (city ?? country),
-                      onRemove: () => toggleCity(ck),
-                    });
-                  }
-                  return arr;
-                })()}
-                clearAll={() => {
-                  setSelectedTypes([]);
-                  setSelectedRanges([]);
-                  setUnscoredSelected(false);
-                  setSelectedCountries([]);
-                  setSelectedCities([]);
-                }}
+                chips={filterChips}
+                clearAll={clearAllFilters}
                 tr={tr}
               />
             </>
@@ -1122,6 +1055,214 @@ type FilterChipDesc = {
 // libera). Cliccando si apre un banner sopra il bottone con tutti i
 // filtri selezionati, ognuno rimovibile via "×", più "rimuovi tutto".
 // Se non c'è nessun filtro attivo, il bottone non viene mostrato.
+// Pill mobile a DUE ZONE (scelta utente 21/07, dopo il pasticcio della
+// pill unica che aveva perso il banner): imbuto+badge = apre il banner
+// dei filtri attivi con rimozione rapida (come su desktop); freccetta =
+// alza/nasconde la colonna dei 4 pannelli. Senza filtri attivi la zona
+// sinistra non ha nulla da mostrare e l'intera pill fa da toggle.
+function MobileFilterPill({
+  chips,
+  clearAll,
+  panelsHidden,
+  onTogglePanels,
+  tr,
+}: {
+  chips: FilterChipDesc[];
+  clearAll: () => void;
+  panelsHidden: boolean;
+  onTogglePanels: () => void;
+  tr: Tr;
+}) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (chips.length === 0 && open) setOpen(false);
+  }, [chips.length, open]);
+
+  const toggleLabel = tr(panelsHidden ? "panels_show" : "panels_hide");
+
+  return (
+    <div
+      className="md:hidden flex"
+      style={{
+        position: "relative",
+        flexDirection: "column",
+        alignItems: "center",
+        pointerEvents: "auto",
+      }}
+    >
+      {open && chips.length > 0 && (
+        <ChipsBanner chips={chips} clearAll={clearAll} tr={tr} />
+      )}
+
+      <div
+        className="flex items-stretch rounded-full border"
+        style={{
+          background: "var(--color-panel)",
+          borderColor: open
+            ? "var(--color-border-glow)"
+            : "var(--color-border)",
+          overflow: "hidden",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+        }}
+      >
+        {chips.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-label={`${tr("filters_active")} · ${chips.length}`}
+              title={tr("filters_active")}
+              className="flex items-center gap-1.5"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--color-bright)",
+                padding: "8px 10px 8px 12px",
+                cursor: "pointer",
+              }}
+            >
+              <FunnelIcon />
+              <span
+                className="rounded-full text-[9px] font-bold tabular-nums"
+                style={{
+                  background: "var(--color-green)",
+                  color: "var(--color-void)",
+                  minWidth: 15,
+                  height: 15,
+                  lineHeight: "15px",
+                  textAlign: "center",
+                  padding: "0 3px",
+                }}
+              >
+                {chips.length}
+              </span>
+            </button>
+            <span
+              aria-hidden
+              style={{ width: 1, background: "var(--color-border)" }}
+            />
+          </>
+        )}
+        <button
+          type="button"
+          onClick={onTogglePanels}
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          className="flex items-center gap-1.5"
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "var(--color-bright)",
+            padding: chips.length > 0 ? "8px 12px 8px 10px" : "8px 12px",
+            cursor: "pointer",
+          }}
+        >
+          {chips.length === 0 && <FunnelIcon />}
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+            style={{
+              transition: "transform 0.2s",
+              transform: panelsHidden ? "rotate(180deg)" : "none",
+            }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FunnelIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}
+
+// Banner dei filtri attivi (chips rimovibili + "rimuovi tutto"), ancorato
+// sopra la pill che lo apre. Condiviso tra FilterButton (desktop) e
+// MobileFilterPill.
+function ChipsBanner({
+  chips,
+  clearAll,
+  tr,
+}: {
+  chips: FilterChipDesc[];
+  clearAll: () => void;
+  tr: Tr;
+}) {
+  return (
+    <div
+      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+      style={{
+        position: "absolute",
+        bottom: "calc(100% + 8px)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        padding: 10,
+        width: 360,
+        maxWidth: "calc(100vw - 48px)",
+        maxHeight: 240,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+      }}
+    >
+      <div className="flex items-center justify-between gap-3 px-1">
+        <span
+          className="text-[10px] font-semibold tracking-[0.14em] uppercase"
+          style={{ color: "var(--color-dim)" }}
+        >
+          {tr("filters_active")} · {chips.length}
+        </span>
+        <ClearAllButton onClick={clearAll} tr={tr} />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        {chips.map((c) => (
+          <FilterChip
+            key={c.key}
+            label={c.label}
+            color={c.color}
+            onRemove={c.onRemove}
+            tr={tr}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FilterButton({
   chips,
   clearAll,
@@ -1155,55 +1296,7 @@ function FilterButton({
     >
       {/* Banner filtri: ancorato in posizione assoluta SOPRA il bottone
           (così non altera il layout della riga controlli). */}
-      {open && (
-        <div
-          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
-          style={{
-            position: "absolute",
-            bottom: "calc(100% + 8px)",
-            left: "50%",
-            transform: "translateX(-50%)",
-            padding: 10,
-            width: 360,
-            maxWidth: "calc(100vw - 48px)",
-            maxHeight: 240,
-            overflowY: "auto",
-            overscrollBehavior: "contain",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-          }}
-        >
-          <div className="flex items-center justify-between gap-3 px-1">
-            <span
-              className="text-[10px] font-semibold tracking-[0.14em] uppercase"
-              style={{ color: "var(--color-dim)" }}
-            >
-              {tr("filters_active")} · {chips.length}
-            </span>
-            <ClearAllButton onClick={clearAll} tr={tr} />
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            {chips.map((c) => (
-              <FilterChip
-                key={c.key}
-                label={c.label}
-                color={c.color}
-                onRemove={c.onRemove}
-                tr={tr}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      {open && <ChipsBanner chips={chips} clearAll={clearAll} tr={tr} />}
 
       <button
         onClick={() => setOpen((v) => !v)}
