@@ -64,8 +64,9 @@ func _rebuild() -> void:
 		depts_label += " (%d/5)" % TourGuide.depts_visited()
 	_row(UIStrings.t("tour.step_assistant"), _state(idx, 0, 0))
 	_row(depts_label, _state(idx, 1, 5))
-	_row(UIStrings.t("tour.step_coordinator"), _state(idx, 6, 6))
+	_row(UIStrings.t("tour.step_doctor"), _state(idx, 6, 6))
 	_row(UIStrings.t("tour.step_mentor"), _state(idx, 7, 7))
+	_row(UIStrings.t("tour.step_coordinator"), _state(idx, 8, 8))
 	_row(UIStrings.t("tour.step_launch"), "current" if launch else "todo")
 
 	if launch:
@@ -78,9 +79,12 @@ func _rebuild() -> void:
 				bool(status.get("profile_ready", false)))
 
 	_rows.add_child(_spacer(4))
-	var hint := TerminalTheme.label(
-			UIStrings.t("tour.hint_launch" if launch else "tour.hint_talk"),
-			12, Palette.DIM)
+	var hint_key := "tour.hint_follow"
+	if idx == 0:
+		hint_key = "tour.hint_talk"
+	elif launch:
+		hint_key = "tour.hint_launch"
+	var hint := TerminalTheme.label(UIStrings.t(hint_key), 12, Palette.DIM)
 	hint.custom_minimum_size = Vector2(250, 0)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_rows.add_child(hint)

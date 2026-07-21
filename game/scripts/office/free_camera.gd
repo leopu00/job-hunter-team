@@ -51,11 +51,31 @@ func _process(delta: float) -> void:
 	if dir != Vector2.ZERO:
 		_stop_focus()  # un gesto dell'utente vince sempre sulla regia guidata
 		position += dir * PAN_SPEED * delta / zoom.x
+	elif _follow_target != null:
+		if is_instance_valid(_follow_target):
+			position = _follow_target.global_position + Vector2(0, -40)
+		else:
+			_follow_target = null
 	_clamp_to_world()
 
 ## Regia guidata (tour): glissa verso un punto del mondo con uno zoom di
 ## contesto. Qualunque input di pan/zoom dell'utente interrompe la corsa.
 var _focus_tween: Tween
+## Inseguimento morbido di un nodo (l'Assistente che accompagna): la
+## position segue il bersaglio, lo smoothing della camera fa il resto.
+var _follow_target: Node2D
+
+func follow(target: Node2D, target_zoom := 1.0) -> void:
+	_stop_focus()
+	_follow_target = target
+	var z := clampf(target_zoom, _zoom_min, ZOOM_MAX)
+	if not is_equal_approx(z, zoom.x):
+		var tw := create_tween()
+		tw.tween_property(self, "zoom", Vector2(z, z), 0.7) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func stop_follow() -> void:
+	_follow_target = null
 
 func focus_on(world_pos: Vector2, target_zoom := 1.0) -> void:
 	_stop_focus()
@@ -77,6 +97,7 @@ func _stop_focus() -> void:
 	if _focus_tween:
 		_focus_tween.kill()
 		_focus_tween = null
+	_follow_target = null
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _input_blocked():
