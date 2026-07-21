@@ -27,6 +27,11 @@ func show_text(text: String, duration := 3.5) -> void:
 func hide_now() -> void:
 	_target_alpha = 0.0
 
+## Visibile o in dissolvenza: chi deve cedere il posto (la targa di stato)
+## controlla qui, non l'alpha istantaneo.
+func is_showing() -> bool:
+	return _target_alpha > 0.0 or _alpha > 0.01
+
 func _process(delta: float) -> void:
 	var prev := _alpha
 	_alpha = move_toward(_alpha, _target_alpha, delta * 6.0)

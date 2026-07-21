@@ -106,6 +106,8 @@ var _state_timer := 0.0
 var _pose_timer := 0.0     # alternanza work/idle alla scrivania
 var _desk_working := true
 var _bubble_timer := 0.0
+## Ultimo chiacchiericcio mostrato nell'INTERO ufficio (cooldown globale).
+static var _last_chatter_ms := -100000
 var _highlight := false
 var _forced_trip := false  # visite chat-driven: finiscono anche se passa idle
 var _investigation_count := 0
@@ -159,10 +161,11 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	# restano solide solo le collisioni coi mobili (layer 1)
 	collision_layer = 2
 	collision_mask = 1
-	# primo viaggio sparso su tutta la cadenza: niente fuggi-fuggi al boot
-	_state_timer = _cadence() * randf_range(0.15, 1.0)
+	# Primo viaggio sparso E ritardato: l'ufficio si ritrova al lavoro, il
+	# movimento arriva piano piano (feedback Leone 21/07: niente frenesia).
+	_state_timer = _cadence() * randf_range(0.5, 1.5)
 	_pose_timer = randf_range(12.0, 35.0)
-	_bubble_timer = randf_range(2.0, 12.0)
+	_bubble_timer = randf_range(15.0, 60.0)
 	_consume_timer = randf_range(30.0, 70.0)
 
 	var shape := CollisionShape2D.new()
@@ -285,6 +288,19 @@ func materialize() -> void:
 	var tw := create_tween()
 	tw.tween_interval(0.25)  # prima l'energia converge, poi il corpo appare
 	tw.tween_property(self, "modulate:a", 1.0, 0.4)
+
+## Rimozione istantanea e silenziosa (swap showroom→backend): nessun FX,
+## nessuna camminata — la scena cambia realtà in un frame.
+func vanish() -> void:
+	if _dissolving:
+		return
+	_dissolving = true
+	_set_desk_occupied(false)
+	if speech:
+		speech.clear_now()
+	if bubble:
+		bubble.hide_now()
+	queue_free()
 
 ## Uscita di scena: dissolve e si rimuove (con la sua pila di fogli).
 ## L'FX è sibling, così sopravvive al queue_free dell'agente.
@@ -490,9 +506,10 @@ func _physics_process(delta: float) -> void:
 		_begin_exit(_pending_exit_spot)
 	_bubble_tick(delta)
 	if state_tag and speech:
-		# Durante le ondate porta↔ufficio le targhe identiche si coprivano più
-		# dei corpi stessi, amplificando l'effetto "sprite duplicato".
-		state_tag.set_suppressed(speech.is_speaking() or _entering or _exiting)
+		# La targa tace anche sotto la vignetta di chiacchiericcio: le due
+		# si sovrapponevano sopra la testa (feedback Leone, test 21/07).
+		state_tag.set_suppressed(speech.is_speaking() or bubble.is_showing()
+				or _entering or _exiting)
 	match state:
 		S.WORK:
 			velocity = Vector2.ZERO
@@ -1051,10 +1068,18 @@ func _bubble_tick(delta: float) -> void:
 		return
 	_bubble_timer -= delta
 	if _bubble_timer <= 0.0:
-		_bubble_timer = randf_range(8.0, 16.0)
+		# Cooldown GLOBALE: nell'intero ufficio parla al massimo una vignetta
+		# ogni ~10 s. Coi timer solo per-agente, 16 persone producevano un
+		# fumetto al secondo (feedback Leone 21/07: serve molta più calma).
+		var now_ms := Time.get_ticks_msec()
+		if now_ms - _last_chatter_ms < 10000:
+			_bubble_timer = randf_range(4.0, 12.0)
+			return
+		_bubble_timer = randf_range(45.0, 110.0)
 		var lines := _chatter.duplicate()
 		var status: Dictionary = TeamData.agent_status().get(slug, {})
 		if status.has("detail"):
 			lines.append(status["detail"])
 		if not lines.is_empty():
+			_last_chatter_ms = now_ms
 			bubble.show_text(lines[randi() % lines.size()])

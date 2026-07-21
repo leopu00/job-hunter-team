@@ -156,8 +156,9 @@ func _ready() -> void:
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(def, nav)
-		if _seat_audit == "" and _doctor_test == "":
-			_stage_agent_entry(agent)
+		# Niente parata d'ingresso all'avvio (feedback Leone 21/07): l'ufficio
+		# si RITROVA già al lavoro — è anche la rappresentazione veritiera
+		# (gli agenti esistono già) e cancella il picco di lag del boot.
 		agent.set_story_marker(_seat_audit == "" \
 				and not ScriptedOnboarding.provider_authenticated())
 		agents.append(agent)
@@ -250,9 +251,9 @@ func _ready() -> void:
 			add_child(_tour_tracker)
 			TourGuide.changed.connect(_on_tour_changed)
 			_refresh_tour_markers()
-			# L'invito parte a parata d'ingresso avviata: la camera accompagna
-			# verso il bersaglio invece di scattare su un ufficio ancora vuoto.
-			get_tree().create_timer(3.0).timeout.connect(_tour_focus_current)
+			# Un breve respiro dopo il primo frame, poi la camera accompagna
+			# verso la guida: l'ufficio si è appena "ritrovato" al lavoro.
+			get_tree().create_timer(1.2).timeout.connect(_tour_focus_current)
 
 	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
 			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
@@ -1607,6 +1608,9 @@ func _tour_focus_current() -> void:
 
 var _desk_pool: Dictionary = {}  # role -> Array di def libere (postazioni)
 var _backend_mode := false
+## false durante il primo snapshot backend (roster già vivo → subito in
+## postazione); true dai sync successivi (i nuovi nati entrano dalla porta).
+var _backend_join_parade := false
 var _unplaced_roles: Dictionary = {}  # ruoli senza postazione già segnalati
 var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-worker)
 var _agent_ui_test_started := false
@@ -1645,6 +1649,8 @@ func sync_agents(list: Array) -> void:
 			wanted.erase(agent.uid)
 	for item_uid in wanted:
 		_spawn_backend_agent(wanted[item_uid])
+	# dal prossimo sync ogni nuovo processo entra fisicamente dalla porta
+	_backend_join_parade = true
 	if _tour_enabled and TourGuide.active():
 		_refresh_tour_markers()
 	if not BackendBus.telemetry.is_empty():
@@ -2036,15 +2042,19 @@ func _react_to_transition(t: Dictionary) -> void:
 ## locale di ambientazione lascia la scena — comanda lo stato reale.
 func _enter_backend_mode() -> void:
 	_backend_mode = true
+	_backend_join_parade = false
 	_desk_pool = {}
 	for def in CharacterDefs.spawn_list():
 		var role: String = def["slug"]
 		if not _desk_pool.has(role):
 			_desk_pool[role] = []
 		_desk_pool[role].append(def)
+	# Lo showroom lascia il posto SUBITO, senza corteo verso la porta: il
+	# passaggio ai dati reali deve sembrare un cambio di realtà, non un
+	# cambio turno (feedback Leone 21/07: niente frenesia alla porta).
 	for agent in agents.duplicate():
 		if agent.uid == "":
-			_despawn_agent(agent, false)
+			_despawn_agent(agent, false, true)
 	Log.info("backend", "modalità backend: in scena solo gli agenti attivi")
 
 ## Ingresso a ondate: cinque corsie affiancate e una nuova fila ogni 0,9 s.
@@ -2070,7 +2080,8 @@ func _spawn_showroom() -> void:
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(def, nav)
-		_stage_agent_entry(agent)
+		# Anche il ritorno allo showroom ritrova l'ufficio popolato: niente
+		# fila alla porta quando la connessione VPS cade.
 		agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
 				bool(_story_seen.get(str(def["slug"]), false)))
 		agents.append(agent)
@@ -2093,7 +2104,7 @@ func _on_setup_status_changed(status: Dictionary) -> void:
 	elif BackendBus.positions.is_empty() or BackendBus.positions_are_demo:
 		BackendBus.show_demo_positions()
 
-func _despawn_agent(agent: AgentNPC, refill_pool := true) -> void:
+func _despawn_agent(agent: AgentNPC, refill_pool := true, instant := false) -> void:
 	agents.erase(agent)
 	if _hover_agent == agent:
 		_hover_agent = null
@@ -2109,8 +2120,12 @@ func _despawn_agent(agent: AgentNPC, refill_pool := true) -> void:
 		else:
 			_desk_pool[role].append(def)
 	# Un agente viene rimosso soltanto oltre la porta: nessun despawn tecnico
-	# può più dissolverlo nel mezzo dell'ufficio.
-	agent.exit_through(EXIT_SPOT)
+	# può più dissolverlo nel mezzo dell'ufficio. Unica eccezione: lo swap
+	# istantaneo showroom→backend, che è un cambio di realtà, non un'uscita.
+	if instant:
+		agent.vanish()
+	else:
+		agent.exit_through(EXIT_SPOT)
 
 func _spawn_backend_agent(item: Dictionary) -> void:
 	var role: String = item.get("role", "")
@@ -2160,7 +2175,11 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	agent.set_throttle(float(item.get("throttle_secs", 0.0)))
 	agent.set_activity_detail(str(item.get("activity_detail", "")))
 	agent.set_backend_status(item.get("status", "idle"))
-	_stage_agent_entry(agent)
+	# Il primo snapshot fotografa processi GIÀ vivi sulla VPS: si ritrovano
+	# alla postazione. La camminata dalla porta resta per chi nasce DOPO,
+	# perché lì l'ingresso è un fatto reale (feedback Leone 21/07).
+	if _backend_join_parade:
+		_stage_agent_entry(agent)
 	agents.append(agent)
 
 # ── Costruzione scena ─────────────────────────────────────────────────
