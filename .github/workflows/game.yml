@@ -47,7 +47,7 @@ jobs:
       JHT_NOVPS: "1"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: chickensoft-games/setup-godot@v2.4.1
         with:
