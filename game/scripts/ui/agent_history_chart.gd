@@ -40,6 +40,11 @@ const DEFAULT_ON := ["tokens_kt", "pct_5h", "pct_weekly"]
 ## pagina, si invalida da sola dopo CACHE_SECS.
 static var _cache := {}
 const CACHE_SECS := 120.0
+## Ancorati a ORA i punti devono restare freschi: sopra questa età il
+## fetch riparte comunque, ma in silenzio — il grafico resta visibile
+## e i dati nuovi subentrano (feedback Leone 21/07: niente velo che
+## copre il live ogni rebuild).
+const LIVE_REFRESH_SECS := 50.0
 
 var role := ""
 var _range_bar: UsageRangeBar
@@ -106,32 +111,80 @@ func _cache_key() -> String:
 func _request() -> void:
 	var key := _cache_key()
 	_pending_key = key
+	var w := UsageRangeBar.window()
 	var hit: Dictionary = _cache.get(key, {})
-	if not hit.is_empty() and Time.get_unix_time_from_system() \
-			- float(hit["at"]) < CACHE_SECS:
+	var age := INF
+	if not hit.is_empty():
+		age = Time.get_unix_time_from_system() - float(hit["at"])
+	if age < CACHE_SECS:
 		_data = hit["data"]
 		_render()
+		# in live il refetch parte comunque oltre LIVE_REFRESH_SECS, senza
+		# velo: i punti vecchi restano a schermo finché arrivano i nuovi
+		if UsageRangeBar.to_ts == 0.0 and age > LIVE_REFRESH_SECS:
+			BackendBus.request_agent_history(role, w[0], w[1],
+					UsageRangeBar.bucket_seconds())
 		return
 	_status.text = ""
-	if not is_instance_valid(_veil):
+	# niente entry fresca (tipico: finestra live slittata di un minuto o
+	# pagina ricostruita dal refresh del bus). Renderizza l'ultimo storico
+	# del ruolo sulla stessa scala e aggiorna in silenzio: il velo copre
+	# il grafico SOLO quando non c'è proprio nulla da mostrare.
+	var stale := _freshest_for_role()
+	if not stale.is_empty():
+		_data = stale
+		_render()
+	elif not is_instance_valid(_veil):
 		_veil = UsageLoadingVeil.cover(_chart)
-	var w := UsageRangeBar.window()
 	BackendBus.request_agent_history(role, w[0], w[1],
 			UsageRangeBar.bucket_seconds())
+
+## L'entry di cache più recente per questo ruolo con lo stesso bucket
+## (stessa ampiezza finestra), anche se scaduta: da mostrare come
+## segnaposto mentre il fetch gira.
+func _freshest_for_role() -> Dictionary:
+	var best := {}
+	var best_at := -1.0
+	var bucket := UsageRangeBar.bucket_seconds()
+	for key: String in _cache:
+		var parts: PackedStringArray = key.split("|")
+		if parts[0] != role or int(parts[3]) != bucket:
+			continue
+		var entry: Dictionary = _cache[key]
+		if float(entry["at"]) > best_at:
+			best_at = float(entry["at"])
+			best = entry["data"]
+	return best
+
+## La chiave della risposta si ricava dalla query stessa: una risposta
+## di una richiesta vecchia (finestra già slittata) finisce comunque in
+## cache ma non tocca il grafico né il velo di quella nuova.
+static func _query_key(query: Dictionary) -> String:
+	return "%s|%d|%d|%d" % [str(query.get("agent", "")),
+			int(float(query.get("from_ts", 0)) / 60.0),
+			int(float(query.get("to_ts", 0)) / 60.0),
+			int(query.get("bucket_sec", 0))]
 
 func _on_history(query: Dictionary, data: Dictionary) -> void:
 	if not is_instance_valid(self) or not is_inside_tree():
 		return
 	if str(query.get("agent", "")) != role:
 		return
-	if is_instance_valid(_veil):
-		_veil.done()
+	var qkey := _query_key(query)
 	if not bool(data.get("ok", false)):
+		if qkey != _pending_key:
+			return
+		if is_instance_valid(_veil):
+			_veil.done()
 		_status.text = UIStrings.t("usage.error") % str(data.get("error", "?"))
 		_status.add_theme_color_override("font_color", Palette.RED)
 		return
-	_cache[_pending_key] = {"data": data,
+	_cache[qkey] = {"data": data,
 			"at": Time.get_unix_time_from_system()}
+	if qkey != _pending_key:
+		return
+	if is_instance_valid(_veil):
+		_veil.done()
 	_data = data
 	_status.text = ""
 	_render()
