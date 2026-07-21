@@ -3,13 +3,34 @@ extends CharacterBody2D
 ## Un agente del team in ufficio: sta alla sua postazione (alterna digitare
 ## e pensare, come i tick veri) e OGNI TANTO — a cadenza calibrata sui dati
 ## di attività reali — parte per un viaggio di lavoro visibile: stampante
-## (torna coi fogli), ritiro dall'inbox del reparto a monte, raro caffè.
+## (torna coi fogli), ritiro dall'inbox del reparto a monte e ispezioni.
 ## Mostra status bubble e si interroga con un click.
 
 const SPEED := 150.0
+## Ruoli che pattugliano anche in live (const: niente Array allocato a ogni
+## frame di WORK dentro _physics_process).
+const LIVE_PATROL := ["coordinatore", "sentinella", "mentor", "assistente"]
+# Le consegne attraversano reparti opposti e devono leggere come un flusso
+# operativo, non come una passeggiata. I giri ambientali restano a SPEED;
+# solo il fascicolo in pipeline usa un passo svelto ma ancora naturale.
+const PIPELINE_SPEED := 185.0
 const STATUS_BUBBLE_POS := Vector2(0, -96)
 const SPEECH_BUBBLE_POS := Vector2(0, -100)
 const STATE_TAG_POS := Vector2(0, -126)
+const STATE_TAG_HEAD_CLEARANCE := 18.0  # mezza box (12) + 6 px sopra i capelli
+
+## Le postazioni core usano compositi desk+sedia+persona: il rig è nascosto,
+## quindi il bordo dei capelli non si può ricavare dal foglio di cammino.
+## Questi centri sono calibrati sull'arte integrata, sempre rispetto al punto
+## logico della seduta. I reparti continuano a usare il delta prospettico.
+const CORE_SEATED_TAG_Y := {
+	"core:coordinatore": -160.0,
+	"core:sentinella": -169.0,
+	"core:mentor": -146.0,
+	"core:assistente": -138.0,
+	"core:mantenitore": -135.0,
+	"core:dottore": -96.0,
+}
 
 ## Cadenza MEDIA fra due viaggi, secondi di gioco, per ruolo (jitter ±40%).
 ## Ancorata ai dati veri esposti da TeamData: lo Scout fa ~3 visite/ora
@@ -76,6 +97,11 @@ var _pause := 0.0
 
 var _path := PackedVector2Array()
 var _pi := 0
+# Corsia visuale deterministica lungo i tratti condivisi. Gli agenti non
+# collidono fra loro (evita deadlock nei corridoi), ma senza questo piccolo
+# scarto percorrevano lo stesso identico asse e due corpi sembravano un unico
+# sprite sdoppiato, soprattutto durante le ondate di ingresso/uscita.
+var _path_lane := 0.0
 var _state_timer := 0.0
 var _pose_timer := 0.0     # alternanza work/idle alla scrivania
 var _desk_working := true
@@ -125,6 +151,10 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 		_custom_seat_offset = def["seat_offset"]
 		_has_custom_seat_offset = true
 	position = _spot
+	# Cinque corsie strette, stabili per identità/postazione: abbastanza per
+	# separare le silhouette senza spingere nessuno dentro mobili o vetrate.
+	var lane_seed := hash("%s|%s|%.0f|%.0f" % [slug, display_name, _spot.x, _spot.y])
+	_path_lane = float(posmod(lane_seed, 5) - 2) * 8.0
 	# gli agenti NON collidono tra loro (si incastravano nei passaggi):
 	# restano solide solo le collisioni coi mobili (layer 1)
 	collision_layer = 2
@@ -213,17 +243,37 @@ func _ensure_front_chair(desk: Dictionary) -> void:
 ## to_label: "" per i broadcast, altrimenti il nome del destinatario.
 func say(text: String, to_label := "") -> void:
 	speech.say(text, to_label)
+	if bubble:
+		bubble.hide_now()
+	if state_tag:
+		state_tag.set_suppressed(true)
+
+## Feedback sul destinatario senza creare una seconda vignetta: la targa di
+## stato diventa per pochi secondi "MESSAGGIO DA …", poi torna allo stato.
+func show_received_message(from_label: String) -> void:
+	if state_tag:
+		state_tag.show_message("MESSAGGIO DA " + from_label, 6.0)
 
 ## Entrata fisica in scena: ogni nuovo processo appare oltre la soglia,
 ## attraversa la porta e raggiunge a piedi la propria postazione. Funziona
 ## anche se il backend lo pubblica idle: l'ingresso è un fatto, non lavoro.
-func enter_through(door_spot: Vector2) -> void:
+func enter_through(door_spot: Vector2, delay_seconds := 0.0,
+		entry_lane := 0.0) -> void:
 	if _dissolving or _exiting:
 		return
 	_set_desk_occupied(false)
 	_entering = true
 	_forced_trip = true
-	position = door_spot + Vector2(randf_range(-26.0, 26.0), randf_range(-4.0, 10.0))
+	position = door_spot + Vector2(entry_lane * 32.0 + randf_range(-3.0, 3.0),
+			randf_range(-4.0, 10.0))
+	if delay_seconds > 0.0:
+		# Non ammassare l'intero roster sulla soglia al primo frame. Il nodo
+		# esiste già per la sync, ma compare solo quando arriva il suo turno.
+		visible = false
+		await get_tree().create_timer(delay_seconds).timeout
+		if _dissolving or _exiting or not is_inside_tree():
+			return
+		visible = true
 	ExitDoor.swing()
 	_legs = [_leg_to(_spot, "walk", 0.0, "work")]
 	_start_next_leg()
@@ -266,7 +316,7 @@ func set_backend_status(status: String) -> void:
 		_work_pose()
 	elif changed and state == S.TRIP and backend_status != "working" and not _forced_trip:
 		velocity = Vector2.ZERO
-		rig.set_motion(rig.facing, rig.flipped, "still")
+		_set_rig_motion(rig.facing, rig.flipped, "still")
 
 func set_throttle(secs: float) -> void:
 	throttle_secs = secs
@@ -277,6 +327,10 @@ func set_activity_detail(detail: String) -> void:
 	activity_detail = detail
 	if state_tag:
 		state_tag.set_state(backend_status, throttle_secs, activity_detail)
+
+func set_cpu_activity(cpu_pct: float, known := true) -> void:
+	if state_tag:
+		state_tag.set_cpu_activity(cpu_pct, known)
 
 ## Uscita FISICA di scena (agente killato/fermato, missione pipeline
 ## 20:1x): cammina fino alla porta dell'ufficio e svanisce oltre la
@@ -406,7 +460,7 @@ func start_talk() -> void:
 	# non dentro il mobile
 	if _seated():
 		position = _spot
-	rig.set_motion("down", false, "idle")
+	_set_rig_motion("down", false, "idle")
 	bubble.hide_now()
 
 ## Fine dialogo: torna alla postazione (viaggio minimo) e riprende.
@@ -435,6 +489,10 @@ func _physics_process(delta: float) -> void:
 		_exit_pending = false
 		_begin_exit(_pending_exit_spot)
 	_bubble_tick(delta)
+	if state_tag and speech:
+		# Durante le ondate porta↔ufficio le targhe identiche si coprivano più
+		# dei corpi stessi, amplificando l'effetto "sprite duplicato".
+		state_tag.set_suppressed(speech.is_speaking() or _entering or _exiting)
 	match state:
 		S.WORK:
 			velocity = Vector2.ZERO
@@ -448,20 +506,21 @@ func _physics_process(delta: float) -> void:
 				# resta disponibile esclusivamente nella demo offline.
 				# Capitano, Tesoriere, Mentor e Assistente pattugliano anche in live.
 				# Il Mentor si muove molto meno: la sua cadenza media è mezz'ora.
-				var live_patrol := slug in ["coordinatore", "sentinella", "mentor", "assistente"]
+				var live_patrol := slug in LIVE_PATROL
 				if backend_status == "working" and (live_patrol \
 						or BackendBus.state != BackendBus.CONNECTED):
 					_plan_trip()
 		S.TRIP:
 			if backend_status != "working" and not _exiting and not _forced_trip:
 				velocity = Vector2.ZERO
-				rig.set_motion(rig.facing, rig.flipped, "still")
+				_set_rig_motion(rig.facing, rig.flipped, "still")
 			elif _pause > 0.0:
 				velocity = Vector2.ZERO
 				_pause -= delta
 				if _pause <= 0.0:
 					_start_next_leg()
-			elif _follow_path(SPEED, _leg.get("mode", "walk")):
+			elif _follow_path(PIPELINE_SPEED if _pipeline_trip_active else SPEED,
+					_leg.get("mode", "walk")):
 				_arrive_at_leg()
 		S.TALK:
 			velocity = Vector2.ZERO
@@ -469,7 +528,10 @@ func _physics_process(delta: float) -> void:
 			# Breve raccordo visivo fra ultimo passo e seduta: il Tween governa
 			# position, la fisica non deve riportare il corpo sul path.
 			velocity = Vector2.ZERO
-	move_and_slide()
+	# A velocità zero move_and_slide è puro overhead: con 16 agenti per lo più
+	# seduti sono 16 slide-and-collide a frame risparmiati (T440s, 2 core).
+	if velocity != Vector2.ZERO:
+		move_and_slide()
 
 # ── Scrivania: si lavora a tick, non di continuo ─────────────────────
 
@@ -572,7 +634,14 @@ func _set_overhead_delta(delta: Vector2) -> void:
 	if speech:
 		speech.position = SPEECH_BUBBLE_POS + delta
 	if state_tag:
-		state_tag.position = STATE_TAG_POS + delta
+		var tag_y := STATE_TAG_POS.y + delta.y
+		if rig and rig.visible and rig.has_method("visual_top_y"):
+			# In piedi o su una posa seduta dinamica: misura il primo pixel
+			# opaco del frame e lascia sempre lo stesso respiro sopra i capelli.
+			tag_y = float(rig.visual_top_y()) - STATE_TAG_HEAD_CLEARANCE
+		elif _desk_pose_active and CORE_SEATED_TAG_Y.has(_desk_key):
+			tag_y = float(CORE_SEATED_TAG_Y[_desk_key])
+		state_tag.position = Vector2(STATE_TAG_POS.x + delta.x, tag_y)
 
 ## Lavorando la pila si smaltisce: un foglio ogni ~minuto di lavoro vero.
 func _consume_tick(delta: float) -> void:
@@ -587,11 +656,24 @@ func _consume_tick(delta: float) -> void:
 func _desk_motion(mode: String) -> void:
 	match _desk_facing:
 		"left":
-			rig.set_motion("side", true, mode)
+			_set_rig_motion("side", true, mode)
 		"right":
-			rig.set_motion("side", false, mode)
+			_set_rig_motion("side", false, mode)
 		_:
-			rig.set_motion(_desk_facing, false, mode)
+			_set_rig_motion(_desk_facing, false, mode)
+
+## Unico ingresso per cambiare posa del rig: appena cambia foglio/direzione,
+## riallinea anche il badge al nuovo bordo opaco. Senza questo passaggio il
+## primo tratto a piedi conservava per qualche secondo l'ancora della posa
+## seduta, nonostante il personaggio fosse già in cammino.
+func _set_rig_motion(facing: String, flipped: bool, mode: String) -> void:
+	if rig == null:
+		return
+	var changed := str(rig.facing) != facing or bool(rig.flipped) != flipped \
+			or str(rig.mode) != mode
+	rig.set_motion(facing, flipped, mode)
+	if changed and state_tag and rig.visible and rig.has_method("visual_top_y"):
+		state_tag.position.y = float(rig.visual_top_y()) - STATE_TAG_HEAD_CLEARANCE
 
 # ── Viaggi di lavoro ──────────────────────────────────────────────────
 
@@ -649,7 +731,7 @@ func _plan_trip() -> void:
 		var src: String = DepartmentDefs.FETCH_FROM[dept]
 		# il ritiro si vede sulle pile: l'inbox a monte si svuota, quello
 		# di casa riceve una parte, il resto arriva FINO alla scrivania
-		var pick := _leg_to(_jit(DepartmentDefs.handoff_spot(src)), "walk",
+		var pick := _leg_to(_jit(DepartmentDefs.handoff_spot(src, true)), "walk",
 				randf_range(0.8, 1.6), "idle")
 		pick["pile_take"] = src
 		if dept == "critici":
@@ -664,15 +746,6 @@ func _plan_trip() -> void:
 					randf_range(0.5, 1.0), "idle")
 			drop["pile_drop"] = dept
 			_legs = [pick, drop, _leg_to(_spot, "carry", 0.0, "work")]
-	elif roll < 0.88:
-		# pausa caffè / macchinetta (raro: i tick non aspettano)
-		var is_coffee := randf() < 0.7
-		var poi: Vector2 = pois["coffee"]["spot"] if is_coffee \
-				else pois["water_cooler"]["spot"]
-		var cl := _leg_to(_jit(poi), "walk", randf_range(3.0, 7.0), "idle")
-		if is_coffee:
-			cl["fx_coffee"] = true  # il vapore sale finché è in pausa
-		_legs = [cl, _leg_to(_spot, "walk", 0.0, "work")]
 	else:
 		# un'occhiata all'ologramma della ricerca
 		_legs = [
@@ -700,7 +773,7 @@ func _prepare_pipeline_trip(transition_state := "") -> bool:
 	if not DepartmentDefs.FETCH_FROM.has(dept):
 		return false
 	var src: String = DepartmentDefs.FETCH_FROM[dept]
-	var pick := _leg_to(DepartmentDefs.handoff_spot(src), "walk",
+	var pick := _leg_to(DepartmentDefs.handoff_spot(src, true), "walk",
 			randf_range(0.8, 1.4), "idle")
 	pick["pile_take"] = src
 	var durations := {
@@ -755,7 +828,7 @@ func _arrive_at_leg() -> void:
 		# sulla soglia: la porta scorre e l'agente svanisce oltre
 		ExitDoor.swing()
 		_dissolving = true
-		rig.set_motion("down", false, "idle")  # la porta è a sud
+		_set_rig_motion("down", false, "idle")  # la porta è a sud
 		var tw := create_tween()
 		tw.tween_property(self, "modulate:a", 0.0, 0.55)
 		tw.tween_callback(func() -> void:
@@ -765,8 +838,6 @@ func _arrive_at_leg() -> void:
 		return
 	if _leg.get("fx_printer", false):
 		PrinterFx.ping(float(_leg.get("pause", 2.0)))
-	if _leg.get("fx_coffee", false):
-		CoffeeFx.ping(float(_leg.get("pause", 4.0)))
 	if _leg.has("investigation_text"):
 		say(str(_leg["investigation_text"]), str(_leg.get("investigation_target", "")))
 		_investigation_count += 1
@@ -780,7 +851,7 @@ func _arrive_at_leg() -> void:
 			_begin_desk_pause(float(_leg["pause"]))
 		else:
 			_pause = _leg["pause"]
-			rig.set_motion(rig.facing, rig.flipped, _leg.get("pause_mode", "idle"))
+		_set_rig_motion(rig.facing, rig.flipped, _leg.get("pause_mode", "idle"))
 	elif _legs.is_empty():
 		_end_trip()
 	else:
@@ -857,8 +928,8 @@ func _set_desk_occupied(on: bool) -> void:
 	if on and use_composite:
 		overhead_delta = _composite_overhead_delta()
 	elif slug in ["coordinatore", "sentinella", "mentor", "assistente", "mantenitore", "dottore"]:
-		# I fogli di cammino dei core sono più alti del roster standard: badge
-		# e vignette devono partire sopra la testa, mai dalla schiena.
+		# Il badge dei core in cammino viene ora ancorato al primo pixel opaco
+		# del frame; resta solo il vecchio delta per fumetti e vignette.
 		overhead_delta = Vector2(0, -42)
 	_set_overhead_delta(overhead_delta)
 	if _seated():
@@ -893,7 +964,7 @@ func _work_pose() -> void:
 func debug_snapshot() -> Dictionary:
 	return {"uid": uid, "status": backend_status, "state": int(state),
 			"motion": str(rig.mode if rig else ""), "speed": velocity.length(),
-			"visible": visible, "detail": activity_detail,
+			"visible": visible, "detail": activity_detail, "path_lane": _path_lane,
 			"forced_trip": _forced_trip, "home": _spot,
 			"work_position": _spot + (_seat_offset() if _seated() else Vector2.ZERO),
 			"collision_mask": collision_mask,
@@ -906,28 +977,72 @@ func debug_snapshot() -> Dictionary:
 func _follow_path(speed: float, mode := "walk") -> bool:
 	if _pi >= _path.size():
 		return true
-	var target := _path[_pi]
-	var to_target := target - global_position
-	if to_target.length() < 10.0:
+	# La soglia d'arrivo si misura sul waypoint REALE, non sulla corsia estetica
+	# (_path_target): se lo scarto laterale restasse contro un mobile l'agente
+	# non toccherebbe mai il punto-corsia e resterebbe incastrato a metà tratta
+	# (_pi fermo → viaggio mai concluso). La corsia guida la direzione, il
+	# waypoint originale decide quando è "raggiunto". Sui tratti intermedi la
+	# soglia supera lo scarto (|_path_lane|px), altrimenti l'agente si fermerebbe
+	# SULLA corsia — 16px di lato — senza mai entrare nei 10px del nodo. L'ultima
+	# tappa (sedia/stampante/inbox) non ha scarto e resta precisa.
+	var arrival := 10.0 if _pi >= _path.size() - 1 else 10.0 + absf(_path_lane)
+	if global_position.distance_to(_path[_pi]) < arrival:
 		_pi += 1
 		if _pi >= _path.size():
 			velocity = Vector2.ZERO
 			return true
-		to_target = _path[_pi] - global_position
+	var to_target := _path_target(_pi) - global_position
 	velocity = to_target.normalized() * speed
 	_face_point(global_position + velocity)
-	rig.set_motion(rig.facing, rig.flipped, mode)
+	_set_rig_motion(rig.facing, rig.flipped, mode)
 	return false
+
+func _path_target(index: int) -> Vector2:
+	var target := _path[index]
+	# I waypoint intermedi vengono percorsi su corsie parallele. La meta finale
+	# resta esatta (sedia, stampante, inbox), quindi il contratto funzionale non
+	# cambia. Se lo scarto uscisse dalla navmesh, si usa il nodo originale.
+	if _path_lane != 0.0 and index > 0 and index < _path.size() - 1:
+		var before := _path[index - 1]
+		var after := _path[index + 1]
+		var tangent := (after - before).normalized()
+		if tangent != Vector2.ZERO:
+			var lane_target := target + Vector2(-tangent.y, tangent.x) * _path_lane
+			# `is_point_walkable` guarda la navgrid, non la fisica: col layout
+			# denso di dev1 lo scarto poteva cadere dietro una scrivania (punto
+			# navigabile ma bloccato da un corpo layer 1) e l'agente ci sbatteva.
+			# Applica la corsia solo se il raggio dalla posizione corrente al
+			# punto-corsia non attraversa mobili; altrimenti resta sul nodo reale.
+			if nav.is_point_walkable(lane_target) and _lane_clear(lane_target):
+				target = lane_target
+	return target
+
+## Vero se il segmento dalla posizione corrente a `point` non tocca mobili
+## (collision layer 1). Gli agenti sono layer 2 ed esclusi comunque: conta
+## solo che la corsia estetica non spinga il corpo dentro un arredo.
+func _lane_clear(point: Vector2) -> bool:
+	var space := get_world_2d().direct_space_state
+	if space == null:
+		return false
+	var query := PhysicsRayQueryParameters2D.create(global_position, point, 1)
+	query.exclude = [self]
+	return space.intersect_ray(query).is_empty()
 
 func _face_point(p: Vector2) -> void:
 	var d := p - global_position
 	if absf(d.x) > absf(d.y):
-		rig.set_motion("side", d.x < 0, rig.mode)
+		_set_rig_motion("side", d.x < 0, rig.mode)
 	else:
-		rig.set_motion("down" if d.y > 0 else "up", false, rig.mode)
+		_set_rig_motion("down" if d.y > 0 else "up", false, rig.mode)
 
 func _bubble_tick(delta: float) -> void:
 	if state == S.TALK:
+		return
+	if _entering or _exiting:
+		bubble.hide_now()
+		return
+	if speech and speech.is_speaking():
+		bubble.hide_now()
 		return
 	# coi dati VERI il chatter di ambientazione tace: sotto il badge
 	# "DATI REALI" parlano solo i messaggi autentici (SpeechBubble)

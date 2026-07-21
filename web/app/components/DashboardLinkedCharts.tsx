@@ -526,13 +526,14 @@ export default function DashboardLinkedCharts({
           </>
         )}
       </div>
-      {/* Riga 1: donut Tipologie a tutta larghezza. */}
-      <div className="mb-4">
+      {/* Riga 1: donut Tipologie a tutta larghezza, ma con la stessa altezza
+      delle card sottostanti: donut compatto e legenda scrollabile. */}
+      <div className="mb-4 lg:h-[280px]">
         <PositionTypesPie
           data={typeData}
           title={labels.types}
           emptyLabel={labels.noData}
-          size={360}
+          size={190}
           selectedTypes={selectedFamilies}
           onToggleType={(f) => toggle(setSelectedFamilies, f)}
         />

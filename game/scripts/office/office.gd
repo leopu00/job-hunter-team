@@ -104,12 +104,9 @@ func _ready() -> void:
 
 	# i macchinari si animano quando qualcuno li usa (ping da AgentNPC)
 	world.add_child(PrinterFx.new(FurnitureDefs.get_rect("printer")))
-	world.add_child(CoffeeFx.new(FurnitureDefs.get_rect("coffee_bar")))
 	match OS.get_environment("JHT_FX"):  # TEST-AUTO: effetto forzato
 		"printer":
 			PrinterFx.ping(20.0)
-		"coffee":
-			CoffeeFx.ping(20.0)
 
 	# Punti di consegna tra reparti. Sono OUTPUT, non generici inbox:
 	# Scout → Analisti → Scorer → Scrittori → Critici. Il risultato dei
@@ -122,14 +119,22 @@ func _ready() -> void:
 	for dept_id in handoff_to:
 		var inbox_pos: Vector2 = DepartmentDefs.DEPARTMENTS[dept_id]["inbox"]
 		var dept_color: Color = DepartmentDefs.DEPARTMENTS[dept_id]["color"]
-		world.add_child(HandoffStation.new(dept_id, inbox_pos,
-				handoff_to[dept_id], dept_color))
-		var p := PaperPile.new(inbox_pos + Vector2(0, -4))
+		var station := HandoffStation.new(dept_id, inbox_pos,
+				handoff_to[dept_id], dept_color)
+		world.add_child(station)
+		var p := PaperPile.new(station.pile_spot())
 		# gli Scout producono e basta: il loro inbox si riempie più svelto
 		p.restock = 90.0 if DepartmentDefs.FETCH_FROM.has(dept_id) else 45.0
 		p.add_sheets(randi_range(1, 6))
 		world.add_child(p)
 		PaperPile.inbox[dept_id] = p
+	# L'anteprima va applicata anche prima del primo snapshot del backend:
+	# in modalità NOVPS la pila altrimenti conserva il seme casuale iniziale.
+	var pile_preview := OS.get_environment("JHT_PILE_PREVIEW").split(":", false, 1)
+	if pile_preview.size() == 2 and PaperPile.inbox.has(pile_preview[0]) \
+			and str(pile_preview[1]).is_valid_int():
+		PaperPile.inbox[pile_preview[0]].set_target(
+				maxi(0, int(pile_preview[1])), true)
 
 	# Primo avvio come showroom: tutti i ruoli fondamentali e due persone per
 	# reparto. Il primo snapshot reale li sostituisce senza mai presentare un
@@ -149,7 +154,7 @@ func _ready() -> void:
 		world.add_child(agent)
 		agent.setup(def, nav)
 		if _seat_audit == "" and _doctor_test == "":
-			agent.enter_through(ENTRY_SPOT)
+			_stage_agent_entry(agent)
 		agent.set_story_marker(_seat_audit == "" \
 				and not ScriptedOnboarding.provider_authenticated())
 		agents.append(agent)
@@ -224,7 +229,9 @@ func _ready() -> void:
 
 	if _seat_audit == "" and _doctor_test == "":
 		_add_hud()
-		add_child(GameSidebar.new())  # sidebar stile desktop-app (linguetta ≡)
+		var sidebar := GameSidebar.new()
+		add_child(sidebar)  # sidebar stile desktop-app (linguetta ≡)
+		sidebar.chat_requested.connect(_toggle_chat_access)
 
 	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
 			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
@@ -288,10 +295,13 @@ func _ready() -> void:
 		BackendBus.agents_updated.connect(sync_agents)
 		BackendBus.chat_message.connect(_on_chat_message)
 		BackendBus.positions_updated.connect(_on_transitions)
+		BackendBus.telemetry_updated.connect(_on_agent_cpu_telemetry)
 		if not BackendBus.agents.is_empty():
 			sync_agents(BackendBus.agents)
 		if not BackendBus.transitions.is_empty():
 			_on_transitions([])  # snapshot già sul bus: assorbito come baseline
+		if not BackendBus.telemetry.is_empty():
+			_on_agent_cpu_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
 		SetupService.status_changed.connect(_on_setup_status_changed)
 		_on_setup_status_changed(SetupService.status)
 
@@ -323,6 +333,8 @@ func _ready() -> void:
 	# TEST-AUTO: JHT_CHATMENU=1 apre il menu delle chat 1-a-1 (tasto C)
 	if OS.get_environment("JHT_CHATMENU") == "1":
 		get_tree().create_timer(2.5).timeout.connect(_open_chat_menu)
+	if OS.get_environment("JHT_CHAT_UI_TEST") == "1":
+		_chat_ui_selftest.call_deferred()
 
 	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza throttle e rimozione roster,
 	# senza aspettare il ciclo eventi del mock.
@@ -821,10 +833,24 @@ func _usage_panel_selftest() -> void:
 		rank_btn.pressed.emit()
 		await get_tree().process_frame
 		agents_ok = agents_ok and stacked._series.size() == 1
-	var ok := history_ok and agents_ok
+	agents_panel.queue_free()
+	# deep-link dalla card: pending_agent → pagina agente col grafico
+	# storico multi-asse (e i suoi interruttori TUTTE/NESSUNA)
+	SectionPanel.pending_agent = "scout"
+	var page_panel := SectionPanel.new("agents", 24.0)
+	add_child(page_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var history := _ui_find_class_node(page_panel, "AgentHistoryChart")
+	var page_ok := page_panel._current_page == "agent" \
+			and page_panel._agent_detail == "scout" \
+			and SectionPanel.pending_agent == "" \
+			and history != null \
+			and _ui_find_button(page_panel, UIStrings.t("agent.history_all")) != null
+	var ok := history_ok and agents_ok and page_ok
 	if not ok:
 		print("USAGE-PANEL-TEST details history=", history_ok,
-				" agents=", agents_ok)
+				" agents=", agents_ok, " page=", page_ok)
 	print("USAGE-PANEL-TEST ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
 
@@ -1016,6 +1042,61 @@ func _chat_selftest(role: String, send: bool) -> void:
 				BackendBus.send_user_chat(a.slug, "Come procede il lavoro?")
 			return
 
+func _chat_ui_selftest() -> void:
+	await get_tree().process_frame
+	BackendBus.clear_chat_unread()
+	BackendBus.publish_chat({"ts": "ui-1", "from": "coordinatore",
+			"to": "user", "text": "Aggiornamento per te"})
+	await get_tree().process_frame
+	var sidebar: GameSidebar
+	for child in get_children():
+		if child is GameSidebar:
+			sidebar = child
+			break
+	var badge_ok := sidebar != null and "1" in sidebar._tab.text
+	_open_chat_menu()
+	await get_tree().process_frame
+	var menu_ok := _chat_menu != null and _chat_menu._agents.size() == 3
+	var coordinator := _find_agent("coordinatore")
+	if _chat_menu:
+		_chat_menu.close(false)
+	await get_tree().process_frame
+	if coordinator:
+		_open_chat(coordinator)
+	await get_tree().process_frame
+	var read_ok := BackendBus.chat_unread_count("capitano") == 0 \
+			and _chat_panel != null
+	if _chat_panel:
+		_chat_panel.close(false)
+	await get_tree().process_frame
+	var close_ok := _chat_panel == null
+	_toggle_chat_access()
+	await get_tree().process_frame
+	var reopen_ok := _chat_menu != null
+	_toggle_chat_access()
+	await get_tree().process_frame
+	var toggle_close_ok := _chat_menu == null
+	if coordinator:
+		deliver_chat("coordinatore", "user", "Aggiornamento per te")
+	await get_tree().process_frame
+	var overlap_ok := coordinator != null \
+			and coordinator.state_tag.debug_suppressed() \
+			and not coordinator.state_tag.visible
+	var assistant := _find_agent("assistente")
+	if coordinator and assistant:
+		deliver_chat("coordinatore", "assistente", "Passaggio completato")
+	var received_ok := assistant != null \
+			and assistant.state_tag.debug_label().begins_with("MESSAGGIO DA")
+	var ok := badge_ok and menu_ok and read_ok and close_ok and reopen_ok \
+			and toggle_close_ok and overlap_ok and received_ok
+	print("CHAT-UI-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify({
+			"badge": badge_ok, "menu": menu_ok, "read": read_ok,
+			"close": close_ok, "reopen": reopen_ok,
+			"toggle_close": toggle_close_ok, "overlap": overlap_ok,
+			"received": received_ok}))
+	BackendBus.clear_chat_unread()
+	get_tree().quit(0 if ok else 1)
+
 ## Forza i due comportamenti nuovi sul roster corrente (vedi _ready).
 func _throttle_selftest() -> void:
 	await get_tree().create_timer(4.0).timeout
@@ -1086,9 +1167,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	# menu delle chat 1-a-1 (feedback test finale): C apre la lista agenti
 	if event is InputEventKey and event.pressed and event.keycode == KEY_C \
-			and not (event.meta_pressed or event.ctrl_pressed) \
-			and _chat_menu == null and _chat_panel == null and _agent_card == null:
-		_open_chat_menu()
+			and not (event.meta_pressed or event.ctrl_pressed):
+		_toggle_chat_access()
 		return
 	# GlobalSearch del web: Cmd/Ctrl+K apre la ricerca sulle posizioni
 	if event is InputEventKey and event.pressed and event.keycode == KEY_K \
@@ -1130,13 +1210,14 @@ func _toggle_search() -> void:
 var _dept_panel: DepartmentPanel
 var _agent_card: AgentCard
 var _thinking_panel: AgentThinkingPanel
+var _coordinator_panel: CoordinatorPanel
 
 ## Click "pulito" dalla FreeCamera: agente > bacheca > reparto.
 func _on_world_click(target: Vector2) -> void:
 	if Game.dialogue_active:
 		return
 	if _registry or _dept_panel or _agent_card or _chat_panel or _cv_shelf_panel \
-			or _queue_panel or _thinking_panel:
+			or _queue_panel or _thinking_panel or _coordinator_panel:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
@@ -1203,13 +1284,16 @@ func _open_dept(dept: String) -> void:
 
 # ── Hover col mouse (evidenzia l'agente cliccabile) ───────────────────
 
+var _last_queue_hover := ""
+var _last_shelf_hover := false
+
 func _update_hover() -> void:
 	var best: AgentNPC = null
 	var shelf_hovered := false
 	var queue_hovered := ""
 	if not Game.dialogue_active and not _registry and not _dept_panel \
 			and not _agent_card and not _chat_panel and not _cv_shelf_panel \
-			and not _queue_panel and not _thinking_panel:
+			and not _queue_panel and not _thinking_panel and not _coordinator_panel:
 		var mouse := get_global_mouse_position()
 		for agent in agents:
 			if agent.hit_by(mouse):
@@ -1219,8 +1303,14 @@ func _update_hover() -> void:
 			queue_hovered = PaperPile.inbox_at(mouse)
 			if queue_hovered == "":
 				shelf_hovered = OutputShelf.hit_by(mouse)
-	PaperPile.highlight_inbox(queue_hovered)
-	OutputShelf.set_highlight(shelf_hovered)
+	# Broadcast solo al cambio: prima si rifacevano i giri su pile e
+	# scaffale a ogni frame anche col mouse fermo nel vuoto.
+	if queue_hovered != _last_queue_hover:
+		_last_queue_hover = queue_hovered
+		PaperPile.highlight_inbox(queue_hovered)
+	if shelf_hovered != _last_shelf_hover:
+		_last_shelf_hover = shelf_hovered
+		OutputShelf.set_highlight(shelf_hovered)
 	if best != _hover_agent:
 		if _hover_agent:
 			_hover_agent.set_highlight(false)
@@ -1239,6 +1329,13 @@ func _open_agent_card(agent: AgentNPC) -> void:
 	_agent_card.talk_requested.connect(func() -> void: _start_talk(agent))
 	_agent_card.chat_requested.connect(func() -> void: _open_chat(agent))
 	_agent_card.thinking_requested.connect(func() -> void: _open_agent_thinking(agent))
+	# scheda completa: sezione Agenti sulla pagina del ruolo, con i
+	# grafici storici — stesso deep-link pattern di pending_detail
+	_agent_card.stats_requested.connect(func() -> void:
+		SectionPanel.pending_agent = agent.slug
+		ScriptedOnboarding.action_requested.emit("open_section",
+				{"section": "agents"}))
+	_agent_card.coordinator_requested.connect(func() -> void: _open_coordinator_panel(agent))
 	_agent_card.closed.connect(func() -> void:
 		_agent_card = null)
 
@@ -1252,13 +1349,25 @@ func _open_agent_thinking(agent: AgentNPC) -> void:
 	_thinking_panel.closed.connect(func() -> void:
 		_thinking_panel = null)
 
+func _open_coordinator_panel(agent: AgentNPC) -> void:
+	if agent.slug != "coordinatore" or not BackendBus.can_chat_with(
+			agent.uid if agent.uid != "" else agent.slug):
+		return
+	Log.info("agent", "console operativa del Coordinatore aperta")
+	_coordinator_panel = CoordinatorPanel.new(agent.accent_color())
+	add_child(_coordinator_panel)
+	_coordinator_panel.closed.connect(func() -> void:
+		_coordinator_panel = null)
+
 var _chat_panel: ChatPanel
 var _chat_menu: ChatMenu
 
 ## Lista degli agenti in scena → chat individuale (tasto C).
 func _open_chat_menu() -> void:
+	if _chat_menu or _chat_panel:
+		return
 	Log.info("chat", "menu chat aperto (%d agenti)" % agents.size())
-	_chat_menu = ChatMenu.new(agents)
+	_chat_menu = ChatMenu.new(_chat_roster())
 	add_child(_chat_menu)
 	_chat_menu.closed.connect(func() -> void: _chat_menu = null)
 	_chat_menu.open_chat.connect(func(slug: String, display_name: String) -> void:
@@ -1278,9 +1387,22 @@ func _open_chat_menu() -> void:
 func _chat_roster() -> Array:
 	var roster: Array = []
 	for a in agents:
-		roster.append({"slug": a.slug if a.uid == "" else a.uid,
-				"name": a.display_name})
+		var ref: String = a.slug if a.uid == "" else a.uid
+		if BackendBus.chat_replies(ref) or ScriptedOnboarding.supports(a.slug):
+			roster.append({"slug": ref, "name": a.display_name})
 	return roster
+
+## Un solo gesto apre o chiude l'accesso rapido. La X/Esc del singolo overlay
+## usa gli stessi close(), quindi i riferimenti tornano sempre null.
+func _toggle_chat_access() -> void:
+	if _chat_panel:
+		_chat_panel.close()
+		return
+	if _chat_menu:
+		_chat_menu.close()
+		return
+	if _agent_card == null:
+		_open_chat_menu()
 
 ## Chat REALE con l'agente: si apre con lo slug di gioco, il bus lo
 ## traduce nel nome del sistema reale (coordinatore → capitano).
@@ -1323,6 +1445,9 @@ var _backend_mode := false
 var _unplaced_roles: Dictionary = {}  # ruoli senza postazione già segnalati
 var _core_overflow_serial: Dictionary = {} # istanze core extra (es. sentinella-worker)
 var _agent_ui_test_started := false
+var _coordinator_test_started := false
+
+const AGENT_CPU_STALE_AFTER := 75.0  # sampler 30s: poco più di due tick
 
 ## Applica lo snapshot del backend (contratto BackendBus.agents_updated):
 ## list = [{slug: uid univoco, role, name, active, status}].
@@ -1355,6 +1480,8 @@ func sync_agents(list: Array) -> void:
 			wanted.erase(agent.uid)
 	for item_uid in wanted:
 		_spawn_backend_agent(wanted[item_uid])
+	if not BackendBus.telemetry.is_empty():
+		_on_agent_cpu_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
 	# Il roster backend arriva dopo _ready: il test-card va riprovato qui,
 	# quando l'istanza richiesta esiste davvero.
 	var card_test := OS.get_environment("JHT_CARD")
@@ -1375,6 +1502,40 @@ func sync_agents(list: Array) -> void:
 			and _thinking_panel != null and not _agent_ui_test_started:
 		_agent_ui_test_started = true
 		_agent_ui_selftest.call_deferred()
+	var coordinator_preview := OS.get_environment("JHT_COORDINATOR_TEST") == "1" \
+			or OS.get_environment("JHT_COORDINATOR_PREVIEW") == "1"
+	if coordinator_preview and _coordinator_panel == null:
+		for a in agents:
+			if a.slug == "coordinatore":
+				_open_coordinator_panel(a)
+				break
+	if OS.get_environment("JHT_COORDINATOR_TEST") == "1" \
+			and _coordinator_panel != null and not _coordinator_test_started:
+		_coordinator_test_started = true
+		_coordinator_selftest.call_deferred()
+
+## Liveness operativa: il roster dice che il processo esiste, il sampler CPU
+## dice se sta davvero elaborando. Dati mancanti o più vecchi di 75 secondi
+## spengono il LED: non si conserva mai un falso verde all'infinito.
+func _on_agent_cpu_telemetry(sample: Dictionary, _history: Array) -> void:
+	var cpu_map: Dictionary = sample.get("agent_cpu", {})
+	var age := float(sample.get("agent_vitals_age_s", -1.0))
+	var fresh := age >= 0.0 and age <= AGENT_CPU_STALE_AFTER
+	for agent in agents:
+		var candidates: Array[String] = []
+		if not agent.uid.is_empty():
+			candidates.append(agent.uid.to_lower())
+		candidates.append(agent.slug.to_lower())
+		if agent.slug == "coordinatore":
+			candidates.append("capitano")
+		var found := false
+		var cpu := 0.0
+		for key in candidates:
+			if cpu_map.has(key):
+				cpu = float(cpu_map[key])
+				found = true
+				break
+		agent.set_cpu_activity(cpu, fresh and found)
 
 func _agent_ui_selftest() -> void:
 	await get_tree().create_timer(2.2).timeout
@@ -1411,14 +1572,102 @@ func _agent_ui_selftest() -> void:
 		agents[0].set_highlight(true)
 		hover_ok = agents[0].aura.hovered
 		agents[0].set_highlight(false)
+	var cpu_threshold_ok := false
+	var cpu_blink_ok := false
+	var cpu_mapping_ok := false
+	var cpu_stale_ok := false
+	if not agents.is_empty():
+		var probe: AgentNPC = agents[0]
+		probe.set_cpu_activity(AgentStateTag.CPU_ACTIVE_THRESHOLD, true)
+		var at_threshold: Dictionary = probe.state_tag.debug_cpu_led()
+		probe.set_cpu_activity(AgentStateTag.CPU_ACTIVE_THRESHOLD + 0.1, true)
+		var above_threshold: Dictionary = probe.state_tag.debug_cpu_led()
+		var lit_before := bool(above_threshold.get("lit", false))
+		probe.state_tag._process(0.5)
+		var lit_after := bool(probe.state_tag.debug_cpu_led().get("lit", true))
+		cpu_threshold_ok = not bool(at_threshold.get("active", true)) \
+				and bool(above_threshold.get("active", false))
+		cpu_blink_ok = lit_before and not lit_after
+		_on_agent_cpu_telemetry({"agent_cpu": {"capitano": 25.0},
+				"agent_vitals_age_s": 0.0}, [])
+		var captain := _find_agent("coordinatore")
+		cpu_mapping_ok = captain != null \
+				and bool(captain.state_tag.debug_cpu_led().get("active", false))
+		_on_agent_cpu_telemetry({"agent_cpu": {"capitano": 50.0},
+				"agent_vitals_age_s": AGENT_CPU_STALE_AFTER + 1.0}, [])
+		cpu_stale_ok = captain != null \
+				and not bool(captain.state_tag.debug_cpu_led().get("active", true))
 	var ok := auras_ok and ground_layer_ok and colors.size() >= 5 \
 			and readonly_ok and stream_ok \
-			and scroll_lock_ok and hover_ok
+			and scroll_lock_ok and hover_ok and cpu_threshold_ok \
+			and cpu_blink_ok and cpu_mapping_ok and cpu_stale_ok
 	print("AGENT-UI-TEST ", "PASS" if ok else "FAIL", " ", JSON.stringify({
 		"departments": colors, "auras": auras_ok, "readonly": readonly_ok,
 		"ground_layer": ground_layer_ok, "stream": stream_ok,
 		"scroll_lock": scroll_lock_ok, "hover": hover_ok,
+		"cpu_threshold": cpu_threshold_ok, "cpu_blink": cpu_blink_ok,
+		"cpu_mapping": cpu_mapping_ok, "cpu_stale": cpu_stale_ok,
 	}))
+	get_tree().quit(0 if ok else 1)
+
+func _coordinator_selftest() -> void:
+	await get_tree().create_timer(0.3).timeout
+	var panel_ok := _coordinator_panel != null \
+			and _coordinator_panel.is_in_group("camera_blocking_overlay")
+	var navigation_ok := false
+	var chat_ok := false
+	var thinking_ok := false
+	if panel_ok:
+		_coordinator_panel._show_view(1)
+		await get_tree().process_frame
+		navigation_ok = _coordinator_panel._tabs.current_tab == 1 \
+				and _coordinator_panel._monitor_built \
+				and _ui_find_class_node(_coordinator_panel,
+						"AgentHistoryChart") != null
+		_coordinator_panel._open_chat()
+		await get_tree().process_frame
+		chat_ok = _coordinator_panel._chat_panel != null \
+				and _coordinator_panel._chat_panel.layer == 70
+		if chat_ok:
+			_coordinator_panel._chat_panel.close(false)
+		await get_tree().process_frame
+		_coordinator_panel._open_thinking()
+		await get_tree().process_frame
+		thinking_ok = _coordinator_panel._thinking_panel != null \
+				and _coordinator_panel._thinking_panel.layer == 70
+		if thinking_ok:
+			_coordinator_panel._thinking_panel.close(false)
+		_coordinator_panel._show_view(0)
+		navigation_ok = navigation_ok \
+				and _coordinator_panel._tabs.current_tab == 0
+	var controls_ok := panel_ok and _coordinator_panel._geo_non_remote != null \
+			and _coordinator_panel._recheck_days != null \
+			and _coordinator_panel._directives.get_child_count() >= 1 \
+			and _coordinator_panel._queue_grid.get_child_count() == 7 \
+			and _coordinator_panel._stop_search.disabled \
+			and _coordinator_panel._geo_score.editable
+	if panel_ok:
+		_coordinator_panel._maintenance.button_pressed = true
+		_coordinator_panel._geo_score.value = 72
+		controls_ok = controls_ok and not _coordinator_panel._stop_search.disabled
+		_coordinator_panel._save_settings()
+	await get_tree().process_frame
+	var save_ok := bool(BackendBus.coordinator_state.get("maintenance", {}) \
+			.get("enabled", false)) \
+			and int(BackendBus.coordinator_state.get("enrichment", {}) \
+			.get("geocode_min_score", 0)) == 72
+	var before: int = BackendBus.coordinator_state.get("directives", []).size()
+	BackendBus.add_team_directive("Test direttiva console", "order")
+	await get_tree().process_frame
+	var directive_ok: bool = BackendBus.coordinator_state.get("directives", []).size() \
+			== before + 1
+	var ok: bool = panel_ok and navigation_ok and chat_ok and thinking_ok \
+			and controls_ok and save_ok and directive_ok
+	print("COORDINATOR-CONSOLE-TEST ", "PASS" if ok else "FAIL", " ",
+			JSON.stringify({"panel": panel_ok, "controls": controls_ok,
+				"navigation": navigation_ok, "chat": chat_ok,
+				"thinking": thinking_ok, "save": save_ok,
+				"directive": directive_ok}))
 	get_tree().quit(0 if ok else 1)
 
 ## Recapita un messaggio della chat di team come fumetto (contratto
@@ -1437,10 +1686,12 @@ func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
 			"all":
 				to_label = ""
 			"user":
-				to_label = "te"
+				to_label = "MESSAGGIO PER TE"
 			_:
 				to_label = _name_of(to_uid)
 		speaker.say(text, to_label)
+		if target and not target.is_dissolving():
+			target.show_received_message(speaker.display_name)
 
 ## Risolve uid reale o ruolo. Nei self-test offline "scout-4" sceglie la
 ## quarta istanza del ruolo, mentre sulla VPS vince sempre l'uid esatto.
@@ -1515,6 +1766,13 @@ var _piles_synced := false
 
 func _sync_piles(hold_seconds := 0.0) -> void:
 	var counts: Dictionary = BackendBus.pipeline_counts()
+	# Hook esclusivamente visivo per gli screenshot di regressione: permette di
+	# verificare l'ingombro/prospettiva di una coda grande senza dipendere dai
+	# dati della VPS. Formato: JHT_PILE_PREVIEW=scorer:517.
+	var preview := OS.get_environment("JHT_PILE_PREVIEW").split(":", false, 1)
+	if preview.size() == 2 and PILE_PHASE.has(preview[0]) \
+			and str(preview[1]).is_valid_int():
+		counts[PILE_PHASE[preview[0]]] = maxi(0, int(preview[1]))
 	for dept_id in PILE_PHASE:
 		if PaperPile.inbox.has(dept_id):
 			# Rapporto esatto 1:1. Il primo snapshot è immediato; i successivi
@@ -1622,6 +1880,15 @@ func _enter_backend_mode() -> void:
 			_despawn_agent(agent, false)
 	Log.info("backend", "modalità backend: in scena solo gli agenti attivi")
 
+## Ingresso a ondate: cinque corsie affiancate e una nuova fila ogni 0,9 s.
+## Tutti gli agenti restano disponibili subito per la sync, ma non formano
+## più la colonna di corpi sovrapposti che sembrava uno sprite sdoppiato.
+func _stage_agent_entry(agent: AgentNPC) -> void:
+	var index := agents.size()
+	var wave := index / 5
+	var lane := posmod(index, 5) - 2
+	agent.enter_through(ENTRY_SPOT, float(wave) * 0.9, float(lane))
+
 func _spawn_showroom() -> void:
 	if world == null:
 		return
@@ -1636,7 +1903,7 @@ func _spawn_showroom() -> void:
 		var agent := AgentNPC.new()
 		world.add_child(agent)
 		agent.setup(def, nav)
-		agent.enter_through(ENTRY_SPOT)
+		_stage_agent_entry(agent)
 		agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
 				bool(_story_seen.get(str(def["slug"]), false)))
 		agents.append(agent)
@@ -1722,7 +1989,7 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	agent.set_throttle(float(item.get("throttle_secs", 0.0)))
 	agent.set_activity_detail(str(item.get("activity_detail", "")))
 	agent.set_backend_status(item.get("status", "idle"))
-	agent.enter_through(ENTRY_SPOT)
+	_stage_agent_entry(agent)
 	agents.append(agent)
 
 # ── Costruzione scena ─────────────────────────────────────────────────

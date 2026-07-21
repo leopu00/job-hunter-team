@@ -1,9 +1,17 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { getPositionById } from "@/lib/queries";
+import {
+  getPositionById,
+  getLatestFeedbackForLegacyId,
+  isCloudDataMode,
+} from "@/lib/queries";
+import { gazetteerCity } from "@/lib/city-gazetteer";
+import { countryFlag } from "@/lib/country-flag";
 import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
+import { colorForFamily } from "@/lib/position-classifier";
+import { scoreSpectrumCss } from "@/lib/score-color";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
@@ -11,6 +19,10 @@ import { ExcludeButton } from "./ExcludeButton";
 import { RecheckButton } from "./RecheckButton";
 import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
+import { TeamActionsSheet } from "./TeamActionsSheet";
+import { FeedbackButtons, type Verdict } from "./FeedbackButtons";
+import PositionMapCardLazy from "./PositionMapCardLazy";
+import PrevNextNav from "./PrevNextNav";
 import { CvDownloadButton } from "./CvDownloadButton";
 import MarkSeenAfterView from "@/app/components/MarkSeenAfterView";
 import { Avatar } from "@/app/components/Avatar";
@@ -371,14 +383,104 @@ const T: Record<string, Record<string, string>> = {
     fr: "Description complète",
     pt: "Descrição completa",
   },
-  details: {
-    it: "Dettagli",
-    en: "Details",
-    hu: "Részletek",
-    es: "Detalles",
-    de: "Details",
-    fr: "Détails",
-    pt: "Detalhes",
+  overview: {
+    it: "Panoramica",
+    en: "Overview",
+    hu: "Áttekintés",
+    es: "Resumen",
+    de: "Überblick",
+    fr: "Aperçu",
+    pt: "Resumo",
+  },
+  o_mode: {
+    it: "Modalità",
+    en: "Work mode",
+    hu: "Munkavégzés",
+    es: "Modalidad",
+    de: "Arbeitsmodus",
+    fr: "Mode de travail",
+    pt: "Modalidade",
+  },
+  o_category: {
+    it: "Categoria",
+    en: "Category",
+    hu: "Kategória",
+    es: "Categoría",
+    de: "Kategorie",
+    fr: "Catégorie",
+    pt: "Categoria",
+  },
+  o_today: {
+    it: "oggi",
+    en: "today",
+    hu: "ma",
+    es: "hoy",
+    de: "heute",
+    fr: "aujourd'hui",
+    pt: "hoje",
+  },
+  o_yesterday: {
+    it: "ieri",
+    en: "yesterday",
+    hu: "tegnap",
+    es: "ayer",
+    de: "gestern",
+    fr: "hier",
+    pt: "ontem",
+  },
+  o_days_ago: {
+    it: "{n} giorni fa",
+    en: "{n} days ago",
+    hu: "{n} napja",
+    es: "hace {n} días",
+    de: "vor {n} Tagen",
+    fr: "il y a {n} jours",
+    pt: "há {n} dias",
+  },
+  rt_full_remote: {
+    it: "Da remoto",
+    en: "Full remote",
+    hu: "Teljesen távoli",
+    es: "Remoto",
+    de: "Vollständig remote",
+    fr: "Télétravail complet",
+    pt: "Remoto",
+  },
+  rt_hybrid: {
+    it: "Ibrido",
+    en: "Hybrid",
+    hu: "Hibrid",
+    es: "Híbrido",
+    de: "Hybrid",
+    fr: "Hybride",
+    pt: "Híbrido",
+  },
+  rt_onsite: {
+    it: "In sede",
+    en: "On-site",
+    hu: "Irodai",
+    es: "Presencial",
+    de: "Vor Ort",
+    fr: "Sur site",
+    pt: "Presencial",
+  },
+  open_in_maps: {
+    it: "Apri in Google Maps",
+    en: "Open in Google Maps",
+    hu: "Megnyitás a Google Térképen",
+    es: "Abrir en Google Maps",
+    de: "In Google Maps öffnen",
+    fr: "Ouvrir dans Google Maps",
+    pt: "Abrir no Google Maps",
+  },
+  location: {
+    it: "Località",
+    en: "Location",
+    hu: "Helyszín",
+    es: "Ubicación",
+    de: "Standort",
+    fr: "Localisation",
+    pt: "Localização",
   },
   d_source: {
     it: "Fonte",
@@ -398,24 +500,6 @@ const T: Record<string, Record<string, string>> = {
     fr: "Trouvée",
     pt: "Encontrada",
   },
-  d_deadline: {
-    it: "Scadenza",
-    en: "Deadline",
-    hu: "Határidő",
-    es: "Fecha límite",
-    de: "Frist",
-    fr: "Échéance",
-    pt: "Prazo",
-  },
-  d_found_by: {
-    it: "Trovata da",
-    en: "Found by",
-    hu: "Megtalálta",
-    es: "Encontrada por",
-    de: "Gefunden von",
-    fr: "Trouvée par",
-    pt: "Encontrada por",
-  },
   d_salary_declared: {
     it: "Stipendio dichiarato",
     en: "Declared salary",
@@ -433,15 +517,6 @@ const T: Record<string, Record<string, string>> = {
     de: "Geschätztes Gehalt",
     fr: "Salaire estimé",
     pt: "Salário estimado",
-  },
-  view_original_offer: {
-    it: "Vedi offerta originale",
-    en: "View original offer",
-    hu: "Eredeti ajánlat megtekintése",
-    es: "Ver oferta original",
-    de: "Originalangebot ansehen",
-    fr: "Voir l'offre originale",
-    pt: "Ver oferta original",
   },
   company: {
     it: "Azienda",
@@ -649,18 +724,6 @@ const VAL: Record<string, Record<string, string>> = {
   },
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  new: "var(--color-muted)",
-  checked: "var(--color-blue)",
-  scored: "var(--color-purple)",
-  writing: "var(--color-yellow)",
-  review: "var(--color-orange)",
-  ready: "var(--color-ready)",
-  applied: "var(--color-green)",
-  response: "#58a6ff",
-  excluded: "var(--color-red)",
-};
-
 // Colori dello stato della CANDIDATURA (applications.status), distinto dallo
 // stato della posizione. 'ready' = CV finito e approvato dal Critico.
 const APP_STATUS_COLORS: Record<string, string> = {
@@ -678,11 +741,20 @@ const VERDICT_COLORS: Record<string, string> = {
   REJECT: "var(--color-red)",
 };
 
+// Ultimo evento feedback → giudizio della scala a 4 (stessa mappatura
+// inversa della pagina /swipe; i vecchi eventi senza score cadono sul
+// giudizio più vicino all'action).
+function verdictOf(action: string, score: number | null): Verdict {
+  if (action === "star") return "top";
+  if (action === "dislike" || action === "hide")
+    return score === 2 ? "review_low" : "no";
+  if (score != null && score <= 2) return "review_low";
+  if (score != null && score >= 5) return "top";
+  return "review_ok";
+}
+
 function scoreColor(s: number | null) {
-  if (!s) return "var(--color-dim)";
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
+  return scoreSpectrumCss(s);
 }
 
 // Colore di un sotto-punteggio relativo al SUO massimo (stack /40, remote
@@ -764,11 +836,54 @@ export default async function PositionDetailPage({ params }: PageProps) {
     return VAL[k]?.[locale] ?? VAL[k]?.en ?? v;
   };
 
-  const statusColor = STATUS_COLORS[position.status] ?? "var(--color-dim)";
-
   // Modalità di accesso ai file: cloud (web pubblico → bridge on-demand) vs
   // local (desktop → link diretto). Stesso criterio di /api/profile/files.
   const cloudMode = isSupabaseConfigured && !(await isLocalRequest());
+
+  // Ultimo giudizio dell'utente (event-log condiviso con /swipe) →
+  // inizializza i bottoni feedback nel popup. Il gate è la modalità DATI
+  // (Supabase vs workspace locale), non cloudMode: quello guarda da dove
+  // arriva la RICHIESTA e in dev locale sarebbe sempre false.
+  const feedbackEnabled = await isCloudDataMode();
+  const fb =
+    feedbackEnabled && position.legacy_id != null
+      ? await getLatestFeedbackForLegacyId(position.legacy_id)
+      : null;
+  const initialVerdict: Verdict | null = fb
+    ? verdictOf(fb.action, fb.score)
+    : null;
+
+  // Card Località: mai per il full remote (nessun posto dove pinnare);
+  // pin a LIVELLO CITTÀ — ufficio esatto se geocodato, altrimenti
+  // gazetteer città→coordinate (scelta utente 19/07: niente zoom sulla via).
+  const isFullRemote = position.remote_type === "full_remote";
+  const locCity = (position.loc_city ?? "").trim() || null;
+  const locCountry = (position.loc_country ?? "").trim() || null;
+  const hasLocationCard =
+    !isFullRemote && Boolean(locCity || locCountry || position.location);
+  const mapCoords =
+    !isFullRemote && position.office_lat != null && position.office_lon != null
+      ? { lat: position.office_lat, lon: position.office_lon }
+      : !isFullRemote
+        ? gazetteerCity(locCountry, locCity)
+        : null;
+  const flag = countryFlag(position.loc_country_code ?? null, locCountry);
+  // Indirizzo ESATTO dell'ufficio (office-geocoding): mostrato solo quando è
+  // davvero un indirizzo (verificato o con civico) — il fallback città-paese
+  // duplicherebbe il testo della card. Il link apre Google Maps (universal
+  // link: app sul telefono, browser altrove) cercando l'INDIRIZZO testuale,
+  // non le coordinate: così Maps mostra la via col civico, non un punto
+  // anonimo "41°24'16.9\"N" (feedback utente 20/07).
+  const exactAddress =
+    position.office_address &&
+    position.office_lat != null &&
+    position.office_lon != null &&
+    (position.office_verified === true || /\d/.test(position.office_address))
+      ? position.office_address
+      : null;
+  const mapsUrl = exactAddress
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(exactAddress)}`
+    : null;
   // basename dei PDF: i path nel DB sono assoluti sul container VPS, ma il
   // bridge e il file-serving locale risolvono per basename.
   const cvFileName = application?.cv_pdf_path?.split("/").pop() || null;
@@ -786,6 +901,181 @@ export default async function PositionDetailPage({ params }: PageProps) {
     if (min) return `${c} ${min.toLocaleString()}+`;
     return null;
   }
+
+  // Card Panoramica (prima card in assoluto): score + stipendio stimato +
+  // modalità + categoria — i fatti decisivi tolti dall'header (19/07).
+  const salaryEst = formatSalary(
+    position.salary_estimated_min,
+    position.salary_estimated_max,
+    position.salary_estimated_currency,
+  );
+  const salaryDecl = formatSalary(
+    position.salary_declared_min,
+    position.salary_declared_max,
+    position.salary_declared_currency,
+  );
+  const modeColor =
+    position.remote_type === "full_remote"
+      ? "var(--color-green)"
+      : position.remote_type === "hybrid"
+        ? "var(--color-yellow)"
+        : "var(--color-red)";
+  // "Trovata 2026-07-17 (2 giorni fa)" — età calcolata al render server;
+  // la pagina è force-dynamic quindi non resta congelata in una build.
+  const foundDate = position.found_at.slice(0, 10);
+  const foundDays = Math.max(
+    0,
+    Math.floor((Date.now() - Date.parse(foundDate)) / 86_400_000),
+  );
+  const foundAge =
+    foundDays === 0
+      ? t("o_today")
+      : foundDays === 1
+        ? t("o_yesterday")
+        : t("o_days_ago").replace("{n}", String(foundDays));
+  // Panoramica SEMPRE presente: da 20/07 ospita anche titolo e azienda
+  // (l'header nudo è sparito) e la fila dei giudizi in coda.
+  const overviewCard = (
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
+      <div className="section-label mb-3">{t("overview")}</div>
+      <h1 className="text-lg md:text-xl font-bold tracking-tight text-[var(--color-white)] mb-1">
+        {position.title}
+      </h1>
+      <div className="mb-3 flex items-center gap-x-2.5 gap-y-1 flex-wrap">
+        <span className="text-[13px] text-[var(--color-base)] font-medium">
+          {position.company}
+        </span>
+        {/* Logo aziendale (mig 056): a destra del nome; senza logo,
+            nessun placeholder. */}
+        {company?.logo && (
+          <Avatar
+            name={position.company}
+            src={company.logo}
+            size="sm"
+            square
+            imgFit="contain"
+          />
+        )}
+        {position.location && !hasLocationCard && (
+          <span className="text-[11px] text-[var(--color-muted)]">
+            · {position.location}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-4">
+        {score && (
+          <div
+            className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
+            style={{
+              borderColor: scoreColor(score.total_score),
+              color: scoreColor(score.total_score),
+            }}
+          >
+            {score.total_score}
+          </div>
+        )}
+        <div className="flex-1 min-w-0 space-y-2">
+          {(salaryEst || salaryDecl) && (
+            <InfoRow
+              label={t(salaryEst ? "d_salary_estimated" : "d_salary_declared")}
+              value={(salaryEst ?? salaryDecl)!}
+            />
+          )}
+          {position.remote_type && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
+                {t("o_mode")}
+              </span>
+              <span
+                className="text-[11px] font-semibold text-right"
+                style={{ color: modeColor }}
+              >
+                {t(`rt_${position.remote_type}`)}
+              </span>
+            </div>
+          )}
+          {position.role_family && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
+                {t("o_category")}
+              </span>
+              <span className="text-[11px] text-[var(--color-base)] text-right inline-flex items-center gap-1.5 min-w-0">
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{
+                    background: colorForFamily(position.role_family.trim()),
+                  }}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{position.role_family}</span>
+              </span>
+            </div>
+          )}
+          {position.source && (
+            <InfoRow label={t("d_source")} value={position.source} />
+          )}
+          <InfoRow label={t("d_found")} value={`${foundDate} (${foundAge})`} />
+        </div>
+      </div>
+      {/* Giudizio rapido in coda alla Panoramica: stessa fila di /swipe
+            (evidenzia quello già dato; resta anche nel popup). */}
+      {feedbackEnabled && position.legacy_id != null && (
+        <div className="mt-4 border-t border-[var(--color-border)] pt-4">
+          <FeedbackButtons
+            legacyId={position.legacy_id}
+            initialVerdict={initialVerdict}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  // Card Località: città + paese (bandiera) + mini-mappa zoomabile col pin.
+  // CON mappa → prima card della colonna principale (prima della JD, scelta
+  // utente 19/07); senza mappa → tra i metadati della colonna destra.
+  const locationCard = hasLocationCard ? (
+    <div
+      id="location"
+      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors"
+    >
+      <div className="section-label mb-3">{t("location")}</div>
+      <div
+        className={`flex items-start justify-between gap-3 ${mapCoords ? "mb-3" : ""}`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          {flag && (
+            <span className="text-[24px] leading-none" aria-hidden="true">
+              {flag}
+            </span>
+          )}
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
+              {locCity ?? position.location}
+            </div>
+            {locCountry && (
+              <div className="text-[11px] text-[var(--color-muted)]">
+                {locCountry}
+              </div>
+            )}
+          </div>
+        </div>
+        {exactAddress && mapsUrl && (
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={t("open_in_maps")}
+            className="max-w-[55%] shrink-0 text-right text-[10px] leading-snug text-[var(--color-blue)] no-underline transition-colors hover:text-[var(--color-bright)]"
+          >
+            {exactAddress} ↗
+          </a>
+        )}
+      </div>
+      {mapCoords && (
+        <PositionMapCardLazy lat={mapCoords.lat} lon={mapCoords.lon} />
+      )}
+    </div>
+  ) : null;
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
@@ -816,153 +1106,76 @@ export default async function PositionDetailPage({ params }: PageProps) {
         </span>
       </div>
 
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-4">
-            {/* Logo aziendale (mig 056, skill logo-extraction): data-URI dal
-                record companies; senza logo l'Avatar ripiega sulle iniziali
-                colorate del nome azienda. object-contain: mai croppare. */}
-            <Avatar
-              name={position.company}
-              src={company?.logo ?? undefined}
-              size="lg"
-              square
-              imgFit="contain"
-              className="mt-1"
-            />
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mb-1">
-                {position.title}
-              </h1>
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-[var(--color-base)] font-medium">
-                  {position.company}
-                </span>
-                {position.location && (
-                  <span className="text-[11px] text-[var(--color-muted)]">
-                    · {position.location}
-                  </span>
-                )}
-                {position.remote_type && (
-                  <span
-                    className="text-[10px]"
-                    style={{
-                      color:
-                        position.remote_type === "full_remote"
-                          ? "var(--color-green)"
-                          : position.remote_type === "hybrid"
-                            ? "var(--color-yellow)"
-                            : "var(--color-red)",
-                    }}
-                  >
-                    {position.remote_type.replace("_", " ")}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <span
-              className="text-[10px] font-semibold px-3 py-1 rounded-full border"
-              style={{
-                color: statusColor,
-                borderColor: statusColor,
-                background: `${statusColor}18`,
-              }}
-            >
-              {position.status}
-            </span>
-            {score && (
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-12 h-12 rounded-full border-2 flex items-center justify-center font-bold text-lg"
-                  style={{
-                    borderColor: scoreColor(score.total_score),
-                    color: scoreColor(score.total_score),
-                  }}
-                >
-                  {score.total_score}
-                </div>
-              </div>
-            )}
-            {position.url && (
-              <a
-                href={position.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
-                style={{
-                  borderColor: "var(--color-blue)",
-                  color: "var(--color-blue)",
-                }}
-              >
-                {t("original_listing")} ↗
-              </a>
-            )}
-            {position.legacy_id != null && (
-              // Geocoding-on-demand (V8): l'utente richiede coordinate
-              // ufficio precise. Sempre attivo: l'Analista skippa
-              // autonomamente quando non ha materiale geografico utile
-              // (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]).
-              <GeocodeRequestButton
-                legacyId={position.legacy_id}
-                initialRequested={position.geocode_requested === true}
-                alreadyGeocoded={position.office_geocoded === true}
-              />
-            )}
-            {position.legacy_id != null && (
-              // Recheck ON-DEMAND (mig 042): il recheck non è più automatico,
-              // l'utente lo richiede qui → l'Analista ri-verifica la liveness.
-              <RecheckButton
-                legacyId={position.legacy_id}
-                initialRequested={position.recheck_requested === true}
-                lastOpenCheck={position.last_open_check}
-              />
-            )}
-            {position.legacy_id != null &&
-              (() => {
-                // Writer-on-demand (V6): il button e' visibile solo se la
-                // posizione e' nello stato giusto. Il Capitano spawna lo
-                // Scrittore quando il flag e' acceso (vedi BACKLOG
-                // [JHT-WRITER-ON-DEMAND]).
-                const wrongStatus = position.status !== "scored";
-                const alreadyWriting = application != null;
-                const isDisabled = wrongStatus || alreadyWriting;
-                const reason = alreadyWriting
-                  ? t("cv_in_progress")
-                  : wrongStatus
-                    ? t("cv_only_from_scored").replace(
-                        "{status}",
-                        position.status,
-                      )
-                    : undefined;
-                return (
-                  <WriteRequestButton
-                    legacyId={position.legacy_id}
-                    initialRequested={position.write_requested === true}
-                    disabled={isDisabled}
-                    disabledReason={reason}
-                  />
-                );
-              })()}
-            {position.legacy_id != null && (
-              // Esclusione manuale utente (mig 041): l'utente esclude l'offerta
-              // con una causa → status 'excluded', gli agenti smettono di
-              // ri-verificarne la liveness (esce da next-for-recheck).
-              <ExcludeButton
-                legacyId={position.legacy_id}
-                status={position.status}
-                initialReason={position.user_excluded_reason ?? null}
-              />
-            )}
-          </div>
-        </div>
+      {/* Precedente/Prossima SUBITO sotto il breadcrumb (scelta utente
+          20/07): sequenza della lista con filtri e ordinamento correnti.
+          Titolo e azienda vivono nella card Panoramica. */}
+      <div className="mb-5 -mt-2">
+        <PrevNextNav id={position.id} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Left column ─────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Panoramica: score, stipendio, modalità, categoria. */}
+          {overviewCard}
+
+          {/* Località CON mappa: prima della descrizione. */}
+          {mapCoords && locationCard}
+
+          {/* Job description — sintesi ottimizzata dell'Analista (jd_summary,
+              markdown, lingua utente). Fallback al testo grezzo per le
+              posizioni legacy non ancora ri-analizzate. */}
+          {(position.jd_summary ||
+            position.jd_text ||
+            position.requirements) && (
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
+              <div className="section-label mb-3">{t("job_description")}</div>
+              {position.jd_summary ? (
+                <>
+                  <MarkdownLite
+                    text={position.jd_summary}
+                    className="text-[12px] text-[var(--color-base)] leading-relaxed"
+                  />
+                  {position.url && (
+                    <a
+                      href={position.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                    >
+                      {t("original_listing")} ↗
+                    </a>
+                  )}
+                </>
+              ) : (
+                <>
+                  {position.requirements && (
+                    <div className="mb-4">
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("requirements")}
+                      </div>
+                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
+                        {position.requirements.slice(0, 2000)}
+                        {position.requirements.length > 2000 ? "…" : ""}
+                      </pre>
+                    </div>
+                  )}
+                  {position.jd_text && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("full_description")}
+                      </div>
+                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
+                        {position.jd_text.slice(0, 3000)}
+                        {position.jd_text.length > 3000 ? "…" : ""}
+                      </pre>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Pro/Con highlights */}
           {(pros.length > 0 || cons.length > 0) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1017,67 +1230,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     ))}
                   </ul>
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Richieste al team (ticket utente→team) */}
-          {position.legacy_id != null && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
-              <TicketPanel legacyId={position.legacy_id} tickets={tickets} />
-            </div>
-          )}
-
-          {/* Job description — sintesi ottimizzata dell'Analista (jd_summary,
-              markdown, lingua utente). Fallback al testo grezzo per le
-              posizioni legacy non ancora ri-analizzate. */}
-          {(position.jd_summary ||
-            position.jd_text ||
-            position.requirements) && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-3">{t("job_description")}</div>
-              {position.jd_summary ? (
-                <>
-                  <MarkdownLite
-                    text={position.jd_summary}
-                    className="text-[12px] text-[var(--color-base)] leading-relaxed"
-                  />
-                  {position.url && (
-                    <a
-                      href={position.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-                    >
-                      {t("original_listing")} ↗
-                    </a>
-                  )}
-                </>
-              ) : (
-                <>
-                  {position.requirements && (
-                    <div className="mb-4">
-                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                        {t("requirements")}
-                      </div>
-                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
-                        {position.requirements.slice(0, 2000)}
-                        {position.requirements.length > 2000 ? "…" : ""}
-                      </pre>
-                    </div>
-                  )}
-                  {position.jd_text && (
-                    <div>
-                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                        {t("full_description")}
-                      </div>
-                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
-                        {position.jd_text.slice(0, 3000)}
-                        {position.jd_text.length > 3000 ? "…" : ""}
-                      </pre>
-                    </div>
-                  )}
-                </>
               )}
             </div>
           )}
@@ -1299,67 +1451,13 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
         {/* ── Right column ────────────────────────────────────── */}
         <div className="space-y-4">
-          {/* Details */}
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-            <div className="section-label mb-3">{t("details")}</div>
-            <div className="space-y-2">
-              {position.source && (
-                <InfoRow label={t("d_source")} value={position.source} />
-              )}
-              <InfoRow
-                label={t("d_found")}
-                value={position.found_at.slice(0, 10)}
-              />
-              {position.deadline && (
-                <InfoRow label={t("d_deadline")} value={position.deadline} />
-              )}
-              {position.found_by && (
-                <InfoRow label={t("d_found_by")} value={position.found_by} />
-              )}
-              {formatSalary(
-                position.salary_declared_min,
-                position.salary_declared_max,
-                position.salary_declared_currency,
-              ) && (
-                <InfoRow
-                  label={t("d_salary_declared")}
-                  value={
-                    formatSalary(
-                      position.salary_declared_min,
-                      position.salary_declared_max,
-                      position.salary_declared_currency,
-                    )!
-                  }
-                />
-              )}
-              {formatSalary(
-                position.salary_estimated_min,
-                position.salary_estimated_max,
-                position.salary_estimated_currency,
-              ) && (
-                <InfoRow
-                  label={t("d_salary_estimated")}
-                  value={
-                    formatSalary(
-                      position.salary_estimated_min,
-                      position.salary_estimated_max,
-                      position.salary_estimated_currency,
-                    )!
-                  }
-                />
-              )}
-            </div>
-            {position.url && (
-              <a
-                href={position.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-              >
-                {t("view_original_offer")} ↗
-              </a>
-            )}
-          </div>
+          {/* Località testuale (senza mappa): resta qui tra i metadati.
+              La versione CON mappa vive in cima alla colonna principale. */}
+          {hasLocationCard && !mapCoords && locationCard}
+
+          {/* La vecchia card Dettagli è confluita nella Panoramica (19/07):
+              fonte e data lì; "trovata da" non interessa l'utente; il link
+              all'annuncio vive nell'header e nella card JD. */}
 
           {/* Company */}
           {company && (
@@ -1544,6 +1642,109 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Azioni di coda (scelta utente 20/07): Feedback e richieste +
+          annuncio originale come ULTIMI elementi, più prev/next ripetuto. */}
+      <div className="mt-6 space-y-4">
+        {position.legacy_id != null && (
+          <div className="mt-4 flex items-center gap-3">
+            <TeamActionsSheet
+              active={
+                initialVerdict != null ||
+                position.geocode_requested === true ||
+                position.recheck_requested === true ||
+                position.write_requested === true ||
+                !!position.user_excluded_reason ||
+                tickets.some((tk) => tk.status !== "resolved")
+              }
+              feedback={
+                feedbackEnabled ? (
+                  <FeedbackButtons
+                    legacyId={position.legacy_id}
+                    initialVerdict={initialVerdict}
+                  />
+                ) : undefined
+              }
+              actions={
+                <>
+                  {/* Geocoding-on-demand (V8): l'utente richiede coordinate
+                      ufficio precise. Sempre attivo: l'Analista skippa
+                      autonomamente quando non ha materiale geografico utile
+                      (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]). */}
+                  <GeocodeRequestButton
+                    legacyId={position.legacy_id}
+                    initialRequested={position.geocode_requested === true}
+                    alreadyGeocoded={position.office_geocoded === true}
+                  />
+                  {/* Recheck ON-DEMAND (mig 042): il recheck non è più
+                      automatico, l'utente lo richiede qui → l'Analista
+                      ri-verifica la liveness. */}
+                  <RecheckButton
+                    legacyId={position.legacy_id}
+                    initialRequested={position.recheck_requested === true}
+                    lastOpenCheck={position.last_open_check}
+                  />
+                  {(() => {
+                    // Writer-on-demand (V6): il button e' visibile solo se la
+                    // posizione e' nello stato giusto. Il Capitano spawna lo
+                    // Scrittore quando il flag e' acceso (vedi BACKLOG
+                    // [JHT-WRITER-ON-DEMAND]).
+                    const wrongStatus = position.status !== "scored";
+                    const alreadyWriting = application != null;
+                    const isDisabled = wrongStatus || alreadyWriting;
+                    const reason = alreadyWriting
+                      ? t("cv_in_progress")
+                      : wrongStatus
+                        ? t("cv_only_from_scored").replace(
+                            "{status}",
+                            position.status,
+                          )
+                        : undefined;
+                    return (
+                      <WriteRequestButton
+                        legacyId={position.legacy_id}
+                        initialRequested={position.write_requested === true}
+                        disabled={isDisabled}
+                        disabledReason={reason}
+                      />
+                    );
+                  })()}
+                  {/* Esclusione manuale utente (mig 041): l'utente esclude
+                      l'offerta con una causa → status 'excluded', gli agenti
+                      smettono di ri-verificarne la liveness. */}
+                  <ExcludeButton
+                    legacyId={position.legacy_id}
+                    status={position.status}
+                    initialReason={position.user_excluded_reason ?? null}
+                  />
+                </>
+              }
+              tickets={
+                <TicketPanel
+                  legacyId={position.legacy_id}
+                  tickets={tickets}
+                  hideTitle
+                />
+              }
+            />
+            {position.url && (
+              <a
+                href={position.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
+                style={{
+                  borderColor: "var(--color-blue)",
+                  color: "var(--color-blue)",
+                }}
+              >
+                {t("original_listing")} ↗
+              </a>
+            )}
+          </div>
+        )}
+        <PrevNextNav id={position.id} />
       </div>
     </div>
   );

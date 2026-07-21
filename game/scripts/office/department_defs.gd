@@ -25,6 +25,11 @@ class_name DepartmentDefs
 ## Catena del valore: Scout → Analisti → Scorer → Scrittori → Critici.
 
 const DEPT_ORDER := ["scout", "analisti", "scorer", "scrittori", "critici"]
+const HANDOFF_DEPTS := ["scout", "analisti", "scorer", "scrittori"]
+# Ingombro A* delle GAMBE, non dell'intera illustrazione alta 145 px. Usare
+# tutto il canvas saldava i tavoli a vetrate e desk vicini, creando muri
+# invisibili e deviazioni enormi pur con molto pavimento libero davanti.
+const HANDOFF_SIZE := Vector2(190, 60)
 
 const DEPARTMENTS := {
 	"scout": {
@@ -32,8 +37,11 @@ const DEPARTMENTS := {
 		"tagline": "Trovano le posizioni là fuori",
 		"color": Color("#00e87a"),
 		"zone": Rect2(320, 348, 880, 520),
-		"inbox": Vector2(1110, 778),
-		"inbox_access": Vector2(1110, 838),
+		# Tavolo Scout → Analisti: più vicino all'ologramma e appena più in
+		# alto, ma senza toccarne l'ingombro. Il ritiro avviene dal basso.
+		"inbox": Vector2(1080, 840),
+		"inbox_drop_access": Vector2(900, 840),
+		"inbox_pickup_access": Vector2(1080, 960),
 		# Anello radiale nell'angolo nord-ovest; indice 0..5 = ore 10,8,12,6,2,4.
 		"desks": [
 			{"rect": Rect2(384, 400, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
@@ -48,36 +56,43 @@ const DEPARTMENTS := {
 		"name": "Analisti",
 		"tagline": "Arricchiscono e verificano i dati",
 		"color": Color("#4d9fff"),
-		"zone": Rect2(2312, 150, 848, 580),  # il lab di vetro, angolo NE
-		"inbox": Vector2(2690, 790),  # fuori dalla porta del lab
-		"inbox_access": Vector2(2690, 848),
-		# Anello radiale adattato al tappeto più stretto del laboratorio.
+		"zone": Rect2(2232, 150, 848, 580),  # lab rientrato dal bordo est
+		# Più vicino alle scrivanie, ma spostato a destra del varco centrale:
+		# salire in asse col portale isolerebbe nuovamente il laboratorio.
+		"inbox": Vector2(2800, 850),
+		"inbox_drop_access": Vector2(2640, 850),
+		"inbox_pickup_access": Vector2(2960, 850),
+		# Anello radiale allargato insieme al tappeto: riempie il laboratorio
+		# senza toccare vetri, schedario o varco meridionale.
 		"desks": [
-			{"rect": Rect2(2405, 293, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(2430, 468, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(2650, 249, 170, 78), "kind": "analisti_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(2650, 527, 170, 78), "kind": "analisti_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
-			{"rect": Rect2(2895, 293, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(2870, 468, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(2286, 278, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(2315, 480, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(2570, 227, 170, 78), "kind": "analisti_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(2570, 548, 170, 78), "kind": "analisti_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
+			{"rect": Rect2(2854, 278, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(2825, 480, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"scorer": {
 		"name": "Scorer",
 		"tagline": "Pesano il match profilo↔annuncio",
 		"color": Color("#f5c518"),
-		"zone": Rect2(1000, 960, 880, 520),
-		"inbox": Vector2(1790, 1390),
-		"inbox_access": Vector2(1862, 1390),
-		# Gli Scorer occupano l'anello centrale lasciato libero dagli Scout.
+		"zone": Rect2(1140, 840, 1120, 640),
+		# Tavolo Scorer → Scrittori al centro esatto del nuovo tappeto. Gli
+		# accessi laterali evitano sia il desk ore 6 sia le pile sul piano.
+		"inbox": Vector2(1700, 1120),
+		"inbox_drop_access": Vector2(1550, 1120),
+		"inbox_pickup_access": Vector2(1850, 1120),
+		# Anello ampliato e centrato sull'asse dell'intero ufficio.
 		"desks": [
 			# scorer_a_side nasce con la sedia a sinistra, al contrario degli
 			# altri reparti: scambiamo solo il verso della texture laterale.
-			{"rect": Rect2(1064, 1012, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "right", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(1106, 1228, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(1370, 958, 170, 78), "kind": "scorer_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(1370, 1301, 170, 78), "kind": "scorer_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.78},
-			{"rect": Rect2(1676, 1012, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "left", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(1634, 1228, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(1263, 942, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "right", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(1312, 1190, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(1615, 880, 170, 78), "kind": "scorer_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(1615, 1274, 170, 78), "kind": "scorer_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.78},
+			{"rect": Rect2(1967, 942, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "left", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(1918, 1190, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"scrittori": {
@@ -85,8 +100,11 @@ const DEPARTMENTS := {
 		"tagline": "Preparano CV e lettere su misura",
 		"color": Color("#a855f7"),
 		"zone": Rect2(320, 1520, 860, 440),
-		"inbox": Vector2(1120, 1740),
-		"inbox_access": Vector2(1190, 1740),
+		# Tavolo Scrittori → Critici riportato verso il reparto Scrittori,
+		# lasciando comunque un varco netto dalla vetrata verticale.
+		"inbox": Vector2(1080, 1535),
+		"inbox_drop_access": Vector2(900, 1535),
+		"inbox_pickup_access": Vector2(1250, 1535),
 		# Sei spicchi radiali sul tappeto, come un quadrante d'orologio.
 		# Ogni agente guarda verso l'ESTERNO: ore 12=schiena, ore 6=viso,
 		# i quattro intermedi usano le viste laterali disponibili. Gli indici
@@ -108,17 +126,17 @@ const DEPARTMENTS := {
 		"name": "Critici",
 		"tagline": "Revisionano ogni riga prima dell'invio",
 		"color": Color("#ff4560"),
-		"zone": Rect2(2150, 1520, 1010, 440),
-		"inbox": Vector2(3100, 1820),  # deposito sul bordo est, fuori dall'anello
-		"inbox_access": Vector2(3130, 1755),
+		"zone": Rect2(2075, 1520, 1010, 440),
+		"inbox": Vector2(3025, 1820),  # deposito sul bordo est, fuori dall'anello
+		"inbox_access": Vector2(3055, 1755),
 		# Anello radiale con il centro sgombro per sedie, corpi e percorsi.
 		"desks": [
-			{"rect": Rect2(2309, 1580, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(2351, 1796, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(2615, 1526, 170, 78), "kind": "critici_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(2615, 1869, 170, 78), "kind": "critici_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.80},
-			{"rect": Rect2(2921, 1580, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(2879, 1796, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(2234, 1580, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(2276, 1796, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			{"rect": Rect2(2540, 1526, 170, 78), "kind": "critici_a", "facing": "up", "tex_facing": "up"},
+			{"rect": Rect2(2540, 1869, 170, 78), "kind": "critici_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.80},
+			{"rect": Rect2(2846, 1580, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(2804, 1796, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 }
@@ -135,28 +153,28 @@ const GLASS_WALLS := [
 	Rect2(350, 284, 260, 12),
 	Rect2(920, 284, 260, 12),
 	Rect2(1224, 364, 12, 264),
-	# Scorer centrali: conservano i varchi dell'ex reparto Scout.
-	Rect2(1030, 896, 260, 12),
-	Rect2(1600, 896, 260, 12),
-	Rect2(1904, 976, 12, 264),
+	# Scorer centrali ampliati: varco nord in asse col desk ore 12 e uscita
+	# orientale larga verso il laboratorio Analisti.
+	Rect2(1140, 840, 370, 12),
+	Rect2(1890, 840, 370, 12),
+	Rect2(2260, 920, 12, 400),
 	# Bordo nord dei Critici con porta larga al centro.
-	Rect2(1990, 1480, 460, 12),
-	Rect2(2660, 1480, 490, 12),
+	Rect2(1915, 1480, 460, 12),
+	Rect2(2585, 1480, 490, 12),
 	# Scrittori: nord (varco verso la sala relax) + est (porta sud)
 	Rect2(360, 1448, 340, 12),
 	Rect2(860, 1448, 300, 12),
 	Rect2(1204, 1560, 12, 160),
 	# Critici: ovest con porta sud
-	Rect2(2126, 1500, 12, 260),
+	Rect2(2051, 1500, 12, 260),
 ]
 
 ## POI condivisi dei behavior: mete dei viaggi "si vede che lavorano".
 ## "spot" = dove l'agente si ferma (punto camminabile davanti al prop).
 const POIS := {
-	"printer": {"rect": Rect2(1672, 190, 110, 78), "spot": Vector2(1727, 300)},
-	"coffee": {"spot": Vector2(1500, 310)},
-	"water_cooler": {"spot": Vector2(1635, 300)},
-	"hologram": {"spot": Vector2(1300, 930)},
+	"printer": {"rect": Rect2(1218, 185, 95, 70), "spot": Vector2(1265, 300)},
+	# Lato ovest del globo, nel corridoio libero tra le scrivanie Scout.
+	"hologram": {"spot": Vector2(625, 560)},
 }
 
 ## La catena del valore dei fogli: chi ritira dall'inbox di chi.
@@ -171,9 +189,10 @@ const FETCH_FROM := {
 
 ## Punto camminabile davanti alla pila. La pila resta ferma e leggibile:
 ## l'agente si affianca alla vaschetta invece di attraversarla o coprirla.
-static func handoff_spot(dept_id: String) -> Vector2:
+static func handoff_spot(dept_id: String, pickup := false) -> Vector2:
 	var def: Dictionary = DEPARTMENTS[dept_id]
-	return def.get("inbox_access", def["inbox"])
+	var key := "inbox_pickup_access" if pickup else "inbox_drop_access"
+	return def.get(key, def.get("inbox_access", def["inbox"]))
 
 ## Dove sta l'agente assegnato alla scrivania, coerente col verso del
 ## mobile (vedi convenzioni in testa).
@@ -207,6 +226,12 @@ static func obstacles() -> Array:
 	var out: Array = []
 	for d in all_desks():
 		out.append(d["rect"])
+	# Gli agenti si fermano al punto d'accesso e non attraversano i tavoli di
+	# consegna: la sagoma entra nella stessa griglia A* delle scrivanie.
+	for dept_id in HANDOFF_DEPTS:
+		var base: Vector2 = DEPARTMENTS[dept_id]["inbox"]
+		out.append(Rect2(base - Vector2(HANDOFF_SIZE.x / 2.0, HANDOFF_SIZE.y),
+				HANDOFF_SIZE))
 	return out
 
 ## Il reparto sotto un punto del mondo ("" se nessuno). Per il click.

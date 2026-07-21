@@ -8,6 +8,10 @@ signal closed
 signal talk_requested
 signal chat_requested
 signal thinking_requested
+## Chiesta la scheda completa (sezione Agenti sulla pagina del ruolo,
+## con i grafici storici di consumo).
+signal stats_requested
+signal coordinator_requested
 
 var _agent: AgentNPC
 
@@ -129,6 +133,16 @@ func _ready() -> void:
 
 	# azioni
 	box.add_child(HSeparator.new())
+	if _agent.slug == "coordinatore":
+		var control := Button.new()
+		control.text = UIStrings.t("coord.open")
+		control.add_theme_font_size_override("font_size", 18)
+		control.add_theme_color_override("font_color", _agent.accent_color())
+		control.tooltip_text = UIStrings.t("coord.open_tip")
+		control.pressed.connect(func() -> void:
+			coordinator_requested.emit()
+			close(false))
+		box.add_child(control)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	box.add_child(actions)
@@ -158,6 +172,15 @@ func _ready() -> void:
 			chat_requested.emit()
 			close(false))
 		actions.add_child(chat)
+	var stats := Button.new()
+	stats.text = UIStrings.t("agent.stats")
+	stats.add_theme_font_size_override("font_size", 17)
+	stats.add_theme_color_override("font_color", Palette.BLUE)
+	stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stats.pressed.connect(func() -> void:
+		stats_requested.emit()
+		close(false))
+	actions.add_child(stats)
 
 	var hint := TerminalTheme.label(UIStrings.t("dept.close"), 13, Palette.DIM)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

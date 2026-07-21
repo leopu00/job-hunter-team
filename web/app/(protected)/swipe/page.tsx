@@ -18,6 +18,7 @@ function toCard(p: PositionWithScore): SwipeCardData {
     loc_country: p.loc_country ?? null,
     remote_type: p.remote_type,
     role_family: p.role_family ?? null,
+    source: p.source ?? null,
     found_at: p.found_at,
     score: p.score ?? null,
     salary_min: p.salary_min ?? null,
@@ -47,7 +48,7 @@ function verdictOf(action: string, score: number | null): Verdict {
 }
 
 export default async function SwipePage() {
-  const { pending, reviewed } = await getSwipeDecks(100);
+  const { pending, reviewed } = await getSwipeDecks();
 
   const pendingCards = pending.filter((p) => p.legacy_id != null).map(toCard);
   const reviewedCards = reviewed

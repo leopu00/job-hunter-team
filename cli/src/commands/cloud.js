@@ -655,6 +655,21 @@ function readSqliteTable(db, table, columns) {
   }
 }
 
+// Vero se la tabella SQLite locale ha la colonna richiesta. Serve per
+// includere nel push solo colonne che lo schema locale possiede davvero
+// (es. logo_* della feature loghi): un jobs.db piu' vecchio del codice non
+// deve far fallire il tick di sync.
+function sqliteHasColumn(db, table, col) {
+  try {
+    return db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .some((r) => r.name === col);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Legge una tabella SQLite filtrando per updated_at > cursor.
  * Se cursor e' null/undefined ritorna tutte le righe (first push o cursor
@@ -942,11 +957,20 @@ async function handlePush(options) {
       // locale) → legacy_id cloud; il server risolve le FK (positions.company_id,
       // highlights.position_id) via le mappe legacy→UUID. hq_country locale →
       // hq cloud lo mappa il server. Delta su updated_at come le altre tabelle.
-      companies = readSqliteTableDelta(db, 'companies', [
+      const companyCols = [
         'id', 'name', 'website', 'hq_country', 'sector', 'size',
         'glassdoor_rating', 'red_flags', 'culture_notes', 'analyzed_by',
         'analyzed_at', 'verdict',
-      ], cursor.companies);
+      ];
+      // Loghi aziendali (skill logo-extraction → companies.logo, data-URI
+      // <=35KB) + provenienza e flag. Inclusi solo se lo schema locale li ha,
+      // cosi' un jobs.db non aggiornato non fa fallire il tick. Lato cloud
+      // servono la mig 056 (colonne) e la route /api/cloud-sync/push aggiornata
+      // (gia' mappa logo_*); di li' arrivano alla Company card via select("*").
+      for (const c of ['logo', 'logo_source', 'logo_fetched']) {
+        if (sqliteHasColumn(db, 'companies', c)) companyCols.push(c);
+      }
+      companies = readSqliteTableDelta(db, 'companies', companyCols, cursor.companies);
       highlights = readSqliteTableDelta(db, 'position_highlights', [
         'id', 'position_id', 'type', 'text',
       ], cursor.position_highlights);

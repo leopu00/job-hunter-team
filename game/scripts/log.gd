@@ -18,6 +18,28 @@ func _enter_tree() -> void:
 	])
 	info("boot", "file di log: %s" % ProjectSettings.globalize_path("user://jht-game.log"))
 
+func _ready() -> void:
+	# GPU e driver reali (smaschera i fallback software: llvmpipe/WARP = lag).
+	info("boot", "video: %s — %s" % [
+		RenderingServer.get_video_adapter_name(),
+		RenderingServer.get_video_adapter_api_version(),
+	])
+	# Battito perf ogni 30s: leggibile via SSH dal log per diagnosi remota.
+	var t := Timer.new()
+	t.wait_time = 30.0
+	t.timeout.connect(_log_perf)
+	add_child(t)
+	t.start()
+
+func _log_perf() -> void:
+	info("perf", "fps=%d frame_ms=%.1f draw_calls=%d nodes=%d mem_mb=%.0f" % [
+		Engine.get_frames_per_second(),
+		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		Performance.get_monitor(Performance.OBJECT_NODE_COUNT),
+		Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
+	])
+
 func info(cat: String, msg: String) -> void:
 	_write("INFO", cat, msg)
 

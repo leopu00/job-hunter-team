@@ -912,6 +912,7 @@ export function getDashboardPositionsLocal(ws: string) {
           ? r.salary_estimated_currency
           : r.salary_declared_currency) as string | null) ?? "EUR",
       found_at: (r.found_at as string | null) ?? null,
+      scored_at: (r.scored_at as string | null) ?? null,
       last_action_at: ((r.last_action_at as string | null) ?? "") || at,
       last_action_by,
       last_action_actor,

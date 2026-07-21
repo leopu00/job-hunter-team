@@ -163,16 +163,16 @@ export default function UserMenu({ avatarUrl, fullName, email }: UserMenuProps) 
           >
             {t.profile}
           </Link>
-          {isCloud !== true && (
-            <Link
-              href="/settings"
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
-            >
-              {t.settings}
-            </Link>
-          )}
+          {/* Impostazioni SEMPRE visibile (reintegrata 20/07): sul cloud la
+              pagina mostra solo le sezioni utili lì (tema + cloud-sync). */}
+          <Link
+            href="/settings"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
+          >
+            {t.settings}
+          </Link>
           <Link
             href="/export"
             role="menuitem"

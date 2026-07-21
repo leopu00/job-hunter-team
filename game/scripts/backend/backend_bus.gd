@@ -31,6 +31,10 @@ extends Node
 signal connection_changed(state: int, detail: String)
 signal agents_updated(agents: Array)
 signal chat_message(msg: Dictionary)
+## Messaggi diretti all'utente non ancora aperti nella chat 1-a-1.
+## La mappa usa il ruolo canonico (coordinatore/assistente/mentor), così un
+## riavvio del worker con uid diverso non perde il badge della conversazione.
+signal chat_unread_changed(unread: Dictionary)
 ## Aggiunta post-contratto (annunciata in chat, additiva): snapshot
 ## completo delle posizioni dal jobs.db della VPS, per le viste web
 ## migrate (elenco+filtri, dettaglio, mappa). Righe = SELECT del
@@ -48,6 +52,10 @@ signal user_chat_sent(agent: String, ok: bool, error: String)
 ## `error` e vuoto durante il flusso regolare; nessun metodo del bus inoltra
 ## input o tasti alla sessione osservata.
 signal agent_terminal_updated(agent: String, text: String, error: String)
+## Console operativa del Coordinatore. state contiene maintenance,
+## enrichment, directives e queue_counts; action_done copre save/add/archive.
+signal coordinator_state_updated(state: Dictionary)
+signal coordinator_action_done(action: String, ok: bool, error: String)
 ## Esito di create_position_ticket (l'unica scrittura remota autorizzata
 ## da Leone, gate 1 dell'11/07: sì ai ticket verso il team, no alle
 ## azioni che scrivono direttamente sul jobs.db).
@@ -75,7 +83,9 @@ signal hours_saved(ok: bool, error: String)
 signal artifact_fetched(path: String, ok: bool, data: PackedByteArray, error: String)
 ## live_settings è arrivata/cambiata (config team + usage reali).
 signal live_settings_updated(settings: Dictionary)
-## Telemetria infrastrutturale VPS/container, campionata via SSH.
+## Telemetria infrastrutturale VPS/container, campionata via SSH. Il campione
+## include anche agent_cpu {uid: cpu_pct} e agent_vitals_age_s dal daemon
+## agent-vitals: è la fonte live del LED sugli agenti in ufficio.
 signal telemetry_updated(sample: Dictionary, history: Array)
 ## Storico usage on-demand (finestre di monitoraggio risorse). query è
 ## l'eco della richiesta {from_ts, to_ts, bucket_sec}; data = {ok, error,
@@ -85,6 +95,13 @@ signal telemetry_updated(sample: Dictionary, history: Array)
 ## agents: {names: [String], series: [{t, <agente>: kT_delta}, …],
 ##          totals_kt: {<agente>: kT}}} — t sempre unix epoch UTC.
 signal usage_history_updated(query: Dictionary, data: Dictionary)
+## Storico del singolo RUOLO (scheda agente): query = {agent, from_ts,
+## to_ts, bucket_sec}; data = {ok, error, agent, series: {tokens_kt|
+## pct_5h|pct_weekly|throttle_s|db_actions|cpu_pct|ram_pct: [{t, v}, …]}}.
+## pct_* = delta usage% della sentinella × fetta token del ruolo nel
+## bucket; cpu/ram sono del CONTAINER (contesto): lo storico per-agente
+## di cpu/ram non esiste sulla VPS.
+signal agent_history_updated(query: Dictionary, data: Dictionary)
 
 enum { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
@@ -106,8 +123,11 @@ var telemetry_history: Array = []
 ## l'eco della query che l'ha prodotto.
 var usage_history: Dictionary = {}
 var usage_history_query: Dictionary = {}
+var coordinator_state: Dictionary = {}
 var chat_log: Array = []     # ultimi messaggi (fumetti di dev1 + vista Chat)
 const CHAT_LOG_MAX := 200
+var chat_unread: Dictionary = {}  # ruolo canonico -> conteggio non letto
+var _open_chat_role := ""
 
 ## Tassi di cambio "unità per 1 EUR" (stessa fonte del web: Frankfurter,
 ## dati BCE, nessuna chiave). Vuoto finché il fetch non risponde o se
@@ -131,6 +151,8 @@ func _ready() -> void:
 		_self_test_throttle()
 	if OS.get_environment("JHT_VPS_CONTRACT_TEST") == "1":
 		_self_test_vps_contract()
+	if OS.get_environment("JHT_CHAT_NOTIFICATION_TEST") == "1":
+		_self_test_chat_notifications.call_deferred()
 	if OS.get_environment("JHT_NOVPS") == "1":
 		return
 	var cfg := load_vps_config()
@@ -348,7 +370,75 @@ func can_chat_with(slug_or_uid: String) -> bool:
 ## (REPLY_CAPABLE elenca RUOLI: dall'uid istanza si torna al ruolo base,
 ## altrimenti "coordinatore-1" non matchava mai — fix dev1 annunciato)
 func chat_replies(slug_or_uid: String) -> bool:
-	return REPLY_CAPABLE.has(_chat_uid(slug_or_uid).split("-")[0])
+	return REPLY_CAPABLE.has(_chat_role(slug_or_uid))
+
+## Ruolo stabile della conversazione: gli uid per istanza e il nome VPS
+## `capitano` convergono tutti sulla stessa chat del Coordinatore.
+func _chat_role(slug_or_uid: String) -> String:
+	var clean := slug_or_uid.strip_edges().to_lower()
+	if clean == "capitano" or clean.begins_with("capitano-"):
+		return "coordinatore"
+	for role in REPLY_CAPABLE:
+		if clean == role or clean.begins_with(role + "-"):
+			return role
+	return clean.split("-")[0]
+
+func chat_unread_count(slug_or_uid: String) -> int:
+	return int(chat_unread.get(_chat_role(slug_or_uid), 0))
+
+func total_chat_unread() -> int:
+	var total := 0
+	for count in chat_unread.values():
+		total += int(count)
+	return total
+
+func mark_chat_read(slug_or_uid: String) -> void:
+	var role := _chat_role(slug_or_uid)
+	if not chat_unread.has(role):
+		return
+	chat_unread.erase(role)
+	chat_unread_changed.emit(chat_unread.duplicate())
+
+## Utile anche per il cambio profilo e per i test: non altera lo storico.
+func clear_chat_unread() -> void:
+	if chat_unread.is_empty():
+		return
+	chat_unread.clear()
+	chat_unread_changed.emit({})
+
+func _self_test_chat_notifications() -> void:
+	clear_chat_unread()
+	publish_chat({"ts": "1", "from": "scout-1", "to": "user",
+			"text": "rumore non interattivo"})
+	var filtered := total_chat_unread() == 0
+	publish_chat({"ts": "2", "from": "capitano", "to": "user",
+			"text": "decisione"})
+	publish_chat({"ts": "3", "from": "mentor-1", "to": "user",
+			"text": "consiglio"})
+	var canonical := chat_unread_count("coordinatore-9") == 1 \
+			and total_chat_unread() == 2
+	mark_chat_read("coordinatore")
+	var selective := chat_unread_count("capitano") == 0 \
+			and chat_unread_count("mentor") == 1
+	var tag := AgentStateTag.new()
+	add_child(tag)
+	tag.set_state("working", 0.0)
+	tag.show_message("messaggio da mentor", 0.1)
+	var message_label := tag.debug_label() == "MESSAGGIO DA MENTOR"
+	tag.set_suppressed(true)
+	tag.set_state("idle", 0.0)
+	var suppressed := tag.debug_suppressed() and not tag.visible
+	tag.set_suppressed(false)
+	tag._process(0.2)
+	var restored := tag.debug_label() == "IN ATTESA"
+	var ok := filtered and canonical and selective and message_label \
+			and suppressed and restored
+	print("CHAT-NOTIFICATION-TEST ", "PASS" if ok else "FAIL", " ",
+			JSON.stringify({"filtered": filtered, "canonical": canonical,
+				"selective": selective, "message_label": message_label,
+				"suppressed": suppressed, "restored": restored}))
+	clear_chat_unread()
+	get_tree().quit(0 if ok else 1)
 
 ## slug generico ("scout") → uid della prima istanza attiva ("scout-2");
 ## un uid passa invariato.
@@ -364,10 +454,13 @@ func _chat_uid(slug_or_uid: String) -> String:
 ## Apre/chiude la conversazione: finché è aperta il backend polla il
 ## chat.jsonl dell'agente e pubblica publish_agent_chat.
 func open_agent_chat(slug: String) -> void:
+	_open_chat_role = _chat_role(slug)
+	mark_chat_read(slug)
 	if _backend:
 		_backend.open_chat(_chat_uid(slug))
 
 func close_agent_chat() -> void:
+	_open_chat_role = ""
 	if _backend:
 		_backend.close_chat()
 
@@ -383,6 +476,40 @@ func close_agent_terminal() -> void:
 
 func publish_agent_terminal(agent: String, text: String, error := "") -> void:
 	agent_terminal_updated.emit(agent, text, error)
+
+
+## ── Console del Coordinatore ────────────────────────────────────────
+
+func request_coordinator_state() -> void:
+	if _backend:
+		_backend.fetch_coordinator_state()
+	else:
+		coordinator_action_done.emit("load", false, "backend non collegato")
+
+func save_coordinator_settings(settings: Dictionary) -> void:
+	if _backend:
+		_backend.save_coordinator_settings(settings)
+	else:
+		coordinator_action_done.emit("save", false, "backend non collegato")
+
+func add_team_directive(body: String, kind := "order") -> void:
+	if _backend:
+		_backend.add_team_directive(body, kind)
+	else:
+		coordinator_action_done.emit("directive_add", false, "backend non collegato")
+
+func archive_team_directive(directive_id: int) -> void:
+	if _backend:
+		_backend.archive_team_directive(directive_id)
+	else:
+		coordinator_action_done.emit("directive_archive", false, "backend non collegato")
+
+func publish_coordinator_state(next: Dictionary) -> void:
+	coordinator_state = next
+	coordinator_state_updated.emit(next)
+
+func publish_coordinator_action(action: String, ok: bool, error := "") -> void:
+	coordinator_action_done.emit(action, ok, error)
 
 ## Invia il messaggio dell'utente all'agente reale (async: l'esito
 ## arriva su user_chat_sent, la risposta su agent_chat_updated).
@@ -485,6 +612,21 @@ func publish_usage_history(query: Dictionary, data: Dictionary) -> void:
 	usage_history = data
 	usage_history_updated.emit(query, data)
 
+## Storico del singolo ruolo per la scheda agente. agent = slug di
+## ruolo minuscolo ([a-z0-9-]); risposta su agent_history_updated.
+func request_agent_history(agent: String, from_ts: float, to_ts: float,
+		bucket_sec: int) -> void:
+	var query := {"agent": agent, "from_ts": from_ts, "to_ts": to_ts,
+			"bucket_sec": bucket_sec}
+	if _backend and _backend.has_method("fetch_agent_history"):
+		_backend.fetch_agent_history(agent, from_ts, to_ts, bucket_sec)
+	else:
+		agent_history_updated.emit(query,
+				{"ok": false, "error": "backend non collegato"})
+
+func publish_agent_history(query: Dictionary, data: Dictionary) -> void:
+	agent_history_updated.emit(query, data)
+
 
 ## ── Documenti prodotti (anteprima CV in-game) ────────────────────────
 
@@ -567,6 +709,11 @@ func publish_chat(msg: Dictionary) -> void:
 	chat_log.append(msg)
 	while chat_log.size() > CHAT_LOG_MAX:
 		chat_log.pop_front()
+	var from_role := _chat_role(str(msg.get("from", "")))
+	if str(msg.get("to", "")).to_lower() == "user" \
+			and REPLY_CAPABLE.has(from_role) and from_role != _open_chat_role:
+		chat_unread[from_role] = int(chat_unread.get(from_role, 0)) + 1
+		chat_unread_changed.emit(chat_unread.duplicate())
 	chat_message.emit(msg)
 
 func publish_positions(list: Array) -> void:

@@ -365,7 +365,7 @@ def recent_activity(minutes=30, limit=40):
     conn.close()
 
 
-def next_for_role(role, min_score=70, older_than_days=7):
+def next_for_role(role, min_score=None, older_than_days=None):
     conn = get_db()
     ensure_schema(conn)
 
@@ -503,12 +503,16 @@ def next_for_role(role, min_score=70, older_than_days=7):
         # col recheck-liveness. Da usare SOLO in maintenance mode.
         # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata —
         # vedi enrichment_policy.py. Coda vuota per policy = stato voluto.
-        from enrichment_policy import is_enabled, disabled_reason
+        from enrichment_policy import is_enabled, disabled_reason, recheck_options
         if not is_enabled('recheck_weekly'):
             print(f"\nRecheck settimanale manutenzione: "
                   f"OFF — {disabled_reason('recheck_weekly')}.")
             conn.close()
             return
+        opts = recheck_options()
+        min_score = opts['min_score'] if min_score is None else min_score
+        older_than_days = (opts['older_than_days'] if older_than_days is None
+                           else older_than_days)
         rows = conn.execute("""
             SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score
             FROM positions p
@@ -530,21 +534,38 @@ def next_for_role(role, min_score=70, older_than_days=7):
         # se l'utente chiede, si fa), qui l'Analista arricchisce in autonomia.
         # Da usare SOLO in maintenance mode.
         # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata.
-        from enrichment_policy import is_enabled, disabled_reason
+        from enrichment_policy import is_enabled, disabled_reason, geocode_options
         if not is_enabled('geocode_missing'):
             print(f"\nGeocoding manutenzione: "
                   f"OFF — {disabled_reason('geocode_missing')}.")
             conn.close()
             return
-        rows = conn.execute("""
+        opts = geocode_options()
+        score_gate = ""
+        remote_gate = ""
+        params = []
+        if opts['min_score'] is not None:
+            score_gate = """
+              AND EXISTS (SELECT 1 FROM scores sg
+                          WHERE sg.position_id = p.id
+                            AND sg.total_score >= ?)"""
+            params.append(opts['min_score'])
+        if opts['non_remote_only']:
+            remote_gate = """
+              AND LOWER(COALESCE(p.work_mode, '')) != 'remote'"""
+        rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.location, p.loc_city, p.loc_country_code
             FROM positions p
             WHERE p.status != 'excluded'
               AND (p.office_lat IS NULL
                    OR p.office_geocoded IS NULL OR p.office_geocoded = 0)
+              {score_gate}
+              {remote_gate}
             ORDER BY p.found_at DESC
-        """).fetchall()
-        label = "Geocoding manutenzione (posizioni vive senza coordinate ufficio)"
+        """, tuple(params)).fetchall()
+        label = ("Geocoding manutenzione (posizioni vive senza coordinate ufficio"
+                 + (f", score >= {opts['min_score']}" if opts['min_score'] is not None else "")
+                 + (", non remote" if opts['non_remote_only'] else "") + ")")
 
     elif role == 'logo-missing':
         # MAINTENANCE MODE (mig 056): logo aziendale per la pagina posizione web.
@@ -732,10 +753,10 @@ def main():
     sub.add_parser('next-for-salary-precise')
     # Maintenance-mode queues (2026-07-13): autonome ma cadenzate/gated (vedi next_for_role).
     rw = sub.add_parser('next-for-recheck-weekly')
-    rw.add_argument('--min-score', type=int, default=70,
-                    help='Score minimo per il recheck settimanale di manutenzione (default 70).')
-    rw.add_argument('--older-than-days', type=int, default=7,
-                    help='Ricontrolla solo chi non è verificato da > N giorni (default 7 = 1x/settimana).')
+    rw.add_argument('--min-score', type=int, default=None,
+                    help='Score minimo; omesso = valore della enrichment policy (default 70).')
+    rw.add_argument('--older-than-days', type=int, default=None,
+                    help='Anzianità minima; omesso = enrichment policy (default 7 giorni).')
     sub.add_parser('next-for-geocode-missing')
     sub.add_parser('next-for-logo-missing')
 

@@ -8,7 +8,8 @@ import { usePathname } from "next/navigation";
 const FULLSCREEN_FLOWS = ["/positions"];
 // Hero flows: full-width senza padding (il globo del dashboard tocca
 // il navbar; il page gestisce il centering dei contenuti sottostanti).
-const HERO_FLOWS = ["/dashboard", "/map", "/swipe"];
+// /messages: la chat a piena altezza gestisce da sé selettore/thread/composer.
+const HERO_FLOWS = ["/dashboard", "/map", "/swipe", "/messages"];
 
 export default function MainChrome({
   children,

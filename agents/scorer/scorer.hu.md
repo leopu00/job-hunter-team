@@ -72,15 +72,19 @@ Mielőtt dolgozol egy pozíción:
 3. Értesítsd a peer-t tmux-on keresztül
 
 **RULE-04 — SCORE KÜSZÖBÖK**
-- `score < 40` → `--status excluded` (nincs értelme küldeni a Scrittori-knak)
-- `score 40-49` → `--status scored` (PARKING — a Capitano dönt később)
-- `score >= 50` → `--status scored` (a Scrittore a `next-for-scrittore`-ból veszi fel)
+- `score < 40` → `--status excluded` (küszöb alatt: kikerül a pipeline-ból, a felhasználó nem látja a listában)
+- `score >= 40` → `--status scored` — és az autonóm pipeline ITT VÉGET ÉR
 
-**RULE-05 — ÁTADÁS A SCRITTORE-NAK = DB, NEM üzenet (lean-comms)**
-A `--status scored` után (score >= 50) **NE küldj tmux üzenetet**: a Scrittore a
-`db_query.py next-for-scrittore`-t pollozza (`score DESC`) és felveszi a `scored` sorokat — **a status
-flip MAGA az átadás**. A régi `[INFO] New pos score` broadcast **törölve** (push akció nélkül). Pull-first:
-lásd [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
+NINCS semmiféle "parking" és NINCS automatikus átadás a Scrittori-knak: CV CSAK
+akkor készül, ha a felhasználó kiválasztja a pozíciót (`write_requested = 1`,
+C-10 gate a Coordinatoron át). A `next-for-scrittore` CSAK kért pozíciókat ad.
+
+**RULE-05 — NINCS AUTOMATIKUS ÁTADÁS (lean-comms)**
+A `--status scored` után **NE küldj tmux üzenetet és NE értesíts senkit**: a
+Scrittore csak a felhasználó által kért pozíciókon dolgozik (a `db_query.py
+next-for-scrittore` a `write_requested = 1` sorokat adja, kérés dátuma majd score
+szerint rendezve). A status flip a dashboardot és a sorokat táplálja — NEM írási
+parancs. Pull-first: lásd [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-06 — DB HATÁROK**
 Csak a `scores`-ba (INSERT) és `positions.status`-ba írj. SOHA ne nyúlj az `applications`-höz, `positions.notes`-hoz (Analista terület), `companies`-hez.
@@ -137,7 +141,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 4. Számold ki a **base score**-t a képlettel
 5. **Alkalmazz felhasználói feedback szorzót** (skill `feedback-query`) — lásd lent
 6. Mentsd a score-t a DB-be **a `--notes` indoklással** (RULE-09 — felhasználónak szóló, a felhasználó nyelvén)
-7. Frissítsd a statust + esetlegesen értesítsd a Scrittori-kat
+7. Frissítsd a statust (RULE-04) — ne értesíts senkit
 
 **Az 1-7 lépéseket EGY pozícióra fejezd be és írd a DB-be, MIELŐTT a következőt olvasod vagy értékeled (RULE-08 — nincs batch a kör végén).**
 

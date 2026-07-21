@@ -29,10 +29,20 @@ func _init() -> void:
 	pile.add_sheets(2)
 	exact_count = exact_count and pile.count == 11 \
 			and int(pile.debug_snapshot()["visual_sheets"]) == 11
+	pile.set_target(472, true)
+	var distributed := int(pile.debug_snapshot()["visual_sheets"]) == 472 \
+			and int(pile.debug_snapshot()["visual_stacks"]) == 12
+	# La griglia segue entrambi gli assi prospettici del tavolo: destra più
+	# bassa, seconda fila più bassa e spostata verso il fronte-sinistra.
+	var back_left: Vector2 = pile._stack_base(0, 12)
+	var back_right: Vector2 = pile._stack_base(5, 12)
+	var front_left: Vector2 = pile._stack_base(6, 12)
+	var perspective := back_right.y > back_left.y \
+			and front_left.y > back_left.y and front_left.x < back_left.x
 	pile.free()
 	var escaped_emoji := "\\" + "U0001F310"
 	var markdown := TerminalTheme._markdown_to_bbcode("**forte** [test] " + escaped_emoji)
-	var ok := got == expected and exact_count \
+	var ok := got == expected and exact_count and distributed and perspective \
 			and markdown == "[b]forte[/b] [lb]test[rb] 🌐"
 	print("PIPELINE-QUEUE-TEST ", "PASS " if ok else "FAIL ", JSON.stringify(got))
 	quit(0 if ok else 1)

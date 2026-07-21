@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
+import { scoreSpectrumCss } from "@/lib/score-color";
 import type { Locale } from "@/i18n/config";
 import {
   IconCalendar,
@@ -10,10 +12,12 @@ import {
   IconChat,
   IconCheckCircle,
   IconChevronLeft,
+  IconChevronRight,
+  IconFilter,
   IconMic,
   IconPin,
   IconStar,
-  IconStarHalf,
+  IconThumbsMeh,
   IconStop,
   IconThumbsUp,
   IconX,
@@ -53,6 +57,7 @@ export type SwipeCardData = {
   loc_country: string | null;
   remote_type: "full_remote" | "hybrid" | "onsite" | null;
   role_family: string | null;
+  source: string | null;
   found_at: string;
   score: number | null;
   salary_min: number | null;
@@ -92,7 +97,7 @@ const VERDICTS: Record<
   // less_like_this allo Scout — è un keep con entusiasmo basso (score 2).
   // Icona: mezza stella ("interessante, ma poco"), non un pollice giù.
   review_low: {
-    Icon: IconStarHalf,
+    Icon: IconThumbsMeh,
     color: "var(--color-orange)",
     action: "like",
     score: 2,
@@ -158,6 +163,19 @@ const T: Record<
     today: string;
     yesterday: string;
     daysAgo: string; // template con {n}
+    filters: string;
+    fScore: string;
+    fSalary: string;
+    fCategory: string;
+    fMode: string;
+    fCountry: string;
+    fCity: string;
+    fSource: string;
+    fReset: string;
+    fCount: string; // template con {n}
+    fNoResults: string;
+    fSort: string;
+    sortLabels: Record<string, string>;
   }
 > = {
   it: {
@@ -179,7 +197,7 @@ const T: Record<
     voiceError: "Dettatura non disponibile su questo dispositivo",
     voiceDenied:
       "Permesso per il microfono negato — controlla le impostazioni del browser",
-    modePending: "Da giudicare",
+    modePending: "Da recensire",
     modeReviewed: "Recensite",
     reviewedEmpty: "Ancora nessuna posizione recensita.",
     emptyTitle: "Mazzo finito!",
@@ -192,6 +210,26 @@ const T: Record<
     today: "oggi",
     yesterday: "ieri",
     daysAgo: "{n} giorni fa",
+    filters: "Filtri",
+    fScore: "Score",
+    fSalary: "Stipendio (k€ / anno)",
+    fCategory: "Categoria",
+    fMode: "Modalità",
+    fCountry: "Paese",
+    fCity: "Città",
+    fSource: "Fonte",
+    fReset: "Azzera filtri",
+    fCount: "{n} posizioni",
+    fNoResults: "Nessuna posizione corrisponde ai filtri.",
+    fSort: "Ordinamento",
+    sortLabels: {
+      oldest: "Meno recenti prima",
+      newest: "Più recenti prima",
+      score_desc: "Score: dal più alto",
+      score_asc: "Score: dal più basso",
+      salary_desc: "Stipendio: dal più alto",
+      shuffle: "Casuale (shuffle)",
+    },
   },
   en: {
     title: "Swipe",
@@ -211,7 +249,7 @@ const T: Record<
     voiceListening: "Listening…",
     voiceError: "Dictation not available on this device",
     voiceDenied: "Microphone permission denied — check your browser settings",
-    modePending: "Pending",
+    modePending: "To review",
     modeReviewed: "Reviewed",
     reviewedEmpty: "No reviewed positions yet.",
     emptyTitle: "Deck finished!",
@@ -224,6 +262,26 @@ const T: Record<
     today: "today",
     yesterday: "yesterday",
     daysAgo: "{n} days ago",
+    filters: "Filters",
+    fScore: "Score",
+    fSalary: "Salary (k€ / yr)",
+    fCategory: "Category",
+    fMode: "Work mode",
+    fCountry: "Country",
+    fCity: "City",
+    fSource: "Source",
+    fReset: "Reset filters",
+    fCount: "{n} positions",
+    fNoResults: "No positions match the filters.",
+    fSort: "Sorting",
+    sortLabels: {
+      oldest: "Oldest first",
+      newest: "Newest first",
+      score_desc: "Score: highest first",
+      score_asc: "Score: lowest first",
+      salary_desc: "Salary: highest first",
+      shuffle: "Random (shuffle)",
+    },
   },
   hu: {
     title: "Swipe",
@@ -257,6 +315,26 @@ const T: Record<
     today: "ma",
     yesterday: "tegnap",
     daysAgo: "{n} napja",
+    filters: "Szűrők",
+    fScore: "Pontszám",
+    fSalary: "Fizetés (k€ / év)",
+    fCategory: "Kategória",
+    fMode: "Munkavégzés",
+    fCountry: "Ország",
+    fCity: "Város",
+    fSource: "Forrás",
+    fReset: "Szűrők törlése",
+    fCount: "{n} pozíció",
+    fNoResults: "Nincs a szűrőknek megfelelő pozíció.",
+    fSort: "Rendezés",
+    sortLabels: {
+      oldest: "Legrégebbi elöl",
+      newest: "Legújabb elöl",
+      score_desc: "Pontszám: legmagasabb elöl",
+      score_asc: "Pontszám: legalacsonyabb elöl",
+      salary_desc: "Fizetés: legmagasabb elöl",
+      shuffle: "Véletlenszerű (shuffle)",
+    },
   },
   es: {
     title: "Swipe",
@@ -277,7 +355,7 @@ const T: Record<
     voiceError: "Dictado no disponible en este dispositivo",
     voiceDenied:
       "Permiso de micrófono denegado — revisa la configuración del navegador",
-    modePending: "Pendientes",
+    modePending: "Por revisar",
     modeReviewed: "Revisadas",
     reviewedEmpty: "Aún no hay posiciones revisadas.",
     emptyTitle: "¡Mazo terminado!",
@@ -290,6 +368,26 @@ const T: Record<
     today: "hoy",
     yesterday: "ayer",
     daysAgo: "hace {n} días",
+    filters: "Filtros",
+    fScore: "Puntuación",
+    fSalary: "Salario (k€ / año)",
+    fCategory: "Categoría",
+    fMode: "Modalidad",
+    fCountry: "País",
+    fCity: "Ciudad",
+    fSource: "Fuente",
+    fReset: "Restablecer filtros",
+    fCount: "{n} posiciones",
+    fNoResults: "Ninguna posición coincide con los filtros.",
+    fSort: "Orden",
+    sortLabels: {
+      oldest: "Más antiguas primero",
+      newest: "Más recientes primero",
+      score_desc: "Puntuación: de mayor a menor",
+      score_asc: "Puntuación: de menor a mayor",
+      salary_desc: "Salario: de mayor a menor",
+      shuffle: "Aleatorio (shuffle)",
+    },
   },
   de: {
     title: "Swipe",
@@ -309,7 +407,7 @@ const T: Record<
     voiceListening: "Ich höre zu…",
     voiceError: "Diktat auf diesem Gerät nicht verfügbar",
     voiceDenied: "Mikrofonzugriff verweigert — prüfe die Browser-Einstellungen",
-    modePending: "Offen",
+    modePending: "Zu bewerten",
     modeReviewed: "Bewertet",
     reviewedEmpty: "Noch keine bewerteten Stellen.",
     emptyTitle: "Stapel geschafft!",
@@ -322,6 +420,26 @@ const T: Record<
     today: "heute",
     yesterday: "gestern",
     daysAgo: "vor {n} Tagen",
+    filters: "Filter",
+    fScore: "Score",
+    fSalary: "Gehalt (k€ / Jahr)",
+    fCategory: "Kategorie",
+    fMode: "Arbeitsmodus",
+    fCountry: "Land",
+    fCity: "Stadt",
+    fSource: "Quelle",
+    fReset: "Filter zurücksetzen",
+    fCount: "{n} Stellen",
+    fNoResults: "Keine Stellen entsprechen den Filtern.",
+    fSort: "Sortierung",
+    sortLabels: {
+      oldest: "Älteste zuerst",
+      newest: "Neueste zuerst",
+      score_desc: "Score: höchste zuerst",
+      score_asc: "Score: niedrigste zuerst",
+      salary_desc: "Gehalt: höchstes zuerst",
+      shuffle: "Zufällig (Shuffle)",
+    },
   },
   fr: {
     title: "Swipe",
@@ -342,7 +460,7 @@ const T: Record<
     voiceError: "Dictée non disponible sur cet appareil",
     voiceDenied:
       "Autorisation du micro refusée — vérifiez les réglages du navigateur",
-    modePending: "À juger",
+    modePending: "À évaluer",
     modeReviewed: "Évaluées",
     reviewedEmpty: "Aucun poste évalué pour l\u2019instant.",
     emptyTitle: "Paquet terminé !",
@@ -359,6 +477,26 @@ const T: Record<
     today: "aujourd’hui",
     yesterday: "hier",
     daysAgo: "il y a {n} jours",
+    filters: "Filtres",
+    fScore: "Score",
+    fSalary: "Salaire (k€ / an)",
+    fCategory: "Catégorie",
+    fMode: "Mode de travail",
+    fCountry: "Pays",
+    fCity: "Ville",
+    fSource: "Source",
+    fReset: "Réinitialiser les filtres",
+    fCount: "{n} postes",
+    fNoResults: "Aucun poste ne correspond aux filtres.",
+    fSort: "Tri",
+    sortLabels: {
+      oldest: "Plus anciens d'abord",
+      newest: "Plus récents d'abord",
+      score_desc: "Score : du plus haut",
+      score_asc: "Score : du plus bas",
+      salary_desc: "Salaire : du plus haut",
+      shuffle: "Aléatoire (shuffle)",
+    },
   },
   pt: {
     title: "Swipe",
@@ -379,7 +517,7 @@ const T: Record<
     voiceError: "Ditado não disponível neste dispositivo",
     voiceDenied:
       "Permissão do microfone negada — verifique as configurações do navegador",
-    modePending: "Pendentes",
+    modePending: "Por avaliar",
     modeReviewed: "Avaliadas",
     reviewedEmpty: "Ainda não há vagas avaliadas.",
     emptyTitle: "Baralho concluído!",
@@ -392,6 +530,26 @@ const T: Record<
     today: "hoje",
     yesterday: "ontem",
     daysAgo: "há {n} dias",
+    filters: "Filtros",
+    fScore: "Pontuação",
+    fSalary: "Salário (k€ / ano)",
+    fCategory: "Categoria",
+    fMode: "Modalidade",
+    fCountry: "País",
+    fCity: "Cidade",
+    fSource: "Fonte",
+    fReset: "Repor filtros",
+    fCount: "{n} vagas",
+    fNoResults: "Nenhuma vaga corresponde aos filtros.",
+    fSort: "Ordenação",
+    sortLabels: {
+      oldest: "Mais antigas primeiro",
+      newest: "Mais recentes primeiro",
+      score_desc: "Pontuação: da mais alta",
+      score_asc: "Pontuação: da mais baixa",
+      salary_desc: "Salário: do mais alto",
+      shuffle: "Aleatório (shuffle)",
+    },
   },
 };
 
@@ -426,10 +584,7 @@ function stripMd(s: string): string {
 }
 
 function scoreColor(score: number | null): string {
-  if (score == null) return "var(--color-dim)";
-  if (score >= 70) return "var(--color-green)";
-  if (score >= 50) return "var(--color-yellow)";
-  return "var(--color-muted)";
+  return scoreSpectrumCss(score);
 }
 
 // Data di ritrovamento + conteggio giorni passati (scelta utente 19/07).
@@ -547,8 +702,280 @@ export default function SwipeDeck({
   const [mode, setMode] = useState<"pending" | "reviewed">("pending");
   const [idxP, setIdxP] = useState(0);
   const [idxR, setIdxR] = useState(0);
-  const cards = mode === "pending" ? pending : reviewed;
+
+  // ── Filtri (client-side, sul mazzo già caricato) ─────────────────
+  // Stessa famiglia di filtri della pagina posizioni: range score, range
+  // stipendio (k€, il grosso del dataset è EUR), categorie, modalità.
+  // Con un filtro attivo le card senza il dato corrispondente escono.
+  const [filters, setFilters] = useState({
+    sMin: 0,
+    sMax: 100,
+    salMin: 0,
+    salMax: 200,
+    fams: [] as string[],
+    modes: [] as string[],
+    countries: [] as string[],
+    cities: [] as string[],
+    sources: [] as string[],
+  });
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const filterActive =
+    filters.sMin > 0 ||
+    filters.sMax < 100 ||
+    filters.salMin > 0 ||
+    filters.salMax < 200 ||
+    filters.fams.length > 0 ||
+    filters.modes.length > 0 ||
+    filters.countries.length > 0 ||
+    filters.cities.length > 0 ||
+    filters.sources.length > 0;
+  // Valori distinti per le chip (dal mazzo completo). Le città si
+  // restringono ai paesi selezionati, come l'albero location di /positions.
+  const distinct = (vals: (string | null)[]) =>
+    Array.from(
+      new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean)),
+    ).sort();
+  const deckForLists = mode === "pending" ? pending : reviewed;
+  const countries = useMemo(
+    () => distinct(deckForLists.map((c) => c.loc_country)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deckForLists],
+  );
+  const cities = useMemo(
+    () =>
+      distinct(
+        deckForLists
+          .filter(
+            (c) =>
+              !filters.countries.length ||
+              filters.countries.includes((c.loc_country ?? "").trim()),
+          )
+          .map((c) => c.loc_city),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deckForLists, filters.countries],
+  );
+  const sources = useMemo(
+    () => distinct(deckForLists.map((c) => c.source)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deckForLists],
+  );
+  const families = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          deckForLists.map((c) => (c.role_family ?? "").trim()).filter(Boolean),
+        ),
+      ).sort(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deckForLists],
+  );
+  // skip = criterio da ignorare: serve a istogrammi e contatori chip, che
+  // mostrano il PROPRIO asse con gli ALTRI filtri applicati (stile Airbnb).
+  const matches = useCallback(
+    (
+      c: SwipeCardData,
+      skip?:
+        | "score"
+        | "salary"
+        | "fams"
+        | "modes"
+        | "countries"
+        | "cities"
+        | "sources",
+    ) => {
+      if (skip !== "score" && (filters.sMin > 0 || filters.sMax < 100)) {
+        if (c.score == null || c.score < filters.sMin || c.score > filters.sMax)
+          return false;
+      }
+      if (skip !== "salary" && (filters.salMin > 0 || filters.salMax < 200)) {
+        const lo = c.salary_min ?? c.salary_max;
+        const hi = c.salary_max ?? c.salary_min;
+        if (lo == null || hi == null) return false;
+        if (hi / 1000 < filters.salMin || lo / 1000 > filters.salMax)
+          return false;
+      }
+      if (
+        skip !== "fams" &&
+        filters.fams.length &&
+        !filters.fams.includes((c.role_family ?? "").trim())
+      )
+        return false;
+      if (
+        skip !== "modes" &&
+        filters.modes.length &&
+        !filters.modes.includes(c.remote_type ?? "")
+      )
+        return false;
+      if (
+        skip !== "countries" &&
+        filters.countries.length &&
+        !filters.countries.includes((c.loc_country ?? "").trim())
+      )
+        return false;
+      if (
+        skip !== "cities" &&
+        filters.cities.length &&
+        !filters.cities.includes((c.loc_city ?? "").trim())
+      )
+        return false;
+      if (
+        skip !== "sources" &&
+        filters.sources.length &&
+        !filters.sources.includes((c.source ?? "").trim())
+      )
+        return false;
+      return true;
+    },
+    [filters],
+  );
+  const fPending = useMemo(
+    () => pending.filter((c) => matches(c)),
+    [pending, matches],
+  );
+  const fReviewed = useMemo(
+    () => reviewed.filter((c) => matches(c)),
+    [reviewed, matches],
+  );
+  // Istogrammi dei filtri (bin = step degli slider) sul mazzo corrente.
+  const histoBase = mode === "pending" ? pending : reviewed;
+  const scoreHisto = useMemo(() => {
+    const bins = new Array(20).fill(0) as number[];
+    for (const c of histoBase) {
+      if (c.score == null || !matches(c, "score")) continue;
+      bins[Math.min(19, Math.floor(c.score / 5))]++;
+    }
+    return bins;
+  }, [histoBase, matches]);
+  // Conteggi per chip: quante card del mazzo corrente (con gli ALTRI
+  // filtri applicati) hanno quel valore.
+  const countBy = useCallback(
+    (
+      get: (c: SwipeCardData) => string | null,
+      skip: "fams" | "modes" | "countries" | "cities" | "sources",
+    ) => {
+      const m = new Map<string, number>();
+      for (const c of histoBase) {
+        if (!matches(c, skip)) continue;
+        const k = (get(c) ?? "").trim();
+        if (!k) continue;
+        m.set(k, (m.get(k) ?? 0) + 1);
+      }
+      return m;
+    },
+    [histoBase, matches],
+  );
+  const famCounts = useMemo(
+    () => countBy((c) => c.role_family, "fams"),
+    [countBy],
+  );
+  const modeCounts = useMemo(
+    () => countBy((c) => c.remote_type, "modes"),
+    [countBy],
+  );
+  const countryCounts = useMemo(
+    () => countBy((c) => c.loc_country, "countries"),
+    [countBy],
+  );
+  const cityCounts = useMemo(
+    () => countBy((c) => c.loc_city, "cities"),
+    [countBy],
+  );
+  const sourceCounts = useMemo(
+    () => countBy((c) => c.source, "sources"),
+    [countBy],
+  );
+  // Ordinamento del mazzo. shuffleNonce: rimescolare = ricliccare la chip;
+  // il seed tiene il mazzo stabile tra i render (niente Math.random in render).
+  const [sortMode, setSortMode] = useState<
+    "oldest" | "newest" | "score_desc" | "score_asc" | "salary_desc" | "shuffle"
+  >("oldest");
+  const [shuffleNonce, setShuffleNonce] = useState(1);
+  // Sintesi JD on-demand (il deck arriva senza testi, vedi getSwipeDecks):
+  // cache per id + set richieste in volo. null = fetch fatta, nessun testo.
+  const [summaries, setSummaries] = useState<Record<string, string | null>>({});
+  const summaryInflight = useRef<Set<string>>(new Set());
+  // Sezioni collassabili: slider aperti di default, chip chiuse.
+  const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({
+    score: true,
+    salary: true,
+  });
+  const toggleSec = (k: string) =>
+    setOpenSecs((o) => ({ ...o, [k]: !(o[k] ?? false) }));
+  const salHisto = useMemo(() => {
+    const bins = new Array(40).fill(0) as number[];
+    for (const c of histoBase) {
+      const lo = c.salary_min ?? c.salary_max;
+      const hi = c.salary_max ?? c.salary_min;
+      if (lo == null || hi == null || !matches(c, "salary")) continue;
+      const mid = (lo + hi) / 2 / 1000;
+      bins[Math.max(0, Math.min(39, Math.floor(mid / 5)))]++;
+    }
+    return bins;
+  }, [histoBase, matches]);
+  // Cambio filtri o ordinamento = mazzo diverso → dalla prima card.
+  useEffect(() => {
+    setIdxP(0);
+    setIdxR(0);
+  }, [filters, sortMode, shuffleNonce]);
+
+  const cards = useMemo(() => {
+    const base = mode === "pending" ? fPending : fReviewed;
+    if (sortMode === "oldest") return base; // ordine server: found_at asc
+    const arr = [...base];
+    const mid = (c: SwipeCardData) => {
+      const lo = c.salary_min ?? c.salary_max;
+      const hi = c.salary_max ?? c.salary_min;
+      return lo == null || hi == null ? null : (lo + hi) / 2;
+    };
+    switch (sortMode) {
+      case "newest":
+        return arr.reverse();
+      case "score_desc":
+        return arr.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+      case "score_asc":
+        return arr.sort((a, b) => (a.score ?? 101) - (b.score ?? 101));
+      case "salary_desc":
+        return arr.sort((a, b) => (mid(b) ?? -1) - (mid(a) ?? -1));
+      case "shuffle": {
+        // Fisher-Yates su PRNG seedato (mulberry32) dal nonce.
+        let seed = shuffleNonce * 0x9e3779b9;
+        const rnd = () => {
+          seed |= 0;
+          seed = (seed + 0x6d2b79f5) | 0;
+          let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(rnd() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+    }
+  }, [mode, fPending, fReviewed, sortMode, shuffleNonce]);
   const idx = mode === "pending" ? idxP : idxR;
+
+  // Prefetch della sintesi per la card corrente e le prossime tre.
+  useEffect(() => {
+    for (let i = idx; i < Math.min(idx + 4, cards.length); i++) {
+      const c = cards[i];
+      if (!c || c.jd_summary != null) continue;
+      if (c.id in summaries || summaryInflight.current.has(c.id)) continue;
+      summaryInflight.current.add(c.id);
+      fetch(`/api/positions/${c.legacy_id}/summary`)
+        .then((r) => (r.ok ? r.json() : { summary: null }))
+        .catch(() => ({ summary: null }))
+        .then((b: { summary?: string | null }) => {
+          summaryInflight.current.delete(c.id);
+          setSummaries((m) => ({ ...m, [c.id]: b.summary ?? null }));
+        });
+    }
+  }, [idx, cards, summaries]);
+
   // Timbri: i giudizi storici (dal DB) + quelli dati in sessione.
   const [given, setGiven] = useState<Record<string, Verdict>>(initialVerdicts);
   const [chipAreaW, setChipAreaW] = useState(320);
@@ -936,6 +1363,32 @@ export default function SwipeDeck({
               </button>
             ))}
           </span>
+          {/* Filtri del mazzo (score/stipendio/categoria/modalità) */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen(true)}
+            aria-label={t.filters}
+            className="relative flex h-7 w-7 items-center justify-center rounded-full border"
+            style={{
+              borderColor: filterActive
+                ? "var(--color-purple)"
+                : "var(--color-border)",
+              color: filterActive
+                ? "var(--color-purple)"
+                : "var(--color-muted)",
+              background: "transparent",
+              cursor: "pointer",
+            }}
+          >
+            <IconFilter size={14} />
+            {filterActive && (
+              <span
+                className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full"
+                style={{ background: "var(--color-purple)" }}
+                aria-hidden="true"
+              />
+            )}
+          </button>
           {total > 0 && (
             <span
               className="text-[11px] font-semibold tabular-nums"
@@ -972,9 +1425,11 @@ export default function SwipeDeck({
             className="text-[12px] mb-1"
             style={{ color: "var(--color-muted)" }}
           >
-            {mode === "reviewed" && total === 0
-              ? t.reviewedEmpty
-              : t.emptySubtitle}
+            {filterActive && total === 0
+              ? t.fNoResults
+              : mode === "reviewed" && total === 0
+                ? t.reviewedEmpty
+                : t.emptySubtitle}
           </p>
           {Object.keys(given).length > 0 && (
             <p
@@ -1145,19 +1600,42 @@ export default function SwipeDeck({
                       </div>
 
                       {/* Sintesi JD: scrollabile se non c'entra; pre-line
-                          per rispettare gli accapi del testo originale. */}
-                      {card.jd_summary && (
-                        <div
-                          className="text-[12px] leading-relaxed flex-1 min-h-0 overflow-y-auto pr-1"
-                          style={{
-                            color: "var(--color-base)",
-                            whiteSpace: "pre-line",
-                            overscrollBehavior: "contain",
-                          }}
-                        >
-                          {stripMd(card.jd_summary)}
-                        </div>
-                      )}
+                          per rispettare gli accapi. Arriva on-demand (cache
+                          summaries); undefined = fetch in corso → skeleton. */}
+                      {(() => {
+                        const text = card.jd_summary ?? summaries[card.id];
+                        if (text) {
+                          return (
+                            <div
+                              className="text-[12px] leading-relaxed flex-1 min-h-0 overflow-y-auto pr-1"
+                              style={{
+                                color: "var(--color-base)",
+                                whiteSpace: "pre-line",
+                                overscrollBehavior: "contain",
+                              }}
+                            >
+                              {stripMd(text)}
+                            </div>
+                          );
+                        }
+                        if (text === undefined) {
+                          return (
+                            <div className="flex-1 min-h-0 space-y-2 pt-1">
+                              {[92, 100, 78, 96, 60].map((w, i) => (
+                                <div
+                                  key={i}
+                                  className="h-3 rounded animate-pulse"
+                                  style={{
+                                    width: `${w}%`,
+                                    background: "var(--color-border)",
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                 );
@@ -1339,6 +1817,294 @@ export default function SwipeDeck({
         </div>
       )}
 
+      {/* Schermata filtri — portal su body (il wrapper di pagina è animato
+          con transform e intrappolerebbe il fixed, vedi TeamActionsSheet).
+          I filtri si applicano dal vivo; contatore in basso. */}
+      {filtersOpen &&
+        mounted &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.filters}
+          >
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setFiltersOpen(false)}
+            />
+            <div
+              className="relative w-full sm:max-w-md max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-2xl border p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]"
+              style={{
+                borderColor: "var(--color-border)",
+                background: "var(--color-card)",
+              }}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <div className="section-label">{t.filters}</div>
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen(false)}
+                  aria-label={t.commentClose}
+                  className="rounded-lg p-1.5 transition-colors hover:bg-[var(--color-row)]"
+                  style={{ color: "var(--color-dim)" }}
+                >
+                  <IconX size={18} />
+                </button>
+              </div>
+
+              {/* Ordinamento del mazzo (singola scelta) */}
+              <FilterSection
+                label={t.fSort}
+                meta={t.sortLabels[sortMode]}
+                metaActive={sortMode !== "oldest"}
+                open={openSecs.sort ?? false}
+                onToggle={() => toggleSec("sort")}
+              >
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      "oldest",
+                      "newest",
+                      "score_desc",
+                      "score_asc",
+                      "salary_desc",
+                      "shuffle",
+                    ] as const
+                  ).map((k) => {
+                    const on = sortMode === k;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => {
+                          setSortMode(k);
+                          // Ri-cliccare shuffle rimescola di nuovo.
+                          if (k === "shuffle") setShuffleNonce((n) => n + 1);
+                        }}
+                        className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                        style={{
+                          borderColor: on
+                            ? "var(--color-purple)"
+                            : "var(--color-border)",
+                          color: on
+                            ? "var(--color-purple)"
+                            : "var(--color-muted)",
+                          background: on
+                            ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
+                            : "transparent",
+                        }}
+                      >
+                        {t.sortLabels[k]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FilterSection>
+
+              {/* Range score */}
+              <FilterSection
+                label={t.fScore}
+                meta={`${filters.sMin} – ${filters.sMax}`}
+                metaActive={filters.sMin > 0 || filters.sMax < 100}
+                open={openSecs.score ?? false}
+                onToggle={() => toggleSec("score")}
+              >
+                <DualRange
+                  min={0}
+                  max={100}
+                  step={5}
+                  lo={filters.sMin}
+                  hi={filters.sMax}
+                  histo={scoreHisto}
+                  onChange={(lo, hi) =>
+                    setFilters((f) => ({ ...f, sMin: lo, sMax: hi }))
+                  }
+                />
+              </FilterSection>
+
+              {/* Range stipendio (k€) */}
+              <FilterSection
+                label={t.fSalary}
+                meta={`${filters.salMin}k – ${filters.salMax}k`}
+                metaActive={filters.salMin > 0 || filters.salMax < 200}
+                open={openSecs.salary ?? false}
+                onToggle={() => toggleSec("salary")}
+              >
+                <DualRange
+                  min={0}
+                  max={200}
+                  step={5}
+                  lo={filters.salMin}
+                  hi={filters.salMax}
+                  histo={salHisto}
+                  onChange={(lo, hi) =>
+                    setFilters((f) => ({ ...f, salMin: lo, salMax: hi }))
+                  }
+                />
+              </FilterSection>
+
+              {/* Sezioni a chip: Modalità / Categoria / Paese / Città / Fonte */}
+              {(
+                [
+                  {
+                    key: "modes" as const,
+                    label: t.fMode,
+                    vals: ["full_remote", "hybrid", "onsite"],
+                    counts: modeCounts,
+                    text: (v: string) => t.remote[v] ?? v,
+                  },
+                  {
+                    key: "fams" as const,
+                    label: t.fCategory,
+                    vals: families,
+                    counts: famCounts,
+                    text: (v: string) => v,
+                  },
+                  {
+                    key: "countries" as const,
+                    label: t.fCountry,
+                    vals: countries,
+                    counts: countryCounts,
+                    text: (v: string) => v,
+                  },
+                  {
+                    key: "cities" as const,
+                    label: t.fCity,
+                    vals: cities,
+                    counts: cityCounts,
+                    text: (v: string) => v,
+                  },
+                  {
+                    key: "sources" as const,
+                    label: t.fSource,
+                    vals: sources,
+                    counts: sourceCounts,
+                    text: (v: string) => v,
+                  },
+                ] as const
+              ).map(
+                (sec) =>
+                  sec.vals.length > 0 && (
+                    <FilterSection
+                      key={sec.key}
+                      label={sec.label}
+                      meta={
+                        filters[sec.key].length
+                          ? String(filters[sec.key].length)
+                          : undefined
+                      }
+                      metaActive={filters[sec.key].length > 0}
+                      open={openSecs[sec.key] ?? false}
+                      onToggle={() => toggleSec(sec.key)}
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        {sec.vals
+                          .filter(
+                            (v) =>
+                              (sec.counts.get(v) ?? 0) > 0 ||
+                              filters[sec.key].includes(v),
+                          )
+                          .map((v) => {
+                            const on = filters[sec.key].includes(v);
+                            const n = sec.counts.get(v) ?? 0;
+                            return (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() =>
+                                  setFilters((f) => ({
+                                    ...f,
+                                    [sec.key]: on
+                                      ? f[sec.key].filter((x) => x !== v)
+                                      : [...f[sec.key], v],
+                                  }))
+                                }
+                                className="rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                                style={{
+                                  borderColor: on
+                                    ? "var(--color-purple)"
+                                    : "var(--color-border)",
+                                  color: on
+                                    ? "var(--color-purple)"
+                                    : "var(--color-muted)",
+                                  background: on
+                                    ? "color-mix(in srgb, var(--color-purple) 10%, transparent)"
+                                    : "transparent",
+                                }}
+                              >
+                                {sec.text(v)}
+                                <span
+                                  className="ml-1.5 font-normal tabular-nums"
+                                  style={{ opacity: 0.65 }}
+                                >
+                                  {n}
+                                </span>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </FilterSection>
+                  ),
+              )}
+
+              <div
+                className="flex items-center justify-between border-t pt-4"
+                style={{ borderColor: "var(--color-border)" }}
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFilters({
+                      sMin: 0,
+                      sMax: 100,
+                      salMin: 0,
+                      salMax: 200,
+                      fams: [],
+                      modes: [],
+                      countries: [],
+                      cities: [],
+                      sources: [],
+                    })
+                  }
+                  disabled={!filterActive}
+                  className="text-[11px] font-semibold disabled:opacity-40"
+                  style={{
+                    color: "var(--color-red)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.fReset}
+                </button>
+                <span className="text-[11px] font-semibold tabular-nums text-[var(--color-muted)]">
+                  {t.fCount.replace(
+                    "{n}",
+                    String(
+                      mode === "pending" ? fPending.length : fReviewed.length,
+                    ),
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen(false)}
+                  className="rounded-lg border px-4 py-2 text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)]"
+                  style={{
+                    borderColor: "var(--color-purple)",
+                    color: "var(--color-purple)",
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.commentDone}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
       {/* Toast errori rete (non bloccante) */}
       {toast && (
         <div
@@ -1353,6 +2119,199 @@ export default function SwipeDeck({
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+// Sezione collassabile della schermata filtri: header con label,
+// valore/selezione corrente a destra (viola quando il filtro è attivo)
+// e chevron che ruota. Solo gli slider partono aperti.
+function FilterSection({
+  label,
+  meta,
+  metaActive = false,
+  open,
+  onToggle,
+  children,
+}: {
+  label: string;
+  meta?: string;
+  metaActive?: boolean;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-b" style={{ borderColor: "var(--color-border)" }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between py-3"
+        style={{ background: "none", border: "none", cursor: "pointer" }}
+        aria-expanded={open}
+      >
+        <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
+          {label}
+        </span>
+        <span className="flex items-center gap-2">
+          {meta && (
+            <span
+              className="text-[11px] font-semibold tabular-nums"
+              style={{
+                color: metaActive
+                  ? "var(--color-purple)"
+                  : "var(--color-muted)",
+              }}
+            >
+              {meta}
+            </span>
+          )}
+          <span
+            style={{
+              color: "var(--color-dim)",
+              display: "inline-flex",
+              transform: open ? "rotate(90deg)" : "none",
+              transition: "transform 0.15s ease",
+            }}
+            aria-hidden="true"
+          >
+            <IconChevronRight size={14} />
+          </span>
+        </span>
+      </button>
+      {open && <div className="pb-4">{children}</div>}
+    </div>
+  );
+}
+
+// Slider a DOPPIO cursore su una traccia sola (l'HTML nativo non ce l'ha:
+// due <input type=range> sovrapposti con traccia trasparente e pointer-events
+// solo sui pomelli) + istogramma della distribuzione sopra la traccia, con i
+// bin dentro il range selezionato evidenziati (stile filtro-prezzo Airbnb).
+function DualRange({
+  min,
+  max,
+  step,
+  lo,
+  hi,
+  onChange,
+  histo,
+}: {
+  min: number;
+  max: number;
+  step: number;
+  lo: number;
+  hi: number;
+  onChange: (lo: number, hi: number) => void;
+  histo?: number[];
+}) {
+  const pct = (v: number) => ((v - min) / (max - min)) * 100;
+  const maxBin = histo && histo.length ? Math.max(...histo, 1) : 1;
+  return (
+    <div>
+      {histo && (
+        <div className="mb-1 flex h-10 items-end gap-[2px] px-1">
+          {histo.map((n, i) => {
+            const bLo = min + i * ((max - min) / histo.length);
+            const bHi = bLo + (max - min) / histo.length;
+            const inRange = bHi > lo && bLo < hi;
+            return (
+              <div
+                key={i}
+                className="flex-1 rounded-sm"
+                style={{
+                  height: `${Math.max((n / maxBin) * 100, n > 0 ? 8 : 2)}%`,
+                  background: inRange
+                    ? "var(--color-purple)"
+                    : "var(--color-border)",
+                  opacity: inRange ? 0.9 : 0.7,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+      <div className="relative h-9">
+        <div
+          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
+          style={{ left: 12, right: 12, background: "var(--color-border)" }}
+        />
+        {/* Il centro del pomello viaggia tra 12px e (100% - 12px), non da
+            bordo a bordo: il riempimento segue la STESSA geometria, sennò
+            sborda oltre i pomelli. */}
+        <div
+          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
+          style={{
+            left: `calc((100% - 24px) * ${pct(lo) / 100} + 12px)`,
+            right: `calc((100% - 24px) * ${(100 - pct(hi)) / 100} + 12px)`,
+            background: "var(--color-purple)",
+          }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={lo}
+          aria-label="min"
+          onChange={(e) => onChange(Math.min(Number(e.target.value), hi), hi)}
+          className="jht-dualrange absolute inset-0 h-full w-full"
+          // Se entrambi i pomelli sono a fondo scala destro, il min deve
+          // stare sopra per restare afferrabile.
+          style={{ zIndex: lo > min + (max - min) / 2 ? 5 : 3 }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={hi}
+          aria-label="max"
+          onChange={(e) => onChange(lo, Math.max(Number(e.target.value), lo))}
+          className="jht-dualrange absolute inset-0 h-full w-full"
+          style={{ zIndex: 4 }}
+        />
+      </div>
+      <style>{`
+        .jht-dualrange {
+          -webkit-appearance: none;
+          appearance: none;
+          background: transparent;
+          pointer-events: none;
+          margin: 0;
+          border: none;
+          outline: none;
+        }
+        .jht-dualrange::-webkit-slider-runnable-track {
+          -webkit-appearance: none;
+          background: transparent;
+        }
+        .jht-dualrange::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          pointer-events: auto;
+          width: 24px;
+          height: 24px;
+          margin-top: 6px;
+          border-radius: 9999px;
+          background: #fff;
+          border: 1px solid var(--color-border);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+          cursor: pointer;
+        }
+        .jht-dualrange::-moz-range-track {
+          background: transparent;
+        }
+        .jht-dualrange::-moz-range-thumb {
+          pointer-events: auto;
+          width: 22px;
+          height: 22px;
+          border-radius: 9999px;
+          background: #fff;
+          border: 1px solid var(--color-border);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 }

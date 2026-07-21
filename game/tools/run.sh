@@ -44,11 +44,17 @@ case "$MODE" in
 		JHT_NOVPS=1 godot --headless --script res://tools/speech_bubble_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/pipeline_queue_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/embedded_terminal_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/doc_preview_selftest.gd
 		python3 tools/python_payload_syntax_test.py
+		python3 tools/coordinator_policy_selftest.py
 		GUIDED_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GUIDED_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
 		VPS_OUT="$(JHT_NOVPS=1 JHT_VPS_CONTRACT_TEST=1 godot --headless --quit-after 3 . 2>&1)"
 		printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
+		CHAT_NOTICE_OUT="$(JHT_NOVPS=1 JHT_CHAT_NOTIFICATION_TEST=1 godot --headless --quit-after 3 . 2>&1)"
+		printf '%s\n' "$CHAT_NOTICE_OUT" | grep "CHAT-NOTIFICATION-TEST PASS"
+		CHAT_UI_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_CHAT_UI_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$CHAT_UI_OUT" | grep "CHAT-UI-TEST PASS"
 		PIPE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_PIPELINE_FORCE_TEST=scout godot --headless . 2>&1)"
 		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
 		ENTRY_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_ENTRY_TEST=analista godot --headless . 2>&1)"
@@ -68,6 +74,9 @@ case "$MODE" in
 		printf '%s\n' "$AGENT_UI_OUT" | grep "AGENT-UI-TEST PASS"
 		USAGE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_USAGE_PANEL_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$USAGE_OUT" | grep "USAGE-PANEL-TEST PASS"
+		COORD_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_TEST=1 \
+			JHT_COORDINATOR_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$COORD_OUT" | grep "COORDINATOR-CONSOLE-TEST PASS"
 		echo "[run.sh] TEST OK"
 		;;
 	boot)

@@ -972,6 +972,9 @@ export type DashboardPosition = {
   salary_max: number | null;
   salary_currency: string;
   found_at: string | null;
+  // Quando lo Scorer ha assegnato lo score (scores.scored_at), null se
+  // non ancora valutata — alimenta la tabella "posizioni nuove".
+  scored_at: string | null;
   last_action_at: string;
   // Chi ha eseguito l'ultima azione: ruolo (scout/analista/scorer/scrittore/
   // critico/user) e nome istanza (es. 'scout-1', fallback al ruolo).
@@ -1037,7 +1040,67 @@ async function getLatestFeedbackByLegacyId(
   return map;
 }
 
-export async function getSwipeDecks(limit = 100): Promise<{
+// true quando i dati arrivano da Supabase (e quindi il feedback utente —
+// position_feedback — è disponibile); false in local mode (workspace SQLite).
+// È la modalità DATI, distinta da isLocalRequest() che guarda la RICHIESTA.
+export async function isCloudDataMode(): Promise<boolean> {
+  return (await ws()) == null && isSupabaseConfigured;
+}
+
+// Ultimo evento feedback (like/dislike/hide/star) di UNA posizione — alimenta
+// i bottoni giudizio della pagina posizione (stessa semantica di /swipe:
+// event-log append-only, l'ultimo prevale). Cloud-only: in local mode il
+// feedback non è disponibile (position_feedback vive su Supabase).
+export async function getLatestFeedbackForLegacyId(
+  legacyId: number,
+): Promise<{ action: string; score: number | null } | null> {
+  const w = await ws();
+  if (w) return null;
+  if (!isSupabaseConfigured) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("position_feedback")
+    .select("action, score, created_at")
+    .eq("position_legacy_id", legacyId)
+    .in("action", ["like", "dislike", "hide", "star"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error || !data?.length) return null;
+  return { action: data[0].action, score: data[0].score ?? null };
+}
+
+// Mappa legacy_id → giudizio a 4 livelli (ultimo evento feedback) per il
+// filtro "Il tuo feedback" della pagina posizioni. Stessa mappatura inversa
+// di /swipe. Cloud-only: {} in local mode.
+export async function getVerdictMapByLegacyId(): Promise<
+  Record<string, "top" | "review_ok" | "review_low" | "no">
+> {
+  const w = await ws();
+  if (w) return {};
+  if (!isSupabaseConfigured) return {};
+  const supabase = await createClient();
+  const fb = await getLatestFeedbackByLegacyId(supabase);
+  const out: Record<string, "top" | "review_ok" | "review_low" | "no"> = {};
+  for (const [k, v] of fb) {
+    out[k] =
+      v.action === "star"
+        ? "top"
+        : v.action === "dislike" || v.action === "hide"
+          ? v.score === 2
+            ? "review_low"
+            : "no"
+          : v.score != null && v.score <= 2
+            ? "review_low"
+            : v.score != null && v.score >= 5
+              ? "top"
+              : "review_ok";
+  }
+  return out;
+}
+
+// limit = tetto di SICUREZZA payload (e max righe per request di Supabase),
+// non un cap voluto del mazzo: l'utente scorre tutto il backlog (20/07).
+export async function getSwipeDecks(limit = 1000): Promise<{
   pending: PositionWithScore[];
   reviewed: SwipeReviewedRow[];
 }> {
@@ -1064,14 +1127,17 @@ export async function getSwipeDecks(limit = 100): Promise<{
     supabase
       .from("positions")
       .select(
-        "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, jd_summary, jd_text, scores ( total_score )",
+        // NIENTE jd_summary/jd_text: senza cap il mazzo supera le 900 card e
+        // i testi inline affossavano SSR/hydration — la card li scarica
+        // on-demand da /api/positions/[legacyId]/summary.
+        "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, scores ( total_score )",
       )
       // 'excluded' incluso: le posizioni giudicate "non interessante"
       // devono restare visitabili nel mazzo reviewed.
       .in("status", ["scored", "ready", "excluded"])
       .is("deleted_at", null)
       .order("found_at", { ascending: true })
-      .limit(limit * 4),
+      .limit(limit),
     getLatestFeedbackByLegacyId(supabase),
   ]);
   const { data, error } = positionsRes;
@@ -1220,6 +1286,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       salary_max: typeof salary_max === "number" ? salary_max : null,
       salary_currency,
       found_at: p.found_at ?? null,
+      scored_at: (s?.scored_at as string | null) ?? null,
       last_action_at: last_action_at || (p.found_at ?? ""),
       last_action_by,
       last_action_actor,

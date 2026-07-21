@@ -17,7 +17,9 @@ var _t := 0.0
 
 func _init(printer_rect: Rect2) -> void:
 	_rect = printer_rect
-	position = printer_rect.get_center()
+	# Stessa baseline del FurnitureNode: il nuovo sprite è verticale e il
+	# pannello/slot vivono molto sopra il vecchio blockout rettangolare.
+	position = Vector2(printer_rect.get_center().x, printer_rect.end.y)
 	z_index = 1
 	instance = self
 
@@ -25,6 +27,7 @@ func _init(printer_rect: Rect2) -> void:
 static func ping(secs: float) -> void:
 	if instance:
 		instance._busy = maxf(instance._busy, secs)
+		instance.set_process(true)
 
 func _process(delta: float) -> void:
 	_t += delta
@@ -35,17 +38,22 @@ func _process(delta: float) -> void:
 	elif _was_busy:
 		_was_busy = false
 		queue_redraw()  # un ultimo frame per pulire LED e foglio
+	else:
+		set_process(false)  # a riposo dorme: lo risveglia il prossimo ping
 
 func _draw() -> void:
 	if _busy <= 0.0:
 		return
+	var s := _rect.size.x / 150.0
 	# LED di stato che lampeggia sul fronte del mobile
 	var on := fmod(_t, 0.5) < 0.3
-	draw_circle(Vector2(_rect.size.x * 0.34, -6), 3.0,
+	draw_circle(Vector2(43.0, -126.0) * s, 3.2 * s,
 			LED if on else Color(LED, 0.25))
-	# il foglio esce a scatti dal cassetto frontale (loop ~1.2s)
+	# Un foglio nuovo cresce dallo slot già illustrato; le pagine statiche
+	# rendono la stampante leggibile anche quando l'effetto non è attivo.
 	var k := fmod(_t, 1.2) / 1.2
-	var h := 16.0 * minf(1.0, k * 1.4)
-	draw_rect(Rect2(Vector2(-16, 8 - h), Vector2(32, h)), SHEET)
-	draw_rect(Rect2(Vector2(-16, 8 - h), Vector2(32, h)),
+	var h := 24.0 * s * minf(1.0, k * 1.5)
+	var sheet := Rect2(Vector2(-28.0 * s, -111.0 * s), Vector2(54.0 * s, h))
+	draw_rect(sheet, SHEET)
+	draw_rect(sheet,
 			Color(0.55, 0.55, 0.6, 0.8), false, 1.0)

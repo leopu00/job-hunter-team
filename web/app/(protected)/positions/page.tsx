@@ -3,8 +3,12 @@ import {
   getPositions,
   getSeenPositionIds,
   getSourceDistribution,
+  getVerdictMapByLegacyId,
 } from "@/lib/queries";
 import { colorForFamily } from "@/lib/position-classifier";
+import { scoreSpectrumCss } from "@/lib/score-color";
+import DeckSaver from "./DeckSaver";
+import { IconStar, IconThumbsMeh, IconThumbsUp, IconX } from "../swipe/icons";
 import {
   getExchangeRates,
   convertCurrency,
@@ -38,20 +42,6 @@ const STATUS_COLORS: Record<string, string> = {
   excluded: "var(--color-red)",
 };
 
-function scoreClass(s?: number) {
-  if (!s) return "text-[var(--color-dim)]";
-  if (s >= 75) return "text-[var(--color-green)]";
-  if (s >= 55) return "text-[var(--color-yellow)]";
-  return "text-[var(--color-red)]";
-}
-
-function scoreBg(s?: number) {
-  if (!s) return "var(--color-border)";
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
-}
-
 const LOCALE_TAG: Record<string, string> = {
   it: "it-IT",
   en: "en-US",
@@ -82,6 +72,18 @@ function formatFoundAt(ts: string | null | undefined, locale: string) {
   });
 }
 
+// Mini-tag del giudizio utente sulle righe/card (stessi colori/icone di
+// /swipe): rende visibile il feedback direttamente in lista.
+const FB_TAG: Record<
+  string,
+  { color: string; Icon: (p: { size?: number }) => React.ReactElement }
+> = {
+  top: { color: "var(--color-green)", Icon: IconStar },
+  review_ok: { color: "var(--color-blue)", Icon: IconThumbsUp },
+  review_low: { color: "var(--color-orange)", Icon: IconThumbsMeh },
+  no: { color: "var(--color-red)", Icon: IconX },
+};
+
 interface PageProps {
   searchParams: Promise<{
     status?: string;
@@ -97,6 +99,7 @@ interface PageProps {
     cscore?: string; // "lo-hi" range voto critico (0-10)
     cnoscore?: string; // "1" = includi posizioni senza voto
     writereq?: string; // "1" = solo selezionate (write_requested); "0" = solo non
+    fb?: string; // CSV giudizi utente: top,review_ok,review_low,no,none
     sort?: string;
     dir?: string;
     page?: string;
@@ -226,6 +229,42 @@ const T: Record<string, Record<string, string>> = {
     de: "Neu — noch nicht angesehen",
     fr: "Nouvelle — pas encore vue",
     pt: "Nova — ainda não vista",
+  },
+  fb_top: {
+    it: "Molto interessante",
+    en: "Very interesting",
+    hu: "Nagyon érdekes",
+    es: "Muy interesante",
+    de: "Sehr interessant",
+    fr: "Très intéressant",
+    pt: "Muito interessante",
+  },
+  fb_review_ok: {
+    it: "Interessante",
+    en: "Interesting",
+    hu: "Érdekes",
+    es: "Interesante",
+    de: "Interessant",
+    fr: "Intéressant",
+    pt: "Interessante",
+  },
+  fb_review_low: {
+    it: "Poco interessante",
+    en: "Slightly interesting",
+    hu: "Kevéssé érdekes",
+    es: "Poco interesante",
+    de: "Wenig interessant",
+    fr: "Peu intéressant",
+    pt: "Pouco interessante",
+  },
+  fb_no: {
+    it: "Non interessante",
+    en: "Not interesting",
+    hu: "Nem érdekes",
+    es: "No interesante",
+    de: "Uninteressant",
+    fr: "Pas intéressant",
+    pt: "Não interessante",
   },
   remote_loc: {
     it: "Remote",
@@ -525,6 +564,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const remotes = csv(params.remote);
   const sources = csv(params.source);
   const verdicts = csv(params.verdict);
+  const fbSel = csv(params.fb);
   const families = csv(params.family);
   const countries = csv(params.country);
   const cities = csv(params.city);
@@ -593,14 +633,30 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // le escluse sono rumore. La regola salta se l'utente sceglie stati
   // espliciti dalla sidebar (es. vuole proprio le escluse) o chiede le
   // senza-score (noscore=1).
-  // La soglia 40 rispecchia la RULE-04 dello Scorer (score<40 → excluded):
-  // copre anche le sbavature dell'agente sul bordo (36-39 lasciate scored).
-  const positions =
-    statuses.length || unscored || scoreBands.length
+  // La soglia sotto-40 NON vive qui: è la RULE-04 dello Scorer (score<40 →
+  // excluded) e va rispettata NEI DATI — la vista non maschera niente.
+  let positions =
+    statuses.length || unscored
       ? allPositions
       : allPositions.filter(
-          (p) => p.score != null && p.score >= 40 && p.status !== "excluded",
+          (p) =>
+            p.score != null &&
+            // "Non interessante" implica escluse: col filtro fb=no attivo
+            // il default nascondi-escluse si allenta, sennò risultato vuoto.
+            (p.status !== "excluded" || fbSel.includes("no")),
         );
+
+  // Giudizi utente (event-log, ultimo prevale): servono sia al filtro
+  // "Il tuo feedback" sia ai mini-tag sulle righe/card.
+  const vmap = await getVerdictMapByLegacyId();
+  const verdictOfP = (p: PositionWithScore) =>
+    p.legacy_id != null ? vmap[String(p.legacy_id)] : undefined;
+  if (fbSel.length) {
+    positions = positions.filter((p) => {
+      const v = verdictOfP(p);
+      return v ? fbSel.includes(v) : fbSel.includes("none");
+    });
+  }
 
   // Pagination computed values
   const totalResults = positions.length;
@@ -618,6 +674,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     if (remotes.length) merged.remote = remotes.join(",");
     if (sources.length) merged.source = sources.join(",");
     if (verdicts.length) merged.verdict = verdicts.join(",");
+    if (fbSel.length) merged.fb = fbSel.join(",");
     if (families.length) merged.family = families.join(",");
     if (countries.length) merged.country = countries.join(",");
     if (cities.length) merged.city = cities.join(",");
@@ -778,6 +835,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             stessa query, stessa paginazione, ma una card compatta per
             posizione — titolo+score, azienda+località, stato+categoria+
             data. Tap sulla card = pagina dettaglio. */}
+        {/* Sequenza corrente (filtri+ordinamento) per prev/next nel
+            dettaglio: tutte le posizioni filtrate, non solo la pagina. */}
+        <DeckSaver ids={positions.map((p) => String(p.id))} />
         <div className="md:hidden flex flex-col gap-2">
           {visiblePositions.length === 0 ? (
             <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-dim)] text-[11px]">
@@ -785,38 +845,62 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             </div>
           ) : (
             visiblePositions.map((p: PositionWithScore) => (
-              <Link
+              <div
                 key={p.id}
-                href={`/positions/${p.id}`}
-                className="block rounded-lg border p-3 no-underline"
+                className="rounded-lg border p-3"
                 style={{
                   borderColor: "var(--color-border)",
                   background: "var(--color-card)",
                 }}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <span className="flex items-start gap-2 min-w-0">
+                  {/* SOLO il titolo è il link: la card-link intera al tap
+                      sottolineava ogni riga (a:hover globale; su touch la
+                      variante hover: di Tailwind non esiste — media query
+                      hover:hover — quindi non è sovrascrivibile lì). */}
+                  <Link
+                    href={`/positions/${p.id}`}
+                    className="min-w-0 text-[13px] font-semibold leading-snug no-underline"
+                    style={{
+                      color: "var(--color-green)",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {p.title}{" "}
+                    {/* NEW inline nel flusso del titolo (inline-block: non
+                        eredita l'underline). Giudicata = letta: niente NEW. */}
                     <UnseenDot
                       id={String(p.id)}
                       label={tr("unseen_marker")}
-                      initialSeen={p.seen}
+                      initialSeen={p.seen || verdictOfP(p) != null}
                     />
+                  </Link>
+                  <span className="shrink-0 flex items-center gap-1.5">
+                    {(() => {
+                      const v = verdictOfP(p);
+                      const tag = v ? FB_TAG[v] : null;
+                      return tag ? (
+                        <span
+                          style={{ color: tag.color }}
+                          title={tr(`fb_${v}`)}
+                          aria-label={tr(`fb_${v}`)}
+                        >
+                          <tag.Icon size={13} />
+                        </span>
+                      ) : null;
+                    })()}
                     <span
-                      className="text-[13px] font-semibold leading-snug text-[var(--color-bright)]"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
                       style={{
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
+                        color: scoreSpectrumCss(p.score),
+                        borderColor: scoreSpectrumCss(p.score),
                       }}
                     >
-                      {p.title}
+                      {p.score ?? "—"}
                     </span>
-                  </span>
-                  <span
-                    className={`shrink-0 text-[13px] font-bold tabular-nums ${scoreClass(p.score)}`}
-                  >
-                    {p.score ?? "—"}
                   </span>
                 </div>
                 <div className="mt-1 text-[11px] text-[var(--color-muted)] truncate">
@@ -852,7 +936,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     {formatFoundAt(p.last_action_at || p.found_at, locale)}
                   </span>
                 </div>
-              </Link>
+              </div>
             ))
           )}
         </div>
@@ -1003,11 +1087,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Titolo — una riga, troncato con … se troppo lungo */}
                       <td className="px-4 py-3 font-medium">
                         <span className="flex items-center gap-2">
-                          <UnseenDot
-                            id={String(p.id)}
-                            label={tr("unseen_marker")}
-                            initialSeen={p.seen}
-                          />
                           <Link
                             href={`/positions/${p.id}`}
                             title={p.title ?? undefined}
@@ -1015,6 +1094,25 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           >
                             {p.title}
                           </Link>
+                          <UnseenDot
+                            id={String(p.id)}
+                            label={tr("unseen_marker")}
+                            initialSeen={p.seen || verdictOfP(p) != null}
+                          />
+                          {(() => {
+                            const v = verdictOfP(p);
+                            const tag = v ? FB_TAG[v] : null;
+                            return tag ? (
+                              <span
+                                className="shrink-0"
+                                style={{ color: tag.color }}
+                                title={tr(`fb_${v}`)}
+                                aria-label={tr(`fb_${v}`)}
+                              >
+                                <tag.Icon size={12} />
+                              </span>
+                            ) : null;
+                          })()}
                         </span>
                       </td>
                       {/* Azienda */}
@@ -1098,7 +1196,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 justify-center">
                             <span
-                              className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
+                              className="text-[12px] font-semibold w-6 text-right tabular-nums"
+                              style={{ color: scoreSpectrumCss(p.score) }}
                             >
                               {p.score ?? "—"}
                             </span>
@@ -1110,7 +1209,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                                 className="h-full rounded-full"
                                 style={{
                                   width: `${p.score ?? 0}%`,
-                                  background: scoreBg(p.score),
+                                  background: scoreSpectrumCss(p.score),
                                 }}
                               />
                             </div>

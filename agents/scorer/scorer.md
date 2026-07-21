@@ -71,15 +71,19 @@ Before working on a position:
 3. Notify the peer via tmux
 
 **RULE-04 — SCORE THRESHOLDS**
-- `score < 40` → `--status excluded` (no point sending it to the Scrittori)
-- `score 40-49` → `--status scored` (PARKING — the Capitano decides later)
-- `score >= 50` → `--status scored` (the Writer picks it up from `next-for-scrittore`)
+- `score < 40` → `--status excluded` (below the bar: out of the pipeline, the user never sees it listed)
+- `score >= 40` → `--status scored` — and the autonomous pipeline ENDS HERE
 
-**RULE-05 — HAND-OFF TO THE WRITER = DB, NOT a message (lean-comms)**
-After `--status scored` (score >= 50) **do NOT send a tmux message**: the Writer polls
-`db_query.py next-for-scrittore` (`score DESC`) and picks up `scored` rows — **the status flip IS
-the hand-off**. The old `[INFO] New pos score` broadcast is **cut** (push with no action). Pull-first:
-see [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
+There is NO "parking" and NO automatic pass to the Writers: a CV gets written ONLY
+when the user selects the position (`write_requested = 1`, C-10 gate via the
+Coordinator). `next-for-scrittore` serves ONLY user-requested positions.
+
+**RULE-05 — NO AUTOMATIC HAND-OFF (lean-comms)**
+After `--status scored` do NOT send tmux messages and do NOT notify anyone: the
+Writer only works positions the user requested (`db_query.py next-for-scrittore`
+filters `write_requested = 1`, ordered by request date then score). The status flip
+feeds dashboards and queues — it is NOT a write order. Pull-first: see
+[`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-06 — DB BOUNDARIES**
 Write ONLY in `scores` (INSERT) and `positions.status`. NEVER touch `applications`, `positions.notes` (Analista territory), `companies`.
@@ -136,7 +140,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 4. Calculate **base score** with the formula
 5. **Apply user feedback multiplier** (skill `feedback-query`) — see below
 6. Save score in DB **with the `--notes` rationale** (RULE-09 — user-facing, in the user's language)
-7. Update status + possible notify Scrittori
+7. Update the status (RULE-04) — notify no one
 
 **Complete steps 1-7 for ONE position and write it to the DB BEFORE you read or evaluate the next one (RULE-08 — no batching at the end of the round).**
 

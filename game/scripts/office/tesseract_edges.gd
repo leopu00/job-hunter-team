@@ -25,12 +25,17 @@ func _ready() -> void:
 	material = mat
 
 func _process(delta: float) -> void:
+	# La geometria è statica: pulsare via self_modulate è un uniform per-item
+	# e NON ri-esegue _draw. Prima si ri-tessellavano 24 polilinee additive a
+	# ogni frame (~36 allocazioni di array): il singolo costo più alto sulle
+	# iGPU vecchie (HD 4400).
 	_t += delta
-	queue_redraw()
+	self_modulate.a = 0.80 + 0.20 * sin(_t * 1.4)
 
 func _draw() -> void:
+	# Eseguito una volta sola: i comandi restano in cache del CanvasItem.
 	var f := FurnitureDefs.FLOOR
-	var pulse := 0.80 + 0.20 * sin(_t * 1.4)
+	var pulse := 1.0
 	var corners := [
 		{"pos": f.position, "dirs": [Vector2.RIGHT, Vector2.DOWN]},
 		{"pos": Vector2(f.end.x, f.position.y), "dirs": [Vector2.LEFT, Vector2.DOWN]},
