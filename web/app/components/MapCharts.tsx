@@ -1082,17 +1082,21 @@ function MobileFilterPill({
   const toggleLabel = tr(panelsHidden ? "panels_show" : "panels_hide");
 
   return (
+    // NB: wrapper NON-positioned, a differenza del FilterButton desktop:
+    // il banner assoluto risale al contenitore della riga controlli
+    // (bottom-center, già centrato nel viewport) → "centrato" = centrato
+    // nello SCHERMO. Ancorato alla pill sbordava sempre da un lato
+    // (la pill sta a destra della riga).
     <div
       className="md:hidden flex"
       style={{
-        position: "relative",
         flexDirection: "column",
         alignItems: "center",
         pointerEvents: "auto",
       }}
     >
       {open && chips.length > 0 && (
-        <ChipsBanner chips={chips} clearAll={clearAll} tr={tr} align="right" />
+        <ChipsBanner chips={chips} clearAll={clearAll} tr={tr} align="mobile" />
       )}
 
       <div
@@ -1212,10 +1216,11 @@ function ChipsBanner({
   chips: FilterChipDesc[];
   clearAll: () => void;
   tr: Tr;
-  // "center" (desktop: pill in mezzo alla riga) | "right" (mobile: la
-  // pill sta a destra e il banner centrato sbordava dallo schermo —
-  // ancorato al bordo destro della pill si apre verso sinistra).
-  align?: "center" | "right";
+  // "center" = centrato sul wrapper della pill (desktop). "mobile" =
+  // stesso centraggio ma sul contenitore riga-controlli (il wrapper
+  // mobile non è positioned) e con cap larghezza fisso: niente unità
+  // viewport, ambigue sotto lo zoom globale.
+  align?: "center" | "mobile";
 }) {
   return (
     <div
@@ -1223,14 +1228,13 @@ function ChipsBanner({
       style={{
         position: "absolute",
         bottom: "calc(100% + 8px)",
-        ...(align === "center"
-          ? { left: "50%", transform: "translateX(-50%)" }
-          : { right: 0 }),
+        left: "50%",
+        transform: "translateX(-50%)",
         padding: 10,
         width: 360,
         // NB niente unità viewport (ambigue sotto zoom, vedi page.tsx):
         // su mobile il cap fisso tiene il banner dentro lo schermo.
-        maxWidth: align === "right" ? 300 : "calc(100vw - 48px)",
+        maxWidth: align === "mobile" ? 296 : "calc(100vw - 48px)",
         maxHeight: 240,
         overflowY: "auto",
         overscrollBehavior: "contain",
