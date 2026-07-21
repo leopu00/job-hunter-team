@@ -137,6 +137,22 @@ const S := {
 	"hud.dialogue_next": "[INVIO] continua",
 	"hud.dialogue_skip": "[ESC] chiudi",
 
+	"tour.title": "TOUR DELL'UFFICIO",
+	"tour.step_assistant": "Saluta l'Assistente",
+	"tour.step_depts": "Il giro dei reparti",
+	"tour.step_doctor": "Una visita al Dottore",
+	"tour.step_mentor": "La chiacchierata col Mentor",
+	"tour.step_coordinator": "Il Coordinatore e il setup",
+	"tour.step_launch": "Prepara il lancio",
+	"tour.chk_container": "Container attivo",
+	"tour.chk_provider": "Provider collegato",
+	"tour.chk_profile": "Profilo completo",
+	"tour.hint_talk": "Clicca l'Assistente col diamante per iniziare il giro.",
+	"tour.hint_follow": "L'Assistente ti fa strada: seguila, pensa a tutto lei.",
+	"tour.hint_launch": "Completa i tre requisiti: il pulsante giallo in alto apre la checklist.",
+	"tour.skip": "SALTA IL TOUR",
+	"tour.done": "TOUR COMPLETATO ✓",
+
 	# ── Pannello reparto ──────────────────────────────────────────
 	"dept.desks": "POSTAZIONI",
 	"dept.desk_free": "postazione libera",
