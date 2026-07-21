@@ -143,12 +143,24 @@ export default async function MapPage() {
 
           Layout MOBILE (≤767px, scelta utente 21/07): le 4 card d'angolo
           sovrapposte al globo erano inutilizzabili al tocco (larghe 50vw,
-          si coprivano a vicenda). Qui diventano una colonna di card
-          collassabili SOTTO il globo, in flusso normale: si scrolla giù,
-          si impostano i filtri, si torna su a interagire col globo. Le
-          regole sono !important perché devono vincere sugli stili inline
-          desktop (position:absolute ecc.). Ordine: globo → Location →
-          Score → Tipologie → Posizioni. Desktop invariato. */}
+          si coprivano a vicenda). Qui diventano una colonna: globo che
+          riempie TUTTO lo spazio disponibile (flex:1) e le 4 barre
+          collassabili ancorate in fondo, sopra la barra del browser —
+          niente spazio vuoto (rifinitura utente 21/07). Aprire una card
+          la espande verso l'alto comprimendo il globo (maplibre segue il
+          resize del container); se le card aperte eccedono la viewport
+          la colonna scorre internamente (min-height del globo = 30dvh).
+          L'altezza NON usa vh/dvh: dentro il contesto zoom (--zoom 1.15)
+          Safari scala le unità viewport e Chromium no, quindi qualunque
+          formula pura-CSS è giusta su un motore e sbagliata sull'altro
+          (era il vuoto ~13% sotto le card su iOS; position:fixed
+          bottom:0 finiva invece DIETRO la toolbar di Safari). Si usa
+          --map-vh: l'altezza visibile misurata in JS da visualViewport
+          (px reali, non ambigui, aggiornata al collasso della toolbar) —
+          la setta LockBodyScroll. Le regole sono !important perché
+          devono vincere sugli stili inline desktop (position:absolute
+          ecc.). Ordine: globo → Location → Score → Tipologie →
+          Posizioni. Desktop invariato. */}
       <style>{`
         .map-bare-chart > div:first-child {
           background: transparent !important;
@@ -157,29 +169,34 @@ export default async function MapPage() {
         }
         @media (max-width: 767px) {
           .map-shell {
-            height: auto !important;
-            overflow: visible !important;
+            height: calc(var(--map-vh, 700) / var(--zoom) * 1px - 3.5rem) !important;
             display: flex;
             flex-direction: column;
-            padding-bottom: 24px;
+            overflow-y: auto !important;
+            overscroll-behavior: contain;
           }
           .map-globe-layer {
             position: relative !important;
             inset: auto !important;
-            height: 52dvh;
+            flex: 1;
+            min-height: 30dvh;
             order: 0;
           }
           .map-float-card {
             position: static !important;
             width: auto !important;
             max-width: none !important;
-            margin: 12px 16px 0;
+            margin: 8px 12px 0;
+            flex-shrink: 0;
             box-shadow: none !important;
           }
           .map-card-location { order: 1; }
           .map-card-score { order: 2; }
           .map-card-donut { order: 3; }
-          .map-card-positions { order: 4; }
+          .map-card-positions {
+            order: 4;
+            margin-bottom: calc(10px + env(safe-area-inset-bottom));
+          }
         }
       `}</style>
 
