@@ -5,6 +5,11 @@ import { useState, useEffect, useCallback } from "react";
 import { Tabs, Tab } from "../../components/Tabs";
 import { useToast } from "../../components/Toast";
 import SettingsProfile from "../../components/SettingsProfile";
+import {
+  AccountCard,
+  LanguageCard,
+  CurrencyCard,
+} from "../../components/SettingsCloudSections";
 import WorkHoursPicker from "../../components/WorkHoursPicker";
 import { DarkModeToggle } from "@/app/theme-provider";
 import { AVAILABLE_CURRENCIES, BASE_CURRENCIES } from "@/lib/exchange-rates";
@@ -633,6 +638,8 @@ export default function SettingsPage() {
             </h1>
           </div>
 
+          <AccountCard />
+
           <div
             className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg"
             style={{
@@ -648,6 +655,10 @@ export default function SettingsPage() {
             </p>
             <DarkModeToggle />
           </div>
+
+          <LanguageCard />
+
+          <CurrencyCard />
 
           <Link
             href="/settings/cloud-sync"
