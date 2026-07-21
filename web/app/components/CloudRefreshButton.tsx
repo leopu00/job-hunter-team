@@ -255,20 +255,29 @@ export default function CloudRefreshButton() {
     // Client non configurato (mock): niente websocket, resta solo il catch-up.
     if (typeof supabase.channel !== "function") return;
 
-    const channel = supabase
-      .channel("cloud-sync-status")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "team_state" },
-        (payload: { new: StateRow }) => apply(payload.new),
-      )
-      .subscribe((status: string) => {
-        // Alla (ri)connessione recupera lo stato corrente (eventi persi a socket giù).
-        if (status === "SUBSCRIBED") void catchUp();
-      });
+    // Realtime NON disponibile (es. Safari che rifiuta il websocket:
+    // "The operation is insecure") ≠ pagina rotta: si degrada al solo
+    // catch-up. subscribe() può lanciare SINCRONO dal costruttore WebSocket
+    // e senza il try/catch l'eccezione buttava giù l'intera dashboard.
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel("cloud-sync-status")
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "team_state" },
+          (payload: { new: StateRow }) => apply(payload.new),
+        )
+        .subscribe((status: string) => {
+          // Alla (ri)connessione recupera lo stato corrente (eventi persi a socket giù).
+          if (status === "SUBSCRIBED") void catchUp();
+        });
+    } catch {
+      channel = null;
+    }
 
     return () => {
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [remote, loggedIn, router]);
 
