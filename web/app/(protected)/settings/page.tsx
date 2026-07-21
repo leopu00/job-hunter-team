@@ -640,22 +640,6 @@ export default function SettingsPage() {
 
           <AccountCard />
 
-          <div
-            className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg"
-            style={{
-              border: "1px solid var(--color-border)",
-              background: "var(--color-card)",
-            }}
-          >
-            <p
-              className="m-0 text-[11px] font-semibold"
-              style={{ color: "var(--color-muted)" }}
-            >
-              {tr("theme")}
-            </p>
-            <DarkModeToggle />
-          </div>
-
           <LanguageCard />
 
           <CurrencyCard />
@@ -686,6 +670,23 @@ export default function SettingsPage() {
               {tr("open")}
             </span>
           </Link>
+
+          {/* Tema per ultimo (scelta utente 21/07). */}
+          <div
+            className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg"
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "var(--color-card)",
+            }}
+          >
+            <p
+              className="m-0 text-[11px] font-semibold"
+              style={{ color: "var(--color-muted)" }}
+            >
+              {tr("theme")}
+            </p>
+            <DarkModeToggle />
+          </div>
         </div>
       </main>
     );
@@ -748,6 +749,10 @@ export default function SettingsPage() {
 
           {tab === "general" && (
             <>
+              {/* Lingua della UI (7 locali): qui perché il selettore in
+                  navbar è stato rimosso (21/07). Distinta da "Lingua
+                  default" sotto, che è la lingua del workspace jht.config. */}
+              <LanguageCard />
               <Row label={tr("app_name")}>
                 <input
                   style={inp}

@@ -8,8 +8,21 @@
 // Vercel dove ~/.jht/jobs.db non esiste (era il bug della vecchia pagina).
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+
+// Breadcrumb: senza, dalla pagina token non si tornava alle Impostazioni
+// (feedback utente 21/07).
+const BC: Record<Locale, { dashboard: string; settings: string }> = {
+  it: { dashboard: "Dashboard", settings: "Impostazioni" },
+  en: { dashboard: "Dashboard", settings: "Settings" },
+  hu: { dashboard: "Vezérlőpult", settings: "Beállítások" },
+  es: { dashboard: "Panel", settings: "Ajustes" },
+  de: { dashboard: "Dashboard", settings: "Einstellungen" },
+  fr: { dashboard: "Tableau de bord", settings: "Paramètres" },
+  pt: { dashboard: "Painel", settings: "Definições" },
+};
 
 interface TokenRow {
   id: string;
@@ -251,7 +264,9 @@ const T: Record<
 };
 
 export default function CloudTokensClient() {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
+  const bc = BC[locale] ?? BC.en;
   const [tokens, setTokens] = useState<TokenRow[] | null>(null);
   const [name, setName] = useState("");
   const [createState, setCreateState] = useState<CreateState>({ kind: "idle" });
@@ -341,6 +356,32 @@ export default function CloudTokensClient() {
   return (
     <div className="min-h-screen px-5 py-8 max-w-2xl mx-auto">
       <header className="mb-8">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
+          <Link
+            href="/dashboard"
+            className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
+          >
+            {bc.dashboard}
+          </Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">
+            /
+          </span>
+          <Link
+            href="/settings"
+            className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
+          >
+            {bc.settings}
+          </Link>
+          <span className="text-[var(--color-border)]" aria-hidden="true">
+            /
+          </span>
+          <span
+            className="text-[10px] text-[var(--color-muted)]"
+            aria-current="page"
+          >
+            {t.title}
+          </span>
+        </nav>
         <h1 className="text-xl font-medium tracking-tight text-[var(--color-white)] mb-1">
           {t.title}
         </h1>
