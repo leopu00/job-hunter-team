@@ -355,6 +355,24 @@ const T: Record<string, Record<string, string>> = {
     fr: "Supprime tous les fichiers dans ~/.jht/cache/",
     pt: "Elimina todos os ficheiros em ~/.jht/cache/",
   },
+  web_notifications: {
+    it: "Notifiche",
+    en: "Notifications",
+    hu: "Értesítések",
+    es: "Notificaciones",
+    de: "Benachrichtigungen",
+    fr: "Notifications",
+    pt: "Notificações",
+  },
+  web_notifications_desc: {
+    it: "Notifiche del browser: messaggi del team e regole sulle posizioni",
+    en: "Browser notifications: team messages and position rules",
+    hu: "Böngészőértesítések: csapatüzenetek és pozíciószabályok",
+    es: "Notificaciones del navegador: mensajes del equipo y reglas de posiciones",
+    de: "Browser-Benachrichtigungen: Team-Nachrichten und Stellen-Regeln",
+    fr: "Notifications du navigateur : messages de l'équipe et règles sur les postes",
+    pt: "Notificações do navegador: mensagens da equipe e regras de vagas",
+  },
   cloud_sync: {
     it: "Sincronizzazione cloud",
     en: "Cloud sync",
@@ -648,6 +666,33 @@ export default function SettingsPage() {
             </p>
             <DarkModeToggle />
           </div>
+
+          <Link
+            href="/settings/notifications"
+            className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg no-underline transition-colors hover:border-[var(--color-border-glow)]"
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "var(--color-card)",
+            }}
+          >
+            <div>
+              <p
+                className="m-0 text-[11px] font-semibold"
+                style={{ color: "var(--color-muted)" }}
+              >
+                {tr("web_notifications")}
+              </p>
+              <p
+                className="m-0 text-[10px]"
+                style={{ color: "var(--color-dim)" }}
+              >
+                {tr("web_notifications_desc")}
+              </p>
+            </div>
+            <span className="text-[10px] font-semibold tracking-widest uppercase shrink-0 text-[var(--color-green)]">
+              {tr("open")}
+            </span>
+          </Link>
 
           <Link
             href="/settings/cloud-sync"

@@ -733,12 +733,17 @@ async function saveCloudCursor(cursor) {
  * Missing/corrupt = null → endpoint server applica default lookback 7gg.
  */
 function loadPullCursor() {
-  if (!existsSync(CLOUD_PULL_CURSOR_FILE)) return { since: null };
+  if (!existsSync(CLOUD_PULL_CURSOR_FILE)) return { since: null, messages_since: null };
   try {
     const parsed = JSON.parse(readFileSync(CLOUD_PULL_CURSOR_FILE, 'utf-8'));
-    return { since: typeof parsed?.since === 'string' ? parsed.since : null };
+    return {
+      since: typeof parsed?.since === 'string' ? parsed.since : null,
+      // [JHT-MSG-BACKFLOW] cursore dedicato reply/ack chat web (timeline
+      // diversa dai flag posizione).
+      messages_since: typeof parsed?.messages_since === 'string' ? parsed.messages_since : null,
+    };
   } catch {
-    return { since: null };
+    return { since: null, messages_since: null };
   }
 }
 
@@ -1550,7 +1555,9 @@ async function handlePullDesiredState(options = {}) {
     return;
   }
 
-  const cursor = options.full ? { since: null } : loadPullCursor();
+  const cursor = options.full
+    ? { since: null, messages_since: null }
+    : loadPullCursor();
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
 
   // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: leggi i flag desired-state da Supabase
@@ -1585,7 +1592,29 @@ async function handlePullDesiredState(options = {}) {
           if (Number.isNaN(maxMs) || ms > maxMs) { maxMs = ms; maxTs = ts; }
         }
       }
-      body = { positions: rows, cursor: maxTs };
+      // [JHT-MSG-BACKFLOW] Reply/ack chat web: lettura diretta con cursore
+      // dedicato. Un errore qui non deve far cadere il pull dei flag →
+      // try separato, fallback = nessuna reply in questo tick.
+      let msgRows = [];
+      let msgCursor = cursor.messages_since || null;
+      try {
+        const msgSinceVal = cursor.messages_since
+          || new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+        msgRows = await reader.readPendingReplyChanges({ since: msgSinceVal, limit: 500 });
+        let msgMaxMs = Date.parse(msgSinceVal);
+        let msgMaxTs = msgSinceVal;
+        for (const m of msgRows) {
+          for (const ts of [m.user_reply_at, m.acknowledged_at]) {
+            if (!ts) continue;
+            const ms = Date.parse(ts);
+            if (!Number.isNaN(ms) && ms > msgMaxMs) { msgMaxMs = ms; msgMaxTs = ts; }
+          }
+        }
+        msgCursor = msgMaxTs;
+      } catch (err) {
+        console.error(pc.yellow(`  reply-backflow (direct) warn: ${err.message}`));
+      }
+      body = { positions: rows, cursor: maxTs, pending_replies: msgRows, messages_cursor: msgCursor };
     } catch (err) {
       const auth = err instanceof SupabaseAuthError;
       console.error(pc.yellow(`  pull (direct) ${auth ? 'auth' : 'warn'}: ${err.message}${auth ? '' : ' — fallback Vercel'}`));
@@ -1595,6 +1624,7 @@ async function handlePullDesiredState(options = {}) {
   if (body === null) {
     const params = new URLSearchParams();
     if (cursor.since) params.set('since', cursor.since);
+    if (cursor.messages_since) params.set('messages_since', cursor.messages_since);
     if (options.limit) params.set('limit', String(options.limit));
     const pullUrl = `${baseUrl}/api/cloud-sync/pull-desired-state?${params.toString()}`;
     let res;
@@ -1644,11 +1674,55 @@ async function handlePullDesiredState(options = {}) {
     return;
   }
 
+  // ── [JHT-MSG-BACKFLOW] Reply/ack chat web → SQLite locale ──
+  // L'agente legge le reply dalla SQLite locale (user_reply_at NOT NULL AND
+  // agent_seen_reply_at NULL, iniettate nel prompt): senza questo apply la
+  // chat web era un guscio — la reply restava sul cloud e nessuno rispondeva.
+  // Merge NON distruttivo (COALESCE): il locale resta autoritativo se ha già
+  // un valore; la WHERE salta i no-op per non riscrivere righe a ogni tick.
+  const pendingReplies = Array.isArray(body.pending_replies) ? body.pending_replies : [];
+  const messagesCursorNext = body.messages_cursor || cursor.messages_since || null;
+  if (pendingReplies.length > 0) {
+    let repliesApplied = 0;
+    try {
+      const mdb = new DatabaseSync(dbPath);
+      mdb.exec('PRAGMA busy_timeout = 5000');
+      const upd = mdb.prepare(`
+        UPDATE pending_user_messages
+           SET acknowledged_at = COALESCE(acknowledged_at, ?),
+               user_reply      = COALESCE(user_reply, ?),
+               user_reply_at   = COALESCE(user_reply_at, ?)
+         WHERE id = ?
+           AND (
+             (acknowledged_at IS NULL AND ? IS NOT NULL) OR
+             (user_reply IS NULL AND ? IS NOT NULL)
+           )
+      `);
+      for (const m of pendingReplies) {
+        const localId = Number(m.legacy_id);
+        if (!Number.isInteger(localId) || localId <= 0) continue;
+        const ack = m.acknowledged_at || null;
+        const reply = m.user_reply || null;
+        const replyAt = m.user_reply_at || null;
+        const res = upd.run(ack, reply, replyAt, localId, ack, reply);
+        repliesApplied += res.changes;
+      }
+      mdb.close();
+    } catch (err) {
+      console.error(pc.yellow(`  reply-backflow warn: ${err.message}`));
+    }
+    // Loggato anche in silent: è il segnale "l'utente ha scritto dal web".
+    if (repliesApplied > 0) {
+      console.log(pc.green(`✓ Reply/ack web applicati in locale: ${repliesApplied}`));
+    }
+  }
+
   if (positions.length === 0) {
-    // Aggiorniamo comunque il cursor al server-side value (no-op se cancellato
-    // o uguale, ma riallinea dopo un eventuale --full).
-    if (body.cursor && body.cursor !== cursor.since) {
-      await savePullCursor({ since: body.cursor });
+    // Aggiorniamo comunque i cursor al server-side value (no-op se uguali,
+    // ma riallinea dopo un eventuale --full).
+    const nextSince = body.cursor || cursor.since;
+    if (nextSince !== cursor.since || messagesCursorNext !== cursor.messages_since) {
+      await savePullCursor({ since: nextSince, messages_since: messagesCursorNext });
     }
     return;
   }
@@ -1794,8 +1868,11 @@ async function handlePullDesiredState(options = {}) {
     console.log(successMsg);
   }
 
-  if (body.cursor) {
-    await savePullCursor({ since: body.cursor });
+  if (body.cursor || messagesCursorNext !== cursor.messages_since) {
+    await savePullCursor({
+      since: body.cursor || cursor.since,
+      messages_since: messagesCursorNext,
+    });
   }
   if (body.has_more) {
     log(pc.dim('  has_more=true: rilancia per recuperare le righe rimanenti'));

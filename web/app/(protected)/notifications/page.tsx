@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useLocale } from "@/lib/use-locale";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 import type { Locale } from "@/i18n/config";
 
 type Priority = "low" | "normal" | "high" | "urgent";
@@ -368,10 +369,22 @@ export default function NotificationsPage() {
   useEffect(() => {
     fetchNotifs();
   }, [fetchNotifs]);
+  // [JHT-NO-CLIENT-POLLING] Su cloud ogni fetch e' un'invocazione Vercel
+  // fatturata: niente interval (refresh al mount, al cambio filtro, al
+  // rientro del tab e dopo le azioni). In locale il container e' co-locato
+  // → il polling 5s resta per la vista "live".
+  const isCloud = useIsCloud();
   useEffect(() => {
+    if (isCloud !== false) {
+      const onVisible = () => {
+        if (document.visibilityState === "visible") void fetchNotifs();
+      };
+      document.addEventListener("visibilitychange", onVisible);
+      return () => document.removeEventListener("visibilitychange", onVisible);
+    }
     const id = setInterval(fetchNotifs, 5000);
     return () => clearInterval(id);
-  }, [fetchNotifs]);
+  }, [fetchNotifs, isCloud]);
 
   const markRead = async (id: string) => {
     await fetch(`/api/notifications?id=${id}`, { method: "PATCH" });
