@@ -239,7 +239,10 @@ export default function MessagesList({ initialMessages }: Props) {
         setMessages(next);
       } else {
         merged = row;
-        if (merged.agent === activeAgentRef.current && !merged.acknowledged_at) {
+        if (
+          merged.agent === activeAgentRef.current &&
+          !merged.acknowledged_at
+        ) {
           merged = { ...merged, acknowledged_at: new Date().toISOString() };
           void fetch(`/api/pending-messages/${merged.id}/ack`, {
             method: "POST",
