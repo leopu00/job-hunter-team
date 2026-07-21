@@ -4,7 +4,11 @@ extends Node2D
 ## Deve essere sempre esplicito: senza tag un agente working sembrava avere
 ## uno stato sconosciuto, mentre attesa/pausa/throttle erano leggibili.
 
-const CPU_ACTIVE_THRESHOLD := 0.3
+## Soglia calibrata sui vitals REALI (VPS Leone, 21/07, ~36k campioni):
+## la TUI a riposo sta sotto il 3,2% (p85, spinner e redraw), il lavoro
+## vero sopra il 15% (p90=24). 8% è il centro della valle: niente
+## lampeggio da agente fermo, nessun lavoro perso.
+const CPU_ACTIVE_THRESHOLD := 8.0
 const LED_BLINK_PERIOD := 0.9
 const LED_ON_TIME := 0.45
 
@@ -38,7 +42,7 @@ func set_suppressed(on: bool) -> void:
 	visible = not on
 
 ## Il LED non interpreta lo stato tmux: segue esclusivamente il sampler CPU.
-## Soglia strettamente maggiore di 0,3%, come da contratto operativo.
+## Soglia strettamente maggiore di CPU_ACTIVE_THRESHOLD.
 func set_cpu_activity(cpu_pct: float, known := true) -> void:
 	var was_active := cpu_led_active()
 	_cpu_pct = maxf(0.0, cpu_pct)
@@ -129,7 +133,7 @@ func _draw() -> void:
 	draw_rect(r, Color(col.r, col.g, col.b, 0.85), false, 1.4)
 	var led_pos := Vector2(r.position.x + 9.0, 0.0)
 	# Base spenta sempre presente. Il verde compare e pulsa soltanto quando
-	# l'ultimo campione CPU fresco supera davvero lo 0,3%.
+	# l'ultimo campione CPU fresco supera davvero la soglia di lavoro.
 	draw_circle(led_pos, 3.0, Color(0.13, 0.13, 0.18, 1.0))
 	if cpu_led_active():
 		var alpha := 1.0 if _cpu_led_lit() else 0.16

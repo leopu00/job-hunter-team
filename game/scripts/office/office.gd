@@ -1578,9 +1578,9 @@ func _agent_ui_selftest() -> void:
 	var cpu_stale_ok := false
 	if not agents.is_empty():
 		var probe: AgentNPC = agents[0]
-		probe.set_cpu_activity(0.3, true)
+		probe.set_cpu_activity(AgentStateTag.CPU_ACTIVE_THRESHOLD, true)
 		var at_threshold: Dictionary = probe.state_tag.debug_cpu_led()
-		probe.set_cpu_activity(0.31, true)
+		probe.set_cpu_activity(AgentStateTag.CPU_ACTIVE_THRESHOLD + 0.1, true)
 		var above_threshold: Dictionary = probe.state_tag.debug_cpu_led()
 		var lit_before := bool(above_threshold.get("lit", false))
 		probe.state_tag._process(0.5)
@@ -1588,7 +1588,7 @@ func _agent_ui_selftest() -> void:
 		cpu_threshold_ok = not bool(at_threshold.get("active", true)) \
 				and bool(above_threshold.get("active", false))
 		cpu_blink_ok = lit_before and not lit_after
-		_on_agent_cpu_telemetry({"agent_cpu": {"capitano": 0.4},
+		_on_agent_cpu_telemetry({"agent_cpu": {"capitano": 25.0},
 				"agent_vitals_age_s": 0.0}, [])
 		var captain := _find_agent("coordinatore")
 		cpu_mapping_ok = captain != null \
