@@ -105,6 +105,15 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
+  // [JHT-SYNC-UX] `sync_requested_at` è un rendezvous confrontato con
+  // `sync_completed_at` scritto dalla VPS: se arrivasse l'orologio del
+  // BROWSER (skew arbitrario sulle macchine utente) la richiesta potrebbe
+  // risultare "già servita" e il Sync now non fare mai nulla. Timbro lato
+  // server; per il client il valore è solo un trigger.
+  if (source !== "token" && "sync_requested_at" in update) {
+    update.sync_requested_at = new Date().toISOString();
+  }
+
   if (typeof update.agents_enabled !== "undefined") {
     if (
       typeof update.agents_enabled !== "object" ||

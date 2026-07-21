@@ -181,11 +181,23 @@ export default function CloudSyncStatusBanner() {
 
   useEffect(() => {
     refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // [JHT-NO-CLIENT-POLLING] Il banner su cloud renderizza null ma il vecchio
+  // interval continuava a chiamare /api/local/sync/status ogni 30s da ogni
+  // tab aperto (invocazioni Vercel a vuoto). Il polling parte SOLO quando lo
+  // status conferma contesto locale + login: lì il server è co-locato e il
+  // giro non costa nulla.
+  const pollEligible = !!status && !status.remote && status.logged_in;
+  useEffect(() => {
+    if (!pollEligible) return;
     const id = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
     }, 30_000);
     return () => clearInterval(id);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pollEligible]);
 
   async function handleSync() {
     setError(null);

@@ -811,10 +811,14 @@ export async function POST(req: NextRequest) {
       });
 
     if (payload.length > 0) {
-      const { data: upserted, error } = await admin
-        .from("pending_user_messages")
-        .upsert(payload, { onConflict: "user_id,legacy_id" })
-        .select("id");
+      // [JHT-MSG-BACKFLOW] Merge lato DB (mig 057) invece di upsert cieco:
+      // i campi utente (acknowledged_at, user_reply, user_reply_at) scritti
+      // dal web NON vengono più sovrascritti dai NULL della SQLite locale
+      // a ogni tick di full-push. Vedi commento nella migration.
+      const { data: upsertedCount, error } = await admin.rpc(
+        "upsert_pending_user_messages_merge",
+        { p_rows: payload },
+      );
 
       if (error) {
         return NextResponse.json(
@@ -822,7 +826,8 @@ export async function POST(req: NextRequest) {
           { status: 500 },
         );
       }
-      pendingMessagesUpserted = upserted?.length ?? 0;
+      pendingMessagesUpserted =
+        typeof upsertedCount === "number" ? upsertedCount : payload.length;
     }
   }
 
@@ -1075,6 +1080,33 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         profileError = `yaml parse: ${(e as Error).message}`;
       }
+    }
+  }
+
+  // [JHT-DATA-FRESH-SIGNAL] Timbro `sync_completed_at` quando il push ha
+  // portato dati DASHBOARD nuovi (positions/scores/…): i browser aperti sono
+  // sottoscritti a team_state via Supabase Realtime (websocket diretto, zero
+  // invocazioni Vercel) e usano questo timestamp come segnale "dati freschi
+  // disponibili" → refresh throttled senza polling né reload manuale.
+  // Esclusi pending_user_messages (full-push a ogni tick, hanno già i loro
+  // eventi Realtime per-riga) e sentinel/profile (non-dashboard). Best-effort:
+  // UPDATE puro (no-op se la riga team_state non esiste ancora).
+  const dashboardRowsChanged =
+    positionsUpserted +
+    scoresUpserted +
+    applicationsUpserted +
+    companiesUpserted +
+    highlightsUpserted +
+    positionTransitionsUpserted +
+    tombstonesApplied;
+  if (dashboardRowsChanged > 0) {
+    try {
+      await admin
+        .from("team_state")
+        .update({ sync_completed_at: new Date().toISOString() })
+        .eq("user_id", userId);
+    } catch {
+      // best-effort: il segnale di freschezza non deve rompere il push
     }
   }
 
