@@ -7,6 +7,16 @@ import {
   isCloudDataMode,
 } from "@/lib/queries";
 import { gazetteerCity } from "@/lib/city-gazetteer";
+import {
+  getExchangeRates,
+  convertCurrency,
+  currencySymbol,
+  formatMoneyCompact,
+} from "@/lib/exchange-rates";
+import {
+  DISPLAY_CURRENCY_COOKIE,
+  sanitizeDisplayCurrency,
+} from "@/lib/display-currency";
 import { countryFlag } from "@/lib/country-flag";
 import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
@@ -889,16 +899,38 @@ export default async function PositionDetailPage({ params }: PageProps) {
   const cvFileName = application?.cv_pdf_path?.split("/").pop() || null;
   const clFileName = application?.cl_pdf_path?.split("/").pop() || null;
 
+  // Valuta di visualizzazione (Impostazioni → Valuta stipendi): valuta
+  // diversa da quella dell'annuncio → importo convertito ("≈") con
+  // l'originale compatto tra parentesi, così il numero resta confrontabile
+  // con le altre posizioni senza perdere il dato dichiarato.
+  const displayCurrency = sanitizeDisplayCurrency(
+    cookieStore.get(DISPLAY_CURRENCY_COOKIE)?.value,
+  );
+  const rates = await getExchangeRates();
+
   function formatSalary(
     min: number | null,
     max: number | null,
     currency?: string | null,
   ) {
     if (!min && !max) return null;
-    const c = currency ?? "EUR";
+    const from = currency ?? "EUR";
+    if (from === displayCurrency) {
+      if (min && max)
+        return `${from} ${min.toLocaleString()} – ${max.toLocaleString()}`;
+      if (min) return `${from} ${min.toLocaleString()}+`;
+      return null;
+    }
+    const conv = (v: number) =>
+      Math.round(convertCurrency(v, from, displayCurrency, rates));
+    const sym = currencySymbol(displayCurrency);
+    const orig =
+      min && max
+        ? `${from} ${formatMoneyCompact(min)}–${formatMoneyCompact(max)}`
+        : `${from} ${formatMoneyCompact((min ?? max)!)}+`;
     if (min && max)
-      return `${c} ${min.toLocaleString()} – ${max.toLocaleString()}`;
-    if (min) return `${c} ${min.toLocaleString()}+`;
+      return `≈ ${sym}${conv(min).toLocaleString()} – ${conv(max).toLocaleString()} (${orig})`;
+    if (min) return `≈ ${sym}${conv(min).toLocaleString()}+ (${orig})`;
     return null;
   }
 

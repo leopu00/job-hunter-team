@@ -7,6 +7,7 @@ import {
   UNCATEGORIZED_LABEL,
 } from "@/lib/position-classifier";
 import type { DashboardPosition } from "@/lib/queries";
+import { DISPLAY_CURRENCY_COOKIE } from "@/lib/display-currency";
 import PositionTypesPie from "@/app/components/PositionTypesPie";
 import ScoreDistribution from "@/app/components/ScoreDistribution";
 import LocationBarList, {
@@ -136,6 +137,16 @@ export default function DashboardLinkedCharts({
   const [selectedScoreBins, setSelectedScoreBins] = useState<number[]>([]);
   const [selectedSalaryBins, setSelectedSalaryBins] = useState<number[]>([]);
   const [displayCurrency, setDisplayCurrency] = useState<string>("EUR");
+  // Selezione iniziale = valuta preferita (Impostazioni → Valuta stipendi),
+  // se tra quelle offerte dal selettore. In useEffect (non nell'initializer)
+  // per non creare mismatch di idratazione col render server.
+  useEffect(() => {
+    const m = document.cookie.match(
+      new RegExp(`(?:^|;\\s*)${DISPLAY_CURRENCY_COOKIE}=([^;]+)`),
+    );
+    const pref = m ? decodeURIComponent(m[1]).toUpperCase() : null;
+    if (pref && currencies.includes(pref)) setDisplayCurrency(pref);
+  }, [currencies]);
 
   // Banner "Filtri · N": apre/chiude la lista dei filtri attivi rimovibili.
   const [filtersOpen, setFiltersOpen] = useState(false);
