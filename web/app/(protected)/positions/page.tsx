@@ -16,6 +16,10 @@ import {
   formatMoneyCompact,
   type Rates,
 } from "@/lib/exchange-rates";
+import {
+  DISPLAY_CURRENCY_COOKIE,
+  sanitizeDisplayCurrency,
+} from "@/lib/display-currency";
 import { getServerLocale } from "@/lib/server-locale";
 import type { PositionWithScore } from "@/lib/types";
 import { cookies } from "next/headers";
@@ -78,7 +82,8 @@ const FB_TAG: Record<
   string,
   { color: string; Icon: (p: { size?: number }) => React.ReactElement }
 > = {
-  top: { color: "var(--color-green)", Icon: IconStar },
+  // Stella "Molto interessante" = giallo oro ovunque (21/07).
+  top: { color: "var(--color-yellow)", Icon: IconStar },
   review_ok: { color: "var(--color-blue)", Icon: IconThumbsUp },
   review_low: { color: "var(--color-orange)", Icon: IconThumbsMeh },
   no: { color: "var(--color-red)", Icon: IconX },
@@ -623,10 +628,13 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   );
   const availableSources = sourceList.map((s) => s.source);
 
-  // Tassi di cambio per le colonne Stipendio/Mensile (default valuta EUR,
-  // come la tabella del dashboard). Errore rete → fallback già in getExchangeRates.
+  // Tassi di cambio per le colonne Stipendio/Mensile. La valuta arriva
+  // dalla preferenza utente (Impostazioni → Valuta stipendi, cookie);
+  // default EUR. Errore rete → fallback già in getExchangeRates.
   const rates = await getExchangeRates();
-  const displayCurrency = "EUR";
+  const displayCurrency = sanitizeDisplayCurrency(
+    cookieStore.get(DISPLAY_CURRENCY_COOKIE)?.value,
+  );
 
   // Default (scelta utente 19/07): SOLO posizioni con uno score e non
   // escluse — le 'new'/'checked' senza analisi non dicono nulla di utile e

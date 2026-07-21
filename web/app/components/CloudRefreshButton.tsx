@@ -408,32 +408,41 @@ export default function CloudRefreshButton() {
     let cancelled = false;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let channel: any = null;
+    // Realtime NON disponibile (es. Safari che rifiuta il websocket: "The
+    // operation is insecure") ≠ pagina rotta: si degrada al solo catch-up.
+    // subscribe()/il costruttore WebSocket possono lanciare SINCRONO, quindi
+    // TUTTO il setup del canale (auth + subscribe) sta in try/catch: senza,
+    // l'eccezione buttava giù l'intera dashboard.
     void (async () => {
-      // Auth del canale col JWT user PRIMA della subscribe: senza, il canale
-      // parte con role anon → la RLS blocca in silenzio ogni postgres_changes
-      // e il completamento non arriva MAI (root cause del "Sync now morto").
-      const { data } = (await supabase.auth.getSession()) as {
-        data: { session: { access_token: string } | null };
-      };
-      if (cancelled) return;
-      const jwt = data.session?.access_token;
-      if (jwt && supabase.realtime?.setAuth) {
-        supabase.realtime.setAuth(jwt);
+      try {
+        // Auth del canale col JWT user PRIMA della subscribe: senza, il canale
+        // parte con role anon → la RLS blocca in silenzio ogni postgres_changes
+        // e il completamento non arriva MAI (root cause del "Sync now morto").
+        const { data } = (await supabase.auth.getSession()) as {
+          data: { session: { access_token: string } | null };
+        };
+        if (cancelled) return;
+        const jwt = data.session?.access_token;
+        if (jwt && supabase.realtime?.setAuth) {
+          supabase.realtime.setAuth(jwt);
+        }
+        channel = supabase
+          .channel("cloud-sync-status")
+          .on(
+            "postgres_changes",
+            { event: "UPDATE", schema: "public", table: "team_state" },
+            (payload: { new: StateRow }) => {
+              if (!cancelled) apply(payload.new);
+            },
+          )
+          .subscribe((status: string) => {
+            // Alla (ri)connessione recupera lo stato corrente (eventi persi
+            // a socket giù).
+            if (status === "SUBSCRIBED" && !cancelled) void catchUp();
+          });
+      } catch {
+        channel = null;
       }
-      channel = supabase
-        .channel("cloud-sync-status")
-        .on(
-          "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "team_state" },
-          (payload: { new: StateRow }) => {
-            if (!cancelled) apply(payload.new);
-          },
-        )
-        .subscribe((status: string) => {
-          // Alla (ri)connessione recupera lo stato corrente (eventi persi
-          // a socket giù).
-          if (status === "SUBSCRIBED" && !cancelled) void catchUp();
-        });
     })();
 
     return () => {

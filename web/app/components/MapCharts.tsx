@@ -110,6 +110,24 @@ const T: Record<string, Record<string, string>> = {
     fr: "Filtres",
     pt: "Filtros",
   },
+  panels_show: {
+    it: "Mostra filtri",
+    en: "Show filters",
+    hu: "Szűrők megjelenítése",
+    es: "Mostrar filtros",
+    de: "Filter anzeigen",
+    fr: "Afficher les filtres",
+    pt: "Mostrar filtros",
+  },
+  panels_hide: {
+    it: "Nascondi filtri",
+    en: "Hide filters",
+    hu: "Szűrők elrejtése",
+    es: "Ocultar filtros",
+    de: "Filter ausblenden",
+    fr: "Masquer les filtres",
+    pt: "Ocultar filtros",
+  },
   filters_active: {
     it: "Filtri attivi",
     en: "Active filters",
@@ -270,6 +288,12 @@ export default function MapCharts({
   }>({ location: true, score: true, donut: true, remote: true });
   const toggleCollapse = (k: "location" | "score" | "donut" | "remote") =>
     setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+  // MOBILE: nasconde in blocco la colonna delle 4 card (classe
+  // map-card-offscreen, attiva solo nella media query di page.tsx) —
+  // stesso pulsante per mostrare/nascondere, così il globo può prendersi
+  // tutto lo schermo (scelta utente 21/07). Su desktop non ha effetto.
+  const [panelsHidden, setPanelsHidden] = useState(false);
+  const offscreen = panelsHidden ? " map-card-offscreen" : "";
   // Richiesta di "focus" su un pin: cliccando una posizione (con
   // coordinate) nella card Posizioni, la mappa ci zooma sopra e la
   // seleziona. `tick` permette di ri-triggerare lo stesso id.
@@ -626,13 +650,65 @@ export default function MapCharts({
       cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key],
     );
 
+  // Chips dei filtri attivi (banner rimozione rapida) — condivise dalla
+  // pill desktop (FilterButton) e dalla pill mobile a due zone.
+  const filterChips: FilterChipDesc[] = [];
+  for (const t of selectedTypes) {
+    filterChips.push({
+      key: `t-${t}`,
+      label: labels[t] ?? String(t),
+      color: typeDist.find((d) => d.family === t)?.color,
+      onRemove: () => toggleType(t),
+    });
+  }
+  for (const r of selectedRanges) {
+    filterChips.push({
+      key: `r-${r.lo}-${r.hi}`,
+      label: `${r.lo}–${r.hi}`,
+      onRemove: () => toggleRange(r),
+    });
+  }
+  if (unscoredSelected) {
+    filterChips.push({
+      key: "unscored",
+      label: tr("no_score"),
+      onRemove: () => setUnscoredSelected(false),
+    });
+  }
+  for (const c of selectedCountries) {
+    filterChips.push({
+      key: `co-${c}`,
+      label: c,
+      onRemove: () => toggleCountry(c),
+    });
+  }
+  for (const ck of selectedCities) {
+    // Mostra "City" (Country implicito) nel chip per brevità.
+    const [country, city] = ck.split("|");
+    filterChips.push({
+      key: `ci-${ck}`,
+      label: city === "(country-only)" ? country : (city ?? country),
+      onRemove: () => toggleCity(ck),
+    });
+  }
+  const clearAllFilters = () => {
+    setSelectedTypes([]);
+    setSelectedRanges([]);
+    setUnscoredSelected(false);
+    setSelectedCountries([]);
+    setSelectedCities([]);
+  };
+
   return (
     <>
       {/* Globo — riceve tutte le selezioni di filtro. La pill "Filtri"
           è passata come bottomCenterExtra così sta nella STESSA riga
           flex dei controlli mappa (Vista generale + zoom) in basso-
           centro → l'insieme si ricentra da solo quando compare. */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
+      <div
+        className="map-globe-layer"
+        style={{ position: "absolute", inset: 0, zIndex: 0 }}
+      >
         <JobsGlobeLazy
           fullscreen
           selectedTypes={selectedTypes}
@@ -645,66 +721,30 @@ export default function MapCharts({
             typeDist.map((d) => [d.family, d.color ?? "var(--color-muted)"]),
           )}
           bottomCenterExtra={
-            <FilterButton
-              chips={(() => {
-                const arr: FilterChipDesc[] = [];
-                for (const t of selectedTypes) {
-                  arr.push({
-                    key: `t-${t}`,
-                    label: labels[t] ?? String(t),
-                    color: typeDist.find((d) => d.family === t)?.color,
-                    onRemove: () => toggleType(t),
-                  });
-                }
-                for (const r of selectedRanges) {
-                  arr.push({
-                    key: `r-${r.lo}-${r.hi}`,
-                    label: `${r.lo}–${r.hi}`,
-                    onRemove: () => toggleRange(r),
-                  });
-                }
-                if (unscoredSelected) {
-                  arr.push({
-                    key: "unscored",
-                    label: tr("no_score"),
-                    onRemove: () => setUnscoredSelected(false),
-                  });
-                }
-                for (const c of selectedCountries) {
-                  arr.push({
-                    key: `co-${c}`,
-                    label: c,
-                    onRemove: () => toggleCountry(c),
-                  });
-                }
-                for (const ck of selectedCities) {
-                  // Mostra "City" (Country implicito) nel chip per brevità.
-                  const [country, city] = ck.split("|");
-                  arr.push({
-                    key: `ci-${ck}`,
-                    label:
-                      city === "(country-only)" ? country : (city ?? country),
-                    onRemove: () => toggleCity(ck),
-                  });
-                }
-                return arr;
-              })()}
-              clearAll={() => {
-                setSelectedTypes([]);
-                setSelectedRanges([]);
-                setUnscoredSelected(false);
-                setSelectedCountries([]);
-                setSelectedCities([]);
-              }}
-              tr={tr}
-            />
+            <>
+              <MobileFilterPill
+                chips={filterChips}
+                clearAll={clearAllFilters}
+                panelsHidden={panelsHidden}
+                onTogglePanels={() => setPanelsHidden((v) => !v)}
+                tr={tr}
+              />
+              <FilterButton
+                chips={filterChips}
+                clearAll={clearAllFilters}
+                tr={tr}
+              />
+            </>
           }
         />
       </div>
 
       {/* Card Score top-right: header collassabile + grafico. */}
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        className={
+          "map-float-card map-card-score bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+          offscreen
+        }
         style={{
           position: "absolute",
           top: CARD_TOP,
@@ -757,7 +797,10 @@ export default function MapCharts({
           posizione con coordinate → zoom sul pin in mappa; remote →
           apre il dettaglio. */}
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        className={
+          "map-float-card map-card-positions bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+          offscreen
+        }
         style={{
           position: "absolute",
           bottom: CARD_BOTTOM,
@@ -893,6 +936,7 @@ export default function MapCharts({
           tree={effectiveLocationTree}
           tr={tr}
           collapsed={collapsed.location}
+          extraClass={offscreen}
           onToggleCollapse={() => toggleCollapse("location")}
           onPositionClick={openPosition}
           openCountry={openCountry}
@@ -940,7 +984,10 @@ export default function MapCharts({
       {/* Position Types donut — overlay bottom-left. Header collassabile
           + donut/legenda. È il riferimento dimensionale delle 4 card. */}
       <div
-        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        className={
+          "map-float-card map-card-donut bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+          offscreen
+        }
         style={{
           position: "absolute",
           bottom: CARD_BOTTOM,
@@ -1008,6 +1055,226 @@ type FilterChipDesc = {
 // libera). Cliccando si apre un banner sopra il bottone con tutti i
 // filtri selezionati, ognuno rimovibile via "×", più "rimuovi tutto".
 // Se non c'è nessun filtro attivo, il bottone non viene mostrato.
+// Pill mobile a DUE ZONE (scelta utente 21/07, dopo il pasticcio della
+// pill unica che aveva perso il banner): imbuto+badge = apre il banner
+// dei filtri attivi con rimozione rapida (come su desktop); freccetta =
+// alza/nasconde la colonna dei 4 pannelli. Senza filtri attivi la zona
+// sinistra non ha nulla da mostrare e l'intera pill fa da toggle.
+function MobileFilterPill({
+  chips,
+  clearAll,
+  panelsHidden,
+  onTogglePanels,
+  tr,
+}: {
+  chips: FilterChipDesc[];
+  clearAll: () => void;
+  panelsHidden: boolean;
+  onTogglePanels: () => void;
+  tr: Tr;
+}) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (chips.length === 0 && open) setOpen(false);
+  }, [chips.length, open]);
+
+  const toggleLabel = tr(panelsHidden ? "panels_show" : "panels_hide");
+
+  return (
+    // NB: wrapper NON-positioned, a differenza del FilterButton desktop:
+    // il banner assoluto risale al contenitore della riga controlli
+    // (bottom-center, già centrato nel viewport) → "centrato" = centrato
+    // nello SCHERMO. Ancorato alla pill sbordava sempre da un lato
+    // (la pill sta a destra della riga).
+    <div
+      className="md:hidden flex"
+      style={{
+        flexDirection: "column",
+        alignItems: "center",
+        pointerEvents: "auto",
+      }}
+    >
+      {open && chips.length > 0 && (
+        <ChipsBanner chips={chips} clearAll={clearAll} tr={tr} align="mobile" />
+      )}
+
+      <div
+        className="flex items-stretch rounded-full border"
+        style={{
+          background: "var(--color-panel)",
+          borderColor: open
+            ? "var(--color-border-glow)"
+            : "var(--color-border)",
+          overflow: "hidden",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+        }}
+      >
+        {chips.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-label={`${tr("filters_active")} · ${chips.length}`}
+              title={tr("filters_active")}
+              className="flex items-center gap-1.5"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--color-bright)",
+                padding: "8px 10px 8px 12px",
+                cursor: "pointer",
+              }}
+            >
+              <FunnelIcon />
+              <span
+                className="rounded-full text-[9px] font-bold tabular-nums"
+                style={{
+                  background: "var(--color-green)",
+                  color: "var(--color-void)",
+                  minWidth: 15,
+                  height: 15,
+                  lineHeight: "15px",
+                  textAlign: "center",
+                  padding: "0 3px",
+                }}
+              >
+                {chips.length}
+              </span>
+            </button>
+            <span
+              aria-hidden
+              style={{ width: 1, background: "var(--color-border)" }}
+            />
+          </>
+        )}
+        <button
+          type="button"
+          onClick={onTogglePanels}
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          className="flex items-center gap-1.5"
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "var(--color-bright)",
+            padding: chips.length > 0 ? "8px 12px 8px 10px" : "8px 12px",
+            cursor: "pointer",
+          }}
+        >
+          {chips.length === 0 && <FunnelIcon />}
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+            style={{
+              transition: "transform 0.2s",
+              transform: panelsHidden ? "rotate(180deg)" : "none",
+            }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FunnelIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}
+
+// Banner dei filtri attivi (chips rimovibili + "rimuovi tutto"), ancorato
+// sopra la pill che lo apre. Condiviso tra FilterButton (desktop) e
+// MobileFilterPill.
+function ChipsBanner({
+  chips,
+  clearAll,
+  tr,
+  align = "center",
+}: {
+  chips: FilterChipDesc[];
+  clearAll: () => void;
+  tr: Tr;
+  // "center" = centrato sul wrapper della pill (desktop). "mobile" =
+  // stesso centraggio ma sul contenitore riga-controlli (il wrapper
+  // mobile non è positioned) e con cap larghezza fisso: niente unità
+  // viewport, ambigue sotto lo zoom globale.
+  align?: "center" | "mobile";
+}) {
+  return (
+    <div
+      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+      style={{
+        position: "absolute",
+        bottom: "calc(100% + 8px)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        padding: 10,
+        width: 360,
+        // NB niente unità viewport (ambigue sotto zoom, vedi page.tsx):
+        // su mobile il cap fisso tiene il banner dentro lo schermo.
+        maxWidth: align === "mobile" ? 296 : "calc(100vw - 48px)",
+        maxHeight: 240,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+      }}
+    >
+      <div className="flex items-center justify-between gap-3 px-1">
+        <span
+          className="text-[10px] font-semibold tracking-[0.14em] uppercase"
+          style={{ color: "var(--color-dim)" }}
+        >
+          {tr("filters_active")} · {chips.length}
+        </span>
+        <ClearAllButton onClick={clearAll} tr={tr} />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        {chips.map((c) => (
+          <FilterChip
+            key={c.key}
+            label={c.label}
+            color={c.color}
+            onRemove={c.onRemove}
+            tr={tr}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FilterButton({
   chips,
   clearAll,
@@ -1027,10 +1294,13 @@ function FilterButton({
   if (chips.length === 0) return null;
 
   return (
+    // hidden md:flex — su mobile questa pill NON esiste: il ruolo
+    // "filtri" ce l'ha il toggle pannelli (che mostra anche il
+    // conteggio); due pill imbuto affiancate confondevano (21/07).
     <div
+      className="hidden md:flex"
       style={{
         position: "relative",
-        display: "flex",
         flexDirection: "column",
         alignItems: "center",
         pointerEvents: "auto",
@@ -1038,55 +1308,7 @@ function FilterButton({
     >
       {/* Banner filtri: ancorato in posizione assoluta SOPRA il bottone
           (così non altera il layout della riga controlli). */}
-      {open && (
-        <div
-          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
-          style={{
-            position: "absolute",
-            bottom: "calc(100% + 8px)",
-            left: "50%",
-            transform: "translateX(-50%)",
-            padding: 10,
-            width: 360,
-            maxWidth: "calc(100vw - 48px)",
-            maxHeight: 240,
-            overflowY: "auto",
-            overscrollBehavior: "contain",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-          }}
-        >
-          <div className="flex items-center justify-between gap-3 px-1">
-            <span
-              className="text-[10px] font-semibold tracking-[0.14em] uppercase"
-              style={{ color: "var(--color-dim)" }}
-            >
-              {tr("filters_active")} · {chips.length}
-            </span>
-            <ClearAllButton onClick={clearAll} tr={tr} />
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            {chips.map((c) => (
-              <FilterChip
-                key={c.key}
-                label={c.label}
-                color={c.color}
-                onRemove={c.onRemove}
-                tr={tr}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      {open && <ChipsBanner chips={chips} clearAll={clearAll} tr={tr} />}
 
       <button
         onClick={() => setOpen((v) => !v)}
@@ -1258,6 +1480,7 @@ function LocationTree({
   tree,
   tr,
   collapsed,
+  extraClass,
   onToggleCollapse,
   openCountry,
   openCity,
@@ -1272,6 +1495,9 @@ function LocationTree({
   tree: LocationCountry[];
   tr: Tr;
   collapsed: boolean;
+  // Classe extra dal parent (es. map-card-offscreen quando i pannelli
+  // sono nascosti su mobile).
+  extraClass: string;
   onToggleCollapse: () => void;
   openCountry: string | null;
   openCity: string | null;
@@ -1290,7 +1516,10 @@ function LocationTree({
   const total = tree.reduce((s, c) => s + c.count, 0);
   return (
     <div
-      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+      className={
+        "map-float-card map-card-location bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+        extraClass
+      }
       style={{
         position: "absolute",
         // Angolo in alto a sinistra, stessa dimensione fissa delle altre
