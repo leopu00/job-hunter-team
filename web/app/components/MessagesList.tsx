@@ -8,7 +8,7 @@
 // di reply è per-messaggio); aprire una conversazione marca i suoi non
 // letti come letti, come nel drawer della navbar (MessagesDrawer).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import {
@@ -18,6 +18,7 @@ import {
   KIND_BORDER,
 } from "@/lib/message-display";
 import MessageBody from "@/app/components/MessageBody";
+import { usePendingMessagesLive } from "@/app/hooks/usePendingMessagesLive";
 import type { PendingMessage } from "@/lib/types";
 
 interface Props {
@@ -203,6 +204,51 @@ export default function MessagesList({ initialMessages }: Props) {
   // Ack anche della conversazione aperta di default al primo mount.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => ackAgent(activeAgent), [activeAgent]);
+
+  // Mirror per il merge live (le callback Realtime non vedono lo state).
+  const messagesRef = useRef<PendingMessage[]>(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+  const activeAgentRef = useRef(activeAgent);
+  useEffect(() => {
+    activeAgentRef.current = activeAgent;
+  }, [activeAgent]);
+
+  // [JHT-MSG-REALTIME] Nuovi messaggi e aggiornamenti arrivano via websocket
+  // Supabase (zero Vercel, zero polling): merge in place; se la conversazione
+  // è quella aperta, il messaggio viene ackato subito (l'utente lo sta
+  // guardando), come farebbe openChat.
+  usePendingMessagesLive(
+    useCallback((row, event) => {
+      if (row.delivered_via !== "web") return;
+      const cur = messagesRef.current;
+      const idx = cur.findIndex((m) => m.id === row.id);
+      if (idx < 0 && event === "UPDATE") return; // fuori finestra: ignora
+      let merged: PendingMessage;
+      if (idx >= 0) {
+        const prev = cur[idx];
+        merged = {
+          ...row,
+          acknowledged_at: row.acknowledged_at ?? prev.acknowledged_at,
+          user_reply: row.user_reply ?? prev.user_reply,
+          user_reply_at: row.user_reply_at ?? prev.user_reply_at,
+        };
+        const next = [...cur];
+        next[idx] = merged;
+        setMessages(next);
+      } else {
+        merged = row;
+        if (merged.agent === activeAgentRef.current && !merged.acknowledged_at) {
+          merged = { ...merged, acknowledged_at: new Date().toISOString() };
+          void fetch(`/api/pending-messages/${merged.id}/ack`, {
+            method: "POST",
+          }).catch(() => {});
+        }
+        setMessages([merged, ...cur]);
+      }
+    }, []),
+  );
 
   // Scroll in fondo SOLO dentro il contenitore del thread: scrollIntoView
   // scrollava anche gli antenati (documento incluso) creando il "vuoto

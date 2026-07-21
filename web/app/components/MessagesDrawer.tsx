@@ -6,7 +6,8 @@
 // vista chat del singolo agente con risposta rapida. La panoramica completa
 // resta in /messages; qui vive la lettura veloce.
 // Niente polling (i poller scalano i costi Vercel): fetch al mount, alla
-// riapertura del drawer e quando il tab torna visibile.
+// riapertura del drawer e quando il tab torna visibile + eventi LIVE via
+// Supabase Realtime (websocket diretto, zero Vercel) per i nuovi messaggi.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -19,6 +20,7 @@ import {
   KIND_BORDER,
 } from "@/lib/message-display";
 import MessageBody, { stripInlineMarkdown } from "@/app/components/MessageBody";
+import { usePendingMessagesLive } from "@/app/hooks/usePendingMessagesLive";
 import type { PendingMessage } from "@/lib/types";
 
 const T: Record<string, Record<string, string>> = {
@@ -224,6 +226,46 @@ export default function MessagesDrawer() {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refresh]);
+
+  // Mirror dello stato per il merge live (le callback Realtime non vedono
+  // lo state corrente; gli updater devono restare puri).
+  const messagesRef = useRef<PendingMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // [JHT-MSG-REALTIME] Merge degli eventi live nel drawer: nuovi messaggi
+  // compaiono (e il badge sale) senza refetch né reload. Le UPDATE non
+  // regrediscono mai lo stato ottimistico locale (ack/reply appena fatti).
+  usePendingMessagesLive(
+    useCallback((row, event) => {
+      // Il widget web mostra solo il canale web (stesso filtro dell'API).
+      if (row.delivered_via !== "web") return;
+      const cur = messagesRef.current;
+      const idx = cur.findIndex((m) => m.id === row.id);
+      if (idx < 0 && event === "UPDATE") return; // riga fuori finestra: ignora
+      const wasUnread = idx >= 0 ? !cur[idx].acknowledged_at : false;
+      let merged: PendingMessage;
+      if (idx >= 0) {
+        const prev = cur[idx];
+        merged = {
+          ...row,
+          acknowledged_at: row.acknowledged_at ?? prev.acknowledged_at,
+          user_reply: row.user_reply ?? prev.user_reply,
+          user_reply_at: row.user_reply_at ?? prev.user_reply_at,
+        };
+        const next = [...cur];
+        next[idx] = merged;
+        setMessages(next);
+      } else {
+        merged = row;
+        setMessages([row, ...cur]);
+      }
+      const isUnread = !merged.acknowledged_at;
+      const delta = (isUnread ? 1 : 0) - (wasUnread ? 1 : 0);
+      if (delta !== 0) setUnread((u) => Math.max(0, u + delta));
+    }, []),
+  );
 
   // ESC chiude (prima la chat, poi il drawer); body scroll lock da aperto.
   useEffect(() => {
