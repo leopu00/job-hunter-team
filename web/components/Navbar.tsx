@@ -9,6 +9,8 @@ import UserMenu from './UserMenu'
 
 const LanguageSwitcher = dynamic(() => import('@/app/components/LanguageSwitcher'))
 const MessagesDrawer = dynamic(() => import('@/app/components/MessagesDrawer'))
+// [JHT-WEB-NOTIFICATIONS] agente invisibile: notifiche browser da eventi Realtime
+const WebNotificationsAgent = dynamic(() => import('@/app/hooks/useWebNotifications'))
 
 const T: Record<Locale, { navAria: string }> = {
   it: { navAria: 'Navigazione app' },
@@ -61,6 +63,7 @@ export default function Navbar({ user, locale }: NavbarProps) {
         {/* User / Login */}
         {user ? (
           <div className="flex items-center gap-3 flex-shrink-0 ml-auto md:ml-0">
+            <WebNotificationsAgent />
             <LanguageSwitcher direction="down" />
             <MessagesDrawer />
             <UserMenu avatarUrl={avatarUrl} fullName={fullName} email={email} />
