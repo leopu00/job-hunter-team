@@ -49,8 +49,55 @@ func _process(delta: float) -> void:
 		return
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if dir != Vector2.ZERO:
+		_stop_focus()  # un gesto dell'utente vince sempre sulla regia guidata
 		position += dir * PAN_SPEED * delta / zoom.x
+	elif _follow_target != null:
+		if is_instance_valid(_follow_target):
+			position = _follow_target.global_position + Vector2(0, -40)
+		else:
+			_follow_target = null
 	_clamp_to_world()
+
+## Regia guidata (tour): glissa verso un punto del mondo con uno zoom di
+## contesto. Qualunque input di pan/zoom dell'utente interrompe la corsa.
+var _focus_tween: Tween
+## Inseguimento morbido di un nodo (l'Assistente che accompagna): la
+## position segue il bersaglio, lo smoothing della camera fa il resto.
+var _follow_target: Node2D
+
+func follow(target: Node2D, target_zoom := 1.0) -> void:
+	_stop_focus()
+	_follow_target = target
+	var z := clampf(target_zoom, _zoom_min, ZOOM_MAX)
+	if not is_equal_approx(z, zoom.x):
+		var tw := create_tween()
+		tw.tween_property(self, "zoom", Vector2(z, z), 0.7) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func stop_follow() -> void:
+	_follow_target = null
+
+func focus_on(world_pos: Vector2, target_zoom := 1.0) -> void:
+	_stop_focus()
+	var z := clampf(target_zoom, _zoom_min, ZOOM_MAX)
+	# la destinazione va bloccata sui limiti del mondo allo zoom d'arrivo,
+	# altrimenti il tween termina fuori e _clamp la fa scattare indietro
+	var vp := get_viewport_rect().size / z
+	var world := FurnitureDefs.WORLD
+	var target := Vector2(
+			clampf(world_pos.x, world.position.x + vp.x / 2.0, world.end.x - vp.x / 2.0),
+			clampf(world_pos.y, world.position.y + vp.y / 2.0, world.end.y - vp.y / 2.0))
+	_focus_tween = create_tween()
+	_focus_tween.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_focus_tween.set_parallel()
+	_focus_tween.tween_property(self, "position", target, 0.9)
+	_focus_tween.tween_property(self, "zoom", Vector2(z, z), 0.9)
+
+func _stop_focus() -> void:
+	if _focus_tween:
+		_focus_tween.kill()
+		_focus_tween = null
+	_follow_target = null
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _input_blocked():
@@ -66,6 +113,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					_zoom_at_mouse(1.0 / ZOOM_STEP)
 			MOUSE_BUTTON_LEFT:
 				if event.pressed:
+					_stop_focus()
 					_dragging = true
 					_drag_travel = 0.0
 				elif _dragging:
@@ -81,6 +129,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMagnifyGesture:
 		_zoom_at(event.factor, get_global_mouse_position())
 	elif event is InputEventPanGesture:
+		_stop_focus()
 		position += event.delta * 18.0 / zoom.x
 		_clamp_to_world()
 	# fallback senza mouse né trackpad: +/- zoomano verso il centro vista
@@ -103,6 +152,7 @@ func _zoom_at_mouse(factor: float) -> void:
 
 ## Zoom verso un punto-àncora del mondo, che resta fermo sullo schermo.
 func _zoom_at(factor: float, anchor: Vector2) -> void:
+	_stop_focus()
 	var old_z := zoom.x
 	var z := clampf(old_z * factor, _zoom_min, ZOOM_MAX)
 	if is_equal_approx(z, old_z):

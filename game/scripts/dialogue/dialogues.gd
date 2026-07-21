@@ -270,6 +270,339 @@ const TREES := {
 		},
 	},
 
+	# ── Tour di primo avvio (TourGuide): l'Assistente ACCOMPAGNA fisicamente
+	# l'utente di reparto in reparto e presenta lei ogni tappa; Mentor e
+	# Coordinatore parlano invece in prima persona. Regole (feedback Leone
+	# 21/07): saluto in base all'orario, niente elenco di limiti, opzioni mai
+	# ripetute identiche, esempi concreti e universali, tono personale. ──
+
+	"tour_benvenuto": {
+		"start": {
+			"text": "[caldo] {greeting}! Benvenuto nel tuo ufficio. Da oggi tutte le persone che vedi lavorano per una persona sola: tu.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[caldo] Io sono l'Assistente, la tua persona di fiducia qui dentro. Ti presento la squadra, poi resterò sempre a un click di distanza.",
+			"pose": "a",
+			"choices": [
+				{"text": "Andiamo, fammi strada.", "next": "go"},
+				{"text": "Prima dimmi: cosa posso fare qui?", "next": "can1"},
+			],
+		},
+		"can1": {
+			"text": "[neutro] Puoi girare liberamente: trascina la vista, avvicinati, clicca persone e oggetti. La bacheca è il registro delle candidature, il mappamondo apre la mappa delle offerte, lo scaffale custodisce i CV pronti.",
+			"pose": "b", "next": "can2",
+		},
+		"can2": {
+			"text": "[caldo] Con me, il Coordinatore e il Mentor parlerai spesso: siamo qui per te. E quando collegherai il tuo assistente AI, potrai scriverci liberamente, come in una chat.",
+			"pose": "a", "next": "ready",
+		},
+		"ready": {
+			"text": "[divertito] Pronto? Si comincia dagli Scout, i nostri cercatori.",
+			"pose": "a",
+			"choices": [
+				{"text": "Andiamo.", "next": "go"},
+				{"text": "Me lo riassumi in una riga?", "next": "recap"},
+			],
+		},
+		"recap": {
+			"text": "[caldo] Esplora, clicca, chiedi: l'ufficio è tutto tuo. Il resto te lo mostro strada facendo.",
+			"pose": "a", "next": "go",
+		},
+		"go": {
+			"text": "[caldo] Seguimi, ti faccio strada io.",
+			"pose": "a",
+		},
+	},
+
+	"tour_scout": {
+		"start": {
+			"text": "[caldo] Ecco gli Scout. Battono i siti di annunci giorno e notte e portano a casa le posizioni: da oggi non dovrai più cercare nulla a mano.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] E ascoltano: se preferisci che insistano su un sito piuttosto che su un altro, basta dirlo al Coordinatore. È lui che dà gli ordini, e loro li eseguono alla lettera.",
+			"pose": "b",
+			"choices": [
+				{"text": "E io dove vedo quello che trovano?", "next": "see"},
+				{"text": "Chiaro, andiamo avanti.", "next": "end"},
+			],
+		},
+		"see": {
+			"text": "[caldo] Nella bacheca in sala e nella pagina Posizioni: ogni annuncio con la sua storia completa. Un click e sei dentro.",
+			"pose": "a", "next": "end2",
+		},
+		"end": {
+			"text": "[divertito] Di là ci sono gli Analisti. Ti piaceranno: sono i pignoli del gruppo.",
+			"pose": "a",
+		},
+		"end2": {
+			"text": "[caldo] Ora andiamo dagli Analisti: i pignoli del gruppo.",
+			"pose": "a",
+		},
+	},
+
+	"tour_analisti": {
+		"start": {
+			"text": "[caldo] Gli Analisti prendono ogni annuncio trovato dagli Scout e lo trasformano in un quadro completo.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Riassumono la descrizione del ruolo, studiano l'azienda, trovano l'indirizzo esatto della sede e stimano lo stipendio quando l'annuncio non lo dichiara.",
+			"pose": "b",
+			"choices": [
+				{"text": "E a me cosa cambia?", "next": "why"},
+				{"text": "Capito, proseguiamo.", "next": "end"},
+			],
+		},
+		"why": {
+			"text": "[caldo] Cambia che deciderai in un minuto invece che in un'ora: quando aprirai una posizione troverai già tutto — cosa fanno, dove stanno, quanto offrono.",
+			"pose": "a", "next": "end2",
+		},
+		"end": {
+			"text": "[caldo] Adesso ti presento chi dà i voti: gli Scorer.",
+			"pose": "a",
+		},
+		"end2": {
+			"text": "[divertito] Andiamo dagli Scorer: quelli che danno i voti a tutto.",
+			"pose": "a",
+		},
+	},
+
+	"tour_scorer": {
+		"start": {
+			"text": "[caldo] Gli Scorer cercano il match perfetto tra te e ogni posizione: un numero da 0 a 100, mai un'etichetta.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Incrociano il lavoro di Scout e Analisti con il tuo profilo — che puoi aggiornare quando vuoi — e pesano ogni dettaglio sulle TUE preferenze.",
+			"pose": "b", "next": "n3",
+		},
+		"n3": {
+			"text": "[caldo] Un esempio: se hai chiesto solo lavoro da remoto, una sede a 800 chilometri pesa parecchio sul voto. Se la sede ti è indifferente, quello stesso dettaglio quasi non lo tocca.",
+			"pose": "a",
+			"choices": [
+				{"text": "E se cambio idea sulle preferenze?", "next": "change"},
+				{"text": "Andiamo avanti.", "next": "end"},
+			],
+		},
+		"change": {
+			"text": "[divertito] Aggiorni il profilo e loro ricalibrano i pesi su tutto, anche sul già valutato. Sono permalosi solo se li chiami «calcolatrici».",
+			"pose": "a", "next": "end2",
+		},
+		"end": {
+			"text": "[caldo] E ora la parte che preferisco: gli Scrittori.",
+			"pose": "a",
+		},
+		"end2": {
+			"text": "[caldo] Vieni, ti presento gli Scrittori.",
+			"pose": "a",
+		},
+	},
+
+	"tour_scrittori": {
+		"start": {
+			"text": "[caldo] Gli Scrittori partono dal TUO curriculum: il tuo stile, i tuoi dati, le tue esperienze vere.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Per ogni posizione scelgono le parti giuste della tua storia e cuciono un CV su misura per quell'annuncio. Mai una riga inventata.",
+			"pose": "b", "next": "n3",
+		},
+		"n3": {
+			"text": "[caldo] Poi consegnano tutto al Critico, che li tratta malissimo. Loro incassano, imparano dalla critica e riscrivono: quando il voto sale, la versione è davvero migliore. Esce solo la migliore possibile.",
+			"pose": "a",
+			"choices": [
+				{"text": "E i CV finiti dove li trovo?", "next": "see"},
+				{"text": "Andiamo dal famoso Critico.", "next": "end"},
+			],
+		},
+		"see": {
+			"text": "[caldo] Sullo scaffale CV PRONTI, accanto all'uscita: ogni documento leggibile per intero. L'ultima parola resta sempre tua.",
+			"pose": "a", "next": "end2",
+		},
+		"end": {
+			"text": "[divertito] E ora... il Critico. Non farti impressionare.",
+			"pose": "a",
+		},
+		"end2": {
+			"text": "[divertito] Ora il Critico. Ti avverto: non è famoso per la dolcezza.",
+			"pose": "a",
+		},
+	},
+
+	"tour_critici": {
+		"start": {
+			"text": "[neutro] I Critici sono l'unico reparto che NON deve conoscerti. Non sanno chi sei, non vogliono saperlo e, se lo scoprono, lo dimenticano subito.",
+			"pose": "b", "next": "n2",
+		},
+		"n2": {
+			"text": "[severo] Leggono ogni candidatura come un selezionatore stanco o un filtro automatico: senza affetto, senza contesto, senza sconti. La tua esitazione non li tocca.",
+			"pose": "b", "next": "n3",
+		},
+		"n3": {
+			"text": "[caldo] Sembrano crudeli, ma sono il nostro muro di prova: se un CV sopravvive a loro, può sopravvivere ai filtri veri delle aziende.",
+			"pose": "a",
+			"choices": [
+				{"text": "Quindi bocciano tanto?", "next": "strict"},
+				{"text": "Meglio averli qui che là fuori. Andiamo.", "next": "end"},
+			],
+		},
+		"strict": {
+			"text": "[divertito] Tantissimo, ed è un ottimo segno: ogni bocciatura qui dentro è un no che non riceverai là fuori.",
+			"pose": "a", "next": "end2",
+		},
+		"end": {
+			"text": "[caldo] Passiamo un attimo dal Dottore, poi c'è una persona che voglio davvero farti conoscere.",
+			"pose": "a",
+		},
+		"end2": {
+			"text": "[caldo] Esatto. Ora un saluto veloce al Dottore, e poi il pezzo forte.",
+			"pose": "a",
+		},
+	},
+
+	"tour_dottore": {
+		"start": {
+			"text": "[caldo] Lui è il Dottore: tiene tutta la squadra in salute.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Controlla che ogni agente renda al massimo: se qualcuno rallenta o si inceppa, lo visita, capisce cosa succede e lo rimette in piedi. Tu probabilmente non lo noterai mai — ed è il suo miglior complimento.",
+			"pose": "b", "next": "end",
+		},
+		"end": {
+			"text": "[caldo] E adesso vieni: il salotto del Mentor è di là. Da qui in poi parla lui.",
+			"pose": "a",
+		},
+	},
+
+	## Il Mentor parla DIRETTAMENTE con l'utente: conversazione personale e
+	## adattiva — ogni strada scelta riceve una risposta pensata per quella
+	## strada, e le scelte diventano preferenze reali (nodi "action").
+	"tour_mentor": {
+		"start": {
+			"text": "[caldo] Finalmente. Gli altri ti hanno mostrato COME lavoriamo; a me interessa il PERCHÉ. Dimmi la verità: cosa ti porta qui?",
+			"pose": "a",
+			"choices": [
+				{"text": "Voglio cambiare: quello che ho non mi basta più.", "next": "path_change"},
+				{"text": "Sto ricominciando, e non è un momento facile.", "next": "path_restart"},
+				{"text": "Voglio crescere: ruolo, stipendio, prospettive.", "next": "path_more"},
+			],
+		},
+		"path_change": {
+			"text": "[pensieroso] Succede alle persone migliori: non è ingratitudine, è crescita. E chi cambia con lucidità parte avvantaggiato — sa già cosa NON vuole.",
+			"pose": "d", "action": "pref:career_priority=growth", "next": "change2",
+		},
+		"change2": {
+			"text": "[caldo] Useremo il tuo presente come bussola al contrario: ogni cosa che oggi ti pesa diventa un criterio di ricerca. La costanza la mette il team; a te resta solo la parte nobile — scegliere.",
+			"pose": "c", "next": "q2",
+		},
+		"path_restart": {
+			"text": "[caldo] Allora la prima cosa te la dico guardandoti negli occhi: ricominciare non è tornare indietro. È ripartire sapendo più cose di chiunque sia al primo giro.",
+			"pose": "a", "action": "pref:career_priority=stability", "next": "restart2",
+		},
+		"restart2": {
+			"text": "[pensieroso] Il team ti toglie la parte che logora: cercare, confrontare, riscrivere. A te resta quella che nessuno può fare al posto tuo — presentarti per ciò che sei. E lì, io ci sono.",
+			"pose": "d", "next": "q2",
+		},
+		"path_more": {
+			"text": "[divertito] Ambizione dichiarata: apprezzo. È il carburante giusto, se lo si incanala.",
+			"pose": "a", "action": "pref:career_priority=salary", "next": "more2",
+		},
+		"more2": {
+			"text": "[severo] Però facciamo un patto: puntiamo in alto sulle posizioni GIUSTE, non su tutte. Sparare nel mucchio è il modo più rapido per sembrare uno dei tanti.",
+			"pose": "b", "next": "q2",
+		},
+		"q2": {
+			"text": "[caldo] Seconda domanda, poi ti lascio andare: i prossimi mesi, come li vuoi vivere?",
+			"pose": "a",
+			"choices": [
+				{"text": "Con calma: poche mosse, ma precise.", "next": "style_calm"},
+				{"text": "Con ritmo: voglio vedere movimento ogni settimana.", "next": "style_active"},
+				{"text": "Decida il team il passo: mi fido.", "next": "style_trust"},
+			],
+		},
+		"style_calm": {
+			"text": "[caldo] Poche e precise: la strategia dei cecchini. Dirò agli Scorer di essere severi — sopra il 70 vedrai solo occasioni vere.",
+			"pose": "c", "action": "pref:search_style=cautious", "next": "cadence",
+		},
+		"style_active": {
+			"text": "[caldo] Ritmo, dunque. Allargheremo il setaccio senza abbassare l'asticella: preparati a scegliere spesso.",
+			"pose": "c", "action": "pref:search_style=ambitious", "next": "cadence",
+		},
+		"style_trust": {
+			"text": "[caldo] Allora il passo lo detterà il mercato: quando c'è abbondanza spingiamo, quando è secca non forziamo. È la scelta di chi capisce le maratone.",
+			"pose": "c", "action": "pref:search_style=balanced", "next": "cadence",
+		},
+		"cadence": {
+			"text": "[caldo] Io ci sarò comunque. Come preferisci sentirmi?",
+			"pose": "a",
+			"choices": [
+				{"text": "Un punto sincero ogni settimana.", "next": "cad_week"},
+				{"text": "Solo quando c'è da decidere qualcosa di importante.", "next": "cad_mile"},
+			],
+		},
+		"cad_week": {
+			"text": "[caldo] Settimanale sia: breve, onesto, utile. Promesso.",
+			"pose": "a", "action": "pref:mentor_cadence=weekly", "next": "final",
+		},
+		"cad_mile": {
+			"text": "[caldo] Ricevuto: silenzio operoso, e mi faccio vivo quando conta davvero.",
+			"pose": "a", "action": "pref:mentor_cadence=milestones", "next": "final",
+		},
+		"final": {
+			"text": "[caldo] Un'ultima cosa, poi il Coordinatore ti aspetta: là fuori il tuo CV parlerà di competenze, ma tu stai cercando un posto dove stare bene. Non accontentarti.",
+			"pose": "a",
+		},
+	},
+
+	## Il Coordinatore chiude il giro: spiega in linguaggio umano dove può
+	## vivere il team e la scelta apre la pagina di configurazione giusta.
+	"tour_coordinatore": {
+		"start": {
+			"text": "[caldo] Eccoti, ti aspettavo. L'ufficio l'hai visto: ora accendiamolo. Io sono il Coordinatore — distribuisco gli ordini, tengo il ritmo e nessuno corre più del dovuto.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Il team ha bisogno di una casa: un computer acceso dove lavorare. Ci sono tre strade, tutte buone — dipende da te.",
+			"pose": "b", "next": "n3",
+		},
+		"n3": {
+			"text": "[neutro] La prima: QUESTO computer. La più semplice — il team lavora mentre lo usi e riposa quando lo spegni.",
+			"pose": "b", "next": "n4",
+		},
+		"n4": {
+			"text": "[neutro] La seconda: un computer DEDICATO — un portatile in più o un piccolo PC in un angolo, sempre acceso. Il team lavora anche mentre tu vivi la tua vita.",
+			"pose": "b", "next": "n5",
+		},
+		"n5": {
+			"text": "[neutro] La terza: una VPS — un computer a noleggio in un datacenter, acceso 24 ore su 24, che comandi da qui. Niente hardware in casa, massima continuità.",
+			"pose": "b", "next": "choose",
+		},
+		"choose": {
+			"text": "[caldo] Dove vuoi far vivere il tuo team? Qualunque scelta si cambia quando vuoi.",
+			"pose": "a",
+			"choices": [
+				{"text": "Su questo computer.", "next": "pick_local"},
+				{"text": "Su un computer dedicato.", "next": "pick_dedicated"},
+				{"text": "Su una VPS.", "next": "pick_vps"},
+			],
+		},
+		"pick_local": {
+			"text": "[caldo] Scelta pratica: si parte subito. Ti apro la pagina del container — pochi passi guidati e la squadra prende servizio qui.",
+			"pose": "a", "action": "runtime:local",
+		},
+		"pick_dedicated": {
+			"text": "[caldo] L'ottima via di mezzo. Installa l'app su quella macchina e ripeti lì questi passi; intanto ti apro la pagina del container, così vedi come funziona.",
+			"pose": "a", "action": "runtime:dedicated",
+		},
+		"pick_vps": {
+			"text": "[caldo] La scelta di chi fa sul serio. Ti apro la pagina VPS: servono l'indirizzo del server e una chiave d'accesso, il resto te lo spiega lei.",
+			"pose": "a", "action": "runtime:vps",
+		},
+	},
+
 	"assistente": {
 		"start": {
 			"text": "[caldo] Sono la tua guida nell'ufficio. Da dove vuoi cominciare?",
@@ -299,6 +632,7 @@ static func resolve_placeholders(text: String, team_data: Node) -> String:
 		reasons += "  · %s\n" % r
 	var summary: Dictionary = team_data.summary()
 	return text.format({
+		"greeting": greeting(),
 		"mentor_tip": team_data.mentor_tip(),
 		"positions": pos_lines.strip_edges(),
 		"positions_summary": "Lo Scout ha portato %d posizioni nuove." % summary["positions_today"],
@@ -308,6 +642,16 @@ static func resolve_placeholders(text: String, team_data: Node) -> String:
 		"score": str(expl["score"]),
 		"score_reasons": reasons.strip_edges(),
 	})
+
+## Saluto in base all'orario locale dell'utente: l'accoglienza deve
+## sembrare quella di una persona vera, non di un software.
+static func greeting() -> String:
+	var hour := int(Time.get_datetime_dict_from_system().get("hour", 12))
+	if hour >= 5 and hour < 13:
+		return "Buongiorno"
+	if hour >= 13 and hour < 18:
+		return "Buon pomeriggio"
+	return "Buonasera"
 
 ## Estrae il tag emozione inline: "[caldo] Ciao" → ["caldo", "Ciao"].
 static func parse_emotion(text: String) -> Array:

@@ -49,6 +49,8 @@ case "$MODE" in
 		python3 tools/coordinator_policy_selftest.py
 		GUIDED_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GUIDED_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
+		TOUR_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_TOUR_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$TOUR_OUT" | grep "TOUR-TEST PASS"
 		VPS_OUT="$(JHT_NOVPS=1 JHT_VPS_CONTRACT_TEST=1 godot --headless --quit-after 3 . 2>&1)"
 		printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
 		CHAT_NOTICE_OUT="$(JHT_NOVPS=1 JHT_CHAT_NOTIFICATION_TEST=1 godot --headless --quit-after 3 . 2>&1)"
