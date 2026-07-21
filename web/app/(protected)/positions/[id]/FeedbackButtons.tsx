@@ -55,7 +55,8 @@ const VERDICTS: Record<
   },
   top: {
     Icon: IconStar,
-    color: "var(--color-green)",
+    // Giallo oro come in SwipeDeck: stella = oro ovunque (21/07).
+    color: "var(--color-yellow)",
     action: "star",
     score: 5,
     direction: "more_like_this",

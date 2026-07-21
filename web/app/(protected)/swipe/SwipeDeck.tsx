@@ -118,7 +118,9 @@ const VERDICTS: Record<
   },
   top: {
     Icon: IconStar,
-    color: "var(--color-green)",
+    // Giallo oro (scelta utente 21/07): la stella "Molto interessante"
+    // è oro ovunque, non verde.
+    color: "var(--color-yellow)",
     action: "star",
     score: 5,
     direction: "more_like_this",

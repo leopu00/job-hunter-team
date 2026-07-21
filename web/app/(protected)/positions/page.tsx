@@ -82,7 +82,8 @@ const FB_TAG: Record<
   string,
   { color: string; Icon: (p: { size?: number }) => React.ReactElement }
 > = {
-  top: { color: "var(--color-green)", Icon: IconStar },
+  // Stella "Molto interessante" = giallo oro ovunque (21/07).
+  top: { color: "var(--color-yellow)", Icon: IconStar },
   review_ok: { color: "var(--color-blue)", Icon: IconThumbsUp },
   review_low: { color: "var(--color-orange)", Icon: IconThumbsMeh },
   no: { color: "var(--color-red)", Icon: IconX },
