@@ -163,6 +163,33 @@ usa ancora l'upsert cieco finché non va live la nuova); il pull esteso è addit
 (campi nuovi ignorati dai client vecchi); la UI nuova degrada a fetch-on-visibility
 se il websocket non c'è.
 
+## 9. 🔔 Notifiche browser configurabili ([JHT-WEB-NOTIFICATIONS], stesso giorno)
+
+Feature costruita sopra lo stesso stack Realtime (commit `304c02a8`+`f7b69f18`,
+mig 058 applicata a prod). Solo web cloud, **niente service worker / Web Push**:
+le notifiche vivono finché una tab del sito è aperta (requisito esplicito).
+
+- **Storage**: `notification_prefs` (JSONB per-utente, RLS). Il browser legge e
+  scrive **direttamente su Supabase** con la sessione — zero route Vercel.
+  Cache localStorage per il runtime + riallineo cross-tab via evento `storage`.
+- **Trigger**: `positions` aggiunta alla publication Realtime (senza REPLICA
+  IDENTITY FULL: tabella larga, serve solo la riga NEW). Il motore client
+  (`web/lib/web-notifications.ts`) valuta ogni INSERT/UPDATE della propria riga.
+- **Regola** = trigger (posizione **valutata** / **nuova**) + condizioni in AND:
+  score minimo, località (substring, OR), codici paese (OR), keyword su
+  titolo+azienda (OR), work mode (remote/hybrid/onsite). `minCount > 1` =
+  **digest**: una notifica raggruppata ogni N match. Dedupe per
+  regola+posizione (localStorage, cap 800) contro i re-push.
+- **Messaggi agenti**: notifica su INSERT di `pending_user_messages` (nome
+  agente + preview); toggle dedicato + "solo a scheda non attiva".
+- **UI**: `/settings/notifications` (editor completo, flusso permesso browser
+  con guida per lo stato *denied*, preset rapidi, notifica di prova, 7 lingue),
+  linkata dalla variante cloud di `/settings`. Runtime montato in navbar
+  (`useWebNotifications`, componente invisibile).
+- **Costo**: riusa il websocket già aperto (canale in più sulla stessa
+  connessione); eventi `positions` = solo righe delta della propria utenza.
+  Zero invocazioni Vercel in tutto il ciclo (lettura prefs, eventi, salvataggio).
+
 ## 🔗 Riferimenti
 
 - `cloud-sync-architecture.md` — living doc (shift 2026-07-21 in testa)
