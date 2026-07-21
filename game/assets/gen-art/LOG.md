@@ -203,3 +203,27 @@ della notte sono consegnate e integrate.
     screenshot del gioco a Codex → immagine reference "ufficio ideale" →
     si estraggono gli elementi visti e si generano UNO A UNO con /clear tra
     l'uno e l'altro. Il reference vive in game/docs/reference/.
+
+## ORDINI APERTI
+
+### 2026-07-21 — ORDINE APERTO #5: ritratti dialogo dei 5 ruoli mancanti
+
+Verificato durante il test onboarding su Windows (riquadro VUOTO nel
+dialogo con "LO SCRITTORE"): esistono i ritratti di soli 6 ruoli
+(assistente, coordinatore, scout, scorer, analista, mentor). **Mancano:
+`scrittore`, `critico`, `sentinella`, `dottore`, `mantenitore`.**
+
+- Stesso formato degli esistenti: mezzo busto 1120x1520, alpha nativo,
+  stile Disco Elysium (ANALISI-GIOCHI.md §6), slug ITALIANI.
+- Emozioni minime per ruolo: neutro (àncora) + quelle usate dai loro
+  alberi in `scripts/dialogue/dialogues.gd` (grep `"pose"` e tag
+  emozione per ruolo; oggi servono almeno neutro/caldo/severo/
+  pensieroso/divertito a seconda del ruolo).
+- Destinazione: `assets/gen-art/portraits/<slug>/full_<emozione>.png`
+  (il runner li carica da lì; vedi portrait_view.gd).
+- Identità personaggi: coerenti con gli sprite in-world già in scena
+  (`assets/characters/`) — il Critico severo, il Dottore col camice, la
+  Sentinella in ronda, il Mantenitore con la chiave inglese.
+- Workaround attivo nel frattempo: il tour fa presentare i reparti
+  all'Assistente, ma il click diretto sull'agente apre ancora il
+  dialogo senza volto.

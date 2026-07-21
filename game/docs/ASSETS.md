@@ -42,3 +42,10 @@ giacca, testa, capelli) con origine ai piedi e anima via codice:
 Vedi `assets/characters/portraits/` (M3): mezzo busto grande per il
 dialogo, layer corpo-posa × faccia-espressione, generati da
 `src/build_portraits.py` con lo stesso principio dei layer componibili.
+
+**Copertura ritratti dipinti (21/07): 6 ruoli su 11.** Esistono
+assistente, coordinatore, scout, scorer, analista, mentor. **MANCANO
+scrittore, critico, sentinella, dottore, mantenitore** → il dialogo
+diretto con questi ruoli mostra il riquadro vuoto (visto da Leone nel
+test Windows). Ordine di produzione aperto in
+`assets/gen-art/LOG.md` §"ORDINI APERTI" (pipeline dev1-art/Codex).
