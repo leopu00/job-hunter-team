@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { JHT_DB_PATH, JHT_PROFILE_YAML, JHT_USER_DIR } from "@/lib/jht-paths";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 
 export async function getWorkspacePath(): Promise<string | null> {
   return JHT_USER_DIR;
@@ -25,11 +26,18 @@ export function workspaceExists(_workspacePath?: string): boolean {
   }
 }
 
+// [JHT-DASHBOARD-SPLIT] Sul deploy CLOUD il workspace locale non esiste
+// per definizione, anche se il filesystem del dev server ha un ~/.jht con
+// jobs.db: senza questo guard un dev in modalità cloud leggeva lo SQLite
+// locale (magari stantio) al posto di Supabase — era la ragione del
+// workaround "JHT_HOME=dir-vuota" per avviare il :3002.
 export function workspaceHasDb(_workspacePath?: string): boolean {
+  if (isCloudDeploy()) return false;
   return fs.existsSync(JHT_DB_PATH);
 }
 
 export function workspaceHasProfile(_workspacePath?: string): boolean {
+  if (isCloudDeploy()) return false;
   return fs.existsSync(JHT_PROFILE_YAML);
 }
 
