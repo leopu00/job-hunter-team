@@ -372,11 +372,20 @@ export default function CloudSyncClient() {
   useEffect(() => {
     refreshHealth();
     refreshStatus();
-    // Polling stato ogni 30s mentre la pagina è visibile (no costo se offscreen).
+    // [JHT-NO-CLIENT-POLLING] Pagina di stato: refresh al rientro del tab +
+    // interval lento (60s) solo mentre è visibile. È l'unica pagina cloud
+    // con un interval e serve a vedere il "last sync" muoversi da soli.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshStatus();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     const id = setInterval(() => {
       if (document.visibilityState === "visible") refreshStatus();
-    }, 30_000);
-    return () => clearInterval(id);
+    }, 60_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(id);
+    };
   }, []);
 
   async function handleLogin() {

@@ -13,7 +13,7 @@
 // `channel` → no-op. Senza sessione (non loggato) → no-op. `setAuth(jwt)` è
 // OBBLIGATORIO prima della subscribe: senza, il canale parte con role anon e
 // la RLS blocca silenziosamente tutti gli eventi (gotcha E2E 2026-05-23,
-// vedi useTeamState.ts).
+// stesso pattern di CloudRefreshButton).
 
 import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
