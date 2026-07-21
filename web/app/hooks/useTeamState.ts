@@ -4,6 +4,19 @@ import { useCallback, useEffect, useState } from "react";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 
+// Realtime NON disponibile (es. browser che rifiuta il websocket con
+// "The operation is insecure") ≠ hook rotto: fetch iniziale e polling
+// coprono comunque i dati. subscribe() può lanciare SINCRONO dal
+// costruttore WebSocket, quindi ogni sottoscrizione passa da qui e un
+// fallimento degrada a channel=null invece di far crollare la pagina.
+function trySubscribe<T>(open: () => T): T | null {
+  try {
+    return open();
+  } catch {
+    return null;
+  }
+}
+
 export interface TeamState {
   user_id: string;
   should_run: boolean;
@@ -113,23 +126,25 @@ export function useTeamState(userId: string | null) {
       setLoading(false);
     })();
 
-    const channel = supabase
-      .channel(`team_state:${userId}`)
-      .on(
-        "postgres_changes" as never,
-        {
-          event: "*",
-          schema: "public",
-          table: "team_state",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<TeamState>) => {
-          if (cancelled) return;
-          if (payload.eventType === "DELETE") setState(null);
-          else setState(payload.new as TeamState);
-        },
-      )
-      .subscribe();
+    const channel = trySubscribe(() =>
+      supabase
+        .channel(`team_state:${userId}`)
+        .on(
+          "postgres_changes" as never,
+          {
+            event: "*",
+            schema: "public",
+            table: "team_state",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload: RealtimePostgresChangesPayload<TeamState>) => {
+            if (cancelled) return;
+            if (payload.eventType === "DELETE") setState(null);
+            else setState(payload.new as TeamState);
+          },
+        )
+        .subscribe(),
+    );
 
     // Polling fallback (15s): backup conservativo per quando il Realtime
     // broadcast non arriva (es. WS reconnect, network filter). Realtime
@@ -150,7 +165,7 @@ export function useTeamState(userId: string | null) {
     return () => {
       cancelled = true;
       clearInterval(pollInterval);
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [userId]);
 
@@ -252,38 +267,43 @@ export function useUserAgentMessages(userId: string | null, limit = 50) {
       setLoading(false);
     })();
 
-    const channel = supabase
-      .channel(`user_to_agent_messages:${userId}`)
-      .on(
-        "postgres_changes" as never,
-        {
-          event: "*",
-          schema: "public",
-          table: "user_to_agent_messages",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<UserAgentMessage>) => {
-          if (cancelled) return;
-          setMessages((prev) => {
-            if (payload.eventType === "INSERT")
-              return [payload.new as UserAgentMessage, ...prev].slice(0, limit);
-            if (payload.eventType === "UPDATE") {
-              const updated = payload.new as UserAgentMessage;
-              return prev.map((m) => (m.id === updated.id ? updated : m));
-            }
-            if (payload.eventType === "DELETE") {
-              const oldRow = payload.old as { id?: string };
-              return prev.filter((m) => m.id !== oldRow.id);
-            }
-            return prev;
-          });
-        },
-      )
-      .subscribe();
+    const channel = trySubscribe(() =>
+      supabase
+        .channel(`user_to_agent_messages:${userId}`)
+        .on(
+          "postgres_changes" as never,
+          {
+            event: "*",
+            schema: "public",
+            table: "user_to_agent_messages",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload: RealtimePostgresChangesPayload<UserAgentMessage>) => {
+            if (cancelled) return;
+            setMessages((prev) => {
+              if (payload.eventType === "INSERT")
+                return [payload.new as UserAgentMessage, ...prev].slice(
+                  0,
+                  limit,
+                );
+              if (payload.eventType === "UPDATE") {
+                const updated = payload.new as UserAgentMessage;
+                return prev.map((m) => (m.id === updated.id ? updated : m));
+              }
+              if (payload.eventType === "DELETE") {
+                const oldRow = payload.old as { id?: string };
+                return prev.filter((m) => m.id !== oldRow.id);
+              }
+              return prev;
+            });
+          },
+        )
+        .subscribe(),
+    );
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [userId, limit]);
 
@@ -338,28 +358,30 @@ export function usePendingUserMessages(userId: string | null, limit = 50) {
       setLoading(false);
     })();
 
-    const channel = supabase
-      .channel(`pending_user_messages:${userId}`)
-      .on(
-        "postgres_changes" as never,
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "pending_user_messages",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<PendingUserMessage>) => {
-          if (cancelled) return;
-          setMessages((prev) =>
-            [payload.new as PendingUserMessage, ...prev].slice(0, limit),
-          );
-        },
-      )
-      .subscribe();
+    const channel = trySubscribe(() =>
+      supabase
+        .channel(`pending_user_messages:${userId}`)
+        .on(
+          "postgres_changes" as never,
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "pending_user_messages",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload: RealtimePostgresChangesPayload<PendingUserMessage>) => {
+            if (cancelled) return;
+            setMessages((prev) =>
+              [payload.new as PendingUserMessage, ...prev].slice(0, limit),
+            );
+          },
+        )
+        .subscribe(),
+    );
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [userId, limit]);
 
@@ -400,28 +422,30 @@ export function usePositionFeedback(
       setLoading(false);
     })();
 
-    const channel = supabase
-      .channel(`position_feedback:${userId}:${legacyId}`)
-      .on(
-        "postgres_changes" as never,
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "position_feedback",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<PositionFeedback>) => {
-          if (cancelled) return;
-          const row = payload.new as PositionFeedback;
-          if (row.position_legacy_id !== legacyId) return;
-          setFeedback((prev) => [row, ...prev]);
-        },
-      )
-      .subscribe();
+    const channel = trySubscribe(() =>
+      supabase
+        .channel(`position_feedback:${userId}:${legacyId}`)
+        .on(
+          "postgres_changes" as never,
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "position_feedback",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload: RealtimePostgresChangesPayload<PositionFeedback>) => {
+            if (cancelled) return;
+            const row = payload.new as PositionFeedback;
+            if (row.position_legacy_id !== legacyId) return;
+            setFeedback((prev) => [row, ...prev]);
+          },
+        )
+        .subscribe(),
+    );
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [userId, legacyId]);
 
