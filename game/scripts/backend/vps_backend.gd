@@ -1684,6 +1684,11 @@ func _do_fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> v
 			{"ok": false, "error": _short_error(res)})
 
 var _agent_history_busy := false
+## Richiesta arrivata mentre il worker era occupato: si tiene SOLO
+## l'ultima (è la finestra corrente) e parte appena il giro si libera.
+## Prima veniva scartata in silenzio e il grafico restava sotto il velo
+## di caricamento finché qualcosa non lo ritriggava.
+var _agent_history_next := {}
 
 ## Ruolo SEMPRE validato prima dell'interpolazione nello script python:
 ## niente testo libero dentro il payload remoto.
@@ -1697,6 +1702,7 @@ func fetch_agent_history(agent: String, from_ts: float, to_ts: float,
 				{"ok": false, "error": "ruolo non valido"})
 		return
 	if _agent_history_busy:
+		_agent_history_next = query
 		return
 	_agent_history_busy = true
 	_queue_worker(_do_fetch_agent_history.bind(query))
@@ -1708,15 +1714,20 @@ func _do_fetch_agent_history(query: Dictionary) -> void:
 	_agent_history_busy = false
 	if _stop:
 		return
+	var payload: Dictionary = {"ok": false, "error": _short_error(res)}
 	if res["code"] == 0:
 		for line in str(res["out"]).split("\n"):
 			if line.begins_with("{"):
 				var data: Variant = JSON.parse_string(line)
 				if data is Dictionary:
-					bus.call_deferred("publish_agent_history", query, data)
-					return
-	bus.call_deferred("publish_agent_history", query,
-			{"ok": false, "error": _short_error(res)})
+					payload = data
+					break
+	bus.call_deferred("publish_agent_history", query, payload)
+	if not _agent_history_next.is_empty():
+		var next: Dictionary = _agent_history_next
+		_agent_history_next = {}
+		fetch_agent_history(str(next["agent"]), float(next["from_ts"]),
+				float(next["to_ts"]), int(next["bucket_sec"]))
 
 func save_profile(fields: Dictionary) -> void:
 	_queue_worker(_do_save_profile.bind(fields))
