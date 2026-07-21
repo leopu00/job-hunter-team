@@ -102,15 +102,9 @@ export function useWebNotifications() {
     let channel: any = null;
 
     const shouldSuppress = () =>
-      prefsRef.current.onlyWhenHidden &&
-      document.visibilityState === "visible";
+      prefsRef.current.onlyWhenHidden && document.visibilityState === "visible";
 
-    const notify = (
-      title: string,
-      body: string,
-      tag: string,
-      href: string,
-    ) => {
+    const notify = (title: string, body: string, tag: string, href: string) => {
       try {
         const n = new Notification(title, { body, tag });
         n.onclick = () => {
@@ -129,7 +123,10 @@ export function useWebNotifications() {
       if (!row?.id || !row.agent || !row.body) return;
       if (row.delivered_via !== "web" || row.acknowledged_at) return;
       const info = agentInfo(row.agent, localeRef.current);
-      const preview = stripMd(row.body).split("\n").find((l) => l.trim()) ?? "";
+      const preview =
+        stripMd(row.body)
+          .split("\n")
+          .find((l) => l.trim()) ?? "";
       notify(
         info.name,
         preview.slice(0, 160),
@@ -154,7 +151,12 @@ export function useWebNotifications() {
           .filter(Boolean)
           .join(" ");
         if (rule.minCount <= 1) {
-          notify(rule.name, label.slice(0, 180), `jht-rule-${rule.id}-${row.id}`, `/positions/${row.id}`);
+          notify(
+            rule.name,
+            label.slice(0, 180),
+            `jht-rule-${rule.id}-${row.id}`,
+            `/positions/${row.id}`,
+          );
           continue;
         }
         // Digest: accumula e notifica al raggiungimento della soglia.
@@ -163,7 +165,10 @@ export function useWebNotifications() {
           clearPending(rule.id);
           notify(
             rule.name,
-            `${pending.length}× — ${pending.slice(-3).join(" · ")}`.slice(0, 180),
+            `${pending.length}× — ${pending.slice(-3).join(" · ")}`.slice(
+              0,
+              180,
+            ),
             `jht-rule-${rule.id}-digest`,
             "/positions",
           );
