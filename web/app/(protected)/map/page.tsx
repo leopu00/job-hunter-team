@@ -190,6 +190,10 @@ export default async function MapPage() {
             flex-shrink: 0;
             box-shadow: none !important;
           }
+          /* Pannelli nascosti dal toggle in mappa: il globo prende tutto. */
+          .map-card-offscreen {
+            display: none !important;
+          }
           .map-card-location { order: 1; }
           .map-card-score { order: 2; }
           .map-card-donut { order: 3; }
