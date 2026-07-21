@@ -196,6 +196,26 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
   }
 
   /**
+   * [JHT-MSG-BACKFLOW] Reply/ack scritti dall'utente sulla chat WEB
+   * (pending_user_messages, campi user-side). Vanno riportati alla SQLite
+   * locale dove l'agente li legge. Cursore sui timestamp delle azioni utente
+   * (user_reply_at / acknowledged_at): `updated_at` è inutilizzabile perché
+   * il full-push VPS lo bumpa a ogni tick su tutte le righe.
+   * @param {object} [o] { since?: ISO string, limit?: number }
+   */
+  async function readPendingReplyChanges({ since, limit = 500 } = {}) {
+    const params = new URLSearchParams();
+    params.set('select', 'legacy_id,acknowledged_at,user_reply,user_reply_at');
+    if (since) {
+      params.set('or', `(user_reply_at.gt.${since},acknowledged_at.gt.${since})`);
+    }
+    params.set('order', 'legacy_id.asc');
+    params.set('limit', String(limit));
+    const rows = await rest(`pending_user_messages?${params.toString()}`);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /**
    * Riga `team_state` dell'utente (PK user_id → al più 1 riga, già scoping RLS).
    * Rimpiazza GET /api/team-state (sync rendezvous + desired-state/reconcile).
    * @param {string[]} [select] colonne; default i campi sync + desired-state.
@@ -228,6 +248,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     rest,
     readOpenTickets,
     readDesiredStateChanges,
+    readPendingReplyChanges,
     readTeamState,
     patchTeamState,
     getRefreshToken: () => currentRefresh,
