@@ -73,6 +73,13 @@ func preferences() -> Dictionary:
 	return _preferences.duplicate(true)
 
 
+## Preferenza raccolta fuori dalle chat guidate (es. dialoghi del tour):
+## stessa pentola delle scelte scripted, stessa persistenza.
+func set_preference(key: String, value: String) -> void:
+	_preferences[key] = value
+	_save_state()
+
+
 func live_text_available(value: String) -> bool:
 	var agent := normalize_agent(value)
 	return supports(agent) \

@@ -2,29 +2,31 @@ class_name MockDataSource
 extends TeamDataSource
 ## Dati finti ma verosimili per il vertical slice. Nessuna chiamata esterna.
 
+## Esempi UNIVERSALI (feedback Leone 21/07): una famiglia professionale
+## coerente e capibile da chiunque, non solo profili da ingegnere.
 const POSITIONS := [
 	{
-		"title": "Backend Engineer (Python)",
-		"company": "Nordwind Logistics",
-		"location": "Amburgo · ibrido",
+		"title": "Responsabile Comunicazione",
+		"company": "Bottega Aurora",
+		"location": "Milano · ibrido",
 		"score": 82,
-		"salary": "~68k EUR",
-		"note": "stack allineato, seniority giusta",
+		"salary": "~42k EUR",
+		"note": "esperienze molto vicine al tuo CV",
 	},
 	{
-		"title": "Platform Engineer",
+		"title": "Specialista Marketing Digitale",
 		"company": "Ferrovia Digitale",
-		"location": "Milano · remoto",
+		"location": "Roma · remoto",
 		"score": 74,
-		"salary": "~55k EUR",
-		"note": "ottimo team, on-call da chiarire",
+		"salary": "~38k EUR",
+		"note": "ottimo team, trasferte da chiarire",
 	},
 	{
-		"title": "Site Reliability Engineer",
-		"company": "Chiaroscuro Cloud",
+		"title": "Account Manager",
+		"company": "Chiaroscuro Media",
 		"location": "Berlino · in sede",
 		"score": 61,
-		"salary": "~72k EUR",
+		"salary": "~45k EUR",
 		"note": "richiede tedesco B2",
 	},
 ]
@@ -54,22 +56,24 @@ func get_score_explanation() -> Dictionary:
 		"title": POSITIONS[0]["title"],
 		"company": POSITIONS[0]["company"],
 		"score": POSITIONS[0]["score"],
+		# Motivazioni CONCRETE e quotidiane (feedback Leone 21/07): meno
+		# percentuali astratte, più vita reale.
 		"reasons": [
-			"competenze richieste coperte all'85%",
-			"range salariale sopra la tua soglia",
-			"sede compatibile con le tue città prioritarie",
-			"-8 punti: l'annuncio chiede reperibilità notturna",
+			"l'annuncio ricalca due esperienze già nel tuo CV",
+			"la sede è in centro, vicino a una delle tue città prioritarie",
+			"stipendio sopra la soglia che hai indicato",
+			"-8 punti: chiedono disponibilità anche nel weekend",
 		],
 	}
 
 func get_mentor_tip() -> String:
-	return "Nei colloqui, racconta i risultati con i numeri: non «ho migliorato il sistema», ma «ho dimezzato i tempi di deploy»."
+	return "Nei colloqui, racconta i risultati con i numeri: non «ho migliorato le cose», ma «ho ridotto i tempi di attesa del 40%»."
 
 const APPLICATIONS := [
-	{"title": "DevOps Engineer", "company": "Vetriera Systems", "score": 84, "stage": 3},
-	{"title": "Backend Engineer (Python)", "company": "Nordwind Logistics", "score": 82, "stage": 2},
-	{"title": "Data Platform Engineer", "company": "Brumaio Analytics", "score": 77, "stage": 1},
-	{"title": "Site Reliability Engineer", "company": "Chiaroscuro Cloud", "score": 61, "stage": 0},
+	{"title": "Responsabile Punto Vendita", "company": "Vetriera Retail", "score": 84, "stage": 3},
+	{"title": "Responsabile Comunicazione", "company": "Bottega Aurora", "score": 82, "stage": 2},
+	{"title": "Addetto/a Amministrazione", "company": "Brumaio & Soci", "score": 77, "stage": 1},
+	{"title": "Account Manager", "company": "Chiaroscuro Media", "score": 61, "stage": 0},
 ]
 
 func get_applications() -> Array:

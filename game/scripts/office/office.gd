@@ -251,9 +251,9 @@ func _ready() -> void:
 			add_child(_tour_tracker)
 			TourGuide.changed.connect(_on_tour_changed)
 			_refresh_tour_markers()
-			# Un breve respiro dopo il primo frame, poi la camera accompagna
-			# verso la guida: l'ufficio si è appena "ritrovato" al lavoro.
-			get_tree().create_timer(1.2).timeout.connect(_tour_focus_current)
+			# Un breve respiro dopo il primo frame, poi la regia riprende il
+			# tour dal punto giusto (primo saluto o tappa interrotta).
+			get_tree().create_timer(1.2).timeout.connect(_tour_resume_entry)
 
 	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
 			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
@@ -410,9 +410,9 @@ func _camera_lock_selftest() -> void:
 ## First-run E2E senza rete: attraversa gli alberi scripted e monta il
 ## pannello chat reale: prima offline choice-only, poi live col mock e scelte
 ## contestuali prodotte dall'agente (mai sovrapposte al copione authored).
-## E2E del tour di primo avvio: tracker montato, marker limitati al
-## bersaglio, ordine forzato, dialogo dedicato dell'Assistente, apertura
-## automatica della checklist e chiusura quando il setup è verde.
+## E2E del tour accompagnato: benvenuto con saluto orario, catena delle
+## tappe presentate dall'Assistente, preferenze reali dal Mentor, scelta
+## runtime del Coordinatore che apre la pagina giusta, checklist finale.
 func _tour_selftest() -> void:
 	var failures: Array[String] = []
 	var check := func(ok: bool, message: String) -> void:
@@ -432,8 +432,11 @@ func _tour_selftest() -> void:
 	check.call(is_instance_valid(_tour_tracker), "TourTracker assente")
 	check.call(TourGuide.current_slug() == "assistente",
 			"il tour non parte dall'Assistente")
-	check.call(Dialogues.TREES.has("assistente_tour"),
-			"albero assistente_tour assente")
+	for stop in TourGuide.TALK_STEPS:
+		check.call(Dialogues.TREES.has(str(TourGuide.scene_for(stop).get("tree", ""))),
+				"albero di dialogo mancante per la tappa " + stop)
+	check.call(Dialogues.greeting() in ["Buongiorno", "Buon pomeriggio", "Buonasera"],
+			"saluto orario fuori catalogo")
 	var count_markers := func() -> Array:
 		var visible_count := 0
 		var marked_slugs := {}
@@ -448,41 +451,68 @@ func _tour_selftest() -> void:
 	# ordine forzato: un incontro fuori sequenza non avanza il tour
 	TourGuide.notify_talked("scout")
 	check.call(TourGuide.step_index() == 0, "incontro fuori sequenza avanza il tour")
-	# il dialogo con l'Assistente usa il tree del tour e avanza alla chiusura
-	var guide: AgentNPC = null
-	for a in agents:
-		if ScriptedOnboarding.normalize_agent(a.slug) == "assistente":
-			guide = a
-			break
+	# cattura le pagine aperte dalle azioni del tour (scelta runtime)
+	var opened_sections: Array = []
+	var capture := func(action: String, payload: Dictionary) -> void:
+		if action == "open_section":
+			opened_sections.append(str(payload.get("section", "")))
+	ScriptedOnboarding.action_requested.connect(capture)
+	# benvenuto: il click sull'Assistente apre tour_benvenuto
+	var guide := _tour_guide_npc()
 	check.call(guide != null, "Assistente assente dallo showroom")
+	var find_dialogue := func() -> DialogueUI:
+		var found: DialogueUI = null
+		for child in get_children():
+			if child is DialogueUI and not child.is_queued_for_deletion():
+				found = child
+		return found
 	if guide:
 		_start_talk(guide)
 		await get_tree().process_frame
-		var dialogue_ui: DialogueUI = null
-		for child in get_children():
-			if child is DialogueUI:
-				dialogue_ui = child
-				break
-		check.call(dialogue_ui != null and dialogue_ui._tree.has("do3"),
-				"il dialogo del tour non usa assistente_tour")
-		if dialogue_ui:
-			dialogue_ui._close()
+		var welcome: DialogueUI = find_dialogue.call()
+		check.call(welcome != null and welcome._tree.has("ready"),
+				"il primo dialogo non usa tour_benvenuto")
+		if welcome:
+			welcome._close()
+	# da qui la catena è automatica (in test-mode senza camminate): a ogni
+	# chiusura la tappa avanza e si apre il dialogo successivo
+	var expected := ["scout", "analista", "scorer", "scrittore", "critico",
+			"dottore", "mentor", "coordinatore"]
+	var visited: Array = []
+	for _i in expected.size():
 		await get_tree().process_frame
-	check.call(TourGuide.step_index() == 1 and TourGuide.current_slug() == "scout",
-			"la chiusura del dialogo non avanza allo Scout")
-	# entrambe le persone del reparto portano il diamante: si può parlare
-	# con chiunque del ruolo, ma SOLO con quel ruolo
-	markers = count_markers.call()
-	check.call(markers[1].size() == 1 and markers[1].has("scout"),
-			"il marker non segue il bersaglio (Scout)")
-	# il resto del giro via notifica diretta (i dialoghi per ruolo esistono già)
-	for slug in ["scout", "analista", "scorer", "scrittore", "critico",
-			"coordinatore", "mentor"]:
-		TourGuide.notify_talked(slug)
+		await get_tree().process_frame
+		var stop := TourGuide.current_slug()
+		var ui: DialogueUI = find_dialogue.call()
+		if ui == null:
+			failures.append("dialogo della tappa non aperto: " + stop)
+			break
+		visited.append(stop)
+		var scene := TourGuide.scene_for(stop)
+		check.call(ui._tree == Dialogues.TREES.get(str(scene.get("tree", "")), {}),
+				"albero sbagliato per la tappa " + stop)
+		if stop == "mentor":
+			# percorso adattivo: le scelte diventano preferenze salvate
+			ui._goto("path_change")
+			ui._goto("style_calm")
+			ui._goto("cad_week")
+		elif stop == "coordinatore":
+			ui._goto("pick_vps")
+		ui._close()
+	check.call(visited == expected,
+			"sequenza tappe errata: " + JSON.stringify(visited))
+	var prefs := ScriptedOnboarding.preferences()
+	check.call(prefs.get("career_priority", "") == "growth" \
+			and prefs.get("search_style", "") == "cautious" \
+			and prefs.get("mentor_cadence", "") == "weekly" \
+			and prefs.get("runtime_location", "") == "vps",
+			"le scelte del tour non diventano preferenze: " + JSON.stringify(prefs))
 	check.call(TourGuide.in_launch_phase(), "fase di lancio non raggiunta")
 	check.call(TourGuide.depts_visited() == 5, "conteggio reparti errato")
 	await get_tree().process_frame
-	check.call(_tour_launch_opened, "checklist di lancio non aperta in automatico")
+	check.call(_tour_launch_opened and opened_sections.has("vps"),
+			"la scelta VPS non apre la pagina VPS: " + JSON.stringify(opened_sections))
+	ScriptedOnboarding.action_requested.disconnect(capture)
 	# checklist verde → tour concluso e marker showroom ripristinati
 	SetupService.status["ready"] = true
 	TourGuide.notify_setup_status(SetupService.status)
@@ -493,7 +523,7 @@ func _tour_selftest() -> void:
 			"marker showroom non ripristinati a tour finito (%d)" % int(markers[0]))
 	var ok := failures.is_empty()
 	print("TOUR-TEST ", "PASS " if ok else "FAIL ",
-			JSON.stringify({"failures": failures, "steps": TourGuide.step_index()}))
+			JSON.stringify({"failures": failures, "visited": visited}))
 	await get_tree().create_timer(0.3).timeout
 	get_tree().quit(0 if ok else 1)
 
@@ -1541,32 +1571,39 @@ func _start_talk(agent: AgentNPC) -> void:
 	agent.start_talk()
 	var ui := DialogueUI.new()
 	add_child(ui)
-	# Durante il tour l'Assistente accoglie con il giro completo dell'ufficio
-	# (cosa puoi fare, cosa non ancora, chi ascoltare) invece del saluto breve.
-	var tree_id := ""
-	if tour_running and TourGuide.current_slug() == "assistente" \
-			and ScriptedOnboarding.normalize_agent(agent.slug) == "assistente":
-		tree_id = "assistente_tour"
-	ui.open(agent.slug, agent.display_name, tree_id)
+	# Il primo saluto del tour: cliccando l'Assistente parte l'accoglienza
+	# completa (saluto legato all'orario) e da lì in poi accompagna lei.
+	var is_guide := ScriptedOnboarding.normalize_agent(agent.slug) == "assistente"
+	var tour_welcome := tour_running and is_guide \
+			and TourGuide.current_slug() == "assistente"
+	ui.open(agent.slug, agent.display_name, "tour_benvenuto" if tour_welcome else "")
 	ui.closed.connect(func() -> void:
 		if is_instance_valid(agent) and not agent.is_dissolving():
 			agent.end_talk()
-		if _tour_enabled and TourGuide.active():
-			TourGuide.notify_talked(agent.slug)
-			_refresh_tour_markers())
+		if not (_tour_enabled and TourGuide.active()):
+			return
+		if tour_welcome:
+			TourGuide.notify_talked("assistente")
+		elif is_guide and TourGuide.current_slug() != "assistente" \
+				and not TourGuide.in_launch_phase():
+			# l'utente ha fermato la guida per strada: il giro riprende
+			_tour_go_to_stop())
 
-# ── Tour del primo avvio (TourGuide + TourTracker) ────────────────────
+# ── Tour del primo avvio: l'Assistente accompagna (TourGuide) ─────────
 
-## Durante il tour il diamante pulsa SOLO sul bersaglio corrente: un unico
-## punto d'attenzione per volta. A tour finito si torna al default showroom
-## (marker su tutti finché il provider non è collegato).
+var _tour_runtime_choice := ""
+var _tour_walk_serial := 0
+
+## Il diamante pulsa SOLO sull'Assistente al primo passo: da lì in poi è
+## lei a fare strada. A tour finito torna il default showroom (marker su
+## tutti finché il provider non è collegato).
 func _refresh_tour_markers() -> void:
 	var tour_running := _tour_enabled and TourGuide.active()
-	var target := TourGuide.current_slug() if tour_running else ""
 	for agent in agents:
 		if tour_running:
 			var slug := ScriptedOnboarding.normalize_agent(agent.slug)
-			agent.set_story_marker(target != "" and slug == target, false)
+			agent.set_story_marker(slug == "assistente" \
+					and TourGuide.current_slug() == "assistente", false)
 		else:
 			agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
 					bool(_story_seen.get(agent.slug, false)))
@@ -1574,32 +1611,152 @@ func _refresh_tour_markers() -> void:
 func _on_tour_changed() -> void:
 	_refresh_tour_markers()
 	if not TourGuide.active():
+		_tour_release_guide()
 		return
 	if TourGuide.in_launch_phase():
-		# Gli incontri sono finiti: la checklist di lancio diventa il centro
-		# della scena. Aperta una sola volta; il tracker continua a seguirla.
+		# Il giro è finito: la guida torna al suo posto e la checklist di
+		# lancio prende la scena (se il Coordinatore non l'ha già aperta).
+		_tour_release_guide()
 		if not _tour_launch_opened:
 			_tour_launch_opened = true
 			ScriptedOnboarding.action_requested.emit("open_section",
 					{"section": "activation"})
 		return
-	_tour_focus_current()
+	if TourGuide.current_slug() == "assistente":
+		_tour_focus_current()
+		return
+	_tour_go_to_stop()
 
-## Porta la regia sul bersaglio corrente e gli fa dire l'invito: il
-## giocatore vede sempre dove andare senza cercare il diamante a mano.
+## Ripresa all'avvio scena: primo saluto o tappa dove si era rimasti.
+func _tour_resume_entry() -> void:
+	if not _tour_enabled or not TourGuide.active() or TourGuide.in_launch_phase():
+		return
+	if TourGuide.current_slug() == "assistente":
+		_tour_focus_current()
+	else:
+		_tour_go_to_stop()
+
+## Primo passo: camera sull'Assistente, saluto legato all'orario, diamante.
 func _tour_focus_current() -> void:
 	if not _tour_enabled or not TourGuide.active() or Game.dialogue_active:
 		return
-	var target := TourGuide.current_slug()
-	if target == "":
+	var guide := _tour_guide_npc()
+	if guide == null:
 		return
+	_camera.focus_on(guide.global_position + Vector2(0, -40), 1.05)
+	guide.say(TourGuide.invite_line())
+
+func _tour_guide_npc() -> AgentNPC:
 	for agent in agents:
-		if ScriptedOnboarding.normalize_agent(agent.slug) == target:
-			_camera.focus_on(agent.global_position + Vector2(0, -40), 1.05)
-			var invite := TourGuide.invite_line()
-			if invite != "":
-				agent.say(invite)
+		if ScriptedOnboarding.normalize_agent(agent.slug) == "assistente" \
+				and not agent.is_dissolving():
+			return agent
+	return null
+
+func _tour_host_npc(stop: String) -> AgentNPC:
+	for agent in agents:
+		if ScriptedOnboarding.normalize_agent(agent.slug) == stop \
+				and not agent.is_dissolving():
+			return agent
+	return null
+
+## Regia di una tappa: l'Assistente cammina fin lì (camera al seguito),
+## saluta, l'ospite risponde, poi si apre il dialogo della tappa.
+func _tour_go_to_stop() -> void:
+	var stop := TourGuide.current_slug()
+	if stop == "":
+		return
+	var guide := _tour_guide_npc()
+	var host := _tour_host_npc(stop)
+	if host == null:
+		# tappa impossibile (roster cambiato sotto i piedi): mai bloccare
+		TourGuide.notify_talked(stop)
+		return
+	if guide == null or guide == host \
+			or OS.get_environment("JHT_TOUR_TEST") == "1":
+		# senza accompagnatrice (o nei selftest) la regia va dritta al punto
+		_camera.focus_on(host.global_position + Vector2(0, -40), 1.05)
+		_tour_stage_arrival(stop)
+		return
+	_camera.follow(guide, 1.0)
+	_tour_walk_serial += 1
+	var serial := _tour_walk_serial
+	var on_arrival := func() -> void:
+		if serial == _tour_walk_serial and _tour_enabled \
+				and TourGuide.current_slug() == stop:
+			_tour_stage_arrival(stop)
+	guide.tour_arrived.connect(on_arrival, CONNECT_ONE_SHOT)
+	guide.tour_walk_to(host.global_position)
+
+## All'arrivo: scambio di saluti in scena, poi il dialogo della tappa.
+func _tour_stage_arrival(stop: String) -> void:
+	_camera.stop_follow()
+	var scene := TourGuide.scene_for(stop)
+	var guide := _tour_guide_npc()
+	var host := _tour_host_npc(stop)
+	if host:
+		_camera.focus_on(host.global_position + Vector2(0, -40), 1.05)
+	if OS.get_environment("JHT_TOUR_TEST") == "1":
+		_tour_open_stop_dialogue(stop)
+		return
+	if guide and scene.has("greet"):
+		guide.say(str(scene["greet"]))
+	if host and scene.has("reply"):
+		get_tree().create_timer(1.3).timeout.connect(func() -> void:
+			if is_instance_valid(host) and TourGuide.current_slug() == stop:
+				host.say(str(scene["reply"])))
+	get_tree().create_timer(3.0).timeout.connect(func() -> void:
+		_tour_open_stop_dialogue(stop))
+
+## Apre il dialogo della tappa appena la scena è libera (ritenta finché
+## un pannello o un altro dialogo occupano lo schermo).
+func _tour_open_stop_dialogue(stop: String) -> void:
+	if not _tour_enabled or TourGuide.current_slug() != stop:
+		return
+	if Game.dialogue_active or _registry or _dept_panel or _agent_card \
+			or _chat_panel or _cv_shelf_panel or _queue_panel \
+			or _thinking_panel or _coordinator_panel:
+		get_tree().create_timer(0.8).timeout.connect(func() -> void:
+			_tour_open_stop_dialogue(stop))
+		return
+	var scene := TourGuide.scene_for(stop)
+	var host := _tour_host_npc(stop)
+	if host:
+		host.start_talk()
+	var ui := DialogueUI.new()
+	add_child(ui)
+	ui.action_triggered.connect(_on_tour_dialogue_action)
+	ui.open(str(scene.get("portrait", "assistente")),
+			str(scene.get("name", "L'Assistente")), str(scene.get("tree", "")))
+	ui.closed.connect(func() -> void:
+		if host and is_instance_valid(host) and not host.is_dissolving():
+			host.end_talk()
+		if not TourGuide.active():
 			return
+		if stop == "coordinatore" and _tour_runtime_choice != "":
+			# la scelta del Coordinatore apre la pagina giusta e il tracker
+			# passa alla checklist senza aprire anche la pagina generica
+			_tour_launch_opened = true
+			ScriptedOnboarding.action_requested.emit("open_section",
+					{"section": "vps" if _tour_runtime_choice == "vps" else "docker"})
+		TourGuide.notify_talked(stop))
+
+## Le scelte narrative diventano effetti reali: preferenze salvate e
+## destinazione del runtime (questo computer / dedicato / VPS).
+func _on_tour_dialogue_action(action: String) -> void:
+	if action.begins_with("pref:"):
+		var kv := action.substr(5).split("=", false, 2)
+		if kv.size() == 2:
+			ScriptedOnboarding.set_preference(kv[0], kv[1])
+	elif action.begins_with("runtime:"):
+		_tour_runtime_choice = action.substr(8)
+		ScriptedOnboarding.set_preference("runtime_location", _tour_runtime_choice)
+
+func _tour_release_guide() -> void:
+	_camera.stop_follow()
+	var guide := _tour_guide_npc()
+	if guide:
+		guide.tour_release()
 
 # ── Roster dinamico dal backend (missione backend-integration) ────────
 # In modalità backend la scena mostra SOLO gli agenti attivi sulla VPS:

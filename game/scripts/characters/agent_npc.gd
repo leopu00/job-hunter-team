@@ -445,6 +445,37 @@ func investigate_agent(target: AgentNPC, text: String) -> bool:
 	_start_next_leg()
 	return true
 
+## ── Tour di primo avvio: l'Assistente accompagna l'utente ────────────
+## Cammina fino a un punto vicino alla tappa e resta lì (pausa lunga) in
+## attesa che la regia la mandi avanti o a casa. L'arrivo è un segnale.
+
+signal tour_arrived
+
+const TOUR_STOP_WAIT := 900.0  # la regia la sblocca molto prima
+
+func tour_walk_to(target_point: Vector2) -> void:
+	if is_dissolving():
+		return
+	_set_desk_occupied(false)
+	if _seated():
+		position = _spot
+	_pause = 0.0
+	_forced_trip = true
+	var approach := nav.approach_point(global_position, target_point)
+	var leg := _leg_to(approach, "walk", TOUR_STOP_WAIT, "idle")
+	leg["tour_stop"] = true
+	_legs = [leg]
+	_start_next_leg()
+
+## Fine servizio da guida: torna alla sua postazione e riprende la vita.
+func tour_release() -> void:
+	if is_dissolving() or state == S.TALK:
+		return
+	_pause = 0.0
+	_forced_trip = true
+	_legs = [_leg_to(_spot, "walk", 0.0, "work")]
+	_start_next_leg()
+
 func set_highlight(on: bool) -> void:
 	if _highlight != on:
 		_highlight = on
@@ -853,6 +884,8 @@ func _arrive_at_leg() -> void:
 				pile.queue_free()
 			queue_free())
 		return
+	if _leg.get("tour_stop", false):
+		tour_arrived.emit()
 	if _leg.get("fx_printer", false):
 		PrinterFx.ping(float(_leg.get("pause", 2.0)))
 	if _leg.has("investigation_text"):

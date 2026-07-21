@@ -5,6 +5,9 @@ extends CanvasLayer
 ## precedenti salgono e si attenuano. Typewriter, scelte 1-3, ESC chiude.
 
 signal closed
+## Nodo con campo "action" raggiunto: il regista (tour) traduce la scelta
+## narrativa in effetti reali (preferenze salvate, pagine da aprire).
+signal action_triggered(action: String)
 
 const TYPE_SPEED := 42.0          # caratteri al secondo
 const MAX_OLD_VIGNETTES := 2
@@ -93,6 +96,8 @@ func _goto(id: String) -> void:
 		return
 	_node_id = id
 	var node: Dictionary = _tree[id]
+	if node.has("action"):
+		action_triggered.emit(str(node["action"]))
 	var parsed := Dialogues.parse_emotion(node["text"])
 	var emo: String = parsed[0]
 	var text: String = Dialogues.resolve_placeholders(parsed[1], TeamData)
