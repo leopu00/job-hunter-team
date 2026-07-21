@@ -14,6 +14,9 @@ var _seat_audit := ""
 var _doctor_test := ""
 var _story_seen := {}
 var _tour_visits := 0
+var _tour_enabled := false
+var _tour_tracker: TourTracker
+var _tour_launch_opened := false
 
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
@@ -180,6 +183,8 @@ func _ready() -> void:
 		_usage_panel_selftest.call_deferred()
 	if OS.get_environment("JHT_GUIDED_TEST") == "1":
 		_guided_onboarding_selftest.call_deferred()
+	if OS.get_environment("JHT_TOUR_TEST") == "1":
+		_tour_selftest.call_deferred()
 	if _seat_audit != "":
 		var audit_parts := _seat_audit.split(":")
 		if audit_parts.size() == 2 and DepartmentDefs.DEPARTMENTS.has(audit_parts[0]):
@@ -232,6 +237,22 @@ func _ready() -> void:
 		var sidebar := GameSidebar.new()
 		add_child(sidebar)  # sidebar stile desktop-app (linguetta ≡)
 		sidebar.chat_requested.connect(_toggle_chat_access)
+		# Tour del primo avvio: attivo solo nel flusso reale (titolo → ufficio;
+		# ogni test/shot headless imposta JHT_SCENE e resta fuori) o quando il
+		# selftest lo forza. Il tour guida con marker mirati, camera e to-do.
+		_tour_enabled = OS.get_environment("JHT_TOUR_TEST") == "1" \
+				or OS.get_environment("JHT_TOUR_PREVIEW") == "1" \
+				or (OS.get_environment("JHT_SCENE") == "" and TourGuide.active() \
+					and not ScriptedOnboarding.provider_authenticated())
+		if _tour_enabled:
+			Log.info("tour", "tour primo avvio attivo dal passo %d" % TourGuide.step_index())
+			_tour_tracker = TourTracker.new()
+			add_child(_tour_tracker)
+			TourGuide.changed.connect(_on_tour_changed)
+			_refresh_tour_markers()
+			# L'invito parte a parata d'ingresso avviata: la camera accompagna
+			# verso il bersaglio invece di scattare su un ufficio ancora vuoto.
+			get_tree().create_timer(3.0).timeout.connect(_tour_focus_current)
 
 	Log.info("scene", "ufficio pronto: %d agenti, %d postazioni reparto, mondo %v" % [
 			agents.size(), DepartmentDefs.all_desks().size(), FurnitureDefs.WORLD.size])
@@ -388,6 +409,93 @@ func _camera_lock_selftest() -> void:
 ## First-run E2E senza rete: attraversa gli alberi scripted e monta il
 ## pannello chat reale: prima offline choice-only, poi live col mock e scelte
 ## contestuali prodotte dall'agente (mai sovrapposte al copione authored).
+## E2E del tour di primo avvio: tracker montato, marker limitati al
+## bersaglio, ordine forzato, dialogo dedicato dell'Assistente, apertura
+## automatica della checklist e chiusura quando il setup è verde.
+func _tour_selftest() -> void:
+	var failures: Array[String] = []
+	var check := func(ok: bool, message: String) -> void:
+		if not ok:
+			failures.append(message)
+	# La macchina che esegue il test può avere Docker e provider veri:
+	# lo stato va forzato a "primo avvio" come nel selftest guidato.
+	ScriptedOnboarding.set_provider_test_override(0)
+	SetupService.status["provider_authenticated"] = false
+	SetupService.status["container_running"] = false
+	SetupService.status["profile_ready"] = false
+	SetupService.status["ready"] = false
+	_on_setup_status_changed(SetupService.status)
+	await get_tree().create_timer(0.6).timeout
+	_refresh_tour_markers()
+	check.call(_tour_enabled and TourGuide.active(), "tour non attivo")
+	check.call(is_instance_valid(_tour_tracker), "TourTracker assente")
+	check.call(TourGuide.current_slug() == "assistente",
+			"il tour non parte dall'Assistente")
+	check.call(Dialogues.TREES.has("assistente_tour"),
+			"albero assistente_tour assente")
+	var count_markers := func() -> Array:
+		var visible_count := 0
+		var marked_slugs := {}
+		for a in agents:
+			if a.quest_marker != null and a.quest_marker.visible:
+				visible_count += 1
+				marked_slugs[ScriptedOnboarding.normalize_agent(a.slug)] = true
+		return [visible_count, marked_slugs]
+	var markers: Array = count_markers.call()
+	check.call(markers[1].size() == 1 and markers[1].has("assistente"),
+			"marker non limitati all'Assistente (%d visibili)" % int(markers[0]))
+	# ordine forzato: un incontro fuori sequenza non avanza il tour
+	TourGuide.notify_talked("scout")
+	check.call(TourGuide.step_index() == 0, "incontro fuori sequenza avanza il tour")
+	# il dialogo con l'Assistente usa il tree del tour e avanza alla chiusura
+	var guide: AgentNPC = null
+	for a in agents:
+		if ScriptedOnboarding.normalize_agent(a.slug) == "assistente":
+			guide = a
+			break
+	check.call(guide != null, "Assistente assente dallo showroom")
+	if guide:
+		_start_talk(guide)
+		await get_tree().process_frame
+		var dialogue_ui: DialogueUI = null
+		for child in get_children():
+			if child is DialogueUI:
+				dialogue_ui = child
+				break
+		check.call(dialogue_ui != null and dialogue_ui._tree.has("do3"),
+				"il dialogo del tour non usa assistente_tour")
+		if dialogue_ui:
+			dialogue_ui._close()
+		await get_tree().process_frame
+	check.call(TourGuide.step_index() == 1 and TourGuide.current_slug() == "scout",
+			"la chiusura del dialogo non avanza allo Scout")
+	# entrambe le persone del reparto portano il diamante: si può parlare
+	# con chiunque del ruolo, ma SOLO con quel ruolo
+	markers = count_markers.call()
+	check.call(markers[1].size() == 1 and markers[1].has("scout"),
+			"il marker non segue il bersaglio (Scout)")
+	# il resto del giro via notifica diretta (i dialoghi per ruolo esistono già)
+	for slug in ["scout", "analista", "scorer", "scrittore", "critico",
+			"coordinatore", "mentor"]:
+		TourGuide.notify_talked(slug)
+	check.call(TourGuide.in_launch_phase(), "fase di lancio non raggiunta")
+	check.call(TourGuide.depts_visited() == 5, "conteggio reparti errato")
+	await get_tree().process_frame
+	check.call(_tour_launch_opened, "checklist di lancio non aperta in automatico")
+	# checklist verde → tour concluso e marker showroom ripristinati
+	SetupService.status["ready"] = true
+	TourGuide.notify_setup_status(SetupService.status)
+	check.call(not TourGuide.active(), "tour non concluso a setup pronto")
+	await get_tree().process_frame
+	markers = count_markers.call()
+	check.call(int(markers[0]) == agents.size(),
+			"marker showroom non ripristinati a tour finito (%d)" % int(markers[0]))
+	var ok := failures.is_empty()
+	print("TOUR-TEST ", "PASS " if ok else "FAIL ",
+			JSON.stringify({"failures": failures, "steps": TourGuide.step_index()}))
+	await get_tree().create_timer(0.3).timeout
+	get_tree().quit(0 if ok else 1)
+
 func _guided_onboarding_selftest() -> void:
 	var failures: Array[String] = []
 	var original_setup := SetupService.status.duplicate(true)
@@ -1419,21 +1527,78 @@ func _start_talk(agent: AgentNPC) -> void:
 	if Game.dialogue_active:
 		return
 	Log.info("agent", "dialogo aperto con " + agent.slug)
+	var tour_running := _tour_enabled and TourGuide.active()
 	if not ScriptedOnboarding.provider_authenticated():
 		_story_seen[agent.slug] = true
 		_tour_visits += 1
-		agent.set_story_marker(true, true)
-		if _tour_visits == 3:
+		if not tour_running:
+			agent.set_story_marker(true, true)
+		if _tour_visits == 3 and not tour_running:
 			var helper := _find_agent("assistente")
 			if helper:
 				helper.say("Per domande libere e personali collega un provider dal setup. L'ufficio demo resta sempre esplorabile.")
 	agent.start_talk()
 	var ui := DialogueUI.new()
 	add_child(ui)
-	ui.open(agent.slug, agent.display_name, "")
+	# Durante il tour l'Assistente accoglie con il giro completo dell'ufficio
+	# (cosa puoi fare, cosa non ancora, chi ascoltare) invece del saluto breve.
+	var tree_id := ""
+	if tour_running and TourGuide.current_slug() == "assistente" \
+			and ScriptedOnboarding.normalize_agent(agent.slug) == "assistente":
+		tree_id = "assistente_tour"
+	ui.open(agent.slug, agent.display_name, tree_id)
 	ui.closed.connect(func() -> void:
 		if is_instance_valid(agent) and not agent.is_dissolving():
-			agent.end_talk())
+			agent.end_talk()
+		if _tour_enabled and TourGuide.active():
+			TourGuide.notify_talked(agent.slug)
+			_refresh_tour_markers())
+
+# ── Tour del primo avvio (TourGuide + TourTracker) ────────────────────
+
+## Durante il tour il diamante pulsa SOLO sul bersaglio corrente: un unico
+## punto d'attenzione per volta. A tour finito si torna al default showroom
+## (marker su tutti finché il provider non è collegato).
+func _refresh_tour_markers() -> void:
+	var tour_running := _tour_enabled and TourGuide.active()
+	var target := TourGuide.current_slug() if tour_running else ""
+	for agent in agents:
+		if tour_running:
+			var slug := ScriptedOnboarding.normalize_agent(agent.slug)
+			agent.set_story_marker(target != "" and slug == target, false)
+		else:
+			agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
+					bool(_story_seen.get(agent.slug, false)))
+
+func _on_tour_changed() -> void:
+	_refresh_tour_markers()
+	if not TourGuide.active():
+		return
+	if TourGuide.in_launch_phase():
+		# Gli incontri sono finiti: la checklist di lancio diventa il centro
+		# della scena. Aperta una sola volta; il tracker continua a seguirla.
+		if not _tour_launch_opened:
+			_tour_launch_opened = true
+			ScriptedOnboarding.action_requested.emit("open_section",
+					{"section": "activation"})
+		return
+	_tour_focus_current()
+
+## Porta la regia sul bersaglio corrente e gli fa dire l'invito: il
+## giocatore vede sempre dove andare senza cercare il diamante a mano.
+func _tour_focus_current() -> void:
+	if not _tour_enabled or not TourGuide.active() or Game.dialogue_active:
+		return
+	var target := TourGuide.current_slug()
+	if target == "":
+		return
+	for agent in agents:
+		if ScriptedOnboarding.normalize_agent(agent.slug) == target:
+			_camera.focus_on(agent.global_position + Vector2(0, -40), 1.05)
+			var invite := TourGuide.invite_line()
+			if invite != "":
+				agent.say(invite)
+			return
 
 # ── Roster dinamico dal backend (missione backend-integration) ────────
 # In modalità backend la scena mostra SOLO gli agenti attivi sulla VPS:
@@ -1480,6 +1645,8 @@ func sync_agents(list: Array) -> void:
 			wanted.erase(agent.uid)
 	for item_uid in wanted:
 		_spawn_backend_agent(wanted[item_uid])
+	if _tour_enabled and TourGuide.active():
+		_refresh_tour_markers()
 	if not BackendBus.telemetry.is_empty():
 		_on_agent_cpu_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
 	# Il roster backend arriva dopo _ready: il test-card va riprovato qui,
@@ -1907,6 +2074,8 @@ func _spawn_showroom() -> void:
 		agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
 				bool(_story_seen.get(str(def["slug"]), false)))
 		agents.append(agent)
+	if _tour_enabled and TourGuide.active():
+		_refresh_tour_markers()
 
 func _on_setup_status_changed(status: Dictionary) -> void:
 	var authenticated := bool(status.get("provider_authenticated", false))
@@ -1914,6 +2083,8 @@ func _on_setup_status_changed(status: Dictionary) -> void:
 		if agent.uid == "":
 			agent.set_story_marker(not authenticated,
 					bool(_story_seen.get(agent.slug, false)))
+	if _tour_enabled and TourGuide.active() and not authenticated:
+		_refresh_tour_markers()
 	if authenticated:
 		for child in get_children():
 			if child is DialogueUI:

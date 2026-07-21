@@ -270,6 +270,61 @@ const TREES := {
 		},
 	},
 
+	## Accoglienza del tour di primo avvio (TourGuide): il giro completo —
+	## cosa puoi fare, cosa non ancora, chi ascoltare e in che ordine.
+	"assistente_tour": {
+		"start": {
+			"text": "[caldo] Eccoti! Benvenuto nel TUO ufficio: qui lavora il team che cercherà lavoro per te. Ogni persona che vedi ha un compito preciso. Ti faccio fare il giro?",
+			"pose": "a",
+			"choices": [
+				{"text": "Guidami.", "next": "do1"},
+				{"text": "Prima dimmi: cosa posso fare qui?", "next": "can1"},
+				{"text": "E cosa NON posso ancora fare?", "next": "cant1"},
+			],
+		},
+		"can1": {
+			"text": "[neutro] Puoi muoverti liberamente: trascina col mouse o usa WASD, zoom con la rotella. Clicca una persona per parlarle, un reparto per aprirne il pannello.",
+			"pose": "b", "next": "can2",
+		},
+		"can2": {
+			"text": "[neutro] Anche gli oggetti parlano: la bacheca è il registro delle candidature, il mappamondo apre la mappa delle offerte, le pile di fogli sono le code di lavoro e lo scaffale contiene i CV pronti.",
+			"pose": "b", "next": "can3",
+		},
+		"can3": {
+			"text": "[caldo] E la linguetta ≡ in alto a sinistra apre tutte le pagine: profilo, posizioni, statistiche, impostazioni. Nessuna procedura ti chiude mai fuori dall'ufficio.",
+			"pose": "a", "next": "hub",
+		},
+		"cant1": {
+			"text": "[pensieroso] Finché non colleghi un provider AI, la chat libera resta spenta: parliamo per scelte guidate, sicure e gratuite. E il team non lavora finché la checklist di lancio non è tutta verde.",
+			"pose": "c", "next": "cant2",
+		},
+		"cant2": {
+			"text": "[caldo] Non è un limite: è una garanzia. Nessun token speso e nessun dato inviato finché non lo decidi tu.",
+			"pose": "a", "next": "hub",
+		},
+		"hub": {
+			"text": "[caldo] Vuoi sapere altro o partiamo col giro?",
+			"pose": "a",
+			"choices": [
+				{"text": "Cosa posso fare qui?", "next": "can1"},
+				{"text": "Cosa non posso ancora fare?", "next": "cant1"},
+				{"text": "Partiamo col giro.", "next": "do1"},
+			],
+		},
+		"do1": {
+			"text": "[neutro] Il giro segue il viaggio di un annuncio: lo Scout lo trova, l'Analista lo verifica, lo Scorer gli dà un numero da 0 a 100, lo Scrittore prepara CV e lettera, il Critico li approva.",
+			"pose": "b", "next": "do2",
+		},
+		"do2": {
+			"text": "[caldo] Poi passiamo dal Coordinatore per preparare il lancio del team e dal Mentor per le tue priorità. La to-do list a sinistra tiene il conto per te.",
+			"pose": "a", "next": "do3",
+		},
+		"do3": {
+			"text": "[divertito] Segui il diamante che pulsa: si comincia dallo Scout. Se ti perdi, la camera ti accompagna lei dal prossimo ospite.",
+			"pose": "a",
+		},
+	},
+
 	"assistente": {
 		"start": {
 			"text": "[caldo] Sono la tua guida nell'ufficio. Da dove vuoi cominciare?",
