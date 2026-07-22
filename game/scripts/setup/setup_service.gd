@@ -70,7 +70,7 @@ func _show_embedded_terminal(context: String, spec: Dictionary) -> void:
 	# aperto. Una sola console interattiva alla volta.
 	for existing in get_tree().get_nodes_in_group("embedded_terminal"):
 		if is_instance_valid(existing):
-			existing.queue_free()
+			existing.close()  # kill del processo figlio incluso, non solo l'UI
 	var terminal := EmbeddedTerminal.new(context, spec)
 	get_tree().root.add_child(terminal)
 
@@ -314,15 +314,17 @@ func _do_start_container() -> Dictionary:
 	if start["code"] == 0:
 		Log.call_deferred("info", "setup", "container jht avviato")
 		return {"ok": true, "message": "Container JHT attivo"}
-	# Il container non esiste ancora: prima attivazione via compose.
+	# Il container non esiste ancora: prima attivazione via compose, eseguita
+	# in background come faceva la app desktop — nessuna console interattiva
+	# (quella resta solo per i login provider): il progresso del pull scorre
+	# nel pannello e l'azione tiene occupato il bottone fino alla fine, così
+	# un secondo click non lancia un secondo compose (successo 22/07).
 	var compose := _ensure_compose_file()
 	if compose == "":
 		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
 	_ensure_host_dirs()
 	Log.call_deferred("info", "setup", "prima attivazione: compose up da " + compose)
-	call_deferred("_open_compose_terminal", compose)
-	return {"ok": true, "message": "Prima attivazione: scarico l'immagine del team nel " \
-			+ "terminale. Al termine la spia CONTAINER diventa verde da sola."}
+	return _compose_up_with_progress(compose)
 
 
 static func _find_compose_file() -> String:
@@ -399,17 +401,119 @@ static func _ensure_host_dirs() -> void:
 			docs.rstrip("/\\").path_join("Documents/Job Hunter Team"))
 
 
-func _open_compose_terminal(compose: String) -> void:
-	var inner := "docker compose -f " + _local_quote(compose) + " up -d jht"
-	var command := inner
-	if OS.get_name() == "Windows":
-		# ${HOME} nel compose non esiste nell'ambiente Windows: iniettato qui.
-		command = "set \"HOME=%USERPROFILE%\" && " + inner
-	terminal_requested.emit("container-setup", embedded_terminal_spec(
-			"Prima attivazione del container",
-			"Scarico l'immagine del team (qualche GB, dipende dalla rete). " \
-			+ "Quando il comando termina puoi chiudere la console: la checklist si aggiorna da sola.",
-			command))
+## `docker compose up -d` senza shell né console: spawn diretto con pipe e
+## progresso del pull riportato nel pannello via _progress. Il successo si
+## verifica sullo stato del container (docker inspect), non sull'exit code
+## (leggerlo dopo il reap logga falsi errori su macOS). Gira nel worker
+## dell'azione: i delay non toccano il main thread.
+func _compose_up_with_progress(compose: String) -> Dictionary:
+	if OS.get_name() == "Windows" and OS.get_environment("HOME") == "":
+		# ${HOME} nel compose non esiste nell'ambiente Windows: i processi
+		# figli ereditano l'ambiente del gioco.
+		OS.set_environment("HOME", OS.get_environment("USERPROFILE"))
+	_progress("container", "Scarico l'immagine del team (qualche GB, dipende dalla rete)…")
+	# Niente --progress: su pipe (non-TTY) compose è già in modalità plain e
+	# il flag non esiste nelle versioni meno recenti.
+	var process := OS.execute_with_pipe("docker", PackedStringArray([
+			"compose", "-f", compose, "up", "-d", "jht"]), false)
+	if process.is_empty():
+		return {"ok": false, "message": "Impossibile avviare docker compose"}
+	var stdio: FileAccess = process["stdio"]
+	var stderr: FileAccess = process["stderr"]
+	var pid := int(process["pid"])
+	var sizes := RegEx.new()
+	sizes.compile("([0-9.]+)\\s*([kKmMgG]?i?B)/([0-9.]+)\\s*([kKmMgG]?i?B)")
+	var pending := ""
+	var tail := ""            # ultime righe complete, per il messaggio d'errore
+	var layers := {}          # id livello → ultima riga di stato vista
+	var last_output_ms := Time.get_ticks_msec()
+	var last_ui_ms := 0
+	while true:
+		var got_data := false
+		for pipe: FileAccess in [stdio, stderr]:
+			if pipe == null:
+				continue
+			var chunk: PackedByteArray = pipe.get_buffer(65536)
+			if chunk.size() > 0:
+				got_data = true
+				pending += chunk.get_string_from_utf8()
+		if got_data:
+			last_output_ms = Time.get_ticks_msec()
+			var lines: PackedStringArray = pending.split("\n")
+			pending = lines[lines.size() - 1]
+			for i in lines.size() - 1:
+				var line := lines[i].strip_edges()
+				if line == "":
+					continue
+				tail += line + "\n"
+				if tail.length() > 1200:
+					tail = tail.right(1200)
+				var parts: PackedStringArray = line.split(" ", false, 1)
+				if parts.size() == 2 and parts[0].is_valid_hex_number():
+					layers[parts[0]] = parts[1]
+		else:
+			if not OS.is_process_running(pid):
+				# Drain finale: il processo può uscire con dati ancora in coda
+				# nei pipe (tipicamente la riga d'errore che ci serve).
+				for _attempt in 3:
+					for pipe: FileAccess in [stdio, stderr]:
+						if pipe == null:
+							continue
+						var rest: PackedByteArray = pipe.get_buffer(65536)
+						if rest.size() > 0:
+							pending += rest.get_string_from_utf8()
+					OS.delay_msec(30)
+				if pending.strip_edges() != "":
+					tail += pending.strip_edges() + "\n"
+				break
+			if Time.get_ticks_msec() - last_output_ms > 180000:
+				OS.kill(pid)
+				Log.call_deferred("warn", "setup", "compose fermo da 3 minuti, interrotto")
+				return {"ok": false, "message": "Il download non procede da 3 minuti. " \
+						+ "Controlla la connessione e riprova; se persiste apri Docker Desktop " \
+						+ "e verifica che il motore sia attivo."}
+			OS.delay_msec(80)
+		if Time.get_ticks_msec() - last_ui_ms > 1500 and not layers.is_empty():
+			last_ui_ms = Time.get_ticks_msec()
+			_progress("container", _pull_progress_text(layers, sizes))
+	var state := _run("docker", PackedStringArray(["inspect", "jht",
+			"--format", "{{.State.Status}}"]))
+	if state["code"] == 0 and str(state["out"]).contains("running"):
+		Log.call_deferred("info", "setup", "prima attivazione completata: container attivo")
+		return {"ok": true, "message": "Container JHT attivo"}
+	Log.call_deferred("warn", "setup", "compose fallito: " + tail.right(400))
+	return {"ok": false, "message": "Prima attivazione fallita: " \
+			+ tail.strip_edges().right(260)}
+
+
+## Riassunto leggibile del pull: parti completate e byte scaricati/totali
+## quando docker li espone nelle righe di stato.
+static func _pull_progress_text(layers: Dictionary, sizes: RegEx) -> String:
+	var done := 0
+	var got_bytes := 0.0
+	var total_bytes := 0.0
+	for id in layers:
+		var status := str(layers[id]).to_lower()
+		if status.contains("complete") or status.contains("already exists") \
+				or status.contains("exists"):
+			done += 1
+		var found := sizes.search(str(layers[id]))
+		if found != null:
+			got_bytes += _to_mb(found.get_string(1), found.get_string(2))
+			total_bytes += _to_mb(found.get_string(3), found.get_string(4))
+	var text := "Scarico l'immagine del team: %d/%d parti" % [done, layers.size()]
+	if total_bytes > 0.0:
+		text += " · %.0f/%.0f MB" % [got_bytes, total_bytes]
+	return text + "…"
+
+
+static func _to_mb(value: String, unit: String) -> float:
+	var v := value.to_float()
+	match unit.to_lower().left(1):
+		"g": return v * 1024.0
+		"k": return v / 1024.0
+		"m": return v
+		_: return v / 1048576.0
 
 
 const DOCKER_DESKTOP_WIN := "C:/Program Files/Docker/Docker/Docker Desktop.exe"

@@ -330,6 +330,13 @@ func close() -> void:
 
 func _exit_tree() -> void:
 	_closing = true
+	# Anche chi smonta la console con queue_free (es. una console che ne
+	# sostituisce un'altra) non deve lasciare orfano il processo figlio:
+	# il 22/07 un compose doppio è sopravvissuto proprio così.
+	_mutex.lock()
+	if _pid > 0 and not _process_exited:
+		OS.kill(_pid)
+	_mutex.unlock()
 	if _thread != null and _thread.is_started():
 		_thread.wait_to_finish()
 
