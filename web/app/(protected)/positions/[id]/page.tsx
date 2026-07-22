@@ -990,11 +990,12 @@ export default async function PositionDetailPage({ params }: PageProps) {
           </span>
         )}
       </div>
-      <div className="flex items-center gap-4">
-        {/* Score dentro un riquadro quadrato: il cerchio è circondato dallo
-            stesso spazio su tutti e quattro i lati (feedback utente 22/07). */}
+      <div className="flex items-stretch gap-4">
+        {/* Score centrato nello spazio libero a sinistra del blocco fatti:
+            equidistante da bordo card, titolo azienda, inizio delle label e
+            linea divisoria — nessun riquadro disegnato (feedback 22/07). */}
         {score && (
-          <div className="w-[88px] h-[88px] shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-row)] flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center">
             <div
               className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl"
               style={{
@@ -1008,7 +1009,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
         )}
         {/* Blocco fatti ancorato a destra: label e valore su due colonne
             adiacenti, niente vuoto tra label e valore (feedback 22/07). */}
-        <div className="ml-auto grid grid-cols-[auto_auto] gap-x-6 gap-y-2 items-baseline min-w-0">
+        <div className="ml-auto self-center grid grid-cols-[auto_auto] gap-x-6 gap-y-2 items-baseline min-w-0">
           {(salaryEst || salaryDecl) && (
             <OverviewRow
               label={t(salaryEst ? "d_salary_estimated" : "d_salary_declared")}
