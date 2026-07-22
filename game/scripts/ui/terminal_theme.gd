@@ -74,11 +74,24 @@ static func get_theme() -> Theme:
 	_theme = t
 	return t
 
+## Spessore del bordo "hairline". Il design 1920x1080 viene riscalato con
+## canvas_items: su schermi più piccoli (1366x768) un bordo di 1px logico
+## scende sotto il pixel fisico e certi driver (Intel HD + ANGLE) ne perdono
+## dei lati interi — i "bordi su tre lati" visti da Leone su Windows 22/07.
+## A scala <1 il bordo passa a 2px logici (≥1px fisico garantito).
+static func hairline() -> int:
+	var screen := DisplayServer.screen_get_size()
+	if screen.x <= 0 or screen.y <= 0:
+		return 1
+	var scale := minf(screen.x / 1920.0, screen.y / 1080.0)
+	return 2 if scale < 1.0 else 1
+
+
 static func _flat(bg: Color, border: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.border_color = border
-	sb.set_border_width_all(1)
+	sb.set_border_width_all(hairline())
 	sb.set_corner_radius_all(0)
 	sb.content_margin_left = 10
 	sb.content_margin_right = 10

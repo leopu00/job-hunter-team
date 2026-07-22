@@ -192,6 +192,11 @@ func _apply_fullscreen(on: bool) -> void:
 		var sp := DisplayServer.screen_get_position(scr)
 		var ss := DisplayServer.screen_get_size(scr)
 		var target := Vector2i(mini(1600, int(ss.x * 0.9)), mini(900, int(ss.y * 0.9)))
+		# TEST-AUTO: JHT_WIN_SIZE=1366x768 replica la finestra di uno schermo
+		# specifico (repro bug di scala tipo "bordi su tre lati").
+		var forced := OS.get_environment("JHT_WIN_SIZE")
+		if forced.contains("x"):
+			target = Vector2i(int(forced.get_slice("x", 0)), int(forced.get_slice("x", 1)))
 		win.size = target
 		win.position = sp + (ss - target) / 2
 
