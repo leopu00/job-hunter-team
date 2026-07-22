@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
@@ -13,12 +14,28 @@ import {
 
 // Giudizio a 4 livelli dalla pagina posizione — stessa semantica della
 // pagina /swipe (event-log position_feedback, l'ultimo evento prevale):
-//   no         → dislike/1/less_like_this + esclusione utente (reversibile)
+//   no         → "Escludi": popup con causa OBBLIGATORIA (regola 22/07:
+//                mai un'esclusione senza motivo) → dislike/1 + esclusione
 //   review_low → like/2 (keep con entusiasmo basso, NIENTE esclusione)
 //   review_ok  → like/4/more_like_this
 //   top        → star/5/more_like_this
 // Il ri-giudizio riconcilia l'esclusione (no→altro: DELETE; altro→no: POST).
+// Il popup è renderizzato in un PORTAL su document.body: la pagina ha
+// un'animazione con transform che diventa containing block per i fixed —
+// senza portal il popup si ancorava alla card, non al viewport (bug 22/07).
 export type Verdict = "no" | "review_low" | "review_ok" | "top";
+
+type ReasonKey =
+  "closed" | "not_interested" | "mismatch" | "company" | "conditions";
+
+// 5 cause pronte, un tap e via; il motivo libero passa come 'other' + nota.
+const REASON_ORDER: ReasonKey[] = [
+  "not_interested",
+  "mismatch",
+  "conditions",
+  "company",
+  "closed",
+];
 
 const VERDICTS: Record<
   Verdict,
@@ -67,79 +84,178 @@ const ORDER: Verdict[] = ["no", "review_low", "review_ok", "top"];
 
 const T: Record<
   Locale,
-  { verdicts: Record<Verdict, string>; networkError: string }
+  {
+    verdicts: Record<Verdict, string>;
+    networkError: string;
+    reasons: Record<ReasonKey, string>;
+    popupTitle: string;
+    customPlaceholder: string;
+    cancel: string;
+    confirm: string;
+    removeExclusion: string;
+  }
 > = {
   it: {
     verdicts: {
-      no: "Non interessante",
+      no: "Escludi",
       review_low: "Poco interessante",
       review_ok: "Interessante",
       top: "Molto interessante",
     },
     networkError: "Errore di rete",
+    reasons: {
+      closed: "Chiusa / non più attiva",
+      not_interested: "Non mi interessa",
+      mismatch: "Non in linea col mio profilo",
+      company: "Azienda non desiderata",
+      conditions: "Condizioni inadatte (stipendio/sede)",
+    },
+    popupTitle: "Perché escludi questa offerta?",
+    customPlaceholder: "Oppure scrivi il motivo…",
+    cancel: "Annulla",
+    confirm: "Escludi",
+    removeExclusion: "Annulla esclusione",
   },
   en: {
     verdicts: {
-      no: "Not interesting",
+      no: "Exclude",
       review_low: "Slightly interesting",
       review_ok: "Interesting",
       top: "Very interesting",
     },
     networkError: "Network error",
+    reasons: {
+      closed: "Closed / no longer active",
+      not_interested: "Not interested",
+      mismatch: "Not a match for my profile",
+      company: "Unwanted company",
+      conditions: "Unsuitable conditions (salary/location)",
+    },
+    popupTitle: "Why are you excluding this offer?",
+    customPlaceholder: "Or write the reason…",
+    cancel: "Cancel",
+    confirm: "Exclude",
+    removeExclusion: "Remove exclusion",
   },
   hu: {
     verdicts: {
-      no: "Nem érdekes",
+      no: "Kizárás",
       review_low: "Kevéssé érdekes",
       review_ok: "Érdekes",
       top: "Nagyon érdekes",
     },
     networkError: "Hálózati hiba",
+    reasons: {
+      closed: "Lezárva / már nem aktív",
+      not_interested: "Nem érdekel",
+      mismatch: "Nem illik a profilomhoz",
+      company: "Nem kívánt cég",
+      conditions: "Nem megfelelő feltételek (fizetés/helyszín)",
+    },
+    popupTitle: "Miért zárod ki ezt az ajánlatot?",
+    customPlaceholder: "Vagy írd le az okot…",
+    cancel: "Mégse",
+    confirm: "Kizárás",
+    removeExclusion: "Kizárás visszavonása",
   },
   es: {
     verdicts: {
-      no: "No interesante",
+      no: "Excluir",
       review_low: "Poco interesante",
       review_ok: "Interesante",
       top: "Muy interesante",
     },
     networkError: "Error de red",
+    reasons: {
+      closed: "Cerrada / ya no activa",
+      not_interested: "No me interesa",
+      mismatch: "No encaja con mi perfil",
+      company: "Empresa no deseada",
+      conditions: "Condiciones inadecuadas (salario/ubicación)",
+    },
+    popupTitle: "¿Por qué excluyes esta oferta?",
+    customPlaceholder: "O escribe el motivo…",
+    cancel: "Cancelar",
+    confirm: "Excluir",
+    removeExclusion: "Anular exclusión",
   },
   de: {
     verdicts: {
-      no: "Uninteressant",
+      no: "Ausschließen",
       review_low: "Wenig interessant",
       review_ok: "Interessant",
       top: "Sehr interessant",
     },
     networkError: "Netzwerkfehler",
+    reasons: {
+      closed: "Geschlossen / nicht mehr aktiv",
+      not_interested: "Kein Interesse",
+      mismatch: "Passt nicht zu meinem Profil",
+      company: "Unerwünschtes Unternehmen",
+      conditions: "Ungeeignete Bedingungen (Gehalt/Standort)",
+    },
+    popupTitle: "Warum schließt du dieses Angebot aus?",
+    customPlaceholder: "Oder schreib den Grund…",
+    cancel: "Abbrechen",
+    confirm: "Ausschließen",
+    removeExclusion: "Ausschluss aufheben",
   },
   fr: {
     verdicts: {
-      no: "Pas intéressant",
+      no: "Exclure",
       review_low: "Peu intéressant",
       review_ok: "Intéressant",
       top: "Très intéressant",
     },
     networkError: "Erreur réseau",
+    reasons: {
+      closed: "Fermée / plus active",
+      not_interested: "Pas intéressé",
+      mismatch: "Pas adapté à mon profil",
+      company: "Entreprise non souhaitée",
+      conditions: "Conditions inadaptées (salaire/lieu)",
+    },
+    popupTitle: "Pourquoi excluez-vous cette offre ?",
+    customPlaceholder: "Ou écrivez le motif…",
+    cancel: "Annuler",
+    confirm: "Exclure",
+    removeExclusion: "Annuler l'exclusion",
   },
   pt: {
     verdicts: {
-      no: "Não interessante",
+      no: "Excluir",
       review_low: "Pouco interessante",
       review_ok: "Interessante",
       top: "Muito interessante",
     },
     networkError: "Erro de rede",
+    reasons: {
+      closed: "Fechada / já não ativa",
+      not_interested: "Não tenho interesse",
+      mismatch: "Não se adequa ao meu perfil",
+      company: "Empresa indesejada",
+      conditions: "Condições inadequadas (salário/local)",
+    },
+    popupTitle: "Porque excluis esta oferta?",
+    customPlaceholder: "Ou escreve o motivo…",
+    cancel: "Cancelar",
+    confirm: "Excluir",
+    removeExclusion: "Anular exclusão",
   },
 };
 
 export function FeedbackButtons({
   legacyId,
   initialVerdict,
+  initialExcludedReason = null,
+  initialExcludedNote = null,
 }: {
   legacyId: number;
   initialVerdict: Verdict | null;
+  // Esclusione utente corrente (user_excluded_reason/note): serve al popup
+  // per evidenziare la causa attiva e permettere il toggle-off.
+  initialExcludedReason?: string | null;
+  initialExcludedNote?: string | null;
 }) {
   const t = T[useLocale()];
   const router = useRouter();
@@ -147,9 +263,21 @@ export function FeedbackButtons({
   const [verdict, setVerdict] = useState<Verdict | null>(initialVerdict);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Popup causa esclusione (pulsante "Escludi") — portal su body.
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [customText, setCustomText] = useState("");
+  const [popupError, setPopupError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  // Causa/nota dell'esclusione ATTIVA (null = non esclusa dall'utente):
+  // guida evidenziazione, toggle-off e "Annulla esclusione" nel popup.
+  const [curReason, setCurReason] = useState<string | null>(
+    initialExcludedReason,
+  );
+  const [curNote, setCurNote] = useState<string | null>(initialExcludedNote);
 
-  const give = async (v: Verdict) => {
-    if (busy) return;
+  const give = async (v: Verdict, excl?: { reason: string; note?: string }) => {
+    if (busy) return false;
     const prev = verdict;
     setError(null);
     setBusy(true);
@@ -167,11 +295,15 @@ export function FeedbackButtons({
       });
       if (!res.ok) throw new Error(String(res.status));
       const wasExcluded = prev ? Boolean(VERDICTS[prev].exclude) : false;
-      if (cfg.exclude && !wasExcluded) {
+      if (cfg.exclude && excl) {
+        // Sempre POST (anche se già esclusa): l'utente può correggere la causa.
         const ex = await fetch(`/api/positions/${legacyId}/user-exclude`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason: "not_interested" }),
+          body: JSON.stringify({
+            reason: excl.reason,
+            ...(excl.note ? { note: excl.note } : {}),
+          }),
         });
         if (!ex.ok) throw new Error(String(ex.status));
       } else if (!cfg.exclude && wasExcluded) {
@@ -180,6 +312,60 @@ export function FeedbackButtons({
         });
         if (!ex.ok) throw new Error(String(ex.status));
       }
+      startTransition(() => router.refresh());
+      setBusy(false);
+      return true;
+    } catch (e) {
+      setVerdict(prev);
+      setError(
+        e instanceof Error
+          ? `${t.networkError} (${e.message})`
+          : t.networkError,
+      );
+      setBusy(false);
+      return false;
+    }
+  };
+
+  const closePopup = () => {
+    if (busy) return;
+    setPopupOpen(false);
+    setCustomText("");
+    setPopupError(null);
+  };
+
+  // Un tap su una causa pronta = esclusione immediata.
+  const excludeWithReason = async (reason: string, note?: string) => {
+    setPopupError(null);
+    const ok = await give("no", { reason, note });
+    if (ok) {
+      setCurReason(reason);
+      setCurNote(note ?? null);
+      setPopupOpen(false);
+      setCustomText("");
+    } else {
+      setPopupError(t.networkError);
+    }
+  };
+
+  // Ritira il voto attivo (riclick sul giudizio selezionato): evento
+  // 'clear' nel log (mig 059) → in DB non resta nessuna label attiva.
+  const postClear = () =>
+    fetch(`/api/positions/${legacyId}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "clear" }),
+    });
+
+  const clearVerdict = async () => {
+    if (busy) return;
+    const prev = verdict;
+    setError(null);
+    setBusy(true);
+    setVerdict(null);
+    try {
+      const res = await postClear();
+      if (!res.ok) throw new Error(String(res.status));
       startTransition(() => router.refresh());
     } catch (e) {
       setVerdict(prev);
@@ -192,6 +378,163 @@ export function FeedbackButtons({
     setBusy(false);
   };
 
+  // Toglie l'esclusione (tap sulla causa attiva o "Annulla esclusione"):
+  // la posizione torna allo stato precedente e il giudizio si azzera
+  // ANCHE nel log feedback (evento 'clear').
+  const removeExclusion = async () => {
+    if (busy) return;
+    setPopupError(null);
+    setBusy(true);
+    try {
+      const ex = await fetch(`/api/positions/${legacyId}/user-exclude`, {
+        method: "DELETE",
+      });
+      if (!ex.ok) throw new Error(String(ex.status));
+      const res = await postClear();
+      if (!res.ok) throw new Error(String(res.status));
+      setCurReason(null);
+      setCurNote(null);
+      setVerdict(null);
+      setPopupOpen(false);
+      setCustomText("");
+      startTransition(() => router.refresh());
+    } catch (e) {
+      setPopupError(
+        e instanceof Error
+          ? `${t.networkError} (${e.message})`
+          : t.networkError,
+      );
+    }
+    setBusy(false);
+  };
+
+  const popup =
+    popupOpen && mounted
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.55)" }}
+            onClick={closePopup}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={t.popupTitle}
+              className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-[12px] font-semibold text-[var(--color-white)] mb-3">
+                {t.popupTitle}
+              </div>
+              {/* Cause pronte: un tap esclude subito. La causa ATTIVA è
+                  evidenziata e un tap su di lei ANNULLA l'esclusione. */}
+              <div className="flex flex-col gap-1.5 mb-3">
+                {REASON_ORDER.map((k) => {
+                  const active = curReason === k;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      disabled={busy}
+                      aria-pressed={active}
+                      onClick={() =>
+                        active
+                          ? void removeExclusion()
+                          : void excludeWithReason(k)
+                      }
+                      className="w-full rounded-lg border px-3 py-2 text-left text-[11px] font-medium transition-colors hover:border-[var(--color-red)] hover:text-[var(--color-red)] disabled:opacity-60"
+                      style={
+                        active
+                          ? {
+                              borderColor: "var(--color-red)",
+                              color: "var(--color-red)",
+                              background:
+                                "color-mix(in srgb, var(--color-red) 10%, transparent)",
+                            }
+                          : {
+                              borderColor: "var(--color-border)",
+                              color: "var(--color-base)",
+                            }
+                      }
+                    >
+                      {t.reasons[k]}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Motivo libero: testo → 'other' + nota. */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customText}
+                  onChange={(e) => setCustomText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && customText.trim())
+                      void excludeWithReason("other", customText.trim());
+                  }}
+                  placeholder={t.customPlaceholder}
+                  maxLength={200}
+                  className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-2 text-[11px] text-[var(--color-base)] placeholder:text-[var(--color-dim)]"
+                />
+                <button
+                  type="button"
+                  disabled={busy || !customText.trim()}
+                  onClick={() =>
+                    void excludeWithReason("other", customText.trim())
+                  }
+                  className="shrink-0 rounded-lg border px-3.5 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40"
+                  style={{
+                    borderColor: "var(--color-red)",
+                    color: "var(--color-red)",
+                    background:
+                      "color-mix(in srgb, var(--color-red) 10%, transparent)",
+                  }}
+                >
+                  {busy ? "…" : t.confirm}
+                </button>
+              </div>
+              {popupError && (
+                <p
+                  className="mt-2 text-[10px]"
+                  style={{ color: "var(--color-red)" }}
+                >
+                  {popupError}
+                </p>
+              )}
+              <div className="mt-3 flex justify-between gap-2">
+                {/* Già esclusa (anche con motivo personalizzato) → via
+                    esplicita per togliere l'esclusione. */}
+                {curReason ? (
+                  <button
+                    type="button"
+                    onClick={() => void removeExclusion()}
+                    disabled={busy}
+                    className="rounded-lg border px-3.5 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
+                    style={{
+                      borderColor: "var(--color-red)",
+                      color: "var(--color-red)",
+                    }}
+                  >
+                    {t.removeExclusion}
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  onClick={closePopup}
+                  disabled={busy}
+                  className="rounded-lg border border-[var(--color-border)] px-3.5 py-2 text-[11px] font-semibold text-[var(--color-muted)] transition-colors hover:bg-[var(--color-row)] disabled:opacity-60"
+                >
+                  {t.cancel}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div>
       <div className="grid grid-cols-4 gap-2">
@@ -202,7 +545,20 @@ export function FeedbackButtons({
             <button
               key={v}
               type="button"
-              onClick={() => give(v)}
+              onClick={() => {
+                if (v === "no") {
+                  // Esclusione: MAI senza causa → popup, non azione diretta.
+                  // Motivo personalizzato attivo → prefill per correggerlo.
+                  setPopupError(null);
+                  setCustomText(curReason === "other" ? (curNote ?? "") : "");
+                  setPopupOpen(true);
+                } else if (selected) {
+                  // Riclick sul voto attivo = lo ritira (nessun giudizio).
+                  void clearVerdict();
+                } else {
+                  void give(v);
+                }
+              }}
               disabled={busy}
               aria-pressed={selected}
               className="flex flex-col items-center gap-1.5 rounded-lg border px-1 py-2.5 transition-colors disabled:opacity-60"
@@ -227,6 +583,7 @@ export function FeedbackButtons({
           {error}
         </p>
       )}
+      {popup}
     </div>
   );
 }
