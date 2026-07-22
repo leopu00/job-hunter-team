@@ -400,7 +400,7 @@ static func _ensure_host_dirs() -> void:
 
 
 func _open_compose_terminal(compose: String) -> void:
-	var inner := "docker compose -f " + _shell_quote(compose) + " up -d jht"
+	var inner := "docker compose -f " + _local_quote(compose) + " up -d jht"
 	var command := inner
 	if OS.get_name() == "Windows":
 		# ${HOME} nel compose non esiste nell'ambiente Windows: iniettato qui.
@@ -531,17 +531,19 @@ static func embedded_terminal_spec(title: String, hint: String, command: String)
 
 func open_technical_terminal(context: String, title: String, hint: String,
 		container_args: PackedStringArray) -> void:
-	var pieces := PackedStringArray(["docker", "exec", "-it", "jht"])
-	for arg in container_args:
-		pieces.append(_shell_quote(arg))
-	var inner := " ".join(pieces)
 	var vps := _vps_config()
+	var pieces := PackedStringArray(["docker", "exec",
+			_exec_tty_flags(not vps.is_empty()), "jht"])
+	for arg in container_args:
+		# via VPS parsa la sh remota (POSIX); in locale la shell di piattaforma
+		pieces.append(_shell_quote(arg) if not vps.is_empty() else _local_quote(arg))
+	var inner := " ".join(pieces)
 	var command := inner
 	if not vps.is_empty():
 		var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 		var target := "root@" + str(vps.get("ip", ""))
-		command = "ssh -tt -i " + _shell_quote(key) + " " \
-				+ _shell_quote(target) + " " + _shell_quote(inner)
+		command = "ssh -tt -i " + _local_quote(key) + " " \
+				+ _local_quote(target) + " " + _local_quote(inner)
 	terminal_requested.emit(context, embedded_terminal_spec(title, hint, command))
 
 
@@ -621,9 +623,9 @@ func open_vps_install(ip: String, key_path: String) -> void:
 		return
 	var remote := "curl -fsSL https://jobhunterteam.ai/install.sh | " \
 			+ "JHT_SKIP_ONBOARD=1 bash"
-	var command := "ssh -tt -i " + _shell_quote(key) \
-			+ " -o StrictHostKeyChecking=accept-new " + _shell_quote("root@" + clean_ip) \
-			+ " " + _shell_quote(remote)
+	var command := "ssh -tt -i " + _local_quote(key) \
+			+ " -o StrictHostKeyChecking=accept-new " + _local_quote("root@" + clean_ip) \
+			+ " " + _local_quote(remote)
 	terminal_requested.emit("vps-install", embedded_terminal_spec(
 			"Installa JHT sulla VPS",
 			"Installazione remota completa. Al termine chiudi la console e premi Connetti.",
@@ -933,18 +935,25 @@ static func _run_ssh_stdin(vps: Dictionary, command: String,
 
 
 static func _provider_login_command(provider: String, vps: Dictionary = {}) -> String:
-	var intro := "printf '\\nJHT — login con abbonamento (console interna)\\n\\n'; "
+	var flags := _exec_tty_flags(not vps.is_empty())
 	var inner := ""
 	match provider:
-		"codex": inner = "docker exec -it jht codex login --device-auth"
-		"kimi": inner = "docker exec -it jht kimi --yolo"
-		_: inner = "docker exec -it jht claude --dangerously-skip-permissions"
+		"codex": inner = "docker exec %s jht codex login --device-auth" % flags
+		"kimi": inner = "docker exec %s jht kimi --yolo" % flags
+		_: inner = "docker exec %s jht claude --dangerously-skip-permissions" % flags
 	if vps.is_empty():
-		return intro + inner
+		if OS.get_name() == "Windows":
+			# cmd.exe non ha printf: niente banner, dritto al comando.
+			return inner
+		return "printf '\\nJHT — login con abbonamento (console interna)\\n\\n'; " + inner
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 	var target := "root@" + str(vps.get("ip", ""))
-	return intro + "ssh -tt -i " + _shell_quote(key) + " " \
-			+ _shell_quote(target) + " " + _shell_quote(inner)
+	var command := "ssh -tt -i " + _local_quote(key) + " " \
+			+ _local_quote(target) + " " + _local_quote(inner)
+	if OS.get_name() != "Windows":
+		command = "printf '\\nJHT — login con abbonamento (console interna)\\n\\n'; " \
+				+ command
+	return command
 
 
 static func _provider_terminal_hint(provider: String) -> String:
@@ -959,6 +968,24 @@ static func _provider_terminal_hint(provider: String) -> String:
 
 static func _shell_quote(value: String) -> String:
 	return "'" + value.replace("'", "'\\''") + "'"
+
+
+## Quota per la shell LOCALE che ospita il comando. Su Windows è cmd.exe, che
+## non interpreta gli apici singoli POSIX: arrivano letterali al figlio (il
+## "CreateFile ...\'C:\..." visto da Leone il 22/07). I doppi apici invece
+## attraversano intatti sia OS.execute (wrap esterno senza escape degli apici
+## interni) sia cmd /s /c (che spoglia solo la coppia più esterna).
+static func _local_quote(value: String) -> String:
+	if OS.get_name() == "Windows":
+		return "\"" + value.replace("\"", "") + "\""
+	return _shell_quote(value)
+
+
+## `docker exec` locale su Windows: stdin del figlio è una pipe, non un TTY,
+## e `-t` fallirebbe con "the input device is not a TTY". Via `ssh -tt` il
+## TTY remoto esiste sempre, quindi lì `-it` resta valido.
+static func _exec_tty_flags(remote: bool) -> String:
+	return "-i" if OS.get_name() == "Windows" and not remote else "-it"
 
 
 func open_subscription(provider: String) -> void:
