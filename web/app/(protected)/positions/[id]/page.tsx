@@ -977,38 +977,42 @@ export default async function PositionDetailPage({ params }: PageProps) {
   const overviewCard = (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
       <div className="section-label mb-3">{t("overview")}</div>
-      <h1 className="text-lg md:text-xl font-bold tracking-tight text-[var(--color-white)] mb-1">
-        {position.title}
-      </h1>
-      <div className="mb-3 flex items-center gap-x-2.5 gap-y-1 flex-wrap">
-        <span className="text-[13px] text-[var(--color-base)] font-medium">
-          {position.company}
-        </span>
-        {/* Logo aziendale (mig 056): a destra del nome; senza logo,
-            nessun placeholder. */}
-        {company?.logo && (
-          <Avatar
-            name={position.company}
-            src={company.logo}
-            size="sm"
-            square
-            imgFit="contain"
-          />
-        )}
-        {position.location && !hasLocationCard && (
-          <span className="text-[11px] text-[var(--color-muted)]">
-            · {position.location}
-          </span>
-        )}
-      </div>
-      <div className="flex items-stretch gap-4">
-        {/* Score centrato nello spazio libero a sinistra del blocco fatti:
-            equidistante da bordo card, titolo azienda, inizio delle label e
-            linea divisoria — nessun riquadro disegnato (feedback 22/07). */}
-        {score && (
-          <div className="flex-1 flex items-center justify-center">
+      {/* Layout compatto (feedback 22/07, "come sul telefono"): su desktop
+          titolo+azienda a sinistra e il gruppo score+fatti adiacente a
+          destra, tutto su una fascia — niente zone vuote. Su mobile il
+          gruppo va a capo sotto il titolo (score a sinistra, fatti a
+          destra), che è la resa già approvata. */}
+      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
+        <div className="min-w-0 md:flex-1">
+          <h1 className="text-lg md:text-xl font-bold tracking-tight text-[var(--color-white)] mb-1">
+            {position.title}
+          </h1>
+          <div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap">
+            <span className="text-[13px] text-[var(--color-base)] font-medium">
+              {position.company}
+            </span>
+            {/* Logo aziendale (mig 056): a destra del nome; senza logo,
+                nessun placeholder. */}
+            {company?.logo && (
+              <Avatar
+                name={position.company}
+                src={company.logo}
+                size="sm"
+                square
+                imgFit="contain"
+              />
+            )}
+            {position.location && !hasLocationCard && (
+              <span className="text-[11px] text-[var(--color-muted)]">
+                · {position.location}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-4 md:gap-6 min-w-0">
+          {score && (
             <div
-              className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl"
+              className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
               style={{
                 borderColor: scoreColor(score.total_score),
                 color: scoreColor(score.total_score),
@@ -1016,56 +1020,58 @@ export default async function PositionDetailPage({ params }: PageProps) {
             >
               {score.total_score}
             </div>
+          )}
+          {/* Fatti: label e valore su due colonne adiacenti, niente vuoto
+              tra label e valore (feedback 22/07). */}
+          <div className="ml-auto md:ml-0 grid grid-cols-[auto_auto] gap-x-5 gap-y-1.5 items-baseline min-w-0">
+            {(salaryEst || salaryDecl) && (
+              <OverviewRow
+                label={t(
+                  salaryEst ? "d_salary_estimated" : "d_salary_declared",
+                )}
+              >
+                {(salaryEst ?? salaryDecl)!}
+              </OverviewRow>
+            )}
+            {position.remote_type && (
+              <OverviewRow label={t("o_mode")}>
+                {t(`rt_${position.remote_type}`)}
+              </OverviewRow>
+            )}
+            {position.role_family && (
+              <OverviewRow label={t("o_category")}>
+                <span className="inline-flex items-center gap-1.5 max-w-full">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{
+                      background: colorForFamily(position.role_family.trim()),
+                    }}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">{position.role_family}</span>
+                </span>
+              </OverviewRow>
+            )}
+            {position.source && (
+              <OverviewRow label={t("d_source")}>
+                {position.url ? (
+                  <a
+                    href={position.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                  >
+                    {sourceDisplayName(position.source)} ↗
+                  </a>
+                ) : (
+                  sourceDisplayName(position.source)
+                )}
+              </OverviewRow>
+            )}
+            <OverviewRow label={t("d_found")}>
+              {`${foundDate} (${foundAge})`}
+            </OverviewRow>
           </div>
-        )}
-        {/* Blocco fatti ancorato a destra: label e valore su due colonne
-            adiacenti, niente vuoto tra label e valore (feedback 22/07). */}
-        <div className="ml-auto self-center grid grid-cols-[auto_auto] gap-x-6 gap-y-2 items-baseline min-w-0">
-          {(salaryEst || salaryDecl) && (
-            <OverviewRow
-              label={t(salaryEst ? "d_salary_estimated" : "d_salary_declared")}
-            >
-              {(salaryEst ?? salaryDecl)!}
-            </OverviewRow>
-          )}
-          {position.remote_type && (
-            <OverviewRow label={t("o_mode")}>
-              {t(`rt_${position.remote_type}`)}
-            </OverviewRow>
-          )}
-          {position.role_family && (
-            <OverviewRow label={t("o_category")}>
-              <span className="inline-flex items-center gap-1.5 max-w-full">
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{
-                    background: colorForFamily(position.role_family.trim()),
-                  }}
-                  aria-hidden="true"
-                />
-                <span className="truncate">{position.role_family}</span>
-              </span>
-            </OverviewRow>
-          )}
-          {position.source && (
-            <OverviewRow label={t("d_source")}>
-              {position.url ? (
-                <a
-                  href={position.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-                >
-                  {sourceDisplayName(position.source)} ↗
-                </a>
-              ) : (
-                sourceDisplayName(position.source)
-              )}
-            </OverviewRow>
-          )}
-          <OverviewRow label={t("d_found")}>
-            {`${foundDate} (${foundAge})`}
-          </OverviewRow>
         </div>
       </div>
       {/* Giudizio rapido in coda alla Panoramica: stessa fila di /swipe
