@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -21,6 +22,7 @@ import { countryFlag } from "@/lib/country-flag";
 import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
 import { colorForFamily } from "@/lib/position-classifier";
+import { sourceDisplayName } from "@/lib/case-study-sources";
 import { scoreSpectrumCss } from "@/lib/score-color";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
@@ -946,12 +948,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
     position.salary_declared_max,
     position.salary_declared_currency,
   );
-  const modeColor =
-    position.remote_type === "full_remote"
-      ? "var(--color-green)"
-      : position.remote_type === "hybrid"
-        ? "var(--color-yellow)"
-        : "var(--color-red)";
   // "Trovata 2026-07-17 (2 giorni fa)" — età calcolata al render server;
   // la pagina è force-dynamic quindi non resta congelata in una build.
   const foundDate = position.found_at.slice(0, 10);
@@ -995,43 +991,39 @@ export default async function PositionDetailPage({ params }: PageProps) {
         )}
       </div>
       <div className="flex items-center gap-4">
+        {/* Score dentro un riquadro quadrato: il cerchio è circondato dallo
+            stesso spazio su tutti e quattro i lati (feedback utente 22/07). */}
         {score && (
-          <div
-            className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
-            style={{
-              borderColor: scoreColor(score.total_score),
-              color: scoreColor(score.total_score),
-            }}
-          >
-            {score.total_score}
+          <div className="w-[88px] h-[88px] shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-row)] flex items-center justify-center">
+            <div
+              className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl"
+              style={{
+                borderColor: scoreColor(score.total_score),
+                color: scoreColor(score.total_score),
+              }}
+            >
+              {score.total_score}
+            </div>
           </div>
         )}
-        <div className="flex-1 min-w-0 space-y-2">
+        {/* Blocco fatti ancorato a destra: label e valore su due colonne
+            adiacenti, niente vuoto tra label e valore (feedback 22/07). */}
+        <div className="ml-auto grid grid-cols-[auto_auto] gap-x-6 gap-y-2 items-baseline min-w-0">
           {(salaryEst || salaryDecl) && (
-            <InfoRow
+            <OverviewRow
               label={t(salaryEst ? "d_salary_estimated" : "d_salary_declared")}
-              value={(salaryEst ?? salaryDecl)!}
-            />
+            >
+              {(salaryEst ?? salaryDecl)!}
+            </OverviewRow>
           )}
           {position.remote_type && (
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
-                {t("o_mode")}
-              </span>
-              <span
-                className="text-[11px] font-semibold text-right"
-                style={{ color: modeColor }}
-              >
-                {t(`rt_${position.remote_type}`)}
-              </span>
-            </div>
+            <OverviewRow label={t("o_mode")}>
+              {t(`rt_${position.remote_type}`)}
+            </OverviewRow>
           )}
           {position.role_family && (
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
-                {t("o_category")}
-              </span>
-              <span className="text-[11px] text-[var(--color-base)] text-right inline-flex items-center gap-1.5 min-w-0">
+            <OverviewRow label={t("o_category")}>
+              <span className="inline-flex items-center gap-1.5 max-w-full">
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{
@@ -1041,12 +1033,27 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 />
                 <span className="truncate">{position.role_family}</span>
               </span>
-            </div>
+            </OverviewRow>
           )}
           {position.source && (
-            <InfoRow label={t("d_source")} value={position.source} />
+            <OverviewRow label={t("d_source")}>
+              {position.url ? (
+                <a
+                  href={position.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                >
+                  {sourceDisplayName(position.source)} ↗
+                </a>
+              ) : (
+                sourceDisplayName(position.source)
+              )}
+            </OverviewRow>
           )}
-          <InfoRow label={t("d_found")} value={`${foundDate} (${foundAge})`} />
+          <OverviewRow label={t("d_found")}>
+            {`${foundDate} (${foundAge})`}
+          </OverviewRow>
         </div>
       </div>
       {/* Giudizio rapido in coda alla Panoramica: stessa fila di /swipe
@@ -1792,5 +1799,25 @@ function InfoRow({ label, value }: { label: string; value: string }) {
         {value}
       </span>
     </div>
+  );
+}
+
+// Riga della card Panoramica: due celle (label + valore) del grid a due
+// colonne — il fragment si appiattisce nelle colonne del grid padre, così
+// label e valore restano adiacenti qualunque sia la larghezza della card.
+function OverviewRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <span className="text-[10px] text-[var(--color-dim)]">{label}</span>
+      <span className="text-[11px] text-[var(--color-base)] text-right min-w-0 break-words">
+        {children}
+      </span>
+    </>
   );
 }
