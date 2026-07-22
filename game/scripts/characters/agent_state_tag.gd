@@ -125,7 +125,7 @@ func _draw() -> void:
 		return
 	var text := _label()
 	var col := _color()
-	var fs := 11
+	var fs := int(round(11 * TerminalTheme.text_boost()))
 	var text_size := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
 	var size := Vector2(text_size.x + 24.0, 24.0)
 	var r := Rect2(Vector2(-size.x / 2.0, -size.y / 2.0), size)

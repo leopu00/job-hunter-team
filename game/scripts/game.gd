@@ -64,6 +64,41 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif state != State.TITLE:
 			open_pause()
 
+# ── Calibrazione grafica automatica ──────────────────────────────────
+## Dopo 5 secondi di ufficio si misura il framerate per 10 secondi: sotto
+## soglia si passa al profilo ridotto — cap a 30fps, che sui portatili
+## deboli dà un ritmo stabile invece di oscillare tra 14 e 24. La
+## leggibilità del testo non si tocca MAI (è garantita da text_boost).
+## Su hardware capace non cambia nulla: grafica piena a 60fps.
+var low_gfx := false
+var _gfx_time := 0.0
+var _gfx_fps_sum := 0.0
+var _gfx_samples := 0
+var _gfx_done := false
+
+func _process(delta: float) -> void:
+	if _gfx_done or state != State.OFFICE:
+		return
+	if DisplayServer.get_name() == "headless" \
+			or OS.get_environment("JHT_SHOT") != "":
+		_gfx_done = true
+		return
+	_gfx_time += delta
+	if _gfx_time < 5.0:
+		return
+	_gfx_fps_sum += Engine.get_frames_per_second()
+	_gfx_samples += 1
+	if _gfx_time >= 15.0 and _gfx_samples > 0:
+		_gfx_done = true
+		var avg := _gfx_fps_sum / _gfx_samples
+		if avg < 24.0:
+			low_gfx = true
+			Engine.max_fps = 30
+			Log.info("perf",
+					"calibrazione: fps medio %.0f → profilo ridotto (cap 30fps)" % avg)
+		else:
+			Log.info("perf", "calibrazione: fps medio %.0f → profilo pieno" % avg)
+
 # ── Navigazione fra scene ─────────────────────────────────────────────
 
 func goto_title() -> void:
