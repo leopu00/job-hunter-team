@@ -29,10 +29,19 @@ var _font: Font
 var _font_med: Font
 var _current_text := ""
 var _dropped := 0
+# Corpi effettivi: sotto scala 1 compensati da text_boost per restare
+# leggibili sugli schermi 1366x768 (feedback Leone 22/07).
+var _fs := FONT_SIZE
+var _to_fs := TO_SIZE
+var _max_w := MAX_TEXT_W
 
 func _ready() -> void:
 	_font = load(TerminalTheme.FONT_REGULAR)
 	_font_med = load(TerminalTheme.FONT_MEDIUM)
+	var boost := TerminalTheme.text_boost()
+	_fs = int(round(FONT_SIZE * boost))
+	_to_fs = int(round(TO_SIZE * boost))
+	_max_w = MAX_TEXT_W * boost
 	z_index = 60  # sopra gli StatusBubble: il parlato vince sullo stato
 
 ## Accoda un messaggio. to_label: "" = broadcast, altrimenti il nome
@@ -105,17 +114,17 @@ func _wrap(text: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	var line := ""
 	for word in text.split(" ", false):
-		while _width(word) > MAX_TEXT_W:  # parola più larga della vignetta
+		while _width(word) > _max_w:  # parola più larga della vignetta
 			if line != "":
 				out.append(line)
 				line = ""
 			var cut := word.length()
-			while cut > 1 and _width(word.left(cut)) > MAX_TEXT_W:
+			while cut > 1 and _width(word.left(cut)) > _max_w:
 				cut -= 1
 			out.append(word.left(cut))
 			word = word.substr(cut)
 		var probe := word if line.is_empty() else line + " " + word
-		if _width(probe) > MAX_TEXT_W:
+		if _width(probe) > _max_w:
 			out.append(line)
 			line = word
 		else:
@@ -125,20 +134,20 @@ func _wrap(text: String) -> PackedStringArray:
 	return out
 
 func _width(s: String) -> float:
-	return _font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
+	return _font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, _fs).x
 
 func _draw() -> void:
 	if _alpha <= 0.01 or _lines.is_empty():
 		return
-	var line_h := _font.get_height(FONT_SIZE) + LINE_GAP
+	var line_h := _font.get_height(_fs) + LINE_GAP
 	var w := 0.0
 	for l in _lines:
 		w = maxf(w, _width(l))
 	var to_h := 0.0
 	if _to_label != "":
-		to_h = _font_med.get_height(TO_SIZE) + 2.0
+		to_h = _font_med.get_height(_to_fs) + 2.0
 		w = maxf(w, _font_med.get_string_size("→ " + _to_label,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, TO_SIZE).x)
+				HORIZONTAL_ALIGNMENT_LEFT, -1, _to_fs).x)
 	var h := _lines.size() * line_h - LINE_GAP + to_h
 	var box := Rect2(Vector2(-w / 2.0 - PAD.x, -h - PAD.y * 2.0 - 12.0),
 			Vector2(w + PAD.x * 2.0, h + PAD.y * 2.0))
@@ -155,13 +164,13 @@ func _draw() -> void:
 	draw_line(Vector2(5, box.end.y), Vector2(0, box.end.y + 7), border, 1.0)
 	var pen := box.position + Vector2(PAD.x, PAD.y)
 	if _to_label != "":
-		pen.y += _font_med.get_height(TO_SIZE) - 3.0
+		pen.y += _font_med.get_height(_to_fs) - 3.0
 		draw_string(_font_med, pen, "→ " + _to_label,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, TO_SIZE,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, _to_fs,
 				Color(Palette.MUTED.r, Palette.MUTED.g, Palette.MUTED.b, _alpha))
 		pen.y += 5.0
 	for l in _lines:
-		pen.y += _font.get_height(FONT_SIZE) - 3.0
-		draw_string(_font, pen, l, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE,
+		pen.y += _font.get_height(_fs) - 3.0
+		draw_string(_font, pen, l, HORIZONTAL_ALIGNMENT_LEFT, -1, _fs,
 				Color(Palette.BRIGHT.r, Palette.BRIGHT.g, Palette.BRIGHT.b, _alpha))
 		pen.y += LINE_GAP - 2.0

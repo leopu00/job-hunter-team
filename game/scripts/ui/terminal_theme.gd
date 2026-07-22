@@ -87,6 +87,18 @@ static func hairline() -> int:
 	return 2 if scale < 1.0 else 1
 
 
+## Fattore di leggibilità per il testo di scena (fumetti, targhe): sotto
+## scala 1 (schermi 1366x768) i corpi piccoli scendono sotto la soglia di
+## lettura — "quello che scrivono gli agenti si vede male" (Leone 22/07).
+## Si compensa quanto basta a ritrovare la dimensione fisica del design.
+static func text_boost() -> float:
+	var screen := DisplayServer.screen_get_size()
+	if screen.x <= 0 or screen.y <= 0:
+		return 1.0
+	var scale := minf(screen.x / 1920.0, screen.y / 1080.0)
+	return clampf(1.0 / scale, 1.0, 1.5) if scale < 1.0 else 1.0
+
+
 static func _flat(bg: Color, border: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
