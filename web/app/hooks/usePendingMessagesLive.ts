@@ -91,29 +91,37 @@ export function usePendingMessagesLive(
         supabase.realtime.setAuth(data.session.access_token);
       }
       const userId = data.session.user.id;
-      channel = supabase
-        .channel(`pending_user_messages:live:${userId}`)
-        .on(
-          "postgres_changes" as never,
-          {
-            event: "*",
-            schema: "public",
-            table: "pending_user_messages",
-            filter: `user_id=eq.${userId}`,
-          },
-          (payload: { eventType: string; new: CloudRow }) => {
-            if (cancelled) return;
-            if (
-              payload.eventType !== "INSERT" &&
-              payload.eventType !== "UPDATE"
-            ) {
-              return;
-            }
-            const row = toPendingMessage(payload.new);
-            if (row) cbRef.current(row, payload.eventType);
-          },
-        )
-        .subscribe();
+      // subscribe() può LANCIARE SINCRONO dal costruttore WebSocket
+      // (Safari su http://localhost: "The operation is insecure") →
+      // dentro questa IIFE async diventerebbe unhandledRejection. Senza
+      // realtime il drawer degrada al fetch: nessun crash.
+      try {
+        channel = supabase
+          .channel(`pending_user_messages:live:${userId}`)
+          .on(
+            "postgres_changes" as never,
+            {
+              event: "*",
+              schema: "public",
+              table: "pending_user_messages",
+              filter: `user_id=eq.${userId}`,
+            },
+            (payload: { eventType: string; new: CloudRow }) => {
+              if (cancelled) return;
+              if (
+                payload.eventType !== "INSERT" &&
+                payload.eventType !== "UPDATE"
+              ) {
+                return;
+              }
+              const row = toPendingMessage(payload.new);
+              if (row) cbRef.current(row, payload.eventType);
+            },
+          )
+          .subscribe();
+      } catch {
+        channel = null;
+      }
     })();
 
     return () => {

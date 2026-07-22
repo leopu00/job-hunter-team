@@ -189,35 +189,46 @@ export function useWebNotifications() {
         supabase.realtime.setAuth(data.session.access_token);
       }
       const userId = data.session.user.id;
-      channel = supabase.channel(`web-notifications:${userId}`);
-      channel.on(
-        "postgres_changes" as never,
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "pending_user_messages",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload: { new: MessageRow }) => {
-          if (!cancelled) onMessage(payload.new);
-        },
-      );
-      channel.on(
-        "postgres_changes" as never,
-        {
-          event: "*",
-          schema: "public",
-          table: "positions",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload: { eventType: string; new: PositionEventRow }) => {
-          if (cancelled) return;
-          if (payload.eventType !== "INSERT" && payload.eventType !== "UPDATE")
-            return;
-          onPosition(payload.new, payload.eventType);
-        },
-      );
-      channel.subscribe();
+      // subscribe() può LANCIARE SINCRONO dal costruttore WebSocket
+      // (Safari su http://localhost: "The operation is insecure") →
+      // unhandledRejection dentro l'IIFE. Senza realtime niente notifiche
+      // live, ma la pagina resta viva.
+      try {
+        channel = supabase.channel(`web-notifications:${userId}`);
+        channel.on(
+          "postgres_changes" as never,
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "pending_user_messages",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload: { new: MessageRow }) => {
+            if (!cancelled) onMessage(payload.new);
+          },
+        );
+        channel.on(
+          "postgres_changes" as never,
+          {
+            event: "*",
+            schema: "public",
+            table: "positions",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload: { eventType: string; new: PositionEventRow }) => {
+            if (cancelled) return;
+            if (
+              payload.eventType !== "INSERT" &&
+              payload.eventType !== "UPDATE"
+            )
+              return;
+            onPosition(payload.new, payload.eventType);
+          },
+        );
+        channel.subscribe();
+      } catch {
+        channel = null;
+      }
     })();
 
     return () => {
