@@ -580,13 +580,14 @@ func _guided_onboarding_selftest() -> void:
 			"welcome Assistente assente")
 	check.call(ScriptedOnboarding.options("assistente").size() == 3,
 			"scelte Assistente errate")
-	for choice in ["start", "software", "mid", "remote", "europe"]:
+	for choice in ["start", "software", "backend", "mid", "active", "adjacent",
+			"remote_first", "europe", "depends", "permanent", "improve", "scaleup"]:
 		ScriptedOnboarding.choose("assistente", choice)
 	var draft := ScriptedOnboarding.profile_draft()
 	check.call(draft.get("target_role") == "Software Engineering", "ruolo non raccolto")
 	check.call(draft.get("experience_years") == "3", "esperienza non raccolta")
 	check.call(draft.get("location") == "Europa", "località non raccolta")
-	check.call(ScriptedOnboarding.options("assistente").size() == 2,
+	check.call(ScriptedOnboarding.options("assistente").size() == 3,
 			"finale Assistente non raggiunto")
 	var guided_actions: Array = []
 	var capture_action := func(action: String, payload: Dictionary) -> void:
@@ -608,16 +609,21 @@ func _guided_onboarding_selftest() -> void:
 			"gate container del Coordinatore non apre Docker")
 	ScriptedOnboarding.choose("coordinatore", "check")
 	ScriptedOnboarding.choose("coordinatore", "already")
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 5,
+			"preferenze autonomia Coordinatore assenti")
+	for choice in ["review_cv", "balanced", "contextual", "always"]:
+		ScriptedOnboarding.choose("coordinatore", choice)
 	check.call(ScriptedOnboarding.options("coordinatore").size() == 4,
 			"canali opzionali del Coordinatore assenti")
 	ScriptedOnboarding.choose("coordinatore", "telegram")
 	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "telegram",
 			"configurazione Telegram non raggiungibile dalla conversazione")
 	ScriptedOnboarding.choose("coordinatore", "skip_channels")
-	check.call(ScriptedOnboarding.options("coordinatore").size() == 3,
+	check.call(ScriptedOnboarding.options("coordinatore").size() == 4,
 			"attivazione team non raggiunta dopo i canali")
 	ScriptedOnboarding.action_requested.disconnect(capture_action)
-	for choice in ["growth", "balanced", "weekly", "done"]:
+	for choice in ["growth", "plateau", "balanced", "low", "steady",
+			"analytical", "weekly", "culture", "done"]:
 		ScriptedOnboarding.choose("mentor", choice)
 	check.call(ScriptedOnboarding.is_complete("mentor"), "Mentor non completato")
 	check.call(ScriptedOnboarding.preferences().get("mentor_cadence") == "weekly",
@@ -649,6 +655,8 @@ func _guided_onboarding_selftest() -> void:
 	ScriptedOnboarding.choose("coordinatore", "claude")
 	ScriptedOnboarding.choose("coordinatore", "check")
 	ScriptedOnboarding.choose("coordinatore", "open_profile")
+	for choice in ["observe", "minimal", "strict", "custom"]:
+		ScriptedOnboarding.choose("coordinatore", choice)
 	for section_choice in ["email", "cloud"]:
 		ScriptedOnboarding.choose("coordinatore", section_choice)
 	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "account",
@@ -661,13 +669,14 @@ func _guided_onboarding_selftest() -> void:
 	check.call(str(guided_actions[-1].get("action", "")) == "open_scripted_chat" \
 			and str(guided_actions[-1].get("payload", {}).get("agent", "")) == "mentor",
 			"handoff Coordinatore-Mentor assente")
-	for choice in ["salary", "ambitious", "milestones", "hours"]:
+	for choice in ["salary", "curious", "ambitious", "high", "intensive",
+			"direct", "milestones", "hours", "hours"]:
 		ScriptedOnboarding.choose("mentor", choice)
 	check.call(str(guided_actions[-1].get("payload", {}).get("section", "")) == "hours" \
 			and not ScriptedOnboarding.is_complete("mentor"),
 			"orari Mentor devono aprire la pagina senza chiudere il percorso")
 	ScriptedOnboarding.choose("mentor", "restart")
-	check.call(ScriptedOnboarding.options("mentor").size() == 4 \
+	check.call(ScriptedOnboarding.options("mentor").size() == 7 \
 			and ScriptedOnboarding.preferences().get("mentor_cadence", "") == "",
 			"riavvio Mentor non azzera il percorso")
 	ScriptedOnboarding.action_requested.disconnect(capture_action)
@@ -690,11 +699,26 @@ func _guided_onboarding_selftest() -> void:
 			break
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check.call(pressed_first and ScriptedOnboarding.options("assistente").size() == 4,
+	check.call(pressed_first and ScriptedOnboarding.options("assistente").size() == 7,
 			"il primo bottone della chat non avanza al ruolo")
-	for choice in ["software", "mid", "remote", "europe"]:
+	for choice in ["software", "fullstack", "mid", "employed", "exact",
+			"remote", "remote_only", "never", "employee", "market", "established"]:
 		ScriptedOnboarding.choose("assistente", choice)
 	draft = ScriptedOnboarding.profile_draft()
+	check.call(ScriptedOnboarding.answers().size() >= 12,
+			"le risposte onboarding non sono state strutturate")
+	check.call(ScriptedOnboarding.llm_context_text().contains("target_role") \
+			and ScriptedOnboarding.llm_context_text().contains("Software Engineering") \
+			and ScriptedOnboarding.llm_context().get("schema_version", 0) == 2,
+			"contesto LLM onboarding incompleto")
+	ScriptedOnboarding.remember_profile_fields({"name": "Ada Test",
+			"email": "ada@example.test", "languages": "Italiano, English"})
+	ScriptedOnboarding.record_dialogue_choice("tour_scout", "n2",
+			"Posso indicare siti e aziende preferiti?", "sources")
+	check.call(ScriptedOnboarding.llm_context_text().contains("Ada Test") \
+			and ScriptedOnboarding.profile_draft().get("email", "") == "ada@example.test" \
+			and ScriptedOnboarding.llm_context_text().contains("aziende preferiti"),
+			"dati del profilo nativo non sincronizzati nel contesto LLM")
 
 	BackendBus.set_backend(MockBackend.new())
 	await get_tree().create_timer(1.2).timeout
