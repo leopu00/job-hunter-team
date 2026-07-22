@@ -548,6 +548,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Siège",
     pt: "Sede",
   },
+  not_specified: {
+    it: "Non specificato",
+    en: "Not specified",
+    hu: "Nincs megadva",
+    es: "No especificado",
+    de: "Nicht angegeben",
+    fr: "Non précisé",
+    pt: "Não especificado",
+  },
   c_sector: {
     it: "Settore",
     en: "Sector",
@@ -865,14 +874,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
     ? verdictOf(fb.action, fb.score)
     : null;
 
-  // Card Località: mai per il full remote (nessun posto dove pinnare);
-  // pin a LIVELLO CITTÀ — ufficio esatto se geocodato, altrimenti
-  // gazetteer città→coordinate (scelta utente 19/07: niente zoom sulla via).
+  // Card Località: per il full remote niente mappa (nessun posto dove
+  // pinnare) ma la card c'è comunque — indica "Da remoto" e l'HQ
+  // dell'azienda (scelta utente 22/07). Per il resto pin a LIVELLO CITTÀ —
+  // ufficio esatto se geocodato, altrimenti gazetteer città→coordinate
+  // (scelta utente 19/07: niente zoom sulla via).
   const isFullRemote = position.remote_type === "full_remote";
   const locCity = (position.loc_city ?? "").trim() || null;
   const locCountry = (position.loc_country ?? "").trim() || null;
   const hasLocationCard =
-    !isFullRemote && Boolean(locCity || locCountry || position.location);
+    isFullRemote || Boolean(locCity || locCountry || position.location);
   const mapCoords =
     !isFullRemote && position.office_lat != null && position.office_lon != null
       ? { lat: position.office_lat, lon: position.office_lon }
@@ -1090,7 +1101,9 @@ export default async function PositionDetailPage({ params }: PageProps) {
           )}
           <div className="min-w-0">
             <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
-              {locCity ?? position.location}
+              {isFullRemote
+                ? t("rt_full_remote")
+                : (locCity ?? position.location)}
             </div>
             {locCountry && (
               <div className="text-[11px] text-[var(--color-muted)]">
@@ -1111,6 +1124,18 @@ export default async function PositionDetailPage({ params }: PageProps) {
           </a>
         )}
       </div>
+      {/* Full remote: nessuna mappa, ma l'HQ dell'azienda sì — con
+          fallback esplicito quando l'arricchimento non l'ha trovato. */}
+      {isFullRemote && (
+        <div className="mt-3 pt-3 border-t border-[var(--color-border)] flex items-baseline gap-3">
+          <span className="text-[10px] text-[var(--color-dim)]">
+            {t("c_hq")}
+          </span>
+          <span className="text-[11px] text-[var(--color-base)] min-w-0 break-words">
+            {company?.hq?.trim() || t("not_specified")}
+          </span>
+        </div>
+      )}
       {mapCoords && (
         <PositionMapCardLazy lat={mapCoords.lat} lon={mapCoords.lon} />
       )}
