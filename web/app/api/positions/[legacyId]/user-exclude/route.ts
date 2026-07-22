@@ -31,7 +31,8 @@ export const dynamic = "force-dynamic";
 const VALID_REASONS = new Set([
   "closed", // Chiusa / non più attiva
   "not_interested", // Non mi interessa
-  "already_applied", // Già candidato / gestita altrove
+  "mismatch", // Non in linea col mio profilo (22/07, sostituisce already_applied nella UI)
+  "already_applied", // Già candidato / gestita altrove (legacy: righe esistenti)
   "company", // Azienda non desiderata
   "conditions", // Condizioni inadatte (stipendio/sede)
   "other", // Altro (richiede note)
