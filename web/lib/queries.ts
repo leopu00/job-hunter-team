@@ -7,6 +7,12 @@ import {
 } from "@/lib/workspace";
 import { isLocalRequest } from "@/lib/auth";
 import * as local from "@/lib/local-queries";
+// [JHT-WEB-DEMO] Modalità demo (onboarding cloud): quando il cookie
+// jht_demo_persona è attivo le query servono il dataset statico della
+// persona scelta nel wizard /welcome invece di interrogare Supabase.
+// Il ramo demo sta in TESTA a ogni funzione: vince su local e cloud.
+import { activeDemoPersona } from "@/lib/demo/mode";
+import * as demo from "@/lib/demo/queries";
 import { resolveCityPins } from "@/lib/city-coords";
 import {
   aggregateRoleFamilies,
@@ -68,6 +74,8 @@ const EMPTY_STATS: DashboardStats = {
 };
 
 export async function getDashboardStats(): Promise<DashboardStats> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoDashboardStats(dp);
   const w = await ws();
   if (w) {
     try {
@@ -498,6 +506,8 @@ function applyFacetFilters(
 export async function getPositions(
   opts?: PositionFilterOpts,
 ): Promise<PositionWithScore[]> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoPositions(dp, opts);
   const w = await ws();
   if (w) {
     try {
@@ -631,6 +641,8 @@ export async function getPositionById(id: string): Promise<{
   application: Application | null;
   tickets: PositionTicket[];
 } | null> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoPositionById(dp, id);
   const w = await ws();
   if (w) {
     try {
@@ -806,6 +818,8 @@ export async function getRisposteCount(): Promise<number> {
 
 // ── Score distribution ──────────────────────────────────────────────
 export async function getScoreDistribution() {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoScoreDistribution(dp);
   const w = await ws();
   if (w) {
     try {
@@ -861,6 +875,8 @@ export async function getScoreDistribution() {
 export async function getSourceDistribution(): Promise<
   Array<{ source: string; count: number }>
 > {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoSourceDistribution(dp);
   const w = await ws();
   if (w) {
     try {
@@ -908,6 +924,8 @@ export type PositionFacet = {
 };
 
 export async function getPositionFacets(): Promise<PositionFacet[]> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoFacets(dp);
   const w = await ws();
   if (w) {
     try {
@@ -995,6 +1013,17 @@ export type DashboardPosition = {
 // string esploderebbe). In local mode lo stato vive in localStorage lato
 // client (vedi lib/seen-positions) → set vuoto, decide il client.
 export async function getSeenPositionIds(): Promise<Set<string>> {
+  const dp = await activeDemoPersona();
+  if (dp) {
+    // Demo: risultano "già viste" le posizioni più vecchie di 24h, così
+    // il marker "nuova" è dimostrabile senza rumore su tutta la lista.
+    return new Set(
+      demo
+        .demoDashboardPositions(dp)
+        .filter((p) => p.seen)
+        .map((p) => p.id),
+    );
+  }
   if (await ws()) return new Set();
   if (!isSupabaseConfigured) return new Set();
   const supabase = await createClient();
@@ -1054,6 +1083,8 @@ export async function isCloudDataMode(): Promise<boolean> {
 export async function getLatestFeedbackForLegacyId(
   legacyId: number,
 ): Promise<{ action: string; score: number | null } | null> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoLatestFeedbackForLegacyId(legacyId);
   const w = await ws();
   if (w) return null;
   if (!isSupabaseConfigured) return null;
@@ -1075,6 +1106,8 @@ export async function getLatestFeedbackForLegacyId(
 export async function getVerdictMapByLegacyId(): Promise<
   Record<string, "top" | "review_ok" | "review_low" | "no">
 > {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoVerdictMapByLegacyId();
   const w = await ws();
   if (w) return {};
   if (!isSupabaseConfigured) return {};
@@ -1104,6 +1137,8 @@ export async function getSwipeDecks(limit = 1000): Promise<{
   pending: PositionWithScore[];
   reviewed: SwipeReviewedRow[];
 }> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoSwipeDecks(dp);
   const w = await ws();
   if (w) {
     try {
@@ -1207,6 +1242,8 @@ export function pickLastAction(cands: LastActionCandidate[]): {
 }
 
 export async function getDashboardPositions(): Promise<DashboardPosition[]> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoDashboardPositions(dp);
   const w = await ws();
   if (w) {
     try {
@@ -1297,6 +1334,8 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
 }
 
 export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoCoords(dp);
   const w = await ws();
   if (w) {
     try {
@@ -1432,6 +1471,8 @@ function buildLocationTree(
 }
 
 export async function getPositionLocations(): Promise<LocationCountry[]> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoLocations(dp);
   const w = await ws();
   if (w) {
     try {
@@ -1483,6 +1524,8 @@ export type PositionNoCoord = {
   created_at: string | null;
 };
 export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoNoCoords(dp);
   const w = await ws();
   if (w) {
     try {
@@ -1623,6 +1666,8 @@ export async function getCriticScores(): Promise<number[]> {
 export async function getPositionTypeDistribution(): Promise<
   RoleFamilyCount[]
 > {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoTypeDistribution(dp);
   const w = await ws();
   // Coerente con getScoreDistribution: se la versione locale fallisce
   // (es. better-sqlite3 binding mancante), fall-through a Supabase
@@ -1937,6 +1982,8 @@ export async function getCriticVerdictTotals(): Promise<CriticVerdictTotals> {
 export async function getPendingMessages(
   limit = 20,
 ): Promise<PendingMessage[]> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoPendingMessages(dp);
   const w = await ws();
   if (w) {
     try {
@@ -1968,6 +2015,8 @@ export async function getPendingMessages(
 export async function getMessagesHistory(
   limit = 200,
 ): Promise<PendingMessage[]> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoPendingMessages(dp);
   const w = await ws();
   if (w) {
     try {
@@ -1995,6 +2044,8 @@ export async function getMessagesHistory(
 // Conteggio esatto dei non letti per il banner in dashboard: la lista
 // limitata a 20 saturava il vecchio contatore ("20 non letti" anche con 50).
 export async function getPendingMessagesCount(): Promise<number> {
+  const dp = await activeDemoPersona();
+  if (dp) return (await demo.demoPendingMessages(dp)).length;
   const w = await ws();
   if (w) {
     try {

@@ -9,6 +9,8 @@ import {
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isDemoLegacyId } from "@/lib/demo/data";
+import { activeDemoPersona } from "@/lib/demo/mode";
 
 export const dynamic = "force-dynamic";
 
@@ -363,12 +365,29 @@ async function handle(
   return NextResponse.json(cloud.outcome);
 }
 
+// [JHT-WEB-DEMO] Le posizioni demo non cambiano status (dataset statico):
+// il giudizio "non interessante" vive già nel cookie overlay del feedback.
+// Risposta 200 nella stessa shape, così SwipeDeck non mostra errori.
+async function demoNoop(legacyId: string): Promise<NextResponse | null> {
+  if (!isDemoLegacyId(legacyId) || !(await activeDemoPersona())) return null;
+  return NextResponse.json({
+    ok: true,
+    outcome: {
+      id: `demo-${legacyId}`,
+      status: null,
+      user_excluded_reason: null,
+      source: "cloud",
+      cloud_synced: null,
+    },
+  });
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const { legacyId } = await params;
-  return handle(req, legacyId, "exclude");
+  return (await demoNoop(legacyId)) ?? handle(req, legacyId, "exclude");
 }
 
 export async function DELETE(
@@ -376,5 +395,5 @@ export async function DELETE(
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const { legacyId } = await params;
-  return handle(req, legacyId, "unexclude");
+  return (await demoNoop(legacyId)) ?? handle(req, legacyId, "unexclude");
 }
