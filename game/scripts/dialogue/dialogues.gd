@@ -278,18 +278,23 @@ const TREES := {
 
 	"tour_benvenuto": {
 		"start": {
-			"text": "[caldo] {greeting}! Benvenuto nel tuo ufficio. Da oggi tutte le persone che vedi lavorano per una persona sola: tu.",
+			"text": "[caldo] {greeting}{player}! Benvenuto nel tuo ufficio. Da oggi tutte le persone che vedi lavorano per una persona sola: tu.",
 			"pose": "a", "next": "n2",
 		},
 		"n2": {
-			"text": "[caldo] Io sono l'Assistente, la tua persona di fiducia qui dentro. Ti presento la squadra, poi resterò sempre a un click di distanza.",
+			"text": "[caldo] Io sono l'Assistente, la tua persona di fiducia qui dentro. Se vuoi ti presento io la squadra — oppure giri da solo e ti raccontano tutto loro. Come preferisci?",
 			"pose": "a",
 			"choices": [
-				{"text": "Andiamo, fammi strada.", "next": "go"},
+				{"text": "Fammi strada tu.", "next": "go"},
+				{"text": "Preferisco girare da solo.", "next": "solo"},
 				{"text": "Prima dimmi: cosa posso fare qui?", "next": "can1"},
 				{"text": "Quanto dura il giro?", "next": "duration"},
 				{"text": "I miei dati restano privati?", "next": "privacy"},
 			],
+		},
+		"solo": {
+			"text": "[divertito] Padronissimo: l'ufficio è tuo. Vai dove ti incuriosisce e clicca chi ha il diamante sopra la testa: si presenteranno da soli. Io resto qui per qualsiasi cosa.",
+			"pose": "a", "action": "tour:free",
 		},
 		"duration": {
 			"text": "[caldo] Pochi minuti, ma sei tu a dare il ritmo. Puoi chiudere, esplorare e riprendere: ricorderò dove eravamo.",
@@ -308,10 +313,11 @@ const TREES := {
 			"pose": "a", "next": "ready",
 		},
 		"ready": {
-			"text": "[divertito] Pronto? Si comincia dagli Scout, i nostri cercatori.",
+			"text": "[divertito] Pronto? Se vuoi si comincia dagli Scout, i nostri cercatori. O vai per conto tuo, senza offesa.",
 			"pose": "a",
 			"choices": [
-				{"text": "Andiamo.", "next": "go"},
+				{"text": "Andiamo insieme.", "next": "go"},
+				{"text": "Faccio da solo, grazie.", "next": "solo"},
 				{"text": "Me lo riassumi in una riga?", "next": "recap"},
 			],
 		},
@@ -723,8 +729,12 @@ const TREES := {
 			],
 		},
 		"pick_local": {
-			"text": "[caldo] Scelta pratica: si parte subito. Ti apro la pagina del container — pochi passi guidati e la squadra prende servizio qui.",
-			"pose": "a", "action": "runtime:local",
+			"text": "[caldo] Scelta pratica: si parte subito.",
+			"pose": "a", "action": "runtime:local", "next": "local_state",
+		},
+		"local_state": {
+			"text": "[neutro] {docker_line}",
+			"pose": "b",
 		},
 		"pick_dedicated": {
 			"text": "[caldo] L'ottima via di mezzo. Installa l'app su quella macchina e ripeti lì questi passi; intanto ti apro la pagina del container, così vedi come funziona.",
@@ -734,6 +744,342 @@ const TREES := {
 			"text": "[caldo] La scelta di chi fa sul serio. Ti apro la pagina VPS: servono l'indirizzo del server e una chiave d'accesso, il resto te lo spiega lei.",
 			"pose": "a", "action": "runtime:vps",
 		},
+	},
+
+	## ── Giro libero: parlano gli agenti, in prima persona ─────────────
+	## L'utente ha scelto di esplorare da solo: niente Assistente di mezzo,
+	## ogni reparto si presenta con la propria voce.
+
+	"self_scout": {
+		"start": {
+			"text": "[caldo] Ciao{player}! Scout, piacere: io e i colleghi battiamo i siti di annunci giorno e notte. Da oggi la caccia alle posizioni la facciamo noi — tu non cerchi più niente a mano.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] E prendiamo ordini volentieri: se vuoi che insistiamo su un sito o su certe aziende, dillo al Coordinatore ed è fatta.",
+			"pose": "b",
+			"choices": [
+				{"text": "Dove vedo quello che trovate?", "next": "see"},
+				{"text": "Come evitate doppioni e annunci vecchi?", "next": "duplicates"},
+				{"text": "Posso mettervi in pausa senza spegnere tutto?", "next": "pause"},
+				{"text": "A dopo, buona caccia.", "next": "end"},
+			],
+		},
+		"see": {
+			"text": "[caldo] Bacheca in sala e pagina Posizioni: ogni annuncio con la sua storia completa. Un click e sei dentro.",
+			"pose": "a", "next": "end",
+		},
+		"duplicates": {
+			"text": "[neutro] Confrontiamo URL, azienda, titolo e sede; gli scaduti li ricontrolliamo. Niente doppioni a intasarti la coda.",
+			"pose": "b", "next": "end",
+		},
+		"pause": {
+			"text": "[caldo] Certo: fermi solo lo scouting e gli altri reparti smaltiscono quello che è già in coda.",
+			"pose": "a", "next": "end",
+		},
+		"end": {
+			"text": "[divertito] Torna quando vuoi: le board sono sempre calde.",
+			"pose": "a",
+		},
+	},
+
+	"self_analisti": {
+		"start": {
+			"text": "[caldo] Benvenuto{player}. Noi Analisti prendiamo ogni annuncio degli Scout e lo trasformiamo in un quadro completo: che ruolo è davvero, che azienda c'è dietro, dove sta la sede — indirizzo esatto — e quanto pagano, anche quando non lo scrivono.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Così quando apri una posizione decidi in un minuto invece che in un'ora.",
+			"pose": "b",
+			"choices": [
+				{"text": "Quanto sono affidabili stipendio e sede?", "next": "accuracy"},
+				{"text": "E se mancano informazioni?", "next": "missing"},
+				{"text": "Posso chiedervi un approfondimento?", "next": "deeper"},
+				{"text": "Ottimo lavoro, continuate.", "next": "end"},
+			],
+		},
+		"accuracy": {
+			"text": "[neutro] Separiamo sempre il dato dichiarato dalla stima: quando una cifra è dedotta, vedrai l'incertezza, mai una falsa precisione.",
+			"pose": "b", "next": "end",
+		},
+		"missing": {
+			"text": "[caldo] La posizione resta visibile con i vuoti dichiarati. Non inventiamo niente: decidi tu se vale la pena scavare.",
+			"pose": "a", "next": "end",
+		},
+		"deeper": {
+			"text": "[caldo] Sì: da una posizione apri una richiesta al team, il Coordinatore la assegna e il risultato resta nella scheda.",
+			"pose": "a", "next": "end",
+		},
+		"end": {
+			"text": "[caldo] Passa quando vuoi: i dossier sono sempre aperti.",
+			"pose": "a",
+		},
+	},
+
+	"self_scorer": {
+		"start": {
+			"text": "[caldo] Ciao{player}, Scorer. Il mio mestiere è il match perfetto tra te e ogni posizione: un numero da 0 a 100, mai un'etichetta.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Peso ogni dettaglio sulle TUE preferenze. Esempio: se vuoi solo remoto, una sede a 800 chilometri pesa parecchio sul voto; se la sede ti è indifferente, quasi non la conto.",
+			"pose": "b",
+			"choices": [
+				{"text": "E se cambio idea sulle preferenze?", "next": "change"},
+				{"text": "Da cosa nasce il voto, esattamente?", "next": "formula"},
+				{"text": "Mi spieghi anche i punti deboli?", "next": "weakness"},
+				{"text": "Chiaro. Continua pure.", "next": "end"},
+			],
+		},
+		"change": {
+			"text": "[divertito] Aggiorni il profilo e io ricalibro tutto, anche il già valutato. Basta che non mi chiami «calcolatrice».",
+			"pose": "a", "next": "end",
+		},
+		"formula": {
+			"text": "[neutro] Competenze, seniority, modalità, sede, contratto, retribuzione e preferenze personali. Ogni voto conserva le ragioni, non solo il numero.",
+			"pose": "b", "next": "end",
+		},
+		"weakness": {
+			"text": "[caldo] Sempre: cosa combacia, cosa manca e quali lacune puoi colmare davvero. Un 70 senza spiegazione non serve a nessuno.",
+			"pose": "a", "next": "end",
+		},
+		"end": {
+			"text": "[caldo] I numeri ti aspettano. A presto.",
+			"pose": "a",
+		},
+	},
+
+	"self_scrittori": {
+		"start": {
+			"text": "[caldo] Ciao{player}! Scrittore, molto piacere. Il mio punto di partenza sarà il TUO curriculum: il tuo stile, i tuoi dati, le tue esperienze vere.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Per ogni posizione scelgo le parti giuste della tua storia e cucio un CV su misura. Poi lo consegno al Critico, che mi tratta malissimo: incasso, imparo e riscrivo finché il voto sale. Esce solo la versione migliore.",
+			"pose": "b",
+			"choices": [
+				{"text": "I CV finiti dove li trovo?", "next": "see"},
+				{"text": "Giuri che non inventi esperienze?", "next": "truth"},
+				{"text": "Rispetti il mio tono e la mia lingua?", "next": "voice"},
+				{"text": "Non vedo l'ora. A presto.", "next": "end"},
+			],
+		},
+		"see": {
+			"text": "[caldo] Sullo scaffale CV PRONTI, accanto all'uscita: ogni documento leggibile per intero. L'ultima parola resta tua.",
+			"pose": "a", "next": "end",
+		},
+		"truth": {
+			"text": "[severo] Giurato: seleziono e riscrivo, mai creo fatti. E il Critico segnala qualsiasi affermazione che il tuo profilo non sostiene.",
+			"pose": "b", "next": "end",
+		},
+		"voice": {
+			"text": "[caldo] Sì: lingua, formalità, sintesi e stile diventano preferenze. Il contenuto resta tuo anche quando cambia il vestito.",
+			"pose": "a", "next": "end",
+		},
+		"end": {
+			"text": "[divertito] Porta un buon curriculum di partenza: al resto penso io.",
+			"pose": "a",
+		},
+	},
+
+	"self_critici": {
+		"start": {
+			"text": "[severo] Non presentarti: non voglio saperlo. Io leggo candidature come un selezionatore stanco o un filtro automatico — senza affetto, senza contesto, senza sconti.",
+			"pose": "b", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Ti sembrerò crudele. Bene: sono il muro di prova. Se un CV sopravvive a me, sopravvive ai filtri veri delle aziende.",
+			"pose": "b",
+			"choices": [
+				{"text": "Quindi bocci tanto?", "next": "strict"},
+				{"text": "Quali errori cerchi per primi?", "next": "errors"},
+				{"text": "Come eviti giudizi arbitrari?", "next": "fair"},
+				{"text": "Meglio te qui che là fuori.", "next": "end"},
+			],
+		},
+		"strict": {
+			"text": "[divertito] Tantissimo, ed è un ottimo segno: ogni mia bocciatura è un no che non riceverai là fuori.",
+			"pose": "a", "next": "end",
+		},
+		"errors": {
+			"text": "[severo] Requisiti ignorati, frasi vaghe, risultati senza prove, parole chiave mancanti e promesse che il profilo non sostiene.",
+			"pose": "b", "next": "end",
+		},
+		"fair": {
+			"text": "[neutro] Valuto il documento contro annuncio e criteri espliciti, senza sapere nulla di te. Il mio isolamento è intenzionale.",
+			"pose": "b", "next": "end",
+		},
+		"end": {
+			"text": "[severo] Ora vai. Ho refusi da trovare.",
+			"pose": "b",
+		},
+	},
+
+	"self_dottore": {
+		"start": {
+			"text": "[caldo] Salve{player}, il Dottore. Io tengo tutta la squadra in salute: se qualcuno rallenta o si inceppa, lo visito, capisco cosa succede e lo rimetto in piedi.",
+			"pose": "a", "next": "n2",
+		},
+		"n2": {
+			"text": "[neutro] Tu probabilmente non mi noterai mai — ed è il miglior complimento che possa ricevere.",
+			"pose": "b",
+			"choices": [
+				{"text": "Posso vedere cosa monitori?", "next": "monitor"},
+				{"text": "Riavvii gli agenti da solo?", "next": "restart"},
+				{"text": "Guardi anche costi e limiti?", "next": "costs"},
+				{"text": "Buon lavoro, Dottore.", "next": "end"},
+			],
+		},
+		"monitor": {
+			"text": "[caldo] Sì: dalla mia scheda trovi salute, processi, code e anomalie. Ogni azione tecnica resta registrata.",
+			"pose": "a", "next": "end",
+		},
+		"restart": {
+			"text": "[neutro] Prima diagnostico; poi applico solo i recuperi autorizzati. Se serve una scelta, chiamo il Coordinatore o te.",
+			"pose": "b", "next": "end",
+		},
+		"costs": {
+			"text": "[caldo] Con Sentinella e Coordinatore: salute tecnica, consumo e ritmo si guardano insieme, così un agente sano non diventa comunque troppo costoso.",
+			"pose": "a", "next": "end",
+		},
+		"end": {
+			"text": "[caldo] Torna pure: la porta dell'ambulatorio è sempre aperta.",
+			"pose": "a",
+		},
+	},
+
+	## ── Post-tour a setup incompleto: assaggi personali, un solo invito ──
+	## Il giro è finito ma il team non è acceso: ogni agente si presenta in
+	## breve e riporta con garbo alla checklist (richiesta Leone 22/07).
+
+	"tease_scout": {
+		"start": {
+			"text": "[caldo] Ciao{player}, Scout. Le board mi chiamano: appena il team è acceso ti riempio la bacheca di posizioni vere.",
+			"pose": "a",
+			"choices": [
+				{"text": "Andiamo ad accendere il team.", "next": "go"},
+				{"text": "A dopo.", "next": "later"},
+			],
+		},
+		"go": {"text": "[divertito] Così si parla. Ti apro la checklist.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[caldo] Quando vuoi: io intanto scaldo i motori.", "pose": "a"},
+	},
+
+	"tease_analista": {
+		"start": {
+			"text": "[neutro] Analista. La lente è pronta: dammi un annuncio vero e ti dico azienda, sede esatta e stipendio. Serve solo il team acceso.",
+			"pose": "b",
+			"choices": [
+				{"text": "Finiamo il setup, allora.", "next": "go"},
+				{"text": "Più tardi.", "next": "later"},
+			],
+		},
+		"go": {"text": "[caldo] Ottima decisione. Ecco la checklist.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[neutro] I dossier non scappano. A dopo.", "pose": "b"},
+	},
+
+	"tease_scorer": {
+		"start": {
+			"text": "[caldo] Scorer. Senza il team acceso i miei numeri restano spenti — e io senza numeri non so stare.",
+			"pose": "a",
+			"choices": [
+				{"text": "Accendiamoli, questi numeri.", "next": "go"},
+				{"text": "Un'altra volta.", "next": "later"},
+			],
+		},
+		"go": {"text": "[divertito] Musica per le mie orecchie. Checklist in arrivo.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[caldo] Va bene. Lo zero intanto non si giudica da solo.", "pose": "a"},
+	},
+
+	"tease_scrittore": {
+		"start": {
+			"text": "[caldo] Ciao{player}, lo Scrittore. Non vedo l'ora di mettere le mani sul tuo curriculum — solo storie tue, mai inventate. Mi manca soltanto l'ufficio acceso.",
+			"pose": "a",
+			"choices": [
+				{"text": "Diamoci da fare: setup.", "next": "go"},
+				{"text": "Arrivo dopo.", "next": "later"},
+			],
+		},
+		"go": {"text": "[caldo] Perfetto: intanto scaldo la penna.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[divertito] D'accordo. La pagina bianca non mi spaventa.", "pose": "a"},
+	},
+
+	"tease_critico": {
+		"start": {
+			"text": "[severo] Il Critico. Non ho niente da bocciare, ed è francamente insopportabile. Accendi il team e dammi materiale.",
+			"pose": "b",
+			"choices": [
+				{"text": "Ti accontento: setup.", "next": "go"},
+				{"text": "Sopporta ancora un po'.", "next": "later"},
+			],
+		},
+		"go": {"text": "[severo] Finalmente. Vediamo di cosa sei capace.", "pose": "b", "action": "open_setup"},
+		"later": {"text": "[severo] Come vuoi. La mediocrità non si boccia da sola.", "pose": "b"},
+	},
+
+	"tease_dottore": {
+		"start": {
+			"text": "[caldo] Il Dottore. Squadra in salute perfetta... anche perché è ferma. Dammi qualcuno da tenere d'occhio.",
+			"pose": "a",
+			"choices": [
+				{"text": "Mettiamoli al lavoro.", "next": "go"},
+				{"text": "Riposatevi ancora un po'.", "next": "later"},
+			],
+		},
+		"go": {"text": "[caldo] Saggio. Preparo l'ambulatorio.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[neutro] Va bene. Ma l'ozio non è una terapia.", "pose": "b"},
+	},
+
+	"tease_sentinella": {
+		"start": {
+			"text": "[neutro] La Sentinella. Tengo d'occhio consumi e ritmo: per ora la sala è silenziosa. Troppo silenziosa.",
+			"pose": "b",
+			"choices": [
+				{"text": "Rompiamo il silenzio: setup.", "next": "go"},
+				{"text": "Goditi la quiete.", "next": "later"},
+			],
+		},
+		"go": {"text": "[caldo] Ricevuto. Sensori accesi.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[neutro] La quiete prima del lavoro. Va bene.", "pose": "b"},
+	},
+
+	"tease_mantenitore": {
+		"start": {
+			"text": "[caldo] Il Mantenitore. Qui è tutto pulito e in ordine. Sporchiamolo di lavoro, che dici?",
+			"pose": "a",
+			"choices": [
+				{"text": "Sporchiamolo: setup.", "next": "go"},
+				{"text": "Resta pulito ancora un po'.", "next": "later"},
+			],
+		},
+		"go": {"text": "[divertito] Parole sante. Attrezzi alla mano.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[caldo] Come preferisci: lo straccio è sempre pronto.", "pose": "a"},
+	},
+
+	"tease_coordinatore": {
+		"start": {
+			"text": "[caldo] Eccoti{player}. Il piano c'è, la squadra pure: manca solo la casa del team. Finiamo il setup insieme?",
+			"pose": "a",
+			"choices": [
+				{"text": "Sì, chiudiamo la pratica.", "next": "go"},
+				{"text": "Non ancora.", "next": "later"},
+			],
+		},
+		"go": {"text": "[caldo] {docker_line}", "pose": "b", "action": "open_setup"},
+		"later": {"text": "[neutro] Quando decidi, la sala operativa è pronta.", "pose": "b"},
+	},
+
+	"tease_mentor": {
+		"start": {
+			"text": "[caldo] Io sono qui{player}. Quando decidi di partire davvero, la prima conversazione seria la facciamo io e te. Intanto: non accontentarti.",
+			"pose": "a",
+			"choices": [
+				{"text": "Partiamo ora: setup.", "next": "go"},
+				{"text": "Ci penso ancora.", "next": "later"},
+			],
+		},
+		"go": {"text": "[caldo] Buona scelta. Il resto vien da sé.", "pose": "a", "action": "open_setup"},
+		"later": {"text": "[pensieroso] Pensaci. Ma non troppo a lungo.", "pose": "d"},
 	},
 
 	"assistente": {
@@ -766,6 +1112,8 @@ static func resolve_placeholders(text: String, team_data: Node) -> String:
 	var summary: Dictionary = team_data.summary()
 	return text.format({
 		"greeting": greeting(),
+		"player": _player_suffix(team_data),
+		"docker_line": _docker_line(team_data),
 		"mentor_tip": team_data.mentor_tip(),
 		"positions": pos_lines.strip_edges(),
 		"positions_summary": "Lo Scout ha portato %d posizioni nuove." % summary["positions_today"],
@@ -775,6 +1123,25 @@ static func resolve_placeholders(text: String, team_data: Node) -> String:
 		"score": str(expl["score"]),
 		"score_reasons": reasons.strip_edges(),
 	})
+
+## ", Nome" quando l'utente si è presentato all'ingresso, altrimenti "".
+static func _player_suffix(team_data: Node) -> String:
+	var onboarding := team_data.get_node_or_null("/root/ScriptedOnboarding")
+	return str(onboarding.player_suffix()) if onboarding != null else ""
+
+## La battuta del Coordinatore sul PROSSIMO passo concreto, calcolata sullo
+## stato reale di Docker al momento del dialogo (richiesta Leone 22/07):
+## niente istruzioni per installare ciò che c'è già.
+static func _docker_line(team_data: Node) -> String:
+	var setup := team_data.get_node_or_null("/root/SetupService")
+	var status: Dictionary = setup.status if setup != null else {}
+	if bool(status.get("container_running", false)):
+		return "E il container del team è già acceso: ti apro il pannello così vedi la checklist — mancano solo provider e profilo."
+	if bool(status.get("docker_running", false)):
+		return "Docker è già acceso: perfetto, il grosso è fatto. Nel pannello che ti apro c'è un solo pulsante — ATTIVA CONTAINER — e la squadra prende servizio."
+	if bool(status.get("docker_available", false)):
+		return "Docker è già installato su questo computer, va solo avviato. Aprilo, aspetta che il motore sia in moto, poi nel pannello che ti apro premi ATTIVA CONTAINER."
+	return "Una premessa importante: qui manca ancora Docker, il programma che fa da palazzo al nostro ufficio. Nel pannello che ti apro trovi INSTALLA / RIPARA RUNTIME: scaricalo, avvialo una volta, poi torna e premi ATTIVA CONTAINER."
 
 ## Saluto in base all'orario locale dell'utente: l'accoglienza deve
 ## sembrare quella di una persona vera, non di un software.

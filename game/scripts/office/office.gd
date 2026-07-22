@@ -521,6 +521,72 @@ func _tour_selftest() -> void:
 	markers = count_markers.call()
 	check.call(int(markers[0]) == agents.size(),
 			"marker showroom non ripristinati a tour finito (%d)" % int(markers[0]))
+
+	# ── Placeholder personali e stato Docker nei dialoghi ─────────────
+	ScriptedOnboarding.set_player_name("Test", "Utente")
+	check.call(Dialogues.resolve_placeholders("{greeting}{player}!", TeamData)
+			.contains(", Test"), "il saluto non usa il nome dell'utente")
+	check.call(TourGuide.invite_line().contains(", Test"),
+			"l'invito del tour non usa il nome dell'utente")
+	SetupService.status["docker_available"] = false
+	SetupService.status["docker_running"] = false
+	var no_docker := Dialogues.resolve_placeholders("{docker_line}", TeamData)
+	SetupService.status["docker_available"] = true
+	SetupService.status["docker_running"] = true
+	var docker_on := Dialogues.resolve_placeholders("{docker_line}", TeamData)
+	check.call(no_docker.contains("INSTALLA") and docker_on.contains("ATTIVA") \
+			and no_docker != docker_on,
+			"la battuta del Coordinatore non segue lo stato Docker")
+
+	# ── Giro libero: ordine sparso, alberi in prima persona ───────────
+	TourGuide.reset_for_test()
+	_tour_launch_opened = false
+	SetupService.status["ready"] = false
+	check.call(TourGuide.active(), "reset per il giro libero fallito")
+	# la scelta "giro libero" avviene DENTRO il benvenuto: prima la modalità,
+	# poi la chiusura del dialogo (in guidato partirebbe la regia verso Scout)
+	TourGuide.set_free_mode()
+	TourGuide.notify_talked("assistente")
+	check.call(TourGuide.mode() == "free", "modalità libera non attiva")
+	check.call(TourGuide.pending_stops().size() == 8,
+			"tappe pendenti errate in giro libero")
+	for stop in ["critico", "scout", "mentor"]:
+		check.call(TourGuide.stop_open(str(stop)),
+				"tappa non apribile in giro libero: " + str(stop))
+		check.call(Dialogues.TREES.has(str(TourGuide.scene_for(str(stop)).get("tree", ""))),
+				"albero in prima persona mancante per " + str(stop))
+	await get_tree().process_frame
+	markers = count_markers.call()
+	check.call(markers[1].size() == 8 and not markers[1].has("assistente"),
+			"marker giro libero errati: " + JSON.stringify(markers[1].keys()))
+	for stop in ["critico", "scout", "dottore", "mentor", "scorer", "analista",
+			"scrittore"]:
+		TourGuide.notify_talked(str(stop))
+	check.call(not TourGuide.in_launch_phase(),
+			"fase di lancio raggiunta col Coordinatore mancante")
+	check.call(TourGuide.depts_visited() == 5,
+			"conteggio reparti errato in giro libero")
+	TourGuide.notify_talked("coordinatore")
+	check.call(TourGuide.in_launch_phase(), "giro libero non arriva al lancio")
+
+	# ── Teaser post-tour: team spento → l'agente invita al setup ──────
+	TourGuide.finish()
+	await get_tree().process_frame
+	var writer: AgentNPC = _tour_host_npc("scrittore")
+	check.call(writer != null, "scrittore assente dallo showroom")
+	if writer:
+		_start_talk(writer)
+		await get_tree().process_frame
+		var tease: DialogueUI = find_dialogue.call()
+		check.call(tease != null and tease._tree_id == "tease_scrittore",
+				"il post-tour senza setup non apre il teaser dello scrittore " \
+				+ "(ui=%s tree=%s active=%s ready=%s)" % [
+					str(tease != null),
+					tease._tree_id if tease else "-",
+					str(Game.dialogue_active),
+					str(SetupService.status.get("ready", "?"))])
+		if tease:
+			tease._close()
 	var ok := failures.is_empty()
 	print("TOUR-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"failures": failures, "visited": visited}))
@@ -1583,6 +1649,13 @@ func _start_talk(agent: AgentNPC) -> void:
 		return
 	Log.info("agent", "dialogo aperto con " + agent.slug)
 	var tour_running := _tour_enabled and TourGuide.active()
+	var slug := ScriptedOnboarding.normalize_agent(agent.slug)
+	# Giro libero: una tappa pendente apre la conversazione DIRETTA con
+	# l'agente del reparto (prima persona), senza regia dell'Assistente.
+	if tour_running and TourGuide.mode() == "free" and TourGuide.stop_open(slug):
+		_camera.focus_on(agent.global_position + Vector2(0, -40), 1.05)
+		_tour_open_stop_dialogue(slug)
+		return
 	if not ScriptedOnboarding.provider_authenticated():
 		_story_seen[agent.slug] = true
 		_tour_visits += 1
@@ -1596,11 +1669,21 @@ func _start_talk(agent: AgentNPC) -> void:
 	var ui := DialogueUI.new()
 	add_child(ui)
 	# Il primo saluto del tour: cliccando l'Assistente parte l'accoglienza
-	# completa (saluto legato all'orario) e da lì in poi accompagna lei.
-	var is_guide := ScriptedOnboarding.normalize_agent(agent.slug) == "assistente"
+	# completa (saluto legato all'orario) e da lì in poi accompagna lei —
+	# o, se l'utente sceglie così, si prosegue in giro libero.
+	var is_guide := slug == "assistente"
 	var tour_welcome := tour_running and is_guide \
 			and TourGuide.current_slug() == "assistente"
-	ui.open(agent.slug, agent.display_name, "tour_benvenuto" if tour_welcome else "")
+	var tree_id := ""
+	if tour_welcome:
+		tree_id = "tour_benvenuto"
+	elif not tour_running and not bool(SetupService.status.get("ready", false)) \
+			and Dialogues.TREES.has("tease_" + slug):
+		# Tour chiuso ma team ancora spento: l'agente si presenta in breve
+		# e riporta con garbo alla checklist (mai le stesse risposte esaurite).
+		tree_id = "tease_" + slug
+	ui.action_triggered.connect(_on_tour_dialogue_action)
+	ui.open(agent.slug, agent.display_name, tree_id)
 	ui.closed.connect(func() -> void:
 		if is_instance_valid(agent) and not agent.is_dissolving():
 			agent.end_talk()
@@ -1608,7 +1691,8 @@ func _start_talk(agent: AgentNPC) -> void:
 			return
 		if tour_welcome:
 			TourGuide.notify_talked("assistente")
-		elif is_guide and TourGuide.current_slug() != "assistente" \
+		elif is_guide and TourGuide.mode() != "free" \
+				and TourGuide.current_slug() != "assistente" \
 				and not TourGuide.in_launch_phase():
 			# l'utente ha fermato la guida per strada: il giro riprende
 			_tour_go_to_stop())
@@ -1623,11 +1707,17 @@ var _tour_walk_serial := 0
 ## tutti finché il provider non è collegato).
 func _refresh_tour_markers() -> void:
 	var tour_running := _tour_enabled and TourGuide.active()
+	var free_pending: Array = TourGuide.pending_stops() \
+			if tour_running and TourGuide.mode() == "free" else []
 	for agent in agents:
 		if tour_running:
 			var slug := ScriptedOnboarding.normalize_agent(agent.slug)
-			agent.set_story_marker(slug == "assistente" \
-					and TourGuide.current_slug() == "assistente", false)
+			if TourGuide.mode() == "free" and TourGuide.step_index() >= 1:
+				# giro libero: il diamante segna OGNI tappa ancora da visitare
+				agent.set_story_marker(free_pending.has(slug), false)
+			else:
+				agent.set_story_marker(slug == "assistente" \
+						and TourGuide.current_slug() == "assistente", false)
 		else:
 			agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
 					bool(_story_seen.get(agent.slug, false)))
@@ -1646,6 +1736,8 @@ func _on_tour_changed() -> void:
 			ScriptedOnboarding.action_requested.emit("open_section",
 					{"section": "activation"})
 		return
+	if TourGuide.mode() == "free":
+		return  # niente accompagnamento: i diamanti fanno da guida
 	if TourGuide.current_slug() == "assistente":
 		_tour_focus_current()
 		return
@@ -1655,6 +1747,8 @@ func _on_tour_changed() -> void:
 func _tour_resume_entry() -> void:
 	if not _tour_enabled or not TourGuide.active() or TourGuide.in_launch_phase():
 		return
+	if TourGuide.mode() == "free":
+		return  # i marker sono già accesi sulle tappe pendenti
 	if TourGuide.current_slug() == "assistente":
 		_tour_focus_current()
 	else:
@@ -1735,7 +1829,7 @@ func _tour_stage_arrival(stop: String) -> void:
 ## Apre il dialogo della tappa appena la scena è libera (ritenta finché
 ## un pannello o un altro dialogo occupano lo schermo).
 func _tour_open_stop_dialogue(stop: String) -> void:
-	if not _tour_enabled or TourGuide.current_slug() != stop:
+	if not _tour_enabled or not TourGuide.stop_open(stop):
 		return
 	if Game.dialogue_active or _registry or _dept_panel or _agent_card \
 			or _chat_panel or _cv_shelf_panel or _queue_panel \
@@ -1775,6 +1869,11 @@ func _on_tour_dialogue_action(action: String) -> void:
 	elif action.begins_with("runtime:"):
 		_tour_runtime_choice = action.substr(8)
 		ScriptedOnboarding.set_preference("runtime_location", _tour_runtime_choice)
+	elif action == "tour:free":
+		TourGuide.set_free_mode()
+	elif action == "open_setup":
+		ScriptedOnboarding.action_requested.emit("open_section",
+				{"section": "activation"})
 
 func _tour_release_guide() -> void:
 	_camera.stop_follow()

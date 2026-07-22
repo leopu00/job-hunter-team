@@ -33,6 +33,7 @@ func setup(slug: String) -> void:
 	_slug = slug
 	_cur_pose = ""
 	_cur_face = ""
+	visible = true
 	# exists() è true anche col solo .import: la modalità pittorica va attivata
 	# solo se il PNG carica davvero, altrimenti si usano i ritratti SVG.
 	var full_path := GEN_DIR + slug + "/full_neutro.png"
@@ -40,8 +41,13 @@ func setup(slug: String) -> void:
 	if _full_mode:
 		_base.texture = null
 		_pose.texture = null
-	else:
+	elif ResourceLoader.exists(DIR + slug + "/base.svg"):
 		_base.texture = load(DIR + slug + "/base.svg")
+	else:
+		# Ruolo senza alcun ritratto (gap d'arte tracciato in gen-art/LOG.md):
+		# meglio nessun riquadro che un riquadro vuoto. Resta la targa nome.
+		_base.texture = null
+		visible = false
 
 func has_face(face: String) -> bool:
 	return ResourceLoader.exists(DIR + _slug + "/face_%s.svg" % face)
