@@ -26,9 +26,12 @@ const T: Record<Locale, { navAria: string }> = {
 interface NavbarProps {
   user: User | null;
   locale: Locale;
+  // [JHT-WEB-DEMO] true = nessun dato sincronizzato → lo UserMenu mostra
+  // il promemoria "Collega il tuo team" (con pallino sull'avatar).
+  needsPairing?: boolean;
 }
 
-export default function Navbar({ user, locale }: NavbarProps) {
+export default function Navbar({ user, locale, needsPairing }: NavbarProps) {
   const t = T[locale];
 
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
@@ -67,7 +70,12 @@ export default function Navbar({ user, locale }: NavbarProps) {
           <div className="flex items-center gap-3 flex-shrink-0 ml-auto md:ml-0">
             <WebNotificationsAgent />
             <MessagesDrawer />
-            <UserMenu avatarUrl={avatarUrl} fullName={fullName} email={email} />
+            <UserMenu
+              avatarUrl={avatarUrl}
+              fullName={fullName}
+              email={email}
+              needsPairing={needsPairing}
+            />
           </div>
         ) : (
           <div className="flex items-center gap-3 flex-shrink-0 ml-auto md:ml-0">
