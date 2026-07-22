@@ -287,7 +287,17 @@ const TREES := {
 			"choices": [
 				{"text": "Andiamo, fammi strada.", "next": "go"},
 				{"text": "Prima dimmi: cosa posso fare qui?", "next": "can1"},
+				{"text": "Quanto dura il giro?", "next": "duration"},
+				{"text": "I miei dati restano privati?", "next": "privacy"},
 			],
+		},
+		"duration": {
+			"text": "[caldo] Pochi minuti, ma sei tu a dare il ritmo. Puoi chiudere, esplorare e riprendere: ricorderò dove eravamo.",
+			"pose": "a", "next": "ready",
+		},
+		"privacy": {
+			"text": "[neutro] Prima del provider le risposte restano in file locali. Quando collegherai l'AI, diventeranno il suo punto di partenza; potrai sempre correggerle dal profilo.",
+			"pose": "b", "next": "ready",
 		},
 		"can1": {
 			"text": "[neutro] Puoi girare liberamente: trascina la vista, avvicinati, clicca persone e oggetti. La bacheca è il registro delle candidature, il mappamondo apre la mappa delle offerte, lo scaffale custodisce i CV pronti.",
@@ -325,11 +335,26 @@ const TREES := {
 			"pose": "b",
 			"choices": [
 				{"text": "E io dove vedo quello che trovano?", "next": "see"},
+				{"text": "Posso indicare siti e aziende preferiti?", "next": "sources"},
+				{"text": "Come evitano annunci duplicati o vecchi?", "next": "duplicates"},
+				{"text": "Posso fermare la ricerca senza spegnere il team?", "next": "pause"},
 				{"text": "Chiaro, andiamo avanti.", "next": "end"},
 			],
 		},
 		"see": {
 			"text": "[caldo] Nella bacheca in sala e nella pagina Posizioni: ogni annuncio con la sua storia completa. Un click e sei dentro.",
+			"pose": "a", "next": "end2",
+		},
+		"sources": {
+			"text": "[caldo] Sì. Il Coordinatore può dare priorità a fonti, aziende, paesi e famiglie di ruolo; gli Scout useranno quelle direttive nei cicli successivi.",
+			"pose": "a", "next": "end2",
+		},
+		"duplicates": {
+			"text": "[neutro] Confrontano URL, azienda, titolo e sede. Gli annunci scaduti vengono ricontrollati e quelli equivalenti non intasano la coda.",
+			"pose": "b", "next": "end2",
+		},
+		"pause": {
+			"text": "[caldo] Certo: puoi fermare solo lo scouting e lasciare che gli altri reparti smaltiscano ciò che è già in coda.",
 			"pose": "a", "next": "end2",
 		},
 		"end": {
@@ -352,11 +377,26 @@ const TREES := {
 			"pose": "b",
 			"choices": [
 				{"text": "E a me cosa cambia?", "next": "why"},
+				{"text": "Quanto sono affidabili stipendio e sede?", "next": "accuracy"},
+				{"text": "Cosa succede se mancano informazioni?", "next": "missing"},
+				{"text": "Posso chiedere un'analisi più approfondita?", "next": "deeper"},
 				{"text": "Capito, proseguiamo.", "next": "end"},
 			],
 		},
 		"why": {
 			"text": "[caldo] Cambia che deciderai in un minuto invece che in un'ora: quando aprirai una posizione troverai già tutto — cosa fanno, dove stanno, quanto offrono.",
+			"pose": "a", "next": "end2",
+		},
+		"accuracy": {
+			"text": "[neutro] Separano sempre il dato dichiarato dalla stima. Quando una cifra è dedotta, vedrai l'incertezza invece di una falsa precisione.",
+			"pose": "b", "next": "end2",
+		},
+		"missing": {
+			"text": "[caldo] La posizione resta visibile con i vuoti dichiarati. Nessun dato viene inventato: potrai decidere se vale la pena approfondire.",
+			"pose": "a", "next": "end2",
+		},
+		"deeper": {
+			"text": "[caldo] Sì: da una posizione puoi aprire una richiesta al team. Il Coordinatore la assegna e conserva il risultato nella scheda.",
 			"pose": "a", "next": "end2",
 		},
 		"end": {
@@ -383,11 +423,26 @@ const TREES := {
 			"pose": "a",
 			"choices": [
 				{"text": "E se cambio idea sulle preferenze?", "next": "change"},
+				{"text": "Da cosa nasce esattamente il voto?", "next": "formula"},
+				{"text": "Posso decidere una soglia minima?", "next": "threshold"},
+				{"text": "Mi spiegano anche i punti deboli?", "next": "weakness"},
 				{"text": "Andiamo avanti.", "next": "end"},
 			],
 		},
 		"change": {
 			"text": "[divertito] Aggiorni il profilo e loro ricalibrano i pesi su tutto, anche sul già valutato. Sono permalosi solo se li chiami «calcolatrici».",
+			"pose": "a", "next": "end2",
+		},
+		"formula": {
+			"text": "[neutro] Competenze, seniority, modalità, sede, contratto, retribuzione e preferenze personali. Ogni voto conserva le ragioni, non solo il numero.",
+			"pose": "b", "next": "end2",
+		},
+		"threshold": {
+			"text": "[caldo] Sì. Puoi alzare o abbassare la soglia che manda una posizione agli Scrittori senza nascondere il resto dell'archivio.",
+			"pose": "a", "next": "end2",
+		},
+		"weakness": {
+			"text": "[caldo] Sempre: vedrai cosa combacia, cosa manca e quali lacune sono realisticamente colmabili. Un 70 senza spiegazione non ci serve.",
 			"pose": "a", "next": "end2",
 		},
 		"end": {
@@ -414,11 +469,26 @@ const TREES := {
 			"pose": "a",
 			"choices": [
 				{"text": "E i CV finiti dove li trovo?", "next": "see"},
+				{"text": "Come impedite che inventino esperienze?", "next": "truth"},
+				{"text": "Possono rispettare il mio tono e la lingua?", "next": "voice"},
+				{"text": "Il curriculum originale resta intatto?", "next": "original"},
 				{"text": "Andiamo dal famoso Critico.", "next": "end"},
 			],
 		},
 		"see": {
 			"text": "[caldo] Sullo scaffale CV PRONTI, accanto all'uscita: ogni documento leggibile per intero. L'ultima parola resta sempre tua.",
+			"pose": "a", "next": "end2",
+		},
+		"truth": {
+			"text": "[severo] Gli Scrittori possono selezionare e riscrivere, mai creare fatti. Il Critico segnala anche affermazioni non sostenute dal tuo profilo.",
+			"pose": "b", "next": "end2",
+		},
+		"voice": {
+			"text": "[caldo] Sì: lingua, formalità, sintesi e stile diventano preferenze. Il contenuto resta tuo anche quando cambia il vestito.",
+			"pose": "a", "next": "end2",
+		},
+		"original": {
+			"text": "[caldo] Sempre. I documenti su misura sono nuove versioni legate alla posizione; la sorgente originale non viene sovrascritta.",
 			"pose": "a", "next": "end2",
 		},
 		"end": {
@@ -445,12 +515,27 @@ const TREES := {
 			"pose": "a",
 			"choices": [
 				{"text": "Quindi bocciano tanto?", "next": "strict"},
+				{"text": "Quali errori cercano per primi?", "next": "errors"},
+				{"text": "Posso vedere ogni revisione?", "next": "rounds"},
+				{"text": "Come evitate giudizi arbitrari?", "next": "fair"},
 				{"text": "Meglio averli qui che là fuori. Andiamo.", "next": "end"},
 			],
 		},
 		"strict": {
 			"text": "[divertito] Tantissimo, ed è un ottimo segno: ogni bocciatura qui dentro è un no che non riceverai là fuori.",
 			"pose": "a", "next": "end2",
+		},
+		"errors": {
+			"text": "[severo] Requisiti ignorati, frasi vaghe, risultati senza prove, parole chiave mancanti e promesse che il profilo non sostiene.",
+			"pose": "b", "next": "end2",
+		},
+		"rounds": {
+			"text": "[caldo] Sì. Ogni passaggio conserva voto, osservazioni e autore: puoi capire perché una versione ha superato la precedente.",
+			"pose": "a", "next": "end2",
+		},
+		"fair": {
+			"text": "[neutro] Valutano il documento contro annuncio e criteri espliciti, senza usare la conversazione personale col Mentor. Il loro isolamento è intenzionale.",
+			"pose": "b", "next": "end2",
 		},
 		"end": {
 			"text": "[caldo] Passiamo un attimo dal Dottore, poi c'è una persona che voglio davvero farti conoscere.",
@@ -469,7 +554,25 @@ const TREES := {
 		},
 		"n2": {
 			"text": "[neutro] Controlla che ogni agente renda al massimo: se qualcuno rallenta o si inceppa, lo visita, capisce cosa succede e lo rimette in piedi. Tu probabilmente non lo noterai mai — ed è il suo miglior complimento.",
+			"pose": "b",
+			"choices": [
+				{"text": "Posso vedere cosa sta monitorando?", "next": "monitor"},
+				{"text": "Riavvia gli agenti da solo?", "next": "restart"},
+				{"text": "Tiene d'occhio anche costi e limiti?", "next": "costs"},
+				{"text": "Perfetto, andiamo dal Mentor.", "next": "end"},
+			],
+		},
+		"monitor": {
+			"text": "[caldo] Sì: dalla sua scheda trovi salute, processi, code e anomalie. Le azioni tecniche restano registrate.",
+			"pose": "a", "next": "end",
+		},
+		"restart": {
+			"text": "[neutro] Prima diagnostica; poi applica solo i recuperi autorizzati. Se il problema richiede una scelta, chiama il Coordinatore o te.",
 			"pose": "b", "next": "end",
+		},
+		"costs": {
+			"text": "[caldo] Collabora con Sentinella e Coordinatore: salute tecnica, consumo e ritmo sono viste insieme, così un agente sano non diventa comunque troppo costoso.",
+			"pose": "a", "next": "end",
 		},
 		"end": {
 			"text": "[caldo] E adesso vieni: il salotto del Mentor è di là. Da qui in poi parla lui.",
@@ -488,7 +591,17 @@ const TREES := {
 				{"text": "Voglio cambiare: quello che ho non mi basta più.", "next": "path_change"},
 				{"text": "Sto ricominciando, e non è un momento facile.", "next": "path_restart"},
 				{"text": "Voglio crescere: ruolo, stipendio, prospettive.", "next": "path_more"},
+				{"text": "Sto bene, ma voglio capire quanto valgo sul mercato.", "next": "path_explore"},
+				{"text": "Cerco un lavoro più compatibile con la mia vita.", "next": "path_balance"},
 			],
+		},
+		"path_explore": {
+			"text": "[caldo] Ottimo punto di partenza: nessuna fuga e nessuna fretta. Possiamo osservare il mercato con lucidità e muoverci solo davanti a un salto reale.",
+			"pose": "a", "action": "pref:career_priority=growth", "next": "q2",
+		},
+		"path_balance": {
+			"text": "[pensieroso] Allora il lavoro deve smettere di invadere il resto. Modalità, orari e cultura peseranno quanto titolo e stipendio.",
+			"pose": "d", "action": "pref:career_priority=balance", "next": "q2",
 		},
 		"path_change": {
 			"text": "[pensieroso] Succede alle persone migliori: non è ingratitudine, è crescita. E chi cambia con lucidità parte avvantaggiato — sa già cosa NON vuole.",
@@ -521,6 +634,8 @@ const TREES := {
 				{"text": "Con calma: poche mosse, ma precise.", "next": "style_calm"},
 				{"text": "Con ritmo: voglio vedere movimento ogni settimana.", "next": "style_active"},
 				{"text": "Decida il team il passo: mi fido.", "next": "style_trust"},
+				{"text": "Con urgenza: devo trovare presto.", "next": "style_urgent"},
+				{"text": "Sperimentando: proviamo più direzioni.", "next": "style_experiment"},
 			],
 		},
 		"style_calm": {
@@ -535,13 +650,27 @@ const TREES := {
 			"text": "[caldo] Allora il passo lo detterà il mercato: quando c'è abbondanza spingiamo, quando è secca non forziamo. È la scelta di chi capisce le maratone.",
 			"pose": "c", "action": "pref:search_style=balanced", "next": "cadence",
 		},
+		"style_urgent": {
+			"text": "[severo] Urgenza non significa rumore: allarghiamo il volume, accorciamo i cicli e teniamo visibili le decisioni che richiedono te.",
+			"pose": "b", "action": "pref:search_style=volume", "next": "cadence",
+		},
+		"style_experiment": {
+			"text": "[divertito] Bene: tratteremo la ricerca come un esperimento. Più piste, risultati misurati e nessun attaccamento a un'ipotesi che non funziona.",
+			"pose": "a", "action": "pref:search_style=experimental", "next": "cadence",
+		},
 		"cadence": {
 			"text": "[caldo] Io ci sarò comunque. Come preferisci sentirmi?",
 			"pose": "a",
 			"choices": [
+				{"text": "Un riepilogo breve ogni giorno.", "next": "cad_daily"},
 				{"text": "Un punto sincero ogni settimana.", "next": "cad_week"},
 				{"text": "Solo quando c'è da decidere qualcosa di importante.", "next": "cad_mile"},
+				{"text": "Solo quando ti cerco io.", "next": "cad_demand"},
 			],
+		},
+		"cad_daily": {
+			"text": "[caldo] Ogni giorno, ma corto: movimento, blocchi e una sola prossima decisione.",
+			"pose": "a", "action": "pref:mentor_cadence=daily", "next": "final",
 		},
 		"cad_week": {
 			"text": "[caldo] Settimanale sia: breve, onesto, utile. Promesso.",
@@ -550,6 +679,10 @@ const TREES := {
 		"cad_mile": {
 			"text": "[caldo] Ricevuto: silenzio operoso, e mi faccio vivo quando conta davvero.",
 			"pose": "a", "action": "pref:mentor_cadence=milestones", "next": "final",
+		},
+		"cad_demand": {
+			"text": "[caldo] Va bene. Io osservo senza interrompere e rispondo quando apri tu la porta.",
+			"pose": "a", "action": "pref:mentor_cadence=on_demand", "next": "final",
 		},
 		"final": {
 			"text": "[caldo] Un'ultima cosa, poi il Coordinatore ti aspetta: là fuori il tuo CV parlerà di competenze, ma tu stai cercando un posto dove stare bene. Non accontentarti.",
