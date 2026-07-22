@@ -24,6 +24,7 @@ import {
 } from "@/lib/dashboard-demo";
 import VpsLifecycleCard from "@/app/components/VpsLifecycleCard";
 import OnboardingPopup from "@/app/components/OnboardingPopup";
+import DemoPickerCard from "@/app/components/demo/DemoPickerCard";
 import CloudRefreshButton from "@/app/components/CloudRefreshButton";
 
 const OnboardingWizard = dynamic(
@@ -249,8 +250,13 @@ export default async function DashboardPage() {
           tua MacBook. Vedi docs/internal/ops/vps.md § "Lifecycle". */}
           <VpsLifecycleCard visible={process.env.JHT_HOST_TYPE === "vps"} />
 
-          {/* ── Onboarding popup (empty state) ────────────────────── */}
-          {isEmpty && (
+          {/* ── Empty state ─────────────────────────────────────────
+          CLOUD [JHT-WEB-DEMO 22/07]: profilo e avvio team vivono SOLO
+          nell'app desktop → niente popup "Configure your Profile". Al suo
+          posto la scelta della categoria demo (per chi ha saltato il
+          wizard /welcome). LOCALE: resta il popup profilo→team. */}
+          {isEmpty && isCloudDeploy() && !demoMode && <DemoPickerCard />}
+          {isEmpty && !isCloudDeploy() && (
             <OnboardingPopup
               hasProfile={hasProfile}
               translations={{

@@ -11,13 +11,13 @@ import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import type { DemoPersonaKey } from "@/lib/demo/data";
+import { PERSONA_LABELS } from "@/app/components/demo/personas";
 
 type Strings = {
   demo_label: string;
   demo_text: string;
   connect: string;
   exit: string;
-  personas: Record<DemoPersonaKey, string>;
 };
 
 const T: Record<Locale, Strings> = {
@@ -27,12 +27,6 @@ const T: Record<Locale, Strings> = {
       "Stai guardando dati di esempio ({p}). I tuoi dati appariranno quando collegherai il tuo team.",
     connect: "Collega il tuo team",
     exit: "Esci dalla demo",
-    personas: {
-      software: "Software & IT",
-      marketing: "Marketing & vendite",
-      finance: "Finanza & business",
-      design: "Design & creatività",
-    },
   },
   en: {
     demo_label: "Demo mode",
@@ -40,12 +34,6 @@ const T: Record<Locale, Strings> = {
       "You are looking at sample data ({p}). Your own data will appear once you connect your team.",
     connect: "Connect your team",
     exit: "Exit demo",
-    personas: {
-      software: "Software & IT",
-      marketing: "Marketing & Sales",
-      finance: "Finance & Business",
-      design: "Design & Creative",
-    },
   },
   es: {
     demo_label: "Modo demo",
@@ -53,12 +41,6 @@ const T: Record<Locale, Strings> = {
       "Estás viendo datos de ejemplo ({p}). Tus datos aparecerán cuando conectes tu equipo.",
     connect: "Conecta tu equipo",
     exit: "Salir de la demo",
-    personas: {
-      software: "Software e IT",
-      marketing: "Marketing y ventas",
-      finance: "Finanzas y negocio",
-      design: "Diseño y creatividad",
-    },
   },
   fr: {
     demo_label: "Mode démo",
@@ -66,12 +48,6 @@ const T: Record<Locale, Strings> = {
       "Vous consultez des données d'exemple ({p}). Vos données apparaîtront quand vous connecterez votre équipe.",
     connect: "Connecter votre équipe",
     exit: "Quitter la démo",
-    personas: {
-      software: "Logiciel & IT",
-      marketing: "Marketing & ventes",
-      finance: "Finance & business",
-      design: "Design & créativité",
-    },
   },
   de: {
     demo_label: "Demo-Modus",
@@ -79,12 +55,6 @@ const T: Record<Locale, Strings> = {
       "Du siehst Beispieldaten ({p}). Deine eigenen Daten erscheinen, sobald du dein Team verbindest.",
     connect: "Team verbinden",
     exit: "Demo verlassen",
-    personas: {
-      software: "Software & IT",
-      marketing: "Marketing & Vertrieb",
-      finance: "Finanzen & Business",
-      design: "Design & Kreation",
-    },
   },
   hu: {
     demo_label: "Demó mód",
@@ -92,12 +62,6 @@ const T: Record<Locale, Strings> = {
       "Mintaadatokat látsz ({p}). A saját adataid akkor jelennek meg, amikor összekapcsolod a csapatodat.",
     connect: "Csapat összekapcsolása",
     exit: "Kilépés a demóból",
-    personas: {
-      software: "Szoftver & IT",
-      marketing: "Marketing & értékesítés",
-      finance: "Pénzügy & üzlet",
-      design: "Design & kreatív",
-    },
   },
   pt: {
     demo_label: "Modo demo",
@@ -105,17 +69,12 @@ const T: Record<Locale, Strings> = {
       "Estás a ver dados de exemplo ({p}). Os teus dados vão aparecer quando ligares a tua equipa.",
     connect: "Liga a tua equipa",
     exit: "Sair da demo",
-    personas: {
-      software: "Software & IT",
-      marketing: "Marketing & vendas",
-      finance: "Finanças & negócio",
-      design: "Design & criatividade",
-    },
   },
 };
 
 export default function DemoBanner({ persona }: { persona: DemoPersonaKey }) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -163,7 +122,7 @@ export default function DemoBanner({ persona }: { persona: DemoPersonaKey }) {
           {t.demo_label}
         </span>
         <span className="text-[11px] text-[var(--color-muted)] min-w-0">
-          {t.demo_text.replace("{p}", t.personas[persona])}
+          {t.demo_text.replace("{p}", PERSONA_LABELS[locale][persona])}
         </span>
         <span className="flex items-center gap-2 ml-auto shrink-0">
           <Link
