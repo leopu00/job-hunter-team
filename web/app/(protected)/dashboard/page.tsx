@@ -1,6 +1,9 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { isCloudDeploy } from "@/lib/deploy-mode";
+import { WELCOME_SEEN_COOKIE } from "@/lib/demo/mode";
 import {
   getDashboardStats,
   getDashboardPositions,
@@ -124,6 +127,15 @@ export default async function DashboardPage() {
   const dashPositions = dashPositionsRaw.map((p) =>
     seenIds.has(p.id) ? { ...p, seen: true } : p,
   );
+
+  // [JHT-WEB-DEMO] Utente cloud nuovo: niente dati (né demo — con demo
+  // attiva stats.total è >0) e wizard mai visto → onboarding /welcome.
+  // Il cookie jht_welcome_seen (settato dal wizard su skip/demo) evita di
+  // riproporlo a ogni visita.
+  if (isCloudDeploy() && !demoMode && stats.total === 0) {
+    const seen = (await cookies()).get(WELCOME_SEEN_COOKIE)?.value === "1";
+    if (!seen) redirect("/welcome");
+  }
 
   const activeTotal = stats.total - stats.excluded;
 

@@ -5,7 +5,9 @@ import {
   DEMO_PERSONA_COOKIE,
   DEMO_FEEDBACK_COOKIE,
   WELCOME_SEEN_COOKIE,
+  activeDemoPersona,
 } from "@/lib/demo/mode";
+import { hasSyncedData } from "@/lib/demo/pairing";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,18 @@ export const dynamic = "force-dynamic";
 // sul deploy locale/desktop l'utente ha i dati veri, la demo non esiste.
 
 const YEAR = 60 * 60 * 24 * 365;
+
+// Stato demo/pairing per i client component (card in Impostazioni).
+export async function GET() {
+  if (!isCloudDeploy()) {
+    return NextResponse.json({ persona: null, synced: true });
+  }
+  const [persona, synced] = await Promise.all([
+    activeDemoPersona(),
+    hasSyncedData(),
+  ]);
+  return NextResponse.json({ persona, synced });
+}
 
 export async function POST(req: NextRequest) {
   if (!isCloudDeploy()) {

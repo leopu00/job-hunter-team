@@ -16,6 +16,10 @@ export const WELCOME_SEEN_COOKIE = "jht_welcome_seen";
 // Persona demo attiva per la richiesta corrente (null = niente demo).
 export async function activeDemoPersona(): Promise<DemoPersonaKey | null> {
   if (!isCloudDeploy()) return null;
+  // Override dev/test (stesso pattern di JHT_WEB_DASHBOARD_DEMO): forza la
+  // persona senza passare dal wizard — utile per collaudare le pagine demo.
+  const envPersona = process.env.JHT_WEB_DEMO_PERSONA;
+  if (isDemoPersonaKey(envPersona)) return envPersona;
   try {
     const store = await cookies();
     const v = store.get(DEMO_PERSONA_COOKIE)?.value;
