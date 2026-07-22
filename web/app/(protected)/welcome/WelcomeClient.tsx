@@ -14,6 +14,11 @@ import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import type { DemoPersonaKey } from "@/lib/demo/data";
 import { DEMO_PERSONA_KEYS } from "@/lib/demo/data";
+import {
+  PERSONA_ICONS,
+  PERSONA_LABELS,
+  activateDemo,
+} from "@/app/components/demo/personas";
 
 type StatusChoice = "none" | "downloaded" | "experimenting" | "running";
 
@@ -54,7 +59,6 @@ type Strings = {
   synced_title: string;
   synced_body: string;
   synced_cta: string;
-  personas: Record<DemoPersonaKey, string>;
 };
 
 const T: Record<Locale, Strings> = {
@@ -105,12 +109,6 @@ const T: Record<Locale, Strings> = {
     synced_body:
       "Questo account riceve già dati sincronizzati: la dashboard mostra il lavoro del tuo team.",
     synced_cta: "Vai alla dashboard",
-    personas: {
-      software: "Software & IT",
-      marketing: "Marketing & vendite",
-      finance: "Finanza & business",
-      design: "Design & creatività",
-    },
   },
   en: {
     title: "Welcome to JHT",
@@ -159,12 +157,6 @@ const T: Record<Locale, Strings> = {
     synced_body:
       "This account already receives synced data: the dashboard shows your team's work.",
     synced_cta: "Go to the dashboard",
-    personas: {
-      software: "Software & IT",
-      marketing: "Marketing & Sales",
-      finance: "Finance & Business",
-      design: "Design & Creative",
-    },
   },
   es: {
     title: "Bienvenido a JHT",
@@ -213,12 +205,6 @@ const T: Record<Locale, Strings> = {
     synced_body:
       "Esta cuenta ya recibe datos sincronizados: el dashboard muestra el trabajo de tu equipo.",
     synced_cta: "Ir al dashboard",
-    personas: {
-      software: "Software e IT",
-      marketing: "Marketing y ventas",
-      finance: "Finanzas y negocio",
-      design: "Diseño y creatividad",
-    },
   },
   fr: {
     title: "Bienvenue sur JHT",
@@ -268,12 +254,6 @@ const T: Record<Locale, Strings> = {
     synced_body:
       "Ce compte reçoit déjà des données synchronisées : le dashboard montre le travail de votre équipe.",
     synced_cta: "Aller au dashboard",
-    personas: {
-      software: "Logiciel & IT",
-      marketing: "Marketing & ventes",
-      finance: "Finance & business",
-      design: "Design & créativité",
-    },
   },
   de: {
     title: "Willkommen bei JHT",
@@ -322,12 +302,6 @@ const T: Record<Locale, Strings> = {
     synced_body:
       "Dieses Konto empfängt bereits synchronisierte Daten: Das Dashboard zeigt die Arbeit deines Teams.",
     synced_cta: "Zum Dashboard",
-    personas: {
-      software: "Software & IT",
-      marketing: "Marketing & Vertrieb",
-      finance: "Finanzen & Business",
-      design: "Design & Kreation",
-    },
   },
   hu: {
     title: "Üdvözlünk a JHT-n",
@@ -378,12 +352,6 @@ const T: Record<Locale, Strings> = {
     synced_body:
       "Ez a fiók már kap szinkronizált adatokat: a dashboard a csapatod munkáját mutatja.",
     synced_cta: "Irány a dashboard",
-    personas: {
-      software: "Szoftver & IT",
-      marketing: "Marketing & értékesítés",
-      finance: "Pénzügy & üzlet",
-      design: "Design & kreatív",
-    },
   },
   pt: {
     title: "Bem-vindo ao JHT",
@@ -432,79 +400,7 @@ const T: Record<Locale, Strings> = {
     synced_body:
       "Esta conta já recebe dados sincronizados: o dashboard mostra o trabalho da tua equipa.",
     synced_cta: "Ir para o dashboard",
-    personas: {
-      software: "Software & IT",
-      marketing: "Marketing & vendas",
-      finance: "Finanças & negócio",
-      design: "Design & criatividade",
-    },
   },
-};
-
-const PERSONA_ICONS: Record<DemoPersonaKey, React.ReactNode> = {
-  software: (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <polyline points="16 18 22 12 16 6" />
-      <polyline points="8 6 2 12 8 18" />
-    </svg>
-  ),
-  marketing: (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M3 11l18-7-7 18-2.5-7.5L3 11z" />
-    </svg>
-  ),
-  finance: (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <line x1="12" y1="1" x2="12" y2="23" />
-      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-    </svg>
-  ),
-  design: (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="13.5" cy="6.5" r="2.5" />
-      <path d="M12 2a10 10 0 1 0 0 20 2 2 0 0 0 2-2v-1a2 2 0 0 1 2-2h2a4 4 0 0 0 4-4A10 10 0 0 0 12 2z" />
-    </svg>
-  ),
 };
 
 const STATUS_OPTIONS: Array<{
@@ -538,7 +434,9 @@ export default function WelcomeClient({
   hasSynced: boolean;
   activePersona: DemoPersonaKey | null;
 }) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
+  const labels = PERSONA_LABELS[locale];
   const [step, setStep] = useState<"status" | "path" | "demo">("status");
   const [choice, setChoice] = useState<StatusChoice>("none");
   const [busy, setBusy] = useState<DemoPersonaKey | null>(null);
@@ -546,17 +444,8 @@ export default function WelcomeClient({
   const startDemo = async (persona: DemoPersonaKey) => {
     if (busy) return;
     setBusy(persona);
-    try {
-      const res = await fetch("/api/demo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ persona }),
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      window.location.href = "/dashboard";
-    } catch {
-      setBusy(null);
-    }
+    const ok = await activateDemo(persona);
+    if (!ok) setBusy(null);
   };
 
   const skip = () => {
@@ -739,7 +628,7 @@ export default function WelcomeClient({
                   {PERSONA_ICONS[k]}
                 </span>
                 <span className="text-[12px] font-bold text-[var(--color-bright)] group-hover:text-[var(--color-green)] transition-colors">
-                  {t.personas[k]}
+                  {labels[k]}
                 </span>
                 {busy === k && (
                   <span className="ml-auto w-3.5 h-3.5 rounded-full border-2 border-[var(--color-green)] border-t-transparent animate-spin shrink-0" />
