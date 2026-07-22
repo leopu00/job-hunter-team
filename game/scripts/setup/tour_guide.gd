@@ -60,9 +60,31 @@ const SCENES := {
 		"reply": "Vi stavo aspettando."},
 }
 
+## Giro libero: si parla direttamente con l'agente del reparto, in prima
+## persona. Il ritratto è quello del ruolo quando esiste (per gli altri il
+## riquadro si nasconde con eleganza — gap d'arte tracciato in gen-art/LOG.md).
+const FREE_SCENES := {
+	"scout": {"tree": "self_scout", "portrait": "scout", "name": "Lo Scout"},
+	"analista": {"tree": "self_analisti", "portrait": "analista",
+		"name": "L'Analista"},
+	"scorer": {"tree": "self_scorer", "portrait": "scorer", "name": "Lo Scorer"},
+	"scrittore": {"tree": "self_scrittori", "portrait": "scrittore",
+		"name": "Lo Scrittore"},
+	"critico": {"tree": "self_critici", "portrait": "critico", "name": "Il Critico"},
+	"dottore": {"tree": "self_dottore", "portrait": "dottore", "name": "Il Dottore"},
+	"mentor": {"tree": "tour_mentor", "portrait": "mentor", "name": "Il Mentor"},
+	"coordinatore": {"tree": "tour_coordinatore", "portrait": "coordinatore",
+		"name": "Il Coordinatore"},
+}
+
 var _index := 0
 var _done := false
 var _test_mode := false
+## "guided" = l'Assistente accompagna tappa per tappa; "free" = l'utente
+## gira da solo, in qualsiasi ordine, e parla DIRETTAMENTE con gli agenti
+## (scelta fatta nel dialogo di benvenuto — richiesta Leone 22/07).
+var _mode := "guided"
+var _visited := {}
 
 func _ready() -> void:
 	# TEST-AUTO: JHT_TOUR_TEST=1 (selftest) e JHT_TOUR_PREVIEW=1 (shot)
@@ -75,18 +97,74 @@ func _ready() -> void:
 	if cfg.load(SAVE_PATH) == OK:
 		_index = clampi(int(cfg.get_value("tour", "index", 0)), 0, TALK_STEPS.size())
 		_done = bool(cfg.get_value("tour", "done", false))
+		_mode = str(cfg.get_value("tour", "mode", "guided"))
+		var saved: Variant = cfg.get_value("tour", "visited", [])
+		if saved is Array:
+			for slug in saved:
+				_visited[str(slug)] = true
 
 func active() -> bool:
 	return not _done
 
+func mode() -> String:
+	return _mode
+
+## Giro libero scelto nel benvenuto: da qui in poi ogni tappa è cliccabile
+## in qualsiasi ordine e parla l'agente, non l'Assistente.
+func set_free_mode() -> void:
+	if _mode == "free":
+		return
+	_mode = "free"
+	Log.info("tour", "modalità giro libero scelta dall'utente")
+	_save()
+	changed.emit()
+
+## Tappe ancora da visitare (dopo il benvenuto). In guidato è solo la
+## corrente; in libero tutte quelle non ancora fatte.
+func pending_stops() -> Array:
+	if _done or _index == 0:
+		return []
+	if _mode != "free":
+		var current := current_slug()
+		return [] if current == "" or current == "assistente" else [current]
+	var out: Array = []
+	for slug in TALK_STEPS:
+		if slug != "assistente" and not _visited.has(slug):
+			out.append(slug)
+	return out
+
+func visited(slug: String) -> bool:
+	if slug == "assistente":
+		return _index >= 1
+	if _mode == "free":
+		return _visited.has(slug)
+	return TALK_STEPS.find(slug) < _index
+
+## La tappa può aprirsi adesso? (bersaglio corrente in guidato;
+## qualsiasi pendente in giro libero, dopo il benvenuto)
+func stop_open(slug: String) -> bool:
+	if _done or _index == 0 or in_launch_phase():
+		return false
+	if _mode == "free":
+		return slug != "assistente" and TALK_STEPS.has(slug) \
+				and not _visited.has(slug)
+	return slug == current_slug()
+
 ## Fase finale: gli incontri sono completi, resta la checklist di lancio.
 func in_launch_phase() -> bool:
-	return not _done and _index >= TALK_STEPS.size()
+	if _done:
+		return false
+	if _mode == "free":
+		return _index >= 1 and pending_stops().is_empty()
+	return _index >= TALK_STEPS.size()
 
-## Slug del bersaglio corrente ("" in fase di lancio o a tour concluso).
+## Slug del bersaglio corrente ("" in fase di lancio, a tour concluso o
+## in giro libero, dove non esiste un bersaglio unico).
 func current_slug() -> String:
-	if _done or _index >= TALK_STEPS.size():
+	if _done or in_launch_phase():
 		return ""
+	if _mode == "free":
+		return "assistente" if _index == 0 else ""
 	return TALK_STEPS[_index]
 
 func step_index() -> int:
@@ -94,33 +172,83 @@ func step_index() -> int:
 
 ## Quanti dei 5 reparti pipeline sono già stati visitati (per il tracker).
 func depts_visited() -> int:
+	if _mode == "free":
+		var count := 0
+		for slug in ["scout", "analista", "scorer", "scrittore", "critico"]:
+			if _visited.has(slug):
+				count += 1
+		return count
 	return clampi(_index - 1, 0, 5)
 
-## Partitura della tappa corrente (o di uno slug esplicito).
+## Stato di una riga del tracker ("assistente" | "depts" | "dottore" |
+## "mentor" | "coordinatore"): il tracker resta una vista pura.
+func row_state(row: String) -> String:
+	if _mode != "free":
+		var idx := _index
+		match row:
+			"assistente": return _range_state(idx, 0, 0)
+			"depts": return _range_state(idx, 1, 5)
+			"dottore": return _range_state(idx, 6, 6)
+			"mentor": return _range_state(idx, 7, 7)
+			_: return _range_state(idx, 8, 8)
+	if _index == 0:
+		return "current" if row == "assistente" else "todo"
+	match row:
+		"assistente": return "done"
+		"depts": return "done" if depts_visited() == 5 else "current"
+		_: return "done" if _visited.has(row) else "current"
+
+static func _range_state(idx: int, first: int, last: int) -> String:
+	if idx > last:
+		return "done"
+	if idx >= first:
+		return "current"
+	return "todo"
+
+## Partitura della tappa (o di uno slug esplicito). In giro libero parla
+## l'agente in prima persona: albero self_*, ritratto e nome del ruolo.
 func scene_for(slug: String) -> Dictionary:
+	if _mode == "free" and FREE_SCENES.has(slug):
+		return FREE_SCENES[slug]
 	return SCENES.get(slug, {})
 
-## Invito iniziale sopra l'Assistente: saluto legato all'orario reale.
+## Invito iniziale sopra l'Assistente: saluto legato all'orario reale
+## (e al nome, se l'utente l'ha già lasciato all'ingresso).
 func invite_line() -> String:
-	return "%s! Vieni, ti presento il tuo nuovo team." % Dialogues.greeting()
+	return "%s%s! Vieni, ti presento il tuo nuovo team." % [
+		Dialogues.greeting(), ScriptedOnboarding.player_suffix()]
 
-## Un dialogo-tappa si è concluso: avanza solo se era il bersaglio corrente.
-## Accetta sia slug che uid backend ("scout-2" → "scout").
+## Un dialogo-tappa si è concluso. In guidato avanza solo il bersaglio
+## corrente; in libero qualsiasi tappa pendente. Accetta slug o uid
+## backend ("scout-2" → "scout").
 func notify_talked(slug_or_uid: String) -> void:
 	if _done or in_launch_phase():
 		return
-	if ScriptedOnboarding.normalize_agent(slug_or_uid) != current_slug():
+	var slug := ScriptedOnboarding.normalize_agent(slug_or_uid)
+	if _mode == "free" and _index >= 1:
+		if slug == "assistente" or _visited.has(slug) \
+				or TALK_STEPS.find(slug) < 0:
+			return
+		_visited[slug] = true
+		_save()
+		changed.emit()
+		return
+	if slug != current_slug():
 		return
 	_index += 1
 	_save()
 	changed.emit()
 
 ## In fase di lancio il tour si chiude quando la checklist è verde (o il
-## team è già partito): la to-do list ha esaurito il suo compito.
+## team è già partito): la to-do list ha esaurito il suo compito. In giro
+## libero basta il setup completo: le presentazioni non sono un obbligo.
 func notify_setup_status(status: Dictionary) -> void:
-	if _done or not in_launch_phase():
+	if _done:
 		return
-	if bool(status.get("ready", false)) or bool(status.get("team_running", false)):
+	if not (bool(status.get("ready", false)) \
+			or bool(status.get("team_running", false))):
+		return
+	if in_launch_phase() or (_mode == "free" and _index >= 1):
 		finish()
 
 func finish() -> void:
@@ -138,6 +266,8 @@ func skip() -> void:
 func reset_for_test() -> void:
 	_index = 0
 	_done = false
+	_mode = "guided"
+	_visited = {}
 
 func _save() -> void:
 	if _test_mode:
@@ -145,4 +275,6 @@ func _save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("tour", "index", _index)
 	cfg.set_value("tour", "done", _done)
+	cfg.set_value("tour", "mode", _mode)
+	cfg.set_value("tour", "visited", _visited.keys())
 	cfg.save(SAVE_PATH)

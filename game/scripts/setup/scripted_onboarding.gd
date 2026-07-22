@@ -77,6 +77,34 @@ func remember_profile_fields(fields: Dictionary) -> void:
 	_save_state()
 
 
+## Nome lasciato dall'utente all'ingresso (title screen): l'Assistente lo
+## usa per chiamarlo per nome fin dal primo saluto (richiesta Leone 22/07).
+func set_player_name(first: String, last: String) -> void:
+	var clean_first := first.strip_edges()
+	var clean_last := last.strip_edges()
+	if clean_first.is_empty():
+		return
+	_draft["first_name"] = clean_first
+	_draft["name"] = (clean_first + " " + clean_last).strip_edges()
+	_save_state()
+
+
+func player_first_name() -> String:
+	var first := str(_draft.get("first_name", "")).strip_edges()
+	if not first.is_empty():
+		return first
+	# fallback: la prima parola del nome completo (es. profilo importato)
+	var full := str(_draft.get("name", "")).strip_edges()
+	return full.get_slice(" ", 0) if not full.is_empty() else ""
+
+
+## Suffisso pronto per i saluti: ", Leone" — o stringa vuota senza nome,
+## così le battute restano naturali in entrambi i casi.
+func player_suffix() -> String:
+	var first := player_first_name()
+	return ", " + first if not first.is_empty() else ""
+
+
 ## Risposte authored in forma strutturata. A differenza della cronologia chat,
 ## questa lista è stabile, categorizzata e pronta per essere trasformata in
 ## contesto iniziale quando viene collegato un provider.
@@ -856,7 +884,10 @@ static func _tr(it: String, en: String) -> String:
 
 
 func _save_state() -> void:
-	if OS.get_environment("JHT_GUIDED_TEST") == "1":
+	# Anche il selftest del tour salva preferenze e nome: mai sporcare il
+	# config reale della macchina di sviluppo.
+	if OS.get_environment("JHT_GUIDED_TEST") == "1" \
+			or OS.get_environment("JHT_TOUR_TEST") == "1":
 		return
 	var cfg := ConfigFile.new()
 	cfg.set_value("guided", "steps", JSON.stringify(_steps))
