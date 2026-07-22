@@ -20,7 +20,7 @@ import {
   activateDemo,
 } from "@/app/components/demo/personas";
 
-type StatusChoice = "none" | "downloaded" | "experimenting" | "running";
+type StatusChoice = "browsing" | "none" | "downloaded" | "running";
 
 type Strings = {
   title: string;
@@ -30,8 +30,8 @@ type Strings = {
   opt_none_d: string;
   opt_downloaded: string;
   opt_downloaded_d: string;
-  opt_experimenting: string;
-  opt_experimenting_d: string;
+  opt_browsing: string;
+  opt_browsing_d: string;
   opt_running: string;
   opt_running_d: string;
   back: string;
@@ -71,8 +71,8 @@ const T: Record<Locale, Strings> = {
     opt_none_d: "Ti spieghiamo come funziona e dove scaricarla",
     opt_downloaded: "Ho scaricato l'app ma non ho avviato il team",
     opt_downloaded_d: "Ti guidiamo al primo avvio",
-    opt_experimenting: "Sto ancora sperimentando in locale",
-    opt_experimenting_d: "Collega il team per vedere i dati anche qui",
+    opt_browsing: "Sto solo dando un'occhiata",
+    opt_browsing_d: "Vai dritto alla demo interattiva della piattaforma",
     opt_running: "Il mio team è già attivo",
     opt_running_d: "Collegalo al tuo account con un token",
     back: "Indietro",
@@ -119,8 +119,8 @@ const T: Record<Locale, Strings> = {
     opt_none_d: "We'll explain how it works and where to get it",
     opt_downloaded: "I downloaded the app but haven't started the team",
     opt_downloaded_d: "We'll guide you through the first run",
-    opt_experimenting: "I'm still experimenting locally",
-    opt_experimenting_d: "Connect the team to see the data here too",
+    opt_browsing: "I'm just looking around",
+    opt_browsing_d: "Jump straight to the interactive demo of the platform",
     opt_running: "My team is already running",
     opt_running_d: "Link it to your account with a token",
     back: "Back",
@@ -167,8 +167,8 @@ const T: Record<Locale, Strings> = {
     opt_none_d: "Te explicamos cómo funciona y dónde conseguirla",
     opt_downloaded: "Descargué la app pero no he iniciado el equipo",
     opt_downloaded_d: "Te guiamos en el primer arranque",
-    opt_experimenting: "Todavía estoy experimentando en local",
-    opt_experimenting_d: "Conecta el equipo para ver los datos también aquí",
+    opt_browsing: "Solo estoy echando un vistazo",
+    opt_browsing_d: "Ve directo a la demo interactiva de la plataforma",
     opt_running: "Mi equipo ya está activo",
     opt_running_d: "Vincúlalo a tu cuenta con un token",
     back: "Atrás",
@@ -215,8 +215,8 @@ const T: Record<Locale, Strings> = {
     opt_none_d: "On vous explique comment ça marche et où la télécharger",
     opt_downloaded: "J'ai téléchargé l'app mais pas démarré l'équipe",
     opt_downloaded_d: "On vous guide pour le premier démarrage",
-    opt_experimenting: "J'expérimente encore en local",
-    opt_experimenting_d: "Connectez l'équipe pour voir les données ici aussi",
+    opt_browsing: "Je jette juste un coup d'œil",
+    opt_browsing_d: "Passez directement à la démo interactive de la plateforme",
     opt_running: "Mon équipe tourne déjà",
     opt_running_d: "Reliez-la à votre compte avec un token",
     back: "Retour",
@@ -264,8 +264,8 @@ const T: Record<Locale, Strings> = {
     opt_none_d: "Wir erklären, wie es funktioniert und wo du sie bekommst",
     opt_downloaded: "App heruntergeladen, Team noch nicht gestartet",
     opt_downloaded_d: "Wir begleiten dich beim ersten Start",
-    opt_experimenting: "Ich experimentiere noch lokal",
-    opt_experimenting_d: "Verbinde das Team, um die Daten auch hier zu sehen",
+    opt_browsing: "Ich schaue mich nur um",
+    opt_browsing_d: "Direkt zur interaktiven Demo der Plattform",
     opt_running: "Mein Team läuft bereits",
     opt_running_d: "Verknüpfe es mit einem Token mit deinem Konto",
     back: "Zurück",
@@ -312,9 +312,8 @@ const T: Record<Locale, Strings> = {
     opt_none_d: "Elmagyarázzuk, hogyan működik és honnan szerezheted be",
     opt_downloaded: "Letöltöttem az appot, de nem indítottam el a csapatot",
     opt_downloaded_d: "Végigvezetünk az első indításon",
-    opt_experimenting: "Még helyben kísérletezem",
-    opt_experimenting_d:
-      "Kapcsold össze a csapatot, hogy itt is lásd az adatokat",
+    opt_browsing: "Csak körülnézek",
+    opt_browsing_d: "Ugorj egyenesen a platform interaktív demójához",
     opt_running: "A csapatom már fut",
     opt_running_d: "Kapcsold a fiókodhoz egy tokennel",
     back: "Vissza",
@@ -362,8 +361,8 @@ const T: Record<Locale, Strings> = {
     opt_none_d: "Explicamos como funciona e onde a obter",
     opt_downloaded: "Descarreguei a app mas não iniciei a equipa",
     opt_downloaded_d: "Guiamos-te no primeiro arranque",
-    opt_experimenting: "Ainda estou a experimentar localmente",
-    opt_experimenting_d: "Liga a equipa para veres os dados também aqui",
+    opt_browsing: "Estou só a dar uma olhada",
+    opt_browsing_d: "Vai direto para a demo interativa da plataforma",
     opt_running: "A minha equipa já está ativa",
     opt_running_d: "Liga-a à tua conta com um token",
     back: "Voltar",
@@ -403,21 +402,24 @@ const T: Record<Locale, Strings> = {
   },
 };
 
+// "browsing" per primo: la maggior parte di chi atterra qui non ha (né
+// magari vuole) l'app — il tour demo dev'essere la porta più a portata di
+// mano, non nascosta dietro domande sul setup (feedback utente 22/07).
 const STATUS_OPTIONS: Array<{
   key: StatusChoice;
   label: (t: Strings) => string;
   desc: (t: Strings) => string;
 }> = [
+  {
+    key: "browsing",
+    label: (t) => t.opt_browsing,
+    desc: (t) => t.opt_browsing_d,
+  },
   { key: "none", label: (t) => t.opt_none, desc: (t) => t.opt_none_d },
   {
     key: "downloaded",
     label: (t) => t.opt_downloaded,
     desc: (t) => t.opt_downloaded_d,
-  },
-  {
-    key: "experimenting",
-    label: (t) => t.opt_experimenting,
-    desc: (t) => t.opt_experimenting_d,
   },
   { key: "running", label: (t) => t.opt_running, desc: (t) => t.opt_running_d },
 ];
@@ -505,7 +507,9 @@ export default function WelcomeClient({
                 type="button"
                 onClick={() => {
                   setChoice(o.key);
-                  setStep("path");
+                  // Chi sta solo curiosando non ha un percorso di setup:
+                  // dritto alla scelta della categoria demo.
+                  setStep(o.key === "browsing" ? "demo" : "path");
                 }}
                 className="group text-left p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[#00e87a55] transition-colors cursor-pointer"
               >
@@ -568,7 +572,7 @@ export default function WelcomeClient({
             </Card>
           )}
 
-          {(choice === "experimenting" || choice === "running") && (
+          {choice === "running" && (
             <Card title={t.pair_title}>
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mb-4">
                 {t.pair_body}
@@ -642,7 +646,9 @@ export default function WelcomeClient({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setStep("path")}
+              // "browsing" ha saltato lo step percorso: indietro = domanda
+              // iniziale, non una pagina di setup mai vista.
+              onClick={() => setStep(choice === "browsing" ? "status" : "path")}
               className={btnGhost}
             >
               {t.back}
