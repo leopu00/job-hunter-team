@@ -12,6 +12,7 @@ import type { Locale } from "@/i18n/config";
 type ReasonKey =
   | "closed"
   | "not_interested"
+  | "mismatch"
   | "already_applied"
   | "company"
   | "conditions"
@@ -20,7 +21,7 @@ type ReasonKey =
 const REASON_ORDER: ReasonKey[] = [
   "closed",
   "not_interested",
-  "already_applied",
+  "mismatch",
   "company",
   "conditions",
   "other",
@@ -47,6 +48,7 @@ const T: Record<
     reasons: {
       closed: "Chiusa / non più attiva",
       not_interested: "Non mi interessa",
+      mismatch: "Non in linea col mio profilo",
       already_applied: "Già candidato / gestita altrove",
       company: "Azienda non desiderata",
       conditions: "Condizioni inadatte (stipendio/sede)",
@@ -69,6 +71,7 @@ const T: Record<
     reasons: {
       closed: "Closed / no longer active",
       not_interested: "Not interested",
+      mismatch: "Not a match for my profile",
       already_applied: "Already applied / handled elsewhere",
       company: "Unwanted company",
       conditions: "Unsuitable conditions (salary/location)",
@@ -91,6 +94,7 @@ const T: Record<
     reasons: {
       closed: "Cerrada / ya no activa",
       not_interested: "No me interesa",
+      mismatch: "No encaja con mi perfil",
       already_applied: "Ya inscrito / gestionada en otro sitio",
       company: "Empresa no deseada",
       conditions: "Condiciones inadecuadas (salario/ubicación)",
@@ -113,6 +117,7 @@ const T: Record<
     reasons: {
       closed: "Fermée / plus active",
       not_interested: "Pas intéressé",
+      mismatch: "Pas adapté à mon profil",
       already_applied: "Déjà postulé / traité ailleurs",
       company: "Entreprise non souhaitée",
       conditions: "Conditions inadaptées (salaire/lieu)",
@@ -135,6 +140,7 @@ const T: Record<
     reasons: {
       closed: "Geschlossen / nicht mehr aktiv",
       not_interested: "Kein Interesse",
+      mismatch: "Passt nicht zu meinem Profil",
       already_applied: "Bereits beworben / anderweitig erledigt",
       company: "Unerwünschtes Unternehmen",
       conditions: "Ungeeignete Bedingungen (Gehalt/Standort)",
@@ -157,6 +163,7 @@ const T: Record<
     reasons: {
       closed: "Lezárva / már nem aktív",
       not_interested: "Nem érdekel",
+      mismatch: "Nem illik a profilomhoz",
       already_applied: "Már jelentkeztem / máshol kezelve",
       company: "Nem kívánt cég",
       conditions: "Nem megfelelő feltételek (fizetés/helyszín)",
@@ -179,6 +186,7 @@ const T: Record<
     reasons: {
       closed: "Fechada / já não ativa",
       not_interested: "Não tenho interesse",
+      mismatch: "Não se adequa ao meu perfil",
       already_applied: "Já candidatado / tratado noutro lado",
       company: "Empresa indesejada",
       conditions: "Condições inadequadas (salário/local)",
