@@ -21,19 +21,24 @@ a visual wrapper around another application.
 The setup CTA exposes both a three-gate checklist and three diegetic
 conversations:
 
-1. **Assistant** gathers role family, experience, work mode and geography,
-   then prefills the native profile form.
+1. **Assistant** gathers role family/specialization, experience and current
+   situation, acceptable skill stretch, work/geography/relocation, contract,
+   compensation strategy and preferred company stage, then prefills the
+   native profile form.
 2. **Coordinator** guides local/VPS runtime, provider selection and login,
-   required profile fields, optional Telegram/email/cloud channels, and team
-   activation.
-3. **Mentor** captures career priority, search breadth, feedback cadence and
-   optionally opens working hours.
+   required profile fields, autonomy, budget, privacy and availability,
+   optional Telegram/email/cloud channels, and team activation.
+3. **Mentor** captures priority and motivation, search breadth, risk, pace,
+   feedback style/cadence and deal-breakers, and optionally opens working
+   hours.
 
 Before provider authentication, only authored reply choices are available and
 no LLM is called. The representative showroom roster and 50 fictional jobs keep
-the office, list and map explorable. State is persisted locally. After provider authentication
-and agent startup, suggested replies remain available while free text is sent
-to the real agent. Details: [`FIRST-RUN.md`](FIRST-RUN.md).
+the office, list and map explorable. State and a versioned LLM-ready context
+are persisted locally. After provider authentication and agent startup, that
+context accompanies the first live turn outside the visible chat history;
+suggested replies remain available while free text is sent to the real agent.
+Details: [`FIRST-RUN.md`](FIRST-RUN.md).
 
 ## Main state flow
 
