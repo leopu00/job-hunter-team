@@ -332,6 +332,7 @@ func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
 		_backend.stop()
 		publish_state(DISCONNECTED, "")
 	_backend = backend
+	_onboarding_context_hashes.clear()
 	if _backend:
 		_backend.bus = self
 		_backend.start(config)
@@ -355,6 +356,7 @@ const REPLY_CAPABLE := ["coordinatore", "assistente", "mentor"]
 ## In attesa di risposta: uid → ts unix dell'invio. La UI mostra
 ## l'indicatore di caricamento su chat_waiting_changed.
 var chat_waiting := {}
+var _onboarding_context_hashes := {}
 signal chat_waiting_changed(agent: String, waiting: bool)
 
 func can_chat_with(slug_or_uid: String) -> bool:
@@ -518,7 +520,16 @@ func send_user_chat(slug: String, text: String) -> void:
 		var uid := _chat_uid(slug)
 		chat_waiting[uid] = Time.get_unix_time_from_system()
 		chat_waiting_changed.emit(uid, true)
-		_backend.send_chat(uid, text)
+		var context := ScriptedOnboarding.llm_context_text()
+		var context_hash := hash(context)
+		# Il profilo non appare come una finta battuta dell'utente: viene
+		# consegnato fuori banda una volta, e ancora solo se cambia.
+		if not context.strip_edges().is_empty() \
+				and int(_onboarding_context_hashes.get(uid, 0)) != context_hash:
+			_onboarding_context_hashes[uid] = context_hash
+			_backend.send_chat_with_context(uid, text, context)
+		else:
+			_backend.send_chat(uid, text)
 
 ## Il backend pubblica la conversazione da qui: spegne l'attesa quando
 ## la risposta dell'agente (successiva all'invio) è arrivata.
