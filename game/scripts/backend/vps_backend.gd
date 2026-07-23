@@ -1142,7 +1142,12 @@ func _queue_worker(callable: Callable) -> void:
 
 func _run() -> void:
 	# handshake: la VPS risponde e il container jht esiste?
-	var probe := _ssh("echo JHT_OK; docker inspect jht --format {{.State.Status}}")
+	# Apici singoli attorno al template Go: senza, su Windows PowerShell
+	# (_ssh → powershell -Command) interpreta {{.State.Status}} come
+	# script-block e corrompe l'intero `docker inspect` → probe in ERROR,
+	# backend mai CONNECTED, badge SIMULAZIONE e chat scartata in local.
+	# Gli apici singoli sono innocui e portabili (sh li rispetta uguale).
+	var probe := _ssh("echo JHT_OK; docker inspect jht --format '{{.State.Status}}'")
 	if _stop:
 		return
 	if probe["code"] != 0 or not probe["out"].contains("JHT_OK"):
