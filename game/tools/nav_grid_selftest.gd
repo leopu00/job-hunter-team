@@ -52,8 +52,7 @@ func _test_real_desk_routes() -> void:
 	var nav = NavGridScript.new()
 	var obstacles: Array = FurnitureDefsScript.obstacles()
 	obstacles.append_array(DepartmentDefsScript.obstacles())
-	obstacles.append_array(DepartmentDefsScript.GLASS_WALLS)
-	nav.build(FurnitureDefsScript.FLOOR, obstacles)
+	nav.build(FurnitureDefsScript.FLOOR, obstacles, DepartmentDefsScript.GLASS_WALLS)
 	var start := Vector2(1500, 900)
 	for desk in DepartmentDefsScript.all_desks():
 		var spot: Vector2 = DepartmentDefsScript.desk_spot(desk)
@@ -81,8 +80,7 @@ func _test_handoff_routes() -> void:
 	var nav = NavGridScript.new()
 	var obstacles: Array = FurnitureDefsScript.obstacles()
 	obstacles.append_array(DepartmentDefsScript.obstacles())
-	obstacles.append_array(DepartmentDefsScript.GLASS_WALLS)
-	nav.build(FurnitureDefsScript.FLOOR, obstacles)
+	nav.build(FurnitureDefsScript.FLOOR, obstacles, DepartmentDefsScript.GLASS_WALLS)
 	var order: Array = DepartmentDefsScript.DEPT_ORDER
 	for dept_id in DepartmentDefsScript.HANDOFF_DEPTS:
 		var producer_i := order.find(dept_id)
@@ -184,6 +182,10 @@ func _test_all_department_radial_layouts() -> void:
 	var centers := {}
 	for dept in DepartmentDefsScript.DEPT_ORDER:
 		centers[dept] = DeptRugsScript.RUGS[dept][0]
+		var rug_asset := str(DeptRugsScript.RUGS[dept][2])
+		_assert(_texture_loads(rug_asset), "%s Persian rug missing: %s" % [dept, rug_asset])
+	_assert((DeptRugsScript.RUGS["scrittori"][1] as Vector2).x >= 980.0,
+			"writer rug must cover the full six-desk ring")
 	var expected_facing := ["left", "left", "up", "down", "right", "right"]
 	var facing_vector := {
 		"up": Vector2.UP, "right": Vector2.RIGHT,
@@ -271,8 +273,7 @@ func _test_core_patrol_routes() -> void:
 	var nav = NavGridScript.new()
 	var obstacles: Array = FurnitureDefsScript.obstacles()
 	obstacles.append_array(DepartmentDefsScript.obstacles())
-	obstacles.append_array(DepartmentDefsScript.GLASS_WALLS)
-	nav.build(FurnitureDefsScript.FLOOR, obstacles)
+	nav.build(FurnitureDefsScript.FLOOR, obstacles, DepartmentDefsScript.GLASS_WALLS)
 	for slug in ["coordinatore", "sentinella", "mentor", "assistente", "mantenitore", "dottore"]:
 		var def: Dictionary = CharacterDefsScript.AGENTS[slug]
 		var home: Vector2 = nav.approach_point(Vector2(1700, 900), def["spot"])

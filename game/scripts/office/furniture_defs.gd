@@ -129,7 +129,9 @@ const ITEMS := [
 	{"id": "coat_rack", "kind": "nc_coat_rack", "rect": Rect2(1500, 1780, 50, 50)},
 	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(400, 778, 40, 40)},
 	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(330, 758, 60, 72)},
-	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(940, 920, 60, 72)},
+	# Spostata fuori dall'asse della porta Scout sud: a (940,920) bloccava
+	# materialmente il passaggio fra il tavolo di consegna e il corridoio.
+	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(305, 1180, 60, 72)},
 	# Fuori dall'anello radiale: a (774,1545) intersecava la postazione
 	# Scrittori delle ore 12 e ne falsava collisione e lettura prospettica.
 	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(250, 1840, 60, 72)},
@@ -154,7 +156,4 @@ static func obstacles() -> Array:
 	var out: Array = []
 	for item in ITEMS:
 		out.append(item["rect"])
-	out.append(LAB_WALL_V)
-	out.append(LAB_WALL_H1)
-	out.append(LAB_WALL_H2)
 	return out
