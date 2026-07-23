@@ -11,7 +11,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const VALID_ACTIONS = ["like", "dislike", "hide", "star"] as const;
+// 'clear' (mig 059): l'utente ritira il voto — evento nel log, l'ultimo
+// prevale; i lettori lo trattano come "nessun giudizio".
+const VALID_ACTIONS = ["like", "dislike", "hide", "star", "clear"] as const;
 type Action = (typeof VALID_ACTIONS)[number];
 
 const VALID_DIRECTIONS = ["more_like_this", "less_like_this"] as const;

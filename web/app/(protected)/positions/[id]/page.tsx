@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -21,6 +22,7 @@ import { countryFlag } from "@/lib/country-flag";
 import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
 import { colorForFamily } from "@/lib/position-classifier";
+import { sourceDisplayName } from "@/lib/case-study-sources";
 import { scoreSpectrumCss } from "@/lib/score-color";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
@@ -546,6 +548,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Siège",
     pt: "Sede",
   },
+  not_specified: {
+    it: "Non specificato",
+    en: "Not specified",
+    hu: "Nincs megadva",
+    es: "No especificado",
+    de: "Nicht angegeben",
+    fr: "Non précisé",
+    pt: "Não especificado",
+  },
   c_sector: {
     it: "Settore",
     en: "Sector",
@@ -617,6 +628,87 @@ const T: Record<string, Record<string, string>> = {
     de: "Ausschlussgrund",
     fr: "Motif d'exclusion",
     pt: "Motivo de exclusão",
+  },
+  excl_by_user: {
+    it: "Esclusa da te",
+    en: "Excluded by you",
+    hu: "Általad kizárva",
+    es: "Excluida por ti",
+    de: "Von dir ausgeschlossen",
+    fr: "Exclue par vous",
+    pt: "Excluída por ti",
+  },
+  excl_by_team: {
+    it: "Esclusa dal team",
+    en: "Excluded by the team",
+    hu: "A csapat által kizárva",
+    es: "Excluida por el equipo",
+    de: "Vom Team ausgeschlossen",
+    fr: "Exclue par l'équipe",
+    pt: "Excluída pela equipa",
+  },
+  xr_closed: {
+    it: "Chiusa / non più attiva",
+    en: "Closed / no longer active",
+    hu: "Lezárva / már nem aktív",
+    es: "Cerrada / ya no activa",
+    de: "Geschlossen / nicht mehr aktiv",
+    fr: "Fermée / plus active",
+    pt: "Fechada / já não ativa",
+  },
+  xr_not_interested: {
+    it: "Non mi interessa",
+    en: "Not interested",
+    hu: "Nem érdekel",
+    es: "No me interesa",
+    de: "Kein Interesse",
+    fr: "Pas intéressé",
+    pt: "Não tenho interesse",
+  },
+  xr_mismatch: {
+    it: "Non in linea col mio profilo",
+    en: "Not a match for my profile",
+    hu: "Nem illik a profilomhoz",
+    es: "No encaja con mi perfil",
+    de: "Passt nicht zu meinem Profil",
+    fr: "Pas adapté à mon profil",
+    pt: "Não se adequa ao meu perfil",
+  },
+  xr_already_applied: {
+    it: "Già candidato / gestita altrove",
+    en: "Already applied / handled elsewhere",
+    hu: "Már jelentkeztem / máshol kezelve",
+    es: "Ya inscrito / gestionada en otro sitio",
+    de: "Bereits beworben / anderweitig erledigt",
+    fr: "Déjà postulé / traité ailleurs",
+    pt: "Já candidatado / tratado noutro lado",
+  },
+  xr_company: {
+    it: "Azienda non desiderata",
+    en: "Unwanted company",
+    hu: "Nem kívánt cég",
+    es: "Empresa no deseada",
+    de: "Unerwünschtes Unternehmen",
+    fr: "Entreprise non souhaitée",
+    pt: "Empresa indesejada",
+  },
+  xr_conditions: {
+    it: "Condizioni inadatte (stipendio/sede)",
+    en: "Unsuitable conditions (salary/location)",
+    hu: "Nem megfelelő feltételek (fizetés/helyszín)",
+    es: "Condiciones inadecuadas (salario/ubicación)",
+    de: "Ungeeignete Bedingungen (Gehalt/Standort)",
+    fr: "Conditions inadaptées (salaire/lieu)",
+    pt: "Condições inadequadas (salário/local)",
+  },
+  xr_other: {
+    it: "Altro",
+    en: "Other",
+    hu: "Egyéb",
+    es: "Otro",
+    de: "Sonstiges",
+    fr: "Autre",
+    pt: "Outro",
   },
   an_notes: {
     it: "Note del team",
@@ -863,14 +955,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
     ? verdictOf(fb.action, fb.score)
     : null;
 
-  // Card Località: mai per il full remote (nessun posto dove pinnare);
-  // pin a LIVELLO CITTÀ — ufficio esatto se geocodato, altrimenti
-  // gazetteer città→coordinate (scelta utente 19/07: niente zoom sulla via).
+  // Card Località: per il full remote niente mappa (nessun posto dove
+  // pinnare) ma la card c'è comunque — indica "Da remoto" e l'HQ
+  // dell'azienda (scelta utente 22/07). Per il resto pin a LIVELLO CITTÀ —
+  // ufficio esatto se geocodato, altrimenti gazetteer città→coordinate
+  // (scelta utente 19/07: niente zoom sulla via).
   const isFullRemote = position.remote_type === "full_remote";
   const locCity = (position.loc_city ?? "").trim() || null;
   const locCountry = (position.loc_country ?? "").trim() || null;
   const hasLocationCard =
-    !isFullRemote && Boolean(locCity || locCountry || position.location);
+    isFullRemote || Boolean(locCity || locCountry || position.location);
   const mapCoords =
     !isFullRemote && position.office_lat != null && position.office_lon != null
       ? { lat: position.office_lat, lon: position.office_lon }
@@ -946,12 +1040,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
     position.salary_declared_max,
     position.salary_declared_currency,
   );
-  const modeColor =
-    position.remote_type === "full_remote"
-      ? "var(--color-green)"
-      : position.remote_type === "hybrid"
-        ? "var(--color-yellow)"
-        : "var(--color-red)";
   // "Trovata 2026-07-17 (2 giorni fa)" — età calcolata al render server;
   // la pagina è force-dynamic quindi non resta congelata in una build.
   const foundDate = position.found_at.slice(0, 10);
@@ -965,90 +1053,146 @@ export default async function PositionDetailPage({ params }: PageProps) {
       : foundDays === 1
         ? t("o_yesterday")
         : t("o_days_ago").replace("{n}", String(foundDays));
+  // Posizione esclusa → il motivo è SEMPRE visibile in Panoramica
+  // (regola utente 22/07): esclusione manuale → causa scelta + nota
+  // (mig 041); esclusione agente → tag EXCLUDED nelle notes (skill
+  // db-update); righe legacy senza motivo → fallback esplicito.
+  const isExcluded = position.status === "excluded";
+  const XR_KEYS = new Set([
+    "closed",
+    "not_interested",
+    "mismatch",
+    "already_applied",
+    "company",
+    "conditions",
+    "other",
+  ]);
+  let exclusionByUser = false;
+  let exclusionText: string | null = null;
+  if (isExcluded) {
+    const code = position.user_excluded_reason;
+    if (code) {
+      exclusionByUser = true;
+      const label = XR_KEYS.has(code) ? t(`xr_${code}`) : code;
+      const note = (position.user_excluded_note ?? "").trim();
+      exclusionText =
+        code === "other" && note ? note : note ? `${label} — ${note}` : label;
+    } else if (analysis.excluded) {
+      exclusionText =
+        `${analysis.excluded.tag ? `[${analysis.excluded.tag}] ` : ""}${analysis.excluded.text}`.trim();
+    } else {
+      exclusionText = t("not_specified");
+    }
+  }
   // Panoramica SEMPRE presente: da 20/07 ospita anche titolo e azienda
   // (l'header nudo è sparito) e la fila dei giudizi in coda.
   const overviewCard = (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
       <div className="section-label mb-3">{t("overview")}</div>
-      <h1 className="text-lg md:text-xl font-bold tracking-tight text-[var(--color-white)] mb-1">
-        {position.title}
-      </h1>
-      <div className="mb-3 flex items-center gap-x-2.5 gap-y-1 flex-wrap">
-        <span className="text-[13px] text-[var(--color-base)] font-medium">
-          {position.company}
-        </span>
-        {/* Logo aziendale (mig 056): a destra del nome; senza logo,
-            nessun placeholder. */}
-        {company?.logo && (
-          <Avatar
-            name={position.company}
-            src={company.logo}
-            size="sm"
-            square
-            imgFit="contain"
-          />
-        )}
-        {position.location && !hasLocationCard && (
-          <span className="text-[11px] text-[var(--color-muted)]">
-            · {position.location}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-4">
-        {score && (
-          <div
-            className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
-            style={{
-              borderColor: scoreColor(score.total_score),
-              color: scoreColor(score.total_score),
-            }}
-          >
-            {score.total_score}
+      {/* Layout compatto (feedback 22/07, "come sul telefono"): su desktop
+          titolo+azienda a sinistra e il gruppo score+fatti adiacente a
+          destra, tutto su una fascia — niente zone vuote. Su mobile il
+          gruppo va a capo sotto il titolo (score a sinistra, fatti a
+          destra), che è la resa già approvata. */}
+      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
+        <div className="min-w-0 md:flex-1">
+          <h1 className="text-lg md:text-xl font-bold tracking-tight text-[var(--color-white)] mb-1">
+            {position.title}
+          </h1>
+          <div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap">
+            <span className="text-[13px] text-[var(--color-base)] font-medium">
+              {position.company}
+            </span>
+            {position.location && !hasLocationCard && (
+              <span className="text-[11px] text-[var(--color-muted)]">
+                · {position.location}
+              </span>
+            )}
           </div>
-        )}
-        <div className="flex-1 min-w-0 space-y-2">
-          {(salaryEst || salaryDecl) && (
-            <InfoRow
-              label={t(salaryEst ? "d_salary_estimated" : "d_salary_declared")}
-              value={(salaryEst ?? salaryDecl)!}
-            />
+        </div>
+        <div className="flex items-center gap-4 md:gap-6 min-w-0">
+          {score && (
+            <div
+              className="w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-xl shrink-0"
+              style={{
+                borderColor: scoreColor(score.total_score),
+                color: scoreColor(score.total_score),
+              }}
+            >
+              {score.total_score}
+            </div>
           )}
-          {position.remote_type && (
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
-                {t("o_mode")}
-              </span>
-              <span
-                className="text-[11px] font-semibold text-right"
-                style={{ color: modeColor }}
+          {/* Fatti: label e valore su due colonne adiacenti, niente vuoto
+              tra label e valore (feedback 22/07). */}
+          <div className="ml-auto md:ml-0 grid grid-cols-[auto_auto] gap-x-5 gap-y-1.5 items-baseline min-w-0">
+            {(salaryEst || salaryDecl) && (
+              <OverviewRow
+                label={t(
+                  salaryEst ? "d_salary_estimated" : "d_salary_declared",
+                )}
               >
+                {(salaryEst ?? salaryDecl)!}
+              </OverviewRow>
+            )}
+            {position.remote_type && (
+              <OverviewRow label={t("o_mode")}>
                 {t(`rt_${position.remote_type}`)}
-              </span>
-            </div>
-          )}
-          {position.role_family && (
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[10px] text-[var(--color-dim)] shrink-0">
-                {t("o_category")}
-              </span>
-              <span className="text-[11px] text-[var(--color-base)] text-right inline-flex items-center gap-1.5 min-w-0">
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{
-                    background: colorForFamily(position.role_family.trim()),
-                  }}
-                  aria-hidden="true"
-                />
-                <span className="truncate">{position.role_family}</span>
-              </span>
-            </div>
-          )}
-          {position.source && (
-            <InfoRow label={t("d_source")} value={position.source} />
-          )}
-          <InfoRow label={t("d_found")} value={`${foundDate} (${foundAge})`} />
+              </OverviewRow>
+            )}
+            {position.role_family && (
+              <OverviewRow label={t("o_category")}>
+                <span className="inline-flex items-center gap-1.5 max-w-full">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{
+                      background: colorForFamily(position.role_family.trim()),
+                    }}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">{position.role_family}</span>
+                </span>
+              </OverviewRow>
+            )}
+            {position.source && (
+              <OverviewRow label={t("d_source")}>
+                {position.url ? (
+                  <a
+                    href={position.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                  >
+                    {sourceDisplayName(position.source)} ↗
+                  </a>
+                ) : (
+                  sourceDisplayName(position.source)
+                )}
+              </OverviewRow>
+            )}
+            <OverviewRow label={t("d_found")}>
+              {`${foundDate} (${foundAge})`}
+            </OverviewRow>
+          </div>
         </div>
       </div>
+      {/* Banner motivo esclusione: sempre presente su una posizione
+          esclusa, chiunque l'abbia esclusa. */}
+      {isExcluded && (
+        <div
+          className="mt-4 rounded-lg border p-3"
+          style={{
+            borderColor: "var(--color-red)",
+            background: "color-mix(in srgb, var(--color-red) 9%, transparent)",
+          }}
+        >
+          <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-red)] mb-1">
+            {exclusionByUser ? t("excl_by_user") : t("excl_by_team")}
+          </div>
+          <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
+            {exclusionText}
+          </p>
+        </div>
+      )}
       {/* Giudizio rapido in coda alla Panoramica: stessa fila di /swipe
             (evidenzia quello già dato; resta anche nel popup). */}
       {feedbackEnabled && position.legacy_id != null && (
@@ -1056,6 +1200,8 @@ export default async function PositionDetailPage({ params }: PageProps) {
           <FeedbackButtons
             legacyId={position.legacy_id}
             initialVerdict={initialVerdict}
+            initialExcludedReason={position.user_excluded_reason ?? null}
+            initialExcludedNote={position.user_excluded_note ?? null}
           />
         </div>
       )}
@@ -1082,7 +1228,9 @@ export default async function PositionDetailPage({ params }: PageProps) {
           )}
           <div className="min-w-0">
             <div className="text-[13px] font-semibold text-[var(--color-white)] truncate">
-              {locCity ?? position.location}
+              {isFullRemote
+                ? t("rt_full_remote")
+                : (locCity ?? position.location)}
             </div>
             {locCountry && (
               <div className="text-[11px] text-[var(--color-muted)]">
@@ -1103,6 +1251,18 @@ export default async function PositionDetailPage({ params }: PageProps) {
           </a>
         )}
       </div>
+      {/* Full remote: nessuna mappa, ma l'HQ dell'azienda sì — con
+          fallback esplicito quando l'arricchimento non l'ha trovato. */}
+      {isFullRemote && (
+        <div className="mt-3 pt-3 border-t border-[var(--color-border)] flex items-baseline gap-3">
+          <span className="text-[10px] text-[var(--color-dim)]">
+            {t("c_hq")}
+          </span>
+          <span className="text-[11px] text-[var(--color-base)] min-w-0 break-words">
+            {company?.hq?.trim() || t("not_specified")}
+          </span>
+        </div>
+      )}
       {mapCoords && (
         <PositionMapCardLazy lat={mapCoords.lat} lon={mapCoords.lon} />
       )}
@@ -1494,40 +1654,48 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {/* Company */}
           {company && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="flex items-center justify-between mb-3">
-                <div className="section-label">{t("company")}</div>
+              <div className="section-label mb-3">{t("company")}</div>
+              {/* [LOGO-V/B] Il logo vive SOLO qui: grande, col nome
+                  dell'azienda accanto. Il lato destro della riga si riempie
+                  con verdetto e Glassdoor quando esistono — niente vuoti
+                  fissi (feedback 22/07). */}
+              <div className="flex items-center gap-3 mb-3">
                 {company.logo && (
                   <Avatar
                     name={company.name}
                     src={company.logo}
-                    size="sm"
+                    size="lg"
                     square
                     imgFit="contain"
+                    className="shrink-0"
                   />
                 )}
-              </div>
-              <div className="space-y-2">
-                {company.verdict && (
-                  <div className="flex items-center gap-2 mb-3">
-                    <span
-                      className="text-[10px] font-bold px-2 py-0.5 rounded border"
-                      style={{
-                        color:
-                          company.verdict === "GO"
-                            ? "var(--color-green)"
-                            : company.verdict === "CAUTIOUS"
-                              ? "var(--color-yellow)"
-                              : "var(--color-red)",
-                        borderColor:
-                          company.verdict === "GO"
-                            ? "var(--color-green)"
-                            : company.verdict === "CAUTIOUS"
-                              ? "var(--color-yellow)"
-                              : "var(--color-red)",
-                      }}
-                    >
-                      {company.verdict}
-                    </span>
+                <div className="text-[13px] font-semibold text-[var(--color-white)] min-w-0 flex-1 truncate">
+                  {company.name}
+                </div>
+                {(company.verdict || company.glassdoor_rating) && (
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    {company.verdict && (
+                      <span
+                        className="text-[10px] font-bold px-2 py-0.5 rounded border"
+                        style={{
+                          color:
+                            company.verdict === "GO"
+                              ? "var(--color-green)"
+                              : company.verdict === "CAUTIOUS"
+                                ? "var(--color-yellow)"
+                                : "var(--color-red)",
+                          borderColor:
+                            company.verdict === "GO"
+                              ? "var(--color-green)"
+                              : company.verdict === "CAUTIOUS"
+                                ? "var(--color-yellow)"
+                                : "var(--color-red)",
+                        }}
+                      >
+                        {company.verdict}
+                      </span>
+                    )}
                     {company.glassdoor_rating && (
                       <span className="text-[10px] text-[var(--color-muted)]">
                         Glassdoor: {company.glassdoor_rating}/5
@@ -1535,6 +1703,8 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     )}
                   </div>
                 )}
+              </div>
+              <div className="space-y-2">
                 {company.hq && <InfoRow label={t("c_hq")} value={company.hq} />}
                 {company.sector && (
                   <InfoRow label={t("c_sector")} value={company.sector} />
@@ -1695,6 +1865,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   <FeedbackButtons
                     legacyId={position.legacy_id}
                     initialVerdict={initialVerdict}
+                    initialExcludedReason={
+                      position.user_excluded_reason ?? null
+                    }
+                    initialExcludedNote={position.user_excluded_note ?? null}
                   />
                 ) : undefined
               }
@@ -1792,5 +1966,25 @@ function InfoRow({ label, value }: { label: string; value: string }) {
         {value}
       </span>
     </div>
+  );
+}
+
+// Riga della card Panoramica: due celle (label + valore) del grid a due
+// colonne — il fragment si appiattisce nelle colonne del grid padre, così
+// label e valore restano adiacenti qualunque sia la larghezza della card.
+function OverviewRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <span className="text-[10px] text-[var(--color-dim)]">{label}</span>
+      <span className="text-[11px] text-[var(--color-base)] text-right min-w-0 break-words">
+        {children}
+      </span>
+    </>
   );
 }
