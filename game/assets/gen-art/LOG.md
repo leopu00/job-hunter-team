@@ -204,9 +204,9 @@ della notte sono consegnate e integrate.
     si estraggono gli elementi visti e si generano UNO A UNO con /clear tra
     l'uno e l'altro. Il reference vive in game/docs/reference/.
 
-## ORDINI APERTI
+## ORDINI COMPLETATI
 
-### 2026-07-21 — ORDINE APERTO #5: ritratti dialogo dei 5 ruoli mancanti
+### 2026-07-21 — ORDINE #5: ritratti dialogo dei 5 ruoli mancanti
 
 Verificato durante il test onboarding su Windows (riquadro VUOTO nel
 dialogo con "LO SCRITTORE"): esistono i ritratti di soli 6 ruoli
@@ -224,6 +224,13 @@ dialogo con "LO SCRITTORE"): esistono i ritratti di soli 6 ruoli
 - Identità personaggi: coerenti con gli sprite in-world già in scena
   (`assets/characters/`) — il Critico severo, il Dottore col camice, la
   Sentinella in ronda, il Mantenitore con la chiave inglese.
-- Workaround attivo nel frattempo: il tour fa presentare i reparti
-  all'Assistente, ma il click diretto sull'agente apre ancora il
-  dialogo senza volto.
+- **Completato il 2026-07-22** con 14 asset dipinti 1120x1520 e alpha:
+  - scrittore: `neutro`, `caldo`;
+  - critico: `neutro`, `caldo`, `severo`, `divertito`;
+  - sentinella: `neutro`, `caldo`, `severo`;
+  - dottore: `neutro`, `caldo`, `pensieroso`;
+  - mantenitore: `neutro`, `caldo`.
+- I volti neutri sono stati generati dai riferimenti canonici web + sprite
+  in-world; le emozioni sono derivate dalla rispettiva ancora per conservare
+  identità, abiti, crop e proporzioni. Alpha e dimensioni sono stati validati
+  prima dell'import Godot.
