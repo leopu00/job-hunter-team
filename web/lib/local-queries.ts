@@ -602,6 +602,7 @@ export interface PositionCoord {
   lat: number;
   lon: number;
   is_remote: boolean;
+  remote_type: string | null;
   location: string | null;
   loc_country: string | null;
   loc_city: string | null;
@@ -619,7 +620,7 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
            p.loc_country, p.loc_city, p.office_address, p.created_at,
            s.total_score as score,
            p.office_lat, p.office_lon,
-           p.is_remote
+           p.remote_type
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     WHERE p.status != 'excluded'
@@ -635,6 +636,7 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
       id: sid(r.id),
       score: typeof r.score === "number" ? r.score : null,
       company: r.company ?? null,
+      remote_type: r.remote_type ?? null,
     })),
   );
   const out: PositionCoord[] = [];
@@ -650,7 +652,10 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
       score: typeof r.score === "number" ? r.score : null,
       lat: c.lat,
       lon: c.lon,
-      is_remote: !!r.is_remote,
+      // La colonna is_remote è storicamente sempre false (campo morto):
+      // la verità sta in remote_type.
+      is_remote: r.remote_type === "full_remote",
+      remote_type: (r.remote_type as string | null) ?? null,
       location: r.location ?? null,
       loc_country: r.loc_country ?? null,
       loc_city: r.loc_city ?? null,
@@ -764,13 +769,16 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
     )
     .all() as any[];
   // Qui id/score non servono: interessa solo se il pin è risolvibile
-  // (pins[i] truthy), non lo slot esatto nella griglia nord.
+  // (pins[i] truthy), non lo slot esatto nelle griglie. remote_type sì:
+  // le full remote ora si risolvono (griglia-paese o isola) e devono
+  // uscire da questo bucket.
   const pins = resolveCityPins(
     rows.map((r) => ({
       loc_country: r.loc_country ?? null,
       loc_city: r.loc_city ?? null,
       office_lat: r.office_lat ?? null,
       office_lon: r.office_lon ?? null,
+      remote_type: r.remote_type ?? null,
     })),
   );
   const out: any[] = [];
@@ -783,7 +791,7 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
       status: r.status as string,
       role_family: r.role_family as string | null,
       score: typeof r.score === "number" ? r.score : null,
-      is_remote: !!r.is_remote,
+      is_remote: r.remote_type === "full_remote",
       remote_type: (r.remote_type as string | null) ?? null,
       location: (r.location as string | null) ?? null,
       loc_country: (r.loc_country as string | null) ?? null,
