@@ -19,8 +19,11 @@ import {
   sanitizeDisplayCurrency,
 } from "@/lib/display-currency";
 import { countryFlag } from "@/lib/country-flag";
-import type { PositionHighlight } from "@/lib/types";
-import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
+import {
+  parseAnalysisNotes,
+  parseScoreBreakdown,
+  tagColor,
+} from "@/lib/parse-analysis";
 import { colorForFamily } from "@/lib/position-classifier";
 import { sourceDisplayName } from "@/lib/case-study-sources";
 import { scoreSpectrumCss } from "@/lib/score-color";
@@ -874,14 +877,19 @@ function ScoreBar({
   label,
   value,
   max,
+  detail,
 }: {
   label: string;
   value: number | null;
   max: number;
+  // Razionale della dimensione (scores.breakdown, RULE-09 Scorer): se
+  // presente la riga diventa espandibile via <details> nativo — niente
+  // JS client, funziona anche nel render server.
+  detail?: string;
 }) {
   const pct = value ? Math.round((value / max) * 100) : 0;
   const color = ratioColor(value, max);
-  return (
+  const row = (
     <div className="flex items-center gap-3">
       <span className="text-[10px] text-[var(--color-dim)] w-28 shrink-0">
         {label}
@@ -902,7 +910,36 @@ function ScoreBar({
         {value ?? "—"}
         <span className="text-[var(--color-dim)] font-normal">/{max}</span>
       </span>
+      {/* Slot fisso per il chevron: mantiene allineate le barre con e
+          senza razionale. */}
+      <span className="w-3 shrink-0 flex items-center justify-center">
+        {detail && (
+          <svg
+            viewBox="0 0 10 6"
+            className="w-2.5 h-2.5 text-[var(--color-dim)] transition-transform group-open:rotate-180"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M1 1l4 4 4-4" />
+          </svg>
+        )}
+      </span>
     </div>
+  );
+  if (!detail) return row;
+  return (
+    <details className="group">
+      <summary className="list-none cursor-pointer [&::-webkit-details-marker]:hidden">
+        {row}
+      </summary>
+      <MarkdownLite
+        text={detail}
+        className="mt-1.5 mb-1 ml-1 pl-3 border-l-2 border-[var(--color-border)] text-[11px] text-[var(--color-muted)] leading-relaxed"
+      />
+    </details>
   );
 }
 
@@ -926,9 +963,13 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
   if (!data) notFound();
 
-  const { position, score, highlights, company, application, tickets } = data;
-  const pros = highlights.filter((h: PositionHighlight) => h.type === "pro");
-  const cons = highlights.filter((h: PositionHighlight) => h.type === "con");
+  // NB: data.highlights esiste ancora nel DB ma è segnale interno per gli
+  // agenti (Scorer/Capitano) — la card Pro/Contro duplicava jd_summary,
+  // note del team e razionale dello score (contratto contenuti 2026-07-23).
+  const { position, score, company, application, tickets } = data;
+  // Razionale per-dimensione dello score (RULE-09): mostrato espandibile
+  // sotto ogni barra. Vuoto per gli score precedenti al 2026-07-23.
+  const scoreWhy = parseScoreBreakdown(score?.breakdown);
 
   // Analisi semi-strutturata dell'Analista (campo notes) → metadati,
   // motivo esclusione, disallineamenti, prosa. Vedi lib/parse-analysis.
@@ -1368,64 +1409,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Pro/Con highlights */}
-          {(pros.length > 0 || cons.length > 0) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {pros.length > 0 && (
-                <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-                  <div
-                    className="text-[9.5px] font-semibold tracking-[0.14em] uppercase mb-3"
-                    style={{ color: "var(--color-green)" }}
-                  >
-                    {t("pro")}
-                  </div>
-                  <ul className="space-y-2">
-                    {pros.map((h: PositionHighlight) => (
-                      <li
-                        key={h.id}
-                        className="flex gap-2 text-[11px] text-[var(--color-base)] leading-relaxed"
-                      >
-                        <span
-                          style={{ color: "var(--color-green)" }}
-                          className="shrink-0 mt-0.5"
-                        >
-                          +
-                        </span>
-                        {h.text}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {cons.length > 0 && (
-                <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-                  <div
-                    className="text-[9.5px] font-semibold tracking-[0.14em] uppercase mb-3"
-                    style={{ color: "var(--color-red)" }}
-                  >
-                    {t("con")}
-                  </div>
-                  <ul className="space-y-2">
-                    {cons.map((h: PositionHighlight) => (
-                      <li
-                        key={h.id}
-                        className="flex gap-2 text-[11px] text-[var(--color-base)] leading-relaxed"
-                      >
-                        <span
-                          style={{ color: "var(--color-red)" }}
-                          className="shrink-0 mt-0.5"
-                        >
-                          −
-                        </span>
-                        {h.text}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Score breakdown */}
           {score && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
@@ -1435,26 +1418,31 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   label={t("sb_stack_match")}
                   value={score.stack_match}
                   max={40}
+                  detail={scoreWhy.stack}
                 />
                 <ScoreBar
                   label={t("sb_remote_fit")}
                   value={score.remote_fit}
                   max={25}
+                  detail={scoreWhy.remote}
                 />
                 <ScoreBar
                   label={t("sb_salary_fit")}
                   value={score.salary_fit}
                   max={20}
+                  detail={scoreWhy.salary}
                 />
                 <ScoreBar
                   label={t("sb_experience_fit")}
                   value={score.experience_fit}
                   max={10}
+                  detail={scoreWhy.experience}
                 />
                 <ScoreBar
                   label={t("sb_strategic_fit")}
                   value={score.strategic_fit}
                   max={15}
+                  detail={scoreWhy.strategic}
                 />
               </div>
               {score.notes && (
