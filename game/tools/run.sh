@@ -41,6 +41,8 @@ fi
 case "$MODE" in
 	test)
 		JHT_NOVPS=1 godot --headless --script res://tools/theme_selftest.gd
+		VPS_SETUP_OUT="$(JHT_NOVPS=1 JHT_VPS_SETUP_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$VPS_SETUP_OUT" | grep "VPS-SETUP-TEST PASS"
 		JHT_NOVPS=1 godot --headless --script res://tools/nav_grid_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/speech_bubble_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/pipeline_queue_selftest.gd

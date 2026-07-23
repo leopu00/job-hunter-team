@@ -11,8 +11,11 @@ Electron wizard is not involved.
 - A dedicated Claude, Codex or Kimi subscription.
 - Optionally, three Telegram bots and a dedicated job-alert mailbox.
 
-The native app can generate an Ed25519 key under `~/.jht/ssh/id_ed25519`.
-Add its `.pub` content to the server when creating the VPS.
+The native app can generate a dedicated Ed25519 key under
+`~/.jht/ssh/id_ed25519`. The **Copy public key** button copies only the `.pub`
+line expected by Hetzner; **Open folder** reveals both files and the UI shows
+the fingerprint. The private file never needs to leave the computer and is
+explicitly excluded from migrations.
 
 ## Guided path
 
@@ -20,20 +23,63 @@ Add its `.pub` content to the server when creating the VPS.
 2. Click **Attiva team**, then talk to the **Coordinator** and choose
    **The team will run on a VPS**. The same settings are available directly
    under **Settings → Connect VPS**.
-3. Generate or select the SSH key, enter the server IP, then choose
-   **Install JHT on VPS**. Installation output stays in the embedded console.
-4. Connect to the VPS from the same page. The status turns green when the
-   native backend can read the remote runtime.
-5. In the Coordinator conversation, choose Claude, Codex or Kimi and open
+3. Generate or select the SSH key, copy the public key into the provider's
+   server-creation form and enter the new server IP.
+4. Choose **Verify SSH**. The app verifies key authentication and root access
+   before changing the server.
+5. Choose **Prepare and connect automatically**. It installs the host runtime,
+   writes VPS host mode, pulls and starts the container, saves the connection
+   and switches the office to the remote backend. **Advanced console** keeps a
+   visible recovery path for troubleshooting.
+6. In the Coordinator conversation, choose Claude, Codex or Kimi and open
    subscription login. The provider CLI runs in the embedded console. A
    browser may open only for provider authorization; codes and prompts remain
    visible in the app.
-6. Complete **Profile**. This is a native form and does not require an LLM.
+7. Complete **Profile**. This is a native form and does not require an LLM.
    The scripted Assistant can prefill role, experience and geographic scope.
-7. Optionally configure **Telegram**, **Email** and **Account**. Telegram
+8. Optionally configure **Telegram**, **Email** and **Account**. Telegram
    verifies each token and detects the chat after you press Start in the bot.
-8. Return to **Attiva team** and start the team. Agents appear in the office as
+9. Return to **Attiva team** and start the team. Agents appear in the office as
    their real remote sessions come online.
+
+## Move an existing team to a new VPS
+
+**Settings → Connect VPS → Complete migration** supports both sources:
+
+- this computer (local container), or
+- the VPS currently saved in the native app.
+
+Enter the *destination* IP/key, select the source and confirm. The app:
+
+1. verifies and provisions the destination;
+2. stops the source so SQLite and session files form one coherent snapshot;
+3. transfers `~/.jht` and `~/Documents/Job Hunter Team`, including database,
+   profile, outputs, team configuration, provider login and cloud pairing;
+4. excludes SSH private keys, runtime files and the source `host.env`;
+5. creates a timestamped backup on the destination before extracting;
+6. enforces VPS host mode and safe ownership/credential permissions;
+7. starts the new container (and the team if it was active), archives the old
+   source cloud token and connects the office to the destination.
+
+If snapshot, upload or extraction fails, the old source is restarted. Nothing
+is deleted automatically; the destination backup path is shown in the result.
+
+This single-source handoff is important: do not restart the old team after a
+successful migration unless you are intentionally rolling back.
+
+## Google account and local-only mode
+
+Under **Settings → Account**, **Sign in with Google** starts the cloud device
+flow inside the embedded console. The browser is used only to authenticate and
+approve the displayed code. Google passwords/cookies never enter the game;
+the team stores a revocable `jht_sync_…` device token in `~/.jht/cloud.json`
+with restricted permissions.
+
+Pairing automatically performs the initial push when a database exists. The
+same page exposes status, one-shot sync, profile recovery and pipeline disaster
+recovery (positions, scores and applications). **Stop sync and continue locally** revokes the current device token
+on the server and removes it from the running computer/VPS. Local database,
+profile and generated files are retained and the team continues to work.
 
 ## First-run conversations
 
