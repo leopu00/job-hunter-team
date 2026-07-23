@@ -136,7 +136,7 @@ func _series_suffix(s: Dictionary) -> String:
 ## ── Resa ──────────────────────────────────────────────────────────────
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.035, 0.037, 0.052, 0.92))
+	draw_rect(Rect2(Vector2.ZERO, size), Color(Palette.CARD.r, Palette.CARD.g, Palette.CARD.b, 0.96))
 	draw_rect(Rect2(Vector2.ZERO, size), Palette.BORDER_GLOW, false, 1.0)
 	var plot := _plot_rect()
 	if plot.size.x < 40.0 or plot.size.y < 40.0:
@@ -168,7 +168,8 @@ func _draw_y_axis(plot: Rect2, peak: float) -> void:
 		var frac := float(i) / 4.0
 		var y := plot.end.y - plot.size.y * frac
 		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y),
-				Color(0.35, 0.37, 0.46, 0.30 if i == 0 else 0.16), 1.0)
+				Color(Palette.BORDER.r, Palette.BORDER.g, Palette.BORDER.b,
+						0.72 if i == 0 else 0.42), 1.0)
 		# in multi-asse l'etichetta numerica unica mentirebbe (ogni serie
 		# ha la sua scala): i valori veri stanno su hover e legenda
 		if _font and not multi_axis:
@@ -196,7 +197,7 @@ func _draw_time_axis(plot: Rect2) -> void:
 	while t <= _to_ts:
 		var x := _x_for(t, plot)
 		draw_line(Vector2(x, plot.position.y), Vector2(x, plot.end.y),
-				Color(0.35, 0.37, 0.46, 0.14), 1.0)
+				Color(Palette.BORDER.r, Palette.BORDER.g, Palette.BORDER.b, 0.36), 1.0)
 		if _font:
 			var lbl := _fmt_tick(t, span)
 			var w := _font.get_string_size(lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
@@ -345,7 +346,7 @@ func _draw_hover(plot: Rect2, peak: float, visible: Array) -> void:
 		bx = x - box_w - 12.0
 	var by := plot.position.y + 8.0
 	draw_rect(Rect2(Vector2(bx, by), Vector2(box_w, box_h)),
-			Color(0.02, 0.02, 0.03, 0.94))
+			Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.97))
 	draw_rect(Rect2(Vector2(bx, by), Vector2(box_w, box_h)),
 			Palette.BORDER_GLOW, false, 1.0)
 	for i in lines.size():

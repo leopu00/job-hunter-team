@@ -2,11 +2,13 @@ class_name BracketPanel
 extends PanelContainer
 ## Pannello HUD con i brackets a L verdi agli angoli, come sul sito.
 
-@export var bracket_color: Color = Palette.GREEN
+@export var bracket_color := Color.TRANSPARENT
 @export var bracket_len := 16.0
 @export var bracket_width := 2.0
 
 func _ready() -> void:
+	if bracket_color == Color.TRANSPARENT:
+		bracket_color = Palette.GREEN
 	resized.connect(queue_redraw)
 
 func _draw() -> void:

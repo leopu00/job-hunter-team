@@ -43,6 +43,7 @@ const GROUPS := [
 			{"id": "telegram", "icon": "✈", "label": "Telegram"},
 			{"id": "account", "icon": "👤", "label": "Account"},
 			{"id": "email", "icon": "📧", "label": "Email"},
+			{"id": "appearance", "icon": "◐", "label": "Aspetto"},
 			{"id": "language", "icon": "🌐", "label": "Lingua"},
 			{"id": "advanced", "icon": "⚙", "label": "Avanzate"},
 		],

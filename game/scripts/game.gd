@@ -42,6 +42,7 @@ func _enter_tree() -> void:
 				usable.position + usable.size - wsize - Vector2i(8, 8))
 
 func _ready() -> void:
+	RenderingServer.set_default_clear_color(Palette.VOID)
 	# Shot-quiet: la finestrella resta cliccabile anche senza focus — un
 	# click VERO dell'utente al lavoro può aprire pannelli e falsare lo
 	# shot (successo: pagina Mentor aperta da sola in uno sweep). Sordi
@@ -140,7 +141,7 @@ func _show_loading() -> void:
 	_loading_veil = CanvasLayer.new()
 	_loading_veil.layer = 90
 	var rect := ColorRect.new()
-	rect.color = Color(0.024, 0.024, 0.031)
+	rect.color = Palette.VOID
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_loading_veil.add_child(rect)
 	var center := CenterContainer.new()
@@ -181,6 +182,37 @@ func mark_onboarding_done() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("onboarding", "done", true)
 	cfg.save(ONBOARDING_CFG)
+
+
+# ── Aspetto interfaccia ─────────────────────────────────────────────
+
+func set_ui_theme(requested: String) -> void:
+	if requested not in [Palette.MODE_DARK, Palette.MODE_LIGHT]:
+		return
+	if not Palette.set_mode(requested):
+		return
+	TerminalTheme.reset()
+	RenderingServer.set_default_clear_color(Palette.VOID)
+	Log.info("ui", "tema interfaccia → %s" % requested)
+	_reload_ui_theme.call_deferred()
+
+
+func _reload_ui_theme() -> void:
+	# Gli override colore vengono creati insieme ai controlli. Ricostruire la
+	# scena corrente applica il cambio a ogni finestra senza lasciare widget
+	# metà dark e metà light; gli autoload e la connessione VPS restano vivi.
+	if get_tree().current_scene:
+		var err := get_tree().reload_current_scene()
+		if err != OK:
+			Log.warn("ui", "reload tema fallito: %s" % error_string(err))
+			return
+		# Il giocatore resta nello stesso punto delle impostazioni dopo il cambio,
+		# anziché dover riaprire menu e pagina Aspetto.
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var sidebars := get_tree().get_nodes_in_group("game_sidebar")
+		if not sidebars.is_empty():
+			sidebars[0].open_section("appearance")
 
 # ── Pausa ─────────────────────────────────────────────────────────────
 

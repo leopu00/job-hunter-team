@@ -8,10 +8,6 @@ extends VBoxContainer
 ##   3. donut della quota sul totale
 ##   4. heatmap ora × giorno — i turni di consumo a colpo d'occhio
 
-const AGENT_COLORS := [Palette.GREEN, Palette.BLUE, Palette.PURPLE,
-		Palette.YELLOW, Palette.ORANGE, Palette.RED, Palette.MINT,
-		Color("#e879f9"), Color("#38bdf8"), Color("#facc15"),
-		Color("#4ade80"), Color("#fb7185")]
 const RANK_MAX := 14      # righe in classifica (oltre: "(altri)")
 const DONUT_MAX := 8      # spicchi nominati nel donut
 
@@ -140,7 +136,15 @@ func _ranked_agents() -> Array:
 	return names
 
 func _color_of(rank: int) -> Color:
-	return AGENT_COLORS[rank % AGENT_COLORS.size()]
+	var colors := Palette.accent_cycle()
+	colors.append_array([
+		Color("#a832a8") if Palette.is_light() else Color("#e879f9"),
+		Color("#087aa5") if Palette.is_light() else Color("#38bdf8"),
+		Color("#8a6500") if Palette.is_light() else Color("#facc15"),
+		Color("#167343") if Palette.is_light() else Color("#4ade80"),
+		Color("#b52f50") if Palette.is_light() else Color("#fb7185"),
+	])
+	return colors[rank % colors.size()]
 
 func _render() -> void:
 	var w := UsageRangeBar.window()
@@ -445,7 +449,7 @@ class AgentHeatmap:
 		queue_redraw()
 
 	func _draw() -> void:
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.035, 0.037, 0.052, 0.92))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(Palette.CARD.r, Palette.CARD.g, Palette.CARD.b, 0.96))
 		draw_rect(Rect2(Vector2.ZERO, size), Palette.BORDER_GLOW, false, 1.0)
 		var left := 44.0
 		var top := 8.0
@@ -461,7 +465,7 @@ class AgentHeatmap:
 				var rect := Rect2(Vector2(left + cw * hour, top + ch * day),
 						Vector2(cw - 1.0, ch - 1.0))
 				if v <= 0.0:
-					draw_rect(rect, Color(1, 1, 1, 0.03))
+					draw_rect(rect, Color(Palette.BORDER.r, Palette.BORDER.g, Palette.BORDER.b, 0.24))
 				else:
 					var f := clampf(v / _peak, 0.04, 1.0)
 					draw_rect(rect, Color(Palette.GREEN.r, Palette.GREEN.g,

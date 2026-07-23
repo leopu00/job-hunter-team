@@ -156,6 +156,8 @@ func _build(page := "") -> void:
 				_build_positions()
 		"language":
 			_build_language()
+		"appearance":
+			_build_appearance()
 		"profile":
 			_build_profile()
 		"hours":
@@ -1297,6 +1299,45 @@ func _on_profile_saved(ok: bool, error: String) -> void:
 	if is_instance_valid(_prof_save_btn):
 		_prof_save_btn.disabled = false
 
+
+## Impostazioni → Aspetto: preferenza solo locale. Il cambio ricostruisce la
+## scena corrente, quindi raggiunge anche popup e override colore già creati.
+func _build_appearance() -> void:
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("appearance.intro"), 14, Palette.MUTED))
+	_content.add_child(HSeparator.new())
+	var current := TerminalTheme.label(
+			UIStrings.t("appearance.current") % UIStrings.t(
+					"appearance.light" if Palette.is_light() else "appearance.dark"),
+			16, Palette.BRIGHT, "bold")
+	_content.add_child(current)
+	var choices := HBoxContainer.new()
+	choices.add_theme_constant_override("separation", 16)
+	_content.add_child(choices)
+	for spec in [
+		[Palette.MODE_LIGHT, "☀", "appearance.light", "appearance.light_desc"],
+		[Palette.MODE_DARK, "◐", "appearance.dark", "appearance.dark_desc"],
+	]:
+		var selected: bool = Palette.mode == spec[0]
+		var button := Button.new()
+		button.text = "%s  %s%s\n%s" % [spec[1],
+				UIStrings.t(spec[2]).to_upper(), "  ✓" if selected else "",
+				UIStrings.t(spec[3])]
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.custom_minimum_size = Vector2(360, 104)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_font_size_override("font_size", 15)
+		button.add_theme_color_override("font_color",
+				Palette.GREEN if selected else Palette.BASE)
+		button.add_theme_color_override("font_disabled_color", Palette.GREEN)
+		button.disabled = selected
+		var requested := str(spec[0])
+		button.pressed.connect(func() -> void: Game.set_ui_theme(requested))
+		choices.add_child(button)
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("appearance.note"), 13, Palette.DIM))
+
 ## Impostazioni → Lingua: le 7 lingue del web. Il cambio si applica
 ## subito a ciò che viene (ri)costruito; la scena intorno si aggiorna
 ## man mano che i pannelli si riaprono.
@@ -1323,12 +1364,14 @@ func _build_language() -> void:
 
 # ── Posizioni: la pagina positions del web privato, dati veri ────────
 
-## Stessi colori-fase della pipeline web (status → colore).
-const POS_STATUS_COLORS := {
-	"new": Palette.MUTED, "checked": Palette.BLUE, "scored": Palette.PURPLE,
-	"writing": Palette.YELLOW, "review": Palette.ORANGE, "ready": Palette.MINT,
-	"applied": Palette.GREEN, "response": Palette.BLUE, "excluded": Palette.RED,
-}
+## Stessi colori-fase della pipeline web (status → colore), risolti a runtime
+## perché gli accenti hanno una variante a contrasto alto nel tema light.
+static func _pos_status_color(status: String, fallback: Color) -> Color:
+	return {
+		"new": Palette.MUTED, "checked": Palette.BLUE, "scored": Palette.PURPLE,
+		"writing": Palette.YELLOW, "review": Palette.ORANGE, "ready": Palette.MINT,
+		"applied": Palette.GREEN, "response": Palette.BLUE, "excluded": Palette.RED,
+	}.get(status, fallback)
 const POS_STATUS_ORDER := ["new", "checked", "scored", "writing", "review",
 		"ready", "applied", "response", "excluded"]
 const POS_PAGE_SIZES := [25, 50, 100, 200]
@@ -1590,7 +1633,7 @@ func _build_agent_page() -> void:
 		row.add_child(what)
 		var to_st := str(t.get("to_state", "?"))
 		row.add_child(TerminalTheme.label("→ " + to_st, 13,
-				POS_STATUS_COLORS.get(to_st, Palette.MUTED), "medium"))
+				_pos_status_color(to_st, Palette.MUTED), "medium"))
 
 	# le sue COMUNICAZIONI nel team (i core non lavorano posizioni, ma
 	# parlano: senza questo blocco la pagina di Assistente/Mentor è vuota)
@@ -1621,7 +1664,8 @@ func _build_agent_page() -> void:
 
 func _on_config_refresh(_settings: Dictionary) -> void:
 	if is_instance_valid(_content) and section in ["hours",
-			"provider", "docker", "account", "email", "language", "advanced"]:
+			"provider", "docker", "account", "email", "appearance", "language",
+			"advanced"]:
 		_build()
 
 ## Posizioni filtrate da tutti i gruppi tranne `skip` (cross-filter).
@@ -1808,7 +1852,7 @@ func _pos_row(p: Dictionary) -> Control:
 	row.add_child(sal_lbl)
 	var st := _pos_value(p, "status")
 	var st_lbl := TerminalTheme.label(st, 13,
-			POS_STATUS_COLORS.get(st, Palette.MUTED), "medium")
+			_pos_status_color(st, Palette.MUTED), "medium")
 	st_lbl.custom_minimum_size = Vector2(90, 0)
 	row.add_child(st_lbl)
 	# aria a destra: la scrollbar non deve coprire lo stato
@@ -1825,9 +1869,9 @@ const SCORE_WEIGHTS := [
 	["salary_fit", "Salary", 20], ["experience_fit", "Experience", 10],
 	["strategic_fit", "Strategic", 15],
 ]
-const VERDICT_COLORS := {
-	"PASS": Palette.GREEN, "NEEDS_WORK": Palette.YELLOW, "REJECT": Palette.RED,
-}
+static func _verdict_color(verdict: String) -> Color:
+	return {"PASS": Palette.GREEN, "NEEDS_WORK": Palette.YELLOW,
+			"REJECT": Palette.RED}.get(verdict, Palette.MUTED)
 
 var _pos_detail_id := 0
 
@@ -1882,7 +1926,7 @@ func _build_pos_detail() -> void:
 			14, Palette.MUTED))
 	var st := _pos_value(p, "status")
 	sub.add_child(TerminalTheme.label(st, 14,
-			POS_STATUS_COLORS.get(st, Palette.MUTED), "bold"))
+			_pos_status_color(st, Palette.MUTED), "bold"))
 	if p.get("found_by"):
 		box.add_child(TerminalTheme.label(UIStrings.t("pos.found") % [
 				str(p["found_by"]), str(p.get("found_at", "")).left(10)], 13, Palette.DIM))
@@ -1983,7 +2027,7 @@ func _build_pos_detail() -> void:
 		var verdict := str(p.get("critic_verdict", ""))
 		if verdict != "" and verdict != "<null>":
 			crow.add_child(TerminalTheme.label(verdict, 15,
-					VERDICT_COLORS.get(verdict, Palette.MUTED), "bold"))
+					_verdict_color(verdict), "bold"))
 		if p.get("critic_notes"):
 			box.add_child(_pos_paragraph(str(p["critic_notes"])))
 	else:
@@ -2460,11 +2504,11 @@ func _build_activity() -> void:
 			row.add_child(title_lbl)
 			var from_st := str(t.get("from_state", "") if t.get("from_state") else "—")
 			row.add_child(TerminalTheme.label(from_st, 13,
-					POS_STATUS_COLORS.get(from_st, Palette.DIM)))
+					_pos_status_color(from_st, Palette.DIM)))
 			row.add_child(TerminalTheme.label("→", 13, Palette.DIM))
 			var to_st := str(t.get("to_state", "?"))
 			row.add_child(TerminalTheme.label(to_st, 13,
-					POS_STATUS_COLORS.get(to_st, Palette.MUTED), "medium"))
+					_pos_status_color(to_st, Palette.MUTED), "medium"))
 			var pad := Control.new()
 			pad.custom_minimum_size = Vector2(14, 0)
 			row.add_child(pad)
@@ -2534,12 +2578,12 @@ func _build_apps() -> void:
 			row.add_child(btn)
 			var status := str(p.get("status", ""))
 			row.add_child(TerminalTheme.label(UIStrings.t(APP_STAGES[status]), 14,
-					POS_STATUS_COLORS.get(status, Palette.MUTED), "medium"))
+					_pos_status_color(status, Palette.MUTED), "medium"))
 			var verdict := str(p.get("critic_verdict", "")
 					if p.get("critic_verdict") != null else "")
 			if verdict != "":
 				row.add_child(TerminalTheme.label(verdict, 13,
-						VERDICT_COLORS.get(verdict, Palette.MUTED), "bold"))
+						_verdict_color(verdict), "bold"))
 		return
 	var apps: Array = TeamData.applications()
 	if apps.is_empty():
@@ -2694,7 +2738,7 @@ func _build_notifs() -> void:
 				continue
 			var what := "%s — %s" % [str(tr.get("title", "?")), str(tr.get("company", "?"))]
 			items.append({"ts": str(tr.get("ts", "")), "icon": "●",
-					"color": POS_STATUS_COLORS.get(to, Palette.GREEN),
+					"color": _pos_status_color(to, Palette.GREEN),
 					"text": UIStrings.t(NOTIF_STATES[to]) % what})
 		items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 			return str(a["ts"]) > str(b["ts"]))
