@@ -21,7 +21,7 @@
 #
 # Trigger gate: parte se active_provider è settato in jht.config.json E
 # le credenziali del provider sono presenti. Telegram NON è più richiesto:
-# l'interazione è web-first (chat/feedback dalla dashboard), Telegram è un
+# l'interazione vive nell'app desktop (chat/feedback dal gioco), Telegram è un
 # canale secondario opzionale. Richiederlo bloccava Capitano/Mentor in
 # modalità no-telegram (il watchdog non li spawnava mai → team monco al boot).
 

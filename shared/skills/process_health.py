@@ -47,7 +47,9 @@ EXPECTED = [
     ("doctor-watchdog",    "doctor-watchdog.sh",    "pid1-child"),
     ("auto-report-loop",   "auto-report-loop.sh",   "pid1-child"),
     ("cloud-daemon",       "cloud daemon",          "daemon"),
-    ("dashboard",          "jht.js dashboard",      "daemon"),
+    # 2026-07-23: 'dashboard' RIMOSSA dalla lista — la web UI locale è stata
+    # ritirata (pid1 non la avvia più). Lasciarla attesa faceva scattare il
+    # flap-cap e una falsa escalation al Capitano al primo boot.
     ("pid1",               "jht.js pid1",           "core"),
 ]
 TG_MARKER = "tg-bridge.py"
@@ -87,8 +89,8 @@ def _cloud_daemon_expected():
     """Il cloud-daemon va atteso SOLO se il cloud sync è configurato e abilitato.
 
     pid1 lo avvia con lo stesso predicato (cli/src/commands/pid1.js → cloud.json
-    `enabled === true && typeof token === 'string'`); `dashboard` gira sempre,
-    il cloud-daemon è IN PIÙ solo quando il pairing è attivo. Su istanze con
+    `enabled === true && typeof token === 'string'`); il cloud-daemon gira
+    SOLO quando il pairing è attivo. Su istanze con
     cloud disabilitato (es. betaB, `enabled: false` dal 2026-05-22 per quota
     Vercel) pid1 NON lo avvia → marcarlo atteso lo fa vedere "morto" al
     watchdog, che scala a vuoto (falso positivo). Default prudente: False se
