@@ -57,6 +57,12 @@ static func _translations() -> Dictionary:
 const S := {
 	# ── Title screen ──────────────────────────────────────────────
 	"title.wordmark": "JOB HUNTER TEAM",
+	"title.name_title": "Presentiamoci",
+	"title.name_sub": "Come ti chiami? Il team ti chiamerà per nome.",
+	"title.name_first": "Nome",
+	"title.name_last": "Cognome (facoltativo)",
+	"title.name_enter": "ENTRA IN UFFICIO",
+	"title.name_skip": "Preferisco non dirlo, entriamo",
 	"title.press_enter": "▶ PREMI INVIO",
 	"title.footer": "prototipo — dati mock, nessun backend",
 	"title.hint_pause": "ESC menu",
@@ -149,6 +155,7 @@ const S := {
 	"tour.chk_profile": "Profilo completo",
 	"tour.hint_talk": "Clicca l'Assistente col diamante per iniziare il giro.",
 	"tour.hint_follow": "L'Assistente ti fa strada: seguila, pensa a tutto lei.",
+	"tour.hint_free": "Giro libero: clicca chi ha il diamante, in qualsiasi ordine.",
 	"tour.hint_launch": "Completa i tre requisiti: il pulsante giallo in alto apre la checklist.",
 	"tour.skip": "SALTA IL TOUR",
 	"tour.done": "TOUR COMPLETATO ✓",

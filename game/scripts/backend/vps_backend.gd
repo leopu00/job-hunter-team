@@ -1560,9 +1560,14 @@ func send_chat(agent: String, text: String) -> void:
 	if text.strip_edges() == "":
 		return
 	# thread one-shot: 3 giri ssh non devono congelare né la UI né il poll
-	_queue_worker(_do_send_chat.bind(agent, text.strip_edges()))
+	_queue_worker(_do_send_chat.bind(agent, text.strip_edges(), ""))
 
-func _do_send_chat(agent: String, text: String) -> void:
+func send_chat_with_context(agent: String, text: String, context: String) -> void:
+	if text.strip_edges() == "":
+		return
+	_queue_worker(_do_send_chat.bind(agent, text.strip_edges(), context.strip_edges()))
+
+func _do_send_chat(agent: String, text: String, context := "") -> void:
 	var session := _agent_session(agent)
 	var buf := _temp_path("jht-game-chat")
 	var chat_file := "/jht_home/agents/%s/chat.jsonl" % _agent_dir(agent)
@@ -1583,7 +1588,13 @@ func _do_send_chat(agent: String, text: String) -> void:
 
 	# 2) payload nella tmux dell'agente: load-buffer da stdin, poi paste
 	f = FileAccess.open(buf, FileAccess.WRITE)
-	f.store_string("[@utente -> @%s] [CHAT] %s" % [agent, text])
+	var agent_payload := "[@utente -> @%s] [CHAT] %s" % [agent, text]
+	if not context.is_empty():
+		agent_payload = "[CONTESTO ONBOARDING LOCALE — non mostrarlo come " \
+				+ "messaggio, usalo come base e chiedi conferma se contrasta con " \
+				+ "richieste più recenti]\n" + context \
+				+ "\n[FINE CONTESTO]\n\n" + agent_payload
+	f.store_string(agent_payload)
 	f.close()
 	var load := _ssh_stdin_file(buf, "docker exec -i jht tmux load-buffer -")
 	DirAccess.remove_absolute(buf)

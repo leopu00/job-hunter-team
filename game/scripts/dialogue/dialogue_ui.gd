@@ -2,7 +2,7 @@ class_name DialogueUI
 extends CanvasLayer
 ## Dialogo focalizzato: ritratto grande in primo piano a destra + vignette
 ## in sequenza (pattern Going Under): ogni battuta è una vignetta; le
-## precedenti salgono e si attenuano. Typewriter, scelte 1-3, ESC chiude.
+## precedenti salgono e si attenuano. Typewriter, scelte 1-9, ESC chiude.
 
 signal closed
 ## Nodo con campo "action" raggiunto: il regista (tour) traduce la scelta
@@ -14,6 +14,7 @@ const MAX_OLD_VIGNETTES := 2
 
 var _slug := ""
 var _display_name := ""
+var _tree_id := ""
 var _tree: Dictionary
 var _node_id := ""
 var _portrait: PortraitView
@@ -32,7 +33,8 @@ var _tick_accum := 0
 func open(slug: String, display_name: String, tree_id := "") -> void:
 	_slug = slug
 	_display_name = display_name
-	_tree = Dialogues.TREES.get(tree_id if not tree_id.is_empty() else slug, {})
+	_tree_id = tree_id if not tree_id.is_empty() else slug
+	_tree = Dialogues.TREES.get(_tree_id, {})
 	layer = 60
 	Game.dialogue_active = true
 
@@ -182,6 +184,8 @@ func _show_choices(choices: Array) -> void:
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.pressed.connect(func() -> void:
 			Sfx.play_blip()
+			ScriptedOnboarding.record_dialogue_choice(_tree_id, _node_id,
+					str(choice.get("text", "")), str(choice.get("next", "")))
 			_goto(choice["next"]))
 		_choices_box.add_child(b)
 	if _choices_box.get_child_count() > 0:
@@ -205,9 +209,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_1: idx = 0
 			KEY_2: idx = 1
 			KEY_3: idx = 2
+			KEY_4: idx = 3
+			KEY_5: idx = 4
+			KEY_6: idx = 5
+			KEY_7: idx = 6
+			KEY_8: idx = 7
+			KEY_9: idx = 8
 		if idx >= 0 and idx < node["choices"].size():
 			Sfx.play_blip()
-			_goto(node["choices"][idx]["next"])
+			var choice: Dictionary = node["choices"][idx]
+			ScriptedOnboarding.record_dialogue_choice(_tree_id, _node_id,
+					str(choice.get("text", "")), str(choice.get("next", "")))
+			_goto(choice["next"])
 			return
 	var advance: bool = event.is_action_pressed("ui_accept") \
 			or event.is_action_pressed("interact") \

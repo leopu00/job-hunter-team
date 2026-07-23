@@ -36,5 +36,5 @@ func _refresh() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.92)
 	style.border_color = Color(color.r, color.g, color.b, 0.85)
-	style.set_border_width_all(1)
+	style.set_border_width_all(TerminalTheme.hairline())
 	add_theme_stylebox_override("panel", style)

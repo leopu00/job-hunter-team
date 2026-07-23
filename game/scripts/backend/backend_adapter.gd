@@ -39,6 +39,11 @@ func close_chat() -> void:
 func send_chat(_agent: String, _text: String) -> void:
 	pass
 
+## Variante con contesto authored locale. Un adapter semplice può ignorare il
+## contesto senza rompere la chat; quello VPS lo consegna fuori banda all'LLM.
+func send_chat_with_context(agent: String, text: String, _context: String) -> void:
+	send_chat(agent, text)
+
 
 ## ── Stream terminale agente (sola lettura) ──────────────────────────
 

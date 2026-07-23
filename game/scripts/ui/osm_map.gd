@@ -324,7 +324,7 @@ func _rebuild_card() -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.96)
 	sb.border_color = Palette.BORDER_GLOW
-	sb.set_border_width_all(1)
+	sb.set_border_width_all(TerminalTheme.hairline())
 	sb.content_margin_left = 12
 	sb.content_margin_right = 12
 	sb.content_margin_top = 8
@@ -384,7 +384,7 @@ func _rebuild_card() -> void:
 		var hover := StyleBoxFlat.new()
 		hover.bg_color = Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, 0.10)
 		hover.border_color = Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, 0.35)
-		hover.set_border_width_all(1)
+		hover.set_border_width_all(TerminalTheme.hairline())
 		row_btn.add_theme_stylebox_override("hover", hover)
 		row_btn.add_theme_stylebox_override("pressed", hover.duplicate())
 		row_btn.pressed.connect(func() -> void:

@@ -2,6 +2,12 @@ extends RefCounted
 ## Traduzioni EN — stesse chiavi di UIStrings.S (fallback: italiano).
 const S := {
 	"title.wordmark": "JOB HUNTER TEAM",
+	"title.name_title": "Introductions first",
+	"title.name_sub": "What is your name? The team will use it.",
+	"title.name_first": "First name",
+	"title.name_last": "Last name (optional)",
+	"title.name_enter": "ENTER THE OFFICE",
+	"title.name_skip": "I'd rather not say, let's go in",
 	"title.press_enter": "▶ PRESS ENTER",
 	"title.footer": "prototype — mock data, no backend",
 	"title.hint_pause": "ESC menu",
@@ -41,6 +47,7 @@ const S := {
 	"tour.chk_profile": "Profile complete",
 	"tour.hint_talk": "Click the Assistant with the diamond to start the tour.",
 	"tour.hint_follow": "The Assistant leads the way: follow her, she handles everything.",
+	"tour.hint_free": "Free tour: click anyone with a diamond, in any order.",
 	"tour.hint_launch": "Complete the three requirements: the yellow button on top opens the checklist.",
 	"tour.skip": "SKIP THE TOUR",
 	"tour.done": "TOUR COMPLETE ✓",

@@ -100,7 +100,83 @@ func _unhandled_input(event: InputEvent) -> void:
 	if (event.is_action_pressed("ui_accept") or clicked) and not _leaving:
 		_leaving = true
 		Sfx.play_confirm()
+		# Primo avvio: prima dell'ufficio ci si presenta — così l'Assistente
+		# può chiamare l'utente per nome fin dal primo saluto (Leone 22/07).
+		if ScriptedOnboarding.player_first_name() == "" and TourGuide.active():
+			_show_name_entry()
+		else:
+			_fade_out()
+
+
+## Modulo di presentazione: nome (necessario per proseguire col nome) e
+## cognome facoltativo; chi preferisce può entrare senza dirlo.
+func _show_name_entry() -> void:
+	var dim := ColorRect.new()
+	dim.color = Color(Palette.VOID.r, Palette.VOID.g, Palette.VOID.b, 0.72)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(center)
+	var panel := BracketPanel.new()
+	panel.bracket_len = 22
+	center.add_child(panel)
+	var pad := MarginContainer.new()
+	for side in ["left", "right"]:
+		pad.add_theme_constant_override("margin_" + side, 46)
+	for side in ["top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 34)
+	panel.add_child(pad)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	pad.add_child(box)
+
+	var title := TerminalTheme.label(UIStrings.t("title.name_title"), 26,
+			Palette.WHITE, "xbold")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(title)
+	var sub := TerminalTheme.label(UIStrings.t("title.name_sub"), 15, Palette.BASE)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(sub)
+
+	var first := LineEdit.new()
+	first.placeholder_text = UIStrings.t("title.name_first")
+	first.custom_minimum_size = Vector2(420, 0)
+	first.max_length = 40
+	box.add_child(first)
+	var last := LineEdit.new()
+	last.placeholder_text = UIStrings.t("title.name_last")
+	last.custom_minimum_size = Vector2(420, 0)
+	last.max_length = 60
+	box.add_child(last)
+
+	var enter := Button.new()
+	enter.text = UIStrings.t("title.name_enter")
+	enter.disabled = true
+	box.add_child(enter)
+	var skip := Button.new()
+	skip.flat = true
+	skip.text = UIStrings.t("title.name_skip")
+	skip.add_theme_font_size_override("font_size", 13)
+	skip.add_theme_color_override("font_color", Palette.MUTED)
+	skip.add_theme_color_override("font_hover_color", Palette.WHITE)
+	box.add_child(skip)
+
+	var confirm := func() -> void:
+		if first.text.strip_edges().is_empty():
+			return
+		ScriptedOnboarding.set_player_name(first.text, last.text)
+		Sfx.play_confirm()
 		_fade_out()
+	first.text_changed.connect(func(value: String) -> void:
+		enter.disabled = value.strip_edges().is_empty())
+	first.text_submitted.connect(func(_v: String) -> void: last.grab_focus())
+	last.text_submitted.connect(func(_v: String) -> void: confirm.call())
+	enter.pressed.connect(confirm)
+	skip.pressed.connect(func() -> void:
+		Sfx.play_back()
+		_fade_out())
+	first.grab_focus()
 
 ## Dissolvenza a nero sopra tutto, poi sempre nell'ufficio. Il setup non è
 ## più un tunnel prima del prodotto: container, provider e profilo si

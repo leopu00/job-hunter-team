@@ -11,6 +11,12 @@ var _debug_on := false
 
 func _enter_tree() -> void:
 	_debug_on = OS.get_environment("JHT_LOG") == "debug"
+	# La sessione precedente sopravvive in .prev.log: dopo un crash il log
+	# corrente riparte vuoto e la diagnosi andrebbe persa (crash Docker 21/07).
+	var live := ProjectSettings.globalize_path("user://jht-game.log")
+	if FileAccess.file_exists(live):
+		DirAccess.rename_absolute(live,
+				ProjectSettings.globalize_path("user://jht-game.prev.log"))
 	_file = FileAccess.open("user://jht-game.log", FileAccess.WRITE)
 	info("boot", "log aperto — versione %s, %s" % [
 		ProjectSettings.get_setting("application/config/version", "dev"),

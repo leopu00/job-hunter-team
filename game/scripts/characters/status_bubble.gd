@@ -10,9 +10,11 @@ var _text := ""
 var _alpha := 0.0
 var _target_alpha := 0.0
 var _font: Font
+var _fs := FONT_SIZE  # compensato sotto scala 1 (leggibilità 1366x768)
 
 func _ready() -> void:
 	_font = load(TerminalTheme.FONT_REGULAR)
+	_fs = int(round(FONT_SIZE * TerminalTheme.text_boost()))
 	z_index = 50  # sopra i personaggi, sotto l'HUD
 
 func show_text(text: String, duration := 3.5) -> void:
@@ -41,7 +43,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if _alpha <= 0.01 or _text.is_empty():
 		return
-	var size := _font.get_string_size(_text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE)
+	var size := _font.get_string_size(_text, HORIZONTAL_ALIGNMENT_LEFT, -1, _fs)
 	var box := Rect2(Vector2(-size.x / 2.0 - PAD.x, -size.y - PAD.y * 2.0 - 10.0),
 			Vector2(size.x + PAD.x * 2.0, size.y + PAD.y * 2.0))
 	var rise := (1.0 - _alpha) * 4.0  # piccolo slide-in verticale
@@ -56,5 +58,5 @@ func _draw() -> void:
 	])
 	draw_colored_polygon(tail, bg)
 	draw_string(_font, box.position + Vector2(PAD.x, PAD.y + size.y - 4), _text,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, _fs,
 			Color(Palette.BASE.r, Palette.BASE.g, Palette.BASE.b, _alpha))
