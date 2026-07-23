@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  DEMO_PERSONA_COOKIE,
+  DEMO_FEEDBACK_COOKIE,
+  WELCOME_SEEN_COOKIE,
+} from "@/lib/demo/mode";
 
 // Difesa contro open redirect: solo path relativi che iniziano con
 // `/` ma non `//` (protocol-relative URL → punterebbero a domini
@@ -21,7 +26,19 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      const res = NextResponse.redirect(`${origin}${next}`);
+      // Login = identità (potenzialmente) nuova: lo stato demo/onboarding è
+      // del BROWSER, non dell'account — senza questo reset un utente appena
+      // registrato eredita la demo e il "wizard già visto" di chi usava il
+      // browser prima, saltando l'onboarding (visto sul campo 23/07).
+      for (const c of [
+        DEMO_PERSONA_COOKIE,
+        DEMO_FEEDBACK_COOKIE,
+        WELCOME_SEEN_COOKIE,
+      ]) {
+        res.cookies.delete(c);
+      }
+      return res;
     }
   }
 
