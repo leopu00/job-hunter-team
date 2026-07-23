@@ -1327,12 +1327,17 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   if (error || !data) return [];
   const rows = data as any[];
   const pins = resolveCityPins(
-    rows.map((p) => ({
-      loc_country: p.loc_country ?? null,
-      loc_city: p.loc_city ?? null,
-      office_lat: p.office_lat,
-      office_lon: p.office_lon,
-    })),
+    rows.map((p) => {
+      const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
+      return {
+        loc_country: p.loc_country ?? null,
+        loc_city: p.loc_city ?? null,
+        office_lat: p.office_lat,
+        office_lon: p.office_lon,
+        id: String(p.id),
+        score: typeof s?.total_score === "number" ? s.total_score : null,
+      };
+    }),
   );
   const out: local.PositionCoord[] = [];
   rows.forEach((p, i) => {
@@ -1512,6 +1517,8 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
     .is("deleted_at", null);
   if (error || !data) return [];
   const rows = data as any[];
+  // Qui id/score non servono: interessa solo se il pin è risolvibile
+  // (pins[i] truthy), non lo slot esatto nella griglia nord.
   const pins = resolveCityPins(
     rows.map((p) => ({
       loc_country: p.loc_country ?? null,

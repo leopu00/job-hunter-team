@@ -763,13 +763,6 @@ export default function JobsGlobe({
   // Trigger di re-render quando lo zoom/pan cambia → recompute clustered.
   const [reclusterTick, setReclusterTick] = useState(0);
 
-  // Micro-jitter deterministico per pin con stesse coordinate
-  // (city-center fallback): perturba di ~50m random-but-stable, cosi'
-  // a zoom city-level si vedono come pin distinti su strade vicine,
-  // non come cerchio finto. A zoom country i pin micro-jitterati
-  // restano dentro il clusterRadius (~30m) e vengono raggruppati
-  // dal cluster nativo MapLibre. Quando lo Scout/Analista forniranno
-  // office-level vero, il jitter sara' no-op naturale.
   // Applica filtri donut (tipi) + histogram (range score + flag
   // unscored) di /map. Tra tipi e score: AND. Dentro score:
   // (range OR unscored). Vuoto = no filtro.
@@ -832,10 +825,11 @@ export default function JobsGlobe({
       // Raggruppa per COORDINATA, non per città: un ufficio geocodato in modo
       // esatto diventa il SUO pin alle sue coordinate reali (il team cerca
       // l'indirizzo preciso dell'ufficio apposta perché si veda lì). Le
-      // posizioni senza indirizzo esatto condividono tutte la stessa
-      // coordinata-città (vedi resolveCityPins) → si aggregano in un unico
-      // pin-città. A zoom basso i pin vicini vengono fusi in un super-cluster
-      // (pixelClusterCities); il click li espande.
+      // posizioni senza indirizzo esatto arrivano da resolveCityPins già con
+      // uno slot FISSO nella griglia a nord della città (~300 m fra loro) →
+      // qui sono gruppi da 1. Coincidenti restano solo gli uffici reali
+      // condivisi (stesso building). A zoom basso i pin vicini vengono fusi
+      // in un super-cluster (pixelClusterCities); il click li espande.
       const key = `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
       const arr = groups.get(key);
       if (arr) arr.push(p);
