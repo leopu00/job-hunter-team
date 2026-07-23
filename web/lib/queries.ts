@@ -1018,8 +1018,7 @@ export async function getSeenPositionIds(): Promise<Set<string>> {
     // Demo: risultano "già viste" le posizioni più vecchie di 24h, così
     // il marker "nuova" è dimostrabile senza rumore su tutta la lista.
     return new Set(
-      demo
-        .demoDashboardPositions(dp)
+      (await demo.demoDashboardPositions(dp))
         .filter((p) => p.seen)
         .map((p) => p.id),
     );
@@ -2227,6 +2226,8 @@ export async function getTeamActivity(opts?: {
   from?: string;
   to?: string;
 }): Promise<TeamActivity> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoTeamActivity(dp, opts);
   const { from, to } = resolveActivityRange(opts, new Date());
   const w = await ws();
   if (w) {
@@ -2348,6 +2349,8 @@ export async function getTeamActivity(opts?: {
 // ordinata e arricchita con titolo/azienda/id. NB cap Supabase ~1000 righe
 // per query: ok per gli account attuali (<1000 posizioni/score).
 export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
+  const dp = await activeDemoPersona();
+  if (dp) return demo.demoTeamActivityLog(dp);
   const w = await ws();
   if (w) {
     try {

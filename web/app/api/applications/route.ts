@@ -6,16 +6,13 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { activeDemoPersona } from "@/lib/demo/mode";
+import { getDemoPositionsData } from "@/lib/demo/data";
 
 export const dynamic = "force-dynamic";
 
 type AppStatus =
-  | "draft"
-  | "sent"
-  | "viewed"
-  | "interview"
-  | "offer"
-  | "rejected";
+  "draft" | "sent" | "viewed" | "interview" | "offer" | "rejected";
 type TimelineEntry = { status: AppStatus; date: number; note?: string };
 type Doc = {
   name: string;
@@ -164,11 +161,32 @@ function generateSample(): Application[] {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status") as AppStatus | null;
-  let apps = loadApplications();
+  // Demo mode: candidature derivate dalle stesse posizioni demo
+  // (applied→sent, response→interview), mai il filesystem locale.
+  const dp = await activeDemoPersona();
+  let apps = dp
+    ? getDemoPositionsData(dp)
+        .filter((p) => p.status === "applied" || p.status === "response")
+        .map((p) => {
+          const sentAt = new Date(p.last_action_at).getTime();
+          const st: AppStatus = p.status === "response" ? "interview" : "sent";
+          return {
+            id: `demo-app-${p.legacy_id}`,
+            jobTitle: p.title,
+            company: p.company,
+            status: st,
+            sentAt,
+            updatedAt: sentAt,
+            profileId: "demo",
+            timeline: [{ status: st, date: sentAt }],
+            docs: [],
+          } as Application;
+        })
+    : loadApplications();
   if (status) apps = apps.filter((a) => a.status === status);
   apps.sort((a, b) => b.updatedAt - a.updatedAt);
   const counts: Record<string, number> = {};
-  for (const a of loadApplications())
+  for (const a of dp ? apps : loadApplications())
     counts[a.status] = (counts[a.status] ?? 0) + 1;
   return NextResponse.json({ applications: apps, total: apps.length, counts });
 }
