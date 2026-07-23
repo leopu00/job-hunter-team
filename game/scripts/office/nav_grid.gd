@@ -8,6 +8,10 @@ const CELL := 32.0
 # Il collider agente è centrato 12px sopra i piedi con raggio 13px: 16px
 # lasciavano il corpo incastrato sulle vetrate pur seguendo una cella libera.
 const MARGIN := 28.0
+# Le vetrate sono ostacoli sottili e verticali: per loro basta il raggio
+# reale del corpo. Applicare il margine dei mobili mangiava quasi due celle
+# per lato e trasformava porte ampie in passaggi invisibilmente chiusi.
+const WALL_MARGIN := 14.0
 
 var astar := AStar2D.new()
 var _origin: Vector2
@@ -17,7 +21,7 @@ var _walkable := {}
 var _floor_rect := Rect2()
 var _grown_obstacles: Array[Rect2] = []
 
-func build(floor_rect: Rect2, obstacle_rects: Array) -> void:
+func build(floor_rect: Rect2, obstacle_rects: Array, wall_rects: Array = []) -> void:
 	astar.clear()
 	_walkable.clear()
 	_floor_rect = floor_rect
@@ -27,6 +31,8 @@ func build(floor_rect: Rect2, obstacle_rects: Array) -> void:
 	_grown_obstacles.clear()
 	for r in obstacle_rects:
 		_grown_obstacles.append((r as Rect2).grow(MARGIN))
+	for r in wall_rects:
+		_grown_obstacles.append((r as Rect2).grow(WALL_MARGIN))
 	for y in _rows:
 		for x in _cols:
 			var p := _origin + Vector2((x + 0.5) * CELL, (y + 0.5) * CELL)
