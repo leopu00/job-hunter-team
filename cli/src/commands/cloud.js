@@ -1486,20 +1486,43 @@ async function handlePair(options) {
   }
 }
 
-async function handleDisable() {
+async function handleDisable(options = {}) {
   const config = await loadCloudConfig();
   if (!config) {
     console.log(pc.dim('Cloud sync gia disabilitato.'));
     return;
   }
+  let revoked = false;
+  let revokeWarning = '';
+  if (!options.localOnly && config.base_url && config.token) {
+    try {
+      const res = await fetch(
+        `${String(config.base_url).replace(/\/+$/, '')}/api/cloud-sync/revoke`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${config.token}` },
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) revoked = true;
+      else revokeWarning = `revoca remota fallita (HTTP ${res.status}: ${body.error || 'errore sconosciuto'})`;
+    } catch (err) {
+      revokeWarning = `revoca remota non raggiungibile (${err.message})`;
+    }
+  }
   try {
     await unlink(CLOUD_FILE);
     console.log(pc.green('✓ Cloud sync disabilitato'));
     console.log(pc.dim('  Token rimosso dalla macchina locale.'));
-    console.log(
-      pc.dim('  Per revocare lato server vai su ') +
-        `${config.base_url || DEFAULT_BASE_URL}/settings/cloud-sync`
-    );
+    if (revoked) {
+      console.log(pc.dim('  Token revocato anche sul server.'));
+    } else if (options.localOnly) {
+      console.log(pc.dim('  Revoca remota saltata (--local-only).'));
+    } else if (revokeWarning) {
+      console.log(pc.yellow(`  ⚠ ${revokeWarning}`));
+      console.log(pc.dim('  Il sync locale è comunque fermo. Revoca il token su ') +
+        `${config.base_url || DEFAULT_BASE_URL}/settings/cloud-sync`);
+    }
   } catch (err) {
     console.error(pc.red(`Errore: ${err.message}`));
     process.exitCode = 1;
@@ -2827,7 +2850,8 @@ export function registerCloudCommand(program) {
 
   cloud
     .command('disable')
-    .description('Rimuove il token dalla macchina locale (non revoca lato server)')
+    .description('Ferma il sync, revoca il token cloud e lo rimuove dal dispositivo')
+    .option('--local-only', 'Rimuove il token solo da questo dispositivo senza revocarlo sul server')
     .action(handleDisable);
 
   // `restore` — disaster recovery: ricostruisce SQLite locale (positions /

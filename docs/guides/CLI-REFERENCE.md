@@ -133,7 +133,7 @@ Supabase-backed sync of `positions`, `scores`, `applications`. See also
 | `jht cloud status`            | Node  | Show sync state + last push timestamp.                                |
 | `jht cloud push [flags]`      | Node  | One-shot sync of local SQLite → cloud.                                |
 | `jht cloud daemon [flags]`    | Node  | Long-running push loop (used by container's PID 1).                   |
-| `jht cloud disable`           | Node  | Remove the token from this machine. Doesn't affect cloud side — revoke separately on the web. |
+| `jht cloud disable`           | Node  | Stop sync, revoke this device token on the server, then remove it locally. |
 | `jht cloud realtime-listen`   | Node  | HTTP long-poll subscriber for `team_commands` (legacy, in cutover to team_state). Backing file: `cli/src/lib/team-commands-poller.js`. |
 | `jht cloud team-state-listen` | Node  | Desired-state reconciler: polls `team_state`, applies `should_run`/`restart_token` via `jht team start\|stop\|restart`. Co-spawned by pid1 alongside `realtime-listen` during cutover. |
 
@@ -142,6 +142,8 @@ Supabase-backed sync of `positions`, `scores`, `applications`. See also
 - `--name <name>` (login, pair) — name the token on the web dashboard.
 - `--no-push` (login, enable) — skip the initial data push.
 - `--force` (pair) — re-pair even if `cloud.json` already exists.
+- `--local-only` (disable) — remove the local token without server revocation
+  (offline recovery only; normally use the safer default).
 
 ## Config
 
