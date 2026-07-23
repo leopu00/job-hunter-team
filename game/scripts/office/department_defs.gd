@@ -39,17 +39,23 @@ const DEPARTMENTS := {
 		"zone": Rect2(320, 348, 880, 520),
 		# Tavolo Scout → Analisti: più vicino all'ologramma e appena più in
 		# alto, ma senza toccarne l'ingombro. Il ritiro avviene dal basso.
-		"inbox": Vector2(1080, 840),
-		"inbox_drop_access": Vector2(900, 840),
-		"inbox_pickup_access": Vector2(1080, 960),
+		"inbox": Vector2(1080, 800),
+		# Gli Scout consegnano dal fianco destro, in asse con la porta est;
+		# gli Analisti ritirano dal basso attraverso la porta sud.
+		"inbox_drop_access": Vector2(1240, 800),
+		"inbox_pickup_access": Vector2(1100, 920),
 		# Anello radiale nell'angolo nord-ovest; indice 0..5 = ore 10,8,12,6,2,4.
 		"desks": [
 			{"rect": Rect2(384, 400, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
 			{"rect": Rect2(426, 616, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
 			{"rect": Rect2(690, 346, 170, 78), "kind": "scout_a", "facing": "up", "tex_facing": "up"},
 			{"rect": Rect2(690, 689, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
-			{"rect": Rect2(996, 400, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(954, 616, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			# Arretrate dal vetro est: prima il margine delle sedie invadeva il
+			# varco e costringeva gli Scout a tagliare tutto il tappeto.
+			{"rect": Rect2(956, 400, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			# Sollevata di 56 px: prima desk e tavolo di consegna si saldavano
+			# con i rispettivi margini nav e chiudevano la corsia orientale.
+			{"rect": Rect2(914, 560, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
 		],
 	},
 	"analisti": {
@@ -65,8 +71,10 @@ const DEPARTMENTS := {
 		# Anello radiale allargato insieme al tappeto: riempie il laboratorio
 		# senza toccare vetri, schedario o varco meridionale.
 		"desks": [
-			{"rect": Rect2(2286, 278, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(2315, 480, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
+			# Cinquanta pixel più interne: il fianco delle sedie non invade più
+			# la porta ovest usata per il ritiro dal reparto Ricerca.
+			{"rect": Rect2(2336, 278, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(2365, 480, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
 			{"rect": Rect2(2570, 227, 170, 78), "kind": "analisti_a", "facing": "up", "tex_facing": "up"},
 			{"rect": Rect2(2570, 548, 170, 78), "kind": "analisti_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
 			{"rect": Rect2(2854, 278, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
@@ -103,7 +111,8 @@ const DEPARTMENTS := {
 		# Tavolo Scrittori → Critici riportato verso il reparto Scrittori,
 		# lasciando comunque un varco netto dalla vetrata verticale.
 		"inbox": Vector2(1080, 1535),
-		"inbox_drop_access": Vector2(900, 1535),
+		# Dentro la porta orientale, ma sotto il margine della vetrata nord.
+		"inbox_drop_access": Vector2(1100, 1600),
 		"inbox_pickup_access": Vector2(1250, 1535),
 		# Sei spicchi radiali sul tappeto, come un quadrante d'orologio.
 		# Ogni agente guarda verso l'ESTERNO: ore 12=schiena, ore 6=viso,
@@ -113,7 +122,9 @@ const DEPARTMENTS := {
 		"desks": [
 			# indice 0..5 = ore 10, 8, 12, 6, 2, 4
 			{"rect": Rect2(345, 1584, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2), "seated_art": "res://assets/gen-art/furniture/scrittori_a_side_seated.png"},
-			{"rect": Rect2(380, 1768, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71), "seated_art": "res://assets/gen-art/furniture/scrittori_a_diag_down_seated_v2.png"},
+			# Sollevata di 48 px: fra il retro della sedia e il vetro sud
+			# rimane ora una corsia completa, non una tasca A* senza uscita.
+			{"rect": Rect2(380, 1720, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71), "seated_art": "res://assets/gen-art/furniture/scrittori_a_diag_down_seated_v2.png"},
 			# Le postazioni 12/6 rientrano entrambe sul tappeto mantenendo
 			# l'asse verticale e la vista retro/frontale richiesta.
 			{"rect": Rect2(605, 1538, 170, 78), "kind": "scrittori_a", "facing": "up", "tex_facing": "up"},
@@ -141,32 +152,66 @@ const DEPARTMENTS := {
 	},
 }
 
-## Vetrate dei reparti (reference Codex, ciclo grafica 11/07): pannelli
-## PARZIALI di vetro con varchi larghi, mai gabbie chiuse. Regole nav
-## (celle 32px, margine 16): vetro ad almeno ~95px dalle scrivanie e
-## varchi >=160px, o si torna agli "agenti incastrati". La linea a
-## y=1480 è CONDIVISA: sud degli Scorer e nord dei Critici insieme.
-## Il lab degli Analisti ha già i suoi vetri (LAB_WALL_* in
-## FurnitureDefs). Visual: _glass_line in OfficeFloor, stesso stile lab.
+## Vetrate perimetrali. Ogni rettangolo coincide con i quattro bracket della
+## zona in DepartmentDressing. Una sola porta per reparto è stata aperta sui
+## picchi misurati dalla demo a 30 agenti (tools/traffic_door_audit.gd).
+## Il footprint è centrato sul bordo: 6 px dentro e 6 px fuori dalla zona.
 const GLASS_WALLS := [
-	# Scout nord-ovest: nord con varco centrale + est con uscita a sud.
-	Rect2(350, 284, 260, 12),
-	Rect2(920, 284, 260, 12),
-	Rect2(1224, 364, 12, 264),
-	# Scorer centrali ampliati: varco nord in asse col desk ore 12 e uscita
-	# orientale larga verso il laboratorio Analisti.
-	Rect2(1140, 840, 370, 12),
-	Rect2(1890, 840, 370, 12),
-	Rect2(2260, 920, 12, 400),
-	# Bordo nord dei Critici con porta larga al centro.
-	Rect2(1915, 1480, 460, 12),
-	Rect2(2585, 1480, 490, 12),
-	# Scrittori: nord (varco verso la sala relax) + est (porta sud)
-	Rect2(360, 1448, 340, 12),
-	Rect2(860, 1448, 300, 12),
-	Rect2(1204, 1560, 12, 160),
-	# Critici: ovest con porta sud
-	Rect2(2051, 1500, 12, 260),
+	# Ricerca — zone Rect2(320, 348, 880, 520)
+	# Porta NORD x=512..960: tratta diretta verso la stampante, a pari
+	# frequenza del varco est nel campionamento senza muri.
+	Rect2(320, 342, 192, 12),
+	Rect2(960, 342, 240, 12),
+	# Porta SUD x=960..1200: accesso diretto ai due lati del tavolo Ricerca →
+	# Analisi. Il vetro termina prima della pila e lascia libero l'angolo.
+	Rect2(320, 862, 640, 12),
+	Rect2(314, 348, 12, 520),
+	# Porta EST sul corridoio naturale: apertura ampia y=348..780. Il varco
+	# pittorico comprende il margine di sicurezza A* e resta leggibile anche
+	# con trenta agenti in transito.
+	Rect2(1194, 780, 12, 88),
+	# Analisi — zone Rect2(2232, 150, 848, 580)
+	Rect2(2232, 144, 848, 12),
+	# Porta SUD, sul fascio rilevato fra consegna e postazioni. La luce larga
+	# x=2400..3008 serve entrambi i lati del tavolo senza creare una strettoia.
+	Rect2(2232, 724, 168, 12),
+	Rect2(3008, 724, 72, 12),
+	# Porta OVEST y=220..650: percorso diretto verso l'output Scout.
+	Rect2(2226, 150, 12, 70),
+	Rect2(2226, 650, 12, 80),
+	Rect2(3074, 150, 12, 580),
+	# Compatibilità — zone Rect2(1140, 840, 1120, 640)
+	Rect2(1140, 834, 1120, 12),
+	# Passaggio SUD x=1536..1856: collega il corridoio centrale ai due
+	# reparti meridionali. Senza questa luce i tre perimetri adiacenti
+	# diventavano, insieme, un'unica barriera da una parete all'altra.
+	Rect2(1140, 1474, 396, 12),
+	Rect2(1856, 1474, 404, 12),
+	Rect2(1134, 840, 12, 640),
+	# Porta EST, fascia di traffico y=864..1280; tiene fuori dal passaggio la
+	# postazione laterale ma lascia scorrere più agenti affiancati.
+	Rect2(2254, 840, 12, 24),
+	Rect2(2254, 1280, 12, 200),
+	# Candidature — zone Rect2(320, 1520, 860, 440)
+	Rect2(320, 1514, 860, 12),
+	Rect2(320, 1954, 860, 12),
+	Rect2(314, 1520, 12, 440),
+	# Porta EST, fascia y=1536..1920: è il corridoio naturale verso Scorer e
+	# Critici e non interferisce con il tavolo di passaggio.
+	Rect2(1174, 1520, 12, 16),
+	Rect2(1174, 1920, 12, 40),
+	# Controllo qualità — zone Rect2(2075, 1520, 1010, 440)
+	Rect2(2075, 1514, 1010, 12),
+	Rect2(2075, 1954, 1010, 12),
+	# Porta OVEST, fascia y=1536..1920: il picco è a y=1696 e l'apertura
+	# evita che il tavolino di revisione trasformi la porta in un imbuto.
+	Rect2(2069, 1520, 12, 48),
+	Rect2(2069, 1920, 12, 40),
+	Rect2(3079, 1520, 12, 440),
+	# Divisorio operativo fra Mantenitore (a nord) e Dottore (a sud). È un
+	# unico vetro continuo; termina prima del corridoio centrale, così gli
+	# agenti lo aggirano dal lato naturale senza attraversare le postazioni.
+	Rect2(430, 1108, 620, 12),
 ]
 
 ## POI condivisi dei behavior: mete dei viaggi "si vede che lavorano".

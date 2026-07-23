@@ -17,6 +17,7 @@ var _tour_visits := 0
 var _tour_enabled := false
 var _tour_tracker: TourTracker
 var _tour_launch_opened := false
+var _traffic_demo_started := false
 
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
@@ -32,7 +33,7 @@ func _ready() -> void:
 	add_child(dressing_layer)  # tinte/targhe dei 5 reparti (dev-art)
 	var rugs_layer := DeptRugs.new()
 	rugs_layer.z_index = -2
-	add_child(rugs_layer)  # tappetoni tondi colore-reparto (reference)
+	add_child(rugs_layer)  # tappeti persiani rettangolari colore-reparto
 	# giorno/notte sull'ora locale: esterno, lampade e luce dalle finestre.
 	# Va qui, PRIMA di mondo e maintainer, che devono disegnarsi sopra.
 	add_child(DayNight.new())
@@ -94,16 +95,26 @@ func _ready() -> void:
 		# registry per lo scambio vuota/occupata quando l'agente si siede
 		FurnitureNode.desks["%s:%d" % [d["dept"], d["index"]]] = desk_node
 
-	for r in [FurnitureDefs.LAB_WALL_V, FurnitureDefs.LAB_WALL_H1, FurnitureDefs.LAB_WALL_H2]:
-		world.add_child(_invisible_wall(r))
-	# vetrate dei reparti: collisioni sottili, il visual è in OfficeFloor
+	# Vetrate complete dei cinque reparti: collisione sottile più parete
+	# realmente trasparente. Anche il vecchio lab Analisti usa questo unico
+	# perimetro, evitando segmenti doppi o fuori asse.
+	var traffic_demo := OS.get_environment("JHT_TRAFFIC_DEMO") == "1"
+	# Primo pass diagnostico: ignora i vetri per scoprire i varchi naturali.
+	# Senza JHT_TRAFFIC_FREE la stessa demo verifica le porte reali.
+	var traffic_free := traffic_demo \
+			and OS.get_environment("JHT_TRAFFIC_FREE") == "1"
 	for r in DepartmentDefs.GLASS_WALLS:
-		world.add_child(_invisible_wall(r))
+		if not traffic_free:
+			world.add_child(_invisible_wall(r))
+		world.add_child(GlassPartition.new(r))
 	_add_perimeter_walls()
 
-	nav.build(FurnitureDefs.FLOOR, FurnitureDefs.obstacles()
-			+ DepartmentDefs.obstacles() + DepartmentDefs.GLASS_WALLS
-			+ [OutputShelf.RECT])
+	var nav_obstacles: Array = FurnitureDefs.obstacles() + DepartmentDefs.obstacles()
+	var nav_walls: Array = []
+	if not traffic_free:
+		nav_walls.append_array(DepartmentDefs.GLASS_WALLS)
+	nav_obstacles.append(OutputShelf.RECT)
+	nav.build(FurnitureDefs.FLOOR, nav_obstacles, nav_walls)
 
 	# i macchinari si animano quando qualcuno li usa (ping da AgentNPC)
 	world.add_child(PrinterFx.new(FurnitureDefs.get_rect("printer")))
@@ -162,6 +173,10 @@ func _ready() -> void:
 		agent.set_story_marker(_seat_audit == "" \
 				and not ScriptedOnboarding.provider_authenticated())
 		agents.append(agent)
+	if traffic_demo:
+		var probe := TrafficProbe.new()
+		probe.setup(agents)
+		add_child(probe)
 	# Audit visuale locale: con JHT_SEAT_AUDIT=<reparto>:<desk> mostra una
 	# vignetta reale sul singolo composito inquadrato, senza dipendere dalla VPS.
 	if _seat_audit != "" and OS.get_environment("JHT_SPEECH_AUDIT") == "1" \
@@ -1152,6 +1167,15 @@ func _force_pipeline_trip(test_dept: String) -> void:
 			agent.perform_pipeline_step()
 			return
 
+func _start_traffic_demo() -> void:
+	await get_tree().create_timer(0.8).timeout
+	for agent in agents:
+		if agent.dept == "" or agent.is_dissolving():
+			continue
+		agent.set_backend_status("working")
+		agent.perform_pipeline_step(true)
+	Log.info("test", "traffic demo: %d agenti messi in viaggio" % agents.size())
+
 func _force_core_patrol(role: String) -> void:
 	await get_tree().create_timer(0.45).timeout
 	var actor := _find_agent(role)
@@ -2048,6 +2072,10 @@ func sync_agents(list: Array) -> void:
 			and _coordinator_panel != null and not _coordinator_test_started:
 		_coordinator_test_started = true
 		_coordinator_selftest.call_deferred()
+	if OS.get_environment("JHT_TRAFFIC_DEMO") == "1" \
+			and not _traffic_demo_started and agents.size() >= 30:
+		_traffic_demo_started = true
+		_start_traffic_demo.call_deferred()
 
 ## Liveness operativa: il roster dice che il processo esiste, il sampler CPU
 ## dice se sta davvero elaborando. Dati mancanti o più vecchi di 75 secondi

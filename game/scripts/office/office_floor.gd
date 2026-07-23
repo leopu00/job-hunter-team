@@ -128,16 +128,7 @@ func _draw() -> void:
 	# pareti di vetro perimetrali: tre passate per il glow ciano
 	_glass_rect(floor_rect, 1.0)
 
-	# vetri interni del lab (più discreti), con porta nella parete bassa
-	_glass_line(FurnitureDefs.LAB_WALL_V.get_center() - Vector2(0, FurnitureDefs.LAB_WALL_V.size.y / 2),
-			FurnitureDefs.LAB_WALL_V.get_center() + Vector2(0, FurnitureDefs.LAB_WALL_V.size.y / 2), 0.55)
-	_glass_line(Vector2(FurnitureDefs.LAB_WALL_H1.position.x, FurnitureDefs.LAB_WALL_H1.get_center().y),
-			Vector2(FurnitureDefs.LAB_WALL_H1.end.x, FurnitureDefs.LAB_WALL_H1.get_center().y), 0.55)
-	_glass_line(Vector2(FurnitureDefs.LAB_WALL_H2.position.x, FurnitureDefs.LAB_WALL_H2.get_center().y),
-			Vector2(FurnitureDefs.LAB_WALL_H2.end.x, FurnitureDefs.LAB_WALL_H2.get_center().y), 0.55)
-
-	# vetrate dei reparti (layout reference; footprint in DepartmentDefs,
-	# stesso stile dei vetri del lab)
+	# Vetrate dei reparti: un unico perimetro anche per il lab Analisti.
 	for r in DepartmentDefs.GLASS_WALLS:
 		var g: Rect2 = r
 		if g.size.x >= g.size.y:
