@@ -26,6 +26,13 @@ import type {
 } from "@/lib/queries";
 import type { PositionCoord } from "@/lib/local-queries";
 import {
+  buildTeamActivity,
+  resolveActivityRange,
+  type TeamActivity,
+  type TeamActivityEvent,
+  type RecentActivityEvent,
+} from "@/lib/team-activity";
+import {
   aggregateRoleFamilies,
   UNCATEGORIZED_LABEL,
   type RoleFamilyCount,
@@ -43,8 +50,23 @@ import {
   type DemoFeedbackMap,
 } from "@/lib/demo/mode";
 
-function active(key: DemoPersonaKey): DemoPosition[] {
-  return getDemoPositionsData(key).filter((p) => p.status !== "excluded");
+// Locale della request: la voce degli agenti (notes/scoreNotes/criticNotes/
+// pros/cons) è localizzata via overlay in seeds/i18n; gli annunci restano
+// in inglese. Fuori dal request scope (mai atteso) si ripiega sull'italiano.
+async function demoLocale(): Promise<Locale> {
+  try {
+    return await getRequestLocale();
+  } catch {
+    return "it";
+  }
+}
+
+async function data(key: DemoPersonaKey): Promise<DemoPosition[]> {
+  return getDemoPositionsData(key, await demoLocale());
+}
+
+async function active(key: DemoPersonaKey): Promise<DemoPosition[]> {
+  return (await data(key)).filter((p) => p.status !== "excluded");
 }
 
 function toPositionWithScore(p: DemoPosition): PositionWithScore {
@@ -60,8 +82,10 @@ function toPositionWithScore(p: DemoPosition): PositionWithScore {
 }
 
 // ── Stats ───────────────────────────────────────────────────────────
-export function demoDashboardStats(key: DemoPersonaKey): DashboardStats {
-  const all = getDemoPositionsData(key);
+export async function demoDashboardStats(
+  key: DemoPersonaKey,
+): Promise<DashboardStats> {
+  const all = await data(key);
   const count = (s: string) => all.filter((p) => p.status === s).length;
   const TO_WRITE = new Set(["scored", "writing", "review"]);
   const to_write = all.filter(
@@ -215,12 +239,12 @@ function applySort(
   });
 }
 
-export function demoPositions(
+export async function demoPositions(
   key: DemoPersonaKey,
   opts?: PositionFilterOpts,
-): PositionWithScore[] {
+): Promise<PositionWithScore[]> {
   // Default della query cloud: found_at desc.
-  let rows = getDemoPositionsData(key)
+  let rows = (await data(key))
     .map(toPositionWithScore)
     .sort((a, b) => (b.found_at > a.found_at ? 1 : -1));
   rows = applyFilters(rows, opts);
@@ -234,10 +258,10 @@ export function demoPositions(
 }
 
 // ── Dashboard positions ─────────────────────────────────────────────
-export function demoDashboardPositions(
+export async function demoDashboardPositions(
   key: DemoPersonaKey,
-): DashboardPosition[] {
-  return active(key)
+): Promise<DashboardPosition[]> {
+  return (await active(key))
     .slice()
     .sort((a, b) => (b.last_action_at > a.last_action_at ? 1 : -1))
     .map((p) => ({
@@ -270,8 +294,8 @@ export function demoDashboardPositions(
 }
 
 // ── Distribuzioni ───────────────────────────────────────────────────
-export function demoScoreDistribution(key: DemoPersonaKey) {
-  const scores = active(key).map((p) => p.score);
+export async function demoScoreDistribution(key: DemoPersonaKey) {
+  const scores = (await active(key)).map((p) => p.score);
   const withScore = scores.filter((s): s is number => s != null && s > 0);
   const buckets = [
     { label: "76–100", min: 76, max: 100, color: "var(--color-green)" },
@@ -293,11 +317,11 @@ export function demoScoreDistribution(key: DemoPersonaKey) {
   };
 }
 
-export function demoSourceDistribution(
+export async function demoSourceDistribution(
   key: DemoPersonaKey,
-): Array<{ source: string; count: number }> {
+): Promise<Array<{ source: string; count: number }>> {
   const counts: Record<string, number> = {};
-  for (const p of active(key)) {
+  for (const p of await active(key)) {
     const s = p.source ?? "sconosciuta";
     counts[s] = (counts[s] ?? 0) + 1;
   }
@@ -307,9 +331,11 @@ export function demoSourceDistribution(
     .slice(0, 8);
 }
 
-export function demoTypeDistribution(key: DemoPersonaKey): RoleFamilyCount[] {
+export async function demoTypeDistribution(
+  key: DemoPersonaKey,
+): Promise<RoleFamilyCount[]> {
   return aggregateRoleFamilies(
-    active(key).map((p) => ({
+    (await active(key)).map((p) => ({
       role_family: p.role_family ?? null,
       score: p.score,
       critic: p.critic_score,
@@ -318,8 +344,10 @@ export function demoTypeDistribution(key: DemoPersonaKey): RoleFamilyCount[] {
 }
 
 // ── Facets (sidebar /positions: universo COMPLETO, incluse excluded) ─
-export function demoFacets(key: DemoPersonaKey): PositionFacet[] {
-  return getDemoPositionsData(key).map((p) => ({
+export async function demoFacets(
+  key: DemoPersonaKey,
+): Promise<PositionFacet[]> {
+  return (await data(key)).map((p) => ({
     id: p.id,
     role_family: p.role_family ?? null,
     score: p.score,
@@ -333,8 +361,10 @@ export function demoFacets(key: DemoPersonaKey): PositionFacet[] {
 }
 
 // ── Mappa: coords / no-coords / tree località ──────────────────────
-export function demoCoords(key: DemoPersonaKey): PositionCoord[] {
-  return active(key)
+export async function demoCoords(
+  key: DemoPersonaKey,
+): Promise<PositionCoord[]> {
+  return (await active(key))
     .filter((p) => p.lat != null && p.lon != null)
     .map((p) => ({
       id: p.id,
@@ -354,8 +384,10 @@ export function demoCoords(key: DemoPersonaKey): PositionCoord[] {
     }));
 }
 
-export function demoNoCoords(key: DemoPersonaKey): PositionNoCoord[] {
-  return active(key)
+export async function demoNoCoords(
+  key: DemoPersonaKey,
+): Promise<PositionNoCoord[]> {
+  return (await active(key))
     .filter((p) => p.lat == null || p.lon == null)
     .map((p) => ({
       id: p.id,
@@ -373,9 +405,11 @@ export function demoNoCoords(key: DemoPersonaKey): PositionNoCoord[] {
     }));
 }
 
-export function demoLocations(key: DemoPersonaKey): LocationCountry[] {
+export async function demoLocations(
+  key: DemoPersonaKey,
+): Promise<LocationCountry[]> {
   const byCountry = new Map<string, Map<string | null, DemoPosition[]>>();
-  for (const p of active(key)) {
+  for (const p of await active(key)) {
     const country = p.loc_country?.trim() || "(unknown)";
     const city = p.loc_city?.trim() || null;
     const cMap = byCountry.get(country) ?? new Map();
@@ -441,7 +475,7 @@ export async function demoSwipeDecks(key: DemoPersonaKey): Promise<{
   reviewed: SwipeReviewedRow[];
 }> {
   const fb: DemoFeedbackMap = await readDemoFeedback();
-  const rows = getDemoPositionsData(key)
+  const rows = (await data(key))
     .filter((p) => ["scored", "ready", "excluded"].includes(p.status))
     .sort((a, b) => (a.found_at > b.found_at ? 1 : -1));
   const pending: PositionWithScore[] = [];
@@ -462,18 +496,18 @@ export async function demoSwipeDecks(key: DemoPersonaKey): Promise<{
 }
 
 // ── Dettaglio posizione ─────────────────────────────────────────────
-export function demoPositionById(
+export async function demoPositionById(
   key: DemoPersonaKey,
   id: string,
-): {
+): Promise<{
   position: Position;
   score: Score | null;
   highlights: PositionHighlight[];
   company: Company | null;
   application: Application | null;
   tickets: PositionTicket[];
-} | null {
-  const p = getDemoPositionsData(key).find((x) => x.id === id);
+} | null> {
+  const p = (await data(key)).find((x) => x.id === id);
   if (!p) return null;
   const application: Application | null =
     p.critic_score != null
@@ -531,17 +565,108 @@ export function demoPositionById(
   };
 }
 
+// ── Team activity demo ──────────────────────────────────────────────
+// Gli eventi sono DERIVATI dalle stesse posizioni demo (stessa storia
+// che l'utente vede in pipeline): trovata→scout, analizzata→analista,
+// scored→scorer, CV scritto→scrittore, revisione→critico. Numeri e
+// timeline quindi combaciano con dashboard e /positions.
+function demoActivityEvents(rows: DemoPosition[]): TeamActivityEvent[] {
+  const ev: TeamActivityEvent[] = [];
+  for (const p of rows) {
+    ev.push({
+      role: "scout",
+      actor: p.found_by ?? "scout",
+      ts: p.found_at,
+      pid: p.id,
+    });
+    if (p.last_checked)
+      ev.push({
+        role: "analista",
+        actor: "analista",
+        ts: p.last_checked,
+        pid: p.id,
+      });
+    if (p.demo_score_row)
+      ev.push({
+        role: "scorer",
+        actor: p.demo_score_row.scored_by ?? "scorer",
+        ts: p.demo_score_row.scored_at,
+        pid: p.id,
+      });
+    if (p.critic_score != null) {
+      ev.push({
+        role: "scrittore",
+        actor: "scrittore-1",
+        ts: p.last_action_at,
+        pid: p.id,
+      });
+      ev.push({
+        role: "critico",
+        actor: "critico",
+        ts: p.last_action_at,
+        pid: p.id,
+      });
+    } else if (p.status === "writing") {
+      ev.push({
+        role: "scrittore",
+        actor: "scrittore-1",
+        ts: p.last_action_at,
+        pid: p.id,
+      });
+    }
+  }
+  return ev;
+}
+
+function enrichDemoEvents(evts: RecentActivityEvent[], rows: DemoPosition[]) {
+  const byId = new Map(rows.map((p) => [p.id, p]));
+  for (const e of evts) {
+    const p = e.pid ? byId.get(e.pid) : undefined;
+    if (!p) continue;
+    e.title = p.title;
+    e.company = p.company;
+    e.legacyId = p.legacy_id;
+    e.city = p.loc_city;
+    if (e.role === "scorer") e.score = p.score;
+    if (e.role === "scout") e.source = p.source;
+  }
+}
+
+export async function demoTeamActivity(
+  key: DemoPersonaKey,
+  opts?: { from?: string; to?: string },
+): Promise<TeamActivity> {
+  const { from, to } = resolveActivityRange(opts, new Date());
+  const rows = await data(key);
+  const act = buildTeamActivity(demoActivityEvents(rows), from, to);
+  enrichDemoEvents(act.recent, rows);
+  return act;
+}
+
+export async function demoTeamActivityLog(
+  key: DemoPersonaKey,
+): Promise<RecentActivityEvent[]> {
+  const rows = await data(key);
+  const evts = demoActivityEvents(rows).sort((a, b) =>
+    a.ts < b.ts ? 1 : -1,
+  ) as RecentActivityEvent[];
+  enrichDemoEvents(evts, rows);
+  return evts;
+}
+
 // ── Messaggi demo dagli agenti ──────────────────────────────────────
-// Tre messaggi (digest Capitano, domanda Assistente, notifica Scout)
-// localizzati nelle 7 lingue del sito, col titolo della top position
-// della persona interpolato — così il drawer messaggi in navbar è vivo
-// anche in demo.
+// Tre messaggi (digest Capitano, domanda Assistente, coaching Mentor)
+// localizzati nelle 7 lingue del sito, con titoli delle posizioni della
+// persona interpolati — così il drawer messaggi in navbar è vivo anche
+// in demo. Solo i tre agenti "conversazionali" scrivono all'utente
+// (assistente/mentor/capitano, come CORE_AGENTS in MessagesList): gli
+// operativi tipo Scout non mandano mai messaggi (feedback utente 23/07).
 const MSG: Record<
   Locale,
   {
     capitano: (t: string, c: string) => string;
     assistente: string;
-    scout: string;
+    mentor: (t: string, c: string) => string;
   }
 > = {
   it: {
@@ -549,56 +674,56 @@ const MSG: Record<
       `Ho preparato 3 candidature ad alta priorità. Guarda prima "${t}" di ${c}: score alto e requisiti perfettamente allineati al tuo profilo.`,
     assistente:
       "Per calibrare meglio lo Scorer mi serve una preferenza: meglio più posizioni full remote o accetti l'ibrido se lo stipendio è sopra il tuo target?",
-    scout:
-      "Stanotte ho trovato 6 nuove posizioni nelle tue città preferite. Le trovi in cima alla lista, contrassegnate come nuove.",
+    mentor: (t, c) =>
+      `Hai ricevuto una risposta da ${c} per "${t}": prepariamo il colloquio. Ti ho messo da parte 5 domande probabili e i punti del tuo percorso da mettere in evidenza.`,
   },
   en: {
     capitano: (t, c) =>
       `I prepared 3 high-priority applications. Check "${t}" at ${c} first: high score and requirements perfectly aligned with your profile.`,
     assistente:
       "To calibrate the Scorer I need one preference: more full-remote positions, or is hybrid fine when salary is above your target?",
-    scout:
-      "Overnight I found 6 new positions in your preferred cities. They are at the top of the list, marked as new.",
+    mentor: (t, c) =>
+      `You got a reply from ${c} about "${t}": let's prep the interview. I set aside 5 likely questions and the parts of your background worth emphasising.`,
   },
   es: {
     capitano: (t, c) =>
       `He preparado 3 candidaturas de alta prioridad. Mira primero "${t}" en ${c}: puntuación alta y requisitos perfectamente alineados con tu perfil.`,
     assistente:
       "Para calibrar el Scorer necesito una preferencia: ¿más posiciones full remote o aceptas híbrido si el salario supera tu objetivo?",
-    scout:
-      "Esta noche encontré 6 posiciones nuevas en tus ciudades preferidas. Están al principio de la lista, marcadas como nuevas.",
+    mentor: (t, c) =>
+      `Has recibido respuesta de ${c} para "${t}": preparemos la entrevista. Te he apartado 5 preguntas probables y los puntos de tu trayectoria que conviene destacar.`,
   },
   fr: {
     capitano: (t, c) =>
       `J'ai préparé 3 candidatures prioritaires. Regarde d'abord « ${t} » chez ${c} : score élevé et exigences parfaitement alignées avec ton profil.`,
     assistente:
       "Pour calibrer le Scorer, j'ai besoin d'une préférence : plus de postes full remote, ou l'hybride te convient si le salaire dépasse ton objectif ?",
-    scout:
-      "Cette nuit, j'ai trouvé 6 nouveaux postes dans tes villes préférées. Ils sont en haut de la liste, marqués comme nouveaux.",
+    mentor: (t, c) =>
+      `Tu as reçu une réponse de ${c} pour « ${t} » : préparons l'entretien. Je t'ai mis de côté 5 questions probables et les points de ton parcours à mettre en avant.`,
   },
   de: {
     capitano: (t, c) =>
       `Ich habe 3 Bewerbungen mit hoher Priorität vorbereitet. Sieh dir zuerst „${t}" bei ${c} an: hoher Score und Anforderungen, die perfekt zu deinem Profil passen.`,
     assistente:
       "Um den Scorer zu kalibrieren, brauche ich eine Präferenz: mehr Full-Remote-Stellen, oder ist hybrid in Ordnung, wenn das Gehalt über deinem Ziel liegt?",
-    scout:
-      "Heute Nacht habe ich 6 neue Stellen in deinen bevorzugten Städten gefunden. Sie stehen oben in der Liste und sind als neu markiert.",
+    mentor: (t, c) =>
+      `Du hast eine Antwort von ${c} zu „${t}" erhalten: Bereiten wir das Gespräch vor. Ich habe 5 wahrscheinliche Fragen und die Stärken deines Werdegangs für dich zusammengestellt.`,
   },
   hu: {
     capitano: (t, c) =>
       `Előkészítettem 3 kiemelt jelentkezést. Nézd meg először a(z) „${t}" pozíciót a ${c} cégnél: magas pontszám, a követelmények tökéletesen illenek a profilodhoz.`,
     assistente:
       "A Scorer kalibrálásához kell egy preferencia: több teljesen távoli pozíció, vagy a hibrid is jó, ha a fizetés a célod felett van?",
-    scout:
-      "Az éjjel 6 új pozíciót találtam a kedvenc városaidban. A lista tetején vannak, újként megjelölve.",
+    mentor: (t, c) =>
+      `Választ kaptál a ${c} cégtől a(z) „${t}" pozícióra: készüljünk az interjúra. Összegyűjtöttem 5 valószínű kérdést és a hátterednek azokat a pontjait, amelyeket érdemes kiemelni.`,
   },
   pt: {
     capitano: (t, c) =>
       `Preparei 3 candidaturas de alta prioridade. Vê primeiro "${t}" na ${c}: pontuação alta e requisitos perfeitamente alinhados com o teu perfil.`,
     assistente:
       "Para calibrar o Scorer preciso de uma preferência: mais posições full remote, ou aceitas híbrido se o salário estiver acima do teu objetivo?",
-    scout:
-      "Esta noite encontrei 6 novas posições nas tuas cidades preferidas. Estão no topo da lista, marcadas como novas.",
+    mentor: (t, c) =>
+      `Recebeste resposta da ${c} para "${t}": vamos preparar a entrevista. Separei 5 perguntas prováveis e os pontos do teu percurso a destacar.`,
   },
 };
 
@@ -611,9 +736,16 @@ export async function demoPendingMessages(
 ): Promise<PendingMessage[]> {
   const locale = await getRequestLocale();
   const m = MSG[locale] ?? MSG.it;
-  const top = getDemoPositionsData(key)
+  const rows = await data(key);
+  const top = rows
     .filter((p) => p.status !== "excluded" && p.score != null)
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
+  // Il Mentor aggancia la posizione che ha ricevuto risposta (ce n'è
+  // sempre almeno una nel dataset); fallback difensivo sulla top.
+  const responded =
+    rows
+      .filter((p) => p.status === "response")
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0] ?? top;
   const mk = (
     id: string,
     agent: string,
@@ -643,6 +775,12 @@ export async function demoPendingMessages(
       1,
     ),
     mk("demo-msg-2", "assistente", m.assistente, "question", 4),
-    mk("demo-msg-3", "scout", m.scout, "notification", 9),
+    mk(
+      "demo-msg-3",
+      "mentor",
+      m.mentor(responded?.title ?? "-", responded?.company ?? "-"),
+      "notification",
+      9,
+    ),
   ];
 }
