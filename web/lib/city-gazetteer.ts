@@ -274,3 +274,79 @@ export function gazetteerCity(
     GAZETTEER[`${canonCountry}|${canonCity}`] ?? CITY_ONLY[canonCity] ?? null
   );
 }
+
+/**
+ * Nome-paese canonico (lowercase EN, alias risolti: Italia→italy, UK→united
+ * kingdom). Stringa vuota se assente. Usato come chiave di aggregazione così
+ * "Italy" e "Italia" finiscono nello stesso fascio/griglia.
+ */
+export function canonicalCountry(country: string | null): string {
+  const co = norm(country);
+  return COUNTRY_ALIAS[co] ?? co;
+}
+
+/**
+ * Chiave canonica "paese|città" per aggregazioni (alias e accenti risolti:
+ * Roma/Rome → stessa chiave). Città vuota → "paese|".
+ */
+export function canonicalCityKey(
+  country: string | null,
+  city: string | null,
+): string {
+  const c = norm(city);
+  return `${canonicalCountry(country)}|${CITY_ALIAS[c] ?? c}`;
+}
+
+// Capitali (o città-ancora) per paese: ancoraggio delle griglie "remote dal
+// paese X" quando l'account non ha alcun pin in quel paese. Geografia
+// stabile, non una tassonomia: additivo come il gazetteer città.
+const COUNTRY_CAPITAL: Record<string, LatLon> = {
+  italy: { lat: 41.9028, lon: 12.4964 },
+  spain: { lat: 40.4168, lon: -3.7038 },
+  france: { lat: 48.8566, lon: 2.3522 },
+  germany: { lat: 52.52, lon: 13.405 },
+  poland: { lat: 52.2297, lon: 21.0122 },
+  portugal: { lat: 38.7223, lon: -9.1393 },
+  netherlands: { lat: 52.3676, lon: 4.9041 },
+  belgium: { lat: 50.8503, lon: 4.3517 },
+  luxembourg: { lat: 49.6117, lon: 6.1319 },
+  ireland: { lat: 53.3498, lon: -6.2603 },
+  "united kingdom": { lat: 51.5074, lon: -0.1278 },
+  switzerland: { lat: 46.948, lon: 7.4474 },
+  austria: { lat: 48.2082, lon: 16.3738 },
+  hungary: { lat: 47.4979, lon: 19.0402 },
+  czechia: { lat: 50.0755, lon: 14.4378 },
+  slovakia: { lat: 48.1486, lon: 17.1077 },
+  slovenia: { lat: 46.0569, lon: 14.5058 },
+  croatia: { lat: 45.815, lon: 15.9819 },
+  greece: { lat: 37.9838, lon: 23.7275 },
+  romania: { lat: 44.4268, lon: 26.1025 },
+  bulgaria: { lat: 42.6977, lon: 23.3219 },
+  denmark: { lat: 55.6761, lon: 12.5683 },
+  sweden: { lat: 59.3293, lon: 18.0686 },
+  norway: { lat: 59.9139, lon: 10.7522 },
+  finland: { lat: 60.1699, lon: 24.9384 },
+  estonia: { lat: 59.437, lon: 24.7536 },
+  latvia: { lat: 56.9496, lon: 24.1052 },
+  lithuania: { lat: 54.6872, lon: 25.2797 },
+  malta: { lat: 35.8989, lon: 14.5146 },
+  cyprus: { lat: 35.1856, lon: 33.3823 },
+  "united states": { lat: 38.9072, lon: -77.0369 },
+  canada: { lat: 45.4215, lon: -75.6972 },
+  "united arab emirates": { lat: 24.4539, lon: 54.3773 },
+  qatar: { lat: 25.2854, lon: 51.531 },
+  "saudi arabia": { lat: 24.7136, lon: 46.6753 },
+  turkey: { lat: 39.9334, lon: 32.8597 },
+  india: { lat: 28.6139, lon: 77.209 },
+  singapore: { lat: 1.3521, lon: 103.8198 },
+  australia: { lat: -35.2809, lon: 149.13 },
+  japan: { lat: 35.6762, lon: 139.6503 },
+};
+
+/**
+ * Coordinate-ancora note per un paese (capitale), o null se il paese non è
+ * riconosciuto (o è uno pseudo-paese tipo "Europe").
+ */
+export function gazetteerCountryAnchor(country: string | null): LatLon | null {
+  return COUNTRY_CAPITAL[canonicalCountry(country)] ?? null;
+}

@@ -21,22 +21,30 @@
 // pin che hanno un indirizzo reale. Zoom e pan non la muovono: sono normali
 // coordinate lat/lon nel GeoJSON.
 
-import { gazetteerCity } from "./city-gazetteer";
+import {
+  gazetteerCity,
+  gazetteerCountryAnchor,
+  canonicalCountry,
+  canonicalCityKey,
+} from "./city-gazetteer";
 
 export type GeoRow = {
   loc_country: string | null;
   loc_city: string | null;
   office_lat: number | null;
   office_lon: number | null;
-  // Opzionali, usati SOLO per l'ordine dentro la griglia nord: score
-  // decrescente (i migliori nella riga più vicina alla città), tie-break
-  // per id → layout deterministico fra refresh a parità di dati.
+  // Opzionali, usati SOLO per l'ordine dentro le griglie: score decrescente
+  // (i migliori nella riga più vicina all'ancora), tie-break per id →
+  // layout deterministico fra refresh a parità di dati.
   id?: string | null;
   score?: number | null;
   // Opzionale, usato per smascherare gli "uffici" finti: la stessa identica
   // coordinata condivisa da aziende DIVERSE non è un building reale ma il
   // geocode generico della città (vedi GENERIC_COORD_MIN_COMPANIES).
   company?: string | null;
+  // Opzionale: 'full_remote' attiva il piazzamento remote (griglia-paese a
+  // SUD dell'ancora paese, o isola "anywhere") per le righe senza città.
+  remote_type?: string | null;
 };
 
 // Distanza del bordo sud della griglia dal centro città (~10 km: fuori dal
@@ -54,9 +62,18 @@ const M_PER_DEG_LAT = 111_320;
 // alberghiero); da 3 in su le trattiamo come città-only → griglia nord.
 const GENERIC_COORD_MIN_COMPANIES = 3;
 
+// Chiave città CANONICA (alias/accenti risolti dal gazetteer): "Rome" e
+// "Roma" condividono centroide e griglia nord invece di sdoppiarsi.
 function cityKey(country: string | null, city: string | null): string {
-  return `${(country ?? "").trim().toLowerCase()}|${(city ?? "").trim().toLowerCase()}`;
+  return canonicalCityKey(country, city);
 }
+
+// Ancora dell'isola "remote anywhere": punto convenzionale IN MARE
+// (Mediterraneo occidentale, tra Baleari e Sardegna). Fisso per tutti i
+// profili: qualunque derivazione dai dati (min-lon, paese dominante)
+// finiva su terra o in mezzo al Pacifico appena il dataset aveva un
+// outlier — il mare aperto non è mai confondibile con una sede.
+const ANYWHERE_ANCHOR = { lat: 40.0, lon: 5.0 };
 
 /**
  * Ritorna, allineato all'ordine di `rows`, le coordinate risolte per ogni
@@ -111,43 +128,66 @@ export function resolveCityPins(
   for (const [ck, companies] of coordCompanies)
     if (companies.size >= GENERIC_COORD_MIN_COMPANIES) genericCoords.add(ck);
 
-  // 3. Prima passata: uffici esatti alle coordinate reali; le città-only
-  //    (senza ufficio, o con coordinata generica) vengono raccolte per
-  //    città (con l'indice originale) per la griglia.
+  // 3. Prima passata: uffici esatti alle coordinate reali. Le altre righe
+  //    vengono smistate (con l'indice originale) nei bucket delle griglie:
+  //    per città (onsite/ibride o remote CON sede di riferimento), per
+  //    paese-remote (full remote col solo vincolo di paese), o isola
+  //    "anywhere" (full remote senza alcun geo).
   const out: Array<{ lat: number; lon: number } | null> = new Array(
     rows.length,
   ).fill(null);
-  const cityOnly = new Map<string, { row: GeoRow; idx: number }[]>();
+  type Member = { row: GeoRow; idx: number };
+  const cityOnly = new Map<string, Member[]>();
+  const remoteByCountry = new Map<string, Member[]>();
+  const remoteAnywhere: Member[] = [];
   rows.forEach((r, idx) => {
     const hasOffice = r.office_lat != null && r.office_lon != null;
     const hasCity = (r.loc_city ?? "").trim() !== "";
+    const fullRemote = r.remote_type === "full_remote";
     if (hasOffice) {
       const ck = `${r.office_lat!.toFixed(4)}|${r.office_lon!.toFixed(4)}`;
-      // Coordinata generica MA senza città nota: meglio il punto generico
-      // che sparire dalla mappa → resta dov'è.
-      if (!genericCoords.has(ck) || !hasCity) {
+      // Ufficio vero (coordinata non generica) → pin lì, anche per le
+      // remote (è la sede di riferimento geocodata). Coordinata generica
+      // ma non ricollocabile altrove (niente città né regime remote) →
+      // meglio il punto generico che sparire dalla mappa.
+      if (!genericCoords.has(ck) || (!hasCity && !fullRemote)) {
         out[idx] = { lat: r.office_lat!, lon: r.office_lon! };
         return;
       }
     }
-    if (!hasCity) return; // resta null → bucket no-coords
-    const k = cityKey(r.loc_country, r.loc_city);
-    const arr = cityOnly.get(k) ?? [];
-    arr.push({ row: r, idx });
-    cityOnly.set(k, arr);
+    if (hasCity) {
+      // Anche le full remote con una sede di riferimento vanno alla città.
+      const k = cityKey(r.loc_country, r.loc_city);
+      const arr = cityOnly.get(k) ?? [];
+      arr.push({ row: r, idx });
+      cityOnly.set(k, arr);
+      return;
+    }
+    if (fullRemote) {
+      const country = canonicalCountry(r.loc_country);
+      if (country) {
+        const arr = remoteByCountry.get(country) ?? [];
+        arr.push({ row: r, idx });
+        remoteByCountry.set(country, arr);
+      } else {
+        remoteAnywhere.push({ row: r, idx });
+      }
+      return;
+    }
+    // Onsite/ibrida senza città: resta null → bucket no-coords.
   });
 
-  // 4. Griglia nord per ogni città: quadrata (≈√N colonne), ancorata
-  //    NORTH_OFFSET_M a nord del centro città, righe che crescono verso
-  //    nord. Ordine di lettura: score decrescente, ovest→est riga per riga
-  //    (i migliori nella riga più vicina alla città). Coordinate pure
-  //    funzioni di (centro città, insieme posizioni) → fisse a ogni
-  //    zoom/pan e stabili fra refresh a parità di dati.
-  for (const [k, members] of cityOnly) {
-    const sample = members[0].row;
-    const c =
-      centroid.get(k) ?? gazetteerCity(sample.loc_country, sample.loc_city);
-    if (!c) continue; // città irrisolvibile → restano null (no-coords)
+  // Layout griglia condiviso: quadrata (≈√N colonne), bordo a OFFSET
+  // dall'ancora, righe che crescono ALLONTANANDOSI (dir +1 = verso nord,
+  // -1 = verso sud). Ordine di lettura: score decrescente, ovest→est riga
+  // per riga (i migliori nella riga più vicina all'ancora). Coordinate
+  // pure funzioni di (ancora, insieme posizioni) → fisse a ogni zoom/pan
+  // e stabili fra refresh a parità di dati.
+  const layGrid = (
+    members: Member[],
+    anchor: { lat: number; lon: number },
+    dir: 1 | -1,
+  ) => {
     const sorted = [...members].sort((a, b) => {
       const sa = a.row.score ?? -1;
       const sb = b.row.score ?? -1;
@@ -161,17 +201,54 @@ export function resolveCityPins(
     const dLat = GRID_SPACING_M / M_PER_DEG_LAT;
     // Clamp del coseno: a latitudini estreme il passo in longitudine
     // divergerebbe (difensivo, nessuna città reale del dataset è lì).
-    const cosLat = Math.max(0.2, Math.cos((c.lat * Math.PI) / 180));
+    const cosLat = Math.max(0.2, Math.cos((anchor.lat * Math.PI) / 180));
     const dLon = GRID_SPACING_M / (M_PER_DEG_LAT * cosLat);
-    const baseLat = c.lat + NORTH_OFFSET_M / M_PER_DEG_LAT;
+    const baseLat = anchor.lat + (dir * NORTH_OFFSET_M) / M_PER_DEG_LAT;
     sorted.forEach((m, i) => {
       const rowI = Math.floor(i / cols);
       const colI = i % cols;
       out[m.idx] = {
-        lat: baseLat + rowI * dLat,
-        lon: c.lon + (colI - (cols - 1) / 2) * dLon,
+        lat: baseLat + dir * rowI * dLat,
+        lon: anchor.lon + (colI - (cols - 1) / 2) * dLon,
       };
     });
+  };
+
+  // 4. Griglia NORD per ogni città (posizioni con città ma senza ufficio).
+  for (const [k, members] of cityOnly) {
+    const sample = members[0].row;
+    const c =
+      centroid.get(k) ?? gazetteerCity(sample.loc_country, sample.loc_city);
+    if (!c) continue; // città irrisolvibile → restano null (no-coords)
+    layGrid(members, c, 1);
+  }
+
+  // 5. Griglia SUD per le full remote col solo vincolo di paese, ancorata
+  //    al "baricentro" del paese: mediana dei centroidi delle sue città
+  //    (se l'account ne ha), altrimenti la capitale dal gazetteer. Paese
+  //    non riconosciuto (es. pseudo-paesi come "Europe") → isola anywhere.
+  for (const [country, members] of remoteByCountry) {
+    const cityAnchors = [...centroid.entries()]
+      .filter(([k]) => k.startsWith(`${country}|`))
+      .map(([, c]) => c);
+    const anchor =
+      cityAnchors.length > 0
+        ? {
+            lat: median(cityAnchors.map((c) => c.lat)),
+            lon: median(cityAnchors.map((c) => c.lon)),
+          }
+        : gazetteerCountryAnchor(country);
+    if (!anchor) {
+      remoteAnywhere.push(...members);
+      continue;
+    }
+    layGrid(members, anchor, -1);
+  }
+
+  // 6. Isola "anywhere" per le full remote senza alcun geo: griglia sul
+  //    punto-mare convenzionale, uguale per tutti i profili.
+  if (remoteAnywhere.length > 0) {
+    layGrid(remoteAnywhere, ANYWHERE_ANCHOR, -1);
   }
 
   return out;
