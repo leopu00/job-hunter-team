@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { DashboardPosition } from "@/lib/queries";
 import UnseenDot from "@/app/components/UnseenDot";
@@ -34,6 +33,12 @@ type Props = {
   firstCol?: "id" | "scored";
 };
 
+// Larghezze fisse delle 6 colonne (table-fixed): la somma fa 100% così la
+// tabella riempie sempre il contenitore SENZA scroll orizzontale — l'utente
+// vede tutte e sei le colonne a ogni larghezza. Titolo e azienda hanno la
+// fetta più grande; il testo che eccede viene troncato con ellipsis.
+const COL_WIDTHS = ["10%", "33%", "27%", "9%", "10%", "11%"] as const;
+
 // Timestamp compatto "20/07 09:57" per la colonna della variante "scored".
 function formatScoredAt(iso: string | null): string {
   if (!iso) return "—";
@@ -51,32 +56,6 @@ export default function RecentPositionsTable({
   totalFiltered,
   firstCol = "id",
 }: Props) {
-  // Doppia scrollbar orizzontale: una barra-proxy in cima sincronizzata con
-  // il contenitore della tabella in fondo (utile con tabella larga + tante
-  // righe, così non devi scorrere fino in fondo per scrollare a destra).
-  const topRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const [scrollW, setScrollW] = useState(0);
-
-  useEffect(() => {
-    const el = bottomRef.current;
-    if (!el) return;
-    const update = () => setScrollW(el.scrollWidth);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [rows]);
-
-  // Sync bidirezionale dello scrollLeft tra le due barre.
-  const syncing = useRef(false);
-  const mirror = (from: HTMLDivElement | null, to: HTMLDivElement | null) => {
-    if (syncing.current || !from || !to) return;
-    syncing.current = true;
-    to.scrollLeft = from.scrollLeft;
-    syncing.current = false;
-  };
-
   // Colonne "dati" allineate al centro (header + valore): le altre (testo:
   // titolo/azienda/paese…) restano a sinistra, che si legge meglio.
   const centeredHeaders = new Set([labels.colScore]);
@@ -96,25 +75,17 @@ export default function RecentPositionsTable({
           {labels.viewAll}
         </Link>
       </div>
-      {/* Scrollbar orizzontale in cima (proxy sincronizzata con la tabella) */}
-      <div
-        ref={topRef}
-        onScroll={() => mirror(topRef.current, bottomRef.current)}
-        className="overflow-x-auto overflow-y-hidden"
-        aria-hidden="true"
-      >
-        <div style={{ width: scrollW, height: 1 }} />
-      </div>
-      <div
-        ref={bottomRef}
-        onScroll={() => mirror(bottomRef.current, topRef.current)}
-        className="overflow-x-auto border border-[var(--color-border)] rounded-lg"
-      >
+      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
         <table
-          className="w-full text-[12px]"
+          className="w-full table-fixed text-[12px]"
           style={{ borderCollapse: "collapse" }}
           aria-label={labels.title}
         >
+          <colgroup>
+            {COL_WIDTHS.map((w, i) => (
+              <col key={i} style={{ width: w }} />
+            ))}
+          </colgroup>
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {[
@@ -130,7 +101,7 @@ export default function RecentPositionsTable({
                 <th
                   key={h}
                   scope="col"
-                  className={`px-4 py-3 ${centeredHeaders.has(h) ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
+                  className={`px-4 py-3 ${centeredHeaders.has(h) ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase truncate`}
                   style={{ color: "var(--color-dim)" }}
                 >
                   {h}
@@ -164,25 +135,25 @@ export default function RecentPositionsTable({
                     // suppressHydrationWarning: il timestamp è formattato in
                     // timezone locale — server e browser possono divergere.
                     <td
-                      className="px-4 py-3 text-[10px] tabular-nums text-[var(--color-muted)] whitespace-nowrap"
+                      className="px-4 py-3 text-[10px] tabular-nums text-[var(--color-muted)] truncate"
                       title={p.scored_at ?? undefined}
                       suppressHydrationWarning
                     >
                       {formatScoredAt(p.scored_at)}
                     </td>
                   ) : (
-                    <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                    <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] truncate">
                       {p.legacy_id
                         ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
                         : p.id.slice(0, 8)}
                     </td>
                   )}
                   <td className="px-4 py-3 font-medium">
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-2 min-w-0">
                       <Link
                         href={`/positions/${p.id}`}
                         title={p.title ?? undefined}
-                        className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                        className="min-w-0 flex-1 truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
                       >
                         {p.title}
                       </Link>
@@ -193,7 +164,10 @@ export default function RecentPositionsTable({
                       />
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
+                  <td
+                    className="px-4 py-3 text-[var(--color-base)] truncate"
+                    title={p.company ?? undefined}
+                  >
                     {p.company}
                   </td>
                   {(() => {
@@ -203,7 +177,10 @@ export default function RecentPositionsTable({
                       !country && p.remote_type === "full_remote";
                     return (
                       <>
-                        <td className="px-4 py-3 text-[11px] whitespace-nowrap">
+                        <td
+                          className="px-4 py-3 text-[11px] truncate"
+                          title={country || undefined}
+                        >
                           {country ? (
                             <span className="text-[var(--color-base)]">
                               {country}
@@ -216,7 +193,10 @@ export default function RecentPositionsTable({
                             <span className="text-[var(--color-dim)]">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
+                        <td
+                          className="px-4 py-3 text-[11px] text-[var(--color-muted)] truncate"
+                          title={city || undefined}
+                        >
                           {city || (
                             <span className="text-[var(--color-dim)]">—</span>
                           )}

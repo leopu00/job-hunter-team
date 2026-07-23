@@ -27,7 +27,9 @@ import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
 import UnseenDot from "@/app/components/UnseenDot";
 import ColumnsPicker from "./ColumnsPicker";
 import {
+  POSITIONS_COLUMNS,
   POSITIONS_COLS_COOKIE,
+  POSITIONS_COL_MIN_WIDTH,
   parseColumnsCookie,
   type PositionsColumnKey,
 } from "./columns";
@@ -565,6 +567,16 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     cookieStore.get(POSITIONS_COLS_COOKIE)?.value,
   );
   const show = (k: PositionsColumnKey) => visibleCols.has(k);
+  // Colonne visibili nell'ordine di render (identico a header/body sotto):
+  // alimentano il <colgroup> di `table-fixed` e il min-width della tabella.
+  // Le larghezze del colgroup sono percentuali proporzionali ai minimi, così
+  // la tabella riempie il 100% quando le colonne ci stanno (testo troncato,
+  // niente scroll) e scrolla solo quando la somma dei minimi eccede.
+  const orderedCols = POSITIONS_COLUMNS.filter((c) => show(c));
+  const tableMinWidth = orderedCols.reduce(
+    (s, c) => s + POSITIONS_COL_MIN_WIDTH[c],
+    0,
+  );
   const statuses = csv(params.status);
   const remotes = csv(params.remote);
   const sources = csv(params.source);
@@ -956,10 +968,23 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         <div className="hidden md:block">
           <TableScrollSync className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
             <table
-              className="w-full text-[12px]"
-              style={{ borderCollapse: "collapse" }}
+              className="w-full table-fixed text-[12px]"
+              style={{ borderCollapse: "collapse", minWidth: tableMinWidth }}
               aria-label={tr("list_positions")}
             >
+              <colgroup>
+                {orderedCols.map((c) => (
+                  <col
+                    key={c}
+                    style={{
+                      width: `${(
+                        (POSITIONS_COL_MIN_WIDTH[c] / tableMinWidth) *
+                        100
+                      ).toFixed(3)}%`,
+                    }}
+                  />
+                ))}
+              </colgroup>
               <thead>
                 <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
                   {[
@@ -1023,7 +1048,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       <th
                         key={col}
                         scope="col"
-                        className={`px-4 py-3 ${center ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
+                        className={`px-4 py-3 ${center ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase truncate`}
                         style={{
                           color:
                             sortable && sortCol === col
@@ -1094,11 +1119,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Titolo — una riga, troncato con … se troppo lungo */}
                       <td className="px-4 py-3 font-medium">
-                        <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-2 min-w-0">
                           <Link
                             href={`/positions/${p.id}`}
                             title={p.title ?? undefined}
-                            className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                            className="min-w-0 flex-1 truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
                           >
                             {p.title}
                           </Link>
@@ -1126,7 +1151,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Azienda */}
                       {show("company") && (
                         <td
-                          className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap"
+                          className="px-4 py-3 text-[var(--color-base)] truncate"
                           title={p.company}
                         >
                           {p.company}
@@ -1135,7 +1160,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Categoria */}
                       {show("role_family") && (
                         <td
-                          className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap"
+                          className="px-4 py-3 text-[11px] text-[var(--color-base)] truncate"
                           title={p.role_family ?? undefined}
                         >
                           {p.role_family && p.role_family.trim() ? (
@@ -1162,7 +1187,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Paese (Remote in corsivo se senza paese ma full remote) */}
                       {show("loc_country") && (
                         <td
-                          className="px-4 py-3 text-[11px] whitespace-nowrap"
+                          className="px-4 py-3 text-[11px] truncate"
                           title={p.loc_country ?? undefined}
                         >
                           {p.loc_country && p.loc_country.trim() ? (
@@ -1181,7 +1206,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Città */}
                       {show("loc_city") && (
                         <td
-                          className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap"
+                          className="px-4 py-3 text-[11px] text-[var(--color-muted)] truncate"
                           title={p.loc_city ?? undefined}
                         >
                           {p.loc_city && p.loc_city.trim() ? (
@@ -1238,7 +1263,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       )}
                       {/* Fonte */}
                       {show("source") && (
-                        <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap">
+                        <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] truncate">
                           {p.source ? (
                             <span className="capitalize">
                               {p.source.replace(/[-_]/g, " ")}
