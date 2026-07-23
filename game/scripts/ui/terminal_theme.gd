@@ -35,14 +35,18 @@ static func get_theme() -> Theme:
 	btn_hover.bg_color = Palette.ROW
 	var btn_pressed := btn_hover.duplicate()
 	btn_pressed.bg_color = Palette.DEEP
+	var btn_disabled := btn_hover.duplicate()
+	btn_disabled.bg_color = Palette.ROW
 	t.set_stylebox("normal", "Button", btn)
 	t.set_stylebox("hover", "Button", btn_hover)
 	t.set_stylebox("pressed", "Button", btn_pressed)
 	t.set_stylebox("focus", "Button", btn_hover.duplicate())
+	t.set_stylebox("disabled", "Button", btn_disabled)
 	t.set_color("font_color", "Button", Palette.BASE)
 	t.set_color("font_hover_color", "Button", Palette.GREEN)
 	t.set_color("font_pressed_color", "Button", Palette.MINT)
 	t.set_color("font_focus_color", "Button", Palette.GREEN)
+	t.set_color("font_disabled_color", "Button", Palette.GREEN)
 	t.set_font("font", "Button", load(FONT_MEDIUM))
 
 	# LineEdit
@@ -58,6 +62,16 @@ static func get_theme() -> Theme:
 	t.set_color("font_color", "LineEdit", Palette.WHITE)
 	t.set_color("font_placeholder_color", "LineEdit", Palette.DIM)
 	t.set_color("caret_color", "LineEdit", Palette.GREEN)
+	t.set_color("selection_color", "LineEdit", Color(Palette.GREEN, 0.24))
+
+	# TextEdit / CodeEdit: usati da anteprime e console incorporate.
+	for type in ["TextEdit", "CodeEdit"]:
+		t.set_stylebox("normal", type, le.duplicate())
+		t.set_stylebox("focus", type, le_focus.duplicate())
+		t.set_color("font_color", type, Palette.WHITE)
+		t.set_color("font_placeholder_color", type, Palette.DIM)
+		t.set_color("caret_color", type, Palette.GREEN)
+		t.set_color("selection_color", type, Color(Palette.GREEN, 0.24))
 
 	# ProgressBar
 	var pb_bg := _flat(Palette.DEEP, Palette.BORDER)
@@ -71,8 +85,28 @@ static func get_theme() -> Theme:
 	t.set_font("normal_font", "RichTextLabel", load(FONT_REGULAR))
 	t.set_font("bold_font", "RichTextLabel", load(FONT_BOLD))
 
+	# Separatori e scrollbar devono schiarirsi insieme ai pannelli: lasciare
+	# quelli del tema Godot produrrebbe righe e binari dark nel tema light.
+	var separator := StyleBoxLine.new()
+	separator.color = Palette.BORDER
+	separator.thickness = hairline()
+	t.set_stylebox("separator", "HSeparator", separator)
+	var vseparator := separator.duplicate()
+	vseparator.vertical = true
+	t.set_stylebox("separator", "VSeparator", vseparator)
+	var scroll_bg := _flat(Palette.CARD, Palette.BORDER)
+	var scroll_grab := _flat(Palette.BORDER_GLOW, Palette.BORDER_GLOW)
+	for type in ["VScrollBar", "HScrollBar"]:
+		t.set_stylebox("scroll", type, scroll_bg.duplicate())
+		t.set_stylebox("grabber", type, scroll_grab.duplicate())
+		t.set_stylebox("grabber_highlight", type, _flat(Palette.GREEN, Palette.GREEN))
+
 	_theme = t
 	return t
+
+
+static func reset() -> void:
+	_theme = null
 
 ## Spessore del bordo "hairline". Il design 1920x1080 viene riscalato con
 ## canvas_items: su schermi più piccoli (1366x768) un bordo di 1px logico

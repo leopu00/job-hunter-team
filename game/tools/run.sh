@@ -40,6 +40,7 @@ fi
 
 case "$MODE" in
 	test)
+		JHT_NOVPS=1 godot --headless --script res://tools/theme_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/nav_grid_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/speech_bubble_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/pipeline_queue_selftest.gd

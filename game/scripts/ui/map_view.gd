@@ -198,14 +198,14 @@ func _draw() -> void:
 	var step := 60.0
 	var x := step
 	while x < r.size.x:
-		draw_line(Vector2(x, 0), Vector2(x, r.size.y), Color(1, 1, 1, 0.04), 1.0)
+		draw_line(Vector2(x, 0), Vector2(x, r.size.y), Color(Palette.BORDER.r, Palette.BORDER.g, Palette.BORDER.b, 0.32), 1.0)
 		x += step
 	var y := step
 	while y < r.size.y:
-		draw_line(Vector2(0, y), Vector2(r.size.x, y), Color(1, 1, 1, 0.04), 1.0)
+		draw_line(Vector2(0, y), Vector2(r.size.x, y), Color(Palette.BORDER.r, Palette.BORDER.g, Palette.BORDER.b, 0.32), 1.0)
 		y += step
 	# la terra sotto i pin: silhouette dei paesi dal geojson del web
-	var fill := PackedColorArray([Color(0.16, 0.17, 0.22, 1.0)])
+	var fill := PackedColorArray([Palette.ROW])
 	for land: Dictionary in _land:
 		var ring: PackedVector2Array = land["pts"]
 		var scaled := PackedVector2Array()
@@ -218,7 +218,7 @@ func _draw() -> void:
 					get_canvas_item(), idx, scaled, fill)
 		var outline := scaled.duplicate()
 		outline.append(scaled[0])
-		draw_polyline(outline, Color(0.32, 0.34, 0.45, 0.9), 1.0)
+		draw_polyline(outline, Palette.BORDER_GLOW, 1.0)
 	# pin: anello + punto + targhetta company/città + score
 	var font := TerminalTheme.get_theme().default_font
 	for pin in _pins:
@@ -241,7 +241,8 @@ func _draw() -> void:
 		# in basso a destra (Mediterraneo orientale: quasi solo mare, non
 		# copre pin), con un velo dietro: sotto passano coste e griglia
 		var x0 := r.size.x - 632.0
-		draw_rect(Rect2(x0 - 12, y0 - 26, 632, r.size.y - y0 + 20), Color(0.04, 0.05, 0.07, 0.88))
+		draw_rect(Rect2(x0 - 12, y0 - 26, 632, r.size.y - y0 + 20),
+				Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.94))
 		draw_string(font, Vector2(x0, y0 - 8), UIStrings.t("map.no_coords") % _no_coords.size(),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.MUTED)
 		for i in shown:

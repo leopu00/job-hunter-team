@@ -194,10 +194,6 @@ func _rebuild() -> void:
 	_block_salary(right, rows)
 	_block_matches(right, rows)
 
-## Colori ciclici delle fette del donut (tipi di ruolo, come sul web).
-const DONUT_COLORS := [Palette.GREEN, Palette.BLUE, Palette.PURPLE,
-		Palette.YELLOW, Palette.ORANGE, Palette.RED, Palette.MINT]
-
 ## Il donut dei tipi: archi proporzionali + legenda cliccabile accanto.
 class DonutChart:
 	extends Control
@@ -249,7 +245,8 @@ func _block_families(into: VBoxContainer, rows: Array) -> void:
 	legend.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for i in keys.size():
 		var k: Variant = keys[i]
-		var color: Color = DONUT_COLORS[i % DONUT_COLORS.size()]
+		var colors := Palette.accent_cycle()
+		var color: Color = colors[i % colors.size()]
 		var selected: bool = _sel["family"].has(k)
 		donut.slices.append({"count": int(counts[k]), "color": color,
 				"selected": selected or not any_sel})

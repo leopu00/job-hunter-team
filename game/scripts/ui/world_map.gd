@@ -130,7 +130,7 @@ static func _style_widget_button(btn: Button, col: Color) -> void:
 	btn.add_theme_color_override("font_color", col)
 	btn.add_theme_color_override("font_hover_color", Palette.MINT)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.05, 0.07, 0.85)
+	sb.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.94)
 	sb.border_color = Palette.BORDER
 	sb.set_border_width_all(TerminalTheme.hairline())
 	sb.content_margin_left = 10

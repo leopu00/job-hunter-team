@@ -129,18 +129,18 @@ func _draw() -> void:
 	var text_size := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
 	var size := Vector2(text_size.x + 24.0, 24.0)
 	var r := Rect2(Vector2(-size.x / 2.0, -size.y / 2.0), size)
-	draw_rect(r, Color(0.035, 0.035, 0.055, 0.94), true)
+	draw_rect(r, Color(Palette.CARD.r, Palette.CARD.g, Palette.CARD.b, 0.96), true)
 	draw_rect(r, Color(col.r, col.g, col.b, 0.85), false, 1.4)
 	var led_pos := Vector2(r.position.x + 9.0, 0.0)
 	# Base spenta sempre presente. Il verde compare e pulsa soltanto quando
 	# l'ultimo campione CPU fresco supera davvero la soglia di lavoro.
-	draw_circle(led_pos, 3.0, Color(0.13, 0.13, 0.18, 1.0))
+	draw_circle(led_pos, 3.0, Palette.BORDER)
 	if cpu_led_active():
 		var alpha := 1.0 if _cpu_led_lit() else 0.16
 		draw_circle(led_pos, 2.8,
 				Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, alpha))
 	else:
 		draw_arc(led_pos, 2.7, 0.0, TAU, 12,
-				Color(0.34, 0.34, 0.43, 0.8), 0.8)
+				Color(Palette.DIM.r, Palette.DIM.g, Palette.DIM.b, 0.8), 0.8)
 	draw_string(_font, Vector2(r.position.x + 16.0, 4.0), text,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("#f0f0fa"))
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Palette.WHITE)
