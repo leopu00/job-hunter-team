@@ -93,14 +93,24 @@ Scrivi SOLO in `scores` (INSERT) e `positions.status`. MAI toccare `applications
 **RULE-08 — UNA ALLA VOLTA, SCRITTURA IMMEDIATA (NIENTE BATCH)**
 Valuta le posizioni **rigorosamente una alla volta**. Valuta UNA posizione e **scrivi subito il risultato nel DB** (`db_insert.py score` + `db_update.py position --status`), e SOLO DOPO leggi/valuti la prossima. **MAI** valutare più posizioni e poi scriverle tutte insieme a fine giro. Il batch fa condividere lo stesso secondo `scored_at` a più score: sembra frettoloso/superficiale all'utente anche se ogni score è stato ragionato singolarmente. Una posizione → una valutazione focalizzata → una scrittura DB immediata → la prossima. Così la timeline attività resta veritiera (timestamp distinti = lavoro visibilmente sequenziale).
 
-**RULE-09 — RAZIONALE DELLO SCORE (`--notes`, OBBLIGATORIO, per l'utente)**
-Ogni score che salvi DEVE avere un razionale `--notes`. Viene mostrato all'**UTENTE**, sotto le barre dello score nella pagina posizione — NON è un log interno. Scrivilo bene:
-- **Nella lingua dell'UTENTE** (RULE-T14: "scorer reasoning" segue il locale utente — la stessa lingua che il team usa in chat). **Mai default all'inglese.** È la cosa più visibile che produci — una lingua sbagliata qui è la prima cosa che l'utente nota.
-- **Discorsivo e leggibile, parlando ALL'utente** — un paio di paragrafi brevi, `**grassetto**` sui punti decisivi, qualche bullet per pro/contro, qualche emoji (con parsimonia). **NON** un elenco di keyword separate da virgole.
-- **Spiega il numero**: perché QUESTO score e non più alto o più basso — nomina la leva che l'ha spostato (es. "match competenze forte ma **stipendio sotto target** → frena a NN").
-- **Collocalo** rispetto alle altre posizioni del candidato: una lettura veloce di dove si piazza ("tra i punteggi più alti adesso", "solido ma non in cima"). Dai un'occhiata alla distribuzione se utile (`db_query.py stats` / `db_query.py positions`) — basta il qualitativo, NON inventare ranking esatti.
-- **Pro / contro sintetici ma completi**: non omettere un contro reale, ma non scrivere un poema.
-Salvalo con `db_insert.py score ... --notes "<markdown>"` (usa `$'...\n...'` per veri a-capo se multi-riga — mai `\n` letterale, che la pagina mostrerebbe come testo).
+**RULE-09 — RAZIONALE DELLO SCORE (`--breakdown` + `--notes`, ENTRAMBI OBBLIGATORI, per l'utente)**
+L'analisi del fit col profilo vive QUI e solo qui. L'Analista possiede la descrizione dell'offerta (`jd_summary`) e una breve nota personale del team; tu possiedi i numeri e il loro perché. Mai ripetere quello che quelle card già dicono — ogni fatto vive in UNA sola card. Due campi, entrambi mostrati nella pagina posizione, entrambi **nella lingua dell'UTENTE** (RULE-T14 — mai default all'inglese):
+- **`--breakdown`** — una riga per dimensione dello score, in questo formato esatto (chiavi EN canoniche, testo libero dopo i due punti):
+```
+STACK: <1-2 frasi: perché N/40 — cosa matcha, cosa manca>
+REMOTE: <1-2 frasi: perché N/25>
+SALARY: <1-2 frasi: perché N/20>
+EXPERIENCE: <1-2 frasi: perché N/10>
+STRATEGIC: <1-2 frasi: perché N/15>
+```
+La pagina mostra ogni riga sotto la sua barra: l'utente tocca "Strategia 11/15" e legge perché 11 e non 15. Nomina cosa ha guadagnato i punti E cosa li ha tolti — un sotto-score senza il suo "perché" è lavoro incompleto.
+- **`--notes`** — 2-4 frasi max, parlando ALL'utente: solo la leva decisiva ("cosa lo tiene a 87 / cosa l'avrebbe spinto a 95"), più penalità/moltiplicatore feedback se applicati. `**grassetto**` sul punto chiave. NON un elenco di pro/contro (quello è il breakdown), NON un riassunto della JD.
+
+**VIETATO ovunque in breakdown/notes:**
+- **Confronti relativi/di sessione** — "il punteggio più alto della sessione", "in cima al batch di oggi", "a pari merito con #1234". Gli score si leggono giorni o settimane dopo, quando esistono posizioni più nuove: quelle frasi invecchiano e diventano false. La lista posizioni ordina già per score — mai classifiche in prosa.
+- **Ripetere l'Analista** — niente ri-riassunto della JD, niente ri-elenco degli stessi pro/contro che `jd_summary` o la nota del team già portano. (Pre-2026-07 gli stessi tre fatti comparivano in quattro card.)
+
+Salva con `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (veri a-capo `$'...\n...'` — mai un `\n` letterale, la pagina lo mostra come testo).
 
 ---
 
@@ -139,7 +149,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 3. Claim (RULE-03)
 4. Calcola lo **score base** con la formula
 5. **Applica il moltiplicatore feedback utente** (skill `feedback-query`) — vedi sotto
-6. Salva lo score nel DB **con il razionale `--notes`** (RULE-09 — per l'utente, nella lingua dell'utente)
+6. Salva lo score nel DB **con `--breakdown` (perché per-dimensione) + `--notes` (leva decisiva)** (RULE-09 — per l'utente, nella lingua dell'utente)
 7. Aggiorna lo status (RULE-04) — nessuna notifica a nessuno
 
 **Completa i passi 1-7 per UNA posizione e scrivila nel DB PRIMA di leggere o valutare la prossima (RULE-08 — niente batch a fine giro).**
@@ -164,13 +174,14 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 
 ```bash
 # Salva lo score (i flag CLI usano i nomi delle colonne DB, non i nomi della tabella)
-# --notes = razionale per l'utente (RULE-09), nella lingua dell'utente, markdown
-# leggero. Usa $'...\n...' per veri a-capo (mai un \n letterale).
+# --breakdown = perché per-dimensione (RULE-09): STACK/REMOTE/SALARY/EXPERIENCE/STRATEGIC.
+# --notes = 2-4 frasi sulla leva decisiva. Veri a-capo con $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
   --total 76 \
-  --notes $'**Match forte** sulle competenze chiave, sede perfetta.\n- ✅ <pro concreto>\n- ⚠️ <contro concreto>\nTra i punteggi più alti; a frenarlo è lo **stipendio sotto target**.' \
+  --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
+  --notes $'A decidere il numero è lo **stipendio sotto target**: il solo fit tecnico valeva oltre 85.' \
   --scored-by $MY_ID
 
 # Aggiorna lo status

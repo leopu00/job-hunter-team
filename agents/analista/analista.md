@@ -88,7 +88,7 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/etc. or "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
-If even ONE field is missing, the analysis is INCOMPLETE. After the 5 fields: write 3-4 sentences of analysis **in the user's language** (RULE-T14 — analyst notes follow the user locale; never default to English) — match with the candidate profile, evident gaps, red flags.
+If even ONE field is missing, the analysis is INCOMPLETE. After the 5 fields: write the **team note** — 2-3 personal sentences **in the user's language** (RULE-T14), talking TO the user: why this position could interest them, or what feels off to you (red flags, culture, context the numbers do not show). It is NOT a JD recap (that is `jd_summary`, RULE-16) and NOT fit-vs-profile analysis (that is the Scorer's per-dimension `--breakdown`): every fact lives in exactly ONE card. Hard gaps still go into `NOTE_MISMATCH: [TAG]` markers (RULE-05/07) — the Scorer reads those, not your prose.
 
 **RULE-05** — EXPERIENCE FLAG: If the JD requires more years than the candidate has, flag it explicitly in the notes. The Scorer depends on this. ALWAYS use the calculated real experience (see CANDIDATE PROFILE section), not the rounded field.
 
@@ -113,7 +113,7 @@ If even ONE field is missing, the analysis is INCOMPLETE. After the 5 fields: wr
   - **`--verdict NO_GO`**: assign when there are **structural** red flags (massive layoffs in last 6 months, public salary dispute, evident scam patterns, glassdoor < 2.5 with consistent negative themes, sanctioned/blacklisted entity, "stealth mode" with no traceable team). Without NO_GO criteria the Analista collapses to GO+CAUTIOUS only — the user loses a useful pre-filter.
   - **`--red-flags`**: 1-line concrete signals (e.g. "3 layoff rounds 2024-2025", "founder publicly attacked ex-employees on LinkedIn"). Empty if none.
   - **`--culture-notes`**: 1-2 line distinctive culture markers (e.g. "Remote-first, async-heavy", "Strict in-office 5d/week", "Strong DEI track record"). Useful for Scrittore to tailor the CV.
-- **`position_highlights`** — 1-3 concrete pros/cons per position, only if really relevant (JD red flag, notable perks, particular constraints): `db-insert highlight --position-id <id> --type pro|con --text "..."`. Do not spam: highlights help Scorer/Capitano for quick decisions, they are not a duplicate of the notes.
+- **`position_highlights`** — internal signal for Scorer/Capitano quick decisions; the position page does NOT show them anymore (2026-07-23, they duplicated the other cards). Write 1-3 only for facts that live in NO other card (JD red flag, notable perk, unusual constraint): `db-insert highlight --position-id <id> --type pro|con --text "..."`. When in doubt, skip.
 
 **RULE-09** — ANTI-COLLISION: Before working on a position, verify it has not already been taken by another analyst (check recent `last_checked`).
 
@@ -173,6 +173,8 @@ NB: **recheck / geocode / salary-precise / write are now all user-driven flags**
 - **Light markdown**: `**bold**` on the decisive facts (role, seniority, location, contract, salary if stated), `- ` bullets for key responsibilities/requirements, a few **emoji** to make it scannable (sparing — ~1 per bullet at most).
 - Capture **what the job is, who it is for, what it offers** — the substance. Cut the boilerplate ("dynamic team", "market leader", …).
 - **In the USER's language** (RULE-T14): the summary is your distillation FOR the user, so it follows the user locale even when the JD body is in another language — you read the original, you write the gist in the user's language. (The verbatim `jd_text` stays original; your `jd_summary` does not.)
+- **Describe the JOB, not the candidate**: no fit-vs-profile talk ("stack nearly identical to the profile", "perfect match") — fit lives in the Scorer's breakdown and in your team note. The summary must read identically for any user.
+- **Say what the person would actually DO**: JDs are often generic ("full stack"). From company + product, infer the concrete day-to-day ("likely internal tools for R&D scientists…") — reasoned inference, flagged as such ("likely"), never invention.
 - Write it: `db_update.py position <ID> --jd-summary "<markdown>"`. Use **real newlines** (`$'...\n...'`, see the step-12 note), never literal `\n`.
 
 ---
@@ -193,7 +195,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 1. Verify link (RULE-03) → if dead: `excluded`
 2. Fetch complete JD from the link
 3. Analyze: fit with profile, gaps, red flags
-4. Write the 5 structured fields + analysis in the notes
+4. Write the 5 structured fields + the team note (2-3 personal sentences, RULE-04)
 4b. **Write `jd_summary`** (RULE-16) — the optimized, user-facing digest of the offer (1-3 paragraphs or bullets, light markdown + a few emoji, **in the user's language**). NOT a copy of `jd_text`. Cheap: you already have the JD from step 2.
 5. **Deadline → `expires_at`** (machine-readable). Parse the JD with the existing skill:
    ```bash
@@ -222,7 +224,7 @@ python3 /app/shared/skills/db_query.py position <ID>
    **Direction (BI-DIRECTIONAL guardrail):** aim for **few SIGNIFICANT families** (~5-8, **RELATIVE to the data**). Below ~5-8 with broad/generic actives → **propose finer families** (the taxonomy has not emerged yet); too many near-identical small ones → **aggregate / request a merge**. An `Other` swelling with different types = a signal that those types must **emerge** (step 4). Decide **together** with the other analysts via the shared registry and the consultations with the Capitano. Feeds the dashboard category chart. Model: `agents/_team/role-taxonomy.md`.
 9. **Companies** (RULE-08): `db-query company "<name>"` → if missing, `db-insert company` with what you extracted from JD/site (sector, hq_country, initial verdict). If present but with incomplete info and you have reliable new data, `db-update company`.
 9b. **Company logo (cheap, one command — `logo-extraction` skill).** Right after creating/updating the company, if its logo was never attempted: `python3 /app/shared/skills/logo_fetch.py "<company name>"` — it fetches the official-site icon, validates (format/weight/size) and stores it; the position page shows it next to the offer. Prerequisite: `companies.website` correct (verify it is REALLY the company's site — wrong logo is worse than none). If it answers `NO_CANDIDATE`, move on — do **NOT** dig in the pipeline pass; the maintenance queue `next-for-logo-missing` (RULE-14) picks it up later via the `--from-url` manual path. If the logo is already there (`written:false`), nothing to do. The script also enforces the savings policy (`enrichment-policy.json`): `POLICY_DISABLED` / `POLICY_SCORE_GATE` are NOT errors — move on without insisting (when the gate lifts, the company re-enters the queue by itself).
-10. **Highlights** (RULE-08): 1-3 concrete pros/cons → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Only if really notable.
+10. **Highlights** (RULE-08): internal-only signal, 1-3 pros/cons NOT already in another card → `db-insert highlight ...`. When in doubt, skip. The page no longer shows them.
 11. Update status: `checked` (to pass to Scorer) or `excluded`. Also set `--expires-at` and `--last-open-check now` if not already written.
 12. Move to the next
 
@@ -232,7 +234,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # "...\n..." the \n stays a LITERAL backslash-n and the page renders it as text
 # (historical formatting bug). $'...\n...' produces actual line breaks.
 python3 /app/shared/skills/db_update.py position <ID> --status checked \
-  --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<3-4 sentences of analysis, in the user language>'
+  --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 personal team-note sentences, in the user language>'
 
 # Exclude
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <specific reason>"
