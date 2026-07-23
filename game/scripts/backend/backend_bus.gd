@@ -202,6 +202,16 @@ func _self_test_vps_contract() -> void:
 			and VpsBackend.expand_user_path("/tmp/a~b", "/home/test") == "/tmp/a~b" \
 			and VpsBackend._safe_tmux_session("SCOUT-2") \
 			and not VpsBackend._safe_tmux_session("SCOUT-2; send-keys C-c")
+	# Trasporto locale: docker via argv diretto, mai una shell host (su
+	# Windows sarebbe PowerShell 5.1, che non parla POSIX).
+	ok = ok and LocalBackend._docker_argv(
+			"docker exec jht sh -lc 'tmux ls 2>/dev/null; echo ---X---'") \
+			== PackedStringArray(["exec", "jht", "sh", "-lc",
+					"tmux ls 2>/dev/null; echo ---X---"]) \
+			and LocalBackend._docker_argv(
+					"docker inspect jht --format '{{.State.Status}}'") \
+			== PackedStringArray(["inspect", "jht", "--format", "{{.State.Status}}"]) \
+			and LocalBackend._docker_argv("python3 -").is_empty()
 	print("VPS-CONTRACT-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"uids": uids, "roles": roles, "msg": msg}))
 

@@ -204,6 +204,14 @@ func _apply_probe(next: Dictionary) -> void:
 	if bool(status.get("container_running", false)) \
 			and BackendBus.state == BackendBus.DISCONNECTED:
 		BackendBus.connect_local_backend()
+	# Login appena rilevato (o già presente) con container acceso: l'assistente
+	# parte da solo in background, così il passo profilo trova subito il suo
+	# interlocutore invece di un team spento (feedback Leone 23/07). La
+	# chiamata è idempotente: ha il guard tmux has-session dentro.
+	if bool(status.get("container_running", false)) \
+			and not bool(status.get("remote", false)) \
+			and bool(status.get("provider_authenticated", false)):
+		BackendBus.ensure_assistant()
 
 
 func _finalize(next: Dictionary) -> void:
@@ -720,19 +728,42 @@ static func embedded_terminal_spec(title: String, hint: String, command: String)
 func open_technical_terminal(context: String, title: String, hint: String,
 		container_args: PackedStringArray) -> void:
 	var vps := _vps_config()
-	var pieces := PackedStringArray(["docker", "exec",
-			_exec_tty_flags(not vps.is_empty()), "jht"])
-	for arg in container_args:
-		# via VPS parsa la sh remota (POSIX); in locale la shell di piattaforma
-		pieces.append(_shell_quote(arg) if not vps.is_empty() else _local_quote(arg))
-	var inner := " ".join(pieces)
-	var command := inner
-	if not vps.is_empty():
+	var command := ""
+	if vps.is_empty():
+		command = _local_container_exec(" ".join(_posix_quoted(container_args)))
+	else:
+		var pieces := PackedStringArray(["docker", "exec", "-it", "jht"])
+		pieces.append_array(_posix_quoted(container_args))
+		var inner := " ".join(pieces)
 		var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 		var target := "root@" + str(vps.get("ip", ""))
 		command = "ssh -tt -i " + _local_quote(key) + " " \
 				+ _local_quote(target) + " " + _local_quote(inner)
 	terminal_requested.emit(context, embedded_terminal_spec(title, hint, command))
+
+
+static func _posix_quoted(args: PackedStringArray) -> PackedStringArray:
+	var quoted := PackedStringArray()
+	for arg in args:
+		quoted.append(_shell_quote(arg))
+	return quoted
+
+
+## `docker exec` locale per la console incorporata. Su Windows Godot non ha
+## ConPTY: senza TTY i CLI raw-mode partono in modalità batch (Claude:
+## "Input must be provided ... when using --print", test Leone 23/07). La
+## PTY si crea DENTRO il container con `script` (util-linux, presente
+## nell'immagine): il comando viene parsato dalla sh del container, quindi
+## arriva già POSIX-quotato e passa a script come UNICO argomento tra
+## doppi apici (che cmd.exe e il CRT di docker attraversano intatti).
+## Su macOS/Linux la PTY host-side la crea già embedded_terminal_spec.
+static func _local_container_exec(posix_command: String) -> String:
+	if OS.get_name() == "Windows":
+		# stty allinea la pty alla griglia 40x120 del renderer della console
+		# incorporata (TermScreen.ROWS): i TUI impaginano su quella misura.
+		return "docker exec -i -e TERM=xterm-256color jht script -qec \"" \
+				+ "stty rows 40 cols 120 2>/dev/null; " + posix_command + "\" /dev/null"
+	return "docker exec -it jht " + posix_command
 
 
 func open_cloud_login(prefer_google := false) -> void:
@@ -1460,17 +1491,18 @@ static func _run_ssh_stdin(vps: Dictionary, command: String,
 
 
 static func _provider_login_command(provider: String, vps: Dictionary = {}) -> String:
-	var flags := _exec_tty_flags(not vps.is_empty())
-	var inner := ""
+	var tool := ""
 	match provider:
-		"codex": inner = "docker exec %s jht codex login --device-auth" % flags
-		"kimi": inner = "docker exec %s jht kimi --yolo" % flags
-		_: inner = "docker exec %s jht claude --dangerously-skip-permissions" % flags
+		"codex": tool = "codex login --device-auth"
+		"kimi": tool = "kimi --yolo"
+		_: tool = "claude --dangerously-skip-permissions"
 	if vps.is_empty():
 		if OS.get_name() == "Windows":
 			# cmd.exe non ha printf: niente banner, dritto al comando.
-			return inner
-		return "printf '\\nJHT — login con abbonamento (console interna)\\n\\n'; " + inner
+			return _local_container_exec(tool)
+		return "printf '\\nJHT — login con abbonamento (console interna)\\n\\n'; " \
+				+ _local_container_exec(tool)
+	var inner := "docker exec -it jht " + tool
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 	var target := "root@" + str(vps.get("ip", ""))
 	var command := "ssh -tt -i " + _local_quote(key) + " " \
@@ -1488,7 +1520,9 @@ static func _provider_terminal_hint(provider: String) -> String:
 		"kimi":
 			return "Nel prompt Kimi digita /login, scegli Kimi Code e completa il login nel browser."
 		_:
-			return "Nel menu Claude scegli Login with subscription e completa l'accesso nel browser."
+			return "Nel menu Claude scegli Login with subscription. Se il browser non si apre: " \
+					+ "COPIA LINK qui sotto e incollalo nel browser. Poi copia il codice dal browser, " \
+					+ "premi INCOLLA e Invio; se non risponde, premi INVIO una seconda volta."
 
 
 static func _shell_quote(value: String) -> String:
@@ -1504,13 +1538,6 @@ static func _local_quote(value: String) -> String:
 	if OS.get_name() == "Windows":
 		return "\"" + value.replace("\"", "") + "\""
 	return _shell_quote(value)
-
-
-## `docker exec` locale su Windows: stdin del figlio è una pipe, non un TTY,
-## e `-t` fallirebbe con "the input device is not a TTY". Via `ssh -tt` il
-## TTY remoto esiste sempre, quindi lì `-it` resta valido.
-static func _exec_tty_flags(remote: bool) -> String:
-	return "-i" if OS.get_name() == "Windows" and not remote else "-it"
 
 
 func open_subscription(provider: String) -> void:

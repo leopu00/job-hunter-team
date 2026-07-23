@@ -78,17 +78,25 @@ if retry:
 print(json.dumps(out, ensure_ascii=False))
 """
 
-## Roster, chat e throttle in UN solo giro ssh. NIENTE quoting annidato
-## qui dentro (sh -c con apici e #{} si è già rotto una volta nel viaggio
-## OS.execute→ssh→shell remota): il ; lo interpreta la shell remota,
-## tmux ls resta in formato default e il nome sessione si estrae dai ':'.
-const POLL_CMD := "docker exec jht tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
+## Roster, chat e throttle in UN solo giro ssh e UNA sola docker exec: la
+## catena POSIX (;, 2>/dev/null) vive in un blocco a apici singoli parsato
+## dalla sh DENTRO il container. Vincolo Windows: in locale il trasporto è
+## PowerShell 5.1, che di quella sintassi non capisce niente (2>/dev/null
+## diventa il file C:\dev\null — l'"Out-File: impossibile trovare una parte
+## del percorso" del test Leone 23/07); un blocco a apici singoli invece lo
+## attraversa come argomento unico. tmux ls resta in formato default e il
+## nome sessione si estrae dai ':'.
+const POLL_CMD := "docker exec jht sh -lc 'tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
 		# Un team in modalita intensiva puo produrre molte righe fra due poll:
 		# 500 evita che una raffica valida cada fuori dalla finestra prima che
 		# il cursore timestamp locale la osservi.
-		+ "docker exec jht tail -n 500 /jht_home/logs/messages.jsonl 2>/dev/null; " \
+		+ "tail -n 500 /jht_home/logs/messages.jsonl 2>/dev/null; " \
 		+ "echo ---JHT-THROTTLE---; " \
-		+ "docker exec jht tail -n 60 /jht_home/logs/throttle-events.jsonl 2>/dev/null"
+		# true finale: su un'install fresca throttle-events.jsonl non esiste
+		# ancora e l'exit 1 del tail verrebbe scambiato per un guasto del
+		# trasporto (2 giri → badge ERROR). code!=0 ora significa solo
+		# docker/ssh rotti davvero.
+		+ "tail -n 60 /jht_home/logs/throttle-events.jsonl 2>/dev/null; true'"
 
 ## Snapshot posizioni dal jobs.db (stesso dataset leggero dei facets del
 ## web), letto con python3 nel container (sqlite3 CLI assente).
@@ -1355,11 +1363,11 @@ static func _uid_norm(name: String) -> String:
 
 ## ── Chat bidirezionale utente ↔ agente ───────────────────────────────
 ## Invio = il canale della desktop app: persist del messaggio utente in
-## chat.jsonl + payload [@utente -> @<agent>] [CHAT] nella tmux
-## dell'agente via load-buffer/paste-buffer. Il testo NON attraversa mai
-## una shell come argomento (gotcha OS.execute): viaggia su file
-## temporaneo locale e arriva al remoto via stdin (pipe diretto a OpenSSH,
-## senza shell locale; append remoto con tee -a, mai sh -c).
+## chat.jsonl + payload [@utente -> @<agent>] [CHAT] consegnato alla tmux
+## dell'agente con jht-tmux-send (busy-wait + verify + submit). Il testo
+## NON attraversa mai una shell come argomento (gotcha OS.execute):
+## viaggia su file temporaneo locale, arriva via stdin e diventa argomento
+## solo nella sh DENTRO il container ("$msg").
 ## Chat 1-a-1 con OGNI agente del roster: l'uid del gioco si risolve in
 ## directory (/jht_home/agents/<dir>/) e sessione tmux raw dal poll.
 
@@ -1591,7 +1599,14 @@ func _do_send_chat(agent: String, text: String, context := "") -> void:
 		Log.call_deferred("warn", "backend", "chat: persist fallito (non blocco): "
 				+ _short_error(persist))
 
-	# 2) payload nella tmux dell'agente: load-buffer da stdin, poi paste
+	# 2) payload nella tmux dell'agente via jht-tmux-send, il tool di
+	# flotta: le TUI Ink NON registrano l'Enter se arriva mentre il turno è
+	# in corso o prima del render del testo — il paste+Enter alla cieca
+	# lasciava il messaggio APPESO nel composer (test Leone 23/07 sera).
+	# Il tool fa busy-wait (fino a 90s), digita, VERIFICA che il testo sia
+	# nel pane e solo allora submitta. Il messaggio viaggia su stdin →
+	# variabile della sh del container: mai come argomento attraverso le
+	# shell host (ricetta anti-quoting di questo file).
 	f = FileAccess.open(buf, FileAccess.WRITE)
 	var agent_payload := "[@utente -> @%s] [CHAT] %s" % [agent, text]
 	if not context.is_empty():
@@ -1601,18 +1616,20 @@ func _do_send_chat(agent: String, text: String, context := "") -> void:
 				+ "\n[FINE CONTESTO]\n\n" + agent_payload
 	f.store_string(agent_payload)
 	f.close()
-	var load := _ssh_stdin_file(buf, "docker exec -i jht tmux load-buffer -")
+	var deliver_cmd := "docker exec -i jht sh -c " \
+			+ "'msg=$(cat); jht-tmux-send " + session + " \"$msg\"'"
+	var delivered := {}
+	for attempt in 3:
+		delivered = _ssh_stdin_file(buf, deliver_cmd)
+		# exit 4 = TUI occupata oltre il budget: agente VIVO su un turno
+		# lungo — si riprova (il tool ha già atteso 90s per conto suo).
+		if int(delivered.get("code", -1)) != 4:
+			break
 	DirAccess.remove_absolute(buf)
-	if load["code"] != 0:
-		_chat_sent(agent, false, _short_error(load))
-		return
-	var paste := _ssh("docker exec jht tmux paste-buffer -t " + session)
-	if paste["code"] != 0:
-		_chat_sent(agent, false, _short_error(paste))
-		return
-	var enter := _ssh("docker exec jht tmux send-keys -t " + session + " Enter")
-	if enter["code"] != 0:
-		_chat_sent(agent, false, _short_error(enter))
+	if delivered["code"] != 0:
+		var reason := "l'agente è occupato da diversi minuti: riprova tra poco" \
+				if int(delivered["code"]) == 4 else _short_error(delivered)
+		_chat_sent(agent, false, reason)
 		return
 	_chat_sent(agent, true, "")
 	_fetch_convo(agent)  # eco immediato del messaggio persistito
@@ -1838,14 +1855,16 @@ func _fetch_profile_status() -> void:
 
 ## Avvio idempotente dell'assistente (equivalente di POST
 ## /api/assistente/start): se la sessione ASSISTENTE non c'è, lancia
-## start-agent.sh dentro il container in detached. Niente quoting: solo
-## il || della shell remota, come nel POLL_CMD.
+## start-agent.sh dentro il container. Il || e il detach (setsid -f al
+## posto di docker -d) vivono nella sh del container, dentro apici
+## singoli: PowerShell 5.1 (trasporto locale Windows) non ha || e senza
+## questo blocco l'assistente non partiva MAI in locale (Leone 23/07).
 func ensure_assistant() -> void:
 	_queue_worker(_do_ensure_assistant)
 
 func _do_ensure_assistant() -> void:
-	_ssh("docker exec jht tmux has-session -t ASSISTENTE 2>/dev/null " \
-			+ "|| docker exec -d jht bash /app/.launcher/start-agent.sh assistente")
+	_ssh("docker exec jht sh -lc 'tmux has-session -t ASSISTENTE 2>/dev/null " \
+			+ "|| setsid -f bash /app/.launcher/start-agent.sh assistente'")
 
 ## Upload CV/documenti nella drop-zone del container (/jht_user/allegati,
 ## stessa destinazione di POST /api/assistente/upload). Il file viaggia
@@ -1883,8 +1902,10 @@ func _do_upload_document(local_path: String) -> void:
 	if mk["code"] != 0:
 		_doc_uploaded(false, "", _short_error(mk))
 		return
+	# >/dev/null dentro la sh del container: al livello host sarebbe un
+	# redirect PowerShell verso il file C:\dev\null (Windows locale).
 	var res := _ssh_stdin_file(local_path,
-			"docker exec -i jht tee " + remote + " >/dev/null")
+			"docker exec -i jht sh -lc 'tee " + remote + " >/dev/null'")
 	if res["code"] != 0:
 		_doc_uploaded(false, "", _short_error(res))
 		return
