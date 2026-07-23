@@ -1358,24 +1358,31 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const { data, error } = await supabase
     .from("positions")
     .select(
-      "id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, is_remote, created_at, scores ( total_score )",
+      "id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, remote_type, created_at, scores ( total_score )",
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null);
   if (error || !data) return [];
   const rows = data as any[];
   const pins = resolveCityPins(
-    rows.map((p) => ({
-      loc_country: p.loc_country ?? null,
-      loc_city: p.loc_city ?? null,
-      office_lat: p.office_lat,
-      office_lon: p.office_lon,
-    })),
+    rows.map((p) => {
+      const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
+      return {
+        loc_country: p.loc_country ?? null,
+        loc_city: p.loc_city ?? null,
+        office_lat: p.office_lat,
+        office_lon: p.office_lon,
+        id: String(p.id),
+        score: typeof s?.total_score === "number" ? s.total_score : null,
+        company: p.company ?? null,
+        remote_type: p.remote_type ?? null,
+      };
+    }),
   );
   const out: local.PositionCoord[] = [];
   rows.forEach((p, i) => {
     const c = pins[i];
-    if (!c) return; // città non risolvibile → finisce tra i no-coords
+    if (!c) return; // posizione non risolvibile → finisce tra i no-coords
     const score = Array.isArray(p.scores) ? p.scores[0] : p.scores;
     out.push({
       id: String(p.id),
@@ -1386,7 +1393,11 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
       score: typeof score?.total_score === "number" ? score.total_score : null,
       lat: c.lat,
       lon: c.lon,
-      is_remote: !!p.is_remote,
+      // La colonna is_remote è storicamente sempre false (campo morto):
+      // la verità sta in remote_type. Derivato qui così contatori e
+      // rendering remote funzionano.
+      is_remote: p.remote_type === "full_remote",
+      remote_type: p.remote_type ?? null,
       location: p.location ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
@@ -1554,12 +1565,17 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
     .is("deleted_at", null);
   if (error || !data) return [];
   const rows = data as any[];
+  // Qui id/score non servono: interessa solo se il pin è risolvibile
+  // (pins[i] truthy), non lo slot esatto nelle griglie. remote_type sì:
+  // le full remote ora si risolvono (griglia-paese o isola) e devono
+  // uscire da questo bucket.
   const pins = resolveCityPins(
     rows.map((p) => ({
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
       office_lat: p.office_lat,
       office_lon: p.office_lon,
+      remote_type: p.remote_type ?? null,
     })),
   );
   const out: PositionNoCoord[] = [];
@@ -1573,7 +1589,7 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
       status: p.status,
       role_family: p.role_family ?? null,
       score: typeof score?.total_score === "number" ? score.total_score : null,
-      is_remote: !!p.is_remote,
+      is_remote: p.remote_type === "full_remote",
       remote_type: p.remote_type ?? null,
       location: p.location ?? null,
       loc_country: p.loc_country ?? null,
