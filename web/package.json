@@ -21,7 +21,7 @@
     "ipaddr.js": "^2.2.0",
     "js-yaml": "^4.1.1",
     "maplibre-gl": "^5.24.0",
-    "next": "^16.2.9",
+    "next": "^16.2.11",
     "next-intl": "^4.9.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
@@ -41,7 +41,8 @@
   },
   "overrides": {
     "@swc/helpers": "^0.5.17",
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.10",
+    "sharp": "^0.35.3"
   },
   "license": "MIT",
   "author": "Leone Emanuel Puglisi <leopu00@gmail.com>",
