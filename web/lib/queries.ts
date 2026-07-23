@@ -1305,13 +1305,16 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       p.salary_estimated_min != null || p.salary_estimated_max != null;
     const salary_min =
       ((useEst ? p.salary_estimated_min : p.salary_declared_min) as
-        number | null) ?? null;
+        | number
+        | null) ?? null;
     const salary_max =
       ((useEst ? p.salary_estimated_max : p.salary_declared_max) as
-        number | null) ?? null;
+        | number
+        | null) ?? null;
     const salary_currency =
       ((useEst ? p.salary_estimated_currency : p.salary_declared_currency) as
-        string | null) ?? "EUR";
+        | string
+        | null) ?? "EUR";
     return {
       id: String(p.id),
       legacy_id: (p.legacy_id as number | null) ?? null,
