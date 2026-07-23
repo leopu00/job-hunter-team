@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { JHT_USER_UPLOADS_DIR } from "@/lib/jht-paths";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { isLocalRequest, requireLocalWrite } from "@/lib/auth";
+import { activeDemoPersona } from "@/lib/demo/mode";
 import { createClient } from "@/lib/supabase/server";
 import fs from "fs";
 import path from "path";
@@ -15,6 +16,12 @@ export const dynamic = "force-dynamic";
 //     per APRIRE un file si passa dal bridge on-demand (vedi
 //     docs/internal/file-bridge-on-demand-2026-06-07.md).
 export async function GET() {
+  // Demo mode: il candidato fittizio non ha file sincronizzati — lista
+  // vuota, MAI il filesystem locale (su dev :3002 mostrerebbe i CV veri
+  // della macchina; feedback utente 23/07).
+  if (await activeDemoPersona()) {
+    return NextResponse.json({ files: [], mode: "cloud" });
+  }
   if (isSupabaseConfigured && !(await isLocalRequest())) {
     const supabase = await createClient();
     const {

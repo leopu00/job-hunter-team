@@ -5,6 +5,8 @@ import { isSupabaseConfigured } from "@/lib/workspace";
 import { isCloudDeploy } from "@/lib/deploy-mode";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { isLocalRequest } from "@/lib/auth";
+import { activeDemoPersona } from "@/lib/demo/mode";
+import { getDemoCandidate } from "@/lib/demo/profile";
 import type { CandidateProfile } from "@/lib/types";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { getProfileT } from "@/lib/profile-i18n";
@@ -70,7 +72,17 @@ export default async function ProfilePage() {
   // localhost (dev server in modalità cloud): decidere per origine
   // richiesta mandava il dev :3002 sul workspace vuoto → "nessun
   // profilo" con dati presenti sul cloud (21/07).
-  if (isSupabaseConfigured && (isCloudDeploy() || !(await isLocalRequest()))) {
+  // Demo mode: profilo candidato fittizio della persona attiva, così anche
+  // /profile è dimostrabile prima del pairing (feedback utente 23/07).
+  const demoPersona = await activeDemoPersona();
+  if (demoPersona) {
+    const d = getDemoCandidate(demoPersona);
+    profile = d.profile;
+    cloudContacts = d.contacts;
+  } else if (
+    isSupabaseConfigured &&
+    (isCloudDeploy() || !(await isLocalRequest()))
+  ) {
     const supabase = await createClient();
     const {
       data: { user },
