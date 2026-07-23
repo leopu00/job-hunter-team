@@ -140,7 +140,7 @@ export default function PositionTypesPie({
         )}
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+      <div className="flex-1 min-h-0 flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-8">
         <div
           className="relative shrink-0 self-center sm:self-auto"
           style={{ width: size, maxWidth: "100%", aspectRatio: "1 / 1" }}

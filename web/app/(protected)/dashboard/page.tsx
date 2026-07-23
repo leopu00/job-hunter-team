@@ -1,4 +1,3 @@
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -30,18 +29,6 @@ import CloudRefreshButton from "@/app/components/CloudRefreshButton";
 const OnboardingWizard = dynamic(
   () => import("@/app/components/OnboardingWizard"),
 );
-
-const STATUS_COLORS: Record<string, string> = {
-  new: "var(--color-muted)",
-  checked: "var(--color-blue)",
-  scored: "var(--color-purple)",
-  writing: "var(--color-yellow)",
-  review: "var(--color-orange)",
-  ready: "var(--color-ready)",
-  applied: "var(--color-green)",
-  response: "#58a6ff",
-  excluded: "var(--color-red)",
-};
 
 // Demo: stato corrente → attore plausibile dell'ultima azione.
 const DEMO_ACTOR_BY_STATUS: Record<string, string> = {
@@ -166,56 +153,6 @@ export default async function DashboardPage() {
 
   const isEmpty = stats.total === 0;
 
-  // Pipeline a 5 box che segue il flusso reale (2026-06-07):
-  //   Da analizzare → Analizzate → Con lo score → Da scrivere → Scritte
-  // "Con lo score" = scored NON ancora selezionate; "Da scrivere" =
-  // selezionate dall'utente (write_requested) ma CV non ancora pronto
-  // (scored/writing/review). Trovate/Inviate vivono nella pagina Analisi.
-  const pipeline = [
-    {
-      key: "to_analyze",
-      label: t.pl_to_analyze,
-      count: stats.new,
-      color: STATUS_COLORS.new,
-      href: "/positions?status=new",
-      basis: activeTotal,
-    },
-    {
-      key: "analyzed",
-      label: t.pl_analyzed,
-      count: stats.checked,
-      color: STATUS_COLORS.checked,
-      href: "/positions?status=checked",
-      basis: activeTotal,
-    },
-    {
-      key: "with_score",
-      label: t.pl_with_score,
-      count: stats.scored_open,
-      color: STATUS_COLORS.scored,
-      // scored NON ancora selezionate → status=scored + writereq=0
-      href: "/positions?status=scored&writereq=0",
-      basis: activeTotal,
-    },
-    {
-      key: "to_write",
-      label: t.pl_to_write,
-      count: stats.to_write,
-      color: STATUS_COLORS.writing,
-      // selezionate ma CV non pronto → status in (scored,writing,review) + writereq=1
-      href: "/positions?status=scored,writing,review&writereq=1",
-      basis: activeTotal,
-    },
-    {
-      key: "written",
-      label: t.pl_written,
-      count: stats.ready,
-      color: STATUS_COLORS.ready,
-      href: "/positions?status=ready",
-      basis: activeTotal,
-    },
-  ];
-
   return (
     <div style={{ animation: "fade-in 0.35s ease both", position: "relative" }}>
       <div
@@ -274,75 +211,6 @@ export default async function DashboardPage() {
               }}
             />
           )}
-
-          {/* ── Pipeline ────────────────────────────────────────────── */}
-          <div className="section-label mb-4">{t.pipeline}</div>
-          <div
-            className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mb-8"
-            style={{ animation: "fade-in 0.35s ease both" }}
-          >
-            {pipeline.map((step, i) => {
-              const percent =
-                step.basis > 0
-                  ? Math.round((step.count / step.basis) * 100)
-                  : 0;
-
-              return (
-                <Link
-                  key={step.key}
-                  href={step.href}
-                  className="relative overflow-hidden min-h-[112px] flex flex-col justify-between bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] hover:bg-[var(--color-row)] hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(0,0,0,0.35)] transition-all duration-200 text-left no-underline"
-                  style={{ animation: `fade-in 0.4s ease ${i * 0.04}s both` }}
-                >
-                  {/* Hairline superiore nel colore dello stato: lega la card
-                  alla fase della pipeline senza appesantire il layout. */}
-                  <span
-                    aria-hidden
-                    className="absolute top-0 left-0 right-0 h-[2px]"
-                    style={{
-                      background: `linear-gradient(90deg, ${step.color}, transparent 75%)`,
-                      opacity: 0.55,
-                    }}
-                  />
-                  <div>
-                    <div
-                      className="text-[9px] font-semibold tracking-[0.14em] uppercase mb-3 leading-tight min-h-[24px]"
-                      style={{ color: "var(--color-dim)" }}
-                      title={step.label}
-                    >
-                      {step.label}
-                    </div>
-                    <div
-                      className="text-3xl font-bold leading-none tracking-tight tabular-nums"
-                      style={{
-                        color: step.color,
-                        textShadow: `0 0 24px color-mix(in srgb, ${step.color} 40%, transparent)`,
-                      }}
-                    >
-                      {step.count}
-                    </div>
-                  </div>
-                  <div
-                    className="h-0.5 rounded-full mt-3 mb-1 overflow-hidden"
-                    style={{ background: "var(--color-border)" }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.min(percent, 100)}%`,
-                        background: step.color,
-                        opacity: 0.8,
-                        boxShadow: `0 0 8px color-mix(in srgb, ${step.color} 60%, transparent)`,
-                      }}
-                    />
-                  </div>
-                  <div className="text-[9px] tabular-nums text-[var(--color-dim)]">
-                    {`${percent}%`}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
 
           {/* ── Le ultime posizioni valutate (al posto del feed attività):
           stesse colonne della tabella "migliori", timestamp al posto
