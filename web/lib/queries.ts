@@ -1057,14 +1057,19 @@ async function getLatestFeedbackByLegacyId(
   const { data, error } = await supabase
     .from("position_feedback")
     .select("position_legacy_id, action, score, created_at")
-    .in("action", ["like", "dislike", "hide", "star"])
+    .in("action", ["like", "dislike", "hide", "star", "clear"])
     .order("created_at", { ascending: false })
     .limit(10000);
   const map = new Map<string, { action: string; score: number | null }>();
   if (error || !data) return map;
+  // 'clear' (mig 059) più recente = voto ritirato: la posizione non deve
+  // ripescare gli eventi più vecchi → si marca e si salta.
+  const cleared = new Set<string>();
   for (const r of data as any[]) {
     const k = String(r.position_legacy_id);
-    if (!map.has(k)) map.set(k, { action: r.action, score: r.score ?? null });
+    if (map.has(k) || cleared.has(k)) continue;
+    if (r.action === "clear") cleared.add(k);
+    else map.set(k, { action: r.action, score: r.score ?? null });
   }
   return map;
 }
@@ -1093,10 +1098,12 @@ export async function getLatestFeedbackForLegacyId(
     .from("position_feedback")
     .select("action, score, created_at")
     .eq("position_legacy_id", legacyId)
-    .in("action", ["like", "dislike", "hide", "star"])
+    .in("action", ["like", "dislike", "hide", "star", "clear"])
     .order("created_at", { ascending: false })
     .limit(1);
   if (error || !data?.length) return null;
+  // Ultimo evento 'clear' (mig 059) = voto ritirato.
+  if (data[0].action === "clear") return null;
   return { action: data[0].action, score: data[0].score ?? null };
 }
 

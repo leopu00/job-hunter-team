@@ -64,6 +64,12 @@ function prettify(key: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// Nome "bello" senza dizionario generico: per i punti UI dove la fonte è un
+// singolo valore (es. card Panoramica della posizione), non una legenda.
+export function sourceDisplayName(key: string): string {
+  return SOURCE_LABELS[key] ?? prettify(key);
+}
+
 // Etichetta localizzata: i nomi generici (Altre/career pages) vengono dal
 // dizionario `generic` del componente; i brand dalla mappa; il resto prettify.
 export function labelForSource(
