@@ -274,11 +274,11 @@ func _ensure_started(agent: String) -> void:
 func _opening(agent: String) -> String:
 	match agent:
 		"assistente":
-			return _tr("Ciao, sono l’Assistente. Possiamo preparare il tuo profilo senza collegare ancora alcuna AI: ti farò domande brevi e potrai correggere tutto dalla pagina Profilo.",
-					"Hi, I’m the Assistant. We can prepare your profile before connecting any AI: I’ll ask short questions and you can edit everything later on the Profile page.")
+			return _tr("Ciao, sono l’Assistente. Vorrei conoscerti un po’, così tutto l’ufficio saprà quali lavori cercare per te. Ti farò domande brevi e potrai correggere ogni risposta dalla pagina Profilo.",
+					"Hi, I’m the Assistant. I’d like to get to know you so the whole office understands what work to seek for you. I’ll ask short questions and you can edit every answer later in Profile.")
 		"coordinatore":
-			return _tr("Benvenuto in ufficio. Io sono il Coordinatore: ti accompagno nell’attivazione del runtime, nella scelta del provider e nell’avvio del team. L’ufficio resta esplorabile in ogni momento.",
-					"Welcome to the office. I’m the Coordinator: I’ll guide runtime activation, provider selection and team startup. The office remains open throughout.")
+			return _tr("Benvenuto in ufficio. Io sono il Coordinatore: preparo la casa della squadra, collego gli strumenti di cui ha bisogno e faccio partire il lavoro. Ti accompagno io, un passo alla volta.",
+					"Welcome to the office. I’m the Coordinator: I prepare the team’s workplace, connect the tools it needs and start the work. I’ll guide you one step at a time.")
 		_:
 			return _tr("Io sono il Mentor. Prima che il team parta voglio capire che tipo di ricerca vuoi: prudente, equilibrata o ambiziosa. Sono preferenze, non vincoli permanenti.",
 					"I’m the Mentor. Before the team starts, I want to understand the kind of search you want: cautious, balanced or ambitious. These are preferences, not permanent constraints.")
@@ -417,7 +417,7 @@ func _choose_assistant(id: String) -> void:
 	match str(_steps["assistente"]):
 		"intro":
 			if id == "profile":
-				_reply("assistente", _tr("Perfetto. Apro il modulo nativo: non serve un LLM e i dati restano nel tuo runtime.", "Perfect. I’ll open the native form: no LLM is needed and the data stays in your runtime."))
+				_reply("assistente", _tr("Perfetto. Ti apro la scheda personale: puoi compilarla con calma e le informazioni restano nel tuo ufficio.", "Perfect. I’ll open your personal profile: you can complete it at your own pace and the information stays in your office."))
 				action_requested.emit("open_section", {"section": "profile"})
 				_steps["assistente"] = "finish"
 			elif id == "later":
@@ -447,7 +447,7 @@ func _choose_assistant(id: String) -> void:
 			_steps["assistente"] = "current_status"
 		"current_status":
 			_preferences["current_status"] = id
-			_reply("assistente", _tr("Quanto possiamo allontanarci dal match perfetto sulla carta?", "How far may we move from a perfect on-paper match?"))
+			_reply("assistente", _tr("Quanto vuoi che esploriamo anche lavori per cui non sembri perfetto sulla carta?", "How much should we explore jobs for which you may not look perfect on paper?"))
 			_steps["assistente"] = "confidence"
 		"confidence":
 			_preferences["skills_stretch"] = id
@@ -455,7 +455,7 @@ func _choose_assistant(id: String) -> void:
 			_steps["assistente"] = "mode"
 		"mode":
 			_preferences["work_mode"] = id
-			_reply("assistente", _tr("Qual è il perimetro geografico iniziale? Potrai restringerlo con i filtri.", "What is the initial geographic scope? You can narrow it with filters later."))
+			_reply("assistente", _tr("In quali luoghi vuoi che il reparto Ricerca cerchi per cominciare? Potrai cambiare idea quando vuoi.", "Where should the Research department look to begin with? You can change your mind at any time."))
 			_steps["assistente"] = "where"
 		"where":
 			var places := {"local": "Vicino alla residenza", "italy": "Italia",
@@ -489,20 +489,20 @@ func _choose_assistant(id: String) -> void:
 			else:
 				action_requested.emit("open_scripted_chat", {"agent": "coordinatore"})
 			_completed["assistente"] = true
-			_reply("assistente", _tr("La mia parte guidata è conclusa. Quando il provider sarà collegato, qui potrai anche scrivermi liberamente.", "My guided part is complete. Once the provider is connected, you can also write to me freely here."))
+			_reply("assistente", _tr("Adesso l’ufficio ti conosce già un po’ meglio. Quando avremo collegato la sua intelligenza, qui potrai anche scrivermi liberamente.", "The office already knows you a little better now. Once its intelligence is connected, you’ll also be able to write to me freely here."))
 
 
 func _coordinator_options(step: String) -> Array:
 	match step:
 		"intro": return _opts([
 			["local", "Il team lavorerà su questo computer", "The team will run on this computer"],
-			["vps", "Il team lavorerà su una VPS", "The team will run on a VPS"],
+			["vps", "Il team lavorerà su un computer online sempre acceso", "The team will run on an always-on online computer"],
 			["explain", "Spiegami la differenza", "Explain the difference"],
 		])
 		"runtime": return _opts([
-			["start", "Avvia o controlla il container", "Start or check the container"],
-			["repair", "Installa o ripara il runtime", "Install or repair the runtime"],
-			["ready", "Il container è già attivo", "The container is already running"],
+			["start", "Prepara o controlla lo spazio di lavoro", "Prepare or check the workspace"],
+			["repair", "Installa o ripara lo spazio di lavoro", "Install or repair the workspace"],
+			["ready", "Lo spazio di lavoro è già pronto", "The workspace is already ready"],
 		])
 		"provider": return _opts([
 			["codex", "Codex con ChatGPT", "Codex with ChatGPT"],
@@ -522,12 +522,12 @@ func _coordinator_options(step: String) -> Array:
 		"autonomy": return _opts([
 			["review_all", "Voglio approvare ogni candidatura", "I want to approve every application"],
 			["review_cv", "Prepara tutto, ma fammi approvare i documenti", "Prepare everything, but let me approve documents"],
-			["high_score", "Automatizza solo sopra una soglia alta", "Automate only above a high score"],
+			["high_score", "Procedi da solo soltanto con le occasioni migliori", "Proceed alone only with the best opportunities"],
 			["autonomous", "Automatizza il più possibile", "Automate as much as possible"],
 			["observe", "Per ora osserva e non eseguire azioni esterne", "For now observe and take no external actions"],
 		])
 		"budget": return _opts([
-			["minimal", "Budget minimo: pochissime chiamate", "Minimum budget: very few calls"],
+			["minimal", "Risparmio massimo: fate soltanto l’essenziale", "Maximum savings: do only what is essential"],
 			["careful", "Risparmioso: qualità dove conta", "Economical: quality where it matters"],
 			["balanced", "Bilanciato", "Balanced"],
 			["quality", "Privilegia la qualità", "Prioritize quality"],
@@ -548,9 +548,9 @@ func _coordinator_options(step: String) -> Array:
 			["custom", "Configuro orari personalizzati", "Configure custom hours"],
 		])
 		"channels": return _opts([
-			["telegram", "Configura i tre bot Telegram", "Configure the three Telegram bots"],
-			["email", "Collega la casella dei job alert", "Connect the job-alert mailbox"],
-			["cloud", "Collega l’account cloud opzionale", "Connect the optional cloud account"],
+			["telegram", "Ricevi gli aggiornamenti su Telegram", "Receive updates on Telegram"],
+			["email", "Fai controllare una casella per gli avvisi di lavoro", "Have a mailbox checked for job alerts"],
+			["cloud", "Collega uno spazio online opzionale", "Connect an optional online space"],
 			["skip_channels", "Per ora continuo senza canali opzionali", "Continue without optional channels for now"],
 		])
 		"team": return _opts([
@@ -566,34 +566,34 @@ func _choose_coordinator(id: String) -> void:
 	match str(_steps["coordinatore"]):
 		"intro":
 			if id == "explain":
-				_reply("coordinatore", _tr("Locale è più semplice e si spegne col computer. Una VPS resta attiva 24/7 e viene controllata via SSH. In entrambi i casi dati e credenziali restano sotto il tuo controllo.", "Local is simpler and stops with your computer. A VPS runs 24/7 and is controlled over SSH. In both cases, you retain control of data and credentials."))
+				_reply("coordinatore", _tr("Su questo computer è più semplice e la squadra riposa quando lo spegni. Un computer online resta acceso anche mentre sei lontano. In entrambi i casi le chiavi dell’ufficio restano nelle tue mani.", "This computer is simpler and the team rests when you turn it off. An online computer stays on while you are away. Either way, you keep the office keys."))
 			else:
 				_preferences["runtime_location"] = id
 				if id == "vps":
-					_reply("coordinatore", _tr("Apriamo la configurazione VPS: servono IP e chiave SSH. Poi torniamo qui per il provider.", "Let’s open VPS setup: you need an IP and SSH key. Then we’ll return here for the provider."))
+					_reply("coordinatore", _tr("Ti apro la configurazione del computer online. La procedura ti chiederà dove si trova e come accedervi, spiegandoti ogni passaggio. Poi torniamo qui.", "I’ll open online-computer setup. It will ask where the computer is and how to access it, explaining each step. Then we’ll return here."))
 					action_requested.emit("open_section", {"section": "vps"})
 				else:
-					_reply("coordinatore", _tr("Partiamo dal container locale. Posso controllarlo o avviare l’installazione guidata.", "Let’s start with the local container. I can check it or launch guided installation."))
+					_reply("coordinatore", _tr("Partiamo preparando uno spazio di lavoro riservato alla squadra su questo computer. Posso controllarlo o guidarti nell’installazione.", "Let’s prepare a private workspace for the team on this computer. I can check it or guide you through installation."))
 				_steps["coordinatore"] = "runtime"
 		"runtime":
 			if id == "start":
 				SetupService.start_container()
-				_reply("coordinatore", _tr("Controllo avviato. Lo stato in alto si aggiornerà automaticamente; intanto scegliamo il provider.", "Check started. The status above updates automatically; meanwhile, let’s choose a provider."))
+				_reply("coordinatore", _tr("Controllo avviato. Lo stato in alto si aggiornerà da solo; intanto scegliamo quale intelligenza assisterà la squadra.", "Check started. The status above updates itself; meanwhile, let’s choose which intelligence will assist the team."))
 			elif id == "repair":
 				SetupService.open_runtime_install()
-				_reply("coordinatore", _tr("Ho aperto l’installazione nella console interna. Nessun terminale esterno.", "I opened installation in the embedded console. No external terminal."))
+				_reply("coordinatore", _tr("Ho aperto qui dentro l’installazione guidata. Segui i passaggi e poi torna da me.", "I opened guided installation in here. Follow the steps, then come back to me."))
 			else:
 				SetupService.refresh()
-				_reply("coordinatore", _tr("Ricevuto. Scegli il provider che userà il team.", "Got it. Choose the provider the team will use."))
+				_reply("coordinatore", _tr("Ricevuto. Scegli ora quale servizio assisterà la squadra nel suo lavoro.", "Got it. Now choose which service will assist the team in its work."))
 			_steps["coordinatore"] = "provider"
 		"provider":
 			if id == "compare":
-				_reply("coordinatore", _tr("Codex è il percorso più collaudato; Claude privilegia precisione; Kimi punta al costo più basso. Serve un abbonamento dedicato, non una API key a consumo.", "Codex is the most proven route; Claude prioritizes precision; Kimi targets lower cost. Use a dedicated subscription, not pay-per-use API keys."))
+				_reply("coordinatore", _tr("Codex è la scelta più collaudata, Claude è apprezzato per la precisione e Kimi tende a essere più economico. Puoi usare il servizio a cui sei già abbonato e cambiare idea in seguito.", "Codex is the most proven choice, Claude is known for precision and Kimi tends to be less expensive. You can use a service you already subscribe to and change later."))
 			else:
 				_provider_choice = id
 				if OS.get_environment("JHT_GUIDED_TEST") != "1":
 					SetupService.select_provider(id)
-				_reply("coordinatore", _tr("Provider selezionato. Il login si aprirà nella console incorporata e il browser servirà solo per autorizzare l’abbonamento.", "Provider selected. Login opens in the embedded console; the browser is only used to authorize the subscription."))
+				_reply("coordinatore", _tr("Scelta registrata. Il collegamento avverrà qui dentro; il browser si aprirà soltanto per confermare il tuo abbonamento.", "Choice recorded. The connection happens in here; the browser opens only to confirm your subscription."))
 				_steps["coordinatore"] = "login"
 		"login":
 			if id == "different":
@@ -601,14 +601,14 @@ func _choose_coordinator(id: String) -> void:
 				_reply("coordinatore", _tr("Va bene, scegliamo di nuovo.", "Okay, let’s choose again."))
 			elif id == "login":
 				if not bool(SetupService.status.get("container_running", false)):
-					_reply("coordinatore", _tr("Prima deve essere attivo il container. Apro la pagina Docker.", "The container must be running first. I’ll open the Docker page."))
+					_reply("coordinatore", _tr("Prima dobbiamo preparare lo spazio di lavoro della squadra. Ti apro la pagina giusta.", "First we need to prepare the team’s workspace. I’ll open the right page."))
 					action_requested.emit("open_section", {"section": "docker"})
 				elif _provider_choice != "":
 					SetupService.open_provider_login(_provider_choice)
-					_reply("coordinatore", _tr("Segui le istruzioni nella console. Quando termina, torna qui e scegli Ricontrolla.", "Follow the console instructions. When it finishes, return here and choose Check again."))
+					_reply("coordinatore", _tr("Segui le istruzioni che compaiono qui dentro. Quando hai terminato, torna da me e chiedimi di controllare.", "Follow the instructions shown in here. When you are done, come back and ask me to check."))
 			elif id == "check":
 				SetupService.refresh()
-				_reply("coordinatore", _tr("Verifica avviata. Ora completiamo il profilo: questa parte non richiede l’LLM.", "Verification started. Now let’s complete the profile; this part does not require the LLM."))
+				_reply("coordinatore", _tr("Verifica avviata. Ora completiamo il Profilo, così ogni reparto saprà per chi sta lavorando.", "Verification started. Now let’s complete Profile so every department knows whom it is working for."))
 				_steps["coordinatore"] = "profile"
 			else:
 				_steps["coordinatore"] = "provider"
@@ -619,15 +619,15 @@ func _choose_coordinator(id: String) -> void:
 			_steps["coordinatore"] = "autonomy"
 		"autonomy":
 			_preferences["approval_mode"] = id
-			_reply("coordinatore", _tr("Quanto devo essere aggressivo nel consumo di token e capacità del provider?", "How aggressively should I use provider tokens and capacity?"))
+			_reply("coordinatore", _tr("Quanto vuoi che l’ufficio risparmi? Più prudenza significa meno lavoro superfluo; più libertà significa più approfondimenti.", "How much should the office save? More caution means less unnecessary work; more freedom means more in-depth work."))
 			_steps["coordinatore"] = "budget"
 		"budget":
 			_preferences["token_budget_style"] = id
-			_reply("coordinatore", _tr("Quale regola di privacy devo imporre a tutti gli agenti?", "Which privacy rule should I enforce for every agent?"))
+			_reply("coordinatore", _tr("Quale regola sulla riservatezza devo far rispettare a tutti i colleghi?", "Which privacy rule should every colleague follow?"))
 			_steps["coordinatore"] = "privacy"
 		"privacy":
 			_preferences["privacy_mode"] = id
-			_reply("coordinatore", _tr("Quando può lavorare il team? Questo influenza attività, notifiche e budget.", "When may the team work? This affects activity, notifications and budget."))
+			_reply("coordinatore", _tr("In quali orari vuoi che l’ufficio lavori e quando preferisci non essere disturbato?", "When should the office work, and when would you rather not be disturbed?"))
 			_steps["coordinatore"] = "availability"
 		"availability":
 			_preferences["team_availability"] = id
@@ -648,7 +648,7 @@ func _choose_coordinator(id: String) -> void:
 				if bool(SetupService.status.get("ready", false)):
 					SetupService.start_team()
 					_completed["coordinatore"] = true
-					_reply("coordinatore", _tr("Team in attivazione. Vedrai gli agenti raggiungere le postazioni man mano che le sessioni partono.", "Team activation started. You’ll see agents reach their desks as sessions come online."))
+					_reply("coordinatore", _tr("L’ufficio sta aprendo. Vedrai i colleghi raggiungere le loro scrivanie man mano che prendono servizio.", "The office is opening. You’ll see colleagues reach their desks as they begin work."))
 				else:
 					_reply("coordinatore", _tr("Manca ancora almeno un requisito. Apro la checklist, così vediamo esattamente quale.", "At least one requirement is still missing. I’ll open the checklist so we can see exactly which one."))
 					action_requested.emit("open_section", {"section": "activation"})
@@ -769,7 +769,7 @@ func _choose_mentor(id: String) -> void:
 		"finish":
 			if id == "hours":
 				action_requested.emit("open_section", {"section": "hours"})
-				_reply("mentor", _tr("Gli orari definiscono quando il team può consumare budget. Torna qui dopo averli salvati.", "Working hours define when the team may consume budget. Return here after saving them."))
+				_reply("mentor", _tr("Gli orari dicono alla squadra quando lavorare e quando lasciarti in pace. Torna qui dopo averli salvati.", "Working hours tell the team when to work and when to leave you in peace. Return here after saving them."))
 			elif id == "restart":
 				_history["mentor"] = []
 				for key in ["career_priority", "search_motivation", "search_style",
@@ -782,7 +782,7 @@ func _choose_mentor(id: String) -> void:
 				action_requested.emit("open_scripted_chat", {"agent": "assistente"})
 			else:
 				_completed["mentor"] = true
-				_reply("mentor", _tr("Preferenze salvate. Quando il team sarà online, questa conversazione diventerà una chat libera con me.", "Preferences saved. When the team is online, this conversation becomes a free chat with me."))
+				_reply("mentor", _tr("Ho preso nota. Quando l’ufficio sarà al lavoro, potremo continuare questa conversazione liberamente ogni volta che ne avrai bisogno.", "I’ve taken note. Once the office is working, we can continue this conversation freely whenever you need it."))
 
 
 func _reply(agent: String, text: String) -> void:
@@ -799,17 +799,17 @@ func _assistant_finish_reply() -> String:
 	elif bool(_preferences.get("requires_sponsorship", false)):
 		parts.append(_tr("filtrerò subito visto e relocation", "I’ll filter visa and relocation immediately"))
 	if stretch in ["stretch", "retrain"]:
-		parts.append(_tr("gli Scorer distingueranno lacune colmabili da requisiti essenziali", "Scorers will separate learnable gaps from essential requirements"))
+		parts.append(_tr("il reparto Compatibilità considererà anche lavori in cui puoi crescere", "the Compatibility department will also consider jobs you can grow into"))
 	elif stretch == "exact":
-		parts.append(_tr("gli Scorer resteranno vicini alle competenze già dimostrate", "Scorers will stay close to proven skills"))
+		parts.append(_tr("il reparto Compatibilità resterà vicino a ciò che sai già fare bene", "the Compatibility department will stay close to what you already do well"))
 	if status in ["available", "active"]:
 		parts.append(_tr("la ricerca partirà con un ritmo sostenuto", "the search will start at a brisk pace"))
 	elif status == "employed":
 		parts.append(_tr("privilegeremo qualità e discrezione rispetto al volume", "we’ll favor quality and discretion over volume"))
 	var tailored := "; ".join(parts)
 	if tailored.is_empty():
-		tailored = _tr("useremo queste preferenze per ordinare e spiegare ogni match", "we’ll use these preferences to rank and explain each match")
-	return _tr("Ho preparato un profilo su misura: %s. Nel modulo puoi aggiungere nome, email, lingue, competenze e cifre esatte senza usare token.", "I prepared a tailored profile: %s. In the form you can add name, email, languages, skills and exact figures without using tokens.") % tailored
+		tailored = _tr("useremo queste preferenze per scegliere e spiegare ogni opportunità", "we’ll use these preferences to choose and explain every opportunity")
+	return _tr("Ho preparato un profilo su misura: %s. Nella scheda personale puoi aggiungere nome, contatti, lingue, competenze e cifre esatte.", "I prepared a tailored profile: %s. In your personal profile you can add your name, contact details, languages, skills and exact figures.") % tailored
 
 
 func _coordinator_policy_reply() -> String:
@@ -818,10 +818,10 @@ func _coordinator_policy_reply() -> String:
 	var privacy := str(_preferences.get("privacy_mode", "standard"))
 	var summary := _tr("approvazione manuale", "manual approval")
 	if autonomy == "review_cv": summary = _tr("preparazione automatica con approvazione dei documenti", "automatic preparation with document approval")
-	elif autonomy == "high_score": summary = _tr("automazione riservata ai match migliori", "automation limited to top matches")
+	elif autonomy == "high_score": summary = _tr("iniziativa riservata alle opportunità migliori", "initiative limited to the best opportunities")
 	elif autonomy == "autonomous": summary = _tr("autonomia estesa e tracciata", "broad, traceable autonomy")
 	elif autonomy == "observe": summary = _tr("sola osservazione, nessuna azione esterna", "observation only, no external actions")
-	return _tr("Policy registrata: %s; budget %s; privacy %s. Ora scegliamo se collegare un canale opzionale.", "Policy recorded: %s; %s budget; %s privacy. Now choose whether to connect an optional channel.") % [summary, budget, privacy]
+	return _tr("Regole dell’ufficio registrate: %s; livello di risparmio %s; riservatezza %s. Ora scegliamo se collegare un modo opzionale per ricevere aggiornamenti.", "Office rules recorded: %s; savings level %s; privacy %s. Now let’s choose whether to connect an optional way to receive updates.") % [summary, budget, privacy]
 
 
 func _mentor_finish_reply() -> String:
