@@ -26,7 +26,11 @@ import {
 export type Verdict = "no" | "review_low" | "review_ok" | "top";
 
 type ReasonKey =
-  "closed" | "not_interested" | "mismatch" | "company" | "conditions";
+  | "closed"
+  | "not_interested"
+  | "mismatch"
+  | "company"
+  | "conditions";
 
 // 5 cause pronte, un tap e via; il motivo libero passa come 'other' + nota.
 const REASON_ORDER: ReasonKey[] = [
