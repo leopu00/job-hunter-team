@@ -376,6 +376,7 @@ export async function demoCoords(
       lat: p.lat as number,
       lon: p.lon as number,
       is_remote: p.remote_type === "full_remote",
+      remote_type: p.remote_type,
       location: p.location,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
