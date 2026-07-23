@@ -120,6 +120,14 @@ func _apply_probe(next: Dictionary) -> void:
 	if bool(status.get("container_running", false)) \
 			and BackendBus.state == BackendBus.DISCONNECTED:
 		BackendBus.connect_local_backend()
+	# Login appena rilevato (o già presente) con container acceso: l'assistente
+	# parte da solo in background, così il passo profilo trova subito il suo
+	# interlocutore invece di un team spento (feedback Leone 23/07). La
+	# chiamata è idempotente: ha il guard tmux has-session dentro.
+	if bool(status.get("container_running", false)) \
+			and not bool(status.get("remote", false)) \
+			and bool(status.get("provider_authenticated", false)):
+		BackendBus.ensure_assistant()
 
 
 func _finalize(next: Dictionary) -> void:
@@ -667,8 +675,10 @@ static func _posix_quoted(args: PackedStringArray) -> PackedStringArray:
 ## Su macOS/Linux la PTY host-side la crea già embedded_terminal_spec.
 static func _local_container_exec(posix_command: String) -> String:
 	if OS.get_name() == "Windows":
+		# stty allinea la pty alla griglia 40x120 del renderer della console
+		# incorporata (TermScreen.ROWS): i TUI impaginano su quella misura.
 		return "docker exec -i -e TERM=xterm-256color jht script -qec \"" \
-				+ posix_command + "\" /dev/null"
+				+ "stty rows 40 cols 120 2>/dev/null; " + posix_command + "\" /dev/null"
 	return "docker exec -it jht " + posix_command
 
 
@@ -1089,7 +1099,9 @@ static func _provider_terminal_hint(provider: String) -> String:
 		"kimi":
 			return "Nel prompt Kimi digita /login, scegli Kimi Code e completa il login nel browser."
 		_:
-			return "Nel menu Claude scegli Login with subscription e completa l'accesso nel browser."
+			return "Nel menu Claude scegli Login with subscription. Se il browser non si apre: " \
+					+ "COPIA LINK qui sotto e incollalo nel browser. Poi copia il codice dal browser, " \
+					+ "premi INCOLLA e Invio; se non risponde, premi INVIO una seconda volta."
 
 
 static func _shell_quote(value: String) -> String:
