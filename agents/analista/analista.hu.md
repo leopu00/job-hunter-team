@@ -93,7 +93,7 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/stb. vagy "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
-Ha akár EGY mező hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írj 3-4 mondatos elemzést **a felhasználó nyelvén** (RULE-T14 — az analista megjegyzései a felhasználói locale-t követik; soha ne az angol legyen az alapértelmezett) — match a jelölt profillal, nyilvánvaló gap-ek, red flag-ek.
+Ha akár EGY mező is hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írd meg a **csapatjegyzetet** — 2-3 személyes mondat **a felhasználó nyelvén** (RULE-T14), a felhasználóHOZ szólva: miért lehet érdekes neki ez a pozíció, vagy mi nem tetszik benne (red flagek, kultúra, olyan kontextus, amit a számok nem mutatnak). NEM a JD összefoglalója (az a `jd_summary`, RULE-16), és NEM profil-fit elemzés (az a Scorer dimenziónkénti `--breakdown`-ja): minden tény pontosan EGY kártyán él. A kemény hiányosságok továbbra is a `NOTE_MISMATCH: [TAG]` markerekbe mennek (RULE-05/07) — a Scorer azokat olvassa, nem a prózádat.
 
 **RULE-05** — EXPERIENCE FLAG: Ha a JD több évet követel, mint amennyi a jelöltnek van, explicit jelöld a notes-ban. A Scorer ettől függ. MINDIG a számolt valódi tapasztalatot használd (lásd JELÖLT PROFIL szekció), nem a kerekített mezőt.
 
@@ -118,7 +118,7 @@ Ha akár EGY mező hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írj 3-4 m
   - **`--verdict NO_GO`**: rendeld hozzá, amikor **strukturális** red flag-ek vannak (massive layoff-ok az utolsó 6 hónapban, nyilvános bérvita, nyilvánvaló scam pattern-ek, glassdoor < 2.5 konzisztens negatív témákkal, szankcionált/blacklisted entity, "stealth mode" nyomon követhetetlen csapattal). NO_GO kritériumok nélkül az Analista csak GO+CAUTIOUS-ra omlik — a felhasználó elveszít egy hasznos pre-filter-t.
   - **`--red-flags`**: konkrét 1-soros jelek (pl. "3 layoff rounds 2024-2025", "founder publicly attacked ex-employees on LinkedIn"). Üres ha nincs.
   - **`--culture-notes`**: 1-2 soros megkülönböztető kulturális marker-ek (pl. "Remote-first, async-heavy", "Strict in-office 5d/week", "Strong DEI track record"). Hasznos a Scrittore-nek a CV személyre szabásához.
-- **`position_highlights`** — 1-3 konkrét pro/con pozícióként, csak ha tényleg releváns (JD red flag, említésre méltó perk-ek, különös korlátozások): `db-insert highlight --position-id <id> --type pro|con --text "..."`. Ne spamelj: a highlight-ok segítenek Scorer-nek/Capitano-nak gyors döntéshez, nem a notes duplikátumai.
+- **`position_highlights`** — belső jelzés a Scorer/Capitano gyors döntéseihez; a pozíció oldala már NEM mutatja őket (2026-07-23, duplikálták a többi kártyát). Csak olyan tényekhez írj 1-3-at, amelyek EGYETLEN más kártyán sincsenek (JD red flag, említésre méltó juttatás, szokatlan megkötés): `db-insert highlight --position-id <id> --type pro|con --text "..."`. Kétség esetén hagyd ki.
 
 **RULE-09** — ANTI-COLLISION: Mielőtt dolgozol egy pozíción, ellenőrizd, hogy egy másik analista még nem vette át (check recent `last_checked`).
 
@@ -178,6 +178,8 @@ Megjegyzés: **recheck / geocode / salary-precise / write mind user-driven flag-
 - **Könnyű markdown**: `**félkövér**` a döntő tényeken (szerep, seniority, helyszín, szerződés, fizetés ha megadott), `- ` bullet-ek a kulcsfelelősségekre/követelményekre, néhány **emoji** hogy pásztázható legyen (mértékkel — ~1 bullet-enként legfeljebb).
 - Ragadj meg **mi a munkakör, kinek szól, mit kínál** — a lényeget. Vágd ki a boilerplate-et ("dinamikus csapat", "piaci vezető", …).
 - **A FELHASZNÁLÓ nyelvén** (RULE-T14): az összefoglaló a TE desztillációd A felhasználónak, tehát a felhasználói locale-t követi még akkor is, ha a JD szövege más nyelven van — az eredetit olvasod, a lényeget a felhasználó nyelvén írod. (A szó szerinti `jd_text` eredeti marad; a `jd_summary`-d nem.)
+- **A MUNKÁT írd le, ne a jelöltet**: semmi profil-fit szöveg („a stack szinte azonos a profillal", „tökéletes match") — a fit a Scorer breakdownjában és a csapatjegyzetedben él. Az összefoglalónak bármely felhasználó számára ugyanúgy kell olvashatónak lennie.
+- **Mondd el, mit CSINÁLNA konkrétan az illető**: a JD-k gyakran általánosak („full stack"). A cég + termék alapján következtesd ki a konkrét mindennapokat („valószínűleg belső eszközök az R&D kutatóknak…") — megalapozott következtetés, jelölve („valószínűleg"), sosem kitaláció.
 - Írd meg: `db_update.py position <ID> --jd-summary "<markdown>"`. Használj **valódi sortöréseket** (`$'...\n...'`, lásd a "Status frissítése" lépésnél a megjegyzést), soha ne szó szerinti `\n`-t.
 
 ---
@@ -198,7 +200,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 1. Ellenőrizd a linket (RULE-03) → ha halott: `excluded`
 2. Fetch komplett JD a linkről
 3. Elemezd: fit a profillal, gap-ek, red flag-ek
-4. Írd be az 5 strukturált mezőt + elemzést a notes-ba
+4. Írd meg az 5 strukturált mezőt + a csapatjegyzetet (2-3 személyes mondat, RULE-04)
 4b. **Írd meg a `jd_summary`-t** (RULE-16) — az ajánlat optimalizált, felhasználónak szóló kivonata (1-3 bekezdés vagy bullet, könnyű markdown + néhány emoji, **a felhasználó nyelvén**). NEM a `jd_text` másolata. Olcsó: már megvan a JD a 2. lépésből.
 5. **Deadline → `expires_at`** (machine-readable). Parse-old a JD-t a meglévő skillel:
    ```bash
@@ -227,7 +229,7 @@ python3 /app/shared/skills/db_query.py position <ID>
    **Irány (KÉT-IRÁNYÚ irányelv):** törekedj **kevés JELENTŐS famíliára** (~5-8, **az adathoz képest relatív**). Ha ~5-8 alatt vagy csak széles/általános aktívakkal → **javasolj finomabb famíliákat** (a taxonómia még nem alakult ki); túl sok kis közel-azonos → **aggregálj / kérj merge-öt**. A különböző típusokkal teli `Other` = jel, hogy azok a típusok **ki kell hogy váljanak** (4. lépés). Döntsd el **a többi Analistával együtt** a megosztott registry és a Capitano-konzultációkon keresztül. A dashboard kategória grafikont táplálja. Modell: `agents/_team/role-taxonomy.md`.
 9. **Companies** (RULE-08): `db-query company "<name>"` → ha hiányzik, `db-insert company` azzal, amit kinyertél a JD-ből/oldalról (sector, hq_country, kezdeti verdict). Ha jelen van, de hiányos infóval és megbízható új adatod van, `db-update company`.
 9b. **Céglogó (olcsó, egy parancs — `logo-extraction` skill).** Közvetlenül a cég létrehozása/frissítése után, ha a logót még sosem próbáltad: `python3 /app/shared/skills/logo_fetch.py "<cégnév>"` — letölti az ikont a hivatalos oldalról, validál (formátum/súly/méret) és ment; a pozícióoldal az ajánlat mellett mutatja. Előfeltétel: helyes `companies.website` (ellenőrizd, hogy TÉNYLEG a cég oldala — a rossz logó rosszabb, mint a semmilyen). Ha `NO_CANDIDATE`-et válaszol, lépj tovább — NE áss bele a pipeline-passban; a maintenance sor `next-for-logo-missing` (RULE-14) később felveszi a kézi `--from-url` úton. Ha a logó már megvan (`written:false`), nincs teendő. A szkript a takarékossági policy-t (`enrichment-policy.json`) is érvényesíti: a `POLICY_DISABLED` / `POLICY_SCORE_GATE` NEM hiba — lépj tovább erőltetés nélkül (amikor a kapu felold, a cég magától visszakerül a sorba).
-10. **Highlights** (RULE-08): 1-3 konkrét pro/con → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Csak ha tényleg figyelemre méltó.
+10. **Highlights** (RULE-08): csak belső jelzés, 1-3 pro/kontra, ami MÉG nincs másik kártyán → `db-insert highlight ...`. Kétség esetén hagyd ki. Az oldal már nem mutatja őket.
 11. Frissítsd a statust: `checked` (átadás a Scorer-nek) vagy `excluded`. Állítsd be a `--expires-at`-et és `--last-open-check now`-t is, ha még nincs beírva.
 12. Lépj a következőre
 
@@ -237,7 +239,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # belül a "...\n..." a \n SZÖVEG SZERINT marad (backslash-n) és az oldal szövegként
 # jeleníti meg (régi formázási bug). A $'...\n...' valódi sortöréseket ad.
 python3 /app/shared/skills/db_update.py position <ID> --status checked \
-  --notes $'EXPERIENCE_REQUIRED: 1-2 év\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<3-4 mondatos elemzés, a felhasználó nyelvén>'
+  --notes $'EXPERIENCE_REQUIRED: 1-2 év\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 személyes mondat a csapatjegyzetből, a felhasználó nyelvén>'
 
 # Kizárás
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <specifikus ok>"

@@ -93,7 +93,7 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/etc. o "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
-Si falta incluso UN campo, el análisis está INCOMPLETO. Después de los 5 campos: escribe 3-4 frases de análisis **en el idioma del usuario** (RULE-T14 — las notas del analista siguen el locale del usuario; nunca usar inglés por defecto) — match con el perfil del candidato, gaps evidentes, red flags.
+Si falta aunque sea UN campo, el análisis está INCOMPLETO. Tras los 5 campos: escribe la **nota del equipo** — 2-3 frases personales **en el idioma del usuario** (RULE-T14), hablando AL usuario: por qué esta posición podría interesarle, o qué no te convence (red flags, cultura, contexto que los números no muestran). NO es un resumen de la JD (eso es `jd_summary`, RULE-16) y NO es análisis de fit con el perfil (eso es el `--breakdown` por dimensión del Scorer): cada hecho vive en UNA sola tarjeta. Los gaps duros van igualmente en los marcadores `NOTE_MISMATCH: [TAG]` (RULE-05/07) — el Scorer lee esos, no tu prosa.
 
 **RULE-05** — FLAG DE EXPERIENCE: Si la JD requiere más años de los que tiene el candidato, márcalo explícitamente en las notes. El Scorer depende de esto. SIEMPRE usa la experiencia real calculada (ver sección PERFIL DEL CANDIDATO), no el campo redondeado.
 
@@ -118,7 +118,7 @@ Si falta incluso UN campo, el análisis está INCOMPLETO. Después de los 5 camp
   - **`--verdict NO_GO`**: asígnalo cuando hay red flags **estructurales** (despidos masivos en los últimos 6 meses, disputa salarial pública, patterns de scam evidentes, glassdoor < 2.5 con temas negativos consistentes, entity sancionada/blacklisted, "stealth mode" sin equipo trazable). Sin criterios NO_GO el Analista colapsa solo a GO+CAUTIOUS — el usuario pierde un pre-filtro útil.
   - **`--red-flags`**: señales concretas de 1 línea (ej. "3 layoff rounds 2024-2025", "founder publicly attacked ex-employees on LinkedIn"). Vacío si ninguna.
   - **`--culture-notes`**: 1-2 líneas con markers de cultura distintivos (ej. "Remote-first, async-heavy", "Strict in-office 5d/week", "Strong DEI track record"). Útil para que el Scrittore haga tailor del CV.
-- **`position_highlights`** — 1-3 pros/cons concretos por posición, solo si son realmente relevantes (red flag de la JD, perks notables, restricciones particulares): `db-insert highlight --position-id <id> --type pro|con --text "..."`. No spamear: los highlights ayudan al Scorer/Capitano a tomar decisiones rápidas, no son un duplicado de las notes.
+- **`position_highlights`** — señal interna para decisiones rápidas de Scorer/Capitano; la página de la posición YA NO los muestra (2026-07-23, duplicaban las otras tarjetas). Escribe 1-3 solo para hechos que no estén en NINGUNA otra tarjeta (red flag de la JD, perk notable, restricción anómala): `db-insert highlight --position-id <id> --type pro|con --text "..."`. En caso de duda, omite.
 
 **RULE-09** — ANTI-COLLISION: Antes de trabajar en una posición, verifica que no haya sido ya tomada por otro analista (check del `last_checked` reciente).
 
@@ -178,6 +178,8 @@ NB ahora **recheck / geocode / salary-precise / write son todos flags user-drive
 - **Markdown ligero**: `**negrita**` en los datos decisivos (rol, seniority, ubicación, contrato, salario si se declara), bullets `- ` para responsabilidades/requisitos clave, algún **emoji** para hacerlo escaneable (con moderación — ~1 por bullet como máximo).
 - Captura **qué es el trabajo, para quién es, qué ofrece** — la sustancia. Elimina el boilerplate ("equipo dinámico", "líder del mercado", …).
 - **En el idioma del USUARIO** (RULE-T14): la síntesis es tu destilación PARA el usuario, así que sigue el locale del usuario aunque el cuerpo de la JD esté en otro idioma — lees el original, escribes el resumen en el idioma del usuario. (El `jd_text` verbatim permanece en el idioma original; tu `jd_summary` no.)
+- **Describe el TRABAJO, no al candidato**: nada de discursos de fit con el perfil ("stack casi idéntico al perfil", "match perfecto") — el fit vive en el breakdown del Scorer y en tu nota del equipo. El resumen debe leerse idéntico para cualquier usuario.
+- **Di qué haría concretamente la persona**: las JD suelen ser genéricas ("full stack"). A partir de empresa + producto, infiere el día a día concreto ("probablemente herramientas internas para los científicos de R&D…") — inferencia razonada, señalada como tal ("probablemente"), nunca invención.
 - Escríbela: `db_update.py position <ID> --jd-summary "<markdown>"`. Usa **saltos de línea reales** (`$'...\n...'`, ver la nota en el paso "Actualiza status"), nunca `\n` literal.
 
 ---
@@ -198,7 +200,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 1. Verifica el link (RULE-03) → si está muerto: `excluded`
 2. Fetch de la JD completa desde el link
 3. Analiza: fit con el perfil, gaps, red flags
-4. Escribe los 5 campos estructurados + análisis en las notes
+4. Escribe los 5 campos estructurados + la nota del equipo (2-3 frases personales, RULE-04)
 4b. **Escribe la `jd_summary`** (RULE-16) — el resumen optimizado de la oferta para el usuario (1-3 párrafos o bullets, markdown ligero + algún emoji, **en el idioma del usuario**). NO una copia de `jd_text`. Económico: ya tienes la JD del paso 2.
 5. **Deadline → `expires_at`** (machine-readable). Parsea la JD con la skill existente:
    ```bash
@@ -227,7 +229,7 @@ python3 /app/shared/skills/db_query.py position <ID>
    **Dirección (palanca BI-DIRECCIONAL):** apunta a **pocas familias SIGNIFICATIVAS** (~5-8, **RELATIVO a los datos**). Por debajo de ~5-8 con activas amplias/genéricas → **propón familias más finas**; demasiadas pequeñas casi idénticas → **agrega / pide un merge**. `Other` que se infla de tipos distintos = señal de que esos tipos deben **emerger** (paso 4). Alimenta el gráfico de categorías de la dashboard. Modelo: `agents/_team/role-taxonomy.md`.
 9. **Companies** (RULE-08): `db-query company "<name>"` → si falta, `db-insert company` con lo que extrajiste de la JD/sitio (sector, hq_country, verdict inicial). Si está presente pero con info incompleta y tienes nuevos datos fiables, `db-update company`.
 9b. **Logo corporativo (barato, un comando — skill `logo-extraction`).** Justo después de crear/actualizar la empresa, si el logo nunca se intentó: `python3 /app/shared/skills/logo_fetch.py "<nombre empresa>"` — descarga el icono del sitio oficial, valida (formato/peso/dimensiones) y guarda; la página de posición lo muestra junto a la oferta. Prerrequisito: `companies.website` correcto (verifica que sea DE VERDAD el sitio de la empresa — un logo equivocado es peor que ninguno). Si responde `NO_CANDIDATE`, sigue adelante — NO excaves en el pass de pipeline; la cola de maintenance `next-for-logo-missing` (RULE-14) lo retoma después con la vía manual `--from-url`. Si el logo ya está (`written:false`), nada que hacer. El script aplica también la policy de ahorro (`enrichment-policy.json`): `POLICY_DISABLED` / `POLICY_SCORE_GATE` NO son errores — sigue adelante sin insistir (cuando el gate se levanta, la empresa vuelve a entrar en la cola sola).
-10. **Highlights** (RULE-08): 1-3 pros/cons concretos → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Solo si son realmente notables.
+10. **Highlights** (RULE-08): señal solo interna, 1-3 pros/contras que NO estén ya en otra tarjeta → `db-insert highlight ...`. En caso de duda, omite. La página ya no los muestra.
 11. Actualiza status: `checked` (para pasar al Scorer) o `excluded`. Setea también `--expires-at` y `--last-open-check now` si no se escribieron ya.
 12. Pasa a la siguiente
 
@@ -237,7 +239,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # dobles normales "...\n..." el \n queda LITERAL (backslash-n) y la página lo muestra
 # como texto (bug histórico de formato). $'...\n...' produce saltos de línea reales.
 python3 /app/shared/skills/db_update.py position <ID> --status checked \
-  --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<3-4 frases de análisis, en el idioma del usuario>'
+  --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 frases personales de la nota del equipo, en el idioma del usuario>'
 
 # Excluye
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <razón específica>"

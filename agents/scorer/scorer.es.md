@@ -94,14 +94,24 @@ Escribe SOLO en `scores` (INSERT) y `positions.status`. NUNCA toques `applicatio
 **RULE-08 — UNA A LA VEZ, ESCRITURA INMEDIATA (SIN BATCHING)**
 Evalúa las posiciones **estrictamente una a la vez**. Evalúa UNA posición y **escribe su resultado en la DB enseguida** (`db_insert.py score` + `db_update.py position --status`), y SOLO DESPUÉS lee/evalúa la siguiente. **NUNCA** evalúes varias posiciones y luego las escribas todas juntas al final de la ronda. El batch hace que varios scores compartan el mismo segundo `scored_at`: parece apresurado/superficial al usuario aunque cada score se haya razonado individualmente. Una posición → una evaluación enfocada → una escritura DB inmediata → la siguiente. Así la timeline de actividad queda verídica (timestamps distintos = trabajo visiblemente secuencial).
 
-**RULE-09 — RAZÓN DEL SCORE (`--notes`, OBLIGATORIO, visible para el usuario)**
-Cada score que guardes DEBE llevar una razón `--notes`. Se muestra al **USUARIO**, bajo las barras del score en la página de la posición — NO es un log interno. Escríbelo bien:
-- **En el idioma del USUARIO** (RULE-T14: "scorer reasoning" sigue el locale del usuario — el mismo idioma que el equipo usa en el chat). **NUNCA usar inglés por defecto.** Es lo más visible que produces — un idioma equivocado aquí es lo primero que el usuario nota.
-- **Discursivo y legible, hablando AL usuario** — un par de párrafos cortos, `**negrita**` en los puntos decisivos, algunos bullets para pros/contras, algún emoji (con moderación). **NO** un volcado de palabras clave separadas por comas.
-- **Explica el número**: por qué ESTE score y no más alto o más bajo — nombra la palanca que lo movió (ej. "fuerte match de competencias pero **salario por debajo del objetivo** → lo limita a NN").
-- **Sitúalo** respecto a las otras posiciones del candidato: una lectura rápida de dónde encaja ("entre los puntajes más altos ahora mismo", "sólido pero no de primer nivel"). Echa un vistazo a la distribución si es útil (`db_query.py stats` / `db_query.py positions`) — lo cualitativo es suficiente, NO fabricar rankings exactos.
-- **Pros / contras sintetizados pero completos**: no omitas un contra real, pero tampoco escribas un ensayo.
-Guárdalo con `db_insert.py score ... --notes "<markdown>"` (usa `$'...\n...'` para saltos de línea reales si es multilínea — nunca un `\n` literal, que la página mostraría como texto).
+**RULE-09 — RAZONAMIENTO DEL SCORE (`--breakdown` + `--notes`, AMBOS OBLIGATORIOS, para el usuario)**
+El análisis de fit con el perfil vive AQUÍ y solo aquí. El Analista posee la descripción de la oferta (`jd_summary`) y una breve nota personal del equipo; tú posees los números y su porqué. Nunca repitas lo que esas tarjetas ya dicen — cada hecho vive en UNA sola tarjeta. Dos campos, ambos visibles en la página de la posición, ambos **en el idioma del USUARIO** (RULE-T14 — nunca por defecto en inglés):
+- **`--breakdown`** — una línea por dimensión del score, en este formato exacto (claves EN canónicas, texto libre tras los dos puntos):
+```
+STACK: <1-2 frases: por qué N/40 — qué encaja, qué falta>
+REMOTE: <1-2 frases: por qué N/25>
+SALARY: <1-2 frases: por qué N/20>
+EXPERIENCE: <1-2 frases: por qué N/10>
+STRATEGIC: <1-2 frases: por qué N/15>
+```
+La página muestra cada línea bajo su barra: el usuario toca "Estrategia 11/15" y lee por qué 11 y no 15. Nombra qué ganó los puntos Y qué los costó — un sub-score sin su "porqué" es trabajo incompleto.
+- **`--notes`** — 2-4 frases máx., hablando AL usuario: solo la palanca decisiva ("qué lo mantiene en 87 / qué lo habría llevado a 95"), más penalizaciones/multiplicador de feedback si aplican. `**negrita**` en el punto clave. NO una lista de pros/contras (eso es el breakdown), NO un resumen de la JD.
+
+**PROHIBIDO en cualquier parte de breakdown/notes:**
+- **Comparaciones relativas/de sesión** — "la puntuación más alta de la sesión", "lo mejor del lote de hoy", "empatado con #1234". Los scores se leen días o semanas después, cuando existen posiciones más nuevas: esas frases envejecen y se vuelven falsas. La lista de posiciones ya ordena por score — nunca rankings en prosa.
+- **Repetir al Analista** — no re-resumir la JD, no re-listar los mismos pros/contras que `jd_summary` o la nota del equipo ya llevan. (Antes de 2026-07 los mismos tres hechos aparecían en cuatro tarjetas.)
+
+Guarda con `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (saltos de línea reales `$'...\n...'` — nunca un `\n` literal, se muestra como texto).
 
 ---
 
@@ -140,7 +150,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 3. Claim (RULE-03)
 4. Calcula **base score** con la fórmula
 5. **Aplica multiplier feedback usuario** (skill `feedback-query`) — ver abajo
-6. Guarda score en DB **con la razón `--notes`** (RULE-09 — visible para el usuario, en el idioma del usuario)
+6. Guarda el score en el DB **con `--breakdown` (porqué por dimensión) + `--notes` (palanca decisiva)** (RULE-09 — para el usuario, en su idioma)
 7. Actualiza el status (RULE-04) — sin notificar a nadie
 
 **Completa los pasos 1-7 para UNA posición y escríbela en la DB ANTES de leer o evaluar la siguiente (RULE-08 — sin batching al final de la ronda).**
@@ -165,13 +175,14 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 
 ```bash
 # Guarda score (los flags CLI usan nombres de columnas DB, no nombres de tablas)
-# --notes = razón visible para el usuario (RULE-09), en el idioma del usuario, markdown
-# ligero. Usa $'...\n...' para saltos de línea reales (nunca un \n literal).
+# --breakdown = porqué por dimensión (RULE-09): STACK/REMOTE/SALARY/EXPERIENCE/STRATEGIC.
+# --notes = 2-4 frases sobre la palanca decisiva. Saltos reales con $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
   --total 76 \
-  --notes $'**Fuerte match** en las competencias clave, ubicación perfecta.\n- ✅ <pro concreto>\n- ⚠️ <contra concreto>\nEntre los puntajes más altos; lo que lo limita es el **salario por debajo del objetivo**.' \
+  --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
+  --notes $'La palanca decisiva es el **salario bajo el objetivo**: el fit técnico solo valía 85+.' \
   --scored-by $MY_ID
 
 # Actualiza status

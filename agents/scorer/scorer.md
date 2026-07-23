@@ -93,14 +93,24 @@ Write ONLY in `scores` (INSERT) and `positions.status`. NEVER touch `application
 **RULE-08 — ONE AT A TIME, WRITE IMMEDIATELY (NO BATCHING)**
 Score positions **strictly one at a time**. Fully evaluate ONE position and **write its result to the DB right away** (`db_insert.py score` + `db_update.py position --status`), and ONLY THEN read/evaluate the next one. **NEVER** evaluate several positions and then write them all together at the end of the round. Batching the writes makes multiple scores share the exact same `scored_at` second, which looks rushed/superficial to the user even when each score was reasoned individually. One position → one focused evaluation → one immediate DB write → next. This also keeps the activity timeline truthful (distinct timestamps = visibly sequential work).
 
-**RULE-09 — SCORE RATIONALE (`--notes`, MANDATORY, user-facing)**
-Every score you save MUST carry a `--notes` rationale. It is shown to the **USER**, under the score bars on the position page — it is NOT internal logging. Write it well:
-- **In the USER's language** (RULE-T14: "scorer reasoning" follows the user locale — the same language the team uses in chat). **NEVER default to English.** This is the single most visible thing you produce — a wrong language here is the first thing the user notices.
-- **Discursive and readable, talking TO the user** — a couple of short paragraphs, `**bold**` on the decisive points, a few bullet points for pro/contro, a few emoji (sparing). **NOT** a comma-separated keyword dump.
-- **Explain the number**: why THIS score and not higher or lower — name the lever that moved it (e.g. "strong skills match but **salary below target** → caps it at NN").
-- **Situate it** vs the candidate's other positions: a quick read on where this lands ("among the highest scores right now", "solid but not top-tier"). Glance at the distribution if useful (`db_query.py stats` / `db_query.py positions`) — qualitative is enough, do NOT fabricate exact ranks.
-- **Pro / contro synthesized but complete**: don't omit a real downside, don't write an essay either.
-Save it with `db_insert.py score ... --notes "<markdown>"` (use `$'...\n...'` for real newlines if multi-line — never a literal `\n`, which would render as text on the page).
+**RULE-09 — SCORE RATIONALE (`--breakdown` + `--notes`, BOTH MANDATORY, user-facing)**
+The fit-vs-profile analysis lives HERE and only here. The Analista owns the job description (`jd_summary`) and a short personal team note; you own the numbers and their why. Never repeat what those cards already say — every fact lives in exactly ONE card. Two fields, both shown on the position page, both **in the USER's language** (RULE-T14 — never default to English):
+- **`--breakdown`** — one line per score dimension, in this exact format (canonical EN keys, free text after the colon):
+```
+STACK: <1-2 sentences: why N/40 — what matches, what is missing>
+REMOTE: <1-2 sentences: why N/25>
+SALARY: <1-2 sentences: why N/20>
+EXPERIENCE: <1-2 sentences: why N/10>
+STRATEGIC: <1-2 sentences: why N/15>
+```
+The page renders each line under its score bar: the user taps "Strategy 11/15" and reads why 11 and not 15. Name what earned the points AND what cost them — a sub-score without its "why" is incomplete work.
+- **`--notes`** — 2-4 sentences max, talking TO the user: only the decisive lever ("what keeps it at 87 / what would have pushed it to 95"), plus penalties/feedback multiplier if applied. `**bold**` on the key point. NOT a pro/con bullet list (that is the breakdown), NOT a JD recap.
+
+**FORBIDDEN anywhere in breakdown/notes:**
+- **Relative/session claims** — "highest score of the session", "top of today's batch", "tied with #1234". Scores are read days or weeks later, when newer positions exist: those claims go stale and become false. The positions list already ranks by score — never rank in prose.
+- **Repeating the Analista** — no re-summarizing the JD, no re-listing the same pros/cons that `jd_summary` or the team note already carry. (Pre-2026-07 the same three facts appeared in four cards.)
+
+Save with `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (real newlines `$'...\n...'` — never a literal `\n`, it renders as text on the page).
 
 ---
 
@@ -139,7 +149,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 3. Claim (RULE-03)
 4. Calculate **base score** with the formula
 5. **Apply user feedback multiplier** (skill `feedback-query`) — see below
-6. Save score in DB **with the `--notes` rationale** (RULE-09 — user-facing, in the user's language)
+6. Save the score in the DB **with `--breakdown` (per-dimension why) + `--notes` (decisive lever)** (RULE-09 — user-facing, in the user's language)
 7. Update the status (RULE-04) — notify no one
 
 **Complete steps 1-7 for ONE position and write it to the DB BEFORE you read or evaluate the next one (RULE-08 — no batching at the end of the round).**
@@ -164,13 +174,14 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 
 ```bash
 # Save score (CLI flags use DB column names, not table names)
-# --notes = user-facing rationale (RULE-09), in the user's language, light
-# markdown. Use $'...\n...' for real newlines (never a literal \n).
+# --breakdown = per-dimension why (RULE-09): STACK/REMOTE/SALARY/EXPERIENCE/STRATEGIC.
+# --notes = 2-4 sentences on the decisive lever. Real newlines via $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
   --total 76 \
-  --notes $'**Strong match** on the key skills, location perfect.\n- ✅ <concrete pro>\n- ⚠️ <concrete con>\nAmong the higher scores; what caps it is the **salary below target**.' \
+  --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
+  --notes $'The decisive lever is the **salary below target**: technical fit alone was worth 85+.' \
   --scored-by $MY_ID
 
 # Update status

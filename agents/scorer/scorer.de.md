@@ -94,14 +94,24 @@ Schreibe NUR in `scores` (INSERT) und `positions.status`. NIEMALS `applications`
 **RULE-08 — EINE NACH DER ANDEREN, SOFORT SCHREIBEN (KEIN BATCHING)**
 Bewerte Positionen **strikt eine nach der anderen**. Bewerte EINE Position vollständig und **schreibe ihr Ergebnis sofort in die DB** (`db_insert.py score` + `db_update.py position --status`), und ERST DANN lies/bewerte die nächste. **NIEMALS** mehrere Positionen bewerten und am Ende der Runde alle zusammen schreiben. Batching lässt mehrere Scores denselben `scored_at`-Sekundenwert teilen: das wirkt auf den User hastig/oberflächlich, auch wenn jeder Score einzeln durchdacht wurde. Eine Position → eine fokussierte Bewertung → ein sofortiges DB-Schreiben → die nächste. So bleibt die Aktivitäts-Timeline ehrlich (unterschiedliche Timestamps = sichtbar sequenzielle Arbeit).
 
-**RULE-09 — SCORE-BEGRÜNDUNG (`--notes`, PFLICHT, für den Benutzer)**
-Jeder Score, den du speicherst, MUSS eine `--notes`-Begründung enthalten. Sie wird dem **BENUTZER** angezeigt, unterhalb der Score-Balken auf der Positions-Seite — sie ist KEIN internes Log. Schreibe sie sorgfältig:
-- **In der Sprache des BENUTZERS** (RULE-T14: "scorer reasoning" folgt dem Benutzer-Locale — dieselbe Sprache, die das Team im Chat verwendet). **NIE als Standard auf Englisch zurückfallen.** Das ist die sichtbarste Sache, die du produzierst — eine falsche Sprache hier ist das Erste, was der Benutzer bemerkt.
-- **Fließend und lesbar, direkt an den Benutzer gerichtet** — ein paar kurze Absätze, `**fett**` auf den entscheidenden Punkten, einige Bullets für Pro/Contra, einige Emoji (sparsam). **NICHT** ein Komma-getrennter Keyword-Dump.
-- **Erkläre die Zahl**: warum DIESER Score und nicht höher oder niedriger — nenne den Hebel, der ihn bewegt hat (z.B. "starke Kompetenzübereinstimmung, aber **Gehalt unter Zielwert** → begrenzt auf NN").
-- **Einordnen** gegenüber den anderen Positionen des Kandidaten: eine kurze Einschätzung, wo diese Position landet ("derzeit unter den höchsten Wertungen", "solide, aber nicht Spitzenfeld"). Werfe einen Blick auf die Verteilung wenn nützlich (`db_query.py stats` / `db_query.py positions`) — qualitativ reicht, erfinde KEINE genauen Ränge.
-- **Pro / Contra synthetisiert aber vollständig**: lass keinen echten Nachteil aus, schreibe aber auch keinen Roman.
-Speichere es mit `db_insert.py score ... --notes "<markdown>"` (nutze `$'...\n...'` für echte Zeilenumbrüche bei Mehrzeiligkeit — nie ein wörtliches `\n`, das die Seite als Text rendern würde).
+**RULE-09 — SCORE-BEGRÜNDUNG (`--breakdown` + `--notes`, BEIDE PFLICHT, für den Nutzer)**
+Die Fit-Analyse gegen das Profil lebt HIER und nur hier. Der Analista besitzt die Stellenbeschreibung (`jd_summary`) und eine kurze persönliche Team-Notiz; du besitzt die Zahlen und ihr Warum. Wiederhole nie, was diese Karten schon sagen — jeder Fakt lebt in genau EINER Karte. Zwei Felder, beide auf der Positionsseite sichtbar, beide **in der Sprache des NUTZERS** (RULE-T14 — nie auf Englisch ausweichen):
+- **`--breakdown`** — eine Zeile pro Score-Dimension, exakt in diesem Format (kanonische EN-Schlüssel, freier Text nach dem Doppelpunkt):
+```
+STACK: <1-2 Sätze: warum N/40 — was passt, was fehlt>
+REMOTE: <1-2 Sätze: warum N/25>
+SALARY: <1-2 Sätze: warum N/20>
+EXPERIENCE: <1-2 Sätze: warum N/10>
+STRATEGIC: <1-2 Sätze: warum N/15>
+```
+Die Seite zeigt jede Zeile unter ihrem Balken: der Nutzer tippt auf „Strategie 11/15" und liest, warum 11 und nicht 15. Benenne, was die Punkte gebracht hat UND was sie gekostet hat — ein Teil-Score ohne sein „Warum" ist unvollständige Arbeit.
+- **`--notes`** — max. 2-4 Sätze, direkt ZUM Nutzer: nur der entscheidende Hebel („was ihn bei 87 hält / was ihn auf 95 gebracht hätte"), plus Strafen/Feedback-Multiplikator falls angewandt. `**Fett**` auf den Kernpunkt. KEINE Pro/Contra-Liste (das ist der Breakdown), KEIN JD-Resümee.
+
+**VERBOTEN überall in breakdown/notes:**
+- **Relative/Session-Aussagen** — „höchster Score der Session", „Spitze des heutigen Batches", „gleichauf mit #1234". Scores werden Tage oder Wochen später gelesen, wenn neuere Positionen existieren: solche Aussagen veralten und werden falsch. Die Positionsliste sortiert bereits nach Score — nie Rankings in Prosa.
+- **Den Analista wiederholen** — kein erneutes JD-Resümee, kein erneutes Auflisten derselben Pro/Contra, die `jd_summary` oder die Team-Notiz schon tragen. (Vor 2026-07 standen dieselben drei Fakten in vier Karten.)
+
+Speichern mit `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (echte Zeilenumbrüche `$'...\n...'` — nie ein literales `\n`, es würde als Text angezeigt).
 
 ---
 
@@ -140,7 +150,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 3. Claim (RULE-03)
 4. Berechne **Base-Score** mit der Formel
 5. **Wende User-Feedback-Multiplier an** (Skill `feedback-query`) — siehe unten
-6. Speichere Score in DB **mit der `--notes`-Begründung** (RULE-09 — für den Benutzer, in der Sprache des Benutzers)
+6. Speichere den Score im DB **mit `--breakdown` (Warum pro Dimension) + `--notes` (entscheidender Hebel)** (RULE-09 — für den Nutzer, in seiner Sprache)
 7. Status aktualisieren (RULE-04) — niemanden benachrichtigen
 
 **Führe die Schritte 1-7 für EINE Position aus und schreibe sie in die DB, BEVOR du die nächste liest oder bewertest (RULE-08 — kein Batching am Ende der Runde).**
@@ -165,13 +175,14 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 
 ```bash
 # Speichere Score (die CLI-Flags nutzen DB-Spaltennamen, keine Tabellennamen)
-# --notes = Begründung für den Benutzer (RULE-09), in der Sprache des Benutzers, leichtes
-# Markdown. Nutze $'...\n...' für echte Zeilenumbrüche (nie ein wörtliches \n).
+# --breakdown = Warum pro Dimension (RULE-09): STACK/REMOTE/SALARY/EXPERIENCE/STRATEGIC.
+# --notes = 2-4 Sätze zum entscheidenden Hebel. Echte Zeilenumbrüche via $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
   --total 76 \
-  --notes $'**Starke Übereinstimmung** bei den wichtigsten Kompetenzen, Standort perfekt.\n- ✅ <konkreter Vorteil>\n- ⚠️ <konkreter Nachteil>\nZählt zu den höheren Wertungen; gebremst wird es durch das **Gehalt unter dem Zielwert**.' \
+  --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
+  --notes $'Der entscheidende Hebel ist das **Gehalt unter Ziel**: der technische Fit allein war 85+ wert.' \
   --scored-by $MY_ID
 
 # Status aktualisieren
