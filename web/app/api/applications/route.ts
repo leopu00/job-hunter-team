@@ -12,7 +12,12 @@ import { getDemoPositionsData } from "@/lib/demo/data";
 export const dynamic = "force-dynamic";
 
 type AppStatus =
-  "draft" | "sent" | "viewed" | "interview" | "offer" | "rejected";
+  | "draft"
+  | "sent"
+  | "viewed"
+  | "interview"
+  | "offer"
+  | "rejected";
 type TimelineEntry = { status: AppStatus; date: number; note?: string };
 type Doc = {
   name: string;
