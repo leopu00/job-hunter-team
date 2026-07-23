@@ -33,6 +33,10 @@ export type GeoRow = {
   // per id → layout deterministico fra refresh a parità di dati.
   id?: string | null;
   score?: number | null;
+  // Opzionale, usato per smascherare gli "uffici" finti: la stessa identica
+  // coordinata condivisa da aziende DIVERSE non è un building reale ma il
+  // geocode generico della città (vedi GENERIC_COORD_MIN_COMPANIES).
+  company?: string | null;
 };
 
 // Distanza del bordo sud della griglia dal centro città (~10 km: fuori dal
@@ -41,6 +45,14 @@ export type GeoRow = {
 const NORTH_OFFSET_M = 10_000;
 const GRID_SPACING_M = 300;
 const M_PER_DEG_LAT = 111_320;
+
+// Una coordinata-ufficio identica (~11 m, 4 decimali) condivisa da almeno
+// QUESTO numero di aziende diverse è un geocode città-level salvato come
+// ufficio, non un indirizzo reale (caso reale su prod: 42 posizioni di 33
+// aziende tutte sul punto-centro di Roma → la vecchia "fila" sulla mappa).
+// 2 aziende sullo stesso punto restano plausibili (coworking, cluster
+// alberghiero); da 3 in su le trattiamo come città-only → griglia nord.
+const GENERIC_COORD_MIN_COMPANIES = 3;
 
 function cityKey(country: string | null, city: string | null): string {
   return `${(country ?? "").trim().toLowerCase()}|${(city ?? "").trim().toLowerCase()}`;
@@ -82,25 +94,50 @@ export function resolveCityPins(
   for (const [k, a] of byCity)
     centroid.set(k, { lat: median(a.lat), lon: median(a.lon) });
 
-  // 2. Prima passata: uffici esatti alle coordinate reali; le città-only
-  //    vengono raccolte per città (con l'indice originale) per la griglia.
+  // 2. Smaschera gli "uffici" finti: coordinate identiche condivise da
+  //    aziende diverse = geocode generico della città → le posizioni vanno
+  //    trattate come città-only. Senza `company` nei rows (call-site
+  //    no-coords) nessuna coordinata risulta generica: lì conta solo se il
+  //    pin è risolvibile, non dove sta, e l'esito non cambia.
+  const coordCompanies = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (r.office_lat == null || r.office_lon == null) continue;
+    const ck = `${r.office_lat.toFixed(4)}|${r.office_lon.toFixed(4)}`;
+    const set = coordCompanies.get(ck) ?? new Set<string>();
+    set.add((r.company ?? "").trim().toLowerCase());
+    coordCompanies.set(ck, set);
+  }
+  const genericCoords = new Set<string>();
+  for (const [ck, companies] of coordCompanies)
+    if (companies.size >= GENERIC_COORD_MIN_COMPANIES) genericCoords.add(ck);
+
+  // 3. Prima passata: uffici esatti alle coordinate reali; le città-only
+  //    (senza ufficio, o con coordinata generica) vengono raccolte per
+  //    città (con l'indice originale) per la griglia.
   const out: Array<{ lat: number; lon: number } | null> = new Array(
     rows.length,
   ).fill(null);
   const cityOnly = new Map<string, { row: GeoRow; idx: number }[]>();
   rows.forEach((r, idx) => {
-    if (r.office_lat != null && r.office_lon != null) {
-      out[idx] = { lat: r.office_lat, lon: r.office_lon };
-      return;
+    const hasOffice = r.office_lat != null && r.office_lon != null;
+    const hasCity = (r.loc_city ?? "").trim() !== "";
+    if (hasOffice) {
+      const ck = `${r.office_lat!.toFixed(4)}|${r.office_lon!.toFixed(4)}`;
+      // Coordinata generica MA senza città nota: meglio il punto generico
+      // che sparire dalla mappa → resta dov'è.
+      if (!genericCoords.has(ck) || !hasCity) {
+        out[idx] = { lat: r.office_lat!, lon: r.office_lon! };
+        return;
+      }
     }
-    if (!(r.loc_city ?? "").trim()) return; // resta null → bucket no-coords
+    if (!hasCity) return; // resta null → bucket no-coords
     const k = cityKey(r.loc_country, r.loc_city);
     const arr = cityOnly.get(k) ?? [];
     arr.push({ row: r, idx });
     cityOnly.set(k, arr);
   });
 
-  // 3. Griglia nord per ogni città: quadrata (≈√N colonne), ancorata
+  // 4. Griglia nord per ogni città: quadrata (≈√N colonne), ancorata
   //    NORTH_OFFSET_M a nord del centro città, righe che crescono verso
   //    nord. Ordine di lettura: score decrescente, ovest→est riga per riga
   //    (i migliori nella riga più vicina alla città). Coordinate pure

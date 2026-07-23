@@ -634,6 +634,7 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
       office_lon: r.office_lon ?? null,
       id: sid(r.id),
       score: typeof r.score === "number" ? r.score : null,
+      company: r.company ?? null,
     })),
   );
   const out: PositionCoord[] = [];
