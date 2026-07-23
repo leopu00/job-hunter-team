@@ -632,6 +632,8 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
       loc_city: r.loc_city ?? null,
       office_lat: r.office_lat ?? null,
       office_lon: r.office_lon ?? null,
+      id: sid(r.id),
+      score: typeof r.score === "number" ? r.score : null,
     })),
   );
   const out: PositionCoord[] = [];
@@ -760,6 +762,8 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
   `,
     )
     .all() as any[];
+  // Qui id/score non servono: interessa solo se il pin è risolvibile
+  // (pins[i] truthy), non lo slot esatto nella griglia nord.
   const pins = resolveCityPins(
     rows.map((r) => ({
       loc_country: r.loc_country ?? null,
