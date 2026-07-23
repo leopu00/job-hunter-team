@@ -11,15 +11,35 @@ filters and map without using personal or production data.
 ## State
 
 `ScriptedOnboarding` is an autoload. It persists steps, history, profile draft,
-preferences and completion flags in `user://guided_onboarding.cfg`.
+preferences, structured answers and completion flags in
+`user://guided_onboarding.cfg`. It also updates two portable local exports
+after every answer:
 
-- **Assistant:** goal → experience → work mode → geography → native profile.
+- `user://onboarding_context.json`: versioned machine-readable context;
+- `user://onboarding_context.md`: compact, human-readable LLM context.
+
+Re-answering a topic replaces that topic in the structured context (the
+visible chat still keeps its history), so an LLM never receives two
+contradictory current preferences.
+
+- **Assistant:** role and specialization → experience/current situation →
+  skill stretch → work mode/geography → relocation → contract → compensation
+  → company stage → native profile.
 - **Coordinator:** local/VPS → runtime → provider → login → profile → optional
-  channels → team activation.
-- **Mentor:** career priority → search breadth → feedback cadence → hours.
+  autonomy → token budget → privacy → availability → channels → activation.
+- **Mentor:** career priority/motivation → breadth → risk/pace → feedback
+  tone/cadence → deal-breaker → hours.
 
-Every node offers two or more authored choices where a decision exists. Users
-can leave and return without losing state.
+Decision nodes offer 3–7 authored choices and follow-up copy reacts to the
+path already taken. Across the three agents this creates millions of valid
+combinations without pretending to call an AI. Users can leave and return
+without losing state.
+
+The physical office tour also exposes multiple questions for every presented
+department (sources, enrichment reliability, scoring, document provenance,
+review criteria and health monitoring). `DialogueUI` records the selected
+questions in the same structured memory, including keyboard choices 1–9, so
+the future agents know which parts of the system mattered to the user.
 
 ## Strict choice-only and live modes
 
@@ -33,6 +53,13 @@ Provider authentication is a hard boundary. Before it, only authored choices
 exist. As soon as it succeeds, every authored choice disappears—even if the
 container or selected agent still needs to start. Once all three conditions are
 true, free text is routed through `BackendBus` to the real agent.
+
+On the first live message to each agent, the VPS adapter attaches the current
+Markdown onboarding context to the tmux payload outside the visible
+`chat.jsonl` message. It sends it again only after the context changes. Agents
+are told to treat it as a starting point, prefer newer explicit requests and
+ask for confirmation on conflicts. Nothing is sent before the user connects a
+provider and starts a live chat.
 
 Assistant, Coordinator and Mentor install `game-reply-options` at agent boot.
 They may emit 2–5 optional buttons generated for the current live context. Such

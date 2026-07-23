@@ -60,13 +60,13 @@ func _rebuild() -> void:
 	var idx := TourGuide.step_index()
 	var launch := TourGuide.in_launch_phase()
 	var depts_label := UIStrings.t("tour.step_depts")
-	if idx >= 1 and idx < 6:
+	if TourGuide.row_state("depts") == "current":
 		depts_label += " (%d/5)" % TourGuide.depts_visited()
-	_row(UIStrings.t("tour.step_assistant"), _state(idx, 0, 0))
-	_row(depts_label, _state(idx, 1, 5))
-	_row(UIStrings.t("tour.step_doctor"), _state(idx, 6, 6))
-	_row(UIStrings.t("tour.step_mentor"), _state(idx, 7, 7))
-	_row(UIStrings.t("tour.step_coordinator"), _state(idx, 8, 8))
+	_row(UIStrings.t("tour.step_assistant"), TourGuide.row_state("assistente"))
+	_row(depts_label, TourGuide.row_state("depts"))
+	_row(UIStrings.t("tour.step_doctor"), TourGuide.row_state("dottore"))
+	_row(UIStrings.t("tour.step_mentor"), TourGuide.row_state("mentor"))
+	_row(UIStrings.t("tour.step_coordinator"), TourGuide.row_state("coordinatore"))
 	_row(UIStrings.t("tour.step_launch"), "current" if launch else "todo")
 
 	if launch:
@@ -84,6 +84,8 @@ func _rebuild() -> void:
 		hint_key = "tour.hint_talk"
 	elif launch:
 		hint_key = "tour.hint_launch"
+	elif TourGuide.mode() == "free":
+		hint_key = "tour.hint_free"
 	var hint := TerminalTheme.label(UIStrings.t(hint_key), 12, Palette.DIM)
 	hint.custom_minimum_size = Vector2(250, 0)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

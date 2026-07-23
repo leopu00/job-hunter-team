@@ -41,6 +41,12 @@ func _init(p_provider: String, p_spec: Dictionary) -> void:
 	add_to_group("embedded_terminal")
 
 
+## I flussi di login (provider e pairing cloud) mostrano lessico "LOGIN";
+## tutto il resto (compose, install, doctor…) è un comando tecnico generico.
+func _is_login_flow() -> bool:
+	return provider.begins_with("provider:") or provider == "cloud"
+
+
 func _ready() -> void:
 	_build_ui()
 	var setup := get_node_or_null("/root/SetupService")
@@ -109,7 +115,8 @@ func _build_ui() -> void:
 	var titles := VBoxContainer.new()
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(titles)
-	titles.add_child(TerminalTheme.label("LOGIN " + str(spec.get("title", provider)).to_upper(),
+	var title_prefix := "LOGIN " if _is_login_flow() else ""
+	titles.add_child(TerminalTheme.label(title_prefix + str(spec.get("title", provider)).to_upper(),
 			24, Palette.WHITE, "xbold"))
 	var hint := TerminalTheme.label(str(spec.get("hint", "")), 13, Palette.YELLOW)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -178,7 +185,7 @@ func _build_ui() -> void:
 		button.pressed.connect(_send.bind(str(entry[1])))
 		input_row.add_child(button)
 	_done = Button.new()
-	_done.text = "HO COMPLETATO IL LOGIN"
+	_done.text = "HO COMPLETATO IL LOGIN" if _is_login_flow() else "HO FINITO · CHIUDI"
 	_done.add_theme_color_override("font_color", Palette.GREEN)
 	_done.pressed.connect(_complete)
 	col.add_child(_done)
@@ -239,7 +246,8 @@ func _process_failed(message: String) -> void:
 
 func _process_finished(code: int) -> void:
 	_finished = true
-	_status.text = "● LOGIN TERMINATO" if code == 0 else "● PROCESSO CHIUSO (%d)" % code
+	_status.text = ("● LOGIN TERMINATO" if _is_login_flow() else "● COMANDO TERMINATO") \
+			if code == 0 else "● PROCESSO CHIUSO (%d)" % code
 	_status.add_theme_color_override("font_color", Palette.GREEN if code == 0 else Palette.YELLOW)
 	_refresh_setup()
 
@@ -322,6 +330,13 @@ func close() -> void:
 
 func _exit_tree() -> void:
 	_closing = true
+	# Anche chi smonta la console con queue_free (es. una console che ne
+	# sostituisce un'altra) non deve lasciare orfano il processo figlio:
+	# il 22/07 un compose doppio è sopravvissuto proprio così.
+	_mutex.lock()
+	if _pid > 0 and not _process_exited:
+		OS.kill(_pid)
+	_mutex.unlock()
 	if _thread != null and _thread.is_started():
 		_thread.wait_to_finish()
 

@@ -41,7 +41,20 @@ func _ready() -> void:
 	ScriptedOnboarding.action_requested.connect(_on_guided_action)
 	_on_setup_status(SetupService.status)
 
-	# linguetta sempre visibile (apre/chiude il cassetto): cornice terminale
+	_drawer = PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.96)
+	style.border_color = Palette.BORDER_GLOW
+	style.set_border_width_all(TerminalTheme.hairline())
+	_drawer.add_theme_stylebox_override("panel", style)
+	_drawer.custom_minimum_size = Vector2(WIDTH, 0)
+	_drawer.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	_drawer.visible = false
+	root.add_child(_drawer)
+
+	# Linguetta apre il cassetto. Da aperto si nasconde (il cassetto la
+	# coprirebbe rendendo il menu impossibile da chiudere — Windows 22/07):
+	# la chiusura sta nell'header del cassetto, mai coperta da altri pannelli.
 	_tab = Button.new()
 	_tab.text = "≡"
 	_tab.add_theme_font_size_override("font_size", 26)
@@ -50,7 +63,7 @@ func _ready() -> void:
 	var tab_style := StyleBoxFlat.new()
 	tab_style.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.92)
 	tab_style.border_color = Palette.BORDER_GLOW
-	tab_style.set_border_width_all(1)
+	tab_style.set_border_width_all(TerminalTheme.hairline())
 	tab_style.content_margin_left = 12
 	tab_style.content_margin_right = 12
 	tab_style.content_margin_top = 4
@@ -65,17 +78,6 @@ func _ready() -> void:
 	_tab.pressed.connect(toggle)
 	root.add_child(_tab)
 
-	_drawer = PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.96)
-	style.border_color = Palette.BORDER_GLOW
-	style.set_border_width_all(1)
-	_drawer.add_theme_stylebox_override("panel", style)
-	_drawer.custom_minimum_size = Vector2(WIDTH, 0)
-	_drawer.set_anchors_preset(Control.PRESET_LEFT_WIDE)
-	_drawer.visible = false
-	root.add_child(_drawer)
-
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_drawer.add_child(scroll)
@@ -86,20 +88,33 @@ func _ready() -> void:
 
 	var brand := TerminalTheme.label("JOB HUNTER TEAM", 15, Palette.WHITE, "xbold")
 	brand.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var brand_row := HBoxContainer.new()
+	brand_row.add_child(brand)
+	var close_btn := Button.new()
+	close_btn.flat = true
+	close_btn.text = "‹"
+	close_btn.tooltip_text = "Chiudi il menu"
+	close_btn.add_theme_font_size_override("font_size", 22)
+	close_btn.add_theme_color_override("font_color", Palette.DIM)
+	close_btn.add_theme_color_override("font_hover_color", Palette.WHITE)
+	close_btn.pressed.connect(toggle)
+	brand_row.add_child(close_btn)
 	var brand_pad := MarginContainer.new()
 	for side in ["top", "bottom"]:
 		brand_pad.add_theme_constant_override("margin_" + side, 14)
-	brand_pad.add_child(brand)
+	brand_pad.add_theme_constant_override("margin_right", 10)
+	brand_pad.add_child(brand_row)
 	box.add_child(brand_pad)
 
 	# TEST-AUTO: JHT_SIDEBAR=1 apre il cassetto al boot (per gli screenshot);
-	# JHT_SECTION=<id> apre anche il pannello di quella sezione.
-	if OS.get_environment("JHT_SIDEBAR") == "1":
-		toggle.call_deferred()
+	# JHT_SECTION=<id> apre anche il pannello di quella sezione. Un solo
+	# toggle: due deferred (JHT_SIDEBAR + JHT_SECTION valutati a _open ancora
+	# false) aprivano e richiudevano il cassetto nello stesso frame.
 	var sec := OS.get_environment("JHT_SECTION")
+	if OS.get_environment("JHT_SIDEBAR") == "1" or sec != "":
+		toggle.call_deferred()
 	if sec != "":
-		if not _open:
-			toggle.call_deferred()
 		_select.call_deferred(sec)
 
 	for group in SidebarDefs.GROUPS:
@@ -120,8 +135,10 @@ func _ready() -> void:
 func toggle() -> void:
 	_open = not _open
 	_drawer.visible = _open
+	_tab.visible = not _open
 	if not _open:
 		_close_panel()
+	_refresh_chat_badges()
 	Sfx.play_tick()
 
 ## Stile riga di navigazione: sfondo pieno, accento verde a sinistra.

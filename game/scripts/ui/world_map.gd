@@ -87,7 +87,7 @@ func _build_overlays() -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.96)
 	sb.border_color = Palette.BORDER_GLOW
-	sb.set_border_width_all(1)
+	sb.set_border_width_all(TerminalTheme.hairline())
 	for side_val in [["left", 14], ["right", 14], ["top", 10], ["bottom", 10]]:
 		sb.set("content_margin_" + side_val[0], side_val[1])
 	_filter_panel.add_theme_stylebox_override("panel", sb)
@@ -132,7 +132,7 @@ static func _style_widget_button(btn: Button, col: Color) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.04, 0.05, 0.07, 0.85)
 	sb.border_color = Palette.BORDER
-	sb.set_border_width_all(1)
+	sb.set_border_width_all(TerminalTheme.hairline())
 	sb.content_margin_left = 10
 	sb.content_margin_right = 10
 	sb.content_margin_top = 3
@@ -248,7 +248,7 @@ func _chip_row(key: String, title: String) -> void:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(color.r, color.g, color.b, 0.18 if active else 0.0)
 		sb.border_color = color if active else Palette.BORDER
-		sb.set_border_width_all(1)
+		sb.set_border_width_all(TerminalTheme.hairline())
 		sb.content_margin_left = 7
 		sb.content_margin_right = 7
 		sb.content_margin_top = 1

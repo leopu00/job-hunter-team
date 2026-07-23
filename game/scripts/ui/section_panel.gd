@@ -1238,6 +1238,7 @@ func _build_profile() -> void:
 		save.disabled = true
 		_prof_status.text = UIStrings.t("prof.saving")
 		_prof_status.add_theme_color_override("font_color", Palette.DIM)
+		ScriptedOnboarding.remember_profile_fields(fields)
 		BackendBus.save_user_profile(ScriptedOnboarding.enrich_profile_fields(fields)))
 	_content.add_child(save)
 	_prof_status = TerminalTheme.label("", 13, Palette.DIM)
@@ -2646,7 +2647,7 @@ func _build_dash_pipeline() -> void:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(color.r, color.g, color.b, 0.10)
 		sb.border_color = Color(color.r, color.g, color.b, 0.55)
-		sb.set_border_width_all(1)
+		sb.set_border_width_all(TerminalTheme.hairline())
 		btn.add_theme_stylebox_override("normal", sb)
 		var hover := sb.duplicate()
 		hover.border_color = color
