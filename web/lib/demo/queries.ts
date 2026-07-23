@@ -43,8 +43,23 @@ import {
   type DemoFeedbackMap,
 } from "@/lib/demo/mode";
 
-function active(key: DemoPersonaKey): DemoPosition[] {
-  return getDemoPositionsData(key).filter((p) => p.status !== "excluded");
+// Locale della request: la voce degli agenti (notes/scoreNotes/criticNotes/
+// pros/cons) è localizzata via overlay in seeds/i18n; gli annunci restano
+// in inglese. Fuori dal request scope (mai atteso) si ripiega sull'italiano.
+async function demoLocale(): Promise<Locale> {
+  try {
+    return await getRequestLocale();
+  } catch {
+    return "it";
+  }
+}
+
+async function data(key: DemoPersonaKey): Promise<DemoPosition[]> {
+  return getDemoPositionsData(key, await demoLocale());
+}
+
+async function active(key: DemoPersonaKey): Promise<DemoPosition[]> {
+  return (await data(key)).filter((p) => p.status !== "excluded");
 }
 
 function toPositionWithScore(p: DemoPosition): PositionWithScore {
@@ -60,8 +75,10 @@ function toPositionWithScore(p: DemoPosition): PositionWithScore {
 }
 
 // ── Stats ───────────────────────────────────────────────────────────
-export function demoDashboardStats(key: DemoPersonaKey): DashboardStats {
-  const all = getDemoPositionsData(key);
+export async function demoDashboardStats(
+  key: DemoPersonaKey,
+): Promise<DashboardStats> {
+  const all = await data(key);
   const count = (s: string) => all.filter((p) => p.status === s).length;
   const TO_WRITE = new Set(["scored", "writing", "review"]);
   const to_write = all.filter(
@@ -215,12 +232,12 @@ function applySort(
   });
 }
 
-export function demoPositions(
+export async function demoPositions(
   key: DemoPersonaKey,
   opts?: PositionFilterOpts,
-): PositionWithScore[] {
+): Promise<PositionWithScore[]> {
   // Default della query cloud: found_at desc.
-  let rows = getDemoPositionsData(key)
+  let rows = (await data(key))
     .map(toPositionWithScore)
     .sort((a, b) => (b.found_at > a.found_at ? 1 : -1));
   rows = applyFilters(rows, opts);
@@ -234,10 +251,10 @@ export function demoPositions(
 }
 
 // ── Dashboard positions ─────────────────────────────────────────────
-export function demoDashboardPositions(
+export async function demoDashboardPositions(
   key: DemoPersonaKey,
-): DashboardPosition[] {
-  return active(key)
+): Promise<DashboardPosition[]> {
+  return (await active(key))
     .slice()
     .sort((a, b) => (b.last_action_at > a.last_action_at ? 1 : -1))
     .map((p) => ({
@@ -270,8 +287,8 @@ export function demoDashboardPositions(
 }
 
 // ── Distribuzioni ───────────────────────────────────────────────────
-export function demoScoreDistribution(key: DemoPersonaKey) {
-  const scores = active(key).map((p) => p.score);
+export async function demoScoreDistribution(key: DemoPersonaKey) {
+  const scores = (await active(key)).map((p) => p.score);
   const withScore = scores.filter((s): s is number => s != null && s > 0);
   const buckets = [
     { label: "76–100", min: 76, max: 100, color: "var(--color-green)" },
@@ -293,11 +310,11 @@ export function demoScoreDistribution(key: DemoPersonaKey) {
   };
 }
 
-export function demoSourceDistribution(
+export async function demoSourceDistribution(
   key: DemoPersonaKey,
-): Array<{ source: string; count: number }> {
+): Promise<Array<{ source: string; count: number }>> {
   const counts: Record<string, number> = {};
-  for (const p of active(key)) {
+  for (const p of await active(key)) {
     const s = p.source ?? "sconosciuta";
     counts[s] = (counts[s] ?? 0) + 1;
   }
@@ -307,9 +324,11 @@ export function demoSourceDistribution(
     .slice(0, 8);
 }
 
-export function demoTypeDistribution(key: DemoPersonaKey): RoleFamilyCount[] {
+export async function demoTypeDistribution(
+  key: DemoPersonaKey,
+): Promise<RoleFamilyCount[]> {
   return aggregateRoleFamilies(
-    active(key).map((p) => ({
+    (await active(key)).map((p) => ({
       role_family: p.role_family ?? null,
       score: p.score,
       critic: p.critic_score,
@@ -318,8 +337,10 @@ export function demoTypeDistribution(key: DemoPersonaKey): RoleFamilyCount[] {
 }
 
 // ── Facets (sidebar /positions: universo COMPLETO, incluse excluded) ─
-export function demoFacets(key: DemoPersonaKey): PositionFacet[] {
-  return getDemoPositionsData(key).map((p) => ({
+export async function demoFacets(
+  key: DemoPersonaKey,
+): Promise<PositionFacet[]> {
+  return (await data(key)).map((p) => ({
     id: p.id,
     role_family: p.role_family ?? null,
     score: p.score,
@@ -333,8 +354,10 @@ export function demoFacets(key: DemoPersonaKey): PositionFacet[] {
 }
 
 // ── Mappa: coords / no-coords / tree località ──────────────────────
-export function demoCoords(key: DemoPersonaKey): PositionCoord[] {
-  return active(key)
+export async function demoCoords(
+  key: DemoPersonaKey,
+): Promise<PositionCoord[]> {
+  return (await active(key))
     .filter((p) => p.lat != null && p.lon != null)
     .map((p) => ({
       id: p.id,
@@ -354,8 +377,10 @@ export function demoCoords(key: DemoPersonaKey): PositionCoord[] {
     }));
 }
 
-export function demoNoCoords(key: DemoPersonaKey): PositionNoCoord[] {
-  return active(key)
+export async function demoNoCoords(
+  key: DemoPersonaKey,
+): Promise<PositionNoCoord[]> {
+  return (await active(key))
     .filter((p) => p.lat == null || p.lon == null)
     .map((p) => ({
       id: p.id,
@@ -373,9 +398,11 @@ export function demoNoCoords(key: DemoPersonaKey): PositionNoCoord[] {
     }));
 }
 
-export function demoLocations(key: DemoPersonaKey): LocationCountry[] {
+export async function demoLocations(
+  key: DemoPersonaKey,
+): Promise<LocationCountry[]> {
   const byCountry = new Map<string, Map<string | null, DemoPosition[]>>();
-  for (const p of active(key)) {
+  for (const p of await active(key)) {
     const country = p.loc_country?.trim() || "(unknown)";
     const city = p.loc_city?.trim() || null;
     const cMap = byCountry.get(country) ?? new Map();
@@ -441,7 +468,7 @@ export async function demoSwipeDecks(key: DemoPersonaKey): Promise<{
   reviewed: SwipeReviewedRow[];
 }> {
   const fb: DemoFeedbackMap = await readDemoFeedback();
-  const rows = getDemoPositionsData(key)
+  const rows = (await data(key))
     .filter((p) => ["scored", "ready", "excluded"].includes(p.status))
     .sort((a, b) => (a.found_at > b.found_at ? 1 : -1));
   const pending: PositionWithScore[] = [];
@@ -462,18 +489,18 @@ export async function demoSwipeDecks(key: DemoPersonaKey): Promise<{
 }
 
 // ── Dettaglio posizione ─────────────────────────────────────────────
-export function demoPositionById(
+export async function demoPositionById(
   key: DemoPersonaKey,
   id: string,
-): {
+): Promise<{
   position: Position;
   score: Score | null;
   highlights: PositionHighlight[];
   company: Company | null;
   application: Application | null;
   tickets: PositionTicket[];
-} | null {
-  const p = getDemoPositionsData(key).find((x) => x.id === id);
+} | null> {
+  const p = (await data(key)).find((x) => x.id === id);
   if (!p) return null;
   const application: Application | null =
     p.critic_score != null
@@ -611,7 +638,7 @@ export async function demoPendingMessages(
 ): Promise<PendingMessage[]> {
   const locale = await getRequestLocale();
   const m = MSG[locale] ?? MSG.it;
-  const top = getDemoPositionsData(key)
+  const top = (await data(key))
     .filter((p) => p.status !== "excluded" && p.score != null)
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
   const mk = (
