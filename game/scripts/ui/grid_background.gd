@@ -2,10 +2,12 @@ class_name GridBackground
 extends Control
 ## Sfondo "console": nero-lavanda pieno + griglia sottilissima del brand.
 
-@export var bg_color: Color = Palette.VOID
+@export var bg_color := Color.TRANSPARENT
 @export var spacing := 48.0
 
 func _ready() -> void:
+	if bg_color == Color.TRANSPARENT:
+		bg_color = Palette.VOID
 	resized.connect(queue_redraw)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 

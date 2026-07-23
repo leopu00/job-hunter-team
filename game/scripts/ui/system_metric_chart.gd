@@ -25,7 +25,7 @@ func set_history(history: Array) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.035, 0.037, 0.052, 0.90))
+	draw_rect(Rect2(Vector2.ZERO, size), Color(Palette.CARD.r, Palette.CARD.g, Palette.CARD.b, 0.94))
 	draw_rect(Rect2(Vector2.ZERO, size), Color(color.r, color.g, color.b, 0.28), false, 1.0)
 	if _font:
 		draw_string(_font, Vector2(12, 20), title, HORIZONTAL_ALIGNMENT_LEFT,
@@ -34,7 +34,7 @@ func _draw() -> void:
 	for i in 3:
 		var y := plot.position.y + plot.size.y * float(i) / 2.0
 		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y),
-				Color(0.35, 0.37, 0.46, 0.22), 1.0)
+				Color(Palette.BORDER.r, Palette.BORDER.g, Palette.BORDER.b, 0.55), 1.0)
 	if _history.is_empty():
 		return
 	var rows: Array = _history.slice(maxi(0, _history.size() - 60))

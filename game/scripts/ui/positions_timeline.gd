@@ -37,13 +37,13 @@ func set_positions(rows: Array) -> void:
 
 func _draw() -> void:
 	var r := Rect2(Vector2.ZERO, size)
-	draw_rect(r, Color(0.035, 0.037, 0.052, 0.86))
+	draw_rect(r, Color(Palette.CARD.r, Palette.CARD.g, Palette.CARD.b, 0.92))
 	draw_rect(r, Color(accent.r, accent.g, accent.b, 0.30), false, 1.0)
 	var plot := Rect2(PAD, size - PAD - Vector2(12, 34))
 	for i in 3:
 		var y := plot.position.y + plot.size.y * float(i) / 2.0
 		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y),
-				Color(0.35, 0.37, 0.46, 0.25), 1.0)
+				Color(Palette.BORDER.r, Palette.BORDER.g, Palette.BORDER.b, 0.55), 1.0)
 	var peak := 1
 	for n in _counts:
 		peak = maxi(peak, n)

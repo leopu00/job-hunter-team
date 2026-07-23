@@ -20,6 +20,7 @@ func _init() -> void:
 	layer = 20
 
 func _ready() -> void:
+	add_to_group("game_sidebar")
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -140,6 +141,14 @@ func toggle() -> void:
 		_close_panel()
 	_refresh_chat_badges()
 	Sfx.play_tick()
+
+
+## API pubblica usata dal cambio tema e dall'onboarding: apre il cassetto e
+## mostra direttamente la sezione richiesta senza simulare click.
+func open_section(section: String) -> void:
+	if not _open:
+		toggle()
+	_select(section)
 
 ## Stile riga di navigazione: sfondo pieno, accento verde a sinistra.
 ## `bg_alpha` 0 = trasparente (normal); `accent` accende la barra 3px.
