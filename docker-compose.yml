@@ -22,11 +22,11 @@ services:
     # Override del CMD Dockerfile (--help): entry point `pid1` che
     # in base a JHT_HOST_TYPE dispatch tra:
     #   - vps  + cloud paired → `cloud daemon` (push loop verso prod)
-    #   - vps  no cloud       → `dashboard --no-browser` (fallback per onboarding)
-    #   - local               → `dashboard --no-browser` (default storico)
-    # Su VPS la dashboard locale e' inutile (porta 3000 bindata a
-    # 127.0.0.1, irraggiungibile dall'utente). Il daemon push spinge
-    # i dati su jobhunterteam.ai dove l'utente li vede via browser.
+    #   - vps  no cloud       → bridges + watchdog (daemon parte al pairing)
+    #   - local               → bridges + watchdog
+    # Niente dashboard web locale (ritirata 2026-07-23): l'interazione
+    # local/VPS passa dall'app desktop via docker exec / SSH; il browser
+    # serve solo il cloud (jobhunterteam.ai, con login).
     # Vedi cli/src/commands/pid1.js per dettagli.
     command: ["pid1"]
     environment:
@@ -75,11 +75,8 @@ services:
     volumes:
       - ${HOME}/.jht:/jht_home
       - ${HOME}/Documents/Job Hunter Team:/jht_user
-    ports:
-      # Bind solo a 127.0.0.1: previene LAN access. Per esporre in rete,
-      # mettere il container dietro un reverse proxy (nginx/traefik) o
-      # un tunnel Tailscale.
-      - "127.0.0.1:3000:3000"
+    # Nessuna porta esposta: la dashboard web locale e' stata ritirata
+    # (2026-07-23) — l'interazione passa dall'app desktop (docker exec).
     stdin_open: true
     tty: true
     restart: unless-stopped

@@ -149,9 +149,9 @@ Verify:
 
 ```bash
 jht status            # name=/jht status=running
-docker ps             # jht ... 127.0.0.1:3000->3000/tcp
-free -h               # ~1 GB used after Next.js boot
-jht logs --tail 10    # "Dashboard started at http://localhost:3000"
+docker ps             # jht ... (no published ports)
+free -h               # memory in use after boot
+jht logs --tail 10    # "mode: VPS" + watchdog/bridge lines
 ```
 
 ### 6. `jht setup` — provider config
@@ -364,27 +364,13 @@ jht cron add cloud-push '*/15 * * * *'   # every 15min (auto-sync)
 > only**: your logs/agent state stay on the VPS, only positions/scores/
 > applications are synchronized.
 
-### 12. (Advanced) Web UI directly on the VPS via SSH tunnel
+### 12. (Retired) Web UI on the VPS via SSH tunnel
 
-> ⚠️ **Tech-only path.** The prod dashboard (`jobhunterteam.ai`) is the
-> recommended one. This path is only for debugging the Next.js backend
-> local to the VPS, or for fully offline environments.
-
-The Next.js dashboard runs on `127.0.0.1:3000` of the VPS — **not exposed
-on the network**. Open a second terminal on your PC with an SSH tunnel:
-
-```bash
-ssh -i ~/.ssh/jht_hetzner -L 3000:localhost:3000 root@<VPS_IP>
-```
-
-Browser → **http://localhost:3000**.
-
-> ⚠️ **Supabase auth via SSH tunnel** — the OAuth callback is configured
-> for `jobhunterteam.ai/auth/callback`, not for `localhost`. The public
-> pages work, the protected ones redirect to prod. Tracked as
-> `[BUG-VPS-AUTH-TUNNEL]`. **To use it via tunnel** you need to add
-> `http://localhost:3000/**` to the additional redirect URLs in the
-> Supabase project dashboard.
+> 🪦 **Retired 2026-07-23.** The container no longer serves a web UI on
+> `127.0.0.1:3000` — the local/VPS interaction surface is the **desktop
+> app** (it talks to the VPS over SSH directly). For a browser view use
+> the cloud dashboard (`jobhunterteam.ai`, requires login). The SSH
+> tunnel remains useful only for generic debugging, not for a web UI.
 
 ## Lifecycle and shutdown
 
@@ -482,9 +468,9 @@ client). Cosmetic, doesn't block login. See BACKLOG.
 
 ### Web UI auth doesn't work via SSH tunnel `localhost:3000`
 
-Supabase OAuth callback configured only for the prod domain. Workaround:
-use the CLI / Telegram to manage the team. Future fix: add
-`http://localhost:3000` to the additional redirect URLs in the Supabase project.
+🪦 Obsolete (2026-07-23): the container no longer serves a web UI, so
+this can't happen anymore. Interaction = desktop app; browser = cloud
+dashboard (`jobhunterteam.ai`).
 
 ### SSH `Permission denied (publickey,password)` with a key that should match
 

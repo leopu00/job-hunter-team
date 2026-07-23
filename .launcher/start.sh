@@ -83,19 +83,7 @@ echo ""
 echo -e "${BOLD}Connettiti al Coordinatore:${RESET}"
 echo "  tmux attach -t CAPITANO"
 echo ""
-echo -e "${BOLD}Web App (localhost:3000):${RESET}"
-
-WEB_ENV="$REPO_ROOT/web/.env.local"
-if [ ! -f "$WEB_ENV" ]; then
-  warn "web/.env.local mancante. Esegui:"
-  echo "    cp web/.env.example web/.env.local"
-  echo "    # poi compila con le tue credenziali Supabase"
-  echo ""
-fi
-
-if command -v docker &>/dev/null && docker compose version &>/dev/null 2>&1; then
-  echo "  Con Docker:  cd web && docker compose up"
-else
-  echo "  Senza Docker: cd web && npm install && npm run dev"
-fi
+# Niente web app locale: la dashboard browser su localhost:3000 e' stata
+# ritirata (2026-07-23) — l'interazione passa dall'app desktop JHT.
+echo -e "${BOLD}Interfaccia:${RESET} app desktop Job Hunter Team (il gioco)"
 echo ""

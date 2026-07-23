@@ -7,6 +7,8 @@
 > Supersede la memoria `web-first-interaction-roadmap` (2026-05-23) e le voci interactive di `cloud-sync-architecture.md`.
 >
 > 🔄 **Raffinato 2026-06-20** da [`2026-06-20-data-sync-and-dashboard-split-design.md`](2026-06-20-data-sync-and-dashboard-split-design.md): la **decisione aperta #5 è risolta** (il web cloud NON è Telegram-only — mantiene una **corsia richieste async**, ticket+azioni-posizione, pull-based dalla VPS); inoltre quel doc definisce il meccanismo di **sync dati** (on-access + pulsante, niente polling) e la **separazione dura delle due dashboard** (locale dentro l'app desktop · cloud nel browser).
+>
+> 🪦 **SUPERATO in parte 2026-07-23 (native desktop migration, commit `32225cb7`):** la "dashboard locale" NON è più una pagina web servita dal container su `localhost:3000` (né embeddata via `<webview>`, né aperta nel browser). **Tutta l'interazione local/VPS vive nell'app desktop nativa (il gioco)**, che legge i dati via `docker exec` (local) o SSH (VPS) — il server Next.js locale è stato ritirato e il container non espone porte. Il **browser è solo cloud** (`jobhunterteam.ai`, con login). Restano validi i principi: interazione co-locata col team, cloud read-mostly, Telegram opzionale.
 
 ---
 

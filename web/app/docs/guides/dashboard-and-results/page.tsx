@@ -98,7 +98,7 @@ jht stats                 # found / scored / applied counts`,
     withSignupRest2:
       " from any browser, share with a mentor. Your CVs stay local; only metadata syncs.",
     withoutStrong: "Without",
-    withoutRest1: " — fully local. The dashboard lives at ",
+    withoutRest1: " — fully local. Everything lives in the desktop app ",
     withoutRest2: ", nothing external is touched.",
     readOnlyStrong: "read-only",
     readOnlyRest1: "🌐 On the public site the dashboard is ",
@@ -157,7 +157,7 @@ jht stats                 # conteggi trovate / valutate / candidate`,
     withSignupRest2:
       " da qualsiasi browser, condividi con un mentore. I tuoi CV restano in locale; si sincronizzano solo i metadati.",
     withoutStrong: "Senza",
-    withoutRest1: " — tutto in locale. La dashboard è su ",
+    withoutRest1: " — tutto in locale. Tutto vive nell’app desktop ",
     withoutRest2: ", nulla di esterno viene toccato.",
     readOnlyStrong: "in sola lettura",
     readOnlyRest1: "🌐 Sul sito pubblico la dashboard è ",
@@ -216,7 +216,7 @@ jht stats                 # recuentos de encontradas / puntuadas / aplicadas`,
     withSignupRest2:
       " desde cualquier navegador, comparte con un mentor. Tus CV permanecen en local; solo se sincronizan los metadatos.",
     withoutStrong: "Sin registro",
-    withoutRest1: " — totalmente local. El panel reside en ",
+    withoutRest1: " — totalmente local. Todo vive en la app de escritorio ",
     withoutRest2: ", no se toca nada externo.",
     readOnlyStrong: "de solo lectura",
     readOnlyRest1: "🌐 En el sitio público el panel es ",
@@ -276,7 +276,7 @@ jht stats                 # nombres trouvés / notés / postulés`,
     withSignupRest2:
       " depuis n'importe quel navigateur, partagez avec un mentor. Vos CV restent en local ; seules les métadonnées se synchronisent.",
     withoutStrong: "Sans inscription",
-    withoutRest1: " — entièrement local. Le tableau de bord se trouve sur ",
+    withoutRest1: " — entièrement local. Tout vit dans l’app de bureau ",
     withoutRest2: ", rien d'externe n'est touché.",
     readOnlyStrong: "en lecture seule",
     readOnlyRest1: "🌐 Sur le site public, le tableau de bord est ",
@@ -335,7 +335,7 @@ jht stats                 # Zähler gefunden / bewertet / beworben`,
     withSignupRest2:
       " in jedem Browser, teile mit einem Mentor. Deine Lebensläufe bleiben lokal; nur Metadaten werden synchronisiert.",
     withoutStrong: "Ohne",
-    withoutRest1: " — vollständig lokal. Das Dashboard liegt unter ",
+    withoutRest1: " — vollständig lokal. Alles lebt in der Desktop-App ",
     withoutRest2: ", nichts Externes wird berührt.",
     readOnlyStrong: "schreibgeschützt",
     readOnlyRest1:
@@ -394,7 +394,7 @@ jht stats                 # talált / pontozott / jelentkezett darabszámok`,
     withSignupRest2:
       " címet bármely böngészőből, oszd meg egy mentorral. Az önéletrajzaid helyben maradnak; csak a metaadatok szinkronizálódnak.",
     withoutStrong: "Regisztráció nélkül",
-    withoutRest1: " — teljesen helyi. Az irányítópult itt él: ",
+    withoutRest1: " — teljesen helyi. Minden az asztali alkalmazásban él: ",
     withoutRest2: ", semmi külsőhöz nem nyúl.",
     readOnlyStrong: "csak olvasható",
     readOnlyRest1: "🌐 A nyilvános oldalon az irányítópult biztonsági okból ",
@@ -453,7 +453,7 @@ jht stats                 # contagens encontradas / pontuadas / candidatadas`,
     withSignupRest2:
       " a partir de qualquer navegador, partilha com um mentor. Os teus CV ficam em local; só os metadados sincronizam.",
     withoutStrong: "Sem registo",
-    withoutRest1: " — totalmente local. O painel vive em ",
+    withoutRest1: " — totalmente local. Tudo vive no app de desktop ",
     withoutRest2: ", nada externo é tocado.",
     readOnlyStrong: "apenas de leitura",
     readOnlyRest1: "🌐 No site público o painel é ",
@@ -518,7 +518,7 @@ export default async function DashboardAndResultsPage() {
         <LI>
           <strong>{t.withoutStrong}</strong>
           {t.withoutRest1}
-          <Code>localhost:3000</Code>
+          <Code>Job Hunter Team</Code>
           {t.withoutRest2}
         </LI>
       </UL>

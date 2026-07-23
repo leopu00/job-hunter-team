@@ -450,11 +450,9 @@ func _build_advanced() -> void:
 	open_log.pressed.connect(func() -> void:
 		OS.shell_open(ProjectSettings.globalize_path("user://jht-game.log").get_base_dir()))
 	files.add_child(open_log)
-	var dashboard := Button.new()
-	dashboard.text = "APRI DASHBOARD WEB LOCALE  ↗"
-	dashboard.disabled = not bool(SetupService.status.get("container_running", false))
-	dashboard.pressed.connect(func() -> void: OS.shell_open("http://127.0.0.1:3000"))
-	files.add_child(dashboard)
+	# Niente pulsante "dashboard web locale": la UI browser su localhost:3000
+	# è stata ritirata con la native desktop migration — tutta l'interazione
+	# local/VPS vive nel gioco; il browser serve solo il cloud (con login).
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			"Versione gioco %s · dati applicazione %s" % [
