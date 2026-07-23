@@ -27,6 +27,35 @@ export const POSITIONS_COLUMNS = [
 
 export type PositionsColumnKey = (typeof POSITIONS_COLUMNS)[number];
 
+// Larghezza MINIMA leggibile (px) per colonna. La tabella /positions usa
+// `table-fixed` con un <colgroup> le cui larghezze sono percentuali
+// PROPORZIONALI a questi minimi, e un `min-width` di tabella pari alla loro
+// somma. Effetto:
+//   • contenitore ≥ somma dei minimi → la tabella riempie il 100%: le colonne
+//     crescono in proporzione (titolo/azienda si prendono lo spazio in più) e
+//     il testo lungo viene troncato con l'ellissi → NIENTE scroll orizzontale;
+//   • contenitore < somma (troppe colonne aggiunte) → il min-width forza la
+//     tabella oltre il contenitore: ogni colonna resta al suo minimo leggibile
+//     e compare lo scroll orizzontale (gestito da TableScrollSync).
+// I valori tengono conto sia dell'header (label + freccia sort) sia del
+// contenuto tipico della cella.
+export const POSITIONS_COL_MIN_WIDTH: Record<PositionsColumnKey, number> = {
+  id: 78,
+  last_action_at: 122,
+  title: 260,
+  company: 190,
+  role_family: 150,
+  loc_country: 104,
+  loc_city: 104,
+  remote: 92,
+  score: 124,
+  monthly: 100,
+  source: 108,
+  last_action_by: 134,
+  critic: 80,
+  status: 104,
+};
+
 // Default = le 6 colonne della tabella dashboard ("Le Migliori
 // Posizioni") + le due più utili in una vista-elenco completa: stato
 // pipeline e ultima attività.
