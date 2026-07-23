@@ -1,7 +1,8 @@
 "use client";
 
 // [JHT-WEB-DEMO] Wizard di benvenuto per l'utente cloud senza dati (22/07).
-// Tre step: (1) a che punto sei col setup, (2) la via d'uscita giusta —
+// Quattro step: (0) lingua della piattaforma, (1) a che punto sei col
+// setup, (2) la via d'uscita giusta —
 // scaricare l'app, avviare il team, o collegarlo col pairing token —,
 // (3) la demo interattiva della dashboard per categoria di lavoro.
 // La scelta demo scrive il cookie via POST /api/demo e ricarica su
@@ -22,9 +23,22 @@ import {
 
 type StatusChoice = "browsing" | "none" | "downloaded" | "running";
 
+// Lingue nel loro endonimo: leggibili da chiunque a prescindere dalla
+// lingua corrente del wizard.
+const LANGS: { code: Locale; name: string }[] = [
+  { code: "it", name: "Italiano" },
+  { code: "en", name: "English" },
+  { code: "es", name: "Español" },
+  { code: "fr", name: "Français" },
+  { code: "de", name: "Deutsch" },
+  { code: "hu", name: "Magyar" },
+  { code: "pt", name: "Português" },
+];
+
 type Strings = {
   title: string;
   subtitle: string;
+  q_lang: string;
   q_status: string;
   opt_none: string;
   opt_none_d: string;
@@ -66,6 +80,7 @@ const T: Record<Locale, Strings> = {
     title: "Benvenuto su JHT",
     subtitle:
       "Il tuo team di agenti cerca, analizza e prepara le candidature al posto tuo. Questo sito è la finestra sui dati che il team genera.",
+    q_lang: "In che lingua vuoi usare la piattaforma?",
     q_status: "A che punto sei?",
     opt_none: "Non ho ancora scaricato l'app desktop",
     opt_none_d: "Ti spieghiamo come funziona e dove scaricarla",
@@ -114,6 +129,7 @@ const T: Record<Locale, Strings> = {
     title: "Welcome to JHT",
     subtitle:
       "Your team of agents searches, analyses and prepares applications for you. This site is the window on the data the team generates.",
+    q_lang: "Which language do you want to use the platform in?",
     q_status: "Where are you at?",
     opt_none: "I haven't downloaded the desktop app yet",
     opt_none_d: "We'll explain how it works and where to get it",
@@ -162,6 +178,7 @@ const T: Record<Locale, Strings> = {
     title: "Bienvenido a JHT",
     subtitle:
       "Tu equipo de agentes busca, analiza y prepara candidaturas por ti. Este sitio es la ventana a los datos que genera el equipo.",
+    q_lang: "¿En qué idioma quieres usar la plataforma?",
     q_status: "¿En qué punto estás?",
     opt_none: "Aún no he descargado la app de escritorio",
     opt_none_d: "Te explicamos cómo funciona y dónde conseguirla",
@@ -210,6 +227,7 @@ const T: Record<Locale, Strings> = {
     title: "Bienvenue sur JHT",
     subtitle:
       "Votre équipe d'agents cherche, analyse et prépare les candidatures à votre place. Ce site est la fenêtre sur les données que l'équipe génère.",
+    q_lang: "Dans quelle langue veux-tu utiliser la plateforme ?",
     q_status: "Où en êtes-vous ?",
     opt_none: "Je n'ai pas encore téléchargé l'app desktop",
     opt_none_d: "On vous explique comment ça marche et où la télécharger",
@@ -259,6 +277,7 @@ const T: Record<Locale, Strings> = {
     title: "Willkommen bei JHT",
     subtitle:
       "Dein Agenten-Team sucht, analysiert und bereitet Bewerbungen für dich vor. Diese Seite ist das Fenster auf die Daten, die das Team erzeugt.",
+    q_lang: "In welcher Sprache möchtest du die Plattform nutzen?",
     q_status: "Wo stehst du?",
     opt_none: "Ich habe die Desktop-App noch nicht heruntergeladen",
     opt_none_d: "Wir erklären, wie es funktioniert und wo du sie bekommst",
@@ -307,6 +326,7 @@ const T: Record<Locale, Strings> = {
     title: "Üdvözlünk a JHT-n",
     subtitle:
       "Az ügynökcsapatod keres, elemez és előkészíti a jelentkezéseket helyetted. Ez az oldal ablak a csapat által generált adatokra.",
+    q_lang: "Milyen nyelven szeretnéd használni a platformot?",
     q_status: "Hol tartasz?",
     opt_none: "Még nem töltöttem le az asztali appot",
     opt_none_d: "Elmagyarázzuk, hogyan működik és honnan szerezheted be",
@@ -356,6 +376,7 @@ const T: Record<Locale, Strings> = {
     title: "Bem-vindo ao JHT",
     subtitle:
       "A tua equipa de agentes procura, analisa e prepara candidaturas por ti. Este site é a janela para os dados que a equipa gera.",
+    q_lang: "Em que língua queres usar a plataforma?",
     q_status: "Em que ponto estás?",
     opt_none: "Ainda não descarreguei a app desktop",
     opt_none_d: "Explicamos como funciona e onde a obter",
@@ -436,12 +457,28 @@ export default function WelcomeClient({
   hasSynced: boolean;
   activePersona: DemoPersonaKey | null;
 }) {
-  const locale = useLocale();
+  const cookieLocale = useLocale();
+  // La scelta lingua è il PRIMO step (feedback utente 23/07: senza, le
+  // traduzioni della demo restano invisibili): il cookie NEXT_LOCALE viene
+  // scritto subito, l'override locale evita di dover ricaricare la pagina.
+  const [localeChosen, setLocaleChosen] = useState<Locale | null>(null);
+  const locale = localeChosen ?? cookieLocale;
   const t = T[locale];
   const labels = PERSONA_LABELS[locale];
-  const [step, setStep] = useState<"status" | "path" | "demo">("status");
+  const [step, setStep] = useState<"lang" | "status" | "path" | "demo">("lang");
   const [choice, setChoice] = useState<StatusChoice>("none");
   const [busy, setBusy] = useState<DemoPersonaKey | null>(null);
+
+  const pickLang = (l: Locale) => {
+    document.cookie = `NEXT_LOCALE=${l};path=/;max-age=31536000;SameSite=Lax`;
+    try {
+      localStorage.setItem("jht-lang", l);
+    } catch {
+      /* localStorage non disponibile */
+    }
+    setLocaleChosen(l);
+    setStep("status");
+  };
 
   const startDemo = async (persona: DemoPersonaKey) => {
     if (busy) return;
@@ -484,7 +521,7 @@ export default function WelcomeClient({
 
       {/* Progress dots */}
       <div className="flex items-center gap-1.5 mb-6" aria-hidden>
-        {(["status", "path", "demo"] as const).map((s) => (
+        {(["lang", "status", "path", "demo"] as const).map((s) => (
           <span
             key={s}
             className="h-1 rounded-full transition-all"
@@ -496,6 +533,39 @@ export default function WelcomeClient({
           />
         ))}
       </div>
+
+      {step === "lang" && (
+        <>
+          <div className="section-label mb-4">{t.q_lang}</div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {LANGS.map((l) => (
+              <button
+                key={l.code}
+                type="button"
+                onClick={() => pickLang(l.code)}
+                className="group text-left p-3.5 rounded-lg border bg-[var(--color-panel)] hover:border-[#00e87a55] transition-colors cursor-pointer"
+                style={{
+                  borderColor:
+                    locale === l.code
+                      ? "color-mix(in srgb, var(--color-green) 55%, transparent)"
+                      : "var(--color-border)",
+                }}
+              >
+                <span className="text-[12px] font-bold text-[var(--color-bright)] group-hover:text-[var(--color-green)] transition-colors">
+                  {l.name}
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={skip}
+            className="mt-6 text-[11px] text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer"
+          >
+            {t.skip}
+          </button>
+        </>
+      )}
 
       {step === "status" && (
         <>
