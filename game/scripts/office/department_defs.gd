@@ -33,8 +33,8 @@ const HANDOFF_SIZE := Vector2(190, 60)
 
 const DEPARTMENTS := {
 	"scout": {
-		"name": "Scout",
-		"tagline": "Trovano le posizioni là fuori",
+		"name": "Ricerca",
+		"tagline": "Cercano sul web opportunità per te",
 		"color": Color("#00e87a"),
 		"zone": Rect2(320, 348, 880, 520),
 		# Tavolo Scout → Analisti: più vicino all'ologramma e appena più in
@@ -53,8 +53,8 @@ const DEPARTMENTS := {
 		],
 	},
 	"analisti": {
-		"name": "Analisti",
-		"tagline": "Arricchiscono e verificano i dati",
+		"name": "Analisi",
+		"tagline": "Studiano ogni opportunità nel dettaglio",
 		"color": Color("#4d9fff"),
 		"zone": Rect2(2232, 150, 848, 580),  # lab rientrato dal bordo est
 		# Più vicino alle scrivanie, ma spostato a destra del varco centrale:
@@ -74,8 +74,8 @@ const DEPARTMENTS := {
 		],
 	},
 	"scorer": {
-		"name": "Scorer",
-		"tagline": "Pesano il match profilo↔annuncio",
+		"name": "Compatibilità",
+		"tagline": "Capiscono quanto ogni lavoro fa per te",
 		"color": Color("#f5c518"),
 		"zone": Rect2(1140, 840, 1120, 640),
 		# Tavolo Scorer → Scrittori al centro esatto del nuovo tappeto. Gli
@@ -96,7 +96,7 @@ const DEPARTMENTS := {
 		],
 	},
 	"scrittori": {
-		"name": "Scrittori",
+		"name": "Candidature",
 		"tagline": "Preparano CV e lettere su misura",
 		"color": Color("#a855f7"),
 		"zone": Rect2(320, 1520, 860, 440),
@@ -123,8 +123,8 @@ const DEPARTMENTS := {
 		],
 	},
 	"critici": {
-		"name": "Critici",
-		"tagline": "Revisionano ogni riga prima dell'invio",
+		"name": "Controllo qualità",
+		"tagline": "Rileggono tutto prima della consegna",
 		"color": Color("#ff4560"),
 		"zone": Rect2(2075, 1520, 1010, 440),
 		"inbox": Vector2(3025, 1820),  # deposito sul bordo est, fuori dall'anello

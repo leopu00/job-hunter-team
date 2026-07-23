@@ -271,7 +271,7 @@ func _build_email() -> void:
 	var state: Dictionary = SetupService.email_status()
 	var configured := bool(state.get("configured", false))
 	_content.add_child(TerminalTheme.label(
-			"Casella dedicata per i job alert. Lo Scout la controlla a inizio giornata e trasforma le email in posizioni da analizzare.",
+			"Casella dedicata agli avvisi di lavoro. Il reparto Ricerca la controlla a inizio giornata e porta in ufficio le opportunità ricevute.",
 			14, Palette.MUTED))
 	_content.add_child(HSeparator.new())
 	_setup_state_row("STATO", configured,
