@@ -8,6 +8,7 @@ import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
+import { canonicalCountry, canonicalCityKey } from "@/lib/city-gazetteer";
 
 // Stringhe UI hardcoded localizzate (chart/empty/aria/popup).
 const T: Record<string, Record<string, string>> = {
@@ -234,19 +235,24 @@ function scoreNormHeight(score: number | null): number {
 const MAX_BEAMS_PER_ICON = 24;
 
 // Hash content-based per l'icon-image. Dipende SOLO dai top-cap
-// scores sorted desc → icone ri-usate fra cluster con stessa "testa
-// di distribuzione" anche se la coda differisce.
-function iconIdForScores(scores: (number | null)[]): string {
+// scores sorted desc (+ flag remote) → icone ri-usate fra cluster con
+// stessa "testa di distribuzione" anche se la coda differisce.
+function iconIdForScores(scores: (number | null)[], remote: boolean): string {
   const drawn = [...scores]
     .sort((a, b) => (b ?? 0) - (a ?? 0))
     .slice(0, MAX_BEAMS_PER_ICON)
     .map((s) => (s == null ? "x" : String(s)))
     .join("|");
-  return `jht-bm-${Math.min(scores.length, MAX_BEAMS_PER_ICON)}-${hashStr(drawn).toString(36)}`;
+  return `jht-bm-${remote ? "r-" : ""}${Math.min(scores.length, MAX_BEAMS_PER_ICON)}-${hashStr(drawn).toString(36)}`;
 }
+
+// Tinta del distintivo "da remoto" (anello alla base del fascio).
+// Azzurro: fuori dalla scala verde degli score, non ruba significato.
+const REMOTE_RING_RGB = "90,180,255";
 
 function createGroupBeamsImageData(
   scores: (number | null)[],
+  remote: boolean,
 ): { data: ImageData; w: number; h: number } | null {
   const total = Math.max(1, scores.length);
   // Sort desc e cap ai top N_CAP — visualizziamo la testa della
@@ -377,6 +383,24 @@ function createGroupBeamsImageData(
   ctx.arc(cx, baseY, coreR, 0, 2 * Math.PI);
   ctx.fill();
 
+  // Distintivo remote: ellisse azzurra alla base del fascio (schiacciata
+  // come il "terreno" dell'aiuola). Doppio tratto: alone morbido + linea
+  // netta → leggibile sia su singoli pin che su fasci aggregati.
+  if (remote) {
+    const rx = Math.max(16, Math.max(-minX, maxX) + beamW + 6);
+    const ry = rx * yScale;
+    ctx.beginPath();
+    ctx.ellipse(cx, baseY, rx + 2, ry + 2, 0, 0, 2 * Math.PI);
+    ctx.strokeStyle = `rgba(${REMOTE_RING_RGB},0.35)`;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx, baseY, rx, ry, 0, 0, 2 * Math.PI);
+    ctx.strokeStyle = `rgba(${REMOTE_RING_RGB},0.9)`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
   return { data: ctx.getImageData(0, 0, W, H), w: W, h: H };
 }
 
@@ -399,6 +423,9 @@ type PositionCoord = {
   lat: number;
   lon: number;
   is_remote: boolean;
+  // 'full_remote' | 'hybrid' | 'onsite' | null — la sorgente di verità per
+  // il regime remote (is_remote è derivato da questa lato query).
+  remote_type: string | null;
   location: string | null;
   // Country/city normalizzati (location-enrichment skill, regole R12-R15).
   // Usati come filtro mappa quando l'utente clicca un nodo del tree
@@ -426,6 +453,9 @@ type GroupedFeature = {
   scores: (number | null)[];
   positions: PositionCoord[];
   topScore: number | null; // max degli scores → tinta halo/core
+  // true se TUTTI i membri sono full remote: icona con base cerchiata
+  // azzurra + etichetta "Da remoto" sui fasci aggregati.
+  remote: boolean;
 };
 
 // Calcola la "faccia migliore" del globo da mostrare: longitude
@@ -522,15 +552,17 @@ function aggregateGroups(
       if (acc == null) return s;
       return Math.max(acc, s);
     }, null);
+    const remote = sorted.every((p) => p.remote_type === "full_remote");
     out.push({
       groupKey: `${prefix}|${k}`,
-      iconId: iconIdForScores(scores),
+      iconId: iconIdForScores(scores, remote),
       lat: median(arr.map((p) => p.lat)),
       lon: median(arr.map((p) => p.lon)),
       count: arr.length,
       scores,
       positions: sorted,
       topScore,
+      remote,
     });
   }
   return out;
@@ -745,7 +777,8 @@ export default function JobsGlobe({
         return sa - sb;
       });
       const scores = sorted.map((p) => p.score);
-      const iconId = iconIdForScores(scores);
+      const remote = sorted.every((p) => p.remote_type === "full_remote");
+      const iconId = iconIdForScores(scores, remote);
       const lat = arr.reduce((a, p) => a + p.lat, 0) / arr.length;
       const lon = arr.reduce((a, p) => a + p.lon, 0) / arr.length;
       const topScore = scores.reduce<number | null>((acc, s) => {
@@ -762,6 +795,7 @@ export default function JobsGlobe({
         scores,
         positions: sorted,
         topScore,
+        remote,
       });
     }
     return out;
@@ -773,20 +807,31 @@ export default function JobsGlobe({
   // zoom/pan → il marker sta sempre nello stesso identico punto; le
   // uniche transizioni sono gli attraversamenti di soglia. Posizioni
   // senza chiave (città/paese mancante) restano pin individuali.
+  // Chiavi CANONICHE (gazetteer): "Rome"/"Roma" e "Italy"/"Italia" nello
+  // stesso fascio. Le full remote senza sede formano fasci propri: per
+  // paese-vincolo ("remote|<paese>", ancorati alla loro griglia sud) o
+  // l'isola unica "remote|anywhere". Le remote CON sede stanno nel fascio
+  // della loro città come le altre (la sede conta).
   const cityGrouped = useMemo(
     () =>
       aggregateGroups(grouped, "city", (p) => {
         const city = (p.loc_city ?? "").trim();
-        if (!city) return null;
-        return `${(p.loc_country ?? "").trim().toLowerCase()}|${city.toLowerCase()}`;
+        if (city) return canonicalCityKey(p.loc_country, p.loc_city);
+        if (p.remote_type !== "full_remote") return null;
+        const country = canonicalCountry(p.loc_country);
+        return country ? `remote|${country}` : "remote|anywhere";
       }),
     [grouped],
   );
   const countryGrouped = useMemo(
     () =>
       aggregateGroups(grouped, "country", (p) => {
-        const country = (p.loc_country ?? "").trim();
-        return country ? country.toLowerCase() : null;
+        const country = canonicalCountry(p.loc_country);
+        const city = (p.loc_city ?? "").trim();
+        if (p.remote_type === "full_remote" && !city) {
+          return country ? `remote|${country}` : "remote|anywhere";
+        }
+        return country || null;
       }),
     [grouped],
   );
@@ -944,13 +989,10 @@ export default function JobsGlobe({
               16,
               1.15,
             ],
-            // Numero del cluster mostrato sotto al fascio (solo se >1).
-            "text-field": [
-              "case",
-              [">", ["get", "count"], 1],
-              ["to-string", ["get", "count"]],
-              "",
-            ],
+            // Etichetta sotto al fascio: count sui gruppi (>1), con
+            // " · Da remoto" sui fasci di sole remote. Precomputata in
+            // syncData (property "label").
+            "text-field": ["get", "label"],
             "text-font": ["Open Sans Bold"],
             "text-size": [
               "interpolate",
@@ -1180,7 +1222,7 @@ export default function JobsGlobe({
     for (const g of groups) {
       neededIcons.add(g.iconId);
       if (!map.hasImage(g.iconId)) {
-        const img = createGroupBeamsImageData(g.scores);
+        const img = createGroupBeamsImageData(g.scores, g.remote);
         if (img) {
           // pixelRatio 2 → l'icon-size 1.0 renderizza l'immagine a
           // metà delle dim canvas: netto su display retina.
@@ -1203,8 +1245,9 @@ export default function JobsGlobe({
     }
 
     // 3) Una feature per gruppo, al centroide. properties include
-    // count + iconId. La lista positions completa è in clusteredRef per
-    // il click handler.
+    // count + iconId + label precomputata (count, con " · Da remoto" sui
+    // fasci aggregati di sole remote). La lista positions completa è in
+    // clusteredRef per il click handler.
     const features: GeoJSON.Feature[] = groups.map((g) => ({
       type: "Feature",
       geometry: { type: "Point", coordinates: [g.lon, g.lat] },
@@ -1213,6 +1256,12 @@ export default function JobsGlobe({
         iconId: g.iconId,
         count: g.count,
         topScore: g.topScore,
+        label:
+          g.count > 1
+            ? g.remote
+              ? `${g.count} · ${tr("remote")}`
+              : String(g.count)
+            : "",
       },
     }));
     src.setData({ type: "FeatureCollection", features });
@@ -1547,14 +1596,21 @@ export default function JobsGlobe({
               </div>
             </div>
 
-            {/* Location: solo città + paese (niente via). */}
+            {/* Location: solo città + paese (niente via). Le full remote
+                dichiarano il regime, con l'eventuale vincolo geografico. */}
             {(() => {
-              const loc =
+              const geo =
                 [selected.loc_city, selected.loc_country]
                   .filter(Boolean)
                   .join(", ") ||
                 selected.location ||
                 "";
+              const loc =
+                selected.remote_type === "full_remote"
+                  ? geo
+                    ? `${tr("remote")} — ${geo}`
+                    : tr("remote")
+                  : geo;
               if (!loc) return null;
               return (
                 <div
