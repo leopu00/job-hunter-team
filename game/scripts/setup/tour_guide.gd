@@ -19,37 +19,44 @@ const TALK_STEPS := [
 	"dottore", "mentor", "coordinatore",
 ]
 
+## Tappe in cui l'Assistente invita fisicamente un collega ad alzarsi e a
+## presentare il proprio lavoro. Mentor e Coordinatore restano invece nelle
+## loro aree: sono incontri personali, non presentazioni di reparto.
+const PRESENTED_STOPS := [
+	"scout", "analista", "scorer", "scrittore", "critico", "dottore",
+]
+
 ## Partitura per tappa: albero di dialogo, ritratto/nome di chi parla,
 ## battuta della guida all'arrivo e risposta dell'ospite (fumetti in scena).
-## I reparti li presenta l'Assistente: è lei il volto del tour (e i ruoli
-## senza ritratto dipinto non lasciano mai il riquadro vuoto).
+## L'Assistente introduce la tappa in scena; il dialogo lungo appartiene al
+## collega del reparto, con il suo nome e il suo ritratto.
 const SCENES := {
 	"assistente": {"tree": "tour_benvenuto", "portrait": "assistente",
 		"name": "L'Assistente"},
-	"scout": {"tree": "tour_scout", "portrait": "assistente",
-		"name": "L'Assistente",
-		"greet": "Ciao ragazzi! Vi presento il capo.",
-		"reply": "Benvenuto! Le board sono già calde."},
-	"analista": {"tree": "tour_analisti", "portrait": "assistente",
-		"name": "L'Assistente",
-		"greet": "Permesso... porto un ospite di riguardo.",
-		"reply": "Arrivi giusto: due dossier appena chiusi."},
-	"scorer": {"tree": "tour_scorer", "portrait": "assistente",
-		"name": "L'Assistente",
-		"greet": "Ciao! Come vanno i numeri?",
-		"reply": "Precisi come sempre. Benvenuto."},
-	"scrittore": {"tree": "tour_scrittori", "portrait": "assistente",
-		"name": "L'Assistente",
-		"greet": "Salve, penne d'oro. C'è chi vi voleva conoscere.",
-		"reply": "Un attimo... ecco. Benvenuto!"},
-	"critico": {"tree": "tour_critici", "portrait": "assistente",
-		"name": "L'Assistente",
-		"greet": "Buongiorno anche a voi... loro non salutano.",
-		"reply": "Refuso a riga tre. Di chi è questo CV?"},
-	"dottore": {"tree": "tour_dottore", "portrait": "assistente",
-		"name": "L'Assistente",
-		"greet": "Dottore, un saluto veloce!",
-		"reply": "Tutti i parametri in ordine. Benvenuto!"},
+	"scout": {"tree": "tour_scout", "portrait": "scout",
+		"name": "Il Ricercatore",
+		"greet": "Questo è il reparto Ricerca. Ti presento uno dei nostri Ricercatori.",
+		"reply": "Piacere. Ti racconto come cerchiamo le opportunità per te."},
+	"analista": {"tree": "tour_analisti", "portrait": "analista",
+		"name": "L'Analista",
+		"greet": "Questo è il reparto Analisi. Una collega ti spiega che cosa succede qui.",
+		"reply": "Benvenuto. Qui trasformiamo gli annunci confusi in informazioni chiare."},
+	"scorer": {"tree": "tour_scorer", "portrait": "scorer",
+		"name": "Il Consulente",
+		"greet": "Siamo nel reparto Compatibilità. Ti presento uno dei Consulenti.",
+		"reply": "Piacere. Qui capiamo quali occasioni sono davvero adatte a te."},
+	"scrittore": {"tree": "tour_scrittori", "portrait": "scrittore",
+		"name": "Il Redattore",
+		"greet": "Questo è il reparto Candidature. Lascio la parola a un Redattore.",
+		"reply": "Benvenuto. Ti mostro come prepariamo ogni candidatura su misura."},
+	"critico": {"tree": "tour_critici", "portrait": "critico",
+		"name": "Il Revisore",
+		"greet": "Qui c'è il Controllo qualità. Un Revisore ti racconta il suo lavoro.",
+		"reply": "Piacere. Il nostro compito è non lasciare passare candidature deboli."},
+	"dottore": {"tree": "tour_dottore", "portrait": "dottore",
+		"name": "Il Dottore",
+		"greet": "Prima degli ultimi incontri ti presento il Dottore dell'ufficio.",
+		"reply": "Benvenuto. Io mi assicuro che la squadra continui a lavorare bene."},
 	"mentor": {"tree": "tour_mentor", "portrait": "mentor",
 		"name": "Il Mentor",
 		"greet": "E qui ti lascio in ottime mani. Io sono alla mia scrivania.",
@@ -60,17 +67,20 @@ const SCENES := {
 		"reply": "Vi stavo aspettando."},
 }
 
+func requires_staged_colleague(slug: String) -> bool:
+	return slug in PRESENTED_STOPS
+
 ## Giro libero: si parla direttamente con l'agente del reparto, in prima
 ## persona. Il ritratto è quello del ruolo quando esiste (per gli altri il
 ## riquadro si nasconde con eleganza — gap d'arte tracciato in gen-art/LOG.md).
 const FREE_SCENES := {
-	"scout": {"tree": "self_scout", "portrait": "scout", "name": "Lo Scout"},
+	"scout": {"tree": "self_scout", "portrait": "scout", "name": "Il Ricercatore"},
 	"analista": {"tree": "self_analisti", "portrait": "analista",
 		"name": "L'Analista"},
-	"scorer": {"tree": "self_scorer", "portrait": "scorer", "name": "Lo Scorer"},
+	"scorer": {"tree": "self_scorer", "portrait": "scorer", "name": "Il Consulente"},
 	"scrittore": {"tree": "self_scrittori", "portrait": "scrittore",
-		"name": "Lo Scrittore"},
-	"critico": {"tree": "self_critici", "portrait": "critico", "name": "Il Critico"},
+		"name": "Il Redattore"},
+	"critico": {"tree": "self_critici", "portrait": "critico", "name": "Il Revisore"},
 	"dottore": {"tree": "self_dottore", "portrait": "dottore", "name": "Il Dottore"},
 	"mentor": {"tree": "tour_mentor", "portrait": "mentor", "name": "Il Mentor"},
 	"coordinatore": {"tree": "tour_coordinatore", "portrait": "coordinatore",

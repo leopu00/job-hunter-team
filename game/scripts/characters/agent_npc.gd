@@ -456,8 +456,9 @@ const TOUR_STOP_WAIT := 900.0  # la regia la sblocca molto prima
 func tour_walk_to(target_point: Vector2) -> void:
 	if is_dissolving():
 		return
+	var was_at_desk := _desk_pose_active or state == S.SEATING
 	_set_desk_occupied(false)
-	if _seated():
+	if was_at_desk:
 		position = _spot
 	_pause = 0.0
 	_forced_trip = true
@@ -466,6 +467,41 @@ func tour_walk_to(target_point: Vector2) -> void:
 	leg["tour_stop"] = true
 	_legs = [leg]
 	_start_next_leg()
+
+## Variante usata dalla regia del tour: raggiunge il punto di scena esatto,
+## senza applicare una seconda distanza di sicurezza. Serve a comporre una
+## coppia leggibile Assistente + collega, invece di lasciare i due dispersi
+## ai lati opposti della scrivania.
+func tour_walk_exact(target_point: Vector2) -> void:
+	if is_dissolving():
+		return
+	var was_at_desk := _desk_pose_active or state == S.SEATING
+	_set_desk_occupied(false)
+	if was_at_desk:
+		position = _spot
+	_pause = 0.0
+	_forced_trip = true
+	var leg := _leg_to(target_point, "walk", TOUR_STOP_WAIT, "idle")
+	leg["tour_stop"] = true
+	_legs = [leg]
+	_start_next_leg()
+
+## Posa da presentazione: il foglio "down" è sempre la vista frontale.
+## Viene richiamata sia all'arrivo sia prima del dialogo, così nessuno dei
+## due personaggi dà le spalle all'utente mentre parla il reparto.
+func tour_face_audience() -> void:
+	if is_dissolving():
+		return
+	velocity = Vector2.ZERO
+	# Una posa di presentazione è anche uno stop di scena. Se arrivasse mentre
+	# era ancora accodato il rientro alla scrivania (tipico tra due tappe), il
+	# frame successivo rimetterebbe il personaggio di lato o di schiena.
+	_path = PackedVector2Array()
+	_pause = TOUR_STOP_WAIT
+	_forced_trip = true
+	if state != S.TALK:
+		state = S.TRIP
+	_set_rig_motion("down", false, "idle")
 
 ## Fine servizio da guida: torna alla sua postazione e riprende la vita.
 func tour_release() -> void:
@@ -498,6 +534,7 @@ func accent_color() -> Color:
 
 ## Interrogato con un click: si ferma e guarda in camera.
 func start_talk() -> void:
+	var was_at_desk := _desk_pose_active or state == S.SEATING
 	_set_desk_occupied(false)
 	state = S.TALK
 	_path = PackedVector2Array()
@@ -505,9 +542,9 @@ func start_talk() -> void:
 	# da seduti la position è affondata nel desk (seat_sink/offset): il
 	# rig che riappare per il dialogo si alza in piedi alla postazione,
 	# non dentro il mobile
-	if _seated():
+	if was_at_desk:
 		position = _spot
-	_set_rig_motion("down", false, "idle")
+	tour_face_audience()
 	bubble.hide_now()
 
 ## Fine dialogo: torna alla postazione (viaggio minimo) e riprende.

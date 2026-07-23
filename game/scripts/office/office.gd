@@ -116,8 +116,8 @@ func _ready() -> void:
 	# Critici va invece nello scaffale CV PRONTI accanto all'uscita.
 	PaperPile.inbox = {}
 	var handoff_to := {
-		"scout": "Analisti", "analisti": "Scorer", "scorer": "Scrittori",
-		"scrittori": "Critici",
+		"scout": "Analisi", "analisti": "Compatibilità", "scorer": "Candidature",
+		"scrittori": "Controllo qualità",
 	}
 	for dept_id in handoff_to:
 		var inbox_pos: Vector2 = DepartmentDefs.DEPARTMENTS[dept_id]["inbox"]
@@ -435,6 +435,12 @@ func _tour_selftest() -> void:
 	for stop in TourGuide.TALK_STEPS:
 		check.call(Dialogues.TREES.has(str(TourGuide.scene_for(stop).get("tree", ""))),
 				"albero di dialogo mancante per la tappa " + stop)
+		if TourGuide.requires_staged_colleague(stop):
+			var scene := TourGuide.scene_for(stop)
+			check.call(str(scene.get("portrait", "")) == stop,
+					"ritratto del collega errato per la tappa " + stop)
+			check.call(str(scene.get("name", "")) != "L'Assistente",
+					"il reparto parla ancora con la voce dell'Assistente: " + stop)
 	check.call(Dialogues.greeting() in ["Buongiorno", "Buon pomeriggio", "Buonasera"],
 			"saluto orario fuori catalogo")
 	var count_markers := func() -> Array:
@@ -491,6 +497,13 @@ func _tour_selftest() -> void:
 		var scene := TourGuide.scene_for(stop)
 		check.call(ui._tree == Dialogues.TREES.get(str(scene.get("tree", "")), {}),
 				"albero sbagliato per la tappa " + stop)
+		if TourGuide.requires_staged_colleague(stop):
+			var colleague := _tour_host_npc(stop)
+			check.call(_tour_staged_host == colleague,
+					"collega non messo in scena per la tappa " + stop)
+			check.call(guide != null and str(guide.rig.facing) == "down" \
+					and colleague != null and str(colleague.rig.facing) == "down",
+					"personaggi non rivolti all'utente nella tappa " + stop)
 		if stop == "mentor":
 			# percorso adattivo: le scelte diventano preferenze salvate
 			ui._goto("path_change")
@@ -534,8 +547,8 @@ func _tour_selftest() -> void:
 	SetupService.status["docker_available"] = true
 	SetupService.status["docker_running"] = true
 	var docker_on := Dialogues.resolve_placeholders("{docker_line}", TeamData)
-	check.call(no_docker.contains("INSTALLA") and docker_on.contains("ATTIVA") \
-			and no_docker != docker_on,
+	check.call(no_docker.contains("installazione guidata") \
+			and docker_on.contains("squadra") and no_docker != docker_on,
 			"la battuta del Coordinatore non segue lo stato Docker")
 
 	# ── Giro libero: ordine sparso, alberi in prima persona ───────────
@@ -780,10 +793,10 @@ func _guided_onboarding_selftest() -> void:
 	ScriptedOnboarding.remember_profile_fields({"name": "Ada Test",
 			"email": "ada@example.test", "languages": "Italiano, English"})
 	ScriptedOnboarding.record_dialogue_choice("tour_scout", "n2",
-			"Posso indicare siti e aziende preferiti?", "sources")
+			"Posso indicare aziende o tipi di lavoro preferiti?", "sources")
 	check.call(ScriptedOnboarding.llm_context_text().contains("Ada Test") \
 			and ScriptedOnboarding.profile_draft().get("email", "") == "ada@example.test" \
-			and ScriptedOnboarding.llm_context_text().contains("aziende preferiti"),
+			and ScriptedOnboarding.llm_context_text().contains("lavoro preferiti"),
 			"dati del profilo nativo non sincronizzati nel contesto LLM")
 
 	BackendBus.set_backend(MockBackend.new())
@@ -1701,6 +1714,7 @@ func _start_talk(agent: AgentNPC) -> void:
 
 var _tour_runtime_choice := ""
 var _tour_walk_serial := 0
+var _tour_staged_host: AgentNPC
 
 ## Il diamante pulsa SOLO sull'Assistente al primo passo: da lì in poi è
 ## lei a fare strada. A tour finito torna il default showroom (marker su
@@ -1806,14 +1820,72 @@ func _tour_go_to_stop() -> void:
 	guide.tour_arrived.connect(on_arrival, CONNECT_ONE_SHOT)
 	guide.tour_walk_to(host.global_position)
 
-## All'arrivo: scambio di saluti in scena, poi il dialogo della tappa.
+## All'arrivo l'Assistente resta frontale e, per i reparti, invita un collega
+## ad alzarsi e a raggiungerla. Soltanto quando i due sono affiancati parte
+## la presentazione: niente persone di schiena o dialoghi dalla scrivania.
 func _tour_stage_arrival(stop: String) -> void:
 	_camera.stop_follow()
-	var scene := TourGuide.scene_for(stop)
 	var guide := _tour_guide_npc()
 	var host := _tour_host_npc(stop)
+	if guide:
+		guide.tour_face_audience()
+	if TourGuide.requires_staged_colleague(stop) and guide and host \
+			and guide != host:
+		_tour_stage_colleague(stop, guide, host)
+		return
 	if host:
+		host.tour_face_audience()
 		_camera.focus_on(host.global_position + Vector2(0, -40), 1.05)
+	_tour_begin_presentation(stop, guide, host)
+
+## Compone una coppia orizzontale su un punto realmente camminabile. Prova
+## prima destra e sinistra dell'Assistente e usa l'avvicinamento libero solo
+## come ripiego se una scrivania occupa entrambi i lati.
+func _tour_stage_colleague(stop: String, guide: AgentNPC, host: AgentNPC) -> void:
+	_tour_staged_host = host
+	if OS.get_environment("JHT_TOUR_TEST") == "1":
+		host.tour_face_audience()
+		_camera.focus_on((guide.global_position + host.global_position) * 0.5 \
+				+ Vector2(0, -40), 1.05)
+		_tour_begin_presentation(stop, guide, host)
+		return
+	var chosen := Vector2.INF
+	var best_cost := INF
+	for direction in [1.0, -1.0]:
+		var candidate := guide.global_position + Vector2(82.0 * direction, 0)
+		if not host.nav.is_point_walkable(candidate):
+			continue
+		var route := host.nav.path(host.global_position, candidate)
+		if route.is_empty() or route[-1].distance_to(candidate) > 24.0:
+			continue
+		var cost := host.global_position.distance_to(route[0])
+		for i in range(1, route.size()):
+			cost += route[i - 1].distance_to(route[i])
+		if cost < best_cost:
+			best_cost = cost
+			chosen = candidate
+	if chosen == Vector2.INF:
+		chosen = host.nav.approach_point(host.global_position,
+				guide.global_position, 82.0)
+	_tour_walk_serial += 1
+	var serial := _tour_walk_serial
+	var on_host_arrival := func() -> void:
+		if serial != _tour_walk_serial or not _tour_enabled \
+				or TourGuide.current_slug() != stop:
+			return
+		guide.tour_face_audience()
+		host.tour_face_audience()
+		_camera.focus_on((guide.global_position + host.global_position) * 0.5 \
+				+ Vector2(0, -40), 1.05)
+		_tour_begin_presentation(stop, guide, host)
+	host.tour_arrived.connect(on_host_arrival, CONNECT_ONE_SHOT)
+	host.tour_walk_exact(chosen)
+
+## Scambio di battute in scena: prima presenta l'Assistente, poi risponde il
+## collega. La finestra successiva appartiene allo stesso collega.
+func _tour_begin_presentation(stop: String, guide: AgentNPC,
+		host: AgentNPC) -> void:
+	var scene := TourGuide.scene_for(stop)
 	if OS.get_environment("JHT_TOUR_TEST") == "1":
 		_tour_open_stop_dialogue(stop)
 		return
@@ -1839,6 +1911,9 @@ func _tour_open_stop_dialogue(stop: String) -> void:
 		return
 	var scene := TourGuide.scene_for(stop)
 	var host := _tour_host_npc(stop)
+	var guide := _tour_guide_npc()
+	if guide:
+		guide.tour_face_audience()
 	if host:
 		host.start_talk()
 	var ui := DialogueUI.new()
@@ -1847,6 +1922,8 @@ func _tour_open_stop_dialogue(stop: String) -> void:
 	ui.open(str(scene.get("portrait", "assistente")),
 			str(scene.get("name", "L'Assistente")), str(scene.get("tree", "")))
 	ui.closed.connect(func() -> void:
+		if host == _tour_staged_host:
+			_tour_staged_host = null
 		if host and is_instance_valid(host) and not host.is_dissolving():
 			host.end_talk()
 		if not TourGuide.active():
@@ -1877,6 +1954,11 @@ func _on_tour_dialogue_action(action: String) -> void:
 
 func _tour_release_guide() -> void:
 	_camera.stop_follow()
+	_tour_walk_serial += 1
+	if _tour_staged_host and is_instance_valid(_tour_staged_host) \
+			and not _tour_staged_host.is_dissolving():
+		_tour_staged_host.tour_release()
+	_tour_staged_host = null
 	var guide := _tour_guide_npc()
 	if guide:
 		guide.tour_release()
