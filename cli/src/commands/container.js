@@ -139,7 +139,7 @@ async function upAction() {
     process.exit(1);
   }
   console.log(c.green(`✓ Container ${CONTAINER_NAME} avviato`));
-  console.log(c.dim('  Web UI: http://localhost:3000  ·  logs: jht container logs -f'));
+  console.log(c.dim('  Interazione: app desktop JHT  ·  logs: jht container logs -f'));
 }
 
 // ── down ───────────────────────────────────────────────────────────

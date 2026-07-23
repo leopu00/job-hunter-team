@@ -1,6 +1,6 @@
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  Job Hunter Team — Runtime container                                     ║
-# ║  Immagine agenti + CLI + dashboard web.                                  ║
+# ║  Immagine agenti + CLI (interazione via app desktop, no web locale).     ║
 # ║  Stato persistente nei bind-mount /jht_home e /jht_user.                 ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 # Base image pinned by digest (multi-arch index). Update tracked by
@@ -202,7 +202,8 @@ RUN useradd --create-home --shell /bin/bash jht \
 
 USER jht
 
-EXPOSE 3000
+# Nessuna porta esposta: la dashboard web locale e' stata ritirata
+# (2026-07-23) — l'interazione passa dall'app desktop via docker exec.
 
 VOLUME ["/jht_home", "/jht_user"]
 

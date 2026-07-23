@@ -139,8 +139,8 @@ For dev tasks specifically:
 # Start the team using the local source
 jht team start
 
-# Open the web dashboard at http://localhost:3001 (host mode) or :3000 (container)
-jht web open
+# Interaction happens in the desktop app (the game). For web-dev only,
+# run the cloud app on the host: cd web && npm run dev:host (:3001)
 
 # Tail logs
 jht container logs -f

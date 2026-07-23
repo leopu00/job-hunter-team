@@ -105,7 +105,7 @@ The installer auto-detects which one is running. The user can switch later by st
 | Choice | What it does | Pros | Cons |
 |---|---|---|---|
 | ✅ **Yes** (recommended) | Local SQLite mirrored to Supabase, accessible via `jobhunterteam.ai` web dashboard | See jobs/scores/CVs from any browser, multi-device, share with mentor | Requires GitHub/Google sign-up at jobhunterteam.ai, ~50 MB metadata uploaded per week, CVs stay local |
-| ❌ **No** | Fully local, no cloud touched | Maximum privacy, zero external dependency | Dashboard only at `localhost:3000`, no remote access |
+| ❌ **No** | Fully local, no cloud touched | Maximum privacy, zero external dependency | All interaction lives in the desktop app; no remote/browser access |
 
 For **Local PC** the choice is real (default: ask). For **VPS** cloud sync is structurally required (the user can't be at the VPS terminal all day, the web dashboard is the primary interface).
 
@@ -200,8 +200,6 @@ If the user closes the wizard mid-flow, re-running `jht setup` resumes from the 
 jht status                # confirm `mode: running`
 jht doctor                # must exit 0; surfaces auth + Docker + DB checks
 jht cloud status          # if sync was enabled, must show `abilitato`
-jht dashboard             # Local: opens http://localhost:3000
-                          # VPS:   prints the SSH tunnel command
 ```
 
 If `jht doctor` flags an issue, fix it with the suggested remediation before handing back to the user. Never declare setup complete on a failing `doctor`.

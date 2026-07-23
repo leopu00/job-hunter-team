@@ -4,20 +4,22 @@
  * Pensato come CMD del docker-compose: in base a JHT_HOST_TYPE decide
  * cosa far girare nel container.
  *
- *   vps + cloud paired → dashboard + cloud daemon
- *                        ↳ daemon pusha dati a jobhunterteam.ai ogni 30s
- *                        ↳ dashboard resta su 127.0.0.1:3000 cosi' l'utente
- *                          puo' accedervi via SSH tunnel
- *                          (`ssh -L 3000:localhost:3000 root@vps`)
+ * NOTA 2026-07-23: la dashboard web su 127.0.0.1:3000 e' stata RITIRATA.
+ * Tutta l'interazione local/VPS vive nell'app desktop (il gioco), che parla
+ * col container via docker exec / SSH. Il browser serve solo il cloud
+ * (jobhunterteam.ai, con login) — storia separata.
  *
- *   vps senza cloud    → solo dashboard, finche' non appare cloud.json:
+ *   vps + cloud paired → cloud daemon + bridges
+ *                        ↳ daemon pusha dati a jobhunterteam.ai ogni 30s
+ *
+ *   vps senza cloud    → bridges soltanto, finche' non appare cloud.json:
  *                        un watcher su $JHT_HOME/cloud.json fa partire il
  *                        daemon non appena il pairing viene completato dal
  *                        wizard, SENZA richiedere `jht down && jht up`.
  *                        Idem in caso di unpairing (`jht cloud disable`):
- *                        kill del daemon, dashboard intatta.
+ *                        kill del daemon, il resto resta intatto.
  *
- *   local              → solo dashboard (default storico)
+ *   local              → bridges + watchdog soltanto
  *
  * Il sorgente di JHT_HOST_TYPE in ordine di priorita':
  *   1. env var (passato da docker-compose o dall'utente)
@@ -25,7 +27,7 @@
  *   3. default `local` (sicuro: comportamento storico)
  */
 
-import { readFile, access } from 'node:fs/promises';
+import { readFile, access, unlink } from 'node:fs/promises';
 import { existsSync, createWriteStream, mkdirSync, statSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -159,9 +161,18 @@ async function hasProviderCredentials() {
       // kimi-cli 1.47+ scrive le creds OAuth in .kimi/credentials/<plan>.json
       // (es. kimi-code.json per l'abbonamento kimi-for-coding), NON piu' in
       // .kimi/kimi.json. Allineato a sentinel-bridge.py KIMI_CREDENTIALS.
+      //
+      // Accetta sia il nome-VENDOR (openai/anthropic — quello che scrive
+      // `jht providers use`) sia il nome-CLI storico (codex/claude): stesso
+      // marker. Senza gli alias, active_provider="openai" cadeva su
+      // markers[prov]=undefined → false SILENZIOSO → auto-start mai
+      // eseguito (stessa timebomb del post-mortem 2026-07-18 su
+      // agent-watchdog.sh config_ready, mai propagata qui).
       kimi: `${JHT_HOME}/.kimi/credentials/kimi-code.json`,
       claude: `${JHT_HOME}/.claude/.credentials.json`,
+      anthropic: `${JHT_HOME}/.claude/.credentials.json`,
       codex: `${JHT_HOME}/.codex/auth.json`,
+      openai: `${JHT_HOME}/.codex/auth.json`,
     };
     const marker = markers[provider];
     if (!marker) return false;
@@ -188,7 +199,7 @@ async function hasProviderCredentials() {
  */
 async function startUserFacingAgents() {
   // Gate centrale .team-halted.flag: se settato (utente ha cliccato Stop
-  // dalla dashboard prima del restart container), NON auto-startare.
+  // dall'app desktop prima del restart container), NON auto-startare.
   // Source of truth: team_state.should_run. Il reconciler creerà/rimuoverà
   // il flag al prossimo polling. Senza questo gate, il container post-restart
   // partiva sempre con agenti attivi anche se l'utente li aveva spenti.
@@ -217,7 +228,7 @@ async function startUserFacingAgents() {
         if (code === 0) {
           pid1Log(`auto-start ${role}: OK`);
         } else {
-          pid1Log(`auto-start ${role}: fallito (exit ${code}) — utente potrà cliccare Avvia dalla dashboard`);
+          pid1Log(`auto-start ${role}: fallito (exit ${code}) — utente potrà cliccare Avvia dall'app desktop`);
         }
         resolve();
       });
@@ -267,7 +278,7 @@ async function isCloudConfigured() {
 
 /**
  * Spawn di un processo figlio con label prefisso sull'output (cosi' i log
- * di daemon e dashboard non si confondono dentro `docker logs jht`).
+ * dei vari figli non si confondono dentro `docker logs jht`).
  * stdio='inherit' direttamente perderebbe l'identita'; usiamo pipe e
  * prefiggiamo ogni riga con il label.
  */
@@ -349,7 +360,7 @@ function pid1Log(msg) {
  *
  * Il successo del pair fa apparire cloud.json → il watcher esistente fara'
  * partire il daemon. Il fallimento NON blocca il boot: pid1 continua a
- * partire la dashboard, l'utente puo' diagnosticare via `jht cloud pair`
+ * girare, l'utente puo' diagnosticare via `jht cloud pair`
  * a mano dal terminale embedded del desktop.
  */
 async function maybeRunPairing() {
@@ -453,6 +464,26 @@ async function runUnstuckPositions() {
   });
 }
 
+/**
+ * Al boot del container nessun processo bridge sopravvive al teardown,
+ * quindi pid + state file lasciati dalla sessione precedente sono per
+ * definizione orfani: senza pulizia, chi legge lo stato (game via docker
+ * exec, process_health) vede "running" + "next tick" stantii. Era dentro
+ * il comando dashboard (ritirato 2026-07-23); ora vive qui.
+ */
+async function cleanupStaleBridgeState() {
+  const logs = join(JHT_HOME, 'logs');
+  const targets = [
+    'sentinel-bridge.pid',
+    'sentinel-bridge-state.json',
+    'pacing-bridge.pid',
+    'pacing-bridge-state.json',
+  ];
+  for (const name of targets) {
+    try { await unlink(join(logs, name)); } catch { /* ENOENT atteso */ }
+  }
+}
+
 async function dispatch() {
   const hostType = await readHostType();
   const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
@@ -466,24 +497,26 @@ async function dispatch() {
   // kill mid-run). Idempotente, skip se jobs.db non esiste ancora.
   await runUnstuckPositions();
 
-  // Pair non-interattivo PRIMA di partire dashboard+daemon: cosi' il watcher
+  // Pulizia pid/state file orfani dei bridge (pre-teardown).
+  await cleanupStaleBridgeState();
+
+  // Pair non-interattivo PRIMA di partire il daemon: cosi' il watcher
   // su cloud.json non scatta a vuoto e il daemon parte subito col token
   // appena mintato. Su local non ha senso (no install.sh con --pairing-token).
   if (isVps) {
     await maybeRunPairing();
   }
 
-  const dashCmd = [JHT_ENTRY, 'dashboard', '--no-browser'];
   const daemonCmd = [JHT_ENTRY, 'cloud', 'daemon'];
   const realtimeCmd = [JHT_ENTRY, 'cloud', 'realtime-listen'];
   const teamStateCmd = [JHT_ENTRY, 'cloud', 'team-state-listen'];
   const userMessagesCmd = [JHT_ENTRY, 'cloud', 'messages-listen'];
   const fileBridgeCmd = [JHT_ENTRY, 'cloud', 'file-bridge-listen'];
 
-  // ── Dashboard: lifetime = container, parte sempre.
+  // Niente dashboard web: ritirata 2026-07-23 (vedi header). L'interazione
+  // passa dall'app desktop via docker exec / SSH; il container espone zero
+  // porte HTTP. pid1 resta vivo col keep-alive esplicito in fondo.
   pid1Log(isVps ? 'mode: VPS' : 'mode: local');
-  pid1Log('starting dashboard (127.0.0.1:3000)');
-  const dashboardChild = spawnLabeled('dashboard', process.execPath, dashCmd);
 
   // ── Telegram bridge: long-poll Bot API → tmux corrispondente. Parte
   // sempre al boot se ci sono bot configurati (decisione 2026-05-16:
@@ -939,7 +972,6 @@ async function dispatch() {
     if (teamStateChild && !teamStateChild.killed) teamStateChild.kill(sig);
     if (userMessagesChild && !userMessagesChild.killed) userMessagesChild.kill(sig);
     if (fileBridgeChild && !fileBridgeChild.killed) fileBridgeChild.kill(sig);
-    if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
     if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
     if (doctorWatchdogChild && !doctorWatchdogChild.killed) doctorWatchdogChild.kill(sig);
@@ -951,23 +983,16 @@ async function dispatch() {
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));
   process.on('SIGINT', () => forwardSignal('SIGINT'));
 
-  // ── Dashboard exit = container exit. Se la dashboard crasha, l'utente
-  // non puo' piu' interagire — meglio uscire e farsi restartare da docker.
-  dashboardChild.on('exit', (code, signal) => {
-    if (shuttingDown) return;
-    pid1Log(`dashboard exited (code=${code} signal=${signal}) — exit pid1`);
-    shuttingDown = true;
-    if (daemonChild && !daemonChild.killed) daemonChild.kill('SIGTERM');
-    if (signal) {
-      process.exit(128 + (signal === 'SIGTERM' ? 15 : signal === 'SIGINT' ? 2 : 0));
-    }
-    process.exit(code ?? 0);
-  });
+  // ── Keep-alive esplicito. Prima l'ancora del processo era il child
+  // dashboard ("dashboard exit = container exit"); tolta la dashboard,
+  // pid1 deve restare vivo da solo finche' docker non manda SIGTERM —
+  // senza contare su watcher/child stdio che potrebbero chiudersi tutti.
+  setInterval(() => {}, 2 ** 31 - 1);
 }
 
 export function registerPid1Command(program) {
   program
     .command('pid1')
-    .description('Container entrypoint: dashboard (sempre) + cloud daemon (auto-start su VPS quando cloud.json appare)')
+    .description('Container entrypoint: bridges + watchdog (sempre) + cloud daemon (auto-start su VPS quando cloud.json appare)')
     .action(dispatch);
 }

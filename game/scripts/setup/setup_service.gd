@@ -369,8 +369,8 @@ services:
     volumes:
       - ${HOME}/.jht:/jht_home
       - ${HOME}/Documents/Job Hunter Team:/jht_user
-    ports:
-      - "127.0.0.1:3000:3000"
+    # Nessuna porta esposta: la dashboard browser su localhost e' stata
+    # ritirata — l'interazione locale passa dal gioco (docker exec).
     stdin_open: true
     tty: true
     restart: unless-stopped

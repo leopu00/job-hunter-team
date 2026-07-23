@@ -187,7 +187,7 @@ Supabase-backed sync of `positions`, `scores`, `applications`. See also
 
 | Command                              | Layer | What it does                                                  |
 |--------------------------------------|-------|---------------------------------------------------------------|
-| `jht dashboard [-p PORT] [--no-browser]` | Node  | Local: opens `http://localhost:3000`. VPS: prints the SSH tunnel command. |
+| `jht dashboard`                      | Node  | **Deprecated** (2026-07-23): the local web dashboard was retired — interaction lives in the desktop app; browser is cloud-only (`jobhunterteam.ai`). Prints a pointer and exits. |
 | `jht upgrade [-c|-a]`                | Both  | Wrapper: refresh image. Node: `-c` check, `-a` apply self-update. |
 
 ## Cron tasks
