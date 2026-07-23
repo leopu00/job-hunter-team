@@ -184,6 +184,10 @@ func _test_all_department_radial_layouts() -> void:
 	var centers := {}
 	for dept in DepartmentDefsScript.DEPT_ORDER:
 		centers[dept] = DeptRugsScript.RUGS[dept][0]
+		var rug_asset := str(DeptRugsScript.RUGS[dept][2])
+		_assert(_texture_loads(rug_asset), "%s Persian rug missing: %s" % [dept, rug_asset])
+	_assert((DeptRugsScript.RUGS["scrittori"][1] as Vector2).x >= 980.0,
+			"writer rug must cover the full six-desk ring")
 	var expected_facing := ["left", "left", "up", "down", "right", "right"]
 	var facing_vector := {
 		"up": Vector2.UP, "right": Vector2.RIGHT,
