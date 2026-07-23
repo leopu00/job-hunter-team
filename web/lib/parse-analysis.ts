@@ -162,6 +162,56 @@ export function parseAnalysisNotes(
   };
 }
 
+// ── Parser del campo scores.breakdown ─────────────────────────────────
+// Lo Scorer (RULE-09, 2026-07-23) scrive il "perché" di ogni dimensione
+// dello score, una riga per chiave canonica:
+//
+//   STACK: quasi identico al profilo, manca solo Redux
+//   REMOTE: ibrido 3 giorni, non full remote
+//   ...
+//
+// Le chiavi sono EN canoniche (stabili cross-locale), il testo è nella
+// lingua dell'utente e può proseguire su più righe fino alla chiave
+// successiva. La UI mostra ogni voce sotto la barra corrispondente.
+
+export type ScoreDimensionKey =
+  "stack" | "remote" | "salary" | "experience" | "strategic";
+
+const BREAKDOWN_KEYS = [
+  "STACK",
+  "REMOTE",
+  "SALARY",
+  "EXPERIENCE",
+  "STRATEGIC",
+] as const;
+
+const BREAKDOWN_RE = new RegExp(
+  `(${BREAKDOWN_KEYS.join("|")})\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:${BREAKDOWN_KEYS.join("|")})\\s*:|$)`,
+  "g",
+);
+
+export function parseScoreBreakdown(
+  breakdown: string | null | undefined,
+): Partial<Record<ScoreDimensionKey, string>> {
+  const out: Partial<Record<ScoreDimensionKey, string>> = {};
+  if (!breakdown || !breakdown.trim()) return out;
+
+  // Stessa normalizzazione di parseAnalysisNotes: alcuni run salvano `\n`
+  // LETTERALE (backslash+n) invece del vero a-capo.
+  const text = breakdown
+    .replace(/\r\n/g, "\n")
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n");
+
+  for (const m of text.matchAll(BREAKDOWN_RE)) {
+    const key = m[1].toLowerCase() as ScoreDimensionKey;
+    const value = m[2].trim();
+    // Prima occorrenza vince; ignora i placeholder vuoti ("...").
+    if (value && value !== "..." && !(key in out)) out[key] = value;
+  }
+  return out;
+}
+
 // Palette per il tag del disallineamento. Default neutro per tag ignoti.
 export function tagColor(tag: string): string {
   switch (tag.toUpperCase()) {
