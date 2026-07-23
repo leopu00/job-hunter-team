@@ -489,7 +489,7 @@ export function demoPositionById(
           critic_verdict:
             (p.critic_verdict as Application["critic_verdict"]) ?? null,
           critic_score: p.critic_score,
-          critic_notes: null,
+          critic_notes: p.demo_critic_notes,
           status:
             p.status === "applied"
               ? "applied"
@@ -510,9 +510,17 @@ export function demoPositionById(
           interview_round: null,
         }
       : null;
-  const { demo_score_row, demo_highlights, lat, lon, ...position } = p;
+  const {
+    demo_score_row,
+    demo_highlights,
+    demo_critic_notes,
+    lat,
+    lon,
+    ...position
+  } = p;
   void lat;
   void lon;
+  void demo_critic_notes;
   return {
     position: position as Position,
     score: demo_score_row,
