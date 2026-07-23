@@ -22,6 +22,12 @@ export async function POST(
     return NextResponse.json({ error: "id mancante" }, { status: 400 });
   }
 
+  // [JHT-WEB-DEMO] I messaggi demo sono statici: ack no-op, restano nel
+  // drawer come vetrina finché la demo è attiva.
+  if (id.startsWith("demo-msg-")) {
+    return NextResponse.json({ ok: true, changed: false });
+  }
+
   // Local mode: scrive su SQLite. Lo stato verra' poi pushato al cloud
   // al prossimo tick del daemon — vedi handlePush in cli/src/commands/cloud.js.
   // Gate identico a ws() in lib/queries.ts (host locale + DB presente): se il

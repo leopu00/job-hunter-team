@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
+import { isDemoPositionId } from "@/lib/demo/data";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,11 @@ export async function POST(req: NextRequest) {
     ({ position_id: positionId } = await req.json());
   } catch {
     return NextResponse.json({ error: "Body non valido" }, { status: 400 });
+  }
+  // [JHT-WEB-DEMO] Posizione demo: niente riga in position_views, lo stato
+  // "vista" delle demo è derivato dall'età (vedi getSeenPositionIds).
+  if (typeof positionId === "string" && isDemoPositionId(positionId)) {
+    return new NextResponse(null, { status: 204 });
   }
   if (typeof positionId !== "string" || !UUID_RE.test(positionId)) {
     return NextResponse.json(

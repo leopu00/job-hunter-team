@@ -67,6 +67,42 @@ const T: Record<string, Record<string, string>> = {
     fr: "Les estimations de salaire dans les listes, le swipe et le détail sont converties dans cette devise.",
     pt: "As estimativas salariais em listas, swipe e detalhe são convertidas para esta moeda.",
   },
+  connect_title: {
+    it: "Collega il tuo team",
+    en: "Connect your team",
+    hu: "Kapcsold össze a csapatodat",
+    es: "Conecta tu equipo",
+    de: "Team verbinden",
+    fr: "Connecter votre équipe",
+    pt: "Liga a tua equipa",
+  },
+  connect_desc: {
+    it: "Questo account non riceve ancora dati. Genera un token dispositivo e inseriscilo nell'app desktop: la dashboard si popolerà da sola.",
+    en: "This account doesn't receive data yet. Generate a device token and enter it in the desktop app: the dashboard will fill up by itself.",
+    hu: "Ez a fiók még nem kap adatokat. Generálj eszköztokent és add meg az asztali appban: a dashboard magától feltöltődik.",
+    es: "Esta cuenta aún no recibe datos. Genera un token de dispositivo e introdúcelo en la app de escritorio: el dashboard se llenará solo.",
+    de: "Dieses Konto empfängt noch keine Daten. Erzeuge ein Gerätetoken und gib es in der Desktop-App ein: Das Dashboard füllt sich von selbst.",
+    fr: "Ce compte ne reçoit pas encore de données. Générez un token d'appareil et saisissez-le dans l'app desktop : le dashboard se remplira tout seul.",
+    pt: "Esta conta ainda não recebe dados. Gera um token de dispositivo e insere-o na app desktop: o dashboard preenche-se sozinho.",
+  },
+  connect_guide: {
+    it: "Guida rapida",
+    en: "Quick guide",
+    hu: "Gyors útmutató",
+    es: "Guía rápida",
+    de: "Kurzanleitung",
+    fr: "Guide rapide",
+    pt: "Guia rápido",
+  },
+  connect_tokens: {
+    it: "Token dispositivi",
+    en: "Device tokens",
+    hu: "Eszköztokenek",
+    es: "Tokens de dispositivo",
+    de: "Gerätetokens",
+    fr: "Tokens d'appareil",
+    pt: "Tokens de dispositivo",
+  },
 };
 
 function readCookie(name: string): string | null {
@@ -78,6 +114,77 @@ const card: React.CSSProperties = {
   border: "1px solid var(--color-border)",
   background: "var(--color-card)",
 };
+
+/** [JHT-WEB-DEMO] Card promemoria pairing: visibile finché l'account non
+ *  riceve dati sincronizzati (GET /api/demo → synced). Sparisce da sola
+ *  al primo sync del team. */
+export function ConnectTeamCard() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const [needsPairing, setNeedsPairing] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/demo")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && d.synced === false) setNeedsPairing(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!needsPairing) return null;
+
+  return (
+    <section
+      className="rounded-lg p-4"
+      style={{
+        border:
+          "1px solid color-mix(in srgb, var(--color-green) 40%, transparent)",
+        background: "var(--color-card)",
+      }}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span
+          aria-hidden
+          className="w-1.5 h-1.5 rounded-full"
+          style={{ background: "var(--color-green)" }}
+        />
+        <p
+          className="m-0 text-[11px] font-bold"
+          style={{ color: "var(--color-green)" }}
+        >
+          {tr("connect_title")}
+        </p>
+      </div>
+      <p
+        className="m-0 mb-3 text-[11px]"
+        style={{ color: "var(--color-muted)" }}
+      >
+        {tr("connect_desc")}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <a
+          href="/welcome"
+          className="text-[10px] font-semibold tracking-[0.08em] uppercase no-underline px-2.5 py-1 rounded border transition-colors"
+          style={{
+            color: "var(--color-green)",
+            borderColor:
+              "color-mix(in srgb, var(--color-green) 45%, transparent)",
+          }}
+        >
+          {tr("connect_guide")}
+        </a>
+        <a
+          href="/settings/cloud-sync"
+          className="text-[10px] font-semibold tracking-[0.08em] uppercase no-underline px-2.5 py-1 rounded border border-[var(--color-border)] transition-colors"
+          style={{ color: "var(--color-muted)" }}
+        >
+          {tr("connect_tokens")}
+        </a>
+      </div>
+    </section>
+  );
+}
 
 /** Card Account: con che utente sei dentro + Esci. */
 export function AccountCard() {

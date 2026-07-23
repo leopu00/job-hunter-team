@@ -45,6 +45,12 @@ export async function POST(
     );
   }
 
+  // [JHT-WEB-DEMO] Messaggio demo: nessun agente dall'altra parte, la
+  // reply viene accettata e scartata (i dati demo sono statici).
+  if (id.startsWith("demo-msg-")) {
+    return NextResponse.json({ ok: true });
+  }
+
   // Gate identico a ws() in lib/queries.ts (host locale + DB presente),
   // vedi commento in [id]/ack/route.ts.
   if ((await isLocalRequest()) && workspaceHasDb()) {

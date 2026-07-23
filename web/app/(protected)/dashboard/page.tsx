@@ -1,6 +1,9 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { isCloudDeploy } from "@/lib/deploy-mode";
+import { WELCOME_SEEN_COOKIE } from "@/lib/demo/mode";
 import {
   getDashboardStats,
   getDashboardPositions,
@@ -21,6 +24,7 @@ import {
 } from "@/lib/dashboard-demo";
 import VpsLifecycleCard from "@/app/components/VpsLifecycleCard";
 import OnboardingPopup from "@/app/components/OnboardingPopup";
+import DemoPickerCard from "@/app/components/demo/DemoPickerCard";
 import CloudRefreshButton from "@/app/components/CloudRefreshButton";
 
 const OnboardingWizard = dynamic(
@@ -124,6 +128,15 @@ export default async function DashboardPage() {
   const dashPositions = dashPositionsRaw.map((p) =>
     seenIds.has(p.id) ? { ...p, seen: true } : p,
   );
+
+  // [JHT-WEB-DEMO] Utente cloud nuovo: niente dati (né demo — con demo
+  // attiva stats.total è >0) e wizard mai visto → onboarding /welcome.
+  // Il cookie jht_welcome_seen (settato dal wizard su skip/demo) evita di
+  // riproporlo a ogni visita.
+  if (isCloudDeploy() && !demoMode && stats.total === 0) {
+    const seen = (await cookies()).get(WELCOME_SEEN_COOKIE)?.value === "1";
+    if (!seen) redirect("/welcome");
+  }
 
   const activeTotal = stats.total - stats.excluded;
 
@@ -237,8 +250,13 @@ export default async function DashboardPage() {
           tua MacBook. Vedi docs/internal/ops/vps.md § "Lifecycle". */}
           <VpsLifecycleCard visible={process.env.JHT_HOST_TYPE === "vps"} />
 
-          {/* ── Onboarding popup (empty state) ────────────────────── */}
-          {isEmpty && (
+          {/* ── Empty state ─────────────────────────────────────────
+          CLOUD [JHT-WEB-DEMO 22/07]: profilo e avvio team vivono SOLO
+          nell'app desktop → niente popup "Configure your Profile". Al suo
+          posto la scelta della categoria demo (per chi ha saltato il
+          wizard /welcome). LOCALE: resta il popup profilo→team. */}
+          {isEmpty && isCloudDeploy() && !demoMode && <DemoPickerCard />}
+          {isEmpty && !isCloudDeploy() && (
             <OnboardingPopup
               hasProfile={hasProfile}
               translations={{
