@@ -237,11 +237,16 @@ func _build_account() -> void:
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
 	var login := Button.new()
-	login.text = "RIFAI PAIRING" if configured else "COLLEGA ACCOUNT  →"
+	login.text = "RIFAI LOGIN GOOGLE" if configured else "ACCEDI CON GOOGLE  →"
 	login.disabled = not bool(SetupService.status.get("container_running", false))
 	login.add_theme_color_override("font_color", Palette.GREEN)
-	login.pressed.connect(SetupService.open_cloud_login)
+	login.pressed.connect(SetupService.open_cloud_login.bind(true))
 	actions.add_child(login)
+	var other_login := Button.new()
+	other_login.text = "USA UN ALTRO ACCOUNT"
+	other_login.disabled = not bool(SetupService.status.get("container_running", false))
+	other_login.pressed.connect(SetupService.open_cloud_login.bind(false))
+	actions.add_child(other_login)
 	for entry in [["STATO", "status"], ["SINCRONIZZA ORA", "push"],
 			["RECUPERA PROFILO", "pull-profile"]]:
 		var button := Button.new()
@@ -251,12 +256,41 @@ func _build_account() -> void:
 		actions.add_child(button)
 	if configured:
 		var disable := Button.new()
-		disable.text = "DISABILITA SU QUESTO DISPOSITIVO"
+		disable.text = "FERMA SYNC E CONTINUA SOLO IN LOCALE"
 		disable.add_theme_color_override("font_color", Palette.RED)
-		disable.pressed.connect(SetupService.open_cloud_command.bind("disable"))
+		disable.pressed.connect(_confirm_cloud_disable)
 		_content.add_child(disable)
+	var recovery := HBoxContainer.new()
+	recovery.add_theme_constant_override("separation", 10)
+	_content.add_child(recovery)
+	var restore := Button.new()
+	restore.text = "RIPRISTINA PIPELINE DAL CLOUD"
+	restore.disabled = not configured
+	restore.add_theme_color_override("font_color", Palette.YELLOW)
+	restore.pressed.connect(SetupService.open_cloud_command.bind("restore"))
+	recovery.add_child(restore)
+	var manage := Button.new()
+	manage.text = "GESTISCI DISPOSITIVI E REVOCA  ↗"
+	manage.pressed.connect(func() -> void:
+		OS.shell_open("https://jobhunterteam.ai/settings/cloud-sync"))
+	recovery.add_child(manage)
+	_content.add_child(TerminalTheme.label(
+			"Il login Google autentica il tuo account web. La VPS conserva solo un token di dispositivo revocabile; password e cookie Google non vengono salvati nel gioco.",
+			12, Palette.DIM))
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
+
+
+func _confirm_cloud_disable() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Continuare solo in locale?"
+	dialog.dialog_text = "Il team continuerà a funzionare e i dati locali non verranno cancellati. Il token di questo dispositivo verrà revocato e posizioni/profilo non saranno più sincronizzati col cloud."
+	dialog.ok_button_text = "FERMA SINCRONIZZAZIONE"
+	dialog.confirmed.connect(SetupService.open_cloud_command.bind("disable"))
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.confirmed.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(620, 260))
 
 
 func _on_account_settings_refresh(_settings: Dictionary) -> void:
@@ -2194,9 +2228,14 @@ var _vps_agents_box: VBoxContainer
 func _build_vps() -> void:
 	_listen_setup()
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.intro"), 15, Palette.MUTED))
+	_content.add_child(TerminalTheme.label(
+			"1  Crea la chiave  →  2  aggiungila alla VPS  →  3  verifica SSH  →  4  prepara e collega",
+			13, Palette.MINT, "medium"))
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label("1 · CHIAVE SSH DEDICATA", 15,
+			Palette.BRIGHT, "bold"))
 	var cfg: Dictionary = BackendBus.load_vps_config()
 
-	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "167.233.135.77")
 	_vps_key = _vps_input(UIStrings.t("vps.key"), cfg.get("key_path", ""),
 			"~/.ssh/id_ed25519")
 	if _vps_key.text == "" and FileAccess.file_exists(SetupService.default_vps_key_path()):
@@ -2210,22 +2249,39 @@ func _build_vps() -> void:
 	var generate := Button.new()
 	generate.text = "GENERA CHIAVE"
 	generate.pressed.connect(func() -> void:
-		SetupService.generate_vps_key()
-		_vps_key.text = SetupService.default_vps_key_path())
+		_vps_key.text = SetupService.default_vps_key_path()
+		SetupService.generate_vps_key())
 	_vps_key.get_parent().add_child(generate)
 	var copy_public := Button.new()
-	copy_public.text = "COPIA CHIAVE PUBBLICA"
+	copy_public.text = "COPIA PUBBLICA"
 	copy_public.pressed.connect(func() -> void:
-		var pub := VpsBackend.expand_user_path(_vps_key.text) + ".pub"
-		if FileAccess.file_exists(pub):
-			DisplayServer.clipboard_set(FileAccess.get_file_as_string(pub).strip_edges()))
+		SetupService.copy_vps_public_key(_vps_key.text))
 	_vps_key.get_parent().add_child(copy_public)
+	var reveal := Button.new()
+	reveal.text = "APRI CARTELLA"
+	reveal.pressed.connect(func() -> void:
+		SetupService.reveal_vps_key(_vps_key.text))
+	_vps_key.get_parent().add_child(reveal)
+	var key_info := SetupService.vps_key_info(_vps_key.text)
+	var fingerprint := str(key_info.get("fingerprint", ""))
+	_content.add_child(TerminalTheme.label(
+			("Fingerprint: " + fingerprint) if fingerprint != "" else \
+			"La chiave privata resta sul computer; su Hetzner va incollata soltanto la riga .pub.",
+			12, Palette.DIM))
+
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label("2 · SERVER DI DESTINAZIONE", 15,
+			Palette.BRIGHT, "bold"))
+	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "167.233.135.77")
+	_content.add_child(TerminalTheme.label(
+			"VERIFICA SSH mostra anche il fingerprint host: confrontalo con quello indicato dal provider prima del setup.",
+			12, Palette.DIM))
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 16)
 	_content.add_child(actions)
 	var connect_btn := Button.new()
-	connect_btn.text = UIStrings.t("vps.connect")
+	connect_btn.text = "COLLEGA SENZA INSTALLARE"
 	connect_btn.add_theme_font_size_override("font_size", 16)
 	connect_btn.add_theme_color_override("font_color", Palette.GREEN)
 	connect_btn.pressed.connect(_connect_vps)
@@ -2236,17 +2292,52 @@ func _build_vps() -> void:
 	disconnect_btn.add_theme_color_override("font_color", Palette.MUTED)
 	disconnect_btn.pressed.connect(func() -> void: BackendBus.disconnect_backend())
 	actions.add_child(disconnect_btn)
+	var test_ssh := Button.new()
+	test_ssh.text = "VERIFICA SSH"
+	test_ssh.add_theme_color_override("font_color", Palette.MINT)
+	test_ssh.pressed.connect(func() -> void:
+		SetupService.test_vps_connection(_vps_ip.text, _vps_key.text))
+	actions.add_child(test_ssh)
 	var install := Button.new()
-	install.text = "INSTALLA JHT SULLA VPS"
+	install.text = "PREPARA E COLLEGA AUTOMATICAMENTE"
 	install.add_theme_color_override("font_color", Palette.YELLOW)
 	install.pressed.connect(func() -> void:
-		SetupService.open_vps_install(_vps_ip.text, _vps_key.text))
+		SetupService.provision_vps(_vps_ip.text, _vps_key.text))
 	actions.add_child(install)
+	var console_install := Button.new()
+	console_install.text = "CONSOLE AVANZATA"
+	console_install.flat = true
+	console_install.pressed.connect(func() -> void:
+		SetupService.open_vps_install(_vps_ip.text, _vps_key.text))
+	_content.add_child(console_install)
 
 	_vps_state_lbl = TerminalTheme.label("", 16, Palette.MUTED, "medium")
 	_content.add_child(_vps_state_lbl)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label("3 · MIGRAZIONE COMPLETA (OPZIONALE)",
+			15, Palette.BRIGHT, "bold"))
+	_content.add_child(TerminalTheme.label(
+			"Trasferisce database, profilo, documenti, configurazione, login provider e pairing cloud. La chiave SSH privata e i file runtime non vengono copiati. Prima crea uno snapshot e un backup sulla destinazione.",
+			12, Palette.MUTED))
+	var migration := HBoxContainer.new()
+	migration.add_theme_constant_override("separation", 12)
+	_content.add_child(migration)
+	var source_mode := OptionButton.new()
+	source_mode.add_item("DA QUESTO COMPUTER", 0)
+	source_mode.add_item("DALLA VPS ATTUALMENTE SALVATA", 1)
+	source_mode.custom_minimum_size.x = 330
+	migration.add_child(source_mode)
+	var migrate := Button.new()
+	migrate.text = "MIGRA TUTTO SULLA NUOVA VPS  →"
+	migrate.add_theme_color_override("font_color", Palette.YELLOW)
+	migrate.pressed.connect(func() -> void:
+		_confirm_vps_migration("vps" if source_mode.selected == 1 else "local"))
+	migration.add_child(migrate)
+	_content.add_child(TerminalTheme.label(
+			"A migrazione riuscita la sorgente viene fermata e il suo cloud token archiviato, così non esistono due team autoritativi. In caso di errore la sorgente viene riavviata.",
+			12, Palette.DIM))
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.agents_live"),
 			14, Palette.MUTED, "medium"))
@@ -2258,6 +2349,21 @@ func _build_vps() -> void:
 	BackendBus.agents_updated.connect(_on_vps_agents)
 	_on_vps_state(BackendBus.state, BackendBus.state_detail)
 	_on_vps_agents(BackendBus.agents)
+
+
+func _confirm_vps_migration(source_mode: String) -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Migrare tutto sulla nuova VPS?"
+	dialog.dialog_text = ("La sorgente è questo computer." if source_mode == "local" \
+			else "La sorgente è la VPS attualmente salvata.") \
+			+ "\n\nIl team verrà fermato durante lo snapshot. I dati non saranno cancellati: la destinazione riceverà una copia completa e conserverà un backup pre-migrazione."
+	dialog.ok_button_text = "FERMA, COPIA E ATTIVA LA NUOVA VPS"
+	dialog.confirmed.connect(func() -> void:
+		SetupService.migrate_to_vps(_vps_ip.text, _vps_key.text, source_mode))
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.confirmed.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(700, 300))
 
 func _vps_input(label_text: String, value: String, placeholder: String) -> LineEdit:
 	var row := HBoxContainer.new()

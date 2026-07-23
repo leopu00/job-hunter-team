@@ -53,6 +53,9 @@ var _timer: Timer
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if OS.get_environment("JHT_VPS_SETUP_TEST") == "1":
+		_self_test_vps_setup.call_deferred()
+		return
 	terminal_requested.connect(_show_embedded_terminal)
 	_timer = Timer.new()
 	_timer.wait_time = 3.0
@@ -62,6 +65,87 @@ func _ready() -> void:
 	BackendBus.profile_status_updated.connect(_on_profile_status)
 	BackendBus.connection_changed.connect(_on_backend_connection)
 	refresh()
+
+
+func _self_test_vps_setup() -> void:
+	var failures: Array[String] = []
+	var old_home := OS.get_environment("HOME")
+	var old_profile := OS.get_environment("USERPROFILE")
+	var old_jht := OS.get_environment("JHT_HOME")
+	var test_root := OS.get_cache_dir().path_join(
+			"jht-vps-selftest-" + str(int(Time.get_ticks_usec())))
+	DirAccess.make_dir_recursive_absolute(test_root.path_join(".jht/ssh"))
+	DirAccess.make_dir_recursive_absolute(test_root.path_join(".jht/runtime"))
+	DirAccess.make_dir_recursive_absolute(
+			test_root.path_join("Documents/Job Hunter Team"))
+	OS.set_environment("HOME", test_root)
+	OS.set_environment("USERPROFILE", test_root)
+	OS.set_environment("JHT_HOME", test_root.path_join(".jht"))
+	_test_write(test_root.path_join(".jht/keep.json"), "{\"ok\":true}\n")
+	_test_write(test_root.path_join(".jht/host.env"), "JHT_HOST_TYPE=local\n")
+	_test_write(test_root.path_join(".jht/ssh/never-copy"), "PRIVATE\n")
+	_test_write(test_root.path_join(".jht/runtime/compose.yml"), "runtime\n")
+	_test_write(test_root.path_join("Documents/Job Hunter Team/cv.md"), "CV\n")
+
+	var generated := _do_generate_vps_key()
+	if not bool(generated.get("ok", false)):
+		failures.append("generazione Ed25519 fallita")
+	var key := vps_key_info()
+	if not bool(key.get("private_exists", false)):
+		failures.append("chiave privata assente")
+	if not str(key.get("public_key", "")).begins_with("ssh-ed25519 "):
+		failures.append("chiave pubblica non valida")
+	if not _vps_credentials("host con spazi", str(key.get("path", ""))).is_empty():
+		failures.append("hostname pericoloso accettato")
+	if _vps_credentials("203.0.113.10", str(key.get("path", ""))).is_empty():
+		failures.append("IPv4 e chiave valide rifiutate")
+	var runtime_command := _vps_prepare_runtime_command()
+	if not runtime_command.contains("command -v jht") \
+			or not runtime_command.contains("$HOME/.local/bin/jht"):
+		failures.append("rilevamento wrapper VPS incompleto")
+
+	var archive := test_root.path_join("migration.tar.gz")
+	var packed := _create_local_migration_archive(archive)
+	if packed.get("code", -1) != 0 or not FileAccess.file_exists(archive):
+		failures.append("snapshot migrazione non creato: " + str(packed.get("out", "")))
+	else:
+		var listing := _run("tar", PackedStringArray(["-tzf", archive]))
+		var names := str(listing.get("out", ""))
+		if not names.contains(".jht/keep.json"):
+			failures.append("config non inclusa")
+		if not names.contains("Documents/Job Hunter Team/cv.md"):
+			failures.append("documenti non inclusi")
+		if names.contains(".jht/ssh/"):
+			failures.append("chiavi SSH private incluse")
+		if names.contains(".jht/runtime/"):
+			failures.append("runtime incluso")
+		if names.contains(".jht/host.env"):
+			failures.append("host.env locale incluso")
+	_restore_test_env("HOME", old_home)
+	_restore_test_env("USERPROFILE", old_profile)
+	_restore_test_env("JHT_HOME", old_jht)
+	if failures.is_empty():
+		print("VPS-SETUP-TEST PASS")
+		get_tree().quit(0)
+		return
+	for failure in failures:
+		push_error("[vps-setup-test] " + failure)
+	print("VPS-SETUP-TEST FAIL")
+	get_tree().quit(1)
+
+
+static func _test_write(path: String, content: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(content)
+		file.close()
+
+
+static func _restore_test_env(name: String, value: String) -> void:
+	if value == "":
+		OS.unset_environment(name)
+	else:
+		OS.set_environment(name, value)
 
 
 func _show_embedded_terminal(context: String, spec: Dictionary) -> void:
@@ -651,14 +735,16 @@ func open_technical_terminal(context: String, title: String, hint: String,
 	terminal_requested.emit(context, embedded_terminal_spec(title, hint, command))
 
 
-func open_cloud_login() -> void:
+func open_cloud_login(prefer_google := false) -> void:
 	open_technical_terminal("cloud", "Account e cloud",
-			"Apri il link, inserisci il codice e approva questo dispositivo. Il pairing prosegue automaticamente.",
+			("Apri il link, scegli ACCEDI CON GOOGLE, inserisci il codice e approva questo dispositivo. " \
+			+ "Il pairing prosegue automaticamente.") if prefer_google else \
+			"Apri il link, accedi all'account, inserisci il codice e approva questo dispositivo. Il pairing prosegue automaticamente.",
 			PackedStringArray(["node", "/app/cli/bin/jht.js", "cloud", "login"]))
 
 
 func open_cloud_command(command: String) -> void:
-	var supported := ["status", "push", "pull-profile", "disable"]
+	var supported := ["status", "push", "pull-profile", "restore", "disable"]
 	if not supported.has(command):
 		return
 	open_technical_terminal("cloud:" + command, "Cloud · " + command,
@@ -700,6 +786,44 @@ static func default_vps_key_path() -> String:
 	return _jht_home().path_join("ssh/id_ed25519")
 
 
+static func vps_key_info(key_path := "") -> Dictionary:
+	var path := VpsBackend.expand_user_path(
+			key_path if key_path.strip_edges() != "" else default_vps_key_path())
+	var pub := path + ".pub"
+	var public_key := FileAccess.get_file_as_string(pub).strip_edges() \
+			if FileAccess.file_exists(pub) else ""
+	var fingerprint := ""
+	if public_key != "":
+		var fp := _run("ssh-keygen", PackedStringArray(["-lf", pub]))
+		if fp["code"] == 0:
+			fingerprint = str(fp["out"]).strip_edges()
+	return {
+		"path": path, "public_path": pub, "directory": path.get_base_dir(),
+		"private_exists": FileAccess.file_exists(path),
+		"public_exists": public_key != "", "public_key": public_key,
+		"fingerprint": fingerprint,
+	}
+
+
+func copy_vps_public_key(key_path := "") -> void:
+	var info := vps_key_info(key_path)
+	if str(info.get("public_key", "")) == "":
+		action_changed.emit("vps-key", false,
+				"Chiave pubblica assente: genera prima la chiave SSH", false)
+		return
+	DisplayServer.clipboard_set(str(info["public_key"]))
+	action_changed.emit("vps-key", false,
+			"Chiave pubblica copiata: incollala nella sezione SSH Keys di Hetzner", true)
+
+
+func reveal_vps_key(key_path := "") -> void:
+	var info := vps_key_info(key_path)
+	DirAccess.make_dir_recursive_absolute(str(info["directory"]))
+	OS.shell_show_in_file_manager(str(info["public_path"]), true)
+	action_changed.emit("vps-key", false,
+			"Cartella della chiave aperta: " + str(info["directory"]), true)
+
+
 func generate_vps_key() -> void:
 	if _action_running:
 		return
@@ -709,30 +833,327 @@ func generate_vps_key() -> void:
 static func _do_generate_vps_key() -> Dictionary:
 	var path := default_vps_key_path()
 	if FileAccess.file_exists(path) and FileAccess.file_exists(path + ".pub"):
-		return {"ok": true, "message": "Chiave SSH già disponibile: " + path}
+		var existing := vps_key_info(path)
+		return {"ok": true, "message": "Chiave SSH già disponibile · " \
+				+ str(existing.get("fingerprint", path))}
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-	var result := _run("ssh-keygen", PackedStringArray([
-		"-t", "ed25519", "-N", "", "-C", "job-hunter-team", "-f", path]))
+	var result := {"code": 0, "out": ""}
+	if FileAccess.file_exists(path):
+		# Recupera la .pub senza rigenerare o sovrascrivere una privata valida.
+		result = _run("ssh-keygen", PackedStringArray(["-y", "-f", path]))
+		if result["code"] == 0:
+			var public_file := FileAccess.open(path + ".pub", FileAccess.WRITE)
+			if public_file == null:
+				return {"ok": false, "message": "Impossibile scrivere " + path + ".pub"}
+			public_file.store_string(str(result["out"]).strip_edges() \
+					+ " job-hunter-team\n")
+			public_file.close()
+	else:
+		result = _run("ssh-keygen", PackedStringArray([
+				"-t", "ed25519", "-N", "", "-C", "job-hunter-team", "-f", path]))
+	if result["code"] == 0 and OS.get_name() != "Windows":
+		_run("chmod", PackedStringArray(["600", path]))
+	var info := vps_key_info(path)
 	return {"ok": result["code"] == 0,
-			"message": "Chiave SSH creata: " + path if result["code"] == 0 \
+			"message": "Chiave SSH creata · " + str(info.get("fingerprint", path)) \
+			if result["code"] == 0 \
 			else "Creazione chiave fallita: " + str(result["out"]).right(220)}
 
 
-func open_vps_install(ip: String, key_path: String) -> void:
+static func _vps_credentials(ip: String, key_path: String) -> Dictionary:
 	var clean_ip := ip.strip_edges()
-	var key := VpsBackend.expand_user_path(key_path)
-	if clean_ip == "" or not FileAccess.file_exists(key):
+	var key := VpsBackend.expand_user_path(key_path.strip_edges())
+	if clean_ip == "" or key == "" or not FileAccess.file_exists(key):
+		return {}
+	var host_re := RegEx.new()
+	# Il trasporto attuale usa la sintassi scp host:path: finché non viene
+	# aggiunto il bracket IPv6 esplicito accettiamo IPv4 o hostname DNS.
+	host_re.compile("^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
+	if host_re.search(clean_ip) == null:
+		return {}
+	return {"ip": clean_ip, "key_path": key}
+
+
+func test_vps_connection(ip: String, key_path: String) -> void:
+	if _action_running:
+		return
+	var target := _vps_credentials(ip, key_path)
+	if target.is_empty():
+		action_changed.emit("vps-test", false,
+				"IP/hostname non valido o chiave privata non trovata", false)
+		return
+	_start_action("vps-test", _do_test_vps_connection.bind(target))
+
+
+static func _do_test_vps_connection(target: Dictionary) -> Dictionary:
+	var result := _run_ssh(target,
+			"printf 'JHT_SSH_OK '; uname -srm; test \"$(id -u)\" = 0")
+	var fingerprint := _vps_host_fingerprint(str(target.get("ip", "")))
+	return {"ok": result["code"] == 0,
+			"message": "SSH verificato · " + str(result["out"]).strip_edges() \
+			+ ((" · HOST " + fingerprint) if fingerprint != "" else "") \
+			if result["code"] == 0 else "SSH non disponibile: " \
+			+ str(result.get("out", "")).strip_edges().right(260)}
+
+
+static func _vps_host_fingerprint(host: String) -> String:
+	var scan := _run("ssh-keyscan", PackedStringArray([
+			"-T", "5", "-t", "ed25519", host]))
+	if scan["code"] != 0 or str(scan["out"]).strip_edges() == "":
+		return ""
+	var temp := OS.get_cache_dir().path_join(
+			"jht-host-key-" + str(int(Time.get_ticks_usec())))
+	var file := FileAccess.open(temp, FileAccess.WRITE)
+	if file == null:
+		return ""
+	file.store_string(str(scan["out"]) + "\n")
+	file.close()
+	var fingerprint := _run("ssh-keygen", PackedStringArray(["-lf", temp]))
+	DirAccess.remove_absolute(temp)
+	if fingerprint["code"] != 0:
+		return ""
+	var parts := str(fingerprint["out"]).strip_edges().split(" ", false)
+	return str(parts[1]) if parts.size() > 1 else str(fingerprint["out"]).strip_edges()
+
+
+func provision_vps(ip: String, key_path: String) -> void:
+	if _action_running:
+		return
+	var target := _vps_credentials(ip, key_path)
+	if target.is_empty():
+		action_changed.emit("vps-provision", false,
+				"Inserisci un IP valido e genera/seleziona la chiave SSH", false)
+		return
+	_start_action("vps-provision", _do_provision_vps.bind(target))
+
+
+static func _vps_prepare_runtime_command() -> String:
+	# L'installer mette il wrapper in /usr/local/bin quando gira come root e in
+	# ~/.local/bin per utenti normali. Non assumere uno dei due percorsi: una VPS
+	# Hetzner nuova usa root e il vecchio hardcoding faceva fallire il primo up.
+	return "export JHT_SKIP_ONBOARD=1; " \
+			+ "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
+			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
+			+ "if [ ! -x \"$JHT_BIN\" ]; then " \
+			+ "curl -fsSL https://jobhunterteam.ai/install.sh | bash; " \
+			+ "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
+			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; fi; " \
+			+ "[ -x \"$JHT_BIN\" ] && \"$JHT_BIN\" up"
+
+
+func _do_provision_vps(target: Dictionary) -> Dictionary:
+	_progress("vps-provision", "Verifico accesso SSH e privilegi root…")
+	var check := _do_test_vps_connection(target)
+	if not bool(check["ok"]):
+		return check
+	_progress("vps-provision", "Installo il runtime e preparo il container sulla VPS…")
+	var command := _vps_prepare_runtime_command() + " && " \
+			+ "test \"$(docker inspect jht --format '{{.State.Running}}')\" = true && " \
+			+ "grep -q '^JHT_HOST_TYPE=vps' \"$HOME/.jht/host.env\""
+	var result := _run_ssh(target, command)
+	if result["code"] != 0:
+		return {"ok": false, "message": "Setup VPS fallito: " \
+				+ str(result.get("out", "")).strip_edges().right(300)}
+	return {"ok": true, "message": "VPS pronta e collegamento salvato",
+			"activate_vps": target}
+
+
+func migrate_to_vps(ip: String, key_path: String, source_mode: String) -> void:
+	if _action_running:
+		return
+	var target := _vps_credentials(ip, key_path)
+	if target.is_empty():
+		action_changed.emit("vps-migrate", false,
+				"Destinazione non valida: controlla IP e chiave SSH", false)
+		return
+	var source := BackendBus.load_vps_config() if source_mode == "vps" else {}
+	if source_mode == "vps":
+		source = _vps_credentials(str(source.get("ip", "")),
+				str(source.get("key_path", "")))
+		if source.is_empty():
+			action_changed.emit("vps-migrate", false,
+					"Nessuna VPS sorgente salvata da cui migrare", false)
+			return
+		if str(source["ip"]) == str(target["ip"]):
+			action_changed.emit("vps-migrate", false,
+					"Sorgente e destinazione coincidono", false)
+			return
+	_start_action("vps-migrate", _do_migrate_to_vps.bind(
+			target, source_mode, source, false))
+
+
+func _do_migrate_to_vps(target: Dictionary, source_mode: String,
+		source: Dictionary, source_was_running: bool) -> Dictionary:
+	var check := _do_test_vps_connection(target)
+	if not bool(check["ok"]):
+		return check
+	_progress("vps-migrate", "Preparo il runtime sulla nuova VPS…")
+	var provision := _run_ssh(target,
+			_vps_prepare_runtime_command() + " && " \
+			+ "test \"$(docker inspect jht --format '{{.State.Running}}')\" = true")
+	if provision["code"] != 0:
+		return {"ok": false, "message": "Preparazione destinazione fallita: " \
+				+ str(provision.get("out", "")).right(280)}
+
+	var stamp := str(int(Time.get_unix_time_from_system()))
+	var archive_name := "jht-migration-" + stamp + ".tar.gz"
+	var local_archive := OS.get_cache_dir().path_join(archive_name)
+	var source_stopped := false
+	_progress("vps-migrate", "Fermo la sorgente e creo uno snapshot coerente…")
+	var archived := {"code": 0, "out": ""}
+	if source_mode == "vps":
+		# Lo stato UI può essere vecchio o la VPS può essere momentaneamente
+		# scollegata: interroghiamo tmux sulla sorgente prima di fermarla.
+		var source_container := _run_ssh(source,
+				"docker inspect jht --format '{{.State.Running}}' 2>/dev/null")
+		source_stopped = source_container["code"] == 0 \
+				and str(source_container.get("out", "")).strip_edges() == "true"
+		var source_team := _run_ssh(source,
+				"docker exec jht tmux list-sessions -F '#{session_name}' 2>/dev/null")
+		source_was_running = source_was_running or (source_team["code"] == 0 \
+				and str(source_team.get("out", "")).strip_edges() != "")
+		var remote_archive := "/tmp/" + archive_name
+		archived = _run_ssh(source,
+				"docker stop jht >/dev/null 2>&1 || true; " \
+				+ "cd /root; set --; [ -d .jht ] && set -- \"$@\" .jht; " \
+				+ "[ -d \"Documents/Job Hunter Team\" ] && " \
+				+ "set -- \"$@\" \"Documents/Job Hunter Team\"; " \
+				+ "[ \"$#\" -gt 0 ] && tar czf " + remote_archive \
+				+ " --exclude='.jht/ssh' --exclude='.jht/runtime' " \
+				+ "--exclude='.jht/host.env' \"$@\"")
+		if archived["code"] == 0:
+			archived = _scp_download(source, remote_archive, local_archive)
+			_run_ssh(source, "rm -f " + remote_archive)
+	else:
+		var local_team := _run("docker", PackedStringArray([
+				"exec", "jht", "tmux", "list-sessions", "-F", "#{session_name}"]))
+		source_was_running = source_was_running or (local_team["code"] == 0 \
+				and str(local_team.get("out", "")).strip_edges() != "")
+		var docker_state := _run("docker", PackedStringArray([
+				"inspect", "jht", "--format", "{{.State.Running}}"] ))
+		if docker_state["code"] == 0 and str(docker_state["out"]).contains("true"):
+			_run("docker", PackedStringArray(["stop", "jht"]))
+			source_stopped = true
+		archived = _create_local_migration_archive(local_archive)
+	if archived["code"] != 0:
+		_restore_migration_source(source_mode, source, source_stopped)
+		return {"ok": false, "message": "Snapshot sorgente fallito: " \
+				+ str(archived.get("out", "")).strip_edges().right(280)}
+
+	_progress("vps-migrate", "Trasferisco dati, profilo, configurazione e login…")
+	var upload := _scp_upload(target, local_archive, "/tmp/" + archive_name)
+	if upload["code"] != 0:
+		DirAccess.remove_absolute(local_archive)
+		_restore_migration_source(source_mode, source, source_stopped)
+		return {"ok": false, "message": "Trasferimento fallito: " \
+				+ str(upload.get("out", "")).strip_edges().right(280)}
+
+	_progress("vps-migrate", "Creo backup sulla destinazione e applico la migrazione…")
+	var remote_backup := "/root/jht-before-migration-" + stamp + ".tar.gz"
+	var apply := _run_ssh(target,
+			"docker stop jht >/dev/null 2>&1 || true; cd /root; " \
+			+ "tar czf " + remote_backup \
+			+ " .jht \"Documents/Job Hunter Team\" 2>/dev/null || true; " \
+			+ "tar xzf /tmp/" + archive_name \
+			+ " -C /root --no-same-owner && rm -f /tmp/" + archive_name + "; " \
+			+ "printf 'JHT_HOST_TYPE=vps\\n' > /root/.jht/host.env; " \
+			+ "chown -R 1001:1001 /root/.jht \"/root/Documents/Job Hunter Team\"; " \
+			+ "chmod 600 /root/.jht/cloud.json 2>/dev/null || true; " \
+			+ _vps_prepare_runtime_command() + " && " \
+			+ "test \"$(docker inspect jht --format '{{.State.Running}}')\" = true && " \
+			+ "grep -q '^JHT_HOST_TYPE=vps' /root/.jht/host.env")
+	DirAccess.remove_absolute(local_archive)
+	if apply["code"] != 0:
+		# Il comando può essere arrivato fino al riavvio del container prima
+		# dell'ultima verifica: fermiamolo per evitare due sync concorrenti.
+		_run_ssh(target, "docker stop jht >/dev/null 2>&1 || true")
+		_restore_migration_source(source_mode, source, source_stopped)
+		return {"ok": false, "message": "Applicazione migrazione fallita. Backup: " \
+				+ remote_backup + " · " + str(apply.get("out", "")).right(220)}
+
+	if source_was_running:
+		_progress("vps-migrate", "Riavvio il team sulla nuova VPS…")
+		var team_start := _run_ssh(target,
+				"docker exec jht node /app/cli/bin/jht.js team start >/dev/null 2>&1 && " \
+				+ "for i in $(seq 1 15); do docker exec jht tmux list-sessions " \
+				+ "-F '#{session_name}' 2>/dev/null | grep -q . && exit 0; sleep 2; done; exit 1")
+		if team_start["code"] != 0:
+			# La copia rimane disponibile sulla destinazione ma viene fermata:
+			# il vecchio host torna l'unica origine attiva e conserva il token.
+			_run_ssh(target, "docker stop jht >/dev/null 2>&1 || true")
+			_restore_migration_source(source_mode, source, source_stopped)
+			return {"ok": false, "message": "Dati trasferiti, ma avvio agenti fallito. " \
+					+ "La sorgente è stata ripristinata; backup destinazione: " + remote_backup}
+
+	# Disattiva la vecchia origine solo dopo che container ed eventuali agenti
+	# risultano realmente operativi sulla nuova VPS.
+	if source_mode == "vps":
+		_run_ssh(source, "if [ -f /root/.jht/cloud.json ]; then mv " \
+				+ "/root/.jht/cloud.json /root/.jht/cloud.json.migrated-" + stamp \
+				+ "; fi")
+	else:
+		var cloud := _jht_home().path_join("cloud.json")
+		if FileAccess.file_exists(cloud):
+			DirAccess.rename_absolute(cloud, cloud + ".migrated-" + stamp)
+	return {"ok": true,
+			"message": "Migrazione completata · backup destinazione: " + remote_backup,
+			"activate_vps": target}
+
+
+static func _create_local_migration_archive(path: String) -> Dictionary:
+	var home := OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" \
+			else OS.get_environment("HOME")
+	var args := PackedStringArray(["-czf", path, "-C", home,
+			"--exclude=.jht/ssh", "--exclude=.jht/runtime",
+			"--exclude=.jht/host.env"])
+	if DirAccess.dir_exists_absolute(home.path_join(".jht")):
+		args.append(".jht")
+	if DirAccess.dir_exists_absolute(home.path_join("Documents/Job Hunter Team")):
+		args.append("Documents/Job Hunter Team")
+	if args.size() == 7:
+		return {"code": -1, "out": "nessun dato JHT trovato sul computer"}
+	return _run("tar", args)
+
+
+static func _scp_download(source: Dictionary, remote: String, local: String) -> Dictionary:
+	var key := VpsBackend.expand_user_path(str(source.get("key_path", "")))
+	return _run("scp", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
+			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new",
+			"root@" + str(source.get("ip", "")) + ":" + remote, local]))
+
+
+static func _scp_upload(target: Dictionary, local: String, remote: String) -> Dictionary:
+	var key := VpsBackend.expand_user_path(str(target.get("key_path", "")))
+	return _run("scp", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
+			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new",
+			local, "root@" + str(target.get("ip", "")) + ":" + remote]))
+
+
+static func _restore_migration_source(source_mode: String, source: Dictionary,
+		was_stopped: bool) -> void:
+	if not was_stopped:
+		return
+	if source_mode == "vps":
+		_run_ssh(source, "docker start jht >/dev/null 2>&1 || true")
+	else:
+		_run("docker", PackedStringArray(["start", "jht"]))
+
+
+func open_vps_install(ip: String, key_path: String) -> void:
+	var target := _vps_credentials(ip, key_path)
+	if target.is_empty():
 		action_changed.emit("vps-install", false,
 				"Inserisci l'IP e genera/seleziona una chiave SSH prima di installare", false)
 		return
-	var remote := "curl -fsSL https://jobhunterteam.ai/install.sh | " \
-			+ "JHT_SKIP_ONBOARD=1 bash"
+	var remote := _vps_prepare_runtime_command()
+	var key := str(target["key_path"])
+	var clean_ip := str(target["ip"])
 	var command := "ssh -tt -i " + _local_quote(key) \
 			+ " -o StrictHostKeyChecking=accept-new " + _local_quote("root@" + clean_ip) \
 			+ " " + _local_quote(remote)
 	terminal_requested.emit("vps-install", embedded_terminal_spec(
 			"Installa JHT sulla VPS",
-			"Installazione remota completa. Al termine chiudi la console e premi Connetti.",
+			"Installazione remota completa, incluso l'avvio del container. Al termine chiudi la console e premi Collega.",
 			command))
 
 
@@ -1180,6 +1601,11 @@ func _finish_action(action: String, result: Dictionary) -> void:
 			str(result.get("message", ""))])
 	action_changed.emit(action, false, str(result.get("message", "")),
 			bool(result.get("ok", false)))
+	if bool(result.get("ok", false)) and result.get("activate_vps") is Dictionary:
+		var target: Dictionary = result["activate_vps"]
+		BackendBus.save_vps_config(str(target.get("ip", "")),
+				str(target.get("key_path", "")))
+		BackendBus.set_backend(VpsBackend.new(), target)
 	refresh()
 
 
