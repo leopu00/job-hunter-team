@@ -128,24 +128,29 @@ const T: Record<string, Record<string, string>> = {
     fr: "Zoom arrière",
     pt: "Afastar",
   },
+  positions_here: {
+    it: "posizioni a questo indirizzo",
+    en: "positions at this address",
+    hu: "pozíció ezen a címen",
+    es: "posiciones en esta dirección",
+    de: "Stellen an dieser Adresse",
+    fr: "postes à cette adresse",
+    pt: "vagas neste endereço",
+  },
 };
 
 const SOURCE_ID = "jht-jobs";
 const LAYER_HALO_ID = "jht-jobs-halo";
 const LAYER_DOT_ID = "jht-jobs-dot";
 
-// Soglia di clustering in GRADI (lat/lon) per zoom level. Geografica
-// invece di pixel → pan non riassorbisce i punti in bucket diversi.
-// Zoom SNAPPED a intero → radiusDeg in step discreti → cluster
-// cambiano solo a soglie nette (no jitter su zoom fractional).
-//
-// Valori: z=4 ~5° (~550km); z=8 ~0.3° (~33km); z=12 ~0.02° (~2km).
-// A zoom >= 14 niente cluster (raggio sotto coords city-center).
-function clusterRadiusDeg(zoom: number): number {
-  const z = Math.round(zoom);
-  if (z >= 12) return 0; // zoom street-level: no cluster, esplode singletons
-  return 5.0 / Math.pow(2, Math.max(0, z - 4));
-}
+// NIENTE clustering dipendente dallo zoom (scelta utente 23/07): ogni
+// pin viene disegnato SEMPRE alla sua coordinata risolta (ufficio esatto
+// o slot fisso della griglia nord), a qualsiasi zoom. I vecchi cluster
+// dinamici (bucket geografici per-zoom + fusione dei marker sovrapposti
+// in pixel) disegnavano il marker al CENTROIDE dei membri, che cambiava
+// a ogni scatto di zoom → i pin sembravano "muoversi". Ora l'unica
+// aggregazione è per coordinata IDENTICA (stesso building): un fascio a
+// N raggi inchiodato lì, il click apre la lista delle posizioni.
 
 // Layout circolare 2D: N raggi disposti su anelli concentrici visti
 // dall'alto-davanti (yScale schiaccia il cerchio in ellisse, dando
@@ -464,178 +469,6 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
-// Esplode i group coord-coincident in singletons, perché a zoom
-// street-level ogni position deve essere cliccabile (con N positions
-// sulla stessa coord il click cade su uno solo).
-//
-// I pin sono FASCI VERTICALI: disposti in cerchio le colonne si
-// incrociano (pin sopra/sotto condividono la x) → click ambiguo. Li
-// disponiamo invece in una FILA ORIZZONTALE — tutti alla stessa
-// latitudine, distanziati lungo la longitudine — così ogni colonna è
-// isolata e selezionabile. Spaziatura in PIXEL (costante a schermo a
-// qualunque zoom) via la proiezione reale; fallback a stima metrica.
-// Ordine stabile (per id) → la fila non "balla" tra refresh/zoom.
-function explodeGroups(
-  groups: GroupedFeature[],
-  zoom: number,
-  map?: MaplibreMap | null,
-): GroupedFeature[] {
-  // Spaziatura orizzontale fra pin (px) — supera l'ingombro dell'icona
-  // così i box di click non si sovrappongono.
-  const SPACING_PX = 64;
-  const out: GroupedFeature[] = [];
-  for (const g of groups) {
-    if (g.count <= 1) {
-      out.push(g);
-      continue;
-    }
-    let center: { x: number; y: number } | null = null;
-    if (map) {
-      try {
-        center = map.project([g.lon, g.lat]);
-      } catch {
-        center = null;
-      }
-    }
-    // Fallback metrico (proiezione assente): ground-meters per pixel in
-    // Web Mercator alla latitudine del gruppo → spaziatura in longitudine.
-    const mpp =
-      (156543.03392 * Math.cos((g.lat * Math.PI) / 180)) / Math.pow(2, zoom);
-    const lonScale = 1 / Math.cos((g.lat * Math.PI) / 180);
-    // Fila ordinata per SCORE crescente: score più basso a sinistra, più alto
-    // a destra. Tie-break per id → fila stabile fra refresh/zoom.
-    const stable = [...g.positions].sort((a, b) => {
-      const sa = a.score ?? -1;
-      const sb = b.score ?? -1;
-      if (sa !== sb) return sa - sb;
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-    });
-    const mid = (g.count - 1) / 2;
-    stable.forEach((p, i) => {
-      // Offset orizzontale centrato sulla coord del gruppo.
-      const offset = (i - mid) * SPACING_PX;
-      let lat: number;
-      let lon: number;
-      if (center && map) {
-        const ll = map.unproject([center.x + offset, center.y]);
-        lat = ll.lat;
-        lon = ll.lng;
-      } else {
-        const meters = offset * mpp;
-        lat = g.lat;
-        lon = g.lon + (meters / 111000) * lonScale;
-      }
-      const singleScores: (number | null)[] = [p.score];
-      out.push({
-        groupKey: `single|${p.id}`,
-        iconId: iconIdForScores(singleScores),
-        lat,
-        lon,
-        count: 1,
-        scores: singleScores,
-        positions: [p],
-        topScore: p.score,
-      });
-    });
-  }
-  return out;
-}
-
-// Re-clusterizza i gruppi (city-coincident) tramite bucket geografici
-// in gradi (lat/lon), dimensione derivata dallo zoom. Bucket geografici
-// sono PAN-INVARIANTI: spostarsi sulla mappa non cambia in che bucket
-// cade un punto → i cluster non "tremano" durante lo scroll.
-// Re-trigger solo su cambio zoom, non su move.
-//
-// A zoom street-level (>=14) "esplode" i group coord-coincident in
-// singletons con micro-offset radiale: così ogni position diventa
-// cliccabile separatamente (altrimenti N positions sulla stessa
-// coord = 1 solo target di click).
-// Soglia (px) sotto la quale due marker-città si SOVRAPPONGONO a schermo e
-// vanno fusi in un super-cluster. Clustering in PIXEL (non in gradi): è
-// pan-invariante (la distanza relativa fra due punti fissi non cambia col
-// pan, solo con lo zoom) → niente "tremolio" durante lo scroll, e città
-// lontane (Zurigo/Milano) non si fondono mai a zoom medio.
-const CITY_MERGE_PX = 52;
-
-function mergeGroups(arr: GroupedFeature[]): GroupedFeature {
-  const totalCount = arr.reduce((s, g) => s + g.count, 0);
-  const lat = arr.reduce((s, g) => s + g.lat * g.count, 0) / totalCount;
-  const lon = arr.reduce((s, g) => s + g.lon * g.count, 0) / totalCount;
-  const scores = arr.flatMap((g) => g.scores);
-  const positions = arr.flatMap((g) => g.positions);
-  const topScore = scores.reduce<number | null>((acc, s) => {
-    if (s == null) return acc;
-    if (acc == null) return s;
-    return Math.max(acc, s);
-  }, null);
-  return {
-    groupKey: `super|${arr.map((g) => g.groupKey).join(",")}`,
-    iconId: iconIdForScores(scores),
-    lat,
-    lon,
-    count: totalCount,
-    scores,
-    positions,
-    topScore,
-  };
-}
-
-// Fonde i gruppi-città i cui marker si sovrappongono in pixel al zoom corrente.
-// Greedy O(n²) su n = numero città (poche decine) → trascurabile.
-function pixelClusterCities(
-  groups: GroupedFeature[],
-  map: MaplibreMap | null | undefined,
-): GroupedFeature[] {
-  if (!map || groups.length <= 1) return groups;
-  const pts = groups.map((g) => {
-    let px: { x: number; y: number } | null = null;
-    try {
-      px = map.project([g.lon, g.lat]);
-    } catch {
-      px = null;
-    }
-    return { g, px };
-  });
-  const used = new Array(pts.length).fill(false);
-  const out: GroupedFeature[] = [];
-  const thr2 = CITY_MERGE_PX * CITY_MERGE_PX;
-  for (let i = 0; i < pts.length; i++) {
-    if (used[i]) continue;
-    used[i] = true;
-    const cluster = [pts[i].g];
-    const pi = pts[i].px;
-    if (pi) {
-      for (let j = i + 1; j < pts.length; j++) {
-        if (used[j] || !pts[j].px) continue;
-        const dx = pi.x - pts[j].px!.x;
-        const dy = pi.y - pts[j].px!.y;
-        if (dx * dx + dy * dy < thr2) {
-          cluster.push(pts[j].g);
-          used[j] = true;
-        }
-      }
-    }
-    out.push(cluster.length === 1 ? cluster[0] : mergeGroups(cluster));
-  }
-  return out;
-}
-
-function reclusterByZoom(
-  groups: GroupedFeature[],
-  zoom: number,
-  map?: MaplibreMap | null,
-): GroupedFeature[] {
-  if (groups.length === 0) return [];
-  // Zoom street-level: esplode la città nei singoli pin cliccabili.
-  if (clusterRadiusDeg(zoom) <= 0) {
-    return explodeGroups(groups, zoom, map);
-  }
-  // Altrimenti: un marker per città, ma città che si SOVRAPPONGONO a schermo
-  // vengono fuse in un super-cluster (si separano zoomando).
-  return pixelClusterCities(groups, map);
-}
-
 // Paint override per allineare il basemap al theme JHT.
 // Dark = inverso cromatico della light: stessa palette grayscale
 // neutra (warm offwhite → warm darkgray), nessun verde/blu acceso.
@@ -734,6 +567,12 @@ export default function JobsGlobe({
   const [data, setData] = useState<PositionCoord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<PositionCoord | null>(null);
+  // Gruppo coincidente selezionato (più posizioni sullo stesso building):
+  // il popup mostra la LISTA dei membri invece della singola posizione.
+  // Mutuamente esclusivo con `selected`.
+  const [selectedGroup, setSelectedGroup] = useState<GroupedFeature | null>(
+    null,
+  );
   // Posizione schermo del pin selezionato (in pixel viewport del map
   // container). Serve a posizionare il popup-vignetta sopra al pin
   // con la coda che punta verso il basso. Si aggiorna ad ogni
@@ -750,18 +589,13 @@ export default function JobsGlobe({
   const mapRef = useRef<MaplibreMap | null>(null);
   const layersReadyRef = useRef(false);
   const themeRef = useRef<"dark" | "light">(resolvedTheme);
-  // Ref tracking di clustered (gruppi RI-clusterizzati in pixel-space
-  // sul viewport corrente). Letta dentro onStyleLoad che ha una closure
-  // vecchia (registrato 1 sola volta in mount).
+  // Ref tracking dei gruppi correnti (per coordinata identica). Letta
+  // dentro onStyleLoad che ha una closure vecchia (registrato 1 sola
+  // volta in mount).
   const clusteredRef = useRef<GroupedFeature[]>([]);
-  // Focus posizione in attesa: settato quando la città non è ancora esplosa;
-  // si centra sul pin appena il cluster si ricompone (effetto su `clustered`).
-  const pendingFocusRef = useRef<string | null>(null);
   // Registry icone gruppo registrate sulla mappa: iconId -> true. Permette
-  // di rimuoverle quando il set di gruppi visibili cambia (filtri/zoom).
+  // di rimuoverle quando il set di gruppi visibili cambia (filtri).
   const registeredIconsRef = useRef<Set<string>>(new Set());
-  // Trigger di re-render quando lo zoom/pan cambia → recompute clustered.
-  const [reclusterTick, setReclusterTick] = useState(0);
 
   // Applica filtri donut (tipi) + histogram (range score + flag
   // unscored) di /map. Tra tipi e score: AND. Dentro score:
@@ -828,8 +662,9 @@ export default function JobsGlobe({
       // posizioni senza indirizzo esatto arrivano da resolveCityPins già con
       // uno slot FISSO nella griglia a nord della città (~300 m fra loro) →
       // qui sono gruppi da 1. Coincidenti restano solo gli uffici reali
-      // condivisi (stesso building). A zoom basso i pin vicini vengono fusi
-      // in un super-cluster (pixelClusterCities); il click li espande.
+      // condivisi (stesso building): un fascio a N raggi inchiodato lì,
+      // il click apre il popup-lista. Nessuna fusione a zoom basso: i pin
+      // non cambiano MAI coordinata, si sovrappongono e basta.
       const key = `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
       const arr = groups.get(key);
       if (arr) arr.push(p);
@@ -1068,11 +903,9 @@ export default function JobsGlobe({
     // Click handler sul layer: identifica il gruppo via groupKey e
     // recupera la lista positions dal ref.
     //  • singleton → popup diretto + zoom-in moderato sul pin.
-    //  • gruppo → INQUADRA tutte le posizioni del gruppo (fitBounds sui
-    //    loro bounds reali) così le si vede tutte; niente popup, perché
-    //    salendo di zoom il cluster si ri-divide nei pin individuali.
-    //    Se le posizioni sono coincidenti (stessa coord) → zoom profondo
-    //    che le "esplode" con micro-offset rendendole cliccabili.
+    //  • gruppo (più posizioni sulla STESSA coordinata, es. stesso hotel)
+    //    → popup-lista dei membri, ancorato al pin. Il pin non si sposta
+    //    e non "esplode": la coordinata è quella vera del building.
     map.on("click", LAYER_DOT_ID, (e) => {
       // I fasci sono icone alte: i loro box di click si sovrappongono,
       // quindi e.features[0] (il top in z-order) NON è quello puntato.
@@ -1110,33 +943,20 @@ export default function JobsGlobe({
       if (!g) return;
 
       if (g.count > 1) {
+        // Popup-lista sul gruppo coincidente + zoom-in moderato per
+        // leggerlo nel contesto della via.
         setSelected(null);
-        const vp = bestViewport(g.positions);
-        const spread =
-          vp != null &&
-          (vp.bounds[1][0] - vp.bounds[0][0] > 1e-4 ||
-            vp.bounds[1][1] - vp.bounds[0][1] > 1e-4);
-        if (vp && spread) {
-          // Inquadra tutto il gruppo. Padding-top generoso: i fasci dei
-          // pin si sviluppano verso l'alto e non devono uscire dal frame.
-          map.fitBounds(vp.bounds, {
-            padding: { top: 140, bottom: 90, left: 90, right: 90 },
-            duration: 800,
-            maxZoom: 14,
-          });
-        } else {
-          // Posizioni coincidenti: zoom street-level → explodeCoincident
-          // le separa con micro-offset.
-          map.flyTo({
-            center: [g.lon, g.lat],
-            zoom: Math.max(map.getZoom() + 2, 15),
-            duration: 800,
-          });
-        }
+        setSelectedGroup(g);
+        map.flyTo({
+          center: [g.lon, g.lat],
+          zoom: Math.max(map.getZoom(), 11),
+          duration: 800,
+        });
         return;
       }
 
       // Singleton: popup diretto sul pin + zoom-in moderato.
+      setSelectedGroup(null);
       setSelected(g.positions[0]);
       map.flyTo({
         center: [g.lon, g.lat],
@@ -1173,37 +993,14 @@ export default function JobsGlobe({
     };
   }, []);
 
-  // Re-clustering ad ogni cambio di grouped (filtri) o di zoom.
-  // PAN non riclusterizza (bucket geografici sono pan-invarianti)
-  // → niente jitter durante lo scroll.
-  const clustered = useMemo(() => {
-    const map = mapRef.current;
-    if (!map || !layersReadyRef.current) return grouped;
-    return reclusterByZoom(grouped, map.getZoom(), map);
-  }, [grouped, reclusterTick]);
-
-  // Listener `zoomend` (fired UNA volta a fine animazione di zoom)
-  // + check sullo zoom intero arrotondato: ricluster solo quando lo
-  // zoom snappato cambia. Pan non triggera. Mid-animation non triggera.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    let lastSnap = Math.round(map.getZoom());
-    const trigger = () => {
-      const snap = Math.round(map.getZoom());
-      if (snap !== lastSnap) {
-        lastSnap = snap;
-        setReclusterTick((t) => t + 1);
-      }
-    };
-    map.on("zoomend", trigger);
-    return () => {
-      map.off("zoomend", trigger);
-    };
-  }, [loaded]);
+  // Nessun re-clustering per zoom: i gruppi sono per coordinata identica
+  // e le coordinate del GeoJSON non cambiano MAI durante zoom/pan. I pin
+  // stanno inchiodati dove sono; cambia solo la scala delle icone
+  // (icon-size interpolato sullo zoom, gestito dal renderer).
+  const clustered = grouped;
 
   // Tieni il ref allineato a ogni render: syncData (closure vecchia)
-  // legge sempre i cluster attuali.
+  // legge sempre i gruppi attuali.
   useEffect(() => {
     clusteredRef.current = clustered;
   }, [clustered]);
@@ -1306,25 +1103,19 @@ export default function JobsGlobe({
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
-  // Traccia la posizione schermo del pin selezionato: aggiorna ad
-  // ogni movimento/zoom mappa per tenere il popup ancorato sopra.
+  // Traccia la posizione schermo del pin selezionato (posizione singola
+  // o gruppo coincidente): aggiorna ad ogni movimento/zoom mappa per
+  // tenere il popup ancorato sopra. Le coordinate sono quelle VERE del
+  // pin: non c'è più alcun offset di rendering.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !selected) {
+    const anchor = selected ?? selectedGroup;
+    if (!map || !anchor) {
       setPopupAnchor(null);
       return;
     }
     const update = () => {
-      // Ancora il popup alla coordinata RENDERIZZATA del pin (che può
-      // essere esplosa/offsettata in una fila), non a quella originale
-      // condivisa dal gruppo — altrimenti la vignetta finisce al centro
-      // del gruppo invece che sopra il pin selezionato.
-      const grp = clusteredRef.current.find((x) =>
-        x.positions.some((p) => p.id === selected.id),
-      );
-      const lon = grp ? grp.lon : selected.lon;
-      const lat = grp ? grp.lat : selected.lat;
-      const pt = map.project([lon, lat]);
+      const pt = map.project([anchor.lon, anchor.lat]);
       setPopupAnchor({ x: pt.x, y: pt.y });
     };
     update();
@@ -1334,7 +1125,7 @@ export default function JobsGlobe({
       map.off("move", update);
       map.off("zoom", update);
     };
-  }, [selected]);
+  }, [selected, selectedGroup]);
 
   // Auto-zoom sui pin filtrati: ogni volta che cambia displayData
   // (filtri donut/histogram di /map o primo fetch), riadatta la
@@ -1354,32 +1145,17 @@ export default function JobsGlobe({
     });
   }, [displayData]);
 
-  // Focus su una posizione richiesto da una lista (card Posizioni o drilldown
-  // Location): centra il SUO pin al centro schermo e apre la card. Il pin, a
-  // zoom-esplosione, è in una fila offsettata → centriamo sulla coord
-  // RENDERIZZATA (singleton in clustered), non su quella di città.
+  // Focus su una posizione richiesto da una lista (card Posizioni o
+  // drilldown Location): centra il SUO pin al centro schermo e apre la
+  // card. La coordinata della posizione È quella renderizzata (nessun
+  // offset dinamico), quindi si centra direttamente.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !focusPosition) return;
     const pos = data.find((d) => d.id === focusPosition.id);
     if (!pos) return;
+    setSelectedGroup(null);
     setSelected(pos);
-    // Se il pin è GIÀ esploso (singleton presente), centra direttamente su di esso.
-    const existing = clusteredRef.current.find(
-      (g) => g.count === 1 && g.positions[0]?.id === pos.id,
-    );
-    if (existing) {
-      pendingFocusRef.current = null;
-      map.easeTo({
-        center: [existing.lon, existing.lat],
-        zoom: Math.max(map.getZoom(), 13),
-        duration: 600,
-      });
-      return;
-    }
-    // Altrimenti: vola sulla città a zoom-esplosione; il re-center sul pin
-    // avviene quando il cluster si ricompone (effetto sotto, su `clustered`).
-    pendingFocusRef.current = pos.id;
     map.flyTo({
       center: [pos.lon, pos.lat],
       zoom: Math.max(map.getZoom(), 13),
@@ -1387,23 +1163,6 @@ export default function JobsGlobe({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPosition?.tick]);
-
-  // Quando il cluster si ricompone (es. dopo lo zoom del focus la città
-  // esplode), se c'è un focus in attesa centra esattamente sul pin singolo.
-  useEffect(() => {
-    const id = pendingFocusRef.current;
-    if (!id) return;
-    const map = mapRef.current;
-    if (!map) return;
-    const feat = clustered.find(
-      (g) => g.count === 1 && g.positions[0]?.id === id,
-    );
-    if (feat) {
-      pendingFocusRef.current = null;
-      map.easeTo({ center: [feat.lon, feat.lat], duration: 400 });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clustered]);
 
   const wrapClass =
     hero || fullscreen
@@ -1723,6 +1482,133 @@ export default function JobsGlobe({
                 box, punta verso il basso (verso il pin). Riga top
                 del triangolo NON disegnata per non far apparire
                 doppia linea col bordo del popup. */}
+            <svg
+              width="16"
+              height="9"
+              viewBox="0 0 16 9"
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: -9,
+                transform: "translateX(-50%)",
+                pointerEvents: "none",
+                overflow: "visible",
+              }}
+              aria-hidden
+            >
+              <path
+                d="M 0 0 L 8 9 L 16 0 Z"
+                fill="var(--color-panel)"
+                stroke="none"
+              />
+              <path
+                d="M 0 0 L 8 9 L 16 0"
+                fill="none"
+                stroke="var(--color-border)"
+                strokeWidth="1"
+              />
+            </svg>
+          </div>
+        )}
+
+        {selectedGroup && !selected && popupAnchor && (
+          <div
+            // Vignetta-lista per un gruppo coincidente (più posizioni
+            // sullo stesso building). Stessa ancora/coda del popup
+            // singolo: punta al pin, che sta alla coordinata vera.
+            className="absolute bg-[var(--color-panel)] border border-[var(--color-border)] rounded-md p-3 text-[11px] z-10"
+            style={{
+              left: popupAnchor.x,
+              top: popupAnchor.y - 14,
+              transform: "translate(-50%, -100%)",
+              width: 300,
+              maxWidth: "calc(100vw - 32px)",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span
+                className="text-[8px] font-semibold tracking-widest uppercase"
+                style={{ color: "var(--color-dim)" }}
+              >
+                {selectedGroup.count} {tr("positions_here")}
+              </span>
+              <button
+                onClick={() => setSelectedGroup(null)}
+                aria-label={tr("close")}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--color-muted)",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  lineHeight: 1,
+                  padding: 0,
+                }}
+              >
+                ×
+              </button>
+            </div>
+            {(() => {
+              const addr =
+                selectedGroup.positions[0]?.office_address ??
+                [
+                  selectedGroup.positions[0]?.loc_city,
+                  selectedGroup.positions[0]?.loc_country,
+                ]
+                  .filter(Boolean)
+                  .join(", ");
+              if (!addr) return null;
+              return (
+                <div
+                  className="text-[10px] mb-2 leading-tight truncate"
+                  style={{ color: "var(--color-muted)" }}
+                  title={addr}
+                >
+                  {addr}
+                </div>
+              );
+            })()}
+            <div
+              className="flex flex-col"
+              style={{ maxHeight: 220, overflowY: "auto" }}
+            >
+              {[...selectedGroup.positions]
+                .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+                .map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/positions/${p.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-3 py-1.5 no-underline rounded-sm hover:bg-[var(--color-card)]"
+                    style={{
+                      borderTop: "1px solid var(--color-border)",
+                    }}
+                  >
+                    <span className="min-w-0">
+                      <span
+                        className="block font-semibold leading-tight truncate"
+                        style={{ color: "var(--color-bright)" }}
+                      >
+                        {p.title}
+                      </span>
+                      <span
+                        className="block text-[10px] truncate"
+                        style={{ color: "var(--color-muted)" }}
+                      >
+                        {p.company}
+                      </span>
+                    </span>
+                    <span
+                      className="text-[16px] font-bold leading-none tabular-nums flex-shrink-0"
+                      style={{ color: matchScoreColor(p.score) }}
+                    >
+                      {p.score ?? "—"}
+                    </span>
+                  </Link>
+                ))}
+            </div>
             <svg
               width="16"
               height="9"
