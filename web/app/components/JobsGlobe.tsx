@@ -143,12 +143,23 @@ const SOURCE_ID = "jht-jobs";
 const LAYER_HALO_ID = "jht-jobs-halo";
 const LAYER_DOT_ID = "jht-jobs-dot";
 
-// Zoom (snappato a intero) da cui la mappa mostra i pin alle coordinate
-// ESATTE. Sotto: un solo fascio per città, su ancora fissa. È l'UNICA
-// transizione dipendente dallo zoom: dentro ciascuno dei due regimi le
-// coordinate non cambiano mai (scelta utente 23/07 — "raggruppamento a
-// zoom fuori, location esatte una volta scompattato").
-const CITY_DETAIL_ZOOM = 11;
+// Tre regimi di aggregazione, selezionati dallo zoom SNAPPATO a intero.
+// Dentro ciascun regime le coordinate non cambiano MAI (ancore fisse =
+// mediana dei membri): le uniche transizioni sono gli attraversamenti
+// di soglia (scelta utente 23/07 — "raggruppamento a zoom fuori,
+// location esatte una volta scompattato").
+//   snap < CITY_ZOOM            → un fascio per PAESE
+//   CITY_ZOOM ≤ snap < DETAIL   → un fascio per CITTÀ
+//   snap ≥ DETAIL_ZOOM          → pin alle coordinate esatte
+const CITY_ZOOM = 5;
+const DETAIL_ZOOM = 11;
+type ViewLevel = 0 | 1 | 2; // 0=paese, 1=città, 2=esatto
+function viewLevelForZoom(zoom: number): ViewLevel {
+  const snap = Math.round(zoom);
+  if (snap >= DETAIL_ZOOM) return 2;
+  if (snap >= CITY_ZOOM) return 1;
+  return 0;
+}
 
 // NIENTE clustering dipendente dallo zoom (scelta utente 23/07): ogni
 // pin viene disegnato SEMPRE alla sua coordinata risolta (ufficio esatto
@@ -476,6 +487,55 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
+// Aggrega i gruppi-coordinata in fasci per chiave (città o paese), con
+// ancora alla MEDIANA per componente delle coordinate dei membri:
+// deterministica, indipendente da zoom/pan, robusta agli outlier (una
+// posizione mal geocodata non trascina il fascio). keyOf → null lascia
+// il gruppo com'è (pin individuale in ogni regime).
+function aggregateGroups(
+  groups: GroupedFeature[],
+  prefix: string,
+  keyOf: (p: PositionCoord) => string | null,
+): GroupedFeature[] {
+  const median = (xs: number[]): number => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  const byKey = new Map<string, PositionCoord[]>();
+  const out: GroupedFeature[] = [];
+  for (const g of groups) {
+    const k = keyOf(g.positions[0]);
+    if (k == null) {
+      out.push(g);
+      continue;
+    }
+    const arr = byKey.get(k) ?? [];
+    arr.push(...g.positions);
+    byKey.set(k, arr);
+  }
+  for (const [k, arr] of byKey) {
+    const sorted = [...arr].sort((a, b) => (a.score ?? -1) - (b.score ?? -1));
+    const scores = sorted.map((p) => p.score);
+    const topScore = scores.reduce<number | null>((acc, s) => {
+      if (s == null) return acc;
+      if (acc == null) return s;
+      return Math.max(acc, s);
+    }, null);
+    out.push({
+      groupKey: `${prefix}|${k}`,
+      iconId: iconIdForScores(scores),
+      lat: median(arr.map((p) => p.lat)),
+      lon: median(arr.map((p) => p.lon)),
+      count: arr.length,
+      scores,
+      positions: sorted,
+      topScore,
+    });
+  }
+  return out;
+}
+
 // Paint override per allineare il basemap al theme JHT.
 // Dark = inverso cromatico della light: stessa palette grayscale
 // neutra (warm offwhite → warm darkgray), nessun verde/blu acceso.
@@ -707,53 +767,29 @@ export default function JobsGlobe({
     return out;
   }, [displayData]);
 
-  // Aggregazione per CITTÀ, usata sotto CITY_DETAIL_ZOOM: un solo fascio
-  // per città, ancorato alla MEDIANA (per componente) delle coordinate dei
-  // membri. La mediana è deterministica e NON dipende da zoom/pan → il
-  // marker-città sta sempre nello stesso identico punto; l'unica
-  // transizione è lo scompattamento nei pin esatti oltre la soglia.
-  // Posizioni senza città restano pin individuali anche qui.
-  const cityGrouped = useMemo(() => {
-    const median = (xs: number[]): number => {
-      const s = [...xs].sort((a, b) => a - b);
-      const m = s.length >> 1;
-      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-    };
-    const byCity = new Map<string, PositionCoord[]>();
-    const out: GroupedFeature[] = [];
-    for (const g of grouped) {
-      const p = g.positions[0];
-      const city = (p.loc_city ?? "").trim();
-      if (!city) {
-        out.push(g); // niente città → pin com'è (esatto e fisso)
-        continue;
-      }
-      const k = `${(p.loc_country ?? "").trim().toLowerCase()}|${city.toLowerCase()}`;
-      const arr = byCity.get(k) ?? [];
-      arr.push(...g.positions);
-      byCity.set(k, arr);
-    }
-    for (const [k, arr] of byCity) {
-      const sorted = [...arr].sort((a, b) => (a.score ?? -1) - (b.score ?? -1));
-      const scores = sorted.map((p) => p.score);
-      const topScore = scores.reduce<number | null>((acc, s) => {
-        if (s == null) return acc;
-        if (acc == null) return s;
-        return Math.max(acc, s);
-      }, null);
-      out.push({
-        groupKey: `city|${k}`,
-        iconId: iconIdForScores(scores),
-        lat: median(arr.map((p) => p.lat)),
-        lon: median(arr.map((p) => p.lon)),
-        count: arr.length,
-        scores,
-        positions: sorted,
-        topScore,
-      });
-    }
-    return out;
-  }, [grouped]);
+  // Aggregazioni per CITTÀ (regime 1) e per PAESE (regime 0): un solo
+  // fascio per chiave, ancorato alla MEDIANA (per componente) delle
+  // coordinate dei membri. La mediana è deterministica e NON dipende da
+  // zoom/pan → il marker sta sempre nello stesso identico punto; le
+  // uniche transizioni sono gli attraversamenti di soglia. Posizioni
+  // senza chiave (città/paese mancante) restano pin individuali.
+  const cityGrouped = useMemo(
+    () =>
+      aggregateGroups(grouped, "city", (p) => {
+        const city = (p.loc_city ?? "").trim();
+        if (!city) return null;
+        return `${(p.loc_country ?? "").trim().toLowerCase()}|${city.toLowerCase()}`;
+      }),
+    [grouped],
+  );
+  const countryGrouped = useMemo(
+    () =>
+      aggregateGroups(grouped, "country", (p) => {
+        const country = (p.loc_country ?? "").trim();
+        return country ? country.toLowerCase() : null;
+      }),
+    [grouped],
+  );
 
   // Fetch data
   useEffect(() => {
@@ -958,8 +994,9 @@ export default function JobsGlobe({
     // Click handler sul layer: identifica il gruppo via groupKey e
     // recupera la lista positions dal ref.
     //  • singleton → popup diretto + zoom-in moderato sul pin.
-    //  • cluster-città (groupKey "city|...") → fitBounds sui membri: lo
-    //    zoom supera la soglia e la città si scompatta nei pin esatti.
+    //  • fascio paese/città (groupKey "country|"/"city|") → fitBounds
+    //    sui membri: lo zoom attraversa la soglia e il fascio si
+    //    scompatta nel livello successivo.
     //  • gruppo coincidente (più posizioni sulla STESSA coordinata, es.
     //    stesso hotel) → popup-lista dei membri, ancorato al pin.
     map.on("click", LAYER_DOT_ID, (e) => {
@@ -998,10 +1035,13 @@ export default function JobsGlobe({
       const g = clusteredRef.current.find((x) => x.groupKey === groupKey);
       if (!g) return;
 
-      if (g.count > 1 && g.groupKey.startsWith("city|")) {
-        // Cluster-città: inquadra tutte le posizioni della città; lo
-        // zoom risultante supera la soglia e la città si scompatta nei
-        // pin esatti. Padding-top generoso per i fasci alti.
+      if (
+        g.count > 1 &&
+        (g.groupKey.startsWith("city|") || g.groupKey.startsWith("country|"))
+      ) {
+        // Fascio paese/città: inquadra tutte le posizioni; lo zoom
+        // risultante attraversa la soglia e il fascio si scompatta nel
+        // livello successivo. Padding-top generoso per i fasci alti.
         setSelected(null);
         setSelectedGroup(null);
         const vp = bestViewport(g.positions);
@@ -1066,30 +1106,30 @@ export default function JobsGlobe({
     };
   }, []);
 
-  // Due soli regimi, entrambi con coordinate FISSE: sotto CITY_DETAIL_ZOOM
-  // un fascio per città (ancora = mediana, mai ricalcolata con lo zoom),
-  // sopra i pin alle coordinate esatte. detailMode cambia solo quando lo
-  // zoom snappato attraversa la soglia → una transizione netta, nessuna
-  // ricomposizione continua (era la causa dei pin "che si muovono").
-  const [detailMode, setDetailMode] = useState(false);
-  const clustered = detailMode ? grouped : cityGrouped;
+  // Tre regimi (paese/città/esatto), tutti con coordinate FISSE: il
+  // livello cambia solo quando lo zoom snappato attraversa una soglia
+  // → transizioni nette, nessuna ricomposizione continua (era la causa
+  // dei pin "che si muovono").
+  const [viewLevel, setViewLevel] = useState<ViewLevel>(0);
+  const clustered =
+    viewLevel === 2 ? grouped : viewLevel === 1 ? cityGrouped : countryGrouped;
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const check = () => {
-      const detail = Math.round(map.getZoom()) >= CITY_DETAIL_ZOOM;
-      setDetailMode((prev) => {
-        if (prev !== detail && !detail) {
-          // Rientro nel regime città: chiudi i popup, il pin ancorato
-          // non è più renderizzato (assorbito nel fascio-città). In
-          // direzione opposta (scompattamento) i popup restano: il pin
-          // selezionato esiste alle sue coordinate esatte — è il caso
-          // del focus dalla sidebar, che apre popup e poi zooma.
+      const level = viewLevelForZoom(map.getZoom());
+      setViewLevel((prev) => {
+        if (level < prev) {
+          // Ri-aggregazione (zoom out): chiudi i popup, il pin ancorato
+          // non è più renderizzato (assorbito in un fascio). Verso il
+          // dettaglio i popup restano: il pin selezionato esiste alle
+          // sue coordinate esatte — è il caso del focus dalla sidebar,
+          // che apre il popup e poi zooma.
           setSelected(null);
           setSelectedGroup(null);
         }
-        return detail;
+        return level;
       });
     };
     check();
