@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { resolveUser } from "@/lib/team-state/auth";
+import { isDemoLegacyId } from "@/lib/demo/data";
+import {
+  activeDemoPersona,
+  parseDemoFeedback,
+  serializeDemoFeedback,
+  DEMO_FEEDBACK_COOKIE,
+} from "@/lib/demo/mode";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +91,34 @@ export async function POST(
     direction = body.direction as Direction;
   }
 
+  // [JHT-WEB-DEMO] Giudizio su una posizione demo: vive nel cookie overlay
+  // (nessuna riga su Supabase). Stessa risposta del path reale, così i
+  // client (FeedbackButtons, SwipeDeck) non distinguono.
+  if (isDemoLegacyId(legacyId) && (await activeDemoPersona())) {
+    const store = await cookies();
+    const map = parseDemoFeedback(store.get(DEMO_FEEDBACK_COOKIE)?.value);
+    map[String(legacyId)] = { a: action, s: score };
+    const res = NextResponse.json({
+      feedback: {
+        id: `demo-fb-${legacyId}`,
+        position_legacy_id: legacyId,
+        action,
+        reason,
+        comment,
+        score,
+        direction,
+        created_at: new Date().toISOString(),
+      },
+    });
+    res.cookies.set(DEMO_FEEDBACK_COOKIE, serializeDemoFeedback(map), {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+      httpOnly: true,
+    });
+    return res;
+  }
+
   const { data, error } = await supabase
     .from("position_feedback")
     .insert({
@@ -110,6 +146,29 @@ export async function GET(
   if (!resolved.ok) return resolved.res;
   const { userId, supabase } = resolved.user;
   const { legacyId } = await params;
+
+  // [JHT-WEB-DEMO] Lettura giudizio demo dal cookie overlay.
+  if (isDemoLegacyId(legacyId) && (await activeDemoPersona())) {
+    const store = await cookies();
+    const map = parseDemoFeedback(store.get(DEMO_FEEDBACK_COOKIE)?.value);
+    const e = map[String(legacyId)];
+    return NextResponse.json({
+      feedback: e
+        ? [
+            {
+              id: `demo-fb-${legacyId}`,
+              position_legacy_id: legacyId,
+              action: e.a,
+              score: e.s,
+              reason: null,
+              comment: null,
+              direction: null,
+              created_at: new Date().toISOString(),
+            },
+          ]
+        : [],
+    });
+  }
 
   const { data, error } = await supabase
     .from("position_feedback")

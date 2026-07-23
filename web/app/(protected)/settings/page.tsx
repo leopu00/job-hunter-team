@@ -9,6 +9,7 @@ import {
   AccountCard,
   LanguageCard,
   CurrencyCard,
+  ConnectTeamCard,
 } from "../../components/SettingsCloudSections";
 import WorkHoursPicker from "../../components/WorkHoursPicker";
 import { DarkModeToggle } from "@/app/theme-provider";
@@ -655,6 +656,10 @@ export default function SettingsPage() {
               {tr("settings")}
             </h1>
           </div>
+
+          {/* [JHT-WEB-DEMO] Promemoria pairing: solo finché non ci sono
+              dati sincronizzati (la card si nasconde da sé). */}
+          <ConnectTeamCard />
 
           <AccountCard />
 

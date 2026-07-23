@@ -16,6 +16,7 @@ type UserMenuStrings = {
   exportData: string;
   backup: string;
   logout: string;
+  connectTeam: string;
 };
 
 const T: Record<Locale, UserMenuStrings> = {
@@ -26,6 +27,7 @@ const T: Record<Locale, UserMenuStrings> = {
     exportData: "Esporta dati",
     backup: "Backup",
     logout: "Esci",
+    connectTeam: "Collega il tuo team",
   },
   en: {
     accountPrefix: "Account:",
@@ -34,6 +36,7 @@ const T: Record<Locale, UserMenuStrings> = {
     exportData: "Export data",
     backup: "Backup",
     logout: "Sign out",
+    connectTeam: "Connect your team",
   },
   es: {
     accountPrefix: "Cuenta:",
@@ -42,6 +45,7 @@ const T: Record<Locale, UserMenuStrings> = {
     exportData: "Exportar datos",
     backup: "Copia de seguridad",
     logout: "Cerrar sesión",
+    connectTeam: "Conecta tu equipo",
   },
   fr: {
     accountPrefix: "Compte :",
@@ -50,6 +54,7 @@ const T: Record<Locale, UserMenuStrings> = {
     exportData: "Exporter les données",
     backup: "Sauvegarde",
     logout: "Se déconnecter",
+    connectTeam: "Connecter votre équipe",
   },
   de: {
     accountPrefix: "Konto:",
@@ -58,6 +63,7 @@ const T: Record<Locale, UserMenuStrings> = {
     exportData: "Daten exportieren",
     backup: "Sicherung",
     logout: "Abmelden",
+    connectTeam: "Team verbinden",
   },
   hu: {
     accountPrefix: "Fiók:",
@@ -66,6 +72,7 @@ const T: Record<Locale, UserMenuStrings> = {
     exportData: "Adatok exportálása",
     backup: "Biztonsági mentés",
     logout: "Kijelentkezés",
+    connectTeam: "Csapat összekapcsolása",
   },
   pt: {
     accountPrefix: "Conta:",
@@ -74,6 +81,7 @@ const T: Record<Locale, UserMenuStrings> = {
     exportData: "Exportar dados",
     backup: "Backup",
     logout: "Sair",
+    connectTeam: "Liga a tua equipa",
   },
 };
 
@@ -81,12 +89,17 @@ interface UserMenuProps {
   avatarUrl?: string;
   fullName?: string;
   email: string;
+  // [JHT-WEB-DEMO] true = nessun dato sincronizzato: voce "Collega il tuo
+  // team" in cima al menu + pallino sull'avatar, finché il pairing non
+  // avviene (promemoria onboarding, 22/07).
+  needsPairing?: boolean;
 }
 
 export default function UserMenu({
   avatarUrl,
   fullName,
   email,
+  needsPairing,
 }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -147,6 +160,13 @@ export default function UserMenu({
           </span>
         )}
       </button>
+      {needsPairing && (
+        <span
+          aria-hidden
+          className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--color-panel)]"
+          style={{ background: "var(--color-green)" }}
+        />
+      )}
 
       {open && (
         <div
@@ -167,6 +187,22 @@ export default function UserMenu({
               {email}
             </div>
           </div>
+          {needsPairing && (
+            <Link
+              href="/welcome"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-[11px] font-semibold hover:bg-[var(--color-card)] transition-colors no-underline"
+              style={{ color: "var(--color-green)" }}
+            >
+              <span
+                aria-hidden
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: "var(--color-green)" }}
+              />
+              {t.connectTeam}
+            </Link>
+          )}
           <Link
             href="/profile"
             role="menuitem"

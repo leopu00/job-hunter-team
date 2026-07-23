@@ -7,6 +7,9 @@ import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
 import { isCloudDeploy, isLocalDeploy } from "@/lib/deploy-mode";
 import { isLocalRequestFromHeaders } from "@/lib/auth";
 import { isDashboardDemoMode } from "@/lib/dashboard-demo";
+import { activeDemoPersona } from "@/lib/demo/mode";
+import { hasSyncedData } from "@/lib/demo/pairing";
+import DemoBanner from "@/app/components/demo/DemoBanner";
 import { getRequestLocale } from "@/lib/request-locale";
 import Navbar from "@/components/NavbarChrome";
 import MainChrome from "@/components/MainChrome";
@@ -111,9 +114,18 @@ export default async function ProtectedLayout({
 
   const locale = await getRequestLocale();
 
+  // [JHT-WEB-DEMO] Demo attiva → banda "dati di esempio" su ogni pagina.
+  // needsPairing (nessuna posizione reale sincronizzata) accende il
+  // promemoria "Collega il tuo team" nello UserMenu. hasSyncedData guarda
+  // sempre i dati REALI (head-count con RLS, cache per-request), così il
+  // promemoria sparisce da solo al primo sync anche a demo attiva.
+  const demoPersona = await activeDemoPersona();
+  const needsPairing = cloudUser ? !(await hasSyncedData()) : false;
+
   return (
     <div style={{ position: "relative", zIndex: 1 }}>
-      <Navbar user={cloudUser} locale={locale} />
+      <Navbar user={cloudUser} locale={locale} needsPairing={needsPairing} />
+      {demoPersona && <DemoBanner persona={demoPersona} />}
       <div className="flex items-stretch">
         <div className="flex-1 min-w-0">
           <MainChrome>{children}</MainChrome>

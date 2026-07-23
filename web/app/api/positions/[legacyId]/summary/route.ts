@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
+import { isDemoLegacyId, findDemoPositionByLegacyId } from "@/lib/demo/data";
+import { activeDemoPersona } from "@/lib/demo/mode";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,12 @@ export async function GET(
   const id = Number(legacyId);
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ error: "legacyId invalido" }, { status: 400 });
+  }
+
+  // [JHT-WEB-DEMO] Sintesi dal dataset statico per le posizioni demo.
+  if (isDemoLegacyId(id) && (await activeDemoPersona())) {
+    const p = findDemoPositionByLegacyId(id);
+    return NextResponse.json({ summary: p?.jd_summary ?? null });
   }
 
   const { data, error } = await supabase
