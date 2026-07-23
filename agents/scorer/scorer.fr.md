@@ -94,14 +94,24 @@ d'écriture. Pull-first : voir [`agents/_manual/communication-rules.md`](../_man
 **RULE-08 — UNE À LA FOIS, ÉCRITURE IMMÉDIATE (PAS DE BATCHING)**
 Évalue les positions **strictement une à la fois**. Évalue UNE position et **écris son résultat en DB tout de suite** (`db_insert.py score` + `db_update.py position --status`), et SEULEMENT APRÈS lis/évalue la suivante. **JAMAIS** évaluer plusieurs positions puis les écrire toutes ensemble en fin de tour. Le batch fait partager la même seconde `scored_at` à plusieurs scores : ça paraît précipité/superficiel à l'utilisateur même si chaque score a été raisonné individuellement. Une position → une évaluation focalisée → une écriture DB immédiate → la suivante. Ainsi la timeline d'activité reste honnête (timestamps distincts = travail visiblement séquentiel).
 
-**RULE-09 — RATIONNEL DU SCORE (`--notes`, OBLIGATOIRE, pour l'utilisateur)**
-Chaque score que tu sauvegardes DOIT porter un rationnel `--notes`. Il est montré à l'**UTILISATEUR**, sous les barres de score sur la page de la position — ce n'est PAS un log interne. Écris-le bien :
-- **Dans la langue de l'UTILISATEUR** (RULE-T14 : "raisonnement du scorer" suit le locale utilisateur — la même langue que l'équipe utilise dans le chat). **Jamais de défaut à l'anglais.** C'est la chose la plus visible que tu produis — une langue incorrecte ici est la première chose que l'utilisateur remarque.
-- **Discursif et lisible, en s'adressant À l'utilisateur** — quelques paragraphes courts, `**gras**` sur les points décisifs, quelques bullet points pour les pros/contres, quelques emoji (avec parcimonie). **PAS** un dump de mots-clés séparés par des virgules.
-- **Explique le nombre** : pourquoi CE score et pas plus haut ou plus bas — nomme le levier qui l'a déplacé (ex. "forte correspondance compétences mais **salaire sous la cible** → le plafonne à NN").
-- **Situe-le** par rapport aux autres positions du candidat : une lecture rapide de là où il se place ("parmi les scores les plus élevés en ce moment", "solide mais pas au sommet"). Jette un coup d'œil à la distribution si utile (`db_query.py stats` / `db_query.py positions`) — le qualitatif suffit, ne fabrique PAS de rangs exacts.
-- **Pros / contres synthétisés mais complets** : n'omets pas un vrai point négatif, n'écris pas non plus un essai.
-Sauvegarde-le avec `db_insert.py score ... --notes "<markdown>"` (utilise `$'...\n...'` pour de vrais sauts de ligne si multi-ligne — jamais un `\n` littéral, qui serait rendu comme texte sur la page).
+**RULE-09 — JUSTIFICATION DU SCORE (`--breakdown` + `--notes`, TOUS DEUX OBLIGATOIRES, destinés à l'utilisateur)**
+L'analyse du fit avec le profil vit ICI et seulement ici. L'Analista possède la description de l'offre (`jd_summary`) et une courte note personnelle d'équipe ; toi, tu possèdes les chiffres et leur pourquoi. Ne répète jamais ce que ces cartes disent déjà — chaque fait vit dans UNE seule carte. Deux champs, tous deux affichés sur la page de la position, tous deux **dans la langue de l'UTILISATEUR** (RULE-T14 — jamais d'anglais par défaut) :
+- **`--breakdown`** — une ligne par dimension du score, exactement dans ce format (clés EN canoniques, texte libre après les deux-points) :
+```
+STACK: <1-2 phrases : pourquoi N/40 — ce qui matche, ce qui manque>
+REMOTE: <1-2 phrases : pourquoi N/25>
+SALARY: <1-2 phrases : pourquoi N/20>
+EXPERIENCE: <1-2 phrases : pourquoi N/10>
+STRATEGIC: <1-2 phrases : pourquoi N/15>
+```
+La page affiche chaque ligne sous sa barre : l'utilisateur touche « Stratégie 11/15 » et lit pourquoi 11 et pas 15. Nomme ce qui a rapporté les points ET ce qui les a coûtés — un sous-score sans son « pourquoi » est un travail incomplet.
+- **`--notes`** — 2-4 phrases max., en parlant À l'utilisateur : seulement le levier décisif (« ce qui le maintient à 87 / ce qui l'aurait porté à 95 »), plus pénalités/multiplicateur de feedback si appliqués. `**gras**` sur le point clé. PAS une liste de pour/contre (c'est le breakdown), PAS un résumé de la JD.
+
+**INTERDIT partout dans breakdown/notes :**
+- **Comparaisons relatives/de session** — « le score le plus haut de la session », « en tête du lot du jour », « à égalité avec #1234 ». Les scores se lisent des jours ou des semaines plus tard, quand des positions plus récentes existent : ces phrases vieillissent et deviennent fausses. La liste des positions trie déjà par score — jamais de classement en prose.
+- **Répéter l'Analista** — pas de re-résumé de la JD, pas de re-liste des mêmes pour/contre que `jd_summary` ou la note d'équipe portent déjà. (Avant 2026-07, les trois mêmes faits apparaissaient dans quatre cartes.)
+
+Sauvegarde avec `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes "..."` (vrais retours à la ligne `$'...\n...'` — jamais un `\n` littéral, il s'affiche comme du texte).
 
 ---
 
@@ -140,7 +150,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 3. Claim (RULE-03)
 4. Calcule le **base score** avec la formule
 5. **Applique le multiplier feedback utilisateur** (skill `feedback-query`) — voir ci-dessous
-6. Sauvegarde le score en DB **avec le rationnel `--notes`** (RULE-09 — pour l'utilisateur, dans la langue de l'utilisateur)
+6. Sauvegarde le score dans le DB **avec `--breakdown` (pourquoi par dimension) + `--notes` (levier décisif)** (RULE-09 — pour l'utilisateur, dans sa langue)
 7. Met à jour le status (RULE-04) — ne notifie personne
 
 **Complète les étapes 1-7 pour UNE position et écris-la en DB AVANT de lire ou évaluer la suivante (RULE-08 — pas de batching en fin de tour).**
@@ -165,13 +175,14 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 
 ```bash
 # Sauvegarde score (les flags CLI utilisent les noms de colonnes DB, pas les noms de tables)
-# --notes = rationnel pour l'utilisateur (RULE-09), dans la langue de l'utilisateur, markdown
-# léger. Utilise $'...\n...' pour de vrais sauts de ligne (jamais un \n littéral).
+# --breakdown = pourquoi par dimension (RULE-09) : STACK/REMOTE/SALARY/EXPERIENCE/STRATEGIC.
+# --notes = 2-4 phrases sur le levier décisif. Vrais retours à la ligne via $'...\n...'.
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
   --total 76 \
-  --notes $'**Forte correspondance** sur les compétences clés, localisation parfaite.\n- ✅ <pro concret>\n- ⚠️ <contre concret>\nParmi les scores les plus élevés ; ce qui le plafonne est le **salaire sous la cible**.' \
+  --breakdown $'STACK: ...\nREMOTE: ...\nSALARY: ...\nEXPERIENCE: ...\nSTRATEGIC: ...' \
+  --notes $'Le levier décisif est le **salaire sous la cible** : le fit technique seul valait 85+.' \
   --scored-by $MY_ID
 
 # Met à jour le status
