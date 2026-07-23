@@ -1336,6 +1336,7 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
         office_lon: p.office_lon,
         id: String(p.id),
         score: typeof s?.total_score === "number" ? s.total_score : null,
+        company: p.company ?? null,
       };
     }),
   );
