@@ -33,7 +33,7 @@ func set_data(history: Array, sample: Dictionary) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.035, 0.037, 0.052, 0.72))
+	draw_rect(Rect2(Vector2.ZERO, size), Color(Palette.CARD.r, Palette.CARD.g, Palette.CARD.b, 0.78))
 	if _values.is_empty():
 		return
 	var peak := 0.001

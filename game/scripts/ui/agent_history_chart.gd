@@ -11,28 +11,31 @@ extends VBoxContainer
 ## con cache statica per ruolo+finestra, così i rebuild della pagina
 ## (refresh live del bus, ~60s) non rifanno un giro SSH da 10s.
 
-const SERIES_DEFS := [
-	{"key": "tokens_kt", "label_key": "agent.hs_tokens",
-		"color": Palette.GREEN, "suffix": "kt"},
-	{"key": "pct_5h", "label_key": "agent.hs_pct5h",
-		"color": Palette.PURPLE, "suffix": "%"},
-	{"key": "pct_weekly", "label_key": "agent.hs_pctweek",
-		"color": Palette.BLUE, "suffix": "%"},
-	{"key": "day_cum", "label_key": "agent.hs_day",
-		"color": Palette.MINT, "suffix": "%"},
-	{"key": "throttle_s", "label_key": "agent.hs_throttle",
-		"color": Palette.RED, "suffix": "s"},
-	{"key": "db_actions", "label_key": "agent.hs_db",
-		"color": Palette.YELLOW, "suffix": "az"},
-	{"key": "cpu_agent_pct", "label_key": "agent.hs_cpu_agent",
-		"color": Palette.ORANGE, "suffix": "%"},
-	{"key": "ram_agent_mb", "label_key": "agent.hs_ram_agent",
-		"color": Color("#e879f9"), "suffix": "MB"},
-	{"key": "cpu_pct", "label_key": "agent.hs_cpu",
-		"color": Color("#8a6a3a"), "suffix": "%"},
-	{"key": "ram_pct", "label_key": "agent.hs_ram",
-		"color": Palette.BASE, "suffix": "%"},
-]
+static func _series_defs() -> Array:
+	return [
+		{"key": "tokens_kt", "label_key": "agent.hs_tokens",
+			"color": Palette.GREEN, "suffix": "kt"},
+		{"key": "pct_5h", "label_key": "agent.hs_pct5h",
+			"color": Palette.PURPLE, "suffix": "%"},
+		{"key": "pct_weekly", "label_key": "agent.hs_pctweek",
+			"color": Palette.BLUE, "suffix": "%"},
+		{"key": "day_cum", "label_key": "agent.hs_day",
+			"color": Palette.MINT, "suffix": "%"},
+		{"key": "throttle_s", "label_key": "agent.hs_throttle",
+			"color": Palette.RED, "suffix": "s"},
+		{"key": "db_actions", "label_key": "agent.hs_db",
+			"color": Palette.YELLOW, "suffix": "az"},
+		{"key": "cpu_agent_pct", "label_key": "agent.hs_cpu_agent",
+			"color": Palette.ORANGE, "suffix": "%"},
+		{"key": "ram_agent_mb", "label_key": "agent.hs_ram_agent",
+			"color": Color("#a832a8") if Palette.is_light() else Color("#e879f9"),
+			"suffix": "MB"},
+		{"key": "cpu_pct", "label_key": "agent.hs_cpu",
+			"color": Color("#79501c") if Palette.is_light() else Color("#8a6a3a"),
+			"suffix": "%"},
+		{"key": "ram_pct", "label_key": "agent.hs_ram",
+			"color": Palette.BASE, "suffix": "%"},
+	]
 ## Serie accese di default: le tre che Leone guarda per prime.
 const DEFAULT_ON := ["tokens_kt", "pct_5h", "pct_weekly"]
 
@@ -83,7 +86,7 @@ func _ready() -> void:
 		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		var mute_all: bool = spec[1]
 		btn.pressed.connect(func() -> void:
-			for d in SERIES_DEFS:
+			for d in _series_defs():
 				_chart.set_muted(d["key"], mute_all)
 			_chart.queue_redraw())
 		controls.add_child(btn)
@@ -94,7 +97,7 @@ func _ready() -> void:
 	_chart.multi_axis = true
 	_chart.custom_minimum_size = Vector2(520, 320)
 	add_child(_chart)
-	for d in SERIES_DEFS:
+	for d in _series_defs():
 		if not DEFAULT_ON.has(d["key"]):
 			_chart.set_muted(d["key"], true)
 	add_child(TerminalTheme.label(UIStrings.t("agent.history_ctx_note"),
@@ -210,7 +213,7 @@ func _render() -> void:
 	var w := UsageRangeBar.window()
 	var raw: Dictionary = _data.get("series", {})
 	var series: Array = []
-	for d in SERIES_DEFS:
+	for d in _series_defs():
 		var rows: Array = _day_cumulative(raw.get("pct_weekly", [])) \
 				if d["key"] == "day_cum" else raw.get(d["key"], [])
 		var pts: Array = []

@@ -33,7 +33,7 @@ func done() -> void:
 	queue_free()
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.022, 0.03, 0.78))
+	draw_rect(Rect2(Vector2.ZERO, size), Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.86))
 	if not _font:
 		return
 	# il centraggio usa SOLO il testo base: i puntini si aggiungono a
@@ -49,7 +49,7 @@ func _draw() -> void:
 	var bx := (size.x - bar_w) / 2.0
 	var by := size.y / 2.0 + 14.0
 	draw_rect(Rect2(Vector2(bx, by), Vector2(bar_w, 3.0)),
-			Color(1, 1, 1, 0.08))
+			Color(Palette.BORDER.r, Palette.BORDER.g, Palette.BORDER.b, 0.55))
 	var seg := bar_w * 0.3
 	var travel := bar_w - seg
 	var t := float(Time.get_ticks_msec() % 1200) / 1200.0

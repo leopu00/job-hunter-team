@@ -570,8 +570,18 @@ const S := {
 	"side.docker": "Docker",
 	"side.account": "Account",
 	"side.email": "Email",
+	"side.appearance": "Aspetto",
 	"side.language": "Lingua",
 	"side.advanced": "Avanzate",
+
+	# ── Impostazioni → Aspetto ───────────────────────────────────
+	"appearance.intro": "Scegli l’aspetto dell’interfaccia. Il mondo dell’ufficio mantiene la sua illuminazione; menu, finestre, dialoghi e grafici cambiano insieme.",
+	"appearance.current": "TEMA ATTIVO: %s",
+	"appearance.light": "Chiaro",
+	"appearance.dark": "Scuro",
+	"appearance.light_desc": "Finestre bianche, testo scuro e accenti ad alto contrasto",
+	"appearance.dark_desc": "Interfaccia terminale scura con accenti luminosi",
+	"appearance.note": "// la preferenza viene salvata su questo dispositivo",
 
 	# ── Sezioni non ancora migrate / config sola lettura ──────────────
 	"section.migrating": "// sezione non ancora disponibile",
