@@ -32,7 +32,7 @@ func _ready() -> void:
 	add_child(dressing_layer)  # tinte/targhe dei 5 reparti (dev-art)
 	var rugs_layer := DeptRugs.new()
 	rugs_layer.z_index = -2
-	add_child(rugs_layer)  # tappetoni tondi colore-reparto (reference)
+	add_child(rugs_layer)  # tappeti persiani rettangolari colore-reparto
 	# giorno/notte sull'ora locale: esterno, lampade e luce dalle finestre.
 	# Va qui, PRIMA di mondo e maintainer, che devono disegnarsi sopra.
 	add_child(DayNight.new())
