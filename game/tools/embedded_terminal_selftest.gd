@@ -43,6 +43,25 @@ func _run() -> void:
 	var ok := visible.contains("https://example.com/device")
 	if not is_windows:
 		ok = ok and visible.contains("ricevuto:OK")
+	# Modello di schermo: il posizionamento colonna (ESC[nG, stile TUI
+	# Claude) deve produrre spazi, non parole incollate; cursor-home + erase
+	# sovrascrivono invece di accodare; il clear screen svuota davvero.
+	ok = ok and terminal._terminal_text("Accessing\u001b[12Gworkspace:") \
+			== "Accessing  workspace:"
+	ok = ok and terminal._terminal_text(
+			"riga1\r\nriga2\u001b[H\u001b[KRIGA1") == "RIGA1\nriga2"
+	ok = ok and terminal._terminal_text("vecchia\u001b[2Jnuova") == "nuova"
+	# URL spezzato dal wrap: le righe successive fatte solo di caratteri-URL
+	# continuano il link; una riga qualunque lo chiude.
+	terminal._detect_url(PackedStringArray([
+		"Use the url below to sign in",
+		"https://claude.com/oauth/authorize?code=true&sta",
+		"te=abc123",
+		"",
+		"Esc to cancel",
+	]))
+	ok = ok and terminal._last_url \
+			== "https://claude.com/oauth/authorize?code=true&state=abc123"
 	var pid := terminal._pid
 	# Il provider deve chiudersi automaticamente solo quando la checklist
 	# conferma le credenziali del provider corretto.

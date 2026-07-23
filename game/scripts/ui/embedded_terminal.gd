@@ -9,6 +9,187 @@ signal closed
 const MAX_RAW_CHARS := 100000
 const MAX_VISIBLE_CHARS := 50000
 
+
+## Modello di schermo minimale (griglia + scrollback) per i TUI raw-mode.
+## Strappare via le sequenze CSI come faceva il vecchio filtro incollava le
+## parole tra loro ("Accessingworkspace:", test Leone 23/07): i TUI
+## posizionano OGNI parola col cursore (ESC[nG, ESC[r;cH), quindi serve
+## un cursore vero che scriva su una griglia. Niente colori né attributi:
+## qui conta solo che il testo resti leggibile e nell'ordine giusto.
+class TermScreen:
+	const ROWS := 40  # in sincrono con lo stty del wrapper Windows
+	const SCROLLBACK_MAX := 400
+
+	var rows := PackedStringArray([""])
+	var scrollback := PackedStringArray()
+	var row := 0
+	var col := 0
+	var saved := Vector2i.ZERO
+	var _esc := ""  # sequenza escape parziale fra un feed e l'altro
+
+	func feed(text: String) -> void:
+		for i in text.length():
+			var ch := text[i]
+			if _esc != "":
+				_esc += ch
+				_advance_escape()
+				continue
+			var code := ch.unicode_at(0)
+			if code == 0x1b:
+				_esc = ch
+			elif ch == "\n":
+				_newline()
+			elif ch == "\r":
+				col = 0
+			elif ch == "\b":
+				col = maxi(0, col - 1)
+			elif ch == "\t":
+				col = (col / 8 + 1) * 8
+			elif code >= 32:
+				_put(ch)
+			# altri codici di controllo (BEL, NUL…): ignorati
+
+	func text() -> String:
+		var all := PackedStringArray()
+		for line in scrollback:
+			all.append(line.strip_edges(false, true))
+		for line in rows:
+			all.append(line.strip_edges(false, true))
+		var joined := "\n".join(all)
+		var blank := RegEx.new()
+		if blank.compile("\\n{4,}") == OK:
+			joined = blank.sub(joined, "\n\n\n", true)
+		return joined.strip_edges()
+
+	## Righe correnti (storico + schermo) già ripulite a destra: servono al
+	## riconoscimento degli URL spezzati dal wrap della pty.
+	func lines() -> PackedStringArray:
+		var all := PackedStringArray()
+		for line in scrollback:
+			all.append(line.strip_edges(false, true))
+		for line in rows:
+			all.append(line.strip_edges(false, true))
+		return all
+
+	func _put(ch: String) -> void:
+		_ensure_row()
+		var line := rows[row]
+		while line.length() < col:
+			line += " "
+		if col < line.length():
+			line = line.substr(0, col) + ch + line.substr(col + 1)
+		else:
+			line += ch
+		rows[row] = line
+		col += 1
+
+	func _ensure_row() -> void:
+		while rows.size() <= row:
+			rows.append("")
+
+	func _newline() -> void:
+		row += 1
+		if row >= ROWS:
+			# scroll: la riga in cima passa nello storico
+			scrollback.append(rows[0])
+			rows.remove_at(0)
+			if scrollback.size() > SCROLLBACK_MAX:
+				scrollback = scrollback.slice(scrollback.size() - SCROLLBACK_MAX)
+			row = ROWS - 1
+		_ensure_row()
+
+	func _advance_escape() -> void:
+		var kind := _esc[1]
+		if kind == "[":
+			if _esc.length() < 3:
+				return
+			var last := _esc[_esc.length() - 1]
+			var lc := last.unicode_at(0)
+			if lc >= 0x40 and lc <= 0x7e:
+				_csi(_esc.substr(2, _esc.length() - 3), last)
+				_esc = ""
+			elif _esc.length() > 64:
+				_esc = ""
+		elif kind == "]":
+			# OSC: termina con BEL o con ST (ESC \)
+			if _esc.ends_with(String.chr(7)) or _esc.ends_with("\u001b\\"):
+				_esc = ""
+			elif _esc.length() > 2048:
+				_esc = ""
+		elif kind == "7":
+			saved = Vector2i(row, col)
+			_esc = ""
+		elif kind == "8":
+			row = saved.x
+			col = saved.y
+			_esc = ""
+		elif kind == "M":
+			row = maxi(0, row - 1)
+			_esc = ""
+		elif kind == "(" or kind == ")":
+			if _esc.length() >= 3:
+				_esc = ""
+		else:
+			_esc = ""
+
+	func _csi(params: String, final: String) -> void:
+		var parts := params.trim_prefix("?").split(";")
+		var n := maxi(1, int(parts[0])) if parts[0].is_valid_int() else 1
+		match final:
+			"A": row = maxi(0, row - n)
+			"B": row = mini(ROWS - 1, row + n)
+			"C": col += n
+			"D": col = maxi(0, col - n)
+			"E":
+				row = mini(ROWS - 1, row + n)
+				col = 0
+			"F":
+				row = maxi(0, row - n)
+				col = 0
+			"G": col = maxi(0, n - 1)
+			"d": row = mini(ROWS - 1, maxi(0, n - 1))
+			"H", "f":
+				row = mini(ROWS - 1, maxi(0, n - 1))
+				col = 0
+				if parts.size() > 1 and parts[1].is_valid_int():
+					col = maxi(0, int(parts[1]) - 1)
+			"J": _erase_screen(int(parts[0]) if parts[0].is_valid_int() else 0)
+			"K": _erase_line(int(parts[0]) if parts[0].is_valid_int() else 0)
+			"s": saved = Vector2i(row, col)
+			"u":
+				row = saved.x
+				col = saved.y
+			_: pass  # SGR, modi privati, resize: irrilevanti per il testo
+		_ensure_row()
+
+	func _erase_screen(mode: int) -> void:
+		_ensure_row()
+		if mode >= 2:
+			# come un terminale vero: il clear NON archivia (i TUI che
+			# ridisegnano di continuo inonderebbero lo storico di frame)
+			rows = PackedStringArray([""])
+			row = 0
+			col = 0
+		elif mode == 0:
+			_erase_line(0)
+			while rows.size() > row + 1:
+				rows.remove_at(rows.size() - 1)
+		else:
+			for i in row:
+				rows[i] = ""
+			_erase_line(1)
+
+	func _erase_line(mode: int) -> void:
+		_ensure_row()
+		var line := rows[row]
+		if mode == 0:
+			rows[row] = line.substr(0, mini(col, line.length()))
+		elif mode == 1:
+			var keep := line.substr(mini(col, line.length()))
+			rows[row] = " ".repeat(mini(col, line.length())) + keep
+		else:
+			rows[row] = ""
+
 var provider := ""
 var spec: Dictionary = {}
 var _thread: Thread
@@ -30,6 +211,8 @@ var _done: Button
 var _mutex := Mutex.new()
 var _auth_was_ready := false
 var _auth_autoclose_started := false
+var _screen := TermScreen.new()
+var _undecoded := PackedByteArray()
 
 
 func _init(p_provider: String, p_spec: Dictionary) -> void:
@@ -67,14 +250,47 @@ func _process(_delta: float) -> void:
 	_raw_bytes.append_array(chunk)
 	if _raw_bytes.size() > MAX_RAW_CHARS:
 		_raw_bytes = _raw_bytes.slice(_raw_bytes.size() - MAX_RAW_CHARS)
-	# Decodifica il buffer intero: un codepoint UTF-8 può arrivare in più
-	# letture, mentre convertire il singolo byte produrrebbe U+FFFD.
-	var visible := _terminal_text(_raw_bytes.get_string_from_utf8())
+	# Feed incrementale al modello di schermo. Un codepoint UTF-8 può
+	# arrivare spezzato in più letture: gli eventuali byte di coda incompleti
+	# restano in _undecoded fino al prossimo giro (decodificarli subito
+	# produrrebbe U+FFFD).
+	_undecoded.append_array(chunk)
+	var cut := _utf8_safe_length(_undecoded)
+	if cut > 0:
+		_screen.feed(_undecoded.slice(0, cut).get_string_from_utf8())
+		_undecoded = _undecoded.slice(cut)
+	var visible := _screen.text()
 	if visible.length() > MAX_VISIBLE_CHARS:
 		visible = "… output precedente omesso …\n" + visible.right(MAX_VISIBLE_CHARS)
 	_output.text = visible
 	_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
-	_detect_url(visible)
+	_detect_url(_screen.lines())
+
+
+## Lunghezza del prefisso decodificabile: si tiene indietro solo una
+## sequenza UTF-8 multi-byte troncata alla fine del buffer.
+static func _utf8_safe_length(bytes: PackedByteArray) -> int:
+	var size := bytes.size()
+	if size == 0:
+		return 0
+	var i := size - 1
+	while i >= 0 and i >= size - 4 and (bytes[i] & 0xC0) == 0x80:
+		i -= 1
+	if i < 0:
+		return size
+	var lead := bytes[i]
+	var need := 0
+	if (lead & 0x80) == 0:
+		need = 1
+	elif (lead & 0xE0) == 0xC0:
+		need = 2
+	elif (lead & 0xF0) == 0xE0:
+		need = 3
+	elif (lead & 0xF8) == 0xF0:
+		need = 4
+	else:
+		return size  # byte invalido: tanto vale decodificare tutto
+	return size if size - i >= need else i
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -341,35 +557,47 @@ func _exit_tree() -> void:
 		_thread.wait_to_finish()
 
 
-func _detect_url(text: String) -> void:
+## Ultimo URL nel flusso, ricomposto quando il wrap della pty (o il box del
+## TUI) lo spezza su più righe: il "COPIA LINK" monco mandava l'utente su un
+## link OAuth invalido (test Leone 23/07). Una riga che finisce in mezzo
+## all'URL continua nelle righe successive fatte SOLO di caratteri da URL.
+func _detect_url(lines: PackedStringArray) -> void:
 	var regex := RegEx.new()
 	if regex.compile("https?://[^\\s<>()\\[\\]{}]+") != OK:
 		return
-	var matches := regex.search_all(text)
-	if matches.is_empty():
+	var frag := RegEx.new()
+	if frag.compile("^[A-Za-z0-9%&=_.:/?#+~\\-]+$") != OK:
 		return
-	var candidate := str(matches[-1].get_string()).trim_suffix(".").trim_suffix(",")
-	if candidate == _last_url:
+	var best := ""
+	for i in lines.size():
+		var line := lines[i].strip_edges()
+		var matches := regex.search_all(line)
+		if matches.is_empty():
+			continue
+		var m: RegExMatch = matches[-1]
+		var candidate := m.get_string()
+		if m.get_end() == line.length():
+			var j := i + 1
+			while j < lines.size():
+				var cont := lines[j].strip_edges()
+				if cont == "" or frag.search(cont) == null:
+					break
+				candidate += cont
+				j += 1
+		best = candidate
+	if best == "":
 		return
-	_last_url = candidate
+	best = best.trim_suffix(".").trim_suffix(",")
+	if best == _last_url:
+		return
+	_last_url = best
 	_open_url.disabled = false
 	_copy_url.disabled = false
 
 
+## Compat per i selftest e i flussi one-shot: testo leggibile da un dump
+## grezzo, passando dal modello di schermo.
 static func _terminal_text(raw: String) -> String:
-	var text := raw.replace("\r\n", "\n").replace("\r", "\n")
-	# OSC (titolo/link terminale) e CSI (colori, cursore, clear screen).
-	var osc := RegEx.new()
-	if osc.compile("\\x1b\\][^\\x07]*(?:\\x07|\\x1b\\\\)") == OK:
-		text = osc.sub(text, "", true)
-	var csi := RegEx.new()
-	if csi.compile("\\x1b\\[[0-?]*[ -/]*[@-~]") == OK:
-		text = csi.sub(text, "", true)
-	var simple := RegEx.new()
-	if simple.compile("\\x1b[@-_]") == OK:
-		text = simple.sub(text, "", true)
-	text = text.replace(String.chr(0), "").replace("\b", "")
-	var blank := RegEx.new()
-	if blank.compile("\\n{4,}") == OK:
-		text = blank.sub(text, "\n\n\n", true)
-	return text.strip_edges()
+	var screen := TermScreen.new()
+	screen.feed(raw)
+	return screen.text()
