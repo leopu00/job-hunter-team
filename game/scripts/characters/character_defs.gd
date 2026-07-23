@@ -18,19 +18,19 @@ const AGENTS := {
 				Vector2(2690, 790), Vector2(1790, 1390), Vector2(1120, 1740),
 				Vector2(2690, 1825), Vector2(1300, 930)],
 		"chatter": [
-			"ricalibro il ritmo del team…",
-			"il weekly è al 64%, tutto in linea",
-			"nessun collo di bottiglia oggi",
+			"controllo che tutti abbiano un incarico…",
+			"il lavoro di oggi procede bene",
+			"nessun reparto ha bisogno di aiuto",
 		],
 	},
 	"scout": {
-		"name": "Lo Scout",
+		"name": "Il Ricercatore",
 		"dept": "scout",
 		"desk": 1,
 		"chatter": [
-			"sto scansionando LinkedIn…",
-			"3 board visitate nell'ultima ora",
-			"c'è una pagina careers nuova…",
+			"sto cercando nuove opportunità…",
+			"ho trovato tre aziende interessanti",
+			"questa azienda ha appena pubblicato un'offerta…",
 		],
 	},
 	"analista": {
@@ -38,37 +38,37 @@ const AGENTS := {
 		"dept": "analisti",
 		"desk": 1,  # seduta centrale del bench a muro (il tavolo lungo)
 		"chatter": [
-			"verifico lo stipendio probabile…",
-			"questo annuncio ha dati mancanti",
-			"incrocio le fonti sulla sede…",
+			"studio meglio questa opportunità…",
+			"qui mancano alcune informazioni",
+			"controllo dove si trova davvero la sede…",
 		],
 	},
 	"scorer": {
-		"name": "Lo Scorer",
+		"name": "Il Consulente",
 		"dept": "scorer",
 		"desk": 1,  # il desk_wide col monitor curvo
 		"chatter": [
-			"sto pesando i requisiti…",
-			"score in coda: 1 posizione",
-			"profilo vs annuncio: 85% di copertura",
+			"confronto questa offerta con i suoi desideri…",
+			"questa opportunità sembra promettente",
+			"qui competenze e condizioni combaciano bene",
 		],
 	},
 	"scrittore": {
-		"name": "Lo Scrittore",
+		"name": "Il Redattore",
 		"dept": "scrittori",
 		"desk": 1,
 		"chatter": [
-			"questo CV merita un attacco migliore…",
+			"questa candidatura merita un inizio migliore…",
 			"due righe in meno, il doppio del peso",
 			"su misura, mai fotocopie",
 		],
 	},
 	"critico": {
-		"name": "Il Critico",
+		"name": "Il Revisore",
 		"dept": "critici",
 		"desk": 0,
 		"chatter": [
-			"chi ha scritto questa frase? riscrivila",
+			"questa frase non è abbastanza chiara: riscrivila",
 			"un refuso qui costa un colloquio",
 			"approvato. sorprendentemente.",
 		],
@@ -98,7 +98,7 @@ const AGENTS := {
 		"workstation_key": "core:assistente",
 		"wander": [Vector2(1110, 778), Vector2(1490, 320), Vector2(1790, 1390)],
 		"chatter": [
-			"l'onboarding è completo",
+			"la presentazione dell'ufficio è completa",
 			"se hai dubbi, chiedi pure a me",
 			"tengo io il registro del team",
 		],
@@ -114,8 +114,8 @@ const AGENTS := {
 		"workstation_key": "core:mantenitore",
 		"wander": [Vector2(1727, 300), Vector2(590, 1090), Vector2(950, 1070)],
 		"chatter": [
-			"container sani, disco ok",
-			"aggiorno le dipendenze…",
+			"gli strumenti dell'ufficio sono in ordine",
+			"preparo gli aggiornamenti…",
 			"backup verificato, tutto al suo posto",
 		],
 	},
@@ -128,8 +128,8 @@ const AGENTS := {
 		"wander": [Vector2(1110, 778), Vector2(1790, 1390), Vector2(2690, 1825)],
 		"chatter": [
 			"visita di controllo agli agenti…",
-			"contesto in salute, nessun sintomo di burn",
-			"prescrivo un refresh leggero",
+			"la squadra è in salute",
+			"prescrivo una breve pausa e poi si riparte",
 		],
 	},
 	"sentinella": {
@@ -142,9 +142,9 @@ const AGENTS := {
 				Vector2(2690, 1825), Vector2(1120, 1740), Vector2(775, 820),
 				Vector2(2600, 1120), Vector2(1790, 1390)],
 		"chatter": [
-			"ronda: processi tutti vivi",
-			"bridge attivo, heartbeat regolare",
-			"nessun flap nelle sessioni",
+			"ronda completata: tutto in ordine",
+			"l'ufficio lavora regolarmente",
+			"nessun problema durante il turno",
 		],
 	},
 }
@@ -155,11 +155,11 @@ const AGENTS := {
 ## 5-6 istanze per ruolo e ogni istanza reale deve trovare posto —
 ## l'ufficio respira comunque, in scena c'è solo chi è attivo davvero.
 const DEPT_ROLES := {
-	"scout": {"slug": "scout", "label": "Scout", "workers": [0, 2, 3, 4, 5]},
+	"scout": {"slug": "scout", "label": "Ricercatore", "workers": [0, 2, 3, 4, 5]},
 	"analisti": {"slug": "analista", "label": "Analista", "workers": [0, 2, 3, 4, 5]},
-	"scorer": {"slug": "scorer", "label": "Scorer", "workers": [0, 2, 3, 4, 5]},
-	"scrittori": {"slug": "scrittore", "label": "Scrittore", "workers": [0, 2, 3, 4, 5]},
-	"critici": {"slug": "critico", "label": "Critico", "workers": [1, 2, 3, 4, 5]},
+	"scorer": {"slug": "scorer", "label": "Consulente", "workers": [0, 2, 3, 4, 5]},
+	"scrittori": {"slug": "scrittore", "label": "Redattore", "workers": [0, 2, 3, 4, 5]},
+	"critici": {"slug": "critico", "label": "Revisore", "workers": [1, 2, 3, 4, 5]},
 }
 
 static var _spawn_cache: Array = []
