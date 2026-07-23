@@ -13,10 +13,12 @@ import type {
   PositionStatus,
   Score,
 } from "@/lib/types";
+import type { Locale } from "@/i18n/config";
 import { SOFTWARE } from "./seeds/software";
 import { MARKETING } from "./seeds/marketing";
 import { FINANCE } from "./seeds/finance";
 import { DESIGN } from "./seeds/design";
+import { DEMO_I18N } from "./seeds/i18n";
 
 export type DemoPersonaKey = "software" | "marketing" | "finance" | "design";
 
@@ -308,6 +310,31 @@ export type Seed = {
   addr?: string; // office_address (con civico: il dettaglio lo mostra se contiene cifre)
 };
 
+// Overlay di traduzione della "voce degli agenti" (notes/scoreNotes/
+// criticNotes/pros/cons): la base nei seed è in italiano, gli overlay in
+// seeds/i18n/<persona>.<locale>.ts la sostituiscono per le altre lingue.
+// Annunci (title/jd/jdFull/req) restano in inglese per tutte le lingue,
+// come gli annunci reali.
+export type SeedI18nOverlay = {
+  i: number; // indice della posizione nell'array seed della persona
+  notes?: string;
+  scoreNotes?: string;
+  criticNotes?: string;
+  pros?: string[];
+  cons?: string[];
+};
+
+function applyOverlay(s: Seed, o: SeedI18nOverlay): Seed {
+  return {
+    ...s,
+    ...(o.notes != null ? { notes: o.notes } : null),
+    ...(o.scoreNotes != null ? { scoreNotes: o.scoreNotes } : null),
+    ...(o.criticNotes != null ? { criticNotes: o.criticNotes } : null),
+    ...(o.pros != null ? { pros: o.pros } : null),
+    ...(o.cons != null ? { cons: o.cons } : null),
+  };
+}
+
 // ── Seed per persona ────────────────────────────────────────────────
 // I seed vivono in ./seeds/<persona>.ts (56 posizioni ciascuno, generati
 // dal run di arricchimento del 23/07 su pattern dei dati reali).
@@ -372,9 +399,16 @@ const STATUS_RANK: Record<string, number> = {
   excluded: 2,
 };
 
-function expand(key: DemoPersonaKey, seeds: Seed[]): DemoPosition[] {
+function expand(
+  key: DemoPersonaKey,
+  seeds: Seed[],
+  locale: Locale,
+): DemoPosition[] {
   const base = LEGACY_BASE[key];
-  return seeds.map((s, i) => {
+  const ov = locale === "it" ? undefined : DEMO_I18N[key]?.[locale];
+  const ovMap = ov ? new Map(ov.map((o) => [o.i, o])) : undefined;
+  return seeds.map((raw, i) => {
+    const s = ovMap?.has(i) ? applyOverlay(raw, ovMap.get(i)!) : raw;
     const n = i + 1;
     const legacy = base + n;
     const id = `demo-${key}-${String(n).padStart(3, "0")}`;
@@ -488,13 +522,17 @@ function expand(key: DemoPersonaKey, seeds: Seed[]): DemoPosition[] {
   });
 }
 
-const cache = new Map<DemoPersonaKey, DemoPosition[]>();
+const cache = new Map<string, DemoPosition[]>();
 
-export function getDemoPositionsData(key: DemoPersonaKey): DemoPosition[] {
-  let v = cache.get(key);
+export function getDemoPositionsData(
+  key: DemoPersonaKey,
+  locale: Locale = "it",
+): DemoPosition[] {
+  const ck = `${key}:${locale}`;
+  let v = cache.get(ck);
   if (!v) {
-    v = expand(key, SEEDS[key]);
-    cache.set(key, v);
+    v = expand(key, SEEDS[key], locale);
+    cache.set(ck, v);
   }
   return v;
 }

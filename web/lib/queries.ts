@@ -1018,8 +1018,7 @@ export async function getSeenPositionIds(): Promise<Set<string>> {
     // Demo: risultano "già viste" le posizioni più vecchie di 24h, così
     // il marker "nuova" è dimostrabile senza rumore su tutta la lista.
     return new Set(
-      demo
-        .demoDashboardPositions(dp)
+      (await demo.demoDashboardPositions(dp))
         .filter((p) => p.seen)
         .map((p) => p.id),
     );
