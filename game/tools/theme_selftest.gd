@@ -12,6 +12,8 @@ func _init() -> void:
 	_check_mode(Palette.MODE_DARK)
 	Palette.set_mode(original, false)
 	TerminalTheme.reset()
+	_check_chat_text()
+	_check_emoji_fallback()
 	if _failures.is_empty():
 		print("THEME-TEST PASS")
 		quit(0)
@@ -39,6 +41,32 @@ func _check_mode(requested: String) -> void:
 			if requested == Palette.MODE_LIGHT
 			else Palette.WHITE.get_luminance() > Palette.PANEL.get_luminance(),
 			requested + ": contrasto testo/sfondo invertito")
+
+
+## Come arriva in chat quello che scrive un agente: markdown reso, a capo
+## veri anche quando il messaggio li porta come escape letterali (jht-send).
+func _check_chat_text() -> void:
+	var rich := TerminalTheme.markdown_label(
+			"Ciao!\\n\\nChe **ruolo** cerchi?", 15, Palette.BASE)
+	var body: String = rich.text
+	_assert(not body.contains("\\n"), "escape \\n non decodificato in chat")
+	_assert(body.contains("\n\n"), "a capo mancante nel testo di chat")
+	_assert(body.contains("[b]ruolo[/b]"), "grassetto markdown non convertito")
+	rich.free()
+	var right := TerminalTheme.markdown_label("ciao", 15, Palette.BASE,
+			HORIZONTAL_ALIGNMENT_RIGHT)
+	_assert(right.text.begins_with("[right]"), "messaggio utente non allineato a destra")
+	right.free()
+
+
+## Le emoji dei messaggi agente non devono cadere sui font di sistema:
+## il fallback imbarcato deve essere agganciato ai font del tema.
+func _check_emoji_fallback() -> void:
+	var regular := TerminalTheme.font(TerminalTheme.FONT_REGULAR)
+	_assert(regular.fallbacks.size() > 0, "font senza fallback emoji")
+	var emoji: FontFile = load(TerminalTheme.FONT_EMOJI)
+	_assert(emoji != null and emoji.has_char(0x1F4CE), "font emoji privo dei glifi attesi")
+	_assert(regular.has_char(0x1F4CE), "graffetta 📎 non risolta dal fallback")
 
 
 func _near(a: Color, b: Color) -> bool:
