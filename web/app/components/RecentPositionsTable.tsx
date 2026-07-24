@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { DashboardPosition } from "@/lib/queries";
 import UnseenDot from "@/app/components/UnseenDot";
 import { scoreSpectrumCss } from "@/lib/score-color";
+import { colorForFamily } from "@/lib/position-classifier";
 
 export type TableLabels = {
   title: string;
@@ -75,7 +76,108 @@ export default function RecentPositionsTable({
           {labels.viewAll}
         </Link>
       </div>
-      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+      {/* ── Card list (solo mobile) ─────────────────────────────────
+          Sotto md le sei colonne non ci stanno: comprimerle riduce
+          titolo/azienda a due lettere + ellipsis (illeggibile). Stessa
+          scelta già fatta su /positions: una card compatta per posizione
+          con gli stessi dati della riga — titolo+score, azienda+località,
+          categoria + prima colonna (timestamp score o ID). */}
+      <div className="md:hidden flex flex-col gap-2">
+        {rows.length === 0 ? (
+          <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-dim)] text-[11px]">
+            {labels.noPositions}
+          </div>
+        ) : (
+          rows.map((p) => {
+            const country = (p.loc_country ?? "").trim();
+            const city = (p.loc_city ?? "").trim();
+            const place =
+              city ||
+              country ||
+              (p.remote_type === "full_remote" ? "Remote" : "");
+            return (
+              <div
+                key={p.id}
+                className="rounded-lg border p-3"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-card)",
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  {/* SOLO il titolo è link (come su /positions): la card
+                      intera cliccabile sottolinea ogni riga su touch. */}
+                  <Link
+                    href={`/positions/${p.id}`}
+                    className="min-w-0 text-[13px] font-semibold leading-snug no-underline"
+                    style={{
+                      color: "var(--color-green)",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {p.title}{" "}
+                    <UnseenDot
+                      id={p.id}
+                      label={labels.unseen}
+                      initialSeen={p.seen}
+                    />
+                  </Link>
+                  <span
+                    className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
+                    style={{
+                      color: scoreSpectrumCss(p.score),
+                      borderColor: scoreSpectrumCss(p.score),
+                    }}
+                  >
+                    {p.score ?? "—"}
+                  </span>
+                </div>
+                <div className="mt-1 text-[11px] text-[var(--color-muted)] truncate">
+                  {p.company}
+                  {place ? ` · ${place}` : ""}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 text-[10px]">
+                  <span className="flex items-center gap-2 min-w-0">
+                    {p.role_family?.trim() && (
+                      <span className="inline-flex items-center gap-1 truncate text-[var(--color-muted)]">
+                        <span
+                          aria-hidden
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: "50%",
+                            background: colorForFamily(p.role_family.trim()),
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span className="truncate">{p.role_family.trim()}</span>
+                      </span>
+                    )}
+                  </span>
+                  {/* Stessa informazione della prima colonna della tabella:
+                      timestamp dello score, oppure ID nella variante "id". */}
+                  <span
+                    className="shrink-0 font-mono tabular-nums text-[var(--color-dim)]"
+                    suppressHydrationWarning={firstCol === "scored"}
+                  >
+                    {firstCol === "scored"
+                      ? formatScoredAt(p.scored_at)
+                      : p.legacy_id
+                        ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                        : p.id.slice(0, 8)}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* ── Tabella (da md in su) ──────────────────────────────────── */}
+      <div className="hidden md:block border border-[var(--color-border)] rounded-lg overflow-hidden">
         <table
           className="w-full table-fixed text-[12px]"
           style={{ borderCollapse: "collapse" }}
