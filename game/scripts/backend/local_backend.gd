@@ -33,9 +33,43 @@ func _ssh(command: String) -> Dictionary:
 	if argv.is_empty():
 		return {"code": -1,
 				"out": "comando host non disponibile in locale: " + command.left(60)}
-	var out: Array = []
-	var code := OS.execute("docker", argv, out, true)
-	return {"code": code, "out": prefix + "\n".join(PackedStringArray(out))}
+	# MAI OS.execute: su Windows decodifica lo stdout del figlio col codepage
+	# ANSI (cp1252), corrompendo accenti ed emoji delle risposte agente
+	# (à→Ã, 👋→ðŸ'‹ — onboarding Codex, Leone 24/07). Come _ssh_stdin_file,
+	# leggiamo i byte grezzi dal pipe e li decodifichiamo UTF-8 a mano, così il
+	# testo del container arriva intatto. read_stderr dell'ex-OS.execute =
+	# drenare anche il pipe stderr e concatenarlo.
+	var proc := OS.execute_with_pipe("docker", argv, true)
+	if proc.is_empty():
+		return {"code": -1, "out": "processo docker non avviabile"}
+	var stdout_pipe: FileAccess = proc["stdio"]
+	var stderr_pipe: FileAccess = proc["stderr"]
+	var pid := int(proc["pid"])
+	var output_bytes := PackedByteArray()
+	# Un read corto NON è EOF (stesso fix del trasporto SSH, 19/07): si legge
+	# finché il processo vive, poi si svuota il residuo dei pipe.
+	while true:
+		var chunk := stdout_pipe.get_buffer(65536)
+		output_bytes.append_array(chunk)
+		var echunk := stderr_pipe.get_buffer(65536)
+		output_bytes.append_array(echunk)
+		if chunk.size() == 0 and echunk.size() == 0:
+			if not OS.is_process_running(pid):
+				break
+			# Uscita in corso: stop() fa wait_to_finish() sul thread del poll;
+			# se restiamo appesi qui su un docker exec in volo, l'INTERA finestra
+			# si freeza finché l'exec non finisce (Leone 24/07). Molliamo:
+			# uccidiamo il processo ed usciamo subito.
+			if _stop:
+				OS.kill(pid)
+				break
+			OS.delay_msec(5)
+	stdout_pipe.close()
+	stderr_pipe.close()
+	while OS.is_process_running(pid) and not _stop:
+		OS.delay_msec(5)
+	return {"code": OS.get_process_exit_code(pid),
+			"out": prefix + output_bytes.get_string_from_utf8()}
 
 
 ## Versione locale del pipe binario usato per upload, script Python e tmux
@@ -70,9 +104,13 @@ func _ssh_stdin_file(local_file: String, command: String) -> Dictionary:
 		if chunk.size() == 0:
 			if not OS.is_process_running(pid):
 				break
+			# Uscita in corso: non tenere appesa la UI sul join (vedi _ssh).
+			if _stop:
+				OS.kill(pid)
+				break
 			OS.delay_msec(5)
 	stderr.close()
-	while OS.is_process_running(pid):
+	while OS.is_process_running(pid) and not _stop:
 		OS.delay_msec(5)
 	return {"code": OS.get_process_exit_code(pid),
 			"out": output_bytes.get_string_from_utf8()}

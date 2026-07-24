@@ -1491,11 +1491,24 @@ static func _run_ssh_stdin(vps: Dictionary, command: String,
 
 
 static func _provider_login_command(provider: String, vps: Dictionary = {}) -> String:
-	var tool := ""
+	var login := ""
 	match provider:
-		"codex": tool = "codex login --device-auth"
-		"kimi": tool = "kimi --yolo"
-		_: tool = "claude --dangerously-skip-permissions"
+		"codex": login = "codex login --device-auth"
+		"kimi": login = "kimi --yolo"
+		_: login = "claude --dangerously-skip-permissions"
+	# Il CLI del provider NON è baked nell'immagine (install lazily in
+	# /jht_home/.npm-global). Il login DEVE partire SOLO a CLI installato,
+	# altrimenti "sh: claude: not found" (Leone 24/07). Prependiamo l'install
+	# idempotente (progress a video) e col `&&` il login: install→login in
+	# un'unica sessione, ordine garantito.
+	# `sh -c` (NON `-lc`): la login shell sourcerebbe /etc/profile e RESETTA il
+	# PATH a /usr/local/bin:/usr/bin:/bin, buttando via /jht_home/.npm-global/bin
+	# dove claude è appena stato installato → "claude: not found" (verificato
+	# live 24/07). `sh -c` eredita il PATH del container (ENV Dockerfile), che
+	# include .npm-global/bin.
+	var install_id := str(PROVIDERS.get(provider, {}).get("install_id", provider))
+	var tool := "sh -c 'node /app/cli/bin/jht.js providers update " \
+			+ install_id + " && " + login + "'"
 	if vps.is_empty():
 		if OS.get_name() == "Windows":
 			# cmd.exe non ha printf: niente banner, dritto al comando.
