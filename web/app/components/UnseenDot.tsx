@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { isSeen, SEEN_EVENT } from "@/lib/seen-positions";
-import { useTheme } from "@/app/theme-provider";
 
-// I titoli delle posizioni sono verdi, quindi il badge NON può esserlo: si
-// confondeva col titolo. Ambra — l'unica tinta libera sulla riga, la scala
-// score usa verde→giallo→arancio→rosso. Literal hex e non una var CSS: una
-// variabile referenziata solo da style inline viene potata dalla build
-// (Tailwind v4 / Lightning CSS), stesso motivo di BUDGET_LINE nei grafici
-// case-studies. Su fondo chiaro serve la stessa tinta più scura per leggerla.
-const NEW_BADGE = { dark: "#f5a623", light: "#b26a00" } as const;
+// Badge pieno: i titoli delle posizioni sono verdi e un badge verde "a filo"
+// ci si confondeva dentro. Invertendolo — fondo verde, scritta scura — resta
+// nel brand ma stacca per contrasto invece che per tinta. Il testo è un
+// literal scuro (non var(--color-void), che in tema chiaro è chiarissimo): si
+// legge sia sul verde acceso del dark sia sul verde foglia del light.
+const BADGE_INK = "#08120c";
 
 type Props = {
   id: string;
@@ -28,8 +26,6 @@ type Props = {
 // non esiste in SSR e un render speculativo darebbe hydration mismatch.
 export default function UnseenDot({ id, label, initialSeen }: Props) {
   const [unseen, setUnseen] = useState(false);
-  const { resolvedTheme } = useTheme();
-  const color = NEW_BADGE[resolvedTheme] ?? NEW_BADGE.dark;
 
   useEffect(() => {
     if (initialSeen) return;
@@ -56,14 +52,13 @@ export default function UnseenDot({ id, label, initialSeen }: Props) {
       // quando il titolo ci sta tutto. In inline bordo e padding si disegnano
       // uguale; nei contenitori flex (tabelle) resta un flex item come prima.
       // In inline il box NON allarga la riga: se è più alto della line-box del
-      // titolo, l'overflow:hidden del line-clamp gli rade il bordo inferiore.
-      // Con py-[1px] e vertical-align sollevato di 1px sta dentro i ~17.9px
-      // della riga (titolo 13px × leading-snug).
-      className="inline shrink-0 self-center rounded border px-1 py-[1px] text-[8px] font-bold uppercase tracking-wider leading-none"
+      // titolo, l'overflow:hidden del line-clamp gli rade il fondo. Con
+      // py-[1px] e vertical-align sollevato di 1px sta dentro i ~17.9px della
+      // riga (titolo 13px × leading-snug).
+      className="inline shrink-0 self-center rounded px-1 py-[1px] text-[8px] font-bold uppercase tracking-wider leading-none"
       style={{
-        color,
-        borderColor: color,
-        background: `color-mix(in srgb, ${color} 12%, transparent)`,
+        color: BADGE_INK,
+        background: "var(--color-green)",
         verticalAlign: "1px",
       }}
     >
