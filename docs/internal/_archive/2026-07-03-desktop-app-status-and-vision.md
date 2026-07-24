@@ -1,5 +1,14 @@
 # 🖥️ App Desktop JHT — Stato, gap e visione (2026-07-03)
 
+> 🗄️ **ARCHIVIATO il 2026-07-25 — la visione qui descritta si è realizzata, ma
+> altrove.** Il "centro di controllo" immaginato per l'app Electron è diventato
+> l'ufficio Godot (`game/`) con la migrazione nativa del 2026-07-19
+> (`32225cb7`), che ha rimosso `desktop/`. Anche la premessa della § 1.3
+> ("stessa dashboard su web e desktop, servita in locale dal container") è
+> caduta: dal 2026-07-23 il container non serve più Next.js e il browser vede
+> solo il cloud. Vale come storia di come ci siamo arrivati; per lo stato
+> attuale vedi `game/docs/` e `docs/internal/ops/release.md`.
+
 > **Documento di stato + roadmap.** Fotografa dove l'app desktop (Electron, `desktop/`)
 > funziona oggi, cosa manca, cosa resta da testare, e la visione di prodotto che
 > vogliamo raggiungere. Scritto in occasione del reclutamento di sviluppatori

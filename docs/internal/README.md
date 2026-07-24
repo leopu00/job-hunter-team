@@ -35,6 +35,8 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 | File | Topic |
 |---|---|
 | [`cloud-sync-architecture.md`](architecture/cloud-sync-architecture.md) | Sync DB locale ↔ Supabase: cosa va in cloud, macro-event design |
+| [`2026-07-22-web-demo-mode-and-welcome.md`](architecture/2026-07-22-web-demo-mode-and-welcome.md) | 🎭 Demo mode cloud (4 personas × 56 posizioni × 7 lingue) + wizard `/welcome`: stato nei cookie, ramo demo in testa a `lib/queries.ts`, scritture no-op |
+| [`2026-07-21-web-sync-realtime-rework.md`](architecture/2026-07-21-web-sync-realtime-rework.md) | ⚡ Sync web Realtime-first: niente polling dal browser, backflow delle reply cloud→VPS, notifiche configurabili |
 | [`2026-06-20-data-sync-and-dashboard-split-design.md`](architecture/2026-06-20-data-sync-and-dashboard-split-design.md) | 🔄 Sync on-access + "Sync now" (no polling), event-log push, corsia richieste async, split dashboard locale/cloud |
 | [`daemon-sync-redesign.md`](architecture/daemon-sync-redesign.md) | 🔌 Daemon: letture Supabase dirette (Fase 1) + event-driven Realtime (7/7 dietro flag `JHT_REALTIME_SYNC`); niente Fase 3 |
 | [`2026-06-15-interaction-planes-redesign-design.md`](architecture/2026-06-15-interaction-planes-redesign-design.md) | Piani di interazione: web cloud read-only, desktop cockpit (locale + tunnel SSH), Telegram opzionale |
@@ -158,6 +160,8 @@ Note storiche superate o consolidate altrove. Conservate per git-blame e ricerca
 | File | Motivo archive |
 |---|---|
 | [`_archive/BACKLOG-2026-07-03-frozen.md`](_archive/BACKLOG-2026-07-03-frozen.md) | Snapshot integrale del BACKLOG pre-ristrutturazione (1487 righe): ogni [TAG] chiuso si risolve qui |
+| [`_archive/2026-07-03-desktop-app-status-and-vision.md`](_archive/2026-07-03-desktop-app-status-and-vision.md) | Stato + visione dell'app Electron: la visione si è realizzata nell'ufficio Godot, `desktop/` è stato rimosso il 2026-07-19 |
+| [`_archive/2026-07-03-desktop-app-state-and-roadmap.md`](_archive/2026-07-03-desktop-app-state-and-roadmap.md) | Gemello del precedente (snapshot del giorno del lancio): decisioni ancora valide, dettagli tecnici Electron superati |
 | [`_archive/2026-06-14-piano-dse3-parteB.md`](_archive/2026-06-14-piano-dse3-parteB.md) | Piano dse3 Parte B — bozza mai implementata, superata |
 | [`_archive/2026-05-20-supabase-perf-backlog.md`](_archive/2026-05-20-supabase-perf-backlog.md) | Backlog perf Supabase — P0-P2 applicati 2026-05-31, resta solo monitoring pool (nel BACKLOG index) |
 | [`_archive/2026-06-29-coordinator-burn-kimi-vs-codex.md`](_archive/2026-06-29-coordinator-burn-kimi-vs-codex.md) | Snapshot congelato dell'indagine coordinator-burn; conclusioni quantitative superate dal living doc `architecture/kimi-vs-codex-economics.md` |

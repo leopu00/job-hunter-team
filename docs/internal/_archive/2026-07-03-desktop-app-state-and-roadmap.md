@@ -1,5 +1,14 @@
 # 🖥️ App Desktop — stato, gap e roadmap (2026-07-03)
 
+> 🗄️ **ARCHIVIATO il 2026-07-25 — descrive l'app Electron, che non esiste più.**
+> La migrazione nativa del 2026-07-19 (`32225cb7`) ha eliminato l'intero albero
+> `desktop/`: l'unica applicazione desktop è l'ufficio Godot in `game/`. Restano
+> validi il *ragionamento* e le decisioni del giorno del lancio (CLI-only,
+> ritiro del download desktop); sono superati tutti i dettagli tecnici
+> (electron-builder, DMG/AppImage/deb, dashboard locale servita dal container).
+> Stato attuale: `game/docs/GDD.md`, `game/docs/FIRST-RUN.md`,
+> `game/docs/ROADMAP.md` e `docs/internal/ops/release.md`.
+
 > **Contesto.** Snapshot preso il giorno del lancio su Reddit per reclutare
 > contributor. **Decisione del giorno:** l'app desktop **non è ancora promossa** →
 > per il lancio pubblico si espone **solo la CLI**; il download desktop dal web va
