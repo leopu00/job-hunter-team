@@ -4,11 +4,10 @@ import { useEffect, useState } from "react";
 import { isSeen, SEEN_EVENT } from "@/lib/seen-positions";
 
 // Badge pieno: i titoli delle posizioni sono verdi e un badge verde "a filo"
-// ci si confondeva dentro. Invertendolo — fondo verde, scritta scura — resta
-// nel brand ma stacca per contrasto invece che per tinta. Il testo è un
-// literal scuro (non var(--color-void), che in tema chiaro è chiarissimo): si
-// legge sia sul verde acceso del dark sia sul verde foglia del light.
-const BADGE_INK = "#08120c";
+// ci si confondeva dentro. Invertendolo — fondo verde, scritta bianca — resta
+// nel brand ma stacca per contrasto invece che per tinta. Literal e non
+// var(--color-white), che in tema chiaro è quasi nero.
+const BADGE_INK = "#ffffff";
 
 type Props = {
   id: string;
