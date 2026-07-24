@@ -2,6 +2,8 @@
 
 This folder gathers the security analysis of the repo and the pre-open-source hardening plan.
 
+> ⏱️ **Read `04-threat-model.md` first for the current architecture.** The audit documents (`01`, `02`, `03`, `06`) are a **dated snapshot of April 2026**: they describe an Electron launcher opening a Next.js dashboard on `localhost:3000`, and much of their reasoning (CSRF on loopback, the local-token cookie, the Electron dependency chain) is about a surface that no longer ships — the Electron tree was removed on 2026-07-19 and the container stopped serving the web app on 2026-07-23. The findings and their fixes remain valid history; the **architecture** they assume does not. Only `04-threat-model.md` is kept current (v0.2, 2026-07-25).
+
 ## Index
 
 | File | Purpose |
