@@ -7,8 +7,79 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-### Fixed
+**The native-application cycle** — 2026-07-06 → 2026-07-25, ~500 commits. The desktop surface moved from an Electron launcher wrapping a web dashboard to a **native Godot office**; the browser is now cloud-only. Three user-visible removals are listed under *Breaking changes* below — read those first if you are upgrading an existing install.
+
+### 💥 Breaking changes
+
+- **Electron desktop launcher removed.** The whole `desktop/` tree is gone (−35k lines); the supported desktop application is the Godot office in [`game/`](game/), built by `.github/workflows/release.yml` for macOS (signed + notarized `.zip`), Windows (NSIS `.exe`) and Linux (`.tar.gz`). Release version consistency is now checked against `package.json` + `game/project.godot` + `game/export_presets.cfg` — see [`docs/internal/ops/release.md`](docs/internal/ops/release.md).
+- **Local web dashboard on `:3000` retired.** The container no longer serves Next.js: no `EXPOSE 3000`, no `ports:` in `docker-compose.yml`, no dashboard child process in `jht pid1`. Local and VPS interaction happen in the native app (`docker exec` / SSH); the browser only ever talks to the cloud deployment (jobhunterteam.ai, authenticated). `jht dashboard` still exists but prints a pointer and exits 0.
+- **`/onboarding` removed from the web app.** Onboarding is a first-run experience of the native office; the cloud app opens at `/dashboard`, and new cloud users get the `/welcome` wizard (see *Demo mode* below) instead.
+
+### 🖥️ Native desktop application (Godot 4.7)
+
+- **Feature-complete migration.** Setup wizard, provider login through an embedded console, local/VPS container lifecycle, candidate profile, working hours, email and Telegram configuration, cloud sync, positions/statistics/applications/map views, per-agent pages and observability are all native. The office is a live view of the real team: agents are the real roster, the paper flow tracks real pipeline counters, transitions and chat come from the running team.
+- **Onboarding.** Assistant-driven first run (title → wizard → office) with an escorted tour: the Assistant walks the user around the departments with a quest tracker, addresses them by name, allows free roaming, and adapts to the state already configured. Offline showroom mode for demoing without a container.
+- **Observability.** Usage window (5-hour and weekly), per-agent burn, per-role CPU/RAM series over SSH sampled by a dedicated vitals collector, activity LEDs driven by real CPU, agent history charts with deep links.
+- **Documents.** In-game CV/PDF preview from the output archive, folder reveal, artifact fetch channel over the backend bus.
+- **Art & world.** Painted portrait sets for the full roster, painterly sprite sheets (walk/work/sit) for every department, five-department layout with per-department rugs, glass partitions that agents can walk through, day/night cycle on local time, switchable light interface theme, automatic graphics calibration that keeps text readable on any resolution.
+- **Platform work.** Windows-compatible quoting and pty allocation for the embedded terminal, native Windows Docker setup flow, NSIS installer, faster installer startup, VRAM-compressed world art and mipmaps, and a per-frame retessellation fix that made weak GPUs usable.
+- **Chat delivery** goes through `jht-tmux-send` instead of a blind paste + Enter, so messages survive composer quirks of the provider CLIs.
+
+### 🌐 Web & cloud dashboard
+
+- **Demo mode + `/welcome` wizard.** A new cloud user picks a language, then either pairs a real team or explores a full read-only product with one of **4 personas** (software, design, marketing, finance), **56 positions each**, localized in all **7 languages**. The persona lives in the `jht_demo_persona` cookie; every query branches to a static dataset and every write API is a no-op on demo ids. Design record: [`docs/internal/architecture/2026-07-22-web-demo-mode-and-welcome.md`](docs/internal/architecture/2026-07-22-web-demo-mode-and-welcome.md).
+- **Realtime-first sync.** Client polling is gone on the cloud deployment: live data and messages arrive over Supabase Realtime, with graceful degradation when a subscription fails. Configurable browser notifications (messages + position rules) on top of the new `notification_prefs` table. Design record: [`docs/internal/architecture/2026-07-21-web-sync-realtime-rework.md`](docs/internal/architecture/2026-07-21-web-sync-realtime-rework.md).
+- **`/swipe` triage.** Mobile-first rapid judgment over the scored backlog: 4-level interest scale plus free (or dictated) comment, re-judgeable stamps, prev/next navigation, deck sort modes, collapsible filters with per-chip counts and dual-range histograms, on-demand JD summaries.
+- **Position page rework.** Overview card with score, per-dimension score rationale from the Scorer, company card with logo, location card (map pin, exact clickable address, HQ for full-remote roles), self-explanatory action rows, prev/next navigation, mobile card list below `md`.
+- **Feedback that can be withdrawn.** Clicking the active verdict again retracts it (`clear` event, append-only log); excluding a position asks for a reason and keeps that reason visible afterwards.
+- **Map.** Pins never move with zoom: exact office coordinates when known, a fixed north grid for positions without a location, city/country bundles at low zoom, and full-remote roles resolved onto the map with their own styling.
+- **Messages.** Dedicated `/messages` page (Assistant/Mentor/Captain sections), navbar messenger drawer, exact unread counts, history endpoint, inline markdown, and reply/ack backflow from the cloud down to the local SQLite.
+- **Team board.** `team_directives` — the user's standing orders — are editable from the dashboard, mirrored to Supabase and re-read by the Captain at every wake (C-21).
+- **Settings & dashboard.** Account, language and salary-currency sections on cloud; salaries follow the preferred display currency; dashboard decluttered around a newest-scored table with a single score-colour spectrum shared by every visual.
+
+### 🤖 Agents & runtime
+
+- **Scorer refuses to score without a candidate profile.** New deterministic gate (`shared/skills/profile_gate.py`) plus RULE-01 step 0 in all 7 prompt locales: a missing or empty `candidate_profile.yml` stops scoring instead of producing meaningless numbers. Covered by `tests/test_score_profile_gate.py`.
+- **Single-home content contract for position cards** (Analyst + Scorer, 7 locales): every fact lives in exactly one card, per-dimension score breakdown is mandatory, the redundant pro/con card is gone.
+- **Company logos.** New `logo-extraction` duty for Analysts, `shared/skills/logo_fetch.py` (35 KB cap, data-URI), maintenance queue, cloud sync of the logo columns.
+- **Enrichment savings policy** — a code-enforced spend brake (C-18) with matching awareness in the Captain and Analyst prompts.
+- **Scout self-loop sourcing** (one position per iteration, no external "continue"), Doctor session refresh gated on measured context (>50%) instead of session age, deterministic cold-archive flow for monitoring logs, cloud-sync failure detection and escalation by the Maintainer.
+- **Watchdog / pid1 credential markers** now accept vendor provider names (`openai`, `anthropic`) — the same time bomb was fixed in the watchdog on 2026-07-18 and in `pid1` on 2026-07-23, where it had been silently preventing auto-start.
+
+### 🗄️ Database & sync
+
+- Migrations **054–059**: `team_directives` (team board), `position_views` (cross-device seen state), `companies.logo*`, `pending_messages` merge-upsert that stops the VPS push from clobbering web-written replies, `notification_prefs` + positions in the Realtime publication, `position_feedback` `clear` action.
+- **Cloud-sync resilience**: chunked push and cursor unfreezing after the 2026-07-15 HTTP 413 incident ([postmortem](docs/internal/postmortems/2026-07-15-cloud-sync-413-freeze.md)), `sync_completed_at` acknowledged only on a fully successful push, server-side `sync_requested_at` stamp with a no-op skip in the merge RPC.
+- **Cloud builds never look local**: `isLocalRequest`/`workspaceHasDb` are false on the Vercel deployment regardless of request origin, so a cloud page can never read a stale local `jobs.db`.
+
+### 🐳 Container, CLI & install
+
+- **Runtime image 7.2 GB → 3.2 GB (−55%)**: `/app` dropped from the final `chown -R` (a duplicated ~1.7 GB layer), no `npm ci --prefix web` now that the container does not run Next.js, and a `.dockerignore` that keeps `game/`, `docs/`, `tests/` and `e2e/` out of the build context.
 - **Windows (Docker Desktop/WSL2):** the container could not write to the bind-mounted `/jht_home` / `/jht_user` (root-owned mounts + non-root `jht` user → `Permission denied` on startup). A new entrypoint wrapper probes the mounts and repairs their ownership through the existing sudo whitelist — agents still run as `jht`, no behavior change on macOS/Linux.
+- `jht pid1` keeps itself alive explicitly (it used to be anchored to the dashboard child) and took over the orphan bridge pid/state cleanup.
+- File-bridge poller enabled by default on the VPS to serve on-demand CV/attachment downloads from the web.
+- **The installers are English at the source.** The 2026-07-03 translation pass had been applied only to the published mirror `web/public/install.sh`, so source and mirror had drifted apart *in language*; and `install.ps1` had never been translated at all, so Windows users got Italian output from the public installer. Both are now English in `scripts/`, with `web/public/` a byte-identical mirror (`scripts/sync-public-installers.sh`, enforced by `tests/test_public_installers_sync.py`).
+
+### 🔒 Security & dependencies
+
+- Next.js 16.2.9 → 16.2.11 with a `sharp ^0.35.3` override (July-2026 advisories), plus fixes for the high-severity `brace-expansion` and `js-yaml` DoS advisories.
+- Routine dependency bumps: `@supabase/supabase-js`, `@supabase/ssr`, `tailwindcss`, `eslint-config-next`, `actions/checkout` 4→7, `actions/setup-node` 4→7, `grammy` in the test runner.
+
+### 🧪 Tests, CI & tooling
+
+- **pytest now runs in CI.** The Python suite (447 passing, 62 skipped) was runnable only by hand, which is why the installer-mirror drift went unnoticed for three weeks; `.github/workflows/test.yml` gained a `pytest` job (with `npm ci` in `cli/`, since two test files shell out to the Node CLI) and the root `npm test` now runs both runners.
+- Godot self-tests wired into `release.yml` and `game.yml`: scene import, nav grid, speech bubble, pipeline queue, embedded terminal, plus VPS-contract, pipeline and doctor headless scenarios and a smoke test of the exported binary.
+- `tests/test_sync_supabase.py` builds its database with the real `shared/skills/_db.ensure_schema()` instead of a hand-copied DDL — the copy had gone stale against the `companies.logo*` columns and was failing on healthy code.
+
+### 📚 Documentation
+
+User-facing guides were updated in the same commit as the `:3000` retirement (QUICKSTART, CLI-REFERENCE, VPS-SETUP, AI-AGENT-INTEGRATION and the public *dashboard-and-results* page in 7 languages). The rest of the documentation had fallen three weeks behind and was realigned on 2026-07-24/25:
+
+- [`docs/internal/ops/release.md`](docs/internal/ops/release.md) rewritten for the Godot pipeline — it still told the maintainer to bump `desktop/package.json` and to expect electron-builder artifacts, which would have failed on the first CI job. The macOS signing playbook in `MAINTAINERS.md` went with it (signing is mandatory now, not "deferred post-beta").
+- [`04-threat-model.md`](docs/security/04-threat-model.md) → v0.2: the document meant to become the public `SECURITY.md` still modelled "Electron + a dashboard on localhost:3000". The April audit documents around it are now labelled as the dated snapshot they are.
+- Design record written for [demo mode and `/welcome`](docs/internal/architecture/2026-07-22-web-demo-mode-and-welcome.md); the site cookies are declared on the public privacy page in all 7 languages.
+- Planning docs realigned: `BACKLOG.md` (superseded entries closed, newly-surfaced debt added), `ROADMAP.md`, and the beta coverage matrix.
+- Housekeeping: the two 2026-07-03 Electron status notes archived, `docs/review-log.json` resynced (20 dead entries dropped, everything since May added, 251 files with a description each), 18 links to a deleted document repaired, and three registered CLI commands documented (`working-hours`, `profile validate`, `tools`).
 
 ## [0.2.0] — 2026-07-03
 
