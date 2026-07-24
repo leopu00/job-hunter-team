@@ -1,5 +1,11 @@
 # 🖥️ 2026-05-17 — Team dashboard & 5-window timeline (Capitano on-demand v3)
 
+> 🗄️ **Nota (2026-07-25).** I riferimenti `bug #N` di questa nota puntavano a
+> `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`, rimosso il 2026-06-16
+> (commit `2adbdf03`, pulizia doc obsoleti). I numeri restano come identificatori
+> storici; l'esito di quei bug è nel
+> [BACKLOG congelato](../../internal/_archive/BACKLOG-2026-07-03-frozen.md).
+
 Terza sessione di grafici on-demand del Capitano (post-reset finestra Kimi
 13:11 UTC). Salto qualitativo importante rispetto alle sessioni precedenti:
 
@@ -176,7 +182,7 @@ fonte non risponde.
   — 4 grafici budget iniziali (notte 16→17 mag), include `budget_chart_late.png`.
 - [`docs/sessions/2026-05-17-pipeline-snapshot/`](../2026-05-17-pipeline-snapshot/)
   — 8 grafici pipeline + 2 mappe geografiche (notte 16→17 mag).
-- [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md)
+- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`
   — bug #9 (apply), #12 (Scout learning), #14 (state-event log), #16
   (auto-report), #17 (Capitano passivo) tutti confermati o rinforzati
   da questa sessione.

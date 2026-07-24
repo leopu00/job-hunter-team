@@ -86,11 +86,6 @@
       "last_review": null
     },
     {
-      "path": "agents/maestro/maestro.md",
-      "description": "🧙‍♂️ Maestro — career-coach pattern-detector (planned, voce Gandalf)",
-      "last_review": null
-    },
-    {
       "path": "agents/capitano/missions/thermostat-test.md",
       "description": "🌡️ Missione opt-in test termostato senza Sentinella",
       "last_review": null
@@ -197,7 +192,7 @@
     },
     {
       "path": "docs/about/VISION.md",
-      "description": "Vision long-term, Maestro 🧙‍♂️, \"AI on the side of workers\"",
+      "description": "Vision long-term, Maestro 🧙‍♂️, \"AI on the side of workers",
       "last_review": null
     },
     {
@@ -246,16 +241,6 @@
       "last_review": null
     },
     {
-      "path": "docs/guides/quickstart.md",
-      "description": "Guida quickstart utente (3 path: desktop, repo, one-liner)",
-      "last_review": null
-    },
-    {
-      "path": "docs/guides/cli-install.md",
-      "description": "Spec dell'installer one-liner `install.sh` (AS-IS)",
-      "last_review": null
-    },
-    {
       "path": "docs/guides/AI-AGENT-INTEGRATION.md",
       "description": "Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor)",
       "last_review": null
@@ -263,51 +248,6 @@
     {
       "path": "docs/guides/BETA.md",
       "description": "Onboarding beta tester + matrice coverage 10 celle",
-      "last_review": null
-    },
-    {
-      "path": "docs/guides/feedback-ticketing.md",
-      "description": "Runbook pagina /feedback + API `/api/feedback`",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/MAINTAINERS.md",
-      "description": "🔒 Riferimento maintainer (Supabase, Vercel, OAuth, secret)",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/INFRA.md",
-      "description": "Diagramma deployment (container + storage + sync opzionale)",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/release.md",
-      "description": "Procedura cut-release (tag vX.Y.Z + GH workflow)",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-01-bridge-and-token-monitoring.md",
-      "description": "Analisi bridge V6 + token-meter, roadmap V7",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-01-team-session-report.md",
-      "description": "Report sessione team 30 apr/1 mag UTC",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-03-rate-kimi-weights.md",
-      "description": "Calibrazione empirica pesi rate Kimi K2",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-04-vps-deployment-design.md",
-      "description": "Design deploy VPS (3 path: SSH manuale / web pairing / launcher)",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/TODO-bridge-v7.md",
-      "description": "📌 Punch list bridge V7 + token monitor (entry point)",
       "last_review": null
     },
     {
@@ -346,28 +286,8 @@
       "last_review": null
     },
     {
-      "path": "docs/sessions/long-session-2026-05-04/README.md",
-      "description": "Report sessione 10h+ con 2 finestre Claude back-to-back",
-      "last_review": null
-    },
-    {
       "path": "supabase/README.md",
       "description": "Schema multi-tenant Postgres + RLS (BYO backend)",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-06-host-container-split.md",
-      "description": "⚙️ Split host/container — CLI wrapper + dev compose, design e razionale",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-06-launch-infra-costs.md",
-      "description": "💰 Stima costi infra per public launch (Vercel/Supabase/domain)",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-06-prompt-decomposition-skill-vs-manual.md",
-      "description": "🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math",
       "last_review": null
     },
     {
@@ -377,47 +297,12 @@
     },
     {
       "path": "docs/guides/VPS-SETUP.md",
-      "description": "",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-06-agent-prompts-i18n.md",
-      "description": "",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-06-vps-providers-research.md",
-      "description": "",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/2026-05-09-experimentation-overview-15d.md",
-      "description": "",
+      "description": "☁️ VPS setup — JHT on Hetzner Cloud — Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS",
       "last_review": null
     },
     {
       "path": "docs/sessions/README.md",
-      "description": "",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/codex-10h-2026-05-08/README.md",
-      "description": "",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/codex-12h-2026-05-08-pm/README.md",
-      "description": "",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/codex-12h-2026-05-09-am/README.md",
-      "description": "",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/experimentation-overview-2026-04-25-to-2026-05-09/README.md",
-      "description": "",
+      "description": "📊 Session reports — JHT team experimentation — Indice cronologico dei report HTML interattivi prodotti durante le",
       "last_review": null
     },
     {
@@ -493,6 +378,881 @@
     {
       "path": "agents/_skills/spawn-agent/SKILL.md",
       "description": "Spawn agente via start-agent.sh + kick-off + verifica boot (Capitano-only)",
+      "last_review": null
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/beta_feedback.md",
+      "description": "Template GitHub issue per il feedback dei beta tester",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/agent-emergency/SKILL.md",
+      "description": "Capitano — gestisce un agente sospettato BLOCCATO IN UN LOOP ATTIVO (vivo e che genera turni, ma ripete lo stesso…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/blind-review/SKILL.md",
+      "description": "The Critic's full review protocol — receive PDF + JD, run a blind review (no profile access), produce a…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/captain-diary/SKILL.md",
+      "description": "Daily handoff diary for the Captain.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/circles-and-sources/SKILL.md",
+      "description": "Strategy map for what to search WHERE, derived entirely from the candidate profile.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/cv-disk-audit/SKILL.md",
+      "description": "Healthcheck periodico (Dottore) per riconciliare CV su disk e cv_pdf_path nel DB.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/daily-restart-wave/SKILL.md",
+      "description": "Pre-emptive mass-restart of every team agent once per 24h for context freshness.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/email-monitor/SKILL.md",
+      "description": "Day-start sourcing dalla casella email DEDICATA del team (l'utente vi inoltra i propri job alert).",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/expiration-tracking/SKILL.md",
+      "description": "Estrae deadline dal JD (helper deadline_extract) e produce alert utente quando una candidatura READY sta per…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/feedback-query/SKILL.md",
+      "description": "Read user feedback (like/dislike/hide/star) for a given position from the cloud.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/format-time/SKILL.md",
+      "description": "Convert UTC timestamps to the user's timezone before showing them in chat, charts, Telegram, or any user-facing…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/game-reply-options/SKILL.md",
+      "description": "Offer 2-5 context-specific clickable reply buttons in the JHT game chat when they genuinely make the user's next…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/location-enrichment/SKILL.md",
+      "description": "Standardize positions.location free-text into structured loc_/work_/role_family columns BEFORE marking any…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/logo-extraction/SKILL.md",
+      "description": "Extract the company logo for a company in the companies table and store it as a small base64 data-URI (max ~35KB,…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/maintainer-sweep/SKILL.md",
+      "description": "Lo sweep di manutenzione INFRA del Mantenitore 👷‍♂️ (gemello del Dottore, scope infrastruttura non agenti).",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/mentor-output/SKILL.md",
+      "description": "How the Mentor speaks once a pattern from mentor-patterns has crossed the threshold.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/mentor-patterns/SKILL.md",
+      "description": "The five patterns the Mentor hunts in the records to decide WHEN to speak.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/notify-user/SKILL.md",
+      "description": "Notify the user with automatic fallback.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/office-geocoding/SKILL.md",
+      "description": "Geocode the precise office building (lat/lon/address) for a position AFTER location-enrichment has populated…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/parse-cv/SKILL.md",
+      "description": "Pre-process a CV/profile file (PDF, DOCX, ODT, RTF) into plain text BEFORE feeding it to the LLM context.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/position-insert/SKILL.md",
+      "description": "The 5-gate sequence the Scout runs for EACH candidate position before INSERTing into positions: dedup → link…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/profile-schema/SKILL.md",
+      "description": "Single source of truth dello SCHEMA del candidate_profile.yml — il formato canonico che TUTTO il team produce e…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/recheck-liveness/SKILL.md",
+      "description": "Verifica se un annuncio di lavoro è ANCORA APERTO senza falsi-aperti.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/resilience/SKILL.md",
+      "description": "Resilience — never give up silently on a broken tool — When a mission-critical tool fails, NEVER degrade silently or report \"queue exhausted\"/new=0.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/salary-estimate/SKILL.md",
+      "description": "Stima salariale gerarchica per il Scorer (bug 27).",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/scaling-calc/SKILL.md",
+      "description": "🎚️ scaling-calc — salire di marcia per gradini, non in 6ª — Calibrazione graduale del roster — misura il burn di 1 worker, calcola quanti worker e con quale throttle servono…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/scout-coord/SKILL.md",
+      "description": "Boot-time coordination protocol between multiple Scouts.",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/scout-web-access/SKILL.md",
+      "description": "Strato web-access cross-provider per gli Scout (F-2).",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/session-refresh/SKILL.md",
+      "description": "Refresh sessione agente (solo Dottore): gate sul contesto misurato >50%, non sull'età della sessione",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/spawn-doctor/SKILL.md",
+      "description": "Spawn a fresh DOTTORE on-demand when you (Capitano/Assistente/Sentinella/Mentor) need an immediate health-check…",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/telegram-send/SKILL.md",
+      "description": "Send a message to the user via Telegram (outbound).",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/user-reply-check/SKILL.md",
+      "description": "Read user replies that arrived via the web dashboard (fallback channel when Telegram was down/not configured).",
+      "last_review": null
+    },
+    {
+      "path": "agents/_team/role-taxonomy.md",
+      "description": "🗂️ role_family — emergent taxonomy MODEL (no hardcoded categories) — What role_family is.",
+      "last_review": null
+    },
+    {
+      "path": "agents/mantenitore/mantenitore.md",
+      "description": "👷‍♂️ MANTENITORE — infra health + standardization — You are the Mantenitore (Maintainer) of the JHT team.",
+      "last_review": null
+    },
+    {
+      "path": "agents/mentor/mentor.md",
+      "description": "🧙‍♂️ MENTOR — career mentor — You are Mentor — career mentor to the user (the human owner of the profile, not an agent).",
+      "last_review": null
+    },
+    {
+      "path": "assets/README.md",
+      "description": "🖼️ assets — repo-level static assets — Shared static assets used in repo-level docs and the project landing.",
+      "last_review": null
+    },
+    {
+      "path": "cli/README.md",
+      "description": "⌨️ cli — the jht command-line interface — The jht CLI is the primary control surface for Job Hunter Team.",
+      "last_review": null
+    },
+    {
+      "path": "docs/README.md",
+      "description": "📚 Documentation — Job Hunter Team — Top-level index of the documentation.",
+      "last_review": null
+    },
+    {
+      "path": "docs/about/README.md",
+      "description": "🎯 docs/about — what JHT is, and whether it works — Public-facing documentation for anyone evaluating Job Hunter Team.",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/0005-provider-risk-and-mitigation.md",
+      "description": "0005 — Provider risk and mitigation — JHT runs on third-party LLM subscriptions (Claude Max, Codex Plus/Pro, Kimi Pro) consumed by autonomous agents in…",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/0006-user-choice-container-runtime-macos.md",
+      "description": "0006 — User chooses the container runtime on macOS (Colima or Docker Desktop) — ADR-0001 mandated Colima as the only container runtime on macOS, because",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/CLI-INSTALL.md",
+      "description": "📦 CLI install — jobhunterteam.ai/install.sh — This document describes how the one-liner installer works today",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/CLI-REFERENCE.md",
+      "description": "⌨️ CLI Reference — jht — Systematic reference of every jht command.",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/EMAIL-FORWARDING.md",
+      "description": "📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/FEEDBACK-TICKETING.md",
+      "description": "💬 Feedback Ticketing — Operational runbook for the /feedback page and the /api/feedback API.",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/QUICKSTART.md",
+      "description": "🚀 Quickstart — Get the team running in about 10 minutes, depending on the path you pick.",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/README.md",
+      "description": "📘 docs/guides — user & operator guides — How to install, run, and operate Job Hunter Team.",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/VPS-SETUP-WIZARD.md",
+      "description": "VPS setup from the native office — This is the current non-terminal path for running Job Hunter Team on an",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/2026-07-11-team-directives-bacheca.md",
+      "description": "📋 Bacheca del team — direttive permanenti dell'utente (2026-07-11) — Stato: fondamenta su dev4 (tabella + skill).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/README.md",
+      "description": "📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-05-19-dashboard-routing-cases.md",
+      "description": "🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-05-20-world-globe-feature.md",
+      "description": "🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-05-25-work-hours-design.md",
+      "description": "🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-13-fix-batch-recheck-pacing-design.md",
+      "description": "🔧 Fix-batch 2026-06-13 — recheck quality · scout-resume · pacing · non_producing · totalQuota — Stato: approvato dall'utente (\"implementa tutto\"), distribuito a 3.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-13-maintainer-toolhealth-resilience-design.md",
+      "description": "👷‍♂️ Mantenitore 👷‍♂️ + Tool-Health + Resilience — Design unificato — Data: 2026-06-13 · Autori: dev1, dev2, dev3 (panel) · Stato: approvato dall'utente, in implementazione",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md",
+      "description": "Interaction Planes — Redesign (2026-06-15) — Design / decision doc.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-15-lean-comms-redesign.md",
+      "description": "📡 Lean-comms redesign — pull-default, push solo per l'importante — Data: 2026-06-15 · Owner spec: dev1 · Implementazione: dev1 + dev2 + dev3 (insieme,",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-20-data-sync-and-dashboard-split-design.md",
+      "description": "🔄 Data sync + dashboard split — design (2026-06-20) — Design / decision doc.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-20-taxonomy-brain-driven-redesign.md",
+      "description": "🧠 Tassonomia role_family resa BRAIN-DRIVEN — recon, redesign, deploy — Data: 2026-06-20 · Stato: ✅ IMPLEMENTATO + DEPLOYATO + betaA RESETTATO ·",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-25-bridge-to-sentinella-pull-model.md",
+      "description": "🔀 Pacing: bridge → Sentinella unica, Capitano pull-on-demand — Data: 2026-06-25 · Branch: dev2 · Stato: progettato + implementato (gated: merge utente → redeploy)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-26-capitano-graceful-scaling-paced-consumption.md",
+      "description": "🎚️ Scaling graduale del Capitano + consumo spalmato sulla giornata (design 2026-06-26) — Movente (osservato dal vivo su betaB/Kimi, 2026-06-26): quando il team va ON, il",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-28-weekly-pacing-redesign.md",
+      "description": "📐 Weekly pacing redesign — verdetto imperativo, valuta token, debt-aware (2026-06-28) — Due doc gemelli scritti lo stesso giorno sulla stessa causa-radice: vel_weekly è rumoroso perché il contatore provider è…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-06-29-status-weekly-aware.md",
+      "description": "🧭 Status bi-dimensionale (5h ∧ weekly) — pacing weekly-aware — Data: 2026-06-29 · Branch: dev2 · Stato: prototipo committato, NON deployato",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-07-21-web-sync-realtime-rework.md",
+      "description": "⚡ Web sync Realtime-first + backflow messaggi — design & decision record (2026-07-21) — Decision doc + postmortem.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-07-22-web-demo-mode-and-welcome.md",
+      "description": "🎭 Demo mode + wizard /welcome — design & decision record (2026-07-22 → 07-23) — Design lock.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/analista-expansion-design.md",
+      "description": "🔬 Design-doc — Espansione ruolo ANALISTA — Stato: DRAFT — schema da lockare PRIMA di codare (design-doc-first, ordine lead dev3).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/bot-telegram.md",
+      "description": "💬 JHT bot Telegram — design, scelta canale, ingest documenti — Doc consolidato il 2026-05-13 unificando",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/bridges.md",
+      "description": "I tre bridge deterministici (role-map) — Mappa autorevole dei bridge Python deterministici (no-LLM) che girano setsid",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/candidate-profile-cloud-sync-redesign.md",
+      "description": "🧬 Candidate profile — cloud sync redesign — Design doc — da validare prima di implementare.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/cloud-sync-architecture.md",
+      "description": "☁️ Cloud sync — architecture & status — Living doc.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/context-watchdog-spec.md",
+      "description": "🩺 Agent context saturation + reboot periodico via Dottore — Status: MVP SHIPPED 2026-05-31 (daily-restart-wave) — PoC validato 2026-05-20.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/daemon-sync-redesign.md",
+      "description": "🔌 Daemon sync — da polling Vercel a Supabase diretto + event-driven — Documento consolidato del redesign del sync daemon↔cloud (tre note datate 24–26/06, qui integrate senza modifiche al contenuto).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/dottore-redesign-design.md",
+      "description": "🩺 Design-doc — Ridisegno ruolo DOTTORE (context-refresh) — Stato: DRAFT — schema/flow da lockare prima di codare (design-doc-first).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/file-bridge-on-demand.md",
+      "description": "📎 File bridge on-demand — architettura & stato — Living doc.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/kimi-vs-codex-economics.md",
+      "description": "💰 Economia Kimi vs Codex — budget · coordinatori · prezzo (living doc) — Living doc (non datato): riflette lo stato corrente dell'analisi economica dei",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/onboarding-flow.md",
+      "description": "🚪 Onboarding flow JHT — Stato: design lock — sequenza ufficiale di onboarding utente.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/skill-distribution.md",
+      "description": "🛠️ Skill distribution — launcher-distributed isolation — Moved verbatim from docs/about/ROADMAP.md in the 2026-07-03 docs restructure (the ROADMAP keeps only the strategic view).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/usage-monitoring-redesign-design.md",
+      "description": "📡 Design-doc — Ridisegno monitoraggio usage (Sentinella ↔ Capitano) — Stato: DRAFT (visione utente 2026-06-13).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-03-rate-kimi-weights.md",
+      "description": "⚖️ 2026-05-03 — Pesi rate-limit Kimi K2: analisi empirica e calibrazione — Il rate budget Kimi K2 e' guidato da input_tokens + output_tokens,",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-06-agent-prompts-i18n.md",
+      "description": "🌍 Agent prompts i18n — policy lockata 2026-05-13 — Convenzione + infrastruttura di startup per la risoluzione multi-lingua dei file d'identità agenti (agents/<role /<role .md).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-06-prompt-decomposition-skill-vs-manual.md",
+      "description": "🧩 Prompt decomposition — CLAUDE.md vs Skill vs Manual — 📅 2026-05-06 — analisi originata dal refactor di agents/capitano/capitano.md (564 righe, ~14k token).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-23-case-study-staging.md",
+      "description": "📋 Case Study Staging — Run VPS1 (Codex) + Run Kimi K2 — Purpose: documento di consolidamento per promuovere a docs/about/RESULTS.md come Case Study 2 e 3.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-23-location-playbook.md",
+      "description": "📍 Location enrichment — playbook per gli analisti — Stato: bozza per simulazione",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-23-sim-1-location-enrichment-report.md",
+      "description": "🧪 Simulazione 1 — location enrichment con Capitano + 3 analisti — Container: jht-sim-d2 (isolato, ~/.jht-sim-d2/)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-23-sim-2-location-enrichment-report.md",
+      "description": "🧪 Simulazione 2 — location enrichment con i fix applicati — Container: jht-sim-d2 (resettato dopo sim 1, stesso dataset 206 record vergini)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-23-sim-3-location-enrichment-report.md",
+      "description": "🧪 Simulazione 3 — location enrichment su profilo Python Developer — Container: jht-sim-d2 (reset totale via sim-reset.sh)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-25-case-studies-page-handoff.md",
+      "description": "🤝 Case studies page — sessione 2026-05-23 → 2026-05-25 handoff — Stato di /case-studies dopo ~3 giorni di lavoro intenso.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-25-sim-4-office-geocoding-report.md",
+      "description": "🧪 Simulazione 4 — office geocoding precise + 6 analisti — Data: 2026-05-25 (avvio 22:45 del 2026-05-24, chiusura ~01:50 del 2026-05-25)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-05-25-sim-5-office-geocoding-mario-rossi-report.md",
+      "description": "🧪 Simulazione 5 — office geocoding su owner (Marton / Tech Writer) — Container: jht-sim-d2 (reset totale, candidate_profile.yml ripristinato su Marton Kovacs)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-06-13-kimi-quota-tiers-discovery.md",
+      "description": "🔍 Kimi Code — i tre tier di quota e il buco totalQuota (scoperta 2026-06-13) — Contesto: deploy del team su VPS betaB (Kimi, 203.0.113.20) con l'immagine",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/landing-image-prompts.md",
+      "description": "🎨 Prompt immagini — Sito pubblico — Raccolta dei prompt per tutte le immagini del sito pubblico (landing + pagine",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/INFRA.md",
+      "description": "🏗️ Infrastructure — Job Hunter Team — 📐 High-level deployment diagram.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/MAINTAINERS.md",
+      "description": "👥 Maintainers Reference — 🔒 Internal information for project maintainers.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/access-and-credentials.md",
+      "description": "🔐 Access & Credentials — guida consolidata — Last updated: 2026-05-26.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/release.md",
+      "description": "🚢 Release — Cutting a release means pushing a vX.Y.Z tag that points at the production HEAD.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/triage.md",
+      "description": "🐛 Issue triage workflow — Internal contract for how we handle incoming issues post-launch.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/vps.md",
+      "description": "☁️ JHT su VPS — design, providers, install UX — Doc consolidato il 2026-05-13 unificando",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-05-21-halt-weekly-incident.md",
+      "description": "🛑 HALT-WEEKLY incident — 2026-05-21 — Manovra di emergenza sulla VPS1 (203.0.113.20, Hetzner CPX22) per evitare la saturazione del weekly cap Codex ProLite…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-05-21-vps-bootstrap-fixes-validated.md",
+      "description": "✅ 2026-05-21 — VPS bootstrap bugs FIXED & VALIDATED su VPS fresh — I 3 bug bloccanti dello startup VPS documentati il 2026-05-20 (docs/internal/_archive/2026-05-20-vps-bootstrap-bugs.md) sono…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md",
+      "description": "📉 2026-05-21 — VPS1 first run (35h) postmortem — Consolida 3 inchieste sullo stesso run VPS1 (2026-05-19 20:29 → 2026-05-21 07:20 UTC, ≈ 35h)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md",
+      "description": "💸 Vercel quota exhaustion — jobhunterteam.ai down (HTTP 402) — Snapshot: 2026-05-22 mattina.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-03-beta-vps-session-corrections.md",
+      "description": "🔧 Correzioni — sessione beta tester VPS (2026-06-03) — Findings raccolti durante il primo avvio del team su VPS Hetzner di un beta",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-03-diagnosi-pacing-weekly.md",
+      "description": "🔬 DIAGNOSI COLLABORATIVA — pacing weekly (2026-06-03/04) — CASO CHIUSO — Diagnosi condivisa multi-agente (master + dev1 + dev2 + dev3).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-04-p7-weekly-reset-non-rilevato.md",
+      "description": "⏰ P7 — Reset settimanale non rilevato dagli agenti (2026-06-04) — Finding emerso dopo la chiusura della diagnosi P1-P6",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-04-scout-geo-concentration.md",
+      "description": "🌍 Scout geo-concentration — over-concentrazione su una città (2026-06-04) — Analisi su run beta live (profilo finance, target EU, provider Codex).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-07-capitano-runaway-scaling-postmortem.md",
+      "description": "📈 Capitano runaway-scaling — postmortem 2026-06-07 — Sulla VPS beta di betaA (203.0.113.10, ubuntu-2gb-hil-1-betaC, profilo betaA@example.com) il Capitano ha scalato il team a 14…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-11-overspawn-rootcause.md",
+      "description": "🔍 Incident & Root-Cause — Overspawn + saturazione weekly Codex (VPS betaC) — VPS: 203.0.113.10 (ubuntu-2gb-hil-1-betaC, Hetzner Hillsboro, 2 GB)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-13-osservazione-no-intervento.md",
+      "description": "🛑 REGOLA FERREA — Mai intervenire in un team in osservazione/simulazione — 2026-06-13.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-14-betaA-risveglio-dottore-mantenitore-observation.md",
+      "description": "👀 Osservazione — Risveglio betaA 2026-06-14 (Dottore + Mantenitore in azione) — Tipo: osservazione read-only (regola ferrea: si annota, non si corregge a caldo).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-14-betaB-team-panoramica.md",
+      "description": "📊 Panoramica — team betaB (Kimi), 13–14 giugno 2026 — Retrospettiva dell'osservazione in sola lettura del team betaB (VPS 203.0.113.20, modello Kimi K2.7) dopo il deploy del fix-batch.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-14-burst-transient-dead-letter-finding.md",
+      "description": "🔬 burst_transient (P3) — finding RIDIMENSIONATO: scatta tardi, NON è un dead-letter (backlog prio BASSA) — Data: 2026-06-14 · Trovato osservando: betaB (Kimi) post-deploy fix-batch · Owner fetta: shared/skills/weekly_pace.py (dev3) ·…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-14-weekly-bind-not-enforced-finding.md",
+      "description": "🔬 Weekly-bind non enforced: il pacing target è l'arco-5h, mai il weekly (backlog, PRIO ALTA) — Data: 2026-06-14 (notte) · Trovato osservando: betaB (Kimi) post-fix, pipeline piena · Confermato design: dev1 · Lane fix:…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-15-coordinator-burn-consumo-finding.md",
+      "description": "🔥 Coordinator-burn — perché il consumo settimanale sale anche a settimana appena resettata — Data: 2026-06-15 · Lane: dev1 (osservazione read-only) · VPS: betaB (Kimi, domanda",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-16-betaA-taxonomy-collapse-finding.md",
+      "description": "🕳️ Tassonomia emergente — collasso a 1 categoria su betaA (finding) — ⚠️ AGGIORNAMENTO 2026-06-20 — leggere PRIMA ../architecture/2026-06-20-taxonomy-brain-driven-redesign.md.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-17-betaB-kimi-weekly-burn-finding.md",
+      "description": "🔥 betaB/Kimi — weekly esaurito in 2 giorni: backfill storm post-deploy (finding) — Data: 2026-06-17 · VPS: betaB (203.0.113.20, provider kimi, user_id <redacted ) ·",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-21-betaA-daily-actions-drop-finding.md",
+      "description": "📉 betaA/Codex — perché le azioni medie/giorno sono scese (finding) — Data: 2026-06-21 · VPS: Codex 203.0.113.10 (utente betaA, beta-1) ·",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-21-throttle-floor-5min-analysis.md",
+      "description": "Throttle floor a 5min + ladder — analisi storica e modifica (2026-06-21) — Stato: implementato su dev1 (codice + guida agenti).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-22-kimi-weekly-frontload-investigation.md",
+      "description": "Indagine multi-agente (15 agenti, dibattito a round con avvocato del diavolo + giudice, consenso 0.93).",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-24-betaA-weekly-milestones.md",
+      "description": "🏆 betaA/Codex — chiusura del weekly al 99% e poi al 100% (milestone, 18–24/06) — Stessa osservazione in due atti, sola lettura, comportamento da preservare: il team Codex chiude il cap settimanale al massimo…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-24-betaB-kimi-fresh-weekly-monitor.md",
+      "description": "👁️ betaB/Kimi — monitor weekly su account fresco (live observation) — Avvio: 2026-06-24 ~19:45 CEST · VPS: betaB (203.0.113.20, provider kimi,",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-24-vercel-cost-analysis-and-sync-fix.md",
+      "description": "📊 Analisi costi Vercel + fix schema sync_requested_at (2026-06-24) — Sessione del 2026-06-24.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-25-desktop-team-integration-findings.md",
+      "description": "🖥️ Desktop ↔ Team — scoperte e decisioni (sessione 2026-06-24/25) — Documento delle scoperte fatte testando dal vivo l'app desktop con il team in",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-25-rollout-observation-betaB.md",
+      "description": "🔭 Osservazione rollout betaB/Kimi — push→pull + daily guardrail (2026-06-25 sera) — Data: 2026-06-25, shift notturno (19:30 Roma start) · VPS: betaB/Kimi (203.0.113.20)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-26-sentinella-capitano-relationship-live.md",
+      "description": "🛰️🧭 Rapporto Sentinella ↔ Capitano — osservazione dal vivo (2026-06-26) — VPS: betaA/Codex (203.0.113.10) · Finestra: mattina, ciclo pulito (apertura 06:00 UTC)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md",
+      "description": "🔴 betaC — sentinel-bridge morto dalle 08:00, nessun auto-recovery — Data: 2026-06-27 ~16:00 UTC",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-28-betaD-vps-budget-burn-investigation.md",
+      "description": "🔥 Indagine consumo budget — VPS betaD (Kimi) — 2026-06-28 — Tipo: osservazione + finding per il codice (nessun intervento a runtime — regola \"sola lettura sulle simulazioni\").",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-06-30-reset-always-full-date.md",
+      "description": "🗓️ Reset sempre con DATA completa — mai un orario orfano — Data: 2026-06-30 · Branch: dev2 · Stato: committato, NON deployato",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-07-01-betaD-daily-hardstop-validated.md",
+      "description": "Daily hard-stop ( 2) — validato end-to-end sul team di betaD (beta-3) — Data: 2026-07-01 · VPS: beta-3 ubuntu-4gb-fsn1-b3 (203.0.113.40, betaD — luxury",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md",
+      "description": "🚨 Il Capitano Kimi a thinking-OFF viola il gate writer-on-demand (beta-3, 2026-07-01) — 📎 Verità consolidata (economia + decisione thinking-flag) nel living doc",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-07-01-cv-quality-findings-beta3.md",
+      "description": "📄 Qualità CV — 4 difetti trovati sui 30 CV di beta-3 (2026-07-01) — Contesto: i 30 CV+CL prodotti (a torto) dal team beta-3 — profilo betaD, Luxury Hospitality (vedi…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-07-02-daily-halt-standby-leak.md",
+      "description": "Daily hard-stop — prima accensione live + falla dello standby (betaB/Kimi, 2026-07-02) — Prima volta che il daily hard-stop ([BRIDGE ALERT] ⛔ DAILY-CAP SFORATO in",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-07-02-kimi-codex-token-forensics.md",
+      "description": "📊 Kimi vs Codex — misura del consumo token (2026-07-02) — Due misure eseguite nella stessa giornata: la prima (token-meter euristico, full-history) ribalta le stime della linea…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-07-15-cloud-sync-413-freeze.md",
+      "description": "🔌 Cloud-sync congelato (cursor + push 413) — postmortem 2026-07-15 — Su una VPS di produzione a nodo singolo, la dashboard web è rimasta ferma per ~14 ore senza che nessuno se ne accorgesse: il…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-07-18-provider-vendor-enum-config-ready.md",
+      "description": "🧨 Timebomb config_ready: nome-vendor vs nome-CLI del provider — postmortem 2026-07-18 — Una VPS di produzione (team su Anthropic/Claude) è rimasta con la pipeline morta per ~44 ore senza che nessuno se ne…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-05-23-position-classifier-llm-roadmap.md",
+      "description": "🏷️ Roadmap: classificatore posizioni → LLM-driven (no hardcoded taxonomy) — Owner: team backend / data",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-06-05-pacing-migration-plan.md",
+      "description": "⏱️ Piano di migrazione pacing — completare il passaggio al modello weekly-aware — Stato: Phase 0 + Phase 1 IMPLEMENTATE · 2026-06-05 (su master, da validare con simulazione su VPS nuova prima di considerarle…",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-06-06-idle-enrichment-roadmap.md",
+      "description": "🧠 Idle Enrichment — usare il tempo morto del team per arricchire il DB — Stato: 💡 idea / roadmap (non implementato)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-06-20-proj-volatile-pacing-todo.md",
+      "description": "📐 proj volatile nel pacing — da rifinire (TODO, NON ancora toccato) — Data: 2026-06-20 · Stato: 🟡 DEFERRED di proposito (sistema delicato, esperimenti live in",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-06-25-pacing-future-ideas.md",
+      "description": "💭 Pacing — idee di sofisticazione (questioni APERTE, future) — Data: 2026-06-25 · Stato: discusse, NON implementate — parcheggiate per dopo.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-06-30-B1-deterministic-pacing-idea.md",
+      "description": "🅱️ B1 — Pacing deterministico nel bridge (IDEA futura, NON decisa) — Data: 2026-06-30 · Stato: 💭 parcheggiata — possibile implementazione futura, non schedulata, non validata.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/MINOR-TRACKER.md",
+      "description": "🪛 Minor tracker — note, debt, fix piccoli — File di tracciamento per cose da fare/migliorare/controllare che NON sono blocker pre-launch.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/db-schema-optimization.md",
+      "description": "🗄️ Database schema optimization — plan (idea, not scheduled) — Moved from docs/about/ROADMAP.md in the 2026-07-03 docs restructure.",
+      "last_review": null
+    },
+    {
+      "path": "docs/launch/demo-storyboard.md",
+      "description": "🎬 JHT 30-second demo — storyboard + recording script — Linked from BACKLOG.md item [JHT-LAUNCH-03] (blocker",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-04-25-experimentation-overview-to-2026-05-09/README.md",
+      "description": "🧪 Sperimentazione JHT — panoramica 15 giorni (2026-04-25 → 2026-05-09) — Report HTML \"meta\" che aggrega 15 giorni di sperimentazione del team",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-08-codex-10h/README.md",
+      "description": "🔵 Codex monitoring — 10h snapshot (2026-05-08 mattina) — Primo report HTML interattivo prodotto dopo che il team JHT e' stato",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-08-codex-12h-pm/README.md",
+      "description": "🔵 Codex monitoring — 12h snapshot (2026-05-08 PM) — Report HTML 12h del pomeriggio del 8 maggio.",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-09-codex-12h-am/README.md",
+      "description": "🔵 Codex monitoring — 12h snapshot (2026-05-09 AM) — Report 12h del mattino del 9 maggio.",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-budget-windows/README.md",
+      "description": "💰 2026-05-17 — Budget windows Kimi: 2 finestre consecutive, entrambe in target — Sessione operativa: il team Job Hunter Team ha lavorato per 2 finestre Kimi",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-pipeline-snapshot/README.md",
+      "description": "📈 2026-05-17 — Pipeline snapshot charts (Capitano on-demand) — Seconda sessione di grafici on-demand del Capitano (post chiusura finestra",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-team-dashboard/README.md",
+      "description": "🖥️ 2026-05-17 — Team dashboard & 5-window timeline (Capitano on-demand v3) — Terza sessione di grafici on-demand del Capitano (post-reset finestra Kimi",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-vps-health/README.md",
+      "description": "🩺 2026-05-17 — Health audit VPS + container (snapshot 14:09 UTC) — Audit operativo richiesto durante la sessione test e2e Path 2.",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-vps-path2-e2e/README.md",
+      "description": "🚀 Test E2E setup VPS Path 2 (2026-05-15 → 2026-05-17) — Sessione di validazione end-to-end del Path 2 (Desktop + VPS remota Hetzner)",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-18-capitano-zombie-night/README.md",
+      "description": "🌙 Post-mortem — Capitano zombie night (17-18 maggio 2026) — Sintesi in 1 riga: il Capitano è morto nella notte (kimi CLI crashato dentro al pane tmux), e nessun automatismo l'ha…",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-18-fix-effectiveness-review/README.md",
+      "description": "📊 Review effectiveness fix — 18 maggio 2026 — Sintesi in 1 riga: i fix delle ultime 48h sono un successo netto — EMERGENZA Sentinella −96%, URG −71%, FREEZE −82%;",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-18-sentinella-severity-analysis/README.md",
+      "description": "🚨 Sentinella — analisi \"troppo severa?\" (post Bug 24) — Data: 2026-05-18 16:50 CEST",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-18-supabase-disk-io-investigation/README.md",
+      "description": "🔥 Supabase Disk IO Budget — investigazione e piano fix — Trigger: email Supabase Team \"Your project is depleting its Disk IO Budget\" (project ref smittwvohsnwwwisqdrh)",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-18-weekly-budget-analysis/README.md",
+      "description": "📊 Analisi consumo weekly Kimi — 18 maggio 2026 — Sintesi in 1 riga: 1% di una finestra Kimi (5h) ≈ 0.20% del weekly budget.",
+      "last_review": null
+    },
+    {
+      "path": "e2e/README.md",
+      "description": "🧪 e2e — end-to-end tests (Playwright) — Browser-driven end-to-end tests for the Job Hunter Team web dashboard.",
+      "last_review": null
+    },
+    {
+      "path": "game/PROMPT.md",
+      "description": "PROMPT — Prototipo videogioco \"JHT: The Office\" (esperienza gamificata di Job Hunter Team) — Il progetto game/ è ora l'unica applicazione desktop di Job Hunter Team.",
+      "last_review": null
+    },
+    {
+      "path": "game/README.md",
+      "description": "Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux.",
+      "last_review": null
+    },
+    {
+      "path": "game/assets/gen-art/LOG.md",
+      "description": "🎨 gen-art — log dell'Art Director (mac-leone:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro",
+      "last_review": null
+    },
+    {
+      "path": "game/docs/ANALISI-GIOCHI.md",
+      "description": "Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace.",
+      "last_review": null
+    },
+    {
+      "path": "game/docs/ASSETS.md",
+      "description": "Pipeline asset personaggi — Sprite in-world (SVG a layer componibili)",
+      "last_review": null
+    },
+    {
+      "path": "game/docs/DATA-ADAPTER.md",
+      "description": "Data adapter — contratto fra gioco e dati del team — Il gioco non conosce Supabase né la dashboard: parla solo con l'autoload",
+      "last_review": null
+    },
+    {
+      "path": "game/docs/FIRST-RUN.md",
+      "description": "First-run conversation contract — The office must be understandable before Docker or an LLM is available.",
+      "last_review": null
+    },
+    {
+      "path": "game/docs/GDD.md",
+      "description": "JHT: The Office — current product design — The Godot application is the only desktop client for Job Hunter Team.",
+      "last_review": null
+    },
+    {
+      "path": "game/docs/RESEARCH-DOSSIER.md",
+      "description": "Game Research Dossier — \"The Box\" (versione gamificata di Job Hunter Team) — Materiale di supporto per le sessioni che sviluppano game/ (branch work3-dev1).",
+      "last_review": null
+    },
+    {
+      "path": "game/docs/ROADMAP.md",
+      "description": "Native application roadmap — The Electron-to-Godot migration, live data views, embedded console and",
+      "last_review": null
+    },
+    {
+      "path": "game/docs/SPRITES.md",
+      "description": "Sprite agenti — contratto spritesheet (v1, 2026-07-11) — Gli agenti in-world passano dagli SVG a parti (CharacterRig) a spritesheet",
+      "last_review": null
+    },
+    {
+      "path": "scripts/README.md",
+      "description": "🐚 scripts — setup, install & dev tooling — Bash/PowerShell scripts for installing, developing, releasing, and simulating",
+      "last_review": null
+    },
+    {
+      "path": "scripts/case-study-extract/README.md",
+      "description": "Case study VPS extraction toolkit — Read-only dump of an entire JHT VPS run for offline analysis.",
+      "last_review": null
+    },
+    {
+      "path": "shared/README.md",
+      "description": "🧩 shared — shared core library — Cross-cutting logic shared across the CLI, TUI, agents, and monitoring stack.",
+      "last_review": null
+    },
+    {
+      "path": "tests/js/tasks/_disabled/README.md",
+      "description": "Disabled test files — These 38 test files reference components, API routes, or layout",
+      "last_review": null
+    },
+    {
+      "path": "tui/README.md",
+      "description": "⌨️ tui — terminal UI — Terminal interface for Job Hunter Team: drives the team, streams agent activity,",
+      "last_review": null
+    },
+    {
+      "path": "web/README.md",
+      "description": "🌐 web — dashboard (Next.js) — The Job Hunter Team web dashboard: positions, scoring, map/globe, team telemetry,",
       "last_review": null
     }
   ]

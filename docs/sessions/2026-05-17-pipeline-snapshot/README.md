@@ -1,5 +1,11 @@
 # 📈 2026-05-17 — Pipeline snapshot charts (Capitano on-demand)
 
+> 🗄️ **Nota (2026-07-25).** I riferimenti `bug #N` di questa nota puntavano a
+> `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`, rimosso il 2026-06-16
+> (commit `2adbdf03`, pulizia doc obsoleti). I numeri restano come identificatori
+> storici; l'esito di quei bug è nel
+> [BACKLOG congelato](../../internal/_archive/BACKLOG-2026-07-03-frozen.md).
+
 Seconda sessione di grafici on-demand del Capitano (post chiusura finestra
 Kimi 22:11→03:11 UTC). Tema: **visualizzazione stato pipeline**, non più
 budget. L'utente ha iterato 4 volte sullo stesso grafico per arrivare alla
@@ -46,7 +52,7 @@ architetturale del DB (vedi `2026-05-17-team-strategy-bugs.md` bug #14).
 > hanno superato la verifica (scored + writing + ready + excluded)."*
 
 **Conclusione dell'utente**: dovremmo **loggare anche il cambio di stato**.
-Vedi bug #14 in [`2026-05-17-team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md).
+Vedi bug #14 in `2026-05-17-team-strategy-bugs.md`.
 
 ## I 6 PNG, in dettaglio
 
@@ -183,5 +189,5 @@ verranno potate quando il container si riavvia):
 
 - [`docs/sessions/2026-05-17-budget-windows/`](../2026-05-17-budget-windows/) —
   prima sessione grafici on-demand (budget windows). Stesso pattern.
-- [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md) —
+- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` —
   bug #14 (state transitions log) emerso da questa sessione.
