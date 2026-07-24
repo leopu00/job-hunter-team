@@ -42,6 +42,15 @@ type Props = {
   onToggle?: (key: string) => void;
 };
 
+// La lista scorre dentro la card. Il tetto max-h serve sotto lg: lì l'altezza
+// della card non è imposta da nessuno (la griglia della dashboard usa
+// auto-rows-[260px] solo da lg in su), quindi con maxRows=100 le righe si
+// srotolavano tutte a schermo invece di scrollare nella loro box. Da lg in su
+// comanda di nuovo il parent. overscroll-contain: su iOS lo scroll di fine
+// lista non trascina la pagina.
+const LIST_CLASS =
+  "flex-1 min-h-0 max-h-[300px] lg:max-h-none overflow-y-auto overscroll-y-contain space-y-1.5 pr-1";
+
 export default function LocationBarList({
   items,
   title,
@@ -77,10 +86,7 @@ export default function LocationBarList({
           {emptyLabel}
         </div>
       ) : (
-        <ul
-          className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1"
-          onMouseLeave={() => setHovered(null)}
-        >
+        <ul className={LIST_CLASS} onMouseLeave={() => setHovered(null)}>
           {visible.map((d) => {
             const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
             const isHover = hovered === d.key;
