@@ -169,12 +169,14 @@ for try in $(seq 1 "$attempts"); do
   sleep 1
   pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
   case "$pane" in
-    *"$signature"*|*"Pasted text"*|*"pasted text"*)
+    *"$signature"*|*"Pasted text"*|*"pasted text"*|*"Pasted Content"*|*"pasted content"*)
       # Testo visibile nel prompt (match diretto del signature) OPPURE la TUI
-      # claude ha COLLASSATO un paste multi-riga in "[Pasted text +N lines]"
-      # (il signature non comparirebbe mai → senza questo ramo l'Enter non
-      # verrebbe inviato e il messaggio resterebbe appeso). In entrambi i casi
-      # il testo è nel buffer di input → submit.
+      # ha COLLASSATO un paste multi-riga in un placeholder: Claude Code lo
+      # chiama "[Pasted text +N lines]", OpenAI Codex "[Pasted Content N chars]"
+      # (il signature non comparirebbe mai → senza questi rami l'Enter non
+      # verrebbe inviato e il messaggio resterebbe appeso nel composer, con
+      # l'agente che non parte mai — onboarding Codex rotto, Leone 24/07). In
+      # tutti i casi il testo è nel buffer di input → submit.
       sleep 0.3
       tmux send-keys -t "$session" Enter
       # Kimi: con solo Enter il messaggio puo' restare accodato in pending
@@ -191,6 +193,18 @@ for try in $(seq 1 "$attempts"); do
   # Testo perso. Casi: (a) il typing ha fatto partire un turno → il busy-check
   # in cima alla prossima iterazione lo cattura e aspetta; (b) la TUI e' in boot
   # o ha un modal aperto che ha mangiato i keystroke. Pausa e ritenta.
+  #
+  # Modal di primo avvio che mangia i keystroke (es. Claude Code v2.1.x "Try
+  # the new fullscreen renderer?", theme-picker, "what's new", update-prompt):
+  # il pane NON e' busy e il testo non compare. Mandiamo Esc — il "cancel"
+  # generico che chiude QUALSIASI prompt senza confermarne una scelta (MAI
+  # Enter, che selezionerebbe il default: sul fullscreen sarebbe "Yes" → attiva
+  # l'alternate screen e rompe capture-pane). Poi il typing riparte alla
+  # prossima iterazione. Robusto e future-proof per claude/codex/kimi, a
+  # prescindere da quale nuovo prompt introducano (Leone 24/07).
+  if ! _pane_busy "$pane"; then
+    tmux send-keys -t "$session" Escape 2>/dev/null || true
+  fi
   sleep 1.5
 done
 
