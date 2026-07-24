@@ -22,12 +22,14 @@
 
 ## 🌐 Web & cloud sync
 
-- 🟡 **[JHT-INTERACTION-PLANES]** — the 2026-06-15 redesign (desktop cockpit + read-only web) is largely shipped (TELEGRAM-OPTIONAL, WEB-READONLY gating, DATA-SYNC, DASHBOARD-SPLIT, VPS-TUNNEL MVP, poll fold-in). Open residuals: **[JHT-DESKTOP-COCKPIT]** native terminal/tray/notifications polish · **[JHT-VPS-TUNNEL]** in-app remote terminal, upload over tunnel, tunnel status indicator · **[JHT-WEB-READONLY]** `pending-messages/{ack,reply}` + `profile-assistant/chat` lanes · **[JHT-DASHBOARD-SPLIT]** minor mixed-page buttons + set `NEXT_PUBLIC_JHT_DEPLOY=cloud` on Vercel (user action) · **[JHT-CLOUD-INTERACTIVE-RETIRE]** retire `team_commands` once the web feeder is gone. Design doc: `docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`.
+- 🟡 **[JHT-INTERACTION-PLANES]** — the 2026-06-15 redesign is shipped and then some: the native migration (2026-07-19) and the retirement of the local `:3000` dashboard (2026-07-23) closed the "two dashboards" ambiguity outright. Open residuals: **[JHT-DESKTOP-COCKPIT]** native tray/notifications polish · **[JHT-VPS-TUNNEL]** in-app remote terminal, upload over tunnel, tunnel status indicator · **[JHT-CLOUD-INTERACTIVE-RETIRE]** retire `team_commands` once the web feeder is gone. Closed since: `pending-messages/{ack,reply}` (implemented, demo-aware), and `NEXT_PUBLIC_JHT_DEPLOY` on Vercel (a server-side fallback now infers `cloud` from the `VERCEL` env var, so a missing variable no longer degrades to local behaviour). Design doc: `docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`.
+- 🔴 **[JHT-WEB-LOCAL-ROUTES-ORPHANED]** — **28 API routes under `web/app/api/` still shell into the container** (`runBash`: team start/stop, terminal, agent control, sentinel, `profile-assistant/chat`, …). Since the container stopped serving Next.js they are unreachable in production from either plane: no shell on Vercel, no Next.js in the container. They still ship in the Vercel bundle and still count as attack surface in every audit. Decide per route: delete, or keep explicitly for `npm run dev:host` development only.
 - ⬜ **[JHT-REALTIME-SCALE]** — event-driven sync is live and degrades gracefully; scale refinements for many users (reconnect-rate monitor, Realtime connection ceiling, thundering herd, unified auth, tunable parachute).
 - ⬜ **[JHT-CLOUDSYNC-01]** — remaining P0 flow-correctness items; living doc: `docs/internal/architecture/cloud-sync-architecture.md` § Pending.
 - ⬜ **[JHT-ONBOARDING-04]** — periodic agent-results push.
+- 🟡 **[JHT-WEB-DEMO]** — demo mode + `/welcome` shipped 2026-07-22/23 ([design record](docs/internal/architecture/2026-07-22-web-demo-mode-and-welcome.md)). Open: no e2e spec covers `/welcome` or the demo branch (`JHT_WEB_DEMO_PERSONA` exists to make them testable), and nothing checks that the 4 seeds still carry every field the pages read — a new field silently renders a hole in the demo.
 - 🟠 **[JHT-CASE-STUDIES-WEB]** — publish the Kimi weekly-distributed run (data collected, processing pending) and the Claude Max re-run (with proper instrumentation); optional charts (team efficiency, Kimi burn sparkline, per-day timeline).
-- ⬜ **[JHT-WEB-02-CHECKSUM]** — SHA256 checksums on the download page.
+- ⬜ **[JHT-WEB-02-CHECKSUM]** — SHA256 checksums for the release artifacts. Reframed 2026-07-25: `/download` no longer resolves GitHub assets (it hands out the CLI one-liner), so the checksums belong to the release notes / GitHub Release body, not to the page.
 - ⬜ **[JHT-SETUP-LOCAL-FIRST]** — re-elevate Local PC to a first-class path; align execution-mode copy.
 
 ## 🖥️ Applicazione nativa Godot
@@ -40,8 +42,9 @@
 - ⬜ **[JHT-CLOUD-RESTORE]** — automatic bootstrap pull on an empty container after login.
 - ⬜ **[JHT-CLOUD-SYNC-THEME]** — theme/settings from localStorage to a synced `user_settings` table.
 - ⬜ **[JHT-DESKTOP-06]** — "dedicated computer" mode (JHT on a LAN PC via SSH/mDNS); unify with the VPS tunnel path.
-- ⬜ **[JHT-DESKTOP-07]** — container serves `next start` instead of `next dev`.
-- 🟡 **[PACK-INSTALLER-SIZE]** — misurare e ottimizzare gli export Godot sui tre sistemi.
+- 🟡 **[PACK-INSTALLER-SIZE]** — misurare e ottimizzare gli export Godot sui tre sistemi. Il container è già stato dimezzato (7.2 → 3.2 GB, 2026-07-24); resta da misurare il peso degli export sui tre sistemi.
+
+> `[JHT-DESKTOP-07]` ("container serves `next start` instead of `next dev`") è stato **chiuso per superamento** il 2026-07-23: il container non avvia più Next.js in nessuna modalità.
 
 ## 🤖 Team & agents
 
@@ -76,6 +79,7 @@
 - 🟡 **[BUG-INSTALL-BRANCH-MASTER-DEFAULT]** — `install.sh` still fetches runtime files from `master` when installed from a dev branch (mostly fixed).
 - 🟡 **[JHT-CLI-WIN-NATIVE]** — Windows-native CLI shipped; E2E validation pass remaining.
 - 🟡 **[JHT-INSTALL-SPLIT]** — host/container split partially done.
+- 🔴 **[JHT-E2E-STALE]** — the 78 Playwright specs in `e2e/` run in no workflow and have not been touched since 2026-07-03: they know nothing about `/welcome`, demo mode, `/swipe`, the messenger drawer or the reworked position page. Either wire them into CI against a preview deployment, or prune them to the set that is actually maintained — a suite nobody runs is worse than no suite, because it reads as coverage. (The Python suite went into CI on 2026-07-24; vitest and the Godot self-tests were already there.)
 
 ## 📦 Docs & launch assets (maintainer)
 
