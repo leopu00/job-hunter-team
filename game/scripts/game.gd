@@ -77,6 +77,31 @@ var _gfx_fps_sum := 0.0
 var _gfx_samples := 0
 var _gfx_done := false
 
+const PIXEL_CFG := "user://graphics.cfg"
+
+## Fattore di riduzione del rendering del MONDO (1 = nativo, 2 = metà lato,
+## 3 = un terzo). Il mondo finisce in un SubViewport ingrandito con filtro
+## nearest: a shrink 2 la GPU riempie un quarto dei pixel e l'immagine
+## diventa dichiaratamente pixel-art. La UI non passa di qui e resta nitida.
+## Precedenza: JHT_PIXEL (test) → scelta dell'utente → automatico.
+static func pixel_shrink() -> int:
+	var forced := OS.get_environment("JHT_PIXEL").strip_edges()
+	if forced.is_valid_int():
+		return clampi(int(forced), 1, 4)
+	var cfg := ConfigFile.new()
+	if cfg.load(PIXEL_CFG) == OK:
+		var saved := int(cfg.get_value("graphics", "pixel_shrink", 0))
+		if saved >= 1:
+			return clampi(saved, 1, 4)
+	return 0  # 0 = decide la calibrazione a runtime
+
+
+static func set_pixel_shrink(value: int) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(PIXEL_CFG)
+	cfg.set_value("graphics", "pixel_shrink", clampi(value, 1, 4))
+	cfg.save(PIXEL_CFG)
+
 func _process(delta: float) -> void:
 	if _gfx_done or state != State.OFFICE:
 		return
@@ -95,8 +120,17 @@ func _process(delta: float) -> void:
 		if avg < 24.0:
 			low_gfx = true
 			Engine.max_fps = 30
+			# Il cap da solo non toglie lavoro alla GPU: su una macchina che
+			# fa 8 fps è un placebo (misurato su T440s, 24/07). Quello che
+			# toglie lavoro davvero è rendere il mondo a risoluzione ridotta:
+			# sotto i 15 fps si scende a un terzo, altrimenti a metà.
+			var shrink := 3 if avg < 15.0 else 2
+			var scene := get_tree().current_scene
+			if scene != null and scene.has_method("set_pixel_shrink"):
+				scene.call("set_pixel_shrink", shrink)
 			Log.info("perf",
-					"calibrazione: fps medio %.0f → profilo ridotto (cap 30fps)" % avg)
+					"calibrazione: fps medio %.0f → profilo ridotto (cap 30fps, mondo 1/%d)"
+					% [avg, shrink])
 		else:
 			Log.info("perf", "calibrazione: fps medio %.0f → profilo pieno" % avg)
 

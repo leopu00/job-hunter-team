@@ -19,35 +19,48 @@ var _tour_tracker: TourTracker
 var _tour_launch_opened := false
 var _traffic_demo_started := false
 
+## Palcoscenico del mondo: di norma è la scena stessa. Col profilo pixel
+## diventa un SubViewport a risoluzione ridotta, ingrandito con filtro
+## nearest — la GPU riempie un quarto dei pixel (a shrink 2) disegnando le
+## stesse cose. La UI vive nei CanvasLayer, fuori di qui, e resta nitida.
+var _stage: Node
+var _pixel_stage: SubViewportContainer
+var _pixel_layer: CanvasLayer
+var _pixel_shrink := 1
+
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
 	_doctor_test = OS.get_environment("JHT_DOCTOR_TEST")
+	_stage = self
+	var wanted := Game.pixel_shrink()
+	if wanted > 1:
+		set_pixel_shrink(wanted)
 	# Stratificazione globale: sfondo (-3), tinte e tappeti (-2), aure degli
 	# agenti (-1), mondo y-sortato (0+). Le aure risultano quindi davvero
 	# appoggiate al suolo e vengono coperte dagli arredi senza maschere ad hoc.
 	var floor_layer := OfficeFloor.new()
 	floor_layer.z_index = -3
-	add_child(floor_layer)
+	_stage.add_child(floor_layer)
 	var dressing_layer := DepartmentDressing.new()
 	dressing_layer.z_index = -2
-	add_child(dressing_layer)  # tinte/targhe dei 5 reparti (dev-art)
+	_stage.add_child(dressing_layer)  # tinte/targhe dei 5 reparti (dev-art)
 	var rugs_layer := DeptRugs.new()
 	rugs_layer.z_index = -2
-	add_child(rugs_layer)  # tappeti persiani rettangolari colore-reparto
+	_stage.add_child(rugs_layer)  # tappeti persiani rettangolari colore-reparto
 	# giorno/notte sull'ora locale: esterno, lampade e luce dalle finestre.
 	# Va qui, PRIMA di mondo e maintainer, che devono disegnarsi sopra.
-	add_child(DayNight.new())
+	_stage.add_child(DayNight.new())
 	if OS.get_environment("JHT_ONLYFLOOR") == "1":  # TEST-AUTO
 		var c := Camera2D.new()
 		c.position = Vector2(1300, 750)
-		add_child(c)
+		_stage.add_child(c)
 		c.make_current()
 		return
 
 	world = Node2D.new()
 	world.name = "World"
 	world.y_sort_enabled = true
-	add_child(world)
+	_stage.add_child(world)
 	# la porta dell'ufficio (perimetro sud, accanto all'entrata): da qui
 	# escono gli agenti killati/fermati — missione pipeline 20:1x
 	world.add_child(ExitDoor.new(EXIT_DOOR))
@@ -176,18 +189,18 @@ func _ready() -> void:
 	if traffic_demo:
 		var probe := TrafficProbe.new()
 		probe.setup(agents)
-		add_child(probe)
+		_stage.add_child(probe)
 	# Audit visuale locale: con JHT_SEAT_AUDIT=<reparto>:<desk> mostra una
 	# vignetta reale sul singolo composito inquadrato, senza dipendere dalla VPS.
 	if _seat_audit != "" and OS.get_environment("JHT_SPEECH_AUDIT") == "1" \
 			and not agents.is_empty():
 		agents[0].say("Verifica ancoraggio sopra la testa")
 
-	add_child(TesseractEdges.new())  # gli spigoli blu della box (trasparenti)
+	_stage.add_child(TesseractEdges.new())  # gli spigoli blu della box (trasparenti)
 	add_child(Sfx.make_ambient_hum())
 
 	_camera = FreeCamera.new()
-	add_child(_camera)
+	_stage.add_child(_camera)
 	_camera.clicked.connect(_on_world_click)
 	if OS.get_environment("JHT_CAMERA_LOCK_TEST") == "1":
 		_camera_lock_selftest.call_deferred()
@@ -220,7 +233,7 @@ func _ready() -> void:
 		var vp := get_viewport_rect().size
 		var z := minf(vp.x / FurnitureDefs.WORLD.size.x, vp.y / FurnitureDefs.WORLD.size.y)
 		ov.zoom = Vector2(z, z)
-		add_child(ov)
+		_stage.add_child(ov)
 		ov.make_current()
 	elif OS.get_environment("JHT_FOCUS_CORE") == "1":
 		# Audit delle due postazioni direzionali: entrambe nello stesso frame,
@@ -228,7 +241,7 @@ func _ready() -> void:
 		var core_cam := Camera2D.new()
 		core_cam.position = Vector2(1700, 535)
 		core_cam.zoom = Vector2(1.45, 1.45)
-		add_child(core_cam)
+		_stage.add_child(core_cam)
 		core_cam.make_current()
 	elif OS.get_environment("JHT_FOCUS_LOUNGE") == "1":
 		# Inquadratura di controllo dell'intero angolo: Dottore/Mantenitore a
@@ -236,7 +249,7 @@ func _ready() -> void:
 		var lounge_cam := Camera2D.new()
 		lounge_cam.position = Vector2(2490, 1140)
 		lounge_cam.zoom = Vector2(1.45, 1.45)
-		add_child(lounge_cam)
+		_stage.add_child(lounge_cam)
 		lounge_cam.make_current()
 	elif OS.get_environment("JHT_FOCUS_DEPT") != "":
 		var focus_id := OS.get_environment("JHT_FOCUS_DEPT")
@@ -245,7 +258,7 @@ func _ready() -> void:
 			var zone: Rect2 = DepartmentDefs.DEPARTMENTS[focus_id]["zone"]
 			focus_cam.position = zone.get_center()
 			focus_cam.zoom = Vector2(1.65, 1.65)
-			add_child(focus_cam)
+			_stage.add_child(focus_cam)
 			focus_cam.make_current()
 
 	if _seat_audit == "" and _doctor_test == "":
@@ -2623,6 +2636,68 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	agents.append(agent)
 
 # ── Costruzione scena ─────────────────────────────────────────────────
+
+## Monta (o smonta) il palcoscenico a risoluzione ridotta. Funziona anche a
+## ufficio già avviato: la calibrazione decide dopo 15 secondi, e a quel
+## punto i nodi del mondo vengono semplicemente traslocati nel SubViewport.
+func set_pixel_shrink(value: int) -> void:
+	var target := clampi(value, 1, 4)
+	if target == _pixel_shrink:
+		return
+	_pixel_shrink = target
+	if target <= 1:
+		if _pixel_stage != null:
+			_move_world_nodes(_pixel_stage.get_child(0), self)
+			_pixel_layer.queue_free()
+			_pixel_layer = null
+			_pixel_stage = null
+			_stage = self
+		return
+	if _pixel_stage != null:
+		_pixel_stage.stretch_shrink = target
+		return
+	# Il container è un Control: figlio diretto di un Node2D resterebbe di
+	# dimensione zero (gli anchor hanno senso solo dentro uno spazio schermo)
+	# e il mondo uscirebbe nero. Serve un CanvasLayer, sotto tutta la UI.
+	_pixel_layer = CanvasLayer.new()
+	_pixel_layer.name = "PixelLayer"
+	_pixel_layer.layer = -100
+	add_child(_pixel_layer)
+	_pixel_stage = SubViewportContainer.new()
+	_pixel_stage.name = "PixelStage"
+	_pixel_stage.stretch = true
+	_pixel_stage.stretch_shrink = target
+	_pixel_stage.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Nearest sull'ingrandimento: i pixel restano quadrati e netti invece di
+	# diventare una sfocatura (che sarebbe il peggio dei due mondi).
+	_pixel_stage.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_pixel_layer.add_child(_pixel_stage)
+	var vp := SubViewport.new()
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	vp.handle_input_locally = false
+	vp.transparent_bg = false
+	_pixel_stage.add_child(vp)
+	_stage = vp
+	_move_world_nodes(self, vp)
+
+
+## Trasloca i nodi di mondo (Node2D e camere) preservando l'ordine. HUD,
+## pannelli e sidebar sono CanvasLayer: non si toccano, devono restare
+## a risoluzione piena.
+func _move_world_nodes(from: Node, to: Node) -> void:
+	if from == null or to == null or from == to:
+		return
+	var current: Camera2D = null
+	for node in from.get_children():
+		if not (node is Node2D):
+			continue
+		if node is Camera2D and (node as Camera2D).is_current():
+			current = node
+		from.remove_child(node)
+		to.add_child(node)
+	if current != null:
+		current.make_current()
+
 
 func _invisible_wall(r: Rect2) -> StaticBody2D:
 	var body := StaticBody2D.new()
