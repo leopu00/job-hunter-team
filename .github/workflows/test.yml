@@ -64,3 +64,42 @@ jobs:
       - name: Run tests — ${{ matrix.module }}
         working-directory: tests/js
         run: npx vitest run ${{ matrix.module }} --reporter=verbose
+
+  # La suite Python (agenti, skill, sync, installer) girava solo a mano: per
+  # tre settimane nessuno ha visto che tests/test_public_installers_sync.py
+  # era rosso — il test scritto apposta per fallire in CI sul drift degli
+  # installer pubblici. Ora gira qui, allo stesso trigger di vitest.
+  pytest:
+    name: pytest — agents, skills, sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      # tests/test_cli_{config,status_team}.py lanciano `node cli/bin/jht.js`:
+      # senza le dipendenze del CLI (commander) sono 21 fallimenti secchi che
+      # non c'entrano nulla con il codice sotto test.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Install CLI dependencies
+        working-directory: cli
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r requirements.txt
+
+      - name: Run pytest
+        run: python -m pytest tests/ -q

@@ -11,8 +11,15 @@
 # Pattern: scripts/ e' source-of-truth, web/public/ e' mirror "build".
 # Run this dopo OGNI edit a scripts/install.{sh,ps1}.
 #
-# CI gating proposto (post-launch): check `git diff --name-only` su
-# scripts/install.* e fail se web/public/install.* non sincronizzati.
+# CI gating: ATTIVO da 2026-07-24 — tests/test_public_installers_sync.py gira
+# nel job `pytest` di .github/workflows/test.yml e fallisce se le due copie
+# divergono. Prima il test esisteva ma la suite Python non girava in CI, e il
+# drift (source italiano, mirror inglese) e' passato inosservato 3 settimane.
+#
+# ATTENZIONE — la direzione della copia e' scripts/ → web/public/, MAI il
+# contrario: il testo utente-facing e' in inglese ed e' in scripts/ che va
+# scritto. Se ti ritrovi un mirror "piu' giusto" del source, la correzione va
+# portata a monte prima di lanciare questo script.
 
 set -euo pipefail
 
