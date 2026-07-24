@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <rect width="128" height="128" fill="#0c0c10"/>
-  <!-- brackets a L, firma HUD del brand -->
-  <path d="M14 34 V14 H34" fill="none" stroke="#00e87a" stroke-width="6"/>
-  <path d="M94 14 H114 V34" fill="none" stroke="#00e87a" stroke-width="6"/>
-  <path d="M114 94 V114 H94" fill="none" stroke="#00e87a" stroke-width="6"/>
-  <path d="M34 114 H14 V94" fill="none" stroke="#00e87a" stroke-width="6"/>
-  <text x="64" y="78" font-family="JetBrains Mono, monospace" font-size="38" font-weight="800" fill="#f0f0fa" text-anchor="middle">JHT</text>
-</svg>

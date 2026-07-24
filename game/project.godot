@@ -14,7 +14,7 @@ run/max_fps=60
 config/features=PackedStringArray("4.7")
 boot_splash/bg_color=Color(0.0235294, 0.0235294, 0.0313726, 1)
 boot_splash/show_image=false
-config/icon="res://assets/icon.svg"
+config/icon="res://assets/icon.png"
 
 [autoload]
 

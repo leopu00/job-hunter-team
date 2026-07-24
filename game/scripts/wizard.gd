@@ -55,6 +55,7 @@ func _ready() -> void:
 	BackendBus.chat_waiting_changed.connect(_on_waiting)
 	BackendBus.profile_status_updated.connect(_on_profile)
 	BackendBus.document_uploaded.connect(_on_uploaded)
+	BackendBus.user_chat_sent.connect(_on_chat_sent)
 
 	BackendBus.ensure_assistant()
 	BackendBus.open_profile_watch()
@@ -312,6 +313,20 @@ func _on_waiting(agent: String, waiting: bool) -> void:
 		_waiting_label.visible = waiting
 	if _portrait and waiting:
 		_portrait.set_state("a", "pensieroso")
+
+## Consegna del messaggio fallita (es. jht-tmux-send exit 3/4: TUI non
+## ricettiva o occupata). Senza questo l'errore era MUTO e sembrava che
+## l'agente non rispondesse (debug onboarding Codex, Leone 24/07): lo si
+## mostra in chat e si spegne l'attesa, così l'utente sa che deve riprovare.
+func _on_chat_sent(agent: String, ok: bool, error: String) -> void:
+	if ok or not agent.begins_with("assistente"):
+		return
+	_waiting = false
+	if _waiting_label:
+		_waiting_label.visible = false
+	if _portrait:
+		_portrait.set_state("a", "neutro")
+	_append_line("⚠ " + error, Palette.RED)
 
 func _redraw_chat(messages: Array) -> void:
 	for child in _list.get_children():

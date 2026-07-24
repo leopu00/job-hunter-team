@@ -172,6 +172,11 @@ func _ready() -> void:
 	ScriptedOnboarding.conversation_changed.connect(_on_scripted_changed)
 	ScriptedOnboarding.action_requested.connect(_on_scripted_action)
 	SetupService.status_changed.connect(_on_setup_status_changed)
+	# Apri la conversazione lato backend: SENZA questo il backend non fa il
+	# fetch della history da chat.jsonl → la chat grande restava vuota e a
+	# riapertura spariva anche il messaggio dell'utente (Leone 24/07). Come il
+	# wizard, open_agent_chat triggera agent_chat_updated con lo storico.
+	BackendBus.open_agent_chat(_slug)
 	_refresh_chat_mode()
 	if BackendBus.chat_waiting.has(_slug):
 		_on_waiting(_slug, true)  # attesa già in corso da prima
@@ -272,6 +277,9 @@ func _switch_to(slug: String, display_name: String) -> void:
 		return
 	BackendBus.close_agent_chat()
 	_slug = slug
+	# Apri la conversazione del nuovo agente → fetch della sua history
+	# (vedi _ready): al cambio agente lo storico si ricarica (Leone 24/07).
+	BackendBus.open_agent_chat(_slug)
 	BackendBus.mark_chat_read(_slug)
 	_display_name = display_name
 	_title.text = UIStrings.t("chat.title") % _display_name.to_upper()
