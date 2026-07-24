@@ -27,18 +27,13 @@ export default async function LandingPage({
   const authError = sp.error === "auth_failed";
   const returnTo = sanitizeReturnTo(sp.returnTo);
 
-  // Login (/?login=true) → vecchio LandingClient, che gestisce l'OAuth.
-  // Landing pubblica normale → nuova LandingHome (clean slate, in
-  // ricostruzione). Il vecchio sito pubblico resta intatto nei suoi file.
+  // Login (/?login=true) → LandingClient, che gestisce l'OAuth.
+  // Landing pubblica normale → LandingHome.
   if (wantsLogin) {
     return (
       <>
         <JsonLd />
-        <LandingClient
-          wantsLogin={wantsLogin}
-          authError={authError}
-          returnTo={returnTo}
-        />
+        <LandingClient authError={authError} returnTo={returnTo} />
       </>
     );
   }
