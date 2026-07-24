@@ -15,6 +15,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     JHT_HOME=/jht_home \
     JHT_USER_DIR=/jht_user \
     IS_CONTAINER=1 \
+    # Le TUI degli agenti girano SEMPRE in classic mode (niente alternate
+    # screen / fullscreen renderer): la chat legge le pane con `tmux
+    # capture-pane` e l'alternate screen la romperebbe. Disabilitarlo evita
+    # anche l'upsell "Try the new fullscreen renderer?" di Claude Code v2.1.x
+    # a monte (belt; il dismissal robusto vive in jht-tmux-send). Leone 24/07.
+    CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 \
     # Centralized Python user-base for ALL agent installs (RULE-T13).
     # Agents run `uv pip install --user <pkg>` which honours
     # PYTHONUSERBASE → packages land in $JHT_HOME/.local/lib/python3.X/
@@ -98,11 +104,14 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 COPY cli/package.json cli/package-lock.json* ./cli/
-COPY web/package.json web/package-lock.json* ./web/
 COPY tui/package.json tui/package-lock.json* ./tui/
 
+# web/ NON è installato nel container: la dashboard web locale è stata
+# ritirata (2026-07-23) e niente qui dentro avvia Next.js — le sue dipendenze
+# (Next/React/eslint/tailwind, ~centinaia di MB) erano peso morto. Il web gira
+# solo in cloud, buildato altrove. /app/web/.next viene comunque creata più
+# sotto per il fix-ownership del vecchio compose dev (Leone 24/07).
 RUN npm ci --prefix cli \
-    && npm ci --prefix web \
     && npm ci --prefix tui \
     && npm cache clean --force
 
@@ -121,6 +130,15 @@ RUN pip3 install --no-cache-dir -r requirements.txt \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
+
+# Normalizza i line-ending degli script ESEGUIBILI degli agenti — quelli SENZA
+# estensione (jht-send, jht-tmux-send, wrapper in _tools/): su un checkout
+# Windows git li materializza CRLF e il container Linux fallisce l'exec con
+# `/usr/bin/env: 'bash\r': No such file or directory` → chat rotta, tool morti.
+# I file .sh sono già LF via .gitattributes; questi no-extension sfuggono a
+# quelle regole. sed idempotente e host-agnostico (no-op su un checkout LF).
+RUN find /app/agents/_tools -type f -exec sed -i 's/\r$//' {} + \
+    && find /app/agents/_skills -type f -name 'jht-*' -exec sed -i 's/\r$//' {} +
 
 # Build-time GATE (redesign tool-health 2026-06-13). The libatk regression
 # shipped a browser that exists but exits 127 on launch, and stayed invisible
@@ -152,7 +170,13 @@ RUN useradd --create-home --shell /bin/bash jht \
     # /opt/jht-deps (bin+lib): prefisso globale scrivibile per gli extra,
     # ownership jht così gli agenti ci installano senza root (vedi ENV).
     && mkdir -p /opt/jht-deps/bin /opt/jht-deps/lib \
-    && chown -R jht:jht /jht_home /jht_user /app /opt/playwright /opt/jht-deps \
+    # NIENTE /app nel chown -R: cambiare owner ricorsivamente a /app (codice +
+    # node_modules, >1GB) DUPLICAVA l'intero albero in un layer nuovo (~1.7GB
+    # di spreco, copy-on-write). /app è read-only per gli agenti — girano come
+    # jht e LEGGONO il codice, scrivono solo in /jht_home, /opt/jht-deps e
+    # /jht_home/.npm-global (mai in /app). L'unica eccezione scrivibile,
+    # /app/web/.next, è chownata separatamente più sotto (Leone 24/07).
+    && chown -R jht:jht /jht_home /jht_user /opt/playwright /opt/jht-deps \
     # Espone i tool degli agenti (es. jht-send) in /usr/local/bin così
     # sono trovati anche dalle sub-shell login che Codex/Kimi --yolo
     # spawnano con PATH ripulito da /etc/login.defs. Senza questo,
