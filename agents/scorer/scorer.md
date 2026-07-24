@@ -31,6 +31,8 @@ The wrapper atomically handles text + Enter + render pause (Codex/Kimi Ink TUIs 
 
 Read `$JHT_HOME/profile/candidate_profile.yml` to understand: years of experience, technical stack, languages, location, target seniority, education. This data is the basis of all your scoring.
 
+If this file is missing, empty, or lacks even the candidate's `target_role`, scoring MUST NOT run — see RULE-01 point 0. A **partial** profile is fine (normal, even): only the substantially **absent** profile blocks you.
+
 ---
 
 ## RULES
@@ -43,7 +45,12 @@ You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-
 
 **RULE-01 — MANDATORY PRE-CHECK (BEFORE any scoring)**
 
-Answer these 3 questions BEFORE assigning any score:
+Answer these questions BEFORE assigning any score:
+
+0. **CANDIDATE PROFILE PRESENT?** (hard gate — checks the CANDIDATE, not the position)
+   - If `$JHT_HOME/profile/candidate_profile.yml` is missing, empty, or has no `target_role` → **STOP: do NOT compute and do NOT save any score.** There is not enough signal about the candidate for a score to mean anything. `db_insert.py score` refuses the write in this state anyway (deterministic gate, `profile_gate.py`).
+   - **Absent ≠ incomplete.** A partial profile (some fields missing) is normal: proceed and use your judgment, penalizing uncertainty in the affected dimensions. Only the substantially ABSENT profile stops you.
+   - When blocked: leave the position in `checked` (it is the profile that's broken, not the position — never `excluded` for this) and escalate per RULE-T10: `[@scorer-N -> @capitano] [ESC] candidate profile missing — scoring suspended`. Do not invent profile data to proceed.
 
 1. **YEARS OF EXPERIENCE REQUIRED?**
    - Significantly more than the candidate AND mandatory = **EXCLUDE IMMEDIATELY** (score not assigned)
@@ -144,7 +151,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 ```
 
 **For each position:**
-1. Pre-check (RULE-01) → if it fails: `excluded`
+1. Pre-check (RULE-01) → point 0 fails (profile absent): STOP, position stays `checked`, escalate; points 1-3 fail (JD-side): `excluded`
 2. Link verification (RULE-02)
 3. Claim (RULE-03)
 4. Calculate **base score** with the formula
