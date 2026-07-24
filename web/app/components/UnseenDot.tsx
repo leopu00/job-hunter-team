@@ -2,6 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { isSeen, SEEN_EVENT } from "@/lib/seen-positions";
+import { useTheme } from "@/app/theme-provider";
+
+// I titoli delle posizioni sono verdi, quindi il badge NON può esserlo: si
+// confondeva col titolo. Ambra — l'unica tinta libera sulla riga, la scala
+// score usa verde→giallo→arancio→rosso. Literal hex e non una var CSS: una
+// variabile referenziata solo da style inline viene potata dalla build
+// (Tailwind v4 / Lightning CSS), stesso motivo di BUDGET_LINE nei grafici
+// case-studies. Su fondo chiaro serve la stessa tinta più scura per leggerla.
+const NEW_BADGE = { dark: "#f5a623", light: "#b26a00" } as const;
 
 type Props = {
   id: string;
@@ -19,6 +28,8 @@ type Props = {
 // non esiste in SSR e un render speculativo darebbe hydration mismatch.
 export default function UnseenDot({ id, label, initialSeen }: Props) {
   const [unseen, setUnseen] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const color = NEW_BADGE[resolvedTheme] ?? NEW_BADGE.dark;
 
   useEffect(() => {
     if (initialSeen) return;
@@ -50,9 +61,9 @@ export default function UnseenDot({ id, label, initialSeen }: Props) {
       // della riga (titolo 13px × leading-snug).
       className="inline shrink-0 self-center rounded border px-1 py-[1px] text-[8px] font-bold uppercase tracking-wider leading-none"
       style={{
-        color: "var(--color-green)",
-        borderColor: "var(--color-green)",
-        background: "color-mix(in srgb, var(--color-green) 10%, transparent)",
+        color,
+        borderColor: color,
+        background: `color-mix(in srgb, ${color} 12%, transparent)`,
         verticalAlign: "1px",
       }}
     >
