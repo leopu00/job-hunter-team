@@ -1,45 +1,45 @@
 # ╔══════════════════════════════════════════════════════════════════════════╗
-# ║  Job Hunter Team — Installer Windows-native (PowerShell)                 ║
+# ║  Job Hunter Team — Windows-native installer (PowerShell)                 ║
 # ╠══════════════════════════════════════════════════════════════════════════╣
 # ║                                                                          ║
-# ║  Uso:                                                                    ║
+# ║  Usage:                                                                  ║
 # ║    iwr -useb https://jobhunterteam.ai/install.ps1 | iex                  ║
 # ║                                                                          ║
-# ║    # Branch alternativa per testare dev-N:                               ║
+# ║    # Alternative branch, to test dev-N:                                  ║
 # ║    & ([scriptblock]::Create((iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/scripts/install.ps1).Content)) -Branch dev-1
 # ║                                                                          ║
-# ║  Default (Docker-mode): non installa nulla sull'host se non Docker       ║
-# ║  Desktop (che deve essere gia' installato; lo controlliamo ma non lo     ║
-# ║  scarichiamo per te — richiede consenso utente + WSL2 + reboot).         ║
+# ║  Default (Docker mode): installs nothing on the host except Docker       ║
+# ║  Desktop (which must already be there; we check for it but do not        ║
+# ║  download it for you — it needs user consent + WSL2 + a reboot).         ║
 # ║                                                                          ║
-# ║  Scarica:                                                                ║
+# ║  Downloads:                                                              ║
 # ║    - $env:USERPROFILE\.jht\runtime\docker-compose.yml                    ║
-# ║    - $env:USERPROFILE\.local\bin\jht.ps1 (wrapper PowerShell)            ║
-# ║    - $env:USERPROFILE\.local\bin\jht.cmd (shim per CMD)                  ║
+# ║    - $env:USERPROFILE\.local\bin\jht.ps1 (PowerShell wrapper)            ║
+# ║    - $env:USERPROFILE\.local\bin\jht.cmd (shim for CMD)                  ║
 # ║                                                                          ║
-# ║  Il CLI Node, Python, tmux, agents girano TUTTI nel container long-      ║
-# ║  running gestito dal compose. Niente Node/Python/tmux sull'host.         ║
-# ║  Niente socket Docker dentro al container.                               ║
+# ║  The Node CLI, Python, tmux and the agents ALL run inside the long-      ║
+# ║  running container managed by compose. No Node/Python/tmux on the host.  ║
+# ║  No Docker socket inside the container.                                  ║
 # ║                                                                          ║
-# ║  Solo due cartelle host vengono esposte al container:                    ║
+# ║  Only two host folders are exposed to the container:                     ║
 # ║    $env:USERPROFILE\.jht                  → /jht_home                    ║
 # ║    $env:USERPROFILE\Documents\Job Hunter Team → /jht_user                ║
 # ║                                                                          ║
-# ║  Differenze vs install.sh (Linux/macOS):                                 ║
-# ║    - NO --no-docker: Windows native (Node+tmux+Claude standalone) non    ║
-# ║      e' supportato. Il container e' l'unico path.                        ║
+# ║  Differences vs install.sh (Linux/macOS):                                ║
+# ║    - NO --no-docker: Windows native (Node+tmux+Claude standalone) is     ║
+# ║      not supported. The container is the only path.                      ║
 # ║    - NO sudo / apt / dnf / pacman / Colima / Homebrew: Docker Desktop    ║
-# ║      e' l'unico runtime; lo si pre-installa via winget o manualmente.    ║
-# ║    - PATH register via [Environment]::SetEnvironmentVariable User-scope  ║
-# ║      (no shell rc). Effettivo dal prossimo terminale.                    ║
+# ║      is the only runtime; pre-install it via winget or by hand.          ║
+# ║    - PATH registered with [Environment]::SetEnvironmentVariable in the   ║
+# ║      User scope (no shell rc). Effective from the next terminal.         ║
 # ║                                                                          ║
-# ║  Parametri:                                                              ║
-# ║    -DryRun           Mostra azioni senza eseguirle                       ║
-# ║    -Branch <name>    Branch sorgente (default: master)                   ║
-# ║    -PairingToken     Token opaco per VPS pairing (skippa wizard)         ║
-# ║    -SkipOnboard      Non lanciare il wizard alla fine                    ║
+# ║  Parameters:                                                             ║
+# ║    -DryRun           Show the actions without running them               ║
+# ║    -Branch <name>    Source branch (default: master)                     ║
+# ║    -PairingToken     Opaque token for VPS pairing (skips the wizard)     ║
+# ║    -SkipOnboard      Do not launch the wizard at the end                 ║
 # ║                                                                          ║
-# ║  Riferimento design: docs/internal/ops/vps.md                                ║
+# ║  Design reference: docs/internal/ops/vps.md                              ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 [CmdletBinding()]
@@ -89,38 +89,38 @@ function Show-Header {
   Write-Host "  branch:  $Branch" -ForegroundColor DarkGray
   Write-Host "  runtime: $RuntimeDir" -ForegroundColor DarkGray
   Write-Host "  bin:     $BinDir" -ForegroundColor DarkGray
-  if ($DryRun)       { Write-Host "  dry-run: ON (nessuna modifica al sistema)" -ForegroundColor Yellow }
-  if ($PairingToken) { Write-Host "  pairing: token presente (skip wizard)" -ForegroundColor Yellow }
+  if ($DryRun)       { Write-Host "  dry-run: ON (no changes to the system)" -ForegroundColor Yellow }
+  if ($PairingToken) { Write-Host "  pairing: token present (skips the wizard)" -ForegroundColor Yellow }
   Write-Host ""
 }
 
 # ── Step 1: System detection ──────────────────────────────────────────────
 function Test-System {
-  Write-Step 1 $TotalSteps "Rilevamento sistema"
+  Write-Step 1 $TotalSteps "System detection"
   $os = [System.Environment]::OSVersion
   if ($os.Platform -ne 'Win32NT') {
-    Write-Fail "install.ps1 supporta solo Windows. Su Linux/macOS usa install.sh."
+    Write-Fail "install.ps1 only supports Windows. On Linux/macOS use install.sh."
   }
   $psVersion = $PSVersionTable.PSVersion
   if ($psVersion.Major -lt 5) {
-    Write-Fail "PowerShell 5.1+ richiesto (versione corrente: $psVersion). Installa PowerShell 7: https://aka.ms/PowerShell"
+    Write-Fail "PowerShell 5.1+ required (current version: $psVersion). Install PowerShell 7: https://aka.ms/PowerShell"
   }
   Write-Ok "Windows $($os.Version) / PowerShell $psVersion"
 }
 
 # ── Step 2: Docker Desktop check ──────────────────────────────────────────
 function Test-DockerDesktop {
-  Write-Step 2 $TotalSteps "Verifica Docker Desktop"
+  Write-Step 2 $TotalSteps "Docker Desktop check"
 
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Warn "docker non trovato nel PATH."
-    Write-Info "Installa Docker Desktop per Windows:"
+    Write-Warn "docker not found in PATH."
+    Write-Info "Install Docker Desktop for Windows:"
     Write-Info "  - winget install Docker.DockerDesktop"
-    Write-Info "  - oppure: https://www.docker.com/products/docker-desktop/"
-    Write-Info "Docker Desktop richiede WSL2 attivo e un riavvio dopo l'installazione."
-    Write-Fail "Rilancia install.ps1 dopo aver installato Docker Desktop."
+    Write-Info "  - or: https://www.docker.com/products/docker-desktop/"
+    Write-Info "Docker Desktop needs WSL2 enabled and a reboot after installation."
+    Write-Fail "Re-run install.ps1 once Docker Desktop is installed."
   }
-  Write-Ok "docker CLI trovato: $(docker --version)"
+  Write-Ok "docker CLI found: $(docker --version)"
 
   if ($DryRun) {
     Write-Dry "docker info (skip in dry-run)"
@@ -129,19 +129,19 @@ function Test-DockerDesktop {
 
   $null = & docker info 2>&1
   if ($LASTEXITCODE -ne 0) {
-    Write-Warn "docker daemon non risponde."
-    Write-Info "Avvia Docker Desktop dall'icona system tray o dal menu Start."
-    Write-Info "Attendi che lo stato sia 'Engine running' prima di rilanciare."
-    Write-Fail "Docker Desktop non e' attivo."
+    Write-Warn "docker daemon is not responding."
+    Write-Info "Start Docker Desktop from the system tray icon or the Start menu."
+    Write-Info "Wait until the status reads 'Engine running' before retrying."
+    Write-Fail "Docker Desktop is not running."
   }
-  Write-Ok "docker daemon raggiungibile"
+  Write-Ok "docker daemon reachable"
 
-  # Verifica compose v2 (incluso in Docker Desktop di default ma controlliamo)
+  # Check compose v2 (bundled with Docker Desktop by default, but verify)
   $null = & docker compose version 2>&1
   if ($LASTEXITCODE -ne 0) {
-    Write-Fail "docker compose v2 non disponibile. Aggiorna Docker Desktop all'ultima versione."
+    Write-Fail "docker compose v2 not available. Update Docker Desktop to the latest version."
   }
-  Write-Ok "docker compose v2 disponibile"
+  Write-Ok "docker compose v2 available"
 }
 
 # ── Step 3: Download runtime files ────────────────────────────────────────
@@ -154,16 +154,16 @@ function Get-File {
   }
 
   try {
-    # -UseBasicParsing evita la dipendenza da Internet Explorer engine
-    # (deprecato in PS7). Force evita prompt overwrite.
+    # -UseBasicParsing avoids the dependency on the Internet Explorer engine
+    # (deprecated in PS7). Force avoids the overwrite prompt.
     Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $Dest -ErrorAction Stop
   } catch {
-    Write-Fail "Download fallito: $Url`n  $($_.Exception.Message)`n  Controlla connessione e branch ($Branch)."
+    Write-Fail "Download failed: $Url`n  $($_.Exception.Message)`n  Check your connection and branch ($Branch)."
   }
 }
 
 function Get-RuntimeFiles {
-  Write-Step 3 $TotalSteps "Download wrapper + docker-compose.yml"
+  Write-Step 3 $TotalSteps "Downloading wrapper + docker-compose.yml"
 
   $composeUrl  = "$RawBase/docker-compose.yml"
   $wrapperUrl  = "$RawBase/scripts/jht-wrapper.ps1"
@@ -177,18 +177,18 @@ function Get-RuntimeFiles {
     New-Item -ItemType Directory -Force -Path $JhtHome    | Out-Null
   } | Out-Null
 
-  Write-Info "Scarico docker-compose.yml..."
+  Write-Info "Downloading docker-compose.yml..."
   Get-File -Url $composeUrl -Dest $composeDest
   Write-Ok "compose: $composeDest"
 
-  Write-Info "Scarico jht-wrapper.ps1..."
+  Write-Info "Downloading jht-wrapper.ps1..."
   Get-File -Url $wrapperUrl -Dest $wrapperDest
   Write-Ok "wrapper: $wrapperDest"
 
-  # Shim CMD per chi usa cmd.exe invece di pwsh. Permette `jht <args>` senza
-  # estensione .ps1, con bypass della ExecutionPolicy default Restricted.
-  # Fallback su powershell.exe (PS 5.1, ships con Windows) se pwsh (PS 7+)
-  # non e' installato — feedback master#28 cross-review d87890f8.
+  # CMD shim for people using cmd.exe instead of pwsh. It allows `jht <args>`
+  # without the .ps1 extension, bypassing the default Restricted
+  # ExecutionPolicy. Falls back to powershell.exe (PS 5.1, ships with Windows)
+  # when pwsh (PS 7+) is not installed — feedback master#28, cross-review d87890f8.
   if (-not $DryRun) {
     $shimContent = @"
 @echo off
@@ -201,7 +201,7 @@ if %errorlevel%==0 (
 exit /b %errorlevel%
 "@
     Set-Content -Path $shimDest -Value $shimContent -Encoding ASCII
-    Write-Ok "shim CMD: $shimDest (pwsh + powershell.exe fallback)"
+    Write-Ok "CMD shim: $shimDest (pwsh + powershell.exe fallback)"
   } else {
     Write-Dry "Set-Content $shimDest (CMD shim)"
   }
@@ -209,17 +209,17 @@ exit /b %errorlevel%
 
 # ── Step 4: PATH register ─────────────────────────────────────────────────
 function Add-ToUserPath {
-  Write-Step 4 $TotalSteps "Registrazione PATH utente"
+  Write-Step 4 $TotalSteps "Registering the user PATH"
 
   if ($DryRun) {
     Write-Dry "[Environment]::SetEnvironmentVariable('Path', '...;$BinDir', 'User')"
-    Write-Dry "Update `$env:Path corrente sessione"
+    Write-Dry "Update `$env:Path for the current session"
     $script:PathReady = $true
     return
   }
 
-  # Usa il PATH USER-scope (HKCU). System-wide richiederebbe elevation;
-  # user-scope sopravvive a login multipli senza prompt UAC.
+  # Use the USER-scope PATH (HKCU). System-wide would require elevation;
+  # user scope survives multiple logins without a UAC prompt.
   $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
   if (-not $userPath) { $userPath = '' }
 
@@ -228,15 +228,15 @@ function Add-ToUserPath {
   $alreadyPresent = $pathEntries | Where-Object { $_.TrimEnd('\') -ieq $normalizedBin }
 
   if ($alreadyPresent) {
-    Write-Ok "$BinDir gia' nel PATH utente"
+    Write-Ok "$BinDir already in the user PATH"
   } else {
     $newPath = if ($userPath) { "$userPath;$BinDir" } else { $BinDir }
     [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-    Write-Ok "PATH utente aggiornato (effettivo dal prossimo terminale)"
+    Write-Ok "User PATH updated (effective from the next terminal)"
   }
 
-  # Aggiorna anche $env:Path della sessione corrente cosi' i comandi
-  # successivi dell'installer (es. wizard) trovano `jht.cmd` senza riaprire.
+  # Also update $env:Path for the current session so the installer's next
+  # commands (e.g. the wizard) find `jht.cmd` without reopening a terminal.
   $sessionPath = $env:Path -split ';' | Where-Object { $_.TrimEnd('\') -ieq $normalizedBin }
   if (-not $sessionPath) {
     $env:Path = "$env:Path;$BinDir"
@@ -247,17 +247,17 @@ function Add-ToUserPath {
 
 # ── Step 5: host.env + pairing token ──────────────────────────────────────
 function Write-HostEnv {
-  Write-Step 5 $TotalSteps "Configurazione host.env"
+  Write-Step 5 $TotalSteps "Writing host.env"
 
   $hostEnvFile = Join-Path $JhtHome 'host.env'
   $hostType = if ($PairingToken) { 'vps' } else { 'local' }
 
   # Best-effort timezone detection (Windows TimeZoneInfo → IANA name).
-  # Se la mappatura non e' nota lasciamo UTC, il wizard chiedera' all'utente.
+  # When the mapping is unknown we leave UTC and the wizard asks the user.
   $tz = 'UTC'
   try {
     $winTz = [System.TimeZoneInfo]::Local.Id
-    # Mappatura minima dei TZ Windows piu' comuni. Lista completa in
+    # Minimal mapping of the most common Windows time zones. Full list at
     # https://github.com/unicode-org/cldr/blob/main/common/supplemental/windowsZones.xml
     $tzMap = @{
       'W. Europe Standard Time'      = 'Europe/Berlin'
@@ -270,11 +270,11 @@ function Write-HostEnv {
     }
     if ($tzMap.ContainsKey($winTz)) { $tz = $tzMap[$winTz] }
   } catch {
-    # Fallback silente: $tz resta 'UTC', il wizard chiedera'.
+    # Silent fallback: $tz stays 'UTC', the wizard will ask.
   }
 
   $content = @"
-# Host env per JHT wrapper + container. Generato da install.ps1.
+# Host env for the JHT wrapper + container. Generated by install.ps1.
 JHT_HOST_TYPE=$hostType
 JHT_LANG=en
 JHT_USER_TZ=$tz
@@ -284,12 +284,12 @@ JHT_USER_TZ=$tz
     Write-Dry "Set-Content $hostEnvFile (JHT_HOST_TYPE=$hostType, JHT_USER_TZ=$tz)"
   } else {
     Set-Content -Path $hostEnvFile -Value $content -Encoding UTF8
-    Write-Ok "host.env scritto: $hostEnvFile (mode=$hostType, tz=$tz)"
+    Write-Ok "host.env written: $hostEnvFile (mode=$hostType, tz=$tz)"
   }
 
-  # Pairing token: salva in $JhtHome\.pairing-token con perms restrictive
-  # (Windows ACL: solo USERPROFILE owner legge/scrive). Il container lo
-  # leggera' al primo boot via `jht cloud pair`.
+  # Pairing token: saved to $JhtHome\.pairing-token with restrictive perms
+  # (Windows ACL: only the USERPROFILE owner reads/writes). The container
+  # reads it on first boot via `jht cloud pair`.
   if ($PairingToken) {
     $tokenFile = Join-Path $JhtHome '.pairing-token'
     if ($DryRun) {
@@ -297,8 +297,8 @@ JHT_USER_TZ=$tz
     } else {
       Set-Content -Path $tokenFile -Value $PairingToken -Encoding ASCII -NoNewline
 
-      # Restringe ACL al solo utente corrente (rimuove eredita' Users/Everyone).
-      # Best-effort: se fallisce non blocchiamo l'install.
+      # Restrict the ACL to the current user only (drops the inherited
+      # Users/Everyone entries). Best-effort: a failure does not block the install.
       try {
         $acl = Get-Acl $tokenFile
         $acl.SetAccessRuleProtection($true, $false)
@@ -309,9 +309,9 @@ JHT_USER_TZ=$tz
         $acl.SetAccessRule($rule)
         Set-Acl -Path $tokenFile -AclObject $acl
       } catch {
-        Write-Warn "ACL restriction failed (file ancora accessibile a Users): $($_.Exception.Message)"
+        Write-Warn "ACL restriction failed (file still readable by Users): $($_.Exception.Message)"
       }
-      Write-Ok "Pairing token salvato: $tokenFile"
+      Write-Ok "Pairing token saved: $tokenFile"
     }
   }
 }
@@ -320,31 +320,31 @@ JHT_USER_TZ=$tz
 function Show-Final {
   Write-Host ""
   Write-Host "+------------------------------------------+" -ForegroundColor Green
-  Write-Host "|  Installazione completata!               |" -ForegroundColor Green
+  Write-Host "|  Installation complete!                  |" -ForegroundColor Green
   Write-Host "+------------------------------------------+" -ForegroundColor Green
   Write-Host ""
-  Write-Host "  Modalita' container attiva." -ForegroundColor White
-  Write-Host "  Gli agenti vedono solo:" -ForegroundColor DarkGray
-  Write-Host "    $JhtHome                          -> /jht_home (config, db, agenti)" -ForegroundColor DarkGray
-  Write-Host "    $env:USERPROFILE\Documents\Job Hunter Team -> /jht_user (CV, allegati, output)" -ForegroundColor DarkGray
+  Write-Host "  Container mode active." -ForegroundColor White
+  Write-Host "  The agents only see:" -ForegroundColor DarkGray
+  Write-Host "    $JhtHome                          -> /jht_home (config, db, agents)" -ForegroundColor DarkGray
+  Write-Host "    $env:USERPROFILE\Documents\Job Hunter Team -> /jht_user (CVs, attachments, output)" -ForegroundColor DarkGray
   Write-Host ""
 
   if (-not (Test-WillAutoOnboard)) {
-    Write-Host "  Prossimi passi:" -ForegroundColor White
+    Write-Host "  Next steps:" -ForegroundColor White
     Write-Host ""
     if ($script:PathReady) {
-      Write-Host "      jht setup        # wizard di configurazione (avvia anche il container)" -ForegroundColor White
+      Write-Host "      jht setup        # setup wizard (also starts the container)" -ForegroundColor White
     } else {
       Write-Host "      $BinDir\jht.cmd setup" -ForegroundColor White
     }
     Write-Host ""
   }
 
-  Write-Host "  Per disinstallare (mantiene i dati in ~/.jht e ~/Documents/Job Hunter Team):" -ForegroundColor DarkGray
+  Write-Host "  To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):" -ForegroundColor DarkGray
   Write-Host "    jht down" -ForegroundColor DarkGray
   Write-Host "    Remove-Item -Recurse -Force '$RuntimeDir', '$BinDir\jht.ps1', '$BinDir\jht.cmd'" -ForegroundColor DarkGray
   Write-Host "    docker rmi $Image" -ForegroundColor DarkGray
-  Write-Host "  Per cancellare anche dati (config, db, CV, output):" -ForegroundColor DarkGray
+  Write-Host "  To delete the data as well (config, db, CVs, output):" -ForegroundColor DarkGray
   Write-Host "    Remove-Item -Recurse -Force '$JhtHome', '$env:USERPROFILE\Documents\Job Hunter Team'" -ForegroundColor DarkGray
   Write-Host ""
 }
@@ -354,9 +354,9 @@ function Test-WillAutoOnboard {
   if ($SkipOnboard)   { return $false }
   if ($env:JHT_SKIP_ONBOARD -eq '1') { return $false }
   if ($PairingToken)  { return $false }
-  # Wizard interattivo richiede un host process — quando install.ps1 e' eseguito
-  # via `iwr|iex` dentro pwsh interattivo, abbiamo host normale. Quando e'
-  # eseguito da un job/CI con redirect, IsInputRedirected e' true.
+  # The interactive wizard needs a host process — when install.ps1 runs via
+  # `iwr|iex` inside an interactive pwsh we have a normal host. When it runs
+  # from a job/CI with redirection, IsInputRedirected is true.
   if ([Console]::IsInputRedirected) { return $false }
   return $true
 }
@@ -364,17 +364,17 @@ function Test-WillAutoOnboard {
 function Invoke-Onboard {
   if (-not (Test-WillAutoOnboard)) {
     if ($PairingToken) {
-      Write-Info "Pairing token presente: skip wizard interattivo. Il container completera' il pairing al primo avvio."
+      Write-Info "Pairing token present: skipping the interactive wizard. The container will complete the pairing on first boot."
     }
     return
   }
   Write-Host ""
-  Write-Info "Lancio wizard di setup..."
-  # Usa il shim CMD che gestisce ExecutionPolicy. PathReady garantisce
-  # che `jht.cmd` sia raggiungibile in questa sessione.
+  Write-Info "Launching the setup wizard..."
+  # Use the CMD shim, which handles the ExecutionPolicy. PathReady guarantees
+  # that `jht.cmd` is reachable in this session.
   & "$BinDir\jht.cmd" setup
   if ($LASTEXITCODE -ne 0) {
-    Write-Warn "Il wizard e' uscito con errore. Rilancialo con: jht setup"
+    Write-Warn "The wizard exited with an error. Re-run it with: jht setup"
   }
 }
 
