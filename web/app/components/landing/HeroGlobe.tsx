@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useTheme } from "@/app/theme-provider";
 import { LUXURY_POSITIONS } from "./_data/luxuryPositions";
+import {
+  attachFpsMonitor,
+  initialAutoTier,
+  profileFor,
+  readQualityPref,
+  type FpsMonitorHandle,
+  type MapTier,
+  type MapTierProfile,
+} from "@/lib/map-perf";
 
 const STYLE_DARK =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -93,6 +102,20 @@ export default function HeroGlobe({ pinColors, centerLon }: HeroGlobeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const themeRef = useRef<"dark" | "light">(resolvedTheme);
+  // Stesso scaling qualità del globo di /map (lib/map-perf.ts) e stessa
+  // preferenza utente: chi ha forzato "Bassa" là non si ritrova la
+  // landing pesante qui. Unica differenza: la proiezione resta SEMPRE
+  // globe — la sfera è il soggetto della hero, e l'anchor del polo nord
+  // (data-sphere-top) su cui BetaTeamFlow fa convergere i tracciati ha
+  // senso solo su sfera.
+  const [tier, setTier] = useState<MapTier>(() => {
+    if (typeof window === "undefined") return "high";
+    const pref = readQualityPref();
+    return pref === "auto" ? initialAutoTier().tier : pref;
+  });
+  const profileRef = useRef<MapTierProfile>(profileFor(tier));
+  profileRef.current = profileFor(tier);
+  const fpsMonitorRef = useRef<FpsMonitorHandle | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const layersReadyRef = useRef(false);
@@ -107,6 +130,7 @@ export default function HeroGlobe({ pinColors, centerLon }: HeroGlobeProps) {
     if (!containerRef.current || mapRef.current) return;
     const container = containerRef.current;
 
+    const boot = profileRef.current;
     const map = new maplibregl.Map({
       container,
       style: themeRef.current === "light" ? STYLE_LIGHT : STYLE_DARK,
@@ -116,6 +140,9 @@ export default function HeroGlobe({ pinColors, centerLon }: HeroGlobeProps) {
       interactive: false,
       pitch: 0,
       bearing: 0,
+      pixelRatio: boot.canvasPixelRatio,
+      fadeDuration: boot.fadeDuration,
+      maxTileCacheSize: boot.maxTileCacheSize,
     });
 
     // Anchor invisibile alla posizione esatta del top sfera, computata
@@ -154,6 +181,10 @@ export default function HeroGlobe({ pinColors, centerLon }: HeroGlobeProps) {
           id: HALO_ID,
           type: "circle",
           source: SRC_ID,
+          // Alone sfocato: fillrate puro, spento sui profili bassi.
+          layout: {
+            visibility: profileRef.current.beamHalo ? "visible" : "none",
+          },
           paint: {
             "circle-radius": 14,
             // colore "data-driven" dalla property `color` della feature.
@@ -178,6 +209,17 @@ export default function HeroGlobe({ pinColors, centerLon }: HeroGlobeProps) {
         const src = map.getSource(SRC_ID) as maplibregl.GeoJSONSource;
         src.setData(buildPinFeatures(pinColorsRef.current));
       }
+      // Etichette della basemap: il loro placement è lavoro CPU a ogni
+      // frame e sulla hero non si leggono comunque (globo piccolo,
+      // decorativo). Via sui profili bassi.
+      if (!profileRef.current.basemapLabels) {
+        for (const layer of map.getStyle()?.layers ?? []) {
+          if (layer.type !== "symbol") continue;
+          try {
+            map.setLayoutProperty(layer.id, "visibility", "none");
+          } catch {}
+        }
+      }
       layersReadyRef.current = true;
     };
     map.on("style.load", onStyleLoad);
@@ -193,10 +235,27 @@ export default function HeroGlobe({ pinColors, centerLon }: HeroGlobeProps) {
     ro.observe(container);
 
     map.on("move", updateSphereAnchor);
-    map.on("render", updateSphereAnchor);
+    // L'anchor si ricalcola con un project() + una scrittura di stile:
+    // trascurabile con la GPU, non trascurabile a 3 fps in software.
+    // Sul tier alto si aggiorna a ogni frame (massima precisione del
+    // punto di convergenza dei tracciati), altrimenti solo sui move.
+    if (profileRef.current.tier === "high") {
+      map.on("render", updateSphereAnchor);
+    }
+
+    fpsMonitorRef.current = attachFpsMonitor(
+      map,
+      profileRef.current.tier,
+      (next) => {
+        if (readQualityPref() !== "auto") return;
+        setTier(next);
+      },
+    );
 
     return () => {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      fpsMonitorRef.current?.stop();
+      fpsMonitorRef.current = null;
       ro.disconnect();
       layersReadyRef.current = false;
       map.remove();
@@ -211,6 +270,33 @@ export default function HeroGlobe({ pinColors, centerLon }: HeroGlobeProps) {
     layersReadyRef.current = false;
     map.setStyle(resolvedTheme === "light" ? STYLE_LIGHT : STYLE_DARK);
   }, [resolvedTheme]);
+
+  // Degrado a caldo deciso dal monitor FPS: risoluzione del canvas e
+  // alone dei pin. Il resto del profilo (fade, cache, etichette) è
+  // fissato al boot — qui conta solo smettere di arrancare subito.
+  const appliedTierRef = useRef<MapTier | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (appliedTierRef.current === tier) return;
+    const first = appliedTierRef.current == null;
+    appliedTierRef.current = tier;
+    fpsMonitorRef.current?.reset(tier);
+    if (first) return;
+    const p = profileFor(tier);
+    try {
+      map.setPixelRatio(p.canvasPixelRatio);
+    } catch {}
+    try {
+      if (map.getLayer(HALO_ID)) {
+        map.setLayoutProperty(
+          HALO_ID,
+          "visibility",
+          p.beamHalo ? "visible" : "none",
+        );
+      }
+    } catch {}
+  }, [tier]);
 
   // Longitudine del centro pilotata dalla pipeline. jumpTo istantaneo,
   // lo "scrubbing" è dato dal fatto che centerLon è funzione lineare
