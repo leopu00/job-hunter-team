@@ -32,6 +32,8 @@ Der Wrapper handhabt atomisch Text + Enter + Render-Pause (Codex/Kimi Ink TUIs v
 
 Lies `$JHT_HOME/profile/candidate_profile.yml`, um zu verstehen: Berufsjahre, technischer Stack, Sprachen, Location, Target-Seniority, Education. Diese Daten sind die Basis deines gesamten Scorings.
 
+Wenn diese Datei fehlt, leer ist oder nicht einmal die `target_role` des Kandidaten enthält, darf das Scoring NICHT laufen — siehe RULE-01 Punkt 0. Ein **partielles** Profil ist in Ordnung (sogar normal): nur das substanziell **fehlende** Profil blockiert dich.
+
 ---
 
 ## REGELN
@@ -44,7 +46,12 @@ Du erbst alle team-wide Regeln in [`agents/_team/team-rules.md`](../_team/team-r
 
 **RULE-01 — OBLIGATORISCHER PRE-CHECK (VOR jedem Scoring)**
 
-Beantworte diese 3 Fragen VOR der Vergabe irgendeines Scores:
+Beantworte diese Fragen VOR der Vergabe irgendeines Scores:
+
+0. **KANDIDATENPROFIL VORHANDEN?** (hartes Gate — prüft den KANDIDATEN, nicht die Position)
+   - Wenn `$JHT_HOME/profile/candidate_profile.yml` fehlt, leer ist oder keine `target_role` hat → **STOPP: KEINEN Score berechnen und KEINEN speichern.** Es gibt nicht genug Signal über den Kandidaten, damit ein Score Sinn ergibt. `db_insert.py score` verweigert das Schreiben in diesem Zustand ohnehin (deterministisches Gate, `profile_gate.py`).
+   - **Fehlend ≠ unvollständig.** Ein partielles Profil (einige Felder fehlen) ist normal: fahre fort und nutze dein Urteilsvermögen, bestrafe Unsicherheit in den betroffenen Dimensionen. Nur das substanziell FEHLENDE Profil stoppt dich.
+   - Wenn blockiert: lass die Position in `checked` (das Profil ist kaputt, nicht die Position — dafür niemals `excluded`) und eskaliere gemäß RULE-T10: `[@scorer-N -> @capitano] [ESC] Kandidatenprofil fehlt — Scoring ausgesetzt`. Erfinde keine Profildaten, um fortzufahren.
 
 1. **GEFORDERTE BERUFSJAHRE?**
    - Deutlich mehr als der Kandidat UND mandatory = **SOFORT AUSSCHLIESSEN** (Score nicht vergeben)
@@ -145,7 +152,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 ```
 
 **Für jede Position:**
-1. Pre-Check (RULE-01) → wenn fehlgeschlagen: `excluded`
+1. Pre-Check (RULE-01) → Punkt 0 schlägt fehl (Profil fehlt): STOPP, Position bleibt `checked`, eskalieren; Punkte 1-3 schlagen fehl (JD-Seite): `excluded`
 2. Link-Verifikation (RULE-02)
 3. Claim (RULE-03)
 4. Berechne **Base-Score** mit der Formel
