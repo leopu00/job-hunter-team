@@ -4,48 +4,52 @@ class_name SidebarDefs
 
 ## `label` resta il fallback italiano; a schermo passa da UIStrings
 ## con la chiave "side.<id>" (e "side.<group_key>" per i titoli gruppo).
+##
+## `icon` è l'id di una forma vettoriale di SidebarIcon, MAI un'emoji: i glifi
+## emoji dipendono dai font di sistema e su Linux due terzi di essi finivano in
+## rettangoli vuoti (vedi sidebar_icon.gd).
 const GROUPS := [
 	{
 		"title": "Team",
 		"key": "group_team",
 		"items": [
-			{"id": "activation", "icon": "⚡", "label": "Attiva team"},
-			{"id": "team", "icon": "🚀", "label": "Team"},
-			{"id": "agents", "icon": "🤖", "label": "Agenti"},
-			{"id": "agent_metrics", "icon": "📉", "label": "Risorse agenti"},
-			{"id": "usage_history", "icon": "📈", "label": "Usage"},
-			{"id": "usage_agents", "icon": "🔥", "label": "Consumi agenti"},
-			{"id": "chat", "icon": "💬", "label": "Chat"},
-			{"id": "notifs", "icon": "🔔", "label": "Notifiche"},
+			{"id": "activation", "icon": "bolt", "label": "Attiva team"},
+			{"id": "team", "icon": "users", "label": "Team"},
+			{"id": "agents", "icon": "robot", "label": "Agenti"},
+			{"id": "agent_metrics", "icon": "chart-down", "label": "Risorse agenti"},
+			{"id": "usage_history", "icon": "chart-up", "label": "Usage"},
+			{"id": "usage_agents", "icon": "flame", "label": "Consumi agenti"},
+			{"id": "chat", "icon": "chat", "label": "Chat"},
+			{"id": "notifs", "icon": "bell", "label": "Notifiche"},
 		],
 	},
 	{
 		"title": "Lavoro",
 		"key": "group_work",
 		"items": [
-			{"id": "dashboard", "icon": "📊", "label": "Dashboard"},
-			{"id": "positions", "icon": "🎯", "label": "Posizioni"},
-			{"id": "stats", "icon": "📈", "label": "Statistiche"},
-			{"id": "apps", "icon": "📨", "label": "Candidature"},
-			{"id": "map", "icon": "🗺", "label": "Mappa"},
-			{"id": "activity", "icon": "📜", "label": "Attività"},
+			{"id": "dashboard", "icon": "dashboard", "label": "Dashboard"},
+			{"id": "positions", "icon": "target", "label": "Posizioni"},
+			{"id": "stats", "icon": "bars", "label": "Statistiche"},
+			{"id": "apps", "icon": "inbox", "label": "Candidature"},
+			{"id": "map", "icon": "map", "label": "Mappa"},
+			{"id": "activity", "icon": "activity", "label": "Attività"},
 		],
 	},
 	{
 		"title": "Impostazioni",
 		"key": "group_settings",
 		"items": [
-			{"id": "vps", "icon": "🔌", "label": "Collega VPS"},
-			{"id": "profile", "icon": "📝", "label": "Profilo"},
-			{"id": "hours", "icon": "⏰", "label": "Orari"},
-			{"id": "provider", "icon": "🧠", "label": "Provider"},
-			{"id": "docker", "icon": "🐳", "label": "Docker"},
-			{"id": "telegram", "icon": "✈", "label": "Telegram"},
-			{"id": "account", "icon": "👤", "label": "Account"},
-			{"id": "email", "icon": "📧", "label": "Email"},
-			{"id": "appearance", "icon": "◐", "label": "Aspetto"},
-			{"id": "language", "icon": "🌐", "label": "Lingua"},
-			{"id": "advanced", "icon": "⚙", "label": "Avanzate"},
+			{"id": "vps", "icon": "server", "label": "Collega VPS"},
+			{"id": "profile", "icon": "doc", "label": "Profilo"},
+			{"id": "hours", "icon": "clock", "label": "Orari"},
+			{"id": "provider", "icon": "chip", "label": "Provider"},
+			{"id": "docker", "icon": "container", "label": "Docker"},
+			{"id": "telegram", "icon": "plane", "label": "Telegram"},
+			{"id": "account", "icon": "user", "label": "Account"},
+			{"id": "email", "icon": "envelope", "label": "Email"},
+			{"id": "appearance", "icon": "contrast", "label": "Aspetto"},
+			{"id": "language", "icon": "globe", "label": "Lingua"},
+			{"id": "advanced", "icon": "gear", "label": "Avanzate"},
 		],
 	},
 ]
