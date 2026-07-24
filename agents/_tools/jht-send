@@ -27,6 +27,30 @@ import sys
 import time
 
 
+ESCAPES = {"n": "\n", "t": "\t", "r": "", "\\": "\\"}
+
+
+def unescape(text: str) -> str:
+    """Rimette gli a capo veri al posto degli escape letterali.
+
+    Gli agenti scrivono `jht-send "riga1\\nriga2"`: dentro i doppi apici la
+    shell NON tocca la sequenza, quindi qui arrivano i due caratteri
+    backslash+n e json.dumps li persiste come "\\\\n". Il frontend mostrava
+    "\\n" in mezzo alla frase invece di andare a capo (chat dell'Assistente,
+    24/07). `\\\\n` resta un backslash letterale seguito da n.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        if text[i] == "\\" and i + 1 < len(text) and text[i + 1] in ESCAPES:
+            out.append(ESCAPES[text[i + 1]])
+            i += 2
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
 def resolve_chat_file(agent_id: str | None) -> pathlib.Path:
     if agent_id:
         jht_home = os.environ.get("JHT_HOME") or str(pathlib.Path.home() / ".jht")
@@ -54,6 +78,11 @@ def main() -> int:
         help="Ruolo del messaggio (default: assistant).",
     )
     parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Non interpretare \\n / \\t nel messaggio (testo passato alla lettera).",
+    )
+    parser.add_argument(
         "--partial",
         action="store_true",
         help=(
@@ -69,9 +98,10 @@ def main() -> int:
 
     # `done` = True  → messaggio finale di turno, spegni i puntini
     # `done` = False → checkpoint intermedio, tieni i puntini accesi
+    message = args.message if args.raw else unescape(args.message)
     entry = {
         "role": args.role,
-        "text": args.message,
+        "text": message,
         "ts": time.time(),
         "done": not args.partial,
     }
@@ -89,7 +119,7 @@ def main() -> int:
         return 1
 
     print(
-        f"jht-send: sent {len(args.message)} chars as {args.role} to {chat_file}",
+        f"jht-send: sent {len(message)} chars as {args.role} to {chat_file}",
         file=sys.stderr,
     )
     return 0
