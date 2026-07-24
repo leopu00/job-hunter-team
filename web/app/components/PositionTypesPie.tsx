@@ -241,9 +241,12 @@ export default function PositionTypesPie({
 
         {/* Legenda scrollabile (stesso pattern di LocationBarList): quando il
         parent vincola l'altezza della card, la lista scorre invece di
-        allungarla; l'header colonne resta sticky in cima allo scroll. */}
+        allungarla; l'header colonne resta sticky in cima allo scroll.
+        Il tetto max-h vale sotto lg, dove nessuno vincola l'altezza della
+        card (il parent usa lg:h-[280px]) e la legenda si srotolava tutta
+        lungo la pagina. */}
         <ul
-          className="space-y-2.5 min-w-0 flex-1 min-h-0 sm:self-stretch overflow-y-auto pr-1"
+          className="space-y-2.5 min-w-0 flex-1 min-h-0 max-h-[300px] lg:max-h-none sm:self-stretch overflow-y-auto overscroll-y-contain pr-1"
           onMouseLeave={() => setHovered(null)}
         >
           {/* Header: didascalia colonne. Colonna 'tipo' a larghezza limitata +
