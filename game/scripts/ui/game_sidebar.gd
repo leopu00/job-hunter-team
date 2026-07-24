@@ -12,6 +12,7 @@ signal chat_requested
 var _drawer: Control
 var _panel: SectionPanel
 var _buttons := {}  # id sezione → Button
+var _icons := {}  # id sezione → SidebarIcon (segue il colore del testo)
 var _open := false
 var _setup_cta: Button
 var _tab: Button
@@ -150,6 +151,10 @@ func open_section(section: String) -> void:
 		toggle()
 	_select(section)
 
+## Colonna dell'icona vettoriale: il testo parte dopo, sempre allineato.
+const ICON_X := 14.0
+const ICON_SIZE := 18.0
+
 ## Stile riga di navigazione: sfondo pieno, accento verde a sinistra.
 ## `bg_alpha` 0 = trasparente (normal); `accent` accende la barra 3px.
 static func _row_style(bg: Color, bg_alpha: float, accent: bool) -> StyleBoxFlat:
@@ -159,7 +164,7 @@ static func _row_style(bg: Color, bg_alpha: float, accent: bool) -> StyleBoxFlat
 	if accent:
 		sb.border_width_left = 3
 		sb.border_color = Palette.GREEN
-	sb.content_margin_left = 14
+	sb.content_margin_left = ICON_X + ICON_SIZE + 8.0
 	sb.content_margin_right = 10
 	sb.content_margin_top = 7
 	sb.content_margin_bottom = 7
@@ -168,7 +173,7 @@ static func _row_style(bg: Color, bg_alpha: float, accent: bool) -> StyleBoxFlat
 func _nav_button(item: Dictionary) -> Control:
 	var btn := Button.new()
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	btn.text = "%s  %s" % [item["icon"], SidebarDefs.label_for(item["id"])]
+	btn.text = SidebarDefs.label_for(item["id"])
 	btn.add_theme_font_size_override("font_size", 16)
 	btn.add_theme_font_override("font", load(TerminalTheme.FONT_MEDIUM))
 	btn.add_theme_color_override("font_color", Palette.BASE)
@@ -180,9 +185,22 @@ func _nav_button(item: Dictionary) -> Control:
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.pressed.connect(func() -> void: _select(item["id"]))
-	btn.set_meta("icon", item["icon"])
 	btn.set_meta("label", SidebarDefs.label_for(item["id"]))
 	_buttons[item["id"]] = btn
+
+	# L'icona è un figlio ancorato a metà altezza del Button: resta ferma a
+	# sinistra qualunque sia la lunghezza dell'etichetta tradotta, e non
+	# intercetta i click (mouse_filter IGNORE nel costruttore).
+	var icon := SidebarIcon.new(str(item["icon"]), Palette.BASE)
+	icon.anchor_top = 0.5
+	icon.anchor_bottom = 0.5
+	icon.offset_left = ICON_X
+	icon.offset_right = ICON_X + ICON_SIZE
+	icon.offset_top = -ICON_SIZE * 0.5
+	icon.offset_bottom = ICON_SIZE * 0.5
+	btn.add_child(icon)
+	_icons[item["id"]] = icon
+
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_left", 8)
 	pad.add_theme_constant_override("margin_right", 8)
@@ -217,8 +235,11 @@ func _set_active(section: String) -> void:
 		var b: Button = _buttons[id]
 		var active: bool = (id == section)
 		var unread: bool = id == "chat" and BackendBus.total_chat_unread() > 0
-		b.add_theme_color_override("font_color", Palette.GREEN if active \
-				else (Palette.YELLOW if unread else Palette.BASE))
+		var tint: Color = Palette.GREEN if active \
+				else (Palette.YELLOW if unread else Palette.BASE)
+		b.add_theme_color_override("font_color", tint)
+		if _icons.has(id):
+			_icons[id].color = tint
 		# la voce attiva tiene sfondo e barra accento anche fuori hover
 		b.add_theme_stylebox_override("normal",
 				_row_style(Palette.DEEP, 1.0, true) if active
@@ -232,7 +253,7 @@ func _refresh_chat_badges() -> void:
 				Palette.YELLOW if total > 0 else Palette.GREEN)
 	if _buttons.has("chat"):
 		var btn: Button = _buttons["chat"]
-		btn.text = "%s  %s%s" % [btn.get_meta("icon"), btn.get_meta("label"),
+		btn.text = "%s%s" % [btn.get_meta("label"),
 				"  ● %d" % total if total > 0 else ""]
 	_set_active(_panel.section if _panel else "")
 
