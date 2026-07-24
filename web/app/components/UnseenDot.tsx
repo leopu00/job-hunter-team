@@ -44,11 +44,16 @@ export default function UnseenDot({ id, label, initialSeen }: Props) {
       // WebKit lo conta come contenuto oltre il taglio → stampa un "…" anche
       // quando il titolo ci sta tutto. In inline bordo e padding si disegnano
       // uguale; nei contenitori flex (tabelle) resta un flex item come prima.
-      className="inline shrink-0 self-center rounded border px-1 py-[2px] text-[8px] font-bold uppercase tracking-wider leading-none align-middle"
+      // In inline il box NON allarga la riga: se è più alto della line-box del
+      // titolo, l'overflow:hidden del line-clamp gli rade il bordo inferiore.
+      // Con py-[1px] e vertical-align sollevato di 1px sta dentro i ~17.9px
+      // della riga (titolo 13px × leading-snug).
+      className="inline shrink-0 self-center rounded border px-1 py-[1px] text-[8px] font-bold uppercase tracking-wider leading-none"
       style={{
         color: "var(--color-green)",
         borderColor: "var(--color-green)",
         background: "color-mix(in srgb, var(--color-green) 10%, transparent)",
+        verticalAlign: "1px",
       }}
     >
       NEW
