@@ -3,7 +3,7 @@ testpaths = ["tests"]
 norecursedirs = [
   ".agents",
   ".git",
-  "desktop",
+  "game",
   "node_modules",
   "shared",
 ]

@@ -5,8 +5,16 @@ install.ps1 esisteva solo in scripts/ ma NON in web/public/. Master ha
 aggiunto la copia (a95fb028) ma senza automazione le 2 copie divergono
 silenziosamente al prossimo edit.
 
-Questo test fa fail in CI se le copie divergono. Fix: run
+Questo test fa fail in CI se le copie divergono (job `pytest` in
+.github/workflows/test.yml, attivo dal 2026-07-24). Fix: run
 `bash scripts/sync-public-installers.sh` e ri-committare web/public/.
+
+⚠️ Prima di lanciare il sync, guarda QUALE delle due copie e' quella giusta.
+Nel luglio 2026 il mirror era in inglese e il source in italiano (la
+traduzione del funnel pubblico era stata applicata solo a web/public/): il
+sync alla cieca avrebbe rimesso in italiano l'installer servito da
+jobhunterteam.ai. La direzione e' sempre scripts/ → web/public/, quindi
+eventuali correzioni vanno portate PRIMA nel source.
 """
 
 import os
