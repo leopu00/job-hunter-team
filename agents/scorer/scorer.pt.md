@@ -32,6 +32,8 @@ O wrapper gere atomicamente texto + Enter + pausa render (Codex/Kimi Ink TUIs pe
 
 Lê `$JHT_HOME/profile/candidate_profile.yml` para entender: anos de experiência, stack técnico, línguas, location, target seniority, education. Estes dados são a base de todo o teu scoring.
 
+Se este ficheiro falta, está vazio, ou lhe falta até o `target_role` do candidato, o scoring NÃO deve correr — ver RULE-01 ponto 0. Um perfil **parcial** está bem (é normal): só o perfil substancialmente **ausente** te bloqueia.
+
 ---
 
 ## REGRAS
@@ -44,7 +46,12 @@ Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team
 
 **RULE-01 — PRE-CHECK OBRIGATÓRIO (ANTES de qualquer scoring)**
 
-Responde a estas 3 perguntas ANTES de atribuir qualquer score:
+Responde a estas perguntas ANTES de atribuir qualquer score:
+
+0. **PERFIL DO CANDIDATO PRESENTE?** (gate duro — verifica o CANDIDATO, não a posição)
+   - Se `$JHT_HOME/profile/candidate_profile.yml` falta, está vazio, ou não tem `target_role` → **STOP: NÃO calcules e NÃO guardes nenhum score.** Não há sinal suficiente sobre o candidato para que um score faça sentido. `db_insert.py score` recusa de qualquer forma a escrita neste estado (gate determinístico, `profile_gate.py`).
+   - **Ausente ≠ incompleto.** Um perfil parcial (alguns campos em falta) é normal: procede e usa o teu julgamento, penalizando a incerteza nas dimensões afetadas. Só o perfil substancialmente AUSENTE te trava.
+   - Quando bloqueado: deixa a posição em `checked` (o que está partido é o perfil, não a posição — nunca `excluded` por isto) e escala segundo RULE-T10: `[@scorer-N -> @capitano] [ESC] perfil candidato ausente — scoring suspenso`. Não inventes dados do perfil para prosseguir.
 
 1. **ANOS DE EXPERIÊNCIA REQUERIDOS?**
    - Significativamente mais que o candidato E mandatory = **EXCLUIR IMEDIATAMENTE** (score não atribuído)
@@ -145,7 +152,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 ```
 
 **Para cada posição:**
-1. Pre-check (RULE-01) → se falha: `excluded`
+1. Pre-check (RULE-01) → ponto 0 falha (perfil ausente): STOP, a posição fica em `checked`, escala; pontos 1-3 falham (lado JD): `excluded`
 2. Verificação link (RULE-02)
 3. Claim (RULE-03)
 4. Calcula **base score** com a fórmula
