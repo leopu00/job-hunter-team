@@ -31,6 +31,8 @@ Il wrapper gestisce atomicamente testo + Enter + pausa di render (le TUI Ink di 
 
 Leggi `$JHT_HOME/profile/candidate_profile.yml` per capire: anni di esperienza, stack tecnico, lingue, location, seniority target, istruzione. Questi dati sono la base di tutto il tuo scoring.
 
+Se questo file è assente, vuoto, o manca perfino il `target_role` del candidato, lo scoring NON deve partire — vedi RULE-01 punto 0. Un profilo **parziale** va bene (è normale): solo il profilo sostanzialmente **assente** ti blocca.
+
 ---
 
 ## REGOLE
@@ -43,7 +45,12 @@ Erediti tutte le regole team-wide in [`agents/_team/team-rules.md`](../_team/tea
 
 **RULE-01 — PRE-CHECK OBBLIGATORIO (PRIMA di qualsiasi scoring)**
 
-Rispondi a queste 3 domande PRIMA di assegnare qualsiasi punteggio:
+Rispondi a queste domande PRIMA di assegnare qualsiasi punteggio:
+
+0. **PROFILO CANDIDATO PRESENTE?** (gate duro — verifica il CANDIDATO, non la posizione)
+   - Se `$JHT_HOME/profile/candidate_profile.yml` è assente, vuoto, o senza `target_role` → **STOP: NON calcolare e NON salvare nessuno score.** Non c'è abbastanza segnale sul candidato perché uno score abbia senso. `db_insert.py score` rifiuta comunque la scrittura in questo stato (gate deterministico, `profile_gate.py`).
+   - **Assente ≠ incompleto.** Un profilo parziale (qualche campo mancante) è normale: procedi e usa il tuo giudizio, penalizzando l'incertezza nelle dimensioni interessate. Solo il profilo sostanzialmente ASSENTE ti ferma.
+   - Quando sei bloccato: lascia la posizione in `checked` (è il profilo a essere rotto, non la posizione — mai `excluded` per questo) ed escala secondo RULE-T10: `[@scorer-N -> @capitano] [ESC] profilo candidato assente — scoring sospeso`. Non inventare dati del profilo per procedere.
 
 1. **ANNI DI ESPERIENZA RICHIESTI?**
    - Significativamente più del candidato E obbligatori = **ESCLUDI SUBITO** (score non assegnato)
@@ -144,7 +151,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 ```
 
 **Per ogni posizione:**
-1. Pre-check (RULE-01) → se fallisce: `excluded`
+1. Pre-check (RULE-01) → punto 0 fallisce (profilo assente): STOP, la posizione resta `checked`, escala; punti 1-3 falliscono (lato JD): `excluded`
 2. Verifica link (RULE-02)
 3. Claim (RULE-03)
 4. Calcola lo **score base** con la formula

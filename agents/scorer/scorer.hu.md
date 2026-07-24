@@ -32,6 +32,8 @@ A wrapper atomikusan kezeli a szöveg + Enter + render pause-t (a Codex/Kimi Ink
 
 Olvasd a `$JHT_HOME/profile/candidate_profile.yml` fájlt, hogy megértsd: tapasztalat évek száma, technikai stack, nyelvek, location, target seniority, education. Ezek az adatok a teljes scoring-od alapja.
 
+Ha ez a fájl hiányzik, üres, vagy még a jelölt `target_role`-ja is hiányzik belőle, a scoring NEM futhat — lásd RULE-01 0. pont. Egy **részleges** profil rendben van (sőt, normális): csak a lényegében **hiányzó** profil blokkol téged.
+
 ---
 
 ## SZABÁLYOK
@@ -44,7 +46,12 @@ Olvasd a `$JHT_HOME/profile/candidate_profile.yml` fájlt, hogy megértsd: tapas
 
 **RULE-01 — KÖTELEZŐ PRE-CHECK (BÁRMILYEN scoring ELŐTT)**
 
-Válaszolj ezekre a 3 kérdésre MIELŐTT bármilyen score-t rendelnél hozzá:
+Válaszolj ezekre a kérdésekre MIELŐTT bármilyen score-t rendelnél hozzá:
+
+0. **JELÖLTPROFIL JELEN VAN?** (kemény gate — a JELÖLTET ellenőrzi, nem a pozíciót)
+   - Ha a `$JHT_HOME/profile/candidate_profile.yml` hiányzik, üres, vagy nincs benne `target_role` → **STOP: NE számolj és NE ments el semmilyen score-t.** Nincs elég jel a jelöltről ahhoz, hogy egy score-nak értelme legyen. A `db_insert.py score` egyébként is megtagadja az írást ebben az állapotban (determinisztikus gate, `profile_gate.py`).
+   - **Hiányzó ≠ hiányos.** Egy részleges profil (néhány hiányzó mező) normális: haladj tovább és használd az ítélőképességed, büntetve a bizonytalanságot az érintett dimenziókban. Csak a lényegében HIÁNYZÓ profil állít meg.
+   - Ha blokkolva vagy: hagyd a pozíciót `checked` állapotban (a profil a hibás, nem a pozíció — soha ne `excluded` emiatt) és eszkalálj a RULE-T10 szerint: `[@scorer-N -> @capitano] [ESC] jelöltprofil hiányzik — scoring felfüggesztve`. Ne találj ki profiladatokat a folytatáshoz.
 
 1. **HÁNY ÉV TAPASZTALAT KELL?**
    - Jelentősen több, mint a jelöltnek ÉS kötelező = **AZONNAL KIZÁR** (score nincs hozzárendelve)
@@ -145,7 +152,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 ```
 
 **Minden pozícióhoz:**
-1. Pre-check (RULE-01) → ha kudarcot vall: `excluded`
+1. Pre-check (RULE-01) → 0. pont bukik (profil hiányzik): STOP, a pozíció `checked` marad, eszkalálj; 1-3. pontok buknak (JD-oldal): `excluded`
 2. Link ellenőrzés (RULE-02)
 3. Claim (RULE-03)
 4. Számold ki a **base score**-t a képlettel
