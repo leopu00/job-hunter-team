@@ -39,7 +39,12 @@ export default function UnseenDot({ id, label, initialSeen }: Props) {
     <span
       title={label}
       aria-label={label}
-      className="inline-block shrink-0 self-center rounded border px-1 text-[8px] font-bold uppercase tracking-wider leading-[13px]"
+      // display:inline (NON inline-block): dentro il titolo delle card, che è
+      // un -webkit-box con line-clamp, un inline-block è un atomic inline e
+      // WebKit lo conta come contenuto oltre il taglio → stampa un "…" anche
+      // quando il titolo ci sta tutto. In inline bordo e padding si disegnano
+      // uguale; nei contenitori flex (tabelle) resta un flex item come prima.
+      className="inline shrink-0 self-center rounded border px-1 py-[2px] text-[8px] font-bold uppercase tracking-wider leading-none align-middle"
       style={{
         color: "var(--color-green)",
         borderColor: "var(--color-green)",
