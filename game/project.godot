@@ -35,6 +35,12 @@ window/size/mode=0
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/vsync/vsync_mode=1
+; Su Linux il default parte in X11: dentro una sessione Wayland finisce su
+; Xwayland, che in questa configurazione non ha accesso alla GPU e rasterizza
+; a CPU — 254% di CPU e 2 fps sul ThinkPad, contro 21% e 45 fps col backend
+; nativo (misurato 24/07). Se il compositore Wayland non c'è, Godot ricade
+; su X11 da solo.
+display_server/driver.linuxbsd="wayland"
 
 [importer_defaults]
 
