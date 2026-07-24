@@ -171,7 +171,7 @@ func _ready() -> void:
 		# si RITROVA già al lavoro — è anche la rappresentazione veritiera
 		# (gli agenti esistono già) e cancella il picco di lag del boot.
 		agent.set_story_marker(_seat_audit == "" \
-				and not ScriptedOnboarding.provider_authenticated())
+				and ScriptedOnboarding.story_mode())
 		agents.append(agent)
 	if traffic_demo:
 		var probe := TrafficProbe.new()
@@ -259,7 +259,7 @@ func _ready() -> void:
 		_tour_enabled = OS.get_environment("JHT_TOUR_TEST") == "1" \
 				or OS.get_environment("JHT_TOUR_PREVIEW") == "1" \
 				or (OS.get_environment("JHT_SCENE") == "" and TourGuide.active() \
-					and not ScriptedOnboarding.provider_authenticated())
+					and ScriptedOnboarding.story_mode())
 		if _tour_enabled:
 			Log.info("tour", "tour primo avvio attivo dal passo %d" % TourGuide.step_index())
 			_tour_tracker = TourTracker.new()
@@ -847,6 +847,56 @@ func _guided_onboarding_selftest() -> void:
 	check.call(profile_panel._prof_edits.has("target_role") \
 			and profile_panel._prof_edits["target_role"].text == "Software Engineering",
 			"bozza scripted non precompila il profilo")
+
+	# Regressione 24/07 — provider GIÀ configurato e container ancora spento:
+	# prima i dialoghi authored si spegnevano al solo vedere il token e la
+	# chat viva non era disponibile, lasciando l'utente senza interlocutore.
+	# Il criterio è il canale, non il token; e i passi già soddisfatti si
+	# riconciliano invece di attendere un login che non arriverà mai.
+	SetupService.status["container_running"] = false
+	SetupService.status["provider_authenticated"] = true
+	ScriptedOnboarding.set_provider_test_override(1)
+	check.call(ScriptedOnboarding.use_scripted_chat("assistente") \
+			and ScriptedOnboarding.use_scripted_chat("coordinatore"),
+			"con container spento la chat guidata deve restare disponibile")
+	check.call(not ScriptedOnboarding.live_text_available("coordinatore"),
+			"senza container non può esistere testo libero verso l'agente reale")
+	check.call(ScriptedOnboarding.story_mode(),
+			"senza container l'ufficio deve restare in modalità racconto")
+	ScriptedOnboarding._steps["coordinatore"] = "provider"
+	ScriptedOnboarding._reconcile_with_status(SetupService.status)
+	check.call(str(ScriptedOnboarding._steps["coordinatore"]) == "profile",
+			"il passo provider va marcato fatto, non lasciato su un login impossibile")
+	ScriptedOnboarding._steps["coordinatore"] = "runtime"
+	SetupService.status["container_running"] = true
+	ScriptedOnboarding._reconcile_with_status(SetupService.status)
+	check.call(str(ScriptedOnboarding._steps["coordinatore"]) == "profile",
+			"con runtime e provider pronti si arriva diretti al profilo")
+	check.call(not ScriptedOnboarding.story_mode(),
+			"con team operativo la modalità racconto deve chiudersi")
+
+	# Pannello Docker: deve mostrare la versione del runtime e l'azione di
+	# aggiornamento, altrimenti l'utente resta su un'immagine vecchia senza
+	# nemmeno saperlo (il gioco si aggiorna con l'installer, il container no).
+	SetupService.status["docker_running"] = true
+	SetupService.status["container_exists"] = true
+	SetupService.status["runtime_stale"] = true
+	var docker_panel := SectionPanel.new("docker", 24.0)
+	add_child(docker_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var docker_labels := ""
+	var docker_buttons := ""
+	for node in docker_panel.find_children("*", "", true, false):
+		if node is Label:
+			docker_labels += (node as Label).text + "\n"
+		elif node is Button:
+			docker_buttons += (node as Button).text + "\n"
+	check.call(docker_labels.contains(UIStrings.t("setup.runtime_stale")),
+			"il pannello Docker non segnala il runtime da aggiornare")
+	check.call(docker_buttons.contains(UIStrings.t("setup.runtime_update")),
+			"il pannello Docker non offre l'aggiornamento del runtime")
+	docker_panel.queue_free()
 	var ok := failures.is_empty()
 	print("GUIDED-ONBOARDING-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"failures": failures, "draft": draft,
@@ -1487,7 +1537,7 @@ func _on_world_click(target: Vector2) -> void:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
-			if not ScriptedOnboarding.provider_authenticated() and agent.uid == "":
+			if ScriptedOnboarding.story_mode() and agent.uid == "":
 				_start_talk(agent)
 			else:
 				_open_agent_card(agent)
@@ -1637,7 +1687,7 @@ func _open_chat_menu() -> void:
 	add_child(_chat_menu)
 	_chat_menu.closed.connect(func() -> void: _chat_menu = null)
 	_chat_menu.open_chat.connect(func(slug: String, display_name: String) -> void:
-		if not ScriptedOnboarding.provider_authenticated():
+		if ScriptedOnboarding.story_mode():
 			for candidate in agents:
 				if candidate.uid == "" and candidate.slug == slug \
 						and candidate.display_name == display_name:
@@ -1693,7 +1743,7 @@ func _start_talk(agent: AgentNPC) -> void:
 		_camera.focus_on(agent.global_position + Vector2(0, -40), 1.05)
 		_tour_open_stop_dialogue(slug)
 		return
-	if not ScriptedOnboarding.provider_authenticated():
+	if ScriptedOnboarding.story_mode():
 		_story_seen[agent.slug] = true
 		_tour_visits += 1
 		if not tour_running:
@@ -1757,7 +1807,7 @@ func _refresh_tour_markers() -> void:
 				agent.set_story_marker(slug == "assistente" \
 						and TourGuide.current_slug() == "assistente", false)
 		else:
-			agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
+			agent.set_story_marker(ScriptedOnboarding.story_mode(),
 					bool(_story_seen.get(agent.slug, false)))
 
 func _on_tour_changed() -> void:
@@ -2472,7 +2522,7 @@ func _spawn_showroom() -> void:
 		agent.setup(def, nav)
 		# Anche il ritorno allo showroom ritrova l'ufficio popolato: niente
 		# fila alla porta quando la connessione VPS cade.
-		agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
+		agent.set_story_marker(ScriptedOnboarding.story_mode(),
 				bool(_story_seen.get(str(def["slug"]), false)))
 		agents.append(agent)
 	if _tour_enabled and TourGuide.active():
