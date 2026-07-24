@@ -95,6 +95,8 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserimento riga |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — auto-touched ad ogni UPDATE via trigger |
 
+> ⚠️ **Gate profilo (2026-07)**: `db_insert.py score` rifiuta l'INSERT se il profilo candidato è sostanzialmente assente (manca `candidate_profile.yml` o il suo `target_role` — vedi `shared/skills/profile_gate.py`). NON è un check di completezza: i profili parziali passano. Scorer: RULE-01 punto 0.
+
 ### applications
 | Colonna | Tipo | Default | Note |
 |---------|------|---------|------|

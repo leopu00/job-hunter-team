@@ -20,6 +20,7 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, resolve_company_id
+from profile_gate import check_minimum_viable_profile
 
 
 def extract_linkedin_job_id(url):
@@ -283,6 +284,20 @@ def _validate_score_range(value, name, min_val, max_val):
 
 
 def insert_score(args):
+    # Gate anti-scoring con profilo assente (incident 2026-07: score 45
+    # persistito per utente con profilo mai compilato). Precondizione
+    # DETERMINISTICA, non delegata all'agente: se il profilo non raggiunge il
+    # "minimum viable profile" (target_role + un secondo segnale — vedi
+    # profile_gate.py) lo score non ha senso e non viene scritto. NON è un
+    # check di completezza: i profili parziali passano e restano una
+    # valutazione qualitativa dello Scorer (RULE-01 punto 0).
+    viable, reason = check_minimum_viable_profile()
+    if not viable:
+        print(f"⚠️  SCORE RIFIUTATO: {reason}.")
+        print("    Il profilo candidato è sostanzialmente assente: non assegnare lo score.")
+        print("    Lascia la posizione in 'checked' ed escala al Capitano (RULE-T10 — do not invent).")
+        sys.exit(1)
+
     _validate_score_range(args.total, 'total', 0, 100)
     _validate_score_range(args.stack_match, 'stack_match', 0, 40)
     _validate_score_range(args.remote_fit, 'remote_fit', 0, 25)
