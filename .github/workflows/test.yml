@@ -90,10 +90,25 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: cli/package-lock.json
+          cache-dependency-path: |
+            cli/package-lock.json
+            shared/package-lock.json
+            shared/cron/package-lock.json
 
       - name: Install CLI dependencies
         working-directory: cli
+        run: npm ci
+
+      # Il CLI importa da shared/ (runtime/container.js) e shared/cron: senza le
+      # loro dipendenze `node cli/bin/jht.js` muore con ERR_MODULE_NOT_FOUND e i
+      # test CLI falliscono per un motivo che non c'entra col codice sotto test.
+      # In locale non si vede: quelle cartelle hanno già i node_modules.
+      - name: Install shared dependencies
+        working-directory: shared
+        run: npm ci
+
+      - name: Install cron dependencies
+        working-directory: shared/cron
         run: npm ci
 
       - name: Install Python dependencies
