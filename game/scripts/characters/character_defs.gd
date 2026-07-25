@@ -10,7 +10,7 @@ const SHEETS := "res://assets/characters/sheets/"
 const AGENTS := {
 	"coordinatore": {
 		"name": "Il Coordinatore",
-		"spot": Vector2(1495, 486),  # dietro il desk, volto verso la camera
+		"spot": Vector2(1495, 441),  # dietro il desk, volto verso la camera
 		"facing": "down",
 		"workstation_key": "core:coordinatore",
 		# il giro dei reparti: passa a controllare gli inbox, come i C-tick
@@ -77,13 +77,15 @@ const AGENTS := {
 		"name": "Il Mentor",
 		# Il punto d'accesso resta sotto la poltrona e navigabile; l'offset porta
 		# il centro logico nel composito frontale senza ingrandire il personaggio.
-		"spot": Vector2(2725, 1274),
+		"spot": Vector2(2830, 1274),
 		"facing": "down",
 		"seat_offset": Vector2(0, -24),
 		"workstation_key": "core:mentor",
 		# Ordine intenzionale della passeggiata: prende un volume, controlla la
 		# lavagna e torna a leggere. AgentNPC percorre entrambe le tappe.
-		"wander": [Vector2(2860, 1088), Vector2(2595, 1072)],
+		# Punti liberi sul lato sud della lounge: seguono la nuova posizione di
+		# libreria, poltrona e lavagna senza intrappolare il Mentor fra gli arredi.
+		"wander": [Vector2(2550, 1260), Vector2(2920, 1320)],
 		"chatter": [
 			"un buon colloquio è una conversazione",
 			"i numeri raccontano i risultati",
@@ -109,7 +111,7 @@ const AGENTS := {
 	"mantenitore": {
 		"name": "Il Mantenitore",
 		# Reparto tecnico sul lato ovest degli Scorer, opposto al Mentor.
-		"spot": Vector2(775, 946),
+		"spot": Vector2(702.5, 899),
 		"facing": "down",
 		"workstation_key": "core:mantenitore",
 		"wander": [Vector2(1727, 300), Vector2(590, 1090), Vector2(950, 1070)],
@@ -122,7 +124,7 @@ const AGENTS := {
 	"dottore": {
 		"name": "Il Dottore",
 		# Poltrona clinica e strumenti sul lato ovest degli Scorer.
-		"spot": Vector2(850, 1216),
+		"spot": Vector2(850, 1186),
 		"facing": "down",
 		"workstation_key": "core:dottore",
 		"wander": [Vector2(1110, 778), Vector2(1790, 1390), Vector2(2690, 1825)],
