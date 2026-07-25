@@ -223,6 +223,28 @@ The same flag exists one layer down on `db_query.py` — `positions`, `position`
 `companies`, `company`, `dashboard`, `stats`, `recent-activity` — which is what
 agents inside the container call directly.
 
+### Decision verbs
+
+| Command | Layer | What it does |
+|---------|-------|--------------|
+| `jht positions exclude <id> --reason <r> [--note ...]` | Python | Drops a position out of the agent queues. Reversible. |
+| `jht positions restore <id>` | Python | Undoes the exclusion, back to the exact previous status. |
+| `jht positions request-cv <id> [--off]` | Python | Asks the team to write the CV for this position. |
+| `jht ticket open <position_id> "<text>"` | Python | Opens a user→team ticket; lands in the Captain's queue. |
+| `jht ticket list` · `count` · `show <id>` · `for-position <id>` | Python | Read the ticket queue (`count` prints only the number). |
+| `jht ticket assign <id> <agent>` · `resolve <id> --response "..."` | Python | Team side of the flow. |
+| `jht directives` | Python | The standing orders currently in force. |
+| `jht directives add "<text>" [--kind order\|strategy\|formation\|note]` | Python | An order that survives the Captain's context refresh. |
+| `jht directives list [--all]` · `edit <id> "<text>"` · `archive <id>` · `show <id>` | Python | Manage the board. |
+
+`--reason` accepts `closed`, `not_interested`, `mismatch`, `already_applied`,
+`company`, `conditions`, `other` — the same set the UI offers. `other` requires
+`--note`, so an exclusion is still readable in a month.
+
+Exit codes: `0` done · `1` refused for a domain reason (no such position,
+`other` without a note) · `2` bad arguments. The position verbs print one JSON
+line, so a script can check the outcome without reading prose.
+
 ## Dashboard
 
 | Command                              | Layer | What it does                                                  |

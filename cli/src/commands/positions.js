@@ -17,8 +17,6 @@ import { spawnSync } from 'node:child_process';
 import { containerRunning, execInContainer, CONTAINER_NAME } from '../utils/container-proxy.js';
 import { JHT_DB_PATH } from '../jht-paths.js';
 
-const SKILL_PATH_CONTAINER = '/app/shared/skills/db_query.py';
-
 const c = {
   green:  (s) => `\x1b[32m${s}\x1b[0m`,
   red:    (s) => `\x1b[31m${s}\x1b[0m`,
@@ -26,25 +24,34 @@ const c = {
   dim:    (s) => `\x1b[2m${s}\x1b[0m`,
 };
 
-/** Esegue lo skill db_query.py (container o host) e passa l'output. */
-function runDbQuery(args) {
+/**
+ * Esegue una skill Python di shared/skills (container se attivo, host altrimenti).
+ *
+ * Il container resta la strada preferita: è lì che vive il jobs.db su cui
+ * lavora il team, e ci arriva col bind-mount. Il fallback host serve allo
+ * sviluppo locale e alle macchine senza container su.
+ */
+export function runSkill(skill, args) {
   if (containerRunning()) {
-    // Build shell cmd con escape sicuro degli args (single-quote)
+    // Escape a apici singoli: gli argomenti includono testo libero scritto
+    // dall'utente (note di esclusione, corpo di una direttiva, risposta a un
+    // ticket), quindi un apice o un `$` non deve poter uscire dalla stringa.
     const escaped = args.map((a) => `'${String(a).replace(/'/g, "'\\''")}'`).join(' ');
-    const cmd = `python3 ${SKILL_PATH_CONTAINER} ${escaped}`;
-    const r = execInContainer(cmd, { timeoutMs: 30_000 });
+    const r = execInContainer(`python3 /app/shared/skills/${skill} ${escaped}`, {
+      timeoutMs: 30_000,
+    });
     process.stdout.write(r.stdout);
     if (r.stderr) process.stderr.write(r.stderr);
     return r.code ?? 1;
   }
-  // Fallback host: richiede che il repo e Python siano presenti localmente
-  // e che jobs.db sia accessibile. Tipicamente su Linux/Mac dev locale.
-  const r = spawnSync('python3', ['shared/skills/db_query.py', ...args], {
+  const r = spawnSync('python3', [`shared/skills/${skill}`, ...args], {
     stdio: 'inherit',
     env: { ...process.env, JHT_DB: JHT_DB_PATH },
   });
   return r.status ?? 1;
 }
+
+const runDbQuery = (args) => runSkill('db_query.py', args);
 
 /**
  * Legge le opzioni tenendo conto del comando padre.
@@ -92,6 +99,34 @@ function dashboardAction(options, command) {
   if (code !== 0) process.exit(code);
 }
 
+// ── Verbi di DECISIONE ────────────────────────────────────────────────
+//
+// Fino al 2026-07-25 `jht positions` sapeva solo leggere: ogni azione che
+// esprime un giudizio dell'utente — escludere, chiedere il CV — esisteva solo
+// nella UI. Chi guida JHT da script o da un agente LLM poteva guardare e
+// comandare il team, ma non decidere nulla. Vedi [JHT-CLI-AGENT-PARITY].
+//
+// Le skill sottostanti restano la fonte: qui non c'è logica di dominio, solo
+// il passaggio degli argomenti. Ogni verbo stampa la riga JSON della skill ed
+// eredita il suo exit code (0 ok / 1 rifiutato), così è verificabile in uno
+// script senza leggere il testo.
+
+function excludeAction(id, options) {
+  const args = ['exclude', String(id), '--reason', options.reason];
+  if (options.note) args.push('--note', options.note);
+  process.exit(runSkill('user_exclude.py', args));
+}
+
+function restoreAction(id) {
+  process.exit(runSkill('user_exclude.py', ['restore', String(id)]));
+}
+
+function requestCvAction(id, options) {
+  process.exit(runSkill('write_request.py', [
+    String(id), '--mode', options.off ? 'off' : 'on',
+  ]));
+}
+
 export function registerPositionsCommand(program) {
   const cmd = new Command('positions').description('Query DB posizioni (proxy a db_query.py)');
 
@@ -127,6 +162,27 @@ export function registerPositionsCommand(program) {
     .description('Riepilogo pipeline (totali per stato)')
     .option('--json', JSON_HELP)
     .action(dashboardAction);
+
+  cmd
+    .command('exclude <id>')
+    .description('Escludi una posizione: esce dalle code agenti (reversibile)')
+    .requiredOption(
+      '--reason <causa>',
+      'closed | not_interested | mismatch | already_applied | company | conditions | other',
+    )
+    .option('--note <testo>', "richiesta con --reason other")
+    .action(excludeAction);
+
+  cmd
+    .command('restore <id>')
+    .description('Annulla un\'esclusione: la posizione torna allo stato precedente')
+    .action(restoreAction);
+
+  cmd
+    .command('request-cv <id>')
+    .description('Chiedi al team di scrivere il CV per questa posizione')
+    .option('--off', 'annulla la richiesta invece di farla')
+    .action(requestCvAction);
 
   program.addCommand(cmd);
 }

@@ -195,7 +195,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor) | — | 2026-07-23 | ✅ |
+| [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor) | — | 2026-07-25 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Onboarding beta tester + matrice coverage 10 celle | — | 2026-07-25 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | ☁️ VPS setup — JHT on Hetzner Cloud — Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS | — | 2026-07-23 | ✅ |
 | [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | 📦 CLI install — jobhunterteam.ai/install.sh — This document describes how the one-liner installer works today | — | 2026-07-19 | ✅ |

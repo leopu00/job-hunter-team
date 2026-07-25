@@ -32,15 +32,49 @@ Honest status, so you don't discover the edges one failed command at a time:
 |---|---|---|
 | 👀 **read** | positions, pipeline state, stats, logs, throttle graphs | `jht positions list/show/dashboard`, `jht stats`, `jht status`, `jht logs`, `jht sentinella graph` |
 | 🎛️ **command** | start/stop the team, talk to an agent, switch provider, set working hours, schedule jobs | `jht team start/stop/send/chat`, `jht providers`, `jht working-hours`, `jht cron` |
-| ⚖️ **decide** | ❌ **not yet** — judge or exclude a position, request a CV, open a ticket, post a standing directive, save the profile | tracked as **[JHT-CLI-AGENT-PARITY]** in `BACKLOG.md` |
+| ⚖️ **decide** | exclude a position (reversibly), request a CV, open a ticket, post a standing directive | `jht positions exclude/restore/request-cv`, `jht ticket`, `jht directives` |
 
-Until those verbs land, the actions exist one layer down as Python skills you
-can call inside the container:
+### ⚖️ The decision verbs
+
+These carry a **user judgement**, so treat them the way you'd treat any
+irreversible-looking action: say what you're about to do, and don't batch them
+without being asked.
+
+```bash
+# scartare una posizione — esce dalle code agenti, niente più token spesi su di lei
+jht positions exclude 42 --reason not_interested
+jht positions exclude 42 --reason other --note "sede sbagliata"   # 'other' esige --note
+jht positions restore 42                                          # torna allo stato di prima
+
+# chiedere il CV al team
+jht positions request-cv 42
+jht positions request-cv 42 --off
+
+# domandare qualcosa al team su una posizione
+jht ticket open 42 "L'annuncio è ancora attivo?"
+jht ticket list                    # la coda del Capitano
+jht ticket count                   # solo il numero — output stabile per script
+
+# ordini permanenti: sopravvivono al context-refresh del Capitano
+jht directives add "Modalità mantenimento: CV solo 90+" --kind strategy
+jht directives                     # le attive
+jht directives archive 1
+```
+
+**Exit code**: `0` fatto · `1` rifiutato per una ragione di dominio (posizione
+inesistente, `other` senza nota) · `2` argomenti sbagliati. Le operazioni su
+posizione stampano una riga JSON, quindi puoi verificare l'esito senza leggere
+il testo.
+
+Cosa **non** c'è ancora, con il tag per cercarne lo stato: dare un giudizio
+like/dislike/star (vive solo sul cloud), scaricare un artifact prodotto,
+caricare un documento, leggere e scrivere le impostazioni del Capitano —
+tutto sotto **[JHT-CLI-AGENT-PARITY]** in `BACKLOG.md`. Per quelli, le skill
+Python nel container restano la strada:
 
 ```bash
 jht sh -c 'python3 /app/shared/skills/ticket.py --help'
 jht sh -c 'python3 /app/shared/skills/team_directives.py --help'
-jht sh -c 'python3 /app/shared/skills/write_request.py --help'
 ```
 
 ### 🤖 Ask for JSON
