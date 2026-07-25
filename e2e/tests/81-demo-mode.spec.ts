@@ -63,11 +63,19 @@ test.describe("demo mode — pagine", () => {
   });
 
   test("positions: la lista contiene solo posizioni demo", async ({ page }) => {
-    await page.goto(`${BASE}/positions`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE}/positions`, { waitUntil: "networkidle" });
     const demoLinks = page.locator('a[href*="/positions/demo-"]');
-    expect(await demoLinks.count(), "nessuna posizione demo").toBeGreaterThan(
-      0,
-    );
+    // Si aspetta il *conteggio*, non la visibilità: la pagina rende due liste
+    // (tabella desktop e card mobile) e una delle due è nascosta dal CSS, per
+    // cui `.first()` può risolvere su un nodo hidden anche quando la lista c'è
+    // (misurato 2026-07-25 contro `next start`). Con `domcontentloaded` invece
+    // si contava prima dell'idratazione: 0 link in produzione, 78 dopo.
+    await expect
+      .poll(() => demoLinks.count(), {
+        message: "nessuna posizione demo in lista",
+        timeout: 10_000,
+      })
+      .toBeGreaterThan(0);
     for (const a of await page.locator('a[href^="/positions/"]').all()) {
       const href = (await a.getAttribute("href")) ?? "";
       if (/\/positions\/[^/?#]+$/.test(href)) {
@@ -77,11 +85,11 @@ test.describe("demo mode — pagine", () => {
   });
 
   test("dettaglio: la prima posizione demo si apre", async ({ page }) => {
-    await page.goto(`${BASE}/positions`, { waitUntil: "domcontentloaded" });
-    const href = await page
-      .locator('a[href*="/positions/demo-"]')
-      .first()
-      .getAttribute("href");
+    await page.goto(`${BASE}/positions`, { waitUntil: "networkidle" });
+    const links = page.locator('a[href*="/positions/demo-"]');
+    await expect.poll(() => links.count(), { timeout: 10_000 }).toBeGreaterThan(0);
+    // L'href basta anche se il nodo è nascosto: si naviga all'URL, non si clicca.
+    const href = await links.first().getAttribute("href");
     expect(href).toBeTruthy();
     const res = await page.goto(`${BASE}${href}`, {
       waitUntil: "domcontentloaded",
@@ -114,10 +122,14 @@ test.describe("demo mode — pagine", () => {
     await page.request.post(`${BASE}/api/demo`, {
       data: { persona: "design" },
     });
-    await page.goto(`${BASE}/positions`, { waitUntil: "domcontentloaded" });
-    const hrefs = await page
-      .locator('a[href*="/positions/demo-"]')
-      .evaluateAll((els) => els.map((e) => e.getAttribute("href") ?? ""));
+    await page.goto(`${BASE}/positions`, { waitUntil: "networkidle" });
+    const demoLinks = page.locator('a[href*="/positions/demo-"]');
+    await expect
+      .poll(() => demoLinks.count(), { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    const hrefs = await demoLinks.evaluateAll((els) =>
+      els.map((e) => e.getAttribute("href") ?? ""),
+    );
     expect(hrefs.length).toBeGreaterThan(0);
     expect(
       hrefs.every((h) => h.includes("demo-design-")),
@@ -129,7 +141,9 @@ test.describe("demo mode — pagine", () => {
     page,
   }) => {
     await page.request.delete(`${BASE}/api/demo`);
-    await page.goto(`${BASE}/positions`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE}/positions`, { waitUntil: "networkidle" });
+    // Un'asserzione di assenza deve dare tempo a ciò che nega di comparire.
+    await page.waitForTimeout(1500);
     expect(await page.locator('a[href*="/positions/demo-"]').count()).toBe(0);
   });
 });
