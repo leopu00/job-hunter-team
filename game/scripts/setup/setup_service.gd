@@ -262,6 +262,14 @@ static func runtime_image() -> String:
 	return custom if custom != "" else DEFAULT_RUNTIME_IMAGE
 
 
+## Il container è acceso adesso? Serve a decidere chi scrive nei dati del team:
+## quando c'è, comanda lui (vedi _do_select_provider).
+static func _container_is_running() -> bool:
+	var state := _run("docker", PackedStringArray(["inspect", "jht",
+			"--format", "{{.State.Running}}"]))
+	return state["code"] == 0 and str(state["out"]).strip_edges() == "true"
+
+
 static func _probe_host(home: String) -> Dictionary:
 	var d := {
 		"docker_available": false, "docker_running": false,
@@ -355,6 +363,24 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 				"message": "Provider selezionato sulla VPS: " \
 				+ str(PROVIDERS[provider]["name"]) if remote["code"] == 0 \
 				else "Selezione provider fallita: " + str(remote["out"]).right(240)}
+	# Quando il container c'è, la configurazione la scrive LUI: è il proprietario
+	# dei dati in /jht_home, esattamente come nel ramo VPS qui sopra. Su Linux i
+	# bind mount non rimappano gli uid: l'entrypoint trova /jht_home non
+	# scrivibile da `jht`, ne fa chown -R, e da quel momento la cartella è di
+	# uid 1001 mentre il gioco gira come 1000 — ogni scrittura dall'host muore
+	# con "config non scrivibile" (primo avvio pulito sul ThinkPad, 25/07).
+	# La scrittura diretta resta come ripiego per chi sceglie il provider prima
+	# di aver mai acceso il container.
+	var install_id := str(PROVIDERS[provider]["install_id"])
+	if _container_is_running():
+		var used := _run("docker", PackedStringArray(["exec", "jht", "node",
+				"/app/cli/bin/jht.js", "providers", "use", install_id]))
+		if used["code"] == 0:
+			return {"ok": true, "message": "Provider selezionato: "
+					+ str(PROVIDERS[provider]["name"])}
+		Log.warn("setup", "providers use nel container fallito (%d): %s"
+				% [used["code"], str(used["out"]).strip_edges().right(200)])
+
 	var home := _jht_home()
 	DirAccess.make_dir_recursive_absolute(home)
 	var path := home.path_join("jht.config.json")
@@ -371,7 +397,9 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 	var tmp := path + ".game-tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
-		return {"ok": false, "message": "config non scrivibile"}
+		return {"ok": false, "message": "configurazione non scrivibile in "
+				+ home + " — accendi prima il container (passo 01): da lì la "
+				+ "scrittura passa dal team, che di quella cartella è il proprietario"}
 	f.store_string(JSON.stringify(config, "  ") + "\n")
 	f.close()
 	var err := DirAccess.rename_absolute(tmp, path)
