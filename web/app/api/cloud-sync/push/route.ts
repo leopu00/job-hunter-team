@@ -7,6 +7,7 @@ import { mapYamlToCanonical, syncProfileToSupabase } from "@/lib/profile-sync";
 import {
   normalizeApplicationStatus,
   normalizeCriticVerdict,
+  normalizePositionStatus,
 } from "@/lib/sync-vocabulary";
 
 export const dynamic = "force-dynamic";
@@ -243,17 +244,6 @@ interface PushBody {
   profile?: ProfileIn;
 }
 
-const ALLOWED_POSITION_STATUS = new Set([
-  "new",
-  "checked",
-  "excluded",
-  "scored",
-  "writing",
-  "review",
-  "ready",
-  "applied",
-  "response",
-]);
 // 'ready' = CV finito + Critic PASS (lo Scrittore lo setta nel gate finale,
 // single-writer). DEVE restare in whitelist: senza, normalizeApplicationStatus
 // lo degrada a 'draft' e la pagina posizione mostra "draft" pur avendo il CV
@@ -268,13 +258,6 @@ const ALLOWED_DELIVERED_VIA = new Set(["telegram", "web"]);
 // position_highlights.type ha CHECK (pro|con) sul cloud (mig 003): scartiamo
 // le righe con type fuori enum per non far fallire l'intero batch upsert.
 const ALLOWED_HIGHLIGHT_TYPE = new Set(["pro", "con"]);
-
-function normalizePositionStatus(s: string | null | undefined): string {
-  if (!s) return "new";
-  return ALLOWED_POSITION_STATUS.has(s) ? s : "new";
-}
-
-
 
 function finiteNumber(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;

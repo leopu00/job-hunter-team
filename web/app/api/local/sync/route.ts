@@ -6,6 +6,7 @@ import { writeSyncState } from "@/lib/cloud-sync/state";
 import {
   normalizeApplicationStatus,
   normalizeCriticVerdict,
+  normalizePositionStatus,
 } from "@/lib/sync-vocabulary";
 
 export const dynamic = "force-dynamic";
@@ -78,18 +79,6 @@ const APPLICATIONS_COLUMNS = [
   "cv_drive_id",
   "cl_drive_id",
 ];
-
-const ALLOWED_POSITION_STATUS = new Set([
-  "new",
-  "checked",
-  "excluded",
-  "scored",
-  "writing",
-  "review",
-  "ready",
-  "applied",
-  "response",
-]);
 
 interface PositionRow {
   id: number;
@@ -172,11 +161,6 @@ function readTable<T>(
     if (err instanceof Error && /no such table/i.test(err.message)) return [];
     throw err;
   }
-}
-
-function normalizePositionStatus(s: string | null): string {
-  if (!s) return "new";
-  return ALLOWED_POSITION_STATUS.has(s) ? s : "new";
 }
 
 export async function POST() {
