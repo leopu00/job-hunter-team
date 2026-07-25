@@ -126,6 +126,16 @@ func _process(delta: float) -> void:
 	if _gfx_done:
 		_watch_framerate(delta)
 		return
+	# Scelta esplicita (impostazioni o JHT_PIXEL): la calibrazione non deve
+	# nemmeno partire. Bloccavo solo la sorveglianza continua, e la prima
+	# misura sovrascriveva comunque il valore chiesto — il banco di prova
+	# del 25/07 ha misurato tre profili "forzati" che erano tutti finiti
+	# sullo stesso gradino deciso dalla calibrazione.
+	if not is_equal_approx(Game.render_scale(), 1.0) \
+			or OS.get_environment("JHT_PIXEL").strip_edges() != "":
+		_gfx_done = true
+		_applied_scale = Game.render_scale()
+		return
 	_gfx_time += delta
 	if _gfx_time < 5.0:
 		return
