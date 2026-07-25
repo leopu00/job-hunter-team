@@ -607,6 +607,8 @@ func _physics_process(delta: float) -> void:
 			elif _follow_path(PIPELINE_SPEED if _pipeline_trip_active else SPEED,
 					_leg.get("mode", "walk")):
 				_arrive_at_leg()
+			else:
+				_watch_stuck(delta)
 		S.TALK:
 			velocity = Vector2.ZERO
 		S.SEATING:
@@ -894,6 +896,61 @@ func _prepare_pipeline_trip(transition_state := "") -> bool:
 	_legs = [pick, process, deliver, _leg_to(_spot, "walk", 0.0, "work")]
 	return true
 
+## ── Anti-incastro ────────────────────────────────────────────────────
+## Un agente che spinge contro un mobile non avanza mai: `_pi` resta fermo,
+## `_follow_path` non conclude e il viaggio non finisce PIÙ. Il Mantenitore è
+## rimasto piantato contro una scrivania finché non l'ha visto l'utente
+## (25/07). La simulazione se ne deve accorgere da sola: prima si ritenta il
+## percorso senza la corsia estetica (che è ciò che spinge il corpo di lato,
+## dentro gli arredi), poi si atterra sulla meta e il viaggio prosegue.
+const STUCK_AFTER := 3.0   # secondi di spinta senza avanzare
+const STUCK_STEP := 8.0    # px sotto i quali si considera fermo
+
+var _stuck_time := 0.0
+var _stuck_anchor := Vector2.INF
+var _unstuck_tries := 0
+
+
+func _watch_stuck(delta: float) -> void:
+	if _stuck_anchor == Vector2.INF:
+		_stuck_anchor = global_position
+	_stuck_time += delta
+	if _stuck_time < STUCK_AFTER:
+		return
+	var moved := global_position.distance_to(_stuck_anchor)
+	_stuck_time = 0.0
+	_stuck_anchor = global_position
+	if moved >= STUCK_STEP:
+		_unstuck_tries = 0
+		return
+	_unstuck_tries += 1
+	var target: Vector2 = _leg.get("target", _spot)
+	if _unstuck_tries == 1:
+		_path_lane = 0.0  # la corsia è il sospettato numero uno
+		_path = nav.path(global_position, target)
+		_pi = 0
+		Log.info("agent", "%s non avanza: ricalcolo il percorso senza corsia"
+				% (uid if uid != "" else slug))
+		return
+	# Secondo tentativo fallito: meglio un salto brutto che un agente
+	# congelato a metà stanza per il resto della sessione.
+	Log.warn("agent", "%s ancora fermo: lo porto a destinazione" % (uid if uid != "" else slug))
+	_unstuck_tries = 0
+	global_position = target
+	_path = PackedVector2Array()
+	_pi = 0
+	velocity = Vector2.ZERO
+	_arrive_at_leg()
+
+
+## Il contatore riparte a ogni nuova tratta: solo così misura il viaggio in
+## corso e non la somma di soste legittime.
+func _reset_stuck_watch() -> void:
+	_stuck_time = 0.0
+	_stuck_anchor = Vector2.INF
+	_unstuck_tries = 0
+
+
 ## Jitter sulla meta: trenta agenti sullo stesso pixel sembrano una coda.
 func _jit(p: Vector2) -> Vector2:
 	return p + Vector2(randf_range(-26, 26), randf_range(-14, 14))
@@ -906,6 +963,7 @@ func _start_next_leg() -> void:
 	_leg = _legs.pop_front()
 	_path = nav.path(global_position, _leg["target"])
 	_pi = 0
+	_reset_stuck_watch()
 	state = S.TRIP
 
 func _arrive_at_leg() -> void:
