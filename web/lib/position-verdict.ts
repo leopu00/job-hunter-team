@@ -22,3 +22,43 @@ export function verdictOf(action: string, score: number | null): Verdict {
   if (score != null && score >= 5) return "top";
   return "review_ok";
 }
+
+/** Verdetti dal più negativo al più positivo. */
+export const VERDICT_ORDER: Verdict[] = [
+  "no",
+  "review_low",
+  "review_ok",
+  "top",
+];
+
+/**
+ * Cosa viene spedito al backend quando l'utente sceglie un verdetto:
+ * l'azione e il punteggio registrati su `position_feedback`, il segnale
+ * di direzione per lo Scout e se la posizione va esclusa.
+ */
+export type VerdictSignal = {
+  action: "like" | "dislike" | "star";
+  score: number;
+  direction: "more_like_this" | "less_like_this" | null;
+  exclude?: boolean;
+};
+
+/**
+ * Verdetto → segnale. È l'inverso di `verdictOf`, che dalla coppia
+ * (action, score) risale al verdetto: le due devono restare coerenti, e
+ * per questo stanno nello stesso file.
+ *
+ * Era ricopiata in `FeedbackButtons` e in `SwipeDeck` — i due modi che
+ * l'utente ha di esprimere lo stesso giudizio — con tanto di commenti
+ * che si citavano a vicenda per tenerle allineate a mano. Se divergono,
+ * lo stesso giudizio scrive dati diversi a seconda di dove viene dato.
+ */
+export const VERDICT_SIGNAL: Record<Verdict, VerdictSignal> = {
+  no: { action: "dislike", score: 1, direction: "less_like_this", exclude: true },
+  // 'Poco interessante' NON è un dislike (scelta utente 18/07): la
+  // posizione resta tenuta (niente esclusione) e non manda un segnale
+  // less_like_this allo Scout — è un keep con entusiasmo basso.
+  review_low: { action: "like", score: 2, direction: null },
+  review_ok: { action: "like", score: 4, direction: "more_like_this" },
+  top: { action: "star", score: 5, direction: "more_like_this" },
+};
