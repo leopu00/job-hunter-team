@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { isSeen, SEEN_EVENT } from "@/lib/seen-positions";
 
+// Badge pieno: i titoli delle posizioni sono verdi e un badge verde "a filo"
+// ci si confondeva dentro. Invertendolo — fondo verde, scritta bianca — resta
+// nel brand ma stacca per contrasto invece che per tinta. Literal e non
+// var(--color-white), che in tema chiaro è quasi nero.
+const BADGE_INK = "#ffffff";
+
 type Props = {
   id: string;
   // Tooltip/aria localizzato, passato dal chiamante (dict della pagina).
@@ -39,11 +45,20 @@ export default function UnseenDot({ id, label, initialSeen }: Props) {
     <span
       title={label}
       aria-label={label}
-      className="inline-block shrink-0 self-center rounded border px-1 text-[8px] font-bold uppercase tracking-wider leading-[13px]"
+      // display:inline (NON inline-block): dentro il titolo delle card, che è
+      // un -webkit-box con line-clamp, un inline-block è un atomic inline e
+      // WebKit lo conta come contenuto oltre il taglio → stampa un "…" anche
+      // quando il titolo ci sta tutto. In inline bordo e padding si disegnano
+      // uguale; nei contenitori flex (tabelle) resta un flex item come prima.
+      // In inline il box NON allarga la riga: se è più alto della line-box del
+      // titolo, l'overflow:hidden del line-clamp gli rade il fondo. Con
+      // py-[1px] e vertical-align sollevato di 1px sta dentro i ~17.9px della
+      // riga (titolo 13px × leading-snug).
+      className="inline shrink-0 self-center rounded px-1 py-[1px] text-[8px] font-bold uppercase tracking-wider leading-none"
       style={{
-        color: "var(--color-green)",
-        borderColor: "var(--color-green)",
-        background: "color-mix(in srgb, var(--color-green) 10%, transparent)",
+        color: BADGE_INK,
+        background: "var(--color-green)",
+        verticalAlign: "1px",
       }}
     >
       NEW
