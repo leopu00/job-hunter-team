@@ -153,7 +153,6 @@ type ShortcutCtx = { registerEscape: (fn: () => void) => () => void };
 const ShortcutContext = createContext<ShortcutCtx>({
   registerEscape: () => () => {},
 });
-export const useShortcuts = () => useContext(ShortcutContext);
 
 const SHORTCUT_KEYS: { keys: string; key: string }[] = [
   { keys: "⌘K", key: "sc_search" },

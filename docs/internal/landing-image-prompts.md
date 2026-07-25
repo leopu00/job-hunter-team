@@ -114,11 +114,13 @@ Prompt usato:
 > quill pen and writing on a sheet). All standing, none seated. [REGOLA OCCHIALI].
 > Leave room for creativity in poses and outfit details. Transparent PNG.
 
-### `landing.dashboard` ✅ FATTO IN CODICE
-Realizzato come componente SVG/CSS, **non** immagine generata:
-`web/app/components/landing/DashboardMockup.tsx` (donut chart + card flottanti
-in prospettiva 3D, sfondo trasparente). Se non convince, qui sotto il prompt di
-riserva per generarla invece:
+### `landing.dashboard` — DA RIFARE
+Era stato realizzato come componente SVG/CSS invece che come immagine
+(`web/app/components/landing/DashboardMockup.tsx`: donut chart + card flottanti
+in prospettiva 3D), ma quel componente è stato eliminato il 25/07 insieme alla
+vecchia landing pubblica: era rimasto senza alcun punto di utilizzo. Se la
+sezione serve alla nuova `LandingHome`, il prompt di riserva per generare
+l'immagine è qui sotto:
 > [STYLE] Over-the-shoulder view of a person at a sleek laptop, the screen showing
 > a clean abstract dashboard: a world map dotted with glowing markers, simple bar
 > and donut charts, a list of cards — all abstract, NO readable text. Calm,

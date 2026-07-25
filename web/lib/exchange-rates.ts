@@ -97,9 +97,6 @@ export function formatMoneyCompact(n: number): string {
   return `${Math.round(n)}`;
 }
 
-// Compat: alcune parti usano la mappa direttamente.
-export const CURRENCY_SYMBOL = SYMBOLS;
-
 // Fallback statico (ordine di grandezza giugno 2026) se il fetch fallisce.
 const FALLBACK: Rates = {
   EUR: 1,
