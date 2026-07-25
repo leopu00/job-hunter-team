@@ -33,13 +33,34 @@ Verifiche eseguite (tutte riproducibili):
 | `package.json` 0.2.0 vs metadati Godot 0.2.1 (dal 20/07) | `check-release-version.sh` è il **primo job** di `release.yml`: qualunque tag avrebbe fatto fallire la release (v0.2.1 ≠ root, v0.2.0 ≠ game) | `326d699f` |
 | `CHANGELOG` fermo al 06/07 con ~500 commit fuori | `release.yml` estrae le note della GitHub Release dal blocco `## [X.Y.Z]`: taggare avrebbe pubblicato note quasi vuote | `326d699f` |
 | `ops/release.md` descriveva la release Electron (`desktop/package.json`, electron-builder, DMG/AppImage/deb, Windows ARM64) | Chi seguiva il doc sbagliava la release; `desktop/` non esiste più dal 19/07 | `7d0a756c` |
-| `install.sh`: source italiano, mirror pubblico inglese — e il test rosso suggeriva `sync-public-installers.sh` | Il sync alla cieca avrebbe rimesso in **italiano** l'installer servito da jobhunterteam.ai. Delta funzionale verificato: **zero** (solo commenti e stringhe) | `800ec4ff` |
+| `install.sh`: source italiano, mirror pubblico inglese | **Il sito serviva l'italiano.** Il `buildCommand` di Vercel rigenera `web/public/install.sh` da `scripts/install.sh` a ogni deploy (dal 2026-04-11): la traduzione del 03/07, applicata **solo al mirror**, veniva sovrascritta a ogni build. Per tre settimane il repo sembrava tradotto e il funnel pubblico parlava italiano | `800ec4ff` + `[vedi § 3.1]` |
 | `install.ps1` **mai tradotto** (né source né mirror) | Ogni utente Windows leggeva output italiano dal funnel pubblico | `800ec4ff` |
 | **pytest non girava in nessuna CI** | È la ragione per cui `test_public_installers_sync.py` — scritto apposta per fallire in CI sul drift — è rimasto rosso tre settimane senza che nessuno lo vedesse | `e9b1f376` |
 | `04-threat-model.md` modellava "Electron + dashboard su localhost:3000" | È il documento destinato a diventare il `SECURITY.md` pubblico: descriveva una superficie che non spedisce più | `c30a3e2b` |
 | Demo mode (~10k righe, 4 personas × 7 lingue) senza una riga di documentazione, cookie non dichiarati | Superficie pubblica post-login senza design record né dichiarazione cookie | `f4fe27f3` |
 
 Riallineati nello stesso ciclo: `MAINTAINERS.md` (firma macOS **obbligatoria**, non più "deferred post-beta"), `BACKLOG`/`ROADMAP`/`BETA`, indice `docs/internal`, review-log (20 voci morte, tutto il post-maggio assente), 18 link a un doc cancellato, 3 comandi CLI non documentati, `pyproject.toml` che escludeva ancora `desktop/`.
+
+---
+
+### 3.1 🪤 Il caso installer, per esteso (la trappola più cattiva del giro)
+
+Vale raccontarlo perché il meccanismo è generale: **un mirror rigenerato al build rende il file committato una bugia innocua fino al giorno in cui qualcuno lo modifica al posto del source.**
+
+1. 2026-04-11 (`a38dba83`) — `vercel.json` prende un `buildCommand` che fa
+   `cp scripts/install.sh web/public/install.sh`: il sito serve sempre il source.
+2. 2026-07-03 (`1d59fa53`) — la traduzione EN del funnel pubblico viene applicata a
+   **`web/public/install.sh`**, cioè esattamente al file che il build sovrascrive. Il repo
+   sembra tradotto; il sito continua a servire italiano.
+3. 2026-07-19 (`32225cb7`) — `scripts/install.sh` riceve modifiche di commento: ora i due
+   file divergono anche nel contenuto e il test di sync diventa **rosso**.
+4. Il test però non gira in CI (§ 2), quindi nessuno lo vede. E il suo messaggio d'errore
+   consigliava `sync-public-installers.sh`, che avrebbe allineato il mirror **al source
+   italiano** — peggiorando il repo senza cambiare nulla per gli utenti.
+
+Chiuso così: traduzione portata a monte in `scripts/` (entrambi gli installer), `buildCommand`
+che ora invoca `scripts/sync-public-installers.sh` — quindi rigenera **anche il `.ps1`**, che
+prima non era coperto — e il test in CI a guardia del mirror committato.
 
 ---
 
