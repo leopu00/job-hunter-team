@@ -19,35 +19,61 @@ var _tour_tracker: TourTracker
 var _tour_launch_opened := false
 var _traffic_demo_started := false
 
+## Palcoscenico del mondo: di norma è la scena stessa. Col profilo pixel
+## diventa un SubViewport a risoluzione ridotta, ingrandito con filtro
+## nearest — la GPU riempie un quarto dei pixel (a shrink 2) disegnando le
+## stesse cose. La UI vive nei CanvasLayer, fuori di qui, e resta nitida.
+var _stage: Node
+var _pixel_stage: SubViewportContainer
+var _pixel_layer: CanvasLayer
+var _render_scale := 1.0
+
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
 	_doctor_test = OS.get_environment("JHT_DOCTOR_TEST")
+	_stage = self
+	var wanted := Game.render_scale()
+	if wanted < 0.999:
+		set_render_scale(wanted)
 	# Stratificazione globale: sfondo (-3), tinte e tappeti (-2), aure degli
 	# agenti (-1), mondo y-sortato (0+). Le aure risultano quindi davvero
 	# appoggiate al suolo e vengono coperte dagli arredi senza maschere ad hoc.
 	var floor_layer := OfficeFloor.new()
 	floor_layer.z_index = -3
-	add_child(floor_layer)
+	_stage.add_child(floor_layer)
 	var dressing_layer := DepartmentDressing.new()
 	dressing_layer.z_index = -2
-	add_child(dressing_layer)  # tinte/targhe dei 5 reparti (dev-art)
+	_stage.add_child(dressing_layer)  # tinte/targhe dei 5 reparti (dev-art)
 	var rugs_layer := DeptRugs.new()
 	rugs_layer.z_index = -2
-	add_child(rugs_layer)  # tappeti persiani rettangolari colore-reparto
+	_stage.add_child(rugs_layer)  # tappeti persiani rettangolari colore-reparto
+	# Pavimento, tinte e tappeti sono disegnati a mano, primitiva per
+	# primitiva (fughe, riflessi, ombre): centinaia di draw call che si
+	# ripetono ogni frame per un'immagine che non cambia MAI — nessuno dei
+	# tre ha _process o queue_redraw. Vengono cotti una volta in una texture
+	# e da lì in poi costano una draw call sola.
+	# ⚠️ NON ancora attivo di default (25/07): dentro il forno spariscono i
+	# due Polygon2D di fondo di OfficeFloor — il void esterno e la base
+	# scura del pavimento — perché usano `show_behind_parent`, che con un
+	# genitore diverso non li mette più dietro. Risultato: ufficio slavato e
+	# void grigio. Il guadagno è reale ma va risolto prima quel dettaglio;
+	# fino ad allora si attiva solo con JHT_BAKE=1.
+	if OS.get_environment("JHT_BAKE") == "1":
+		_bake_backdrop([floor_layer, dressing_layer, rugs_layer])
 	# giorno/notte sull'ora locale: esterno, lampade e luce dalle finestre.
 	# Va qui, PRIMA di mondo e maintainer, che devono disegnarsi sopra.
-	add_child(DayNight.new())
+	_stage.add_child(DayNight.new())
 	if OS.get_environment("JHT_ONLYFLOOR") == "1":  # TEST-AUTO
 		var c := Camera2D.new()
 		c.position = Vector2(1300, 750)
-		add_child(c)
+		_stage.add_child(c)
 		c.make_current()
 		return
 
 	world = Node2D.new()
 	world.name = "World"
 	world.y_sort_enabled = true
-	add_child(world)
+	_stage.add_child(world)
 	# la porta dell'ufficio (perimetro sud, accanto all'entrata): da qui
 	# escono gli agenti killati/fermati — missione pipeline 20:1x
 	world.add_child(ExitDoor.new(EXIT_DOOR))
@@ -171,23 +197,23 @@ func _ready() -> void:
 		# si RITROVA già al lavoro — è anche la rappresentazione veritiera
 		# (gli agenti esistono già) e cancella il picco di lag del boot.
 		agent.set_story_marker(_seat_audit == "" \
-				and not ScriptedOnboarding.provider_authenticated())
+				and ScriptedOnboarding.story_mode())
 		agents.append(agent)
 	if traffic_demo:
 		var probe := TrafficProbe.new()
 		probe.setup(agents)
-		add_child(probe)
+		_stage.add_child(probe)
 	# Audit visuale locale: con JHT_SEAT_AUDIT=<reparto>:<desk> mostra una
 	# vignetta reale sul singolo composito inquadrato, senza dipendere dalla VPS.
 	if _seat_audit != "" and OS.get_environment("JHT_SPEECH_AUDIT") == "1" \
 			and not agents.is_empty():
 		agents[0].say("Verifica ancoraggio sopra la testa")
 
-	add_child(TesseractEdges.new())  # gli spigoli blu della box (trasparenti)
+	_stage.add_child(TesseractEdges.new())  # gli spigoli blu della box (trasparenti)
 	add_child(Sfx.make_ambient_hum())
 
 	_camera = FreeCamera.new()
-	add_child(_camera)
+	_stage.add_child(_camera)
 	_camera.clicked.connect(_on_world_click)
 	if OS.get_environment("JHT_CAMERA_LOCK_TEST") == "1":
 		_camera_lock_selftest.call_deferred()
@@ -220,7 +246,7 @@ func _ready() -> void:
 		var vp := get_viewport_rect().size
 		var z := minf(vp.x / FurnitureDefs.WORLD.size.x, vp.y / FurnitureDefs.WORLD.size.y)
 		ov.zoom = Vector2(z, z)
-		add_child(ov)
+		_stage.add_child(ov)
 		ov.make_current()
 	elif OS.get_environment("JHT_FOCUS_CORE") == "1":
 		# Audit delle due postazioni direzionali: entrambe nello stesso frame,
@@ -228,7 +254,7 @@ func _ready() -> void:
 		var core_cam := Camera2D.new()
 		core_cam.position = Vector2(1700, 535)
 		core_cam.zoom = Vector2(1.45, 1.45)
-		add_child(core_cam)
+		_stage.add_child(core_cam)
 		core_cam.make_current()
 	elif OS.get_environment("JHT_FOCUS_LOUNGE") == "1":
 		# Inquadratura di controllo dell'intero angolo: Dottore/Mantenitore a
@@ -236,7 +262,7 @@ func _ready() -> void:
 		var lounge_cam := Camera2D.new()
 		lounge_cam.position = Vector2(2490, 1140)
 		lounge_cam.zoom = Vector2(1.45, 1.45)
-		add_child(lounge_cam)
+		_stage.add_child(lounge_cam)
 		lounge_cam.make_current()
 	elif OS.get_environment("JHT_FOCUS_DEPT") != "":
 		var focus_id := OS.get_environment("JHT_FOCUS_DEPT")
@@ -245,7 +271,7 @@ func _ready() -> void:
 			var zone: Rect2 = DepartmentDefs.DEPARTMENTS[focus_id]["zone"]
 			focus_cam.position = zone.get_center()
 			focus_cam.zoom = Vector2(1.65, 1.65)
-			add_child(focus_cam)
+			_stage.add_child(focus_cam)
 			focus_cam.make_current()
 
 	if _seat_audit == "" and _doctor_test == "":
@@ -259,7 +285,7 @@ func _ready() -> void:
 		_tour_enabled = OS.get_environment("JHT_TOUR_TEST") == "1" \
 				or OS.get_environment("JHT_TOUR_PREVIEW") == "1" \
 				or (OS.get_environment("JHT_SCENE") == "" and TourGuide.active() \
-					and not ScriptedOnboarding.provider_authenticated())
+					and ScriptedOnboarding.story_mode())
 		if _tour_enabled:
 			Log.info("tour", "tour primo avvio attivo dal passo %d" % TourGuide.step_index())
 			_tour_tracker = TourTracker.new()
@@ -847,6 +873,56 @@ func _guided_onboarding_selftest() -> void:
 	check.call(profile_panel._prof_edits.has("target_role") \
 			and profile_panel._prof_edits["target_role"].text == "Software Engineering",
 			"bozza scripted non precompila il profilo")
+
+	# Regressione 24/07 — provider GIÀ configurato e container ancora spento:
+	# prima i dialoghi authored si spegnevano al solo vedere il token e la
+	# chat viva non era disponibile, lasciando l'utente senza interlocutore.
+	# Il criterio è il canale, non il token; e i passi già soddisfatti si
+	# riconciliano invece di attendere un login che non arriverà mai.
+	SetupService.status["container_running"] = false
+	SetupService.status["provider_authenticated"] = true
+	ScriptedOnboarding.set_provider_test_override(1)
+	check.call(ScriptedOnboarding.use_scripted_chat("assistente") \
+			and ScriptedOnboarding.use_scripted_chat("coordinatore"),
+			"con container spento la chat guidata deve restare disponibile")
+	check.call(not ScriptedOnboarding.live_text_available("coordinatore"),
+			"senza container non può esistere testo libero verso l'agente reale")
+	check.call(ScriptedOnboarding.story_mode(),
+			"senza container l'ufficio deve restare in modalità racconto")
+	ScriptedOnboarding._steps["coordinatore"] = "provider"
+	ScriptedOnboarding._reconcile_with_status(SetupService.status)
+	check.call(str(ScriptedOnboarding._steps["coordinatore"]) == "profile",
+			"il passo provider va marcato fatto, non lasciato su un login impossibile")
+	ScriptedOnboarding._steps["coordinatore"] = "runtime"
+	SetupService.status["container_running"] = true
+	ScriptedOnboarding._reconcile_with_status(SetupService.status)
+	check.call(str(ScriptedOnboarding._steps["coordinatore"]) == "profile",
+			"con runtime e provider pronti si arriva diretti al profilo")
+	check.call(not ScriptedOnboarding.story_mode(),
+			"con team operativo la modalità racconto deve chiudersi")
+
+	# Pannello Docker: deve mostrare la versione del runtime e l'azione di
+	# aggiornamento, altrimenti l'utente resta su un'immagine vecchia senza
+	# nemmeno saperlo (il gioco si aggiorna con l'installer, il container no).
+	SetupService.status["docker_running"] = true
+	SetupService.status["container_exists"] = true
+	SetupService.status["runtime_stale"] = true
+	var docker_panel := SectionPanel.new("docker", 24.0)
+	add_child(docker_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var docker_labels := ""
+	var docker_buttons := ""
+	for node in docker_panel.find_children("*", "", true, false):
+		if node is Label:
+			docker_labels += (node as Label).text + "\n"
+		elif node is Button:
+			docker_buttons += (node as Button).text + "\n"
+	check.call(docker_labels.contains(UIStrings.t("setup.runtime_stale")),
+			"il pannello Docker non segnala il runtime da aggiornare")
+	check.call(docker_buttons.contains(UIStrings.t("setup.runtime_update")),
+			"il pannello Docker non offre l'aggiornamento del runtime")
+	docker_panel.queue_free()
 	var ok := failures.is_empty()
 	print("GUIDED-ONBOARDING-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"failures": failures, "draft": draft,
@@ -1487,7 +1563,7 @@ func _on_world_click(target: Vector2) -> void:
 		return  # con un pannello aperto, il mondo non riceve click
 	for agent in agents:
 		if agent.hit_by(target):
-			if not ScriptedOnboarding.provider_authenticated() and agent.uid == "":
+			if ScriptedOnboarding.story_mode() and agent.uid == "":
 				_start_talk(agent)
 			else:
 				_open_agent_card(agent)
@@ -1637,7 +1713,7 @@ func _open_chat_menu() -> void:
 	add_child(_chat_menu)
 	_chat_menu.closed.connect(func() -> void: _chat_menu = null)
 	_chat_menu.open_chat.connect(func(slug: String, display_name: String) -> void:
-		if not ScriptedOnboarding.provider_authenticated():
+		if ScriptedOnboarding.story_mode():
 			for candidate in agents:
 				if candidate.uid == "" and candidate.slug == slug \
 						and candidate.display_name == display_name:
@@ -1693,7 +1769,7 @@ func _start_talk(agent: AgentNPC) -> void:
 		_camera.focus_on(agent.global_position + Vector2(0, -40), 1.05)
 		_tour_open_stop_dialogue(slug)
 		return
-	if not ScriptedOnboarding.provider_authenticated():
+	if ScriptedOnboarding.story_mode():
 		_story_seen[agent.slug] = true
 		_tour_visits += 1
 		if not tour_running:
@@ -1757,7 +1833,7 @@ func _refresh_tour_markers() -> void:
 				agent.set_story_marker(slug == "assistente" \
 						and TourGuide.current_slug() == "assistente", false)
 		else:
-			agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
+			agent.set_story_marker(ScriptedOnboarding.story_mode(),
 					bool(_story_seen.get(agent.slug, false)))
 
 func _on_tour_changed() -> void:
@@ -2472,7 +2548,7 @@ func _spawn_showroom() -> void:
 		agent.setup(def, nav)
 		# Anche il ritorno allo showroom ritrova l'ufficio popolato: niente
 		# fila alla porta quando la connessione VPS cade.
-		agent.set_story_marker(not ScriptedOnboarding.provider_authenticated(),
+		agent.set_story_marker(ScriptedOnboarding.story_mode(),
 				bool(_story_seen.get(str(def["slug"]), false)))
 		agents.append(agent)
 	if _tour_enabled and TourGuide.active():
@@ -2573,6 +2649,144 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 	agents.append(agent)
 
 # ── Costruzione scena ─────────────────────────────────────────────────
+
+## Cuoce i livelli statici di sfondo in un'unica texture. I nodi originali
+## finiscono in un SubViewport che renderizza UNA volta sola: da lì in poi
+## lo sfondo dell'ufficio è uno Sprite2D, e le centinaia di primitive che lo
+## componevano non toccano più la GPU. L'aspetto è identico al pixel.
+func _bake_backdrop(layers: Array) -> void:
+	var rect: Rect2 = FurnitureDefs.WORLD
+	var oven := SubViewport.new()
+	oven.name = "BackdropOven"
+	oven.size = Vector2i(rect.size)
+	# Fondo OPACO (il clear color è già il VOID della scena): su fondo
+	# trasparente le tinte e le ombre semi-trasparenti si comporrebbero
+	# contro il nulla e uscirebbero schiarite — l'ufficio cotto sembrava
+	# sbiadito e il void attorno diventava grigio.
+	oven.transparent_bg = false
+	oven.disable_3d = true
+	oven.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(oven)
+	# Il mondo ha origine negativa (WORLD parte da y=-420): la teglia va
+	# traslata, altrimenti si cuoce metà pavimento fuori dai bordi.
+	var holder := Node2D.new()
+	holder.position = -rect.position
+	oven.add_child(holder)
+	for layer in layers:
+		var node: Node2D = layer
+		node.get_parent().remove_child(node)
+		node.z_index = 0
+		holder.add_child(node)
+	_finish_bake.call_deferred(oven, rect)
+
+
+## Il render target va copiato in una texture NORMALE, non usato com'è: la
+## ViewportTexture resta nello spazio colore del target e, ridisegnata, alza
+## i toni scuri — il void nero diventava grigio e le tinte uscivano slavate.
+## Il passaggio per l'immagine costa una frazione di secondo, una volta sola,
+## e restituisce esattamente i colori della scena viva.
+func _finish_bake(oven: SubViewport, rect: Rect2) -> void:
+	if not is_instance_valid(oven):
+		return
+	await RenderingServer.frame_post_draw
+	var image := oven.get_texture().get_image()
+	if image == null or image.is_empty():
+		Log.warn("perf", "bake sfondo non riuscito: resto sui livelli disegnati")
+		return
+	var backdrop := Sprite2D.new()
+	backdrop.name = "BackdropBaked"
+	backdrop.texture = ImageTexture.create_from_image(image)
+	backdrop.centered = false
+	backdrop.position = rect.position
+	backdrop.z_index = -3
+	_stage.add_child(backdrop)
+	_stage.move_child(backdrop, 0)
+	oven.queue_free()  # con dentro i livelli sorgente: non servono più
+	Log.info("perf", "sfondo ufficio cotto in una texture %dx%d"
+			% [image.get_width(), image.get_height()])
+
+
+## Monta (o smonta) il palcoscenico a risoluzione ridotta. Funziona anche a
+## ufficio già avviato: la calibrazione decide dopo 15 secondi, e a quel
+## punto i nodi del mondo vengono semplicemente traslocati nel SubViewport.
+## `value` è la scala di rendering del mondo: 1.0 = nativo, 0.75 = tre quarti
+## di lato, 0.5 = metà. Deliberatamente CONTINUA e non un divisore intero:
+## fra "nativo" e "metà" c'è tutto lo spazio dove la grana si vede appena
+## (richiesta Leone 25/07) e dove sta comunque metà del risparmio.
+func set_render_scale(value: float) -> void:
+	var target := clampf(value, 0.25, 1.0)
+	if is_equal_approx(target, _render_scale):
+		return
+	_render_scale = target
+	if target >= 0.999:
+		if _pixel_stage != null:
+			_move_world_nodes(_pixel_stage.get_child(0), self)
+			_pixel_layer.queue_free()
+			_pixel_layer = null
+			_pixel_stage = null
+			_stage = self
+		return
+	if _pixel_stage != null:
+		_apply_stage_size()
+		return
+	# Il container è un Control: figlio diretto di un Node2D resterebbe di
+	# dimensione zero (gli anchor hanno senso solo dentro uno spazio schermo)
+	# e il mondo uscirebbe nero. Serve un CanvasLayer, sotto tutta la UI.
+	_pixel_layer = CanvasLayer.new()
+	_pixel_layer.name = "PixelLayer"
+	_pixel_layer.layer = -100
+	add_child(_pixel_layer)
+	# Il container resta a shrink 1 e viene RIMPICCIOLITO come Control, poi
+	# riportato a schermo pieno con `scale`: così il fattore è continuo e
+	# l'inoltro degli eventi resta quello del SubViewportContainer, che
+	# rimappa da sé le coordinate del mouse.
+	_pixel_stage = SubViewportContainer.new()
+	_pixel_stage.name = "PixelStage"
+	_pixel_stage.stretch = true
+	_pixel_stage.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_pixel_layer.add_child(_pixel_stage)
+	var vp := SubViewport.new()
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	vp.handle_input_locally = false
+	vp.transparent_bg = false
+	_pixel_stage.add_child(vp)
+	_apply_stage_size()
+	if not get_viewport().size_changed.is_connected(_apply_stage_size):
+		get_viewport().size_changed.connect(_apply_stage_size)
+	_stage = vp
+	_move_world_nodes(self, vp)
+
+
+## Dimensiona il palcoscenico sulla finestra corrente. Il container copre
+## `scala × finestra` e viene poi ingrandito di 1/scala: il mondo si disegna
+## su quei pixel e basta.
+func _apply_stage_size() -> void:
+	if _pixel_stage == null:
+		return
+	var window: Vector2 = get_viewport_rect().size
+	var inner := (window * _render_scale).floor().max(Vector2(320, 180))
+	_pixel_stage.position = Vector2.ZERO
+	_pixel_stage.size = inner
+	_pixel_stage.scale = window / inner
+
+
+## Trasloca i nodi di mondo (Node2D e camere) preservando l'ordine. HUD,
+## pannelli e sidebar sono CanvasLayer: non si toccano, devono restare
+## a risoluzione piena.
+func _move_world_nodes(from: Node, to: Node) -> void:
+	if from == null or to == null or from == to:
+		return
+	var current: Camera2D = null
+	for node in from.get_children():
+		if not (node is Node2D):
+			continue
+		if node is Camera2D and (node as Camera2D).is_current():
+			current = node
+		from.remove_child(node)
+		to.add_child(node)
+	if current != null:
+		current.make_current()
+
 
 func _invisible_wall(r: Rect2) -> StaticBody2D:
 	var body := StaticBody2D.new()

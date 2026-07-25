@@ -26,6 +26,7 @@ var _draft := {}
 var _preferences := {}
 var _answers: Array = []
 var _completed := {}
+var _reconciled := {}
 var _provider_choice := ""
 var _provider_test_override := -1
 
@@ -34,6 +35,48 @@ func _ready() -> void:
 	_load_state()
 	for agent in AGENTS:
 		_ensure_started(agent)
+	# Gli step del Coordinatore sono riconciliati sullo STATO reale, non
+	# innescati dagli eventi: chi arriva con provider o container già pronti
+	# (reinstallazione, Claude Code installato prima del gioco) li trova
+	# marcati come fatti invece di restare bloccato su un passo impossibile.
+	SetupService.status_changed.connect(_reconcile_with_status)
+	_reconcile_with_status(SetupService.status)
+
+
+## Allinea il passo corrente ai prerequisiti già soddisfatti. Idempotente:
+## ogni salto lo annuncia una volta sola e non torna mai indietro.
+func _reconcile_with_status(s: Dictionary) -> void:
+	if is_complete("coordinatore"):
+		return
+	var container := bool(s.get("container_running", false))
+	var provider := bool(s.get("provider_authenticated", false))
+	var step := str(_steps.get("coordinatore", "intro"))
+	var moved := false
+	if step == "runtime" and container:
+		_steps["coordinatore"] = "provider"
+		step = "provider"
+		moved = true
+		_announce_skip("runtime")
+	if step in ["provider", "login"] and provider:
+		_steps["coordinatore"] = "profile"
+		moved = true
+		_announce_skip("provider")
+	if moved:
+		_save_state()
+		conversation_changed.emit("coordinatore")
+
+
+func _announce_skip(what: String) -> void:
+	if bool(_reconciled.get(what, false)):
+		return
+	_reconciled[what] = true
+	match what:
+		"runtime":
+			_reply("coordinatore", _tr("Lo spazio di lavoro della squadra è già pronto su questo computer: salto il passaggio.",
+					"The team’s workspace is already prepared on this computer: skipping that step."))
+		"provider":
+			_reply("coordinatore", _tr("Vedo che un servizio di intelligenza è già collegato su questo computer: tengo quello e andiamo avanti. Potrai cambiarlo quando vuoi da Provider.",
+					"I can see an intelligence service is already connected on this computer: I’ll keep it and move on. You can change it any time from Provider."))
 
 
 static func normalize_agent(value: String) -> String:
@@ -205,13 +248,25 @@ func set_provider_test_override(value: int) -> void:
 	_provider_test_override = clampi(value, -1, 1)
 
 
+## L'ufficio è ancora in modalità racconto? Vero finché il team non è davvero
+## operativo. Un token sul disco non basta: senza container gli agenti reali
+## non esistono e i marker/story devono restare, altrimenti l'utente clicca
+## agenti muti (24/07).
+func story_mode() -> bool:
+	return not (provider_authenticated() \
+			and bool(SetupService.status.get("container_running", false)))
+
+
 func use_scripted_chat(value: String) -> bool:
 	var agent := normalize_agent(value)
-	# Muro intenzionalmente rigido: i dialoghi authored sono il gioco offline,
-	# non un secondo interlocutore che si mescola con l'agente reale. Appena
-	# un provider risulta autenticato spariscono, anche se il container o il
-	# singolo agente devono ancora essere avviati.
-	return supports(agent) and not provider_authenticated()
+	# I dialoghi authored sono il gioco offline, non un secondo interlocutore
+	# che si mescola con l'agente reale: si ritirano appena esiste un canale
+	# vivo verso di lui. Il criterio è il canale, NON il token: legarli a
+	# `provider_authenticated` lasciava senza interlocutore chi arriva con un
+	# provider già configurato (token sul disco, container ancora spento) —
+	# scriptato spento e live non ancora disponibile (24/07).
+	return supports(agent) and not is_complete(agent) \
+			and not live_text_available(agent)
 
 
 func messages(value: String) -> Array:
@@ -258,6 +313,7 @@ func reset_for_test() -> void:
 	_preferences.clear()
 	_answers.clear()
 	_completed.clear()
+	_reconciled.clear()
 	_provider_choice = ""
 	for agent in AGENTS:
 		_ensure_started(agent)
@@ -896,6 +952,7 @@ func _save_state() -> void:
 	cfg.set_value("guided", "preferences", JSON.stringify(_preferences))
 	cfg.set_value("guided", "answers", JSON.stringify(_answers))
 	cfg.set_value("guided", "completed", JSON.stringify(_completed))
+	cfg.set_value("guided", "reconciled", JSON.stringify(_reconciled))
 	cfg.set_value("guided", "provider", _provider_choice)
 	var err := cfg.save(SAVE_PATH)
 	if err != OK:
@@ -931,6 +988,7 @@ func _load_state() -> void:
 	var loaded_answers: Variant = JSON.parse_string(str(cfg.get_value("guided", "answers", "[]")))
 	_answers = loaded_answers if loaded_answers is Array else []
 	_completed = _json_dict(str(cfg.get_value("guided", "completed", "{}")), {})
+	_reconciled = _json_dict(str(cfg.get_value("guided", "reconciled", "{}")), {})
 	_provider_choice = str(cfg.get_value("guided", "provider", ""))
 
 
