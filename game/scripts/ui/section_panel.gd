@@ -625,6 +625,13 @@ func _build_container_setup() -> void:
 	_setup_state_row("TEAM", bool(s.get("team_running", false)),
 			UIStrings.t("setup.team_running") if bool(s.get("team_running", false))
 			else UIStrings.t("setup.team_stopped"))
+	# Runtime obsoleto: il container gira su un'immagine diversa da quella
+	# scaricata. Senza questa riga l'utente resta su una versione vecchia
+	# senza avere modo di accorgersene.
+	if bool(s.get("container_exists", false)) and not bool(s.get("remote", false)):
+		_setup_state_row("VERSIONE RUNTIME", not bool(s.get("runtime_stale", false)),
+				UIStrings.t("setup.runtime_stale") if bool(s.get("runtime_stale", false))
+				else UIStrings.t("setup.runtime_current"))
 	_content.add_child(HSeparator.new())
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
@@ -646,6 +653,13 @@ func _build_container_setup() -> void:
 	install.add_theme_color_override("font_color", Palette.YELLOW)
 	install.pressed.connect(SetupService.open_runtime_install)
 	actions.add_child(install)
+	if bool(s.get("docker_running", false)) and not bool(s.get("remote", false)):
+		var update := Button.new()
+		update.text = UIStrings.t("setup.runtime_update")
+		update.add_theme_color_override("font_color",
+				Palette.YELLOW if bool(s.get("runtime_stale", false)) else Palette.BASE)
+		update.pressed.connect(SetupService.update_runtime)
+		actions.add_child(update)
 	if bool(s.get("container_running", false)):
 		var stop := Button.new()
 		stop.text = "FERMA CONTAINER"

@@ -37,6 +37,10 @@ const AUTH_PATHS := {
 			".config/kimi/config.json"],
 }
 
+## Immagine di runtime. Il compose usa la stessa variabile: chi vuole provare
+## un tag diverso esporta JHT_IMAGE e l'app resta coerente con il container.
+const DEFAULT_RUNTIME_IMAGE := "ghcr.io/leopu00/jht:latest"
+
 var status := {
 	"docker_available": false, "docker_running": false,
 	"container_exists": false, "container_running": false,
@@ -44,6 +48,7 @@ var status := {
 	"provider_authenticated": false, "provider_auth_match": "",
 	"profile_ready": false, "team_running": false,
 	"ready": false, "completed": 0,
+	"image_id": "", "container_image_id": "", "runtime_stale": false,
 }
 
 var _probe_running := false
@@ -252,6 +257,11 @@ static func _run(path: String, args: PackedStringArray) -> Dictionary:
 	return {"code": code, "out": "\n".join(PackedStringArray(output)).strip_edges()}
 
 
+static func runtime_image() -> String:
+	var custom := OS.get_environment("JHT_IMAGE").strip_edges()
+	return custom if custom != "" else DEFAULT_RUNTIME_IMAGE
+
+
 static func _probe_host(home: String) -> Dictionary:
 	var d := {
 		"docker_available": false, "docker_running": false,
@@ -260,6 +270,7 @@ static func _probe_host(home: String) -> Dictionary:
 		"provider_authenticated": false, "provider_auth_match": "",
 		"profile_ready": FileAccess.file_exists(home.path_join("profile/ready.flag")),
 		"team_running": false,
+		"image_id": "", "container_image_id": "", "runtime_stale": false,
 	}
 	var version := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Client.Version}}|{{.Server.Version}}"] ))
@@ -272,6 +283,21 @@ static func _probe_host(home: String) -> Dictionary:
 		if inspect["code"] == 0:
 			d["container_state"] = str(inspect["out"]).strip_edges()
 			d["container_running"] = d["container_state"] == "running"
+		# Runtime obsoleto: il container gira su un'immagine diversa da quella
+		# scaricata come :latest. Confronto locale (nessuna rete): dice se un
+		# pull già fatto aspetta solo la ricreazione del container.
+		var local_image := _run("docker", PackedStringArray(["image", "inspect",
+				runtime_image(), "--format", "{{.Id}}"] ))
+		if local_image["code"] == 0:
+			d["image_id"] = str(local_image["out"]).strip_edges()
+		if d["container_exists"]:
+			var used := _run("docker", PackedStringArray(["inspect", "jht",
+					"--format", "{{.Image}}"] ))
+			if used["code"] == 0:
+				d["container_image_id"] = str(used["out"]).strip_edges()
+		d["runtime_stale"] = d["image_id"] != "" \
+				and d["container_image_id"] != "" \
+				and d["image_id"] != d["container_image_id"]
 		if d["container_running"]:
 			var tmux := _run("docker", PackedStringArray(["exec", "jht", "tmux",
 					"list-sessions", "-F", "#{session_name}"] ))
@@ -402,21 +428,67 @@ func _do_start_container() -> Dictionary:
 			return {"ok": false, "message": "Docker non risponde dopo 2 minuti. " \
 					+ "Aprilo manualmente (al primo avvio chiede di accettare i termini), poi riprova."}
 		Log.call_deferred("info", "setup", "daemon Docker pronto (%ds)" % waited)
-	var start := _run("docker", PackedStringArray(["start", "jht"] ))
-	if start["code"] == 0:
-		Log.call_deferred("info", "setup", "container jht avviato")
-		return {"ok": true, "message": "Container JHT attivo"}
-	# Il container non esiste ancora: prima attivazione via compose, eseguita
-	# in background come faceva la app desktop — nessuna console interattiva
-	# (quella resta solo per i login provider): il progresso del pull scorre
-	# nel pannello e l'azione tiene occupato il bottone fino alla fine, così
-	# un secondo click non lancia un secondo compose (successo 22/07).
+	# Attivazione via compose SEMPRE, anche quando il container esiste già: è
+	# l'unico percorso che aggiorna il runtime. `docker start` da solo lascia
+	# l'utente su un'immagine vecchia per sempre — il gioco si aggiorna con
+	# l'installer, il container no, e nessuno se ne accorge (24/07). Il pull
+	# non è fatale: offline si riparte con l'immagine già scaricata.
+	var compose := _ensure_compose_file()
+	if compose == "":
+		# Senza compose resta solo l'avvio secco del container esistente.
+		var fallback := _run("docker", PackedStringArray(["start", "jht"] ))
+		if fallback["code"] == 0:
+			Log.call_deferred("info", "setup", "container jht avviato (senza compose)")
+			return {"ok": true, "message": "Container JHT attivo"}
+		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
+	_ensure_host_dirs()
+	Log.call_deferred("info", "setup", "attivazione: pull + compose up da " + compose)
+	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
+			"Controllo aggiornamenti del team…")
+	if not bool(pull["ok"]):
+		Log.call_deferred("warn", "setup",
+				"pull immagine fallito, proseguo con la copia locale: "
+				+ str(pull.get("tail", "")).right(200))
+		_progress("container", "Aggiornamento non riuscito: uso l'immagine già scaricata…")
+	return _compose_up_with_progress(compose)
+
+
+## Aggiornamento esplicito del runtime: scarica l'immagine più recente e
+## ricrea il container solo se serve (compose lo fa da sé quando l'immagine
+## referenziata cambia). Il bind-mount ~/.jht resta intatto: nessun dato perso.
+func update_runtime() -> void:
+	if _action_running:
+		return
+	_start_action("container", _do_update_runtime)
+
+
+func _do_update_runtime() -> Dictionary:
+	var daemon := _run("docker", PackedStringArray(["version", "--format",
+			"{{.Server.Version}}"] ))
+	if daemon["code"] != 0:
+		return {"ok": false, "message": "Docker non risponde: avvia prima il runtime."}
 	var compose := _ensure_compose_file()
 	if compose == "":
 		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
 	_ensure_host_dirs()
-	Log.call_deferred("info", "setup", "prima attivazione: compose up da " + compose)
-	return _compose_up_with_progress(compose)
+	var before := _local_image_id()
+	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
+			"Cerco una versione più recente del team…")
+	if not bool(pull["ok"]):
+		return {"ok": false, "message": "Aggiornamento non riuscito: " \
+				+ str(pull.get("tail", "")).strip_edges().right(200)}
+	var after := _local_image_id()
+	var recreated := _compose_up_with_progress(compose)
+	if not bool(recreated["ok"]):
+		return recreated
+	return {"ok": true, "message": "Runtime aggiornato: il team gira sulla versione più recente." \
+			if after != before else "Runtime già aggiornato: nessuna versione più recente."}
+
+
+static func _local_image_id() -> String:
+	var found := _run("docker", PackedStringArray(["image", "inspect",
+			runtime_image(), "--format", "{{.Id}}"] ))
+	return str(found["out"]).strip_edges() if found["code"] == 0 else ""
 
 
 static func _find_compose_file() -> String:
@@ -499,17 +571,40 @@ static func _ensure_host_dirs() -> void:
 ## (leggerlo dopo il reap logga falsi errori su macOS). Gira nel worker
 ## dell'azione: i delay non toccano il main thread.
 func _compose_up_with_progress(compose: String) -> Dictionary:
+	var run := _compose_stream(compose, PackedStringArray(["up", "-d", "jht"]),
+			"Scarico l'immagine del team (qualche GB, dipende dalla rete)…")
+	if not bool(run.get("spawned", false)):
+		return {"ok": false, "message": "Impossibile avviare docker compose"}
+	var state := _run("docker", PackedStringArray(["inspect", "jht",
+			"--format", "{{.State.Status}}"]))
+	if state["code"] == 0 and str(state["out"]).contains("running"):
+		Log.call_deferred("info", "setup", "attivazione completata: container attivo")
+		return {"ok": true, "message": "Container JHT attivo"}
+	Log.call_deferred("warn", "setup", "compose fallito: " + str(run.get("tail", "")).right(400))
+	return {"ok": false, "message": "Attivazione del container fallita: " \
+			+ str(run.get("tail", "")).strip_edges().right(260)}
+
+
+## Esegue un sottocomando compose in background riportando il progresso del
+## pull nel pannello. L'esito non guarda l'exit code (leggerlo dopo il reap
+## logga falsi errori su macOS): chi chiama verifica lo stato reale — il
+## container per `up`, l'id dell'immagine per `pull` — e qui si segnala solo
+## se il processo è partito e se lo stream contiene errori. Gira nel worker
+## dell'azione: i delay non toccano il main thread.
+func _compose_stream(compose: String, args: PackedStringArray,
+		lead: String) -> Dictionary:
 	if OS.get_name() == "Windows" and OS.get_environment("HOME") == "":
 		# ${HOME} nel compose non esiste nell'ambiente Windows: i processi
 		# figli ereditano l'ambiente del gioco.
 		OS.set_environment("HOME", OS.get_environment("USERPROFILE"))
-	_progress("container", "Scarico l'immagine del team (qualche GB, dipende dalla rete)…")
+	_progress("container", lead)
 	# Niente --progress: su pipe (non-TTY) compose è già in modalità plain e
 	# il flag non esiste nelle versioni meno recenti.
-	var process := OS.execute_with_pipe("docker", PackedStringArray([
-			"compose", "-f", compose, "up", "-d", "jht"]), false)
+	var argv := PackedStringArray(["compose", "-f", compose])
+	argv.append_array(args)
+	var process := OS.execute_with_pipe("docker", argv, false)
 	if process.is_empty():
-		return {"ok": false, "message": "Impossibile avviare docker compose"}
+		return {"ok": false, "spawned": false, "tail": "docker compose non eseguibile"}
 	var stdio: FileAccess = process["stdio"]
 	var stderr: FileAccess = process["stderr"]
 	var pid := int(process["pid"])
@@ -561,21 +656,26 @@ func _compose_up_with_progress(compose: String) -> Dictionary:
 			if Time.get_ticks_msec() - last_output_ms > 180000:
 				OS.kill(pid)
 				Log.call_deferred("warn", "setup", "compose fermo da 3 minuti, interrotto")
-				return {"ok": false, "message": "Il download non procede da 3 minuti. " \
+				return {"ok": false, "spawned": true, "timeout": true,
+						"tail": "Il download non procede da 3 minuti. " \
 						+ "Controlla la connessione e riprova; se persiste apri Docker Desktop " \
 						+ "e verifica che il motore sia attivo."}
 			OS.delay_msec(80)
 		if Time.get_ticks_msec() - last_ui_ms > 1500 and not layers.is_empty():
 			last_ui_ms = Time.get_ticks_msec()
 			_progress("container", _pull_progress_text(layers, sizes))
-	var state := _run("docker", PackedStringArray(["inspect", "jht",
-			"--format", "{{.State.Status}}"]))
-	if state["code"] == 0 and str(state["out"]).contains("running"):
-		Log.call_deferred("info", "setup", "prima attivazione completata: container attivo")
-		return {"ok": true, "message": "Container JHT attivo"}
-	Log.call_deferred("warn", "setup", "compose fallito: " + tail.right(400))
-	return {"ok": false, "message": "Prima attivazione fallita: " \
-			+ tail.strip_edges().right(260)}
+	return {"ok": not _stream_failed(tail), "spawned": true, "tail": tail}
+
+
+## Euristica d'errore sullo stream: compose stampa "Error response from daemon",
+## "failed to", "no such host"… L'exit code non è affidabile qui (vedi sopra).
+static func _stream_failed(tail: String) -> bool:
+	var lower := tail.to_lower()
+	for marker in ["error", "errore", "failed", "cannot connect", "no such host",
+			"denied", "not found", "timeout"]:
+		if lower.contains(marker):
+			return true
+	return false
 
 
 ## Riassunto leggibile del pull: parti completate e byte scaricati/totali
