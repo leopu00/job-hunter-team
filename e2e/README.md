@@ -3,7 +3,7 @@
 Browser-driven end-to-end tests for the Job Hunter Team **web** surface.
 
 - **Package:** `e2e` · **Stack:** Playwright · TypeScript
-- **Config:** [`playwright.config.ts`](playwright.config.ts) — `BASE_URL` (default `http://127.0.0.1:3000`), chromium only
+- **Config:** [`playwright.config.ts`](playwright.config.ts) — `BASE_URL` (default `http://localhost:3000`), chromium only
 
 > ⚠️ **Read "State of the suite" before trusting a green run.** The suite exits 0
 > while skipping a large share of its tests, and the reason matters.
@@ -42,7 +42,7 @@ The suite needs a reachable web server. Two useful configurations:
 
 ```bash
 cd web && JHT_HOME=/tmp/empty-jht npm run dev -- -p 3007
-cd e2e && npm ci && BASE_URL=http://127.0.0.1:3007 npx playwright test
+cd e2e && npm ci && BASE_URL=http://localhost:3007 npx playwright test
 ```
 
 In `local` deploy mode the protected-area auth gate is off (`isLocalDeploy()`),
@@ -99,13 +99,27 @@ is the usual recipe: it does not work here, for two independent reasons.
 
 An email+password account sidesteps both and survives unattended runs.
 
-Where the credentials live — and where they deliberately do **not**:
+**Where the credentials live.** Outside the worktrees, in one place, so every
+checkout finds them:
 
-| | |
-|---|---|
-| Locally | `e2e/.auth-credentials` — git-ignored, `chmod 600` |
-| In CI | repository secrets `E2E_EMAIL` / `E2E_PASSWORD` |
-| In this repo | **nowhere.** Not the address, not the password — a public repo should not hand out half a credential |
+```
+~/.config/jht/e2e-credentials      ← canonical, shared by dev1…dev8, master, …
+```
+
+The script looks in three places, in order:
+
+| Order | Source | For |
+|---|---|---|
+| 1 | env `E2E_EMAIL` / `E2E_PASSWORD` | CI, from the repository secrets |
+| 2 | `e2e/.auth-credentials` in the current worktree | overriding with a different account, just here |
+| 3 | `~/.config/jht/e2e-credentials` | everyday use, every worktree |
+
+Not `~/.jht/`: that directory is bind-mounted into the agents' container, and a
+test secret has no business being under their nose. Both files are `chmod 600`,
+the directory `700`.
+
+**In this repo: nothing.** Not the address, not the password — a public
+repository should not hand out half a credential.
 
 The account owns no data: RLS isolates rows per `user_id` and this one has
 none, so a compromise leaks nothing. `auth-state.json` is git-ignored as well:
@@ -118,8 +132,9 @@ secrets fail the job loudly rather than letting the protected-area specs skip
 in silence.
 
 To rotate the password: change it on the account, then
-`gh secret set E2E_PASSWORD --repo <repo>` and update `.auth-credentials`.
-Never paste it into a terminal that echoes — pipe it from stdin.
+`gh secret set E2E_PASSWORD --repo <repo>` and update
+`~/.config/jht/e2e-credentials`. Never paste it into a terminal that echoes —
+pipe it from stdin.
 
 ## What is covered elsewhere (and better)
 
