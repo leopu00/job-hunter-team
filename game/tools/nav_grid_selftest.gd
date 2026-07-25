@@ -16,6 +16,7 @@ func _init() -> void:
 	_test_writer_radial_layout()
 	_test_all_department_radial_layouts()
 	_test_all_department_desk_textures()
+	_test_department_character_variants()
 	_test_core_workstations()
 	_test_core_patrol_routes()
 	_test_real_desk_routes()
@@ -228,6 +229,34 @@ func _test_all_department_desk_textures() -> void:
 		if path.is_empty():
 			continue
 		_assert(_texture_loads(path), "%s texture is missing or unloadable: %s" % [label, path])
+
+## Ogni sedia di reparto ha un'identità stabile e un foglio movimento 6x12.
+## Verifica anche che il roster non torni per errore a usare `a` per tutti.
+func _test_department_character_variants() -> void:
+	var seen := {}
+	for def in CharacterDefsScript.spawn_list():
+		var dept := str(def.get("dept", ""))
+		if dept.is_empty():
+			continue
+		var slug := str(def["slug"])
+		var variant := str(def.get("variant", ""))
+		var desk := int(def["desk"])
+		var expected := str(CharacterDefsScript.VARIANT_BY_DESK[dept][desk])
+		_assert(variant == expected, "%s:%d variant=%s expected=%s" % [
+			dept, desk, variant, expected,
+		])
+		seen["%s_%s" % [slug, variant]] = true
+		var path := "res://assets/characters/sheets/%s_%s.png" % [slug, variant]
+		_assert(_texture_loads(path), "character variant missing: %s" % path)
+		if _texture_loads(path):
+			var texture: Texture2D = load(path)
+			_assert(texture.get_size() == Vector2(1536, 4608),
+					"character variant has wrong size: %s" % path)
+	for dept_id in CharacterDefsScript.DEPT_ROLES:
+		var slug := str(CharacterDefsScript.DEPT_ROLES[dept_id]["slug"])
+		for variant in ["a", "b", "c", "d", "e", "f"]:
+			_assert(seen.has("%s_%s" % [slug, variant]),
+					"roster does not expose %s_%s" % [slug, variant])
 
 ## Ogni ruolo core seduto ha una postazione personale frontale: base e arte
 ## occupata devono essere entrambe presenti e avere lo stesso canvas,

@@ -186,7 +186,7 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	aura.setup(accent_color())
 	add_child(aura)
 
-	rig = CharacterDefs.make_rig(slug)
+	rig = CharacterDefs.make_rig(slug, str(def.get("variant", "a")))
 	add_child(rig)
 	_work_pose()
 
