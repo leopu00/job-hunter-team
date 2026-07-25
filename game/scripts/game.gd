@@ -79,35 +79,52 @@ var _gfx_done := false
 
 const PIXEL_CFG := "user://graphics.cfg"
 
-## Fattore di riduzione del rendering del MONDO (1 = nativo, 2 = metà lato,
-## 3 = un terzo). Il mondo finisce in un SubViewport ingrandito con filtro
-## nearest: a shrink 2 la GPU riempie un quarto dei pixel e l'immagine
-## diventa dichiaratamente pixel-art. La UI non passa di qui e resta nitida.
-## Precedenza: JHT_PIXEL (test) → scelta dell'utente → automatico.
-static func pixel_shrink() -> int:
+## Scala di rendering del MONDO: 1.0 = nativo, 0.75 = tre quarti di lato,
+## 0.5 = metà (un quarto dei pixel). Il mondo finisce in un SubViewport
+## ingrandito con filtro nearest, così la grana resta netta invece di
+## sfocarsi. La UI non passa di qui e resta sempre a risoluzione piena.
+## Precedenza: JHT_PIXEL (test) → scelta dell'utente → calibrazione.
+static func render_scale() -> float:
 	var forced := OS.get_environment("JHT_PIXEL").strip_edges()
-	if forced.is_valid_int():
-		return clampi(int(forced), 1, 4)
+	if forced.is_valid_float():
+		return _as_scale(forced.to_float())
 	var cfg := ConfigFile.new()
 	if cfg.load(PIXEL_CFG) == OK:
-		var saved := int(cfg.get_value("graphics", "pixel_shrink", 0))
-		if saved >= 1:
-			return clampi(saved, 1, 4)
-	return 0  # 0 = decide la calibrazione a runtime
+		var saved := float(cfg.get_value("graphics", "render_scale", 0.0))
+		if saved > 0.0:
+			return clampf(saved, 0.25, 1.0)
+	return 1.0  # nessuna scelta salvata: decide la calibrazione a runtime
 
 
-static func set_pixel_shrink(value: int) -> void:
+## Accetta sia la scala (0.75) sia il vecchio divisore intero (2 → 0.5),
+## così i comandi di test già in giro continuano a funzionare.
+static func _as_scale(value: float) -> float:
+	if value > 1.0:
+		return clampf(1.0 / value, 0.25, 1.0)
+	return clampf(value, 0.25, 1.0)
+
+
+static func set_render_scale(value: float) -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(PIXEL_CFG)
-	cfg.set_value("graphics", "pixel_shrink", clampi(value, 1, 4))
+	cfg.set_value("graphics", "render_scale", clampf(value, 0.25, 1.0))
 	cfg.save(PIXEL_CFG)
 
+## Scala attualmente imposta dalla calibrazione (1.0 = nessuna riduzione).
+var _applied_scale := 1.0
+var _watch_time := 0.0
+var _watch_fps_sum := 0.0
+var _watch_samples := 0
+
 func _process(delta: float) -> void:
-	if _gfx_done or state != State.OFFICE:
+	if state != State.OFFICE:
 		return
 	if DisplayServer.get_name() == "headless" \
 			or OS.get_environment("JHT_SHOT") != "":
 		_gfx_done = true
+		return
+	if _gfx_done:
+		_watch_framerate(delta)
 		return
 	_gfx_time += delta
 	if _gfx_time < 5.0:
@@ -122,17 +139,65 @@ func _process(delta: float) -> void:
 			Engine.max_fps = 30
 			# Il cap da solo non toglie lavoro alla GPU: su una macchina che
 			# fa 8 fps è un placebo (misurato su T440s, 24/07). Quello che
-			# toglie lavoro davvero è rendere il mondo a risoluzione ridotta:
-			# sotto i 15 fps si scende a un terzo, altrimenti a metà.
-			var shrink := 3 if avg < 15.0 else 2
-			var scene := get_tree().current_scene
-			if scene != null and scene.has_method("set_pixel_shrink"):
-				scene.call("set_pixel_shrink", shrink)
-			Log.info("perf",
-					"calibrazione: fps medio %.0f → profilo ridotto (cap 30fps, mondo 1/%d)"
-					% [avg, shrink])
+			# toglie lavoro davvero è rendere il mondo a risoluzione ridotta.
+			_set_scale(_scale_for_fps(avg), avg)
 		else:
 			Log.info("perf", "calibrazione: fps medio %.0f → profilo pieno" % avg)
+
+
+## Scala per la prima calibrazione. Il primo gradino è LEGGERO (85%: la
+## grana si nota appena e la GPU ha già un quarto di lavoro in meno) e si
+## scende solo quanto serve — fino al 60% per le macchine che arrancano
+## davvero. Sopra i 24 fps non si tocca niente: su un computer capace non
+## ha senso pixelare (indicazione di Leone, 25/07).
+static func _scale_for_fps(fps: float) -> float:
+	if fps >= 24.0:
+		return 1.0
+	if fps >= 18.0:
+		return 0.85
+	if fps >= 12.0:
+		return 0.7
+	return 0.6
+
+
+## Una misura sola all'ingresso non basta: l'ufficio si riempie di agenti,
+## la macchina si scalda, arrivano altri programmi. Il profilo continua ad
+## adattarsi — scende quando il gioco arranca, e risale quando c'è margine,
+## così chi ha comprato un computer nuovo non resta pixelato per sempre.
+## Una scelta manuale dell'utente (o JHT_PIXEL) blocca tutto: comanda lei.
+func _watch_framerate(delta: float) -> void:
+	if OS.get_environment("JHT_PIXEL").strip_edges() != "":
+		return
+	_watch_time += delta
+	_watch_fps_sum += Engine.get_frames_per_second()
+	_watch_samples += 1
+	if _watch_time < 12.0 or _watch_samples == 0:
+		return
+	var avg := _watch_fps_sum / _watch_samples
+	_watch_time = 0.0
+	_watch_fps_sum = 0.0
+	_watch_samples = 0
+	var cap := float(Engine.max_fps if Engine.max_fps > 0 else 60)
+	if avg < 20.0 and _applied_scale > 0.6:
+		# Ancora in affanno: un gradino più giù, senza mai scendere sotto il
+		# minimo leggibile.
+		_set_scale(maxf(0.6, _applied_scale - 0.15), avg)
+	elif avg >= cap * 0.95 and _applied_scale < 1.0:
+		# Il tetto è saturo con margine: si può restituire definizione. La
+		# soglia asimmetrica (scendere a 20, risalire solo al 95% del cap)
+		# evita il ping-pong fra due gradini.
+		_set_scale(minf(1.0, _applied_scale + 0.15), avg)
+
+
+func _set_scale(scale: float, measured: float) -> void:
+	if is_equal_approx(scale, _applied_scale):
+		return
+	_applied_scale = scale
+	var scene := get_tree().current_scene
+	if scene != null and scene.has_method("set_render_scale"):
+		scene.call("set_render_scale", scale)
+	Log.info("perf", "profilo grafico: %d fps misurati → mondo al %d%%"
+			% [int(measured), int(scale * 100.0)])
 
 # ── Navigazione fra scene ─────────────────────────────────────────────
 
