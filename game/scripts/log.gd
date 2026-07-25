@@ -46,6 +46,48 @@ func _log_perf() -> void:
 		Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
 	])
 
+## Censimento dei CanvasItem visibili, raggruppati per ramo e per classe.
+## Le draw call di una scena 2D nascono da qui: senza questa fotografia si
+## ottimizza a intuito (ufficio a 20 fps con 1147 draw call sul ThinkPad,
+## 25/07). Si invoca con JHT_CENSUS=1, che stampa e chiude.
+func census(root: Node) -> void:
+	var by_branch := {}
+	var by_class := {}
+	var total := 0
+	for branch in root.get_children():
+		var count := _count_visible(branch, by_class)
+		if count > 0:
+			by_branch[branch.name if branch.name != "" else branch.get_class()] = count
+		total += count
+	info("census", "CanvasItem visibili: %d" % total)
+	for entry in _sorted_desc(by_branch):
+		info("census", "  ramo %-28s %4d" % [entry[0], entry[1]])
+	for entry in _sorted_desc(by_class):
+		info("census", "  class %-28s %4d" % [entry[0], entry[1]])
+
+
+func _count_visible(node: Node, by_class: Dictionary) -> int:
+	var count := 0
+	var item := node as CanvasItem
+	if item != null:
+		if not item.is_visible_in_tree():
+			return 0  # invisibile: né lui né i figli finiscono nel renderer
+		count = 1
+		var key := item.get_class()
+		by_class[key] = int(by_class.get(key, 0)) + 1
+	for child in node.get_children():
+		count += _count_visible(child, by_class)
+	return count
+
+
+func _sorted_desc(counts: Dictionary) -> Array:
+	var rows := []
+	for key in counts:
+		rows.append([key, counts[key]])
+	rows.sort_custom(func(a: Array, b: Array) -> bool: return a[1] > b[1])
+	return rows
+
+
 func info(cat: String, msg: String) -> void:
 	_write("INFO", cat, msg)
 

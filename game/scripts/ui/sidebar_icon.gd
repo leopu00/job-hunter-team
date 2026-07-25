@@ -1,0 +1,232 @@
+class_name SidebarIcon
+extends Control
+## Icone della navigazione disegnate a vettori, MAI emoji.
+##
+## Le emoji dipendono dai font di sistema: su Linux (Ubuntu 24.04) fontconfig
+## risolve 16 dei 25 glifi della sidebar su NotoColorEmoji.ttf — bitmap CBDT che
+## Godot non rende — e a schermo restavano rettangoli vuoti; passavano solo i
+## codepoint coperti da DejaVu Sans e Noto Sans Symbols2 (live-test ThinkPad
+## Linux, 24/07). Disegnandole qui la resa è identica su ogni OS.
+##
+## Tutte le forme vivono in uno spazio normalizzato 0..1 scalato sul lato corto
+## del Control: cambiare `size` cambia solo la scala, mai le proporzioni.
+
+const BASE_SIZE := 18.0
+
+var icon_id: String = "":
+	set(value):
+		icon_id = value
+		queue_redraw()
+
+var color: Color = Color.WHITE:
+	set(value):
+		color = value
+		queue_redraw()
+
+
+func _init(id: String = "", col: Color = Color.WHITE) -> void:
+	icon_id = id
+	color = col
+	# l'icona sta dentro il Button della voce: non deve mangiarne i click
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	custom_minimum_size = Vector2(BASE_SIZE, BASE_SIZE)
+
+
+func _draw() -> void:
+	var s := minf(size.x, size.y)
+	if s <= 0.0:
+		return
+	var w := maxf(1.0, s / 13.0)
+	match icon_id:
+		"bolt":
+			_poly([Vector2(0.60, 0.06), Vector2(0.24, 0.56), Vector2(0.46, 0.56),
+					Vector2(0.40, 0.94), Vector2(0.78, 0.44), Vector2(0.54, 0.44)],
+					s, w, true)
+		"users":
+			_circle(Vector2(0.34, 0.30), 0.15, s, w)
+			_arc(Vector2(0.34, 0.78), 0.26, PI, TAU, s, w)
+			_arc(Vector2(0.72, 0.32), 0.12, -PI * 0.5, PI * 0.5, s, w)
+			_arc(Vector2(0.72, 0.78), 0.22, PI * 1.5, TAU, s, w)
+		"robot":
+			_rect(Vector2(0.16, 0.32), Vector2(0.84, 0.84), s, w)
+			_line(Vector2(0.50, 0.32), Vector2(0.50, 0.18), s, w)
+			_dot(Vector2(0.50, 0.13), 0.07, s)
+			_dot(Vector2(0.34, 0.52), 0.06, s)
+			_dot(Vector2(0.66, 0.52), 0.06, s)
+			_line(Vector2(0.36, 0.70), Vector2(0.64, 0.70), s, w)
+		"chart-down":
+			_axes(s, w)
+			_poly([Vector2(0.24, 0.28), Vector2(0.44, 0.50), Vector2(0.58, 0.40),
+					Vector2(0.84, 0.70)], s, w)
+			_poly([Vector2(0.62, 0.70), Vector2(0.84, 0.70), Vector2(0.84, 0.48)],
+					s, w)
+		"chart-up":
+			_axes(s, w)
+			_poly([Vector2(0.24, 0.70), Vector2(0.44, 0.48), Vector2(0.58, 0.58),
+					Vector2(0.84, 0.26)], s, w)
+			_poly([Vector2(0.62, 0.26), Vector2(0.84, 0.26), Vector2(0.84, 0.48)],
+					s, w)
+		"flame":
+			_poly([Vector2(0.50, 0.06), Vector2(0.74, 0.36), Vector2(0.70, 0.50),
+					Vector2(0.80, 0.64), Vector2(0.68, 0.86), Vector2(0.50, 0.94),
+					Vector2(0.32, 0.86), Vector2(0.20, 0.64), Vector2(0.34, 0.40)],
+					s, w, true)
+			_arc(Vector2(0.50, 0.72), 0.14, 0.0, TAU, s, w)
+		"chat":
+			_rect(Vector2(0.10, 0.16), Vector2(0.90, 0.70), s, w)
+			_poly([Vector2(0.28, 0.70), Vector2(0.28, 0.92), Vector2(0.50, 0.70)],
+					s, w)
+			_dot(Vector2(0.34, 0.43), 0.05, s)
+			_dot(Vector2(0.50, 0.43), 0.05, s)
+			_dot(Vector2(0.66, 0.43), 0.05, s)
+		"bell":
+			_arc(Vector2(0.50, 0.50), 0.28, PI, TAU, s, w)
+			_line(Vector2(0.22, 0.50), Vector2(0.22, 0.72), s, w)
+			_line(Vector2(0.78, 0.50), Vector2(0.78, 0.72), s, w)
+			_line(Vector2(0.12, 0.72), Vector2(0.88, 0.72), s, w)
+			_arc(Vector2(0.50, 0.74), 0.10, 0.0, PI, s, w)
+			_line(Vector2(0.50, 0.16), Vector2(0.50, 0.22), s, w)
+		"dashboard":
+			_rect(Vector2(0.10, 0.10), Vector2(0.46, 0.52), s, w)
+			_rect(Vector2(0.54, 0.10), Vector2(0.90, 0.34), s, w)
+			_rect(Vector2(0.10, 0.60), Vector2(0.46, 0.90), s, w)
+			_rect(Vector2(0.54, 0.42), Vector2(0.90, 0.90), s, w)
+		"target":
+			_circle(Vector2(0.50, 0.50), 0.40, s, w)
+			_circle(Vector2(0.50, 0.50), 0.22, s, w)
+			_dot(Vector2(0.50, 0.50), 0.08, s)
+		"bars":
+			_line(Vector2(0.10, 0.88), Vector2(0.90, 0.88), s, w)
+			_rect(Vector2(0.16, 0.52), Vector2(0.34, 0.88), s, w)
+			_rect(Vector2(0.41, 0.28), Vector2(0.59, 0.88), s, w)
+			_rect(Vector2(0.66, 0.44), Vector2(0.84, 0.88), s, w)
+		"inbox":
+			_rect(Vector2(0.10, 0.36), Vector2(0.90, 0.86), s, w)
+			_poly([Vector2(0.10, 0.36), Vector2(0.50, 0.64), Vector2(0.90, 0.36)],
+					s, w)
+			_line(Vector2(0.50, 0.06), Vector2(0.50, 0.26), s, w)
+			_poly([Vector2(0.40, 0.18), Vector2(0.50, 0.28), Vector2(0.60, 0.18)],
+					s, w)
+		"map":
+			_poly([Vector2(0.08, 0.24), Vector2(0.36, 0.12), Vector2(0.64, 0.26),
+					Vector2(0.92, 0.14), Vector2(0.92, 0.76), Vector2(0.64, 0.88),
+					Vector2(0.36, 0.74), Vector2(0.08, 0.86)], s, w, true)
+			_line(Vector2(0.36, 0.12), Vector2(0.36, 0.74), s, w)
+			_line(Vector2(0.64, 0.26), Vector2(0.64, 0.88), s, w)
+		"activity":
+			for i in 3:
+				var y := 0.24 + 0.26 * i
+				_dot(Vector2(0.18, y), 0.07, s)
+				_line(Vector2(0.36, y), Vector2(0.88, y), s, w)
+		"server":
+			_rect(Vector2(0.10, 0.16), Vector2(0.90, 0.44), s, w)
+			_rect(Vector2(0.10, 0.56), Vector2(0.90, 0.84), s, w)
+			_dot(Vector2(0.24, 0.30), 0.06, s)
+			_dot(Vector2(0.24, 0.70), 0.06, s)
+			_line(Vector2(0.44, 0.30), Vector2(0.78, 0.30), s, w)
+			_line(Vector2(0.44, 0.70), Vector2(0.78, 0.70), s, w)
+		"doc":
+			_poly([Vector2(0.20, 0.08), Vector2(0.62, 0.08), Vector2(0.82, 0.30),
+					Vector2(0.82, 0.92), Vector2(0.20, 0.92)], s, w, true)
+			_poly([Vector2(0.62, 0.08), Vector2(0.62, 0.30), Vector2(0.82, 0.30)],
+					s, w)
+			_line(Vector2(0.32, 0.50), Vector2(0.70, 0.50), s, w)
+			_line(Vector2(0.32, 0.68), Vector2(0.70, 0.68), s, w)
+		"clock":
+			_circle(Vector2(0.50, 0.50), 0.40, s, w)
+			_line(Vector2(0.50, 0.50), Vector2(0.50, 0.26), s, w)
+			_line(Vector2(0.50, 0.50), Vector2(0.68, 0.60), s, w)
+		"chip":
+			_rect(Vector2(0.28, 0.28), Vector2(0.72, 0.72), s, w)
+			_rect(Vector2(0.42, 0.42), Vector2(0.58, 0.58), s, w)
+			for t in [0.40, 0.60]:
+				_line(Vector2(t, 0.28), Vector2(t, 0.12), s, w)
+				_line(Vector2(t, 0.72), Vector2(t, 0.88), s, w)
+				_line(Vector2(0.28, t), Vector2(0.12, t), s, w)
+				_line(Vector2(0.72, t), Vector2(0.88, t), s, w)
+		"container":
+			_rect(Vector2(0.08, 0.52), Vector2(0.92, 0.86), s, w)
+			_rect(Vector2(0.22, 0.30), Vector2(0.44, 0.50), s, w)
+			_rect(Vector2(0.48, 0.30), Vector2(0.70, 0.50), s, w)
+			_rect(Vector2(0.48, 0.08), Vector2(0.70, 0.28), s, w)
+		"plane":
+			_poly([Vector2(0.94, 0.10), Vector2(0.06, 0.48), Vector2(0.40, 0.62),
+					Vector2(0.60, 0.92)], s, w, true)
+			_line(Vector2(0.40, 0.62), Vector2(0.94, 0.10), s, w)
+		"user":
+			_circle(Vector2(0.50, 0.32), 0.20, s, w)
+			_arc(Vector2(0.50, 0.94), 0.32, PI, TAU, s, w)
+		"envelope":
+			_rect(Vector2(0.08, 0.24), Vector2(0.92, 0.78), s, w)
+			_poly([Vector2(0.08, 0.24), Vector2(0.50, 0.56), Vector2(0.92, 0.24)],
+					s, w)
+		"contrast":
+			_circle(Vector2(0.50, 0.50), 0.40, s, w)
+			_half_disc(Vector2(0.50, 0.50), 0.40, s)
+		"globe":
+			_circle(Vector2(0.50, 0.50), 0.40, s, w)
+			_line(Vector2(0.10, 0.50), Vector2(0.90, 0.50), s, w)
+			_ellipse(Vector2(0.50, 0.50), 0.17, 0.40, s, w)
+		"gear":
+			_circle(Vector2(0.50, 0.50), 0.18, s, w)
+			for i in 8:
+				var a := TAU * i / 8.0
+				var dir := Vector2(cos(a), sin(a))
+				_line(Vector2(0.50, 0.50) + dir * 0.28,
+						Vector2(0.50, 0.50) + dir * 0.44, s, w * 1.4)
+		_:
+			# id sconosciuto: cerchietto neutro, mai un rettangolo vuoto
+			_circle(Vector2(0.50, 0.50), 0.30, s, w)
+
+
+## ── primitive in spazio normalizzato ──────────────────────────────────────
+
+func _line(a: Vector2, b: Vector2, s: float, w: float) -> void:
+	draw_line(a * s, b * s, color, w, true)
+
+
+func _poly(pts: Array, s: float, w: float, closed: bool = false) -> void:
+	var out := PackedVector2Array()
+	for p: Vector2 in pts:
+		out.append(p * s)
+	if closed and out.size() > 1:
+		out.append(out[0])
+	draw_polyline(out, color, w, true)
+
+
+func _rect(a: Vector2, b: Vector2, s: float, w: float) -> void:
+	draw_rect(Rect2(a * s, (b - a) * s), color, false, w, true)
+
+
+func _circle(c: Vector2, r: float, s: float, w: float) -> void:
+	draw_arc(c * s, r * s, 0.0, TAU, 32, color, w, true)
+
+
+func _arc(c: Vector2, r: float, from: float, to: float, s: float, w: float) -> void:
+	draw_arc(c * s, r * s, from, to, 24, color, w, true)
+
+
+func _dot(c: Vector2, r: float, s: float) -> void:
+	draw_circle(c * s, r * s, color)
+
+
+## Metà destra piena: la sola icona che vive di contrasto (tema chiaro/scuro).
+func _half_disc(c: Vector2, r: float, s: float) -> void:
+	var pts := PackedVector2Array()
+	for i in 17:
+		var a := -PI * 0.5 + PI * i / 16.0
+		pts.append((c + Vector2(cos(a), sin(a)) * r) * s)
+	draw_colored_polygon(pts, color)
+
+
+func _ellipse(c: Vector2, rx: float, ry: float, s: float, w: float) -> void:
+	var pts := PackedVector2Array()
+	for i in 33:
+		var a := TAU * i / 32.0
+		pts.append((c + Vector2(cos(a) * rx, sin(a) * ry)) * s)
+	draw_polyline(pts, color, w, true)
+
+
+## Assi cartesiani condivisi dalle due icone di andamento.
+func _axes(s: float, w: float) -> void:
+	_poly([Vector2(0.12, 0.10), Vector2(0.12, 0.88), Vector2(0.90, 0.88)], s, w)

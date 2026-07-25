@@ -9,11 +9,33 @@ const FONT_MEDIUM := "res://assets/fonts/JetBrainsMono-Medium.ttf"
 const FONT_BOLD := "res://assets/fonts/JetBrainsMono-Bold.ttf"
 const FONT_XBOLD := "res://assets/fonts/JetBrainsMono-ExtraBold.ttf"
 
+## Le emoji nei testi degli agenti non sono decorazione nostra: le scrive il
+## modello e devono restare leggibili. JetBrains Mono non ha quei glifi e il
+## fallback di sistema copre solo una parte dei codepoint — su Linux li
+## risolve su NotoColorEmoji (bitmap CBDT che Godot non rende) e a schermo
+## restano rettangoli vuoti. Il font monocromatico imbarcato chiude il buco su
+## ogni OS e si intona alla console verde meglio di un'emoji a colori.
+const FONT_EMOJI := "res://assets/fonts/NotoEmoji-Regular.ttf"
+
+static var _fonts := {}
+
+
+## FontFile con il fallback emoji già agganciato. La cache evita di
+## riassegnare i fallbacks a ogni Label costruita.
+static func font(path: String) -> FontFile:
+	if _fonts.has(path):
+		return _fonts[path]
+	var f: FontFile = load(path)
+	if path != FONT_EMOJI:
+		f.fallbacks = [load(FONT_EMOJI)]
+	_fonts[path] = f
+	return f
+
 static func get_theme() -> Theme:
 	if _theme:
 		return _theme
 	var t := Theme.new()
-	t.default_font = load(FONT_REGULAR)
+	t.default_font = font(FONT_REGULAR)
 	t.default_font_size = 19
 
 	# Pannelli
@@ -47,7 +69,7 @@ static func get_theme() -> Theme:
 	t.set_color("font_pressed_color", "Button", Palette.MINT)
 	t.set_color("font_focus_color", "Button", Palette.GREEN)
 	t.set_color("font_disabled_color", "Button", Palette.GREEN)
-	t.set_font("font", "Button", load(FONT_MEDIUM))
+	t.set_font("font", "Button", font(FONT_MEDIUM))
 
 	# LineEdit
 	var le := _flat(Palette.DEEP, Palette.BORDER)
@@ -82,8 +104,8 @@ static func get_theme() -> Theme:
 
 	# RichTextLabel (dialoghi)
 	t.set_color("default_color", "RichTextLabel", Palette.BRIGHT)
-	t.set_font("normal_font", "RichTextLabel", load(FONT_REGULAR))
-	t.set_font("bold_font", "RichTextLabel", load(FONT_BOLD))
+	t.set_font("normal_font", "RichTextLabel", font(FONT_REGULAR))
+	t.set_font("bold_font", "RichTextLabel", font(FONT_BOLD))
 
 	# Separatori e scrollbar devono schiarirsi insieme ai pannelli: lasciare
 	# quelli del tema Godot produrrebbe righe e binari dark nel tema light.
@@ -153,7 +175,7 @@ static func label(text: String, size: int, color: Color, weight := "regular") ->
 		"regular": FONT_REGULAR, "medium": FONT_MEDIUM,
 		"bold": FONT_BOLD, "xbold": FONT_XBOLD,
 	}
-	l.add_theme_font_override("font", load(fonts[weight]))
+	l.add_theme_font_override("font", font(fonts[weight]))
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	return l
@@ -161,7 +183,8 @@ static func label(text: String, size: int, color: Color, weight := "regular") ->
 ## Paragrafo Markdown leggero per i testi prodotti dal team. Godot parla
 ## BBCode: convertiamo il grassetto **...** e preserviamo le parentesi
 ## quadre letterali, frequenti nelle job description.
-static func markdown_label(text: String, size: int, color: Color) -> RichTextLabel:
+static func markdown_label(text: String, size: int, color: Color,
+		align := HORIZONTAL_ALIGNMENT_LEFT) -> RichTextLabel:
 	var rich := RichTextLabel.new()
 	rich.bbcode_enabled = true
 	rich.fit_content = true
@@ -171,17 +194,43 @@ static func markdown_label(text: String, size: int, color: Color) -> RichTextLab
 	rich.add_theme_font_size_override("normal_font_size", size)
 	rich.add_theme_font_size_override("bold_font_size", size)
 	rich.add_theme_color_override("default_color", color)
-	rich.text = _markdown_to_bbcode(text)
+	var body := _markdown_to_bbcode(text)
+	# RichTextLabel non ha horizontal_alignment: l'allineamento è un tag.
+	rich.text = "[right]%s[/right]" % body \
+			if align == HORIZONTAL_ALIGNMENT_RIGHT else body
 	return rich
 
 static func _markdown_to_bbcode(text: String) -> String:
-	var decoded := _decode_unicode_escapes(text)
+	var decoded := _decode_escapes(_decode_unicode_escapes(text))
 	var rendered := decoded.replace("[", "\uE000").replace("]", "[rb]") \
 			.replace("\uE000", "[lb]")
 	var bold := RegEx.new()
 	if bold.compile("\\*\\*([^*]+)\\*\\*") == OK:
 		rendered = bold.sub(rendered, "[b]$1[/b]", true)
 	return rendered
+
+## Gli agenti scrivono in chat via `jht-send "…"`: dentro i doppi apici la
+## shell NON interpreta \n, quindi un a capo del modello arriva come i due
+## caratteri backslash+n e il JSON lo persiste come "\\n" (chat.jsonl del
+## ThinkPad Linux, 24/07 — i messaggi apparivano tutti su una riga sola).
+## Qui li rimettiamo a posto; un backslash raddoppiato resta letterale.
+static func _decode_escapes(text: String) -> String:
+	var escape := RegEx.new()
+	if escape.compile("\\\\(\\\\|n|r|t)") != OK:
+		return text
+	var result := ""
+	var cursor := 0
+	for found in escape.search_all(text):
+		result += text.substr(cursor, found.get_start() - cursor)
+		match found.get_string(1):
+			"\\": result += "\\"
+			"n": result += "\n"
+			"r": result += ""  # \r\n: basta l'a capo
+			"t": result += "\t"
+		cursor = found.get_end()
+	result += text.substr(cursor)
+	return result
+
 
 ## Alcuni jd_summary persistiti dal team contengono escape Python letterali
 ## (es. "\\U0001F310") invece del codepoint Unicode. Le convertiamo solo

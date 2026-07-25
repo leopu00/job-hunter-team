@@ -43,6 +43,7 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.VOID)
+	load_gfx_profile()
 	# Shot-quiet: la finestrella resta cliccabile anche senza focus — un
 	# click VERO dell'utente al lavoro può aprire pannelli e falsare lo
 	# shot (successo: pagina Mentor aperta da sola in uno sweep). Sordi
@@ -67,17 +68,32 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # ── Calibrazione grafica automatica ──────────────────────────────────
 ## Dopo 5 secondi di ufficio si misura il framerate per 10 secondi: sotto
-## soglia si passa al profilo ridotto — cap a 30fps, che sui portatili
-## deboli dà un ritmo stabile invece di oscillare tra 14 e 24. La
-## leggibilità del testo non si tocca MAI (è garantita da text_boost).
-## Su hardware capace non cambia nulla: grafica piena a 60fps.
+## soglia si passa al profilo ridotto. Il cap a 30fps da solo non serviva a
+## nulla — chi sta a 20 non lo tocca mai: quello che conta è togliere lavoro
+## al renderer. Su GL compatibility il costo sta nelle draw call, e la
+## scenografia pura (spigoli del tesseract, ologramma, pile di fogli, ciclo
+## giorno/notte, fumo della stampante) ne vale 85 su 822 — misurate con
+## JHT_CENSUS prima e dopo. È un -10%, non la soluzione: il grosso resta nei
+## mobili (308) e negli agenti (254). Ma è l'unico taglio che non tocca né il
+## gioco né la leggibilità del testo (garantita da text_boost), e su hardware
+## capace non cambia nulla. Il resto del guadagno arriva dalla scala del mondo
+## (render_scale, sotto): meno pixel da riempire a parità di scena. Le due
+## leve si applicano insieme e continuano ad adattarsi mentre si gioca.
+const GFX_CONFIG := "user://graphics.cfg"
+
+signal gfx_profile_changed(low: bool)
+
 var low_gfx := false
 var _gfx_time := 0.0
 var _gfx_fps_sum := 0.0
 var _gfx_samples := 0
 var _gfx_done := false
+## Scala del mondo attualmente imposta dalla calibrazione (1.0 = nativo).
+var _applied_scale := 1.0
+var _watch_time := 0.0
+var _watch_fps_sum := 0.0
+var _watch_samples := 0
 
-const PIXEL_CFG := "user://graphics.cfg"
 
 ## Scala di rendering del MONDO: 1.0 = nativo, 0.75 = tre quarti di lato,
 ## 0.5 = metà (un quarto dei pixel). Il mondo finisce in un SubViewport
@@ -89,7 +105,7 @@ static func render_scale() -> float:
 	if forced.is_valid_float():
 		return _as_scale(forced.to_float())
 	var cfg := ConfigFile.new()
-	if cfg.load(PIXEL_CFG) == OK:
+	if cfg.load(GFX_CONFIG) == OK:
 		var saved := float(cfg.get_value("graphics", "render_scale", 0.0))
 		if saved > 0.0:
 			return clampf(saved, 0.25, 1.0)
@@ -104,17 +120,56 @@ static func _as_scale(value: float) -> float:
 	return clampf(value, 0.25, 1.0)
 
 
+## Scala del mondo e profilo scenografia vivono nello STESSO file: si legge
+## sempre prima di scrivere, altrimenti salvare una delle due cancella l'altra
+## (e al riavvio si torna al profilo pieno senza motivo apparente).
 static func set_render_scale(value: float) -> void:
 	var cfg := ConfigFile.new()
-	cfg.load(PIXEL_CFG)
+	cfg.load(GFX_CONFIG)
 	cfg.set_value("graphics", "render_scale", clampf(value, 0.25, 1.0))
-	cfg.save(PIXEL_CFG)
+	cfg.save(GFX_CONFIG)
 
-## Scala attualmente imposta dalla calibrazione (1.0 = nessuna riduzione).
-var _applied_scale := 1.0
-var _watch_time := 0.0
-var _watch_fps_sum := 0.0
-var _watch_samples := 0
+
+## Il profilo scelto la prima volta vale anche ai riavvii successivi: senza
+## memoria l'utente si rivedrebbe i primi 15 secondi di lag ogni volta.
+func load_gfx_profile() -> void:
+	if OS.get_environment("JHT_LOW_GFX") == "1":  # TEST-AUTO
+		set_low_gfx(true, false)
+		_gfx_done = true
+		return
+	var cfg := ConfigFile.new()
+	if cfg.load(GFX_CONFIG) != OK:
+		return
+	if bool(cfg.get_value("graphics", "low", false)):
+		set_low_gfx(true, false)
+		_gfx_done = true  # già deciso: non rimisurare
+
+
+func set_low_gfx(low: bool, persist := true) -> void:
+	if low_gfx == low:
+		return
+	low_gfx = low
+	Engine.max_fps = 30 if low else 60
+	apply_gfx_profile()
+	gfx_profile_changed.emit(low)
+	if persist:
+		var cfg := ConfigFile.new()
+		cfg.load(GFX_CONFIG)  # la scala del mondo sta nello stesso file
+		cfg.set_value("graphics", "low", low)
+		cfg.save(GFX_CONFIG)
+
+
+## Applica il profilo alla scena viva. Va richiamata anche dopo un cambio
+## scena: i nodi scenografici nuovi nascono visibili.
+func apply_gfx_profile() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	for node in tree.get_nodes_in_group(GfxProfile.GROUP):
+		var item := node as CanvasItem
+		if item != null:
+			item.visible = not low_gfx
+
 
 func _process(delta: float) -> void:
 	if state != State.OFFICE:
@@ -145,11 +200,15 @@ func _process(delta: float) -> void:
 		_gfx_done = true
 		var avg := _gfx_fps_sum / _gfx_samples
 		if avg < 24.0:
-			low_gfx = true
-			Engine.max_fps = 30
-			# Il cap da solo non toglie lavoro alla GPU: su una macchina che
-			# fa 8 fps è un placebo (misurato su T440s, 24/07). Quello che
-			# toglie lavoro davvero è rendere il mondo a risoluzione ridotta.
+			# Le due leve vanno insieme, perché nessuna da sola basta: il
+			# profilo ridotto spegne la scenografia di lusso (85 draw call su
+			# 822, misurate con JHT_CENSUS) e il mondo passa a risoluzione
+			# ridotta, che è l'unica cosa che sposta davvero i fps su una
+			# macchina che ne fa 8 (T440s, 24/07). Il cap a 30 da solo era un
+			# placebo: chi sta a 20 non lo tocca mai.
+			set_low_gfx(true)
+			Log.info("perf",
+					"calibrazione: fps medio %.0f → profilo ridotto (scenografia off)" % avg)
 			_set_scale(_scale_for_fps(avg), avg)
 		else:
 			Log.info("perf", "calibrazione: fps medio %.0f → profilo pieno" % avg)
@@ -175,8 +234,13 @@ static func _scale_for_fps(fps: float) -> float:
 ## adattarsi — scende quando il gioco arranca, e risale quando c'è margine,
 ## così chi ha comprato un computer nuovo non resta pixelato per sempre.
 ## Una scelta manuale dell'utente (o JHT_PIXEL) blocca tutto: comanda lei.
+## Vale anche per JHT_LOW_GFX: un profilo forzato dall'ambiente serve a
+## MISURARE, e se la sorveglianza gli muove la scala sotto i piedi il banco di
+## prova finisce per confrontare tutte le varianti sullo stesso gradino (è
+## esattamente l'errore visto il 25/07).
 func _watch_framerate(delta: float) -> void:
-	if OS.get_environment("JHT_PIXEL").strip_edges() != "":
+	if OS.get_environment("JHT_PIXEL").strip_edges() != "" \
+			or OS.get_environment("JHT_LOW_GFX") == "1":
 		return
 	_watch_time += delta
 	_watch_fps_sum += Engine.get_frames_per_second()

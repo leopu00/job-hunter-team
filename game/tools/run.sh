@@ -70,6 +70,8 @@ case "$MODE" in
 		printf '%s\n' "$WIZ_OUT" | grep "WIZARD-TEST PASS"
 		CAMERA_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_CAMERA_LOCK_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$CAMERA_OUT" | grep "CAMERA-OVERLAY-LOCK-TEST PASS"
+		GFX_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GFX_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
 		POSITIONS_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_POSITIONS_PANEL_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$POSITIONS_OUT" | grep "POSITIONS-PANEL-TEST PASS"
 		MAP_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_MAP_PANEL_TEST=1 godot --headless . 2>&1)"
