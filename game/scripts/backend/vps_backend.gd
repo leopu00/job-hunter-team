@@ -86,11 +86,19 @@ print(json.dumps(out, ensure_ascii=False))
 ## del percorso" del test Leone 23/07); un blocco a apici singoli invece lo
 ## attraversa come argomento unico. tmux ls resta in formato default e il
 ## nome sessione si estrae dai ':'.
-const POLL_CMD := "docker exec jht sh -lc 'tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
-		# Un team in modalita intensiva puo produrre molte righe fra due poll:
-		# 500 evita che una raffica valida cada fuori dalla finestra prima che
-		# il cursore timestamp locale la osservi.
-		+ "tail -n 500 /jht_home/logs/messages.jsonl 2>/dev/null; " \
+## `exec 2>&1` sta DENTRO gli apici, cioè dentro la sh del container: il
+## redirect non deve mai finire alla shell dell'host (su Windows sarebbe
+## PowerShell 5.1, che scriverebbe un file chiamato `1`). Un solo flusso da
+## leggere significa che il lettore non può restare fermo su stderr mentre
+## il container riempie stdout — era metà del blocco del poll (25/07).
+const POLL_CMD := "docker exec jht sh -lc 'exec 2>&1; tmux ls 2>/dev/null; echo ---JHT-CHAT---; " \
+		# Un team in modalita intensiva puo produrre molte righe fra due poll,
+		# ma 500 righe di messaggi del bridge (2 KB l'una) sono quasi un mega
+		# riversato in una pipe che su Windows ne regge poche decine: il poll
+		# si piantava e il gioco non vedeva mai gli agenti reali (T440s,
+		# 25/07). 120 righe restano molto piu del necessario — c'e comunque il
+		# cursore a timestamp che scarta quelle gia viste.
+		+ "tail -n 120 /jht_home/logs/messages.jsonl 2>/dev/null; " \
 		+ "echo ---JHT-THROTTLE---; " \
 		# true finale: su un'install fresca throttle-events.jsonl non esiste
 		# ancora e l'exit 1 del tail verrebbe scambiato per un guasto del

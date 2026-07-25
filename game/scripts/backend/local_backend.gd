@@ -23,6 +23,11 @@ func start(_config: Dictionary) -> void:
 ## corrompendo accenti ed emoji. I comandi ereditati da VpsBackend sono
 ## tutti `docker …` con quoting POSIX a apici singoli: _docker_argv li
 ## rimappa in argv e gli apici non attraversano mai una shell.
+## Silenzio massimo tollerato da un comando docker prima di considerarlo
+## perso. Generoso: su hardware lento un exec può metterci parecchio a
+## partire, ma se per mezzo minuto non arriva un byte non arriverà più.
+const STALL_MS := 30000
+
 func _ssh(command: String) -> Dictionary:
 	# Il probe di _run è l'unico comando non-docker: si emula l'echo.
 	var prefix := ""
@@ -46,6 +51,8 @@ func _ssh(command: String) -> Dictionary:
 	var stderr_pipe: FileAccess = proc["stderr"]
 	var pid := int(proc["pid"])
 	var output_bytes := PackedByteArray()
+	var started := Time.get_ticks_msec()
+	var last_data := started
 	# Un read corto NON è EOF (stesso fix del trasporto SSH, 19/07): si legge
 	# finché il processo vive, poi si svuota il residuo dei pipe.
 	while true:
@@ -53,6 +60,8 @@ func _ssh(command: String) -> Dictionary:
 		output_bytes.append_array(chunk)
 		var echunk := stderr_pipe.get_buffer(65536)
 		output_bytes.append_array(echunk)
+		if chunk.size() > 0 or echunk.size() > 0:
+			last_data = Time.get_ticks_msec()
 		if chunk.size() == 0 and echunk.size() == 0:
 			if not OS.is_process_running(pid):
 				break
@@ -63,6 +72,17 @@ func _ssh(command: String) -> Dictionary:
 			if _stop:
 				OS.kill(pid)
 				break
+			# Un docker che non parla più è un docker che non parlerà mai: il
+			# CLI resta vivo a CPU zero e il thread del poll con lui, quindi
+			# roster, chat e agenti reali non arrivano MAI al gioco — l'utente
+			# vede lo showroom per sempre e crede che il team non sia partito
+			# (T440s, 25/07). Meglio troncare e riprovare al giro dopo.
+			if Time.get_ticks_msec() - last_data > STALL_MS:
+				OS.kill(pid)
+				stdout_pipe.close()
+				stderr_pipe.close()
+				return {"code": -1, "out": "comando docker senza risposta per %ds: %s"
+						% [STALL_MS / 1000, command.left(70)]}
 			OS.delay_msec(5)
 	stdout_pipe.close()
 	stderr_pipe.close()
