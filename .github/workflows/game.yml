@@ -65,6 +65,8 @@ jobs:
           godot --headless --path game --script res://tools/speech_bubble_selftest.gd
           godot --headless --path game --script res://tools/pipeline_queue_selftest.gd
           godot --headless --path game --script res://tools/embedded_terminal_selftest.gd
+          godot --headless --path game --script res://tools/redactor_selftest.gd
+          godot --headless --path game --script res://tools/diagnostics_selftest.gd
           VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
           printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
           PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"

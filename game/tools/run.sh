@@ -48,6 +48,8 @@ case "$MODE" in
 		JHT_NOVPS=1 godot --headless --script res://tools/pipeline_queue_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/embedded_terminal_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/doc_preview_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/redactor_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/diagnostics_selftest.gd
 		python3 tools/python_payload_syntax_test.py
 		python3 tools/coordinator_policy_selftest.py
 		GUIDED_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GUIDED_TEST=1 godot --headless . 2>&1)"
