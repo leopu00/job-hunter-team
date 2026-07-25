@@ -41,6 +41,7 @@
 - ⬜ **[JHT-CLOUD-SYNC-THEME]** — theme/settings from localStorage to a synced `user_settings` table.
 - ⬜ **[JHT-DESKTOP-06]** — "dedicated computer" mode (JHT on a LAN PC via SSH/mDNS); unify with the VPS tunnel path.
 - ⬜ **[JHT-DESKTOP-07]** — container serves `next start` instead of `next dev`.
+- ⬜ **[JHT-PIXEL-MODE]** — sperimentare una modalità grafica volutamente pixelata dell’ufficio (render interno a bassa risoluzione + upscale nearest-neighbor): preservare la riconoscibilità di reparti, tappeti, persone e oggetti, verificare che l’estetica risulti coerente e non “AI-generated”, e misurare il risparmio reale di CPU/GPU/VRAM su hardware diversi.
 - 🟡 **[PACK-INSTALLER-SIZE]** — misurare e ottimizzare gli export Godot sui tre sistemi.
 
 ## 🤖 Team & agents
