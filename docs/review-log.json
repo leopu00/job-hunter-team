@@ -1241,11 +1241,6 @@
       "last_review": null
     },
     {
-      "path": "tests/js/tasks/_disabled/README.md",
-      "description": "Disabled test files — These 38 test files reference components, API routes, or layout",
-      "last_review": null
-    },
-    {
       "path": "tui/README.md",
       "description": "⌨️ tui — terminal UI — Terminal interface for Job Hunter Team: drives the team, streams agent activity,",
       "last_review": null
