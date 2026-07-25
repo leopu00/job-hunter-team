@@ -20,6 +20,15 @@
 # contrario: il testo utente-facing e' in inglese ed e' in scripts/ che va
 # scritto. Se ti ritrovi un mirror "piu' giusto" del source, la correzione va
 # portata a monte prima di lanciare questo script.
+#
+# QUESTO SCRIPT E' IL buildCommand DI VERCEL (vercel.json, dal 2026-07-25):
+# ogni deploy rigenera i due file pubblici dal source, quindi il sito serve
+# SEMPRE cio' che sta in scripts/. Prima al suo posto c'era un `cp` del solo
+# install.sh (dal 2026-04-11) e questo ha nascosto un problema per mesi: la
+# traduzione EN del 2026-07-03 era stata applicata solo a web/public/, cioe'
+# proprio al file che il build sovrascriveva → jobhunterteam.ai/install.sh ha
+# continuato a servire l'ITALIANO. Ora source, mirror e sito dicono la stessa
+# cosa, e il test in CI verifica che il mirror committato non divergano.
 
 set -euo pipefail
 
