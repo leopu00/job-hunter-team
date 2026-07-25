@@ -4,8 +4,10 @@ google-auth
 google-auth-oauthlib
 google-api-python-client
 gspread
-anthropic
-openai
+# NB: niente SDK `anthropic` / `openai` qui. Gli agenti non parlano ai modelli
+# da Python: ogni ruolo è un processo CLI (`claude`, `codex`, `kimi`) in una
+# finestra tmux. I due SDK erano installati a ogni build per la sola
+# `shared/llm/`, che nessuno importava — rimossi con essa il 2026-07-25.
 # PDF reading per gli agenti che leggono CV/lettere degli utenti.
 pypdf
 # BeautifulSoup per gli agenti che parsano pagine job boards (LinkedIn, etc.)
