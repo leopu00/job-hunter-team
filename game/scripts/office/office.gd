@@ -226,6 +226,10 @@ func _ready() -> void:
 		_gfx_profile_selftest.call_deferred()
 	if OS.get_environment("JHT_WIZARD_JUMP_TEST") == "1":
 		_wizard_jump_selftest.call_deferred()
+	if OS.get_environment("JHT_STUCK_TEST") != "":
+		var stuck := Node.new()
+		stuck.set_script(load("res://tools/stuck_agent_watcher.gd"))
+		get_tree().root.add_child.call_deferred(stuck)
 	if OS.get_environment("JHT_WORLD_TEXT_TEST") == "1":
 		_world_text_selftest.call_deferred()
 	if OS.get_environment("JHT_GRAPHICS_PANEL_TEST") == "1":
