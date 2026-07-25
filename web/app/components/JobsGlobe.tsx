@@ -750,7 +750,6 @@ function formatFoundDate(ts: string | null): string | null {
 }
 
 export default function JobsGlobe({
-  hero = false,
   fullscreen = false,
   selectedTypes = [],
   selectedScoreRanges = [],
@@ -761,7 +760,6 @@ export default function JobsGlobe({
   focusPosition = null,
   familyColors = {},
 }: {
-  hero?: boolean;
   fullscreen?: boolean;
   selectedTypes?: string[];
   selectedScoreRanges?: Array<{ lo: number; hi: number }>;
@@ -1571,16 +1569,13 @@ export default function JobsGlobe({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPosition?.tick]);
 
-  const wrapClass =
-    hero || fullscreen
-      ? fullscreen
-        ? "h-full"
-        : ""
-      : "bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]";
+  const wrapClass = fullscreen
+    ? "h-full"
+    : "bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]";
 
   return (
     <div className={wrapClass}>
-      {!hero && !fullscreen && (
+      {!fullscreen && (
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <span className="section-label">{tr("jobs_map")}</span>
           <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
@@ -1618,16 +1613,15 @@ export default function JobsGlobe({
       `}</style>
       <div
         ref={mapWrapRef}
-        className={`jht-globe-wrap relative w-full overflow-hidden ${hero || fullscreen ? "" : "rounded-md"}`}
+        className={`jht-globe-wrap relative w-full overflow-hidden ${fullscreen ? "" : "rounded-md"}`}
         // zoom: 1 neutralizza il body { zoom: var(--zoom) } di JHT
         // che mandava MapLibre a leggere dimensioni canvas sbagliate.
-        // In hero il bg è transparent così il globo si fonde col
-        // body (--color-deep) senza frame; in card mode mantiene
-        // --color-deep esplicito. In fullscreen height=100% riempie
-        // il container fisso (es. /map).
+        // In fullscreen (es. /map) il bg è transparent e l'altezza
+        // riempie il container fisso; in card mode il riquadro mantiene
+        // --color-deep esplicito e un'altezza fissa.
         style={{
-          height: fullscreen ? "100%" : hero ? 620 : 500,
-          background: hero || fullscreen ? "transparent" : "var(--color-deep)",
+          height: fullscreen ? "100%" : 500,
+          background: fullscreen ? "transparent" : "var(--color-deep)",
           zoom: 1,
         }}
       >

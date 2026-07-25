@@ -12,92 +12,30 @@ export const pt: Record<string, string> = {
   home_pricing_alt:
     "Um cadeado aberto rodeado por algumas moedas, uma verde brilhante: a plataforma é gratuita e open source, só pagas o fornecedor de IA.",
   // Nav
-  nav_features: "Funcionalidades",
-  nav_how: "Como funciona",
   nav_github: "GitHub",
   nav_download: "Instalar",
   nav_project: "Projeto",
-  nav_faq: "FAQ",
   nav_pricing: "Preços",
-  nav_about: "Quem somos",
-  nav_stats: "Estatísticas",
-  nav_chronicles: "Crónicas",
   nav_login: "Entrar",
 
   // Hero
   hero_badge: "beta pública",
-  hero_title_1: "A tua equipa de agentes IA",
-  hero_title_2: "para encontrar emprego",
   hero_desc_short:
     "Uma equipa de agentes IA autónomos para a tua procura de emprego.",
-  hero_desc:
-    "Um sistema multiagente autónomo que trata de cada fase da tua procura: desde a análise das ofertas até à candidatura personalizada. Tu defines a estratégia, os agentes executam-na.",
-  hero_cta: "Começa aqui",
-  hero_cta2: "Descobre como funciona",
-  hero_project_cta: "GitHub",
-  cta_start_team: "Cria a tua equipa",
-
-  // Features
-  feat_aria: "Funcionalidades",
-  feat_label: "capacidades",
-  feat_title_1: "Tudo o que precisas,",
-  feat_title_2: "nada de supérfluo",
-  feat_0_title: "Equipa Multiagente",
-  feat_0_desc:
-    "7 agentes IA especializados — Scout, Analista, Scorer, Escritor, Crítico, Sentinela e Capitão — que colaboram como uma verdadeira equipa.",
-  feat_1_title: "Análise Contínua",
-  feat_1_desc:
-    "Monitorização automática de portais de emprego, LinkedIn e canais dedicados. Nunca mais percas uma oportunidade relevante.",
-  feat_2_title: "Candidaturas Inteligentes",
-  feat_2_desc:
-    "CV e cartas de apresentação personalizados para cada posição, otimizados para os sistemas ATS e para o recrutador.",
-  feat_3_title: "Pontuação Inteligente",
-  feat_3_desc:
-    "Cada oferta é analisada e avaliada com base no teu perfil, competências e preferências. Foca-te no que importa.",
-  feat_4_title: "Painel em Tempo Real",
-  feat_4_desc:
-    "Métricas, analytics e estado de cada candidatura. Tudo numa vista: progresso, custos e o pipeline completo num relance.",
-  feat_5_title: "Tu no Comando",
-  feat_5_desc:
-    "Os agentes propõem, tu decides. Cada candidatura requer a tua aprovação antes do envio.",
-
-  // Steps
-  steps_label: "fluxo de trabalho",
-  steps_title: "Como funciona",
-  step_0_title: "Configura",
-  step_0_desc:
-    "Define o teu perfil, as competências, a função desejada e os critérios de procura. Os agentes calibram-se em função de ti.",
-  step_1_title: "Os agentes trabalham",
-  step_1_desc:
-    "A equipa analisa ofertas, examina requisitos, calcula a pontuação de correspondência e prepara candidaturas personalizadas.",
-  step_2_title: "Tu decides",
-  step_2_desc:
-    "Revê as candidaturas prontas no painel. Aprova, edita ou descarta. Sempre tu no comando.",
-
-  // Get Started
 
   // CTA
   cta_title_1: "Pronto para revolucionar",
   cta_title_2: "a tua procura de emprego?",
-  cta_desc:
-    "Uma equipa de agentes IA percorre todo o mercado e encontra as vagas certas para ti — verificadas e ordenadas pelo quanto combinam com o teu perfil.",
   cta_button: "Começar",
-  cta_team: "Conhece a equipa",
-  cta_note: "Não é necessário cartão de crédito · Beta pública",
 
   // Footer
-  footer_jht: "Job Hunter Team",
   footer_brand_desc:
     "Uma equipa de agentes IA autónomos que procura emprego por ti. Open source, local, privado.",
   footer_product: "Produto",
   footer_stats: "Projeto",
-  footer_report: "Relatórios",
   footer_resources: "Recursos",
-  footer_docs: "Documentação",
-  footer_about: "Quem somos",
   footer_contacts: "Contactos",
   footer_bug: "Reportar um erro",
-  footer_discuss: "Discussões",
   footer_privacy: "Política de Privacidade",
   footer_terms: "Termos de Serviço",
   footer_copyright: "Open Source sob licença MIT",
@@ -117,141 +55,6 @@ export const pt: Record<string, string> = {
   dl_help_text: "Não sabes onde instalá-lo?",
   dl_help_link: "Lê o guia",
 
-  // FAQ page
-  faq_title: "Perguntas frequentes",
-  faq_subtitle: "Tudo o que precisas de saber sobre o Job Hunter Team.",
-  faq_no_answer: "Não encontras a resposta?",
-  faq_no_answer_desc: "Consulta o guia completo ou a documentação técnica.",
-  faq_docs_btn: "Documentação",
-
-  // About page
-  about_badge: "quem somos",
-  about_title_1: "Uma equipa de agentes IA",
-  about_title_2: "ao teu serviço",
-  about_intro:
-    "O Job Hunter Team é um projeto open-source que automatiza a procura de emprego com uma equipa de agentes IA autónomos. Cada agente tem um papel preciso e, juntos, formam um pipeline completo: desde a descoberta das ofertas até à candidatura final.",
-  about_story_label: "a história",
-  about_story_title: "Como nasceu o projeto",
-  about_story_desc:
-    "O Job Hunter Team nasceu da ideia de que procurar emprego não devia ser um trabalho a tempo inteiro. Candidatar-se exige horas de pesquisa, personalização de CV e cartas de apresentação, acompanhamento das candidaturas. Pensámos: e se uma equipa de agentes IA pudesse fazer tudo isto por ti?",
-  about_tl_0: "Ideia inicial — sistema multiagente para procura de emprego",
-  about_tl_1: "Primeiro protótipo com pipeline Scout → Analista → Scorer",
-  about_tl_2: "Adicionados o painel local e ferramentas de terminal avançadas",
-  about_tl_3: "Beta pública — launcher desktop e equipa operacional",
-  about_agents_label: "a equipa",
-  about_agents_title: "Os agentes",
-  about_agents_desc:
-    "O sistema inclui 7 agentes operacionais especializados e um assistente de apoio. Trabalham em local, coordenados por um runtime comum e um pipeline estruturado.",
-  about_agent_alfa_name: "Capitão",
-  about_agent_alfa_desc:
-    "O coordenador da equipa. Recebe as diretrizes do utilizador, atribui as tarefas aos agentes, monitoriza o progresso e garante que o pipeline funciona sem percalços. É o ponto de contacto entre ti e a equipa.",
-  about_agent_scout_name: "Scout",
-  about_agent_scout_desc:
-    "O explorador. Analisa portais de emprego, LinkedIn, canais de Telegram e outras fontes à procura de ofertas relevantes. Filtra o ruído e leva à equipa apenas as oportunidades que correspondem ao teu perfil.",
-  about_agent_analista_name: "Analista",
-  about_agent_analista_desc:
-    "O estratega. Analisa cada oferta em profundidade: requisitos, cultura da empresa, tecnologias, senioridade. Produz um relatório estruturado para cada posição, destacando pontos fortes e riscos.",
-  about_agent_scorer_name: "Scorer",
-  about_agent_scorer_desc:
-    "O avaliador. Calcula uma pontuação de correspondência entre o teu perfil e cada oferta analisada. Considera competências técnicas, experiência, localização, salário e preferências pessoais. As melhores ofertas sobem ao topo.",
-  about_agent_scrittore_name: "Escritor",
-  about_agent_scrittore_desc:
-    "O copywriter. Para cada candidatura aprovada, gera um CV personalizado e uma carta de apresentação à medida. Adapta o tom, as keywords e a estrutura aos requisitos específicos da posição e da empresa.",
-  about_agent_critico_name: "Crítico",
-  about_agent_critico_desc:
-    "O revisor. Examina com olhar crítico cada documento produzido pelo Escritor: coerência, erros, keywords em falta, tom inadequado. Se necessário, devolve o trabalho ao Escritor com feedback preciso.",
-  about_agent_sentinella_name: "Sentinela",
-  about_agent_sentinella_desc:
-    "O guardião. Monitoriza os custos de API, o uso, os tempos de resposta e a saúde do sistema. Avisa-te se algo correr mal e garante que a equipa opera dentro dos limites de orçamento definidos.",
-  about_agent_assistente_name: "Assistente",
-  about_agent_assistente_desc:
-    "O apoio. Responde às tuas perguntas, guia-te na configuração, explica as decisões dos outros agentes. É o teu ponto de referência quando precisas de ajuda ou queres perceber o que está a acontecer.",
-  about_how_label: "arquitetura",
-  about_how_title: "Como funciona o sistema",
-  about_how_desc:
-    "O Job Hunter Team usa uma arquitetura multiagente local: cada agente corre como um worker independente, enquanto o runtime coordena as passagens, o estado e a comunicação entre os módulos.",
-  about_how_0: "Cada agente corre como um worker local isolado",
-  about_how_1:
-    "O runtime orquestra as passagens e mensagens estruturadas entre os módulos",
-  about_how_2:
-    "Pipeline coordenado: Scout → Analista → Scorer → Escritor → Crítico",
-  about_how_3:
-    "Sistema de tarefas com estado (pendente → em curso → concluído)",
-  about_how_4: "A Sentinela monitoriza custos e saúde em tempo real",
-  about_vision_label: "visão",
-  about_vision_title: "O futuro",
-  about_vision_desc:
-    "Estamos a construir o futuro da procura de emprego automatizada. A nossa visão é um sistema que aprende com as tuas preferências, melhora a cada candidatura e te permite focar no que importa: preparar-te para as entrevistas.",
-  about_vision_0: "Aprendizagem contínua a partir do feedback do utilizador",
-  about_vision_1: "Integração direta com portais de candidatura",
-  about_vision_2: "Preparação automática de entrevistas com simulações",
-  about_vision_3: "Networking assistido e follow-ups automatizados",
-
-  // Onboarding wizard
-  ob_title: "Bem-vindo ao Job Hunter Team",
-  ob_skip: "Saltar",
-  ob_next: "Seguinte",
-  ob_back: "Voltar",
-  ob_finish: "Começa a procurar",
-  ob_step: "Passo",
-  ob_s1_title: "Bem-vindo",
-  ob_s1_desc:
-    "O Job Hunter Team é a tua equipa pessoal de agentes IA. Encontram ofertas, analisam-nas, escrevem CV e cartas de apresentação à medida — tudo de forma automática, tudo no teu computador.",
-  ob_s1_hint: "Vamos configurar juntos o teu espaço em 5 passos rápidos.",
-  ob_s2_title: "Configura o perfil",
-  ob_s2_desc:
-    "Indica o teu nome, a função que procuras e um breve resumo da tua experiência. Os agentes usarão estas informações para personalizar cada candidatura.",
-  ob_s2_name: "Nome",
-  ob_s2_role: "Função alvo",
-  ob_s2_bio: "Breve bio",
-  ob_s3_title: "Escolhe as competências",
-  ob_s3_desc:
-    "Seleciona as tecnologias e competências que conheces. O Scorer usá-las-á para calcular a correspondência com cada oferta.",
-  ob_s3_hint: "Clica para selecionar, clica novamente para desselecionar.",
-  ob_s4_title: "Liga um fornecedor de IA",
-  ob_s4_desc:
-    "Os agentes correm numa das três CLI suportadas (Claude Code, Codex, Kimi). Terás de iniciar sessão com a subscrição que já tens ativa com o fornecedor; o JHT nunca pede nem armazena chaves de API.",
-  ob_s4_placeholder: "claude login / codex login / kimi login",
-  ob_s4_hint:
-    "O início de sessão acontece dentro do contentor a partir do terminal da CLI escolhida. Os tokens de sessão permanecem geridos pela CLI, em local.",
-  ob_s5_title: "Inicia o primeiro agente",
-  ob_s5_desc:
-    "Está tudo pronto! Carrega no botão para iniciar o Scout — o primeiro agente que procurará ofertas por ti. Poderás iniciar a equipa completa a partir da página Equipa.",
-  ob_s5_launch: "Iniciar Scout",
-  ob_s5_skip_agent: "Faço isso depois",
-  ob_s5_launched: "Scout iniciado!",
-
-  // Home-beta: tabela top matches
-  table_title: "Top {n} correspondências",
-  table_updated: "Atualizado",
-  table_match_score: "Correspondência",
-  table_title_col: "Cargo",
-  table_company: "Empresa",
-  table_location: "Localização",
-  table_salary: "Salário",
-  table_cv: "CV",
-  table_empty: "Ainda sem posições.",
-
-  // Home-beta: nós do team flow
-  agent_captain: "Capitão",
-  agent_scout: "Scout",
-  agent_analyst: "Analista",
-  agent_scorer: "Scorer",
-  agent_writer: "Escritor",
-  agent_critic: "Crítico",
-
-  // Home-beta: speech bubbles do team flow
-  chat_captain_go: "OK equipa, vamos!",
-  chat_captain_profile: "Alvo: Sommelier em hotéis 5★",
-  chat_scout_europe: "Encontrados 3 na Europa!",
-  chat_scout_asia: "Ásia a caminho…",
-  chat_scout_usa: "Grande mercado dos EUA!",
-  chat_analyst_check: "A verificar a correspondência…",
-  chat_captain_good: "Está tudo bem",
-  chat_scorer_top: "Top correspondências encontradas",
-  chat_writer_cvs: "A escrever os CV…",
-  chat_critic_reviewing: "Revisão…",
-
   // Login page (LandingClient)
   login_save_progress: "Entre para guardar o seu progresso",
   login_auth_failed: "A autenticação falhou.",
@@ -260,18 +63,7 @@ export const pt: Record<string, string> = {
   login_with_github: "Entrar com GitHub",
   back: "Voltar",
 
-  // Relative time (LatestPositionsTable)
-  rel_just_now: "agora mesmo",
-  rel_m_ago: "há {n}min",
-  rel_h_ago: "há {n}h",
-  rel_d_ago: "há {n}d",
-  rel_mo_ago: "há {n}mes",
-  table_cv_written: "CV escrito",
-
   // Aria-labels
-  dashboard_preview_alt:
-    "Pré-visualização do painel: lista de posições com pontuações, barras, donut e tendência",
-  image_placeholder: "Imagem — marcador de posição",
   scroll_to_top: "Voltar ao topo",
   nav_main: "Navegação principal",
   nav_menu: "Menu",
@@ -296,13 +88,6 @@ export const pt: Record<string, string> = {
   home_team_body:
     "Um único chatbot tem de fazer tudo sozinho e não se destaca em nada. Uma equipa não: cada agente tem uma tarefa precisa e leva-a a fundo, e o trabalho de cada um passa pelo crivo do seguinte. Assim cada fase é tratada por quem melhor a sabe fazer, e o que chega até ti já foi verificado várias vezes.",
   home_team_cta: "Conheça a equipa →",
-  home_dashboard_kicker: "O seu painel",
-  home_dashboard_title: "Tudo sob controlo, a partir da web",
-  home_dashboard_body:
-    "Veja cada oferta encontrada, a sua pontuação de compatibilidade, o mapa de oportunidades por cidade e país, o estado das suas candidaturas. Registe-se para encontrar tudo em qualquer lugar — mas não é obrigatório: pode manter cada dado apenas no seu computador, sem nuvem.",
-  home_dashboard_cta: "Entre ou registe-se →",
-  home_dashboard_note:
-    "Início de sessão opcional · os seus dados podem ficar apenas no seu PC.",
   home_setup_kicker: "Execute-o",
   home_setup_title: "Como quiser, onde quiser",
   home_setup_body:
@@ -313,14 +98,4 @@ export const pt: Record<string, string> = {
   home_pricing_body:
     "O Job Hunter Team não se paga. O único custo é a subscrição do fornecedor de IA que escolher — a partir de cerca de €40 por mês — ou nada, se um dia usar modelos locais e pagar apenas a eletricidade.",
   home_pricing_cta: "Veja os custos →",
-  home_project_kicker: "O projeto",
-  home_project_title: "O que está por trás, às claras",
-  home_project_body:
-    "Código aberto, os seus dados, sem amarras. Descubra como o Job Hunter Team é construído, a filosofia por trás da equipa de agentes e para onde se dirige.",
-  home_project_cta: "Descubra o projeto →",
-  home_studies_kicker: "Casos de estudo",
-  home_studies_title: "O que faz de verdade, no terreno",
-  home_studies_body:
-    "Não promessas, mas resultados: o que a equipa produziu em perfis de candidatos reais — posições encontradas, analisadas e pontuadas. Dados agregados e anónimos, uma página que cresce a cada nova equipa monitorizada.",
-  home_studies_cta: "Veja os casos de estudo →",
 };
