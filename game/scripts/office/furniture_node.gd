@@ -69,13 +69,18 @@ static var front_chairs: Dictionary = {}
 var _sprite: Sprite2D
 var _base_tex: Texture2D
 var _seated_tex: Texture2D
+var _occupied_material: ShaderMaterial
 
 func has_seated_art() -> bool:
 	return _seated_tex != null
 
 func set_occupied(on: bool) -> void:
 	if _sprite and _seated_tex:
-		_sprite.texture = _seated_tex if on else _base_tex
+		if _occupied_material:
+			_sprite.texture = _base_tex
+			_occupied_material.set_shader_parameter("occupied", on)
+		else:
+			_sprite.texture = _seated_tex if on else _base_tex
 
 ## Lampo di lavoro (react_to_work): quando l'agente è dipinto nella
 ## texture del desk il rig è nascosto — il segnale del lavoro reale
@@ -94,12 +99,13 @@ func _init(p_item: Dictionary) -> void:
 	position = Vector2(_rect.get_center().x, _rect.end.y)
 
 func _ready() -> void:
-	var shape := CollisionShape2D.new()
-	var box := RectangleShape2D.new()
-	box.size = _rect.size
-	shape.shape = box
-	shape.position = Vector2(0, -_rect.size.y / 2.0)
-	add_child(shape)
+	if not bool(item.get("non_blocking", false)):
+		var shape := CollisionShape2D.new()
+		var box := RectangleShape2D.new()
+		box.size = _rect.size
+		shape.shape = box
+		shape.position = Vector2(0, -_rect.size.y / 2.0)
+		add_child(shape)
 	# la texture vive in un CanvasItem separato dalle primitive del _draw
 	# (mescolarle rompe il batching GLES3 su macOS: tutto bianco)
 	#
@@ -184,10 +190,59 @@ func _ready() -> void:
 			if st != null:
 				if st.get_size() == tex.get_size():
 					_seated_tex = st
+					if item.has("occupied_person_scale"):
+						_add_scaled_occupant_material(spr, tex, st)
 				else:
 					push_warning("Seated art canvas mismatch: %s is %s, base %s is %s; using dynamic rig." % [
 						seated_path, st.get_size(), path, tex.get_size(),
 					])
+
+## Alcune illustrazioni composite hanno il tavolo già proporzionato ma la
+## persona di una vista specifica troppo grande. Lo shader confronta base e
+## variante seduta, isola i pixel cambiati e scala soltanto quella differenza:
+## il mobile resta perfettamente immobile quando l'agente si siede o si alza.
+func _add_scaled_occupant_material(spr: Sprite2D, base: Texture2D,
+		seated: Texture2D) -> void:
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+uniform sampler2D seated_texture : source_color;
+uniform bool occupied = false;
+uniform float person_scale = 1.0;
+uniform vec2 person_pivot = vec2(0.5, 0.5);
+
+void fragment() {
+	vec4 base_pixel = texture(TEXTURE, UV);
+	if (!occupied) {
+		COLOR = base_pixel;
+	} else {
+		vec2 source_uv = (UV - person_pivot) / person_scale + person_pivot;
+		if (source_uv.x < 0.0 || source_uv.x > 1.0
+				|| source_uv.y < 0.0 || source_uv.y > 1.0) {
+			COLOR = base_pixel;
+		} else {
+			vec4 seated_pixel = texture(seated_texture, source_uv);
+			vec4 source_base = texture(TEXTURE, source_uv);
+			float color_delta = max(max(abs(seated_pixel.r - source_base.r),
+					abs(seated_pixel.g - source_base.g)),
+					abs(seated_pixel.b - source_base.b));
+			float alpha_delta = abs(seated_pixel.a - source_base.a);
+			float changed = smoothstep(0.025, 0.085,
+					max(color_delta, alpha_delta));
+			float mask = changed * seated_pixel.a;
+			COLOR = mix(base_pixel, seated_pixel, mask);
+		}
+	}
+}
+"""
+	_occupied_material = ShaderMaterial.new()
+	_occupied_material.shader = shader
+	_occupied_material.set_shader_parameter("seated_texture", seated)
+	_occupied_material.set_shader_parameter("person_scale",
+			clampf(float(item["occupied_person_scale"]), 0.5, 1.0))
+	_occupied_material.set_shader_parameter("person_pivot",
+			item.get("occupied_person_pivot", Vector2(0.5, 0.5)))
+	spr.material = _occupied_material
 
 func _add_front_occluder(source: Sprite2D, tex: Texture2D, cut: float) -> void:
 	var overlay := Sprite2D.new()

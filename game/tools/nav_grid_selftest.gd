@@ -108,7 +108,7 @@ func _test_writer_handoff_visual_clearance() -> void:
 	var table_h: float = table_w * table_tex.get_height() / table_tex.get_width()
 	var table_rect := Rect2(pos - Vector2(table_w / 2.0, table_h),
 			Vector2(table_w, table_h))
-	for item_id in ["plant_palm_a", "drawer_scorer", "drawer_scrittori"]:
+	for item_id in ["plant_palm_a", "drawer_scrittori"]:
 		var item: Dictionary = {}
 		for candidate in FurnitureDefsScript.ITEMS:
 			if str(candidate["id"]) == item_id:

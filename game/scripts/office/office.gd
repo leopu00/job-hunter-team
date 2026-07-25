@@ -90,6 +90,9 @@ func _ready() -> void:
 		# approvati possono fissare qui un path specifico.
 		if d.has("seated_art"):
 			desk_item["seated_art"] = d["seated_art"]
+		for visual_key in ["occupied_person_scale", "occupied_person_pivot"]:
+			if d.has(visual_key):
+				desk_item[visual_key] = d[visual_key]
 		var desk_node := FurnitureNode.new(desk_item)
 		world.add_child(desk_node)
 		# registry per lo scambio vuota/occupata quando l'agente si siede
@@ -154,7 +157,8 @@ func _ready() -> void:
 	# reparto. Il primo snapshot reale li sostituisce senza mai presentare un
 	# ufficio vuoto a chi sta ancora configurando il prodotto.
 	var initial_defs: Array = []
-	if _seat_audit != "" or _doctor_test != "":
+	var all_seated_preview := OS.get_environment("JHT_ALL_SEATED_PREVIEW") == "1"
+	if _seat_audit != "" or _doctor_test != "" or all_seated_preview:
 		initial_defs = CharacterDefs.spawn_list()
 	elif BackendBus.agents.is_empty():
 		initial_defs = CharacterDefs.showroom_list()
@@ -170,7 +174,7 @@ func _ready() -> void:
 		# Niente parata d'ingresso all'avvio (feedback Leone 21/07): l'ufficio
 		# si RITROVA già al lavoro — è anche la rappresentazione veritiera
 		# (gli agenti esistono già) e cancella il picco di lag del boot.
-		agent.set_story_marker(_seat_audit == "" \
+		agent.set_story_marker(_seat_audit == "" and not all_seated_preview \
 				and not ScriptedOnboarding.provider_authenticated())
 		agents.append(agent)
 	if traffic_demo:
@@ -248,7 +252,8 @@ func _ready() -> void:
 			add_child(focus_cam)
 			focus_cam.make_current()
 
-	if _seat_audit == "" and _doctor_test == "":
+	if _seat_audit == "" and _doctor_test == "" \
+			and OS.get_environment("JHT_ALL_SEATED_PREVIEW") != "1":
 		_add_hud()
 		var sidebar := GameSidebar.new()
 		add_child(sidebar)  # sidebar stile desktop-app (linguetta ≡)
