@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import type { DashboardPosition } from "@/lib/queries";
 import UnseenDot from "@/app/components/UnseenDot";
 import { scoreSpectrumCss } from "@/lib/score-color";
@@ -50,6 +51,143 @@ function formatScoredAt(iso: string | null): string {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// ── Card mobile ────────────────────────────────────────────────────────
+// Ogni card ha SEMPRE le stesse quattro righe: tre per titolo+azienda, una
+// per categoria/data. Il titolo ne prende al massimo due, l'azienda si
+// prende quelle che restano — due se il titolo sta su una riga, altrimenti
+// una — e in entrambi i casi tronca con "…". Così la riga vuota compare solo
+// quando titolo e azienda stanno entrambi su una riga sola, e sparisce da
+// sola appena uno dei due ne occupa un'altra.
+//
+// Il numero di righe del titolo dipende dal render (larghezza, font, badge
+// NEW che compare dopo il mount), quindi il CSS da solo non basta: lo misura
+// un ResizeObserver e da lì si ricava il clamp dell'azienda.
+const CARD_LINE = 18; // px per riga di testo, uguale per titolo e azienda
+const CARD_TEXT_LINES = 3;
+
+function PositionCard({
+  p,
+  unseenLabel,
+  firstCol,
+}: {
+  p: DashboardPosition;
+  unseenLabel: string;
+  firstCol: "id" | "scored";
+}) {
+  const titleRef = useRef<HTMLAnchorElement>(null);
+  const [titleLines, setTitleLines] = useState(1);
+
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const measure = () => {
+      const lines = Math.round(el.getBoundingClientRect().height / CARD_LINE);
+      setTitleLines(Math.min(2, Math.max(1, lines)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const country = (p.loc_country ?? "").trim();
+  const city = (p.loc_city ?? "").trim();
+  const place =
+    city || country || (p.remote_type === "full_remote" ? "Remote" : "");
+
+  return (
+    <div
+      className="rounded-lg border p-3"
+      style={{
+        borderColor: "var(--color-border)",
+        background: "var(--color-card)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        {/* Altezza fissa = 3 righe: è questa a rendere tutte le card uguali,
+            e l'eventuale riga libera resta qui sotto l'azienda — cioè sopra
+            la riga categoria/data, non in fondo alla card. */}
+        <div
+          className="min-w-0 flex-1"
+          style={{ height: CARD_LINE * CARD_TEXT_LINES }}
+        >
+          {/* SOLO il titolo è link (come su /positions): la card intera
+              cliccabile sottolinea ogni riga su touch. */}
+          <Link
+            ref={titleRef}
+            href={`/positions/${p.id}`}
+            className="text-[13px] font-semibold no-underline"
+            style={{
+              color: "var(--color-green)",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              lineHeight: `${CARD_LINE}px`,
+            }}
+          >
+            {p.title}{" "}
+            <UnseenDot id={p.id} label={unseenLabel} initialSeen={p.seen} />
+          </Link>
+          <div
+            className="text-[11px] text-[var(--color-muted)]"
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: CARD_TEXT_LINES - titleLines,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              lineHeight: `${CARD_LINE}px`,
+            }}
+          >
+            {p.company}
+            {place ? ` · ${place}` : ""}
+          </div>
+        </div>
+        <span
+          className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
+          style={{
+            color: scoreSpectrumCss(p.score),
+            borderColor: scoreSpectrumCss(p.score),
+          }}
+        >
+          {p.score ?? "—"}
+        </span>
+      </div>
+      <div className="pt-2 flex items-center justify-between gap-2 text-[10px]">
+        <span className="flex items-center gap-2 min-w-0">
+          {p.role_family?.trim() && (
+            <span className="inline-flex items-center gap-1 truncate text-[var(--color-muted)]">
+              <span
+                aria-hidden
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: colorForFamily(p.role_family.trim()),
+                  flexShrink: 0,
+                }}
+              />
+              <span className="truncate">{p.role_family.trim()}</span>
+            </span>
+          )}
+        </span>
+        {/* Stessa informazione della prima colonna della tabella: timestamp
+            dello score, oppure ID nella variante "id". */}
+        <span
+          className="shrink-0 font-mono tabular-nums text-[var(--color-dim)]"
+          suppressHydrationWarning={firstCol === "scored"}
+        >
+          {firstCol === "scored"
+            ? formatScoredAt(p.scored_at)
+            : p.legacy_id
+              ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+              : p.id.slice(0, 8)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function RecentPositionsTable({
   rows,
   labels,
@@ -88,115 +226,14 @@ export default function RecentPositionsTable({
             {labels.noPositions}
           </div>
         ) : (
-          rows.map((p) => {
-            const country = (p.loc_country ?? "").trim();
-            const city = (p.loc_city ?? "").trim();
-            const place =
-              city ||
-              country ||
-              (p.remote_type === "full_remote" ? "Remote" : "");
-            return (
-              <div
-                key={p.id}
-                className="rounded-lg border p-3 flex flex-col"
-                style={{
-                  borderColor: "var(--color-border)",
-                  background: "var(--color-card)",
-                  // Altezza uniforme per TUTTE le card. Il caso più alto è
-                  // titolo su 2 righe: 24 (padding) + 35.75 (2 × 1.375 × 13px)
-                  // + 4 (mt-1) + 17.6 (azienda 1.6 × 11px) + 8 (pt-2) + 16
-                  // (meta 1.6 × 10px) = 105.35 → 106 li copre tutti, e le card
-                  // con titolo corto arrivano allo stesso numero scaricando
-                  // l'avanzo in fondo (mt-auto sulla riga categoria/data).
-                  // Inline e non una classe Tailwind: la classe arbitraria
-                  // veniva servita dal CSS in cache di Safari e non applicata.
-                  minHeight: 106,
-                }}
-              >
-                {/* Azienda+località stanno nella colonna del TITOLO, non sotto
-                    la riga del punteggio: il cerchio è alto 36px e con un
-                    titolo di una sola riga (~18px) dettava lui l'altezza,
-                    lasciando un buco proprio tra titolo e azienda. Così il
-                    testo resta compatto e l'aria in più finisce in fondo alla
-                    card (min-h + mt-auto), dove non separa niente. */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    {/* SOLO il titolo è link (come su /positions): la card
-                        intera cliccabile sottolinea ogni riga su touch. */}
-                    <Link
-                      href={`/positions/${p.id}`}
-                      className="text-[13px] font-semibold leading-snug no-underline"
-                      style={{
-                        color: "var(--color-green)",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {p.title}{" "}
-                      <UnseenDot
-                        id={p.id}
-                        label={labels.unseen}
-                        initialSeen={p.seen}
-                      />
-                    </Link>
-                    <div className="mt-1 text-[11px] text-[var(--color-muted)] truncate">
-                      {p.company}
-                      {place ? ` · ${place}` : ""}
-                    </div>
-                  </div>
-                  <span
-                    className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
-                    style={{
-                      color: scoreSpectrumCss(p.score),
-                      borderColor: scoreSpectrumCss(p.score),
-                    }}
-                  >
-                    {p.score ?? "—"}
-                  </span>
-                </div>
-                {/* Riga categoria/data ancorata al fondo: l'avanzo di altezza
-                    si apre TRA azienda e categoria, non sotto. marginTop
-                    inline e non mt-auto: quella classe nasceva solo qui,
-                    quindi il CSS in cache di Safari non la conteneva. */}
-                <div
-                  className="pt-2 flex items-center justify-between gap-2 text-[10px]"
-                  style={{ marginTop: "auto" }}
-                >
-                  <span className="flex items-center gap-2 min-w-0">
-                    {p.role_family?.trim() && (
-                      <span className="inline-flex items-center gap-1 truncate text-[var(--color-muted)]">
-                        <span
-                          aria-hidden
-                          style={{
-                            width: 7,
-                            height: 7,
-                            borderRadius: "50%",
-                            background: colorForFamily(p.role_family.trim()),
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span className="truncate">{p.role_family.trim()}</span>
-                      </span>
-                    )}
-                  </span>
-                  {/* Stessa informazione della prima colonna della tabella:
-                      timestamp dello score, oppure ID nella variante "id". */}
-                  <span
-                    className="shrink-0 font-mono tabular-nums text-[var(--color-dim)]"
-                    suppressHydrationWarning={firstCol === "scored"}
-                  >
-                    {firstCol === "scored"
-                      ? formatScoredAt(p.scored_at)
-                      : p.legacy_id
-                        ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                        : p.id.slice(0, 8)}
-                  </span>
-                </div>
-              </div>
-            );
-          })
+          rows.map((p) => (
+            <PositionCard
+              key={p.id}
+              p={p}
+              unseenLabel={labels.unseen}
+              firstCol={firstCol}
+            />
+          ))
         )}
       </div>
 
