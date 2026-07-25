@@ -485,9 +485,40 @@ func _send(data: String) -> void:
 	_input.grab_focus()
 
 
+## Il CLI scrive le credenziali qualche secondo DOPO aver detto "Login
+## successful" a video: sul ThinkPad il file è comparso 8 secondi dopo che
+## l'utente era tornato nel gioco (25/07). Un solo refresh al click arrivava
+## prima del file, non trovava nulla e non diceva niente — il verde compariva
+## da solo mezzo minuto più tardi e il click sembrava ignorato. Ora il pulsante
+## risponde subito e continua a controllare finché la prova non c'è.
+const AUTH_WAIT_MS := 30000
+const AUTH_POLL_S := 0.7
+
 func _complete() -> void:
-	_refresh_setup()
-	close()
+	if not _is_login_flow():
+		_refresh_setup()
+		close()
+		return
+	_done.disabled = true
+	_done.text = "VERIFICO IL LOGIN…"
+	var deadline := Time.get_ticks_msec() + AUTH_WAIT_MS
+	while Time.get_ticks_msec() < deadline:
+		_refresh_setup()
+		await get_tree().create_timer(AUTH_POLL_S).timeout
+		if _closing or not is_instance_valid(_done):
+			return  # l'auto-chiusura su credenziali trovate ci ha preceduti
+	# Scaduto il tempo: il login non ha lasciato traccia. Meglio dirlo che
+	# chiudere in silenzio facendo credere all'utente di aver finito.
+	if not is_instance_valid(_done):
+		return
+	_status.text = "● LOGIN NON ANCORA RILEVATO"
+	_status.add_theme_color_override("font_color", Palette.YELLOW)
+	_done.disabled = false
+	_done.text = "HO COMPLETATO IL LOGIN"
+	_output.text += "\n\n[JHT] Non trovo ancora le credenziali del provider. " \
+			+ "Se il login nel browser è andato a buon fine, lascia questa " \
+			+ "console aperta ancora qualche secondo: la spunta verde arriva " \
+			+ "da sola appena il CLI le salva."
 
 
 func _matching_auth_ready(next: Dictionary) -> bool:

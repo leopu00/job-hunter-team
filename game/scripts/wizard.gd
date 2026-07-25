@@ -38,6 +38,7 @@ var _ready_flag := false
 var _leaving := false
 
 func _ready() -> void:
+	Log.info("scene", "wizard pronto")  # traccia il passo 03 del setup (25/07)
 	theme = TerminalTheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_build_ui()
