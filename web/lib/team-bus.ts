@@ -63,23 +63,6 @@ export async function blockIfRemote(
 }
 
 /**
- * Per endpoint GET status che fanno tmux ls / capture-pane / docker
- * inspect: invece di crashare su Vercel (no tmux/docker), ritornano uno
- * stato neutro che le UI possono visualizzare senza errori console.
- */
-export async function remoteStatusStub<T>(
-  stub: T,
-): Promise<NextResponse | null> {
-  if (await isLocalRequest()) return null;
-  return NextResponse.json({
-    ok: true,
-    remote: true,
-    status: "unknown",
-    ...stub,
-  });
-}
-
-/**
  * Inferenza dello stato active di un agente quando girimo su cloud (no
  * accesso a tmux della VPS). Logica: l'ultimo comando con
  * `status='done'` sul bus che ha target `<agent>` o `all` decide. Se

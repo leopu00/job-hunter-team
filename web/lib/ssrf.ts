@@ -1,6 +1,18 @@
 /**
  * SSRF policies and re-exports for the web layer.
  *
+ * STATO (verificato 25/07/2026): nessun consumatore attivo. Il modulo
+ * nasce il 30/04 per la route webhook `test-ping`, che oggi non esiste
+ * più; da allora nessuna route fa fetch verso URL forniti dall'utente
+ * (`reverse-geocode` → Nominatim, `device-register` → Supabase,
+ * `ai-assistant` → OpenAI: host tutti costanti), quindi NON c'è una
+ * superficie SSRF scoperta. Il modulo resta in repo deliberatamente:
+ * non essendo importato non entra nel bundle (costo zero a runtime) ed
+ * è la guardia pronta all'uso per il primo fetch verso un URL di
+ * provenienza esterna — webhook, callback, import da link, scraping.
+ * Se ne aggiungi uno, passa da `safeFetch` invece di reinventare le
+ * euristiche sugli IP privati.
+ *
  * Centralised so route handlers do not each invent their own private-IP
  * heuristics. The validation primitives live in
  * [`./net/ssrf.ts`](./net/ssrf.ts) — this file just bundles the policies

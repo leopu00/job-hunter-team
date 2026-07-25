@@ -6,73 +6,15 @@ import React from "react";
 import { useLocale } from "@/lib/use-locale";
 import { t } from "./setup-i18n";
 
-export const inputCls = [
-  "w-full px-3 py-2 rounded text-[12px] font-mono",
-  "bg-[var(--color-card)] border border-[var(--color-border)]",
-  "outline-none focus:border-[var(--color-green)] transition-colors",
-].join(" ");
-
-export const btnPrimary: React.CSSProperties = {
+const btnPrimary: React.CSSProperties = {
   background: "var(--color-green)",
   color: "#000",
 };
-export const btnSecondary: React.CSSProperties = {
+const btnSecondary: React.CSSProperties = {
   border: "1px solid var(--color-border)",
   color: "var(--color-muted)",
   background: "transparent",
 };
-
-export const STEPS = [
-  "provider",
-  "auth",
-  "model",
-  "telegram",
-  "summary",
-] as const;
-export type Step = (typeof STEPS)[number];
-
-/** Chiavi i18n per le label degli step (vedi setup-i18n.ts). */
-export const STEP_LABEL_KEYS: Record<Step, string> = {
-  provider: "step_provider",
-  auth: "step_auth",
-  model: "step_model",
-  telegram: "step_telegram",
-  summary: "step_summary",
-};
-
-export function StepBar({ current }: { current: Step }) {
-  const locale = useLocale();
-  const idx = STEPS.indexOf(current);
-  return (
-    <div className="flex items-center gap-1 mb-8 flex-wrap">
-      {STEPS.map((s, i) => (
-        <div key={s} className="flex items-center gap-1">
-          <div
-            className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold"
-            style={{
-              background:
-                i <= idx ? "var(--color-green)" : "var(--color-border)",
-              color: i <= idx ? "#000" : "var(--color-dim)",
-            }}
-          >
-            {i + 1}
-          </div>
-          <span
-            className="text-[9px] tracking-widest uppercase hidden sm:inline"
-            style={{
-              color: i === idx ? "var(--color-bright)" : "var(--color-dim)",
-            }}
-          >
-            {t(STEP_LABEL_KEYS[s], locale)}
-          </span>
-          {i < STEPS.length - 1 && (
-            <span className="text-[var(--color-border)] mx-1">›</span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function Card({
   title,
@@ -102,37 +44,6 @@ export function Card({
         )}
       </div>
       <div className="px-6 py-6 flex flex-col gap-4">{children}</div>
-    </div>
-  );
-}
-
-export function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label
-        className="text-[10px] font-semibold tracking-widest uppercase"
-        style={{ color: "var(--color-muted)" }}
-      >
-        {label}
-      </label>
-      {children}
-      {error && (
-        <p
-          role="alert"
-          className="text-[10px]"
-          style={{ color: "var(--color-red)" }}
-        >
-          {error}
-        </p>
-      )}
     </div>
   );
 }

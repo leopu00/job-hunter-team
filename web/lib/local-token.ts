@@ -103,5 +103,3 @@ export function isLocalTokenAuthenticated(
   return false;
 }
 
-/** Path canonico esposto per CLI/Electron consumer. */
-export const LOCAL_TOKEN_PATH = TOKEN_FILE;
