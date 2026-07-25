@@ -211,7 +211,6 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/2026-07-11-team-directives-bacheca.md](./internal/2026-07-11-team-directives-bacheca.md) | 📋 Bacheca del team — direttive permanenti dell'utente (2026-07-11) — Stato: fondamenta su dev4 (tabella + skill). | — | 2026-07-15 | ✅ |
 | [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-07-25 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
@@ -306,6 +305,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/roadmap/MINOR-TRACKER.md](./internal/roadmap/MINOR-TRACKER.md) | 🪛 Minor tracker — note, debt, fix piccoli — File di tracciamento per cose da fare/migliorare/controllare che NON sono blocker pre-launch. | — | 2026-07-25 | ✅ |
 | [docs/internal/roadmap/db-schema-optimization.md](./internal/roadmap/db-schema-optimization.md) | 🗄️ Database schema optimization — plan (idea, not scheduled) — Moved from docs/about/ROADMAP.md in the 2026-07-03 docs restructure. | — | 2026-07-03 | ✅ |
 | [docs/internal/2026-07-25-audit-doc-code-drift.md](./internal/2026-07-25-audit-doc-code-drift.md) | Audit doc↔codice del ciclo native (500 commit): cosa era slittato, cosa è stato riallineato, debito residuo per tag | — | 2026-07-25 | ✅ |
+| [docs/internal/architecture/2026-07-11-team-directives-bacheca.md](./internal/architecture/2026-07-11-team-directives-bacheca.md) | 📋 Bacheca del team — direttive permanenti dell'utente (2026-07-11) — Stato: fondamenta su dev4 (tabella + skill). | 2026-07-15 | — | 🟢 |
 
 
 ## 🔒 docs/security

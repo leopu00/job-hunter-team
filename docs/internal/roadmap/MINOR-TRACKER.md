@@ -135,11 +135,10 @@
 - **Effort:** M (serve un giro di cattura schermate su app + Gmail).
 - **Origine:** audit doc↔codice 2026-07-25 (unico link "rotto" restante nel repo, ed è un esempio in backtick).
 
-### ⬜ `[MINOR-INTERNAL-NOTE-UNFILED]` Nota del 2026-07-11 ancora nella root di `docs/internal/`
+### ✅ `[MINOR-INTERNAL-NOTE-UNFILED]` Nota del 2026-07-11 ancora nella root di `docs/internal/`
 
-- **Stato:** ⬜ open. `2026-07-11-team-directives-bacheca.md` è in root; il protocollo di `docs/internal/README.md` vuole la root riservata a `landing-image-prompts.md` e le note smistate in `architecture/` · `postmortems/` · `roadmap/` · `_archive/`.
-- **Da fare:** `git mv` in `architecture/` (è un design della bacheca `team_directives`, feature poi shippata) + riga nell'indice.
-- **Effort:** S.
+- **Com'era:** ⬜ open. `2026-07-11-team-directives-bacheca.md` era in root; il protocollo di `docs/internal/README.md` vuole la root riservata a `landing-image-prompts.md` e le note smistate in `architecture/` · `postmortems/` · `roadmap/` · `_archive/`.
+- **Fatto (2026-07-25):** `git mv` in `architecture/` + riga nell'indice. Era una nota **non indicizzata**: fuori dal protocollo *e* fuori da ogni sommario, quindi raggiungibile solo per `ls`.
 - **Origine:** audit doc↔codice 2026-07-25. Le altre due note in root (`2026-07-03-desktop-app-*`) sono già state archiviate nello stesso giro.
 
 ### ⬜ `[NOTE-COMPANIES-RUBRIC]` Analista rubric companies troppo permissivo
