@@ -1,20 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { localWorkspace } from "@/lib/local-workspace";
+import { readLocalOr } from "@/lib/local-workspace";
 import { getCriticoActivityLocal } from "@/lib/local-queries";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   // Local-only (host localhost + jobs.db): leggi dal DB locale, mai Supabase.
-  const ws = await localWorkspace();
-  if (ws) {
-    try {
-      return NextResponse.json(getCriticoActivityLocal(ws));
-    } catch (err) {
-      console.error("[critico] local", err);
-    }
-  }
+  const fromLocal = await readLocalOr("critico", getCriticoActivityLocal);
+  if (fromLocal !== null) return NextResponse.json(fromLocal);
   const supabase = await createClient();
 
   const { data: apps, error } = await supabase
