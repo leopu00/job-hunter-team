@@ -156,7 +156,14 @@ export default function RecentPositionsTable({
                     {p.score ?? "—"}
                   </span>
                 </div>
-                <div className="mt-auto pt-2 flex items-center justify-between gap-2 text-[10px]">
+                {/* Riga categoria/data ancorata al fondo: l'avanzo di altezza
+                    si apre TRA azienda e categoria, non sotto. marginTop
+                    inline e non mt-auto: quella classe nasceva solo qui,
+                    quindi il CSS in cache di Safari non la conteneva. */}
+                <div
+                  className="pt-2 flex items-center justify-between gap-2 text-[10px]"
+                  style={{ marginTop: "auto" }}
+                >
                   <span className="flex items-center gap-2 min-w-0">
                     {p.role_family?.trim() && (
                       <span className="inline-flex items-center gap-1 truncate text-[var(--color-muted)]">
