@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import {
   aggregateRoleFamilies,
+  groupRoleFamilies,
+  OTHER_GROUP_LABEL,
   UNCATEGORIZED_LABEL,
 } from "@/lib/position-classifier";
 import type { DashboardPosition } from "@/lib/queries";
@@ -73,6 +75,16 @@ const T: Record<string, Record<string, string>> = {
     fr: "Sans ville",
     pt: "Sem cidade",
   },
+  // Spicchio che raccoglie i tipi sotto soglia: "{n}" = quanti ne contiene.
+  other_types: {
+    it: "Altre ({n} tipi)",
+    en: "Other ({n} types)",
+    hu: "Egyéb ({n} típus)",
+    es: "Otras ({n} tipos)",
+    de: "Andere ({n} Typen)",
+    fr: "Autres ({n} types)",
+    pt: "Outras ({n} tipos)",
+  },
   reset_all: {
     it: "Rimuovi tutti i filtri",
     en: "Clear all filters",
@@ -111,6 +123,14 @@ const COUNTRY_ONLY = "(country-only)";
 // cross-filter è coerente con la sidebar /positions e la mappa.
 const familyKey = (rf: string | null) =>
   (rf ?? "").trim() || UNCATEGORIZED_LABEL;
+// Il donut ragiona per MACRO-categoria (la parte prima di "/" nel nome scritto
+// dagli agenti), quindi anche il cross-filter deve confrontare i macro: un
+// clic su "F&B" seleziona Hostess, Restaurant Service, Wine Service insieme.
+const macroKey = (rf: string | null) => {
+  const full = familyKey(rf);
+  const head = full.split("/")[0]?.trim();
+  return head && head.length > 0 ? head : full;
+};
 const countryKey = (c: string | null) => (c ?? "").trim() || UNKNOWN;
 const cityKey = (c: string | null, ci: string | null) =>
   `${countryKey(c)}|${(ci ?? "").trim() || COUNTRY_ONLY}`;
@@ -250,7 +270,7 @@ export default function DashboardLinkedCharts({
     selectedCountries.length > 0 || selectedCities.length > 0;
   const passFamily = (p: DashboardPosition) =>
     selectedFamilies.length === 0 ||
-    selectedFamilies.includes(familyKey(p.role_family));
+    selectedFamilies.includes(macroKey(p.role_family));
   const passLocation = (p: DashboardPosition) => {
     if (!locationActive) return true;
     if (selectedCities.includes(cityKey(p.loc_country, p.loc_city)))
@@ -282,12 +302,14 @@ export default function DashboardLinkedCharts({
     const pool = rows.filter(
       (p) => passLocation(p) && passScore(p.score) && passSalary(p),
     );
-    return aggregateRoleFamilies(
-      pool.map((p) => ({
-        role_family: p.role_family,
-        score: p.score,
-        critic: null,
-      })),
+    return groupRoleFamilies(
+      aggregateRoleFamilies(
+        pool.map((p) => ({
+          role_family: p.role_family,
+          score: p.score,
+          critic: null,
+        })),
+      ),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -297,6 +319,19 @@ export default function DashboardLinkedCharts({
     selectedScoreBins,
     selectedSalaryBins,
   ]);
+
+  // Etichetta localizzata dello spicchio "Altre", con quanti tipi contiene.
+  const otherGroupLabel = useMemo(() => {
+    const other = typeData.find((d) => d.family === OTHER_GROUP_LABEL);
+    if (!other) return undefined;
+    return {
+      [OTHER_GROUP_LABEL]: tr("other_types").replace(
+        "{n}",
+        String(other.members.length),
+      ),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeData, locale]);
 
   // Paesi: scope per family + score (esclude la dimensione location).
   const countryItems = useMemo(() => {
@@ -545,8 +580,29 @@ export default function DashboardLinkedCharts({
           title={labels.types}
           emptyLabel={labels.noData}
           size={190}
+          labels={otherGroupLabel}
           selectedTypes={selectedFamilies}
-          onToggleType={(f) => toggle(setSelectedFamilies, f)}
+          // "Altre" non è una categoria: selezionarlo equivale a selezionare
+          // tutti i macro-tipi che ha inghiottito.
+          onToggleType={(f) => {
+            if (f !== OTHER_GROUP_LABEL) {
+              toggle(setSelectedFamilies, f);
+              return;
+            }
+            const macros = Array.from(
+              new Set(
+                (
+                  typeData.find((d) => d.family === OTHER_GROUP_LABEL)
+                    ?.members ?? []
+                ).map((m) => macroKey(m)),
+              ),
+            );
+            setSelectedFamilies((cur) =>
+              macros.every((m) => cur.includes(m))
+                ? cur.filter((m) => !macros.includes(m))
+                : Array.from(new Set([...cur, ...macros])),
+            );
+          }}
         />
       </div>
 
