@@ -190,6 +190,27 @@ Vale registrarlo, perché dice dove il processo funziona:
 
 ---
 
+## 5.1 ✅ Esito delle decisioni (rivista del 2026-07-25 con l'utente)
+
+Le quattro decisioni aperte sono state prese e applicate nello stesso giorno.
+
+| # | Decisione | Esito |
+|---|---|---|
+| 1 | **Account e2e** | Scelta A (account di test dedicato sul progetto prod, isolato da RLS). **Infrastruttura pronta:** `playwright.config.ts` raccoglie `auth-state.json` se esiste e annuncia all'avvio se l'area riservata verrà esercitata. Resta il passo umano: creare l'account e salvare la sessione. |
+| 2 | **Pagine `/team/*`** | Scelta A, applicata **chirurgicamente**: rimosse le 3 pagine di controllo (`assistente`, `capitano`, `sentinella`) + 16 route + `ProfileAssistantFab`. Tenute `/team` (voce di navbar viva, alimentata dai dati sincronizzati), `/team/log` e le 5 pagine dei ruoli, che sul cloud mostrano contenuto descrittivo utile. Totali: **149 → 97 route**, shell **28 → 4**. |
+| 3 | **Dossier azienda demo** | L'opzione B come l'avevo scritta era imprecisa e l'utente l'ha colta: le aziende demo sono nomi inventati, quindi **il logo non si può mettere** (e la card lo rende opzionale). Ciò che mancava era il dossier testuale: ora **derivato** deterministicamente dai dati del seed, senza logo e senza prosa da localizzare. |
+| 4 | **287 test del config inutilizzato** | Scelta B (indagare) con tetto di tempo: **un minuto è bastato**. Il `.mjs` re-includeva `tasks/_disabled/`. Nessuna copertura nascosta → config cancellato dopo aver verificato tutti gli 11 moduli del job matrix. |
+
+Le quattro scelte meccaniche sono state applicate tutte, con **una correzione sostanziale**: due delle sei variabili che avevo chiamato "residui Next" nel compose (`NEXT_PUBLIC_SUPABASE_URL/ANON_KEY`) le legge il **sync del container**. Rimuoverle avrebbe rotto il push cloud per chi passa la config via env. Sono rimaste, con un commento che lo dice.
+
+### Errori miei in questo giro, per memoria
+
+1. **Ho committato con due test rossi** (la rimozione delle pagine faceva cadere un audit QA del 30/03 che asseriva l'esistenza di `/api/capitano/stop`). Visti e sistemati subito dopo: audit archiviato, la sua guardia di sicurezza su `shell.ts` estratta in un test proprio. La lezione è banale e vale scriverla: leggere l'output dei test *prima* del commit, non dopo.
+2. **Tre analisi da correggere in corsa**, tutte per lo stesso motivo — avevo dedotto invece di misurare: le route "orfane" erano 36 e non 28 (avevo guardato solo quelle con `runBash`); il match per prefisso teneva vive le route padre; i tipi generati in `web/.next` contavano come chiamanti. Ogni volta il numero è cambiato *dopo* la misura.
+3. **Un bug scritto e preso dal mio stesso test:** `h >> 3` è uno shift su int32 *signed*, quindi con hash oltre 2^31 l'indice diventava negativo e `size` finiva `undefined`.
+
+---
+
 ## 6. 📌 Lezione di processo
 
 Il pattern comune ai tre problemi più gravi (versioni non taggabili, CHANGELOG vuoto,
