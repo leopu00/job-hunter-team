@@ -1236,11 +1236,6 @@
       "last_review": null
     },
     {
-      "path": "tui/README.md",
-      "description": "⌨️ tui — terminal UI — Terminal interface for Job Hunter Team: drives the team, streams agent activity,",
-      "last_review": null
-    },
-    {
       "path": "web/README.md",
       "description": "🌐 web — dashboard (Next.js) — The Job Hunter Team web dashboard: positions, scoring, map/globe, team telemetry,",
       "last_review": null

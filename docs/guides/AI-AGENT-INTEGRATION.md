@@ -24,6 +24,39 @@ This is one of JHT's primary design decisions:
 
 If a feature requires opening the web dashboard or the Desktop app to be configured *after install*, that's a bug. The CLI must be self-sufficient for day-to-day operation. File an issue if you find an exception.
 
+### 📐 Where the CLI stands against that rule (measured 2026-07-25)
+
+Honest status, so you don't discover the edges one failed command at a time:
+
+| | you can | via |
+|---|---|---|
+| 👀 **read** | positions, pipeline state, stats, logs, throttle graphs | `jht positions list/show/dashboard`, `jht stats`, `jht status`, `jht logs`, `jht sentinella graph` |
+| 🎛️ **command** | start/stop the team, talk to an agent, switch provider, set working hours, schedule jobs | `jht team start/stop/send/chat`, `jht providers`, `jht working-hours`, `jht cron` |
+| ⚖️ **decide** | ❌ **not yet** — judge or exclude a position, request a CV, open a ticket, post a standing directive, save the profile | tracked as **[JHT-CLI-AGENT-PARITY]** in `BACKLOG.md` |
+
+Until those verbs land, the actions exist one layer down as Python skills you
+can call inside the container:
+
+```bash
+jht sh -c 'python3 /app/shared/skills/ticket.py --help'
+jht sh -c 'python3 /app/shared/skills/team_directives.py --help'
+jht sh -c 'python3 /app/shared/skills/write_request.py --help'
+```
+
+### 🤖 Ask for JSON
+
+`jht positions list|show|dashboard` accept `--json`: one line of JSON instead of
+the aligned table. Use it. Parsing the human table means regexes that break the
+next time a column width changes.
+
+```bash
+jht positions list -s scored --min-score 70 --json
+jht positions show 42 --json          # object, or null when not found
+```
+
+Coverage is not universal yet — 3 of 37 command modules speak `--json` today.
+When a command has no machine format, say so rather than scraping its output.
+
 ## Setup runbook (Path 3 — no Desktop app)
 
 > **Audience**: an AI agent (Claude Code / OpenClaw / Codex / Cursor) running on the user's machine. Treat this as an executable script: each step is a concrete CLI invocation. **STOP AND ASK the user at every step marked `**ASK USER**`** — these are real decisions only the user can make (cost, privacy, hardware). Don't pre-decide them based on the prompt unless the user has explicitly answered the question upfront.

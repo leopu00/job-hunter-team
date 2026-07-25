@@ -196,9 +196,32 @@ concentrates the same budget into fewer hours rather than saving it.
 | `jht export <source>`                | Node  | Export positions / applications / DB to a portable format.    |
 | `jht import <file>`                  | Node  | Import a previously-exported file.                            |
 | `jht migrate`                        | Node  | Apply pending SQLite migrations.                              |
-| `jht positions list`                 | Node  | List positions in the local DB.                               |
-| `jht positions show <id>`            | Node  | Detail view of one position.                                  |
-| `jht positions dashboard`            | Node  | TTY-friendly position dashboard.                              |
+| `jht positions list`                 | Node  | List positions in the local DB. `--json` for machine output.  |
+| `jht positions show <id>`            | Node  | Detail view of one position. `--json` for machine output.     |
+| `jht positions dashboard`            | Node  | TTY-friendly position dashboard. `--json` for machine output. |
+
+### `--json` — machine-readable output
+
+Every `jht positions` form accepts `--json`: same query, one line of JSON on
+stdout instead of the aligned table, same exit code. Filters still apply.
+
+```bash
+jht positions list --json                    # array of position objects
+jht positions list -s scored --min-score 70 --json
+jht positions show 42 --json                 # one object, or null if absent
+jht positions dashboard --json               # totals, by_status, top_scores, applications
+```
+
+Written for scripts and for the AI agents this CLI is meant to be driven by
+(see [AI-AGENT-INTEGRATION.md](AI-AGENT-INTEGRATION.md)): parsing the human
+table means regexes that break the next time a column width changes. The human
+format is unchanged and stays the default — `--json` is a second exit, not a
+replacement. `null` (not `{}`) means not found, so "absent" and "empty" stay
+distinguishable.
+
+The same flag exists one layer down on `db_query.py` — `positions`, `position`,
+`companies`, `company`, `dashboard`, `stats`, `recent-activity` — which is what
+agents inside the container call directly.
 
 ## Dashboard
 
