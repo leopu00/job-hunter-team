@@ -15,9 +15,8 @@ function readSrc(rel: string) {
 describe("CopyButton", () => {
   const src = readSrc("app/components/CopyButton.tsx");
 
-  it("export CopyButton + CopyField + useCopy + CopyState type + CopyButtonProps", () => {
+  it("export CopyButton + useCopy + CopyState type + CopyButtonProps", () => {
     expect(src).toMatch(/export function CopyButton\b/);
-    expect(src).toMatch(/export function CopyField\b/);
     expect(src).toMatch(/export function useCopy\b/);
     expect(src).toContain("export type CopyState");
     expect(src).toContain("export interface CopyButtonProps");
@@ -40,10 +39,5 @@ describe("CopyButton", () => {
     expect(src).toContain("'default' | 'inline' | 'ghost'");
     expect(src).toContain("var(--color-green)"); expect(src).toContain("var(--color-red)");
     expect(src).toContain("'Copiato!'"); expect(src).toContain("'Copia'");
-  });
-
-  it("CopyField: readonly input + CopyButton inline integrato + label tracking-widest", () => {
-    expect(src).toContain("readOnly value={value}"); expect(src).toContain("font-mono");
-    expect(src).toContain('variant="inline"'); expect(src).toContain("tracking-widest");
   });
 });

@@ -208,6 +208,3 @@ export function CopyButton({
     </button>
   );
 }
-
-// ── CopyField — input readonly con CopyButton integrato ────────────────────
-
