@@ -23,7 +23,8 @@ import {
 // Il popup è renderizzato in un PORTAL su document.body: la pagina ha
 // un'animazione con transform che diventa containing block per i fixed —
 // senza portal il popup si ancorava alla card, non al viewport (bug 22/07).
-export type Verdict = "no" | "review_low" | "review_ok" | "top";
+import type { Verdict } from "@/lib/position-verdict";
+export type { Verdict };
 
 type ReasonKey =
   | "closed"

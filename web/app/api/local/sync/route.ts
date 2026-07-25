@@ -3,6 +3,10 @@ import Database from "better-sqlite3";
 import { createClient } from "@/lib/supabase/server";
 import { getLocalDbPath, localDbExists } from "@/lib/cloud-sync/local";
 import { writeSyncState } from "@/lib/cloud-sync/state";
+import {
+  normalizeApplicationStatus,
+  normalizeCriticVerdict,
+} from "@/lib/sync-vocabulary";
 
 export const dynamic = "force-dynamic";
 
@@ -86,19 +90,6 @@ const ALLOWED_POSITION_STATUS = new Set([
   "applied",
   "response",
 ]);
-// 'ready' = CV finito + Critic PASS (lo Scrittore lo setta nel gate finale,
-// single-writer). DEVE restare in whitelist: senza, normalizeApplicationStatus
-// lo degrada a 'draft' e la pagina posizione mostra "draft" pur avendo il CV
-// pronto — il CHECK cloud lo ammette già (mig 014_applications_status_ready).
-const ALLOWED_APPLICATION_STATUS = new Set([
-  "draft",
-  "review",
-  "ready",
-  "approved",
-  "applied",
-  "response",
-]);
-const ALLOWED_CRITIC_VERDICT = new Set(["PASS", "NEEDS_WORK", "REJECT"]);
 
 interface PositionRow {
   id: number;
@@ -186,16 +177,6 @@ function readTable<T>(
 function normalizePositionStatus(s: string | null): string {
   if (!s) return "new";
   return ALLOWED_POSITION_STATUS.has(s) ? s : "new";
-}
-
-function normalizeApplicationStatus(s: string | null): string | null {
-  if (!s) return null;
-  return ALLOWED_APPLICATION_STATUS.has(s) ? s : "draft";
-}
-
-function normalizeCriticVerdict(v: string | null): string | null {
-  if (!v) return null;
-  return ALLOWED_CRITIC_VERDICT.has(v) ? v : null;
 }
 
 export async function POST() {
