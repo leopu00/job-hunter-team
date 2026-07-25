@@ -40,6 +40,9 @@ import type {
   Application,
   PendingMessage,
   PositionTicket,
+  LocationPositionLite,
+  LocationCity,
+  LocationCountry,
 } from "@/lib/types";
 
 // Source of truth = origine della request:
@@ -1318,22 +1321,11 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
 // (popolati dall'analista via skill location-enrichment). Le positions
 // senza loc_country finiscono sotto "(unknown)"; quelle senza loc_city
 // sotto una città chiamata "(country-only)".
-export type LocationPositionLite = {
-  id: string;
-  title: string | null;
-  company: string | null;
-  score: number | null;
-};
-export type LocationCity = {
-  city: string | null;
-  count: number;
-  positions: LocationPositionLite[];
-};
-export type LocationCountry = {
-  country: string;
-  count: number;
-  cities: LocationCity[];
-};
+export type {
+  LocationPositionLite,
+  LocationCity,
+  LocationCountry,
+} from "@/lib/types";
 
 function buildLocationTree(
   rows: Array<{

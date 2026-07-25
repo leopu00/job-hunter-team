@@ -278,3 +278,29 @@ export interface PendingMessage {
   agent_seen_reply_at: string | null;
   created_at: string;
 }
+
+// ── Albero delle località ──────────────────────────────────────────
+// Paese → città → posizioni, come lo costruiscono `getPositionLocations`
+// (Supabase) e `getPositionLocationsLocal` (SQLite) e come lo consuma
+// MapCharts. I tre tipi erano dichiarati identici in tutti e tre i file:
+// le due corsie dati DEVONO produrre la stessa forma, quindi la forma
+// sta qui e non in una delle due.
+
+export type LocationPositionLite = {
+  id: string;
+  title: string | null;
+  company: string | null;
+  score: number | null;
+};
+
+export type LocationCity = {
+  city: string | null;
+  count: number;
+  positions: LocationPositionLite[];
+};
+
+export type LocationCountry = {
+  country: string;
+  count: number;
+  cities: LocationCity[];
+};
