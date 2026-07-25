@@ -93,6 +93,24 @@ func _ready() -> void:
 	brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var brand_row := HBoxContainer.new()
 	brand_row.add_child(brand)
+	# Uscita a portata di mouse SEMPRE: la voce in fondo a Impostazioni finisce
+	# sotto lo scroll su schermi bassi, e in fullscreen su Wayland non esiste
+	# nemmeno la X della finestra.
+	var quit_btn := Button.new()
+	quit_btn.flat = true
+	quit_btn.tooltip_text = UIStrings.t("pause.quit")
+	quit_btn.custom_minimum_size = Vector2(26, 26)
+	quit_btn.pressed.connect(func() -> void: Game.open_pause())
+	var quit_icon := SidebarIcon.new("power", Palette.DIM)
+	quit_icon.set_anchors_preset(Control.PRESET_CENTER)
+	quit_icon.offset_left = -9
+	quit_icon.offset_right = 9
+	quit_icon.offset_top = -9
+	quit_icon.offset_bottom = 9
+	quit_btn.add_child(quit_icon)
+	quit_btn.mouse_entered.connect(func() -> void: quit_icon.color = Palette.RED)
+	quit_btn.mouse_exited.connect(func() -> void: quit_icon.color = Palette.DIM)
+	brand_row.add_child(quit_btn)
 	var close_btn := Button.new()
 	close_btn.flat = true
 	close_btn.text = "‹"
@@ -212,6 +230,13 @@ func _select(section: String) -> void:
 	if section == "chat":
 		_close_panel()
 		chat_requested.emit()
+		return
+	if section == "quit":
+		# Passa dal menu pausa invece di chiudere di colpo: la stessa schermata
+		# di ESC, raggiunta però col mouse. Chi ha cliccato per sbaglio esce da
+		# lì con "Riprendi".
+		_close_panel()
+		Game.open_pause()
 		return
 	if _panel and _panel.section == section:
 		_close_panel()

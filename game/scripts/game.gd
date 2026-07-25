@@ -56,7 +56,25 @@ func _ready() -> void:
 	elif OS.get_environment("JHT_SCENE") == "wizard":
 		goto_wizard.call_deferred()
 
+## Il gioco che "si frizza" senza esserlo: il 25/07 girava a 34 fps e non
+## rispondeva a mouse né tastiera. Un rendering vivo esclude il blocco del main
+## thread e lascia il focus come sospettato — ma senza traccia nel log resta
+## un'ipotesi. Da qui in avanti la perdita di focus si vede nel log.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			Log.info("input", "finestra ha perso il focus")
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			Log.info("input", "finestra ha ripreso il focus")
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			Log.info("input", "chiusura richiesta dal window manager")
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("quit_game"):
+		Log.info("input", "uscita richiesta da tastiera")
+		get_tree().quit()
+		return
 	if event.is_action_pressed("fullscreen"):
 		toggle_fullscreen()
 		return
@@ -571,12 +589,19 @@ func _register_inputs() -> void:
 	_add_key_action("registry", [KEY_TAB])
 	_add_key_action("pause", [KEY_ESCAPE])
 	_add_key_action("fullscreen", [KEY_F11])
+	# Uscita d'emergenza con la combinazione che ogni desktop conosce. ESC apre
+	# un menu e richiede poi un click: se il gioco smette di ricevere il mouse
+	# (o l'ha perso il compositore) non basta. Questa chiude e basta.
+	_add_key_action("quit_game", [KEY_Q], true)
 
-func _add_key_action(action: String, keys: Array) -> void:
+func _add_key_action(action: String, keys: Array, with_ctrl := false) -> void:
 	if InputMap.has_action(action):
 		return
 	InputMap.add_action(action)
 	for k in keys:
 		var ev := InputEventKey.new()
 		ev.physical_keycode = k
+		if with_ctrl:
+			# su macOS il modificatore di sistema è Cmd, altrove Ctrl
+			ev.command_or_control_autoremap = true
 		InputMap.action_add_event(action, ev)
