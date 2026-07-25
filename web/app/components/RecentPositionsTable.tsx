@@ -64,6 +64,11 @@ function formatScoredAt(iso: string | null): string {
 // un ResizeObserver e da lì si ricava il clamp dell'azienda.
 const CARD_LINE = 18; // px per riga di testo, uguale per titolo e azienda
 const CARD_TEXT_LINES = 3;
+// Spazio da lasciare libero a destra per il cerchio dello score (36px + gap).
+// Il cerchio è alto 36px = ESATTAMENTE due righe: serve solo alle righe 1-2.
+// Quando il titolo le occupa entrambe, l'azienda cade sulla terza riga, dove
+// non c'è più nulla a destra → va a piena larghezza fino al bordo.
+const SCORE_GUTTER = 48;
 
 function PositionCard({
   p,
@@ -103,48 +108,12 @@ function PositionCard({
         background: "var(--color-card)",
       }}
     >
-      <div className="flex items-start justify-between gap-3">
-        {/* Altezza fissa = 3 righe: è questa a rendere tutte le card uguali,
-            e l'eventuale riga libera resta qui sotto l'azienda — cioè sopra
-            la riga categoria/data, non in fondo alla card. */}
-        <div
-          className="min-w-0 flex-1"
-          style={{ height: CARD_LINE * CARD_TEXT_LINES }}
-        >
-          {/* SOLO il titolo è link (come su /positions): la card intera
-              cliccabile sottolinea ogni riga su touch. */}
-          <Link
-            ref={titleRef}
-            href={`/positions/${p.id}`}
-            className="text-[13px] font-semibold no-underline"
-            style={{
-              color: "var(--color-green)",
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-              lineHeight: `${CARD_LINE}px`,
-            }}
-          >
-            {p.title}{" "}
-            <UnseenDot id={p.id} label={unseenLabel} initialSeen={p.seen} />
-          </Link>
-          <div
-            className="text-[11px] text-[var(--color-muted)]"
-            style={{
-              display: "-webkit-box",
-              WebkitLineClamp: CARD_TEXT_LINES - titleLines,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-              lineHeight: `${CARD_LINE}px`,
-            }}
-          >
-            {p.company}
-            {place ? ` · ${place}` : ""}
-          </div>
-        </div>
+      {/* Altezza fissa = 3 righe: è questa a rendere tutte le card uguali,
+          e l'eventuale riga libera resta qui sotto l'azienda — cioè sopra
+          la riga categoria/data, non in fondo alla card. */}
+      <div className="relative" style={{ height: CARD_LINE * CARD_TEXT_LINES }}>
         <span
-          className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
+          className="absolute right-0 top-0 flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
           style={{
             color: scoreSpectrumCss(p.score),
             borderColor: scoreSpectrumCss(p.score),
@@ -152,6 +121,42 @@ function PositionCard({
         >
           {p.score ?? "—"}
         </span>
+        {/* SOLO il titolo è link (come su /positions): la card intera
+            cliccabile sottolinea ogni riga su touch. */}
+        <Link
+          ref={titleRef}
+          href={`/positions/${p.id}`}
+          className="text-[13px] font-semibold no-underline"
+          style={{
+            color: "var(--color-green)",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            lineHeight: `${CARD_LINE}px`,
+            paddingRight: SCORE_GUTTER,
+          }}
+        >
+          {p.title}{" "}
+          <UnseenDot id={p.id} label={unseenLabel} initialSeen={p.seen} />
+        </Link>
+        <div
+          className="text-[11px] text-[var(--color-muted)]"
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: CARD_TEXT_LINES - titleLines,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            lineHeight: `${CARD_LINE}px`,
+            // Titolo su 2 righe → l'azienda è sulla terza, il cerchio è
+            // finito: piena larghezza. Titolo su 1 riga → l'azienda parte
+            // dalla seconda, ancora affiancata al cerchio: resta rientrata.
+            paddingRight: titleLines >= 2 ? 0 : SCORE_GUTTER,
+          }}
+        >
+          {p.company}
+          {place ? ` · ${place}` : ""}
+        </div>
       </div>
       <div className="pt-2 flex items-center justify-between gap-2 text-[10px]">
         <span className="flex items-center gap-2 min-w-0">
