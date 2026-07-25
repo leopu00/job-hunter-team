@@ -51,6 +51,13 @@ const GROUPS := [
 			{"id": "graphics", "icon": "display", "label": "Grafica"},
 			{"id": "language", "icon": "globe", "label": "Lingua"},
 			{"id": "advanced", "icon": "gear", "label": "Avanzate"},
+			# Uscire dal gioco deve essere possibile COL MOUSE. In fullscreen su
+			# Wayland la finestra non ha decorazioni — niente X — e finché questa
+			# voce non c'è stata l'unica via era il menu ESC: se l'input da
+			# tastiera si perde (sessione remota, 25/07) l'utente resta chiuso
+			# dentro. `label_key` riusa la traduzione già esistente del menu pausa.
+			{"id": "quit", "icon": "power", "label": "Esci dal gioco",
+					"label_key": "pause.quit"},
 		],
 	},
 ]
@@ -59,6 +66,10 @@ static func label_for(section: String) -> String:
 	for group in GROUPS:
 		for item in group["items"]:
 			if item["id"] == section:
+				if item.has("label_key"):
+					var reused: String = UIStrings.t(str(item["label_key"]))
+					return reused.capitalize() if reused == reused.to_upper() \
+							else reused
 				var translated: String = UIStrings.t("side." + section)
 				# fallback: se la chiave non esiste t() la restituisce tale
 				# e quale — in quel caso vale la label italiana della def
