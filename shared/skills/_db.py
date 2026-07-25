@@ -65,25 +65,7 @@ def ensure_schema(conn: sqlite3.Connection):
       esegue la skill `office-geocoding` solo quando il flag è acceso.
       Replica del pattern Writer-on-demand. Vedi BACKLOG (2026-05-31).
     """
-    _migrate_v2_to_v3(conn)
-    _migrate_v3_to_v4(conn)
-    _migrate_positions_status_review(conn)
-    _migrate_positions_length_constraints(conn)
-    _migrate_positions_role_family(conn)
-    _migrate_positions_structured_location(conn)
-    _migrate_positions_office_geocoding(conn)
-    _migrate_positions_write_requested(conn)
-    _migrate_v6_to_v7_tombstones(conn)
-    _migrate_positions_geocode_requested(conn)
-    _migrate_positions_expiry(conn)
-    _migrate_positions_salary_precise(conn)
-    _migrate_positions_role_family_proposed(conn)
-    _migrate_positions_user_excluded(conn)
-    _migrate_positions_recheck_requested(conn)
-    _migrate_positions_jd_summary(conn)
-    _migrate_role_family_registry(conn)
-    _migrate_position_tickets_cloud_id(conn)
-    _migrate_companies_logo(conn)
+    _run_migrations(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -558,8 +540,48 @@ def ensure_schema(conn: sqlite3.Connection):
       VALUES ('applications', OLD.position_id, CURRENT_TIMESTAMP);
     END;
     """)
+    # Secondo giro, ed è quello che conta su un database NUOVO.
+    #
+    # Le migrazioni sopra girano prima delle CREATE TABLE: su un DB esistente è
+    # giusto (alterano tabelle già lì), ma su uno appena creato non trovano
+    # NIENTE da alterare — `PRAGMA table_info` torna vuoto e ogni migrazione si
+    # salta. Poi il DDL base crea `positions` senza le colonne che solo le
+    # migrazioni aggiungono, e il database resta incompleto fino alla chiamata
+    # SUCCESSIVA di ensure_schema, in un altro processo.
+    #
+    # Misurato il 2026-07-25: su un jobs.db fresco, `user_excluded_reason` &
+    # co. non esistevano dopo il primo ensure_schema. Chi scriveva subito su
+    # quelle colonne — la route web, che apre SQLite diretto senza passare di
+    # qui — prendeva "no such column" al primo avvio. Le migrazioni sono tutte
+    # idempotenti e guardate da PRAGMA table_info, quindi ripeterle costa una
+    # manciata di PRAGMA e chiude il buco.
+    _run_migrations(conn)
     conn.execute("PRAGMA user_version = 7")
     conn.commit()
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """Tutte le migrazioni incrementali, in ordine. Idempotenti: ognuna
+    controlla da sé se ha già lavorato, quindi è sicuro chiamarle più volte."""
+    _migrate_v2_to_v3(conn)
+    _migrate_v3_to_v4(conn)
+    _migrate_positions_status_review(conn)
+    _migrate_positions_length_constraints(conn)
+    _migrate_positions_role_family(conn)
+    _migrate_positions_structured_location(conn)
+    _migrate_positions_office_geocoding(conn)
+    _migrate_positions_write_requested(conn)
+    _migrate_v6_to_v7_tombstones(conn)
+    _migrate_positions_geocode_requested(conn)
+    _migrate_positions_expiry(conn)
+    _migrate_positions_salary_precise(conn)
+    _migrate_positions_role_family_proposed(conn)
+    _migrate_positions_user_excluded(conn)
+    _migrate_positions_recheck_requested(conn)
+    _migrate_positions_jd_summary(conn)
+    _migrate_role_family_registry(conn)
+    _migrate_position_tickets_cloud_id(conn)
+    _migrate_companies_logo(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
