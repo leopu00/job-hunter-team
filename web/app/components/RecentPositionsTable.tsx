@@ -98,33 +98,45 @@ export default function RecentPositionsTable({
             return (
               <div
                 key={p.id}
-                className="rounded-lg border p-3"
+                className="rounded-lg border p-3 flex flex-col min-h-[106px]"
                 style={{
                   borderColor: "var(--color-border)",
                   background: "var(--color-card)",
                 }}
               >
+                {/* Azienda+località stanno nella colonna del TITOLO, non sotto
+                    la riga del punteggio: il cerchio è alto 36px e con un
+                    titolo di una sola riga (~18px) dettava lui l'altezza,
+                    lasciando un buco proprio tra titolo e azienda. Così il
+                    testo resta compatto e l'aria in più finisce in fondo alla
+                    card (min-h + mt-auto), dove non separa niente. */}
                 <div className="flex items-start justify-between gap-3">
-                  {/* SOLO il titolo è link (come su /positions): la card
-                      intera cliccabile sottolinea ogni riga su touch. */}
-                  <Link
-                    href={`/positions/${p.id}`}
-                    className="min-w-0 text-[13px] font-semibold leading-snug no-underline"
-                    style={{
-                      color: "var(--color-green)",
-                      display: "-webkit-box",
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {p.title}{" "}
-                    <UnseenDot
-                      id={p.id}
-                      label={labels.unseen}
-                      initialSeen={p.seen}
-                    />
-                  </Link>
+                  <div className="min-w-0">
+                    {/* SOLO il titolo è link (come su /positions): la card
+                        intera cliccabile sottolinea ogni riga su touch. */}
+                    <Link
+                      href={`/positions/${p.id}`}
+                      className="text-[13px] font-semibold leading-snug no-underline"
+                      style={{
+                        color: "var(--color-green)",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {p.title}{" "}
+                      <UnseenDot
+                        id={p.id}
+                        label={labels.unseen}
+                        initialSeen={p.seen}
+                      />
+                    </Link>
+                    <div className="mt-1 text-[11px] text-[var(--color-muted)] truncate">
+                      {p.company}
+                      {place ? ` · ${place}` : ""}
+                    </div>
+                  </div>
                   <span
                     className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
                     style={{
@@ -135,11 +147,7 @@ export default function RecentPositionsTable({
                     {p.score ?? "—"}
                   </span>
                 </div>
-                <div className="mt-1 text-[11px] text-[var(--color-muted)] truncate">
-                  {p.company}
-                  {place ? ` · ${place}` : ""}
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-2 text-[10px]">
+                <div className="mt-auto pt-2 flex items-center justify-between gap-2 text-[10px]">
                   <span className="flex items-center gap-2 min-w-0">
                     {p.role_family?.trim() && (
                       <span className="inline-flex items-center gap-1 truncate text-[var(--color-muted)]">
