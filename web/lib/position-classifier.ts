@@ -57,6 +57,103 @@ export function colorForFamily(name: string): string {
   return `hsl(${hue}, 42%, 60%)`;
 }
 
+// Etichetta del gruppo che raccoglie la coda lunga del donut. Non è una
+// categoria del DB: nasce e muore nella UI.
+export const OTHER_GROUP_LABEL = "__other__";
+
+export type RoleFamilyGroup = RoleFamilyCount & {
+  // role_family reali che questo spicchio rappresenta. Per un macro-gruppo
+  // sono i suoi sotto-tipi ("Front Office / Reception", "…/ Supervision"),
+  // per la coda lunga sono le famiglie sotto soglia. Il cross-filter
+  // seleziona TUTTI i membri quando si clicca lo spicchio.
+  members: string[];
+};
+
+// Le role_family scritte dagli agenti hanno già una gerarchia implicita nel
+// nome, "Macro / Micro" (es. "F&B / Hostess"). Il donut aggrega sul primo
+// livello — così F&B non si spezza in quattro spicchi da 3% — e manda sotto
+// un'unica voce "Altre" tutto ciò che resta sotto `minShare`. Nessuna lista
+// hardcoded: i gruppi emergono dai dati esattamente come le famiglie.
+export function groupRoleFamilies(
+  families: RoleFamilyCount[],
+  minShare = 0.03,
+  maxSlices = 10,
+): RoleFamilyGroup[] {
+  const total = families.reduce((a, f) => a + f.count, 0);
+  if (total === 0) return [];
+
+  const macroOf = (family: string) => {
+    const head = family.split("/")[0]?.trim();
+    return head && head.length > 0 ? head : family;
+  };
+
+  // 1) somma per macro-categoria, tenendo traccia dei membri e degli score
+  //    grezzi (servono all'istogramma collegato).
+  const byMacro = new Map<string, RoleFamilyGroup>();
+  for (const f of families) {
+    const macro = macroOf(f.family);
+    const cur = byMacro.get(macro);
+    if (!cur) {
+      byMacro.set(macro, {
+        family: macro,
+        count: f.count,
+        color: colorForFamily(macro),
+        avgScore: f.avgScore,
+        avgCritic: f.avgCritic,
+        scores: [...(f.scores ?? [])],
+        members: [f.family],
+      });
+      continue;
+    }
+    cur.scores = [...(cur.scores ?? []), ...(f.scores ?? [])];
+    cur.members.push(f.family);
+    cur.count += f.count;
+  }
+
+  // 2) le medie vanno ricalcolate sugli score del gruppo, non ereditate dal
+  //    primo membro incontrato. Il voto critico non è disponibile qui per
+  //    posizione, quindi resta quello del membro maggiore (best effort).
+  //
+  //    Il nome si accorcia al macro SOLO se quel macro raccoglie davvero più
+  //    famiglie. Non ovunque la barra è una gerarchia: in un profilo finance
+  //    "Infrastructure / Real Assets Investment" è una coppia di sinonimi, e
+  //    troncarla a "Infrastructure" perderebbe senso senza aggregare niente.
+  for (const g of byMacro.values()) {
+    const s = g.scores ?? [];
+    g.avgScore = s.length > 0 ? s.reduce((a, v) => a + v, 0) / s.length : null;
+    if (g.members.length === 1) {
+      g.family = g.members[0];
+      g.color = colorForFamily(g.family);
+    }
+  }
+
+  // 3) coda lunga → "Altre": sotto soglia, oppure oltre il tetto di spicchi
+  //    (un profilo può avere tante categorie tutte legittime e sopra soglia,
+  //    ma un donut con quindici fette non si legge). Un solo gruppo in coda
+  //    non vale l'aggregazione: resta com'è.
+  const groups = Array.from(byMacro.values()).sort((a, b) => b.count - a.count);
+  const keep = groups.filter(
+    (g, i) => g.count / total >= minShare && i < maxSlices - 1,
+  );
+  const tail = groups.filter((g) => !keep.includes(g));
+  if (tail.length < 2) return groups;
+
+  const head = keep;
+  const other: RoleFamilyGroup = {
+    family: OTHER_GROUP_LABEL,
+    count: tail.reduce((a, g) => a + g.count, 0),
+    color: "var(--color-dim)",
+    avgScore: null,
+    avgCritic: null,
+    scores: tail.flatMap((g) => g.scores ?? []),
+    members: tail.flatMap((g) => g.members),
+  };
+  const s = other.scores ?? [];
+  other.avgScore =
+    s.length > 0 ? s.reduce((a, v) => a + v, 0) / s.length : null;
+  return [...head, other];
+}
+
 export function aggregateRoleFamilies(
   rows: Array<{
     role_family: string | null | undefined;

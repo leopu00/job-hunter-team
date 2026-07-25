@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import type { DashboardPosition } from "@/lib/queries";
 import UnseenDot from "@/app/components/UnseenDot";
 import { scoreSpectrumCss } from "@/lib/score-color";
+import { colorForFamily } from "@/lib/position-classifier";
 
 export type TableLabels = {
   title: string;
@@ -49,6 +51,153 @@ function formatScoredAt(iso: string | null): string {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// ── Card mobile ────────────────────────────────────────────────────────
+// Ogni card ha SEMPRE le stesse quattro righe: tre per titolo+azienda, una
+// per categoria/data. Il titolo ne prende al massimo due, l'azienda si
+// prende quelle che restano — due se il titolo sta su una riga, altrimenti
+// una — e in entrambi i casi tronca con "…". Così la riga vuota compare solo
+// quando titolo e azienda stanno entrambi su una riga sola, e sparisce da
+// sola appena uno dei due ne occupa un'altra.
+//
+// Il numero di righe del titolo dipende dal render (larghezza, font, badge
+// NEW che compare dopo il mount), quindi il CSS da solo non basta: lo misura
+// un ResizeObserver e da lì si ricava il clamp dell'azienda.
+const CARD_LINE = 18; // px per riga di testo, uguale per titolo e azienda
+const CARD_TEXT_LINES = 3;
+// Spazio da lasciare libero a destra per il cerchio dello score (36px + gap).
+// Il cerchio è alto 36px = ESATTAMENTE due righe: serve solo alle righe 1-2.
+// Quando il titolo le occupa entrambe, l'azienda cade sulla terza riga, dove
+// non c'è più nulla a destra → va a piena larghezza fino al bordo.
+const SCORE_GUTTER = 48;
+
+function PositionCard({
+  p,
+  unseenLabel,
+  firstCol,
+}: {
+  p: DashboardPosition;
+  unseenLabel: string;
+  firstCol: "id" | "scored";
+}) {
+  const titleRef = useRef<HTMLAnchorElement>(null);
+  const [titleLines, setTitleLines] = useState(1);
+
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const measure = () => {
+      const lines = Math.round(el.getBoundingClientRect().height / CARD_LINE);
+      setTitleLines(Math.min(2, Math.max(1, lines)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const country = (p.loc_country ?? "").trim();
+  const city = (p.loc_city ?? "").trim();
+  const place =
+    city || country || (p.remote_type === "full_remote" ? "Remote" : "");
+
+  return (
+    <div
+      className="rounded-lg border p-3"
+      style={{
+        borderColor: "var(--color-border)",
+        background: "var(--color-card)",
+      }}
+    >
+      {/* Altezza fissa = 3 righe: è questa a rendere tutte le card uguali,
+          e l'eventuale riga libera resta qui sotto l'azienda — cioè sopra
+          la riga categoria/data, non in fondo alla card. */}
+      <div className="relative" style={{ height: CARD_LINE * CARD_TEXT_LINES }}>
+        <span
+          className="absolute right-0 top-0 flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
+          style={{
+            color: scoreSpectrumCss(p.score),
+            borderColor: scoreSpectrumCss(p.score),
+          }}
+        >
+          {p.score ?? "—"}
+        </span>
+        {/* SOLO il titolo è link (come su /positions): la card intera
+            cliccabile sottolinea ogni riga su touch. */}
+        <Link
+          ref={titleRef}
+          href={`/positions/${p.id}`}
+          className="text-[13px] font-semibold no-underline"
+          style={{
+            color: "var(--color-green)",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            lineHeight: `${CARD_LINE}px`,
+            paddingRight: SCORE_GUTTER,
+            // Riempie la riga fino in fondo: senza questo il taglio avviene
+            // all'ultima parola INTERA che ci sta, e lo spazio della parola
+            // successiva resta bianco prima dei "…".
+            overflowWrap: "anywhere",
+          }}
+        >
+          {p.title}{" "}
+          <UnseenDot id={p.id} label={unseenLabel} initialSeen={p.seen} />
+        </Link>
+        <div
+          className="text-[11px] text-[var(--color-muted)]"
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: CARD_TEXT_LINES - titleLines,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            lineHeight: `${CARD_LINE}px`,
+            // Titolo su 2 righe → l'azienda è sulla terza, il cerchio è
+            // finito: piena larghezza. Titolo su 1 riga → l'azienda parte
+            // dalla seconda, ancora affiancata al cerchio: resta rientrata.
+            paddingRight: titleLines >= 2 ? 0 : SCORE_GUTTER,
+            overflowWrap: "anywhere",
+          }}
+        >
+          {p.company}
+          {place ? ` · ${place}` : ""}
+        </div>
+      </div>
+      <div className="pt-2 flex items-center justify-between gap-2 text-[10px]">
+        <span className="flex items-center gap-2 min-w-0">
+          {p.role_family?.trim() && (
+            <span className="inline-flex items-center gap-1 truncate text-[var(--color-muted)]">
+              <span
+                aria-hidden
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: colorForFamily(p.role_family.trim()),
+                  flexShrink: 0,
+                }}
+              />
+              <span className="truncate">{p.role_family.trim()}</span>
+            </span>
+          )}
+        </span>
+        {/* Stessa informazione della prima colonna della tabella: timestamp
+            dello score, oppure ID nella variante "id". */}
+        <span
+          className="shrink-0 font-mono tabular-nums text-[var(--color-dim)]"
+          suppressHydrationWarning={firstCol === "scored"}
+        >
+          {firstCol === "scored"
+            ? formatScoredAt(p.scored_at)
+            : p.legacy_id
+              ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+              : p.id.slice(0, 8)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function RecentPositionsTable({
   rows,
   labels,
@@ -75,7 +224,31 @@ export default function RecentPositionsTable({
           {labels.viewAll}
         </Link>
       </div>
-      <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+      {/* ── Card list (solo mobile) ─────────────────────────────────
+          Sotto md le sei colonne non ci stanno: comprimerle riduce
+          titolo/azienda a due lettere + ellipsis (illeggibile). Stessa
+          scelta già fatta su /positions: una card compatta per posizione
+          con gli stessi dati della riga — titolo+score, azienda+località,
+          categoria + prima colonna (timestamp score o ID). */}
+      <div className="md:hidden flex flex-col gap-2">
+        {rows.length === 0 ? (
+          <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-dim)] text-[11px]">
+            {labels.noPositions}
+          </div>
+        ) : (
+          rows.map((p) => (
+            <PositionCard
+              key={p.id}
+              p={p}
+              unseenLabel={labels.unseen}
+              firstCol={firstCol}
+            />
+          ))
+        )}
+      </div>
+
+      {/* ── Tabella (da md in su) ──────────────────────────────────── */}
+      <div className="hidden md:block border border-[var(--color-border)] rounded-lg overflow-hidden">
         <table
           className="w-full table-fixed text-[12px]"
           style={{ borderCollapse: "collapse" }}

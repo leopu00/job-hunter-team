@@ -29,6 +29,16 @@ const T: Record<string, Record<string, string>> = {
     fr: "à distance",
     pt: "remoto",
   },
+  // Chip del filtro di default sullo score minimo ("{n}" = la soglia).
+  min_score: {
+    it: "score ≥ {n}",
+    en: "score ≥ {n}",
+    hu: "pontszám ≥ {n}",
+    es: "puntuación ≥ {n}",
+    de: "Score ≥ {n}",
+    fr: "score ≥ {n}",
+    pt: "pontuação ≥ {n}",
+  },
   no_title: {
     it: "(senza titolo)",
     en: "(untitled)",
@@ -223,6 +233,10 @@ type CoordItem = {
 // coordinate): le raggruppiamo sotto questo nodo nella card Location.
 const REMOTE_LABEL = "Remote";
 
+// Soglia score con cui la mappa si apre. Sotto questa i pin restano fuori
+// finché l'utente non rimuove la chip del filtro.
+const DEFAULT_MIN_SCORE = 65;
+
 function scoreColor(s: number | null): string {
   return scoreSpectrumCss(s);
 }
@@ -311,6 +325,13 @@ export default function MapCharts({
     Array<{ lo: number; hi: number }>
   >([]);
   const [unscoredSelected, setUnscoredSelected] = useState(false);
+  // Filtro di DEFAULT sullo score: la mappa si apre mostrando solo le
+  // posizioni da 65 in su, il resto è rumore su un globo già affollato.
+  // Non è un range dell'istogramma (quelli sono bin esatti e si
+  // toglierebbero a vicenda): è una soglia a sé, con la sua chip
+  // rimovibile. Appena l'utente sceglie un bin a mano la soglia decade,
+  // altrimenti resterebbe in AND e nasconderebbe la sua stessa selezione.
+  const [minScore, setMinScore] = useState<number | null>(DEFAULT_MIN_SCORE);
   // Filtro location: array di nomi country (es. "Italy") e di city
   // formato "Country|City" (es. "Italy|Milan"). Country e city
   // OR-uniti (selezioni multiple).
@@ -361,11 +382,15 @@ export default function MapCharts({
     };
   }, []);
 
-  const scoreFilterActive = selectedRanges.length > 0 || unscoredSelected;
+  const scoreFilterActive =
+    selectedRanges.length > 0 || unscoredSelected || minScore != null;
   // True se p passa il filtro score combinato: nessun filtro attivo
   // OR (range match e ha score) OR (no-score selezionato e score null).
   const passScoreFilter = (score: number | null) => {
     if (!scoreFilterActive) return true;
+    // Soglia di default: le non ancora valutate non sono "buone", restano
+    // fuori con le sotto-soglia finché la chip è attiva.
+    if (minScore != null) return score != null && score >= minScore;
     if (score == null) return unscoredSelected;
     return selectedRanges.some((r) => score >= r.lo && score <= r.hi);
   };
@@ -635,12 +660,16 @@ export default function MapCharts({
     setSelectedTypes((cur) =>
       cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t],
     );
-  const toggleRange = (r: { lo: number; hi: number }) =>
+  const toggleRange = (r: { lo: number; hi: number }) => {
+    // Selezione esplicita sull'istogramma → la soglia di default esce di
+    // scena, altrimenti resterebbe in AND e un bin sotto 65 mostrerebbe zero.
+    setMinScore(null);
     setSelectedRanges((cur) =>
       cur.some((x) => x.lo === r.lo && x.hi === r.hi)
         ? cur.filter((x) => !(x.lo === r.lo && x.hi === r.hi))
         : [...cur, r],
     );
+  };
   const toggleCountry = (c: string) =>
     setSelectedCountries((cur) =>
       cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c],
@@ -659,6 +688,13 @@ export default function MapCharts({
       label: labels[t] ?? String(t),
       color: typeDist.find((d) => d.family === t)?.color,
       onRemove: () => toggleType(t),
+    });
+  }
+  if (minScore != null) {
+    filterChips.push({
+      key: "min-score",
+      label: tr("min_score").replace("{n}", String(minScore)),
+      onRemove: () => setMinScore(null),
     });
   }
   for (const r of selectedRanges) {
@@ -694,6 +730,7 @@ export default function MapCharts({
   const clearAllFilters = () => {
     setSelectedTypes([]);
     setSelectedRanges([]);
+    setMinScore(null);
     setUnscoredSelected(false);
     setSelectedCountries([]);
     setSelectedCities([]);
@@ -712,7 +749,16 @@ export default function MapCharts({
         <JobsGlobeLazy
           fullscreen
           selectedTypes={selectedTypes}
-          selectedScoreRanges={selectedRanges}
+          // Il globo filtra i pin per range: la soglia di default gli arriva
+          // tradotta in un range aperto verso l'alto, altrimenti resterebbero
+          // pinnate anche le posizioni sotto 65 (i pannelli laterali le
+          // escludevano già, i pin no). hi=Infinity e non 100: se un giorno
+          // uno score sforasse la scala non lo perdiamo per strada.
+          selectedScoreRanges={
+            minScore != null
+              ? [{ lo: minScore, hi: Number.POSITIVE_INFINITY }]
+              : selectedRanges
+          }
           selectedUnscored={unscoredSelected}
           selectedCountries={selectedCountries}
           selectedCities={selectedCities}
@@ -779,7 +825,12 @@ export default function MapCharts({
               onToggleRange={toggleRange}
               unscoredCount={unscoredCount}
               unscoredSelected={unscoredSelected}
-              onToggleUnscored={() => setUnscoredSelected((v) => !v)}
+              onToggleUnscored={() => {
+                // Come per i bin: chiedere le non valutate mentre la soglia
+                // di default è attiva darebbe zero risultati.
+                setMinScore(null);
+                setUnscoredSelected((v) => !v);
+              }}
               fit
               // Area utile = box meno header e padding → riempie esatto.
               fitAspect={
