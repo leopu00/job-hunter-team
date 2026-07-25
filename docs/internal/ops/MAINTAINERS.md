@@ -95,15 +95,13 @@ For maintainers who use Claude Code: add the official Supabase MCP server to `~/
 
 ## 📦 Release process
 
-See [`docs/release.md`](release.md) for the active release flow (tag → CI → GitHub Release).
+See [`release.md`](release.md) for the active release flow (bump four version fields → merge to `production` → tag → CI → GitHub Release).
 
-### 🍎 macOS code signing & notarization (deferred post-beta)
+### 🍎 macOS code signing & notarization
 
-> ⏸️ **Currently disabled** — JHT ships unsigned `.dmg` files during beta. The trust signal in beta is open-source transparency + community review, not a paid certificate (see memory `project_open_source_as_trust_signal`). When the project graduates from beta, follow this playbook to enable signing + notarization.
+> ✅ **Required, not optional.** Since the native migration the release job **fails fast** when any of the five Apple secrets is missing (`macOS game releases require signing and notarization credentials`) — there is no unsigned fallback. An unsigned Godot `.app` is blocked by Gatekeeper with "Apple could not verify this app", which is where non-technical users abandon the install.
 
-**Why**: without signing + Apple notarization, first launch of `JHT Desktop.app` triggers Gatekeeper's "Apple could not verify this app" block. Non-tech users typically close the app at that point. A signed + notarized DMG opens with the standard "downloaded from the Internet" confirmation only.
-
-Two independent steps required: **code signing** (Developer ID Application certificate) and **notarization** (submit to Apple's notary service + staple ticket). The release workflow performs both automatically when the required secrets are configured.
+Two independent steps: **code signing** (Developer ID Application certificate) and **notarization** (submit to Apple's notary service + staple the ticket). CI performs both on every tagged release.
 
 #### One-time maintainer setup
 
@@ -128,30 +126,34 @@ Two independent steps required: **code signing** (Developer ID Application certi
 | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password |
 | `APPLE_TEAM_ID` | 10-character Team ID |
 
-All five must be present. If any is missing, the release workflow falls back to producing an **unsigned** DMG and emits a warning (build doesn't fail, other platforms still publish).
+All five must be present. If any is missing, the `macos-14` matrix entry stops immediately with an `::error::` annotation — the Windows and Linux builds still run, but no release is published (the `release` job needs all three artifacts).
 
 #### What the workflow does
 
-`.github/workflows/release.yml` job `build-desktop` matrix entry `macos-14`, on tag push:
+`.github/workflows/release.yml` job `build-game`, matrix entry `macos-14`, on tag push:
 
-1. Detects whether all five secrets are configured (`HAS_MAC_SIGNING`).
-2. If yes: decodes `MACOS_CERTIFICATE` to a temporary `.p12`, points `CSC_LINK` at it and passes `CSC_KEY_PASSWORD` to electron-builder.
-3. Passes `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` so `@electron/notarize` (invoked by electron-builder when `build.mac.notarize: true`) can submit to Apple's notary.
-4. Post-build, runs `codesign -dv --verbose=4` and `spctl --assess --type open --context context:primary-signature --verbose` on the `.dmg`. Non-zero exit fails the job.
+1. `HAS_MAC_SIGNING` checks that all five secrets are configured; if not, the job fails with an explicit error.
+2. `apple-actions/import-codesign-certs` imports the `.p12` into a temporary keychain.
+3. The Godot `macOS` preset is exported to `builds/macos/job-hunter-team.zip`; the step unpacks it, resolves the `Developer ID Application` identity from the keychain and runs `codesign --deep --force --options runtime --timestamp`, then `codesign --verify --deep --strict`.
+4. The signed `.app` is re-zipped with `ditto -c -k --sequesterRsrc --keepParent` and submitted to `xcrun notarytool submit --wait`, then `xcrun stapler staple` + `stapler validate` + `spctl --assess --type execute`. Any non-zero exit fails the job.
+5. The stapled `.app` is zipped one last time — that final `.zip` is the published asset.
 
-Signing config in `desktop/package.json` → `build.mac`: `hardenedRuntime: true`, `entitlements` → `desktop/build/entitlements.mac.plist` (JIT, unsigned-executable-memory, network.client), `notarize: true`.
+Hardened runtime comes from `--options runtime` at signing time; there is no entitlements plist (the Godot binary needs none of the Electron exceptions).
 
 #### Verifying a build locally
 
 ```bash
-codesign -dv --verbose=4 /path/to/JHT\ Desktop.app
+ditto -x -k job-hunter-team.zip /tmp/jht-check
+APP="$(find /tmp/jht-check -maxdepth 2 -type d -name '*.app' | head -n 1)"
+
+codesign -dv --verbose=4 "$APP"
 # expect: Authority=Developer ID Application: ...
 
-spctl --assess --type execute --verbose=4 /path/to/JHT\ Desktop.app
+spctl --assess --type execute --verbose=4 "$APP"
 # expect: accepted + source=Notarized Developer ID
 
-spctl --assess --type open --context context:primary-signature --verbose /path/to/job-hunter-team-<version>-mac.dmg
-# expect: source=Notarized Developer ID
+xcrun stapler validate "$APP"
+# expect: The validate action worked!
 ```
 
 #### Rotating the certificate

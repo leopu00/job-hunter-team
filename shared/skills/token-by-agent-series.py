@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""token-by-agent-series.py — serie temporale aggregata per la UI web.
+"""token-by-agent-series.py — serie temporale aggregata dei token per agente.
 
 Stessa logica di estrazione di token-by-agent-plot.py / -rate.py (Kimi
 wire.jsonl, mapping session→agente via state.json), ma:
-  • output JSON su stdout (consumato da /api/tokens/by-agent)
+  • output JSON su stdout — consumato dall'app nativa (che esegue la skill
+    via docker exec/SSH e disegna i grafici per-agente). Il consumatore
+    originale era la route web /api/tokens/by-agent, rimossa il 2026-07-25
+    con la dashboard locale: lo SCHEMA sotto resta il contratto.
   • parametri --since-min e --bucket-sec da CLI
-  • niente matplotlib (no dipendenze pesanti per la route web)
+  • niente matplotlib (no dipendenze pesanti: gira dentro al container)
 
 Schema output:
 {

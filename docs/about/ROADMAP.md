@@ -1,6 +1,6 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-07-18 *(native Godot application replaces Electron)*
+> Last updated: 2026-07-25 *(native migration complete, local `:3000` dashboard retired, cloud demo mode shipped)*
 >
 > This is the **strategic, forward-looking** view — the themes in motion and where help is welcome. It is **not** a status ledger: shipped work lives in [`CHANGELOG.md`](../../CHANGELOG.md), tactical tasks in [GitHub Issues](https://github.com/leopu00/job-hunter-team/issues) (plus the slim [`BACKLOG.md`](../../BACKLOG.md) index), technical debt in [`docs/internal/roadmap/MINOR-TRACKER.md`](../internal/roadmap/MINOR-TRACKER.md). No percentages here — verbal states only.
 >
@@ -56,8 +56,8 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 
 | Theme | State | What's open |
 |---|---|---|
-| 🔨 **Web platform** (read-only cloud dashboard) | **Shipped, hardening** | Live on [jobhunterteam.ai](https://jobhunterteam.ai) — 54 pages, 142 API routes on real data, E2E-tested. Open: pacing reset-edge guard, publish the remaining test-campaign cells ([`BETA.md`](../guides/BETA.md)). |
-| 🖥️ **Native office** (Godot, all-in-one) | **Feature-complete migration, beta QA** | Office, onboarding, embedded provider console, local/VPS lifecycle, profile, email, Telegram, cloud sync, job data, map, agents and observability are native. Electron has been removed. Open: cross-platform QA, signing and installer polish. |
+| 🔨 **Web platform** (read-only cloud dashboard) | **Shipped, hardening** | Live on [jobhunterteam.ai](https://jobhunterteam.ai) — 54 pages, 97 API routes on real data (52 dead or local-plane-only ones pruned on 2026-07-25). Event-driven since 2026-07-21 (Supabase Realtime, no browser polling); a new user without a team gets the `/welcome` wizard and a full interactive demo. Open: pacing reset-edge guard, the last four local-plane routes behind the role pages, a stale e2e suite, and the remaining test-campaign cells ([`BETA.md`](../guides/BETA.md)). |
+| 🖥️ **Native office** (Godot, all-in-one) | **Feature-complete migration, beta QA** | Office, onboarding, embedded provider console, local/VPS lifecycle, profile, email, Telegram, cloud sync, job data, map, agents and observability are native. Electron has been removed, and so has the local web dashboard: the browser is cloud-only. macOS releases are signed and notarized. Open: cross-platform QA, Windows/Linux signing, installer and auto-update polish. |
 | ☁️ **VPS provisioning** (bring-up via SSH) | **Shipped** | The native office brings a team up on any VPS (SSH key + IP, provider install, embedded login console, Telegram setup). Multi-cloud adapters deliberately not pursued — see the scope note below. |
 | 📡 **Budget monitoring** (Bridge + Sentinel) | **Proven at month scale on Codex** | Weekly-aware pacing closed 4 straight weekly cycles at 99–100% with zero overshoot ([case study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Open: Kimi projection precision (±10–15% → tier stays **beta**, two multi-week teams in observation), €20 entry tiers not viable yet (→ mission M4). |
 | 🌍 **Internationalization** (7 languages) | **Essentially done** | EN base + it/hu/es/de/fr/pt across agent prompts, UI, landing, docs pages. Open: `LOCALES` drift (`shared/i18n/types.ts` omits `hu`; API default `'it'` vs `DEFAULT_LOCALE='en'`), `mantenitore` agent overlays, translator-facing guide, native-speaker review. |

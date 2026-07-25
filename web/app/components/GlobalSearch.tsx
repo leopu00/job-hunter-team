@@ -42,13 +42,6 @@ const ITEM_DEFS: ItemDef[] = [
     href: "/team",
   },
   {
-    id: "assistente",
-    labelKey: "gs_assistente_label",
-    detailKey: "gs_assistente_detail",
-    catKey: "cat_pages",
-    href: "/team/assistente",
-  },
-  {
     id: "integrations",
     labelKey: "gs_integrations_label",
     detailKey: "gs_integrations_detail",

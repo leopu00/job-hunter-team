@@ -8,8 +8,8 @@ import {
 import { execInContainer } from '../../utils/container-proxy.js';
 
 // Sessioni considerate 'core' — non le killiamo con 'stop --all' per
-// non spegnere la chat utente. Coerente con /api/team/stop-all della
-// web UI che preserva ASSISTENTE.
+// non spegnere la chat utente. Regola nata con la route web
+// `/api/team/stop-all` (rimossa il 2026-07-25): ASSISTENTE va preservato.
 const KEEP_ALIVE_ON_STOP_ALL = new Set(['ASSISTENTE']);
 
 export function stopAction(agentArg, options = {}) {

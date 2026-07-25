@@ -202,20 +202,11 @@ export default function OnboardingPopup({
           </Link>
         </div>
 
-        <div className="mt-5 pt-4 border-t border-[var(--color-border)]">
-          <Link
-            href="/team/assistente"
-            onClick={handleClose}
-            className="group flex items-center gap-3 no-underline"
-          >
-            <span className="text-[11px] text-[var(--color-dim)] group-hover:text-[var(--color-muted)] transition-colors">
-              {t.help_text}
-            </span>
-            <span className="text-[var(--color-dim)] group-hover:text-[var(--color-muted)] text-[12px] transition-colors shrink-0">
-              {t.open_assistant}
-            </span>
-          </Link>
-        </div>
+        {/* Il rimando alla chat con l'Assistente è caduto il 2026-07-25 con la
+            pagina /team/assistente: quella conversazione vive nell'app nativa,
+            non in una pagina web. Le stringhe help_text/open_assistant restano
+            nel contratto delle props per non toccare i dizionari, ma non sono
+            più rese. */}
       </div>
     </div>
   );

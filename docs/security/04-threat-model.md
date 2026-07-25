@@ -8,15 +8,18 @@
 
 ## 1. What JHT is
 
-JHT is a **local-first desktop app for a single user** that:
-- runs on the user's machine (Windows/macOS/Linux), via Electron + Docker container
-- exposes a web dashboard at `http://localhost:3000`
-- orchestrates AI agents (Claude/Codex/Kimi) inside `tmux` within the container
-- reads local files (CV, profile) and performs outbound HTTP fetches (job listings)
-- optionally syncs data to Supabase via cloud-sync
+JHT is a **local-first, single-user job-hunting team** made of three pieces:
+
+- **The native application** (Godot, [`game/`](../../game/)) on the user's machine (Windows/macOS/Linux). It is the only control surface: it starts and stops the team, logs the user into the LLM provider through an embedded console, edits the profile and the configuration.
+- **The runtime container** (Docker) hosting the agents in `tmux`, the SQLite database and the bridges. It **exposes no network port**: the app drives it through `docker exec` when it runs on the same machine, or over **SSH** when it runs on the user's own VPS.
+- **The cloud dashboard** (Next.js on Vercel + Supabase), optional and opt-in. It is **read-only on the data**, plus an asynchronous request lane (tickets, feedback, per-position actions). It is shared by several users, whose rows are isolated per `user_id` by Supabase RLS.
+
+Agents read local files (CV, profile) and perform outbound HTTP fetches (job listings); data reaches the cloud only if the user enables cloud-sync.
+
+> **Changed on 2026-07-19 / 07-23.** Until then the desktop surface was an Electron launcher wrapping a Next.js dashboard served on `http://localhost:3000`. Both are gone: the `desktop/` tree was removed with the native migration, and the container stopped serving the web app (no `EXPOSE`, no published port). **A shipped install has no local HTTP surface at all.** The `local` deploy mode of `web/` survives for development (`npm run dev`), not in the product. Audit documents `01`, `02`, `03` and `06` in this folder predate that change and describe the old architecture — they are kept as history.
 
 **JHT is NOT:**
-- a multi-tenant SaaS platform
+- a multi-tenant SaaS platform for *running teams* — a team belongs to one user and runs on that user's machine or VPS (the cloud dashboard is multi-user, but it only mirrors data and queues requests)
 - a service shared between different users
 - a security wrapper for third-party data
 
@@ -28,15 +31,18 @@ JHT is a **local-first desktop app for a single user** that:
 
 The following are considered **trusted** and have full operator access:
 - whoever has physical/SSH access to the host operating system
+- whoever can talk to the Docker daemon on the machine hosting the container — `docker exec` into `jht` **is** operator access, and it is exactly how the native app works
+- whoever holds the SSH key paired with the user's VPS (`~/.jht/` keys, see [`ops/access-and-credentials.md`](../internal/ops/access-and-credentials.md))
 - whoever can write to `~/.jht/` (config, credentials, agents)
 - whoever can modify `~/Documents/Job Hunter Team/` (CV, attachments)
-- whoever is authenticated on the dashboard `http://localhost:3000` via local-token (`jht_local_token` HttpOnly+SameSite=Strict cookie, set by the middleware only on direct localhost requests with no `x-forwarded-*` headers) or Supabase login
+
+A **cloud-authenticated session** (Supabase login on jobhunterteam.ai) is *not* an operator: it can read that user's mirrored data and queue requests, and nothing else. Control actions are refused server-side on the cloud deployment.
 
 ### Untrusted
 
 The following are considered **untrusted** and MUST NOT reach operator capability:
-- websites opened in the user's browser (CSRF / DNS rebinding)
-- other users on the same LAN (if the dashboard is exposed on the network)
+- websites opened in the user's browser (CSRF against the cloud dashboard session)
+- every other authenticated user of the cloud deployment (RLS isolation per `user_id`)
 - content fetched from the web (job listing HTML, email, attachments)
 - AI model output (prompt injection)
 
@@ -55,7 +61,9 @@ The following vectors are treated as security bugs:
 | Vector | Examples |
 |---------|--------|
 | **Auth bypass** | bypassing `requireAuth()` on sensitive routes without physical/SSH control of the host |
-| **CSRF / DNS rebinding** | a malicious site that triggers side-effects on `localhost:3000` (e.g. start agent, read secret) |
+| **Write from the cloud plane** | any path that lets the cloud deployment perform a control or configuration write instead of queueing a request (`requireLocalWrite()` bypass, a cloud build that believes it is local) |
+| **CSRF on the cloud dashboard** | a malicious site that uses the user's session to write on the request lane (feedback, tickets, position actions) |
+| **Pairing/SSH credential exposure** | pairing token or VPS key readable by another local user; VPS host-key handling on the SSH path |
 | **Command injection** | untrusted input (file content, API body, env config) that becomes shell execution |
 | **Path traversal** | reading/writing files outside the expected directories |
 | **SSRF** | fetch toward `127.0.0.1` / `metadata.google.internal` / RFC1918 from untrusted URLs |
@@ -91,7 +99,11 @@ The following are **not security bugs** in JHT (inspired by OpenClaw):
 - CVEs in upstream dependencies that aren't exploitable through JHT specifically → reported upstream, not a JHT bug.
 
 ### Publicly exposed setups
-- Exposing `localhost:3000` to the internet without Supabase auth is **not recommended and not supported**. Bug only if the recommended setup (loopback only) is bypassable.
+- The container publishes **no port**, so there is nothing to expose by default. If someone re-adds a `ports:` mapping to their own compose file and puts the runtime on the internet, that is their configuration, not a JHT bug.
+- Handing the VPS SSH key (or the pairing token) to a third party is operator delegation, not a vulnerability.
+
+### The demo mode of the cloud dashboard
+- Demo data is static and lives in the code; demo verdicts live in a cookie of that browser. "I altered the demo data I am shown" is not a bug — nothing of it reaches a database. A demo write that *does* reach the database **is** a bug (see *Write from the cloud plane*).
 
 ---
 
@@ -100,18 +112,16 @@ The following are **not security bugs** in JHT (inspired by OpenClaw):
 JHT is designed and tested for:
 
 ✅ **Recommended setup:**
-- One machine (laptop/desktop) per user
-- Docker container on loopback `127.0.0.1:3000`
-- Optional: cloud-sync to Supabase (authenticated)
+- One machine (laptop/desktop) per user, native app + container side by side, no published port
+- Optional: cloud-sync to Supabase (authenticated), read-only dashboard in the browser
 
 ⚠️ **Advanced setups supported with documented caveats:**
-- Personal VPS for headless JHT: requires `JHT_CREDENTIALS_KEY` env var, no keyring
-- Public tunnel (ngrok/Cloudflare) to JHT: **requires Supabase auth on** (no localhost bypass)
+- Personal VPS running the container headless, driven over SSH from the native app: requires the `JHT_CREDENTIALS_KEY` env var (no OS keyring on a server) — see [`VPS-SETUP.md`](../guides/VPS-SETUP.md)
 
 ❌ **Setups NOT supported:**
 - Multiple users on the same container
-- Dashboard exposed on LAN/internet without auth
-- JHT as a multi-tenant service
+- Re-publishing the container port on LAN/internet
+- JHT as a multi-tenant service (one shared team for several people)
 
 ---
 
@@ -162,7 +172,8 @@ Reports lacking a reproducible PoC or that fail to demonstrate a boundary bypass
 
 - Security patches: shipped as a patch version (`X.Y.Z+1`) within 7 days of discovery for Critical, 30 days for High.
 - Announcements via GitHub Security Advisory + entry in CHANGELOG.md.
-- Electron auto-update: signed updates via Sparkle (TODO).
+- **Release signing**: the macOS build is signed with a Developer ID certificate and notarized by Apple on every tag (CI fails without the credentials). Windows and Linux artifacts are unsigned.
+- **Auto-update: not implemented** — updates are a manual download from the GitHub Release. Tracked in [`BACKLOG.md`](../../BACKLOG.md) under the native application section.
 
 ---
 
@@ -174,13 +185,15 @@ To avoid false expectations:
 - ❌ **No enterprise SLA** (use at your own risk)
 - ❌ **No 100% prompt-injection-proof guarantee** (active research)
 - ❌ **No container-escape guarantee** (Docker/OS responsibility)
-- ❌ **No signed binary releases** (post-MVP)
+- ❌ **No signed Windows/Linux binaries** (macOS is signed and notarized; the other two are not)
+- ❌ **No auto-update channel** (updates are manual downloads)
 
 ---
 
 ## 10. Versioning
 
-**Threat model version:** 0.1 (draft)
-**Last updated:** 2026-04-27
+**Threat model version:** 0.2
+**Last updated:** 2026-07-25 — realigned to the post-migration surface (native Godot app, no local HTTP server, control via `docker exec`/SSH, multi-user cloud dashboard with RLS).
+**Previous version:** 0.1 (2026-04-27, Electron + `localhost:3000`) — see the git history of this file.
 **Next review:** at the first public release.
 **Current hardening status:** see [`05-checklist.md`](05-checklist.md) — Phase 1 (blockers) tracked at 9/9 before the `v0.1.0` tag.
