@@ -68,7 +68,11 @@
 
 ## 🌍 i18n residuals
 
-- ⬜ `LOCALES` drift — `shared/i18n/types.ts` omits `'hu'`; API default `'it'` vs `DEFAULT_LOCALE='en'`.
+- ⬜ `LOCALES` drift — API default `'it'` vs `DEFAULT_LOCALE='en'`. Half of this
+  item closed itself on 2026-07-25: the third list, `shared/i18n/types.ts`
+  (which omitted `'hu'`), went with the unreachable `shared/` scaffolding. The
+  surviving lists are `web/app/api/i18n/route.ts` and the catalogs under
+  `shared/locales/`, which the bash/Python helpers read.
 - ⬜ `mantenitore` agent overlays (6 languages) + translator-facing guide + native-speaker review pass.
 
 ## 🛠️ Infra & CLI
