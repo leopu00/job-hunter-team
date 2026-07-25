@@ -35,6 +35,7 @@ import {
 } from "./columns";
 import PositionsShell from "./PositionsShell";
 import TableScrollSync from "./TableScrollSync";
+import { intlTag } from "@/lib/locale-tag";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "var(--color-muted)",
@@ -48,16 +49,6 @@ const STATUS_COLORS: Record<string, string> = {
   excluded: "var(--color-red)",
 };
 
-const LOCALE_TAG: Record<string, string> = {
-  it: "it-IT",
-  en: "en-US",
-  hu: "hu-HU",
-  es: "es-ES",
-  de: "de-DE",
-  fr: "fr-FR",
-  pt: "pt-PT",
-};
-
 function formatFoundAt(ts: string | null | undefined, locale: string) {
   if (!ts) return "—";
   const d = new Date(ts);
@@ -65,12 +56,12 @@ function formatFoundAt(ts: string | null | undefined, locale: string) {
   const today = new Date();
   const sameDay = d.toDateString() === today.toDateString();
   if (sameDay) {
-    return d.toLocaleTimeString(LOCALE_TAG[locale] ?? "en-US", {
+    return d.toLocaleTimeString(intlTag(locale), {
       hour: "2-digit",
       minute: "2-digit",
     });
   }
-  return d.toLocaleString(LOCALE_TAG[locale] ?? "en-US", {
+  return d.toLocaleString(intlTag(locale), {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",

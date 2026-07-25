@@ -15,19 +15,10 @@ export type {
 } from "@/lib/cron-store";
 
 import type { CronSchedule } from "@/lib/cron-store";
+import { intlTag } from "@/lib/locale-tag";
 
 /* ── i18n per le label della schedule (usate dalla UI) ───────────── */
 type CronLocale = "it" | "en" | "hu" | "es" | "de" | "fr" | "pt";
-
-const LOCALE_TAG: Record<string, string> = {
-  it: "it-IT",
-  en: "en-US",
-  hu: "hu-HU",
-  es: "es-ES",
-  de: "de-DE",
-  fr: "fr-FR",
-  pt: "pt-PT",
-};
 
 interface CronStrings {
   every: (n: number) => string;
@@ -114,7 +105,7 @@ export function nextRunLabel(ms: number | undefined, locale = "it"): string {
   if (diff < 0) return t.running;
   if (diff < 60_000) return t.inSeconds(Math.round(diff / 1000));
   if (diff < 3_600_000) return t.inMinutes(Math.round(diff / 60_000));
-  return d.toLocaleString(LOCALE_TAG[locale] ?? "en-US", {
+  return d.toLocaleString(intlTag(locale), {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
