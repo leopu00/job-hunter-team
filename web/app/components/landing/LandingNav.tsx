@@ -4,90 +4,20 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLandingI18n, type Lang } from "./LandingI18n";
-
-function FlagIT() {
-  return (
-    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
-      <rect width="7" height="14" fill="#009246" />
-      <rect x="7" width="6" height="14" fill="#fff" />
-      <rect x="13" width="7" height="14" fill="#CE2B37" />
-    </svg>
-  );
-}
-
-function FlagEN() {
-  return (
-    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
-      <rect width="20" height="14" fill="#012169" />
-      <path d="M0,0 L20,14 M20,0 L0,14" stroke="#fff" strokeWidth="2.5" />
-      <path d="M0,0 L20,14 M20,0 L0,14" stroke="#C8102E" strokeWidth="1.5" />
-      <path d="M10,0 V14 M0,7 H20" stroke="#fff" strokeWidth="4" />
-      <path d="M10,0 V14 M0,7 H20" stroke="#C8102E" strokeWidth="2.5" />
-    </svg>
-  );
-}
-
-function FlagHU() {
-  return (
-    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
-      <rect width="20" height="4.67" fill="#CD2A3E" />
-      <rect y="4.67" width="20" height="4.66" fill="#fff" />
-      <rect y="9.33" width="20" height="4.67" fill="#436F4D" />
-    </svg>
-  );
-}
-
-function FlagES() {
-  return (
-    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
-      <rect width="20" height="14" fill="#AA151B" />
-      <rect y="3.5" width="20" height="7" fill="#F1BF00" />
-    </svg>
-  );
-}
-
-function FlagFR() {
-  return (
-    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
-      <rect width="6.67" height="14" fill="#0055A4" />
-      <rect x="6.67" width="6.66" height="14" fill="#fff" />
-      <rect x="13.33" width="6.67" height="14" fill="#EF4135" />
-    </svg>
-  );
-}
-
-function FlagDE() {
-  return (
-    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
-      <rect width="20" height="4.67" fill="#000" />
-      <rect y="4.67" width="20" height="4.66" fill="#DD0000" />
-      <rect y="9.33" width="20" height="4.67" fill="#FFCE00" />
-    </svg>
-  );
-}
-
-function FlagPT() {
-  return (
-    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
-      <rect width="20" height="14" fill="#FF0000" />
-      <rect width="8" height="14" fill="#006600" />
-      <circle cx="8" cy="7" r="2.1" fill="#FFCC00" />
-    </svg>
-  );
-}
+import { FLAGS } from "@/app/components/LocaleFlags";
 
 const LANGUAGES: {
   code: Lang;
   label: string;
   Flag: () => React.JSX.Element;
 }[] = [
-  { code: "it", label: "Italiano", Flag: FlagIT },
-  { code: "en", label: "English", Flag: FlagEN },
-  { code: "es", label: "Español", Flag: FlagES },
-  { code: "fr", label: "Français", Flag: FlagFR },
-  { code: "de", label: "Deutsch", Flag: FlagDE },
-  { code: "pt", label: "Português", Flag: FlagPT },
-  { code: "hu", label: "Magyar", Flag: FlagHU },
+  { code: "it", label: "Italiano", Flag: FLAGS.it },
+  { code: "en", label: "English", Flag: FLAGS.en },
+  { code: "es", label: "Español", Flag: FLAGS.es },
+  { code: "fr", label: "Français", Flag: FLAGS.fr },
+  { code: "de", label: "Deutsch", Flag: FLAGS.de },
+  { code: "pt", label: "Português", Flag: FLAGS.pt },
+  { code: "hu", label: "Magyar", Flag: FLAGS.hu },
 ];
 
 function LangDropdown() {
