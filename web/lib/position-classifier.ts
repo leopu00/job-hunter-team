@@ -77,6 +77,7 @@ export type RoleFamilyGroup = RoleFamilyCount & {
 export function groupRoleFamilies(
   families: RoleFamilyCount[],
   minShare = 0.03,
+  maxSlices = 10,
 ): RoleFamilyGroup[] {
   const total = families.reduce((a, f) => a + f.count, 0);
   if (total === 0) return [];
@@ -112,18 +113,32 @@ export function groupRoleFamilies(
   // 2) le medie vanno ricalcolate sugli score del gruppo, non ereditate dal
   //    primo membro incontrato. Il voto critico non è disponibile qui per
   //    posizione, quindi resta quello del membro maggiore (best effort).
+  //
+  //    Il nome si accorcia al macro SOLO se quel macro raccoglie davvero più
+  //    famiglie. Non ovunque la barra è una gerarchia: in un profilo finance
+  //    "Infrastructure / Real Assets Investment" è una coppia di sinonimi, e
+  //    troncarla a "Infrastructure" perderebbe senso senza aggregare niente.
   for (const g of byMacro.values()) {
     const s = g.scores ?? [];
     g.avgScore = s.length > 0 ? s.reduce((a, v) => a + v, 0) / s.length : null;
+    if (g.members.length === 1) {
+      g.family = g.members[0];
+      g.color = colorForFamily(g.family);
+    }
   }
 
-  // 3) coda lunga sotto soglia → "Altre". Un gruppo solo nella coda non vale
-  //    l'aggregazione: resta com'è.
+  // 3) coda lunga → "Altre": sotto soglia, oppure oltre il tetto di spicchi
+  //    (un profilo può avere tante categorie tutte legittime e sopra soglia,
+  //    ma un donut con quindici fette non si legge). Un solo gruppo in coda
+  //    non vale l'aggregazione: resta com'è.
   const groups = Array.from(byMacro.values()).sort((a, b) => b.count - a.count);
-  const tail = groups.filter((g) => g.count / total < minShare);
+  const keep = groups.filter(
+    (g, i) => g.count / total >= minShare && i < maxSlices - 1,
+  );
+  const tail = groups.filter((g) => !keep.includes(g));
   if (tail.length < 2) return groups;
 
-  const head = groups.filter((g) => g.count / total >= minShare);
+  const head = keep;
   const other: RoleFamilyGroup = {
     family: OTHER_GROUP_LABEL,
     count: tail.reduce((a, g) => a + g.count, 0),
