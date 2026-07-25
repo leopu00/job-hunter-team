@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { localWorkspace } from "@/lib/local-workspace";
+import { readLocalOr } from "@/lib/local-workspace";
 import {
   categorizeExclusion,
   getAnalistaActivityLocal,
@@ -13,14 +13,8 @@ export async function GET() {
   // locale, mai Supabase → le pagine team funzionano senza login cloud
   // (direction shift "interaction planes", gap WEB-READONLY). Se il ramo
   // local fallisce (es. schema parziale), si scende al path Supabase sotto.
-  const ws = await localWorkspace();
-  if (ws) {
-    try {
-      return NextResponse.json(getAnalistaActivityLocal(ws));
-    } catch (err) {
-      console.error("[analista/activity] local", err);
-    }
-  }
+  const fromLocal = await readLocalOr("analista/activity", getAnalistaActivityLocal);
+  if (fromLocal !== null) return NextResponse.json(fromLocal);
   try {
     const supabase = await createClient();
     const today = new Date().toISOString().slice(0, 10);

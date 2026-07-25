@@ -18,3 +18,31 @@ export async function localWorkspace(): Promise<string | null> {
   if (!p || !workspaceHasDb(p)) return null;
   return p;
 }
+
+/**
+ * Lettura dal DB locale quando c'è, `null` quando il chiamante deve
+ * proseguire su Supabase.
+ *
+ * Le route "activity" del team ripetevano tutte lo stesso preambolo:
+ * `localWorkspace()`, e se c'è un workspace leggi dentro un try/catch che
+ * NON rilancia — un jobs.db con schema parziale deve far scendere al ramo
+ * cloud, non restituire 500. Quel try/catch è la parte che si dimentica:
+ * qui il contratto è garantito una volta per tutte.
+ *
+ * Il ramo cloud resta interamente del chiamante: le route non lo trattano
+ * allo stesso modo (le "activity" degradano a un payload vuoto, `critico`
+ * risponde con un errore esplicito) e quella differenza è voluta.
+ */
+export async function readLocalOr<T>(
+  tag: string,
+  read: (workspace: string) => T,
+): Promise<T | null> {
+  const ws = await localWorkspace();
+  if (!ws) return null;
+  try {
+    return read(ws);
+  } catch (err) {
+    console.error(`[${tag}] local`, err);
+    return null;
+  }
+}
