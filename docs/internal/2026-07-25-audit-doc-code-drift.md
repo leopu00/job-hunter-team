@@ -110,16 +110,39 @@ insieme alle route — resta nel BACKLOG.
 ### `[JHT-E2E-STALE]` — 78 spec Playwright che nessuno esegue
 
 `ls e2e/tests | wc -l` → **78**; ultimo commit sulla cartella **2026-07-03**; nessun
-workflow le invoca (`grep -rl playwright .github/workflows` → vuoto). Non conoscono
-`/welcome`, il demo mode, `/swipe`, il drawer messaggi né la pagina posizione
-riscritta. Una suite che nessuno esegue è peggio di nessuna suite: **si legge come
-copertura**.
+workflow le invoca (`grep -rl playwright .github/workflows` → vuoto).
 
-### `[JHT-WEB-DEMO]` (residui) — demo senza rete di sicurezza
+**Misurato il 2026-07-25** (server locale, suite intera): **770 passed · 574 skipped ·
+0 failed** in 6.9 minuti. La suite non è rotta: **si skippa da sola**, e la causa è più
+vecchia del drift di luglio — *non ha mai avuto una storia di autenticazione*.
+`01-auth.spec.ts` porta ancora il suo `TODO: test con sessione autenticata — richiede
+storageState`, quindi ogni spec che tocca l'area riservata si skippa appena il deploy si
+comporta come produzione. Una run verde certifica le pagine **pubbliche** e quasi nulla
+d'altro: si legge come copertura, e non lo è.
 
-Nessuna spec copre `/welcome` o il ramo demo (`JHT_WEB_DEMO_PERSONA` esiste apposta per
-renderli testabili senza wizard), e nulla verifica che i 4 seed portino ancora **tutti**
-i campi che le pagine leggono: un campo nuovo produce un buco silenzioso nella demo.
+Piano (in [`e2e/README.md`](../../e2e/README.md) e nel BACKLOG): account Supabase di test
++ `storageState` → potatura degli spec scritti per superfici che non esistono → subset
+pubblico in CI contro un preview deployment. Gli spec nuovi seguono la regola **skip
+rumoroso**: ciò che è verificabile in anonimo gira sempre, il resto dice cosa gli manca.
+
+### `[JHT-WEB-DEMO]` (residui) — coperta il 2026-07-25
+
+Le pagine pretendono una sessione, il codice dietro no: la copertura è andata dove può
+davvero asserire. **42 test vitest** in `tests/js/tasks/demo-{seeds,queries,feedback-cookie}.test.ts`:
+contratto dei seed (4 personas × 56, id/legacy-id, campi letti dalle pagine, breakdown
+per dimensione, coordinate a coppie), le query che alimentano ogni pagina, la semantica
+del giudizio ritrattabile nel cookie. Più `e2e/tests/8{0,1}-*.spec.ts` per il contratto
+dell'API demo e la chiusura dell'area riservata (6 test che girano sempre).
+
+**Invariante i18n messo a contratto:** ogni seed con testo della "voce agenti" deve
+avere l'overlay in tutte e 6 le lingue. È il buco silenzioso che si voleva intercettare —
+aggiungo una posizione con le note dello Scorer, dimentico i 6 overlay, e chi guarda la
+demo in tedesco legge italiano.
+
+**Trovato scrivendo i test:** `demoPositionById` ritorna `company: null` per costruzione
+→ la card azienda (logo, banner esclusione, verdetto dell'Analista, shippata il 22/07)
+**non compare mai in demo**. Il test fotografa il limite invece di nasconderlo; il debito
+è nel BACKLOG.
 
 ---
 
@@ -162,7 +185,7 @@ Vale registrarlo, perché dice dove il processo funziona:
 - **CI del gioco già completa**: import, 4 self-test, 3 scenari headless, export, firma
   e notarizzazione, smoke test del binario.
 - **59 migration, nessuna collisione di numero.**
-- `vitest` 869/869, `pytest` 447 passed — entrambe verdi senza aggiustamenti.
+- `vitest` 869/869, `pytest` 447 passed — entrambe verdi senza aggiustamenti (dopo il lavoro sulla demo: **911 vitest**, 55 file).
 - Branch `dev-N` senza lavoro dimenticato (dev1 1, dev2 4, dev3 5 commit avanti).
 
 ---

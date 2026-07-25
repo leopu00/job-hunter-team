@@ -51,6 +51,14 @@
 - **Effort:** M (1h setup + test su tutti gli OS).
 - **Trade-off:** può rallentare i commit grandi; mitigabile con `lint-staged` che lavora solo sui file staged.
 
+### ⬜ `[MINOR-VITEST-DOUBLE-CONFIG]` Due config Vitest, uno dei quali non gira mai
+
+- **Stato:** ⬜ open. `tests/js/` contiene **sia** `vitest.config.ts` **sia** `vitest.config.mjs`. Vitest preferisce il `.ts`, quindi `npm test` e il job CI passano da quello; il `.mjs` — con la sua lista `include` esplicita dei moduli — non è invocato da nessun workflow.
+- **Perché è un problema:** i due divergono. Il `.mjs` aveva l'alias `@` → `web/` e il `.ts` no, quindi un test che importava un modulo dell'app (`@/lib/...`) **falliva in blocco all'import** sotto il config reale: nessun test eseguito, nessuna asserzione, un file che sembra "presente" e non copre niente. Scoperto il 2026-07-25 aggiungendo i test della demo; l'alias è stato portato nel `.ts` (911 test verdi, 55 file). Inoltre eseguire la suite **con** il `.mjs` produce **287 fallimenti**, quindi quel config è anche marcio nel merito.
+- **Da fare:** tenere un solo config. Verificare cosa serviva la lista `include` del `.mjs` (probabilmente l'ordine/selezione dei moduli del job matrix in `test.yml`) e poi cancellarlo, oppure capire perché 287 test falliscono sotto quel setup e sistemarli prima di renderlo canonico.
+- **Effort:** M (bisogna capire i 287 fallimenti prima di scegliere).
+- **Origine:** audit doc↔codice 2026-07-25 ([nota](../2026-07-25-audit-doc-code-drift.md)).
+
 ### ⬜ `[MINOR-TUI-DEAD-BUILD]` `tui/` compilato in ogni immagine ma mai invocato
 
 - **Stato:** ⬜ open. Il Dockerfile fa `npm ci --prefix tui` (r115) **e** `npm run build --prefix tui` (r153) in ogni build dell'immagine.
