@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
+import { bestViewport } from "@/lib/globe-viewport";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
 import { canonicalCountry, canonicalCityKey } from "@/lib/city-gazetteer";
 
@@ -457,56 +458,6 @@ type GroupedFeature = {
   // azzurra + etichetta "Da remoto" sui fasci aggregati.
   remote: boolean;
 };
-
-// Calcola la "faccia migliore" del globo da mostrare: longitude
-// media circolare di tutti i pin (vettorializzata, gestisce wrap-around
-// 180/-180 correttamente). Restituisce centro + bounding box dei pin
-// entro 90° da quel centro (la "metà di globo visibile").
-function bestViewport(pins: PositionCoord[]): {
-  center: [number, number];
-  bounds: [[number, number], [number, number]];
-} | null {
-  if (pins.length === 0) return null;
-  const toRad = Math.PI / 180;
-  let sx = 0,
-    sy = 0;
-  for (const p of pins) {
-    sx += Math.cos(p.lon * toRad);
-    sy += Math.sin(p.lon * toRad);
-  }
-  const centerLon = Math.atan2(sy, sx) / toRad;
-  // Distanza circolare in longitudine [0..180]
-  const lonDist = (a: number, b: number) => {
-    let d = Math.abs(a - b) % 360;
-    if (d > 180) d = 360 - d;
-    return d;
-  };
-  const inFace = pins.filter((p) => lonDist(p.lon, centerLon) <= 100);
-  const subset = inFace.length >= Math.ceil(pins.length * 0.5) ? inFace : pins;
-  let minLat = +Infinity,
-    maxLat = -Infinity,
-    minLon = +Infinity,
-    maxLon = -Infinity;
-  for (const p of subset) {
-    if (p.lat < minLat) minLat = p.lat;
-    if (p.lat > maxLat) maxLat = p.lat;
-    // Normalizza lon relativa al centerLon per evitare wrap nella bbox.
-    let nlon = p.lon;
-    if (nlon - centerLon > 180) nlon -= 360;
-    if (nlon - centerLon < -180) nlon += 360;
-    if (nlon < minLon) minLon = nlon;
-    if (nlon > maxLon) maxLon = nlon;
-  }
-  // Centroide lat = media; centroide lon = centerLon circolare.
-  const centerLat = (minLat + maxLat) / 2;
-  return {
-    center: [centerLon, centerLat],
-    bounds: [
-      [minLon, minLat],
-      [maxLon, maxLat],
-    ],
-  };
-}
 
 function hashStr(s: string): number {
   let h = 2166136261;
