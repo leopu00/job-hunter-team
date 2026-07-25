@@ -24,12 +24,34 @@ export const ALLOWED_APPLICATION_STATUS = new Set([
   "response",
 ]);
 
+/** `positions.status` — stato della posizione nella pipeline. */
+export const ALLOWED_POSITION_STATUS = new Set([
+  "new",
+  "checked",
+  "excluded",
+  "scored",
+  "writing",
+  "review",
+  "ready",
+  "applied",
+  "response",
+]);
+
 /** `positions.critic_verdict` — CHECK sul cloud. */
 export const ALLOWED_CRITIC_VERDICT = new Set([
   "PASS",
   "NEEDS_WORK",
   "REJECT",
 ]);
+
+/**
+ * Stato posizione sanificato. Fuori vocabolario torna a `new`: la
+ * posizione ricomincia il giro di pipeline invece di sparire.
+ */
+export function normalizePositionStatus(s: string | null | undefined): string {
+  if (!s) return "new";
+  return ALLOWED_POSITION_STATUS.has(s) ? s : "new";
+}
 
 /**
  * Stato candidatura sanificato. Un valore fuori vocabolario diventa
