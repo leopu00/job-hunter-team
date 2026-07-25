@@ -2,7 +2,6 @@
 
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useDevMode } from './SettingsMenu'
 import { useIsCloud } from '@/app/hooks/useIsCloud'
 import { useLocale } from '@/lib/use-locale'
 import type { Locale } from '@/i18n/config'
@@ -19,15 +18,11 @@ const LOCALE_TAG: Record<Locale, string> = {
 
 const T: Record<Locale, {
   chat: string
-  terminal: string
   clear: string
-  openTerminal: string
-  openPowershell: string
   exit: string
   expand: string
   send: string
   sendError: string
-  noOutput: string
   writeToInteract: (label: string) => string
   messageTo: (session: string) => string
   noActiveSession: string
@@ -40,15 +35,11 @@ const T: Record<Locale, {
 }> = {
   it: {
     chat: 'chat',
-    terminal: 'terminale',
     clear: 'pulisci',
-    openTerminal: 'apri terminale',
-    openPowershell: 'apri powershell',
     exit: 'esci',
     expand: 'espandi',
     send: 'invia',
     sendError: 'Errore: messaggio non inviato.',
-    noOutput: 'nessun output...',
     writeToInteract: (label) => `Scrivi un messaggio per interagire con ${label}.`,
     messageTo: (session) => `Messaggio a ${session}...`,
     noActiveSession: 'Nessuna sessione attiva',
@@ -61,15 +52,11 @@ const T: Record<Locale, {
   },
   en: {
     chat: 'chat',
-    terminal: 'terminal',
     clear: 'clear',
-    openTerminal: 'open terminal',
-    openPowershell: 'open powershell',
     exit: 'exit',
     expand: 'expand',
     send: 'send',
     sendError: 'Error: message not sent.',
-    noOutput: 'no output...',
     writeToInteract: (label) => `Write a message to interact with ${label}.`,
     messageTo: (session) => `Message to ${session}...`,
     noActiveSession: 'No active session',
@@ -82,15 +69,11 @@ const T: Record<Locale, {
   },
   es: {
     chat: 'chat',
-    terminal: 'terminal',
     clear: 'limpiar',
-    openTerminal: 'abrir terminal',
-    openPowershell: 'abrir powershell',
     exit: 'salir',
     expand: 'expandir',
     send: 'enviar',
     sendError: 'Error: mensaje no enviado.',
-    noOutput: 'sin salida...',
     writeToInteract: (label) => `Escribe un mensaje para interactuar con ${label}.`,
     messageTo: (session) => `Mensaje a ${session}...`,
     noActiveSession: 'Ninguna sesión activa',
@@ -103,15 +86,11 @@ const T: Record<Locale, {
   },
   fr: {
     chat: 'chat',
-    terminal: 'terminal',
     clear: 'effacer',
-    openTerminal: 'ouvrir le terminal',
-    openPowershell: 'ouvrir powershell',
     exit: 'quitter',
     expand: 'agrandir',
     send: 'envoyer',
     sendError: 'Erreur : message non envoyé.',
-    noOutput: 'aucune sortie...',
     writeToInteract: (label) => `Écrivez un message pour interagir avec ${label}.`,
     messageTo: (session) => `Message à ${session}...`,
     noActiveSession: 'Aucune session active',
@@ -124,15 +103,11 @@ const T: Record<Locale, {
   },
   de: {
     chat: 'chat',
-    terminal: 'Terminal',
     clear: 'leeren',
-    openTerminal: 'Terminal öffnen',
-    openPowershell: 'powershell öffnen',
     exit: 'schließen',
     expand: 'erweitern',
     send: 'senden',
     sendError: 'Fehler: Nachricht nicht gesendet.',
-    noOutput: 'keine Ausgabe...',
     writeToInteract: (label) => `Schreibe eine Nachricht, um mit ${label} zu interagieren.`,
     messageTo: (session) => `Nachricht an ${session}...`,
     noActiveSession: 'Keine aktive Sitzung',
@@ -145,15 +120,11 @@ const T: Record<Locale, {
   },
   hu: {
     chat: 'chat',
-    terminal: 'terminál',
     clear: 'törlés',
-    openTerminal: 'terminál megnyitása',
-    openPowershell: 'powershell megnyitása',
     exit: 'kilépés',
     expand: 'kibontás',
     send: 'küldés',
     sendError: 'Hiba: az üzenet nem lett elküldve.',
-    noOutput: 'nincs kimenet...',
     writeToInteract: (label) => `Írj egy üzenetet a(z) ${label} eléréséhez.`,
     messageTo: (session) => `Üzenet ide: ${session}...`,
     noActiveSession: 'Nincs aktív munkamenet',
@@ -166,15 +137,11 @@ const T: Record<Locale, {
   },
   pt: {
     chat: 'chat',
-    terminal: 'terminal',
     clear: 'limpar',
-    openTerminal: 'abrir terminal',
-    openPowershell: 'abrir powershell',
     exit: 'sair',
     expand: 'expandir',
     send: 'enviar',
     sendError: 'Erro: mensagem não enviada.',
-    noOutput: 'nenhuma saída...',
     writeToInteract: (label) => `Escreva uma mensagem para interagir com ${label}.`,
     messageTo: (session) => `Mensagem para ${session}...`,
     noActiveSession: 'Nenhuma sessão ativa',
@@ -188,7 +155,6 @@ const T: Record<Locale, {
 }
 
 type AgentSession = { session: string; active: boolean }
-type Mode = 'chat' | 'terminal'
 
 interface Props {
   /** Prefisso sessione tmux (es. 'SCOUT', 'ANALISTA') */
@@ -202,31 +168,27 @@ interface Props {
 type LocalMsg = { role: 'user' | 'system'; text: string; ts: number }
 
 export default function AgentInteraction({ sessionPrefix, color, label }: Props) {
-  // [JHT-DASHBOARD-SPLIT] Questa è una superficie di INTERAZIONE (chat +
-  // terminale + invio a tmux): zero dati in lettura. Sul cloud non esiste →
-  // niente widget, niente polling /api/team/{status,terminal}. La pagina-agente
-  // resta (monitoraggio read-only), sparisce solo la sezione "Interazione".
+  // [JHT-DASHBOARD-SPLIT] Questa è una superficie di INTERAZIONE (chat + invio
+  // a tmux): zero dati in lettura. Sul cloud non esiste → niente widget, niente
+  // polling /api/team/status. La pagina-agente resta (monitoraggio read-only),
+  // sparisce solo la sezione "Interazione".
+  //
+  // La lettura del terminale non c'è più: /api/team/terminal e
+  // /api/team/terminal/open sono state rimosse il 25/07 con le altre route di
+  // controllo del team, perché il comando passa dal desktop. Restavano qui un
+  // pannello che si riempiva di nulla e un bottone che apriva nulla.
   const isCloud = useIsCloud()
   const [sessions, setSessions] = useState<AgentSession[]>([])
   const [activeSession, setActiveSession] = useState<string | null>(null)
-  const [output, setOutput] = useState('')
-  const [mode, setMode] = useState<Mode>('chat')
   const [messages, setMessages] = useState<LocalMsg[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const devMode = useDevMode()
   const locale = useLocale()
   const t = T[locale]
 
-  // Se il dev mode si spegne mentre si è sul tab terminale, torna su chat.
-  useEffect(() => {
-    if (!devMode && mode === 'terminal') setMode('chat')
-  }, [devMode, mode])
-
   const chatEndRef = useRef<HTMLDivElement>(null)
-  const termRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Blocca scroll body in fullscreen
@@ -255,32 +217,16 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
       }
       if (matching.length === 0) {
         setActiveSession(null)
-        setOutput('')
       }
     } catch {
       setSessions([])
     }
   }, [sessionPrefix, activeSession, isCloud])
 
-  // Fetch terminal output per la sessione attiva
-  const fetchTerminal = useCallback(async () => {
-    if (isCloud === true || !activeSession) return
-    try {
-      const res = await fetch(`/api/team/terminal?session=${encodeURIComponent(activeSession)}`)
-      const data = await res.json()
-      setOutput(data.output ?? '')
-    } catch {
-      setOutput('')
-    }
-  }, [activeSession, isCloud])
-
-  // Poll adattivo: pausa quando tab non e' visibile, backoff esponenziale
-  // se l'output non cambia. Pre-fix (2026-05-22): 1500ms fissi senza
-  // visibility check → 2400 req/h × dashboard aperta H24 ≈ 30 GB egress
-  // mensili Vercel (vedi docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md).
-  const lastOutputRef = useRef('')
-  const backoffRef = useRef(0)
-
+  // Poll delle sessioni: pausa quando il tab non è visibile. La lezione del
+  // 2026-05-22 vale ancora — 1500ms fissi senza visibility check facevano
+  // 2400 req/h con la dashboard aperta H24, ≈30 GB di egress Vercel al mese
+  // (docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md).
   useEffect(() => {
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -298,43 +244,6 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     return () => { cancelled = true; if (timer) clearTimeout(timer) }
   }, [fetchSessions])
 
-  useEffect(() => {
-    if (!activeSession) return
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
-    // Reset backoff su cambio sessione: nuovo agente, ricomincia veloce.
-    backoffRef.current = 0
-    lastOutputRef.current = ''
-
-    const tick = async () => {
-      if (cancelled) return
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
-        timer = setTimeout(tick, 30_000)
-        return
-      }
-      await fetchTerminal()
-      // Schedule prossimo tick basato su backoff. Il backoff cresce se
-      // l'output non e' cambiato (agente idle). Range: 1500ms a 20s.
-      const delay = Math.min(20_000, 1500 * Math.pow(2, backoffRef.current))
-      timer = setTimeout(tick, delay)
-    }
-    tick()
-    return () => { cancelled = true; if (timer) clearTimeout(timer) }
-  }, [activeSession, fetchTerminal])
-
-  // Aggiorna backoff in base a variazione dell'output. setOutput viene
-  // chiamato da fetchTerminal: confrontiamo con lastOutputRef per capire
-  // se vale la pena accelerare o rallentare. Idle prolungato → polling
-  // ogni 20s (max). Cambio rilevato → torna a 1500ms.
-  useEffect(() => {
-    if (output !== lastOutputRef.current) {
-      lastOutputRef.current = output
-      backoffRef.current = 0
-    } else if (backoffRef.current < 4) {
-      backoffRef.current += 1
-    }
-  }, [output])
-
   // Scroll chat
   const prevMsgCountRef = useRef(0)
   useEffect(() => {
@@ -345,25 +254,6 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     prevMsgCountRef.current = messages.length
   }, [messages])
 
-  // Scroll terminale: stick-to-bottom condizionale.
-  // Bug fix 2026-04-25: prima ogni nuovo output sparava scroll a bottom,
-  // anche se l'utente stava leggendo in mezzo → la posizione saltava ad
-  // ogni tick. Ora teniamo un flag aggiornato dall'onScroll handler:
-  //  - utente in fondo (entro 50px) ⇒ auto-scroll su nuovo output
-  //  - utente scrollato in alto       ⇒ NO auto-scroll, lascia leggere
-  //  - utente torna in fondo a mano   ⇒ il flag torna true, auto-scroll riprende
-  const termAtBottomRef = useRef(true)
-  const handleTermScroll = useCallback(() => {
-    const el = termRef.current
-    if (!el) return
-    const slack = 50  // px di tolleranza per evitare flicker su rounding
-    termAtBottomRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - slack
-  }, [])
-  useEffect(() => {
-    if (termRef.current && termAtBottomRef.current) {
-      termRef.current.scrollTop = termRef.current.scrollHeight
-    }
-  }, [output])
 
   const handleSend = async () => {
     if (!input.trim() || sending || !activeSession) return
@@ -377,8 +267,6 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session: activeSession, message: text }),
       })
-      // Refresh terminale per mostrare la risposta
-      setTimeout(fetchTerminal, 500)
     } catch {
       setMessages(prev => [...prev, { role: 'system', text: t.sendError, ts: Date.now() / 1000 }])
     }
@@ -397,7 +285,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
       } : { animation: 'fade-in 0.25s ease both' }),
     }}>
 
-      {/* Tabs chat/terminale + header */}
+      {/* Header della chat */}
       <div className="border border-[var(--color-border)] overflow-hidden"
         style={{
           background: 'var(--color-card)',
@@ -408,26 +296,11 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full" style={{ background: color, animation: 'pulse-dot 2s ease-in-out infinite' }} />
             <div className="flex items-center gap-1">
-              <button
-                onClick={() => setMode('chat')}
-                className="text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer px-2 py-0.5 rounded"
-                style={{
-                  color: mode === 'chat' ? color : 'var(--color-dim)',
-                  background: mode === 'chat' ? `${color}15` : 'transparent',
-                }}>
+              <span
+                className="text-[10px] font-semibold tracking-widest uppercase px-2 py-0.5 rounded"
+                style={{ color, background: `${color}15` }}>
                 {t.chat}
-              </button>
-              {devMode && (
-                <button
-                  onClick={() => setMode('terminal')}
-                  className="text-[10px] font-semibold tracking-widest uppercase transition-colors cursor-pointer px-2 py-0.5 rounded"
-                  style={{
-                    color: mode === 'terminal' ? color : 'var(--color-dim)',
-                    background: mode === 'terminal' ? `${color}15` : 'transparent',
-                  }}>
-                  {t.terminal}
-                </button>
-              )}
+              </span>
             </div>
             {/* Selettore sessione se > 1 */}
             {sessions.length > 1 && (
@@ -446,19 +319,11 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
             )}
           </div>
           <div className="flex items-center gap-3">
-            {mode === 'chat' && messages.length > 0 && (
+            {messages.length > 0 && (
               <button onClick={() => setMessages([])}
                 disabled={sending}
                 className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-red)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                 {t.clear}
-              </button>
-            )}
-            {activeSession && (
-              <button onClick={async () => {
-                  await fetch(`/api/team/terminal/open?session=${encodeURIComponent(activeSession)}`, { method: 'POST' })
-                }}
-                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
-                {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? t.openTerminal : t.openPowershell}
               </button>
             )}
             <button onClick={() => setChatFullscreen(v => !v)}
@@ -468,74 +333,37 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
           </div>
         </div>
 
-        {/* Contenuto mode-dipendente */}
-        {mode === 'chat' ? (
-          <div className="px-4 py-4 overflow-auto" style={{ height: chatFullscreen ? undefined : '45vh', flex: chatFullscreen ? 1 : undefined }}>
-            {messages.length === 0 && !output.trim() && (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="text-3xl mb-3 opacity-30" style={{ color }}>{'>'}_</div>
-                <p className="text-[var(--color-dim)] text-[11px]">
-                  {t.writeToInteract(label)}
-                </p>
-              </div>
-            )}
+        {/* Chat */}
+        <div className="px-4 py-4 overflow-auto" style={{ height: chatFullscreen ? undefined : '45vh', flex: chatFullscreen ? 1 : undefined }}>
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="text-3xl mb-3 opacity-30" style={{ color }}>{'>'}_</div>
+              <p className="text-[var(--color-dim)] text-[11px]">
+                {t.writeToInteract(label)}
+              </p>
+            </div>
+          )}
 
-            {/* Messaggi utente */}
-            {messages.map((msg, i) => (
-              <div key={`${msg.ts}-${i}`}
-                className="flex mb-3 justify-end">
-                <div className="max-w-[75%] px-3 py-2 rounded-lg text-[12px] leading-relaxed"
-                  style={{
-                    background: color,
-                    color: '#000',
-                    borderBottomRightRadius: '4px',
-                  }}>
-                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
-                  <div className="text-[9px] mt-1 opacity-50 text-right">
-                    {new Date(msg.ts * 1000).toLocaleTimeString(LOCALE_TAG[locale] ?? 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                  </div>
+          {/* Messaggi utente */}
+          {messages.map((msg, i) => (
+            <div key={`${msg.ts}-${i}`}
+              className="flex mb-3 justify-end">
+              <div className="max-w-[75%] px-3 py-2 rounded-lg text-[12px] leading-relaxed"
+                style={{
+                  background: color,
+                  color: '#000',
+                  borderBottomRightRadius: '4px',
+                }}>
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
+                <div className="text-[9px] mt-1 opacity-50 text-right">
+                  {new Date(msg.ts * 1000).toLocaleTimeString(LOCALE_TAG[locale] ?? 'en-US', { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
-            ))}
+            </div>
+          ))}
 
-            {/* Output terminale come "risposta" dell'agente */}
-            {output.trim() && (
-              <div className="flex mb-3 justify-start">
-                <div className="max-w-[90%] px-3 py-2 rounded-lg text-[11px] leading-relaxed font-mono"
-                  style={{
-                    background: '#1c2333',
-                    color: 'var(--color-base)',
-                    borderBottomLeftRadius: '4px',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    maxHeight: chatFullscreen ? undefined : '35vh',
-                    overflowY: 'auto',
-                  }}>
-                  {output.trim().split('\n').slice(-60).join('\n')}
-                </div>
-              </div>
-            )}
-
-            <div ref={chatEndRef} />
-          </div>
-        ) : (
-          /* Terminale raw */
-          <div ref={termRef}
-            onScroll={handleTermScroll}
-            className="px-4 py-4 font-mono text-[11px] leading-relaxed overflow-auto"
-            style={{
-              height: chatFullscreen ? undefined : '45vh',
-              flex: chatFullscreen ? 1 : undefined,
-              background: '#0d1117',
-              color: 'var(--color-base)',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}>
-            {output
-              ? output
-              : <span style={{ color: 'var(--color-dim)' }}>{t.noOutput}</span>}
-          </div>
-        )}
+          <div ref={chatEndRef} />
+        </div>
       </div>
 
       {/* Input messaggio */}
