@@ -75,9 +75,11 @@ To unskip the protected-area specs you need a real Supabase session:
    ```bash
    npx playwright open --save-storage=auth-state.json http://127.0.0.1:3008
    ```
-3. Point the config at it — `use: { storageState: 'auth-state.json' }` — or pass
-   it per-project. `auth-state.json` is git-ignored: **never commit it**, it
-   carries a live session token.
+3. Nothing else to wire: `playwright.config.ts` picks the file up automatically
+   if it exists (override the name with `E2E_STORAGE_STATE`). On startup it
+   prints which mode it is in, so a green run never leaves you guessing whether
+   the protected area was actually exercised. `auth-state.json` is git-ignored:
+   **never commit it**, it carries a live session token.
 
 Not wired into CI on purpose: it needs a secret and an account decision that
 belongs to the maintainer. Until then, treat the suite as a public-surface check.

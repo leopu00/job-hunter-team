@@ -1,27 +1,56 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
 
 // In locale usiamo IPv4 esplicito per evitare che `localhost` risolva su ::1
 // mentre `next start` ascolta solo su 127.0.0.1.
-const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:3000';
+const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:3000";
+
+// ── Sessione (opzionale) ────────────────────────────────────────────────
+// L'area riservata pretende una sessione Supabase: senza, gli spec che la
+// toccano si skippano da soli (vedi e2e/README.md § "State of the suite" —
+// misurato 770 passed / 574 skipped il 2026-07-25).
+//
+// Per sbloccarli serve lo storage state di un **account di test dedicato**:
+//
+//   npx playwright open --save-storage=auth-state.json http://127.0.0.1:3008
+//   # login a mano, poi chiudi la finestra
+//   BASE_URL=http://127.0.0.1:3008 npx playwright test
+//
+// Il file viene raccolto automaticamente se esiste (default `auth-state.json`,
+// override con E2E_STORAGE_STATE). È git-ignored: contiene un token di sessione
+// vivo, non committarlo mai.
+const STORAGE_STATE = process.env.E2E_STORAGE_STATE || "auth-state.json";
+const storagePath = path.resolve(__dirname, STORAGE_STATE);
+const hasSession = fs.existsSync(storagePath);
+
+if (hasSession) {
+  console.log(`[playwright] sessione trovata: ${STORAGE_STATE} → i test dell'area riservata girano`);
+} else {
+  console.log(
+    `[playwright] nessuna sessione (${STORAGE_STATE} assente) → gli spec dell'area riservata si skipperanno. Ricetta: e2e/README.md § Sessione`,
+  );
+}
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: "./tests",
   timeout: 30_000,
   retries: 1,
-  reporter: [['html', { outputFolder: 'reports/playwright' }], ['list']],
+  reporter: [["html", { outputFolder: "reports/playwright" }], ["list"]],
   use: {
     baseURL: BASE_URL,
-    browserName: 'chromium',
+    browserName: "chromium",
     headless: true,
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    screenshot: "only-on-failure",
+    video: "retain-on-failure",
     // PRIVACY: non salvare screenshot automatici con dati personali
-    trace: 'on-first-retry',
+    trace: "on-first-retry",
+    ...(hasSession ? { storageState: storagePath } : {}),
   },
   projects: [
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
 });
