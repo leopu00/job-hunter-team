@@ -22,8 +22,10 @@
  * perché Turbopack (Next 16) non risolve correttamente cross-package import
  * + npm packages (ipaddr.js) consumati da file fuori dal project root.
  * Vedi BUG-TURBOPACK-SHARED-RESOLVE in BACKLOG.md per la storia completa.
- * `shared/net/` resta in repo come riferimento OpenClaw originale e per
- * eventuali futuri consumer non-web (cli/, tui/) che useranno node ESM.
+ * La copia gemella `shared/net/` è stata rimossa il 2026-07-25: era rimasta
+ * come "riferimento OpenClaw" per ipotetici consumer non-web che non sono mai
+ * arrivati, e una seconda implementazione di una difesa SSRF è un rischio, non
+ * un archivio. L'originale da cui confrontarsi è OpenClaw, non un file qui.
  */
 
 import { safeFetch, type SafeFetchOptions, type SsrFPolicy } from "./net/ssrf";
