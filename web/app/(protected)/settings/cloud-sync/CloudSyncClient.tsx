@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useLocale } from "@/lib/use-locale";
+import type { SyncCounts } from "@/lib/types";
 
 const T: Record<string, Record<string, string>> = {
   in_future: {
@@ -289,12 +290,6 @@ type SyncState =
   | { status: "success"; result: SyncResult; at: number }
   | { status: "error"; message: string };
 
-interface Counts {
-  positions: number;
-  scores: number;
-  applications: number;
-}
-
 interface SyncStatus {
   local: boolean;
   logged_in: boolean;
@@ -306,8 +301,8 @@ interface SyncStatus {
       applications: { upserted: number; payload: number };
     };
   } | null;
-  local_counts: Counts;
-  cloud_counts: Counts;
+  local_counts: SyncCounts;
+  cloud_counts: SyncCounts;
   in_sync: boolean;
 }
 
