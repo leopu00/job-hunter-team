@@ -3,20 +3,15 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
-
-interface Counts {
-  positions: number;
-  scores: number;
-  applications: number;
-}
+import type { SyncCounts } from "@/lib/types";
 
 interface SyncStatus {
   local: boolean;
   logged_in: boolean;
   remote?: boolean;
   last_sync: { at: string } | null;
-  local_counts: Counts;
-  cloud_counts: Counts;
+  local_counts: SyncCounts;
+  cloud_counts: SyncCounts;
   in_sync: boolean;
 }
 

@@ -4,17 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getLocalDbPath, localDbExists } from "@/lib/cloud-sync/local";
 import { readSyncState } from "@/lib/cloud-sync/state";
 import { isLocalRequest } from "@/lib/auth";
+import type { SyncCounts } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-interface Counts {
-  positions: number;
-  scores: number;
-  applications: number;
-}
-
-function readLocalCounts(): Counts {
-  const counts: Counts = { positions: 0, scores: 0, applications: 0 };
+function readLocalCounts(): SyncCounts {
+  const counts: SyncCounts = { positions: 0, scores: 0, applications: 0 };
   let db: Database.Database | null = null;
   try {
     db = new Database(getLocalDbPath(), {
@@ -72,11 +67,11 @@ export async function GET() {
   const stateForCurrentUser =
     state && user && state.last_user_id === user.id ? state : null;
 
-  const localCounts: Counts = local
+  const localCounts: SyncCounts = local
     ? readLocalCounts()
     : { positions: 0, scores: 0, applications: 0 };
 
-  let cloudCounts: Counts = { positions: 0, scores: 0, applications: 0 };
+  let cloudCounts: SyncCounts = { positions: 0, scores: 0, applications: 0 };
   if (user) {
     const tables = ["positions", "scores", "applications"] as const;
     const results = await Promise.all(

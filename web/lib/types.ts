@@ -304,3 +304,27 @@ export type LocationCountry = {
   count: number;
   cities: LocationCity[];
 };
+
+// ── Contratti delle API interne ────────────────────────────────────
+// Tipi che descrivono la forma di una risposta e che quindi servono a
+// due capi: la route che la produce e il componente che la consuma.
+// Dichiararli due volte significa poterli cambiare da un lato solo.
+
+/** Conteggi per tabella — `/api/local/sync/status`. */
+export interface SyncCounts {
+  positions: number;
+  scores: number;
+  applications: number;
+}
+
+/** Stato di un'integrazione — `/api/integrations`. */
+export type IntegrationStatus = "connected" | "configured" | "disconnected";
+
+export type Integration = {
+  id: string;
+  name: string;
+  description: string;
+  status: IntegrationStatus;
+  detail: string | null;
+  last_sync: string | null;
+};

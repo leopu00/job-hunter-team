@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import os from "os";
 import { JHT_HOME } from "@/lib/jht-paths";
+import type { Integration } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -10,15 +10,6 @@ const JHT = JHT_HOME;
 const CONFIG_PATH = path.join(JHT, "jht.config.json");
 const CREDS_DIR = path.join(JHT, "credentials");
 
-type Status = "connected" | "configured" | "disconnected";
-type Integration = {
-  id: string;
-  name: string;
-  description: string;
-  status: Status;
-  detail: string | null;
-  last_sync: string | null;
-};
 
 function modTime(p: string): string | null {
   try {
