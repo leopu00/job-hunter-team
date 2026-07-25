@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import yaml from "js-yaml";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
-import { reconstructCanonicalProfile } from "@/lib/profile-sync";
+import {
+  CANDIDATE_LIST_TABLES,
+  reconstructCanonicalProfile,
+  type CandidateListField,
+  type ProfileTables,
+} from "@/lib/profile-sync";
 import { decryptContacts } from "@/lib/pii-crypto";
 
 export const dynamic = "force-dynamic";
@@ -46,23 +51,14 @@ export async function GET(req: NextRequest) {
       .eq("user_id", userId)
       .order("ord", { ascending: true });
 
-  const [
-    skills,
-    languages,
-    experiences,
-    education,
-    workAuth,
-    locationPrefs,
-    blocks,
-    contacts,
-  ] = await Promise.all([
-    list("candidate_skills"),
-    list("candidate_languages"),
-    list("candidate_experiences"),
-    list("candidate_education"),
-    list("candidate_work_authorization"),
-    list("candidate_location_preferences"),
-    list("candidate_blocks"),
+  // Le tabelle normalizzate le elenca CANDIDATE_LIST_TABLES, la stessa
+  // lista che usa il push: aggiungerne una lì la fa ricostruire anche qui.
+  const [listRows, contacts] = await Promise.all([
+    Promise.all(
+      CANDIDATE_LIST_TABLES.map(
+        async ([field, table]) => [field, (await list(table)).data ?? []] as const,
+      ),
+    ),
     admin
       .from("candidate_contacts")
       .select("*")
@@ -72,14 +68,10 @@ export async function GET(req: NextRequest) {
 
   const canonical = reconstructCanonicalProfile({
     profile,
-    skills: skills.data ?? [],
-    languages: languages.data ?? [],
-    experiences: experiences.data ?? [],
-    education: education.data ?? [],
-    workAuth: workAuth.data ?? [],
-    locationPrefs: locationPrefs.data ?? [],
+    // Le righe arrivano non tipizzate da Supabase, come prima di questa
+    // riscrittura: il cast le riporta alla forma che ProfileTables attende.
+    ...(Object.fromEntries(listRows) as Pick<ProfileTables, CandidateListField>),
     contacts: decryptContacts(contacts.data) ?? null,
-    blocks: blocks.data ?? [],
   });
 
   const yamlStr = yaml.dump(canonical, { lineWidth: 100, noRefs: true });
