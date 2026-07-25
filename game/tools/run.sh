@@ -74,6 +74,8 @@ case "$MODE" in
 		printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
 		TEXT_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_WORLD_TEXT_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$TEXT_OUT" | grep "WORLD-TEXT-TEST PASS"
+		GFXPANEL_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GRAPHICS_PANEL_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$GFXPANEL_OUT" | grep "GRAPHICS-PANEL-TEST PASS"
 		POSITIONS_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_POSITIONS_PANEL_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$POSITIONS_OUT" | grep "POSITIONS-PANEL-TEST PASS"
 		MAP_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_MAP_PANEL_TEST=1 godot --headless . 2>&1)"

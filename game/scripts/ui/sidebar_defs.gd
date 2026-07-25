@@ -48,6 +48,7 @@ const GROUPS := [
 			{"id": "account", "icon": "user", "label": "Account"},
 			{"id": "email", "icon": "envelope", "label": "Email"},
 			{"id": "appearance", "icon": "contrast", "label": "Aspetto"},
+			{"id": "graphics", "icon": "display", "label": "Grafica"},
 			{"id": "language", "icon": "globe", "label": "Lingua"},
 			{"id": "advanced", "icon": "gear", "label": "Avanzate"},
 		],

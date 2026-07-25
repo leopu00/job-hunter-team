@@ -77,6 +77,8 @@ jobs:
           printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
           TEXT_OUT="$(JHT_SCENE=office JHT_WORLD_TEXT_TEST=1 godot --headless --path game 2>&1)"
           printf '%s\n' "$TEXT_OUT" | grep "WORLD-TEXT-TEST PASS"
+          GFXPANEL_OUT="$(JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$GFXPANEL_OUT" | grep "GRAPHICS-PANEL-TEST PASS"
 
       - name: Run deterministic game tests through PowerShell
         if: runner.os == 'Windows'

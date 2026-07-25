@@ -95,21 +95,71 @@ var _watch_fps_sum := 0.0
 var _watch_samples := 0
 
 
+## I profili offerti in Impostazioni → Grafica. "auto" non è in elenco: è
+## l'assenza di scelta, cioè la calibrazione che decide e continua ad adattarsi.
+## Le due leve viaggiano in coppia — quanti pixel disegnare e quanta
+## scenografia — perché è la coppia a fare la differenza percepita.
+const CHOICES := {
+	"full": {"scale": 1.0, "luxury": true},
+	"balanced": {"scale": 0.85, "luxury": true},
+	"performance": {"scale": 0.6, "luxury": false},
+}
+const CHOICE_AUTO := "auto"
+
+signal graphics_choice_changed(mode: String)
+
+
+## Scala a cui il mondo si sta disegnando in questo momento (1.0 = nativo). In
+## automatico cambia mentre si gioca: il pannello Grafica la mostra perché è il
+## dato che spiega cosa si vede a schermo.
+func world_scale() -> float:
+	return _applied_scale
+
+
+## Profilo scelto dall'utente, o "auto" se non ha mai scelto. È l'unica cosa che
+## COMANDA su calibrazione e sorveglianza: chi ha deciso non vuole ritrovarsi il
+## gioco che gli cambia la grafica sotto le mani mezzo minuto dopo.
+##
+## Il valore è tenuto in memoria: lo chiede la sorveglianza a OGNI frame, e
+## rileggere un file dal disco sessanta volte al secondo — in codice che esiste
+## per far girare meglio il gioco — sarebbe una beffa. Il file cambia solo da
+## set_graphics_choice, che aggiorna anche questa copia.
+static var _choice_cache := ""
+
+static func graphics_choice() -> String:
+	if _choice_cache != "":
+		return _choice_cache
+	_choice_cache = CHOICE_AUTO
+	var cfg := ConfigFile.new()
+	if cfg.load(GFX_CONFIG) == OK:
+		var mode := str(cfg.get_value("graphics", "mode", CHOICE_AUTO))
+		if CHOICES.has(mode):
+			_choice_cache = mode
+	return _choice_cache
+
+
 ## Scala di rendering del MONDO: 1.0 = nativo, 0.75 = tre quarti di lato,
 ## 0.5 = metà (un quarto dei pixel). Il mondo finisce in un SubViewport
 ## ingrandito con filtro nearest, così la grana resta netta invece di
-## sfocarsi. La UI non passa di qui e resta sempre a risoluzione piena.
-## Precedenza: JHT_PIXEL (test) → scelta dell'utente → calibrazione.
+## sfocarsi. La UI non passa di qui e resta sempre a risoluzione piena; il testo
+## dentro il mondo si ingrandisce per compensare (WorldText).
+## Precedenza: JHT_PIXEL (test) → scelta dell'utente → ultima calibrazione.
 static func render_scale() -> float:
 	var forced := OS.get_environment("JHT_PIXEL").strip_edges()
 	if forced.is_valid_float():
 		return _as_scale(forced.to_float())
+	var chosen := graphics_choice()
+	if chosen != CHOICE_AUTO:
+		return float(CHOICES[chosen]["scale"])
 	var cfg := ConfigFile.new()
 	if cfg.load(GFX_CONFIG) == OK:
+		# In automatico la scala misurata l'ultima volta vale come punto di
+		# partenza: senza memoria l'utente si rivede i 15 secondi di lag a ogni
+		# avvio, esattamente come succedeva col profilo scenografia.
 		var saved := float(cfg.get_value("graphics", "render_scale", 0.0))
 		if saved > 0.0:
 			return clampf(saved, 0.25, 1.0)
-	return 1.0  # nessuna scelta salvata: decide la calibrazione a runtime
+	return 1.0  # mai misurato: decide la calibrazione a runtime
 
 
 ## Accetta sia la scala (0.75) sia il vecchio divisore intero (2 → 0.5),
@@ -133,8 +183,21 @@ static func set_render_scale(value: float) -> void:
 ## Il profilo scelto la prima volta vale anche ai riavvii successivi: senza
 ## memoria l'utente si rivedrebbe i primi 15 secondi di lag ogni volta.
 func load_gfx_profile() -> void:
+	# La scala di partenza è quella che la scena applicherà davvero (scelta
+	# dell'utente, o l'ultima misurata): tenerne conto qui è ciò che permette
+	# alla sorveglianza di sapere da dove si sta muovendo. Senza, si crede a
+	# risoluzione piena e non restituisce mai definizione a chi ha cambiato
+	# computer da quando quella misura è stata scritta.
+	_applied_scale = render_scale()
 	if OS.get_environment("JHT_LOW_GFX") == "1":  # TEST-AUTO
 		set_low_gfx(true, false)
+		_gfx_done = true
+		return
+	var chosen := graphics_choice()
+	if chosen != CHOICE_AUTO:
+		# Scelta esplicita: si applica e non si discute più (la calibrazione è
+		# già disinnescata in _process; la scala l'ha già presa render_scale).
+		set_low_gfx(not bool(CHOICES[chosen]["luxury"]), false)
 		_gfx_done = true
 		return
 	var cfg := ConfigFile.new()
@@ -143,6 +206,43 @@ func load_gfx_profile() -> void:
 	if bool(cfg.get_value("graphics", "low", false)):
 		set_low_gfx(true, false)
 		_gfx_done = true  # già deciso: non rimisurare
+
+
+## Impostazioni → Grafica: l'utente ha scelto. Si salva, si applica subito alla
+## scena viva e — se ha scelto "auto" — si rimette in moto la calibrazione da
+## zero, riportando intanto il gioco al profilo pieno: è il punto di partenza
+## onesto per una nuova misura.
+func set_graphics_choice(mode: String) -> void:
+	var chosen := mode if CHOICES.has(mode) else CHOICE_AUTO
+	_choice_cache = chosen
+	var cfg := ConfigFile.new()
+	cfg.load(GFX_CONFIG)  # scala e profilo scenografia stanno nello stesso file
+	cfg.set_value("graphics", "mode", chosen)
+	if chosen == CHOICE_AUTO:
+		# Via anche le misure vecchie: restano di una macchina che magari non è
+		# più questa (chi copia ~/.jht su un altro computer si porta dietro il
+		# profilo, non la ragione per cui era stato scelto). Il controllo
+		# `has_section_key` non è pignoleria: cancellare una chiave che non c'è
+		# stampa un errore nel log e sporca le diagnostiche.
+		for stale in ["render_scale", "low"]:
+			if cfg.has_section_key("graphics", stale):
+				cfg.erase_section_key("graphics", stale)
+		cfg.save(GFX_CONFIG)
+		set_low_gfx(false, false)
+		_apply_world_scale(1.0)
+		_gfx_time = 0.0
+		_gfx_fps_sum = 0.0
+		_gfx_samples = 0
+		_gfx_done = false  # si rimisura, da adesso
+		Log.info("perf", "profilo grafico: automatico, nuova calibrazione in corso")
+	else:
+		cfg.save(GFX_CONFIG)
+		set_low_gfx(not bool(CHOICES[chosen]["luxury"]), false)
+		_apply_world_scale(float(CHOICES[chosen]["scale"]))
+		_gfx_done = true  # comanda la scelta: né calibrazione né sorveglianza
+		Log.info("perf", "profilo grafico scelto: %s (mondo al %d%%)"
+				% [chosen, int(float(CHOICES[chosen]["scale"]) * 100.0)])
+	graphics_choice_changed.emit(chosen)
 
 
 func set_low_gfx(low: bool, persist := true) -> void:
@@ -181,13 +281,12 @@ func _process(delta: float) -> void:
 	if _gfx_done:
 		_watch_framerate(delta)
 		return
-	# Scelta esplicita (impostazioni o JHT_PIXEL): la calibrazione non deve
-	# nemmeno partire. Bloccavo solo la sorveglianza continua, e la prima
-	# misura sovrascriveva comunque il valore chiesto — il banco di prova
-	# del 25/07 ha misurato tre profili "forzati" che erano tutti finiti
-	# sullo stesso gradino deciso dalla calibrazione.
-	if not is_equal_approx(Game.render_scale(), 1.0) \
-			or OS.get_environment("JHT_PIXEL").strip_edges() != "":
+	# Scelta esplicita (Impostazioni → Grafica, o JHT_PIXEL nei banchi di prova):
+	# la calibrazione non deve nemmeno partire. Bloccavo solo la sorveglianza
+	# continua, e la prima misura sovrascriveva comunque il valore chiesto — il
+	# banco di prova del 25/07 ha misurato tre profili "forzati" che erano tutti
+	# finiti sullo stesso gradino deciso dalla calibrazione.
+	if _graphics_forced():
 		_gfx_done = true
 		_applied_scale = Game.render_scale()
 		return
@@ -239,8 +338,7 @@ static func _scale_for_fps(fps: float) -> float:
 ## prova finisce per confrontare tutte le varianti sullo stesso gradino (è
 ## esattamente l'errore visto il 25/07).
 func _watch_framerate(delta: float) -> void:
-	if OS.get_environment("JHT_PIXEL").strip_edges() != "" \
-			or OS.get_environment("JHT_LOW_GFX") == "1":
+	if _graphics_forced():
 		return
 	_watch_time += delta
 	_watch_fps_sum += Engine.get_frames_per_second()
@@ -263,15 +361,38 @@ func _watch_framerate(delta: float) -> void:
 		_set_scale(minf(1.0, _applied_scale + 0.15), avg)
 
 
+## Il profilo è deciso da qualcuno che non è la calibrazione — la scelta salvata
+## in Impostazioni, o una variabile d'ambiente di prova. In tutti questi casi
+## calibrazione e sorveglianza stanno a guardare.
+static func _graphics_forced() -> bool:
+	return graphics_choice() != CHOICE_AUTO \
+			or OS.get_environment("JHT_PIXEL").strip_edges() != "" \
+			or OS.get_environment("JHT_LOW_GFX") == "1"
+
+
 func _set_scale(scale: float, measured: float) -> void:
 	if is_equal_approx(scale, _applied_scale):
 		return
-	_applied_scale = scale
-	var scene := get_tree().current_scene
-	if scene != null and scene.has_method("set_render_scale"):
-		scene.call("set_render_scale", scale)
+	_apply_world_scale(scale)
+	# In automatico la misura si ricorda, così il prossimo avvio parte già dal
+	# gradino giusto invece di rifare i 15 secondi di lag.
+	if graphics_choice() == CHOICE_AUTO:
+		set_render_scale(scale)
 	Log.info("perf", "profilo grafico: %d fps misurati → mondo al %d%%"
 			% [int(measured), int(scale * 100.0)])
+
+
+## Porta la scala alla scena viva. La scena è l'unica a sapere come si fa (il
+## palcoscenico a risoluzione ridotta è roba sua); qui si tiene solo il valore
+## corrente, che serve alla sorveglianza per sapere da dove si muove.
+func _apply_world_scale(scale: float) -> void:
+	_applied_scale = scale
+	var tree := get_tree()
+	if tree == null:
+		return
+	var scene := tree.current_scene
+	if scene != null and scene.has_method("set_render_scale"):
+		scene.call("set_render_scale", scale)
 
 # ── Navigazione fra scene ─────────────────────────────────────────────
 
