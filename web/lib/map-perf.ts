@@ -235,8 +235,8 @@ export function probeMapTier(): MapTierProbe {
 // Preferenza utente + memoria del tier osservato
 // ---------------------------------------------------------------------------
 
-const PREF_KEY = "jht:map-quality";
-const OBSERVED_KEY = "jht:map-tier-observed";
+const PREF_KEY = "jht-map-quality";
+const OBSERVED_KEY = "jht-map-tier";
 
 export function readQualityPref(): MapQualityPref {
   if (typeof window === "undefined") return "auto";
