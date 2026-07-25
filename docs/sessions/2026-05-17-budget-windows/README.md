@@ -1,5 +1,11 @@
 # 💰 2026-05-17 — Budget windows Kimi: 2 finestre consecutive, entrambe in target
 
+> 🗄️ **Nota (2026-07-25).** I riferimenti `bug #N` di questa nota puntavano a
+> `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`, rimosso il 2026-06-16
+> (commit `2adbdf03`, pulizia doc obsoleti). I numeri restano come identificatori
+> storici; l'esito di quei bug è nel
+> [BACKLOG congelato](../../internal/_archive/BACKLOG-2026-07-03-frozen.md).
+
 Sessione operativa: il team Job Hunter Team ha lavorato per **2 finestre Kimi
 consecutive** (5 h ciascuna, reset 22:11 e 03:11 UTC) generando 5+ CV
 personalizzati. Il Capitano ha prodotto **4 grafici matplotlib** di
@@ -52,7 +58,7 @@ Storia della finestra:
 - 23:00 trend `SCENDE_OK`, proj 175 %
 - 23:30 proj 115 %
 - 23:45 ripresa controllata su pressione utente (vedi
-  [bug #3 Capitano gerarchia](../../internal/_archive/2026-05-17-team-strategy-bugs.md))
+  bug #3 Capitano gerarchia)
 - 00:13 ritmo normalizzato, proj 95 % esatto
 
 ### `budget_chart_late.png` — Stessa finestra, snapshot tardivo (01:14 UTC)
@@ -73,7 +79,7 @@ generato confusione (01:22 UTC: utente *"l'ora qui è 3.21 e te dici che
 reset è alle 3.11 . ."* → Capitano *"Reset e' alle 03:11 UTC. Ora server:
 01:22 UTC. Se li' sono le 3:21, siamo UTC+2 (CEST). Reset fra ~1h50m (alle
 5:11 tue)."*). Vedi bug #15 in
-[`team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md).
+`team-strategy-bugs.md`.
 
 ### `usage_chart.png` e `usage_chart_v2.png` — iterazioni intermedie
 
@@ -132,7 +138,7 @@ attivo e la finestra 2 sarebbe chiusa sotto target.
 Cioè: **il team sa correre, ma ha bisogno di un coach quando la Sentinella
 sbaglia il freno**. Risolti i bug strategici #2 (Sentinella throttle
 progressivo) e #3 (Capitano override utente) — vedi
-[team-strategy-bugs.md](../../internal/_archive/2026-05-17-team-strategy-bugs.md) — il
+team-strategy-bugs.md — il
 coach non serve più, e i prossimi run dovrebbero essere puliti anche senza
 pressione TG dell'utente.
 
@@ -150,7 +156,7 @@ professionale.
 
 ## Connessione con altri documenti
 
-- [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md)
+- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`
   — 7 bug strategici emersi nella stessa sessione (Sentinella aggressiva,
   Capitano gerarchia user override, voice/photo Whisper/OCR, ecc.)
 - [`docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md`](../../internal/_archive/2026-05-01-bridge-and-token-monitoring.md)

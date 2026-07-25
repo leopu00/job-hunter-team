@@ -32,7 +32,18 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 JSON_PATH = REPO_ROOT / "docs" / "review-log.json"
 MD_PATH = REPO_ROOT / "docs" / "REVIEW-LOG.md"
 
-EXCLUDE_DIR_PARTS = {"node_modules", ".git", ".next", "dist", "build", ".venv", ".venv_uv", "__pycache__"}
+EXCLUDE_DIR_PARTS = {
+    "node_modules", ".git", ".next", "dist", "build", ".venv", ".venv_uv",
+    "__pycache__", ".pytest_cache",
+    # Storia congelata: si conserva, non si rilegge.
+    "_archive", "archive",
+}
+
+# Le traduzioni dei prompt/skill (`<nome>.<locale>.md`) NON entrano nel
+# registro: si rivede il file base, le altre 6 lingue lo seguono. Senza
+# questo filtro l'indice passerebbe da ~250 a ~680 righe, per due terzi
+# traduzioni — e diventerebbe inutile da leggere.
+LOCALE_SUFFIX_RE = re.compile(r"\.(it|en|es|fr|de|hu|pt)\.md$")
 
 SECTIONS: list[tuple[str, str]] = [
     ("root",            "🏠 Root"),
@@ -41,6 +52,7 @@ SECTIONS: list[tuple[str, str]] = [
     ("team_arch",       "📐 Team architecture & manuals"),
     ("skills_global",   "🛠️ Skill globali"),
     ("skills_sentinel", "💂 Skill Sentinella"),
+    ("game",            "🎮 game (applicazione desktop)"),
     ("about",           "📖 docs/about"),
     ("adr",             "📜 docs/adr (Architecture Decision Records)"),
     ("guides",          "🧭 docs/guides"),
@@ -59,6 +71,7 @@ def classify(path: str) -> str:
     if path.startswith("agents/_skills/"):             return "skills_global"
     if path.startswith("agents/sentinella/_skills/"):  return "skills_sentinel"
     if path.startswith("agents/"):                     return "agent_prompts"
+    if path.startswith("game/"):                       return "game"
     if path.startswith("docs/about/"):                 return "about"
     if path.startswith("docs/adr/"):                   return "adr"
     if path.startswith("docs/guides/"):                return "guides"
@@ -84,6 +97,8 @@ def scan_repo() -> list[str]:
         if any(part in EXCLUDE_DIR_PARTS for part in rel.parts):
             continue
         if rel.name == "REVIEW-LOG.md":
+            continue
+        if LOCALE_SUFFIX_RE.search(rel.name):
             continue
         paths.append(str(rel).replace("\\", "/"))
     return sorted(paths)

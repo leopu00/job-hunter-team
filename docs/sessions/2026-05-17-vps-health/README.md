@@ -1,5 +1,11 @@
 # 🩺 2026-05-17 — Health audit VPS + container (snapshot 14:09 UTC)
 
+> 🗄️ **Nota (2026-07-25).** I riferimenti `bug #N` di questa nota puntavano a
+> `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`, rimosso il 2026-06-16
+> (commit `2adbdf03`, pulizia doc obsoleti). I numeri restano come identificatori
+> storici; l'esito di quei bug è nel
+> [BACKLOG congelato](../../internal/_archive/BACKLOG-2026-07-03-frozen.md).
+
 Audit operativo richiesto durante la sessione test e2e Path 2. Verifica:
 ordine agenti, aderenza istruzioni, gestione dipendenze, salute VPS,
 riempimento disk, posizionamento file. Snapshot puntuale 14:09 UTC del
@@ -32,7 +38,7 @@ riempimento disk, posizionamento file. Snapshot puntuale 14:09 UTC del
 | 👨‍✈️ CAPITANO | 16/05 | 0.9% | 172M | 🟢 coordina |
 | 💬 ASSISTENTE | 16/05 | 3.8% | 192M | 🟢 |
 | 🧙‍♂️ MENTOR | 16/05 | 2.2% | 161M | 🟢 |
-| 👨‍⚕️ **DOTTORE** | — | — | — | **❌ MAI SPAWNATO** ([bug #18](../../internal/_archive/2026-05-17-team-strategy-bugs.md#-18-dottore-mai-spawnato--watchdog-non-lo-include-bridge-mancante)) |
+| 👨‍⚕️ **DOTTORE** | — | — | — | **❌ MAI SPAWNATO** (bug #18) |
 
 → **10/11 agenti attivi**. Tutti i ruoli operativi presenti. Solo Dottore assente.
 
@@ -60,7 +66,7 @@ riempimento disk, posizionamento file. Snapshot puntuale 14:09 UTC del
 
 → **Ordine generale**: 🟢 BUONO. Critiche-CV ben separati. Worktrees
 puliti. Solo `/tmp` accumula PNG (problema collegato a
-[bug #16](../../internal/_archive/2026-05-17-team-strategy-bugs.md#-16-auto-report-periodici--auto-grafici-via-bridge-orders-feature-mancante)
+bug #16
 — i grafici dovrebbero migrare in `/jht_user/output/charts/`).
 
 ## 📦 Dipendenze Python
@@ -93,17 +99,17 @@ EMERGENZA    2  ███                                ⚠️ 2 freeze ordinat
 
 → Mix di tipi rispetta envelope `[@from -> @to] [TIPO]`. 🟢
 compliance buona, ma 9 episodi URG+EMERGENZA = sintomo Sentinella
-aggressiva ([bug #2](../../internal/_archive/2026-05-17-team-strategy-bugs.md#-2-sentinella-ipersensibile-freeze-totale--kill-invece-di-throttle-progressivo)).
+aggressiva (bug #2).
 
 ## ⚠️ Anomalie rilevate
 
 | # | Cosa | Severità | Bug doc |
 |---|---|---|---|
-| 1 | DOTTORE mai spawnato | 🟠 | [#18](../../internal/_archive/2026-05-17-team-strategy-bugs.md#-18-dottore-mai-spawnato--watchdog-non-lo-include-bridge-mancante) |
+| 1 | DOTTORE mai spawnato | 🟠 | #18 |
 | 2 | `/tmp/` 24M con 221 PNG/HTML | 🟡 | da migrare a `/jht_user/output/` |
-| 3 | Proj 161% (ATTENZIONE) ma usage 31% | 🟡 | finestra giovane (10 min), bias cold-start [#5](../../internal/_archive/2026-05-17-team-strategy-bugs.md#-5-bridge-latency-al-boot-non-ha-ancora-emesso-il-primo-campione) |
+| 3 | Proj 161% (ATTENZIONE) ma usage 31% | 🟡 | finestra giovane (10 min), bias cold-start #5 |
 | 4 | 1 errore agent-watchdog | 🟡 | "0 avviati, 0 già attivi, 1 errori" — investigare |
-| 5 | Cache uv 270M crescente | 🟡 | nessuna auto-prune (compito sarebbe del Dottore [#18](../../internal/_archive/2026-05-17-team-strategy-bugs.md#-18-dottore-mai-spawnato--watchdog-non-lo-include-bridge-mancante)) |
+| 5 | Cache uv 270M crescente | 🟡 | nessuna auto-prune (compito sarebbe del Dottore #18) |
 
 ## 🎯 Verdict generale: 🟢 **8/10**
 
@@ -142,14 +148,14 @@ Tempo totale: ~30 secondi (2 round paralleli).
 
 ## 🔗 Connessioni con altri documenti
 
-- [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md)
+- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`
   — 19 bug strategici documentati. Questo audit conferma empiricamente
   #18 (Dottore assente), #16 (PNG su /tmp non migrati), #5 (cold-start
   proj), #2 (Sentinella aggressiva con 9 URG+EMERGENZA).
 - [`docs/sessions/2026-05-17-team-dashboard/`](../2026-05-17-team-dashboard/)
   — `pipeline_overview.png` è il template visivo di questa stessa
   ispezione, ma generato dal Capitano on-demand. Se il Capitano avesse
-  la regola C-04 ([bug #16](../../internal/_archive/2026-05-17-team-strategy-bugs.md#-16-auto-report-periodici--auto-grafici-via-bridge-orders-feature-mancante))
+  la regola C-04 (bug #16)
   questo audit potrebbe essere automatico ogni 2h.
 - [`docs/sessions/2026-05-17-budget-windows/`](../2026-05-17-budget-windows/),
   [`docs/sessions/2026-05-17-pipeline-snapshot/`](../2026-05-17-pipeline-snapshot/)

@@ -1,5 +1,11 @@
 # 📊 Analisi consumo weekly Kimi — 18 maggio 2026
 
+> 🗄️ **Nota (2026-07-25).** Il doc citato nei riferimenti
+> (`2026-05-17-team-strategy-bugs.md`) è stato rimosso il 2026-06-16
+> (commit `2adbdf03`, pulizia doc obsoleti). I numeri di bug restano come
+> identificatori storici; l'esito è nel
+> [BACKLOG congelato](../../internal/_archive/BACKLOG-2026-07-03-frozen.md).
+
 **Sintesi in 1 riga**: 1% di una finestra Kimi (5h) ≈ 0.20% del weekly budget. Settimana corrente consuma ~8.5% in più della precedente per finestra unitaria, principalmente per **Capitano context bloat** (83.7k tokens/turn).
 
 ---

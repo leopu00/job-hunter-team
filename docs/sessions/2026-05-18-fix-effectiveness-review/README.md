@@ -1,5 +1,11 @@
 # 📊 Review effectiveness fix — 18 maggio 2026
 
+> 🗄️ **Nota (2026-07-25).** Il doc citato nei riferimenti
+> (`2026-05-17-team-strategy-bugs.md`) è stato rimosso il 2026-06-16
+> (commit `2adbdf03`, pulizia doc obsoleti). I numeri di bug restano come
+> identificatori storici; l'esito è nel
+> [BACKLOG congelato](../../internal/_archive/BACKLOG-2026-07-03-frozen.md).
+
 **Sintesi in 1 riga**: i fix delle ultime 48h sono un successo netto — EMERGENZA Sentinella **−96%**, URG **−71%**, FREEZE **−82%**; promotion CV ready ATTIVA (19 nuovi), engine PDF wkhtmltopdf al 100% sui nuovi CV, Dottore da MAI-spawnato a 37 spawn attivi.
 
 **Cutoff temporale**: 17 maggio 17:11 UTC (reset weekly Kimi) come confine pre/post-fix.
