@@ -34,15 +34,28 @@ var _dropped := 0
 var _fs := FONT_SIZE
 var _to_fs := TO_SIZE
 var _max_w := MAX_TEXT_W
+var _boost := 1.0  # compensazione della scala di rendering del mondo
 
 func _ready() -> void:
 	_font = load(TerminalTheme.FONT_REGULAR)
 	_font_med = load(TerminalTheme.FONT_MEDIUM)
-	var boost := TerminalTheme.text_boost()
+	z_index = 60  # sopra gli StatusBubble: il parlato vince sullo stato
+	# Registrandosi il nodo riceve subito la misura giusta per la scala in corso.
+	WorldText.mark(self)  # la chat del team si legge sempre, a ogni risoluzione
+
+## Rimisura la vignetta quando cambia la scala del mondo. Il testo già a schermo
+## va ri-mandato a capo: la larghezza massima è cresciuta con lui, e senza
+## rifare il wrap le righe resterebbero spezzate come prima — mezza vignetta
+## vuota e frasi tronche.
+func refresh_world_text() -> void:
+	_boost = WorldText.boost()
+	var boost := TerminalTheme.text_boost() * _boost
 	_fs = int(round(FONT_SIZE * boost))
 	_to_fs = int(round(TO_SIZE * boost))
 	_max_w = MAX_TEXT_W * boost
-	z_index = 60  # sopra gli StatusBubble: il parlato vince sullo stato
+	if not _current_text.is_empty():
+		_lines = _wrap(_current_text)
+	queue_redraw()
 
 ## Accoda un messaggio. to_label: "" = broadcast, altrimenti il nome
 ## del destinatario mostrato come riga "→ <nome>" sopra il testo.
@@ -79,6 +92,11 @@ func debug_snapshot() -> Dictionary:
 		"alpha": _alpha,
 		"target_alpha": _target_alpha,
 		"dropped": _dropped,
+		# misure del testo: il selftest della leggibilità verifica che crescano
+		# con la scala del mondo senza cambiare l'impaginazione
+		"lines": _lines.size(),
+		"font_size": _fs,
+		"max_width": _max_w,
 	}
 
 func _process(delta: float) -> void:
@@ -139,38 +157,46 @@ func _width(s: String) -> float:
 func _draw() -> void:
 	if _alpha <= 0.01 or _lines.is_empty():
 		return
-	var line_h := _font.get_height(_fs) + LINE_GAP
+	# Tutte le quote della vignetta seguono il testo (_boost): riquadro, codino,
+	# interlinea e respiro crescono insieme al corpo, così la forma è identica a
+	# qualunque scala di rendering del mondo — solo più grande dove serve.
+	var pad := PAD * _boost
+	var gap := LINE_GAP * _boost
+	var line_h := _font.get_height(_fs) + gap
 	var w := 0.0
 	for l in _lines:
 		w = maxf(w, _width(l))
 	var to_h := 0.0
 	if _to_label != "":
-		to_h = _font_med.get_height(_to_fs) + 2.0
+		to_h = _font_med.get_height(_to_fs) + 2.0 * _boost
 		w = maxf(w, _font_med.get_string_size("→ " + _to_label,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, _to_fs).x)
-	var h := _lines.size() * line_h - LINE_GAP + to_h
-	var box := Rect2(Vector2(-w / 2.0 - PAD.x, -h - PAD.y * 2.0 - 12.0),
-			Vector2(w + PAD.x * 2.0, h + PAD.y * 2.0))
-	box.position.y += (1.0 - _alpha) * 5.0  # slide-in come lo StatusBubble
+	var h := _lines.size() * line_h - gap + to_h
+	var box := Rect2(Vector2(-w / 2.0 - pad.x, -h - pad.y * 2.0 - 12.0 * _boost),
+			Vector2(w + pad.x * 2.0, h + pad.y * 2.0))
+	box.position.y += (1.0 - _alpha) * 5.0 * _boost  # slide-in come lo StatusBubble
 	var bg := Color(Palette.CARD.r, Palette.CARD.g, Palette.CARD.b, 0.96 * _alpha)
 	var border := Color(Palette.GREEN.r, Palette.GREEN.g, Palette.GREEN.b, 0.75 * _alpha)
 	draw_rect(box, bg)
-	draw_rect(box, border, false, 1.0)
+	draw_rect(box, border, false, 1.0 * _boost)
+	var tail_w := 5.0 * _boost
+	var tail_h := 7.0 * _boost
 	var tail := PackedVector2Array([
-		Vector2(-5, box.end.y), Vector2(5, box.end.y), Vector2(0, box.end.y + 7),
+		Vector2(-tail_w, box.end.y), Vector2(tail_w, box.end.y),
+		Vector2(0, box.end.y + tail_h),
 	])
 	draw_colored_polygon(tail, bg)
-	draw_line(Vector2(-5, box.end.y), Vector2(0, box.end.y + 7), border, 1.0)
-	draw_line(Vector2(5, box.end.y), Vector2(0, box.end.y + 7), border, 1.0)
-	var pen := box.position + Vector2(PAD.x, PAD.y)
+	draw_line(Vector2(-tail_w, box.end.y), Vector2(0, box.end.y + tail_h), border, 1.0 * _boost)
+	draw_line(Vector2(tail_w, box.end.y), Vector2(0, box.end.y + tail_h), border, 1.0 * _boost)
+	var pen := box.position + pad
 	if _to_label != "":
-		pen.y += _font_med.get_height(_to_fs) - 3.0
+		pen.y += _font_med.get_height(_to_fs) - 3.0 * _boost
 		draw_string(_font_med, pen, "→ " + _to_label,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, _to_fs,
 				Color(Palette.MUTED.r, Palette.MUTED.g, Palette.MUTED.b, _alpha))
-		pen.y += 5.0
+		pen.y += 5.0 * _boost
 	for l in _lines:
-		pen.y += _font.get_height(_fs) - 3.0
+		pen.y += _font.get_height(_fs) - 3.0 * _boost
 		draw_string(_font, pen, l, HORIZONTAL_ALIGNMENT_LEFT, -1, _fs,
 				Color(Palette.BRIGHT.r, Palette.BRIGHT.g, Palette.BRIGHT.b, _alpha))
-		pen.y += LINE_GAP - 2.0
+		pen.y += gap - 2.0 * _boost

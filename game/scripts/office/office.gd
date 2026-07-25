@@ -33,6 +33,11 @@ func _ready() -> void:
 	_doctor_test = OS.get_environment("JHT_DOCTOR_TEST")
 	_stage = self
 	var wanted := Game.render_scale()
+	# Prima di costruire qualsiasi cosa: le targhe e le vignette che nasceranno
+	# devono già sapere su quanti pixel verranno disegnate. Va detto SEMPRE,
+	# anche a scala piena, perché il fattore è statico e sopravvive a un ritorno
+	# in ufficio dopo una partita passata col profilo ridotto.
+	WorldText.set_world_scale(wanted)
 	if wanted < 0.999:
 		set_render_scale(wanted)
 	# Stratificazione globale: sfondo (-3), tinte e tappeti (-2), aure degli
@@ -219,6 +224,8 @@ func _ready() -> void:
 		_scene_census.call_deferred()
 	if OS.get_environment("JHT_GFX_TEST") == "1":
 		_gfx_profile_selftest.call_deferred()
+	if OS.get_environment("JHT_WORLD_TEXT_TEST") == "1":
+		_world_text_selftest.call_deferred()
 	if OS.get_environment("JHT_CAMERA_LOCK_TEST") == "1":
 		_camera_lock_selftest.call_deferred()
 	if OS.get_environment("JHT_POSITIONS_PANEL_TEST") == "1":
@@ -459,6 +466,70 @@ func _gfx_profile_selftest() -> void:
 	for key in result:
 		ok = ok and bool(result[key])
 	print("GFX-PROFILE-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
+
+
+## Il testo del mondo resta leggibile a ogni scala di rendering: quando il mondo
+## si disegna su meno pixel, targhe e vignette si ingrandiscono della stessa
+## proporzione, così il dettaglio in pixel FISICI non cala mai. Qui si misura
+## proprio quello, sui nodi vivi dell'ufficio.
+func _world_text_selftest() -> void:
+	await get_tree().process_frame
+	var result := {}
+	var tag: AgentStateTag = null
+	var bubble: SpeechBubble = null
+	for agent in agents:
+		if agent.state_tag != null and agent.speech != null:
+			tag = agent.state_tag
+			bubble = agent.speech
+			break
+	if tag == null or bubble == null:
+		print("WORLD-TEXT-TEST FAIL {\"agenti_con_targa\":false}")
+		get_tree().quit(1)
+		return
+	bubble.say("Ho trovato tre posizioni nuove e le ho passate agli analisti")
+	await get_tree().process_frame
+	set_render_scale(1.0)
+	await get_tree().process_frame
+	var full: Dictionary = tag.debug_metrics()
+	var full_bubble: Dictionary = bubble.debug_snapshot()
+	result["scala_piena_senza_compensazione"] = is_equal_approx(
+			float(full["boost"]), 1.0)
+
+	set_render_scale(0.6)
+	await get_tree().process_frame
+	var low: Dictionary = tag.debug_metrics()
+	var low_bubble: Dictionary = bubble.debug_snapshot()
+	# 1/0.6 = 1.667: il corpo del testo cresce di tanto, quindi in pixel fisici
+	# la targa conserva il dettaglio che aveva a risoluzione piena.
+	result["compensazione_pari_alla_scala"] = is_equal_approx(
+			float(low["boost"]), 1.0 / 0.6)
+	result["targa_ingrandita"] = int(low["font_size"]) >= int(
+			round(float(full["font_size"]) / 0.6)) - 1
+	result["vignetta_ingrandita"] = int(low_bubble["font_size"]) >= int(
+			round(float(full_bubble["font_size"]) / 0.6)) - 1
+	# Il riquadro deve continuare a contenere la frase: se crescesse solo il
+	# font, il testo uscirebbe dalla targa.
+	result["riquadro_contiene_il_testo"] = float(low["box_width"]) \
+			> float(low["text_width"])
+	# Stessa impaginazione: la larghezza di wrap è cresciuta col font, quindi la
+	# vignetta ha la stessa forma — più grande, non ricomposta.
+	result["impaginazione_invariata"] = int(low_bubble["lines"]) \
+			== int(full_bubble["lines"]) and int(low_bubble["lines"]) > 1
+	result["wrap_ingrandito"] = float(low_bubble["max_width"]) \
+			> float(full_bubble["max_width"])
+
+	# Il ritorno al profilo pieno riporta il testo alla misura di sempre.
+	set_render_scale(1.0)
+	await get_tree().process_frame
+	result["ritorno_a_scala_piena"] = is_equal_approx(
+			float(tag.debug_metrics()["boost"]), 1.0) \
+			and int(bubble.debug_snapshot()["font_size"]) == int(full_bubble["font_size"])
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("WORLD-TEXT-TEST %s %s" % ["PASS" if ok else "FAIL",
 			JSON.stringify(result)])
 	get_tree().quit(0 if ok else 1)
 
@@ -2827,6 +2898,9 @@ func set_render_scale(value: float) -> void:
 	if is_equal_approx(target, _render_scale):
 		return
 	_render_scale = target
+	# Il testo del mondo si rimisura insieme alla scala, nello stesso istante:
+	# la calibrazione può cambiarla anche a ufficio pieno di agenti.
+	WorldText.set_world_scale(target)
 	if target >= 0.999:
 		if _pixel_stage != null:
 			_move_world_nodes(_pixel_stage.get_child(0), self)
