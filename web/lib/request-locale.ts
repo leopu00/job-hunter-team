@@ -7,7 +7,7 @@ import { locales, defaultLocale, type Locale } from "@/i18n/config";
  * Da usare nelle pagine/route component PUBBLICHE (landing, /docs, /case-studies)
  * servite sul web: lì `getServerLocale()` (che legge ~/.jht/i18n-prefs.json) non
  * è disponibile e ricadrebbe sempre sul default. Il cookie è la stessa fonte
- * usata da i18n/request.ts, DashboardI18n e dal LanguageSwitcher.
+ * usata da DashboardI18n e dal LanguageSwitcher.
  *
  * Per le pagine dell'area protetta (desktop, dove il file ~/.jht esiste)
  * continua a usare `getServerLocale()`.
