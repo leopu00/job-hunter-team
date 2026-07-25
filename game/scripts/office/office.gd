@@ -1503,7 +1503,21 @@ func _feedback_panel_selftest() -> void:
 	# Tornando indietro il racconto è ancora lì: farlo riscrivere sarebbe il
 	# modo più rapido per non ricevere più segnalazioni.
 	var persist_ok := str(panel._fb_form["happened"]).contains("collegamento")
-	var ok := gate_ok and collected and preview_ok and persist_ok
+	# JHT_FEEDBACK_SEND_TEST=1 spinge la segnalazione fino in fondo, contro
+	# l'endpoint indicato da JHT_FEEDBACK_URL. Fuori da questo flag il test
+	# resta offline: in CI non si esce sulla rete.
+	var send_ok := true
+	if OS.get_environment("JHT_FEEDBACK_SEND_TEST") == "1":
+		panel._fb_form["contact"] = "tester@example.org"
+		panel._submit_feedback()
+		var result: Array = await FeedbackService.submit_changed
+		while bool(result[0]):  # running
+			result = await FeedbackService.submit_changed
+		send_ok = bool(result[1]) and str(result[3]) == "#4242" \
+				and FeedbackService.last_saved_path != ""
+		if not send_ok:
+			print("FEEDBACK-PANEL-TEST send esito=", result)
+	var ok := gate_ok and collected and preview_ok and persist_ok and send_ok
 	if not ok:
 		print("FEEDBACK-PANEL-TEST details gate=", gate_ok, " collected=", collected,
 				" preview=", preview_ok, " persist=", persist_ok)

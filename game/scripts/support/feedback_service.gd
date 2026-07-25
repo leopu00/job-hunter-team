@@ -30,13 +30,22 @@ const HTTP_TIMEOUT := 25.0
 
 var preview_markdown := ""
 var preview_counts := {}
+## Il bundle esatto che l'anteprima mostra. L'invio riusa questo, non ne
+## raccoglie un altro: abbiamo promesso all'utente che parte ciò che vede.
+var preview_bundle := {}
 ## Dove è finita l'ultima copia su disco: la UI la offre in apertura cartella.
 var last_saved_path := ""
 var last_ticket := ""
 
 var _thread: Thread
-var _busy := false
-var _pending_form := {}
+## Una raccolta è in volo (le sonde girano su un thread).
+var _collecting := false
+## Un invio è stato chiesto e non si è ancora concluso.
+var _sending := false
+## Opzioni con cui è stato costruito `preview_bundle`.
+var _preview_opts := {}
+## Invio chiesto mentre una raccolta era in corso: parte appena finisce.
+var _queued_submit := {}
 var _http: HTTPRequest
 
 
@@ -53,23 +62,42 @@ func endpoint() -> String:
 ## della sezione: l'utente deve poter leggere cosa allegherà PRIMA di scrivere,
 ## non trovarselo spiegato in una riga di consenso a fondo pagina.
 func build_preview(include_logs := true, include_container := true) -> void:
-	if _busy:
+	if _collecting:
 		return
-	_busy = true
-	preview_changed.emit(true, "", {})
-	_thread = Thread.new()
-	_thread.start(_collect.bind(include_logs, include_container, {}))
+	_start_collect({"logs": include_logs, "container": include_container}, {})
 
 
 ## Invia. `form` = {"doing":…, "happened":…, "expected":…, "contact":…}.
+##
+## Non viene MAI ignorato in silenzio. Se una raccolta di anteprima è ancora in
+## volo — succede se l'utente scrive in fretta e preme invia subito — la
+## richiesta si accoda e parte da sola: un pulsante che non fa niente e non
+## dice niente è il modo più rapido per perdere la segnalazione e la fiducia.
 func submit(form: Dictionary, include_logs := true, include_container := true) -> void:
-	if _busy:
-		return
-	_busy = true
-	_pending_form = form.duplicate()
+	if _sending:
+		return  # già in volo: il doppio clic non manda due segnalazioni
+	_sending = true
 	submit_changed.emit(true, false, UIStrings.t("feedback.sending"), "")
+	var opts := {"logs": include_logs, "container": include_container}
+	# L'anteprima fresca È il contenuto da spedire: niente seconda passata di
+	# sonde, e nessuna finestra in cui il contenuto cambia dopo che l'utente
+	# lo ha letto.
+	if not preview_bundle.is_empty() and _preview_opts == opts:
+		_deliver(form, preview_bundle, preview_markdown)
+		return
+	if _collecting:
+		_queued_submit = {"form": form.duplicate(), "opts": opts}
+		return
+	_start_collect(opts, form)
+
+
+func _start_collect(opts: Dictionary, form: Dictionary) -> void:
+	_collecting = true
+	if form.is_empty():
+		preview_changed.emit(true, "", {})
 	_thread = Thread.new()
-	_thread.start(_collect.bind(include_logs, include_container, form))
+	_thread.start(_collect.bind(
+			bool(opts["logs"]), bool(opts["container"]), form, opts))
 
 
 func reports_path() -> String:
@@ -83,23 +111,33 @@ func open_reports_folder() -> void:
 
 # ── Raccolta (thread) ────────────────────────────────────────────────
 
-func _collect(include_logs: bool, include_container: bool, form: Dictionary) -> void:
+func _collect(include_logs: bool, include_container: bool, form: Dictionary,
+		opts: Dictionary) -> void:
 	var bundle := Diagnostics.collect(include_logs, include_container)
 	var markdown := Diagnostics.to_markdown(bundle)
-	call_deferred("_on_collected", bundle, markdown, form)
+	call_deferred("_on_collected", bundle, markdown, form, opts)
 
 
-func _on_collected(bundle: Dictionary, markdown: String, form: Dictionary) -> void:
+func _on_collected(bundle: Dictionary, markdown: String, form: Dictionary,
+		opts: Dictionary) -> void:
 	if _thread != null:
 		_thread.wait_to_finish()
 		_thread = null
+	_collecting = false
 	preview_markdown = markdown
+	preview_bundle = bundle
 	preview_counts = bundle.get("redaction", {})
-	if form.is_empty():
-		_busy = false
-		preview_changed.emit(false, markdown, preview_counts)
+	_preview_opts = opts
+	if not form.is_empty():
+		_deliver(form, bundle, markdown)
 		return
-	_deliver(form, bundle, markdown)
+	preview_changed.emit(false, markdown, preview_counts)
+	# Un invio chiesto durante la raccolta parte adesso, con il bundle appena
+	# prodotto: è lo stesso che l'utente vedrebbe nell'anteprima.
+	if not _queued_submit.is_empty():
+		var queued: Dictionary = _queued_submit
+		_queued_submit = {}
+		_deliver(queued["form"], bundle, markdown)
 
 
 # ── Consegna ─────────────────────────────────────────────────────────
@@ -196,8 +234,8 @@ func _on_response(_result: int, code: int, _headers: PackedStringArray,
 
 
 func _finish(ok: bool, message: String, ticket: String) -> void:
-	_busy = false
-	_pending_form = {}
+	_sending = false
+	_queued_submit = {}
 	submit_changed.emit(false, ok, message, ticket)
 
 
