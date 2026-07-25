@@ -112,27 +112,58 @@ describe("demo queries — lista e dettaglio posizioni", () => {
     }
   });
 
-  it("LIMITE NOTO: il dossier azienda non esiste in demo", async () => {
-    // `demoPositionById` ritorna `company: null` per costruzione
-    // (lib/demo/queries.ts), quindi la card azienda — header con logo, banner
-    // di esclusione, verdetto dell'Analista, shippata il 2026-07-22 — **non
-    // compare mai** in demo. I seed portano il nome dell'azienda, non il
-    // dossier.
-    //
-    // Questo test fotografa il limite invece di nasconderlo: quando il dossier
-    // demo verrà aggiunto, fallirà e obbligherà a spostare l'aspettativa
-    // (→ "esiste su una parte del dataset"). Debito tracciato nel BACKLOG
-    // sotto [JHT-WEB-DEMO].
+  it("il dossier azienda c'è, ed è coerente con la posizione", async () => {
+    // Fino al 2026-07-25 `demoPositionById` ritornava `company: null` e la card
+    // azienda non compariva mai in demo. Ora il dossier è derivato in modo
+    // deterministico (seeds/companies.ts): questo test verifica che ci sia, che
+    // sia stabile e che non contraddica ciò che l'utente vede nella pagina.
     for (const key of PERSONAS) {
       const rows = await demoPositions(key, {});
-      for (const r of rows.slice(0, 5)) {
+      for (const r of rows.slice(0, 12)) {
         const d = await demoPositionById(key, r.id);
-        expect(
-          d?.company,
-          `${key} · ${r.id} ha un dossier azienda: aggiorna questo test e il BACKLOG`,
-        ).toBe(null);
+        const c = d?.company;
+        expect(c, `${key} · ${r.id} senza dossier azienda`).toBeTruthy();
+        expect(c!.name).toBe(r.company);
+        // I campi che la card rende come InfoRow.
+        expect(c!.sector, `${key} · ${r.id} senza settore`).toBeTruthy();
+        expect(c!.size, `${key} · ${r.id} senza dimensione`).toBeTruthy();
+        expect(c!.glassdoor_rating).toBeGreaterThanOrEqual(3);
+        expect(c!.glassdoor_rating).toBeLessThanOrEqual(5);
+        // La sede non deve contraddire la mappa: o è quella della posizione,
+        // o è assente (full-remote senza sede dichiarata).
+        expect([r.location ?? null, null]).toContain(c!.hq);
+        // Verdetto allineato allo score mostrato accanto.
+        if (r.score == null) expect(c!.verdict).toBe(null);
+        else if (r.score >= 75) expect(c!.verdict).toBe("GO");
+        else if (r.score >= 55) expect(c!.verdict).toBe("CAUTIOUS");
+        else expect(c!.verdict).toBe("NO_GO");
+        // Nessun logo: un'azienda inventata non ne ha uno, e la card lo rende
+        // opzionale. Se un giorno arriva, questa riga va discussa, non tolta.
+        expect(c!.logo, `${key} · ${r.id} ha un logo finto`).toBe(null);
+        // Niente prosa: culture_notes/red_flags sono voce dell'Analista e
+        // andrebbero localizzati in 7 lingue — restano fuori dalla demo.
+        expect(c!.culture_notes).toBe(null);
+        expect(c!.red_flags).toBe(null);
       }
     }
+  });
+
+  it("il dossier è deterministico: stessa azienda, stesso dossier", async () => {
+    // Se il dossier cambiasse tra due letture, l'utente vedrebbe settore o
+    // dimensione ballare mentre naviga.
+    const rows = await demoPositions("software", {});
+    const byName = new Map<string, string>();
+    for (const r of rows) {
+      const c = (await demoPositionById("software", r.id))?.company;
+      if (!c) continue;
+      const sig = `${c.sector}|${c.size}|${c.glassdoor_rating}|${c.website}`;
+      if (byName.has(c.name)) {
+        expect(sig, `${c.name} · dossier instabile`).toBe(byName.get(c.name));
+      } else {
+        byName.set(c.name, sig);
+      }
+    }
+    expect(byName.size).toBeGreaterThan(5);
   });
 });
 
