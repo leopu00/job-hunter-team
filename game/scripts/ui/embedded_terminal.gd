@@ -262,8 +262,14 @@ func _process(_delta: float) -> void:
 	var visible := _screen.text()
 	if visible.length() > MAX_VISIBLE_CHARS:
 		visible = "… output precedente omesso …\n" + visible.right(MAX_VISIBLE_CHARS)
-	_output.text = visible
-	_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
+	# Selezionare col mouse era IMPOSSIBILE: ogni pezzo di output riscriveva
+	# `text` da capo e la selezione moriva sul nascere, decine di volte al
+	# secondo (login Kimi, 25/07). Mentre l'utente tiene qualcosa di
+	# selezionato il testo resta fermo: l'output continua ad accumularsi nel
+	# modello di schermo e compare appena molla la selezione.
+	if _output.get_selected_text() == "":
+		_output.text = visible
+		_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
 	_detect_url(_screen.lines())
 
 
@@ -376,6 +382,21 @@ func _build_ui() -> void:
 	_copy_url.pressed.connect(func() -> void:
 		if _last_url != "": DisplayServer.clipboard_set(_last_url))
 	url_row.add_child(_copy_url)
+	# Rete di sicurezza indipendente dal riconoscimento del link: qualunque
+	# cosa ci sia a schermo — codice di verifica, URL spezzato su due righe,
+	# messaggio d'errore da incollare altrove — si porta via in un click.
+	# Il rilevamento automatico non può coprire ogni CLI: Kimi stampa il codice
+	# dentro l'URL, Claude lo mette su una riga a sé.
+	var copy_all := Button.new()
+	copy_all.text = "COPIA TESTO"
+	copy_all.tooltip_text = "Copia tutto l'output della console"
+	copy_all.pressed.connect(func() -> void:
+		DisplayServer.clipboard_set(_screen.text())
+		copy_all.text = "COPIATO ✓"
+		await get_tree().create_timer(1.5).timeout
+		if is_instance_valid(copy_all):
+			copy_all.text = "COPIA TESTO")
+	url_row.add_child(copy_all)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	url_row.add_child(spacer)

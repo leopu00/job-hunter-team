@@ -6,6 +6,14 @@ extends Node
 
 func _ready() -> void:
 	await get_tree().create_timer(1.0).timeout
+	# Condizione reale del passo 03: l'utente ha la sidebar aperta sul pannello
+	# del setup e preme "Configura" da lì. Chiamare il cambio scena a pannello
+	# chiuso passava sempre e non riproduceva niente (25/07).
+	var sidebars := get_tree().get_nodes_in_group("game_sidebar")
+	if not sidebars.is_empty():
+		sidebars[0].open_section("activation")
+		for _i in 6:
+			await get_tree().process_frame
 	var before := _scene_path()
 	Game.goto_wizard()
 	for _i in 20:
