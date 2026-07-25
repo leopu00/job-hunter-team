@@ -17,6 +17,7 @@ const S := {
 	"pause.window": "WINDOWED / FULLSCREEN",
 	"pause.quit": "QUIT GAME",
 	"pause.shutdown": "STOPPING THE TEAM…",
+	"setup.docker_install": "INSTALL DOCKER",
 	"shutdown.title": "YOU ARE ABOUT TO STOP THE TEAM",
 	"shutdown.lead": "Agents run in the container, not in this window: closing it stops them. %d are working right now.",
 	"shutdown.graceful": "CLOSE PROPERLY",
