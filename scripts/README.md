@@ -10,7 +10,6 @@ Job Hunter Team.
 | 📦 **Install** | `install.sh` · `install.ps1` · `host-setup.sh` · `sync-public-installers.sh` |
 | 📜 **Legacy onboarding** | `setup.sh` · `setup.ps1` — from-source onboarding in an already-cloned repo (deprecated in favor of the one-liner installer, see [`docs/guides/CLI-INSTALL.md`](../docs/guides/CLI-INSTALL.md)) |
 | 🐳 **Dev (container)** | `dev-up.sh` · `dev-down.sh` · `dev-up-additional.sh` · `dev-down-additional.sh` |
-| 🚀 **Launchers** | `launchers/start-{mac,linux,windows}.*` |
 | 🏷️ **Release** | `build-release.sh` · `check-release-version.sh` |
 | 🧪 **Simulation** | `sim/` — `sim-up.sh` / `sim-down.sh` / `sim-reset.sh`, Supabase seed import/export |
 | 🧰 **Wrappers / misc** | `jht-wrapper.sh` · `jht-wrapper.ps1` · `migrate-deliverables-to-user-dir.sh` · `review-log.py` · `pre-commit` |
