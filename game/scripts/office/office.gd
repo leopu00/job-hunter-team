@@ -191,6 +191,8 @@ func _ready() -> void:
 	_camera.clicked.connect(_on_world_click)
 	if OS.get_environment("JHT_CENSUS") == "1":  # TEST-AUTO: fotografia scena
 		_scene_census.call_deferred()
+	if OS.get_environment("JHT_GFX_TEST") == "1":
+		_gfx_profile_selftest.call_deferred()
 	if OS.get_environment("JHT_CAMERA_LOCK_TEST") == "1":
 		_camera_lock_selftest.call_deferred()
 	if OS.get_environment("JHT_POSITIONS_PANEL_TEST") == "1":
@@ -404,6 +406,37 @@ func _ready() -> void:
 
 ## Regressione trackpad/overlay: una gesture consegnata direttamente alla
 ## camera non deve cambiare né pan né zoom finché il gruppo modal è attivo.
+## Il profilo ridotto deve spegnere DAVVERO la scenografia (per due anni ha
+## solo alzato un flag che nessuno leggeva) e non deve toccare il resto.
+func _gfx_profile_selftest() -> void:
+	await get_tree().process_frame
+	var result := {}
+	var group := get_tree().get_nodes_in_group(GfxProfile.GROUP)
+	result["scenografia_registrata"] = group.size() >= 4
+	Game.set_low_gfx(true, false)
+	await get_tree().process_frame
+	var off := 0
+	for node in group:
+		if node is CanvasItem and not (node as CanvasItem).visible:
+			off += 1
+	result["spenta_con_profilo_ridotto"] = off == group.size()
+	# i mobili e gli agenti restano: il profilo taglia scenografia, non gioco
+	result["mobili_intatti"] = world != null and world.visible
+	Game.set_low_gfx(false, false)
+	await get_tree().process_frame
+	var on := 0
+	for node in group:
+		if node is CanvasItem and (node as CanvasItem).visible:
+			on += 1
+	result["riaccesa_con_profilo_pieno"] = on == group.size()
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("GFX-PROFILE-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
+
+
 ## Fotografia della scena costruita: quanti CanvasItem visibili, da quale ramo
 ## arrivano e — con la finestra aperta, non headless — quante draw call costa
 ## ciascun ramo. La misura è differenziale: si spegne un ramo, si guarda di
