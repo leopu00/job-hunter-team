@@ -537,14 +537,6 @@ export function getDemoPositionsData(
   return v;
 }
 
-export function findDemoPositionById(id: string): DemoPosition | null {
-  for (const key of DEMO_PERSONA_KEYS) {
-    const hit = getDemoPositionsData(key).find((p) => p.id === id);
-    if (hit) return hit;
-  }
-  return null;
-}
-
 export function findDemoPositionByLegacyId(
   legacyId: number,
 ): DemoPosition | null {

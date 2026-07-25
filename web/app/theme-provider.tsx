@@ -117,39 +117,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Toggle animato con icone sun/moon */
-export function ThemeToggle({ className }: { className?: string }) {
-  const { resolvedTheme, toggleTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
-  return (
-    <button
-      onClick={toggleTheme}
-      title={isDark ? "Passa a tema chiaro" : "Passa a tema scuro"}
-      aria-label={isDark ? "Passa a tema chiaro" : "Passa a tema scuro"}
-      className={className}
-      style={{
-        background: "transparent",
-        border: "none",
-        cursor: "pointer",
-        lineHeight: 1,
-        padding: "4px 6px",
-        borderRadius: 4,
-        color: isDark ? "var(--color-yellow)" : "var(--color-muted)",
-        fontSize: 15,
-        transition: "transform 0.3s ease, color 0.2s ease",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "rotate(20deg) scale(1.15)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "rotate(0deg) scale(1)";
-      }}
-    >
-      {isDark ? "☀" : "◐"}
-    </button>
-  );
-}
-
 /** DarkModeToggle esteso — mostra testo + icona, usabile in settings */
 export function DarkModeToggle() {
   const { theme, setTheme } = useTheme();

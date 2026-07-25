@@ -255,10 +255,6 @@ export interface PositionWithScore extends Position {
   seen?: boolean;
 }
 
-export interface ApplicationWithPosition extends Application {
-  positions: Pick<Position, "id" | "title" | "company" | "status" | "url">;
-}
-
 // Coda notifiche agente -> utente (schema V5, decisione 2026-05-13).
 // L'agente scrive qui via `jht-notify-user`; il record viene sincronizzato
 // su Supabase e mostrato sulla dashboard quando `delivered_via = 'web'`

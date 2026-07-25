@@ -11,7 +11,6 @@ import {
 // ─── Context ───────────────────────────────────────────────────────────────
 type A11yCtx = { announce: (msg: string, assertive?: boolean) => void };
 const A11yContext = createContext<A11yCtx>({ announce: () => {} });
-export const useA11y = () => useContext(A11yContext);
 
 // ─── Focus trap hook ───────────────────────────────────────────────────────
 const FOCUSABLE = [

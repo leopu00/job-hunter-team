@@ -18,7 +18,6 @@ import type {
   Score,
   PositionHighlight,
   Company,
-  ApplicationWithPosition,
   Application,
   PendingMessage,
   PositionTicket,
@@ -480,76 +479,6 @@ function mapTicket(r: any): PositionTicket {
   };
 }
 
-// ── Applications with position info ────────────────────────────────
-export function getApplicationsLocal(ws: string): ApplicationWithPosition[] {
-  const db = getDb(ws);
-  const rows = db
-    .prepare(
-      `
-    SELECT a.*, p.id as p_id, p.title as p_title, p.company as p_company, p.status as p_status, p.url as p_url
-    FROM applications a
-    LEFT JOIN positions p ON p.id = a.position_id
-    ORDER BY a.written_at DESC
-  `,
-    )
-    .all() as any[];
-
-  return rows.map((r) => mapAppWithPosition(r));
-}
-
-// ── Applications filtered by status ────────────────────────────────
-export function getApplicationsByStatusLocal(
-  ws: string,
-  status: string,
-): ApplicationWithPosition[] {
-  const db = getDb(ws);
-  const rows = db
-    .prepare(
-      `
-    SELECT a.*, p.id as p_id, p.title as p_title, p.company as p_company, p.status as p_status, p.url as p_url
-    FROM applications a
-    LEFT JOIN positions p ON p.id = a.position_id
-    WHERE a.status = ?
-    ORDER BY a.response_at DESC
-  `,
-    )
-    .all(status) as any[];
-
-  return rows.map((r) => mapAppWithPosition(r));
-}
-
-// ── Risposte ────────────────────────────────────────────────────────
-export function getRisposteLocal(ws: string): ApplicationWithPosition[] {
-  const db = getDb(ws);
-  const rows = db
-    .prepare(
-      `
-    SELECT a.*, p.id as p_id, p.title as p_title, p.company as p_company, p.status as p_status, p.url as p_url
-    FROM applications a
-    LEFT JOIN positions p ON p.id = a.position_id
-    WHERE a.status = 'response' OR a.response IS NOT NULL
-    ORDER BY a.response_at DESC
-  `,
-    )
-    .all() as any[];
-
-  return rows.map((r) => mapAppWithPosition(r));
-}
-
-// ── Risposte count ──────────────────────────────────────────────────
-export function getRisposteCountLocal(ws: string): number {
-  const db = getDb(ws);
-  const row = db
-    .prepare(
-      `
-    SELECT COUNT(*) as cnt FROM applications
-    WHERE status = 'response' OR response IS NOT NULL
-  `,
-    )
-    .get() as { cnt: number };
-  return row.cnt;
-}
-
 // ── Score distribution ──────────────────────────────────────────────
 export function getScoreDistributionLocal(ws: string) {
   const db = getDb(ws);
@@ -1000,24 +929,6 @@ export function getPositionTypeDistributionLocal(
   return aggregateRoleFamilies(rows);
 }
 
-// ── Critic votes distribution (0-10) ───────────────────────────────
-export function getCriticScoresLocal(ws: string): number[] {
-  const db = getDb(ws);
-  const rows = db
-    .prepare(
-      `
-    SELECT a.critic_score
-    FROM applications a
-    JOIN positions p ON p.id = a.position_id
-    WHERE p.status != 'excluded' AND a.critic_score IS NOT NULL
-  `,
-    )
-    .all() as { critic_score: number }[];
-  return rows
-    .map((r) => r.critic_score)
-    .filter((s): s is number => typeof s === "number");
-}
-
 // ── Source distribution ─────────────────────────────────────────────
 export function getSourceDistributionLocal(
   ws: string,
@@ -1034,17 +945,6 @@ export function getSourceDistributionLocal(
     .all() as { source: string; cnt: number }[];
 
   return rows.map((r) => ({ source: r.source, count: r.cnt }));
-}
-
-// ── Positions count by status ───────────────────────────────────────
-export function getPositionsByStatusLocal(ws: string): Record<string, number> {
-  const db = getDb(ws);
-  const rows = db
-    .prepare("SELECT status, COUNT(*) as cnt FROM positions GROUP BY status")
-    .all() as { status: string; cnt: number }[];
-  const result: Record<string, number> = {};
-  for (const r of rows) result[r.status] = r.cnt;
-  return result;
 }
 
 // ── Scout stats ─────────────────────────────────────────────────────
@@ -1113,30 +1013,6 @@ export function getScorerStatsLocal(ws: string) {
       mid: scores.filter((s) => s >= 40 && s < 70).length,
       low: scores.filter((s) => s < 40).length,
     }))
-    .sort((a, b) => b.total - a.total);
-}
-
-// ── Scrittore stats ─────────────────────────────────────────────────
-export function getScrittoreStatsLocal(ws: string) {
-  const db = getDb(ws);
-  const rows = db
-    .prepare("SELECT written_by, critic_verdict, applied FROM applications")
-    .all() as any[];
-  const grouped: Record<
-    string,
-    { total: number; pass: number; needsWork: number; sent: number }
-  > = {};
-  for (const row of rows) {
-    const key = row.written_by ?? "sconosciuto";
-    if (!grouped[key])
-      grouped[key] = { total: 0, pass: 0, needsWork: 0, sent: 0 };
-    grouped[key].total++;
-    if (row.critic_verdict === "PASS") grouped[key].pass++;
-    if (row.critic_verdict === "NEEDS_WORK") grouped[key].needsWork++;
-    if (row.applied) grouped[key].sent++;
-  }
-  return Object.entries(grouped)
-    .map(([scrittore, s]) => ({ scrittore, ...s }))
     .sort((a, b) => b.total - a.total);
 }
 
@@ -1508,123 +1384,6 @@ export function getScrittoreActivityLocal(ws: string) {
   };
 }
 
-// ── Analista stats ──────────────────────────────────────────────────
-export function getAnalistaStatsLocal(ws: string) {
-  const db = getDb(ws);
-  const rows = db
-    .prepare(
-      "SELECT analyzed_by, verdict FROM companies WHERE analyzed_by IS NOT NULL",
-    )
-    .all() as any[];
-  const grouped: Record<
-    string,
-    { total: number; go: number; cautious: number; noGo: number }
-  > = {};
-  for (const row of rows) {
-    const key = row.analyzed_by;
-    if (!grouped[key]) grouped[key] = { total: 0, go: 0, cautious: 0, noGo: 0 };
-    grouped[key].total++;
-    if (row.verdict === "GO") grouped[key].go++;
-    if (row.verdict === "CAUTIOUS") grouped[key].cautious++;
-    if (row.verdict === "NO_GO") grouped[key].noGo++;
-  }
-  return Object.entries(grouped)
-    .map(([analista, s]) => ({ analista, ...s }))
-    .sort((a, b) => b.total - a.total);
-}
-
-// ── Critico stats ───────────────────────────────────────────────────
-export function getCriticoStatsLocal(ws: string) {
-  const db = getDb(ws);
-  const rows = db
-    .prepare(
-      "SELECT reviewed_by, critic_verdict FROM applications WHERE reviewed_by IS NOT NULL",
-    )
-    .all() as any[];
-  const grouped: Record<
-    string,
-    { total: number; pass: number; needsWork: number; reject: number }
-  > = {};
-  for (const row of rows) {
-    const key = row.reviewed_by;
-    if (!grouped[key])
-      grouped[key] = { total: 0, pass: 0, needsWork: 0, reject: 0 };
-    grouped[key].total++;
-    if (row.critic_verdict === "PASS") grouped[key].pass++;
-    if (row.critic_verdict === "NEEDS_WORK") grouped[key].needsWork++;
-    if (row.critic_verdict === "REJECT") grouped[key].reject++;
-  }
-  return Object.entries(grouped)
-    .map(([critico, s]) => ({ critico, ...s }))
-    .sort((a, b) => b.total - a.total);
-}
-
-// ── Critic verdict aggregate ────────────────────────────────────────
-// Conta PASS / NEEDS_WORK / REJECT totali (non per critico).
-// Per il widget "Conversion rate" della dashboard.
-export function getCriticVerdictTotalsLocal(ws: string): {
-  pass: number;
-  needs_work: number;
-  reject: number;
-  total: number;
-} {
-  const db = getDb(ws);
-  const rows = db
-    .prepare(
-      "SELECT critic_verdict, count(*) as n FROM applications WHERE critic_verdict IS NOT NULL GROUP BY critic_verdict",
-    )
-    .all() as { critic_verdict: string; n: number }[];
-  const out = { pass: 0, needs_work: 0, reject: 0, total: 0 };
-  for (const r of rows) {
-    out.total += r.n;
-    if (r.critic_verdict === "PASS") out.pass = r.n;
-    else if (r.critic_verdict === "NEEDS_WORK") out.needs_work = r.n;
-    else if (r.critic_verdict === "REJECT") out.reject = r.n;
-  }
-  return out;
-}
-
-// ── Pending user messages (V5) ──────────────────────────────────────
-// Restituisce i messaggi che l'utente deve ancora ack-are: arrivati via
-// fallback web (Telegram down/non configurato) e non ancora visti.
-// Quelli consegnati a Telegram non finiscono qui: l'utente li ha gia'
-// visti sul telefono, non serve duplicarli in dashboard.
-export function getPendingMessagesLocal(
-  ws: string,
-  limit = 20,
-): PendingMessage[] {
-  const db = getDb(ws);
-  const rows = db
-    .prepare(
-      `
-    SELECT id, agent, body, kind, related_position_id,
-           delivered_via, delivered_at, acknowledged_at,
-           user_reply, user_reply_at, agent_seen_reply_at, created_at
-    FROM pending_user_messages
-    WHERE delivered_via = 'web' AND acknowledged_at IS NULL
-    ORDER BY created_at DESC
-    LIMIT ?
-  `,
-    )
-    .all(limit) as any[];
-
-  return rows.map((r) => ({
-    id: sid(r.id),
-    agent: r.agent,
-    body: r.body,
-    kind: r.kind,
-    related_position_id:
-      r.related_position_id != null ? sid(r.related_position_id) : null,
-    delivered_via: r.delivered_via,
-    delivered_at: r.delivered_at,
-    acknowledged_at: r.acknowledged_at,
-    user_reply: r.user_reply,
-    user_reply_at: r.user_reply_at,
-    agent_seen_reply_at: r.agent_seen_reply_at,
-    created_at: r.created_at,
-  }));
-}
-
 // Storico completo per la pagina /messages: stessi campi dei pendenti ma
 // SENZA il filtro acknowledged (i letti restano visibili in coda alla lista).
 export function getMessagesHistoryLocal(
@@ -1693,9 +1452,9 @@ export function ackPendingMessageLocal(ws: string, id: string): boolean {
   return result.changes > 0;
 }
 
-// Marca come letti tutti i messaggi web pendenti in un colpo solo. Stesso
-// filtro di getPendingMessagesLocal (delivered_via='web' AND non ack) cosi'
-// azzera esattamente cio' che la dashboard mostra. Ritorna il n. di righe.
+// Marca come letti tutti i messaggi web pendenti in un colpo solo. Il filtro
+// (delivered_via='web' AND non ack) è lo stesso di countPendingMessagesLocal,
+// cosi' azzera esattamente cio' che la dashboard mostra. Ritorna il n. di righe.
 export function ackAllPendingMessagesLocal(ws: string): number {
   const db = getDb(ws);
   const result = db
@@ -1868,20 +1627,6 @@ export function getTeamActivityLogLocal(ws: string): RecentActivityEvent[] {
   }));
 }
 
-// ── Application stats ───────────────────────────────────────────────
-export function getApplicationStatsLocal(ws: string): Record<string, number> {
-  const db = getDb(ws);
-  const rows = db.prepare("SELECT status, applied FROM applications").all() as {
-    status: string;
-    applied: number;
-  }[];
-  const counts: Record<string, number> = {};
-  for (const r of rows) counts[r.status] = (counts[r.status] ?? 0) + 1;
-  counts["_total"] = rows.length;
-  counts["_sent"] = rows.filter((r) => r.applied).length;
-  return counts;
-}
-
 // ── Mapping helpers ─────────────────────────────────────────────────
 
 function mapPosition(r: any): PositionWithScore {
@@ -2042,15 +1787,3 @@ function mapApplication(r: any): Application {
   };
 }
 
-function mapAppWithPosition(r: any): ApplicationWithPosition {
-  return {
-    ...mapApplication(r),
-    positions: {
-      id: sid(r.p_id ?? r.position_id),
-      title: r.p_title ?? "",
-      company: r.p_company ?? "",
-      status: r.p_status ?? "new",
-      url: r.p_url ?? null,
-    },
-  };
-}
