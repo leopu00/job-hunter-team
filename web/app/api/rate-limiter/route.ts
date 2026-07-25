@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import * as fs from "node:fs";
-import * as path from "node:path";
-import * as os from "node:os";
-import { JHT_HOME } from "@/lib/jht-paths";
+import { loadJhtConfig } from "@/lib/json-files";
 
 export const dynamic = "force-dynamic";
 
@@ -55,22 +52,7 @@ const KNOWN_PROVIDERS: Array<{
   { id: "kimi", label: "Kimi", window: { maxRequests: 40, windowMs: 60_000 } },
 ];
 
-function loadConfig(): JhtConfig {
-  const candidates = [
-    path.join(JHT_HOME, "jht.config.json"),
-    path.join(process.cwd(), "jht.config.json"),
-    path.join(process.cwd(), "..", "jht.config.json"),
-  ];
-  for (const p of candidates) {
-    try {
-      if (fs.existsSync(p))
-        return JSON.parse(fs.readFileSync(p, "utf-8")) as JhtConfig;
-    } catch {
-      /* continua */
-    }
-  }
-  return {};
-}
+const loadConfig = () => loadJhtConfig<JhtConfig>();
 
 function calcBackoff(retry: RetryConfig): number[] {
   return Array.from({ length: retry.attempts }, (_, i) => {
