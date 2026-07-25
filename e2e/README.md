@@ -98,13 +98,28 @@ is the usual recipe: it does not work here, for two independent reasons.
    point 1 the return trip would fail.
 
 An email+password account sidesteps both and survives unattended runs.
-Credentials live in `e2e/.auth-credentials` (git-ignored, `chmod 600`); the
-account is `e2e-tests@jobhunterteam.ai`, created on 2026-07-25, and owns no
-data — RLS isolates rows per `user_id` and this one has none. `auth-state.json`
-is git-ignored too: **never commit it**, it carries a live session token.
 
-Still not wired into CI: that needs the credentials as a repository secret,
-which is a maintainer decision.
+Where the credentials live — and where they deliberately do **not**:
+
+| | |
+|---|---|
+| Locally | `e2e/.auth-credentials` — git-ignored, `chmod 600` |
+| In CI | repository secrets `E2E_EMAIL` / `E2E_PASSWORD` |
+| In this repo | **nowhere.** Not the address, not the password — a public repo should not hand out half a credential |
+
+The account owns no data: RLS isolates rows per `user_id` and this one has
+none, so a compromise leaks nothing. `auth-state.json` is git-ignored as well:
+**never commit it**, it carries a live session token.
+
+**In CI** the same script runs inside `.github/workflows/test.yml` (job `e2e`).
+The credentials file is written from the secrets, used, and deleted in an
+`always()` step, so it survives neither the job nor an artifact. Missing
+secrets fail the job loudly rather than letting the protected-area specs skip
+in silence.
+
+To rotate the password: change it on the account, then
+`gh secret set E2E_PASSWORD --repo <repo>` and update `.auth-credentials`.
+Never paste it into a terminal that echoes — pipe it from stdin.
 
 ## What is covered elsewhere (and better)
 
