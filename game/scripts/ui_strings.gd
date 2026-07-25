@@ -660,6 +660,7 @@ const S := {
 	"setup.runtime_stale": "aggiornamento pronto: riattiva il container",
 	"setup.runtime_update": "⇩ AGGIORNA RUNTIME",
 	"setup.back_overview": "← PANORAMICA SETUP",
+	"setup.docker_install": "INSTALLA DOCKER",
 	"setup.provider_lead": "Scegli un solo provider principale. Il login usa il tuo abbonamento: JHT non chiede né salva API key.",
 	"setup.provider_note": "Il login si svolge nella console incorporata: link, codice e scelte restano dentro il gioco; il browser si apre solo per autorizzare l’account.",
 	"setup.provider_connected": "✓ login rilevato",

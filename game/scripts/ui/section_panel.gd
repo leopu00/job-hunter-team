@@ -638,6 +638,11 @@ func _build_container_setup() -> void:
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	_content.add_child(actions)
+	# UN pulsante che fa la cosa giusta. "ATTIVA CONTAINER" già accende Docker
+	# se è spento, crea il container se manca e scarica l'immagine: gli altri
+	# comandi erano riparazioni messe in fila come se fossero alternative, e
+	# costringevano l'utente a scegliere fra opzioni che non deve conoscere
+	# (Leone, 25/07). Ora compaiono SOLO nel caso in cui servono davvero.
 	var start := Button.new()
 	start.text = UIStrings.t("setup.container_recheck") \
 			if bool(s.get("container_running", false)) else UIStrings.t("setup.container_start")
@@ -646,20 +651,20 @@ func _build_container_setup() -> void:
 	start.pressed.connect(SetupService.refresh if bool(s.get("container_running", false)) \
 			else SetupService.start_container)
 	actions.add_child(start)
-	var back := Button.new()
-	back.text = UIStrings.t("setup.back_overview")
-	back.pressed.connect(func() -> void: navigate.emit("activation"))
-	actions.add_child(back)
-	var install := Button.new()
-	install.text = "INSTALLA / RIPARA RUNTIME"
-	install.add_theme_color_override("font_color", Palette.YELLOW)
-	install.pressed.connect(SetupService.open_runtime_install)
-	actions.add_child(install)
-	if bool(s.get("docker_running", false)) and not bool(s.get("remote", false)):
+	# Docker assente: senza motore non si accende niente, e questa è l'unica
+	# azione sensata da offrire.
+	if not bool(s.get("docker_available", false)) and not bool(s.get("remote", false)):
+		var install := Button.new()
+		install.text = UIStrings.t("setup.docker_install")
+		install.add_theme_color_override("font_color", Palette.YELLOW)
+		install.pressed.connect(SetupService.open_runtime_install)
+		actions.add_child(install)
+	# Versione vecchia: lo dice la riga di stato qui sopra, il pulsante la ripara.
+	if bool(s.get("runtime_stale", false)) and bool(s.get("docker_running", false)) \
+			and not bool(s.get("remote", false)):
 		var update := Button.new()
 		update.text = UIStrings.t("setup.runtime_update")
-		update.add_theme_color_override("font_color",
-				Palette.YELLOW if bool(s.get("runtime_stale", false)) else Palette.BASE)
+		update.add_theme_color_override("font_color", Palette.YELLOW)
 		update.pressed.connect(SetupService.update_runtime)
 		actions.add_child(update)
 	if bool(s.get("container_running", false)):
@@ -668,6 +673,13 @@ func _build_container_setup() -> void:
 		stop.add_theme_color_override("font_color", Palette.RED)
 		stop.pressed.connect(SetupService.stop_container)
 		actions.add_child(stop)
+	# Il ritorno alla checklist sta in fondo: è navigazione, non un'azione,
+	# e in mezzo agli altri sembrava una scelta alla pari.
+	var back := Button.new()
+	back.text = UIStrings.t("setup.back_overview")
+	back.add_theme_color_override("font_color", Palette.MUTED)
+	back.pressed.connect(func() -> void: navigate.emit("activation"))
+	actions.add_child(back)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
 
