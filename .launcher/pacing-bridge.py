@@ -57,8 +57,11 @@ JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 LOGS_DIR = JHT_HOME / "logs"
 SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 PID_FILE = LOGS_DIR / "pacing-bridge.pid"
-# Stato pubblico letto dalla UI (/api/team/pacing-bridge). Scritto
-# atomicamente a ogni tick + al boot. Stesso pattern del sentinel-bridge.
+# Stato pubblico del bridge, scritto atomicamente a ogni tick + al boot
+# (stesso pattern del sentinel-bridge). Lo leggeva la route web
+# `/api/team/pacing-bridge`, rimossa il 2026-07-25 con la dashboard locale:
+# oggi il file e' consumato dall'app nativa (che lo legge via docker exec/SSH)
+# e dalle skill di pacing.
 STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
 # Daily hard-stop (#2): flag scritto dal sentinel-bridge a cap giornaliero sforato.
 # Lo leggiamo (sola lettura) per tacere come fuori orario finché il team è in standby.

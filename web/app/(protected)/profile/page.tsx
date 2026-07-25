@@ -11,7 +11,6 @@ import type { CandidateProfile } from "@/lib/types";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { getProfileT } from "@/lib/profile-i18n";
 import ProfileStats from "@/components/ProfileStats";
-import ProfileAssistantFab from "@/components/ProfileAssistantFab";
 import ProfileEditButton from "@/components/ProfileEditButton";
 import RevealableContactRow from "@/app/components/RevealableContactRow";
 import ProfileBlockRenderer from "@/app/components/ProfileBlockRenderer";
@@ -987,7 +986,6 @@ export default async function ProfilePage() {
           </div>
         )}
       </div>
-      {!isCloudDeploy() && <ProfileAssistantFab />}
     </>
   );
 }

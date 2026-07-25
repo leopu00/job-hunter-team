@@ -45,6 +45,7 @@ Our **pre-launch commitment** is not to fill a coverage matrix — it's to **doc
 | 4 | Maintainer baseline (weekly-distributed run) | 🌙 Kimi K2 Pro €40 | 🟡 data collected, **processing pending** |
 | 5 | Maintainer baseline (re-test with better monitoring) | 🟠 Claude Max x20 | 🟡 previous run lacked instrumentation, **to be re-run + documented** |
 | 6 | Early-career finance profile (EU financial hubs) | 🔵 Codex Pro €100 | ✅ documented — see [Case study #4](../about/RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run) — **one-month autonomous run** |
+| 7 | Two external multi-week teams, different personas | 🌙 Kimi K2 Pro €40 | 🟡 **running, under observation** — these are the runs that decide whether the €40 tier leaves beta (mission M4). Not yet processed into case studies. |
 
 **Post-launch (open invitation):**
 

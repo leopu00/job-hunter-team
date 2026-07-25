@@ -1,6 +1,6 @@
 {
   "name": "job-hunter-team",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "An open-source multi-agent AI framework that automates your job search — from position discovery to tailored CVs and cover letters.",
   "repository": {
     "type": "git",
@@ -13,7 +13,7 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "npm --prefix tests/js ci && npm --prefix tests/js test",
+    "test": "npm --prefix tests/js ci && npm --prefix tests/js test && python3 -m pytest tests/",
     "test:js": "npm --prefix tests/js test",
     "test:py": "python3 -m pytest tests/",
     "dev:up": "bash scripts/dev-up.sh",

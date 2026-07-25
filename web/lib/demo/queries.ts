@@ -39,6 +39,7 @@ import {
 } from "@/lib/position-classifier";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
+import { demoCompanyFor } from "./seeds/companies";
 import {
   getDemoPositionsData,
   type DemoPosition,
@@ -560,7 +561,17 @@ export async function demoPositionById(
     position: position as Position,
     score: demo_score_row,
     highlights: demo_highlights,
-    company: null,
+    // [JHT-WEB-DEMO 25/07] Prima era `null`, e la card azienda non compariva
+    // mai in demo. Il dossier è derivato in modo deterministico dai dati della
+    // posizione (vedi seeds/companies.ts): senza logo, che un'azienda inventata
+    // non può avere, e senza prosa da localizzare.
+    company: demoCompanyFor({
+      persona: key,
+      name: p.company,
+      location: p.location ?? null,
+      score: p.score,
+      analyzedAt: p.last_action_at,
+    }),
     application,
     tickets: [],
   };

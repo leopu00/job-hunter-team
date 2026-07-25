@@ -15,6 +15,7 @@ Con Supabase:
 
 import os
 import sqlite3
+import sys
 import importlib.util
 import pytest
 
@@ -47,61 +48,24 @@ def load_sync_module():
 
 
 def make_test_db(tmp_path):
-    """Crea un DB SQLite v2 con schema completo e pronto per i test."""
+    """Crea un DB SQLite con lo schema REALE, non con una copia a mano.
+
+    Lo schema arriva da `shared/skills/_db.ensure_schema()` — la stessa
+    funzione che crea il database in produzione. Prima questa fixture
+    duplicava il DDL: quando la feature logo (2026-07-18) ha aggiunto
+    `companies.logo/logo_source/logo_fetched`, il sync ha iniziato a
+    leggerle e i test sono diventati rossi su codice sano. Costruendo il DB
+    con `ensure_schema` il drift non è più possibile: ogni colonna nuova
+    arriva automaticamente anche qui.
+    """
+    if SKILLS_DIR not in sys.path:
+        sys.path.insert(0, SKILLS_DIR)
+    import _db
+
     db_path = str(tmp_path / 'sync-test.db')
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    conn.executescript("""
-        CREATE TABLE companies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            website TEXT, hq_country TEXT, size TEXT, sector TEXT,
-            glassdoor_rating REAL, red_flags TEXT, culture_notes TEXT,
-            analyzed_by TEXT, analyzed_at TIMESTAMP, verdict TEXT
-        );
-        CREATE TABLE positions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL, company TEXT NOT NULL,
-            company_id INTEGER, url TEXT UNIQUE,
-            location TEXT, remote_type TEXT,
-            status TEXT DEFAULT 'new',
-            source TEXT, jd_text TEXT, requirements TEXT,
-            notes TEXT, found_by TEXT, deadline TEXT,
-            salary_declared_min INTEGER, salary_declared_max INTEGER,
-            salary_declared_currency TEXT,
-            salary_estimated_min INTEGER, salary_estimated_max INTEGER,
-            salary_estimated_source TEXT,
-            found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_checked TIMESTAMP
-        );
-        CREATE TABLE scores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            position_id INTEGER NOT NULL UNIQUE,
-            total_score INTEGER NOT NULL,
-            stack_match INTEGER, remote_fit INTEGER, salary_fit INTEGER,
-            experience_fit INTEGER, strategic_fit INTEGER,
-            breakdown TEXT, notes TEXT, scored_by TEXT,
-            scored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE applications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            position_id INTEGER NOT NULL UNIQUE,
-            cv_path TEXT, cl_path TEXT, cv_pdf_path TEXT, cl_pdf_path TEXT,
-            cv_drive_id TEXT, cl_drive_id TEXT,
-            status TEXT DEFAULT 'draft',
-            critic_score REAL, critic_verdict TEXT, critic_notes TEXT,
-            applied_via TEXT, written_by TEXT, reviewed_by TEXT,
-            applied BOOLEAN DEFAULT 0, response TEXT,
-            written_at TIMESTAMP, applied_at TIMESTAMP,
-            response_at TIMESTAMP, critic_reviewed_at TIMESTAMP,
-            interview_round INTEGER
-        );
-        CREATE TABLE position_highlights (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            position_id INTEGER, type TEXT, text TEXT
-        );
-    """)
-    conn.execute("PRAGMA user_version = 2")
+    _db.ensure_schema(conn)
     conn.commit()
     return db_path, conn
 

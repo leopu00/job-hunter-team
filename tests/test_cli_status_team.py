@@ -12,8 +12,16 @@ JHT_BIN = str(REPO_ROOT / "cli" / "bin" / "jht.js")
 
 
 def run_jht(*args, env=None):
-    """Esegue jht CLI e restituisce (returncode, stdout, stderr)."""
+    """Esegue jht CLI e restituisce (returncode, stdout, stderr).
+
+    Quando il test finge un `HOME`, `JHT_HOME` va tolto dall'ambiente: il CLI
+    lo preferisce a `~/.jht`, quindi lasciandolo il sottoprocesso leggerebbe la
+    config di un'altra directory e il test misurerebbe l'ambiente invece del
+    codice (la suite ne imposta uno isolato per sessione — vedi conftest.py).
+    """
     full_env = {**os.environ, **(env or {})}
+    if env and "HOME" in env:
+        full_env.pop("JHT_HOME", None)
     result = subprocess.run(
         ["node", JHT_BIN, *args],
         capture_output=True,

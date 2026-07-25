@@ -16,8 +16,9 @@ function shellEscape(value) {
 
 // Tick idle (default 10 min, range 1-60): il bridge usa questo come
 // ceiling a riposo, ma adatta dinamicamente in alto (fino a 1 min)
-// quando status CRITICO / host saturo / team operativo attivo. Stesso
-// fallback della web UI in /api/team/start-all/route.ts.
+// quando status CRITICO / host saturo / team operativo attivo. Questo
+// era anche il fallback della route web `/api/team/start-all`, rimossa il
+// 2026-07-25 con la dashboard locale: ora il default vive solo qui.
 function readSentinellaTickMinutes() {
   try {
     const cfg = JSON.parse(readFileSync(JHT_CONFIG_PATH, 'utf-8'));
@@ -27,7 +28,9 @@ function readSentinellaTickMinutes() {
   return 10;
 }
 
-// Bootstrap container del team — replica `/api/team/start-all` (web UI).
+// Bootstrap container del team. Era la stessa logica della route web
+// `/api/team/start-all` (rimossa il 2026-07-25 con la dashboard locale):
+// da allora questa e' l'UNICA implementazione: il gioco chiama il CLI.
 // Sequenza V7 (rivista 2026-05-13, 3 bot Telegram dedicati):
 //   0. ASSISTENTE: tmux + CLI boot + welcome Telegram. Per PRIMO cosi'
 //      l'utente riceve subito un messaggio "Ciao, mandami il CV" sul
@@ -226,9 +229,9 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
 
 export async function startAction(agentArg, options) {
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
-  // jht. Stessa identica logica della web UI (/api/team/start-all),
-  // coerente col boot del bridge Sentinella e con le dipendenze CLI
-  // installate nell'immagine.
+  // jht — coerente col boot del bridge Sentinella e con le dipendenze CLI
+  // installate nell'immagine. (Era la stessa logica della route web
+  // `/api/team/start-all`, rimossa il 2026-07-25.)
   if (usingContainer()) {
     return await startActionContainer(agentArg, options);
   }
