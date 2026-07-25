@@ -7,6 +7,7 @@
 import { cookies } from "next/headers";
 import { isCloudDeploy } from "@/lib/deploy-mode";
 import { isDemoPersonaKey, type DemoPersonaKey } from "@/lib/demo/data";
+import { verdictOf, type Verdict } from "@/lib/position-verdict";
 
 export const DEMO_PERSONA_COOKIE = "jht_demo_persona";
 export const DEMO_FEEDBACK_COOKIE = "jht_demo_feedback";
@@ -67,20 +68,8 @@ export function serializeDemoFeedback(map: DemoFeedbackMap): string {
   return JSON.stringify(map);
 }
 
-// Mappatura action+score → giudizio a 4 livelli, identica a
-// getVerdictMapByLegacyId in lib/queries.ts (stessa semantica di /swipe).
-export function demoVerdictOf(
-  e: DemoFeedbackEntry,
-): "top" | "review_ok" | "review_low" | "no" {
-  return e.a === "star"
-    ? "top"
-    : e.a === "dislike" || e.a === "hide"
-      ? e.s === 2
-        ? "review_low"
-        : "no"
-      : e.s != null && e.s <= 2
-        ? "review_low"
-        : e.s != null && e.s >= 5
-          ? "top"
-          : "review_ok";
+// Adattatore sulla forma compatta del cookie demo (`a`/`s`): la regola
+// è quella vera, non una sua imitazione.
+export function demoVerdictOf(e: DemoFeedbackEntry): Verdict {
+  return verdictOf(e.a, e.s);
 }
