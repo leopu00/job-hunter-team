@@ -29,9 +29,9 @@
 - **Effort:** S (5 min).
 - **Follow-up consigliato:** valutare hook pre-commit con `prettier --write` su staged files per evitare ricorrenza ([[feedback-pre-commit-hooks]] futura).
 
-### 🟠 `[MINOR-DISABLED-TESTS]` 40 test file in `tests/js/tasks/_disabled/`
+### 🟠 `[MINOR-DISABLED-TESTS]` 41 test file in `tests/js/tasks/_disabled/`
 
-- **Stato:** ⬜ open. 40 file spostati il 2026-05-31 per sbloccare il workflow Tests dopo refactor dashboard. Tests workflow verde solo perché **ignora il 43% dei test (40/92)**.
+- **Stato:** ⬜ open. 40 file spostati il 2026-05-31 per sbloccare il workflow Tests dopo refactor dashboard. Tests workflow verde solo perché **ignora quei file**. Ricontato 2026-07-25: **32 attivi in `tests/js/tasks/`, 41 in `_disabled/`** (56% della cartella fuori dal giro). I 869 test che passano vengono dai file attivi.
 - **Composizione:**
   - 17 × `web-pages-*.test.ts` (pages/API routes restructured)
   - 11 × `ui-components-*.test.ts` (componenti rimossi/rinominati)
@@ -50,6 +50,30 @@
 - **Fix proposto:** `husky` + `lint-staged` (o pre-commit hook semplice) per `prettier --write` + `eslint --fix` sui file staged.
 - **Effort:** M (1h setup + test su tutti gli OS).
 - **Trade-off:** può rallentare i commit grandi; mitigabile con `lint-staged` che lavora solo sui file staged.
+
+### ⬜ `[MINOR-TUI-DEAD-BUILD]` `tui/` compilato in ogni immagine ma mai invocato
+
+- **Stato:** ⬜ open. Il Dockerfile fa `npm ci --prefix tui` (r115) **e** `npm run build --prefix tui` (r153) in ogni build dell'immagine.
+- **Contesto:** `tui/package.json` non dichiara né `bin` né `main`; l'unico entry point sarebbe `npm start` → `node dist/tui/src/tui.js`, che **nessuno invoca**: `grep -rn "dist/tui|tui.js|jht-tui"` su `cli/src/`, `.launcher/`, `jht-wrapper.sh` e `docker-compose.yml` non trova invocatori (fuori dai commenti "specchio di `tui-paths.ts`"). L'unica citazione viva è in `install.sh`, che compila la TUI sul path expert-mode.
+- **Da fare:** decidere se (a) è morto come `shared/llm/` → rimuovere dal Dockerfile e dal repo, oppure (b) è un entry point voluto ma non cablato → cablarlo e documentarlo. Nel frattempo ogni immagine paga install + build TypeScript per codice che non parte.
+- **Effort:** S per togliere le due righe dal Dockerfile · M per la rimozione completa (tocca `install.sh`, `jht-paths.js`, `.launcher/config.sh`).
+- **Origine:** audit doc↔codice 2026-07-25 ([nota](../2026-07-25-audit-doc-code-drift.md)).
+
+### ⬜ `[MINOR-COMPOSE-NEXT-ENV]` Residui Next.js nel compose e nel Dockerfile
+
+- **Stato:** ⬜ open. Dal ritiro della dashboard locale (2026-07-23) il container non avvia Next.js, ma il compose passa ancora `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_JHT_DEPLOY`, `WATCHPACK_POLLING`, `CHOKIDAR_USEPOLLING`, `TURBOPACK_WATCH_POLL`; il Dockerfile pre-crea `/app/web/.next` con ownership `jht`.
+- **Perché non è banale:** quelle variabili e quella cartella servono ancora al **compose dev** (`docker-compose.dev.yml` con hot-reload dei sorgenti), che monta `web/` e può far girare Next dentro il container. Va distinto ciò che serve al dev da ciò che è residuo del path produzione.
+- **Da fare:** spostare le variabili "solo dev" nell'override `docker-compose.dev.yml`, lasciando il compose di produzione con il minimo indispensabile + un commento che spieghi la divisione.
+- **Effort:** S.
+- **Origine:** audit doc↔codice 2026-07-25.
+
+### ⬜ `[MINOR-SUBPACKAGE-VERSIONS]` Versioni dei sub-package alla deriva
+
+- **Stato:** ⬜ open. Root `0.2.1` (l'unica che conta, verificata da `check-release-version.sh` insieme ai metadati Godot) · `web/` `0.1.13` · `cli/` `0.1.9` · `tui/` `0.1.7` · `shared/` `0.1.7`.
+- **Contesto:** nessuno di questi numeri viene pubblicato, bumpato in release o verificato da CI: sono fermi a date diverse e non significano nulla per chi legge. Il rischio non è funzionale, è di **fraintendimento** (un contributor legge `web/package.json` e crede che il web sia alla 0.1.13).
+- **Da fare:** decidere una regola sola — allineare i sub-package alla versione root al momento della release, oppure togliere il campo `version` dai package interni non pubblicati (npm lo tollera nei workspace privati) e dirlo in `release.md`.
+- **Effort:** S.
+- **Origine:** audit doc↔codice 2026-07-25.
 
 ---
 
@@ -90,12 +114,26 @@
 - **Principio:** osservazione, non intervento (betaB sano). Backup reset betaA: `/jht_home/logs/taxonomy-reset-betaA-backup.json`.
 - **Effort:** S (check via SSH read-only).
 
-### ⬜ `[NOTE-NODE-20-DEPRECATION]` GitHub Actions Node.js 20 deprecato dal 2026-09-16
+### ✅ `[NOTE-NODE-20-DEPRECATION]` GitHub Actions Node.js 20 deprecato dal 2026-09-16 — CHIUSA 2026-07-21
 
 - **Origine:** warning ricorrente in CI logs 2026-06-02.
-- **Cosa serve:** aggiornare `actions/checkout@v4` + `actions/setup-node@v4` quando arriva una versione che parla Node 24 di default; oppure aggiungere `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` env var nei workflow.
-- **Deadline:** 2026-09-16 (Node 20 rimosso dal runner).
+- **Cosa serviva:** aggiornare `actions/checkout@v4` + `actions/setup-node@v4` a versioni che girano su Node 24.
+- **Chiusa da:** i bump Dependabot del 2026-07-21 (`0b40effc` checkout 4→7, `81a5e1ec` setup-node 4→7). Verificato 2026-07-25: i workflow usano `checkout@v7`, `setup-node@v7`, `upload-artifact@v7`, `download-artifact@v8`, `setup-python@v6`. La deadline del 2026-09-16 non è più un rischio.
+
+### ⬜ `[MINOR-EMAIL-GUIDE-SCREENSHOTS]` 5 screenshot mai prodotti in `EMAIL-FORWARDING.md`
+
+- **Stato:** ⬜ open. La guida elenca 5 screenshot attesi con i path di destinazione (`docs/guides/assets/email-0*.png`) e un callout "📸 Missing screenshots"; **`docs/guides/assets/` non esiste**.
+- **Nota:** il primo screenshot atteso ("Desktop Settings → Team email") va rifatto sull'ufficio Godot, non sul vecchio wizard.
+- **Da fare:** produrre le 5 immagini e sostituire il callout con gli embed, oppure ridurre la lista a quelle che si vogliono davvero mantenere.
+- **Effort:** M (serve un giro di cattura schermate su app + Gmail).
+- **Origine:** audit doc↔codice 2026-07-25 (unico link "rotto" restante nel repo, ed è un esempio in backtick).
+
+### ⬜ `[MINOR-INTERNAL-NOTE-UNFILED]` Nota del 2026-07-11 ancora nella root di `docs/internal/`
+
+- **Stato:** ⬜ open. `2026-07-11-team-directives-bacheca.md` è in root; il protocollo di `docs/internal/README.md` vuole la root riservata a `landing-image-prompts.md` e le note smistate in `architecture/` · `postmortems/` · `roadmap/` · `_archive/`.
+- **Da fare:** `git mv` in `architecture/` (è un design della bacheca `team_directives`, feature poi shippata) + riga nell'indice.
 - **Effort:** S.
+- **Origine:** audit doc↔codice 2026-07-25. Le altre due note in root (`2026-07-03-desktop-app-*`) sono già state archiviate nello stesso giro.
 
 ### ⬜ `[NOTE-COMPANIES-RUBRIC]` Analista rubric companies troppo permissivo
 
