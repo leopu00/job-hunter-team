@@ -6,6 +6,7 @@ import {
   workspaceHasDb,
 } from "@/lib/workspace";
 import { isLocalRequest } from "@/lib/auth";
+import { verdictOf, type Verdict } from "@/lib/position-verdict";
 import * as local from "@/lib/local-queries";
 // [JHT-WEB-DEMO] Modalità demo (onboarding cloud): quando il cookie
 // jht_demo_persona è attivo le query servono il dataset statico della
@@ -1015,7 +1016,7 @@ export async function getLatestFeedbackForLegacyId(
 // filtro "Il tuo feedback" della pagina posizioni. Stessa mappatura inversa
 // di /swipe. Cloud-only: {} in local mode.
 export async function getVerdictMapByLegacyId(): Promise<
-  Record<string, "top" | "review_ok" | "review_low" | "no">
+  Record<string, Verdict>
 > {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoVerdictMapByLegacyId();
@@ -1024,21 +1025,8 @@ export async function getVerdictMapByLegacyId(): Promise<
   if (!isSupabaseConfigured) return {};
   const supabase = await createClient();
   const fb = await getLatestFeedbackByLegacyId(supabase);
-  const out: Record<string, "top" | "review_ok" | "review_low" | "no"> = {};
-  for (const [k, v] of fb) {
-    out[k] =
-      v.action === "star"
-        ? "top"
-        : v.action === "dislike" || v.action === "hide"
-          ? v.score === 2
-            ? "review_low"
-            : "no"
-          : v.score != null && v.score <= 2
-            ? "review_low"
-            : v.score != null && v.score >= 5
-              ? "top"
-              : "review_ok";
-  }
+  const out: Record<string, Verdict> = {};
+  for (const [k, v] of fb) out[k] = verdictOf(v.action, v.score);
   return out;
 }
 
