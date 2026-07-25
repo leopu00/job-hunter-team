@@ -98,10 +98,19 @@ export default function RecentPositionsTable({
             return (
               <div
                 key={p.id}
-                className="rounded-lg border p-3 flex flex-col min-h-[106px]"
+                className="rounded-lg border p-3 flex flex-col"
                 style={{
                   borderColor: "var(--color-border)",
                   background: "var(--color-card)",
+                  // Altezza uniforme per TUTTE le card. Il caso più alto è
+                  // titolo su 2 righe: 24 (padding) + 35.75 (2 × 1.375 × 13px)
+                  // + 4 (mt-1) + 17.6 (azienda 1.6 × 11px) + 8 (pt-2) + 16
+                  // (meta 1.6 × 10px) = 105.35 → 106 li copre tutti, e le card
+                  // con titolo corto arrivano allo stesso numero scaricando
+                  // l'avanzo in fondo (mt-auto sulla riga categoria/data).
+                  // Inline e non una classe Tailwind: la classe arbitraria
+                  // veniva servita dal CSS in cache di Safari e non applicata.
+                  minHeight: 106,
                 }}
               >
                 {/* Azienda+località stanno nella colonna del TITOLO, non sotto
