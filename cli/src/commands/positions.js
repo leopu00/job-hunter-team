@@ -46,35 +46,64 @@ function runDbQuery(args) {
   return r.status ?? 1;
 }
 
-function listAction(options = {}) {
+/**
+ * Legge le opzioni tenendo conto del comando padre.
+ *
+ * `--json` è dichiarato sia su `positions` che su ogni sottocomando, così
+ * compare in entrambi gli `--help`. Ma commander 13, quando lo stesso flag
+ * esiste ai due livelli, lo assegna al PADRE: `cmd.opts()` dentro l'azione di
+ * `list` torna `{}` anche con `--json` scritto dopo `list` (verificato il
+ * 2026-07-25 — il flag veniva accettato e ignorato in silenzio, che è il modo
+ * peggiore di fallire). `optsWithGlobals()` unisce i due livelli e copre tutte
+ * le forme: `positions --json`, `positions list --json`, `positions show 1 --json`.
+ */
+function opts(options, command) {
+  return command?.optsWithGlobals ? command.optsWithGlobals() : (options || {});
+}
+
+function listAction(options, command) {
+  const o = opts(options, command);
   const args = ['positions'];
-  if (options.status) args.push('--status', options.status);
-  if (options.company) args.push('--company', options.company);
-  if (options.minScore) args.push('--min-score', String(options.minScore));
-  if (options.maxScore) args.push('--max-score', String(options.maxScore));
-  if (options.source) args.push('--source', options.source);
+  if (o.status) args.push('--status', o.status);
+  if (o.company) args.push('--company', o.company);
+  if (o.minScore) args.push('--min-score', String(o.minScore));
+  if (o.maxScore) args.push('--max-score', String(o.maxScore));
+  if (o.source) args.push('--source', o.source);
+  if (o.json) args.push('--json');
   const code = runDbQuery(args);
   if (code !== 0) process.exit(code);
 }
 
-function showAction(id) {
+function showAction(id, options, command) {
   if (!id) {
     console.error(c.red('Uso: jht positions show <id|legacy_id>'));
     process.exit(1);
   }
-  const code = runDbQuery(['position', String(id)]);
+  const args = ['position', String(id)];
+  if (opts(options, command).json) args.push('--json');
+  const code = runDbQuery(args);
   if (code !== 0) process.exit(code);
 }
 
-function dashboardAction() {
-  const code = runDbQuery(['dashboard']);
+function dashboardAction(options, command) {
+  const args = ['dashboard'];
+  if (opts(options, command).json) args.push('--json');
+  const code = runDbQuery(args);
   if (code !== 0) process.exit(code);
 }
 
 export function registerPositionsCommand(program) {
   const cmd = new Command('positions').description('Query DB posizioni (proxy a db_query.py)');
 
-  cmd.action(() => listAction({})); // default: jht positions → list all
+  // `--json` su ogni lettura: il default resta la tabella per l'occhio umano,
+  // il flag dà la stessa query come una riga JSON. Serve a chi guida `jht` da
+  // uno script o da un agente LLM, che altrimenti deve estrarre i dati a
+  // regex da colonne allineate a mano — vedi [JHT-CLI-AGENT-PARITY].
+  const JSON_HELP = 'output JSON (per script e agenti)';
+
+  cmd
+    .option('--json', JSON_HELP)
+    .action(listAction); // default: jht positions → list all
 
   cmd
     .command('list')
@@ -84,16 +113,19 @@ export function registerPositionsCommand(program) {
     .option('--min-score <n>', 'score minimo')
     .option('--max-score <n>', 'score massimo')
     .option('--source <src>', 'filtro fonte (linkedin, greenhouse, lever, ashby, pythonjobs, websearch, careerpages)')
+    .option('--json', JSON_HELP)
     .action(listAction);
 
   cmd
     .command('show <id>')
     .description('Mostra dettaglio di una posizione (id UUID o legacy_id numerico)')
+    .option('--json', JSON_HELP)
     .action(showAction);
 
   cmd
     .command('dashboard')
     .description('Riepilogo pipeline (totali per stato)')
+    .option('--json', JSON_HELP)
     .action(dashboardAction);
 
   program.addCommand(cmd);
