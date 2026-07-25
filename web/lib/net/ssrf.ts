@@ -38,7 +38,7 @@
  *
  * ## Faithful vs adapted from OpenClaw
  *
- * The IP/hostname classifiers (`shared/net/ip.ts`, `hostname.ts`) are a
+ * The IP/hostname classifiers (`./ip.ts`, `./hostname.ts`) are a
  * faithful port. This dispatcher distills the security-relevant slice of
  * OpenClaw's `ssrf.ts` + `fetch-guard.ts` (~1000 lines combined) into a
  * single ~350-line module: dropping proxy-mode dispatchers, undici
