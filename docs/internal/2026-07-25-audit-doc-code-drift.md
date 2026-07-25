@@ -68,16 +68,44 @@ prima non era coperto — e il test in CI a guardia del mirror committato.
 
 Tre voci nuove, tutte emerse da questo audit e tutte con evidenza misurata:
 
-### `[JHT-WEB-LOCAL-ROUTES-ORPHANED]` — 28 route API irraggiungibili
+### `[JHT-WEB-LOCAL-ROUTES-ORPHANED]` — 36 route morte, rimosse · 17 shell residue
 
-`grep -rln "runBash" web/app/api/ | wc -l` → **28**. Sono le route che eseguono comandi
-nel container (team start/stop, terminal, controllo agenti, sentinella,
-`profile-assistant/chat`, …). Dopo il ritiro di `:3000` non sono raggiungibili da
-**nessuno** dei due piani: su Vercel non c'è shell, nel container non c'è Next.js.
-Restano nel bundle Vercel e nella superficie di ogni audit di sicurezza. Vive solo il
-percorso di sviluppo `npm run dev:host` (`JHT_SHELL_VIA=docker:jht`).
-**Decisione da prendere per ciascuna:** eliminare, oppure marcare esplicitamente
-dev-only.
+Partito da `grep -rln "runBash" web/app/api/` → **28** route che shellano nel container.
+Analizzando **tutte** le 149 route (chiamanti cercati in `web/`, `game/scripts`,
+`cli/src`, `.launcher`, `shared`, `scripts`, `tui/src`, `e2e/tests`, `tests/js`,
+`agents/`, `docs/`, con match esatto sui segmenti dinamici) il quadro è risultato
+diverso e più ampio del sospetto iniziale:
+
+| Categoria | Esito |
+|---|---|
+| Zero chiamanti in qualunque file | **29** → rimosse |
+| Citate solo in commenti/doc | **7** → rimosse (6) / tenuta (1) |
+| Solo negli spec Playwright | **11** → destino legato a `[JHT-E2E-STALE]` |
+| Chiamate da codice vivo | il resto |
+
+**Rimosse: 36** (149 → 113 route; shell 28 → 17). Erano i feed della dashboard locale
+ritirata e della pagina team-v1 archiviata (`agents/*-activity`, `db/recent-writes`,
+`dashboard/stats`, `tokens/by-type`, `tokens/throttle`, `tokens/by-agent`,
+`team/{messages,queue,pacing-bridge}`, `dottore/actions`), il lifecycle VPS che ora vive
+nell'app (`vps/{pause,terminate,snapshot-destroy}`), la corsia profile-assistant
+(`profile-assistant/{chat,save,upload-cv}`, `profile/{sources,summaries}`), il controllo
+bridge (`bridge/{start,stop}`), `team/{start-all,stop-all}` — di cui il CLI porta ora
+l'unica implementazione — più `email`, `workspace/{browse,init}`, `assistente/{browse,check}`,
+`telegram/status`, `local/sync/synced-ids`, `positions/{recent,reverse-geocode}`,
+`pending-messages/ack-all`, `agents/speed-table`.
+
+**Tenuta di proposito:** `/api/canary`, diagnostica Supabase-vs-Vercel con le istruzioni
+`curl` nel file — si usa a mano durante un incidente, non ha bisogno di un chiamante.
+
+**Verifica:** `npm run build` in `web/` verde (compilato in 4.6s, zero errori) e nessun
+import residuo verso le route rimosse. I commenti che le citavano come riferimento di
+parità logica (`cli/src/commands/team/{start,stop}.js`, `.launcher/pacing-bridge.py`,
+`shared/skills/token-by-agent-series.py`) ora dicono che quel consumatore non esiste più.
+
+**Residuo aperto:** le 17 route shell restanti sono tutte chiamate dalle pagine
+`(protected)/team/*`, che appartengono al piano locale e sul cloud degradano a vuoto
+(`useIsCloud()` in `AgentInteraction`). La decisione — pagine dev-only o rimozione
+insieme alle route — resta nel BACKLOG.
 
 ### `[JHT-E2E-STALE]` — 78 spec Playwright che nessuno esegue
 
