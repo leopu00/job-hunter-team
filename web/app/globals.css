@@ -261,66 +261,6 @@ label {
 .h-scroll-top::-webkit-scrollbar-thumb { background: var(--color-muted); border-radius: 6px; }
 .h-scroll-top::-webkit-scrollbar-thumb:hover { background: var(--color-bright); }
 
-/* ── Landing page ───────────────────────────────────────────────── */
-@keyframes landing-type {
-  from { opacity: 0; transform: translateX(-4px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes landing-blink {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0; }
-}
-
-.landing-term-line {
-  opacity: 0;
-  animation: landing-type 0.3s ease forwards;
-}
-
-.landing-cursor {
-  opacity: 0;
-  color: var(--color-green);
-  animation: landing-type 0.2s ease forwards, landing-blink 0.8s step-end infinite 4.2s;
-}
-
-.landing-feature-card {
-  position: relative;
-}
-
-.landing-feature-card:hover {
-  border-color: var(--color-border-glow);
-  transform: translateY(-2px);
-}
-
-/* ── Modern Aesthetics ───────────────────────────────────────────── */
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
-}
-
-/* Speech bubble sopra agente: mantiene il translateX(-50%) per
-   centrarsi orizzontalmente, aggiunge solo translateY per fade-in. */
-@keyframes chat-bubble-in {
-  from { opacity: 0; transform: translate(-50%, 6px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
-}
-
-.glass-panel {
-  background: rgba(17, 17, 22, 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-.text-gradient {
-  background: linear-gradient(135deg, var(--color-white) 0%, var(--color-muted) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
 /* ── Focus visible ──────────────────────────────────────────────── */
 :focus-visible {
   outline: 2px solid var(--color-green);

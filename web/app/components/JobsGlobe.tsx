@@ -9,6 +9,17 @@ import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
 import { canonicalCountry, canonicalCityKey } from "@/lib/city-gazetteer";
+import {
+  attachFpsMonitor,
+  initialAutoTier,
+  profileFor,
+  readQualityPref,
+  writeQualityPref,
+  type FpsMonitorHandle,
+  type MapQualityPref,
+  type MapTier,
+  type MapTierProfile,
+} from "@/lib/map-perf";
 
 // Stringhe UI hardcoded localizzate (chart/empty/aria/popup).
 const T: Record<string, Record<string, string>> = {
@@ -128,6 +139,69 @@ const T: Record<string, Record<string, string>> = {
     de: "Verkleinern",
     fr: "Zoom arrière",
     pt: "Afastar",
+  },
+  quality: {
+    it: "Qualità grafica",
+    en: "Graphics quality",
+    hu: "Grafikai minőség",
+    es: "Calidad gráfica",
+    de: "Grafikqualität",
+    fr: "Qualité graphique",
+    pt: "Qualidade gráfica",
+  },
+  quality_auto: {
+    it: "Auto",
+    en: "Auto",
+    hu: "Automatikus",
+    es: "Auto",
+    de: "Auto",
+    fr: "Auto",
+    pt: "Auto",
+  },
+  quality_high: {
+    it: "Alta",
+    en: "High",
+    hu: "Magas",
+    es: "Alta",
+    de: "Hoch",
+    fr: "Élevée",
+    pt: "Alta",
+  },
+  quality_medium: {
+    it: "Media",
+    en: "Medium",
+    hu: "Közepes",
+    es: "Media",
+    de: "Mittel",
+    fr: "Moyenne",
+    pt: "Média",
+  },
+  quality_low: {
+    it: "Bassa",
+    en: "Low",
+    hu: "Alacsony",
+    es: "Baja",
+    de: "Niedrig",
+    fr: "Basse",
+    pt: "Baixa",
+  },
+  quality_auto_hint: {
+    it: "adatta la grafica alla fluidità misurata",
+    en: "adapts graphics to measured smoothness",
+    hu: "a grafikát a mért folyamatossághoz igazítja",
+    es: "adapta los gráficos a la fluidez medida",
+    de: "passt die Grafik an die gemessene Flüssigkeit an",
+    fr: "adapte le rendu à la fluidité mesurée",
+    pt: "adapta os gráficos à fluidez medida",
+  },
+  quality_current: {
+    it: "in uso ora",
+    en: "in use now",
+    hu: "jelenleg használatban",
+    es: "en uso ahora",
+    de: "aktuell aktiv",
+    fr: "utilisée actuellement",
+    pt: "em uso agora",
   },
   positions_here: {
     it: "posizioni a questo indirizzo",
@@ -253,19 +327,23 @@ const REMOTE_RING_RGB = "90,180,255";
 function createGroupBeamsImageData(
   scores: (number | null)[],
   remote: boolean,
+  // Profilo qualità: su hardware lento si disegnano meno raggi, più
+  // bassi, su un canvas più piccolo. È il costo per-icona che poi
+  // diventa texture nell'atlante GPU e ridisegno per frame.
+  profile: MapTierProfile,
 ): { data: ImageData; w: number; h: number } | null {
   const total = Math.max(1, scores.length);
   // Sort desc e cap ai top N_CAP — visualizziamo la testa della
   // distribuzione, non l'intero spettro.
   const sortedDesc = [...scores].sort((a, b) => (b ?? 0) - (a ?? 0));
-  const drawScores = sortedDesc.slice(0, MAX_BEAMS_PER_ICON);
+  const drawScores = sortedDesc.slice(0, profile.maxBeams);
   const N = drawScores.length;
   // Step radiale costante per cap fisso → layout stabile.
   const ringStep = N <= 4 ? 14 : N <= 12 ? 11 : 9;
   const yScale = 0.42;
   const beamW = Math.max(3, Math.min(8, ringStep - 3));
-  const minH = 90;
-  const maxH = 400;
+  const minH = Math.min(90, profile.beamMaxHeight * 0.45);
+  const maxH = profile.beamMaxHeight;
   const haloPad = 36;
 
   const layout = arrangeCircle(N, ringStep, yScale);
@@ -295,10 +373,15 @@ function createGroupBeamsImageData(
   const H = 2 * halfH;
 
   const c = document.createElement("canvas");
-  c.width = W;
-  c.height = H;
+  // Il disegno resta in unità base: si scala il canvas e si compensa il
+  // pixelRatio dichiarato a MapLibre (vedi syncData), così l'icona ha la
+  // stessa dimensione a schermo ma pesa `iconScale²` in texture.
+  const s = profile.iconScale;
+  c.width = Math.max(1, Math.round(W * s));
+  c.height = Math.max(1, Math.round(H * s));
   const ctx = c.getContext("2d");
   if (!ctx) return null;
+  if (s !== 1) ctx.scale(s, s);
 
   const cx = W / 2;
   // baseY al centro del canvas. Con icon-anchor "center" la coord
@@ -315,15 +398,19 @@ function createGroupBeamsImageData(
 
   // Halo: ellisse tenue al centro (più piccolo + meno opaco rispetto
   // alle prime versioni). Suggerisce il "terreno" senza dominare.
-  const haloR = Math.max(28, halfW * 0.55);
-  const haloGrad = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, haloR);
-  haloGrad.addColorStop(0, `${haloBase}${0.3 * topSal})`);
-  haloGrad.addColorStop(0.5, `${haloBase}${0.1 * topSal})`);
-  haloGrad.addColorStop(1, `${haloBase}0)`);
-  ctx.fillStyle = haloGrad;
-  ctx.beginPath();
-  ctx.ellipse(cx, baseY, haloR, haloR * yScale, 0, 0, 2 * Math.PI);
-  ctx.fill();
+  // Saltato sui profili senza halo: è un gradiente radiale su area
+  // larga, cioè fillrate, la cosa che un rasterizer software paga di più.
+  if (profile.beamHalo) {
+    const haloR = Math.max(28, halfW * 0.55);
+    const haloGrad = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, haloR);
+    haloGrad.addColorStop(0, `${haloBase}${0.3 * topSal})`);
+    haloGrad.addColorStop(0.5, `${haloBase}${0.1 * topSal})`);
+    haloGrad.addColorStop(1, `${haloBase}0)`);
+    ctx.fillStyle = haloGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, baseY, haloR, haloR * yScale, 0, 0, 2 * Math.PI);
+    ctx.fill();
+  }
 
   // Niente blur filter: era il più costoso del rendering canvas e
   // non aggiunge molto valore visivo con raggi sottili. Painter sort
@@ -401,7 +488,11 @@ function createGroupBeamsImageData(
     ctx.stroke();
   }
 
-  return { data: ctx.getImageData(0, 0, W, H), w: W, h: H };
+  return {
+    data: ctx.getImageData(0, 0, c.width, c.height),
+    w: c.width,
+    h: c.height,
+  };
 }
 
 // Carto basemap styles (free, no API key, CDN OSS).
@@ -568,6 +659,37 @@ function aggregateGroups(
   return out;
 }
 
+// Applica al layer corrente le scelte del profilo qualità che vivono
+// nello style (non nel costruttore della mappa): halo dei fasci e
+// etichette della basemap. Il placement dei simboli di testo è lavoro
+// CPU per frame — sul tier basso si spegne.
+function applyProfileToStyle(map: MaplibreMap, profile: MapTierProfile) {
+  try {
+    if (map.getLayer(LAYER_HALO_ID)) {
+      map.setLayoutProperty(
+        LAYER_HALO_ID,
+        "visibility",
+        profile.beamHalo ? "visible" : "none",
+      );
+    }
+  } catch {
+    /* style non ancora pronto: ci ripasserà style.load */
+  }
+  try {
+    for (const layer of map.getStyle()?.layers ?? []) {
+      if (layer.type !== "symbol") continue;
+      if (layer.id === LAYER_DOT_ID) continue; // i nostri pin restano
+      map.setLayoutProperty(
+        layer.id,
+        "visibility",
+        profile.basemapLabels ? "visible" : "none",
+      );
+    }
+  } catch {
+    /* idem */
+  }
+}
+
 // Paint override per allineare il basemap al theme JHT.
 // Dark = inverso cromatico della light: stessa palette grayscale
 // neutra (warm offwhite → warm darkgray), nessun verde/blu acceso.
@@ -628,7 +750,6 @@ function formatFoundDate(ts: string | null): string | null {
 }
 
 export default function JobsGlobe({
-  hero = false,
   fullscreen = false,
   selectedTypes = [],
   selectedScoreRanges = [],
@@ -639,7 +760,6 @@ export default function JobsGlobe({
   focusPosition = null,
   familyColors = {},
 }: {
-  hero?: boolean;
   fullscreen?: boolean;
   selectedTypes?: string[];
   selectedScoreRanges?: Array<{ lo: number; hi: number }>;
@@ -695,6 +815,29 @@ export default function JobsGlobe({
   // Registry icone gruppo registrate sulla mappa: iconId -> true. Permette
   // di rimuoverle quando il set di gruppi visibili cambia (filtri).
   const registeredIconsRef = useRef<Set<string>>(new Set());
+
+  // --- Qualità grafica adattiva (vedi lib/map-perf.ts) -------------------
+  // `pref` è la scelta esplicita dell'utente ("auto" = adattiva);
+  // `tier` è il livello effettivamente in uso in questo momento.
+  // Entrambi inizializzati lazy: leggono window/navigator, quindi mai
+  // durante il render server.
+  const [qualityPref, setQualityPref] = useState<MapQualityPref>(() =>
+    typeof window === "undefined" ? "auto" : readQualityPref(),
+  );
+  // Il tier di partenza è deciso PRIMA di costruire la mappa: pixelRatio
+  // e fadeDuration si passano solo al costruttore.
+  const [tier, setTier] = useState<MapTier>(() => {
+    if (typeof window === "undefined") return "high";
+    const pref = readQualityPref();
+    return pref === "auto" ? initialAutoTier().tier : pref;
+  });
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const profile = useMemo(() => profileFor(tier), [tier]);
+  const profileRef = useRef<MapTierProfile>(profile);
+  profileRef.current = profile;
+  const qualityPrefRef = useRef<MapQualityPref>(qualityPref);
+  qualityPrefRef.current = qualityPref;
+  const fpsMonitorRef = useRef<FpsMonitorHandle | null>(null);
 
   // Applica filtri donut (tipi) + histogram (range score + flag
   // unscored) di /map. Tra tipi e score: AND. Dentro score:
@@ -852,6 +995,7 @@ export default function JobsGlobe({
     if (!mapContainerRef.current || mapRef.current) return;
     const container = mapContainerRef.current;
 
+    const boot = profileRef.current;
     const map = new maplibregl.Map({
       container,
       style: themeRef.current === "light" ? STYLE_LIGHT : STYLE_DARK,
@@ -860,11 +1004,18 @@ export default function JobsGlobe({
       attributionControl: { compact: true },
       pitch: 0,
       bearing: 0,
+      // Qualità: pixelRatio e fadeDuration si possono dare SOLO qui
+      // (fadeDuration non ha setter pubblico), quindi il tier di boot
+      // deve essere già quello giusto. Il degrado runtime agisce poi su
+      // pixelRatio/proiezione/halo/icone, che sono modificabili a caldo.
+      pixelRatio: boot.canvasPixelRatio,
+      fadeDuration: boot.fadeDuration,
+      maxTileCacheSize: boot.maxTileCacheSize,
     });
 
     const onStyleLoad = () => {
       try {
-        map.setProjection({ type: "globe" });
+        map.setProjection({ type: profileRef.current.projection });
       } catch (e) {
         console.warn("[JobsGlobe] globe projection unsupported:", e);
       }
@@ -1025,6 +1176,9 @@ export default function JobsGlobe({
         });
       }
       layersReadyRef.current = true;
+      // Halo/etichette secondo il tier corrente: va rifatto a ogni
+      // style.load perché il cambio tema ricarica lo style da zero.
+      applyProfileToStyle(map, profileRef.current);
       syncData(map);
     };
     map.on("style.load", onStyleLoad);
@@ -1090,7 +1244,7 @@ export default function JobsGlobe({
         if (vp) {
           map.fitBounds(vp.bounds, {
             padding: { top: 140, bottom: 90, left: 90, right: 90 },
-            duration: 800,
+            duration: profileRef.current.flyDuration,
             maxZoom: 14,
           });
         }
@@ -1105,7 +1259,7 @@ export default function JobsGlobe({
         map.flyTo({
           center: [g.lon, g.lat],
           zoom: Math.max(map.getZoom(), 11),
-          duration: 800,
+          duration: profileRef.current.flyDuration,
         });
         return;
       }
@@ -1116,7 +1270,7 @@ export default function JobsGlobe({
       map.flyTo({
         center: [g.lon, g.lat],
         zoom: Math.max(map.getZoom(), 11),
-        duration: 800,
+        duration: profileRef.current.flyDuration,
       });
     });
 
@@ -1133,6 +1287,21 @@ export default function JobsGlobe({
     // basso-centro, orizzontali e affiancati a "Vista generale".
     mapRef.current = map;
 
+    // Misura la fluidità reale e corregge il tier. Attivo solo in
+    // modalità auto: se l'utente ha scelto un livello a mano, quello
+    // resta (il monitor viene staccato dall'effect qui sotto).
+    fpsMonitorRef.current = attachFpsMonitor(
+      map,
+      profileRef.current.tier,
+      (next, info) => {
+        if (qualityPrefRef.current !== "auto") return;
+        console.info(
+          `[JobsGlobe] qualità ${info.direction === "down" ? "ridotta" : "aumentata"} a "${next}" (${info.fps.toFixed(0)} fps misurati)`,
+        );
+        setTier(next);
+      },
+    );
+
     const ro = new ResizeObserver(() => {
       try {
         map.resize();
@@ -1142,6 +1311,8 @@ export default function JobsGlobe({
 
     return () => {
       ro.disconnect();
+      fpsMonitorRef.current?.stop();
+      fpsMonitorRef.current = null;
       layersReadyRef.current = false;
       map.remove();
       mapRef.current = null;
@@ -1194,6 +1365,43 @@ export default function JobsGlobe({
     syncData(map);
   }, [clustered, loaded]);
 
+  // Applica a caldo un cambio di tier (deciso dal monitor FPS o dal
+  // selettore). Tutto ciò che qui si tocca è modificabile a mappa viva:
+  // risoluzione del canvas, proiezione, halo, etichette, icone dei
+  // fasci. fadeDuration no — resta quello del boot, è cosmetico.
+  const appliedTierRef = useRef<MapTier | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (appliedTierRef.current === tier) return;
+    const first = appliedTierRef.current == null;
+    appliedTierRef.current = tier;
+    fpsMonitorRef.current?.reset(tier);
+    if (first) return; // il boot ha già costruito la mappa con questo profilo
+    try {
+      map.setPixelRatio(profile.canvasPixelRatio);
+    } catch {
+      /* ignora */
+    }
+    try {
+      map.setProjection({ type: profile.projection });
+    } catch {
+      /* proiezione non supportata: resta quella corrente */
+    }
+    applyProfileToStyle(map, profile);
+    // Le icone-fascio sono disegnate secondo il vecchio profilo: si
+    // buttano e si rigenerano al primo syncData.
+    for (const id of Array.from(registeredIconsRef.current)) {
+      try {
+        if (map.hasImage(id)) map.removeImage(id);
+      } catch {
+        /* race ok */
+      }
+    }
+    registeredIconsRef.current.clear();
+    syncData(map);
+  }, [tier, profile]);
+
   // Reagisci al cambio theme JHT (dark/light/system): switch del basemap.
   useEffect(() => {
     themeRef.current = resolvedTheme;
@@ -1222,11 +1430,19 @@ export default function JobsGlobe({
     for (const g of groups) {
       neededIcons.add(g.iconId);
       if (!map.hasImage(g.iconId)) {
-        const img = createGroupBeamsImageData(g.scores, g.remote);
+        const img = createGroupBeamsImageData(
+          g.scores,
+          g.remote,
+          profileRef.current,
+        );
         if (img) {
           // pixelRatio 2 → l'icon-size 1.0 renderizza l'immagine a
-          // metà delle dim canvas: netto su display retina.
-          map.addImage(g.iconId, img.data, { pixelRatio: 2 });
+          // metà delle dim canvas: netto su display retina. Con icone
+          // renderizzate a scala ridotta il ratio scende in proporzione,
+          // così la dimensione a schermo resta identica.
+          map.addImage(g.iconId, img.data, {
+            pixelRatio: 2 * profileRef.current.iconScale,
+          });
           registeredIconsRef.current.add(g.iconId);
         }
       }
@@ -1276,7 +1492,7 @@ export default function JobsGlobe({
     if (!vp) return;
     map.fitBounds(vp.bounds, {
       padding: { top: 60, bottom: 60, left: 60, right: 60 },
-      duration: 800,
+      duration: profileRef.current.flyDuration,
       maxZoom: 7,
       // Reset anche dell'inclinazione (pitch) e dell'orientamento
       // (bearing) → torna alla vista piatta di default, non solo al
@@ -1326,7 +1542,7 @@ export default function JobsGlobe({
     if (!vp) return;
     map.fitBounds(vp.bounds, {
       padding: { top: 80, bottom: 80, left: 80, right: 80 },
-      duration: 800,
+      duration: profileRef.current.flyDuration,
       // maxZoom city-level (era 7 = livello stato): filtrando una città
       // si scende fino allo zoom città; per insiemi più ampi (paese,
       // tutto) fitBounds sceglie comunque uno zoom inferiore.
@@ -1348,21 +1564,18 @@ export default function JobsGlobe({
     map.flyTo({
       center: [pos.lon, pos.lat],
       zoom: Math.max(map.getZoom(), 13),
-      duration: 800,
+      duration: profileRef.current.flyDuration,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPosition?.tick]);
 
-  const wrapClass =
-    hero || fullscreen
-      ? fullscreen
-        ? "h-full"
-        : ""
-      : "bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]";
+  const wrapClass = fullscreen
+    ? "h-full"
+    : "bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]";
 
   return (
     <div className={wrapClass}>
-      {!hero && !fullscreen && (
+      {!fullscreen && (
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <span className="section-label">{tr("jobs_map")}</span>
           <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
@@ -1400,16 +1613,15 @@ export default function JobsGlobe({
       `}</style>
       <div
         ref={mapWrapRef}
-        className={`jht-globe-wrap relative w-full overflow-hidden ${hero || fullscreen ? "" : "rounded-md"}`}
+        className={`jht-globe-wrap relative w-full overflow-hidden ${fullscreen ? "" : "rounded-md"}`}
         // zoom: 1 neutralizza il body { zoom: var(--zoom) } di JHT
         // che mandava MapLibre a leggere dimensioni canvas sbagliate.
-        // In hero il bg è transparent così il globo si fonde col
-        // body (--color-deep) senza frame; in card mode mantiene
-        // --color-deep esplicito. In fullscreen height=100% riempie
-        // il container fisso (es. /map).
+        // In fullscreen (es. /map) il bg è transparent e l'altezza
+        // riempie il container fisso; in card mode il riquadro mantiene
+        // --color-deep esplicito e un'altezza fissa.
         style={{
-          height: fullscreen ? "100%" : hero ? 620 : 500,
-          background: hero || fullscreen ? "transparent" : "var(--color-deep)",
+          height: fullscreen ? "100%" : 500,
+          background: fullscreen ? "transparent" : "var(--color-deep)",
           zoom: 1,
         }}
       >
@@ -1515,6 +1727,138 @@ export default function JobsGlobe({
                       <line x1="18.5" y1="12" x2="22.5" y2="12" />
                     </svg>
                   </GlobeCtrlButton>
+                </>
+              )}
+            </div>
+
+            {/* Selettore qualità grafica. "Auto" adatta il rendering
+                alla fluidità misurata; i livelli fissi servono quando
+                il rilevamento sbaglia (tipicamente su VDI/desktop
+                remoti, dove il WebGL gira in software). */}
+            <div style={{ position: "relative" }}>
+              <div
+                className="flex items-stretch"
+                style={{
+                  background: "var(--color-panel)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: 9999,
+                  overflow: "hidden",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+                }}
+              >
+                <GlobeCtrlButton
+                  onClick={() => setQualityOpen((o) => !o)}
+                  label={`${tr("quality")}: ${tr(`quality_${qualityPref}`)}`}
+                >
+                  {/* Cursori: metafora "regolazione", non decorativa */}
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    aria-hidden
+                  >
+                    <line x1="4" y1="7" x2="20" y2="7" />
+                    <line x1="4" y1="17" x2="20" y2="17" />
+                    <circle cx="10" cy="7" r="2.4" />
+                    <circle cx="15" cy="17" r="2.4" />
+                  </svg>
+                </GlobeCtrlButton>
+              </div>
+
+              {qualityOpen && (
+                <>
+                  {/* Click fuori = chiudi */}
+                  <div
+                    onClick={() => setQualityOpen(false)}
+                    style={{ position: "fixed", inset: 0, zIndex: 20 }}
+                  />
+                  <div
+                    role="menu"
+                    aria-label={tr("quality")}
+                    style={{
+                      position: "absolute",
+                      bottom: 42,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      zIndex: 21,
+                      minWidth: 172,
+                      background: "var(--color-panel)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: 8,
+                      boxShadow: "0 6px 18px rgba(0,0,0,0.45)",
+                      padding: 6,
+                    }}
+                  >
+                    <p
+                      className="px-2 pt-1 pb-2 text-[10px] uppercase tracking-wider"
+                      style={{ color: "var(--color-dim)" }}
+                    >
+                      {tr("quality")}
+                    </p>
+                    {(
+                      ["auto", "high", "medium", "low"] as MapQualityPref[]
+                    ).map((opt) => {
+                      const active = qualityPref === opt;
+                      return (
+                        <button
+                          key={opt}
+                          role="menuitemradio"
+                          aria-checked={active}
+                          onClick={() => {
+                            setQualityPref(opt);
+                            writeQualityPref(opt);
+                            setTier(
+                              opt === "auto" ? initialAutoTier().tier : opt,
+                            );
+                            setQualityOpen(false);
+                          }}
+                          className="w-full text-left transition-colors hover:bg-[var(--color-card)]"
+                          style={{
+                            display: "block",
+                            padding: "6px 8px",
+                            borderRadius: 6,
+                            border: "none",
+                            background: active
+                              ? "var(--color-card)"
+                              : "transparent",
+                            color: active
+                              ? "var(--color-bright)"
+                              : "var(--color-muted)",
+                            cursor: "pointer",
+                            fontSize: 11,
+                          }}
+                        >
+                          {tr(`quality_${opt}`)}
+                          {opt === "auto" && (
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: 9,
+                                color: "var(--color-dim)",
+                              }}
+                            >
+                              {tr("quality_auto_hint")}
+                            </span>
+                          )}
+                          {qualityPref === "auto" && opt === tier && (
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: 9,
+                                color: "var(--color-dim)",
+                              }}
+                            >
+                              {tr("quality_current")}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </>
               )}
             </div>

@@ -211,37 +211,3 @@ export function CopyButton({
 
 // ── CopyField — input readonly con CopyButton integrato ────────────────────
 
-export function CopyField({ value, label }: { value: string; label?: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      {label && (
-        <p
-          className="text-[10px] font-semibold tracking-widest uppercase"
-          style={{ color: "var(--color-muted)" }}
-        >
-          {label}
-        </p>
-      )}
-      <div
-        className="flex items-center rounded overflow-hidden"
-        style={{ border: "1px solid var(--color-border)" }}
-      >
-        <input
-          readOnly
-          value={value}
-          className="flex-1 px-3 py-2 text-[11px] font-mono bg-[var(--color-card)] outline-none truncate"
-          style={{ color: "var(--color-bright)", border: "none" }}
-        />
-        <div
-          className="flex-shrink-0 px-2"
-          style={{
-            borderLeft: "1px solid var(--color-border)",
-            background: "var(--color-row)",
-          }}
-        >
-          <CopyButton text={value} variant="inline" size="md" />
-        </div>
-      </div>
-    </div>
-  );
-}

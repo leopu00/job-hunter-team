@@ -31,7 +31,7 @@ const ACTION_META: Record<
 };
 
 /* ── i18n ─────────────────────────────────────────────────────────── */
-// Stesso pattern di TicketPanel/NotificationCenter: dict inline per le 7
+// Stesso pattern di TicketPanel: dict inline per le 7
 // lingue + useLocale (cookie NEXT_LOCALE). Termini invariati: VPS,
 // snapshot, "jht up", Supabase, deploy. Il suffisso del prezzo mensile
 // segue la convenzione delle pagine docs (/mese, /mo, /mes, /mois,
