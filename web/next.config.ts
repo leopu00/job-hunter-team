@@ -57,7 +57,6 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     '*': [
       path.join(MONOREPO_ROOT, 'cli/**'),
-      path.join(MONOREPO_ROOT, 'tui/**'),
       path.join(MONOREPO_ROOT, 'agents/**'),
       path.join(MONOREPO_ROOT, 'e2e/**'),
       path.join(MONOREPO_ROOT, 'tests/**'),

@@ -45,7 +45,7 @@ repos:
       - id: zizmor
         args: [--persona=regular, --min-severity=medium, --min-confidence=medium]
 
-  # Audit npm produzione (cli/desktop/tui/web). Blocca commit se
+  # Audit npm produzione (cli/web). Blocca commit se
   # vulnerabilita' high+ presenti nelle dipendenze prod.
   - repo: local
     hooks:
