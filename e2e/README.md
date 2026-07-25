@@ -53,11 +53,19 @@ ships. Useful to exercise rendering, misleading as a production signal.
 
 ```bash
 cd web && JHT_HOME=/tmp/empty-jht NEXT_PUBLIC_JHT_DEPLOY=cloud npm run dev -- -p 3008
-cd e2e && BASE_URL=http://127.0.0.1:3008 npx playwright test 80-welcome 81-demo
+cd e2e && BASE_URL=http://localhost:3008 npx playwright test 80-welcome 81-demo
 ```
 
 Anonymous: the demo API and the auth-closure tests pass; everything behind the
-login skips.
+login skips. With a session (below): 16/16.
+
+> 🚨 **Use `localhost`, never `127.0.0.1`, against `next dev`.** Next refuses the
+> HMR WebSocket upgrade when the host is not `localhost`; the dev runtime then
+> hangs reconnecting and **React never hydrates**. The pages render, every click
+> does nothing, and your tests fail with messages that point everywhere except
+> the cause. Measured on 2026-07-25: same server, same build — `localhost`
+> advances the wizard, `127.0.0.1` does not. The config default was changed for
+> this reason.
 
 ```bash
 npm test             # full suite
@@ -67,22 +75,36 @@ npm run test:report  # open the HTML report
 
 ## Sessione
 
-To unskip the protected-area specs you need a real Supabase session:
+The protected area needs a real Supabase session. **It is already set up** — one
+command regenerates it:
 
-1. Create a **dedicated test account** on the Supabase project (never a personal
-   one: these specs write feedback and toggle demo state).
-2. Log in once by hand and save the storage state:
-   ```bash
-   npx playwright open --save-storage=auth-state.json http://127.0.0.1:3008
-   ```
-3. Nothing else to wire: `playwright.config.ts` picks the file up automatically
-   if it exists (override the name with `E2E_STORAGE_STATE`). On startup it
-   prints which mode it is in, so a green run never leaves you guessing whether
-   the protected area was actually exercised. `auth-state.json` is git-ignored:
-   **never commit it**, it carries a live session token.
+```bash
+node e2e/scripts/refresh-auth-state.mjs
+```
 
-Not wired into CI on purpose: it needs a secret and an account decision that
-belongs to the maintainer. Until then, treat the suite as a public-surface check.
+That script signs in as the dedicated test account with email+password against
+`/auth/v1/token` and writes `auth-state.json` in the exact cookie format
+`@supabase/ssr` expects (`base64-` prefix, chunked at 3180 bytes, for both
+`localhost` and `127.0.0.1`). `playwright.config.ts` picks the file up
+automatically and announces at startup whether the protected-area specs will
+run. Sessions last an hour: when they expire, run it again.
+
+**Why not the interactive OAuth login** (`playwright open --save-storage`), which
+is the usual recipe: it does not work here, for two independent reasons.
+
+1. Google refuses OAuth from automated browsers ("this browser may not be
+   secure"), and Chrome for Testing is one of them.
+2. The dev port is not in the project's allowed redirect URLs, so even past
+   point 1 the return trip would fail.
+
+An email+password account sidesteps both and survives unattended runs.
+Credentials live in `e2e/.auth-credentials` (git-ignored, `chmod 600`); the
+account is `e2e-tests@jobhunterteam.ai`, created on 2026-07-25, and owns no
+data — RLS isolates rows per `user_id` and this one has none. `auth-state.json`
+is git-ignored too: **never commit it**, it carries a live session token.
+
+Still not wired into CI: that needs the credentials as a repository secret,
+which is a maintainer decision.
 
 ## What is covered elsewhere (and better)
 

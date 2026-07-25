@@ -89,15 +89,24 @@ test.describe("demo mode — pagine", () => {
     expect(res?.status()).toBe(200);
   });
 
-  test("map e swipe rispondono con contenuto", async ({ page }) => {
+  test("map e swipe rispondono e sono etichettate come demo", async ({
+    page,
+  }) => {
+    // NB su /map: la mappa vera non si renderizza in headless (nessun canvas,
+    // nessun tile, nessun pin — misurato il 2026-07-25: servirebbe WebGL, che
+    // il browser headless non espone). È un limite dell'ambiente, non del
+    // prodotto, quindi qui si verifica ciò che *è* verificabile: la pagina
+    // risponde e si dichiara demo. Il fatto che il dataset abbia coordinate da
+    // mostrare è coperto da tests/js/tasks/demo-queries.test.ts.
     for (const path of ["/map", "/swipe"]) {
       const res = await page.goto(`${BASE}${path}`, {
-        waitUntil: "domcontentloaded",
+        waitUntil: "networkidle",
       });
       expect(res?.status(), `${path} non risponde 200`).toBe(200);
-      expect((await page.locator("body").innerText()).length).toBeGreaterThan(
-        100,
-      );
+      await expect(
+        page.getByText(/demo/i).first(),
+        `${path} senza banda demo`,
+      ).toBeVisible();
     }
   });
 
