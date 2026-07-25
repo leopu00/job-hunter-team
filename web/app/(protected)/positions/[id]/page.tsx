@@ -950,7 +950,7 @@ interface PageProps {
 export default async function PositionDetailPage({ params }: PageProps) {
   const { id } = await params;
 
-  // Locale corrente dalla fonte unica (cookie NEXT_LOCALE), come next-intl.
+  // Locale corrente dalla fonte unica: il cookie NEXT_LOCALE.
   const cookieStore = await cookies();
   const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
   const locale: Locale =

@@ -61,8 +61,8 @@ function savePrefs(prefs: { locale: Locale }): void {
   }
 }
 
-// GET — locale corrente + lista lingue supportate. Cookie NEXT_LOCALE è la
-// fonte primaria (allineata a next-intl); il file è il fallback persistente.
+// GET — locale corrente + lista lingue supportate. Il cookie NEXT_LOCALE è la
+// fonte primaria; il file è il fallback persistente.
 export async function GET(req: Request) {
   const cookieHeader = req.headers.get("cookie") || "";
   const cookieMatch = cookieHeader.match(/(?:^|;\s*)NEXT_LOCALE=([^;]+)/);
@@ -75,8 +75,8 @@ export async function GET(req: Request) {
 }
 
 // POST — cambia locale attivo. Persiste sia il file (~/.jht/i18n-prefs.json)
-// sia il cookie NEXT_LOCALE letto da next-intl server-side, così la prossima
-// richiesta server-renderizza nella locale giusta senza flash.
+// sia il cookie NEXT_LOCALE letto server-side, così la prossima richiesta
+// server-renderizza nella locale giusta senza flash.
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
