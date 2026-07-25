@@ -1004,8 +1004,13 @@ func _begin_desk_pause(duration: float) -> void:
 func _set_desk_occupied(on: bool) -> void:
 	var was_at_desk := _desk_pose_active
 	var desk_node: FurnitureNode = FurnitureNode.desks.get(_desk_key)
-	var use_composite := _seated() and desk_node != null \
-			and desk_node.has_seated_art()
+	# I compositi storici contengono un occupante generico dipinto dentro la
+	# scrivania. Ora ogni persona del reparto ha il proprio foglio seduto: in
+	# quel caso il rig dinamico deve vincere, altrimenti tutte le varianti
+	# tornano visivamente al volto `a` (e i Critici ricevono tutti la parrucca).
+	var rig_has_sit: bool = rig != null and rig.get("has_sit") == true
+	var use_composite: bool = _seated() and desk_node != null \
+			and desk_node.has_seated_art() and not rig_has_sit
 	if desk_node and desk_node.has_seated_art():
 		desk_node.set_occupied(on and use_composite)
 	if rig:

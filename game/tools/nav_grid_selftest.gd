@@ -252,6 +252,21 @@ func _test_department_character_variants() -> void:
 			var texture: Texture2D = load(path)
 			_assert(texture.get_size() == Vector2(1536, 4608),
 					"character variant has wrong size: %s" % path)
+		var sit_path := "res://assets/characters/sheets/%s_%s_sit.png" % [slug, variant]
+		if variant == "a":
+			sit_path = "res://assets/characters/sheets/%s_sit.png" % slug
+		_assert(_texture_loads(sit_path), "seated character variant missing: %s" % sit_path)
+		if _texture_loads(sit_path):
+			var sit_texture: Texture2D = load(sit_path)
+			_assert(sit_texture.get_size() == Vector2(1024, 1152),
+					"seated character variant has wrong size: %s" % sit_path)
+			var rig: Node2D = CharacterDefsScript.make_rig(slug, variant)
+			var selected_sit: Texture2D = rig.get("_sit_sheet")
+			_assert(selected_sit != null, "rig did not select seated sheet: %s" % sit_path)
+			if selected_sit != null:
+				_assert(selected_sit.resource_path == sit_path,
+						"rig selected %s instead of %s" % [selected_sit.resource_path, sit_path])
+			rig.free()
 	for dept_id in CharacterDefsScript.DEPT_ROLES:
 		var slug := str(CharacterDefsScript.DEPT_ROLES[dept_id]["slug"])
 		for variant in ["a", "b", "c", "d", "e", "f"]:
