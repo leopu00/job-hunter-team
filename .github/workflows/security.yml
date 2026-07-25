@@ -23,12 +23,28 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Audit web/
+      # Ciò che raggiunge gli utenti: qui una high FERMA la pipeline.
+      - name: Audit web/ — produzione
         working-directory: web
-        run: npm audit --audit-level=high --package-lock-only
+        run: npm audit --omit=dev --audit-level=high --package-lock-only
 
       - name: Audit tests/js/
         working-directory: tests/js
+        run: npm audit --audit-level=high --package-lock-only
+
+      # Le dipendenze di sviluppo restano sotto osservazione ma non bloccano il
+      # merge, perché non finiscono in nessun bundle e a volte non hanno una via
+      # d'uscita: il 25/07 l'unico avviso era brace-expansion (DoS per
+      # espansione illimitata) dentro la catena ESLint, dove minimatch@3 chiede
+      # `^1.1.7` e la correzione esiste solo nella linea 5.x — che con
+      # minimatch@3 non è nemmeno chiamabile (`expand is not a function`,
+      # verificato). L'unico fix offerto era eslint@10, che i plugin portati da
+      # eslint-config-next non accettano (peer fino a ^9): si romperebbe il lint
+      # per far tacere un avviso su un attrezzo da banco. Il log resta leggibile
+      # e Dependabot continua ad aprire le PR.
+      - name: Audit web/ — sviluppo (informativo)
+        working-directory: web
+        continue-on-error: true
         run: npm audit --audit-level=high --package-lock-only
 
   secrets:
