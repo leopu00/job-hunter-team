@@ -18,10 +18,16 @@
  *
  * Uso:
  *   node e2e/scripts/refresh-auth-state.mjs
- *   BASE_URL=http://127.0.0.1:3008 npx playwright test    # ora entra
+ *   BASE_URL=http://localhost:3008 npx playwright test    # ora entra
  *
- * Le credenziali stanno in `e2e/.auth-credentials` (gitignored). Se il file
- * manca, questo script dice come ricrearlo e esce senza rumore.
+ * ⚠️ `localhost`, non `127.0.0.1`: contro `next dev` Next rifiuta l'upgrade
+ * WebSocket dell'HMR se l'host è diverso, e senza HMR React non idrata (pagine
+ * visibili, click che non fanno nulla).
+ *
+ * Le credenziali si cercano in ordine: variabili d'ambiente (è così che le
+ * riceve la CI) → `e2e/.auth-credentials` del worktree → `~/.config/jht/
+ * e2e-credentials`, che è la posizione canonica perché vale per TUTTI i
+ * worktree. Se non si trovano, lo script dice dove ha guardato ed esce.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -31,8 +37,33 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const E2E_DIR = path.resolve(HERE, "..");
 const REPO = path.resolve(E2E_DIR, "..");
 
-const CREDS = path.join(E2E_DIR, ".auth-credentials");
 const OUT = path.join(E2E_DIR, "auth-state.json");
+
+// ── Dove cercare le credenziali, in ordine ──────────────────────────────
+//
+// Il repo è sviluppato su più worktree in parallelo (dev1…dev8, master): un
+// file di credenziali dentro *un* worktree serve solo a quello, e gli altri si
+// ritroverebbero i test skippati senza capire perché. Quindi la posizione
+// canonica è **fuori dai worktree**, in `~/.config/jht/` — una sola copia del
+// segreto, valida ovunque.
+//
+// Non `~/.jht/`: quella directory è bind-mountata dentro il container degli
+// agenti, e un segreto di test non ha motivo di finire sotto i loro occhi.
+const XDG =
+  process.env.XDG_CONFIG_HOME ||
+  path.join(process.env.HOME || process.env.USERPROFILE || "", ".config");
+const SHARED_CREDS = path.join(XDG, "jht", "e2e-credentials");
+const LOCAL_CREDS = path.join(E2E_DIR, ".auth-credentials");
+
+const CRED_SOURCES = [
+  // 1. Ambiente: è così che le riceve la CI (dai repository secrets).
+  { kind: "env", path: "(variabili d'ambiente E2E_EMAIL / E2E_PASSWORD)" },
+  // 2. File del worktree corrente: sovrascrive quello condiviso, utile per
+  //    provare un account diverso senza toccare gli altri worktree.
+  { kind: "file", path: LOCAL_CREDS },
+  // 3. File condiviso: la posizione canonica.
+  { kind: "file", path: SHARED_CREDS },
+];
 
 // I domini su cui il cookie va installato: il test può girare su localhost o
 // su 127.0.0.1, e per i cookie sono host distinti.
@@ -46,22 +77,40 @@ function fail(msg) {
   process.exit(1);
 }
 
-function readCreds() {
-  if (!fs.existsSync(CREDS)) {
-    fail(
-      `credenziali non trovate: ${CREDS}\n` +
-        `  Il file è gitignored e contiene E2E_EMAIL / E2E_PASSWORD dell'account\n` +
-        `  riservato ai test. Vedi e2e/README.md § Sessione.`,
-    );
-  }
+function parseEnvFile(file) {
   const env = {};
-  for (const line of fs.readFileSync(CREDS, "utf8").split("\n")) {
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
     const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
     if (m) env[m[1]] = m[2].trim();
   }
-  if (!env.E2E_EMAIL || !env.E2E_PASSWORD)
-    fail(`${CREDS} non contiene E2E_EMAIL e E2E_PASSWORD`);
   return env;
+}
+
+function readCreds() {
+  for (const source of CRED_SOURCES) {
+    if (source.kind === "env") {
+      if (process.env.E2E_EMAIL && process.env.E2E_PASSWORD) {
+        return {
+          E2E_EMAIL: process.env.E2E_EMAIL,
+          E2E_PASSWORD: process.env.E2E_PASSWORD,
+          from: source.path,
+        };
+      }
+      continue;
+    }
+    if (!fs.existsSync(source.path)) continue;
+    const env = parseEnvFile(source.path);
+    if (env.E2E_EMAIL && env.E2E_PASSWORD) return { ...env, from: source.path };
+    console.warn(
+      `[auth-state] ${source.path} esiste ma non contiene E2E_EMAIL/E2E_PASSWORD — proseguo`,
+    );
+  }
+  fail(
+    `credenziali dell'account di test non trovate. Cercate, in ordine:\n` +
+      CRED_SOURCES.map((s) => `    • ${s.path}`).join("\n") +
+      `\n\n  La posizione canonica è la terza: un solo file, valido da ogni worktree.\n` +
+      `  Vedi e2e/README.md § Sessione.`,
+  );
 }
 
 /** URL e anon key: gli stessi default che usa l'app (web/lib/supabase/config.ts). */
@@ -154,7 +203,8 @@ const creds = readCreds();
 const cfg = readSupabaseConfig();
 const ref = projectRef(cfg.url);
 
-console.log(`[auth-state] login come ${creds.E2E_EMAIL} su ${ref}…`);
+console.log(`[auth-state] credenziali da: ${creds.from}`);
+console.log(`[auth-state] login su ${ref}…`);
 const session = await signIn(cfg, creds.E2E_EMAIL, creds.E2E_PASSWORD);
 const { cookies, chunks } = sessionToCookies(session, ref);
 
@@ -171,5 +221,5 @@ console.log(
     `sessione valida ~${mins} min`,
 );
 console.log(
-  `[auth-state] ora: BASE_URL=http://127.0.0.1:3008 npx playwright test`,
+  `[auth-state] ora: BASE_URL=http://localhost:3008 npx playwright test`,
 );
