@@ -53,6 +53,16 @@ const GROUPS := [
 			{"id": "advanced", "icon": "gear", "label": "Avanzate"},
 		],
 	},
+	{
+		# Gruppo a sé con una voce sola, e non l'ultima riga di Impostazioni:
+		# in coda a dodici voci di configurazione la segnalazione finisce sotto
+		# il bordo dello schermo, e un canale che non si trova non esiste.
+		"title": "Assistenza",
+		"key": "group_help",
+		"items": [
+			{"id": "feedback", "icon": "bug", "label": "Segnala un problema"},
+		],
+	},
 ]
 
 static func label_for(section: String) -> String:

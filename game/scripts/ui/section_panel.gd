@@ -176,6 +176,11 @@ func _build(page := "") -> void:
 			_build_email()
 		"advanced":
 			_build_advanced()
+		"feedback":
+			if page == "preview":
+				_build_feedback_preview()
+			else:
+				_build_feedback()
 		_:
 			_build_placeholder()
 
@@ -475,6 +480,12 @@ func _build_advanced() -> void:
 	install.text = "REINSTALLA / AGGIORNA RUNTIME"
 	install.pressed.connect(SetupService.open_runtime_install)
 	actions.add_child(install)
+	# Seconda porta d'ingresso: chi ha un problema apre la diagnostica prima
+	# di cercare un modulo di segnalazione, ed è qui che va incontrato.
+	var report := Button.new()
+	report.text = UIStrings.t("feedback.send")
+	report.pressed.connect(func() -> void: navigate.emit("feedback"))
+	actions.add_child(report)
 	var files := HBoxContainer.new()
 	files.add_theme_constant_override("separation", 10)
 	_content.add_child(files)
@@ -498,6 +509,223 @@ func _build_advanced() -> void:
 					SetupService._jht_home()], 12, Palette.DIM))
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
+
+
+# ── Segnalazione di un problema ──────────────────────────────────────
+#
+# Il canale con cui un utente ci racconta un bug. Il template GitHub chiede
+# `tmux capture-pane`, la versione di Docker e quale ruolo agente ha fallito:
+# domande giuste per uno sviluppatore, impossibili per la persona a cui
+# abbiamo promesso che non avrebbe mai aperto un terminale. Qui il costo per
+# l'utente sono tre frasi, e tutto il resto lo raccoglie il gioco.
+
+## I campi sopravvivono al passaggio all'anteprima e ritorno: farglieli
+## riscrivere sarebbe il modo più veloce per non ricevere più segnalazioni.
+var _fb_form := {"doing": "", "happened": "", "expected": "", "contact": ""}
+var _fb_include_logs := true
+var _fb_include_container := true
+var _fb_status: Label
+var _fb_redaction: Label
+var _fb_send: Button
+
+const FB_FIELDS := [
+	["doing", "feedback.q_doing", "feedback.ph_doing", 60],
+	["happened", "feedback.q_happened", "feedback.ph_happened", 90],
+	["expected", "feedback.q_expected", "feedback.ph_expected", 60],
+]
+
+
+func _build_feedback() -> void:
+	_listen_feedback()
+	var intro := TerminalTheme.label(UIStrings.t("feedback.intro"), 14, Palette.MUTED)
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(intro)
+	_content.add_child(HSeparator.new())
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 10)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+
+	for field in FB_FIELDS:
+		var key := str(field[0])
+		list.add_child(TerminalTheme.label(
+				UIStrings.t(str(field[1])), 13, Palette.MUTED, "medium"))
+		var edit := TextEdit.new()
+		edit.text = str(_fb_form[key])
+		edit.placeholder_text = UIStrings.t(str(field[2]))
+		edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+		edit.custom_minimum_size = Vector2(0, int(field[3]))
+		edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		edit.text_changed.connect(func() -> void:
+			_fb_form[key] = edit.text
+			_refresh_feedback_send())
+		list.add_child(edit)
+
+	list.add_child(TerminalTheme.label(
+			UIStrings.t("feedback.q_contact"), 13, Palette.MUTED, "medium"))
+	var contact := LineEdit.new()
+	contact.text = str(_fb_form["contact"])
+	contact.placeholder_text = UIStrings.t("feedback.ph_contact")
+	contact.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contact.text_changed.connect(func(value: String) -> void:
+		_fb_form["contact"] = value)
+	list.add_child(contact)
+	var contact_hint := TerminalTheme.label(
+			UIStrings.t("feedback.contact_hint"), 12, Palette.DIM)
+	contact_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	list.add_child(contact_hint)
+
+	list.add_child(HSeparator.new())
+	var attach := HBoxContainer.new()
+	attach.add_theme_constant_override("separation", 18)
+	list.add_child(attach)
+	attach.add_child(_fb_toggle("feedback.attach_diag", _fb_include_logs,
+			func(on: bool) -> void:
+				_fb_include_logs = on
+				_collect_feedback_preview()))
+	attach.add_child(_fb_toggle("feedback.attach_container", _fb_include_container,
+			func(on: bool) -> void:
+				_fb_include_container = on
+				_collect_feedback_preview()))
+
+	_fb_redaction = TerminalTheme.label(
+			UIStrings.t("feedback.collecting"), 12, Palette.YELLOW)
+	_fb_redaction.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	list.add_child(_fb_redaction)
+
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	_content.add_child(actions)
+	_fb_send = Button.new()
+	_fb_send.text = UIStrings.t("feedback.send")
+	_fb_send.add_theme_color_override("font_color", Palette.GREEN)
+	_fb_send.pressed.connect(_submit_feedback)
+	actions.add_child(_fb_send)
+	# "Vedi cosa stai inviando" non è un vezzo: è ciò che rende il consenso
+	# reale invece che una casella spuntata al buio.
+	var preview := Button.new()
+	preview.text = UIStrings.t("feedback.preview_btn")
+	preview.pressed.connect(func() -> void: _build("preview"))
+	actions.add_child(preview)
+	var folder := Button.new()
+	folder.text = UIStrings.t("feedback.open_folder")
+	folder.pressed.connect(FeedbackService.open_reports_folder)
+	actions.add_child(folder)
+
+	_fb_status = TerminalTheme.label("", 13, Palette.DIM)
+	_fb_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(_fb_status)
+	_refresh_feedback_send()
+	_refresh_feedback_redaction()
+	_collect_feedback_preview()
+
+
+## Quel che l'utente sta per spedire, per esteso e in sola lettura. Nessuna
+## sorpresa: questo testo è letteralmente il corpo che parte.
+func _build_feedback_preview() -> void:
+	_listen_feedback()
+	var note := TerminalTheme.label(UIStrings.t("feedback.preview_title"), 14, Palette.MUTED)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(note)
+	var back := Button.new()
+	back.text = UIStrings.t("feedback.back")
+	back.pressed.connect(func() -> void: _build())
+	_content.add_child(back)
+	_content.add_child(HSeparator.new())
+	var body := TextEdit.new()
+	body.editable = false
+	body.text = FeedbackService.preview_markdown if FeedbackService.preview_markdown != "" \
+			else UIStrings.t("feedback.collecting")
+	body.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_content.add_child(body)
+
+
+func _fb_toggle(key: String, value: bool, on_change: Callable) -> CheckBox:
+	var box := CheckBox.new()
+	box.text = UIStrings.t(key)
+	box.button_pressed = value
+	box.toggled.connect(on_change)
+	return box
+
+
+func _listen_feedback() -> void:
+	if not FeedbackService.preview_changed.is_connected(_on_feedback_preview):
+		FeedbackService.preview_changed.connect(_on_feedback_preview)
+	if not FeedbackService.submit_changed.is_connected(_on_feedback_submit):
+		FeedbackService.submit_changed.connect(_on_feedback_submit)
+
+
+func _collect_feedback_preview() -> void:
+	FeedbackService.build_preview(_fb_include_logs, _fb_include_container)
+
+
+## Il racconto di cosa è successo è l'unico campo davvero necessario: senza
+## quello non c'è segnalazione, con quello si parte anche se il resto è vuoto.
+func _refresh_feedback_send() -> void:
+	if not is_instance_valid(_fb_send):
+		return
+	var ready := str(_fb_form["happened"]).strip_edges().length() >= 10
+	_fb_send.disabled = not ready
+	# Il colore segue lo stato: un pulsante verde acceso che non risponde al
+	# click si legge come un bug del gioco, proprio nella schermata in cui si
+	# chiede fiducia all'utente. Serve l'override di font_disabled_color e non
+	# di font_color: il tema terminale colora di verde ANCHE i pulsanti
+	# disabilitati, quindi senza questa riga lo stato non si vedrebbe.
+	_fb_send.add_theme_color_override("font_color", Palette.GREEN)
+	_fb_send.add_theme_color_override("font_disabled_color", Palette.MUTED)
+
+
+func _refresh_feedback_redaction() -> void:
+	if not is_instance_valid(_fb_redaction):
+		return
+	var counts: Dictionary = FeedbackService.preview_counts
+	var total := 0
+	for key in counts:
+		total += int(counts[key])
+	_fb_redaction.text = UIStrings.t("feedback.redacted_none") if total == 0 \
+			else UIStrings.t("feedback.redacted_count") % total
+
+
+func _submit_feedback() -> void:
+	FeedbackService.submit(_fb_form, _fb_include_logs, _fb_include_container)
+
+
+func _on_feedback_preview(running: bool, _markdown: String, _counts: Dictionary) -> void:
+	if section != "feedback" or not is_instance_valid(_fb_redaction):
+		return
+	if running:
+		_fb_redaction.text = UIStrings.t("feedback.collecting")
+		return
+	_refresh_feedback_redaction()
+
+
+func _on_feedback_submit(running: bool, ok: bool, message: String, ticket: String) -> void:
+	if section != "feedback" or not is_instance_valid(_fb_status):
+		return
+	_fb_status.text = message
+	if not ticket.is_empty():
+		_fb_status.text += "  ·  " + UIStrings.t("feedback.ticket") % ticket
+	# Anche quando l'invio fallisce l'utente non resta a mani vuote: la copia
+	# su disco esiste già e gliela indichiamo.
+	if not running and not ok and FeedbackService.last_saved_path != "":
+		_fb_status.text += "\n" + UIStrings.t("feedback.saved_copy") \
+				% FeedbackService.last_saved_path
+	_fb_status.add_theme_color_override("font_color",
+			Palette.DIM if running else (Palette.GREEN if ok else Palette.YELLOW))
+	if is_instance_valid(_fb_send):
+		_fb_send.disabled = running
+	if not running and ok:
+		# Inviata: si azzera il modulo, così un secondo invio accidentale non
+		# rispedisce lo stesso racconto.
+		for key in _fb_form:
+			_fb_form[key] = ""
 
 
 # ── Attivazione iniziale (ufficio aperto, lavoro sotto gate) ─────────
