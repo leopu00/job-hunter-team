@@ -31,6 +31,34 @@ def _fmt(t) -> str:
     return "\n".join(lines)
 
 
+def open_ticket(conn, position_id: int, text: str, kind: str = "custom") -> int:
+    """Apre un ticket dell'UTENTE su una posizione. Ritorna l'id creato.
+
+    Aggiunta il 2026-07-25: fino ad allora questa operazione viveva solo dentro
+    `web/app/api/positions/[legacyId]/ticket/route.ts`, quindi si poteva aprire
+    un ticket solo da un browser — il CLI e gli agenti che lo guidano non
+    avevano modo di farlo. Stessa INSERT della route (kind + status 'open').
+
+    Il mirror su Supabase NON si fa qui: lo fa il daemon con
+    `jht cloud sync-tickets`, che correla via `cloud_id`. Scriverlo anche qui
+    creava una riga cloud scollegata che il pull ri-importava come duplicato.
+    """
+    if not (text or "").strip():
+        raise ValueError("il testo della richiesta non può essere vuoto")
+    row = conn.execute(
+        "SELECT id FROM positions WHERE id = ?", (position_id,)
+    ).fetchone()
+    if not row:
+        raise LookupError(f"posizione #{position_id} non trovata")
+    cur = conn.execute(
+        "INSERT INTO position_tickets (position_id, request_text, kind, status) "
+        "VALUES (?, ?, ?, 'open')",
+        (position_id, text.strip(), kind),
+    )
+    conn.commit()
+    return int(cur.lastrowid)
+
+
 def list_open(conn) -> None:
     rows = conn.execute(
         "SELECT * FROM position_tickets WHERE status = 'open' "
@@ -113,6 +141,10 @@ def for_position(conn, position_id: int) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Gestione ticket utente→team")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    o = sub.add_parser("open", help="l'utente apre un ticket su una posizione")
+    o.add_argument("position_id", type=int)
+    o.add_argument("text", help="cosa chiedi al team")
+    o.add_argument("--kind", default="custom")
     sub.add_parser("list-open")
     sub.add_parser("count-open")
     a = sub.add_parser("assign")
@@ -130,7 +162,15 @@ def main() -> None:
     conn = get_db()
     ensure_schema(conn)
     try:
-        if args.cmd == "list-open":
+        if args.cmd == "open":
+            try:
+                new_id = open_ticket(conn, args.position_id, args.text, args.kind)
+            except (ValueError, LookupError) as e:
+                print(f"✗ {e}", file=sys.stderr)
+                sys.exit(1)
+            print(f"✓ ticket #{new_id} aperto su posizione #{args.position_id} "
+                  f"(status 'open', in coda al Capitano)")
+        elif args.cmd == "list-open":
             list_open(conn)
         elif args.cmd == "count-open":
             count_open(conn)
