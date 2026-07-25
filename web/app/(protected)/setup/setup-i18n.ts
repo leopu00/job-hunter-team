@@ -406,4 +406,3 @@ export function t(key: keyof typeof T | string, locale: Locale): string {
   if (!entry) return key as string;
   return entry[locale] ?? entry.it;
 }
-

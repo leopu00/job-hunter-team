@@ -145,4 +145,3 @@ type AvatarGroupProps = {
   max?: number;
   className?: string;
 };
-
