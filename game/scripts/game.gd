@@ -434,18 +434,38 @@ func goto_office() -> void:
 ## nero muto sembra un crash (feedback Leone, test Windows 20/07).
 var _loading_veil: CanvasLayer = null
 
+## Un cambio scena alla volta: sul ThinkPad il passo 03 del setup non portava
+## al wizard e l'utente ha cliccato nove volte, accodando nove cambi scena
+## sovrapposti — ognuno col suo velo e i suoi await (25/07). Il primo click
+## comanda, gli altri non fanno danni.
+var _scene_change_busy := false
+
 func _change_scene_with_veil(path: String) -> void:
+	if _scene_change_busy:
+		Log.info("scene", "cambio verso %s ignorato: uno è già in corso" % path)
+		return
+	_scene_change_busy = true
 	_show_loading()
 	# Due frame: il velo deve arrivare DAVVERO a schermo prima che il
 	# caricamento blocchi il main thread.
 	await get_tree().process_frame
 	await get_tree().process_frame
-	get_tree().change_scene_to_file(path)
+	# L'esito NON era guardato da nessuno: una scena che non si carica lasciava
+	# l'utente dov'era, in silenzio, con il solo velo a lampeggiare.
+	var err := get_tree().change_scene_to_file(path)
+	if err != OK:
+		Log.error("scene", "cambio scena %s FALLITO (errore %d)" % [path, err])
 	# Il cambio scena è deferred: dopo due frame la nuova scena ha
 	# completato _ready e sta renderizzando.
 	await get_tree().process_frame
 	await get_tree().process_frame
+	var landed := get_tree().current_scene.scene_file_path \
+			if get_tree().current_scene != null else "(nessuna)"
+	if landed != path:
+		Log.error("scene", "dopo il cambio la scena attiva è %s, non %s"
+				% [landed, path])
 	_hide_loading()
+	_scene_change_busy = false
 
 func _show_loading() -> void:
 	if _loading_veil:
