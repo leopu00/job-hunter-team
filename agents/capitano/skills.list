@@ -5,6 +5,10 @@
 
 # Inter-agent + user communication
 tmux-send
+
+# Chiusura ordinata quando l'utente esce dall'applicazione: ogni agente
+# annota dove era arrivato, poi il flag lascia chiudere il gioco.
+graceful-shutdown
 chat-web
 game-reply-options
 # Phone-side outbound: notifiche batch + risposte all'utente sul bot Capitano

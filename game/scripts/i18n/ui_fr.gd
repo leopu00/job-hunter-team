@@ -10,6 +10,7 @@ const S := {
 	"pause.resume": "REPRENDRE",
 	"pause.window": "FENÊTRE / PLEIN ÉCRAN",
 	"pause.quit": "QUITTER LE JEU",
+	"pause.shutdown": "ARRÊT DE L'ÉQUIPE…",
 
 	"hud.team": "ÉQUIPE",
 	"hud.positions_today": "POSITIONS AUJOURD'HUI",

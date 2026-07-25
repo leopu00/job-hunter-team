@@ -10,6 +10,7 @@ const S := {
 	"pause.resume": "FOLYTATÁS",
 	"pause.window": "ABLAK / TELJES KÉPERNYŐ",
 	"pause.quit": "KILÉPÉS A JÁTÉKBÓL",
+	"pause.shutdown": "A CSAPAT LEÁLLÍTÁSA…",
 
 	"hud.team": "CSAPAT",
 	"hud.positions_today": "MAI POZÍCIÓK",

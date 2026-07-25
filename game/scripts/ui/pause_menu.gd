@@ -32,7 +32,7 @@ func _ready() -> void:
 
 	_add_button(box, UIStrings.t("pause.resume"), func() -> void: Game.close_pause())
 	_add_button(box, UIStrings.t("pause.window"), func() -> void: Game.toggle_fullscreen())
-	_add_button(box, UIStrings.t("pause.quit"), func() -> void: get_tree().quit())
+	_add_button(box, UIStrings.t("pause.quit"), func() -> void: Game.quit_game())
 
 func _add_button(parent: Node, text: String, action: Callable) -> void:
 	var b := Button.new()

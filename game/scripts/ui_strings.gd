@@ -72,6 +72,16 @@ const S := {
 	"pause.resume": "RIPRENDI",
 	"pause.window": "FINESTRA / SCHERMO INTERO",
 	"pause.quit": "ESCI DAL GIOCO",
+	"pause.shutdown": "FERMO IL TEAM E CHIUDO…",
+	"shutdown.title": "STAI PER FERMARE IL TEAM",
+	"shutdown.lead": "Gli agenti lavorano nel container, non in questa finestra: chiudendo si fermano. Adesso ne stanno lavorando %d.",
+	"shutdown.graceful": "CHIUDI IN ORDINE",
+	"shutdown.forced": "CHIUDI SUBITO",
+	"shutdown.forced_now": "NON ASPETTARE · CHIUDI SUBITO",
+	"shutdown.cancel": "ANNULLA",
+	"shutdown.ordered": "Ho chiesto al Capitano di chiudere la giornata: ogni agente annota dove era arrivato, poi si ferma.",
+	"shutdown.waiting": "Ancora %d agenti al lavoro · %d s. Puoi aspettare o chiudere subito.",
+	"shutdown.done": "Team fermo. Chiudo.",
 
 	# ── HUD ───────────────────────────────────────────────────────
 	"hud.team": "TEAM",
