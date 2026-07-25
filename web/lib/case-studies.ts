@@ -17,6 +17,7 @@ import betaBKimiRun from "@/data/case-studies/betaB-kimi-run.json";
 import betaDRun from "@/data/case-studies/betaD-kimi-run.json";
 import PROFILES_I18N from "@/data/case-studies/profiles-i18n.json";
 import type { Locale } from "@/i18n/config";
+import { intlTag } from "@/lib/locale-tag";
 
 // Link contribute (doc reali sul repo GitHub).
 export const GITHUB_REPO = "https://github.com/leopu00/job-hunter-team";
@@ -378,15 +379,6 @@ export function buildCaseActivity(run: CaseStudyRun): TeamActivity {
 // dettaglio). Formattazione locale-aware, risolta server-side col locale della
 // richiesta (come gli altri campi editoriali della scheda). `label` è pronto da
 // mostrare: es. "19 mag → 30 giu (34 giorni)".
-const RUN_LOCALE_TAG: Record<Locale, string> = {
-  it: "it-IT",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  de: "de-DE",
-  hu: "hu-HU",
-  pt: "pt-PT",
-};
 const DAYS_WORD: Record<Locale, (n: number) => string> = {
   it: (n) => `${n} giorn${n === 1 ? "o" : "i"}`,
   en: (n) => `${n} day${n === 1 ? "" : "s"}`,
@@ -397,7 +389,7 @@ const DAYS_WORD: Record<Locale, (n: number) => string> = {
   pt: (n) => `${n} dia${n === 1 ? "" : "s"}`,
 };
 function fmtRunDay(locale: Locale, iso: string): string {
-  return new Intl.DateTimeFormat(RUN_LOCALE_TAG[locale], {
+  return new Intl.DateTimeFormat(intlTag(locale), {
     day: "numeric",
     month: "short",
     timeZone: "UTC",

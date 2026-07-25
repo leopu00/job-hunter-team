@@ -14,16 +14,7 @@ import {
   TooltipLayer,
   type TooltipHandle,
 } from "@/app/components/ChartTooltip";
-
-const LOCALE_TAG: Record<Locale, string> = {
-  it: "it-IT",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  de: "de-DE",
-  hu: "hu-HU",
-  pt: "pt-PT",
-};
+import { intlTag } from "@/lib/locale-tag";
 
 const T: Record<
   Locale,
@@ -127,7 +118,7 @@ export default function DailyHighScore({
 }) {
   const locale = useLocale();
   const t = T[locale];
-  const tag = LOCALE_TAG[locale];
+  const tag = intlTag(locale);
   const nf = (n: number) => n.toLocaleString(tag);
   const tipRef = useRef<TooltipHandle>(null);
   const dayLabel = (iso: string) =>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
+import { intlTag } from "@/lib/locale-tag";
 
 const T: Record<string, Record<string, string>> = {
   type_other: {
@@ -187,18 +188,8 @@ const TYPE_ICON: Record<SecretType, string> = {
   other: "◆",
 };
 
-const LOCALE_TAG: Record<string, string> = {
-  it: "it-IT",
-  en: "en-US",
-  hu: "hu-HU",
-  es: "es-ES",
-  de: "de-DE",
-  fr: "fr-FR",
-  pt: "pt-PT",
-};
-
 function fmtDate(ms: number, locale: string) {
-  return new Date(ms).toLocaleDateString(LOCALE_TAG[locale] ?? "en-US", {
+  return new Date(ms).toLocaleDateString(intlTag(locale), {
     day: "2-digit",
     month: "short",
     year: "numeric",
