@@ -23,6 +23,11 @@ func _init(printer_rect: Rect2) -> void:
 	z_index = 1
 	instance = self
 
+func _ready() -> void:
+	# scenografia: il profilo ridotto la spegne in blocco
+	GfxProfile.mark(self)
+
+
 ## Un agente ha avviato una stampa: il macchinario si anima per `secs`.
 static func ping(secs: float) -> void:
 	if instance:

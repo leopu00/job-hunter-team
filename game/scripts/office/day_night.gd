@@ -48,6 +48,8 @@ var _day_wash: Array = []   # luce dalle vetrate, accesa di giorno
 var _clock := 0.0
 
 func _ready() -> void:
+	# scenografia: il profilo ridotto la spegne in blocco
+	GfxProfile.mark(self)
 	if OS.get_environment("JHT_NOFX") == "1":  # TEST-AUTO
 		return
 	_cm = CanvasModulate.new()

@@ -89,6 +89,8 @@ func _init(world_position: Vector2) -> void:
 	z_index = 1
 
 func _ready() -> void:
+	# scenografia: il profilo ridotto la spegne in blocco
+	GfxProfile.mark(self)
 	_restock_timer = restock
 	if ResourceLoader.exists(SHEET_TEX):
 		_sheet_texture = load(SHEET_TEX)

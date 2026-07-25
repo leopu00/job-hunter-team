@@ -801,6 +801,22 @@ static func provider_login_spec(provider: String, vps: Dictionary = {}) -> Dicti
 			_provider_terminal_hint(provider), _provider_login_command(provider, vps))
 
 
+## Griglia della pty ospitata: DEVE combaciare con TermScreen del renderer.
+const PTY_ROWS := 40
+const PTY_COLS := 120
+
+
+## Senza `stty` la pty aperta da `script` nasce 0×0 — misurato sia su macOS
+## sia su Ubuntu 24.04, e `docker exec -it` propaga quello 0×0 dentro al
+## container. Un TUI che non sa quante righe ha non le può riscrivere: invece
+## di ridisegnare in place accoda ogni frame, e nel login Claude comparivano i
+## resti della schermata precedente sopra quella nuova (ThinkPad Linux, 24/07).
+## Su Windows la stessa misura viaggia dentro il container (_local_container_exec),
+## dove la pty la crea `script` perché Godot non espone ConPTY.
+static func _with_pty_size(command: String) -> String:
+	return "stty rows %d cols %d 2>/dev/null; " % [PTY_ROWS, PTY_COLS] + command
+
+
 ## Costruttore comune per qualunque comando tecnico ospitato nel gioco.
 static func embedded_terminal_spec(title: String, hint: String, command: String) -> Dictionary:
 	var path := "/bin/sh"
@@ -808,7 +824,7 @@ static func embedded_terminal_spec(title: String, hint: String, command: String)
 	match OS.get_name():
 		"macOS":
 			args = PackedStringArray(["-lc", "script -q /dev/null /bin/sh -lc " \
-					+ _shell_quote(command) + " 1>&2"])
+					+ _shell_quote(_with_pty_size(command)) + " 1>&2"])
 		"Windows":
 			path = "cmd.exe"
 			# ConPTY non è ancora esposto da Godot: il device flow Codex resta
@@ -816,7 +832,7 @@ static func embedded_terminal_spec(title: String, hint: String, command: String)
 			args = PackedStringArray(["/d", "/s", "/c", command + " 1>&2"])
 		_:
 			args = PackedStringArray(["-lc", "script -qefc " \
-					+ _shell_quote(command) + " /dev/null 1>&2"])
+					+ _shell_quote(_with_pty_size(command)) + " /dev/null 1>&2"])
 	return {
 		"path": path,
 		"args": args,
@@ -859,10 +875,10 @@ static func _posix_quoted(args: PackedStringArray) -> PackedStringArray:
 ## Su macOS/Linux la PTY host-side la crea già embedded_terminal_spec.
 static func _local_container_exec(posix_command: String) -> String:
 	if OS.get_name() == "Windows":
-		# stty allinea la pty alla griglia 40x120 del renderer della console
+		# stty allinea la pty alla griglia del renderer della console
 		# incorporata (TermScreen.ROWS): i TUI impaginano su quella misura.
 		return "docker exec -i -e TERM=xterm-256color jht script -qec \"" \
-				+ "stty rows 40 cols 120 2>/dev/null; " + posix_command + "\" /dev/null"
+				+ _with_pty_size(posix_command) + "\" /dev/null"
 	return "docker exec -it jht " + posix_command
 
 

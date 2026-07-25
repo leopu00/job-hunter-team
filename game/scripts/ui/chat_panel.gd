@@ -483,12 +483,11 @@ func _append(msg: Dictionary) -> void:
 	var color: Color = Palette.BRIGHT if mine else Palette.BASE
 	if partial:
 		color = Palette.DIM  # checkpoint "sta lavorando"
-	var body := TerminalTheme.label(str(msg.get("text", "")), 15, color)
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if mine \
-			else HORIZONTAL_ALIGNMENT_LEFT
-	row.add_child(body)
+	# markdown_label e non label: gli agenti scrivono in markdown (grassetto,
+	# elenchi) e mandano gli a capo come escape letterali — una Label li
+	# mostrerebbe crudi, "**ruolo**" e "\n" compresi.
+	row.add_child(TerminalTheme.markdown_label(str(msg.get("text", "")), 15, color,
+			HORIZONTAL_ALIGNMENT_RIGHT if mine else HORIZONTAL_ALIGNMENT_LEFT))
 	_list.add_child(row)
 
 func _append_line(text: String, color: Color) -> void:

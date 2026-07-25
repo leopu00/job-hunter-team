@@ -215,6 +215,10 @@ func _ready() -> void:
 	_camera = FreeCamera.new()
 	_stage.add_child(_camera)
 	_camera.clicked.connect(_on_world_click)
+	if OS.get_environment("JHT_CENSUS") == "1":  # TEST-AUTO: fotografia scena
+		_scene_census.call_deferred()
+	if OS.get_environment("JHT_GFX_TEST") == "1":
+		_gfx_profile_selftest.call_deferred()
 	if OS.get_environment("JHT_CAMERA_LOCK_TEST") == "1":
 		_camera_lock_selftest.call_deferred()
 	if OS.get_environment("JHT_POSITIONS_PANEL_TEST") == "1":
@@ -428,6 +432,111 @@ func _ready() -> void:
 
 ## Regressione trackpad/overlay: una gesture consegnata direttamente alla
 ## camera non deve cambiare né pan né zoom finché il gruppo modal è attivo.
+## Il profilo ridotto deve spegnere DAVVERO la scenografia (per due anni ha
+## solo alzato un flag che nessuno leggeva) e non deve toccare il resto.
+func _gfx_profile_selftest() -> void:
+	await get_tree().process_frame
+	var result := {}
+	var group := get_tree().get_nodes_in_group(GfxProfile.GROUP)
+	result["scenografia_registrata"] = group.size() >= 4
+	Game.set_low_gfx(true, false)
+	await get_tree().process_frame
+	var off := 0
+	for node in group:
+		if node is CanvasItem and not (node as CanvasItem).visible:
+			off += 1
+	result["spenta_con_profilo_ridotto"] = off == group.size()
+	# i mobili e gli agenti restano: il profilo taglia scenografia, non gioco
+	result["mobili_intatti"] = world != null and world.visible
+	Game.set_low_gfx(false, false)
+	await get_tree().process_frame
+	var on := 0
+	for node in group:
+		if node is CanvasItem and (node as CanvasItem).visible:
+			on += 1
+	result["riaccesa_con_profilo_pieno"] = on == group.size()
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("GFX-PROFILE-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
+
+
+## Fotografia della scena costruita: quanti CanvasItem visibili, da quale ramo
+## arrivano e — con la finestra aperta, non headless — quante draw call costa
+## ciascun ramo. La misura è differenziale: si spegne un ramo, si guarda di
+## quanto scende il contatore, si riaccende. È l'unico modo onesto di attribuire
+## le draw call, che non stanno in rapporto 1:1 coi nodi.
+## I rami si cercano su `_stage`, non su `self`: col profilo pixel il mondo vive
+## dentro il SubViewport e da qui si vedrebbe un solo figlio (PixelLayer).
+func _scene_census() -> void:
+	for _i in 5:
+		await get_tree().process_frame
+	Log.census(_stage)
+	var baseline := await _draw_calls()
+	Log.info("census", "draw call totali: %d" % baseline)
+	if baseline > 0:
+		var costs := []
+		for branch in _stage.get_children():
+			var item := branch as CanvasItem
+			if item == null or not item.visible:
+				continue
+			item.visible = false
+			var without := await _draw_calls()
+			item.visible = true
+			costs.append([_census_name(branch), baseline - without])
+		costs.sort_custom(func(a: Array, b: Array) -> bool: return a[1] > b[1])
+		for row in costs:
+			Log.info("census", "  costo %-28s %4d draw call" % [row[0], row[1]])
+		if world != null:
+			await _census_group(world, baseline)
+	get_tree().quit(0)
+
+
+## Dentro il ramo più caro i figli sono centinaia: si spengono a gruppi
+## omogenei (stesso script) per sapere quale famiglia di oggetti costa.
+func _census_group(branch: Node, baseline: int) -> void:
+	var groups := {}
+	for child in branch.get_children():
+		if child is CanvasItem:
+			var key := _census_name(child)
+			if not groups.has(key):
+				groups[key] = []
+			groups[key].append(child)
+	var costs := []
+	for key in groups:
+		for node: CanvasItem in groups[key]:
+			node.visible = false
+		var without := await _draw_calls()
+		for node: CanvasItem in groups[key]:
+			node.visible = true
+		costs.append([key, baseline - without, groups[key].size()])
+	costs.sort_custom(func(a: Array, b: Array) -> bool: return a[1] > b[1])
+	Log.info("census", "dentro %s:" % _census_name(branch))
+	for row in costs:
+		Log.info("census", "  %-26s %4d draw call su %3d nodi" % [row[0], row[1], row[2]])
+
+
+## I nodi creati da codice restano anonimi (@Node2D@41): il nome dello script
+## è l'unica etichetta leggibile per attribuire il costo.
+func _census_name(node: Node) -> String:
+	var script: Script = node.get_script() as Script
+	if script != null and script.resource_path != "":
+		return script.resource_path.get_file().trim_suffix(".gd")
+	if not node.name.begins_with("@"):
+		return str(node.name)
+	return node.get_class()
+
+
+## Contatore stabilizzato: il monitor si aggiorna a fine frame, quindi va
+## letto dopo che il ramo spento è davvero uscito dal rendering.
+func _draw_calls() -> int:
+	for _i in 3:
+		await get_tree().process_frame
+	return int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+
+
 func _camera_lock_selftest() -> void:
 	var blocker := Node.new()
 	add_child(blocker)
