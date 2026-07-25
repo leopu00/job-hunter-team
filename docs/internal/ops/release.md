@@ -28,7 +28,25 @@ scripts/check-release-version.sh v0.2.1
 
 Exit codes: `1` no tag resolvable · `2` malformed tag · `3` version mismatch.
 
-> The other `package.json` files (`web/`, `cli/`, `shared/`, `tui/`) version their own sub-packages and are **not** part of the release check — leave them alone.
+### The other `package.json` files
+
+`web/`, `cli/`, `shared/`, `shared/cron/`, `tui/` and `e2e/` are private
+sub-packages: nothing publishes them and CI does not check their `version`.
+They had drifted to four different numbers by July 2026 (0.1.7 … 0.1.13), which
+told a contributor nothing except a wrong story.
+
+**Rule (2026-07-25): they follow the root version.** Bump them together with the
+four fields above — a one-liner is enough:
+
+```bash
+V=$(node -p "require('./package.json').version")
+for f in web cli shared shared/cron tui e2e; do
+  node -e "const p='$f/package.json',fs=require('fs'),j=JSON.parse(fs.readFileSync(p));j.version='$V';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
+done
+```
+
+They are still **not** part of `check-release-version.sh`: a mismatch there
+must not block a release, it is bookkeeping.
 
 ---
 

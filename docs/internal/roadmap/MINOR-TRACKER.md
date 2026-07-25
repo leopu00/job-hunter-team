@@ -59,25 +59,25 @@
 - **Effort:** M (bisogna capire i 287 fallimenti prima di scegliere).
 - **Origine:** audit doc↔codice 2026-07-25 ([nota](../2026-07-25-audit-doc-code-drift.md)).
 
-### ⬜ `[MINOR-TUI-DEAD-BUILD]` `tui/` compilato in ogni immagine ma mai invocato
+### 🟡 `[MINOR-TUI-DEAD-BUILD]` `tui/` compilato in ogni immagine ma mai invocato — build ripulita 2026-07-25
 
-- **Stato:** ⬜ open. Il Dockerfile fa `npm ci --prefix tui` (r115) **e** `npm run build --prefix tui` (r153) in ogni build dell'immagine.
+- **Stato:** 🟡 mezzo chiuso. Il Dockerfile non installa né compila più `tui/` (via `COPY tui/package.json`, `npm ci --prefix tui`, `npm run build --prefix tui`): ogni immagine risparmia un `npm ci` e una compilazione TypeScript per codice che nessun processo lancia. **Il codice resta nel repo**: la rimozione definitiva aspetta la conferma che la TUI non serva più a nessuno (l'expert-mode di `install.sh` la compila ancora sull'host).
 - **Contesto:** `tui/package.json` non dichiara né `bin` né `main`; l'unico entry point sarebbe `npm start` → `node dist/tui/src/tui.js`, che **nessuno invoca**: `grep -rn "dist/tui|tui.js|jht-tui"` su `cli/src/`, `.launcher/`, `jht-wrapper.sh` e `docker-compose.yml` non trova invocatori (fuori dai commenti "specchio di `tui-paths.ts`"). L'unica citazione viva è in `install.sh`, che compila la TUI sul path expert-mode.
 - **Da fare:** decidere se (a) è morto come `shared/llm/` → rimuovere dal Dockerfile e dal repo, oppure (b) è un entry point voluto ma non cablato → cablarlo e documentarlo. Nel frattempo ogni immagine paga install + build TypeScript per codice che non parte.
 - **Effort:** S per togliere le due righe dal Dockerfile · M per la rimozione completa (tocca `install.sh`, `jht-paths.js`, `.launcher/config.sh`).
 - **Origine:** audit doc↔codice 2026-07-25 ([nota](../2026-07-25-audit-doc-code-drift.md)).
 
-### ⬜ `[MINOR-COMPOSE-NEXT-ENV]` Residui Next.js nel compose e nel Dockerfile
+### ✅ `[MINOR-COMPOSE-NEXT-ENV]` Residui Next.js nel compose — CHIUSA 2026-07-25
 
-- **Stato:** ⬜ open. Dal ritiro della dashboard locale (2026-07-23) il container non avvia Next.js, ma il compose passa ancora `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_JHT_DEPLOY`, `WATCHPACK_POLLING`, `CHOKIDAR_USEPOLLING`, `TURBOPACK_WATCH_POLL`; il Dockerfile pre-crea `/app/web/.next` con ownership `jht`.
-- **Perché non è banale:** quelle variabili e quella cartella servono ancora al **compose dev** (`docker-compose.dev.yml` con hot-reload dei sorgenti), che monta `web/` e può far girare Next dentro il container. Va distinto ciò che serve al dev da ciò che è residuo del path produzione.
-- **Da fare:** spostare le variabili "solo dev" nell'override `docker-compose.dev.yml`, lasciando il compose di produzione con il minimo indispensabile + un commento che spieghi la divisione.
-- **Effort:** S.
-- **Origine:** audit doc↔codice 2026-07-25.
+- **Cosa era:** il compose di produzione passava sei variabili col profumo di Next mentre il container non avvia più Next.js.
+- **Correzione dell'analisi iniziale (importante):** **quattro di quelle sei NON sono residui.** `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`, malgrado il prefisso, le legge il **sync del container** (`shared/skills/db_to_supabase.py`, `db_to_sheets.py`, `jht doctor`) come fallback quando la config non arriva da `~/.jht/cloud.json`: rimuoverle avrebbe rotto il push su chi le passa via env. `NEXT_PUBLIC_JHT_DEPLOY` resta perché il template compose generato dal gioco (`game/scripts/setup/setup_service.gd`) la include.
+- **Fatto:** spostati nell'override dev i tre flag che servono davvero solo al dev server (`WATCHPACK_POLLING`, `CHOKIDAR_USEPOLLING`, `TURBOPACK_WATCH_POLL`) e annotate le due env Supabase con un "non rimuoverle, non sono per Next".
+- **Lezione:** il prefisso di una variabile non dice chi la legge. `grep` prima di potare.
 
-### ⬜ `[MINOR-SUBPACKAGE-VERSIONS]` Versioni dei sub-package alla deriva
+### ✅ `[MINOR-SUBPACKAGE-VERSIONS]` Versioni dei sub-package alla deriva — CHIUSA 2026-07-25
 
-- **Stato:** ⬜ open. Root `0.2.1` (l'unica che conta, verificata da `check-release-version.sh` insieme ai metadati Godot) · `web/` `0.1.13` · `cli/` `0.1.9` · `tui/` `0.1.7` · `shared/` `0.1.7`.
+- **Fatto:** tutti allineati a `0.2.1` (root) e regola scritta in [`ops/release.md`](../ops/release.md) § "The other package.json files", con il one-liner da eseguire al bump — verificato sul posto. Restano fuori da `check-release-version.sh`: un disallineamento lì è bookkeeping, non deve bloccare una release.
+- **Com'era:** Root `0.2.1` (l'unica che conta, verificata da `check-release-version.sh` insieme ai metadati Godot) · `web/` `0.1.13` · `cli/` `0.1.9` · `tui/` `0.1.7` · `shared/` `0.1.7`.
 - **Contesto:** nessuno di questi numeri viene pubblicato, bumpato in release o verificato da CI: sono fermi a date diverse e non significano nulla per chi legge. Il rischio non è funzionale, è di **fraintendimento** (un contributor legge `web/package.json` e crede che il web sia alla 0.1.13).
 - **Da fare:** decidere una regola sola — allineare i sub-package alla versione root al momento della release, oppure togliere il campo `version` dai package interni non pubblicati (npm lo tollera nei workspace privati) e dirlo in `release.md`.
 - **Effort:** S.
@@ -128,9 +128,10 @@
 - **Cosa serviva:** aggiornare `actions/checkout@v4` + `actions/setup-node@v4` a versioni che girano su Node 24.
 - **Chiusa da:** i bump Dependabot del 2026-07-21 (`0b40effc` checkout 4→7, `81a5e1ec` setup-node 4→7). Verificato 2026-07-25: i workflow usano `checkout@v7`, `setup-node@v7`, `upload-artifact@v7`, `download-artifact@v8`, `setup-python@v6`. La deadline del 2026-09-16 non è più un rischio.
 
-### ⬜ `[MINOR-EMAIL-GUIDE-SCREENSHOTS]` 5 screenshot mai prodotti in `EMAIL-FORWARDING.md`
+### 🟡 `[MINOR-EMAIL-GUIDE-SCREENSHOTS]` Screenshot mai prodotti in `EMAIL-FORWARDING.md` — lista ridotta 2026-07-25
 
-- **Stato:** ⬜ open. La guida elenca 5 screenshot attesi con i path di destinazione (`docs/guides/assets/email-0*.png`) e un callout "📸 Missing screenshots"; **`docs/guides/assets/` non esiste**.
+- **Stato:** 🟡 la lista è passata da 5 a **2** (form email nell'ufficio Godot + filtro Gmail): gli altri tre erano UI di Google/LinkedIn che cambia sotto di noi o già visibile in qualunque screenshot della dashboard. Restano da catturare le due immagini.
+- **Com'era:** ⬜ open. La guida elenca 5 screenshot attesi con i path di destinazione (`docs/guides/assets/email-0*.png`) e un callout "📸 Missing screenshots"; **`docs/guides/assets/` non esiste**.
 - **Nota:** il primo screenshot atteso ("Desktop Settings → Team email") va rifatto sull'ufficio Godot, non sul vecchio wizard.
 - **Da fare:** produrre le 5 immagini e sostituire il callout con gli embed, oppure ridurre la lista a quelle che si vogliono davvero mantenere.
 - **Effort:** M (serve un giro di cattura schermate su app + Gmail).

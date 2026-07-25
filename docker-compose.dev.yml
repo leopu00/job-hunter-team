@@ -18,6 +18,14 @@
 
 services:
   jht:
+    environment:
+      # Inotify su bind-mount Windows+WSL2 non propaga sempre gli eventi di
+      # modifica: polling per Next.js / Turbopack. Vivono QUI e non nel compose
+      # di produzione (spostati il 2026-07-25) perché servono solo al dev
+      # server, e il container di produzione non avvia Next.
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - TURBOPACK_WATCH_POLL=true
     build:
       context: .
       dockerfile: Dockerfile

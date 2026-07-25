@@ -58,6 +58,10 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
+      # NB: nonostante il prefisso NEXT_PUBLIC_, queste due NON servono a
+      # Next (che qui non gira): le legge il sync del container —
+      # shared/skills/db_to_supabase.py e `jht doctor` — come fallback
+      # quando la config non arriva da ~/.jht/cloud.json. Non rimuoverle.
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
       # [JHT-DASHBOARD-SPLIT] Deploy-mode DURO deciso a build/deploy. Il
@@ -66,12 +70,6 @@ services:
       # Vercel imposta 'cloud' (sola lettura + corsia richieste). Default
       # 'local' anche se l'env manca (vedi web/lib/deploy-mode.ts).
       - NEXT_PUBLIC_JHT_DEPLOY=${NEXT_PUBLIC_JHT_DEPLOY:-local}
-      # Inotify su bind-mount Windows+WSL2 non fa sempre propagare gli
-      # eventi di modifica: polling generale per Next.js / Turbopack.
-      # Innocuo su VPS Linux dove inotify funziona nativo.
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
-      - TURBOPACK_WATCH_POLL=true
     volumes:
       - ${HOME}/.jht:/jht_home
       - ${HOME}/Documents/Job Hunter Team:/jht_user

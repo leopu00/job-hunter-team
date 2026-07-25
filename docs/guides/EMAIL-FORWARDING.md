@@ -180,18 +180,23 @@ If nothing shows up:
 
 ## 🖼️ Graphic materials
 
-This guide is user-facing but **has no screenshots yet**. Placeholders:
+This guide is user-facing and **has no screenshots yet**. The list was cut from
+five to two on 2026-07-25: fewer promises, and the two that survive are the
+steps where a picture genuinely saves the reader a wrong turn.
 
 | # | Expected screenshot | Target path |
 |---|---|---|
-| 1 | Desktop **Settings → Team email** form (email + app-password + "How to set up forwarding" button) | `docs/guides/assets/email-01-desktop-form.png` |
-| 2 | Gmail **App password** creation screen | `docs/guides/assets/email-02-app-password.png` |
-| 3 | LinkedIn **Job Alert** with email notifications on | `docs/guides/assets/email-03-linkedin-alert.png` |
-| 4 | Gmail **forwarding filter** forwarding alerts to the team inbox | `docs/guides/assets/email-04-gmail-filter.png` |
-| 5 | Dashboard showing positions tagged with an `*-email` source | `docs/guides/assets/email-05-dashboard-source.png` |
+| 1 | The **Team email** section of the native office (address + app-password + the "how to forward" hint) | `docs/guides/assets/email-01-app-form.png` |
+| 2 | Gmail **forwarding filter** sending job alerts to the team inbox | `docs/guides/assets/email-02-gmail-filter.png` |
+
+The other three (Gmail app-password screen, LinkedIn job-alert toggle, dashboard
+with `*-email` sources) were dropped: the first two are Google/LinkedIn UI that
+changes under us and is already documented on their side, the third is visible in
+any dashboard screenshot.
 
 When you add the images, replace the `> 📸 Missing screenshots` callout at the
-top with markdown embeds: `![Desktop form](assets/email-01-desktop-form.png)`.
+top with markdown embeds: `![Team email](assets/email-01-app-form.png)`.
+Note the first shot is now the **Godot office**, not the retired Electron wizard.
 
 ---
 
