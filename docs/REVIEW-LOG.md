@@ -200,7 +200,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | ☁️ VPS setup — JHT on Hetzner Cloud — Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS | — | 2026-07-23 | ✅ |
 | [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | 📦 CLI install — jobhunterteam.ai/install.sh — This document describes how the one-liner installer works today | — | 2026-07-19 | ✅ |
 | [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | — | 2026-07-25 | ✅ |
-| [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-07-19 | ✅ |
+| [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-07-25 | ✅ |
 | [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | 💬 Feedback Ticketing — Operational runbook for the /feedback page and the /api/feedback API. | — | 2026-07-03 | ✅ |
 | [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | 🚀 Quickstart — Get the team running in about 10 minutes, depending on the path you pick. | — | 2026-07-23 | ✅ |
 | [docs/guides/README.md](./guides/README.md) | 📘 docs/guides — user & operator guides — How to install, run, and operate Job Hunter Team. | — | 2026-07-19 | ✅ |
@@ -257,7 +257,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/ops/INFRA.md](./internal/ops/INFRA.md) | 🏗️ Infrastructure — Job Hunter Team — 📐 High-level deployment diagram. | — | 2026-07-03 | ✅ |
 | [docs/internal/ops/MAINTAINERS.md](./internal/ops/MAINTAINERS.md) | 👥 Maintainers Reference — 🔒 Internal information for project maintainers. | — | 2026-07-24 | ✅ |
 | [docs/internal/ops/access-and-credentials.md](./internal/ops/access-and-credentials.md) | 🔐 Access & Credentials — guida consolidata — Last updated: 2026-05-26. | — | 2026-06-13 | ✅ |
-| [docs/internal/ops/release.md](./internal/ops/release.md) | 🚢 Release — Cutting a release means pushing a vX.Y.Z tag that points at the production HEAD. | — | 2026-07-24 | ✅ |
+| [docs/internal/ops/release.md](./internal/ops/release.md) | 🚢 Release — Cutting a release means pushing a vX.Y.Z tag that points at the production HEAD. | — | 2026-07-25 | ✅ |
 | [docs/internal/ops/triage.md](./internal/ops/triage.md) | 🐛 Issue triage workflow — Internal contract for how we handle incoming issues post-launch. | — | 2026-06-13 | ✅ |
 | [docs/internal/ops/vps.md](./internal/ops/vps.md) | ☁️ JHT su VPS — design, providers, install UX — Doc consolidato il 2026-05-13 unificando | — | 2026-06-13 | ✅ |
 | [docs/internal/postmortems/2026-05-21-halt-weekly-incident.md](./internal/postmortems/2026-05-21-halt-weekly-incident.md) | 🛑 HALT-WEEKLY incident — 2026-05-21 — Manovra di emergenza sulla VPS1 (203.0.113.20, Hetzner CPX22) per evitare la saturazione del weekly cap Codex ProLite… | — | 2026-06-13 | ✅ |
@@ -303,9 +303,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/roadmap/2026-06-20-proj-volatile-pacing-todo.md](./internal/roadmap/2026-06-20-proj-volatile-pacing-todo.md) | 📐 proj volatile nel pacing — da rifinire (TODO, NON ancora toccato) — Data: 2026-06-20 · Stato: 🟡 DEFERRED di proposito (sistema delicato, esperimenti live in | — | 2026-07-03 | ✅ |
 | [docs/internal/roadmap/2026-06-25-pacing-future-ideas.md](./internal/roadmap/2026-06-25-pacing-future-ideas.md) | 💭 Pacing — idee di sofisticazione (questioni APERTE, future) — Data: 2026-06-25 · Stato: discusse, NON implementate — parcheggiate per dopo. | — | 2026-07-03 | ✅ |
 | [docs/internal/roadmap/2026-06-30-B1-deterministic-pacing-idea.md](./internal/roadmap/2026-06-30-B1-deterministic-pacing-idea.md) | 🅱️ B1 — Pacing deterministico nel bridge (IDEA futura, NON decisa) — Data: 2026-06-30 · Stato: 💭 parcheggiata — possibile implementazione futura, non schedulata, non validata. | — | 2026-07-03 | ✅ |
-| [docs/internal/roadmap/MINOR-TRACKER.md](./internal/roadmap/MINOR-TRACKER.md) | 🪛 Minor tracker — note, debt, fix piccoli — File di tracciamento per cose da fare/migliorare/controllare che NON sono blocker pre-launch. | — | 2026-07-03 | ✅ |
+| [docs/internal/roadmap/MINOR-TRACKER.md](./internal/roadmap/MINOR-TRACKER.md) | 🪛 Minor tracker — note, debt, fix piccoli — File di tracciamento per cose da fare/migliorare/controllare che NON sono blocker pre-launch. | — | 2026-07-25 | ✅ |
 | [docs/internal/roadmap/db-schema-optimization.md](./internal/roadmap/db-schema-optimization.md) | 🗄️ Database schema optimization — plan (idea, not scheduled) — Moved from docs/about/ROADMAP.md in the 2026-07-03 docs restructure. | — | 2026-07-03 | ✅ |
-| [docs/internal/2026-07-25-audit-doc-code-drift.md](./internal/2026-07-25-audit-doc-code-drift.md) | Audit doc↔codice del ciclo native (500 commit): cosa era slittato, cosa è stato riallineato, debito residuo per tag | — | — | ✅ |
+| [docs/internal/2026-07-25-audit-doc-code-drift.md](./internal/2026-07-25-audit-doc-code-drift.md) | Audit doc↔codice del ciclo native (500 commit): cosa era slittato, cosa è stato riallineato, debito residuo per tag | — | 2026-07-25 | ✅ |
 
 
 ## 🔒 docs/security
@@ -357,7 +357,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [cli/README.md](../cli/README.md) | ⌨️ cli — the jht command-line interface — The jht CLI is the primary control surface for Job Hunter Team. | — | 2026-07-19 | ✅ |
 | [docs/README.md](./README.md) | 📚 Documentation — Job Hunter Team — Top-level index of the documentation. | — | 2026-07-03 | ✅ |
 | [docs/launch/demo-storyboard.md](./launch/demo-storyboard.md) | 🎬 JHT 30-second demo — storyboard + recording script — Linked from BACKLOG.md item [JHT-LAUNCH-03] (blocker | — | 2026-06-13 | ✅ |
-| [e2e/README.md](../e2e/README.md) | 🧪 e2e — end-to-end tests (Playwright) — Browser-driven end-to-end tests for the Job Hunter Team web dashboard. | — | 2026-07-03 | ✅ |
+| [e2e/README.md](../e2e/README.md) | 🧪 e2e — end-to-end tests (Playwright) — Browser-driven end-to-end tests for the Job Hunter Team web dashboard. | — | 2026-07-25 | ✅ |
 | [scripts/README.md](../scripts/README.md) | 🐚 scripts — setup, install & dev tooling — Bash/PowerShell scripts for installing, developing, releasing, and simulating | — | 2026-07-03 | ✅ |
 | [scripts/case-study-extract/README.md](../scripts/case-study-extract/README.md) | Case study VPS extraction toolkit — Read-only dump of an entire JHT VPS run for offline analysis. | — | 2026-07-03 | ✅ |
 | [shared/README.md](../shared/README.md) | 🧩 shared — shared core library — Cross-cutting logic shared across the CLI, TUI, agents, and monitoring stack. | — | 2026-06-13 | ✅ |
