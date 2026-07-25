@@ -213,6 +213,8 @@ var _auth_was_ready := false
 var _auth_autoclose_started := false
 var _screen := TermScreen.new()
 var _undecoded := PackedByteArray()
+## Mouse premuto dentro l'output: selezione in corso, testo congelato.
+var _dragging_selection := false
 
 
 func _init(p_provider: String, p_spec: Dictionary) -> void:
@@ -262,15 +264,38 @@ func _process(_delta: float) -> void:
 	var visible := _screen.text()
 	if visible.length() > MAX_VISIBLE_CHARS:
 		visible = "… output precedente omesso …\n" + visible.right(MAX_VISIBLE_CHARS)
-	# Selezionare col mouse era IMPOSSIBILE: ogni pezzo di output riscriveva
-	# `text` da capo e la selezione moriva sul nascere, decine di volte al
-	# secondo (login Kimi, 25/07). Mentre l'utente tiene qualcosa di
-	# selezionato il testo resta fermo: l'output continua ad accumularsi nel
-	# modello di schermo e compare appena molla la selezione.
-	if _output.get_selected_text() == "":
+	# Il testo NON si tocca mentre l'utente sta selezionando: né durante il
+	# trascinamento (mouse premuto), né dopo, finché tiene la selezione. Tutto
+	# ciò che arriva resta nel modello di schermo e compare appena molla.
+	if not _selection_locked():
 		_output.text = visible
 		_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
 	_detect_url(_screen.lines())
+
+
+## Vero mentre l'utente sta selezionando col mouse o tiene una selezione:
+## in entrambi i casi riscrivere il testo gliela porterebbe via.
+func _selection_locked() -> bool:
+	return _dragging_selection or _output.get_selected_text() != ""
+
+
+func _on_output_gui_input(event: InputEvent) -> void:
+	var click := event as InputEventMouseButton
+	if click == null or click.button_index != MOUSE_BUTTON_LEFT:
+		return
+	_dragging_selection = click.pressed
+	if not click.pressed:
+		# Rilasciato: se non ha selezionato nulla il testo riprende a scorrere
+		# al prossimo pezzo di output, senza aspettare altri eventi.
+		_flush_pending_output()
+
+
+## Riporta a schermo tutto ciò che è arrivato mentre il testo era congelato.
+func _flush_pending_output() -> void:
+	if _selection_locked() or not is_instance_valid(_output):
+		return
+	_output.text = _screen.text()
+	_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
 
 
 ## Lunghezza del prefisso decodificabile: si tiene indietro solo una
@@ -362,6 +387,12 @@ func _build_ui() -> void:
 	_output.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_output.add_theme_font_size_override("normal_font_size", 15)
 	_output.add_theme_color_override("default_color", Palette.BRIGHT)
+	# Il testo si congela DA QUANDO SI PREME, non da quando la selezione
+	# esiste: mentre trascini il mouse la selezione si sta ancora formando, e
+	# l'output che arriva nel frattempo la cancellava prima che tu potessi
+	# finirla (login Kimi, 25/07 — il primo tentativo di fix guardava
+	# get_selected_text(), che durante il trascinamento è ancora vuoto).
+	_output.gui_input.connect(_on_output_gui_input)
 	_output.text = "Preparazione del terminale interattivo…"
 	col.add_child(_output)
 
