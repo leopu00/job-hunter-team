@@ -21,7 +21,6 @@ import {
   getDemoDashboardData,
   isDashboardDemoMode,
 } from "@/lib/dashboard-demo";
-import VpsLifecycleCard from "@/app/components/VpsLifecycleCard";
 import OnboardingPopup from "@/app/components/OnboardingPopup";
 import DemoPickerCard from "@/app/components/demo/DemoPickerCard";
 import CloudRefreshButton from "@/app/components/CloudRefreshButton";
@@ -181,11 +180,10 @@ export default async function DashboardPage() {
           {/* ── Sync now (solo cloud): refresh dati on-demand, niente polling ─ */}
           <CloudRefreshButton />
 
-          {/* ── VPS lifecycle: 3 bottoni (pausa/snapshot/termina) ────
-          Solo in VPS mode (JHT_HOST_TYPE=vps): in Local PC mode i
-          bottoni non hanno senso — niente "snapshot Hetzner" della
-          tua MacBook. Vedi docs/internal/ops/vps.md § "Lifecycle". */}
-          <VpsLifecycleCard visible={process.env.JHT_HOST_TYPE === "vps"} />
+          {/* Il ciclo di vita della VPS (pausa/snapshot/termina) non si comanda
+          più da qui: le route /api/vps/* sono state rimosse il 25/07 con le
+          altre di controllo, e la card restava con tre bottoni che chiamavano
+          il vuoto. Si fa dal desktop, o via `hcloud` sulla VPS. */}
 
           {/* ── Empty state ─────────────────────────────────────────
           CLOUD [JHT-WEB-DEMO 22/07]: profilo e avvio team vivono SOLO
