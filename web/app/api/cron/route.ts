@@ -1,61 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-import os from "os";
 import { randomUUID } from "crypto";
-import { JHT_HOME } from "@/lib/jht-paths";
+import {
+  readStore,
+  writeStore,
+  type CronJob,
+  type CronPayload,
+  type CronSchedule,
+} from "@/lib/cron-store";
 
 export const dynamic = "force-dynamic";
-
-const CRON_DIR = path.join(JHT_HOME, "cron");
-const CRON_STORE = path.join(CRON_DIR, "jobs.json");
-
-interface CronJob {
-  id: string;
-  name: string;
-  description?: string;
-  enabled: boolean;
-  deleteAfterRun?: boolean;
-  createdAtMs: number;
-  updatedAtMs: number;
-  schedule: Record<string, unknown>;
-  payload: Record<string, unknown>;
-  state: {
-    nextRunAtMs?: number;
-    lastRunAtMs?: number;
-    lastRunStatus?: string;
-    lastError?: string;
-    lastDurationMs?: number;
-  };
-}
-interface StoreFile {
-  version: 1;
-  jobs: CronJob[];
-}
-
-function readStore(): StoreFile {
-  try {
-    if (!fs.existsSync(CRON_STORE)) return { version: 1, jobs: [] };
-    return JSON.parse(fs.readFileSync(CRON_STORE, "utf-8")) as StoreFile;
-  } catch {
-    return { version: 1, jobs: [] };
-  }
-}
-
-function writeStore(store: StoreFile) {
-  fs.mkdirSync(CRON_DIR, { recursive: true });
-  const tmp = `${CRON_STORE}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(store, null, 2) + "\n", {
-    encoding: "utf-8",
-    mode: 0o600,
-  });
-  try {
-    fs.renameSync(tmp, CRON_STORE);
-  } catch {
-    fs.copyFileSync(tmp, CRON_STORE);
-    fs.unlinkSync(tmp);
-  }
-}
 
 export async function GET() {
   const store = readStore();
@@ -108,8 +61,13 @@ export async function POST(req: NextRequest) {
     deleteAfterRun: body.deleteAfterRun === true,
     createdAtMs: now,
     updatedAtMs: now,
-    schedule,
-    payload,
+    // Il body arriva dal client e qui è verificato solo per presenza e
+    // tipo object (più il controllo injection sul command): la forma
+    // esatta della schedule resta una promessa del chiamante, come da
+    // sempre in questa route. Il cast la dichiara invece di nasconderla
+    // dietro un Record<string, unknown>.
+    schedule: schedule as unknown as CronSchedule,
+    payload: payload as unknown as CronPayload,
     state: {},
   };
 
@@ -142,7 +100,7 @@ export async function PATCH(req: NextRequest) {
   if (typeof body.description === "string")
     job.description = body.description.trim();
   if (body.schedule && typeof body.schedule === "object")
-    job.schedule = body.schedule as Record<string, unknown>;
+    job.schedule = body.schedule as CronSchedule;
   if (body.payload && typeof body.payload === "object") {
     const command =
       typeof (body.payload as Record<string, unknown>).command === "string"
@@ -153,7 +111,7 @@ export async function PATCH(req: NextRequest) {
         { error: "command contiene caratteri non validi" },
         { status: 400 },
       );
-    job.payload = body.payload as Record<string, unknown>;
+    job.payload = body.payload as CronPayload;
   }
   job.updatedAtMs = Date.now();
 

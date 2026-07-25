@@ -1,42 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-import os from "os";
-import { JHT_HOME } from "@/lib/jht-paths";
+import { readStore, writeStore } from "@/lib/cron-store";
 
 export const dynamic = "force-dynamic";
-
-const CRON_DIR = path.join(JHT_HOME, "cron");
-const CRON_STORE = path.join(CRON_DIR, "jobs.json");
-
-interface StoreFile {
-  version: 1;
-  jobs: Array<Record<string, unknown>>;
-}
-
-function readStore(): StoreFile {
-  try {
-    if (!fs.existsSync(CRON_STORE)) return { version: 1, jobs: [] };
-    return JSON.parse(fs.readFileSync(CRON_STORE, "utf-8")) as StoreFile;
-  } catch {
-    return { version: 1, jobs: [] };
-  }
-}
-
-function writeStore(store: StoreFile) {
-  fs.mkdirSync(CRON_DIR, { recursive: true });
-  const tmp = `${CRON_STORE}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(store, null, 2) + "\n", {
-    encoding: "utf-8",
-    mode: 0o600,
-  });
-  try {
-    fs.renameSync(tmp, CRON_STORE);
-  } catch {
-    fs.copyFileSync(tmp, CRON_STORE);
-    fs.unlinkSync(tmp);
-  }
-}
 
 type Ctx = { params: Promise<{ id: string }> };
 
