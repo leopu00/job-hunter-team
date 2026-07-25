@@ -10,6 +10,7 @@ const S := {
 	"pause.resume": "WEITER",
 	"pause.window": "FENSTER / VOLLBILD",
 	"pause.quit": "SPIEL BEENDEN",
+	"pause.shutdown": "TEAM WIRD GESTOPPT…",
 
 	"hud.team": "TEAM",
 	"hud.positions_today": "POSITIONEN HEUTE",

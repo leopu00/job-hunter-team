@@ -10,6 +10,7 @@ const S := {
 	"pause.resume": "REANUDAR",
 	"pause.window": "VENTANA / PANTALLA COMPLETA",
 	"pause.quit": "SALIR DEL JUEGO",
+	"pause.shutdown": "DETENIENDO EL EQUIPO…",
 
 	"hud.team": "EQUIPO",
 	"hud.positions_today": "POSICIONES HOY",

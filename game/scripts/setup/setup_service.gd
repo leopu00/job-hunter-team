@@ -126,6 +126,23 @@ func _self_test_vps_setup() -> void:
 			failures.append("runtime incluso")
 		if names.contains(".jht/host.env"):
 			failures.append("host.env locale incluso")
+	# Spegnimento in uscita: in locale ferma agenti E container, sulla VPS mai.
+	var local_shutdown := shutdown_commands({})
+	if local_shutdown.size() != 3:
+		failures.append("in locale servono stop agenti, stop assistente e stop container")
+	else:
+		var flat := ""
+		for argv: PackedStringArray in local_shutdown:
+			flat += " ".join(argv) + "|"
+		if not flat.contains("team stop --all"):
+			failures.append("manca lo stop degli agenti")
+		if not flat.contains("team stop assistente"):
+			failures.append("l'Assistente resterebbe acceso")
+		if not flat.contains("stop jht"):
+			failures.append("il container resterebbe acceso")
+	if not shutdown_commands({"ip": "1.2.3.4", "key_path": "~/k"}).is_empty():
+		failures.append("su VPS il team NON va spento")
+
 	_restore_test_env("HOME", old_home)
 	_restore_test_env("USERPROFILE", old_profile)
 	_restore_test_env("JHT_HOME", old_jht)
@@ -1791,6 +1808,80 @@ func _finish_action(action: String, result: Dictionary) -> void:
 				str(target.get("key_path", "")))
 		BackendBus.set_backend(VpsBackend.new(), target)
 	refresh()
+
+
+## Comandi di spegnimento da eseguire quando l'utente chiude il gioco.
+##
+## In LOCALE si ferma tutto: gli agenti vivono nel container sul computer
+## dell'utente e continuavano a lavorare — e a consumare token — a finestra
+## chiusa, senza che nulla lo dicesse (Leone se n'è accorto dal traffico di
+## rete, 25/07). Prima uno stop pulito degli agenti, che così salvano il loro
+## stato, poi il container.
+##
+## Su VPS non si tocca NIENTE: là il team deve girare anche a gioco chiuso, è
+## esattamente il motivo per cui esiste una macchina remota.
+static func shutdown_commands(vps: Dictionary) -> Array:
+	if not vps.is_empty():
+		return []
+	var cli := PackedStringArray(["exec", "jht", "node", "/app/cli/bin/jht.js"])
+	var stop_all := cli.duplicate()
+	stop_all.append_array(PackedStringArray(["team", "stop", "--all"]))
+	var stop_assistant := cli.duplicate()
+	# `team stop --all` preserva l'Assistente di proposito (è quello della chat):
+	# in uscita va chiuso anche lui, altrimenti resta un processo vivo.
+	stop_assistant.append_array(PackedStringArray(["team", "stop", "assistente"]))
+	return [stop_all, stop_assistant, PackedStringArray(["stop", "jht"])]
+
+
+## Flag che il Capitano crea quando TUTTI hanno chiuso in ordine: è il segnale
+## che il gioco può spegnere il container e uscire senza troncare lavoro.
+const SHUTDOWN_READY_FLAG := "/jht_home/.shutdown-ready.flag"
+
+## Sessioni tmux vive nel container: sono gli agenti che l'utente vedrebbe
+## interrompere chiudendo la finestra. Vuoto se il container non risponde.
+static func active_agents() -> PackedStringArray:
+	var res := _run("docker", PackedStringArray(["exec", "jht", "tmux",
+			"list-sessions", "-F", "#{session_name}"]))
+	if res["code"] != 0:
+		return PackedStringArray()
+	var names := PackedStringArray()
+	for line: String in str(res["out"]).split("\n"):
+		var name := line.strip_edges()
+		if name != "":
+			names.append(name)
+	return names
+
+
+## Chiede al Capitano di chiudere la giornata come si deve: ogni agente scrive
+## sulla propria agenda a che punto era, così alla riapertura si riprende invece
+## di ricominciare. Il gioco non ferma nessuno da sé — aspetta il flag.
+static func request_graceful_shutdown() -> bool:
+	_run("docker", PackedStringArray(["exec", "jht", "rm", "-f",
+			SHUTDOWN_READY_FLAG]))
+	var order := "[@utente -> @capitano] [SHUTDOWN] L'utente sta chiudendo " \
+			+ "l'applicazione. Usa la skill graceful-shutdown: fai annotare a " \
+			+ "ogni agente lo stato del lavoro in corso sulla propria agenda, " \
+			+ "poi fermali uno a uno e infine crea il flag " \
+			+ SHUTDOWN_READY_FLAG + " che chiude l'applicazione."
+	var res := _run("docker", PackedStringArray(["exec", "jht",
+			"jht-tmux-send", "CAPITANO", order]))
+	Log.call_deferred("info", "setup", "ordine di chiusura al Capitano → %d"
+			% res["code"])
+	return res["code"] == 0
+
+
+## Il Capitano ha finito? Il flag è l'unica prova che accettiamo.
+static func graceful_shutdown_ready() -> bool:
+	return _run("docker", PackedStringArray(["exec", "jht", "test", "-f",
+			SHUTDOWN_READY_FLAG]))["code"] == 0
+
+
+## Esegue lo spegnimento. Bloccante: la chiama un thread, non il main loop.
+func shutdown_team() -> void:
+	for argv: PackedStringArray in shutdown_commands(_vps_config()):
+		var res := _run("docker", argv)
+		Log.call_deferred("info", "setup", "spegnimento: docker %s → %d"
+				% [" ".join(argv), res["code"]])
 
 
 func _vps_config() -> Dictionary:
