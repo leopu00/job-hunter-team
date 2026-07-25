@@ -35,7 +35,8 @@ import { RecheckButton } from "./RecheckButton";
 import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 import { TeamActionsSheet } from "./TeamActionsSheet";
-import { FeedbackButtons, type Verdict } from "./FeedbackButtons";
+import { FeedbackButtons } from "./FeedbackButtons";
+import { verdictOf, type Verdict } from "@/lib/position-verdict";
 import PositionMapCardLazy from "./PositionMapCardLazy";
 import PrevNextNav from "./PrevNextNav";
 import { CvDownloadButton } from "./CvDownloadButton";
@@ -849,15 +850,6 @@ const VERDICT_COLORS: Record<string, string> = {
 // Ultimo evento feedback → giudizio della scala a 4 (stessa mappatura
 // inversa della pagina /swipe; i vecchi eventi senza score cadono sul
 // giudizio più vicino all'action).
-function verdictOf(action: string, score: number | null): Verdict {
-  if (action === "star") return "top";
-  if (action === "dislike" || action === "hide")
-    return score === 2 ? "review_low" : "no";
-  if (score != null && score <= 2) return "review_low";
-  if (score != null && score >= 5) return "top";
-  return "review_ok";
-}
-
 function scoreColor(s: number | null) {
   return scoreSpectrumCss(s);
 }

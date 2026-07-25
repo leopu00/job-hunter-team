@@ -70,7 +70,8 @@ export type SwipeCardData = {
   jd_summary: string | null;
 };
 
-export type Verdict = "no" | "review_low" | "review_ok" | "top";
+import type { Verdict } from "@/lib/position-verdict";
+export type { Verdict };
 
 // Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
 // l'esclusione. Score 3 lasciato libero come neutro non usato. fly: solo
