@@ -163,6 +163,11 @@ func _draw() -> void:
 		"contrast":
 			_circle(Vector2(0.50, 0.50), 0.40, s, w)
 			_half_disc(Vector2(0.50, 0.50), 0.40, s)
+		"display":
+			# schermo su piedistallo: la grafica del mondo, non il tema della UI
+			_rect(Vector2(0.10, 0.16), Vector2(0.90, 0.68), s, w)
+			_line(Vector2(0.50, 0.68), Vector2(0.50, 0.84), s, w)
+			_line(Vector2(0.30, 0.86), Vector2(0.70, 0.86), s, w)
 		"globe":
 			_circle(Vector2(0.50, 0.50), 0.40, s, w)
 			_line(Vector2(0.10, 0.50), Vector2(0.90, 0.50), s, w)

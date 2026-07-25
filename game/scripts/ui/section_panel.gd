@@ -158,6 +158,8 @@ func _build(page := "") -> void:
 			_build_language()
 		"appearance":
 			_build_appearance()
+		"graphics":
+			_build_graphics()
 		"profile":
 			_build_profile()
 		"hours":
@@ -1385,6 +1387,72 @@ func _build_appearance() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("appearance.note"), 13, Palette.DIM))
+
+
+## Impostazioni → Grafica: qui l'utente prende il comando sul compromesso fra
+## resa e fluidità. Finché non sceglie decide la calibrazione (e continua ad
+## adattarsi mentre gioca); appena scegli, la tua scelta vince e non viene più
+## rivista — è la ragione per cui questo pannello esiste: su una macchina lenta
+## il gioco che ti cambia la grafica da solo, ogni tanto, è peggio del lag.
+func _build_graphics() -> void:
+	_content.add_child(_wrapped_label(UIStrings.t("gfx.intro"), 14, Palette.MUTED))
+	_content.add_child(HSeparator.new())
+	var mode := Game.graphics_choice()
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("gfx.current") % UIStrings.t("gfx." + _graphics_key(mode)),
+			16, Palette.BRIGHT, "bold"))
+	# Cosa sta girando ADESSO: in automatico non coincide con la scelta, ed è
+	# proprio il dato che serve a chi sta valutando se prendere il comando.
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("gfx.state") % [int(round(Game.world_scale() * 100.0)),
+					UIStrings.t("gfx.scenery_off" if Game.low_gfx else "gfx.scenery_on")],
+			14, Palette.MUTED))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 12)
+	_content.add_child(grid)
+	for spec in [
+		[Game.CHOICE_AUTO, "auto"], ["full", "full"],
+		["balanced", "balanced"], ["performance", "performance"],
+	]:
+		var value := str(spec[0])
+		var key := str(spec[1])
+		var selected: bool = mode == value
+		var button := Button.new()
+		button.text = "%s%s\n%s" % [UIStrings.t("gfx." + key).to_upper(),
+				"  ✓" if selected else "", UIStrings.t("gfx." + key + "_desc")]
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.custom_minimum_size = Vector2(360, 92)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_font_size_override("font_size", 15)
+		button.add_theme_color_override("font_color",
+				Palette.GREEN if selected else Palette.BASE)
+		button.add_theme_color_override("font_disabled_color", Palette.GREEN)
+		button.disabled = selected
+		button.pressed.connect(func() -> void:
+			Game.set_graphics_choice(value)
+			_build())  # riapre col profilo nuovo già evidenziato
+		grid.add_child(button)
+	_content.add_child(HSeparator.new())
+	_content.add_child(_wrapped_label(UIStrings.t("gfx.note"), 13, Palette.DIM))
+
+
+## Riga di prosa che va a capo dentro il pannello. Serve davvero: una Label
+## senza autowrap allarga il contenitore fino alla lunghezza della frase e si
+## porta dietro il pannello, che finisce fuori dallo schermo — bordo destro e
+## pulsante di chiusura compresi (visto negli shot del 25/07).
+func _wrapped_label(text: String, size: int, color: Color) -> Label:
+	var label := TerminalTheme.label(text, size, color)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return label
+
+
+## "auto" non sta fra i CHOICES di Game (è l'assenza di scelta) ma ha la sua
+## voce in elenco: qui le due nomenclature si incontrano.
+func _graphics_key(mode: String) -> String:
+	return mode if Game.CHOICES.has(mode) else "auto"
 
 ## Impostazioni → Lingua: le 7 lingue del web. Il cambio si applica
 ## subito a ciò che viene (ri)costruito; la scena intorno si aggiorna

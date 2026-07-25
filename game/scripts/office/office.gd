@@ -226,6 +226,8 @@ func _ready() -> void:
 		_gfx_profile_selftest.call_deferred()
 	if OS.get_environment("JHT_WORLD_TEXT_TEST") == "1":
 		_world_text_selftest.call_deferred()
+	if OS.get_environment("JHT_GRAPHICS_PANEL_TEST") == "1":
+		_graphics_panel_selftest.call_deferred()
 	if OS.get_environment("JHT_CAMERA_LOCK_TEST") == "1":
 		_camera_lock_selftest.call_deferred()
 	if OS.get_environment("JHT_POSITIONS_PANEL_TEST") == "1":
@@ -468,6 +470,85 @@ func _gfx_profile_selftest() -> void:
 	print("GFX-PROFILE-TEST %s %s" % ["PASS" if ok else "FAIL",
 			JSON.stringify(result)])
 	get_tree().quit(0 if ok else 1)
+
+
+## Impostazioni → Grafica: quello che l'utente sceglie deve arrivare al mondo
+## SUBITO e restare. Il test passa dal pannello vero, premendo i bottoni veri:
+## se un domani la scelta smette di comandare sulla calibrazione, cade qui.
+func _graphics_panel_selftest() -> void:
+	await get_tree().process_frame
+	var result := {}
+	var panel := SectionPanel.new("graphics", 24.0)
+	add_child(panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var labels := ""
+	for node in panel.find_children("*", "Label", true, false):
+		labels += (node as Label).text + "\n"
+	var buttons := ""
+	for node in panel.find_children("*", "Button", true, false):
+		buttons += (node as Button).text + "\n"
+	result["quattro_profili_in_elenco"] = buttons.contains(
+			UIStrings.t("gfx.auto").to_upper()) \
+			and buttons.contains(UIStrings.t("gfx.full").to_upper()) \
+			and buttons.contains(UIStrings.t("gfx.balanced").to_upper()) \
+			and buttons.contains(UIStrings.t("gfx.performance").to_upper())
+	# In automatico il pannello deve dire cosa sta girando ADESSO, non solo che
+	# la scelta è "automatico": senza la riga di stato l'utente non sa nulla.
+	result["stato_corrente_mostrato"] = labels.contains(
+			UIStrings.t("gfx.state") % [int(round(Game.world_scale() * 100.0)),
+					UIStrings.t("gfx.scenery_off" if Game.low_gfx else "gfx.scenery_on")])
+
+	_press_graphics_choice(panel, "gfx.performance")
+	await get_tree().process_frame
+	result["scelta_salvata"] = Game.graphics_choice() == "performance"
+	result["scelta_applicata_al_mondo"] = is_equal_approx(Game.world_scale(), 0.6) \
+			and is_equal_approx(_render_scale, 0.6)
+	result["scenografia_spenta"] = Game.low_gfx
+	# La riga chiave: da qui in poi né la calibrazione né la sorveglianza
+	# possono più toccare niente.
+	result["calibrazione_disinnescata"] = Game._graphics_forced()
+	# Il testo del mondo si è adeguato insieme alla scala.
+	result["testo_compensato"] = is_equal_approx(WorldText.boost(), 1.0 / 0.6)
+	# Riavvio simulato: rileggendo il profilo salvato la scala corrente deve
+	# risultare quella scelta, non 1.0. Se qui torna 1.0 la sorveglianza crede
+	# di essere a risoluzione piena e non restituisce più definizione a nessuno.
+	Game.load_gfx_profile()
+	result["scala_nota_dopo_riavvio"] = is_equal_approx(Game.world_scale(), 0.6)
+
+	_press_graphics_choice(panel, "gfx.auto")
+	await get_tree().process_frame
+	result["ritorno_ad_automatico"] = Game.graphics_choice() == Game.CHOICE_AUTO \
+			and not Game._graphics_forced()
+	result["riparte_dal_profilo_pieno"] = not Game.low_gfx \
+			and is_equal_approx(Game.world_scale(), 1.0)
+	# La prossima calibrazione deve partire da zero: nel file non resta nessuna
+	# misura vecchia da riapplicare al prossimo avvio. (Che _gfx_done torni
+	# false non è verificabile headless: là la calibrazione è spenta per
+	# principio, non c'è nessun framerate vero da misurare.)
+	var cfg := ConfigFile.new()
+	cfg.load(Game.GFX_CONFIG)
+	result["nessuna_misura_residua"] = not cfg.has_section_key("graphics", "render_scale") \
+			and not cfg.has_section_key("graphics", "low") \
+			and str(cfg.get_value("graphics", "mode", "")) == Game.CHOICE_AUTO
+	panel.queue_free()
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("GRAPHICS-PANEL-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
+
+
+## Premere il bottone di un profilo come farebbe l'utente. Il pannello si
+## ricostruisce a ogni scelta, quindi i bottoni vanno ritrovati ogni volta.
+func _press_graphics_choice(panel: SectionPanel, key: String) -> void:
+	var wanted := UIStrings.t(key).to_upper()
+	for node in panel.find_children("*", "Button", true, false):
+		var button := node as Button
+		if button.text.begins_with(wanted):
+			button.pressed.emit()
+			return
 
 
 ## Il testo del mondo resta leggibile a ogni scala di rendering: quando il mondo

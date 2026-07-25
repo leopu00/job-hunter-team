@@ -571,6 +571,7 @@ const S := {
 	"side.account": "Account",
 	"side.email": "Email",
 	"side.appearance": "Aspetto",
+	"side.graphics": "Grafica",
 	"side.language": "Lingua",
 	"side.advanced": "Avanzate",
 
@@ -582,6 +583,22 @@ const S := {
 	"appearance.light_desc": "Finestre bianche, testo scuro e accenti ad alto contrasto",
 	"appearance.dark_desc": "Interfaccia terminale scura con accenti luminosi",
 	"appearance.note": "// la preferenza viene salvata su questo dispositivo",
+
+	# ── Impostazioni → Grafica ───────────────────────────────────
+	"gfx.intro": "Il gioco misura da sé quanti fotogrammi riesce a fare e alleggerisce la grafica quando serve. Se preferisci decidere tu, scegli un profilo: da quel momento comanda la tua scelta e la misura automatica non tocca più niente.",
+	"gfx.current": "PROFILO ATTIVO: %s",
+	"gfx.state": "mondo disegnato al %d%% · scenografia %s",
+	"gfx.scenery_on": "accesa",
+	"gfx.scenery_off": "spenta",
+	"gfx.auto": "Automatico",
+	"gfx.auto_desc": "Il gioco misura gli fps e si adatta mentre giochi",
+	"gfx.full": "Massima",
+	"gfx.full_desc": "Mondo a risoluzione piena, scenografia completa",
+	"gfx.balanced": "Equilibrata",
+	"gfx.balanced_desc": "Mondo all’85%: la grana si nota appena, un quarto di lavoro in meno per la GPU",
+	"gfx.performance": "Prestazioni",
+	"gfx.performance_desc": "Mondo al 60% e scenografia spenta: per le macchine che arrancano",
+	"gfx.note": "// la scelta è salvata su questo dispositivo. Le scritte dentro l’ufficio si ingrandiscono da sé quando la risoluzione scende: restano leggibili con ogni profilo.",
 
 	# ── Sezioni non ancora migrate / config sola lettura ──────────────
 	"section.migrating": "// sezione non ancora disponibile",
