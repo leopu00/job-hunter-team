@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "buildCommand": "cp scripts/install.sh web/public/install.sh && cd web && npm run build",
+  "buildCommand": "bash scripts/sync-public-installers.sh && cd web && npm run build",
   "installCommand": "npm install && cd web && npm install",
   "outputDirectory": "web/.next",
   "regions": ["cdg1"],

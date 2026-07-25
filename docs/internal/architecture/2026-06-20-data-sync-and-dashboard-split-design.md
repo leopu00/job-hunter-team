@@ -12,6 +12,18 @@
 >
 > Raffina: `2026-06-15-interaction-planes-redesign-design.md` (§ "Decisioni aperte" #5).
 > Si appoggia a: `cloud-sync-architecture.md` (living doc del meccanismo push/pull).
+>
+> 🪦 **SUPERATO in parte 2026-07-19/23 (migrazione nativa `32225cb7` + ritiro `:3000` `303a6ec6`):**
+> la "dashboard locale dentro l'app desktop" **non è più una view web wrappata** —
+> non esiste `desktop/main.js`, non esiste una `BrowserWindow` Electron, e il
+> container non serve più Next.js né espone porte. Le stesse viste sono
+> **native nell'ufficio Godot** (`game/`), alimentate via `docker exec` (locale)
+> o SSH (VPS); il browser vede **solo** il cloud. Restano validi e implementati:
+> lo split duro `local`/`cloud` deciso a build (`NEXT_PUBLIC_JHT_DEPLOY`), la
+> corsia richieste async, e il principio "una istanza = una modalità sola".
+> Il meccanismo di sync descritto qui (on-access + pulsante, niente polling) è
+> stato a sua volta superato dal Realtime-first del 2026-07-21, vedi
+> [`2026-07-21-web-sync-realtime-rework.md`](2026-07-21-web-sync-realtime-rework.md).
 
 ---
 

@@ -104,15 +104,19 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 COPY cli/package.json cli/package-lock.json* ./cli/
-COPY tui/package.json tui/package-lock.json* ./tui/
 
 # web/ NON è installato nel container: la dashboard web locale è stata
 # ritirata (2026-07-23) e niente qui dentro avvia Next.js — le sue dipendenze
 # (Next/React/eslint/tailwind, ~centinaia di MB) erano peso morto. Il web gira
 # solo in cloud, buildato altrove. /app/web/.next viene comunque creata più
 # sotto per il fix-ownership del vecchio compose dev (Leone 24/07).
+#
+# tui/ ANCHE non è più installato né compilato qui (2026-07-25): nessun
+# processo del container la lancia (nessun `bin`, nessun `main`, zero
+# invocatori) — era install + build TypeScript a ogni immagine per codice
+# che non parte. Il codice resta nel repo; l'expert-mode di install.sh la
+# compila sull'host quando serve. Vedi MINOR-TRACKER [MINOR-TUI-DEAD-BUILD].
 RUN npm ci --prefix cli \
-    && npm ci --prefix tui \
     && npm cache clean --force
 
 COPY requirements.txt ./
@@ -150,8 +154,7 @@ RUN find /app/agents/_tools -type f -exec sed -i 's/\r$//' {} + \
 RUN python3 shared/skills/tool_health.py --only playwright_browser \
     || { echo "BUILD GATE FAILED: chromium headless cannot launch — missing system libs (libatk/nss/gbm/asound)? See shared/skills/tool_health.py" >&2; exit 1; }
 
-RUN npm run build --prefix tui \
-    && for pkg in shared/*/package.json; do \
+RUN for pkg in shared/*/package.json; do \
          [ -f "$pkg" ] || continue; \
          dir=$(dirname "$pkg"); \
          has_deps=$(node -p "Object.keys(JSON.parse(require('fs').readFileSync('$pkg','utf8')).dependencies||{}).length > 0"); \

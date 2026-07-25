@@ -151,9 +151,24 @@ Supabase-backed sync of `positions`, `scores`, `applications`. See also
 |--------------------------------------|-------|-------------------------------------------------------------------------|
 | `jht config get [key]`               | Node  | Print one key (dot-notation) or the whole config when no key.           |
 | `jht config set <key> <value>`       | Node  | Write a key (dot-notation; creates intermediate objects automatically). |
+| `jht profile validate [file]`        | Node  | Validate the candidate profile against the canonical schema (defaults to `$JHT_HOME/profile/candidate_profile.yml`). The Scorer refuses to score without a valid profile, so this is the first thing to run when scores stop appearing. |
 
 > ⚠️ `config set` bypasses the wizard's validation. For Telegram tokens,
 > prefer the interactive wizard so `getMe` + chat_id long-poll run.
+
+### Working hours
+
+`jht working-hours <action>` (alias `jht wh`) — when the team is allowed to
+work. The weekly budget is spread across these hours, so narrowing them
+concentrates the same budget into fewer hours rather than saving it.
+
+| Command                              | What it does                                                |
+|--------------------------------------|-------------------------------------------------------------|
+| `jht wh show`                        | Current schedule + total hours per week.                    |
+| `jht wh set <preset>`                | Apply a preset: `office` (mon–fri 09:00–18:00) · `weekend` (sat–sun 09:00–18:00) · `daytime` (every day 09:00–18:00) · `night` (every day 22:00–07:00) · `24-7`. |
+| `jht wh set-custom <days> <range>`   | Custom window, e.g. `jht wh set-custom mon-fri 09:00-18:00`; `--tz <iana>` overrides the timezone. |
+| `jht wh clear`                       | Remove the schedule — the team runs 24/7.                   |
+| `jht wh simulate`                    | Simulate the resulting pace target (needs the container running). |
 
 ## Status & observability
 
@@ -214,6 +229,7 @@ These exist for developers and power-users. Skip if you're onboarding.
 |--------------------------------------|-------------------------------------------------------------|
 | `jht container up\|down\|recreate\|status\|logs` | Same as the host-layer commands but with finer-grained subcommand structure. Lives in the Node CLI for environments where the wrapper isn't installed. |
 | `jht cache [clear]`                  | Manage the cache directory.                                 |
+| `jht tools [action]`                 | Audit the shared Python user-base the agents install into: `stats`, `list`, `outdated`, `dups`. |
 | `jht context`                        | Manage `CLAUDE.md`/`AGENTS.md` context files per agent.     |
 | `jht hooks [action]`                 | Manage event hooks (pre-submit, post-score, etc.).          |
 | `jht webhooks [action]`              | Manage outbound webhooks.                                   |
