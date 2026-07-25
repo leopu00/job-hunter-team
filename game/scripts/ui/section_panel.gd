@@ -751,11 +751,11 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 		login.add_theme_color_override("font_color", Palette.GREEN)
 		login.pressed.connect(SetupService.open_provider_login.bind(provider))
 		actions.add_child(login)
-		var install := Button.new()
-		install.text = UIStrings.t("setup.provider_install")
-		install.disabled = not bool(s.get("container_running", false))
-		install.pressed.connect(SetupService.install_provider.bind(provider))
-		actions.add_child(install)
+		# Niente pulsante "INSTALLA / AGGIORNA CLI" accanto: faceva la PRIMA
+		# METÀ di questo. Dal 24/07 il comando di login è
+		# `providers update <id> && <cli> login`, cioè installa o aggiorna e poi
+		# entra — quel secondo pulsante è rimasto lì a chiedere all'utente una
+		# distinzione che non esiste più (Leone, 25/07).
 		if authed:
 			var logout := Button.new()
 			logout.text = "DISCONNETTI ACCOUNT"
