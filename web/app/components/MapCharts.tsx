@@ -749,7 +749,16 @@ export default function MapCharts({
         <JobsGlobeLazy
           fullscreen
           selectedTypes={selectedTypes}
-          selectedScoreRanges={selectedRanges}
+          // Il globo filtra i pin per range: la soglia di default gli arriva
+          // tradotta in un range aperto verso l'alto, altrimenti resterebbero
+          // pinnate anche le posizioni sotto 65 (i pannelli laterali le
+          // escludevano già, i pin no). hi=Infinity e non 100: se un giorno
+          // uno score sforasse la scala non lo perdiamo per strada.
+          selectedScoreRanges={
+            minScore != null
+              ? [{ lo: minScore, hi: Number.POSITIVE_INFINITY }]
+              : selectedRanges
+          }
           selectedUnscored={unscoredSelected}
           selectedCountries={selectedCountries}
           selectedCities={selectedCities}
