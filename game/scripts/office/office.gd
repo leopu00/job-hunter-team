@@ -26,15 +26,15 @@ var _traffic_demo_started := false
 var _stage: Node
 var _pixel_stage: SubViewportContainer
 var _pixel_layer: CanvasLayer
-var _pixel_shrink := 1
+var _render_scale := 1.0
 
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
 	_doctor_test = OS.get_environment("JHT_DOCTOR_TEST")
 	_stage = self
-	var wanted := Game.pixel_shrink()
-	if wanted > 1:
-		set_pixel_shrink(wanted)
+	var wanted := Game.render_scale()
+	if wanted < 0.999:
+		set_render_scale(wanted)
 	# Stratificazione globale: sfondo (-3), tinte e tappeti (-2), aure degli
 	# agenti (-1), mondo y-sortato (0+). Le aure risultano quindi davvero
 	# appoggiate al suolo e vengono coperte dagli arredi senza maschere ad hoc.
@@ -47,6 +47,19 @@ func _ready() -> void:
 	var rugs_layer := DeptRugs.new()
 	rugs_layer.z_index = -2
 	_stage.add_child(rugs_layer)  # tappeti persiani rettangolari colore-reparto
+	# Pavimento, tinte e tappeti sono disegnati a mano, primitiva per
+	# primitiva (fughe, riflessi, ombre): centinaia di draw call che si
+	# ripetono ogni frame per un'immagine che non cambia MAI — nessuno dei
+	# tre ha _process o queue_redraw. Vengono cotti una volta in una texture
+	# e da lì in poi costano una draw call sola.
+	# ⚠️ NON ancora attivo di default (25/07): dentro il forno spariscono i
+	# due Polygon2D di fondo di OfficeFloor — il void esterno e la base
+	# scura del pavimento — perché usano `show_behind_parent`, che con un
+	# genitore diverso non li mette più dietro. Risultato: ufficio slavato e
+	# void grigio. Il guadagno è reale ma va risolto prima quel dettaglio;
+	# fino ad allora si attiva solo con JHT_BAKE=1.
+	if OS.get_environment("JHT_BAKE") == "1":
+		_bake_backdrop([floor_layer, dressing_layer, rugs_layer])
 	# giorno/notte sull'ora locale: esterno, lampade e luce dalle finestre.
 	# Va qui, PRIMA di mondo e maintainer, che devono disegnarsi sopra.
 	_stage.add_child(DayNight.new())
@@ -2637,15 +2650,75 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 
 # ── Costruzione scena ─────────────────────────────────────────────────
 
+## Cuoce i livelli statici di sfondo in un'unica texture. I nodi originali
+## finiscono in un SubViewport che renderizza UNA volta sola: da lì in poi
+## lo sfondo dell'ufficio è uno Sprite2D, e le centinaia di primitive che lo
+## componevano non toccano più la GPU. L'aspetto è identico al pixel.
+func _bake_backdrop(layers: Array) -> void:
+	var rect: Rect2 = FurnitureDefs.WORLD
+	var oven := SubViewport.new()
+	oven.name = "BackdropOven"
+	oven.size = Vector2i(rect.size)
+	# Fondo OPACO (il clear color è già il VOID della scena): su fondo
+	# trasparente le tinte e le ombre semi-trasparenti si comporrebbero
+	# contro il nulla e uscirebbero schiarite — l'ufficio cotto sembrava
+	# sbiadito e il void attorno diventava grigio.
+	oven.transparent_bg = false
+	oven.disable_3d = true
+	oven.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(oven)
+	# Il mondo ha origine negativa (WORLD parte da y=-420): la teglia va
+	# traslata, altrimenti si cuoce metà pavimento fuori dai bordi.
+	var holder := Node2D.new()
+	holder.position = -rect.position
+	oven.add_child(holder)
+	for layer in layers:
+		var node: Node2D = layer
+		node.get_parent().remove_child(node)
+		node.z_index = 0
+		holder.add_child(node)
+	_finish_bake.call_deferred(oven, rect)
+
+
+## Il render target va copiato in una texture NORMALE, non usato com'è: la
+## ViewportTexture resta nello spazio colore del target e, ridisegnata, alza
+## i toni scuri — il void nero diventava grigio e le tinte uscivano slavate.
+## Il passaggio per l'immagine costa una frazione di secondo, una volta sola,
+## e restituisce esattamente i colori della scena viva.
+func _finish_bake(oven: SubViewport, rect: Rect2) -> void:
+	if not is_instance_valid(oven):
+		return
+	await RenderingServer.frame_post_draw
+	var image := oven.get_texture().get_image()
+	if image == null or image.is_empty():
+		Log.warn("perf", "bake sfondo non riuscito: resto sui livelli disegnati")
+		return
+	var backdrop := Sprite2D.new()
+	backdrop.name = "BackdropBaked"
+	backdrop.texture = ImageTexture.create_from_image(image)
+	backdrop.centered = false
+	backdrop.position = rect.position
+	backdrop.z_index = -3
+	_stage.add_child(backdrop)
+	_stage.move_child(backdrop, 0)
+	oven.queue_free()  # con dentro i livelli sorgente: non servono più
+	Log.info("perf", "sfondo ufficio cotto in una texture %dx%d"
+			% [image.get_width(), image.get_height()])
+
+
 ## Monta (o smonta) il palcoscenico a risoluzione ridotta. Funziona anche a
 ## ufficio già avviato: la calibrazione decide dopo 15 secondi, e a quel
 ## punto i nodi del mondo vengono semplicemente traslocati nel SubViewport.
-func set_pixel_shrink(value: int) -> void:
-	var target := clampi(value, 1, 4)
-	if target == _pixel_shrink:
+## `value` è la scala di rendering del mondo: 1.0 = nativo, 0.75 = tre quarti
+## di lato, 0.5 = metà. Deliberatamente CONTINUA e non un divisore intero:
+## fra "nativo" e "metà" c'è tutto lo spazio dove la grana si vede appena
+## (richiesta Leone 25/07) e dove sta comunque metà del risparmio.
+func set_render_scale(value: float) -> void:
+	var target := clampf(value, 0.25, 1.0)
+	if is_equal_approx(target, _render_scale):
 		return
-	_pixel_shrink = target
-	if target <= 1:
+	_render_scale = target
+	if target >= 0.999:
 		if _pixel_stage != null:
 			_move_world_nodes(_pixel_stage.get_child(0), self)
 			_pixel_layer.queue_free()
@@ -2654,7 +2727,7 @@ func set_pixel_shrink(value: int) -> void:
 			_stage = self
 		return
 	if _pixel_stage != null:
-		_pixel_stage.stretch_shrink = target
+		_apply_stage_size()
 		return
 	# Il container è un Control: figlio diretto di un Node2D resterebbe di
 	# dimensione zero (gli anchor hanno senso solo dentro uno spazio schermo)
@@ -2663,13 +2736,13 @@ func set_pixel_shrink(value: int) -> void:
 	_pixel_layer.name = "PixelLayer"
 	_pixel_layer.layer = -100
 	add_child(_pixel_layer)
+	# Il container resta a shrink 1 e viene RIMPICCIOLITO come Control, poi
+	# riportato a schermo pieno con `scale`: così il fattore è continuo e
+	# l'inoltro degli eventi resta quello del SubViewportContainer, che
+	# rimappa da sé le coordinate del mouse.
 	_pixel_stage = SubViewportContainer.new()
 	_pixel_stage.name = "PixelStage"
 	_pixel_stage.stretch = true
-	_pixel_stage.stretch_shrink = target
-	_pixel_stage.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# Nearest sull'ingrandimento: i pixel restano quadrati e netti invece di
-	# diventare una sfocatura (che sarebbe il peggio dei due mondi).
 	_pixel_stage.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_pixel_layer.add_child(_pixel_stage)
 	var vp := SubViewport.new()
@@ -2677,8 +2750,24 @@ func set_pixel_shrink(value: int) -> void:
 	vp.handle_input_locally = false
 	vp.transparent_bg = false
 	_pixel_stage.add_child(vp)
+	_apply_stage_size()
+	if not get_viewport().size_changed.is_connected(_apply_stage_size):
+		get_viewport().size_changed.connect(_apply_stage_size)
 	_stage = vp
 	_move_world_nodes(self, vp)
+
+
+## Dimensiona il palcoscenico sulla finestra corrente. Il container copre
+## `scala × finestra` e viene poi ingrandito di 1/scala: il mondo si disegna
+## su quei pixel e basta.
+func _apply_stage_size() -> void:
+	if _pixel_stage == null:
+		return
+	var window: Vector2 = get_viewport_rect().size
+	var inner := (window * _render_scale).floor().max(Vector2(320, 180))
+	_pixel_stage.position = Vector2.ZERO
+	_pixel_stage.size = inner
+	_pixel_stage.scale = window / inner
 
 
 ## Trasloca i nodi di mondo (Node2D e camere) preservando l'ordine. HUD,
