@@ -2,9 +2,20 @@ import { defineConfig, devices } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-// In locale usiamo IPv4 esplicito per evitare che `localhost` risolva su ::1
-// mentre `next start` ascolta solo su 127.0.0.1.
-const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:3000";
+// ⚠️ Contro `next dev` usa **localhost**, non `127.0.0.1`.
+//
+// Il default storico era `127.0.0.1` per un problema di `next start` (dove
+// `localhost` poteva risolvere su ::1 mentre il server ascoltava su IPv4). In
+// dev quel default costa carissimo: Next rifiuta l'upgrade WebSocket dell'HMR
+// quando l'host non è `localhost`, il runtime di sviluppo resta appeso a
+// riconnettersi e **React non idrata affatto**. Risultato: le pagine si vedono,
+// nessun click funziona, e i test che cliccano falliscono con messaggi che non
+// c'entrano nulla (misurato il 2026-07-25: stesso server, stessa build —
+// localhost avanza, 127.0.0.1 no).
+//
+// Se un giorno servisse davvero IPv4 esplicito contro `next start`, passa
+// BASE_URL a mano per quella sola esecuzione.
+const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
 // ── Sessione (opzionale) ────────────────────────────────────────────────
 // L'area riservata pretende una sessione Supabase: senza, gli spec che la
@@ -25,7 +36,9 @@ const storagePath = path.resolve(__dirname, STORAGE_STATE);
 const hasSession = fs.existsSync(storagePath);
 
 if (hasSession) {
-  console.log(`[playwright] sessione trovata: ${STORAGE_STATE} → i test dell'area riservata girano`);
+  console.log(
+    `[playwright] sessione trovata: ${STORAGE_STATE} → i test dell'area riservata girano`,
+  );
 } else {
   console.log(
     `[playwright] nessuna sessione (${STORAGE_STATE} assente) → gli spec dell'area riservata si skipperanno. Ricetta: e2e/README.md § Sessione`,
