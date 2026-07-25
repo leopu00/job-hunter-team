@@ -16,6 +16,8 @@ func _init(rect: Rect2) -> void:
 	position = Vector2(rect.get_center().x, rect.end.y)
 
 func _ready() -> void:
+	# scenografia: il profilo ridotto la spegne in blocco
+	GfxProfile.mark(self)
 	# Con la camera libera l'ologramma è spesso fuori inquadratura: lì
 	# l'animazione si ferma del tutto (niente _draw, niente _process).
 	var vis := VisibleOnScreenNotifier2D.new()

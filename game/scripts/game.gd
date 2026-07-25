@@ -43,6 +43,7 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.VOID)
+	load_gfx_profile()
 	# Shot-quiet: la finestrella resta cliccabile anche senza focus — un
 	# click VERO dell'utente al lavoro può aprire pannelli e falsare lo
 	# shot (successo: pagina Mentor aperta da sola in uno sweep). Sordi
@@ -67,15 +68,65 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # ── Calibrazione grafica automatica ──────────────────────────────────
 ## Dopo 5 secondi di ufficio si misura il framerate per 10 secondi: sotto
-## soglia si passa al profilo ridotto — cap a 30fps, che sui portatili
-## deboli dà un ritmo stabile invece di oscillare tra 14 e 24. La
-## leggibilità del testo non si tocca MAI (è garantita da text_boost).
-## Su hardware capace non cambia nulla: grafica piena a 60fps.
+## soglia si passa al profilo ridotto. Il cap a 30fps da solo non serviva a
+## nulla — chi sta a 20 non lo tocca mai: quello che conta è togliere lavoro
+## al renderer. Su GL compatibility il costo sta nelle draw call, e la
+## scenografia pura (spigoli del tesseract, ologramma, pile di fogli, ciclo
+## giorno/notte, fumo della stampante) ne vale 85 su 822 — misurate con
+## JHT_CENSUS prima e dopo. È un -10%, non la soluzione: il grosso resta nei
+## mobili (308) e negli agenti (254). Ma è l'unico taglio che non tocca né il
+## gioco né la leggibilità del testo (garantita da text_boost), e su hardware
+## capace non cambia nulla.
+const GFX_CONFIG := "user://graphics.cfg"
+
+signal gfx_profile_changed(low: bool)
+
 var low_gfx := false
 var _gfx_time := 0.0
 var _gfx_fps_sum := 0.0
 var _gfx_samples := 0
 var _gfx_done := false
+
+
+## Il profilo scelto la prima volta vale anche ai riavvii successivi: senza
+## memoria l'utente si rivedrebbe i primi 15 secondi di lag ogni volta.
+func load_gfx_profile() -> void:
+	if OS.get_environment("JHT_LOW_GFX") == "1":  # TEST-AUTO
+		set_low_gfx(true, false)
+		_gfx_done = true
+		return
+	var cfg := ConfigFile.new()
+	if cfg.load(GFX_CONFIG) != OK:
+		return
+	if bool(cfg.get_value("graphics", "low", false)):
+		set_low_gfx(true, false)
+		_gfx_done = true  # già deciso: non rimisurare
+
+
+func set_low_gfx(low: bool, persist := true) -> void:
+	if low_gfx == low:
+		return
+	low_gfx = low
+	Engine.max_fps = 30 if low else 60
+	apply_gfx_profile()
+	gfx_profile_changed.emit(low)
+	if persist:
+		var cfg := ConfigFile.new()
+		cfg.set_value("graphics", "low", low)
+		cfg.save(GFX_CONFIG)
+
+
+## Applica il profilo alla scena viva. Va richiamata anche dopo un cambio
+## scena: i nodi scenografici nuovi nascono visibili.
+func apply_gfx_profile() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	for node in tree.get_nodes_in_group(GfxProfile.GROUP):
+		var item := node as CanvasItem
+		if item != null:
+			item.visible = not low_gfx
+
 
 func _process(delta: float) -> void:
 	if _gfx_done or state != State.OFFICE:
@@ -93,10 +144,9 @@ func _process(delta: float) -> void:
 		_gfx_done = true
 		var avg := _gfx_fps_sum / _gfx_samples
 		if avg < 24.0:
-			low_gfx = true
-			Engine.max_fps = 30
+			set_low_gfx(true)
 			Log.info("perf",
-					"calibrazione: fps medio %.0f → profilo ridotto (cap 30fps)" % avg)
+					"calibrazione: fps medio %.0f → profilo ridotto (scenografia off)" % avg)
 		else:
 			Log.info("perf", "calibrazione: fps medio %.0f → profilo pieno" % avg)
 

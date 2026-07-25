@@ -19,6 +19,8 @@ const STEPS := 9          # punti della polyline sfumata
 var _t := 0.0
 
 func _ready() -> void:
+	# scenografia: il profilo ridotto la spegne in blocco
+	GfxProfile.mark(self)
 	z_index = 60  # sopra il mondo (l'alpha basso non copre l'interno)
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
