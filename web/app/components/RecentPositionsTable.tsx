@@ -135,6 +135,10 @@ function PositionCard({
             overflow: "hidden",
             lineHeight: `${CARD_LINE}px`,
             paddingRight: SCORE_GUTTER,
+            // Riempie la riga fino in fondo: senza questo il taglio avviene
+            // all'ultima parola INTERA che ci sta, e lo spazio della parola
+            // successiva resta bianco prima dei "…".
+            overflowWrap: "anywhere",
           }}
         >
           {p.title}{" "}
@@ -152,6 +156,7 @@ function PositionCard({
             // finito: piena larghezza. Titolo su 1 riga → l'azienda parte
             // dalla seconda, ancora affiancata al cerchio: resta rientrata.
             paddingRight: titleLines >= 2 ? 0 : SCORE_GUTTER,
+            overflowWrap: "anywhere",
           }}
         >
           {p.company}
