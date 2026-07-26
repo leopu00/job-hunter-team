@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as path from "node:path";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { readJsonSafe } from "@/lib/json-files";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,10 @@ function toCsv(rows: Record<string, unknown>[]): string {
 
 /** GET /api/export?source=tasks&format=csv&from=2026-01-01&to=2026-12-31 */
 export async function GET(req: NextRequest) {
+  // Scarica in blocco candidature, contatti, aziende e colloqui: è
+  // l'archivio personale dell'utente in un solo file.
+  const denied = await requireAuth();
+  if (denied) return denied;
   const sp = req.nextUrl.searchParams;
   const source = sp.get("source") as DataSource | null;
   const format = (sp.get("format") ?? "json") as ExportFormat;

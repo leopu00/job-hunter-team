@@ -7,6 +7,7 @@ import path from "node:path";
 import os from "node:os";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { sanitizedError } from "@/lib/error-response";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -81,10 +82,19 @@ function defaultResume(): ResumeData {
 }
 
 export async function GET() {
+  // Il CV per intero: nome, email, telefono, città, storia lavorativa.
+  const denied = await requireAuth();
+  if (denied) return denied;
   return NextResponse.json(loadResume());
 }
 
 export async function POST(req: Request) {
+  // Sovrascrive resume.json senza merge: una POST anonima cancellerebbe
+  // il CV dell'utente.
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   try {
     const body = await req.json();
     const data: ResumeData = {

@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { JHT_HOME } from "@/lib/jht-paths";
 import type { Integration } from "@/lib/types";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,10 @@ function checkEnvOrCred(
 }
 
 export async function GET() {
+  // Non restituisce segreti, ma dice quali esistono, con che nome di file e
+  // quale variabile d'ambiente: è la mappa di dove cercarli.
+  const denied = await requireAuth();
+  if (denied) return denied;
   const integrations: Integration[] = [
     {
       id: "telegram",

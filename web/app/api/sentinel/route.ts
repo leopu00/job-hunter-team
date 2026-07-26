@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,10 @@ type UsagePoint = {
 type Order = { ts: string; text: string };
 
 export async function GET() {
+  // Consumo dell'abbonamento dell'utente (usage %, proiezione al reset) e
+  // ordini impartiti al team: dice quanto e quando lavora, e con che account.
+  const denied = await requireAuth();
+  if (denied) return denied;
   if (!fs.existsSync(LOG_PATH)) {
     return NextResponse.json({
       current: null,

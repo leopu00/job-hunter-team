@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +30,18 @@ function save(state: OnboardingState): void {
 }
 
 export async function GET() {
+  // A che punto è l'utente nel suo onboarding: dato suo, non pubblico.
+  const denied = await requireAuth();
+  if (denied) return denied;
   return NextResponse.json(load());
 }
 
 export async function POST(req: NextRequest) {
+  // Scrive ~/.jht/onboarding.json (e `reset` lo azzera).
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();
