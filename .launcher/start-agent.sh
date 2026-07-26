@@ -20,6 +20,9 @@ export PATH="/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:$
 DEV_TEAM_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DEV_TEAM_DIR/config.sh"
 source "$DEV_TEAM_DIR/tui-helpers.sh"
+# jht_kill_by_marker / jht_daemon_log — singleton dei daemon detached e log
+# sotto $JHT_HOME/logs con rotazione (vedi daemon-lib.sh).
+source "$DEV_TEAM_DIR/daemon-lib.sh"
 
 if [ -z "${1:-}" ]; then
   echo "Uso: $0 <ruolo> [istanza] [mode]"
@@ -132,52 +135,44 @@ if [ "$ROLE" = "bridge" ]; then
     echo "✗ $BRIDGE_SCRIPT non trovato — bridge NON partito"
     exit 1
   fi
-  # Kill bridge preesistenti via /proc/*/cmdline (pkill non è installato
-  # nell'immagine busybox slim). Matching su 'sentinel-bridge.py' copre
-  # setsid wrapper + python + eventuali figli.
+  # Kill bridge preesistenti (pkill non è installato nell'immagine slim).
+  # Matching su 'sentinel-bridge.py' copre setsid wrapper + python + figli.
   # Bug 2026-05-17 20:42: dopo recreate restavano 2 coppie process vive
   # perché SIGTERM + sleep 1 era troppo permissivo. Doppio kill TERM→KILL.
-  for _pid in $(grep -l sentinel-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-    kill -TERM "$_pid" 2>/dev/null || true
-  done
-  sleep 1
-  for _pid in $(grep -l sentinel-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-    kill -KILL "$_pid" 2>/dev/null || true
-  done
-  sleep 0.5
+  # La scansione passa da proc-kill.py (Python): il vecchio
+  # `grep -l MARKER /proc/*/cmdline` trovava anche il proprio argv e
+  # qualunque processo innocente che nominasse il marker.
+  # NB: il singleton VERO è il flock dentro sentinel-bridge.py (copre anche
+  # l'entry point bridge-control.sh); questo kill serve al restart pulito.
+  jht_kill_by_marker sentinel-bridge.py 1 0.5
+  BRIDGE_LOG="$(jht_daemon_log sentinel-bridge.log)"
   setsid sh -c "
     JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
-      python3 -u $BRIDGE_SCRIPT >> /tmp/sentinel-bridge.log 2>&1
+      python3 -u $BRIDGE_SCRIPT >> '$BRIDGE_LOG' 2>&1
   " >/dev/null 2>&1 < /dev/null &
-  echo "✓ sentinel-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log /tmp/sentinel-bridge.log)"
+  echo "✓ sentinel-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log $BRIDGE_LOG)"
 
   # Pacing bridge — tick alla SENTINELLA (analista del pacing) sul ritmo del
   # team (2026-06-25 push→pull: NON più al Capitano, vedi bridge-to-sentinella
   # doc). Stesso
-  # pattern del sentinel-bridge: setsid + singleton tramite kill via
-  # /proc/*/cmdline + log su /tmp. Indipendente dal sentinel-bridge:
+  # pattern del sentinel-bridge: setsid + singleton (kill by marker +
+  # flock nel .py) + log in $JHT_HOME/logs. Indipendente dal sentinel-bridge:
   # legge sentinel-data.jsonl (scritto dal sentinel-bridge) + token logs
   # locali, calcola Δusage / vel_team / vel_target / %/h per agente, e
   # manda un [BRIDGE PACING] alla Sentinella allineato a :00,:15,:30,:45 UTC.
   PACING_SCRIPT="/app/.launcher/pacing-bridge.py"
   if [ -f "$PACING_SCRIPT" ]; then
-    for _pid in $(grep -l pacing-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill -TERM "$_pid" 2>/dev/null || true
-    done
-    sleep 1
-    for _pid in $(grep -l pacing-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill -KILL "$_pid" 2>/dev/null || true
-    done
-    sleep 0.5
+    jht_kill_by_marker pacing-bridge.py 1 0.5
+    PACING_LOG="$(jht_daemon_log pacing-bridge.log)"
     # Niente PATH= esplicito: lo `export PATH` in cima a start-agent.sh
     # (riga 18) include già /app/agents/_tools, e setsid sh -c eredita
     # le env vars del parent. Setting PATH a single-quoted lo aveva
     # rotto (BUG: $PATH non espanso → python3 not found, bridge morto).
     setsid sh -c "
       JHT_PACING_TARGET_SESSION='${JHT_PACING_TARGET_SESSION:-SENTINELLA}' \
-        python3 -u $PACING_SCRIPT >> /tmp/pacing-bridge.log 2>&1
+        python3 -u $PACING_SCRIPT >> '$PACING_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ pacing-bridge partito (target=${JHT_PACING_TARGET_SESSION:-SENTINELLA}, log /tmp/pacing-bridge.log)"
+    echo "✓ pacing-bridge partito (target=${JHT_PACING_TARGET_SESSION:-SENTINELLA}, log $PACING_LOG)"
   else
     echo "⚠ $PACING_SCRIPT non trovato — pacing NON partito (sentinel ok)"
   fi
@@ -188,19 +183,13 @@ if [ "$ROLE" = "bridge" ]; then
   # dati DB (deterministico, NON LLM), così resta attivo senza essere passivo.
   HEARTBEAT_SCRIPT="/app/.launcher/heartbeat-bridge.py"
   if [ -f "$HEARTBEAT_SCRIPT" ]; then
-    for _pid in $(grep -l heartbeat-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill -TERM "$_pid" 2>/dev/null || true
-    done
-    sleep 0.5
-    for _pid in $(grep -l heartbeat-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill -KILL "$_pid" 2>/dev/null || true
-    done
-    sleep 0.5
+    jht_kill_by_marker heartbeat-bridge.py 0.5 0.5
+    HEARTBEAT_LOG="$(jht_daemon_log heartbeat-bridge.log)"
     setsid sh -c "
       JHT_HEARTBEAT_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
-        python3 -u $HEARTBEAT_SCRIPT >> /tmp/heartbeat-bridge.log 2>&1
+        python3 -u $HEARTBEAT_SCRIPT >> '$HEARTBEAT_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ heartbeat-bridge (nudge orario al Capitano) partito (log /tmp/heartbeat-bridge.log)"
+    echo "✓ heartbeat-bridge (nudge orario al Capitano) partito (log $HEARTBEAT_LOG)"
   else
     echo "⚠ $HEARTBEAT_SCRIPT non trovato — heartbeat NON partito"
   fi
@@ -212,17 +201,12 @@ if [ "$ROLE" = "bridge" ]; then
   # comunque ma update_ratio scarta tutti i sample senza weekly_usage.
   WRM_SCRIPT="/app/shared/skills/window_ratio_meter.py"
   if [ -f "$WRM_SCRIPT" ]; then
-    for _pid in $(grep -l window_ratio_meter.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill -TERM "$_pid" 2>/dev/null || true
-    done
-    sleep 0.5
-    for _pid in $(grep -l window_ratio_meter.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill -KILL "$_pid" 2>/dev/null || true
-    done
+    jht_kill_by_marker window_ratio_meter.py 0.5 0
+    WRM_LOG="$(jht_daemon_log window-ratio-meter.log)"
     setsid sh -c "
-      python3 -u $WRM_SCRIPT --watch >> /tmp/window-ratio-meter.log 2>&1
+      python3 -u $WRM_SCRIPT --watch >> '$WRM_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ window-ratio-meter partito (log /tmp/window-ratio-meter.log)"
+    echo "✓ window-ratio-meter partito (log $WRM_LOG)"
   else
     echo "⚠ $WRM_SCRIPT non trovato — calibrazione auto N/D (seed only)"
   fi
@@ -232,15 +216,13 @@ if [ "$ROLE" = "bridge" ]; then
   # rimasto giù 6 giorni. Ora vive e muore con la bridge-suite.
   METER_SCRIPT="/app/shared/skills/token-meter.py"
   if [ -f "$METER_SCRIPT" ]; then
-    for _pid in $(grep -l token-meter.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill -TERM "$_pid" 2>/dev/null || true
-    done
-    sleep 0.5
+    jht_kill_by_marker token-meter.py 0 0.5
+    METER_LOG="$(jht_daemon_log token-meter.log)"
     setsid sh -c "
       JHT_HOME='${JHT_HOME:-/jht_home}' \
-        python3 -u $METER_SCRIPT >> /tmp/token-meter.log 2>&1
+        python3 -u $METER_SCRIPT >> '$METER_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ token-meter partito (log /tmp/token-meter.log)"
+    echo "✓ token-meter partito (log $METER_LOG)"
   else
     echo "⚠ $METER_SCRIPT non trovato — token-meter N/D"
   fi
@@ -251,15 +233,13 @@ if [ "$ROLE" = "bridge" ]; then
   # la scheda agente del gioco. Stesso pattern: setsid + singleton.
   AV_SCRIPT="/app/shared/skills/agent_vitals.py"
   if [ -f "$AV_SCRIPT" ]; then
-    for _pid in $(grep -l agent_vitals.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill -TERM "$_pid" 2>/dev/null || true
-    done
-    sleep 0.5
+    jht_kill_by_marker agent_vitals.py 0 0.5
+    AV_LOG="$(jht_daemon_log agent-vitals.log)"
     setsid sh -c "
       JHT_HOME='${JHT_HOME:-/jht_home}' \
-        python3 -u $AV_SCRIPT >> /tmp/agent-vitals.log 2>&1
+        python3 -u $AV_SCRIPT >> '$AV_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ agent-vitals partito (cpu/rss per-agente, log /tmp/agent-vitals.log)"
+    echo "✓ agent-vitals partito (cpu/rss per-agente, log $AV_LOG)"
   else
     echo "⚠ $AV_SCRIPT non trovato — vitals per-agente N/D"
   fi
@@ -268,17 +248,15 @@ if [ "$ROLE" = "bridge" ]; then
   # degli agenti e li riavvia per ri-leggere la auth.json CONDIVISA fresca
   # (l'ultimo refresh valido è sempre nel file → un restart cura l'agente con
   # token stale in memoria). Standalone, non tocca agent-watchdog/Dottore.
-  # Stesso pattern: setsid + singleton via /proc cmdline + cooldown anti-storm.
+  # Stesso pattern: setsid + singleton via marker cmdline + cooldown anti-storm.
   HEALER_SCRIPT="/app/.launcher/codex-auth-healer.sh"
   if [ -f "$HEALER_SCRIPT" ]; then
-    for _pid in $(grep -l codex-auth-healer.sh /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-      kill -TERM "$_pid" 2>/dev/null || true
-    done
-    sleep 0.5
+    jht_kill_by_marker codex-auth-healer.sh 0 0.5
+    HEALER_LOG="$(jht_daemon_log codex-auth-healer.log)"
     setsid sh -c "
-      JHT_HOME='${JHT_HOME:-/jht_home}' bash $HEALER_SCRIPT >> ${JHT_HOME:-/jht_home}/logs/codex-auth-healer.log 2>&1
+      JHT_HOME='${JHT_HOME:-/jht_home}' bash $HEALER_SCRIPT >> '$HEALER_LOG' 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ codex-auth-healer partito (#6, log codex-auth-healer.log)"
+    echo "✓ codex-auth-healer partito (#6, log $HEALER_LOG)"
   fi
 
   exit 0
@@ -297,20 +275,17 @@ if [ "$ROLE" = "tg-bridge" ]; then
     exit 1
   fi
   # Kill TUTTE le istanze esistenti (di qualsiasi ruolo): rispawnamo 3 fresche.
-  for _pid in $(grep -l tg-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-    kill "$_pid" 2>/dev/null || true
-  done
-  sleep 1
+  jht_kill_by_marker tg-bridge.py 0 1
   # JHT_TG_OFFSET_RESET=1 → al primo poll skippa il backlog (utile in fresh
   # install per non rifare replay di vecchi /start dell'utente).
   for _role in assistente capitano mentor; do
     _target=$(echo "$_role" | tr '[:lower:]' '[:upper:]')
-    _log="/tmp/tg-bridge-${_role}.log"
+    _log="$(jht_daemon_log "tg-bridge-${_role}.log")"
     setsid sh -c "
       JHT_TG_BOT_ROLE='$_role' \
       JHT_TG_TARGET_SESSION='$_target' \
       JHT_TG_OFFSET_RESET='${JHT_TG_OFFSET_RESET:-}' \
-        python3 -u $TG_SCRIPT >> $_log 2>&1
+        python3 -u $TG_SCRIPT >> '$_log' 2>&1
     " >/dev/null 2>&1 < /dev/null &
     echo "✓ tg-bridge[$_role] partito (target=$_target, log $_log)"
   done
@@ -324,7 +299,7 @@ fi
 # /proc/cmdline come gli altri bridge. Output:
 #   • $JHT_HOME/logs/token-meter-state.json  (consumer: /api/tokens/status)
 #   • $JHT_HOME/logs/token-meter.csv
-#   • /tmp/token-meter.log
+#   • $JHT_HOME/logs/token-meter.log
 if [ "$ROLE" = "token-meter" ]; then
   METER_SCRIPT="/app/shared/skills/token-meter.py"
   if [ ! -f "$METER_SCRIPT" ]; then
@@ -332,15 +307,13 @@ if [ "$ROLE" = "token-meter" ]; then
     exit 1
   fi
   # Kill istanze preesistenti.
-  for _pid in $(grep -l token-meter.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-    kill "$_pid" 2>/dev/null || true
-  done
-  sleep 1
+  jht_kill_by_marker token-meter.py 0 1
+  METER_LOG="$(jht_daemon_log token-meter.log)"
   setsid sh -c "
     JHT_HOME='${JHT_HOME:-/jht_home}' \
-      python3 -u $METER_SCRIPT >> /tmp/token-meter.log 2>&1
+      python3 -u $METER_SCRIPT >> '$METER_LOG' 2>&1
   " >/dev/null 2>&1 < /dev/null &
-  echo "✓ token-meter partito (log /tmp/token-meter.log)"
+  echo "✓ token-meter partito (log $METER_LOG)"
   exit 0
 fi
 
@@ -354,15 +327,13 @@ if [ "$ROLE" = "agent-vitals" ]; then
     echo "✗ $AV_SCRIPT non trovato — agent-vitals NON partito"
     exit 1
   fi
-  for _pid in $(grep -l agent_vitals.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
-    kill -TERM "$_pid" 2>/dev/null || true
-  done
-  sleep 1
+  jht_kill_by_marker agent_vitals.py 0 1
+  AV_LOG="$(jht_daemon_log agent-vitals.log)"
   setsid sh -c "
     JHT_HOME='${JHT_HOME:-/jht_home}' \
-      python3 -u $AV_SCRIPT >> /tmp/agent-vitals.log 2>&1
+      python3 -u $AV_SCRIPT >> '$AV_LOG' 2>&1
   " >/dev/null 2>&1 < /dev/null &
-  echo "✓ agent-vitals partito (log /tmp/agent-vitals.log)"
+  echo "✓ agent-vitals partito (log $AV_LOG)"
   exit 0
 fi
 
