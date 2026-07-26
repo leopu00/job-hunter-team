@@ -555,6 +555,12 @@ func _build_activation() -> void:
 			bool(s.get("profile_ready", false)),
 			UIStrings.t("setup.profile_ok") if bool(s.get("profile_ready", false))
 			else UIStrings.t("setup.profile_todo"), "profile")
+	# Quarto passo, obbligatorio come gli altri: senza finestre di lavoro il
+	# team macina a ogni ora del giorno e il conto arriva dopo.
+	_setup_gate(progress, "04", UIStrings.t("setup.hours"),
+			bool(s.get("hours_ready", false)),
+			UIStrings.t("setup.hours_ok") if bool(s.get("hours_ready", false))
+			else UIStrings.t("setup.hours_todo"), "hours")
 	_content.add_child(HSeparator.new())
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 14)
