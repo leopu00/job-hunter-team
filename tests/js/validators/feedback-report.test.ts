@@ -255,3 +255,22 @@ describe("modulo di contatto del sito", () => {
     expect(sembraSpam(null)).toBe(false);
   });
 });
+
+describe("oggetto scritto da chi invia", () => {
+  it("vince sul troncamento automatico del messaggio", () => {
+    const r = parseReport({ ...VALID, subject: "Non parte il team su Windows" })!;
+    expect(emailSubject(r, "JHT-1")).toBe(
+      "[JHT-1] Non parte il team su Windows",
+    );
+  });
+
+  it("senza oggetto si ripiega sulla prima riga", () => {
+    const r = parseReport(VALID)!;
+    expect(emailSubject(r, "JHT-1")).toContain("collegamento");
+  });
+
+  it("non lascia passare un oggetto smisurato", () => {
+    const r = parseReport({ ...VALID, subject: "x".repeat(400) })!;
+    expect(r.subject.length).toBe(120);
+  });
+});

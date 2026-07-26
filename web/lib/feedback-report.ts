@@ -15,6 +15,9 @@ export const MAX_DIAGNOSTICS_CHARS = 200_000;
 
 export interface Report {
   client: string;
+  /** Oggetto scritto da chi invia (modulo di contatto del sito). Vuoto per
+   *  l'app desktop, che non lo chiede. */
+  subject: string;
   /** Che tipo di messaggio è: "bug", "domanda", "altro". Lo manda il modulo
    *  di contatto del sito; l'app desktop lo lascia vuoto. */
   kind: string;
@@ -61,6 +64,7 @@ export function parseReport(raw: unknown): Report | null {
   if (happened.length < 5) return null;
   return {
     client: field(body.client, 60) || "unknown",
+    subject: field(body.subject, 120),
     kind: field(body.kind, 40),
     appVersion: field(body.app_version, 40) || "unknown",
     locale: field(body.locale, 10) || "it",
@@ -115,7 +119,11 @@ export function replyToSicuro(contatto: string): string {
 
 /** Oggetto della mail che arriva in casella. */
 export function emailSubject(report: Report, ticket: string): string {
-  const summary = report.happened.split("\n")[0].slice(0, 80).trim();
+  // Quello che ha scritto chi invia batte sempre il troncamento automatico
+  // del messaggio: sintetizza meglio, e senza si finisce con una casella
+  // piena di mail intitolate "Ciao".
+  const summary =
+    report.subject || report.happened.split("\n")[0].slice(0, 80).trim();
   // Il tipo in oggetto fa la differenza fra una casella che si smista a
   // colpo d'occhio e una in cui bisogna aprire tutto per capire cosa c'è.
   const tipo = report.kind ? `(${report.kind}) ` : "";
