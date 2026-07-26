@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   // Local-only (host localhost + jobs.db): leggi dal DB locale, mai Supabase.
-  const fromLocal = await readLocalOr("scrittore/activity", getScrittoreActivityLocal);
+  const fromLocal = await readLocalOr(
+    "scrittore/activity",
+    getScrittoreActivityLocal,
+  );
   if (fromLocal !== null) return NextResponse.json(fromLocal);
   try {
     const supabase = await createClient();

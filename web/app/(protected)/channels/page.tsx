@@ -234,15 +234,12 @@ function ChannelCard({
   locale: string;
 }) {
   const lastActivity = ch.stats.lastActivityAt
-    ? new Date(ch.stats.lastActivityAt).toLocaleString(
-        intlTag(locale),
-        {
-          day: "2-digit",
-          month: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        },
-      )
+    ? new Date(ch.stats.lastActivityAt).toLocaleString(intlTag(locale), {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
     : tr("never");
 
   return (

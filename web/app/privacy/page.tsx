@@ -83,7 +83,8 @@ const T = {
     s5_body:
       "A JHT teljesen nyílt forráskódú. Bármikor ellenőrizheted, hogy mit csinál a kód, a GitHub-on található repository átvizsgálásával.",
     s6_title: "Kapcsolat",
-    s6_body: "Adatvédelmi kérdések esetén írj az support@jobhunterteam.ai címre.",
+    s6_body:
+      "Adatvédelmi kérdések esetén írj az support@jobhunterteam.ai címre.",
     nav_home: "Főoldal",
     nav_privacy: "Adatvédelem",
     nav_terms: "Feltételek",
@@ -109,7 +110,8 @@ const T = {
     s5_body:
       "JHT es completamente de código abierto. Puedes verificar en cualquier momento lo que hace el código examinando el repositorio en GitHub.",
     s6_title: "Contacto",
-    s6_body: "Para cuestiones de privacidad, escribe a support@jobhunterteam.ai.",
+    s6_body:
+      "Para cuestiones de privacidad, escribe a support@jobhunterteam.ai.",
     nav_home: "Inicio",
     nav_privacy: "Privacidad",
     nav_terms: "Términos",
@@ -188,7 +190,8 @@ const T = {
     s5_body:
       "O JHT é totalmente de código aberto. Pode verificar a qualquer momento o que o código faz examinando o repositório no GitHub.",
     s6_title: "Contacto",
-    s6_body: "Para questões de privacidade, escreva para support@jobhunterteam.ai.",
+    s6_body:
+      "Para questões de privacidade, escreva para support@jobhunterteam.ai.",
     nav_home: "Início",
     nav_privacy: "Privacidade",
     nav_terms: "Termos",

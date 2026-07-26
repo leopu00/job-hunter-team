@@ -13,7 +13,10 @@ export async function GET() {
   // locale, mai Supabase → le pagine team funzionano senza login cloud
   // (direction shift "interaction planes", gap WEB-READONLY). Se il ramo
   // local fallisce (es. schema parziale), si scende al path Supabase sotto.
-  const fromLocal = await readLocalOr("analista/activity", getAnalistaActivityLocal);
+  const fromLocal = await readLocalOr(
+    "analista/activity",
+    getAnalistaActivityLocal,
+  );
   if (fromLocal !== null) return NextResponse.json(fromLocal);
   try {
     const supabase = await createClient();
