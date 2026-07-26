@@ -5,59 +5,64 @@ Browser-driven end-to-end tests for the Job Hunter Team **web** surface.
 - **Package:** `e2e` · **Stack:** Playwright · TypeScript
 - **Config:** [`playwright.config.ts`](playwright.config.ts) — `BASE_URL` (default `http://localhost:3000`), chromium only
 
-> ⚠️ **Read "State of the suite" before trusting a green run.** The suite exits 0
-> while skipping a large share of its tests, and the reason matters.
-
 ## Layout
 
 ```
-tests/           Playwright specs (78 files, numbered by flow)
+tests/             3 live specs — these run, in CI and locally
+tests/quarantine/  75 specs kept for parts, excluded from every run
 playwright.config.ts
 ```
 
-## State of the suite (measured 2026-07-25)
+## State of the suite (triaged 2026-07-26)
 
-Full run against a local server: **770 passed · 574 skipped · 0 failed** (6.9 min).
-The skips are not flakiness — they are the specs skipping *themselves*:
+**What runs: 37 tests in 3 files** — `39-og-twitter-image` (social/PWA metadata),
+`80-welcome-wizard`, `81-demo-mode`. They run on every push and PR
+(`.github/workflows/test.yml`, job `e2e`) against `next start` in cloud mode
+with a real session.
 
-| Cause | What it looks like |
-|---|---|
-| **No authenticated session** | Most specs touch the protected area (`/dashboard`, `/positions`, `/profile`, `/team/*`). On a cloud deployment that area redirects anonymous visitors to the login, so the spec skips. `01-auth.spec.ts` has carried a `TODO: test con sessione autenticata — richiede storageState` since it was written: **the suite never had an auth story.** |
-| **Surface that no longer exists** | Specs written for the retired local dashboard, `/onboarding` (removed from the web on 2026-07-18) and API routes pruned on 2026-07-25. |
-| **Data-dependent assertions** | Specs that need positions/applications in the database; against an empty `JHT_HOME` there is nothing to assert. |
+**What does not: the other 75 specs**, moved to [`tests/quarantine/`](tests/quarantine/README.md).
+The 2026-07-25 measurement of the full suite — 770 passed · 574 skipped ·
+0 failed — was the thing that hid the problem: the "passes" were largely specs
+skipping themselves, and the file that says why is the quarantine README. In
+short: the site map was rewritten under them (`/faq`, `/guide`, `/about`,
+`/changelog`, `/demo`, `/stats`, `/applications`, `/jobs`… no longer exist), the
+local plane they logged into was retired, `/api/health` changed shape, and a few
+assert on `https://jobhunterteam.ai` rather than on the code.
 
-Consequence: a green run proves the **public** pages work — landing, docs, `/demo`,
-`/download`, security headers, a11y, sitemap — and says almost nothing about the
-protected area. Tracked in `BACKLOG.md` as **[JHT-E2E-STALE]**.
+The triage was static — every route in every spec matched against `web/app/` —
+and no spec was condemned on the strength of a red run. Reviving one is a
+documented path, not a rewrite: see the quarantine README.
 
-New specs (`80-welcome-wizard`, `81-demo-mode`) follow a rule worth extending to
-the rest: **skip loudly**. What can be tested anonymously runs on every
-execution; what needs a session skips with a message that says so.
+Tracked in `BACKLOG.md` as **[JHT-E2E-STALE]**.
+
+The rule for anything new: **skip loudly**. What can be tested anonymously runs
+on every execution; what needs a session skips with a message that says so —
+`80-welcome-wizard.spec.ts` is the model.
 
 ## How to run
 
-The suite needs a reachable web server. Two useful configurations:
-
-**A · Public pages + local plane** (what the historical specs were written for):
-
-```bash
-cd web && JHT_HOME=/tmp/empty-jht npm run dev -- -p 3007
-cd e2e && npm ci && BASE_URL=http://localhost:3007 npx playwright test
-```
-
-In `local` deploy mode the protected-area auth gate is off (`isLocalDeploy()`),
-so pages render — but they render the *local* plane, which the product no longer
-ships. Useful to exercise rendering, misleading as a production signal.
-
-**B · Cloud plane** (what production actually is):
+The suite needs a reachable web server. **Cloud plane** — what production
+actually is, and what CI runs:
 
 ```bash
 cd web && JHT_HOME=/tmp/empty-jht NEXT_PUBLIC_JHT_DEPLOY=cloud npm run dev -- -p 3008
-cd e2e && BASE_URL=http://localhost:3008 npx playwright test 80-welcome 81-demo
+cd e2e && npm ci && BASE_URL=http://localhost:3008 npx playwright test
 ```
 
 Anonymous: the demo API and the auth-closure tests pass; everything behind the
-login skips. With a session (below): 16/16.
+login skips. With a session (below): everything runs.
+
+To review a quarantined spec — the only reason to run one:
+
+```bash
+E2E_INCLUDE_QUARANTINE=1 BASE_URL=http://localhost:3008 npx playwright test quarantine/27-pricing
+```
+
+There used to be a second recipe here, `local` deploy mode without
+`NEXT_PUBLIC_JHT_DEPLOY=cloud`, in which the protected-area gate is off
+(`isLocalDeploy()`) and every page renders. It is gone with the specs that
+needed it: it renders the *local* plane, which the product no longer ships, so a
+green run there proved something nobody uses.
 
 > 🚨 **Use `localhost`, never `127.0.0.1`, against `next dev`.** Next refuses the
 > HMR WebSocket upgrade when the host is not `localhost`; the dev runtime then
@@ -68,9 +73,9 @@ login skips. With a session (below): 16/16.
 > this reason.
 
 ```bash
-npm test             # full suite
-npm run test:smoke   # smoke only
-npm run test:report  # open the HTML report
+npm test                  # the 3 live specs
+npm run test:quarantine   # the 75 retired ones, on purpose
+npm run test:report       # open the HTML report
 ```
 
 ## Sessione

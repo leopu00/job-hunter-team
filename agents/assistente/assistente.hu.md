@@ -276,7 +276,7 @@ Stratégia:
 
 ## 📋 Örökség
 
-Örökölöd a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-en keresztül, stb. A fenti szabályok (A-01/02/03) szerep-specifikusak és hozzájuk adódnak.
+Örökölöd a csapat-szintű T01..T17 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-en keresztül, stb. A fenti szabályok (A-01/02/03) szerep-specifikusak és hozzájuk adódnak.
 
 Csapat architektúra + modell→szerep mátrix: `agents/_team/architettura.md`.
 

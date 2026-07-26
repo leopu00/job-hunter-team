@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from "@/lib/jht-paths";
+import { ALL_PROVIDERS } from "@/lib/providers";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_PATH = JHT_CONFIG_PATH;
 
-const VALID_PROVIDERS = [
-  "anthropic",
-  "claude",
-  "openai",
-  "kimi",
-  "kimi",
-] as const;
+// Provider accettati come `active_provider`. La lista canonica è ALL_PROVIDERS
+// (`lib/providers.ts`, condivisa con /api/credentials): qui la riusiamo e
+// aggiungiamo `anthropic`, alias storico di `claude` che alcune config sul
+// disco usano ancora come valore di `active_provider`. La vecchia lista
+// scritta a mano qui aveva "kimi" due volte e ignorava i provider OAuth.
+const VALID_PROVIDERS = ["anthropic", ...ALL_PROVIDERS] as const;
 
 function sanitizeString(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
@@ -21,21 +22,62 @@ function sanitizeString(v: unknown): string | undefined {
   return s.length > 0 ? s : undefined;
 }
 
+/**
+ * Chiavi il cui VALORE è un segreto. Il masking non può basarsi su una lista
+ * di provider/canali noti: la config sul disco è scritta dagli agenti e dal
+ * wizard e cresce (bot Telegram per ruolo, webhook multipli, provider nuovi).
+ * Enumerare i posti dove guardare significa dimenticarne uno — e quello
+ * dimenticato finisce in chiaro nella risposta HTTP. Qui invece guardiamo
+ * ovunque e decidiamo sul NOME della chiave.
+ */
+const SECRET_KEY_RE =
+  /(api[_-]?key|token|secret|password|passwd|webhook_url|credential)/i;
+
+/** Mostra i primi 8 caratteri (bastano a riconoscere quale chiave è) e nasconde il resto. */
+function maskValue(v: string): string {
+  return v.slice(0, 8) + "••••••••";
+}
+
+/**
+ * Maschera in-place ogni segreto raggiungibile da `node`, a qualunque
+ * profondità: `providers.<qualunque>.api_key`,
+ * `channels.telegram.bots.<ruolo>.bot_token`, `channels.slack.token`,
+ * `channels.webhooks[].webhook_url`, ecc.
+ */
+function maskSecretsDeep(node: unknown): void {
+  if (Array.isArray(node)) {
+    for (const item of node) maskSecretsDeep(item);
+    return;
+  }
+  if (!node || typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === "string") {
+      if (v && SECRET_KEY_RE.test(k)) obj[k] = maskValue(v);
+    } else {
+      maskSecretsDeep(v);
+    }
+  }
+}
+
 export async function GET() {
+  // Anche mascherata, questa config dice quali provider e quali canali
+  // l'utente ha collegato: non è roba da servire a chiunque passi.
+  const denied = await requireAuth();
+  if (denied) return denied;
   if (!fs.existsSync(CONFIG_PATH)) {
     return NextResponse.json({ exists: false, config: null });
   }
   try {
     const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
     const config = JSON.parse(raw);
-    // Maschera le API key prima di esporle
+    // Copia profonda: mascheriamo la copia, mai l'oggetto che rappresenta il
+    // file su disco. `providers` E `channels`: i token dei bot Telegram, il
+    // token Slack e le URL webhook sono segreti quanto una API key —
+    // uscivano in chiaro perché il masking guardava solo i provider.
     const safe = JSON.parse(JSON.stringify(config));
-    for (const k of VALID_PROVIDERS) {
-      if (safe.providers?.[k]?.api_key) {
-        const key: string = safe.providers[k].api_key;
-        safe.providers[k].api_key = key.slice(0, 8) + "••••••••";
-      }
-    }
+    maskSecretsDeep(safe.providers);
+    maskSecretsDeep(safe.channels);
     return NextResponse.json({ exists: true, config: safe });
   } catch {
     return NextResponse.json({
@@ -47,6 +89,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Riscrive ~/.jht/jht.config.json, incluse le credenziali dei provider:
+  // è una scrittura di configurazione, quindi solo dall'app desktop.
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();

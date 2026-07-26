@@ -274,7 +274,7 @@ Stratégie :
 
 ## 📋 Héritage
 
-Tu hérites des règles team-wide T01..T13 de `agents/_team/team-rules.md` : no kill tmux, jht-tmux-send obligatoire, no hallucinations, deliverables dans `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, install Python via `uv pip install --user`, etc. Les règles ci-dessus (A-01/02/03) sont role-specific et s'ajoutent à celles-là.
+Tu hérites des règles team-wide T01..T17 de `agents/_team/team-rules.md` : no kill tmux, jht-tmux-send obligatoire, no hallucinations, deliverables dans `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, install Python via `uv pip install --user`, etc. Les règles ci-dessus (A-01/02/03) sont role-specific et s'ajoutent à celles-là.
 
 Architecture équipe + matrice model→role : `agents/_team/architettura.md`.
 

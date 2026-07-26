@@ -23,7 +23,7 @@ agent-speed-table e la UI: nessuna formula duplicata. Pesi token Kimi
 hardcoded (1, 1, 0, 0) ereditati da token-by-agent-series.
 
 Output:
-  - stdout (catturato da /tmp/pacing-bridge.log)
+  - stdout (catturato da $JHT_HOME/logs/pacing-bridge.log)
   - tmux send alla SENTINELLA via jht-tmux-send (analista del pacing; il Capitano
     NON viene pingato — pull on-demand via rate-budget/agent-speed-table)
 
@@ -43,6 +43,7 @@ Modi:
   python3 pacing-bridge.py --once     # un solo tick, stampa, niente send
   python3 pacing-bridge.py --once --send  # un solo tick + send alla SENTINELLA
 """
+import fcntl
 import importlib.util
 import json
 import os
@@ -57,6 +58,10 @@ JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 LOGS_DIR = JHT_HOME / "logs"
 SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 PID_FILE = LOGS_DIR / "pacing-bridge.pid"
+# Lockfile del singleton (flock), file dedicato mai cancellato: pid1 ripulisce
+# il PID file al boot (cleanupStaleBridgeState) e cancellare un file flockato
+# ne romperebbe la mutua esclusione. Vedi acquire_singleton_lock().
+LOCK_FILE = LOGS_DIR / "pacing-bridge.lock"
 # Stato pubblico del bridge, scritto atomicamente a ogni tick + al boot
 # (stesso pattern del sentinel-bridge). Lo leggeva la route web
 # `/api/team/pacing-bridge`, rimossa il 2026-07-25 con la dashboard locale:
@@ -1175,7 +1180,7 @@ def escalate_unreceptive_to_capitano(streak: int) -> bool:
         f"orchestrato. Applica C-08: liveness-check via Dottore e, se confermata "
         f"morta/wedged, respawn (bash /app/.launcher/start-agent.sh "
         f"{TARGET_SESSION.lower()}). Non è rc=4 (viva-occupata): è pane non "
-        f"ricettiva. Log: /tmp/pacing-bridge.log"
+        f"ricettiva. Log: {LOGS_DIR}/pacing-bridge.log"
     )
     try:
         r = subprocess.run(
@@ -1219,9 +1224,46 @@ def append_to_mailbox(msg: str, delivered_via_tmux: bool, kind: str | None = Non
         print(f"[pacing-bridge] WARN append mailbox: {e}", file=sys.stderr)
 
 
-def write_pid():
+# Il fd del lock resta aperto per tutta la vita del processo: è il possesso
+# del fd a tenere il flock.
+_LOCK_FH = None
+
+
+def acquire_singleton_lock():
+    """Singleton ATOMICO via flock + scrittura del PID file.
+
+    Il PID file da solo non basta (e qui non veniva nemmeno riletto): due
+    pacing-bridge lanciati in parallelo si sovrascrivevano il pid a vicenda e
+    giravano entrambi, raddoppiando i [BRIDGE PACING] alla Sentinella. flock è
+    atomico e si rilascia da solo alla morte del processo, anche su SIGKILL.
+    """
+    global _LOCK_FH
     try:
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        fh = open(LOCK_FILE, "a+", encoding="utf-8")
+    except OSError as e:
+        print(f"[pacing-bridge] WARN lockfile: {e} — proseguo senza lock", file=sys.stderr)
+        return
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        try:
+            fh.seek(0)
+            other = fh.read().strip() or "?"
+        except OSError:
+            other = "?"
+        fh.close()
+        print(f"[pacing-bridge] altra istanza viva (pid={other}), exit")
+        sys.exit(0)
+    _LOCK_FH = fh
+    try:
+        fh.seek(0)
+        fh.truncate()
+        fh.write(str(os.getpid()))
+        fh.flush()
+    except OSError:
+        pass
+    try:
         PID_FILE.write_text(str(os.getpid()))
     except OSError as e:
         print(f"[pacing-bridge] WARN write pid: {e}", file=sys.stderr)
@@ -1382,7 +1424,7 @@ def loop():
     ast, tba, rb = _load_helpers()
     wh = _load_working_hours()
     wht, pcap = _load_target_helpers()
-    write_pid()
+    acquire_singleton_lock()
     print(
         f"[pacing-bridge] up — target={TARGET_SESSION} tick={TICK_MIN}m "
         f"target_band_center={TARGET_BAND_CENTER}% min_pct_h={MIN_PCT_H} "

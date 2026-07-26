@@ -2,9 +2,8 @@
 
 /**
  * Hook + helper client per leggere la locale corrente da un'unica fonte:
- * il cookie `NEXT_LOCALE`. È la stessa fonte che usano DashboardI18n e il
- * LanguageSwitcher — scritta sia dallo switcher della dashboard sia dalla
- * landing (via POST /api/i18n).
+ * il cookie `NEXT_LOCALE`. È la stessa fonte che usa DashboardI18n —
+ * scritta dalla landing (via POST /api/i18n).
  *
  * Prima di questo hook diversi componenti leggevano `localStorage['jht-lang']`,
  * che però viene scritto SOLO dalla landing: nella dashboard restavano quindi

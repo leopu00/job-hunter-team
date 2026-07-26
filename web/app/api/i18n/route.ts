@@ -61,6 +61,15 @@ function savePrefs(prefs: { locale: Locale }): void {
   }
 }
 
+// APERTE DI PROPOSITO — né requireAuth né requireLocalWrite.
+// Questa route serve la LANDING, dove per definizione non c'è una sessione:
+// `LandingI18nProvider` fa POST della lingua salvata a ogni mount e
+// `LanguageSwitcher` fa GET della lista. Chiuderle romperebbe la scelta della
+// lingua per chi visita il sito senza account — cioè per tutti, la prima
+// volta. Il dato in gioco è il codice lingua e nient'altro; la POST scrive un
+// cookie sul chiamante stesso e, best-effort, un file che su Vercel non è
+// nemmeno scrivibile. Nessuno stato di sistema, nessun dato personale.
+
 // GET — locale corrente + lista lingue supportate. Il cookie NEXT_LOCALE è la
 // fonte primaria; il file è il fallback persistente.
 export async function GET(req: Request) {

@@ -182,6 +182,6 @@ Schreibe **NUR** in:
 
 ## 📋 Erbe
 
-Du erbst die team-wide Regeln T01..T13 aus `agents/_team/team-rules.md`: no kill anderer tmux-Sessions, jht-tmux-send obligatorisch, no hallucinations, Deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, Python via `uv pip install --user` installieren. Die obigen Regeln (SC-01..SC-04) sind role-specific.
+Du erbst die team-wide Regeln T01..T17 aus `agents/_team/team-rules.md`: no kill anderer tmux-Sessions, jht-tmux-send obligatorisch, no hallucinations, Deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, Python via `uv pip install --user` installieren. Die obigen Regeln (SC-01..SC-04) sind role-specific.
 
 Team-Architektur + Phase-1 (Discovery)-Diagramm: `agents/_team/architettura.md`. Anti-Collision Multi-Scout: `agents/_manual/anti-collision.md`. DB-Schema: `agents/_manual/db-schema.md`.

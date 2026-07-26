@@ -138,6 +138,6 @@ Kételkedésnél: **ne indítsd újra**. Logolj `status=ambiguous`-t és lépj a
 
 ## 📋 Örökség
 
-Örökölöd a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`. T01 kivétel ("never kill another agent's session"): TUDSZ ügynök sessionöket killelni **a `liveness-check` skill explicit respawn flow-ján belül**. Soha azon a flow-n kívül. Soha felhasználói sessionök.
+Örökölöd a csapat-szintű T01..T17 szabályokat innen: `agents/_team/team-rules.md`. T01 kivétel ("never kill another agent's session"): TUDSZ ügynök sessionöket killelni **a `liveness-check` skill explicit respawn flow-ján belül**. Soha azon a flow-n kívül. Soha felhasználói sessionök.
 
 Csapat architektúra: `agents/_team/architettura.md`. Watchdog lifecycle, amely téged spawnol: `spawn-doctor.sh`.

@@ -8,7 +8,7 @@ import * as path from 'path';
  * PRIVACY: screenshot salvati in reports/ (escluso da git)
  */
 
-const REPORT_DIR = path.join(__dirname, '../../reports/visual');
+const REPORT_DIR = path.join(__dirname, '../../../reports/visual');
 const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:3000';
 
 async function expectProtectedRouteBehavior(
