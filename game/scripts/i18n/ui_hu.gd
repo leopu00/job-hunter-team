@@ -782,4 +782,12 @@ const S := {
 
 	"demo.map": "◆ SHOWROOM · a jelölők és az ajánlatok kitalált példák",
 	"demo.positions": "◆ SHOWROOM · 50 KITALÁLT POZÍCIÓ · nincs személyes adat és élő link",
+	"hours.presets": "INDULJ INNEN",
+	"hours.preset_office": "Munkaidő",
+	"hours.preset_evening": "Este és hétvégén",
+	"hours.preset_always": "Mindig aktív",
+	"hours.first_time": "Még nem választottál idősávot: indulj az egyik javaslatból, és alakítsd kedvedre.",
+	"hours.need_team": "Az idősávok beállításához futnia kell a csapatnak: térj vissza a 01. lépéshez, és indítsd el a konténert.",
+	"setup.provider_recheck": "BEJELENTKEZÉS ÚJRAELLENŐRZÉSE",
+	"setup.provider_rechecking": "ELLENŐRZÉS…",
 }
