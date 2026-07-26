@@ -16,6 +16,7 @@ func _init() -> void:
 	_test_writer_radial_layout()
 	_test_all_department_radial_layouts()
 	_test_all_department_desk_textures()
+	_test_department_occupied_composites()
 	_test_department_character_variants()
 	_test_core_workstations()
 	_test_core_patrol_routes()
@@ -229,6 +230,36 @@ func _test_all_department_desk_textures() -> void:
 		if path.is_empty():
 			continue
 		_assert(_texture_loads(path), "%s texture is missing or unloadable: %s" % [label, path])
+
+## Ogni agente di reparto si siede dentro un composito completo della propria
+## postazione. Il canvas deve coincidere con quello vuoto, altrimenti lo swap
+## sposta o ridimensiona il mobile; le varianti b..f devono inoltre avere un
+## path esplicito, così non ricadono mai sul volto legacy `a`.
+func _test_department_occupied_composites() -> void:
+	for desk in DepartmentDefsScript.all_desks():
+		var dept := str(desk["dept"])
+		var index := int(desk["index"])
+		var label := "%s:%d" % [dept, index]
+		var visual: Dictionary = _desk_visual(desk)
+		var base_path := str(visual.get("path", ""))
+		if base_path.is_empty() or not _texture_loads(base_path):
+			continue
+		var seated_path := str(desk.get("seated_art", ""))
+		if seated_path.is_empty():
+			var v2_path := base_path.replace(".png", "_seated_v2.png")
+			var legacy_path := base_path.replace(".png", "_seated.png")
+			seated_path = v2_path if _texture_loads(v2_path) else legacy_path
+		_assert(_texture_loads(seated_path), "%s occupied art missing: %s" % [label, seated_path])
+		if not _texture_loads(seated_path):
+			continue
+		var variant := str(CharacterDefsScript.VARIANT_BY_DESK[dept][index])
+		if variant != "a":
+			_assert(desk.has("seated_art"), "%s variant %s needs explicit occupied art" % [label, variant])
+			_assert(seated_path.contains("_%s_" % variant),
+					"%s occupied art does not match variant %s: %s" % [label, variant, seated_path])
+		var base: Texture2D = load(base_path)
+		var seated: Texture2D = load(seated_path)
+		_assert(base.get_size() == seated.get_size(), "%s occupied canvas mismatch" % label)
 
 ## Ogni sedia di reparto ha un'identità stabile e un foglio movimento 6x12.
 ## Verifica anche che il roster non torni per errore a usare `a` per tutti.
