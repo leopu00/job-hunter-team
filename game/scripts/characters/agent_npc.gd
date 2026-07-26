@@ -186,7 +186,7 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	aura.setup(accent_color())
 	add_child(aura)
 
-	rig = CharacterDefs.make_rig(slug)
+	rig = CharacterDefs.make_rig(slug, str(def.get("variant", "a")))
 	add_child(rig)
 	_work_pose()
 
@@ -1004,7 +1004,10 @@ func _begin_desk_pause(duration: float) -> void:
 func _set_desk_occupied(on: bool) -> void:
 	var was_at_desk := _desk_pose_active
 	var desk_node: FurnitureNode = FurnitureNode.desks.get(_desk_key)
-	var use_composite := _seated() and desk_node != null \
+	# Ogni postazione di reparto ha il proprio composito desk+sedia+persona.
+	# Quando esiste, il composito deve vincere sul foglio seduto del rig: così
+	# mani, corpo e arredo condividono prospettiva e occlusioni legacy.
+	var use_composite: bool = _seated() and desk_node != null \
 			and desk_node.has_seated_art()
 	if desk_node and desk_node.has_seated_art():
 		desk_node.set_occupied(on and use_composite)

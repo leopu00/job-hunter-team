@@ -46,6 +46,8 @@
 
 > `[JHT-DESKTOP-07]` ("container serves `next start` instead of `next dev`") è stato **chiuso per superamento** il 2026-07-23: il container non avvia più Next.js in nessuna modalità.
 
+> `[JHT-PIXEL-MODE]` (modalità grafica pixelata: render interno a bassa risoluzione + upscale nearest) è stato **chiuso per implementazione** il 2026-07-25, prima ancora di essere archiviato come esperimento: `Game.render_scale` disegna il mondo in un SubViewport ridotto, la calibrazione sceglie il gradino e l'utente può forzarlo da Impostazioni → Grafica. Il risparmio è reale ma parziale — il grosso delle draw call resta nei mobili (308) e negli agenti (254), non nella scenografia (85 su 822). Resta da misurare su hardware diverso dal T440s.
+
 ## 🤖 Team & agents
 
 - ⬜ **[JHT-RENAME-COORDINATOR]** — rename Capitano → Coordinatore everywhere (prompts ×7 languages, tmux session names, launcher, CLI labels, web routes/i18n). Done so far: public `/agents` page only. Needs a dedicated session with a compat alias so live teams don't break.

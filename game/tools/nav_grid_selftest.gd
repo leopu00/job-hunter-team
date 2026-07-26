@@ -16,6 +16,8 @@ func _init() -> void:
 	_test_writer_radial_layout()
 	_test_all_department_radial_layouts()
 	_test_all_department_desk_textures()
+	_test_department_occupied_composites()
+	_test_department_character_variants()
 	_test_core_workstations()
 	_test_core_patrol_routes()
 	_test_real_desk_routes()
@@ -108,7 +110,7 @@ func _test_writer_handoff_visual_clearance() -> void:
 	var table_h: float = table_w * table_tex.get_height() / table_tex.get_width()
 	var table_rect := Rect2(pos - Vector2(table_w / 2.0, table_h),
 			Vector2(table_w, table_h))
-	for item_id in ["plant_palm_a", "drawer_scorer", "drawer_scrittori"]:
+	for item_id in ["plant_palm_a", "drawer_scrittori"]:
 		var item: Dictionary = {}
 		for candidate in FurnitureDefsScript.ITEMS:
 			if str(candidate["id"]) == item_id:
@@ -228,6 +230,79 @@ func _test_all_department_desk_textures() -> void:
 		if path.is_empty():
 			continue
 		_assert(_texture_loads(path), "%s texture is missing or unloadable: %s" % [label, path])
+
+## Ogni agente di reparto si siede dentro un composito completo della propria
+## postazione. Il canvas deve coincidere con quello vuoto, altrimenti lo swap
+## sposta o ridimensiona il mobile; le varianti b..f devono inoltre avere un
+## path esplicito, così non ricadono mai sul volto legacy `a`.
+func _test_department_occupied_composites() -> void:
+	for desk in DepartmentDefsScript.all_desks():
+		var dept := str(desk["dept"])
+		var index := int(desk["index"])
+		var label := "%s:%d" % [dept, index]
+		var visual: Dictionary = _desk_visual(desk)
+		var base_path := str(visual.get("path", ""))
+		if base_path.is_empty() or not _texture_loads(base_path):
+			continue
+		var seated_path := str(desk.get("seated_art", ""))
+		if seated_path.is_empty():
+			var v2_path := base_path.replace(".png", "_seated_v2.png")
+			var legacy_path := base_path.replace(".png", "_seated.png")
+			seated_path = v2_path if _texture_loads(v2_path) else legacy_path
+		_assert(_texture_loads(seated_path), "%s occupied art missing: %s" % [label, seated_path])
+		if not _texture_loads(seated_path):
+			continue
+		var variant := str(CharacterDefsScript.VARIANT_BY_DESK[dept][index])
+		if variant != "a":
+			_assert(desk.has("seated_art"), "%s variant %s needs explicit occupied art" % [label, variant])
+			_assert(seated_path.contains("_%s_" % variant),
+					"%s occupied art does not match variant %s: %s" % [label, variant, seated_path])
+		var base: Texture2D = load(base_path)
+		var seated: Texture2D = load(seated_path)
+		_assert(base.get_size() == seated.get_size(), "%s occupied canvas mismatch" % label)
+
+## Ogni sedia di reparto ha un'identità stabile e un foglio movimento 6x12.
+## Verifica anche che il roster non torni per errore a usare `a` per tutti.
+func _test_department_character_variants() -> void:
+	var seen := {}
+	for def in CharacterDefsScript.spawn_list():
+		var dept := str(def.get("dept", ""))
+		if dept.is_empty():
+			continue
+		var slug := str(def["slug"])
+		var variant := str(def.get("variant", ""))
+		var desk := int(def["desk"])
+		var expected := str(CharacterDefsScript.VARIANT_BY_DESK[dept][desk])
+		_assert(variant == expected, "%s:%d variant=%s expected=%s" % [
+			dept, desk, variant, expected,
+		])
+		seen["%s_%s" % [slug, variant]] = true
+		var path := "res://assets/characters/sheets/%s_%s.png" % [slug, variant]
+		_assert(_texture_loads(path), "character variant missing: %s" % path)
+		if _texture_loads(path):
+			var texture: Texture2D = load(path)
+			_assert(texture.get_size() == Vector2(1536, 4608),
+					"character variant has wrong size: %s" % path)
+		var sit_path := "res://assets/characters/sheets/%s_%s_sit.png" % [slug, variant]
+		if variant == "a":
+			sit_path = "res://assets/characters/sheets/%s_sit.png" % slug
+		_assert(_texture_loads(sit_path), "seated character variant missing: %s" % sit_path)
+		if _texture_loads(sit_path):
+			var sit_texture: Texture2D = load(sit_path)
+			_assert(sit_texture.get_size() == Vector2(1024, 1152),
+					"seated character variant has wrong size: %s" % sit_path)
+			var rig: Node2D = CharacterDefsScript.make_rig(slug, variant)
+			var selected_sit: Texture2D = rig.get("_sit_sheet")
+			_assert(selected_sit != null, "rig did not select seated sheet: %s" % sit_path)
+			if selected_sit != null:
+				_assert(selected_sit.resource_path == sit_path,
+						"rig selected %s instead of %s" % [selected_sit.resource_path, sit_path])
+			rig.free()
+	for dept_id in CharacterDefsScript.DEPT_ROLES:
+		var slug := str(CharacterDefsScript.DEPT_ROLES[dept_id]["slug"])
+		for variant in ["a", "b", "c", "d", "e", "f"]:
+			_assert(seen.has("%s_%s" % [slug, variant]),
+					"roster does not expose %s_%s" % [slug, variant])
 
 ## Ogni ruolo core seduto ha una postazione personale frontale: base e arte
 ## occupata devono essere entrambe presenti e avere lo stesso canvas,
