@@ -236,6 +236,14 @@ export default function LandingNav() {
           >
             {t("nav_github")}
           </a>
+          <Link
+            href="/contact"
+            aria-current={currentPage("/contact")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/contact")}
+          >
+            {t("nav_contact")}
+          </Link>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">

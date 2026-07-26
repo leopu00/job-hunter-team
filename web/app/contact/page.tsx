@@ -13,273 +13,272 @@ import ContactForm, { type ContactStrings } from "./ContactForm";
 /**
  * Pagina di contatto pubblica.
  *
- * Esiste perché non tutti quelli che hanno qualcosa da dirci hanno un account
- * GitHub, e perché chi non ha ancora installato niente non ha un pulsante
- * "Segnala un problema" da premere. Da qui il messaggio arriva nella casella
- * del progetto come una mail normale.
+ * Categoria e oggetto fanno due lavori diversi e stanno bene insieme: la
+ * categoria smista (un click, e in casella diventa un filtro), l'oggetto
+ * descrive. Entrambi finiscono nell'intestazione della mail che riceviamo.
  */
 
 type Testi = ContactStrings & {
-  nav: string;
   title: string;
   intro: string;
-  inapp_title: string;
-  inapp_body: string;
-  security_title: string;
-  security_body: string;
+  intro_app: string;
   privacy_note: string;
 };
 
 const T: Record<string, Testi> = {
   it: {
-    nav: "Contatti",
-    title: "Scrivici",
+    title: "Contatti",
     intro:
-      "Domande, problemi, proposte: qui arriva tutto nella stessa casella e ti rispondiamo all'indirizzo che lasci.",
-    inapp_title: "Hai già installato JHT e vuoi segnalare un bug?",
-    inapp_body:
-      "Conviene usare «Segnala un problema» dentro l'app: allega da solo una diagnostica del computer già ripulita dai tuoi dati personali, e senza quella capire un bug è molto più difficile.",
-    security_title: "Hai trovato una vulnerabilità?",
-    security_body:
-      "Non usare questo modulo e non aprire una issue pubblica: scrivi a security@jobhunterteam.ai.",
+      "Per domande, problemi o proposte scrivi a {MAIL} o usa il modulo qui sotto. Per le segnalazioni di sicurezza: {SEC}.",
+    intro_app:
+      "Hai già installato JHT? Per i problemi tecnici usa «Segnala un problema» dentro l'app: allega in automatico una diagnostica anonimizzata.",
     privacy_note:
-      "L'indirizzo che lasci lo usiamo solo per risponderti a questo messaggio.",
-    kind_label: "Di cosa si tratta",
-    kind_question: "Una domanda",
-    kind_bug: "Un problema",
-    kind_other: "Altro",
-    name: "Nome (facoltativo)",
-    name_ph: "come ti chiamiamo",
+      "Usiamo il tuo indirizzo solo per rispondere a questo messaggio.",
+    kind_label: "Argomento",
+    kind_support: "Supporto tecnico",
+    kind_question: "Domanda generale",
+    kind_partnership: "Collaborazioni",
+    kind_privacy: "Privacy e dati",
+    name: "Nome",
+    name_ph: "Il tuo nome",
     email: "Email",
-    email_ph: "dove ti rispondiamo",
-    email_hint: "Senza indirizzo non possiamo risponderti.",
+    email_ph: "nome@esempio.it",
+    subject: "Oggetto",
+    subject_ph: "Di cosa vuoi parlarci",
     message: "Messaggio",
-    message_ph: "Raccontaci pure: non serve essere tecnici.",
+    message_ph: "Scrivi qui il tuo messaggio",
     send: "Invia",
     sending: "Invio…",
     sent_title: "Messaggio inviato",
-    sent_body:
-      "Lo leggiamo davvero. Ti rispondiamo all'indirizzo che ci hai lasciato.",
+    sent_body: "Ti risponderemo all'indirizzo che hai indicato.",
     sent_again: "Scrivi un altro messaggio",
-    error_short: "Scrivi qualche parola in più, così capiamo.",
-    error_email: "Controlla l'indirizzo email.",
+    error_subject: "Aggiungi un oggetto.",
+    error_short: "Il messaggio è troppo corto.",
+    error_email: "Indirizzo email non valido.",
     error_send:
-      "Invio non riuscito. Riprova, o scrivi a support@jobhunterteam.ai.",
-    error_rate: "Troppi messaggi ravvicinati: riprova fra qualche minuto.",
+      "Invio non riuscito. Riprova o scrivi a support@jobhunterteam.ai.",
+    error_rate: "Hai inviato troppi messaggi. Riprova fra qualche minuto.",
   },
   en: {
-    nav: "Contact",
-    title: "Write to us",
+    title: "Contact",
     intro:
-      "Questions, problems, ideas: it all lands in the same mailbox and we reply to the address you leave.",
-    inapp_title: "Already running JHT and want to report a bug?",
-    inapp_body:
-      "Use «Report a problem» inside the app: it attaches a diagnostic of your machine, already stripped of personal data. Without it, understanding a bug is much harder.",
-    security_title: "Found a vulnerability?",
-    security_body:
-      "Don't use this form and don't open a public issue: write to security@jobhunterteam.ai.",
-    privacy_note: "We use the address you leave only to reply to this message.",
-    kind_label: "What is it about",
-    kind_question: "A question",
-    kind_bug: "A problem",
-    kind_other: "Something else",
-    name: "Name (optional)",
-    name_ph: "what to call you",
+      "For questions, issues or proposals write to {MAIL} or use the form below. For security reports: {SEC}.",
+    intro_app:
+      "Already using JHT? For technical issues use «Report a problem» inside the app: it automatically attaches an anonymised diagnostic.",
+    privacy_note: "We use your address only to reply to this message.",
+    kind_label: "Topic",
+    kind_support: "Technical support",
+    kind_question: "General question",
+    kind_partnership: "Partnerships",
+    kind_privacy: "Privacy & data",
+    name: "Name",
+    name_ph: "Your name",
     email: "Email",
-    email_ph: "where we reply",
-    email_hint: "Without an address we cannot answer you.",
+    email_ph: "name@example.com",
+    subject: "Subject",
+    subject_ph: "What is it about",
     message: "Message",
-    message_ph: "Tell us anything — no need to be technical.",
+    message_ph: "Write your message here",
     send: "Send",
     sending: "Sending…",
     sent_title: "Message sent",
-    sent_body: "We do read these. We'll reply to the address you left.",
+    sent_body: "We'll reply to the address you provided.",
     sent_again: "Write another message",
-    error_short: "Write a few more words so we can understand.",
-    error_email: "Check the email address.",
+    error_subject: "Add a subject.",
+    error_short: "The message is too short.",
+    error_email: "Invalid email address.",
     error_send:
-      "Sending failed. Try again, or write to support@jobhunterteam.ai.",
-    error_rate: "Too many messages in a row: try again in a few minutes.",
+      "Sending failed. Try again or write to support@jobhunterteam.ai.",
+    error_rate: "Too many messages sent. Try again in a few minutes.",
   },
   es: {
-    nav: "Contacto",
-    title: "Escríbenos",
+    title: "Contacto",
     intro:
-      "Dudas, problemas, propuestas: todo llega al mismo buzón y respondemos a la dirección que dejes.",
-    inapp_title: "¿Ya tienes JHT instalado y quieres informar de un fallo?",
-    inapp_body:
-      "Mejor usa «Informar de un problema» dentro de la app: adjunta un diagnóstico de tu ordenador ya limpio de datos personales, y sin eso entender un fallo es mucho más difícil.",
-    security_title: "¿Has encontrado una vulnerabilidad?",
-    security_body:
-      "No uses este formulario ni abras una issue pública: escribe a security@jobhunterteam.ai.",
-    privacy_note:
-      "Usamos la dirección que dejas solo para responder a este mensaje.",
-    kind_label: "De qué se trata",
-    kind_question: "Una pregunta",
-    kind_bug: "Un problema",
-    kind_other: "Otra cosa",
-    name: "Nombre (opcional)",
-    name_ph: "cómo te llamamos",
+      "Para dudas, problemas o propuestas escribe a {MAIL} o usa el formulario. Para avisos de seguridad: {SEC}.",
+    intro_app:
+      "¿Ya usas JHT? Para problemas técnicos usa «Informar de un problema» dentro de la app: adjunta automáticamente un diagnóstico anonimizado.",
+    privacy_note: "Usamos tu dirección solo para responder a este mensaje.",
+    kind_label: "Asunto",
+    kind_support: "Soporte técnico",
+    kind_question: "Consulta general",
+    kind_partnership: "Colaboraciones",
+    kind_privacy: "Privacidad y datos",
+    name: "Nombre",
+    name_ph: "Tu nombre",
     email: "Email",
-    email_ph: "dónde te respondemos",
-    email_hint: "Sin dirección no podemos responderte.",
+    email_ph: "nombre@ejemplo.com",
+    subject: "Asunto",
+    subject_ph: "De qué quieres hablarnos",
     message: "Mensaje",
-    message_ph: "Cuéntanos: no hace falta ser técnico.",
+    message_ph: "Escribe aquí tu mensaje",
     send: "Enviar",
     sending: "Enviando…",
     sent_title: "Mensaje enviado",
-    sent_body:
-      "Los leemos de verdad. Te respondemos a la dirección que dejaste.",
+    sent_body: "Te responderemos a la dirección indicada.",
     sent_again: "Escribir otro mensaje",
-    error_short: "Escribe algunas palabras más para que podamos entender.",
-    error_email: "Revisa la dirección de correo.",
+    error_subject: "Añade un asunto.",
+    error_short: "El mensaje es demasiado corto.",
+    error_email: "Dirección de correo no válida.",
     error_send:
-      "El envío ha fallado. Inténtalo o escribe a support@jobhunterteam.ai.",
-    error_rate: "Demasiados mensajes seguidos: inténtalo en unos minutos.",
+      "Error al enviar. Inténtalo o escribe a support@jobhunterteam.ai.",
+    error_rate: "Has enviado demasiados mensajes. Inténtalo en unos minutos.",
   },
   fr: {
-    nav: "Contact",
-    title: "Écris-nous",
+    title: "Contact",
     intro:
-      "Questions, problèmes, propositions : tout arrive dans la même boîte et nous répondons à l'adresse que tu laisses.",
-    inapp_title: "Tu as déjà installé JHT et veux signaler un bug ?",
-    inapp_body:
-      "Utilise plutôt « Signaler un problème » dans l'app : elle joint un diagnostic de ta machine, déjà débarrassé de tes données personnelles. Sans ça, comprendre un bug est bien plus difficile.",
-    security_title: "Tu as trouvé une vulnérabilité ?",
-    security_body:
-      "N'utilise pas ce formulaire et n'ouvre pas d'issue publique : écris à security@jobhunterteam.ai.",
+      "Pour toute question, problème ou proposition, écris à {MAIL} ou utilise le formulaire. Pour les signalements de sécurité : {SEC}.",
+    intro_app:
+      "Tu utilises déjà JHT ? Pour les problèmes techniques, utilise « Signaler un problème » dans l'app : elle joint automatiquement un diagnostic anonymisé.",
     privacy_note:
-      "Nous utilisons l'adresse que tu laisses uniquement pour répondre à ce message.",
-    kind_label: "De quoi s'agit-il",
-    kind_question: "Une question",
-    kind_bug: "Un problème",
-    kind_other: "Autre chose",
-    name: "Nom (facultatif)",
-    name_ph: "comment t'appeler",
+      "Nous utilisons ton adresse uniquement pour répondre à ce message.",
+    kind_label: "Sujet",
+    kind_support: "Support technique",
+    kind_question: "Question générale",
+    kind_partnership: "Partenariats",
+    kind_privacy: "Confidentialité",
+    name: "Nom",
+    name_ph: "Ton nom",
     email: "Email",
-    email_ph: "où te répondre",
-    email_hint: "Sans adresse, impossible de te répondre.",
+    email_ph: "nom@exemple.com",
+    subject: "Objet",
+    subject_ph: "De quoi veux-tu nous parler",
     message: "Message",
-    message_ph: "Raconte-nous : pas besoin d'être technique.",
+    message_ph: "Écris ton message ici",
     send: "Envoyer",
     sending: "Envoi…",
     sent_title: "Message envoyé",
-    sent_body: "On les lit vraiment. On répond à l'adresse que tu as laissée.",
+    sent_body: "Nous répondrons à l'adresse indiquée.",
     sent_again: "Écrire un autre message",
-    error_short: "Écris quelques mots de plus pour qu'on comprenne.",
-    error_email: "Vérifie l'adresse email.",
+    error_subject: "Ajoute un objet.",
+    error_short: "Le message est trop court.",
+    error_email: "Adresse email invalide.",
     error_send:
       "Échec de l'envoi. Réessaie ou écris à support@jobhunterteam.ai.",
-    error_rate: "Trop de messages rapprochés : réessaie dans quelques minutes.",
+    error_rate: "Trop de messages envoyés. Réessaie dans quelques minutes.",
   },
   de: {
-    nav: "Kontakt",
-    title: "Schreib uns",
+    title: "Kontakt",
     intro:
-      "Fragen, Probleme, Vorschläge: alles landet im selben Postfach, und wir antworten an die Adresse, die du hinterlässt.",
-    inapp_title: "JHT schon installiert und willst einen Bug melden?",
-    inapp_body:
-      "Nutze lieber «Problem melden» in der App: sie hängt eine Diagnose deines Rechners an, bereits von persönlichen Daten bereinigt. Ohne die ist ein Bug viel schwerer zu verstehen.",
-    security_title: "Eine Sicherheitslücke gefunden?",
-    security_body:
-      "Nutze dieses Formular nicht und öffne kein öffentliches Issue: schreib an security@jobhunterteam.ai.",
+      "Bei Fragen, Problemen oder Vorschlägen schreib an {MAIL} oder nutze das Formular. Für Sicherheitsmeldungen: {SEC}.",
+    intro_app:
+      "Du nutzt JHT bereits? Für technische Probleme nimm «Problem melden» in der App: sie hängt automatisch eine anonymisierte Diagnose an.",
     privacy_note:
-      "Die Adresse, die du hinterlässt, nutzen wir nur für die Antwort auf diese Nachricht.",
-    kind_label: "Worum geht es",
-    kind_question: "Eine Frage",
-    kind_bug: "Ein Problem",
-    kind_other: "Etwas anderes",
-    name: "Name (optional)",
-    name_ph: "wie wir dich nennen",
+      "Wir verwenden deine Adresse nur für die Antwort auf diese Nachricht.",
+    kind_label: "Thema",
+    kind_support: "Technischer Support",
+    kind_question: "Allgemeine Frage",
+    kind_partnership: "Kooperationen",
+    kind_privacy: "Datenschutz",
+    name: "Name",
+    name_ph: "Dein Name",
     email: "E-Mail",
-    email_ph: "wohin wir antworten",
-    email_hint: "Ohne Adresse können wir nicht antworten.",
+    email_ph: "name@beispiel.de",
+    subject: "Betreff",
+    subject_ph: "Worum geht es",
     message: "Nachricht",
-    message_ph: "Erzähl einfach — technisch musst du nicht sein.",
+    message_ph: "Schreib hier deine Nachricht",
     send: "Senden",
     sending: "Wird gesendet…",
     sent_title: "Nachricht gesendet",
-    sent_body:
-      "Wir lesen sie wirklich. Wir antworten an die hinterlassene Adresse.",
+    sent_body: "Wir antworten an die angegebene Adresse.",
     sent_again: "Weitere Nachricht schreiben",
-    error_short: "Schreib ein paar Worte mehr, damit wir es verstehen.",
-    error_email: "Prüfe die E-Mail-Adresse.",
+    error_subject: "Bitte einen Betreff angeben.",
+    error_short: "Die Nachricht ist zu kurz.",
+    error_email: "Ungültige E-Mail-Adresse.",
     error_send:
       "Senden fehlgeschlagen. Versuch es erneut oder schreib an support@jobhunterteam.ai.",
     error_rate:
-      "Zu viele Nachrichten hintereinander: versuch es in ein paar Minuten.",
+      "Zu viele Nachrichten gesendet. Versuch es in ein paar Minuten.",
   },
   pt: {
-    nav: "Contacto",
-    title: "Escreve-nos",
+    title: "Contacto",
     intro:
-      "Dúvidas, problemas, propostas: chega tudo à mesma caixa e respondemos ao endereço que deixares.",
-    inapp_title: "Já tens o JHT instalado e queres comunicar um erro?",
-    inapp_body:
-      "Usa antes «Comunicar um problema» dentro da app: anexa um diagnóstico do teu computador, já limpo dos teus dados pessoais. Sem isso, perceber um erro é bem mais difícil.",
-    security_title: "Encontraste uma vulnerabilidade?",
-    security_body:
-      "Não uses este formulário nem abras uma issue pública: escreve para security@jobhunterteam.ai.",
+      "Para dúvidas, problemas ou propostas escreve para {MAIL} ou usa o formulário. Para comunicações de segurança: {SEC}.",
+    intro_app:
+      "Já usas o JHT? Para problemas técnicos usa «Comunicar um problema» dentro da app: anexa automaticamente um diagnóstico anonimizado.",
     privacy_note:
-      "Usamos o endereço que deixares apenas para responder a esta mensagem.",
-    kind_label: "Do que se trata",
-    kind_question: "Uma pergunta",
-    kind_bug: "Um problema",
-    kind_other: "Outra coisa",
-    name: "Nome (opcional)",
-    name_ph: "como te chamamos",
+      "Usamos o teu endereço apenas para responder a esta mensagem.",
+    kind_label: "Assunto",
+    kind_support: "Suporte técnico",
+    kind_question: "Questão geral",
+    kind_partnership: "Parcerias",
+    kind_privacy: "Privacidade e dados",
+    name: "Nome",
+    name_ph: "O teu nome",
     email: "Email",
-    email_ph: "onde respondemos",
-    email_hint: "Sem endereço não podemos responder.",
+    email_ph: "nome@exemplo.com",
+    subject: "Assunto",
+    subject_ph: "Sobre o que nos queres falar",
     message: "Mensagem",
-    message_ph: "Conta-nos: não precisas de ser técnico.",
+    message_ph: "Escreve aqui a tua mensagem",
     send: "Enviar",
     sending: "A enviar…",
     sent_title: "Mensagem enviada",
-    sent_body: "Lemos mesmo. Respondemos ao endereço que deixaste.",
+    sent_body: "Responderemos ao endereço indicado.",
     sent_again: "Escrever outra mensagem",
-    error_short: "Escreve mais algumas palavras para percebermos.",
-    error_email: "Verifica o endereço de email.",
+    error_subject: "Adiciona um assunto.",
+    error_short: "A mensagem é demasiado curta.",
+    error_email: "Endereço de email inválido.",
     error_send:
-      "O envio falhou. Tenta de novo ou escreve para support@jobhunterteam.ai.",
-    error_rate: "Demasiadas mensagens seguidas: tenta daqui a alguns minutos.",
+      "Falha no envio. Tenta de novo ou escreve para support@jobhunterteam.ai.",
+    error_rate: "Enviaste demasiadas mensagens. Tenta daqui a alguns minutos.",
   },
   hu: {
-    nav: "Kapcsolat",
-    title: "Írj nekünk",
+    title: "Kapcsolat",
     intro:
-      "Kérdés, probléma, ötlet: minden ugyanabba a postafiókba érkezik, és a megadott címre válaszolunk.",
-    inapp_title: "Már fut a JHT és hibát jelentenél?",
-    inapp_body:
-      "Használd inkább az app «Hiba jelentése» pontját: csatol egy diagnosztikát a gépedről, amelyből a személyes adatokat már eltávolítottuk. Enélkül sokkal nehezebb megérteni egy hibát.",
-    security_title: "Sebezhetőséget találtál?",
-    security_body:
-      "Ne ezt az űrlapot használd és ne nyiss nyilvános issue-t: írj a security@jobhunterteam.ai címre.",
+      "Kérdés, probléma vagy javaslat esetén írj a {MAIL} címre, vagy használd az űrlapot. Biztonsági bejelentés: {SEC}.",
+    intro_app:
+      "Már használod a JHT-t? Technikai problémához használd az app «Hiba jelentése» gombját: automatikusan csatol egy anonimizált diagnosztikát.",
     privacy_note:
-      "A megadott címet kizárólag erre az üzenetre adott válaszhoz használjuk.",
-    kind_label: "Miről van szó",
-    kind_question: "Kérdés",
-    kind_bug: "Probléma",
-    kind_other: "Egyéb",
-    name: "Név (nem kötelező)",
-    name_ph: "hogyan szólítsunk",
+      "A címedet kizárólag erre az üzenetre adott válaszhoz használjuk.",
+    kind_label: "Téma",
+    kind_support: "Technikai támogatás",
+    kind_question: "Általános kérdés",
+    kind_partnership: "Együttműködés",
+    kind_privacy: "Adatvédelem",
+    name: "Név",
+    name_ph: "A neved",
     email: "E-mail",
-    email_ph: "ide válaszolunk",
-    email_hint: "Cím nélkül nem tudunk válaszolni.",
+    email_ph: "nev@pelda.hu",
+    subject: "Tárgy",
+    subject_ph: "Miről szeretnél írni",
     message: "Üzenet",
-    message_ph: "Mesélj nyugodtan — nem kell technikusnak lenned.",
+    message_ph: "Írd ide az üzeneted",
     send: "Küldés",
     sending: "Küldés…",
     sent_title: "Üzenet elküldve",
-    sent_body: "Tényleg elolvassuk. A megadott címre válaszolunk.",
+    sent_body: "A megadott címre válaszolunk.",
     sent_again: "Új üzenet írása",
-    error_short: "Írj még pár szót, hogy értsük.",
-    error_email: "Ellenőrizd az e-mail címet.",
+    error_subject: "Adj meg egy tárgyat.",
+    error_short: "Az üzenet túl rövid.",
+    error_email: "Érvénytelen e-mail cím.",
     error_send:
       "A küldés nem sikerült. Próbáld újra, vagy írj a support@jobhunterteam.ai címre.",
-    error_rate: "Túl sok üzenet egymás után: próbáld pár perc múlva.",
+    error_rate: "Túl sok üzenetet küldtél. Próbáld pár perc múlva.",
   },
 };
+
+const SUPPORT = "support@jobhunterteam.ai";
+const SECURITY = "security@jobhunterteam.ai";
+
+/** Rende cliccabili i due indirizzi dentro il testo: chi preferisce il proprio
+ *  client di posta al modulo non deve copiarli a mano. */
+function conIndirizzi(testo: string) {
+  return testo.split(/(\{MAIL\}|\{SEC\})/).map((pezzo, i) => {
+    const indirizzo =
+      pezzo === "{MAIL}" ? SUPPORT : pezzo === "{SEC}" ? SECURITY : null;
+    if (!indirizzo) return <span key={i}>{pezzo}</span>;
+    return (
+      <a
+        key={i}
+        href={`mailto:${indirizzo}`}
+        className="text-[var(--color-green)] underline underline-offset-2"
+      >
+        {indirizzo}
+      </a>
+    );
+  });
+}
 
 function ContactContent() {
   const { lang } = useLandingI18n();
@@ -305,33 +304,20 @@ function ContactContent() {
             </Link>
             <span className="text-[var(--color-border)]">/</span>
             <span className="text-[10px] text-[var(--color-muted)]">
-              {tx.nav}
+              {tx.title}
             </span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
             {tx.title}
           </h1>
-          <p className="text-[var(--color-muted)] text-[12px] mt-3 leading-relaxed">
-            {tx.intro}
-          </p>
         </div>
 
-        {/* Chi ha l'app installata va indirizzato al pulsante in-app: da lì il
-            report arriva con la diagnostica, da qui no. Dirlo prima del modulo
-            costa una riga e fa risparmiare uno scambio di mail. */}
-        <div className="mb-6 border border-[var(--color-border)] rounded-lg p-5">
-          <p className="text-sm font-semibold mb-2">{tx.inapp_title}</p>
-          <p className="text-[12px] text-[var(--color-muted)] leading-relaxed">
-            {tx.inapp_body}
-          </p>
-        </div>
-
-        <div className="mb-10 border border-[var(--color-border)] rounded-lg p-5">
-          <p className="text-sm font-semibold mb-2">{tx.security_title}</p>
-          <p className="text-[12px] text-[var(--color-muted)] leading-relaxed">
-            {tx.security_body}
-          </p>
-        </div>
+        <p className="text-[13px] text-[var(--color-muted)] leading-relaxed mb-3">
+          {conIndirizzi(tx.intro)}
+        </p>
+        <p className="text-[12px] text-[var(--color-dim)] leading-relaxed mb-10">
+          {tx.intro_app}
+        </p>
 
         <ContactForm t={tx} locale={lang} />
 
