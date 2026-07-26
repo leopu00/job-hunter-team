@@ -1,20 +1,32 @@
-pyyaml
-requests
-google-auth
-google-auth-oauthlib
-google-api-python-client
-gspread
+# Dipendenze Python del container (Dockerfile: `pip3 install -r requirements.txt`).
+#
+# VERSIONI PINNATE (2026-07-26). Prima erano tutte libere: due build della
+# stessa immagine, a giorni di distanza, installavano librerie diverse — e il
+# caso peggiore era playwright, dove il pacchetto Python (il driver) e il
+# browser scaricato a build-time devono avere versioni compatibili: un driver
+# che avanza da solo rompe `playwright install --only-shell chromium` e con lui
+# linkedin_check.py (≈68% delle sorgenti che riportano new=0 in silenzio).
+# Per aggiornare: alzare il pin qui e ricostruire l'immagine, MAI lasciare
+# risolvere a caso.
+pyyaml==6.0.3
+requests==2.34.2
+google-auth==2.56.2
+google-auth-oauthlib==1.4.0
+google-api-python-client==2.198.0
+gspread==6.2.1
 # NB: niente SDK `anthropic` / `openai` qui. Gli agenti non parlano ai modelli
 # da Python: ogni ruolo è un processo CLI (`claude`, `codex`, `kimi`) in una
 # finestra tmux. I due SDK erano installati a ogni build per la sola
 # `shared/llm/`, che nessuno importava — rimossi con essa il 2026-07-25.
 # PDF reading per gli agenti che leggono CV/lettere degli utenti.
-pypdf
+pypdf==6.14.2
 # BeautifulSoup per gli agenti che parsano pagine job boards (LinkedIn, etc.)
-beautifulsoup4
-lxml
+beautifulsoup4==4.15.0
+lxml==6.1.1
 # Playwright (headless browser): usato da shared/skills/linkedin_check.py
 # per verificare se un annuncio LinkedIn e' ancora attivo via screenshot
 # autenticato. Solo --only-shell chromium viene scaricato a build-time
-# nel Dockerfile (PLAYWRIGHT_BROWSERS_PATH=/opt/playwright).
-playwright
+# nel Dockerfile (PLAYWRIGHT_BROWSERS_PATH=/opt/playwright): il browser è
+# legato a QUESTA versione del driver, quindi il pin qui sotto è quello che
+# tiene allineati i due pezzi.
+playwright==1.61.0
