@@ -2660,7 +2660,7 @@ func _build_vps() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label("2 · SERVER DI DESTINAZIONE", 15,
 			Palette.BRIGHT, "bold"))
-	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "167.233.135.77")
+	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "203.0.113.10")
 	_content.add_child(TerminalTheme.label(
 			"VERIFICA SSH mostra anche il fingerprint host: confrontalo con quello indicato dal provider prima del setup.",
 			12, Palette.DIM))
