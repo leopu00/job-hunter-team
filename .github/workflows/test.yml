@@ -121,15 +121,19 @@ jobs:
       - name: Run pytest
         run: python -m pytest tests/ -q
 
-  # Spec end-to-end che toccano l'area riservata. Gira solo il sottoinsieme
-  # mantenuto (wizard /welcome + demo mode): il resto della suite è fermo al
-  # 2026-07-03 e si skippa da solo — vedi e2e/README.md § "State of the suite"
-  # e [JHT-E2E-STALE] nel BACKLOG.
+  # Spec end-to-end. Gira TUTTO ciò che non è in quarantena: le 75 spec
+  # storiche testavano un sito che non esiste più (pagine rimosse, plane locale
+  # ritirato, `/api/health` cambiato) e stanno in e2e/tests/quarantine/, che il
+  # playwright.config esclude — il perché, gruppo per gruppo, è nel README lì
+  # dentro. Restano wizard /welcome, demo mode e i metadati social/PWA.
+  #
+  # Non c'è più un elenco di spec da tenere allineato a mano: una spec nuova in
+  # e2e/tests/ gira dal primo push.
   #
   # Contro `next start` (build di produzione) e non `next dev`: niente HMR,
   # quindi niente dipendenza dall'host, ed è la stessa cosa che gira su Vercel.
   e2e:
-    name: e2e — welcome wizard + demo mode
+    name: e2e — welcome wizard, demo mode, social metadata
     runs-on: ubuntu-latest
     # Senza i segreti dell'account di test l'area riservata non è raggiungibile
     # e i test si skipperebbero in silenzio: meglio non far partire il job.
@@ -165,12 +169,19 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # NEXT_PUBLIC_* è inlinata a build time: il deploy mode va deciso qui.
+      #
+      # NEXT_PUBLIC_SITE_URL punta al server del job perché `metadataBase` ne
+      # deriva og:image, canonical e sitemap: senza, il build li assolutizza su
+      # https://jobhunterteam.ai e una spec che segue og:image finirebbe a
+      # interrogare la produzione — CI che dipende dal sito vivo, cioè rossa
+      # quando cade qualcosa che non c'entra con la PR.
       - name: Build web (cloud mode)
         working-directory: web
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
           NEXT_PUBLIC_JHT_DEPLOY: cloud
+          NEXT_PUBLIC_SITE_URL: http://localhost:3011
 
       - name: Start web
         working-directory: web
@@ -178,6 +189,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/empty-jht"
           JHT_HOME="$RUNNER_TEMP/empty-jht" \
           NEXT_PUBLIC_JHT_DEPLOY=cloud \
+          NEXT_PUBLIC_SITE_URL=http://localhost:3011 \
           npx next start -p 3011 > "$RUNNER_TEMP/next.log" 2>&1 &
           # Attesa senza dipendenze da scaricare: /api/demo risponde solo a
           # server pronto ed è cloud-only, quindi conferma anche il deploy mode.
@@ -210,7 +222,7 @@ jobs:
         working-directory: e2e
         env:
           BASE_URL: http://localhost:3011
-        run: npx playwright test 80-welcome 81-demo --reporter=list
+        run: npx playwright test --reporter=list
 
       # Le credenziali non devono sopravvivere al job nemmeno in un artifact.
       - name: Wipe the session
