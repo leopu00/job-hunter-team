@@ -782,4 +782,12 @@ const S := {
 
 	"demo.map": "◆ SHOWROOM · los pines y las ofertas son ejemplos ficticios",
 	"demo.positions": "◆ SHOWROOM · 50 POSICIONES FICTICIAS · sin datos personales ni enlaces activos",
+	"hours.presets": "EMPIEZA AQUÍ",
+	"hours.preset_office": "Horario de oficina",
+	"hours.preset_evening": "Tardes y fin de semana",
+	"hours.preset_always": "Siempre activo",
+	"hours.first_time": "Aún no has elegido el horario: empieza por una de estas propuestas y ajústala como quieras.",
+	"hours.need_team": "Para configurar el horario hace falta el equipo en marcha: vuelve al paso 01 y arranca el contenedor.",
+	"setup.provider_recheck": "VOLVER A COMPROBAR EL ACCESO",
+	"setup.provider_rechecking": "COMPROBANDO…",
 }

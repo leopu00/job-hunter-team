@@ -782,4 +782,12 @@ const S := {
 
 	"demo.map": "◆ SHOWROOM · Pins und Angebote sind erfundene Beispiele",
 	"demo.positions": "◆ SHOWROOM · 50 FIKTIVE STELLEN · keine persönlichen Daten, keine aktiven Links",
+	"hours.presets": "HIER STARTEN",
+	"hours.preset_office": "Bürozeiten",
+	"hours.preset_evening": "Abends und am Wochenende",
+	"hours.preset_always": "Immer aktiv",
+	"hours.first_time": "Du hast die Zeiten noch nicht gewählt: starte mit einem dieser Vorschläge und passe ihn an.",
+	"hours.need_team": "Für die Zeiten muss das Team laufen: geh zurück zu Schritt 01 und starte den Container.",
+	"setup.provider_recheck": "ANMELDUNG ERNEUT PRÜFEN",
+	"setup.provider_rechecking": "PRÜFE…",
 }
