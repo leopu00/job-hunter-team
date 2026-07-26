@@ -46,21 +46,16 @@ const DEPARTMENTS := {
 		"inbox_pickup_access": Vector2(1100, 920),
 		# Anello radiale nell'angolo nord-ovest; indice 0..5 = ore 10,8,12,6,2,4.
 		"desks": [
-			{"rect": Rect2(384, 400, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(384, 400, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2), "seated_art": "res://assets/gen-art/furniture/occupied/scout_b_side_seated_v3.png"},
 			{"rect": Rect2(426, 616, 170, 78), "kind": "scout_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			# La sagoma incorporata nella vista posteriore nasce sensibilmente più
-			# grande di quella frontale. Il renderer riduce soltanto l'agente,
-			# tenendo ferme scrivania e mani sulla tastiera.
-			{"rect": Rect2(690, 346, 170, 78), "kind": "scout_a", "facing": "up", "tex_facing": "up",
-					"occupied_person_scale": 0.78,
-					"occupied_person_pivot": Vector2(0.5, 0.38)},
-			{"rect": Rect2(690, 689, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
+			{"rect": Rect2(690, 346, 170, 78), "kind": "scout_a", "facing": "up", "tex_facing": "up", "seated_art": "res://assets/gen-art/furniture/occupied/scout_c_up_seated_v3.png"},
+			{"rect": Rect2(690, 689, 170, 78), "kind": "scout_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72, "seated_art": "res://assets/gen-art/furniture/occupied/scout_d_down_seated_v3.png"},
 			# Arretrate dal vetro est: prima il margine delle sedie invadeva il
 			# varco e costringeva gli Scout a tagliare tutto il tappeto.
-			{"rect": Rect2(956, 400, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
+			{"rect": Rect2(956, 400, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2), "seated_art": "res://assets/gen-art/furniture/occupied/scout_e_side_seated_v3.png"},
 			# Sollevata di 56 px: prima desk e tavolo di consegna si saldavano
 			# con i rispettivi margini nav e chiudevano la corsia orientale.
-			{"rect": Rect2(914, 560, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(914, 560, 170, 78), "kind": "scout_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71), "seated_art": "res://assets/gen-art/furniture/occupied/scout_f_diag_down_seated_v3.png"},
 		],
 	},
 	"analisti": {
@@ -78,12 +73,12 @@ const DEPARTMENTS := {
 		"desks": [
 			# Cinquanta pixel più interne: il fianco delle sedie non invade più
 			# la porta ovest usata per il ritiro dal reparto Ricerca.
-			{"rect": Rect2(2336, 278, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(2336, 278, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2), "seated_art": "res://assets/gen-art/furniture/occupied/analisti_b_side_seated_v3.png"},
 			{"rect": Rect2(2365, 480, 170, 78), "kind": "analisti_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(2570, 227, 170, 78), "kind": "analisti_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(2570, 548, 170, 78), "kind": "analisti_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72},
-			{"rect": Rect2(2854, 278, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(2825, 480, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(2570, 227, 170, 78), "kind": "analisti_a", "facing": "up", "tex_facing": "up", "seated_art": "res://assets/gen-art/furniture/occupied/analisti_c_up_seated_v3.png"},
+			{"rect": Rect2(2570, 548, 170, 78), "kind": "analisti_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.72, "seated_art": "res://assets/gen-art/furniture/occupied/analisti_d_down_seated_v3.png"},
+			{"rect": Rect2(2854, 278, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2), "seated_art": "res://assets/gen-art/furniture/occupied/analisti_e_side_seated_v3.png"},
+			{"rect": Rect2(2825, 480, 170, 78), "kind": "analisti_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71), "seated_art": "res://assets/gen-art/furniture/occupied/analisti_f_diag_down_seated_v3.png"},
 		],
 	},
 	"scorer": {
@@ -100,12 +95,12 @@ const DEPARTMENTS := {
 		"desks": [
 			# scorer_a_side nasce con la sedia a sinistra, al contrario degli
 			# altri reparti: scambiamo solo il verso della texture laterale.
-			{"rect": Rect2(1263, 942, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "right", "seat_offset": Vector2(-26, -2)},
+			{"rect": Rect2(1263, 942, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "right", "seat_offset": Vector2(-26, -2), "seated_art": "res://assets/gen-art/furniture/occupied/scorer_b_side_seated_v3.png"},
 			{"rect": Rect2(1312, 1190, 170, 78), "kind": "scorer_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(1615, 880, 170, 78), "kind": "scorer_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(1615, 1274, 170, 78), "kind": "scorer_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.78},
-			{"rect": Rect2(1967, 942, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "left", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(1918, 1190, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(1615, 880, 170, 78), "kind": "scorer_a", "facing": "up", "tex_facing": "up", "seated_art": "res://assets/gen-art/furniture/occupied/scorer_c_up_seated_v3.png"},
+			{"rect": Rect2(1615, 1274, 170, 78), "kind": "scorer_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.78, "seated_art": "res://assets/gen-art/furniture/occupied/scorer_d_down_seated_v3.png"},
+			{"rect": Rect2(1967, 942, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "left", "seat_offset": Vector2(26, -2), "seated_art": "res://assets/gen-art/furniture/occupied/scorer_e_side_seated_v3.png"},
+			{"rect": Rect2(1918, 1190, 170, 78), "kind": "scorer_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71), "seated_art": "res://assets/gen-art/furniture/occupied/scorer_f_diag_down_seated_v3.png"},
 		],
 	},
 	"scrittori": {
@@ -126,16 +121,16 @@ const DEPARTMENTS := {
 		# da Scrittore 4, resta alle ore 6) per non spostare gli UID live.
 		"desks": [
 			# indice 0..5 = ore 10, 8, 12, 6, 2, 4
-			{"rect": Rect2(345, 1584, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2), "seated_art": "res://assets/gen-art/furniture/scrittori_a_side_seated.png"},
+			{"rect": Rect2(345, 1584, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2), "seated_art": "res://assets/gen-art/furniture/occupied/scrittori_b_side_seated_v3.png"},
 			# Sollevata di 48 px: fra il retro della sedia e il vetro sud
 			# rimane ora una corsia completa, non una tasca A* senza uscita.
 			{"rect": Rect2(380, 1720, 170, 78), "kind": "scrittori_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71), "seated_art": "res://assets/gen-art/furniture/scrittori_a_diag_down_seated_v2.png"},
 			# Le postazioni 12/6 rientrano entrambe sul tappeto mantenendo
 			# l'asse verticale e la vista retro/frontale richiesta.
-			{"rect": Rect2(605, 1538, 170, 78), "kind": "scrittori_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(605, 1830, 170, 78), "kind": "scrittori_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.62},
-			{"rect": Rect2(865, 1584, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(830, 1768, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(605, 1538, 170, 78), "kind": "scrittori_a", "facing": "up", "tex_facing": "up", "seated_art": "res://assets/gen-art/furniture/occupied/scrittori_c_up_seated_v3.png"},
+			{"rect": Rect2(605, 1830, 170, 78), "kind": "scrittori_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.62, "seated_art": "res://assets/gen-art/furniture/occupied/scrittori_d_down_seated_v3.png"},
+			{"rect": Rect2(865, 1584, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2), "seated_art": "res://assets/gen-art/furniture/occupied/scrittori_e_side_seated_v3.png"},
+			{"rect": Rect2(830, 1768, 170, 78), "kind": "scrittori_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71), "seated_art": "res://assets/gen-art/furniture/occupied/scrittori_f_diag_down_seated_v3.png"},
 		],
 	},
 	"critici": {
@@ -148,11 +143,11 @@ const DEPARTMENTS := {
 		# Anello radiale con il centro sgombro per sedie, corpi e percorsi.
 		"desks": [
 			{"rect": Rect2(2234, 1580, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "left", "seat_offset": Vector2(-26, -2)},
-			{"rect": Rect2(2276, 1796, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71)},
-			{"rect": Rect2(2540, 1526, 170, 78), "kind": "critici_a", "facing": "up", "tex_facing": "up"},
-			{"rect": Rect2(2540, 1815, 170, 78), "kind": "critici_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.80},
-			{"rect": Rect2(2846, 1580, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2)},
-			{"rect": Rect2(2804, 1796, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71)},
+			{"rect": Rect2(2276, 1796, 170, 78), "kind": "critici_a", "facing": "left", "tex_facing": "down_left", "seat_offset": Vector2(-41, -71), "seated_art": "res://assets/gen-art/furniture/occupied/critici_b_diag_down_seated_v3.png"},
+			{"rect": Rect2(2540, 1526, 170, 78), "kind": "critici_a", "facing": "up", "tex_facing": "up", "seated_art": "res://assets/gen-art/furniture/occupied/critici_c_up_seated_v3.png"},
+			{"rect": Rect2(2540, 1815, 170, 78), "kind": "critici_a", "facing": "down", "tex_facing": "down", "integrated_chair": true, "front_occlusion": 0.80, "seated_art": "res://assets/gen-art/furniture/occupied/critici_d_down_seated_v3.png"},
+			{"rect": Rect2(2846, 1580, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "right", "seat_offset": Vector2(26, -2), "seated_art": "res://assets/gen-art/furniture/occupied/critici_e_side_seated_v3.png"},
+			{"rect": Rect2(2804, 1796, 170, 78), "kind": "critici_a", "facing": "right", "tex_facing": "down_right", "seat_offset": Vector2(41, -71), "seated_art": "res://assets/gen-art/furniture/occupied/critici_f_diag_down_seated_v3.png"},
 		],
 	},
 }
