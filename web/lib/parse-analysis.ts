@@ -173,9 +173,26 @@ export function parseAnalysisNotes(
 // Le chiavi sono EN canoniche (stabili cross-locale), il testo è nella
 // lingua dell'utente e può proseguire su più righe fino alla chiave
 // successiva. La UI mostra ogni voce sotto la barra corrispondente.
+//
+// LEGACY: prima della regola il campo conteneva altro — l'aritmetica dello
+// score ("36+7+24+16+13=96, penalità -15 = 81") o un riepilogo in prosa
+// ("0-100 formula: stack 32/35, experience 18/25 … Very strong credit fit:
+// …"). Sono 611 record su 2745, e buttarli via significherebbe far sparire
+// testo che l'utente vedeva. Quel che non è attribuibile a una dimensione
+// finisce quindi in `rest`, che la pagina mostra sotto le barre insieme
+// alle note: le posizioni vecchie restano leggibili, le nuove guadagnano
+// il dettaglio espandibile. I due casi convivono anche nello stesso record
+// (preambolo + chiavi).
 
 export type ScoreDimensionKey =
   "stack" | "remote" | "salary" | "experience" | "strategic";
+
+export interface ParsedScoreBreakdown {
+  // Razionale per dimensione: alimenta il dropdown sotto ogni barra.
+  perDimension: Partial<Record<ScoreDimensionKey, string>>;
+  // Testo non attribuibile a una dimensione (formati legacy, preamboli).
+  rest: string;
+}
 
 const BREAKDOWN_KEYS = [
   "STACK",
@@ -192,9 +209,9 @@ const BREAKDOWN_RE = new RegExp(
 
 export function parseScoreBreakdown(
   breakdown: string | null | undefined,
-): Partial<Record<ScoreDimensionKey, string>> {
-  const out: Partial<Record<ScoreDimensionKey, string>> = {};
-  if (!breakdown || !breakdown.trim()) return out;
+): ParsedScoreBreakdown {
+  const perDimension: Partial<Record<ScoreDimensionKey, string>> = {};
+  if (!breakdown || !breakdown.trim()) return { perDimension, rest: "" };
 
   // Stessa normalizzazione di parseAnalysisNotes: alcuni run salvano `\n`
   // LETTERALE (backslash+n) invece del vero a-capo.
@@ -203,13 +220,20 @@ export function parseScoreBreakdown(
     .replace(/\\r\\n/g, "\n")
     .replace(/\\n/g, "\n");
 
+  // Offset della prima chiave riconosciuta: tutto ciò che la precede è
+  // preambolo (o, se non c'è nessuna chiave, l'intero campo legacy).
+  let firstKeyAt = -1;
   for (const m of text.matchAll(BREAKDOWN_RE)) {
+    if (firstKeyAt < 0) firstKeyAt = m.index ?? 0;
     const key = m[1].toLowerCase() as ScoreDimensionKey;
     const value = m[2].trim();
     // Prima occorrenza vince; ignora i placeholder vuoti ("...").
-    if (value && value !== "..." && !(key in out)) out[key] = value;
+    if (value && value !== "..." && !(key in perDimension))
+      perDimension[key] = value;
   }
-  return out;
+
+  const rest = (firstKeyAt < 0 ? text : text.slice(0, firstKeyAt)).trim();
+  return { perDimension, rest };
 }
 
 // Palette per il tag del disallineamento. Default neutro per tag ignoti.
