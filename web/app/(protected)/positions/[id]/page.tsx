@@ -128,14 +128,17 @@ const T: Record<string, Record<string, string>> = {
     fr: "Correspondance stack",
     pt: "Correspondência de stack",
   },
+  // La dimensione pesa la SEDE (città, pendolarismo, relocation), non solo
+  // il lavoro da remoto: "Da remoto" era fuorviante. La chiave del DB resta
+  // `remote_fit` — qui cambia solo come la chiamiamo all'utente.
   sb_remote_fit: {
-    it: "Da remoto",
-    en: "Remote fit",
-    hu: "Távmunka illeszkedés",
-    es: "Ajuste remoto",
-    de: "Remote-Eignung",
-    fr: "Adéquation à distance",
-    pt: "Ajuste remoto",
+    it: "Location",
+    en: "Location",
+    hu: "Helyszín",
+    es: "Ubicación",
+    de: "Standort",
+    fr: "Localisation",
+    pt: "Localização",
   },
   sb_salary_fit: {
     it: "Stipendio",
