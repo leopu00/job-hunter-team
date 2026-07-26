@@ -2728,10 +2728,10 @@ func _build_vps() -> void:
 	_listen_setup()
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.intro"), 15, Palette.MUTED))
 	_content.add_child(TerminalTheme.label(
-			"1  Crea la chiave  →  2  aggiungila alla VPS  →  3  verifica SSH  →  4  prepara e collega",
+			UIStrings.t("vps.steps"),
 			13, Palette.MINT, "medium"))
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label("1 · CHIAVE SSH DEDICATA", 15,
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.key_section"), 15,
 			Palette.BRIGHT, "bold"))
 	var cfg: Dictionary = BackendBus.load_vps_config()
 
@@ -2746,18 +2746,18 @@ func _build_vps() -> void:
 	browse.pressed.connect(_browse_vps_key)
 	_vps_key.get_parent().add_child(browse)
 	var generate := Button.new()
-	generate.text = "GENERA CHIAVE"
+	generate.text = UIStrings.t("vps.key_generate")
 	generate.pressed.connect(func() -> void:
 		_vps_key.text = SetupService.default_vps_key_path()
 		SetupService.generate_vps_key())
 	_vps_key.get_parent().add_child(generate)
 	var copy_public := Button.new()
-	copy_public.text = "COPIA PUBBLICA"
+	copy_public.text = UIStrings.t("vps.key_copy")
 	copy_public.pressed.connect(func() -> void:
 		SetupService.copy_vps_public_key(_vps_key.text))
 	_vps_key.get_parent().add_child(copy_public)
 	var reveal := Button.new()
-	reveal.text = "APRI CARTELLA"
+	reveal.text = UIStrings.t("vps.key_open")
 	reveal.pressed.connect(func() -> void:
 		SetupService.reveal_vps_key(_vps_key.text))
 	_vps_key.get_parent().add_child(reveal)
@@ -2765,22 +2765,22 @@ func _build_vps() -> void:
 	var fingerprint := str(key_info.get("fingerprint", ""))
 	_content.add_child(TerminalTheme.label(
 			("Fingerprint: " + fingerprint) if fingerprint != "" else \
-			"La chiave privata resta sul computer; su Hetzner va incollata soltanto la riga .pub.",
+			UIStrings.t("vps.key_note"),
 			12, Palette.DIM))
 
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label("2 · SERVER DI DESTINAZIONE", 15,
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.destination"), 15,
 			Palette.BRIGHT, "bold"))
 	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "203.0.113.10")
 	_content.add_child(TerminalTheme.label(
-			"VERIFICA SSH mostra anche il fingerprint host: confrontalo con quello indicato dal provider prima del setup.",
+			UIStrings.t("vps.fingerprint_note"),
 			12, Palette.DIM))
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 16)
 	_content.add_child(actions)
 	var connect_btn := Button.new()
-	connect_btn.text = "COLLEGA SENZA INSTALLARE"
+	connect_btn.text = UIStrings.t("vps.connect_existing")
 	connect_btn.add_theme_font_size_override("font_size", 16)
 	connect_btn.add_theme_color_override("font_color", Palette.GREEN)
 	connect_btn.pressed.connect(_connect_vps)
@@ -2789,22 +2789,24 @@ func _build_vps() -> void:
 	disconnect_btn.text = UIStrings.t("vps.disconnect")
 	disconnect_btn.add_theme_font_size_override("font_size", 16)
 	disconnect_btn.add_theme_color_override("font_color", Palette.MUTED)
-	disconnect_btn.pressed.connect(func() -> void: BackendBus.disconnect_backend())
+	# Una disconnessione richiesta dall'utente deve sopravvivere al riavvio;
+	# altrimenti vps.cfg ricollegherebbe silenziosamente la stessa VPS al boot.
+	disconnect_btn.pressed.connect(func() -> void: BackendBus.switch_to_local_backend())
 	actions.add_child(disconnect_btn)
 	var test_ssh := Button.new()
-	test_ssh.text = "VERIFICA SSH"
+	test_ssh.text = UIStrings.t("vps.verify_ssh")
 	test_ssh.add_theme_color_override("font_color", Palette.MINT)
 	test_ssh.pressed.connect(func() -> void:
 		SetupService.test_vps_connection(_vps_ip.text, _vps_key.text))
 	actions.add_child(test_ssh)
 	var install := Button.new()
-	install.text = "PREPARA E COLLEGA AUTOMATICAMENTE"
+	install.text = UIStrings.t("vps.prepare")
 	install.add_theme_color_override("font_color", Palette.YELLOW)
 	install.pressed.connect(func() -> void:
 		SetupService.provision_vps(_vps_ip.text, _vps_key.text))
 	actions.add_child(install)
 	var console_install := Button.new()
-	console_install.text = "CONSOLE AVANZATA"
+	console_install.text = UIStrings.t("vps.advanced")
 	console_install.flat = true
 	console_install.pressed.connect(func() -> void:
 		SetupService.open_vps_install(_vps_ip.text, _vps_key.text))
@@ -2815,27 +2817,34 @@ func _build_vps() -> void:
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label("3 · MIGRAZIONE COMPLETA (OPZIONALE)",
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.migration_title"),
 			15, Palette.BRIGHT, "bold"))
 	_content.add_child(TerminalTheme.label(
-			"Trasferisce database, profilo, documenti, configurazione, login provider e pairing cloud. La chiave SSH privata e i file runtime non vengono copiati. Prima crea uno snapshot e un backup sulla destinazione.",
+			UIStrings.t("vps.migration_desc"),
 			12, Palette.MUTED))
-	var migration := HBoxContainer.new()
+	var migration := HFlowContainer.new()
 	migration.add_theme_constant_override("separation", 12)
 	_content.add_child(migration)
 	var source_mode := OptionButton.new()
-	source_mode.add_item("DA QUESTO COMPUTER", 0)
-	source_mode.add_item("DALLA VPS ATTUALMENTE SALVATA", 1)
+	source_mode.add_item(UIStrings.t("vps.source_local"), 0)
+	source_mode.add_item(UIStrings.t("vps.source_saved"), 1)
 	source_mode.custom_minimum_size.x = 330
 	migration.add_child(source_mode)
 	var migrate := Button.new()
-	migrate.text = "MIGRA TUTTO SULLA NUOVA VPS  →"
+	migrate.text = UIStrings.t("vps.migrate_to_vps")
 	migrate.add_theme_color_override("font_color", Palette.YELLOW)
 	migrate.pressed.connect(func() -> void:
 		_confirm_vps_migration("vps" if source_mode.selected == 1 else "local"))
 	migration.add_child(migrate)
+	var migrate_local := Button.new()
+	migrate_local.text = UIStrings.t("vps.migrate_to_local")
+	migrate_local.disabled = str(cfg.get("ip", "")) == "" \
+			or str(cfg.get("key_path", "")) == ""
+	migrate_local.add_theme_color_override("font_color", Palette.BLUE)
+	migrate_local.pressed.connect(_confirm_local_migration)
+	migration.add_child(migrate_local)
 	_content.add_child(TerminalTheme.label(
-			"A migrazione riuscita la sorgente viene fermata e il suo cloud token archiviato, così non esistono due team autoritativi. In caso di errore la sorgente viene riavviata.",
+			UIStrings.t("vps.migration_note"),
 			12, Palette.DIM))
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.agents_live"),
@@ -2852,13 +2861,25 @@ func _build_vps() -> void:
 
 func _confirm_vps_migration(source_mode: String) -> void:
 	var dialog := ConfirmationDialog.new()
-	dialog.title = "Migrare tutto sulla nuova VPS?"
-	dialog.dialog_text = ("La sorgente è questo computer." if source_mode == "local" \
-			else "La sorgente è la VPS attualmente salvata.") \
-			+ "\n\nIl team verrà fermato durante lo snapshot. I dati non saranno cancellati: la destinazione riceverà una copia completa e conserverà un backup pre-migrazione."
-	dialog.ok_button_text = "FERMA, COPIA E ATTIVA LA NUOVA VPS"
+	dialog.title = UIStrings.t("vps.confirm_vps_title")
+	dialog.dialog_text = (UIStrings.t("vps.confirm_source_local") \
+			if source_mode == "local" else UIStrings.t("vps.confirm_source_vps")) \
+			+ "\n\n" + UIStrings.t("vps.confirm_body")
+	dialog.ok_button_text = UIStrings.t("vps.confirm_vps_ok")
 	dialog.confirmed.connect(func() -> void:
 		SetupService.migrate_to_vps(_vps_ip.text, _vps_key.text, source_mode))
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.confirmed.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(700, 300))
+
+
+func _confirm_local_migration() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = UIStrings.t("vps.confirm_local_title")
+	dialog.dialog_text = UIStrings.t("vps.confirm_local_body")
+	dialog.ok_button_text = UIStrings.t("vps.confirm_local_ok")
+	dialog.confirmed.connect(SetupService.migrate_to_local)
 	dialog.canceled.connect(dialog.queue_free)
 	dialog.confirmed.connect(dialog.queue_free)
 	add_child(dialog)

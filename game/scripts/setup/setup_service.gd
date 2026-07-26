@@ -91,6 +91,7 @@ func _self_test_vps_setup() -> void:
 	OS.set_environment("USERPROFILE", test_root)
 	OS.set_environment("JHT_HOME", test_root.path_join(".jht"))
 	_test_write(test_root.path_join(".jht/keep.json"), "{\"ok\":true}\n")
+	_test_write(test_root.path_join(".jht/jht.config.json"), "{\"version\":4}\n")
 	_test_write(test_root.path_join(".jht/host.env"), "JHT_HOST_TYPE=local\n")
 	_test_write(test_root.path_join(".jht/ssh/never-copy"), "PRIVATE\n")
 	_test_write(test_root.path_join(".jht/runtime/compose.yml"), "runtime\n")
@@ -130,6 +131,47 @@ func _self_test_vps_setup() -> void:
 			failures.append("runtime incluso")
 		if names.contains(".jht/host.env"):
 			failures.append("host.env locale incluso")
+		var validated := _validate_migration_archive(archive)
+		if not bool(validated.get("ok", false)):
+			failures.append("snapshot valido rifiutato: " + str(validated.get("message", "")))
+		if FileAccess.get_sha256(archive) == "":
+			failures.append("checksum snapshot assente")
+	var apply_script := _remote_apply_script("migration.tar.gz", "12345",
+			"0123456789abcdef", "/root/backup.tar.gz")
+	for required in ["set -eu", "sha256sum", ".jht-migration-stage-12345",
+			"test -s \"$BACKUP\"", "pragma integrity_check"]:
+		if not apply_script.contains(required):
+			failures.append("transazione remota senza garanzia: " + required)
+	if apply_script.contains("tar czf \"$BACKUP\" \"$@\" || true"):
+		failures.append("errore backup destinazione ignorato")
+	var local_env := _local_host_env(test_root.path_join(".jht/host.env"))
+	if not local_env.begins_with("JHT_HOST_TYPE=local\n") \
+			or local_env.count("JHT_HOST_TYPE=") != 1:
+		failures.append("host.env locale non normalizzato")
+	# Rollback filesystem: il vecchio stato deve tornare integralmente e i
+	# file presenti soltanto nella destinazione nuova devono sparire.
+	var tx_root := test_root.path_join("tx")
+	var current_jht := tx_root.path_join(".jht")
+	var current_docs := tx_root.path_join("Documents/Job Hunter Team")
+	var tx_old_jht := tx_root.path_join(".jht.migration-old-1")
+	var tx_old_docs := tx_root.path_join("Documents/Job Hunter Team.migration-old-1")
+	DirAccess.make_dir_recursive_absolute(current_jht)
+	DirAccess.make_dir_recursive_absolute(current_docs)
+	DirAccess.make_dir_recursive_absolute(tx_old_jht)
+	DirAccess.make_dir_recursive_absolute(tx_old_docs)
+	_test_write(current_jht.path_join("new-only"), "new")
+	_test_write(current_docs.path_join("new-only"), "new")
+	_test_write(tx_old_jht.path_join("old-only"), "old")
+	_test_write(tx_old_docs.path_join("old-only"), "old")
+	_rollback_local_destination({"current_jht": current_jht,
+			"current_docs": current_docs, "old_jht": tx_old_jht,
+			"old_docs": tx_old_docs, "stage": "", "jht_moved": true,
+			"docs_moved": true, "jht_activated": true,
+			"docs_activated": true, "old_container_running": false}, false)
+	if not FileAccess.file_exists(current_jht.path_join("old-only")) \
+			or FileAccess.file_exists(current_jht.path_join("new-only")) \
+			or not FileAccess.file_exists(current_docs.path_join("old-only")):
+		failures.append("rollback locale non ripristina lo stato precedente")
 	# Spegnimento in uscita: in locale ferma agenti E container, sulla VPS mai.
 	var local_shutdown := shutdown_commands({})
 	if local_shutdown.size() != 3:
@@ -1289,9 +1331,12 @@ func test_vps_connection(ip: String, key_path: String) -> void:
 
 
 static func _do_test_vps_connection(target: Dictionary) -> Dictionary:
+	var pinned := _pin_vps_host(str(target.get("ip", "")))
+	if not bool(pinned.get("ok", false)):
+		return pinned
 	var result := _run_ssh(target,
 			"printf 'JHT_SSH_OK '; uname -srm; test \"$(id -u)\" = 0")
-	var fingerprint := _vps_host_fingerprint(str(target.get("ip", "")))
+	var fingerprint := str(pinned.get("fingerprint", ""))
 	return {"ok": result["code"] == 0,
 			"message": "SSH verificato · " + str(result["out"]).strip_edges() \
 			+ ((" · HOST " + fingerprint) if fingerprint != "" else "") \
@@ -1300,8 +1345,7 @@ static func _do_test_vps_connection(target: Dictionary) -> Dictionary:
 
 
 static func _vps_host_fingerprint(host: String) -> String:
-	var scan := _run("ssh-keyscan", PackedStringArray([
-			"-T", "5", "-t", "ed25519", host]))
+	var scan := _vps_host_scan(host)
 	if scan["code"] != 0 or str(scan["out"]).strip_edges() == "":
 		return ""
 	var temp := OS.get_cache_dir().path_join(
@@ -1317,6 +1361,47 @@ static func _vps_host_fingerprint(host: String) -> String:
 		return ""
 	var parts := str(fingerprint["out"]).strip_edges().split(" ", false)
 	return str(parts[1]) if parts.size() > 1 else str(fingerprint["out"]).strip_edges()
+
+
+static func _vps_host_scan(host: String) -> Dictionary:
+	return _run("ssh-keyscan", PackedStringArray(["-T", "5", "-t", "ed25519", host]))
+
+
+static func _pin_vps_host(host: String) -> Dictionary:
+	var scan := _vps_host_scan(host)
+	var material := _host_key_material(str(scan.get("out", "")))
+	if scan["code"] != 0 or material == "":
+		return {"ok": false, "message": "Impossibile leggere la chiave host SSH"}
+	var path := VpsBackend.known_hosts_path(host)
+	if FileAccess.file_exists(path):
+		var previous := _host_key_material(FileAccess.get_file_as_string(path))
+		if previous != material:
+			return {"ok": false, "message": "CHIAVE HOST SSH CAMBIATA: collegamento rifiutato"}
+	else:
+		DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+		if not _write_text(path, str(scan.get("out", "")).strip_edges() + "\n"):
+			return {"ok": false, "message": "Impossibile salvare il fingerprint SSH"}
+		if OS.get_name() != "Windows":
+			_run("chmod", PackedStringArray(["600", path]))
+	return {"ok": true, "fingerprint": _fingerprint_for_known_host(path)}
+
+
+static func _host_key_material(raw: String) -> String:
+	for line: String in raw.split("\n"):
+		if line.begins_with("#") or line.strip_edges() == "":
+			continue
+		var parts := line.strip_edges().split(" ", false)
+		if parts.size() >= 3:
+			return str(parts[1]) + " " + str(parts[2])
+	return ""
+
+
+static func _fingerprint_for_known_host(path: String) -> String:
+	var fingerprint := _run("ssh-keygen", PackedStringArray(["-lf", path]))
+	if fingerprint["code"] != 0:
+		return ""
+	var parts := str(fingerprint.get("out", "")).strip_edges().split(" ", false)
+	return str(parts[1]) if parts.size() > 1 else str(fingerprint.get("out", "")).strip_edges()
 
 
 func provision_vps(ip: String, key_path: String) -> void:
@@ -1381,12 +1466,26 @@ func migrate_to_vps(ip: String, key_path: String, source_mode: String) -> void:
 			action_changed.emit("vps-migrate", false,
 					"Sorgente e destinazione coincidono", false)
 			return
-	_start_action("vps-migrate", _do_migrate_to_vps.bind(
-			target, source_mode, source, false))
+	_start_action("vps-migrate", _do_migrate_to_vps.bind(target, source_mode, source))
+
+
+## Percorso inverso, assente nella prima versione: la VPS salvata è la
+## sorgente, il runtime Docker di questo computer è la destinazione.
+func migrate_to_local() -> void:
+	if _action_running:
+		return
+	var source := BackendBus.load_vps_config()
+	source = _vps_credentials(str(source.get("ip", "")),
+			str(source.get("key_path", "")))
+	if source.is_empty():
+		action_changed.emit("vps-migrate", false,
+				"Nessuna VPS sorgente salvata da cui migrare", false)
+		return
+	_start_action("vps-migrate", _do_migrate_to_local.bind(source))
 
 
 func _do_migrate_to_vps(target: Dictionary, source_mode: String,
-		source: Dictionary, source_was_running: bool) -> Dictionary:
+		source: Dictionary) -> Dictionary:
 	var check := _do_test_vps_connection(target)
 	if not bool(check["ok"]):
 		return check
@@ -1397,115 +1496,581 @@ func _do_migrate_to_vps(target: Dictionary, source_mode: String,
 	if provision["code"] != 0:
 		return {"ok": false, "message": "Preparazione destinazione fallita: " \
 				+ str(provision.get("out", "")).right(280)}
+	var target_team_probe := _run_ssh(target,
+			"docker exec jht tmux list-sessions -F '#{session_name}' 2>/dev/null")
+	var target_team_was_running: bool = target_team_probe["code"] == 0 \
+			and str(target_team_probe.get("out", "")).strip_edges() != ""
 
 	var stamp := str(int(Time.get_unix_time_from_system()))
 	var archive_name := "jht-migration-" + stamp + ".tar.gz"
 	var local_archive := OS.get_cache_dir().path_join(archive_name)
-	var source_stopped := false
 	_progress("vps-migrate", "Fermo la sorgente e creo uno snapshot coerente…")
-	var archived := {"code": 0, "out": ""}
-	if source_mode == "vps":
-		# Lo stato UI può essere vecchio o la VPS può essere momentaneamente
-		# scollegata: interroghiamo tmux sulla sorgente prima di fermarla.
-		var source_container := _run_ssh(source,
-				"docker inspect jht --format '{{.State.Running}}' 2>/dev/null")
-		source_stopped = source_container["code"] == 0 \
-				and str(source_container.get("out", "")).strip_edges() == "true"
-		var source_team := _run_ssh(source,
-				"docker exec jht tmux list-sessions -F '#{session_name}' 2>/dev/null")
-		source_was_running = source_was_running or (source_team["code"] == 0 \
-				and str(source_team.get("out", "")).strip_edges() != "")
-		var remote_archive := "/tmp/" + archive_name
-		archived = _run_ssh(source,
-				"docker stop jht >/dev/null 2>&1 || true; " \
-				+ "cd /root; set --; [ -d .jht ] && set -- \"$@\" .jht; " \
-				+ "[ -d \"Documents/Job Hunter Team\" ] && " \
-				+ "set -- \"$@\" \"Documents/Job Hunter Team\"; " \
-				+ "[ \"$#\" -gt 0 ] && tar czf " + remote_archive \
-				+ " --exclude='.jht/ssh' --exclude='.jht/runtime' " \
-				+ "--exclude='.jht/host.env' \"$@\"")
-		if archived["code"] == 0:
-			archived = _scp_download(source, remote_archive, local_archive)
-			_run_ssh(source, "rm -f " + remote_archive)
-	else:
-		var local_team := _run("docker", PackedStringArray([
-				"exec", "jht", "tmux", "list-sessions", "-F", "#{session_name}"]))
-		source_was_running = source_was_running or (local_team["code"] == 0 \
-				and str(local_team.get("out", "")).strip_edges() != "")
-		var docker_state := _run("docker", PackedStringArray([
-				"inspect", "jht", "--format", "{{.State.Running}}"] ))
-		if docker_state["code"] == 0 and str(docker_state["out"]).contains("true"):
-			_run("docker", PackedStringArray(["stop", "jht"]))
-			source_stopped = true
-		archived = _create_local_migration_archive(local_archive)
-	if archived["code"] != 0:
-		_restore_migration_source(source_mode, source, source_stopped)
-		return {"ok": false, "message": "Snapshot sorgente fallito: " \
-				+ str(archived.get("out", "")).strip_edges().right(280)}
+	var captured := _capture_migration_source(source_mode, source,
+			archive_name, local_archive)
+	if not bool(captured.get("ok", false)):
+		return captured
 
 	_progress("vps-migrate", "Trasferisco dati, profilo, configurazione e login…")
 	var upload := _scp_upload(target, local_archive, "/tmp/" + archive_name)
 	if upload["code"] != 0:
 		DirAccess.remove_absolute(local_archive)
-		_restore_migration_source(source_mode, source, source_stopped)
+		_restore_migration_source(source_mode, source,
+				bool(captured.get("container_was_running", false)),
+				bool(captured.get("team_was_running", false)))
 		return {"ok": false, "message": "Trasferimento fallito: " \
 				+ str(upload.get("out", "")).strip_edges().right(280)}
 
-	_progress("vps-migrate", "Creo backup sulla destinazione e applico la migrazione…")
+	_progress("vps-migrate", "Verifico il trasferimento e applico in modo atomico…")
 	var remote_backup := "/root/jht-before-migration-" + stamp + ".tar.gz"
-	var apply := _run_ssh(target,
-			"docker stop jht >/dev/null 2>&1 || true; cd /root; " \
-			+ "tar czf " + remote_backup \
-			+ " .jht \"Documents/Job Hunter Team\" 2>/dev/null || true; " \
-			+ "tar xzf /tmp/" + archive_name \
-			+ " -C /root --no-same-owner && rm -f /tmp/" + archive_name + "; " \
-			+ "printf 'JHT_HOST_TYPE=vps\\n' > /root/.jht/host.env; " \
-			+ "chown -R 1001:1001 /root/.jht \"/root/Documents/Job Hunter Team\"; " \
-			+ "chmod 600 /root/.jht/cloud.json 2>/dev/null || true; " \
-			+ _vps_prepare_runtime_command() + " && " \
-			+ "test \"$(docker inspect jht --format '{{.State.Running}}')\" = true && " \
-			+ "grep -q '^JHT_HOST_TYPE=vps' /root/.jht/host.env")
+	var apply := _run_ssh(target, "bash -lc " + _shell_quote(
+			_remote_apply_script(archive_name, stamp,
+					str(captured.get("sha256", "")), remote_backup)))
 	DirAccess.remove_absolute(local_archive)
 	if apply["code"] != 0:
-		# Il comando può essere arrivato fino al riavvio del container prima
-		# dell'ultima verifica: fermiamolo per evitare due sync concorrenti.
-		_run_ssh(target, "docker stop jht >/dev/null 2>&1 || true")
-		_restore_migration_source(source_mode, source, source_stopped)
+		_rollback_vps_destination(target, stamp, target_team_was_running)
+		_restore_migration_source(source_mode, source,
+				bool(captured.get("container_was_running", false)),
+				bool(captured.get("team_was_running", false)))
 		return {"ok": false, "message": "Applicazione migrazione fallita. Backup: " \
 				+ remote_backup + " · " + str(apply.get("out", "")).right(220)}
 
-	if source_was_running:
+	if bool(captured.get("team_was_running", false)):
 		_progress("vps-migrate", "Riavvio il team sulla nuova VPS…")
 		var team_start := _run_ssh(target,
 				"docker exec jht node /app/cli/bin/jht.js team start >/dev/null 2>&1 && " \
 				+ "for i in $(seq 1 15); do docker exec jht tmux list-sessions " \
 				+ "-F '#{session_name}' 2>/dev/null | grep -q . && exit 0; sleep 2; done; exit 1")
 		if team_start["code"] != 0:
-			# La copia rimane disponibile sulla destinazione ma viene fermata:
-			# il vecchio host torna l'unica origine attiva e conserva il token.
-			_run_ssh(target, "docker stop jht >/dev/null 2>&1 || true")
-			_restore_migration_source(source_mode, source, source_stopped)
+			_rollback_vps_destination(target, stamp, target_team_was_running)
+			_restore_migration_source(source_mode, source,
+					bool(captured.get("container_was_running", false)),
+					bool(captured.get("team_was_running", false)))
 			return {"ok": false, "message": "Dati trasferiti, ma avvio agenti fallito. " \
 					+ "La sorgente è stata ripristinata; backup destinazione: " + remote_backup}
 
-	# Disattiva la vecchia origine solo dopo che container ed eventuali agenti
-	# risultano realmente operativi sulla nuova VPS.
-	if source_mode == "vps":
-		_run_ssh(source, "if [ -f /root/.jht/cloud.json ]; then mv " \
-				+ "/root/.jht/cloud.json /root/.jht/cloud.json.migrated-" + stamp \
-				+ "; fi")
-	else:
-		var cloud := _jht_home().path_join("cloud.json")
-		if FileAccess.file_exists(cloud):
-			DirAccess.rename_absolute(cloud, cloud + ".migrated-" + stamp)
+	# Commit del single-source handoff: se non riusciamo a disarmare la vecchia
+	# origine, ripristiniamo davvero la destinazione invece di dichiarare un
+	# successo con due writer potenziali.
+	var handoff := _archive_source_cloud(source_mode, source, stamp)
+	if not bool(handoff.get("ok", false)):
+		_rollback_vps_destination(target, stamp, target_team_was_running)
+		_restore_migration_source(source_mode, source,
+				bool(captured.get("container_was_running", false)),
+				bool(captured.get("team_was_running", false)))
+		return {"ok": false, "message": "Handoff cloud non completato: " \
+				+ str(handoff.get("message", "errore sconosciuto"))}
+	_cleanup_vps_transaction(target, stamp)
 	return {"ok": true,
 			"message": "Migrazione completata · backup destinazione: " + remote_backup,
 			"activate_vps": target}
 
 
+func _do_migrate_to_local(source: Dictionary) -> Dictionary:
+	var check := _do_test_vps_connection(source)
+	if not bool(check.get("ok", false)):
+		return check
+	var prepared := _prepare_local_migration_target()
+	if not bool(prepared.get("ok", false)):
+		return prepared
+	var stamp := str(int(Time.get_unix_time_from_system()))
+	var archive_name := "jht-migration-" + stamp + ".tar.gz"
+	var local_archive := OS.get_cache_dir().path_join(archive_name)
+	_progress("vps-migrate", "Fermo la VPS e scarico uno snapshot coerente…")
+	var captured := _capture_migration_source("vps", source,
+			archive_name, local_archive)
+	if not bool(captured.get("ok", false)):
+		return captured
+	_progress("vps-migrate", "Creo il backup locale e applico in modo atomico…")
+	var applied := _apply_archive_to_local(local_archive, stamp,
+			bool(captured.get("team_was_running", false)))
+	DirAccess.remove_absolute(local_archive)
+	if not bool(applied.get("ok", false)):
+		_restore_migration_source("vps", source,
+				bool(captured.get("container_was_running", false)),
+				bool(captured.get("team_was_running", false)))
+		return applied
+	var handoff := _archive_source_cloud("vps", source, stamp)
+	if not bool(handoff.get("ok", false)):
+		_rollback_local_destination(applied, true)
+		_restore_migration_source("vps", source,
+				bool(captured.get("container_was_running", false)),
+				bool(captured.get("team_was_running", false)))
+		return {"ok": false, "message": "Handoff cloud non completato: " \
+				+ str(handoff.get("message", "errore sconosciuto"))}
+	_commit_local_destination(applied)
+	return {"ok": true,
+			"message": "Migrazione sul computer completata · backup: " \
+				+ str(applied.get("backup", "")), "activate_local": true}
+
+
+## Cattura un'unica fotografia della sorgente, la valida e ne conserva il
+## checksum end-to-end. Il chiamante è responsabile del riavvio in caso KO.
+static func _capture_migration_source(source_mode: String, source: Dictionary,
+		archive_name: String, local_archive: String) -> Dictionary:
+	var container_was_running := false
+	var team_was_running := false
+	var created := {"code": 0, "out": ""}
+	var expected_sha := ""
+	if source_mode == "vps":
+		var container := _run_ssh(source,
+				"docker inspect jht --format '{{.State.Running}}' 2>/dev/null")
+		container_was_running = container["code"] == 0 \
+				and str(container.get("out", "")).strip_edges() == "true"
+		var team := _run_ssh(source,
+				"docker exec jht tmux list-sessions -F '#{session_name}' 2>/dev/null")
+		team_was_running = team["code"] == 0 \
+				and str(team.get("out", "")).strip_edges() != ""
+		var remote_archive := "/tmp/" + archive_name
+		var script := "set -eu; docker stop jht >/dev/null 2>&1 || true; " \
+				+ "cd /root; set --; [ -d .jht ] && set -- \"$@\" .jht; " \
+				+ "[ -d \"Documents/Job Hunter Team\" ] && " \
+				+ "set -- \"$@\" \"Documents/Job Hunter Team\"; " \
+				+ "[ \"$#\" -gt 0 ]; tar czf " + remote_archive \
+				+ " --exclude='.jht/ssh' --exclude='.jht/runtime' " \
+				+ "--exclude='.jht/host.env' \"$@\"; " \
+				+ "test -s " + remote_archive + "; sha256sum " + remote_archive \
+				+ " | awk '{print $1}'"
+		created = _run_ssh(source, "bash -lc " + _shell_quote(script))
+		if created["code"] == 0:
+			expected_sha = str(created.get("out", "")).strip_edges().split("\n")[-1]
+			created = _scp_download(source, remote_archive, local_archive)
+		_run_ssh(source, "rm -f " + remote_archive)
+	else:
+		var team := _run("docker", PackedStringArray([
+				"exec", "jht", "tmux", "list-sessions", "-F", "#{session_name}"]))
+		team_was_running = team["code"] == 0 \
+				and str(team.get("out", "")).strip_edges() != ""
+		var container := _run("docker", PackedStringArray([
+				"inspect", "jht", "--format", "{{.State.Running}}"] ))
+		container_was_running = container["code"] == 0 \
+				and str(container.get("out", "")).contains("true")
+		if container_was_running:
+			_run("docker", PackedStringArray(["stop", "jht"]))
+		created = _create_local_migration_archive(local_archive)
+	if created["code"] != 0:
+		if FileAccess.file_exists(local_archive):
+			DirAccess.remove_absolute(local_archive)
+		_restore_migration_source(source_mode, source, container_was_running,
+				team_was_running)
+		return {"ok": false, "message": "Snapshot sorgente fallito: " \
+				+ str(created.get("out", "")).strip_edges().right(280)}
+	var valid := _validate_migration_archive(local_archive)
+	if not bool(valid.get("ok", false)):
+		DirAccess.remove_absolute(local_archive)
+		_restore_migration_source(source_mode, source, container_was_running,
+				team_was_running)
+		return valid
+	var actual_sha := FileAccess.get_sha256(local_archive)
+	if actual_sha == "" or (expected_sha != "" and actual_sha != expected_sha):
+		DirAccess.remove_absolute(local_archive)
+		_restore_migration_source(source_mode, source, container_was_running,
+				team_was_running)
+		return {"ok": false, "message": "Checksum snapshot non valido"}
+	return {"ok": true, "sha256": actual_sha,
+			"container_was_running": container_was_running,
+			"team_was_running": team_was_running}
+
+
+static func _validate_migration_archive(path: String) -> Dictionary:
+	if not _file_nonempty(path):
+		return {"ok": false, "message": "Snapshot vuoto o non leggibile"}
+	var listing := _run("tar", PackedStringArray(["-tzf", path]))
+	if listing["code"] != 0:
+		return {"ok": false, "message": "Snapshot corrotto: " \
+				+ str(listing.get("out", "")).right(220)}
+	var has_jht := false
+	var has_payload := false
+	for raw: String in str(listing.get("out", "")).split("\n"):
+		var name := raw.strip_edges().trim_prefix("./")
+		if name == "":
+			continue
+		if name.begins_with("/") or name.split("/").has(".."):
+			return {"ok": false, "message": "Snapshot contiene un percorso non sicuro"}
+		if name == ".jht" or name.begins_with(".jht/"):
+			has_jht = true
+		if name in [".jht/jobs.db", ".jht/jht.config.json"] \
+				or name.begins_with(".jht/profile/"):
+			has_payload = true
+		if name == ".jht/host.env" or name.begins_with(".jht/ssh/") \
+				or name.begins_with(".jht/runtime/"):
+			return {"ok": false, "message": "Snapshot include file host riservati"}
+	if not has_jht or not has_payload:
+		return {"ok": false, "message": "Snapshot non contiene un team JHT valido"}
+	return {"ok": true}
+
+
+static func _remote_apply_script(archive_name: String, stamp: String,
+		sha256: String, backup: String) -> String:
+	var archive := "/tmp/" + archive_name
+	var stage := "/root/.jht-migration-stage-" + stamp
+	var old_jht := "/root/.jht.migration-old-" + stamp
+	var old_docs := "/root/Documents/Job Hunter Team.migration-old-" + stamp
+	return "set -eu; ARCH=" + _shell_quote(archive) + "; STAGE=" \
+			+ _shell_quote(stage) + "; BACKUP=" + _shell_quote(backup) + "; " \
+			+ "test \"$(sha256sum \"$ARCH\" | awk '{print $1}')\" = " \
+			+ _shell_quote(sha256) + "; rm -rf -- \"$STAGE\"; mkdir -p \"$STAGE\"; " \
+			+ "tar tzf \"$ARCH\" >/dev/null; tar xzf \"$ARCH\" -C \"$STAGE\" --no-same-owner; " \
+			+ "test -d \"$STAGE/.jht\"; " \
+			+ "test -f \"$STAGE/.jht/jobs.db\" -o -f \"$STAGE/.jht/jht.config.json\" " \
+			+ "-o -d \"$STAGE/.jht/profile\"; " \
+			+ "mkdir -p \"$STAGE/Documents/Job Hunter Team\"; " \
+			+ "[ ! -d /root/.jht/ssh ] || cp -a /root/.jht/ssh \"$STAGE/.jht/ssh\"; " \
+			+ "[ ! -d /root/.jht/runtime ] || cp -a /root/.jht/runtime \"$STAGE/.jht/runtime\"; " \
+			+ "printf 'JHT_HOST_TYPE=vps\\n' > \"$STAGE/.jht/host.env\"; " \
+			+ "cd /root; set --; [ -d .jht ] && set -- \"$@\" .jht; " \
+			+ "[ -d \"Documents/Job Hunter Team\" ] && set -- \"$@\" \"Documents/Job Hunter Team\"; " \
+			+ "if [ \"$#\" -gt 0 ]; then tar czf \"$BACKUP\" \"$@\"; " \
+			+ "else tar czf \"$BACKUP\" --files-from /dev/null; fi; test -s \"$BACKUP\"; chmod 600 \"$BACKUP\"; " \
+			+ "docker stop jht >/dev/null 2>&1 || true; rm -rf -- " \
+			+ _shell_quote(old_jht) + " " + _shell_quote(old_docs) + "; " \
+			+ "mv /root/.jht " + _shell_quote(old_jht) + "; " \
+			+ "mv \"/root/Documents/Job Hunter Team\" " + _shell_quote(old_docs) + "; " \
+			+ "mv \"$STAGE/.jht\" /root/.jht; " \
+			+ "mv \"$STAGE/Documents/Job Hunter Team\" \"/root/Documents/Job Hunter Team\"; " \
+			+ "chown -R 1001:1001 /root/.jht \"/root/Documents/Job Hunter Team\"; " \
+			+ "chmod 600 /root/.jht/cloud.json 2>/dev/null || true; " \
+			+ _vps_prepare_runtime_command() + "; " \
+			+ "test \"$(docker inspect jht --format '{{.State.Running}}')\" = true; " \
+			+ "grep -q '^JHT_HOST_TYPE=vps' /root/.jht/host.env; " \
+			+ "if [ -f /root/.jht/jobs.db ]; then docker exec jht python3 -c " \
+			+ _shell_quote("import sqlite3,sys; c=sqlite3.connect('/jht_home/jobs.db'); sys.exit(0 if c.execute('pragma integrity_check').fetchone()[0]=='ok' else 1)") \
+			+ "; fi; rm -f \"$ARCH\""
+
+
+static func _rollback_vps_destination(target: Dictionary, stamp: String,
+		team_was_running: bool = false) -> void:
+	var old_jht := "/root/.jht.migration-old-" + stamp
+	var old_docs := "/root/Documents/Job Hunter Team.migration-old-" + stamp
+	var stage := "/root/.jht-migration-stage-" + stamp
+	var script := "set -u; if [ -d " + _shell_quote(old_jht) + " ]; then " \
+			+ "docker stop jht >/dev/null 2>&1 || true; rm -rf -- /root/.jht; " \
+			+ "mv " + _shell_quote(old_jht) + " /root/.jht; " \
+			+ "if [ -d " + _shell_quote(old_docs) + " ]; then rm -rf -- " \
+			+ "\"/root/Documents/Job Hunter Team\"; mv " + _shell_quote(old_docs) \
+			+ " \"/root/Documents/Job Hunter Team\"; fi; " \
+			+ _vps_prepare_runtime_command() + " >/dev/null 2>&1 || true; fi; " \
+			+ "rm -rf -- " + _shell_quote(stage)
+	_run_ssh(target, "bash -lc " + _shell_quote(script))
+	if team_was_running:
+		_run_ssh(target,
+				"docker exec jht node /app/cli/bin/jht.js team start >/dev/null 2>&1 || true")
+
+
+static func _cleanup_vps_transaction(target: Dictionary, stamp: String) -> void:
+	var script := "rm -rf -- " + _shell_quote("/root/.jht.migration-old-" + stamp) \
+			+ " " + _shell_quote("/root/Documents/Job Hunter Team.migration-old-" + stamp) \
+			+ " " + _shell_quote("/root/.jht-migration-stage-" + stamp)
+	_run_ssh(target, script)
+
+
+func _prepare_local_migration_target() -> Dictionary:
+	var daemon := _run("docker", PackedStringArray(["version", "--format",
+			"{{.Server.Version}}"] ))
+	if daemon["code"] != 0:
+		var launch := _launch_docker_runtime()
+		if not bool(launch.get("ok", false)):
+			return launch
+		_progress("vps-migrate", str(launch.get("message", "Avvio Docker…")))
+		for waited in range(2, 122, 2):
+			OS.delay_msec(2000)
+			daemon = _run("docker", PackedStringArray(["version", "--format",
+					"{{.Server.Version}}"] ))
+			if daemon["code"] == 0:
+				break
+			_progress("vps-migrate", "Avvio di Docker in corso… (%ds)" % waited)
+	if daemon["code"] != 0:
+		return {"ok": false, "message": "Docker locale non risponde"}
+	var compose := _ensure_compose_file()
+	if compose == "":
+		return {"ok": false, "message": "Impossibile preparare il runtime locale"}
+	_ensure_host_dirs()
+	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
+			"Preparo l'immagine del team sul computer…")
+	if not bool(pull.get("ok", false)) and _local_image_id() == "":
+		return {"ok": false, "message": "Immagine runtime non disponibile: " \
+				+ str(pull.get("tail", "")).right(220)}
+	return {"ok": true}
+
+
+func _apply_archive_to_local(archive: String, stamp: String,
+		team_was_running: bool) -> Dictionary:
+	var home := _host_home()
+	var stage := home.path_join(".jht-migration-stage-" + stamp)
+	var staged_jht := stage.path_join(".jht")
+	var staged_docs := stage.path_join("Documents/Job Hunter Team")
+	_remove_tree(stage)
+	DirAccess.make_dir_recursive_absolute(stage)
+	var extracted := _run("tar", PackedStringArray(["-xzf", archive, "-C", stage]))
+	if extracted["code"] != 0 or not DirAccess.dir_exists_absolute(staged_jht):
+		_remove_tree(stage)
+		return {"ok": false, "message": "Estrazione locale fallita: " \
+				+ str(extracted.get("out", "")).right(220)}
+	if not FileAccess.file_exists(staged_jht.path_join("jobs.db")) \
+			and not FileAccess.file_exists(staged_jht.path_join("jht.config.json")) \
+			and not DirAccess.dir_exists_absolute(staged_jht.path_join("profile")):
+		_remove_tree(stage)
+		return {"ok": false, "message": "Lo snapshot estratto non contiene un team valido"}
+	DirAccess.make_dir_recursive_absolute(staged_docs)
+	# Il runtime e le chiavi appartengono alla macchina destinazione, non alla
+	# sorgente. Si preservano fuori dallo snapshot prima dello swap atomico.
+	for rel in ["ssh", "runtime"]:
+		var src := home.path_join(".jht/" + rel)
+		if DirAccess.dir_exists_absolute(src):
+			var copied := _copy_tree(src, staged_jht.path_join(rel))
+			if copied != OK:
+				_remove_tree(stage)
+				return {"ok": false, "message": "Impossibile preservare .jht/" + rel}
+	var host_env := _local_host_env(home.path_join(".jht/host.env"))
+	if not _write_text(staged_jht.path_join("host.env"), host_env):
+		_remove_tree(stage)
+		return {"ok": false, "message": "Impossibile impostare la modalità locale"}
+
+	var backup_dir := home.path_join(".jht-migration-backups")
+	DirAccess.make_dir_recursive_absolute(backup_dir)
+	var backup := backup_dir.path_join("jht-before-migration-" + stamp + ".tar.gz")
+	var backed_up := _create_local_destination_backup(backup)
+	if backed_up["code"] != 0 or not _file_nonempty(backup):
+		_remove_tree(stage)
+		return {"ok": false, "message": "Backup locale fallito: " \
+				+ str(backed_up.get("out", "")).right(220)}
+	if OS.get_name() != "Windows":
+		_run("chmod", PackedStringArray(["600", backup]))
+
+	var current_jht := home.path_join(".jht")
+	var current_docs := home.path_join("Documents/Job Hunter Team")
+	var old_jht := home.path_join(".jht.migration-old-" + stamp)
+	var old_docs := home.path_join("Documents/Job Hunter Team.migration-old-" + stamp)
+	var old_running := _container_is_running()
+	var old_team_probe := _run("docker", PackedStringArray([
+			"exec", "jht", "tmux", "list-sessions", "-F", "#{session_name}"]))
+	var old_team_running: bool = old_team_probe["code"] == 0 \
+			and str(old_team_probe.get("out", "")).strip_edges() != ""
+	if old_running:
+		_run("docker", PackedStringArray(["stop", "jht"]))
+	_remove_tree(old_jht)
+	_remove_tree(old_docs)
+	var tx := {"ok": false, "stage": stage, "old_jht": old_jht,
+			"old_docs": old_docs, "current_jht": current_jht,
+			"current_docs": current_docs, "backup": backup,
+			"old_container_running": old_running,
+			"old_team_running": old_team_running, "jht_moved": false,
+			"docs_moved": false, "jht_activated": false, "docs_activated": false}
+	if DirAccess.rename_absolute(current_jht, old_jht) != OK:
+		_remove_tree(stage)
+		return {"ok": false, "message": "Impossibile mettere al sicuro ~/.jht"}
+	tx["jht_moved"] = true
+	if DirAccess.dir_exists_absolute(current_docs) \
+			and DirAccess.rename_absolute(current_docs, old_docs) != OK:
+		_rollback_local_destination(tx, true)
+		return {"ok": false, "message": "Impossibile mettere al sicuro i documenti"}
+	tx["docs_moved"] = DirAccess.dir_exists_absolute(old_docs)
+	if DirAccess.rename_absolute(staged_jht, current_jht) != OK:
+		_rollback_local_destination(tx, true)
+		return {"ok": false, "message": "Impossibile attivare i dati migrati"}
+	tx["jht_activated"] = true
+	DirAccess.make_dir_recursive_absolute(current_docs.get_base_dir())
+	if DirAccess.rename_absolute(staged_docs, current_docs) != OK:
+		_rollback_local_destination(tx, true)
+		return {"ok": false, "message": "Impossibile attivare i documenti migrati"}
+	tx["docs_activated"] = true
+
+	var started := _do_start_container()
+	if not bool(started.get("ok", false)):
+		_rollback_local_destination(tx, true)
+		return {"ok": false, "message": "Avvio del runtime migrato fallito: " \
+				+ str(started.get("message", ""))}
+	var checked := _validate_local_migration_target()
+	if not bool(checked.get("ok", false)):
+		_rollback_local_destination(tx, true)
+		return checked
+	if team_was_running:
+		var team := _do_start_team({})
+		if not bool(team.get("ok", false)):
+			_rollback_local_destination(tx, true)
+			return {"ok": false, "message": "Dati integri, ma riavvio team locale fallito"}
+	tx["ok"] = true
+	return tx
+
+
+static func _validate_local_migration_target() -> Dictionary:
+	var running := _run("docker", PackedStringArray([
+			"inspect", "jht", "--format", "{{.State.Running}}"] ))
+	if running["code"] != 0 or str(running.get("out", "")).strip_edges() != "true":
+		return {"ok": false, "message": "Il container locale migrato non è attivo"}
+	if FileAccess.file_exists(_jht_home().path_join("jobs.db")):
+		var py := "import sqlite3,sys; c=sqlite3.connect('/jht_home/jobs.db'); " \
+				+ "sys.exit(0 if c.execute('pragma integrity_check').fetchone()[0]=='ok' else 1)"
+		var integrity := _run("docker", PackedStringArray([
+				"exec", "jht", "python3", "-c", py]))
+		if integrity["code"] != 0:
+			return {"ok": false, "message": "Il database migrato non supera integrity_check"}
+	var host_env := FileAccess.get_file_as_string(_jht_home().path_join("host.env"))
+	if not host_env.contains("JHT_HOST_TYPE=local"):
+		return {"ok": false, "message": "Il runtime migrato non è in modalità locale"}
+	return {"ok": true}
+
+
+static func _create_local_destination_backup(path: String) -> Dictionary:
+	var home := _host_home()
+	var args := PackedStringArray(["-czf", path, "-C", home])
+	if DirAccess.dir_exists_absolute(home.path_join(".jht")):
+		args.append(".jht")
+	if DirAccess.dir_exists_absolute(home.path_join("Documents/Job Hunter Team")):
+		args.append("Documents/Job Hunter Team")
+	if args.size() == 4:
+		# tar portabile per una destinazione realmente vuota.
+		args.append("--files-from")
+		args.append("/dev/null" if OS.get_name() != "Windows" else "NUL")
+	return _run("tar", args)
+
+
+static func _archive_source_cloud(source_mode: String, source: Dictionary,
+		stamp: String) -> Dictionary:
+	if source_mode == "vps":
+		var archived := "/root/.jht/cloud.json.migrated-" + stamp
+		var result := _run_ssh(source, "set -eu; if [ -f /root/.jht/cloud.json ]; " \
+				+ "then mv /root/.jht/cloud.json " + archived + "; " \
+				+ "test -f " + archived + " && test ! -f /root/.jht/cloud.json; fi")
+		return {"ok": result["code"] == 0,
+				"message": str(result.get("out", "")).right(220)}
+	var cloud := _jht_home().path_join("cloud.json")
+	if not FileAccess.file_exists(cloud):
+		return {"ok": true}
+	var archived := cloud + ".migrated-" + stamp
+	var err := DirAccess.rename_absolute(cloud, archived)
+	return {"ok": err == OK and FileAccess.file_exists(archived) \
+			and not FileAccess.file_exists(cloud),
+			"message": "impossibile archiviare " + cloud if err != OK else ""}
+
+
+static func _rollback_local_destination(tx: Dictionary, restore_container: bool) -> void:
+	if restore_container:
+		_run("docker", PackedStringArray(["stop", "jht"]))
+	var current_jht := str(tx.get("current_jht", ""))
+	var current_docs := str(tx.get("current_docs", ""))
+	var old_jht := str(tx.get("old_jht", ""))
+	var old_docs := str(tx.get("old_docs", ""))
+	if bool(tx.get("jht_activated", false)):
+		_remove_tree(current_jht)
+	if bool(tx.get("jht_moved", false)) and old_jht != "" \
+			and DirAccess.dir_exists_absolute(old_jht):
+		DirAccess.rename_absolute(old_jht, current_jht)
+	if bool(tx.get("docs_activated", false)):
+		_remove_tree(current_docs)
+	if bool(tx.get("docs_moved", false)) and old_docs != "" \
+			and DirAccess.dir_exists_absolute(old_docs):
+		DirAccess.rename_absolute(old_docs, current_docs)
+	_remove_tree(str(tx.get("stage", "")))
+	if restore_container and bool(tx.get("old_container_running", false)):
+		_run("docker", PackedStringArray(["start", "jht"]))
+		if bool(tx.get("old_team_running", false)):
+			_run("docker", PackedStringArray(["exec", "jht", "node",
+					"/app/cli/bin/jht.js", "team", "start"]))
+
+
+static func _commit_local_destination(tx: Dictionary) -> void:
+	_remove_tree(str(tx.get("old_jht", "")))
+	_remove_tree(str(tx.get("old_docs", "")))
+	_remove_tree(str(tx.get("stage", "")))
+
+
+static func _host_home() -> String:
+	return (OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" \
+			else OS.get_environment("HOME")).rstrip("/\\")
+
+
+static func _local_host_env(existing_path: String) -> String:
+	var lines := PackedStringArray()
+	if FileAccess.file_exists(existing_path):
+		for raw: String in FileAccess.get_file_as_string(existing_path).split("\n"):
+			if raw.strip_edges() != "" and not raw.begins_with("JHT_HOST_TYPE="):
+				lines.append(raw)
+	var output := PackedStringArray(["JHT_HOST_TYPE=local"])
+	output.append_array(lines)
+	return "\n".join(output) + "\n"
+
+
+static func _write_text(path: String, content: String) -> bool:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(content)
+	file.close()
+	return true
+
+
+static func _copy_tree(source: String, destination: String) -> Error:
+	if not DirAccess.dir_exists_absolute(source):
+		return OK
+	var made := DirAccess.make_dir_recursive_absolute(destination)
+	if made != OK:
+		return made
+	var directory := DirAccess.open(source)
+	if directory == null:
+		return DirAccess.get_open_error()
+	directory.list_dir_begin()
+	var entry := directory.get_next()
+	while entry != "":
+		if entry != "." and entry != "..":
+			# SSH e runtime appartengono alla destinazione. Non seguiamo link:
+			# potrebbero uscire dall'albero e copiare dati arbitrari nel backup.
+			if directory.is_link(entry):
+				directory.list_dir_end()
+				return ERR_LINK_FAILED
+			var source_entry := source.path_join(entry)
+			var destination_entry := destination.path_join(entry)
+			var copied := OK
+			if directory.current_is_dir():
+				copied = _copy_tree(source_entry, destination_entry)
+			else:
+				copied = DirAccess.copy_absolute(source_entry, destination_entry)
+			if copied != OK:
+				directory.list_dir_end()
+				return copied
+		entry = directory.get_next()
+	directory.list_dir_end()
+	return OK
+
+
+static func _file_nonempty(path: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return false
+	var size := file.get_length()
+	file.close()
+	return size > 0
+
+
+static func _remove_tree(path: String) -> void:
+	# Solo directory transazionali risolte esplicitamente dai chiamanti; niente
+	# glob o variabili shell. Su file/symlink basta remove_absolute.
+	if path == "":
+		return
+	if FileAccess.file_exists(path) and not DirAccess.dir_exists_absolute(path):
+		DirAccess.remove_absolute(path)
+		return
+	if not DirAccess.dir_exists_absolute(path):
+		return
+	var directory := DirAccess.open(path)
+	if directory == null:
+		return
+	directory.list_dir_begin()
+	var entry := directory.get_next()
+	while entry != "":
+		if entry != "." and entry != "..":
+			var child := path.path_join(entry)
+			if directory.current_is_dir() and not directory.is_link(entry):
+				_remove_tree(child)
+			else:
+				DirAccess.remove_absolute(child)
+		entry = directory.get_next()
+	directory.list_dir_end()
+	DirAccess.remove_absolute(path)
+
+
 static func _create_local_migration_archive(path: String) -> Dictionary:
-	var home := OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" \
-			else OS.get_environment("HOME")
+	var home := _host_home()
 	var args := PackedStringArray(["-czf", path, "-C", home,
 			"--exclude=.jht/ssh", "--exclude=.jht/runtime",
 			"--exclude=.jht/host.env"])
@@ -1520,26 +2085,36 @@ static func _create_local_migration_archive(path: String) -> Dictionary:
 
 static func _scp_download(source: Dictionary, remote: String, local: String) -> Dictionary:
 	var key := VpsBackend.expand_user_path(str(source.get("key_path", "")))
+	var known := VpsBackend.known_hosts_path(str(source.get("ip", "")))
 	return _run("scp", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
-			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new",
+			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes",
+			"-o", "UserKnownHostsFile=" + known,
 			"root@" + str(source.get("ip", "")) + ":" + remote, local]))
 
 
 static func _scp_upload(target: Dictionary, local: String, remote: String) -> Dictionary:
 	var key := VpsBackend.expand_user_path(str(target.get("key_path", "")))
+	var known := VpsBackend.known_hosts_path(str(target.get("ip", "")))
 	return _run("scp", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
-			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new",
+			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes",
+			"-o", "UserKnownHostsFile=" + known,
 			local, "root@" + str(target.get("ip", "")) + ":" + remote]))
 
 
 static func _restore_migration_source(source_mode: String, source: Dictionary,
-		was_stopped: bool) -> void:
-	if not was_stopped:
+		container_was_running: bool, team_was_running: bool) -> void:
+	if not container_was_running:
 		return
 	if source_mode == "vps":
 		_run_ssh(source, "docker start jht >/dev/null 2>&1 || true")
+		if team_was_running:
+			_run_ssh(source,
+					"docker exec jht node /app/cli/bin/jht.js team start >/dev/null 2>&1 || true")
 	else:
 		_run("docker", PackedStringArray(["start", "jht"]))
+		if team_was_running:
+			_run("docker", PackedStringArray(["exec", "jht", "node",
+					"/app/cli/bin/jht.js", "team", "start"]))
 
 
 func open_vps_install(ip: String, key_path: String) -> void:
@@ -1551,8 +2126,10 @@ func open_vps_install(ip: String, key_path: String) -> void:
 	var remote := _vps_prepare_runtime_command()
 	var key := str(target["key_path"])
 	var clean_ip := str(target["ip"])
+	var known := VpsBackend.known_hosts_path(clean_ip)
 	var command := "ssh -tt -i " + _local_quote(key) \
-			+ " -o StrictHostKeyChecking=accept-new " + _local_quote("root@" + clean_ip) \
+			+ " -o StrictHostKeyChecking=yes -o UserKnownHostsFile=" \
+			+ _local_quote(known) + " " + _local_quote("root@" + clean_ip) \
 			+ " " + _local_quote(remote)
 	terminal_requested.emit("vps-install", embedded_terminal_spec(
 			"Installa JHT sulla VPS",
@@ -1825,10 +2402,12 @@ static func _run_stdin_stderr(path: String, args: PackedStringArray,
 static func _run_ssh_stdin(vps: Dictionary, command: String,
 		payload: PackedByteArray) -> Dictionary:
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
+	var known := VpsBackend.known_hosts_path(str(vps.get("ip", "")))
 	var target := "root@" + str(vps.get("ip", ""))
 	var process := OS.execute_with_pipe("ssh", PackedStringArray([
 		"-i", key, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
-		"-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=accept-new",
+		"-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=yes",
+		"-o", "UserKnownHostsFile=" + known,
 		target, command + " 1>&2"]), true)
 	if process.is_empty():
 		return {"code": -1, "out": "ssh non avviabile"}
@@ -2006,6 +2585,8 @@ func _finish_action(action: String, result: Dictionary) -> void:
 		BackendBus.save_vps_config(str(target.get("ip", "")),
 				str(target.get("key_path", "")))
 		BackendBus.set_backend(VpsBackend.new(), target)
+	elif bool(result.get("ok", false)) and bool(result.get("activate_local", false)):
+		BackendBus.switch_to_local_backend()
 	refresh()
 
 
@@ -2089,7 +2670,9 @@ func _vps_config() -> Dictionary:
 
 static func _run_ssh(vps: Dictionary, command: String) -> Dictionary:
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
+	var known := VpsBackend.known_hosts_path(str(vps.get("ip", "")))
 	var target := "root@" + str(vps.get("ip", ""))
 	return _run("ssh", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
 			"-o", "IdentitiesOnly=yes", "-o", "ConnectTimeout=8",
-			"-o", "StrictHostKeyChecking=accept-new", target, command]))
+			"-o", "StrictHostKeyChecking=yes",
+			"-o", "UserKnownHostsFile=" + known, target, command]))
