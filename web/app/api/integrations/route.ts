@@ -10,7 +10,6 @@ const JHT = JHT_HOME;
 const CONFIG_PATH = path.join(JHT, "jht.config.json");
 const CREDS_DIR = path.join(JHT, "credentials");
 
-
 function modTime(p: string): string | null {
   try {
     return fs.statSync(p).mtime.toISOString().slice(0, 19).replace("T", " ");

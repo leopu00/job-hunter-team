@@ -56,7 +56,8 @@ export async function GET(req: NextRequest) {
   const [listRows, contacts] = await Promise.all([
     Promise.all(
       CANDIDATE_LIST_TABLES.map(
-        async ([field, table]) => [field, (await list(table)).data ?? []] as const,
+        async ([field, table]) =>
+          [field, (await list(table)).data ?? []] as const,
       ),
     ),
     admin
@@ -70,7 +71,10 @@ export async function GET(req: NextRequest) {
     profile,
     // Le righe arrivano non tipizzate da Supabase, come prima di questa
     // riscrittura: il cast le riporta alla forma che ProfileTables attende.
-    ...(Object.fromEntries(listRows) as Pick<ProfileTables, CandidateListField>),
+    ...(Object.fromEntries(listRows) as Pick<
+      ProfileTables,
+      CandidateListField
+    >),
     contacts: decryptContacts(contacts.data) ?? null,
   });
 

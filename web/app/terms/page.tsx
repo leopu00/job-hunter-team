@@ -34,7 +34,8 @@ const T = {
     s6_body:
       "Ci riserviamo il diritto di aggiornare questi termini in qualsiasi momento. Le modifiche saranno pubblicate su questa pagina con la data di aggiornamento.",
     s7_title: "Contatti",
-    s7_body: "Per domande sui termini di servizio, scrivi a support@jobhunterteam.ai.",
+    s7_body:
+      "Per domande sui termini di servizio, scrivi a support@jobhunterteam.ai.",
     nav_home: "Home",
     nav_terms: "Termini",
     nav_privacyPolicy: "Privacy Policy",

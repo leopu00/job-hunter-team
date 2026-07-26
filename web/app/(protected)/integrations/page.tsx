@@ -123,7 +123,6 @@ const T: Record<
   },
 };
 
-
 const ICONS: Record<string, string> = {
   telegram: "✈️",
   github: "🐙",
