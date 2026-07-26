@@ -554,6 +554,11 @@ const S := {
 	# ── Badge simulazione / dati reali ────────────────────────────────
 	"sim.live_vps": "● DATI REALI — VPS",
 	"sim.live_local": "● DATI REALI — QUESTO COMPUTER",
+	# ── Finestra di lavoro esaurita ───────────────────────────────────
+	"budget.exhausted": "Il team ha esaurito la finestra di lavoro — riprende %s",
+	"budget.near_limit": "Finestra di lavoro al %d%% — il team rallenta, si riapre %s",
+	"budget.in_minutes": "fra %d min",
+	"budget.in_hours": "fra %dh %02dm",
 	"sim.mock": "◐ SIMULAZIONE — dati non reali",
 
 	# ── Ufficio (hint camera) ─────────────────────────────────────────
