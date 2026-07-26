@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { readJsonSafe } from "@/lib/json-files";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -171,6 +172,10 @@ function searchPages(q: string): SearchResult[] {
 
 /** GET /api/search?q=query — ricerca globale */
 export async function GET(req: NextRequest) {
+  // Le pagine sarebbero pubblicabili, ma sessioni, task e plugin no: la
+  // ricerca è unica e restituisce tutto insieme, quindi si protegge tutta.
+  const denied = await requireAuth();
+  if (denied) return denied;
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase();
   if (!q || q.length < 2) return NextResponse.json({ results: [], query: q });
 

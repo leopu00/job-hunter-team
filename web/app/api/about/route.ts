@@ -51,6 +51,11 @@ const STACK = {
   infra: ["GitHub Actions CI", "Docker-ready"],
 };
 
+// APERTA DI PROPOSITO — nessun requireAuth.
+// Restituisce solo la carta d'identità del progetto: nome, versione, stack e
+// quattro conteggi di file. Sono gli stessi dati del README e del package.json
+// pubblicati su GitHub: niente che riguardi l'utente, il suo workspace o le
+// sue credenziali. È anche il ping "l'app è viva?" degli smoke test.
 export async function GET() {
   const sharedModules = countDirs(path.join(ROOT, "shared"));
   const webPages = countFiles(path.join(ROOT, "web", "app"), /^page\.tsx$/);

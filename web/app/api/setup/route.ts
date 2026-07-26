@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from "@/lib/jht-paths";
 import { ALL_PROVIDERS } from "@/lib/providers";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,10 @@ function maskSecretsDeep(node: unknown): void {
 }
 
 export async function GET() {
+  // Anche mascherata, questa config dice quali provider e quali canali
+  // l'utente ha collegato: non è roba da servire a chiunque passi.
+  const denied = await requireAuth();
+  if (denied) return denied;
   if (!fs.existsSync(CONFIG_PATH)) {
     return NextResponse.json({ exists: false, config: null });
   }
@@ -84,6 +89,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Riscrive ~/.jht/jht.config.json, incluse le credenziali dei provider:
+  // è una scrittura di configurazione, quindi solo dall'app desktop.
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();
