@@ -825,12 +825,17 @@ save_pairing_token() {
     return 0
   fi
   printf '%s' "$PAIRING_TOKEN" > "$token_file"
-  # 0644: the container runs as a non-root UID (jht/1001) and must be able
-  # to read the token on first boot. On a VPS the only host user is root,
-  # so the risk of "other host users reading it" is nil. Moreover the
-  # file is deleted by `jht cloud pair` right after consumption.
-  chmod 644 "$token_file" 2>/dev/null || true
-  ok "Pairing token saved to $token_file (mode 0644)"
+  # 0600 — it is a bearer credential (it is exchanged for a Supabase
+  # access_token), so no other host user may read it. It used to be 0644
+  # "because the container runs as a non-root UID (jht/1001)": the right fix
+  # for that is ownership, not world-readability — run_host_setup() (called
+  # right after this) already does `chown -R 1001:1001 ~/.jht`, and we align
+  # this file explicitly here so the order of those two steps stops mattering.
+  # The file is deleted by `jht cloud pair` right after consumption
+  # (cli/src/commands/cloud.js handlePair), so the window is short either way.
+  chmod 600 "$token_file" 2>/dev/null || true
+  chown 1001:1001 "$token_file" 2>/dev/null || true
+  ok "Pairing token saved to $token_file (mode 0600)"
 }
 
 run_host_setup() {
