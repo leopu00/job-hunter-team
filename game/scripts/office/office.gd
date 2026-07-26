@@ -1254,6 +1254,37 @@ func _guided_onboarding_selftest() -> void:
 			"etichetta del piano troppo lunga (%d caratteri): allarga la scheda" % longest)
 	provider_panel.queue_free()
 
+	# ── Orari di lavoro ─────────────────────────────────────────────────
+	# La pagina si costruiva solo se le finestre esistevano GIÀ: al primo
+	# avvio — cioè quando il passo 04 le chiede — restava vuota (ThinkPad,
+	# 26/07). Qui si verifica che dal foglio bianco esca comunque qualcosa
+	# di valido, e che i punti di partenza siano salvabili così come sono.
+	for preset_key in SectionPanel.HOURS_PRESETS.keys():
+		for w: Dictionary in SectionPanel.HOURS_PRESETS[preset_key]:
+			var giorni := SectionPanel._hours_day_list(w)
+			check.call(not giorni.is_empty(),
+					"il punto di partenza '%s' non ha giorni" % preset_key)
+			for g: String in giorni:
+				check.call(["mon", "tue", "wed", "thu", "fri", "sat", "sun"].has(g),
+						"giorno non salvabile in '%s': %s" % [preset_key, g])
+			check.call(str(w["start"]).contains(":") and str(w["end"]).contains(":"),
+					"orari non salvabili in '%s'" % preset_key)
+	check.call(SectionPanel._hours_day_list(
+			SectionPanel.HOURS_PRESETS["always"][0]).size() == 7,
+			"'sempre attivo' non copre tutta la settimana")
+
+	# I sette pulsanti scrivono nello stesso campo che il salvataggio legge,
+	# e la riga non deve rimescolarsi sotto le dita.
+	var finestra := {"days": "mon, wed", "start": "09:00", "end": "18:00"}
+	SectionPanel._hours_toggle_day(finestra, "tue")
+	check.call(str(finestra["days"]) == "mon, tue, wed",
+			"i giorni non restano in ordine di settimana: " + str(finestra["days"]))
+	SectionPanel._hours_toggle_day(finestra, "mon")
+	check.call(str(finestra["days"]) == "tue, wed",
+			"il giorno spento non sparisce: " + str(finestra["days"]))
+	check.call(not SectionPanel._hours_has_day(finestra, "mon"),
+			"un giorno spento risulta ancora acceso")
+
 	var ok := failures.is_empty()
 	print("GUIDED-ONBOARDING-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"failures": failures, "draft": draft,
