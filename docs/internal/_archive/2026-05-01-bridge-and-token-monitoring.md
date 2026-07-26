@@ -415,5 +415,7 @@ Nota di processo: il **freeze Sentinella alle 22:45** della finestra
 207 %, reazione binaria). Il team ha recuperato ma solo grazie alla
 pressione dell'utente sul Capitano via Telegram. In autonomia il freeze
 sarebbe rimasto attivo. Bug strategico aperto: vedi
-[`2026-05-17-team-strategy-bugs.md`](./2026-05-17-team-strategy-bugs.md)
-#2 (Sentinella throttle progressivo) e #3 (gerarchia user > Sentinella).
+`2026-05-17-team-strategy-bugs.md` #2 (Sentinella throttle progressivo) e #3
+(gerarchia user > Sentinella) — documento rimosso il 2026-06-16 con la pulizia
+dei doc obsoleti (commit `2adbdf03`); recuperabile da `git show
+c5696035:<path>`.

@@ -67,6 +67,40 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Next.js 16.2.9 → 16.2.11 with a `sharp ^0.35.3` override (July-2026 advisories), plus fixes for the high-severity `brace-expansion` and `js-yaml` DoS advisories.
 - Routine dependency bumps: `@supabase/supabase-js`, `@supabase/ssr`, `tailwindcss`, `eslint-config-next`, `actions/checkout` 4→7, `actions/setup-node` 4→7, `grammy` in the test runner.
 
+### 🧹 Dead code removed (2026-07-25)
+
+A reachability walk from the real entry points (`cli/`, `web/`, `game/`,
+`scripts/`, `Dockerfile`) — resolving actual `import`/`require` statements, not
+grepping for names — found that **nine files** of `shared/`'s TypeScript were
+reachable at all: `config/schema.ts`, `paths.js`, `runtime/container.js` and
+`cron/`. Everything else was scaffolding ported from OpenClaw in April 2026 and
+never wired to anything: an agent runtime, a gateway, a plugin system, a queue,
+a rate limiter, a session store, a context engine, a second SSRF implementation,
+and twenty more. Untouched since birth except by one repo-wide Prettier pass.
+
+- **30 subdirectories of `shared/` removed** — 130 files, ~17.000 lines. Their
+  only callers were their own tests, which went with them.
+- **The CI matrix follows the code**: 11 vitest modules → 3. Of the 933 tests,
+  692 guarded code the product cannot reach; the surviving 241 cover the demo
+  mode, config schemas, cron, credentials, the daemon templates and the CLI
+  setup wizard. The suite got faster and started meaning something.
+- **`shared/llm/` and its credential resolvers removed** (11 files) — the agents
+  talk to models as CLI processes in tmux, never through a Python SDK. That also
+  retired `anthropic` and `openai` from `requirements.txt`, installed into every
+  container build for zero imports.
+- **`tests/js/tasks/_disabled/` deleted** (40 specs, 6068 lines) — parked on
+  2026-05-31 with a re-enable procedure nobody ran, asserting against surfaces
+  that were *removed* rather than renamed. Dropping the folder-wide vitest
+  exclude then revealed a second, unknown `_disabled/` holding one **working**
+  file: its move had broken a relative import, not its subject. 18 passing tests
+  came back.
+- `shared/skills/browse_folder.py` removed: the native folder picker behind the
+  `/assistente` page, orphaned when that route went on 2026-07-25; the game has
+  used Godot's own `FileDialog` for a month.
+
+Nothing here changes behaviour — that is the point. `git show d8fd3088:<path>`
+restores any of it.
+
 ### 🧪 Tests, CI & tooling
 
 - **pytest now runs in CI.** The Python suite (447 passing, 62 skipped) was runnable only by hand, which is why the installer-mirror drift went unnoticed for three weeks; `.github/workflows/test.yml` gained a `pytest` job (with `npm ci` in `cli/`, since two test files shell out to the Node CLI) and the root `npm test` now runs both runners.

@@ -704,7 +704,9 @@ IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 #      (shared/i18n.sh, shared/i18n.py, cli/wizard/i18n.js)
 #   2. $JHT_HOME/i18n-prefs.json::locale — popolato dal desktop wizard
 #   3. host.env::JHT_LANG — persisted dal host-setup.sh preflight
-#   4. default 'en' (DEFAULT_LOCALE in shared/i18n/types.ts)
+#   4. default 'en' — la lingua master dei template. (Il `DEFAULT_LOCALE` di
+#      shared/i18n/types.ts, che questa riga citava, è sparito il 2026-07-25
+#      con lo scaffolding TS irraggiungibile: il default vive qui sotto.)
 # Il fallback al baseline (`<role>.md`, sempre EN dal 2026-05-18) è
 # silenzioso perché 'en' è il master language.
 # Vedi docs/internal/experiments/2026-05-06-agent-prompts-i18n.md.

@@ -68,10 +68,32 @@
 
 ## 🌍 i18n residuals
 
-- ⬜ `LOCALES` drift — `shared/i18n/types.ts` omits `'hu'`; API default `'it'` vs `DEFAULT_LOCALE='en'`.
+- ⬜ `LOCALES` drift — API default `'it'` vs `DEFAULT_LOCALE='en'`. Half of this
+  item closed itself on 2026-07-25: the third list, `shared/i18n/types.ts`
+  (which omitted `'hu'`), went with the unreachable `shared/` scaffolding. The
+  surviving lists are `web/app/api/i18n/route.ts` and the catalogs under
+  `shared/locales/`, which the bash/Python helpers read.
 - ⬜ `mantenitore` agent overlays (6 languages) + translator-facing guide + native-speaker review pass.
 
 ## 🛠️ Infra & CLI
+
+- 🔴 **[JHT-CLI-AGENT-PARITY]** — **the CLI reads and commands, but cannot decide.** The project's stated design rule lives in `docs/guides/AI-AGENT-INTEGRATION.md`: *"If a feature requires opening the web dashboard or the Desktop app to be configured after install, that's a bug — one CLI surface for humans, AI agents and the Desktop launcher."* Measured against the game's `BackendBus` verbs on **2026-07-25**, it is not being met.
+
+  | | 🎮 game | 🔧 CLI |
+  |---|---|---|
+  | read — positions, state, stats, logs, graphs | ✅ | ✅ `positions list/show`, `stats`, `status`, `logs`, `sentinella graph` |
+  | command — start/stop the team, talk to an agent, providers, hours | ✅ | ✅ `team start/stop/send/chat`, `providers`, `working-hours`, `cron` |
+  | **decide** — judge a position, exclude it, request a CV, open a ticket, post a standing directive, save the profile, fetch a produced artifact | ✅ | ❌ **nothing** |
+
+  `jht positions` describes itself in code as *"Query DB posizioni (proxy a db_query.py)"* — read-only by construction. The missing verbs are exactly the ones that carry a **user judgement**, which is what the human does in the office and an agent currently cannot do at all.
+
+  The capability is already there, one layer down: `shared/skills/{ticket,team_directives,write_request,feedback_query}.py`. What is missing is the `jht` verb in front — wrapping, not design.
+
+  **The bigger blocker is not the verbs, it is the output format.** Only **3 of 37** command modules support `--json`/`--format` (`container`, `profile`, `tools`). An agent reading `jht positions list` gets an ASCII table meant for a human eye and has to parse it with brittle regexes — while `db_query.py` underneath already knows how to emit JSON and the flag simply is not exposed. Work, in order: (1) `--json` across the read commands; (2) the decision verbs; (3) a CI parity check that fails when the game gains a verb the CLI lacks, so this cannot drift again.
+
+  **Done 2026-07-25 — all three steps.** (1) `--json` on the seven `db_query.py` read commands, surfaced on `jht positions list/show/dashboard`. (2) Decision verbs: `jht positions exclude/restore/request-cv`, `jht ticket open/list/count/show/for-position/assign/resolve`, `jht directives add/list/edit/archive/show`. Two skills had to be written or extended, because the verb existed *only* inside a web route and was therefore browser-only: `shared/skills/user_exclude.py` (new) and `ticket.py open`. (3) `tests/test_cli_game_parity.py` classifies every public `BackendBus` verb as covered / known-gap / not-applicable and **fails on an unclassified one** — verified by injecting a fake verb and watching it name it.
+
+  **Residual, still open:** like/dislike/star feedback (lives only in Supabase `position_feedback`, needs the cloud lane, not SQLite), `fetch_artifact`, `upload_user_document`, and read/write of the coordinator settings. Each is listed in `KNOWN_GAPS` inside the parity test, so the list cannot quietly rot. Also open: `user_exclude.py` and the TS route now hold **two implementations of the same rules** — one test compares their reason sets, nothing compares their behaviour.
 
 - 🟡 **[INFRA-VERCEL-QUOTA]** — poll fold-in shipped (~75% idle reduction); residual: spending limit on Vercel (user action). The **file-bridge poller was re-enabled by default on the VPS (2026-07-11)** to serve on-demand CV/attachment downloads from the web (position-page "Download PDF" + profile CV preview): ~130 req/h per user at idle (index/purge at 5min, pending-poll ≤30s). Sustainable for beta — the structural fix is **[JHT-FILEBRIDGE-REALTIME]**.
 - ⬜ **[JHT-FILEBRIDGE-REALTIME]** — take the file-bridge off HTTP long-polling onto push/Realtime (Supabase Realtime subscription on `file_bridge_requests`, or fold into the event-driven [JHT-REALTIME-SCALE] channel) so idle cost → ~0 as users scale. Today the VPS poller polls `/api/cloud-sync/file-bridge` (~130 req/h/user idle); re-enabled 2026-07-11 in `cli/src/commands/pid1.js` (split out of the `JHT_CLOUD_CONTROL_POLLERS` gate).

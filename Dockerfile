@@ -111,11 +111,10 @@ COPY cli/package.json cli/package-lock.json* ./cli/
 # solo in cloud, buildato altrove. /app/web/.next viene comunque creata più
 # sotto per il fix-ownership del vecchio compose dev (Leone 24/07).
 #
-# tui/ ANCHE non è più installato né compilato qui (2026-07-25): nessun
-# processo del container la lancia (nessun `bin`, nessun `main`, zero
-# invocatori) — era install + build TypeScript a ogni immagine per codice
-# che non parte. Il codice resta nel repo; l'expert-mode di install.sh la
-# compila sull'host quando serve. Vedi MINOR-TRACKER [MINOR-TUI-DEAD-BUILD].
+# tui/ non compare più: smesso di compilarla qui il 2026-07-25, rimossa dal
+# repo lo stesso giorno. Nessun `bin`, nessun `main`, zero invocatori — era
+# install + build TypeScript a ogni immagine per una schermata che nessuno
+# poteva aprire. Il cockpit del team è l'ufficio Godot; il resto è questo CLI.
 RUN npm ci --prefix cli \
     && npm cache clean --force
 

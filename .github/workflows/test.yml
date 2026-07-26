@@ -14,20 +14,18 @@ jobs:
     name: vitest — ${{ matrix.module }}
     runs-on: ubuntu-latest
 
+    # La matrice era di 11 moduli; 8 sono spariti il 2026-07-25 insieme alle
+    # 30 sottocartelle di `shared/` che il prodotto non importava. Testavano
+    # scaffolding: 692 dei 933 test guardavano codice irraggiungibile.
+    # Restano i tre che puntano a codice spedito: `config` (schemi Zod letti da
+    # web/ e dagli agenti), `tasks` (demo mode, cron, credentials, daemon) e
+    # `wizard` (il setup del CLI — test in .js, non .ts).
     strategy:
       fail-fast: false
       matrix:
         module:
-          - assistant
           - config
-          - context-engine
-          - deploy
-          - events
-          - integration
-          - queue
-          - sessions
           - tasks
-          - validators
           - wizard
 
     steps:

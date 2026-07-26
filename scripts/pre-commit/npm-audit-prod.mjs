@@ -11,7 +11,10 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(new URL('../..', import.meta.url).pathname);
-const WORKSPACES = ['cli', 'tui', 'web'];
+// I due workspace npm che finiscono davvero in mano a qualcuno: il CLI
+// (installato sull'host e nel container) e il web (deployato su Vercel).
+// `tui` era il terzo finché la TUI è stata rimossa il 2026-07-25.
+const WORKSPACES = ['cli', 'web'];
 const SKIP_DIRS = new Set();
 
 let failed = false;

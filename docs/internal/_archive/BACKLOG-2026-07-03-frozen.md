@@ -1,6 +1,14 @@
 # 🧊 BACKLOG — frozen snapshot (2026-07-03, pre-restructure)
 
 > Integral copy of `BACKLOG.md` (1487 lines) taken right before the 2026-07-03 docs restructure that turned it into a slim index. Every historical tag, postmortem and ✅ entry lives here unchanged. Open work moved to the new `BACKLOG.md` index and GitHub Issues; shipped work is summarized in `CHANGELOG.md`.
+>
+> ⚠️ **The links below are relative to the repository root**, because that is
+> where this file lived when it was written. Read `docs/guides/BETA.md` as
+> `<repo>/docs/guides/BETA.md`, not as a path under `docs/internal/_archive/`.
+> They are left untouched on purpose: this is a frozen snapshot, and rewriting
+> 41 link targets would make it something other than the file it claims to be.
+> Some of them point at documents deleted after 2026-07-03 — expected for an
+> archive, `git log --diff-filter=D -- <path>` finds them.
 
 ---
 

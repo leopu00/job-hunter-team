@@ -196,9 +196,54 @@ concentrates the same budget into fewer hours rather than saving it.
 | `jht export <source>`                | Node  | Export positions / applications / DB to a portable format.    |
 | `jht import <file>`                  | Node  | Import a previously-exported file.                            |
 | `jht migrate`                        | Node  | Apply pending SQLite migrations.                              |
-| `jht positions list`                 | Node  | List positions in the local DB.                               |
-| `jht positions show <id>`            | Node  | Detail view of one position.                                  |
-| `jht positions dashboard`            | Node  | TTY-friendly position dashboard.                              |
+| `jht positions list`                 | Node  | List positions in the local DB. `--json` for machine output.  |
+| `jht positions show <id>`            | Node  | Detail view of one position. `--json` for machine output.     |
+| `jht positions dashboard`            | Node  | TTY-friendly position dashboard. `--json` for machine output. |
+
+### `--json` — machine-readable output
+
+Every `jht positions` form accepts `--json`: same query, one line of JSON on
+stdout instead of the aligned table, same exit code. Filters still apply.
+
+```bash
+jht positions list --json                    # array of position objects
+jht positions list -s scored --min-score 70 --json
+jht positions show 42 --json                 # one object, or null if absent
+jht positions dashboard --json               # totals, by_status, top_scores, applications
+```
+
+Written for scripts and for the AI agents this CLI is meant to be driven by
+(see [AI-AGENT-INTEGRATION.md](AI-AGENT-INTEGRATION.md)): parsing the human
+table means regexes that break the next time a column width changes. The human
+format is unchanged and stays the default — `--json` is a second exit, not a
+replacement. `null` (not `{}`) means not found, so "absent" and "empty" stay
+distinguishable.
+
+The same flag exists one layer down on `db_query.py` — `positions`, `position`,
+`companies`, `company`, `dashboard`, `stats`, `recent-activity` — which is what
+agents inside the container call directly.
+
+### Decision verbs
+
+| Command | Layer | What it does |
+|---------|-------|--------------|
+| `jht positions exclude <id> --reason <r> [--note ...]` | Python | Drops a position out of the agent queues. Reversible. |
+| `jht positions restore <id>` | Python | Undoes the exclusion, back to the exact previous status. |
+| `jht positions request-cv <id> [--off]` | Python | Asks the team to write the CV for this position. |
+| `jht ticket open <position_id> "<text>"` | Python | Opens a user→team ticket; lands in the Captain's queue. |
+| `jht ticket list` · `count` · `show <id>` · `for-position <id>` | Python | Read the ticket queue (`count` prints only the number). |
+| `jht ticket assign <id> <agent>` · `resolve <id> --response "..."` | Python | Team side of the flow. |
+| `jht directives` | Python | The standing orders currently in force. |
+| `jht directives add "<text>" [--kind order\|strategy\|formation\|note]` | Python | An order that survives the Captain's context refresh. |
+| `jht directives list [--all]` · `edit <id> "<text>"` · `archive <id>` · `show <id>` | Python | Manage the board. |
+
+`--reason` accepts `closed`, `not_interested`, `mismatch`, `already_applied`,
+`company`, `conditions`, `other` — the same set the UI offers. `other` requires
+`--note`, so an exclusion is still readable in a month.
+
+Exit codes: `0` done · `1` refused for a domain reason (no such position,
+`other` without a note) · `2` bad arguments. The position verbs print one JSON
+line, so a script can check the outcome without reading prose.
 
 ## Dashboard
 

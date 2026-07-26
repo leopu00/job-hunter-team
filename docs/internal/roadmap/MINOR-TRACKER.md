@@ -14,13 +14,12 @@
 
 ## 🧹 CI / Test / Lint debt
 
-### ⬜ `[MINOR-SHARED-LLM-DEAD]` Rimuovere `shared/llm/` (dead code) — post-lancio
+### ✅ `[MINOR-SHARED-LLM-DEAD]` Rimuovere `shared/llm/` (dead code) — FATTO 2026-07-25
 
-- **Stato:** ⬜ open (decisione release 2026-07-03: fix minimale subito, rimozione dopo il lancio).
-- **Contesto:** `shared/llm/` (base + factory + 3 provider) non ha NESSUN consumatore runtime — zero import da `agents/`, `cli/`, `tui/`, `desktop/`, `scripts/`, Docker; unici consumatori i suoi 4 file di test (`test_llm_*`, `test_factory_config`). Il team usa i TUI provider in tmux. Serie `feat(llm)` mai cablata. Fix minimale applicato pre-lancio: model ID MiniMax residui (`abab*`) → ID Moonshot reali (`kimi-latest`, `moonshot-v1-8k`) + alias factory.
-- **Da fare:** rimuovere `shared/llm/` + i 4 test file, aggiornare le 2 righe doc che citano LLM nello stack shared (`README.md` tabella Backend, `shared/README.md` r7). Dopo la rimozione i test file tracciati scendono a ~251 (claim "250+" del README regge).
-- **Effort:** M.
-- **Origine:** fact-check pre-Reddit 2026-07-03 (sessione master-3), consenso master1+master-2 in coordination/chat.jsonl.
+- **Com'era:** ⬜ open dal 2026-07-03 (decisione release: fix minimale subito, rimozione dopo il lancio). `shared/llm/` (base + factory + 3 provider) non aveva NESSUN consumatore runtime — zero import da `agents/`, `cli/`, `tui/`, `scripts/`, Docker; unici consumatori i suoi 4 file di test. Il team parla ai modelli via processo CLI in tmux, non via SDK.
+- **Fatto:** rimossi `shared/llm/` (7 file), i suoi 4 test, e il grappolo che ci stava attaccato — `shared/skills/credential_manager.py` + `credential_planner.py` + `tests/test_credential_manager.py`, che risolvevano le API key **per** quei provider e per nessun altro. 11 file, 1.409 righe.
+- **In più, la conseguenza che non era stata vista:** `anthropic` e `openai` in `requirements.txt` esistevano solo per questo codice. Erano installate in ogni build del container — due SDK, e la loro superficie di aggiornamento, per zero import. Tolte anche quelle, con il motivo scritto accanto perché nessuno le rimetta per abitudine.
+- **Origine:** fact-check pre-Reddit 2026-07-03 (sessione master-3). Chiuso nel giro di pulizia dead-code del 2026-07-25 insieme a [[MINOR-DISABLED-TESTS]] e alle 30 sottocartelle irraggiungibili di `shared/`.
 
 ### ✅ `[MINOR-PRETTIER-FORMAT]` Prettier check su `web/app/` + `shared/` — FIXED 2026-06-02
 
@@ -29,20 +28,13 @@
 - **Effort:** S (5 min).
 - **Follow-up consigliato:** valutare hook pre-commit con `prettier --write` su staged files per evitare ricorrenza ([[feedback-pre-commit-hooks]] futura).
 
-### 🟠 `[MINOR-DISABLED-TESTS]` 41 test file in `tests/js/tasks/_disabled/`
+### ✅ `[MINOR-DISABLED-TESTS]` 41 test file in `tests/js/tasks/_disabled/` — CHIUSO 2026-07-25
 
-- **Stato:** ⬜ open. 40 file spostati il 2026-05-31 per sbloccare il workflow Tests dopo refactor dashboard. Tests workflow verde solo perché **ignora quei file**. Ricontato 2026-07-25: **32 attivi in `tests/js/tasks/`, 41 in `_disabled/`** (56% della cartella fuori dal giro). I 869 test che passano vengono dai file attivi.
-- **Composizione:**
-  - 17 × `web-pages-*.test.ts` (pages/API routes restructured)
-  - 11 × `ui-components-*.test.ts` (componenti rimossi/rinominati)
-  - 3 × `smoke-finale*.test.ts` (route non più esistenti)
-  - 2 × `api-routes.test.ts` + `api-smoke.test.ts` (Next 16 routing changes, E251 NEXT_ERROR_CODE)
-  - 7 × misc legacy (cli-e2e, barrel-regression, i18n-backup, migrations-i18n, shared-modules, ecc.)
-- **Pattern del fail:** `const src = read("app/components/sidebar.tsx")` → file rinominato/rimosso → `ENOENT` prima ancora di arrivare all'assert.
-- **Origine:** `tests/js/tasks/_disabled/README.md`.
-- **How to revive:** uno per uno, verifica file target esiste / aggiorna path / adatta assertion al codice attuale. Decidi se ricuperare o cancellare.
-- **Effort:** L (1-2 giorni se fatto in batch dedicato).
-- **Priorità:** 🟠 non blocker, ma riapparirà come signal quality issue post-launch quando i contributor noteranno la coverage gap.
+- **Com'era:** 🟠 open. 40 file spostati il 2026-05-31 per sbloccare il workflow Tests dopo il refactor dashboard, con un README che prometteva una procedura di riabilitazione mai eseguita in due mesi. Il workflow era verde solo perché `vitest.config.ts` **escludeva la cartella intera**.
+- **Verdetto:** non recuperabili. Puntavano a superfici **rimosse**, non rinominate — la dashboard locale ritirata e le route API cancellate nel giro 149 → 97. `web/app/api/{activity,alerts,analytics,archive,audit,automations,budget,calendar,changelog,companies,compare,config,contacts,context,cover-letters,database,env,errors,events,…}` non esistono più. Cancellati: 6.068 righe che leggevano come copertura.
+- **Il colpo di scena:** tolto l'exclude `**/_disabled/**`, è emerso un **secondo** cimitero che nessuno sapeva esistesse — `tests/js/assistant/_disabled/`. Quello era un falso positivo: `shared/assistant/assistant-bot.ts` e tutte e quattro le funzioni sotto test erano al loro posto. Lo spostamento in `_disabled/` aveva portato il file una directory più in basso senza correggere `../../../shared/…`, quindi l'import risolveva su `tests/shared/` e la suite moriva prima di eseguire un assert. Rimesso al posto giusto: **18 test che non avevano mai smesso di passare**, nascosti per due mesi dall'exclude che doveva nascondere quelli rotti.
+- **Lezione:** un exclude a glob nasconde ciò che sai *e* ciò che non sai. Se un test va disabilitato, si disabilita **quel** test — `it.skip` con il motivo — non la cartella che lo contiene.
+- **Origine:** `tests/js/tasks/_disabled/README.md` (che nel frattempo aveva anche perso il conto: diceva 38, erano 41).
 
 ### 🟡 `[MINOR-PRECOMMIT-DRIFT]` No hook pre-commit per Prettier/ESLint
 
@@ -135,11 +127,10 @@
 - **Effort:** M (serve un giro di cattura schermate su app + Gmail).
 - **Origine:** audit doc↔codice 2026-07-25 (unico link "rotto" restante nel repo, ed è un esempio in backtick).
 
-### ⬜ `[MINOR-INTERNAL-NOTE-UNFILED]` Nota del 2026-07-11 ancora nella root di `docs/internal/`
+### ✅ `[MINOR-INTERNAL-NOTE-UNFILED]` Nota del 2026-07-11 ancora nella root di `docs/internal/`
 
-- **Stato:** ⬜ open. `2026-07-11-team-directives-bacheca.md` è in root; il protocollo di `docs/internal/README.md` vuole la root riservata a `landing-image-prompts.md` e le note smistate in `architecture/` · `postmortems/` · `roadmap/` · `_archive/`.
-- **Da fare:** `git mv` in `architecture/` (è un design della bacheca `team_directives`, feature poi shippata) + riga nell'indice.
-- **Effort:** S.
+- **Com'era:** ⬜ open. `2026-07-11-team-directives-bacheca.md` era in root; il protocollo di `docs/internal/README.md` vuole la root riservata a `landing-image-prompts.md` e le note smistate in `architecture/` · `postmortems/` · `roadmap/` · `_archive/`.
+- **Fatto (2026-07-25):** `git mv` in `architecture/` + riga nell'indice. Era una nota **non indicizzata**: fuori dal protocollo *e* fuori da ogni sommario, quindi raggiungibile solo per `ls`.
 - **Origine:** audit doc↔codice 2026-07-25. Le altre due note in root (`2026-07-03-desktop-app-*`) sono già state archiviate nello stesso giro.
 
 ### ⬜ `[NOTE-COMPANIES-RUBRIC]` Analista rubric companies troppo permissivo
