@@ -777,7 +777,8 @@ func _build_activation() -> void:
 			else (UIStrings.t("setup.where_local") if bool(s.get("container_running", false))
 			else UIStrings.t("setup.where_todo")), "docker")
 	_setup_gate(progress, "02", UIStrings.t("setup.provider"),
-			bool(s.get("provider_authenticated", false)),
+			bool(s.get("provider_authenticated", false))
+					and bool(s.get("plan_ready", false)),
 			_provider_status_text(s), "provider")
 	_setup_gate(progress, "03", UIStrings.t("setup.profile"),
 			bool(s.get("profile_ready", false)),
@@ -848,9 +849,11 @@ func _provider_status_text(s: Dictionary) -> String:
 	if id == "":
 		return UIStrings.t("setup.provider_todo")
 	var name := str(SetupService.PROVIDERS.get(id, {}).get("name", id))
-	return UIStrings.t("setup.provider_ok") % name \
-			if bool(s.get("provider_authenticated", false)) \
-			else UIStrings.t("setup.provider_login") % name
+	if not bool(s.get("provider_authenticated", false)):
+		return UIStrings.t("setup.provider_login") % name
+	if not bool(s.get("plan_ready", false)):
+		return UIStrings.t("setup.plan_todo") % name
+	return UIStrings.t("setup.provider_ok") % name
 
 
 func _build_container_setup() -> void:
@@ -1033,6 +1036,41 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 		var hint := TerminalTheme.label(UIStrings.t(hint_key), 12, Palette.DIM)
 		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		text_col.add_child(hint)
+		if authed:
+			_plan_picker(text_col, provider, s)
+
+
+## Quale abbonamento hai. Non è una curiosità statistica: è il numero da cui
+## il Capitano ricava quanti agenti accendere il primo giorno. Senza, il team
+## parte in prima marcia e l'utente — che guarda l'ufficio per dieci minuti e
+## vede comparire una posizione — conclude che l'applicazione è rotta.
+func _plan_picker(col: VBoxContainer, provider: String, s: Dictionary) -> void:
+	var plans := SetupService.plans_for(provider)
+	if plans.is_empty():
+		col.add_child(TerminalTheme.label(UIStrings.t("setup.plan_unavailable"),
+				12, Palette.YELLOW))
+		return
+	var chosen := str(s.get("active_plan", "")) \
+			if str(s.get("active_provider", "")) == provider else ""
+	col.add_child(TerminalTheme.label(UIStrings.t("setup.plan_question"), 13,
+			Palette.MINT if chosen != "" else Palette.YELLOW, "bold"))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	col.add_child(row)
+	for entry in plans:
+		if not (entry is Dictionary):
+			continue
+		var plan: Dictionary = entry
+		var plan_id := str(plan.get("id", ""))
+		var button := Button.new()
+		button.text = "%s · %s" % [str(plan.get("label", plan_id)),
+				str(plan.get("price", ""))]
+		button.toggle_mode = true
+		button.button_pressed = plan_id == chosen
+		if plan_id == chosen:
+			button.add_theme_color_override("font_color", Palette.GREEN)
+		button.pressed.connect(SetupService.select_plan.bind(provider, plan_id))
+		row.add_child(button)
 
 
 func _on_setup_refresh(_status: Dictionary) -> void:
