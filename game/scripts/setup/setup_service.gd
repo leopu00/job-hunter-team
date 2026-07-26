@@ -46,6 +46,7 @@ var status := {
 	"container_exists": false, "container_running": false,
 	"container_state": "missing", "active_provider": "",
 	"provider_authenticated": false, "provider_auth_match": "",
+	"active_plan": "", "plan_ready": false,
 	"profile_ready": false, "team_running": false,
 	"ready": false, "completed": 0,
 	"image_id": "", "container_image_id": "", "runtime_stale": false,
@@ -246,7 +247,12 @@ func _apply_probe(next: Dictionary) -> void:
 func _finalize(next: Dictionary) -> void:
 	var completed := 0
 	completed += 1 if bool(next.get("container_running", false)) else 0
-	completed += 1 if bool(next.get("provider_authenticated", false)) else 0
+	# Il passo provider è verde solo con login FATTO e abbonamento DICHIARATO:
+	# sono la stessa domanda ("con che account lavora il team, e quanto può
+	# spendere"), spezzarla in due passi allungherebbe il setup senza aggiungere
+	# una decisione.
+	completed += 1 if bool(next.get("provider_authenticated", false)) \
+			and bool(next.get("plan_ready", false)) else 0
 	completed += 1 if bool(next.get("profile_ready", false)) else 0
 	completed += 1 if bool(next.get("hours_ready", false)) else 0
 	next["completed"] = completed
@@ -315,6 +321,7 @@ static func _probe_host(home: String) -> Dictionary:
 		"container_exists": false, "container_running": false,
 		"container_state": "missing", "active_provider": "",
 		"provider_authenticated": false, "provider_auth_match": "",
+		"active_plan": "", "plan_ready": false,
 		"profile_ready": FileAccess.file_exists(home.path_join("profile/ready.flag")),
 		"team_running": false,
 		"image_id": "", "container_image_id": "", "runtime_stale": false,
@@ -357,7 +364,28 @@ static func _probe_host(home: String) -> Dictionary:
 		var match := auth_match(active, home)
 		d["provider_auth_match"] = match
 		d["provider_authenticated"] = match != ""
+		d["active_plan"] = _declared_plan(config, active)
+		d["plan_ready"] = str(d["active_plan"]) != ""
 	return d
+
+
+## Quale abbonamento ha l'utente. Il provider da solo non basta: un piano da
+## 19$ e uno da 199$ sono lo stesso `active_provider` con capacita di lavoro
+## 30 volte diverse, e il Capitano ci dimensiona sopra il roster del primo
+## avvio. Finche non lo sa, o parte in prima marcia (e l'utente crede che
+## l'app sia rotta) o strafa (e gli brucia la finestra il primo giorno).
+static func _declared_plan(config: Dictionary, ui_provider: String) -> String:
+	var providers: Variant = config.get("providers", {})
+	if not (providers is Dictionary):
+		return ""
+	var config_id := str(PROVIDERS.get(ui_provider, {}).get("config_id", ui_provider))
+	for key in [config_id, ui_provider]:
+		var entry: Variant = (providers as Dictionary).get(key, {})
+		if entry is Dictionary:
+			var plan := str((entry as Dictionary).get("plan", "")).strip_edges()
+			if plan != "":
+				return plan
+	return ""
 
 
 ## Finestre di lavoro dichiarate? Il team senza orari lavora sempre.
@@ -458,6 +486,65 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 	return {"ok": err == OK,
 			"message": "Provider selezionato: " + str(PROVIDERS[provider]["name"])
 			if err == OK else "impossibile salvare il provider"}
+
+
+## ── Abbonamento ────────────────────────────────────────────────────────
+## Quanto grande può essere il team dipende dal PIANO, non dal provider. La
+## tabella dei piani vive nel container (shared/skills/plan_registry.py) e
+## qui non si duplica: una seconda copia nel gioco divergerebbe al primo
+## cambio di listino, e il Capitano userebbe quella sbagliata per il roster.
+var _plans_cache := {}
+
+func plans_for(provider: String) -> Array:
+	if not PROVIDERS.has(provider):
+		return []
+	var config_id := str(PROVIDERS[provider]["config_id"])
+	if _plans_cache.has(config_id):
+		return _plans_cache[config_id]
+	var out := _plan_registry(["list", config_id, "--json"], _vps_config())
+	if out == "":
+		return []
+	var parsed: Variant = JSON.parse_string(out)
+	if not (parsed is Dictionary):
+		return []
+	var plans: Variant = (parsed as Dictionary).get(config_id, [])
+	if not (plans is Array):
+		return []
+	_plans_cache[config_id] = plans
+	return plans
+
+
+func select_plan(provider: String, plan_id: String) -> void:
+	if not PROVIDERS.has(provider) or _action_running:
+		return
+	_start_action("plan", _do_select_plan.bind(provider, plan_id, _vps_config()))
+
+
+func _do_select_plan(provider: String, plan_id: String,
+		vps: Dictionary) -> Dictionary:
+	var config_id := str(PROVIDERS[provider]["config_id"])
+	var out := _plan_registry(["set", config_id + ":" + plan_id], vps)
+	if out == "":
+		return {"ok": false, "message": "abbonamento non salvato — "
+				+ "il container deve essere acceso (passo 01)"}
+	return {"ok": true, "message": "Abbonamento registrato"}
+
+
+## Esegue plan_registry.py dentro il container (locale o VPS). Stringa vuota
+## = non ci siamo riusciti; il chiamante non deve inventare un ripiego, il
+## piano lo dichiara l'utente e basta.
+func _plan_registry(args: Array, vps: Dictionary) -> String:
+	var argv := PackedStringArray(["exec", "jht", "python3",
+			"/app/shared/skills/plan_registry.py"])
+	for a in args:
+		argv.append(str(a))
+	if not vps.is_empty():
+		var joined := " ".join(PackedStringArray(args))
+		var remote := _run_ssh(vps, "docker exec jht python3 "
+				+ "/app/shared/skills/plan_registry.py " + joined)
+		return str(remote["out"]).strip_edges() if remote["code"] == 0 else ""
+	var local := _run("docker", argv)
+	return str(local["out"]).strip_edges() if local["code"] == 0 else ""
 
 
 func start_container() -> void:
