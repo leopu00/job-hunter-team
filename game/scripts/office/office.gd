@@ -249,6 +249,8 @@ func _ready() -> void:
 		_map_panel_selftest.call_deferred()
 	if OS.get_environment("JHT_USAGE_PANEL_TEST") == "1":
 		_usage_panel_selftest.call_deferred()
+	if OS.get_environment("JHT_FEEDBACK_PANEL_TEST") == "1":
+		_feedback_panel_selftest.call_deferred()
 	if OS.get_environment("JHT_GUIDED_TEST") == "1":
 		_guided_onboarding_selftest.call_deferred()
 	if OS.get_environment("JHT_TOUR_TEST") == "1":
@@ -1474,6 +1476,94 @@ func _usage_panel_selftest() -> void:
 				" agents=", agents_ok, " page=", page_ok)
 	print("USAGE-PANEL-TEST ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
+
+## Sezione "Segnala un problema": il gate sul racconto, la persistenza dei
+## campi attraverso l'anteprima e — la parte che conta — che l'anteprima mostri
+## davvero il contenuto sanificato invece di una promessa.
+func _feedback_panel_selftest() -> void:
+	var panel := SectionPanel.new("feedback", 24.0)
+	add_child(panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var send := _ui_find_button(panel, UIStrings.t("feedback.send"))
+	# Senza racconto non si invia: una segnalazione vuota costa a noi il triage
+	# e all'utente la sensazione di aver scritto nel vuoto.
+	var gate_ok := send != null and send.disabled
+	panel._fb_form["happened"] = "la finestra resta ferma su collegamento"
+	panel._refresh_feedback_send()
+	gate_ok = gate_ok and send != null and not send.disabled
+
+	# La raccolta gira su un thread (docker, file): si attende l'esito.
+	var collected := false
+	for _i in 200:
+		await get_tree().process_frame
+		if FeedbackService.preview_markdown != "":
+			collected = true
+			break
+	var preview_btn := _ui_find_button(panel, UIStrings.t("feedback.preview_btn"))
+	var preview_ok := preview_btn != null
+	if preview_btn:
+		preview_btn.pressed.emit()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		preview_ok = preview_ok and panel._current_page == "preview"
+		# Il body si cerca per proprietà e non per posizione: i figli della
+		# pagina precedente vivono ancora un frame dopo queue_free(), e il
+		# primo TextEdit dell'albero può essere un campo del modulo.
+		var body: TextEdit = null
+		for _i in 20:
+			body = _ui_find_readonly_text(panel)
+			if body != null:
+				break
+			await get_tree().process_frame
+		preview_ok = preview_ok and body != null and body.text.contains("### App")
+		# Il canarino della catena di redazione, come nel selftest headless.
+		var user := OS.get_environment("USER")
+		if body != null and user.length() >= 3:
+			preview_ok = preview_ok and not body.text.contains(user)
+		var back := _ui_find_button(panel, UIStrings.t("feedback.back"))
+		preview_ok = preview_ok and back != null
+		if back:
+			back.pressed.emit()
+			await get_tree().process_frame
+			await get_tree().process_frame
+	# Tornando indietro il racconto è ancora lì: farlo riscrivere sarebbe il
+	# modo più rapido per non ricevere più segnalazioni.
+	var persist_ok := str(panel._fb_form["happened"]).contains("collegamento")
+	# JHT_FEEDBACK_SEND_TEST=1 spinge la segnalazione fino in fondo, contro
+	# l'endpoint indicato da JHT_FEEDBACK_URL. Fuori da questo flag il test
+	# resta offline: in CI non si esce sulla rete.
+	var send_ok := true
+	if OS.get_environment("JHT_FEEDBACK_SEND_TEST") == "1":
+		panel._fb_form["contact"] = "tester@example.org"
+		panel._submit_feedback()
+		var result: Array = await FeedbackService.submit_changed
+		while bool(result[0]):  # running
+			result = await FeedbackService.submit_changed
+		send_ok = bool(result[1]) and str(result[3]) == "#4242" \
+				and FeedbackService.last_saved_path != ""
+		if not send_ok:
+			print("FEEDBACK-PANEL-TEST send esito=", result)
+	var ok := gate_ok and collected and preview_ok and persist_ok and send_ok
+	if not ok:
+		print("FEEDBACK-PANEL-TEST details gate=", gate_ok, " collected=", collected,
+				" preview=", preview_ok, " persist=", persist_ok)
+	print("FEEDBACK-PANEL-TEST ", "PASS" if ok else "FAIL")
+	get_tree().quit(0 if ok else 1)
+
+
+## Il TextEdit in sola lettura dell'anteprima, distinguibile dai campi del
+## modulo per la proprietà `editable` invece che per l'ordine nell'albero.
+func _ui_find_readonly_text(node: Node) -> TextEdit:
+	var edit := node as TextEdit
+	if edit != null and not edit.editable and not edit.is_queued_for_deletion():
+		return edit
+	for child in node.get_children():
+		var found := _ui_find_readonly_text(child)
+		if found:
+			return found
+	return null
+
 
 func _ui_has_text(node: Node, wanted: String) -> bool:
 	if node is Label and node.text == wanted:

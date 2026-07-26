@@ -1,0 +1,11 @@
+# Chi arriva su "New issue" senza account GitHub, o senza voglia di aprirne
+# uno, deve trovare comunque una porta. Senza queste voci l'unica strada è
+# registrarsi — e la maggior parte delle persone a quel punto rinuncia.
+blank_issues_enabled: true
+contact_links:
+  - name: 📧 Scrivici via email
+    url: mailto:support@jobhunterteam.ai
+    about: Non hai un account GitHub? Raccontaci il problema per email.
+  - name: 🔐 Segnalazione di sicurezza
+    url: mailto:security@jobhunterteam.ai
+    about: Le vulnerabilità non vanno in una issue pubblica — scrivi qui.

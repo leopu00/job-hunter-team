@@ -141,6 +141,13 @@ func player_first_name() -> String:
 	return full.get_slice(" ", 0) if not full.is_empty() else ""
 
 
+## Nome e cognome come li ha scritti l'utente. Lo usa il ripulitore PII della
+## segnalazione in-app: sapere come si chiama chi segnala è l'unico modo di
+## toglierlo dai log, dove compare dentro path, nomi di file e messaggi.
+func player_full_name() -> String:
+	return str(_draft.get("name", "")).strip_edges()
+
+
 ## Suffisso pronto per i saluti: ", Leone" — o stringa vuota senza nome,
 ## così le battute restano naturali in entrambi i casi.
 func player_suffix() -> String:

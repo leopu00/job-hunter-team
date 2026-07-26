@@ -183,6 +183,17 @@ func _draw() -> void:
 				var dir := Vector2(cos(a), sin(a))
 				_line(Vector2(0.50, 0.50) + dir * 0.28,
 						Vector2(0.50, 0.50) + dir * 0.44, s, w * 1.4)
+		"bug":
+			# Scarabeo di profilo: corpo, testa, dorso e tre paia di zampe.
+			# Il glifo 🐞 sarebbe stato un rettangolo vuoto su Linux.
+			_circle(Vector2(0.50, 0.58), 0.26, s, w)
+			_arc(Vector2(0.50, 0.30), 0.13, PI, TAU, s, w)
+			_line(Vector2(0.50, 0.32), Vector2(0.50, 0.84), s, w)
+			_line(Vector2(0.41, 0.20), Vector2(0.34, 0.09), s, w)
+			_line(Vector2(0.59, 0.20), Vector2(0.66, 0.09), s, w)
+			for dy in [-0.14, 0.02, 0.18]:
+				_line(Vector2(0.26, 0.58 + dy), Vector2(0.10, 0.52 + dy), s, w)
+				_line(Vector2(0.74, 0.58 + dy), Vector2(0.90, 0.52 + dy), s, w)
 		_:
 			# id sconosciuto: cerchietto neutro, mai un rettangolo vuoto
 			_circle(Vector2(0.50, 0.50), 0.30, s, w)
