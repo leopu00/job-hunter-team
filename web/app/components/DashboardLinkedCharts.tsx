@@ -19,6 +19,8 @@ import RecentPositionsTable, {
   type TableLabels,
 } from "@/app/components/RecentPositionsTable";
 import SalaryBars from "@/app/components/SalaryBars";
+import { makeT } from "@/lib/i18n-dict";
+import { T } from "./DashboardLinkedCharts.i18n";
 import {
   convertCurrency,
   currencySymbol,
@@ -56,63 +58,6 @@ type Props = {
 
 // Stringhe UI hardcoded localizzate (le altre arrivano già tradotte via
 // `labels` dal server component).
-const T: Record<string, Record<string, string>> = {
-  no_country: {
-    it: "Senza paese",
-    en: "No country",
-    hu: "Nincs ország",
-    es: "Sin país",
-    de: "Ohne Land",
-    fr: "Sans pays",
-    pt: "Sem país",
-  },
-  no_city: {
-    it: "Senza città",
-    en: "No city",
-    hu: "Nincs város",
-    es: "Sin ciudad",
-    de: "Ohne Stadt",
-    fr: "Sans ville",
-    pt: "Sem cidade",
-  },
-  // Spicchio che raccoglie i tipi sotto soglia: "{n}" = quanti ne contiene.
-  other_types: {
-    it: "Altre ({n} tipi)",
-    en: "Other ({n} types)",
-    hu: "Egyéb ({n} típus)",
-    es: "Otras ({n} tipos)",
-    de: "Andere ({n} Typen)",
-    fr: "Autres ({n} types)",
-    pt: "Outras ({n} tipos)",
-  },
-  reset_all: {
-    it: "Rimuovi tutti i filtri",
-    en: "Clear all filters",
-    hu: "Összes szűrő törlése",
-    es: "Quitar todos los filtros",
-    de: "Alle Filter entfernen",
-    fr: "Supprimer tous les filtres",
-    pt: "Remover todos os filtros",
-  },
-  filters_label: {
-    it: "Filtri",
-    en: "Filters",
-    hu: "Szűrők",
-    es: "Filtros",
-    de: "Filter",
-    fr: "Filtres",
-    pt: "Filtros",
-  },
-  score_prefix: {
-    it: "Score",
-    en: "Score",
-    hu: "Score",
-    es: "Score",
-    de: "Score",
-    fr: "Score",
-    pt: "Score",
-  },
-};
 
 const SCORE_BIN = 5;
 const SALARY_BIN = 20000;
@@ -143,7 +88,7 @@ export default function DashboardLinkedCharts({
   tableLimit = 15,
 }: Props) {
   const locale = useLocale();
-  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const tr = makeT(T, locale);
   // La dashboard ragiona sull'universo "attivo" (la query già esclude le
   // scartate, ma teniamo il filtro per robustezza anche in demo).
   const rows = useMemo(

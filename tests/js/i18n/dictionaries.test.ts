@@ -45,7 +45,12 @@ const rel = (p: string) => path.relative(WEB, p);
 // ───────────────────────────────────────────────────────────────────────
 // 1. Dizionari estratti — importati, non letti come testo
 // ───────────────────────────────────────────────────────────────────────
-const extracted = walk(WEB, (f) => f.endsWith(".i18n.ts"));
+// `*.i18n.ts` è la convenzione nuova; `*-i18n.ts` sono i due dizionari
+// che erano già in un file a parte prima dell'estrazione.
+const extracted = walk(
+  WEB,
+  (f) => f.endsWith(".i18n.ts") || f.endsWith("-i18n.ts"),
+);
 
 describe("dizionari estratti (*.i18n.ts)", () => {
   it("ne esiste almeno uno (altrimenti questo blocco non prova nulla)", () => {
@@ -65,9 +70,22 @@ describe("dizionari estratti (*.i18n.ts)", () => {
 
       const problemi: string[] = [];
       for (const [exportName, dict] of dicts) {
-        for (const [key, value] of Object.entries(
-          dict as Record<string, unknown>,
-        )) {
+        const top = dict as Record<string, unknown>;
+        // Due forme in circolazione. Per chiave: `{ saluto: { it, en, … } }`.
+        // Per lingua: `{ it: { saluto, … }, en: { … } }` — quella di
+        // dashboard-i18n. Si distinguono da cosa c'è al primo livello.
+        const perLingua = LOCALES.every((l) => l in top);
+        if (perLingua) {
+          const riferimento = Object.keys(top.en as object).sort();
+          for (const loc of LOCALES) {
+            const chiavi = Object.keys(top[loc] as object).sort();
+            for (const k of riferimento)
+              if (!chiavi.includes(k))
+                problemi.push(`${exportName}.${loc}: manca la chiave "${k}"`);
+          }
+          continue;
+        }
+        for (const [key, value] of Object.entries(top)) {
           // Una voce è {locale: stringa}. Tutto il resto (funzioni,
           // costanti d'appoggio) non è materia di questo controllo.
           if (!value || typeof value !== "object") continue;
