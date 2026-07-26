@@ -1285,6 +1285,26 @@ func _guided_onboarding_selftest() -> void:
 	check.call(not SectionPanel._hours_has_day(finestra, "mon"),
 			"un giorno spento risulta ancora acceso")
 
+	# ── Ogni agente al suo banco ────────────────────────────────────────
+	# Il volto è legato alla sedia, e la sedia ora discende dal numero: due
+	# Scout attivi mostravano sempre le stesse due facce perché si pescava in
+	# ordine di arrivo, e i ritratti nuovi (banchi 3-6) non si vedevano mai.
+	check.call(_desk_index_from_uid("scout-5") == 4, "scout-5 non siede al quinto banco")
+	check.call(_desk_index_from_uid("analista-1") == 0, "analista-1 non siede al primo banco")
+	check.call(_desk_index_from_uid("capitano") == -1, "un ruolo core non ha un banco numerato")
+	check.call(_desk_index_from_uid("") == -1, "uid vuoto non deve scegliere un banco")
+
+	var banchi: Array = []
+	for i in 6:
+		banchi.append({"desk": i, "slug": "scout"})
+	var preso := _take_desk_for(banchi, "scout-5")
+	check.call(int(preso.get("desk", -1)) == 4,
+			"scout-5 ha ricevuto il banco %s" % preso.get("desk", "?"))
+	check.call(banchi.size() == 5, "il banco assegnato non è uscito dal giro")
+	# Numero oltre le sedie disponibili: si ripiega, non si resta in piedi.
+	var ripiego := _take_desk_for(banchi, "scout-99")
+	check.call(not ripiego.is_empty(), "nessun banco assegnato a un numero fuori scala")
+
 	var ok := failures.is_empty()
 	print("GUIDED-ONBOARDING-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"failures": failures, "draft": draft,
@@ -3070,6 +3090,36 @@ func _log_roster_gap(list: Array) -> void:
 			% [expected.size(), on_stage.size(), ", ".join(missing)])
 
 
+## La postazione di un agente discende dal SUO numero: `scout-5` siede al
+## quinto banco, sempre. Prima si pescava in ordine di arrivo (`pop_front`),
+## e siccome il volto è legato alla sedia il primo Scout entrato aveva sempre
+## la stessa faccia: con due soli worker attivi metà del cast disegnato non
+## entrava mai in scena, e i ritratti nuovi non si vedevano affatto (Leone,
+## 26/07). Il numero lo tira già il dado (`roll_worker_number.py`) fra quelli
+## liberi, quindi due agenti non possono contendersi lo stesso banco.
+##
+## Se quel banco non è disponibile — roster più grande delle sedie, o numero
+## non leggibile — si ripiega sull'ordine di arrivo: meglio una sedia
+## qualsiasi che nessuna.
+func _take_desk_for(pool: Array, uid: String) -> Dictionary:
+	var wanted := _desk_index_from_uid(uid)
+	if wanted >= 0:
+		for i in pool.size():
+			if int((pool[i] as Dictionary).get("desk", -1)) == wanted:
+				return pool.pop_at(i)
+	return pool.pop_front()
+
+
+## `scout-5` → banco 4 (i banchi contano da zero, gli agenti da uno).
+## -1 quando il nome non porta un numero: i ruoli core non ne hanno.
+static func _desk_index_from_uid(uid: String) -> int:
+	var parts := uid.strip_edges().to_lower().split("-")
+	if parts.size() < 2 or not parts[parts.size() - 1].is_valid_int():
+		return -1
+	var n := int(parts[parts.size() - 1])
+	return n - 1 if n >= 1 else -1
+
+
 func _spawn_backend_agent(item: Dictionary) -> void:
 	var role: String = item.get("role", "")
 	var pool: Array = _desk_pool.get(role, [])
@@ -3106,7 +3156,7 @@ func _spawn_backend_agent(item: Dictionary) -> void:
 				Log.warn("backend", "nessuna postazione libera per il ruolo " + role)
 			return
 	else:
-		def = pool.pop_front()
+		def = _take_desk_for(pool, str(item.get("uid", "")))
 	var live := def.duplicate(true)
 	if item.get("name", "") != "":
 		live["name"] = item["name"]
