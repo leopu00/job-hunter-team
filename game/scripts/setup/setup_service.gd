@@ -147,6 +147,38 @@ func _self_test_vps_setup() -> void:
 	if not shutdown_commands({"ip": "1.2.3.4", "key_path": "~/k"}).is_empty():
 		failures.append("su VPS il team NON va spento")
 
+	# ── Abbonamento: il passo 02 non è finito finché non lo sappiamo ──────
+	var cfg := {"active_provider": "kimi",
+			"providers": {"kimi": {"auth_method": "subscription"}}}
+	if _declared_plan(cfg, "kimi") != "":
+		failures.append("piano inventato quando l'utente non l'ha dichiarato")
+	cfg["providers"]["kimi"]["plan"] = "allegretto"
+	if _declared_plan(cfg, "kimi") != "allegretto":
+		failures.append("piano dichiarato non riletto")
+	# Codex vive sotto `openai` nella config ma resta `codex` nella UI: se la
+	# corrispondenza si rompe, il passo resta rosso su un piano già scelto.
+	var cfg_codex := {"active_provider": "openai",
+			"providers": {"openai": {"plan": "pro"}}}
+	if _declared_plan(cfg_codex, "codex") != "pro":
+		failures.append("piano di Codex non riconosciuto sotto openai")
+
+	var gated := {"container_running": true, "provider_authenticated": true,
+			"profile_ready": true, "hours_ready": true, "plan_ready": false}
+	_finalize(gated)
+	if bool(gated.get("ready", false)):
+		failures.append("setup dichiarato pronto senza abbonamento")
+	gated["plan_ready"] = true
+	_finalize(gated)
+	if not bool(gated.get("ready", false)):
+		failures.append("setup completo non riconosciuto come pronto")
+
+	# ── Login: il comando lo manda il programma, non l'utente ────────────
+	for id in ["claude", "kimi"]:
+		if str(provider_login_spec(id).get("send_command", "")) != "/login":
+			failures.append("manca il comando di login per " + id)
+	if str(provider_login_spec("codex").get("send_command", "")) != "":
+		failures.append("Codex non ha una TUI da sbloccare: niente comando")
+
 	_restore_test_env("HOME", old_home)
 	_restore_test_env("USERPROFILE", old_profile)
 	_restore_test_env("JHT_HOME", old_jht)
@@ -203,7 +235,12 @@ func _probe() -> void:
 
 func _apply_probe(next: Dictionary) -> void:
 	_probe_running = false
-	if BackendBus.is_live():
+	# SOLO in modalità VPS. Col container locale questo blocco sovrascriveva
+	# il probe — appena letto dal disco — con `live_settings`, che il backend
+	# rinfresca un tick ogni otto: sceglievi Kimi, il file cambiava subito, e
+	# la scheda restava sul provider di prima finché il fetch non passava. Da
+	# fuori sembrava che il pulsante non facesse niente (Leone, 26/07).
+	if BackendBus.is_remote() and BackendBus.is_live():
 		# In modalità VPS il container vive dall'altra parte di SSH: non deve
 		# risultare "spento" solo perché sul portatile non esiste un jht locale.
 		next["remote"] = true
@@ -964,8 +1001,21 @@ static func _do_logout_provider(provider: String, vps: Dictionary) -> Dictionary
 ## macOS/Linux, necessaria ai menu raw-mode di Claude e Kimi. stdout viene
 ## portato sul pipe stderr: stdin resta interattivo tramite execute_with_pipe.
 static func provider_login_spec(provider: String, vps: Dictionary = {}) -> Dictionary:
-	return embedded_terminal_spec(str(PROVIDERS.get(provider, {}).get("name", provider)),
+	var spec := embedded_terminal_spec(
+			str(PROVIDERS.get(provider, {}).get("name", provider)),
 			_provider_terminal_hint(provider), _provider_login_command(provider, vps))
+	spec["send_command"] = _provider_tui_login(provider)
+	return spec
+
+
+## Il comando da battere DENTRO la TUI del provider per aprire il login.
+## Claude e Kimi partono in chat e aspettano `/login`; Codex fa già tutto
+## dalla riga di comando, quindi non ha niente da mandare. Scriverlo a mano
+## è l'unico pezzo di questa schermata che chiedeva all'utente di sapere
+## qualcosa: diventa un pulsante, e la casella di testo resta per il codice
+## di verifica, che è l'unica cosa che solo lui può conoscere.
+static func _provider_tui_login(provider: String) -> String:
+	return "" if provider == "codex" else "/login"
 
 
 ## Griglia della pty ospitata: DEVE combaciare con TermScreen del renderer.

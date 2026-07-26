@@ -1213,6 +1213,47 @@ func _guided_onboarding_selftest() -> void:
 	check.call(docker_buttons.contains(UIStrings.t("setup.runtime_update")),
 			"il pannello Docker non offre l'aggiornamento del runtime")
 	docker_panel.queue_free()
+
+	# Scelta dell'abbonamento: i tagli devono andare A CAPO. Con cinque in
+	# fila la scheda cresceva oltre il bordo dello schermo e gli ultimi non
+	# erano raggiungibili (ThinkPad, 26/07). La cache si pre-popola qui: la
+	# lista vera arriva dal container, che in un test headless non c'è.
+	SetupService._plans_cache["kimi"] = [
+		{"id": "adagio", "label": "Adagio (gratuito)", "price": "0"},
+		{"id": "moderato", "label": "Moderato", "price": "19 $/mese"},
+		{"id": "allegretto", "label": "Allegretto", "price": "39 $/mese"},
+		{"id": "allegro", "label": "Allegro", "price": "99 $/mese"},
+		{"id": "vivace", "label": "Vivace", "price": "199 $/mese"},
+	]
+	SetupService.status["active_provider"] = "kimi"
+	SetupService.status["provider_authenticated"] = true
+	# `remote` perché in locale la scheda si fida solo dei file di credenziali
+	# sul disco, che in un test headless non esistono: il percorso remoto è
+	# l'unico modo di arrivare al selettore senza inventare finti segreti.
+	SetupService.status["remote"] = true
+	SetupService.status["active_plan"] = "allegretto"
+	var provider_panel := SectionPanel.new("provider", 24.0)
+	add_child(provider_panel)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var flow: HFlowContainer = null
+	var plan_labels: Array[String] = []
+	for node in provider_panel.find_children("*", "", true, false):
+		if node is HFlowContainer:
+			flow = node
+			for child in (node as HFlowContainer).get_children():
+				if child is Button:
+					plan_labels.append((child as Button).text)
+	check.call(flow != null, "i piani non sono in un contenitore che va a capo")
+	check.call(plan_labels.size() == 5,
+			"mostrati %d piani invece di 5" % plan_labels.size())
+	var longest := 0
+	for label in plan_labels:
+		longest = maxi(longest, label.length())
+	check.call(longest <= 24,
+			"etichetta del piano troppo lunga (%d caratteri): allarga la scheda" % longest)
+	provider_panel.queue_free()
+
 	var ok := failures.is_empty()
 	print("GUIDED-ONBOARDING-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"failures": failures, "draft": draft,
