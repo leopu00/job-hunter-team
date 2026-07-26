@@ -44,7 +44,7 @@ sample() {
   echo "rate_budget:"
   MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" bash -c 'python3 /app/shared/skills/rate_budget.py status 2>&1 | head -2'
   echo "bridge (last 3):"
-  MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" bash -c 'tail -3 /tmp/sentinel-bridge.log 2>/dev/null'
+  MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" bash -c 'tail -3 "${JHT_HOME:-/jht_home}"/logs/sentinel-bridge.log 2>/dev/null'
   echo "kickoff CAPITANO:"
   MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" bash -c 'tail -3 /tmp/kickoff-CAPITANO.log 2>/dev/null'
 }
@@ -98,7 +98,7 @@ for provider in $PROVIDERS; do
   # Quick summary line per provider — MSYS_NO_PATHCONV=1 evita path mangle
   # su git-bash. bash -c per path POSIX dentro il container.
   SESSIONS=$(MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" tmux list-sessions 2>/dev/null | wc -l || echo 0)
-  ORDERS=$(MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" bash -c 'grep -c "\[ORDER SENT\]" /tmp/sentinel-bridge.log 2>/dev/null || echo 0')
+  ORDERS=$(MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" bash -c 'grep -c "\[ORDER SENT\]" "${JHT_HOME:-/jht_home}"/logs/sentinel-bridge.log 2>/dev/null || echo 0')
   KICKOFF=$(MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" bash -c 'grep -c "SENT OK" /tmp/kickoff-CAPITANO.log 2>/dev/null || echo 0')
   echo "  elapsed:         ${ELAPSED}s" | tee -a "$SUMMARY"
   echo "  tmux sessions:   $SESSIONS (at stop)" | tee -a "$SUMMARY"

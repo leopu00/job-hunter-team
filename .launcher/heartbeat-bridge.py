@@ -29,7 +29,7 @@ invece il VERDETTO deterministico come ORDINE (spawna 1 Scout, C-05), perché il
 "segnale morbido" veniva razionalizzato via e la finestra chiusa a vuoto.
 
 Output:
-  - stdout (→ /tmp/heartbeat-bridge.log)
+  - stdout (→ $JHT_HOME/logs/heartbeat-bridge.log)
   - tmux send al CAPITANO via jht-tmux-send (single-line)
 
 Modi:

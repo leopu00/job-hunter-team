@@ -200,7 +200,7 @@ bridge_escalate() {
   fi
   echo "$now" > "$ef" 2>/dev/null || true
   log "bridge-watchdog: FLAP CAP superato ($what) — STOP respawn, escalo al Capitano"
-  jht-tmux-send CAPITANO "[WATCHDOG] $what continua a morire (>${BRIDGE_FLAP_CAP} respawn in $((BRIDGE_FLAP_WINDOW_SEC/60))min). Ho FERMATO il respawn automatico per evitare un crash-loop. Serve diagnosi manuale: controlla /tmp/*-bridge.log. Il Mantenitore farà comunque un canary completo al prossimo sweep." >/dev/null 2>&1 || true
+  jht-tmux-send CAPITANO "[WATCHDOG] $what continua a morire (>${BRIDGE_FLAP_CAP} respawn in $((BRIDGE_FLAP_WINDOW_SEC/60))min). Ho FERMATO il respawn automatico per evitare un crash-loop. Serve diagnosi manuale: controlla \$JHT_HOME/logs/*-bridge.log. Il Mantenitore farà comunque un canary completo al prossimo sweep." >/dev/null 2>&1 || true
 }
 
 tg_bots_configured() {
