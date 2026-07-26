@@ -452,8 +452,22 @@ static func _ui_provider_id(value: String) -> String:
 	return ""
 
 
+## Il login è stato fatto? La domanda va posta a CHI POSSIEDE i dati.
+##
+## I CLI salvano le credenziali con permessi 600 sotto l'utente del container
+## (uid 1001), e su Linux i bind mount non rimappano gli uid: il gioco gira
+## come l'utente (1000) e su quel file prende "Permission denied". Leggendolo
+## da fuori il login risultava NON fatto per sempre — l'utente entrava in
+## Kimi, la console gli rispondeva, e la spunta verde non arrivava mai
+## (ThinkPad, 26/07). Quando il container è acceso è lui a rispondere; la
+## lettura diretta resta per il caso "provider già autenticato e container
+## ancora spento".
 static func auth_match(provider: String, home: String) -> String:
-	for rel in AUTH_PATHS.get(provider, []):
+	var paths: Array = AUTH_PATHS.get(provider, [])
+	var from_container := _auth_match_container(paths)
+	if from_container != "":
+		return from_container
+	for rel in paths:
 		var path := home.path_join(rel)
 		if not FileAccess.file_exists(path):
 			continue
@@ -464,6 +478,20 @@ static func auth_match(provider: String, home: String) -> String:
 		if f != null:
 			f.close()
 	return ""
+
+
+## Chiede al container quale file di credenziali esiste e non è vuoto. Una
+## sola invocazione per tutti i path del provider: il probe gira ogni pochi
+## secondi e un docker exec per percorso costerebbe più della risposta.
+static func _auth_match_container(paths: Array) -> String:
+	if paths.is_empty() or not _container_is_running():
+		return ""
+	var script := ""
+	for rel in paths:
+		script += "test -s '/jht_home/%s' && echo '%s' && exit 0; " % [rel, rel]
+	script += "exit 1"
+	var res := _run("docker", PackedStringArray(["exec", "jht", "sh", "-c", script]))
+	return str(res["out"]).strip_edges() if res["code"] == 0 else ""
 
 
 func select_provider(provider: String) -> void:

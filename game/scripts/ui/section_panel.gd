@@ -1015,6 +1015,18 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 		login.add_theme_color_override("font_color", Palette.GREEN)
 		login.pressed.connect(SetupService.open_provider_login.bind(provider))
 		actions.add_child(login)
+		# Login fatto ma non ancora visto: serve RIGUARDARE, non rifare. Il
+		# pulsante di sopra reinstalla il CLI e riapre la console da capo —
+		# usarlo per "controlla di nuovo" costa minuti e riporta al punto di
+		# partenza (Leone, 26/07).
+		if not authed:
+			var recheck := Button.new()
+			recheck.text = UIStrings.t("setup.provider_recheck")
+			recheck.disabled = not bool(s.get("container_running", false))
+			recheck.pressed.connect(func() -> void:
+				recheck.text = UIStrings.t("setup.provider_rechecking")
+				SetupService.refresh())
+			actions.add_child(recheck)
 		# Niente pulsante "INSTALLA / AGGIORNA CLI" accanto: faceva la PRIMA
 		# METÀ di questo. Dal 24/07 il comando di login è
 		# `providers update <id> && <cli> login`, cioè installa o aggiorna e poi
@@ -1355,20 +1367,58 @@ var _hours_status: Label
 var _hours_save_btn: Button
 var _hours_loaded := false
 
+## Giorni della settimana: chiave che va nel config (mon…sun) ed etichetta
+## di una lettera per i sette pulsanti.
+const HOURS_DAYS := [["mon", "L"], ["tue", "M"], ["wed", "M"], ["thu", "G"],
+		["fri", "V"], ["sat", "S"], ["sun", "D"]]
+
+## Punti di partenza in un click. Chi apre questa pagina la prima volta non
+## ha un'opinione sugli orari: ne ha una sul MODO in cui vuole lavorare.
+const HOURS_PRESETS := {
+	"office": [{"days": "mon, tue, wed, thu, fri", "start": "09:00", "end": "18:00"}],
+	"evening": [{"days": "mon, tue, wed, thu, fri", "start": "18:00", "end": "23:00"},
+			{"days": "sat, sun", "start": "10:00", "end": "20:00"}],
+	"always": [{"days": "mon, tue, wed, thu, fri, sat, sun",
+			"start": "00:00", "end": "00:00"}],
+}
+
+
 func _build_hours() -> void:
 	if not BackendBus.hours_saved.is_connected(_on_hours_saved):
 		BackendBus.hours_saved.connect(_on_hours_saved)
-	var raw: Dictionary = BackendBus.live_settings.get("hours_raw", {})
-	if not BackendBus.is_live() or raw.is_empty():
-		_build_config()
+	# Senza team acceso non c'è dove scrivere gli orari: dirlo, invece di
+	# mostrare una pagina vuota che sembra rotta.
+	if not BackendBus.is_live():
+		_content.add_child(TerminalTheme.label(UIStrings.t("hours.intro"),
+				14, Palette.MUTED))
+		var warn := TerminalTheme.label(UIStrings.t("hours.need_team"),
+				14, Palette.YELLOW)
+		warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(warn)
+		var back := Button.new()
+		back.text = UIStrings.t("setup.back_overview")
+		back.flat = true
+		back.pressed.connect(func() -> void: navigate.emit("activation"))
+		_content.add_child(back)
 		return
+	var raw: Dictionary = BackendBus.live_settings.get("hours_raw", {})
 	if not _hours_loaded:
 		_hours_windows = []
 		for w in raw.get("windows", []):
 			_hours_windows.append({"days": ", ".join(PackedStringArray(w.get("days", []))),
 					"start": str(w.get("start", "09:00")), "end": str(w.get("end", "18:00"))})
+		# Prima volta: si parte da una proposta, non dal foglio bianco. La
+		# pagina usciva di qui senza disegnare niente quando le finestre non
+		# esistevano ancora — cioè proprio quando il passo 04 le chiede.
+		if _hours_windows.is_empty():
+			for w in HOURS_PRESETS["office"]:
+				_hours_windows.append(w.duplicate())
 		_hours_loaded = true
 	_content.add_child(TerminalTheme.label(UIStrings.t("hours.intro"), 14, Palette.MUTED))
+	if raw.is_empty():
+		var first := TerminalTheme.label(UIStrings.t("hours.first_time"), 13, Palette.MINT)
+		first.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(first)
 	var tz_row := HBoxContainer.new()
 	tz_row.add_theme_constant_override("separation", 12)
 	_content.add_child(tz_row)
@@ -1379,6 +1429,23 @@ func _build_hours() -> void:
 	_hours_tz.text = str(raw.get("timezone", "Europe/Rome"))
 	_hours_tz.custom_minimum_size = Vector2(280, 0)
 	tz_row.add_child(_hours_tz)
+	var preset_lbl := TerminalTheme.label(UIStrings.t("hours.presets"),
+			13, Palette.MUTED, "medium")
+	_content.add_child(preset_lbl)
+	var preset_row := HFlowContainer.new()
+	preset_row.add_theme_constant_override("h_separation", 6)
+	preset_row.add_theme_constant_override("v_separation", 4)
+	_content.add_child(preset_row)
+	for entry in [["office", "hours.preset_office"], ["evening", "hours.preset_evening"],
+			["always", "hours.preset_always"]]:
+		var preset := Button.new()
+		preset.text = UIStrings.t(str(entry[1]))
+		preset.pressed.connect(func() -> void:
+			_hours_windows = []
+			for w in HOURS_PRESETS[str(entry[0])]:
+				_hours_windows.append(w.duplicate())
+			_build())
+		preset_row.add_child(preset)
 	_content.add_child(TerminalTheme.label(UIStrings.t("hours.windows"),
 			14, Palette.MUTED, "medium"))
 	for i in _hours_windows.size():
@@ -1386,11 +1453,27 @@ func _build_hours() -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		_content.add_child(row)
-		var days := LineEdit.new()
-		days.text = str(w["days"])
-		days.placeholder_text = "mon, tue, wed…"
-		days.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(days)
+		# I giorni sono sette pulsanti, non una riga da compilare: "mon, tue,
+		# wed" era una sintassi da ricordare dentro un passo obbligatorio.
+		var day_box := HBoxContainer.new()
+		day_box.add_theme_constant_override("separation", 2)
+		day_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(day_box)
+		var win_for_days: Dictionary = w
+		for day_def in HOURS_DAYS:
+			var key := str(day_def[0])
+			var toggle := Button.new()
+			toggle.text = str(day_def[1])
+			toggle.toggle_mode = true
+			toggle.custom_minimum_size = Vector2(34, 0)
+			toggle.button_pressed = _hours_has_day(win_for_days, key)
+			toggle.tooltip_text = key
+			if toggle.button_pressed:
+				toggle.add_theme_color_override("font_color", Palette.GREEN)
+			toggle.pressed.connect(func() -> void:
+				_hours_toggle_day(win_for_days, key)
+				_build())
+			day_box.add_child(toggle)
 		var start := LineEdit.new()
 		start.text = str(w["start"])
 		start.custom_minimum_size = Vector2(100, 0)
@@ -1402,11 +1485,9 @@ func _build_hours() -> void:
 		row.add_child(end)
 		var win: Dictionary = w
 		var sync := func() -> void:
-			win["days"] = days.text
 			win["start"] = start.text
 			win["end"] = end.text
 			_refresh_hours_estimate()
-		days.text_changed.connect(func(_t: String) -> void: sync.call())
 		start.text_changed.connect(func(_t: String) -> void: sync.call())
 		end.text_changed.connect(func(_t: String) -> void: sync.call())
 		var rm := Button.new()
@@ -1441,6 +1522,36 @@ func _build_hours() -> void:
 	_content.add_child(_hours_save_btn)
 	_hours_status = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_hours_status)
+
+## I giorni di una finestra restano una stringa "mon, tue" perché è il
+## formato che il salvataggio e la stima già parlano: i pulsanti scrivono lì.
+static func _hours_day_list(win: Dictionary) -> Array:
+	var out: Array = []
+	for d in str(win.get("days", "")).split(","):
+		var day := d.strip_edges().to_lower()
+		if day != "" and not out.has(day):
+			out.append(day)
+	return out
+
+
+static func _hours_has_day(win: Dictionary, day: String) -> bool:
+	return _hours_day_list(win).has(day)
+
+
+## Accende o spegne un giorno mantenendo l'ordine della settimana, così la
+## riga non si rimescola sotto le dita a ogni click.
+static func _hours_toggle_day(win: Dictionary, day: String) -> void:
+	var current := _hours_day_list(win)
+	if current.has(day):
+		current.erase(day)
+	else:
+		current.append(day)
+	var ordered: Array = []
+	for day_def in HOURS_DAYS:
+		if current.has(str(day_def[0])):
+			ordered.append(str(day_def[0]))
+	win["days"] = ", ".join(PackedStringArray(ordered))
+
 
 ## Ore attive/settimana di una lista finestre del form.
 static func _hours_per_week(windows: Array) -> float:
