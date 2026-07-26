@@ -8,11 +8,14 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  emailSubject,
+  emailText,
   issueBody,
   issueTitle,
   neutralize,
   newTicket,
   parseReport,
+  replyToSicuro,
   MAX_STORY_CHARS,
 } from "../../../web/lib/feedback-report";
 
@@ -163,5 +166,69 @@ describe("titolo e riferimento", () => {
   it("il riferimento è ripetibile a voce", () => {
     const ticket = newTicket(1_700_000_000_000);
     expect(ticket).toMatch(/^JHT-[0-9A-Z]+$/);
+  });
+});
+
+describe("email — la segnalazione che arriva in casella", () => {
+  const report = parseReport(VALID)!;
+
+  it("mette il riferimento nell'oggetto, per ritrovarla", () => {
+    expect(emailSubject(report, "JHT-9Z")).toContain("JHT-9Z");
+    expect(emailSubject(report, "JHT-9Z")).toContain("collegamento");
+  });
+
+  it("non produce un oggetto smisurato", () => {
+    const lungo = parseReport({ ...VALID, happened: "x".repeat(500) })!;
+    expect(emailSubject(lungo, "JHT-9Z").length).toBeLessThanOrEqual(95);
+  });
+
+  it("il contatto QUI c'e': la casella e' privata, la issue no", () => {
+    const testo = emailText(report, "JHT-9Z");
+    expect(testo).toContain("mario@rossi.it");
+    expect(testo).toContain("RISPONDI A");
+  });
+
+  it("dice chiaramente quando non si puo' rispondere", () => {
+    const anon = parseReport({ ...VALID, contact: "" })!;
+    expect(emailText(anon, "JHT-9Z")).toContain("nessun contatto lasciato");
+  });
+
+  it("redige comunque i segreti e i dati personali della diagnostica", () => {
+    const token = "ghp" + "_ABCdefGHIjklMNOpqrSTUvwxYZ0123456789";
+    const sporco = parseReport({
+      ...VALID,
+      happened: `ho incollato ${token}`,
+      diagnostics: "path /Users/mariorossi/.jht · ssh 65.108.14.22",
+    })!;
+    const testo = emailText(sporco, "JHT-9Z");
+    expect(testo).not.toContain(token);
+    expect(testo).not.toContain("mariorossi");
+    expect(testo).not.toContain("65.108.14.22");
+  });
+});
+
+describe("replyToSicuro — header injection", () => {
+  it("accetta un indirizzo normale", () => {
+    expect(replyToSicuro(" mario@rossi.it ")).toBe("mario@rossi.it");
+  });
+
+  it("rifiuta gli a-capo, che inietterebbero header nella mail", () => {
+    // Il contatto arriva da un campo libero di un client pubblico: un \r\n
+    // dentro il valore permetterebbe di aggiungere Bcc arbitrari.
+    expect(replyToSicuro("a@b.it\r\nBcc: vittima@x.it")).toBe("");
+    expect(replyToSicuro("a@b.it\nBcc: vittima@x.it")).toBe("");
+  });
+
+  it("rifiuta le forme che non sono un indirizzo", () => {
+    for (const brutto of [
+      "",
+      "non-una-mail",
+      "a@b",
+      "<a@b.it>",
+      "a b@c.it",
+      "a@b.it, c@d.it",
+    ]) {
+      expect(replyToSicuro(brutto)).toBe("");
+    }
   });
 });

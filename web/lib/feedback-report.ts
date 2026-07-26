@@ -80,6 +80,75 @@ export function issueTitle(report: Report): string {
   return `[in-app] ${summary || "segnalazione senza titolo"}`;
 }
 
+/**
+ * Indirizzo utilizzabile come Reply-To, oppure stringa vuota.
+ *
+ * Il contatto arriva da un campo libero di un client pubblico e finisce in un
+ * header SMTP: un a-capo dentro il valore permetterebbe di iniettare header
+ * arbitrari nel messaggio (header injection). Qui si accetta solo la forma
+ * di un indirizzo, su una riga sola, o niente.
+ */
+export function replyToSicuro(contatto: string): string {
+  const pulito = contatto.trim();
+  if (!/^[^\s@<>,;:"'\\]+@[^\s@<>,;:"'\\]+\.[A-Za-z]{2,}$/.test(pulito)) {
+    return "";
+  }
+  return pulito;
+}
+
+/** Oggetto della mail che arriva in casella. */
+export function emailSubject(report: Report, ticket: string): string {
+  const summary = report.happened.split("\n")[0].slice(0, 80).trim();
+  return `[${ticket}] ${summary || "segnalazione dall'app"}`;
+}
+
+/**
+ * Il corpo della mail: testo semplice, non HTML.
+ *
+ * La segnalazione va letta, non ammirata — e il testo semplice si legge
+ * ovunque, si cita nelle risposte e non porta con sé il rischio di rendere
+ * cliccabile qualcosa che un estraneo ha scritto in un campo libero.
+ */
+export function emailText(report: Report, ticket: string): string {
+  const story = (text: string) =>
+    text ? neutralize(redactSecrets(text)) : "(non indicato)";
+  const righe = [
+    `Segnalazione ${ticket}`,
+    "",
+    "COSA STAVO FACENDO",
+    story(report.doing),
+    "",
+    "COSA È SUCCESSO",
+    story(report.happened),
+    "",
+    "COSA MI ASPETTAVO",
+    story(report.expected),
+    "",
+    "CONTESTO",
+    `  client:      ${report.client}`,
+    `  versione:    ${report.appVersion}`,
+    `  piattaforma: ${report.platform}`,
+    `  lingua:      ${report.locale}`,
+    "",
+  ];
+  // Il contatto QUI c'è, al contrario della issue pubblica: questa mail
+  // arriva in una casella privata, ed è il dato che permette di rispondere.
+  righe.push(
+    report.contact
+      ? `RISPONDI A: ${report.contact}  (è già nel Reply-To)`
+      : "RISPONDI A: nessun contatto lasciato — non è possibile rispondere",
+    "",
+  );
+  if (report.diagnostics) {
+    righe.push(
+      "DIAGNOSTICA (già ripulita dai dati personali)",
+      "─".repeat(60),
+      redact(report.diagnostics),
+    );
+  }
+  return righe.join("\n");
+}
+
 export function issueBody(report: Report, ticket: string): string {
   // Seconda passata di redazione: il client sanifica già, questa copre le
   // versioni vecchie e i client non nostri. I racconti perdono solo le
