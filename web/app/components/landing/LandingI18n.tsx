@@ -106,10 +106,10 @@ const translations = {
   footer_stats: { it: "Progetto", en: "Project", hu: "Projekt" },
   footer_resources: { it: "Risorse", en: "Resources", hu: "Források" },
   footer_contacts: { it: "Contatti", en: "Contacts", hu: "Kapcsolat" },
-  footer_write: {
-    it: "Scrivici",
-    en: "Write to us",
-    hu: "Írj nekünk",
+  nav_contact: {
+    it: "Contatti",
+    en: "Contact",
+    hu: "Kapcsolat",
   },
   footer_bug: {
     it: "Segnala un bug",

@@ -35,7 +35,7 @@ export const fr: Record<string, string> = {
   footer_stats: "Projet",
   footer_resources: "Ressources",
   footer_contacts: "Contacts",
-  footer_write: "Écris-nous",
+  nav_contact: "Contact",
   footer_bug: "Signaler un bug",
   footer_privacy: "Politique de confidentialité",
   footer_terms: "Conditions d'utilisation",
