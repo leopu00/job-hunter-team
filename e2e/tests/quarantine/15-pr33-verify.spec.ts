@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/workspace';
+import { ensureSeededWorkspace, loginToSeededWorkspace } from '../_helpers/workspace';
 
 /**
  * VERIFICA /positions — smoke, no-leak, job description.
@@ -17,7 +17,7 @@ import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/worksp
  * Le route sono protette: i test verificano struttura, redirect e contenuto.
  */
 
-const REPORT_DIR = path.join(__dirname, '../../reports/visual');
+const REPORT_DIR = path.join(__dirname, '../../../reports/visual');
 const WORKSPACE = '/tmp/jht-e2e-pr33';
 
 test.beforeAll(() => {

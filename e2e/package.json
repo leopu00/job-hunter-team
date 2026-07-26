@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
-    "test:smoke": "playwright test 06-full-flow --grep 'smoke test'",
-    "test:auth": "playwright test 01-auth",
+    "test:quarantine": "E2E_INCLUDE_QUARANTINE=1 playwright test quarantine/",
     "test:report": "playwright show-report reports/playwright"
   },
   "keywords": [],

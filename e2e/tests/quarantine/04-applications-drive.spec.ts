@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/workspace';
+import { ensureSeededWorkspace, loginToSeededWorkspace } from '../_helpers/workspace';
 
 const WORKSPACE = '/tmp/jht-e2e-applications';
 
