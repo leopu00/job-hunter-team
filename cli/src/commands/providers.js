@@ -181,7 +181,13 @@ async function handleUse(id) {
 // ogni provider: lista di step, ogni step diventa `docker compose run --rm
 // --no-deps --entrypoint <entrypoint> jht <args>` — eseguito in un container
 // effimero, così rename() atomici di npm non trovano il binario in uso.
-const NPM_PREFIX_ENV = { NPM_CONFIG_PREFIX: '/jht_home/.npm-global' };
+// Il prefisso lo decide il compose (che lo tiene FUORI dal bind-mount: su
+// Windows scriverci costa ~158x). Qui si rispetta quello che il container
+// dichiara, col vecchio percorso come fallback per i runtime piu' datati.
+const NPM_PREFIX = process.env.NPM_CONFIG_PREFIX || '/jht_home/.npm-global';
+const UV_BIN_DIR = process.env.UV_TOOL_BIN_DIR || `${NPM_PREFIX}/bin`;
+const PY_USER_BASE = '/opt/jht-deps/python';
+const NPM_PREFIX_ENV = { NPM_CONFIG_PREFIX: NPM_PREFIX };
 const UPDATE_SPECS = {
   claude: [{ entrypoint: 'npm', args: ['install', '-g', '@anthropic-ai/claude-code@latest'], env: NPM_PREFIX_ENV }],
   codex:  [{ entrypoint: 'npm', args: ['install', '-g', '@openai/codex@latest'], env: NPM_PREFIX_ENV }],
@@ -192,9 +198,13 @@ const UPDATE_SPECS = {
     entrypoint: 'sh',
     args: ['-c', [
       'set -e',
-      'export PATH="$HOME/.local/bin:$PATH"',
+      // uv finisce nel prefisso veloce SOLO per questa installazione: il
+      // PYTHONUSERBASE globale resta il magazzino condiviso degli agenti
+      // (RULE-T13), che non c'entra con i CLI dei provider.
+      `export PYTHONUSERBASE=${PY_USER_BASE}`,
+      `export PATH="${PY_USER_BASE}/bin:$HOME/.local/bin:$PATH"`,
       'pip3 install --user --break-system-packages --upgrade uv',
-      'UV_TOOL_BIN_DIR=/jht_home/.npm-global/bin uv tool install --force --python 3.13 kimi-cli',
+      `UV_TOOL_BIN_DIR=${UV_BIN_DIR} uv tool install --force --python 3.13 kimi-cli`,
     ].join(' && ')],
   }],
 };
