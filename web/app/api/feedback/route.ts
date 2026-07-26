@@ -9,6 +9,7 @@ import {
   issueTitle,
   newTicket,
   parseReport,
+  sembraSpam,
   replyToSicuro,
   type Report,
 } from "@/lib/feedback-report";
@@ -178,6 +179,11 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "JSON non valido" }, { status: 400 });
   }
+  // Al bot si risponde di sì e non si consegna niente: un errore gli
+  // direbbe come aggirare la trappola al tentativo successivo.
+  if (sembraSpam(parsed)) {
+    return NextResponse.json({ ok: true, ticket: newTicket() });
+  }
   const report = parseReport(parsed);
   if (!report) {
     return NextResponse.json(
@@ -189,9 +195,13 @@ export async function POST(req: NextRequest) {
   const ticket = newTicket();
   // La casella è la destinazione principale: è quella che regge anche quando
   // il token GitHub scade o il repo cambia nome. Le altre due si aggiungono.
+  // Il modulo di contatto del sito NON apre issue: una domanda commerciale o
+  // un messaggio con dentro i dati di chi scrive non deve diventare una
+  // pagina pubblica indicizzabile. Da lì si passa solo dalla casella.
+  const dalSito = report.client.startsWith("web-");
   const [mail, issue, webhook] = await Promise.all([
     sendEmail(report, ticket),
-    openIssue(report, ticket),
+    dalSito ? Promise.resolve(null) : openIssue(report, ticket),
     notifyWebhook(report, ticket),
   ]);
 

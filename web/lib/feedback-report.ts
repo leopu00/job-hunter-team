@@ -15,6 +15,9 @@ export const MAX_DIAGNOSTICS_CHARS = 200_000;
 
 export interface Report {
   client: string;
+  /** Che tipo di messaggio è: "bug", "domanda", "altro". Lo manda il modulo
+   *  di contatto del sito; l'app desktop lo lascia vuoto. */
+  kind: string;
   appVersion: string;
   locale: string;
   platform: string;
@@ -58,6 +61,7 @@ export function parseReport(raw: unknown): Report | null {
   if (happened.length < 5) return null;
   return {
     client: field(body.client, 60) || "unknown",
+    kind: field(body.kind, 40),
     appVersion: field(body.app_version, 40) || "unknown",
     locale: field(body.locale, 10) || "it",
     platform: field(body.platform, 40) || "unknown",
@@ -67,6 +71,19 @@ export function parseReport(raw: unknown): Report | null {
     contact: field(body.contact, 200),
     diagnostics: field(body.diagnostics, MAX_DIAGNOSTICS_CHARS),
   };
+}
+
+/**
+ * Trappola per i bot: un campo che un umano non vede e non compila mai.
+ *
+ * Un modulo pubblico senza difese diventa in poche settimane una macchina per
+ * spam puntata sulla casella del progetto. Il rate limit ferma i volumi, non
+ * i singoli invii automatici — questo li riconosce.
+ */
+export function sembraSpam(raw: unknown): boolean {
+  if (typeof raw !== "object" || raw === null) return false;
+  const esca = (raw as Record<string, unknown>).website;
+  return typeof esca === "string" && esca.trim().length > 0;
 }
 
 /** Riferimento leggibile a voce e al telefono, non un UUID: l'utente lo
@@ -99,7 +116,10 @@ export function replyToSicuro(contatto: string): string {
 /** Oggetto della mail che arriva in casella. */
 export function emailSubject(report: Report, ticket: string): string {
   const summary = report.happened.split("\n")[0].slice(0, 80).trim();
-  return `[${ticket}] ${summary || "segnalazione dall'app"}`;
+  // Il tipo in oggetto fa la differenza fra una casella che si smista a
+  // colpo d'occhio e una in cui bisogna aprire tutto per capire cosa c'è.
+  const tipo = report.kind ? `(${report.kind}) ` : "";
+  return `[${ticket}] ${tipo}${summary || "segnalazione dall'app"}`;
 }
 
 /**
