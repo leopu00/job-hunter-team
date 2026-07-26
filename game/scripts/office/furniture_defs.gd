@@ -10,31 +10,25 @@ class_name FurnitureDefs
 const WORLD := Rect2(0, -420, 3400, 2560)
 const FLOOR := Rect2(240, 140, 2920, 1860)
 
-## Zona lab racchiusa da vetri interni (visual + collisioni sottili).
-## Spostato all'angolo NE del pavimento largo: casa dei 6 Analisti.
-const LAB_WALL_V := Rect2(2220, 140, 12, 606)     # parete verticale
-const LAB_WALL_H1 := Rect2(2220, 740, 330, 12)    # tratto sx della parete bassa
-const LAB_WALL_H2 := Rect2(2670, 740, 410, 12)    # tratto dx (in mezzo: porta)
-
 const ITEMS := [
 	# ── Supporto operativo, lato OVEST degli Scorer ──
 	# Il Mantenitore lavora a una console tecnica frontale: monitor, utensili,
 	# ricambi e sedia sono un unico composito quando la postazione è occupata.
 	{"id": "maintainer_workbench", "kind": "maintainer_workbench",
-			# 215 px porta il corpo dipinto a ~127 px: la stessa altezza del
-			# Dottore seduto. Centro e baseline restano invariati.
-			"rect": Rect2(668, 960, 215, 93), "facing": "down",
+			# Ingrandita rispetto ai ricambi: la console deve restare chiaramente
+			# il mobile principale, mentre le scatole sono un accessorio minuto.
+			"rect": Rect2(580, 900, 245, 106), "facing": "down",
 			"registry_key": "core:mantenitore"},
-	{"id": "maintainer_parts", "kind": "nc_boxes", "rect": Rect2(548, 1015, 72, 60)},
-	{"id": "maintainer_cabinet", "kind": "nc_filing_cabinet", "rect": Rect2(910, 935, 58, 92)},
+	{"id": "maintainer_parts", "kind": "nc_boxes", "rect": Rect2(510, 930, 45, 38)},
+	{"id": "maintainer_cabinet", "kind": "nc_filing_cabinet", "rect": Rect2(980, 875, 58, 92)},
 
 	# Il Dottore ha un'identità autonoma: poltrona clinica frontale (non il
 	# Mentor), banco con strumenti e cassettiera. Anche qui seduta+agente
 	# diventano un solo elemento grafico durante il lavoro.
-	{"id": "doctor_lab_desk", "kind": "lab_bench", "rect": Rect2(490, 1190, 220, 90)},
-	{"id": "doctor_drawers", "kind": "nc_drawer_unit", "rect": Rect2(712, 1265, 52, 68)},
+	{"id": "doctor_lab_desk", "kind": "lab_bench", "rect": Rect2(490, 1160, 220, 90)},
+	{"id": "doctor_drawers", "kind": "nc_drawer_unit", "rect": Rect2(720, 1182, 52, 68)},
 	{"id": "doctor_armchair", "kind": "doctor_armchair",
-			"rect": Rect2(780, 1230, 140, 133), "facing": "down",
+			"rect": Rect2(780, 1200, 140, 133), "facing": "down",
 			"registry_key": "core:dottore"},
 
 	# ── Area comune (ex zona Scorer): lounge del Mentor ──
@@ -43,14 +37,16 @@ const ITEMS := [
 	# come gli altri arredi individuali. L'arte occupata include Mentor+libro.
 	# Il canvas contiene margini per le gambe: 140 px di rect producono una
 	# sagoma effettiva di ~104 px, allineata alla scala degli agenti in piedi.
-	{"id": "mentor_armchair", "kind": "mentor_armchair", "rect": Rect2(2655, 1117, 140, 133),
+	{"id": "mentor_armchair", "kind": "mentor_armchair", "rect": Rect2(2760, 1117, 140, 133),
 			"facing": "down", "registry_key": "core:mentor"},
-	{"id": "lamp", "kind": "lamp", "rect": Rect2(2290, 1060, 44, 44)},
-	{"id": "plant_a", "kind": "plant", "rect": Rect2(2440, 1035, 56, 56)},
+	{"id": "lamp", "kind": "lamp", "rect": Rect2(2700, 1090, 44, 44)},
+	{"id": "plant_a", "kind": "plant", "rect": Rect2(2750, 1035, 56, 56)},
 
-	# Bacheca e libreria seguono la lounge.
-	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(2520, 995, 150, 34)},
-	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2720, 970, 280, 70)},
+	# La bacheca è appesa alla vetrata (nessuna collisione sul pavimento); la
+	# libreria più larga dà peso alla parete della lounge.
+	{"id": "corkboard", "kind": "corkboard", "rect": Rect2(2990, 865, 150, 34),
+			"non_blocking": true},
+	{"id": "bookshelf", "kind": "shelf_h", "rect": Rect2(2580, 950, 360, 90)},
 	# Un solo elemento operativo sulla parete nord: la stampante condivisa.
 	# Il nuovo sprite verticale sostituisce il vecchio blockout e tutto il
 	# gruppo decorativo (bar, dispenser, scatole, cestino e orologio).
@@ -60,11 +56,12 @@ const ITEMS := [
 	{"id": "plant_printer", "kind": "plant_palm", "rect": Rect2(1330, 190, 110, 100)},
 
 	# ── Centro del tappeto Scout: l'ologramma della ricerca ──
-	# Il centro del rect coincide con DeptRugs.RUGS["scout"] = (775, 560).
-	{"id": "hologram", "kind": "hologram", "rect": Rect2(675, 470, 200, 180)},
+	# L'asse X coincide col tappeto; l'asse Y è rialzato per centrare la base
+	# luminosa sull'ornamento prospettico, che visivamente cade sopra il centro.
+	{"id": "hologram", "kind": "hologram", "rect": Rect2(675, 435, 200, 180)},
 
 	# ── Direzione, fascia nord: Capitano e Tesoriere guardano in camera ──
-	{"id": "desk_coordinator", "kind": "captain_desk", "rect": Rect2(1365, 500, 260, 108),
+	{"id": "desk_coordinator", "kind": "captain_desk", "rect": Rect2(1365, 455, 260, 108),
 			"facing": "down", "registry_key": "core:coordinatore"},
 	# Il canvas del Budgeteer contiene una sagoma più piena: 280 px rendono
 	# l'agente alto ~149 px, uguale ai ~150 px del Capitano. Centro e baseline
@@ -73,20 +70,20 @@ const ITEMS := [
 			"facing": "down", "registry_key": "core:sentinella"},
 
 	# ── Area comune: lavagna score board ──
-	{"id": "blackboard", "kind": "blackboard", "rect": Rect2(3070, 1030, 56, 260)},
+	{"id": "blackboard", "kind": "blackboard", "rect": Rect2(2950, 1050, 56, 260)},
 	{"id": "plant_c", "kind": "plant", "rect": Rect2(3030, 1340, 56, 56)},
 
 	# ── Verde sparso (reparti e corridoi, mai sulla nav principale) ──
 	# Fuori dalla proiezione del tavolo Scrittori → Critici e sopra la
 	# vetrata: la chioma non deve più spuntare attraverso il piano.
 	{"id": "plant_palm_a", "kind": "plant_palm", "rect": Rect2(760, 1370, 56, 56)},
-	{"id": "plant_monstera_a", "kind": "plant_monstera", "rect": Rect2(2200, 820, 56, 56)},
-	{"id": "plant_shelf_a", "kind": "plant_shelf", "rect": Rect2(2340, 960, 90, 50)},
-	{"id": "plant_monstera_b", "kind": "plant_monstera", "rect": Rect2(2378, 764, 56, 56)},
-	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1230, 1900, 56, 56)},
-	# Lontana dal varco scorer: a y=1455 chiudeva il passaggio tra desk 5
-	# e vetrata, isolando la postazione dalla componente A* principale.
-	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3015, 1700, 56, 56)},
+	{"id": "plant_monstera_a", "kind": "plant_monstera", "rect": Rect2(2765, 235, 56, 56)},
+	{"id": "plant_shelf_a", "kind": "plant_shelf", "rect": Rect2(2470, 960, 90, 50)},
+	{"id": "plant_monstera_b", "kind": "plant_monstera", "rect": Rect2(2225, 250, 56, 56)},
+	# A destra della postazione assistente Scrittori, senza invadere la credenza.
+	{"id": "plant_palm_b", "kind": "plant_palm", "rect": Rect2(1790, 1725, 56, 56)},
+	# Nell'angolo nord-est dei Critici, vicino all'incontro tra vetrata e bordo.
+	{"id": "plant_monstera_c", "kind": "plant_monstera", "rect": Rect2(3080, 1515, 56, 56)},
 	{"id": "plant_palm_c", "kind": "plant_palm", "rect": Rect2(302, 1436, 56, 56)},
 
 	# ── Reception all'uscita sud, tra Scrittori e Critici ──
@@ -98,7 +95,7 @@ const ITEMS := [
 
 	# Tavolino revisione sul bordo ovest: il centro dell'anello resta libero
 	# per le sei sedie rivolte all'interno e per i viaggi della pipeline.
-	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2085, 1840, 120, 100)},
+	{"id": "critici_center", "kind": "critici_center", "rect": Rect2(2107.5, 1877.5, 75, 62.5)},
 
 	{"id": "plant_b", "kind": "plant", "rect": Rect2(1950, 860, 56, 56)},
 
@@ -114,27 +111,19 @@ const ITEMS := [
 	{"id": "wb_analisti", "kind": "nc_whiteboard", "rect": Rect2(1255, 400, 150, 34)},
 	{"id": "wb_scorer", "kind": "nc_whiteboard", "rect": Rect2(1585, 400, 150, 34),
 			"flip_h": true},
-	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(380, 1414, 150, 34)},
-	# Sul lato sud della vetrata: a y=1446 tagliava l'unica riga A* tra
-	# scorer:5 e l'apertura occidentale della parete condivisa.
-	{"id": "wb_critici", "kind": "nc_whiteboard", "rect": Rect2(2085, 1510, 150, 34)},
-	# Scatoloni e schedari: l'ufficio vive
-	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(2985, 1920, 80, 66)},
-	{"id": "boxes_scrittori", "kind": "nc_boxes", "rect": Rect2(1100, 1900, 80, 66)},
-	{"id": "filing_lab", "kind": "nc_filing_cabinet", "rect": Rect2(3000, 250, 70, 110)},
-	{"id": "filing_coord", "kind": "nc_filing_cabinet", "rect": Rect2(2950, 1175, 70, 110)},
+	{"id": "wb_scrittori", "kind": "nc_whiteboard", "rect": Rect2(290, 1160, 150, 34)},
+	# Scatoloni ridotti alla scala degli agenti e schedario della lounge.
+	{"id": "boxes_critici", "kind": "nc_boxes", "rect": Rect2(3000, 1945, 50, 41)},
+	{"id": "boxes_scrittori", "kind": "nc_boxes", "rect": Rect2(1115, 1925, 50, 41)},
+	{"id": "filing_coord", "kind": "nc_filing_cabinet", "rect": Rect2(2445, 910, 70, 110)},
 	# Dettagli: appendiabiti all'entrata sud, cestini e cassettiere a fianco
 	# delle scrivanie. La fascia nord della stampante resta intenzionalmente
 	# pulita e leggibile.
 	{"id": "coat_rack", "kind": "nc_coat_rack", "rect": Rect2(1500, 1780, 50, 50)},
-	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(400, 778, 40, 40)},
-	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(330, 758, 60, 72)},
-	# Spostata fuori dall'asse della porta Scout sud: a (940,920) bloccava
-	# materialmente il passaggio fra il tavolo di consegna e il corridoio.
-	{"id": "drawer_scorer", "kind": "nc_drawer_unit", "rect": Rect2(305, 1180, 60, 72)},
-	# Fuori dall'anello radiale: a (774,1545) intersecava la postazione
-	# Scrittori delle ore 12 e ne falsava collisione e lettura prospettica.
-	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(250, 1840, 60, 72)},
+	{"id": "bin_scout", "kind": "nc_waste_bin", "rect": Rect2(1175, 215, 26, 26)},
+	{"id": "drawer_scout", "kind": "nc_drawer_unit", "rect": Rect2(605, 640, 42, 50)},
+	# Cassettiera degli Scrittori, a destra della lavagna e fuori dal tappeto.
+	{"id": "drawer_scrittori", "kind": "nc_drawer_unit", "rect": Rect2(380, 1425, 60, 72)},
 	# in coda da dev-art (post-reset Codex): footprint già pronti
 	{"id": "dartboard", "kind": "nc_dartboard", "rect": Rect2(254, 1010, 36, 36)},
 	{"id": "wall_art", "kind": "nc_wall_art", "rect": Rect2(2040, 150, 90, 60)},
@@ -155,5 +144,6 @@ static func get_rect(id: String) -> Rect2:
 static func obstacles() -> Array:
 	var out: Array = []
 	for item in ITEMS:
-		out.append(item["rect"])
+		if not bool(item.get("non_blocking", false)):
+			out.append(item["rect"])
 	return out

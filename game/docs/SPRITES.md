@@ -63,7 +63,7 @@ Celle non usate = completamente trasparenti.
    matte chroma-key semi-trasparente di Codex — vedi gen-art/LOG.md).
 2. **Aggancio piedi**: nei 6 frame di walk i piedi restano nell'intorno
    di (128, 360) ±12 px — niente "scivolamento" verticale tra frame.
-3. **Identità**: occhiali tondi scuri SEMPRE (firma degli agenti);
+3. **Identità**: occhiali scuri ovali/allungati SEMPRE (firma degli agenti);
    palette abiti coerente col ruolo; niente pixel art, niente flat vector.
 
 ## Foglio seduto (opzionale): `<slug>_sit.png`

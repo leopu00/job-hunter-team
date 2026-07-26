@@ -81,16 +81,6 @@ func _ready() -> void:
 		band.scale = Vector2(floor_rect.size.x, GLASS_H) / gtex.get_size()
 		band.show_behind_parent = true
 		add_child(band)
-		# velatura sul recinto di vetro del lab
-		var lab := Sprite2D.new()
-		lab.texture = gtex
-		lab.centered = false
-		lab.position = Vector2(FurnitureDefs.LAB_WALL_V.position.x, floor_rect.position.y)
-		lab.scale = Vector2(floor_rect.end.x - FurnitureDefs.LAB_WALL_V.position.x,
-				FurnitureDefs.LAB_WALL_H1.end.y - floor_rect.position.y) / gtex.get_size()
-		lab.modulate.a = 0.5
-		lab.show_behind_parent = true
-		add_child(lab)
 	var rug_tex := _load_tex(RUG_TEX)
 	if rug_tex != null:
 		# Tappeto dell'area comune trasferita nella vecchia zona Scorer.
@@ -98,7 +88,7 @@ func _ready() -> void:
 		rug.texture = rug_tex
 		# Centro visivo dell'angolo comune: tavolino sul tappeto, figure di
 		# servizio a sinistra e divanetto del Mentor sul bordo destro.
-		rug.position = Vector2(2500, 1190)
+		rug.position = Vector2(2620, 1190)
 		rug.scale = Vector2(0.68, 0.68)
 		rug.show_behind_parent = true
 		add_child(rug)

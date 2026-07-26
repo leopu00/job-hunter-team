@@ -10,7 +10,7 @@ const SHEETS := "res://assets/characters/sheets/"
 const AGENTS := {
 	"coordinatore": {
 		"name": "Il Coordinatore",
-		"spot": Vector2(1495, 486),  # dietro il desk, volto verso la camera
+		"spot": Vector2(1495, 441),  # dietro il desk, volto verso la camera
 		"facing": "down",
 		"workstation_key": "core:coordinatore",
 		# il giro dei reparti: passa a controllare gli inbox, come i C-tick
@@ -77,13 +77,15 @@ const AGENTS := {
 		"name": "Il Mentor",
 		# Il punto d'accesso resta sotto la poltrona e navigabile; l'offset porta
 		# il centro logico nel composito frontale senza ingrandire il personaggio.
-		"spot": Vector2(2725, 1274),
+		"spot": Vector2(2830, 1274),
 		"facing": "down",
 		"seat_offset": Vector2(0, -24),
 		"workstation_key": "core:mentor",
 		# Ordine intenzionale della passeggiata: prende un volume, controlla la
 		# lavagna e torna a leggere. AgentNPC percorre entrambe le tappe.
-		"wander": [Vector2(2860, 1088), Vector2(2595, 1072)],
+		# Punti liberi sul lato sud della lounge: seguono la nuova posizione di
+		# libreria, poltrona e lavagna senza intrappolare il Mentor fra gli arredi.
+		"wander": [Vector2(2550, 1260), Vector2(2920, 1320)],
 		"chatter": [
 			"un buon colloquio è una conversazione",
 			"i numeri raccontano i risultati",
@@ -109,7 +111,7 @@ const AGENTS := {
 	"mantenitore": {
 		"name": "Il Mantenitore",
 		# Reparto tecnico sul lato ovest degli Scorer, opposto al Mentor.
-		"spot": Vector2(775, 946),
+		"spot": Vector2(702.5, 899),
 		"facing": "down",
 		"workstation_key": "core:mantenitore",
 		"wander": [Vector2(1727, 300), Vector2(590, 1090), Vector2(950, 1070)],
@@ -122,7 +124,7 @@ const AGENTS := {
 	"dottore": {
 		"name": "Il Dottore",
 		# Poltrona clinica e strumenti sul lato ovest degli Scorer.
-		"spot": Vector2(850, 1216),
+		"spot": Vector2(850, 1186),
 		"facing": "down",
 		"workstation_key": "core:dottore",
 		"wander": [Vector2(1110, 778), Vector2(1790, 1390), Vector2(2690, 1825)],
@@ -162,6 +164,17 @@ const DEPT_ROLES := {
 	"critici": {"slug": "critico", "label": "Revisore", "workers": [1, 2, 3, 4, 5]},
 }
 
+## Identità visiva stabile per postazione. Il lead resta sempre `a`; le altre
+## cinque sedie ricevono `b`..`f`. Tenere la mappa per desk (e non per ordine
+## di spawn) evita che una persona cambi volto quando varia il roster live.
+const VARIANT_BY_DESK := {
+	"scout": {0: "b", 1: "a", 2: "c", 3: "d", 4: "e", 5: "f"},
+	"analisti": {0: "b", 1: "a", 2: "c", 3: "d", 4: "e", 5: "f"},
+	"scorer": {0: "b", 1: "a", 2: "c", 3: "d", 4: "e", 5: "f"},
+	"scrittori": {0: "b", 1: "a", 2: "c", 3: "d", 4: "e", 5: "f"},
+	"critici": {0: "a", 1: "b", 2: "c", 3: "d", 4: "e", 5: "f"},
+}
+
 static var _spawn_cache: Array = []
 
 ## L'organico completo della scena: un Dictionary per agente con
@@ -175,6 +188,7 @@ static func spawn_list() -> Array:
 		def["slug"] = slug
 		def["lead"] = true
 		if def.has("dept"):
+			def["variant"] = VARIANT_BY_DESK[def["dept"]][def["desk"]]
 			def["spot"] = _desk_spot_of(def["dept"], def["desk"])
 		_spawn_cache.append(def)
 	for dept_id in DEPT_ROLES:
@@ -183,6 +197,7 @@ static func spawn_list() -> Array:
 		for desk_i in role["workers"]:
 			_spawn_cache.append({
 				"slug": role["slug"],
+				"variant": VARIANT_BY_DESK[dept_id][desk_i],
 				"name": "%s %02d" % [role["label"], n],
 				"dept": dept_id,
 				"desk": desk_i,
@@ -237,14 +252,19 @@ const SHEET_LOANS := {
 }
 
 static func make_rig(slug: String, variant := "a") -> Node2D:
-	var sheet_path := SHEETS + slug + "_" + variant + ".png"
-	if not ResourceLoader.exists(sheet_path) and SHEET_LOANS.has(slug):
-		sheet_path = SHEETS + SHEET_LOANS[slug] + "_" + variant + ".png"
+	var sheet_slug := str(SHEET_LOANS.get(slug, slug))
+	var sheet_path := SHEETS + sheet_slug + "_" + variant + ".png"
+	# Le varianti vengono consegnate reparto per reparto: fino a quando un
+	# foglio non esiste, la scena resta funzionante usando l'identità `a`.
+	if not ResourceLoader.exists(sheet_path):
+		sheet_path = SHEETS + sheet_slug + "_a.png"
 	if ResourceLoader.exists(sheet_path):
 		var rig := SpriteSheetRig.new()
 		# foglio seduto opzionale (4x3, vedi SIT_TRACKS): se manca, il rig
 		# degrada "sit" a work da solo
-		var sit_path := SHEETS + slug + "_sit.png"
+		var sit_path := SHEETS + sheet_slug + "_" + variant + "_sit.png"
+		if not ResourceLoader.exists(sit_path):
+			sit_path = SHEETS + sheet_slug + "_sit.png"
 		var sit: Texture2D = load(sit_path) if ResourceLoader.exists(sit_path) else null
 		rig.setup(load(sheet_path), sit)
 		return rig
