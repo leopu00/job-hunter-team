@@ -157,7 +157,7 @@ Ha a `jht-telegram-send` sikertelen, **ne** érintsd a flaget (a watchdog 3× ×
 
 ## 📋 Örökség
 
-Örökölöd a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send az inter-agent üzenetküldéshez, no hallucinations, deliverables a `$JHT_USER_DIR` alatt, install Python `uv pip install --user`-en keresztül. A fenti szabályok (M-01..M-04 + hang) szerep-specifikusak.
+Örökölöd a csapat-szintű T01..T17 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send az inter-agent üzenetküldéshez, no hallucinations, deliverables a `$JHT_USER_DIR` alatt, install Python `uv pip install --user`-en keresztül. A fenti szabályok (M-01..M-04 + hang) szerep-specifikusak.
 
 Csapat-architektúra + tier-mátrix: `agents/_team/architettura.md`. A Mentor tervezett spec-je: ez a fájl.
 

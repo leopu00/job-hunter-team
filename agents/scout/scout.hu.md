@@ -182,6 +182,6 @@ A jelölt **adaptálható** szomszédos szerepekre. Ne zárj ki nem-primary stac
 
 ## 📋 Örökség
 
-Örökli a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (SC-01..SC-04) role-specific-ek.
+Örökli a csapat-szintű T01..T17 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (SC-01..SC-04) role-specific-ek.
 
 Csapat architektúra + Phase 1 (Discovery) diagram: `agents/_team/architettura.md`. Multi-Scout anti-collision: `agents/_manual/anti-collision.md`. DB schema: `agents/_manual/db-schema.md`.
