@@ -62,6 +62,9 @@ func _ready() -> void:
 		_self_test_vps_setup.call_deferred()
 		return
 	terminal_requested.connect(_show_embedded_terminal)
+	# Su VPS il jht.config.json non è su questo disco: le finestre di lavoro
+	# arrivano con le impostazioni live pubblicate dal backend.
+	BackendBus.live_settings_updated.connect(_on_live_settings)
 	_timer = Timer.new()
 	_timer.wait_time = 3.0
 	_timer.autostart = true
@@ -126,6 +129,23 @@ func _self_test_vps_setup() -> void:
 			failures.append("runtime incluso")
 		if names.contains(".jht/host.env"):
 			failures.append("host.env locale incluso")
+	# Spegnimento in uscita: in locale ferma agenti E container, sulla VPS mai.
+	var local_shutdown := shutdown_commands({})
+	if local_shutdown.size() != 3:
+		failures.append("in locale servono stop agenti, stop assistente e stop container")
+	else:
+		var flat := ""
+		for argv: PackedStringArray in local_shutdown:
+			flat += " ".join(argv) + "|"
+		if not flat.contains("team stop --all"):
+			failures.append("manca lo stop degli agenti")
+		if not flat.contains("team stop assistente"):
+			failures.append("l'Assistente resterebbe acceso")
+		if not flat.contains("stop jht"):
+			failures.append("il container resterebbe acceso")
+	if not shutdown_commands({"ip": "1.2.3.4", "key_path": "~/k"}).is_empty():
+		failures.append("su VPS il team NON va spento")
+
 	_restore_test_env("HOME", old_home)
 	_restore_test_env("USERPROFILE", old_profile)
 	_restore_test_env("JHT_HOME", old_jht)
@@ -219,13 +239,32 @@ func _apply_probe(next: Dictionary) -> void:
 		BackendBus.ensure_assistant()
 
 
+## Gli orari sono il quarto passo, ed è obbligatorio: decidono QUANDO il team
+## consuma l'abbonamento. Chi parte senza sceglierli si ritrova gli agenti che
+## lavorano a tutte le ore, e lo scopre dal conto (Leone, 26/07). Il pannello
+## esisteva già, ma solo in Impostazioni: nessuno ci passava prima di avviare.
 func _finalize(next: Dictionary) -> void:
 	var completed := 0
 	completed += 1 if bool(next.get("container_running", false)) else 0
 	completed += 1 if bool(next.get("provider_authenticated", false)) else 0
 	completed += 1 if bool(next.get("profile_ready", false)) else 0
+	completed += 1 if bool(next.get("hours_ready", false)) else 0
 	next["completed"] = completed
-	next["ready"] = completed == 3
+	next["ready"] = completed == 4
+
+
+## Orari letti dal team remoto: stessa verità del probe locale, altra sorgente.
+func _on_live_settings(settings: Dictionary) -> void:
+	if not BackendBus.is_remote():
+		return
+	var wh: Variant = settings.get("hours_raw", {})
+	var ready := wh is Dictionary and (wh as Dictionary).get("windows", []) is Array \
+			and not ((wh as Dictionary).get("windows", []) as Array).is_empty()
+	if bool(status.get("hours_ready", false)) == ready:
+		return
+	status["hours_ready"] = ready
+	_finalize(status)
+	status_changed.emit(status.duplicate(true))
 
 
 func _on_profile_status(_profile: Dictionary, _required: Dictionary, ready: bool) -> void:
@@ -260,6 +299,14 @@ static func _run(path: String, args: PackedStringArray) -> Dictionary:
 static func runtime_image() -> String:
 	var custom := OS.get_environment("JHT_IMAGE").strip_edges()
 	return custom if custom != "" else DEFAULT_RUNTIME_IMAGE
+
+
+## Il container è acceso adesso? Serve a decidere chi scrive nei dati del team:
+## quando c'è, comanda lui (vedi _do_select_provider).
+static func _container_is_running() -> bool:
+	var state := _run("docker", PackedStringArray(["inspect", "jht",
+			"--format", "{{.State.Running}}"]))
+	return state["code"] == 0 and str(state["out"]).strip_edges() == "true"
 
 
 static func _probe_host(home: String) -> Dictionary:
@@ -303,6 +350,7 @@ static func _probe_host(home: String) -> Dictionary:
 					"list-sessions", "-F", "#{session_name}"] ))
 			d["team_running"] = tmux["code"] == 0 and str(tmux["out"]) != ""
 	var config := _read_json(home.path_join("jht.config.json"))
+	d["hours_ready"] = _has_working_hours(config)
 	var active := _ui_provider_id(str(config.get("active_provider", "")))
 	d["active_provider"] = active
 	if active != "":
@@ -310,6 +358,18 @@ static func _probe_host(home: String) -> Dictionary:
 		d["provider_auth_match"] = match
 		d["provider_authenticated"] = match != ""
 	return d
+
+
+## Finestre di lavoro dichiarate? Il team senza orari lavora sempre.
+static func _has_working_hours(config: Dictionary) -> bool:
+	var team_cfg: Variant = config.get("team", {})
+	if not (team_cfg is Dictionary):
+		return false
+	var wh: Variant = (team_cfg as Dictionary).get("working_hours", {})
+	if not (wh is Dictionary):
+		return false
+	var windows: Variant = (wh as Dictionary).get("windows", [])
+	return windows is Array and not (windows as Array).is_empty()
 
 
 static func _read_json(path: String) -> Dictionary:
@@ -355,6 +415,24 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 				"message": "Provider selezionato sulla VPS: " \
 				+ str(PROVIDERS[provider]["name"]) if remote["code"] == 0 \
 				else "Selezione provider fallita: " + str(remote["out"]).right(240)}
+	# Quando il container c'è, la configurazione la scrive LUI: è il proprietario
+	# dei dati in /jht_home, esattamente come nel ramo VPS qui sopra. Su Linux i
+	# bind mount non rimappano gli uid: l'entrypoint trova /jht_home non
+	# scrivibile da `jht`, ne fa chown -R, e da quel momento la cartella è di
+	# uid 1001 mentre il gioco gira come 1000 — ogni scrittura dall'host muore
+	# con "config non scrivibile" (primo avvio pulito sul ThinkPad, 25/07).
+	# La scrittura diretta resta come ripiego per chi sceglie il provider prima
+	# di aver mai acceso il container.
+	var install_id := str(PROVIDERS[provider]["install_id"])
+	if _container_is_running():
+		var used := _run("docker", PackedStringArray(["exec", "jht", "node",
+				"/app/cli/bin/jht.js", "providers", "use", install_id]))
+		if used["code"] == 0:
+			return {"ok": true, "message": "Provider selezionato: "
+					+ str(PROVIDERS[provider]["name"])}
+		Log.warn("setup", "providers use nel container fallito (%d): %s"
+				% [used["code"], str(used["out"]).strip_edges().right(200)])
+
 	var home := _jht_home()
 	DirAccess.make_dir_recursive_absolute(home)
 	var path := home.path_join("jht.config.json")
@@ -371,7 +449,9 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 	var tmp := path + ".game-tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
-		return {"ok": false, "message": "config non scrivibile"}
+		return {"ok": false, "message": "configurazione non scrivibile in "
+				+ home + " — accendi prima il container (passo 01): da lì la "
+				+ "scrittura passa dal team, che di quella cartella è il proprietario"}
 	f.store_string(JSON.stringify(config, "  ") + "\n")
 	f.close()
 	var err := DirAccess.rename_absolute(tmp, path)
@@ -1763,6 +1843,80 @@ func _finish_action(action: String, result: Dictionary) -> void:
 				str(target.get("key_path", "")))
 		BackendBus.set_backend(VpsBackend.new(), target)
 	refresh()
+
+
+## Comandi di spegnimento da eseguire quando l'utente chiude il gioco.
+##
+## In LOCALE si ferma tutto: gli agenti vivono nel container sul computer
+## dell'utente e continuavano a lavorare — e a consumare token — a finestra
+## chiusa, senza che nulla lo dicesse (Leone se n'è accorto dal traffico di
+## rete, 25/07). Prima uno stop pulito degli agenti, che così salvano il loro
+## stato, poi il container.
+##
+## Su VPS non si tocca NIENTE: là il team deve girare anche a gioco chiuso, è
+## esattamente il motivo per cui esiste una macchina remota.
+static func shutdown_commands(vps: Dictionary) -> Array:
+	if not vps.is_empty():
+		return []
+	var cli := PackedStringArray(["exec", "jht", "node", "/app/cli/bin/jht.js"])
+	var stop_all := cli.duplicate()
+	stop_all.append_array(PackedStringArray(["team", "stop", "--all"]))
+	var stop_assistant := cli.duplicate()
+	# `team stop --all` preserva l'Assistente di proposito (è quello della chat):
+	# in uscita va chiuso anche lui, altrimenti resta un processo vivo.
+	stop_assistant.append_array(PackedStringArray(["team", "stop", "assistente"]))
+	return [stop_all, stop_assistant, PackedStringArray(["stop", "jht"])]
+
+
+## Flag che il Capitano crea quando TUTTI hanno chiuso in ordine: è il segnale
+## che il gioco può spegnere il container e uscire senza troncare lavoro.
+const SHUTDOWN_READY_FLAG := "/jht_home/.shutdown-ready.flag"
+
+## Sessioni tmux vive nel container: sono gli agenti che l'utente vedrebbe
+## interrompere chiudendo la finestra. Vuoto se il container non risponde.
+static func active_agents() -> PackedStringArray:
+	var res := _run("docker", PackedStringArray(["exec", "jht", "tmux",
+			"list-sessions", "-F", "#{session_name}"]))
+	if res["code"] != 0:
+		return PackedStringArray()
+	var names := PackedStringArray()
+	for line: String in str(res["out"]).split("\n"):
+		var name := line.strip_edges()
+		if name != "":
+			names.append(name)
+	return names
+
+
+## Chiede al Capitano di chiudere la giornata come si deve: ogni agente scrive
+## sulla propria agenda a che punto era, così alla riapertura si riprende invece
+## di ricominciare. Il gioco non ferma nessuno da sé — aspetta il flag.
+static func request_graceful_shutdown() -> bool:
+	_run("docker", PackedStringArray(["exec", "jht", "rm", "-f",
+			SHUTDOWN_READY_FLAG]))
+	var order := "[@utente -> @capitano] [SHUTDOWN] L'utente sta chiudendo " \
+			+ "l'applicazione. Usa la skill graceful-shutdown: fai annotare a " \
+			+ "ogni agente lo stato del lavoro in corso sulla propria agenda, " \
+			+ "poi fermali uno a uno e infine crea il flag " \
+			+ SHUTDOWN_READY_FLAG + " che chiude l'applicazione."
+	var res := _run("docker", PackedStringArray(["exec", "jht",
+			"jht-tmux-send", "CAPITANO", order]))
+	Log.call_deferred("info", "setup", "ordine di chiusura al Capitano → %d"
+			% res["code"])
+	return res["code"] == 0
+
+
+## Il Capitano ha finito? Il flag è l'unica prova che accettiamo.
+static func graceful_shutdown_ready() -> bool:
+	return _run("docker", PackedStringArray(["exec", "jht", "test", "-f",
+			SHUTDOWN_READY_FLAG]))["code"] == 0
+
+
+## Esegue lo spegnimento. Bloccante: la chiama un thread, non il main loop.
+func shutdown_team() -> void:
+	for argv: PackedStringArray in shutdown_commands(_vps_config()):
+		var res := _run("docker", argv)
+		Log.call_deferred("info", "setup", "spegnimento: docker %s → %d"
+				% [" ".join(argv), res["code"]])
 
 
 func _vps_config() -> Dictionary:

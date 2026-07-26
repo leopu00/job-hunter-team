@@ -47,6 +47,7 @@ case "$MODE" in
 		JHT_NOVPS=1 godot --headless --script res://tools/speech_bubble_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/pipeline_queue_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/embedded_terminal_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/terminal_selection_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/doc_preview_selftest.gd
 		python3 tools/python_payload_syntax_test.py
 		python3 tools/coordinator_policy_selftest.py
@@ -72,6 +73,10 @@ case "$MODE" in
 		printf '%s\n' "$CAMERA_OUT" | grep "CAMERA-OVERLAY-LOCK-TEST PASS"
 		GFX_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GFX_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
+		JUMP_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_WIZARD_JUMP_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$JUMP_OUT" | grep "WIZARD-JUMP-TEST PASS"
+		STUCK_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_STUCK_TEST=scout godot --headless . 2>&1)"
+		printf '%s\n' "$STUCK_OUT" | grep "STUCK-TEST PASS"
 		TEXT_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_WORLD_TEXT_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$TEXT_OUT" | grep "WORLD-TEXT-TEST PASS"
 		GFXPANEL_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GRAPHICS_PANEL_TEST=1 godot --headless . 2>&1)"

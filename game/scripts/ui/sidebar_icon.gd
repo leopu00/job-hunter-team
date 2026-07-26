@@ -172,6 +172,10 @@ func _draw() -> void:
 			_circle(Vector2(0.50, 0.50), 0.40, s, w)
 			_line(Vector2(0.10, 0.50), Vector2(0.90, 0.50), s, w)
 			_ellipse(Vector2(0.50, 0.50), 0.17, 0.40, s, w)
+		"power":
+			# interruttore: arco aperto in alto + asta centrale
+			_arc(Vector2(0.50, 0.56), 0.34, PI * 0.75, PI * 2.25, s, w)
+			_line(Vector2(0.50, 0.10), Vector2(0.50, 0.46), s, w)
 		"gear":
 			_circle(Vector2(0.50, 0.50), 0.18, s, w)
 			for i in 8:

@@ -10,6 +10,7 @@ const S := {
 	"pause.resume": "FOLYTATÁS",
 	"pause.window": "ABLAK / TELJES KÉPERNYŐ",
 	"pause.quit": "KILÉPÉS A JÁTÉKBÓL",
+	"pause.shutdown": "A CSAPAT LEÁLLÍTÁSA…",
 
 	"hud.team": "CSAPAT",
 	"hud.positions_today": "MAI POZÍCIÓK",
@@ -232,7 +233,8 @@ const S := {
 	"common.data_incoming": "// adatok érkeznek a VPS-ről…",
 	"common.updated": "frissítve: %s",
 
-	"sim.live": "● VALÓS ADATOK — VPS",
+	"sim.live_vps": "● VALÓS ADATOK — VPS",
+	"sim.live_local": "● VALÓS ADATOK — EZ A GÉP",
 	"sim.mock": "◐ SZIMULÁCIÓ — nem valós adatok",
 
 	"office.camera_hint": "kamera: húzás vagy WASD · zoom görgővel, csippentéssel vagy +/- · kattints az ügynökökre és részlegekre · TAB napló · ESC menü",

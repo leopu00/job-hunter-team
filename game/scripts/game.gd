@@ -56,7 +56,84 @@ func _ready() -> void:
 	elif OS.get_environment("JHT_SCENE") == "wizard":
 		goto_wizard.call_deferred()
 
+## Il gioco che "si frizza" senza esserlo: il 25/07 girava a 34 fps e non
+## rispondeva a mouse né tastiera. Un rendering vivo esclude il blocco del main
+## thread e lascia il focus come sospettato — ma senza traccia nel log resta
+## un'ipotesi. Da qui in avanti la perdita di focus si vede nel log.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			Log.info("input", "finestra ha perso il focus")
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			Log.info("input", "finestra ha ripreso il focus")
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			Log.info("input", "chiusura richiesta dal window manager")
+			quit_game()
+
+
+## Uscita SEMPRE da qui: chiudere la finestra deve spegnere anche il team.
+## Gli agenti girano nel container, non nel gioco, e continuavano a lavorare —
+## consumando token — con la finestra chiusa e nessun avviso (25/07).
+var _quitting := false
+
+## Chiedere prima di interrompere: se ci sono agenti al lavoro l'utente decide
+## se farli chiudere in ordine (il Capitano fa annotare a tutti dove erano
+## arrivati) o troncare. Senza agenti attivi non c'è niente da chiedere.
+var _shutdown_dialog: Node = null
+
+func quit_game() -> void:
+	if _quitting or _shutdown_dialog != null:
+		return
+	var agents := SetupService.active_agents()
+	if agents.is_empty():
+		_do_quit()
+		return
+	close_pause()
+	_shutdown_dialog = load("res://scripts/ui/shutdown_dialog.gd").new(agents)
+	_shutdown_dialog.chosen.connect(_on_shutdown_choice)
+	get_tree().root.add_child(_shutdown_dialog)
+
+
+func _on_shutdown_choice(mode: String) -> void:
+	if is_instance_valid(_shutdown_dialog):
+		_shutdown_dialog.queue_free()
+	_shutdown_dialog = null
+	if mode == "cancel":
+		return
+	# "graceful": il team si è già fermato da sé, resta da spegnere il container;
+	# "forced": shutdown_team() ferma prima gli agenti e poi il container.
+	_do_quit()
+
+
+func _do_quit() -> void:
+	if _quitting:
+		return
+	_quitting = true
+	get_tree().paused = false
+	_show_loading(UIStrings.t("pause.shutdown"))
+	# Lo stop passa da docker e blocca per qualche secondo: in un thread, così
+	# il velo arriva a schermo invece di congelarsi a metà.
+	var task := func() -> void:
+		var setup := get_node_or_null("/root/SetupService")
+		if setup != null and setup.has_method("shutdown_team"):
+			setup.call("shutdown_team")
+		call_deferred("_quit_now")
+	WorkerThreadPool.add_task(task)
+	# Rete di sicurezza: se docker non risponde non si resta in ostaggio del velo.
+	await get_tree().create_timer(20.0).timeout
+	_quit_now()
+
+
+func _quit_now() -> void:
+	if is_inside_tree():
+		get_tree().quit()
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("quit_game"):
+		Log.info("input", "uscita richiesta da tastiera")
+		quit_game()
+		return
 	if event.is_action_pressed("fullscreen"):
 		toggle_fullscreen()
 		return
@@ -416,20 +493,40 @@ func goto_office() -> void:
 ## nero muto sembra un crash (feedback Leone, test Windows 20/07).
 var _loading_veil: CanvasLayer = null
 
+## Un cambio scena alla volta: sul ThinkPad il passo 03 del setup non portava
+## al wizard e l'utente ha cliccato nove volte, accodando nove cambi scena
+## sovrapposti — ognuno col suo velo e i suoi await (25/07). Il primo click
+## comanda, gli altri non fanno danni.
+var _scene_change_busy := false
+
 func _change_scene_with_veil(path: String) -> void:
+	if _scene_change_busy:
+		Log.info("scene", "cambio verso %s ignorato: uno è già in corso" % path)
+		return
+	_scene_change_busy = true
 	_show_loading()
 	# Due frame: il velo deve arrivare DAVVERO a schermo prima che il
 	# caricamento blocchi il main thread.
 	await get_tree().process_frame
 	await get_tree().process_frame
-	get_tree().change_scene_to_file(path)
+	# L'esito NON era guardato da nessuno: una scena che non si carica lasciava
+	# l'utente dov'era, in silenzio, con il solo velo a lampeggiare.
+	var err := get_tree().change_scene_to_file(path)
+	if err != OK:
+		Log.error("scene", "cambio scena %s FALLITO (errore %d)" % [path, err])
 	# Il cambio scena è deferred: dopo due frame la nuova scena ha
 	# completato _ready e sta renderizzando.
 	await get_tree().process_frame
 	await get_tree().process_frame
+	var landed := get_tree().current_scene.scene_file_path \
+			if get_tree().current_scene != null else "(nessuna)"
+	if landed != path:
+		Log.error("scene", "dopo il cambio la scena attiva è %s, non %s"
+				% [landed, path])
 	_hide_loading()
+	_scene_change_busy = false
 
-func _show_loading() -> void:
+func _show_loading(message := "CARICAMENTO…") -> void:
 	if _loading_veil:
 		return
 	_loading_veil = CanvasLayer.new()
@@ -446,7 +543,7 @@ func _show_loading() -> void:
 	box.add_theme_constant_override("separation", 14)
 	center.add_child(box)
 	var label := Label.new()
-	label.text = "CARICAMENTO…"
+	label.text = message
 	label.add_theme_font_size_override("font_size", 26)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(label)
@@ -571,12 +668,19 @@ func _register_inputs() -> void:
 	_add_key_action("registry", [KEY_TAB])
 	_add_key_action("pause", [KEY_ESCAPE])
 	_add_key_action("fullscreen", [KEY_F11])
+	# Uscita d'emergenza con la combinazione che ogni desktop conosce. ESC apre
+	# un menu e richiede poi un click: se il gioco smette di ricevere il mouse
+	# (o l'ha perso il compositore) non basta. Questa chiude e basta.
+	_add_key_action("quit_game", [KEY_Q], true)
 
-func _add_key_action(action: String, keys: Array) -> void:
+func _add_key_action(action: String, keys: Array, with_ctrl := false) -> void:
 	if InputMap.has_action(action):
 		return
 	InputMap.add_action(action)
 	for k in keys:
 		var ev := InputEventKey.new()
 		ev.physical_keycode = k
+		if with_ctrl:
+			# su macOS il modificatore di sistema è Cmd, altrove Ctrl
+			ev.command_or_control_autoremap = true
 		InputMap.action_add_event(action, ev)
