@@ -129,14 +129,17 @@ const T: Record<string, Record<string, string>> = {
     fr: "Correspondance stack",
     pt: "Correspondência de stack",
   },
+  // La dimensione pesa la SEDE (città, pendolarismo, relocation), non solo
+  // il lavoro da remoto: "Da remoto" era fuorviante. La chiave del DB resta
+  // `remote_fit` — qui cambia solo come la chiamiamo all'utente.
   sb_remote_fit: {
-    it: "Da remoto",
-    en: "Remote fit",
-    hu: "Távmunka illeszkedés",
-    es: "Ajuste remoto",
-    de: "Remote-Eignung",
-    fr: "Adéquation à distance",
-    pt: "Ajuste remoto",
+    it: "Location",
+    en: "Location",
+    hu: "Helyszín",
+    es: "Ubicación",
+    de: "Standort",
+    fr: "Localisation",
+    pt: "Localização",
   },
   sb_salary_fit: {
     it: "Stipendio",
@@ -959,8 +962,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // agenti (Scorer/Capitano) — la card Pro/Contro duplicava jd_summary,
   // note del team e razionale dello score (contratto contenuti 2026-07-23).
   const { position, score, company, application, tickets } = data;
-  // Razionale per-dimensione dello score (RULE-09): mostrato espandibile
-  // sotto ogni barra. Vuoto per gli score precedenti al 2026-07-23.
+  // Razionale dello score. `perDimension` (RULE-09) va espandibile sotto la
+  // barra corrispondente; `rest` è ciò che non appartiene a una dimensione —
+  // i breakdown vecchi, che restano visibili sotto le barre insieme alle
+  // note invece di sparire.
   const scoreWhy = parseScoreBreakdown(score?.breakdown);
 
   // Analisi semi-strutturata dell'Analista (campo notes) → metadati,
@@ -1410,38 +1415,51 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   label={t("sb_stack_match")}
                   value={score.stack_match}
                   max={40}
-                  detail={scoreWhy.stack}
+                  detail={scoreWhy.perDimension.stack}
                 />
                 <ScoreBar
                   label={t("sb_remote_fit")}
                   value={score.remote_fit}
                   max={25}
-                  detail={scoreWhy.remote}
+                  detail={scoreWhy.perDimension.remote}
                 />
                 <ScoreBar
                   label={t("sb_salary_fit")}
                   value={score.salary_fit}
                   max={20}
-                  detail={scoreWhy.salary}
+                  detail={scoreWhy.perDimension.salary}
                 />
                 <ScoreBar
                   label={t("sb_experience_fit")}
                   value={score.experience_fit}
                   max={10}
-                  detail={scoreWhy.experience}
+                  detail={scoreWhy.perDimension.experience}
                 />
                 <ScoreBar
                   label={t("sb_strategic_fit")}
                   value={score.strategic_fit}
                   max={15}
-                  detail={scoreWhy.strategic}
+                  detail={scoreWhy.perDimension.strategic}
                 />
               </div>
-              {score.notes && (
-                <MarkdownLite
-                  text={score.notes}
-                  className="mt-4 text-[11px] text-[var(--color-muted)] leading-relaxed border-t border-[var(--color-border)] pt-3"
-                />
+              {/* Sotto le barre: il commento che vale per l'intero score.
+                  `rest` è il breakdown non attribuibile a una dimensione —
+                  senza di lui gli score vecchi perderebbero il loro testo. */}
+              {(scoreWhy.rest || score.notes) && (
+                <div className="mt-4 border-t border-[var(--color-border)] pt-3 space-y-3">
+                  {scoreWhy.rest && (
+                    <MarkdownLite
+                      text={scoreWhy.rest}
+                      className="text-[11px] text-[var(--color-muted)] leading-relaxed"
+                    />
+                  )}
+                  {score.notes && (
+                    <MarkdownLite
+                      text={score.notes}
+                      className="text-[11px] text-[var(--color-muted)] leading-relaxed"
+                    />
+                  )}
+                </div>
               )}
             </div>
           )}
