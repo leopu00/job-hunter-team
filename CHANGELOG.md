@@ -17,6 +17,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### 🖥️ Native desktop application (Godot 4.7)
 
+- **Bidirectional team migration.** Settings can now move the complete team local → VPS, VPS → VPS, or VPS → local. Transfers are checksummed, validated in staging, backed up before replacement, switched atomically, checked with SQLite integrity probes, and rolled back if startup or cloud handoff fails. Destination SSH/runtime credentials stay local to that host; VPS host keys are pinned before authentication.
 - **Feature-complete migration.** Setup wizard, provider login through an embedded console, local/VPS container lifecycle, candidate profile, working hours, email and Telegram configuration, cloud sync, positions/statistics/applications/map views, per-agent pages and observability are all native. The office is a live view of the real team: agents are the real roster, the paper flow tracks real pipeline counters, transitions and chat come from the running team.
 - **Onboarding.** Assistant-driven first run (title → wizard → office) with an escorted tour: the Assistant walks the user around the departments with a quest tracker, addresses them by name, allows free roaming, and adapts to the state already configured. Offline showroom mode for demoing without a container.
 - **Observability.** Usage window (5-hour and weekly), per-agent burn, per-role CPU/RAM series over SSH sampled by a dedicated vitals collector, activity LEDs driven by real CPU, agent history charts with deep links.

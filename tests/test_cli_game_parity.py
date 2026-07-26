@@ -71,6 +71,10 @@ NOT_APPLICABLE = {
     # leggono il badge della simulazione e il pannello di setup. Da CLI non ha
     # senso chiederlo — il CLI gira DENTRO il container di cui è la risposta.
     'is_remote': 'UI',
+    # Persistono e applicano la macchina selezionata nel solo client Godot
+    # (`user://vps.cfg`). Il CLI gira già dentro l'host scelto e non possiede
+    # un backend grafico da commutare.
+    'clear_vps_config': 'UI', 'switch_to_local_backend': 'UI',
     # `publish_*`: il bus che consegna dati alla scena. Direzione opposta —
     # backend → UI — quindi non c'è niente da invocare da CLI.
     'publish_agent_terminal': 'bus', 'publish_coordinator_state': 'bus',

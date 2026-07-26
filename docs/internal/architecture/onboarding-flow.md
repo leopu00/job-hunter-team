@@ -151,9 +151,14 @@ In modalità VPS, il sync con Supabase è **strutturalmente obbligatorio** e non
 
 In Path 1 (Local PC), il sync resta opt-in e toggleable a piacere (vedi sopra).
 
-### Reclaim VPS da nuovo PC — **wipe + ricreate, no migrazione**
+### Reclaim VPS da nuovo PC — decisione storica, superata il 2026-07-26
 
-Se l'utente cambia PC e perde la SSH key locale (o vuole semplicemente ripartire da un'altra macchina), **NON c'è un flusso "trasporto" della VPS esistente**. Il path è:
+> Questa sezione descriveva il comportamento del vecchio onboarding. La native
+> app ora supporta il trasporto esplicito e transazionale **locale → VPS, VPS →
+> VPS e VPS → locale** dalle Impostazioni. Il flusso corrente, comprese garanzie
+> e limiti, è documentato in `docs/guides/VPS-SETUP-WIZARD.md`.
+
+Il fallback storico, utile quando la chiave SSH originale è stata persa, resta:
 
 ```
 nuovo PC → desktop app → login Supabase (stesso account)
@@ -168,7 +173,9 @@ Perché funziona:
 - Costo accettato: 24h-48h di ridondanza Hetzner (vecchia VPS attiva finché l'utente non la cancella manualmente). È pulizia utente, non automation app.
 - Niente codice "reclaim VPS esistente via Hetzner API + re-iniezione SSH key" — superato dal wipe+ricreate.
 
-**Annullato `[JHT-DESKTOP-RECLAIM]`**: non si fa più. Lo gestisce il wizard "crea VPS" standard del Path 2.
+Il vecchio ticket `[JHT-DESKTOP-RECLAIM]` resta annullato: non serve un reclaim
+via API Hetzner, perché la migrazione usa SSH quando la chiave è disponibile e
+il wipe+ricreate resta il recupero quando non lo è.
 
 ---
 
