@@ -196,6 +196,15 @@ test.describe("pagina pubblica /contact", () => {
       .fill("Messaggio di prova generato dalla suite end-to-end. Ignorare.");
     const stato = await inviaEStato(page);
     test.skip(stato === 429, "rate limit orario esaurito (5/ora per IP)");
+    // 503 = nessuna destinazione configurata: la route lo restituisce quando
+    // casella, issue e webhook sono tutti assenti o giù, invece di finta
+    // conferma. In CI i segreti di consegna non esistono, quindi è lo stato
+    // atteso e non un difetto — dove il canale è configurato il test verifica
+    // l'invio per davvero. Qualunque altro stato resta un fallimento.
+    test.skip(
+      stato === 503,
+      "canale di assistenza non configurato in questo ambiente (nessun RESEND/mailbox/webhook)",
+    );
     expect(stato, "l'endpoint ha rifiutato l'invio").toBe(200);
     // Il modulo sparisce e resta il riferimento del ticket.
     await expect(page.locator("#c-msg")).toHaveCount(0, { timeout: 15_000 });
@@ -272,6 +281,10 @@ test.describe("dialogo dell'area riservata", () => {
       .fill("Segnalazione di prova generata dalla suite end-to-end. Ignorare.");
     const stato = await inviaEStato(page, dialogo);
     test.skip(stato === 429, "rate limit orario esaurito (5/ora per IP)");
+    test.skip(
+      stato === 503,
+      "canale di assistenza non configurato in questo ambiente (nessun RESEND/mailbox/webhook)",
+    );
     expect(stato, "l'endpoint ha rifiutato l'invio").toBe(200);
     await expect(dialogo.locator("#s-msg")).toHaveCount(0, { timeout: 15_000 });
   });
