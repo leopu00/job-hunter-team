@@ -183,8 +183,10 @@ test.describe('/privacy — Privacy Policy', () => {
     await expect(ghLink).toBeVisible({ timeout: 3000 });
   });
 
-  test('email di contatto leopu00@gmail.com visibile', async ({ page }) => {
-    const email = page.getByText(/leopu00@gmail\.com/i).first();
+  // L'indirizzo personale è stato ritirato da ogni superficie pubblica il
+  // 25/07: la privacy policy indirizza alla casella di progetto.
+  test('email di contatto support@jobhunterteam.ai visibile', async ({ page }) => {
+    const email = page.getByText(/support@jobhunterteam\.ai/i).first();
     await expect(email).toBeVisible({ timeout: 5000 });
   });
 
