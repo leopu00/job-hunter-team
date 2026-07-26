@@ -149,7 +149,7 @@ export function LandingFooter() {
               {t("footer_contacts")}
             </h4>
             <Link href="/contact" className={linkClass}>
-              {t("footer_write")}
+              {t("nav_contact")}
             </Link>
             <a
               href="https://github.com/leopu00/job-hunter-team/issues"
