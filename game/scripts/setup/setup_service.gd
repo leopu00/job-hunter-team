@@ -734,14 +734,31 @@ services:
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
       - TURBOPACK_WATCH_POLL=true
+      # CLI dei provider FUORI dal bind-mount: su Windows ~/.jht e' C:\
+      # vista da WSL2 e scriverci costa ~158x (misurato: 200 file piccoli
+      # = 11.209 ms contro 71 ms sul disco del container). npm e uv ne
+      # creano decine di migliaia, ed e' il motivo per cui installare un
+      # provider su Windows richiedeva un'attesa interminabile mentre su
+      # Linux bastava mezzo minuto.
+      - NPM_CONFIG_PREFIX=/opt/jht-deps/npm-global
+      - NPM_CONFIG_CACHE=/opt/jht-deps/npm-cache
+      - UV_TOOL_DIR=/opt/jht-deps/uv-tools
+      - UV_TOOL_BIN_DIR=/opt/jht-deps/bin
+      - UV_CACHE_DIR=/opt/jht-deps/uv-cache
+      - PATH=/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/jht_home/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
     volumes:
       - ${HOME}/.jht:/jht_home
       - ${HOME}/Documents/Job Hunter Team:/jht_user
+      # Volume Docker: sul disco della VM, non sul mount dell'host.
+      - jht-deps:/opt/jht-deps
     # Nessuna porta esposta: la dashboard browser su localhost e' stata
     # ritirata — l'interazione locale passa dal gioco (docker exec).
     stdin_open: true
     tty: true
     restart: unless-stopped
+
+volumes:
+  jht-deps:
 """
 
 
