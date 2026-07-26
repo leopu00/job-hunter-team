@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import type { Integration, IntegrationStatus } from "@/lib/types";
 
 const T: Record<
   Locale,
@@ -122,15 +123,6 @@ const T: Record<
   },
 };
 
-type Status = "connected" | "configured" | "disconnected";
-type Integration = {
-  id: string;
-  name: string;
-  description: string;
-  status: Status;
-  detail: string | null;
-  last_sync: string | null;
-};
 
 const ICONS: Record<string, string> = {
   telegram: "✈️",
@@ -140,7 +132,7 @@ const ICONS: Record<string, string> = {
   vercel: "▲",
 };
 
-const STATUS_CFG: Record<Status, { color: string; bg: string }> = {
+const STATUS_CFG: Record<IntegrationStatus, { color: string; bg: string }> = {
   connected: {
     color: "var(--color-green)",
     bg: "rgba(0,232,122,0.08)",

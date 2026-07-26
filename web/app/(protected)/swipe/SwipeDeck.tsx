@@ -70,65 +70,50 @@ export type SwipeCardData = {
   jd_summary: string | null;
 };
 
-export type Verdict = "no" | "review_low" | "review_ok" | "top";
+import {
+  VERDICT_ORDER,
+  VERDICT_SIGNAL,
+  type Verdict,
+  type VerdictSignal,
+} from "@/lib/position-verdict";
+export type { Verdict };
 
 // Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
 // l'esclusione. Score 3 lasciato libero come neutro non usato. fly: solo
 // 'no' esce a sinistra, gli altri tre a destra.
+// Segnale (che cosa si spedisce) da lib/position-verdict; qui sopra solo
+// icona, colore e il lato da cui la card esce.
 const VERDICTS: Record<
   Verdict,
-  {
+  VerdictSignal & {
     Icon: (p: { size?: number }) => React.ReactElement;
     color: string;
-    action: "like" | "dislike" | "star";
-    score: number;
-    direction: "more_like_this" | "less_like_this" | null;
-    exclude?: boolean;
     fly: -1 | 1;
   }
 > = {
-  no: {
-    Icon: IconX,
-    color: "var(--color-red)",
-    action: "dislike",
-    score: 1,
-    direction: "less_like_this",
-    exclude: true,
-    fly: -1,
-  },
-  // 'Poco interessante' NON è un dislike (scelta utente 18/07): la
-  // posizione resta tenuta (niente esclusione) e non manda un segnale
-  // less_like_this allo Scout — è un keep con entusiasmo basso (score 2).
+  no: { ...VERDICT_SIGNAL.no, Icon: IconX, color: "var(--color-red)", fly: -1 },
   // Icona: mezza stella ("interessante, ma poco"), non un pollice giù.
   review_low: {
+    ...VERDICT_SIGNAL.review_low,
     Icon: IconThumbsMeh,
     color: "var(--color-orange)",
-    action: "like",
-    score: 2,
-    direction: null,
     fly: 1,
   },
   review_ok: {
+    ...VERDICT_SIGNAL.review_ok,
     Icon: IconThumbsUp,
     color: "var(--color-blue)",
-    action: "like",
-    score: 4,
-    direction: "more_like_this",
     fly: 1,
   },
+  // Giallo oro (scelta utente 21/07): la stella "Molto interessante"
+  // è oro ovunque, non verde.
   top: {
+    ...VERDICT_SIGNAL.top,
     Icon: IconStar,
-    // Giallo oro (scelta utente 21/07): la stella "Molto interessante"
-    // è oro ovunque, non verde.
     color: "var(--color-yellow)",
-    action: "star",
-    score: 5,
-    direction: "more_like_this",
     fly: 1,
   },
 };
-
-const VERDICT_ORDER: Verdict[] = ["no", "review_low", "review_ok", "top"];
 
 // BCP-47 per la dettatura (SpeechRecognition.lang) dal locale dell'app.
 const SPEECH_LANG: Record<Locale, string> = {

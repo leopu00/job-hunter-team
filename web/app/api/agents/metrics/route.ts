@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as fs from "node:fs";
 import * as path from "node:path";
-import * as os from "node:os";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { readJsonSafe } from "@/lib/json-files";
 import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -39,14 +38,6 @@ type UsageEntry = {
   success: boolean;
 };
 type AnalyticsStore = { entries: UsageEntry[] };
-
-function readJsonSafe<T>(p: string): T | null {
-  try {
-    return JSON.parse(fs.readFileSync(p, "utf-8"));
-  } catch {
-    return null;
-  }
-}
 
 type AgentMetrics = {
   agentId: string;

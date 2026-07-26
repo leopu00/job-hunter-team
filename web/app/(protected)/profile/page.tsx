@@ -44,7 +44,7 @@ function experienceSortKey(period?: string): number {
 }
 
 export default async function ProfilePage() {
-  // Locale corrente dalla fonte unica (cookie NEXT_LOCALE), come next-intl.
+  // Locale corrente dalla fonte unica: il cookie NEXT_LOCALE.
   const cookieStore = await cookies();
   const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
   const locale: Locale =

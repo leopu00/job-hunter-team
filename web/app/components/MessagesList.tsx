@@ -19,6 +19,14 @@ import {
 } from "@/lib/message-display";
 import MessageBody from "@/app/components/MessageBody";
 import { usePendingMessagesLive } from "@/app/hooks/usePendingMessagesLive";
+import {
+  THREAD_T,
+  postAcks,
+  postReply,
+  unreadIdsOf,
+  withAgentAcked,
+  withReply,
+} from "@/lib/messages-thread";
 import type { PendingMessage } from "@/lib/types";
 
 interface Props {
@@ -63,6 +71,7 @@ const AGENT_BIO: Record<string, Record<string, string>> = {
 };
 
 const T: Record<string, Record<string, string>> = {
+  ...THREAD_T,
   empty_agent: {
     it: "Nessun messaggio da {name}, per ora.",
     en: "No messages from {name} yet.",
@@ -72,51 +81,8 @@ const T: Record<string, Record<string, string>> = {
     fr: "Pas encore de messages de {name}.",
     pt: "Ainda não há mensagens de {name}.",
   },
-  reply_placeholder: {
-    it: "Scrivi una risposta…",
-    en: "Write a reply…",
-    hu: "Írj választ…",
-    es: "Escribe una respuesta…",
-    de: "Antwort schreiben…",
-    fr: "Écrivez une réponse…",
-    pt: "Escreva uma resposta…",
-  },
-  no_reply_target: {
-    it: "Nessun messaggio in attesa di risposta",
-    en: "No message awaiting a reply",
-    hu: "Nincs válaszra váró üzenet",
-    es: "Ningún mensaje espera respuesta",
-    de: "Keine Nachricht wartet auf Antwort",
-    fr: "Aucun message en attente de réponse",
-    pt: "Nenhuma mensagem aguardando resposta",
-  },
-  send: {
-    it: "Invia",
-    en: "Send",
-    hu: "Küldés",
-    es: "Enviar",
-    de: "Senden",
-    fr: "Envoyer",
-    pt: "Enviar",
-  },
-  see_position: {
-    it: "→ vedi posizione",
-    en: "→ view position",
-    hu: "→ állás megtekintése",
-    es: "→ ver posición",
-    de: "→ Stelle ansehen",
-    fr: "→ voir le poste",
-    pt: "→ ver vaga",
-  },
-  you: {
-    it: "Tu",
-    en: "You",
-    hu: "Te",
-    es: "Tú",
-    de: "Du",
-    fr: "Vous",
-    pt: "Você",
-  },
+  // Le stringhe condivise col drawer stanno in THREAD_T (spread sopra);
+  // questa è solo di questa vista — il bottone che riporta in fondo al thread.
   to_bottom: {
     it: "Vai all'ultimo messaggio",
     en: "Jump to latest message",
@@ -236,23 +202,11 @@ export default function MessagesList({ initialMessages }: Props) {
   // Aprire una conversazione marca i suoi non letti (stile messenger, come
   // nel drawer): ottimista + fire-and-forget, il server riallinea al reload.
   function ackAgent(agent: string) {
-    const ids = messages
-      .filter((m) => m.agent === agent && !m.acknowledged_at)
-      .map((m) => m.id);
+    const ids = unreadIdsOf(messages, agent);
     if (ids.length === 0) return;
     const now = new Date().toISOString();
-    setMessages((ms) =>
-      ms.map((m) =>
-        m.agent === agent && !m.acknowledged_at
-          ? { ...m, acknowledged_at: now }
-          : m,
-      ),
-    );
-    for (const id of ids) {
-      void fetch(`/api/pending-messages/${id}/ack`, { method: "POST" }).catch(
-        () => {},
-      );
-    }
+    setMessages((ms) => withAgentAcked(ms, agent, now));
+    postAcks(ids);
   }
 
   // Ack anche della conversazione aperta di default al primo mount.
@@ -373,30 +327,9 @@ export default function MessagesList({ initialMessages }: Props) {
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/pending-messages/${replyTarget.id}/reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reply }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(
-          (body as { error?: string }).error ?? `HTTP ${res.status}`,
-        );
-      }
+      await postReply(replyTarget.id, reply);
       const now = new Date().toISOString();
-      setMessages((ms) =>
-        ms.map((m) =>
-          m.id === replyTarget.id
-            ? {
-                ...m,
-                user_reply: reply,
-                user_reply_at: now,
-                acknowledged_at: m.acknowledged_at ?? now,
-              }
-            : m,
-        ),
-      );
+      setMessages((ms) => withReply(ms, replyTarget.id, reply, now));
       setReplyText("");
     } catch (e) {
       setError((e as Error).message);

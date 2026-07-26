@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as os from "node:os";
 import { execSync, spawnSync } from "node:child_process";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { loadJhtConfig, readJsonSafe } from "@/lib/json-files";
 import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -69,22 +69,7 @@ const KNOWN_PROVIDERS = [
   },
 ];
 
-function loadConfig(): JhtConfig {
-  const candidates = [
-    path.join(JHT_HOME, "jht.config.json"),
-    path.join(process.cwd(), "jht.config.json"),
-    path.join(process.cwd(), "..", "jht.config.json"),
-  ];
-  for (const p of candidates) {
-    try {
-      if (fs.existsSync(p))
-        return JSON.parse(fs.readFileSync(p, "utf-8")) as JhtConfig;
-    } catch {
-      /* continua */
-    }
-  }
-  return {};
-}
+const loadConfig = () => loadJhtConfig<JhtConfig>();
 
 // Tutti gli agenti usano lo stesso pool di sessioni tmux: l'update del
 // CLI del provider attivo richiede di stopparle tutte (qualsiasi ruolo).
@@ -161,14 +146,6 @@ const CLI_SPECS: Record<string, CliSpec> = {
   },
 };
 
-function readJson(p: string): any | null {
-  try {
-    return JSON.parse(fs.readFileSync(p, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-
 function readUvToolVersion(
   distInfoParent: string,
   prefix: string,
@@ -196,9 +173,11 @@ function readVersionInfo(providerId: string): {
   const spec = CLI_SPECS[providerId];
   if (!spec) return { installedVersion: null, latestVersion: null };
   if (spec.kind === "npm") {
-    const pkg = readJson(spec.installedPkgJson);
+    const pkg = readJsonSafe<{ version?: string }>(spec.installedPkgJson);
     const installedVersion = pkg?.version ?? null;
-    const latestJson = spec.latestSource ? readJson(spec.latestSource) : null;
+    const latestJson = spec.latestSource
+      ? readJsonSafe<{ latest_version?: string }>(spec.latestSource)
+      : null;
     const latestVersion = latestJson?.latest_version ?? null;
     return { installedVersion, latestVersion };
   }

@@ -19,8 +19,10 @@ app/
   page.tsx       landing
 components/       shared UI components
 lib/             queries, i18n, parsers, types
-i18n/ · messages/  localization (note: the inline dict in lib/ is the live
-                   path; messages/ + next-intl is legacy, unused)
+i18n/config.ts   supported locales + the `Locale` type; the translations
+                 themselves live in per-area dictionaries (lib/*-i18n.ts)
+                 and in per-component `T` maps, keyed off the NEXT_LOCALE
+                 cookie via lib/use-locale.ts
 middleware.ts    auth/routing middleware
 ```
 

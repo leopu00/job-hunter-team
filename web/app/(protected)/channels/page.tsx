@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useLocale } from "@/lib/use-locale";
+import { intlTag } from "@/lib/locale-tag";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
 const T: Record<string, Record<string, string>> = {
@@ -161,16 +162,6 @@ const T: Record<string, Record<string, string>> = {
   },
 };
 
-const LOCALE_TAG: Record<string, string> = {
-  it: "it-IT",
-  en: "en-US",
-  hu: "hu-HU",
-  es: "es-ES",
-  de: "de-DE",
-  fr: "fr-FR",
-  pt: "pt-PT",
-};
-
 type ChannelId = "web" | "cli" | "telegram" | "email" | "slack" | "webhook";
 type Caps = {
   markdown: boolean;
@@ -244,7 +235,7 @@ function ChannelCard({
 }) {
   const lastActivity = ch.stats.lastActivityAt
     ? new Date(ch.stats.lastActivityAt).toLocaleString(
-        LOCALE_TAG[locale] ?? "en-US",
+        intlTag(locale),
         {
           day: "2-digit",
           month: "2-digit",

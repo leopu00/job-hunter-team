@@ -74,6 +74,29 @@ export interface CanonicalProfile {
   blocks: Array<Dict>;
 }
 
+/**
+ * Tabelle normalizzate del profilo, accoppiate al campo del modello
+ * canonico che le riempie.
+ *
+ * Le conoscono entrambe le direzioni della sincronizzazione — il push
+ * qui sotto e il pull in `api/cloud-sync/pull-profile` — e le
+ * elencavano tutte e due per esteso. Aggiungerne una da un lato solo
+ * significa un profilo che si carica intero e si riscarica incompleto,
+ * senza errori. Aggiungendola qui, entrambe le direzioni la vedono.
+ */
+export const CANDIDATE_LIST_TABLES = [
+  ["skills", "candidate_skills"],
+  ["languages", "candidate_languages"],
+  ["experiences", "candidate_experiences"],
+  ["education", "candidate_education"],
+  ["workAuth", "candidate_work_authorization"],
+  ["locationPrefs", "candidate_location_preferences"],
+  ["blocks", "candidate_blocks"],
+] as const satisfies ReadonlyArray<readonly [keyof CanonicalProfile, string]>;
+
+/** Campo del modello canonico che corrisponde a una tabella normalizzata. */
+export type CandidateListField = (typeof CANDIDATE_LIST_TABLES)[number][0];
+
 // ── block generation ─────────────────────────────────────────────────
 /** Normalizza un valore arbitrario nel kind più adatto. null = niente blocco. */
 function valueToBlock(
@@ -442,13 +465,9 @@ export async function syncProfileToSupabase(
     }
   };
 
-  await replace("candidate_skills", c.skills);
-  await replace("candidate_languages", c.languages);
-  await replace("candidate_experiences", c.experiences);
-  await replace("candidate_education", c.education);
-  await replace("candidate_work_authorization", c.workAuth);
-  await replace("candidate_location_preferences", c.locationPrefs);
-  await replace("candidate_blocks", c.blocks);
+  for (const [field, table] of CANDIDATE_LIST_TABLES) {
+    await replace(table, c[field] as Array<Dict>);
+  }
 
   // 3. contacts (1:1 upsert)
   if (c.contacts) {

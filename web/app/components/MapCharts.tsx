@@ -198,6 +198,11 @@ type Tr = (k: string) => string;
 import PositionTypesDonut from "@/app/components/PositionTypesDonut";
 import ScoreDistributionHorizontal from "@/app/components/ScoreDistributionHorizontal";
 import JobsGlobeLazy from "@/app/components/JobsGlobeLazy";
+import type {
+  LocationCity,
+  LocationCountry,
+  LocationPositionLite,
+} from "@/lib/types";
 
 type NoCoordItem = {
   id: string;
@@ -242,22 +247,6 @@ function scoreColor(s: number | null): string {
 }
 
 // Tree gerarchico restituito da /api/positions/locations
-type LocationPositionLite = {
-  id: string;
-  title: string | null;
-  company: string | null;
-  score: number | null;
-};
-type LocationCity = {
-  city: string | null;
-  count: number;
-  positions: LocationPositionLite[];
-};
-type LocationCountry = {
-  country: string;
-  count: number;
-  cities: LocationCity[];
-};
 
 type Props = {
   typeDist: RoleFamilyCount[];

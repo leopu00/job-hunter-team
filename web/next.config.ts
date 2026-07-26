@@ -1,5 +1,4 @@
 import type { NextConfig } from 'next'
-import createNextIntlPlugin from 'next-intl/plugin';
 import withBundleAnalyzerInit from '@next/bundle-analyzer';
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -126,6 +125,4 @@ const nextConfig: NextConfig = {
   },
 }
 
-const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
-
-export default withBundleAnalyzer(withNextIntl(nextConfig));
+export default withBundleAnalyzer(nextConfig);

@@ -4,6 +4,11 @@ import { isSupabaseConfigured } from "@/lib/workspace";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
 import { mapYamlToCanonical, syncProfileToSupabase } from "@/lib/profile-sync";
+import {
+  normalizeApplicationStatus,
+  normalizeCriticVerdict,
+  normalizePositionStatus,
+} from "@/lib/sync-vocabulary";
 
 export const dynamic = "force-dynamic";
 
@@ -239,30 +244,10 @@ interface PushBody {
   profile?: ProfileIn;
 }
 
-const ALLOWED_POSITION_STATUS = new Set([
-  "new",
-  "checked",
-  "excluded",
-  "scored",
-  "writing",
-  "review",
-  "ready",
-  "applied",
-  "response",
-]);
 // 'ready' = CV finito + Critic PASS (lo Scrittore lo setta nel gate finale,
 // single-writer). DEVE restare in whitelist: senza, normalizeApplicationStatus
 // lo degrada a 'draft' e la pagina posizione mostra "draft" pur avendo il CV
 // pronto — il CHECK cloud lo ammette già (mig 014_applications_status_ready).
-const ALLOWED_APPLICATION_STATUS = new Set([
-  "draft",
-  "review",
-  "ready",
-  "approved",
-  "applied",
-  "response",
-]);
-const ALLOWED_CRITIC_VERDICT = new Set(["PASS", "NEEDS_WORK", "REJECT"]);
 const ALLOWED_MESSAGE_KIND = new Set([
   "notification",
   "question",
@@ -273,23 +258,6 @@ const ALLOWED_DELIVERED_VIA = new Set(["telegram", "web"]);
 // position_highlights.type ha CHECK (pro|con) sul cloud (mig 003): scartiamo
 // le righe con type fuori enum per non far fallire l'intero batch upsert.
 const ALLOWED_HIGHLIGHT_TYPE = new Set(["pro", "con"]);
-
-function normalizePositionStatus(s: string | null | undefined): string {
-  if (!s) return "new";
-  return ALLOWED_POSITION_STATUS.has(s) ? s : "new";
-}
-
-function normalizeApplicationStatus(
-  s: string | null | undefined,
-): string | null {
-  if (!s) return null;
-  return ALLOWED_APPLICATION_STATUS.has(s) ? s : "draft";
-}
-
-function normalizeCriticVerdict(v: string | null | undefined): string | null {
-  if (!v) return null;
-  return ALLOWED_CRITIC_VERDICT.has(v) ? v : null;
-}
 
 function finiteNumber(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;

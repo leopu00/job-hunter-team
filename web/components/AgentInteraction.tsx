@@ -5,16 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useIsCloud } from '@/app/hooks/useIsCloud'
 import { useLocale } from '@/lib/use-locale'
 import type { Locale } from '@/i18n/config'
-
-const LOCALE_TAG: Record<Locale, string> = {
-  it: 'it-IT',
-  en: 'en-US',
-  es: 'es-ES',
-  fr: 'fr-FR',
-  de: 'de-DE',
-  hu: 'hu-HU',
-  pt: 'pt-PT',
-}
+import { intlTag } from '@/lib/locale-tag';
 
 const T: Record<Locale, {
   chat: string
@@ -356,7 +347,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
                 }}>
                 <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
                 <div className="text-[9px] mt-1 opacity-50 text-right">
-                  {new Date(msg.ts * 1000).toLocaleTimeString(LOCALE_TAG[locale] ?? 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(msg.ts * 1000).toLocaleTimeString(intlTag(locale), { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
             </div>

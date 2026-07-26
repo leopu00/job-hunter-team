@@ -10,7 +10,8 @@ import {
   DISPLAY_CURRENCY_COOKIE,
   sanitizeDisplayCurrency,
 } from "@/lib/display-currency";
-import SwipeDeck, { type SwipeCardData, type Verdict } from "./SwipeDeck";
+import SwipeDeck, { type SwipeCardData } from "./SwipeDeck";
+import { verdictOf, type Verdict } from "@/lib/position-verdict";
 
 export const dynamic = "force-dynamic";
 
@@ -66,15 +67,6 @@ function toCard(
 // Ultimo evento feedback → giudizio della scala a 4 (inverso della
 // mappatura VERDICTS in SwipeDeck; i vecchi eventi senza score cadono
 // sul giudizio più vicino all'action).
-function verdictOf(action: string, score: number | null): Verdict {
-  if (action === "star") return "top";
-  if (action === "dislike" || action === "hide")
-    return score === 2 ? "review_low" : "no";
-  if (score != null && score <= 2) return "review_low";
-  if (score != null && score >= 5) return "top";
-  return "review_ok";
-}
-
 export default async function SwipePage() {
   const cookieStore = await cookies();
   const displayCurrency = sanitizeDisplayCurrency(

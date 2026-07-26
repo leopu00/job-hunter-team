@@ -15,16 +15,7 @@ import europeOutline from "@/data/case-studies/europe-outline.json";
 import ScoreDistribution from "@/app/components/ScoreDistribution";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
-
-const LOCALE_TAG: Record<Locale, string> = {
-  it: "it-IT",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  de: "de-DE",
-  hu: "hu-HU",
-  pt: "pt-PT",
-};
+import { intlTag } from "@/lib/locale-tag";
 
 const T: Record<
   Locale,
@@ -345,7 +336,7 @@ function projectEU(lat: number, lon: number, w: number, h: number) {
 export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
   const locale = useLocale();
   const t = T[locale] ?? T.it;
-  const tag = LOCALE_TAG[locale] ?? "en-US";
+  const tag = intlTag(locale);
   const tipRef = useRef<TooltipHandle>(null);
   const showTip = (e: React.MouseEvent, title: string, rows: TipRow[]) =>
     tipRef.current?.show(e.clientX, e.clientY, title, rows);
