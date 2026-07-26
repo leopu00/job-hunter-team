@@ -62,6 +62,9 @@ func _ready() -> void:
 		_self_test_vps_setup.call_deferred()
 		return
 	terminal_requested.connect(_show_embedded_terminal)
+	# Su VPS il jht.config.json non è su questo disco: le finestre di lavoro
+	# arrivano con le impostazioni live pubblicate dal backend.
+	BackendBus.live_settings_updated.connect(_on_live_settings)
 	_timer = Timer.new()
 	_timer.wait_time = 3.0
 	_timer.autostart = true
@@ -236,13 +239,32 @@ func _apply_probe(next: Dictionary) -> void:
 		BackendBus.ensure_assistant()
 
 
+## Gli orari sono il quarto passo, ed è obbligatorio: decidono QUANDO il team
+## consuma l'abbonamento. Chi parte senza sceglierli si ritrova gli agenti che
+## lavorano a tutte le ore, e lo scopre dal conto (Leone, 26/07). Il pannello
+## esisteva già, ma solo in Impostazioni: nessuno ci passava prima di avviare.
 func _finalize(next: Dictionary) -> void:
 	var completed := 0
 	completed += 1 if bool(next.get("container_running", false)) else 0
 	completed += 1 if bool(next.get("provider_authenticated", false)) else 0
 	completed += 1 if bool(next.get("profile_ready", false)) else 0
+	completed += 1 if bool(next.get("hours_ready", false)) else 0
 	next["completed"] = completed
-	next["ready"] = completed == 3
+	next["ready"] = completed == 4
+
+
+## Orari letti dal team remoto: stessa verità del probe locale, altra sorgente.
+func _on_live_settings(settings: Dictionary) -> void:
+	if not BackendBus.is_remote():
+		return
+	var wh: Variant = settings.get("hours_raw", {})
+	var ready := wh is Dictionary and (wh as Dictionary).get("windows", []) is Array \
+			and not ((wh as Dictionary).get("windows", []) as Array).is_empty()
+	if bool(status.get("hours_ready", false)) == ready:
+		return
+	status["hours_ready"] = ready
+	_finalize(status)
+	status_changed.emit(status.duplicate(true))
 
 
 func _on_profile_status(_profile: Dictionary, _required: Dictionary, ready: bool) -> void:
@@ -328,6 +350,7 @@ static func _probe_host(home: String) -> Dictionary:
 					"list-sessions", "-F", "#{session_name}"] ))
 			d["team_running"] = tmux["code"] == 0 and str(tmux["out"]) != ""
 	var config := _read_json(home.path_join("jht.config.json"))
+	d["hours_ready"] = _has_working_hours(config)
 	var active := _ui_provider_id(str(config.get("active_provider", "")))
 	d["active_provider"] = active
 	if active != "":
@@ -335,6 +358,18 @@ static func _probe_host(home: String) -> Dictionary:
 		d["provider_auth_match"] = match
 		d["provider_authenticated"] = match != ""
 	return d
+
+
+## Finestre di lavoro dichiarate? Il team senza orari lavora sempre.
+static func _has_working_hours(config: Dictionary) -> bool:
+	var team_cfg: Variant = config.get("team", {})
+	if not (team_cfg is Dictionary):
+		return false
+	var wh: Variant = (team_cfg as Dictionary).get("working_hours", {})
+	if not (wh is Dictionary):
+		return false
+	var windows: Variant = (wh as Dictionary).get("windows", [])
+	return windows is Array and not (windows as Array).is_empty()
 
 
 static func _read_json(path: String) -> Dictionary:
