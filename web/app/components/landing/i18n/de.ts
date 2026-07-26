@@ -33,6 +33,7 @@ export const de: Record<string, string> = {
   footer_stats: "Projekt",
   footer_resources: "Ressourcen",
   footer_contacts: "Kontakt",
+  footer_write: "Schreib uns",
   footer_bug: "Fehler melden",
   footer_privacy: "Datenschutz",
   footer_terms: "Nutzungsbedingungen",
