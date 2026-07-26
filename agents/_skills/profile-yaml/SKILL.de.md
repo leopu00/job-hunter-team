@@ -181,6 +181,21 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 #    Kündigen Sie die Freischaltung NIEMALS ohne FLAG_OK im vorherigen Schritt an.
 ```
 
+
+### 4. Benachrichtigen Sie den Capitano — hier startet das Team
+
+Erst nach `FLAG_OK`, und nur einmal:
+
+```bash
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] Kandidatenprofil vollstandig und validiert — das Team kann starten."
+```
+
+Der Capitano schaut nicht in die Profildatei: solange niemand es ihm sagt, lasst
+er den Benutzer beim ersten Start vor einem fast stillstehenden Buro sitzen.
+Diese Nachricht ist der Trigger seiner Skill `first-run-burst` (vollstandiges
+Roster sofort statt schrittweisem Hochfahren). Ohne sie sieht der Benutzer am
+ersten Tag alle zehn Minuten eine Position und halt die Anwendung fur kaputt.
+
 ### Anti-Halluzination von Schritt 2
 
 Es ist bekannt, dass ein LLM dazu neigt, "ich habe X gemacht" zu schreiben, auch wenn der Tool-Call nicht ausgeführt wurde. Der `test -f` existiert genau dafür, um Sie zu unterbrechen, falls Sie die Erstellung übersprungen haben: Sie sehen `FLAG_MISSING` und erinnern sich, zurückzugehen. **Vertrauen Sie nicht Ihrer Erinnerung, vertrauen Sie nur der Ausgabe von `test -f`.**
