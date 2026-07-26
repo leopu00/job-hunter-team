@@ -11,34 +11,25 @@
 #
 # Cosa cambia rispetto al compose di produzione:
 # - build locale dal Dockerfile (sovrascrive l'immagine GHCR pullata)
-# - bind-mount di web/, agents/, shared/, .launcher/ per modifiche
-#   visibili senza ricostruire l'immagine
-# - anonymous volume per node_modules e .next (preserva i binari Linux
-#   contro overrides Windows/Mac)
+# - bind-mount di agents/, shared/, .launcher/ per modifiche visibili
+#   senza ricostruire l'immagine
+#
+# NB: niente mount di ./web e niente polling watcher (WATCHPACK_POLLING &
+# co.). La dashboard web locale è stata ritirata (2026-07-23) e il Dockerfile
+# non installa più le dipendenze di web/: nel container non gira alcun Next.js
+# da ricompilare. Il mount serviva solo a quello e i volumi anonimi su
+# node_modules/.next mascheravano la directory montata. Rimossi il 2026-07-26.
 
 services:
   jht:
-    environment:
-      # Inotify su bind-mount Windows+WSL2 non propaga sempre gli eventi di
-      # modifica: polling per Next.js / Turbopack. Vivono QUI e non nel compose
-      # di produzione (spostati il 2026-07-25) perché servono solo al dev
-      # server, e il container di produzione non avvia Next.
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
-      - TURBOPACK_WATCH_POLL=true
     build:
       context: .
       dockerfile: Dockerfile
     volumes:
-      # Sorgenti del repo — hot-reload senza rebuild dell'immagine.
-      # Next.js dev-server ricompila al cambio di .ts/.tsx.
-      # start-agent.sh rilegge i prompt markdown ad ogni lancio agent.
-      - ./web:/app/web
-      - /app/web/node_modules
-      - /app/web/.next
+      # Sorgenti del repo — hot-reload senza rebuild dell'immagine:
+      # start-agent.sh rilegge i prompt markdown a ogni lancio agente e le
+      # skill/bridge sono i file più modificati durante lo sviluppo (senza
+      # bind-mount ogni fix richiederebbe un rebuild o un docker cp a mano).
       - ./agents:/app/agents
       - ./shared:/app/shared
-      # .launcher/start-agent.sh + .launcher/sentinel-ticker.py sono
-      # i file piu' modificati durante lo sviluppo: senza bind-mount
-      # ogni fix richiederebbe un rebuild o un docker cp manuale.
       - ./.launcher:/app/.launcher
