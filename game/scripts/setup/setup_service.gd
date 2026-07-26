@@ -172,6 +172,27 @@ func _self_test_vps_setup() -> void:
 	if not bool(gated.get("ready", false)):
 		failures.append("setup completo non riconosciuto come pronto")
 
+	# ── La cartella dati è del team: nessuno la tocca alle spalle ────────
+	# Tre bug diversi in una giornata (config non scrivibile, runtime non
+	# creabile, login mai rilevato) erano lo stesso bug: il gioco che tratta
+	# `~/.jht` come roba sua mentre appartiene al container. La regola vale
+	# solo se resta vera nel tempo, quindi la si verifica invece di ricordarla.
+	var sorgente := FileAccess.get_file_as_string(
+			"res://scripts/setup/setup_service.gd")
+	# I termini si compongono a pezzi, altrimenti il controllo troverebbe
+	# sé stesso e fallirebbe sempre.
+	var casa := "_jht_home()"
+	for vietato in ["FileAccess.open(" + casa, "_read_json(" + casa,
+			"DirAccess.remove_absolute(" + casa]:
+		if sorgente.contains(vietato):
+			failures.append("accesso diretto alla cartella del team: " + vietato)
+	# Il compose NON deve tornare in `~/.jht`: è il file che serve PRIMA che
+	# il container esista, e da lì in poi quella cartella non è più nostra.
+	if not compose_home_path().contains("runtime"):
+		failures.append("il compose ha perso la sua cartella")
+	if compose_home_path().contains("/.jht/"):
+		failures.append("il compose è tornato nella cartella del team")
+
 	# ── Login: il comando lo manda il programma, non l'utente ────────────
 	for id in ["claude", "kimi"]:
 		if str(provider_login_spec(id).get("send_command", "")) != "/login":
@@ -452,18 +473,18 @@ static func _ui_provider_id(value: String) -> String:
 	return ""
 
 
-static func auth_match(provider: String, home: String) -> String:
-	for rel in AUTH_PATHS.get(provider, []):
-		var path := home.path_join(rel)
-		if not FileAccess.file_exists(path):
-			continue
-		var f := FileAccess.open(path, FileAccess.READ)
-		if f != null and f.get_length() > 0:
-			f.close()
-			return rel
-		if f != null:
-			f.close()
-	return ""
+## Il login è stato fatto? La domanda va posta a CHI POSSIEDE i dati.
+##
+## I CLI salvano le credenziali con permessi 600 sotto l'utente del container
+## (uid 1001), e su Linux i bind mount non rimappano gli uid: il gioco gira
+## come l'utente (1000) e su quel file prende "Permission denied". Leggendolo
+## da fuori il login risultava NON fatto per sempre — l'utente entrava in
+## Kimi, la console gli rispondeva, e la spunta verde non arrivava mai
+## (ThinkPad, 26/07). Quando il container è acceso è lui a rispondere; la
+## lettura diretta resta per il caso "provider già autenticato e container
+## ancora spento".
+static func auth_match(provider: String, _home: String = "") -> String:
+	return JhtFs.first_with_content(AUTH_PATHS.get(provider, []))
 
 
 func select_provider(provider: String) -> void:
@@ -498,10 +519,7 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 		Log.warn("setup", "providers use nel container fallito (%d): %s"
 				% [used["code"], str(used["out"]).strip_edges().right(200)])
 
-	var home := _jht_home()
-	DirAccess.make_dir_recursive_absolute(home)
-	var path := home.path_join("jht.config.json")
-	var config := _read_json(path)
+	var config := JhtFs.read_json("jht.config.json")
 	var config_id := str(PROVIDERS[provider]["config_id"])
 	config["active_provider"] = config_id
 	var providers: Dictionary = config.get("providers", {}) \
@@ -511,18 +529,13 @@ func _do_select_provider(provider: String, vps: Dictionary) -> Dictionary:
 	provider_config["auth_method"] = "subscription"
 	providers[config_id] = provider_config
 	config["providers"] = providers
-	var tmp := path + ".game-tmp"
-	var f := FileAccess.open(tmp, FileAccess.WRITE)
-	if f == null:
-		return {"ok": false, "message": "configurazione non scrivibile in "
-				+ home + " — accendi prima il container (passo 01): da lì la "
-				+ "scrittura passa dal team, che di quella cartella è il proprietario"}
-	f.store_string(JSON.stringify(config, "  ") + "\n")
-	f.close()
-	var err := DirAccess.rename_absolute(tmp, path)
-	return {"ok": err == OK,
-			"message": "Provider selezionato: " + str(PROVIDERS[provider]["name"])
-			if err == OK else "impossibile salvare il provider"}
+	if JhtFs.write_json("jht.config.json", config):
+		return {"ok": true, "message": "Provider selezionato: "
+				+ str(PROVIDERS[provider]["name"])}
+	if JhtFs.host_home_blocked():
+		return {"ok": false, "message": "la cartella dati appartiene al team e "
+				+ "il container è spento: accendilo dal passo 01 e riprova"}
+	return {"ok": false, "message": "impossibile salvare il provider"}
 
 
 ## ── Abbonamento ────────────────────────────────────────────────────────
@@ -695,8 +708,20 @@ static func _local_image_id() -> String:
 	return str(found["out"]).strip_edges() if found["code"] == 0 else ""
 
 
+## Dove vive il file compose. NON in `~/.jht`: quella cartella diventa del
+## container al primo avvio, e da lì in poi riscriverla è "Impossibile
+## preparare il runtime" — il muro contro cui è finito il primo avvio pulito
+## del 26/07. Vive nella cartella dell'applicazione, che è nostra per
+## definizione; i volumi dentro al file sono path assoluti, quindi la sua
+## posizione non cambia nulla per docker. Il vecchio percorso resta letto
+## per chi ce l'ha già.
+static func compose_home_path() -> String:
+	return ProjectSettings.globalize_path("user://runtime/docker-compose.yml")
+
+
 static func _find_compose_file() -> String:
 	var candidates := [
+		compose_home_path(),
 		_jht_home().path_join("runtime/docker-compose.yml"),
 		ProjectSettings.globalize_path("res://../docker-compose.yml"),
 	]
@@ -766,7 +791,7 @@ static func _ensure_compose_file() -> String:
 	var found := _find_compose_file()
 	if found != "":
 		return found
-	var path := _jht_home().path_join("runtime/docker-compose.yml")
+	var path := compose_home_path()
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
@@ -999,11 +1024,8 @@ static func _do_logout_provider(provider: String, vps: Dictionary) -> Dictionary
 	var result := {"code": 0, "out": ""}
 	if vps.is_empty():
 		for rel in paths:
-			var path := _jht_home().path_join(str(rel))
-			if FileAccess.file_exists(path):
-				var err := DirAccess.remove_absolute(path)
-				if err != OK:
-					result = {"code": -1, "out": "impossibile rimuovere " + str(rel)}
+			if not JhtFs.remove(str(rel)):
+				result = {"code": -1, "out": "impossibile rimuovere " + str(rel)}
 	else:
 		var remote_paths := PackedStringArray()
 		for rel in paths:
@@ -1541,7 +1563,7 @@ func open_vps_install(ip: String, key_path: String) -> void:
 func email_status() -> Dictionary:
 	if BackendBus.is_live():
 		return BackendBus.live_settings.get("email_account", {})
-	var data := _read_json(_jht_home().path_join("credentials/email_monitor.json"))
+	var data := JhtFs.read_json("credentials/email_monitor.json")
 	return {"configured": str(data.get("user", "")) != "",
 			"email": str(data.get("user", "")),
 			"host": str(data.get("imap_host", ""))}
@@ -1550,7 +1572,7 @@ func email_status() -> Dictionary:
 func cloud_status() -> Dictionary:
 	if BackendBus.is_live():
 		return BackendBus.live_settings.get("cloud_account", {})
-	var data := _read_json(_jht_home().path_join("cloud.json"))
+	var data := JhtFs.read_json("cloud.json")
 	return {"configured": bool(data.get("enabled", false)) \
 			and str(data.get("token", "")) != "",
 			"base_url": str(data.get("base_url", "")),
@@ -1561,7 +1583,7 @@ func cloud_status() -> Dictionary:
 func telegram_status() -> Dictionary:
 	if BackendBus.is_live():
 		return BackendBus.live_settings.get("telegram_bots", {})
-	var config := _read_json(_jht_home().path_join("jht.config.json"))
+	var config := JhtFs.read_json("jht.config.json")
 	var channels: Dictionary = config.get("channels", {}) \
 			if config.get("channels", {}) is Dictionary else {}
 	var telegram: Dictionary = channels.get("telegram", {}) \
@@ -1739,21 +1761,12 @@ static func _do_save_email(email: String, password: String, vps: Dictionary) -> 
 	}, "  ") + "\n"
 	var saved := {"code": -1, "out": ""}
 	if vps.is_empty():
-		var dir := _jht_home().path_join("credentials")
-		DirAccess.make_dir_recursive_absolute(dir)
-		var path := dir.path_join("email_monitor.json")
-		var tmp := path + ".game-tmp"
-		var file := FileAccess.open(tmp, FileAccess.WRITE)
-		if file != null:
-			file.store_string(payload)
-			file.close()
-			if FileAccess.file_exists(path):
-				DirAccess.remove_absolute(path)
-			var err := DirAccess.rename_absolute(tmp, path)
-			if err == OK:
-				if OS.get_name() != "Windows":
-					_run("chmod", PackedStringArray(["600", path]))
-				saved = {"code": 0, "out": ""}
+		const EMAIL_CRED := "credentials/email_monitor.json"
+		if JhtFs.write_text(EMAIL_CRED, payload):
+			JhtFs.chmod(EMAIL_CRED, "600")  # è una password: non resta leggibile a tutti
+			saved = {"code": 0, "out": ""}
+		else:
+			saved = {"code": -1, "out": "cartella dati non scrivibile"}
 	else:
 		var python := "import sys,json,os;d=json.load(sys.stdin);" \
 				+ "p='/jht_home/credentials/email_monitor.json';" \
@@ -1777,10 +1790,7 @@ static func _do_save_email(email: String, password: String, vps: Dictionary) -> 
 static func _do_delete_email(vps: Dictionary) -> Dictionary:
 	var result := {"code": 0, "out": ""}
 	if vps.is_empty():
-		var path := _jht_home().path_join("credentials/email_monitor.json")
-		if FileAccess.file_exists(path):
-			var err := DirAccess.remove_absolute(path)
-			result["code"] = 0 if err == OK else -1
+		result["code"] = 0 if JhtFs.remove("credentials/email_monitor.json") else -1
 	else:
 		result = _run_ssh(vps,
 				"docker exec jht rm -f /jht_home/credentials/email_monitor.json")
