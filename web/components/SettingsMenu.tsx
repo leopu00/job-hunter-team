@@ -4,45 +4,8 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { DarkModeToggle } from '@/app/theme-provider'
 import { useLocale } from '@/lib/use-locale'
-
-const T: Record<string, Record<string, string>> = {
-  settings: {
-    it: 'Impostazioni',
-    en: 'Settings',
-    hu: 'Beállítások',
-    es: 'Ajustes',
-    de: 'Einstellungen',
-    fr: 'Paramètres',
-    pt: 'Configurações',
-  },
-  theme: {
-    it: 'Tema',
-    en: 'Theme',
-    hu: 'Téma',
-    es: 'Tema',
-    de: 'Design',
-    fr: 'Thème',
-    pt: 'Tema',
-  },
-  team: {
-    it: 'Team',
-    en: 'Team',
-    hu: 'Csapat',
-    es: 'Equipo',
-    de: 'Team',
-    fr: 'Équipe',
-    pt: 'Equipe',
-  },
-  org_chart: {
-    it: 'Organigramma',
-    en: 'Org chart',
-    hu: 'Szervezeti ábra',
-    es: 'Organigrama',
-    de: 'Organigramm',
-    fr: 'Organigramme',
-    pt: 'Organograma',
-  },
-}
+import { makeT } from "@/lib/i18n-dict";
+import { T } from "./SettingsMenu.i18n";
 
 const DEV_MODE_KEY = 'jht-dev-mode'
 const DEV_MODE_EVENT = 'jht-dev-mode-change'
@@ -80,7 +43,7 @@ export default function SettingsMenu() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const locale = useLocale()
-  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
+  const tr = makeT(T, locale);
 
   useEffect(() => {
     if (!open) return

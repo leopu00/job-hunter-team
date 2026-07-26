@@ -1,6 +1,7 @@
 import type { ServerLocale } from "./server-locale";
 
-const T = {
+// Esportato per la verifica di completezza in tests/js/i18n.
+export const T = {
   it: {
     live: "live · team attivo",
     data_updated: "dati aggiornati",

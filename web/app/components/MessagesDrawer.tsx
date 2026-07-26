@@ -30,55 +30,8 @@ import {
   withReply,
 } from "@/lib/messages-thread";
 import type { PendingMessage } from "@/lib/types";
-
-const T: Record<string, Record<string, string>> = {
-  ...THREAD_T,
-  title: {
-    it: "Messaggi",
-    en: "Messages",
-    hu: "Üzenetek",
-    es: "Mensajes",
-    de: "Nachrichten",
-    fr: "Messages",
-    pt: "Mensagens",
-  },
-  aria_open: {
-    it: "Apri i messaggi del team",
-    en: "Open team messages",
-    hu: "Csapatüzenetek megnyitása",
-    es: "Abrir mensajes del equipo",
-    de: "Team-Nachrichten öffnen",
-    fr: "Ouvrir les messages de l'équipe",
-    pt: "Abrir mensagens da equipe",
-  },
-  close: {
-    it: "Chiudi",
-    en: "Close",
-    hu: "Bezárás",
-    es: "Cerrar",
-    de: "Schließen",
-    fr: "Fermer",
-    pt: "Fechar",
-  },
-  back: {
-    it: "Indietro",
-    en: "Back",
-    hu: "Vissza",
-    es: "Atrás",
-    de: "Zurück",
-    fr: "Retour",
-    pt: "Voltar",
-  },
-  empty: {
-    it: "Nessun messaggio dal team, per ora.",
-    en: "No messages from the team yet.",
-    hu: "Egyelőre nincs üzenet a csapattól.",
-    es: "Aún no hay mensajes del equipo.",
-    de: "Noch keine Nachrichten vom Team.",
-    fr: "Pas encore de messages de l'équipe.",
-    pt: "Ainda não há mensagens da equipe.",
-  },
-};
+import { makeT } from "@/lib/i18n-dict";
+import { T } from "./MessagesDrawer.i18n";
 
 type Conversation = {
   agent: string;
@@ -155,7 +108,7 @@ function AgentDot({
 
 export default function MessagesDrawer() {
   const locale = useLocale();
-  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const tr = makeT(T, locale);
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<PendingMessage[]>([]);
