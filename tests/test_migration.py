@@ -306,15 +306,19 @@ class TestSetupIntegrity:
         """shared/skills/db_migrate_v2.py deve esistere — richiesto da setup.sh step 7."""
         assert os.path.isfile(DB_MIGRATE), f"db_migrate_v2.py mancante"
 
-    def test_dev_team_start_sh_exists(self):
+    def test_dev_team_start_sh_removed(self):
         """
-        .launcher/start.sh deve esistere — referenziato da setup.sh nel riepilogo.
-        GAP CONFERMATO: directory .launcher/ mancante.
-        Fix atteso: INFRA.
+        .launcher/start.sh NON deve tornare: rimosso il 2026-07-26.
+
+        Assumeva claude+tmux sull'host (modello pre-container: oggi il team gira
+        dentro il container ed è pid1/`jht team start` ad avviare gli agenti) e
+        i suoi `&& true` neutralizzavano `set -e`, dichiarando successo anche
+        con tutti gli spawn falliti. Nessun invocatore reale: solo questo test e
+        un paio di messaggi di riepilogo in scripts/setup.*, ora aggiornati.
         """
         path = os.path.join(REPO_ROOT, '.launcher', 'start.sh')
-        assert os.path.isfile(path), \
-            ".launcher/start.sh mancante — setup.sh non mostra il comando di avvio (fix: INFRA)"
+        assert not os.path.exists(path), \
+            ".launcher/start.sh è stato rimosso: l'avvio del team passa da `jht team start`"
 
     def test_web_env_example_exists(self):
         """web/.env.example deve esistere — setup.sh linea 205 lo richiede."""
