@@ -3231,6 +3231,7 @@ func _add_hud() -> void:
 	_team_hud = TeamHud.new()
 	theme_root.add_child(_team_hud)
 	theme_root.add_child(SimBadge.new())  # SIMULAZIONE vs DATI REALI
+	theme_root.add_child(BudgetNotice.new())  # perche il team tace, quando tace
 	var hint := TerminalTheme.label(
 			UIStrings.t("office.camera_hint"),
 			15, Palette.DIM)

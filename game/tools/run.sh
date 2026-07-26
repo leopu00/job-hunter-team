@@ -48,6 +48,7 @@ case "$MODE" in
 		JHT_NOVPS=1 godot --headless --script res://tools/pipeline_queue_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/embedded_terminal_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/terminal_selection_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/budget_notice_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/doc_preview_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/redactor_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/diagnostics_selftest.gd
