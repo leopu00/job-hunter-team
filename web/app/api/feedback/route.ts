@@ -3,10 +3,13 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { redactSecrets } from "@/lib/redact";
 import {
   MAX_BODY_BYTES,
+  emailSubject,
+  emailText,
   issueBody,
   issueTitle,
   newTicket,
   parseReport,
+  replyToSicuro,
   type Report,
 } from "@/lib/feedback-report";
 
@@ -37,6 +40,52 @@ const REPO = process.env.JHT_FEEDBACK_REPO || "leopu00/job-hunter-team";
 const GITHUB_TOKEN = process.env.JHT_FEEDBACK_GITHUB_TOKEN || "";
 const WEBHOOK_URL = process.env.JHT_FEEDBACK_WEBHOOK_URL || "";
 const SUPPORT_EMAIL = process.env.JHT_SUPPORT_EMAIL || "";
+const RESEND_KEY = process.env.RESEND_API_KEY || "";
+const MAIL_TO = process.env.JHT_FEEDBACK_TO || SUPPORT_EMAIL;
+const MAIL_FROM =
+  process.env.JHT_FEEDBACK_FROM ||
+  "Segnalazioni JHT <support@jobhunterteam.ai>";
+
+/**
+ * Recapita la segnalazione nella casella del progetto.
+ *
+ * È la destinazione che conta: la persona che segnala un crash non ha un
+ * account GitHub e non ne aprirà uno: qui la sua segnalazione diventa una mail
+ * come tutte le altre, in una casella dove qualcuno la legge.
+ *
+ * Si usa l'API HTTP di Resend e non l'SMTP: le funzioni serverless hanno le
+ * porte SMTP in uscita bloccate o inaffidabili, mentre una POST parte sempre.
+ */
+async function sendEmail(report: Report, ticket: string): Promise<boolean> {
+  if (!RESEND_KEY || !MAIL_TO) return false;
+  // Il Reply-To fa sì che rispondere sia un solo click: la risposta parte
+  // verso chi ha segnalato, non verso di noi.
+  const replyTo = replyToSicuro(report.contact);
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: MAIL_FROM,
+        to: [MAIL_TO],
+        subject: emailSubject(report, ticket),
+        text: emailText(report, ticket),
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      }),
+    });
+    if (!res.ok) {
+      console.error("[feedback] Resend ha risposto", res.status);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[feedback] mail non inviata:", err);
+    return false;
+  }
+}
 
 function clientIp(req: NextRequest): string {
   const forwarded = req.headers.get("x-forwarded-for");
@@ -138,10 +187,15 @@ export async function POST(req: NextRequest) {
   }
 
   const ticket = newTicket();
-  const issue = await openIssue(report, ticket);
-  const webhook = await notifyWebhook(report, ticket);
+  // La casella è la destinazione principale: è quella che regge anche quando
+  // il token GitHub scade o il repo cambia nome. Le altre due si aggiungono.
+  const [mail, issue, webhook] = await Promise.all([
+    sendEmail(report, ticket),
+    openIssue(report, ticket),
+    notifyWebhook(report, ticket),
+  ]);
 
-  if (!issue && !webhook) {
+  if (!mail && !issue && !webhook) {
     // Nessun canale configurato, o entrambi giù. Si risponde con la verità:
     // il client tiene la copia locale e lo dice all'utente, invece di far
     // credere che la segnalazione sia arrivata da qualche parte.
@@ -156,7 +210,7 @@ export async function POST(req: NextRequest) {
   }
 
   console.log(
-    `[feedback] ${ticket} · ${report.platform} · v${report.appVersion} · issue=${issue ?? "no"} webhook=${webhook}`,
+    `[feedback] ${ticket} · ${report.platform} · v${report.appVersion} · mail=${mail} issue=${issue ?? "no"} webhook=${webhook}`,
   );
   return NextResponse.json({ ok: true, ticket: issue ?? ticket });
 }
