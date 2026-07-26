@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,6 +8,10 @@ import { createClient } from "@/lib/supabase/client";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+
+// Caricato solo quando serve: il modulo di segnalazione non deve pesare sul
+// primo caricamento della dashboard di chi non lo aprirà mai.
+const SupportDialog = lazy(() => import("./SupportDialog"));
 
 type UserMenuStrings = {
   accountPrefix: string;
@@ -17,6 +21,7 @@ type UserMenuStrings = {
   backup: string;
   logout: string;
   connectTeam: string;
+  support: string;
 };
 
 const T: Record<Locale, UserMenuStrings> = {
@@ -28,6 +33,7 @@ const T: Record<Locale, UserMenuStrings> = {
     backup: "Backup",
     logout: "Esci",
     connectTeam: "Collega il tuo team",
+    support: "Segnala un problema",
   },
   en: {
     accountPrefix: "Account:",
@@ -37,6 +43,7 @@ const T: Record<Locale, UserMenuStrings> = {
     backup: "Backup",
     logout: "Sign out",
     connectTeam: "Connect your team",
+    support: "Report a problem",
   },
   es: {
     accountPrefix: "Cuenta:",
@@ -46,6 +53,7 @@ const T: Record<Locale, UserMenuStrings> = {
     backup: "Copia de seguridad",
     logout: "Cerrar sesión",
     connectTeam: "Conecta tu equipo",
+    support: "Informar de un problema",
   },
   fr: {
     accountPrefix: "Compte :",
@@ -55,6 +63,7 @@ const T: Record<Locale, UserMenuStrings> = {
     backup: "Sauvegarde",
     logout: "Se déconnecter",
     connectTeam: "Connecter votre équipe",
+    support: "Signaler un problème",
   },
   de: {
     accountPrefix: "Konto:",
@@ -64,6 +73,7 @@ const T: Record<Locale, UserMenuStrings> = {
     backup: "Sicherung",
     logout: "Abmelden",
     connectTeam: "Team verbinden",
+    support: "Problem melden",
   },
   hu: {
     accountPrefix: "Fiók:",
@@ -73,6 +83,7 @@ const T: Record<Locale, UserMenuStrings> = {
     backup: "Biztonsági mentés",
     logout: "Kijelentkezés",
     connectTeam: "Csapat összekapcsolása",
+    support: "Hiba jelentése",
   },
   pt: {
     accountPrefix: "Conta:",
@@ -82,6 +93,7 @@ const T: Record<Locale, UserMenuStrings> = {
     backup: "Backup",
     logout: "Sair",
     connectTeam: "Liga a tua equipa",
+    support: "Comunicar um problema",
   },
 };
 
@@ -102,6 +114,7 @@ export default function UserMenu({
   needsPairing,
 }: UserMenuProps) {
   const [open, setOpen] = useState(false);
+  const [supporto, setSupporto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const t = T[useLocale()];
@@ -244,12 +257,28 @@ export default function UserMenu({
             </Link>
           )}
           <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              setSupporto(true);
+            }}
+            className="w-full text-left px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors cursor-pointer border-t border-[var(--color-border)]"
+          >
+            {t.support}
+          </button>
+          <button
             onClick={handleLogout}
             className="w-full text-left px-4 py-2.5 text-[11px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-red)] hover:bg-[var(--color-card)] transition-colors cursor-pointer border-t border-[var(--color-border)] mt-1"
           >
             {t.logout}
           </button>
         </div>
+      )}
+
+      {supporto && (
+        <Suspense fallback={null}>
+          <SupportDialog email={email} onClose={() => setSupporto(false)} />
+        </Suspense>
       )}
     </div>
   );
