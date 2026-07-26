@@ -18,6 +18,11 @@ const S := {
 	"pause.quit": "QUIT GAME",
 	"pause.shutdown": "STOPPING THE TEAM…",
 	"setup.docker_install": "INSTALL DOCKER",
+	"setup.where": "Where the team works",
+	"setup.where_todo": "On your computer, or on a VPS that keeps working with the window closed.",
+	"setup.where_local": "The team works on this computer.",
+	"setup.where_vps": "The team works on the VPS: this window mirrors it.",
+	"setup.use_vps": "MOVE THE TEAM TO A VPS",
 	"shutdown.title": "YOU ARE ABOUT TO STOP THE TEAM",
 	"shutdown.lead": "Agents run in the container, not in this window: closing it stops them. %d are working right now.",
 	"shutdown.graceful": "CLOSE PROPERLY",
@@ -363,7 +368,8 @@ const S := {
 	"common.data_incoming": "// data incoming from the VPS…",
 	"common.updated": "updated: %s",
 
-	"sim.live": "● REAL DATA — VPS",
+	"sim.live_vps": "● REAL DATA — VPS",
+	"sim.live_local": "● REAL DATA — THIS COMPUTER",
 	"sim.mock": "◐ SIMULATION — not real data",
 
 	"office.camera_hint": "drag or WASD to move the camera · zoom with wheel, pinch or +/- · click agents and departments · TAB registry · ESC menu",

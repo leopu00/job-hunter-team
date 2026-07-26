@@ -350,9 +350,16 @@ func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
 func disconnect_backend() -> void:
 	set_backend(null)
 
-## Dati VERI in arrivo dalla VPS? (per il badge SIMULAZIONE / LIVE)
+## Dati VERI in arrivo dal team? (per il badge SIMULAZIONE / LIVE)
 func is_live() -> bool:
 	return state == CONNECTED and _backend != null and _backend.live
+
+
+## Il team gira su una macchina remota o qui? Il badge in alto diceva
+## "DATI REALI — VPS" anche col container sul computer dell'utente, che è
+## una bugia sullo schermo (Leone, 26/07).
+func is_remote() -> bool:
+	return _backend != null and not (_backend is LocalBackend)
 
 ## ── Chat bidirezionale utente ↔ agente ───────────────────────────────
 ## Chat 1-a-1 con OGNI agente del roster (paradigma desktop app): il

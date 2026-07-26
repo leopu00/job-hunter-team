@@ -538,10 +538,16 @@ func _build_activation() -> void:
 	var progress := HBoxContainer.new()
 	progress.add_theme_constant_override("separation", 12)
 	_content.add_child(progress)
-	_setup_gate(progress, "01", UIStrings.t("setup.container"),
-			bool(s.get("container_running", false)),
-			UIStrings.t("setup.container_ok") if bool(s.get("container_running", false))
-			else UIStrings.t("setup.container_todo"), "docker")
+	# Il passo 01 non è "accendi un container": è DOVE vive il team. Chi ha una
+	# VPS la usa come casa degli agenti e tiene questa finestra come specchio;
+	# la scelta esisteva solo sepolta in Impostazioni → Collega VPS, e
+	# nell'onboarding non compariva affatto (Leone, 26/07).
+	var on_vps: bool = BackendBus.is_remote() and BackendBus.is_live()
+	_setup_gate(progress, "01", UIStrings.t("setup.where"),
+			bool(s.get("container_running", false)) or on_vps,
+			UIStrings.t("setup.where_vps") if on_vps
+			else (UIStrings.t("setup.where_local") if bool(s.get("container_running", false))
+			else UIStrings.t("setup.where_todo")), "docker")
 	_setup_gate(progress, "02", UIStrings.t("setup.provider"),
 			bool(s.get("provider_authenticated", false)),
 			_provider_status_text(s), "provider")
@@ -673,6 +679,15 @@ func _build_container_setup() -> void:
 		stop.add_theme_color_override("font_color", Palette.RED)
 		stop.pressed.connect(SetupService.stop_container)
 		actions.add_child(stop)
+	# La seconda strada, alla pari della prima: il team può vivere su una VPS e
+	# questa finestra restare lo specchio da cui lo si guarda. Prima esisteva
+	# solo in Impostazioni, fuori dal percorso di setup.
+	if not bool(s.get("remote", false)):
+		var to_vps := Button.new()
+		to_vps.text = UIStrings.t("setup.use_vps")
+		to_vps.add_theme_color_override("font_color", Palette.BLUE)
+		to_vps.pressed.connect(func() -> void: navigate.emit("vps"))
+		actions.add_child(to_vps)
 	# Il ritorno alla checklist sta in fondo: è navigazione, non un'azione,
 	# e in mezzo agli altri sembrava una scelta alla pari.
 	var back := Button.new()

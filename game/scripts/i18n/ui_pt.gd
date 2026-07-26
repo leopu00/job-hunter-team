@@ -233,7 +233,8 @@ const S := {
 	"common.data_incoming": "// dados a caminho da VPS…",
 	"common.updated": "atualizado: %s",
 
-	"sim.live": "● DADOS REAIS — VPS",
+	"sim.live_vps": "● DADOS REAIS — VPS",
+	"sim.live_local": "● DADOS REAIS — ESTE COMPUTADOR",
 	"sim.mock": "◐ SIMULAÇÃO — dados não reais",
 
 	"office.camera_hint": "arraste ou WASD para a câmera · zoom com a roda, pinch ou +/- · clique em agentes e departamentos · TAB registro · ESC menu",

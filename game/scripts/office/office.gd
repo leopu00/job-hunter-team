@@ -2391,6 +2391,10 @@ func sync_agents(list: Array) -> void:
 			wanted.erase(agent.uid)
 	for item_uid in wanted:
 		_spawn_backend_agent(wanted[item_uid])
+	# Quanti ne lavorano davvero contro quanti se ne vedono: l'utente contava
+	# due agenti in ufficio mentre il Capitano ne comandava otto, e il gioco
+	# non diceva nulla su chi fosse rimasto fuori (26/07).
+	_log_roster_gap(list)
 	# dal prossimo sync ogni nuovo processo entra fisicamente dalla porta
 	_backend_join_parade = true
 	if _tour_enabled and TourGuide.active():
@@ -2872,6 +2876,29 @@ func _despawn_agent(agent: AgentNPC, refill_pool := true, instant := false) -> v
 		agent.vanish()
 	else:
 		agent.exit_through(EXIT_SPOT)
+
+## Confronto fra il roster del backend e i corpi in scena. Se qualcuno manca,
+## il log dice CHI: senza questo l'unico modo di accorgersene era contare gli
+## agenti a schermo e fidarsi della memoria.
+func _log_roster_gap(list: Array) -> void:
+	var expected := PackedStringArray()
+	for item in list:
+		if item.get("active", true) and str(item.get("status", "")) != "killed":
+			expected.append(str(item.get("uid", item.get("slug", ""))))
+	var on_stage := PackedStringArray()
+	for agent in agents:
+		if agent.uid != "":
+			on_stage.append(agent.uid)
+	if expected.size() == on_stage.size():
+		Log.info("backend", "roster: %d agenti attivi, tutti in scena" % expected.size())
+		return
+	var missing := PackedStringArray()
+	for uid in expected:
+		if not on_stage.has(uid):
+			missing.append(uid)
+	Log.warn("backend", "roster: %d attivi ma %d in scena — mancano: %s"
+			% [expected.size(), on_stage.size(), ", ".join(missing)])
+
 
 func _spawn_backend_agent(item: Dictionary) -> void:
 	var role: String = item.get("role", "")
