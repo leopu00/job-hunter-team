@@ -552,7 +552,8 @@ const S := {
 	"common.updated": "aggiornato: %s",
 
 	# ── Badge simulazione / dati reali ────────────────────────────────
-	"sim.live": "● DATI REALI — VPS",
+	"sim.live_vps": "● DATI REALI — VPS",
+	"sim.live_local": "● DATI REALI — QUESTO COMPUTER",
 	"sim.mock": "◐ SIMULAZIONE — dati non reali",
 
 	# ── Ufficio (hint camera) ─────────────────────────────────────────
@@ -635,6 +636,11 @@ const S := {
 	"setup.intro": "L’ufficio è già tuo. Per mettere davvero al lavoro gli agenti completa questi tre passaggi, nell’ordine che preferisci.",
 	"setup.office_open": "Puoi chiudere questa finestra e continuare a esplorare in qualsiasi momento: il setup non blocca l’app.",
 	"setup.container": "Container",
+	"setup.where": "Dove lavora il team",
+	"setup.where_todo": "Sul tuo computer, oppure su una VPS che lavora anche a finestra chiusa.",
+	"setup.where_local": "Il team lavora su questo computer.",
+	"setup.where_vps": "Il team lavora sulla VPS: questa finestra ne è lo specchio.",
+	"setup.use_vps": "PORTA IL TEAM SU UNA VPS",
 	"setup.provider": "Provider AI",
 	"setup.profile": "Profilo e CV",
 	"setup.container_ok": "Il container JHT è acceso e raggiungibile.",
