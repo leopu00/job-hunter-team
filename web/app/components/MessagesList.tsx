@@ -117,6 +117,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Vous",
     pt: "Você",
   },
+  to_bottom: {
+    it: "Vai all'ultimo messaggio",
+    en: "Jump to latest message",
+    hu: "Ugrás a legutóbbi üzenetre",
+    es: "Ir al último mensaje",
+    de: "Zur neuesten Nachricht",
+    fr: "Aller au dernier message",
+    pt: "Ir para a última mensagem",
+  },
 };
 
 export default function MessagesList({ initialMessages }: Props) {
@@ -134,21 +143,66 @@ export default function MessagesList({ initialMessages }: Props) {
   // Robusto rispetto alle diverse semantiche zoom×dvh dei Chromium (il
   // calc statico 100dvh/--zoom tornava ~150px in più su Chrome Canary →
   // pagina scrollabile con vuoto nero sotto il composer).
+  //
+  // Su iOS 26 la barra di Safari GALLEGGIA sopra la pagina: misurato sul
+  // simulatore, innerHeight e visualViewport.height valgono entrambi 714 e
+  // ignorano la fascia coperta, mentre 100svh vale 621 — l'altezza davvero
+  // libera. Con 714 il composer finiva sotto la barra. Misuriamo quindi
+  // `svh` con una probe (statico: non insegue la barra che si contrae, così
+  // il layout non sobbalza a ogni scroll) e teniamo innerHeight come
+  // fallback per i browser senza svh.
   const [panelH, setPanelH] = useState<number | null>(null);
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
+    const smallViewportH = () => {
+      const probe = document.createElement("div");
+      probe.style.cssText =
+        "position:absolute;top:-9999px;left:0;width:1px;height:100svh;pointer-events:none";
+      document.body.appendChild(probe);
+      const h = probe.getBoundingClientRect().height;
+      probe.remove();
+      return h > 0 ? h : 0;
+    };
     const apply = () => {
       const rect = el.getBoundingClientRect();
       const zoom = el.offsetWidth > 0 ? rect.width / el.offsetWidth : 1;
       const topDoc = rect.top + window.scrollY;
-      setPanelH(
-        Math.max(320, Math.floor((window.innerHeight - topDoc) / zoom)),
-      );
+      // Il minimo tra i due: svh toglie la barra del browser, visualViewport
+      // toglie la tastiera quando si apre (svh, statico, non la vede).
+      const candidates = [
+        smallViewportH(),
+        window.visualViewport?.height ?? 0,
+        window.innerHeight,
+      ].filter((v) => v > 0);
+      const viewH = Math.min(...candidates);
+      setPanelH(Math.max(320, Math.floor((viewH - topDoc) / zoom)));
     };
     apply();
     window.addEventListener("resize", apply);
-    return () => window.removeEventListener("resize", apply);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      vv?.removeEventListener("resize", apply);
+    };
+  }, []);
+
+  // Il documento non deve MAI scrollare su questa pagina: lo scroll è del
+  // solo thread. Senza questo, l'overscroll in fondo alle bolle si propaga
+  // alla pagina e porta fuori schermo selettore agenti e composer (su iOS
+  // basta un pixel di eccedenza). Ripristinato all'uscita dalla pagina.
+  useEffect(() => {
+    const html = document.documentElement;
+    const prevHtml = html.style.overflow;
+    const prevBody = document.body.style.overflow;
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    window.scrollTo(0, 0);
+    return () => {
+      html.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
   }, []);
 
   // Conversazioni: le tre core sempre presenti + eventuali mittenti extra.
@@ -253,13 +307,62 @@ export default function MessagesList({ initialMessages }: Props) {
     }, []),
   );
 
+  // "Sei in fondo?": comanda sia il pulsante di ritorno all'ultimo messaggio
+  // sia l'auto-scroll (un messaggio in arrivo non deve strappare la lettura
+  // a chi sta scorrendo lo storico più in alto).
+  const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true);
+  const readAtBottom = useCallback(() => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    atBottomRef.current = near;
+    setAtBottom(near);
+  }, []);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    atBottomRef.current = true;
+    setAtBottom(true);
+  }, []);
+
   // Scroll in fondo SOLO dentro il contenitore del thread: scrollIntoView
   // scrollava anche gli antenati (documento incluso) creando il "vuoto
   // nero" sotto il composer.
   useEffect(() => {
     const el = threadScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    atBottomRef.current = true;
+    setAtBottom(true);
+  }, [activeAgent]);
+
+  useEffect(() => {
+    if (!atBottomRef.current) return; // l'utente sta leggendo più in alto
+    const el = threadScrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [activeAgent, messages.length]);
+  }, [messages.length]);
+
+  // L'altezza misurata arriva DOPO il primo paint (e il testo delle bolle si
+  // riflowa quando il font è pronto): senza questo riaggancio la chat si
+  // apriva a metà storico invece che sull'ultimo messaggio.
+  useEffect(() => {
+    if (!atBottomRef.current) return;
+    const el = threadScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    const ro = new ResizeObserver(() => {
+      if (atBottomRef.current) el.scrollTop = el.scrollHeight;
+    });
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    const t = setTimeout(() => ro.disconnect(), 2000);
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+    };
+  }, [panelH, activeAgent]);
 
   const replyTarget = [...thread].reverse().find((m) => !m.user_reply);
 
@@ -367,13 +470,13 @@ export default function MessagesList({ initialMessages }: Props) {
 
   return (
     // Altezza piena sotto la navbar: valore SSR di partenza col calc
-    // 100dvh/--zoom, poi corretto dalla misura a runtime (vedi sopra).
+    // 100svh/--zoom, poi corretto dalla misura a runtime (vedi sopra).
     <div
       ref={rootRef}
       className="flex flex-col md:flex-row"
       style={{
         height:
-          panelH != null ? panelH : "calc(100dvh / var(--zoom, 1) - 56px)",
+          panelH != null ? panelH : "calc(100svh / var(--zoom, 1) - 56px)",
       }}
     >
       {/* ── Sidebar sinistra: conversazioni + presentazione ────────── */}
@@ -413,98 +516,149 @@ export default function MessagesList({ initialMessages }: Props) {
       </div>
 
       {/* ── Colonna chat ───────────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        <div
-          ref={threadScrollRef}
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-        >
+      {/* min-h-0 NON è decorativo: su mobile il root è flex-column e senza
+          di esso questa colonna non scende sotto l'altezza del thread
+          (min-height:auto), sfora il pannello e a scrollare se ne va
+          l'intera pagina — header e composer inclusi. */}
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        <div className="relative flex-1 min-h-0">
           <div
-            className="max-w-3xl mx-auto px-5 py-6 flex flex-col gap-4"
-            style={{ animation: "fade-in 0.25s ease both" }}
+            ref={threadScrollRef}
+            onScroll={readAtBottom}
+            className="h-full overflow-y-auto overflow-x-hidden"
+            // overscroll contain: arrivati a fine thread lo slancio non passa
+            // al documento (inline, non via classe: vedi nota sulle utility
+            // rare assenti dal CSS in cache su Safari).
+            style={{ overscrollBehavior: "contain" }}
           >
-            {thread.length === 0 && (
-              <p className="text-[12px] text-[var(--color-muted)] text-center py-12 m-0">
-                {tr("empty_agent").replace("{name}", activeInfo.name)}
-              </p>
-            )}
-            {thread.map((m) => (
-              <div key={m.id} className="flex flex-col gap-2">
-                {/* Bolla dell'agente */}
-                <div className="flex items-end gap-2 max-w-[85%] self-start">
-                  <span aria-hidden className="text-[16px] leading-none mb-1">
-                    {agentInfo(m.agent, locale).emoji}
-                  </span>
-                  <div
-                    className="rounded-lg rounded-bl-sm px-4 py-3 border-l-2 min-w-0"
-                    style={{
-                      background: "var(--color-card)",
-                      borderLeftColor: KIND_BORDER[m.kind],
-                    }}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      {m.kind !== "notification" && (
-                        <span
-                          className="text-[7.5px] font-semibold tracking-[0.14em] uppercase px-1 py-px rounded"
-                          style={{
-                            color: KIND_BORDER[m.kind],
-                            border: `1px solid ${KIND_BORDER[m.kind]}`,
-                          }}
-                        >
-                          {kindLabel(m.kind, locale)}
-                        </span>
-                      )}
-                      <span className="text-[9px] text-[var(--color-dim)]">
-                        {formatRelative(m.created_at, locale)}
-                      </span>
-                    </div>
-                    <MessageBody
-                      text={m.body}
-                      className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
-                    />
-                    {m.related_position_id && (
-                      <Link
-                        href={`/positions/${m.related_position_id}`}
-                        className="inline-block mt-1.5 text-[10px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-                      >
-                        {tr("see_position")}
-                      </Link>
-                    )}
-                  </div>
-                </div>
-                {/* Risposta dell'utente */}
-                {m.user_reply && (
-                  <div
-                    className="max-w-[85%] self-end rounded-lg rounded-br-sm px-4 py-3"
-                    style={{
-                      background:
-                        "color-mix(in srgb, var(--color-green) 10%, var(--color-card))",
-                      border:
-                        "1px solid color-mix(in srgb, var(--color-green) 30%, transparent)",
-                    }}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5 justify-end">
-                      <span className="text-[9px] font-semibold text-[var(--color-green)]">
-                        {tr("you")}
-                      </span>
-                      {m.user_reply_at && (
+            <div
+              className="max-w-3xl mx-auto px-5 py-6 flex flex-col gap-4"
+              style={{ animation: "fade-in 0.25s ease both" }}
+            >
+              {thread.length === 0 && (
+                <p className="text-[12px] text-[var(--color-muted)] text-center py-12 m-0">
+                  {tr("empty_agent").replace("{name}", activeInfo.name)}
+                </p>
+              )}
+              {thread.map((m) => (
+                <div key={m.id} className="flex flex-col gap-2">
+                  {/* Bolla dell'agente */}
+                  <div className="flex items-end gap-2 max-w-[85%] self-start">
+                    <span aria-hidden className="text-[16px] leading-none mb-1">
+                      {agentInfo(m.agent, locale).emoji}
+                    </span>
+                    <div
+                      className="rounded-lg rounded-bl-sm px-4 py-3 border-l-2 min-w-0"
+                      style={{
+                        background: "var(--color-card)",
+                        borderLeftColor: KIND_BORDER[m.kind],
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        {m.kind !== "notification" && (
+                          <span
+                            className="text-[7.5px] font-semibold tracking-[0.14em] uppercase px-1 py-px rounded"
+                            style={{
+                              color: KIND_BORDER[m.kind],
+                              border: `1px solid ${KIND_BORDER[m.kind]}`,
+                            }}
+                          >
+                            {kindLabel(m.kind, locale)}
+                          </span>
+                        )}
                         <span className="text-[9px] text-[var(--color-dim)]">
-                          {formatRelative(m.user_reply_at, locale)}
+                          {formatRelative(m.created_at, locale)}
                         </span>
+                      </div>
+                      <MessageBody
+                        text={m.body}
+                        className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
+                      />
+                      {m.related_position_id && (
+                        <Link
+                          href={`/positions/${m.related_position_id}`}
+                          className="inline-block mt-1.5 text-[10px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                        >
+                          {tr("see_position")}
+                        </Link>
                       )}
                     </div>
-                    <MessageBody
-                      text={m.user_reply}
-                      className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
-                    />
                   </div>
-                )}
-              </div>
-            ))}
+                  {/* Risposta dell'utente */}
+                  {m.user_reply && (
+                    <div
+                      className="max-w-[85%] self-end rounded-lg rounded-br-sm px-4 py-3"
+                      style={{
+                        background:
+                          "color-mix(in srgb, var(--color-green) 10%, var(--color-card))",
+                        border:
+                          "1px solid color-mix(in srgb, var(--color-green) 30%, transparent)",
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5 justify-end">
+                        <span className="text-[9px] font-semibold text-[var(--color-green)]">
+                          {tr("you")}
+                        </span>
+                        {m.user_reply_at && (
+                          <span className="text-[9px] text-[var(--color-dim)]">
+                            {formatRelative(m.user_reply_at, locale)}
+                          </span>
+                        )}
+                      </div>
+                      <MessageBody
+                        text={m.user_reply}
+                        className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* Ritorno all'ultimo messaggio: compare solo se il thread è
+              scorso in alto (in fondo sarebbe rumore). */}
+          {!atBottom && thread.length > 0 && (
+            <button
+              type="button"
+              onClick={() => scrollToBottom()}
+              aria-label={tr("to_bottom")}
+              title={tr("to_bottom")}
+              className="absolute bottom-3 right-4 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border transition-colors"
+              style={{
+                background: "var(--color-card)",
+                borderColor: "var(--color-border)",
+                color: "var(--color-base)",
+                boxShadow: "0 6px 18px rgba(0,0,0,0.28)",
+                animation: "fade-in 0.18s ease both",
+              }}
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* ── Composer centrato, stile ChatGPT ──────────────────────── */}
-        <div className="shrink-0 px-5 pb-5 pt-2">
+        {/* La barra flottante di Safari su iOS galleggia SOPRA la pagina:
+            senza il safe-area inset il composer finisce sotto di essa. */}
+        <div
+          className="shrink-0 px-5 pt-2"
+          style={{
+            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)",
+          }}
+        >
           <div className="max-w-2xl mx-auto">
             {error && (
               <div
