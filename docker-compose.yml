@@ -70,14 +70,38 @@ services:
       # Vercel imposta 'cloud' (sola lettura + corsia richieste). Default
       # 'local' anche se l'env manca (vedi web/lib/deploy-mode.ts).
       - NEXT_PUBLIC_JHT_DEPLOY=${NEXT_PUBLIC_JHT_DEPLOY:-local}
+      # ── CLI dei provider FUORI dal bind-mount ────────────────────────
+      # Su Windows /jht_home e' C:\ visto attraverso WSL2: scrivere li'
+      # dentro costa ~158x piu' che sul disco del container (misurato su
+      # T440s: 200 file piccoli = 11.209 ms contro 71 ms). npm e uv creano
+      # decine di migliaia di file minuscoli, ed e' esattamente il caso
+      # peggiore: installare un CLI passava da mezzo minuto (Linux) a
+      # un'attesa interminabile (Windows). Su Linux e macOS il mount e'
+      # locale e non cambia nulla.
+      # /opt/jht-deps e' gia' il prefisso scrivibile degli agenti ed e'
+      # ora un volume: i CLI installati sopravvivono alla ricreazione del
+      # container come facevano nel bind-mount.
+      - NPM_CONFIG_PREFIX=/opt/jht-deps/npm-global
+      - NPM_CONFIG_CACHE=/opt/jht-deps/npm-cache
+      - UV_TOOL_DIR=/opt/jht-deps/uv-tools
+      - UV_TOOL_BIN_DIR=/opt/jht-deps/bin
+      - UV_CACHE_DIR=/opt/jht-deps/uv-cache
+      # PATH esplicito: il nuovo prefisso davanti, il vecchio dietro come
+      # rete per chi ha gia' i CLI installati nel bind-mount.
+      - PATH=/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/jht_home/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
     volumes:
       - ${HOME}/.jht:/jht_home
       - ${HOME}/Documents/Job Hunter Team:/jht_user
+      # Volume Docker (dentro la VM su Windows/macOS: veloce), non bind.
+      - jht-deps:/opt/jht-deps
     # Nessuna porta esposta: la dashboard web locale e' stata ritirata
     # (2026-07-23) — l'interazione passa dall'app desktop (docker exec).
     stdin_open: true
     tty: true
     restart: unless-stopped
+
+volumes:
+  jht-deps:
 
 # ── Dev mode ────────────────────────────────────────────────────────────
 #

@@ -43,11 +43,20 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # auto-install was depositing ~928M (full Chromium + headless shell
     # + ffmpeg) into the user's home on every fresh container.
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright \
-    # Agent CLIs (claude, codex, kimi) are NOT baked into the image.
-    # They are installed lazily on first run into /jht_home/.npm-global,
-    # which lives on a bind-mount so installs persist across container
-    # recreation. See ADR 0004 + the desktop provider-install step.
-    NPM_CONFIG_PREFIX=/jht_home/.npm-global \
+    # Agent CLIs (claude, codex, kimi) are NOT baked into the image: they
+    # are installed lazily on first run. They used to land in
+    # /jht_home/.npm-global, on the bind-mount — which on Windows is C:\
+    # seen through WSL2, where writing costs ~158x more than the container
+    # disk (measured on a T440s: 200 small files, 11,209 ms vs 71 ms). npm
+    # and uv create tens of thousands of tiny files, so installing one CLI
+    # went from half a minute on Linux to an endless wait on Windows.
+    # /opt/jht-deps is the agents' writable prefix and is a Docker volume
+    # in compose, so installs still survive container recreation.
+    NPM_CONFIG_PREFIX=/opt/jht-deps/npm-global \
+    NPM_CONFIG_CACHE=/opt/jht-deps/npm-cache \
+    UV_TOOL_DIR=/opt/jht-deps/uv-tools \
+    UV_TOOL_BIN_DIR=/opt/jht-deps/bin \
+    UV_CACHE_DIR=/opt/jht-deps/uv-cache \
     # /opt/jht-deps — prefisso GLOBALE scrivibile dagli agenti per gli extra
     # che non rientrano nelle lane standard (apt→sistema, uv→python user,
     # npm→node): binari in bin/, librerie in lib/. Baked nell'immagine con
@@ -62,7 +71,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # usano per scrivere in chat.jsonl. Va nel PATH del container (non solo
     # nel tmux pane) così anche i sub-shell spawnati da Codex/Kimi --yolo
     # lo trovano senza dipendere dall'export re-inviato via send-keys.
-    PATH=/app/agents/_tools:/opt/jht-deps/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
+    PATH=/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip \
@@ -178,6 +187,12 @@ RUN useradd --create-home --shell /bin/bash jht \
     # jht e LEGGONO il codice, scrivono solo in /jht_home, /opt/jht-deps e
     # /jht_home/.npm-global (mai in /app). L'unica eccezione scrivibile,
     # /app/web/.next, è chownata separatamente più sotto (Leone 24/07).
+    # Le sottocartelle del prefisso vanno CREATE qui: quando compose ci
+    # monta sopra il volume vuoto, Docker ne copia contenuto e ownership —
+    # e senza queste il volume nascerebbe di root, con npm in EACCES.
+    && mkdir -p /opt/jht-deps/bin /opt/jht-deps/lib /opt/jht-deps/npm-global \
+         /opt/jht-deps/npm-cache /opt/jht-deps/uv-tools /opt/jht-deps/uv-cache \
+         /opt/jht-deps/python \
     && chown -R jht:jht /jht_home /jht_user /opt/playwright /opt/jht-deps \
     # Espone i tool degli agenti (es. jht-send) in /usr/local/bin così
     # sono trovati anche dalle sub-shell login che Codex/Kimi --yolo
