@@ -5,15 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [0.3.0] — 2026-07-27
 
-**The native-application cycle** — 2026-07-06 → 2026-07-25, ~500 commits. The desktop surface moved from an Electron launcher wrapping a web dashboard to a **native Godot office**; the browser is now cloud-only. Three user-visible removals are listed under *Breaking changes* below — read those first if you are upgrading an existing install.
+**The native-application cycle** — 2026-07-06 → 2026-07-27, 842 commits since v0.2.0. The desktop surface moved from an Electron launcher wrapping a web dashboard to a **native Godot office**; the browser is now cloud-only. Three user-visible removals are listed under *Breaking changes* below — read those first if you are upgrading an existing install.
 
 ### 💥 Breaking changes
 
 - **Electron desktop launcher removed.** The whole `desktop/` tree is gone (−35k lines); the supported desktop application is the Godot office in [`game/`](game/), built by `.github/workflows/release.yml` for macOS (signed + notarized `.zip`), Windows (NSIS `.exe`) and Linux (`.tar.gz`). Release version consistency is now checked against `package.json` + `game/project.godot` + `game/export_presets.cfg` — see [`docs/internal/ops/release.md`](docs/internal/ops/release.md).
 - **Local web dashboard on `:3000` retired.** The container no longer serves Next.js: no `EXPOSE 3000`, no `ports:` in `docker-compose.yml`, no dashboard child process in `jht pid1`. Local and VPS interaction happen in the native app (`docker exec` / SSH); the browser only ever talks to the cloud deployment (jobhunterteam.ai, authenticated). `jht dashboard` still exists but prints a pointer and exits 0.
 - **`/onboarding` removed from the web app.** Onboarding is a first-run experience of the native office; the cloud app opens at `/dashboard`, and new cloud users get the `/welcome` wizard (see *Demo mode* below) instead.
+- **The TUI is gone.** `tui/` (29 files) is removed: it was compiled by every user on install and its job — watching sessions, reading logs — is done by the CLI and by the native office. With it went the Python LLM layer in `shared/` and the two SDKs only it needed, plus 30 unreachable `shared/` subdirectories.
 
 ### 🖥️ Native desktop application (Godot 4.7)
 
@@ -25,6 +26,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Art & world.** Painted portrait sets for the full roster, painterly sprite sheets (walk/work/sit) for every department, five-department layout with per-department rugs, glass partitions that agents can walk through, day/night cycle on local time, switchable light interface theme, automatic graphics calibration that keeps text readable on any resolution.
 - **Platform work.** Windows-compatible quoting and pty allocation for the embedded terminal, native Windows Docker setup flow, NSIS installer, faster installer startup, VRAM-compressed world art and mipmaps, and a per-frame retessellation fix that made weak GPUs usable.
 - **Chat delivery** goes through `jht-tmux-send` instead of a blind paste + Enter, so messages survive composer quirks of the provider CLIs.
+- **An agent's number is its identity.** Desk and face follow the number instead of the spawn order, so scout-2 is the same character across restarts.
+- **The office says why it went quiet.** When the work window closes or the budget runs down, a window explains it instead of leaving the team silent.
+- **Provider step reads the container.** The plans offered match the provider just picked, the login is detected from the container instead of being typed, and the embedded console text can be selected and copied in one click.
+- **Report a problem, from inside the game.** A panel with three free-text fields and an inspectable preview; everything technical (Docker version, agent role, session capture) is collected for the user, with a PII redactor over it. The GitHub bug template asked questions only a developer could answer.
+- Closing the window no longer aborts the process: the shutdown thread is joined before quitting, instead of having its tree pulled out mid `docker stop` (SIGABRT, ThinkPad 2026-07-26).
 
 ### 🌐 Web & cloud dashboard
 
@@ -39,6 +45,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Settings & dashboard.** Account, language and salary-currency sections on cloud; salaries follow the preferred display currency; dashboard decluttered around a newest-scored table with a single score-colour spectrum shared by every visual.
 - **Company card in demo mode.** `demoPositionById` used to return `company: null`, so the company card — sector, size, HQ, Glassdoor rating, Analyst verdict — never appeared to anyone evaluating the product through the demo. The dossier is now derived deterministically from the seed data (no logo: an invented company has none; no prose: nothing new to localize).
 - **36 dead API routes removed** (149 → 113). All of them fed surfaces that no longer exist: the retired local dashboard, the archived team-v1 page, the VPS lifecycle buttons (now in the native app), the profile-assistant lane, bridge start/stop, and `team/{start-all,stop-all}` — of which the CLI now holds the only implementation. Each removal was checked for callers across `web/`, `game/`, `cli/`, `.launcher/`, `shared/`, `e2e/` and the docs; `/api/canary` was deliberately kept as a hand-run diagnostic.
+- **Public `/contact` page** with a real form in all seven languages, the sender's own subject line, and `/api/feedback` as the single destination for both the page and the in-app reports.
+- **Report a problem from the dashboard** (`SupportDialog`, reachable from the user menu), delivering to the project mailbox and not only to GitHub.
+- Unguarded API routes closed, and `GET /api/setup` no longer returns channel secrets.
 
 ### 🤖 Agents & runtime
 
@@ -67,6 +76,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Next.js 16.2.9 → 16.2.11 with a `sharp ^0.35.3` override (July-2026 advisories), plus fixes for the high-severity `brace-expansion` and `js-yaml` DoS advisories.
 - Routine dependency bumps: `@supabase/supabase-js`, `@supabase/ssr`, `tailwindcss`, `eslint-config-next`, `actions/checkout` 4→7, `actions/setup-node` 4→7, `grammy` in the test runner.
+- The pairing token is written `0600`, every Python dependency is pinned, and the C toolchain is out of the runtime image.
+- `postcss` raised past GHSA-r28c-9q8g-f849 (path traversal in previous-source-map auto-loading) in both `web/` and `tests/js`.
 
 ### 🧹 Dead code removed (2026-07-25)
 
@@ -107,6 +118,9 @@ restores any of it.
 - **pytest now runs in CI.** The Python suite (447 passing, 62 skipped) was runnable only by hand, which is why the installer-mirror drift went unnoticed for three weeks; `.github/workflows/test.yml` gained a `pytest` job (with `npm ci` in `cli/`, since two test files shell out to the Node CLI) and the root `npm test` now runs both runners.
 - Godot self-tests wired into `release.yml` and `game.yml`: scene import, nav grid, speech bubble, pipeline queue, embedded terminal, plus VPS-contract, pipeline and doctor headless scenarios and a smoke test of the exported binary.
 - `tests/test_sync_supabase.py` builds its database with the real `shared/skills/_db.ensure_schema()` instead of a hand-copied DDL — the copy had gone stale against the `companies.logo*` columns and was failing on healthy code.
+- **CLI ↔ game parity guard**: every public `BackendBus` verb must be classified as covered by a CLI command, a known gap with its tag, or not-applicable with a reason. A new verb nobody decided about fails the suite.
+- **Seven-language parity guard** for the game dictionaries, as a headless self-test: all 746 keys in all 7 languages. It exists because a duplicated key in `ui_en.gd` broke every non-Italian boot while Italian stayed clean — the translated dictionaries load lazily.
+- 75 e2e specs that no longer describe the product are quarantined instead of silently skipped, and every `tests/js` module runs exactly once per push.
 
 ### 📚 Documentation
 
