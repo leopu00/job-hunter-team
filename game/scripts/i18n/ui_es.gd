@@ -10,6 +10,7 @@ const S := {
 	"pause.resume": "REANUDAR",
 	"pause.window": "VENTANA / PANTALLA COMPLETA",
 	"pause.quit": "SALIR DEL JUEGO",
+	"pause.shutdown": "DETENIENDO EL EQUIPO…",
 
 	"hud.team": "EQUIPO",
 	"hud.positions_today": "POSICIONES HOY",
@@ -232,7 +233,8 @@ const S := {
 	"common.data_incoming": "// datos en camino desde la VPS…",
 	"common.updated": "actualizado: %s",
 
-	"sim.live": "● DATOS REALES — VPS",
+	"sim.live_vps": "● DATOS REALES — VPS",
+	"sim.live_local": "● DATOS REALES — ESTE ORDENADOR",
 	"sim.mock": "◐ SIMULACIÓN — datos no reales",
 
 	"office.camera_hint": "arrastra o WASD para la cámara · zoom con rueda, pinch o +/- · clic en agentes y departamentos · TAB registro · ESC menú",

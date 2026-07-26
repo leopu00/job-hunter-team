@@ -213,6 +213,8 @@ var _auth_was_ready := false
 var _auth_autoclose_started := false
 var _screen := TermScreen.new()
 var _undecoded := PackedByteArray()
+## Mouse premuto dentro l'output: selezione in corso, testo congelato.
+var _dragging_selection := false
 
 
 func _init(p_provider: String, p_spec: Dictionary) -> void:
@@ -262,9 +264,38 @@ func _process(_delta: float) -> void:
 	var visible := _screen.text()
 	if visible.length() > MAX_VISIBLE_CHARS:
 		visible = "… output precedente omesso …\n" + visible.right(MAX_VISIBLE_CHARS)
-	_output.text = visible
-	_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
+	# Il testo NON si tocca mentre l'utente sta selezionando: né durante il
+	# trascinamento (mouse premuto), né dopo, finché tiene la selezione. Tutto
+	# ciò che arriva resta nel modello di schermo e compare appena molla.
+	if not _selection_locked():
+		_output.text = visible
+		_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
 	_detect_url(_screen.lines())
+
+
+## Vero mentre l'utente sta selezionando col mouse o tiene una selezione:
+## in entrambi i casi riscrivere il testo gliela porterebbe via.
+func _selection_locked() -> bool:
+	return _dragging_selection or _output.get_selected_text() != ""
+
+
+func _on_output_gui_input(event: InputEvent) -> void:
+	var click := event as InputEventMouseButton
+	if click == null or click.button_index != MOUSE_BUTTON_LEFT:
+		return
+	_dragging_selection = click.pressed
+	if not click.pressed:
+		# Rilasciato: se non ha selezionato nulla il testo riprende a scorrere
+		# al prossimo pezzo di output, senza aspettare altri eventi.
+		_flush_pending_output()
+
+
+## Riporta a schermo tutto ciò che è arrivato mentre il testo era congelato.
+func _flush_pending_output() -> void:
+	if _selection_locked() or not is_instance_valid(_output):
+		return
+	_output.text = _screen.text()
+	_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
 
 
 ## Lunghezza del prefisso decodificabile: si tiene indietro solo una
@@ -356,6 +387,12 @@ func _build_ui() -> void:
 	_output.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_output.add_theme_font_size_override("normal_font_size", 15)
 	_output.add_theme_color_override("default_color", Palette.BRIGHT)
+	# Il testo si congela DA QUANDO SI PREME, non da quando la selezione
+	# esiste: mentre trascini il mouse la selezione si sta ancora formando, e
+	# l'output che arriva nel frattempo la cancellava prima che tu potessi
+	# finirla (login Kimi, 25/07 — il primo tentativo di fix guardava
+	# get_selected_text(), che durante il trascinamento è ancora vuoto).
+	_output.gui_input.connect(_on_output_gui_input)
 	_output.text = "Preparazione del terminale interattivo…"
 	col.add_child(_output)
 
@@ -376,6 +413,21 @@ func _build_ui() -> void:
 	_copy_url.pressed.connect(func() -> void:
 		if _last_url != "": DisplayServer.clipboard_set(_last_url))
 	url_row.add_child(_copy_url)
+	# Rete di sicurezza indipendente dal riconoscimento del link: qualunque
+	# cosa ci sia a schermo — codice di verifica, URL spezzato su due righe,
+	# messaggio d'errore da incollare altrove — si porta via in un click.
+	# Il rilevamento automatico non può coprire ogni CLI: Kimi stampa il codice
+	# dentro l'URL, Claude lo mette su una riga a sé.
+	var copy_all := Button.new()
+	copy_all.text = "COPIA TESTO"
+	copy_all.tooltip_text = "Copia tutto l'output della console"
+	copy_all.pressed.connect(func() -> void:
+		DisplayServer.clipboard_set(_screen.text())
+		copy_all.text = "COPIATO ✓"
+		await get_tree().create_timer(1.5).timeout
+		if is_instance_valid(copy_all):
+			copy_all.text = "COPIA TESTO")
+	url_row.add_child(copy_all)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	url_row.add_child(spacer)
@@ -485,9 +537,40 @@ func _send(data: String) -> void:
 	_input.grab_focus()
 
 
+## Il CLI scrive le credenziali qualche secondo DOPO aver detto "Login
+## successful" a video: sul ThinkPad il file è comparso 8 secondi dopo che
+## l'utente era tornato nel gioco (25/07). Un solo refresh al click arrivava
+## prima del file, non trovava nulla e non diceva niente — il verde compariva
+## da solo mezzo minuto più tardi e il click sembrava ignorato. Ora il pulsante
+## risponde subito e continua a controllare finché la prova non c'è.
+const AUTH_WAIT_MS := 30000
+const AUTH_POLL_S := 0.7
+
 func _complete() -> void:
-	_refresh_setup()
-	close()
+	if not _is_login_flow():
+		_refresh_setup()
+		close()
+		return
+	_done.disabled = true
+	_done.text = "VERIFICO IL LOGIN…"
+	var deadline := Time.get_ticks_msec() + AUTH_WAIT_MS
+	while Time.get_ticks_msec() < deadline:
+		_refresh_setup()
+		await get_tree().create_timer(AUTH_POLL_S).timeout
+		if _closing or not is_instance_valid(_done):
+			return  # l'auto-chiusura su credenziali trovate ci ha preceduti
+	# Scaduto il tempo: il login non ha lasciato traccia. Meglio dirlo che
+	# chiudere in silenzio facendo credere all'utente di aver finito.
+	if not is_instance_valid(_done):
+		return
+	_status.text = "● LOGIN NON ANCORA RILEVATO"
+	_status.add_theme_color_override("font_color", Palette.YELLOW)
+	_done.disabled = false
+	_done.text = "HO COMPLETATO IL LOGIN"
+	_output.text += "\n\n[JHT] Non trovo ancora le credenziali del provider. " \
+			+ "Se il login nel browser è andato a buon fine, lascia questa " \
+			+ "console aperta ancora qualche secondo: la spunta verde arriva " \
+			+ "da sola appena il CLI le salva."
 
 
 func _matching_auth_ready(next: Dictionary) -> bool:

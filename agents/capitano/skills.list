@@ -5,6 +5,10 @@
 
 # Inter-agent + user communication
 tmux-send
+
+# Chiusura ordinata quando l'utente esce dall'applicazione: ogni agente
+# annota dove era arrivato, poi il flag lascia chiudere il gioco.
+graceful-shutdown
 chat-web
 game-reply-options
 # Phone-side outbound: notifiche batch + risposte all'utente sul bot Capitano
@@ -19,6 +23,10 @@ user-reply-check
 # DB access (read + targeted update; the Captain does NOT insert)
 db-query
 db-update
+
+# Primo avvio di un utente nuovo: roster completo subito invece della salita
+# a gradini, perché il risultato che conta è una posizione CON PUNTEGGIO.
+first-run-burst
 
 # Coordination (the Captain's daily operational loop)
 spawn-agent

@@ -3,7 +3,8 @@ extends PanelContainer
 ## Badge di verità dei dati (ordine Leone 18:0x): finché in scena NON
 ## scorrono i dati veri della VPS l'utente deve vederlo a colpo d'occhio.
 ## In alto al centro: ambra "SIMULAZIONE — dati non reali"; quando la VPS
-## è collegata e connessa diventa un discreto "DATI REALI — VPS".
+## è collegata e connessa diventa un discreto "DATI REALI", che dice anche
+## DOVE gira il team: su una VPS o su questo computer.
 
 var _label: Label
 
@@ -30,8 +31,8 @@ func _notification(what: int) -> void:
 func _refresh() -> void:
 	var live: bool = BackendBus.is_live()
 	var color: Color = Palette.GREEN if live else Palette.YELLOW
-	_label.text = UIStrings.t("sim.live") if live \
-			else UIStrings.t("sim.mock")
+	_label.text = UIStrings.t("sim.live_vps" if BackendBus.is_remote() \
+			else "sim.live_local") if live else UIStrings.t("sim.mock")
 	_label.add_theme_color_override("font_color", color)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(Palette.PANEL.r, Palette.PANEL.g, Palette.PANEL.b, 0.92)

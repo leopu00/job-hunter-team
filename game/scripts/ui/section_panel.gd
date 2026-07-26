@@ -538,10 +538,16 @@ func _build_activation() -> void:
 	var progress := HBoxContainer.new()
 	progress.add_theme_constant_override("separation", 12)
 	_content.add_child(progress)
-	_setup_gate(progress, "01", UIStrings.t("setup.container"),
-			bool(s.get("container_running", false)),
-			UIStrings.t("setup.container_ok") if bool(s.get("container_running", false))
-			else UIStrings.t("setup.container_todo"), "docker")
+	# Il passo 01 non è "accendi un container": è DOVE vive il team. Chi ha una
+	# VPS la usa come casa degli agenti e tiene questa finestra come specchio;
+	# la scelta esisteva solo sepolta in Impostazioni → Collega VPS, e
+	# nell'onboarding non compariva affatto (Leone, 26/07).
+	var on_vps: bool = BackendBus.is_remote() and BackendBus.is_live()
+	_setup_gate(progress, "01", UIStrings.t("setup.where"),
+			bool(s.get("container_running", false)) or on_vps,
+			UIStrings.t("setup.where_vps") if on_vps
+			else (UIStrings.t("setup.where_local") if bool(s.get("container_running", false))
+			else UIStrings.t("setup.where_todo")), "docker")
 	_setup_gate(progress, "02", UIStrings.t("setup.provider"),
 			bool(s.get("provider_authenticated", false)),
 			_provider_status_text(s), "provider")
@@ -549,6 +555,12 @@ func _build_activation() -> void:
 			bool(s.get("profile_ready", false)),
 			UIStrings.t("setup.profile_ok") if bool(s.get("profile_ready", false))
 			else UIStrings.t("setup.profile_todo"), "profile")
+	# Quarto passo, obbligatorio come gli altri: senza finestre di lavoro il
+	# team macina a ogni ora del giorno e il conto arriva dopo.
+	_setup_gate(progress, "04", UIStrings.t("setup.hours"),
+			bool(s.get("hours_ready", false)),
+			UIStrings.t("setup.hours_ok") if bool(s.get("hours_ready", false))
+			else UIStrings.t("setup.hours_todo"), "hours")
 	_content.add_child(HSeparator.new())
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 14)
@@ -638,6 +650,11 @@ func _build_container_setup() -> void:
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	_content.add_child(actions)
+	# UN pulsante che fa la cosa giusta. "ATTIVA CONTAINER" già accende Docker
+	# se è spento, crea il container se manca e scarica l'immagine: gli altri
+	# comandi erano riparazioni messe in fila come se fossero alternative, e
+	# costringevano l'utente a scegliere fra opzioni che non deve conoscere
+	# (Leone, 25/07). Ora compaiono SOLO nel caso in cui servono davvero.
 	var start := Button.new()
 	start.text = UIStrings.t("setup.container_recheck") \
 			if bool(s.get("container_running", false)) else UIStrings.t("setup.container_start")
@@ -646,20 +663,20 @@ func _build_container_setup() -> void:
 	start.pressed.connect(SetupService.refresh if bool(s.get("container_running", false)) \
 			else SetupService.start_container)
 	actions.add_child(start)
-	var back := Button.new()
-	back.text = UIStrings.t("setup.back_overview")
-	back.pressed.connect(func() -> void: navigate.emit("activation"))
-	actions.add_child(back)
-	var install := Button.new()
-	install.text = "INSTALLA / RIPARA RUNTIME"
-	install.add_theme_color_override("font_color", Palette.YELLOW)
-	install.pressed.connect(SetupService.open_runtime_install)
-	actions.add_child(install)
-	if bool(s.get("docker_running", false)) and not bool(s.get("remote", false)):
+	# Docker assente: senza motore non si accende niente, e questa è l'unica
+	# azione sensata da offrire.
+	if not bool(s.get("docker_available", false)) and not bool(s.get("remote", false)):
+		var install := Button.new()
+		install.text = UIStrings.t("setup.docker_install")
+		install.add_theme_color_override("font_color", Palette.YELLOW)
+		install.pressed.connect(SetupService.open_runtime_install)
+		actions.add_child(install)
+	# Versione vecchia: lo dice la riga di stato qui sopra, il pulsante la ripara.
+	if bool(s.get("runtime_stale", false)) and bool(s.get("docker_running", false)) \
+			and not bool(s.get("remote", false)):
 		var update := Button.new()
 		update.text = UIStrings.t("setup.runtime_update")
-		update.add_theme_color_override("font_color",
-				Palette.YELLOW if bool(s.get("runtime_stale", false)) else Palette.BASE)
+		update.add_theme_color_override("font_color", Palette.YELLOW)
 		update.pressed.connect(SetupService.update_runtime)
 		actions.add_child(update)
 	if bool(s.get("container_running", false)):
@@ -668,6 +685,22 @@ func _build_container_setup() -> void:
 		stop.add_theme_color_override("font_color", Palette.RED)
 		stop.pressed.connect(SetupService.stop_container)
 		actions.add_child(stop)
+	# La seconda strada, alla pari della prima: il team può vivere su una VPS e
+	# questa finestra restare lo specchio da cui lo si guarda. Prima esisteva
+	# solo in Impostazioni, fuori dal percorso di setup.
+	if not bool(s.get("remote", false)):
+		var to_vps := Button.new()
+		to_vps.text = UIStrings.t("setup.use_vps")
+		to_vps.add_theme_color_override("font_color", Palette.BLUE)
+		to_vps.pressed.connect(func() -> void: navigate.emit("vps"))
+		actions.add_child(to_vps)
+	# Il ritorno alla checklist sta in fondo: è navigazione, non un'azione,
+	# e in mezzo agli altri sembrava una scelta alla pari.
+	var back := Button.new()
+	back.text = UIStrings.t("setup.back_overview")
+	back.add_theme_color_override("font_color", Palette.MUTED)
+	back.pressed.connect(func() -> void: navigate.emit("activation"))
+	actions.add_child(back)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
 
@@ -751,11 +784,11 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 		login.add_theme_color_override("font_color", Palette.GREEN)
 		login.pressed.connect(SetupService.open_provider_login.bind(provider))
 		actions.add_child(login)
-		var install := Button.new()
-		install.text = UIStrings.t("setup.provider_install")
-		install.disabled = not bool(s.get("container_running", false))
-		install.pressed.connect(SetupService.install_provider.bind(provider))
-		actions.add_child(install)
+		# Niente pulsante "INSTALLA / AGGIORNA CLI" accanto: faceva la PRIMA
+		# METÀ di questo. Dal 24/07 il comando di login è
+		# `providers update <id> && <cli> login`, cioè installa o aggiorna e poi
+		# entra — quel secondo pulsante è rimasto lì a chiedere all'utente una
+		# distinzione che non esiste più (Leone, 25/07).
 		if authed:
 			var logout := Button.new()
 			logout.text = "DISCONNETTI ACCOUNT"

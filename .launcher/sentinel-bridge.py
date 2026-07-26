@@ -1145,6 +1145,78 @@ def write_jsonl(entry):
         f.write(json.dumps(entry) + "\n")
 
 
+def _load_skill_module(name, filename):
+    """Importa una skill Python per path (container prima, repo come fallback)."""
+    for cand in (Path("/app/shared/skills") / filename,
+                 Path(__file__).resolve().parent.parent / "shared" / "skills" / filename):
+        if not cand.exists():
+            continue
+        try:
+            spec = importlib.util.spec_from_file_location(name, cand)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+        except (OSError, ImportError, AttributeError, SyntaxError):
+            continue
+    return None
+
+
+def _pace_guard_step(entry):
+    """Freno automatico sulla curva della finestra (vedi shared/skills/pace_guard.py).
+
+    Il pacing sa da sempre CHE il team sta sforando, ma l'attuazione passava dal
+    Capitano: 15 min per misurare, un turno di modello per decidere, un altro per
+    scrivere il throttle. Nel run 2026-07-26 la finestra si è saturata al 100% a
+    metà tempo e il team è rimasto muto per 2h40. Qui la correzione di velocità
+    parte a ogni sample, senza modello in mezzo — il Capitano continua a decidere
+    COSA fare (spawn, colli di bottiglia), non più QUANTO IN FRETTA.
+
+    Fail-safe per costruzione: qualunque errore lascia il bridge intatto e il
+    throttle dov'era. Disattivabile con JHT_PACE_GUARD=0.
+    """
+    if os.environ.get("JHT_PACE_GUARD", "1").strip() in ("0", "false", "no"):
+        return
+    try:
+        mod = _load_skill_module("pace_guard", "pace_guard.py")
+        if mod is None:
+            return
+        workers = mod.active_workers()
+        if not workers:
+            return
+        current = mod.current_worker_throttle(workers)
+        result = mod.evaluate(entry, time.time(), current_throttle_s=current)
+        if not result.get("ok"):
+            return
+        if result.get("changed"):
+            result["applied"] = mod.apply_throttle(workers, result["throttle_after_s"])
+        result["ts"] = entry.get("ts")
+        result["workers"] = workers
+        with (LOGS_DIR / "pace-guard.jsonl").open("a", encoding="utf-8") as f:
+            f.write(json.dumps(result) + "\n")
+        # Il Capitano viene avvisato solo quando la finestra sta per chiudersi
+        # in anticipo: è l'unico caso in cui deve cambiare piano (meno worker,
+        # non solo più lenti). Sotto quella soglia il freno è routine e non
+        # merita di consumargli un turno.
+        if result.get("verdict") == "LOCKOUT-IMMINENTE":
+            _notify_captain_pace_guard(result)
+    except Exception:  # noqa: BLE001 — il bridge non muore per il guard
+        pass
+
+
+def _notify_captain_pace_guard(result):
+    try:
+        subprocess.run(
+            ["jht-tmux-send", "CAPITANO",
+             "[@bridge -> @capitano] [PACE-GUARD] finestra al "
+             f"{result['usage_pct']}% con curva ideale al {result['ideal_pct']}% "
+             f"({result['deviation_pct']:+}pt): throttle worker portato a "
+             f"{result['throttle_after_s']}s. Il freno è già applicato — "
+             "valuta se ridurre il ROSTER, non la velocità."],
+            capture_output=True, timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def write_log(entry):
     line = (
         f"[{entry['ts']}] provider={entry['provider']} "
@@ -1751,6 +1823,7 @@ def main():
             entry["source"] = "bridge"
             write_jsonl(entry)
             write_log(entry)
+            _pace_guard_step(entry)
 
             # Vitals RAM/CPU (2026-06-18): campiona a OGNI tick su vitals.jsonl
             # (file dedicato — NON nel tick Sentinella, che resta sul flusso quota).
