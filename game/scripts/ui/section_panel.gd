@@ -826,8 +826,13 @@ func _plan_picker(col: VBoxContainer, provider: String, s: Dictionary) -> void:
 			if str(s.get("active_provider", "")) == provider else ""
 	col.add_child(TerminalTheme.label(UIStrings.t("setup.plan_question"), 13,
 			Palette.MINT if chosen != "" else Palette.YELLOW, "bold"))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+	# I piani vanno A CAPO invece di allargare la scheda: con cinque tagli in
+	# fila (Kimi) la riga spingeva il pannello oltre il bordo dello schermo e
+	# gli ultimi non erano nemmeno raggiungibili (Leone, 26/07).
+	var row := HFlowContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("h_separation", 6)
+	row.add_theme_constant_override("v_separation", 4)
 	col.add_child(row)
 	for entry in plans:
 		if not (entry is Dictionary):
@@ -835,8 +840,10 @@ func _plan_picker(col: VBoxContainer, provider: String, s: Dictionary) -> void:
 		var plan: Dictionary = entry
 		var plan_id := str(plan.get("id", ""))
 		var button := Button.new()
-		button.text = "%s · %s" % [str(plan.get("label", plan_id)),
-				str(plan.get("price", ""))]
+		# "39 $/mese" → "39$": nel pulsante conta il taglio, non l'unità.
+		var price := str(plan.get("price", "")).split(" ")[0]
+		button.text = str(plan.get("label", plan_id)) if price in ["", "0"] \
+				else "%s %s$" % [str(plan.get("label", plan_id)), price]
 		button.toggle_mode = true
 		button.button_pressed = plan_id == chosen
 		if plan_id == chosen:

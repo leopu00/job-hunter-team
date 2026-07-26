@@ -442,10 +442,21 @@ func _build_ui() -> void:
 	input_row.add_theme_constant_override("separation", 8)
 	col.add_child(input_row)
 	_input = LineEdit.new()
-	_input.placeholder_text = "Scrivi una scelta, /login o il codice e premi Invio"
+	_input.placeholder_text = "Incolla qui il codice di verifica e premi Invio"
 	_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_input.text_submitted.connect(_submit_line)
 	input_row.add_child(_input)
+	# Il comando che apre il login è sempre lo stesso e lo sa il programma:
+	# farlo battere all'utente era l'unico punto della schermata che gli
+	# chiedeva di sapere qualcosa (Leone, 26/07). Diventa un tasto come INVIO.
+	var login_command := str(spec.get("send_command", ""))
+	if login_command != "":
+		var login_btn := Button.new()
+		login_btn.text = login_command.to_upper()
+		login_btn.tooltip_text = "Manda %s alla console e avvia il login" % login_command
+		login_btn.add_theme_color_override("font_color", Palette.GREEN)
+		login_btn.pressed.connect(func() -> void: _send(login_command + "\r"))
+		input_row.add_child(login_btn)
 	for entry in [["↑", "\u001b[A"], ["↓", "\u001b[B"], ["TAB", "\t"],
 			["INVIO", "\r"], ["CTRL+C", "\u0003"]]:
 		var button := Button.new()
