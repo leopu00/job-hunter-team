@@ -42,27 +42,39 @@ explicitly excluded from migrations.
 9. Return to **Attiva team** and start the team. Agents appear in the office as
    their real remote sessions come online.
 
-## Move an existing team to a new VPS
+## Move an existing team
 
-**Settings → Connect VPS → Complete migration** supports both sources:
+**Settings → Connect VPS → Complete migration** supports all host changes:
 
-- this computer (local container), or
-- the VPS currently saved in the native app.
+- this computer → a new VPS;
+- the currently saved VPS → a new VPS; or
+- the currently saved VPS → this computer.
 
-Enter the *destination* IP/key, select the source and confirm. The app:
+For a VPS destination, enter its IP/key, select the source and confirm. For a
+local destination, use **Migrate from VPS to this computer**. The app:
 
 1. verifies and provisions the destination;
 2. stops the source so SQLite and session files form one coherent snapshot;
 3. transfers `~/.jht` and `~/Documents/Job Hunter Team`, including database,
    profile, outputs, team configuration, provider login and cloud pairing;
 4. excludes SSH private keys, runtime files and the source `host.env`;
-5. creates a timestamped backup on the destination before extracting;
-6. enforces VPS host mode and safe ownership/credential permissions;
-7. starts the new container (and the team if it was active), archives the old
-   source cloud token and connects the office to the destination.
+5. verifies the archive checksum after every network transfer;
+6. extracts into a staging directory and validates the payload before touching
+   the destination;
+7. creates and verifies a timestamped backup on the destination;
+8. atomically replaces the destination state instead of merging stale files;
+9. enforces the destination host mode, checks SQLite integrity and starts the
+   container (and the team if it was active);
+10. archives and verifies the old source cloud token, then connects the office
+    to the destination.
 
-If snapshot, upload or extraction fails, the old source is restarted. Nothing
-is deleted automatically; the destination backup path is shown in the result.
+If snapshot, checksum, backup, extraction, database validation, team startup or
+cloud handoff fails, both source and destination are rolled back. Nothing is
+deleted automatically; the destination backup path is shown in the result.
+
+SSH host keys are pinned in an app-owned known-hosts file before login. A key
+change is rejected instead of being accepted silently. **Verify SSH** shows the
+fingerprint to compare with the server provider.
 
 This single-source handoff is important: do not restart the old team after a
 successful migration unless you are intentionally rolling back.
