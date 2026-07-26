@@ -737,6 +737,29 @@ try:
     out['work_phase'] = str(ps.get('work_phase', ''))
 except Exception:
     pass
+# Finestra di consumo del provider: serve al gioco per DIRE all'utente
+# perche il team non risponde. Senza, chi scrive in chat durante un
+# lockout vede solo silenzio e conclude che l'app e rotta.
+try:
+    last = None
+    with open('/jht_home/logs/sentinel-data.jsonl') as fh:
+        for row in fh:
+            row = row.strip()
+            if row:
+                last = row
+    s = json.loads(last) if last else {}
+    usage = s.get('usage')
+    if isinstance(usage, (int, float)):
+        out['budget_window'] = {
+            'usage_pct': float(usage),
+            'reset_at': str(s.get('reset_at') or ''),
+            'reset_at_unix': s.get('reset_at_unix'),
+            'weekly_pct': s.get('weekly_usage'),
+            'status': str(s.get('status') or ''),
+            'sample_ts': str(s.get('ts') or ''),
+        }
+except Exception:
+    pass
 try:
     u = json.load(open('/jht_home/logs/agent-usage-table.json'))
     tot = {}
