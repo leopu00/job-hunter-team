@@ -12,22 +12,23 @@ ACTION="${1:-}"
 JHT_HOME="${JHT_HOME:-/jht_home}"
 PID_FILE="$JHT_HOME/logs/sentinel-bridge.pid"
 BRIDGE_PY="/app/.launcher/sentinel-bridge.py"
-LOG_FILE="/tmp/sentinel-bridge.log"
+
+# jht_kill_by_marker / jht_daemon_log — STESSA procedura di start-agent.sh
+# (l'altro entry point del bridge: agent-watchdog.sh → start-agent.sh bridge,
+# questo → team-commands-poller.js). Prima divergevano: qui un kill-by-scan
+# single-shot che si auto-matchava, là TERM→KILL; il PID file era dichiarato
+# e mai scritto. Ora entrambi killano allo stesso modo e il singleton vero è
+# il flock dentro sentinel-bridge.py, che copre pure lo start in parallelo.
+. "$(dirname "$0")/daemon-lib.sh"
+LOG_FILE="$(jht_daemon_log sentinel-bridge.log)"
 
 kill_all_bridges() {
-  for f in /proc/[0-9]*/cmdline; do
-    if grep -q sentinel-bridge.py "$f" 2>/dev/null; then
-      pid="${f#/proc/}"
-      pid="${pid%/cmdline}"
-      kill "$pid" 2>/dev/null
-    fi
-  done
+  jht_kill_by_marker sentinel-bridge.py 1 0.5
 }
 
 case "$ACTION" in
   start)
     kill_all_bridges
-    sleep 0.5
     rm -f "$PID_FILE"
     if [ ! -f "$BRIDGE_PY" ]; then
       echo "bridge script not found: $BRIDGE_PY" >&2
@@ -50,7 +51,6 @@ case "$ACTION" in
     ;;
   stop)
     kill_all_bridges
-    sleep 0.3
     rm -f "$PID_FILE"
     exit 0
     ;;

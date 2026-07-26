@@ -694,10 +694,15 @@ const S := {
 	"agents.no_transitions": "nessuna transizione recente a suo nome",
 	"agents.active_count": "%d agenti ATTIVI sulla VPS in questo momento",
 	"agents.status_default": "operativo",
+	"agents.restart": "RIAVVIA",
+	"agents.stop": "FERMA",
 
 	# ── Sezione Team ──────────────────────────────────────────────────
 	"team.desks": "%d/%d postazioni",
 	"team.core": "Core: Il Coordinatore · Il Mentor · L'Assistente",
+	"team.stop": "FERMA TEAM",
+	"team.start": "AVVIA TEAM",
+	"team.setup": "SETUP E STATO",
 
 	# ── Setup iniziale aperto ─────────────────────────────────────
 	"setup.cta": "SETUP TEAM · %d/4 COMPLETATO  →",
@@ -761,6 +766,14 @@ const S := {
 	"setup.profile_body": "Carica il CV e racconta obiettivi, località, esperienza, competenze e lingue. Il badge mostra cosa manca senza costringerti a un percorso prestabilito.",
 	"setup.profile_open": "PARLA CON L’ASSISTENTE E CARICA IL CV  →",
 	"setup.profile_requires": "Prima accendi il container e completa il login del provider: servono per far rispondere davvero l’Assistente.",
+	"setup.tour_progress": "TOUR CONVERSAZIONALE · %d/3 COMPLETATI",
+	"setup.tour_assistant": "ASSISTENTE",
+	"setup.tour_coordinator": "COORDINATORE",
+	"setup.tour_mentor": "MENTOR",
+	"setup.runtime_version": "VERSIONE RUNTIME",
+	"setup.container_stop": "FERMA CONTAINER",
+	"setup.provider_active": "  ·  ATTIVO",
+	"setup.provider_logout": "DISCONNETTI ACCOUNT",
 
 	# ── Titoli KPI (dashboard, statistiche, utilizzo) ─────────────────
 	"kpi.positions_today": "POSIZIONI OGGI",
@@ -787,4 +800,92 @@ const S := {
 	# ── Mappa ─────────────────────────────────────────────────────────
 	"map.no_coords": "SENZA COORDINATE (%d)",
 	"map.none_today": "nessuna posizione geolocalizzata oggi",
+
+	# ── Impostazioni → Account cloud ──────────────────────────────────
+	"account.intro": "Sincronizza posizioni, profilo e comandi con jobhunterteam.ai. L'account è opzionale: il team può restare completamente locale.",
+	"account.cloud": "ACCOUNT CLOUD",
+	"account.linked": "collegato",
+	"account.local_mode": "modalità locale / ospite",
+	"account.device": "DISPOSITIVO",
+	"account.device_paired": "associato",
+	"account.server": "SERVER",
+	"account.login_again": "RIFAI LOGIN GOOGLE",
+	"account.login": "ACCEDI CON GOOGLE  →",
+	"account.other_account": "USA UN ALTRO ACCOUNT",
+	"account.status": "STATO",
+	"account.sync_now": "SINCRONIZZA ORA",
+	"account.pull_profile": "RECUPERA PROFILO",
+	"account.disable_sync": "FERMA SYNC E CONTINUA SOLO IN LOCALE",
+	"account.restore": "RIPRISTINA PIPELINE DAL CLOUD",
+	"account.manage_devices": "GESTISCI DISPOSITIVI E REVOCA  ↗",
+	"account.privacy_note": "Il login Google autentica il tuo account web. La VPS conserva solo un token di dispositivo revocabile; password e cookie Google non vengono salvati nel gioco.",
+	"account.disable_title": "Continuare solo in locale?",
+	"account.disable_body": "Il team continuerà a funzionare e i dati locali non verranno cancellati. Il token di questo dispositivo verrà revocato e posizioni/profilo non saranno più sincronizzati col cloud.",
+	"account.disable_ok": "FERMA SINCRONIZZAZIONE",
+
+	# ── Impostazioni → Email ──────────────────────────────────────────
+	"email.intro": "Casella dedicata agli avvisi di lavoro. Il reparto Ricerca la controlla a inizio giornata e porta in ufficio le opportunità ricevute.",
+	"email.status": "STATO",
+	"email.configured": "configurata · ",
+	"email.none": "nessuna casella configurata",
+	"email.address": "INDIRIZZO EMAIL",
+	"email.app_password": "APP PASSWORD",
+	"email.password_ph": "password specifica per l'app, mai la password principale",
+	"email.note": "La password rimane in ~/.jht/credentials con permessi 0600 e non viene sincronizzata sul cloud.",
+	"email.save": "SALVA E VERIFICA IMAP",
+	"email.remove": "RIMUOVI",
+	"email.help": "COME CREARE UNA APP PASSWORD  ↗",
+
+	# ── Impostazioni → Telegram ───────────────────────────────────────
+	"tg.intro": "Collega i tre bot privati usati dal team. I token restano nel runtime locale o sulla tua VPS e non vengono mai inviati al cloud JHT.",
+	"tg.botfather": "APRI BOTFATHER  ↗",
+	"tg.guide": "Crea un bot, incolla il token, apri la chat col bot e premi Start; poi usa SALVA E RILEVA CHAT.",
+	"tg.role_assistente": "onboarding del profilo e documenti",
+	"tg.role_capitano": "direzione del team e posizioni pronte",
+	"tg.role_mentor": "coaching e strategia professionale",
+	"tg.configured": "● CONFIGURATO",
+	"tg.to_link": "○ DA COLLEGARE",
+	"tg.token_ph": "token BotFather",
+	"tg.chat_id_ph": "chat_id (opzionale: rilevamento automatico)",
+	"tg.save": "SALVA E RILEVA CHAT",
+	"tg.remove": "RIMUOVI",
+
+	# ── Impostazioni → Avanzate ───────────────────────────────────────
+	"advanced.intro": "Diagnostica e manutenzione del runtime. Ogni comando resta visibile dentro il gioco.",
+	"advanced.doctor": "ESEGUI DIAGNOSTICA",
+	"advanced.review_setup": "RIVEDI SETUP",
+	"advanced.reinstall": "REINSTALLA / AGGIORNA RUNTIME",
+	"advanced.open_data": "APRI DATI JHT",
+	"advanced.open_log": "APRI LOG DEL GIOCO",
+	"advanced.version": "Versione gioco %s · dati applicazione %s",
+
+	# ── Sistema VPS (telemetria host e container) ─────────────────────
+	"sys.title": "SISTEMA VPS · LIVE",
+	"sys.subtitle": "Host e container jht · aggiornamento ogni 8 secondi",
+	"sys.disk": "DISCO /",
+	"sys.cpu_host_history": "CPU HOST · STORICO",
+	"sys.ram_host_history": "RAM HOST · STORICO",
+	"sys.container_status": "STATO CONTAINER",
+	"sys.container_mem": "MEMORIA JHT",
+	"sys.restarts": "RIAVVII",
+	"sys.load1": "LOAD 1 MIN",
+	"sys.uptime": "UPTIME VPS",
+	"sys.rx": "RETE RICEVUTA",
+	"sys.tx": "RETE INVIATA",
+
+	# ── Risorse per agente (live) ─────────────────────────────────────
+	"metrics.title": "RISORSE PER AGENTE · LIVE",
+	"metrics.subtitle": "RAM = processo tmux e discendenti · token = bucket reali del token-meter",
+	"metrics.freshness_wait": "TOKEN · freschezza in attesa…",
+	"metrics.col_agent": "AGENTE",
+	"metrics.col_ram_history": "STORICO RAM",
+	"metrics.tokens_window": "TOKEN (%s)",
+	"metrics.tokens_bucket": "TOKEN / %s",
+	"metrics.no_source": "TOKEN · sorgente non disponibile",
+	"metrics.stale": "TOKEN · %s · STALE DA %s",
+	"metrics.updated": "TOKEN · aggiornati %s · %s fa",
+
+	# ── Showroom (dati dimostrativi) ──────────────────────────────────
+	"demo.map": "◆ SHOWROOM · pin e offerte sono esempi fittizi",
+	"demo.positions": "◆ SHOWROOM · 50 POSIZIONI FITTIZIE · nessun dato personale o link attivo",
 }

@@ -5,6 +5,7 @@ import {
   JHT_USER_OUTPUT_DIR,
 } from "@/lib/jht-paths";
 import { safeResolveUnder } from "@/lib/fs-safety";
+import { isLocalRequest, requireAuth } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 
@@ -30,6 +31,15 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ name: string }> },
 ) {
+  // Stessa corsia della route sorella (`../route.ts`, che LISTA questi file):
+  // in locale il filesystem è quello dell'utente che ha aperto l'app e si
+  // serve senza login, altrimenti serve una sessione. Qui pesa di più: là si
+  // espongono i nomi, qui i BYTE del CV.
+  if (!(await isLocalRequest())) {
+    const denied = await requireAuth();
+    if (denied) return denied;
+  }
+
   const { name } = await params;
   const safeName = path.basename(decodeURIComponent(name));
 

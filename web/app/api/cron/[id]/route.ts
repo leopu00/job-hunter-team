@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readStore, writeStore } from "@/lib/cron-store";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+// Stesso store — e stesso gate — di `../route.ts`: questi handler abilitano,
+// rinominano e cancellano job che eseguono comandi shell schedulati.
+
 export async function PATCH(req: NextRequest, ctx: Ctx) {
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const { id } = await ctx.params;
   let body: Record<string, unknown>;
   try {
@@ -31,6 +39,10 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 }
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const { id } = await ctx.params;
   const store = readStore();
   const idx = store.jobs.findIndex((j) => j.id === id);

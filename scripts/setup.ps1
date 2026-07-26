@@ -81,8 +81,8 @@ if ($git) {
 
 # tmux (via WSL, opzionale su Windows nativo)
 # Allineato con setup.sh: tmux serve per gli agenti tmux. Su Windows
-# nativo non c'e' tmux; il warning indica a Leone-di-turno che serve WSL
-# (o una VM Linux) per lanciare ".launcher/start.sh".
+# nativo non c'e' tmux; il warning indica che serve WSL (o una VM Linux)
+# per avviare il team con "jht team start".
 $wsl = Get-Command wsl -ErrorAction SilentlyContinue
 if ($wsl) {
     $tmuxCheck = & wsl -d Ubuntu-22.04 -- which tmux 2>$null
@@ -290,7 +290,7 @@ Write-Host ""
 
 if ($wsl) {
     Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Avvia il team (via WSL):"
-    Write-Host "      wsl -d Ubuntu-22.04 -- ./.launcher/start.sh"
+    Write-Host "      wsl -d Ubuntu-22.04 -- jht team start"
     Write-Host ""
     Write-Host "  > " -NoNewline -ForegroundColor Green; Write-Host "Connettiti al Coordinatore:"
     Write-Host "      wsl -d Ubuntu-22.04 -- tmux attach -t CAPITANO"

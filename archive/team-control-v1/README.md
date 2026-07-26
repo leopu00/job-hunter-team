@@ -32,5 +32,6 @@ sono usciti dal routing per non esporre due viste "Team" concorrenti.
 
 Ricopiare i file sotto `web/app/(protected)/team/` (le due pagine come
 route dedicate, es. `controllo/page.tsx`) e verificare gli import `@/…`:
-gli hook `useTeamCommandPoller` / `useTeamState` e le API pollate esistono
-ancora in `web/`.
+`useTeamState` e le API pollate esistono ancora in `web/`, mentre l'hook
+`useTeamCommandPoller` è stato rimosso da `web/app/hooks/` (era orfano) —
+va recuperato dalla storia git insieme alle pagine.
