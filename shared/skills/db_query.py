@@ -23,14 +23,39 @@ Uso:
                                             # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
   python3 db_query.py check-url "https://..."  # cerca per URL esatto
+
+Ogni comando di lettura (positions, position, companies, company, dashboard,
+stats, recent-activity) accetta `--json`: una riga JSON su stdout invece della
+tabella. Serve a `jht ... --json` e agli agenti LLM che guidano JHT.
 """
 
 import argparse
+import json
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, active_categories
+
+
+# ── Output macchina ─────────────────────────────────────────────────────
+#
+# Ogni comando di lettura accetta `--json`. Serve a chi non ha occhi: il CLI
+# (`jht positions list --json`) e gli agenti LLM che guidano JHT, per i quali
+# la tabella incolonnata qui sotto è una fonte di parsing fragile. Il formato
+# umano resta il default e non cambia — `--json` è una seconda uscita, non una
+# riscrittura della prima.
+#
+# Contratto: UNA riga JSON su stdout, niente intestazioni né colori, exit code
+# invariato. Le liste sono array di oggetti con i nomi di colonna del DB; i
+# dettagli sono un oggetto solo. `default=str` copre date e Decimal senza
+# rompersi su un tipo nuovo.
+def emit_json(payload):
+    print(json.dumps(payload, ensure_ascii=False, default=str))
+
+
+def rows_to_dicts(rows):
+    return [dict(r) for r in rows]
 
 # Categorie ATTIVE del registro emergente (lane registro dev2). Usa la funzione
 # canonica di _db (active_categories: user_id=None → local_user_id) appena è
@@ -101,6 +126,12 @@ def query_positions(args):
     query += " ORDER BY COALESCE(s.total_score, 0) DESC, p.found_at DESC"
 
     rows = conn.execute(query, params).fetchall()
+
+    if getattr(args, 'json', False):
+        emit_json(rows_to_dicts(rows))
+        conn.close()
+        return
+
     if not rows:
         print("Nessuna posizione trovata.")
         return
@@ -118,7 +149,7 @@ def query_positions(args):
     conn.close()
 
 
-def query_position_detail(position_id):
+def query_position_detail(position_id, as_json=False):
     conn = get_db()
     ensure_schema(conn)
 
@@ -136,6 +167,13 @@ def query_position_detail(position_id):
         LEFT JOIN companies c ON c.id = p.company_id
         WHERE p.id = ?
     """, (position_id,)).fetchone()
+
+    if as_json:
+        # Assente → `null`, non un oggetto vuoto: chi legge deve poter
+        # distinguere "non c'è" da "c'è ma è vuota" senza un secondo giro.
+        emit_json(dict(r) if r else None)
+        conn.close()
+        return
 
     if not r:
         print(f"Posizione {position_id} non trovata.")
@@ -199,6 +237,11 @@ def query_companies(args):
     query += " ORDER BY name"
     rows = conn.execute(query, params).fetchall()
 
+    if getattr(args, 'json', False):
+        emit_json(rows_to_dicts(rows))
+        conn.close()
+        return
+
     if not rows:
         print("Nessuna azienda trovata.")
         return
@@ -216,11 +259,29 @@ def query_companies(args):
     conn.close()
 
 
-def query_company_detail(name):
+def query_company_detail(name, as_json=False):
     conn = get_db()
     ensure_schema(conn)
 
     r = conn.execute("SELECT * FROM companies WHERE name LIKE ?", (f"%{name}%",)).fetchone()
+
+    if as_json:
+        if not r:
+            emit_json(None)
+            conn.close()
+            return
+        payload = dict(r)
+        payload['positions'] = rows_to_dicts(conn.execute("""
+            SELECT p.id, p.title, p.status, s.total_score
+            FROM positions p
+            LEFT JOIN scores s ON s.position_id = p.id
+            WHERE p.company_id = ?
+            ORDER BY COALESCE(s.total_score, 0) DESC
+        """, (r['id'],)).fetchall())
+        emit_json(payload)
+        conn.close()
+        return
+
     if not r:
         print(f"Azienda '{name}' non trovata.")
         return
@@ -253,13 +314,9 @@ def query_company_detail(name):
     conn.close()
 
 
-def dashboard():
+def dashboard(as_json=False):
     conn = get_db()
     ensure_schema(conn)
-
-    print("\n" + "=" * 60)
-    print("  JOB HUNTER — DASHBOARD (Schema V2)")
-    print("=" * 60)
 
     # Conteggi per stato
     statuses = conn.execute("""
@@ -272,6 +329,38 @@ def dashboard():
     """).fetchall()
 
     total = sum(r['cnt'] for r in statuses)
+
+    if as_json:
+        emit_json({
+            'total': total,
+            'by_status': {r['status']: r['cnt'] for r in statuses},
+            'top_scores': rows_to_dicts(conn.execute("""
+                SELECT p.id, p.title, p.company, s.total_score, p.status
+                FROM positions p JOIN scores s ON s.position_id = p.id
+                ORDER BY s.total_score DESC LIMIT 10
+            """).fetchall()),
+            'applications': rows_to_dicts(conn.execute("""
+                SELECT p.id AS position_id, p.company, p.title, a.status,
+                       a.critic_verdict, a.applied_at, a.written_at
+                FROM applications a JOIN positions p ON p.id = a.position_id
+                ORDER BY a.id DESC
+            """).fetchall()),
+            'companies_by_verdict': {
+                r['verdict']: r['cnt'] for r in conn.execute(
+                    "SELECT verdict, COUNT(*) as cnt FROM companies "
+                    "WHERE verdict IS NOT NULL GROUP BY verdict"
+                ).fetchall()
+            },
+            'positions_with_company_id': conn.execute(
+                "SELECT COUNT(*) FROM positions WHERE company_id IS NOT NULL"
+            ).fetchone()[0],
+        })
+        conn.close()
+        return
+
+    print("\n" + "=" * 60)
+    print("  JOB HUNTER — DASHBOARD (Schema V2)")
+    print("=" * 60)
     print(f"\n  Posizioni totali: {total}")
     for r in statuses:
         print(f"    {r['status']:>10}: {r['cnt']}")
@@ -319,7 +408,7 @@ def dashboard():
     conn.close()
 
 
-def stats():
+def stats(as_json=False):
     conn = get_db()
     ensure_schema(conn)
 
@@ -328,11 +417,15 @@ def stats():
         counts[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
     version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if as_json:
+        emit_json({**counts, 'schema_version': version})
+        conn.close()
+        return
     print(f"\npositions: {counts['positions']} | companies: {counts['companies']} | scores: {counts['scores']} | applications: {counts['applications']} | schema: V{version}")
     conn.close()
 
 
-def recent_activity(minutes=30, limit=40):
+def recent_activity(minutes=30, limit=40, as_json=False):
     """Event-log OSSERVABILITÀ (lean-comms redesign): chi ha mosso quali posizioni,
     quando. Sostituisce i broadcast 'status' inter-agente — invece di narrare in chat
     'ho scorato #X / coda vuota', si QUERYa qui (pull, non push). Sorgente già
@@ -347,6 +440,10 @@ def recent_activity(minutes=30, limit=40):
         "ORDER BY ts DESC LIMIT ?",
         (f'-{int(minutes)} minutes', int(limit))
     ).fetchall()
+    if as_json:
+        emit_json(rows_to_dicts(rows))
+        conn.close()
+        return
     if not rows:
         print(f"\nNessuna attività pipeline negli ultimi {minutes} min (UTC).")
         conn.close()
@@ -704,6 +801,10 @@ def main():
     parser = argparse.ArgumentParser(description='Query jobs.db')
     sub = parser.add_subparsers(dest='cmd', required=True)
 
+    # `--json` sui comandi di lettura: stessa query, seconda uscita. Vedi
+    # emit_json() in testa al file per il contratto.
+    JSON_HELP = 'Output JSON su una riga (per CLI e agenti; il default resta umano)'
+
     # positions
     p = sub.add_parser('positions')
     p.add_argument('--status')
@@ -711,11 +812,13 @@ def main():
     p.add_argument('--min-score', type=int)
     p.add_argument('--max-score', type=int)
     p.add_argument('--source')
+    p.add_argument('--json', action='store_true', help=JSON_HELP)
 
     # position detail
     pd = sub.add_parser('position')
     pd.add_argument('id', type=int)
     pd.add_argument('--field', help='Stampa solo il valore di una colonna (bug #26): es. --field status. No header, plain stdout.')
+    pd.add_argument('--json', action='store_true', help=JSON_HELP)
 
     # companies
     c = sub.add_parser('companies')
@@ -729,18 +832,23 @@ def main():
         '--missing-verdict', action='store_true',
         help='Filtra companies senza verdict (gap analysis Analista).'
     )
+    c.add_argument('--json', action='store_true', help=JSON_HELP)
 
     # company detail
     cd = sub.add_parser('company')
     cd.add_argument('name')
+    cd.add_argument('--json', action='store_true', help=JSON_HELP)
 
     # dashboard + stats
-    sub.add_parser('dashboard')
-    sub.add_parser('stats')
+    db_p = sub.add_parser('dashboard')
+    db_p.add_argument('--json', action='store_true', help=JSON_HELP)
+    st_p = sub.add_parser('stats')
+    st_p.add_argument('--json', action='store_true', help=JSON_HELP)
     # recent-activity: event-log osservabilità (lean-comms) — sostituisce i broadcast status
     ra = sub.add_parser('recent-activity')
     ra.add_argument('--minutes', type=int, default=30)
     ra.add_argument('--limit', type=int, default=40)
+    ra.add_argument('--json', action='store_true', help=JSON_HELP)
 
     # next-for-*
     sub.add_parser('next-for-analista')
@@ -810,17 +918,17 @@ def main():
             val = row[args.field] if args.field in row.keys() else None
             print('' if val is None else val)
         else:
-            query_position_detail(args.id)
+            query_position_detail(args.id, as_json=args.json)
     elif args.cmd == 'companies':
         query_companies(args)
     elif args.cmd == 'company':
-        query_company_detail(args.name)
+        query_company_detail(args.name, as_json=args.json)
     elif args.cmd == 'dashboard':
-        dashboard()
+        dashboard(as_json=args.json)
     elif args.cmd == 'stats':
-        stats()
+        stats(as_json=args.json)
     elif args.cmd == 'recent-activity':
-        recent_activity(args.minutes, args.limit)
+        recent_activity(args.minutes, args.limit, as_json=args.json)
     elif args.cmd == 'application':
         return query_application(args.position_id)
     elif args.cmd == 'check-url':

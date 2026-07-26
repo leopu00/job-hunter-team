@@ -621,11 +621,6 @@
       "last_review": null
     },
     {
-      "path": "docs/internal/2026-07-11-team-directives-bacheca.md",
-      "description": "📋 Bacheca del team — direttive permanenti dell'utente (2026-07-11) — Stato: fondamenta su dev4 (tabella + skill).",
-      "last_review": null
-    },
-    {
       "path": "docs/internal/README.md",
       "description": "📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni.",
       "last_review": null
@@ -1241,16 +1236,6 @@
       "last_review": null
     },
     {
-      "path": "tests/js/tasks/_disabled/README.md",
-      "description": "Disabled test files — These 38 test files reference components, API routes, or layout",
-      "last_review": null
-    },
-    {
-      "path": "tui/README.md",
-      "description": "⌨️ tui — terminal UI — Terminal interface for Job Hunter Team: drives the team, streams agent activity,",
-      "last_review": null
-    },
-    {
       "path": "web/README.md",
       "description": "🌐 web — dashboard (Next.js) — The Job Hunter Team web dashboard: positions, scoring, map/globe, team telemetry,",
       "last_review": null
@@ -1259,6 +1244,11 @@
       "path": "docs/internal/2026-07-25-audit-doc-code-drift.md",
       "description": "Audit doc↔codice del ciclo native (500 commit): cosa era slittato, cosa è stato riallineato, debito residuo per tag",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-07-11-team-directives-bacheca.md",
+      "description": "📋 Bacheca del team — direttive permanenti dell'utente (2026-07-11) — Stato: fondamenta su dev4 (tabella + skill).",
+      "last_review": "2026-07-15"
     }
   ]
 }

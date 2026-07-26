@@ -664,23 +664,13 @@ clone_repo() {
 }
 
 build_jht() {
-  step 6 "$TOTAL_STEPS_NATIVE" "Build TUI, CLI and shared modules"
+  step 6 "$TOTAL_STEPS_NATIVE" "Build CLI and shared modules"
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would execute: (cd %s/tui && npm install && npx tsc)\n" "$INSTALL_DIR"
     printf "  ${DIM}[dry-run]${RESET} would execute: (cd %s/cli && npm install)\n" "$INSTALL_DIR"
     printf "  ${DIM}[dry-run]${RESET} would execute: npm install in each %s/shared/*/package.json with deps\n" "$INSTALL_DIR"
     return 0
   fi
-
-  info "Installing TUI dependencies..."
-  (cd "$INSTALL_DIR/tui" && npm install --silent --no-audit --no-fund) \
-    || fail "TUI npm install failed"
-
-  info "Compiling TUI (TypeScript)..."
-  (cd "$INSTALL_DIR/tui" && npx --yes tsc) \
-    || fail "TUI build failed"
-  ok "TUI compiled in $INSTALL_DIR/tui/dist"
 
   info "Installing CLI dependencies..."
   (cd "$INSTALL_DIR/cli" && npm install --silent --no-audit --no-fund) \

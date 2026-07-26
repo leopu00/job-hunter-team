@@ -1,6 +1,8 @@
 /**
  * JHT paths — costanti condivise lato web.
- * Specchio di tui/src/tui-paths.ts. Se cambi uno, cambia anche l'altro.
+ * Specchio di shared/paths.js (che è la definizione canonica) e di
+ * cli/src/jht-paths.js. Se cambi uno, cambia anche gli altri: nessuno
+ * dei tre importa gli altri, quindi niente li tiene allineati da solo.
  */
 import os from "os";
 import path from "path";

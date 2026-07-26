@@ -24,6 +24,73 @@ This is one of JHT's primary design decisions:
 
 If a feature requires opening the web dashboard or the Desktop app to be configured *after install*, that's a bug. The CLI must be self-sufficient for day-to-day operation. File an issue if you find an exception.
 
+### 📐 Where the CLI stands against that rule (measured 2026-07-25)
+
+Honest status, so you don't discover the edges one failed command at a time:
+
+| | you can | via |
+|---|---|---|
+| 👀 **read** | positions, pipeline state, stats, logs, throttle graphs | `jht positions list/show/dashboard`, `jht stats`, `jht status`, `jht logs`, `jht sentinella graph` |
+| 🎛️ **command** | start/stop the team, talk to an agent, switch provider, set working hours, schedule jobs | `jht team start/stop/send/chat`, `jht providers`, `jht working-hours`, `jht cron` |
+| ⚖️ **decide** | exclude a position (reversibly), request a CV, open a ticket, post a standing directive | `jht positions exclude/restore/request-cv`, `jht ticket`, `jht directives` |
+
+### ⚖️ The decision verbs
+
+These carry a **user judgement**, so treat them the way you'd treat any
+irreversible-looking action: say what you're about to do, and don't batch them
+without being asked.
+
+```bash
+# scartare una posizione — esce dalle code agenti, niente più token spesi su di lei
+jht positions exclude 42 --reason not_interested
+jht positions exclude 42 --reason other --note "sede sbagliata"   # 'other' esige --note
+jht positions restore 42                                          # torna allo stato di prima
+
+# chiedere il CV al team
+jht positions request-cv 42
+jht positions request-cv 42 --off
+
+# domandare qualcosa al team su una posizione
+jht ticket open 42 "L'annuncio è ancora attivo?"
+jht ticket list                    # la coda del Capitano
+jht ticket count                   # solo il numero — output stabile per script
+
+# ordini permanenti: sopravvivono al context-refresh del Capitano
+jht directives add "Modalità mantenimento: CV solo 90+" --kind strategy
+jht directives                     # le attive
+jht directives archive 1
+```
+
+**Exit code**: `0` fatto · `1` rifiutato per una ragione di dominio (posizione
+inesistente, `other` senza nota) · `2` argomenti sbagliati. Le operazioni su
+posizione stampano una riga JSON, quindi puoi verificare l'esito senza leggere
+il testo.
+
+Cosa **non** c'è ancora, con il tag per cercarne lo stato: dare un giudizio
+like/dislike/star (vive solo sul cloud), scaricare un artifact prodotto,
+caricare un documento, leggere e scrivere le impostazioni del Capitano —
+tutto sotto **[JHT-CLI-AGENT-PARITY]** in `BACKLOG.md`. Per quelli, le skill
+Python nel container restano la strada:
+
+```bash
+jht sh -c 'python3 /app/shared/skills/ticket.py --help'
+jht sh -c 'python3 /app/shared/skills/team_directives.py --help'
+```
+
+### 🤖 Ask for JSON
+
+`jht positions list|show|dashboard` accept `--json`: one line of JSON instead of
+the aligned table. Use it. Parsing the human table means regexes that break the
+next time a column width changes.
+
+```bash
+jht positions list -s scored --min-score 70 --json
+jht positions show 42 --json          # object, or null when not found
+```
+
+Coverage is not universal yet — 3 of 37 command modules speak `--json` today.
+When a command has no machine format, say so rather than scraping its output.
+
 ## Setup runbook (Path 3 — no Desktop app)
 
 > **Audience**: an AI agent (Claude Code / OpenClaw / Codex / Cursor) running on the user's machine. Treat this as an executable script: each step is a concrete CLI invocation. **STOP AND ASK the user at every step marked `**ASK USER**`** — these are real decisions only the user can make (cost, privacy, hardware). Don't pre-decide them based on the prompt unless the user has explicitly answered the question upfront.

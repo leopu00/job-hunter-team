@@ -28,7 +28,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [README.md](../README.md) | Entry point del repo: vision, install, panoramica team agenti, provider | — | 2026-07-19 | ✅ |
+| [README.md](../README.md) | Entry point del repo: vision, install, panoramica team agenti, provider | — | 2026-07-25 | ✅ |
 | [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-07-25 | ✅ |
 | [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-07-25 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `owner@example.com` | — | 2026-07-03 | ✅ |
@@ -153,7 +153,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [game/PROMPT.md](../game/PROMPT.md) | PROMPT — Prototipo videogioco "JHT: The Office" (esperienza gamificata di Job Hunter Team) — Il progetto game/ è ora l'unica applicazione desktop di Job Hunter Team. | — | 2026-07-19 | ✅ |
-| [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-07-19 | ✅ |
+| [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-07-25 | ✅ |
 | [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (mac-leone:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-07-22 | ✅ |
 | [game/docs/ANALISI-GIOCHI.md](../game/docs/ANALISI-GIOCHI.md) | Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace. | — | 2026-07-07 | ✅ |
 | [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-07-22 | ✅ |
@@ -195,7 +195,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor) | — | 2026-07-23 | ✅ |
+| [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor) | — | 2026-07-25 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Onboarding beta tester + matrice coverage 10 celle | — | 2026-07-25 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | ☁️ VPS setup — JHT on Hetzner Cloud — Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS | — | 2026-07-23 | ✅ |
 | [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | 📦 CLI install — jobhunterteam.ai/install.sh — This document describes how the one-liner installer works today | — | 2026-07-19 | ✅ |
@@ -211,7 +211,6 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/2026-07-11-team-directives-bacheca.md](./internal/2026-07-11-team-directives-bacheca.md) | 📋 Bacheca del team — direttive permanenti dell'utente (2026-07-11) — Stato: fondamenta su dev4 (tabella + skill). | — | 2026-07-15 | ✅ |
 | [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-07-25 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
@@ -253,7 +252,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/experiments/2026-05-25-sim-4-office-geocoding-report.md](./internal/experiments/2026-05-25-sim-4-office-geocoding-report.md) | 🧪 Simulazione 4 — office geocoding precise + 6 analisti — Data: 2026-05-25 (avvio 22:45 del 2026-05-24, chiusura ~01:50 del 2026-05-25) | — | 2026-06-13 | ✅ |
 | [docs/internal/experiments/2026-05-25-sim-5-office-geocoding-mario-rossi-report.md](./internal/experiments/2026-05-25-sim-5-office-geocoding-mario-rossi-report.md) | 🧪 Simulazione 5 — office geocoding su owner (Marton / Tech Writer) — Container: jht-sim-d2 (reset totale, candidate_profile.yml ripristinato su Marton Kovacs) | — | 2026-06-13 | ✅ |
 | [docs/internal/experiments/2026-06-13-kimi-quota-tiers-discovery.md](./internal/experiments/2026-06-13-kimi-quota-tiers-discovery.md) | 🔍 Kimi Code — i tre tier di quota e il buco totalQuota (scoperta 2026-06-13) — Contesto: deploy del team su VPS betaB (Kimi, 203.0.113.20) con l'immagine | — | 2026-06-14 | ✅ |
-| [docs/internal/landing-image-prompts.md](./internal/landing-image-prompts.md) | 🎨 Prompt immagini — Sito pubblico — Raccolta dei prompt per tutte le immagini del sito pubblico (landing + pagine | — | 2026-07-03 | ✅ |
+| [docs/internal/landing-image-prompts.md](./internal/landing-image-prompts.md) | 🎨 Prompt immagini — Sito pubblico — Raccolta dei prompt per tutte le immagini del sito pubblico (landing + pagine | — | 2026-07-25 | ✅ |
 | [docs/internal/ops/INFRA.md](./internal/ops/INFRA.md) | 🏗️ Infrastructure — Job Hunter Team — 📐 High-level deployment diagram. | — | 2026-07-03 | ✅ |
 | [docs/internal/ops/MAINTAINERS.md](./internal/ops/MAINTAINERS.md) | 👥 Maintainers Reference — 🔒 Internal information for project maintainers. | — | 2026-07-24 | ✅ |
 | [docs/internal/ops/access-and-credentials.md](./internal/ops/access-and-credentials.md) | 🔐 Access & Credentials — guida consolidata — Last updated: 2026-05-26. | — | 2026-06-13 | ✅ |
@@ -306,6 +305,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/roadmap/MINOR-TRACKER.md](./internal/roadmap/MINOR-TRACKER.md) | 🪛 Minor tracker — note, debt, fix piccoli — File di tracciamento per cose da fare/migliorare/controllare che NON sono blocker pre-launch. | — | 2026-07-25 | ✅ |
 | [docs/internal/roadmap/db-schema-optimization.md](./internal/roadmap/db-schema-optimization.md) | 🗄️ Database schema optimization — plan (idea, not scheduled) — Moved from docs/about/ROADMAP.md in the 2026-07-03 docs restructure. | — | 2026-07-03 | ✅ |
 | [docs/internal/2026-07-25-audit-doc-code-drift.md](./internal/2026-07-25-audit-doc-code-drift.md) | Audit doc↔codice del ciclo native (500 commit): cosa era slittato, cosa è stato riallineato, debito residuo per tag | — | 2026-07-25 | ✅ |
+| [docs/internal/architecture/2026-07-11-team-directives-bacheca.md](./internal/architecture/2026-07-11-team-directives-bacheca.md) | 📋 Bacheca del team — direttive permanenti dell'utente (2026-07-11) — Stato: fondamenta su dev4 (tabella + skill). | 2026-07-15 | 2026-07-25 | ✅ |
 
 
 ## 🔒 docs/security
@@ -358,11 +358,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/README.md](./README.md) | 📚 Documentation — Job Hunter Team — Top-level index of the documentation. | — | 2026-07-03 | ✅ |
 | [docs/launch/demo-storyboard.md](./launch/demo-storyboard.md) | 🎬 JHT 30-second demo — storyboard + recording script — Linked from BACKLOG.md item [JHT-LAUNCH-03] (blocker | — | 2026-06-13 | ✅ |
 | [e2e/README.md](../e2e/README.md) | 🧪 e2e — end-to-end tests (Playwright) — Browser-driven end-to-end tests for the Job Hunter Team web dashboard. | — | 2026-07-25 | ✅ |
-| [scripts/README.md](../scripts/README.md) | 🐚 scripts — setup, install & dev tooling — Bash/PowerShell scripts for installing, developing, releasing, and simulating | — | 2026-07-03 | ✅ |
+| [scripts/README.md](../scripts/README.md) | 🐚 scripts — setup, install & dev tooling — Bash/PowerShell scripts for installing, developing, releasing, and simulating | — | 2026-07-25 | ✅ |
 | [scripts/case-study-extract/README.md](../scripts/case-study-extract/README.md) | Case study VPS extraction toolkit — Read-only dump of an entire JHT VPS run for offline analysis. | — | 2026-07-03 | ✅ |
-| [shared/README.md](../shared/README.md) | 🧩 shared — shared core library — Cross-cutting logic shared across the CLI, TUI, agents, and monitoring stack. | — | 2026-06-13 | ✅ |
-| [tests/js/tasks/_disabled/README.md](../tests/js/tasks/_disabled/README.md) | Disabled test files — These 38 test files reference components, API routes, or layout | — | 2026-05-31 | ✅ |
-| [tui/README.md](../tui/README.md) | ⌨️ tui — terminal UI — Terminal interface for Job Hunter Team: drives the team, streams agent activity, | — | 2026-06-13 | ✅ |
+| [shared/README.md](../shared/README.md) | 🧩 shared — shared core library — Cross-cutting logic shared across the CLI, TUI, agents, and monitoring stack. | — | 2026-07-25 | ✅ |
 | [web/README.md](../web/README.md) | 🌐 web — dashboard (Next.js) — The Job Hunter Team web dashboard: positions, scoring, map/globe, team telemetry, | — | 2026-07-03 | ✅ |
 
 
