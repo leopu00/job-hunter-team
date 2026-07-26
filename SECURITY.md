@@ -6,7 +6,7 @@ JHT (Job Hunter Team) is a **local-first, single-user system** with a native God
 
 **Do not open a public issue for security bugs.**
 
-Email **`leopu00@gmail.com`** with:
+Email **`security@jobhunterteam.ai`** with:
 
 - Descriptive title and estimated severity (Critical / High / Medium / Low)
 - Path + function + line numbers of the vulnerable code
