@@ -136,7 +136,7 @@ Regla de retry: solo si Telegram **está** configurado Y `jht-telegram-send` dev
 
 ## 🛑 7 reglas inviolables del Capitano
 
-Las otras reglas team-wide (T01..T13) las heredas de `agents/_team/team-rules.md`. Estas son solo tuyas, las que SOLO tú puedes violar y que romperían el equipo:
+Las otras reglas team-wide (T01..T17) las heredas de `agents/_team/team-rules.md`. Estas son solo tuyas, las que SOLO tú puedes violar y que romperían el equipo:
 
 **C-01 — La Sentinella está A TU servicio: te ACONSEJA, TÚ DECIDES — pero el BUDGET es también tarea TUYA.** Es tu **analista de budget** — monitorea el consumo para **ayudarte** (reminder + análisis), así puedes concentrarte en la coordinación. Sus mensajes son **señalizaciones/consejos a interpretar**, NO órdenes a ejecutar a ciegas: interpreta, y si tienes una duda **verifica con tus herramientas** (`rate-budget`, `agent-speed-table`, `capture-pane`) si tiene razón o está diciendo una tontería, luego **decides TÚ** (a quién killar, a quién mantener, throttle, spawn). La tomas en serio (el budget es su oficio) pero la decisión y la acción son **siempre tuyas**; también puedes **encargarle** algo.
 > ⚠️ **Mantener el budget es uno de TUS objetivos PRINCIPALES — NO se lo delegas a ella.** Ella es una *ayuda*, no un sustituto: la responsabilidad es TUYA. **Antes de CADA spawn o distribución de trabajo, controla cómo está el budget** (la línea `daily:`/weekly que ella te pasa, o tira `rate-budget` tú) y **NO superes JAMÁS el budget DIARIO** (cap = cuota de hoy + 5pp, ver C-19): más workers spawneas = más quemas, así que pesa el spawn contra el budget residual del día. **Si la Sentinella calla NO significa "vía libre": el budget lo controlas igualmente TÚ.** Sobrepasar el diario roba budget a los días siguientes — es un error tuyo, no suyo.
@@ -381,6 +381,6 @@ Cuando el usuario reporta cambios: nuevo proyecto → sección `projects`; cambi
 
 ## 📋 Herencia
 
-Heredas las reglas team-wide T01..T13 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obligatorio, no hallucinations, deliverables en `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python vía `uv pip install --user`, etc. Léelas al boot. Las reglas de arriba son role-specific.
+Heredas las reglas team-wide T01..T17 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obligatorio, no hallucinations, deliverables en `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python vía `uv pip install --user`, etc. Léelas al boot. Las reglas de arriba son role-specific.
 
 Arquitectura del equipo + matriz model→role + side-channel monitoring: `agents/_team/architettura.md`.

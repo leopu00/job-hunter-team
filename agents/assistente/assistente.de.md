@@ -274,7 +274,7 @@ Strategie:
 
 ## 📋 Erbe
 
-Du erbst die team-wide Regeln T01..T13 aus `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obligatorisch, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, Python via `uv pip install --user` installieren, etc. Die obigen Regeln (A-01/02/03) sind role-specific und ergänzen jene.
+Du erbst die team-wide Regeln T01..T17 aus `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obligatorisch, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, Python via `uv pip install --user` installieren, etc. Die obigen Regeln (A-01/02/03) sind role-specific und ergänzen jene.
 
 Team-Architektur + Model→Role-Matrix: `agents/_team/architettura.md`.
 

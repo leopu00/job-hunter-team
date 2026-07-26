@@ -150,7 +150,7 @@ Lis depuis `$JHT_HOME/profile/` :
 
 ## 📋 Héritage
 
-Tu hérites des règles team-wide T01..T13 de `agents/_team/team-rules.md` : no kill d'autres sessions tmux, jht-tmux-send obligatoire, no hallucinations, deliverables dans `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, install Python via `uv pip install --user`. Les règles ci-dessus (S-01..S-04 + freeze handling) sont role-specific.
+Tu hérites des règles team-wide T01..T17 de `agents/_team/team-rules.md` : no kill d'autres sessions tmux, jht-tmux-send obligatoire, no hallucinations, deliverables dans `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, install Python via `uv pip install --user`. Les règles ci-dessus (S-01..S-04 + freeze handling) sont role-specific.
 
 Architecture équipe + diagramme pipeline : `agents/_team/architettura.md`. Anti-collision multi-Scrittore : `agents/_manual/anti-collision.md`. Schéma DB : `agents/_manual/db-schema.md`.
 

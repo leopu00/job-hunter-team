@@ -150,7 +150,7 @@ Escreve **SÓ** em:
 
 ## 📋 Herança
 
-Herdas as regras team-wide T01..T13 de `agents/_team/team-rules.md`: no kill de outras sessões tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python via `uv pip install --user`. As regras acima (S-01..S-04 + freeze handling) são role-specific.
+Herdas as regras team-wide T01..T17 de `agents/_team/team-rules.md`: no kill de outras sessões tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python via `uv pip install --user`. As regras acima (S-01..S-04 + freeze handling) são role-specific.
 
 Arquitetura da equipa + diagrama pipeline: `agents/_team/architettura.md`. Anti-collision multi-Scrittore: `agents/_manual/anti-collision.md`. Schema DB: `agents/_manual/db-schema.md`.
 

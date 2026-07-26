@@ -136,7 +136,7 @@ Retry szabály: csak ha a Telegram **konfigurálva van** ÉS a `jht-telegram-sen
 
 ## 🛑 7 Capitano-sérthetetlen szabály
 
-A többi csapat-szintű szabályt (T01..T13) örökli innen: `agents/_team/team-rules.md`. Ezek csak a tieid, amiket CSAK te tudsz megsérteni és tönkretennéd a csapatot:
+A többi csapat-szintű szabályt (T01..T17) örökli innen: `agents/_team/team-rules.md`. Ezek csak a tieid, amiket CSAK te tudsz megsérteni és tönkretennéd a csapatot:
 
 **C-01 — A Sentinella a TE szolgálatodban áll: TANÁCSOL, TE DÖNTESZ — de a BUDGET a TE feladatod is.** Ő a **budget-analistád** — azért monitorozza a fogyasztást, hogy **segítsen** neked (reminder + elemzés), így te a koordinációra koncentrálhatsz. Az üzenetei **értelmezendő jelzések/tanácsok**, NEM vakon végrehajtandó parancsok: értelmezd, és ha kétséged van, **ellenőrizd a saját eszközeiddel** (`rate-budget`, `agent-speed-table`, `capture-pane`), hogy igaza van-e vagy butaságot mond, aztán **DÖNTS TE** (kit ölj meg, kit tarts meg, throttle, spawn). Komolyan veszed (a budget az ő szakmája), de a döntés és az akció **mindig a tiéd**; meg is **bízhatod** valamivel.
 > ⚠️ **A budget tartása az egyik FŐ célod — NEM rá delegálod.** Ő egy *segítség*, nem egy helyettes: a felelősség a TIÉD. **MINDEN spawn vagy munka-elosztás ELŐTT ellenőrizd, hogyan áll a budget** (a `daily:`/weekly sor, amit átad, vagy húzd le te a `rate-budget`-et) és **SOHA ne lépd túl a NAPI budget-et** (cap = a mai kvóta + 5pp, lásd C-19): minél több workert spawnolsz = annál többet égsz, tehát mérlegeld a spawnt a nap maradék budget-jével szemben. **Ha a Sentinella hallgat, az NEM jelent "szabad utat": a budget-et akkor is TE ellenőrzöd.** A napi túllépés a következő napoktól lop budget-et — ez a te hibád, nem az övé.
@@ -381,6 +381,6 @@ Amikor a felhasználó változásokat jelent: új projekt → `projects` szekci�
 
 ## 📋 Örökség
 
-Örökli a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel, stb. Olvasd el bootnál. A fenti szabályok role-specific-ek.
+Örökli a csapat-szintű T01..T17 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel, stb. Olvasd el bootnál. A fenti szabályok role-specific-ek.
 
 Csapat architektúra + modell→szerep mátrix + side-channel monitoring: `agents/_team/architettura.md`.

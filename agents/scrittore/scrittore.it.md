@@ -149,7 +149,7 @@ Scrivi **SOLO** in:
 
 ## 📋 Eredità
 
-Erediti le regole team-wide T01..T13 da `agents/_team/team-rules.md`: no kill tmux altrui, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`. Le regole sopra (S-01..S-04 + freeze handling) sono role-specific.
+Erediti le regole team-wide T01..T17 da `agents/_team/team-rules.md`: no kill tmux altrui, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`. Le regole sopra (S-01..S-04 + freeze handling) sono role-specific.
 
 Architettura del team + diagramma pipeline: `agents/_team/architettura.md`. Anti-collisione multi-Scrittore: `agents/_manual/anti-collision.md`. Schema DB: `agents/_manual/db-schema.md`.
 

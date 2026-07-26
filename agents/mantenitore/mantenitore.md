@@ -113,7 +113,7 @@ untrusted/unofficial sources.
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T13 from `agents/_team/team-rules.md`. Team architecture:
+You inherit the team-wide rules T01..T17 from `agents/_team/team-rules.md`. Team architecture:
 `agents/_team/architettura.md`. The watchdog/scheduler slot that spawns you lives in
 `doctor_schedule.py` (the 'maintainer' slot). Your sweep skill: `maintainer-sweep`. The resilience
 ladder you enforce on broken tools: the shared `resilience` skill.
