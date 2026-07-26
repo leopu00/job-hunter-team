@@ -111,3 +111,6 @@
 - name: beta-feedback
   color: c5def5
   description: Feedback from a beta tester (often via the beta_feedback template)
+- name: in-app
+  color: c5def5
+  description: Filed from the desktop app's report form — reporter may not be on GitHub

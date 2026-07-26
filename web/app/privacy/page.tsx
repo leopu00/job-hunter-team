@@ -31,7 +31,7 @@ const T = {
     s5_body:
       "JHT e completamente open source. Puoi verificare in qualsiasi momento cosa fa il codice esaminando il repository su GitHub.",
     s6_title: "Contatti",
-    s6_body: "Per domande sulla privacy, scrivi a leopu00@gmail.com.",
+    s6_body: "Per domande sulla privacy, scrivi a support@jobhunterteam.ai.",
     nav_home: "Home",
     nav_privacy: "Privacy",
     nav_terms: "Termini",
@@ -57,7 +57,7 @@ const T = {
     s5_body:
       "JHT is fully open source. You can verify what the code does at any time by examining the repository on GitHub.",
     s6_title: "Contact",
-    s6_body: "For privacy questions, write to leopu00@gmail.com.",
+    s6_body: "For privacy questions, write to support@jobhunterteam.ai.",
     nav_home: "Home",
     nav_privacy: "Privacy",
     nav_terms: "Terms",
@@ -83,7 +83,7 @@ const T = {
     s5_body:
       "A JHT teljesen nyílt forráskódú. Bármikor ellenőrizheted, hogy mit csinál a kód, a GitHub-on található repository átvizsgálásával.",
     s6_title: "Kapcsolat",
-    s6_body: "Adatvédelmi kérdések esetén írj az leopu00@gmail.com címre.",
+    s6_body: "Adatvédelmi kérdések esetén írj az support@jobhunterteam.ai címre.",
     nav_home: "Főoldal",
     nav_privacy: "Adatvédelem",
     nav_terms: "Feltételek",
@@ -109,7 +109,7 @@ const T = {
     s5_body:
       "JHT es completamente de código abierto. Puedes verificar en cualquier momento lo que hace el código examinando el repositorio en GitHub.",
     s6_title: "Contacto",
-    s6_body: "Para cuestiones de privacidad, escribe a leopu00@gmail.com.",
+    s6_body: "Para cuestiones de privacidad, escribe a support@jobhunterteam.ai.",
     nav_home: "Inicio",
     nav_privacy: "Privacidad",
     nav_terms: "Términos",
@@ -135,7 +135,7 @@ const T = {
     s5_body:
       "JHT ist vollständig Open Source. Du kannst jederzeit überprüfen, was der Code tut, indem du das Repository auf GitHub untersuchst.",
     s6_title: "Kontakt",
-    s6_body: "Bei Fragen zum Datenschutz schreibe an leopu00@gmail.com.",
+    s6_body: "Bei Fragen zum Datenschutz schreibe an support@jobhunterteam.ai.",
     nav_home: "Startseite",
     nav_privacy: "Datenschutz",
     nav_terms: "Bedingungen",
@@ -162,7 +162,7 @@ const T = {
       "JHT est entièrement open source. Vous pouvez vérifier à tout moment ce que fait le code en examinant le dépôt sur GitHub.",
     s6_title: "Contact",
     s6_body:
-      "Pour toute question relative à la confidentialité, écrivez à leopu00@gmail.com.",
+      "Pour toute question relative à la confidentialité, écrivez à support@jobhunterteam.ai.",
     nav_home: "Accueil",
     nav_privacy: "Confidentialité",
     nav_terms: "Conditions",
@@ -188,7 +188,7 @@ const T = {
     s5_body:
       "O JHT é totalmente de código aberto. Pode verificar a qualquer momento o que o código faz examinando o repositório no GitHub.",
     s6_title: "Contacto",
-    s6_body: "Para questões de privacidade, escreva para leopu00@gmail.com.",
+    s6_body: "Para questões de privacidade, escreva para support@jobhunterteam.ai.",
     nav_home: "Início",
     nav_privacy: "Privacidade",
     nav_terms: "Termos",

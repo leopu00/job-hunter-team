@@ -126,7 +126,7 @@ in [`docs/internal/ops/release.md`](../docs/internal/ops/release.md).
 
 ## Code of conduct
 
-This project follows the [Contributor Covenant 2.1](../CODE_OF_CONDUCT.md). By participating you agree to uphold it. Report unacceptable behavior to `leopu00@gmail.com`.
+This project follows the [Contributor Covenant 2.1](../CODE_OF_CONDUCT.md). By participating you agree to uphold it. Report unacceptable behavior to `support@jobhunterteam.ai`.
 
 ## License
 

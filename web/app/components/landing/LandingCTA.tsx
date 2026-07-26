@@ -148,6 +148,9 @@ export function LandingFooter() {
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">
               {t("footer_contacts")}
             </h4>
+            <Link href="/contact" className={linkClass}>
+              {t("footer_write")}
+            </Link>
             <a
               href="https://github.com/leopu00/job-hunter-team/issues"
               target="_blank"

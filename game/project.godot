@@ -25,6 +25,7 @@ BackendBus="*res://scripts/backend/backend_bus.gd"
 SetupService="*res://scripts/setup/setup_service.gd"
 ScriptedOnboarding="*res://scripts/setup/scripted_onboarding.gd"
 TourGuide="*res://scripts/setup/tour_guide.gd"
+FeedbackService="*res://scripts/support/feedback_service.gd"
 Sfx="*res://scripts/sfx.gd"
 
 [display]
