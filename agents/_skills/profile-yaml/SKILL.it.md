@@ -187,6 +187,21 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 #    NON annunciare MAI lo sblocco senza FLAG_OK nel passo precedente.
 ```
 
+
+### 4. Avvisa il Capitano — è da qui che il team parte
+
+Solo dopo `FLAG_OK`, e una sola volta:
+
+```bash
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] profilo del candidato completo e validato — il team può partire."
+```
+
+Il Capitano non guarda il file del profilo: finché nessuno glielo dice, al primo
+avvio lascia l'utente davanti a un ufficio quasi fermo. Questo messaggio è il
+trigger della sua skill `first-run-burst` (roster completo subito invece della
+salita a gradini). Senza, il primo giorno l'utente vede una posizione ogni dieci
+minuti e conclude che l'applicazione è rotta.
+
 ### Anti-allucinazione del passo 2
 
 È noto che un LLM tende a scrivere "ho fatto X" anche quando la tool call non è stata emessa. Il `test -f` esiste apposta per interromperti se hai saltato la creazione: vedi `FLAG_MISSING` e ti ricordi di tornare indietro. **Non fidarti del tuo ricordo, fidati solo dell'output di `test -f`.**

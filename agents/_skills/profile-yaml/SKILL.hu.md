@@ -181,6 +181,21 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 #    SOHA ne jelentsd be a feloldast FLAG_OK nelkul az elozo lepesben.
 ```
 
+
+### 4. Ertesitsd a Capitanot — innen indul a csapat
+
+Csak `FLAG_OK` utan, es csak egyszer:
+
+```bash
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] a jelolt profilja teljes es validalt — a csapat indulhat."
+```
+
+A Capitano nem nezi a profilfajlt: amig senki nem szol neki, az elso inditasnal a
+felhasznalo egy szinte allo irodat lat. Ez az uzenet a `first-run-burst` skilljenek
+kivaltoja (teljes csapat azonnal, a fokozatos felfutas helyett). Nelkule az elso
+napon a felhasznalo tiz percenkent lat egy poziciot, es arra jut, hogy az
+alkalmazas elromlott.
+
 ### A 2. lepes anti-hallucinacioja
 
 Ismert, hogy egy LLM hajlamos azt irni "megcsinaltam X-et", meg akkor is, ha a tool call nem lett kibocsatva. A `test -f` pontosan azert letezik, hogy megallitson, ha kihagytad a letrehozast: latod a `FLAG_MISSING`-et es emlekeztetod magad, hogy menj vissza. **Ne bizz az emlekezesedben, csak a `test -f` kimeneteben.**

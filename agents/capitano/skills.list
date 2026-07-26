@@ -24,6 +24,10 @@ user-reply-check
 db-query
 db-update
 
+# Primo avvio di un utente nuovo: roster completo subito invece della salita
+# a gradini, perché il risultato che conta è una posizione CON PUNTEGGIO.
+first-run-burst
+
 # Coordination (the Captain's daily operational loop)
 spawn-agent
 sentinel-orders
