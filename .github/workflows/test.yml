@@ -10,23 +10,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Suite vitest completa — l'UNICO posto in cui gira. Fino al 2026-07-26 il
+  # job viveva anche in ci.yml (stesso trigger, stesso codice, due esecuzioni)
+  # e qui era una matrice `config|tasks|wizard` che si presentava come elenco
+  # esaustivo pur omettendo `validators/` (redazione dei dati sensibili nei
+  # ticket): la cartella non girava in nessun job della matrice. Niente
+  # matrice, niente elenco da tenere allineato a mano: `npm test` prende tutto
+  # quello che c'è in tests/js, e un modulo nuovo è coperto il giorno che nasce.
   vitest:
-    name: vitest — ${{ matrix.module }}
+    name: vitest — tests/js
     runs-on: ubuntu-latest
-
-    # La matrice era di 11 moduli; 8 sono spariti il 2026-07-25 insieme alle
-    # 30 sottocartelle di `shared/` che il prodotto non importava. Testavano
-    # scaffolding: 692 dei 933 test guardavano codice irraggiungibile.
-    # Restano i tre che puntano a codice spedito: `config` (schemi Zod letti da
-    # web/ e dagli agenti), `tasks` (demo mode, cron, credentials, daemon) e
-    # `wizard` (il setup del CLI — test in .js, non .ts).
-    strategy:
-      fail-fast: false
-      matrix:
-        module:
-          - config
-          - tasks
-          - wizard
 
     steps:
       - uses: actions/checkout@v7
@@ -39,30 +32,40 @@ jobs:
             tests/js/package-lock.json
             web/package-lock.json
             cli/package-lock.json
+            shared/package-lock.json
             shared/cron/package-lock.json
 
-      - name: Install dependencies
+      - name: Install test runner dependencies
         working-directory: tests/js
         run: npm ci
 
-      - name: Install web dependencies for task imports
-        if: matrix.module == 'tasks'
+      # tasks/demo-*.test.ts importano `@/lib/demo/...` (alias → web/), che a
+      # sua volta tira `next/headers`.
+      - name: Install web dependencies for imported routes
         working-directory: web
         run: npm ci
 
-      - name: Install CLI dependencies for task imports
-        if: matrix.module == 'tasks'
+      # wizard/setup.test.js importa cli/wizard/setup.js e lancia cli/bin/jht.js.
+      - name: Install CLI dependencies for imported commands
         working-directory: cli
         run: npm ci
 
-      - name: Install cron dependencies for task imports
-        if: matrix.module == 'tasks'
+      # config/schema.test.ts importa shared/config/schema.ts → `zod`. Senza
+      # questo `npm ci` lo schema veniva validato con la copia di zod di
+      # tests/js: fino al 2026-07-26 era la 3.x mentre il prodotto è sulla 4.x,
+      # cioè la CI validava lo schema con una libreria che nessuno spedisce.
+      - name: Install shared dependencies for imported modules
+        working-directory: shared
+        run: npm ci
+
+      # tasks/cron.test.ts importa shared/cron/schedule.js → `croner`.
+      - name: Install cron dependencies for imported modules
         working-directory: shared/cron
         run: npm ci
 
-      - name: Run tests — ${{ matrix.module }}
+      - name: Run tests
         working-directory: tests/js
-        run: npx vitest run ${{ matrix.module }} --reporter=verbose
+        run: npm test
 
   # La suite Python (agenti, skill, sync, installer) girava solo a mano: per
   # tre settimane nessuno ha visto che tests/test_public_installers_sync.py
