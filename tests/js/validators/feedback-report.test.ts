@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  sembraSpam,
   emailSubject,
   emailText,
   issueBody,
@@ -230,5 +231,27 @@ describe("replyToSicuro — header injection", () => {
     ]) {
       expect(replyToSicuro(brutto)).toBe("");
     }
+  });
+});
+
+describe("modulo di contatto del sito", () => {
+  it("il tipo compare in oggetto, per smistare a colpo d'occhio", () => {
+    const domanda = parseReport({ ...VALID, kind: "domanda" })!;
+    expect(emailSubject(domanda, "JHT-1")).toContain("(domanda)");
+  });
+
+  it("senza tipo l'oggetto resta pulito", () => {
+    expect(emailSubject(parseReport(VALID)!, "JHT-1")).not.toContain("(");
+  });
+
+  it("riconosce il campo trappola compilato", () => {
+    expect(sembraSpam({ ...VALID, website: "http://spam.example" })).toBe(true);
+  });
+
+  it("non scambia per spam un invio umano", () => {
+    // Il campo esiste ma resta vuoto: e' quello che fa un browser vero.
+    expect(sembraSpam({ ...VALID, website: "" })).toBe(false);
+    expect(sembraSpam(VALID)).toBe(false);
+    expect(sembraSpam(null)).toBe(false);
   });
 });
