@@ -14,6 +14,38 @@ const SSH_TIMEOUT := 8
 const CHAT_MARK := "---JHT-CHAT---"
 const THROTTLE_MARK := "---JHT-THROTTLE---"
 
+
+## Known-hosts dedicato per singolo server. SetupService lo popola da
+## ssh-keyscan PRIMA del primo login; tutti i trasporti successivi usano
+## StrictHostKeyChecking=yes, quindi un cambio chiave diventa un errore netto.
+static func known_hosts_path(host: String) -> String:
+	var root := OS.get_environment("JHT_HOME")
+	if root == "":
+		root = (OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" \
+				else OS.get_environment("HOME")).path_join(".jht")
+	return root.path_join("ssh/known_hosts/" + host.sha256_text())
+
+
+static func ensure_known_host(host: String) -> Dictionary:
+	var path := known_hosts_path(host)
+	if FileAccess.file_exists(path):
+		return {"ok": true, "path": path}
+	var output: Array = []
+	var code := OS.execute("ssh-keyscan", ["-T", "5", "-t", "ed25519", host],
+			output, true)
+	var raw := "\n".join(PackedStringArray(output)).strip_edges()
+	if code != 0 or raw == "":
+		return {"ok": false, "message": "chiave host SSH non disponibile"}
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return {"ok": false, "message": "known-hosts non scrivibile"}
+	file.store_string(raw + "\n")
+	file.close()
+	if OS.get_name() != "Windows":
+		OS.execute("chmod", ["600", path])
+	return {"ok": true, "path": path}
+
 ## Stato EFFETTIVO del turno, non semplice presenza tmux. Le tre TUI
 ## supportate mostrano un marker di interrupt mentre il modello/tool sta
 ## lavorando; quando il composer è fermo il marker sparisce. In dubbio si
@@ -1116,6 +1148,10 @@ func start(config: Dictionary) -> void:
 		bus.publish_state(BackendBus.ERROR,
 				"client OpenSSH non installato o non presente nel PATH")
 		return
+	var pinned := ensure_known_host(_ip)
+	if not bool(pinned.get("ok", false)):
+		bus.publish_state(BackendBus.ERROR, str(pinned.get("message", "errore fingerprint SSH")))
+		return
 	bus.publish_state(BackendBus.CONNECTING, "handshake ssh con %s…" % _ip)
 	_stop = false
 	_thread = Thread.new()
@@ -2164,7 +2200,8 @@ func _ssh_stdin_file(local_file: String, remote_cmd: String) -> Dictionary:
 		"-o", "BatchMode=yes",
 		"-o", "IdentitiesOnly=yes",
 		"-o", "ConnectTimeout=%d" % SSH_TIMEOUT,
-		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "StrictHostKeyChecking=yes",
+		"-o", "UserKnownHostsFile=" + known_hosts_path(_ip),
 		"%s@%s" % [_user, _ip],
 		remote_cmd + " 1>&2",
 	])
@@ -2206,7 +2243,8 @@ func _ssh(remote_cmd: String) -> Dictionary:
 		"-o", "BatchMode=yes",
 		"-o", "IdentitiesOnly=yes",
 		"-o", "ConnectTimeout=%d" % SSH_TIMEOUT,
-		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "StrictHostKeyChecking=yes",
+		"-o", "UserKnownHostsFile=" + known_hosts_path(_ip),
 		"%s@%s" % [_user, _ip],
 		remote_cmd,
 	], out, true)
