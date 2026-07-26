@@ -14,16 +14,7 @@
 
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
-
-const LOCALE_TAG: Record<Locale, string> = {
-  it: "it-IT",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  de: "de-DE",
-  hu: "hu-HU",
-  pt: "pt-PT",
-};
+import { intlTag } from "@/lib/locale-tag";
 
 const T: Record<
   Locale,
@@ -189,7 +180,7 @@ export default function CostPerOutcome({
 }) {
   const locale = useLocale();
   const t = T[locale];
-  const tag = LOCALE_TAG[locale];
+  const tag = intlTag(locale);
   const nf = (n: number) => Math.round(n).toLocaleString(tag);
   const eur = (n: number, dp: number) =>
     new Intl.NumberFormat(tag, {

@@ -6,16 +6,7 @@ import { useEffect, useState, useCallback } from "react";
 import AgentInteraction from "@/components/AgentInteraction";
 import { useLocale } from "@/lib/use-locale";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
-
-const LOCALE_TAG: Record<string, string> = {
-  it: "it-IT",
-  en: "en-GB",
-  hu: "hu-HU",
-  es: "es-ES",
-  de: "de-DE",
-  fr: "fr-FR",
-  pt: "pt-PT",
-};
+import { intlTag } from "@/lib/locale-tag";
 
 const T: Record<string, Record<string, string>> = {
   fetchError: {
@@ -491,7 +482,7 @@ function VerdictBadge({ verdict }: { verdict: string | null }) {
 export default function CriticoPage() {
   const locale = useLocale();
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
-  const localeTag = LOCALE_TAG[locale] ?? "en-GB";
+  const localeTag = intlTag(locale);
   const [live, setLive] = useState<LiveData | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);

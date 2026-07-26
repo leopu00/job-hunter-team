@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLocale } from "@/lib/use-locale";
+import { SIZE, CX, CY, arc } from "@/lib/donut-geometry";
 import type { Locale } from "@/i18n/config";
 import type { RoleFamilyCount } from "@/lib/position-classifier";
 
@@ -56,48 +57,6 @@ type Props = {
   selectedTypes?: string[];
   onToggleType?: (t: string) => void;
 };
-
-const SIZE = 130;
-const RADIUS = 52;
-const INNER = 30;
-const CX = SIZE / 2;
-const CY = SIZE / 2;
-
-function arc(startAngle: number, endAngle: number): string {
-  const span = endAngle - startAngle;
-  if (span >= 2 * Math.PI - 1e-6) {
-    const xR = CX + RADIUS;
-    const xL = CX - RADIUS;
-    const yC = CY;
-    const xRi = CX + INNER;
-    const xLi = CX - INNER;
-    return [
-      `M ${xR} ${yC}`,
-      `A ${RADIUS} ${RADIUS} 0 1 1 ${xL} ${yC}`,
-      `A ${RADIUS} ${RADIUS} 0 1 1 ${xR} ${yC}`,
-      `M ${xRi} ${yC}`,
-      `A ${INNER} ${INNER} 0 1 0 ${xLi} ${yC}`,
-      `A ${INNER} ${INNER} 0 1 0 ${xRi} ${yC}`,
-      "Z",
-    ].join(" ");
-  }
-  const x1 = CX + RADIUS * Math.cos(startAngle);
-  const y1 = CY + RADIUS * Math.sin(startAngle);
-  const x2 = CX + RADIUS * Math.cos(endAngle);
-  const y2 = CY + RADIUS * Math.sin(endAngle);
-  const xi2 = CX + INNER * Math.cos(endAngle);
-  const yi2 = CY + INNER * Math.sin(endAngle);
-  const xi1 = CX + INNER * Math.cos(startAngle);
-  const yi1 = CY + INNER * Math.sin(startAngle);
-  const large = span > Math.PI ? 1 : 0;
-  return [
-    `M ${x1} ${y1}`,
-    `A ${RADIUS} ${RADIUS} 0 ${large} 1 ${x2} ${y2}`,
-    `L ${xi2} ${yi2}`,
-    `A ${INNER} ${INNER} 0 ${large} 0 ${xi1} ${yi1}`,
-    "Z",
-  ].join(" ");
-}
 
 export default function PositionTypesDonut({
   data,

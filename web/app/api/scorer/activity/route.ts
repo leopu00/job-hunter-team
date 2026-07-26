@@ -1,20 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { localWorkspace } from "@/lib/local-workspace";
+import { readLocalOr } from "@/lib/local-workspace";
 import { getScorerActivityLocal } from "@/lib/local-queries";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   // Local-only (host localhost + jobs.db): leggi dal DB locale, mai Supabase.
-  const ws = await localWorkspace();
-  if (ws) {
-    try {
-      return NextResponse.json(getScorerActivityLocal(ws));
-    } catch (err) {
-      console.error("[scorer/activity] local", err);
-    }
-  }
+  const fromLocal = await readLocalOr("scorer/activity", getScorerActivityLocal);
+  if (fromLocal !== null) return NextResponse.json(fromLocal);
   try {
     const supabase = await createClient();
 

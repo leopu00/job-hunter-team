@@ -6,16 +6,7 @@ import AgentInteraction from "@/components/AgentInteraction";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
-
-const LOCALE_TAG: Record<Locale, string> = {
-  it: "it-IT",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  de: "de-DE",
-  hu: "hu-HU",
-  pt: "pt-PT",
-};
+import { intlTag } from "@/lib/locale-tag";
 
 const T: Record<
   Locale,
@@ -464,7 +455,7 @@ function CompletedItem({ p }: { p: PositionItem }) {
 export default function ScrittorePage() {
   const locale = useLocale();
   const t = T[locale];
-  const localeTag = LOCALE_TAG[locale] ?? "en-US";
+  const localeTag = intlTag(locale);
   const itemLabels: ItemLabels = {
     remote: t.remote,
     inWriting: t.inWriting,

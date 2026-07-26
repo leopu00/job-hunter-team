@@ -18,6 +18,7 @@ import {
 import ProviderStats from "./ProviderStats";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
+import { intlTag } from "@/lib/locale-tag";
 
 export const dynamic = "force-dynamic";
 
@@ -25,16 +26,6 @@ export const metadata = {
   title: "Case studies · Job Hunter Team",
   description:
     "Dati reali e anonimi di team di agenti Job Hunter Team in esecuzione su profili veri. Guarda i risultati, e contribuisci con i tuoi dati.",
-};
-
-const LOCALE_TAG: Record<Locale, string> = {
-  it: "it-IT",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  de: "de-DE",
-  hu: "hu-HU",
-  pt: "pt-PT",
 };
 
 const T: Record<
@@ -666,7 +657,7 @@ const T: Record<
 export default async function CaseStudiesIndexPage() {
   const locale = await getRequestLocale();
   const t = T[locale];
-  const nf = (n: number): string => n.toLocaleString(LOCALE_TAG[locale]);
+  const nf = (n: number): string => n.toLocaleString(intlTag(locale));
   const localized = CASE_STUDIES.map((cs) => localizeCaseStudy(cs, locale));
 
   // ── Statistiche PER PROVIDER ────────────────────────────────────────────

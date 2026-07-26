@@ -40,6 +40,7 @@ import {
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 import { demoCompanyFor } from "./seeds/companies";
+import type { Verdict } from "@/lib/position-verdict";
 import {
   getDemoPositionsData,
   type DemoPosition,
@@ -463,10 +464,10 @@ export async function demoLatestFeedbackForLegacyId(
 }
 
 export async function demoVerdictMapByLegacyId(): Promise<
-  Record<string, "top" | "review_ok" | "review_low" | "no">
+  Record<string, Verdict>
 > {
   const fb = await readDemoFeedback();
-  const out: Record<string, "top" | "review_ok" | "review_low" | "no"> = {};
+  const out: Record<string, Verdict> = {};
   for (const [k, e] of Object.entries(fb)) out[k] = demoVerdictOf(e);
   return out;
 }

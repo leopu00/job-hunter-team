@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { FLAGS } from "@/app/components/LanguageSwitcher";
+import { FLAGS } from "@/app/components/LocaleFlags";
 import { localeLabels, type Locale } from "@/i18n/config";
 import { useLocale } from "@/lib/use-locale";
 import { AVAILABLE_CURRENCIES, currencySymbol } from "@/lib/exchange-rates";

@@ -6,6 +6,7 @@ import AgentInteraction from "@/components/AgentInteraction";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { intlTag } from "@/lib/locale-tag";
 
 type Position = {
   id: number;
@@ -136,16 +137,6 @@ const CAT_LABELS: Record<Locale, Record<string, string>> = {
     CRITICO: "Nota do crítico",
     NON_CATEGORIZZATA: "Não categorizada",
   },
-};
-
-const LOCALE_TAG: Record<Locale, string> = {
-  it: "it-IT",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  de: "de-DE",
-  hu: "hu-HU",
-  pt: "pt-PT",
 };
 
 const T: Record<
@@ -542,7 +533,7 @@ function DonutChart({
 export default function AnalistaPage() {
   const locale = useLocale();
   const t = T[locale];
-  const localeTag = LOCALE_TAG[locale] ?? "en-US";
+  const localeTag = intlTag(locale);
   const catLabels = CAT_LABELS[locale] ?? CAT_LABELS.en;
   const [data, setData] = useState<AnalistaActivity | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);

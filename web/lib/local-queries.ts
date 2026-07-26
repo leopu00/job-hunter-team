@@ -596,23 +596,15 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
 }
 
 // ── Tree gerarchico location (country → cities → positions) ──────
-// Allineato a queries.ts (Supabase). Usa loc_country/loc_city strutturati.
-export type LocationPositionLite = {
-  id: string;
-  title: string | null;
-  company: string | null;
-  score: number | null;
-};
-export type LocationCity = {
-  city: string | null;
-  count: number;
-  positions: LocationPositionLite[];
-};
-export type LocationCountry = {
-  country: string;
-  count: number;
-  cities: LocationCity[];
-};
+// Stessa forma prodotta da queries.ts (Supabase): il tipo vive in
+// lib/types.ts perché le due corsie devono restituire la stessa cosa.
+// Usa loc_country/loc_city strutturati.
+import type {
+  LocationPositionLite,
+  LocationCity,
+  LocationCountry,
+} from "@/lib/types";
+export type { LocationPositionLite, LocationCity, LocationCountry };
 
 export function getPositionLocationsLocal(ws: string): LocationCountry[] {
   const db = getDb(ws);

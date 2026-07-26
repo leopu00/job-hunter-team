@@ -23,7 +23,13 @@ import {
 // Il popup è renderizzato in un PORTAL su document.body: la pagina ha
 // un'animazione con transform che diventa containing block per i fixed —
 // senza portal il popup si ancorava alla card, non al viewport (bug 22/07).
-export type Verdict = "no" | "review_low" | "review_ok" | "top";
+import {
+  VERDICT_ORDER,
+  VERDICT_SIGNAL,
+  type Verdict,
+  type VerdictSignal,
+} from "@/lib/position-verdict";
+export type { Verdict };
 
 type ReasonKey =
   | "closed"
@@ -41,50 +47,31 @@ const REASON_ORDER: ReasonKey[] = [
   "closed",
 ];
 
+// Segnale (che cosa si spedisce) da lib/position-verdict; qui sopra solo
+// icona e colore, che sono presentazione.
 const VERDICTS: Record<
   Verdict,
-  {
+  VerdictSignal & {
     Icon: (p: { size?: number }) => React.ReactElement;
     color: string;
-    action: "like" | "dislike" | "star";
-    score: number;
-    direction: "more_like_this" | "less_like_this" | null;
-    exclude?: boolean;
   }
 > = {
-  no: {
-    Icon: IconX,
-    color: "var(--color-red)",
-    action: "dislike",
-    score: 1,
-    direction: "less_like_this",
-    exclude: true,
-  },
+  no: { ...VERDICT_SIGNAL.no, Icon: IconX, color: "var(--color-red)" },
   review_low: {
+    ...VERDICT_SIGNAL.review_low,
     Icon: IconThumbsMeh,
     color: "var(--color-orange)",
-    action: "like",
-    score: 2,
-    direction: null,
   },
   review_ok: {
+    ...VERDICT_SIGNAL.review_ok,
     Icon: IconThumbsUp,
     color: "var(--color-blue)",
-    action: "like",
-    score: 4,
-    direction: "more_like_this",
   },
-  top: {
-    Icon: IconStar,
-    // Giallo oro come in SwipeDeck: stella = oro ovunque (21/07).
-    color: "var(--color-yellow)",
-    action: "star",
-    score: 5,
-    direction: "more_like_this",
-  },
+  // Giallo oro: la stella è oro ovunque (21/07).
+  top: { ...VERDICT_SIGNAL.top, Icon: IconStar, color: "var(--color-yellow)" },
 };
 
-const ORDER: Verdict[] = ["no", "review_low", "review_ok", "top"];
+const ORDER = VERDICT_ORDER;
 
 const T: Record<
   Locale,

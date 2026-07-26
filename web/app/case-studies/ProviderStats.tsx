@@ -12,16 +12,7 @@
 import { useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
-
-const LOCALE_TAG: Record<Locale, string> = {
-  it: "it-IT",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  de: "de-DE",
-  hu: "hu-HU",
-  pt: "pt-PT",
-};
+import { intlTag } from "@/lib/locale-tag";
 
 export type ProviderRow = {
   key: string; // found | scored | strong70 | strong80
@@ -299,7 +290,7 @@ export default function ProviderStats({
   providers: ProviderData[];
 }) {
   const locale = useLocale();
-  const tag = LOCALE_TAG[locale];
+  const tag = intlTag(locale);
   const t = T[locale];
   const stage = STAGE[locale];
   const [sel, setSel] = useState(providers[0]?.id ?? "");

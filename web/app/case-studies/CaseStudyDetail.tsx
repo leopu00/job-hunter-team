@@ -27,6 +27,7 @@ import ConversionFunnelCard from "./ConversionFunnelCard";
 import CostPerOutcome from "./CostPerOutcome";
 import DailyHighScore from "./DailyHighScore";
 import { caseMonthlyProjection } from "@/lib/case-studies";
+import { intlTag } from "@/lib/locale-tag";
 
 export interface PreparedCase {
   id: string;
@@ -52,21 +53,11 @@ export interface CaseRef {
   badge: string;
 }
 
-const LOCALE_TAG: Record<Locale, string> = {
-  it: "it-IT",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  de: "de-DE",
-  hu: "hu-HU",
-  pt: "pt-PT",
-};
-
 // Abbreviazioni dei mesi localizzate (gen…dic) via Intl, con il tag locale.
 function monthShort(locale: Locale, monthIndex0: number): string {
   // 2021 = anno qualunque; usiamo il giorno 1 di ogni mese.
   const d = new Date(Date.UTC(2021, monthIndex0, 1));
-  return new Intl.DateTimeFormat(LOCALE_TAG[locale], {
+  return new Intl.DateTimeFormat(intlTag(locale), {
     month: "short",
     timeZone: "UTC",
   }).format(d);
@@ -78,14 +69,14 @@ function dayLabel(locale: Locale, key: string): string {
 }
 
 function nf(locale: Locale, n: number): string {
-  return n.toLocaleString(LOCALE_TAG[locale]);
+  return n.toLocaleString(intlTag(locale));
 }
 
 // Abbreviazioni dei giorni della settimana localizzate (lun…dom) via Intl.
 // 2021-08-02 era un lunedì → offset 0..6 = lun..dom.
 function dowLabels(locale: Locale): Record<string, string> {
   const keys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-  const fmt = new Intl.DateTimeFormat(LOCALE_TAG[locale], {
+  const fmt = new Intl.DateTimeFormat(intlTag(locale), {
     weekday: "short",
     timeZone: "UTC",
   });

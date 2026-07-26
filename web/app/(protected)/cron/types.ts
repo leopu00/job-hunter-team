@@ -1,76 +1,24 @@
-export type ScheduleKind = "cron" | "every" | "at";
+// I tipi del dominio cron vivono accanto allo store che li produce
+// (`lib/cron-store.ts`), condiviso con le route API. Qui restano solo le
+// funzioni di presentazione, che sono roba di UI.
+export type {
+  ScheduleKind,
+  ScheduleCron,
+  ScheduleEvery,
+  ScheduleAt,
+  CronSchedule,
+  CronPayload,
+  CronJobState,
+  CronJob,
+  CronListResponse,
+  CronJobCreateInput,
+} from "@/lib/cron-store";
 
-export interface ScheduleCron {
-  kind: "cron";
-  expr: string;
-  tz?: string;
-}
-export interface ScheduleEvery {
-  kind: "every";
-  everyMs: number;
-  anchorMs?: number;
-}
-export interface ScheduleAt {
-  kind: "at";
-  at: string;
-}
-export type CronSchedule = ScheduleCron | ScheduleEvery | ScheduleAt;
-
-export interface CronPayload {
-  kind: "command";
-  command: string;
-  timeoutSeconds?: number;
-}
-
-export interface CronJobState {
-  nextRunAtMs?: number;
-  lastRunAtMs?: number;
-  lastRunStatus?: "ok" | "error" | "skipped";
-  lastError?: string;
-  lastDurationMs?: number;
-  consecutiveErrors?: number;
-}
-
-export interface CronJob {
-  id: string;
-  name: string;
-  description?: string;
-  enabled: boolean;
-  deleteAfterRun?: boolean;
-  createdAtMs: number;
-  updatedAtMs: number;
-  schedule: CronSchedule;
-  payload: CronPayload;
-  state: CronJobState;
-}
-
-/** Ritornato dall'API GET /api/cron */
-export interface CronListResponse {
-  jobs: CronJob[];
-}
-
-/** Input per la creazione di un nuovo job */
-export interface CronJobCreateInput {
-  name: string;
-  description?: string;
-  enabled: boolean;
-  schedule: CronSchedule;
-  payload: CronPayload;
-  deleteAfterRun?: boolean;
-}
+import type { CronSchedule } from "@/lib/cron-store";
+import { intlTag } from "@/lib/locale-tag";
 
 /* ── i18n per le label della schedule (usate dalla UI) ───────────── */
 type CronLocale = "it" | "en" | "hu" | "es" | "de" | "fr" | "pt";
-
-const LOCALE_TAG: Record<string, string> = {
-  it: "it-IT",
-  en: "en-US",
-  hu: "hu-HU",
-  es: "es-ES",
-  de: "de-DE",
-  fr: "fr-FR",
-  pt: "pt-PT",
-};
 
 interface CronStrings {
   every: (n: number) => string;
@@ -157,7 +105,7 @@ export function nextRunLabel(ms: number | undefined, locale = "it"): string {
   if (diff < 0) return t.running;
   if (diff < 60_000) return t.inSeconds(Math.round(diff / 1000));
   if (diff < 3_600_000) return t.inMinutes(Math.round(diff / 60_000));
-  return d.toLocaleString(LOCALE_TAG[locale] ?? "en-US", {
+  return d.toLocaleString(intlTag(locale), {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
