@@ -67,6 +67,10 @@ NOT_APPLICABLE = {
     'chat_unread_count': 'UI', 'total_chat_unread': 'UI',
     'can_chat_with': 'UI', 'chat_replies': 'UI', 'is_live': 'UI',
     'to_eur': 'UI',
+    # `is_remote`: dice se il bus parla con la VPS o col container locale, e la
+    # leggono il badge della simulazione e il pannello di setup. Da CLI non ha
+    # senso chiederlo — il CLI gira DENTRO il container di cui è la risposta.
+    'is_remote': 'UI',
     # `publish_*`: il bus che consegna dati alla scena. Direzione opposta —
     # backend → UI — quindi non c'è niente da invocare da CLI.
     'publish_agent_terminal': 'bus', 'publish_coordinator_state': 'bus',
