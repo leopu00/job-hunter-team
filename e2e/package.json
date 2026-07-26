@@ -10,7 +10,7 @@
     "test:report": "playwright show-report reports/playwright"
   },
   "keywords": [],
-  "author": "Leone Emanuel Puglisi <leopu00@gmail.com>",
+  "author": "Leone Emanuel Puglisi <support@jobhunterteam.ai>",
   "license": "MIT",
   "type": "commonjs",
   "devDependencies": {

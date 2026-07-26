@@ -34,7 +34,7 @@ const T = {
     s6_body:
       "Ci riserviamo il diritto di aggiornare questi termini in qualsiasi momento. Le modifiche saranno pubblicate su questa pagina con la data di aggiornamento.",
     s7_title: "Contatti",
-    s7_body: "Per domande sui termini di servizio, scrivi a leopu00@gmail.com.",
+    s7_body: "Per domande sui termini di servizio, scrivi a support@jobhunterteam.ai.",
     nav_home: "Home",
     nav_terms: "Termini",
     nav_privacyPolicy: "Privacy Policy",
@@ -64,7 +64,7 @@ const T = {
       "We reserve the right to update these terms at any time. Changes will be posted on this page with the update date.",
     s7_title: "Contact",
     s7_body:
-      "For questions about the terms of service, write to leopu00@gmail.com.",
+      "For questions about the terms of service, write to support@jobhunterteam.ai.",
     nav_home: "Home",
     nav_terms: "Terms",
     nav_privacyPolicy: "Privacy Policy",
@@ -94,7 +94,7 @@ const T = {
       "Fenntartjuk a jogot, hogy bármikor frissítsük ezeket a feltételeket. A változások ezen az oldalon lesznek közzétéve a frissítés dátumával.",
     s7_title: "Kapcsolat",
     s7_body:
-      "A szolgáltatási feltételekkel kapcsolatos kérdések esetén írj az leopu00@gmail.com címre.",
+      "A szolgáltatási feltételekkel kapcsolatos kérdések esetén írj az support@jobhunterteam.ai címre.",
     nav_home: "Főoldal",
     nav_terms: "Feltételek",
     nav_privacyPolicy: "Adatvédelmi szabályzat",
@@ -124,7 +124,7 @@ const T = {
       "Nos reservamos el derecho de actualizar estos términos en cualquier momento. Los cambios se publicarán en esta página con la fecha de actualización.",
     s7_title: "Contacto",
     s7_body:
-      "Para preguntas sobre los términos del servicio, escribe a leopu00@gmail.com.",
+      "Para preguntas sobre los términos del servicio, escribe a support@jobhunterteam.ai.",
     nav_home: "Inicio",
     nav_terms: "Términos",
     nav_privacyPolicy: "Política de privacidad",
@@ -154,7 +154,7 @@ const T = {
       "Wir behalten uns das Recht vor, diese Bedingungen jederzeit zu aktualisieren. Änderungen werden auf dieser Seite mit dem Aktualisierungsdatum veröffentlicht.",
     s7_title: "Kontakt",
     s7_body:
-      "Bei Fragen zu den Nutzungsbedingungen schreibe an leopu00@gmail.com.",
+      "Bei Fragen zu den Nutzungsbedingungen schreibe an support@jobhunterteam.ai.",
     nav_home: "Startseite",
     nav_terms: "Bedingungen",
     nav_privacyPolicy: "Datenschutzrichtlinie",
@@ -184,7 +184,7 @@ const T = {
       "Nous nous réservons le droit de mettre à jour ces conditions à tout moment. Les modifications seront publiées sur cette page avec la date de mise à jour.",
     s7_title: "Contact",
     s7_body:
-      "Pour toute question concernant les conditions d'utilisation, écrivez à leopu00@gmail.com.",
+      "Pour toute question concernant les conditions d'utilisation, écrivez à support@jobhunterteam.ai.",
     nav_home: "Accueil",
     nav_terms: "Conditions",
     nav_privacyPolicy: "Politique de confidentialité",
@@ -214,7 +214,7 @@ const T = {
       "Reservamo-nos o direito de atualizar estes termos a qualquer momento. As alterações serão publicadas nesta página com a data de atualização.",
     s7_title: "Contacto",
     s7_body:
-      "Para questões sobre os termos de serviço, escreva para leopu00@gmail.com.",
+      "Para questões sobre os termos de serviço, escreva para support@jobhunterteam.ai.",
     nav_home: "Início",
     nav_terms: "Termos",
     nav_privacyPolicy: "Política de privacidade",
