@@ -67,6 +67,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip \
       tmux git bash curl ca-certificates \
+      # build-essential + pkg-config servono SOLO a compilare le wheel che pip
+      # non trova precompilate (lxml & co.) durante il `pip3 install` più sotto:
+      # sono rimossi nello STESSO layer del pip install (~250MB in meno
+      # nell'immagine finale). Non aggiungere qui roba che serve a runtime
+      # aspettandosi che sopravviva.
       build-essential pkg-config \
       libsqlite3-0 \
       tini \
@@ -130,6 +135,15 @@ RUN pip3 install --no-cache-dir -r requirements.txt \
     # install-deps runs its own apt-get update, so the apt lists cleaned
     # above are repopulated here; we clean them again to keep the layer slim.
     && playwright install --with-deps --only-shell chromium \
+    # Drop the C toolchain: it only existed to compile the wheels installed
+    # above (nothing in the runtime image compiles anything), and it is ~250MB.
+    # The purge MUST live in this same RUN: in a separate one the files would
+    # stay in the previous layer and the image would not shrink by a byte.
+    # autoremove sweeps the transitive dev packages (gcc, libc6-dev, …) that
+    # nothing else pulls in — packages installed explicitly above are flagged
+    # manual and survive it.
+    && apt-get purge -y build-essential pkg-config \
+    && apt-get autoremove -y --purge \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
