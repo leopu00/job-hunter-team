@@ -115,6 +115,26 @@ async function sessioneOrSkip(page: Page) {
   );
 }
 
+// Apre il dialogo dal menu utente. Menu e dialogo sono due passaggi distinti:
+// senza attendere che la voce sia davvero visibile il click parte mentre il
+// menu è ancora in apertura, e Playwright resta 30 secondi su un elemento che
+// non riceve eventi. Fallimento intermittente in CI il 2026-07-27 — lo stesso
+// test era passato in 2.4s quattordici minuti prima.
+async function apriDialogo(page: Page, da = "/dashboard") {
+  await page.goto(`${BASE}${da}`, { waitUntil: "domcontentloaded" });
+  const account = page.getByRole("button", { name: /account:/i });
+  await account.waitFor({ state: "visible" });
+  await account.click();
+  const voce = page.getByRole("menuitem", {
+    name: /segnala|report a problem|informar|signaler|problem melden|hiba|comunicar/i,
+  });
+  await voce.waitFor({ state: "visible" });
+  await voce.click();
+  const dialogo = page.getByRole("dialog");
+  await expect(dialogo).toBeVisible();
+  return dialogo;
+}
+
 test.describe("pagina pubblica /contact", () => {
   test("il modulo ha i campi che servono", async ({ page }) => {
     await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
@@ -218,16 +238,7 @@ test.describe("dialogo dell'area riservata", () => {
   });
 
   test("si apre dal menu utente e sa già chi sei", async ({ page }) => {
-    await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /account:/i }).click();
-    await page
-      .getByRole("menuitem", {
-        name: /segnala|report a problem|informar|signaler|problem melden|hiba|comunicar/i,
-      })
-      .click();
-
-    const dialogo = page.getByRole("dialog");
-    await expect(dialogo).toBeVisible();
+    const dialogo = await apriDialogo(page);
     // Niente campo email: chi scrive è autenticato, l'indirizzo lo sappiamo.
     await expect(dialogo.locator('input[type="email"]')).toHaveCount(0);
     await expect(dialogo.locator("#s-oggetto")).toBeVisible();
@@ -237,44 +248,21 @@ test.describe("dialogo dell'area riservata", () => {
   test("mostra la pagina che allega, invece di allegarla di nascosto", async ({
     page,
   }) => {
-    await page.goto(`${BASE}/positions`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /account:/i }).click();
-    await page
-      .getByRole("menuitem", {
-        name: /segnala|report a problem|informar|signaler|problem melden|hiba|comunicar/i,
-      })
-      .click();
+    const dialogo = await apriDialogo(page, "/positions");
     // È il contesto che rende un report riproducibile, e l'utente deve poterlo
     // leggere prima di premere invia.
-    await expect(
-      page.getByRole("dialog").getByText("/positions"),
-    ).toBeVisible();
+    await expect(dialogo.getByText("/positions")).toBeVisible();
   });
 
   test("si chiude con Escape", async ({ page }) => {
-    await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /account:/i }).click();
-    await page
-      .getByRole("menuitem", {
-        name: /segnala|report a problem|informar|signaler|problem melden|hiba|comunicar/i,
-      })
-      .click();
-    await expect(page.getByRole("dialog")).toBeVisible();
+    const dialogo = await apriDialogo(page);
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(dialogo).toHaveCount(0);
   });
 
   test("invio completo: conferma dentro il dialogo", async ({ page }) => {
     await invioPossibileOrSkip(page);
-    await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /account:/i }).click();
-    await page
-      .getByRole("menuitem", {
-        name: /segnala|report a problem|informar|signaler|problem melden|hiba|comunicar/i,
-      })
-      .click();
-
-    const dialogo = page.getByRole("dialog");
+    const dialogo = await apriDialogo(page);
     await dialogo.locator("#s-oggetto").fill("[e2e] invio dalla dashboard");
     await dialogo
       .locator("#s-msg")
