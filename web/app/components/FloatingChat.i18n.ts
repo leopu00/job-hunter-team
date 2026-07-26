@@ -1,0 +1,138 @@
+// Dizionario di `FloatingChat.tsx`.
+//
+// Le chiavi sono LOCALI a questo file: lo stesso nome può valere
+// tutt'altro altrove (`empty` è "nessun backup" in una pagina e
+// "nessun canale" in un'altra), quindi non vanno accorpate in un
+// dizionario comune. `satisfies Dictionary` fa pretendere al
+// compilatore tutte e sette le lingue: una voce a cui ne manca una
+// non compila, invece di mostrare l'inglese all'utente sbagliato.
+import type { Dictionary } from "@/lib/i18n-dict";
+
+export const T = {
+  close_chat: {
+    it: "Chiudi chat",
+    en: "Close chat",
+    hu: "Csevegés bezárása",
+    es: "Cerrar chat",
+    de: "Chat schließen",
+    fr: "Fermer le chat",
+    pt: "Fechar chat",
+  },
+  open_assistant: {
+    it: "Apri AI Assistant",
+    en: "Open AI Assistant",
+    hu: "AI Asszisztens megnyitása",
+    es: "Abrir AI Assistant",
+    de: "AI Assistant öffnen",
+    fr: "Ouvrir l'AI Assistant",
+    pt: "Abrir AI Assistant",
+  },
+  panel_label: {
+    it: "Chat AI Assistant",
+    en: "AI Assistant chat",
+    hu: "AI Asszisztens csevegés",
+    es: "Chat de AI Assistant",
+    de: "AI Assistant Chat",
+    fr: "Chat AI Assistant",
+    pt: "Chat do AI Assistant",
+  },
+  close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+  offline: {
+    it: "offline",
+    en: "offline",
+    hu: "offline",
+    es: "sin conexión",
+    de: "offline",
+    fr: "hors ligne",
+    pt: "offline",
+  },
+  online: {
+    it: "online",
+    en: "online",
+    hu: "online",
+    es: "en línea",
+    de: "online",
+    fr: "en ligne",
+    pt: "online",
+  },
+  not_active: {
+    it: "Chatbot non attivo: manca `OPENAI_API_KEY` sul server.",
+    en: "Chatbot not active: `OPENAI_API_KEY` is missing on the server.",
+    hu: "A chatbot nem aktív: hiányzik az `OPENAI_API_KEY` a szerveren.",
+    es: "Chatbot no activo: falta `OPENAI_API_KEY` en el servidor.",
+    de: "Chatbot nicht aktiv: `OPENAI_API_KEY` fehlt auf dem Server.",
+    fr: "Chatbot inactif : `OPENAI_API_KEY` est manquant sur le serveur.",
+    pt: "Chatbot inativo: falta `OPENAI_API_KEY` no servidor.",
+  },
+  intro: {
+    it: "Ti aiuto a capire la piattaforma e da dove iniziare.",
+    en: "I help you understand the platform and where to start.",
+    hu: "Segítek megérteni a platformot, és hogy hol kezdd.",
+    es: "Te ayudo a entender la plataforma y por dónde empezar.",
+    de: "Ich helfe dir, die Plattform zu verstehen und wo du anfangen sollst.",
+    fr: "Je vous aide à comprendre la plateforme et par où commencer.",
+    pt: "Ajudo você a entender a plataforma e por onde começar.",
+  },
+  thinking: {
+    it: "Sto pensando...",
+    en: "Thinking...",
+    hu: "Gondolkodom...",
+    es: "Pensando...",
+    de: "Ich denke nach...",
+    fr: "Réflexion...",
+    pt: "Pensando...",
+  },
+  placeholder_unconfigured: {
+    it: "Chatbot non configurato",
+    en: "Chatbot not configured",
+    hu: "A chatbot nincs beállítva",
+    es: "Chatbot no configurado",
+    de: "Chatbot nicht konfiguriert",
+    fr: "Chatbot non configuré",
+    pt: "Chatbot não configurado",
+  },
+  placeholder_message: {
+    it: "Scrivi un messaggio...",
+    en: "Write a message...",
+    hu: "Írj egy üzenetet...",
+    es: "Escribe un mensaje...",
+    de: "Schreibe eine Nachricht...",
+    fr: "Écrivez un message...",
+    pt: "Escreva uma mensagem...",
+  },
+  input_label: {
+    it: "Scrivi un messaggio all'assistente",
+    en: "Write a message to the assistant",
+    hu: "Írj üzenetet az asszisztensnek",
+    es: "Escribe un mensaje al asistente",
+    de: "Schreibe eine Nachricht an den Assistenten",
+    fr: "Écrivez un message à l'assistant",
+    pt: "Escreva uma mensagem ao assistente",
+  },
+  send: {
+    it: "Invia messaggio",
+    en: "Send message",
+    hu: "Üzenet küldése",
+    es: "Enviar mensaje",
+    de: "Nachricht senden",
+    fr: "Envoyer le message",
+    pt: "Enviar mensagem",
+  },
+  reply_error: {
+    it: "Il chatbot non è riuscito a rispondere in questo momento.",
+    en: "The chatbot was unable to respond at this time.",
+    hu: "A chatbot most nem tudott válaszolni.",
+    es: "El chatbot no pudo responder en este momento.",
+    de: "Der Chatbot konnte momentan nicht antworten.",
+    fr: "Le chatbot n'a pas pu répondre pour le moment.",
+    pt: "O chatbot não conseguiu responder neste momento.",
+  },
+} satisfies Dictionary;
