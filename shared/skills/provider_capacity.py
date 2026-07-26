@@ -67,7 +67,20 @@ _PROVIDER_SEEDS: dict[str, dict] = {
     "claude-max5": {"window_cap_pct_of_weekly": 15.0,
                     "natural_burn_pct_per_h":   2.50,
                     "confidence": "low"},
-    "kimi":        {"weekly_unlimited": True},
+    # Kimi NON è weekly-unlimited (correzione 2026-07-26). Tutti i piani a
+    # abbonamento (Moderato/Allegretto/Allegro/Vivace) hanno una quota
+    # settimanale OLTRE alla finestra rolling 5h — vedi `plan_registry.py`.
+    # Il ratio 23% è MISURATO sul run ThinkPad del 2026-07-26 (Allegretto):
+    # finestra 5h portata da 0 a 100% → weekly da 0 a 23%. Il rapporto è ~
+    # costante fra i tier (finestra e weekly scalano insieme col moltiplicatore),
+    # quindi vale un solo seed per il provider; il `window_ratio_meter` lo
+    # raffina appena ha storia.
+    # `natural_burn` è invece una STIMA, non una misura: quel run bruciava
+    # 9.5 %weekly/h ma con un roster gonfiato a mano (~8 sessioni vive);
+    # riportato a un roster normale di 3-4 worker viene ~4.6 %weekly/h.
+    "kimi":        {"window_cap_pct_of_weekly": 23.0,
+                    "natural_burn_pct_per_h":   4.60,
+                    "confidence": "low"},
 }
 
 # Soglia minima di "blend weight" per fidarsi dell'EMA invece del seed.
@@ -267,8 +280,10 @@ if __name__ == "__main__":
         ok("codex seed 17.0", get_window_cap_pct_of_weekly("codex") == 17.0)
         ok("openai seed 17.0", get_window_cap_pct_of_weekly("openai") == 17.0)
         ok("claude seed 15.0", get_window_cap_pct_of_weekly("claude") == 15.0)
-        ok("kimi → None senza osservazione (unlimited)",
-           get_window_cap_pct_of_weekly("kimi") is None)
+        # 2026-07-26: Kimi NON è più weekly-unlimited (403 "billing cycle" preso
+        # sul campo + quote settimanali dichiarate su tutti i piani).
+        ok("kimi seed 23.0 (misurato ThinkPad 2026-07-26)",
+           get_window_cap_pct_of_weekly("kimi") == 23.0)
         ok("provider sconosciuto → None",
            get_window_cap_pct_of_weekly("foobar") is None)
         # Data-driven override: se il daemon ha osservato un weekly cap per un
