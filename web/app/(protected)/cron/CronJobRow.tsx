@@ -3,6 +3,8 @@
 import { useLocale } from "@/lib/use-locale";
 import type { CronJob } from "./types";
 import { scheduleLabel, nextRunLabel } from "./types";
+import { makeT } from "@/lib/i18n-dict";
+import { T } from "./CronJobRow.i18n";
 
 interface Props {
   job: CronJob;
@@ -16,57 +18,9 @@ const STATUS_COLOR: Record<string, string> = {
   skipped: "var(--color-yellow)",
 };
 
-const T: Record<string, Record<string, string>> = {
-  pause: {
-    it: "pausa",
-    en: "pause",
-    hu: "szünet",
-    es: "pausar",
-    de: "Pause",
-    fr: "pause",
-    pt: "pausar",
-  },
-  resume: {
-    it: "riprendi",
-    en: "resume",
-    hu: "folytatás",
-    es: "reanudar",
-    de: "fortsetzen",
-    fr: "reprendre",
-    pt: "retomar",
-  },
-  delete: {
-    it: "elimina",
-    en: "delete",
-    hu: "törlés",
-    es: "eliminar",
-    de: "löschen",
-    fr: "supprimer",
-    pt: "excluir",
-  },
-  next: {
-    it: "prossima:",
-    en: "next:",
-    hu: "következő:",
-    es: "próxima:",
-    de: "nächste:",
-    fr: "prochaine :",
-    pt: "próxima:",
-  },
-  last: {
-    it: "ultimo:",
-    en: "last:",
-    hu: "utolsó:",
-    es: "último:",
-    de: "letzter:",
-    fr: "dernier :",
-    pt: "último:",
-  },
-};
-
 export function CronJobRow({ job, onToggle, onDelete }: Props) {
   const locale = useLocale();
-  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const tr = makeT(T, locale);
   const statusColor = job.state.lastRunStatus
     ? STATUS_COLOR[job.state.lastRunStatus]
     : "var(--color-dim)";

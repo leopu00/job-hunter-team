@@ -99,15 +99,25 @@ describe("jht reset CLI", () => {
 /* ── FloatingChat ── */
 describe("FloatingChat", () => {
   const src = readSrc("app/components/FloatingChat.tsx");
+  // Le stringhe tradotte non stanno più nel componente ma nel dizionario
+  // accanto: qui si verifica che il componente CHIEDA quelle voci, non che
+  // le contenga: il testo italiano è materia del dizionario.
+  const dict = readSrc("app/components/FloatingChat.i18n.ts");
   it("export default FloatingChat + Message/Suggestion types + chat-slide-up", () => {
     expect(src).toMatch(/export default function FloatingChat/);
     expect(src).toContain("type Message"); expect(src).toContain("type Suggestion");
     expect(src).toContain("chat-slide-up");
   });
-  it("fetchHistory + send + suggestions + 'Sto pensando' + Enter + aria-label", () => {
+  it("fetchHistory + send + suggestions + stato 'sta pensando' + Enter + aria-label", () => {
     expect(src).toContain("fetchHistory"); expect(src).toContain("const send");
-    expect(src).toContain("suggestions"); expect(src).toContain("Sto pensando");
-    expect(src).toContain("'Enter'"); expect(src).toContain("Apri AI Assistant");
+    expect(src).toContain("suggestions");
+    expect(src).toContain('tr("thinking")');
+    expect(src).toContain("'Enter'");
+    expect(src).toContain('tr("open_assistant")');
+  });
+  it("il dizionario traduce le voci che il componente chiede", () => {
+    expect(dict).toContain("Sto pensando");
+    expect(dict).toContain("Apri AI Assistant");
   });
 });
 

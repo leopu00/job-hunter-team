@@ -6,104 +6,12 @@ import { useLocale } from "@/lib/use-locale";
 import type { CronJob, CronListResponse } from "./types";
 import { CronJobRow } from "./CronJobRow";
 import { CronForm } from "./CronForm";
-
-/* ── i18n inline ─────────────────────────────────────────────────── */
-const T: Record<string, Record<string, string>> = {
-  err_load: {
-    it: "Errore caricamento",
-    en: "Loading error",
-    hu: "Betöltési hiba",
-    es: "Error de carga",
-    de: "Ladefehler",
-    fr: "Erreur de chargement",
-    pt: "Erro de carregamento",
-  },
-  loading: {
-    it: "Caricamento…",
-    en: "Loading…",
-    hu: "Betöltés…",
-    es: "Cargando…",
-    de: "Wird geladen…",
-    fr: "Chargement…",
-    pt: "Carregando…",
-  },
-  subtitle: {
-    it: "{a} attivi · {p} in pausa",
-    en: "{a} active · {p} paused",
-    hu: "{a} aktív · {p} szüneteltetve",
-    es: "{a} activos · {p} en pausa",
-    de: "{a} aktiv · {p} pausiert",
-    fr: "{a} actifs · {p} en pause",
-    pt: "{a} ativos · {p} em pausa",
-  },
-  cancel: {
-    it: "Annulla",
-    en: "Cancel",
-    hu: "Mégse",
-    es: "Cancelar",
-    de: "Abbrechen",
-    fr: "Annuler",
-    pt: "Cancelar",
-  },
-  new_job: {
-    it: "+ Nuovo job",
-    en: "+ New job",
-    hu: "+ Új feladat",
-    es: "+ Nueva tarea",
-    de: "+ Neuer Job",
-    fr: "+ Nouvelle tâche",
-    pt: "+ Nova tarefa",
-  },
-  new_job_title: {
-    it: "Nuovo job",
-    en: "New job",
-    hu: "Új feladat",
-    es: "Nueva tarea",
-    de: "Neuer Job",
-    fr: "Nouvelle tâche",
-    pt: "Nova tarefa",
-  },
-  active_jobs: {
-    it: "Job attivi",
-    en: "Active jobs",
-    hu: "Aktív feladatok",
-    es: "Tareas activas",
-    de: "Aktive Jobs",
-    fr: "Tâches actives",
-    pt: "Tarefas ativas",
-  },
-  refresh_8s: {
-    it: "aggiornamento ogni 8s",
-    en: "refresh every 8s",
-    hu: "frissítés 8 mp-enként",
-    es: "actualización cada 8s",
-    de: "Aktualisierung alle 8 Sek.",
-    fr: "actualisation toutes les 8s",
-    pt: "atualização a cada 8s",
-  },
-  empty: {
-    it: "Nessun job configurato.",
-    en: "No jobs configured.",
-    hu: "Nincs konfigurált feladat.",
-    es: "Ninguna tarea configurada.",
-    de: "Keine Jobs konfiguriert.",
-    fr: "Aucune tâche configurée.",
-    pt: "Nenhuma tarefa configurada.",
-  },
-  empty_hint: {
-    it: 'Usa "+ Nuovo job" per crearne uno.',
-    en: 'Use "+ New job" to create one.',
-    hu: 'Használd a "+ Új feladat" gombot egy létrehozásához.',
-    es: 'Usa "+ Nueva tarea" para crear una.',
-    de: 'Nutze "+ Neuer Job", um einen zu erstellen.',
-    fr: 'Utilisez "+ Nouvelle tâche" pour en créer une.',
-    pt: 'Use "+ Nova tarefa" para criar uma.',
-  },
-};
+import { makeT } from "@/lib/i18n-dict";
+import { T } from "./page.i18n";
 
 export default function CronPage() {
   const locale = useLocale();
-  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const tr = makeT(T, locale);
   const [jobs, setJobs] = useState<CronJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
