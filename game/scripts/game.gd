@@ -75,6 +75,8 @@ func _notification(what: int) -> void:
 ## Gli agenti girano nel container, non nel gioco, e continuavano a lavorare —
 ## consumando token — con la finestra chiusa e nessun avviso (25/07).
 var _quitting := false
+var _quit_done := false
+var _shutdown_task := -1
 
 ## Chiedere prima di interrompere: se ci sono agenti al lavoro l'utente decide
 ## se farli chiudere in ordine (il Capitano fa annotare a tutti dove erano
@@ -118,13 +120,25 @@ func _do_quit() -> void:
 		if setup != null and setup.has_method("shutdown_team"):
 			setup.call("shutdown_team")
 		call_deferred("_quit_now")
-	WorkerThreadPool.add_task(task)
+	_shutdown_task = WorkerThreadPool.add_task(task)
 	# Rete di sicurezza: se docker non risponde non si resta in ostaggio del velo.
 	await get_tree().create_timer(20.0).timeout
 	_quit_now()
 
 
+## Uscire NON è solo chiamare quit(): il thread di spegnimento può essere
+## ancora dentro `docker stop`, e distruggergli l'albero sotto i piedi fa
+## abortire il processo (SIGABRT "corrupted size vs. prev_size", ThinkPad
+## 26/07 — il team si fermava correttamente, ma il gioco moriva male invece
+## di chiudersi). Lo si aspetta sempre, anche quando è la rete di sicurezza
+## dei 20 secondi a portarci qui.
 func _quit_now() -> void:
+	if _quit_done:
+		return
+	_quit_done = true
+	if _shutdown_task != -1:
+		WorkerThreadPool.wait_for_task_completion(_shutdown_task)
+		_shutdown_task = -1
 	if is_inside_tree():
 		get_tree().quit()
 
