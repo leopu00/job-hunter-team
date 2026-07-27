@@ -121,6 +121,35 @@ def _is_worker(agent) -> bool:
     return base in _WORKER_ROLES
 
 
+# Esenzione PER SINGOLO AGENTE dal worker floor, un nome per riga in
+# `$JHT_HOME/config/throttle-floor-exempt.txt` (righe `#` = commento).
+# Esiste per un caso solo: un esperimento a termine in cui si vuole misurare
+# cosa produce UN worker senza pause, tenendo il floor su tutti gli altri.
+# ⚠️ Non è un interruttore generale — è deliberatamente per-agente, perché il
+# floor nasce da un incidente misurato (il marathon di uno Scout, ~308kT per 3
+# posizioni) e toglierlo a tutti riproduce la configurazione della burn
+# notturna del 2026-07-15, dove floor e hard-stop erano entrambi off.
+# Il file va rimosso a esperimento finito: nessuno lo scade al posto tuo.
+_FLOOR_EXEMPT_FILE = CONFIG_DIR / "throttle-floor-exempt.txt"
+
+
+def _floor_exempt(agent) -> bool:
+    """True se l'agente è elencato nel file di esenzione. Robusta per
+    costruzione: qualunque errore di lettura lascia il floor attivo — la
+    direzione sicura è tenere il freno, non toglierlo."""
+    try:
+        if not _FLOOR_EXEMPT_FILE.exists():
+            return False
+        names = {
+            ln.strip().lower()
+            for ln in _FLOOR_EXEMPT_FILE.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")
+        }
+    except OSError:
+        return False
+    return str(agent or "").strip().lower() in names
+
+
 def load() -> dict:
     """Read config from disk. Missing file → default. Corrupt → default
     (logged to stderr, never raises — la skill DEVE essere robusta perché
@@ -178,7 +207,12 @@ def get_agent(agent: str) -> int:
     # (anti-marathon, 2026-06-26): mai 0. Il core interattivo NON ha floor →
     # resta reattivo. Vale anche per i valori legacy già nel throttle.json
     # (es. 60/120 → 300, o 0 su un worker → 300) senza riscrivere il file.
-    floor = WORKER_FLOOR if _is_worker(agent) else MIN_SLEEP
+    floor = WORKER_FLOOR if (_is_worker(agent) and not _floor_exempt(agent)) \
+        else MIN_SLEEP
+    # L'esente salta anche la ladder: quantize() aggancerebbe comunque a 300
+    # (il suo primo gradino), quindi il valore richiesto va usato tale e quale.
+    if floor == MIN_SLEEP and _is_worker(agent):
+        return max(MIN_SLEEP, min(MAX_SLEEP, v))
     return quantize(max(floor, min(MAX_SLEEP, v)))
 
 
