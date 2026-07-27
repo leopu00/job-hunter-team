@@ -34,6 +34,8 @@
 
 ## 🖥️ Applicazione nativa Godot
 
+- 🔴 **[GAME-VPS-SSH-USER]** — "Collega VPS" hard-codes `root@`, so it can only talk to providers that hand out root. Found live on 2026-07-27 connecting the beta-5 box (OVHcloud): `SSH non disponibile: root@<ip>: Permission denied (publickey)` — OVH logs you in as `ubuntu`, and it is not an outlier (AWS gives `ubuntu`/`ec2-user`, GCP and Azure the account name; Hetzner's root-by-default is the exception). Fix: an **SSH user** field next to the IP, default `root`, threaded through the seven call sites in `game/scripts/setup/setup_service.gd` (`1153`, `2092`, `2101`, `2132`, `2406`, `2459`, `2674`) and persisted with the rest of the VPS config. Workaround used to unblock the test: install the key for root on the box too.
+- 🔴 **[GAME-VPS-FINGERPRINT-STALE]** — the fingerprint shown under the key field is not recomputed when you pick a different key: with `jht-delia` selected the panel still displayed `jht-fleet`'s (`7ZqE0jai…` instead of `3GYAEagO…`, 2026-07-27). That field exists to be compared against the fingerprint the provider shows, so a stale value doesn't just mislead — it turns the anti-MITM check into false assurance. Fix: recompute on key change in `game/scripts/setup/setup_service.gd:1240-1249` / re-read `key_info` in `game/scripts/ui/section_panel.gd:2769`.
 - ⬜ Auto-update firmato per gli export Godot.
 - ⬜ Tray icon + notifiche native dal gioco.
 - ⬜ **[JHT-DESKTOP-RECOVERY]** — recovery passphrase BIP39 6-word (Argon2id KDF v2).
