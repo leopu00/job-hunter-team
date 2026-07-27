@@ -10,27 +10,29 @@
  * nome `middleware.ts` resta supportato in 16.2.x e di default usa
  * Edge runtime, che ha una pipeline di bundling stabile.
  *
- * Vincolo Edge: niente `node:fs`/`node:crypto`/Database. Il
- * bootstrap del local-token (che leggeva `~/.jht/.local-token`)
- * resta solo lato API (route handler) tramite `lib/local-token.ts`;
- * il desktop launcher pre-setta il cookie via `/api/local-bootstrap`
- * o passa `Authorization: Bearer <hex>` sulle chiamate API.
+ * Vincolo Edge: niente `node:fs`/`node:crypto`/Database. Il local-token
+ * (che si legge da `~/.jht/.local-token`) resta quindi solo lato API,
+ * tramite `lib/local-token.ts`, e viaggia come
+ * `Authorization: Bearer <hex>` sulle chiamate da CLI/curl.
  *
- * Auth su tutte le rotte, CORS + rate limit solo su /api/*,
- * CSP nonce-based su tutte le risposte HTML.
+ * Cosa NON fa questo middleware: l'auth. Il gate delle pagine è il layout
+ * `app/(protected)/layout.tsx`, che conosce le sezioni reali, il deploy mode
+ * e la demo; qui c'era una lista di path duplicata che era andata alla
+ * deriva (vedi sotto). Le route `/api/*` non sono coperte da nessuno dei
+ * due: ogni handler si difende da sé con `requireAuth`/`requireLocalWrite`.
+ *
+ * Restano: refresh della sessione Supabase, CORS + rate limit + guard CSRF
+ * su /api/*, CSP nonce-based sulle risposte HTML.
  */
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSupabaseConfig } from '@/lib/supabase/config'
 import { shouldRejectBrowserMutation } from '@/lib/csrf'
-import { isLocalDeploy } from '@/lib/deploy-mode'
 
 // --- Local request detection (inlined da lib/auth.ts per Edge compat) ---
 // lib/auth.ts importa `next/headers` + `lib/workspace` (`node:fs`) →
 // non importabile in Edge runtime. Replicato qui solo il puro
 // header-parsing che serve al middleware.
-
-const LOCAL_TOKEN_COOKIE = 'jht_local_token'
 
 function isLocalhostHost(host: string): boolean {
   return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?$/.test(host.toLowerCase())
@@ -290,10 +292,12 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // --- Auth Supabase ---
+  // --- Sessione Supabase ---
+  // Non è un gate: è il refresh. `supabase.auth.getUser()` rinnova il token
+  // scaduto e riscrive i cookie sulla risposta (pattern @supabase/ssr). Senza
+  // questa chiamata la sessione muore da sola durante la navigazione.
   let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
 
-  const localRequest = isLocalRequestFromHeaders(request.headers)
   const supabaseConfig = getSupabaseConfig()
 
   if (supabaseConfig.configured) {
@@ -318,54 +322,23 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    // Rotte protette — redirect al login se non autenticato
-    const isProtected =
-      pathname.startsWith('/dashboard') ||
-      pathname.startsWith('/profile') ||
-      pathname.startsWith('/positions') ||
-      pathname.startsWith('/ready') ||
-      pathname.startsWith('/risposte') ||
-      pathname.startsWith('/team') ||
-      pathname.startsWith('/scout') ||
-      pathname.startsWith('/analista') ||
-      pathname.startsWith('/scorer') ||
-      pathname.startsWith('/scrittore') ||
-      pathname.startsWith('/critico')
-
-    // Bypass auth per richieste locali (desktop container): il login
-    // Supabase è opzionale in locale — il container deve poter servire
-    // /dashboard senza account.
-    // [JHT-DASHBOARD-SPLIT] Anche il deploy LOCAL (container desktop/VPS, build
-    // NEXT_PUBLIC_JHT_DEPLOY=local) bypassa: via Docker port-map gli header
-    // forwarded non sono loopback → localRequest può essere false anche su
-    // localhost, ma un container local NON deve mai forzare il web-login (è
-    // compito dell'app desktop, sezione Account).
-    if (isProtected && !user && !localRequest && !isLocalDeploy()) {
-      const returnTo = pathname + request.nextUrl.search
-      const loginUrl = new URL('/?login=true', request.url)
-      if (returnTo && returnTo !== '/') {
-        loginUrl.searchParams.set('returnTo', returnTo)
-      }
-      return NextResponse.redirect(loginUrl)
-    }
+    // Il valore non serve qui: chiamare getUser() È l'operazione: rinnova
+    // il token e fa scattare il `setAll` sopra. Il redirect al login lo
+    // decide `app/(protected)/layout.tsx`.
+    //
+    // [rimosso 24/07] Qui c'era una seconda lista di rotte protette che
+    // duplicava quel layout. Aveva smesso di corrispondere alla app:
+    // proteggeva /ready, /risposte, /scout, /analista, /scorer, /scrittore
+    // e /critico — sette path che non esistono più — e non conosceva
+    // nessuna delle sezioni vere sotto `app/(protected)/` (channels,
+    // credentials, cron, secrets, settings, map, messages, swipe...). Due
+    // liste che devono restare uguali non restano uguali: il gate è uno
+    // solo, ed è il layout, che oltre ai path conosce anche il deploy
+    // mode, il contesto locale e la modalità demo.
+    await supabase.auth.getUser()
 
     // Landing page sempre accessibile — nessun redirect da / a /dashboard
   }
-
-  // Local-token bootstrap: rimosso dal middleware perchè la lettura
-  // `~/.jht/.local-token` richiede `node:fs`, incompatibile con
-  // Edge runtime. Il cookie `jht_local_token` viene ora settato:
-  //   - dal desktop launcher al primo apertura del browser (Electron
-  //     session.cookies.set), oppure
-  //   - lazy dalla route `/api/local-bootstrap` (TODO) invocata dal
-  //     client al boot.
-  // Le richieste con `Authorization: Bearer <hex>` (curl / CLI)
-  // continuano a funzionare via `requireAuth` nelle route handler.
-  void LOCAL_TOKEN_COOKIE // riferimento per documentazione futura
 
   // --- API: Aggiungi CORS + rate limit headers alla risposta ---
   if (isApi) {

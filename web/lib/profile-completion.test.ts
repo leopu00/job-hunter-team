@@ -1,8 +1,12 @@
 /**
  * Test unitari — web/lib/profile-completion (tassonomia a 3 livelli)
- * Esegui: node --experimental-strip-types --test web/lib/profile-completion.test.ts
+ * Esegui: cd tests/js && npx vitest run
+ *
+ * Raccolto dal runner vitest di tests/js (vedi `include` in
+ * tests/js/vitest.config.ts): finché usava `node:test` nessun runner lo
+ * eseguiva e la copertura era solo apparente.
  */
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { CandidateProfile } from "./types.ts";
 import {

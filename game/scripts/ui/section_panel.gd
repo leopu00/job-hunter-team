@@ -117,7 +117,7 @@ func _build(page := "") -> void:
 			# filtri cross e schede pin che aprono il dettaglio posizione
 			if BackendBus.positions_are_demo:
 				_content.add_child(TerminalTheme.label(
-						"◆ SHOWROOM · pin e offerte sono esempi fittizi",
+						UIStrings.t("demo.map"),
 						13, Palette.YELLOW, "medium"))
 			var wm := WorldMap.new()
 			wm.open_position.connect(func(pid: int) -> void:
@@ -231,39 +231,41 @@ func _build_account() -> void:
 	var cloud: Dictionary = SetupService.cloud_status()
 	var configured := bool(cloud.get("configured", false))
 	_content.add_child(TerminalTheme.label(
-			"Sincronizza posizioni, profilo e comandi con jobhunterteam.ai. L'account è opzionale: il team può restare completamente locale.",
+			UIStrings.t("account.intro"),
 			14, Palette.MUTED))
 	_content.add_child(HSeparator.new())
-	_setup_state_row("ACCOUNT CLOUD", configured,
-			"collegato" if configured else "modalità locale / ospite")
+	_setup_state_row(UIStrings.t("account.cloud"), configured,
+			UIStrings.t("account.linked") if configured else UIStrings.t("account.local_mode"))
 	if configured:
-		_setup_state_row("DISPOSITIVO", true,
-				str(cloud.get("token_name", "")) if str(cloud.get("token_name", "")) != "" else "associato")
-		_setup_state_row("SERVER", true, str(cloud.get("base_url", "—")))
+		_setup_state_row(UIStrings.t("account.device"), true,
+				str(cloud.get("token_name", "")) if str(cloud.get("token_name", "")) != "" \
+				else UIStrings.t("account.device_paired"))
+		_setup_state_row(UIStrings.t("account.server"), true, str(cloud.get("base_url", "—")))
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
 	var login := Button.new()
-	login.text = "RIFAI LOGIN GOOGLE" if configured else "ACCEDI CON GOOGLE  →"
+	login.text = UIStrings.t("account.login_again") if configured \
+			else UIStrings.t("account.login")
 	login.disabled = not bool(SetupService.status.get("container_running", false))
 	login.add_theme_color_override("font_color", Palette.GREEN)
 	login.pressed.connect(SetupService.open_cloud_login.bind(true))
 	actions.add_child(login)
 	var other_login := Button.new()
-	other_login.text = "USA UN ALTRO ACCOUNT"
+	other_login.text = UIStrings.t("account.other_account")
 	other_login.disabled = not bool(SetupService.status.get("container_running", false))
 	other_login.pressed.connect(SetupService.open_cloud_login.bind(false))
 	actions.add_child(other_login)
-	for entry in [["STATO", "status"], ["SINCRONIZZA ORA", "push"],
-			["RECUPERA PROFILO", "pull-profile"]]:
+	for entry in [["account.status", "status"], ["account.sync_now", "push"],
+			["account.pull_profile", "pull-profile"]]:
 		var button := Button.new()
-		button.text = str(entry[0])
+		button.text = UIStrings.t(str(entry[0]))
 		button.disabled = not configured
 		button.pressed.connect(SetupService.open_cloud_command.bind(str(entry[1])))
 		actions.add_child(button)
 	if configured:
 		var disable := Button.new()
-		disable.text = "FERMA SYNC E CONTINUA SOLO IN LOCALE"
+		disable.text = UIStrings.t("account.disable_sync")
 		disable.add_theme_color_override("font_color", Palette.RED)
 		disable.pressed.connect(_confirm_cloud_disable)
 		_content.add_child(disable)
@@ -271,18 +273,18 @@ func _build_account() -> void:
 	recovery.add_theme_constant_override("separation", 10)
 	_content.add_child(recovery)
 	var restore := Button.new()
-	restore.text = "RIPRISTINA PIPELINE DAL CLOUD"
+	restore.text = UIStrings.t("account.restore")
 	restore.disabled = not configured
 	restore.add_theme_color_override("font_color", Palette.YELLOW)
 	restore.pressed.connect(SetupService.open_cloud_command.bind("restore"))
 	recovery.add_child(restore)
 	var manage := Button.new()
-	manage.text = "GESTISCI DISPOSITIVI E REVOCA  ↗"
+	manage.text = UIStrings.t("account.manage_devices")
 	manage.pressed.connect(func() -> void:
 		OS.shell_open("https://jobhunterteam.ai/settings/cloud-sync"))
 	recovery.add_child(manage)
 	_content.add_child(TerminalTheme.label(
-			"Il login Google autentica il tuo account web. La VPS conserva solo un token di dispositivo revocabile; password e cookie Google non vengono salvati nel gioco.",
+			UIStrings.t("account.privacy_note"),
 			12, Palette.DIM))
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
@@ -290,9 +292,9 @@ func _build_account() -> void:
 
 func _confirm_cloud_disable() -> void:
 	var dialog := ConfirmationDialog.new()
-	dialog.title = "Continuare solo in locale?"
-	dialog.dialog_text = "Il team continuerà a funzionare e i dati locali non verranno cancellati. Il token di questo dispositivo verrà revocato e posizioni/profilo non saranno più sincronizzati col cloud."
-	dialog.ok_button_text = "FERMA SINCRONIZZAZIONE"
+	dialog.title = UIStrings.t("account.disable_title")
+	dialog.dialog_text = UIStrings.t("account.disable_body")
+	dialog.ok_button_text = UIStrings.t("account.disable_ok")
 	dialog.confirmed.connect(SetupService.open_cloud_command.bind("disable"))
 	dialog.canceled.connect(dialog.queue_free)
 	dialog.confirmed.connect(dialog.queue_free)
@@ -312,31 +314,31 @@ func _build_email() -> void:
 	var state: Dictionary = SetupService.email_status()
 	var configured := bool(state.get("configured", false))
 	_content.add_child(TerminalTheme.label(
-			"Casella dedicata agli avvisi di lavoro. Il reparto Ricerca la controlla a inizio giornata e porta in ufficio le opportunità ricevute.",
+			UIStrings.t("email.intro"),
 			14, Palette.MUTED))
 	_content.add_child(HSeparator.new())
-	_setup_state_row("STATO", configured,
-			"configurata · " + str(state.get("email", "")) if configured \
-			else "nessuna casella configurata")
+	_setup_state_row(UIStrings.t("email.status"), configured,
+			UIStrings.t("email.configured") + str(state.get("email", "")) if configured \
+			else UIStrings.t("email.none"))
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 18)
 	grid.add_theme_constant_override("v_separation", 10)
 	_content.add_child(grid)
-	grid.add_child(TerminalTheme.label("INDIRIZZO EMAIL", 13, Palette.MUTED, "medium"))
+	grid.add_child(TerminalTheme.label(UIStrings.t("email.address"), 13, Palette.MUTED, "medium"))
 	var email := LineEdit.new()
 	email.text = str(state.get("email", ""))
 	email.placeholder_text = "nome.jht@gmail.com"
 	email.custom_minimum_size = Vector2(560, 0)
 	grid.add_child(email)
-	grid.add_child(TerminalTheme.label("APP PASSWORD", 13, Palette.MUTED, "medium"))
+	grid.add_child(TerminalTheme.label(UIStrings.t("email.app_password"), 13, Palette.MUTED, "medium"))
 	var password := LineEdit.new()
 	password.secret = true
-	password.placeholder_text = "password specifica per l'app, mai la password principale"
+	password.placeholder_text = UIStrings.t("email.password_ph")
 	password.custom_minimum_size = Vector2(560, 0)
 	grid.add_child(password)
 	var note := TerminalTheme.label(
-			"La password rimane in ~/.jht/credentials con permessi 0600 e non viene sincronizzata sul cloud.",
+			UIStrings.t("email.note"),
 			12, Palette.YELLOW)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_content.add_child(note)
@@ -344,7 +346,7 @@ func _build_email() -> void:
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
 	var save := Button.new()
-	save.text = "SALVA E VERIFICA IMAP"
+	save.text = UIStrings.t("email.save")
 	save.disabled = not bool(SetupService.status.get("container_running", false))
 	save.add_theme_color_override("font_color", Palette.GREEN)
 	save.pressed.connect(func() -> void:
@@ -352,13 +354,13 @@ func _build_email() -> void:
 		password.clear())
 	actions.add_child(save)
 	var remove := Button.new()
-	remove.text = "RIMUOVI"
+	remove.text = UIStrings.t("email.remove")
 	remove.disabled = not configured
 	remove.add_theme_color_override("font_color", Palette.RED)
 	remove.pressed.connect(SetupService.delete_email)
 	actions.add_child(remove)
 	var help := Button.new()
-	help.text = "COME CREARE UNA APP PASSWORD  ↗"
+	help.text = UIStrings.t("email.help")
 	help.pressed.connect(func() -> void:
 		OS.shell_open("https://support.google.com/accounts/answer/185833"))
 	actions.add_child(help)
@@ -370,17 +372,17 @@ func _build_telegram() -> void:
 	_listen_setup()
 	var states: Dictionary = SetupService.telegram_status()
 	_content.add_child(TerminalTheme.label(
-			"Collega i tre bot privati usati dal team. I token restano nel runtime locale o sulla tua VPS e non vengono mai inviati al cloud JHT.",
+			UIStrings.t("tg.intro"),
 			14, Palette.MUTED))
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
 	var botfather := Button.new()
-	botfather.text = "APRI BOTFATHER  ↗"
+	botfather.text = UIStrings.t("tg.botfather")
 	botfather.pressed.connect(func() -> void: OS.shell_open("https://t.me/BotFather"))
 	actions.add_child(botfather)
 	var guide := TerminalTheme.label(
-			"Crea un bot, incolla il token, apri la chat col bot e premi Start; poi usa SALVA E RILEVA CHAT.",
+			UIStrings.t("tg.guide"),
 			12, Palette.YELLOW)
 	guide.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	guide.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -395,9 +397,9 @@ func _build_telegram() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
 	var details := {
-		"assistente": "onboarding del profilo e documenti",
-		"capitano": "direzione del team e posizioni pronte",
-		"mentor": "coaching e strategia professionale",
+		"assistente": UIStrings.t("tg.role_assistente"),
+		"capitano": UIStrings.t("tg.role_capitano"),
+		"mentor": UIStrings.t("tg.role_mentor"),
 	}
 	for role in ["assistente", "capitano", "mentor"]:
 		var state: Dictionary = states.get(role, {}) \
@@ -418,8 +420,8 @@ func _build_telegram() -> void:
 		role_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		head.add_child(role_detail)
 		head.add_child(TerminalTheme.label(
-				"● CONFIGURATO" if bool(state.get("configured", false)) \
-				else "○ DA COLLEGARE", 13,
+				UIStrings.t("tg.configured") if bool(state.get("configured", false)) \
+				else UIStrings.t("tg.to_link"), 13,
 				Palette.GREEN if bool(state.get("configured", false)) else Palette.YELLOW,
 				"medium"))
 		var fields := HBoxContainer.new()
@@ -427,15 +429,15 @@ func _build_telegram() -> void:
 		col.add_child(fields)
 		var token := LineEdit.new()
 		token.secret = true
-		token.placeholder_text = "token BotFather"
+		token.placeholder_text = UIStrings.t("tg.token_ph")
 		token.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fields.add_child(token)
 		var chat_id := LineEdit.new()
-		chat_id.placeholder_text = "chat_id (opzionale: rilevamento automatico)"
+		chat_id.placeholder_text = UIStrings.t("tg.chat_id_ph")
 		chat_id.custom_minimum_size = Vector2(360, 0)
 		fields.add_child(chat_id)
 		var save := Button.new()
-		save.text = "SALVA E RILEVA CHAT"
+		save.text = UIStrings.t("tg.save")
 		save.disabled = not bool(SetupService.status.get("container_running", false))
 		save.add_theme_color_override("font_color", Palette.GREEN)
 		save.pressed.connect(func() -> void:
@@ -444,7 +446,7 @@ func _build_telegram() -> void:
 		fields.add_child(save)
 		if bool(state.get("configured", false)):
 			var remove := Button.new()
-			remove.text = "RIMUOVI"
+			remove.text = UIStrings.t("tg.remove")
 			remove.add_theme_color_override("font_color", Palette.RED)
 			remove.pressed.connect(SetupService.delete_telegram_bot.bind(role))
 			fields.add_child(remove)
@@ -460,24 +462,24 @@ func _on_email_settings_refresh(_settings: Dictionary) -> void:
 func _build_advanced() -> void:
 	_listen_setup()
 	_content.add_child(TerminalTheme.label(
-			"Diagnostica e manutenzione del runtime. Ogni comando resta visibile dentro il gioco.",
+			UIStrings.t("advanced.intro"),
 			14, Palette.MUTED))
 	_content.add_child(HSeparator.new())
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
 	var doctor := Button.new()
-	doctor.text = "ESEGUI DIAGNOSTICA"
+	doctor.text = UIStrings.t("advanced.doctor")
 	doctor.disabled = not bool(SetupService.status.get("container_running", false))
 	doctor.add_theme_color_override("font_color", Palette.GREEN)
 	doctor.pressed.connect(SetupService.open_doctor)
 	actions.add_child(doctor)
 	var setup := Button.new()
-	setup.text = "RIVEDI SETUP"
+	setup.text = UIStrings.t("advanced.review_setup")
 	setup.pressed.connect(func() -> void: navigate.emit("activation"))
 	actions.add_child(setup)
 	var install := Button.new()
-	install.text = "REINSTALLA / AGGIORNA RUNTIME"
+	install.text = UIStrings.t("advanced.reinstall")
 	install.pressed.connect(SetupService.open_runtime_install)
 	actions.add_child(install)
 	# Seconda porta d'ingresso: chi ha un problema apre la diagnostica prima
@@ -490,12 +492,12 @@ func _build_advanced() -> void:
 	files.add_theme_constant_override("separation", 10)
 	_content.add_child(files)
 	var open_data := Button.new()
-	open_data.text = "APRI DATI JHT"
+	open_data.text = UIStrings.t("advanced.open_data")
 	open_data.pressed.connect(func() -> void:
 		OS.shell_open(SetupService._jht_home()))
 	files.add_child(open_data)
 	var open_log := Button.new()
-	open_log.text = "APRI LOG DEL GIOCO"
+	open_log.text = UIStrings.t("advanced.open_log")
 	open_log.pressed.connect(func() -> void:
 		OS.shell_open(ProjectSettings.globalize_path("user://jht-game.log").get_base_dir()))
 	files.add_child(open_log)
@@ -504,7 +506,7 @@ func _build_advanced() -> void:
 	# local/VPS vive nel gioco; il browser serve solo il cloud (con login).
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
-			"Versione gioco %s · dati applicazione %s" % [
+			UIStrings.t("advanced.version") % [
 					ProjectSettings.get_setting("application/config/version", "dev"),
 					SetupService._jht_home()], 12, Palette.DIM))
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
@@ -750,18 +752,18 @@ func _build_activation() -> void:
 	guided.add_theme_constant_override("separation", 10)
 	_content.add_child(guided)
 	var guided_label := TerminalTheme.label(
-			"TOUR CONVERSAZIONALE · %d/3 COMPLETATI" % ScriptedOnboarding.completed_count(),
+			UIStrings.t("setup.tour_progress") % ScriptedOnboarding.completed_count(),
 			13, Palette.MINT, "medium")
 	guided_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	guided.add_child(guided_label)
-	for entry in [["assistente", "ASSISTENTE"], ["coordinatore", "COORDINATORE"],
-			["mentor", "MENTOR"]]:
+	for entry in [["assistente", "setup.tour_assistant"],
+			["coordinatore", "setup.tour_coordinator"], ["mentor", "setup.tour_mentor"]]:
+		var label := UIStrings.t(str(entry[1]))
 		var chat := Button.new()
-		chat.text = ("✓ " if ScriptedOnboarding.is_complete(str(entry[0])) else "▶ ") \
-				+ str(entry[1])
+		chat.text = ("✓ " if ScriptedOnboarding.is_complete(str(entry[0])) else "▶ ") + label
 		chat.add_theme_color_override("font_color", Palette.GREEN)
 		chat.pressed.connect(func() -> void:
-			add_child(ChatPanel.new(str(entry[0]), str(entry[1]).capitalize())))
+			add_child(ChatPanel.new(str(entry[0]), label.capitalize())))
 		guided.add_child(chat)
 	var progress := HBoxContainer.new()
 	progress.add_theme_constant_override("separation", 12)
@@ -874,7 +876,7 @@ func _build_container_setup() -> void:
 	# scaricata. Senza questa riga l'utente resta su una versione vecchia
 	# senza avere modo di accorgersene.
 	if bool(s.get("container_exists", false)) and not bool(s.get("remote", false)):
-		_setup_state_row("VERSIONE RUNTIME", not bool(s.get("runtime_stale", false)),
+		_setup_state_row(UIStrings.t("setup.runtime_version"), not bool(s.get("runtime_stale", false)),
 				UIStrings.t("setup.runtime_stale") if bool(s.get("runtime_stale", false))
 				else UIStrings.t("setup.runtime_current"))
 	_content.add_child(HSeparator.new())
@@ -912,7 +914,7 @@ func _build_container_setup() -> void:
 		actions.add_child(update)
 	if bool(s.get("container_running", false)):
 		var stop := Button.new()
-		stop.text = "FERMA CONTAINER"
+		stop.text = UIStrings.t("setup.container_stop")
 		stop.add_theme_color_override("font_color", Palette.RED)
 		stop.pressed.connect(SetupService.stop_container)
 		actions.add_child(stop)
@@ -991,7 +993,7 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(text_col)
 	text_col.add_child(TerminalTheme.label(str(meta["name"]) \
-			+ ("  ·  ATTIVO" if active else ""), 18,
+			+ (UIStrings.t("setup.provider_active") if active else ""), 18,
 			Palette.GREEN if active else Palette.WHITE, "bold"))
 	text_col.add_child(TerminalTheme.label(str(meta["vendor"]), 13, Palette.MUTED))
 	text_col.add_child(TerminalTheme.label(
@@ -1034,7 +1036,7 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 		# distinzione che non esiste più (Leone, 25/07).
 		if authed:
 			var logout := Button.new()
-			logout.text = "DISCONNETTI ACCOUNT"
+			logout.text = UIStrings.t("setup.provider_logout")
 			logout.add_theme_color_override("font_color", Palette.RED)
 			logout.pressed.connect(SetupService.logout_provider.bind(provider))
 			actions.add_child(logout)
@@ -1114,34 +1116,34 @@ var _ram_chart: SystemMetricChart
 func _build_system_dashboard() -> void:
 	if not BackendBus.telemetry_updated.is_connected(_on_telemetry_updated):
 		BackendBus.telemetry_updated.connect(_on_telemetry_updated)
-	_content.add_child(TerminalTheme.label("SISTEMA VPS · LIVE", 18, Palette.BRIGHT, "bold"))
+	_content.add_child(TerminalTheme.label(UIStrings.t("sys.title"), 18, Palette.BRIGHT, "bold"))
 	_content.add_child(TerminalTheme.label(
-			"Host e container jht · aggiornamento ogni 8 secondi", 13, Palette.MUTED))
+			UIStrings.t("sys.subtitle"), 13, Palette.MUTED))
 	_content.add_child(HSeparator.new())
 	_metric_row("cpu_pct", "CPU HOST", Palette.GREEN)
 	_metric_row("ram_pct", "RAM HOST", Palette.BLUE)
 	_metric_row("swap_pct", "SWAP", Palette.PURPLE)
-	_metric_row("disk_pct", "DISCO /", Palette.YELLOW)
+	_metric_row("disk_pct", UIStrings.t("sys.disk"), Palette.YELLOW)
 	_metric_row("container_cpu_pct", "CPU CONTAINER", Palette.MINT)
 	_metric_row("container_mem_pct", "RAM CONTAINER", Palette.MINT)
 	var charts := HBoxContainer.new()
 	charts.add_theme_constant_override("separation", 12)
 	_content.add_child(charts)
-	_cpu_chart = SystemMetricChart.new("cpu_pct", "CPU HOST · STORICO", Palette.GREEN)
-	_ram_chart = SystemMetricChart.new("ram_pct", "RAM HOST · STORICO", Palette.BLUE)
+	_cpu_chart = SystemMetricChart.new("cpu_pct", UIStrings.t("sys.cpu_host_history"), Palette.GREEN)
+	_ram_chart = SystemMetricChart.new("ram_pct", UIStrings.t("sys.ram_host_history"), Palette.BLUE)
 	charts.add_child(_cpu_chart)
 	charts.add_child(_ram_chart)
 	_content.add_child(HSeparator.new())
 	for key_label in [
-		["container_status", "STATO CONTAINER"], ["container_mem", "MEMORIA JHT"],
-		["container_restarts", "RIAVVII"], ["load1", "LOAD 1 MIN"],
-		["uptime_s", "UPTIME VPS"], ["rx_bytes", "RETE RICEVUTA"],
-		["tx_bytes", "RETE INVIATA"],
+		["container_status", "sys.container_status"], ["container_mem", "sys.container_mem"],
+		["container_restarts", "sys.restarts"], ["load1", "sys.load1"],
+		["uptime_s", "sys.uptime"], ["rx_bytes", "sys.rx"],
+		["tx_bytes", "sys.tx"],
 	]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
 		_content.add_child(row)
-		var lbl := TerminalTheme.label(key_label[1], 13, Palette.MUTED, "medium")
+		var lbl := TerminalTheme.label(UIStrings.t(str(key_label[1])), 13, Palette.MUTED, "medium")
 		lbl.custom_minimum_size = Vector2(220, 0)
 		row.add_child(lbl)
 		var value := TerminalTheme.label("—", 15, Palette.BRIGHT)
@@ -1222,20 +1224,20 @@ func _build_agent_metrics() -> void:
 		BackendBus.telemetry_updated.connect(_on_agent_metrics_updated)
 	if not BackendBus.agents_updated.is_connected(_on_agent_metrics_roster):
 		BackendBus.agents_updated.connect(_on_agent_metrics_roster)
-	_content.add_child(TerminalTheme.label("RISORSE PER AGENTE · LIVE", 18,
+	_content.add_child(TerminalTheme.label(UIStrings.t("metrics.title"), 18,
 			Palette.BRIGHT, "bold"))
 	_content.add_child(TerminalTheme.label(
-			"RAM = processo tmux e discendenti · token = bucket reali del token-meter",
+			UIStrings.t("metrics.subtitle"),
 			13, Palette.MUTED))
-	_agent_metric_freshness = TerminalTheme.label("TOKEN · freschezza in attesa…",
+	_agent_metric_freshness = TerminalTheme.label(UIStrings.t("metrics.freshness_wait"),
 			12, Palette.DIM, "medium")
 	_content.add_child(_agent_metric_freshness)
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
 	_content.add_child(header)
-	for spec in [["AGENTE", 170], ["RAM", 84], ["STORICO RAM", 180],
+	for spec in [["metrics.col_agent", 170], ["RAM", 84], ["metrics.col_ram_history", 180],
 			["TOKEN", 100], ["TOKEN / BUCKET", 180]]:
-		var lbl := TerminalTheme.label(spec[0], 12, Palette.DIM, "medium")
+		var lbl := TerminalTheme.label(UIStrings.t(str(spec[0])), 12, Palette.DIM, "medium")
 		lbl.custom_minimum_size = Vector2(spec[1], 0)
 		header.add_child(lbl)
 		if spec[0] == "TOKEN":
@@ -1314,14 +1316,16 @@ func _refresh_agent_metric_metadata(sample: Dictionary) -> void:
 	var window_h := float(sample.get("window_h", 0.0))
 	var bucket_sec := int(sample.get("bucket_sec", 0))
 	if is_instance_valid(_agent_token_total_header):
-		_agent_token_total_header.text = "TOKEN (%s)" % _metric_window_text(window_h)
+		_agent_token_total_header.text = UIStrings.t("metrics.tokens_window") \
+				% _metric_window_text(window_h)
 	if is_instance_valid(_agent_token_bucket_header):
-		_agent_token_bucket_header.text = "TOKEN / %s" % _metric_bucket_text(bucket_sec)
+		_agent_token_bucket_header.text = UIStrings.t("metrics.tokens_bucket") \
+				% _metric_bucket_text(bucket_sec)
 	if not is_instance_valid(_agent_metric_freshness):
 		return
 	var generated := str(sample.get("generated_at", "")).strip_edges()
 	if generated == "":
-		_agent_metric_freshness.text = "TOKEN · sorgente non disponibile"
+		_agent_metric_freshness.text = UIStrings.t("metrics.no_source")
 		_agent_metric_freshness.add_theme_color_override("font_color", Palette.RED)
 		return
 	# Il producer usa ISO-8601 UTC con microsecondi; il parser Godot vuole
@@ -1331,11 +1335,11 @@ func _refresh_agent_metric_metadata(sample: Dictionary) -> void:
 	var stale_after := maxi(900, bucket_sec * 3)
 	var stamp := generated.replace("T", " ").left(19) + " UTC"
 	if age_sec > stale_after:
-		_agent_metric_freshness.text = "TOKEN · %s · STALE DA %s" % [
+		_agent_metric_freshness.text = UIStrings.t("metrics.stale") % [
 				stamp, _metric_age_text(age_sec)]
 		_agent_metric_freshness.add_theme_color_override("font_color", Palette.RED)
 	else:
-		_agent_metric_freshness.text = "TOKEN · aggiornati %s · %s fa" % [
+		_agent_metric_freshness.text = UIStrings.t("metrics.updated") % [
 				stamp, _metric_age_text(age_sec)]
 		_agent_metric_freshness.add_theme_color_override("font_color", Palette.MINT)
 
@@ -1938,7 +1942,7 @@ func _build_positions() -> void:
 		BackendBus.positions_updated.connect(_on_positions_refresh)
 	if BackendBus.positions_are_demo:
 		var demo_note := TerminalTheme.label(
-				"◆ SHOWROOM · 50 POSIZIONI FITTIZIE · nessun dato personale o link attivo",
+				UIStrings.t("demo.positions"),
 				13, Palette.YELLOW, "medium")
 		demo_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_content.add_child(demo_note)
@@ -2086,12 +2090,12 @@ func _build_agent_page() -> void:
 			15, Palette.MINT if not agent.is_empty() else Palette.DIM, "medium"))
 	if not agent.is_empty():
 		var restart := Button.new()
-		restart.text = "RIAVVIA"
+		restart.text = UIStrings.t("agents.restart")
 		restart.add_theme_color_override("font_color", Palette.YELLOW)
 		restart.pressed.connect(SetupService.control_agent.bind(slug, true))
 		title_row.add_child(restart)
 		var stop := Button.new()
-		stop.text = "FERMA"
+		stop.text = UIStrings.t("agents.stop")
 		stop.add_theme_color_override("font_color", Palette.RED)
 		stop.pressed.connect(SetupService.control_agent.bind(slug, false))
 		title_row.add_child(stop)
@@ -2728,10 +2732,10 @@ func _build_vps() -> void:
 	_listen_setup()
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.intro"), 15, Palette.MUTED))
 	_content.add_child(TerminalTheme.label(
-			"1  Crea la chiave  →  2  aggiungila alla VPS  →  3  verifica SSH  →  4  prepara e collega",
+			UIStrings.t("vps.steps"),
 			13, Palette.MINT, "medium"))
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label("1 · CHIAVE SSH DEDICATA", 15,
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.key_section"), 15,
 			Palette.BRIGHT, "bold"))
 	var cfg: Dictionary = BackendBus.load_vps_config()
 
@@ -2746,18 +2750,18 @@ func _build_vps() -> void:
 	browse.pressed.connect(_browse_vps_key)
 	_vps_key.get_parent().add_child(browse)
 	var generate := Button.new()
-	generate.text = "GENERA CHIAVE"
+	generate.text = UIStrings.t("vps.key_generate")
 	generate.pressed.connect(func() -> void:
 		_vps_key.text = SetupService.default_vps_key_path()
 		SetupService.generate_vps_key())
 	_vps_key.get_parent().add_child(generate)
 	var copy_public := Button.new()
-	copy_public.text = "COPIA PUBBLICA"
+	copy_public.text = UIStrings.t("vps.key_copy")
 	copy_public.pressed.connect(func() -> void:
 		SetupService.copy_vps_public_key(_vps_key.text))
 	_vps_key.get_parent().add_child(copy_public)
 	var reveal := Button.new()
-	reveal.text = "APRI CARTELLA"
+	reveal.text = UIStrings.t("vps.key_open")
 	reveal.pressed.connect(func() -> void:
 		SetupService.reveal_vps_key(_vps_key.text))
 	_vps_key.get_parent().add_child(reveal)
@@ -2765,22 +2769,22 @@ func _build_vps() -> void:
 	var fingerprint := str(key_info.get("fingerprint", ""))
 	_content.add_child(TerminalTheme.label(
 			("Fingerprint: " + fingerprint) if fingerprint != "" else \
-			"La chiave privata resta sul computer; su Hetzner va incollata soltanto la riga .pub.",
+			UIStrings.t("vps.key_note"),
 			12, Palette.DIM))
 
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label("2 · SERVER DI DESTINAZIONE", 15,
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.destination"), 15,
 			Palette.BRIGHT, "bold"))
 	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "203.0.113.10")
 	_content.add_child(TerminalTheme.label(
-			"VERIFICA SSH mostra anche il fingerprint host: confrontalo con quello indicato dal provider prima del setup.",
+			UIStrings.t("vps.fingerprint_note"),
 			12, Palette.DIM))
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 16)
 	_content.add_child(actions)
 	var connect_btn := Button.new()
-	connect_btn.text = "COLLEGA SENZA INSTALLARE"
+	connect_btn.text = UIStrings.t("vps.connect_existing")
 	connect_btn.add_theme_font_size_override("font_size", 16)
 	connect_btn.add_theme_color_override("font_color", Palette.GREEN)
 	connect_btn.pressed.connect(_connect_vps)
@@ -2789,22 +2793,24 @@ func _build_vps() -> void:
 	disconnect_btn.text = UIStrings.t("vps.disconnect")
 	disconnect_btn.add_theme_font_size_override("font_size", 16)
 	disconnect_btn.add_theme_color_override("font_color", Palette.MUTED)
-	disconnect_btn.pressed.connect(func() -> void: BackendBus.disconnect_backend())
+	# Una disconnessione richiesta dall'utente deve sopravvivere al riavvio;
+	# altrimenti vps.cfg ricollegherebbe silenziosamente la stessa VPS al boot.
+	disconnect_btn.pressed.connect(func() -> void: BackendBus.switch_to_local_backend())
 	actions.add_child(disconnect_btn)
 	var test_ssh := Button.new()
-	test_ssh.text = "VERIFICA SSH"
+	test_ssh.text = UIStrings.t("vps.verify_ssh")
 	test_ssh.add_theme_color_override("font_color", Palette.MINT)
 	test_ssh.pressed.connect(func() -> void:
 		SetupService.test_vps_connection(_vps_ip.text, _vps_key.text))
 	actions.add_child(test_ssh)
 	var install := Button.new()
-	install.text = "PREPARA E COLLEGA AUTOMATICAMENTE"
+	install.text = UIStrings.t("vps.prepare")
 	install.add_theme_color_override("font_color", Palette.YELLOW)
 	install.pressed.connect(func() -> void:
 		SetupService.provision_vps(_vps_ip.text, _vps_key.text))
 	actions.add_child(install)
 	var console_install := Button.new()
-	console_install.text = "CONSOLE AVANZATA"
+	console_install.text = UIStrings.t("vps.advanced")
 	console_install.flat = true
 	console_install.pressed.connect(func() -> void:
 		SetupService.open_vps_install(_vps_ip.text, _vps_key.text))
@@ -2815,27 +2821,34 @@ func _build_vps() -> void:
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label("3 · MIGRAZIONE COMPLETA (OPZIONALE)",
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.migration_title"),
 			15, Palette.BRIGHT, "bold"))
 	_content.add_child(TerminalTheme.label(
-			"Trasferisce database, profilo, documenti, configurazione, login provider e pairing cloud. La chiave SSH privata e i file runtime non vengono copiati. Prima crea uno snapshot e un backup sulla destinazione.",
+			UIStrings.t("vps.migration_desc"),
 			12, Palette.MUTED))
-	var migration := HBoxContainer.new()
+	var migration := HFlowContainer.new()
 	migration.add_theme_constant_override("separation", 12)
 	_content.add_child(migration)
 	var source_mode := OptionButton.new()
-	source_mode.add_item("DA QUESTO COMPUTER", 0)
-	source_mode.add_item("DALLA VPS ATTUALMENTE SALVATA", 1)
+	source_mode.add_item(UIStrings.t("vps.source_local"), 0)
+	source_mode.add_item(UIStrings.t("vps.source_saved"), 1)
 	source_mode.custom_minimum_size.x = 330
 	migration.add_child(source_mode)
 	var migrate := Button.new()
-	migrate.text = "MIGRA TUTTO SULLA NUOVA VPS  →"
+	migrate.text = UIStrings.t("vps.migrate_to_vps")
 	migrate.add_theme_color_override("font_color", Palette.YELLOW)
 	migrate.pressed.connect(func() -> void:
 		_confirm_vps_migration("vps" if source_mode.selected == 1 else "local"))
 	migration.add_child(migrate)
+	var migrate_local := Button.new()
+	migrate_local.text = UIStrings.t("vps.migrate_to_local")
+	migrate_local.disabled = str(cfg.get("ip", "")) == "" \
+			or str(cfg.get("key_path", "")) == ""
+	migrate_local.add_theme_color_override("font_color", Palette.BLUE)
+	migrate_local.pressed.connect(_confirm_local_migration)
+	migration.add_child(migrate_local)
 	_content.add_child(TerminalTheme.label(
-			"A migrazione riuscita la sorgente viene fermata e il suo cloud token archiviato, così non esistono due team autoritativi. In caso di errore la sorgente viene riavviata.",
+			UIStrings.t("vps.migration_note"),
 			12, Palette.DIM))
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.agents_live"),
@@ -2852,13 +2865,25 @@ func _build_vps() -> void:
 
 func _confirm_vps_migration(source_mode: String) -> void:
 	var dialog := ConfirmationDialog.new()
-	dialog.title = "Migrare tutto sulla nuova VPS?"
-	dialog.dialog_text = ("La sorgente è questo computer." if source_mode == "local" \
-			else "La sorgente è la VPS attualmente salvata.") \
-			+ "\n\nIl team verrà fermato durante lo snapshot. I dati non saranno cancellati: la destinazione riceverà una copia completa e conserverà un backup pre-migrazione."
-	dialog.ok_button_text = "FERMA, COPIA E ATTIVA LA NUOVA VPS"
+	dialog.title = UIStrings.t("vps.confirm_vps_title")
+	dialog.dialog_text = (UIStrings.t("vps.confirm_source_local") \
+			if source_mode == "local" else UIStrings.t("vps.confirm_source_vps")) \
+			+ "\n\n" + UIStrings.t("vps.confirm_body")
+	dialog.ok_button_text = UIStrings.t("vps.confirm_vps_ok")
 	dialog.confirmed.connect(func() -> void:
 		SetupService.migrate_to_vps(_vps_ip.text, _vps_key.text, source_mode))
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.confirmed.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(700, 300))
+
+
+func _confirm_local_migration() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = UIStrings.t("vps.confirm_local_title")
+	dialog.dialog_text = UIStrings.t("vps.confirm_local_body")
+	dialog.ok_button_text = UIStrings.t("vps.confirm_local_ok")
+	dialog.confirmed.connect(SetupService.migrate_to_local)
 	dialog.canceled.connect(dialog.queue_free)
 	dialog.confirmed.connect(dialog.queue_free)
 	add_child(dialog)
@@ -2970,13 +2995,13 @@ func _build_team() -> void:
 	var running := not BackendBus.agents.is_empty() or bool(
 			SetupService.status.get("team_running", false))
 	var primary := Button.new()
-	primary.text = "FERMA TEAM" if running else "AVVIA TEAM"
+	primary.text = UIStrings.t("team.stop") if running else UIStrings.t("team.start")
 	primary.disabled = not bool(SetupService.status.get("ready", false)) and not running
 	primary.add_theme_color_override("font_color", Palette.RED if running else Palette.GREEN)
 	primary.pressed.connect(SetupService.stop_team if running else SetupService.start_team)
 	controls.add_child(primary)
 	var setup := Button.new()
-	setup.text = "SETUP E STATO"
+	setup.text = UIStrings.t("team.setup")
 	setup.pressed.connect(func() -> void: navigate.emit("activation"))
 	controls.add_child(setup)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)

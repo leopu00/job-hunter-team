@@ -200,6 +200,8 @@ func _self_test_vps_contract() -> void:
 			and VpsBackend.expand_user_path("~/keys/id", "/home/Jane Doe") \
 					== "/home/Jane Doe/keys/id" \
 			and VpsBackend.expand_user_path("/tmp/a~b", "/home/test") == "/tmp/a~b" \
+			and VpsBackend.known_hosts_path("203.0.113.10") \
+					!= VpsBackend.known_hosts_path("203.0.113.11") \
 			and VpsBackend._safe_tmux_session("SCOUT-2") \
 			and not VpsBackend._safe_tmux_session("SCOUT-2; send-keys C-c")
 	# Trasporto locale: docker via argv diretto, mai una shell host (su
@@ -700,6 +702,23 @@ func save_vps_config(ip: String, key_path: String) -> void:
 	cfg.set_value("vps", "ip", ip)
 	cfg.set_value("vps", "key_path", key_path)
 	cfg.save(CONFIG_PATH)
+
+
+## Il passaggio VPS -> locale deve essere persistente: `disconnect_backend()`
+## da solo stacca soltanto il processo corrente e al boot successivo _ready()
+## rilegge IP/chiave. Rimuoviamo invece la scelta salvata e adottiamo il
+## container locale, se è già attivo.
+func clear_vps_config() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("vps", "ip", "")
+	cfg.set_value("vps", "key_path", "")
+	cfg.save(CONFIG_PATH)
+
+
+func switch_to_local_backend() -> void:
+	clear_vps_config()
+	set_backend(null)
+	connect_local_backend()
 
 
 ## ── Lato backend (solo gli adapter chiamano i publish_*) ─────────────

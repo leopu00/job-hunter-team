@@ -242,28 +242,17 @@ echo ""
 echo -e "${BOLD}Prossimi step:${RESET}"
 echo ""
 
-REPO_ROOT="$(git -C "$REPO_DIR" rev-parse --show-toplevel 2>/dev/null || echo "$REPO_DIR")"
-START_SCRIPT="$REPO_ROOT/.launcher/start.sh"
-
-if [ -f "$START_SCRIPT" ]; then
-  echo -e "  ${GREEN}▶${RESET} Attiva il virtualenv:"
-  echo -e "      ${BOLD}source .venv/bin/activate${RESET}"
-  echo ""
-  echo -e "  ${GREEN}▶${RESET} Avvia il team:"
-  echo -e "      ${BOLD}$START_SCRIPT${RESET}"
-  echo ""
-  echo -e "  ${GREEN}▶${RESET} Connettiti al Coordinatore:"
-  echo -e "      ${BOLD}tmux attach -t CAPITANO${RESET}"
-else
-  echo -e "  ${GREEN}▶${RESET} Attiva il virtualenv:"
-  echo -e "      ${BOLD}source .venv/bin/activate${RESET}"
-  echo ""
-  echo -e "  ${GREEN}▶${RESET} Avvia il team:"
-  echo -e "      ${BOLD}.launcher/start.sh${RESET}  (dalla root del repo)"
-  echo ""
-  echo -e "  ${GREEN}▶${RESET} Connettiti al Coordinatore:"
-  echo -e "      ${BOLD}tmux attach -t CAPITANO${RESET}"
-fi
+# .launcher/start.sh è stato rimosso il 2026-07-26 (assumeva claude+tmux
+# sull'host, modello pre-container). L'avvio del team passa dal CLI `jht`,
+# che parla col container.
+echo -e "  ${GREEN}▶${RESET} Attiva il virtualenv:"
+echo -e "      ${BOLD}source .venv/bin/activate${RESET}"
+echo ""
+echo -e "  ${GREEN}▶${RESET} Avvia il team:"
+echo -e "      ${BOLD}jht team start${RESET}"
+echo ""
+echo -e "  ${GREEN}▶${RESET} Connettiti al Coordinatore:"
+echo -e "      ${BOLD}tmux attach -t CAPITANO${RESET}"
 
 echo ""
 echo -e "${BOLD}Web App (Next.js) — setup locale:${RESET}"

@@ -1,0 +1,129 @@
+// Dizionario di `DirectivesPanel.tsx`.
+//
+// Le chiavi sono LOCALI a questo file: lo stesso nome può valere
+// tutt'altro altrove (`empty` è "nessun backup" in una pagina e
+// "nessun canale" in un'altra), quindi non vanno accorpate in un
+// dizionario comune. `satisfies Dictionary` fa pretendere al
+// compilatore tutte e sette le lingue: una voce a cui ne manca una
+// non compila, invece di mostrare l'inglese all'utente sbagliato.
+import type { Dictionary } from "@/lib/i18n-dict";
+
+export const T = {
+  title: {
+    it: "Bacheca del team",
+    en: "Team board",
+    es: "Tablón del equipo",
+    fr: "Tableau de l'équipe",
+    de: "Team-Board",
+    hu: "Csapattábla",
+    pt: "Quadro da equipa",
+  },
+  subtitle: {
+    it: "Ordini e strategia permanenti. Restano validi finché non li cambi; il Capitano li rilegge a ogni riavvio e li rispetta come policy.",
+    en: "Permanent orders and strategy. They stay until you change them; the Captain re-reads them on every restart and honors them as policy.",
+    es: "Órdenes y estrategia permanentes. Se mantienen hasta que las cambies; el Capitán las relee en cada reinicio y las respeta como política.",
+    fr: "Ordres et stratégie permanents. Ils restent jusqu'à ce que tu les changes ; le Capitaine les relit à chaque redémarrage et les respecte comme politique.",
+    de: "Dauerhafte Anweisungen und Strategie. Sie bleiben, bis du sie änderst; der Kapitän liest sie bei jedem Neustart und befolgt sie als Policy.",
+    hu: "Állandó utasítások és stratégia. Addig érvényesek, amíg meg nem változtatod; a Kapitány minden újraindításkor újraolvassa és betartja.",
+    pt: "Ordens e estratégia permanentes. Ficam até as mudares; o Capitão relê-as a cada reinício e respeita-as como política.",
+  },
+  addPlaceholder: {
+    it: "Nuova direttiva… (es. Modalità mantenimento: stop nuove posizioni, CV solo 90+)",
+    en: "New directive… (e.g. Maintenance mode: stop new positions, CVs only for 90+)",
+    es: "Nueva directiva… (p. ej. Modo mantenimiento: parar nuevas posiciones, CV solo 90+)",
+    fr: "Nouvelle directive… (ex. Mode maintenance : stop nouveaux postes, CV seulement 90+)",
+    de: "Neue Direktive… (z. B. Wartungsmodus: keine neuen Stellen, Lebensläufe nur für 90+)",
+    hu: "Új direktíva… (pl. Karbantartó mód: nincs új pozíció, önéletrajz csak 90+)",
+    pt: "Nova diretiva… (ex. Modo manutenção: parar novas posições, CV só 90+)",
+  },
+  add: {
+    it: "Aggiungi",
+    en: "Add",
+    es: "Añadir",
+    fr: "Ajouter",
+    de: "Hinzufügen",
+    hu: "Hozzáad",
+    pt: "Adicionar",
+  },
+  empty: {
+    it: "Nessuna direttiva attiva. Aggiungine una qui sopra, oppure scrivila in chat al Capitano.",
+    en: "No active directives. Add one above, or write it in chat to the Captain.",
+    es: "No hay directivas activas. Añade una arriba, o escríbela en el chat al Capitán.",
+    fr: "Aucune directive active. Ajoutes-en une ci-dessus, ou écris-la au Capitaine dans le chat.",
+    de: "Keine aktiven Direktiven. Füge oben eine hinzu oder schreibe sie dem Kapitän im Chat.",
+    hu: "Nincs aktív direktíva. Adj hozzá egyet fent, vagy írd meg a Kapitánynak a chatben.",
+    pt: "Sem diretivas ativas. Adiciona uma acima, ou escreve-a no chat ao Capitão.",
+  },
+  edit: {
+    it: "Modifica",
+    en: "Edit",
+    es: "Editar",
+    fr: "Modifier",
+    de: "Bearbeiten",
+    hu: "Szerkeszt",
+    pt: "Editar",
+  },
+  save: {
+    it: "Salva",
+    en: "Save",
+    es: "Guardar",
+    fr: "Enregistrer",
+    de: "Speichern",
+    hu: "Mentés",
+    pt: "Guardar",
+  },
+  cancel: {
+    it: "Annulla",
+    en: "Cancel",
+    es: "Cancelar",
+    fr: "Annuler",
+    de: "Abbrechen",
+    hu: "Mégse",
+    pt: "Cancelar",
+  },
+  archive: {
+    it: "Archivia",
+    en: "Archive",
+    es: "Archivar",
+    fr: "Archiver",
+    de: "Archivieren",
+    hu: "Archivál",
+    pt: "Arquivar",
+  },
+  added: {
+    it: "Direttiva aggiunta",
+    en: "Directive added",
+    es: "Directiva añadida",
+    fr: "Directive ajoutée",
+    de: "Direktive hinzugefügt",
+    hu: "Direktíva hozzáadva",
+    pt: "Diretiva adicionada",
+  },
+  archivedMsg: {
+    it: "Direttiva archiviata",
+    en: "Directive archived",
+    es: "Directiva archivada",
+    fr: "Directive archivée",
+    de: "Direktive archiviert",
+    hu: "Direktíva archiválva",
+    pt: "Diretiva arquivada",
+  },
+  archivedSection: {
+    it: "Archiviate",
+    en: "Archived",
+    es: "Archivadas",
+    fr: "Archivées",
+    de: "Archiviert",
+    hu: "Archivált",
+    pt: "Arquivadas",
+  },
+  errGeneric: {
+    it: "Operazione fallita",
+    en: "Operation failed",
+    es: "Operación fallida",
+    fr: "Opération échouée",
+    de: "Vorgang fehlgeschlagen",
+    hu: "A művelet sikertelen",
+    pt: "Operação falhou",
+  },
+} satisfies Dictionary;

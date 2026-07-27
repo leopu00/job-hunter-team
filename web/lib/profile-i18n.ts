@@ -7,10 +7,16 @@
  * lingua scelta → italiano → chiave grezza.
  */
 import type { Locale } from "@/i18n/config";
+import type { LocaleDict } from "@/lib/i18n-dict";
 
-type Entry = Partial<Record<Locale, string>> & { it: string };
+// Tutte e sette le lingue obbligatorie. Prima il tipo era
+// `Partial<Record<Locale, string>> & { it: string }`, cioè permetteva
+// di dimenticarne sei su sette senza che nulla protestasse. Le voci
+// erano comunque complete: ora è il compilatore a garantirlo.
+type Entry = LocaleDict;
 
-const T: Record<string, Entry> = {
+// Esportato per la verifica di completezza in tests/js/i18n.
+export const T: Record<string, Entry> = {
   // ── Header pagina ────────────────────────────────────────────────
   bc_dashboard: {
     it: "Dashboard",

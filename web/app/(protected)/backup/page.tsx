@@ -4,154 +4,8 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { intlTag } from "@/lib/locale-tag";
-
-/* ── i18n inline ─────────────────────────────────────────────────── */
-const T: Record<string, Record<string, string>> = {
-  subtitle: {
-    it: "{n} backup · {size} totali",
-    en: "{n} backups · {size} total",
-    hu: "{n} biztonsági mentés · összesen {size}",
-    es: "{n} copias · {size} en total",
-    de: "{n} Backups · {size} gesamt",
-    fr: "{n} sauvegardes · {size} au total",
-    pt: "{n} backups · {size} no total",
-  },
-  create: {
-    it: "crea backup",
-    en: "create backup",
-    hu: "biztonsági mentés",
-    es: "crear copia",
-    de: "Backup erstellen",
-    fr: "créer une sauvegarde",
-    pt: "criar backup",
-  },
-  creating: {
-    it: "creazione...",
-    en: "creating...",
-    hu: "létrehozás...",
-    es: "creando...",
-    de: "wird erstellt...",
-    fr: "création...",
-    pt: "criando...",
-  },
-  restore: {
-    it: "ripristina",
-    en: "restore",
-    hu: "visszaállítás",
-    es: "restaurar",
-    de: "wiederherstellen",
-    fr: "restaurer",
-    pt: "restaurar",
-  },
-  delete: {
-    it: "elimina",
-    en: "delete",
-    hu: "törlés",
-    es: "eliminar",
-    de: "löschen",
-    fr: "supprimer",
-    pt: "excluir",
-  },
-  manual_backup: {
-    it: "Backup manuale {date}",
-    en: "Manual backup {date}",
-    hu: "Kézi biztonsági mentés {date}",
-    es: "Copia manual {date}",
-    de: "Manuelles Backup {date}",
-    fr: "Sauvegarde manuelle {date}",
-    pt: "Backup manual {date}",
-  },
-  created_ok: {
-    it: "Backup creato con successo",
-    en: "Backup created successfully",
-    hu: "Biztonsági mentés sikeresen létrehozva",
-    es: "Copia creada con éxito",
-    de: "Backup erfolgreich erstellt",
-    fr: "Sauvegarde créée avec succès",
-    pt: "Backup criado com sucesso",
-  },
-  err_create: {
-    it: "Errore creazione backup",
-    en: "Backup creation error",
-    hu: "Hiba a biztonsági mentés létrehozásakor",
-    es: "Error al crear la copia",
-    de: "Fehler beim Erstellen des Backups",
-    fr: "Erreur de création de la sauvegarde",
-    pt: "Erro ao criar backup",
-  },
-  confirm_restore: {
-    it: "Ripristinare il backup {id}…?",
-    en: "Restore backup {id}…?",
-    hu: "Visszaállítja a(z) {id}… biztonsági mentést?",
-    es: "¿Restaurar la copia {id}…?",
-    de: "Backup {id}… wiederherstellen?",
-    fr: "Restaurer la sauvegarde {id}… ?",
-    pt: "Restaurar o backup {id}…?",
-  },
-  restored_ok: {
-    it: "Ripristinato in {dir} ({n} file)",
-    en: "Restored to {dir} ({n} files)",
-    hu: "Visszaállítva ide: {dir} ({n} fájl)",
-    es: "Restaurado en {dir} ({n} archivos)",
-    de: "Wiederhergestellt nach {dir} ({n} Dateien)",
-    fr: "Restauré dans {dir} ({n} fichiers)",
-    pt: "Restaurado em {dir} ({n} arquivos)",
-  },
-  err_restore: {
-    it: "Errore ripristino",
-    en: "Restore error",
-    hu: "Visszaállítási hiba",
-    es: "Error de restauración",
-    de: "Fehler bei der Wiederherstellung",
-    fr: "Erreur de restauration",
-    pt: "Erro de restauração",
-  },
-  confirm_delete: {
-    it: "Eliminare definitivamente il backup {id}…?",
-    en: "Permanently delete backup {id}…?",
-    hu: "Véglegesen törli a(z) {id}… biztonsági mentést?",
-    es: "¿Eliminar definitivamente la copia {id}…?",
-    de: "Backup {id}… endgültig löschen?",
-    fr: "Supprimer définitivement la sauvegarde {id}… ?",
-    pt: "Excluir permanentemente o backup {id}…?",
-  },
-  deleted_ok: {
-    it: "Backup eliminato",
-    en: "Backup deleted",
-    hu: "Biztonsági mentés törölve",
-    es: "Copia eliminada",
-    de: "Backup gelöscht",
-    fr: "Sauvegarde supprimée",
-    pt: "Backup excluído",
-  },
-  err_delete: {
-    it: "Errore eliminazione",
-    en: "Deletion error",
-    hu: "Törlési hiba",
-    es: "Error de eliminación",
-    de: "Fehler beim Löschen",
-    fr: "Erreur de suppression",
-    pt: "Erro de exclusão",
-  },
-  loading: {
-    it: "Caricamento...",
-    en: "Loading...",
-    hu: "Betöltés...",
-    es: "Cargando...",
-    de: "Wird geladen...",
-    fr: "Chargement...",
-    pt: "Carregando...",
-  },
-  empty: {
-    it: "Nessun backup trovato.",
-    en: "No backups found.",
-    hu: "Nem található biztonsági mentés.",
-    es: "No se encontraron copias.",
-    de: "Keine Backups gefunden.",
-    fr: "Aucune sauvegarde trouvée.",
-    pt: "Nenhum backup encontrado.",
-  },
-};
+import { makeT } from "@/lib/i18n-dict";
+import { T } from "./page.i18n";
 
 type Backup = {
   id: string;
@@ -249,7 +103,7 @@ function BackupRow({
 
 export default function BackupPage() {
   const locale = useLocale();
-  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const tr = makeT(T, locale);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [totalSize, setTotalSize] = useState(0);
   const [creating, setCreating] = useState(false);

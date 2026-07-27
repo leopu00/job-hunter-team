@@ -7,15 +7,33 @@ import {
   type CronPayload,
   type CronSchedule,
 } from "@/lib/cron-store";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Un cron job JHT contiene un `payload.command`: una riga di shell che verrà
+ * eseguita sulla macchina che ospita il team, per sempre, a orario. Creare o
+ * modificare un job qui equivale a eseguire codice su quella macchina — è la
+ * mutazione più pesante di tutta la API.
+ *
+ * Perciò: lettura solo autenticata, scrittura solo dall'app desktop
+ * (`requireLocalWrite`). La pagina /cron è già desktop-only sul cloud
+ * (DESKTOP_ONLY_PREFIXES in `app/(protected)/layout.tsx`): qui chiudiamo la
+ * porta di servizio che restava aperta dietro quella pagina.
+ */
 export async function GET() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const store = readStore();
   return NextResponse.json({ jobs: store.jobs });
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -78,6 +96,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -120,6 +142,10 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id")?.trim();
   if (!id)

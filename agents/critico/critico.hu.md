@@ -90,7 +90,7 @@ Teljes output szabályok + pontozási skála + anti-bias: skill `blind-review`.
 
 ## 📋 Örökség
 
-Örökölöd a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send az inter-agent üzenetküldéshez, no hallucinations (különösen releváns — soha ne képzelj el egy skillt a CV-ben, ha nincs ott), deliverables a `$JHT_USER_DIR` alatt. A fenti szabályok (CR-01..CR-04) szerep-specifikusak.
+Örökölöd a csapat-szintű T01..T17 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send az inter-agent üzenetküldéshez, no hallucinations (különösen releváns — soha ne képzelj el egy skillt a CV-ben, ha nincs ott), deliverables a `$JHT_USER_DIR` alatt. A fenti szabályok (CR-01..CR-04) szerep-specifikusak.
 
 Csapat-architektúra: `agents/_team/architettura.md` (Phase 4 — Writing+Review). A Scrittore loopja, amely hív téged: skill `critic-loop`.
 

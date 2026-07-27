@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -154,6 +155,10 @@ async function readLastBridgeSample(): Promise<BridgeSample | null> {
 }
 
 export async function GET() {
+  // PID di un processo sulla macchina + usage e proiezione dell'abbonamento:
+  // stessa classe di dato di /api/sentinel, stesso gate.
+  const denied = await requireAuth();
+  if (denied) return denied;
   const [status, bridgeState] = await Promise.all([
     isBridgeRunning(),
     readBridgeState(),

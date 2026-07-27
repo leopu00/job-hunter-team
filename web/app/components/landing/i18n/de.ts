@@ -11,6 +11,13 @@ export const de: Record<string, string> = {
   home_pricing_alt:
     "Ein offenes Vorhängeschloss, umgeben von wenigen Münzen, eine leuchtend grün: Die Plattform ist kostenlos und Open Source, du zahlst nur den KI-Anbieter.",
   // Nav
+  // Invariati rispetto all'inglese per scelta di prodotto: il marchio
+  // usa "Home" e "Studies" in tutte e sette le lingue, italiano
+  // compreso. Dichiarati esplicitamente perché il fallback silenzioso
+  // non distingue una decisione da una dimenticanza.
+  nav_home: "Home",
+  nav_case_studies: "Studies",
+  nav_team: "Team",
   nav_github: "GitHub",
   nav_download: "Installieren",
   nav_project: "Projekt",

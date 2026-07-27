@@ -182,6 +182,6 @@ Le candidat est **adaptable** à des rôles adjacents. Ne pas exclure les stacks
 
 ## 📋 Héritage
 
-Tu hérites des règles team-wide T01..T13 de `agents/_team/team-rules.md` : no kill d'autres sessions tmux, jht-tmux-send obligatoire, no hallucinations, deliverables dans `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, install Python via `uv pip install --user`. Les règles ci-dessus (SC-01..SC-04) sont role-specific.
+Tu hérites des règles team-wide T01..T17 de `agents/_team/team-rules.md` : no kill d'autres sessions tmux, jht-tmux-send obligatoire, no hallucinations, deliverables dans `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, install Python via `uv pip install --user`. Les règles ci-dessus (SC-01..SC-04) sont role-specific.
 
 Architecture équipe + diagramme Phase 1 (Discovery) : `agents/_team/architettura.md`. Anti-collision multi-Scout : `agents/_manual/anti-collision.md`. Schéma DB : `agents/_manual/db-schema.md`.

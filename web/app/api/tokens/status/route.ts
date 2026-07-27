@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -131,6 +132,10 @@ async function readMeterState(): Promise<MeterState | null> {
 }
 
 export async function GET() {
+  // Consumo token per agente, provider in uso e finestra di reset: dice
+  // quanto sta spendendo l'utente e su quale abbonamento.
+  const denied = await requireAuth();
+  if (denied) return denied;
   const [status, state] = await Promise.all([
     isMeterRunning(),
     readMeterState(),
