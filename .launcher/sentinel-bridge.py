@@ -491,6 +491,19 @@ def _daily_halt_active():
     return DAILY_HALT_FLAG.exists()
 
 
+def _daily_hardstop_disabled():
+    """True se il cap giornaliero è stato disattivato con JHT_DAILY_HARDSTOP=0.
+
+    Il cap giornaliero (`weekly_rimanente / finestre_rimaste`) esiste per non
+    bruciare il weekly in due sedute. Durante un **burst dimostrativo** però è
+    proprio quello che si vuole: saturare la finestra 5h invece di spalmarla.
+    Stessa forma di JHT_PACE_GUARD, ma con l'effetto opposto — e attenzione,
+    questo toglie l'ultima rete: la velocità resta governata dal `pace_guard`,
+    il tetto complessivo no. Da tenere acceso per una finestra, non per sempre.
+    """
+    return os.environ.get("JHT_DAILY_HARDSTOP", "1").strip() in ("0", "false", "no")
+
+
 def _esc_all_sessions():
     """Manda un ESC a ogni sessione tmux: interrompe il turno in corso senza
     uccidere il processo — una pausa pulita, non un kill. Best-effort: qualunque
@@ -1955,7 +1968,21 @@ def main():
                 entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
             _hb = _dp.get("budget") if isinstance(_dp, dict) else None
             _hc = _dp.get("consumed") if isinstance(_dp, dict) else None
-            if isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
+            if _daily_hardstop_disabled():
+                # Deroga esplicita (JHT_DAILY_HARDSTOP=0): il cap giornaliero
+                # protegge il WEEKLY spalmandolo sulle finestre; durante un burst
+                # dimostrativo si accetta di sforarlo per saturare la finestra 5h.
+                # Il pace_guard resta attivo: la velocità continua a essere
+                # governata, è solo l'interruttore generale a non scattare.
+                # Se un halt era già attivo lo si rimuove, altrimenti il team
+                # resterebbe in standby con il freno tolto e nessuno a liberarlo.
+                if _daily_halt_active():
+                    try:
+                        DAILY_HALT_FLAG.unlink()
+                    except OSError:
+                        pass
+                    print(f"[bridge V6] {now_h} DAILY-HARDSTOP disabilitato → flag rimosso")
+            elif isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
                 _hcap = _hb + 5.0
                 _over_cap = _hc > _hcap
                 if _daily_halt_active():
