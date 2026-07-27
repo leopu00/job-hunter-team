@@ -8,6 +8,7 @@ import os from "node:os";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { activeDemoPersona } from "@/lib/demo/mode";
 import { getDemoPositionsData } from "@/lib/demo/data";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -164,11 +165,19 @@ function generateSample(): Application[] {
 }
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status") as AppStatus | null;
   // Demo mode: candidature derivate dalle stesse posizioni demo
   // (applied→sent, response→interview), mai il filesystem locale.
   const dp = await activeDemoPersona();
+  // Il visitatore in demo è anonimo per definizione (wizard /welcome, nessun
+  // account): l'auth vale solo fuori dalla demo, dove queste sono le
+  // candidature VERE dell'utente. Stesso ordine di /api/profile/files.
+  if (!dp) {
+    const denied = await requireAuth();
+    if (denied) return denied;
+  }
+
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status") as AppStatus | null;
   let apps = dp
     ? getDemoPositionsData(dp)
         .filter((p) => p.status === "applied" || p.status === "response")

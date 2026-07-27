@@ -3,6 +3,7 @@ import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,11 @@ function getLastTask(name: string): { id: string; stato: string } | null {
 }
 
 export async function GET() {
+  // Sonda le sessioni tmux della macchina (`tmux has-session` per ogni
+  // agente) e legge i task su disco: stato interno di una macchina, non
+  // una pagina pubblica.
+  const denied = await requireAuth();
+  if (denied) return denied;
   const team = TEAM.map((m) => ({
     id: m.id,
     name: m.name,

@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -70,11 +71,21 @@ function writeStatus(status: BridgeStatusFile) {
 }
 
 export async function GET() {
+  // Espone bot username, PID e contatori dei messaggi dell'utente.
+  const denied = await requireAuth();
+  if (denied) return denied;
   const status = readStatus();
   return NextResponse.json({ status });
 }
 
 export async function POST(req: NextRequest) {
+  // `start` fa spawn di un processo detached sulla macchina che serve
+  // questa app e `stop` gli manda SIGTERM: controllo di sistema, quindi
+  // solo dall'app desktop (web read-only).
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();

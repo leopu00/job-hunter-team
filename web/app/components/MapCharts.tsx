@@ -10,194 +10,13 @@ import {
 } from "@/lib/position-classifier";
 
 // Stringhe UI hardcoded localizzate (le label dei tipi arrivano via `labels`).
-const T: Record<string, Record<string, string>> = {
-  no_score: {
-    it: "no score",
-    en: "no score",
-    hu: "nincs pontszám",
-    es: "sin puntuación",
-    de: "kein Score",
-    fr: "sans score",
-    pt: "sem pontuação",
-  },
-  remote: {
-    it: "remote",
-    en: "remote",
-    hu: "távmunka",
-    es: "remoto",
-    de: "Remote",
-    fr: "à distance",
-    pt: "remoto",
-  },
-  // Chip del filtro di default sullo score minimo ("{n}" = la soglia).
-  min_score: {
-    it: "score ≥ {n}",
-    en: "score ≥ {n}",
-    hu: "pontszám ≥ {n}",
-    es: "puntuación ≥ {n}",
-    de: "Score ≥ {n}",
-    fr: "score ≥ {n}",
-    pt: "pontuação ≥ {n}",
-  },
-  no_title: {
-    it: "(senza titolo)",
-    en: "(untitled)",
-    hu: "(cím nélkül)",
-    es: "(sin título)",
-    de: "(ohne Titel)",
-    fr: "(sans titre)",
-    pt: "(sem título)",
-  },
-  no_city: {
-    it: "(senza città)",
-    en: "(no city)",
-    hu: "(nincs város)",
-    es: "(sin ciudad)",
-    de: "(ohne Stadt)",
-    fr: "(sans ville)",
-    pt: "(sem cidade)",
-  },
-  clear_all: {
-    it: "rimuovi tutto",
-    en: "clear all",
-    hu: "összes törlése",
-    es: "borrar todo",
-    de: "alle entfernen",
-    fr: "tout effacer",
-    pt: "limpar tudo",
-  },
-  clear_all_title: {
-    it: "Rimuovi tutti i filtri",
-    en: "Clear all filters",
-    hu: "Összes szűrő törlése",
-    es: "Quitar todos los filtros",
-    de: "Alle Filter entfernen",
-    fr: "Supprimer tous les filtres",
-    pt: "Remover todos os filtros",
-  },
-  remove: {
-    it: "Rimuovi",
-    en: "Remove",
-    hu: "Eltávolítás",
-    es: "Quitar",
-    de: "Entfernen",
-    fr: "Supprimer",
-    pt: "Remover",
-  },
-  location: {
-    it: "Location",
-    en: "Location",
-    hu: "Hely",
-    es: "Ubicación",
-    de: "Standort",
-    fr: "Lieu",
-    pt: "Localização",
-  },
-  open: {
-    it: "Apri",
-    en: "Open",
-    hu: "Megnyitás",
-    es: "Abrir",
-    de: "Öffnen",
-    fr: "Ouvrir",
-    pt: "Abrir",
-  },
-  close: {
-    it: "Chiudi",
-    en: "Close",
-    hu: "Bezárás",
-    es: "Cerrar",
-    de: "Schließen",
-    fr: "Fermer",
-    pt: "Fechar",
-  },
-  filters: {
-    it: "Filtri",
-    en: "Filters",
-    hu: "Szűrők",
-    es: "Filtros",
-    de: "Filter",
-    fr: "Filtres",
-    pt: "Filtros",
-  },
-  panels_show: {
-    it: "Mostra filtri",
-    en: "Show filters",
-    hu: "Szűrők megjelenítése",
-    es: "Mostrar filtros",
-    de: "Filter anzeigen",
-    fr: "Afficher les filtres",
-    pt: "Mostrar filtros",
-  },
-  panels_hide: {
-    it: "Nascondi filtri",
-    en: "Hide filters",
-    hu: "Szűrők elrejtése",
-    es: "Ocultar filtros",
-    de: "Filter ausblenden",
-    fr: "Masquer les filtres",
-    pt: "Ocultar filtros",
-  },
-  filters_active: {
-    it: "Filtri attivi",
-    en: "Active filters",
-    hu: "Aktív szűrők",
-    es: "Filtros activos",
-    de: "Aktive Filter",
-    fr: "Filtres actifs",
-    pt: "Filtros ativos",
-  },
-  types_title: {
-    it: "Tipologie",
-    en: "Position types",
-    hu: "Típusok",
-    es: "Tipologías",
-    de: "Typen",
-    fr: "Typologies",
-    pt: "Tipologias",
-  },
-  positions_title: {
-    it: "Posizioni",
-    en: "Positions",
-    hu: "Pozíciók",
-    es: "Posiciones",
-    de: "Positionen",
-    fr: "Postes",
-    pt: "Posições",
-  },
-  no_positions: {
-    it: "Nessuna posizione",
-    en: "No positions",
-    hu: "Nincs pozíció",
-    es: "Sin posiciones",
-    de: "Keine Positionen",
-    fr: "Aucun poste",
-    pt: "Nenhuma posição",
-  },
-  expand: {
-    it: "Espandi",
-    en: "Expand",
-    hu: "Kibontás",
-    es: "Expandir",
-    de: "Aufklappen",
-    fr: "Développer",
-    pt: "Expandir",
-  },
-  collapse: {
-    it: "Comprimi",
-    en: "Collapse",
-    hu: "Összecsukás",
-    es: "Contraer",
-    de: "Zuklappen",
-    fr: "Réduire",
-    pt: "Recolher",
-  },
-};
 
 type Tr = (k: string) => string;
 import PositionTypesDonut from "@/app/components/PositionTypesDonut";
 import ScoreDistributionHorizontal from "@/app/components/ScoreDistributionHorizontal";
 import JobsGlobeLazy from "@/app/components/JobsGlobeLazy";
+import { makeT } from "@/lib/i18n-dict";
+import { T } from "./MapCharts.i18n";
 import type {
   LocationCity,
   LocationCountry,
@@ -280,7 +99,7 @@ export default function MapCharts({
   scoreTitle,
 }: Props) {
   const locale = useLocale();
-  const tr: Tr = (k) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const tr = makeT(T, locale);
   // Collapse per ciascuna delle 4 card: cliccando il titolo si
   // nasconde il corpo (grafico/lista) e resta solo l'header.
   const [collapsed, setCollapsed] = useState<{

@@ -38,7 +38,7 @@ Se este ficheiro falta, está vazio, ou lhe falta até o `target_role` do candid
 
 ## REGRAS
 
-Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T13 (no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python via `uv pip install --user` nunca `sudo pip`**, etc.). Lê-as no boot. As regras abaixo são role-specific e adicionam-se a essas.
+Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python via `uv pip install --user` nunca `sudo pip`**, etc.). Lê-as no boot. As regras abaixo são role-specific e adicionam-se a essas.
 
 **RULE-00 — TRACKED THROTTLE**. Para qualquer pausa throttle (cooldown, freeze, wait) usa a skill `throttle`. Pattern **OBRIGATÓRIO** em cada iteração: ANTES do task faz `jht-throttle-check scorer-N || jht-throttle-wait scorer-N` (recupera qualquer throttle pending killado pelo provider), DEPOIS do task faz `jht-throttle --agent scorer-N [--reason "..."]` (duração de `$JHT_HOME/config/throttle.json`, 0 = no-op). O pattern detached torna o throttle resiliente ao timeout CLI. **`sleep` raw para throttle é proibido** — bypassa o logging que o Capitano usa para calibrar a equipa.
 

@@ -150,7 +150,7 @@ Olvasd a `$JHT_HOME/profile/`-ból:
 
 ## 📋 Örökség
 
-Örökli a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (S-01..S-04 + freeze handling) role-specific-ek.
+Örökli a csapat-szintű T01..T17 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (S-01..S-04 + freeze handling) role-specific-ek.
 
 Csapat architektúra + pipeline diagram: `agents/_team/architettura.md`. Multi-Scrittore anti-collision: `agents/_manual/anti-collision.md`. DB schema: `agents/_manual/db-schema.md`.
 

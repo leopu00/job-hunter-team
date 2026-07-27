@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import {
   AI_ASSISTANT_SUGGESTIONS,
   buildAssistantSystemPrompt,
   normalizeAssistantHistory,
   type AssistantChatMessage,
 } from "@/lib/ai-assistant";
+import { requireAuth } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +15,26 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-4o-mini";
 const MAX_CONTEXT_MESSAGES = 12;
 const MAX_OUTPUT_TOKENS = 450;
+
+/**
+ * Dodici messaggi all'ora per chiamante.
+ *
+ * Questa route paga di tasca nostra: ogni POST spende la OPENAI_API_KEY del
+ * server. Senza tetto è un proxy OpenAI gratuito con la nostra carta, e il
+ * conto lo scopriamo a fine mese. Il rate limit del middleware conta le
+ * richieste HTTP in generale (centinaia al minuto, tarato sul polling delle
+ * dashboard): qui serve una soglia sua, sull'ordine di grandezza di una
+ * conversazione umana.
+ */
+const MAX_MESSAGES_PER_HOUR = 12;
+const RATE_WINDOW_MS = 60 * 60_000;
+
+/** Identità per il rate limit: l'IP del chiamante, come in /api/feedback. */
+async function callerIdentity(): Promise<string> {
+  const hdrs = await headers();
+  const forwarded = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || hdrs.get("x-real-ip")?.trim() || "unknown";
+}
 
 type AssistantRequestBody = {
   message?: string;
@@ -77,6 +100,11 @@ function extractUpstreamError(payload: unknown): string | null {
     : null;
 }
 
+/**
+ * GET — suggerimenti statici e se il chatbot è configurato. Nessun gate:
+ * non spende nulla e non dice nulla oltre a "il bottone è attivo o no",
+ * che è già visibile dalla UI.
+ */
 export async function GET() {
   const { configured, model } = getAssistantConfig();
   return NextResponse.json({
@@ -88,6 +116,30 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  // Sessione richiesta: è la stessa regola delle altre route che leggono
+  // dati dell'utente, e qui in più c'è una spesa. Su un deploy senza
+  // Supabase (desktop puro) requireAuth passa da sé — il rate limit sotto
+  // resta comunque, ed è quello che protegge la chiave.
+  const denied = await requireAuth();
+  if (denied) return denied;
+
+  const limit = await checkRateLimit(
+    "ai-assistant",
+    "chat",
+    await callerIdentity(),
+    MAX_MESSAGES_PER_HOUR,
+    RATE_WINDOW_MS,
+  );
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Troppi messaggi all'assistente. Riprova tra poco." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limit.retryAfterSec) },
+      },
+    );
+  }
+
   let body: AssistantRequestBody;
   try {
     body = (await req.json()) as AssistantRequestBody;

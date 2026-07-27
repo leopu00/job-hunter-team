@@ -10,23 +10,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Suite vitest completa — l'UNICO posto in cui gira. Fino al 2026-07-26 il
+  # job viveva anche in ci.yml (stesso trigger, stesso codice, due esecuzioni)
+  # e qui era una matrice `config|tasks|wizard` che si presentava come elenco
+  # esaustivo pur omettendo `validators/` (redazione dei dati sensibili nei
+  # ticket): la cartella non girava in nessun job della matrice. Niente
+  # matrice, niente elenco da tenere allineato a mano: `npm test` prende tutto
+  # quello che c'è in tests/js, e un modulo nuovo è coperto il giorno che nasce.
   vitest:
-    name: vitest — ${{ matrix.module }}
+    name: vitest — tests/js
     runs-on: ubuntu-latest
-
-    # La matrice era di 11 moduli; 8 sono spariti il 2026-07-25 insieme alle
-    # 30 sottocartelle di `shared/` che il prodotto non importava. Testavano
-    # scaffolding: 692 dei 933 test guardavano codice irraggiungibile.
-    # Restano i tre che puntano a codice spedito: `config` (schemi Zod letti da
-    # web/ e dagli agenti), `tasks` (demo mode, cron, credentials, daemon) e
-    # `wizard` (il setup del CLI — test in .js, non .ts).
-    strategy:
-      fail-fast: false
-      matrix:
-        module:
-          - config
-          - tasks
-          - wizard
 
     steps:
       - uses: actions/checkout@v7
@@ -39,30 +32,40 @@ jobs:
             tests/js/package-lock.json
             web/package-lock.json
             cli/package-lock.json
+            shared/package-lock.json
             shared/cron/package-lock.json
 
-      - name: Install dependencies
+      - name: Install test runner dependencies
         working-directory: tests/js
         run: npm ci
 
-      - name: Install web dependencies for task imports
-        if: matrix.module == 'tasks'
+      # tasks/demo-*.test.ts importano `@/lib/demo/...` (alias → web/), che a
+      # sua volta tira `next/headers`.
+      - name: Install web dependencies for imported routes
         working-directory: web
         run: npm ci
 
-      - name: Install CLI dependencies for task imports
-        if: matrix.module == 'tasks'
+      # wizard/setup.test.js importa cli/wizard/setup.js e lancia cli/bin/jht.js.
+      - name: Install CLI dependencies for imported commands
         working-directory: cli
         run: npm ci
 
-      - name: Install cron dependencies for task imports
-        if: matrix.module == 'tasks'
+      # config/schema.test.ts importa shared/config/schema.ts → `zod`. Senza
+      # questo `npm ci` lo schema veniva validato con la copia di zod di
+      # tests/js: fino al 2026-07-26 era la 3.x mentre il prodotto è sulla 4.x,
+      # cioè la CI validava lo schema con una libreria che nessuno spedisce.
+      - name: Install shared dependencies for imported modules
+        working-directory: shared
+        run: npm ci
+
+      # tasks/cron.test.ts importa shared/cron/schedule.js → `croner`.
+      - name: Install cron dependencies for imported modules
         working-directory: shared/cron
         run: npm ci
 
-      - name: Run tests — ${{ matrix.module }}
+      - name: Run tests
         working-directory: tests/js
-        run: npx vitest run ${{ matrix.module }} --reporter=verbose
+        run: npm test
 
   # La suite Python (agenti, skill, sync, installer) girava solo a mano: per
   # tre settimane nessuno ha visto che tests/test_public_installers_sync.py
@@ -118,15 +121,19 @@ jobs:
       - name: Run pytest
         run: python -m pytest tests/ -q
 
-  # Spec end-to-end che toccano l'area riservata. Gira solo il sottoinsieme
-  # mantenuto (wizard /welcome + demo mode): il resto della suite è fermo al
-  # 2026-07-03 e si skippa da solo — vedi e2e/README.md § "State of the suite"
-  # e [JHT-E2E-STALE] nel BACKLOG.
+  # Spec end-to-end. Gira TUTTO ciò che non è in quarantena: le 75 spec
+  # storiche testavano un sito che non esiste più (pagine rimosse, plane locale
+  # ritirato, `/api/health` cambiato) e stanno in e2e/tests/quarantine/, che il
+  # playwright.config esclude — il perché, gruppo per gruppo, è nel README lì
+  # dentro. Restano wizard /welcome, demo mode e i metadati social/PWA.
+  #
+  # Non c'è più un elenco di spec da tenere allineato a mano: una spec nuova in
+  # e2e/tests/ gira dal primo push.
   #
   # Contro `next start` (build di produzione) e non `next dev`: niente HMR,
   # quindi niente dipendenza dall'host, ed è la stessa cosa che gira su Vercel.
   e2e:
-    name: e2e — welcome wizard + demo mode
+    name: e2e — welcome wizard, demo mode, social metadata
     runs-on: ubuntu-latest
     # Senza i segreti dell'account di test l'area riservata non è raggiungibile
     # e i test si skipperebbero in silenzio: meglio non far partire il job.
@@ -162,12 +169,19 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # NEXT_PUBLIC_* è inlinata a build time: il deploy mode va deciso qui.
+      #
+      # NEXT_PUBLIC_SITE_URL punta al server del job perché `metadataBase` ne
+      # deriva og:image, canonical e sitemap: senza, il build li assolutizza su
+      # https://jobhunterteam.ai e una spec che segue og:image finirebbe a
+      # interrogare la produzione — CI che dipende dal sito vivo, cioè rossa
+      # quando cade qualcosa che non c'entra con la PR.
       - name: Build web (cloud mode)
         working-directory: web
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
           NEXT_PUBLIC_JHT_DEPLOY: cloud
+          NEXT_PUBLIC_SITE_URL: http://localhost:3011
 
       - name: Start web
         working-directory: web
@@ -175,6 +189,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/empty-jht"
           JHT_HOME="$RUNNER_TEMP/empty-jht" \
           NEXT_PUBLIC_JHT_DEPLOY=cloud \
+          NEXT_PUBLIC_SITE_URL=http://localhost:3011 \
           npx next start -p 3011 > "$RUNNER_TEMP/next.log" 2>&1 &
           # Attesa senza dipendenze da scaricare: /api/demo risponde solo a
           # server pronto ed è cloud-only, quindi conferma anche il deploy mode.
@@ -207,7 +222,7 @@ jobs:
         working-directory: e2e
         env:
           BASE_URL: http://localhost:3011
-        run: npx playwright test 80-welcome 81-demo --reporter=list
+        run: npx playwright test --reporter=list
 
       # Le credenziali non devono sopravvivere al job nemmeno in un artifact.
       - name: Wipe the session

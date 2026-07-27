@@ -12,6 +12,12 @@ export const pt: Record<string, string> = {
   home_pricing_alt:
     "Um cadeado aberto rodeado por algumas moedas, uma verde brilhante: a plataforma é gratuita e open source, só pagas o fornecedor de IA.",
   // Nav
+  // Invariati rispetto all'inglese per scelta di prodotto: il marchio
+  // usa "Home" e "Studies" in tutte e sette le lingue, italiano
+  // compreso. Dichiarati esplicitamente perché il fallback silenzioso
+  // non distingue una decisione da una dimenticanza.
+  nav_home: "Home",
+  nav_case_studies: "Studies",
   nav_github: "GitHub",
   nav_download: "Instalar",
   nav_project: "Projeto",

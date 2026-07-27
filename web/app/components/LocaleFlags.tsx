@@ -1,15 +1,15 @@
 /**
  * Bandierine SVG delle sette lingue supportate.
  *
- * Vivevano duplicate in LanguageSwitcher (area protetta) e LandingNav
- * (landing pubblica), e avevano già iniziato a divergere: la sfera
- * armillare del Portogallo era un anello dorato in una copia e un disco
- * giallo pieno nell'altra. Qui esistono una volta sola, nella versione
- * di LanguageSwitcher — quella che le Impostazioni riusavano già.
+ * Vivevano duplicate nello switcher lingua dell'area protetta e in
+ * LandingNav (landing pubblica), e avevano già iniziato a divergere: la
+ * sfera armillare del Portogallo era un anello dorato in una copia e un
+ * disco giallo pieno nell'altra. Qui esistono una volta sola.
  *
- * Modulo a parte e non dentro LanguageSwitcher perché quello è un client
- * component con stato e fetch: chi vuole solo le bandierine (la landing,
- * le Impostazioni) non deve tirarselo dietro nel bundle.
+ * Modulo a parte e non dentro un componente di switch lingua perché
+ * quello sarebbe un client component con stato e fetch: chi vuole solo
+ * le bandierine (la landing, le Impostazioni) non deve tirarselo dietro
+ * nel bundle.
  */
 function FlagIT() {
   return (

@@ -36,6 +36,7 @@ Config:
   JHT_HOME                                        — dir config (default ~/.jht)
 """
 
+import fcntl
 import importlib.util
 import json
 import os
@@ -78,6 +79,11 @@ _LAST_VITALS_ALERT_AT = 0.0
 DATA_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 LOG_TXT = LOGS_DIR / "sentinel-log.txt"
 PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
+# Lockfile del singleton (flock). File DEDICATO e mai cancellato da nessuno:
+# il PID file lo rimuovono bridge-control.sh e pid1 (cleanupStaleBridgeState),
+# e cancellare un file flockato ne rompe la mutua esclusione (il prossimo
+# processo crea un inode nuovo e prende un lock diverso).
+LOCK_FILE = LOGS_DIR / "sentinel-bridge.lock"
 # State pubblico letto dall'UI web (web/app/api/bridge/status/route.ts).
 # Source-of-truth del prossimo tick: il bridge calcola e pubblica qui;
 # la UI legge senza ricostruire la logica (che cambierebbe ogni V*).
@@ -483,6 +489,19 @@ def jht_tmux_send(session, text):
 def _daily_halt_active():
     """True se il team è in standby per sforo del cap giornaliero (#2)."""
     return DAILY_HALT_FLAG.exists()
+
+
+def _daily_hardstop_disabled():
+    """True se il cap giornaliero è stato disattivato con JHT_DAILY_HARDSTOP=0.
+
+    Il cap giornaliero (`weekly_rimanente / finestre_rimaste`) esiste per non
+    bruciare il weekly in due sedute. Durante un **burst dimostrativo** però è
+    proprio quello che si vuole: saturare la finestra 5h invece di spalmarla.
+    Stessa forma di JHT_PACE_GUARD, ma con l'effetto opposto — e attenzione,
+    questo toglie l'ultima rete: la velocità resta governata dal `pace_guard`,
+    il tetto complessivo no. Da tenere acceso per una finestra, non per sempre.
+    """
+    return os.environ.get("JHT_DAILY_HARDSTOP", "1").strip() in ("0", "false", "no")
 
 
 def _esc_all_sessions():
@@ -1231,24 +1250,59 @@ def write_log(entry):
 
 # ── Singleton lock ──────────────────────────────────────────────────────
 
-def _pid_alive(pid):
-    try:
-        os.kill(pid, 0)
-        return True
-    except (OSError, ProcessLookupError):
-        return False
+# Il file handle del lock resta aperto per TUTTA la vita del processo: è il
+# possesso del fd a tenere il flock. Se il modulo lo lasciasse andare, il GC
+# chiuderebbe il fd e il lock cadrebbe.
+_LOCK_FH = None
 
 
 def acquire_singleton_lock():
-    """Esci se un altro bridge è già vivo (PID file)."""
+    """Singleton ATOMICO via flock. Esci se un altro bridge è già vivo.
+
+    Prima era un check-then-write sul PID file: fra `PID_FILE.exists()` e
+    `write_text()` c'è una finestra in cui due bridge lanciati insieme si
+    vedono entrambi soli e partono entrambi → doppio [BRIDGE TICK], doppio
+    consumo di quota. Non è teorico: i due entry point (agent-watchdog.sh →
+    start-agent.sh bridge, e team-commands-poller.js → bridge-control.sh)
+    possono partire in parallelo.
+
+    flock(LOCK_EX|LOCK_NB) è atomico a livello di kernel e si rilascia da solo
+    quando il processo muore (anche di SIGKILL), quindi non lascia lock stale
+    da ripulire — a differenza del PID file, che sopravvive ai crash.
+
+    Il PID file continua a essere scritto: lo leggono la UI
+    (web/app/api/bridge/status/route.ts) e pid1.
+    """
+    global _LOCK_FH
     try:
-        if PID_FILE.exists():
-            old_pid = int(PID_FILE.read_text(encoding="utf-8").strip() or "0")
-            if old_pid and old_pid != os.getpid() and _pid_alive(old_pid):
-                print(f"[bridge V5] altra istanza viva (pid={old_pid}), exit")
-                sys.exit(0)
+        fh = open(LOCK_FILE, "a+", encoding="utf-8")
+    except OSError as e:
+        # Filesystem non scrivibile: meglio un bridge senza lock che nessun
+        # bridge (il kill-by-marker dello spawner resta come rete).
+        print(f"[bridge V5] WARN lockfile non apribile ({e}) — proseguo senza lock")
+        return
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        try:
+            fh.seek(0)
+            other = fh.read().strip() or "?"
+        except OSError:
+            other = "?"
+        fh.close()
+        print(f"[bridge V5] altra istanza viva (pid={other}), exit")
+        sys.exit(0)
+    _LOCK_FH = fh
+    try:
+        fh.seek(0)
+        fh.truncate()
+        fh.write(str(os.getpid()))
+        fh.flush()
+    except OSError:
+        pass
+    try:
         PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
-    except (OSError, ValueError):
+    except OSError:
         pass
 
 
@@ -1914,7 +1968,21 @@ def main():
                 entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
             _hb = _dp.get("budget") if isinstance(_dp, dict) else None
             _hc = _dp.get("consumed") if isinstance(_dp, dict) else None
-            if isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
+            if _daily_hardstop_disabled():
+                # Deroga esplicita (JHT_DAILY_HARDSTOP=0): il cap giornaliero
+                # protegge il WEEKLY spalmandolo sulle finestre; durante un burst
+                # dimostrativo si accetta di sforarlo per saturare la finestra 5h.
+                # Il pace_guard resta attivo: la velocità continua a essere
+                # governata, è solo l'interruttore generale a non scattare.
+                # Se un halt era già attivo lo si rimuove, altrimenti il team
+                # resterebbe in standby con il freno tolto e nessuno a liberarlo.
+                if _daily_halt_active():
+                    try:
+                        DAILY_HALT_FLAG.unlink()
+                    except OSError:
+                        pass
+                    print(f"[bridge V6] {now_h} DAILY-HARDSTOP disabilitato → flag rimosso")
+            elif isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
                 _hcap = _hb + 5.0
                 _over_cap = _hc > _hcap
                 if _daily_halt_active():

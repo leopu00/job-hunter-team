@@ -4,15 +4,15 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { requireAuth, requireLocalWrite } from "@/lib/auth";
+import {
+  ALL_PROVIDERS,
+  API_KEY_PROVIDERS,
+  type Provider,
+} from "@/lib/providers";
 
 export const dynamic = "force-dynamic";
 
 const CREDS_DIR = path.join(JHT_HOME, "credentials");
-
-const API_KEY_PROVIDERS = ["claude", "openai", "kimi"] as const;
-const OAUTH_PROVIDERS = ["chatgpt_pro", "claude_max"] as const;
-const ALL_PROVIDERS = [...API_KEY_PROVIDERS, ...OAUTH_PROVIDERS] as const;
-type Provider = (typeof ALL_PROVIDERS)[number];
 
 const ENV_VAR_MAP: Record<string, string> = {
   claude: "ANTHROPIC_API_KEY",

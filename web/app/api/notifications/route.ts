@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { randomUUID } from "node:crypto";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -152,6 +153,10 @@ function save(store: NotificationStore): void {
 
 /** GET — lista notifiche con filtri: ?priority=high&channel=web&unread=true */
 export async function GET(req: NextRequest) {
+  // Le notifiche raccontano cosa sta facendo il team per l'utente:
+  // candidature inviate, colloqui, aziende. Nessuna è pubblica.
+  const denied = await requireAuth();
+  if (denied) return denied;
   const sp = req.nextUrl.searchParams;
   const priority = sp.get("priority") as NotificationPriority | null;
   const channel = sp.get("channel") as NotificationChannel | null;
@@ -178,6 +183,13 @@ export async function GET(req: NextRequest) {
 
 /** POST — crea notifica */
 export async function POST(req: NextRequest) {
+  // Le tre mutazioni sotto scrivono ~/.jht/notifications/notifications.json,
+  // che esiste solo dove gira il team: sul cloud il filesystem è read-only e
+  // finivano in 500. Il 403 `read_only` è la stessa risposta, detta bene.
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: {
     title?: string;
     body?: string;
@@ -221,6 +233,10 @@ export async function POST(req: NextRequest) {
 
 /** PATCH — mark-as-read: ?id=xxx oppure ?all=true */
 export async function PATCH(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const id = req.nextUrl.searchParams.get("id");
   const all = req.nextUrl.searchParams.get("all");
 
@@ -258,6 +274,10 @@ export async function PATCH(req: NextRequest) {
 
 /** DELETE — elimina notifica: ?id=xxx oppure ?read=true (elimina tutte le lette) */
 export async function DELETE(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const id = req.nextUrl.searchParams.get("id");
   const readOnly = req.nextUrl.searchParams.get("read");
 

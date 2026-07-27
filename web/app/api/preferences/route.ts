@@ -105,6 +105,18 @@ function save(prefs: UserPreferences): void {
   fs.renameSync(tmp, PREFS_PATH);
 }
 
+// APERTE DI PROPOSITO — né requireAuth né requireLocalWrite.
+// Sono preferenze di CHROME (tema, lingua, suoni, scorciatoie, "tour già
+// visto"), non dati personali. Due ragioni concrete per non chiuderle:
+//
+//   1. la PATCH parte dal `ThemeProvider`, che sta nel layout ROOT: il toggle
+//      chiaro/scuro esiste anche sulla landing pubblica, senza sessione.
+//   2. l'unico dato che sopravvive davvero sul cloud è `tour_done`, e quello
+//      è GIÀ legato all'utente della sessione (`user_onboarding_state`,
+//      filtrata per user.id): senza login la scrittura non tocca nessuno.
+//
+// Il file locale è l'altra metà: su Vercel il filesystem è read-only e la
+// `save()` fallisce in silenzio per costruzione (vedi i try/catch sotto).
 export async function GET() {
   const prefs = load();
   const dbDone = await readTourDoneFromDb();

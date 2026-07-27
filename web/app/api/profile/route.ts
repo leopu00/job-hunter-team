@@ -1,39 +1,29 @@
 import fs from "fs";
 import { NextResponse } from "next/server";
-import { headers, cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { isProfileComplete, readWorkspaceProfile } from "@/lib/profile-reader";
 import { isLocalRequest } from "@/lib/auth";
-import {
-  LOCAL_TOKEN_COOKIE,
-  isLocalTokenAuthenticated,
-} from "@/lib/local-token";
 import { JHT_PROFILE_READY_FLAG } from "@/lib/jht-paths";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // [JHT-DASHBOARD-NATIVE] La dashboard nativa desktop chiede questo profilo via
-  // window.dashboardApi.get('/api/profile') col local-token (Authorization:
-  // Bearer). Ma quella richiesta entra nel container attraverso il port-map
-  // Docker → isLocalRequest() risulta false (forwarded headers non-loopback) →
-  // senza accettare il token darebbe 401 e la view Profilo resterebbe vuota.
-  // Trattiamo un local-token valido (Bearer o cookie) come "locale", come fa
-  // requireAuth per /api/positions. Stesso token, stessa fiducia.
-  const hdrs = await headers();
-  const cookieStore = await cookies();
-  const localToken = isLocalTokenAuthenticated(
-    hdrs.get("authorization"),
-    cookieStore.get(LOCAL_TOKEN_COOKIE)?.value,
-  );
-
-  // Richieste dal desktop locale (Electron → http://localhost:3000):
-  // servi sempre il profilo dal filesystem, anche se Supabase è
-  // configurato nell'env. Senza questo bypass la chat /onboarding
-  // riceve 401 e la form a sinistra non si popola mai.
-  const useCloudAuth =
-    isSupabaseConfigured && !(await isLocalRequest()) && !localToken;
+  // Due sorgenti, una per corsia: sul cloud il profilo è la riga
+  // `candidate_profiles` dell'utente loggato, in locale è il YAML nel
+  // workspace di chi ha aperto l'app.
+  //
+  // [JHT-DASHBOARD-NATIVE, rimosso 24/07] Qui c'era una terza via: un
+  // local-token (Bearer o cookie `jht_local_token`) valeva come "locale" per
+  // la dashboard nativa Electron, che chiamava questa route via
+  // `window.dashboardApi`. Electron è stato eliminato (19/07) — il desktop
+  // ora è il gioco Godot, che parla direttamente con Supabase e non passa mai
+  // di qui. Anche l'altra giustificazione, la chat /onboarding, è caduta con
+  // la pagina (l'onboarding vive nel wizard del gioco). Nessun chiamante
+  // resta, e il cookie citato non lo scriveva comunque nessuno: la corsia era
+  // solo superficie d'attacco in più su un endpoint che serve nome, email,
+  // telefono e storia lavorativa dell'utente.
+  const useCloudAuth = isSupabaseConfigured && !(await isLocalRequest());
 
   if (useCloudAuth) {
     const supabase = await createClient();
