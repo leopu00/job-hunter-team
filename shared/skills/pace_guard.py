@@ -244,9 +244,18 @@ def apply_throttle(workers: list[str], seconds: int) -> dict:
     mod = _load_module("throttle_config", "throttle-config.py")
     if mod is None:
         return {}
+    # Un agente esentato dal worker floor (config/throttle-floor-exempt.txt) sta
+    # girando senza pause per una misura a termine: il pace_guard non lo tocca,
+    # altrimenti al primo tick lo riporterebbe sul suo pavimento di 300s e
+    # l'esperimento durerebbe cinque minuti. `getattr` con default perché una
+    # throttle-config più vecchia non espone la funzione.
+    exempt = getattr(mod, "_floor_exempt", None)
     applied = {}
     for agent in workers:
         try:
+            if callable(exempt) and exempt(agent):
+                applied[agent] = mod.get_agent(agent)
+                continue
             mod.set_agent(agent, seconds)
             applied[agent] = mod.get_agent(agent)
         except (OSError, ValueError):
