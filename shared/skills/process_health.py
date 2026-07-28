@@ -45,6 +45,12 @@ EXPECTED = [
     ("agent-vitals",       "agent_vitals.py",       "bridge-suite"),
     ("agent-watchdog",     "agent-watchdog.sh",     "pid1-child"),
     ("doctor-watchdog",    "doctor-watchdog.sh",    "pid1-child"),
+    # 28/07: il watchdog del cap di step. Qui c'e' solo la meta' facile della
+    # domanda — il PROCESSO e' vivo. L'altra meta' (la FUNZIONE e' viva) non si
+    # legge da /proc: si legge dalla freschezza di logs/stepcap.jsonl, ed e' un
+    # check del Dottore (`stepcap-watchdog.py --health`). Il predecessore di
+    # questo meccanismo aveva il processo vivo e la funzione morta da ~26h.
+    ("stepcap-watchdog",   "stepcap-watchdog.py",   "pid1-child"),
     ("auto-report-loop",   "auto-report-loop.sh",   "pid1-child"),
     ("cloud-daemon",       "cloud daemon",          "daemon"),
     # 2026-07-23: 'dashboard' RIMOSSA dalla lista — la web UI locale è stata
