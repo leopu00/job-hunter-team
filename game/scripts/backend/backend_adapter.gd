@@ -78,6 +78,22 @@ func archive_team_directive(_directive_id: int) -> void:
 	pass
 
 
+## ── Deroga a termine agli automatismi di spesa ───────────────────────
+
+## Legge lo stato REALE del flag governato da shared/skills/burn_intent.py.
+## Non esiste una variante "ricordati cosa ho chiesto": la deroga scade da
+## sola e il Capitano può revocarla, quindi l'unica risposta onesta è quella
+## che arriva dal container. Esito su bus.publish_burn_intent().
+func fetch_burn_intent() -> void:
+	pass
+
+## Concede (`active`) o revoca la deroga. `hours` viene comunque clampato dal
+## modulo Python in [0.25, 12]: non esiste la forma permanente, nemmeno
+## chiedendola. Esito su bus.publish_burn_intent_action().
+func set_burn_intent(_active: bool, _hours: float) -> void:
+	pass
+
+
 ## ── Ticket utente→team (l'unica scrittura remota autorizzata) ────────
 
 ## Apre un ticket 'open' sulla posizione: la richiesta che il

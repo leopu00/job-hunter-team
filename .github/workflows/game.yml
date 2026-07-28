@@ -69,6 +69,11 @@ jobs:
           godot --headless --path game --script res://tools/diagnostics_selftest.gd
           godot --headless --path game --script res://tools/theme_selftest.gd
           godot --headless --path game --script res://tools/budget_notice_selftest.gd
+          # L'avviso della deroga alla spesa NOMINA i freni che non cedono e
+          # il tetto di ore: sono copiati da shared/skills/burn_intent.py, e
+          # una copia che resta indietro promette reti di sicurezza che il
+          # modulo non ha piu'. Questo test confronta la copia col sorgente.
+          godot --headless --path game --script res://tools/burn_mode_selftest.gd
           godot --headless --path game --script res://tools/doc_preview_selftest.gd
           # /bin/sh: solo POSIX, ed e' il motivo per cui non e' in run.ps1.
           godot --headless --path game --script res://tools/terminal_selection_selftest.gd

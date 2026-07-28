@@ -1116,6 +1116,74 @@ conn.commit(); conn.close()
 print(json.dumps({'ok': True, 'action': action}, ensure_ascii=False))
 """
 
+## Stato della deroga agli automatismi di spesa. Non reimplementa nulla:
+## interroga shared/skills/burn_intent.py, che è il punto unico di verità
+## letto anche dai bridge e dal prompt del Capitano.
+##
+## `remaining_sec` invece dell'orario di scadenza: fra host e container il
+## fuso può differire, mentre un delta in secondi non richiede che i due
+## parlino la stessa lingua sui timestamp.
+##
+## `never_yields`, `default_hours` e `max_hours` viaggiano col dato perché
+## l'avviso all'utente li NOMINA: se un giorno la lista cambia nel modulo
+## Python, l'avviso cambia con lei senza aspettare una release del gioco.
+const BURN_INTENT_PY := """
+import json, sys
+sys.path.insert(0, '/app/shared/skills')
+try:
+    import burn_intent
+except Exception:
+    # Deploy sfasato: il gioco può essere più nuovo dell'immagine del
+    # container per qualche minuto. Dirlo è meglio che offrire un
+    # interruttore che non comanda nulla (come COORDINATOR_STATE_PY).
+    print(json.dumps({'ok': True, 'supported': False}))
+    raise SystemExit(0)
+
+from datetime import datetime, timezone
+
+st = burn_intent.status()
+remaining = 0.0
+if st.get('active'):
+    try:
+        expires = datetime.fromisoformat(str(st.get('expires_at')))
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        remaining = (expires - datetime.now(timezone.utc)).total_seconds()
+    except Exception:
+        remaining = float(st.get('remaining_min') or 0) * 60.0
+st['ok'] = True
+st['supported'] = True
+st['remaining_sec'] = int(max(0.0, remaining))
+st['never_yields'] = list(burn_intent.NEVER_YIELDS)
+st['default_hours'] = burn_intent.DEFAULT_HOURS
+st['max_hours'] = burn_intent.MAX_HOURS
+print(json.dumps(st, ensure_ascii=False))
+"""
+
+## Concessione/revoca. Passa da grant()/revoke() del modulo, così scrittura
+## atomica, clamp delle ore e riga di audit restano dove sono già testati:
+## il gioco pilota la deroga, non ne tiene una seconda copia.
+const BURN_INTENT_SET_PY := """
+import base64, json, sys
+sys.path.insert(0, '/app/shared/skills')
+import burn_intent
+
+data = json.loads(base64.b64decode('%s').decode('utf-8'))
+# Il motivo finisce nell'audit log e nel banner letto dagli agenti: è la
+# traccia di CHI ha tolto i freni, e resta in italiano come gli altri
+# messaggi che il backend manda al team.
+if bool(data.get('active')):
+    payload = burn_intent.grant(data.get('hours', burn_intent.DEFAULT_HOURS),
+                                "concessa dall'utente dal pannello del Coordinatore",
+                                'user')
+    out = {'ok': True, 'action': 'grant', 'expires_at': payload['expires_at'],
+           'hours': payload['hours']}
+else:
+    burn_intent.revoke("revocata dall'utente dal pannello del Coordinatore")
+    out = {'ok': True, 'action': 'revoke'}
+print(json.dumps(out, ensure_ascii=False))
+"""
+
 var _ip := ""
 var _key := ""
 var _user := "root"
@@ -1628,6 +1696,72 @@ func _do_team_directive(action: Dictionary) -> void:
 			"La bacheca permanente del team è cambiata. Esegui " \
 			+ "python3 /app/shared/skills/team_directives.py active, " \
 			+ "poi applica le direttive attive.")
+
+
+## ── Deroga a termine agli automatismi di spesa ──────────────────────
+##
+## Un solo percorso per le due macchine: `_ssh_python` scrive lo script su
+## `docker exec -i jht python3 -`, e LocalBackend sostituisce SOLO il
+## trasporto (`_ssh_stdin_file` con docker diretto invece di ssh). Da qui in
+## giù locale e VPS eseguono lo stesso identico Python nello stesso
+## container, come già fanno console del Coordinatore, bacheca e ticket.
+
+func fetch_burn_intent() -> void:
+	_queue_worker(_do_fetch_burn_intent)
+
+func _do_fetch_burn_intent() -> void:
+	var res := _ssh_python(BURN_INTENT_PY)
+	if _stop:
+		return
+	var parsed := _json_result(res)
+	if parsed.is_empty() or not bool(parsed.get("ok", false)):
+		# Fail-closed di sola lettura: non sapere non è "deroga spenta".
+		bus.call_deferred("publish_burn_intent", {"readable": false,
+				"error": _short_error(res) if res["code"] != 0 \
+						else "stato della deroga non leggibile"})
+		return
+	parsed["readable"] = true
+	bus.call_deferred("publish_burn_intent", parsed)
+
+func set_burn_intent(active: bool, hours: float) -> void:
+	_queue_worker(_do_set_burn_intent.bind(active, hours))
+
+func _do_set_burn_intent(active: bool, hours: float) -> void:
+	var payload := Marshalls.utf8_to_base64(JSON.stringify({
+			"active": active, "hours": hours}))
+	var res := _ssh_python(BURN_INTENT_SET_PY % payload)
+	if _stop:
+		return
+	var parsed := _json_result(res)
+	var ok: bool = res["code"] == 0 and bool(parsed.get("ok", false))
+	bus.call_deferred("publish_burn_intent_action", active, ok,
+			"" if ok else _short_error(res))
+	if not ok:
+		return
+	# Si rilegge SEMPRE il flag appena scritto: l'interruttore deve mostrare
+	# ciò che il team leggerà, non ciò che l'utente ha chiesto. Se il clamp
+	# ha ridotto le ore, o se il file non è dove pensiamo, si vede subito.
+	_do_fetch_burn_intent()
+	# I bridge rileggono il flag da soli al prossimo tick (≤5 min). Questo
+	# messaggio serve a un'altra cosa: con gli automatismi sospesi l'unica
+	# sorveglianza rimasta è il Capitano, e deve saperlo ADESSO — nella notte
+	# del 27/07 una deroga tecnica non arrivata agli agenti fu annullata in
+	# buona fede da chi seguiva correttamente il proprio prompt.
+	if active:
+		_do_send_chat("coordinatore",
+				"L'utente ha concesso una deroga A TERMINE agli automatismi " \
+				+ "di spesa dal pannello. Esegui " \
+				+ "python3 /app/shared/skills/burn_intent.py status: finché " \
+				+ "risulta attiva sospendi daily-halt, gate orario, " \
+				+ "WORKER_FLOOR e ladder, e non rimetterli a posto. Restano " \
+				+ "attivi weekly-halt, host_agent_cap, SC-09 e freeze_team. " \
+				+ "Senza gli automatismi la sorveglianza è tua: ferma tu un " \
+				+ "agente che consuma senza produrre.")
+	else:
+		_do_send_chat("coordinatore",
+				"L'utente ha revocato la deroga agli automatismi di spesa. " \
+				+ "Verifica con python3 /app/shared/skills/burn_intent.py " \
+				+ "status e torna al pacing predefinito.")
 
 static func _json_result(res: Dictionary) -> Dictionary:
 	if int(res.get("code", -1)) != 0:
