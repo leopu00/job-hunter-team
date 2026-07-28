@@ -199,8 +199,19 @@ func _rebuild_pins() -> void:
 				str(p.get("company", "?")), where])
 	for pin in _pins:
 		pin["norm"] = lonlat_to_norm(pin["lonlat"])
-		pin["label"] = "%s (%d)" % [str(pin["city"]), int(pin["count"])] \
-				if int(pin["count"]) > 1 else str(pin["city"])
+		# Un pin su un civico verificato porta il nome dell'azienda: è un
+		# edificio, e chiamarlo col nome della città lo renderebbe identico
+		# al pin del centro. Quello approssimato tiene la città e lo dichiara
+		# con "≈", perché la targhetta si legge anche senza cliccare.
+		var base := str(pin["city"])
+		if bool(pin.get("exact", false)):
+			var company: Variant = (pin["positions"][0] as Dictionary).get("company")
+			if company != null and str(company).strip_edges() != "":
+				base = str(company)
+		else:
+			base = "≈ " + base
+		pin["label"] = "%s (%d)" % [base, int(pin["count"])] \
+				if int(pin["count"]) > 1 else base
 		pin["is_cluster"] = false
 		pin["source_count"] = 1
 	_pins_revision += 1
@@ -355,6 +366,11 @@ func _rebuild_card() -> void:
 		_rebuild_card()
 		queue_redraw())
 	head.add_child(close)
+	# L'anello vuoto va spiegato una volta, qui: il pin è il centro città,
+	# non l'ingresso di un ufficio. L'indirizzo vero, quando esiste, sta
+	# nella scheda della singola posizione.
+	if not bool(pin.get("is_cluster", false)) and not bool(pin.get("exact", false)):
+		box.add_child(TerminalTheme.label(UIStrings.t("map.pin_approx"), 11, Palette.MUTED))
 	var positions: Array = pin["positions"]
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -589,9 +605,19 @@ func _draw() -> void:
 			continue
 		var col := MapPins.score_color(pin["best"])
 		var pr := 5.0 + 1.2 * clampf(log(float(pin["count"]) + 1.0) / log(2.0), 0.0, 4.0)
+		# Disco pieno = civico verificato. Anello vuoto = centro città: stessa
+		# scala e stesso colore (lo score non cambia), ma il cerchio non ha un
+		# centro perché il dato non ce l'ha. I gruppi di prossimità restano
+		# pieni: aggregano località, non un indirizzo.
+		var approx := not bool(pin.get("is_cluster", false)) \
+				and not bool(pin.get("exact", false))
 		draw_circle(pos, pr + 1.5, Color(0, 0, 0, 0.6))
-		draw_circle(pos, pr, col)
-		draw_arc(pos, pr + 5.0, 0, TAU, 24, Color(col.r, col.g, col.b, 0.7), 2.0)
+		if approx:
+			draw_arc(pos, pr - 1.0, 0, TAU, 24, col, 2.0)
+		else:
+			draw_circle(pos, pr, col)
+		draw_arc(pos, pr + 5.0, 0, TAU, 24,
+				Color(col.r, col.g, col.b, 0.3 if approx else 0.7), 2.0)
 		if str(pin["key"]) == _selected_key:
 			draw_arc(pos, pr + 9.0, 0, TAU, 32, Palette.WHITE, 2.0)
 		elif str(pin["key"]) == _hover_key:
