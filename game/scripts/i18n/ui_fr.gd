@@ -294,6 +294,7 @@ const S := {
 	"vps.key_copy": "COPIER LA CLÉ PUBLIQUE",
 	"vps.key_open": "OUVRIR LE DOSSIER",
 	"vps.key_note": "La clé privée reste sur cet ordinateur ; seule la ligne .pub est envoyée au fournisseur.",
+	"vps.key_fingerprint_none": "Empreinte : indisponible pour la clé sélectionnée ; il n’y a rien à comparer avec le fournisseur.",
 	"vps.destination": "2 · SERVEUR DE DESTINATION",
 	"vps.fingerprint_note": "VÉRIFIER SSH affiche l’empreinte de l’hôte : compare-la à celle du fournisseur.",
 	"vps.connect_existing": "CONNECTER SANS INSTALLER",
