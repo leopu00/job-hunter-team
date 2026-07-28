@@ -115,6 +115,41 @@ sintomo né positivo né negativo**: senza sapere chi consuma non se ne può con
 nulla, e oggi nessun automatismo del pacing fa quella distinzione. Rafforza la proposta
 dell'indicatore di spesa per posizione prodotta.
 
+## Esito: la finestra da 5 ore protegge il weekly (allarme rientrato)
+
+A pipeline lanciata, le proiezioni del pacing indicavano un rischio grave: weekly al 61%
+in salita a ~12%/h, `weekly_pace_ratio` 13,74 e `proj_weekly` **874%** — cioè quasi nove
+volte il budget settimanale. Su quei numeri il residuo del 39% sarebbe finito in poco
+più di tre ore, con `weekly-halt` (non derogabile) e team fermo fino al reset, cinque
+giorni dopo.
+
+**Non è successo, e non poteva succedere.** La finestra da 5 ore ha saturato prima:
+
+```
+finestra 5h   93% 95% 97% 99% 99% 100% 100% 100% 100% 100%   ← satura, tutto si ferma
+weekly        63% 63% 63% 64% 64%  64%  64%  64%  64%  64%   ← si appiattisce con lei
+```
+
+Il weekly è salito di **3 punti in un'ora** e si è fermato da solo. Il `pace_ratio` è
+sceso da 13,74 a 5,32 senza che nessuno intervenisse.
+
+Il motivo è strutturale: le due quote sono annidate. Non si può bruciare il weekly più
+in fretta di quanto la finestra da 5 ore lasci consumare, e la finestra impone una pausa
+forzata a ogni saturazione. **Il rischio weekly in una singola giornata è quindi molto
+minore di quanto le proiezioni suggeriscano.**
+
+### Come leggere `proj_weekly` e `pace_ratio`
+
+Entrambi estrapolano il ritmo istantaneo su tutta la settimana **ignorando le pause che
+la finestra imporrà**. Sono indicatori di *velocità corrente*, non previsioni: un valore
+di 874% non significa che si arriverà a 874%, significa «al ritmo di questo istante,
+senza freni, saresti a 874%» — una condizione che non si verifica mai. Vanno letti come
+un tachimetro, non come un'autonomia residua.
+
+Errore da non ripetere: quelle proiezioni sono state riportate all'utente come un rischio
+imminente a tre ore, chiedendo una decisione economica che non era necessaria. Il freno
+esisteva già e ha funzionato.
+
 ## Correlato: il freno all'83% era una decisione, non una soglia
 
 La finestra precedente si era appiattita bruscamente intorno all'83% e aveva
