@@ -46,6 +46,35 @@ Tre ipotesi verificate e scartate sul campo:
 - **Modello degradato** — tutti su `agent (K3 ●)`, `default_model = "kimi-code/k3"`.
 - **Freno hardcoded sulla soglia di finestra** — vedi sotto, ipotesi smentita.
 
+## Conferma a distanza di ore: lo stallo è permanente e il budget continua a bruciare
+
+Rimisurato circa tre ore dopo, senza alcun intervento. Lo Scout è ancora sul cap, e il
+dato che lo prova non è il pane ma il **contatore di contesto**: `10.1% (105.5k/1m)`,
+identico al byte a tre ore prima. Un agente che pensa consuma contesto; uno fermo no.
+È l'indicatore più affidabile per distinguere «sta lavorando a lungo» da «è congelato»,
+e costa una sola `capture-pane`.
+
+Nel frattempo, con **zero posizioni prodotte nell'ultima ora**:
+
+```
+finestra 5h    19% → 25%   (+6 punti)
+weekly         48% → 49%
+produzione      0 posizioni
+```
+
+Sei punti di finestra bruciati per nessun output. Il consumo non si ferma quando la
+pipeline si ferma, perché a consumare non sono i worker: il coordinatore continua a
+rispondere ai tick di pacing e della Sentinella, che arrivano ogni 5-15 minuti
+indipendentemente dal fatto che ci sia qualcosa da coordinare. La Sentinella glielo ha
+detto in chiaro nello stesso periodo — `CAPITANO 15%/h (76% share, 0chk) — sei TU il
+top-consumer` — e lui l'ha confermato: «coordination churn — many turns responding to
+every tick with tool calls».
+
+**Conseguenza per il pacing**: le metriche di spesa non sanno distinguere un team che
+lavora da un team fermo che si osserva. Un test di spinta condotto in questo stato
+misura il costo del coordinamento a vuoto, non la capacità produttiva. Un indicatore di
+spesa **per posizione prodotta** renderebbe la differenza visibile al primo tick.
+
 ## Correlato: il freno all'83% era una decisione, non una soglia
 
 La finestra precedente si era appiattita bruscamente intorno all'83% e aveva
