@@ -75,6 +75,46 @@ lavora da un team fermo che si osserva. Un test di spinta condotto in questo sta
 misura il costo del coordinamento a vuoto, non la capacità produttiva. Un indicatore di
 spesa **per posizione prodotta** renderebbe la differenza visibile al primo tick.
 
+## Sblocco: il throttle era il freno vero, non lo Scout
+
+Su ordine dell'utente il coordinatore è stato avvisato. Ha diagnosticato da solo, in un
+turno, e ha riconosciuto che la regola per questo caso **esiste già** (`C-08 ter`:
+sbloccare con `Continua`) — insieme al proprio errore: «My miss: I should have caught
+this». Il che sposta il problema: non manca la conoscenza, manca chi guarda. Un agente
+fermo non emette segnali, e nessuno interroga i pane finché un umano non lo chiede.
+
+Sbloccare lo Scout però **non è bastato**. Il freno che teneva ferma la produzione era
+il throttle: **600-900 secondi** su tutti e quattro i worker, con la macchina al 4% di
+carico. Portato a **180s**:
+
+| | prima | dopo |
+|---|---:|---:|
+| posizioni / 10 min | 0 | 11 → 14 |
+| posizioni / ora | 0 | 53 |
+| punteggi / ora | 0 | 10 |
+| load (4 core) | 0,35 | 1,45 |
+
+Nota sulla deroga: con `BURN-INTENT` attivo `effective()` restituisce il valore
+richiesto **senza applicare il `WORKER_FLOOR` da 300s**, quindi i 180s sono reali e non
+riportati a 300. È il comportamento voluto e ha funzionato senza forzature manuali —
+la deroga fa quello per cui è stata scritta.
+
+### Il consumo si è spostato da coordinamento a produzione
+
+Il dato più interessante non è il volume ma **chi** spende. A pipeline ferma il
+coordinatore era il top-burner col 76% di share. A pipeline in moto sparisce dalla
+classifica:
+
+```
+analista-2   2.11 kT/min      analista-1   1.35 kT/min
+scorer-3     1.10 kT/min      scout-1      0.45 kT/min
+```
+
+Stessa spesa oraria, natura opposta. Ne segue che **il burn alto non è di per sé un
+sintomo né positivo né negativo**: senza sapere chi consuma non se ne può concludere
+nulla, e oggi nessun automatismo del pacing fa quella distinzione. Rafforza la proposta
+dell'indicatore di spesa per posizione prodotta.
+
 ## Correlato: il freno all'83% era una decisione, non una soglia
 
 La finestra precedente si era appiattita bruscamente intorno all'83% e aveva
