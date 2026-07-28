@@ -285,6 +285,8 @@ const S := {
 
 	"vps.intro": "Connect your team's VPS: IP and SSH key, the game handles the rest.",
 	"vps.ip": "VPS IP",
+	"vps.user": "SSH USER",
+	"vps.user_note": "The user your provider opens the VPS with: root on Hetzner, ubuntu on OVH and AWS, your account name on Google Cloud and Azure. Empty means root.",
 	"vps.key": "SSH KEY (private)",
 	"vps.key_browse": "BROWSE…",
 	"vps.connect": "▶ CONNECT",

@@ -342,6 +342,8 @@ const S := {
 	# ── Impostazioni → Collega VPS ────────────────────────────────
 	"vps.intro": "Collega la VPS del tuo team: IP e chiave SSH, al resto pensa il gioco.",
 	"vps.ip": "IP DELLA VPS",
+	"vps.user": "UTENTE SSH",
+	"vps.user_note": "Utente con cui il provider apre la VPS: root su Hetzner, ubuntu su OVH e AWS, il nome dell'account su Google Cloud e Azure. Vuoto vale root.",
 	"vps.key": "CHIAVE SSH (privata)",
 	"vps.key_browse": "SFOGLIA…",
 	"vps.connect": "▶ COLLEGA",

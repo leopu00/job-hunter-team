@@ -1150,7 +1150,7 @@ func open_technical_terminal(context: String, title: String, hint: String,
 		pieces.append_array(_posix_quoted(container_args))
 		var inner := " ".join(pieces)
 		var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
-		var target := "root@" + str(vps.get("ip", ""))
+		var target := _ssh_target(vps)
 		command = "ssh -tt -i " + _local_quote(key) + " " \
 				+ _local_quote(target) + " " + _local_quote(inner)
 	terminal_requested.emit(context, embedded_terminal_spec(title, hint, command))
@@ -1305,7 +1305,22 @@ static func _do_generate_vps_key() -> Dictionary:
 			else "Creazione chiave fallita: " + str(result["out"]).right(220)}
 
 
-static func _vps_credentials(ip: String, key_path: String) -> Dictionary:
+## L'utente SSH dipende dal provider: Hetzner consegna root, OVH e AWS
+## `ubuntu`, Google Cloud e Azure il nome dell'account. Campo vuoto — e
+## configurazioni salvate prima che il campo esistesse — valgono root.
+static func _ssh_user(user: String) -> String:
+	var clean := user.strip_edges()
+	return clean if clean != "" else "root"
+
+
+## Destinazione `utente@host` per ssh/scp. Prima era "root@" cablato in sette
+## punti e una VPS OVH rispondeva solo "Permission denied (publickey)".
+static func _ssh_target(vps: Dictionary) -> String:
+	return _ssh_user(str(vps.get("user", ""))) + "@" + str(vps.get("ip", ""))
+
+
+static func _vps_credentials(ip: String, key_path: String,
+		user := "") -> Dictionary:
 	var clean_ip := ip.strip_edges()
 	var key := VpsBackend.expand_user_path(key_path.strip_edges())
 	if clean_ip == "" or key == "" or not FileAccess.file_exists(key):
@@ -1316,16 +1331,23 @@ static func _vps_credentials(ip: String, key_path: String) -> Dictionary:
 	host_re.compile("^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
 	if host_re.search(clean_ip) == null:
 		return {}
-	return {"ip": clean_ip, "key_path": key}
+	var clean_user := _ssh_user(user)
+	var user_re := RegEx.new()
+	# Nome utente POSIX: lo stesso motivo per cui l'host è validato, dato che
+	# finisce dentro comandi ssh/scp composti come testo.
+	user_re.compile("^[A-Za-z0-9._][A-Za-z0-9._-]{0,31}$")
+	if user_re.search(clean_user) == null:
+		return {}
+	return {"ip": clean_ip, "key_path": key, "user": clean_user}
 
 
-func test_vps_connection(ip: String, key_path: String) -> void:
+func test_vps_connection(ip: String, key_path: String, user := "") -> void:
 	if _action_running:
 		return
-	var target := _vps_credentials(ip, key_path)
+	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-test", false,
-				"IP/hostname non valido o chiave privata non trovata", false)
+				"IP/hostname o utente SSH non valido, o chiave privata non trovata", false)
 		return
 	_start_action("vps-test", _do_test_vps_connection.bind(target))
 
@@ -1334,8 +1356,12 @@ static func _do_test_vps_connection(target: Dictionary) -> Dictionary:
 	var pinned := _pin_vps_host(str(target.get("ip", "")))
 	if not bool(pinned.get("ok", false)):
 		return pinned
+	# Non serve essere root: serve poter installare il runtime e parlare con
+	# Docker. Root (Hetzner), sudo senza password (l'utente ubuntu di OVH e
+	# AWS) o un utente già nel gruppo docker valgono tutti come "sì".
 	var result := _run_ssh(target,
-			"printf 'JHT_SSH_OK '; uname -srm; test \"$(id -u)\" = 0")
+			"printf 'JHT_SSH_OK '; uname -srm; test \"$(id -u)\" = 0 " \
+			+ "|| sudo -n true 2>/dev/null || docker info >/dev/null 2>&1")
 	var fingerprint := str(pinned.get("fingerprint", ""))
 	return {"ok": result["code"] == 0,
 			"message": "SSH verificato · " + str(result["out"]).strip_edges() \
@@ -1404,10 +1430,10 @@ static func _fingerprint_for_known_host(path: String) -> String:
 	return str(parts[1]) if parts.size() > 1 else str(fingerprint.get("out", "")).strip_edges()
 
 
-func provision_vps(ip: String, key_path: String) -> void:
+func provision_vps(ip: String, key_path: String, user := "") -> void:
 	if _action_running:
 		return
-	var target := _vps_credentials(ip, key_path)
+	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-provision", false,
 				"Inserisci un IP valido e genera/seleziona la chiave SSH", false)
@@ -1430,7 +1456,7 @@ static func _vps_prepare_runtime_command() -> String:
 
 
 func _do_provision_vps(target: Dictionary) -> Dictionary:
-	_progress("vps-provision", "Verifico accesso SSH e privilegi root…")
+	_progress("vps-provision", "Verifico accesso SSH e privilegi amministrativi…")
 	var check := _do_test_vps_connection(target)
 	if not bool(check["ok"]):
 		return check
@@ -1446,18 +1472,19 @@ func _do_provision_vps(target: Dictionary) -> Dictionary:
 			"activate_vps": target}
 
 
-func migrate_to_vps(ip: String, key_path: String, source_mode: String) -> void:
+func migrate_to_vps(ip: String, key_path: String, source_mode: String,
+		user := "") -> void:
 	if _action_running:
 		return
-	var target := _vps_credentials(ip, key_path)
+	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-migrate", false,
-				"Destinazione non valida: controlla IP e chiave SSH", false)
+				"Destinazione non valida: controlla IP, utente e chiave SSH", false)
 		return
 	var source := BackendBus.load_vps_config() if source_mode == "vps" else {}
 	if source_mode == "vps":
 		source = _vps_credentials(str(source.get("ip", "")),
-				str(source.get("key_path", "")))
+				str(source.get("key_path", "")), str(source.get("user", "")))
 		if source.is_empty():
 			action_changed.emit("vps-migrate", false,
 					"Nessuna VPS sorgente salvata da cui migrare", false)
@@ -1476,7 +1503,7 @@ func migrate_to_local() -> void:
 		return
 	var source := BackendBus.load_vps_config()
 	source = _vps_credentials(str(source.get("ip", "")),
-			str(source.get("key_path", "")))
+			str(source.get("key_path", "")), str(source.get("user", "")))
 	if source.is_empty():
 		action_changed.emit("vps-migrate", false,
 				"Nessuna VPS sorgente salvata da cui migrare", false)
@@ -2089,7 +2116,7 @@ static func _scp_download(source: Dictionary, remote: String, local: String) -> 
 	return _run("scp", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
 			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes",
 			"-o", "UserKnownHostsFile=" + known,
-			"root@" + str(source.get("ip", "")) + ":" + remote, local]))
+			_ssh_target(source) + ":" + remote, local]))
 
 
 static func _scp_upload(target: Dictionary, local: String, remote: String) -> Dictionary:
@@ -2098,7 +2125,7 @@ static func _scp_upload(target: Dictionary, local: String, remote: String) -> Di
 	return _run("scp", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
 			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes",
 			"-o", "UserKnownHostsFile=" + known,
-			local, "root@" + str(target.get("ip", "")) + ":" + remote]))
+			local, _ssh_target(target) + ":" + remote]))
 
 
 static func _restore_migration_source(source_mode: String, source: Dictionary,
@@ -2117,8 +2144,8 @@ static func _restore_migration_source(source_mode: String, source: Dictionary,
 					"/app/cli/bin/jht.js", "team", "start"]))
 
 
-func open_vps_install(ip: String, key_path: String) -> void:
-	var target := _vps_credentials(ip, key_path)
+func open_vps_install(ip: String, key_path: String, user := "") -> void:
+	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-install", false,
 				"Inserisci l'IP e genera/seleziona una chiave SSH prima di installare", false)
@@ -2129,7 +2156,7 @@ func open_vps_install(ip: String, key_path: String) -> void:
 	var known := VpsBackend.known_hosts_path(clean_ip)
 	var command := "ssh -tt -i " + _local_quote(key) \
 			+ " -o StrictHostKeyChecking=yes -o UserKnownHostsFile=" \
-			+ _local_quote(known) + " " + _local_quote("root@" + clean_ip) \
+			+ _local_quote(known) + " " + _local_quote(_ssh_target(target)) \
 			+ " " + _local_quote(remote)
 	terminal_requested.emit("vps-install", embedded_terminal_spec(
 			"Installa JHT sulla VPS",
@@ -2403,7 +2430,7 @@ static func _run_ssh_stdin(vps: Dictionary, command: String,
 		payload: PackedByteArray) -> Dictionary:
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 	var known := VpsBackend.known_hosts_path(str(vps.get("ip", "")))
-	var target := "root@" + str(vps.get("ip", ""))
+	var target := _ssh_target(vps)
 	var process := OS.execute_with_pipe("ssh", PackedStringArray([
 		"-i", key, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
 		"-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=yes",
@@ -2456,7 +2483,7 @@ static func _provider_login_command(provider: String, vps: Dictionary = {}) -> S
 				+ _local_container_exec(tool)
 	var inner := "docker exec -it jht " + tool
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
-	var target := "root@" + str(vps.get("ip", ""))
+	var target := _ssh_target(vps)
 	var command := "ssh -tt -i " + _local_quote(key) + " " \
 			+ _local_quote(target) + " " + _local_quote(inner)
 	if OS.get_name() != "Windows":
@@ -2583,7 +2610,7 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	if bool(result.get("ok", false)) and result.get("activate_vps") is Dictionary:
 		var target: Dictionary = result["activate_vps"]
 		BackendBus.save_vps_config(str(target.get("ip", "")),
-				str(target.get("key_path", "")))
+				str(target.get("key_path", "")), str(target.get("user", "")))
 		BackendBus.set_backend(VpsBackend.new(), target)
 	elif bool(result.get("ok", false)) and bool(result.get("activate_local", false)):
 		BackendBus.switch_to_local_backend()
@@ -2671,7 +2698,7 @@ func _vps_config() -> Dictionary:
 static func _run_ssh(vps: Dictionary, command: String) -> Dictionary:
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 	var known := VpsBackend.known_hosts_path(str(vps.get("ip", "")))
-	var target := "root@" + str(vps.get("ip", ""))
+	var target := _ssh_target(vps)
 	return _run("ssh", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
 			"-o", "IdentitiesOnly=yes", "-o", "ConnectTimeout=8",
 			"-o", "StrictHostKeyChecking=yes",
