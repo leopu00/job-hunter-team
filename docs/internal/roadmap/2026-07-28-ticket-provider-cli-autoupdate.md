@@ -207,36 +207,59 @@ mano su un team vivo non ha effetto finché qualcuno non riavvia.
 
 ### Come è stato implementato l'addendum (`cli/src/commands/model-pin.js`)
 
-Il passo gira dentro `jht providers autoupdate`, subito **dopo** l'update della CLI (la verifica
-la deve fare la CLI nuova) e **prima** di qualunque spawn, perché ogni sessione legge il pin
-all'avvio. Invocabile anche a mano: `jht providers model-pin [--dry-run]`.
+Il passo gira dentro `jht providers autoupdate`, subito **dopo** l'update della CLI (la prova la
+deve fare la CLI nuova) e **prima** di qualunque spawn, perché ogni sessione legge il modello
+all'avvio: è il solo punto del boot dove un cambio entra in vigore senza riavviare niente.
+Invocabile anche a mano: `jht providers model-pin [--dry-run]`.
 
-**La verifica prima di invalidare** — non si confronta con "l'ultimo modello annunciato dal
-provider", che non sa niente del piano di questo account. Si esegue **la stessa identica
-mutazione su una copia del config** (`kimi --config-file <copia-senza-pin>`) puntando alla share
-dir **vera**, quindi con le credenziali vere: se lì la CLI risolve un modello concreto con le sue
-capability, la stessa mutazione sul file vero produrrà uno stato funzionante — è una prova per
-costruzione, non un'inferenza. Ladder: `info` (locale, costo zero) e, solo se non basta,
-`--quiet -p "ok"` (un turno minimo, che prova anche che il modello **risponde** su questo piano).
-Le credenziali **non** vengono copiate: un refresh OAuth nella copia potrebbe ruotare il refresh
-token e invalidare quello vero, cioè fare al team un danno peggiore del pin.
+**Sostituisce, non cancella.** Il follow-up del 15:55 ha chiuso la questione: togliere
+`default_model` non promuove niente, perché la CLI lo riscrive puntando di nuovo all'alias
+vecchio — è il default del piano. Il passo quindi **sceglie e scrive** un alias.
 
-**Se la verifica non è conclusiva** (CLI che non riscrive, rete assente, timeout, 429, credenziali
-mancanti) non si tocca **niente** e parte solo il finding. Stessa cosa con `JHT_MODEL_PIN=<x>`,
-il flag esplicito di pinning deliberato — l'unica cosa che impedisce l'aggiornamento automatico.
-`JHT_PROVIDER_AUTOUPDATE=0` continua a spegnere tutto il passo di boot.
+**Da dove escono i candidati.** Dal config stesso: i blocchi `[models."…"]` sono l'elenco che
+l'account espone, scritto dalla CLI al login. Non c'è più niente da indovinare. Il criterio non è
+il nome — cambia a ogni generazione — ma la capability dichiarata: **la `max_context_size` più
+alta**, che è anche il motivo per cui questo ticket esiste. Due filtri prudenti: solo alias dello
+**stesso provider** del pin corrente (saltare su un altro provider è un trasloco, non una
+promozione: altra autenticazione, altra fatturazione), e solo alias **strettamente** migliori (a
+parità di finestra non ci si muove: non c'è nulla da guadagnare e ogni cambio costa).
+
+**La prova prima di scrivere**, ora fatta bene. La prima versione interrogava una copia del
+config *senza pin* e la CLI usciva 1 perché non aveva **nessun** modello da usare: un fallimento
+della copia letto come bocciatura del modello. Ora si chiede l'**alias candidato per nome** su
+una copia **intatta**, cioè l'invocazione che sulla macchina ha risposto:
+
+```
+kimi --config-file <copia> --model <alias> --quiet -p "rispondi solo: ok"
+```
+
+La copia serve perché finché il candidato non ha risposto il file vero non si tocca; le
+credenziali **non** si copiano mai (la share dir è quella vera) — un refresh OAuth dentro una
+copia può ruotare il refresh token e invalidare quello buono. Se il migliore non risponde si
+scende al successivo. Esiti tenuti distinti, perché portano a diagnosi diverse: `exit != 0` =
+*l'alias non è utilizzabile*; `exit 0` senza output = *probe non concludente*, che non è una
+bocciatura del modello. La riga `To resume this session: …` compare **anche sui successi** e non
+viene mai usata come indicatore di errore (un test lo sorveglia).
+
+**Se nessun candidato risponde** — o mancano credenziali, o il config non elenca alternative, o
+scade il timeout — non si tocca **niente** e parte solo il finding. Stessa cosa con
+`JHT_MODEL_PIN=<x>`, il flag esplicito di pinning deliberato: l'unica cosa che impedisce
+l'aggiornamento automatico. `JHT_PROVIDER_AUTOUPDATE=0` continua a spegnere tutto il passo.
 
 **Copertura per provider** — i tre non pinnano allo stesso modo:
 
 | Provider | Dove pinna | Cosa fa JHT |
 |---|---|---|
-| kimi | `$JHT_HOME/.kimi/config.toml` — `default_model` + `[models."…"]` scritti al login | rileva, verifica, **invalida** (backup `*.bak-model-pin-<ts>` + scrittura atomica) |
-| codex | `$JHT_HOME/.codex/config.toml` — `model = "…"`, solo se scelto da TUI/mano | **solo segnalato**: il default sta nel binario e non viene riscritto nel file (invalidazione non verificabile), e lo stesso file contiene le entry `trust_level` degli agenti |
+| kimi | `$JHT_HOME/.kimi/config.toml` — `default_model` + il catalogo `[models."…"]` scritti al login | sceglie dal catalogo, **prova**, **scrive** (backup `*.bak-model-pin-<ts>` + scrittura atomica) |
+| codex | `$JHT_HOME/.codex/config.toml` — `model = "…"`, solo se scelto da TUI/mano | **solo segnalato**: il suo config non elenca alternative (nessun catalogo da cui scegliere, e un nome inventato lascerebbe la CLI con un pin che non risolve), e lo stesso file contiene le entry `trust_level` degli agenti |
 | claude | — | **non applicabile**: `start-agent.sh` passa `--model opus\|sonnet` a ogni spawn e gli alias seguono la generazione |
 
-Due guardie che valgono per un passo che gira **a ogni boot**: il finding non si ripete finché la
-situazione è la stessa, e se dopo un'invalidazione la CLI ri-pinna un valore identico non si
-riscrive il config all'infinito — si smette e resta il finding già consegnato.
+Tre dettagli che valgono per un passo che gira **a ogni boot**: il finding non si ripete finché
+la situazione è la stessa; la **scrittura** invece sì — se la CLI rimette il default del piano a
+ogni login, ri-affermare la scelta è esattamente la cura — e per questo i backup vengono potati
+(si tengono gli ultimi 3) e la nota lasciata nel file non si accumula. Il finding dice sempre che
+gli agenti leggono il modello **all'avvio della sessione**: al boot il cambio è già attivo, su un
+team vivo serve un riavvio delle sessioni.
 
 ## Note per chi implementa
 
