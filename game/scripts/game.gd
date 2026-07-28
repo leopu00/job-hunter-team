@@ -54,6 +54,13 @@ func _ready() -> void:
 	# a mouse e tastiera per tutta la durata dello shot.
 	if OS.get_environment("JHT_SHOT_QUIET") == "1":
 		get_viewport().gui_disable_input = true
+	# Il dialogo di uscita si apre solo su richiesta di chiusura e solo con
+	# agenti vivi: senza questa scorciatoia non e' fotografabile, e le tre
+	# scelte sono proprio la cosa da guardare a schermo (le didascalie vanno
+	# a capo in modo diverso in ogni lingua). Roster finto: serve la forma,
+	# non il contenuto.
+	if OS.get_environment("JHT_EXIT_DIALOG") == "1":
+		_open_shutdown_dialog_for_shot.call_deferred()
 	# Scorciatoia per i test: JHT_SCENE=office|wizard salta il boot.
 	if OS.get_environment("JHT_SCENE") == "office":
 		goto_office.call_deferred()
@@ -87,6 +94,17 @@ var _shutdown_task := -1
 ## se farli chiudere in ordine (il Capitano fa annotare a tutti dove erano
 ## arrivati) o troncare. Senza agenti attivi non c'è niente da chiedere.
 var _shutdown_dialog: Node = null
+
+## Apre il dialogo di uscita con un roster finto, per fotografarlo (JHT_EXIT_DIALOG=1).
+## Non passa da quit_game(): li' un roster vuoto uscirebbe subito senza chiedere.
+func _open_shutdown_dialog_for_shot() -> void:
+	if _shutdown_dialog != null:
+		return
+	_shutdown_dialog = load("res://scripts/ui/shutdown_dialog.gd").new(
+			["scout-1", "analista-1", "scorer-1", "capitano"])
+	_shutdown_dialog.chosen.connect(_on_shutdown_choice)
+	get_tree().root.add_child(_shutdown_dialog)
+
 
 func quit_game() -> void:
 	if _quitting or _shutdown_dialog != null:
