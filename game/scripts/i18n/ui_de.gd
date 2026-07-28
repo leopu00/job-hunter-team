@@ -366,6 +366,9 @@ const S := {
 	"pos.open_url": "Anzeige im Browser öffnen",
 	"pos.open_yes": "Anzeige bei der letzten Prüfung OFFEN",
 	"pos.open_no": "Anzeige NICHT MEHR OFFEN",
+	"pos.office_address": "ADRESSE",
+	"pos.office_verified": "von den Analysten verifiziert",
+	"pos.office_approx": "nicht verifiziert · Stadtzentrum",
 
 	"apps.ready": "CV fertig",
 	"apps.applied": "eingereicht",
@@ -412,6 +415,7 @@ const S := {
 	"map.card_hint": "Klick auf eine Position öffnet ihre Seite",
 	"map.card_hint_all": "%d Positionen · Liste scrollen und für Details klicken",
 	"map.cluster": "%d Positionen · %d Orte",
+	"map.pin_approx": "Pin im Stadtzentrum: genaue Adresse nicht verifiziert",
 
 	"hours.intro": "Die Fenster, in denen das Team arbeitet: bearbeiten und speichern, das Pacing passt sich an.",
 	"hours.tz": "Zeitzone",
