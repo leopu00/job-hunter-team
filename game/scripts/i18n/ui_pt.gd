@@ -627,6 +627,7 @@ const S := {
 	"setup.hours": "Horário de trabalho",
 	"setup.hours_todo": "Quando a equipa pode trabalhar. Sem horário funciona a toda a hora e gasta a subscrição.",
 	"setup.hours_ok": "Janelas de trabalho definidas.",
+	"setup.remote_unknown": "Ilegível na máquina ligada. O valor deste computador não conta: é de outra máquina.",
 	"setup.where_todo": "No teu computador ou numa VPS que trabalha mesmo com a janela fechada.",
 	"setup.where_local": "A equipa trabalha neste computador.",
 	"setup.where_vps": "A equipa trabalha na VPS: esta janela é o seu espelho.",

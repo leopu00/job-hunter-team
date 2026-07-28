@@ -204,6 +204,43 @@ func _self_test_vps_setup() -> void:
 	if _declared_plan(cfg_codex, "codex") != "pro":
 		failures.append("piano di Codex non riconosciuto sotto openai")
 
+	# ── Su VPS la checklist deve guardare LA VPS ─────────────────────────
+	# Lo scenario misurato il 27/07: box remoto configurato per davvero e, su
+	# questo portatile, un `~/.jht` che è di un'altra installazione. Il probe
+	# locale dice tutt'altro dal remoto su ognuno dei tre passi, e deve perdere.
+	var altrui := {"active_provider": "claude", "provider_authenticated": true,
+			"provider_auth_match": ".claude/.credentials.json", "active_plan": "",
+			"plan_ready": false, "profile_ready": true, "hours_ready": true}
+	_apply_vps_probe(altrui, {"config_read": true, "active_provider": "moonshot",
+			"providers": {"kimi": {"plan": "allegretto"}},
+			"team": {"working_hours": {"windows": []}},
+			"auth": {"kimi": ".kimi/credentials/kimi-code.json"}, "ready": false})
+	if str(altrui.get("active_provider", "")) != "kimi":
+		failures.append("provider della VPS ignorato a favore di quello locale")
+	if not bool(altrui.get("plan_ready", false)):
+		failures.append("abbonamento dichiarato sulla VPS letto come assente")
+	if bool(altrui.get("profile_ready", false)):
+		failures.append("profilo di questo computer spacciato per quello della VPS")
+	if bool(altrui.get("hours_ready", false)):
+		failures.append("orari di questo computer spacciati per quelli della VPS")
+	if not bool(altrui.get("provider_authenticated", false)):
+		failures.append("login presente sulla VPS non riconosciuto")
+	# VPS che non risponde: nessun valore, e nessuno preso in prestito dal disco.
+	var muta := {"provider_authenticated": true, "plan_ready": true,
+			"container_running": true, "profile_ready": true, "hours_ready": true}
+	_apply_vps_probe(muta, {})
+	for step in ["provider", "profile", "hours"]:
+		if not _is_unknown(muta, str(step)):
+			failures.append("passo senza risposta dalla VPS non marcato ignoto: " + str(step))
+	_finalize(muta)
+	if bool(muta.get("ready", false)) or int(muta.get("completed", 0)) != 1:
+		failures.append("checklist data per fatta su valori mai letti")
+	_mark_known(muta, "hours")
+	if _is_unknown(muta, "hours"):
+		failures.append("valore arrivato dal team che resta ignoto")
+	if not CHECKLIST_PY.contains("/jht_home"):
+		failures.append("la sonda remota non guarda i dati del team remoto")
+
 	var gated := {"container_running": true, "provider_authenticated": true,
 			"profile_ready": true, "hours_ready": true, "plan_ready": false}
 	_finalize(gated)
@@ -284,11 +321,17 @@ func refresh() -> void:
 	if _probe_running or _action_running:
 		return
 	_probe_running = true
-	WorkerThreadPool.add_task(_probe)
+	# La VPS si legge sul thread principale (BackendBus non è thread-safe) e
+	# viaggia col task: il worker non deve chiedere al bus com'è connesso.
+	WorkerThreadPool.add_task(_probe.bind(_connected_vps()))
 
 
-func _probe() -> void:
+func _probe(vps: Dictionary) -> void:
 	var next := _probe_host(_jht_home())
+	# Passi 02/03/04 chiesti ALLA MACCHINA CONNESSA, sullo stesso trasporto del
+	# passo 01. Blocca solo questo worker, mai il thread della UI.
+	if not vps.is_empty():
+		next["vps_probe"] = _probe_vps(vps)
 	# Alcuni self-test Godot chiudono l'albero subito dopo l'assert mentre il
 	# probe Docker è ancora nel worker. Non accodare callback su un autoload
 	# già smontato durante il teardown.
@@ -324,6 +367,11 @@ func _apply_probe(next: Dictionary) -> void:
 	# Il backend conosce anche il caso checklist completa senza ready.flag.
 	if bool(BackendBus.profile_status.get("ready", false)):
 		next["profile_ready"] = true
+	# Ultima parola alla macchina connessa: quello che arriva da lì sovrascrive
+	# sia il disco locale sia i valori rimasti sul bus da una connessione prima.
+	if next.has("vps_probe"):
+		_apply_vps_probe(next, next["vps_probe"])
+		next.erase("vps_probe")
 	_finalize(next)
 	status = next
 	status_changed.emit(status.duplicate(true))
@@ -366,16 +414,20 @@ func _on_live_settings(settings: Dictionary) -> void:
 	var wh: Variant = settings.get("hours_raw", {})
 	var ready := wh is Dictionary and (wh as Dictionary).get("windows", []) is Array \
 			and not ((wh as Dictionary).get("windows", []) as Array).is_empty()
-	if bool(status.get("hours_ready", false)) == ready:
+	if bool(status.get("hours_ready", false)) == ready \
+			and not _is_unknown(status, "hours"):
 		return
+	_mark_known(status, "hours")
 	status["hours_ready"] = ready
 	_finalize(status)
 	status_changed.emit(status.duplicate(true))
 
 
 func _on_profile_status(_profile: Dictionary, _required: Dictionary, ready: bool) -> void:
-	if bool(status.get("profile_ready", false)) == ready:
+	if bool(status.get("profile_ready", false)) == ready \
+			and not _is_unknown(status, "profile"):
 		return
+	_mark_known(status, "profile")
 	status["profile_ready"] = ready
 	_finalize(status)
 	status_changed.emit(status.duplicate(true))
@@ -527,6 +579,129 @@ static func _ui_provider_id(value: String) -> String:
 ## ancora spento".
 static func auth_match(provider: String, _home: String = "") -> String:
 	return JhtFs.first_with_content(AUTH_PATHS.get(provider, []))
+
+
+## ── La checklist guarda la macchina a cui è connessa ───────────────────
+##
+## Col team su una VPS i passi 02, 03 e 04 leggevano il `~/.jht` di QUESTO
+## computer. Sul portatile di chi installa quel file c'è quasi sempre — è di
+## una prova, o di un altro tester — e il risultato misurato il 27/07 è
+## doppio: un box con l'abbonamento dichiarato restava rosso su "manca
+## l'abbonamento" (il piano locale è null) e il profilo di un'ALTRA persona,
+## rimasto in `~/.jht/profile/`, passava per quello del box. Quindi una VPS
+## configurata bene non arrivava mai a 4/4, e insieme la checklist certificava
+## dati di qualcun altro.
+##
+## Da qui in avanti, quando c'è una VPS connessa, ogni sonda passa dalla stessa
+## SSH del passo 01. E quello che non si riesce a leggere di là resta IGNOTO:
+## mai verde, e mai sostituito col valore di questo disco — un ripiego
+## silenzioso qui non peggiora l'informazione, la falsifica.
+const CHECKLIST_PY := """
+import json, os
+AUTH = %s
+HOME = '/jht_home'
+try:
+    c = json.load(open(HOME + '/jht.config.json'))
+except Exception:
+    c = None
+out = {'config_read': isinstance(c, dict)}
+if not isinstance(c, dict):
+    c = {}
+out['active_provider'] = str(c.get('active_provider') or '')
+declared = c.get('providers') if isinstance(c.get('providers'), dict) else {}
+out['providers'] = dict((k, {'plan': str((v or {}).get('plan') or '')})
+                        for k, v in declared.items() if isinstance(v, dict))
+team = c.get('team') if isinstance(c.get('team'), dict) else {}
+out['team'] = {'working_hours': team.get('working_hours') or {}}
+auth = {}
+for name, paths in AUTH.items():
+    for rel in paths:
+        full = HOME + '/' + rel
+        if os.path.isfile(full) and os.path.getsize(full) > 0:
+            auth[name] = rel
+            break
+out['auth'] = auth
+print(json.dumps(out))
+"""
+
+
+## Una sola andata e ritorno per i tre passi. Il profilo usa lo STESSO script
+## del backend (ready.flag oppure campi obbligatori completi): due copie della
+## stessa regola divergerebbero, e il passo 03 direbbe cose diverse a seconda
+## di chi guarda. Dizionario vuoto = non abbiamo saputo niente.
+static func _probe_vps(vps: Dictionary) -> Dictionary:
+	var payload := (CHECKLIST_PY % JSON.stringify(AUTH_PATHS)) \
+			+ VpsBackend.PROFILE_STATUS_PY
+	var res := _run_ssh(vps, "docker exec jht python3 -c " + _shell_quote(payload))
+	if res["code"] != 0:
+		return {}
+	var remote := {}
+	for line in str(res["out"]).split("\n"):
+		if not line.begins_with("{"):
+			continue
+		var parsed: Variant = JSON.parse_string(line)
+		if parsed is Dictionary:
+			remote.merge(parsed as Dictionary, true)
+	return remote
+
+
+## Quello che si è letto sulla macchina connessa sostituisce quello letto qui,
+## nei passi 02/03/04. Le risposte si interpretano con le STESSE funzioni del
+## percorso locale: il payload ha la forma della config proprio per questo.
+static func _apply_vps_probe(next: Dictionary, remote: Dictionary) -> void:
+	var unknown: Array = []
+	if bool(remote.get("config_read", false)):
+		var active := _ui_provider_id(str(remote.get("active_provider", "")))
+		var auth: Variant = remote.get("auth", {})
+		var found := ""
+		if active != "" and auth is Dictionary:
+			found = str((auth as Dictionary).get(active, ""))
+		next["active_provider"] = active
+		next["provider_auth_match"] = found
+		next["provider_authenticated"] = found != ""
+		next["active_plan"] = _declared_plan(remote, active)
+		next["plan_ready"] = str(next["active_plan"]) != ""
+		next["hours_ready"] = _has_working_hours(remote)
+	else:
+		next["active_provider"] = ""
+		next["provider_auth_match"] = ""
+		next["provider_authenticated"] = false
+		next["active_plan"] = ""
+		next["plan_ready"] = false
+		next["hours_ready"] = false
+		unknown.append("provider")
+		unknown.append("hours")
+	if remote.has("ready"):
+		next["profile_ready"] = bool(remote["ready"])
+	else:
+		next["profile_ready"] = false
+		unknown.append("profile")
+	next["unknown_steps"] = unknown
+
+
+## Passo che nessuno ha saputo raccontare: la UI lo mostra come tale invece di
+## disegnarlo verde o rosso, e `_finalize` non lo conta come fatto.
+static func _is_unknown(state: Dictionary, step: String) -> bool:
+	var unknown: Variant = state.get("unknown_steps", [])
+	return unknown is Array and (unknown as Array).has(step)
+
+
+## Un valore appena arrivato DAL team (mai da questo disco) chiude il suo passo.
+static func _mark_known(state: Dictionary, step: String) -> void:
+	if not _is_unknown(state, step):
+		return
+	var unknown: Array = state["unknown_steps"]
+	unknown.erase(step)
+	state["unknown_steps"] = unknown
+
+
+## La VPS a cui il gioco è attaccato ADESSO, o {} se il team vive qui. È lo
+## stesso "sì" del passo 01: connessione viva verso una macchina remota.
+func _connected_vps() -> Dictionary:
+	if not (BackendBus.is_remote() and BackendBus.is_live()):
+		return {}
+	var vps := BackendBus.load_vps_config()
+	return vps if str(vps.get("ip", "")).strip_edges() != "" else {}
 
 
 func select_provider(provider: String) -> void:
