@@ -778,20 +778,26 @@ func _build_activation() -> void:
 			UIStrings.t("setup.where_vps") if on_vps
 			else (UIStrings.t("setup.where_local") if bool(s.get("container_running", false))
 			else UIStrings.t("setup.where_todo")), "docker")
+	# Passi che il team connesso non ha saputo raccontare: si dicono ignoti. Il
+	# valore di questo computer non è una risposta — su una VPS è di un'altra
+	# macchina, e nel caso peggiore di un'altra persona.
+	var unknown: Array = s.get("unknown_steps", [])
 	_setup_gate(progress, "02", UIStrings.t("setup.provider"),
 			bool(s.get("provider_authenticated", false))
 					and bool(s.get("plan_ready", false)),
-			_provider_status_text(s), "provider")
+			_provider_status_text(s), "provider", unknown.has("provider"))
 	_setup_gate(progress, "03", UIStrings.t("setup.profile"),
 			bool(s.get("profile_ready", false)),
-			UIStrings.t("setup.profile_ok") if bool(s.get("profile_ready", false))
-			else UIStrings.t("setup.profile_todo"), "profile")
+			UIStrings.t("setup.remote_unknown") if unknown.has("profile")
+			else (UIStrings.t("setup.profile_ok") if bool(s.get("profile_ready", false))
+			else UIStrings.t("setup.profile_todo")), "profile", unknown.has("profile"))
 	# Quarto passo, obbligatorio come gli altri: senza finestre di lavoro il
 	# team macina a ogni ora del giorno e il conto arriva dopo.
 	_setup_gate(progress, "04", UIStrings.t("setup.hours"),
 			bool(s.get("hours_ready", false)),
-			UIStrings.t("setup.hours_ok") if bool(s.get("hours_ready", false))
-			else UIStrings.t("setup.hours_todo"), "hours")
+			UIStrings.t("setup.remote_unknown") if unknown.has("hours")
+			else (UIStrings.t("setup.hours_ok") if bool(s.get("hours_ready", false))
+			else UIStrings.t("setup.hours_todo")), "hours", unknown.has("hours"))
 	_content.add_child(HSeparator.new())
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 14)
@@ -816,7 +822,8 @@ func _build_activation() -> void:
 
 
 func _setup_gate(parent: HBoxContainer, number: String, title: String,
-		done: bool, detail: String, destination: String) -> void:
+		done: bool, detail: String, destination: String,
+		unknown := false) -> void:
 	var panel := BracketPanel.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.custom_minimum_size = Vector2(260, 180)
@@ -828,8 +835,14 @@ func _setup_gate(parent: HBoxContainer, number: String, title: String,
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
-	col.add_child(TerminalTheme.label(number + "  " + ("✓" if done else "○"),
-			14, Palette.GREEN if done else Palette.YELLOW, "bold"))
+	# Terzo stato accanto a fatto (✓) e da fare (○): il valore vive sulla
+	# macchina connessa e non siamo riusciti a leggerlo. Dirlo con uno degli
+	# altri due sarebbe inventarlo.
+	var tint: Color = Palette.DIM if unknown \
+			else (Palette.GREEN if done else Palette.YELLOW)
+	col.add_child(TerminalTheme.label(
+			number + "  " + ("?" if unknown else ("✓" if done else "○")),
+			14, tint, "bold"))
 	col.add_child(TerminalTheme.label(title.to_upper(), 19, Palette.WHITE, "bold"))
 	var body := TerminalTheme.label(detail, 13, Palette.MUTED)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -837,7 +850,7 @@ func _setup_gate(parent: HBoxContainer, number: String, title: String,
 	col.add_child(body)
 	var open := Button.new()
 	open.text = UIStrings.t("setup.review") if done else UIStrings.t("setup.configure")
-	open.add_theme_color_override("font_color", Palette.GREEN if done else Palette.YELLOW)
+	open.add_theme_color_override("font_color", tint)
 	open.pressed.connect(func() -> void:
 		if destination == "profile":
 			Game.goto_wizard()
@@ -847,6 +860,8 @@ func _setup_gate(parent: HBoxContainer, number: String, title: String,
 
 
 func _provider_status_text(s: Dictionary) -> String:
+	if (s.get("unknown_steps", []) as Array).has("provider"):
+		return UIStrings.t("setup.remote_unknown")
 	var id := str(s.get("active_provider", ""))
 	if id == "":
 		return UIStrings.t("setup.provider_todo")

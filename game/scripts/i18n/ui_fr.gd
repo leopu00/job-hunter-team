@@ -620,6 +620,7 @@ const S := {
 	"setup.hours": "Horaires de travail",
 	"setup.hours_todo": "Quand l'équipe peut travailler. Sans horaires elle tourne à toute heure et consomme l'abonnement.",
 	"setup.hours_ok": "Fenêtres de travail définies.",
+	"setup.remote_unknown": "Illisible sur la machine connectée. La valeur de cet ordinateur ne compte pas : elle appartient à une autre machine.",
 	"setup.where_todo": "Sur ton ordinateur, ou sur une VPS qui travaille même fenêtre fermée.",
 	"setup.where_local": "L'équipe travaille sur cet ordinateur.",
 	"setup.where_vps": "L'équipe travaille sur la VPS : cette fenêtre en est le miroir.",
