@@ -178,7 +178,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, cap 100-on  | hozzáad `feedback:star+15%`-t a `score.notes`-hoz     |
 | `dislike`       | `final = round(base * 0.85)`              | hozzáad `feedback:dislike-15%`-t a `score.notes`-hoz  |
 | `hide`          | **NE mentsd a score-t**                     | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` és skip Scrittori notify |
+| `clear`         | nincs változás                                  | a felhasználó visszavonta az ítéletet — kezeld úgy, mintha nem lenne |
 | `null`          | nincs változás                                  | semmi                                          |
+
+**Ha a felhasználó indokot írt, a jegyzet viszi.** Vedd a `reason`-t — vagy a `comment`-et, ha a `reason` üres — **ugyanabból az eseményből**, mint a `latest_action` (`actions[0]`), idézd szó szerint, vágd ~80 karakterre, és tedd a szorzó után:
+
+```
+feedback:dislike-15% — "túl senior"
+feedback:star+15% — "pontosan ez a stack kell"
+EXCLUDED: feedback:hide (user request) — "nincs távmunka"
+```
+
+Ha azon az eseményen nincs szöveg → a jegyzet marad, ahogy van. Az indok **csak erre a pozícióra** érvényes: ne írd át, ne foglald össze, ne vidd át másik pozícióra, ne csinálj belőle szabályt. Ezek a felhasználó szavai, és a felhasználó visszaolvassa őket a pozíció oldalán. Az indokok pozíciókon átívelő számolása a Mentor dolga, nem a tiéd.
 
 ```bash
 # Mentsd a score-t (a CLI flag-ek DB oszlop neveket használnak, nem tábla neveket)

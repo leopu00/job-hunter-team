@@ -177,7 +177,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, cap at 100  | add `feedback:star+15%` to `score.notes`     |
 | `dislike`       | `final = round(base * 0.85)`              | add `feedback:dislike-15%` to `score.notes`  |
 | `hide`          | **do NOT save score**                     | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` and skip notify Scrittori |
+| `clear`         | no change                                  | the user withdrew the judgement — treat as none |
 | `null`          | no change                                  | none                                          |
+
+**If the user wrote a reason, the note carries it.** Take `reason` — or `comment` when `reason` is empty — from the **same event** as `latest_action` (`actions[0]`), quote it verbatim, trim to ~80 characters, and append it after the multiplier:
+
+```
+feedback:dislike-15% — "too senior"
+feedback:star+15% — "exactly the stack I want"
+EXCLUDED: feedback:hide (user request) — "no remote"
+```
+
+No text on that event → the note stays as it is. That reason belongs to **this position only**: do not rewrite it, do not summarise it, do not carry it over to another position, do not turn it into a rule. Those are the user's words and the user reads them back on the position page. Counting reasons across positions is the Mentor's job, not yours.
 
 ```bash
 # Save score (CLI flags use DB column names, not table names)

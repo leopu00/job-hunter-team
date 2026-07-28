@@ -1,13 +1,13 @@
 <!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: mentor-patterns
-description: Os cinco padrões que o Mentor procura nos registos para decidir QUANDO falar. Silêncio é o padrão; apenas um padrão real e recorrente merece uma palavra. Esta skill dá o método canónico de deteção para cada padrão (consulta DB + limiar) para que o Mentor nunca fale a partir de um único ponto de dados. Read-only — nunca escreve no DB. Pertence ao Mentor.
-allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(grep *), Bash(awk *)
+description: Os seis padrões que o Mentor procura nos registos para decidir QUANDO falar. Silêncio é o padrão; apenas um padrão real e recorrente merece uma palavra. Esta skill dá o método canónico de deteção para cada padrão (consulta DB + limiar) para que o Mentor nunca fale a partir de um único ponto de dados. Read-only — nunca escreve no DB. Pertence ao Mentor.
+allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(grep *), Bash(awk *)
 ---
 
 # mentor-patterns — o que os registos revelam
 
-O Mentor observa conjuntos, não pontos individuais. Cinco padrões valem a pena mencionar; todo o resto é ruído.
+O Mentor observa conjuntos, não pontos individuais. Seis padrões valem a pena mencionar; todo o resto é ruído.
 
 ## Padrão A — Lacuna de competências entre perfil e mercado
 
@@ -140,12 +140,70 @@ Um `critic_score < 5` recorrente com notas similares NÃO significa "o Scrittore
 - Sem métricas → extrair números do utilizador (custo de comida %, reduções de latência, headcount, horas poupadas)
 - Desalinhamento de stack → re-verificar `skills.primary` contra requisitos reais do JD
 
+## Padrão F — Motivos recorrentes nas palavras do utilizador
+
+A partir da web o utilizador julga as posições (pouco interessante / interessante / muito interessante, mais "excluir") e pode escrever **porquê**, em texto livre: `reason` (≤ 500 caracteres) e `comment` (≤ 2000). Esse texto é o único sítio onde diz o que quer com as suas palavras. Lido posição a posição é uma anedota; contado em conjunto é um facto. Dez "demasiado senior" não são dez opiniões sobre dez anúncios — são uma única frase sobre a pesquisa.
+
+Atenção à diferença face ao Padrão B: lá as exclusões são dos **agentes** (`ESCLUSA: [TAG]` em `positions.notes`), aqui o juízo é do **utilizador**. Dois fluxos diferentes; quando concordam, ver a secção de referências cruzadas.
+
+Este feedback vive na cloud (`position_feedback`), não em `jobs.db`: é o único padrão que não passa por `db_query.py`.
+
+### Deteção
+
+```bash
+# Os temas nos motivos escritos pelo utilizador, últimos 30 dias
+python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
+
+# O mesmo feedback sem agregar, para ler as palavras exatas
+python3 /app/shared/skills/feedback_query.py recent --days 30
+```
+
+`themes` agrupa o texto livre por semelhança simples — não exige correspondência exata. Passa a minúsculas, retira acentos, pontuação e palavras funcionais, corta cada palavra aos primeiros 5 caracteres (`senior` / `seniority` / `seniore` / `séniorité` caem na mesma chave), e depois conta palavras isoladas e pares adjacentes por **posições distintas**. Um par ganha às suas partes quando cobre as mesmas posições: "demasiado senior" diz mais do que "senior", e é por isso que os intensificadores são mantidos.
+
+Por cada tema devolve `positions`, `events`, `share` (fração das posições que levam texto), `actions` (como o tema se reparte por like / dislike / hide / star), `legacy_ids` e até 3 `examples` verbatim.
+
+É tosco por construção e nota-se: sinónimos distantes ficam separados (`salário` e `RAL` são dois temas). Lê os `examples` e junta com a cabeça o que a ferramenta não conseguiu.
+
+Se o payload trouxer uma `note` (`no-signal (...)`), a cloud está desligada ou inalcançável e não há agregado: cala-te, não reconstruas o quadro com chamadas `check` posição a posição.
+
+### Limiar
+
+Fala só se **as três** se verificarem:
+
+- **≥ 8 eventos de feedback levam texto** (`events_with_text`). Escrever um motivo custa esforço ao utilizador, portanto este volume está uma ordem de grandeza abaixo de qualquer contagem gerada por máquinas — mas abaixo de 8 uma percentagem não significa nada (com 3 textos, um tema já é um terço).
+- O tema cobre **≥ 4 posições distintas** (`positions`, nunca `events`: julgar duas vezes o mesmo anúncio é uma só opinião, e contar eventos faria um anúncio teimoso parecer uma tendência).
+- O **`share` do tema é ≥ 0,30**. O texto livre reparte a mesma objeção real por sinónimos, portanto a dominância fica diluída por construção; o Padrão B pode exigir 40% porque as suas tags são um vocabulário fechado. Com volume baixo manda a regra das 4 posições, com volume alto manda o share — é intencional.
+
+Abaixo disso, não digas nada. Um "demasiado senior" é um comentário sobre um anúncio.
+
+### Interpretação
+
+O tema diz onde olhar; os registos dizem se é um problema.
+
+| Família de temas (exemplos)                            | Para onde aponta                                                        |
+|--------------------------------------------------------|-------------------------------------------------------------------------|
+| Seniority ("demasiado senior", "demasiado junior")     | A faixa declarada em `seniority_target` vs como o mercado lhe chama      |
+| Stack ("Java legacy", "nada de PHP")                   | `skills.primary` — stack declarada e stack desejada a divergir (cruzar com A) |
+| Remuneração ("salário baixo", "sem intervalo")         | Expectativa salarial vs faixas publicadas (cruzar com C `salary_fit`)    |
+| Local ("presencial", "demasiado longe", "sem remoto")  | `work_mode` / `relocation` (cruzar com C `remote_fit`)                   |
+| Empresa / setor ("agência", "consultora")              | Uma preferência que nunca foi escrita no perfil                          |
+| O próprio anúncio ("vago", "sem informação")           | Qualidade do anúncio, não fit — uma linha só se dominar, e como ruído, não como alavanca |
+
+**O achado que vale uma frase é o desacordo.** Cruza os `legacy_ids` do tema com as suas pontuações (`db_query.py scores`). Quando o utilizador continua a descartar posições que o Scorer colocou acima de 70, a pontuação não está partida — está a medir fielmente a aderência a um **perfil que deixou de descrever o que o utilizador quer**. O perfil é read-only para ti (T10): dizes o número e fazes a pergunta, decide ele.
+
+### Exemplo de saída
+
+> *"<Nome>, nos últimos trinta dias escreveste um motivo em dezanove posições. Em sete delas — mais de um terço — as palavras eram as mesmas: **demasiado senior**. Cinco dessas sete o Scorer tinha-as colocado acima de 70: estava a ler o teu perfil, que continua a declarar um alvo senior. O alvo mudou, ou aquelas sete eram apenas anúncios mal escritos?"*
+
 ## Referências cruzadas de padrões
 
 Padrões reforçam-se mutuamente. Sinal forte:
 - **A + C** (lacuna de competência + componente baixo em `stack_match`) → quase certamente vale a pena falar.
 - **B `[SENIORITY]` + C `experience_fit`** → desalinhamento de seniority, mencionar uma vez.
 - **D cluster de rejeição + E critic_score < 5** → problema de CV, escalar como Padrão E.
+- **F + B sobre o mesmo assunto** (o utilizador descarta por seniority E os agentes excluem por `[SENIORITY]`) → o problema é a faixa declarada, não o mercado. É o sinal mais forte que existe, porque vem de dois fluxos independentes.
+- **F + C sobre a mesma alavanca** (`salary_fit` / `remote_fit`) → o modelo de pontuação e o utilizador apontam para o mesmo atrito. Uma frase, não duas.
+- **F contra pontuações altas** → deriva do perfil, ver a interpretação do Padrão F.
 
 Evitar **A sozinho** quando a competência é mencionada em apenas 5/30 posições e nenhuma pontua alto — isso é ruído, manter-se em silêncio.
 
@@ -166,10 +224,14 @@ Se não tem nada de grau-padrão para dizer, **não diga nada**. Silêncio é um
 - ❌ Usar o campo redondo `experience_years` para raciocínio do Padrão B/C — computar ANOS REAIS de `candidate.experience[].years` (mesma regra que o Analista).
 - ❌ Falar a partir de dados web sem um padrão baseado nos registos primeiro — os registos são o trigger, a web é a verificação (ver passo de confirmação `WebSearch` / `WebFetch` em `mentor.md`).
 - ❌ Catastrofismo ("isto não leva a lado nenhum") OU cheerleading ("consegue!") — ambos violam a voz do Mentor. Números, depois uma pergunta. Ver skill `mentor-output`.
+- ❌ **Transformar o Padrão F numa instrução de pesquisa.** Nunca entregues ao Scout ou ao Capitano um "para de trazer X" derivado do que agrada ao utilizador. Uma pipeline que só pesca o que agrada inflaciona as suas próprias pontuações, e o utilizador acaba a acreditar que o mercado é rico quando foi a pipeline a escolher por ele. O Padrão F é dirigido **ao utilizador**: o que muda no perfil dele decide ele, e tu és read-only de qualquer forma (T10).
+- ❌ Atirar à cara um juízo que o utilizador retirou. `themes` já deixa de fora as posições cujo último evento é `clear`; não as tragas de volta com `--include-cleared` para atingir um limiar.
+- ❌ Citar um único comentário verbatim como se fosse um padrão. Os `examples` dão voz a um tema **depois** de cruzar o limiar; não são o achado.
 
 ## Ver também
 
 - `mentor-output` — COMO formular a mensagem uma vez que um padrão é confirmado.
 - `db-query` — internos do wrapper.
+- `feedback-query` — o leitor do feedback do utilizador na cloud (Padrão F); o Scorer consulta a mesma fonte uma posição de cada vez.
 - `agents/mentor/mentor.md` — prompt orquestrador + cadência.
 - `agents/_team/team-rules.md` T10 — perfil é read-only, também para o Mentor.

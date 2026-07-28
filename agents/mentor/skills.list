@@ -22,6 +22,11 @@ tmux-send
 # DB access — the Mentor is read-only, never writes
 db-query
 
+# User feedback in the cloud (like/dislike/hide/star + the reasons the user
+# types) — read-only source for Pattern F. The Mentor counts them and speaks
+# to the user; it never turns them into a search instruction.
+feedback-query
+
 # Mentor-only operative skills
 mentor-patterns
 mentor-output
