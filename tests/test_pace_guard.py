@@ -1,18 +1,23 @@
-"""Test del guard-rail di pacing sulla finestra rate-limit.
+"""Test del consigliere di pacing sulla finestra rate-limit.
 
 Root cause coperta: run ThinkPad 2026-07-26 (Kimi Allegretto). Finestra
 aperta alle 14:35 con reset alle 19:43; alle 17:00 il consumo era già al
-**100%** e il team è rimasto muto per 2h40. Il pacing misurava correttamente
-ma l'attuazione passava dal Capitano, troppo lenta per fermare la deriva.
+**100%** e il team è rimasto muto per 2h40.
 
-Il vincolo verificato qui: a metà finestra il consumo ideale è metà del
-target, e uno scarto in eccesso deve alzare il freno PRIMA del lockout,
-senza mai arrivare al freeze (che lascia l'utente senza risposte).
+Il vincolo verificato qui è doppio:
+  • la misura — a metà finestra il consumo ideale è metà del target, e uno
+    scarto in eccesso deve produrre un freno PRIMA del lockout, senza mai
+    arrivare al freeze (che lascia l'utente senza risposte);
+  • la separazione dei poteri (2026-07-28) — il pace guard CONSIGLIA e basta.
+    Nessun percorso automatico scrive il throttle: lo fa il Capitano, che
+    riceve il consiglio nel pane. Le reti di sicurezza (worker floor, daily
+    hard-stop) restano invece automatiche e non sono toccate da questa scelta.
 
 Eseguire:
     pytest tests/test_pace_guard.py -v
 """
 
+import importlib.util
 import os
 import sys
 from datetime import datetime, timezone
@@ -24,6 +29,24 @@ SKILLS_DIR = os.path.join(REPO_ROOT, 'shared', 'skills')
 
 sys.path.insert(0, SKILLS_DIR)
 import pace_guard  # noqa: E402
+
+
+def _load_by_path(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _load_bridge():
+    return _load_by_path('sentinel_bridge_pace',
+                         os.path.join(REPO_ROOT, '.launcher', 'sentinel-bridge.py'))
+
+
+def _load_throttle_config():
+    """throttle-config.py ha un trattino nel nome: non è importabile, va per path."""
+    return _load_by_path('throttle_config_pace',
+                         os.path.join(SKILLS_DIR, 'throttle-config.py'))
 
 
 def _ts(iso: str) -> float:
@@ -87,26 +110,26 @@ def test_incident_is_caught_before_lockout():
     assert r["ok"]
     assert r["verdict"] == "AVANTI"
     assert r["deviation_pct"] > 40
-    assert r["throttle_after_s"] > pace_guard.WORKER_FLOOR
+    assert r["throttle_recommended_s"] > pace_guard.WORKER_FLOOR
 
 
-def test_on_curve_does_not_touch_the_throttle():
-    """Metà finestra, metà budget: è esattamente il comportamento voluto."""
+def test_on_curve_recommends_leaving_the_throttle_alone():
+    """Metà finestra, metà budget: il consiglio è 'non toccare niente'."""
     now = _ts("2026-07-26T17:09:04")   # metà esatta fra start e reset
     r = pace_guard.evaluate(_sample(50), now, target_pct=100.0,
-                            current_throttle_s=900)
+                            current_throttle_s=660)
     assert r["verdict"] == "IN-PARI"
-    assert r["changed"] is False
-    assert r["throttle_after_s"] == 900
+    assert r["recommends_change"] is False
+    assert r["throttle_recommended_s"] == 660
 
 
 def test_under_curve_releases_the_brake():
     """Sotto la curva il budget resterebbe sul tavolo: si allenta."""
     now = _ts("2026-07-26T17:09:04")
     r = pace_guard.evaluate(_sample(20), now, target_pct=100.0,
-                            current_throttle_s=1800)
+                            current_throttle_s=1860)
     assert r["verdict"] == "INDIETRO"
-    assert r["throttle_after_s"] < 1800
+    assert r["throttle_recommended_s"] < 1860
 
 
 def test_full_window_at_reset_is_the_goal_not_an_overshoot():
@@ -122,7 +145,7 @@ def test_danger_zone_brakes_hard():
     r = pace_guard.evaluate(_sample(96), now, target_pct=100.0,
                             current_throttle_s=pace_guard.WORKER_FLOOR)
     assert r["verdict"] == "LOCKOUT-IMMINENTE"
-    assert r["throttle_after_s"] == pace_guard.WORKER_CEILING
+    assert r["throttle_recommended_s"] == pace_guard.WORKER_CEILING
 
 
 # ── I limiti del freno ──────────────────────────────────────────────────
@@ -131,18 +154,34 @@ def test_brake_never_becomes_a_freeze():
     """Il freno satura a 1h: un team lento si recupera, uno lockato no."""
     r = pace_guard.evaluate(_sample(99), _ts("2026-07-26T15:00:00"),
                             target_pct=100.0, current_throttle_s=3600)
-    assert r["throttle_after_s"] == pace_guard.WORKER_CEILING
+    assert r["throttle_recommended_s"] == pace_guard.WORKER_CEILING
 
 
 def test_brake_never_goes_below_the_worker_floor():
     """Anche molto indietro, un worker non scende sotto i 5 minuti."""
     r = pace_guard.evaluate(_sample(1), _ts("2026-07-26T19:00:00"),
                             target_pct=100.0, current_throttle_s=300)
-    assert r["throttle_after_s"] == pace_guard.WORKER_FLOOR
+    assert r["throttle_recommended_s"] == pace_guard.WORKER_FLOOR
+
+
+def test_the_ladder_is_the_same_in_both_modules():
+    """pace_guard e throttle-config devono scegliere gli STESSI gradini.
+
+    Quando le due scale divergono, questo modulo consiglia un valore che
+    throttle-config sposta subito altrove: il Capitano applicherebbe 900s e
+    ne leggerebbe 780. È già successo con WORKER_FLOOR.
+    """
+    tc = _load_throttle_config()
+    # LADDER include lo 0 (throttle spento, riservato al core interattivo),
+    # THROTTLE_LADDER parte dal primo gradino reale.
+    assert pace_guard.LADDER[0] == 0
+    assert pace_guard.LADDER[1:] == tc.THROTTLE_LADDER
+    assert pace_guard.WORKER_FLOOR == tc.WORKER_FLOOR
 
 
 def test_step_throttle_moves_one_rung_at_a_time():
-    assert pace_guard.step_throttle(600, 1) == 900
+    """Gradini in minuti primi: da 7min (420s) si sale a 11min (660s)."""
+    assert pace_guard.step_throttle(600, 1) == 660
     assert pace_guard.step_throttle(600, -1) == 300
     assert pace_guard.step_throttle(300, -5) == pace_guard.WORKER_FLOOR
     assert pace_guard.step_throttle(3000, 9) == pace_guard.WORKER_CEILING
@@ -150,7 +189,155 @@ def test_step_throttle_moves_one_rung_at_a_time():
 
 def test_off_ladder_value_snaps_down_not_up():
     """Un valore fuori scala non deve far saltare un gradino per arrotondamento."""
-    assert pace_guard.step_throttle(700, 1) == 900
+    # 700s sta fra 660 (11min) e 780 (13min): il gradino corrente è 660, quindi
+    # +1 porta a 780. Arrotondando al più vicino si salterebbe a 1020.
+    assert pace_guard.step_throttle(700, 1) == 780
+
+
+# ── Chi decide: il guard consiglia, il Capitano applica ─────────────────
+
+AHEAD = _sample(75)          # 75% consumato con curva ideale al 28%
+AHEAD_NOW = _ts("2026-07-26T16:00:00")
+
+
+class _StubGuard:
+    """pace_guard finto: registra le chiamate ad apply_throttle invece di scrivere."""
+
+    def __init__(self, result, workers=("scout-1", "analista-1")):
+        self._result = result
+        self._workers = list(workers)
+        self.applied = []
+
+    def active_workers(self):
+        return list(self._workers)
+
+    def current_worker_throttle(self, workers):
+        return self._result["throttle_current_s"]
+
+    def evaluate(self, entry, now, current_throttle_s=None):
+        return dict(self._result)
+
+    def advisable_workers(self, workers):
+        return list(workers)
+
+    def advice_line(self, result, workers=None, targets=None):
+        return pace_guard.advice_line(result, workers, targets)
+
+    def apply_throttle(self, workers, seconds):
+        self.applied.append((list(workers), seconds))
+        return {}
+
+
+def _run_bridge_step(monkeypatch, tmp_path, result, sent):
+    """Esegue un tick di _pace_guard_step con il guard finto. Ritorna lo stub."""
+    bridge = _load_bridge()
+    guard = _StubGuard(result)
+    monkeypatch.setattr(bridge, "_load_skill_module", lambda *a, **k: guard)
+    monkeypatch.setattr(bridge, "jht_tmux_send",
+                        lambda session, text: (sent.append((session, text)), True)[1])
+    monkeypatch.setattr(bridge, "LOGS_DIR", tmp_path)
+    bridge._pace_guard_step({"ts": "2026-07-26T16:00:00Z", "usage": 75})
+    return guard
+
+
+def test_the_bridge_advises_and_never_writes_the_throttle(tmp_path, monkeypatch):
+    """Il cuore della decisione dell'utente: nessuno script muove il throttle.
+
+    Il team è a 75% con la curva al 28% — il caso più netto possibile — e il
+    bridge si limita a scrivere nel pane del Capitano.
+    """
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    sent = []
+    guard = _run_bridge_step(monkeypatch, tmp_path, r, sent)
+
+    assert guard.applied == []                      # nessuna scrittura
+    assert [s for s, _ in sent] == ["CAPITANO"]     # un consiglio, al Capitano
+    logged = (tmp_path / "pace-guard.jsonl").read_text(encoding="utf-8")
+    assert '"applied": false' in logged
+
+
+def test_a_lost_advice_stays_in_the_mailbox(tmp_path, monkeypatch):
+    """Se il pane è occupato il consiglio non si perde: si drena dalla mailbox.
+
+    Prima il freno era già applicato e il messaggio era un'informativa; ora è
+    l'unico output, quindi una consegna fallita significherebbe zero correzione.
+    """
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    bridge = _load_bridge()
+    monkeypatch.setattr(bridge, "_load_skill_module",
+                        lambda *a, **k: _StubGuard(r))
+    monkeypatch.setattr(bridge, "jht_tmux_send", lambda session, text: False)
+    monkeypatch.setattr(bridge, "LOGS_DIR", tmp_path)
+    bridge._pace_guard_step({"ts": "2026-07-26T16:00:00Z", "usage": 75})
+
+    mailbox = (tmp_path / "bridge-mailbox.jsonl").read_text(encoding="utf-8")
+    assert '"kind":"pace-guard"' in mailbox
+    assert '"delivered_via_tmux":false' in mailbox
+    assert pace_guard.ADVICE_TAG in mailbox
+
+
+def test_advice_line_hands_the_decision_over():
+    """La riga deve dire che NON è applicato e dare il comando pronto."""
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    line = pace_guard.advice_line(r, ["scout-1", "analista-1"],
+                                  ["scout-1", "analista-1"])
+    rec = r["throttle_recommended_s"]
+    assert "\n" not in line                      # una riga sola: è un pane tmux
+    assert line.startswith("[@bridge -> @capitano] [PACE-GUARD] AVANTI")
+    assert "NON APPLICATO" in line
+    assert f"CONSIGLIATO {rec}s" in line
+    assert f"throttle-config.py bulk-set scout-1={rec} analista-1={rec}" in line
+
+
+def test_advice_leaves_out_workers_exempt_from_the_floor(monkeypatch):
+    """Un agente esente sta girando senza pause per una misura a termine:
+    il consiglio non lo include, come non lo includeva il vecchio apply."""
+    monkeypatch.setattr(pace_guard, "_exempt_checker",
+                        lambda: (lambda agent: agent == "scout-9"))
+    assert pace_guard.advisable_workers(["scout-1", "scout-9"]) == ["scout-1"]
+
+
+def test_lockout_advice_asks_for_the_roster_not_just_the_brake():
+    r = pace_guard.evaluate(_sample(96), _ts("2026-07-26T15:30:00"),
+                            target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    line = pace_guard.advice_line(r, ["scout-1"], ["scout-1"])
+    assert "LOCKOUT-IMMINENTE" in line
+    assert "ROSTER" in line
+
+
+# ── Quanto spesso si parla al Capitano ──────────────────────────────────
+
+def test_no_advice_when_the_throttle_is_already_right():
+    """In pari: niente da decidere, niente turno di modello consumato."""
+    bridge = _load_bridge()
+    r = pace_guard.evaluate(_sample(50), _ts("2026-07-26T17:09:04"),
+                            target_pct=100.0, current_throttle_s=660)
+    assert bridge._should_advise_captain(r, dict(ts=0.0, throttle_s=None,
+                                                 verdict=None), 1000.0) is False
+
+
+def test_a_new_advice_goes_out_immediately():
+    bridge = _load_bridge()
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    state = {"ts": 999.0, "throttle_s": 660, "verdict": "AVANTI"}
+    assert bridge._should_advise_captain(r, state, 1000.0) is True
+
+
+def test_the_same_advice_is_repeated_only_after_the_cooldown():
+    """Il Capitano che ignora il consiglio se lo rivede, ma non ogni 5 minuti."""
+    bridge = _load_bridge()
+    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
+                            current_throttle_s=pace_guard.WORKER_FLOOR)
+    state = {"ts": 1000.0, "throttle_s": r["throttle_recommended_s"],
+             "verdict": r["verdict"]}
+    cooldown = bridge.PACE_ADVICE_COOLDOWN_MIN * 60
+    assert bridge._should_advise_captain(r, state, 1000.0 + cooldown - 1) is False
+    assert bridge._should_advise_captain(r, state, 1000.0 + cooldown) is True
 
 
 # ── Robustezza ──────────────────────────────────────────────────────────
