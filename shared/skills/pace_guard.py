@@ -55,9 +55,14 @@ DEFAULT_WINDOW_H = 5.0
 # questa soglia è rumore di misura, sopra è una deriva vera.
 STEP_PCT = 6.0
 
-# Scala dei throttle (secondi). Identica alla ladder di throttle-config, che
-# aggancia comunque qualunque valore le si passi.
-LADDER = [0, 300, 600, 900, 1200, 1500, 1800, 2400, 3000, 3600]
+# Scala dei throttle (secondi). DEVE restare identica a THROTTLE_LADDER in
+# throttle-config.py, che aggancia comunque qualunque valore le si passi: se le
+# due divergono, questo modulo sceglie gradini che l'altro poi sposta altrove.
+# Gradini in minuti primi (1,2,3,5,7,11,13,17,23,31,41,53,60) invece dei vecchi
+# multipli di 5: due worker su gradini diversi si risincronizzavano ogni 10-15
+# minuti *per costruzione*, e ogni coincidenza è un picco simultaneo.
+LADDER = [0, 60, 120, 180, 300, 420, 660, 780, 1020, 1380, 1860, 2460, 3180,
+          3600]
 
 # I worker non scendono mai sotto i 5 minuti (anti-marathon) e non salgono
 # mai sopra l'ora: oltre, la cura diventa il KILL, che è decisione del
