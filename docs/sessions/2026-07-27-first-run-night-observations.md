@@ -106,6 +106,39 @@ Vale registrarlo perché è un comportamento su cui contare, e da non appiattire
 
 ---
 
+## 6. Il vero limite non è il budget né la CPU: è il contesto degli agenti
+
+Fra l'01:44 e le 02:44 la produzione è quasi cessata, **senza nessun segnale d'allarme**:
+
+```
+posizioni   148 → 153  (+5, l'ora prima +17)
+punteggi     98 → 102  (+4, l'ora prima +24)
+coordinate  103 → 103  (+0)
+load        0.84 con 14 sessioni attive
+finestra 5h  6% · weekly 13% · status OK
+```
+
+Non era il rate limit e non era la macchina. Erano **due agenti col contesto saturo**:
+
+| agente | contesto | sintomo |
+|---|---|---|
+| un Analista | **565,5k token** | turni interminabili |
+| uno Scout | 167,6k token | **20 minuti per un singolo turno** |
+
+Il segnale è la riga `to save NNNk tokens` nel pane, o un turno che supera i ~10 minuti.
+Dopo `/clear` + kick-off del ruolo, il load è risalito da 0.84 a 2.23 e la produzione è
+ripresa.
+
+**La lezione operativa più importante della notte**: *load basso non significa che va tutto
+bene*. Quattordici agenti con load 0.84 sembravano una macchina in salute con margine da
+sfruttare; erano agenti impantanati che non producevano. **La metrica da guardare è la
+produzione — posizioni e punteggi che crescono — non il carico macchina.** Il carico dice
+se puoi aggiungere lavoro, non se il lavoro sta avvenendo.
+
+Corollario per il coordinatore: il contesto va sorvegliato a ogni heartbeat come si
+sorveglia la RAM. Un agente saturo non muore e non segnala nulla: rallenta e peggiora in
+silenzio, che è il modo più costoso di fallire.
+
 ## Da verificare nelle prossime notti
 
 - Il tetto reale di sessioni **senza** pause: stanotte 12 worker attivi tengono un load di
