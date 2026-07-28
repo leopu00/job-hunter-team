@@ -1,6 +1,6 @@
 import { readFile, writeFile, access } from 'node:fs/promises';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync, mkdirSync, appendFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
@@ -209,6 +209,14 @@ const UPDATE_SPECS = {
   }],
 };
 
+// Tetto duro per singolo step di update in-container. npm e uv non hanno un
+// timeout globale: un registry che accetta la connessione e poi tace terrebbe
+// in ostaggio chi li aspetta — e da quando l'update gira al boot (pid1) chi
+// aspetta e' il container intero. Scaduto il tempo, lo step viene ucciso e si
+// prosegue con la CLI gia' presente.
+const UPDATE_STEP_TIMEOUT_MS =
+  (Number(process.env.JHT_PROVIDER_UPDATE_TIMEOUT_SEC) || 300) * 1000;
+
 function resolveUpdateTarget(id) {
   // Accept user-facing aliases/normalised IDs and map to update spec keys
   // (claude/codex/kimi). Mantiene gli stessi id mostrati nel gioco.
@@ -256,13 +264,17 @@ async function handleUpdate(id) {
   // Branch in-container vs host:
   // - Sul container (IS_CONTAINER=1, path Docker via wrapper bash) non c'e'
   //   docker daemon: eseguiamo i comandi npm/uv direttamente. L'install
-  //   scrive in /jht_home/.npm-global che e' bind-mounted sull'host, quindi
-  //   persiste cross-container e cross-restart.
+  //   scrive nei prefissi su /opt/jht-deps (volume Docker dal 2026-07-26,
+  //   prima era il bind-mount /jht_home/.npm-global), quindi persiste
+  //   cross-container e cross-restart.
   // - Sull'host (path "from source", contributor) usiamo docker compose run
   //   per ottenere un container effimero isolato (evita rename collisions
   //   sui binari npm in uso dal container running).
   if (process.env.IS_CONTAINER === '1') {
-    return handleUpdateInContainer(targets);
+    const res = await handleUpdateInContainer(targets);
+    if (!res.ok) process.exit(1);
+    console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
+    return;
   }
 
   const repoRoot = findRepoRoot();
@@ -300,25 +312,287 @@ async function handleUpdate(id) {
   console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
 }
 
+/**
+ * Un singolo step, con tetto di tempo che vale davvero.
+ *
+ * `detached: true` da' al figlio un process group tutto suo, cosi' allo
+ * scadere del timeout si uccide il GRUPPO: lo step di kimi e' un `sh -c 'a &&
+ * b'` e chi resta appeso alla rete e' un NIPOTE — ammazzare la sola shell lo
+ * lascerebbe vivo a scrivere nel prefisso mentre il team parte (e chi aspetta
+ * resterebbe fermo lo stesso). Il rovescio del detached e' che il Ctrl-C del
+ * terminale non raggiunge piu' il figlio da solo: lo si inoltra a mano finche'
+ * lo step e' in corso.
+ */
+function runUpdateStep(step, timeoutMs) {
+  return new Promise((resolve) => {
+    const env = { ...process.env, ...(step.env || {}) };
+    let child;
+    try {
+      child = spawn(step.entrypoint, step.args, { stdio: 'inherit', env, detached: true });
+    } catch (error) {
+      resolve({ status: null, error, timedOut: false });
+      return;
+    }
+    let timedOut = false;
+    const killGroup = (sig) => {
+      try { process.kill(-child.pid, sig); } catch { /* gruppo gia' morto */ }
+    };
+    const timer = setTimeout(() => { timedOut = true; killGroup('SIGKILL'); }, timeoutMs);
+    const forward = (sig) => killGroup(sig);
+    process.on('SIGINT', forward);
+    process.on('SIGTERM', forward);
+    const done = (res) => {
+      clearTimeout(timer);
+      process.off('SIGINT', forward);
+      process.off('SIGTERM', forward);
+      resolve(res);
+    };
+    child.on('error', (error) => done({ status: null, error, timedOut }));
+    child.on('exit', (status, signal) => done({ status, signal, timedOut }));
+  });
+}
+
+/**
+ * Esegue gli step di update DENTRO al container. Unico percorso di install:
+ * lo riusa sia `jht providers update` (umano) sia l'auto-update al boot.
+ *
+ * NON esce dal processo: ritorna `{ ok, failed[], reason }` e lascia decidere
+ * al chiamante. Il comando interattivo traduce !ok in `exit 1`; l'auto-update
+ * al boot NON puo' permetterselo — un update fallito non deve impedire al team
+ * di lavorare (vincolo fail-safe di [PROVIDER-CLI-AUTOUPDATE]).
+ *
+ * Persistenza: npm scrive in $NPM_CONFIG_PREFIX e uv in $UV_TOOL_DIR, entrambi
+ * su /opt/jht-deps (volume Docker) — quindi l'installazione sopravvive al
+ * riavvio del container e al secondo boot non c'e' nulla da reinstallare.
+ */
 async function handleUpdateInContainer(targets) {
-  let failed = 0;
+  const failed = [];
+  let reason = '';
   for (const target of targets) {
     const steps = UPDATE_SPECS[target];
     console.log(`\n  ${DIM}── Updating ${target} (in-container) ──${RESET}`);
+    let targetFailed = false;
     for (const step of steps) {
       console.log(`  ${DIM}$ ${step.entrypoint} ${step.args.join(' ')}${RESET}`);
-      const env = { ...process.env, ...(step.env || {}) };
-      const r = spawnSync(step.entrypoint, step.args, { stdio: 'inherit', env });
+      const r = await runUpdateStep(step, UPDATE_STEP_TIMEOUT_MS);
       if (r.status !== 0) {
-        console.error(`  ${ERR}  step fallito (exit ${r.status}) per ${target}`);
-        failed++;
+        // Tre esiti da tenere distinti nel messaggio, perche' portano a tre
+        // diagnosi diverse: binario assente, tempo scaduto, exit code.
+        reason = r.timedOut
+          ? `${step.entrypoint} ucciso dopo ${UPDATE_STEP_TIMEOUT_MS / 1000}s (timeout)`
+          : r.error
+            ? `${step.entrypoint}: ${r.error.message}`
+            : r.signal
+              ? `${step.entrypoint} ucciso da ${r.signal}`
+              : `${step.entrypoint} exit ${r.status}`;
+        console.error(`  ${ERR}  step fallito (${reason}) per ${target}`);
+        targetFailed = true;
         break;
       }
     }
-    if (!failed) console.log(`  ${OK}  ${target} aggiornato`);
+    if (targetFailed) failed.push(target);
+    else console.log(`  ${OK}  ${target} aggiornato`);
   }
-  if (failed > 0) process.exit(1);
-  console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
+  return { ok: failed.length === 0, failed, reason };
+}
+
+// ── Auto-update al boot del container ───────────────────────────────────────
+// [PROVIDER-CLI-AUTOUPDATE] `jht providers update` funziona, ma si aggiorna
+// solo se un umano se lo ricorda: una VPS in produzione e' rimasta undici
+// giorni indietro e due agenti si sono impantanati a 565k e 168k token contro
+// una finestra da 262k, quando la versione piu' recente ne offriva una da 1M.
+// Qui l'aggiornamento diventa un passo del boot — pid1 lo esegue PRIMA dei
+// bridge e quindi prima che esista qualunque cosa che usi la CLI.
+//
+// Tre proprieta' non negoziabili:
+//   • FAIL-SAFE. Qualunque esito, exit 0: rete assente, registry irraggiungibile,
+//     versione rotta → si logga e si parte con la CLI gia' presente. Un
+//     aggiornamento non riuscito non puo' impedire al team di lavorare.
+//   • SOLO IL PROVIDER ATTIVO. Aggiornare tutti e tre a ogni boot e' banda e
+//     tempo sprecati per due CLI che nessuno lancera'.
+//   • NON TOCCA IL MODELLO. Cambiare modello cambia costi, comportamento e
+//     finestra di contesto: resta una decisione dell'utente. Se la CLI nuova ne
+//     espone uno piu' recente, il Capitano lo riceve come FINDING (sotto).
+const AU = '[provider-autoupdate]';
+
+// Binario di ciascuna CLI, come lo invoca .launcher/start-agent.sh.
+const UPDATE_BIN = { claude: 'claude', codex: 'codex', kimi: 'kimi' };
+const UPDATE_NPM_PKG = { claude: '@anthropic-ai/claude-code', codex: '@openai/codex' };
+const SEMVER_RE = /(\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.-]+)?)/;
+
+/**
+ * Versione della CLI chiedendola AL BINARIO. E' la misura che conta: e' lo
+ * stesso eseguibile che gli agenti trovano sul PATH, quindi non dipende da
+ * dove npm/uv abbiano deciso di scrivere (prefisso cambiato il 2026-07-26 da
+ * /jht_home/.npm-global a /opt/jht-deps, e il vecchio resta nel PATH).
+ *   claude --version → "2.1.220 (Claude Code)"
+ *   codex  --version → "codex-cli 0.145.0"
+ *   kimi   --version → "kimi, version 1.36.0"
+ */
+function versionFromBinary(target) {
+  const bin = UPDATE_BIN[target];
+  if (!bin) return null;
+  try {
+    const r = spawnSync(bin, ['--version'], { encoding: 'utf-8', timeout: 20_000 });
+    if (r.status !== 0) return null;
+    const m = SEMVER_RE.exec(`${r.stdout || ''}\n${r.stderr || ''}`);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback su disco quando il binario non e' installato o non risponde. */
+function versionFromDisk(target) {
+  const pkgName = UPDATE_NPM_PKG[target];
+  if (pkgName) {
+    const roots = [join(NPM_PREFIX, 'lib', 'node_modules'), NPM_GLOBAL];
+    for (const root of roots) {
+      const pkg = readJsonSafe(join(root, ...pkgName.split('/'), 'package.json'));
+      if (pkg?.version) return pkg.version;
+    }
+    return null;
+  }
+  // kimi: venv di uv, layout <tool-dir>/kimi-cli/lib/<pythonX.Y>/site-packages.
+  // La minor di Python non e' fissa (oggi 3.13, domani no): si scandisce.
+  const toolDirs = [
+    process.env.UV_TOOL_DIR,
+    join(JHT_DIR, '.local', 'share', 'uv', 'tools'),
+  ].filter(Boolean);
+  for (const toolDir of toolDirs) {
+    let pythons = [];
+    try { pythons = readdirSync(join(toolDir, 'kimi-cli', 'lib')); } catch { continue; }
+    for (const py of pythons) {
+      const v = readUvToolVersion(join(toolDir, 'kimi-cli', 'lib', py, 'site-packages'), 'kimi_cli-');
+      if (v) return v;
+    }
+  }
+  return null;
+}
+
+function detectInstalledVersion(target) {
+  return versionFromBinary(target) ?? versionFromDisk(target);
+}
+
+/** Provider attivo + modello dichiarato in jht.config.json. */
+async function readActiveProvider() {
+  if (!(await fileExists(CONFIG_PATH))) return { id: null, model: null };
+  try {
+    const config = JSON.parse(await readFile(CONFIG_PATH, 'utf-8'));
+    const id = config.active_provider ?? null;
+    const model = (id && config.providers?.[id]?.model) || null;
+    return { id, model };
+  } catch {
+    return { id: null, model: null };
+  }
+}
+
+/**
+ * Consegna un finding al Capitano appendendolo alla mailbox JSONL che gia'
+ * usano sentinel-bridge e pacing-bridge ($JHT_HOME/logs/bridge-mailbox.jsonl):
+ * il Capitano la svuota all'inizio di OGNI turno con la skill `bridge-mailbox`.
+ *
+ * Non si usa `jht-tmux-send`: al boot la sessione CAPITANO non esiste ancora
+ * (gli agenti partono dopo), quindi il messaggio andrebbe perso proprio nel
+ * momento in cui vale di piu'. La mailbox e' asincrona per costruzione.
+ */
+function appendCaptainFinding(msg) {
+  try {
+    const logsDir = join(JHT_DIR, 'logs');
+    mkdirSync(logsDir, { recursive: true });
+    const entry = {
+      ts: new Date().toISOString(),
+      kind: 'provider-cli',
+      delivered_via_tmux: false,
+      msg,
+    };
+    appendFileSync(join(logsDir, 'bridge-mailbox.jsonl'), JSON.stringify(entry) + '\n', 'utf-8');
+    return true;
+  } catch (err) {
+    console.error(`${AU} finding non consegnato al Capitano: ${err.message}`);
+    return false;
+  }
+}
+
+/** `JHT_PROVIDER_AUTOUPDATE=0|false|off|no` spegne l'auto-update. Default: acceso. */
+function autoUpdateDisabled() {
+  const raw = (process.env.JHT_PROVIDER_AUTOUPDATE ?? '').trim().toLowerCase();
+  return raw === '0' || raw === 'false' || raw === 'off' || raw === 'no';
+}
+
+async function autoUpdateOnce() {
+  if (autoUpdateDisabled()) {
+    console.log(`${AU} disabilitato (JHT_PROVIDER_AUTOUPDATE=${process.env.JHT_PROVIDER_AUTOUPDATE}): nessun tentativo di update`);
+    return;
+  }
+  if (process.env.IS_CONTAINER !== '1') {
+    console.log(`${AU} skip: fuori dal container (IS_CONTAINER≠1). Dall'host si aggiorna con 'jht providers update <id>'`);
+    return;
+  }
+
+  const active = await readActiveProvider();
+  if (!active.id) {
+    console.log(`${AU} skip: active_provider non ancora configurato (${CONFIG_PATH}) — niente da aggiornare`);
+    return;
+  }
+  const target = resolveUpdateTarget(active.id);
+  if (!target) {
+    console.log(`${AU} skip: provider attivo '${active.id}' senza spec di update (supportati: claude, codex, kimi)`);
+    return;
+  }
+
+  const before = detectInstalledVersion(target);
+  console.log(`${AU} provider attivo '${active.id}' → aggiorno SOLO ${target} (installata: ${before ?? 'sconosciuta'})`);
+
+  const res = await handleUpdateInContainer([target]);
+  const after = detectInstalledVersion(target);
+
+  // Criterio 2: il log dice SEMPRE prima → dopo, e dice esplicitamente quando
+  // non e' cambiato niente. Un log che tace sul no-op non permette di
+  // distinguere "gia' aggiornata" da "non ha girato".
+  const b = before ?? 'sconosciuta';
+  const a = after ?? 'sconosciuta';
+  const changed = !!before && !!after && before !== after;
+  let verdict;
+  if (changed) {
+    verdict = res.ok
+      ? 'AGGIORNATA'
+      : 'AGGIORNATA (lo step ha riportato un errore ma la versione e\' cambiata)';
+  } else if (res.ok) {
+    verdict = 'INVARIATA — era gia\' all\'ultima versione, niente da reinstallare';
+  } else {
+    verdict = `INVARIATA — update NON riuscito (${res.reason || 'causa ignota'}); il team parte con la CLI gia' presente`;
+  }
+  console.log(`${AU} ${target}: ${b} → ${a} — ${verdict}`);
+
+  if (!changed) return;
+
+  // Il modello NON viene toccato: qui si segnala e basta. Il Capitano lo legge
+  // al primo drain della mailbox e lo porta all'utente, che decide.
+  const modelLine = active.model
+    ? `\`${active.model}\` (da jht.config.json)`
+    : 'quello di default del provider (in jht.config.json non e\' fissato)';
+  const finding = [
+    `🔄 [FINDING] CLI del provider aggiornata al boot: ${target} ${b} → ${a}.`,
+    `Il MODELLO NON e' stato cambiato: resta ${modelLine}.`,
+    'Se questa versione della CLI espone un modello piu\' recente, il cambio e\' una DECISIONE DELL\'UTENTE',
+    '(cambia costi, comportamento e finestra di contesto): portaglielo, non applicarlo da solo.',
+  ].join(' ');
+  if (appendCaptainFinding(finding)) {
+    console.log(`${AU} finding consegnato al Capitano (mailbox bridge, drain a inizio turno)`);
+  }
+}
+
+/**
+ * Entry point del boot. Non fallisce MAI: qualunque eccezione viene loggata e
+ * il processo esce 0, perche' pid1 non deve avere motivo di fermarsi qui.
+ */
+async function handleAutoUpdate() {
+  try {
+    await autoUpdateOnce();
+  } catch (err) {
+    console.error(`${AU} errore inatteso: ${err?.message ?? err} — proseguo con la CLI gia' presente`);
+  }
 }
 
 // Scriptable: stampa "id installed_version latest_version" per ogni provider
@@ -379,6 +653,11 @@ export function registerProvidersCommand(program) {
     .command('update [id]')
     .description('Aggiorna il CLI del provider (claude/codex/kimi) all\'ultima versione. Omesso id: aggiorna tutti i provider supportati.')
     .action(handleUpdate);
+
+  cmd
+    .command('autoupdate')
+    .description('Aggiorna la CLI del SOLO provider attivo (passo di boot: fail-safe, non fallisce mai). Spegnibile con JHT_PROVIDER_AUTOUPDATE=0.')
+    .action(handleAutoUpdate);
 
   cmd
     .command('check')
