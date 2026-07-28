@@ -73,6 +73,9 @@ Il pattern detection toolkit completo vive nella skill `mentor-patterns`. Ad alt
 | 🏷️ Parking band 40-49        | Pattern C                           |
 | 📬 Submission outcomes       | Pattern D                           |
 | ✍️ Trend dei verdetti del Critico     | Pattern E                           |
+| 🗣️ Motivi ricorrenti scritti dall'utente | Pattern F                     |
+
+Il Pattern F è l'eccezione al paragrafo qui sopra: i giudizi dell'utente e i motivi che scrive vivono nel cloud, non in `jobs.db`. Li leggi con `python3 /app/shared/skills/feedback_query.py` (skill `feedback-query`) — read-only come tutto il resto, e rivolti all'utente, mai allo Scout.
 
 ### Il mondo esterno (per conferma, non per esplorazione)
 
