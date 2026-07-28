@@ -75,9 +75,10 @@ func _notification(what: int) -> void:
 			quit_game()
 
 
-## Uscita SEMPRE da qui: chiudere la finestra deve spegnere anche il team.
+## Uscita SEMPRE da qui: chiudere la finestra decide anche cosa ne è del team.
 ## Gli agenti girano nel container, non nel gioco, e continuavano a lavorare —
-## consumando token — con la finestra chiusa e nessun avviso (25/07).
+## consumando token — con la finestra chiusa e nessun avviso (25/07). Da allora
+## si chiede; dal 28/07 una delle risposte possibili è "lasciali lavorare".
 var _quitting := false
 var _quit_done := false
 var _shutdown_task := -1
@@ -104,24 +105,27 @@ func _on_shutdown_choice(mode: String) -> void:
 	if is_instance_valid(_shutdown_dialog):
 		_shutdown_dialog.queue_free()
 	_shutdown_dialog = null
-	if mode == "cancel":
+	if mode == HeadlessSession.MODE_CANCEL:
 		return
 	# "graceful": il team si è già fermato da sé, resta da spegnere il container;
-	# "forced": shutdown_team() ferma prima gli agenti e poi il container.
-	_do_quit()
+	# "forced": shutdown_team() ferma prima gli agenti e poi il container;
+	# "detach": non si esegue NIENTE — la finestra se ne va e loro restano al
+	# lavoro, come quando li avvia la CLI e il comando esce.
+	HeadlessSession.record_exit(mode == HeadlessSession.MODE_DETACH)
+	_do_quit(HeadlessSession.stops_team(mode))
 
 
-func _do_quit() -> void:
+func _do_quit(stop_team := true) -> void:
 	if _quitting:
 		return
 	_quitting = true
 	get_tree().paused = false
-	_show_loading(UIStrings.t("pause.shutdown"))
+	_show_loading(UIStrings.t("pause.shutdown" if stop_team else "pause.detaching"))
 	# Lo stop passa da docker e blocca per qualche secondo: in un thread, così
 	# il velo arriva a schermo invece di congelarsi a metà.
 	var task := func() -> void:
 		var setup := get_node_or_null("/root/SetupService")
-		if setup != null and setup.has_method("shutdown_team"):
+		if stop_team and setup != null and setup.has_method("shutdown_team"):
 			setup.call("shutdown_team")
 		call_deferred("_quit_now")
 	_shutdown_task = WorkerThreadPool.add_task(task)
