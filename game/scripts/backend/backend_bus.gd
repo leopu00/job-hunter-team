@@ -160,6 +160,7 @@ func _ready() -> void:
 		cfg = {
 			"ip": OS.get_environment("JHT_VPS_IP"),
 			"key_path": OS.get_environment("JHT_VPS_KEY"),
+			"user": OS.get_environment("JHT_VPS_USER"),
 		}
 	if str(cfg.get("ip", "")) != "" and str(cfg.get("key_path", "")) != "":
 		set_backend(VpsBackend.new(), cfg)
@@ -695,12 +696,16 @@ func load_vps_config() -> Dictionary:
 	return {
 		"ip": cfg.get_value("vps", "ip", ""),
 		"key_path": cfg.get_value("vps", "key_path", ""),
+		# Le config salvate prima che il campo esistesse non hanno "user":
+		# vuoto vale root, l'unico utente che il gioco sapesse usare.
+		"user": cfg.get_value("vps", "user", ""),
 	}
 
-func save_vps_config(ip: String, key_path: String) -> void:
+func save_vps_config(ip: String, key_path: String, user := "") -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("vps", "ip", ip)
 	cfg.set_value("vps", "key_path", key_path)
+	cfg.set_value("vps", "user", user)
 	cfg.save(CONFIG_PATH)
 
 
@@ -712,6 +717,7 @@ func clear_vps_config() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("vps", "ip", "")
 	cfg.set_value("vps", "key_path", "")
+	cfg.set_value("vps", "user", "")
 	cfg.save(CONFIG_PATH)
 
 

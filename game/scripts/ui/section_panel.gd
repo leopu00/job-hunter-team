@@ -2721,6 +2721,7 @@ static func _fmt_salary_eur(s_min: Variant, s_max: Variant, cur: String) -> Stri
 # ── Impostazioni → Collega VPS ────────────────────────────────────────
 
 var _vps_ip: LineEdit
+var _vps_user: LineEdit
 var _vps_key: LineEdit
 var _vps_state_lbl: Label
 var _vps_agents_box: VBoxContainer
@@ -2776,6 +2777,12 @@ func _build_vps() -> void:
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.destination"), 15,
 			Palette.BRIGHT, "bold"))
 	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "203.0.113.10")
+	# Solo Hetzner consegna root: OVH e AWS aprono su `ubuntu`, Google Cloud e
+	# Azure sul nome dell'account. Campo vuoto = root, come prima.
+	_vps_user = _vps_input(UIStrings.t("vps.user"), cfg.get("user", ""), "root")
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("vps.user_note"),
+			12, Palette.DIM))
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("vps.fingerprint_note"),
 			12, Palette.DIM))
@@ -2801,19 +2808,22 @@ func _build_vps() -> void:
 	test_ssh.text = UIStrings.t("vps.verify_ssh")
 	test_ssh.add_theme_color_override("font_color", Palette.MINT)
 	test_ssh.pressed.connect(func() -> void:
-		SetupService.test_vps_connection(_vps_ip.text, _vps_key.text))
+		SetupService.test_vps_connection(_vps_ip.text, _vps_key.text,
+				_vps_user.text))
 	actions.add_child(test_ssh)
 	var install := Button.new()
 	install.text = UIStrings.t("vps.prepare")
 	install.add_theme_color_override("font_color", Palette.YELLOW)
 	install.pressed.connect(func() -> void:
-		SetupService.provision_vps(_vps_ip.text, _vps_key.text))
+		SetupService.provision_vps(_vps_ip.text, _vps_key.text,
+				_vps_user.text))
 	actions.add_child(install)
 	var console_install := Button.new()
 	console_install.text = UIStrings.t("vps.advanced")
 	console_install.flat = true
 	console_install.pressed.connect(func() -> void:
-		SetupService.open_vps_install(_vps_ip.text, _vps_key.text))
+		SetupService.open_vps_install(_vps_ip.text, _vps_key.text,
+				_vps_user.text))
 	_content.add_child(console_install)
 
 	_vps_state_lbl = TerminalTheme.label("", 16, Palette.MUTED, "medium")
@@ -2871,7 +2881,8 @@ func _confirm_vps_migration(source_mode: String) -> void:
 			+ "\n\n" + UIStrings.t("vps.confirm_body")
 	dialog.ok_button_text = UIStrings.t("vps.confirm_vps_ok")
 	dialog.confirmed.connect(func() -> void:
-		SetupService.migrate_to_vps(_vps_ip.text, _vps_key.text, source_mode))
+		SetupService.migrate_to_vps(_vps_ip.text, _vps_key.text, source_mode,
+				_vps_user.text))
 	dialog.canceled.connect(dialog.queue_free)
 	dialog.confirmed.connect(dialog.queue_free)
 	add_child(dialog)
@@ -2921,8 +2932,10 @@ func _connect_vps() -> void:
 		_vps_state_lbl.text = "● " + UIStrings.t("vps.missing_fields")
 		_vps_state_lbl.add_theme_color_override("font_color", Palette.YELLOW)
 		return
-	BackendBus.save_vps_config(ip, key)
-	BackendBus.set_backend(VpsBackend.new(), {"ip": ip, "key_path": key})
+	var user := _vps_user.text.strip_edges()
+	BackendBus.save_vps_config(ip, key, user)
+	BackendBus.set_backend(VpsBackend.new(),
+			{"ip": ip, "key_path": key, "user": user})
 
 func _on_vps_state(state: int, detail: String) -> void:
 	if not is_instance_valid(_vps_state_lbl):

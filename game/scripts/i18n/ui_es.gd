@@ -277,6 +277,8 @@ const S := {
 
 	"vps.intro": "Conecta la VPS de tu equipo: IP y clave SSH, del resto se encarga el juego.",
 	"vps.ip": "IP DE LA VPS",
+	"vps.user": "USUARIO SSH",
+	"vps.user_note": "Usuario con el que el proveedor abre la VPS: root en Hetzner, ubuntu en OVH y AWS, el nombre de la cuenta en Google Cloud y Azure. Vacío equivale a root.",
 	"vps.key": "CLAVE SSH (privada)",
 	"vps.key_browse": "EXAMINAR…",
 	"vps.connect": "▶ CONECTAR",
