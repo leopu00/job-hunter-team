@@ -2468,6 +2468,25 @@ func _build_pos_detail() -> void:
 	var st := _pos_value(p, "status")
 	sub.add_child(TerminalTheme.label(st, 14,
 			_pos_status_color(st, Palette.MUTED), "bold"))
+	# L'indirizzo che gli Analisti hanno faticato a trovare vive SOLO qui,
+	# accanto a città e paese: è la stessa informazione, alla sua massima
+	# precisione. Con office_verified=0 il team ha ripiegato sul centro città
+	# e lo dice — è anche la ragione per cui il pin sulla mappa è vuoto.
+	var addr_v: Variant = p.get("office_address")
+	var addr := str(addr_v).strip_edges() if addr_v != null else ""
+	if addr != "" and addr != "<null>":
+		var exact := MapPins.is_exact(p)
+		var tag := UIStrings.t("pos.office_verified") if exact \
+				else UIStrings.t("pos.office_approx")
+		var arow := HBoxContainer.new()
+		arow.add_theme_constant_override("separation", 10)
+		box.add_child(arow)
+		arow.add_child(TerminalTheme.label(UIStrings.t("pos.office_address"),
+				13, Palette.MUTED, "medium"))
+		arow.add_child(TerminalTheme.label(addr, 14,
+				Palette.BASE if exact else Palette.MUTED))
+		arow.add_child(TerminalTheme.label(tag, 12,
+				Palette.MINT if exact else Palette.DIM, "medium"))
 	if p.get("found_by"):
 		box.add_child(TerminalTheme.label(UIStrings.t("pos.found") % [
 				str(p["found_by"]), str(p.get("found_at", "")).left(10)], 13, Palette.DIM))
