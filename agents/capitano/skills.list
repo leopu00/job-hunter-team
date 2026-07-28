@@ -34,6 +34,12 @@ sentinel-orders
 bridge-pacing
 bridge-mailbox
 pipeline-triage
+# La velocità della finestra è tornata al Capitano: il pace guard misura e
+# CONSIGLIA, il throttle lo scrive lui. La decisione non è "tutti giù del 10%"
+# ma QUALE agente rallentare e di QUANTO — chi consuma (share) non è chi
+# produce, e livellare colpisce Analista e Scorer, cioè chi trasforma
+# l'arretrato in una posizione CON PUNTEGGIO. Include i casi "non fare niente".
+throttle-distribution
 # Calibrazione graduale del roster: quanti worker + che throttle per centrare
 # la velocità-target, con piano a scaglioni (C-02, anti ACCELERARE→marathon).
 scaling-calc
