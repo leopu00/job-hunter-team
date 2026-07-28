@@ -1,106 +1,107 @@
-# Perché è difficile bruciare in fretta, anche quando l'utente lo chiede
+# Gli automatismi di spesa non cedono all'ordine dell'utente
 
-**Data**: 2026-07-28 · **Origine**: una notte passata a cercare di far consumare a un team
-tutto il budget disponibile, su richiesta esplicita dell'utente ("non mi frega niente del
-budget, spremete il più possibile"). Ci sono volute **cinque deroghe successive**, e non è
-bastato.
+**Data**: 2026-07-28 · **Origine**: una notte in cui l'utente ha chiesto esplicitamente di
+consumare il più possibile ("il budget non è un vincolo, spremete"). Sono servite **cinque
+deroghe successive**, ognuna con una diagnosi separata, e una è stata **annullata da un
+agente** che seguiva il proprio prompt.
 
-Il comportamento predefinito è **giusto**: il progetto nasce da incidenti reali in cui il
-budget si esauriva in due giorni. Il problema è un altro — quando l'utente chiede
-espressamente il contrario, **non esiste un modo per accordarglielo**. Ogni freno va
-smontato singolarmente, alcuni non sono raggiungibili senza modificare il codice, e uno vive
-nelle istruzioni degli agenti invece che nella configurazione.
+Il problema **non** è quanto si riesce a bruciare. È che **il sistema non ha un modo di
+sapere che l'utente ha deciso diversamente**: gli automatismi che fermano il team scattano
+sui numeri e basta, e l'unico modo di fermarli è smontarli a mano, uno per uno, dall'esterno.
 
----
-
-## Inventario dei freni
-
-Livello **C** = codice · **P** = prompt/istruzioni agente · **H** = vincolo hardware.
-
-| # | Freno | Liv. | Cosa fa | Come si deroga oggi |
-|---|---|---|---|---|
-| 1 | **Daily hard-stop** | C | se `consumato > budget_giorno + 5%` manda ESC a **tutte** le sessioni e scrive `daily-halt.flag` | nessuna, prima del 2026-07-27 → aggiunta `JHT_DAILY_HARDSTOP=0` |
-| 2 | **WORKER_FLOOR** | C | throttle minimo 300s per i worker, applicato **in lettura**: qualunque valore inferiore torna 300 | nessuna → aggiunto `config/throttle-floor-exempt.txt` (per agente) |
-| 3 | **Ladder** | C | primo gradino 300s: `quantize()` riagganciava a 5 min anche scrivendo il file a mano | nessuna → ladder estesa a 1/2/3 min (2026-07-28) |
-| 4 | **pace_guard** | C | ricalcola e **riscrive** il throttle a ogni tick del bridge: un override manuale dura < 5 min | `JHT_PACE_GUARD=0` (spegne tutto) → ora rispetta le esenzioni |
-| 5 | **C-02** | **P** | *"i worker non scendono sotto i 5min, quindi **non esiste** «porta il throttle a 0»… MAI azzerare il throttle"* | nessuna: è un'istruzione, non una config |
-| 6 | **SC-09** | **P** | una posizione per iterazione, mai mass-batch — nato dal marathon (~308kT per 3 posizioni) | nessuna, ed è giusto così (vedi sotto) |
-| 7 | **host_agent_cap** | H | tetto worker calcolato dalla **RAM**: `(GB − riserva) / GB_per_agente − 5 core` | nessuna, ed è giusto così |
-| 8 | **Gate orario** | C | fuori dalle working hours nessuna LLM viene svegliata | cambiare le working hours |
-| 9 | **weekly_locked** | C | a weekly esaurito sospende il pacing giornaliero | nessuna (è il limite del provider) |
-| 10 | **freeze_team** | C | emergenza Sentinella: ESC×2 a tutti su `proj>105%` o `usage≥90%` | nessuna |
-| 11 | **soft_pause_team** | C | pausa graceful su FATAL della Sentinella | nessuna |
-| 12 | **first-run-burst** | P | l'**unica** deroga documentata, e vale solo per la prima finestra di un utente nuovo | — |
+Il comportamento predefinito resta giusto — il progetto nasce da budget evaporati in due
+giorni. Manca la deroga, non il freno.
 
 ---
 
-## Le due famiglie, che oggi sono mescolate
+## I flag di halt e chi li legge
 
-**Freni di spesa** (1, 2, 3, 4, 5, 8): esistono per non bruciare il budget. Se l'utente
-dichiara che il budget non è un vincolo, **dovrebbero poter cedere** — è una sua decisione
-economica, non una questione di correttezza.
+| flag | scritto da | letto da | natura |
+|---|---|---|---|
+| `team-halted.flag` | comando dell'utente (`team-state-reconciler`) | 7 componenti: poller, `pid1`, watchdog agenti/dottore/codex, `team.js` | **intento utente** — giusto che vinca su tutto |
+| `weekly-halt.flag` | reconciler, `cloud.js` | 8 componenti | **limite del provider** — non negoziabile: oltre, l'API non risponde |
+| `daily-halt.flag` | i 3 bridge (sentinel, pacing, heartbeat) | gli stessi 3 | **automatismo di spesa** — è questo che deve poter cedere |
 
-**Freni di sicurezza** (6, 7, 9, 10, 11): proteggono da danni che il budget non ripaga —
-thrash della macchina, dati sporchi, lockout del provider. **Devono restare** anche sotto
-richiesta esplicita: il #7 è un limite fisico di RAM, il #6 impedisce che il volume a monte
-produca *throughput negativo* a valle.
+Il punto sta tutto nella terza riga. `daily-halt` viene scritto quando
+`consumato > budget_giornaliero + 5%`, dove il budget è `weekly_rimanente / finestre_rimaste`.
+Nessuno dei tre bridge, prima di scriverlo, si chiede **se l'utente abbia chiesto il
+contrario**.
 
-Oggi le due famiglie si smontano allo stesso modo — cioè a mano, una per una — e nessuna
-delle due è etichettata come tale.
-
----
-
-## Cosa lo rende difficile, in concreto
-
-**Sono indipendenti e a strati.** Togliere il #1 non serve se resta il #2; togliere il #2
-non serve se il #4 lo riscrive cinque minuti dopo. Durante la notte le deroghe sono servite
-tutte e quattro, in sequenza, e ognuna ha richiesto una diagnosi separata perché il sintomo
-era identico: *il throttle torna a 300*.
-
-**Uno dei freni vive nei prompt.** Il #5 non è configurabile: è scritto nelle istruzioni del
-coordinatore. Anche a codice completamente sbloccato, il Capitano legge *"non esiste portare
-il throttle a 0"* e si comporta di conseguenza — cosa che è **successa davvero**: dopo aver
-esentato sei worker, il coordinatore ha ristretto l'esenzione da sé, citando la regola.
-Comportamento corretto dal suo punto di vista, ma significa che una deroga di configurazione
-non basta: va comunicata anche agli agenti.
-
-**Il costo è invisibile finché non misuri.** Nessuno dei freni segnala "ti sto rallentando":
-il team sembra semplicemente lento.
+Effetto osservato: ESC a tutte le sessioni, team in standby, e il coordinatore non più
+raggiungibile — mentre l'utente aveva dato l'ordine opposto un'ora prima.
 
 ---
 
-## Quello che ho verificato, e che cambia la domanda
+## Gli altri automatismi, sullo stesso schema
 
-Vale la pena dirlo, perché ridimensiona l'intero problema: **anche a freni tolti, il team
-non è riuscito a saturare la finestra**. Con throttle a 0 su sei worker, il consumo si è
-fermato al 6-19% della finestra da 5 ore.
+Non tutti passano da un flag su disco, ma tutti condividono il difetto: **decidono sui numeri
+senza consultare l'intento**.
 
-Il motivo è strutturale: scouting e analisi girano su modelli economici e passano la maggior
-parte del tempo **ad aspettare risposte HTTP**. Non c'è throttle da togliere che trasformi
-lavoro I/O-bound in consumo di token. L'unica leva realmente pesante è la **scrittura dei CV
-in Opus**, che nel run osservato era disattivata per ordine dell'utente.
+| automatismo | dove | cosa fa senza chiedere |
+|---|---|---|
+| **WORKER_FLOOR** | `throttle-config.py` | riporta a 300s qualunque valore inferiore, **anche in lettura** |
+| **ladder** | `throttle-config.py` + `pace_guard.py` | riaggancia al gradino più vicino (era 5 min il minimo) |
+| **pace_guard** | `pace_guard.py` | **riscrive** il throttle a ogni tick: un override dura meno di 5 minuti |
+| **C-02** | prompt del Capitano | *"non esiste «porta il throttle a 0»"* — istruzione, non configurazione |
+| **freeze_team** | Sentinella | ESC×2 a tutti su `proj>105%` o `usage≥90%` |
 
-Quindi la domanda "come brucio più in fretta" ha due risposte diverse:
+**Sono a strati**: togliere il primo non serve se resta il secondo, e togliere il secondo non
+serve se il terzo lo riscrive cinque minuti dopo. Il sintomo è sempre lo stesso — *il throttle
+torna a 300* — quindi ogni strato va diagnosticato separatamente.
 
-- **togliere freni** → guadagno modesto, rischio concreto (thrash a 19 sessioni, load 24)
-- **cambiare tipo di lavoro** → è lì che sta il consumo vero
+**E uno vive nei prompt**: dopo aver esentato sei worker dal floor via codice, il coordinatore
+ha **ristretto l'esenzione da sé**, citando C-02. Comportamento corretto dal suo punto di
+vista. Significa che una deroga tecnica **non basta**: va comunicata anche agli agenti, o la
+annullano in buona fede.
 
 ---
 
-## Proposta
+## Cosa deve cedere e cosa no
 
-**Un interruttore unico e a termine**, che dichiari l'intento invece di smontare i freni uno
-per uno:
+**Deve cedere** (automatismi di spesa — è una decisione economica dell'utente):
+`daily-halt`, `WORKER_FLOOR`, la ladder, `pace_guard`, C-02, il gate orario.
 
-- copre in un colpo i freni di **spesa** (1, 2, 3, 4) e passa la deroga anche agli **agenti**,
-  perché il #5 è un prompt e va informato — altrimenti il coordinatore la annulla da solo
-- **non tocca** i freni di sicurezza (6, 7, 9, 10, 11), che restano attivi anche in sprint
-- **scade da solo**: a finestra o a ore. Nessuno dei file di deroga creati stanotte si
-  disattiva da sé, e restano accesi finché qualcuno si ricorda di cancellarli
-- **dice cosa sta facendo**: con i freni tolti, la responsabilità di non sprecare passa
-  interamente al coordinatore, e va scritto — non lasciato dedurre
+**Non deve cedere** (danno che il budget non ripaga, o limite fisico):
+- `weekly-halt` — oltre, il provider non risponde: non è una scelta
+- `host_agent_cap` — tetto derivato dalla RAM; superarlo manda la macchina in thrash e **riduce**
+  la produzione (verificato: 19 sessioni → load 24 su 6 core → SSH irraggiungibile)
+- `SC-09` (una posizione per iterazione) — nasce da un marathon che produsse ~308kT per 3
+  posizioni con dati sporchi: volume a monte = throughput **negativo** a valle
+- `freeze_team` — è l'ultima rete prima del lockout del provider
 
-Nota di realismo: prima di costruirlo, vale la pena chiedersi se serva davvero, dato il
-punto precedente. Un interruttore che promette di bruciare tutto e produce +13% di finestra
-è peggio di nessun interruttore, perché sposta la colpa sul team invece che sul tipo di
-lavoro.
+Oggi le due famiglie si smontano nello stesso modo e nessuna è etichettata come tale.
+
+---
+
+## Cosa serve
+
+**Un punto unico di verità sull'intento dell'utente**, che ogni automatismo di spesa consulta
+**prima** di bloccare — invece di N deroghe indipendenti da smontare a mano.
+
+Requisiti, in ordine di importanza:
+
+1. **I produttori di halt lo leggono prima di scrivere.** Non basta rimuovere il flag dopo:
+   fra la scrittura e la rimozione il team è già stato messo in ESC.
+2. **Arriva anche agli agenti.** C-02 è un prompt: se il coordinatore non sa che l'utente ha
+   derogato, annulla la deroga in buona fede — è già successo.
+3. **Scade da solo.** Nessuno dei file creati durante la notte si disattiva da sé: restano
+   accesi finché qualcuno si ricorda di cancellarli. Una deroga alla protezione di spesa deve
+   avere una durata (una finestra, N ore), non essere permanente per dimenticanza.
+4. **Non tocca i freni di sicurezza** dell'elenco sopra, che restano attivi anche in deroga.
+5. **È esplicito nei log.** Con i freni tolti la responsabilità di non sprecare passa
+   interamente al coordinatore: va scritto, non lasciato dedurre.
+
+Lo schema più semplice che soddisfa tutto: un campo di intento nello stato del team — come
+`team-halted.flag` ma di segno opposto — con scadenza, che i tre bridge e `pace_guard`
+controllano prima di agire, e che il Capitano riceve nel proprio contesto.
+
+---
+
+## Nota a margine
+
+Durante la notte, con tutte le deroghe attive, il consumo si è comunque fermato al 6-19%
+della finestra: sourcing e analisi sono I/O-bound e non diventano token-bound togliendo
+pause. **Questo non cambia nulla di quanto sopra** — un ordine dell'utente va eseguito a
+prescindere da quanto renda, e sapere *dopo* che sarebbe stato inefficace non giustifica non
+averlo eseguito. Va però tenuto presente da chi progetterà la deroga: serve perché il sistema
+obbedisca, non perché prometta un consumo che il tipo di lavoro non produce.
