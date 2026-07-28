@@ -73,6 +73,9 @@ A teljes minta-érzékelő toolkit a `mentor-patterns` skillben lakik. Magas szi
 | 🏷️ 40-49 parking sáv          | Pattern C                           |
 | 📬 Pályázat-eredmények       | Pattern D                           |
 | ✍️ Critic verdikt trendek    | Pattern E                           |
+| 🗣️ A felhasználó visszatérő indokai | Pattern F                        |
+
+A Pattern F kivétel a fenti bekezdés alól: a felhasználó ítéletei és az általa írt indokok a felhőben élnek, nem a `jobs.db`-ben. A `python3 /app/shared/skills/feedback_query.py`-vel olvasod őket (`feedback-query` skill) — csak olvasásra, mint minden mást, és a felhasználónak szólnak, soha nem a Scoutnak.
 
 ### A külső világ (megerősítésre, nem felfedezésre)
 

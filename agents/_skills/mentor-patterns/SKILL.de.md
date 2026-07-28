@@ -1,13 +1,13 @@
 <!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: mentor-patterns
-description: Die fünf Muster, nach denen der Mentor in den Aufzeichnungen sucht, um zu entscheiden WANN er spricht. Stille ist der Standard; nur ein echtes, wiederkehrendes Muster verdient ein Wort. Dieser Skill gibt die kanonische Erkennungsmethode für jedes Muster (DB-Abfrage + Schwelle), damit der Mentor nie von einem einzelnen Datenpunkt aus spricht. Nur lesend — schreibt nie in die DB. Zuständig: Mentor.
-allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(grep *), Bash(awk *)
+description: Die sechs Muster, nach denen der Mentor in den Aufzeichnungen sucht, um zu entscheiden WANN er spricht. Stille ist der Standard; nur ein echtes, wiederkehrendes Muster verdient ein Wort. Dieser Skill gibt die kanonische Erkennungsmethode für jedes Muster (DB-Abfrage + Schwelle), damit der Mentor nie von einem einzelnen Datenpunkt aus spricht. Nur lesend — schreibt nie in die DB. Zuständig: Mentor.
+allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(grep *), Bash(awk *)
 ---
 
 # mentor-patterns — was die Aufzeichnungen verraten
 
-Der Mentor beobachtet Mengen, nicht einzelne Punkte. Fünf Muster sind es wert, darüber zu sprechen; alles andere ist Rauschen.
+Der Mentor beobachtet Mengen, nicht einzelne Punkte. Sechs Muster sind es wert, darüber zu sprechen; alles andere ist Rauschen.
 
 ## Muster A — Skill-Lücke zwischen Profil und Markt
 
@@ -140,12 +140,70 @@ Ein wiederkehrender `critic_score < 5` mit ähnlichen Notizen bedeutet NICHT "de
 - Keine Metriken → den Nutzer nach Zahlen befragen (Food Cost %, Latenz-Reduktionen, Mitarbeiteranzahl, eingesparte Stunden)
 - Stack-Mismatch → `skills.primary` gegen tatsächliche JD-Anforderungen neu prüfen
 
+## Muster F — Wiederkehrende Gründe in den Worten des Nutzers
+
+Im Web beurteilt der Nutzer Positionen (wenig interessant / interessant / sehr interessant, dazu "ausschließen") und kann **warum** schreiben, als Freitext: `reason` (≤ 500 Zeichen) und `comment` (≤ 2000). Dieser Text ist der einzige Ort, an dem er mit eigenen Worten sagt, was er will. Position für Position gelesen ist es eine Anekdote; zusammengezählt ist es eine Tatsache. Zehnmal "zu senior" sind nicht zehn Meinungen über zehn Anzeigen — es ist ein einziger Satz über die Suche.
+
+Der Unterschied zu Muster B ist wichtig: dort sind es die Ausschlüsse der **Agenten** (`ESCLUSA: [TAG]` in `positions.notes`), hier ist es das Urteil des **Nutzers**. Zwei verschiedene Ströme; wenn sie übereinstimmen, siehe den Abschnitt zur Gegenprüfung.
+
+Dieses Feedback lebt in der Cloud (`position_feedback`), nicht in `jobs.db`: es ist das einzige Muster, das nicht über `db_query.py` läuft.
+
+### Erkennung
+
+```bash
+# Die Themen in den vom Nutzer geschriebenen Gründen, letzte 30 Tage
+python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
+
+# Dasselbe Feedback unaggregiert, um seine genauen Worte zu lesen
+python3 /app/shared/skills/feedback_query.py recent --days 30
+```
+
+`themes` gruppiert Freitext nach einfacher Ähnlichkeit — keine exakte Übereinstimmung nötig. Kleinschreibung, Akzente weg, Interpunktion und Funktionswörter weg, jedes Wort auf die ersten 5 Zeichen gekürzt (`senior` / `seniority` / `seniore` / `séniorité` landen auf demselben Schlüssel), dann werden Einzelwörter und benachbarte Paare nach **verschiedenen Positionen** gezählt. Ein Paar gewinnt gegen seine Teile, wenn es dieselben Positionen abdeckt: "zu senior" sagt mehr als "senior", und genau dafür bleiben Verstärkungswörter erhalten.
+
+Pro Thema kommen zurück: `positions`, `events`, `share` (Anteil der Positionen mit Text), `actions` (wie sich das Thema auf like / dislike / hide / star verteilt), `legacy_ids` und bis zu 3 wörtliche `examples`.
+
+Es ist grob gebaut, und man sieht es: entfernte Synonyme bleiben getrennt (`Gehalt` und `RAL` sind zwei Themen). Lies die `examples` und verbinde mit dem Kopf, was das Werkzeug nicht konnte.
+
+Trägt der Payload eine `note` (`no-signal (...)`), ist die Cloud aus oder nicht erreichbar und es gibt kein Aggregat: schweige, baue das Bild nicht aus Einzelabfragen mit `check` wieder zusammen.
+
+### Schwelle
+
+Sprich nur, wenn **alle drei** zutreffen:
+
+- **≥ 8 Feedback-Events tragen Text** (`events_with_text`). Einen Grund zu schreiben kostet den Nutzer Mühe, dieses Volumen liegt also eine Größenordnung unter jedem maschinell erzeugten Zählwert — unter 8 sagt ein Prozentsatz aber nichts (bei 3 Texten ist ein Thema schon ein Drittel).
+- Das Thema deckt **≥ 4 verschiedene Positionen** ab (`positions`, nie `events`: dieselbe Anzeige zweimal zu beurteilen bleibt eine Meinung, und Events zu zählen ließe eine hartnäckige Anzeige wie einen Trend aussehen).
+- Der **`share` des Themas ist ≥ 0,30**. Freitext verteilt denselben echten Einwand über Synonyme, die Dominanz ist also bauartbedingt verdünnt; Muster B darf 40% verlangen, weil seine Tags ein geschlossenes Vokabular sind. Bei kleinem Volumen bindet die 4-Positionen-Regel, bei großem der Anteil — so ist es gemeint.
+
+Darunter: nichts sagen. Ein "zu senior" ist eine Bemerkung zu einer Anzeige.
+
+### Deutung
+
+Das Thema sagt, wo man hinschauen muss; die Aufzeichnungen sagen, ob es ein Problem ist.
+
+| Themenfamilie (Beispiele)                        | Worauf es zeigt                                                          |
+|--------------------------------------------------|--------------------------------------------------------------------------|
+| Seniorität ("zu senior", "zu junior")            | Die in `seniority_target` erklärte Stufe vs. wie der Markt sie nennt      |
+| Stack ("Legacy-Java", "kein PHP")                | `skills.primary` — erklärter und gewünschter Stack driften auseinander (mit A gegenprüfen) |
+| Vergütung ("Gehalt zu niedrig", "keine Spanne")  | Gehaltserwartung vs. ausgeschriebene Spannen (mit C `salary_fit` gegenprüfen) |
+| Ort ("vor Ort", "zu weit", "kein Remote")        | `work_mode` / `relocation` (mit C `remote_fit` gegenprüfen)               |
+| Firma / Branche ("Agentur", "Beratung")          | Eine Präferenz, die nie ins Profil geschrieben wurde                      |
+| Die Anzeige selbst ("vage", "keine Infos")       | Anzeigenqualität, nicht Passung — nur eine Zeile wert, wenn sie dominiert, und als Rauschen, nicht als Hebel |
+
+**Der Befund, der einen Satz wert ist, ist der Widerspruch.** Kreuze die `legacy_ids` des Themas mit ihren Scores (`db_query.py scores`). Wenn der Nutzer weiterhin Positionen ablehnt, die der Scorer über 70 gesetzt hat, ist der Score nicht kaputt — er misst treu die Passung zu einem **Profil, das nicht mehr beschreibt, was der Nutzer will**. Das Profil ist für dich nur lesbar (T10): du nennst die Zahl und stellst die Frage, entscheiden tut er.
+
+### Beispielausgabe
+
+> *"<Name>, in den letzten dreißig Tagen hast du bei neunzehn Positionen einen Grund geschrieben. Bei sieben davon — mehr als ein Drittel — waren es dieselben Worte: **zu senior**. Fünf dieser sieben hatte der Scorer über 70 gesetzt: er las dein Profil, das immer noch ein Senior-Ziel angibt. Hat sich das Ziel verschoben, oder waren diese sieben einfach schlecht geschriebene Anzeigen?"*
+
 ## Muster-Gegenprüfung
 
 Muster verstärken sich gegenseitig. Starkes Signal:
 - **A + C** (Skill-Lücke + niedrige Komponente bei `stack_match`) → fast sicher sprechenswert.
 - **B `[SENIORITY]` + C `experience_fit`** → Senioritäts-Fehlausrichtung, einmal erwähnen.
 - **D abgelehnte Cluster + E critic_score < 5** → CV-Problem, als Muster E eskalieren.
+- **F + B zum selben Thema** (der Nutzer lehnt wegen Seniorität ab UND die Agenten schließen mit `[SENIORITY]` aus) → das Problem ist die erklärte Stufe, nicht der Markt. Das stärkste Signal überhaupt, weil es aus zwei unabhängigen Strömen kommt.
+- **F + C am selben Hebel** (`salary_fit` / `remote_fit`) → Score-Modell und Nutzer zeigen auf dieselbe Reibung. Ein Satz, nicht zwei.
+- **F gegen hohe Scores** → Profil-Drift, siehe Deutung von Muster F.
 
 Vermeide **A allein** wenn der Skill in nur 5/30 Positionen erwähnt wird und keine hoch scort — das ist Rauschen, still bleiben.
 
@@ -166,10 +224,14 @@ Wenn du nichts Muster-würdiges zu sagen hast, **sag nichts**. Stille ist eine A
 - ❌ Das runde `experience_years`-Feld für Muster B/C-Argumentation verwenden — ECHTE Jahre aus `candidate.experience[].years` berechnen (gleiche Regel wie der Analyst).
 - ❌ Von Web-Daten sprechen ohne zuerst ein aufzeichnungs-basiertes Muster — die Aufzeichnungen sind der Trigger, das Web ist die Verifizierung (siehe `WebSearch` / `WebFetch` Bestätigungsschritt in `mentor.md`).
 - ❌ Schwarzmalen ("das führt nirgendwohin") ODER Jubeln ("du schaffst das!") — beides verletzt die Stimme des Mentors. Zahlen, dann eine Frage. Siehe `mentor-output`-Skill.
+- ❌ **Muster F in eine Suchanweisung verwandeln.** Gib dem Scout oder dem Capitano niemals ein "hör auf, X zu bringen", das aus den Vorlieben des Nutzers abgeleitet ist. Eine Pipeline, die nur fischt, was gefällt, bläht ihre eigenen Scores auf, und der Nutzer glaubt am Ende, der Markt sei reich, obwohl die Pipeline für ihn ausgewählt hat. Muster F richtet sich **an den Nutzer**: was sich in seinem Profil ändert, entscheidet er, und du bist ohnehin nur lesend (T10).
+- ❌ Ein zurückgezogenes Urteil vorhalten. `themes` lässt Positionen, deren letztes Event `clear` ist, bereits draußen; hol sie nicht mit `--include-cleared` zurück, nur um eine Schwelle zu erreichen.
+- ❌ Einen einzelnen wörtlichen Kommentar zitieren, als wäre er ein Muster. Die `examples` geben einem Thema eine Stimme, **nachdem** es die Schwelle überschritten hat; sie sind nicht der Befund.
 
 ## Siehe auch
 
 - `mentor-output` — WIE die Nachricht formuliert wird, sobald ein Muster bestätigt ist.
 - `db-query` — Wrapper-Interna.
+- `feedback-query` — der Leser für das Nutzer-Feedback in der Cloud (Muster F); der Scorer fragt dieselbe Quelle Position für Position ab.
 - `agents/mentor/mentor.md` — Orchestrator-Prompt + Kadenz.
 - `agents/_team/team-rules.md` T10 — Profil ist nur lesend, auch für den Mentor.
