@@ -2153,6 +2153,12 @@ func _build_agent_page() -> void:
 		if by.split("-")[0] == real:
 			mine.append(t)
 	_kpi_row(UIStrings.t("agents.registry_actions"), str(mine.size()), Palette.BRIGHT)
+	# Le deroghe che l'utente concede al team stanno sulla pagina di CHI ne
+	# diventa responsabile: tolti gli automatismi, l'unica sorveglianza che
+	# resta sul consumo è il Coordinatore.
+	if slug == "coordinatore":
+		_content.add_child(HSeparator.new())
+		_build_burn_mode()
 	_content.add_child(HSeparator.new())
 	# il grafico storico del ruolo (token, quote finestre, throttle,
 	# azioni db, contesto container) — si autogestisce con cache: i
@@ -2217,6 +2223,205 @@ func _build_agent_page() -> void:
 		who.custom_minimum_size = Vector2(210, 0)
 		row.add_child(who)
 		row.add_child(_pos_paragraph(str(m.get("text", ""))))
+
+## ── Modalità operative: la deroga a termine agli automatismi di spesa ──
+##
+## Finora esisteva solo come `jht burn on` da terminale. Il prodotto non
+## chiede mai all'utente di aprire una shell — le dipendenze si installano
+## in-app, il team si comanda dall'app — quindi la deroga vive qui, e da qui
+## pilota lo STESSO shared/skills/burn_intent.py che leggono i bridge e il
+## prompt del Capitano. Nessuna seconda implementazione, nessuna seconda
+## verità: il gioco chiede e rilegge, non decide.
+
+var _burn_toggle: CheckButton
+var _burn_hours: SpinBox
+var _burn_state_lbl: Label
+## Durata scelta dall'utente, tenuta fuori dai widget: la pagina si
+## ricostruisce a ogni giro del roster e la scelta non deve azzerarsi
+## sotto le dita di chi la sta impostando.
+var _burn_hours_choice := BurnMode.DEFAULT_HOURS
+## true mentre siamo NOI a riallineare l'interruttore allo stato letto:
+## senza, ogni rilettura riaprirebbe da sola il dialogo di conferma.
+var _burn_syncing := false
+## true fra la richiesta e la risposta del container: finché dura, lo stato
+## a schermo non è né quello vecchio né quello nuovo, e non va riscritto.
+var _burn_pending := false
+
+func _build_burn_mode() -> void:
+	if not BackendBus.burn_intent_updated.is_connected(_on_burn_intent):
+		BackendBus.burn_intent_updated.connect(_on_burn_intent)
+	if not BackendBus.burn_intent_action_done.is_connected(_on_burn_action):
+		BackendBus.burn_intent_action_done.connect(_on_burn_action)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 14)
+	_content.add_child(head)
+	head.add_child(TerminalTheme.label("▰ " + UIStrings.t("burn.section"),
+			14, Palette.YELLOW, "bold"))
+	var head_desc := TerminalTheme.label(UIStrings.t("burn.section_desc"),
+			11, Palette.DIM)
+	head_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	head.add_child(head_desc)
+
+	var card := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Palette.CARD
+	style.border_color = Palette.BORDER
+	style.set_border_width_all(TerminalTheme.hairline())
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 14
+	style.content_margin_bottom = 14
+	card.add_theme_stylebox_override("panel", style)
+	_content.add_child(card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	card.add_child(box)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
+	var title := TerminalTheme.label(UIStrings.t("burn.title"), 15,
+			Palette.BRIGHT, "bold")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(title)
+	row.add_child(TerminalTheme.label(UIStrings.t("burn.duration"), 12,
+			Palette.MUTED))
+	_burn_hours = SpinBox.new()
+	_burn_hours.min_value = 1
+	_burn_hours.max_value = BurnMode.MAX_HOURS
+	_burn_hours.step = 1
+	_burn_hours.value = _burn_hours_choice
+	_burn_hours.suffix = "h"
+	_burn_hours.custom_minimum_size = Vector2(104, 0)
+	_burn_hours.value_changed.connect(func(v: float) -> void:
+		_burn_hours_choice = int(v))
+	row.add_child(_burn_hours)
+	_burn_toggle = CheckButton.new()
+	_burn_toggle.tooltip_text = UIStrings.t("burn.title")
+	_burn_toggle.toggled.connect(_on_burn_toggled)
+	row.add_child(_burn_toggle)
+
+	_burn_state_lbl = TerminalTheme.label("", 13, Palette.MUTED, "medium")
+	box.add_child(_burn_state_lbl)
+	var desc := TerminalTheme.label(UIStrings.t("burn.desc"), 12, Palette.BASE)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(desc)
+	# Il numero misurato sta QUI e non solo nell'avviso: è la risposta alla
+	# domanda che uno si fa dopo aver attivato ("perché non sta al 100%?"),
+	# e chi la legge prima decide sapendo cosa comprare.
+	var measured := TerminalTheme.label(UIStrings.t("burn.desc_measured"), 11,
+			Palette.DIM)
+	measured.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(measured)
+
+	# Il tempo scorre anche a pagina ferma. Il residuo si aggiorna da solo sul
+	# delta già ricevuto, e ogni tanto si torna a CHIEDERE: la deroga può
+	# essere scaduta o essere stata revocata dal Capitano mentre guardavamo.
+	var tick := Timer.new()
+	tick.wait_time = 5.0
+	tick.autostart = true
+	tick.timeout.connect(func() -> void:
+		BackendBus.request_burn_intent()
+		_refresh_burn_state())
+	_content.add_child(tick)
+
+	if _burn_pending:
+		_burn_state_lbl.text = "◌ " + UIStrings.t("burn.sending")
+	else:
+		_refresh_burn_state()
+	BackendBus.request_burn_intent()
+
+## Lo stato a schermo viene SEMPRE dal flag riletto, mai dal click: la deroga
+## scade da sola e il Capitano può revocarla, quindi un interruttore che
+## ricorda l'ultima intenzione dell'utente mente entro cinque ore.
+func _refresh_burn_state() -> void:
+	if not is_instance_valid(_burn_state_lbl):
+		return
+	if _burn_pending:
+		return
+	var st := BurnMode.state_for(BackendBus.burn_intent)
+	var state := str(st["state"])
+	var active := state == BurnMode.STATE_ACTIVE
+	_burn_syncing = true
+	_burn_toggle.button_pressed = active
+	_burn_syncing = false
+	_burn_toggle.disabled = state == BurnMode.STATE_UNSUPPORTED
+	_burn_hours.max_value = int(st["max_hours"])
+	# A deroga concessa la durata è già scritta nel flag: cambiarla qui non
+	# sposterebbe la scadenza, e un campo che non fa nulla è una bugia.
+	_burn_hours.editable = not active and not _burn_toggle.disabled
+	var text := ""
+	var color := Palette.MUTED
+	match state:
+		BurnMode.STATE_ACTIVE:
+			var left := BurnMode.remaining_text(int(st["remaining_sec"]))
+			var pattern := UIStrings.t("burn.state_soon") \
+					if bool(st["expiring_soon"]) else UIStrings.t("burn.state_active")
+			text = "✓ " + (pattern % left)
+			color = Palette.YELLOW if bool(st["expiring_soon"]) else Palette.GREEN
+		BurnMode.STATE_OFF:
+			text = "○ " + UIStrings.t("burn.state_off")
+		BurnMode.STATE_UNSUPPORTED:
+			text = "? " + UIStrings.t("burn.state_unsupported")
+			color = Palette.DIM
+		_:
+			text = "? " + UIStrings.t("burn.state_unknown")
+			color = Palette.DIM
+	_burn_state_lbl.text = text
+	_burn_state_lbl.add_theme_color_override("font_color", color)
+
+func _on_burn_toggled(pressed: bool) -> void:
+	if _burn_syncing:
+		return
+	# Rimettere un freno non ha bisogno di essere confermato: la conferma
+	# serve a chi lo toglie.
+	if not pressed:
+		_burn_apply(false)
+		return
+	var st := BurnMode.state_for(BackendBus.burn_intent)
+	# La durata che l'avviso PROMETTE e quella che viene poi scritta devono
+	# essere lo stesso numero, anche se il campo non ha ancora perso il fuoco.
+	_burn_hours_choice = int(_burn_hours.value)
+	var hours := _burn_hours_choice
+	var dialog := ConfirmationDialog.new()
+	dialog.title = UIStrings.t("burn.confirm_title")
+	# I nomi dei freni che restano in piedi non sono una parafrasi: arrivano
+	# da NEVER_YIELDS di burn_intent.py, passando dal container.
+	dialog.dialog_text = UIStrings.t("burn.confirm_body") % [str(hours),
+			str(int(st["max_hours"])),
+			", ".join(PackedStringArray(st["never_yields"]))]
+	dialog.ok_button_text = UIStrings.t("burn.confirm_ok") % str(hours)
+	dialog.confirmed.connect(func() -> void: _burn_apply(true))
+	# Annullare deve far RISALIRE l'interruttore: lasciarlo giù direbbe che
+	# la deroga è attiva quando sul disco non c'è nulla.
+	dialog.canceled.connect(_refresh_burn_state)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.confirmed.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(780, 440))
+
+func _burn_apply(active: bool) -> void:
+	_burn_pending = true
+	if is_instance_valid(_burn_state_lbl):
+		_burn_state_lbl.text = "◌ " + UIStrings.t("burn.sending")
+		_burn_state_lbl.add_theme_color_override("font_color", Palette.YELLOW)
+	BackendBus.set_burn_intent(active, float(_burn_hours_choice))
+
+func _on_burn_intent(_state: Dictionary) -> void:
+	_refresh_burn_state()
+
+func _on_burn_action(_active: bool, ok: bool, error: String) -> void:
+	_burn_pending = false
+	if not is_instance_valid(_burn_state_lbl):
+		return
+	# Anche in caso di successo non si scrive "fatto": il backend rilegge il
+	# flag subito dopo, ed è quella lettura a comandare l'interruttore.
+	_refresh_burn_state()
+	if not ok:
+		_burn_state_lbl.text = "? " + UIStrings.t("burn.failed") % error
+		_burn_state_lbl.add_theme_color_override("font_color", Palette.RED)
 
 func _on_config_refresh(_settings: Dictionary) -> void:
 	if is_instance_valid(_content) and section in ["hours",
