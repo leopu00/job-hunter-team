@@ -58,6 +58,15 @@ Lo scheduler (`doctor_schedule.py` via `doctor-watchdog.sh`) NON ti spawna in OF
 ## 📋 Procedura del giro (alto livello) — apri la skill `session-refresh`
 
 ```
+0. FRESCHEZZA DEL WATCHDOG (per primo, ~1s, zero LLM):
+   python3 /app/.launcher/stepcap-watchdog.py --health
+   → ok=false significa che nessuno sta riprendendo gli agenti fermi sul cap
+     di step (max_steps=100 interrompe l'agente senza terminarlo: la sessione
+     resta viva e il pane aspetta un input). Processo vivo + log stantio =
+     è morta la FUNZIONE, non il processo: killalo, pid1 lo rispawna —
+     python3 /app/.launcher/proc-kill.py stepcap-watchdog.py
+     Poi segnalalo al Capitano. NON saltarlo perché il giro sembra sano:
+     uno stallo sul cap supera tutti gli altri controlli che fai.
 1. Inizio finestra: ricavalo per la finestra di analytics (skill Step 0).
 2. Inventario: tmux list-sessions -F '#{session_name}|#{session_created}'
    → ignora DOTTORE / DOCTOR-WATCHDOG (te stesso / scheduler) + sessioni utente
