@@ -45,6 +45,53 @@ riportare la ripresa dentro il ritmo di pacing invece che fuori.
 
 ---
 
+## ⚠️ Due stalli diversi che si somigliano — rispondere allo stesso modo è un danno
+
+Osservato la sera del 2026-07-28, alla ripresa dopo un reset di finestra: il team era
+fermo da 25 minuti con quota piena. I pane mostravano **due cause distinte**, che al
+watchdog appaiono quasi identiche (agente vivo, pane immobile, nessun progresso):
+
+**A — Cap di step.** Marcatore `Max number of steps reached: 100`. L'agente aspetta un
+input. Risposta corretta: `Continua`.
+
+**B — Quota del provider esaurita.** Risposta HTTP del provider nel pane:
+
+```
+Error code: 403 - {'error': {'message': "You've reached your usage limit for this
+billing cycle. Your quota will be refreshed in the next cycle. …",
+'type': 'access_terminated_error'}}
+```
+
+Risposta corretta: **aspettare il reset**. Mandare `Continua` qui è dannoso — ogni
+tentativo consuma un turno che il provider rifiuta, e se il watchdog ha un backoff su
+stalli ripetuti escala fino al Capitano per un problema che non è dell'agente.
+
+Il watchdog deve quindi classificare **prima** di agire, con due liste separate:
+`STEP_CAP_MARKERS` → nudge, e `PROVIDER_QUOTA_MARKERS` (`access_terminated_error`,
+`usage limit`, codici 402/403/429) → **nessun nudge**, log dell'evento e basta.
+Il contatore di stalli consecutivi non deve incrementare sul caso B: non è un
+rabbit-hole, è una pausa imposta dall'esterno.
+
+Nota utile alla diagnosi: la telemetria interna non vede il caso B. Mentre l'agente
+riceveva il 403, il sentinel riportava finestra al 100% — coerente — ma il messaggio del
+provider parla di *billing cycle*, non della finestra da 5 ore. Il `403` è il modo in cui
+la saturazione della finestra si manifesta lato agente, e va riconosciuto come tale
+invece che letto come «abbonamento finito».
+
+## Lo stallo è ricorrente e colpisce più worker insieme
+
+Nella stessa serata il cap di step si è presentato **due volte in poche ore**, la seconda
+su **tre worker contemporaneamente** (uno Scout, un Analista, uno Scorer) più un quarto
+fermo sul 403. Non è un incidente isolato da tamponare: è il regime normale di un team
+che lavora a throttle basso, e senza la ripresa automatica ogni occorrenza costa un
+quarto d'ora di pipeline ferma e un intervento umano.
+
+Corollario per il backoff: il contatore va tenuto **per agente**, non globale. Tre worker
+che sbattono sul cap nello stesso minuto sono tre eventi indipendenti, non un rabbit-hole
+collettivo che giustifica l'escalation.
+
+---
+
 ## Implementazione
 
 ### Dove
