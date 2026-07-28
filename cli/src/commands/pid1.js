@@ -484,6 +484,45 @@ async function cleanupStaleBridgeState() {
   }
 }
 
+/**
+ * [PROVIDER-CLI-AUTOUPDATE] Aggiorna la CLI del provider ATTIVO prima di
+ * qualunque cosa che la usi. Delegato a `jht providers autoupdate` (stesso
+ * pattern di runMigrate/runUnstuckPositions: pid1 spawna sotto-comandi invece
+ * di importare i moduli dei comandi).
+ *
+ * SEQUENZIALE, non in parallelo ai bridge. Misurato sui due percorsi reali —
+ * `npm install -g @anthropic-ai/claude-code@latest` 1,5s e la coppia
+ * `pip install -U uv` + `uv tool install --force kimi-cli` ~6s — l'attesa e'
+ * un'inezia rispetto ai ~48s di stagger che il boot gia' spende sui 4 agenti.
+ * Farlo in parallelo avrebbe richiesto di trattenere comunque tutti i percorsi
+ * che spawnano agenti (auto-start, agent-watchdog ogni 30s, doctor-watchdog):
+ * complessita' e una finestra di rischio — sostituire il binario sotto una TUI
+ * appena partita — per guadagnare pochi secondi. Il caso degenere (registry che
+ * accetta e poi tace) e' chiuso dal timeout per-step dentro providers.js.
+ *
+ * Fail-safe: qualunque esito, si prosegue. Se l'update non riesce il team
+ * lavora con la CLI gia' installata.
+ */
+async function runProviderAutoUpdate() {
+  pid1Log('provider CLI auto-update (prima dei bridge; JHT_PROVIDER_AUTOUPDATE=0 per spegnerlo)');
+  await new Promise((resolve) => {
+    const child = spawnLabeled('provider-update', process.execPath, [
+      JHT_ENTRY,
+      'providers',
+      'autoupdate',
+    ]);
+    child.on('exit', (code) => {
+      if (code === 0) pid1Log('provider CLI auto-update concluso');
+      else pid1Log(`provider CLI auto-update exit ${code} — proseguo con la CLI gia' presente`);
+      resolve();
+    });
+    child.on('error', (err) => {
+      pid1Log(`provider CLI auto-update spawn error: ${err.message} — proseguo con la CLI gia' presente`);
+      resolve();
+    });
+  });
+}
+
 async function dispatch() {
   const hostType = await readHostType();
   const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
@@ -499,6 +538,11 @@ async function dispatch() {
 
   // Pulizia pid/state file orfani dei bridge (pre-teardown).
   await cleanupStaleBridgeState();
+
+  // Aggiornamento della CLI del provider attivo. Qui e non piu' avanti: da
+  // questo punto in poi il boot spawna bridge, watchdog e agenti, e un update
+  // fatto dopo sostituirebbe il binario sotto processi vivi.
+  await runProviderAutoUpdate();
 
   // Pair non-interattivo PRIMA di partire il daemon: cosi' il watcher
   // su cloud.json non scatta a vuoto e il daemon parte subito col token
