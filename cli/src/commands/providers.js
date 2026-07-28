@@ -4,6 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { refreshModelPin } from './model-pin.js';
 import { Command } from 'commander';
 
 const JHT_DIR     = JHT_HOME;
@@ -410,9 +411,18 @@ async function handleUpdateInContainer(targets) {
 //     aggiornamento non riuscito non puo' impedire al team di lavorare.
 //   • SOLO IL PROVIDER ATTIVO. Aggiornare tutti e tre a ogni boot e' banda e
 //     tempo sprecati per due CLI che nessuno lancera'.
-//   • NON TOCCA IL MODELLO. Cambiare modello cambia costi, comportamento e
-//     finestra di contesto: resta una decisione dell'utente. Se la CLI nuova ne
-//     espone uno piu' recente, il Capitano lo riceve come FINDING (sotto).
+//   • NON SCEGLIE IL MODELLO. L'update riguarda la CLI: JHT non passa un
+//     modello a kimi/codex e non ne applica uno nuovo di sua iniziativa. Ogni
+//     cambio arriva al Capitano come FINDING, perche' cambia costi,
+//     comportamento e finestra di contesto.
+//     ATTENZIONE, e' la lezione del primo test in campo: "non toccare il
+//     modello" non voleva dire "non toccare niente". La CLI si scrive un PIN al
+//     primo login e non lo rivede mai piu', quindi lasciarlo intatto NON e'
+//     neutrale — inchioda il team alla generazione del giorno del login e alla
+//     finestra di contesto di allora. Il passo di refreshModelPin() (in fondo
+//     ad autoUpdateOnce) rimuove quel pin, e SOLO dopo aver verificato che
+//     senza pin la CLI risolve davvero un modello su questo account:
+//     model-pin.js.
 const AU = '[provider-autoupdate]';
 
 // Binario di ciascuna CLI, come lo invoca .launcher/start-agent.sh.
@@ -565,22 +575,55 @@ async function autoUpdateOnce() {
   }
   console.log(`${AU} ${target}: ${b} → ${a} — ${verdict}`);
 
-  if (!changed) return;
-
-  // Il modello NON viene toccato: qui si segnala e basta. Il Capitano lo legge
-  // al primo drain della mailbox e lo porta all'utente, che decide.
-  const modelLine = active.model
-    ? `\`${active.model}\` (da jht.config.json)`
-    : 'quello di default del provider (in jht.config.json non e\' fissato)';
-  const finding = [
-    `🔄 [FINDING] CLI del provider aggiornata al boot: ${target} ${b} → ${a}.`,
-    `Il MODELLO NON e' stato cambiato: resta ${modelLine}.`,
-    'Se questa versione della CLI espone un modello piu\' recente, il cambio e\' una DECISIONE DELL\'UTENTE',
-    '(cambia costi, comportamento e finestra di contesto): portaglielo, non applicarlo da solo.',
-  ].join(' ');
-  if (appendCaptainFinding(finding)) {
-    console.log(`${AU} finding consegnato al Capitano (mailbox bridge, drain a inizio turno)`);
+  if (changed) {
+    // La CLI e' cambiata: qui si segnala e basta. Il Capitano lo legge al primo
+    // drain della mailbox e lo porta all'utente, che decide.
+    const modelLine = active.model
+      ? `\`${active.model}\` (da jht.config.json)`
+      : 'quello di default del provider (in jht.config.json non e\' fissato)';
+    const finding = [
+      `🔄 [FINDING] CLI del provider aggiornata al boot: ${target} ${b} → ${a}.`,
+      `Il MODELLO NON e' stato cambiato: resta ${modelLine}.`,
+      'Se questa versione della CLI espone un modello piu\' recente, il cambio e\' una DECISIONE DELL\'UTENTE',
+      '(cambia costi, comportamento e finestra di contesto): portaglielo, non applicarlo da solo.',
+    ].join(' ');
+    if (appendCaptainFinding(finding)) {
+      console.log(`${AU} finding consegnato al Capitano (mailbox bridge, drain a inizio turno)`);
+    }
   }
+
+  // [PROVIDER-MODEL-PIN] Aggiornare la CLI non sposta il modello: la CLI si
+  // scrive un pin al primo login e non lo rivede mai piu' (il test in campo del
+  // 2026-07-28 ha trovato la CLI all'ultima versione e il team su una
+  // generazione precedente, con la finestra di contesto congelata a 262k).
+  // Il passo gira SEMPRE, non solo quando la versione e' cambiata: il pin e'
+  // vecchio anche — soprattutto — quando non c'e' niente da aggiornare.
+  //
+  // Qui e non altrove: dopo l'update (la CLI che fa la verifica dev'essere
+  // quella nuova) e prima che pid1 spawni qualunque agente, perche' il pin
+  // viene letto all'avvio di ogni sessione.
+  await refreshModelPin({ target, notifyCaptain: appendCaptainFinding });
+}
+
+/**
+ * [PROVIDER-MODEL-PIN] Stesso passo, invocabile a mano: serve per verificare in
+ * campo cosa farebbe (o perche' non fa niente) senza riavviare il container.
+ * Fuori dal container degrada a dry-run: `~/.jht/.kimi` appartiene all'utente
+ * del container (uid 1001) e non si riscrive dall'host.
+ */
+async function handleModelPin(opts = {}) {
+  const active = await readActiveProvider();
+  const target = resolveUpdateTarget(active.id);
+  if (!target) {
+    console.log(`${AU} nessun provider attivo con spec di pin (active_provider=${active.id ?? '(nessuno)'})`);
+    return;
+  }
+  let dryRun = !!opts.dryRun;
+  if (!dryRun && process.env.IS_CONTAINER !== '1') {
+    console.log(`${AU} fuori dal container: eseguo in dry-run (il config del provider e' dell'utente del container)`);
+    dryRun = true;
+  }
+  await refreshModelPin({ target, notifyCaptain: appendCaptainFinding, dryRun });
 }
 
 /**
@@ -656,8 +699,14 @@ export function registerProvidersCommand(program) {
 
   cmd
     .command('autoupdate')
-    .description('Aggiorna la CLI del SOLO provider attivo (passo di boot: fail-safe, non fallisce mai). Spegnibile con JHT_PROVIDER_AUTOUPDATE=0.')
+    .description('Aggiorna la CLI del SOLO provider attivo e rivede il pin di modello scritto al login (passo di boot: fail-safe, non fallisce mai). Spegnibile con JHT_PROVIDER_AUTOUPDATE=0.')
     .action(handleAutoUpdate);
+
+  cmd
+    .command('model-pin')
+    .description('Rivede il pin di modello che la CLI si e\' scritta al login: verifica e (solo se conclusivo) lo invalida. JHT_MODEL_PIN=<x> lo blocca.')
+    .option('--dry-run', 'verifica e riporta cosa farebbe, senza scrivere niente')
+    .action((opts) => handleModelPin(opts));
 
   cmd
     .command('check')
