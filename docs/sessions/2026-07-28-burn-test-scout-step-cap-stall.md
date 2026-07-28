@@ -150,6 +150,34 @@ Errore da non ripetere: quelle proiezioni sono state riportate all'utente come u
 imminente a tre ore, chiedendo una decisione economica che non era necessaria. Il freno
 esisteva già e ha funzionato.
 
+## Quanto spesso succede: il team si ferma da solo ogni mezz'ora
+
+Una serata di giri di controllo a distanza di ~40 minuti l'uno dall'altro, su un team di
+cinque worker. A ogni giro sono stati trovati agenti fermi:
+
+| giro | worker fermi | tipo |
+|---|---|---|
+| 1 | 1 su 5 | cap di step |
+| 2 | 4 su 5 | 3 cap di step + 1 quota provider |
+| 3 | 1 su 5 | nessun marcatore (attesa di incarico) |
+| 4 | 3 su 5 | 2 cap di step + 1 nessun marcatore |
+
+**Nessun giro ha trovato il team interamente in moto.** Ogni volta l'intervento è
+consistito in due o tre messaggi e la produzione è ripartita entro un paio di minuti —
+il che dice che il lavoro c'era, mancava solo chi desse il via.
+
+Questo cambia la natura del problema. Non è un bug che si manifesta in condizioni
+particolari: è il **regime normale** di un team che lavora a throttle basso. Fra un
+intervento umano e il successivo passano dai venti ai quaranta minuti di pipeline ferma,
+e il tempo perso non compare in nessuna metrica — anzi, il pacing lo legge come consumo
+regolare, perché il coordinatore continua a rispondere ai tick.
+
+Ordine di grandezza del costo: nella serata la produzione è passata da 30 a 112 posizioni
+grazie a quattro interventi manuali di pochi secondi ciascuno. Le stesse quattro azioni
+eseguite da un watchdog, entro un minuto dallo stallo invece che entro quaranta,
+varrebbero verosimilmente un multiplo di quel numero. È la giustificazione quantitativa
+del ticket `[STEPCAP-THROTTLE-RESUME]`.
+
 ## Correlato: il freno all'83% era una decisione, non una soglia
 
 La finestra precedente si era appiattita bruscamente intorno all'83% e aveva
