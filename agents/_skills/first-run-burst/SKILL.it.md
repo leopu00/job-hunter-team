@@ -1,7 +1,7 @@
 ---
 name: first-run-burst
 description: La prima mezz'ora in cui un utente nuovo guarda il team lavorare. Apri questa skill quando ricevi `[PROFILO-PRONTO]` dall'Assistente, o al risveglio se `first_run.py status` riporta fase `awaiting_profile` / `burst`. Deroga alla calibrazione graduale (C-02) per la prima finestra soltanto, e definisce il successo come posizioni CON PUNTEGGIO a schermo — non come posizioni trovate.
-allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(jht-send *)
+allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
 ---
 
 # first-run-burst — la dimostrazione da cui dipende se l'utente resta
@@ -76,18 +76,22 @@ python3 /app/shared/skills/first_run.py check
 Eseguilo a ogni `[HEARTBEAT]`. Quando passa a `steady` sei tornato sotto le
 regole ordinarie, calibrazione C-02 compresa.
 
-## La velocità qui non la gestisci tu
+## La velocità qui la gestisci tu — il bridge consiglia soltanto
 
-`pace_guard` tiene il consumo sulla curva della finestra in automatico (muove
-il throttle dei worker a ogni sample del bridge, senza consumare un tuo turno).
-Quindi:
+`pace_guard` misura il consumo contro la curva della finestra a ogni sample del
+bridge e ti scrive nel pane una riga `[PACE-GUARD]` con il throttle che
+consiglierebbe. **Non** lo applica: non lo applica nessuno finché non esegui tu
+`throttle-config.py`. Quindi:
 
 - **Mai** `freeze_team.py` durante il burst. Un team congelato è esattamente il
   silenzio che questa skill esiste per evitare.
-- Se ti arriva un `[PACE-GUARD] LOCKOUT-IMMINENTE`, il freno è **già** al
-  massimo. La leva che ti resta è il **roster** — uccidi uno Scout (mai
-  l'Analista o lo Scorer: senza di loro non si punteggia niente) — non il
-  throttle.
+- Leggi una riga `[PACE-GUARD]` come una decisione da prendere, non come una
+  notifica. Porta il comando già scritto per i worker vivi — adattalo a chi sta
+  facendo cosa ed eseguilo. Se la ignori, il ritmo non cambia: nessuno script
+  tocca il throttle al posto tuo.
+- Se ti arriva come `LOCKOUT-IMMINENTE`, il freno consigliato è già al tetto di
+  1h — frenare non basta più, e la leva è il **roster**: uccidi uno Scout (mai
+  l'Analista o lo Scorer, senza di loro non si punteggia niente).
 - La finestra deve arrivare al 100% **al reset**, non prima. Essere al 100% a
   metà strada significa lasciare l'utente con un team muto per due ore; essere
   al 40% al reset significa budget lasciato sul tavolo. Sono due fallimenti, e
