@@ -78,6 +78,36 @@ provider parla di *billing cycle*, non della finestra da 5 ore. Il `403` è il m
 la saturazione della finestra si manifesta lato agente, e va riconosciuto come tale
 invece che letto come «abbonamento finito».
 
+**C — Task completato, in attesa di un nuovo incarico.** Osservato poco dopo, sullo
+stesso box: uno Scout con il contesto immobile da quaranta minuti, **nessun marcatore di
+alcun tipo**, nessun throttle pendente, il pane chiuso su una riga di esito normale:
+
+> «Hand-off fatto: ping ad ANALISTA-1 e ANALISTA-2 con gli ID ranges. Claim rilasciato.
+> Cache archiviato. **Pronto per il prossimo**»
+
+L'agente ha finito correttamente e si è fermato ad aspettare. Nessuno gli manda il
+prossimo compito, e il suo ciclo non riparte da solo. Un kick-off esplicito l'ha rimesso
+in moto in meno di due minuti.
+
+Questo caso è il più insidioso dei tre perché **non ha nulla da cercare nel pane**: il
+testo finale è indistinguibile da quello di un agente che sta per continuare. La
+rilevazione può quindi appoggiarsi **solo** al segnale universale — contesto/hash del
+pane fermi oltre una soglia — e i marcatori servono a *classificare* la causa una volta
+rilevato lo stallo, non a trovarlo.
+
+Conseguenza sul disegno del watchdog: invertire l'ordine. Prima si rileva
+l'immobilità, poi si cerca un marcatore per decidere la risposta:
+
+| marcatore trovato | risposta |
+|---|---|
+| step cap | throttle + `Continua` |
+| quota provider | solo log, nessun nudge |
+| **nessuno** | kick-off del ruolo (riprendi il ciclo) |
+
+Il ramo «nessun marcatore» non è un caso residuale da ignorare: è quello che ha tenuto
+fermo uno Scout su due per quaranta minuti mentre tutti gli indicatori dicevano che il
+team stava lavorando.
+
 ## Lo stallo è ricorrente e colpisce più worker insieme
 
 Nella stessa serata il cap di step si è presentato **due volte in poche ore**, la seconda
