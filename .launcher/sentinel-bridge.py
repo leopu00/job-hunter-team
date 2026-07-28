@@ -519,6 +519,77 @@ def _daily_hardstop_disabled():
     return os.environ.get("JHT_DAILY_HARDSTOP", "1").strip() in ("0", "false", "no")
 
 
+# Modulo di intento cachato: l'import per path costa un exec, e qui si legge a
+# ogni tick. Il MODULO è cachato, non lo STATO: `status()` rilegge il file ogni
+# volta, così una revoca dell'utente vale entro il tick successivo.
+_BURN_INTENT_MOD = None
+
+
+def _burn_intent_status():
+    """Intento di spesa dell'utente (shared/skills/burn_intent.py).
+
+    Il flag `.burn-intent.flag` è il punto UNICO di verità sul fatto che
+    l'utente abbia chiesto di spingere: va consultato **prima** di scrivere un
+    halt, non dopo averlo scritto — fra la scrittura e la rimozione il team è
+    già stato messo in ESC (notte 2026-07-27).
+
+    Fail-closed per costruzione: se il modulo manca o il flag è illeggibile
+    ritorna inattivo, cioè il freno resta.
+    """
+    global _BURN_INTENT_MOD
+    try:
+        if _BURN_INTENT_MOD is None:
+            _BURN_INTENT_MOD = _load_skill_module("burn_intent", "burn_intent.py")
+        if _BURN_INTENT_MOD is None:
+            return {"active": False, "state": "off"}
+        return _BURN_INTENT_MOD.status()
+    except Exception as e:                                  # noqa: BLE001
+        print(f"[bridge V6] WARN burn_intent: {e}", file=sys.stderr)
+        return {"active": False, "state": "off"}
+
+
+def _burn_intent_sweep():
+    """Scadenza della deroga: proprietario UNICO (questo bridge, che già possiede
+    il ciclo di vita di daily-halt.flag). Ritorna il payload scaduto o None."""
+    global _BURN_INTENT_MOD
+    try:
+        if _BURN_INTENT_MOD is None:
+            _BURN_INTENT_MOD = _load_skill_module("burn_intent", "burn_intent.py")
+        return _BURN_INTENT_MOD.sweep() if _BURN_INTENT_MOD else None
+    except Exception:                                       # noqa: BLE001
+        return None
+
+
+def _burn_intent_announce(state, bi):
+    """Dice agli AGENTI che la deroga è cambiata (requisito: non basta il codice).
+
+    Il 2026-07-27 il coordinatore ha ristretto da sé un'esenzione al floor
+    citando C-02: comportamento corretto dal suo punto di vista, perché la
+    deroga non era nel suo contesto. Qui la transizione ON/OFF arriva a
+    CAPITANO e SENTINELLA una volta sola, e dice esplicitamente di chi è la
+    responsabilità mentre i freni sono tolti.
+    """
+    was = bool(state.get("burn_intent_on"))
+    now_on = bool(bi.get("active"))
+    if was == now_on:
+        return
+    state["burn_intent_on"] = now_on
+    if now_on:
+        msg = ("[BRIDGE INFO] 🔥 " + (_BURN_INTENT_MOD.banner() if _BURN_INTENT_MOD else "") +
+               " Gli automatismi di spesa (daily-halt, gate orario, WORKER_FLOOR, "
+               "ladder) NON ti fermeranno finché dura: la responsabilità di non "
+               "sprecare passa a TE (C-23). Alla scadenza tornano da soli.")
+    else:
+        msg = ("[BRIDGE INFO] ⏱️ BURN-INTENT SCADUTO/REVOCATO — gli automatismi di "
+               "spesa sono di nuovo attivi: daily-halt, gate orario, WORKER_FLOOR "
+               "5min e ladder tornano a valere. Riporta il team al pacing normale "
+               "(C-02/C-07).")
+    for _s in (CAPITANO_SESSION, SENTINELLA_SESSION):
+        if session_exists(_s):
+            jht_tmux_send(_s, msg)
+    print(f"[bridge V6] BURN-INTENT {'ON' if now_on else 'OFF'} → annunciato agli agenti")
+
+
 def _esc_all_sessions():
     """Manda un ESC a ogni sessione tmux: interrompe il turno in corso senza
     uccidere il processo — una pausa pulita, non un kill. Best-effort: qualunque
@@ -1894,6 +1965,21 @@ def main():
         dyn_target, work_phase = _read_dynamic_target()
         within_hours = _within_working_hours(work_phase)
 
+        # ── Intento dell'utente, consultato PRIMA di ogni automatismo ──────
+        # Lo sweep (scadenza) e l'annuncio agli agenti stanno qui, in testa al
+        # tick: sotto, ogni freno di spesa legge `_bi` e nessuno lo ri-calcola.
+        _burn_intent_sweep()
+        _bi = _burn_intent_status()
+        _bi_on = bool(_bi.get("active"))
+        _burn_intent_announce(state, _bi)
+        if _bi_on and not within_hours:
+            # Il gate orario è un automatismo di SPESA (spalma il weekly sulle
+            # ore attive), non un freno di sicurezza: l'utente può decidere di
+            # lavorare stanotte. Il resto del tick prosegue come in orario.
+            within_hours = True
+            print(f"[bridge V6] {now_h} BURN-INTENT: gate orario derogato "
+                  f"(work_phase={work_phase}, scade fra {_bi.get('remaining_min')} min)")
+
         if parsed:
             # ── Path successo: scrivi sample, tick alla Sentinella ────
             parsed["provider"] = provider
@@ -2028,13 +2114,21 @@ def main():
                 entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
             _hb = _dp.get("budget") if isinstance(_dp, dict) else None
             _hc = _dp.get("consumed") if isinstance(_dp, dict) else None
-            if _daily_hardstop_disabled():
-                # Deroga esplicita (JHT_DAILY_HARDSTOP=0): il cap giornaliero
-                # protegge il WEEKLY spalmandolo sulle finestre; durante un burst
-                # dimostrativo si accetta di sforarlo per saturare la finestra 5h.
-                # Il pace_guard continua a misurare e a consigliare il Capitano:
-                # la velocità resta governata (da lui), è solo l'interruttore
-                # generale a non scattare.
+            if _daily_hardstop_disabled() or _bi_on:
+                # Due deroghe, stesso effetto: il cap giornaliero NON scatta.
+                #   • JHT_DAILY_HARDSTOP=0 — deroga di configurazione (burst
+                #     dimostrativo: saturare la finestra 5h invece di spalmarla);
+                #   • BURN-INTENT — deroga esplicita dell'UTENTE, a termine, letta
+                #     QUI **prima** di scrivere l'halt e non dopo: fra la scrittura
+                #     del flag e la sua rimozione il team è già andato in ESC su
+                #     tutte le sessioni, ed è esattamente ciò che è successo la
+                #     notte del 2026-07-27 mentre l'ordine dell'utente era opposto.
+                # In entrambi i casi il `weekly-halt` resta intatto: oltre quel
+                # limite il provider non risponde, e non è una scelta economica.
+                # Il pace_guard, dal canto suo, non tocca più il throttle in
+                # nessuno dei due casi: misura e consiglia, la velocità la
+                # governa il Capitano. Qui non scatta solo l'interruttore
+                # generale.
                 # Se un halt era già attivo lo si rimuove, altrimenti il team
                 # resterebbe in standby con il freno tolto e nessuno a liberarlo.
                 if _daily_halt_active():
@@ -2042,7 +2136,16 @@ def main():
                         DAILY_HALT_FLAG.unlink()
                     except OSError:
                         pass
-                    print(f"[bridge V6] {now_h} DAILY-HARDSTOP disabilitato → flag rimosso")
+                    _why = "BURN-INTENT (deroga utente)" if _bi_on else "DAILY-HARDSTOP disabilitato"
+                    print(f"[bridge V6] {now_h} {_why} → daily-halt flag rimosso")
+                elif _bi_on and isinstance(_hc, (int, float)) and isinstance(_hb, (int, float)) \
+                        and _hc > _hb + 5.0:
+                    # Il cap SAREBBE stato sforato: lo diciamo, non lo subiamo.
+                    # Con i freni tolti la responsabilità di non sprecare passa al
+                    # coordinatore, e deve restarne traccia scritta.
+                    print(f"[bridge V6] {now_h} BURN-INTENT: cap giornaliero sforato "
+                          f"(oggi={_hc:.1f}% > cap={_hb + 5.0:.1f}%) ma NON fermo il team "
+                          f"— deroga utente in corso, scade fra {_bi.get('remaining_min')} min")
             elif isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
                 _hcap = _hb + 5.0
                 _over_cap = _hc > _hcap
