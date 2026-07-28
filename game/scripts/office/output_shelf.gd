@@ -24,10 +24,16 @@ func _init() -> void:
 	position = RECT.get_center()
 	instance = self
 
-## Aggancio al dato vero (chiamato dal sync della scena).
-static func set_ready(n: int) -> void:
+## Aggancio al dato vero (chiamato dal sync della scena). `immediate` salta il
+## drift: serve al primo snapshot di una connessione, perché le cartelline già
+## sui ripiani sono quelle della macchina precedente e a 1,5-3 s l'una
+## resterebbero in vista per quasi un minuto.
+static func set_ready(n: int, immediate := false) -> void:
 	if instance:
 		instance._real = maxi(0, n)
+		if immediate:
+			instance._visual = mini(instance._real, MAX_VISUAL)
+			instance._drift = 0.0
 		instance.set_process(true)
 		instance.queue_redraw()
 

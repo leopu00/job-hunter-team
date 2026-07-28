@@ -40,6 +40,14 @@ signal chat_unread_changed(unread: Dictionary)
 ## migrate (elenco+filtri, dettaglio, mappa). Righe = SELECT del
 ## VpsBackend, campi con i nomi delle colonne reali.
 signal positions_updated(positions: Array)
+## Estensione ADDITIVA (27/07): il backend attivo è CAMBIATO — collegata
+## un'altra macchina, o staccata quella corrente. Tutto ciò che una vista
+## tiene in mano descrive la macchina precedente e va buttato: con un box
+## per beta tester quei numeri sono il lavoro di UN ALTRO utente. Emesso da
+## set_backend() con le cache del bus già svuotate e prima che il nuovo
+## adapter parta, così chi ascolta si risemina nello stesso frame del
+## cambio e non esiste un fotogramma coi conteggi del box precedente.
+signal backend_reset()
 
 ## Conversazione utente ↔ agente (chat bidirezionale). messages = tail
 ## di chat.jsonl dell'agente: [{role: "user"|"assistant", text, ts,
@@ -346,9 +354,44 @@ func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
 		publish_state(DISCONNECTED, "")
 	_backend = backend
 	_onboarding_context_hashes.clear()
+	_reset_connection_snapshots()
 	if _backend:
 		_backend.bus = self
 		_backend.start(config)
+
+
+## Niente di ciò che ha pubblicato un backend sopravvive al successivo.
+## L'ufficio continuava a disegnare la pipeline della macchina precedente
+## perché queste cache restavano intatte: misurato il 27/07 su un box appena
+## creato (14 posizioni nel suo jobs.db) con la pila dello Scorer ferma sulle
+## 694 righe `scored` del box di prima. Con un box per beta tester quello è
+## il lavoro di un altro utente, non un difetto grafico.
+##
+## Le posizioni fittizie dello showroom sono l'unica cosa che resta: non
+## vengono da nessuna macchina, e sparirebbero lasciando l'ufficio vuoto a
+## chi sta ancora configurando il prodotto.
+func _reset_connection_snapshots() -> void:
+	transitions = []
+	telemetry = {}
+	telemetry_history = []
+	live_settings = {}
+	coordinator_state = {}
+	usage_history = {}
+	usage_history_query = {}
+	profile_status = {}
+	chat_log = []
+	if not positions_are_demo:
+		positions = []
+	# Attese di risposta appese a una sessione che non c'è più: senza lo
+	# spegnimento esplicito la chat resterebbe con l'indicatore acceso.
+	for agent in chat_waiting.keys():
+		chat_waiting_changed.emit(str(agent), false)
+	chat_waiting = {}
+	clear_chat_unread()
+	positions_updated.emit(positions)
+	# backend_reset per ULTIMO: chi lo usa per riseminare deve trovare il bus
+	# già svuotato e gli altri segnali già consegnati.
+	backend_reset.emit()
 
 func disconnect_backend() -> void:
 	set_backend(null)

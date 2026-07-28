@@ -84,6 +84,8 @@ jobs:
           printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
           PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
           printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
+          SWITCH_OUT="$(JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$SWITCH_OUT" | grep "BACKEND-SWITCH-TEST PASS"
           DOCTOR_OUT="$(JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game 2>&1)"
           printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
 
