@@ -635,6 +635,7 @@ const S := {
 	"setup.hours": "Working hours",
 	"setup.hours_todo": "When the team may work. With no hours it runs at any time and burns the subscription.",
 	"setup.hours_ok": "Working windows set.",
+	"setup.remote_unknown": "Unreadable on the connected machine. This computer's value does not count: it belongs to another machine.",
 	"setup.where_todo": "On your computer, or on a VPS that keeps working with the window closed.",
 	"setup.where_local": "The team works on this computer.",
 	"setup.where_vps": "The team works on the VPS: this window mirrors it.",

@@ -627,6 +627,7 @@ const S := {
 	"setup.hours": "Munkaidő",
 	"setup.hours_todo": "Mikor dolgozhat a csapat. Munkaidő nélkül éjjel-nappal pörög, és felemészti az előfizetést.",
 	"setup.hours_ok": "Munkaablakok beállítva.",
+	"setup.remote_unknown": "A csatlakoztatott gépen nem olvasható. Ennek a számítógépnek az értéke nem számít: az egy másik gépé.",
 	"setup.where_todo": "A számítógépeden, vagy egy VPS-en, amely zárt ablak mellett is dolgozik.",
 	"setup.where_local": "A csapat ezen a számítógépen dolgozik.",
 	"setup.where_vps": "A csapat a VPS-en dolgozik: ez az ablak a tükre.",
