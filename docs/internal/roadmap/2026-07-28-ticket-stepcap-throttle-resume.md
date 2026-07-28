@@ -108,6 +108,28 @@ Il ramo «nessun marcatore» non è un caso residuale da ignorare: è quello che
 fermo uno Scout su due per quaranta minuti mentre tutti gli indicatori dicevano che il
 team stava lavorando.
 
+### Non riprendere quando la quota sta per finire
+
+Quarto caso osservato la stessa sera: finestra al **96%** con 90 minuti al reset, uno
+Scout fermo senza marcatore e un Analista già respinto con `403`. La classificazione
+direbbe «kick-off del ruolo», ma sarebbe sbagliato.
+
+Con il 4% di quota residua, riprendere uno Scout produce posizioni che **nessuno
+analizzerà né scorerà** prima del reset: consuma il residuo in un turno o due e si ferma
+comunque. Nel frattempo gli Scorer stavano smaltendo la coda già esistente — 11 punteggi
+nell'ultima ora contro 6 posizioni nuove — cioè usando lo stesso residuo per il lavoro
+a valore più alto.
+
+Regola da implementare: **sopra una soglia di quota (≈90-95%) il watchdog sospende i
+nudge e i kick-off**, e lascia lavorare chi è già in moto. Riprendere un agente ha senso
+solo se c'è quota sufficiente perché il suo output attraversi la pipeline. Sotto soglia
+si riprende; sopra si aspetta il reset e si riprende **tutti insieme** subito dopo — che
+è anche il momento in cui il nudge rende di più, perché la finestra è piena.
+
+Corollario: il primo giro dopo un reset di finestra è il più importante di tutti. Nella
+serata osservata, i 25 minuti immediatamente successivi a un reset sono stati sprecati
+con quota piena e tre worker parcheggiati.
+
 ## Lo stallo è ricorrente e colpisce più worker insieme
 
 Nella stessa serata il cap di step si è presentato **due volte in poche ore**, la seconda
