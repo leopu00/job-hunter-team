@@ -142,6 +142,69 @@ Vincoli aggiuntivi:
   costo), quello **sì** deve essere un flag esplicito di JHT — ed è l'unica cosa che deve
   impedire l'aggiornamento automatico.
 
+## 🔴 FOLLOW-UP dopo il test in campo delle 15:55 (2026-07-28)
+
+Il passo `model-pin` ha girato in produzione e **non ha aggiornato**, pur essendo il modello
+nuovo pienamente disponibile. Due difetti distinti, entrambi da correggere: così com'è, il
+passo non promuoverà **mai** un modello.
+
+### 1. Il probe dà falso negativo
+
+Log reale del boot:
+
+```
+[model-pin] kimi: pin trovato → `kimi-code/kimi-for-coding`, ctx 262144, "K2.7 Coding"
+[model-pin] probe: kimi --config-file <copia> info
+[model-pin] probe: kimi --config-file <copia> --quiet -p ok
+[model-pin] kimi: verifica INCONCLUSIVA (--quiet -p ok exit 1
+            — To resume this session: kimi -r f5c7339d-…) — pin lasciato com'è
+```
+
+Ma lo stesso modello, provato a mano un minuto dopo:
+
+```
+$ kimi --model kimi-code/k3 --quiet -p "rispondi solo: ok"
+ok
+--- exit: 0 ---
+```
+
+**Il modello risponde.** Da indagare perché il probe ottiene exit 1: la riga
+`To resume this session: …` compare **anche sui successi**, quindi non è un indicatore di
+errore e non va usata come tale. Ipotesi da verificare: un prompt di una sola parola (`ok`)
+produce un turno che la CLI chiude in modo diverso, oppure la copia del config senza pin
+lascia la CLI senza modello risolto e il fallimento è della *copia*, non del modello.
+
+Finché il probe non distingue "il modello non è disponibile" da "il probe non ha saputo
+chiederglielo", l'esito è sempre INCONCLUSIVO e il passo resta decorativo.
+
+### 2. Invalidare il pin non basta: va **sostituito**
+
+L'approccio attuale rimuove `default_model` e si aspetta che la CLI lo riscriva aggiornato.
+Non funziona: la CLI lo riscrive puntando **di nuovo al vecchio alias**, perché quello è il
+default del piano. Osservato: dopo il boot il file era di nuovo `kimi-for-coding`.
+
+Ciò che ha funzionato davvero è stata la **sostituzione esplicita**:
+
+```bash
+sed -i 's|^default_model = .*|default_model = "kimi-code/k3"|' $JHT_HOME/.kimi/config.toml
+# poi kill dei core + jht team start → agent (K3 ●), contesto 262144 → 1048576
+```
+
+Quindi il passo deve: leggere gli alias che il config **già elenca** (`[models."…"]` — nel caso
+reale erano `kimi-for-coding`, `kimi-for-coding-highspeed`, `k3`, `k3-256k`), scegliere il
+migliore disponibile, e **scriverlo**. Non cancellare e sperare.
+
+Criterio per "migliore": non il nome, che cambia a ogni generazione, ma le **capability
+dichiarate nel config stesso** — a parità di famiglia, la `max_context_size` più alta. Nel caso
+osservato `k3` (1048576) contro `k3-256k` (262144): stesso modello, finestra diversa.
+
+### 3. Nota operativa
+
+Il cambio richiede un **riavvio delle sessioni**: gli agenti leggono il pin all'avvio, quindi
+finché non ripartono continuano sul vecchio modello anche a config aggiornato. Il passo gira
+già prima degli spawn al boot, quindi in quel percorso è coperto — ma un `model-pin` lanciato a
+mano su un team vivo non ha effetto finché qualcuno non riavvia.
+
 ### Come è stato implementato l'addendum (`cli/src/commands/model-pin.js`)
 
 Il passo gira dentro `jht providers autoupdate`, subito **dopo** l'update della CLI (la verifica
