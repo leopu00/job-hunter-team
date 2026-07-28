@@ -294,6 +294,7 @@ const S := {
 	"vps.key_copy": "ÖFFENTLICHEN SCHLÜSSEL KOPIEREN",
 	"vps.key_open": "ORDNER ÖFFNEN",
 	"vps.key_note": "Der private Schlüssel bleibt auf diesem Computer; nur die .pub-Zeile geht an den Anbieter.",
+	"vps.key_fingerprint_none": "Fingerprint: für den gewählten Schlüssel nicht verfügbar — es gibt nichts, was sich mit dem Anbieter vergleichen ließe.",
 	"vps.destination": "2 · ZIELSERVER",
 	"vps.fingerprint_note": "SSH PRÜFEN zeigt den Host-Fingerprint: vergleiche ihn mit dem Wert des Anbieters.",
 	"vps.connect_existing": "OHNE INSTALLATION VERBINDEN",

@@ -294,6 +294,7 @@ const S := {
 	"vps.key_copy": "NYILVÁNOS KULCS MÁSOLÁSA",
 	"vps.key_open": "MAPPA MEGNYITÁSA",
 	"vps.key_note": "A privát kulcs ezen a gépen marad; a szolgáltató csak a .pub sort kapja meg.",
+	"vps.key_fingerprint_none": "Ujjlenyomat: a kiválasztott kulcshoz nem érhető el — nincs mit összevetni a szolgáltatóéval.",
 	"vps.destination": "2 · CÉLSZERVER",
 	"vps.fingerprint_note": "Az SSH ELLENŐRZÉSE megmutatja a host ujjlenyomatát; hasonlítsd össze a szolgáltató értékével.",
 	"vps.connect_existing": "CSATLAKOZÁS TELEPÍTÉS NÉLKÜL",

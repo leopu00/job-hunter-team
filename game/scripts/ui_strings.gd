@@ -359,6 +359,7 @@ const S := {
 	"vps.key_copy": "COPIA PUBBLICA",
 	"vps.key_open": "APRI CARTELLA",
 	"vps.key_note": "La chiave privata resta sul computer; al provider va incollata soltanto la riga .pub.",
+	"vps.key_fingerprint_none": "Fingerprint: non disponibile per la chiave selezionata — non c'è niente da confrontare con il provider.",
 	"vps.destination": "2 · SERVER DI DESTINAZIONE",
 	"vps.fingerprint_note": "VERIFICA SSH mostra il fingerprint host: confrontalo con quello indicato dal provider.",
 	"vps.connect_existing": "COLLEGA SENZA INSTALLARE",
