@@ -21,6 +21,16 @@ extends SceneTree
 ##     `docker stop` faceva abortire il processo (SIGABRT, "corrupted size vs.
 ##     prev_size"): il team si fermava bene e il gioco moriva male. Il rimedio
 ##     è una riga in game.gd, e una riga si cancella senza accorgersene.
+##
+## Due regole di stanza, la prima presa dal vicino (idle_pace_selftest, rosso
+## solo-Windows con lo stesso codice 0xC0000005), la seconda pagata da questo
+## file con un rosso tutto suo (run 30381042447, Windows x64):
+##
+##  - si parte da `call_deferred`, mai da `_init`: dentro `_init` il main loop
+##    non è ancora inizializzato, e quanto sia venuto su cambia da piattaforma
+##    a piattaforma;
+##  - non si tocca MAI la lingua globale per leggere una traduzione. Vedi
+##    `_check_greeting_formats`: costava l'intero processo.
 
 const GAME_GD := "res://scripts/game.gd"
 const DIALOG_GD := "res://scripts/ui/shutdown_dialog.gd"
@@ -33,8 +43,14 @@ var _fails: Array[String] = []
 
 
 func _init() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
 	# Il testo dipende dalla lingua: si fissa l'italiano, altrimenti il test
 	# passa o fallisce a seconda di come ha lasciato lang.cfg chi ha giocato.
+	# È l'UNICA scrittura su `lang`, e vale "it": il ramo italiano di t() legge
+	# la costante S e si ferma lì, senza svegliare la cache dei dizionari.
 	UIStrings.lang = "it"
 	_check_modes()
 	_check_dialog_offers_three_ways()
@@ -178,20 +194,54 @@ func _check_duration() -> void:
 ## una lingua il "%s" della durata diventasse un "%d", il gioco crollerebbe
 ## esattamente lì — nel momento in cui l'utente sta tornando a vedere se il
 ## team ha lavorato. Qui la si compone davvero, lingua per lingua.
+##
+## I dizionari si leggono dal loro file, come fa il test di parità, e finiscono
+## in una variabile LOCALE. La prima versione girava invece la lingua globale
+## (`UIStrings.lang = "de"`) e chiamava `t()`, che è l'unico modo di svegliare
+## `UIStrings._translations()`: quella cache è una `static var` sullo script
+## UIStrings, e ci parcheggia dentro i dizionari di sei ALTRI script, presi dal
+## loro `get_script_constant_map()`. UIStrings sopravvive fino in fondo allo
+## spegnimento del motore (le sue statiche lo trattengono: si vede col
+## `--verbose`, "Resource still in use: res://scripts/ui_strings.gd"), i sei
+## script prestatori no — e in quale ordine i due cadano non è la stessa cosa
+## su ogni piattaforma. Su Windows finiva in ACCESS_VIOLATION dopo il PASS,
+## unico test della suite a non arrivare al rapporto di chiusura del motore.
+## Nessun altro self-test svegliava quella cache; nessuno la sveglierà più.
 func _check_greeting_formats() -> void:
 	var lingue := ["it"]
 	for l in UIStrings.LANGS:
 		if not lingue.has(l):
 			lingue.append(l)
 	for lang: String in lingue:
-		UIStrings.lang = lang
-		var durata := HeadlessSession.duration_text(27000)  # 7h 30m
-		var riga: String = UIStrings.t("headless.back") % [durata, 5]
+		var d := _dictionary_for(lang)
+		if d.is_empty():
+			_fails.append("dizionario %s illeggibile" % lang)
+			continue
+		if not d.has("headless.back") or not d.has("headless.dur_hour"):
+			_fails.append("dizionario %s senza le chiavi del saluto" % lang)
+			continue
+		# Le stesse due composizioni che fa il gioco: prima la durata, poi la
+		# riga che se la mangia dentro insieme al conteggio.
+		var durata: String = str(d["headless.dur_hour"]) % [7, 30]
+		var riga: String = str(d["headless.back"]) % [durata, 5]
 		_check("saluto componibile in %s" % lang, riga.contains(durata),
 				"la durata non compare in \"%s\"" % riga)
 		_check("il conteggio compare in %s" % lang, riga.contains("5"),
 				"quanti sono in ufficio non compare in \"%s\"" % riga)
-	UIStrings.lang = "it"
+
+
+## Il dizionario di una lingua, letto direttamente dal suo file e restituito a
+## chi chiama: nessuna cache statica, nessuna lingua globale spostata. È il
+## modo in cui i18n_parity_selftest legge gli stessi file, ed è verde su tutte
+## e tre le piattaforme.
+static func _dictionary_for(lang: String) -> Dictionary:
+	if lang == "it":
+		return UIStrings.S
+	var path := "res://scripts/i18n/ui_%s.gd" % lang
+	if not ResourceLoader.exists(path):
+		return {}
+	var script: GDScript = load(path)
+	return script.get_script_constant_map().get("S", {})
 
 
 ## Contratto sul sorgente, non sul comportamento: il percorso di uscita chiama
