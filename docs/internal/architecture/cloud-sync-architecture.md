@@ -5,6 +5,34 @@
 > refactor team_state 2026-05-23 (bidirezionalità a desired-state) + writer-on-demand
 > 2026-05-29, stato implementazione a oggi. Aggiornare a ogni shift architetturale.
 >
+> 🌱 **Shift 2026-07-28 — il push del PRIMO PERIODO di vita di un account**
+> (`[CLOUDSYNC-PUSH-ONLY-WHEN-WATCHED]`). Il push on-demand
+> (`[PUSH ON-DEMAND 2026-06-25]`) resta **la regola** e non cambia di una riga:
+> nessun push su timer, `sync_requested_at` → rendezvous → push → ack è l'unico
+> percorso che l'utente vede, e a regime il ragionamento sulla quota vale ancora.
+> Ma un box appena creato ha il DB **vuoto per definizione**: il push che fa
+> `jht cloud login` porta zero righe, e finché nessuno apre la dashboard il cloud
+> resta vuoto anche mentre il team lavora. Misurato 2026-07-27: **25 posizioni e
+> un profilo completo sul box, 0 righe su Supabase ~50 minuti dopo il pairing**.
+> Ne soffrono notifiche, digest, un secondo dispositivo e chiunque ispezioni
+> l'account direttamente — incluso un beta tester nuovo.
+> **Rimedio**: `cli/src/lib/bootstrap-push.js` + `maybeBootstrapPush()` nel
+> daemon. Push a bassa frequenza (1 ogni 15 min, il primo immediato) finché
+> `~/.jht/state/first-run.json` non dichiara `phase: steady`, e **solo se il DB
+> locale è cambiato** dall'ultimo push riuscito (firma per-tabella `{n, max}`,
+> confronti di sola uguaglianza — mai un ordinamento fra formati di data, che è
+> il passo falso del freeze 2026-07-15). Tre garanzie di terminazione
+> **indipendenti**: fase `steady` · budget di 24 push persistito (un daemon che
+> riparte non lo ricarica) · finestra di 6h dal primo push; più uscita immediata
+> su 401/403 e interruttore `JHT_CLOUD_BOOTSTRAP_PUSH=0`. Chiuso, lo stato resta
+> su disco: per quell'installazione non si spinge più senza browser, **mai**.
+> Costo massimo per-account, una tantum: **24 tentativi ≈ 48 POST** su
+> `/api/cloud-sync/push` e ≤24 `UPDATE team_state.sync_completed_at` (li timbra
+> la route, non il client) — poi **0/h per sempre**. Il push è `handlePush`
+> invariato: stesso chunking anti-413, stesso `safeCursor`, nessun nuovo
+> percorso di assemblaggio del payload. Ispezionabile con
+> `jht cloud bootstrap-status` (sola lettura).
+>
 > ⚡ **Shift 2026-07-21 — Realtime-first per il browser + backflow messaggi** (dev5,
 > commit `0f5b66ae…19982d37`). Tre decisioni:
 > **(1) Il canale live browser↔dati è Supabase Realtime (websocket diretto), MAI

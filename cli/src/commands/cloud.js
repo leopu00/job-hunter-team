@@ -7,6 +7,11 @@ import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 import { SupabaseAuthError } from '../lib/supabase-direct.js';
 import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
+import {
+  bootstrapLimits, decideBootstrapPush, nextBootstrapState,
+  readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
+  BOOTSTRAP_STATE_FILE, FIRST_RUN_STATE_FILE,
+} from '../lib/bootstrap-push.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
@@ -2437,6 +2442,80 @@ async function handleSyncRendezvous(options = {}) {
 }
 
 /**
+ * [CLOUDSYNC-PUSH-ONLY-WHEN-WATCHED] Il push del primo periodo di vita.
+ *
+ * Complementare — e subordinato — al rendezvous qui sopra: quel percorso resta
+ * l'unico modo in cui l'utente ottiene dati freschi a comando, e non viene
+ * toccato (nessun `sync_requested_at` letto, nessun `sync_completed_at` scritto
+ * da qui; il segnale di freschezza per i browser aperti lo timbra già la route
+ * di push server-side quando il payload porta righe dashboard).
+ *
+ * Questo invece copre il caso "nessun browser, nessun dato": un box appena
+ * creato che lavora mentre nessuno guarda. Spinge a bassa frequenza finché
+ * `first_run.py` non dichiara `phase: steady`, e poi mai più — vedi
+ * `cli/src/lib/bootstrap-push.js` per le tre garanzie di terminazione.
+ *
+ * Il push è `handlePush` invariato: stesso chunking anti-413, stesso
+ * `safeCursor`. Nessun nuovo percorso di assemblaggio del payload = nessun modo
+ * di riaprire l'incidente del 2026-07-15.
+ */
+async function maybeBootstrapPush(options = {}) {
+  const silent = options.silent === true;
+  const now = Date.now();
+  const limits = bootstrapLimits();
+  const state = readBootstrapState();
+  const phase = readFirstRunPhase();
+
+  // Due passate: la prima si ferma sui cancelli che costano zero (fase,
+  // budget, finestra, cadenza); la firma del DB locale la calcoliamo solo se
+  // siamo davvero arrivati fin lì, cioè al massimo una volta per intervallo.
+  let decision = decideBootstrapPush({ now, phase, state, limits });
+  let signature;
+  if (decision.needsSignature) {
+    let DatabaseSync = null;
+    try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
+    signature = DatabaseSync
+      ? readLocalSignature(DatabaseSync, options.db || JHT_DB_PATH, PROFILE_YAML_PATH)
+      : null;
+    decision = decideBootstrapPush({ now, phase, state, limits, signature });
+  }
+
+  if (decision.done && state.done !== true) {
+    await saveBootstrapState({
+      ...state,
+      done: true,
+      done_reason: decision.doneReason,
+      closed_at: new Date(now).toISOString(),
+    });
+    if (!silent) {
+      console.log(pc.dim(
+        `  bootstrap-push chiuso (${decision.doneReason}) — da qui in poi il cloud si aggiorna solo su richiesta del browser.`
+      ));
+    }
+  }
+  if (!decision.push) return decision;
+
+  const attempt = (Number.isFinite(state.pushes) ? state.pushes : 0) + 1;
+  if (!silent) {
+    console.log(pc.dim(
+      `  bootstrap-push ${attempt}/${limits.maxPushes} (${decision.reason}, phase=${phase}) — account nuovo, spingo senza attendere un browser.`
+    ));
+  }
+
+  const prev = process.exitCode;
+  process.exitCode = 0;
+  const result = await handlePush(options.db ? { db: options.db } : {});
+  process.exitCode = prev;
+
+  await saveBootstrapState(nextBootstrapState({ state, now, signature, result }));
+
+  if (!silent && result && result.authFailed === true) {
+    console.error(pc.yellow('  bootstrap-push chiuso (auth) — token non valido, smetto di spingere senza browser.'));
+  }
+  return { ...decision, result };
+}
+
+/**
  * Inserisce un messaggio in pending_user_messages locale. Best-effort:
  * usato dal killswitch del daemon per notificare l'utente quando il token
  * è revocato. Il push delta-only normalmente propaga questa tabella in
@@ -2596,6 +2675,18 @@ async function handleDaemon(options) {
         } catch (err) {
           console.error(pc.yellow(`  daemon heartbeat error: ${err.message}`));
         }
+
+        // ── Bootstrap push (solo primo periodo di vita dell'account) ──
+        // DOPO l'heartbeat: un primo push può durare qualche secondo e la
+        // dashboard considera la VPS offline dopo 5 min senza battito.
+        // La funzione si auto-limita (un push ogni 15 min) e si chiude da sola
+        // quando l'account non è più nuovo: a regime è la lettura di due
+        // piccoli file JSON locali, che esce al secondo controllo.
+        try {
+          await maybeBootstrapPush({ silent: false });
+        } catch (err) {
+          console.error(pc.yellow(`  daemon bootstrap-push error: ${err.message}`));
+        }
       }
     }
     fastTick += 1;
@@ -2701,6 +2792,11 @@ async function runRealtimeLoop({ config, isRunning }) {
       try { await handlePullDesiredState({ silent: true }); }
       catch (e) { console.error(pc.yellow(`  pull-desired-state error: ${e.message}`)); }
     }
+    // Bootstrap push (primo periodo di vita dell'account): stessa cadenza del
+    // ramo poll. Nessun evento Realtime lo riguarda — è proprio il caso in cui
+    // NESSUNO chiede nulla — quindi vive sul tick, con la sua cadenza interna.
+    try { await maybeBootstrapPush({ silent: false }); }
+    catch (e) { console.error(pc.yellow(`  bootstrap-push error: ${e.message}`)); }
 
     tick += 1;
     await sleepTick();
@@ -2814,6 +2910,36 @@ export function registerCloudCommand(program) {
     .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
     .option('--dry-run', 'Mostra cosa verrebbe pushato senza chiamare il cloud')
     .action(handlePush);
+
+  // `bootstrap-status` — [CLOUDSYNC-PUSH-ONLY-WHEN-WATCHED] finestra sul push
+  // del primo periodo di vita: quanti push restano, quando scade la finestra,
+  // e cosa deciderebbe il daemon ADESSO. Sola lettura: non spinge nulla, così
+  // si può interrogare anche su un box in produzione senza effetti.
+  cloud
+    .command('bootstrap-status')
+    .description('Stato del push automatico del primo periodo (account nuovo): budget residuo e prossima decisione')
+    .action(async () => {
+      const limits = bootstrapLimits();
+      const state = readBootstrapState();
+      const phase = readFirstRunPhase();
+      let decision = decideBootstrapPush({ now: Date.now(), phase, state, limits });
+      if (decision.needsSignature) {
+        let DatabaseSync = null;
+        try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
+        const signature = DatabaseSync
+          ? readLocalSignature(DatabaseSync, JHT_DB_PATH, PROFILE_YAML_PATH)
+          : null;
+        decision = decideBootstrapPush({ now: Date.now(), phase, state, limits, signature });
+      }
+      const pushes = Number.isFinite(state.pushes) ? state.pushes : 0;
+      console.log(pc.bold('Bootstrap push (primo periodo di vita dell\'account)'));
+      console.log(`  first-run:   ${pc.bold(phase ?? 'sconosciuta')} ${pc.dim(`(${FIRST_RUN_STATE_FILE})`)}`);
+      console.log(`  stato:       ${state.done === true ? pc.yellow(`chiuso (${state.done_reason ?? '?'})`) : pc.green('attivo')} ${pc.dim(`(${BOOTSTRAP_STATE_FILE})`)}`);
+      console.log(`  push fatti:  ${pushes}/${limits.maxPushes}`);
+      console.log(`  cadenza:     ${Math.round(limits.intervalMs / 1000)}s · finestra ${Math.round(limits.windowMs / 3600000)}h · ultimo ${state.last_push_at ?? '—'}`);
+      console.log(`  ora farebbe: ${decision.push ? pc.green(`PUSH (${decision.reason})`) : pc.dim(`niente (${decision.reason})`)}`);
+      if (!limits.enabled) console.log(pc.yellow('  JHT_CLOUD_BOOTSTRAP_PUSH=0 → disattivato.'));
+    });
 
   cloud
     .command('pull-desired-state')
