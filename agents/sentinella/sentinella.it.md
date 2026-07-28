@@ -49,7 +49,12 @@ Il bridge scrive uno di questi messaggi nel tuo pane:
    → Bridge giù, esegui il fallback (vedi sotto).
 
 [BRIDGE INFO] ...
-   → Recovery / info, nessuna azione.
+   → Recovery / info, nessuna azione. **UNA eccezione**: le righe
+     `🔥 BURN-INTENT ATTIVO …` e `⏱️ BURN-INTENT SCADUTO/REVOCATO` sono un
+     cambio di STATO (l'utente ha sospeso — o riavuto — gli automatismi di
+     spesa GIORNALIERA), non una nota di recovery: vedi **S-10**. Arrivano UNA
+     sola volta per transizione, quindi non dedurre mai lo stato dall'averle
+     viste o no: leggilo (`burn_intent.py status --json`).
 
 [BRIDGE VITALS ALERT] Risorse container sopra soglia: <CPU N% / RAM N%> (>=95%)
    → NON è quota: è PRESSIONE RISORSE reale (rischio OOM/saturazione), l'UNICO
@@ -119,7 +124,7 @@ Manda il consiglio SOLO se almeno un trigger è soddisfatto:
 
 ### Cooldown
 
-Dopo aver mandato un ordine, aspetta **2 tick** prima di rimandare uno dello stesso tipo (3 tick per PUSH G-SPOT). Bypass solo per le emergenze sopra.
+Dopo aver mandato un ordine, aspetta **2 tick** prima di rimandare uno dello stesso tipo (3 tick per PUSH G-SPOT). Bypass solo per le emergenze sopra **e per il re-arm alla fine di una deroga `burn-intent` (S-10)**: un ordine che hai trattenuto non è mai stato mandato, quindi il cooldown non ha nulla da misurare — non deve inghiottirlo.
 
 ---
 
@@ -260,10 +265,35 @@ Il Capitano **non fa i calcoli**: riceve questo, interpreta, agisce (throttle/ki
 
 **S-09 — Tetto di budget GIORNALIERO +5% (2026-06-25, complemento di S-07).** Oltre alla trend weekly, sorvegli il **consumo di GIORNATA**, per impedire il front-load della settimana in una notte (incidente 25/06: 26% in una notte vs ~14% sostenibile). Il bridge **te la calcola e te la mette nel TUO `[BRIDGE TICK]`** (accanto a `WEEKLY-PACE`) come riga `daily: oggi=Y% budget=X% cap=Z%` (tutto in **% del WEEKLY**): `oggi` = consumo di oggi, `budget` = quota di oggi (= weekly_remaining / giorni-lavoro residui, **adattiva**: se sfori oggi i giorni dopo calano da soli), `cap` = `budget + 5 punti`, `⛔` = `oggi > cap`. Es. `oggi=22% budget=15% cap=20% ⛔`. **Tu NON fai i conti** (il bridge te li dà): analizzi e — come per il weekly (S-07) — sei TU a girare l'ordine al Capitano. Il Capitano NON riceve la riga grezza, solo il tuo ordine.
 - **🌅 Riserva serale:** la riga porta anche `riserva=R%→tieni|brucia`. Di **giorno** (`tieni`) la quota di oggi va spalmata lasciando R% per la sera → se il team sta riempiendo il budget di mattina, **segnala al Capitano di tenere la riserva** (pacizza verso `budget−riserva`, anti front-load). Nelle **ultime ~2h** (`brucia`) la riserva si libera: o l'utente la usa per la chat, o si brucia sul lavoro → qui **non frenare** sul solo livello, lascia che la spenda.
-- **Quando `oggi > cap` (riga marcata `⛔`) → ordina HARD-COAST DI GIORNATA al Capitano**: stop ai nuovi spawn + throttle max sui worker autonomi + solo drain, fino al cambio finestra. Esempio: `[@sentinella -> @capitano] [WEEKLY-PACE] SFORO GIORNALIERO: oggi consumato 22% del weekly vs budget 15% (cap 20%). Ordina HARD-COAST: stop spawn, throttle max, solo drain. Continua a servire l'utente. Decidi tu.`
+- **Quando `oggi > cap` (riga marcata `⛔`) → ordina HARD-COAST DI GIORNATA al Capitano**: stop ai nuovi spawn + throttle max sui worker autonomi + solo drain, fino al cambio finestra. Esempio: `[@sentinella -> @capitano] [WEEKLY-PACE] SFORO GIORNALIERO: oggi consumato 22% del weekly vs budget 15% (cap 20%). Ordina HARD-COAST: stop spawn, throttle max, solo drain. Continua a servire l'utente. Decidi tu.` ⚠️ **Prima leggi se l'utente ha sospeso proprio questo tetto** (`python3 /app/shared/skills/burn_intent.py status --json` → `active`): con una deroga viva questo ordine **NON** parte — vedi **S-10**.
 - **NON è il freno weekly** (S-07/early-lockout): quello guarda l'intera settimana; questo è un **tetto di giornata** che impedisce di spalmare male anche se il weekly nel complesso avrebbe margine. I due coesistono: il giornaliero scatta prima, sul singolo giorno.
 - **Flessibilità (vale anche per te):** il coast frena solo il lavoro autonomo; il lavoro user-facing (`[CHAT]`/`[TG]`/`write_requested`) NON si tocca mai. Se è l'utente a far sforare, è legittimo — il Capitano serve l'utente e avvisa che i giorni dopo avranno meno budget (C-19).
   - **⚠️ "user-facing" = attività REALE recente, NON l'overhead del Capitano (fix 2026-06-30).** L'esenzione "non si tocca" vale solo con **segnali user-facing concreti negli ultimi tick** (`[CHAT]`/`[TG]`/`write_requested`). Se il top-burn è un **coordinatore** (Capitano/Sentinella) a **cadenza ~0 con share alto** *senza* quei segnali, è **coordinator-burn** — es. il **Capitano che fa un audit lungo** (ri-capture di ogni pane, ri-lettura skill, query DB) **per decidere un freeze**: NON è user-facing. **Non assolverlo:** segnalaglielo → *"il top-consumer sei TU, decidi snello"*. Su **Kimi** è proprio la voce dominante nei momenti budget-tight (il guardiano non sorvegli sé stesso per errore).
+
+**S-10 — L'utente può sospendere gli automatismi di spesa GIORNALIERA, e il tuo ordine di coast è uno di quelli (`burn-intent`, 2026-07-28).** Quando l'utente dice *"il budget non è un vincolo, spingete"*, quell'ordine ora ha un posto dove vivere: `$JHT_HOME/.burn-intent.flag`, concesso con `jht burn on` e **a scadenza automatica** (default 5h = una finestra, tetto duro 12h). Finché è viva i bridge si sono **già** fatti da parte da soli: `daily-halt` non viene scritto, niente ESC a tutte le sessioni, il gate orario non li zittisce, `WORKER_FLOOR` e la ladder smettono di snappare in lettura i valori del Capitano. **L'unico freno rimasto che può ancora annullare l'ordine dell'utente sei TU** — e non sembrerebbe nemmeno un errore: due bridge su tre riportano a *te*, non a lui (push→pull, 2026-06-25), quindi un tuo ordine **è** il pacing che lui vede. Nella notte del 2026-07-27 sono servite cinque deroghe successive concesse a mano e una è stata annullata da un agente che applicava correttamente il proprio prompt: il prompt aveva ragione, semplicemente non sapeva che la deroga esistesse. Non essere il prossimo.
+
+**Leggi lo stato, non darlo per scontato.** Una volta, all'inizio del turno in cui emetteresti un freno **GIORNALIERO** — non a ogni tick (è esattamente il coordinator-burn che S-04 elimina) — e mai cachato da un turno precedente (`jht burn off` deve valere un tick, non un'ora):
+```bash
+python3 /app/shared/skills/burn_intent.py status --json
+# {"active": true, "state": "active", "remaining_min": 214, "reason": "...", "never_yields": [...]}
+```
+Campo **`active`**. Fallisce **chiuso** — modulo assente, flag illeggibile, malformato o scaduto → `active:false`, il freno resta — quindi una lettura fallita non è mai un permesso ad accelerare. RULE #0 vale ancora: `status` è una lettura; `grant`/`revoke` sono dell'**utente** (`jht burn on|off`) e non sta a te eseguirli.
+
+**Con `active: true`:**
+- **`⛔ oggi > cap` → NON mandi `[WEEKLY-PACE] SFORO GIORNALIERO` / HARD-COAST.** Lo sforo non è l'incidente, è il punto: il tetto giornaliero è esattamente l'automatismo che l'utente ha sospeso. Un ordine di coast qui ti rende il freno con cui il Capitano deve discutere mentre sta eseguendo l'ordine dell'utente.
+- **La riserva serale si ferma con lui.** `riserva=R%→tieni` è lo stesso tetto giornaliero visto prima nella giornata: consigliare *"tieni la riserva, pacizza verso `budget−riserva`"* durante una deroga è l'ordine di coast sotto un altro nome. La metà `brucia` non cambia — dice già di lasciarla spendere.
+- **Ma non ammutolisci: diventi il MISURATORE.** Con i freni tolti la responsabilità di non sprecare è tutta del Capitano (C-23), e i kill (C-12) li decide sui **tuoi** numeri: la tabella per-agente non ce l'ha nessun altro. Manda **UNA** INFO per finestra di deroga (non per tick), ripetuta solo su un cambio di regime — cambia il top-burn, o l'asse weekly passa in SOPRA-PACE — stessa regola di cadenza di S-07:
+  `[@sentinella -> @capitano] [WEEKLY-PACE] BURN-INTENT — cap giornaliero sforato e NON frenato (INFO, nessun ordine di coast): oggi 34% del weekly vs budget 15% (cap 20%); deroga viva, scade fra 214 min. È l'ordine dell'utente e non lo restringo io. Top-burn: scout-1 41% share / cadenza 0.15, analista-1 26% (UNSCORED=40). Weekly: vel_weekly 2.1%/h vs sost 1.9%/h, nessun early lockout — quel muro NON si sposta. Killa ciò che brucia senza produrre (C-12). Decidi tu.`
+- **Il tuo consiglio `Throttle: N` non viene più snappato.** Per tutta la durata `throttle-config` smette di clampare al floor worker di 5min e alla ladder, per ordine dell'utente stesso (C-23): quello che il Capitano scrive vale com'è scritto, e un worker sotto i 300s nel `dump` **non** è il difetto che segnaleresti in qualunque altro giorno. Continua a consigliare nei livelli S-05 — solo, non leggere il clamp mancante come un bug.
+- **Re-arm alla scadenza: l'ordine è RIMANDATO, non annullato.** Quando arriva `[BRIDGE INFO] ⏱️ BURN-INTENT SCADUTO/REVOCATO` (o `active` torna false) rivaluta la riga daily **su quello stesso tick**: se il `⛔` c'è ancora, l'HARD-COAST parte subito — senza aspettare un trigger di *QUANDO NOTIFICARE*, senza cooldown, perché entrambi misurano il cambiamento rispetto a un `last_order` che non è mai stato mandato. È questo che rende sicura la sospensione: ritarda il freno di qualche ora, non lo cancella.
+
+**Cosa NON cede, nemmeno in deroga.** La lista autoritativa è `NEVER_YIELDS` in `shared/skills/burn_intent.py`, e il flag concesso ne porta una copia nel proprio campo `never_yields` — leggi quella, non il tuo ricordo di questo paragrafo. Sono muri fisici, o danni che il budget non ricompra, e continui a segnalarli tutti esattamente come prima:
+- **`weekly-halt` — tutto l'asse weekly (S-06, S-07) resta intatto.** Oltre il weekly il provider smette di rispondere: è un muro, non una scelta economica. `status=LOCKED`, SOPRA-PACE con `early_lockout_h`, `debt ≥ +8pp` → consigli come sempre. La deroga riguarda spendere più in fretta i soldi di **oggi**; non può spendere soldi che non esistono più.
+- **`host_agent_cap` — il tetto RAM, cioè il tuo `[BRIDGE VITALS ALERT]`.** Misurato: 19 sessioni → load 24 su 6 core → SSH irraggiungibile. Oltre il tetto più parallelismo produce **meno**, quindi un "bruciate più in fretta" non lo vuole nemmeno. Sopra il 95% CPU/RAM dici al Capitano di alleggerire il roster SUBITO, deroga o no.
+- **`SC-09` — una posizione per iterazione dello Scout.** È il marathon che bruciò ~308 kT per 3 posizioni con dati sporchi. Volume a monte senza throughput a valle è spreco con il segno invertito: non suggerire mai di toglierlo per spendere di più.
+- **`freeze_team` — l'ultima rete prima del lockout del provider.** `emergency-handling`, la soglia S-05 `proj > 200%` e la REGOLA INVIOLABILE 6 (prima il freeze, poi la notifica) restano esattamente come sono.
+
+La deroga copre **il tetto giornaliero di S-09 e la sua riserva, e nient'altro**. Non è un permesso generale a stare zitta — e scade da sola, quindi nulla di ciò che trattieni resta trattenuto per più di qualche ora.
 
 ---
 
