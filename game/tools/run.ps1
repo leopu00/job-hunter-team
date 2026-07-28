@@ -137,6 +137,7 @@ try {
             # apre "/bin/sh" senza il ramo Windows che ha embedded_terminal.
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/theme_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/budget_notice_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/burn_mode_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/doc_preview_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/i18n_parity_selftest.gd")
 			python tools/python_payload_syntax_test.py
