@@ -182,6 +182,34 @@ def _work_phase():
         return None
 
 
+# ── Intento di spesa dell'utente (shared/skills/burn_intent.py) ────────────
+# Il flag `.burn-intent.flag` è il punto UNICO di verità sul fatto che l'utente
+# abbia chiesto di spingere. Il modulo viene cachato (l'import costa un exec),
+# lo STATO no: `is_active()` rilegge il file, così una revoca vale al battito
+# successivo. Fail-closed: modulo mancante o flag illeggibile → freno attivo.
+_BURN_INTENT_MOD = None
+
+
+def _burn_intent_active():
+    global _BURN_INTENT_MOD
+    try:
+        if _BURN_INTENT_MOD is None:
+            import importlib.util
+            for cand in (Path("/app/shared/skills/burn_intent.py"),
+                         Path(__file__).resolve().parent.parent
+                         / "shared" / "skills" / "burn_intent.py"):
+                if not cand.exists():
+                    continue
+                spec = importlib.util.spec_from_file_location("burn_intent", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _BURN_INTENT_MOD = mod
+                break
+        return bool(_BURN_INTENT_MOD.is_active()) if _BURN_INTENT_MOD else False
+    except Exception:  # noqa: BLE001 — un guard non abbatte il battito
+        return False
+
+
 def _scout_exhausted_recently(now):
     """True se uno Scout ha dichiarato [SCOUT-ESAUSTO] nell'ultima finestra di
     lavoro (SCOUT_EXHAUST_LOOKBACK_H). In quel caso le fonti sono DAVVERO secche e
@@ -320,16 +348,25 @@ def _write_state(d):
 
 
 def tick(now, send):
+    # Intento dell'utente letto PRIMA dei due gate: sopprimere il battito è già
+    # applicare l'halt, e un Capitano senza battito è un Capitano che non sa che
+    # l'utente ha chiesto il contrario (notte 2026-07-27).
+    burn_intent_on = _burn_intent_active()
     # Daily hard-stop (#2): a team in standby (cap giornaliero sforato) anche il
     # battito orario tace — niente nudge "(decidi tu)" mentre il team è in pausa.
-    if DAILY_HALT_FLAG.exists():
+    if DAILY_HALT_FLAG.exists() and not burn_intent_on:
         _log(f"{now:%H:%M} daily-halt: heartbeat soppresso (team in standby)")
         return
     # Off-hours gate (#4): fuori dall'orario di lavoro il team riposa → niente
     # battito. (work_phase=None = nessun orario configurato, team 24/7 → si batte.)
-    if _work_phase() == "OFF":
+    # Il gate orario è un automatismo di spesa: con BURN-INTENT attivo l'utente
+    # ha deciso di lavorare adesso, e il battito continua.
+    if _work_phase() == "OFF" and not burn_intent_on:
         _log(f"{now:%H:%M} off-hours (work_phase=OFF): heartbeat soppresso")
         return
+    if burn_intent_on:
+        _log(f"{now:%H:%M} BURN-INTENT attivo: battito mantenuto "
+             f"(daily-halt/off-hours derogati dall'utente)")
     st = gather_state()
     persisted = _read_state()
     theme, msg = choose_nudge(st, now, persisted.get("last_theme"))
