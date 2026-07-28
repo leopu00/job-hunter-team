@@ -388,10 +388,17 @@ func _ready() -> void:
 		BackendBus.chat_message.connect(_on_chat_message)
 		BackendBus.positions_updated.connect(_on_transitions)
 		BackendBus.telemetry_updated.connect(_on_agent_cpu_telemetry)
+		BackendBus.backend_reset.connect(_on_backend_reset)
 		if not BackendBus.agents.is_empty():
 			sync_agents(BackendBus.agents)
 		if not BackendBus.transitions.is_empty():
 			_on_transitions([])  # snapshot già sul bus: assorbito come baseline
+		if BackendBus.state != BackendBus.DISCONNECTED and not _piles_synced:
+			# Backend già collegato quando la scena nasce (rientro in ufficio
+			# dopo aver cambiato macchina): le pile partono dai SUOI conteggi —
+			# zero se il box è appena stato creato — mai dal seme casuale di
+			# scenografia, che sarebbe un numero inventato.
+			_reseed_piles()
 		if not BackendBus.telemetry.is_empty():
 			_on_agent_cpu_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
 		SetupService.status_changed.connect(_on_setup_status_changed)
@@ -440,6 +447,8 @@ func _ready() -> void:
 	var pipeline_force_test := OS.get_environment("JHT_PIPELINE_FORCE_TEST")
 	if pipeline_force_test != "":
 		_pipeline_force_selftest.call_deferred(pipeline_force_test)
+	if OS.get_environment("JHT_BACKEND_SWITCH_TEST") == "1":
+		_backend_switch_selftest.call_deferred()
 	var entry_test := OS.get_environment("JHT_ENTRY_TEST")
 	if entry_test != "":
 		_entry_selftest.call_deferred(entry_test)
@@ -2886,15 +2895,20 @@ func _sync_piles(hold_seconds := 0.0) -> void:
 	if preview.size() == 2 and PILE_PHASE.has(preview[0]) \
 			and str(preview[1]).is_valid_int():
 		counts[PILE_PHASE[preview[0]]] = maxi(0, int(preview[1]))
+	# Primo snapshot di QUESTA connessione: pile e scaffale si agganciano di
+	# colpo. Senza l'aggancio immediato la deriva foglio-per-foglio partirebbe
+	# dai numeri della macchina precedente e li terrebbe a schermo per un
+	# minuto (694 → 14 = oltre ottanta secondi).
+	var first_paint := not _piles_synced
 	for dept_id in PILE_PHASE:
 		if PaperPile.inbox.has(dept_id):
 			# Rapporto esatto 1:1. Il primo snapshot è immediato; i successivi
 			# aspettano il viaggio fisico dell'agente prima di riconciliarsi.
 			PaperPile.inbox[dept_id].set_target(
-					int(counts[PILE_PHASE[dept_id]]), not _piles_synced, hold_seconds)
+					int(counts[PILE_PHASE[dept_id]]), first_paint, hold_seconds)
 	_piles_synced = true
 	var ready := int(counts["cv_ready"])
-	OutputShelf.set_ready(ready)
+	OutputShelf.set_ready(ready, first_paint)
 	# Un PASS in più: è il Critico, ultimo anello, a portare il CV nello
 	# scaffale dei pronti. Lo Scrittore lo aveva lasciato sulla propria pila.
 	if _last_ready >= 0 and ready > _last_ready:
@@ -2977,6 +2991,99 @@ func _react_to_transition(t: Dictionary) -> void:
 	# poll della TUI vede gia idle, il viaggio fisico deve ancora avvenire.
 	actor.perform_pipeline_step(true, to_st)
 	Log.debug("scene", "reazione %s: %s → %s" % [by, what, to_st])
+
+## Cambio di connessione (BackendBus.backend_reset): pile, scaffale e registro
+## delle transizioni descrivevano UN'ALTRA macchina. Vengono azzerati DENTRO
+## il frame del cambio — il bus è già svuotato quando arriva questo segnale —
+## così non esiste un fotogramma coi conteggi del box precedente. Il caso
+## misurato il 27/07: box nuovo con 14 posizioni, pila dello Scorer ferma sulle
+## 694 righe `scored` di quello di prima perché uno snapshot vuoto non
+## riseminava nulla e i target restavano quelli vecchi.
+func _on_backend_reset() -> void:
+	_tr_seen.clear()
+	_tr_baseline = false
+	_last_ready = -1
+	_reseed_piles()
+	# LED di attività: senza campione fresco nessun agente resta verde con la
+	# CPU misurata sulla macchina di prima.
+	_on_agent_cpu_telemetry({}, [])
+
+## Riallinea pile e scaffale ai conteggi che il bus ha ADESSO, di colpo, e
+## lascia il prossimo snapshot come "prima pittura": quello arriva da un'altra
+## macchina e deve agganciarsi altrettanto di colpo, non risalire un foglio
+## alla volta partendo da zero.
+func _reseed_piles() -> void:
+	_piles_synced = false
+	_sync_piles()
+	_piles_synced = false
+
+## Regressione del cambio macchina (JHT_BACKEND_SWITCH_TEST=1). Riproduce la
+## misura del 27/07 senza due VPS: box A con 694 righe `scored`, cambio di
+## connessione, box B con 14 posizioni appena trovate. Le asserzioni dopo il
+## cambio NON attendono alcun frame: se una pila conservasse il numero del box
+## A, quel numero sarebbe già stato disegnato.
+func _backend_switch_selftest() -> void:
+	await get_tree().process_frame
+	var failures: Array[String] = []
+	var check := func(ok: bool, message: String) -> void:
+		if not ok:
+			failures.append(message)
+	var shelf := OutputShelf.instance
+	if shelf == null:
+		print("BACKEND-SWITCH-TEST FAIL nessuno scaffale in scena")
+		get_tree().quit(1)
+		return
+	var box_a: Array = []
+	for i in 694:
+		box_a.append({"id": i + 1, "status": "scored", "write_requested": 0})
+	for i in 6:
+		box_a.append({"id": 1000 + i, "status": "ready", "write_requested": 1,
+				"critic_verdict": "PASS"})
+	BackendBus.transitions = [{"position_id": 1, "ts": "2026-07-27T10:00:00Z",
+			"to_state": "scored", "by_agent": "scorer-1"}]
+	_piles_synced = false  # prima pittura: è come essersi appena collegati
+	BackendBus.publish_positions(box_a)
+	var scorer: PaperPile = PaperPile.inbox["scorer"]
+	check.call(scorer.count == 694 and int(scorer.debug_snapshot()["target"]) == 694,
+			"box A: pila scorer %s" % JSON.stringify(scorer.debug_snapshot()))
+	check.call(shelf._real == 6 and shelf._visual == 6,
+			"box A: scaffale %d/%d" % [shelf._real, shelf._visual])
+
+	# Cambio macchina. Da qui niente del box A può restare né sul bus né a
+	# schermo, e non si concede un solo frame di tolleranza.
+	BackendBus.set_backend(null)
+	check.call(BackendBus.positions.is_empty(),
+			"le posizioni del box precedente sono ancora sul bus")
+	check.call(BackendBus.transitions.is_empty(),
+			"le transizioni del box precedente sono ancora sul bus")
+	var counts: Dictionary = BackendBus.pipeline_counts()
+	var zeroed := true
+	for value in counts.values():
+		zeroed = zeroed and int(value) == 0
+	check.call(zeroed, "pipeline_counts non azzerati: %s" % JSON.stringify(counts))
+	for dept_id in PILE_PHASE:
+		var pile: PaperPile = PaperPile.inbox[dept_id]
+		check.call(pile.count == 0 and int(pile.debug_snapshot()["target"]) == 0,
+				"pila %s non azzerata: %s" % [dept_id,
+						JSON.stringify(pile.debug_snapshot())])
+	check.call(shelf._real == 0 and shelf._visual == 0,
+			"scaffale non azzerato: %d/%d" % [shelf._real, shelf._visual])
+
+	# Box B: le sue 14 posizioni si agganciano di colpo, senza risalire un
+	# foglio alla volta e senza passare dai numeri di prima.
+	var box_b: Array = []
+	for i in 14:
+		box_b.append({"id": i + 1, "status": "new", "write_requested": 0})
+	BackendBus.publish_positions(box_b)
+	var scout: PaperPile = PaperPile.inbox["scout"]
+	check.call(scout.count == 14 and int(scout.debug_snapshot()["target"]) == 14,
+			"box B: pila scout %s" % JSON.stringify(scout.debug_snapshot()))
+	check.call(scorer.count == 0,
+			"box B: la pila scorer conserva %d fogli del box precedente" % scorer.count)
+	var ok: bool = failures.is_empty()
+	print("BACKEND-SWITCH-TEST ", "PASS " if ok else "FAIL ",
+			JSON.stringify(failures))
+	get_tree().quit(0 if ok else 1)
 
 ## Primo snapshot backend: le postazioni tornano nel pool e il roster
 ## locale di ambientazione lascia la scena — comanda lo stato reale.

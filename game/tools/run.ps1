@@ -149,6 +149,11 @@ try {
             Remove-Item Env:JHT_PIPELINE_FORCE_TEST
             if ($out -notmatch "PIPELINE-FORCE-TEST PASS") { throw $out }
 
+            $env:JHT_BACKEND_SWITCH_TEST = "1"
+            $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
+            Remove-Item Env:JHT_BACKEND_SWITCH_TEST
+            if ($out -notmatch "BACKEND-SWITCH-TEST PASS") { throw $out }
+
             $env:JHT_DOCTOR_TEST = "scout-4"
             $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
             Remove-Item Env:JHT_DOCTOR_TEST
