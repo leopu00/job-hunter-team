@@ -95,6 +95,12 @@ Vale registrarlo perché è un comportamento su cui contare, e da non appiattire
   rispondevano `HTTP 200` con il marker di chiusura sepolto nel bundle di localizzazione.
   Il gate a monte non li ha fermati, gli Analisti sì. Costo: 4 analisi complete buttate
   per non consegnare link morti all'utente. Trade-off corretto, ma va contato.
+- **Il push al cloud è *lazy*, non rotto** — rettifica a una lettura affrettata fatta durante
+  la notte. Il daemon non pusha a intervalli, ma l'apertura della dashboard (o *Sync now*)
+  scrive un flag che il daemon raccoglie in ~5s, pusha e fa rinfrescare la pagina. Le   ~50 minuti con zero righe sul cloud erano dovuti al fatto che **nessuno stava guardando**:
+  la verifica avveniva via SQL diretto. Il limite reale è stretto ma esiste — *nessun browser,
+  nessun dato* — e colpisce solo ciò che deve funzionare senza spettatori (notifiche, digest,
+  secondo dispositivo, o chi ispeziona il DB cloud direttamente).
 - Resa **per fonte** su 50 posizioni: un job board 62% di arrivo a punteggio, due altre
   lane 0%. Nessun componente del sistema guarda questo dato — è emerso solo da una query
   a mano.
