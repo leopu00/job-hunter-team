@@ -75,6 +75,11 @@ jobs:
           # modulo non ha piu'. Questo test confronta la copia col sorgente.
           godot --headless --path game --script res://tools/burn_mode_selftest.gd
           godot --headless --path game --script res://tools/doc_preview_selftest.gd
+          # La terza via all'uscita ("esci, il team continua") e l'attesa del
+          # thread di spegnimento. Nessuna delle due si vede a schermo: si
+          # sbagliano in silenzio e si scoprono la mattina dopo, dal lavoro
+          # non fatto o dal container rimasto acceso tutta la notte.
+          godot --headless --path game --script res://tools/headless_exit_selftest.gd
           # /bin/sh: solo POSIX, ed e' il motivo per cui non e' in run.ps1.
           godot --headless --path game --script res://tools/terminal_selection_selftest.gd
           # Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO
