@@ -83,7 +83,19 @@ MAX_SLEEP = 3600
 # Per SPENDERE il budget il Capitano non rallenta a raffica pochi agenti,
 # ma PARALLELIZZA (spawna più agenti). `0` resta `0` (nessun throttle,
 # fast path); ogni valore >0 sale ad almeno 5min e si aggancia a un gradino.
-THROTTLE_LADDER = [300, 600, 900, 1200, 1500, 1800, 2400, 3000, 3600]
+# Gradini in MINUTI PRIMI (tranne il primo e l'ultimo): 1, 2, 3, 5, 7, 11, 13,
+# 17, 23, 31, 41, 53, 60. La scala precedente era tutta multipli di 5 — e due
+# worker su gradini diversi si risincronizzavano di continuo *per costruzione*:
+# 5+10 ricadevano insieme ogni 10 minuti, 5+15 ogni 15. Ogni coincidenza è un
+# picco di richieste simultanee sulla stessa macchina.
+# Con gradini coprimi il minimo comune multiplo esplode: il peggior caso passa
+# da 10 a 35 minuti, la media da 84 a 638. Non elimina le collisioni — le rende
+# rare invece che periodiche.
+# Sotto i 5 minuti servono a un worker solo se esentato dal WORKER_FLOOR
+# (config/throttle-floor-exempt.txt); il core interattivo li usa liberamente.
+# Sotto il minuto non si scende: la pausa smetterebbe di essere un checkpoint.
+THROTTLE_LADDER = [60, 120, 180, 300, 420, 660, 780, 1020, 1380, 1860, 2460,
+                   3180, 3600]
 
 
 def quantize(seconds) -> int:
