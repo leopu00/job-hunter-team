@@ -304,6 +304,31 @@ func archive_team_directive(directive_id: int) -> void:
 	bus.publish_coordinator_action("directive_archive", true, "")
 	bus.publish_coordinator_state(_coord_state.duplicate(true))
 
+## Deroga alla spesa nello showroom: nessun flag su disco, una scadenza
+## simulata in memoria. Serve perché l'interruttore si comporti come quello
+## vero — compreso lo scorrere del tempo residuo — senza che chi sta ancora
+## configurando il prodotto veda un comando morto.
+var _burn_deadline_msec := 0
+
+func _burn_payload() -> Dictionary:
+	var left := maxf(0.0, (_burn_deadline_msec - Time.get_ticks_msec()) / 1000.0)
+	return {"readable": true, "supported": true, "active": left > 0.0,
+		"state": "active" if left > 0.0 else "off",
+		"remaining_sec": int(left), "never_yields": BurnMode.NEVER_YIELDS,
+		"default_hours": BurnMode.DEFAULT_HOURS, "max_hours": BurnMode.MAX_HOURS}
+
+func fetch_burn_intent() -> void:
+	bus.publish_burn_intent(_burn_payload())
+
+func set_burn_intent(active: bool, hours: float) -> void:
+	# Stesso clamp del modulo Python: nello showroom non deve esistere una
+	# durata che sulla macchina vera verrebbe rifiutata.
+	var h := clampf(hours, 0.25, float(BurnMode.MAX_HOURS))
+	_burn_deadline_msec = int(Time.get_ticks_msec() + h * 3600.0 * 1000.0) \
+			if active else 0
+	bus.publish_burn_intent_action(active, true, "")
+	bus.publish_burn_intent(_burn_payload())
+
 func _mock_terminal_loop(agent: String, generation: int) -> void:
 	var lines := PackedStringArray([
 		"$ tmux attach -t %s" % agent.to_upper(),
