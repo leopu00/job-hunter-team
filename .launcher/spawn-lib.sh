@@ -24,7 +24,44 @@
 # il 2026-07-27: Dottore e Mantenitore in retry-loop su una VPS dove i worker
 # giravano benissimo, perché `start-agent.sh` compone un PATH più ricco e solo
 # questi due passano di qui.
-JHT_SPAWN_PANE_PATH='/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+#
+# `/opt/jht-deps/python/bin` è lo stesso difetto sul percorso accanto: lì
+# `providers update` mette `uv` (`pip3 install --user` con
+# PYTHONUSERBASE=/opt/jht-deps/python, vedi cli/src/commands/providers.js), ed
+# è l'UNICO posto dell'immagine in cui `uv` esiste — non è in requirements.txt
+# né in apt. Il PATH del container (Dockerfile e docker-compose.yml) lo ha,
+# questa lista no: `kimi` si trovava, `uv` no. Da qui l'ordine sotto: i
+# percorsi noti nella STESSA sequenza del PATH del container.
+#
+# ── perché la lista resta esplicita ──────────────────────────────────────────
+# Il commit che aggiunse npm-global/bin si chiedeva se non convenisse ereditare
+# il PATH come fa `start-agent.sh` invece di mantenere una copia. Ereditare e
+# basta qui non si può: questi script non vengono invocati solo dal watchdog
+# (che ha il PATH del container), ma anche da un agente via la skill
+# `spawn-doctor` / `agent-emergency`, e Codex/Kimi in --yolo lanciano i comandi
+# da sub-shell `bash -l` che /etc/login.defs ripulisce — è scritto nel
+# Dockerfile, ed è il motivo per cui i tool di `_tools` sono symlinkati in
+# /usr/local/bin. Un PATH puramente ereditato farebbe partire il Dottore o no a
+# seconda di CHI lo spawna: un guasto intermittente, molto peggio di una lista
+# che marcisce in modo uguale per tutti.
+#
+# Quindi: entrambe le cose. La lista esplicita è il pavimento — deterministico,
+# indipendente dal chiamante — e il PATH ereditato le va IN CODA, così un
+# percorso d'installazione che si sposta domani viene raccolto da solo senza
+# toccare questo file. In coda e non in testa: le priorità già funzionanti non
+# si spostano. Il dedup (prima occorrenza vince, esattamente come la risoluzione
+# di PATH) serve solo a non stampare nel pane una riga lunga il doppio.
+jht_spawn_pane_path() {
+  local base out
+  base='/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  out="$(printf '%s' "${base}${PATH:+:$PATH}" | awk -v RS=: -v ORS= '
+    $0 != "" && !seen[$0]++ { printf "%s%s", (n++ ? ":" : ""), $0 }' 2>/dev/null)"
+  # Il dedup è cosmetico: se awk mancasse, meglio un PATH lungo il doppio che
+  # un pane con `export PATH=''`.
+  [ -n "$out" ] || out="${base}${PATH:+:$PATH}"
+  printf '%s' "$out"
+}
+JHT_SPAWN_PANE_PATH="$(jht_spawn_pane_path)"
 
 # jht_spawn_kill_sessions <regex-sessione> <label>
 #   Killa ogni sessione tmux che matcha (idempotente: ne resta esattamente una,
