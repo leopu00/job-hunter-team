@@ -1099,7 +1099,11 @@ func _on_setup_refresh(_status: Dictionary) -> void:
 		_build()
 
 
-func _on_setup_action(_action: String, running: bool, message: String, ok: bool) -> void:
+func _on_setup_action(action: String, running: bool, message: String, ok: bool) -> void:
+	# Generare la chiave ne cambia il fingerprint senza toccare il percorso:
+	# senza questo il pannello resterebbe su "non disponibile" fino a riaprirlo.
+	if action == "vps-key" and not running:
+		_refresh_vps_fingerprint()
 	if not is_instance_valid(_setup_message):
 		return
 	_setup_message.text = ("◌ " if running else ("✓ " if ok else "⚠ ")) + message
@@ -2723,6 +2727,7 @@ static func _fmt_salary_eur(s_min: Variant, s_max: Variant, cur: String) -> Stri
 var _vps_ip: LineEdit
 var _vps_key: LineEdit
 var _vps_state_lbl: Label
+var _vps_fingerprint_lbl: Label
 var _vps_agents_box: VBoxContainer
 
 ## Il form del PRIMO PASSO backend: IP + chiave SSH → VpsBackend reale.
@@ -2753,6 +2758,7 @@ func _build_vps() -> void:
 	generate.text = UIStrings.t("vps.key_generate")
 	generate.pressed.connect(func() -> void:
 		_vps_key.text = SetupService.default_vps_key_path()
+		_refresh_vps_fingerprint()
 		SetupService.generate_vps_key())
 	_vps_key.get_parent().add_child(generate)
 	var copy_public := Button.new()
@@ -2765,12 +2771,13 @@ func _build_vps() -> void:
 	reveal.pressed.connect(func() -> void:
 		SetupService.reveal_vps_key(_vps_key.text))
 	_vps_key.get_parent().add_child(reveal)
-	var key_info := SetupService.vps_key_info(_vps_key.text)
-	var fingerprint := str(key_info.get("fingerprint", ""))
-	_content.add_child(TerminalTheme.label(
-			("Fingerprint: " + fingerprint) if fingerprint != "" else \
-			UIStrings.t("vps.key_note"),
-			12, Palette.DIM))
+	_vps_fingerprint_lbl = TerminalTheme.label("", 12, Palette.DIM)
+	_content.add_child(_vps_fingerprint_lbl)
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.key_note"), 12, Palette.DIM))
+	# Il campo cambia significato appena cambia la chiave: va ricalcolato sul
+	# testo di adesso, non su quello con cui il pannello è stato costruito.
+	_vps_key.text_changed.connect(func(_t: String) -> void: _refresh_vps_fingerprint())
+	_refresh_vps_fingerprint()
 
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.destination"), 15,
@@ -2910,9 +2917,33 @@ func _browse_vps_key() -> void:
 	dlg.access = FileDialog.ACCESS_FILESYSTEM
 	dlg.use_native_dialog = true
 	dlg.show_hidden_files = true
-	dlg.file_selected.connect(func(path: String) -> void: _vps_key.text = path)
+	# Assegnare .text da codice non emette text_changed: il ricalcolo va chiesto.
+	dlg.file_selected.connect(func(path: String) -> void:
+		_vps_key.text = path
+		_refresh_vps_fingerprint())
 	add_child(dlg)
 	dlg.popup_centered()
+
+## Il fingerprint esiste per essere confrontato con quello mostrato dal provider:
+## se restasse quello della chiave precedente il controllo anti-MITM darebbe una
+## conferma falsa, che è peggio del non averlo. Quindi si rilegge sempre dalla
+## chiave selezionata adesso — senza cache, perché lo stesso percorso cambia
+## fingerprint appena la chiave viene (ri)generata — e quando non è calcolabile
+## (campo vuoto, .pub assente, ssh-keygen non disponibile) lo dichiara.
+func _refresh_vps_fingerprint() -> void:
+	if not is_instance_valid(_vps_fingerprint_lbl) or not is_instance_valid(_vps_key):
+		return
+	# Campo vuoto: vps_key_info() ripiegherebbe sulla chiave di default, e il
+	# pannello mostrerebbe il fingerprint di una chiave che l'utente non ha scelto.
+	var key_path := _vps_key.text.strip_edges()
+	var fingerprint := ""
+	if key_path != "":
+		var key_info := SetupService.vps_key_info(key_path)
+		fingerprint = str(key_info.get("fingerprint", ""))
+	_vps_fingerprint_lbl.text = ("Fingerprint: " + fingerprint) if fingerprint != "" \
+			else UIStrings.t("vps.key_fingerprint_none")
+	_vps_fingerprint_lbl.add_theme_color_override("font_color",
+			Palette.DIM if fingerprint != "" else Palette.YELLOW)
 
 func _connect_vps() -> void:
 	var ip := _vps_ip.text.strip_edges()
