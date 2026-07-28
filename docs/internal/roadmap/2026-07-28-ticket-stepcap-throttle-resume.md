@@ -1,6 +1,10 @@
 # TICKET — Ripresa automatica degli agenti fermi sul cap di step
 
-**Stato**: da implementare · **Tag**: `[STEPCAP-THROTTLE-RESUME]` ·
+**Stato**: implementato il 2026-07-28 — `.launcher/stepcap-watchdog.py`, avviato da
+pid1, sei test di accettazione in `tests/test_stepcap_watchdog.py`. Resta da vedere
+su un container vero l'unica cosa che un test non può dire: se un pane Kimi fermo
+sul cap è davvero *immobile* (vedi § Limiti noti nella docstring dello script) e se
+il paste dal buffer entra nella TUI. · **Tag**: `[STEPCAP-THROTTLE-RESUME]` ·
 **Correlato**: `[SPAWN-STAGGER-BY-PERIOD]` in `BACKLOG.md`,
 [note di sessione](../../sessions/2026-07-28-burn-test-scout-step-cap-stall.md)
 

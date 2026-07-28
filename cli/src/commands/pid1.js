@@ -43,6 +43,7 @@ const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
 const DOCTOR_WATCHDOG_SCRIPT = '/app/.launcher/doctor-watchdog.sh';
+const STEPCAP_WATCHDOG_SCRIPT = '/app/.launcher/stepcap-watchdog.py';
 const AUTO_REPORT_LOOP_SCRIPT = '/app/.launcher/auto-report-loop.sh';
 const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
 
@@ -762,6 +763,40 @@ async function dispatch() {
   };
   startDoctorWatchdog();
 
+  // ── Step-cap watchdog: l'unico che guarda se un agente PROGREDISCE, non
+  // se esiste. Il cap max_steps=100 interrompe l'agente senza terminarlo: la
+  // sessione resta viva, il pane risponde, e l'agente aspetta un input che
+  // nessuno mandava (2026-07-28: l'unico Scout attivo fermo cosi', coda
+  // Analisti vuota, Scorer a secco — e ogni indicatore di salute verde).
+  // Rileva il marcatore + pane immobile, mette in throttle, poi riprende via
+  // buffer tmux. Stesso pattern di respawn degli altri watchdog.
+  let stepcapChild = null;
+  let stepcapRespawnTimer = null;
+  const startStepcapWatchdog = () => {
+    if (stepcapChild && !stepcapChild.killed) return;
+    pid1Log('starting stepcap-watchdog (ripresa agenti fermi sul cap di step, tick 60s)');
+    stepcapChild = spawnLabeled('stepcap-watchdog', '/usr/bin/env', [
+      'python3',
+      '-u',
+      STEPCAP_WATCHDOG_SCRIPT,
+    ]);
+    stepcapChild.on('exit', (code, signal) => {
+      const exited = stepcapChild;
+      stepcapChild = null;
+      if (shuttingDown) return;
+      pid1Log(`stepcap-watchdog exited (code=${code} signal=${signal})`);
+      if (stepcapRespawnTimer) clearTimeout(stepcapRespawnTimer);
+      stepcapRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('stepcap-watchdog respawn dopo crash');
+          startStepcapWatchdog();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  startStepcapWatchdog();
+
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
   let daemonChild = null;
@@ -1027,6 +1062,8 @@ async function dispatch() {
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
     if (doctorWatchdogChild && !doctorWatchdogChild.killed) doctorWatchdogChild.kill(sig);
     if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
+    if (stepcapChild && !stepcapChild.killed) stepcapChild.kill(sig);
+    if (stepcapRespawnTimer) clearTimeout(stepcapRespawnTimer);
     if (autoReportChild && !autoReportChild.killed) autoReportChild.kill(sig);
     if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
     stopTgBridge();
