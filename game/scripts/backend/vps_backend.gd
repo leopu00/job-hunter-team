@@ -1138,7 +1138,11 @@ func start(config: Dictionary) -> void:
 	live = true  # dati veri: spegne il badge SIMULAZIONE quando connesso
 	_ip = str(config.get("ip", "")).strip_edges()
 	_key = expand_user_path(str(config.get("key_path", "")))
+	# Config salvata prima del campo utente (o campo lasciato vuoto): root,
+	# il default storico e quello di Hetzner.
 	_user = str(config.get("user", "root")).strip_edges()
+	if _user == "":
+		_user = "root"
 	if not FileAccess.file_exists(_key):
 		bus.publish_state(BackendBus.ERROR,
 				"chiave SSH non trovata: %s" % _key)

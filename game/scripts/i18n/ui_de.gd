@@ -277,6 +277,8 @@ const S := {
 
 	"vps.intro": "Verbinde die VPS deines Teams: IP und SSH-Schlüssel, den Rest übernimmt das Spiel.",
 	"vps.ip": "IP DER VPS",
+	"vps.user": "SSH-BENUTZER",
+	"vps.user_note": "Benutzer, mit dem der Anbieter die VPS öffnet: root bei Hetzner, ubuntu bei OVH und AWS, der Kontoname bei Google Cloud und Azure. Leer bedeutet root.",
 	"vps.key": "SSH-SCHLÜSSEL (privat)",
 	"vps.key_browse": "DURCHSUCHEN…",
 	"vps.connect": "▶ VERBINDEN",

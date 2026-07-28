@@ -277,6 +277,8 @@ const S := {
 
 	"vps.intro": "Kösd össze a csapatod VPS-ét: IP és SSH kulcs, a többit a játék intézi.",
 	"vps.ip": "A VPS IP-CÍME",
+	"vps.user": "SSH FELHASZNÁLÓ",
+	"vps.user_note": "Az a felhasználó, amellyel a szolgáltató megnyitja a VPS-t: a Hetznernél root, az OVH-nál és az AWS-nél ubuntu, a Google Cloudnál és az Azure-nál a fiók neve. Az üres mező rootot jelent.",
 	"vps.key": "SSH KULCS (privát)",
 	"vps.key_browse": "TALLÓZÁS…",
 	"vps.connect": "▶ CSATLAKOZÁS",
