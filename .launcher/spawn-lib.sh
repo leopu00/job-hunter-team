@@ -13,10 +13,18 @@
 # Sourced da: spawn-doctor.sh, spawn-maintainer.sh.
 
 # PATH del pane tmux: `tmux new-session -d` apre una shell NON interattiva che
-# non legge .bashrc, quindi i CLI (codex/claude/kimi in /jht_home/.npm-global/bin)
-# e gli extra installati dagli agenti (/opt/jht-deps/bin, vedi JHT_DEPS_PREFIX nel
-# Dockerfile) non sarebbero nel PATH.
-JHT_SPAWN_PANE_PATH='/app/agents/_tools:/opt/jht-deps/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+# non legge .bashrc, quindi i CLI (codex/claude/kimi) e gli extra installati
+# dagli agenti (/opt/jht-deps/bin, vedi JHT_DEPS_PREFIX nel Dockerfile) non
+# sarebbero nel PATH.
+#
+# ⚠️ `/opt/jht-deps/npm-global/bin` è OBBLIGATORIO e va tenuto in lista: da
+# quando le dipendenze vivono nel volume, `providers update` installa i CLI
+# lì, NON più in `/jht_home/.npm-global/bin`. Senza quella voce il pane resta
+# su `bash` e lo spawn muore con "REPL (claude) non partito" — visto in campo
+# il 2026-07-27: Dottore e Mantenitore in retry-loop su una VPS dove i worker
+# giravano benissimo, perché `start-agent.sh` compone un PATH più ricco e solo
+# questi due passano di qui.
+JHT_SPAWN_PANE_PATH='/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 
 # jht_spawn_kill_sessions <regex-sessione> <label>
 #   Killa ogni sessione tmux che matcha (idempotente: ne resta esattamente una,
