@@ -139,6 +139,40 @@ Corollario per il coordinatore: il contesto va sorvegliato a ogni heartbeat come
 sorveglia la RAM. Un agente saturo non muore e non segnala nulla: rallenta e peggiora in
 silenzio, che è il modo più costoso di fallire.
 
+## 7. Un mercato locale si esaurisce in poche ore, e il vincolo è geografico
+
+Il ritmo di sourcing è crollato a metà notte, e non per motivi tecnici:
+
+```
+01:44 → 02:44   +5 posizioni   (contesto saturo — vedi §6)
+03:44 → 04:44   +7 posizioni   ← dopo aver risolto il contesto
+```
+
+La diagnosi arrivava da una misura del coordinatore stesso: **29 career page** di banche,
+assicurazioni e fintech interrogate via API dirette per **una sola** posizione nella città
+target. Le funzioni compliance/antiriciclaggio/audit delle grandi realtà italiane sono
+concentrate altrove.
+
+Aperto il raggio a ibrido/remoto e alle altre città principali, con lo stesso roster e le
+stesse fonti:
+
+```
+04:44   +36 posizioni   +31 punteggi   (era +7 / +4)
+```
+
+**Cinque volte il ritmo**, e la distribuzione conferma la causa: la seconda città ha
+prodotto 64 posizioni contro le 66 della città originale, praticamente raddoppiando il
+bacino in un'ora.
+
+**Lezione**: quando il sourcing rallenta, prima di aggiungere Scout o togliere freni va
+verificato se il bacino è esaurito. Un mercato cittadino per un profilo specialistico può
+saturarsi in **poche ore**, e nessuna quantità di worker lo riempie. Il vincolo era una
+riga del profilo, non la capacità della macchina.
+
+Corollario per il prodotto: il campo "apertura geografica" nel profilo candidato era
+**vuoto** — nessuno l'aveva mai chiesto all'utente. È il tipo di domanda che vale più di
+qualsiasi ottimizzazione del roster, e andrebbe posta durante l'onboarding.
+
 ## Da verificare nelle prossime notti
 
 - Il tetto reale di sessioni **senza** pause: stanotte 12 worker attivi tengono un load di
