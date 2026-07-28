@@ -44,6 +44,10 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.VOID)
 	load_gfx_profile()
+	# Il costo a riposo: dopo load_gfx_profile, così il tetto fps che si
+	# ripristina al ritorno del focus è già quello del profilo scelto.
+	_idle_pace = IdlePace.new()
+	add_child(_idle_pace)
 	# Shot-quiet: la finestrella resta cliccabile anche senza focus — un
 	# click VERO dell'utente al lavoro può aprire pannelli e falsare lo
 	# shot (successo: pagina Mentor aperta da sola in uno sweep). Sordi
@@ -184,6 +188,8 @@ var _applied_scale := 1.0
 var _watch_time := 0.0
 var _watch_fps_sum := 0.0
 var _watch_samples := 0
+## Ritmo di disegno a finestra non in primo piano (vedi scripts/idle_pace.gd).
+var _idle_pace: IdlePace = null
 
 
 ## I profili offerti in Impostazioni → Grafica. "auto" non è in elenco: è
@@ -368,6 +374,13 @@ func _process(delta: float) -> void:
 	if DisplayServer.get_name() == "headless" \
 			or OS.get_environment("JHT_SHOT") != "":
 		_gfx_done = true
+		return
+	# A ritmo ridotto i fps non dicono più niente sulla macchina: sono quelli
+	# che abbiamo imposto noi. Calibrazione e sorveglianza restano ferme —
+	# senza questa riga i 10 fps del secondo piano verrebbero letti come "il
+	# computer arranca", il mondo si pixelerebbe da solo mentre nessuno guarda
+	# e la misura finirebbe pure su disco (render_scale in AUTO).
+	if _idle_pace != null and _idle_pace.throttled():
 		return
 	if _gfx_done:
 		_watch_framerate(delta)
