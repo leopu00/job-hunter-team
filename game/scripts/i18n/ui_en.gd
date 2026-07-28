@@ -302,6 +302,7 @@ const S := {
 	"vps.key_copy": "COPY PUBLIC KEY",
 	"vps.key_open": "OPEN FOLDER",
 	"vps.key_note": "The private key stays on this computer; only the .pub line goes to the provider.",
+	"vps.key_fingerprint_none": "Fingerprint: not available for the selected key — there is nothing to compare with the provider.",
 	"vps.destination": "2 · DESTINATION SERVER",
 	"vps.fingerprint_note": "VERIFY SSH shows the host fingerprint: compare it with the provider's value.",
 	"vps.connect_existing": "CONNECT WITHOUT INSTALLING",
