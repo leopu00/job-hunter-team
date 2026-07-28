@@ -501,16 +501,17 @@ async function cleanupStaleBridgeState() {
  * accetta e poi tace) e' chiuso dal timeout per-step dentro providers.js.
  *
  * Lo stesso sotto-comando fa anche il secondo passo [PROVIDER-MODEL-PIN]:
- * rivedere il pin di modello che la CLI si e' scritta al primo login. Deve
- * girare qui e non altrove — dopo l'update (la verifica la fa la CLI nuova) e
- * PRIMA di qualunque spawn, perche' ogni sessione legge quel pin all'avvio.
+ * rivedere il modello che la CLI si e' pinnata al primo login. Deve girare qui
+ * e non altrove — dopo l'update (la prova la fa la CLI nuova) e PRIMA di
+ * qualunque spawn, perche' ogni sessione legge il modello all'avvio: e' il solo
+ * punto del boot dove un cambio entra in vigore senza riavviare niente.
  *
  * Fail-safe: qualunque esito, si prosegue. Se l'update non riesce il team
- * lavora con la CLI gia' installata; se la verifica del pin non e' conclusiva
- * il pin resta com'e' e il Capitano riceve un finding.
+ * lavora con la CLI gia' installata; se il modello candidato non risponde alla
+ * prova, il pin resta com'e' e il Capitano riceve un finding.
  */
 async function runProviderAutoUpdate() {
-  pid1Log('provider CLI auto-update + revisione pin modello (prima dei bridge; JHT_PROVIDER_AUTOUPDATE=0 per spegnerlo, JHT_MODEL_PIN=<x> per fissare il modello)');
+  pid1Log('provider CLI auto-update + revisione modello (prima dei bridge; JHT_PROVIDER_AUTOUPDATE=0 per spegnerlo, JHT_MODEL_PIN=<x> per fissare il modello)');
   await new Promise((resolve) => {
     const child = spawnLabeled('provider-update', process.execPath, [
       JHT_ENTRY,

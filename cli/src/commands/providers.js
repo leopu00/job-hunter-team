@@ -415,14 +415,16 @@ async function handleUpdateInContainer(targets) {
 //     modello a kimi/codex e non ne applica uno nuovo di sua iniziativa. Ogni
 //     cambio arriva al Capitano come FINDING, perche' cambia costi,
 //     comportamento e finestra di contesto.
-//     ATTENZIONE, e' la lezione del primo test in campo: "non toccare il
+//     ATTENZIONE, e' la lezione dei due test in campo: "non toccare il
 //     modello" non voleva dire "non toccare niente". La CLI si scrive un PIN al
 //     primo login e non lo rivede mai piu', quindi lasciarlo intatto NON e'
 //     neutrale — inchioda il team alla generazione del giorno del login e alla
 //     finestra di contesto di allora. Il passo di refreshModelPin() (in fondo
-//     ad autoUpdateOnce) rimuove quel pin, e SOLO dopo aver verificato che
-//     senza pin la CLI risolve davvero un modello su questo account:
-//     model-pin.js.
+//     ad autoUpdateOnce) sceglie fra gli alias che il config del provider GIA'
+//     elenca, in base alla finestra dichiarata, e lo scrive SOLO dopo avergli
+//     chiesto di rispondere davvero. Non cancella sperando che la CLI si
+//     aggiorni da sola: provato il 2026-07-28, la CLI riscrive il vecchio
+//     alias perche' e' il default del piano. Dettagli in model-pin.js.
 const AU = '[provider-autoupdate]';
 
 // Binario di ciascuna CLI, come lo invoca .launcher/start-agent.sh.
@@ -598,6 +600,8 @@ async function autoUpdateOnce() {
   // generazione precedente, con la finestra di contesto congelata a 262k).
   // Il passo gira SEMPRE, non solo quando la versione e' cambiata: il pin e'
   // vecchio anche — soprattutto — quando non c'e' niente da aggiornare.
+  // E gira anche a ogni riavvio successivo: se la CLI rimette il default del
+  // piano al login, ri-affermare la scelta e' esattamente cio' che serve.
   //
   // Qui e non altrove: dopo l'update (la CLI che fa la verifica dev'essere
   // quella nuova) e prima che pid1 spawni qualunque agente, perche' il pin
@@ -704,7 +708,7 @@ export function registerProvidersCommand(program) {
 
   cmd
     .command('model-pin')
-    .description('Rivede il pin di modello che la CLI si e\' scritta al login: verifica e (solo se conclusivo) lo invalida. JHT_MODEL_PIN=<x> lo blocca.')
+    .description('Rivede il modello pinnato dalla CLI al login: sceglie fra gli alias che il config gia\' elenca (finestra piu\' ampia), lo prova e solo allora lo scrive. JHT_MODEL_PIN=<x> lo blocca.')
     .option('--dry-run', 'verifica e riporta cosa farebbe, senza scrivere niente')
     .action((opts) => handleModelPin(opts));
 
