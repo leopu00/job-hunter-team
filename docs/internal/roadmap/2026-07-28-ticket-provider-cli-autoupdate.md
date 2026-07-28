@@ -142,6 +142,39 @@ Vincoli aggiuntivi:
   costo), quello **sì** deve essere un flag esplicito di JHT — ed è l'unica cosa che deve
   impedire l'aggiornamento automatico.
 
+### Come è stato implementato l'addendum (`cli/src/commands/model-pin.js`)
+
+Il passo gira dentro `jht providers autoupdate`, subito **dopo** l'update della CLI (la verifica
+la deve fare la CLI nuova) e **prima** di qualunque spawn, perché ogni sessione legge il pin
+all'avvio. Invocabile anche a mano: `jht providers model-pin [--dry-run]`.
+
+**La verifica prima di invalidare** — non si confronta con "l'ultimo modello annunciato dal
+provider", che non sa niente del piano di questo account. Si esegue **la stessa identica
+mutazione su una copia del config** (`kimi --config-file <copia-senza-pin>`) puntando alla share
+dir **vera**, quindi con le credenziali vere: se lì la CLI risolve un modello concreto con le sue
+capability, la stessa mutazione sul file vero produrrà uno stato funzionante — è una prova per
+costruzione, non un'inferenza. Ladder: `info` (locale, costo zero) e, solo se non basta,
+`--quiet -p "ok"` (un turno minimo, che prova anche che il modello **risponde** su questo piano).
+Le credenziali **non** vengono copiate: un refresh OAuth nella copia potrebbe ruotare il refresh
+token e invalidare quello vero, cioè fare al team un danno peggiore del pin.
+
+**Se la verifica non è conclusiva** (CLI che non riscrive, rete assente, timeout, 429, credenziali
+mancanti) non si tocca **niente** e parte solo il finding. Stessa cosa con `JHT_MODEL_PIN=<x>`,
+il flag esplicito di pinning deliberato — l'unica cosa che impedisce l'aggiornamento automatico.
+`JHT_PROVIDER_AUTOUPDATE=0` continua a spegnere tutto il passo di boot.
+
+**Copertura per provider** — i tre non pinnano allo stesso modo:
+
+| Provider | Dove pinna | Cosa fa JHT |
+|---|---|---|
+| kimi | `$JHT_HOME/.kimi/config.toml` — `default_model` + `[models."…"]` scritti al login | rileva, verifica, **invalida** (backup `*.bak-model-pin-<ts>` + scrittura atomica) |
+| codex | `$JHT_HOME/.codex/config.toml` — `model = "…"`, solo se scelto da TUI/mano | **solo segnalato**: il default sta nel binario e non viene riscritto nel file (invalidazione non verificabile), e lo stesso file contiene le entry `trust_level` degli agenti |
+| claude | — | **non applicabile**: `start-agent.sh` passa `--model opus\|sonnet` a ogni spawn e gli alias seguono la generazione |
+
+Due guardie che valgono per un passo che gira **a ogni boot**: il finding non si ripete finché la
+situazione è la stessa, e se dopo un'invalidazione la CLI ri-pinna un valore identico non si
+riscrive il config all'infinito — si smette e resta il finding già consegnato.
+
 ## Note per chi implementa
 
 `handleUpdateInContainer()` è già il percorso giusto quando `IS_CONTAINER=1`: scrive in
