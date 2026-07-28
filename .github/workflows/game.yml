@@ -82,6 +82,12 @@ jobs:
           # senza questa riga sedici chiavi duplicate in ui_en.gd passavano
           # in verde e rompevano l'avvio in tutte le lingue tranne una.
           godot --headless --path game --script res://tools/i18n_parity_selftest.gd
+          # Il costo a riposo: la finestra senza focus deve disegnare di meno,
+          # ma il tetto fps del primo piano va restituito ALLA LETTERA (chi ha
+          # il profilo ridotto gira a 30, non a 60) e a ritmo lento i passi di
+          # fisica devono coprire il frame, altrimenti il motore butta il tempo
+          # in eccesso e la scena rallenta davvero.
+          godot --headless --path game --script res://tools/idle_pace_selftest.gd
           VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
           printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
           PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
