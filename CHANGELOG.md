@@ -7,7 +7,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.3.0] — 2026-07-27
 
-**The native-application cycle** — 2026-07-06 → 2026-07-27, 842 commits since v0.2.0. The desktop surface moved from an Electron launcher wrapping a web dashboard to a **native Godot office**; the browser is now cloud-only. Three user-visible removals are listed under *Breaking changes* below — read those first if you are upgrading an existing install.
+**The native-application cycle** — 2026-07-06 → 2026-07-27, 842 commits since v0.2.0. The desktop surface moved from an Electron launcher wrapping a web dashboard to a **native Godot office**; the browser is now cloud-only. Four user-visible removals are listed under *Breaking changes* below — read those first if you are upgrading an existing install.
 
 ### 💥 Breaking changes
 
