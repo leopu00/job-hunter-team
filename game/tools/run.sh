@@ -69,6 +69,8 @@ case "$MODE" in
 		printf '%s\n' "$CHAT_UI_OUT" | grep "CHAT-UI-TEST PASS"
 		PIPE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_PIPELINE_FORCE_TEST=scout godot --headless . 2>&1)"
 		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
+		SWITCH_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_SWITCH_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$SWITCH_OUT" | grep "BACKEND-SWITCH-TEST PASS"
 		ENTRY_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_ENTRY_TEST=analista godot --headless . 2>&1)"
 		printf '%s\n' "$ENTRY_OUT" | grep "ENTRY-CONTINUITY-TEST PASS"
 		DOCTOR_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_DOCTOR_TEST=scout-4 godot --headless . 2>&1)"
