@@ -86,6 +86,62 @@ osserva l'avvio.
 
 ---
 
+## ⚠️ Aggiornamento dopo il primo test in campo (2026-07-28)
+
+L'auto-update **funziona** — log corretto, solo il provider attivo, modello non toccato — ma
+il test ha mostrato che **non basta a mantenere aggiornato il modello**, che era lo scopo per
+cui il ticket è nato.
+
+La CLI era già all'ultima versione, eppure il team girava su una generazione precedente. Il
+motivo è che **la CLI del provider si scrive un pin al primo login** e non lo rivede mai più:
+
+```toml
+# $JHT_HOME/.kimi/config.toml — scritto al login, mai aggiornato
+default_model = "kimi-code/kimi-for-coding"
+
+[models."kimi-code/kimi-for-coding"]
+  provider         = "managed:kimi-code"
+  max_context_size = 262144
+  display_name     = "K2.7 Coding"
+```
+
+Due conseguenze, entrambe osservate:
+
+1. **Il modello resta quello del giorno del login.** Se il provider promuove un nuovo default,
+   il team non lo prende: continua a puntare all'alias fotografato. Aggiornare la CLI non
+   sposta nulla.
+2. **Anche le capability sono congelate.** `max_context_size = 262144` è esattamente la
+   finestra contro cui due agenti si sono bloccati (565k e 168k token). Il modello nuovo ne
+   dichiara 1M: finché quel blocco resta, il team lavora con un quarto della finestra reale
+   *anche se il modello sotto fosse cambiato*.
+
+**JHT non è responsabile del pin**: `start-agent.sh` non passa `--model` per kimi/codex
+(*"il model override non è ancora cablato"*) e lascia deliberatamente il default al provider.
+Il pin lo scrive la CLI.
+
+### Cosa aggiungere al ticket
+
+All'avvio, dopo l'update della CLI e **prima** dello spawn degli agenti:
+
+- rilevare se il config del provider contiene un pin di modello/capability scritto in un login
+  precedente;
+- se il default del provider è cambiato, **invalidare il pin** (rimuovere `default_model` e il
+  blocco `[models."…"]`) così la CLI lo riscrive con i valori correnti al primo uso;
+- **riportarlo al Capitano come finding**, con vecchio e nuovo modello: un cambio di modello
+  altera costo, comportamento e finestra: l'utente deve saperlo, anche quando è desiderato.
+
+Vincoli aggiuntivi:
+
+- **Verificare prima di invalidare.** Se l'alias nuovo non è disponibile sul piano
+  dell'account, cancellare il pin lascia la CLI senza modello e **il team non parte**. Il
+  controllo va fatto contro ciò che l'account espone davvero, non contro l'ultimo modello
+  annunciato dal provider.
+- **Fail-safe come il resto del ticket**: in caso di dubbio si tiene il pin esistente e si
+  segnala. Un team che lavora su un modello vecchio è enormemente meglio di un team fermo.
+- Se un domani si volesse *fissare* deliberatamente un modello (per riprodurre un bug, o per
+  costo), quello **sì** deve essere un flag esplicito di JHT — ed è l'unica cosa che deve
+  impedire l'aggiornamento automatico.
+
 ## Note per chi implementa
 
 `handleUpdateInContainer()` è già il percorso giusto quando `IS_CONTAINER=1`: scrive in
