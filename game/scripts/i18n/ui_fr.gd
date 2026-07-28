@@ -277,6 +277,8 @@ const S := {
 
 	"vps.intro": "Connecte le VPS de ton équipe : IP et clé SSH, le jeu s'occupe du reste.",
 	"vps.ip": "IP DU VPS",
+	"vps.user": "UTILISATEUR SSH",
+	"vps.user_note": "Utilisateur avec lequel le fournisseur ouvre le VPS : root chez Hetzner, ubuntu chez OVH et AWS, le nom du compte chez Google Cloud et Azure. Vide équivaut à root.",
 	"vps.key": "CLÉ SSH (privée)",
 	"vps.key_browse": "PARCOURIR…",
 	"vps.connect": "▶ CONNECTER",
@@ -294,6 +296,7 @@ const S := {
 	"vps.key_copy": "COPIER LA CLÉ PUBLIQUE",
 	"vps.key_open": "OUVRIR LE DOSSIER",
 	"vps.key_note": "La clé privée reste sur cet ordinateur ; seule la ligne .pub est envoyée au fournisseur.",
+	"vps.key_fingerprint_none": "Empreinte : indisponible pour la clé sélectionnée ; il n’y a rien à comparer avec le fournisseur.",
 	"vps.destination": "2 · SERVEUR DE DESTINATION",
 	"vps.fingerprint_note": "VÉRIFIER SSH affiche l’empreinte de l’hôte : compare-la à celle du fournisseur.",
 	"vps.connect_existing": "CONNECTER SANS INSTALLER",
@@ -366,6 +369,9 @@ const S := {
 	"pos.open_url": "ouvrir l'annonce dans le navigateur",
 	"pos.open_yes": "annonce OUVERTE à la dernière vérification",
 	"pos.open_no": "annonce PLUS OUVERTE",
+	"pos.office_address": "ADRESSE",
+	"pos.office_verified": "vérifiée par les Analystes",
+	"pos.office_approx": "non vérifiée · centre-ville",
 
 	"apps.ready": "CV prêt",
 	"apps.applied": "envoyée",
@@ -412,6 +418,7 @@ const S := {
 	"map.card_hint": "cliquez sur une position pour ouvrir sa fiche",
 	"map.card_hint_all": "%d postes · faites défiler puis cliquez pour ouvrir la fiche",
 	"map.cluster": "%d postes · %d lieux",
+	"map.pin_approx": "épingle au centre-ville : adresse exacte non vérifiée",
 
 	"hours.intro": "Les fenêtres où l'équipe travaille : modifiez et enregistrez, le pacing s'adapte.",
 	"hours.tz": "Fuseau horaire",
@@ -620,6 +627,7 @@ const S := {
 	"setup.hours": "Horaires de travail",
 	"setup.hours_todo": "Quand l'équipe peut travailler. Sans horaires elle tourne à toute heure et consomme l'abonnement.",
 	"setup.hours_ok": "Fenêtres de travail définies.",
+	"setup.remote_unknown": "Illisible sur la machine connectée. La valeur de cet ordinateur ne compte pas : elle appartient à une autre machine.",
 	"setup.where_todo": "Sur ton ordinateur, ou sur une VPS qui travaille même fenêtre fermée.",
 	"setup.where_local": "L'équipe travaille sur cet ordinateur.",
 	"setup.where_vps": "L'équipe travaille sur la VPS : cette fenêtre en est le miroir.",

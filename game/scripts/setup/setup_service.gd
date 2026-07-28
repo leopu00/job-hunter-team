@@ -204,6 +204,43 @@ func _self_test_vps_setup() -> void:
 	if _declared_plan(cfg_codex, "codex") != "pro":
 		failures.append("piano di Codex non riconosciuto sotto openai")
 
+	# ── Su VPS la checklist deve guardare LA VPS ─────────────────────────
+	# Lo scenario misurato il 27/07: box remoto configurato per davvero e, su
+	# questo portatile, un `~/.jht` che è di un'altra installazione. Il probe
+	# locale dice tutt'altro dal remoto su ognuno dei tre passi, e deve perdere.
+	var altrui := {"active_provider": "claude", "provider_authenticated": true,
+			"provider_auth_match": ".claude/.credentials.json", "active_plan": "",
+			"plan_ready": false, "profile_ready": true, "hours_ready": true}
+	_apply_vps_probe(altrui, {"config_read": true, "active_provider": "moonshot",
+			"providers": {"kimi": {"plan": "allegretto"}},
+			"team": {"working_hours": {"windows": []}},
+			"auth": {"kimi": ".kimi/credentials/kimi-code.json"}, "ready": false})
+	if str(altrui.get("active_provider", "")) != "kimi":
+		failures.append("provider della VPS ignorato a favore di quello locale")
+	if not bool(altrui.get("plan_ready", false)):
+		failures.append("abbonamento dichiarato sulla VPS letto come assente")
+	if bool(altrui.get("profile_ready", false)):
+		failures.append("profilo di questo computer spacciato per quello della VPS")
+	if bool(altrui.get("hours_ready", false)):
+		failures.append("orari di questo computer spacciati per quelli della VPS")
+	if not bool(altrui.get("provider_authenticated", false)):
+		failures.append("login presente sulla VPS non riconosciuto")
+	# VPS che non risponde: nessun valore, e nessuno preso in prestito dal disco.
+	var muta := {"provider_authenticated": true, "plan_ready": true,
+			"container_running": true, "profile_ready": true, "hours_ready": true}
+	_apply_vps_probe(muta, {})
+	for step in ["provider", "profile", "hours"]:
+		if not _is_unknown(muta, str(step)):
+			failures.append("passo senza risposta dalla VPS non marcato ignoto: " + str(step))
+	_finalize(muta)
+	if bool(muta.get("ready", false)) or int(muta.get("completed", 0)) != 1:
+		failures.append("checklist data per fatta su valori mai letti")
+	_mark_known(muta, "hours")
+	if _is_unknown(muta, "hours"):
+		failures.append("valore arrivato dal team che resta ignoto")
+	if not CHECKLIST_PY.contains("/jht_home"):
+		failures.append("la sonda remota non guarda i dati del team remoto")
+
 	var gated := {"container_running": true, "provider_authenticated": true,
 			"profile_ready": true, "hours_ready": true, "plan_ready": false}
 	_finalize(gated)
@@ -284,11 +321,17 @@ func refresh() -> void:
 	if _probe_running or _action_running:
 		return
 	_probe_running = true
-	WorkerThreadPool.add_task(_probe)
+	# La VPS si legge sul thread principale (BackendBus non è thread-safe) e
+	# viaggia col task: il worker non deve chiedere al bus com'è connesso.
+	WorkerThreadPool.add_task(_probe.bind(_connected_vps()))
 
 
-func _probe() -> void:
+func _probe(vps: Dictionary) -> void:
 	var next := _probe_host(_jht_home())
+	# Passi 02/03/04 chiesti ALLA MACCHINA CONNESSA, sullo stesso trasporto del
+	# passo 01. Blocca solo questo worker, mai il thread della UI.
+	if not vps.is_empty():
+		next["vps_probe"] = _probe_vps(vps)
 	# Alcuni self-test Godot chiudono l'albero subito dopo l'assert mentre il
 	# probe Docker è ancora nel worker. Non accodare callback su un autoload
 	# già smontato durante il teardown.
@@ -324,6 +367,11 @@ func _apply_probe(next: Dictionary) -> void:
 	# Il backend conosce anche il caso checklist completa senza ready.flag.
 	if bool(BackendBus.profile_status.get("ready", false)):
 		next["profile_ready"] = true
+	# Ultima parola alla macchina connessa: quello che arriva da lì sovrascrive
+	# sia il disco locale sia i valori rimasti sul bus da una connessione prima.
+	if next.has("vps_probe"):
+		_apply_vps_probe(next, next["vps_probe"])
+		next.erase("vps_probe")
 	_finalize(next)
 	status = next
 	status_changed.emit(status.duplicate(true))
@@ -366,16 +414,20 @@ func _on_live_settings(settings: Dictionary) -> void:
 	var wh: Variant = settings.get("hours_raw", {})
 	var ready := wh is Dictionary and (wh as Dictionary).get("windows", []) is Array \
 			and not ((wh as Dictionary).get("windows", []) as Array).is_empty()
-	if bool(status.get("hours_ready", false)) == ready:
+	if bool(status.get("hours_ready", false)) == ready \
+			and not _is_unknown(status, "hours"):
 		return
+	_mark_known(status, "hours")
 	status["hours_ready"] = ready
 	_finalize(status)
 	status_changed.emit(status.duplicate(true))
 
 
 func _on_profile_status(_profile: Dictionary, _required: Dictionary, ready: bool) -> void:
-	if bool(status.get("profile_ready", false)) == ready:
+	if bool(status.get("profile_ready", false)) == ready \
+			and not _is_unknown(status, "profile"):
 		return
+	_mark_known(status, "profile")
 	status["profile_ready"] = ready
 	_finalize(status)
 	status_changed.emit(status.duplicate(true))
@@ -527,6 +579,129 @@ static func _ui_provider_id(value: String) -> String:
 ## ancora spento".
 static func auth_match(provider: String, _home: String = "") -> String:
 	return JhtFs.first_with_content(AUTH_PATHS.get(provider, []))
+
+
+## ── La checklist guarda la macchina a cui è connessa ───────────────────
+##
+## Col team su una VPS i passi 02, 03 e 04 leggevano il `~/.jht` di QUESTO
+## computer. Sul portatile di chi installa quel file c'è quasi sempre — è di
+## una prova, o di un altro tester — e il risultato misurato il 27/07 è
+## doppio: un box con l'abbonamento dichiarato restava rosso su "manca
+## l'abbonamento" (il piano locale è null) e il profilo di un'ALTRA persona,
+## rimasto in `~/.jht/profile/`, passava per quello del box. Quindi una VPS
+## configurata bene non arrivava mai a 4/4, e insieme la checklist certificava
+## dati di qualcun altro.
+##
+## Da qui in avanti, quando c'è una VPS connessa, ogni sonda passa dalla stessa
+## SSH del passo 01. E quello che non si riesce a leggere di là resta IGNOTO:
+## mai verde, e mai sostituito col valore di questo disco — un ripiego
+## silenzioso qui non peggiora l'informazione, la falsifica.
+const CHECKLIST_PY := """
+import json, os
+AUTH = %s
+HOME = '/jht_home'
+try:
+    c = json.load(open(HOME + '/jht.config.json'))
+except Exception:
+    c = None
+out = {'config_read': isinstance(c, dict)}
+if not isinstance(c, dict):
+    c = {}
+out['active_provider'] = str(c.get('active_provider') or '')
+declared = c.get('providers') if isinstance(c.get('providers'), dict) else {}
+out['providers'] = dict((k, {'plan': str((v or {}).get('plan') or '')})
+                        for k, v in declared.items() if isinstance(v, dict))
+team = c.get('team') if isinstance(c.get('team'), dict) else {}
+out['team'] = {'working_hours': team.get('working_hours') or {}}
+auth = {}
+for name, paths in AUTH.items():
+    for rel in paths:
+        full = HOME + '/' + rel
+        if os.path.isfile(full) and os.path.getsize(full) > 0:
+            auth[name] = rel
+            break
+out['auth'] = auth
+print(json.dumps(out))
+"""
+
+
+## Una sola andata e ritorno per i tre passi. Il profilo usa lo STESSO script
+## del backend (ready.flag oppure campi obbligatori completi): due copie della
+## stessa regola divergerebbero, e il passo 03 direbbe cose diverse a seconda
+## di chi guarda. Dizionario vuoto = non abbiamo saputo niente.
+static func _probe_vps(vps: Dictionary) -> Dictionary:
+	var payload := (CHECKLIST_PY % JSON.stringify(AUTH_PATHS)) \
+			+ VpsBackend.PROFILE_STATUS_PY
+	var res := _run_ssh(vps, "docker exec jht python3 -c " + _shell_quote(payload))
+	if res["code"] != 0:
+		return {}
+	var remote := {}
+	for line in str(res["out"]).split("\n"):
+		if not line.begins_with("{"):
+			continue
+		var parsed: Variant = JSON.parse_string(line)
+		if parsed is Dictionary:
+			remote.merge(parsed as Dictionary, true)
+	return remote
+
+
+## Quello che si è letto sulla macchina connessa sostituisce quello letto qui,
+## nei passi 02/03/04. Le risposte si interpretano con le STESSE funzioni del
+## percorso locale: il payload ha la forma della config proprio per questo.
+static func _apply_vps_probe(next: Dictionary, remote: Dictionary) -> void:
+	var unknown: Array = []
+	if bool(remote.get("config_read", false)):
+		var active := _ui_provider_id(str(remote.get("active_provider", "")))
+		var auth: Variant = remote.get("auth", {})
+		var found := ""
+		if active != "" and auth is Dictionary:
+			found = str((auth as Dictionary).get(active, ""))
+		next["active_provider"] = active
+		next["provider_auth_match"] = found
+		next["provider_authenticated"] = found != ""
+		next["active_plan"] = _declared_plan(remote, active)
+		next["plan_ready"] = str(next["active_plan"]) != ""
+		next["hours_ready"] = _has_working_hours(remote)
+	else:
+		next["active_provider"] = ""
+		next["provider_auth_match"] = ""
+		next["provider_authenticated"] = false
+		next["active_plan"] = ""
+		next["plan_ready"] = false
+		next["hours_ready"] = false
+		unknown.append("provider")
+		unknown.append("hours")
+	if remote.has("ready"):
+		next["profile_ready"] = bool(remote["ready"])
+	else:
+		next["profile_ready"] = false
+		unknown.append("profile")
+	next["unknown_steps"] = unknown
+
+
+## Passo che nessuno ha saputo raccontare: la UI lo mostra come tale invece di
+## disegnarlo verde o rosso, e `_finalize` non lo conta come fatto.
+static func _is_unknown(state: Dictionary, step: String) -> bool:
+	var unknown: Variant = state.get("unknown_steps", [])
+	return unknown is Array and (unknown as Array).has(step)
+
+
+## Un valore appena arrivato DAL team (mai da questo disco) chiude il suo passo.
+static func _mark_known(state: Dictionary, step: String) -> void:
+	if not _is_unknown(state, step):
+		return
+	var unknown: Array = state["unknown_steps"]
+	unknown.erase(step)
+	state["unknown_steps"] = unknown
+
+
+## La VPS a cui il gioco è attaccato ADESSO, o {} se il team vive qui. È lo
+## stesso "sì" del passo 01: connessione viva verso una macchina remota.
+func _connected_vps() -> Dictionary:
+	if not (BackendBus.is_remote() and BackendBus.is_live()):
+		return {}
+	var vps := BackendBus.load_vps_config()
+	return vps if str(vps.get("ip", "")).strip_edges() != "" else {}
 
 
 func select_provider(provider: String) -> void:
@@ -1150,7 +1325,7 @@ func open_technical_terminal(context: String, title: String, hint: String,
 		pieces.append_array(_posix_quoted(container_args))
 		var inner := " ".join(pieces)
 		var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
-		var target := "root@" + str(vps.get("ip", ""))
+		var target := _ssh_target(vps)
 		command = "ssh -tt -i " + _local_quote(key) + " " \
 				+ _local_quote(target) + " " + _local_quote(inner)
 	terminal_requested.emit(context, embedded_terminal_spec(title, hint, command))
@@ -1305,7 +1480,22 @@ static func _do_generate_vps_key() -> Dictionary:
 			else "Creazione chiave fallita: " + str(result["out"]).right(220)}
 
 
-static func _vps_credentials(ip: String, key_path: String) -> Dictionary:
+## L'utente SSH dipende dal provider: Hetzner consegna root, OVH e AWS
+## `ubuntu`, Google Cloud e Azure il nome dell'account. Campo vuoto — e
+## configurazioni salvate prima che il campo esistesse — valgono root.
+static func _ssh_user(user: String) -> String:
+	var clean := user.strip_edges()
+	return clean if clean != "" else "root"
+
+
+## Destinazione `utente@host` per ssh/scp. Prima era "root@" cablato in sette
+## punti e una VPS OVH rispondeva solo "Permission denied (publickey)".
+static func _ssh_target(vps: Dictionary) -> String:
+	return _ssh_user(str(vps.get("user", ""))) + "@" + str(vps.get("ip", ""))
+
+
+static func _vps_credentials(ip: String, key_path: String,
+		user := "") -> Dictionary:
 	var clean_ip := ip.strip_edges()
 	var key := VpsBackend.expand_user_path(key_path.strip_edges())
 	if clean_ip == "" or key == "" or not FileAccess.file_exists(key):
@@ -1316,16 +1506,23 @@ static func _vps_credentials(ip: String, key_path: String) -> Dictionary:
 	host_re.compile("^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
 	if host_re.search(clean_ip) == null:
 		return {}
-	return {"ip": clean_ip, "key_path": key}
+	var clean_user := _ssh_user(user)
+	var user_re := RegEx.new()
+	# Nome utente POSIX: lo stesso motivo per cui l'host è validato, dato che
+	# finisce dentro comandi ssh/scp composti come testo.
+	user_re.compile("^[A-Za-z0-9._][A-Za-z0-9._-]{0,31}$")
+	if user_re.search(clean_user) == null:
+		return {}
+	return {"ip": clean_ip, "key_path": key, "user": clean_user}
 
 
-func test_vps_connection(ip: String, key_path: String) -> void:
+func test_vps_connection(ip: String, key_path: String, user := "") -> void:
 	if _action_running:
 		return
-	var target := _vps_credentials(ip, key_path)
+	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-test", false,
-				"IP/hostname non valido o chiave privata non trovata", false)
+				"IP/hostname o utente SSH non valido, o chiave privata non trovata", false)
 		return
 	_start_action("vps-test", _do_test_vps_connection.bind(target))
 
@@ -1334,8 +1531,12 @@ static func _do_test_vps_connection(target: Dictionary) -> Dictionary:
 	var pinned := _pin_vps_host(str(target.get("ip", "")))
 	if not bool(pinned.get("ok", false)):
 		return pinned
+	# Non serve essere root: serve poter installare il runtime e parlare con
+	# Docker. Root (Hetzner), sudo senza password (l'utente ubuntu di OVH e
+	# AWS) o un utente già nel gruppo docker valgono tutti come "sì".
 	var result := _run_ssh(target,
-			"printf 'JHT_SSH_OK '; uname -srm; test \"$(id -u)\" = 0")
+			"printf 'JHT_SSH_OK '; uname -srm; test \"$(id -u)\" = 0 " \
+			+ "|| sudo -n true 2>/dev/null || docker info >/dev/null 2>&1")
 	var fingerprint := str(pinned.get("fingerprint", ""))
 	return {"ok": result["code"] == 0,
 			"message": "SSH verificato · " + str(result["out"]).strip_edges() \
@@ -1404,10 +1605,10 @@ static func _fingerprint_for_known_host(path: String) -> String:
 	return str(parts[1]) if parts.size() > 1 else str(fingerprint.get("out", "")).strip_edges()
 
 
-func provision_vps(ip: String, key_path: String) -> void:
+func provision_vps(ip: String, key_path: String, user := "") -> void:
 	if _action_running:
 		return
-	var target := _vps_credentials(ip, key_path)
+	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-provision", false,
 				"Inserisci un IP valido e genera/seleziona la chiave SSH", false)
@@ -1430,7 +1631,7 @@ static func _vps_prepare_runtime_command() -> String:
 
 
 func _do_provision_vps(target: Dictionary) -> Dictionary:
-	_progress("vps-provision", "Verifico accesso SSH e privilegi root…")
+	_progress("vps-provision", "Verifico accesso SSH e privilegi amministrativi…")
 	var check := _do_test_vps_connection(target)
 	if not bool(check["ok"]):
 		return check
@@ -1446,18 +1647,19 @@ func _do_provision_vps(target: Dictionary) -> Dictionary:
 			"activate_vps": target}
 
 
-func migrate_to_vps(ip: String, key_path: String, source_mode: String) -> void:
+func migrate_to_vps(ip: String, key_path: String, source_mode: String,
+		user := "") -> void:
 	if _action_running:
 		return
-	var target := _vps_credentials(ip, key_path)
+	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-migrate", false,
-				"Destinazione non valida: controlla IP e chiave SSH", false)
+				"Destinazione non valida: controlla IP, utente e chiave SSH", false)
 		return
 	var source := BackendBus.load_vps_config() if source_mode == "vps" else {}
 	if source_mode == "vps":
 		source = _vps_credentials(str(source.get("ip", "")),
-				str(source.get("key_path", "")))
+				str(source.get("key_path", "")), str(source.get("user", "")))
 		if source.is_empty():
 			action_changed.emit("vps-migrate", false,
 					"Nessuna VPS sorgente salvata da cui migrare", false)
@@ -1476,7 +1678,7 @@ func migrate_to_local() -> void:
 		return
 	var source := BackendBus.load_vps_config()
 	source = _vps_credentials(str(source.get("ip", "")),
-			str(source.get("key_path", "")))
+			str(source.get("key_path", "")), str(source.get("user", "")))
 	if source.is_empty():
 		action_changed.emit("vps-migrate", false,
 				"Nessuna VPS sorgente salvata da cui migrare", false)
@@ -2089,7 +2291,7 @@ static func _scp_download(source: Dictionary, remote: String, local: String) -> 
 	return _run("scp", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
 			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes",
 			"-o", "UserKnownHostsFile=" + known,
-			"root@" + str(source.get("ip", "")) + ":" + remote, local]))
+			_ssh_target(source) + ":" + remote, local]))
 
 
 static func _scp_upload(target: Dictionary, local: String, remote: String) -> Dictionary:
@@ -2098,7 +2300,7 @@ static func _scp_upload(target: Dictionary, local: String, remote: String) -> Di
 	return _run("scp", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
 			"-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes",
 			"-o", "UserKnownHostsFile=" + known,
-			local, "root@" + str(target.get("ip", "")) + ":" + remote]))
+			local, _ssh_target(target) + ":" + remote]))
 
 
 static func _restore_migration_source(source_mode: String, source: Dictionary,
@@ -2117,8 +2319,8 @@ static func _restore_migration_source(source_mode: String, source: Dictionary,
 					"/app/cli/bin/jht.js", "team", "start"]))
 
 
-func open_vps_install(ip: String, key_path: String) -> void:
-	var target := _vps_credentials(ip, key_path)
+func open_vps_install(ip: String, key_path: String, user := "") -> void:
+	var target := _vps_credentials(ip, key_path, user)
 	if target.is_empty():
 		action_changed.emit("vps-install", false,
 				"Inserisci l'IP e genera/seleziona una chiave SSH prima di installare", false)
@@ -2129,7 +2331,7 @@ func open_vps_install(ip: String, key_path: String) -> void:
 	var known := VpsBackend.known_hosts_path(clean_ip)
 	var command := "ssh -tt -i " + _local_quote(key) \
 			+ " -o StrictHostKeyChecking=yes -o UserKnownHostsFile=" \
-			+ _local_quote(known) + " " + _local_quote("root@" + clean_ip) \
+			+ _local_quote(known) + " " + _local_quote(_ssh_target(target)) \
 			+ " " + _local_quote(remote)
 	terminal_requested.emit("vps-install", embedded_terminal_spec(
 			"Installa JHT sulla VPS",
@@ -2403,7 +2605,7 @@ static func _run_ssh_stdin(vps: Dictionary, command: String,
 		payload: PackedByteArray) -> Dictionary:
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 	var known := VpsBackend.known_hosts_path(str(vps.get("ip", "")))
-	var target := "root@" + str(vps.get("ip", ""))
+	var target := _ssh_target(vps)
 	var process := OS.execute_with_pipe("ssh", PackedStringArray([
 		"-i", key, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
 		"-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=yes",
@@ -2456,7 +2658,7 @@ static func _provider_login_command(provider: String, vps: Dictionary = {}) -> S
 				+ _local_container_exec(tool)
 	var inner := "docker exec -it jht " + tool
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
-	var target := "root@" + str(vps.get("ip", ""))
+	var target := _ssh_target(vps)
 	var command := "ssh -tt -i " + _local_quote(key) + " " \
 			+ _local_quote(target) + " " + _local_quote(inner)
 	if OS.get_name() != "Windows":
@@ -2583,7 +2785,7 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	if bool(result.get("ok", false)) and result.get("activate_vps") is Dictionary:
 		var target: Dictionary = result["activate_vps"]
 		BackendBus.save_vps_config(str(target.get("ip", "")),
-				str(target.get("key_path", "")))
+				str(target.get("key_path", "")), str(target.get("user", "")))
 		BackendBus.set_backend(VpsBackend.new(), target)
 	elif bool(result.get("ok", false)) and bool(result.get("activate_local", false)):
 		BackendBus.switch_to_local_backend()
@@ -2671,7 +2873,7 @@ func _vps_config() -> Dictionary:
 static func _run_ssh(vps: Dictionary, command: String) -> Dictionary:
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 	var known := VpsBackend.known_hosts_path(str(vps.get("ip", "")))
-	var target := "root@" + str(vps.get("ip", ""))
+	var target := _ssh_target(vps)
 	return _run("ssh", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
 			"-o", "IdentitiesOnly=yes", "-o", "ConnectTimeout=8",
 			"-o", "StrictHostKeyChecking=yes",

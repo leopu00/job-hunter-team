@@ -277,6 +277,8 @@ const S := {
 
 	"vps.intro": "Verbinde die VPS deines Teams: IP und SSH-Schlüssel, den Rest übernimmt das Spiel.",
 	"vps.ip": "IP DER VPS",
+	"vps.user": "SSH-BENUTZER",
+	"vps.user_note": "Benutzer, mit dem der Anbieter die VPS öffnet: root bei Hetzner, ubuntu bei OVH und AWS, der Kontoname bei Google Cloud und Azure. Leer bedeutet root.",
 	"vps.key": "SSH-SCHLÜSSEL (privat)",
 	"vps.key_browse": "DURCHSUCHEN…",
 	"vps.connect": "▶ VERBINDEN",
@@ -294,6 +296,7 @@ const S := {
 	"vps.key_copy": "ÖFFENTLICHEN SCHLÜSSEL KOPIEREN",
 	"vps.key_open": "ORDNER ÖFFNEN",
 	"vps.key_note": "Der private Schlüssel bleibt auf diesem Computer; nur die .pub-Zeile geht an den Anbieter.",
+	"vps.key_fingerprint_none": "Fingerprint: für den gewählten Schlüssel nicht verfügbar — es gibt nichts, was sich mit dem Anbieter vergleichen ließe.",
 	"vps.destination": "2 · ZIELSERVER",
 	"vps.fingerprint_note": "SSH PRÜFEN zeigt den Host-Fingerprint: vergleiche ihn mit dem Wert des Anbieters.",
 	"vps.connect_existing": "OHNE INSTALLATION VERBINDEN",
@@ -366,6 +369,9 @@ const S := {
 	"pos.open_url": "Anzeige im Browser öffnen",
 	"pos.open_yes": "Anzeige bei der letzten Prüfung OFFEN",
 	"pos.open_no": "Anzeige NICHT MEHR OFFEN",
+	"pos.office_address": "ADRESSE",
+	"pos.office_verified": "von den Analysten verifiziert",
+	"pos.office_approx": "nicht verifiziert · Stadtzentrum",
 
 	"apps.ready": "CV fertig",
 	"apps.applied": "eingereicht",
@@ -412,6 +418,7 @@ const S := {
 	"map.card_hint": "Klick auf eine Position öffnet ihre Seite",
 	"map.card_hint_all": "%d Positionen · Liste scrollen und für Details klicken",
 	"map.cluster": "%d Positionen · %d Orte",
+	"map.pin_approx": "Pin im Stadtzentrum: genaue Adresse nicht verifiziert",
 
 	"hours.intro": "Die Fenster, in denen das Team arbeitet: bearbeiten und speichern, das Pacing passt sich an.",
 	"hours.tz": "Zeitzone",
@@ -620,6 +627,7 @@ const S := {
 	"setup.hours": "Arbeitszeiten",
 	"setup.hours_todo": "Wann das Team arbeiten darf. Ohne Zeiten läuft es rund um die Uhr und verbraucht das Abo.",
 	"setup.hours_ok": "Arbeitsfenster eingestellt.",
+	"setup.remote_unknown": "Auf der verbundenen Maschine nicht lesbar. Der Wert dieses Computers zählt nicht: er gehört zu einer anderen Maschine.",
 	"setup.where_todo": "Auf deinem Computer oder auf einer VPS, die auch bei geschlossenem Fenster arbeitet.",
 	"setup.where_local": "Das Team arbeitet auf diesem Computer.",
 	"setup.where_vps": "Das Team arbeitet auf der VPS: dieses Fenster ist ihr Spiegel.",

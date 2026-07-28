@@ -1,13 +1,13 @@
 <!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: bridge-pacing
-description: Übersetze einen `[BRIDGE PACING]` 15-Minuten-Kalibrierungs-Tick in Throttle-Anpassungen pro Agent. Die Bridge misst die tatsächliche Verbrauchsrate des Teams und gibt dir ein Urteil (SFORO / MARGINE / ALLINEATO) plus den Anteil pro Agent + Kadenz, um zu entscheiden WER verlangsamt wird und UM WIEVIEL. Öffne diesen Skill NUR wenn eine `[BRIDGE PACING]`-Zeile eintrifft; die routinemäßigen `[SENTINELLA]`-Befehle nutzen einen anderen Ablauf (`sentinel-orders`).
+description: Lies einen 15-Minuten-Kalibrierungs-Tick `[BRIDGE PACING]` — die Messung der Bridge zur tatsächlichen Rate des Teams, mit einem Urteil (SFORO / MARGINE / ALLINEATO) plus Anteil und Kadenz pro Agent. Der Tick ist an die SENTINELLA adressiert, nicht an dich: öffne diesen Skill, wenn sie dir diese Zahlen weitergibt, oder wenn du aus eigener Initiative einen Tick nachliest. Warte nicht darauf, dass einer in deinem Pane landet — das passiert nicht. Das Urteil in Throttle-Werte pro Agent zu übersetzen, ist `throttle-distribution`.
 allowed-tools: Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *)
 ---
 
-# bridge-pacing — datengetriebene Throttle-Kalibrierung
+# bridge-pacing — den 15-Minuten-Kalibrierungs-Tick lesen
 
-Die Bridge führt alle 15 Min. ein Messfenster aus (ausgerichtet auf :00/:15/:30/:45 UTC). Bei jedem Fensterschluss schreibt sie eine Zeile in das Panel des Captain, die die tatsächliche Rate des Teams zusammenfasst und dir sagt, in welche Richtung du den Throttle verschieben sollst. Dies ist **kein** Sentinel-Befehl — es ist ein Kalibrierungssignal, auf das du mit `throttle-config.py` reagierst.
+Die Bridge führt alle 15 Min. ein Messfenster aus (ausgerichtet auf :00/:15/:30/:45 UTC). Bei jedem Fensterschluss schreibt sie eine Zeile mit der tatsächlichen Rate des Teams — **in das Pane der Sentinella, nicht in deins** (push→pull, 25.06.2026). Du wirst bewusst nicht jede Viertelstunde angepingt: sie liest den Tick und weckt dich nur, wenn es einen Zug von dir wert ist. Dieses Format benutzt du also, wenn **sie dir die Zahlen weitergibt**, oder wenn du aus eigener Initiative einen Tick nachschaust — nie als etwas, worauf man wartet.
 
 ## Nachrichtenformat
 
@@ -52,59 +52,14 @@ Der `[schedule+ratio phase=ON]`-Tag in Klammern ist die **Quelle** des Ziels —
 
 > 💡 `X%/h` vs `Y%` sind dasselbe in zwei Einheiten. `Y = X / vel_team × 100`.
 
-## Kalibrierungsformel (das einzig Neue hier)
+## Was du damit machst
 
-Um eine `f%` Ratenreduktion bei einem Agenten mit Kadenz `c` Checkpoint/Min zu erzielen, ist die Dauer für `throttle-config`:
+Das Urteil sagt dir, **ob** du eingreifst und grob **wie viel**. Das in Werte in `throttle.json` zu übersetzen — welcher Agent verlangsamt wird, um wie viele Stufen, und wann Nichtstun das Richtige ist — gehört zu **`throttle-distribution`**. Öffne jenen Skill zum Handeln: er besitzt die Arithmetik, die Leiter und die Sicherheitsregeln.
 
-```
-durata_sec = (f / 100) × 60 / c
-```
+Zwei Dinge, die du mitnimmst:
 
-Die Intuition: Jeder `jht-throttle`-Aufruf fügt `durata_sec` Pause hinzu. Über 60s ruft der Agent es `c` mal auf → fügt `c · durata` Sekunden Pause pro Minute hinzu → anteilige Ratenkürzung `= c · durata / 60`. Nach `durata` auflösen.
-
-### Ausgearbeitetes Beispiel — die Kürzung auf einen Agenten konzentrieren
-
-```
-Tick: SFORO +4.35%/h → riduci 19%
-analista-1: share 47%, cadenza 0.6/min
-```
-
-Fast die gesamte Kürzung auf `analista-1` schieben:
-- Anteil auf analista-1 ≈ 19% / 47% ≈ 40%
-- `durata_sec = 0.40 × 60 / 0.6 = 40s`
-- → `throttle-config.py set analista-1 40`
-
-### Ausgearbeitetes Beispiel — die Kürzung auf zwei Agenten verteilen
-
-```
-Tick: SFORO +4.35%/h → riduci 19%
-analista-1: share 47%, cadenza 0.6/min
-scout-1:    share 26%, cadenza c_scout
-```
-
-Kombiniertes Gewicht 47 + 26 = 73%. 19% proportional verteilen:
-- Anteil pro Agent ≈ 19% / 73% ≈ 26%
-- analista-1: `0.26 × 60 / 0.6 = 26s`
-- scout-1:    `0.26 × 60 / c_scout`
-- → ein `bulk-set` schreibt atomar:
-
-```bash
-python3 /app/shared/skills/throttle-config.py bulk-set \
-    analista-1=26 scout-1=<abgeleitet von c_scout>
-```
-
-## Beim Lösen des Throttle (MARGINE)
-
-Wenn das Urteil `MARGINE −X%/h → puoi salire Y%` lautet:
-1. Wähle die Rolle, die du beschleunigen willst (Priorität: der aktuelle Engpass — `pipeline-triage` wenn unsicher).
-2. Reduziere ihren aktuellen Throttle um ungefähr `Y%` (oder auf Null, wenn es ein kleiner Wert war).
-3. Setze **nicht** alle auf einmal auf Null — du würdest beim nächsten Tick in ein SFORO oszillieren.
-
-## Kadenz nach einer Konfigurationsänderung
-
-- Warte nach jeder Änderung **2-3 Ticks** (≈30-45 Min.) bevor du erneut eingreifst.
-- Das Pacing ist bereits deine Synthese — füge **keine** zusätzlichen `rate_budget live`-Aufrufe dazwischen ein (sie blähen die `velocity_smooth` des Sentinel auf).
-- Wenn nach 3 Ticks das Urteil immer noch SFORO ist, verdopple die Dauern bei denselben Agenten (linear → geometrisch); wenn immer noch MARGINE, halbiere.
+- **`share` beantwortet WER.** Der Throttle gibt Budget nur proportional zu dem zurück, was ein Agent tatsächlich ausgibt — ein teamweites "kürze 19%" ist also nie "alle 19% runter".
+- **`cadenza` beantwortet WIE VIEL.** Sie ist der Input für die Dauer-Formel: derselbe Wert in der Config kürzt bei einem Agenten, der zweimal pro Stunde einen Checkpoint erreicht, völlig anders als bei einem, der zehnmal hinkommt.
 
 ## Anti-Patterns
 
@@ -115,6 +70,7 @@ Wenn das Urteil `MARGINE −X%/h → puoi salire Y%` lautet:
 
 ## Siehe auch
 
+- `throttle-distribution` — die Umsetzung: wer verlangsamt wird, um wie viel, und wann man nichts tut.
 - `sentinel-orders` — Routine-Ticks, Throttle-Stufen 0-4, Notfälle.
 - `bridge-mailbox` — Pacing-Urteile abrufen, die du während einer langen Runde verpasst hast (die Bridge hängt an ein JSONL an, auch wenn der Live-tmux-Send fehlgeschlagen ist).
 - `throttle` — die `throttle-config.py` CLI-Referenz und die Zustandsdatei pro Agent.

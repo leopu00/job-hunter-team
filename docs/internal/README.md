@@ -72,6 +72,7 @@ Note datate su incidenti specifici, diagnosi, investigazioni e osservazioni.
 
 | Data | File | Topic |
 |---|---|---|
+| 2026-07-27 | [`2026-07-27-tailwind-layer-vs-extension-css.md`](postmortems/2026-07-27-tailwind-layer-vs-extension-css.md) | 🧩 Header/liste invisibili su desktop: le utility Tailwind v4 in `@layer` perdono contro il `.hidden` non-layerizzato iniettato dalle estensioni — fix proposto, non applicato |
 | 2026-07-02 | [`2026-07-02-kimi-codex-token-forensics.md`](postmortems/2026-07-02-kimi-codex-token-forensics.md) | Misura token Kimi vs Codex in 2 passate: coordinatori ~20% uguali, budget ~2,7×, €/token ≈ pari → living doc economia |
 | 2026-07-02 | [`2026-07-02-daily-halt-standby-leak.md`](postmortems/2026-07-02-daily-halt-standby-leak.md) | Daily hard-stop su betaB: funziona ma lo standby perde ~1–2%/notte (risvegli da timer di throttle) — fix aperti |
 | 2026-07-01 | [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md) | Capitano Kimi `--no-thinking` inverte C-10 e ordina 30 CV mai richiesti → Capitano thinking ON (deployato) |

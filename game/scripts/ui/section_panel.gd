@@ -778,20 +778,26 @@ func _build_activation() -> void:
 			UIStrings.t("setup.where_vps") if on_vps
 			else (UIStrings.t("setup.where_local") if bool(s.get("container_running", false))
 			else UIStrings.t("setup.where_todo")), "docker")
+	# Passi che il team connesso non ha saputo raccontare: si dicono ignoti. Il
+	# valore di questo computer non è una risposta — su una VPS è di un'altra
+	# macchina, e nel caso peggiore di un'altra persona.
+	var unknown: Array = s.get("unknown_steps", [])
 	_setup_gate(progress, "02", UIStrings.t("setup.provider"),
 			bool(s.get("provider_authenticated", false))
 					and bool(s.get("plan_ready", false)),
-			_provider_status_text(s), "provider")
+			_provider_status_text(s), "provider", unknown.has("provider"))
 	_setup_gate(progress, "03", UIStrings.t("setup.profile"),
 			bool(s.get("profile_ready", false)),
-			UIStrings.t("setup.profile_ok") if bool(s.get("profile_ready", false))
-			else UIStrings.t("setup.profile_todo"), "profile")
+			UIStrings.t("setup.remote_unknown") if unknown.has("profile")
+			else (UIStrings.t("setup.profile_ok") if bool(s.get("profile_ready", false))
+			else UIStrings.t("setup.profile_todo")), "profile", unknown.has("profile"))
 	# Quarto passo, obbligatorio come gli altri: senza finestre di lavoro il
 	# team macina a ogni ora del giorno e il conto arriva dopo.
 	_setup_gate(progress, "04", UIStrings.t("setup.hours"),
 			bool(s.get("hours_ready", false)),
-			UIStrings.t("setup.hours_ok") if bool(s.get("hours_ready", false))
-			else UIStrings.t("setup.hours_todo"), "hours")
+			UIStrings.t("setup.remote_unknown") if unknown.has("hours")
+			else (UIStrings.t("setup.hours_ok") if bool(s.get("hours_ready", false))
+			else UIStrings.t("setup.hours_todo")), "hours", unknown.has("hours"))
 	_content.add_child(HSeparator.new())
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 14)
@@ -816,7 +822,8 @@ func _build_activation() -> void:
 
 
 func _setup_gate(parent: HBoxContainer, number: String, title: String,
-		done: bool, detail: String, destination: String) -> void:
+		done: bool, detail: String, destination: String,
+		unknown := false) -> void:
 	var panel := BracketPanel.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.custom_minimum_size = Vector2(260, 180)
@@ -828,8 +835,14 @@ func _setup_gate(parent: HBoxContainer, number: String, title: String,
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
-	col.add_child(TerminalTheme.label(number + "  " + ("✓" if done else "○"),
-			14, Palette.GREEN if done else Palette.YELLOW, "bold"))
+	# Terzo stato accanto a fatto (✓) e da fare (○): il valore vive sulla
+	# macchina connessa e non siamo riusciti a leggerlo. Dirlo con uno degli
+	# altri due sarebbe inventarlo.
+	var tint: Color = Palette.DIM if unknown \
+			else (Palette.GREEN if done else Palette.YELLOW)
+	col.add_child(TerminalTheme.label(
+			number + "  " + ("?" if unknown else ("✓" if done else "○")),
+			14, tint, "bold"))
 	col.add_child(TerminalTheme.label(title.to_upper(), 19, Palette.WHITE, "bold"))
 	var body := TerminalTheme.label(detail, 13, Palette.MUTED)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -837,7 +850,7 @@ func _setup_gate(parent: HBoxContainer, number: String, title: String,
 	col.add_child(body)
 	var open := Button.new()
 	open.text = UIStrings.t("setup.review") if done else UIStrings.t("setup.configure")
-	open.add_theme_color_override("font_color", Palette.GREEN if done else Palette.YELLOW)
+	open.add_theme_color_override("font_color", tint)
 	open.pressed.connect(func() -> void:
 		if destination == "profile":
 			Game.goto_wizard()
@@ -847,6 +860,8 @@ func _setup_gate(parent: HBoxContainer, number: String, title: String,
 
 
 func _provider_status_text(s: Dictionary) -> String:
+	if (s.get("unknown_steps", []) as Array).has("provider"):
+		return UIStrings.t("setup.remote_unknown")
 	var id := str(s.get("active_provider", ""))
 	if id == "":
 		return UIStrings.t("setup.provider_todo")
@@ -1099,7 +1114,11 @@ func _on_setup_refresh(_status: Dictionary) -> void:
 		_build()
 
 
-func _on_setup_action(_action: String, running: bool, message: String, ok: bool) -> void:
+func _on_setup_action(action: String, running: bool, message: String, ok: bool) -> void:
+	# Generare la chiave ne cambia il fingerprint senza toccare il percorso:
+	# senza questo il pannello resterebbe su "non disponibile" fino a riaprirlo.
+	if action == "vps-key" and not running:
+		_refresh_vps_fingerprint()
 	if not is_instance_valid(_setup_message):
 		return
 	_setup_message.text = ("◌ " if running else ("✓ " if ok else "⚠ ")) + message
@@ -2464,6 +2483,25 @@ func _build_pos_detail() -> void:
 	var st := _pos_value(p, "status")
 	sub.add_child(TerminalTheme.label(st, 14,
 			_pos_status_color(st, Palette.MUTED), "bold"))
+	# L'indirizzo che gli Analisti hanno faticato a trovare vive SOLO qui,
+	# accanto a città e paese: è la stessa informazione, alla sua massima
+	# precisione. Con office_verified=0 il team ha ripiegato sul centro città
+	# e lo dice — è anche la ragione per cui il pin sulla mappa è vuoto.
+	var addr_v: Variant = p.get("office_address")
+	var addr := str(addr_v).strip_edges() if addr_v != null else ""
+	if addr != "" and addr != "<null>":
+		var exact := MapPins.is_exact(p)
+		var tag := UIStrings.t("pos.office_verified") if exact \
+				else UIStrings.t("pos.office_approx")
+		var arow := HBoxContainer.new()
+		arow.add_theme_constant_override("separation", 10)
+		box.add_child(arow)
+		arow.add_child(TerminalTheme.label(UIStrings.t("pos.office_address"),
+				13, Palette.MUTED, "medium"))
+		arow.add_child(TerminalTheme.label(addr, 14,
+				Palette.BASE if exact else Palette.MUTED))
+		arow.add_child(TerminalTheme.label(tag, 12,
+				Palette.MINT if exact else Palette.DIM, "medium"))
 	if p.get("found_by"):
 		box.add_child(TerminalTheme.label(UIStrings.t("pos.found") % [
 				str(p["found_by"]), str(p.get("found_at", "")).left(10)], 13, Palette.DIM))
@@ -2721,8 +2759,10 @@ static func _fmt_salary_eur(s_min: Variant, s_max: Variant, cur: String) -> Stri
 # ── Impostazioni → Collega VPS ────────────────────────────────────────
 
 var _vps_ip: LineEdit
+var _vps_user: LineEdit
 var _vps_key: LineEdit
 var _vps_state_lbl: Label
+var _vps_fingerprint_lbl: Label
 var _vps_agents_box: VBoxContainer
 
 ## Il form del PRIMO PASSO backend: IP + chiave SSH → VpsBackend reale.
@@ -2753,6 +2793,7 @@ func _build_vps() -> void:
 	generate.text = UIStrings.t("vps.key_generate")
 	generate.pressed.connect(func() -> void:
 		_vps_key.text = SetupService.default_vps_key_path()
+		_refresh_vps_fingerprint()
 		SetupService.generate_vps_key())
 	_vps_key.get_parent().add_child(generate)
 	var copy_public := Button.new()
@@ -2765,17 +2806,24 @@ func _build_vps() -> void:
 	reveal.pressed.connect(func() -> void:
 		SetupService.reveal_vps_key(_vps_key.text))
 	_vps_key.get_parent().add_child(reveal)
-	var key_info := SetupService.vps_key_info(_vps_key.text)
-	var fingerprint := str(key_info.get("fingerprint", ""))
-	_content.add_child(TerminalTheme.label(
-			("Fingerprint: " + fingerprint) if fingerprint != "" else \
-			UIStrings.t("vps.key_note"),
-			12, Palette.DIM))
+	_vps_fingerprint_lbl = TerminalTheme.label("", 12, Palette.DIM)
+	_content.add_child(_vps_fingerprint_lbl)
+	_content.add_child(TerminalTheme.label(UIStrings.t("vps.key_note"), 12, Palette.DIM))
+	# Il campo cambia significato appena cambia la chiave: va ricalcolato sul
+	# testo di adesso, non su quello con cui il pannello è stato costruito.
+	_vps_key.text_changed.connect(func(_t: String) -> void: _refresh_vps_fingerprint())
+	_refresh_vps_fingerprint()
 
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.destination"), 15,
 			Palette.BRIGHT, "bold"))
 	_vps_ip = _vps_input(UIStrings.t("vps.ip"), cfg.get("ip", ""), "203.0.113.10")
+	# Solo Hetzner consegna root: OVH e AWS aprono su `ubuntu`, Google Cloud e
+	# Azure sul nome dell'account. Campo vuoto = root, come prima.
+	_vps_user = _vps_input(UIStrings.t("vps.user"), cfg.get("user", ""), "root")
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("vps.user_note"),
+			12, Palette.DIM))
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("vps.fingerprint_note"),
 			12, Palette.DIM))
@@ -2801,19 +2849,22 @@ func _build_vps() -> void:
 	test_ssh.text = UIStrings.t("vps.verify_ssh")
 	test_ssh.add_theme_color_override("font_color", Palette.MINT)
 	test_ssh.pressed.connect(func() -> void:
-		SetupService.test_vps_connection(_vps_ip.text, _vps_key.text))
+		SetupService.test_vps_connection(_vps_ip.text, _vps_key.text,
+				_vps_user.text))
 	actions.add_child(test_ssh)
 	var install := Button.new()
 	install.text = UIStrings.t("vps.prepare")
 	install.add_theme_color_override("font_color", Palette.YELLOW)
 	install.pressed.connect(func() -> void:
-		SetupService.provision_vps(_vps_ip.text, _vps_key.text))
+		SetupService.provision_vps(_vps_ip.text, _vps_key.text,
+				_vps_user.text))
 	actions.add_child(install)
 	var console_install := Button.new()
 	console_install.text = UIStrings.t("vps.advanced")
 	console_install.flat = true
 	console_install.pressed.connect(func() -> void:
-		SetupService.open_vps_install(_vps_ip.text, _vps_key.text))
+		SetupService.open_vps_install(_vps_ip.text, _vps_key.text,
+				_vps_user.text))
 	_content.add_child(console_install)
 
 	_vps_state_lbl = TerminalTheme.label("", 16, Palette.MUTED, "medium")
@@ -2871,7 +2922,8 @@ func _confirm_vps_migration(source_mode: String) -> void:
 			+ "\n\n" + UIStrings.t("vps.confirm_body")
 	dialog.ok_button_text = UIStrings.t("vps.confirm_vps_ok")
 	dialog.confirmed.connect(func() -> void:
-		SetupService.migrate_to_vps(_vps_ip.text, _vps_key.text, source_mode))
+		SetupService.migrate_to_vps(_vps_ip.text, _vps_key.text, source_mode,
+				_vps_user.text))
 	dialog.canceled.connect(dialog.queue_free)
 	dialog.confirmed.connect(dialog.queue_free)
 	add_child(dialog)
@@ -2910,9 +2962,33 @@ func _browse_vps_key() -> void:
 	dlg.access = FileDialog.ACCESS_FILESYSTEM
 	dlg.use_native_dialog = true
 	dlg.show_hidden_files = true
-	dlg.file_selected.connect(func(path: String) -> void: _vps_key.text = path)
+	# Assegnare .text da codice non emette text_changed: il ricalcolo va chiesto.
+	dlg.file_selected.connect(func(path: String) -> void:
+		_vps_key.text = path
+		_refresh_vps_fingerprint())
 	add_child(dlg)
 	dlg.popup_centered()
+
+## Il fingerprint esiste per essere confrontato con quello mostrato dal provider:
+## se restasse quello della chiave precedente il controllo anti-MITM darebbe una
+## conferma falsa, che è peggio del non averlo. Quindi si rilegge sempre dalla
+## chiave selezionata adesso — senza cache, perché lo stesso percorso cambia
+## fingerprint appena la chiave viene (ri)generata — e quando non è calcolabile
+## (campo vuoto, .pub assente, ssh-keygen non disponibile) lo dichiara.
+func _refresh_vps_fingerprint() -> void:
+	if not is_instance_valid(_vps_fingerprint_lbl) or not is_instance_valid(_vps_key):
+		return
+	# Campo vuoto: vps_key_info() ripiegherebbe sulla chiave di default, e il
+	# pannello mostrerebbe il fingerprint di una chiave che l'utente non ha scelto.
+	var key_path := _vps_key.text.strip_edges()
+	var fingerprint := ""
+	if key_path != "":
+		var key_info := SetupService.vps_key_info(key_path)
+		fingerprint = str(key_info.get("fingerprint", ""))
+	_vps_fingerprint_lbl.text = ("Fingerprint: " + fingerprint) if fingerprint != "" \
+			else UIStrings.t("vps.key_fingerprint_none")
+	_vps_fingerprint_lbl.add_theme_color_override("font_color",
+			Palette.DIM if fingerprint != "" else Palette.YELLOW)
 
 func _connect_vps() -> void:
 	var ip := _vps_ip.text.strip_edges()
@@ -2921,8 +2997,10 @@ func _connect_vps() -> void:
 		_vps_state_lbl.text = "● " + UIStrings.t("vps.missing_fields")
 		_vps_state_lbl.add_theme_color_override("font_color", Palette.YELLOW)
 		return
-	BackendBus.save_vps_config(ip, key)
-	BackendBus.set_backend(VpsBackend.new(), {"ip": ip, "key_path": key})
+	var user := _vps_user.text.strip_edges()
+	BackendBus.save_vps_config(ip, key, user)
+	BackendBus.set_backend(VpsBackend.new(),
+			{"ip": ip, "key_path": key, "user": user})
 
 func _on_vps_state(state: int, detail: String) -> void:
 	if not is_instance_valid(_vps_state_lbl):

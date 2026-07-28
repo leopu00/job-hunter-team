@@ -53,6 +53,13 @@ Worker floor (2026-06-26): i WORKER (Scout/Analista/Scorer/Scrittore/Critico)
 hanno floor 5min SEMPRE — `0` su un worker → 300s (anti-marathon). Il core
 interattivo (Capitano/Sentinella/Assistente/Mentor) NON ha floor (`0` resta `0`)
 → resta reattivo per la chat utente. Vedi `_is_worker` / `WORKER_FLOOR`.
+
+Deroga a termine (2026-07-28): floor e ladder sono automatismi di SPESA, quindi
+cedono quando l'utente ha dichiarato l'intento opposto — `.burn-intent.flag`,
+vedi `shared/skills/burn_intent.py` e `effective()` qui sotto. È l'unico modo
+per cui un override dell'utente sopravvive alla `get_agent` successiva: floor e
+ladder si applicano IN LETTURA, quindi vanno derogati in lettura. Alla scadenza
+del flag il freno torna da solo, senza che nessuno debba ricordarsene.
 """
 import argparse
 import json
@@ -83,7 +90,19 @@ MAX_SLEEP = 3600
 # Per SPENDERE il budget il Capitano non rallenta a raffica pochi agenti,
 # ma PARALLELIZZA (spawna più agenti). `0` resta `0` (nessun throttle,
 # fast path); ogni valore >0 sale ad almeno 5min e si aggancia a un gradino.
-THROTTLE_LADDER = [300, 600, 900, 1200, 1500, 1800, 2400, 3000, 3600]
+# Gradini in MINUTI PRIMI (tranne il primo e l'ultimo): 1, 2, 3, 5, 7, 11, 13,
+# 17, 23, 31, 41, 53, 60. La scala precedente era tutta multipli di 5 — e due
+# worker su gradini diversi si risincronizzavano di continuo *per costruzione*:
+# 5+10 ricadevano insieme ogni 10 minuti, 5+15 ogni 15. Ogni coincidenza è un
+# picco di richieste simultanee sulla stessa macchina.
+# Con gradini coprimi il minimo comune multiplo esplode: il peggior caso passa
+# da 10 a 35 minuti, la media da 84 a 638. Non elimina le collisioni — le rende
+# rare invece che periodiche.
+# Sotto i 5 minuti servono a un worker solo se esentato dal WORKER_FLOOR
+# (config/throttle-floor-exempt.txt); il core interattivo li usa liberamente.
+# Sotto il minuto non si scende: la pausa smetterebbe di essere un checkpoint.
+THROTTLE_LADDER = [60, 120, 180, 300, 420, 660, 780, 1020, 1380, 1860, 2460,
+                   3180, 3600]
 
 
 def quantize(seconds) -> int:
@@ -119,6 +138,88 @@ def _is_worker(agent) -> bool:
     suffisso `-N`: scout-3 → scout). Core/one-shot/ignoti → False (niente floor)."""
     base = re.sub(r"-\d+$", "", str(agent or "").strip().lower())
     return base in _WORKER_ROLES
+
+
+# Esenzione PER SINGOLO AGENTE dal worker floor, un nome per riga in
+# `$JHT_HOME/config/throttle-floor-exempt.txt` (righe `#` = commento).
+# Esiste per un caso solo: un esperimento a termine in cui si vuole misurare
+# cosa produce UN worker senza pause, tenendo il floor su tutti gli altri.
+# ⚠️ Non è un interruttore generale — è deliberatamente per-agente, perché il
+# floor nasce da un incidente misurato (il marathon di uno Scout, ~308kT per 3
+# posizioni) e toglierlo a tutti riproduce la configurazione della burn
+# notturna del 2026-07-15, dove floor e hard-stop erano entrambi off.
+# Il file va rimosso a esperimento finito: nessuno lo scade al posto tuo.
+_FLOOR_EXEMPT_FILE = CONFIG_DIR / "throttle-floor-exempt.txt"
+
+
+def _floor_exempt(agent) -> bool:
+    """True se l'agente è elencato nel file di esenzione. Robusta per
+    costruzione: qualunque errore di lettura lascia il floor attivo — la
+    direzione sicura è tenere il freno, non toglierlo."""
+    try:
+        if not _FLOOR_EXEMPT_FILE.exists():
+            return False
+        names = {
+            ln.strip().lower()
+            for ln in _FLOOR_EXEMPT_FILE.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")
+        }
+    except OSError:
+        return False
+    return str(agent or "").strip().lower() in names
+
+
+# ── Deroga a termine dell'utente (shared/skills/burn_intent.py) ──────────
+# Il file di esenzione sopra è per-agente e non scade: è la forma sbagliata per
+# un ordine come *"stanotte spremete"*, che riguarda TUTTI i worker e deve
+# finire da solo. `.burn-intent.flag` è quella giusta — e va letto **qui**,
+# perché il floor e la ladder si applicano IN LETTURA: senza questo controllo
+# qualunque override dell'utente torna a 300s alla prima `get_agent`, che è il
+# sintomo osservato («il throttle torna a 300») dopo ogni deroga tentata.
+# Modulo cachato, stato no: `is_active()` rilegge il flag a ogni chiamata.
+_BURN_INTENT_MOD = None
+
+
+def _burn_intent_active() -> bool:
+    """True se l'utente ha derogato agli automatismi di spesa e la deroga non è
+    scaduta. Fail-closed: qualunque errore lascia floor e ladder attivi."""
+    global _BURN_INTENT_MOD
+    try:
+        if _BURN_INTENT_MOD is None:
+            import importlib.util
+            for cand in (Path("/app/shared/skills/burn_intent.py"),
+                         Path(__file__).resolve().parent / "burn_intent.py"):
+                if not cand.exists():
+                    continue
+                spec = importlib.util.spec_from_file_location("burn_intent", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _BURN_INTENT_MOD = mod
+                break
+        return bool(_BURN_INTENT_MOD.is_active()) if _BURN_INTENT_MOD else False
+    except Exception:  # noqa: BLE001 — la skill gira in loop dagli agenti
+        return False
+
+
+def effective(agent: str, seconds: int) -> int:
+    """Valore EFFETTIVO per l'agente: ladder + worker floor, salvo deroghe.
+
+    In deroga (BURN-INTENT) il valore richiesto vale così com'è, entro
+    `MIN_SLEEP..MAX_SLEEP`: niente floor 5min, niente aggancio alla ladder.
+    È una decisione economica dell'utente sulla velocità — i freni di sicurezza
+    (weekly-halt, host_agent_cap, SC-09, freeze_team) stanno altrove e non
+    passano di qui.
+    """
+    v = max(MIN_SLEEP, min(MAX_SLEEP, seconds))
+    if _burn_intent_active():
+        return v
+    floor = WORKER_FLOOR if (_is_worker(agent) and not _floor_exempt(agent)) \
+        else MIN_SLEEP
+    # L'esente salta anche la ladder: quantize() aggancerebbe comunque a 300
+    # (il suo primo gradino), quindi il valore richiesto va usato tale e quale.
+    if floor == MIN_SLEEP and _is_worker(agent):
+        return v
+    return quantize(max(floor, v))
 
 
 def load() -> dict:
@@ -178,8 +279,8 @@ def get_agent(agent: str) -> int:
     # (anti-marathon, 2026-06-26): mai 0. Il core interattivo NON ha floor →
     # resta reattivo. Vale anche per i valori legacy già nel throttle.json
     # (es. 60/120 → 300, o 0 su un worker → 300) senza riscrivere il file.
-    floor = WORKER_FLOOR if _is_worker(agent) else MIN_SLEEP
-    return quantize(max(floor, min(MAX_SLEEP, v)))
+    # Unica eccezione: la deroga a termine dell'utente (vedi `effective`).
+    return effective(agent, v)
 
 
 def set_agent(agent: str, seconds: int) -> None:
@@ -188,7 +289,10 @@ def set_agent(agent: str, seconds: int) -> None:
     if seconds < MIN_SLEEP or seconds > MAX_SLEEP:
         raise ValueError(f"seconds must be {MIN_SLEEP}..{MAX_SLEEP}, got {seconds}")
     cfg = load()
-    cfg[agent] = quantize(seconds)  # snap alla ladder: ciò che salvi è l'effettivo
+    # Snap alla ladder: ciò che salvi è l'effettivo. In deroga (BURN-INTENT) si
+    # salva il valore CHIESTO — se lo snappassimo qui, alla scadenza della
+    # deroga resterebbe scritto un numero che l'utente non ha mai chiesto.
+    cfg[agent] = seconds if _burn_intent_active() else quantize(seconds)
     _atomic_write(cfg)
 
 
@@ -234,8 +338,10 @@ def main() -> int:
         except (TypeError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
-        eff = quantize(args.seconds)
+        eff = get_agent(args.agent)
         note = "" if eff == args.seconds else f" (richiesto {args.seconds}s → ladder)"
+        if _burn_intent_active():
+            note += " [BURN-INTENT: floor e ladder in deroga]"
         print(f"{args.agent}={eff}s{note}")
         return 0
 
@@ -272,7 +378,8 @@ def main() -> int:
                 print(f"error: '{pair}' out of range {MIN_SLEEP}..{MAX_SLEEP}",
                       file=sys.stderr)
                 return 1
-            cfg[k] = quantize(v_int)  # snap alla ladder (floor 5min)
+            # Snap alla ladder (floor 5min), salvo deroga a termine dell'utente.
+            cfg[k] = v_int if _burn_intent_active() else quantize(v_int)
         _atomic_write(cfg)
         for pair in args.pairs:
             print(pair)

@@ -80,10 +80,21 @@ jobs:
           godot --headless --path game --script res://tools/speech_bubble_selftest.gd
           godot --headless --path game --script res://tools/pipeline_queue_selftest.gd
           godot --headless --path game --script res://tools/embedded_terminal_selftest.gd
+          godot --headless --path game --script res://tools/theme_selftest.gd
+          godot --headless --path game --script res://tools/budget_notice_selftest.gd
+          godot --headless --path game --script res://tools/doc_preview_selftest.gd
+          # Nessun tag deve uscire con le lingue disallineate: il fallback di
+          # UIStrings.t() e' silenzioso, quindi una chiave persa non si vede
+          # ne' in CI ne' all'avvio in italiano — solo dall'utente straniero.
+          # (terminal_selection_selftest.gd resta fuori: questo step gira
+          # anche su Windows via Git Bash e il test apre /bin/sh.)
+          godot --headless --path game --script res://tools/i18n_parity_selftest.gd
           VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
           printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
           PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
           printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
+          SWITCH_OUT="$(JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$SWITCH_OUT" | grep "BACKEND-SWITCH-TEST PASS"
           DOCTOR_OUT="$(JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game 2>&1)"
           printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
 
@@ -113,11 +124,57 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$GAME_APP"
           rm -f "${{ matrix.output }}"
           ditto -c -k --sequesterRsrc --keepParent "$GAME_APP" "${{ matrix.output }}"
-          xcrun notarytool submit "${{ matrix.output }}" \
+          # `--wait` fa polling in proprio ed esce 1 al PRIMO errore di rete:
+          # il 2026-07-27 il runner ha perso la rete dopo 45 minuti di attesa
+          # (NSURLErrorDomain -1009) e ha buttato via una submission che era
+          # valida. Quel giorno la coda Apple ha impiegato 4h30 — con attese
+          # così lunghe un singhiozzo è quasi garantito. Quindi: submit senza
+          # attesa, e polling nostro che tollera gli errori di rete e riprova.
+          SUBMIT_ID="$(xcrun notarytool submit "${{ matrix.output }}" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --no-wait --output-format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+          test -n "$SUBMIT_ID"
+          echo "submission: $SUBMIT_ID"
+          NOTARY_STATUS=""
+          NET_FAILS=0
+          # 5h di finestra (300 × 60s): sotto il limite di 6h del job, sopra
+          # la coda peggiore osservata. Gli errori di rete non contano come
+          # verdetto: si riprova al giro dopo.
+          for _ in $(seq 1 300); do
+            if INFO="$(xcrun notarytool info "$SUBMIT_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" \
+                --output-format json 2>/dev/null)"; then
+              NOTARY_STATUS="$(printf '%s' "$INFO" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
+              NET_FAILS=0
+              echo "notarizzazione: $NOTARY_STATUS"
+              case "$NOTARY_STATUS" in
+                "Accepted") break ;;
+                "In Progress"|"") ;;
+                *) echo "Apple ha respinto la submission: $NOTARY_STATUS"
+                   xcrun notarytool log "$SUBMIT_ID" --apple-id "$APPLE_ID" \
+                     --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                     --team-id "$APPLE_TEAM_ID" || true
+                   exit 1 ;;
+              esac
+            else
+              NET_FAILS=$((NET_FAILS + 1))
+              echo "interrogazione fallita ($NET_FAILS di fila) — la submission resta viva, riprovo"
+              if [ "$NET_FAILS" -ge 20 ]; then
+                echo "20 tentativi consecutivi falliti: il runner non raggiunge Apple da 20 minuti."
+                exit 1
+              fi
+            fi
+            sleep 60
+          done
+          if [ "$NOTARY_STATUS" != "Accepted" ]; then
+            echo "Notarizzazione non conclusa entro 5h (ultimo stato: ${NOTARY_STATUS:-sconosciuto})."
+            echo "La submission $SUBMIT_ID resta valida lato Apple: verificarla con notarytool info."
+            exit 1
+          fi
           xcrun stapler staple "$GAME_APP"
           xcrun stapler validate "$GAME_APP"
           spctl --assess --type execute --verbose=2 "$GAME_APP"

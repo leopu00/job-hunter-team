@@ -54,3 +54,13 @@ l'unica analista del budget; il Capitano riceve il pacing in **pull on-demand**
   rigenerato). Il Mantenitore lo GC al primo sweep — nessun intervento richiesto.
 - Off-hours e daily-halt: sia `heartbeat-bridge` sia `pacing-bridge` tacciono
   quando `work_phase=OFF` o esiste `daily-halt.flag` (team in standby).
+- **Intento dell'utente (`.burn-intent.flag`, 2026-07-28)**: tutti e tre i bridge
+  lo leggono **prima** di applicare un freno di spesa (`shared/skills/burn_intent.py`,
+  `jht burn on|off|status`). Con la deroga viva il `daily-halt` non viene scritto,
+  il gate orario non zittisce nessuno e `WORKER_FLOOR`/ladder smettono di agganciare
+  i valori in lettura. Va letto **prima**, non rimosso dopo: fra la scrittura
+  dell'halt e la sua rimozione il team è già andato in ESC. Scade da sola (default
+  5h, tetto 12h); lo `sweep` della scadenza è del solo `sentinel-bridge`, che già
+  possiede il ciclo di vita di `daily-halt.flag`, e la transizione ON/OFF viene
+  annunciata a CAPITANO e SENTINELLA. **Non cedono mai**: `weekly-halt`,
+  `host_agent_cap`, `SC-09`, `freeze_team`.

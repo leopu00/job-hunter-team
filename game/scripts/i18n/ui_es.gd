@@ -277,6 +277,8 @@ const S := {
 
 	"vps.intro": "Conecta la VPS de tu equipo: IP y clave SSH, del resto se encarga el juego.",
 	"vps.ip": "IP DE LA VPS",
+	"vps.user": "USUARIO SSH",
+	"vps.user_note": "Usuario con el que el proveedor abre la VPS: root en Hetzner, ubuntu en OVH y AWS, el nombre de la cuenta en Google Cloud y Azure. Vacío equivale a root.",
 	"vps.key": "CLAVE SSH (privada)",
 	"vps.key_browse": "EXAMINAR…",
 	"vps.connect": "▶ CONECTAR",
@@ -294,6 +296,7 @@ const S := {
 	"vps.key_copy": "COPIAR CLAVE PÚBLICA",
 	"vps.key_open": "ABRIR CARPETA",
 	"vps.key_note": "La clave privada permanece en este ordenador; al proveedor solo se envía la línea .pub.",
+	"vps.key_fingerprint_none": "Huella: no disponible para la clave seleccionada; no hay nada que comparar con el proveedor.",
 	"vps.destination": "2 · SERVIDOR DE DESTINO",
 	"vps.fingerprint_note": "VERIFICAR SSH muestra la huella del host: compárala con la del proveedor.",
 	"vps.connect_existing": "CONECTAR SIN INSTALAR",
@@ -366,6 +369,9 @@ const S := {
 	"pos.open_url": "abrir el anuncio en el navegador",
 	"pos.open_yes": "anuncio ABIERTO en la última verificación",
 	"pos.open_no": "anuncio YA NO ABIERTO",
+	"pos.office_address": "DIRECCIÓN",
+	"pos.office_verified": "verificada por los Analistas",
+	"pos.office_approx": "sin verificar · centro de la ciudad",
 
 	"apps.ready": "CV listo",
 	"apps.applied": "enviada",
@@ -412,6 +418,7 @@ const S := {
 	"map.card_hint": "clic en una posición para abrir su ficha",
 	"map.card_hint_all": "%d posiciones · desplázate y haz clic para abrir la ficha",
 	"map.cluster": "%d posiciones · %d ubicaciones",
+	"map.pin_approx": "pin en el centro de la ciudad: dirección exacta sin verificar",
 
 	"hours.intro": "Las ventanas en las que trabaja el equipo: edita y guarda, el pacing se adapta.",
 	"hours.tz": "Zona horaria",
@@ -620,6 +627,7 @@ const S := {
 	"setup.hours": "Horario de trabajo",
 	"setup.hours_todo": "Cuándo puede trabajar el equipo. Sin horario funciona a cualquier hora y se come la suscripción.",
 	"setup.hours_ok": "Ventanas de trabajo configuradas.",
+	"setup.remote_unknown": "No se puede leer en la máquina conectada. El valor de este ordenador no cuenta: es de otra máquina.",
 	"setup.where_todo": "En tu ordenador o en una VPS que trabaja también con la ventana cerrada.",
 	"setup.where_local": "El equipo trabaja en este ordenador.",
 	"setup.where_vps": "El equipo trabaja en la VPS: esta ventana es su espejo.",

@@ -285,6 +285,8 @@ const S := {
 
 	"vps.intro": "Connect your team's VPS: IP and SSH key, the game handles the rest.",
 	"vps.ip": "VPS IP",
+	"vps.user": "SSH USER",
+	"vps.user_note": "The user your provider opens the VPS with: root on Hetzner, ubuntu on OVH and AWS, your account name on Google Cloud and Azure. Empty means root.",
 	"vps.key": "SSH KEY (private)",
 	"vps.key_browse": "BROWSE…",
 	"vps.connect": "▶ CONNECT",
@@ -302,6 +304,7 @@ const S := {
 	"vps.key_copy": "COPY PUBLIC KEY",
 	"vps.key_open": "OPEN FOLDER",
 	"vps.key_note": "The private key stays on this computer; only the .pub line goes to the provider.",
+	"vps.key_fingerprint_none": "Fingerprint: not available for the selected key — there is nothing to compare with the provider.",
 	"vps.destination": "2 · DESTINATION SERVER",
 	"vps.fingerprint_note": "VERIFY SSH shows the host fingerprint: compare it with the provider's value.",
 	"vps.connect_existing": "CONNECT WITHOUT INSTALLING",
@@ -374,6 +377,9 @@ const S := {
 	"pos.open_url": "open the listing in your browser",
 	"pos.open_yes": "listing OPEN at last check",
 	"pos.open_no": "listing NO LONGER OPEN",
+	"pos.office_address": "ADDRESS",
+	"pos.office_verified": "verified by the Analysts",
+	"pos.office_approx": "unverified · city centre",
 
 	"apps.ready": "CV ready",
 	"apps.applied": "submitted",
@@ -420,6 +426,7 @@ const S := {
 	"map.card_hint": "click a position to open its page",
 	"map.card_hint_all": "%d positions · scroll the list and click to open details",
 	"map.cluster": "%d positions · %d locations",
+	"map.pin_approx": "pin on the city centre: exact address not verified",
 
 	"hours.intro": "The windows when the team works: edit and save, pacing adapts.",
 	"hours.tz": "Timezone",
@@ -628,6 +635,7 @@ const S := {
 	"setup.hours": "Working hours",
 	"setup.hours_todo": "When the team may work. With no hours it runs at any time and burns the subscription.",
 	"setup.hours_ok": "Working windows set.",
+	"setup.remote_unknown": "Unreadable on the connected machine. This computer's value does not count: it belongs to another machine.",
 	"setup.where_todo": "On your computer, or on a VPS that keeps working with the window closed.",
 	"setup.where_local": "The team works on this computer.",
 	"setup.where_vps": "The team works on the VPS: this window mirrors it.",

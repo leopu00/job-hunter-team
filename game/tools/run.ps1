@@ -129,6 +129,16 @@ try {
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/speech_bubble_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/pipeline_queue_selftest.gd")
 			Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/embedded_terminal_selftest.gd")
+            # Self-test indipendenti dalla piattaforma: asseriscono su dati del
+            # repo (dizionari, tema, font imbarcati) e su trasformazioni pure.
+            # Stanno qui perche' run.ps1 e' il "run.sh test" di chi sviluppa su
+            # Windows: senza, un PC Windows non vede il guard delle 7 lingue
+            # prima di pushare. terminal_selection_selftest.gd resta escluso:
+            # apre "/bin/sh" senza il ramo Windows che ha embedded_terminal.
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/theme_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/budget_notice_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/doc_preview_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/i18n_parity_selftest.gd")
 			python tools/python_payload_syntax_test.py
 			if ($LASTEXITCODE -ne 0) { throw "Embedded Python payload test failed" }
 			$env:JHT_SCENE = "office"
@@ -148,6 +158,11 @@ try {
             $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
             Remove-Item Env:JHT_PIPELINE_FORCE_TEST
             if ($out -notmatch "PIPELINE-FORCE-TEST PASS") { throw $out }
+
+            $env:JHT_BACKEND_SWITCH_TEST = "1"
+            $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
+            Remove-Item Env:JHT_BACKEND_SWITCH_TEST
+            if ($out -notmatch "BACKEND-SWITCH-TEST PASS") { throw $out }
 
             $env:JHT_DOCTOR_TEST = "scout-4"
             $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")

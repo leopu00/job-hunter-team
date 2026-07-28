@@ -67,10 +67,22 @@ jobs:
           godot --headless --path game --script res://tools/embedded_terminal_selftest.gd
           godot --headless --path game --script res://tools/redactor_selftest.gd
           godot --headless --path game --script res://tools/diagnostics_selftest.gd
+          godot --headless --path game --script res://tools/theme_selftest.gd
+          godot --headless --path game --script res://tools/budget_notice_selftest.gd
+          godot --headless --path game --script res://tools/doc_preview_selftest.gd
+          # /bin/sh: solo POSIX, ed e' il motivo per cui non e' in run.ps1.
+          godot --headless --path game --script res://tools/terminal_selection_selftest.gd
+          # Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO
+          # sull'italiano e i dizionari tradotti si caricano pigramente:
+          # senza questa riga sedici chiavi duplicate in ui_en.gd passavano
+          # in verde e rompevano l'avvio in tutte le lingue tranne una.
+          godot --headless --path game --script res://tools/i18n_parity_selftest.gd
           VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
           printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
           PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
           printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
+          SWITCH_OUT="$(JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$SWITCH_OUT" | grep "BACKEND-SWITCH-TEST PASS"
           DOCTOR_OUT="$(JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game 2>&1)"
           printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
           FEEDBACK_OUT="$(JHT_SCENE=office JHT_FEEDBACK_PANEL_TEST=1 godot --headless --path game 2>&1)"

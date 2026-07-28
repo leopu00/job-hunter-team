@@ -19,11 +19,12 @@ Questo modulo tiene il flag che distingue le due situazioni:
                        spinta fino alle prime posizioni CON PUNTEGGIO
     steady           → dimostrazione fatta, si passa al pacing normale
 
-Il burst NON è "spendere senza guardare": il `pace_guard` continua a tenere
-il consumo sulla curva della finestra. È un modo diverso di spendere lo
-stesso budget — tutta la pipeline accesa insieme invece che uno scalino ogni
-mezz'ora, perché il risultato che conta per l'utente non è una posizione
-trovata, è una posizione **valutata**.
+Il burst NON è "spendere senza guardare": il `pace_guard` continua a misurare
+il consumo contro la curva della finestra e a consigliare al Capitano il
+throttle che ci rimetterebbe sopra (applicarlo è compito suo). È un modo
+diverso di spendere lo stesso budget — tutta la pipeline accesa insieme invece
+che uno scalino ogni mezz'ora, perché il risultato che conta per l'utente non
+è una posizione trovata, è una posizione **valutata**.
 
 Uso:
   python3 first_run.py status              # JSON dello stato corrente

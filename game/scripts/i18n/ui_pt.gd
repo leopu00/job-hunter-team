@@ -277,6 +277,8 @@ const S := {
 
 	"vps.intro": "Conecte a VPS da sua equipe: IP e chave SSH, o jogo cuida do resto.",
 	"vps.ip": "IP DA VPS",
+	"vps.user": "UTILIZADOR SSH",
+	"vps.user_note": "Utilizador com que o fornecedor abre a VPS: root na Hetzner, ubuntu na OVH e AWS, o nome da conta no Google Cloud e Azure. Vazio equivale a root.",
 	"vps.key": "CHAVE SSH (privada)",
 	"vps.key_browse": "PROCURAR…",
 	"vps.connect": "▶ CONECTAR",
@@ -294,6 +296,7 @@ const S := {
 	"vps.key_copy": "COPIAR CHAVE PÚBLICA",
 	"vps.key_open": "ABRIR PASTA",
 	"vps.key_note": "A chave privada fica neste computador; apenas a linha .pub vai para o fornecedor.",
+	"vps.key_fingerprint_none": "Impressão digital: não disponível para a chave selecionada; não há nada para comparar com a do fornecedor.",
 	"vps.destination": "2 · SERVIDOR DE DESTINO",
 	"vps.fingerprint_note": "VERIFICAR SSH mostra a impressão digital do host: compara-a com a do fornecedor.",
 	"vps.connect_existing": "LIGAR SEM INSTALAR",
@@ -366,6 +369,9 @@ const S := {
 	"pos.open_url": "abrir o anúncio no navegador",
 	"pos.open_yes": "anúncio ABERTO na última verificação",
 	"pos.open_no": "anúncio NÃO MAIS ABERTO",
+	"pos.office_address": "ENDEREÇO",
+	"pos.office_verified": "verificado pelos Analistas",
+	"pos.office_approx": "não verificado · centro da cidade",
 
 	"apps.ready": "CV pronto",
 	"apps.applied": "enviada",
@@ -412,6 +418,7 @@ const S := {
 	"map.card_hint": "clique numa posição para abrir a ficha",
 	"map.card_hint_all": "%d posições · percorra a lista e clique para abrir a ficha",
 	"map.cluster": "%d posições · %d locais",
+	"map.pin_approx": "pin no centro da cidade: endereço exato não verificado",
 
 	"hours.intro": "As janelas em que a equipe trabalha: edite e salve, o pacing se adapta.",
 	"hours.tz": "Fuso horário",
@@ -620,6 +627,7 @@ const S := {
 	"setup.hours": "Horário de trabalho",
 	"setup.hours_todo": "Quando a equipa pode trabalhar. Sem horário funciona a toda a hora e gasta a subscrição.",
 	"setup.hours_ok": "Janelas de trabalho definidas.",
+	"setup.remote_unknown": "Ilegível na máquina ligada. O valor deste computador não conta: é de outra máquina.",
 	"setup.where_todo": "No teu computador ou numa VPS que trabalha mesmo com a janela fechada.",
 	"setup.where_local": "A equipa trabalha neste computador.",
 	"setup.where_vps": "A equipa trabalha na VPS: esta janela é o seu espelho.",

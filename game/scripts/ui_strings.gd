@@ -342,6 +342,8 @@ const S := {
 	# ── Impostazioni → Collega VPS ────────────────────────────────
 	"vps.intro": "Collega la VPS del tuo team: IP e chiave SSH, al resto pensa il gioco.",
 	"vps.ip": "IP DELLA VPS",
+	"vps.user": "UTENTE SSH",
+	"vps.user_note": "Utente con cui il provider apre la VPS: root su Hetzner, ubuntu su OVH e AWS, il nome dell'account su Google Cloud e Azure. Vuoto vale root.",
 	"vps.key": "CHIAVE SSH (privata)",
 	"vps.key_browse": "SFOGLIA…",
 	"vps.connect": "▶ COLLEGA",
@@ -359,6 +361,7 @@ const S := {
 	"vps.key_copy": "COPIA PUBBLICA",
 	"vps.key_open": "APRI CARTELLA",
 	"vps.key_note": "La chiave privata resta sul computer; al provider va incollata soltanto la riga .pub.",
+	"vps.key_fingerprint_none": "Fingerprint: non disponibile per la chiave selezionata — non c'è niente da confrontare con il provider.",
 	"vps.destination": "2 · SERVER DI DESTINAZIONE",
 	"vps.fingerprint_note": "VERIFICA SSH mostra il fingerprint host: confrontalo con quello indicato dal provider.",
 	"vps.connect_existing": "COLLEGA SENZA INSTALLARE",
@@ -433,6 +436,9 @@ const S := {
 	"pos.open_url": "apri l'annuncio nel browser",
 	"pos.open_yes": "annuncio APERTO all'ultima verifica",
 	"pos.open_no": "annuncio NON PIÙ APERTO",
+	"pos.office_address": "INDIRIZZO",
+	"pos.office_verified": "verificato dagli Analisti",
+	"pos.office_approx": "non verificato · centro città",
 
 	# ── Candidature e Notifiche (dati reali) ──────────────────────
 	"apps.ready": "CV pronto",
@@ -483,6 +489,7 @@ const S := {
 	"map.card_hint": "click su una posizione per aprire la scheda",
 	"map.card_hint_all": "%d posizioni · scorri l’elenco e clicca per aprire la scheda",
 	"map.cluster": "%d posizioni · %d località",
+	"map.pin_approx": "pin sul centro città: indirizzo esatto non verificato",
 
 	# ── Orari di lavoro (editabili, con stima dinamica) ───────────
 	"hours.intro": "Le finestre in cui il team lavora: modifica e salva, il pacing si adegua.",
@@ -714,6 +721,7 @@ const S := {
 	"setup.hours": "Orari di lavoro",
 	"setup.hours_todo": "Quando il team può lavorare. Senza orari macina a ogni ora e consuma l'abbonamento.",
 	"setup.hours_ok": "Finestre di lavoro impostate.",
+	"setup.remote_unknown": "Non leggibile sulla macchina connessa. Il valore di questo computer non conta: è di un’altra macchina.",
 	"setup.where_todo": "Sul tuo computer, oppure su una VPS che lavora anche a finestra chiusa.",
 	"setup.where_local": "Il team lavora su questo computer.",
 	"setup.where_vps": "Il team lavora sulla VPS: questa finestra ne è lo specchio.",

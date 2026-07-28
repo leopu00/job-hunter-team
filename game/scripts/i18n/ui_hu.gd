@@ -277,6 +277,8 @@ const S := {
 
 	"vps.intro": "Kösd össze a csapatod VPS-ét: IP és SSH kulcs, a többit a játék intézi.",
 	"vps.ip": "A VPS IP-CÍME",
+	"vps.user": "SSH FELHASZNÁLÓ",
+	"vps.user_note": "Az a felhasználó, amellyel a szolgáltató megnyitja a VPS-t: a Hetznernél root, az OVH-nál és az AWS-nél ubuntu, a Google Cloudnál és az Azure-nál a fiók neve. Az üres mező rootot jelent.",
 	"vps.key": "SSH KULCS (privát)",
 	"vps.key_browse": "TALLÓZÁS…",
 	"vps.connect": "▶ CSATLAKOZÁS",
@@ -294,6 +296,7 @@ const S := {
 	"vps.key_copy": "NYILVÁNOS KULCS MÁSOLÁSA",
 	"vps.key_open": "MAPPA MEGNYITÁSA",
 	"vps.key_note": "A privát kulcs ezen a gépen marad; a szolgáltató csak a .pub sort kapja meg.",
+	"vps.key_fingerprint_none": "Ujjlenyomat: a kiválasztott kulcshoz nem érhető el — nincs mit összevetni a szolgáltatóéval.",
 	"vps.destination": "2 · CÉLSZERVER",
 	"vps.fingerprint_note": "Az SSH ELLENŐRZÉSE megmutatja a host ujjlenyomatát; hasonlítsd össze a szolgáltató értékével.",
 	"vps.connect_existing": "CSATLAKOZÁS TELEPÍTÉS NÉLKÜL",
@@ -366,6 +369,9 @@ const S := {
 	"pos.open_url": "hirdetés megnyitása a böngészőben",
 	"pos.open_yes": "a hirdetés az utolsó ellenőrzéskor NYITVA volt",
 	"pos.open_no": "a hirdetés MÁR NEM NYITOTT",
+	"pos.office_address": "CÍM",
+	"pos.office_verified": "az Elemzők ellenőrizték",
+	"pos.office_approx": "nem ellenőrzött · városközpont",
 
 	"apps.ready": "önéletrajz kész",
 	"apps.applied": "elküldve",
@@ -412,6 +418,7 @@ const S := {
 	"map.card_hint": "kattints egy pozícióra a lapja megnyitásához",
 	"map.card_hint_all": "%d pozíció · görgesd a listát, majd kattints a részletekért",
 	"map.cluster": "%d pozíció · %d helyszín",
+	"map.pin_approx": "tű a városközpontban: a pontos cím nincs ellenőrizve",
 
 	"hours.intro": "A csapat munkaidő-ablakai: szerkeszd és mentsd, a pacing alkalmazkodik.",
 	"hours.tz": "Időzóna",
@@ -620,6 +627,7 @@ const S := {
 	"setup.hours": "Munkaidő",
 	"setup.hours_todo": "Mikor dolgozhat a csapat. Munkaidő nélkül éjjel-nappal pörög, és felemészti az előfizetést.",
 	"setup.hours_ok": "Munkaablakok beállítva.",
+	"setup.remote_unknown": "A csatlakoztatott gépen nem olvasható. Ennek a számítógépnek az értéke nem számít: az egy másik gépé.",
 	"setup.where_todo": "A számítógépeden, vagy egy VPS-en, amely zárt ablak mellett is dolgozik.",
 	"setup.where_local": "A csapat ezen a számítógépen dolgozik.",
 	"setup.where_vps": "A csapat a VPS-en dolgozik: ez az ablak a tükre.",

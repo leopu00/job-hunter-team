@@ -158,7 +158,7 @@ const POSITIONS_SELECT := "SELECT p.id,p.title,p.company,p.status,p.role_family,
 		+ "p.user_excluded_reason,p.user_excluded_note," \
 		+ "p.salary_declared_min,p.salary_declared_max,p.salary_declared_currency," \
 		+ "p.salary_estimated_min,p.salary_estimated_max,p.salary_estimated_currency," \
-		+ "p.office_lat,p.office_lon," \
+		+ "p.office_lat,p.office_lon,p.office_address,p.office_verified," \
 		+ "s.total_score,s.stack_match,s.remote_fit,s.salary_fit,s.experience_fit," \
 		+ "s.strategic_fit,s.scored_by,s.scored_at,s.notes AS score_notes," \
 		+ "a.critic_score,a.critic_verdict,a.critic_notes,a.written_by,a.written_at," \
@@ -1138,7 +1138,11 @@ func start(config: Dictionary) -> void:
 	live = true  # dati veri: spegne il badge SIMULAZIONE quando connesso
 	_ip = str(config.get("ip", "")).strip_edges()
 	_key = expand_user_path(str(config.get("key_path", "")))
+	# Config salvata prima del campo utente (o campo lasciato vuoto): root,
+	# il default storico e quello di Hetzner.
 	_user = str(config.get("user", "root")).strip_edges()
+	if _user == "":
+		_user = "root"
 	if not FileAccess.file_exists(_key):
 		bus.publish_state(BackendBus.ERROR,
 				"chiave SSH non trovata: %s" % _key)
