@@ -369,6 +369,9 @@ const S := {
 	"pos.open_url": "hirdetés megnyitása a böngészőben",
 	"pos.open_yes": "a hirdetés az utolsó ellenőrzéskor NYITVA volt",
 	"pos.open_no": "a hirdetés MÁR NEM NYITOTT",
+	"pos.office_address": "CÍM",
+	"pos.office_verified": "az Elemzők ellenőrizték",
+	"pos.office_approx": "nem ellenőrzött · városközpont",
 
 	"apps.ready": "önéletrajz kész",
 	"apps.applied": "elküldve",
@@ -415,6 +418,7 @@ const S := {
 	"map.card_hint": "kattints egy pozícióra a lapja megnyitásához",
 	"map.card_hint_all": "%d pozíció · görgesd a listát, majd kattints a részletekért",
 	"map.cluster": "%d pozíció · %d helyszín",
+	"map.pin_approx": "tű a városközpontban: a pontos cím nincs ellenőrizve",
 
 	"hours.intro": "A csapat munkaidő-ablakai: szerkeszd és mentsd, a pacing alkalmazkodik.",
 	"hours.tz": "Időzóna",

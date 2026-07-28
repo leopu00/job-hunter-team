@@ -369,6 +369,9 @@ const S := {
 	"pos.open_url": "abrir el anuncio en el navegador",
 	"pos.open_yes": "anuncio ABIERTO en la última verificación",
 	"pos.open_no": "anuncio YA NO ABIERTO",
+	"pos.office_address": "DIRECCIÓN",
+	"pos.office_verified": "verificada por los Analistas",
+	"pos.office_approx": "sin verificar · centro de la ciudad",
 
 	"apps.ready": "CV listo",
 	"apps.applied": "enviada",
@@ -415,6 +418,7 @@ const S := {
 	"map.card_hint": "clic en una posición para abrir su ficha",
 	"map.card_hint_all": "%d posiciones · desplázate y haz clic para abrir la ficha",
 	"map.cluster": "%d posiciones · %d ubicaciones",
+	"map.pin_approx": "pin en el centro de la ciudad: dirección exacta sin verificar",
 
 	"hours.intro": "Las ventanas en las que trabaja el equipo: edita y guarda, el pacing se adapta.",
 	"hours.tz": "Zona horaria",

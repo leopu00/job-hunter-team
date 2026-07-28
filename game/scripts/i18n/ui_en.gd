@@ -377,6 +377,9 @@ const S := {
 	"pos.open_url": "open the listing in your browser",
 	"pos.open_yes": "listing OPEN at last check",
 	"pos.open_no": "listing NO LONGER OPEN",
+	"pos.office_address": "ADDRESS",
+	"pos.office_verified": "verified by the Analysts",
+	"pos.office_approx": "unverified · city centre",
 
 	"apps.ready": "CV ready",
 	"apps.applied": "submitted",
@@ -423,6 +426,7 @@ const S := {
 	"map.card_hint": "click a position to open its page",
 	"map.card_hint_all": "%d positions · scroll the list and click to open details",
 	"map.cluster": "%d positions · %d locations",
+	"map.pin_approx": "pin on the city centre: exact address not verified",
 
 	"hours.intro": "The windows when the team works: edit and save, pacing adapts.",
 	"hours.tz": "Timezone",

@@ -66,10 +66,30 @@ static func coord_of(p: Dictionary) -> Vector2:
 		return Vector2(float(p["office_lon"]), float(p["office_lat"]))
 	return MapView._city_coord(str(p.get("loc_city", "") if p.get("loc_city") else ""))
 
+## true solo quando la coordinata è l'EDIFICIO: office-geocoding scrive
+## office_verified=1 quando ha via e civico, e 0 quando ha ripiegato sul
+## centro città (con office_address = "<città>, <paese>"). Snapshot senza
+## la colonna — showroom, mock, test — sono centroidi di città anche loro:
+## la colonna assente non è una verifica, quindi resta approssimata.
+static func is_exact(p: Dictionary) -> bool:
+	if p.get("office_lat") == null or p.get("office_lon") == null:
+		return false
+	var v: Variant = p.get("office_verified")
+	return v != null and int(v) == 1
+
 ## Cluster per città delle posizioni filtrate. Ogni cluster porta le SUE
-## posizioni (la scheda al click naviga da lì): {key, city, lonlat,
+## posizioni (la scheda al click naviga da lì): {key, city, lonlat, exact,
 ## count, best (score max, null se nessuno), positions}. Le posizioni
 ## senza coordinate finiscono in no_coords (dizionari interi).
+##
+## Un ufficio verificato NON va nel mucchio della sua città: prende un pin
+## per indirizzo (chiave con la coordinata), mentre tutte le posizioni
+## approssimate della città restano in UN solo pin sul centro. È l'opposto
+## della griglia nord di resolveCityPins sul web, e volutamente: là le righe
+## non hanno NESSUNA coordinata e lo slot in griglia è un'etichetta di
+## comodo, qui la coordinata esiste ed è vera per un civico, condivisa per
+## il centro città — spargere pin attorno al centroide inventerebbe civici
+## che il team non ha mai geocodificato.
 static func build(filters: Dictionary) -> Dictionary:
 	var clusters := {}
 	var no_coords: Array = []
@@ -83,10 +103,13 @@ static func build(filters: Dictionary) -> Dictionary:
 		var city := str(p.get("loc_city", "?") if p.get("loc_city") else "?")
 		var country := str(p.get("loc_country", "")
 				if p.get("loc_country") else UIStrings.t("pos.uncategorized"))
+		var exact := is_exact(p)
 		var key := "%s|%s" % [city, country]
+		if exact:
+			key += "|%.5f,%.5f" % [coord.x, coord.y]
 		if not clusters.has(key):
 			clusters[key] = {"key": key, "city": city, "country": country,
-					"lonlat": coord,
+					"lonlat": coord, "exact": exact,
 					"count": 0, "best": null, "positions": []}
 		var c: Dictionary = clusters[key]
 		c["count"] += 1
