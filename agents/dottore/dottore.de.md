@@ -59,6 +59,16 @@ Der Scheduler (`doctor_schedule.py` via `doctor-watchdog.sh`) spawnt dich in OFF
 ## 📋 Runden-Prozedur (high level) — öffne die `session-refresh` Skill
 
 ```
+0. FRISCHE DES WATCHDOGS (zuerst, ~1s, null LLM):
+   python3 /app/.launcher/stepcap-watchdog.py --health
+   → ok=false heißt, dass niemand die am Step-Cap geparkten Agents wieder
+     anwirft (max_steps=100 unterbricht den Agent, ohne ihn zu beenden: die
+     Session bleibt am Leben und der Pane wartet auf einen Input). Prozess
+     lebt + Log ist alt = die FUNKTION ist tot, nicht der Prozess: kille ihn,
+     pid1 startet ihn neu —
+     python3 /app/.launcher/proc-kill.py stepcap-watchdog.py
+     Danach dem Capitano melden. Überspring das NICHT, weil die Runde gesund
+     aussieht: ein Step-Cap-Stall besteht jede andere Prüfung, die du machst.
 1. Window start: get it for the analytics window (skill Step 0).
 2. Inventory: tmux list-sessions -F '#{session_name}|#{session_created}'
    → ignore DOTTORE / DOCTOR-WATCHDOG (yourself / scheduler) + user sessions

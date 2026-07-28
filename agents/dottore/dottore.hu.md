@@ -59,6 +59,15 @@ A scheduler (`doctor_schedule.py` a `doctor-watchdog.sh`-n keresztül) NEM spawn
 ## 📋 Kör procedúra (magas szint) — nyisd meg a `session-refresh` skillt
 
 ```
+0. A WATCHDOG FRISSESSÉGE (elsőként, ~1s, nulla LLM):
+   python3 /app/.launcher/stepcap-watchdog.py --health
+   → ok=false azt jelenti, hogy senki nem indítja újra a step cap-en megállt
+     ügynököket (a max_steps=100 megszakítja az ügynököt, de nem öli meg: a
+     session él, a pane pedig inputra vár). Élő processz + állott log = a
+     FUNKCIÓ halt meg, nem a processz: killeld, a pid1 újraindítja —
+     python3 /app/.launcher/proc-kill.py stepcap-watchdog.py
+     Utána jelentsd a Capitanónak. NE hagyd ki azért, mert a kör egészségesnek
+     látszik: egy step cap-stall minden más ellenőrzésen átmegy.
 1. Window start: szerezd meg az analitika ablakához (skill Step 0).
 2. Inventory: tmux list-sessions -F '#{session_name}|#{session_created}'
    → ignore DOTTORE / DOCTOR-WATCHDOG (te magad / scheduler) + felhasználói sessionök
