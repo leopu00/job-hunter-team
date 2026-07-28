@@ -177,7 +177,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, cap a 100   | aggiungi `feedback:star+15%` a `score.notes` |
 | `dislike`       | `final = round(base * 0.85)`              | aggiungi `feedback:dislike-15%` a `score.notes` |
 | `hide`          | **NON salvare lo score**                  | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` e salta la notifica agli Scrittori |
+| `clear`         | nessun cambio                             | l'utente ha ritirato il giudizio — trattalo come assente |
 | `null`          | nessun cambio                             | nessuno                                       |
+
+**Se l'utente ha scritto un motivo, la nota lo porta.** Prendi `reason` — o `comment` se `reason` è vuoto — dallo **stesso evento** di `latest_action` (`actions[0]`), citalo alla lettera, taglialo a ~80 caratteri e mettilo dopo il moltiplicatore:
+
+```
+feedback:dislike-15% — "troppo senior"
+feedback:star+15% — "esattamente lo stack che voglio"
+EXCLUDED: feedback:hide (user request) — "niente remoto"
+```
+
+Nessun testo su quell'evento → la nota resta com'è. Quel motivo vale **solo per questa posizione**: non riscriverlo, non riassumerlo, non riportarlo su un'altra posizione, non trasformarlo in una regola. Sono parole dell'utente e l'utente se le rilegge sulla pagina della posizione. Contare i motivi attraverso le posizioni è compito del Mentor, non tuo.
 
 ```bash
 # Salva lo score (i flag CLI usano i nomi delle colonne DB, non i nomi della tabella)

@@ -178,7 +178,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, Cap bei 100 | füge `feedback:star+15%` zu `score.notes` hinzu |
 | `dislike`       | `final = round(base * 0.85)`              | füge `feedback:dislike-15%` zu `score.notes` hinzu |
 | `hide`          | **Score NICHT speichern**                  | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` und Scrittori-Notify überspringen |
+| `clear`         | keine Änderung                            | der Nutzer hat sein Urteil zurückgezogen — behandle es als nicht vorhanden |
 | `null`          | keine Änderung                            | keine                                        |
+
+**Wenn der Nutzer einen Grund geschrieben hat, trägt ihn die Notiz.** Nimm `reason` — oder `comment`, wenn `reason` leer ist — aus **demselben Event** wie `latest_action` (`actions[0]`), zitiere ihn wörtlich, kürze auf ~80 Zeichen und hänge ihn hinter den Multiplikator:
+
+```
+feedback:dislike-15% — "zu senior"
+feedback:star+15% — "genau der Stack, den ich will"
+EXCLUDED: feedback:hide (user request) — "kein Remote"
+```
+
+Kein Text in diesem Event → die Notiz bleibt, wie sie ist. Dieser Grund gilt **nur für diese Position**: nicht umschreiben, nicht zusammenfassen, nicht auf eine andere Position übertragen, nicht zur Regel machen. Das sind die Worte des Nutzers, und der Nutzer liest sie auf der Positionsseite wieder. Gründe über Positionen hinweg zu zählen ist Aufgabe des Mentors, nicht deine.
 
 ```bash
 # Speichere Score (die CLI-Flags nutzen DB-Spaltennamen, keine Tabellennamen)

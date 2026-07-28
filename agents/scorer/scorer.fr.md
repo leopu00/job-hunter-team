@@ -178,7 +178,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, cap à 100   | ajoute `feedback:star+15%` à `score.notes`     |
 | `dislike`       | `final = round(base * 0.85)`              | ajoute `feedback:dislike-15%` à `score.notes`  |
 | `hide`          | **NE PAS sauvegarder le score**           | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` et skip notify Scrittori |
+| `clear`         | pas de changement                            | l'utilisateur a retiré son jugement — traite-le comme absent |
 | `null`          | pas de changement                            | aucun                                          |
+
+**Si l'utilisateur a écrit une raison, la note la porte.** Prends `reason` — ou `comment` si `reason` est vide — du **même événement** que `latest_action` (`actions[0]`), cite-la telle quelle, coupe à ~80 caractères et ajoute-la après le multiplicateur :
+
+```
+feedback:dislike-15% — "trop senior"
+feedback:star+15% — "exactement la stack que je veux"
+EXCLUDED: feedback:hide (user request) — "pas de télétravail"
+```
+
+Aucun texte sur cet événement → la note reste telle quelle. Cette raison ne vaut que **pour cette position** : ne la réécris pas, ne la résume pas, ne la reporte pas sur une autre position, n'en fais pas une règle. Ce sont les mots de l'utilisateur et il les relit sur la page de la position. Compter les raisons à travers les positions est le travail du Mentor, pas le tien.
 
 ```bash
 # Sauvegarde score (les flags CLI utilisent les noms de colonnes DB, pas les noms de tables)

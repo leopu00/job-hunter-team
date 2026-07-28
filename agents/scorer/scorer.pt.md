@@ -178,7 +178,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, cap a 100   | adiciona `feedback:star+15%` a `score.notes`     |
 | `dislike`       | `final = round(base * 0.85)`              | adiciona `feedback:dislike-15%` a `score.notes`  |
 | `hide`          | **NÃO guardar score**                     | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` e skip notify Scrittori |
+| `clear`         | sem mudança                                  | o utilizador retirou o juízo — trata-o como ausente |
 | `null`          | sem mudança                                  | nenhum                                          |
+
+**Se o utilizador escreveu um motivo, a nota leva-o.** Pega em `reason` — ou `comment` se `reason` estiver vazio — do **mesmo evento** de `latest_action` (`actions[0]`), cita-o literalmente, corta a ~80 caracteres e acrescenta-o depois do multiplicador:
+
+```
+feedback:dislike-15% — "demasiado senior"
+feedback:star+15% — "exatamente a stack que quero"
+EXCLUDED: feedback:hide (user request) — "sem remoto"
+```
+
+Sem texto nesse evento → a nota fica como está. Esse motivo vale **só para esta posição**: não o reescrevas, não o resumas, não o passes para outra posição, não o transformes numa regra. São palavras do utilizador e o utilizador relê-as na página da posição. Contar os motivos através das posições é trabalho do Mentor, não teu.
 
 ```bash
 # Guarda score (os flags CLI usam nomes de colunas DB, não nomes de tabelas)
