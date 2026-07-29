@@ -618,8 +618,14 @@ const S := {
 	# ── Sidebar: gruppi e voci (specchio della desktop app) ───────────
 	"side.group_team": "Team",
 	"side.group_work": "Lavoro",
-	"side.group_settings": "Impostazioni",
-	"side.group_help": "Assistenza",
+	"side.group_system": "Sistema",
+	# la riga che apre la finestra a schede: dentro, "Statistiche" è una scheda
+	"side.monitor": "Monitoraggio",
+	# la riga che raccoglie le dodici pagine di configurazione
+	"side.settings": "Impostazioni",
+	"settings.grp_setup": "Configurazione",
+	"settings.grp_channels": "Account e canali",
+	"settings.grp_interface": "Interfaccia",
 	"side.activation": "Attiva team",
 	"side.team": "Team",
 	"side.agents": "Agenti",
@@ -636,6 +642,8 @@ const S := {
 	"side.hours": "Orari",
 	"side.provider": "Provider",
 	"side.docker": "Docker",
+	"side.telegram": "Telegram",
+	"side.agent_metrics": "Risorse agenti",
 	"side.account": "Account",
 	"side.email": "Email",
 	"side.appearance": "Aspetto",

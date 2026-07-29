@@ -55,10 +55,11 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 12)
 	margin.add_child(box)
 
+	_build_breadcrumb(box)
 	var title_row := HBoxContainer.new()
 	box.add_child(title_row)
 	var title := TerminalTheme.label(
-			SidebarDefs.label_for(section).to_upper(), 24, Palette.WHITE, "xbold")
+			SidebarDefs.title_for(section).to_upper(), 24, Palette.WHITE, "xbold")
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(title)
 	var close_btn := Button.new()
@@ -71,6 +72,7 @@ func _ready() -> void:
 	title_row.add_child(close_btn)
 
 	box.add_child(HSeparator.new())
+	_build_tabs(box)
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 10)
 	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -93,6 +95,79 @@ func _ready() -> void:
 		_build("agent")
 		return
 	_build("detail" if _pos_detail_id != 0 else "")
+
+
+## Briciola di ritorno per le pagine di configurazione: in sidebar non hanno
+## più una riga propria, quindi senza questo link chi ci arriva da Impostazioni
+## (o da un passo dell'onboarding) non ha una strada indietro che non sia
+## chiudere la finestra e ricominciare.
+func _build_breadcrumb(parent: VBoxContainer) -> void:
+	if not SidebarDefs.is_settings_section(section):
+		return
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var back := Button.new()
+	back.flat = true
+	back.text = "‹  " + SidebarDefs.label_for(SidebarDefs.SETTINGS_HUB)
+	back.add_theme_font_size_override("font_size", 13)
+	back.add_theme_color_override("font_color", Palette.MUTED)
+	back.add_theme_color_override("font_hover_color", Palette.GREEN)
+	back.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	back.pressed.connect(func() -> void: navigate.emit(SidebarDefs.SETTINGS_HUB))
+	row.add_child(back)
+
+
+## Le schede della finestra Monitoraggio. Ognuna è una sezione vera con il suo
+## id: il salto passa da `navigate`, lo stesso segnale che la sidebar instrada
+## per i link interni, così i deep-link continuano a valere.
+func _build_tabs(parent: VBoxContainer) -> void:
+	var tabs: Array = SidebarDefs.tabs_for(section)
+	if tabs.is_empty():
+		return
+	# a capo automatico: cinque schede non stanno in riga su una finestra
+	# stretta, e una scheda fuori dal bordo è una scheda che non esiste
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 4)
+	row.add_theme_constant_override("v_separation", 4)
+	parent.add_child(row)
+	for id in tabs:
+		row.add_child(_tab_button(str(id)))
+
+
+func _tab_button(id: String) -> Button:
+	var active := id == section
+	var btn := Button.new()
+	btn.text = SidebarDefs.label_for(id).to_upper()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		btn.add_theme_stylebox_override(state, _tab_style(active,
+				state == "hover"))
+	btn.add_theme_color_override("font_color", Palette.BASE)
+	btn.add_theme_color_override("font_hover_color", Palette.WHITE)
+	btn.add_theme_color_override("font_disabled_color", Palette.GREEN)
+	if active:
+		# la scheda corrente non naviga: ricliccarla ricostruirebbe la
+		# finestra buttando via filtri e scroll
+		btn.disabled = true
+	else:
+		btn.pressed.connect(func() -> void: navigate.emit(id))
+	return btn
+
+
+static func _tab_style(active: bool, hover: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(Palette.ROW.r, Palette.ROW.g, Palette.ROW.b,
+			1.0 if active else (0.7 if hover else 0.0))
+	sb.set_border_width_all(0)
+	sb.border_width_bottom = 2
+	sb.border_color = Palette.GREEN if active else Color(0, 0, 0, 0)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 5
+	return sb
+
 
 var _content: VBoxContainer
 
@@ -147,6 +222,8 @@ func _build(page := "") -> void:
 			_build_notifs()
 		"chat":
 			_build_chat()
+		"settings":
+			_build_settings_hub()
 		"vps":
 			_build_vps()
 		"positions":
@@ -220,6 +297,66 @@ func _build_config() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
+
+
+## Il raccoglitore delle dodici pagine di configurazione: riquadri raggruppati
+## per cosa si sta configurando, non un secondo elenco verticale. Ogni riquadro
+## apre la sezione VERA (stesso id di prima) passando da `navigate`.
+func _build_settings_hub() -> void:
+	for group in SidebarDefs.SETTINGS_GROUPS:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t(str(group["key"])).to_upper(), 12, Palette.DIM, "medium"))
+		var grid := HFlowContainer.new()
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		_content.add_child(grid)
+		for item in group["items"]:
+			grid.add_child(_settings_tile(str(item["id"]), str(item["icon"])))
+		_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
+
+
+func _settings_tile(id: String, icon_id: String) -> Button:
+	var btn := Button.new()
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.text = SidebarDefs.label_for(id)
+	btn.custom_minimum_size = Vector2(236, 42)
+	btn.add_theme_font_size_override("font_size", 15)
+	btn.add_theme_color_override("font_color", Palette.BASE)
+	btn.add_theme_color_override("font_hover_color", Palette.WHITE)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("normal", _tile_style(false))
+	btn.add_theme_stylebox_override("hover", _tile_style(true))
+	btn.add_theme_stylebox_override("pressed", _tile_style(true))
+	btn.pressed.connect(func() -> void: navigate.emit(id))
+	# L'icona è un figlio ancorato a metà altezza: resta ferma a sinistra
+	# qualunque sia la lunghezza dell'etichetta tradotta (stesso schema della
+	# sidebar), e non intercetta i click.
+	var icon := SidebarIcon.new(icon_id, Palette.MUTED)
+	icon.anchor_top = 0.5
+	icon.anchor_bottom = 0.5
+	icon.offset_left = 12
+	icon.offset_right = 30
+	icon.offset_top = -9
+	icon.offset_bottom = 9
+	btn.add_child(icon)
+	btn.mouse_entered.connect(func() -> void: icon.color = Palette.GREEN)
+	btn.mouse_exited.connect(func() -> void: icon.color = Palette.MUTED)
+	return btn
+
+
+static func _tile_style(hover: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(Palette.ROW.r, Palette.ROW.g, Palette.ROW.b,
+			0.9 if hover else 0.35)
+	sb.set_border_width_all(TerminalTheme.hairline())
+	sb.border_color = Palette.GREEN if hover else Palette.BORDER_GLOW
+	sb.content_margin_left = 38
+	sb.content_margin_right = 12
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	return sb
 
 
 # ── Servizi tecnici migrati dalla desktop app ───────────────────────
