@@ -14,6 +14,10 @@ zero — per conservare identità, abiti, crop e proporzioni.
 
 ## Lotto 1 — Sei `pensieroso` mancanti · priorità ALTA
 
+**Completato su `dev6` il 2026-07-29**: i sei PNG sono stati derivati dalle
+rispettive ancore, normalizzati a 1120×1520 RGBA e verificati anche su fondo
+scuro. Il Lotto 2 resta aperto.
+
 ### Perché serve
 
 La chat a fumetti mostra il ritratto dell'agente accanto alle vignette e passa a
