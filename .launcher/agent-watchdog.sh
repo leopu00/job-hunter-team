@@ -276,7 +276,12 @@ trap 'log "watchdog shutdown (SIGTERM)"; exit 0' TERM INT
 
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+# Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): flag DIVERSO da halted,
+# semantica diversa — halted = "l'utente ha fermato il team" (tutto giù),
+# standby = sospensione tecnica che si risveglia da sola via sentinel-bridge.
+TEAM_STANDBY_FLAG="$JHT_HOME/.team-standby.flag"
 halt_log_tick=0
+standby_log_tick=0
 # Contatore per rendere LOUD un config_ready=false PERSISTENTE (ramo else in fondo
 # al loop): al primo boot è normale (wizard non ancora finito), ma oltre la grace
 # è un guasto reale che NON deve restare invisibile. Grace ~5min @ 30s/tick.
@@ -303,6 +308,28 @@ while true; do
   if [ "$halt_log_tick" -gt 0 ]; then
     log "halt: flag rimosso — riprendo respawn watchdog"
     halt_log_tick=0
+  fi
+
+  # Standby a spesa zero: le sessioni agente restano vive ma MUTE — niente
+  # respawn (una sessione ricreata fa un kick-off LLM = spesa) e niente
+  # refresh-per-età della Sentinella. I BRIDGE però restano sorvegliati: in
+  # standby sono LORO la sveglia (il sentinel-bridge valuta until/wake_on a
+  # ogni tick) e un bridge morto senza respawn = standby eterno. È l'unica
+  # differenza rispetto al gate halted qui sopra, ed è deliberata.
+  if [ -e "$TEAM_STANDBY_FLAG" ]; then
+    if [ $((standby_log_tick % 20)) -eq 0 ]; then
+      log "standby: .team-standby.flag presente — respawn/refresh agenti sospesi; bridge supervision ATTIVA (la sveglia)"
+    fi
+    standby_log_tick=$((standby_log_tick + 1))
+    if config_ready; then
+      maybe_respawn_bridges
+    fi
+    sleep "$INTERVAL_SEC"
+    continue
+  fi
+  if [ "$standby_log_tick" -gt 0 ]; then
+    log "standby: flag rimosso — riprendo respawn/refresh agenti"
+    standby_log_tick=0
   fi
 
   if config_ready; then

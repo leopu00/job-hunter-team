@@ -45,8 +45,9 @@ non è progresso):
   |   4°   | NIENTE continua — escalation al Capitano (/clear o respawn) |
 
 Gate di sicurezza (il watchdog RIPRENDE gli agenti, non aggira i freni): niente
-ripresa con `.team-halted.flag`, `daily-halt.flag` o `.weekly-halt.flag`
-presenti, fuori dalle working hours, o col tetto di sessioni saturo.
+ripresa con `.team-halted.flag`, `.team-standby.flag`, `daily-halt.flag` o
+`.weekly-halt.flag` presenti, fuori dalle working hours, o col tetto di
+sessioni saturo.
 
 Osservabilità: ogni decisione va su `$JHT_HOME/logs/stepcap.jsonl`, un record per
 evento. Il predecessore di questo meccanismo scriveva su `logs/idle-nudge.jsonl`
@@ -470,6 +471,11 @@ def _halt_flags():
     home, logs = _home(), _logs_dir()
     return (
         ("team-halted", home / ".team-halted.flag"),
+        # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): in standby anche
+        # questo watchdog tace — niente nudge, niente kick-off. La sveglia è
+        # del sentinel-bridge; alla rimozione del flag il retry (GATE_RETRY_SEC)
+        # riprende gli agenti ancora fermi sul cap.
+        ("team-standby", home / ".team-standby.flag"),
         # daily-halt lo scrivono i tre bridge in logs/; la variante in home
         # è controllata comunque, così un cambio di posizione non ci acceca.
         ("daily-halt", logs / "daily-halt.flag"),

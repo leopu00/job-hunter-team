@@ -486,7 +486,90 @@ def session_exists(s):
     return subprocess.run(["tmux", "has-session", "-t", s], capture_output=True).returncode == 0
 
 
+# ── Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]) ────────────────────
+# In standby il bridge continua a LEGGERE (fetch → sentinel-data.jsonl, ogni
+# tick) e smette di PARLARE. Il gate fisico del silenzio sta in jht_tmux_send —
+# l'UNICO chokepoint di scrittura tmux di questo file — così il campionamento,
+# che non passa di lì, resta intatto per costruzione. La SVEGLIA (valutazione
+# di until/wake_on a ogni tick) sta in _standby_step, chiamata in testa al
+# loop: tutto lo stato vive nel flag, quindi un bridge respawnato dal watchdog
+# riprende il ruolo di sveglia rileggendo il file, senza memoria da perdere.
+_STANDBY_MOD = None
+
+
+def _standby_mod():
+    global _STANDBY_MOD
+    if _STANDBY_MOD is None:
+        _STANDBY_MOD = _load_skill_module("standby", "standby.py")
+    return _STANDBY_MOD
+
+
+def _standby_active():
+    """True se il team è in standby a spesa zero (flag valido, non scaduto).
+
+    Fail-closed nella direzione di burn_intent: modulo mancante o flag
+    illeggibile/senza condizione di uscita → False (si continua a parlare).
+    La direzione sicura è NON restare muti per sempre: un team che spende si
+    vede, un team muto in eterno è l'incidente in forma peggiore.
+    """
+    mod = _standby_mod()
+    try:
+        return bool(mod.is_active()) if mod else False
+    except Exception:                                       # noqa: BLE001
+        return False
+
+
+def _standby_step(parsed):
+    """Valuta la SVEGLIA dello standby a ogni tick (anche su fetch fallito:
+    la condizione a tempo `until` non ha bisogno del weekly).
+
+    Quando la condizione è soddisfatta l'ordine è quello obbligato del ticket,
+    incapsulato in standby.wake(): (1) flag via, (2) [RIPRENDI] a tutti i
+    ruoli core inclusi, (3) log. Con `.team-halted.flag` presente wake() NON
+    manda nulla: lo stop dell'utente vince. Un flag invalido (senza condizione
+    di uscita) viene rimosso qui — questo bridge possiede il lifecycle dei
+    flag, come per daily-halt e burn-intent — e va comunque in wake() perché
+    gli agenti potrebbero essere in pausa: meglio un [RIPRENDI] di troppo che
+    un team addormentato senza sveglia.
+    """
+    mod = _standby_mod()
+    if mod is None:
+        return
+    try:
+        st = mod.status()
+        state = st.get("state")
+        if state == "off":
+            return
+        weekly = parsed.get("weekly_usage") if isinstance(parsed, dict) else None
+        if state == "invalid":
+            print("[bridge V6] standby: flag SENZA condizione di uscita — "
+                  "rimosso (fail-closed, vedi standby.py)")
+            mod.wake("flag standby invalido (senza condizione di uscita): rimosso",
+                     weekly_usage=weekly)
+            return
+        do_wake, why = mod.should_wake(weekly_usage=weekly)
+        mod.log_event("wake_check", weekly_usage=weekly, wake=bool(do_wake),
+                      reason=(why if do_wake else st.get("reason")))
+        if do_wake:
+            res = mod.wake(why, weekly_usage=weekly)
+            print(f"[bridge V6] standby: SVEGLIA ({why}) → flag rimosso, "
+                  f"[RIPRENDI] a {res.get('resumed', 0)} sessioni"
+                  + (" — SOPPRESSO: .team-halted.flag presente (lo stop "
+                     "dell'utente vince)" if res.get("halted") else ""))
+    except Exception as e:                                  # noqa: BLE001
+        print(f"[bridge V6] WARN standby step: {e}", file=sys.stderr)
+
+
 def jht_tmux_send(session, text):
+    # Standby a spesa zero: in standby i bridge leggono e NON parlano. Il gate
+    # sta qui, nel chokepoint unico di scrittura tmux, così ogni path (tick,
+    # pace-advice, vitals, failure, off-hours) tace senza doverlo ricordare
+    # sito per sito. Il [RIPRENDI] del risveglio NON viene bloccato: parte da
+    # standby.wake() DOPO la rimozione del flag (ordine obbligato), quando
+    # questo guard è già aperto.
+    if _standby_active():
+        print(f"[bridge V6] standby: send a {session} soppresso", file=sys.stderr)
+        return False
     # Difesa: un tmux-send che si blocca (pane occupato) NON deve mai abbattere il
     # bridge. Senza questa guardia, TimeoutExpired propagava fuori dal while-loop di
     # main() (l'unico handler esterno è KeyboardInterrupt) → bridge morto in silenzio,
@@ -1979,6 +2062,18 @@ def main():
             within_hours = True
             print(f"[bridge V6] {now_h} BURN-INTENT: gate orario derogato "
                   f"(work_phase={work_phase}, scade fra {_bi.get('remaining_min')} min)")
+
+        # ── Standby a spesa zero: la SVEGLIA si valuta a OGNI tick ─────────
+        # Prima di qualunque invio: se la condizione di uscita è soddisfatta,
+        # standby.wake() rimuove il flag e manda [RIPRENDI] — da quel momento
+        # il guard in jht_tmux_send è aperto e il tick sotto torna a parlare.
+        # Finché lo standby dura, il resto del tick campiona e scrive il
+        # sample come sempre (la lettura non costa un turno di modello), ma
+        # ogni send viene soppresso dal guard. NON derogato da BURN-INTENT:
+        # lo standby nasce a weekly esaurito (il muro 403), dove la deroga
+        # economica non compra niente — e il weekly-halt è già NEVER_YIELDS
+        # della deroga stessa.
+        _standby_step(parsed)
 
         if parsed:
             # ── Path successo: scrivi sample, tick alla Sentinella ────
