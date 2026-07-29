@@ -53,12 +53,12 @@ Mantenha sempre o prefixo estruturado:
 
 Tipos padrao (veja `agents/_manual/communication-rules.md` para a taxonomia completa e expectativas por funcao):
 
-- `INFO` — atualizacao de estado / mensagem operacional generica (nenhuma resposta esperada)
+- `BLOCKED` — worker → Capitano: **PARASTE de produzir** e não deixa rasto na DB (ferramenta partida, `403`/`LOCKED`, fontes secas, um item que não consegues nem trabalhar nem saltar). Desde 2026-07-27 é a ÚNICA coisa que distingue um stall do trabalho silencioso
 - `URG` — ordem em tempo real que requer acao imediata (FREEZE, throttle, kill)
 - `FEEDBACK` — coaching ao agente anterior com uma tag de rejeicao (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`)
 - `REQ` / `RES` — requisicao/resposta sincrona entre agentes
 - `ACK` — confirmacao de recebimento de um `URG` ou `REQ` que ainda nao pode atender
-- `REPORT` — resultado final de uma unidade de trabalho
+- ~~`INFO` / `REPORT`~~ — **retirados para o tráfego entre colegas** (2026-07-27): eram 8 das 30 mensagens de puro estado que acordavam o Capitano em ~1,5h. O progresso puxa-se de `db_query.py recent-activity`, não se narra
 
 > 💬 `[CHAT]` e reservado para mensagens **usuario → agente** a partir da web UI (veja o protocolo no prompt do Capitao). Nao o use para trafego inter-agente.
 

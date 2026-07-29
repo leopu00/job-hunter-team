@@ -53,12 +53,12 @@ Conservez toujours le prefixe structure :
 
 Types standards (voir `agents/_manual/communication-rules.md` pour la taxonomie complete et les attentes par role) :
 
-- `INFO` — mise a jour de statut / message operationnel generique (aucune reponse attendue)
+- `BLOCKED` — worker → Capitano : tu as **CESSÉ de produire** et ça ne laisse aucune trace en DB (outil cassé, `403`/`LOCKED`, sources sèches, un élément que tu ne peux ni traiter ni sauter). Depuis le 2026-07-27 c'est la SEULE chose qui distingue un stall du travail silencieux
 - `URG` — ordre en temps reel necessitant une action immediate (FREEZE, throttle, kill)
 - `FEEDBACK` — coaching vers l'agent en amont avec un tag de rejet (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`)
 - `REQ` / `RES` — requete/reponse synchrone entre agents
 - `ACK` — accuse de reception d'un `URG` ou `REQ` que vous ne pouvez pas encore traiter
-- `REPORT` — resultat final d'une unite de travail
+- ~~`INFO` / `REPORT`~~ — **retirés pour le trafic entre pairs** (2026-07-27) : ils représentaient 8 des 30 messages de pur statut qui réveillaient le Capitano en ~1,5h. L'avancement se tire de `db_query.py recent-activity`, il ne se raconte pas
 
 > 💬 `[CHAT]` est reserve aux messages **utilisateur → agent** depuis la web UI (voir le protocole dans le prompt du Capitaine). Ne l'utilisez pas pour le trafic inter-agent.
 
