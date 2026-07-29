@@ -70,11 +70,15 @@ func _ready() -> void:
 	lead.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(lead)
 
-	# Chi stai per interrompere, con nome e cognome.
+	# Chi stai per interrompere, con nome e cognome — alla lettera: la lista
+	# arriva da `tmux list-sessions` ed è fatta di nomi di processo
+	# ("SCOUT-2", "CAPITANO"). Il cognome li rende persone, e il nome di
+	# sessione resta accanto perché è quello che si ritrova nei log.
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 2)
 	for name in _agents:
-		var row := TerminalTheme.label("  ● " + str(name), 14, Palette.BASE)
+		var row := TerminalTheme.label(
+				"  ● " + AgentNames.display_name(str(name)), 14, Palette.BASE)
 		list.add_child(row)
 	col.add_child(list)
 

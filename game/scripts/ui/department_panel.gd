@@ -117,8 +117,16 @@ func _desk_row(index: int, accent: Color) -> Control:
 	if occupant.is_empty():
 		row.add_child(TerminalTheme.label(UIStrings.t("dept.desk_free"), 16, Palette.DIM))
 	else:
-		row.add_child(TerminalTheme.label(occupant, 17, Palette.BRIGHT, "medium"))
 		var role_slug := CharacterDefs.desk_occupant_slug(dept_id, index)
+		# La targa della postazione segue il NUMERO del banco, non chi ci si è
+		# seduto per primo: è la stessa regola con cui l'ufficio assegna
+		# scrivania e volto (Office._desk_index_from_uid, `scout-5` → quinto
+		# banco). Il banco `index` appartiene quindi all'istanza `index + 1`, e
+		# il suo cognome è lo stesso a ogni riavvio. La riga mostra già il
+		# numero a sinistra e il reparto è nel titolo: basta il cognome.
+		var plate := AgentNames.short_name(
+				"%s-%d" % [role_slug, index + 1], occupant)
+		row.add_child(TerminalTheme.label(plate, 17, Palette.BRIGHT, "medium"))
 		var status: Dictionary = TeamData.agent_status().get(role_slug, {})
 		if status.has("status"):
 			var detail := TerminalTheme.label(status["status"], 14, Palette.MUTED)
