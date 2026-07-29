@@ -117,6 +117,15 @@ jobs:
           printf '%s\n' "$FEEDBACK_OUT" | grep "FEEDBACK-PANEL-TEST PASS"
           GUIDED_OUT="$(JHT_SCENE=office JHT_GUIDED_TEST=1 godot --headless --path game 2>&1)"
           printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
+          # La pagina di chat a fumetti: che le vignette esistano, siano
+          # nell'ordine della storia, che quella dell'agente resti bianca col
+          # testo nero (e' una richiesta esplicita, non una scelta di tema) con
+          # la coda verso il suo ritratto e quella dell'utente dalla parte
+          # opposta, che il giro utente->canale->risposta passi davvero dal bus
+          # con un ruolo OPERATIVO, e che rileggere indietro non venga
+          # interrotto dal messaggio successivo.
+          COMIC_OUT="$(JHT_SCENE=office JHT_COMIC_CHAT_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$COMIC_OUT" | grep "COMIC-CHAT-TEST PASS"
           GFX_OUT="$(JHT_SCENE=office JHT_GFX_TEST=1 godot --headless --path game 2>&1)"
           printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
           TEXT_OUT="$(JHT_SCENE=office JHT_WORLD_TEXT_TEST=1 godot --headless --path game 2>&1)"

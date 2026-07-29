@@ -18,3 +18,9 @@ throttle
 application-flow
 cv-structure
 critic-loop
+
+# User chat (game / desktop app). A [CHAT] landing in your pane is answered
+# with ONE short jht-send and then you go straight back to work: the reply
+# costs a full turn of THIS agent's model, and orders still come from the
+# Capitano, never from the chat.
+chat-worker

@@ -262,7 +262,7 @@ func open_chat(agent: String) -> void:
 	if _profile_watch and agent.begins_with("assistente") and _chat_msgs.is_empty():
 		_chat_msgs.append({"role": "assistant", "text": WIZ_REPLIES[0],
 				"ts": Time.get_unix_time_from_system(), "done": true})
-	bus.agent_chat_updated.emit(agent, _chat_msgs.duplicate(true))
+	bus.publish_agent_chat(agent, _chat_msgs.duplicate(true))
 
 func close_chat() -> void:
 	_chat_agent = ""
@@ -404,9 +404,14 @@ func _mock_reply(agent: String) -> void:
 	_chat_msgs.append(response)
 	_publish_chat_state(agent)
 
+## Il mock è il riferimento vivo del contratto: pubblica dalla PORTA del bus
+## (publish_agent_chat), non emettendo il segnale a mano. Emettendolo a mano
+## saltava il pezzo che spegne l'attesa quando la risposta arriva — coi
+## puntini "sta rispondendo" accesi per sempre, che è proprio il difetto che
+## il VpsBackend non ha (usa la porta) e che nessuno vedeva in simulazione.
 func _publish_chat_state(agent: String) -> void:
 	if _chat_agent == agent:
-		bus.agent_chat_updated.emit(agent, _chat_msgs.duplicate(true))
+		bus.publish_agent_chat(agent, _chat_msgs.duplicate(true))
 
 ## ── Onboarding simulato (wizard senza VPS) ───────────────────────────
 ## Contratto opzionale dell'adapter (open_profile_watch / ensure_assistant

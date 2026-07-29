@@ -255,8 +255,9 @@ const S := {
 	"guided.hybrid_note": "◆ vezetés aktív — szabadon is írhatsz a csatlakoztatott ügynöknek",
 	"guided.agent_unavailable": "◆ szolgáltató csatlakoztatva — indítsd el a csapatot az élő csevegéshez",
 	"guided.ai_suggestions": "AZ ÜGYNÖK ÁLTAL JAVASOLT VÁLASZOK",
-	"chat.expand": "TELJES KÉPERNYŐ",
-	"chat.shrink": "KICSINYÍTÉS",
+	"chat.close": "bezárás [Esc]",
+	"chat.history_start": "a beszélgetés eleje",
+	"chat.jump_latest": "LEGÚJABB ÜZENET",
 
 	"wizard.title": "ÁLLÍTSD BE A PROFILOD",
 	"wizard.subtitle": "Beszélgess az Asszisztenssel: a bal oldali kitűző magától kitöltődik, miközben egyeztettek. Töltsd fel az önéletrajzod, hogy gyorsabb legyen.",

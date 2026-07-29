@@ -318,8 +318,9 @@ const S := {
 	"guided.hybrid_note": "◆ guida attiva — puoi anche scrivere liberamente all’agente collegato",
 	"guided.agent_unavailable": "◆ provider collegato — avvia il team per usare la chat reale",
 	"guided.ai_suggestions": "RISPOSTE SUGGERITE DALL’AGENTE",
-	"chat.expand": "SCHERMO INTERO",
-	"chat.shrink": "RIDUCI",
+	"chat.close": "chiudi [Esc]",
+	"chat.history_start": "inizio della conversazione",
+	"chat.jump_latest": "ULTIMO MESSAGGIO",
 
 	# ── Wizard onboarding (foto badge con l'Assistente) ───────────
 	"wizard.title": "CONFIGURA IL TUO PROFILO",

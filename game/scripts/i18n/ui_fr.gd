@@ -255,8 +255,9 @@ const S := {
 	"guided.hybrid_note": "◆ guidage actif — tu peux aussi écrire librement à l'agent connecté",
 	"guided.agent_unavailable": "◆ fournisseur connecté — démarrez l’équipe pour le chat en direct",
 	"guided.ai_suggestions": "RÉPONSES SUGGÉRÉES PAR L’AGENT",
-	"chat.expand": "PLEIN ÉCRAN",
-	"chat.shrink": "RÉDUIRE",
+	"chat.close": "fermer [Échap]",
+	"chat.history_start": "début de la conversation",
+	"chat.jump_latest": "DERNIER MESSAGE",
 
 	"wizard.title": "CONFIGURE TON PROFIL",
 	"wizard.subtitle": "Parle avec l'Assistant : le badge à gauche se remplit tout seul pendant votre échange. Charge ton CV pour aller plus vite.",

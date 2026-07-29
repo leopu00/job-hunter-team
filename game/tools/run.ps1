@@ -31,7 +31,7 @@ if (Test-Path -LiteralPath $Godot) {
 }
 $EnvNames = @(
     "JHT_NOVPS", "JHT_VPS_CONTRACT_TEST", "JHT_SCENE",
-    "JHT_PIPELINE_FORCE_TEST", "JHT_DOCTOR_TEST"
+    "JHT_PIPELINE_FORCE_TEST", "JHT_DOCTOR_TEST", "JHT_COMIC_CHAT_TEST"
 )
 $SavedEnv = @{}
 foreach ($Name in $EnvNames) {
@@ -152,6 +152,17 @@ try {
 			Remove-Item Env:JHT_GUIDED_TEST
 			Remove-Item Env:JHT_SCENE
 			if ($out -notmatch "GUIDED-ONBOARDING-TEST PASS") { throw $out }
+
+			# Pagina di chat a fumetti: vignette, ordine, colori distinti fra
+			# agente e utente, code opposte e scroll all'indietro. Invoke-GodotCaptured
+			# solleva gia' da se' su exit code != 0; il match sulla riga e' il
+			# secondo controllo, non l'unico.
+			$env:JHT_SCENE = "office"
+			$env:JHT_COMIC_CHAT_TEST = "1"
+			$out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
+			Remove-Item Env:JHT_COMIC_CHAT_TEST
+			Remove-Item Env:JHT_SCENE
+			if ($out -notmatch "COMIC-CHAT-TEST PASS") { throw $out }
 
             $env:JHT_VPS_CONTRACT_TEST = "1"
             $out = Invoke-GodotCaptured -GodotArguments @("--headless", "--quit-after", "3", ".")

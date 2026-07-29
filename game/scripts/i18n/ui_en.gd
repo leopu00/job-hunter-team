@@ -263,8 +263,9 @@ const S := {
 	"guided.hybrid_note": "◆ guide active — you can also write freely to the connected agent",
 	"guided.agent_unavailable": "◆ provider connected — start the team to use live chat",
 	"guided.ai_suggestions": "REPLIES SUGGESTED BY THE AGENT",
-	"chat.expand": "FULL SCREEN",
-	"chat.shrink": "SHRINK",
+	"chat.close": "close [Esc]",
+	"chat.history_start": "start of the conversation",
+	"chat.jump_latest": "LATEST MESSAGE",
 
 	"wizard.title": "SET UP YOUR PROFILE",
 	"wizard.subtitle": "Talk to the Assistant: the badge on the left fills in by itself as you chat. Upload your CV to speed things up.",
