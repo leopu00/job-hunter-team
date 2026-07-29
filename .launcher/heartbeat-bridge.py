@@ -210,6 +210,36 @@ def _burn_intent_active():
         return False
 
 
+# ── Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]) ────────────────────────
+# Col flag `.team-standby.flag` valido il battito orario è SOSPESO del tutto:
+# ogni [HEARTBEAT] costerebbe un turno di modello al Capitano mentre il team è
+# fermo di proposito. NON derogato da BURN-INTENT (lo standby nasce a weekly
+# esaurito, dove la deroga economica non compra niente). La sveglia è del
+# sentinel-bridge. Stesso pattern del modulo burn_intent: cache del MODULO,
+# mai dello stato (is_active rilegge il flag a ogni battito).
+_STANDBY_MOD = None
+
+
+def _standby_active():
+    global _STANDBY_MOD
+    try:
+        if _STANDBY_MOD is None:
+            import importlib.util
+            for cand in (Path("/app/shared/skills/standby.py"),
+                         Path(__file__).resolve().parent.parent
+                         / "shared" / "skills" / "standby.py"):
+                if not cand.exists():
+                    continue
+                spec = importlib.util.spec_from_file_location("standby", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _STANDBY_MOD = mod
+                break
+        return bool(_STANDBY_MOD.is_active()) if _STANDBY_MOD else False
+    except Exception:  # noqa: BLE001 — la direzione sicura è continuare a battere
+        return False
+
+
 def _scout_exhausted_recently(now):
     """True se uno Scout ha dichiarato [SCOUT-ESAUSTO] nell'ultima finestra di
     lavoro (SCOUT_EXHAUST_LOOKBACK_H). In quel caso le fonti sono DAVVERO secche e
@@ -348,6 +378,11 @@ def _write_state(d):
 
 
 def tick(now, send):
+    # Standby a spesa zero: PRIMA di ogni altro gate e SENZA deroghe — il
+    # battito tace finché il sentinel-bridge non risveglia il team.
+    if _standby_active():
+        _log(f"{now:%H:%M} standby: heartbeat soppresso (team a spesa zero)")
+        return
     # Intento dell'utente letto PRIMA dei due gate: sopprimere il battito è già
     # applicare l'halt, e un Capitano senza battito è un Capitano che non sa che
     # l'utente ha chiesto il contrario (notte 2026-07-27).

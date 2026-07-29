@@ -106,6 +106,41 @@ def _burn_intent_active() -> bool:
         return bool(mod.is_active()) if mod else False
     except Exception:  # noqa: BLE001
         return False
+
+
+# ── Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]) ────────────────────────
+# Col flag `.team-standby.flag` valido il pacing SOSPENDE del tutto l'invio dei
+# tick: il team è fermo di proposito e ogni [BRIDGE PACING] costerebbe un turno
+# di modello alla Sentinella per niente. NON derogato da BURN-INTENT: lo standby
+# nasce a weekly esaurito (il muro 403), dove la deroga economica non compra
+# niente — e il weekly-halt è già in NEVER_YIELDS della deroga stessa. La
+# sveglia è del sentinel-bridge; qui solo silenzio. Stesso pattern del modulo
+# burn_intent: cache del MODULO, mai dello stato (is_active rilegge il file).
+_STANDBY_MOD = None
+
+
+def _standby():
+    global _STANDBY_MOD
+    if _STANDBY_MOD is None:
+        try:
+            _STANDBY_MOD = _path_import(
+                _shared_skills_dir() / "standby.py", "_standby")
+        except Exception as e:  # noqa: BLE001 — fail-closed: si continua a parlare
+            print(f"[pacing-bridge] WARN standby.py non caricabile: {e}",
+                  file=sys.stderr, flush=True)
+            return None
+    return _STANDBY_MOD
+
+
+def _standby_active() -> bool:
+    """True se il team è in standby a spesa zero (flag valido, non scaduto).
+    Qualunque errore → False: la direzione sicura è NON restare muti per
+    sempre (un team muto in eterno è l'incidente in forma peggiore)."""
+    mod = _standby()
+    try:
+        return bool(mod.is_active()) if mod else False
+    except Exception:  # noqa: BLE001
+        return False
 # Mailbox: ogni verdetto del bridge viene appeso qui, indipendentemente
 # dal successo della consegna tmux a CAPITANO. Il capitano (e il dottore)
 # leggono questo file per assicurarsi di non perdere verdetti quando
@@ -1476,6 +1511,14 @@ def loop():
             time.sleep(sleep_s)
 
         now = datetime.now(timezone.utc)
+        # Standby a spesa zero: PRIMA di ogni altro gate, e senza deroghe.
+        # Nemmeno si calcola il tick: non c'è nessuno che debba riceverlo,
+        # e la sveglia è del sentinel-bridge (che continua a campionare).
+        if _standby_active():
+            print(f"[pacing-bridge] standby skip tick {now.isoformat()}", flush=True)
+            write_state(None, next_quarter(now + timedelta(seconds=1)),
+                        "standby (team a spesa zero)", wht=wht, pcap=pcap)
+            continue
         # Intento dell'utente letto UNA volta, in testa al tick: sotto, i due
         # gate di spesa lo consultano prima di decidere di tacere.
         burn_intent_on = _burn_intent_active()
