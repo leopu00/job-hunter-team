@@ -73,6 +73,10 @@ jobs:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
 
+      # Stessa lista di `game.yml` (step "Run deterministic game tests"), con
+      # UNA sola eccezione, in fondo: terminal_selection_selftest.gd. Un tag non
+      # puo' uscire con meno controlli di quelli che ogni push esegue — chi
+      # aggiunge un self-test la' lo aggiunge anche qui.
       - name: Import and test game
         run: |
           godot --headless --path game --import
@@ -80,15 +84,41 @@ jobs:
           godot --headless --path game --script res://tools/speech_bubble_selftest.gd
           godot --headless --path game --script res://tools/pipeline_queue_selftest.gd
           godot --headless --path game --script res://tools/embedded_terminal_selftest.gd
+          # La redazione dei segreti e il bundle di diagnostica: quello che
+          # l'utente allega a una segnalazione non deve contenere token, path
+          # della sua home o il nome dell'account.
+          godot --headless --path game --script res://tools/redactor_selftest.gd
+          godot --headless --path game --script res://tools/diagnostics_selftest.gd
           godot --headless --path game --script res://tools/theme_selftest.gd
           godot --headless --path game --script res://tools/budget_notice_selftest.gd
+          # L'avviso della deroga alla spesa NOMINA i freni che non cedono e il
+          # tetto di ore: sono copiati da shared/skills/burn_intent.py, e una
+          # copia rimasta indietro promette reti di sicurezza che il modulo non
+          # ha piu'. Il test confronta la copia col sorgente.
+          godot --headless --path game --script res://tools/burn_mode_selftest.gd
           godot --headless --path game --script res://tools/doc_preview_selftest.gd
+          # La terza via all'uscita ("esci, il team continua") e l'attesa del
+          # thread di spegnimento: nessuna delle due si vede a schermo, si
+          # sbagliano in silenzio e si scoprono dal container rimasto acceso.
+          godot --headless --path game --script res://tools/headless_exit_selftest.gd
           # Nessun tag deve uscire con le lingue disallineate: il fallback di
           # UIStrings.t() e' silenzioso, quindi una chiave persa non si vede
           # ne' in CI ne' all'avvio in italiano — solo dall'utente straniero.
-          # (terminal_selection_selftest.gd resta fuori: questo step gira
-          # anche su Windows via Git Bash e il test apre /bin/sh.)
           godot --headless --path game --script res://tools/i18n_parity_selftest.gd
+          # Il patto del riordino della sidebar: le voci raccolte in schede o
+          # dietro "Impostazioni" restano raggiungibili e tradotte.
+          godot --headless --path game --script res://tools/sidebar_nav_selftest.gd
+          # I cognomi degli agenti sono identita', non decorazione: mappa pura
+          # ruolo+numero, niente omonimi e ogni carattere gia' presente nei
+          # font delle 7 lingue (altrimenti a schermo esce un rettangolo).
+          godot --headless --path game --script res://tools/agent_names_selftest.gd
+          # Il costo a riposo: finestra senza focus che disegna di meno, tetto
+          # fps del primo piano restituito ALLA LETTERA, passi di fisica che
+          # coprono il frame anche a ritmo lento.
+          godot --headless --path game --script res://tools/idle_pace_selftest.gd
+          # (terminal_selection_selftest.gd resta fuori: questo step gira anche
+          # su Windows via Git Bash — game.yml lo salta con `runner.os` — e il
+          # test apre /bin/sh senza il ramo Windows che ha embedded_terminal.)
           VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
           printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
           PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
@@ -97,6 +127,22 @@ jobs:
           printf '%s\n' "$SWITCH_OUT" | grep "BACKEND-SWITCH-TEST PASS"
           DOCTOR_OUT="$(JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game 2>&1)"
           printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
+          FEEDBACK_OUT="$(JHT_SCENE=office JHT_FEEDBACK_PANEL_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$FEEDBACK_OUT" | grep "FEEDBACK-PANEL-TEST PASS"
+          GUIDED_OUT="$(JHT_SCENE=office JHT_GUIDED_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
+          # La pagina di chat a fumetti: vignette nell'ordine della storia,
+          # quella dell'agente bianca col testo nero (richiesta esplicita, non
+          # una scelta di tema), il giro utente->canale->risposta che passa dal
+          # bus e la rilettura all'indietro che non viene interrotta.
+          COMIC_OUT="$(JHT_SCENE=office JHT_COMIC_CHAT_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$COMIC_OUT" | grep "COMIC-CHAT-TEST PASS"
+          GFX_OUT="$(JHT_SCENE=office JHT_GFX_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
+          TEXT_OUT="$(JHT_SCENE=office JHT_WORLD_TEXT_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$TEXT_OUT" | grep "WORLD-TEXT-TEST PASS"
+          GFXPANEL_OUT="$(JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1 godot --headless --path game 2>&1)"
+          printf '%s\n' "$GFXPANEL_OUT" | grep "GRAPHICS-PANEL-TEST PASS"
 
       - name: Export native game
         working-directory: game
