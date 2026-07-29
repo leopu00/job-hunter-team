@@ -2813,7 +2813,8 @@ func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
 				to_label = _name_of(to_uid)
 		speaker.say(text, to_label)
 		if target and not target.is_dissolving():
-			target.show_received_message(speaker.display_name)
+			target.show_received_message(
+					AgentNames.short_name(speaker.uid, speaker.display_name))
 
 ## Risolve uid reale o ruolo. Nei self-test offline "scout-4" sceglie la
 ## quarta istanza del ruolo, mentre sulla VPS vince sempre l'uid esatto.
@@ -2840,11 +2841,20 @@ func _find_agent(ref: String) -> AgentNPC:
 		return null
 	return matches[mini(requested_index - 1, matches.size() - 1)]
 
+## Come si chiama il destinatario di un messaggio, dentro una vignetta sopra
+## la testa: il SOLO cognome. La vignetta si allarga col testo più lungo che
+## contiene, e "→ Holmes · scout-1" la farebbe crescere oltre la scrivania per
+## dire due volte la stessa cosa. Il nome per esteso vive nei pannelli, dove
+## c'è la riga intera.
+##
+## Chi non ha un cognome tiene il suo nome di scena; chi non è nemmeno in
+## scena resta l'uid, come prima — un destinatario fuori campo va comunque
+## detto.
 func _name_of(uid: String) -> String:
 	for agent in agents:
 		if agent.uid == uid:
-			return agent.display_name
-	return uid
+			return AgentNames.short_name(uid, agent.display_name)
+	return AgentNames.short_name(uid)
 
 ## ── Scena reattiva al registro attività ──────────────────────────────
 

@@ -141,6 +141,7 @@ try {
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/doc_preview_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/i18n_parity_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/sidebar_nav_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/agent_names_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/idle_pace_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/headless_exit_selftest.gd")
 			python tools/python_payload_syntax_test.py

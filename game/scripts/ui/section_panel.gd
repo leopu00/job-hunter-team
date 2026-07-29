@@ -2322,8 +2322,12 @@ func _build_agent_page() -> void:
 		var when := TerminalTheme.label(str(t.get("ts", "")).left(16), 13, Palette.DIM)
 		when.custom_minimum_size = Vector2(140, 0)
 		row.add_child(when)
-		var who := TerminalTheme.label(str(t.get("by_agent", "?")), 13, Palette.MINT)
-		who.custom_minimum_size = Vector2(110, 0)
+		# Chi ha mosso la posizione: cognome davanti, uid tecnico dietro. La
+		# riga è larga e l'uid serve a chi poi va a cercare quell'agente nei
+		# log, quindi qui ci sta la forma completa.
+		var who := TerminalTheme.label(
+				AgentNames.display_name(str(t.get("by_agent", "?"))), 13, Palette.MINT)
+		who.custom_minimum_size = Vector2(200, 0)
 		row.add_child(who)
 		var what := TerminalTheme.label("%s — %s" % [str(t.get("title", "?")),
 				str(t.get("company", ""))], 14, Palette.BASE)
@@ -2355,8 +2359,13 @@ func _build_agent_page() -> void:
 				str(m.get("ts", "")).replace("T", " ").left(16), 13, Palette.DIM)
 		when.custom_minimum_size = Vector2(140, 0)
 		row.add_child(when)
-		var who := TerminalTheme.label("%s → %s" % [m.get("from", "?"),
-				m.get("to", "?")], 13, Palette.MINT, "medium")
+		# Due nomi sulla stessa cella: qui vale il solo cognome, altrimenti la
+		# colonna raddoppia per ripetere due volte il ruolo che si legge già
+		# dal contesto.
+		var who := TerminalTheme.label("%s → %s"
+				% [AgentNames.short_name(str(m.get("from", "?"))),
+						AgentNames.short_name(str(m.get("to", "?")))],
+				13, Palette.MINT, "medium")
 		who.custom_minimum_size = Vector2(210, 0)
 		row.add_child(who)
 		row.add_child(_pos_paragraph(str(m.get("text", ""))))
@@ -3543,9 +3552,10 @@ func _build_activity() -> void:
 			row.add_child(when)
 			var by := str(t.get("by_agent", "?") if t.get("by_agent") else "?")
 			var base := by.split("-")[0]
-			var who := TerminalTheme.label("%s %s" % [ROLE_EMOJI.get(base, "•"), by],
+			var who := TerminalTheme.label("%s %s"
+					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(by)],
 					13, Palette.MINT, "medium")
-			who.custom_minimum_size = Vector2(150, 0)
+			who.custom_minimum_size = Vector2(210, 0)
 			row.add_child(who)
 			var title_lbl := TerminalTheme.label("%s — %s" % [
 					str(t.get("title", "?")), str(t.get("company", ""))], 14, Palette.BASE)
@@ -3571,8 +3581,10 @@ func _build_activity() -> void:
 			var when := TerminalTheme.label(entry["when"], 13, Palette.DIM)
 			when.custom_minimum_size = Vector2(80, 0)
 			row.add_child(when)
-			var who := TerminalTheme.label(slug, 13, Palette.MUTED)
-			who.custom_minimum_size = Vector2(110, 0)
+			# Ramo offline: la riga è del lead del ruolo, che è l'istanza 1.
+			var who := TerminalTheme.label(
+					AgentNames.display_name(slug), 13, Palette.MUTED)
+			who.custom_minimum_size = Vector2(160, 0)
 			row.add_child(who)
 			row.add_child(TerminalTheme.label(entry["text"], 14, Palette.BASE))
 
@@ -3852,8 +3864,11 @@ func _build_chat() -> void:
 			when.custom_minimum_size = Vector2(130, 0)
 			row.add_child(when)
 			var base := str(msg.get("from", "?")).split("-")[0]
+			# Mittente e destinatario nella stessa cella: solo cognomi.
 			var who := TerminalTheme.label("%s %s → %s" % [ROLE_EMOJI.get(base, "•"),
-					msg.get("from", "?"), msg.get("to", "?")], 13, Palette.MINT, "medium")
+					AgentNames.short_name(str(msg.get("from", "?"))),
+					AgentNames.short_name(str(msg.get("to", "?")))],
+					13, Palette.MINT, "medium")
 			who.custom_minimum_size = Vector2(230, 0)
 			row.add_child(who)
 			var txt := _pos_paragraph(str(msg.get("text", "")))
@@ -3870,8 +3885,9 @@ func _build_chat() -> void:
 		var when := TerminalTheme.label(msg["when"], 13, Palette.DIM)
 		when.custom_minimum_size = Vector2(56, 0)
 		row.add_child(when)
-		var who := TerminalTheme.label(msg["from"], 14, Palette.MINT, "medium")
-		who.custom_minimum_size = Vector2(120, 0)
+		var who := TerminalTheme.label(
+				AgentNames.display_name(str(msg["from"])), 14, Palette.MINT, "medium")
+		who.custom_minimum_size = Vector2(180, 0)
 		row.add_child(who)
 		row.add_child(TerminalTheme.label(msg["text"], 15, Palette.BASE))
 	_content.add_child(HSeparator.new())
@@ -3963,9 +3979,10 @@ func _build_usage() -> void:
 			row.add_theme_constant_override("separation", 12)
 			_content.add_child(row)
 			var base := str(agent).split("-")[0]
-			var lbl := TerminalTheme.label("%s %s" % [ROLE_EMOJI.get(base, "•"), agent],
+			var lbl := TerminalTheme.label("%s %s"
+					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(str(agent))],
 					14, Palette.BASE)
-			lbl.custom_minimum_size = Vector2(220, 0)
+			lbl.custom_minimum_size = Vector2(270, 0)
 			row.add_child(lbl)
 			row.add_child(TerminalTheme.label("%.1f kt" % float(per_agent[agent]),
 					15, Palette.MINT, "bold"))
