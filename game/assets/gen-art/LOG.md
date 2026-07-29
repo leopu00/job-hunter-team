@@ -234,3 +234,40 @@ dialogo con "LO SCRITTORE"): esistono i ritratti di soli 6 ruoli
   in-world; le emozioni sono derivate dalla rispettiva ancora per conservare
   identità, abiti, crop e proporzioni. Alpha e dimensioni sono stati validati
   prima dell'import Godot.
+
+---
+
+## Da generare — richiesta 2026-07-29 (chat a fumetti)
+
+La chat a fumetti mostra il ritratto dell'agente accanto alle vignette e usa
+`pensieroso` mentre l'agente sta scrivendo la risposta. Sei ruoli non ce
+l'hanno e ricadono in silenzio su `neutro`: l'attesa non si distingue dalla
+risposta arrivata, che è proprio la cosa che quella posa doveva comunicare.
+
+**Mancanti** — `assets/gen-art/portraits/<slug>/full_pensieroso.png`,
+stesso formato dei 14 del 22/07 (1120x1520, alpha, derivati dall'ancora del
+ruolo per conservare identità, abiti, crop e proporzioni):
+
+| slug | ancora da cui derivare | ha già |
+|---|---|---|
+| `assistente` | `full_neutro.png` | caldo, divertito, neutro, sorpreso |
+| `coordinatore` | `full_neutro.png` | caldo, neutro, severo |
+| `critico` | `full_neutro.png` | caldo, divertito, neutro, severo |
+| `scrittore` | `full_neutro.png` | caldo, neutro |
+| `sentinella` | `full_neutro.png` | caldo, neutro, severo |
+| `mantenitore` | `full_neutro.png` | caldo, neutro |
+
+Chi li ha già, come riferimento della posa: `scout`, `analista`, `scorer`,
+`dottore`, `mentor`.
+
+### Secondo pezzo: i volti per istanza
+
+Oggi `scout-1` e `scout-2` condividono una faccia, mentre nell'ufficio hanno
+già corpi diversi (`CharacterDefs.VARIANT_BY_DESK`) e dal 29/07 anche cognomi
+diversi — Holmes e Colombo si presentano con lo stesso volto. Il codice è già
+pronto e non va toccato: `ComicChat.portrait_slug()` cerca **prima**
+`gen-art/portraits/<ruolo>-<n>/`, quindi basta depositare la cartella perché
+venga usata.
+
+Priorità bassa rispetto ai sei `pensieroso`: qui il difetto è che due
+personaggi si somigliano, là è un'informazione che non arriva.
