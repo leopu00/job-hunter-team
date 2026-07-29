@@ -40,6 +40,9 @@ log() {
 
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+# Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): un Dottore/Mantenitore
+# spawnato in standby è un turno LLM speso mentre il team è fermo di proposito.
+TEAM_STANDBY_FLAG="$JHT_HOME/.team-standby.flag"
 halt_log_tick=0
 offhours_log_tick=0
 
@@ -47,11 +50,15 @@ log "watchdog starting · Dottore 2×/finestra (+30min, metà) + Mantenitore 1x/
 
 last_fallback=0
 while true; do
-  # Team-halted gate: se l'utente ha cliccato Stop o weekly-halt è attivo,
-  # NON spawnare il dottore.
-  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ]; then
+  # Team-halted gate: se l'utente ha cliccato Stop, weekly-halt è attivo o il
+  # team è in standby a spesa zero, NON spawnare dottore/mantenitore.
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || [ -e "$TEAM_STANDBY_FLAG" ]; then
     if [ $((halt_log_tick % 8)) -eq 0 ]; then
-      log "halt flag presente — spawn dottore disabilitato"
+      if [ -e "$TEAM_STANDBY_FLAG" ]; then
+        log "standby flag presente — spawn dottore/mantenitore disabilitato"
+      else
+        log "halt flag presente — spawn dottore disabilitato"
+      fi
     fi
     halt_log_tick=$((halt_log_tick + 1))
     sleep "$POLL_SEC"
