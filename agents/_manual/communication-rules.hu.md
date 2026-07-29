@@ -46,6 +46,40 @@ jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
 
 ⚠️ **Soha ne használj nyers `tmux send-keys`-t ügynökök közötti üzenetekhez.** A Codex és Kimi TUI-k elveszítik az Enter karaktert, ha az ugyanabban a `send-keys` hívásban érkezik, mint a szövegtörzs, ami csendes deadlockokat okoz. A wrapper atomi módon kezeli a szöveget + Entert renderelési szünettel. Skill helye: `agents/_tools/jht-tmux-send`.
 
+## 🔇 A termelés néma — az állapotot a Capitano veszi elő
+
+Egy worker **nullaszor** érinti a Capitanót azért, hogy haladásról számoljon be. Sem itemenként, sem a
+széleken: a `[START]` / `[DONE]` bookendeket **2026-07-27-én eltávolítottuk**. Egy első indítású
+csapaton mérve, ~1,5 óra előzmény: **37 üzenet érkezett a Capitanóhoz, ebből 30 (81%) tiszta státusz**
+— 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — szemben 3-6 olyannal, amely valóban döntést kért. Mindegyik
+egy teljes körébe kerül, és az automatikus modell-szétosztással ő **Opuson** fut, míg a Scout /
+Analista / Scorer **Sonneten**: a Scorer egy „kész"-e a flotta legdrágább ügynökét ébreszti fel azért,
+hogy ne csináljon semmit.
+
+A pull oldal már létezett, és jobb:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 60
+```
+
+Egyetlen hívás megadja az ügynökönkénti számokat, plusz minden átmenetet timestamppel, aktorral,
+pozícióval és indokkal — `#22 checked→scored`, `#27 new→excluded — [DEAD_LINK]`. **Egy `DONE` kevesebb
+információt hordoz, mint a sor, amely létrehozta.**
+
+### ⚠️ Mi marad PUSH — az aszimmetria a lényeg
+
+A `recent-activity` azt mutatja, **ki termel**, tehát egy megállt ügynök **eltűnik a listából**
+ahelyett, hogy kitűnne: a Capitano oldaláról a hallgatásod és a munkád azonos. Ezt a hármat ezért
+továbbra is **azonnal** el kell küldeni, mert **nem hagynak nyomot a DB-ben**:
+
+| Jelzés | Mikor |
+|---|---|
+| **BLOKKOLT** | abbahagytad a termelést: elromlott eszköz a `resilience` létra után, `403` / `LOCKED`, tényleg kiszáradt források (`[SCOUT-ESAUSTO]`), egy sorban álló elem, amit sem feldolgozni, sem átugrani nem tudsz |
+| **Konfliktus** | két kolléga ugyanazon a rekordon / területen, és egymás közt nem tudjátok lezárni |
+| **Döntéskérés** | egy `REQ`, amire csak a Capitano tud válaszolni (taxonómia-döntés, skálázás, felhasználó felé menő választás) |
+
+Minden más — kezdés, haladás, befejezés — pull. **Ha megállsz és nem szólsz, senki nem veszi észre.**
+
 ## ⏰ Szerepkörönként kötelező jelzések
 
 Mit KELL minden szerepkörnek tmux-on küldenie (minden más adatbázis-vezérelt):

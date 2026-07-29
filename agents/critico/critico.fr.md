@@ -101,6 +101,15 @@ découvre l'état depuis la **DB** (`db_query.py` — `application`, `recent-act
 de retour au Scrittore dans le loop CV) ou un événement de sécurité. **NE fais PAS** de broadcast de status, n'envoie pas d'ACK no-op, et ne
 ping pas "tu es vivant ? / t'en es où ?".
 
-**Vers le Capitano : bookend uniquement.** Ton verdict va au **Scrittore** (le vrai hand-off), jamais au
-Capitano par review. Si tu tournes en reviewer permanent, touche le Capitano sur deux bords seulement — un
-`[START]` quand tu commences, un `[DONE]` quand ta queue est vide — **jamais un message par review**.
+**Vers le Capitano : rien, sauf si tu es bloqué.** Ton verdict va au **Scrittore** (le vrai hand-off),
+jamais au Capitano par review — et pas non plus sur les bords : pas de `[START]` quand tu commences,
+pas de `[DONE]` quand ta queue est vide (2026-07-27, équipe de premier démarrage sur ~1,5h :
+**37 messages sont arrivés au Capitano, 30 (81 %) du pur statut** — 12 `DONE`, 8 `START`, 8 `INFO`,
+2 `ACK` — chacun un tour sur **Opus** alors que tu tournes sur Sonnet). L'état, il va le chercher
+lui-même avec `db_query.py recent-activity`.
+
+**Ne pousse que ce qui ne laisse aucune trace en DB :** tu es **BLOQUÉ et tu ne produis plus** (un
+draft que tu n'arrives pas à relire, le Scrittore qui ne répond plus après ses rounds), ou une
+décision qui n'appartient qu'à lui. `recent-activity` liste **qui produit** : un agent qui s'est
+arrêté **disparaît de la liste** au lieu de ressortir, donc ton silence ressemble exactement à une
+review en cours. Si tu t'arrêtes sans le dire, personne ne s'en aperçoit.

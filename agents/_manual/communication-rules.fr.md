@@ -46,6 +46,41 @@ jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
 
 ⚠️ **N'utilisez jamais `tmux send-keys` brut pour les messages inter-agents.** Les TUI de Codex et Kimi perdent le caractère Enter s'il arrive dans le même appel `send-keys` que le corps du texte, causant des deadlocks silencieux. Le wrapper gère texte + Enter de manière atomique avec une pause de rendu. Skill dans `agents/_tools/jht-tmux-send`.
 
+## 🔇 Produire est silencieux — l'état, le Capitano va le chercher
+
+Un worker touche le Capitano **zéro fois** pour raconter son avancement. Ni par item, ni sur les bords :
+les bookends `[START]` / `[DONE]` ont été **retirés le 2026-07-27**. Mesuré sur une équipe de premier
+démarrage, ~1,5h d'historique : **37 messages sont arrivés au Capitano, 30 (81 %) du pur statut** — 12
+`DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — contre 3-6 qui demandaient vraiment une décision. Chacun lui
+coûte un tour entier et, avec le partage automatique des modèles, il tourne sur **Opus** alors que
+Scout / Analyste / Scorer tournent sur **Sonnet** : un « fait » du Scorer réveille l'agent le plus cher
+de la flotte pour ne rien faire.
+
+Le côté pull existait déjà et il est meilleur :
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 60
+```
+
+Un appel rend les compteurs par agent plus chaque transition avec timestamp, acteur, position et motif
+— `#22 checked→scored`, `#27 new→excluded — [DEAD_LINK]`. **Un `DONE` porte moins d'information que la
+ligne qui l'a produit.**
+
+### ⚠️ Ce qui reste en PUSH — l'asymétrie est tout l'enjeu
+
+`recent-activity` montre **qui produit**, donc un agent qui s'est arrêté **disparaît de la liste** au
+lieu de ressortir : du côté du Capitano, ton silence et ton travail sont identiques. Ces trois-là
+doivent donc toujours partir **tout de suite**, parce qu'ils ne laissent **aucune trace en DB** :
+
+| Signal | Quand |
+|---|---|
+| **BLOQUÉ** | tu as cessé de produire : outil cassé après l'échelle `resilience`, `403` / `LOCKED`, sources vraiment sèches (`[SCOUT-ESAUSTO]`), un élément en file que tu ne peux ni traiter ni sauter |
+| **Conflit** | deux collègues sur le même enregistrement / territoire et vous n'arrivez pas à trancher entre vous |
+| **Demande de décision** | un `REQ` auquel seul le Capitano peut répondre (arbitrage de taxonomie, scaling, un choix côté utilisateur) |
+
+Tout le reste — début, avancement, fin — est en pull. **Si tu t'arrêtes sans le dire, personne ne s'en
+aperçoit.**
+
 ## ⏰ Signaux obligatoires par rôle
 
 Ce que chaque rôle DOIT envoyer via tmux (tout le reste est géré via BD) :
