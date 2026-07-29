@@ -990,6 +990,20 @@ else
 fi
 
 echo "✓ $SESSION avviato (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
+
+# ── Roster atteso ───────────────────────────────────────────────────────────
+# Registra lo spawn nello STATO CONDIVISO letto da agent-watchdog.sh per
+# sorvegliare i worker numerati. Fino al 2026-07-29 il watchdog guardava solo i
+# quattro ruoli core: Scout/Analisti/Scorer/Scrittori morivano senza una riga di
+# log e senza respawn (quattro persi nell'incidente 2026-07-28/29). Il roster
+# non si può DEDURRE dalle sessioni vive — è esattamente la cosa da verificare —
+# quindi va scritto qui, che è l'unico percorso per cui un agente esiste (le
+# skill vietano il `tmux new-session` a mano).
+# Best-effort e fail-open: un roster non scrivibile non deve impedire uno spawn.
+if [ -f /app/shared/skills/team_roster.py ]; then
+  JHT_HOME="${JHT_HOME:-/jht_home}" python3 /app/shared/skills/team_roster.py \
+    record "$ROLE" "${INSTANCE:-}" --src start-agent.sh >/dev/null 2>&1 || true
+fi
 echo "  Agent dir:    $AGENT_DIR"
 echo "  JHT_USER_DIR: $JHT_USER_DIR"
 echo "  Connettiti con: tmux attach -t \"$SESSION\""

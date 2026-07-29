@@ -19,12 +19,44 @@
 #   4. se NO → retry (fino a 3 volte; la TUI potrebbe stare bootando,
 #              avere un modal aperto, o aver perso focus)
 #   5. se SI → send Enter      submit del prompt
+#   6. capture-pane            VERIFICA che il composer si sia svuotato. Un
+#                              Enter "a freddo" puo' non essere processato: in
+#                              quel caso il testo resta appeso nel prompt.
+#
+# ── Il submit va VERIFICATO, non dato per riuscito (2026-07-29) ─────────
+# Fino a oggi il passo 5 usciva 0 subito dopo `send-keys Enter`, senza
+# rileggere il pane: riportava consegna riuscita mentre il messaggio era
+# ancora nel composer. E' il guasto peggiore possibile su questo canale,
+# perche' un pane con del testo non inviato risulta OCCUPATO a chiunque
+# altro: da li' ogni messaggio successivo fallisce e l'agente ammutolisce
+# per sempre — un Enter perso diventa un deadlock permanente, cioe'
+# esattamente il sintomo "exit 4" che questo strumento esiste per evitare.
+# Osservato il 2026-07-29: un coordinatore perso per dieci ore di finestra
+# aperta al 19% di weekly, poi tre worker bloccati insieme con i messaggi
+# del coordinatore ancora nei loro prompt.
+#
+# Il rinforzo al submit c'era gia', ma era dietro `if provider = kimi`. Il
+# guasto NON e' specifico di Kimi: e' stato riprodotto ripetutamente su un
+# box Claude. Ora la verifica e il rinforzo valgono per OGNI provider.
+#
+# La sequenza di recupero e' quella verificata sul campo: `Space` e POI
+# `Enter` — un carattere sveglia la TUI Ink, l'Enter successivo viene
+# processato. E' BOUNDED: al massimo tre tentativi di submit in tutto, mai
+# un ciclo. Se dopo l'ultimo il testo e' ancora li', si esce 5 (onesto) e
+# si annota la riga in logs/pending-input.jsonl, cosi' la fase di sblocco
+# del Dottore (skill `agent-unblock`) la trova invece di doverla indovinare.
+#
+# Fail-open per costruzione: la verifica puo' solo AGGIUNGERE tentativi. Se
+# sbaglia in un senso mandiamo uno Space+Enter di troppo (un turno quasi
+# vuoto); se sbaglia nell'altro ci comportiamo esattamente come prima. In
+# nessun caso rifiuta di consegnare un messaggio: su questo canale passa
+# tutto il traffico fra agenti, e una regressione qui zittisce il team.
 #
 # Uso:
 #   jht-tmux-send SESSION "[@capitano -> @scout-1] [MSG] ..."
 #
 # Exit:
-#   0 → messaggio consegnato e submittato
+#   0 → messaggio consegnato e submit VERIFICATO
 #   1 → argomenti mancanti
 #   2 → sessione inesistente
 #   3 → testo mai apparso nel pane E pane NON occupato → TUI irricettiva
@@ -33,6 +65,10 @@
 #       messaggio NON consegnato in sincrono, il chiamante deve RIPROVARE piu'
 #       tardi, MAI spawnare un rimpiazzo. "Busy != morto" (vedi
 #       docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
+#   5 → testo DIGITATO ma submit NON confermato dopo tutti i tentativi: la TUI
+#       e' probabilmente congelata. Il messaggio e' nel composer del
+#       destinatario, che ora appare occupato a tutti: e' un caso da Dottore
+#       (kill + recreate), non da retry del chiamante.
 
 set -euo pipefail
 
@@ -143,6 +179,69 @@ _pane_busy() {
 # mittente (Capitano) all'infinito. Override via env JHT_TMUX_BUSY_WAIT.
 busy_budget="${JHT_TMUX_BUSY_WAIT:-90}"
 
+# Signature CORTA per il check del composer: la riga del prompt puo' wrappare e
+# quella lunga 30 non ci starebbe. 14 char bastano a distinguere il nostro testo
+# da un placeholder ("Try ...", "? for shortcuts") e non ci sono altri testi
+# nostri nel composer.
+short_sig=$(printf '%s' "$message" | head -c 14)
+
+# _composer_holds <pane> <sig> — 0 se la RIGA DI PROMPT contiene ancora la
+# signature, cioe' il testo NON e' stato submittato.
+#
+# Guarda solo l'ULTIMA riga di prompt del pane (`>` / `▌` / `❯`, eventualmente
+# dentro il bordo del box). E' la distinzione che rende la verifica possibile:
+# dopo un submit riuscito il testo c'e' ANCORA nel pane, ma nel transcript,
+# mentre il composer torna vuoto. Cercare la signature in tutto il pane direbbe
+# sempre "c'e'" e non distinguerebbe nulla.
+#
+# In caso di dubbio (nessuna riga di prompt trovata, awk assente) ritorna 1 =
+# "submittato": fail-open, mai un tentativo in piu' a vuoto.
+_composer_holds() {
+  printf '%s\n' "$1" | awk -v sig="$2" '
+    { line[NR] = $0 }
+    END {
+      start = NR - 14; if (start < 1) start = 1
+      for (i = NR; i >= start; i--) {
+        l = line[i]
+        if (l ~ /^[[:space:]]*[^[:alnum:][:space:]]?[[:space:]]*[>▌❯]/) {
+          exit (index(l, sig) > 0) ? 0 : 1
+        }
+      }
+      exit 1
+    }' 2>/dev/null
+}
+
+# _submit_confirmed <sig> — 0 se il messaggio e' partito.
+# Due prove indipendenti, entrambe positive: (a) la TUI ha iniziato un turno
+# ("esc to interrupt") → per forza ha ricevuto il prompt; (b) il composer non
+# contiene piu' la nostra signature.
+_submit_confirmed() {
+  local pane
+  pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+  _pane_busy "$pane" && return 0
+  _composer_holds "$pane" "$1" && return 1
+  return 0
+}
+
+# Il testo e' rimasto appeso: annotalo dove il Dottore lo cerca, cosi' la fase
+# di sblocco sa gia' quale pane e' ostaggio e di quale messaggio.
+_record_stuck() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 - "$session" "$message" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+from datetime import datetime, timezone
+session, msg = sys.argv[1], sys.argv[2]
+d = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
+os.makedirs(d, exist_ok=True)
+with open(os.path.join(d, "pending-input.jsonl"), "a") as f:
+    f.write(json.dumps({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "session": session, "draft": msg[:4096], "owner": "agent",
+        "src": "jht-tmux-send", "reason": "submit_unconfirmed",
+    }, ensure_ascii=False) + "\n")
+PYEOF
+}
+
 attempts=3
 for try in $(seq 1 "$attempts"); do
   pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
@@ -182,12 +281,45 @@ for try in $(seq 1 "$attempts"); do
       # Kimi: con solo Enter il messaggio puo' restare accodato in pending
       # input fino a fine batch di tool calls; Ctrl-S forza il submit
       # immediato del prompt. Innocuo se la TUI ha gia' processato Enter.
+      # Resta specifico di Kimi: C-s su un pane NON in raw mode e' XOFF e
+      # congelerebbe l'output — il rinforzo universale e' Space+Enter, sotto.
       if [ "$provider" = "kimi" ]; then
         sleep 0.2
         tmux send-keys -t "$session" C-s
       fi
-      echo "jht-tmux-send: ${#message} chars to $session (try $try)"
-      exit 0
+
+      # ── Verifica del submit (tentativo 1/3) ────────────────────────────
+      sleep 0.6
+      if _submit_confirmed "$short_sig"; then
+        echo "jht-tmux-send: ${#message} chars to $session (try $try)"
+        exit 0
+      fi
+
+      # Enter "a freddo" non processato: sveglia la TUI con un carattere e
+      # ri-submitta. Sequenza verificata sul campo il 2026-07-29. (2/3)
+      tmux send-keys -t "$session" Space
+      sleep 0.3
+      tmux send-keys -t "$session" Enter
+      sleep 0.8
+      if _submit_confirmed "$short_sig"; then
+        echo "jht-tmux-send: ${#message} chars to $session (try $try, submit via Space+Enter)"
+        exit 0
+      fi
+
+      # Ultimo tentativo (3/3), poi si smette: mai un ciclo di ritentativi su
+      # una TUI congelata — e' il modo in cui si brucia budget senza accorgersene.
+      tmux send-keys -t "$session" Space
+      sleep 0.4
+      tmux send-keys -t "$session" Enter
+      sleep 1
+      if _submit_confirmed "$short_sig"; then
+        echo "jht-tmux-send: ${#message} chars to $session (try $try, submit al 3° tentativo)"
+        exit 0
+      fi
+
+      _record_stuck
+      echo "jht-tmux-send: $session ha ricevuto il testo ma il submit NON e' confermato dopo 3 tentativi (Enter, Space+Enter ×2) — TUI probabilmente congelata. Il messaggio e' appeso nel suo composer: serve il Dottore (kill+recreate), NON ritentare." >&2
+      exit 5
       ;;
   esac
   # Testo perso. Casi: (a) il typing ha fatto partire un turno → il busy-check
