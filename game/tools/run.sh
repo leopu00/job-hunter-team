@@ -62,6 +62,7 @@ case "$MODE" in
 		python3 tools/python_payload_syntax_test.py
 		python3 tools/coordinator_policy_selftest.py
 		python3 tools/audit_character_sheets.py
+		python3 tools/audit_instance_portraits.py
 		FEEDBACK_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_FEEDBACK_PANEL_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$FEEDBACK_OUT" | grep "FEEDBACK-PANEL-TEST PASS"
 		GUIDED_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GUIDED_TEST=1 godot --headless . 2>&1)"
