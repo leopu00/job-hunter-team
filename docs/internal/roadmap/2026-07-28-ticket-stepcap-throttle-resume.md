@@ -108,6 +108,33 @@ Il ramo «nessun marcatore» non è un caso residuale da ignorare: è quello che
 fermo uno Scout su due per quaranta minuti mentre tutti gli indicatori dicevano che il
 team stava lavorando.
 
+### ⚠️ Il marcatore di quota nello scrollback scade — incrociarlo con lo stato reale
+
+Difetto della prima stesura, scoperto applicando la regola sul campo. La tabella diceva
+«quota provider → nessun nudge», e presa alla lettera **avrebbe lasciato due agenti fermi
+per sempre**.
+
+Il caso: mezz'ora dopo un reset di finestra, con quota tornata piena, due worker avevano
+ancora `access_terminated_error` nelle ultime righe del pane. Quel testo è la traccia di
+un rifiuto avvenuto *prima* del reset e resta lì finché l'agente non scrive altro — ma
+l'agente non scriverà altro, perché è fermo. Il marcatore si auto-perpetua.
+
+Sbloccati con `Continua`, sono ripartiti immediatamente insieme agli altri tre.
+
+Regola corretta: il marcatore di quota nel pane indica **cosa è successo**, non **cosa
+sta succedendo**. La decisione va presa incrociandolo con lo stato corrente della quota
+letto dal sentinel:
+
+| marcatore quota nel pane | quota corrente | azione |
+|---|---|---|
+| presente | esaurita | nessun nudge, attendi |
+| presente | **disponibile** | **`Continua`** — il marcatore è obsoleto |
+| assente | qualsiasi | classifica normalmente |
+
+Vale in generale: **nessun marcatore di pane è affidabile da solo**, perché lo
+scrollback non si aggiorna quando l'agente è inerte. Ogni marcatore va confermato da uno
+stato esterno — la quota dal sentinel, il progresso dal contatore di contesto.
+
 ### Non riprendere quando la quota sta per finire
 
 Quarto caso osservato la stessa sera: finestra al **96%** con 90 minuti al reset, uno
