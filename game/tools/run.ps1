@@ -144,6 +144,12 @@ try {
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/agent_names_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/idle_pace_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/headless_exit_selftest.gd")
+            # L'aggiornamento automatico: si aggiorna solo in avanti, si
+            # installa da solo SOLO dove il pacchetto e' firmato, e non va in
+            # rete quando non deve. Windows non ha un export firmato, quindi
+            # qui la parte che conta e' proprio che l'installazione automatica
+            # resti spenta.
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/update_check_selftest.gd")
 			python tools/python_payload_syntax_test.py
 			if ($LASTEXITCODE -ne 0) { throw "Embedded Python payload test failed" }
 			$env:JHT_SCENE = "office"

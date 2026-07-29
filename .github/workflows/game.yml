@@ -80,6 +80,14 @@ jobs:
           # sbagliano in silenzio e si scoprono la mattina dopo, dal lavoro
           # non fatto o dal container rimasto acceso tutta la notte.
           godot --headless --path game --script res://tools/headless_exit_selftest.gd
+          # L'aggiornamento automatico. Si sbaglia in tre modi che a schermo si
+          # assomigliano tutti a "non succede niente": non avvisare mai,
+          # proporre un DECLASSAMENTO (alfabeticamente "0.3.10" viene prima di
+          # "0.3.9"), o installare un pacchetto firmato da qualcun altro —
+          # perche' la notarizzazione dice che Apple lo ha esaminato, non che
+          # e' il nostro. Nessuno dei tre si vede in un test manuale: il primo
+          # e l'ultimo si scoprirebbero da un utente.
+          godot --headless --path game --script res://tools/update_check_selftest.gd
           # /bin/sh: solo POSIX, ed e' il motivo per cui non e' in run.ps1.
           godot --headless --path game --script res://tools/terminal_selection_selftest.gd
           # Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO
