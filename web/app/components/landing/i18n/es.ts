@@ -56,9 +56,11 @@ export const es: Record<string, string> = {
   dl_copy_cmd: "Copiar comando",
   dl_mode_desktop_title: "Escritorio",
   dl_mode_terminal_title: "CLI",
-  dl_desktop_soon_desc:
-    "La app de escritorio llegará a los tres sistemas operativos: la estamos puliendo y aún no se puede descargar. Mientras tanto, la CLI lo instala todo.",
-  dl_desktop_soon_badge: "Próximamente",
+  dl_desktop_beta_desc:
+    "La app de escritorio es la oficina donde ves trabajar al equipo. Está en beta: la usamos a diario, pero cambia a menudo. Si prefieres un camino más asentado, la CLI sigue ahí.",
+  dl_desktop_beta_badge: "Beta",
+  dl_desktop_unsigned_note:
+    "En macOS la app está firmada y notarizada: se abre con doble clic. En Windows no está firmada, así que SmartScreen muestra «Windows protegió su PC»: pulsa «Más información» y luego «Ejecutar de todas formas». En Linux, extrae el archivo y hazlo ejecutable.",
   dl_help_text: "¿No sabes dónde instalarlo?",
   dl_help_link: "Lee la guía",
 

@@ -31,12 +31,23 @@ function BackLink() {
   );
 }
 
-// 2026-07-03: l'app desktop non è ancora scaricabile dal web (non ancora
-// promossa, non testata su ambiente vergine — vedi
-// docs/internal/2026-07-03-desktop-app-status-and-vision.md). Il percorso
-// maturo è l'installazione da terminale (CLI); il tab Desktop resta visibile
-// ma annuncia solo l'arrivo su macOS, Windows e Linux.
+// 2026-07-29: l'app desktop diventa scaricabile, marcata BETA. Gli asset sono
+// quelli della release più recente su GitHub, via `releases/latest/download/`:
+// il link non va aggiornato a ogni versione, ci pensa GitHub a risolverlo.
+// macOS è firmato Developer ID e notarizzato (dalla 0.3.1), quindi si apre con
+// un doppio clic; Windows e Linux non sono firmati e l'avviso di SmartScreen
+// va detto prima, non lasciato scoprire. Sostituisce il "in arrivo" del
+// 2026-07-03 (docs/internal/2026-07-03-desktop-app-status-and-vision.md).
 type InstallMode = "terminal" | "desktop";
+
+const RELEASE_BASE =
+  "https://github.com/leopu00/job-hunter-team/releases/latest/download";
+
+const DESKTOP_ASSET: Record<PlatformId, string> = {
+  mac: "job-hunter-team.zip",
+  windows: "job-hunter-team.exe",
+  linux: "job-hunter-team-linux-x64.tar.gz",
+};
 
 type DlKey = Parameters<ReturnType<typeof useLandingI18n>["t"]>[0];
 const MODES: { id: InstallMode; labelKey: DlKey }[] = [
@@ -226,13 +237,14 @@ function DownloadContent() {
           {installMode === "desktop" && (
             <div className="mb-8">
               <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-4">
-                {t("dl_desktop_soon_desc")}
+                {t("dl_desktop_beta_desc")}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {PLATFORMS.map((os) => (
-                  <div
+                  <a
                     key={os.id}
-                    className="border px-4 py-4 flex flex-col items-center gap-3 text-center"
+                    href={`${RELEASE_BASE}/${DESKTOP_ASSET[os.id]}`}
+                    className="border px-4 py-4 flex flex-col items-center gap-3 text-center transition-colors hover:border-[var(--color-green)]"
                     style={{
                       borderColor: "var(--color-border)",
                       background: "var(--color-panel)",
@@ -251,11 +263,16 @@ function DownloadContent() {
                       {os.label}
                     </div>
                     <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
-                      {t("dl_desktop_soon_badge")}
+                      {t("dl_desktop_beta_badge")}
                     </span>
-                  </div>
+                  </a>
                 ))}
               </div>
+              {/* Windows e Linux non sono firmati: l'avviso del sistema va
+                  detto prima, così non sembra che il file sia guasto. */}
+              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4">
+                {t("dl_desktop_unsigned_note")}
+              </p>
             </div>
           )}
 
