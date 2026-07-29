@@ -61,6 +61,34 @@ testo è quello voluto. Ma aveva **due leve** e non ne ha usata nessuna:
 Nessuna delle due tocca il testo dell'utente né richiede di indovinare la sua volontà.
 Entrambe rimettono in moto il team in meno di un minuto.
 
+### ⚠️ Due stati che si somigliano e vogliono cure opposte
+
+Verificato sul campo mentre si sbloccava il team. Un pane fermo può essere in due stati
+diversi, indistinguibili a occhio: entrambi mostrano un prompt con del testo e nessuna
+attività.
+
+| stato | sintomo | cura |
+|---|---|---|
+| **testo pendente** | `send-keys Enter` ignorato, ma `Space` **poi** `Enter` funziona | sblocco via input |
+| **TUI congelata** | non accetta **nulla**: né `Enter`, né `C-m`, né invio al `pane_id` | solo kill + recreate |
+
+Sul coordinatore congelato sono stati provati `Enter`, `C-m` e l'invio diretto al
+`%pane_id`: nessuna reazione, con il processo vivo al 2,8% di CPU e la sessione a 15,3
+ore di età. L'unica via è stata ricrearlo.
+
+**Il dettaglio che rende implementabile lo sblocco**: un `Enter` "a freddo" non viene
+processato dalla TUI. Va mandato prima un carattere (`Space`) e poi `Enter` — è lo stesso
+motivo documentato in testa a `agents/_skills/tmux-send/jht-tmux-send`:
+
+> «Le TUI "Ink" (Codex, Kimi, Claude Code) non registrano l'Enter se arriva prima che il
+> testo sia renderizzato nel prompt».
+
+Senza questo, un'implementazione che tenta solo `Enter` **fallisce in silenzio** e conclude
+che il pane è irrecuperabile. Con questo, distingue i due casi: se `Space+Enter` non
+sblocca entro un tentativo, lo stato è «TUI congelata» e la risposta è il recreate — che
+è anche la ragione per cui il TTL della Parte B non è opzionale, ma l'unica difesa
+sistematica contro il secondo stato.
+
 ### La regola che oggi impedisce l'intervento
 
 Dalla skill `dottore.md`, procedura del round:
@@ -105,6 +133,45 @@ Il Dottore **non deve inviare testo digitato dall'utente e mai spedito**, né ca
 completo o voluto. Lo sblocco passa dall'Assistente, non dal tasto Invio.
 
 ---
+
+## Parte A-bis — I worker muoiono e nessuno se ne accorge
+
+Scoperto lo stesso giorno, mentre si rimetteva in piedi il team: **quattro worker erano
+morti** — ANALISTA-1, SCORER-3, SCORER-5, SCOUT-5 — con i processi terminati, non le sole
+sessioni tmux rimosse (7 sessioni vive = 7 processi `claude`). Nessuna riga di log,
+nessun respawn, nessuna segnalazione. Né il watchdog né il coordinatore li avevano
+toccati: il primo non li guarda, il secondo l'ha dichiarato esplicitamente.
+
+Il motivo è in una riga di `agent-watchdog.sh:39`:
+
+```bash
+AGENTS=(assistente capitano mentor sentinella)
+```
+
+**La rete di sicurezza deterministica copre solo i ruoli core.** Scout, Analisti, Scorer,
+Scrittori e Critici — cioè tutti quelli che *producono* — non sono sorvegliati da nulla
+che non sia un agente. Il Dottore dovrebbe accorgersene al suo round, ma il Dottore è a
+sua volta un agente e può essere fermo, bloccato o non spawnato: è successo la stessa
+notte.
+
+Comportamento richiesto: il watchdog deve sorvegliare **anche i worker numerati**,
+ricavandone l'elenco dal roster attivo invece che da una lista fissa, e respawnarli con
+`start-agent.sh <role> <SAME-N>` quando la sessione sparisce. Con due cautele:
+
+- **Rispettare la finestra di lavoro** — fuori orario un worker assente è normale, non va
+  ricreato (a differenza del TTL della Parte B, che invece non si sospende).
+- **Non combattere con il coordinatore** — se il Capitano ha ridotto il roster
+  deliberatamente, il respawn lo annullerebbe. Il roster atteso va letto dallo stato
+  condiviso, non dedotto dalle sessioni esistenti.
+
+Nota di merito al coordinatore ricreato, che aveva già individuato il criterio giusto
+senza che nessuno glielo suggerisse:
+
+> «The detectable signal isn't liveness, it's production: window open + quota free +
+> positions/scores flat for an hour … A live pane with a static DB is a parked worker.»
+
+È lo stesso principio del watchdog di progresso in `[STEPCAP-THROTTLE-RESUME]`: **non
+chiedere se il processo è vivo, chiedere se il database avanza.**
 
 ## Parte B — TTL di 12 ore su ogni sessione agente
 
@@ -191,3 +258,9 @@ garantisce il tetto **a qualsiasi costo**.
 7. **Scaglionamento** — con cinque sessioni oltre il TTL, i refresh non avvengono nello
    stesso tick.
 8. **`working_hours: null`** — il round e il TTL girano normalmente.
+9. **Sblocco con `Space+Enter`** — un pane con testo pendente viene sbloccato al primo
+   tentativo; un pane con TUI congelata **non** viene dichiarato sbloccato per errore, ma
+   escalato a recreate.
+10. **Worker morto respawnato** — uccidere il processo di uno Scorer dentro la finestra di
+    lavoro: la sessione deve tornare entro un tick del watchdog, **con il Dottore spento**.
+11. **Worker assente fuori finestra** — stessa prova fuori orario: **nessun** respawn.
