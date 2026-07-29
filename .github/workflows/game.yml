@@ -151,11 +151,34 @@ jobs:
           $env:JHT_GODOT_BIN = $GodotExe.FullName
           ./game/tools/run.ps1 test
 
+      # L'export e' il passo piu' pesante e arriva per ultimo, dopo ~26
+      # invocazioni di Godot nello stesso job. Ogni chiusura lascia risorse
+      # ("N ObjectDB instances were leaked", "N resources still in use") e il
+      # 2026-07-29 il runner Windows e' andato in **segfault** (exit 139) a
+      # meta' impacchettamento — con tutti i test verdi appena sopra. Al
+      # rilancio e' passato: intermittente, cioe' la specie peggiore, perche'
+      # un rosso casuale rende inutile il semaforo di una release.
+      #
+      # `release.yml` non ha mai avuto il problema: la' l'export vive in un job
+      # a se', su un runner fresco. Qui non possiamo separarlo senza spostare
+      # anche i template di export, quindi si riparte da un processo pulito:
+      # una pausa perche' il sistema operativo recuperi gli handle dei
+      # processi appena usciti, e un solo ritentativo. Se serve il ritentativo
+      # lo si vede nel log — se comincia a servire spesso, la separazione in
+      # due job diventa obbligatoria e questo commento e' la traccia.
       - name: Export native release
         working-directory: game
         run: |
           mkdir -p "$(dirname '${{ matrix.output }}')"
-          godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
+          sleep 5
+          if ! godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"; then
+            code=$?
+            echo "::warning::export fallito (exit $code) — riprovo una volta su processo pulito"
+            rm -f "${{ matrix.output }}"
+            sleep 15
+            godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
+          fi
+          test -s "${{ matrix.output }}"
 
       - name: Smoke-test exported runtime
         working-directory: game
