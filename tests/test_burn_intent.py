@@ -20,6 +20,7 @@ Eseguire:
     pytest tests/test_burn_intent.py -v
 """
 
+import ast
 import importlib.util
 import json
 import sys
@@ -251,6 +252,22 @@ def test_host_agent_cap_never_consults_the_intent():
 def test_freeze_team_never_consults_the_intent():
     """Ultima rete prima del lockout del provider."""
     assert "burn_intent" not in _src(SKILLS_DIR / "freeze_team.py")
+
+
+def test_soft_pause_is_classified_and_does_not_yield():
+    """La pausa gentile della Sentinella scatta quando L1+L2+L3 di lettura
+    dell'usage sono falliti TUTTI: senza numeri non c'è una decisione
+    economica da derogare, solo cecità. Non è in `NEVER_YIELDS` (quei nomi
+    sono copiati nell'avviso del gioco e nei prompt in 7 lingue), quindi la
+    classificazione deve stare SCRITTA nel modulo — altrimenti torna a essere
+    l'unico automatismo che ferma il team senza una famiglia."""
+    src = _src(SKILLS_DIR / "soft_pause_team.py")
+    for call in ("import burn_intent", "burn_intent.is_active",
+                 "burn_intent.status", ".burn-intent.flag\")"):
+        assert call not in src, f"soft_pause_team cede alla deroga: {call}"
+    doc = ast.get_docstring(ast.parse(src)) or ""
+    assert "burn_intent" in doc, (
+        "la scelta va scritta nel docstring, non lasciata dedurre")
 
 
 def test_sc09_never_learns_about_the_derogation():
