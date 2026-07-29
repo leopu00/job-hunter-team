@@ -46,6 +46,12 @@ quella posa doveva dare.
 
 ## Lotto 2 — I volti per istanza · priorità MEDIA
 
+**In corso su `dev6` dal 2026-07-29**: completate e importate le due emozioni
+operative (`neutro`, `pensieroso`) per le istanze 1–2 di tutti e cinque i
+reparti, 20 PNG in totale. Le varianti `a` riusano intenzionalmente il ritratto
+del ruolo, perché sono la stessa identità; le varianti `b` sono state derivate
+dai rispettivi sprite. Restano le istanze 3–6.
+
 ### Perché serve, e cosa NON è
 
 Non sono facce nuove. **In ufficio ogni agente ha già il suo volto**, assegnato
