@@ -43,6 +43,26 @@ A `positions` (P), `scores` (S), `applications` (A) alapján számold ki:
 
 Szintén hasznos: `python3 /app/shared/skills/db_query.py dashboard` az azonnali áttekintéshez + szerep szerinti aktív példányok.
 
+## 1. bis lépés — ki termel, és ki hallgatott el (2026-07-27)
+
+A workerek már nem küldenek `[START]` / `[DONE]`-t (ezek a bookendek adták a Capitanóhoz egy első
+indítású csapatnál ~1,5 óra alatt beérkezett 37 üzenetből 30-at). A haladásukat innen húzod le:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 30
+```
+
+⚠️ **Azt listázza, ki TERMEL, tehát egy elakadt ügynök eltűnik belőle ahelyett, hogy kitűnne.** Egy
+backlog, ami nem ürül, nem automatikusan hiányzó workert jelent: lehet élő, de beragadt worker is, és
+egy másodikat mellé indítani úgy hagyja az elsőt égni. Döntés előtt vesd össze a három forrást:
+
+| Él (`tmux list-sessions`) | Sor (`next-for-*`) | Átmenetek (`recent-activity`) | Verdikt |
+|---|---|---|---|
+| igen | nem üres | 0 | **ELAKADÁS** — erősítsd meg `capture-pane`-nel, aztán `agent-emergency` (Dottore-first → kill). **Ne** indíts mellé másodikat |
+| igen | nem üres | > 0 | dolgozik — kapacitásprobléma, tovább a 2. lépésre |
+| igen | üres | 0 | jogos idle — hagyd békén (egy `[SCOUT-ESAUSTO]` után a nyugalom szándékos) |
+| nem | nem üres | 0 | tényleg hiányzik — indítsd el (2. lépés) |
+
 ## 2. lépés — válaszd ki a prioritást (szűk keresztmetszet először, soha nem új munka)
 
 Alkalmazd a táblázatot fentről lefelé. Állj meg az első egyező feltételnél.
