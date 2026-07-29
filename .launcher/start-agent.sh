@@ -989,6 +989,33 @@ else
   ' >/dev/null 2>&1 < /dev/null &
 fi
 
+# ── Sfasamento iniziale del worker ──────────────────────────────────────────
+# Due worker sullo STESSO gradino di throttle che partono insieme restano
+# appaiati: ogni loro ciclo cade nello stesso istante e ogni coincidenza è un
+# picco di richieste simultanee. Lo stagger che c'era prima era una costante
+# (~10 min) scollegata dal periodo reale: più grande del periodo stesso sui
+# gradini brevi (il primo worker aveva già ciclato due volte prima che partisse
+# il secondo, quindi le fasi finivano dove capita) e per costruzione a rischio
+# di lockstep quando coincideva col periodo. Ora la distanza la decide il
+# gradino: T/N, con T letto da throttle-config e N i worker che quel gradino lo
+# condividono davvero. Vedi shared/skills/spawn_stagger.py per limiti e
+# aritmetica.
+#
+# L'attesa NON la fa questo script (bloccherebbe il Capitano che lo ha invocato,
+# e le tool call dei provider scadono in 30-120s): si pre-arma il throttle del
+# worker, che si ferma da solo al gate `jht-throttle-check` che il suo prompt
+# gli impone già al primo giro di loop. Un worker solo sul gradino non aspetta
+# niente — il primo spawn è il percorso anti-idle.
+STAGGER_SCRIPT="/app/shared/skills/spawn_stagger.py"
+[ -f "$STAGGER_SCRIPT" ] || STAGGER_SCRIPT="$DEV_TEAM_DIR/../shared/skills/spawn_stagger.py"
+STAGGER_SEC=0
+if [ -f "$STAGGER_SCRIPT" ] && command -v python3 >/dev/null 2>&1; then
+  STAGGER_SEC=$(python3 "$STAGGER_SCRIPT" "$AGENT_NAME" --arm 2>/dev/null || echo 0)
+fi
+case "$STAGGER_SEC" in
+  ''|*[!0-9]*) STAGGER_SEC=0 ;;
+esac
+
 echo "✓ $SESSION avviato (cli: $CLI_BIN, provider: ${PROVIDER:-claude}, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
 
 # ── Roster atteso ───────────────────────────────────────────────────────────
@@ -1006,6 +1033,11 @@ if [ -f /app/shared/skills/team_roster.py ]; then
 fi
 echo "  Agent dir:    $AGENT_DIR"
 echo "  JHT_USER_DIR: $JHT_USER_DIR"
+if [ "$STAGGER_SEC" -gt 0 ]; then
+  echo "  Stagger:      ${STAGGER_SEC}s prima del primo ciclo (throttle pre-armato, gradino condiviso)"
+else
+  echo "  Stagger:      nessuno (primo worker del gradino, o ruolo senza periodo)"
+fi
 echo "  Connettiti con: tmux attach -t \"$SESSION\""
 
 # ── Kick-off Capitano / Assistente ──────────────────────────────────────────

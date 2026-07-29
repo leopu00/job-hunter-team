@@ -30,8 +30,15 @@ python3 .../scaling_calc.py --target <S> --measured <b_totale> --workers <N> --t
 ```
 Ti dà: **quanti worker**, **quale throttle**, e un **piano a scaglioni**.
 
-**4. Spawna a SCAGLIONI** seguendo il piano: **uno per volta, ~10 min di distacco**,
-**ri-misurando** prima del successivo. MAI spawnare il blocco intero in un colpo.
+**4. Spawna a SCAGLIONI** seguendo il piano: **uno per volta**, **ri-misurando** prima del
+successivo (~10 min bastano a vedere il burn del nuovo arrivato). MAI spawnare il blocco
+intero in un colpo.
+
+> Quei 10 minuti sono una **finestra di osservazione**, non uno sfasamento: la distanza di
+> fase fra due worker dello stesso gradino è `T/N` (periodo diviso il numero di worker che
+> lo condividono) e la applica il launcher da sé allo spawn. Non è un numero da decidere
+> qui, e non è una costante: su un gradino da 5 minuti tre worker si vogliono a 100s l'uno
+> dall'altro.
 
 ## Le due leve
 - **Worker sotto-target** (1 worker brucia meno del target) → la leva è il **numero di
@@ -55,5 +62,5 @@ scaling_calc.py --target 0.7 --measured 1.4
 ```
 Se invece 1 scout brucia solo **0.3%/h** con target 0.7:
 ```
-→ 2 worker @ 300s (floor), scaglionati: spawn #1, attendi 10min, ri-misura, poi #2.
+→ 2 worker @ 300s (floor), scaglionati: spawn #1, osserva 10min, ri-misura, poi #2.
 ```
