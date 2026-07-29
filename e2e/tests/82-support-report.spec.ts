@@ -107,33 +107,11 @@ async function apriModulo(page: Page) {
   if (await cookie.count()) await cookie.first().click();
 }
 
-// Un 307 dice che la sessione non c'è affatto, ed è il caso facile. Quello
-// che questa guardia non vedeva è la sessione che *esiste ma non serve*:
-// il cookie c'è, `/dashboard` risponde 200, e solo dopo l'idratazione il
-// client scopre di non poter chiamare Supabase — a quel punto il menu utente
-// non viene mai reso e il test resta 30 secondi su un bottone che non
-// arriverà, per poi fallire come se fosse un difetto del prodotto.
-//
-// Succede sul serio: il 2026-07-29 due spec di questo file sono passate alle
-// 17:15 e fallite alle 17:18 su un commit che tocca soltanto la pagina
-// /download. Un test che dipende dallo stato di una sessione esterna deve
-// **saltarsi** quando quello stato manca, non tingere di rosso una release.
 async function sessioneOrSkip(page: Page) {
   const dash = await page.request.get(`${BASE}/dashboard`, { maxRedirects: 0 });
   test.skip(
     dash.status() === 307,
     "serve una sessione autenticata per l'area riservata — vedi e2e/README.md § Sessione",
-  );
-  // La prova vera: il menu utente esiste solo per chi è autenticato davvero.
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
-  const account = page.getByRole("button", { name: /account:/i });
-  const autenticato = await account
-    .waitFor({ state: "visible", timeout: 15_000 })
-    .then(() => true)
-    .catch(() => false);
-  test.skip(
-    !autenticato,
-    "la sessione risponde 200 ma non rende il menu utente: non è utilizzabile — vedi e2e/README.md § Sessione",
   );
 }
 
