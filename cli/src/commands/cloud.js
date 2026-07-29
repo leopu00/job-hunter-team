@@ -991,12 +991,19 @@ async function handlePush(options) {
       // (futuro). Per ora il push e' write-only locale -> cloud.
       // NB: questa tabella non ha colonna updated_at, e' append + flag
       // updates. Lasciamo full-push, il volume e' piccolo.
-      pendingMessages = readSqliteTable(db, 'pending_user_messages', [
+      // [JHT-CHAT-UNIFY] `author`/`chat_ts` viaggiano col push solo se lo
+      // schema locale le ha: un jobs.db più vecchio del codice non deve far
+      // fallire il tick (stesso trattamento dei logo_*).
+      const msgCols = [
         'id', 'agent', 'body', 'kind', 'related_position_id',
         'delivered_via', 'delivered_at', 'acknowledged_at',
         'user_reply', 'user_reply_at', 'agent_seen_reply_at',
         'created_at',
-      ]);
+      ];
+      for (const c of ['author', 'chat_ts']) {
+        if (sqliteHasColumn(db, 'pending_user_messages', c)) msgCols.push(c);
+      }
+      pendingMessages = readSqliteTable(db, 'pending_user_messages', msgCols);
       // Tombstones delta (SQLite V7): righe (table_name, legacy_id,
       // deleted_at) accumulate dai trigger BEFORE DELETE. Filtro per
       // deleted_at > cursor → solo le nuove cancellazioni nel tick.
@@ -2346,38 +2353,57 @@ async function handleDirectiveSync(options = {}) {
  * Best-effort: 1 GET /api/team-state per tick (lettura singola riga per user,
  * economica); push + PATCH ack solo quando c'è davvero una richiesta.
  */
-async function handleSyncRendezvous(options = {}) {
-  const silent = options.silent === true;
-  const config = await loadCloudConfig();
-  if (!config || !config.enabled) return;
+/**
+ * La riga `team_state` che serve ai due rendezvous del giro veloce: "Sync
+ * now" (dati) e chat. Si legge UNA volta e si passa a entrambi — sono la
+ * stessa riga, e leggerla due volte raddoppierebbe le query a vuoto.
+ *
+ * [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: Supabase diretto se abilitato, con
+ * fallback alla GET Vercel. Le colonne `chat_*` (mig 060) possono non
+ * esistere su un progetto non ancora migrato: in quel caso PostgREST
+ * risponde 400 sull'intera select, quindi si ritenta con le sole colonne
+ * storiche e la corsia chat resta semplicemente ferma.
+ */
+async function readRendezvousState(config, { silent = true } = {}) {
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
-
-  // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: leggi team_state da Supabase diretto se
-  // abilitato; su errore (o se disabilitato) fallback alla GET Vercel.
   const reader = getDirectReader(config);
-  let state = null;
-  let gotState = false;
+  const withChat = ['sync_requested_at', 'sync_completed_at', 'chat_requested_at', 'chat_delivered_at'];
+  const legacy = ['sync_requested_at', 'sync_completed_at'];
+
   if (reader) {
     try {
-      state = await reader.readTeamState(['sync_requested_at', 'sync_completed_at']);
-      gotState = true;
-    } catch (err) {
-      if (!silent) console.error(pc.yellow(`  sync-rendezvous (direct) warn: ${err.message} — fallback Vercel`));
+      return await reader.readTeamState(withChat);
+    } catch {
+      try {
+        return await reader.readTeamState(legacy);
+      } catch (err) {
+        if (!silent) console.error(pc.yellow(`  rendezvous (direct) warn: ${err.message} — fallback Vercel`));
+      }
     }
   }
-  if (!gotState) {
-    try {
-      const res = await fetch(`${baseUrl}/api/team-state`, {
-        headers: { Authorization: `Bearer ${config.token}` },
-      });
-      if (!res.ok) return;
-      const body = await res.json().catch(() => ({}));
-      state = body.state || null;
-    } catch (err) {
-      if (!silent) console.error(pc.yellow(`  sync-rendezvous warn: ${err.message}`));
-      return;
-    }
+  try {
+    const res = await fetch(`${baseUrl}/api/team-state`, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => ({}));
+    return body.state || null;
+  } catch (err) {
+    if (!silent) console.error(pc.yellow(`  rendezvous warn: ${err.message}`));
+    return null;
   }
+}
+
+async function handleSyncRendezvous(options = {}) {
+  const silent = options.silent === true;
+  const config = options.config || (await loadCloudConfig());
+  if (!config || !config.enabled) return;
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const reader = getDirectReader(config);
+
+  const state = options.state !== undefined
+    ? options.state
+    : await readRendezvousState(config, { silent });
   if (!state) return;
 
   const reqAt = state.sync_requested_at || null;
@@ -2439,6 +2465,183 @@ async function handleSyncRendezvous(options = {}) {
   } catch (err) {
     if (!silent) console.error(pc.yellow(`  sync-rendezvous ack warn: ${err.message}`));
   }
+}
+
+/**
+ * [JHT-CHAT-UNIFY] La corsia della chat utente ↔ agente, unica per
+ * videogioco e web. Gira nel giro VELOCE del daemon (~5s) perché una chat
+ * con minuti di latenza non è una chat.
+ *
+ * Cinque passi, tutti con una guardia LOCALE davanti: a conversazione ferma
+ * il giro non tocca né Supabase né Vercel.
+ *
+ *   1. import  — turni scritti dal web (solo se `chat_requested_at` lo dice);
+ *   2. ingest  — turni comparsi in `chat.jsonl` (gioco + `jht-send`), solo se
+ *                il file si è mosso (stat, gratis);
+ *   3. mirror  — turni nati in SQLite (`jht-notify-user`, web) → `chat.jsonl`,
+ *                così la chat del gioco vede la conversazione intera;
+ *   4. deliver — turni dell'utente non consegnati → pane tmux dell'agente,
+ *                con `jht-tmux-send` (la stessa strada del gioco);
+ *   5. push    — turni nuovi → cloud, così il browser li riceve via Realtime.
+ *
+ * Il push passa da `/api/cloud-sync/push` (service-role + RPC merge di mig
+ * 057/060) e non da Supabase diretto: la policy di INSERT dell'utente
+ * ammette solo i PROPRI turni, non quelli dell'agente — ed è giusto così.
+ * È una manciata di righe piccole per messaggio scambiato, non un battito.
+ */
+async function handleChatSync(options = {}) {
+  const silent = options.silent === true;
+  const config = options.config || (await loadCloudConfig());
+  if (!config || !config.enabled) return;
+  const dbPath = process.env.JHT_DB || JHT_DB_PATH;
+  if (!existsSync(dbPath)) return;
+
+  const chat = await import('../lib/chat-sync.js');
+  const log = (level, msg) => {
+    if (silent && level !== 'error') return;
+    console.error(level === 'error' ? pc.red(`  ${msg}`) : pc.yellow(`  ${msg}`));
+  };
+
+  let db;
+  try {
+    // `timeout`: la jobs.db è condivisa con gli agenti, che scrivono spesso.
+    // A 5s di cadenza un SQLITE_BUSY istantaneo sarebbe frequente; qui si
+    // aspetta il lock invece di saltare il giro.
+    db = new DatabaseSync(dbPath, { timeout: 5000 });
+  } catch (err) {
+    if (!silent) console.error(pc.yellow(`  chat-sync: DB non apribile: ${err.message}`));
+    return;
+  }
+  // Le colonne arrivano da _db.py alla prima apertura di un agente: un
+  // container non ancora ri-deployato non deve far esplodere il daemon.
+  if (!sqliteHasColumn(db, 'pending_user_messages', 'author')) {
+    db.close();
+    return;
+  }
+
+  const reader = getDirectReader(config);
+  let importedIds = [];
+
+  try {
+    // ── 1. Turni scritti dal web ───────────────────────────────────────
+    // `state` arriva già letto dal giro veloce (la stessa riga team_state
+    // del rendezvous "Sync now"): zero letture Supabase in più.
+    const state = options.state || null;
+    const pending = chat.chatPending(state?.chat_requested_at, state?.chat_delivered_at);
+    if (pending && reader) {
+      try {
+        const cloudRows = await reader.readUndeliveredUserChat({ limit: 50 });
+        importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome: JHT_HOME });
+      } catch (err) {
+        log('warn', `chat-sync: lettura turni utente fallita: ${err.message}`);
+      }
+    }
+
+    // ── 2/3. Mirror bidirezionale col file che legge il gioco ──────────
+    const cursorFile = join(JHT_HOME, '.chat-mirror-cursor.json');
+    const cursor = await chat.loadChatCursor(cursorFile);
+    const ingested = chat.ingestChatJsonl(db, { jhtHome: JHT_HOME, cursor });
+    if (JSON.stringify(ingested.cursor) !== JSON.stringify(cursor)) {
+      await chat.saveChatCursor(cursorFile, ingested.cursor);
+    }
+    const mirrored = chat.mirrorDbTurnsToJsonl(db, { jhtHome: JHT_HOME });
+
+    // ── 4. Consegna al pane ────────────────────────────────────────────
+    const sent = await chat.deliverPendingUserTurns(db, { log });
+
+    // ── 5. Push dei turni nuovi verso il cloud ─────────────────────────
+    const toPush = chat.takeChatRowsToPush(db, { limit: 100 });
+    let pushed = 0;
+    if (toPush.length > 0) {
+      const userId = config.user_id || null;
+      const rows = toPush.map((r) => chat.toCloudRow(r, userId));
+      const okIds = await pushChatRows(config, rows, toPush.map((r) => r.id), log);
+      chat.markChatRowsPushed(db, okIds);
+      pushed = okIds.length;
+    }
+
+    // ── Chiusura del rendezvous ────────────────────────────────────────
+    // Solo se abbiamo davvero consegnato tutto quello che era in coda: con
+    // un pane occupato il flag resta aperto e il giro dopo ritenta.
+    if (pending && reader && sent.failed === 0) {
+      try {
+        if (importedIds.length > 0) await reader.markUserChatDelivered(importedIds);
+        await reader.patchTeamState({ chat_delivered_at: new Date().toISOString() });
+      } catch (err) {
+        log('warn', `chat-sync: ack consegna fallito: ${err.message}`);
+      }
+    }
+
+    const moved = ingested.inserted + mirrored.mirrored + sent.delivered + pushed;
+    if (!silent && (moved > 0 || mirrored.backfilled > 0)) {
+      console.log(
+        pc.green(
+          `✓ Chat: ${ingested.inserted} da chat.jsonl↓, ${mirrored.mirrored} verso chat.jsonl↑, ` +
+          `${sent.delivered} consegnati all'agente, ${pushed} pushati` +
+          (mirrored.backfilled > 0 ? ` (${mirrored.backfilled} storici marcati senza riversarli)` : '')
+        )
+      );
+    }
+  } catch (err) {
+    if (!silent) console.error(pc.yellow(`  chat-sync error: ${err.message}`));
+  } finally {
+    try { db.close(); } catch { /* già chiuso */ }
+  }
+}
+
+/**
+ * Push mirato dei soli turni di chat. Payload minuscolo (una manciata di
+ * messaggi), ma con lo stesso trattamento anti-413 del push grosso: chunk
+ * che si dimezza, riga singola che ancora 413 scartata e loggata invece di
+ * bloccare la coda. Il cursore qui è `cloud_synced_at` per-riga, quindi non
+ * esiste un cursore che possa congelarsi (postmortem 2026-07-15).
+ *
+ * @returns id LOCALI delle righe confermate dal server
+ */
+async function pushChatRows(config, rows, ids, log) {
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const pushUrl = `${baseUrl}/api/cloud-sync/push`;
+  const headers = { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' };
+  const CHUNK = Math.max(1, parseInt(process.env.JHT_CHAT_PUSH_CHUNK || '25', 10) || 25);
+  const ok = [];
+
+  const queue = [];
+  for (let i = 0; i < rows.length; i += CHUNK) queue.push([i, Math.min(i + CHUNK, rows.length)]);
+
+  while (queue.length) {
+    const [s, e] = queue.shift();
+    if (s >= e) continue;
+    let res;
+    try {
+      const r = await fetch(pushUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ pending_user_messages: rows.slice(s, e) }),
+      });
+      res = { status: r.status, ok: r.ok };
+    } catch (err) {
+      log('warn', `chat push: rete (${err.message}) — ritento al prossimo giro`);
+      return ok;
+    }
+    if (res.ok) {
+      for (let i = s; i < e; i++) ok.push(ids[i]);
+      continue;
+    }
+    if (res.status === 413 && e - s > 1) {
+      const mid = s + Math.floor((e - s) / 2);
+      queue.unshift([mid, e]);
+      queue.unshift([s, mid]);
+      continue;
+    }
+    if (res.status === 413) {
+      log('error', `chat push: 413 su un singolo messaggio (#${s}) — scartato, il resto prosegue`);
+      ok.push(ids[s]);
+      continue;
+    }
+    log('warn', `chat push: HTTP ${res.status} — ritento al prossimo giro`);
+    return ok;
+  }
+  return ok;
 }
 
 /**
@@ -2651,16 +2854,36 @@ async function handleDaemon(options) {
         }
       }
 
-      // ── Check "Sync now": OGNI giro veloce (~5s) ── lettura di 1 riga
-      // (sync_requested_at) su Supabase; il push dati parte solo se c'è davvero
-      // una richiesta dell'utente → il pulsante risponde in pochi secondi.
+      // ── Check "Sync now" + chat: OGNI giro veloce (~5s) ── UNA lettura di
+      // 1 riga (team_state) su Supabase, condivisa dai due rendezvous. Il
+      // push dati parte solo se c'è una richiesta dell'utente → il pulsante
+      // risponde in pochi secondi; la chat, che non può permettersi minuti
+      // di latenza, gira qui e non nel giro pesante.
+      let rendezvousState = null;
+      try {
+        rendezvousState = await readRendezvousState(config, { silent: true });
+      } catch (err) {
+        console.error(pc.yellow(`  daemon rendezvous read error: ${err.message}`));
+      }
       try {
         const prevSr = process.exitCode;
         process.exitCode = 0;
-        await handleSyncRendezvous({ silent: true });
+        await handleSyncRendezvous({ silent: true, config, state: rendezvousState });
         process.exitCode = prevSr;
       } catch (err) {
         console.error(pc.yellow(`  daemon sync-rendezvous error: ${err.message}`));
+      }
+
+      // [JHT-CHAT-UNIFY] Corsia chat: mirror chat.jsonl ⇄ SQLite, consegna al
+      // pane dell'agente, push dei turni nuovi. Ogni passo ha una guardia
+      // locale: a chat ferma non tocca nulla di remoto.
+      try {
+        const prevCh = process.exitCode;
+        process.exitCode = 0;
+        await handleChatSync({ silent: true, config, state: rendezvousState });
+        process.exitCode = prevCh;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon chat-sync error: ${err.message}`));
       }
 
       // ── Heartbeat "VPS online": ogni intervalSec ── (reconcileOnce solo-heartbeat;
@@ -2732,6 +2955,21 @@ async function runRealtimeLoop({ config, isRunning }) {
     catch (e) { console.error(pc.yellow(`  ${tag} ticket-sync error: ${e.message}`)); }
     finally { ticketing = false; }
   };
+  // [JHT-CHAT-UNIFY] La chat ha DUE sorgenti: il cloud (turno scritto dal
+  // web → evento su team_state) e il box stesso (l'agente che risponde con
+  // `jht-send`, che non produce alcun evento remoto). Serve quindi sia
+  // l'aggancio all'evento sia un battito locale corto — che però resta
+  // gratis, perché ogni passo di handleChatSync ha una guardia locale.
+  let chatting = false;
+  const runChatSync = async (tag, state) => {
+    if (chatting) return;
+    chatting = true;
+    try { await handleChatSync({ silent: true, config, state }); }
+    catch (e) { console.error(pc.yellow(`  ${tag} chat-sync error: ${e.message}`)); }
+    finally { chatting = false; }
+  };
+  const chatLocalSec = Math.max(1, parseInt(process.env.JHT_CHAT_LOCAL_SEC || '5', 10) || 5);
+  const chatTimer = setInterval(() => { void runChatSync('local', null); }, chatLocalSec * 1000);
 
   let rt = null;
   try {
@@ -2739,7 +2977,11 @@ async function runRealtimeLoop({ config, isRunning }) {
     rt = await createRealtimeSync({ config, log });
 
     // ── Tappa 2: sync-flag → Realtime ── UPDATE su team_state (sync_requested_at) → push.
-    rt.subscribe('team-state', { table: 'team_state', event: 'UPDATE' }, () => { void runSync('realtime'); });
+    rt.subscribe('team-state', { table: 'team_state', event: 'UPDATE' }, (payload) => {
+      void runSync('realtime');
+      // Stessa riga, stesso evento: `chat_requested_at` viaggia qui dentro.
+      void runChatSync('realtime', payload?.new ?? null);
+    });
 
     // ── Tappa 3: ticket → Realtime ── cambio su position_tickets → ticket-sync.
     // Richiede mig 048 (position_tickets in publication supabase_realtime + REPLICA
@@ -2786,6 +3028,9 @@ async function runRealtimeLoop({ config, isRunning }) {
     if (tick % everyParachute === 0) {
       await runSync('parachute');
       await runTicketSync('parachute');
+      // La chat ha già il suo battito locale corto: qui serve solo a
+      // recuperare il PULL dal cloud se l'evento team_state si è perso.
+      await runChatSync('parachute', await readRendezvousState(config));
     }
     // Desired-state ~ogni 5min (poll lento, niente Realtime).
     if (tick % everyDesired === 0) {
@@ -2802,6 +3047,7 @@ async function runRealtimeLoop({ config, isRunning }) {
     await sleepTick();
   }
 
+  clearInterval(chatTimer);
   if (rt) { try { await rt.close(); } catch { /* ignore */ } }
 }
 
@@ -2950,6 +3196,17 @@ export function registerCloudCommand(program) {
     .option('--dry-run', 'Mostra cosa verrebbe applicato senza UPDATE')
     .option('--silent', 'Output minimo (per il boot)')
     .action(handlePullDesiredState);
+
+  cloud
+    .command('chat-sync')
+    .description('Un giro della corsia chat: chat.jsonl <-> SQLite, consegna al pane, push al cloud')
+    .action(async () => {
+      const config = await loadCloudConfig();
+      // A mano si vuole anche il PULL, non solo i passi locali: si legge la
+      // riga team_state come farebbe il giro veloce del daemon.
+      const state = config?.enabled ? await readRendezvousState(config, { silent: false }) : null;
+      await handleChatSync({ silent: false, config, state });
+    });
 
   cloud
     .command('sync-tickets')
