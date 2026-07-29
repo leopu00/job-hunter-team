@@ -164,6 +164,34 @@ prima, presa da sola, autorizza a ignorare il weekly — ed è quello che è qua
 Un allarme sul weekly va valutato **sul tempo che manca al suo reset**, non su quello che
 manca al reset della finestra.
 
+### La frenata sui worker non basta: i core consumano comunque
+
+Esito dell'intervento: **non è bastato**. Con tutti e cinque i worker a 3600s e zero
+posizioni prodotte, il weekly è passato da **98% a 100% in circa un'ora** ed è arrivato
+al muro.
+
+Il motivo è che il throttle governa i **worker**, mentre restano in funzione i ruoli
+core — coordinatore, sentinella, assistente, dottore, mentore — più i tre bridge, che
+continuano a scambiarsi tick ogni 5-15 minuti indipendentemente dal fatto che ci sia
+lavoro. Nessuno di loro passa dal `throttle.json` dei worker.
+
+**Un team acceso ha quindi un costo fisso che nessuna leva di pacing attuale può
+azzerare.** Misurato qui: circa 2 punti di weekly all'ora a pipeline completamente ferma.
+È il numero che manca a tutte le decisioni di capacità — quante VPS reggere con un
+account, se convenga spegnere un team inattivo invece di rallentarlo, quanto costa
+tenere un beta tester "acceso ma fermo".
+
+Conseguenza pratica: **rallentare un team quasi a zero non lo rende quasi gratis**. Sotto
+una certa soglia di produzione, la scelta non è fra veloce e lento ma fra acceso e
+spento, e oggi non esiste una via di mezzo. Serve una modalità di standby che silenzi
+anche i core e i bridge, non solo i worker.
+
+Nota su cosa NON è successo: nessun file di halt è stato scritto (`weekly-halt.flag`
+assente). Il blocco arriva direttamente dal provider come `403` sulle chiamate, e gli
+agenti restano vivi a raccoglierli — la sentinella ne aveva dieci nel solo pane
+visibile. Il team non "si ferma": continua a girare a vuoto contro un muro, il che è un
+altro argomento per lo standby esplicito.
+
 ### Come leggere `proj_weekly` e `pace_ratio`
 
 Entrambi estrapolano il ritmo istantaneo su tutta la settimana **ignorando le pause che
