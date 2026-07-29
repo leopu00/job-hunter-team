@@ -260,14 +260,45 @@ ruolo per conservare identità, abiti, crop e proporzioni):
 Chi li ha già, come riferimento della posa: `scout`, `analista`, `scorer`,
 `dottore`, `mentor`.
 
-### Secondo pezzo: i volti per istanza
+### Secondo pezzo: i volti per istanza — NON sono facce nuove
 
-Oggi `scout-1` e `scout-2` condividono una faccia, mentre nell'ufficio hanno
-già corpi diversi (`CharacterDefs.VARIANT_BY_DESK`) e dal 29/07 anche cognomi
-diversi — Holmes e Colombo si presentano con lo stesso volto. Il codice è già
-pronto e non va toccato: `ComicChat.portrait_slug()` cerca **prima**
-`gen-art/portraits/<ruolo>-<n>/`, quindi basta depositare la cartella perché
-venga usata.
+⚠️ Correzione alla prima stesura di questa nota, che chiedeva genericamente
+"volti per istanza". La richiesta è più precisa, e sbagliarla produrrebbe
+personaggi che non esistono.
 
-Priorità bassa rispetto ai sei `pensieroso`: qui il difetto è che due
-personaggi si somigliano, là è un'informazione che non arriva.
+**In ufficio ogni agente ha già il suo volto**, assegnato per scrivania in
+`CharacterDefs.VARIANT_BY_DESK`, con sprite reali in
+`assets/characters/sheets/<ruolo>_<lettera>.png`:
+
+```
+scout / analisti / scorer / scrittori:  desk 0→b, 1→a, 2→c, 3→d, 4→e, 5→f
+critici:                                desk 0→a, 1→b, 2→c, 3→d, 4→e, 5→f
+```
+
+**In chat, invece, si vede il ritratto del RUOLO** (`portrait_view.gd:39`
+carica `gen-art/portraits/<slug>/full_neutro.png`): parlare con `scout-1`,
+`scout-2` o `scout-5` mostra sempre la stessa faccia, mentre in sala sono tre
+persone diverse. Nota che il primo Scout non è nemmeno la variante `a` ma la
+`b`, quindi il ritratto generico può non corrispondere a **nessuno** dei
+presenti.
+
+Quindi non servono facce inventate: servono i ritratti **delle varianti che
+esistono già**, derivati dallo sprite corrispondente per conservare identità,
+abiti e proporzioni — esattamente come i quattordici del 22/07 sono stati
+derivati dagli sprite in-world.
+
+Destinazione, che il codice già cerca per primo (`ComicChat.portrait_slug()`)
+e che quindi non richiede modifiche:
+
+```
+assets/gen-art/portraits/<ruolo>-<n>/full_<emozione>.png
+        dove <n> è il numero dell'agente e la variante da ritrarre
+        si legge da VARIANT_BY_DESK[<reparto>][<n>-1]
+```
+
+Esempio: `portraits/scout-1/` ritrae la variante **b**, `portraits/scout-2/`
+la variante **a**, `portraits/critico-1/` la variante **a**.
+
+Priorità: **dopo** i sei `pensieroso` — là manca un'informazione (l'attesa
+non si distingue dalla risposta), qui manca la corrispondenza fra chi vedi in
+ufficio e chi ti risponde in chat.
