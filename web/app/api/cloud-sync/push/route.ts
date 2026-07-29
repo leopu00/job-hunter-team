@@ -135,6 +135,11 @@ interface PendingMessageIn {
   agent: string;
   body: string;
   kind?: string | null;
+  // [JHT-CHAT-UNIFY] Chi ha scritto il turno ('agent' | 'user') e il `ts`
+  // della riga gemella in chat.jsonl. Opzionali: un box non ancora
+  // ri-deployato non li manda e la RPC li tratta come "non pervenuti".
+  author?: string | null;
+  chat_ts?: number | null;
   related_position_id?: number | null;
   delivered_via?: string | null;
   delivered_at?: string | null;
@@ -761,6 +766,11 @@ export async function POST(req: NextRequest) {
             m.kind && ALLOWED_MESSAGE_KIND.has(m.kind)
               ? m.kind
               : "notification",
+          author: m.author === "user" ? "user" : "agent",
+          chat_ts:
+            typeof m.chat_ts === "number" && Number.isFinite(m.chat_ts)
+              ? m.chat_ts
+              : null,
           related_position_id: relatedUuid,
           delivered_via:
             m.delivered_via && ALLOWED_DELIVERED_VIA.has(m.delivered_via)
