@@ -351,10 +351,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "Job Hunter Team ${{ github.ref_name }}"
+          # La nota Windows sta QUI perche' questa e' l'unica pagina da cui si
+          # scarica `job-hunter-team.exe`: il sito non serve i binari desktop e
+          # nessun doc pubblico linka le Release. Tre fatti, niente scuse: cosa
+          # vede, cosa clicca, perche' succede.
           body: |
             ## What's new in ${{ github.ref_name }}
 
             ${{ steps.changelog.outputs.notes }}
+
+            ### Windows
+
+            `job-hunter-team.exe` is not code-signed, so Windows shows a **"Windows protected your PC"** screen on first launch: click **More info** → **Run anyway**. The macOS `.zip` is signed and notarized by Apple; the Linux `.tar.gz` is unsigned as well.
 
             ---
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for the full history.
