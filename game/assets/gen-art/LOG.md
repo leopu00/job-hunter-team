@@ -237,7 +237,7 @@ dialogo con "LO SCRITTORE"): esistono i ritratti di soli 6 ruoli
 
 ---
 
-## Da generare — richiesta 2026-07-29 (chat a fumetti)
+## Richiesta 2026-07-29 — chat a fumetti
 
 > **Elenco operativo completo, con la mappa agente→variante già risolta:**
 > [`docs/internal/assets/TODO-ART.md`](../../../docs/internal/assets/TODO-ART.md)
@@ -305,3 +305,24 @@ la variante **a**, `portraits/critico-1/` la variante **a**.
 Priorità: **dopo** i sei `pensieroso` — là manca un'informazione (l'attesa
 non si distingue dalla risposta), qui manca la corrispondenza fra chi vedi in
 ufficio e chi ti risponde in chat.
+
+### 2026-07-29 — Lotto 1 completato: sei `pensieroso`
+
+| slug | file | esito |
+|---|---|---|
+| assistente | `portraits/assistente/full_pensieroso.png` | ✅ identità e crop preservati |
+| coordinatore | `portraits/coordinatore/full_pensieroso.png` | ✅ identità e abiti preservati |
+| critico | `portraits/critico/full_pensieroso.png` | ✅ documento e mani preservati |
+| scrittore | `portraits/scrittore/full_pensieroso.png` | ✅ penna e pagina preservate |
+| sentinella | `portraits/sentinella/full_pensieroso.png` | ✅ notebook e cintura preservati |
+| mantenitore | `portraits/mantenitore/full_pensieroso.png` | ✅ chiave e attrezzi preservati |
+
+Generazione via skill `imagegen`, un asset per chiamata, usando il ritratto
+`full_neutro` come ancora e i `pensieroso` approvati come riferimento di posa.
+Il chroma-key è stato scelto per personaggio per non confliggere con gli abiti;
+ogni finale è 1120×1520 RGBA, ha angoli trasparenti ed è stato controllato in
+composito sul fondo scuro della chat. Il primo tentativo dell'Assistente su
+magenta è stato scartato perché il matte rendeva semitrasparenti pelle e abiti;
+la rigenerazione su verde ha superato il controllo. L'import Godot riesce; lo
+screenshot automatico non è stato acquisito perché macOS ha congelato il
+present della finestra occlusa, caso già documentato in `tools/run.sh`.
