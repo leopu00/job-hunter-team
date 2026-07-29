@@ -434,6 +434,17 @@ func _ready() -> void:
 		get_tree().create_timer(2.5).timeout.connect(_open_chat_menu)
 	if OS.get_environment("JHT_CHAT_UI_TEST") == "1":
 		_chat_ui_selftest.call_deferred()
+	# TEST-AUTO: la pagina a fumetti si verifica da sé, in un nodo suo
+	# (tools/comic_chat_selftest.gd) invece che qui dentro: il corpo del test
+	# è lungo quanto la feature e questa _ready è già una lista di ganci.
+	if OS.get_environment("JHT_COMIC_CHAT_TEST") == "1":
+		add_child(load("res://tools/comic_chat_selftest.gd").new())
+	# SHOT: JHT_COMIC_CHAT=<ruolo> apre la pagina a fumetti su una
+	# conversazione già scritta — è l'unico modo di fotografarla senza un
+	# team vivo (run.sh shot out.png JHT_COMIC_CHAT=scout).
+	var comic_shot := OS.get_environment("JHT_COMIC_CHAT")
+	if comic_shot != "":
+		_comic_chat_shot.call_deferred(comic_shot)
 
 	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza throttle e rimozione roster,
 	# senza aspettare il ciclo eventi del mock.
@@ -1107,11 +1118,11 @@ func _guided_onboarding_selftest() -> void:
 	add_child(panel)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check.call(panel._choices.get_child_count() >= 2, "bottoni guided non renderizzati")
-	check.call(not panel._input.editable and panel._send_btn.disabled,
+	check.call(panel._view.choices.get_child_count() >= 2, "bottoni guided non renderizzati")
+	check.call(not panel._view.input.editable and panel._view.send_button.disabled,
 			"testo libero acceso prima del provider")
 	var pressed_first := false
-	for child in panel._choices.get_children():
+	for child in panel._view.choices.get_children():
 		if child is Button:
 			(child as Button).pressed.emit()
 			pressed_first = true
@@ -1147,9 +1158,9 @@ func _guided_onboarding_selftest() -> void:
 	panel._refresh_chat_mode()
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check.call(panel._input.editable and not panel._send_btn.disabled,
+	check.call(panel._view.input.editable and not panel._view.send_button.disabled,
 			"testo libero non abilitato dopo provider + agente")
-	check.call(panel._choices.get_child_count() == 0,
+	check.call(panel._view.choices.get_child_count() == 0,
 			"le risposte authored non spariscono dopo il login provider")
 	panel._on_updated("assistente", [{"role": "assistant", "text": "Scegli tu.",
 			"done": true, "choices": [
@@ -1158,7 +1169,7 @@ func _guided_onboarding_selftest() -> void:
 			]}])
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check.call(panel._choices.get_child_count() == 3,
+	check.call(panel._view.choices.get_child_count() == 3,
 			"risposte suggerite generate dall'agente non renderizzate")
 	# Il modulo profilo deve esistere anche senza LLM e includere proprio i
 	# campi che determinano il gate ready (email e lingue comprese).
@@ -1863,6 +1874,38 @@ func _chat_selftest(role: String, send: bool) -> void:
 				BackendBus.send_user_chat(a.slug, "Come procede il lavoro?")
 			return
 
+## Apre la pagina a fumetti su una conversazione seminata, per lo screenshot.
+## Il mock serve a rendere l'agente "conversabile" (can_chat_with); le battute
+## le scriviamo noi, perché una foto deve mostrare la forma della pagina —
+## vignette dell'agente e dell'utente, code opposte, ritratto — non l'esito
+## casuale di un mock.
+func _comic_chat_shot(role: String) -> void:
+	if BackendBus.state == BackendBus.DISCONNECTED:
+		BackendBus.set_backend(MockBackend.new())
+	await get_tree().create_timer(1.5).timeout
+	var uid := role
+	for a in BackendBus.agents:
+		if str(a.get("slug", "")) == role:
+			uid = str(a.get("uid", role))
+			break
+	var display := role.capitalize()
+	for a in BackendBus.agents:
+		if str(a.get("uid", "")) == uid:
+			display = str(a.get("name", display))
+	_chat_panel = ChatPanel.new(uid, display, _chat_roster())
+	add_child(_chat_panel)
+	_chat_panel.closed.connect(func() -> void: _chat_panel = null)
+	await get_tree().process_frame
+	BackendBus.publish_agent_chat(uid, [
+		{"role": "assistant", "done": true,
+			"text": "Ho finito il giro delle board: sei posizioni nuove, quattro remote in UE."},
+		{"role": "user", "done": true,
+			"text": "Ottimo. Puoi concentrarti sulle remote?"},
+		{"role": "assistant", "done": true,
+			"text": "Fatto: da adesso do priorità alle remote e passo le altre all'Analista."},
+	])
+
+
 func _chat_ui_selftest() -> void:
 	await get_tree().process_frame
 	BackendBus.clear_chat_unread()
@@ -1877,7 +1920,19 @@ func _chat_ui_selftest() -> void:
 	var badge_ok := sidebar != null and "1" in sidebar._tab.text
 	_open_chat_menu()
 	await get_tree().process_frame
-	var menu_ok := _chat_menu != null and _chat_menu._agents.size() == 3
+	# Il menu elenca ESATTAMENTE il roster conversabile della scena. Il numero
+	# fisso "3" non va più bene: dal 2026-07-28 anche i ruoli operativi hanno
+	# la skill di risposta, e un numero scritto a mano avrebbe solo detto
+	# quanti erano il giorno in cui il test è stato scritto. Quello che conta
+	# è che il menu e il roster non divergano, e che un WORKER ci sia davvero.
+	var expected_roster := _chat_roster()
+	var has_worker := false
+	for entry: Dictionary in expected_roster:
+		if BackendBus._chat_role(str(entry.get("slug", ""))) == "scout":
+			has_worker = true
+	var menu_ok := _chat_menu != null \
+			and _chat_menu._agents.size() == expected_roster.size() \
+			and has_worker
 	var coordinator := _find_agent("coordinatore")
 	if _chat_menu:
 		_chat_menu.close(false)

@@ -421,11 +421,28 @@ func is_remote() -> bool:
 ## ── Chat bidirezionale utente ↔ agente ───────────────────────────────
 ## Chat 1-a-1 con OGNI agente del roster (paradigma desktop app): il
 ## backend risolve uid → sessione tmux e directory chat.jsonl. La
-## RISPOSTA persistita è garantita solo per chi ha la skill chat-web
-## nel proprio prompt (verificato sulla VPS: capitano, assistente,
-## mentor); gli altri ricevono il messaggio ma potrebbero rispondere
-## solo a schermo nel terminale del team — la UI lo dice.
-const REPLY_CAPABLE := ["coordinatore", "assistente", "mentor"]
+## RISPOSTA persistita è garantita solo per chi ha una skill di risposta
+## in chat nel proprio prompt; gli altri ricevono il messaggio ma
+## potrebbero rispondere solo a schermo nel terminale del team — la UI
+## lo dice (chat.besteffort).
+##
+## I tre coordinatori (capitano, assistente, mentor) hanno `chat-web`. Dal
+## 2026-07-28 i cinque ruoli OPERATIVI hanno `chat-worker`, la stessa
+## consegna con in più il freno sul costo: rispondi corto e subito, poi
+## torna al lavoro. Restano fuori tre ruoli, e non per dimenticanza:
+##
+##  - `dottore` e `mantenitore` sono one-shot a slot: fra uno spawn e
+##    l'altro la loro tmux è bash residua (C-08), quindi la risposta non
+##    arriverebbe MAI — un pallino verde sarebbe una promessa falsa;
+##  - `sentinella` è edge-triggered dal bridge e la sua RULE #0 le vieta
+##    di parlare con chiunque non sia il Capitano; per giunta legge
+##    percentuali di consumo, non posizioni: non ha niente da dire
+##    all'utente che il Capitano non dica meglio.
+##
+## Il Critico c'è, ma la sua skill gli vieta di ACCETTARE informazioni sul
+## candidato dalla chat: la blind review è tutto il suo valore.
+const REPLY_CAPABLE := ["coordinatore", "assistente", "mentor",
+	"scout", "analista", "scorer", "scrittore", "critico"]
 
 ## In attesa di risposta: uid → ts unix dell'invio. La UI mostra
 ## l'indicatore di caricamento su chat_waiting_changed.
@@ -484,7 +501,10 @@ func clear_chat_unread() -> void:
 
 func _self_test_chat_notifications() -> void:
 	clear_chat_unread()
-	publish_chat({"ts": "1", "from": "scout-1", "to": "user",
+	# Ruolo NON interattivo: dal 2026-07-28 lo scout risponde in chat, quindi
+	# il rumore che non deve accendere il pallino arriva dalla Sentinella —
+	# che resta fuori da REPLY_CAPABLE per progetto, non per dimenticanza.
+	publish_chat({"ts": "1", "from": "sentinella-1", "to": "user",
 			"text": "rumore non interattivo"})
 	var filtered := total_chat_unread() == 0
 	publish_chat({"ts": "2", "from": "capitano", "to": "user",

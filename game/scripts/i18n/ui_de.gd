@@ -255,8 +255,9 @@ const S := {
 	"guided.hybrid_note": "◆ Führung aktiv — du kannst dem verbundenen Agenten auch frei schreiben",
 	"guided.agent_unavailable": "◆ Provider verbunden — starte das Team für den Live-Chat",
 	"guided.ai_suggestions": "VOM AGENTEN VORGESCHLAGENE ANTWORTEN",
-	"chat.expand": "VOLLBILD",
-	"chat.shrink": "VERKLEINERN",
+	"chat.close": "schließen [Esc]",
+	"chat.history_start": "Beginn des Gesprächs",
+	"chat.jump_latest": "NEUESTE NACHRICHT",
 
 	"wizard.title": "RICHTE DEIN PROFIL EIN",
 	"wizard.subtitle": "Sprich mit dem Assistenten: der Badge links füllt sich von selbst, während ihr euch austauscht. Lade deinen Lebenslauf hoch, um schneller zu sein.",
