@@ -253,9 +253,14 @@ func _render() -> void:
 ## Nome a schermo: i ruoli con workdir condivisa (es. critico) arrivano
 ## dai log come voce unica — il badge ×N dice quante istanze ci sono
 ## dietro, contate dal roster live.
+## Solo le voci PER ISTANZA prendono il cognome: `Holmes · scout-1`. La voce
+## di ruolo nudo qui non è il lead — è la somma di una workdir condivisa, e
+## dietro "critico" ci sono tutte le istanze del reparto insieme. Prestarle il
+## cognome della prima attribuirebbe a una persona i consumi di sei, che è
+## esattamente il numero che questo pannello serve a leggere.
 func _display_label(name: String) -> String:
 	if name.contains("-"):
-		return name
+		return AgentNames.display_name(name)
 	var instances := 0
 	for a in BackendBus.agents:
 		var uid := str(a.get("uid", a.get("slug", ""))).to_lower()
