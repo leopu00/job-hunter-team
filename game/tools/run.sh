@@ -70,6 +70,12 @@ case "$MODE" in
 		printf '%s\n' "$CHAT_NOTICE_OUT" | grep "CHAT-NOTIFICATION-TEST PASS"
 		CHAT_UI_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_CHAT_UI_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$CHAT_UI_OUT" | grep "CHAT-UI-TEST PASS"
+		# Pagina a fumetti: vignette, ordine, bianco/nero dell'agente contro il
+		# fondo dell'utente, code opposte, giro completo su un WORKER e scroll
+		# all'indietro che non viene strappato. L'esito è l'exit code, non la
+		# riga: `set -e` fa fallire lo script da solo se il test esce != 0.
+		COMIC_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_COMIC_CHAT_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$COMIC_OUT" | grep "COMIC-CHAT-TEST PASS"
 		PIPE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_PIPELINE_FORCE_TEST=scout godot --headless . 2>&1)"
 		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
 		SWITCH_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_SWITCH_TEST=1 godot --headless . 2>&1)"

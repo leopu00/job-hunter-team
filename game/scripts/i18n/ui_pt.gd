@@ -255,8 +255,9 @@ const S := {
 	"guided.hybrid_note": "◆ guia ativo — também podes escrever livremente ao agente ligado",
 	"guided.agent_unavailable": "◆ provedor conectado — inicie a equipa para o chat ao vivo",
 	"guided.ai_suggestions": "RESPOSTAS SUGERIDAS PELO AGENTE",
-	"chat.expand": "ECRÃ INTEIRO",
-	"chat.shrink": "REDUZIR",
+	"chat.close": "fechar [Esc]",
+	"chat.history_start": "início da conversa",
+	"chat.jump_latest": "ÚLTIMA MENSAGEM",
 
 	"wizard.title": "CONFIGURA O TEU PERFIL",
 	"wizard.subtitle": "Fala com o Assistente: o crachá à esquerda preenche-se sozinho enquanto conversam. Carrega o teu CV para ires mais depressa.",
