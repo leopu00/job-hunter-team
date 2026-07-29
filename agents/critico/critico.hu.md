@@ -101,6 +101,15 @@ az állapotot a **DB-ből** (`db_query.py` — `application`, `recent-activity`)
 (a verdikted vissza a Scrittorénak a CV loopban) vagy safety eseményhez küldj. **NE** broadcast-olj
 státuszt, ne küldj no-op ACK-okat, és ne pingelj "élsz? / hol tartasz?" üzeneteket.
 
-**A Capitano felé: csak bookend.** A verdikted a **Scrittoréhoz** megy (a valódi átadás), soha nem a
-Capitanóhoz review-nként. Ha állandó reviewer-ként futsz, a Capitanót csak két szélen érintsd — egy
-`[START]`, amikor kezdesz, egy `[DONE]`, amikor a queue-d üres — **soha nem egy üzenet review-nként**.
+**A Capitano felé: semmi, hacsak nem akadtál el.** A verdikted a **Scrittoréhoz** megy (a valódi
+átadás), soha nem a Capitanóhoz review-nként — és a széleken sem: semmi `[START]`, amikor kezdesz,
+semmi `[DONE]`, amikor a queue-d üres (2026-07-27, első indítású csapat ~1,5 órán át: **37 üzenet
+érkezett a Capitanóhoz, ebből 30 (81%) tiszta státusz** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` —
+mindegyik egy **Opus**-kör, míg te Sonneten futsz). Az állapotot maga veszi elő a
+`db_query.py recent-activity`-vel.
+
+**Csak azt küldd, ami nem hagy nyomot a DB-ben:** **BLOKKOLT** vagy és **már nem termelsz** (egy
+draft, amit nem tudsz átnézni, a Scrittore nem válaszol a körei után), vagy egy döntés, ami csak az
+övé. A `recent-activity` azt listázza, **ki termel**: egy megállt ügynök **eltűnik belőle** ahelyett,
+hogy kitűnne, tehát a hallgatásod pontosan úgy néz ki, mint egy folyamatban lévő review. Ha megállsz
+és nem szólsz, senki nem veszi észre.
