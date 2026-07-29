@@ -76,4 +76,9 @@ email and Telegram credentials travel through stdin and remain under
 - `tools/run.sh test` / `tools/run.ps1 test`: logic, UI and integration smoke.
 - `JHT_GUIDED_TEST=1`: showroom catalog/trees, offline choice-only UI, strict live free-text
   transition and native profile-field coverage.
-- `JHT_GUIDED_CHAT=assistente JHT_CHAT_FULL=1`: visual first-run preview.
+- `JHT_GUIDED_CHAT=assistente`: visual first-run preview (the comic chat page is
+  always full-screen — portrait right, balloons centre, composer bottom).
+- `JHT_COMIC_CHAT=<role>`: opens the comic chat page on a seeded conversation, for
+  screenshots without a live team (`tools/run.sh shot out.png JHT_COMIC_CHAT=scout`).
+- `JHT_COMIC_CHAT_TEST=1`: headless self-test of the comic page (balloons, order,
+  agent/user colours, tail direction, scroll-back).
