@@ -36,20 +36,48 @@ const AGENT_LABELS: Record<string, LocaleDict> = {
   },
 };
 
-const AGENT_META: Record<string, { emoji: string; color: string }> = {
+// [JHT-CHAT-UNIFY] Le icone della chat non sono più emoji: sono i ritratti
+// disegnati degli agenti, gli stessi che l'utente vede nel videogioco,
+// ritagliati al busto. I PNG li produce `scripts/gen-chat-avatars.py` dai
+// ritratti a layer in `game/assets/characters/gen/portraits/`.
+//
+// `emoji` resta come fallback per un mittente fuori roster (un agente che
+// notifica e che non ha ritratto) e per i contesti solo-testo.
+const AGENT_META: Record<
+  string,
+  { emoji: string; color: string; avatar: string }
+> = {
   // Stesso pilota usato ovunque nel resto dell'app (team/capitano,
   // api/team/status): 👨‍✈️, non il bersaglio.
-  capitano: { emoji: "👨‍✈️", color: "var(--color-yellow)" },
-  mentor: { emoji: "🧙‍♂️", color: "var(--color-purple)" },
-  assistente: { emoji: "👩‍💼", color: "var(--color-blue)" },
+  capitano: {
+    emoji: "👨‍✈️",
+    color: "var(--color-yellow)",
+    avatar: "/agents/capitano.png",
+  },
+  mentor: {
+    emoji: "🧙‍♂️",
+    color: "var(--color-purple)",
+    avatar: "/agents/mentor.png",
+  },
+  assistente: {
+    emoji: "👩‍💼",
+    color: "var(--color-blue)",
+    avatar: "/agents/assistente.png",
+  },
 };
 
 export function agentInfo(
   agent: string,
   locale: string,
-): { name: string; emoji: string; color: string } {
+): { name: string; emoji: string; color: string; avatar: string | null } {
   const meta = AGENT_META[agent];
-  if (!meta) return { name: agent, emoji: "🤖", color: "var(--color-muted)" };
+  if (!meta)
+    return {
+      name: agent,
+      emoji: "🤖",
+      color: "var(--color-muted)",
+      avatar: null,
+    };
   const labels = AGENT_LABELS[agent];
   return {
     name: labels?.[locale] ?? labels?.en ?? agent,
