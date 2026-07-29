@@ -1,6 +1,6 @@
 ---
 name: session-refresh
-description: "Nur für den Doctor. Kontext-Refresh-Runde: für jede Agenten-Sitzung wird die reale Kontext-Belegung gelesen (client-side-Befehl des Providers, null Tokens) und NUR Sitzungen aktualisiert, deren Kontextfenster zu mehr als 50% gefüllt ist — eine Retrospektive durchgeführt (Erfassung + Interview + Analytics), eine dichte Synthese an das wachsende Tagesjournal angehängt und dann die Sitzung GETÖTET + neu erstellt + mit Fortsetzungskontext fortgesetzt, so wird ihr Kontextfenster geleert, ohne zu vergessen, wo sie stand. Läuft 2× pro Arbeitsfenster (bei +30min und in der Mitte). Überspringt frische, kontextarme (≤50%) und vom Capitano geparkte Sitzungen."
+description: "Nur für den Doctor. Kontext-Refresh-Runde: für jede Agenten-Sitzung wird die reale Kontext-Belegung gelesen (client-side-Befehl des Providers, null Tokens) und NUR Sitzungen aktualisiert, deren Kontextfenster zu mehr als 50% gefüllt ist — eine Retrospektive durchgeführt (Erfassung + Interview + Analytics), eine dichte Synthese an das wachsende Tagesjournal angehängt und dann die Sitzung GETÖTET + neu erstellt + mit Fortsetzungskontext fortgesetzt, so wird ihr Kontextfenster geleert, ohne zu vergessen, wo sie stand. Läuft 2× pro Arbeitsfenster (bei +30min und in der Mitte). Überspringt frische, kontextarme (≤50%) und vom Capitano geparkte Sitzungen — AUSSER jenseits des 12h-Session-TTL (JHT_AGENT_MAX_SESSION_AGE_H), das jeden Skip aussticht: allein das Alter entscheidet, ohne Ausnahme."
 allowed-tools: Bash(tmux *), Bash(python3 *), Bash(bash /app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
 
@@ -25,9 +25,30 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
 - **Reihenfolge**: Worker-Sitzungen ZUERST (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), Koordinatoren ZULETZT und mit Sorgfalt (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). „Mit Sorgfalt" heißt **ihren Zustand gut erfassen und sie kompaktieren — sie NICHT überspringen** (sie sind die Top-Konsumenten; siehe Regeln). Aktualisiere niemals `DOTTORE` / `DOCTOR-WATCHDOG` (dich selbst / den Scheduler).
-- **FRESH-Skip** (günstiger Vorfilter vor der Kontext-Prüfung): `age = now - session_created`. Wenn `age < 40 min` → vollständig ÜBERSPRINGEN (es gibt noch nichts zusammenzufassen, und ein Refresh würde eine gerade erst gestartete Sitzung wegwerfen). Logge `action=skipped_fresh`. Alles, was diesen Vorfilter übersteht, geht durch **Schritt 1.5 (Kontext-Prüfung)** — jene `>50%`-Messung, nicht das Alter, entscheidet über den Refresh.
+- **FRESH-Skip** (günstiger Vorfilter vor der Kontext-Prüfung): `age = now - session_created`. Wenn `age < 40 min` → vollständig ÜBERSPRINGEN (es gibt noch nichts zusammenzufassen, und ein Refresh würde eine gerade erst gestartete Sitzung wegwerfen). Logge `action=skipped_fresh`. Alles, was diesen Vorfilter übersteht, geht durch **Schritt 1.4 (TTL)** und dann durch **Schritt 1.5 (Kontext-Prüfung)** — jene `>50%`-Messung, nicht das Alter, entscheidet über den *gewöhnlichen* Refresh.
 
-## Schritt 1.5 — KONTEXT-PRÜFUNG (der Refresh-Trigger: **>50%**)
+## Schritt 1.4 — TTL: **jede Agenten-Sitzung lebt höchstens 12 Stunden**
+```bash
+TTL_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
+AGE_H=$(( ( $(date -u +%s) - $(tmux display-message -p -t "$S" '#{session_created}') ) / 3600 ))
+[ "$AGE_H" -ge "$TTL_H" ] && echo "TTL ABGELAUFEN ($AGE_H h) → Refresh PFLICHT"
+```
+**Wenn `AGE_H ≥ TTL_H`, wird die Sitzung erneuert. Punkt.** Das TTL wird **vor** allem anderen geprüft und **hebt jeden in dieser Skill vorgesehenen Skip auf** — keine Ausnahme, keine Sonderregel, kein «aber»:
+
+| normaler Skip | jenseits des TTL |
+|---|---|
+| `skipped_fresh` (age < 40min) | jenseits von 12h unmöglich, aber das TTL gewinnt ohnehin |
+| `skipped_lowctx` (Kontext ≤ 50%) | **ignoriert** — eine Sitzung bei 4% nach 30h wird trotzdem neu erstellt |
+| `skipped_parked` (PARKED, Schritt 4) | **ignoriert** — geparkt oder nicht, das TTL gilt |
+| «der Agent arbeitet» | **ignoriert** — erfasse seinen Zustand im Seed und erstelle neu |
+| außerhalb des Arbeitsfensters | **ignoriert** — das TTL wird nie ausgesetzt (siehe Regeln) |
+
+Logge `action=recreated` mit `reason=ttl` und dem gemessenen `session_age_h`. Gehe dann direkt zu den Schritten 2 → 7 (Erfassung, Analytics, Synthese, neu erstellen + fortsetzen): **überspringe Schritt 1.5 und Schritt 4 vollständig**, sie können nur einen Skip erzeugen, und ein Skip steht hier nicht zur Verfügung.
+
+Warum allein das Alter, ohne Gesundheits-Heuristik darüber: beim Vorfall vom 2026-07-28/29 waren die Sitzungen **38,5 · 29,5 · 27,0 · 14,5 · 14,2 Stunden** alt, jede Heuristik meldete «gesund», und das Team stand seit elf Stunden still. Die Kontexte lagen unter 50%, also hat keine Regel sie angefasst. Ein TTL hat keine Heuristik, die sich irren kann.
+
+## Schritt 1.5 — KONTEXT-PRÜFUNG (der *gewöhnliche* Refresh-Trigger: **>50%**)
+Nur für Sitzungen, die in Schritt 1.4 **nicht** das TTL ausgelöst haben.
 **Aktualisiere NUR Sitzungen, deren Kontextfenster zu mehr als 50% gefüllt ist.** Lies die reale Belegung mit dem **client-side**-Kontextbefehl des Providers — er kostet **null Tokens** (lokal gerendert, kein LLM-Aufruf) und ist sofort da. Das Alter ist NICHT mehr der Trigger: eine alte-aber-leere Sitzung (z.B. ein untätiger Mentor bei 2%) muss ÜBERSPRUNGEN werden, eine aufgeblähte Sitzung muss aktualisiert werden.
 
 Zwei zwingende Anforderungen — ignorierst du sie, *verbrennst* du Budget, statt es zu sparen:
@@ -46,7 +67,7 @@ tmux send-keys -t "$S" Escape                   # dismiss the panel
 echo "context=$PCT%"
 ```
 Entscheide anhand von `$PCT` (geparst aus einer Zeile wie `24.9k/1m tokens (2%)`):
-- **`PCT` ≤ 50** → ÜBERSPRINGEN. NICHT neu erstellen, auch wenn die Sitzung alt ist. Logge `action=skipped_lowctx` mit der gemessenen `%`. Gehe zur nächsten Sitzung.
+- **`PCT` ≤ 50** → ÜBERSPRINGEN, **außer das TTL hat in Schritt 1.4 ausgelöst**. Eine Sitzung unterhalb des TTL NICHT neu erstellen, auch wenn sie alt ist. Logge `action=skipped_lowctx` mit der gemessenen `%`. Gehe zur nächsten Sitzung.
 - **`PCT` > 50** → fahre mit dem Refresh fort (Schritte 2–7).
 - **Befehl wurde nicht gerendert / Parsing fehlgeschlagen** → Rückfall auf die Alters-Heuristik (`age ≥ 40min` → Refresh) und logge `ctx=unparsed`.
 
@@ -71,6 +92,10 @@ Eine Sitzung ist **PARKED** (der Capitano hat sie bewusst angelassen, nutzt sie 
 - `last_captain_msg` ist null oder älter als der Fensterbeginn.
 
 Wenn PARKED → **NICHT neu erstellen, um sie neu zu starten**. Schreibe die Synthese (Schritt 6) mit `action=skipped_parked` und gehe weiter. (Ein Neuerstellen würde ein bewusstes Parken in Arbeit verwandeln, die der Capitano nicht wollte.) Falls du sie aus Hygienegründen doch neu erstellst, MUSS die Resume-Nachricht sagen, dass sie inaktiv war: `[RESUME] you were in STANDBY — stay idle until the Capitano assigns you a queue.`
+
+**Zwei zwingende Ausnahmen von PARKED — diese Regel beschrieb den Vorfall wörtlich und hielt dem Doctor genau dann die Hände gebunden, als das Team ihn am nötigsten brauchte:**
+1. **Jenseits des TTL (Schritt 1.4) gilt PARKED nicht.** Geparkt oder nicht, eine Sitzung ab 12h wird neu erstellt.
+2. **Ein blockierter Agent ist kein geparkter Agent.** «nicht frisch + produced == 0 + keine aktuelle Capitano-Nachricht» ist zugleich der exakte Fingerabdruck eines Teams mit kaputter Koordination. Das objektive Signal, das beides trennt: **ein Agent, der einen anderen ohne Antwort immer wieder anfunkt, ist nicht geparkt, sondern blockiert** (die `retry_loop`-Einträge aus dem Scan von `agent-unblock`; im Pane sind die Versuche sichtbar). Dasselbe gilt für «alle Operativen stehen still bei verfügbarem Kontingent». In diesen Fällen NICHT `skipped_parked` loggen — löse die Blockade (`agent-unblock`) und setze die Runde dann fort.
 
 ## Schritt 5 — den Agenten interviewen
 ```bash
@@ -103,7 +128,7 @@ print("appended", session)
 PY
 ```
 
-## Schritt 7 — neu erstellen + fortsetzen (nur wenn Kontext **>50%**, NICHT frisch, NICHT geparkt)
+## Schritt 7 — neu erstellen + fortsetzen (wenn das TTL ausgelöst hat ODER Kontext **>50%** und NICHT frisch, NICHT geparkt)
 Atomarer Refresh — du hast den Kontext bereits in Schritt 2 erfasst, daher ist das Töten sicher:
 ```bash
 ROLE=<role>; N=<instance>      # from analytics; recreate the SAME number (no dice — the die is for NEW spawns only)
@@ -115,6 +140,10 @@ sleep 8
 Setze `resume_msg_sent=True` im Journal-Eintrag. Gehe dann zur nächsten Sitzung über (Tempo ~15-20s zwischen den Agenten).
 
 ## Regeln
+- **Das 12h-TTL hat keine Schlupflöcher und keinen Ausschalter.** `JHT_AGENT_MAX_SESSION_AGE_H`, Standard `12`. Weder PARKED noch skip-fresh noch die Kontextschwelle noch «er arbeitet gerade» noch das Zeitfenster-Gate können es aufheben. **Staffle es**: Sitzungen entstehen in Wellen und würden gemeinsam ablaufen — erneuere höchstens EINE Sitzung jenseits des TTL pro Durchgang, sortiert nach **absteigendem** Alter, so kommt die älteste zuerst und das Team wird nie auf einen Schlag neu erstellt.
+- **Außerhalb des Arbeitsfensters läuft die Runde nicht — das TTL schon.** Nachts wird die Runde übersprungen, weil Interviews Budget für nichts verbrennen würden; eine 30-Stunden-Sitzung wird trotzdem neu erstellt, denn ein Kick-off kostet nichts gegenüber einem verlorenen Tag. `agent-watchdog.sh` erzwingt dieselbe Obergrenze deterministisch (gleiche Env-Variable) für den Fall, dass der Doctor gestoppt, blockiert oder nie gespawnt ist — genau das ist am 2026-07-28/29 passiert. Beide Pfade sollen existieren: dieser ist der *reiche* Refresh (Retrospektive + Resume), jener ist das Netz, das die Obergrenze um jeden Preis garantiert.
+- **`working_hours: null` (oder fehlend oder leer) bedeutet KEINE zeitliche Einschränkung** — das Team läuft 24/7 und die Runde läuft normal. Es bedeutet nie «immer außerhalb des Fensters». Beim Vorfall war `working_hours` null genau deshalb, weil die Antwort des Nutzers zur Zeitzone jene Zeile war, die im Composer des Capitano hängen blieb.
+- **Erst entblocken, dann erneuern.** Führe zuerst die Phase `agent-unblock` aus: ein gelähmtes Team zu erneuern reproduziert die Lähmung nur mit sauberem Kontextfenster.
 - **Ein Doctor erledigt alle Sitzungen dieser Runde** (Benutzervorgabe: vorerst ein einzelner Doctor). Nutze die dateibasierte Erfassung + grep, damit du nie dein eigenes Kontextfenster sprengst.
 - **CAPITANO & SENTINELLA sind die TOP-Token-Konsumenten** (ihr Kontext ist fast immer aufgebläht — die Sentinella tickt alle ~15min, der Capitano koordiniert ununterbrochen). Sie gehen trotzdem durch das **>50%-Kontext-Gate** wie alle anderen (Schritt 1.5) — aber in der Praxis messen sie deutlich über 50%, also werden sie fast jede Runde aktualisiert. Mach sie **zuletzt** (nach den Workern) und **kompaktiere, setze nicht zurück** — der Refresh mit dichter Synthese bewahrt die Kontinuität, ein roher Kill verliert sie. Misst einer ≤50% (selten), überspringe ihn diese Runde wie jede andere kontextarme Sitzung.
 - **CAPITANO**: er ist der Koordinator mit In-Flight-Zustand (Worker-Zuweisungen, aktive Throttle-Konfiguration, letzte Pacing-Anweisung, ausstehende Entscheidungen). Erfasse im Interview (Step 5) ausdrücklich diesen Koordinationszustand und lege ihn in den seed (Step 7), damit er den Faden nicht verliert. **Falls `$JHT_HOME/profile/capitano-maintenance.json` existiert, lies sie und lege auch ihre aktiven `orders` (Maintenance-Modus + `stop_search` / `discard_expired_rotating` / weekly-recheck / geocoding) in den seed** — diese Maintenance-Anweisung aus dem seed zu streichen hat am 2026-07-12 eine ganze Maintenance-Woche verstummen lassen (der Capitano liest die Datei danach ohnehin gemäß seiner eigenen Regel C-18 erneut, aber trage sie weiter, damit er nie davon abhängt). Mach es ZULETZT; wenn er gerade eine live EMERGENZA behandelt (sichtbare Orchestrierung im Pane genau jetzt), lass ihn zuerst stabilisieren, sonst kompaktiere ihn.
