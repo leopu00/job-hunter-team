@@ -326,3 +326,20 @@ magenta è stato scartato perché il matte rendeva semitrasparenti pelle e abiti
 la rigenerazione su verde ha superato il controllo. L'import Godot riesce; lo
 screenshot automatico non è stato acquisito perché macOS ha congelato il
 present della finestra occlusa, caso già documentato in `tools/run.sh`.
+
+### 2026-07-29 — Audit e riparazione animazioni agenti
+
+- `coordinatore_a`: la traccia `work_side` conteneva due corpi sovrapposti in
+  tutti e quattro i frame. Rigenerata soltanto la sorgente work 4×3 e sostituita
+  la traccia, lasciando inalterate idle/walk/carry.
+- `scorer_a`: scoperto dallo stesso audit un secondo `work_side` con doppia
+  sagoma; applicata la stessa riparazione chirurgica.
+- `analista_b`: il sorgente della camminata aveva il volto del sesto frame
+  laterale tagliato sul bordo destro. Rigenerata la griglia walk 6×3 con
+  margini completi e ricostruita la sheet.
+- Aggiunto `tools/audit_character_sheets.py`: verifica canvas, celle richieste,
+  bordi, aggancio piedi, larghezze anomale e doppie sagome fra le viste work.
+  Il vecchio Coordinatore fallisce il controllo; le tre sheet corrette passano.
+- `slice_agent_sheet.py` ora limita anche la larghezza del frame a 248 px,
+  oltre al clamp verticale già presente, così un profilo largo non può essere
+  troncato durante l'impaginazione.
