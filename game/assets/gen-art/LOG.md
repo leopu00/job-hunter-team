@@ -343,3 +343,20 @@ present della finestra occlusa, caso già documentato in `tools/run.sh`.
 - `slice_agent_sheet.py` ora limita anche la larghezza del frame a 248 px,
   oltre al clamp verticale già presente, così un profilo largo non può essere
   troncato durante l'impaginazione.
+
+### 2026-07-29 — Lotto 2, istanze 1–2
+
+Completati `full_neutro.png` e `full_pensieroso.png` per `scout-1..2`,
+`analista-1..2`, `scorer-1..2`, `scrittore-1..2` e `critico-1..2`.
+
+- Le cinque varianti `a` sono le identità principali già ritratte nelle
+  cartelle di ruolo: i file sono stati riusati senza alterazioni.
+- Le cinque varianti `b` sono state ricostruite dai tre angoli dei rispettivi
+  sprite, con il ritratto di ruolo usato soltanto come riferimento di crop,
+  luce e tratto. I `pensieroso` sono poi stati derivati dai nuovi neutri.
+- Tutte le nuove generazioni hanno usato una chiamata `imagegen` per asset e
+  chroma verde o blu scelto in base al guardaroba; il matte è stato controllato
+  su fondo scuro.
+- Verifica: 20/20 PNG 1120×1520 RGBA, angoli trasparenti e import Godot
+  presente. Godot 4.7 completa l'import ma continua a stampare i noti avvisi
+  di risorse residue in uscita.
