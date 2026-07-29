@@ -51,6 +51,13 @@ rimozione il team è già stato messo in ESC.
 Sono danni che il budget non ripaga, o limiti fisici. La deroga copre solo le
 decisioni **economiche**: quanto in fretta spendere soldi che sono dell'utente.
 
+Della stessa famiglia, ma **fuori dalla tupla**: `shared/skills/soft_pause_team.py`
+— la pausa gentile della Sentinella quando L1+L2+L3 di lettura dell'usage
+falliscono tutti. Non cede e non legge questo modulo: senza numeri non c'è una
+decisione economica da derogare, solo cecità. Non è in `NEVER_YIELDS` perché
+quei nomi finiscono TESTUALMENTE nell'avviso del gioco e nei prompt in 7
+lingue; la classificazione, col motivo per esteso, è nel docstring di quel file.
+
 ## Fail-closed
 
 Qualunque errore di lettura, parsing o formato → `is_active() == False`. La
