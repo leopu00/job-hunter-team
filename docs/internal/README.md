@@ -35,10 +35,10 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 
 | File | Topic |
 |---|---|
-| [`cloud-sync-architecture.md`](architecture/cloud-sync-architecture.md) | Sync DB locale ↔ Supabase: cosa va in cloud, macro-event design |
+| [`cloud-sync-architecture.md`](architecture/cloud-sync-architecture.md) | Sync DB locale ↔ Supabase: cosa va in cloud, macro-event design, chat unificata gioco↔web (mig 060) |
 | [`2026-07-22-web-demo-mode-and-welcome.md`](architecture/2026-07-22-web-demo-mode-and-welcome.md) | 🎭 Demo mode cloud (4 personas × 56 posizioni × 7 lingue) + wizard `/welcome`: stato nei cookie, ramo demo in testa a `lib/queries.ts`, scritture no-op |
 | [`2026-07-11-team-directives-bacheca.md`](architecture/2026-07-11-team-directives-bacheca.md) | 📋 Bacheca `team_directives`: ordini permanenti dell'utente che sopravvivono al context-refresh del Capitano — tabella + skill consegnate, integrazione prompt e mirror Supabase ancora aperti |
-| [`2026-07-21-web-sync-realtime-rework.md`](architecture/2026-07-21-web-sync-realtime-rework.md) | ⚡ Sync web Realtime-first: niente polling dal browser, backflow delle reply cloud→VPS, notifiche configurabili |
+| [`2026-07-21-web-sync-realtime-rework.md`](architecture/2026-07-21-web-sync-realtime-rework.md) | ⚡ Sync web Realtime-first: niente polling dal browser, backflow delle reply cloud→VPS, notifiche configurabili — **+ addendum 29/07**: la catena non finiva in SQLite, ora arriva al pane dell'agente |
 | [`2026-06-20-data-sync-and-dashboard-split-design.md`](architecture/2026-06-20-data-sync-and-dashboard-split-design.md) | 🔄 Sync on-access + "Sync now" (no polling), event-log push, corsia richieste async, split dashboard locale/cloud |
 | [`daemon-sync-redesign.md`](architecture/daemon-sync-redesign.md) | 🔌 Daemon: letture Supabase dirette (Fase 1) + event-driven Realtime (7/7 dietro flag `JHT_REALTIME_SYNC`); niente Fase 3 |
 | [`2026-06-15-interaction-planes-redesign-design.md`](architecture/2026-06-15-interaction-planes-redesign-design.md) | Piani di interazione: web cloud read-only, desktop cockpit (locale + tunnel SSH), Telegram opzionale |

@@ -5,6 +5,69 @@
 > refactor team_state 2026-05-23 (bidirezionalità a desired-state) + writer-on-demand
 > 2026-05-29, stato implementazione a oggi. Aggiornare a ogni shift architetturale.
 >
+> 💬 **Shift 2026-07-29 — una sola chat gioco↔web, e il turno arriva al PANE**
+> (`[JHT-CHAT-UNIFY]`, merge `feat-chat-unify`, mig **060**). Chiude due buchi che
+> il rework del 21/07 aveva lasciato aperti perché stavano un livello più sotto.
+> **(1) Il turno scritto dal web raggiunge il pane dell'agente**, non si ferma più
+> in SQLite. Prima ci restava ad aspettare che l'agente si ricordasse di chiamare
+> `jht-check-user-replies` di sua iniziativa — ore, o mai. Ora
+> `POST /api/pending-messages` crea un turno suo (`author='user'`,
+> `legacy_id = -epoch_ms`) e timbra `team_state.chat_requested_at`; il daemon lo
+> vede nel **giro veloce (~5s)** — la stessa riga `team_state` che legge già per
+> "Sync now", quindi **zero letture Supabase in più a riposo** — importa il turno e
+> lo consegna al pane tmux con `jht-tmux-send`, **stessa busta del gioco**
+> (`[@utente -> @<agente>] [CHAT] …`). Latenza attesa: **~5s fino al pane**, più
+> l'attesa di `jht-tmux-send` quando la TUI è occupata (busy-wait fino a 90s, cap
+> 120s); exit 4 lascia `delivered_at` NULL e **ritenta al giro dopo** — un messaggio
+> dell'utente non si scarta mai.
+> **(2) Le risposte scritte con `jht-send` risalgono al cloud**, cosa che prima non
+> avveniva affatto: `jht-send` scrive solo su `chat.jsonl` e non toccava né SQLite
+> né Supabase — è metà del bug "gli agenti non rispondono sul sito". Ora il passo
+> `ingestChatJsonl` le importa in SQLite e le pusha (**~5s + roundtrip del push**), e
+> il browser le riceve sul websocket che tiene già aperto (`usePendingMessagesLive`).
+> Cade anche il filtro `delivered_via='web'` dallo storico: quella colonna dice su
+> quale **canale** era stata spinta la notifica, non se il messaggio appartiene alla
+> conversazione — con Telegram configurato nascondeva sul web ogni risposta marcata
+> `'telegram'`.
+> **(3) Il punto di unificazione è `chat.jsonl` sul BOX, non la UI.** Il file resta
+> la conversazione che legge il gioco; `pending_user_messages` ne diventa il mirror
+> sincronizzabile. **`chat_ts` — il `ts` unix della riga JSONL — è la chiave di dedup
+> nei due versi**: l'ingest salta le righe il cui `ts` è già un `chat_ts` noto, il
+> mirror scrive nel file solo le righe con `chat_ts IS NULL` e lo timbra subito dopo.
+> Senza, ogni giro riscriverebbe nel file quello che ne ha appena letto.
+> **Costo**: ogni passo ha una guardia **locale** davanti (`stat` del file, SELECT su
+> SQLite) → a conversazione ferma il giro non tocca né Supabase né Vercel.
+> **Degrado dichiarato finché la mig 060 non è applicata** — a oggi **NON lo è**
+> (prod ferma alla 059): dettaglio in § *Flusso chat unificata (end-to-end)*.
+>
+> 🌱 **Shift 2026-07-28 — il push del PRIMO PERIODO di vita di un account**
+> (`[CLOUDSYNC-PUSH-ONLY-WHEN-WATCHED]`). Il push on-demand
+> (`[PUSH ON-DEMAND 2026-06-25]`) resta **la regola** e non cambia di una riga:
+> nessun push su timer, `sync_requested_at` → rendezvous → push → ack è l'unico
+> percorso che l'utente vede, e a regime il ragionamento sulla quota vale ancora.
+> Ma un box appena creato ha il DB **vuoto per definizione**: il push che fa
+> `jht cloud login` porta zero righe, e finché nessuno apre la dashboard il cloud
+> resta vuoto anche mentre il team lavora. Misurato 2026-07-27: **25 posizioni e
+> un profilo completo sul box, 0 righe su Supabase ~50 minuti dopo il pairing**.
+> Ne soffrono notifiche, digest, un secondo dispositivo e chiunque ispezioni
+> l'account direttamente — incluso un beta tester nuovo.
+> **Rimedio**: `cli/src/lib/bootstrap-push.js` + `maybeBootstrapPush()` nel
+> daemon. Push a bassa frequenza (1 ogni 15 min, il primo immediato) finché
+> `~/.jht/state/first-run.json` non dichiara `phase: steady`, e **solo se il DB
+> locale è cambiato** dall'ultimo push riuscito (firma per-tabella `{n, max}`,
+> confronti di sola uguaglianza — mai un ordinamento fra formati di data, che è
+> il passo falso del freeze 2026-07-15). Tre garanzie di terminazione
+> **indipendenti**: fase `steady` · budget di 24 push persistito (un daemon che
+> riparte non lo ricarica) · finestra di 6h dal primo push; più uscita immediata
+> su 401/403 e interruttore `JHT_CLOUD_BOOTSTRAP_PUSH=0`. Chiuso, lo stato resta
+> su disco: per quell'installazione non si spinge più senza browser, **mai**.
+> Costo massimo per-account, una tantum: **24 tentativi ≈ 48 POST** su
+> `/api/cloud-sync/push` e ≤24 `UPDATE team_state.sync_completed_at` (li timbra
+> la route, non il client) — poi **0/h per sempre**. Il push è `handlePush`
+> invariato: stesso chunking anti-413, stesso `safeCursor`, nessun nuovo
+> percorso di assemblaggio del payload. Ispezionabile con
+> `jht cloud bootstrap-status` (sola lettura).
+>
 > ⚡ **Shift 2026-07-21 — Realtime-first per il browser + backflow messaggi** (dev5,
 > commit `0f5b66ae…19982d37`). Tre decisioni:
 > **(1) Il canale live browser↔dati è Supabase Realtime (websocket diretto), MAI
@@ -66,7 +129,7 @@
         └──────┤ team_state   user_to_agent_messages          ├─────┘
                │ team_commands position_feedback              │
                │ positions.write_requested                    │
-               │ pending_user_messages (agent→user fallback)  │
+               │ pending_user_messages (chat utente↔agente)   │
                └──────────────────────────────────────────────┘
         ▼                                                            ▼
    web/lib/local-queries.ts                                 web/lib/queries.ts
@@ -82,7 +145,7 @@
 | `companies` | Event-driven | nuova company o metadata user-visible cambiato |
 | `candidate_profiles` (+ tabelle profilo normalizzate, `candidate_blocks`, `candidate_contacts`) | Event-driven | **modello a 3 livelli** dal 2026-06-06 — push completo (no scarto) + `pull-profile` cloud→locale. Vedi `candidate-profile-cloud-sync-redesign.md` |
 | `user_onboarding_state`, `encrypted_user_blobs` | Event-driven | invariati |
-| `pending_user_messages` (mig 010) | Full-push (volume piccolo) | canale fallback notifiche agent→user |
+| `pending_user_messages` (mig 010, 057, 060) | Full-push (volume piccolo) **+ corsia chat dedicata nel giro veloce (~5s)** | mirror cloud della conversazione utente↔agente, non più solo coda notifiche. Il full-push passa dalla RPC merge (`upsert_pending_user_messages_merge`); la corsia chat pusha solo le righe con `cloud_synced_at IS NULL` (cursore per-riga, non congelabile) |
 | `sentinel_ticks` (mig 013) | ⛔ **rimosso dal push** (`f68a127d`) | ~720 row/h/utente, solo container ne ha bisogno |
 | `team_commands` (mig 012) | ⛔ scrittura container disattivata | resta vivo per il subscriber legacy, vedi sotto |
 
@@ -97,9 +160,10 @@ Due path implementativi equivalenti propagano i delta:
 | **Start/stop/restart team** | `team_state` (mig 019) | `cli/src/lib/team-state-reconciler.js:251` long-poll 5s su `/api/team-state` | bottoni Start/Stop dashboard |
 | **Comandi legacy bus** | `team_commands` (mig 012) | `cli/src/lib/realtime-subscriber.js:264` long-poll 5s su `/api/cloud-sync/team-commands?status=pending` | residuo cutover — handleAction single-agent ancora qui |
 | **Writer-on-demand** | `positions.write_requested` (mig 024) | Capitano via `shared/skills/db_query.py:344` query `next-for-scrittore` → SQLite **locale** | bottone "Scrivi CV" dashboard + Telegram `/cv` |
-| **Chat utente→agente** | `user_to_agent_messages` (mig 019) | `cli/src/lib/user-messages-poller.js` long-poll 5s su `/api/messages?status=pending`, claim atomico PATCH delivered, forward `jht-tmux-send` | POST `/api/messages` |
+| **Chat utente→agente** (legacy) | `user_to_agent_messages` (mig 019) | `cli/src/lib/user-messages-poller.js` long-poll 5s su `/api/messages?status=pending`, claim atomico PATCH delivered, forward `jht-tmux-send`. ⚠️ **Congelato dal 2026-06-25** dietro `JHT_CLOUD_CONTROL_POLLERS=1` (default OFF, `pid1.js:991`) — **superato dalla corsia chat** di mig 060, che usa `pending_user_messages` | POST `/api/messages` |
 | **Like/dislike position** | `position_feedback` (mig 019) | `shared/skills/feedback_query.py check <legacy_id>` (Scorer step 5 multiplier; Scout signal opzionale) | POST `/api/positions/{id}/feedback` |
-| **Agent→user fallback** | `pending_user_messages` (mig 010) | bidirezionale: scritto dal container, letto da browser via Realtime | notifiche utente |
+| **Chat utente↔agente** (`[JHT-CHAT-UNIFY]`) | `pending_user_messages` (mig 010, 057, 060) + campanello `team_state.chat_requested_at` | `handleChatSync` nel giro veloce (~5s) del `cloud daemon`: legge i turni `author='user'` non consegnati via **supabase-direct** (0 Vercel), li importa in SQLite + `chat.jsonl`, li consegna al **pane tmux** con `jht-tmux-send`, poi ack `chat_delivered_at` | POST `/api/pending-messages` (comporre) · POST `…/[id]/reply` · `…/[id]/ack` |
+| **Agent→user fallback** | `pending_user_messages` (mig 010) | bidirezionale: scritto dal container, letto dal browser via Realtime (`usePendingMessagesLive`) | notifiche utente (`jht-notify-user`) |
 
 **Nota architetturale sulla nomenclatura**: `realtime-subscriber.js` è **fuorviante** — il file dichiara esplicitamente (riga 10-18) di NON usare WebSocket Realtime. Fa long-poll HTTP perché `cloud.json` non conserva il refresh-token Supabase. Il nome è ereditato dall'intent originale, da rinominare in `team-commands-poller.js` quando si chiude il cutover #13.
 
@@ -137,6 +201,93 @@ UPDATE SQLite locale diretto → Capitano pickup → Scrittore
 ```
 
 **Gap critico (chiuso 2026-05-31)**: prima, se l'utente cliccava "Scrivi CV" via web quando il container era fermo, il PATCH best-effort scriveva `write_requested=true` su Supabase, ma **non esisteva pull cloud→SQLite** al riavvio → flag ghost in cloud. Adesso chiuso da `GET /api/cloud-sync/pull-desired-state` + `jht cloud pull-desired-state` (wire al boot di `startActionContainer` + tick periodico nel `cloud daemon`). Vedi Stato implementazione → Done.
+
+### Flusso chat unificata (end-to-end) — `[JHT-CHAT-UNIFY]`, 2026-07-29
+
+Una sola conversazione utente ↔ agente, condivisa fra **videogioco** e **web**. Il
+punto di unificazione è **`/jht_home/agents/<ruolo>/chat.jsonl` sul box**, non la UI:
+il file resta la conversazione che il gioco legge, `pending_user_messages` ne è il
+mirror sincronizzabile. Le tre figure con cui si chatta dal web sono
+`CHAT_AGENTS = ['assistente', 'capitano', 'mentor']` (nel gioco si parla con tutto il
+roster; solo queste tre hanno il protocollo di risposta garantito).
+
+```
+chat.jsonl  ──ingest──►  SQLite  ──push──►  cloud  ──Realtime──►  browser
+     ▲                     ▲                  │
+     └────mirror───────────┘                  │
+     └────deliver (pane tmux) ◄──── import ───┘
+```
+
+**Il giro** (`handleChatSync`, `cli/src/commands/cloud.js`; logica in
+`cli/src/lib/chat-sync.js`) gira nel **tick veloce del daemon, ~5s**
+(`JHT_SYNC_CHECK_SEC`) — non nel giro pesante da 60s: una chat con minuti di latenza
+non è una chat. Cinque passi, **ognuno preceduto da una guardia locale**, quindi a
+conversazione ferma non si tocca né Supabase né Vercel:
+
+| # | Passo | Guardia locale | Cosa fa |
+|---|---|---|---|
+| 1 | `import` | `chat_requested_at > chat_delivered_at` sulla riga `team_state` **già letta** dal rendezvous "Sync now" | legge i turni `author='user'` non consegnati via supabase-direct (0 Vercel), INSERT in SQLite **e append immediato in `chat.jsonl`** (altrimenti il turno arriverebbe all'agente ma resterebbe invisibile nel gioco) |
+| 2 | `ingest` | `stat` del file (size + mtime vs `.chat-mirror-cursor.json`) | legge la coda (96 KB) di `chat.jsonl` → INSERT in SQLite dei turni nuovi: il turno scritto **dal gioco** e **ogni risposta `jht-send`** |
+| 3 | `mirror` | `SELECT … WHERE chat_ts IS NULL` | porta nel file i turni nati in SQLite (`jht-notify-user`, web), poi timbra `chat_ts` |
+| 4 | `deliver` | `author='user' AND delivered_at IS NULL` | consegna al **pane tmux** con `jht-tmux-send`, max 5/tick |
+| 5 | `push` | `cloud_synced_at IS NULL` | POST `/api/cloud-sync/push` → RPC merge → il browser riceve via Realtime |
+
+**Latenze attese**
+
+| Tratta | Latenza | Prima del 29/07 |
+|---|---|---|
+| Web → pane dell'agente | **~5s** (tick veloce), + busy-wait di `jht-tmux-send` se la TUI è occupata (fino a 90s, cap 120s) | **mai**: restava in SQLite finché l'agente non chiamava `jht-check-user-replies` di sua iniziativa |
+| Gioco → web | **~5s** (ingest) + roundtrip del push | **mai**: `chat.jsonl` non usciva dal box |
+| Agente (`jht-send`) → web | **~5s** + roundtrip del push | **mai**: `jht-send` non tocca SQLite, e dal 2026-06-25 non esiste push periodico |
+| Agente (`jht-notify-user`) → web | **~5s** + roundtrip del push | solo alla pressione di **"Sync now"** |
+| Web → gioco | **~5s** (append in `chat.jsonl` dentro il passo `import`) | **mai** |
+
+Con `JHT_REALTIME_SYNC=1` (default OFF) il passo 1 si aggancia direttamente
+all'evento websocket su `team_state` — la stessa riga che porta `sync_requested_at` —
+e un battito locale corto (`JHT_CHAT_LOCAL_SEC`, 5s) copre le sorgenti **del box**
+(`jht-send`, gioco), che non producono alcun evento remoto.
+
+**`chat_ts` = chiave di dedup nei due versi.** È il `ts` unix della riga JSONL:
+presente ⇒ il turno è già nel file che legge il gioco. L'`ingest` salta le righe il
+cui `ts` è già un `chat_ts` noto (ultimi 1000 per agente); il `mirror` scrive solo le
+righe con `chat_ts IS NULL`. Senza questa guardia il mirror farebbe ping-pong,
+riscrivendo nel file quello che ne ha appena letto. Il `ts` delle righe nate in
+SQLite è `created_at` + `(id % 1000)/1000` — `created_at` ha risoluzione al secondo e
+due notifiche nello stesso secondo collasserebbero sulla stessa chiave.
+
+**Righe native del cloud.** Un turno scritto dal browser non esiste nella SQLite del
+box: prende `legacy_id = -epoch_ms`. Lo spazio negativo è irraggiungibile da SQLite
+(AUTOINCREMENT parte da 1), quindi il full-push **non può collidere né sovrascriverle**
+— e la RPC merge scarta esplicitamente ogni riga pushata che dichiari un id negativo.
+È l'unica eccezione al web read-only (`[JHT-WEB-READONLY]`), con la policy di INSERT
+più stretta possibile: righe proprie, `author='user'`, `legacy_id < 0`.
+
+**Garanzie di consegna.** `delivered_at` si timbra **solo** a consegna riuscita:
+`jht-tmux-send` che torna **exit 4** (TUI occupata oltre il budget) significa agente
+**vivo** su un turno lungo → si ritenta al giro dopo. Un pane morto blocca solo la
+**sua** coda, gli altri agenti proseguono. Il rendezvous si chiude
+(`chat_delivered_at`) solo se `failed === 0`.
+
+**Primo giro dopo l'aggiornamento**: tutto lo storico ha `chat_ts` NULL. Il mirror ha
+un tetto di **48h** (`JHT_CHAT_MIRROR_MAX_AGE_MS`): le righe più vecchie si **marcano**
+come già specchiate senza riversarle nel file — restano nella chat web, che le ha
+sempre avute, e il file riparte da lì.
+
+#### ⚠️ Degrado dichiarato finché la mig 060 non è applicata
+
+**Stato al 2026-07-29: mig 060 NON applicata a prod** (l'ultima applicata è la 059,
+del 22/07). Il comportamento degrada così, in modo dichiarato e senza rotture:
+
+| Pezzo | Senza mig 060 |
+|---|---|
+| Lettura `team_state` del daemon | la `select` con le colonne `chat_*` prende 400 da PostgREST → **retry automatico con le sole colonne storiche** → `chat_requested_at` assente → `chatPending` false → **la corsia cloud→box non parte mai**, silenziosamente |
+| `POST /api/pending-messages` (comporre dal web) | **fallisce**: la colonna `author` non esiste e la policy di INSERT non c'è → 500 al composer |
+| Push dei turni dal box | **funziona**: la RPC di mig 057 ignora i campi `author`/`chat_ts` in più → i turni dell'agente salgono come prima (senza autore) |
+| Corsia chat sul box | `handleChatSync` esce subito se la SQLite non ha la colonna `author` (`sqliteHasColumn`) — cioè su un **container non ri-deployato**, dove `_db.py` non ha ancora girato la sua migration gemella |
+
+**Ordine di deploy**: mig 060 → release web (master→production) → redeploy container.
+Tutti e tre **gated sull'utente**. La migration è additiva e retro-compatibile
+(`author` default `'agent'`): lo storico salvato resta esattamente com'era.
 
 ## 📜 Incident history — RobertHalf redux (2026-05-19)
 
@@ -218,6 +369,9 @@ Entrambe le event lane sono ora osservate (commit `4774c190` + `093027c1`, 2026-
 | **Tombstone propagation end-to-end** (Supabase mig 025 + SQLite V7 + CLI push + web receive) | `6499b3db` | 2026-05-31 |
 | **Profilo: modello a 3 livelli** (mig 033–035: tabelle normalizzate + `candidate_blocks` + `candidate_contacts`) + push completo no-scarto | `e52d31b2…76a150dc` | 2026-06-06 |
 | **`pull-profile` (hydration profilo cloud→locale)**: endpoint + `jht cloud pull-profile` only-if-absent + boot hook (PC nuovo / container ricreato) | `cabee35f` | 2026-06-06 |
+| **Chat unificata gioco↔web — schema** (mig **060**: `author`, `chat_ts`, policy INSERT ristretta, `team_state.chat_requested_at`/`chat_delivered_at`, RPC merge estesa) + gemella SQLite in `_db.py` | `c397f90d` | 2026-07-29 |
+| **Corsia chat nel daemon** (`chat-sync.js`: `chat.jsonl` ⇄ SQLite ⇄ cloud, consegna al **pane** con `jht-tmux-send`, push anti-413 a cursore per-riga) + `jht cloud chat-sync` | `82e4a9b3` | 2026-07-29 |
+| **`POST /api/pending-messages`** (l'utente **compone**, non solo risponde) + via i filtri `delivered_via='web'` dallo storico e non-letti solo `author='agent'` | `2c855c73` | 2026-07-29 |
 
 ### ⬜ Pending (in ordine di priorità)
 

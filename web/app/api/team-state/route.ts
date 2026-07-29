@@ -14,6 +14,11 @@ const DESIRED_FIELDS = [
   // NON è un'azione di controllo (non avvia/ferma il team) → resta consentita
   // dal cloud anche quando il control bus verrà reso read-only (web-readonly d1).
   "sync_requested_at",
+  // [JHT-CHAT-UNIFY] Gemello di sync_requested_at per la chat: il browser lo
+  // timbra quando l'utente manda un messaggio a un agente, il daemon lo vede
+  // nel giro veloce (~5s) — la stessa riga che legge già — e va a prendersi i
+  // turni non consegnati. Non è controllo del team: scrivibile anche dal cloud.
+  "chat_requested_at",
 ] as const;
 
 // [JHT-WEB-READONLY] d1 — sottoinsieme di DESIRED che sono COMANDI al team
@@ -38,6 +43,9 @@ const OBSERVED_FIELDS = [
   // Il daemon VPS (source=token) marca sync_completed_at dopo aver pushato in
   // risposta a una sync_requested_at → il browser lo vede e fa UN refetch.
   "sync_completed_at",
+  // Il box marca chat_delivered_at dopo aver consegnato i turni al pane
+  // dell'agente: chiude il rendezvous di chat_requested_at.
+  "chat_delivered_at",
 ] as const;
 
 type DesiredField = (typeof DESIRED_FIELDS)[number];
@@ -112,6 +120,11 @@ export async function PATCH(req: NextRequest) {
   // server; per il client il valore è solo un trigger.
   if (source !== "token" && "sync_requested_at" in update) {
     update.sync_requested_at = new Date().toISOString();
+  }
+  // Stessa ragione per il rendezvous di chat: il confronto è con
+  // `chat_delivered_at` scritto dal box, l'orologio del browser non entra.
+  if (source !== "token" && "chat_requested_at" in update) {
+    update.chat_requested_at = new Date().toISOString();
   }
 
   if (typeof update.agents_enabled !== "undefined") {

@@ -55,10 +55,11 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 12)
 	margin.add_child(box)
 
+	_build_breadcrumb(box)
 	var title_row := HBoxContainer.new()
 	box.add_child(title_row)
 	var title := TerminalTheme.label(
-			SidebarDefs.label_for(section).to_upper(), 24, Palette.WHITE, "xbold")
+			SidebarDefs.title_for(section).to_upper(), 24, Palette.WHITE, "xbold")
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(title)
 	var close_btn := Button.new()
@@ -71,6 +72,7 @@ func _ready() -> void:
 	title_row.add_child(close_btn)
 
 	box.add_child(HSeparator.new())
+	_build_tabs(box)
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 10)
 	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -93,6 +95,79 @@ func _ready() -> void:
 		_build("agent")
 		return
 	_build("detail" if _pos_detail_id != 0 else "")
+
+
+## Briciola di ritorno per le pagine di configurazione: in sidebar non hanno
+## più una riga propria, quindi senza questo link chi ci arriva da Impostazioni
+## (o da un passo dell'onboarding) non ha una strada indietro che non sia
+## chiudere la finestra e ricominciare.
+func _build_breadcrumb(parent: VBoxContainer) -> void:
+	if not SidebarDefs.is_settings_section(section):
+		return
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var back := Button.new()
+	back.flat = true
+	back.text = "‹  " + SidebarDefs.label_for(SidebarDefs.SETTINGS_HUB)
+	back.add_theme_font_size_override("font_size", 13)
+	back.add_theme_color_override("font_color", Palette.MUTED)
+	back.add_theme_color_override("font_hover_color", Palette.GREEN)
+	back.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	back.pressed.connect(func() -> void: navigate.emit(SidebarDefs.SETTINGS_HUB))
+	row.add_child(back)
+
+
+## Le schede della finestra Monitoraggio. Ognuna è una sezione vera con il suo
+## id: il salto passa da `navigate`, lo stesso segnale che la sidebar instrada
+## per i link interni, così i deep-link continuano a valere.
+func _build_tabs(parent: VBoxContainer) -> void:
+	var tabs: Array = SidebarDefs.tabs_for(section)
+	if tabs.is_empty():
+		return
+	# a capo automatico: cinque schede non stanno in riga su una finestra
+	# stretta, e una scheda fuori dal bordo è una scheda che non esiste
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 4)
+	row.add_theme_constant_override("v_separation", 4)
+	parent.add_child(row)
+	for id in tabs:
+		row.add_child(_tab_button(str(id)))
+
+
+func _tab_button(id: String) -> Button:
+	var active := id == section
+	var btn := Button.new()
+	btn.text = SidebarDefs.label_for(id).to_upper()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		btn.add_theme_stylebox_override(state, _tab_style(active,
+				state == "hover"))
+	btn.add_theme_color_override("font_color", Palette.BASE)
+	btn.add_theme_color_override("font_hover_color", Palette.WHITE)
+	btn.add_theme_color_override("font_disabled_color", Palette.GREEN)
+	if active:
+		# la scheda corrente non naviga: ricliccarla ricostruirebbe la
+		# finestra buttando via filtri e scroll
+		btn.disabled = true
+	else:
+		btn.pressed.connect(func() -> void: navigate.emit(id))
+	return btn
+
+
+static func _tab_style(active: bool, hover: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(Palette.ROW.r, Palette.ROW.g, Palette.ROW.b,
+			1.0 if active else (0.7 if hover else 0.0))
+	sb.set_border_width_all(0)
+	sb.border_width_bottom = 2
+	sb.border_color = Palette.GREEN if active else Color(0, 0, 0, 0)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 5
+	return sb
+
 
 var _content: VBoxContainer
 
@@ -147,6 +222,8 @@ func _build(page := "") -> void:
 			_build_notifs()
 		"chat":
 			_build_chat()
+		"settings":
+			_build_settings_hub()
 		"vps":
 			_build_vps()
 		"positions":
@@ -220,6 +297,66 @@ func _build_config() -> void:
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
+
+
+## Il raccoglitore delle dodici pagine di configurazione: riquadri raggruppati
+## per cosa si sta configurando, non un secondo elenco verticale. Ogni riquadro
+## apre la sezione VERA (stesso id di prima) passando da `navigate`.
+func _build_settings_hub() -> void:
+	for group in SidebarDefs.SETTINGS_GROUPS:
+		_content.add_child(TerminalTheme.label(
+				UIStrings.t(str(group["key"])).to_upper(), 12, Palette.DIM, "medium"))
+		var grid := HFlowContainer.new()
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		_content.add_child(grid)
+		for item in group["items"]:
+			grid.add_child(_settings_tile(str(item["id"]), str(item["icon"])))
+		_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(
+			UIStrings.t("common.readonly_desktop"), 13, Palette.DIM))
+
+
+func _settings_tile(id: String, icon_id: String) -> Button:
+	var btn := Button.new()
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.text = SidebarDefs.label_for(id)
+	btn.custom_minimum_size = Vector2(236, 42)
+	btn.add_theme_font_size_override("font_size", 15)
+	btn.add_theme_color_override("font_color", Palette.BASE)
+	btn.add_theme_color_override("font_hover_color", Palette.WHITE)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("normal", _tile_style(false))
+	btn.add_theme_stylebox_override("hover", _tile_style(true))
+	btn.add_theme_stylebox_override("pressed", _tile_style(true))
+	btn.pressed.connect(func() -> void: navigate.emit(id))
+	# L'icona è un figlio ancorato a metà altezza: resta ferma a sinistra
+	# qualunque sia la lunghezza dell'etichetta tradotta (stesso schema della
+	# sidebar), e non intercetta i click.
+	var icon := SidebarIcon.new(icon_id, Palette.MUTED)
+	icon.anchor_top = 0.5
+	icon.anchor_bottom = 0.5
+	icon.offset_left = 12
+	icon.offset_right = 30
+	icon.offset_top = -9
+	icon.offset_bottom = 9
+	btn.add_child(icon)
+	btn.mouse_entered.connect(func() -> void: icon.color = Palette.GREEN)
+	btn.mouse_exited.connect(func() -> void: icon.color = Palette.MUTED)
+	return btn
+
+
+static func _tile_style(hover: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(Palette.ROW.r, Palette.ROW.g, Palette.ROW.b,
+			0.9 if hover else 0.35)
+	sb.set_border_width_all(TerminalTheme.hairline())
+	sb.border_color = Palette.GREEN if hover else Palette.BORDER_GLOW
+	sb.content_margin_left = 38
+	sb.content_margin_right = 12
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	return sb
 
 
 # ── Servizi tecnici migrati dalla desktop app ───────────────────────
@@ -509,8 +646,79 @@ func _build_advanced() -> void:
 			UIStrings.t("advanced.version") % [
 					ProjectSettings.get_setting("application/config/version", "dev"),
 					SetupService._jht_home()], 12, Palette.DIM))
+	_build_update_block()
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
+
+
+## L'interruttore dell'aggiornamento automatico, accanto al numero di versione:
+## è lì che si guarda quando ci si chiede "sono aggiornato?", ed è lì che deve
+## esserci la risposta e il modo di spegnere la domanda.
+func _build_update_block() -> void:
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(UIStrings.t("update.section"), 13,
+			Palette.BRIGHT, "bold"))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+	row.add_child(TerminalTheme.label(UIStrings.t("update.auto"), 13, Palette.BASE))
+	var auto_switch := CheckButton.new()
+	auto_switch.button_pressed = UpdateService.enabled()
+	row.add_child(auto_switch)
+	var check_now := Button.new()
+	check_now.text = UIStrings.t("update.check_now")
+	check_now.disabled = not auto_switch.button_pressed
+	check_now.pressed.connect(func() -> void: UpdateService.check(true))
+	row.add_child(check_now)
+	auto_switch.toggled.connect(func(on: bool) -> void:
+		UpdateService.set_enabled(on)
+		check_now.disabled = not on)
+	var hint := TerminalTheme.label(UIStrings.t("update.auto_hint"), 12, Palette.DIM)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(hint)
+	# Cosa succede quando si accetta, che è diverso a seconda del sistema: su
+	# macOS il pacchetto è firmato e il gioco può sostituirsi da solo, altrove
+	# l'aggiornamento apre la pagina della release e si ferma lì.
+	var how := TerminalTheme.label(UIStrings.t("update.signed"
+			if UpdateCheck.can_self_install(OS.get_name()) else "update.manual_only"),
+			12, Palette.DIM)
+	how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(how)
+	var status := TerminalTheme.label("", 13, Palette.MUTED, "medium")
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(status)
+	status.text = _update_line(UpdateService.state())
+	UpdateService.state_changed.connect(func(state: Dictionary) -> void:
+		if is_instance_valid(status):
+			status.text = _update_line(state))
+
+
+## Dice sempre qualcosa: "mai controllato" è un'informazione, una riga vuota è
+## un dubbio — e il dubbio su un aggiornamento porta l'utente a cercarlo a mano.
+func _update_line(state: Dictionary) -> String:
+	match str(state.get("phase", "")):
+		UpdateService.PHASE_CHECKING:
+			return UIStrings.t("update.checking")
+		UpdateService.PHASE_AVAILABLE:
+			return UIStrings.t("update.available") % [str(state.get("latest", "")),
+					str(state.get("current", ""))]
+		UpdateService.PHASE_DOWNLOADING:
+			return UIStrings.t("update.downloading") % int(state.get("progress", 0))
+		UpdateService.PHASE_INSTALLING:
+			return UIStrings.t("update.installing")
+		UpdateService.PHASE_DONE:
+			return UIStrings.t("update.installed") % str(state.get("latest", ""))
+		UpdateService.PHASE_FAILED:
+			return UIStrings.t("update.failed") % UIStrings.t(str(state.get("error", "")))
+		UpdateService.PHASE_CURRENT:
+			return UIStrings.t("update.current") % str(state.get("current", ""))
+	var last := float(state.get("last_check", 0.0))
+	if last <= 0.0:
+		return UIStrings.t("update.never")
+	# L'ora locale: un orario UTC in una riga di stato è un piccolo enigma.
+	var bias := int(Time.get_time_zone_from_system().get("bias", 0)) * 60
+	return UIStrings.t("update.last") % Time.get_datetime_string_from_unix_time(
+			int(last) + bias, true)
 
 
 # ── Segnalazione di un problema ──────────────────────────────────────
@@ -2153,6 +2361,12 @@ func _build_agent_page() -> void:
 		if by.split("-")[0] == real:
 			mine.append(t)
 	_kpi_row(UIStrings.t("agents.registry_actions"), str(mine.size()), Palette.BRIGHT)
+	# Le deroghe che l'utente concede al team stanno sulla pagina di CHI ne
+	# diventa responsabile: tolti gli automatismi, l'unica sorveglianza che
+	# resta sul consumo è il Coordinatore.
+	if slug == "coordinatore":
+		_content.add_child(HSeparator.new())
+		_build_burn_mode()
 	_content.add_child(HSeparator.new())
 	# il grafico storico del ruolo (token, quote finestre, throttle,
 	# azioni db, contesto container) — si autogestisce con cache: i
@@ -2179,8 +2393,12 @@ func _build_agent_page() -> void:
 		var when := TerminalTheme.label(str(t.get("ts", "")).left(16), 13, Palette.DIM)
 		when.custom_minimum_size = Vector2(140, 0)
 		row.add_child(when)
-		var who := TerminalTheme.label(str(t.get("by_agent", "?")), 13, Palette.MINT)
-		who.custom_minimum_size = Vector2(110, 0)
+		# Chi ha mosso la posizione: cognome davanti, uid tecnico dietro. La
+		# riga è larga e l'uid serve a chi poi va a cercare quell'agente nei
+		# log, quindi qui ci sta la forma completa.
+		var who := TerminalTheme.label(
+				AgentNames.display_name(str(t.get("by_agent", "?"))), 13, Palette.MINT)
+		who.custom_minimum_size = Vector2(200, 0)
 		row.add_child(who)
 		var what := TerminalTheme.label("%s — %s" % [str(t.get("title", "?")),
 				str(t.get("company", ""))], 14, Palette.BASE)
@@ -2212,11 +2430,215 @@ func _build_agent_page() -> void:
 				str(m.get("ts", "")).replace("T", " ").left(16), 13, Palette.DIM)
 		when.custom_minimum_size = Vector2(140, 0)
 		row.add_child(when)
-		var who := TerminalTheme.label("%s → %s" % [m.get("from", "?"),
-				m.get("to", "?")], 13, Palette.MINT, "medium")
+		# Due nomi sulla stessa cella: qui vale il solo cognome, altrimenti la
+		# colonna raddoppia per ripetere due volte il ruolo che si legge già
+		# dal contesto.
+		var who := TerminalTheme.label("%s → %s"
+				% [AgentNames.short_name(str(m.get("from", "?"))),
+						AgentNames.short_name(str(m.get("to", "?")))],
+				13, Palette.MINT, "medium")
 		who.custom_minimum_size = Vector2(210, 0)
 		row.add_child(who)
 		row.add_child(_pos_paragraph(str(m.get("text", ""))))
+
+## ── Modalità operative: la deroga a termine agli automatismi di spesa ──
+##
+## Finora esisteva solo come `jht burn on` da terminale. Il prodotto non
+## chiede mai all'utente di aprire una shell — le dipendenze si installano
+## in-app, il team si comanda dall'app — quindi la deroga vive qui, e da qui
+## pilota lo STESSO shared/skills/burn_intent.py che leggono i bridge e il
+## prompt del Capitano. Nessuna seconda implementazione, nessuna seconda
+## verità: il gioco chiede e rilegge, non decide.
+
+var _burn_toggle: CheckButton
+var _burn_hours: SpinBox
+var _burn_state_lbl: Label
+## Durata scelta dall'utente, tenuta fuori dai widget: la pagina si
+## ricostruisce a ogni giro del roster e la scelta non deve azzerarsi
+## sotto le dita di chi la sta impostando.
+var _burn_hours_choice := BurnMode.DEFAULT_HOURS
+## true mentre siamo NOI a riallineare l'interruttore allo stato letto:
+## senza, ogni rilettura riaprirebbe da sola il dialogo di conferma.
+var _burn_syncing := false
+## true fra la richiesta e la risposta del container: finché dura, lo stato
+## a schermo non è né quello vecchio né quello nuovo, e non va riscritto.
+var _burn_pending := false
+
+func _build_burn_mode() -> void:
+	if not BackendBus.burn_intent_updated.is_connected(_on_burn_intent):
+		BackendBus.burn_intent_updated.connect(_on_burn_intent)
+	if not BackendBus.burn_intent_action_done.is_connected(_on_burn_action):
+		BackendBus.burn_intent_action_done.connect(_on_burn_action)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 14)
+	_content.add_child(head)
+	head.add_child(TerminalTheme.label("▰ " + UIStrings.t("burn.section"),
+			14, Palette.YELLOW, "bold"))
+	var head_desc := TerminalTheme.label(UIStrings.t("burn.section_desc"),
+			11, Palette.DIM)
+	head_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	head.add_child(head_desc)
+
+	var card := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Palette.CARD
+	style.border_color = Palette.BORDER
+	style.set_border_width_all(TerminalTheme.hairline())
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 14
+	style.content_margin_bottom = 14
+	card.add_theme_stylebox_override("panel", style)
+	_content.add_child(card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	card.add_child(box)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
+	var title := TerminalTheme.label(UIStrings.t("burn.title"), 15,
+			Palette.BRIGHT, "bold")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(title)
+	row.add_child(TerminalTheme.label(UIStrings.t("burn.duration"), 12,
+			Palette.MUTED))
+	_burn_hours = SpinBox.new()
+	_burn_hours.min_value = 1
+	_burn_hours.max_value = BurnMode.MAX_HOURS
+	_burn_hours.step = 1
+	_burn_hours.value = _burn_hours_choice
+	_burn_hours.suffix = "h"
+	_burn_hours.custom_minimum_size = Vector2(104, 0)
+	_burn_hours.value_changed.connect(func(v: float) -> void:
+		_burn_hours_choice = int(v))
+	row.add_child(_burn_hours)
+	_burn_toggle = CheckButton.new()
+	_burn_toggle.tooltip_text = UIStrings.t("burn.title")
+	_burn_toggle.toggled.connect(_on_burn_toggled)
+	row.add_child(_burn_toggle)
+
+	_burn_state_lbl = TerminalTheme.label("", 13, Palette.MUTED, "medium")
+	box.add_child(_burn_state_lbl)
+	var desc := TerminalTheme.label(UIStrings.t("burn.desc"), 12, Palette.BASE)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(desc)
+	# Il numero misurato sta QUI e non solo nell'avviso: è la risposta alla
+	# domanda che uno si fa dopo aver attivato ("perché non sta al 100%?"),
+	# e chi la legge prima decide sapendo cosa comprare.
+	var measured := TerminalTheme.label(UIStrings.t("burn.desc_measured"), 11,
+			Palette.DIM)
+	measured.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(measured)
+
+	# Il tempo scorre anche a pagina ferma. Il residuo si aggiorna da solo sul
+	# delta già ricevuto, e ogni tanto si torna a CHIEDERE: la deroga può
+	# essere scaduta o essere stata revocata dal Capitano mentre guardavamo.
+	var tick := Timer.new()
+	tick.wait_time = 5.0
+	tick.autostart = true
+	tick.timeout.connect(func() -> void:
+		BackendBus.request_burn_intent()
+		_refresh_burn_state())
+	_content.add_child(tick)
+
+	if _burn_pending:
+		_burn_state_lbl.text = "◌ " + UIStrings.t("burn.sending")
+	else:
+		_refresh_burn_state()
+	BackendBus.request_burn_intent()
+
+## Lo stato a schermo viene SEMPRE dal flag riletto, mai dal click: la deroga
+## scade da sola e il Capitano può revocarla, quindi un interruttore che
+## ricorda l'ultima intenzione dell'utente mente entro cinque ore.
+func _refresh_burn_state() -> void:
+	if not is_instance_valid(_burn_state_lbl):
+		return
+	if _burn_pending:
+		return
+	var st := BurnMode.state_for(BackendBus.burn_intent)
+	var state := str(st["state"])
+	var active := state == BurnMode.STATE_ACTIVE
+	_burn_syncing = true
+	_burn_toggle.button_pressed = active
+	_burn_syncing = false
+	_burn_toggle.disabled = state == BurnMode.STATE_UNSUPPORTED
+	_burn_hours.max_value = int(st["max_hours"])
+	# A deroga concessa la durata è già scritta nel flag: cambiarla qui non
+	# sposterebbe la scadenza, e un campo che non fa nulla è una bugia.
+	_burn_hours.editable = not active and not _burn_toggle.disabled
+	var text := ""
+	var color := Palette.MUTED
+	match state:
+		BurnMode.STATE_ACTIVE:
+			var left := BurnMode.remaining_text(int(st["remaining_sec"]))
+			var pattern := UIStrings.t("burn.state_soon") \
+					if bool(st["expiring_soon"]) else UIStrings.t("burn.state_active")
+			text = "✓ " + (pattern % left)
+			color = Palette.YELLOW if bool(st["expiring_soon"]) else Palette.GREEN
+		BurnMode.STATE_OFF:
+			text = "○ " + UIStrings.t("burn.state_off")
+		BurnMode.STATE_UNSUPPORTED:
+			text = "? " + UIStrings.t("burn.state_unsupported")
+			color = Palette.DIM
+		_:
+			text = "? " + UIStrings.t("burn.state_unknown")
+			color = Palette.DIM
+	_burn_state_lbl.text = text
+	_burn_state_lbl.add_theme_color_override("font_color", color)
+
+func _on_burn_toggled(pressed: bool) -> void:
+	if _burn_syncing:
+		return
+	# Rimettere un freno non ha bisogno di essere confermato: la conferma
+	# serve a chi lo toglie.
+	if not pressed:
+		_burn_apply(false)
+		return
+	var st := BurnMode.state_for(BackendBus.burn_intent)
+	# La durata che l'avviso PROMETTE e quella che viene poi scritta devono
+	# essere lo stesso numero, anche se il campo non ha ancora perso il fuoco.
+	_burn_hours_choice = int(_burn_hours.value)
+	var hours := _burn_hours_choice
+	var dialog := ConfirmationDialog.new()
+	dialog.title = UIStrings.t("burn.confirm_title")
+	# I nomi dei freni che restano in piedi non sono una parafrasi: arrivano
+	# da NEVER_YIELDS di burn_intent.py, passando dal container.
+	dialog.dialog_text = UIStrings.t("burn.confirm_body") % [str(hours),
+			str(int(st["max_hours"])),
+			", ".join(PackedStringArray(st["never_yields"]))]
+	dialog.ok_button_text = UIStrings.t("burn.confirm_ok") % str(hours)
+	dialog.confirmed.connect(func() -> void: _burn_apply(true))
+	# Annullare deve far RISALIRE l'interruttore: lasciarlo giù direbbe che
+	# la deroga è attiva quando sul disco non c'è nulla.
+	dialog.canceled.connect(_refresh_burn_state)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.confirmed.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(780, 440))
+
+func _burn_apply(active: bool) -> void:
+	_burn_pending = true
+	if is_instance_valid(_burn_state_lbl):
+		_burn_state_lbl.text = "◌ " + UIStrings.t("burn.sending")
+		_burn_state_lbl.add_theme_color_override("font_color", Palette.YELLOW)
+	BackendBus.set_burn_intent(active, float(_burn_hours_choice))
+
+func _on_burn_intent(_state: Dictionary) -> void:
+	_refresh_burn_state()
+
+func _on_burn_action(_active: bool, ok: bool, error: String) -> void:
+	_burn_pending = false
+	if not is_instance_valid(_burn_state_lbl):
+		return
+	# Anche in caso di successo non si scrive "fatto": il backend rilegge il
+	# flag subito dopo, ed è quella lettura a comandare l'interruttore.
+	_refresh_burn_state()
+	if not ok:
+		_burn_state_lbl.text = "? " + UIStrings.t("burn.failed") % error
+		_burn_state_lbl.add_theme_color_override("font_color", Palette.RED)
 
 func _on_config_refresh(_settings: Dictionary) -> void:
 	if is_instance_valid(_content) and section in ["hours",
@@ -3201,9 +3623,10 @@ func _build_activity() -> void:
 			row.add_child(when)
 			var by := str(t.get("by_agent", "?") if t.get("by_agent") else "?")
 			var base := by.split("-")[0]
-			var who := TerminalTheme.label("%s %s" % [ROLE_EMOJI.get(base, "•"), by],
+			var who := TerminalTheme.label("%s %s"
+					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(by)],
 					13, Palette.MINT, "medium")
-			who.custom_minimum_size = Vector2(150, 0)
+			who.custom_minimum_size = Vector2(210, 0)
 			row.add_child(who)
 			var title_lbl := TerminalTheme.label("%s — %s" % [
 					str(t.get("title", "?")), str(t.get("company", ""))], 14, Palette.BASE)
@@ -3229,8 +3652,10 @@ func _build_activity() -> void:
 			var when := TerminalTheme.label(entry["when"], 13, Palette.DIM)
 			when.custom_minimum_size = Vector2(80, 0)
 			row.add_child(when)
-			var who := TerminalTheme.label(slug, 13, Palette.MUTED)
-			who.custom_minimum_size = Vector2(110, 0)
+			# Ramo offline: la riga è del lead del ruolo, che è l'istanza 1.
+			var who := TerminalTheme.label(
+					AgentNames.display_name(slug), 13, Palette.MUTED)
+			who.custom_minimum_size = Vector2(160, 0)
 			row.add_child(who)
 			row.add_child(TerminalTheme.label(entry["text"], 14, Palette.BASE))
 
@@ -3510,8 +3935,11 @@ func _build_chat() -> void:
 			when.custom_minimum_size = Vector2(130, 0)
 			row.add_child(when)
 			var base := str(msg.get("from", "?")).split("-")[0]
+			# Mittente e destinatario nella stessa cella: solo cognomi.
 			var who := TerminalTheme.label("%s %s → %s" % [ROLE_EMOJI.get(base, "•"),
-					msg.get("from", "?"), msg.get("to", "?")], 13, Palette.MINT, "medium")
+					AgentNames.short_name(str(msg.get("from", "?"))),
+					AgentNames.short_name(str(msg.get("to", "?")))],
+					13, Palette.MINT, "medium")
 			who.custom_minimum_size = Vector2(230, 0)
 			row.add_child(who)
 			var txt := _pos_paragraph(str(msg.get("text", "")))
@@ -3528,8 +3956,9 @@ func _build_chat() -> void:
 		var when := TerminalTheme.label(msg["when"], 13, Palette.DIM)
 		when.custom_minimum_size = Vector2(56, 0)
 		row.add_child(when)
-		var who := TerminalTheme.label(msg["from"], 14, Palette.MINT, "medium")
-		who.custom_minimum_size = Vector2(120, 0)
+		var who := TerminalTheme.label(
+				AgentNames.display_name(str(msg["from"])), 14, Palette.MINT, "medium")
+		who.custom_minimum_size = Vector2(180, 0)
 		row.add_child(who)
 		row.add_child(TerminalTheme.label(msg["text"], 15, Palette.BASE))
 	_content.add_child(HSeparator.new())
@@ -3621,9 +4050,10 @@ func _build_usage() -> void:
 			row.add_theme_constant_override("separation", 12)
 			_content.add_child(row)
 			var base := str(agent).split("-")[0]
-			var lbl := TerminalTheme.label("%s %s" % [ROLE_EMOJI.get(base, "•"), agent],
+			var lbl := TerminalTheme.label("%s %s"
+					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(str(agent))],
 					14, Palette.BASE)
-			lbl.custom_minimum_size = Vector2(220, 0)
+			lbl.custom_minimum_size = Vector2(270, 0)
 			row.add_child(lbl)
 			row.add_child(TerminalTheme.label("%.1f kt" % float(per_agent[agent]),
 					15, Palette.MINT, "bold"))

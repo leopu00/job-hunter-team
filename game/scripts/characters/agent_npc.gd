@@ -439,7 +439,10 @@ func investigate_agent(target: AgentNPC, text: String) -> bool:
 	var approach := nav.approach_point(global_position, target.global_position)
 	var inspect := _leg_to(approach, "walk", 4.5, "idle")
 	inspect["investigation_text"] = text
-	inspect["investigation_target"] = target.display_name
+	# Finisce dentro una vignetta ("→ …"), che si allarga col testo: qui vale
+	# il solo cognome, come per ogni altro destinatario in scena.
+	inspect["investigation_target"] = AgentNames.short_name(
+			target.uid, target.display_name)
 	_forced_trip = true
 	_legs = [inspect, _leg_to(_spot, "walk", 0.0, "work")]
 	_start_next_leg()

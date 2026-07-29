@@ -1,7 +1,7 @@
 <!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
-description: Legge il feedback dell'utente (like/dislike/hide/star) per una data posizione dal cloud. Usato dallo Scorer per applicare un moltiplicatore sul punteggio finale e dallo Scout come segnale contestuale. Restituisce un payload neutrale "no signal" quando il cloud è disabilitato o irraggiungibile, così i chiamanti non falliscono mai con errore hard.
+description: Legge il feedback dell'utente (like/dislike/hide/star) dal cloud — una posizione alla volta, o aggregato su una finestra. Usato dallo Scorer per applicare un moltiplicatore sul punteggio finale e per portare il motivo dell'utente nella nota, dal Mentor per contare i motivi ricorrenti (Pattern F) e dallo Scout come segnale contestuale. Restituisce un payload neutrale "no signal" quando il cloud è disabilitato o irraggiungibile, così i chiamanti non falliscono mai con errore hard.
 allowed-tools: Bash(python3 *)
 ---
 
@@ -12,7 +12,7 @@ L'utente può cliccare like/dislike/hide/star su qualsiasi posizione dalla dashb
 | Colonna             | Tipo    | Significato |
 |---------------------|---------|---------|
 | `position_legacy_id`| TEXT    | Il `legacy_id` (stringa) della posizione in `positions` |
-| `action`            | TEXT    | Uno tra `like`, `dislike`, `hide`, `star` |
+| `action`            | TEXT    | Uno tra `like`, `dislike`, `hide`, `star`, `clear` (mig 059 — l'utente ritira il giudizio; vince l'ultimo evento, quindi un `clear` in coda significa "nessun giudizio") |
 | `reason`            | TEXT    | Motivo breve opzionale (≤500 char) |
 | `comment`           | TEXT    | Commento verboso opzionale (≤2000 char, mig 028) |
 | `score`             | INTEGER | Punteggio granulare opzionale 1-5 (mig 028) |
@@ -61,6 +61,48 @@ Quando il cloud è disabilitato o l'endpoint è irraggiungibile, la skill restit
  "note": "no-signal (cloud-disabled)"}
 ```
 
+## Lettura aggregata (finestra su tutte le posizioni)
+
+Una sola chiamata HTTP invece di N: `GET /api/positions/feedback?days=&limit=`, stesso bearer token, stesso fallback neutro.
+
+```bash
+# Tutti gli eventi di feedback nella finestra, dal più recente
+python3 /app/shared/skills/feedback_query.py recent --days 30
+
+# I motivi scritti dall'utente, raggruppati per somiglianza
+python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
+```
+
+Output di `themes`:
+
+```json
+{"ok": true, "window_days": 30, "field": "both",
+ "events_total": 31, "events_with_text": 19,
+ "positions_with_text": 17, "positions_cleared": 2,
+ "by_action": {"like": 6, "dislike": 21, "hide": 3, "star": 1},
+ "min_positions": 3,
+ "themes": [
+   {"key": "tropp senio", "label": "troppo senior",
+    "positions": 7, "events": 8, "share": 0.412,
+    "actions": {"dislike": 6, "hide": 2},
+    "legacy_ids": ["42", "51", "63"],
+    "examples": ["troppo senior", "richiesta troppo seniore — Lead role"]}
+ ]}
+```
+
+Come funziona il raggruppamento (nessun match esatto richiesto, nessuna dipendenza nuova): minuscolo → accenti via → punteggiatura via → parole di servizio via → ogni parola tagliata ai primi 5 caratteri (`senior` / `seniority` / `seniore` / `séniorité` collassano su una chiave sola) → si contano parole singole e **coppie adiacenti**, per **posizioni distinte**, non per eventi. Una coppia assorbe le sue parti quando copre ≥ 80% delle stesse posizioni, così "troppo senior" vince su "senior"; gli intensificatori restano nel flusso apposta. `reason` e `comment` sono tokenizzati separatamente, così nessuna coppia viene inventata a cavallo dei due.
+
+Limiti voluti, dichiarati perché nessuno legga nei numeri più di quello che c'è:
+- I sinonimi lontani restano separati (`stipendio` e `RAL` sono due temi) — è conteggio di parole, non semantica. Leggi gli `examples` (verbatim, max 3) e unisci con la testa.
+- Le posizioni il cui **ultimo** evento è `clear` restano fuori (il giudizio è stato ritirato); `--include-cleared` le rimette.
+- `share` = posizioni del tema / `positions_with_text`.
+- `--field reason|comment|both` (default `both`), `--top N`, `--days 0` per tutta la storia.
+- Fallback quando l'endpoint aggregato non risponde: `--legacy-ids 12,13,14` legge quelle posizioni una a una (più lento, stesso formato di output).
+
+Flag: `--days` (default 30, `0` = tutto), `--limit` (default 500 eventi), `--min-positions` (default 3), `--text-chars` su `recent` (default 300, tronca i commenti lunghi).
+
+Quando il payload porta una `note` (`no-signal (...)`), l'aggregato non c'è: cloud spento, endpoint assente o rete giù. Trattalo come "nessun dato", mai come "nessun feedback".
+
 ## Come lo usano gli agenti
 
 **Scorer** (obbligatorio al momento dello scoring):
@@ -70,8 +112,18 @@ Quando il cloud è disabilitato o l'endpoint è irraggiungibile, la skill restit
    - `star` → final_score = round(base * 1.15), aggiungi nota `feedback:star+15%`
    - `dislike` → final_score = round(base * 0.85), aggiungi nota `feedback:dislike-15%`
    - `hide` → status=`excluded`, nota `feedback:hide`, salta la scrittura del punteggio
-   - `null` → nessuna modifica
-3. Cap del punteggio finale a 100 dopo il moltiplicatore.
+   - `clear` / `null` → nessuna modifica (un giudizio ritirato non è un giudizio)
+3. **Porta il motivo nella nota**, quando l'utente ne ha scritto uno. Prendi `reason` (o, se vuoto, `comment`) dallo **stesso evento** di `latest_action` — `actions[0]` — citalo alla lettera, taglialo a ~80 caratteri e appendilo alla nota:
+
+   ```
+   feedback:dislike-15% — "troppo senior"
+   feedback:star+15% — "esattamente lo stack che voglio"
+   ```
+
+   Nessun testo su quell'evento → la nota resta com'è. Il motivo vale **solo per questa posizione**: non riportarlo mai su un'altra, non trasformarlo in una regola, non riscriverlo né riassumerlo — sono parole dell'utente e l'utente se le rilegge. Aggregare i motivi attraverso le posizioni è compito del Mentor (Pattern F), non dello Scorer.
+4. Cap del punteggio finale a 100 dopo il moltiplicatore.
+
+**Mentor** (Pattern F, read-only): `themes` sugli ultimi 30 giorni per contare i motivi che l'utente scrive. Soglie e interpretazione stanno nella skill `mentor-patterns`. Il Mentor parla **all'utente** — non emette mai istruzioni di ricerca a partire da questo dato.
 
 **Scout** (segnale contestuale opzionale):
 - Non per skip per-posizione — quello è già gestito dal dedup (SC-05).
@@ -82,4 +134,5 @@ Quando il cloud è disabilitato o l'endpoint è irraggiungibile, la skill restit
 
 - La skill è **read-only**. Le scritture avvengono solo dal browser via POST `/api/positions/{legacy_id}/feedback`.
 - Il bearer token viene da `cloud.json`; nessuna variabile env separata necessaria.
-- Timeout 10s per chiamata. Se processi molte posizioni in batch, aspettati ~50–200ms per chiamata. Per i run in bulk, includi nel loop con pause di throttle come al solito.
+- Timeout 10s su `check`, 20s sulla chiamata aggregata. Se processi molte posizioni con `check`, aspettati ~50–200ms a chiamata — è esattamente ciò che `recent` / `themes` esistono per evitare.
+- L'aggregato è ristretto all'utente lato server: ritorna il feedback di questo utente e nient'altro.

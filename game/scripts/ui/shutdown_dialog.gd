@@ -4,19 +4,30 @@ extends CanvasLayer
 ##
 ## Gli agenti non vivono nel gioco: vivono nel container e continuavano a
 ## lavorare — e a consumare token — con l'applicazione chiusa, senza che nulla
-## lo dicesse (Leone, 25/07). Chiudere ora è una decisione informata: qui sotto
-## c'è chi sta lavorando in questo momento, e due modi di fermarlo.
+## lo dicesse (Leone, 25/07). Chiudere è quindi una decisione, e le decisioni
+## possibili sono TRE, non due:
 ##
-## `ORDINATA` è la strada buona: il Capitano fa annotare a ognuno dove era
-## arrivato prima di spegnere, così domani si riprende invece di ricominciare.
-## `FORZATA` resta per chi ha fretta o per quando il Capitano non risponde.
+##   `FERMA IL TEAM E CHIUDI` — il Capitano fa annotare a ognuno dove era
+##     arrivato, poi si spegne tutto: domani si riprende invece di ricominciare.
+##   `ESCI · IL TEAM CONTINUA` — si chiude solo la finestra. Gli agenti restano
+##     al lavoro nel container (è la strada della CLI, che li avvia e se ne va):
+##     si lascia il computer a lavorare la notte senza tenere aperto un gioco
+##     che disegna. Il budget però continua a scorrere, e va detto qui.
+##   `CHIUDI TUTTO SUBITO` — non aspetta nessuno, per chi ha fretta o per
+##     quando il Capitano non risponde: chi stava lavorando perde il punto.
+##
+## Le tre stanno su tre righe separate, ognuna con una riga sola di spiegazione
+## sotto: in fila orizzontale erano tre bottoni che si assomigliavano, e la
+## differenza fra "chiudi in ordine" e "chiudi subito" — cioè se gli agenti
+## fanno in tempo a salvare — non si legge in un'etichetta di due parole.
 
-signal chosen(mode: String)  # "graceful" | "forced" | "cancel"
+signal chosen(mode: String)  # "graceful" | "detach" | "forced" | "cancel"
 
 const POLL_S := 3.0
 
 var _agents: PackedStringArray
 var _status: Label
+var _choices: VBoxContainer
 var _buttons: HBoxContainer
 var _waiting := false
 var _elapsed := 0.0
@@ -59,13 +70,33 @@ func _ready() -> void:
 	lead.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(lead)
 
-	# Chi stai per interrompere, con nome e cognome.
+	# Chi stai per interrompere, con nome e cognome — alla lettera: la lista
+	# arriva da `tmux list-sessions` ed è fatta di nomi di processo
+	# ("SCOUT-2", "CAPITANO"). Il cognome li rende persone, e il nome di
+	# sessione resta accanto perché è quello che si ritrova nei log.
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 2)
 	for name in _agents:
-		var row := TerminalTheme.label("  ● " + str(name), 14, Palette.BASE)
+		var row := TerminalTheme.label(
+				"  ● " + AgentNames.display_name(str(name)), 14, Palette.BASE)
 		list.add_child(row)
 	col.add_child(list)
+
+	col.add_child(HSeparator.new())
+
+	# Le tre vie, una per riga: bottone a tutta larghezza e sotto la riga che
+	# dice cosa cambia davvero. Il colore fa il resto del lavoro a colpo
+	# d'occhio: verde si riprende da dove si era, blu non si ferma niente,
+	# rosso si perde il punto.
+	_choices = VBoxContainer.new()
+	_choices.add_theme_constant_override("separation", 14)
+	col.add_child(_choices)
+	_add_choice("shutdown.graceful", "shutdown.graceful_hint", Palette.GREEN,
+			func() -> void: _start_graceful())
+	_add_choice("shutdown.detach", "shutdown.detach_hint", Palette.BLUE,
+			func() -> void: _ask_detach())
+	_add_choice("shutdown.forced", "shutdown.forced_hint", Palette.RED,
+			func() -> void: chosen.emit(HeadlessSession.MODE_FORCED))
 
 	col.add_child(HSeparator.new())
 	_status = TerminalTheme.label("", 13, Palette.MUTED)
@@ -75,12 +106,28 @@ func _ready() -> void:
 	_buttons = HBoxContainer.new()
 	_buttons.add_theme_constant_override("separation", 10)
 	col.add_child(_buttons)
-	_add_button(UIStrings.t("shutdown.graceful"), Palette.GREEN,
-			func() -> void: _start_graceful())
-	_add_button(UIStrings.t("shutdown.forced"), Palette.RED,
-			func() -> void: chosen.emit("forced"))
 	_add_button(UIStrings.t("shutdown.cancel"), Palette.MUTED,
-			func() -> void: chosen.emit("cancel"))
+			func() -> void: chosen.emit(HeadlessSession.MODE_CANCEL))
+
+
+## Una scelta = un bottone largo quanto il pannello più la sua riga di
+## spiegazione. La spiegazione è muted e piccola: si legge se serve, non si
+## mette in mezzo a chi ha già deciso.
+func _add_choice(label_key: String, hint_key: String, color: Color,
+		action: Callable) -> void:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	_choices.add_child(box)
+	var b := Button.new()
+	b.text = UIStrings.t(label_key)
+	b.add_theme_color_override("font_color", color)
+	b.pressed.connect(func() -> void:
+		Sfx.play_blip()
+		action.call())
+	box.add_child(b)
+	var hint := TerminalTheme.label(UIStrings.t(hint_key), 13, Palette.MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(hint)
 
 
 func _add_button(text: String, color: Color, action: Callable) -> void:
@@ -94,6 +141,16 @@ func _add_button(text: String, color: Color, action: Callable) -> void:
 	_buttons.add_child(b)
 
 
+## Da qui in poi la scelta è fatta: le tre vie spariscono e restano solo i
+## bottoni dello stato in cui siamo entrati.
+func _leave_choices() -> void:
+	for child in _choices.get_children():
+		child.queue_free()
+	_choices.visible = false
+	for child in _buttons.get_children():
+		child.queue_free()
+
+
 ## Ordine partito: da qui in poi comanda il Capitano e noi aspettiamo il flag,
 ## mostrando chi manca ancora. La chiusura forzata resta a portata di mano.
 func _start_graceful() -> void:
@@ -101,12 +158,28 @@ func _start_graceful() -> void:
 		return
 	_waiting = true
 	_elapsed = 0.0
-	for child in _buttons.get_children():
-		child.queue_free()
+	_leave_choices()
 	_add_button(UIStrings.t("shutdown.forced_now"), Palette.RED,
-			func() -> void: chosen.emit("forced"))
+			func() -> void: chosen.emit(HeadlessSession.MODE_FORCED))
 	_status.text = UIStrings.t("shutdown.ordered")
 	SetupService.request_graceful_shutdown()
+
+
+## Uscire lasciandoli al lavoro è l'unica delle tre che continua a spendere
+## dopo che la finestra è sparita: prima di farlo si dice per intero cosa resta
+## acceso, come si torna e come si ferma. Un passo in più su una decisione che
+## si prende la sera e si verifica la mattina dopo.
+func _ask_detach() -> void:
+	if _waiting:
+		return
+	_leave_choices()
+	_status.text = UIStrings.t("shutdown.detach_body") + "\n" \
+			+ UIStrings.t("shutdown.detach_back")
+	_status.add_theme_color_override("font_color", Palette.BASE)
+	_add_button(UIStrings.t("shutdown.detach_confirm"), Palette.BLUE,
+			func() -> void: chosen.emit(HeadlessSession.MODE_DETACH))
+	_add_button(UIStrings.t("shutdown.cancel"), Palette.MUTED,
+			func() -> void: chosen.emit(HeadlessSession.MODE_CANCEL))
 
 
 func _process(delta: float) -> void:
@@ -117,7 +190,7 @@ func _process(delta: float) -> void:
 		return
 	if SetupService.graceful_shutdown_ready():
 		_status.text = UIStrings.t("shutdown.done")
-		chosen.emit("graceful")
+		chosen.emit(HeadlessSession.MODE_GRACEFUL)
 		_waiting = false
 		return
 	var left := SetupService.active_agents()

@@ -44,25 +44,42 @@ Send a message **only** when one of these is true:
 - **Re-confirmations / repeated orders** — if you already sent an order, don't re-send it every tick.
   The bridge / mailbox delivers once.
 
-## 📍 Bookend signals — START and DONE, never per item
+## 🔇 Producing is silent — the Captain PULLS the state
 
-A worker touches the Captain **exactly twice per work session**: once when it **starts**, once when it
-**finishes**. Everything between the two bookends is the DB's job, not a message.
+A worker touches the Captain **zero times** to report progress. Not per item, and not on the edges
+either: the `[START]` / `[DONE]` bookends were **removed on 2026-07-27**. Measured on a first-run team
+over ~1.5h of pane history: **37 messages reached the Captain, 30 of them (81%) pure status** — 12
+`DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — against 3-6 that actually asked for a decision. Each one costs
+the Captain a full turn, and under the automatic model split he runs on **Opus** while Scout / Analyst
+/ Scorer run on **Sonnet**: a Scorer's "done" wakes the priciest agent of the fleet to do nothing.
 
-| Edge | Message | Example |
-|---|---|---|
-| **START** — you begin a mission / pick up a queue | one `[START]` | `[@analista-1 -> @capitano] [START] draining next-for-analista (~12 queued)` |
-| **DONE** — queue drained / mission complete / you stop | one `[DONE]` + a one-line tally | `[@analista-1 -> @capitano] [DONE] 12 done · 9 checked · 3 excluded` |
+The pull side already existed and is strictly better:
 
-**Never** a message per position, per score, per draft. The Captain reads progress from the **DB**
-(`db_query.py`), not from your pane — one `[REPORT]` per item is exactly the flood this protocol exists
-to kill: it wakes him a full turn each time for state he could already query (a single Analyst once
-woke the Captain **25 times in a night**, one ping per position). The two bookends give him the only
-edges he genuinely needs — *you woke up* and *you're done*; the middle is pull.
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 60
+```
 
-Still allowed **between** the bookends, because they are *decisions*, not progress: a `FEEDBACK` to a
-Scout, a blocking `REQ` consult (taxonomy split/merge), a `URG` safety event. These are rare and carry
-an action — they are not narration.
+One call returns the per-agent counts plus every transition with timestamp, actor, position and reason
+— `#22 checked→scored`, `#27 new→excluded — [DEAD_LINK]`. **A `DONE` carries less information than the
+row that produced it.** (The same protocol already killed the per-item flood: a single Analyst once
+woke the Captain **25 times in a night**, one ping per position. The two "polite" bookends are now
+gone too.)
+
+### ⚠️ What stays PUSH — the asymmetry is the point
+
+`recent-activity` shows **who produces**, so an agent that has stopped **disappears from the list**
+instead of standing out. From the Captain's side, your silence and your work look identical. These
+three must therefore still be sent, **immediately**, because they leave **no trace in the DB**:
+
+| Signal | When |
+|---|---|
+| **BLOCKED** | you have stopped producing: tool broken after the `resilience` ladder, `403` / `LOCKED`, sources genuinely dry (`[SCOUT-ESAUSTO]`), a queue item you can neither process nor skip |
+| **Conflict** | two peers on the same record / territory and you cannot settle it between you |
+| **Decision request** | a `REQ` only the Captain can answer (taxonomy arbitration, scaling, a user-facing call) |
+
+Everything else — start, progress, completion — is pull. Still allowed as before, because they are
+*decisions* and not narration: a `FEEDBACK` to a Scout, a `URG` safety event. **If you stop and don't
+say so, nobody notices.**
 
 ## 🗄️ Tier 1 — DB-driven coordination (the default)
 
@@ -110,6 +127,7 @@ Reduced type set (use the narrowest that fits):
 | `URG` | Safety / act-now: Captain → worker (throttle / freeze / kill); Sentinel → Captain (breach, crash, LOCKED) |
 | `FEEDBACK` | Analyst → Scout rejection patterns (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`) that must shape the next query |
 | `REQ` / `RES` | A genuine synchronous request expecting an answer (rare) — a real hand-off, not a status ask |
+| `BLOCKED` | Worker → Captain: you have **stopped producing** and it leaves no trace in the DB (broken tool, `403`/`LOCKED`, dry sources, an item you can neither process nor skip). Since 2026-07-27 it is the only signal that separates a stall from silent work — `recent-activity` cannot show it, because a stopped agent vanishes from that list |
 
 `ACK` — **only** when the sender explicitly needs to know the action took effect to proceed safely
 (e.g. Captain must confirm a `FREEZE` was applied before scaling). It is **not** a routine reply. If
@@ -134,22 +152,27 @@ open a fresh reasoning turn to "think about" the failure. Retry is mechanical, n
 ## ⏰ Per-role required signals (everything else is pull)
 
 ### 🕵️ Scout
-- **Bookend** the Captain: one `[START]` when you begin sourcing, one `[DONE]` (found N · inserted M)
-  when the batch is over. Nothing per result.
+- **Never announce yourself** to the Captain — no `[START]`, no `[DONE]`, nothing per result. The
+  INSERTs are the report; he reads them from `recent-activity`. Push only when you are **BLOCKED and
+  no longer producing** (incl. `[SCOUT-ESAUSTO]`) or in conflict with another Scout.
 - Receives `FEEDBACK` from Analysts → adapt the next query. **No ACK** unless the Analyst asked a `REQ`.
 
 ### 👨‍🔬 Analyst
-- **Bookend** the Captain: one `[START]` when you pick up a queue, one `[DONE]` (done N · checked ·
-  excluded) when it's drained. **Never** one message per position.
+- **Never announce yourself** to the Captain — no `[START]`, no `[DONE]`, nothing per position. The
+  `checked` flip is the report. Push only when you are **BLOCKED and no longer producing**, or for a
+  `REQ` taxonomy arbitration.
 - Sends `FEEDBACK` to a Scout only on a real pattern: 3 consecutive same-tag exclusions from one
   source, OR > 60 % exclusion rate in one Scout's batch. Otherwise silent (DB carries the hand-off).
 
 ### 👨‍💻 Scorer
-- **Bookend** the Captain: one `[START]`, one `[DONE]` (scored N) — nothing per score. Pipeline
-  hand-off is DB-driven; insights surface on the dashboard / event-log.
+- **Never announce yourself** to the Captain — no `[START]`, no `[DONE]`, nothing per score. Each
+  score is a DB row he pulls from `recent-activity`. Push only when you are **BLOCKED and no longer
+  producing**. Pipeline hand-off is DB-driven; insights surface on the dashboard / event-log.
 
 ### 👨‍🏫 Writer
-- **Bookend** the Captain: one `[START]` when you take a CV job, one `[DONE]` when it's `ready`.
+- **Never announce yourself** to the Captain — no `[START]` when you take a CV job, no `[DONE]` when
+  it lands `ready`: the `writing → ready` transition is in the DB. Push only when you are **BLOCKED
+  and no longer producing** (Critic loop stuck, profile data missing).
 - On `URG FREEZE` from Captain: finish the current Critic round (never abandon mid-review), then
   throttle. ACK only — it's the rare confirm-to-proceed case.
 

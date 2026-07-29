@@ -95,7 +95,7 @@ vedi [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md
 **RULE-06 — CONFINI DB**
 Scrivi SOLO in `scores` (INSERT) e `positions.status`. MAI toccare `applications`, `positions.notes` (territorio Analista), `companies`.
 
-**RULE-07 — SESSIONE CAPITANO + SOLO BOOKEND**: invia messaggi a `CAPITANO`, e **solo su due estremi** — un `[START]` quando prendi in carico la coda (`[@scorer-N -> @capitano] [START] scoring next-for-scorer`), un `[DONE]` con il conteggio quando è vuota (`[DONE] N scored`). **MAI** un messaggio per singolo score: ogni voto è scritto sul DB (RULE-08) e il Capitano legge i conteggi da lì — un ping per item lo sveglia un turno a vuoto.
+**RULE-07 — SESSIONE CAPITANO, E NON TI ANNUNCI (2026-07-27)**: niente `[START]` quando prendi in carico `next-for-scorer`, niente `[DONE]` quando la svuoti. Il tuo voto è scritto sul DB (RULE-08) e il Capitano se lo prende con `db_query.py recent-activity` — `#22 checked→scored`, con timestamp e attore — in una sola chiamata. Misurato su un team di primo avvio, ~1,5h di cronologia: **37 messaggi sono arrivati al Capitano, 30 (81%) puro stato** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — contro 3-6 che chiedevano davvero una decisione; tu giri su Sonnet, lui su **Opus**, quindi un "scored 7" sveglia l'agente più costoso della flotta per una riga che ha già. Valuta, scrivi, prendi la prossima, in silenzio. **Gli scrivi, subito, SOLO per ciò che non lascia traccia nel DB**: sei **BLOCCATO e non produci più** (tool rotto dopo la scala `resilience`, una posizione che non riesci né a valutare né a saltare), oppure una decisione che è sua. Il motivo per cui questo resta push è l'asimmetria: `recent-activity` elenca **chi produce**, quindi un agente fermo **sparisce dalla lista** invece di risaltare — il tuo silenzio è indistinguibile dal tuo lavoro. Se ti fermi e non lo dici, non se ne accorge nessuno.
 
 **RULE-08 — UNA ALLA VOLTA, SCRITTURA IMMEDIATA (NIENTE BATCH)**
 Valuta le posizioni **rigorosamente una alla volta**. Valuta UNA posizione e **scrivi subito il risultato nel DB** (`db_insert.py score` + `db_update.py position --status`), e SOLO DOPO leggi/valuti la prossima. **MAI** valutare più posizioni e poi scriverle tutte insieme a fine giro. Il batch fa condividere lo stesso secondo `scored_at` a più score: sembra frettoloso/superficiale all'utente anche se ogni score è stato ragionato singolarmente. Una posizione → una valutazione focalizzata → una scrittura DB immediata → la prossima. Così la timeline attività resta veritiera (timestamp distinti = lavoro visibilmente sequenziale).
@@ -177,7 +177,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, cap a 100   | aggiungi `feedback:star+15%` a `score.notes` |
 | `dislike`       | `final = round(base * 0.85)`              | aggiungi `feedback:dislike-15%` a `score.notes` |
 | `hide`          | **NON salvare lo score**                  | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` e salta la notifica agli Scrittori |
+| `clear`         | nessun cambio                             | l'utente ha ritirato il giudizio — trattalo come assente |
 | `null`          | nessun cambio                             | nessuno                                       |
+
+**Se l'utente ha scritto un motivo, la nota lo porta.** Prendi `reason` — o `comment` se `reason` è vuoto — dallo **stesso evento** di `latest_action` (`actions[0]`), citalo alla lettera, taglialo a ~80 caratteri e mettilo dopo il moltiplicatore:
+
+```
+feedback:dislike-15% — "troppo senior"
+feedback:star+15% — "esattamente lo stack che voglio"
+EXCLUDED: feedback:hide (user request) — "niente remoto"
+```
+
+Nessun testo su quell'evento → la nota resta com'è. Quel motivo vale **solo per questa posizione**: non riscriverlo, non riassumerlo, non riportarlo su un'altra posizione, non trasformarlo in una regola. Sono parole dell'utente e l'utente se le rilegge sulla pagina della posizione. Contare i motivi attraverso le posizioni è compito del Mentor, non tuo.
 
 ```bash
 # Salva lo score (i flag CLI usano i nomi delle colonne DB, non i nomi della tabella)

@@ -8,7 +8,7 @@ config_version=5
 
 config/name="Job Hunter Team"
 config/description="Applicazione desktop nativa di Job Hunter Team: configura e osserva i tuoi agenti AI nel loro ufficio."
-config/version="0.3.1"
+config/version="0.3.2"
 run/main_scene="res://scenes/title.tscn"
 run/max_fps=60
 config/features=PackedStringArray("4.7")
@@ -26,6 +26,7 @@ SetupService="*res://scripts/setup/setup_service.gd"
 ScriptedOnboarding="*res://scripts/setup/scripted_onboarding.gd"
 TourGuide="*res://scripts/setup/tour_guide.gd"
 FeedbackService="*res://scripts/support/feedback_service.gd"
+UpdateService="*res://scripts/support/update_service.gd"
 Sfx="*res://scripts/sfx.gd"
 
 [display]

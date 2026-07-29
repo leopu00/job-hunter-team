@@ -43,6 +43,27 @@ Aus `positions` (P), `scores` (S), `applications` (A) berechne:
 
 Auch nützlich: `python3 /app/shared/skills/db_query.py dashboard` für Status auf einen Blick + aktive Instanzen pro Rolle.
 
+## Schritt 1 bis — wer produziert und wer verstummt ist (2026-07-27)
+
+Die Worker senden kein `[START]` / `[DONE]` mehr (diese Bookends waren 30 der 37 Nachrichten, die der
+Capitano bei einem Team im Erststart in ~1,5h erhielt). Ihr Fortschritt wird von hier gezogen:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 30
+```
+
+⚠️ **Sie listet, wer PRODUZIERT — ein festgefahrener Agent verschwindet daraus, statt aufzufallen.**
+Ein Backlog, der sich nicht leert, ist nicht automatisch ein fehlender Worker: es kann ein lebendiger,
+festgefahrener Worker sein, und einen zweiten zu spawnen lässt den ersten weiterbrennen. Vor der
+Entscheidung drei Quellen kreuzen:
+
+| Lebendig (`tmux list-sessions`) | Queue (`next-for-*`) | Transitionen (`recent-activity`) | Verdikt |
+|---|---|---|---|
+| ja | nicht leer | 0 | **STALL** — mit `capture-pane` bestätigen, dann `agent-emergency` (Dottore-first → kill). **Keinen** zweiten obendrauf spawnen |
+| ja | nicht leer | > 0 | er arbeitet — ein Kapazitätsproblem, weiter zu Schritt 2 |
+| ja | leer | 0 | legitim idle — in Ruhe lassen (nach einem `[SCOUT-ESAUSTO]` ist die Quieszenz gewollt) |
+| nein | nicht leer | 0 | fehlt wirklich — spawnen (Schritt 2) |
+
 ## Schritt 2 — Priorität wählen (Engpass zuerst, nie neue Arbeit)
 
 Tabelle von oben nach unten anwenden. Bei der ersten zutreffenden Bedingung stoppen.

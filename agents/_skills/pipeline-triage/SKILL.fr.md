@@ -39,6 +39,27 @@ Depuis `positions` (P), `scores` (S), `applications` (A), calculer :
 
 Également utile : `python3 /app/shared/skills/db_query.py dashboard` pour un statut en un coup d'oeil + instances actives par rôle.
 
+## Étape 1 bis — qui produit et qui s'est tu (2026-07-27)
+
+Les workers n'envoient plus de `[START]` / `[DONE]` (ces bookends représentaient 30 des 37 messages
+reçus par le Capitano en ~1,5h sur une équipe de premier démarrage). Leur avancement se tire d'ici :
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 30
+```
+
+⚠️ **Elle liste qui PRODUIT, donc un agent en stall disparaît de la liste au lieu de ressortir.** Un
+backlog qui ne se vide pas n'est pas automatiquement un worker qui manque : ce peut être un worker
+vivant et coincé, et en spawner un second laisse le premier brûler. Avant de décider, croise trois
+sources :
+
+| Vivant (`tmux list-sessions`) | File (`next-for-*`) | Transitions (`recent-activity`) | Verdict |
+|---|---|---|---|
+| oui | non vide | 0 | **STALL** — confirme avec `capture-pane`, puis `agent-emergency` (Dottore-first → kill). **Ne** spawne **pas** un second par-dessus |
+| oui | non vide | > 0 | il travaille — c'est un problème de capacité, va à l'Étape 2 |
+| oui | vide | 0 | idle légitime — laisse-le tranquille (après un `[SCOUT-ESAUSTO]` la quiescence est voulue) |
+| non | non vide | 0 | il manque vraiment — spawne-le (Étape 2) |
+
 ## Étape 2 — choisir la priorité (goulot d'abord, jamais du nouveau travail)
 
 Appliquer le tableau de haut en bas. S'arrêter à la première condition correspondante.

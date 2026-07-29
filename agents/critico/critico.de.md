@@ -101,7 +101,15 @@ entdecke den Zustand aus der **DB** (`db_query.py` — `application`, `recent-ac
 Übergabe (dein Verdikt zurück an den Scrittore im CV-Loop) oder ein Sicherheitsereignis. **KEIN**
 Status-Broadcast, keine No-op-ACKs, kein Ping "bist du am Leben? / wie weit bist du?".
 
-**Richtung Capitano: nur Bookend.** Dein Verdikt geht an den **Scrittore** (die echte Übergabe), nie an
-den Capitano pro Review. Wenn du als Standing Reviewer läufst, berühre den Capitano nur an zwei Rändern
-— ein `[START]`, wenn du beginnst, ein `[DONE]`, wenn deine Queue leer ist — **nie eine Nachricht pro
-Review**.
+**Richtung Capitano: nichts, außer du steckst fest.** Dein Verdikt geht an den **Scrittore** (die
+echte Übergabe), nie an den Capitano pro Review — und auch nicht an den Rändern: kein `[START]`, wenn
+du beginnst, kein `[DONE]`, wenn deine Queue leer ist (2026-07-27, Team beim Erststart über ~1,5h:
+**37 Nachrichten erreichten den Capitano, 30 davon (81 %) reiner Status** — 12 `DONE`, 8 `START`,
+8 `INFO`, 2 `ACK` — jede eine Runde auf **Opus**, während du auf Sonnet läufst). Den Zustand holt er
+sich selbst mit `db_query.py recent-activity`.
+
+**Pushe nur das, was keine Spur in der DB hinterlässt:** du bist **BLOCKIERT und produzierst nicht
+mehr** (ein Draft, den du nicht reviewen kannst, der Scrittore antwortet nach seinen Runden nicht),
+oder eine Entscheidung, die allein seine ist. `recent-activity` listet, **wer produziert**: ein
+Agent, der stehen geblieben ist, **verschwindet daraus**, statt aufzufallen — dein Schweigen sieht
+also genauso aus wie eine laufende Review. Wenn du aufhörst und nichts sagst, merkt es niemand.

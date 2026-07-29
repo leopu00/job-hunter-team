@@ -44,12 +44,23 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Palette.VOID)
 	load_gfx_profile()
+	# Il costo a riposo: dopo load_gfx_profile, così il tetto fps che si
+	# ripristina al ritorno del focus è già quello del profilo scelto.
+	_idle_pace = IdlePace.new()
+	add_child(_idle_pace)
 	# Shot-quiet: la finestrella resta cliccabile anche senza focus — un
 	# click VERO dell'utente al lavoro può aprire pannelli e falsare lo
 	# shot (successo: pagina Mentor aperta da sola in uno sweep). Sordi
 	# a mouse e tastiera per tutta la durata dello shot.
 	if OS.get_environment("JHT_SHOT_QUIET") == "1":
 		get_viewport().gui_disable_input = true
+	# Il dialogo di uscita si apre solo su richiesta di chiusura e solo con
+	# agenti vivi: senza questa scorciatoia non e' fotografabile, e le tre
+	# scelte sono proprio la cosa da guardare a schermo (le didascalie vanno
+	# a capo in modo diverso in ogni lingua). Roster finto: serve la forma,
+	# non il contenuto.
+	if OS.get_environment("JHT_EXIT_DIALOG") == "1":
+		_open_shutdown_dialog_for_shot.call_deferred()
 	# Scorciatoia per i test: JHT_SCENE=office|wizard salta il boot.
 	if OS.get_environment("JHT_SCENE") == "office":
 		goto_office.call_deferred()
@@ -71,9 +82,10 @@ func _notification(what: int) -> void:
 			quit_game()
 
 
-## Uscita SEMPRE da qui: chiudere la finestra deve spegnere anche il team.
+## Uscita SEMPRE da qui: chiudere la finestra decide anche cosa ne è del team.
 ## Gli agenti girano nel container, non nel gioco, e continuavano a lavorare —
-## consumando token — con la finestra chiusa e nessun avviso (25/07).
+## consumando token — con la finestra chiusa e nessun avviso (25/07). Da allora
+## si chiede; dal 28/07 una delle risposte possibili è "lasciali lavorare".
 var _quitting := false
 var _quit_done := false
 var _shutdown_task := -1
@@ -82,6 +94,17 @@ var _shutdown_task := -1
 ## se farli chiudere in ordine (il Capitano fa annotare a tutti dove erano
 ## arrivati) o troncare. Senza agenti attivi non c'è niente da chiedere.
 var _shutdown_dialog: Node = null
+
+## Apre il dialogo di uscita con un roster finto, per fotografarlo (JHT_EXIT_DIALOG=1).
+## Non passa da quit_game(): li' un roster vuoto uscirebbe subito senza chiedere.
+func _open_shutdown_dialog_for_shot() -> void:
+	if _shutdown_dialog != null:
+		return
+	_shutdown_dialog = load("res://scripts/ui/shutdown_dialog.gd").new(
+			["scout-1", "analista-1", "scorer-1", "capitano"])
+	_shutdown_dialog.chosen.connect(_on_shutdown_choice)
+	get_tree().root.add_child(_shutdown_dialog)
+
 
 func quit_game() -> void:
 	if _quitting or _shutdown_dialog != null:
@@ -100,24 +123,27 @@ func _on_shutdown_choice(mode: String) -> void:
 	if is_instance_valid(_shutdown_dialog):
 		_shutdown_dialog.queue_free()
 	_shutdown_dialog = null
-	if mode == "cancel":
+	if mode == HeadlessSession.MODE_CANCEL:
 		return
 	# "graceful": il team si è già fermato da sé, resta da spegnere il container;
-	# "forced": shutdown_team() ferma prima gli agenti e poi il container.
-	_do_quit()
+	# "forced": shutdown_team() ferma prima gli agenti e poi il container;
+	# "detach": non si esegue NIENTE — la finestra se ne va e loro restano al
+	# lavoro, come quando li avvia la CLI e il comando esce.
+	HeadlessSession.record_exit(mode == HeadlessSession.MODE_DETACH)
+	_do_quit(HeadlessSession.stops_team(mode))
 
 
-func _do_quit() -> void:
+func _do_quit(stop_team := true) -> void:
 	if _quitting:
 		return
 	_quitting = true
 	get_tree().paused = false
-	_show_loading(UIStrings.t("pause.shutdown"))
+	_show_loading(UIStrings.t("pause.shutdown" if stop_team else "pause.detaching"))
 	# Lo stop passa da docker e blocca per qualche secondo: in un thread, così
 	# il velo arriva a schermo invece di congelarsi a metà.
 	var task := func() -> void:
 		var setup := get_node_or_null("/root/SetupService")
-		if setup != null and setup.has_method("shutdown_team"):
+		if stop_team and setup != null and setup.has_method("shutdown_team"):
 			setup.call("shutdown_team")
 		call_deferred("_quit_now")
 	_shutdown_task = WorkerThreadPool.add_task(task)
@@ -184,6 +210,8 @@ var _applied_scale := 1.0
 var _watch_time := 0.0
 var _watch_fps_sum := 0.0
 var _watch_samples := 0
+## Ritmo di disegno a finestra non in primo piano (vedi scripts/idle_pace.gd).
+var _idle_pace: IdlePace = null
 
 
 ## I profili offerti in Impostazioni → Grafica. "auto" non è in elenco: è
@@ -368,6 +396,13 @@ func _process(delta: float) -> void:
 	if DisplayServer.get_name() == "headless" \
 			or OS.get_environment("JHT_SHOT") != "":
 		_gfx_done = true
+		return
+	# A ritmo ridotto i fps non dicono più niente sulla macchina: sono quelli
+	# che abbiamo imposto noi. Calibrazione e sorveglianza restano ferme —
+	# senza questa riga i 10 fps del secondo piano verrebbero letti come "il
+	# computer arranca", il mondo si pixelerebbe da solo mentre nessuno guarda
+	# e la misura finirebbe pure su disco (render_scale in AUTO).
+	if _idle_pace != null and _idle_pace.throttled():
 		return
 	if _gfx_done:
 		_watch_framerate(delta)

@@ -198,3 +198,106 @@ le notifiche vivono finché una tab del sito è aperta (requisito esplicito).
 - `web/app/api/cloud-sync/push/route.ts` · `web/app/api/cloud-sync/pull-desired-state/route.ts`
 - `web/app/components/CloudRefreshButton.tsx` · `web/app/hooks/usePendingMessagesLive.ts`
 - `cli/src/commands/cloud.js` (`handlePullDesiredState`) · `cli/src/lib/supabase-direct.js`
+
+---
+
+## ⚡ Aggiornamento 2026-07-29 — la catena non finiva in SQLite: adesso arriva al pane
+
+> **Questo documento resta il record del 21/07 e non è stato riscritto.** Quello che
+> descrive era vero quel giorno. Questa sezione dice cosa si è scoperto dopo e cosa è
+> cambiato con `[JHT-CHAT-UNIFY]` (merge `feat-chat-unify`, mig **060**). Lo stato
+> corrente vive in [`cloud-sync-architecture.md`](cloud-sync-architecture.md),
+> § *Flusso chat unificata (end-to-end)*.
+
+### Cosa era rimasto aperto
+
+Il § 5 *"Messaggi bidirezionali — catena completa"* si chiudeva così:
+
+> `└─► SQLite locale ─► l'agente legge la reply nel prompt e risponde`
+
+Quel passo finale era **l'unico non costruito**. Il lavoro del 21/07 ha portato la
+reply dal cloud fino alla **SQLite del box** — ed è esattamente ciò che ha
+implementato, correttamente. Ma da lì in poi non c'era nessun meccanismo che
+mettesse la reply **davanti** all'agente: dipendeva dal fatto che l'agente
+chiamasse `jht-check-user-replies` **di sua iniziativa** ("in cima al loop", come
+prescrive la skill). In campo questo voleva dire ore di attesa, o mai. La catena
+era quindi completa fino a SQLite, non fino all'agente — e il § 5 andava letto
+così, non come una consegna garantita.
+
+Sono emersi in campo altri due tratti mancanti, che il 21/07 non erano ancora
+visibili perché il sintomo era coperto dal primo:
+
+1. **`jht-send` non risaliva al cloud.** La skill `chat-web` prescrive agli agenti
+   di rispondere **solo** con `jht-send`, che scrive una riga in `chat.jsonl` e
+   **non tocca né SQLite né Supabase**. Ogni risposta data secondo il protocollo
+   era quindi invisibile sul web: è l'altra metà di "gli agenti non rispondono sul
+   sito", indipendente dal clobber di mig 057.
+2. **Il filtro `delivered_via='web'`** nello storico web nascondeva ogni risposta
+   che `jht-notify-user` aveva marcato `'telegram'` — cioè, con Telegram
+   configurato, quasi tutte. Quella colonna dice su quale **canale** è stata spinta
+   la notifica, non se il messaggio appartiene alla conversazione.
+3. **Il turno dell'agente restava in SQLite fino a "Sync now".** Corollario diretto
+   del `[PUSH ON-DEMAND 2026-06-25]`: senza push periodico, la risposta scritta con
+   `jht-notify-user` saliva solo quando l'utente premeva il pulsante.
+
+### Cosa è cambiato
+
+- **`pending_user_messages` non è più una coda a senso unico** (mig 060): ogni turno
+  è una riga con un `author` (`'agent'` | `'user'`). Il composer web non è più
+  costretto ad appendersi a un messaggio dell'agente ancora senza risposta — era il
+  motivo per cui si spegneva con *"Nessun messaggio in attesa di risposta"*.
+  `user_reply` resta dov'è e continua a funzionare: le conversazioni salvate non si
+  riscrivono.
+- **Il punto di unificazione fra gioco e web è `chat.jsonl` sul box**, non la UI.
+  `pending_user_messages` ne diventa il mirror sincronizzabile, e **`chat_ts` (il
+  `ts` unix della riga JSONL) è la chiave di dedup nei due versi**: l'ingest salta le
+  righe il cui `ts` è già un `chat_ts` noto, il mirror scrive solo le righe con
+  `chat_ts IS NULL`. Senza, il mirror riscriverebbe all'infinito quello che ha appena
+  letto.
+- **Il turno scritto dal web raggiunge il pane dell'agente.**
+  `POST /api/pending-messages` crea il turno (`author='user'`,
+  `legacy_id = -epoch_ms`) e timbra `team_state.chat_requested_at` — il gemello di
+  `sync_requested_at` di mig 045, sulla **stessa riga** che il daemon legge già nel
+  giro veloce per "Sync now", quindi a riposo **zero letture in più**. Il daemon
+  importa il turno e lo consegna con `jht-tmux-send`, **stessa busta del gioco**
+  (`[@utente -> @<agente>] [CHAT] …`). **Latenza attesa ~5s fino al pane**, più il
+  busy-wait di `jht-tmux-send` se la TUI è occupata (fino a 90s, cap 120s); exit 4
+  non consuma il messaggio, si ritenta.
+- **Le risposte `jht-send` risalgono al cloud**: il passo `ingestChatJsonl` le importa
+  in SQLite (guardia = `stat` del file, gratis) e la corsia le pusha — **~5s +
+  roundtrip del push**, poi il browser le riceve sul websocket che ha già aperto.
+
+### Cosa di questo documento resta valido
+
+Tutto il resto. In particolare: la regola **Realtime-first / mai polling
+browser→Vercel** (§ 3) è il vincolo sotto cui è stata progettata anche la corsia chat
+— il campanello viaggia su una riga `team_state` che il daemon **già leggeva**, il
+browser non polla nulla, e ogni passo della corsia ha una guardia **locale** davanti,
+quindi a chat ferma non tocca né Supabase né Vercel. Restano validi il segnale
+`sync_completed_at` (§ 4), la RPC merge di mig 057 (§ 5) — che mig 060 **estende**,
+non sostituisce —, l'audit polling (§ 6), le stime di costo (§ 7) e le notifiche
+browser (§ 9).
+
+### Stato deploy (2026-07-29)
+
+| Pezzo | Stato |
+|---|---|
+| mig **060** (`author`, `chat_ts`, policy INSERT, rendezvous chat, RPC estesa) | ⬜ **NON applicata a prod** — l'ultima applicata è la 059 (22/07) |
+| Web (`POST /api/pending-messages`, storico senza filtro canale, push route) | 📦 in master → live con release master→**production** (gated utente) |
+| CLI (`chat-sync.js` + corsia nel daemon) | 📦 in master → attivo al prossimo **redeploy container** (gated utente) |
+
+**Degrado finché la mig 060 non è applicata** — dichiarato, senza rotture: la lettura
+`team_state` del daemon prende 400 sulle colonne `chat_*` e **ritenta con le sole
+colonne storiche** (corsia cloud→box semplicemente ferma); `POST /api/pending-messages`
+fallisce con 500; il push dei turni dal box continua a funzionare perché la RPC di mig
+057 ignora i campi in più; e sul box `handleChatSync` esce subito se la SQLite non ha
+ancora la colonna `author`. Tabella completa in
+[`cloud-sync-architecture.md`](cloud-sync-architecture.md).
+
+### Riferimenti aggiunti
+
+- `supabase/migrations/060_chat_unified.sql` — definizione canonica (schema + RPC estesa)
+- `cli/src/lib/chat-sync.js` · `cli/src/commands/cloud.js` (`handleChatSync`, `readRendezvousState`)
+- `web/app/api/pending-messages/route.ts` · `web/lib/messages-thread.ts`
+- `game/scripts/backend/vps_backend.gd` (`_do_send_chat`, `_fetch_convo`) — il lato gioco della stessa conversazione
+- `agents/_tools/jht-send` · `agents/_skills/chat-web/SKILL.md`

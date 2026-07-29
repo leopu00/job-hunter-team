@@ -37,6 +37,25 @@ python3 /app/shared/skills/db_query.py position 42
 python3 /app/shared/skills/db_query.py check-url 4361788825
 ```
 
+## Csapat-aktivitás — ki termelt, és ki hallgatott el
+
+```bash
+# Az utolsó N perc minden pozíció-átmenete + ügynökönkénti számok
+python3 /app/shared/skills/db_query.py recent-activity --minutes 60
+python3 /app/shared/skills/db_query.py recent-activity --minutes 30 --json
+```
+
+Kimenet: `per-agente: analista-1=9, scorer-1=7`, majd átmenetenként egy sor —
+`14:22:07 scorer-1 #22 checked→scored`, `14:19:51 analista-1 #27 new→excluded — [DEAD_LINK]`
+(idők UTC-ben). **Kiváltja** a workerek `[START]`/`[DONE]` üzeneteit, amelyeket 2026-07-27-én
+eltávolítottunk: egy első indítású csapatnál ezek a bookendek adták a Capitanóhoz ~1,5 óra alatt
+beérkezett 37 üzenetből 30-at, olyan állapotért, ami már a DB-ben volt.
+
+⚠️ **Azt listázza, ki TERMEL.** Egy megállt ügynök egyáltalán nem jelenik meg — nem tűnik ki,
+hanem **eltűnik**. Hogy megkülönböztesd az elakadást a jogos idle-tól, vesd össze a
+`tmux list-sessions`-szel (él?) és a szerep `next-for-*` sorával (volt egyáltalán dolga?):
+**él + nem üres sor + nulla átmenet = elakadás**; él + üres sor + nulla átmenet = idle, hagyd békén.
+
 ## Ágensenkénti sorok (pipeline)
 
 ```bash

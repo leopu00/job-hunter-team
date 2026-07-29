@@ -49,10 +49,16 @@ case "$MODE" in
 		JHT_NOVPS=1 godot --headless --script res://tools/embedded_terminal_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/terminal_selection_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/budget_notice_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/burn_mode_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/doc_preview_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/redactor_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/diagnostics_selftest.gd
 		JHT_NOVPS=1 godot --headless --script res://tools/i18n_parity_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/sidebar_nav_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/agent_names_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/idle_pace_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/headless_exit_selftest.gd
+		JHT_NOVPS=1 godot --headless --script res://tools/update_check_selftest.gd
 		python3 tools/python_payload_syntax_test.py
 		python3 tools/coordinator_policy_selftest.py
 		FEEDBACK_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_FEEDBACK_PANEL_TEST=1 godot --headless . 2>&1)"
@@ -67,6 +73,12 @@ case "$MODE" in
 		printf '%s\n' "$CHAT_NOTICE_OUT" | grep "CHAT-NOTIFICATION-TEST PASS"
 		CHAT_UI_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_CHAT_UI_TEST=1 godot --headless . 2>&1)"
 		printf '%s\n' "$CHAT_UI_OUT" | grep "CHAT-UI-TEST PASS"
+		# Pagina a fumetti: vignette, ordine, bianco/nero dell'agente contro il
+		# fondo dell'utente, code opposte, giro completo su un WORKER e scroll
+		# all'indietro che non viene strappato. L'esito è l'exit code, non la
+		# riga: `set -e` fa fallire lo script da solo se il test esce != 0.
+		COMIC_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_COMIC_CHAT_TEST=1 godot --headless . 2>&1)"
+		printf '%s\n' "$COMIC_OUT" | grep "COMIC-CHAT-TEST PASS"
 		PIPE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_PIPELINE_FORCE_TEST=scout godot --headless . 2>&1)"
 		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
 		SWITCH_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_SWITCH_TEST=1 godot --headless . 2>&1)"

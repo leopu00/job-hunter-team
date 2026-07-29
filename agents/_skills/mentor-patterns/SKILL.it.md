@@ -1,13 +1,13 @@
 <!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: mentor-patterns
-description: I cinque pattern che il Mentor cerca nei record per decidere QUANDO parlare. Il silenzio è il default; solo un pattern reale e ricorrente merita una parola. Questa skill fornisce il metodo canonico di rilevazione per ogni pattern (query DB + soglia) così il Mentor non parla mai da un singolo data point. Read-only — non scrive mai nel DB. Responsabilità del Mentor.
-allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(grep *), Bash(awk *)
+description: I sei pattern che il Mentor cerca nei record per decidere QUANDO parlare. Il silenzio è il default; solo un pattern reale e ricorrente merita una parola. Questa skill fornisce il metodo canonico di rilevazione per ogni pattern (query DB + soglia) così il Mentor non parla mai da un singolo data point. Read-only — non scrive mai nel DB. Responsabilità del Mentor.
+allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(grep *), Bash(awk *)
 ---
 
 # mentor-patterns — cosa rivelano i record
 
-Il Mentor osserva insiemi, non punti singoli. Cinque pattern meritano di parlarne; tutto il resto è rumore.
+Il Mentor osserva insiemi, non punti singoli. Sei pattern meritano di parlarne; tutto il resto è rumore.
 
 ## Pattern A — Gap di competenze tra profilo e mercato
 
@@ -140,12 +140,70 @@ Un `critic_score < 5` ricorrente con note simili NON significa "lo Scrittore è 
 - Niente metriche → estrai numeri dall'utente (food cost %, riduzioni latenza, headcount, ore risparmiate)
 - Mismatch stack → ri-controlla `skills.primary` rispetto ai requisiti reali dei JD
 
+## Pattern F — Motivi ricorrenti nelle parole dell'utente
+
+Dal web l'utente giudica le posizioni (poco interessante / interessante / molto interessante, più "escludi") e può scrivere **perché**, in testo libero: `reason` (≤ 500 caratteri) e `comment` (≤ 2000). Quel testo è l'unico posto in cui dice cosa vuole con parole sue. Letto una posizione alla volta è un aneddoto; contato insieme è un fatto. Dieci "troppo senior" non sono dieci opinioni su dieci annunci — sono una frase sola sulla ricerca.
+
+Attenzione alla differenza col Pattern B: lì le esclusioni sono degli **agenti** (`ESCLUSA: [TAG]` in `positions.notes`), qui il giudizio è dell'**utente**. Due flussi diversi; quando concordano, vedi la sezione di incrocio.
+
+Questo feedback vive nel cloud (`position_feedback`), non in `jobs.db`: è l'unico pattern che non passa da `db_query.py`.
+
+### Rilevazione
+
+```bash
+# I temi nei motivi scritti dall'utente, ultimi 30 giorni
+python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
+
+# Lo stesso feedback non aggregato, per leggere le sue parole esatte
+python3 /app/shared/skills/feedback_query.py recent --days 30
+```
+
+`themes` raggruppa il testo libero per somiglianza semplice — nessun match esatto richiesto. Mette in minuscolo, toglie accenti, punteggiatura e parole di servizio, taglia ogni parola ai primi 5 caratteri (`senior` / `seniority` / `seniore` / `séniorité` finiscono sulla stessa chiave), poi conta parole singole e coppie adiacenti per **posizioni distinte**. Una coppia vince sulle sue parti quando copre le stesse posizioni: "troppo senior" dice più di "senior", e gli intensificatori sono tenuti apposta per questo.
+
+Per ogni tema ritorna `positions`, `events`, `share` (frazione delle posizioni che portano testo), `actions` (come il tema si divide fra like / dislike / hide / star), `legacy_ids` e fino a 3 `examples` verbatim.
+
+È grezzo per costruzione e si vede: i sinonimi lontani restano separati (`stipendio` e `RAL` sono due temi). Leggi gli `examples` e unisci con la testa quello che lo strumento non poteva.
+
+Se il payload porta una `note` (`no-signal (...)`), il cloud è spento o irraggiungibile e l'aggregato non c'è: taci, non ricostruire il quadro con chiamate `check` posizione per posizione.
+
+### Soglia
+
+Parla solo se valgono **tutte e tre**:
+
+- **≥ 8 eventi di feedback portano testo** (`events_with_text`). Scrivere un motivo costa fatica all'utente, quindi questo volume sta un ordine di grandezza sotto qualunque conteggio prodotto dalle macchine — ma sotto 8 una percentuale non significa niente (con 3 testi, un tema è già un terzo).
+- Il tema copre **≥ 4 posizioni distinte** (`positions`, mai `events`: giudicare due volte lo stesso annuncio è un'opinione sola, e contare gli eventi farebbe sembrare un trend un singolo annuncio ostinato).
+- Lo **`share` del tema è ≥ 0,30**. Il testo libero spacca la stessa obiezione reale su più sinonimi, quindi la dominanza è diluita per costruzione; il Pattern B può chiedere il 40% perché i suoi tag sono un vocabolario chiuso. A volume basso vincola la regola delle 4 posizioni, a volume alto lo share — è voluto.
+
+Sotto quella soglia, non dire niente. Un "troppo senior" è un'osservazione su un annuncio.
+
+### Interpretazione
+
+Il tema dice dove guardare; i record dicono se è un problema.
+
+| Famiglia di temi (esempi)                          | Dove punta                                                             |
+|----------------------------------------------------|------------------------------------------------------------------------|
+| Seniority ("troppo senior", "troppo junior")       | La fascia dichiarata in `seniority_target` vs come la chiama il mercato |
+| Stack ("Java legacy", "niente PHP")                | `skills.primary` — stack dichiarato e stack voluto che divergono (incrocia con A) |
+| Retribuzione ("stipendio basso", "nessuna RAL")    | Aspettativa salariale vs fasce pubblicate (incrocia con C `salary_fit`) |
+| Luogo ("in sede", "troppo lontano", "niente remoto")| `work_mode` / `relocation` (incrocia con C `remote_fit`)               |
+| Azienda / settore ("agenzia", "consulenza")        | Una preferenza mai scritta nel profilo                                 |
+| L'annuncio stesso ("vago", "nessuna info")         | Qualità dell'annuncio, non fit — una riga solo se domina, e come rumore, non come leva |
+
+**Il rilievo che vale una frase è il disaccordo.** Incrocia i `legacy_ids` del tema con i loro punteggi (`db_query.py scores`). Quando l'utente continua a scartare posizioni che lo Scorer ha messo sopra 70, il punteggio non è rotto — sta misurando fedelmente l'aderenza a un **profilo che ha smesso di descrivere quello che l'utente vuole**. Il profilo per te è read-only (T10): tu dici il numero e fai la domanda, decide lei.
+
+### Esempio di output
+
+> *"<Nome>, negli ultimi trenta giorni hai scritto un motivo su diciannove posizioni. Su sette — più di un terzo — le parole erano le stesse: **troppo senior**. Cinque di quelle sette lo Scorer le aveva messe sopra 70: stava leggendo il tuo profilo, che dichiara ancora un target senior. Il target si è spostato, o quelle sette erano solo annunci scritti male?"*
+
 ## Incrocio dei pattern
 
 I pattern si rinforzano a vicenda. Segnale forte:
 - **A + C** (gap competenze + componente bassa su `stack_match`) → quasi certamente vale la pena parlarne.
 - **B `[SENIORITY]` + C `experience_fit`** → disallineamento seniority, menziona una volta.
 - **D cluster rifiuti + E critic_score < 5** → problema CV, escala come Pattern E.
+- **F + B sullo stesso tema** (l'utente scarta per seniority E gli agenti escludono per `[SENIORITY]`) → il problema è la fascia dichiarata, non il mercato. È il segnale più forte che esista, perché arriva da due flussi indipendenti.
+- **F + C sulla stessa leva** (`salary_fit` / `remote_fit`) → il modello di punteggio e l'utente indicano lo stesso attrito. Una frase, non due.
+- **F contro punteggi alti** → deriva del profilo, vedi l'interpretazione del Pattern F.
 
 Evita **A da solo** quando la competenza è menzionata in sole 5/30 posizioni e nessuna ha punteggio alto — è rumore, resta in silenzio.
 
@@ -166,10 +224,14 @@ Se non hai nulla di livello pattern da dire, **non dire nulla**. Il silenzio è 
 - ❌ Usare il campo round `experience_years` per il ragionamento Pattern B/C — calcola gli anni REALI da `candidate.experience[].years` (stessa regola dell'Analista).
 - ❌ Parlare da dati web senza prima un pattern basato sui record — i record sono il trigger, il web è la verifica (vedi step di conferma `WebSearch` / `WebFetch` in `mentor.md`).
 - ❌ Catastrofismo ("questo non porta da nessuna parte") O cheerleading ("ce la puoi fare!") — entrambi violano la voce del Mentor. Numeri, poi una domanda. Vedi skill `mentor-output`.
+- ❌ **Trasformare il Pattern F in un'istruzione di ricerca.** Non passare mai allo Scout o al Capitano un "smetti di portare X" ricavato da quello che piace all'utente. Una pipeline che pesca solo ciò che piace si gonfia i punteggi da sola, e l'utente finisce per credere che il mercato sia ricco quando è stata la pipeline a scegliere per lei. Il Pattern F è rivolto **all'utente**: cosa cambia nel suo profilo lo decide lei, e tu sei comunque read-only (T10).
+- ❌ Rinfacciare un giudizio che l'utente ha ritirato. `themes` lascia già fuori le posizioni il cui ultimo evento è `clear`; non rimetterle dentro con `--include-cleared` per arrivare a una soglia.
+- ❌ Citare un singolo commento verbatim come se fosse un pattern. Gli `examples` danno voce a un tema **dopo** che ha superato la soglia; non sono il rilievo.
 
 ## Vedi anche
 
 - `mentor-output` — COME formulare il messaggio una volta che un pattern è confermato.
 - `db-query` — internals del wrapper.
+- `feedback-query` — il lettore del feedback utente nel cloud (Pattern F); lo Scorer interroga la stessa fonte una posizione alla volta.
 - `agents/mentor/mentor.md` — prompt orchestratore + cadenza.
 - `agents/_team/team-rules.md` T10 — il profilo è read-only, anche per il Mentor.

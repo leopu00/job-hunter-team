@@ -24,6 +24,7 @@ type CloudRow = {
   agent?: string;
   body?: string;
   kind?: string | null;
+  author?: string | null;
   related_position_id?: string | null;
   delivered_via?: string | null;
   delivered_at?: string | null;
@@ -45,6 +46,7 @@ function toPendingMessage(r: CloudRow): PendingMessage | null {
     agent: r.agent,
     body: r.body,
     kind,
+    author: r.author === "user" ? "user" : "agent",
     related_position_id: r.related_position_id ?? null,
     delivered_via:
       r.delivered_via === "telegram" || r.delivered_via === "web"

@@ -31,7 +31,7 @@ if (Test-Path -LiteralPath $Godot) {
 }
 $EnvNames = @(
     "JHT_NOVPS", "JHT_VPS_CONTRACT_TEST", "JHT_SCENE",
-    "JHT_PIPELINE_FORCE_TEST", "JHT_DOCTOR_TEST"
+    "JHT_PIPELINE_FORCE_TEST", "JHT_DOCTOR_TEST", "JHT_COMIC_CHAT_TEST"
 )
 $SavedEnv = @{}
 foreach ($Name in $EnvNames) {
@@ -137,8 +137,19 @@ try {
             # apre "/bin/sh" senza il ramo Windows che ha embedded_terminal.
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/theme_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/budget_notice_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/burn_mode_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/doc_preview_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/i18n_parity_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/sidebar_nav_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/agent_names_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/idle_pace_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/headless_exit_selftest.gd")
+            # L'aggiornamento automatico: si aggiorna solo in avanti, si
+            # installa da solo SOLO dove il pacchetto e' firmato, e non va in
+            # rete quando non deve. Windows non ha un export firmato, quindi
+            # qui la parte che conta e' proprio che l'installazione automatica
+            # resti spenta.
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/update_check_selftest.gd")
 			python tools/python_payload_syntax_test.py
 			if ($LASTEXITCODE -ne 0) { throw "Embedded Python payload test failed" }
 			$env:JHT_SCENE = "office"
@@ -147,6 +158,17 @@ try {
 			Remove-Item Env:JHT_GUIDED_TEST
 			Remove-Item Env:JHT_SCENE
 			if ($out -notmatch "GUIDED-ONBOARDING-TEST PASS") { throw $out }
+
+			# Pagina di chat a fumetti: vignette, ordine, colori distinti fra
+			# agente e utente, code opposte e scroll all'indietro. Invoke-GodotCaptured
+			# solleva gia' da se' su exit code != 0; il match sulla riga e' il
+			# secondo controllo, non l'unico.
+			$env:JHT_SCENE = "office"
+			$env:JHT_COMIC_CHAT_TEST = "1"
+			$out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
+			Remove-Item Env:JHT_COMIC_CHAT_TEST
+			Remove-Item Env:JHT_SCENE
+			if ($out -notmatch "COMIC-CHAT-TEST PASS") { throw $out }
 
             $env:JHT_VPS_CONTRACT_TEST = "1"
             $out = Invoke-GodotCaptured -GodotArguments @("--headless", "--quit-after", "3", ".")

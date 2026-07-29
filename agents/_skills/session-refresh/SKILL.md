@@ -1,6 +1,6 @@
 ---
 name: session-refresh
-description: "Doctor-only. Context-refresh round: for each agent session read its real context occupancy (provider client-side command, zero tokens) and refresh ONLY sessions whose context window is >50% full — do a retrospective (capture + interview + analytics), append a dense synthesis to the growing daily journal, then KILL + recreate + resume the session with continuation context, so its context window is cleared without losing where it was. Runs 2× per work window (at +30min and at mid). Skips fresh, low-context (≤50%), and Capitano-parked sessions."
+description: "Doctor-only. Context-refresh round: for each agent session read its real context occupancy (provider client-side command, zero tokens) and refresh ONLY sessions whose context window is >50% full — do a retrospective (capture + interview + analytics), append a dense synthesis to the growing daily journal, then KILL + recreate + resume the session with continuation context, so its context window is cleared without losing where it was. Runs 2× per work window (at +30min and at mid). Skips fresh, low-context (≤50%), and Capitano-parked sessions — EXCEPT past the 12h session TTL (JHT_AGENT_MAX_SESSION_AGE_H), which overrides every skip: age alone decides, no exceptions."
 allowed-tools: Bash(tmux *), Bash(python3 *), Bash(bash /app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
 
@@ -25,9 +25,37 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
 - **Order**: worker sessions FIRST (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), coordinators LAST and with care (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). "With care" means **capture their state well and compact them — NOT skip them** (they are the top consumers; see Rules). Never refresh `DOTTORE` / `DOCTOR-WATCHDOG` (yourself / the scheduler).
-- **FRESH skip** (cheap pre-filter before the context check): `age = now - session_created`. If `age < 40 min` → SKIP entirely (nothing to summarize yet, and refreshing would throw away a session that just started). Log `action=skipped_fresh`. Everything that survives this pre-filter goes through **Step 1.5 (context check)** — that `>50%` measurement, not age, is what decides the refresh.
+- **FRESH skip** (cheap pre-filter before the context check): `age = now - session_created`. If `age < 40 min` → SKIP entirely (nothing to summarize yet, and refreshing would throw away a session that just started). Log `action=skipped_fresh`. Everything that survives this pre-filter goes through **Step 1.4 (TTL)** and then **Step 1.5 (context check)** — that `>50%` measurement, not age, is what decides the *ordinary* refresh.
 
-## Step 1.5 — CONTEXT CHECK (the refresh trigger: **>50%**)
+## Step 1.4 — TTL: **every agent session lives at most 12 hours**
+```bash
+TTL_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
+AGE_H=$(( ( $(date -u +%s) - $(tmux display-message -p -t "$S" '#{session_created}') ) / 3600 ))
+[ "$AGE_H" -ge "$TTL_H" ] && echo "TTL EXPIRED ($AGE_H h) → refresh MANDATORY"
+```
+**If `AGE_H ≥ TTL_H` the session is refreshed. Full stop.** The TTL is checked **before**
+everything else and **overrides every skip in this skill** — there is no exception, no
+override, no "but":
+
+| would normally skip | past the TTL |
+|---|---|
+| `skipped_fresh` (age < 40min) | impossible past 12h, but the TTL wins anyway |
+| `skipped_lowctx` (context ≤ 50%) | **ignored** — a session at 4% after 30h is still refreshed |
+| `skipped_parked` (PARKED, Step 4) | **ignored** — parked or not, the TTL applies |
+| "the agent is working" | **ignored** — capture its state in the seed and recreate |
+| outside the working-hours window | **ignored** — the TTL is never suspended (see Rules) |
+
+Log `action=recreated` with `reason=ttl` and the measured `session_age_h`. Then go straight
+to Steps 2 → 7 (capture, analytics, synthesis, recreate + resume): **skip Step 1.5 and
+Step 4 entirely**, they can only produce a skip and a skip is not available here.
+
+Why age alone, with no health heuristic on top: in the 2026-07-28/29 incident the sessions
+were **38.5 · 29.5 · 27.0 · 14.5 · 14.2 hours** old, every heuristic reported "healthy", and
+the team was paralysed for eleven hours. Contexts were under 50%, so nothing touched them.
+A TTL has no heuristics to get wrong.
+
+## Step 1.5 — CONTEXT CHECK (the *ordinary* refresh trigger: **>50%**)
+Only for sessions that did **not** trip the TTL in Step 1.4.
 **Refresh ONLY sessions whose context window is more than 50% full.** Read the real occupancy with the provider's **client-side** context command — it costs **zero tokens** (rendered locally, no LLM call) and is instant. Age is NOT the trigger anymore: an old-but-empty session (e.g. an idle Mentor at 2%) must be SKIPPED, a bloated session must be refreshed.
 
 Two hard requirements — ignore them and you *burn* budget instead of saving it:
@@ -46,7 +74,7 @@ tmux send-keys -t "$S" Escape                   # dismiss the panel
 echo "context=$PCT%"
 ```
 Decide from `$PCT` (parsed from a line like `24.9k/1m tokens (2%)`):
-- **`PCT` ≤ 50** → SKIP. Do NOT recreate, even if the session is old. Log `action=skipped_lowctx` with the measured `%`. Move to the next session.
+- **`PCT` ≤ 50** → SKIP **unless the TTL tripped in Step 1.4**. Do NOT recreate an under-TTL session, even if it is old-ish. Log `action=skipped_lowctx` with the measured `%`. Move to the next session.
 - **`PCT` > 50** → proceed to refresh (Steps 2–7).
 - **command didn't render / parse failed** → fall back to the age heuristic (`age ≥ 40min` → refresh) and log `ctx=unparsed`.
 
@@ -71,6 +99,10 @@ A session is **PARKED** (the Capitano deliberately left it on but is not using i
 - `last_captain_msg` is null or older than the window start.
 
 If PARKED → **do NOT recreate to restart it**. Write the synthesis (Step 6) with `action=skipped_parked` and move on. (Recreating it would turn a deliberate park into work the Capitano did not want.) If you do recreate it for hygiene, the resume message MUST say it was idle: `[RESUME] you were in STANDBY — stay idle until the Capitano assigns you a queue.`
+
+**Two hard exceptions to PARKED — this rule described the incident exactly and kept the Doctor's hands off precisely when the team needed it most:**
+1. **Past the TTL (Step 1.4), PARKED does not apply.** Parked or not, a 12h+ session gets recreated.
+2. **A blocked agent is not a parked agent.** "not fresh + produced == 0 + no recent captain message" is also the exact fingerprint of a team whose coordination is broken. The objective signal that separates them: **an agent retrying at another agent with no answer is not parked, it is blocked** (the `retry_loop` entries from `agent-unblock`'s scan, and the pane shows the attempts). Same for "every operative idle while quota is available". In those cases do NOT log `skipped_parked` — clear the block (`agent-unblock`), then continue this round.
 
 ## Step 5 — interview the agent
 ```bash
@@ -103,7 +135,7 @@ print("appended", session)
 PY
 ```
 
-## Step 7 — recreate + resume (only if context **>50%**, NOT fresh, NOT parked)
+## Step 7 — recreate + resume (if the TTL tripped, OR context **>50%** and NOT fresh, NOT parked)
 Atomic refresh — you already captured the context in Step 2, so killing is safe:
 ```bash
 ROLE=<role>; N=<instance>      # from analytics; recreate the SAME number (no dice — the die is for NEW spawns only)
@@ -115,6 +147,10 @@ sleep 8
 Set `resume_msg_sent=True` in the journal entry. Then move to the next session (pace ~15-20s between agents).
 
 ## Rules
+- **The 12h TTL has no loopholes and no off-switch.** `JHT_AGENT_MAX_SESSION_AGE_H`, default `12`. Neither PARKED, nor skip-fresh, nor the context threshold, nor "it is working", nor the working-hours gate can cancel it. **Stagger it**: sessions are born in waves and would expire together — refresh at most one over-TTL session per pass and order them by **decreasing age**, so the oldest goes first and the team is never recreated all at once.
+- **Outside the working-hours window the round does not run — but the TTL still does.** The round is skipped at night because interviewing agents would burn budget for nothing; a 30-hour session is recreated anyway, because one kick-off costs nothing next to a lost day. `agent-watchdog.sh` enforces the same ceiling deterministically (same env var) for when the Doctor is stopped, blocked or never spawned — which is exactly what happened on 2026-07-28/29. Both paths are meant to exist: this one is the *rich* refresh (retrospective + resume), that one is the safety net that guarantees the ceiling at any cost.
+- **`working_hours: null` (or absent, or empty) means NO time restriction** — the team is 24/7 and the round runs normally. It never means "always outside the window". In the incident `working_hours` was null exactly because the user's answer about the timezone was the line stuck in the Capitano's composer.
+- **Unblock before you refresh.** Run the `agent-unblock` phase first: refreshing a paralysed team just recreates the paralysis with a clean context window.
 - **One Doctor does all sessions this round** (user order: single Doctor for now). Use the file-based capture + grep so you never blow your own context window.
 - **CAPITANO & SENTINELLA are the TOP token consumers** (their context is almost always bloated — the Sentinella ticks every ~15min, the Capitano coordinates continuously). They still go through the **>50% context gate** like everyone else (Step 1.5) — but in practice they measure well above 50%, so they get refreshed almost every round. Do them **last** (after the workers), and **compact, don't reset** — the dense-synthesis refresh preserves continuity, a raw kill loses it. If one measures ≤50% (rare), skip it that round like any other low-context session.
 - **CAPITANO**: it's the coordinator with in-flight state (worker assignments, active throttle config, last pacing order, pending decisions). In the interview (Step 5) explicitly capture that coordination state and put it in the seed (Step 7) so it doesn't lose the thread. **If `$JHT_HOME/profile/capitano-maintenance.json` exists, read it and put its active `orders` (maintenance mode + `stop_search` / `discard_expired_rotating` / weekly-recheck / geocoding) in the seed too** — dropping that maintenance order from the seed silenced an entire maintenance week on 2026-07-12 (the Capitano then re-reads the file anyway per its own rule C-18, but carry it forward so it never depends on that). Do it LAST; if it's handling a live EMERGENZA (visible orchestration in the pane right now), let it stabilize first, otherwise compact it.
