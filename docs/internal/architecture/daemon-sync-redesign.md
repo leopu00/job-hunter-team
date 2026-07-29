@@ -351,6 +351,7 @@ NON urgente ora (1 VPS attivo, margine enorme). Da affrontare crescendo a molti 
 
 **Cosa resta su Vercel (e va bene così):**
 - **Push dati** (`handlePush` → `${base_url}/api/cloud-sync/push`, `cloud.js:989`): **on-demand** (solo su "Sync now"), + push risoluzione ticket (`/api/cloud-sync/tickets`). User-driven, bounded.
+- **Push dei turni di chat** (`pushChatRows` → stessa route, aggiunto 2026-07-29 con `[JHT-CHAT-UNIFY]`): parte **solo quando un turno si muove** — la guardia è locale (`cloud_synced_at IS NULL`), quindi a chat ferma non parte mai e l'idle resta a 0 chiamate. Passa da Vercel e non da Supabase diretto perché la policy di INSERT dell'utente ammette solo i **propri** turni, non quelli dell'agente. User-driven, bounded: una manciata di righe piccole per messaggio scambiato, non un battito.
 - **Sito/dashboard** `jobhunterteam.ai` (Next.js su Vercel): hosting web inerente, consuma **solo quando un utente naviga** (read-only). Non si toglie spostando il push.
 - Auth/login + bootstrap/restore: rari.
 
