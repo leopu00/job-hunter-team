@@ -42,6 +42,26 @@ From `positions` (P), `scores` (S), `applications` (A), compute:
 
 Also useful: `python3 /app/shared/skills/db_query.py dashboard` for at-a-glance status + per-role active instances.
 
+## Step 1 bis — who is producing, and who has gone quiet (2026-07-27)
+
+The workers no longer send `[START]` / `[DONE]` (those bookends were 30 of the 37 messages the Captain
+received in ~1.5h on a first-run team). Their progress is pulled from here:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 30
+```
+
+⚠️ **It lists who PRODUCES, so a stalled agent disappears from it instead of standing out.** A backlog
+that is not draining is not automatically a missing worker — it may be a worker that is alive and
+stuck, and spawning a second one leaves the first one burning. Before deciding, cross three sources:
+
+| Alive (`tmux list-sessions`) | Queue (`next-for-*`) | Transitions (`recent-activity`) | Verdict |
+|---|---|---|---|
+| yes | non-empty | 0 | **STALL** — confirm with `capture-pane`, then `agent-emergency` (Dottore-first → kill). Do **not** spawn a second one on top |
+| yes | non-empty | > 0 | working — it is a capacity problem, go to Step 2 |
+| yes | empty | 0 | legitimately idle — leave it alone (after `[SCOUT-ESAUSTO]` the quiescence is deliberate) |
+| no | non-empty | 0 | genuinely missing — spawn it (Step 2) |
+
 ## Step 2 — pick priority (bottleneck first, never new work)
 
 Apply the table top-down. Stop at the first matching condition.

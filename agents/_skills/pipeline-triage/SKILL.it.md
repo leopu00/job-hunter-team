@@ -42,6 +42,26 @@ Da `positions` (P), `scores` (S), `applications` (A), calcola:
 
 Utile anche: `python3 /app/shared/skills/db_query.py dashboard` per stato a colpo d'occhio + istanze attive per ruolo.
 
+## Step 1 bis — chi produce e chi è ammutolito (2026-07-27)
+
+I worker non mandano più `[START]` / `[DONE]` (quei bookend erano 30 dei 37 messaggi ricevuti dal
+Capitano in ~1,5h su un team di primo avvio). Il loro avanzamento si tira giù da qui:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 30
+```
+
+⚠️ **Elenca chi PRODUCE, quindi un agente in stallo sparisce dalla lista invece di risaltare.** Un
+backlog che non si svuota non è automaticamente un worker che manca: può essere un worker vivo e
+incagliato, e spawnarne un secondo lascia il primo a bruciare. Prima di decidere, incrocia tre fonti:
+
+| Vivo (`tmux list-sessions`) | Coda (`next-for-*`) | Transizioni (`recent-activity`) | Verdetto |
+|---|---|---|---|
+| sì | non vuota | 0 | **STALLO** — conferma con `capture-pane`, poi `agent-emergency` (Dottore-first → kill). **Non** spawnarne un secondo sopra |
+| sì | non vuota | > 0 | sta lavorando — è un problema di capacità, vai allo Step 2 |
+| sì | vuota | 0 | idle legittimo — lascialo stare (dopo uno `[SCOUT-ESAUSTO]` la quiescenza è voluta) |
+| no | non vuota | 0 | manca davvero — spawnalo (Step 2) |
+
 ## Step 2 — scegli la priorità (bottleneck per primo, mai lavoro nuovo)
 
 Applica la tabella dall'alto in basso. Fermati alla prima condizione che corrisponde.
