@@ -22,6 +22,32 @@ Due modalità:
     (NEVER_MESSAGE): scrivergli è un turno sprecato o, peggio, un comando
     eseguito in shell.
 
+## Rispetto alla deroga di spesa dell'utente (`burn_intent.py`): NON cede
+
+Questa pausa è una **rete di sicurezza**, non un automatismo di spesa: il
+modulo non legge `.burn-intent.flag` e non deve farlo. Il motivo sta nella
+condizione che la fa scattare. La deroga è una decisione **economica** presa
+*sui numeri* — «spendi in fretta soldi che sono miei» — mentre qui i numeri
+non esistono: L1 (fetch HTTP), L2 (skill multi-provider) e L3 (worker TUI)
+sono falliti **tutti e tre**. Derogare qui non significherebbe accettare di
+spendere di più, ma spendere **senza misurare**: una deroga alla cecità, non
+al freno. È la stessa direzione del fail-closed di `burn_intent` (errore di
+lettura → freno attivo).
+
+L'errore costa in modo asimmetrico. Sbagliare per eccesso di prudenza costa
+una pausa: il messaggio chiede di chiudere pulito e attendere, e il
+`[RIPRENDI]` parte da solo appena la sorgente torna leggibile. Sbagliare per
+eccesso di fiducia costa una notte di spesa non misurata, che si scopre a
+lockout avvenuto — cioè esattamente ciò che la deroga NON compra.
+
+Anche `--include-core` resta fuori: lo standby a spesa zero è un'azione
+deliberata (`standby.py`, dietro flag), non un automatismo che reagisce a un
+numero, quindi non c'è niente da derogare.
+
+Non compare in `NEVER_YIELDS` perché quella tupla è una lista di **nomi**
+copiata testualmente nell'avviso del gioco e nei prompt in 7 lingue:
+aggiungerci una voce è un cambio di contratto, non una classificazione.
+
 Exit 0 sempre (dal main storico); `pause_all()` è importabile dalle skill
 (standby.py la usa DOPO aver scritto il flag: prima si zittiscono bridge e
 watchdog, poi si fermano gli agenti).
