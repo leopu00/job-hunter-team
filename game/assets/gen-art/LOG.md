@@ -239,6 +239,9 @@ dialogo con "LO SCRITTORE"): esistono i ritratti di soli 6 ruoli
 
 ## Da generare — richiesta 2026-07-29 (chat a fumetti)
 
+> **Elenco operativo completo, con la mappa agente→variante già risolta:**
+> [`docs/internal/assets/TODO-ART.md`](../../../docs/internal/assets/TODO-ART.md)
+
 La chat a fumetti mostra il ritratto dell'agente accanto alle vignette e usa
 `pensieroso` mentre l'agente sta scrivendo la risposta. Sei ruoli non ce
 l'hanno e ricadono in silenzio su `neutro`: l'attesa non si distingue dalla
