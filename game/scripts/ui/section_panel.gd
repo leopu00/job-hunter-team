@@ -646,8 +646,79 @@ func _build_advanced() -> void:
 			UIStrings.t("advanced.version") % [
 					ProjectSettings.get_setting("application/config/version", "dev"),
 					SetupService._jht_home()], 12, Palette.DIM))
+	_build_update_block()
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
+
+
+## L'interruttore dell'aggiornamento automatico, accanto al numero di versione:
+## è lì che si guarda quando ci si chiede "sono aggiornato?", ed è lì che deve
+## esserci la risposta e il modo di spegnere la domanda.
+func _build_update_block() -> void:
+	_content.add_child(HSeparator.new())
+	_content.add_child(TerminalTheme.label(UIStrings.t("update.section"), 13,
+			Palette.BRIGHT, "bold"))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+	row.add_child(TerminalTheme.label(UIStrings.t("update.auto"), 13, Palette.BASE))
+	var auto_switch := CheckButton.new()
+	auto_switch.button_pressed = UpdateService.enabled()
+	row.add_child(auto_switch)
+	var check_now := Button.new()
+	check_now.text = UIStrings.t("update.check_now")
+	check_now.disabled = not auto_switch.button_pressed
+	check_now.pressed.connect(func() -> void: UpdateService.check(true))
+	row.add_child(check_now)
+	auto_switch.toggled.connect(func(on: bool) -> void:
+		UpdateService.set_enabled(on)
+		check_now.disabled = not on)
+	var hint := TerminalTheme.label(UIStrings.t("update.auto_hint"), 12, Palette.DIM)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(hint)
+	# Cosa succede quando si accetta, che è diverso a seconda del sistema: su
+	# macOS il pacchetto è firmato e il gioco può sostituirsi da solo, altrove
+	# l'aggiornamento apre la pagina della release e si ferma lì.
+	var how := TerminalTheme.label(UIStrings.t("update.signed"
+			if UpdateCheck.can_self_install(OS.get_name()) else "update.manual_only"),
+			12, Palette.DIM)
+	how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(how)
+	var status := TerminalTheme.label("", 13, Palette.MUTED, "medium")
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(status)
+	status.text = _update_line(UpdateService.state())
+	UpdateService.state_changed.connect(func(state: Dictionary) -> void:
+		if is_instance_valid(status):
+			status.text = _update_line(state))
+
+
+## Dice sempre qualcosa: "mai controllato" è un'informazione, una riga vuota è
+## un dubbio — e il dubbio su un aggiornamento porta l'utente a cercarlo a mano.
+func _update_line(state: Dictionary) -> String:
+	match str(state.get("phase", "")):
+		UpdateService.PHASE_CHECKING:
+			return UIStrings.t("update.checking")
+		UpdateService.PHASE_AVAILABLE:
+			return UIStrings.t("update.available") % [str(state.get("latest", "")),
+					str(state.get("current", ""))]
+		UpdateService.PHASE_DOWNLOADING:
+			return UIStrings.t("update.downloading") % int(state.get("progress", 0))
+		UpdateService.PHASE_INSTALLING:
+			return UIStrings.t("update.installing")
+		UpdateService.PHASE_DONE:
+			return UIStrings.t("update.installed") % str(state.get("latest", ""))
+		UpdateService.PHASE_FAILED:
+			return UIStrings.t("update.failed") % UIStrings.t(str(state.get("error", "")))
+		UpdateService.PHASE_CURRENT:
+			return UIStrings.t("update.current") % str(state.get("current", ""))
+	var last := float(state.get("last_check", 0.0))
+	if last <= 0.0:
+		return UIStrings.t("update.never")
+	# L'ora locale: un orario UTC in una riga di stato è un piccolo enigma.
+	var bias := int(Time.get_time_zone_from_system().get("bias", 0)) * 60
+	return UIStrings.t("update.last") % Time.get_datetime_string_from_unix_time(
+			int(last) + bias, true)
 
 
 # ── Segnalazione di un problema ──────────────────────────────────────

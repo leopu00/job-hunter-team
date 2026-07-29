@@ -101,6 +101,12 @@ jobs:
           # thread di spegnimento: nessuna delle due si vede a schermo, si
           # sbagliano in silenzio e si scoprono dal container rimasto acceso.
           godot --headless --path game --script res://tools/headless_exit_selftest.gd
+          # L'aggiornamento automatico, e qui vale doppio: e' il tag che stiamo
+          # costruendo a diventare la versione che le copie gia' installate si
+          # vedranno proporre. Si aggiorna solo in avanti, si installa da solo
+          # solo dove il pacchetto e' firmato, e solo se firmato da chi ha
+          # firmato la copia in esecuzione.
+          godot --headless --path game --script res://tools/update_check_selftest.gd
           # Nessun tag deve uscire con le lingue disallineate: il fallback di
           # UIStrings.t() e' silenzioso, quindi una chiave persa non si vede
           # ne' in CI ne' all'avvio in italiano — solo dall'utente straniero.
