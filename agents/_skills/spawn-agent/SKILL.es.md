@@ -2,7 +2,7 @@
 ---
 name: spawn-agent
 description: "Inicia un agente del equipo JHT (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) a través del launcher, luego envía el mensaje de kick-off que realmente inicia su bucle principal. Solo Capitano — el Capitano es el único propietario del escalado del equipo. USA SIEMPRE esta skill: saltarse `start-agent.sh` con `tmux new-session` + `send-keys \"kimi ...\"` directo produce sesiones donde la CLI nunca arranca (`command not found`), el Capitano ve una sesión \"activa\" que en realidad está muerta, y el equipo rinde por debajo silenciosamente."
-allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(sleep *)
+allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(sleep *), Bash(jht-throttle-check *)
 ---
 
 # spawn-agent — poner un agente en línea
@@ -36,8 +36,27 @@ El launcher ejecuta, atómicamente:
 - detecta el proveedor activo desde `jht.config.json` (claude / kimi / codex)
 - copia `agents/<role>/<role>.md` al workspace como `CLAUDE.md` / `AGENTS.md`
 - inicia la CLI con los flags correctos para ese proveedor + nivel
+- deriva el **desfase** inicial del escalón de throttle y pre-arma el throttle del nuevo worker
 
 > ⚠️ **NUNCA** inicies con `tmux new-session ... ; tmux send-keys "kimi ..."`. La CLI no está en el `PATH` fuera del entorno del launcher → `command not found` → la sesión es solo bash. El `jht-tmux-send` del Capitano devuelve `exit 0` escribiendo en ese bash vacío, el mensaje se pierde silenciosamente, y el equipo rinde por debajo sin causa visible.
+
+### Desfase — lo deriva el launcher, tú nunca esperas
+
+Dos workers en el mismo escalón de throttle que arrancan juntos *siguen* juntos: cada ciclo suyo cae en el mismo instante, y cada coincidencia es un pico de peticiones simultáneas. La distancia que reparte `N` workers sobre un periodo `T` es `T/N` — en el escalón de 5 minutos tres workers se quieren a **100s** uno de otro, no a 10 minutos. Un offset mayor que `T` es el peor caso (el primer worker ya ha ciclado dos veces antes de que arranque el segundo, así que las fases caen donde caen), y uno exactamente igual a `T` es lockstep permanente.
+
+Esa aritmética la hace el launcher por ti, sobre el periodo real en `config/throttle.json` y sobre los workers que de verdad comparten ese escalón, e imprime lo que decidió:
+
+```
+  Stagger:      100s prima del primo ciclo (throttle pre-armato, gradino condiviso)
+```
+
+**Tú nunca esperas.** El launcher pre-arma el throttle del worker nuevo, de modo que es el worker quien se detiene *solo* en el gate `jht-throttle-check` que su propio prompt ya le impone en la primera vuelta de su loop. Manda el kick-off enseguida, como siempre.
+
+Lo que se sigue de esto:
+- **El primer worker de un escalón no espera nada.** El camino anti-idle queda intacto: lo lanzas y arranca.
+- Un worker desfasado se queda en `jht-throttle-wait` sin salida durante 5 minutos como máximo. Es un worker **sano** — antes de leer el silencio justo después de un spawn como un atasco, confirma con `jht-throttle-check <agente>` (`STILL_THROTTLED remaining=Xs`).
+- El offset fija solo la fase *inicial*. La duración de las tareas varía lo bastante como para que las fases deriven solas después, así que no hay nada que recalibrar más tarde.
+- Un spawn que **no** debe retrasarse — recrear un worker que ya tenía una buena fase — lo desactiva con `JHT_SPAWN_STAGGER=0` en el entorno.
 
 ## Fase 2 — kick-off (obligatorio)
 
@@ -102,7 +121,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 
 ## Anti-patrones
 
-- ❌ Iniciar múltiples agentes en un bucle cerrado sin pacing de 1 tick — ver `pipeline-triage` para las reglas de escalado (1 spawn por tick del Sentinel, ~5 min de separación).
+- ❌ Iniciar múltiples agentes en un bucle cerrado sin pacing — las reglas de escalado están en `pipeline-triage` (un spawn cada vez, re-midiendo en medio). Lo que nunca debes hacer es *inventar un número fijo de minutos* entre un worker y el siguiente: la distancia viene del escalón (`T/N`) y la aplica el launcher por ti.
 - ❌ Re-iniciar a ciegas después de un crash sin leer `db_query.py` para recuperar el estado del último task — el nuevo agente empieza desde cero y duplica trabajo.
 - ❌ Usar esta skill para "reiniciar" un agente que funciona porque parece lento. Lento ≠ muerto. Turnos largos con salida de tokens visible no son un caso de spawn — son un caso de `liveness-check` (Dottore).
 - ❌ Spawnear un reemplazo porque `jht-tmux-send` falló al entregar. **`exit 4` = la TUI destino está mid-turn (`Working … esc to interrupt`) → el agente está VIVO, solo ocupado.** El mensaje NO se entregó síncronamente: reintenta el envío más tarde, nunca spawnees un clon. Solo `exit 3` (el texto nunca apareció Y el pane no está ocupado → shell pelado / modal atascado) es una posible señal de muerte, e incluso entonces el veredicto pertenece al **Dottore** (`liveness-check`), no a un spawn por reflejo. Spawnear sobre un agente ocupado es exactamente el bug de overspawn del 2026-06-07 (`docs/internal/postmortems/2026-06-11-overspawn-rootcause.md`): el clon toma el control mientras el original sigue quemando presupuesto como un zombie.
