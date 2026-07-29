@@ -216,6 +216,42 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
   }
 
   /**
+   * [JHT-CHAT-UNIFY] Turni scritti dall'utente dalla chat web e non ancora
+   * consegnati al pane dell'agente (`author='user'`, `delivered_at IS NULL`).
+   * Sono righe NATIVE del cloud: legacy_id negativo, nessun gemello in SQLite
+   * finché non le importa il box (vedi mig 060).
+   *
+   * Letta solo quando `team_state.chat_requested_at` segnala che c'è qualcosa
+   * — a chat ferma questa query non parte mai.
+   * @param {object} [o] { limit?: number }
+   */
+  async function readUndeliveredUserChat({ limit = 50 } = {}) {
+    const params = new URLSearchParams();
+    params.set('select', 'id,legacy_id,agent,body,created_at');
+    params.set('author', 'eq.user');
+    params.set('delivered_at', 'is.null');
+    params.set('order', 'created_at.asc');
+    params.set('limit', String(limit));
+    const rows = await rest(`pending_user_messages?${params.toString()}`);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /**
+   * Marca consegnati i turni dell'utente (dopo che sono arrivati nel pane).
+   * `delivered_at` è nella policy UPDATE dell'utente (mig 010), quindi passa
+   * con la sessione dell'utente: nessun service-role sul box.
+   */
+  async function markUserChatDelivered(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    const list = ids.map((id) => `"${String(id).replace(/"/g, '')}"`).join(',');
+    await rest(`pending_user_messages?id=in.(${list})`, {
+      method: 'PATCH',
+      body: { delivered_at: new Date().toISOString() },
+      prefer: 'return=minimal',
+    });
+  }
+
+  /**
    * Riga `team_state` dell'utente (PK user_id → al più 1 riga, già scoping RLS).
    * Rimpiazza GET /api/team-state (sync rendezvous + desired-state/reconcile).
    * @param {string[]} [select] colonne; default i campi sync + desired-state.
@@ -249,6 +285,8 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     readOpenTickets,
     readDesiredStateChanges,
     readPendingReplyChanges,
+    readUndeliveredUserChat,
+    markUserChatDelivered,
     readTeamState,
     patchTeamState,
     getRefreshToken: () => currentRefresh,
