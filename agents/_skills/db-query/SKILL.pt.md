@@ -37,6 +37,25 @@ python3 /app/shared/skills/db_query.py position 42
 python3 /app/shared/skills/db_query.py check-url 4361788825
 ```
 
+## Atividade da equipa — quem produziu e quem se calou
+
+```bash
+# Cada transição de posição dos últimos N minutos + contagens por agente
+python3 /app/shared/skills/db_query.py recent-activity --minutes 60
+python3 /app/shared/skills/db_query.py recent-activity --minutes 30 --json
+```
+
+Saída: `per-agente: analista-1=9, scorer-1=7`, depois uma linha por transição —
+`14:22:07 scorer-1 #22 checked→scored`, `14:19:51 analista-1 #27 new→excluded — [DEAD_LINK]`
+(horas em UTC). **Substitui** as mensagens `[START]`/`[DONE]` dos workers, removidas a 2026-07-27:
+numa equipa de primeiro arranque esses bookends eram 30 das 37 mensagens recebidas pelo Capitano em
+~1,5h, para um estado que já estava na DB.
+
+⚠️ **Lista quem PRODUZ.** Um agente que parou não aparece de todo — não salta à vista,
+**desaparece**. Para distinguir um stall de um idle legítimo, cruza com `tmux list-sessions`
+(está vivo?) e a fila `next-for-*` do papel (tinha alguma coisa para fazer?): **vivo + fila não
+vazia + zero transições = stall**; vivo + fila vazia + zero transições = idle, deixa-o em paz.
+
 ## Filas por agente (pipeline)
 
 ```bash
