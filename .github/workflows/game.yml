@@ -87,6 +87,10 @@ jobs:
           # senza questa riga sedici chiavi duplicate in ui_en.gd passavano
           # in verde e rompevano l'avvio in tutte le lingue tranne una.
           godot --headless --path game --script res://tools/i18n_parity_selftest.gd
+          # Il patto del riordino della sidebar: le voci raccolte in schede o
+          # dietro "Impostazioni" restano raggiungibili e tradotte. Una sezione
+          # caduta da tutti gli elenchi non fa rumore, semplicemente sparisce.
+          godot --headless --path game --script res://tools/sidebar_nav_selftest.gd
           # Il costo a riposo: la finestra senza focus deve disegnare di meno,
           # ma il tetto fps del primo piano va restituito ALLA LETTERA (chi ha
           # il profilo ridotto gira a 30, non a 60) e a ritmo lento i passi di
