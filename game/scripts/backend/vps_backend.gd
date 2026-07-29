@@ -2496,6 +2496,13 @@ static func _parse_roster(raw: String, throttles: Dictionary = {}, activity: Dic
 			name += " " + num
 		elif uid.ends_with("-worker"):
 			name += " Worker"
+		# Il cognome è funzione dell'uid, come la scrivania e il volto: qui
+		# entra UNA volta e da qui raggiunge ogni pannello che mostra
+		# `name` (scheda agente, elenco VPS, targa dei dialoghi, risorse).
+		# L'uid resta intero dentro l'etichetta, e chi non ha un cognome —
+		# i sub-agenti `critico-s1`, i `-worker` — tiene esattamente il nome
+		# che aveva prima.
+		name = AgentNames.display_name(uid, name)
 		var observed: Dictionary = activity.get(session, activity.get(uid, {}))
 		var status := str(observed.get("status", "idle"))
 		if status not in ["working", "idle", "paused"]:

@@ -91,7 +91,7 @@ func _boot() -> void:
 	if not _running:
 		return
 	bus.publish_state(BackendBus.CONNECTED, "VPS simulata (mock)")
-	bus.publish_agents(_roster.duplicate(true))
+	bus.publish_agents(_published_roster())
 	# baseline del registro attività (contratto: transitions sul bus
 	# PRIMA di positions_updated) — le reazioni partono dal refresh dopo
 	bus.transitions = []
@@ -201,7 +201,23 @@ func _roster_loop() -> void:
 						a["status"] = ev["status"]
 						a["throttle_secs"] = ev.get("throttle_secs", 0.0)
 						break
-		bus.publish_agents(_roster.duplicate(true))
+		bus.publish_agents(_published_roster())
+
+
+## Copia del roster pronta per il bus, coi cognomi già dentro il nome —
+## esattamente quello che VpsBackend._parse_roster consegna con la VPS
+## accesa. Il mock è il riferimento vivo di quel contratto: se qui gli
+## agenti restassero "Scout 02" lo showroom mostrerebbe un ufficio diverso
+## da quello vero, e i cognomi si vedrebbero solo a VPS accesa.
+##
+## Si compone sulla copia e mai su `_roster`: la lista di lavoro resta la
+## sorgente, il nome resta un fatto di presentazione.
+func _published_roster() -> Array:
+	var out := _roster.duplicate(true)
+	for a: Dictionary in out:
+		a["name"] = AgentNames.display_name(
+				str(a.get("uid", a.get("slug", ""))), str(a.get("name", "")))
+	return out
 
 ## Una transizione nuova in testa al registro ogni 12-20 secondi (la
 ## prima presto, per vederla subito nei test), poi refresh come farebbe
