@@ -138,6 +138,32 @@ in fretta di quanto la finestra da 5 ore lasci consumare, e la finestra impone u
 forzata a ogni saturazione. **Il rischio weekly in una singola giornata è quindi molto
 minore di quanto le proiezioni suggeriscano.**
 
+### Rettifica: su più finestre consecutive il weekly si consuma comunque
+
+Quanto sopra vale **dentro una singola finestra**, e va corretto sull'orizzonte lungo.
+Nel corso della notte, con il team rimesso in moto a ogni reset, il weekly è passato da
+64% a **97% in circa sei ore**:
+
+```
+84% 84% 84% 84% 84% 84% 84% 84% 91% 93% 94% 95% 95% 95% 96% 96% 96% 97% 97% 97%
+```
+
+Residuo **3%** con il reset settimanale a **4,6 giorni** di distanza, `pace_ratio` 85.
+
+La finestra da 5 ore impone una pausa, ma non riduce il totale: appena si resetta, il
+team riparte e ricomincia a consumare weekly. Su una sola finestra il weekly sembra
+protetto; su cinque o sei consecutive si arriva comunque al limite. **Il freno della
+finestra sposta il consumo nel tempo, non lo elimina.**
+
+Intervento fatto: throttle dei cinque worker a 3600s e avviso al coordinatore. Bruciare
+il 3% residuo per qualche decina di posizioni costerebbe quattro giorni e mezzo di team
+fermo — `weekly-halt` è un freno di sicurezza e la deroga di burn non lo copre.
+
+Nota di metodo: le due letture non si contraddicono, hanno orizzonti diversi. Ma la
+prima, presa da sola, autorizza a ignorare il weekly — ed è quello che è quasi successo.
+Un allarme sul weekly va valutato **sul tempo che manca al suo reset**, non su quello che
+manca al reset della finestra.
+
 ### Come leggere `proj_weekly` e `pace_ratio`
 
 Entrambi estrapolano il ritmo istantaneo su tutta la settimana **ignorando le pause che
