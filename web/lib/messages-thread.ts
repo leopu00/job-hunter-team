@@ -19,23 +19,17 @@ import type { PendingMessage } from "@/lib/types";
  * restano risolte dallo stesso `tr()` di sempre.
  */
 export const THREAD_T: Record<string, Record<string, string>> = {
-  reply_placeholder: {
-    it: "Scrivi una risposta…",
-    en: "Write a reply…",
-    hu: "Írj választ…",
-    es: "Escribe una respuesta…",
-    de: "Antwort schreiben…",
-    fr: "Écrivez une réponse…",
-    pt: "Escreva uma resposta…",
-  },
-  no_reply_target: {
-    it: "Nessun messaggio in attesa di risposta",
-    en: "No message awaiting a reply",
-    hu: "Nincs válaszra váró üzenet",
-    es: "Ningún mensaje espera respuesta",
-    de: "Keine Nachricht wartet auf Antwort",
-    fr: "Aucun message en attente de réponse",
-    pt: "Nenhuma mensagem aguardando resposta",
+  // [JHT-CHAT-UNIFY] Il composer non si spegne più: si scrive quando si
+  // vuole, non solo "in risposta a". Il placeholder dice a chi si sta
+  // scrivendo, che con tre conversazioni aperte è l'informazione utile.
+  write_to: {
+    it: "Scrivi a {name}…",
+    en: "Message {name}…",
+    hu: "Írj neki: {name}…",
+    es: "Escribe a {name}…",
+    de: "Schreib an {name}…",
+    fr: "Écrivez à {name}…",
+    pt: "Escreva para {name}…",
   },
   send: {
     it: "Invia",
@@ -83,6 +77,78 @@ export async function postReply(id: string, reply: string): Promise<void> {
 }
 
 /**
+ * [JHT-CHAT-UNIFY] Manda un messaggio nuovo a un agente (non una risposta a
+ * una riga esistente). Ritorna il turno creato dal server, che il chiamante
+ * usa per rimpiazzare la bolla ottimistica.
+ */
+export async function postChat(
+  agent: string,
+  message: string,
+): Promise<PendingMessage | null> {
+  const res = await fetch("/api/pending-messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent, message }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    message?: PendingMessage;
+  };
+  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+  return body.message ?? null;
+}
+
+/**
+ * Turno dell'utente costruito localmente per mostrarlo SUBITO nel thread.
+ * L'id `pending:` è provvisorio: viene sostituito dalla riga vera appena la
+ * POST risponde (e riconosciuto per non duplicare l'evento Realtime).
+ */
+export function optimisticUserTurn(
+  agent: string,
+  body: string,
+): PendingMessage {
+  const now = new Date().toISOString();
+  return {
+    id: `pending:${now}:${Math.random().toString(36).slice(2, 8)}`,
+    agent,
+    body,
+    kind: "notification",
+    author: "user",
+    related_position_id: null,
+    delivered_via: "web",
+    delivered_at: null,
+    acknowledged_at: now,
+    user_reply: null,
+    user_reply_at: null,
+    agent_seen_reply_at: null,
+    created_at: now,
+  };
+}
+
+/** Rimpiazza una bolla ottimistica con la riga confermata dal server. */
+export function withConfirmedTurn(
+  messages: PendingMessage[],
+  tempId: string,
+  confirmed: PendingMessage | null,
+): PendingMessage[] {
+  if (!confirmed) return messages;
+  // Se l'evento Realtime è arrivato prima della risposta HTTP la riga vera
+  // c'è già: si toglie solo la provvisoria, senza inserirla due volte.
+  const already = messages.some((m) => m.id === confirmed.id);
+  return messages
+    .map((m) => (m.id === tempId && !already ? confirmed : m))
+    .filter((m) => !(m.id === tempId && already));
+}
+
+/** Toglie una bolla ottimistica rimasta orfana (invio fallito). */
+export function withoutTurn(
+  messages: PendingMessage[],
+  id: string,
+): PendingMessage[] {
+  return messages.filter((m) => m.id !== id);
+}
+
+/**
  * Applica la risposta appena inviata alla lista in memoria. Rispondere vale
  * anche come lettura, quindi valorizza `acknowledged_at` se era vuoto.
  */
@@ -121,7 +187,9 @@ export function withAgentAcked(
   now: string,
 ): PendingMessage[] {
   return messages.map((m) =>
-    m.agent === agent && !m.acknowledged_at ? { ...m, acknowledged_at: now } : m,
+    m.agent === agent && !m.acknowledged_at
+      ? { ...m, acknowledged_at: now }
+      : m,
   );
 }
 

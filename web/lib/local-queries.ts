@@ -28,6 +28,24 @@ function sid(v: number | null | undefined): string {
   return v != null ? String(v) : "";
 }
 
+// Vero se la tabella locale ha davvero quella colonna. Un workspace piu'
+// vecchio del codice (seed da Supabase, container non ancora ri-deployato)
+// puo' non avere le colonne aggiunte dalle migrazioni recenti: nominarle in
+// una SELECT farebbe fallire l'intera query — e la pagina resterebbe vuota
+// invece che leggermente meno ricca.
+function hasColumn(
+  db: ReturnType<typeof getDb>,
+  table: string,
+  column: string,
+): boolean {
+  try {
+    return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[])
+      .some((r) => r.name === column);
+  } catch {
+    return false;
+  }
+}
+
 // ── Dashboard Stats ────────────────────────────────────────────────
 export function getDashboardStatsLocal(ws: string): DashboardStats {
   const db = getDb(ws);
@@ -1378,19 +1396,28 @@ export function getScrittoreActivityLocal(ws: string) {
 
 // Storico completo per la pagina /messages: stessi campi dei pendenti ma
 // SENZA il filtro acknowledged (i letti restano visibili in coda alla lista).
+// [JHT-CHAT-UNIFY] Niente più filtro `delivered_via='web'`: la colonna dice
+// per quale CANALE è passata la notifica, non se il messaggio fa parte della
+// conversazione. Con Telegram configurato, `jht-notify-user` marcava
+// 'telegram' e quel turno spariva dalla chat del sito — metà delle risposte
+// dell'agente invisibili sul web. `author` distingue i due lati della
+// conversazione (colonna aggiunta da mig 060 / _db.py; i DB più vecchi non ce
+// l'hanno, quindi si legge in modo difensivo).
 export function getMessagesHistoryLocal(
   ws: string,
   limit = 200,
 ): PendingMessage[] {
   const db = getDb(ws);
+  const author = hasColumn(db, "pending_user_messages", "author")
+    ? "author"
+    : "'agent' AS author";
   const rows = db
     .prepare(
       `
-    SELECT id, agent, body, kind, related_position_id,
+    SELECT id, agent, body, kind, ${author}, related_position_id,
            delivered_via, delivered_at, acknowledged_at,
            user_reply, user_reply_at, agent_seen_reply_at, created_at
     FROM pending_user_messages
-    WHERE delivered_via = 'web'
     ORDER BY created_at DESC
     LIMIT ?
   `,
@@ -1402,6 +1429,7 @@ export function getMessagesHistoryLocal(
     agent: r.agent,
     body: r.body,
     kind: r.kind,
+    author: r.author === "user" ? "user" : "agent",
     related_position_id:
       r.related_position_id != null ? sid(r.related_position_id) : null,
     delivered_via: r.delivered_via,
@@ -1416,14 +1444,20 @@ export function getMessagesHistoryLocal(
 
 // Conteggio esatto dei non letti (il banner in dashboard non deve saturare
 // al limit della lista come faceva il vecchio "{n} non letti").
+// Non letti = turni dell'AGENTE non ancora ack-ati. I turni scritti
+// dall'utente non si contano (li ha scritti lui). Vedi la nota sul filtro
+// `delivered_via` su getMessagesHistoryLocal.
 export function countPendingMessagesLocal(ws: string): number {
   const db = getDb(ws);
+  const onlyAgent = hasColumn(db, "pending_user_messages", "author")
+    ? "author = 'agent' AND "
+    : "";
   const row = db
     .prepare(
       `
     SELECT COUNT(*) AS n
     FROM pending_user_messages
-    WHERE delivered_via = 'web' AND acknowledged_at IS NULL
+    WHERE ${onlyAgent}acknowledged_at IS NULL
   `,
     )
     .get() as { n: number };
@@ -1459,6 +1493,33 @@ export function ackAllPendingMessagesLocal(ws: string): number {
     )
     .run();
   return result.changes;
+}
+
+// [JHT-CHAT-UNIFY] Turno dell'utente in modalità locale (desktop / tunnel).
+// Nasce senza `chat_ts` e senza `delivered_at`: se ne occupa la corsia chat
+// del daemon, che lo specchia in `chat.jsonl` (il gioco lo vede) e lo
+// consegna al pane dell'agente con `jht-tmux-send`. Qui NON si tocca tmux:
+// il web non lancia processi, li chiede.
+export function sendUserChatLocal(
+  ws: string,
+  agent: string,
+  body: string,
+): string {
+  const db = getDb(ws);
+  if (!hasColumn(db, "pending_user_messages", "author")) {
+    throw new Error(
+      "il database locale non ha ancora la colonna `author`: riavvia il container per applicare le migrazioni",
+    );
+  }
+  const result = db
+    .prepare(
+      `
+    INSERT INTO pending_user_messages (agent, body, kind, author, delivered_via)
+    VALUES (?, ?, 'notification', 'user', 'web')
+  `,
+    )
+    .run(agent, body);
+  return sid(Number(result.lastInsertRowid));
 }
 
 export function replyPendingMessageLocal(

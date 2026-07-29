@@ -770,6 +770,7 @@ export async function demoPendingMessages(
     agent,
     body,
     kind,
+    author: "agent",
     related_position_id: null,
     delivered_via: "web",
     delivered_at: hoursAgoIso(h),
