@@ -46,11 +46,11 @@ quella posa doveva dare.
 
 ## Lotto 2 — I volti per istanza · priorità MEDIA
 
-**In corso su `dev6` dal 2026-07-29**: completate e importate le due emozioni
-operative (`neutro`, `pensieroso`) per le istanze 1–2 di tutti e cinque i
-reparti, 20 PNG in totale. Le varianti `a` riusano intenzionalmente il ritratto
-del ruolo, perché sono la stessa identità; le varianti `b` sono state derivate
-dai rispettivi sprite. Restano le istanze 3–6.
+**Completato su `dev6` il 2026-07-29**: consegnate e importate le due emozioni
+operative (`neutro`, `pensieroso`) per tutte le 30 istanze dei cinque reparti,
+60 PNG in totale. Le varianti `a` riusano intenzionalmente il ritratto del
+ruolo, perché sono la stessa identità; le varianti `b–f` sono state derivate
+dai rispettivi sprite e controllate insieme in un contact sheet globale.
 
 ### Perché serve, e cosa NON è
 
@@ -166,3 +166,9 @@ bash game/tools/run.sh shot /tmp/chat.png JHT_COMIC_CHAT=scout JHT_NOVPS=1 JHT_S
 Un volto mancante non rompe nulla e non lascia traccia a schermo: il ripiego è
 silenzioso, ed è il motivo per cui questi sei buchi sono rimasti invisibili fino
 al 29/07.
+
+Controllo statico della consegna completa:
+
+```bash
+python3 game/tools/audit_instance_portraits.py
+```

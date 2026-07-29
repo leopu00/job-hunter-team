@@ -357,6 +357,30 @@ Completati `full_neutro.png` e `full_pensieroso.png` per `scout-1..2`,
 - Tutte le nuove generazioni hanno usato una chiamata `imagegen` per asset e
   chroma verde o blu scelto in base al guardaroba; il matte è stato controllato
   su fondo scuro.
-- Verifica: 20/20 PNG 1120×1520 RGBA, angoli trasparenti e import Godot
+- Verifica: 20/20 PNG 1120×1520 RGBA, sfondo alpha e import Godot
   presente. Godot 4.7 completa l'import ma continua a stampare i noti avvisi
   di risorse residue in uscita.
+
+### 2026-07-29 — Lotto 2 completato: tutte le 30 istanze
+
+Completati `full_neutro.png` e `full_pensieroso.png` anche per le istanze 3–6
+di Scout, Analisti, Scorer, Scrittori e Critici. Il Lotto 2 contiene ora 60/60
+ritratti richiesti.
+
+- Ogni neutro `b–f` è stato derivato dalla scheda a tre viste del relativo
+  sprite, usando il neutro di ruolo come riferimento di resa; ogni pensieroso
+  è stato poi derivato dal neutro approvato della stessa istanza.
+- Chroma verde per Scout, Analisti, Scorer e Critici; chroma blu per gli
+  Scrittori, così le loro palette marrone/oliva restano integre. Tutti i matte
+  sono stati ispezionati su fondo scuro.
+- Il contact sheet finale confronta le 30 pose neutre con le 30 pensierose:
+  palette di reparto, occhiali, identità, guardaroba e variazione espressiva
+  restano coerenti. I lead conservano intenzionalmente il crop storico più
+  ravvicinato dei ritratti principali.
+- Aggiunto `tools/audit_instance_portraits.py`, eseguito anche da `run.sh test`
+  e `run.ps1 test`: controlla presenza, 1120×1520 RGBA, trasparenza superiore,
+  import Godot e corrispondenza esatta delle cinque varianti `a` con i lead.
+- Aggiornato `comic_chat_selftest.gd` per verificare che tutte le 30 cartelle
+  vengano davvero preferite al fallback di ruolo. Esito: `COMIC-CHAT-TEST PASS`.
+- Regressione conclusiva: `bash game/tools/run.sh test` → `[run.sh] TEST OK`,
+  inclusi 36/36 fogli personaggio e 60/60 ritratti per istanza.
