@@ -49,6 +49,132 @@ riportare la ripresa dentro il ritmo di pacing invece che fuori.
 
 ---
 
+## ⚠️ Due stalli diversi che si somigliano — rispondere allo stesso modo è un danno
+
+Osservato la sera del 2026-07-28, alla ripresa dopo un reset di finestra: il team era
+fermo da 25 minuti con quota piena. I pane mostravano **due cause distinte**, che al
+watchdog appaiono quasi identiche (agente vivo, pane immobile, nessun progresso):
+
+**A — Cap di step.** Marcatore `Max number of steps reached: 100`. L'agente aspetta un
+input. Risposta corretta: `Continua`.
+
+**B — Quota del provider esaurita.** Risposta HTTP del provider nel pane:
+
+```
+Error code: 403 - {'error': {'message': "You've reached your usage limit for this
+billing cycle. Your quota will be refreshed in the next cycle. …",
+'type': 'access_terminated_error'}}
+```
+
+Risposta corretta: **aspettare il reset**. Mandare `Continua` qui è dannoso — ogni
+tentativo consuma un turno che il provider rifiuta, e se il watchdog ha un backoff su
+stalli ripetuti escala fino al Capitano per un problema che non è dell'agente.
+
+Il watchdog deve quindi classificare **prima** di agire, con due liste separate:
+`STEP_CAP_MARKERS` → nudge, e `PROVIDER_QUOTA_MARKERS` (`access_terminated_error`,
+`usage limit`, codici 402/403/429) → **nessun nudge**, log dell'evento e basta.
+Il contatore di stalli consecutivi non deve incrementare sul caso B: non è un
+rabbit-hole, è una pausa imposta dall'esterno.
+
+Nota utile alla diagnosi: la telemetria interna non vede il caso B. Mentre l'agente
+riceveva il 403, il sentinel riportava finestra al 100% — coerente — ma il messaggio del
+provider parla di *billing cycle*, non della finestra da 5 ore. Il `403` è il modo in cui
+la saturazione della finestra si manifesta lato agente, e va riconosciuto come tale
+invece che letto come «abbonamento finito».
+
+**C — Task completato, in attesa di un nuovo incarico.** Osservato poco dopo, sullo
+stesso box: uno Scout con il contesto immobile da quaranta minuti, **nessun marcatore di
+alcun tipo**, nessun throttle pendente, il pane chiuso su una riga di esito normale:
+
+> «Hand-off fatto: ping ad ANALISTA-1 e ANALISTA-2 con gli ID ranges. Claim rilasciato.
+> Cache archiviato. **Pronto per il prossimo**»
+
+L'agente ha finito correttamente e si è fermato ad aspettare. Nessuno gli manda il
+prossimo compito, e il suo ciclo non riparte da solo. Un kick-off esplicito l'ha rimesso
+in moto in meno di due minuti.
+
+Questo caso è il più insidioso dei tre perché **non ha nulla da cercare nel pane**: il
+testo finale è indistinguibile da quello di un agente che sta per continuare. La
+rilevazione può quindi appoggiarsi **solo** al segnale universale — contesto/hash del
+pane fermi oltre una soglia — e i marcatori servono a *classificare* la causa una volta
+rilevato lo stallo, non a trovarlo.
+
+Conseguenza sul disegno del watchdog: invertire l'ordine. Prima si rileva
+l'immobilità, poi si cerca un marcatore per decidere la risposta:
+
+| marcatore trovato | risposta |
+|---|---|
+| step cap | throttle + `Continua` |
+| quota provider | solo log, nessun nudge |
+| **nessuno** | kick-off del ruolo (riprendi il ciclo) |
+
+Il ramo «nessun marcatore» non è un caso residuale da ignorare: è quello che ha tenuto
+fermo uno Scout su due per quaranta minuti mentre tutti gli indicatori dicevano che il
+team stava lavorando.
+
+### ⚠️ Il marcatore di quota nello scrollback scade — incrociarlo con lo stato reale
+
+Difetto della prima stesura, scoperto applicando la regola sul campo. La tabella diceva
+«quota provider → nessun nudge», e presa alla lettera **avrebbe lasciato due agenti fermi
+per sempre**.
+
+Il caso: mezz'ora dopo un reset di finestra, con quota tornata piena, due worker avevano
+ancora `access_terminated_error` nelle ultime righe del pane. Quel testo è la traccia di
+un rifiuto avvenuto *prima* del reset e resta lì finché l'agente non scrive altro — ma
+l'agente non scriverà altro, perché è fermo. Il marcatore si auto-perpetua.
+
+Sbloccati con `Continua`, sono ripartiti immediatamente insieme agli altri tre.
+
+Regola corretta: il marcatore di quota nel pane indica **cosa è successo**, non **cosa
+sta succedendo**. La decisione va presa incrociandolo con lo stato corrente della quota
+letto dal sentinel:
+
+| marcatore quota nel pane | quota corrente | azione |
+|---|---|---|
+| presente | esaurita | nessun nudge, attendi |
+| presente | **disponibile** | **`Continua`** — il marcatore è obsoleto |
+| assente | qualsiasi | classifica normalmente |
+
+Vale in generale: **nessun marcatore di pane è affidabile da solo**, perché lo
+scrollback non si aggiorna quando l'agente è inerte. Ogni marcatore va confermato da uno
+stato esterno — la quota dal sentinel, il progresso dal contatore di contesto.
+
+### Non riprendere quando la quota sta per finire
+
+Quarto caso osservato la stessa sera: finestra al **96%** con 90 minuti al reset, uno
+Scout fermo senza marcatore e un Analista già respinto con `403`. La classificazione
+direbbe «kick-off del ruolo», ma sarebbe sbagliato.
+
+Con il 4% di quota residua, riprendere uno Scout produce posizioni che **nessuno
+analizzerà né scorerà** prima del reset: consuma il residuo in un turno o due e si ferma
+comunque. Nel frattempo gli Scorer stavano smaltendo la coda già esistente — 11 punteggi
+nell'ultima ora contro 6 posizioni nuove — cioè usando lo stesso residuo per il lavoro
+a valore più alto.
+
+Regola da implementare: **sopra una soglia di quota (≈90-95%) il watchdog sospende i
+nudge e i kick-off**, e lascia lavorare chi è già in moto. Riprendere un agente ha senso
+solo se c'è quota sufficiente perché il suo output attraversi la pipeline. Sotto soglia
+si riprende; sopra si aspetta il reset e si riprende **tutti insieme** subito dopo — che
+è anche il momento in cui il nudge rende di più, perché la finestra è piena.
+
+Corollario: il primo giro dopo un reset di finestra è il più importante di tutti. Nella
+serata osservata, i 25 minuti immediatamente successivi a un reset sono stati sprecati
+con quota piena e tre worker parcheggiati.
+
+## Lo stallo è ricorrente e colpisce più worker insieme
+
+Nella stessa serata il cap di step si è presentato **due volte in poche ore**, la seconda
+su **tre worker contemporaneamente** (uno Scout, un Analista, uno Scorer) più un quarto
+fermo sul 403. Non è un incidente isolato da tamponare: è il regime normale di un team
+che lavora a throttle basso, e senza la ripresa automatica ogni occorrenza costa un
+quarto d'ora di pipeline ferma e un intervento umano.
+
+Corollario per il backoff: il contatore va tenuto **per agente**, non globale. Tre worker
+che sbattono sul cap nello stesso minuto sono tre eventi indipendenti, non un rabbit-hole
+collettivo che giustifica l'escalation.
+
+---
+
 ## Implementazione
 
 ### Dove
