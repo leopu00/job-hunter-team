@@ -255,6 +255,13 @@ const FLY_MS = 280;
 // Trascinamento orizzontale oltre questa soglia = cambio card.
 const NAV_THRESHOLD = 90;
 
+// Valori distinti e ordinati, scartando vuoti e nulli. Non chiude su
+// niente: sta fuori dal componente perché ricrearla a ogni render la
+// rendeva una dipendenza instabile dei `useMemo` qui sotto, che infatti
+// la omettevano dietro un `eslint-disable`.
+const distinct = (vals: (string | null)[]) =>
+  Array.from(new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean))).sort();
+
 export default function SwipeDeck({
   pending,
   reviewed,
@@ -311,14 +318,9 @@ export default function SwipeDeck({
     filters.sources.length > 0;
   // Valori distinti per le chip (dal mazzo completo). Le città si
   // restringono ai paesi selezionati, come l'albero location di /positions.
-  const distinct = (vals: (string | null)[]) =>
-    Array.from(
-      new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean)),
-    ).sort();
   const deckForLists = mode === "pending" ? pending : reviewed;
   const countries = useMemo(
     () => distinct(deckForLists.map((c) => c.loc_country)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [deckForLists],
   );
   const cities = useMemo(
@@ -332,12 +334,10 @@ export default function SwipeDeck({
           )
           .map((c) => c.loc_city),
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [deckForLists, filters.countries],
   );
   const sources = useMemo(
     () => distinct(deckForLists.map((c) => c.source)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [deckForLists],
   );
   const families = useMemo(
@@ -347,7 +347,6 @@ export default function SwipeDeck({
           deckForLists.map((c) => (c.role_family ?? "").trim()).filter(Boolean),
         ),
       ).sort(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [deckForLists],
   );
   // skip = criterio da ignorare: serve a istogrammi e contatori chip, che
