@@ -3,8 +3,8 @@
 
 Controlla i fogli principali 6x12 descritti in docs/SPRITES.md. L'audit non
 modifica gli asset: segnala celle vuote/occupate per errore, figure tagliate ai
-bordi, piedi fuori ancoraggio e frame molto piu' larghi dei vicini (sintomo
-tipico di due sagome sovrapposte nello stesso frame).
+bordi, piedi fuori ancoraggio, frammenti staccati e frame molto piu' larghi dei
+vicini (sintomo tipico di due sagome sovrapposte nello stesso frame).
 """
 
 from __future__ import annotations
@@ -25,6 +25,9 @@ ROWS = 12
 FEET_Y = 360
 USED_PER_ROW = (2, 2, 2, 6, 6, 6, 4, 4, 4, 6, 6, 6)
 ALPHA_THRESHOLD = 24
+WALK_ROWS = frozenset((3, 4, 5))
+MIN_FRAGMENT_ROWS = 18
+MIN_FRAGMENT_GAP = 8
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,29 @@ def alpha_bounds(alpha: Image.Image) -> Bounds | None:
         return None
     left, top, right, bottom = box
     return Bounds(left, top, right - 1, bottom - 1, mask.histogram()[255])
+
+
+def occupied_row_segments(alpha: Image.Image) -> list[tuple[int, int]]:
+    """Restituisce le bande verticali realmente occupate nella cella.
+
+    La riduzione BOX calcola in C la densita' alpha di ogni riga. Ignorare le
+    righe con meno di tre pixel opachi evita che un singolo residuo di matte
+    spezzi la sagoma; una seconda banda alta e separata resta invece il segno
+    misurabile di scarpe/teste fantasma montate nella stessa cella.
+    """
+    mask = alpha.point(lambda value: 255 if value > ALPHA_THRESHOLD else 0)
+    profile = mask.resize((1, CELL_H), Image.Resampling.BOX)
+    values = list(profile.tobytes())
+    segments: list[tuple[int, int]] = []
+    start: int | None = None
+    for row, value in enumerate(values + [0]):
+        occupied = value >= 3
+        if occupied and start is None:
+            start = row
+        elif not occupied and start is not None:
+            segments.append((start, row))
+            start = None
+    return segments
 
 
 def audit_sheet(path: Path, *, strict_unused: bool = False) -> list[str]:
@@ -96,6 +122,23 @@ def audit_sheet(path: Path, *, strict_unused: bool = False) -> list[str]:
                 errors.append(
                     f"{label}: piedi a y={bounds.bottom}, atteso {FEET_Y - 16}..{FEET_Y + 12}"
                 )
+
+            # Il vecchio walk_up del Coordinatore aveva il corpo e un secondo
+            # frammento grafico ai piedi: bbox e aggancio restavano validi, ma
+            # in animazione i due elementi tremavano fuori sequenza. Nelle
+            # tracce walk una seconda banda alta e ben separata non e' un
+            # dettaglio antialias, quindi deve fermare la consegna.
+            if row in WALK_ROWS:
+                segments = occupied_row_segments(cell)
+                for previous, detached in zip(segments, segments[1:]):
+                    gap = detached[0] - previous[1]
+                    height = detached[1] - detached[0]
+                    if gap >= MIN_FRAGMENT_GAP and height >= MIN_FRAGMENT_ROWS:
+                        errors.append(
+                            f"{label}: frammento grafico staccato "
+                            f"(gap {gap}px, altezza {height}px)"
+                        )
+                        break
         row_bounds.append(current)
 
     for row, bounds in enumerate(row_bounds):
