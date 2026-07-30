@@ -44,6 +44,8 @@ JSONL_DATA = JHT_HOME / "logs" / "sentinel-data.jsonl"
 CSV_OUT = JHT_HOME / "logs" / "token-meter.csv"
 STATE_OUT = JHT_HOME / "logs" / "token-meter-state.json"
 PID_FILE = JHT_HOME / "logs" / "token-meter.pid"
+# Lockfile del singleton (flock), file DEDICATO e separato dal PID file.
+LOCK_FILE = JHT_HOME / "logs" / "token-meter.lock"
 CONFIG_PATH = JHT_HOME / "jht.config.json"
 
 WINDOW_HOURS = 5.0
@@ -169,11 +171,29 @@ def _pid_is_token_meter(pid):
 
 
 def acquire_singleton_lock():
-    """Esci se un altro token-meter è già vivo (PID file + cmdline check).
+    """Esci se un altro token-meter è già vivo.
 
-    Stesso pattern del sentinel-bridge. Se trova un PID vivo che NON è un
-    token-meter (PID riciclato), sovrascrive il file.
+    Ora è il flock condiviso (`shared/skills/singleton_lock.py`): il vecchio
+    check-then-write sul PID file lasciava una finestra fra `PID_FILE.exists()`
+    e `write_text()` in cui due meter lanciati insieme si vedevano entrambi
+    soli — e `start-agent.sh bridge` ha tre invocatori concorrenti
+    ([BRIDGE-SINGLETON-PARTIAL]). Il lockfile è un file DEDICATO: il PID file
+    viene cancellato da chi riavvia la suite, e cancellare un file flockato ne
+    rompe la mutua esclusione.
+
+    Fallback (modulo non caricabile): il vecchio PID file + cmdline check, che
+    resta meglio di niente sui mount dove il lock non si può prendere.
     """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from singleton_lock import acquire_singleton
+        acquire_singleton(LOCK_FILE, pid_file=PID_FILE, label="token-meter")
+        return
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        print(f"[token-meter] WARN singleton_lock non caricabile ({e}) — "
+              f"fallback su PID file", flush=True)
     try:
         if PID_FILE.exists():
             try:

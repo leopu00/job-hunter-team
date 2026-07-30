@@ -112,6 +112,32 @@ role_of() {
   echo ""
 }
 
+# ── Singleton (flock) ─────────────────────────────────────────────────────
+# `start-agent.sh bridge` ha almeno tre invocatori concorrenti (agent-watchdog
+# ogni 30s, la skill maintainer-sweep, la riparazione di process_health.py):
+# due esecuzioni sovrapposte fanno kill→spawn entrambe e lasciano due healer
+# vivi, cioè due restart per lo stesso auth-fail — due kick-off LLM invece di
+# uno ([BRIDGE-SINGLETON-PARTIAL]). Il lockfile è DEDICATO: si rilascia da
+# solo alla morte del processo (anche di SIGKILL) e non va mai cancellato,
+# perché cancellare un file flockato ne rompe la mutua esclusione.
+# Se `flock` non c'è (mount non-POSIX, bind Windows) si prosegue: meglio un
+# healer senza lock che nessun healer — il kill-by-marker dello spawner resta.
+LOCK_FILE="$JHT_HOME/logs/codex-auth-healer.lock"
+if ! command -v flock >/dev/null 2>&1; then
+  log "WARN flock non disponibile — proseguo senza lock singleton"
+elif ! : >>"$LOCK_FILE" 2>/dev/null; then
+  # Verificata PRIMA di `exec`: un errore di redirezione su `exec` fa uscire
+  # una shell non interattiva, e un lockfile non scrivibile ucciderebbe il
+  # healer invece di degradarlo.
+  log "WARN lockfile non scrivibile ($LOCK_FILE) — proseguo senza lock singleton"
+else
+  exec 9>>"$LOCK_FILE"
+  if ! flock -n 9; then
+    log "altra istanza viva (lock $LOCK_FILE) — exit"
+    exit 0
+  fi
+fi
+
 load_roles
 log "codex-auth-healer avviato (interval=${INTERVAL}s cooldown=${COOLDOWN}s ruoli='${KNOWN_ROLES}')"
 
