@@ -127,10 +127,10 @@ wizard|run|watch|any|JHT_SCENE=wizard JHT_WIZARD_TEST=1|-|WIZARD-TEST PASS
 camera_lock|run|watch|any|JHT_SCENE=office JHT_CAMERA_LOCK_TEST=1|-|CAMERA-OVERLAY-LOCK-TEST PASS
 wizard_jump|run|watch|any|JHT_SCENE=office JHT_WIZARD_JUMP_TEST=1|-|WIZARD-JUMP-TEST PASS
 stuck|run|watch|any|JHT_SCENE=office JHT_STUCK_TEST=scout|-|STUCK-TEST PASS
-positions_panel|run|watch|any|JHT_SCENE=office JHT_POSITIONS_PANEL_TEST=1|-|POSITIONS-PANEL-TEST PASS
-map_panel|run|watch|any|JHT_SCENE=office JHT_MAP_PANEL_TEST=1|-|MAP-PANEL-TEST PASS
+positions_panel|run|watch|any|JHT_SCENE=office JHT_POSITIONS_PANEL_TEST=1 JHT_PIXEL=1|-|POSITIONS-PANEL-TEST PASS
+map_panel|run|watch|any|JHT_SCENE=office JHT_MAP_PANEL_TEST=1 JHT_PIXEL=1|-|MAP-PANEL-TEST PASS
 agent_ui|run|watch|any|JHT_SCENE=office JHT_BACKEND_TEST=1 JHT_THINKING=scout JHT_AGENT_UI_TEST=1|-|AGENT-UI-TEST PASS
-usage_panel|run|watch|any|JHT_SCENE=office JHT_USAGE_PANEL_TEST=1|-|USAGE-PANEL-TEST PASS
+usage_panel|run|watch|any|JHT_SCENE=office JHT_USAGE_PANEL_TEST=1 JHT_PIXEL=1|-|USAGE-PANEL-TEST PASS
 coordinator|run|watch|any|JHT_SCENE=office JHT_BACKEND_TEST=1 JHT_COORDINATOR_TEST=1|-|COORDINATOR-CONSOLE-TEST PASS
 # Avvia `shared/skills/enrichment_policy.py` e `db_query.py` in un JHT_HOME
 # temporaneo: e' l'unico test del gioco che esegue codice del monorepo fuori da

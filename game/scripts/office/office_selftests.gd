@@ -315,6 +315,13 @@ func _gfx_profile_selftest() -> void:
 ## se un domani la scelta smette di comandare sulla calibrazione, cade qui.
 func _graphics_panel_selftest() -> void:
 	await get_tree().process_frame
+	# Premere i bottoni veri vuol dire scrivere DAVVERO user://graphics.cfg,
+	# che è di chi gioca e non del test: finito il giro il file va rimesso
+	# com'era. Senza, questo test si porta via il profilo scelto dall'utente
+	# e — se cade a metà — lascia in eredità un profilo ridotto a chi gira
+	# dopo. È così che i tre pannelli sono finiti a passare solo quando
+	# questo li precede.
+	var gfx_backup := _read_user_file(Game.GFX_CONFIG)
 	var result := {}
 	var panel := SectionPanel.new("graphics", 24.0)
 	office.add_child(panel)
@@ -370,12 +377,34 @@ func _graphics_panel_selftest() -> void:
 			and not cfg.has_section_key("graphics", "low") \
 			and str(cfg.get_value("graphics", "mode", "")) == Game.CHOICE_AUTO
 	panel.queue_free()
+	_write_user_file(Game.GFX_CONFIG, gfx_backup)
 	var ok := true
 	for key in result:
 		ok = ok and bool(result[key])
 	print("GRAPHICS-PANEL-TEST %s %s" % ["PASS" if ok else "FAIL",
 			JSON.stringify(result)])
 	get_tree().quit(0 if ok else 1)
+
+
+## Il contenuto grezzo di un file in `user://`, o un array vuoto se non c'è.
+## Serve ai self-test che scrivono nella cartella dell'utente per rimetterla
+## com'era: un test che lascia tracce cambia l'esito di quello dopo.
+func _read_user_file(path: String) -> PackedByteArray:
+	if not FileAccess.file_exists(path):
+		return PackedByteArray()
+	return FileAccess.get_file_as_bytes(path)
+
+
+## Rimette il file com'era: byte identici, oppure di nuovo assente se prima
+## non c'era (un file "vuoto ma presente" non è lo stesso stato di partenza).
+func _write_user_file(path: String, data: PackedByteArray) -> void:
+	if data.is_empty():
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+		return
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_buffer(data)
+		f.close()
 
 
 ## Premere il bottone di un profilo come farebbe l'utente. Il pannello si
