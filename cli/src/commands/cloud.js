@@ -2508,6 +2508,21 @@ async function handleChatSync(options = {}) {
     console.error(level === 'error' ? pc.red(`  ${msg}`) : pc.yellow(`  ${msg}`));
   };
 
+  // `node:sqlite` si importa QUI, come fanno tutte le altre funzioni di questo
+  // file: non esiste un `DatabaseSync` di modulo. Senza questa riga il `new`
+  // qui sotto lanciava "DatabaseSync is not defined" ad ogni giro, l'eccezione
+  // finiva nel catch che segue, e il catch è dietro `silent` — che nel daemon
+  // vale sempre true. Risultato: la corsia chat usciva in silenzio ad ogni
+  // tentativo, per giorni, senza una riga di log. Scoperto il 30/07 solo
+  // eseguendo `jht cloud chat-sync` a mano, dove `silent` è false.
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch (err) {
+    log('error', `chat-sync: node:sqlite non disponibile: ${err.message}`);
+    return;
+  }
+
   let db;
   try {
     // `timeout`: la jobs.db è condivisa con gli agenti, che scrivono spesso.
@@ -2515,7 +2530,10 @@ async function handleChatSync(options = {}) {
     // aspetta il lock invece di saltare il giro.
     db = new DatabaseSync(dbPath, { timeout: 5000 });
   } catch (err) {
-    if (!silent) console.error(pc.yellow(`  chat-sync: DB non apribile: ${err.message}`));
+    // `log('error', …)` e non il vecchio `if (!silent)`: un DB non apribile
+    // ferma la chat per intero, ed è esattamente ciò che deve farsi vedere
+    // anche dal daemon.
+    log('error', `chat-sync: DB non apribile: ${err.message}`);
     return;
   }
   // Le colonne arrivano da _db.py alla prima apertura di un agente: un
