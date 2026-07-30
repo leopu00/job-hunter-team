@@ -22,7 +22,7 @@ const DESCRIPTIONS: Record<string, string> = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  const locale = getServerLocale();
+  const locale = await getServerLocale();
   return {
     title: TITLES[locale] ?? TITLES.en,
     description: DESCRIPTIONS[locale] ?? DESCRIPTIONS.en,

@@ -17,7 +17,7 @@ import {
 // come la dashboard mostra stat a zero.
 
 export default async function MapPage() {
-  const locale = getServerLocale();
+  const locale = await getServerLocale();
   const t = getDashboardT(locale);
 
   const hdrs = await headers();
