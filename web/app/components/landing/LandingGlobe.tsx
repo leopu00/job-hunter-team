@@ -1,8 +1,10 @@
 "use client";
 
 // Vetrina hero della landing: il globo delle posizioni (lo stesso di
-// /map, riusato in modalità showcase) che ruota da solo e ogni tanto
-// vola su una città, mostrando pin dimostrativi con punteggi.
+// /map, riusato in modalità showcase) che compie un viaggio per
+// continenti — Europa (capitali) → Americhe → Australia → Asia →
+// Medio Oriente — sostando sulle città e mostrando offerte
+// dimostrative con punteggi, un pin per offerta (mai gruppi numerati).
 //
 // Prestazioni prima di tutto — è la prima cosa che vede uno
 // sconosciuto, spesso da telefono:
@@ -24,27 +26,35 @@ import { scoreSpectrumCss } from "@/lib/score-color";
 import { makeT } from "@/lib/i18n-dict";
 import { useLandingI18n } from "./LandingI18n";
 import { T } from "./LandingGlobe.i18n";
-import {
-  LANDING_TOUR,
-  LANDING_GLOBE_POSITIONS,
-  type LandingTourStop,
-} from "./LandingGlobe.data";
+import { landingShowcaseData, type LandingTourStop } from "./LandingGlobe.data";
 
 // ── Copione dell'autopilota ─────────────────────────────────────────
 // Vista d'insieme sul globo intero; lat ~22 tiene in quadro entrambe
-// le fasce di città (Stoccolma… Sydney) durante la rotazione.
+// le fasce di città (Berlino… Melbourne) durante la rotazione.
 const OVERVIEW_ZOOM = 1.7;
 const IDLE_LAT = 22;
-// Zoom tappa: oltre la soglia "dettaglio" di JobsGlobe (snap ≥ 11) i
-// pin della città si separano alle loro coordinate esatte.
+// Zoom tappa: in vetrina l'aggregazione è spenta (ogni offerta è già
+// il suo pin), quindi lo zoom è solo inquadratura — abbastanza vicino
+// da separare a schermo uffici distanti ~1-4 km.
 const CITY_ZOOM = 10.6;
-// Rotazione: passi lineari concatenati (≈3°/s → giro completo in 2').
+// Rotazione (solo intro e ripresa dopo pausa): passi lineari
+// concatenati (≈3°/s).
 const ROTATE_STEP_DEG = 18;
 const ROTATE_STEP_MS = 6000;
-const ROTATE_BEFORE_FLY_MS = 7000;
-const FLY_IN_MS = 3200;
+// Attesa prima del primo volo: breve. Chi apre la home deve vedere il
+// primo movimento interessante entro pochi secondi, non una sfera che
+// gira piano per 7" (l'intro serve solo a far assestare tile e fade).
+const ROTATE_BEFORE_FLY_MS = 3500;
+// Il tour è un viaggio per continenti: salti brevi fra città dello
+// stesso continente, transizione più ampia (flyTo con curva più alta:
+// si allontana fino a mostrare lo spostamento sul globo, poi
+// riatterra) quando si cambia continente.
+const HOP_FLY_MS = 2800;
+const CONTINENT_FLY_MS = 6200;
+// Primo volo assoluto: più corto di un cambio continente — l'utente è
+// appena arrivato, meglio scendere presto sulla prima capitale.
+const FIRST_FLY_MS = 4500;
 const DWELL_MS = 6500;
-const FLY_OUT_MS = 2400;
 
 type AutopilotHandle = {
   suspend: () => void;
@@ -52,11 +62,14 @@ type AutopilotHandle = {
   dispose: () => void;
 };
 
-// Macchina a stati del giro automatico: ruota → vola su una città →
-// sosta (card visibile) → riparte. Vive fuori dal componente React:
-// parla solo con l'istanza mappa e con due callback.
+// Macchina a stati del giro automatico: intro in rotazione, poi il
+// viaggio — vola su una città → sosta (card visibile) → salta alla
+// prossima; al cambio di continente la transizione si allarga. Vive
+// fuori dal componente React: parla solo con l'istanza mappa e con due
+// callback.
 function startAutopilot(
   map: MaplibreMap,
+  tour: LandingTourStop[],
   opts: {
     onStopChange: (stop: LandingTourStop | null) => void;
     onBegan: () => void;
@@ -101,37 +114,31 @@ function startAutopilot(
   const flyToNext = () => {
     if (disposed || suspended) return;
     phase = "travel";
-    const stop = LANDING_TOUR[idx % LANDING_TOUR.length];
+    opts.onStopChange(null);
+    const stop = tour[idx % tour.length];
+    const prev = tour[(idx + tour.length - 1) % tour.length];
+    // Cambio continente (o primissimo volo, o rientro dal fondo del
+    // tour): transizione ampia — durata maggiore e curva più alta, così
+    // il volo si allontana abbastanza da far LEGGERE lo spostamento sul
+    // globo prima di riavvicinarsi. Dentro il continente: salto corto,
+    // il viaggio resta locale.
+    const crossing = idx === 0 || prev.continent !== stop.continent;
+    const duration =
+      idx === 0 ? FIRST_FLY_MS : crossing ? CONTINENT_FLY_MS : HOP_FLY_MS;
     idx += 1;
     map.flyTo({
       center: [stop.lon, stop.lat],
       zoom: CITY_ZOOM,
-      duration: FLY_IN_MS,
+      duration,
+      curve: crossing ? 1.55 : 1.42,
       essential: true,
     });
     schedule(() => {
       if (disposed || suspended) return;
       phase = "dwell";
       opts.onStopChange(stop);
-      schedule(() => flyAway(stop), DWELL_MS);
-    }, FLY_IN_MS + 300);
-  };
-
-  const flyAway = (stop: LandingTourStop) => {
-    if (disposed || suspended) return;
-    phase = "travel";
-    opts.onStopChange(null);
-    map.easeTo({
-      center: [stop.lon + 24, IDLE_LAT],
-      zoom: OVERVIEW_ZOOM,
-      duration: FLY_OUT_MS,
-    });
-    schedule(() => {
-      if (disposed || suspended) return;
-      phase = "rotate";
-      spinStep();
-      schedule(flyToNext, ROTATE_BEFORE_FLY_MS);
-    }, FLY_OUT_MS + 300);
+      schedule(flyToNext, DWELL_MS);
+    }, duration + 300);
   };
 
   const begin = () => {
@@ -191,6 +198,9 @@ export default function LandingGlobe() {
   // sopra l'immagine. static: si resta sull'immagine, per scelta
   // (reduced-motion) o per forza (macchina debole / niente WebGL).
   const [mode, setMode] = useState<"pending" | "live" | "static">("pending");
+  // Profilo grafico ridotto (tier "medium" di map-perf): si monta la
+  // variante lean del dataset — meno pin da disegnare a ogni frame.
+  const [lean, setLean] = useState(false);
   const [stop, setStop] = useState<LandingTourStop | null>(null);
   const [began, setBegan] = useState(false);
 
@@ -216,6 +226,10 @@ export default function LandingGlobe() {
         return;
       }
       const { tier } = initialAutoTier();
+      // lean e mode nello stesso handler: il dataset è definitivo PRIMA
+      // che il render "live" monti JobsGlobe (che legge le posizioni
+      // una volta sola, al mount).
+      setLean(tier === "medium");
       setMode(tier === "low" ? "static" : "live");
     };
     type IdleWindow = Window & {
@@ -269,14 +283,16 @@ export default function LandingGlobe() {
 
   useEffect(() => () => autopilotRef.current?.dispose(), []);
 
-  // Oggetto showcase stabile: JobsGlobe lo legge via ref e la callback
-  // onMapReady parte una sola volta, al mount della mappa.
+  // Dataset del tour (pieno o lean) + oggetto showcase: JobsGlobe lo
+  // legge via ref e la callback onMapReady parte una sola volta, al
+  // mount della mappa — lean è già deciso a quel punto (vedi decide()).
+  const show = useMemo(() => landingShowcaseData(lean), [lean]);
   const showcase = useMemo(
     () => ({
-      positions: LANDING_GLOBE_POSITIONS,
+      positions: show.positions,
       onMapReady: (map: MaplibreMap) => {
         autopilotRef.current?.dispose();
-        autopilotRef.current = startAutopilot(map, {
+        autopilotRef.current = startAutopilot(map, show.tour, {
           onStopChange: setStop,
           onBegan: () => setBegan(true),
         });
@@ -290,7 +306,7 @@ export default function LandingGlobe() {
         if (tier === "low") setMode("static");
       },
     }),
-    [],
+    [show],
   );
 
   // Card: le posizioni della tappa corrente, migliori in alto.
@@ -416,7 +432,9 @@ export default function LandingGlobe() {
               className="text-[10px]"
               style={{ color: "var(--color-muted)" }}
             >
-              {stop.country}
+              {/* Il continente rende leggibile il filo del viaggio:
+                  Europa → Americhe → Australia → Asia → Medio Oriente. */}
+              {stop.country} · {tr(`continent_${stop.continent}`)}
             </span>
           </div>
           {stopRows.map((p) => (

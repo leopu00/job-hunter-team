@@ -30,6 +30,55 @@ export const T = {
     fr: "Trouvées par l'équipe",
     pt: "Encontradas pela equipa",
   },
+  // Nomi dei continenti del tour, mostrati nella card della tappa
+  // accanto al paese: rendono leggibile il filo del viaggio (Europa →
+  // Americhe → Australia → Asia → Medio Oriente). Le chiavi sono
+  // composte a runtime: `continent_${stop.continent}`.
+  continent_europe: {
+    it: "Europa",
+    en: "Europe",
+    hu: "Európa",
+    es: "Europa",
+    de: "Europa",
+    fr: "Europe",
+    pt: "Europa",
+  },
+  continent_america: {
+    it: "Americhe",
+    en: "Americas",
+    hu: "Amerika",
+    es: "América",
+    de: "Amerika",
+    fr: "Amériques",
+    pt: "Américas",
+  },
+  continent_australia: {
+    it: "Australia",
+    en: "Australia",
+    hu: "Ausztrália",
+    es: "Australia",
+    de: "Australien",
+    fr: "Australie",
+    pt: "Austrália",
+  },
+  continent_asia: {
+    it: "Asia",
+    en: "Asia",
+    hu: "Ázsia",
+    es: "Asia",
+    de: "Asien",
+    fr: "Asie",
+    pt: "Ásia",
+  },
+  continent_middle_east: {
+    it: "Medio Oriente",
+    en: "Middle East",
+    hu: "Közel-Kelet",
+    es: "Oriente Medio",
+    de: "Naher Osten",
+    fr: "Moyen-Orient",
+    pt: "Médio Oriente",
+  },
   // Alt dell'immagine statica di ripiego + descrizione accessibile
   // dell'intera vetrina (il globo animato è aria-hidden).
   globe_alt: {
