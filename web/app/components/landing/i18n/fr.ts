@@ -86,8 +86,6 @@ export const fr: Record<string, string> = {
   footer_links_aria: "Liens du pied de page",
 
   // LandingHome: hero alt + sections
-  home_hero_alt:
-    "Illustration de style BD : une équipe d'agents IA — tous portant les mêmes lunettes de soleil noires — assis autour d'une longue table de réunion dans un élégant bureau de gratte-ciel, tandis qu'un agent debout présente des graphiques sur un tableau.",
   home_team_alt:
     "Trois agents de l'équipe en pied : le Scout avec une loupe, l'Analyste en blouse de laboratoire, le Rédacteur avec une plume d'oie — tous portant des lunettes de soleil.",
   home_setup_alt:

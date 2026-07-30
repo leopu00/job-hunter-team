@@ -4,6 +4,7 @@ import Link from "next/link";
 import { LandingI18nProvider, useLandingI18n } from "./LandingI18n";
 import LandingCTA, { LandingFooter } from "./LandingCTA";
 import LandingNav from "./LandingNav";
+import LandingGlobe from "./LandingGlobe";
 
 // Landing pubblica — nuova struttura.
 // Header (nav) + hero (titolo + immagine + intro) + sezioni di anteprima
@@ -27,8 +28,6 @@ export default function LandingHome() {
 function Hero() {
   const { t } = useLandingI18n();
 
-  const heroAlt = t("home_hero_alt");
-
   return (
     <section className="flex flex-col items-center px-6 pt-28 pb-12 text-center">
       <div
@@ -50,25 +49,19 @@ function Hero() {
         </div>
       </div>
 
-      {/* Immagine hero — fumetto del team con occhiali da sole. Resa come
-          "pannello / viewport" coerente con lo stile matrix-grid + comics:
-          bordo netto (linea della griglia, adattivo al tema) e brackets HUD
-          verdi ai 4 angoli, stile vignetta da fumetto / mirino da terminale.
-          Niente dissolvenza. */}
+      {/* Vetrina hero — il globo delle posizioni (riuso del globo di
+          /map in modalità showcase: ruota da solo, vola sulle città e
+          mostra pin dimostrativi con punteggi). Stesso "pannello /
+          viewport" coerente con lo stile matrix-grid + comics: bordo
+          netto (linea della griglia, adattivo al tema) e brackets HUD
+          verdi ai 4 angoli, stile vignetta da fumetto / mirino da
+          terminale. */}
       <div
         className="relative w-full max-w-6xl mx-auto mt-12"
         style={{ animation: "fade-in 0.8s ease 0.15s both" }}
       >
         <div className="relative border border-[var(--color-border)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/landing-hero.png"
-            alt={heroAlt}
-            width={1672}
-            height={941}
-            fetchPriority="high"
-            className="block w-full h-auto"
-          />
+          <LandingGlobe />
           {/* Brackets HUD ai 4 angoli (L formate da due bordi), sporgenti un
               filo oltre il pannello per un look da mirino/terminale. */}
           {[
