@@ -10,7 +10,10 @@
 # restano due, con la stessa interfaccia di prima (nessun argomento, env
 # JHT_HOME, stessi messaggi su stdout, stessi exit code).
 #
-# Sourced da: spawn-doctor.sh, spawn-maintainer.sh.
+# Sourced da: spawn-doctor.sh, spawn-maintainer.sh e — per la sola risoluzione
+# del locale utente — start-agent.sh, che di questo file usa
+# `jht_spawn_user_locale`. Il source va tenuto privo di effetti collaterali
+# fatali: start-agent.sh gira sotto `set -euo pipefail`.
 
 # PATH del pane tmux: `tmux new-session -d` apre una shell NON interattiva che
 # non legge .bashrc, quindi i CLI (codex/claude/kimi) e gli extra installati
@@ -61,7 +64,43 @@ jht_spawn_pane_path() {
   [ -n "$out" ] || out="${base}${PATH:+:$PATH}"
   printf '%s' "$out"
 }
-JHT_SPAWN_PANE_PATH="$(jht_spawn_pane_path)"
+# `|| true`: questo file è sourceable anche da uno script con `set -e`
+# (start-agent.sh). Un'assegnazione da command substitution che fallisce
+# fa uscire il chiamante — e un PATH cosmetico non deve mai poterlo fare.
+JHT_SPAWN_PANE_PATH="$(jht_spawn_pane_path)" || true
+
+# jht_spawn_user_locale
+#   Locale dell'utente, con la cascata canonica (in ordine di priorità):
+#     1. $JHT_LANG (env) — usata per i test rapidi e dagli altri script i18n
+#        (shared/i18n.sh, shared/i18n.py, cli/wizard/i18n.js)
+#     2. $JHT_HOME/i18n-prefs.json::locale — scritto dal wizard desktop
+#     3. host.env::JHT_LANG — persistito dal preflight di host-setup.sh
+#     4. 'en' — la lingua master dei template
+#
+#   Viveva SOLO dentro start-agent.sh, quindi gli unici due agenti che non
+#   passano di lì — Dottore e Mantenitore — leggevano sempre il prompt EN e si
+#   portavano in workspace tutte e 6 le traduzioni di ogni skill, pur essendo
+#   `<ruolo>.<locale>.md` versionati e allineati al baseline. Qui è una funzione
+#   sola, sourceata da entrambi i lati: la parità dichiarata in testa a questo
+#   file vale anche sull'i18n.
+jht_spawn_user_locale() {
+  local locale="" prefs host_env home
+  home="${JHT_HOME:-$HOME/.jht}"
+  if [ -n "${JHT_LANG:-}" ]; then
+    locale="$JHT_LANG"
+  fi
+  prefs="$home/i18n-prefs.json"
+  if [ -z "$locale" ] && [ -f "$prefs" ] && command -v jq >/dev/null 2>&1; then
+    locale="$(jq -r '.locale // "en"' "$prefs" 2>/dev/null || echo en)"
+    [ "$locale" = "null" ] && locale=""
+  fi
+  host_env="$home/host.env"
+  if [ -z "$locale" ] && [ -f "$host_env" ]; then
+    locale="$(grep -E '^JHT_LANG=' "$host_env" 2>/dev/null | cut -d= -f2 | tr -d '"' | head -1)"
+  fi
+  [ -z "$locale" ] && locale="en"
+  printf '%s' "$locale"
+}
 
 # jht_spawn_kill_sessions <regex-sessione> <label>
 #   Killa ogni sessione tmux che matcha (idempotente: ne resta esattamente una,
@@ -77,18 +116,24 @@ jht_spawn_kill_sessions() {
 
 # jht_spawn_sync_prompt <ruolo> <workdir> <label>
 #   Copia il prompt corrente in <workdir>/AGENTS.md (standard Codex/Kimi).
-#   Source di verità: /app/agents/<ruolo>/<ruolo>.md; fallback sul mount
-#   alternativo in $JHT_HOME. Riallinea a ogni spawn, così un update del
+#   Source di verità: /app/agents/<ruolo>/<ruolo>.<locale>.md, con fallback sul
+#   baseline EN <ruolo>.md e, per entrambi, sul mount alternativo in $JHT_HOME.
+#   Stessa convenzione di start-agent.sh: il fallback al baseline è silenzioso
+#   perché 'en' è la lingua master. Riallinea a ogni spawn, così un update del
 #   prompt lo vede subito il prossimo agente.
 jht_spawn_sync_prompt() {
-  local role="$1" workdir="$2" label="$3" src cand
-  src="/app/agents/$role/$role.md"
-  if [ ! -f "$src" ]; then
-    for cand in "/app/agents/$role/$role.md" "${JHT_HOME:-/jht_home}/agents/$role/$role.md"; do
-      if [ -f "$cand" ]; then src="$cand"; break; fi
-    done
-  fi
-  if [ -f "$src" ]; then
+  local role="$1" workdir="$2" label="$3" src cand locale home
+  locale="$(jht_spawn_user_locale)"
+  home="${JHT_HOME:-/jht_home}"
+  src=""
+  for cand in \
+    "/app/agents/$role/$role.$locale.md" \
+    "/app/agents/$role/$role.md" \
+    "$home/agents/$role/$role.$locale.md" \
+    "$home/agents/$role/$role.md"; do
+    if [ -f "$cand" ]; then src="$cand"; break; fi
+  done
+  if [ -n "$src" ]; then
     cp "$src" "$workdir/AGENTS.md"
   else
     echo "[$label] WARN: prompt sorgente non trovato — partirà senza AGENTS.md fresh"
@@ -100,11 +145,15 @@ jht_spawn_sync_prompt() {
 #   Claude legge .claude/skills/, Codex/Kimi leggono .agents/skills/: popoliamo
 #   entrambe come fa start-agent.sh, così l'agente funziona con ogni provider.
 #   Ogni spawn riscrive le cartelle → un cambio di manifest è preso al volo.
+#   Locale-aware come start-agent.sh: SKILL.<locale>.md diventa SKILL.md e le
+#   varianti spariscono dalla workspace — l'agente vede UN solo SKILL.md,
+#   nella sua lingua, invece di leggersi 6 traduzioni a ogni giro.
 jht_spawn_copy_skills() {
   local role="$1" workdir="$2" label="$3"
   local lib="/app/agents/_skills" manifest="/app/agents/$role/skills.list"
-  local dest name line
+  local dest name line locale localized
   [ -f "$manifest" ] || return 0
+  locale="$(jht_spawn_user_locale)"
   for dest in "$workdir/.claude/skills" "$workdir/.agents/skills"; do
     mkdir -p "$dest" 2>/dev/null || continue
     while IFS= read -r line || [ -n "$line" ]; do
@@ -118,6 +167,14 @@ jht_spawn_copy_skills() {
       fi
       rm -rf "$dest/$name" 2>/dev/null || true
       cp -R "$lib/$name" "$dest/$name" 2>/dev/null || true
+      # Locale-aware: SKILL.<locale>.md vince su SKILL.md (fallback silenzioso
+      # sul baseline EN se la traduzione non esiste), poi via le varianti — il
+      # glob SKILL.*.md non matcha SKILL.md, che resta l'unico file letto.
+      localized="$lib/$name/SKILL.$locale.md"
+      if [ "$locale" != "en" ] && [ -f "$localized" ]; then
+        cp "$localized" "$dest/$name/SKILL.md" 2>/dev/null || true
+      fi
+      rm -f "$dest/$name"/SKILL.*.md 2>/dev/null || true
     done < "$manifest"
   done
 }

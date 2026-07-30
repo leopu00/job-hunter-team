@@ -23,6 +23,10 @@ source "$DEV_TEAM_DIR/tui-helpers.sh"
 # jht_kill_by_marker / jht_daemon_log — singleton dei daemon detached e log
 # sotto $JHT_HOME/logs con rotazione (vedi daemon-lib.sh).
 source "$DEV_TEAM_DIR/daemon-lib.sh"
+# jht_spawn_user_locale — la cascata del locale utente, condivisa con
+# spawn-doctor.sh/spawn-maintainer.sh: viveva qui e loro non la vedevano,
+# quindi Dottore e Mantenitore restavano in inglese su ogni installazione.
+source "$DEV_TEAM_DIR/spawn-lib.sh"
 
 if [ -z "${1:-}" ]; then
   echo "Uso: $0 <ruolo> [istanza] [mode]"
@@ -670,31 +674,17 @@ IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 
 # Risoluzione locale del template d'identità.
 # Convenzione: agents/<role>/<role>.<locale>.md → fallback agents/<role>/<role>.md.
-# Cascade lookup (in ordine di priorità):
-#   1. $JHT_LANG (env var) — usata per test rapidi e dagli altri script i18n
-#      (shared/i18n.sh, shared/i18n.py, cli/wizard/i18n.js)
-#   2. $JHT_HOME/i18n-prefs.json::locale — popolato dal desktop wizard
-#   3. host.env::JHT_LANG — persisted dal host-setup.sh preflight
-#   4. default 'en' — la lingua master dei template. (Il `DEFAULT_LOCALE` di
-#      shared/i18n/types.ts, che questa riga citava, è sparito il 2026-07-25
-#      con lo scaffolding TS irraggiungibile: il default vive qui sotto.)
+# La cascata ($JHT_LANG → i18n-prefs.json → host.env → 'en') vive in
+# .launcher/spawn-lib.sh::jht_spawn_user_locale, sourceata in testa a questo
+# file: era codice locale a start-agent.sh, e i due agenti che NON passano da
+# qui (Dottore e Mantenitore, spawnati da spawn-doctor.sh/spawn-maintainer.sh)
+# se ne restavano fuori. Il default 'en' è la lingua master dei template — il
+# `DEFAULT_LOCALE` di shared/i18n/types.ts, che questa riga citava, è sparito
+# il 2026-07-25 con lo scaffolding TS irraggiungibile.
 # Il fallback al baseline (`<role>.md`, sempre EN dal 2026-05-18) è
 # silenzioso perché 'en' è il master language.
 # Vedi docs/internal/experiments/2026-05-06-agent-prompts-i18n.md.
-USER_LOCALE=""
-if [ -n "${JHT_LANG:-}" ]; then
-  USER_LOCALE="$JHT_LANG"
-fi
-PREFS_FILE="${JHT_HOME:-$HOME/.jht}/i18n-prefs.json"
-if [ -z "$USER_LOCALE" ] && [ -f "$PREFS_FILE" ] && command -v jq >/dev/null 2>&1; then
-  USER_LOCALE="$(jq -r '.locale // "en"' "$PREFS_FILE" 2>/dev/null || echo en)"
-  [ "$USER_LOCALE" = "null" ] && USER_LOCALE=""
-fi
-HOST_ENV_FILE="${JHT_HOME:-$HOME/.jht}/host.env"
-if [ -z "$USER_LOCALE" ] && [ -f "$HOST_ENV_FILE" ]; then
-  USER_LOCALE="$(grep -E '^JHT_LANG=' "$HOST_ENV_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"' | head -1)"
-fi
-[ -z "$USER_LOCALE" ] && USER_LOCALE="en"
+USER_LOCALE="$(jht_spawn_user_locale)"
 
 # #7 — welcome i18n: invece di hardcodare il body del welcome in EN nel
 # _welcome_kickoff, pescalo dal catalogo locali (shared/locales/<lang>.json
