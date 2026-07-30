@@ -92,6 +92,59 @@ KNOWN_SKILL_GAPS = {
 }
 
 
+# Skill DICHIARATE in almeno un `skills.list` (quindi spedite agli agenti) che a
+# oggi non hanno tutte e 6 le localizzazioni. `start-agent.sh:788-796` ricade in
+# SILENZIO sul baseline EN, quindi a runtime il buco non si vede: questa lista e'
+# l'unico posto in cui resta VISIBILE. Chi traduce una skill DEVE togliere le sue
+# voci (il test fallisce anche sulle voci obsolete).
+# Ordine di smaltimento: le skill di EMERGENZA per prime — e' li' che l'agente ha
+# meno margine per improvvisare. Quelle sono gia' state fatte (2026-07-30:
+# agent-emergency, agent-unblock, graceful-shutdown); qui resta il resto.
+# Formato: (skill, locale).
+KNOWN_SKILL_LOCALIZATION_GAPS = {
+    # Capitano — burst del primo avvio. Manca il baseline EN in 5 lingue (l'it c'e').
+    ('first-run-burst', 'es'),
+    ('first-run-burst', 'fr'),
+    ('first-run-burst', 'de'),
+    ('first-run-burst', 'pt'),
+    ('first-run-burst', 'hu'),
+    # Assistente/Capitano/Mentor — opzioni di risposta nel gioco (l'it c'e').
+    ('game-reply-options', 'es'),
+    ('game-reply-options', 'fr'),
+    ('game-reply-options', 'de'),
+    ('game-reply-options', 'pt'),
+    ('game-reply-options', 'hu'),
+    # Mantenitore — sweep infra. Monolingue.
+    ('maintainer-sweep', 'it'),
+    ('maintainer-sweep', 'es'),
+    ('maintainer-sweep', 'fr'),
+    ('maintainer-sweep', 'de'),
+    ('maintainer-sweep', 'pt'),
+    ('maintainer-sweep', 'hu'),
+    # Analista — recheck liveness annunci. Monolingue.
+    ('recheck-liveness', 'it'),
+    ('recheck-liveness', 'es'),
+    ('recheck-liveness', 'fr'),
+    ('recheck-liveness', 'de'),
+    ('recheck-liveness', 'pt'),
+    ('recheck-liveness', 'hu'),
+    # Scout/Mantenitore — ladder anti-silenzio. Monolingue.
+    ('resilience', 'it'),
+    ('resilience', 'es'),
+    ('resilience', 'fr'),
+    ('resilience', 'de'),
+    ('resilience', 'pt'),
+    ('resilience', 'hu'),
+    # Capitano — calcolo dello scaling. Monolingue.
+    ('scaling-calc', 'it'),
+    ('scaling-calc', 'es'),
+    ('scaling-calc', 'fr'),
+    ('scaling-calc', 'de'),
+    ('scaling-calc', 'pt'),
+    ('scaling-calc', 'hu'),
+}
+
+
 def _roles():
     """Ruoli = sottodir di agents/ con un prompt baseline `<role>/<role>.md`."""
     out = []
@@ -172,6 +225,45 @@ def test_every_role_has_all_localizations():
             if not p.exists():
                 missing.append(str(p.relative_to(REPO_ROOT)))
     assert not missing, 'localizzazioni mancanti:\n  ' + '\n  '.join(missing)
+
+
+def test_declared_skills_have_all_localizations():
+    """Ogni skill dichiarata in uno `skills.list` esiste in tutte e 7 le lingue.
+
+    Origin: 2026-07-30 — 9 skill dichiarate nei manifest (fra cui le tre di
+    EMERGENZA: `agent-emergency`, `agent-unblock`, `graceful-shutdown`) erano
+    monolingue. `start-agent.sh` fa fallback silenzioso sul baseline EN: nessun
+    warning, e il Dottore ungherese legge la procedura di sblocco in inglese,
+    mentre RULE-T14 impone comunque l'output nella lingua dell'utente.
+
+    I buchi ancora aperti stanno in `KNOWN_SKILL_LOCALIZATION_GAPS`, esplicita
+    apposta: cio' che non e' tradotto resta VISIBILE invece di sparire.
+    """
+    declared = set()
+    for role in _roles():
+        declared.update(_skills_list(role))
+    missing = []
+    stale = []
+    for skill in sorted(declared):
+        d = SKILLS_DIR / skill
+        if not (d / 'SKILL.md').exists():
+            missing.append(f'{skill}: manca del tutto (dichiarata in uno skills.list)')
+            continue
+        for loc in LOCALES:
+            key = (skill, loc)
+            present = (d / f'SKILL.{loc}.md').exists()
+            if not present and key not in KNOWN_SKILL_LOCALIZATION_GAPS:
+                missing.append(f'agents/_skills/{skill}/SKILL.{loc}.md')
+            elif present and key in KNOWN_SKILL_LOCALIZATION_GAPS:
+                stale.append(f'{key} — ora esiste')
+    assert not missing, (
+        'localizzazioni mancanti per skill DICHIARATE nei manifest (l\'agente '
+        'riceve il baseline EN in silenzio):\n  ' + '\n  '.join(missing)
+    )
+    assert not stale, (
+        'voci obsolete in KNOWN_SKILL_LOCALIZATION_GAPS (buco sanato, '
+        'togliere dalla lista):\n  ' + '\n  '.join(stale)
+    )
 
 
 def test_skill_en_baseline_is_not_a_copy_of_italian():
