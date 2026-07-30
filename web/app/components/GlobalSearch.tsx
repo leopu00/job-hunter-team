@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useDashboardT } from "./DashboardI18n";
-import { useFocusTrap } from "./AccessibilityProvider";
+import { useFocusTrap } from "./use-focus-trap";
 
 type ItemDef = {
   id: string;

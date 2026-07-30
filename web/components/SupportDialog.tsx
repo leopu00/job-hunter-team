@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
-import { useFocusTrap } from "@/app/components/AccessibilityProvider";
+import { useFocusTrap } from "@/app/components/use-focus-trap";
 import type { Locale } from "@/i18n/config";
 
 /**

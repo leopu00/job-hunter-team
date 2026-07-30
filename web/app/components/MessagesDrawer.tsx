@@ -32,7 +32,7 @@ import {
 } from "@/lib/messages-thread";
 import { MAX_CHAT_BODY, isChatAgent } from "@/lib/chat-agents";
 import AgentAvatar from "@/app/components/AgentAvatar";
-import { useFocusTrap } from "@/app/components/AccessibilityProvider";
+import { useFocusTrap } from "@/app/components/use-focus-trap";
 import type { PendingMessage } from "@/lib/types";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./MessagesDrawer.i18n";

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { readLocaleCookie } from "@/lib/use-locale";
-import { useFocusTrap } from "./AccessibilityProvider";
+import { useFocusTrap } from "./use-focus-trap";
 
 /* ── i18n inline ──────────────────────────────────────────────────── */
 
