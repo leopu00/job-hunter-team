@@ -1,0 +1,138 @@
+# game/tools/test-matrix.txt — UNICA fonte di verità dei selftest del gioco.
+#
+# Prima del 2026-07-30 la lista viveva in tre copie: `tools/run.sh`,
+# `.github/workflows/game.yml` e `tools/run.ps1`. Divergevano, e la deriva non
+# faceva rumore: 15 selftest su 45 non venivano eseguiti da NESSUNA CI, fra cui
+# quelli scritti apposta per il TOUR v3 e per il wizard. Ora i tre consumano
+# questo file; aggiungere un test qui lo fa girare ovunque, e toglierlo di qui
+# è l'unico modo per non farlo girare da nessuna parte.
+#
+# FORMATO — una riga per test, sette campi separati da `|`, niente padding:
+#
+#   id | kind | tier | platform | env | target | marker
+#
+#   id        nome breve, usato nei log dei runner
+#   kind      script  → godot --headless --script res://<target>
+#             run     → godot --headless <target> .   (target `-` = nessun arg)
+#             python  → python3 <target>              (relativo a game/)
+#   tier      gate    → il suo rosso ferma la CI
+#             watch   → in OSSERVAZIONE: l'esito si vede, ma non blocca.
+#                       Vedi il blocco "TIER WATCH" più sotto.
+#   platform  any     → gira ovunque
+#             posix   → SOLO POSIX. run.ps1 lo salta, e lo dice a schermo:
+#                       un test che sparisce in silenzio è un test perduto.
+#   env       variabili `K=V` separate da spazio (`-` = nessuna). JHT_NOVPS=1
+#             lo impone il runner a tutti, non va ripetuto qui.
+#   marker    riga che deve comparire nell'output (`-` = basta l'exit code).
+#             Per i `run` l'esito è comunque l'exit code E il marker: un test
+#             che esce 0 senza stampare il PASS non ha eseguito le asserzioni.
+#
+# TIER WATCH — perché esiste e come si svuota.
+# I test marcati `watch` sono corretti e verdi in locale (triage 2026-07-30 su
+# Godot 4.7 stable, macOS: tutti PASS), ma NON hanno mai girato su un runner
+# pulito di CI. Renderli bloccanti in un colpo solo significherebbe scoprire
+# sul campo, e su master, se dipendono da `~/.jht`, dal tempo di boot o dal
+# numero di core. Restano quindi in un job separato con `continue-on-error`.
+# PER PROMUOVERLI A `gate`: servono ~10 run consecutivi verdi sui tre OS del
+# job "watch" (Windows compreso: la catena di avvii Godot lì è già andata in
+# ACCESS_VIOLATION due volte). Promuoveteli a scaglioni, non tutti insieme, e
+# cambiate `watch` in `gate` QUI — nessun altro file va toccato.
+#
+# ⚠️ `burn_mode` e `coordinator_policy` leggono file FUORI da `game/`
+# (`shared/skills/`): vedi il `paths:` di `.github/workflows/game.yml`.
+
+# ---------------------------------------------------------------- gate: puri
+# Asseriscono su dati del repo (dizionari, tema, font imbarcati) e su
+# trasformazioni pure: nessuna scena, nessun backend, nessun tempo.
+nav_grid|script|gate|any|-|tools/nav_grid_selftest.gd|-
+speech_bubble|script|gate|any|-|tools/speech_bubble_selftest.gd|-
+pipeline_queue|script|gate|any|-|tools/pipeline_queue_selftest.gd|-
+embedded_terminal|script|gate|any|-|tools/embedded_terminal_selftest.gd|-
+redactor|script|gate|any|-|tools/redactor_selftest.gd|-
+diagnostics|script|gate|any|-|tools/diagnostics_selftest.gd|-
+theme|script|gate|any|-|tools/theme_selftest.gd|-
+budget_notice|script|gate|any|-|tools/budget_notice_selftest.gd|-
+# L'avviso della deroga alla spesa NOMINA i freni che non cedono e il tetto di
+# ore: sono copiati da shared/skills/burn_intent.py, e una copia che resta
+# indietro promette reti di sicurezza che il modulo non ha piu'. Questo test
+# confronta la copia col sorgente.
+burn_mode|script|gate|any|-|tools/burn_mode_selftest.gd|-
+doc_preview|script|gate|any|-|tools/doc_preview_selftest.gd|-
+# La terza via all'uscita ("esci, il team continua") e l'attesa del thread di
+# spegnimento. Nessuna delle due si vede a schermo: si sbagliano in silenzio e
+# si scoprono la mattina dopo, dal lavoro non fatto o dal container rimasto
+# acceso tutta la notte.
+headless_exit|script|gate|any|-|tools/headless_exit_selftest.gd|-
+# L'aggiornamento automatico. Si sbaglia in tre modi che a schermo si
+# assomigliano tutti a "non succede niente": non avvisare mai, proporre un
+# DECLASSAMENTO (alfabeticamente "0.3.10" viene prima di "0.3.9"), o installare
+# un pacchetto firmato da qualcun altro — perche' la notarizzazione dice che
+# Apple lo ha esaminato, non che e' il nostro.
+update_check|script|gate|any|-|tools/update_check_selftest.gd|-
+# /bin/sh: apre la shell senza il ramo Windows che ha embedded_terminal.
+terminal_selection|script|gate|posix|-|tools/terminal_selection_selftest.gd|-
+# Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO sull'italiano e
+# i dizionari tradotti si caricano pigramente: senza questa riga sedici chiavi
+# duplicate in ui_en.gd passavano in verde e rompevano l'avvio in tutte le
+# lingue tranne una.
+i18n_parity|script|gate|any|-|tools/i18n_parity_selftest.gd|-
+# Il patto del riordino della sidebar: le voci raccolte in schede o dietro
+# "Impostazioni" restano raggiungibili e tradotte. Una sezione caduta da tutti
+# gli elenchi non fa rumore, semplicemente sparisce.
+sidebar_nav|script|gate|any|-|tools/sidebar_nav_selftest.gd|-
+# I cognomi degli agenti. Sono identita', non decorazione: se la mappa
+# ruolo+numero smettesse di essere una funzione pura, "scout-2" cambierebbe
+# nome fra un riavvio e l'altro senza che nulla si rompa.
+agent_names|script|gate|any|-|tools/agent_names_selftest.gd|-
+# Il costo a riposo: la finestra senza focus deve disegnare di meno, ma il
+# tetto fps del primo piano va restituito ALLA LETTERA (chi ha il profilo
+# ridotto gira a 30, non a 60).
+idle_pace|script|gate|any|-|tools/idle_pace_selftest.gd|-
+
+# --------------------------------------------------------------- gate: python
+# Solo stdlib, nessun Godot: prima del 2026-07-30 giravano SOLO sul runner
+# Windows, cioe' un bug introdotto da chi sviluppa su macOS o Linux passava il
+# semaforo di due OS su tre.
+payload_syntax|python|gate|any|-|tools/python_payload_syntax_test.py|-
+character_sheets|python|gate|any|-|tools/audit_character_sheets.py|-
+instance_portraits|python|gate|any|-|tools/audit_instance_portraits.py|-
+
+# ----------------------------------------------------------------- gate: scena
+vps_contract|run|gate|any|JHT_VPS_CONTRACT_TEST=1|--quit-after 3|VPS-CONTRACT-TEST PASS
+pipeline_force|run|gate|any|JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout|-|PIPELINE-FORCE-TEST PASS
+backend_switch|run|gate|any|JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1|-|BACKEND-SWITCH-TEST PASS
+doctor|run|gate|any|JHT_SCENE=office JHT_DOCTOR_TEST=scout-4|-|SIMULATION-DOCTOR-TEST PASS
+feedback_panel|run|gate|any|JHT_SCENE=office JHT_FEEDBACK_PANEL_TEST=1|-|FEEDBACK-PANEL-TEST PASS
+guided|run|gate|any|JHT_SCENE=office JHT_GUIDED_TEST=1|-|GUIDED-ONBOARDING-TEST PASS
+# La pagina di chat a fumetti: che le vignette esistano, siano nell'ordine
+# della storia, che quella dell'agente resti bianca col testo nero (e' una
+# richiesta esplicita, non una scelta di tema) con la coda verso il suo
+# ritratto e quella dell'utente dalla parte opposta, che il giro
+# utente->canale->risposta passi davvero dal bus con un ruolo OPERATIVO, e che
+# rileggere indietro non venga interrotto dal messaggio successivo.
+comic_chat|run|gate|any|JHT_SCENE=office JHT_COMIC_CHAT_TEST=1|-|COMIC-CHAT-TEST PASS
+gfx_profile|run|gate|any|JHT_SCENE=office JHT_GFX_TEST=1|-|GFX-PROFILE-TEST PASS
+world_text|run|gate|any|JHT_SCENE=office JHT_WORLD_TEXT_TEST=1|-|WORLD-TEXT-TEST PASS
+graphics_panel|run|gate|any|JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1|-|GRAPHICS-PANEL-TEST PASS
+
+# ------------------------------------------------------------------- watch
+# I 15 che nessuna CI ha mai eseguito. Non sono dimenticati: sono in
+# osservazione. Leggi il blocco "TIER WATCH" in cima prima di promuoverli.
+vps_setup|run|watch|any|JHT_VPS_SETUP_TEST=1|--quit-after 3|VPS-SETUP-TEST PASS
+tour|run|watch|any|JHT_SCENE=office JHT_TOUR_TEST=1|-|TOUR-TEST PASS
+chat_notification|run|watch|any|JHT_CHAT_NOTIFICATION_TEST=1|--quit-after 3|CHAT-NOTIFICATION-TEST PASS
+chat_ui|run|watch|any|JHT_SCENE=office JHT_CHAT_UI_TEST=1|-|CHAT-UI-TEST PASS
+entry_continuity|run|watch|any|JHT_SCENE=office JHT_ENTRY_TEST=analista|-|ENTRY-CONTINUITY-TEST PASS
+wizard|run|watch|any|JHT_SCENE=wizard JHT_WIZARD_TEST=1|-|WIZARD-TEST PASS
+camera_lock|run|watch|any|JHT_SCENE=office JHT_CAMERA_LOCK_TEST=1|-|CAMERA-OVERLAY-LOCK-TEST PASS
+wizard_jump|run|watch|any|JHT_SCENE=office JHT_WIZARD_JUMP_TEST=1|-|WIZARD-JUMP-TEST PASS
+stuck|run|watch|any|JHT_SCENE=office JHT_STUCK_TEST=scout|-|STUCK-TEST PASS
+positions_panel|run|watch|any|JHT_SCENE=office JHT_POSITIONS_PANEL_TEST=1|-|POSITIONS-PANEL-TEST PASS
+map_panel|run|watch|any|JHT_SCENE=office JHT_MAP_PANEL_TEST=1|-|MAP-PANEL-TEST PASS
+agent_ui|run|watch|any|JHT_SCENE=office JHT_BACKEND_TEST=1 JHT_THINKING=scout JHT_AGENT_UI_TEST=1|-|AGENT-UI-TEST PASS
+usage_panel|run|watch|any|JHT_SCENE=office JHT_USAGE_PANEL_TEST=1|-|USAGE-PANEL-TEST PASS
+coordinator|run|watch|any|JHT_SCENE=office JHT_BACKEND_TEST=1 JHT_COORDINATOR_TEST=1|-|COORDINATOR-CONSOLE-TEST PASS
+# Avvia `shared/skills/enrichment_policy.py` e `db_query.py` in un JHT_HOME
+# temporaneo: e' l'unico test del gioco che esegue codice del monorepo fuori da
+# `game/`, e per questo il piu' esposto a un runner pulito.
+coordinator_policy|python|watch|any|-|tools/coordinator_policy_selftest.py|-

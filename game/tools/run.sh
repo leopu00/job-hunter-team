@@ -6,10 +6,17 @@
 #
 # Uso:
 #   tools/run.sh boot                  # check headless: exit 1 se script error
-#   tools/run.sh test                  # self-test collisioni/nav postazioni
+#   tools/run.sh test [gate|watch|all] # selftest da tools/test-matrix.txt
 #   tools/run.sh play                  # lancia il gioco (fullscreen)
 #   tools/run.sh shot out.png [ENV..]  # screenshot autonomo e chiude
 #                                      #   es: JHT_OVERVIEW=1 JHT_DEPT=scout
+#
+# La lista dei test NON vive qui: sta in tools/test-matrix.txt, unica fonte
+# consumata anche da run.ps1 e da .github/workflows/game.yml. Il tier `gate`
+# blocca la CI, `watch` e' in osservazione (spiegato nel file), `all` e' il
+# default di chi sviluppa. I test si eseguono TUTTI anche dopo un rosso: il
+# riepilogo finale vale piu' del secondo risparmiato.
+#
 # Log di gioco: stampato su stdout e in user://jht-game.log (path nel log).
 #
 # ⚠️ shot: se la finestra resta occlusa (utente in fullscreen su altra app)
@@ -21,6 +28,82 @@ GAME_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$GAME_DIR"
 
 MODE="${1:-boot}"
+TIER="${2:-all}"
+MATRIX="$GAME_DIR/tools/test-matrix.txt"
+
+# Esegue una riga della matrice. Ritorna 0/1; l'output del test finisce su
+# stderr SOLO se fallisce, altrimenti il log del gate sarebbe illeggibile.
+matrix_run_one() {
+	local kind="$1" envs="$2" target="$3" marker="$4"
+	local out rc=0 extra=""
+	# forma `||`: sotto `set -e` una lista `&&` che fallisce fa uscire
+	[ "$envs" != "-" ] || envs=""
+	[ "$target" = "-" ] || extra="$target"
+	case "$kind" in
+		script)
+			out="$(env JHT_NOVPS=1 $envs godot --headless \
+				--script "res://$target" 2>&1)" || rc=$?
+			;;
+		run)
+			# shellcheck disable=SC2086  # env e args sono token voluti
+			out="$(env JHT_NOVPS=1 $envs godot --headless $extra . 2>&1)" || rc=$?
+			;;
+		python)
+			out="$(python3 "$target" 2>&1)" || rc=$?
+			;;
+		*)
+			echo "[run.sh] kind sconosciuto '$kind' in test-matrix.txt" >&2
+			return 1
+			;;
+	esac
+	if [ "$rc" -eq 0 ] && [ "$marker" != "-" ] \
+			&& ! printf '%s\n' "$out" | grep -q "$marker"; then
+		# Uscire 0 senza stampare il marker significa che le asserzioni non
+		# sono state eseguite: e' un rosso, non un verde silenzioso.
+		rc=1
+		out="$out
+[run.sh] marker atteso e MAI stampato: $marker"
+	fi
+	[ "$rc" -eq 0 ] || printf '%s\n' "$out" >&2
+	return "$rc"
+}
+
+# Legge tools/test-matrix.txt e lancia i test del tier richiesto.
+matrix_run() {
+	local want="$1"
+	local id kind tier platform envs target marker
+	local ran=0 failed=0 skipped=0 failed_ids=""
+	if [ ! -f "$MATRIX" ]; then
+		echo "[run.sh] tools/test-matrix.txt assente: nessun test da eseguire" >&2
+		return 1
+	fi
+	while IFS='|' read -r id kind tier platform envs target marker; do
+		case "$id" in ''|'#'*) continue ;; esac
+		if [ "$want" != "all" ] && [ "$want" != "$tier" ]; then
+			skipped=$((skipped + 1))
+			continue
+		fi
+		ran=$((ran + 1))
+		printf '[run.sh] %-22s (%s/%s) …\n' "$id" "$tier" "$kind" >&2
+		if matrix_run_one "$kind" "$envs" "$target" "$marker"; then
+			printf '[run.sh]   PASS %s\n' "$id" >&2
+		else
+			printf '[run.sh]   FAIL %s\n' "$id" >&2
+			failed=$((failed + 1))
+			failed_ids="$failed_ids $id"
+		fi
+	done < "$MATRIX"
+	if [ "$ran" -eq 0 ]; then
+		echo "[run.sh] tier '$want' non seleziona nessun test (gate|watch|all)" >&2
+		return 1
+	fi
+	if [ "$failed" -ne 0 ]; then
+		echo "[run.sh] TEST KO — $failed/$ran falliti:$failed_ids" >&2
+		return 1
+	fi
+	echo "[run.sh] $ran test verdi (tier=$want, $skipped fuori tier)" >&2
+	return 0
+}
 
 # mai due istanze sullo stesso progetto (cache corrotta garantita), e mai
 # in parallelo a un ALTRO worktree: due finestre confondono i test utente
@@ -40,82 +123,8 @@ fi
 
 case "$MODE" in
 	test)
-		JHT_NOVPS=1 godot --headless --script res://tools/theme_selftest.gd
-		VPS_SETUP_OUT="$(JHT_NOVPS=1 JHT_VPS_SETUP_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$VPS_SETUP_OUT" | grep "VPS-SETUP-TEST PASS"
-		JHT_NOVPS=1 godot --headless --script res://tools/nav_grid_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/speech_bubble_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/pipeline_queue_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/embedded_terminal_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/terminal_selection_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/budget_notice_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/burn_mode_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/doc_preview_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/redactor_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/diagnostics_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/i18n_parity_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/sidebar_nav_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/agent_names_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/idle_pace_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/headless_exit_selftest.gd
-		JHT_NOVPS=1 godot --headless --script res://tools/update_check_selftest.gd
-		python3 tools/python_payload_syntax_test.py
-		python3 tools/coordinator_policy_selftest.py
-		python3 tools/audit_character_sheets.py
-		python3 tools/audit_instance_portraits.py
-		FEEDBACK_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_FEEDBACK_PANEL_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$FEEDBACK_OUT" | grep "FEEDBACK-PANEL-TEST PASS"
-		GUIDED_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GUIDED_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
-		TOUR_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_TOUR_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$TOUR_OUT" | grep "TOUR-TEST PASS"
-		VPS_OUT="$(JHT_NOVPS=1 JHT_VPS_CONTRACT_TEST=1 godot --headless --quit-after 3 . 2>&1)"
-		printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
-		CHAT_NOTICE_OUT="$(JHT_NOVPS=1 JHT_CHAT_NOTIFICATION_TEST=1 godot --headless --quit-after 3 . 2>&1)"
-		printf '%s\n' "$CHAT_NOTICE_OUT" | grep "CHAT-NOTIFICATION-TEST PASS"
-		CHAT_UI_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_CHAT_UI_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$CHAT_UI_OUT" | grep "CHAT-UI-TEST PASS"
-		# Pagina a fumetti: vignette, ordine, bianco/nero dell'agente contro il
-		# fondo dell'utente, code opposte, giro completo su un WORKER e scroll
-		# all'indietro che non viene strappato. L'esito è l'exit code, non la
-		# riga: `set -e` fa fallire lo script da solo se il test esce != 0.
-		COMIC_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_COMIC_CHAT_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$COMIC_OUT" | grep "COMIC-CHAT-TEST PASS"
-		PIPE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_PIPELINE_FORCE_TEST=scout godot --headless . 2>&1)"
-		printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
-		SWITCH_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_SWITCH_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$SWITCH_OUT" | grep "BACKEND-SWITCH-TEST PASS"
-		ENTRY_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_ENTRY_TEST=analista godot --headless . 2>&1)"
-		printf '%s\n' "$ENTRY_OUT" | grep "ENTRY-CONTINUITY-TEST PASS"
-		DOCTOR_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_DOCTOR_TEST=scout-4 godot --headless . 2>&1)"
-		printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
-		WIZ_OUT="$(JHT_SCENE=wizard JHT_NOVPS=1 JHT_WIZARD_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$WIZ_OUT" | grep "WIZARD-TEST PASS"
-		CAMERA_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_CAMERA_LOCK_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$CAMERA_OUT" | grep "CAMERA-OVERLAY-LOCK-TEST PASS"
-		GFX_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GFX_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
-		JUMP_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_WIZARD_JUMP_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$JUMP_OUT" | grep "WIZARD-JUMP-TEST PASS"
-		STUCK_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_STUCK_TEST=scout godot --headless . 2>&1)"
-		printf '%s\n' "$STUCK_OUT" | grep "STUCK-TEST PASS"
-		TEXT_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_WORLD_TEXT_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$TEXT_OUT" | grep "WORLD-TEXT-TEST PASS"
-		GFXPANEL_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_GRAPHICS_PANEL_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$GFXPANEL_OUT" | grep "GRAPHICS-PANEL-TEST PASS"
-		POSITIONS_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_POSITIONS_PANEL_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$POSITIONS_OUT" | grep "POSITIONS-PANEL-TEST PASS"
-		MAP_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_MAP_PANEL_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$MAP_OUT" | grep "MAP-PANEL-TEST PASS"
-		AGENT_UI_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_TEST=1 \
-			JHT_THINKING=scout JHT_AGENT_UI_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$AGENT_UI_OUT" | grep "AGENT-UI-TEST PASS"
-		USAGE_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_USAGE_PANEL_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$USAGE_OUT" | grep "USAGE-PANEL-TEST PASS"
-		COORD_OUT="$(JHT_SCENE=office JHT_NOVPS=1 JHT_BACKEND_TEST=1 \
-			JHT_COORDINATOR_TEST=1 godot --headless . 2>&1)"
-		printf '%s\n' "$COORD_OUT" | grep "COORDINATOR-CONSOLE-TEST PASS"
-		echo "[run.sh] TEST OK"
+		matrix_run "$TIER"
+		echo "[run.sh] TEST OK (tier=$TIER)"
 		;;
 	boot)
 		set +e
@@ -168,7 +177,7 @@ case "$MODE" in
 		fi
 		;;
 	*)
-		echo "uso: run.sh boot|test|play|shot" >&2
+		echo "uso: run.sh boot|test [gate|watch|all]|play|shot" >&2
 		exit 64
 		;;
 esac
