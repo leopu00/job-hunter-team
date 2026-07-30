@@ -1,38 +1,38 @@
 #!/usr/bin/env python3
 """
-gen-chat-avatars.py — ritratti disegnati degli agenti, ritagliati al busto,
-per le icone della chat web (/messages e il drawer in navbar).
+gen-chat-avatars.py — ritratti in stile fumetto degli agenti, ritagliati sul
+volto, per le icone della chat web (/messages e il drawer in navbar).
 
 Perche' esiste
 --------------
-La chat web mostrava emoji al posto degli agenti (👨‍✈️ 🧙‍♂️ 👩‍💼): un
-segnaposto che non ha niente a che vedere col personaggio che l'utente
-conosce dal videogioco. Le facce vere esistono gia' — sono i ritratti a
-layer del gioco (`game/assets/characters/gen/portraits/<slug>/`), gli
-stessi che PortraitView compone a schermo: `base.svg` (corpo+testa),
-`pose_*.svg` (braccia/gambe), `face_*.svg` (espressione).
+Le icone della chat erano gli sprite del videogioco: testine stilizzate da
+3 KB, buone dentro il gioco ma estranee al web. Gli asset art veri — le
+illustrazioni in stile fumetto che la pagina /agents mostra a piena
+larghezza — esistono gia' in `web/public/agents-*.png`, ed e' quella la
+faccia con cui il progetto presenta ogni ruolo. La chat deve mostrare la
+STESSA faccia.
 
-Questo script li compone nello STESSO ordine di
-`game/scripts/dialogue/portrait_view.gd` (base → posa → faccia), ritaglia
-al busto e scrive i PNG in `web/public/agents/`. Committiamo sia lo
-script sia l'output: rigenerare deve essere una riga di shell, non una
-sessione di lavoro.
-
-Rasterizzazione
----------------
-I ritratti sono SVG e Pillow non li rasterizza. Usiamo `magick`
-(ImageMagick, gia' installato sulla macchina di sviluppo) solo per
-SVG→PNG a piena risoluzione; tutto il resto (compositing, crop, resize,
-quantizzazione) e' Pillow. Nessuna dipendenza Python nuova.
+Servirle intere non si puo': sono PNG da 400 KB a 1,1 MB disegnati a
+30-40 px dentro un cerchio. Questo script ne ritaglia il volto, riduce a
+`OUT_SIZE` e riscrive `web/public/agents/<slug>.png` — gli stessi percorsi
+che `web/lib/message-display.ts` gia' referenzia, cosi' il web non cambia
+sorgente, cambia soltanto il contenuto dei file. Committiamo sia lo script
+sia l'output: rigenerare deve essere una riga di shell, non una sessione
+di lavoro.
 
 Il ritaglio
 -----------
-Il canvas dei ritratti e' 560x760 con una geometria costante fra i
-personaggi: capelli a y~116, mento a y~376, spalle che partono a y~404,
-corpo che esce dal frame a 760. BUST_BOX ritaglia un quadrato che tiene
-testa intera + attacco delle spalle e taglia sul petto — il "busto".
-Il quadrato serve alle icone tonde della chat: qualunque altra
-proporzione, mascherata a cerchio, taglierebbe le orecchie.
+Le illustrazioni sono scene a figura intera (1448x1086) con il personaggio
+in una posizione diversa in ognuna: un ritaglio centrato geometricamente
+darebbe il torace del Capitano o la lavagna alle sue spalle. Per ogni
+agente teniamo quindi tre misure prese SULL'ILLUSTRAZIONE — asse verticale
+del volto, cima dei capelli, mento — e da queste deriviamo il quadrato. Cosi' la testa esce sempre alla STESSA scala apparente anche se
+nelle sorgenti e' alta 126 px (Assistente) o 173 px (Mentor): le tre icone
+stanno una accanto all'altra in sidebar e teste di misura diversa si
+noterebbero subito.
+
+Il quadrato serve alle icone tonde: qualunque altra proporzione,
+mascherata a cerchio, taglierebbe le orecchie.
 
 Uso
 ---
@@ -44,90 +44,104 @@ from __future__ import annotations
 
 import argparse
 import io
-import shutil
-import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image
 
 REPO = Path(__file__).resolve().parent.parent
-PORTRAITS = REPO / "game" / "assets" / "characters" / "gen" / "portraits"
+ART_DIR = REPO / "web" / "public"
 OUT_DIR = REPO / "web" / "public" / "agents"
 
+
+@dataclass(frozen=True)
+class Face:
+    """Dove sta la faccia nell'illustrazione, in pixel nativi.
+
+    `cx` e' l'asse verticale del volto (non del corpo: il Mentor ha un
+    braccio alzato che sposterebbe il centro di massa). `top` e' il punto
+    piu' alto della capigliatura, `chin` il mento — barba compresa quando
+    c'e', altrimenti il crop taglierebbe il Mentor a meta' barba.
+    """
+
+    src: str
+    cx: int
+    top: int
+    chin: int
+
+
 # Slug web (quello che l'agente scrive in `pending_user_messages.agent`)
-# → cartella del ritratto nel gioco. Il Capitano del sistema reale e' il
-# "coordinatore" del gioco: stesso disallineamento di `_agent_dir()` in
-# vps_backend.gd, tenuto qui in un posto solo.
-AGENTS: dict[str, str] = {
-    "assistente": "assistente",
-    "capitano": "coordinatore",
-    "mentor": "mentor",
+# → illustrazione + misure del volto. Il Capitano del sistema reale e' il
+# "coordinatore" degli asset art: stesso disallineamento gia' presente fra
+# gioco e prompt, tenuto qui in un posto solo.
+#
+# Sono i tre agenti che parlano con l'utente: solo assistente, capitano e
+# mentor hanno la skill `notify-user`, quindi solo loro compaiono come
+# mittenti in chat. Aggiungerne uno significa una riga qui piu' la sua
+# voce in AGENT_META (web/lib/message-display.ts).
+AGENTS: dict[str, Face] = {
+    "capitano": Face("agents-coordinator.png", cx=389, top=23, chin=163),
+    # Il Mentor e' spostato di ~10 px a destra rispetto all'asse vero della
+    # testa (726): il suo indice alzato sta a x=550-602 e con l'asse esatto
+    # ne entrava una scheggia nell'angolo in basso a sinistra. Cosi' il dito
+    # cade fuori dal quadrato e la testa resta centrata a occhio.
+    "mentor": Face("agents-mentor.png", cx=736, top=62, chin=235),
+    "assistente": Face("agents-assistant.png", cx=790, top=70, chin=196),
 }
 
-# Espressione di default: la stessa che PortraitView usa a riposo.
-FACE = "face_neutro.svg"
-POSE = "pose_a.svg"
+# Quanta parte dell'altezza della cornice occupa la testa: piu' alto e'
+# questo numero, piu' stretta e' l'inquadratura. 0.62 e' il valore scelto
+# guardando le icone renderizzate a 22-36 px. A 0.55 la cornice si allarga
+# e a quelle dimensioni la faccia diventa una macchia (oltre a far entrare
+# nel quadrato del Mentor il dito alzato che gli sta a sinistra); sopra
+# 0.70 spariscono le spalle e la testa sembra premuta contro il bordo del
+# cerchio.
+HEAD_RATIO = 0.62
 
-# Ritaglio al busto sul canvas nativo 560x760 (left, top, right, bottom).
-# Quadrato di 400px centrato sull'asse del personaggio (x=280).
-#
-# Il bordo superiore e' 80 e non piu' in basso perche' l'Assistente porta
-# lo chignon: il suo inchiostro comincia a y=82 (misurato sull'alpha dei
-# tre ritratti composti: 82 / 114 / 122). Un crop piu' aggressivo le
-# tagliava i capelli. Il box e' lo STESSO per tutti e tre: le tre icone
-# stanno una accanto all'altra nella sidebar e scale diverse si vedono.
-BUST_BOX = (80, 80, 480, 480)
+# Aria sopra i capelli, in frazione del lato. Serve perche' il cerchio
+# mangia gli angoli: senza margine la cima della testa finisce fuori.
+TOP_MARGIN = 0.12
 
-# Lato del PNG finale. Le icone si usano a 18-44 CSS px: 128 le copre
-# tutte a densita' 2x-3x senza pesare.
-OUT_SIZE = 128
+# Lato del PNG finale. Le icone si usano a 22-36 CSS px: 96 le copre tutte
+# a densita' doppia senza far pesare una chat piena di bolle.
+OUT_SIZE = 96
 
 
-def render_svg(path: Path) -> Image.Image:
-    """SVG → RGBA a risoluzione nativa, via ImageMagick."""
-    proc = subprocess.run(
-        ["magick", "-background", "none", str(path), "png:-"],
-        capture_output=True,
+def crop_box(face: Face, size: tuple[int, int]) -> tuple[int, int, int, int]:
+    """Quadrato inquadrato sul volto, dentro i bordi dell'illustrazione."""
+    side = round((face.chin - face.top) / HEAD_RATIO)
+    left = round(face.cx - side / 2)
+    top = round(face.top - TOP_MARGIN * side)
+
+    # Clamp: alcune teste sfiorano il bordo alto della tela (il Capitano
+    # comincia a y=23). Trasliamo invece di rimpicciolire, cosi' la scala
+    # apparente della testa resta quella decisa da HEAD_RATIO.
+    width, height = size
+    left = max(0, min(left, width - side))
+    top = max(0, min(top, height - side))
+    return (left, top, left + side, top + side)
+
+
+def portrait(face: Face) -> Image.Image:
+    """Illustrazione → quadrato sul volto, ridotto, alpha preservato."""
+    src = Image.open(ART_DIR / face.src).convert("RGBA")
+    return src.crop(crop_box(face, src.size)).resize(
+        (OUT_SIZE, OUT_SIZE), Image.LANCZOS
     )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"magick ha fallito su {path}: {proc.stderr.decode(errors='replace')[:300]}"
-        )
-    return Image.open(io.BytesIO(proc.stdout)).convert("RGBA")
-
-
-def build_portrait(slug_dir: Path) -> Image.Image:
-    """Compone base → posa → faccia, come portrait_view.gd."""
-    layers = [slug_dir / "base.svg"]
-    for optional in (POSE, FACE):
-        candidate = slug_dir / optional
-        if candidate.exists():
-            layers.append(candidate)
-
-    out = render_svg(layers[0])
-    for layer in layers[1:]:
-        out = Image.alpha_composite(out, render_svg(layer))
-    return out
-
-
-def bust(portrait: Image.Image) -> Image.Image:
-    """Ritaglia al busto e riduce, mantenendo l'alpha (icone tonde)."""
-    cropped = portrait.crop(BUST_BOX)
-    return cropped.resize((OUT_SIZE, OUT_SIZE), Image.LANCZOS)
 
 
 def encode(img: Image.Image) -> bytes:
     """PNG piu' leggero possibile che resti fedele.
 
-    I ritratti sono flat-color con contorni: una palette a 128 colori e'
-    indistinguibile dall'originale e pesa un terzo. `optimize=True` e
-    compress_level massimo fanno il resto. Alpha preservato: `quantize`
-    con method=FASTOCTREE tiene il canale alfa (gli altri metodi no).
+    Diversamente dagli sprite del gioco (flat-color), queste illustrazioni
+    sono sfumate e tratteggiate: una palette stretta produce banding
+    visibile sugli incarnati. A 96x96 il PNG RGBA pieno resta sotto i
+    30 KB, quindi non quantizziamo affatto — `optimize` + compressione
+    massima bastano.
     """
-    quantized = img.quantize(colors=128, method=Image.FASTOCTREE)
     buf = io.BytesIO()
-    quantized.save(buf, format="PNG", optimize=True, compress_level=9)
+    img.save(buf, format="PNG", optimize=True, compress_level=9)
     return buf.getvalue()
 
 
@@ -140,24 +154,19 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if shutil.which("magick") is None:
-        print(
-            "gen-chat-avatars: serve ImageMagick (`brew install imagemagick`) "
-            "per rasterizzare gli SVG dei ritratti.",
-            file=sys.stderr,
-        )
-        return 2
-
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     stale: list[str] = []
 
-    for web_slug, portrait_dir in AGENTS.items():
-        src = PORTRAITS / portrait_dir
-        if not (src / "base.svg").exists():
-            print(f"gen-chat-avatars: ritratto mancante per {web_slug} ({src})", file=sys.stderr)
+    for web_slug, face in AGENTS.items():
+        if not (ART_DIR / face.src).exists():
+            print(
+                f"gen-chat-avatars: illustrazione mancante per {web_slug} "
+                f"({ART_DIR / face.src})",
+                file=sys.stderr,
+            )
             return 2
 
-        data = encode(bust(build_portrait(src)))
+        data = encode(portrait(face))
         dest = OUT_DIR / f"{web_slug}.png"
 
         if args.check:
