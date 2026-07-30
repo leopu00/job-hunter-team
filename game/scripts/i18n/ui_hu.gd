@@ -536,6 +536,7 @@ const S := {
 	"common.readonly_chat": "// csak olvasható — írni a desktop appból lehet",
 	"common.data_incoming": "// adatok érkeznek a VPS-ről…",
 	"common.updated": "frissítve: %s",
+	"common.backend_unsupported": "A csatlakoztatott backend nem kínálja ezt a funkciót.",
 
 	"sim.live_vps": "● VALÓS ADATOK — VPS",
 	"sim.live_local": "● VALÓS ADATOK — EZ A GÉP",

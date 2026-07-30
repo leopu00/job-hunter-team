@@ -2,9 +2,16 @@ class_name BackendAdapter
 extends RefCounted
 ## Contratto fra il BackendBus e una sorgente di eventi del team.
 ## Un adapter NON parla con le scene: spinge gli eventi sul bus chiamando
-## i suoi publish_* (vedi backend_bus.gd). Implementazioni previste:
-##   MockBackend (dev1) — simulatore locale, per sviluppare senza VPS
-##   VpsBackend  (dev2) — SSH reale verso la VPS del team
+## i suoi publish_* (vedi backend_bus.gd). Implementazioni:
+##   MockBackend  — simulatore locale, per sviluppare senza VPS
+##   VpsBackend   — SSH reale verso la VPS del team
+##   LocalBackend — VpsBackend col trasporto SSH sostituito da comandi locali
+##
+## Il contratto è in due metà: i metodi OBBLIGATORI (start/stop e i blocchi
+## qui sotto, che ogni adapter deve almeno accettare) e i metodi OPZIONALI in
+## fondo al file, che il bus chiama dietro has_method(). Leggi l'avvertenza
+## sopra quel blocco prima di toccarlo: dichiarare un opzionale con corpo
+## `pass` spegne il fallback del bus e trasforma un buco in silenzio.
 
 var bus: Node  # il BackendBus, iniettato da set_backend()
 
@@ -100,3 +107,106 @@ func set_burn_intent(_active: bool, _hours: float) -> void:
 ## Coordinatore smista sulla VPS. Esito su bus.ticket_created.
 func create_ticket(_position_id: int, _text: String) -> void:
 	pass
+
+
+## ── Metodi OPZIONALI (il bus li chiama dietro has_method) ────────────
+##
+## I nove metodi qui sotto sono opzionali: un adapter minimo può non avere
+## niente da rispondere e il gioco deve restare in piedi lo stesso. Prima non
+## erano dichiarati affatto, e il bus — non trovandoli — diceva all'utente
+## "backend non collegato". È FALSO: il backend è collegato eccome, è quella
+## singola funzione che non implementa. Un adapter nuovo che ne dimenticava
+## uno non falliva mai: no-op silenzioso e diagnosi sbagliata a schermo.
+##
+## ⚠️ TRABOCCHETTO — dichiararli rende has_method() SEMPRE vero, quindi per
+## questi nove il ramo `else` del bus non scatta più. Un corpo `pass` sarebbe
+## perciò PEGGIO di non dichiararli: silenzio totale, nemmeno il messaggio
+## sbagliato. Per questo nessun default qui è `pass`: ognuno passa da
+## _unsupported(), che segnala a chi sviluppa QUALE metodo manca (push_error)
+## e, dove il bus ha un segnale d'esito, risponde a chi gioca con un
+## fallimento esplicito e un messaggio vero e tradotto.
+##
+## Il ramo `else` del bus resta corretto per il caso che descrive davvero:
+## nessun adapter installato (_backend == null).
+##
+## Chi implementa uno di questi metodi NON deve chiamare super(): sostituisce
+## il default per intero.
+
+## Registra il buco e restituisce il messaggio da mostrare a chi gioca.
+func _unsupported(method: String) -> String:
+	push_error("BackendAdapter: %s() non implementato da %s"
+			% [method, _adapter_name()])
+	return UIStrings.t("common.backend_unsupported")
+
+
+func _adapter_name() -> String:
+	var script := get_script() as Script
+	if script and script.resource_path != "":
+		return script.resource_path.get_file()
+	return "BackendAdapter"
+
+
+## ── Onboarding: osservazione del profilo candidato ───────────────────
+
+## Rilegge candidate_profile.yml + ready.flag a ogni giro di poll finché il
+## watch è aperto, pubblicando bus.publish_profile_status().
+func open_profile_watch() -> void:
+	_unsupported("open_profile_watch")
+
+func close_profile_watch() -> void:
+	_unsupported("close_profile_watch")
+
+## Avvia l'agente assistente se non è già vivo. Idempotente.
+func ensure_assistant() -> void:
+	_unsupported("ensure_assistant")
+
+## Carica un documento locale (CV…) nella drop-zone allegati del container.
+func upload_document(_local_path: String) -> void:
+	var msg := _unsupported("upload_document")
+	if bus:
+		bus.document_uploaded.emit(false, "", msg)
+
+
+## ── Profilo utente e orari (scrittura dal desktop) ───────────────────
+
+func save_profile(_fields: Dictionary) -> void:
+	var msg := _unsupported("save_profile")
+	if bus:
+		bus.profile_saved.emit(false, msg)
+
+func save_working_hours(_wh: Dictionary) -> void:
+	var msg := _unsupported("save_working_hours")
+	if bus:
+		bus.hours_saved.emit(false, msg)
+
+
+## ── Storico usage (finestre di monitoraggio risorse) ─────────────────
+
+## Storico aggregato per bucket_sec sull'intervallo [from_ts, to_ts] (unix
+## UTC). Esito su bus.publish_usage_history(); la query fa da correlazione.
+func fetch_usage_history(from_ts: float, to_ts: float, bucket_sec: int) -> void:
+	var msg := _unsupported("fetch_usage_history")
+	if bus:
+		bus.usage_history_updated.emit(
+				{"from_ts": from_ts, "to_ts": to_ts, "bucket_sec": bucket_sec},
+				{"ok": false, "error": msg})
+
+## Come sopra ma per il singolo ruolo (scheda agente); agent = slug minuscolo.
+func fetch_agent_history(agent: String, from_ts: float, to_ts: float,
+		bucket_sec: int) -> void:
+	var msg := _unsupported("fetch_agent_history")
+	if bus:
+		bus.agent_history_updated.emit(
+				{"agent": agent, "from_ts": from_ts, "to_ts": to_ts,
+				"bucket_sec": bucket_sec},
+				{"ok": false, "error": msg})
+
+
+## ── Documenti prodotti (anteprima CV in-game) ────────────────────────
+
+## Bytes di un documento registrato in cv_path/cl_path: lettura pura, il path
+## fa da chiave di correlazione. Esito su bus.publish_artifact().
+func fetch_artifact(path: String) -> void:
+	var msg := _unsupported("fetch_artifact")
+	if bus:
+		bus.artifact_fetched.emit(path, false, PackedByteArray(), msg)

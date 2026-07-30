@@ -536,6 +536,7 @@ const S := {
 	"common.readonly_chat": "// somente leitura — escreve-se pelo app desktop",
 	"common.data_incoming": "// dados a caminho da VPS…",
 	"common.updated": "atualizado: %s",
+	"common.backend_unsupported": "O backend ligado não oferece esta funcionalidade.",
 
 	"sim.live_vps": "● DADOS REAIS — VPS",
 	"sim.live_local": "● DADOS REAIS — ESTE COMPUTADOR",
