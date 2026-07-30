@@ -190,6 +190,25 @@ def test_hours_until_reset_input_non_valido(cu):
     assert cu.hours_until_reset("2026-07-30T05:00:00Z") is None
 
 
+@pytest.mark.parametrize("fuori_range", ["24:00", "25:00", "12:60", "99:99", "-1:30"])
+def test_hours_until_reset_fuori_range_degrada_invece_di_sollevare(cu, fuori_range):
+    """Sintatticamente hh:mm ma impossibile come orario: lo rifiuta
+    `replace()`, non lo split. Il parser Claude non ci arriva mai (limita a
+    23), ma i rami kimi/openai passano il `reset_at` del bridge senza
+    validarlo — e main() cattura solo KeyboardInterrupt, quindi una
+    ValueError qui abbatterebbe il comando perdendo anche l'usage."""
+    assert cu.hours_until_reset(fuori_range) is None
+    assert cu.remaining_str(fuori_range) == "?"
+
+
+@pytest.mark.parametrize("non_stringa", [1943, 19.43, ["19", "43"], {"h": 19}])
+def test_hours_until_reset_su_valore_non_stringa_degrada(cu, non_stringa):
+    """`sample.get("reset_at")` non è garantito stringa: nessun tipo deve
+    propagare un'eccezione al chiamante."""
+    assert cu.hours_until_reset(non_stringa) is None
+    assert cu.remaining_str(non_stringa) == "?"
+
+
 def test_remaining_str_formatta_ore_e_minuti(cu):
     assert cu.remaining_str(_hhmm(2.5)).endswith("m")
     assert cu.remaining_str(_hhmm(2.5)).startswith("2h ")
@@ -234,6 +253,20 @@ def test_verdict_e_monotono(cu):
     ordine = {"🟢": 0, "🟡": 1, "🟠": 2, "🔴": 3}
     livelli = [ordine[cu.compute_verdict(u)[0]] for u in range(0, 101)]
     assert livelli == sorted(livelli)
+
+
+def test_verdict_ha_esattamente_tre_livelli_raggiungibili(cu):
+    """Non esiste una banda 🟡. C'era il ramo — `usage >= SAFE_CEILING (95)`
+    messo DOPO `>= 88` — ma era irraggiungibile per costruzione, quindi il
+    verdict non l'ha mai emesso da quando il file esiste.
+
+    Che vada rimosso e non riordinato lo decide questo stesso file: le
+    soglie sono già pinnate senza buchi (<75 🟢, 75-87 🟠, ≥88 🔴), e
+    l'invariante di monotonia sopra ordina 🟡 *sotto* 🟠 — quindi qualunque
+    banda 🟡 la si voglia infilare, sopra o sotto 88, romperebbe l'uno o
+    l'altra. La costante è sparita con il ramo: nessuno la leggeva."""
+    assert {cu.compute_verdict(u)[0] for u in range(0, 201)} == {"🟢", "🟠", "🔴"}
+    assert not hasattr(cu, "SAFE_CEILING")
 
 
 # ── detect_provider ─────────────────────────────────────────────────────
