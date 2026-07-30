@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import yaml from "js-yaml";
+// js-yaml 5 espone solo named export: il default non esiste piu'.
+import * as yaml from "js-yaml";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
