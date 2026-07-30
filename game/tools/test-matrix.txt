@@ -136,3 +136,4 @@ coordinator|run|watch|any|JHT_SCENE=office JHT_BACKEND_TEST=1 JHT_COORDINATOR_TE
 # temporaneo: e' l'unico test del gioco che esegue codice del monorepo fuori da
 # `game/`, e per questo il piu' esposto a un runner pulito.
 coordinator_policy|python|watch|any|-|tools/coordinator_policy_selftest.py|-
+asset_orphans|python|gate|any|-|tools/asset_orphan_audit.py --check|-

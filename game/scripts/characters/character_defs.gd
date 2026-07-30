@@ -4,7 +4,6 @@ class_name CharacterDefs
 ## da spawn_list(): lead + lavoratori generati sulle postazioni dei reparti
 ## (DEPT_ROLES). Le posizioni sono coordinate mondo (vedi DepartmentDefs).
 
-const GEN := "res://assets/characters/gen/"
 const SHEETS := "res://assets/characters/sheets/"
 
 ## I "name" qui dentro sono l'italiano di riferimento: a schermo va sempre
@@ -277,15 +276,21 @@ static func desk_occupant_slug(dept_id: String, index: int) -> String:
 static func _desk_spot_of(dept_id: String, index: int) -> Vector2:
 	return DepartmentDefs.desk_spot(DepartmentDefs.DEPARTMENTS[dept_id]["desks"][index])
 
-## Factory del rig: spritesheet pittorico se esiste (docs/SPRITES.md),
-## altrimenti il vecchio rig a parti SVG. I chiamanti usano solo
-## set_motion(facing, flipped, mode), identica su entrambi i rig.
-## Ruoli senza sheet proprio che vestono quello di un altro (pittorico,
-## mai SVG in scena). La Sentinella/Tesoriere ha ora un foglio dedicato.
+## Ruoli senza foglio proprio che vestono quello di un altro.
+## La Sentinella/Tesoriere ha ora un foglio dedicato.
 const SHEET_LOANS := {
 	"mantenitore": "maintainer",  # il camice è davvero il suo
 }
 
+## Foglio di ripiego per un ruolo che ancora non ha il suo: mai una scena
+## senza agenti. Era il rig SVG a strati (`CharacterRig` + `characters/gen/`),
+## irraggiungibile da quando ognuno degli 11 slug del roster ha il proprio
+## `_a`; ora la rete è pittorica come tutto il resto, quindi un ruolo nuovo
+## entra in scena vestito da Scout invece di apparire in un altro stile.
+const FALLBACK_SHEET := "scout_a"
+
+## Factory del rig degli agenti in-world (spritesheet pittorico, vedi
+## docs/SPRITES.md). I chiamanti usano solo set_motion(facing, flipped, mode).
 static func make_rig(slug: String, variant := "a") -> Node2D:
 	var sheet_slug := str(SHEET_LOANS.get(slug, slug))
 	var sheet_path := SHEETS + sheet_slug + "_" + variant + ".png"
@@ -293,33 +298,18 @@ static func make_rig(slug: String, variant := "a") -> Node2D:
 	# foglio non esiste, la scena resta funzionante usando l'identità `a`.
 	if not ResourceLoader.exists(sheet_path):
 		sheet_path = SHEETS + sheet_slug + "_a.png"
-	if ResourceLoader.exists(sheet_path):
-		var rig := SpriteSheetRig.new()
-		# foglio seduto opzionale (4x3, vedi SIT_TRACKS): se manca, il rig
-		# degrada "sit" a work da solo
-		var sit_path := SHEETS + sheet_slug + "_" + variant + "_sit.png"
-		if not ResourceLoader.exists(sit_path):
-			sit_path = SHEETS + sheet_slug + "_sit.png"
-		var sit: Texture2D = load(sit_path) if ResourceLoader.exists(sit_path) else null
-		rig.setup(load(sheet_path), sit)
-		return rig
-	# fallback SVG; per slug senza asset (ruoli nuovi) si presta lo scout
-	var svg_slug := slug if ResourceLoader.exists(GEN + slug + "/head_front.svg") else "scout"
-	var legacy := CharacterRig.new()
-	legacy.setup(agent_textures(svg_slug))
-	return legacy
-
-## Texture del rig per un agente del roster.
-static func agent_textures(slug: String) -> Dictionary:
-	var base := GEN + slug + "/"
-	var t := {
-		"head_front": load(base + "head_front.svg"),
-		"head_side": load(base + "head_side.svg"),
-		"head_back": load(base + "head_back.svg"),
-		"torso_front": load(base + "torso_front.svg"),
-		"torso_side": load(base + "torso_side.svg"),
-	}
-	if ResourceLoader.exists(base + "leg_front.svg"):
-		t["leg_front"] = load(base + "leg_front.svg")
-		t["leg_side"] = load(base + "leg_side.svg")
-	return t
+	# Ruolo del tutto privo di arte (aggiunto al roster prima del suo foglio):
+	# si presta quello dello Scout. Senza questo ramo l'agente sarebbe INVISIBILE.
+	if not ResourceLoader.exists(sheet_path):
+		push_warning("Nessuno spritesheet per '%s': uso %s" % [slug, FALLBACK_SHEET])
+		sheet_slug = FALLBACK_SHEET.get_slice("_", 0)
+		sheet_path = SHEETS + FALLBACK_SHEET + ".png"
+	var rig := SpriteSheetRig.new()
+	# foglio seduto opzionale (4x3, vedi SIT_TRACKS): se manca, il rig
+	# degrada "sit" a work da solo
+	var sit_path := SHEETS + sheet_slug + "_" + variant + "_sit.png"
+	if not ResourceLoader.exists(sit_path):
+		sit_path = SHEETS + sheet_slug + "_sit.png"
+	var sit: Texture2D = load(sit_path) if ResourceLoader.exists(sit_path) else null
+	rig.setup(load(sheet_path), sit)
+	return rig
