@@ -784,4 +784,46 @@ describe("canale della chat senza lettore diretto", () => {
     const heavyAfter = src.indexOf("if (doHeavy) {", rendezvousRead);
     expect(chatCall).toBeLessThan(heavyAfter);
   });
+  // Il difetto che il merge dei due lavori paralleli ha quasi prodotto: la
+  // diagnosi del guasto e' nata quando il pull esisteva SOLO sul lettore
+  // diretto, quindi classificava "nessun canale" guardando `reader`. Da
+  // quando il ripiego via Vercel esiste, quella lettura e' sbagliata: 4 box
+  // su 5 non hanno letture dirette e ritirano benissimo i turni. L'allarme
+  // sarebbe rimasto acceso per sempre su una corsia sana — e un allarme
+  // sempre acceso e' un allarme che nessuno legge piu'.
+  it("non grida 'nessun canale' quando il ripiego via Vercel c'e'", () => {
+    const sano = diagnoseChatLane({
+      pending: true,
+      requestedAt: new Date(Date.now() - 60_000).toISOString(),
+      canRead: true, // il canale esiste: e' quello col token del box
+      readError: null,
+      queued: 0,
+      oldestQueuedAt: null,
+      deliverFailed: 0,
+    });
+    expect(sano?.reason).not.toBe("no-inbound-channel");
+
+    const rotto = diagnoseChatLane({
+      pending: true,
+      requestedAt: new Date(Date.now() - 60_000).toISOString(),
+      canRead: false, // nessun canale davvero
+      readError: null,
+      queued: 0,
+      oldestQueuedAt: null,
+      deliverFailed: 0,
+    });
+    expect(rotto?.reason).toBe("no-inbound-channel");
+  });
+
+  // E che la diagnosi sia alimentata dal CANALE, non dal lettore diretto:
+  // e' l'unico punto in cui i due lavori si toccano, e un ritorno indietro
+  // qui non lo vedrebbe nessun test di comportamento.
+  it("alimenta la diagnosi con il canale, non con il lettore diretto", () => {
+    const src = readFileSync(
+      join(__dirname, "../../../cli/src/commands/cloud.js"),
+      "utf-8",
+    );
+    expect(src).toContain("canRead: !!channel");
+    expect(src).not.toContain("canRead: !!reader");
+  });
 });
