@@ -2521,6 +2521,9 @@ async function handleChatSync(options = {}) {
 
   const reader = getDirectReader(config);
   let importedIds = [];
+  // Motivo della lettura fallita, se fallita: serve alla diagnosi in fondo
+  // (il log qui sotto è gated da `silent`, quindi nel daemon non si vede).
+  let readError = null;
 
   try {
     // ── 1. Turni scritti dal web ───────────────────────────────────────
@@ -2533,6 +2536,7 @@ async function handleChatSync(options = {}) {
         const cloudRows = await reader.readUndeliveredUserChat({ limit: 50 });
         importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome: JHT_HOME });
       } catch (err) {
+        readError = err.message;
         log('warn', `chat-sync: lettura turni utente fallita: ${err.message}`);
       }
     }
@@ -2572,6 +2576,21 @@ async function handleChatSync(options = {}) {
       }
     }
 
+    // ── Diagnosi: la corsia ha lavorato o è solo stata zitta? ──────────
+    // Va DOPO tutti i passi, perché solo qui si sa cosa è davvero passato.
+    // Non è gated da `silent`: è l'unico punto in cui un guasto della chat
+    // può farsi vedere da fuori, e nel daemon `silent` è sempre true.
+    const queue = chat.undeliveredUserTurns(db);
+    await reportChatLane(chat, config, reader, chat.diagnoseChatLane({
+      pending,
+      requestedAt: state?.chat_requested_at ?? null,
+      canRead: !!reader,
+      readError,
+      queued: queue.count,
+      oldestQueuedAt: queue.oldest,
+      deliverFailed: sent.failed,
+    }));
+
     const moved = ingested.inserted + mirrored.mirrored + sent.delivered + pushed;
     if (!silent && (moved > 0 || mirrored.backfilled > 0)) {
       console.log(
@@ -2587,6 +2606,75 @@ async function handleChatSync(options = {}) {
   } finally {
     try { db.close(); } catch { /* già chiuso */ }
   }
+}
+
+/**
+ * Ultima segnalazione emessa sulla corsia chat: `{ summary, at }`.
+ *
+ * Vive in memoria e non su disco di proposito. Il daemon è un processo
+ * lungo, quindi entro la sua vita la ripetizione è governata; un riavvio
+ * DEVE ri-annunciare, perché chi legge i log dopo un redeploy vuole
+ * ritrovare il guasto in cima e non fidarsi di uno stato che non c'è più.
+ */
+let chatLaneAlert = null;
+
+/**
+ * Scrive campi su `team_state` per la via disponibile. Supabase diretto se
+ * c'è, altrimenti PATCH Vercel col token del box (`source=token` → i campi
+ * OBSERVED, `last_error` incluso, sono ammessi). Il fallback NON è un
+ * dettaglio: il guasto che questa funzione racconta più spesso è proprio
+ * "manca il canale diretto", e senza la seconda strada la segnalazione
+ * morirebbe insieme a ciò che segnala.
+ */
+async function patchTeamStateBestEffort(config, reader, fields) {
+  if (reader) {
+    try {
+      await reader.patchTeamState(fields);
+      return true;
+    } catch { /* canale diretto rotto: si prova da Vercel */ }
+  }
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  try {
+    const res = await fetch(`${baseUrl}/api/team-state`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    });
+    return res.ok;
+  } catch {
+    return false; // offline: al prossimo giro si riprova, lo stato è ricalcolato ogni volta
+  }
+}
+
+/**
+ * Fa uscire allo scoperto lo stato della corsia chat: una riga di log
+ * SEMPRE visibile (mai dietro `silent`: nel daemon vale sempre true, ed è
+ * lì che il guasto va visto) e una traccia su `team_state.last_error` /
+ * `last_error_at` — lo stesso campo che il reconciler usa già per farsi
+ * vedere dal resto del sistema.
+ *
+ * Il rientro si dichiara UNA volta e ripulisce `last_error`: un campo
+ * rosso su un guasto finito è disinformazione, e alla lunga si impara a
+ * ignorarlo.
+ */
+async function reportChatLane(chat, config, reader, stall) {
+  const now = Date.now();
+
+  if (!stall) {
+    if (!chatLaneAlert) return;
+    console.log(pc.green(`✓ chat: corsia di nuovo operativa (era: ${chatLaneAlert.summary})`));
+    chatLaneAlert = null;
+    await patchTeamStateBestEffort(config, reader, { last_error: null });
+    return;
+  }
+
+  if (!chat.shouldAnnounceStall(chatLaneAlert, stall.summary, { now })) return;
+  console.error(pc.red(`  ${stall.message}`));
+  chatLaneAlert = { summary: stall.summary, at: now };
+  await patchTeamStateBestEffort(config, reader, {
+    last_error: stall.summary,
+    last_error_at: new Date(now).toISOString(),
+  });
 }
 
 /**
