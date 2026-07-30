@@ -7,7 +7,16 @@ import hashlib
 from pathlib import Path
 import sys
 
-from PIL import Image
+# Pillow non è installato ovunque: il runner Windows della CI non ce l'ha, e
+# un audit che *non può* girare non è un audit fallito — è un audit assente.
+# Facendolo cadere come errore, il 2026-07-30 ha bloccato una release per una
+# libreria mancante invece che per un asset sbagliato. Esce 0 dicendo perché,
+# e i due leg che Pillow ce l'hanno continuano a controllare davvero.
+try:
+    from PIL import Image
+except ModuleNotFoundError:
+    print("SKIP: Pillow non disponibile su questa macchina — audit non eseguito")
+    raise SystemExit(0)
 
 
 ROLES = ("scout", "analista", "scorer", "scrittore", "critico")
