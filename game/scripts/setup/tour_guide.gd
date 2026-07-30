@@ -30,6 +30,8 @@ const PRESENTED_STOPS := [
 ## battuta della guida all'arrivo e risposta dell'ospite (fumetti in scena).
 ## L'Assistente introduce la tappa in scena; il dialogo lungo appartiene al
 ## collega del reparto, con il suo nome e il suo ritratto.
+## I "name" sono l'italiano di riferimento: a schermo arriva quello che
+## restituisce scene_for(), tradotto nelle 7 lingue.
 const SCENES := {
 	"assistente": {"tree": "tour_benvenuto", "portrait": "assistente",
 		"name": "L'Assistente"},
@@ -217,10 +219,20 @@ static func _range_state(idx: int, first: int, last: int) -> String:
 
 ## Partitura della tappa (o di uno slug esplicito). In giro libero parla
 ## l'agente in prima persona: albero self_*, ritratto e nome del ruolo.
+##
+## Il nome esce di qui già nella lingua dell'interfaccia: nelle costanti resta
+## l'italiano di riferimento (una const non può chiamare t()), è
+## CharacterDefs.role_name a cercarlo nei dizionari. Così la targa del dialogo
+## e la colonna delle chat dicono la stessa cosa nella stessa lingua.
 func scene_for(slug: String) -> Dictionary:
+	var scene: Dictionary = SCENES.get(slug, {})
 	if _mode == "free" and FREE_SCENES.has(slug):
-		return FREE_SCENES[slug]
-	return SCENES.get(slug, {})
+		scene = FREE_SCENES[slug]
+	if scene.is_empty():
+		return scene
+	var localized := scene.duplicate(true)
+	localized["name"] = CharacterDefs.role_name(slug)
+	return localized
 
 ## Invito iniziale sopra l'Assistente: saluto legato all'orario reale
 ## (e al nome, se l'utente l'ha già lasciato all'ingresso).
