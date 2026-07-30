@@ -305,9 +305,14 @@ export default function LandingGlobe() {
   return (
     <div
       ref={wrapRef}
-      // Ritratto su telefono (il globo respira e la card non lo copre),
-      // panoramico da tablet in su come l'immagine hero che sostituisce.
-      className="relative w-full overflow-hidden aspect-[3/4] sm:aspect-[4/3] md:aspect-[16/9] bg-[var(--color-deep)]"
+      // Fascia a tutta larghezza (niente box): ritratto su telefono
+      // (il globo respira e la card non lo copre), panoramico da tablet
+      // in su. Sui monitor larghi l'aspect 16/9 darebbe un'altezza da
+      // schermo intero: il max-h la tappa a ~60% del viewport, così
+      // titolo sopra e inizio contenuti sotto restano nel fold. Il /var
+      // (--zoom) è obbligatorio: il body è zoomato e i vh sono calcolati
+      // sul viewport NON zoomato (vedi commento in globals.css).
+      className="relative w-full overflow-hidden aspect-[3/4] sm:aspect-[4/3] md:aspect-[16/9] md:max-h-[calc(60vh/var(--zoom))] bg-[var(--color-deep)]"
     >
       {/* Base statica: LCP della pagina, ripiego per macchine deboli e
           descrizione accessibile dell'intera vetrina. */}
@@ -346,6 +351,28 @@ export default function LandingGlobe() {
           <JobsGlobeLazy fullscreen showcase={showcase} />
         </div>
       )}
+
+      {/* Raccordo con la pagina: senza più il box, la fascia si fonde
+          nello sfondo con due sfumature (dal colore di fondo del sito,
+          theme-aware, verso il trasparente). Niente z-index: badge,
+          card e credito (z-10) e l'attribution di maplibre (z proprio)
+          restano sopra; pointer-events-none lascia cliccabile la (i)
+          dell'attribution sotto la sfumatura bassa. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-10 md:h-16"
+        style={{
+          background:
+            "linear-gradient(to bottom, var(--color-void), transparent)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-10 md:h-16"
+        style={{
+          background: "linear-gradient(to top, var(--color-void), transparent)",
+        }}
+      />
 
       {/* Dicitura demo: sobria ma sempre visibile — i punteggi sono un
           esempio, non risultati reali. */}
