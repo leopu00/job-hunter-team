@@ -1697,13 +1697,17 @@ export async function getMessagesHistory(
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
+  // [JHT-CHAT-UNIFY] Via il filtro `delivered_via='web'`. Quella colonna dice
+  // su quale CANALE è stata spinta la notifica, non se il messaggio fa parte
+  // della conversazione: con Telegram configurato `jht-notify-user` scriveva
+  // 'telegram' e quel turno spariva dalla chat del sito. È una delle ragioni
+  // per cui la chat web sembrava muta pur avendo l'agente risposto.
   const { data, error } = await supabase
     .from("pending_user_messages")
     .select(
-      "id, agent, body, kind, related_position_id, delivered_via, delivered_at, " +
+      "id, agent, body, kind, author, related_position_id, delivered_via, delivered_at, " +
         "acknowledged_at, user_reply, user_reply_at, agent_seen_reply_at, created_at",
     )
-    .eq("delivered_via", "web")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -1726,10 +1730,12 @@ export async function getPendingMessagesCount(): Promise<number> {
   if (!isSupabaseConfigured) return 0;
 
   const supabase = await createClient();
+  // Non letti = turni dell'AGENTE non ancora ack-ati (quelli scritti
+  // dall'utente li ha già letti chi li ha scritti).
   const { count, error } = await supabase
     .from("pending_user_messages")
     .select("id", { count: "exact", head: true })
-    .eq("delivered_via", "web")
+    .eq("author", "agent")
     .is("acknowledged_at", null);
   if (error || count == null) return 0;
   return count;

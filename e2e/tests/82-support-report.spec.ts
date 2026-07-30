@@ -115,6 +115,52 @@ async function sessioneOrSkip(page: Page) {
   );
 }
 
+/**
+ * Il wizard di primo avvio prende il posto della pagina richiesta.
+ *
+ * `/welcome` non è un redirect del server — `/dashboard` risponde 200 — ma un
+ * dirottamento del client dopo l'idratazione, quindi nessuna guardia basata
+ * sullo status HTTP può vederlo. Una sessione appena creata (il CI la rigenera
+ * a ogni run) è per definizione una sessione che il wizard non ha ancora visto.
+ *
+ * Il sintomo, se non lo si gestisce, è illeggibile: il test aspetta trenta
+ * secondi il menu della dashboard mentre a schermo c'è un selettore di lingua,
+ * e fallisce come se fosse rotto il dialogo di segnalazione. Diagnosticato il
+ * 2026-07-29 dallo screenshot di Playwright, dopo due tentativi a vuoto su
+ * ipotesi sbagliate.
+ *
+ * Il wizard offre lui stesso la via d'uscita, ed è quella che si usa qui.
+ */
+async function superaWizard(page: Page) {
+  // Il redirect al wizard è client-side: subito dopo `goto` l'URL può essere
+  // ancora quello chiesto e il wizard non ancora montato. Il `count()`
+  // istantaneo che stava qui leggeva quel buco e restituiva 0 — e ci lasciava
+  // DENTRO il wizard credendo di averlo saltato.
+  //
+  // Da lì il fallimento non somiglia più alla sua causa: il wizard mostra la
+  // navbar, quindi il menu utente si apre e la voce esiste davvero, ma il
+  // re-render la stacca e il click resta appeso 30 secondi. Il rosso in CI
+  // parlava del menu (30/07, due volte di fila sullo stesso commit); il menu
+  // non c'entrava nulla.
+  //
+  // Quindi si aspetta che l'URL si fermi su una delle due sponde prima di
+  // decidere. `catch` vuoto: se non si ferma su nessuna, il controllo qui
+  // sotto è comunque corretto e sarà il chiamante a fallire con un messaggio
+  // suo.
+  await page
+    .waitForURL(/\/(welcome|dashboard|positions|map)\b/, { timeout: 15_000 })
+    .catch(() => {});
+  if (!page.url().includes("/welcome")) return;
+
+  // È un <button> con onClick, non un <a>: il wizard naviga da codice.
+  const salta = page.getByRole("button", {
+    name: /salta|skip|saltar|passer|überspringen|kihagy/i,
+  });
+  await salta.first().waitFor({ state: "visible", timeout: 15_000 });
+  await salta.first().click();
+  await page.waitForURL(/\/dashboard|\/positions|\/map/, { timeout: 15_000 });
+}
+
 // Apre il dialogo dal menu utente. Menu e dialogo sono due passaggi distinti:
 // senza attendere che la voce sia davvero visibile il click parte mentre il
 // menu è ancora in apertura, e Playwright resta 30 secondi su un elemento che
@@ -122,6 +168,10 @@ async function sessioneOrSkip(page: Page) {
 // test era passato in 2.4s quattordici minuti prima.
 async function apriDialogo(page: Page, da = "/dashboard") {
   await page.goto(`${BASE}${da}`, { waitUntil: "domcontentloaded" });
+  await superaWizard(page);
+  if (!page.url().includes(da)) {
+    await page.goto(`${BASE}${da}`, { waitUntil: "domcontentloaded" });
+  }
   const account = page.getByRole("button", { name: /account:/i });
   await account.waitFor({ state: "visible" });
   await account.click();

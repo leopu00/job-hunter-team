@@ -191,7 +191,7 @@ static func _row_style(bg: Color, bg_alpha: float, accent: bool) -> StyleBoxFlat
 func _nav_button(item: Dictionary) -> Control:
 	var btn := Button.new()
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	btn.text = SidebarDefs.label_for(item["id"])
+	btn.text = SidebarDefs.nav_label(item)
 	btn.add_theme_font_size_override("font_size", 16)
 	btn.add_theme_font_override("font", load(TerminalTheme.FONT_MEDIUM))
 	btn.add_theme_color_override("font_color", Palette.BASE)
@@ -203,7 +203,7 @@ func _nav_button(item: Dictionary) -> Control:
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.pressed.connect(func() -> void: _select(item["id"]))
-	btn.set_meta("label", SidebarDefs.label_for(item["id"]))
+	btn.set_meta("label", SidebarDefs.nav_label(item))
 	_buttons[item["id"]] = btn
 
 	# L'icona è un figlio ancorato a metà altezza del Button: resta ferma a
@@ -256,9 +256,13 @@ func _close_panel() -> void:
 	_set_active("")
 
 func _set_active(section: String) -> void:
+	# Le sezioni-scheda (Monitoraggio) e le pagine di configurazione non hanno
+	# più una riga propria: resta accesa quella che le ospita, altrimenti
+	# aprendo "Docker" la colonna sembrava non avere nulla di selezionato.
+	var host := SidebarDefs.nav_host(section) if section != "" else ""
 	for id in _buttons:
 		var b: Button = _buttons[id]
-		var active: bool = (id == section)
+		var active: bool = (id == host)
 		var unread: bool = id == "chat" and BackendBus.total_chat_unread() > 0
 		var tint: Color = Palette.GREEN if active \
 				else (Palette.YELLOW if unread else Palette.BASE)

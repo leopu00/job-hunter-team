@@ -46,6 +46,39 @@ jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
 
 ⚠️ **Nunca uses `tmux send-keys` directamente para mensajes entre agentes.** Las TUI de Codex y Kimi pierden el carácter Enter si llega en la misma llamada `send-keys` que el cuerpo del texto, causando deadlocks silenciosos. El wrapper maneja texto + Enter de forma atómica con una pausa de renderizado. Skill en `agents/_tools/jht-tmux-send`.
 
+## 🔇 Producir es silencioso — el estado se lo lleva el Capitano
+
+Un worker toca al Capitano **cero veces** para contar su avance. Ni por ítem, ni en los extremos: los
+bookends `[START]` / `[DONE]` se **retiraron el 2026-07-27**. Medido en un equipo de primer arranque,
+~1,5h de historial: **37 mensajes llegaron al Capitano, 30 (81%) puro estado** — 12 `DONE`, 8 `START`,
+8 `INFO`, 2 `ACK` — frente a 3-6 que pedían realmente una decisión. Cada uno le cuesta un turno entero
+y, con el reparto automático de modelos, él corre en **Opus** mientras Scout / Analista / Scorer corren
+en **Sonnet**: un "hecho" del Scorer despierta al agente más caro de la flota para no hacer nada.
+
+El lado pull ya existía y es mejor:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 60
+```
+
+Una llamada devuelve los recuentos por agente más cada transición con timestamp, actor, posición y
+motivo — `#22 checked→scored`, `#27 new→excluded — [DEAD_LINK]`. **Un `DONE` lleva menos información
+que la fila que lo produjo.**
+
+### ⚠️ Qué sigue siendo PUSH — la asimetría es el punto
+
+`recent-activity` muestra **quién produce**, así que un agente que se ha parado **desaparece de la
+lista** en lugar de destacar: desde el lado del Capitano tu silencio y tu trabajo son idénticos. Estos
+tres deben seguir enviándose **de inmediato**, porque no dejan **rastro en la DB**:
+
+| Señal | Cuándo |
+|---|---|
+| **BLOQUEADO** | has dejado de producir: herramienta rota tras la escalera `resilience`, `403` / `LOCKED`, fuentes realmente secas (`[SCOUT-ESAUSTO]`), un elemento en cola que no puedes procesar ni saltar |
+| **Conflicto** | dos compañeros sobre el mismo registro / territorio y no lográis cerrarlo entre vosotros |
+| **Petición de decisión** | un `REQ` que solo el Capitano puede responder (arbitraje de taxonomía, escalado, una decisión de cara al usuario) |
+
+Todo lo demás — inicio, avance, fin — es pull. **Si te paras y no lo dices, nadie se entera.**
+
 ## ⏰ Señales obligatorias por rol
 
 Lo que cada rol DEBE enviar vía tmux (todo lo demás es vía BD):

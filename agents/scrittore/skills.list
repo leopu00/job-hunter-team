@@ -13,8 +13,17 @@ db-update
 
 # Throttle (cooldown, freeze, polling during critic-loop)
 throttle
+# Wake-up ack: first command after every throttle pause. Without it the
+# flag stays on NOTIFIED and the watchdog escalates on a healthy agent.
+throttle-ack
 
 # Scrittore-only operative skills
 application-flow
 cv-structure
 critic-loop
+
+# User chat (game / desktop app). A [CHAT] landing in your pane is answered
+# with ONE short jht-send and then you go straight back to work: the reply
+# costs a full turn of THIS agent's model, and orders still come from the
+# Capitano, never from the chat.
+chat-worker

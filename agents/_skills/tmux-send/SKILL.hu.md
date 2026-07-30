@@ -53,12 +53,12 @@ Mindig tartsd meg a strukturalt prefixet:
 
 Standard tipusok (lasd `agents/_manual/communication-rules.md` a teljes taxonomiaert es szerepenkenti elvarasokert):
 
-- `INFO` — allapotfrissites / altalanos operativ uzenet (nem var valaszt)
+- `BLOCKED` — worker → Capitano: **ABBAHAGYTAD a termelést**, és ez nem hagy nyomot a DB-ben (elromlott eszköz, `403`/`LOCKED`, kiszáradt források, egy elem, amit sem feldolgozni, sem átugrani nem tudsz). 2026-07-27 óta ez az EGYETLEN, ami megkülönbözteti az elakadást a néma munkától
 - `URG` — valos ideju utasitas, azonnali cselekvest igenyel (FREEZE, throttle, kill)
 - `FEEDBACK` — coaching a felso agenynek elutasitasi cimaval (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`)
 - `REQ` / `RES` — szinkron keres/valasz agensek kozott
 - `ACK` — visszajelzes egy `URG` vagy `REQ` kapcsan, amelyet meg nem tudsz kiszolgalni
-- `REPORT` — egy munkaegyseg vegeredmenye
+- ~~`INFO` / `REPORT`~~ — **visszavonva a kollégák közötti forgalomra** (2026-07-27): a Capitanót ~1,5h alatt ébresztő 30 tiszta státusz-üzenetből 8 volt ilyen. A haladást a `db_query.py recent-activity`-ból húzod le, nem elmeséled
 
 > 💬 A `[CHAT]` a **felhasznalo → agens** uzeneteknek van fenntartva a webes feluleten (lasd a Kapitan prompt-protokolljat). Ne hasznald agensek kozotti forgalomra.
 

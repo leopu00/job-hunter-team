@@ -36,20 +36,52 @@ const AGENT_LABELS: Record<string, LocaleDict> = {
   },
 };
 
-const AGENT_META: Record<string, { emoji: string; color: string }> = {
+// [JHT-CHAT-UNIFY] Le icone della chat non sono più emoji: sono i ritratti
+// degli agenti in stile fumetto, gli stessi che la pagina /agents mostra a
+// piena larghezza (`/agents-coordinator.png` e compagnia), ritagliati sul
+// volto. Non sono gli sprite del videogioco: quelli restano nel gioco.
+//
+// I PNG a 96px li produce `scripts/gen-chat-avatars.py` dalle illustrazioni
+// in `web/public/agents-*.png` — servirle intere qui vorrebbe dire scaricare
+// 400 KB-1,1 MB per disegnarli in un cerchio da 30 px.
+//
+// `emoji` resta come fallback per un mittente fuori roster (un agente che
+// notifica e che non ha ritratto) e per i contesti solo-testo.
+const AGENT_META: Record<
+  string,
+  { emoji: string; color: string; avatar: string }
+> = {
   // Stesso pilota usato ovunque nel resto dell'app (team/capitano,
   // api/team/status): 👨‍✈️, non il bersaglio.
-  capitano: { emoji: "👨‍✈️", color: "var(--color-yellow)" },
-  mentor: { emoji: "🧙‍♂️", color: "var(--color-purple)" },
-  assistente: { emoji: "👩‍💼", color: "var(--color-blue)" },
+  capitano: {
+    emoji: "👨‍✈️",
+    color: "var(--color-yellow)",
+    avatar: "/agents/capitano.png",
+  },
+  mentor: {
+    emoji: "🧙‍♂️",
+    color: "var(--color-purple)",
+    avatar: "/agents/mentor.png",
+  },
+  assistente: {
+    emoji: "👩‍💼",
+    color: "var(--color-blue)",
+    avatar: "/agents/assistente.png",
+  },
 };
 
 export function agentInfo(
   agent: string,
   locale: string,
-): { name: string; emoji: string; color: string } {
+): { name: string; emoji: string; color: string; avatar: string | null } {
   const meta = AGENT_META[agent];
-  if (!meta) return { name: agent, emoji: "🤖", color: "var(--color-muted)" };
+  if (!meta)
+    return {
+      name: agent,
+      emoji: "🤖",
+      color: "var(--color-muted)",
+      avatar: null,
+    };
   const labels = AGENT_LABELS[agent];
   return {
     name: labels?.[locale] ?? labels?.en ?? agent,

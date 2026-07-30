@@ -210,6 +210,12 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
+    -- [JHT-CHAT-UNIFY] Non e' piu' solo la coda di notifiche agente->utente:
+    -- e' lo storico della conversazione, condiviso fra videogioco e web.
+    -- `author` dice chi ha parlato ('agent' o 'user'); `chat_ts` e' il `ts`
+    -- della riga corrispondente in `chat.jsonl` (presente = turno gia'
+    -- specchiato nel file che il gioco legge, guardia anti-loop del mirror).
+    -- Vedi supabase/migrations/060_chat_unified.sql.
     CREATE TABLE IF NOT EXISTS pending_user_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         agent TEXT NOT NULL,
@@ -217,6 +223,8 @@ def ensure_schema(conn: sqlite3.Connection):
         kind TEXT NOT NULL DEFAULT 'notification' CHECK (kind IN (
             'notification','question','digest','alert'
         )),
+        author TEXT NOT NULL DEFAULT 'agent' CHECK (author IN ('agent','user')),
+        chat_ts REAL,
         related_position_id INTEGER,
         delivered_via TEXT CHECK (delivered_via IN ('telegram','web') OR delivered_via IS NULL),
         delivered_at TIMESTAMP,
@@ -582,6 +590,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
     _migrate_companies_logo(conn)
+    _migrate_pending_messages_chat_turns(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -1024,6 +1033,46 @@ def _migrate_companies_logo(conn: sqlite3.Connection) -> None:
     ):
         if not _column_exists(conn, 'companies', name):
             conn.execute(f"ALTER TABLE companies ADD COLUMN {name} {decl}")
+
+
+def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:
+    """Aggiunge `pending_user_messages.author` + `chat_ts` ([JHT-CHAT-UNIFY]).
+
+    La tabella smette di essere la sola coda agente->utente e diventa lo
+    storico della conversazione, lo stesso che il videogioco legge da
+    `chat.jsonl`:
+    - `author`: 'agent' | 'user'. Un turno dell'utente e' una RIGA, non piu'
+      soltanto il campo `user_reply` appeso a un messaggio dell'agente
+      (limite che sul web spegneva il composer appena finivano i messaggi
+      senza risposta).
+    - `chat_ts`: il `ts` unix della riga gemella in
+      `/jht_home/agents/<ruolo>/chat.jsonl`. Valorizzato = il turno e' gia'
+      nel file che il gioco legge. E' la chiave di dedup del mirror nei due
+      versi: senza, ogni giro riscriverebbe nel file cio' che ne ha letto.
+
+    Allinea SQLite a Supabase mig 060. Idempotente (guard PRAGMA table_info).
+
+    Nota sul CHECK di `author`: SQLite non sa aggiungere un CHECK con ALTER,
+    e non vale il rituale create+copy+drop+rename su una tabella che ha una
+    FK verso positions. Il vincolo vive sul CREATE TABLE dei DB nuovi e sul
+    cloud (mig 060); qui il DEFAULT garantisce comunque che nessuna riga
+    esistente resti senza autore.
+    """
+    if not _table_exists(conn, 'pending_user_messages'):
+        return
+    if not _column_exists(conn, 'pending_user_messages', 'author'):
+        conn.execute(
+            "ALTER TABLE pending_user_messages "
+            "ADD COLUMN author TEXT NOT NULL DEFAULT 'agent'"
+        )
+    if not _column_exists(conn, 'pending_user_messages', 'chat_ts'):
+        conn.execute("ALTER TABLE pending_user_messages ADD COLUMN chat_ts REAL")
+    # Il mirror cerca "i turni che non sono ancora in chat.jsonl": indice
+    # parziale, a regime quasi vuoto.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pending_messages_unmirrored "
+        "ON pending_user_messages(agent, id) WHERE chat_ts IS NULL"
+    )
 
 
 def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:

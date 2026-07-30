@@ -31,7 +31,7 @@ if (Test-Path -LiteralPath $Godot) {
 }
 $EnvNames = @(
     "JHT_NOVPS", "JHT_VPS_CONTRACT_TEST", "JHT_SCENE",
-    "JHT_PIPELINE_FORCE_TEST", "JHT_DOCTOR_TEST"
+    "JHT_PIPELINE_FORCE_TEST", "JHT_DOCTOR_TEST", "JHT_COMIC_CHAT_TEST"
 )
 $SavedEnv = @{}
 foreach ($Name in $EnvNames) {
@@ -73,21 +73,46 @@ function New-GodotProcessInfo {
     return $Info
 }
 
+# Il runner Windows va in ACCESS_VIOLATION (0xC0000005 = -1073741819) durante
+# la catena di ~26 avvii di Godot che questo blocco esegue in fila. Ogni uscita
+# lascia risorse dietro di se' ("N ObjectDB instances were leaked", "N resources
+# still in use") e a un certo punto un avvio non regge -- ma **il punto si
+# sposta**: il 2026-07-29 e' caduto sull'export, il 2026-07-30 su
+# sidebar_nav_selftest, che nel run precedente era passato.
+#
+# Un crash che cambia bersaglio non e' il segnale di un test rotto: e' il segnale
+# che l'ambiente non regge la sequenza. Il rimedio e' dare fiato fra un processo
+# e il successivo e riprovare **una** volta il singolo avvio, gridandolo nel
+# log. Un test davvero rotto fallisce anche al secondo tentativo, e con lo
+# stesso codice d'uscita: quella distinzione resta intatta.
 function Invoke-Godot {
     param([string[]]$GodotArguments)
-    if ($IsWindowsHost) {
-        $Process = [System.Diagnostics.Process]::Start(
-            (New-GodotProcessInfo -GodotArguments $GodotArguments -CaptureOutput $false)
-        )
-        $Process.WaitForExit()
-        $ExitCode = $Process.ExitCode
-        $Process.Dispose()
-    }
-    else {
-        & $Godot @GodotArguments
-        $ExitCode = $LASTEXITCODE
-    }
-    if ($ExitCode -ne 0) {
+    $Attempt = 0
+    while ($true) {
+        $Attempt++
+        if ($IsWindowsHost) {
+            $Process = [System.Diagnostics.Process]::Start(
+                (New-GodotProcessInfo -GodotArguments $GodotArguments -CaptureOutput $false)
+            )
+            $Process.WaitForExit()
+            $ExitCode = $Process.ExitCode
+            $Process.Dispose()
+            # Lascia al sistema il tempo di riprendersi gli handle del processo
+            # appena uscito, prima di avviarne un altro.
+            Start-Sleep -Milliseconds 400
+        }
+        else {
+            & $Godot @GodotArguments
+            $ExitCode = $LASTEXITCODE
+        }
+        if ($ExitCode -eq 0) { return }
+        # -1073741819 = 0xC0000005 ACCESS_VIOLATION: il motore e' morto, non ha
+        # fallito un'asserzione. Solo questo caso merita un secondo tentativo.
+        if ($IsWindowsHost -and $Attempt -eq 1 -and $ExitCode -eq -1073741819) {
+            Write-Host "::warning::Godot crashato (0xC0000005) su $($GodotArguments -join ' ') -- riprovo una volta"
+            Start-Sleep -Seconds 5
+            continue
+        }
         throw "Godot exited with code $ExitCode"
     }
 }
@@ -129,6 +154,31 @@ try {
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/speech_bubble_selftest.gd")
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/pipeline_queue_selftest.gd")
 			Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/embedded_terminal_selftest.gd")
+            # Self-test indipendenti dalla piattaforma: asseriscono su dati del
+            # repo (dizionari, tema, font imbarcati) e su trasformazioni pure.
+            # Stanno qui perche' run.ps1 e' il "run.sh test" di chi sviluppa su
+            # Windows: senza, un PC Windows non vede il guard delle 7 lingue
+            # prima di pushare. terminal_selection_selftest.gd resta escluso:
+            # apre "/bin/sh" senza il ramo Windows che ha embedded_terminal.
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/theme_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/budget_notice_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/burn_mode_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/doc_preview_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/i18n_parity_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/sidebar_nav_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/agent_names_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/idle_pace_selftest.gd")
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/headless_exit_selftest.gd")
+            # L'aggiornamento automatico: si aggiorna solo in avanti, si
+            # installa da solo SOLO dove il pacchetto e' firmato, e non va in
+            # rete quando non deve. Windows non ha un export firmato, quindi
+            # qui la parte che conta e' proprio che l'installazione automatica
+            # resti spenta.
+            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/update_check_selftest.gd")
+			& python tools/audit_character_sheets.py
+			if ($LASTEXITCODE -ne 0) { throw "character sheet audit failed" }
+			& python tools/audit_instance_portraits.py
+			if ($LASTEXITCODE -ne 0) { throw "instance portrait audit failed" }
 			python tools/python_payload_syntax_test.py
 			if ($LASTEXITCODE -ne 0) { throw "Embedded Python payload test failed" }
 			$env:JHT_SCENE = "office"
@@ -137,6 +187,17 @@ try {
 			Remove-Item Env:JHT_GUIDED_TEST
 			Remove-Item Env:JHT_SCENE
 			if ($out -notmatch "GUIDED-ONBOARDING-TEST PASS") { throw $out }
+
+			# Pagina di chat a fumetti: vignette, ordine, colori distinti fra
+			# agente e utente, code opposte e scroll all'indietro. Invoke-GodotCaptured
+			# solleva gia' da se' su exit code != 0; il match sulla riga e' il
+			# secondo controllo, non l'unico.
+			$env:JHT_SCENE = "office"
+			$env:JHT_COMIC_CHAT_TEST = "1"
+			$out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
+			Remove-Item Env:JHT_COMIC_CHAT_TEST
+			Remove-Item Env:JHT_SCENE
+			if ($out -notmatch "COMIC-CHAT-TEST PASS") { throw $out }
 
             $env:JHT_VPS_CONTRACT_TEST = "1"
             $out = Invoke-GodotCaptured -GodotArguments @("--headless", "--quit-after", "3", ".")
@@ -148,6 +209,11 @@ try {
             $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
             Remove-Item Env:JHT_PIPELINE_FORCE_TEST
             if ($out -notmatch "PIPELINE-FORCE-TEST PASS") { throw $out }
+
+            $env:JHT_BACKEND_SWITCH_TEST = "1"
+            $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
+            Remove-Item Env:JHT_BACKEND_SWITCH_TEST
+            if ($out -notmatch "BACKEND-SWITCH-TEST PASS") { throw $out }
 
             $env:JHT_DOCTOR_TEST = "scout-4"
             $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")

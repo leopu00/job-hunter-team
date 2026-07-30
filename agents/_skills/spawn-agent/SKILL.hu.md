@@ -2,7 +2,7 @@
 ---
 name: spawn-agent
 description: "Elindit egy JHT csapat-agenst (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) a launcheren keresztul, majd elkuldi a kick-off uzenetet, ami tenylegesen elinditja a fo ciklusat. Csak Capitano — a Capitano a csapat skalazodasanak egyetlen tulajdonosa. MINDIG hasznald ezt a skillt: a `start-agent.sh` megkerulese `tmux new-session` + nyers `send-keys \"kimi ...\"` segitsegevel olyan munkameneteket hoz letre, ahol a CLI soha nem indul el (`command not found`), a Capitano \"elo\" munkamenetet lat, ami valojaban halott, es a csapat csoendesen alulteljesit."
-allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(sleep *)
+allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(sleep *), Bash(jht-throttle-check *)
 ---
 
 # spawn-agent — agens online hozasa
@@ -36,8 +36,27 @@ A launcher atomikusan vegzi:
 - felismeri az aktiv providert a `jht.config.json`-bol (claude / kimi / codex)
 - atmasolja az `agents/<role>/<role>.md` fajlt a workspace-be mint `CLAUDE.md` / `AGENTS.md`
 - elinditja a CLI-t a megfelelo flagekkel az adott provider + szint szamara
+- levezeti a kezdeti **eltolast** a throttle fokabol, es elore felhuzza az uj worker throttle-jat
 
 > ⚠️ **SOHA** ne inditsd `tmux new-session ... ; tmux send-keys "kimi ..."`-vel. A CLI nincs a `PATH`-ban a launcher kornyezeten kivul → `command not found` → a munkamenet csak bash. A Capitano `jht-tmux-send` parancsa `exit 0`-t ad vissza, miközben abba az ures bashbe ir, az uzenet csendben elveszik, es a csapat lathato ok nelkul alulteljesit.
+
+### Eltolas — a launcher vezeti le, te soha nem varsz ra
+
+Ket worker ugyanazon a throttle-fokon, amelyek egyutt indulnak, *egyutt is maradnak*: minden ciklusuk ugyanabba a pillanatba esik, es minden egybeeses egyidejű keresek csucsa. Az a tavolsag, amely `N` workert szetteriti egy `T` periodusban, `T/N` — az 5 perces fokon harom worker **100s**-ra akar lenni egymastol, nem 10 percre. A `T`-nel nagyobb eltolas a legrosszabb eset (az elso worker mar ketszer korbeert, mielott a masodik elindul, igy a fazisok oda esnek, ahova epp), a pontosan `T`-vel egyenlo pedig allando lockstep.
+
+Ezt az aritmetikat a launcher vegzi el helyetted, a `config/throttle.json`-ban levo valodi periodusbol es azokbol a workerekbol, amelyek tenylegesen osztoznak azon a fokon, es kiirja, mit dontott:
+
+```
+  Stagger:      100s prima del primo ciclo (throttle pre-armato, gradino condiviso)
+```
+
+**Te soha nem varsz ra.** A launcher elore felhuzza az uj worker throttle-jat, igy a worker *magatol* all meg a `jht-throttle-check` kapunal, amit a sajat promptja ugyis eloir neki a loop elso koreben. A kick-offot kuldd azonnal, mint mindig.
+
+Ami ebbol kovetkezik:
+- **A fok elso workere semmit nem var.** Az anti-idle utvonal erintetlen: elinditod, es elindul.
+- Egy eltolt worker legfeljebb 5 percig all a `jht-throttle-wait`-en kimenet nelkul. Ez **egeszseges** worker — mielott a spawn utani csendet elakadaskent olvasnad, ellenorizd a `jht-throttle-check <agens>`-szel (`STILL_THROTTLED remaining=Xs`).
+- Az eltolas csak a *kezdeti* fazist allitja be. A taskok hossza eleggé valtozo ahhoz, hogy a fazisok utana maguktol elsodrodjanak, tehat kesobb nincs mit ujrahangolni.
+- Egy spawn, amit **nem** szabad kesleltetni — egy olyan worker ujraletrehozasa, amelynek mar jo fazisa volt — a `JHT_SPAWN_STAGGER=0` kornyezeti valtozoval kapcsolja ki.
 
 ## 2. fazis — kick-off (kotelezo)
 
@@ -102,7 +121,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 
 ## Anti-mintak
 
-- ❌ Tobb agens inditasa szoros ciklusban 1-tick pacing nelkul — lasd a `pipeline-triage`-t a skalazasi szabalyokhoz (1 spawn Sentinel-tikkenent, ~5 perc kulonbseggel).
+- ❌ Tobb agens inditasa szoros ciklusban pacing nelkul — a skalazasi szabalyok a `pipeline-triage`-ben vannak (egy spawn egyszerre, kozben ujramerve). Amit soha nem szabad: *fix percszamot kitalalni* egyik worker es a kovetkezo koze. A tavolsag a fokbol jon (`T/N`), es a launcher alkalmazza helyetted.
 - ❌ Crash utan vakon ujrainditani anelkul, hogy `db_query.py`-t olvasnad az utolso task allapotanak visszaallitasahoz — az uj agens elolrol kezdi es duplikalja a munkat.
 - ❌ Ennek a skillnek hasznalata egy mukodo agens "ujrainditasara", mert lassunk tunik. Lassu ≠ halott. Hosszu korok lathato token kimenettel nem spawn-eset — hanem `liveness-check`-eset (Dottore).
 - ❌ Helyettesítő spawnolása, mert a `jht-tmux-send` nem tudott kézbesíteni. **`exit 4` = a cél TUI turn közben van (`Working … esc to interrupt`) → az ügynök ÉL, csak elfoglalt.** Az üzenet NEM lett szinkron módon kézbesítve: próbáld újra a küldést később, soha ne spawnolj klónt. Csak az `exit 3` (a szöveg soha nem jelent meg ÉS a pane nem elfoglalt → csupasz shell / beragadt modal) lehetséges-halott jel, és még akkor is a verdikt a **Dottore**-é (`liveness-check`), nem egy reflex spawn. Egy elfoglalt ügynökre spawnolni pontosan a 2026-06-07-es overspawn bug (`docs/internal/postmortems/2026-06-11-overspawn-rootcause.md`): a klón átveszi az irányítást, miközben az eredeti zombie-ként tovább égeti a budgetet.

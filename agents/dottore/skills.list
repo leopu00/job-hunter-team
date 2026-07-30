@@ -6,6 +6,10 @@
 # Inter-agent messaging (report al Capitano, kick-off post-respawn)
 tmux-send
 
+# Fase 1 del giro (2026-07-29): rilevare e SCIOGLIERE i blocchi del team
+# (input pendente, retry-loop, prompt vuoti con quota, coordinatore muto)
+agent-unblock
+
 # DB access (recover task context before respawning a crashed agent)
 db-query
 

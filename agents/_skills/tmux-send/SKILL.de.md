@@ -53,12 +53,12 @@ Behalte immer das strukturierte Praefix bei:
 
 Standardtypen (siehe `agents/_manual/communication-rules.md` fuer die vollstaendige Taxonomie und rollenspezifische Erwartungen):
 
-- `INFO` — Statusaktualisierung / allgemeine operative Nachricht (keine Antwort erwartet)
+- `BLOCKED` — Worker → Capitano: du hast **AUFGEHÖRT zu produzieren**, und es hinterlässt keine Spur in der DB (Tool kaputt, `403`/`LOCKED`, trockene Quellen, ein Element, das du weder bearbeiten noch überspringen kannst). Seit 2026-07-27 ist das das EINZIGE, was einen Stall von stiller Arbeit unterscheidet
 - `URG` — Echtzeit-Anweisung, die sofortiges Handeln erfordert (FREEZE, throttle, kill)
 - `FEEDBACK` — Coaching an den vorgelagerten Agenten mit einem Ablehnungs-Tag (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`)
 - `REQ` / `RES` — synchrone Anfrage/Antwort zwischen Agenten
 - `ACK` — Empfangsbestaetigung fuer ein `URG` oder `REQ`, das du noch nicht bearbeiten kannst
-- `REPORT` — Endergebnis einer Arbeitseinheit
+- ~~`INFO` / `REPORT`~~ — **für Peer-Traffic zurückgezogen** (2026-07-27): sie waren 8 der 30 reinen Status-Nachrichten, die den Capitano in ~1,5h weckten. Fortschritt wird aus `db_query.py recent-activity` gezogen, nicht erzählt
 
 > 💬 `[CHAT]` ist reserviert fuer **Benutzer → Agent**-Nachrichten ueber die Web-UI (siehe das Protokoll im Prompt des Kapitaens). Verwende es nicht fuer Inter-Agenten-Verkehr.
 

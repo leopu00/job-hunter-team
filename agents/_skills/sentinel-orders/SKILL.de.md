@@ -31,6 +31,8 @@ python3 /app/shared/skills/throttle-config.py reset         # alle auf 0
 
 Verwende **`bulk-set`**, wenn du differenzierte Werte pro Agent basierend auf dem individuellen Verbrauch möchtest (kreuze mit `token-rate-now`, wenn du sehen musst, wer gerade dominiert).
 
+> 🎯 **Die Stufe aus der Tabelle ist nicht der Wert, den du schreibst.** `Throttle: N` ist eine einzige Zahl für das ganze Team; in `throttle.json` steht ein Wert pro Agent, und die Aufteilung zu wählen liegt allein bei dir — kein Skript bewegt den Worker-Throttle mehr. Die Arithmetik lebt in **`throttle-distribution`**: **von wem** der Schnitt kommt (es zahlt der Top-Burn; der Analista und der Scorer, die beiden Rollen, die ein Backlog in eine Position **mit Score** verwandeln, sind die letzten, die du anfasst), **wie viele Sekunden** das auf der Ladder sind, und **wann der richtige Zug ist, nichts zu tun**. Allen dieselbe Zahl zu geben, ist genau das Versagen, das jener Skill verhindern soll — es verbraucht die Bremse dort, wo nichts zu gewinnen war, und nimmt Durchsatz dort, wo er am teuersten ist.
+
 > ⚠️ **Kadenz vs Dauer.** „Wie oft" ein Agent `jht-throttle` in seiner Schleife aufruft, wird über `tmux` geändert (du sendest dem Agent eine Nachricht und sagst ihm, nach jeder Kritiker-Runde aufzurufen, etc.). „Wie viele Sekunden" die Pause dauert, wird in der Konfigurationsdatei geändert. Sende niemals Throttle-Zahlen über tmux.
 
 ## Bei einem expliziten Freeze-Befehl — Timeout-Warnung `N+30` (KRITISCH)
@@ -51,7 +53,7 @@ Wenn das `tmux capture-pane` des Ziel-Agenten `Killed by timeout (60s)` anzeigt,
 
 | Befehl                                         | Bedeutung / Auslöser                                               | Aktion                                                                                                            |
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
-| `[URG] RALLENTARE` `Throttle: N`               | Geschwindigkeit über dem Ziel                                      | wende Throttle-Stufe N sofort an                                                                                  |
+| `[URG] RALLENTARE` `Throttle: N`               | Geschwindigkeit über dem Ziel                                      | wende Stufe N sofort an — aber **die Stufe ist entschieden, die Aufteilung nicht**: `throttle-distribution` übersetzt sie in Werte pro Agent |
 | `ACCELERARE` `Throttle: 0`                     | erstes Grünes Licht nach einer Verlangsamung                       | spawn von **einem einzigen** Agenten, warte auf den nächsten Tick vor dem zweiten (niemals 5 hintereinander)      |
 | `SCALA UP`                                     | `vel_team` deutlich unter `vel_target` (under-pace) seit 2+ Tick, Backlog nicht leer | verwende `pipeline-triage` um die Engpass-Rolle zu identifizieren, spawn 1, warte auf den nächsten Tick           |
 | `PUSH G-SPOT`                                  | `vel_team` leicht unter `vel_target`, stagnierend                  | ein leichter Agent (Writer wenn Score-Warteschlange ≥50, sonst der Engpass) um zurück on-pace zu kommen           |
@@ -97,7 +99,7 @@ done
 |----------------------|-------------------------------------------------------------------------------------------------------|
 | `[BRIDGE ALERT] sorgente degraded da N tick` | handle umsichtig, kein aggressiver Spawn                                                              |
 | `[BRIDGE INFO]`      | Wiederherstellung / Heartbeat — keine Aktion                                                          |
-| `[BRIDGE PACING]`    | 15-Min-Pacing-Tick — öffne den `bridge-pacing`-Skill (separat, dedizierte Formel)                     |
+| `[BRIDGE PACING]`    | 15-Min-Pacing-Tick — `bridge-pacing` dekodiert die Zahlen, `throttle-distribution` entscheidet, wer zahlt. Seit 2026-06-25 landet dieser Tick im Pane der **Sentinella** (push→pull): erreicht dich einer, ist das die Ausnahme, nicht die Regel |
 
 ## Standardverhalten — ausführen ohne in Frage zu stellen
 
@@ -121,6 +123,7 @@ Wann Überprüfung NICHT gerechtfertigt ist:
 ## Siehe auch
 
 - `bridge-pacing` — die 15-Min-Kalibrierungsformel (separater Fluss).
+- `throttle-distribution` — *wer* langsamer wird und um wie viel, sobald die Stufe feststeht: die Aufteilung pro Agent, die Ladder, das Lösen der Bremse und die Fälle, in denen man nichts tut. **Dieser Skill dekodiert den Order; jener wählt die Werte.** Dort wohnt auch der `[PACE-GUARD]`-Hinweis, der den Throttle nicht mehr selbst anwendet.
 - `bridge-mailbox` — leere ausstehende Urteile am Rundenbeginn (Pflicht vor der Reaktion auf den heutigen Tick).
 - `pipeline-triage` — *welche* Rolle unter `SCALA UP` / `PIPELINE VUOTA` zu spawnen ist.
 - `spawn-agent` — *wie* zu spawnen ist, sobald du die Rolle entschieden hast.

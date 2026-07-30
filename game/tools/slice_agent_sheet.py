@@ -115,7 +115,10 @@ def place(sheet: Image.Image, frame: Image.Image, row: int, col: int, scale: flo
     la figura sta sempre nella cella, con un filo di respiro.
     """
     fw, fh = frame.size
-    scale = min(scale, (FEET[1] - 4) / fh)
+    # Il clamp verticale evita le teste nella riga precedente; quello
+    # orizzontale evita il difetto speculare visto su analista_b, dove il
+    # profilo destro arrivava oltre la cella e perdeva parte del volto.
+    scale = min(scale, (FEET[1] - 4) / fh, (CELL_W - 8) / fw)
     nw, nh = max(1, round(fw * scale)), max(1, round(fh * scale))
     fr = frame.resize((nw, nh), Image.LANCZOS)
     x = col * CELL_W + FEET[0] - nw // 2

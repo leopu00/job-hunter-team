@@ -31,6 +31,8 @@ python3 /app/shared/skills/throttle-config.py reset         # mind 0-ra
 
 Használd a **`bulk-set`** parancsot, ha differenciált értékeket akarsz ágensek szerint az egyéni fogyasztás alapján (vesd össze a `token-rate-now` paranccsal, ha látni akarod, ki dominál éppen most).
 
+> 🎯 **A táblázat szintje nem az az érték, amit beírsz.** A `Throttle: N` egyetlen szám az egész csapatra; a `throttle.json`-ben ágensenként áll egy érték, és az elosztás megválasztása egyedül rád tartozik — script már nem mozgatja a workerek throttle-ját. Az aritmetika a **`throttle-distribution`**-ben lakik: **kitől** jön a vágás (a top-burn fizet; az Analista és a Scorer — az a két szerep, amelyik egy backlogot **score-ral bíró** pozícióvá alakít — az utolsó, amihez hozzányúlsz), **hány másodperc** ez a laddert nézve, és **mikor az a helyes lépés, hogy nem csinálsz semmit**. Mindenkinek ugyanazt a számot adni pontosan az a kudarc, aminek megelőzésére az a skill létezik — ott költi el a féket, ahol nem volt mit nyerni, és ott vesz el throughputot, ahol a legtöbbe kerül.
+
 > ⚠️ **Ütem vs időtartam.** „Milyen gyakran" hívja egy ágens a `jht-throttle`-t a ciklusában, azt `tmux`-on keresztül változtatod (üzenetsz az ágensnek, hogy minden Kritikus-kör után hívja, stb.). „Hány másodpercig" tart a szünet, azt a konfigurációs fájlban változtatod. Soha ne küldj throttle számokat tmux-on keresztül.
 
 ## Explicit freeze parancs esetén — timeout `N+30` figyelmeztetés (KRITIKUS)
@@ -51,7 +53,7 @@ Ha a célagens `tmux capture-pane` kimenete `Killed by timeout (60s)`-t mutat, a
 
 | Parancs                                        | Jelentés / trigger                                                 | Akció                                                                                                             |
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
-| `[URG] RALLENTARE` `Throttle: N`               | sebesség a cél felett                                              | alkalmazd a throttle N szintet azonnal                                                                            |
+| `[URG] RALLENTARE` `Throttle: N`               | sebesség a cél felett                                              | alkalmazd az N szintet azonnal — de **a szint el van döntve, az elosztás nem**: a `throttle-distribution` fordítja le ágensenkénti értékekre |
 | `ACCELERARE` `Throttle: 0`                     | első zöld lámpa lassítás után                                      | spawn **egyetlen** ágenst, várd meg a következő ticket a második előtt (soha nem 5 egymás után)                   |
 | `SCALA UP`                                     | `vel_team` jóval `vel_target` alatt (under-pace) 2+ ticken át, backlog nem üres | használd a `pipeline-triage`-ot a szűk keresztmetszet szerep azonosítására, spawn 1, várd meg a következő ticket  |
 | `PUSH G-SPOT`                                  | `vel_team` enyhén `vel_target` alatt, stagnáló                     | egy könnyű ágens (Writer ha score ≥50 sor, egyébként a szűk keresztmetszet) a tempó visszanyeréséhez              |
@@ -97,7 +99,7 @@ done
 |----------------------|-------------------------------------------------------------------------------------------------------|
 | `[BRIDGE ALERT] sorgente degraded da N tick` | óvatosan működj, nincs agresszív spawn                                                                |
 | `[BRIDGE INFO]`      | helyreállítás / heartbeat — nincs akció                                                               |
-| `[BRIDGE PACING]`    | 15 perces pacing tick — nyisd meg a `bridge-pacing` skillt (különálló, dedikált képlet)                |
+| `[BRIDGE PACING]`    | 15 perces pacing tick — a `bridge-pacing` dekódolja a számokat, a `throttle-distribution` dönti el, ki fizet. 2026-06-25 óta ez a tick a **Sentinella** pane-jébe érkezik (push→pull): ha hozzád jut el egy, az a kivétel, nem a szabály |
 
 ## Alapértelmezett viselkedés — végrehajtás megkérdőjelezés nélkül
 
@@ -121,6 +123,7 @@ Amikor az ellenőrzés NEM indokolt:
 ## Lásd még
 
 - `bridge-pacing` — a 15 perces kalibrációs képlet (különálló folyamat).
+- `throttle-distribution` — *ki* lassul és mennyivel, ha már megvan a szint: az ágensenkénti elosztás, a ladder, a fék elengedése és azok az esetek, amikor nem csinálsz semmit. **Ez a skill dekódolja a parancsot; az választja meg az értékeket.** Itt lakik a `[PACE-GUARD]` tanács is, ami már nem alkalmazza magától a throttle-t.
 - `bridge-mailbox` — ürítsd ki a függő verdikteket a kör elején (kötelező a mai tickre való reagálás előtt).
 - `pipeline-triage` — *melyik* szerepet kell spawnolni `SCALA UP` / `PIPELINE VUOTA` alatt.
 - `spawn-agent` — *hogyan* kell spawnolni, ha már eldöntötted melyik szerepet.

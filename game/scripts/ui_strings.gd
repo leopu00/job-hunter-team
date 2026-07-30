@@ -73,15 +73,26 @@ const S := {
 	"pause.window": "FINESTRA / SCHERMO INTERO",
 	"pause.quit": "ESCI DAL GIOCO",
 	"pause.shutdown": "FERMO IL TEAM E CHIUDO…",
-	"shutdown.title": "STAI PER FERMARE IL TEAM",
-	"shutdown.lead": "Gli agenti lavorano nel container, non in questa finestra: chiudendo si fermano. Adesso ne stanno lavorando %d.",
-	"shutdown.graceful": "CHIUDI IN ORDINE",
-	"shutdown.forced": "CHIUDI SUBITO",
+	"pause.detaching": "ESCO · IL TEAM CONTINUA A LAVORARE",
+	"shutdown.title": "STAI PER CHIUDERE LA FINESTRA",
+	"shutdown.lead": "Gli agenti lavorano nel container, non in questa finestra. Adesso ne stanno lavorando %d: scegli cosa ne faccio.",
+	"shutdown.graceful": "FERMA IL TEAM E CHIUDI",
+	"shutdown.graceful_hint": "Ogni agente annota dove è arrivato, poi il team si ferma e il container si spegne. Alla riapertura si riprende da lì.",
+	"shutdown.forced": "CHIUDI TUTTO SUBITO",
+	"shutdown.forced_hint": "Non aspetta nessuno: chi sta lavorando non fa in tempo a salvare il punto in cui è arrivato.",
 	"shutdown.forced_now": "NON ASPETTARE · CHIUDI SUBITO",
 	"shutdown.cancel": "ANNULLA",
+	"shutdown.detach": "ESCI · IL TEAM CONTINUA A LAVORARE",
+	"shutdown.detach_hint": "Si chiude solo la finestra: gli agenti restano al lavoro nel container e il budget continua a scorrere.",
+	"shutdown.detach_body": "Chiudo solo la finestra: il container resta acceso e gli agenti continuano a cercare, valutare e scrivere anche stanotte. Continuano anche a consumare budget, esattamente come se fossi qui a guardarli.",
+	"shutdown.detach_back": "Riapri il gioco quando vuoi e ritrovi l'ufficio al punto in cui è arrivato. Per fermare il team basta rientrare e, chiudendo, scegliere di fermarlo.",
+	"shutdown.detach_confirm": "ESCI COSÌ, LI LASCIO LAVORARE",
 	"shutdown.ordered": "Ho chiesto al Capitano di chiudere la giornata: ogni agente annota dove era arrivato, poi si ferma.",
 	"shutdown.waiting": "Ancora %d agenti al lavoro · %d s. Puoi aspettare o chiudere subito.",
 	"shutdown.done": "Team fermo. Chiudo.",
+	"headless.back": "○ IL TEAM HA LAVORATO SENZA DI TE PER %s · ORA SONO %d IN UFFICIO",
+	"headless.dur_min": "%d min",
+	"headless.dur_hour": "%dh %dm",
 
 	# ── HUD ───────────────────────────────────────────────────────
 	"hud.team": "TEAM",
@@ -175,6 +186,34 @@ const S := {
 	"dept.desk_free": "postazione libera",
 	"dept.close": "click fuori per chiudere",
 	"dept.inbox": "Inbox: %d fogli in attesa",
+
+	# ── Nomi di scena dei ruoli ───────────────────────────────────
+	# La targhetta di ogni agente: quello che l'utente legge nella colonna
+	# delle chat, sulla targa dei dialoghi e nella scheda. Vivono qui e non
+	# più dentro CharacterDefs/TourGuide perché erano l'unica famiglia di
+	# etichette scritta a mano in italiano: con l'interfaccia in inglese la
+	# colonna delle chat restava italiana in mezzo a tutto il resto tradotto.
+	# La chiave si compone a runtime ("role." + slug), quindi il controllo
+	# sui sorgenti di i18n_parity_selftest non la vede: la copertura gliela
+	# dà _check_role_names, che legge direttamente CharacterDefs.
+	"role.coordinatore": "Il Coordinatore",
+	"role.scout": "Il Ricercatore",
+	"role.analista": "L'Analista",
+	"role.scorer": "Il Consulente",
+	"role.scrittore": "Il Redattore",
+	"role.critico": "Il Revisore",
+	"role.mentor": "Il Mentor",
+	"role.assistente": "L'Assistente",
+	"role.mantenitore": "Il Mantenitore",
+	"role.dottore": "Il Dottore",
+	"role.sentinella": "Il Tesoriere",
+	# Forma breve dei soli ruoli di reparto: si numera ("Ricercatore 02")
+	# per i colleghi oltre il lead, quindi niente articolo.
+	"role_short.scout": "Ricercatore",
+	"role_short.analista": "Analista",
+	"role_short.scorer": "Consulente",
+	"role_short.scrittore": "Redattore",
+	"role_short.critico": "Revisore",
 
 	# ── Scheda agente ─────────────────────────────────────────────
 	"agent.activity": "ULTIME ATTIVITÀ",
@@ -307,8 +346,9 @@ const S := {
 	"guided.hybrid_note": "◆ guida attiva — puoi anche scrivere liberamente all’agente collegato",
 	"guided.agent_unavailable": "◆ provider collegato — avvia il team per usare la chat reale",
 	"guided.ai_suggestions": "RISPOSTE SUGGERITE DALL’AGENTE",
-	"chat.expand": "SCHERMO INTERO",
-	"chat.shrink": "RIDUCI",
+	"chat.close": "chiudi [Esc]",
+	"chat.history_start": "inizio della conversazione",
+	"chat.jump_latest": "ULTIMO MESSAGGIO",
 
 	# ── Wizard onboarding (foto badge con l'Assistente) ───────────
 	"wizard.title": "CONFIGURA IL TUO PROFILO",
@@ -342,6 +382,8 @@ const S := {
 	# ── Impostazioni → Collega VPS ────────────────────────────────
 	"vps.intro": "Collega la VPS del tuo team: IP e chiave SSH, al resto pensa il gioco.",
 	"vps.ip": "IP DELLA VPS",
+	"vps.user": "UTENTE SSH",
+	"vps.user_note": "Utente con cui il provider apre la VPS: root su Hetzner, ubuntu su OVH e AWS, il nome dell'account su Google Cloud e Azure. Vuoto vale root.",
 	"vps.key": "CHIAVE SSH (privata)",
 	"vps.key_browse": "SFOGLIA…",
 	"vps.connect": "▶ COLLEGA",
@@ -359,6 +401,7 @@ const S := {
 	"vps.key_copy": "COPIA PUBBLICA",
 	"vps.key_open": "APRI CARTELLA",
 	"vps.key_note": "La chiave privata resta sul computer; al provider va incollata soltanto la riga .pub.",
+	"vps.key_fingerprint_none": "Fingerprint: non disponibile per la chiave selezionata — non c'è niente da confrontare con il provider.",
 	"vps.destination": "2 · SERVER DI DESTINAZIONE",
 	"vps.fingerprint_note": "VERIFICA SSH mostra il fingerprint host: confrontalo con quello indicato dal provider.",
 	"vps.connect_existing": "COLLEGA SENZA INSTALLARE",
@@ -433,6 +476,9 @@ const S := {
 	"pos.open_url": "apri l'annuncio nel browser",
 	"pos.open_yes": "annuncio APERTO all'ultima verifica",
 	"pos.open_no": "annuncio NON PIÙ APERTO",
+	"pos.office_address": "INDIRIZZO",
+	"pos.office_verified": "verificato dagli Analisti",
+	"pos.office_approx": "non verificato · centro città",
 
 	# ── Candidature e Notifiche (dati reali) ──────────────────────
 	"apps.ready": "CV pronto",
@@ -483,6 +529,7 @@ const S := {
 	"map.card_hint": "click su una posizione per aprire la scheda",
 	"map.card_hint_all": "%d posizioni · scorri l’elenco e clicca per aprire la scheda",
 	"map.cluster": "%d posizioni · %d località",
+	"map.pin_approx": "pin sul centro città: indirizzo esatto non verificato",
 
 	# ── Orari di lavoro (editabili, con stima dinamica) ───────────
 	"hours.intro": "Le finestre in cui il team lavora: modifica e salva, il pacing si adegua.",
@@ -600,8 +647,14 @@ const S := {
 	# ── Sidebar: gruppi e voci (specchio della desktop app) ───────────
 	"side.group_team": "Team",
 	"side.group_work": "Lavoro",
-	"side.group_settings": "Impostazioni",
-	"side.group_help": "Assistenza",
+	"side.group_system": "Sistema",
+	# la riga che apre la finestra a schede: dentro, "Statistiche" è una scheda
+	"side.monitor": "Monitoraggio",
+	# la riga che raccoglie le dodici pagine di configurazione
+	"side.settings": "Impostazioni",
+	"settings.grp_setup": "Configurazione",
+	"settings.grp_channels": "Account e canali",
+	"settings.grp_interface": "Interfaccia",
 	"side.activation": "Attiva team",
 	"side.team": "Team",
 	"side.agents": "Agenti",
@@ -618,6 +671,8 @@ const S := {
 	"side.hours": "Orari",
 	"side.provider": "Provider",
 	"side.docker": "Docker",
+	"side.telegram": "Telegram",
+	"side.agent_metrics": "Risorse agenti",
 	"side.account": "Account",
 	"side.email": "Email",
 	"side.appearance": "Aspetto",
@@ -699,7 +754,10 @@ const S := {
 
 	# ── Sezione Team ──────────────────────────────────────────────────
 	"team.desks": "%d/%d postazioni",
-	"team.core": "Core: Il Coordinatore · Il Mentor · L'Assistente",
+	# I tre nomi arrivano da role.* e non sono scritti qui dentro: la riga
+	# era identica in tutte e 7 le lingue (italiana anche in inglese) e la
+	# parità di chiavi non poteva accorgersene.
+	"team.core": "Core: %s · %s · %s",
 	"team.stop": "FERMA TEAM",
 	"team.start": "AVVIA TEAM",
 	"team.setup": "SETUP E STATO",
@@ -714,6 +772,7 @@ const S := {
 	"setup.hours": "Orari di lavoro",
 	"setup.hours_todo": "Quando il team può lavorare. Senza orari macina a ogni ora e consuma l'abbonamento.",
 	"setup.hours_ok": "Finestre di lavoro impostate.",
+	"setup.remote_unknown": "Non leggibile sulla macchina connessa. Il valore di questo computer non conta: è di un’altra macchina.",
 	"setup.where_todo": "Sul tuo computer, oppure su una VPS che lavora anche a finestra chiusa.",
 	"setup.where_local": "Il team lavora su questo computer.",
 	"setup.where_vps": "Il team lavora sulla VPS: questa finestra ne è lo specchio.",
@@ -888,4 +947,53 @@ const S := {
 	# ── Showroom (dati dimostrativi) ──────────────────────────────────
 	"demo.map": "◆ SHOWROOM · pin e offerte sono esempi fittizi",
 	"demo.positions": "◆ SHOWROOM · 50 POSIZIONI FITTIZIE · nessun dato personale o link attivo",
+	# ── Modalità operative del Coordinatore ───────────────────────────
+	"burn.section": "MODALITÀ OPERATIVE",
+	"burn.section_desc": "deroghe che concedi tu, a termine",
+	"burn.title": "Spinta massima",
+	"burn.duration": "Durata",
+	"burn.desc": "Di norma il team rallenta da solo per far durare il budget: si ferma quando ha speso la quota del giorno, tace fuori dall'orario di lavoro e riduce il ritmo man mano che la finestra si riempie. Questo interruttore sospende quei freni per una finestra sola, quando ti serve che il team spinga adesso.",
+	"burn.desc_measured": "Non promette di consumare tutto: la notte in cui è nata questa funzione, con tutte le deroghe attive il consumo si è fermato fra il 6% e il 19% della finestra. Cercare offerte e analizzarle aspetta soprattutto la rete, non il modello, e togliere le pause non lo cambia. Serve perché il team obbedisca quando glielo chiedi.",
+	"burn.state_off": "non attiva — il team si autoregola per far durare il budget",
+	"burn.state_active": "attiva — scade fra %s",
+	"burn.state_soon": "attiva — scade fra %s, poi il ritmo torna da solo",
+	"burn.state_unknown": "stato non leggibile — il team non ha risposto",
+	"burn.state_unsupported": "non disponibile — il container del team è più vecchio del gioco",
+	"burn.left_h": "%s h",
+	"burn.left_hm": "%s h %s min",
+	"burn.left_m": "%s min",
+	"burn.left_soon": "meno di un minuto",
+	"burn.sending": "invio al team…",
+	"burn.failed": "non riuscito — %s",
+	"burn.confirm_title": "Attivare la spinta massima?",
+	"burn.confirm_body": "Il team smette di rallentare da solo per far durare il budget: niente stop giornaliero, niente pausa fuori orario, niente ritmo ridotto quando la finestra si riempie.\n\n• Si spegne da sola dopo %s ore — il massimo consentito è %s: non esiste la forma permanente e non resta accesa per dimenticanza.\n\n• Quattro freni non cedono comunque: %s. Non sono economie — oltre il limite settimanale il provider smette di rispondere, e oltre il tetto di memoria la macchina rallenta tutto. Forzarli darebbe meno lavoro, non di più.\n\n• La sorveglianza passa al Coordinatore: senza i freni automatici è lui che deve fermare un agente che consuma senza produrre. Puoi revocare quando vuoi dallo stesso interruttore.",
+	"burn.confirm_ok": "Attiva per %s ore",
+
+	# ── Aggiornamento dell'applicazione ───────────────────────────
+	"update.available": "○ DISPONIBILE LA VERSIONE %s · STAI USANDO LA %s",
+	"update.install": "SCARICA E INSTALLA",
+	"update.open_page": "APRI LA PAGINA DELLA RELEASE",
+	"update.later": "PIÙ TARDI",
+	"update.downloading": "SCARICAMENTO IN CORSO · %d%%",
+	"update.installing": "VERIFICA DELLA FIRMA APPLE E INSTALLAZIONE…",
+	"update.installed": "○ VERSIONE %s INSTALLATA · RIAVVIA PER USARLA",
+	"update.restart": "RIAVVIA ADESSO",
+	"update.failed": "AGGIORNAMENTO NON RIUSCITO · %s",
+	"update.err_download": "il pacchetto non è stato scaricato",
+	"update.err_extract": "l'archivio non si è aperto",
+	"update.err_signature": "la firma del pacchetto non è valida",
+	"update.err_identity": "il pacchetto è firmato da qualcun altro",
+	"update.err_start": "la versione nuova non si avvia: è rimasta quella di prima",
+	"update.err_swap": "la sostituzione non è riuscita: è rimasta quella di prima",
+	"update.err_write": "non ho i permessi per scrivere dov'è installato il gioco",
+	"update.section": "AGGIORNAMENTI",
+	"update.auto": "Controlla se esiste una versione più recente",
+	"update.auto_hint": "Un controllo al giorno, all'avvio: il gioco chiede a GitHub qual è l'ultima release e non manda nessun dato. Con l'interruttore spento non viene contattata nessuna rete.",
+	"update.check_now": "CONTROLLA ADESSO",
+	"update.checking": "Controllo in corso…",
+	"update.current": "Nessun aggiornamento: la %s è l'ultima versione.",
+	"update.never": "Mai controllato.",
+	"update.last": "Ultimo controllo: %s.",
+	"update.signed": "Il pacchetto macOS è firmato e notarizzato da Apple. Il gioco verifica firma, notarizzazione e identità dello sviluppatore — e prova che la versione nuova si avvia — prima di sostituire qualsiasi cosa.",
+	"update.manual_only": "Il pacchetto per questo sistema non è firmato: l'aggiornamento apre la pagina della release e l'installazione resta nelle tue mani.",
 }

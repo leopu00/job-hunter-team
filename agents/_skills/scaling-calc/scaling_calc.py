@@ -15,8 +15,13 @@ Modello (semplice e spiegabile):
   - Il N "naturale" se tutti al floor:  N_floor = S × 300 / P.
 
 Output: roster consigliato (N) + throttle (T, agganciato alla ladder) + un piano
-di spawn A SCAGLIONI (uno per volta, ~10 min di distacco, ri-misurando), così si
-sale di marcia per gradini invece che in 6ª (l'errore ACCELERARE→throttle 0).
+di spawn A SCAGLIONI (uno per volta, ri-misurando in mezzo), così si sale di
+marcia per gradini invece che in 6ª (l'errore ACCELERARE→throttle 0).
+
+NB: l'attesa fra uno step e il successivo è una finestra di OSSERVAZIONE, non
+uno sfasamento. La distanza di fase fra due worker dello stesso gradino la
+ricava il launcher dal periodo reale (`T/N`, vedi `shared/skills/spawn_stagger.py`)
+e la applica da sé: non è un numero che vada deciso qui.
 
 Uso:
   scaling_calc.py --target 0.7 --measured 1.4                 # 1 worker osservato @ floor
@@ -33,7 +38,7 @@ import importlib.util
 
 FLOOR = 300          # floor worker (5min) — coerente con throttle-config.WORKER_FLOOR
 LADDER = [300, 600, 900, 1200, 1500, 1800, 2400, 3000, 3600]
-STAGGER_MIN = 10     # minuti tra uno spawn e il successivo
+REMEASURE_MIN = 10   # minuti di osservazione prima dello step successivo
 MAX_WORKERS = 8      # tetto di sicurezza anti-runaway
 
 
@@ -79,13 +84,13 @@ def recommend(target_burn, measured_burn, workers_observed=1, throttle_observed=
     # burn atteso col roster consigliato
     burn_expected = N * P / T
 
-    # piano a scaglioni: uno per volta, STAGGER_MIN di distacco, ri-misurando
+    # piano a scaglioni: uno per volta, REMEASURE_MIN di osservazione in mezzo
     plan = []
     for i in range(1, N + 1):
         plan.append({
             "step": i,
             "action": f"spawn worker #{i} @ throttle {T}s ({T//60}min)",
-            "wait_after_min": STAGGER_MIN if i < N else 0,
+            "wait_after_min": REMEASURE_MIN if i < N else 0,
             "then": "ri-misura il burn reale e ricalcola prima del prossimo" if i < N else "roster a regime",
         })
 
@@ -116,7 +121,8 @@ def _fmt(r) -> str:
     out.append(f"   ({r['note']})")
     out.append("📈 piano a scaglioni (NON spawnare in blocco):")
     for s in r["plan"]:
-        w = f"  → attendi {s['wait_after_min']}min, {s['then']}" if s["wait_after_min"] else f"  → {s['then']}"
+        w = (f"  → osserva {s['wait_after_min']}min, {s['then']}"
+             if s["wait_after_min"] else f"  → {s['then']}")
         out.append(f"   {s['step']}. {s['action']}\n   {w}")
     return "\n".join(out)
 
@@ -140,7 +146,8 @@ def _self_test():
     check("under-target: al floor", r2["throttle_s"] == 300)
 
     # spawn a scaglioni col distacco
-    check("piano staggered con wait", all(s["wait_after_min"] in (0, STAGGER_MIN) for s in r2["plan"]))
+    check("piano a scaglioni con finestra di osservazione",
+          all(s["wait_after_min"] in (0, REMEASURE_MIN) for s in r2["plan"]))
     check("ultimo step senza wait", r2["plan"][-1]["wait_after_min"] == 0)
 
     # mai sotto il floor

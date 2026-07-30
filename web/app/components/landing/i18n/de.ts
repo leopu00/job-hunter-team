@@ -55,9 +55,11 @@ export const de: Record<string, string> = {
   dl_copy_cmd: "Befehl kopieren",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
-  dl_desktop_soon_desc:
-    "Die Desktop-App kommt für alle drei Betriebssysteme: Wir feilen noch daran, sie ist noch nicht herunterladbar. In der Zwischenzeit installiert die CLI alles.",
-  dl_desktop_soon_badge: "Demnächst",
+  dl_desktop_beta_desc:
+    "Die Desktop-App ist das Büro, in dem du dem Team bei der Arbeit zusiehst. Sie ist in der Beta: wir nutzen sie täglich, aber sie ändert sich häufig. Wer einen gesetzteren Weg bevorzugt, nimmt weiterhin die CLI.",
+  dl_desktop_beta_badge: "Beta",
+  dl_desktop_unsigned_note:
+    "Unter macOS ist die App signiert und notarisiert: ein Doppelklick genügt. Unter Windows ist sie nicht signiert, deshalb meldet SmartScreen „Der Computer wurde durch Windows geschützt“: auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken. Unter Linux das Archiv entpacken und ausführbar machen.",
   dl_help_text: "Du weißt nicht, wo du es installieren sollst?",
   dl_help_link: "Lies die Anleitung",
 

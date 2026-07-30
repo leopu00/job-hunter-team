@@ -263,12 +263,19 @@ export type PendingMessageKind =
   "notification" | "question" | "digest" | "alert";
 export type PendingMessageDelivery = "telegram" | "web" | null;
 
+// [JHT-CHAT-UNIFY] Chi ha scritto il turno. 'agent' e' il default storico
+// (la tabella nasce come coda di notifiche agente->utente); 'user' e' un
+// turno scritto dall'utente — dal web o dal videogioco — che prima non
+// aveva modo di esistere come riga a se'.
+export type PendingMessageAuthor = "agent" | "user";
+
 export interface PendingMessage {
   // Stringa anche per SQLite, dove l'id e' integer: il widget non se ne accorge.
   id: string;
   agent: string;
   body: string;
   kind: PendingMessageKind;
+  author: PendingMessageAuthor;
   related_position_id: string | null;
   delivered_via: PendingMessageDelivery;
   delivered_at: string | null;

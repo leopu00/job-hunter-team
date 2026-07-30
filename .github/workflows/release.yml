@@ -73,25 +73,137 @@ jobs:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
 
+      # Stessa lista di `game.yml` (step "Run deterministic game tests"), con
+      # UNA sola eccezione, in fondo: terminal_selection_selftest.gd. Un tag non
+      # puo' uscire con meno controlli di quelli che ogni push esegue — chi
+      # aggiunge un self-test la' lo aggiunge anche qui.
       - name: Import and test game
         run: |
-          godot --headless --path game --import
-          godot --headless --path game --script res://tools/nav_grid_selftest.gd
-          godot --headless --path game --script res://tools/speech_bubble_selftest.gd
-          godot --headless --path game --script res://tools/pipeline_queue_selftest.gd
-          godot --headless --path game --script res://tools/embedded_terminal_selftest.gd
-          VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
+          # Il runner Windows non regge la fila di ~26 avvii di Godot di questo
+          # step: il 2026-07-29 e il 2026-07-30 e' uscito in segfault (exit 139)
+          # a meta' lista, con i test verdi sopra e sotto e nessun messaggio di
+          # fallimento — ogni chiusura lascia dietro "ObjectDB instances were
+          # leaked", e prima o poi una di quelle uscite sporche porta giu' il
+          # processo. Non e' un test rotto: al rilancio passa. Ma un rosso
+          # casuale su un tag rende inutile il semaforo della release, e chi lo
+          # legge non ha modo di distinguerlo da un difetto vero.
+          #
+          # Quindi ogni avvio ha diritto a UN ritentativo su processo pulito,
+          # come gia' fanno `game.yml` e `game/tools/run.ps1`. Il ritentativo si
+          # vede nel log: se comincia a servire spesso, questa lista va spezzata
+          # in piu' job e questo commento e' la traccia per farlo.
+          retry_godot() {
+            local out code attempt=0
+            while : ; do
+              attempt=$((attempt + 1))
+              if out="$(env "$@" 2>&1)"; then
+                printf '%s\n' "$out"
+                return 0
+              else
+                # L'`else` non e' decorativo: un `if` bash che non entra nel
+                # ramo `then` e non ha `else` esce con stato 0, quindi qui
+                # fuori `$?` direbbe "0" e il secondo tentativo tornerebbe
+                # VERDE su un test fallito.
+                code=$?
+              fi
+              if [ "$attempt" -ge 2 ]; then
+                printf '%s\n' "$out" >&2
+                echo "::error::Godot uscito con codice $code dopo due tentativi"
+                return "$code"
+              fi
+              printf '%s\n' "$out" >&2
+              echo "::warning::Godot uscito con codice $code — riprovo una volta su processo pulito"
+              sleep 10
+            done
+          }
+          retry_godot godot --headless --path game --import
+          retry_godot godot --headless --path game --script res://tools/nav_grid_selftest.gd
+          retry_godot godot --headless --path game --script res://tools/speech_bubble_selftest.gd
+          retry_godot godot --headless --path game --script res://tools/pipeline_queue_selftest.gd
+          retry_godot godot --headless --path game --script res://tools/embedded_terminal_selftest.gd
+          # La redazione dei segreti e il bundle di diagnostica: quello che
+          # l'utente allega a una segnalazione non deve contenere token, path
+          # della sua home o il nome dell'account.
+          retry_godot godot --headless --path game --script res://tools/redactor_selftest.gd
+          retry_godot godot --headless --path game --script res://tools/diagnostics_selftest.gd
+          retry_godot godot --headless --path game --script res://tools/theme_selftest.gd
+          retry_godot godot --headless --path game --script res://tools/budget_notice_selftest.gd
+          # L'avviso della deroga alla spesa NOMINA i freni che non cedono e il
+          # tetto di ore: sono copiati da shared/skills/burn_intent.py, e una
+          # copia rimasta indietro promette reti di sicurezza che il modulo non
+          # ha piu'. Il test confronta la copia col sorgente.
+          retry_godot godot --headless --path game --script res://tools/burn_mode_selftest.gd
+          retry_godot godot --headless --path game --script res://tools/doc_preview_selftest.gd
+          # La terza via all'uscita ("esci, il team continua") e l'attesa del
+          # thread di spegnimento: nessuna delle due si vede a schermo, si
+          # sbagliano in silenzio e si scoprono dal container rimasto acceso.
+          retry_godot godot --headless --path game --script res://tools/headless_exit_selftest.gd
+          # L'aggiornamento automatico, e qui vale doppio: e' il tag che stiamo
+          # costruendo a diventare la versione che le copie gia' installate si
+          # vedranno proporre. Si aggiorna solo in avanti, si installa da solo
+          # solo dove il pacchetto e' firmato, e solo se firmato da chi ha
+          # firmato la copia in esecuzione.
+          retry_godot godot --headless --path game --script res://tools/update_check_selftest.gd
+          # Nessun tag deve uscire con le lingue disallineate: il fallback di
+          # UIStrings.t() e' silenzioso, quindi una chiave persa non si vede
+          # ne' in CI ne' all'avvio in italiano — solo dall'utente straniero.
+          retry_godot godot --headless --path game --script res://tools/i18n_parity_selftest.gd
+          # Il patto del riordino della sidebar: le voci raccolte in schede o
+          # dietro "Impostazioni" restano raggiungibili e tradotte.
+          retry_godot godot --headless --path game --script res://tools/sidebar_nav_selftest.gd
+          # I cognomi degli agenti sono identita', non decorazione: mappa pura
+          # ruolo+numero, niente omonimi e ogni carattere gia' presente nei
+          # font delle 7 lingue (altrimenti a schermo esce un rettangolo).
+          retry_godot godot --headless --path game --script res://tools/agent_names_selftest.gd
+          # Il costo a riposo: finestra senza focus che disegna di meno, tetto
+          # fps del primo piano restituito ALLA LETTERA, passi di fisica che
+          # coprono il frame anche a ritmo lento.
+          retry_godot godot --headless --path game --script res://tools/idle_pace_selftest.gd
+          # (terminal_selection_selftest.gd resta fuori: questo step gira anche
+          # su Windows via Git Bash — game.yml lo salta con `runner.os` — e il
+          # test apre /bin/sh senza il ramo Windows che ha embedded_terminal.)
+          VPS_OUT="$(retry_godot JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3)"
           printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
-          PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
+          PIPE_OUT="$(retry_godot JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game)"
           printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
-          DOCTOR_OUT="$(JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game 2>&1)"
+          SWITCH_OUT="$(retry_godot JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1 godot --headless --path game)"
+          printf '%s\n' "$SWITCH_OUT" | grep "BACKEND-SWITCH-TEST PASS"
+          DOCTOR_OUT="$(retry_godot JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game)"
           printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
+          FEEDBACK_OUT="$(retry_godot JHT_SCENE=office JHT_FEEDBACK_PANEL_TEST=1 godot --headless --path game)"
+          printf '%s\n' "$FEEDBACK_OUT" | grep "FEEDBACK-PANEL-TEST PASS"
+          GUIDED_OUT="$(retry_godot JHT_SCENE=office JHT_GUIDED_TEST=1 godot --headless --path game)"
+          printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
+          # La pagina di chat a fumetti: vignette nell'ordine della storia,
+          # quella dell'agente bianca col testo nero (richiesta esplicita, non
+          # una scelta di tema), il giro utente->canale->risposta che passa dal
+          # bus e la rilettura all'indietro che non viene interrotta.
+          COMIC_OUT="$(retry_godot JHT_SCENE=office JHT_COMIC_CHAT_TEST=1 godot --headless --path game)"
+          printf '%s\n' "$COMIC_OUT" | grep "COMIC-CHAT-TEST PASS"
+          GFX_OUT="$(retry_godot JHT_SCENE=office JHT_GFX_TEST=1 godot --headless --path game)"
+          printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
+          TEXT_OUT="$(retry_godot JHT_SCENE=office JHT_WORLD_TEXT_TEST=1 godot --headless --path game)"
+          printf '%s\n' "$TEXT_OUT" | grep "WORLD-TEXT-TEST PASS"
+          GFXPANEL_OUT="$(retry_godot JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1 godot --headless --path game)"
+          printf '%s\n' "$GFXPANEL_OUT" | grep "GRAPHICS-PANEL-TEST PASS"
 
+      # L'export e' il passo piu' pesante e arriva dopo tutta la lista di test:
+      # stessa esposizione dello step precedente, stessa difesa (game.yml la ha
+      # dal 2026-07-29). La pausa serve a far chiudere davvero i processi
+      # appena usciti prima di aprirne un altro.
       - name: Export native game
         working-directory: game
         run: |
           mkdir -p "$(dirname '${{ matrix.output }}')"
-          godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
+          sleep 5
+          if ! godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"; then
+            code=$?
+            echo "::warning::export fallito (exit $code) — riprovo una volta su processo pulito"
+            rm -f "${{ matrix.output }}"
+            sleep 15
+            godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
+          fi
+          test -s "${{ matrix.output }}"
 
       - name: Sign, notarize and staple macOS game
         if: matrix.os == 'macos-14'
@@ -113,11 +225,57 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$GAME_APP"
           rm -f "${{ matrix.output }}"
           ditto -c -k --sequesterRsrc --keepParent "$GAME_APP" "${{ matrix.output }}"
-          xcrun notarytool submit "${{ matrix.output }}" \
+          # `--wait` fa polling in proprio ed esce 1 al PRIMO errore di rete:
+          # il 2026-07-27 il runner ha perso la rete dopo 45 minuti di attesa
+          # (NSURLErrorDomain -1009) e ha buttato via una submission che era
+          # valida. Quel giorno la coda Apple ha impiegato 4h30 — con attese
+          # così lunghe un singhiozzo è quasi garantito. Quindi: submit senza
+          # attesa, e polling nostro che tollera gli errori di rete e riprova.
+          SUBMIT_ID="$(xcrun notarytool submit "${{ matrix.output }}" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --no-wait --output-format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+          test -n "$SUBMIT_ID"
+          echo "submission: $SUBMIT_ID"
+          NOTARY_STATUS=""
+          NET_FAILS=0
+          # 5h di finestra (300 × 60s): sotto il limite di 6h del job, sopra
+          # la coda peggiore osservata. Gli errori di rete non contano come
+          # verdetto: si riprova al giro dopo.
+          for _ in $(seq 1 300); do
+            if INFO="$(xcrun notarytool info "$SUBMIT_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" \
+                --output-format json 2>/dev/null)"; then
+              NOTARY_STATUS="$(printf '%s' "$INFO" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
+              NET_FAILS=0
+              echo "notarizzazione: $NOTARY_STATUS"
+              case "$NOTARY_STATUS" in
+                "Accepted") break ;;
+                "In Progress"|"") ;;
+                *) echo "Apple ha respinto la submission: $NOTARY_STATUS"
+                   xcrun notarytool log "$SUBMIT_ID" --apple-id "$APPLE_ID" \
+                     --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                     --team-id "$APPLE_TEAM_ID" || true
+                   exit 1 ;;
+              esac
+            else
+              NET_FAILS=$((NET_FAILS + 1))
+              echo "interrogazione fallita ($NET_FAILS di fila) — la submission resta viva, riprovo"
+              if [ "$NET_FAILS" -ge 20 ]; then
+                echo "20 tentativi consecutivi falliti: il runner non raggiunge Apple da 20 minuti."
+                exit 1
+              fi
+            fi
+            sleep 60
+          done
+          if [ "$NOTARY_STATUS" != "Accepted" ]; then
+            echo "Notarizzazione non conclusa entro 5h (ultimo stato: ${NOTARY_STATUS:-sconosciuto})."
+            echo "La submission $SUBMIT_ID resta valida lato Apple: verificarla con notarytool info."
+            exit 1
+          fi
           xcrun stapler staple "$GAME_APP"
           xcrun stapler validate "$GAME_APP"
           spctl --assess --type execute --verbose=2 "$GAME_APP"
@@ -248,10 +406,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "Job Hunter Team ${{ github.ref_name }}"
+          # La nota Windows sta QUI perche' questa e' l'unica pagina da cui si
+          # scarica `job-hunter-team.exe`: il sito non serve i binari desktop e
+          # nessun doc pubblico linka le Release. Tre fatti, niente scuse: cosa
+          # vede, cosa clicca, perche' succede.
           body: |
             ## What's new in ${{ github.ref_name }}
 
             ${{ steps.changelog.outputs.notes }}
+
+            ### Windows
+
+            `job-hunter-team.exe` is not code-signed, so Windows shows a **"Windows protected your PC"** screen on first launch: click **More info** → **Run anyway**. The macOS `.zip` is signed and notarized by Apple; the Linux `.tar.gz` is unsigned as well.
 
             ---
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for the full history.

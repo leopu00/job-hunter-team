@@ -28,6 +28,15 @@ lasciavano passivo — su tutte il SOURCING FERMO (nessuno Scout attivo) — con
 invece il VERDETTO deterministico come ORDINE (spawna 1 Scout, C-05), perché il
 "segnale morbido" veniva razionalizzato via e la finestra chiusa a vuoto.
 
+Terzo registro (2026-07-30, [MODE-INJECTION-HOURLY-PROMPT]): in coda a OGNI
+messaggio va la sezione `[MODALITÀ CORRENTE]` — modalità, ordini e direttive
+LETTI DA DISCO in quel momento (`shared/skills/mode_banner.py`). Non è un nudge
+ed è indipendente dal tema: è l'ordine dell'utente che raggiunge il Capitano
+periodicamente, così non può evaporare a un refresh di contesto (18 giorni persi
+nel luglio 2026, vedi il docstring di mode_banner.py). Al peggio si perde per
+un'ora — ed è per questo che l'ora di SILENZIO salta quando c'è un ordine in
+vigore da riferire: un promemoria che non parte non è un promemoria.
+
 Output:
   - stdout (→ $JHT_HOME/logs/heartbeat-bridge.log)
   - tmux send al CAPITANO via jht-tmux-send (single-line)
@@ -182,6 +191,115 @@ def _work_phase():
         return None
 
 
+# ── Intento di spesa dell'utente (shared/skills/burn_intent.py) ────────────
+# Il flag `.burn-intent.flag` è il punto UNICO di verità sul fatto che l'utente
+# abbia chiesto di spingere. Il modulo viene cachato (l'import costa un exec),
+# lo STATO no: `is_active()` rilegge il file, così una revoca vale al battito
+# successivo. Fail-closed: modulo mancante o flag illeggibile → freno attivo.
+_BURN_INTENT_MOD = None
+
+
+def _burn_intent_active():
+    global _BURN_INTENT_MOD
+    try:
+        if _BURN_INTENT_MOD is None:
+            import importlib.util
+            for cand in (Path("/app/shared/skills/burn_intent.py"),
+                         Path(__file__).resolve().parent.parent
+                         / "shared" / "skills" / "burn_intent.py"):
+                if not cand.exists():
+                    continue
+                spec = importlib.util.spec_from_file_location("burn_intent", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _BURN_INTENT_MOD = mod
+                break
+        return bool(_BURN_INTENT_MOD.is_active()) if _BURN_INTENT_MOD else False
+    except Exception:  # noqa: BLE001 — un guard non abbatte il battito
+        return False
+
+
+# ── Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]) ────────────────────────
+# Col flag `.team-standby.flag` valido il battito orario è SOSPESO del tutto:
+# ogni [HEARTBEAT] costerebbe un turno di modello al Capitano mentre il team è
+# fermo di proposito. NON derogato da BURN-INTENT (lo standby nasce a weekly
+# esaurito, dove la deroga economica non compra niente). La sveglia è del
+# sentinel-bridge. Stesso pattern del modulo burn_intent: cache del MODULO,
+# mai dello stato (is_active rilegge il flag a ogni battito).
+_STANDBY_MOD = None
+
+
+def _standby_active():
+    global _STANDBY_MOD
+    try:
+        if _STANDBY_MOD is None:
+            import importlib.util
+            for cand in (Path("/app/shared/skills/standby.py"),
+                         Path(__file__).resolve().parent.parent
+                         / "shared" / "skills" / "standby.py"):
+                if not cand.exists():
+                    continue
+                spec = importlib.util.spec_from_file_location("standby", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _STANDBY_MOD = mod
+                break
+        return bool(_STANDBY_MOD.is_active()) if _STANDBY_MOD else False
+    except Exception:  # noqa: BLE001 — la direzione sicura è continuare a battere
+        return False
+
+
+# ── Modalità corrente ([MODE-INJECTION-HOURLY-PROMPT], 2026-07-30) ─────────
+# La sezione `[MODALITÀ CORRENTE]` si compone in `shared/skills/mode_banner.py`,
+# che legge `profile/capitano-maintenance.json`, la bacheca `team_directives` e i
+# flag operativi. Stesso pattern di burn_intent/standby: si cacha il MODULO (un
+# exec per processo), MAI il risultato — la lettura avviene a OGNI invio, che è
+# tutto il senso del ticket: un ordine cambiato a caldo deve valere al battito
+# successivo, non al riavvio del bridge.
+_MODE_BANNER_MOD = None
+
+
+def _mode_banner_mod():
+    global _MODE_BANNER_MOD
+    if _MODE_BANNER_MOD is None:
+        try:
+            import importlib.util
+            for cand in (Path("/app/shared/skills/mode_banner.py"),
+                         Path(__file__).resolve().parent.parent
+                         / "shared" / "skills" / "mode_banner.py"):
+                if not cand.exists():
+                    continue
+                spec = importlib.util.spec_from_file_location("mode_banner", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _MODE_BANNER_MOD = mod
+                break
+        except Exception:  # noqa: BLE001 — un promemoria non abbatte il battito
+            _MODE_BANNER_MOD = None
+    return _MODE_BANNER_MOD
+
+
+def _mode_section():
+    """(sezione, ordini in vigore, sourcing spento) letti DA DISCO adesso.
+
+    Su qualunque guasto ritorna ("", False, False): un modulo non caricabile non deve
+    zittire il battito. L'assenza della sezione resta il segnale «bridge rotto»
+    — ed è per questo che il guasto viene LOGGATO, non ingoiato.
+    """
+    mod = _mode_banner_mod()
+    if mod is None:
+        _log("WARN mode_banner non caricabile: [MODALITÀ CORRENTE] NON iniettata")
+        return ("", False, False)
+    try:
+        snap = mod.snapshot()
+        return (mod.banner(snap=snap),
+                bool(mod.has_standing_orders(snap)),
+                bool(mod.sourcing_stopped(snap)))
+    except Exception as e:  # noqa: BLE001
+        _log(f"WARN [MODALITÀ CORRENTE] non composta: {e}")
+        return ("", False, False)
+
+
 def _scout_exhausted_recently(now):
     """True se uno Scout ha dichiarato [SCOUT-ESAUSTO] nell'ultima finestra di
     lavoro (SCOUT_EXHAUST_LOOKBACK_H). In quel caso le fonti sono DAVVERO secche e
@@ -249,9 +367,18 @@ def choose_nudge(state, now, last_theme):
     #          non ri-ordinare uno Scout che ciclerebbe sulle stesse fonti;
     #      (b) backlog a valle profondo (≥15) → il collo di bottiglia è downstream,
     #          non il sourcing: lo gestisce il ramo (3).
+    #      (c) `stop_search` sul disco (C-18, 2026-07-30) → il sourcing è spento
+    #          PER ORDINE DELL'UTENTE e la coda `new` vuota è lo stato voluto:
+    #          C-05/C-05c sono sospese. Senza questa eccezione il bridge
+    #          ordinerebbe uno spawn Scout contraddicendo, nello STESSO
+    #          messaggio, la sezione [MODALITÀ CORRENTE] che gli sta in coda —
+    #          ed è il verbo con cui i 18 giorni di manutenzione persa si sono
+    #          materializzati in 183 posizioni sorgente.
     #    E non è più un sussurro: è il VERDETTO (spawna Scout) consegnato come ORDINE.
     downstream_deep = (qa or 0) >= 15 or (qs or 0) >= 15
-    if not scouts_live and not downstream_deep and not _scout_exhausted_recently(now):
+    if (not scouts_live and not downstream_deep
+            and not state.get("sourcing_stopped")
+            and not _scout_exhausted_recently(now)):
         return ("sourcing-fermo",
                 f"[HEARTBEAT] Nessuno Scout attivo e nessun [SCOUT-ESAUSTO] oggi "
                 f"(analista={qa}, scorer={qs}, weekly={wk}%) → il sourcing è FERMO. "
@@ -320,22 +447,51 @@ def _write_state(d):
 
 
 def tick(now, send):
+    # Standby a spesa zero: PRIMA di ogni altro gate e SENZA deroghe — il
+    # battito tace finché il sentinel-bridge non risveglia il team.
+    if _standby_active():
+        _log(f"{now:%H:%M} standby: heartbeat soppresso (team a spesa zero)")
+        return
+    # Intento dell'utente letto PRIMA dei due gate: sopprimere il battito è già
+    # applicare l'halt, e un Capitano senza battito è un Capitano che non sa che
+    # l'utente ha chiesto il contrario (notte 2026-07-27).
+    burn_intent_on = _burn_intent_active()
     # Daily hard-stop (#2): a team in standby (cap giornaliero sforato) anche il
     # battito orario tace — niente nudge "(decidi tu)" mentre il team è in pausa.
-    if DAILY_HALT_FLAG.exists():
+    if DAILY_HALT_FLAG.exists() and not burn_intent_on:
         _log(f"{now:%H:%M} daily-halt: heartbeat soppresso (team in standby)")
         return
     # Off-hours gate (#4): fuori dall'orario di lavoro il team riposa → niente
     # battito. (work_phase=None = nessun orario configurato, team 24/7 → si batte.)
-    if _work_phase() == "OFF":
+    # Il gate orario è un automatismo di spesa: con BURN-INTENT attivo l'utente
+    # ha deciso di lavorare adesso, e il battito continua.
+    if _work_phase() == "OFF" and not burn_intent_on:
         _log(f"{now:%H:%M} off-hours (work_phase=OFF): heartbeat soppresso")
         return
+    if burn_intent_on:
+        _log(f"{now:%H:%M} BURN-INTENT attivo: battito mantenuto "
+             f"(daily-halt/off-hours derogati dall'utente)")
     st = gather_state()
     persisted = _read_state()
+    # DA DISCO, adesso: mai da `persisted`, mai da una variabile del giro prima.
+    # Va letto PRIMA di scegliere il nudge, perché `sourcing_stopped` disarma
+    # l'ordine di spawn Scout (C-18 sospende C-05).
+    mode_section, standing_orders, sourcing_stopped = _mode_section()
+    st["sourcing_stopped"] = sourcing_stopped
     theme, msg = choose_nudge(st, now, persisted.get("last_theme"))
     if not msg:
-        _log(f"{now:%H:%M} silent (theme={theme}) state={st}")
-        return
+        # L'ora di silenzio della rotazione salta SOLO se c'è un ordine in
+        # vigore da riferire: quello è il caso in cui il messaggio non è un
+        # nudge in più ma l'unico canale che tiene vivo l'ordine dell'utente.
+        # A modalità normale e bacheca vuota il silenzio resta silenzio.
+        if not (mode_section and standing_orders):
+            _log(f"{now:%H:%M} silent (theme={theme}) state={st}")
+            return
+        theme = "modalita-corrente"
+        msg = ("[HEARTBEAT] Nessuna anomalia da segnalare. Promemoria "
+               "deterministico degli ordini in vigore:")
+    if mode_section:
+        msg = f"{msg} {mode_section}"
     _log(f"{now:%H:%M} nudge[{theme}]: {msg}")
     if send:
         ok = _send(msg)

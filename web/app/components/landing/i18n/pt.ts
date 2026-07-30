@@ -56,9 +56,11 @@ export const pt: Record<string, string> = {
   dl_copy_cmd: "Copiar comando",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
-  dl_desktop_soon_desc:
-    "A app de ambiente de trabalho está a chegar aos três sistemas operativos: estamos a aperfeiçoá-la e ainda não pode ser descarregada. Entretanto, a CLI instala tudo.",
-  dl_desktop_soon_badge: "Em breve",
+  dl_desktop_beta_desc:
+    "A app de ambiente de trabalho é o escritório onde vês a equipa trabalhar. Está em beta: usamo-la todos os dias, mas muda com frequência. Se preferires um caminho mais assente, a CLI continua disponível.",
+  dl_desktop_beta_badge: "Beta",
+  dl_desktop_unsigned_note:
+    "No macOS a app está assinada e notarizada: abre com duplo clique. No Windows não está assinada, por isso o SmartScreen mostra «O Windows protegeu o seu PC»: clica em «Mais informações» e depois «Executar mesmo assim». No Linux, extrai o arquivo e torna-o executável.",
   dl_help_text: "Não sabes onde instalá-lo?",
   dl_help_link: "Lê o guia",
 

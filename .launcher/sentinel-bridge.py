@@ -176,6 +176,19 @@ SENTINELLA_COOLDOWN_MIN = 15.0
 # Un cambio di `status` (regime) la sveglia SEMPRE, anche prima del cap.
 SENTINELLA_RECONFIRM_MIN = 45.0
 
+# ── Consiglio di pacing al Capitano (pace_guard) ─────────────────────────
+# Il bridge campiona ogni ANCHOR_TICK_MIN (5 min): mandare il consiglio a ogni
+# sample vorrebbe dire consumare un turno di modello del Capitano ogni 5 minuti
+# per ripetergli una cosa che ha già letto — è esattamente il coordinator-burn.
+# Un consiglio NUOVO (verdetto o valore diversi dall'ultimo mandato) parte
+# subito, perché è un edge; lo STESSO consiglio si ripete al massimo ogni
+# PACE_ADVICE_COOLDOWN_MIN. La ripetizione non è spam: ora che il bridge non
+# applica più niente, è l'unico modo di recuperare una consegna fallita
+# (jht-tmux-send rc≠0 col pane occupato) o un consiglio che il Capitano ha
+# lasciato cadere.
+PACE_ADVICE_COOLDOWN_MIN = 15.0
+_pace_advice_state = {"ts": 0.0, "throttle_s": None, "verdict": None}
+
 
 # ── Config + tmux helpers (libreria per le skill) ───────────────────────
 
@@ -473,7 +486,90 @@ def session_exists(s):
     return subprocess.run(["tmux", "has-session", "-t", s], capture_output=True).returncode == 0
 
 
+# ── Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]) ────────────────────
+# In standby il bridge continua a LEGGERE (fetch → sentinel-data.jsonl, ogni
+# tick) e smette di PARLARE. Il gate fisico del silenzio sta in jht_tmux_send —
+# l'UNICO chokepoint di scrittura tmux di questo file — così il campionamento,
+# che non passa di lì, resta intatto per costruzione. La SVEGLIA (valutazione
+# di until/wake_on a ogni tick) sta in _standby_step, chiamata in testa al
+# loop: tutto lo stato vive nel flag, quindi un bridge respawnato dal watchdog
+# riprende il ruolo di sveglia rileggendo il file, senza memoria da perdere.
+_STANDBY_MOD = None
+
+
+def _standby_mod():
+    global _STANDBY_MOD
+    if _STANDBY_MOD is None:
+        _STANDBY_MOD = _load_skill_module("standby", "standby.py")
+    return _STANDBY_MOD
+
+
+def _standby_active():
+    """True se il team è in standby a spesa zero (flag valido, non scaduto).
+
+    Fail-closed nella direzione di burn_intent: modulo mancante o flag
+    illeggibile/senza condizione di uscita → False (si continua a parlare).
+    La direzione sicura è NON restare muti per sempre: un team che spende si
+    vede, un team muto in eterno è l'incidente in forma peggiore.
+    """
+    mod = _standby_mod()
+    try:
+        return bool(mod.is_active()) if mod else False
+    except Exception:                                       # noqa: BLE001
+        return False
+
+
+def _standby_step(parsed):
+    """Valuta la SVEGLIA dello standby a ogni tick (anche su fetch fallito:
+    la condizione a tempo `until` non ha bisogno del weekly).
+
+    Quando la condizione è soddisfatta l'ordine è quello obbligato del ticket,
+    incapsulato in standby.wake(): (1) flag via, (2) [RIPRENDI] a tutti i
+    ruoli core inclusi, (3) log. Con `.team-halted.flag` presente wake() NON
+    manda nulla: lo stop dell'utente vince. Un flag invalido (senza condizione
+    di uscita) viene rimosso qui — questo bridge possiede il lifecycle dei
+    flag, come per daily-halt e burn-intent — e va comunque in wake() perché
+    gli agenti potrebbero essere in pausa: meglio un [RIPRENDI] di troppo che
+    un team addormentato senza sveglia.
+    """
+    mod = _standby_mod()
+    if mod is None:
+        return
+    try:
+        st = mod.status()
+        state = st.get("state")
+        if state == "off":
+            return
+        weekly = parsed.get("weekly_usage") if isinstance(parsed, dict) else None
+        if state == "invalid":
+            print("[bridge V6] standby: flag SENZA condizione di uscita — "
+                  "rimosso (fail-closed, vedi standby.py)")
+            mod.wake("flag standby invalido (senza condizione di uscita): rimosso",
+                     weekly_usage=weekly)
+            return
+        do_wake, why = mod.should_wake(weekly_usage=weekly)
+        mod.log_event("wake_check", weekly_usage=weekly, wake=bool(do_wake),
+                      reason=(why if do_wake else st.get("reason")))
+        if do_wake:
+            res = mod.wake(why, weekly_usage=weekly)
+            print(f"[bridge V6] standby: SVEGLIA ({why}) → flag rimosso, "
+                  f"[RIPRENDI] a {res.get('resumed', 0)} sessioni"
+                  + (" — SOPPRESSO: .team-halted.flag presente (lo stop "
+                     "dell'utente vince)" if res.get("halted") else ""))
+    except Exception as e:                                  # noqa: BLE001
+        print(f"[bridge V6] WARN standby step: {e}", file=sys.stderr)
+
+
 def jht_tmux_send(session, text):
+    # Standby a spesa zero: in standby i bridge leggono e NON parlano. Il gate
+    # sta qui, nel chokepoint unico di scrittura tmux, così ogni path (tick,
+    # pace-advice, vitals, failure, off-hours) tace senza doverlo ricordare
+    # sito per sito. Il [RIPRENDI] del risveglio NON viene bloccato: parte da
+    # standby.wake() DOPO la rimozione del flag (ordine obbligato), quando
+    # questo guard è già aperto.
+    if _standby_active():
+        print(f"[bridge V6] standby: send a {session} soppresso", file=sys.stderr)
+        return False
     # Difesa: un tmux-send che si blocca (pane occupato) NON deve mai abbattere il
     # bridge. Senza questa guardia, TimeoutExpired propagava fuori dal while-loop di
     # main() (l'unico handler esterno è KeyboardInterrupt) → bridge morto in silenzio,
@@ -498,10 +594,83 @@ def _daily_hardstop_disabled():
     bruciare il weekly in due sedute. Durante un **burst dimostrativo** però è
     proprio quello che si vuole: saturare la finestra 5h invece di spalmarla.
     Stessa forma di JHT_PACE_GUARD, ma con l'effetto opposto — e attenzione,
-    questo toglie l'ultima rete: la velocità resta governata dal `pace_guard`,
-    il tetto complessivo no. Da tenere acceso per una finestra, non per sempre.
+    questo toglie l'ultima rete AUTOMATICA sul tetto: la velocità resta in mano
+    al Capitano (il `pace_guard` gli manda il consiglio, non frena da sé), e il
+    solo freno che scattava senza di lui era questo. Da tenere acceso per una
+    finestra, non per sempre.
     """
     return os.environ.get("JHT_DAILY_HARDSTOP", "1").strip() in ("0", "false", "no")
+
+
+# Modulo di intento cachato: l'import per path costa un exec, e qui si legge a
+# ogni tick. Il MODULO è cachato, non lo STATO: `status()` rilegge il file ogni
+# volta, così una revoca dell'utente vale entro il tick successivo.
+_BURN_INTENT_MOD = None
+
+
+def _burn_intent_status():
+    """Intento di spesa dell'utente (shared/skills/burn_intent.py).
+
+    Il flag `.burn-intent.flag` è il punto UNICO di verità sul fatto che
+    l'utente abbia chiesto di spingere: va consultato **prima** di scrivere un
+    halt, non dopo averlo scritto — fra la scrittura e la rimozione il team è
+    già stato messo in ESC (notte 2026-07-27).
+
+    Fail-closed per costruzione: se il modulo manca o il flag è illeggibile
+    ritorna inattivo, cioè il freno resta.
+    """
+    global _BURN_INTENT_MOD
+    try:
+        if _BURN_INTENT_MOD is None:
+            _BURN_INTENT_MOD = _load_skill_module("burn_intent", "burn_intent.py")
+        if _BURN_INTENT_MOD is None:
+            return {"active": False, "state": "off"}
+        return _BURN_INTENT_MOD.status()
+    except Exception as e:                                  # noqa: BLE001
+        print(f"[bridge V6] WARN burn_intent: {e}", file=sys.stderr)
+        return {"active": False, "state": "off"}
+
+
+def _burn_intent_sweep():
+    """Scadenza della deroga: proprietario UNICO (questo bridge, che già possiede
+    il ciclo di vita di daily-halt.flag). Ritorna il payload scaduto o None."""
+    global _BURN_INTENT_MOD
+    try:
+        if _BURN_INTENT_MOD is None:
+            _BURN_INTENT_MOD = _load_skill_module("burn_intent", "burn_intent.py")
+        return _BURN_INTENT_MOD.sweep() if _BURN_INTENT_MOD else None
+    except Exception:                                       # noqa: BLE001
+        return None
+
+
+def _burn_intent_announce(state, bi):
+    """Dice agli AGENTI che la deroga è cambiata (requisito: non basta il codice).
+
+    Il 2026-07-27 il coordinatore ha ristretto da sé un'esenzione al floor
+    citando C-02: comportamento corretto dal suo punto di vista, perché la
+    deroga non era nel suo contesto. Qui la transizione ON/OFF arriva a
+    CAPITANO e SENTINELLA una volta sola, e dice esplicitamente di chi è la
+    responsabilità mentre i freni sono tolti.
+    """
+    was = bool(state.get("burn_intent_on"))
+    now_on = bool(bi.get("active"))
+    if was == now_on:
+        return
+    state["burn_intent_on"] = now_on
+    if now_on:
+        msg = ("[BRIDGE INFO] 🔥 " + (_BURN_INTENT_MOD.banner() if _BURN_INTENT_MOD else "") +
+               " Gli automatismi di spesa (daily-halt, gate orario, WORKER_FLOOR, "
+               "ladder) NON ti fermeranno finché dura: la responsabilità di non "
+               "sprecare passa a TE (C-23). Alla scadenza tornano da soli.")
+    else:
+        msg = ("[BRIDGE INFO] ⏱️ BURN-INTENT SCADUTO/REVOCATO — gli automatismi di "
+               "spesa sono di nuovo attivi: daily-halt, gate orario, WORKER_FLOOR "
+               "5min e ladder tornano a valere. Riporta il team al pacing normale "
+               "(C-02/C-07).")
+    for _s in (CAPITANO_SESSION, SENTINELLA_SESSION):
+        if session_exists(_s):
+            jht_tmux_send(_s, msg)
+    print(f"[bridge V6] BURN-INTENT {'ON' if now_on else 'OFF'} → annunciato agli agenti")
 
 
 def _esc_all_sessions():
@@ -679,6 +848,28 @@ def fetch_codex_rollout():
         if isinstance(weekly_resets_unix, (int, float)):
             weekly_reset_at = _fmt_reset(weekly_resets_unix)  # DATA completa
             weekly_reset_at_unix = float(weekly_resets_unix)
+
+        # Piani a finestra UNICA settimanale (es. plan_type "prolite",
+        # 2026-07-30): primary ha window_minutes=10080 (7gg) e secondary è
+        # null. Con la mappatura classica il budget settimanale finirebbe in
+        # `usage` (che tutta la logica a valle tratta come finestra 5h, la cui
+        # saturazione vale "qualche ora di pausa" — qui invece vale GIORNI di
+        # silenzio) e ogni protezione weekly resterebbe cieca: weekly_usage
+        # None spegne SOPRA-PACE, proj_weekly e il freno weekly-halt. Il
+        # payload dichiara già la durata della finestra: se primary è ≥ 1
+        # giorno, primary È il weekly e va riportato su ENTRAMBI gli assi —
+        # su `usage` perché resta l'unico vincolo reale (il pacing 5h, che
+        # riempie al 100% entro reset_at, diventa di fatto un pacer
+        # settimanale corretto), e sui campi weekly perché è ciò che sono.
+        try:
+            window_min = float(primary.get("window_minutes") or 0)
+        except (TypeError, ValueError):
+            window_min = 0
+        if weekly is None and window_min >= 1440:
+            weekly = usage
+            weekly_reset_at = reset_at
+            weekly_reset_at_unix = reset_at_unix
+
         return {
             "usage": usage,
             "reset_at": reset_at,
@@ -1180,15 +1371,37 @@ def _load_skill_module(name, filename):
     return None
 
 
-def _pace_guard_step(entry):
-    """Freno automatico sulla curva della finestra (vedi shared/skills/pace_guard.py).
+def _should_advise_captain(result, state, now_ts):
+    """Gate del consiglio di pacing (lean-comms, stessa forma del gate Sentinella).
 
-    Il pacing sa da sempre CHE il team sta sforando, ma l'attuazione passava dal
-    Capitano: 15 min per misurare, un turno di modello per decidere, un altro per
-    scrivere il throttle. Nel run 2026-07-26 la finestra si è saturata al 100% a
-    metà tempo e il team è rimasto muto per 2h40. Qui la correzione di velocità
-    parte a ogni sample, senza modello in mezzo — il Capitano continua a decidere
-    COSA fare (spawn, colli di bottiglia), non più QUANTO IN FRETTA.
+    Vero quando c'è qualcosa da decidere e non lo si è appena detto:
+      • consiglio == throttle attuale → niente da fare, silenzio;
+      • verdetto o valore diversi dall'ultimo mandato → edge, si parla subito;
+      • consiglio identico → si ripete solo dopo PACE_ADVICE_COOLDOWN_MIN.
+    """
+    if not result.get("recommends_change"):
+        return False
+    if (state.get("verdict") != result.get("verdict")
+            or state.get("throttle_s") != result.get("throttle_recommended_s")):
+        return True
+    return (now_ts - (state.get("ts") or 0.0)) >= PACE_ADVICE_COOLDOWN_MIN * 60
+
+
+def _pace_guard_step(entry):
+    """Consiglio di pacing sulla curva della finestra (shared/skills/pace_guard.py).
+
+    Il bridge MISURA e RACCOMANDA, non tocca il throttle: scrive nel pane del
+    Capitano una riga con verdetto, valore consigliato e comando pronto, e lì
+    si ferma. È il Capitano a decidere se e come applicarlo, perché la velocità
+    è distribuzione di lavoro fra agenti (chi sta facendo cosa, quale collo di
+    bottiglia è aperto) e non una divisione da delegare a uno script — fino al
+    2026-07-28 questa funzione scriveva il throttle da sé e si contendeva il
+    volante con il Capitano, che aggiustava a sua volta.
+
+    Le reti di sicurezza NON passano di qui e restano automatiche: il
+    WORKER_FLOOR di 5 minuti (applicato da throttle-config.py a ogni lettura) e
+    il daily hard-stop più sotto in main(). Frenare per stare sulla curva è
+    pacing; impedire il disastro è un'altra cosa.
 
     Fail-safe per costruzione: qualunque errore lascia il bridge intatto e il
     throttle dov'era. Disattivabile con JHT_PACE_GUARD=0.
@@ -1203,37 +1416,60 @@ def _pace_guard_step(entry):
         if not workers:
             return
         current = mod.current_worker_throttle(workers)
-        result = mod.evaluate(entry, time.time(), current_throttle_s=current)
+        now_ts = time.time()
+        result = mod.evaluate(entry, now_ts, current_throttle_s=current)
         if not result.get("ok"):
             return
-        if result.get("changed"):
-            result["applied"] = mod.apply_throttle(workers, result["throttle_after_s"])
         result["ts"] = entry.get("ts")
         result["workers"] = workers
+        # Invariante esplicita nel log: il bridge non ha scritto niente.
+        result["applied"] = False
+        result["advice"] = mod.advice_line(
+            result, workers, mod.advisable_workers(workers))
+        if _should_advise_captain(result, _pace_advice_state, now_ts):
+            result["advised"] = True
+            result["delivered_via_tmux"] = _notify_captain_pace_guard(result)
+            _pace_advice_state.update({
+                "ts": now_ts,
+                "throttle_s": result.get("throttle_recommended_s"),
+                "verdict": result.get("verdict"),
+            })
+        else:
+            result["advised"] = False
+            if not result.get("recommends_change"):
+                # Rientrati in pari (spesso perché il Capitano ha applicato):
+                # si dimentica l'ultimo consiglio, così la prossima deriva
+                # riparte come edge invece che come ripetizione.
+                _pace_advice_state.update(
+                    {"ts": 0.0, "throttle_s": None, "verdict": None})
         with (LOGS_DIR / "pace-guard.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(result) + "\n")
-        # Il Capitano viene avvisato solo quando la finestra sta per chiudersi
-        # in anticipo: è l'unico caso in cui deve cambiare piano (meno worker,
-        # non solo più lenti). Sotto quella soglia il freno è routine e non
-        # merita di consumargli un turno.
-        if result.get("verdict") == "LOCKOUT-IMMINENTE":
-            _notify_captain_pace_guard(result)
     except Exception:  # noqa: BLE001 — il bridge non muore per il guard
         pass
 
 
 def _notify_captain_pace_guard(result):
+    """Consegna il consiglio al Capitano. Ritorna True se il tmux-send è andato.
+
+    Doppio canale, come per i verdetti del pacing-bridge: il pane (immediato) e
+    la mailbox JSONL (recuperabile con `bridge_mailbox.py drain` a inizio turno).
+    Il secondo esiste perché `jht-tmux-send` fallisce quando il Capitano è in
+    turno lungo, e da oggi un consiglio perso significa nessuna correzione —
+    prima il freno era già stato applicato e il messaggio era solo un'informativa.
+    """
+    advice = result.get("advice") or ""
+    delivered = jht_tmux_send(CAPITANO_SESSION, advice) if advice else False
     try:
-        subprocess.run(
-            ["jht-tmux-send", "CAPITANO",
-             "[@bridge -> @capitano] [PACE-GUARD] finestra al "
-             f"{result['usage_pct']}% con curva ideale al {result['ideal_pct']}% "
-             f"({result['deviation_pct']:+}pt): throttle worker portato a "
-             f"{result['throttle_after_s']}s. Il freno è già applicato — "
-             "valuta se ridurre il ROSTER, non la velocità."],
-            capture_output=True, timeout=30, check=False)
-    except (OSError, subprocess.SubprocessError):
-        pass
+        with (LOGS_DIR / "bridge-mailbox.jsonl").open("a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "kind": "pace-guard",
+                "delivered_via_tmux": delivered,
+                "msg": advice,
+            }, separators=(",", ":")) + "\n")
+    except OSError as e:
+        print(f"[bridge V6] WARN append mailbox pace-guard: {e}", file=sys.stderr)
+    return delivered
 
 
 def write_log(entry):
@@ -1834,6 +2070,33 @@ def main():
         dyn_target, work_phase = _read_dynamic_target()
         within_hours = _within_working_hours(work_phase)
 
+        # ── Intento dell'utente, consultato PRIMA di ogni automatismo ──────
+        # Lo sweep (scadenza) e l'annuncio agli agenti stanno qui, in testa al
+        # tick: sotto, ogni freno di spesa legge `_bi` e nessuno lo ri-calcola.
+        _burn_intent_sweep()
+        _bi = _burn_intent_status()
+        _bi_on = bool(_bi.get("active"))
+        _burn_intent_announce(state, _bi)
+        if _bi_on and not within_hours:
+            # Il gate orario è un automatismo di SPESA (spalma il weekly sulle
+            # ore attive), non un freno di sicurezza: l'utente può decidere di
+            # lavorare stanotte. Il resto del tick prosegue come in orario.
+            within_hours = True
+            print(f"[bridge V6] {now_h} BURN-INTENT: gate orario derogato "
+                  f"(work_phase={work_phase}, scade fra {_bi.get('remaining_min')} min)")
+
+        # ── Standby a spesa zero: la SVEGLIA si valuta a OGNI tick ─────────
+        # Prima di qualunque invio: se la condizione di uscita è soddisfatta,
+        # standby.wake() rimuove il flag e manda [RIPRENDI] — da quel momento
+        # il guard in jht_tmux_send è aperto e il tick sotto torna a parlare.
+        # Finché lo standby dura, il resto del tick campiona e scrive il
+        # sample come sempre (la lettura non costa un turno di modello), ma
+        # ogni send viene soppresso dal guard. NON derogato da BURN-INTENT:
+        # lo standby nasce a weekly esaurito (il muro 403), dove la deroga
+        # economica non compra niente — e il weekly-halt è già NEVER_YIELDS
+        # della deroga stessa.
+        _standby_step(parsed)
+
         if parsed:
             # ── Path successo: scrivi sample, tick alla Sentinella ────
             parsed["provider"] = provider
@@ -1968,12 +2231,21 @@ def main():
                 entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
             _hb = _dp.get("budget") if isinstance(_dp, dict) else None
             _hc = _dp.get("consumed") if isinstance(_dp, dict) else None
-            if _daily_hardstop_disabled():
-                # Deroga esplicita (JHT_DAILY_HARDSTOP=0): il cap giornaliero
-                # protegge il WEEKLY spalmandolo sulle finestre; durante un burst
-                # dimostrativo si accetta di sforarlo per saturare la finestra 5h.
-                # Il pace_guard resta attivo: la velocità continua a essere
-                # governata, è solo l'interruttore generale a non scattare.
+            if _daily_hardstop_disabled() or _bi_on:
+                # Due deroghe, stesso effetto: il cap giornaliero NON scatta.
+                #   • JHT_DAILY_HARDSTOP=0 — deroga di configurazione (burst
+                #     dimostrativo: saturare la finestra 5h invece di spalmarla);
+                #   • BURN-INTENT — deroga esplicita dell'UTENTE, a termine, letta
+                #     QUI **prima** di scrivere l'halt e non dopo: fra la scrittura
+                #     del flag e la sua rimozione il team è già andato in ESC su
+                #     tutte le sessioni, ed è esattamente ciò che è successo la
+                #     notte del 2026-07-27 mentre l'ordine dell'utente era opposto.
+                # In entrambi i casi il `weekly-halt` resta intatto: oltre quel
+                # limite il provider non risponde, e non è una scelta economica.
+                # Il pace_guard, dal canto suo, non tocca più il throttle in
+                # nessuno dei due casi: misura e consiglia, la velocità la
+                # governa il Capitano. Qui non scatta solo l'interruttore
+                # generale.
                 # Se un halt era già attivo lo si rimuove, altrimenti il team
                 # resterebbe in standby con il freno tolto e nessuno a liberarlo.
                 if _daily_halt_active():
@@ -1981,7 +2253,16 @@ def main():
                         DAILY_HALT_FLAG.unlink()
                     except OSError:
                         pass
-                    print(f"[bridge V6] {now_h} DAILY-HARDSTOP disabilitato → flag rimosso")
+                    _why = "BURN-INTENT (deroga utente)" if _bi_on else "DAILY-HARDSTOP disabilitato"
+                    print(f"[bridge V6] {now_h} {_why} → daily-halt flag rimosso")
+                elif _bi_on and isinstance(_hc, (int, float)) and isinstance(_hb, (int, float)) \
+                        and _hc > _hb + 5.0:
+                    # Il cap SAREBBE stato sforato: lo diciamo, non lo subiamo.
+                    # Con i freni tolti la responsabilità di non sprecare passa al
+                    # coordinatore, e deve restarne traccia scritta.
+                    print(f"[bridge V6] {now_h} BURN-INTENT: cap giornaliero sforato "
+                          f"(oggi={_hc:.1f}% > cap={_hb + 5.0:.1f}%) ma NON fermo il team "
+                          f"— deroga utente in corso, scade fra {_bi.get('remaining_min')} min")
             elif isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
                 _hcap = _hb + 5.0
                 _over_cap = _hc > _hcap

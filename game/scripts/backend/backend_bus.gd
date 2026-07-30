@@ -40,6 +40,14 @@ signal chat_unread_changed(unread: Dictionary)
 ## migrate (elenco+filtri, dettaglio, mappa). Righe = SELECT del
 ## VpsBackend, campi con i nomi delle colonne reali.
 signal positions_updated(positions: Array)
+## Estensione ADDITIVA (27/07): il backend attivo è CAMBIATO — collegata
+## un'altra macchina, o staccata quella corrente. Tutto ciò che una vista
+## tiene in mano descrive la macchina precedente e va buttato: con un box
+## per beta tester quei numeri sono il lavoro di UN ALTRO utente. Emesso da
+## set_backend() con le cache del bus già svuotate e prima che il nuovo
+## adapter parta, così chi ascolta si risemina nello stesso frame del
+## cambio e non esiste un fotogramma coi conteggi del box precedente.
+signal backend_reset()
 
 ## Conversazione utente ↔ agente (chat bidirezionale). messages = tail
 ## di chat.jsonl dell'agente: [{role: "user"|"assistant", text, ts,
@@ -56,6 +64,11 @@ signal agent_terminal_updated(agent: String, text: String, error: String)
 ## enrichment, directives e queue_counts; action_done copre save/add/archive.
 signal coordinator_state_updated(state: Dictionary)
 signal coordinator_action_done(action: String, ok: bool, error: String)
+## Deroga a termine agli automatismi di spesa (shared/skills/burn_intent.py).
+## `state` è il payload LETTO dal flag più `readable`/`received_msec`: chi lo
+## consuma passa da BurnMode.state_for() e non deduce mai nulla dal click.
+signal burn_intent_updated(state: Dictionary)
+signal burn_intent_action_done(active: bool, ok: bool, error: String)
 ## Esito di create_position_ticket (l'unica scrittura remota autorizzata
 ## da Leone, gate 1 dell'11/07: sì ai ticket verso il team, no alle
 ## azioni che scrivono direttamente sul jobs.db).
@@ -124,6 +137,9 @@ var telemetry_history: Array = []
 var usage_history: Dictionary = {}
 var usage_history_query: Dictionary = {}
 var coordinator_state: Dictionary = {}
+## Ultima lettura del flag di deroga alla spesa. Vuoto = mai letto: NON è
+## "spenta", ed è per questo che l'interruttore parte da "stato sconosciuto".
+var burn_intent: Dictionary = {}
 var chat_log: Array = []     # ultimi messaggi (fumetti di dev1 + vista Chat)
 const CHAT_LOG_MAX := 200
 var chat_unread: Dictionary = {}  # ruolo canonico -> conteggio non letto
@@ -160,6 +176,7 @@ func _ready() -> void:
 		cfg = {
 			"ip": OS.get_environment("JHT_VPS_IP"),
 			"key_path": OS.get_environment("JHT_VPS_KEY"),
+			"user": OS.get_environment("JHT_VPS_USER"),
 		}
 	if str(cfg.get("ip", "")) != "" and str(cfg.get("key_path", "")) != "":
 		set_backend(VpsBackend.new(), cfg)
@@ -345,9 +362,47 @@ func set_backend(backend: BackendAdapter, config: Dictionary = {}) -> void:
 		publish_state(DISCONNECTED, "")
 	_backend = backend
 	_onboarding_context_hashes.clear()
+	_reset_connection_snapshots()
 	if _backend:
 		_backend.bus = self
 		_backend.start(config)
+
+
+## Niente di ciò che ha pubblicato un backend sopravvive al successivo.
+## L'ufficio continuava a disegnare la pipeline della macchina precedente
+## perché queste cache restavano intatte: misurato il 27/07 su un box appena
+## creato (14 posizioni nel suo jobs.db) con la pila dello Scorer ferma sulle
+## 694 righe `scored` del box di prima. Con un box per beta tester quello è
+## il lavoro di un altro utente, non un difetto grafico.
+##
+## Le posizioni fittizie dello showroom sono l'unica cosa che resta: non
+## vengono da nessuna macchina, e sparirebbero lasciando l'ufficio vuoto a
+## chi sta ancora configurando il prodotto.
+func _reset_connection_snapshots() -> void:
+	transitions = []
+	telemetry = {}
+	telemetry_history = []
+	live_settings = {}
+	coordinator_state = {}
+	# Cambiata la macchina, la deroga letta prima non dice più nulla di
+	# questo team: meglio "non lo so" di un residuo che sembra fresco.
+	burn_intent = {}
+	usage_history = {}
+	usage_history_query = {}
+	profile_status = {}
+	chat_log = []
+	if not positions_are_demo:
+		positions = []
+	# Attese di risposta appese a una sessione che non c'è più: senza lo
+	# spegnimento esplicito la chat resterebbe con l'indicatore acceso.
+	for agent in chat_waiting.keys():
+		chat_waiting_changed.emit(str(agent), false)
+	chat_waiting = {}
+	clear_chat_unread()
+	positions_updated.emit(positions)
+	# backend_reset per ULTIMO: chi lo usa per riseminare deve trovare il bus
+	# già svuotato e gli altri segnali già consegnati.
+	backend_reset.emit()
 
 func disconnect_backend() -> void:
 	set_backend(null)
@@ -366,11 +421,28 @@ func is_remote() -> bool:
 ## ── Chat bidirezionale utente ↔ agente ───────────────────────────────
 ## Chat 1-a-1 con OGNI agente del roster (paradigma desktop app): il
 ## backend risolve uid → sessione tmux e directory chat.jsonl. La
-## RISPOSTA persistita è garantita solo per chi ha la skill chat-web
-## nel proprio prompt (verificato sulla VPS: capitano, assistente,
-## mentor); gli altri ricevono il messaggio ma potrebbero rispondere
-## solo a schermo nel terminale del team — la UI lo dice.
-const REPLY_CAPABLE := ["coordinatore", "assistente", "mentor"]
+## RISPOSTA persistita è garantita solo per chi ha una skill di risposta
+## in chat nel proprio prompt; gli altri ricevono il messaggio ma
+## potrebbero rispondere solo a schermo nel terminale del team — la UI
+## lo dice (chat.besteffort).
+##
+## I tre coordinatori (capitano, assistente, mentor) hanno `chat-web`. Dal
+## 2026-07-28 i cinque ruoli OPERATIVI hanno `chat-worker`, la stessa
+## consegna con in più il freno sul costo: rispondi corto e subito, poi
+## torna al lavoro. Restano fuori tre ruoli, e non per dimenticanza:
+##
+##  - `dottore` e `mantenitore` sono one-shot a slot: fra uno spawn e
+##    l'altro la loro tmux è bash residua (C-08), quindi la risposta non
+##    arriverebbe MAI — un pallino verde sarebbe una promessa falsa;
+##  - `sentinella` è edge-triggered dal bridge e la sua RULE #0 le vieta
+##    di parlare con chiunque non sia il Capitano; per giunta legge
+##    percentuali di consumo, non posizioni: non ha niente da dire
+##    all'utente che il Capitano non dica meglio.
+##
+## Il Critico c'è, ma la sua skill gli vieta di ACCETTARE informazioni sul
+## candidato dalla chat: la blind review è tutto il suo valore.
+const REPLY_CAPABLE := ["coordinatore", "assistente", "mentor",
+	"scout", "analista", "scorer", "scrittore", "critico"]
 
 ## In attesa di risposta: uid → ts unix dell'invio. La UI mostra
 ## l'indicatore di caricamento su chat_waiting_changed.
@@ -429,7 +501,10 @@ func clear_chat_unread() -> void:
 
 func _self_test_chat_notifications() -> void:
 	clear_chat_unread()
-	publish_chat({"ts": "1", "from": "scout-1", "to": "user",
+	# Ruolo NON interattivo: dal 2026-07-28 lo scout risponde in chat, quindi
+	# il rumore che non deve accendere il pallino arriva dalla Sentinella —
+	# che resta fuori da REPLY_CAPABLE per progetto, non per dimenticanza.
+	publish_chat({"ts": "1", "from": "sentinella-1", "to": "user",
 			"text": "rumore non interattivo"})
 	var filtered := total_chat_unread() == 0
 	publish_chat({"ts": "2", "from": "capitano", "to": "user",
@@ -531,6 +606,46 @@ func publish_coordinator_state(next: Dictionary) -> void:
 
 func publish_coordinator_action(action: String, ok: bool, error := "") -> void:
 	coordinator_action_done.emit(action, ok, error)
+
+
+## ── Deroga a termine agli automatismi di spesa ──────────────────────
+
+## Intervallo minimo fra due letture del flag. La pagina dell'agente si
+## ricostruisce a ogni giro del roster: senza questo guard ogni rebuild
+## sparerebbe un giro SSH, come già evita AgentHistoryChart con la sua cache.
+## Il conto alla rovescia intanto scorre da solo, sul delta ricevuto.
+const BURN_INTENT_MIN_INTERVAL_MSEC := 20000
+var _burn_intent_asked_msec := -BURN_INTENT_MIN_INTERVAL_MSEC
+
+func request_burn_intent(force := false) -> void:
+	var now := Time.get_ticks_msec()
+	if not force and now - _burn_intent_asked_msec < BURN_INTENT_MIN_INTERVAL_MSEC:
+		return
+	_burn_intent_asked_msec = now
+	if _backend:
+		_backend.fetch_burn_intent()
+	else:
+		# Senza backend NON si dice "spenta": si dice "non leggibile". Il
+		# freno potrebbe essere sospeso su una macchina che non stiamo
+		# guardando, e mostrarlo come off sarebbe la bugia peggiore.
+		publish_burn_intent({"readable": false, "error": "backend non collegato"})
+
+func set_burn_intent(active: bool, hours: float) -> void:
+	if _backend:
+		_backend.set_burn_intent(active, hours)
+	else:
+		burn_intent_action_done.emit(active, false, "backend non collegato")
+
+func publish_burn_intent(state: Dictionary) -> void:
+	var next := state.duplicate(true)
+	# Il momento della lettura viaggia col dato: la scadenza si conta da lì,
+	# non dall'orologio del gioco (host e container possono non concordare).
+	next["received_msec"] = Time.get_ticks_msec()
+	burn_intent = next
+	burn_intent_updated.emit(next)
+
+func publish_burn_intent_action(active: bool, ok: bool, error := "") -> void:
+	burn_intent_action_done.emit(active, ok, error)
 
 ## Invia il messaggio dell'utente all'agente reale (async: l'esito
 ## arriva su user_chat_sent, la risposta su agent_chat_updated).
@@ -695,12 +810,16 @@ func load_vps_config() -> Dictionary:
 	return {
 		"ip": cfg.get_value("vps", "ip", ""),
 		"key_path": cfg.get_value("vps", "key_path", ""),
+		# Le config salvate prima che il campo esistesse non hanno "user":
+		# vuoto vale root, l'unico utente che il gioco sapesse usare.
+		"user": cfg.get_value("vps", "user", ""),
 	}
 
-func save_vps_config(ip: String, key_path: String) -> void:
+func save_vps_config(ip: String, key_path: String, user := "") -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("vps", "ip", ip)
 	cfg.set_value("vps", "key_path", key_path)
+	cfg.set_value("vps", "user", user)
 	cfg.save(CONFIG_PATH)
 
 
@@ -712,6 +831,7 @@ func clear_vps_config() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("vps", "ip", "")
 	cfg.set_value("vps", "key_path", "")
+	cfg.set_value("vps", "user", "")
 	cfg.save(CONFIG_PATH)
 
 

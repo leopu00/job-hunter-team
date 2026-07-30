@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# agent-watchdog.sh — controlla che le 4 sessioni tmux core
-# (ASSISTENTE, CAPITANO, MENTOR, SENTINELLA) siano sempre attive. Se una
-# manca, la rilancia via `jht team start <role>`.
+# agent-watchdog.sh — controlla che le sessioni tmux degli agenti siano attive:
+# i 4 ruoli core (ASSISTENTE, CAPITANO, MENTOR, SENTINELLA) e — dal 2026-07-29 —
+# anche i WORKER NUMERATI letti dal roster atteso. Se una manca, la rilancia.
 #
 # Pensato come daemon spawnato da pid1 al boot del container. NON
 # sostituisce il dottore (context-refresh LLM degli agenti CON stato),
@@ -14,6 +14,28 @@
 # fresca oltre una soglia. È age-based, NON health-based: non re-introduce
 # il restart-loop del vecchio sentinel_health (V4 bug). Gli altri core hanno
 # stato e li rinfresca il Dottore (refresh ricco con resume).
+#
+# ── TTL di 12h su OGNI sessione agente (2026-07-29) ─────────────────────
+# maybe_ttl_refresh: superata JHT_AGENT_MAX_SESSION_AGE_H la sessione viene
+# ricreata, punto. Il criterio è SOLO l'età: non conta il contesto (una
+# sessione al 4% dopo 30 ore va comunque ricreata), non conta che l'agente
+# stia lavorando, non conta lo stato PARKED, non conta nessuna euristica di
+# salute. Motivo: nell'incidente 2026-07-28/29 le sessioni avevano 38,5 ·
+# 29,5 · 27,0 · 14,5 · 14,2 ore e TUTTE le euristiche disponibili dicevano
+# "sano" mentre il team era paralizzato per undici ore. Un TTL non ha
+# euristiche da sbagliare.
+#
+# Il TTL vive QUI oltre che nel Dottore per ridondanza: il Dottore è un
+# agente e può essere fermo, bloccato o non spawnato — è successo proprio
+# quella notte. Il Dottore fa il refresh RICCO (capture + intervista +
+# retrospettiva + resume), questo è la rete che garantisce il tetto a
+# qualsiasi costo. Due differenze deliberate dal refresh della Sentinella:
+#   • NIENTE gate orario — una sessione di 30 ore va ricreata anche di
+#     notte: il costo di un kick-off è trascurabile rispetto a una giornata
+#     persa (il gate resta invece sul respawn dei worker, sotto);
+#   • UN SOLO refresh per tick, il più vecchio — le sessioni nascono a
+#     ondate e scadrebbero insieme, scaglionarle evita di rifare il team
+#     intero in un colpo.
 #
 # Loop interval: 30s (configurable via env JHT_AGENT_WATCHDOG_INTERVAL).
 # Idempotente: `jht team start` skippa session già attive.
@@ -40,6 +62,16 @@ AGENTS=(assistente capitano mentor sentinella)
 # Soglia (ore) oltre cui la sessione SENTINELLA viene ricreata per ripulire
 # il context window accumulato. Refresh deterministico, near-stateless.
 SENTINELLA_MAX_CTX_AGE_H="${JHT_SENTINELLA_MAX_CTX_AGE_H:-24}"
+# TTL: età massima (ore) di QUALSIASI sessione agente. Vedi il blocco in testa.
+AGENT_MAX_SESSION_AGE_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
+# Roster atteso (chi dovrebbe essere vivo): stato condiviso scritto da
+# start-agent.sh a ogni spawn riuscito, letto qui per sorvegliare i worker
+# numerati. Vedi shared/skills/team_roster.py per le tre guardie che
+# impediscono al watchdog di combattere col coordinatore.
+# Path overridabili solo per poterli esercitare nei test con dei finti: in
+# container restano quelli dell'immagine.
+ROSTER_TOOL="${JHT_ROSTER_TOOL:-/app/shared/skills/team_roster.py}"
+START_AGENT="${JHT_START_AGENT:-/app/.launcher/start-agent.sh}"
 
 # ── Bridge suite supervision (2026-06-27) ──────────────────────────────
 # I bridge/daemon ausiliari sono lanciati `setsid` detached da start-agent.sh
@@ -172,6 +204,118 @@ maybe_refresh_sentinella() {
   fi
 }
 
+is_agent_session() {
+  # Sessioni soggette a TTL: i core + i worker numerati + il Critico.
+  # ESCLUSE di proposito: DOTTORE / MANTENITORE / DOCTOR-WATCHDOG (one-shot,
+  # li rimpiazza il loro scheduler), SENTINELLA-WORKER (pane di appoggio del
+  # bridge, non un agente LLM con contesto) e qualunque sessione utente.
+  case "$1" in
+    DOTTORE*|DOCTOR-WATCHDOG|MANTENITORE*|SENTINELLA-WORKER) return 1 ;;
+    ASSISTENTE|CAPITANO|MENTOR|SENTINELLA|CRITICO) return 0 ;;
+    SCOUT-[0-9]*|ANALISTA-[0-9]*|SCORER-[0-9]*|SCRITTORE-[0-9]*|CRITICO-S[0-9]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+session_role() {
+  # SCOUT-3 → "scout 3" · CAPITANO → "capitano". Stampa "ruolo[ istanza]".
+  local s="$1" base inst
+  base="${s%%-*}"
+  inst=""
+  case "$s" in
+    *-*) inst="${s##*-}"; case "$inst" in ''|*[!0-9]*) inst="" ;; esac ;;
+  esac
+  printf '%s %s' "$(echo "$base" | tr '[:upper:]' '[:lower:]')" "$inst"
+}
+
+worker_kickoff() {
+  # Un respawn senza kick-off lascia l'agente al prompt vuoto: la sessione
+  # risulta viva e non lavora — esattamente il guasto invisibile che questo
+  # watchdog esiste per evitare. Messaggio minimo per ruolo; il protocollo
+  # completo sta nel prompt che start-agent.sh ha già installato.
+  local session="$1" role="$2" body
+  case "$role" in
+    scout)     body="Riprendi il loop principale: parti dal CIRCLE 1 del profilo candidato e notifica gli Analisti a lotti di 3-5 posizioni." ;;
+    analista)  body="Riprendi il loop principale: coda da db_query.py next-for-analista." ;;
+    scorer)    body="Riprendi il loop principale: coda da db_query.py next-for-scorer." ;;
+    scrittore) body="Riprendi il loop principale: coda da db_query.py next-for-scrittore." ;;
+    *)         body="Riprendi il loop principale come da prompt." ;;
+  esac
+  ( sleep 12
+    jht-tmux-send "$session" "[@watchdog -> @$(echo "$session" | tr '[:upper:]' '[:lower:]')] [MSG] Sessione ricreata dal watchdog. $body" >/dev/null 2>&1 || true
+  ) >/dev/null 2>&1 &
+}
+
+respawn_worker() {
+  # start-agent.sh con lo STESSO numero d'istanza (il dado di
+  # roll_worker_number è per gli spawn NUOVI, non per le ricreazioni).
+  local role="$1" inst="$2" session="$3"
+  if JHT_HOME="$JHT_HOME" bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
+    log "worker $session: start OK"
+    worker_kickoff "$session" "$role"
+    return 0
+  fi
+  log "worker $session: start FAIL — riprovo al prossimo tick"
+  return 1
+}
+
+maybe_ttl_refresh() {
+  # TTL duro su ogni sessione agente. SOLO l'età decide: nessun gate orario,
+  # nessuna soglia di contesto, nessun check di salute, nessuno stato PARKED.
+  # Un refresh per tick, il più vecchio per primo (scaglionamento).
+  local oldest="" oldest_age=-1 line s age
+  while IFS= read -r line; do
+    s="${line%%|*}"
+    [ -z "$s" ] && continue
+    is_agent_session "$s" || continue
+    age=$(session_age_h "$s") || continue
+    [ -z "$age" ] && continue
+    if [ "$age" -ge "$AGENT_MAX_SESSION_AGE_H" ] && [ "$age" -gt "$oldest_age" ]; then
+      oldest="$s"; oldest_age="$age"
+    fi
+  done <<EOF
+$(tmux list-sessions -F '#{session_name}' 2>/dev/null)
+EOF
+  [ -z "$oldest" ] && return 0
+
+  local role inst
+  read -r role inst <<EOF
+$(session_role "$oldest")
+EOF
+  log "ttl: $oldest ha ${oldest_age}h ≥ ${AGENT_MAX_SESSION_AGE_H}h — kill+recreate (solo età: contesto/PARKED/attività NON contano)"
+  tmux kill-session -t "$oldest" 2>/dev/null || true
+  # I core li ricrea ensure_agent nello stesso tick (subito sotto nel loop);
+  # i worker numerati non passano di lì e vanno ricreati qui.
+  if [ -n "$inst" ]; then
+    respawn_worker "$role" "$inst" "$oldest"
+  fi
+  return 0
+}
+
+maybe_respawn_workers() {
+  # Rete deterministica sui worker numerati: fino al 2026-07-29 la lista
+  # AGENTS copriva solo i core, quindi Scout/Analisti/Scorer/Scrittori —
+  # cioè tutti quelli che PRODUCONO — non erano sorvegliati da nulla che non
+  # fosse un agente. Quattro sono morti in silenzio nell'incidente.
+  #
+  # La decisione di respawnare NON è presa qui: sta in team_roster.py, che
+  # applica il gate orario (fuori finestra un worker assente è normale), il
+  # cancello di attività (si ricrea solo chi stava LAVORANDO quando è sparito
+  # — chi il Capitano ha tolto era già fermo), la sonda a colpo singolo e il
+  # tetto globale. Qui si esegue e basta: uno per tick.
+  [ -f "$ROSTER_TOOL" ] || return 0
+  local plan role inst session
+  plan=$(JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" next-respawn 2>/dev/null) || return 0
+  [ -z "$plan" ] && return 0
+  read -r role inst session <<EOF
+$plan
+EOF
+  [ -z "${session:-}" ] && return 0
+  log "roster: $session atteso ma assente (attivo di recente) — respawn via start-agent.sh $role $inst"
+  JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" mark-respawn "$session" >/dev/null 2>&1 || true
+  respawn_worker "$role" "$inst" "$session"
+}
+
 bridge_flap_ok() {
   # 0 se sotto il cap di respawn nella finestra, 1 se il cap è superato.
   local key="$1" f="$BRIDGE_STATE_DIR/bridge-flap-$1" now cutoff cnt
@@ -266,7 +410,7 @@ maybe_respawn_bridges() {
   fi
 }
 
-log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
+log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no gate orario, 1/tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
 
 # Loop principale: gate sulla config (può non essere ancora pronta al
 # primo boot del container — il wizard la scrive post-pairing). Sleep
@@ -276,7 +420,12 @@ trap 'log "watchdog shutdown (SIGTERM)"; exit 0' TERM INT
 
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+# Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): flag DIVERSO da halted,
+# semantica diversa — halted = "l'utente ha fermato il team" (tutto giù),
+# standby = sospensione tecnica che si risveglia da sola via sentinel-bridge.
+TEAM_STANDBY_FLAG="$JHT_HOME/.team-standby.flag"
 halt_log_tick=0
+standby_log_tick=0
 # Contatore per rendere LOUD un config_ready=false PERSISTENTE (ramo else in fondo
 # al loop): al primo boot è normale (wizard non ancora finito), ma oltre la grace
 # è un guasto reale che NON deve restare invisibile. Grace ~5min @ 30s/tick.
@@ -305,6 +454,28 @@ while true; do
     halt_log_tick=0
   fi
 
+  # Standby a spesa zero: le sessioni agente restano vive ma MUTE — niente
+  # respawn (una sessione ricreata fa un kick-off LLM = spesa) e niente
+  # refresh-per-età della Sentinella. I BRIDGE però restano sorvegliati: in
+  # standby sono LORO la sveglia (il sentinel-bridge valuta until/wake_on a
+  # ogni tick) e un bridge morto senza respawn = standby eterno. È l'unica
+  # differenza rispetto al gate halted qui sopra, ed è deliberata.
+  if [ -e "$TEAM_STANDBY_FLAG" ]; then
+    if [ $((standby_log_tick % 20)) -eq 0 ]; then
+      log "standby: .team-standby.flag presente — respawn/refresh agenti sospesi; bridge supervision ATTIVA (la sveglia)"
+    fi
+    standby_log_tick=$((standby_log_tick + 1))
+    if config_ready; then
+      maybe_respawn_bridges
+    fi
+    sleep "$INTERVAL_SEC"
+    continue
+  fi
+  if [ "$standby_log_tick" -gt 0 ]; then
+    log "standby: flag rimosso — riprendo respawn/refresh agenti"
+    standby_log_tick=0
+  fi
+
   if config_ready; then
     if [ "$config_not_ready_tick" -gt 0 ]; then
       log "config: tornata pronta dopo ${config_not_ready_tick} tick — riprendo respawn agenti"
@@ -313,9 +484,16 @@ while true; do
     # Refresh-per-età della Sentinella PRIMA del giro di ensure: se è troppo
     # vecchia la killa, poi ensure_agent la ricrea fresca nello stesso tick.
     maybe_refresh_sentinella
+    # TTL duro (12h) su ogni sessione agente, uno per tick, il più vecchio
+    # per primo. Deliberatamente PRIMA di ensure_agent: se la vittima è un
+    # core, ensure_agent la ricrea fresca subito sotto.
+    maybe_ttl_refresh
     for role in "${AGENTS[@]}"; do
       ensure_agent "$role"
     done
+    # Worker numerati: respawn guidato dal roster atteso (gate orario +
+    # cancello di attività + sonda a colpo singolo dentro team_roster.py).
+    maybe_respawn_workers
     # Bridge/daemon detached (sentinel/pacing/heartbeat-bridge/window-ratio/
     # codex-auth-healer + tg-bridge): respawn se morti, con anti-flap. Sono
     # fuori dal respawn-on-crash di pid1 (setsid), questo è il loro recovery.

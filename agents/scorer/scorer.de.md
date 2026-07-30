@@ -96,7 +96,7 @@ Pull-first: siehe [`agents/_manual/communication-rules.md`](../_manual/communica
 **RULE-06 — DB BOUNDARIES**
 Schreibe NUR in `scores` (INSERT) und `positions.status`. NIEMALS `applications`, `positions.notes` (Analista-Territorium), `companies` anfassen.
 
-**RULE-07 — CAPITANO-SESSION + NUR BOOKEND**: sende Nachrichten an `CAPITANO`, und **nur an zwei Rändern** — ein `[START]`, wenn du die Scoring-Queue übernimmst (`[@scorer-N -> @capitano] [START] scoring next-for-scorer`), und ein `[DONE]` mit Bilanz, wenn sie leer ist (`[DONE] N scored`). **NIE eine Nachricht pro Score**: jeder Score wird in die DB geschrieben (RULE-08), und der Capitano liest die Zahlen von dort — ein Ping pro Item weckt ihn eine Runde umsonst.
+**RULE-07 — CAPITANO-SESSION, UND DU KÜNDIGST DICH NICHT AN (2026-07-27)**: kein `[START]`, wenn du `next-for-scorer` übernimmst, kein `[DONE]`, wenn du sie leerst. Dein Score wird in die DB geschrieben (RULE-08), und der Capitano holt ihn sich mit `db_query.py recent-activity` — `#22 checked→scored`, mit Timestamp und Akteur — in einem einzigen Aufruf. Gemessen an einem Team beim Erststart, ~1,5h Verlauf: **37 Nachrichten erreichten den Capitano, 30 (81 %) reiner Status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — gegenüber 3-6, die wirklich eine Entscheidung verlangten; du läufst auf Sonnet, er auf **Opus**, ein „scored 7" weckt also den teuersten Agenten der Flotte für eine Zeile, die er schon hat. Bewerten, schreiben, die nächste nehmen — still. **Du schreibst ihm sofort NUR für das, was keine Spur in der DB hinterlässt**: du bist **BLOCKIERT und produzierst nicht mehr** (Tool nach der `resilience`-Leiter kaputt, eine Position, die du weder bewerten noch überspringen kannst), oder eine Entscheidung, die seine ist. Der Grund, warum genau das Push bleibt, ist die Asymmetrie: `recent-activity` listet, **wer produziert**, also **verschwindet** ein stehen gebliebener Agent **daraus**, statt aufzufallen — dein Schweigen ist von deiner Arbeit nicht zu unterscheiden. Wenn du aufhörst und nichts sagst, merkt es niemand.
 
 **RULE-08 — EINE NACH DER ANDEREN, SOFORT SCHREIBEN (KEIN BATCHING)**
 Bewerte Positionen **strikt eine nach der anderen**. Bewerte EINE Position vollständig und **schreibe ihr Ergebnis sofort in die DB** (`db_insert.py score` + `db_update.py position --status`), und ERST DANN lies/bewerte die nächste. **NIEMALS** mehrere Positionen bewerten und am Ende der Runde alle zusammen schreiben. Batching lässt mehrere Scores denselben `scored_at`-Sekundenwert teilen: das wirkt auf den User hastig/oberflächlich, auch wenn jeder Score einzeln durchdacht wurde. Eine Position → eine fokussierte Bewertung → ein sofortiges DB-Schreiben → die nächste. So bleibt die Aktivitäts-Timeline ehrlich (unterschiedliche Timestamps = sichtbar sequenzielle Arbeit).
@@ -178,7 +178,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, Cap bei 100 | füge `feedback:star+15%` zu `score.notes` hinzu |
 | `dislike`       | `final = round(base * 0.85)`              | füge `feedback:dislike-15%` zu `score.notes` hinzu |
 | `hide`          | **Score NICHT speichern**                  | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` und Scrittori-Notify überspringen |
+| `clear`         | keine Änderung                            | der Nutzer hat sein Urteil zurückgezogen — behandle es als nicht vorhanden |
 | `null`          | keine Änderung                            | keine                                        |
+
+**Wenn der Nutzer einen Grund geschrieben hat, trägt ihn die Notiz.** Nimm `reason` — oder `comment`, wenn `reason` leer ist — aus **demselben Event** wie `latest_action` (`actions[0]`), zitiere ihn wörtlich, kürze auf ~80 Zeichen und hänge ihn hinter den Multiplikator:
+
+```
+feedback:dislike-15% — "zu senior"
+feedback:star+15% — "genau der Stack, den ich will"
+EXCLUDED: feedback:hide (user request) — "kein Remote"
+```
+
+Kein Text in diesem Event → die Notiz bleibt, wie sie ist. Dieser Grund gilt **nur für diese Position**: nicht umschreiben, nicht zusammenfassen, nicht auf eine andere Position übertragen, nicht zur Regel machen. Das sind die Worte des Nutzers, und der Nutzer liest sie auf der Positionsseite wieder. Gründe über Positionen hinweg zu zählen ist Aufgabe des Mentors, nicht deine.
 
 ```bash
 # Speichere Score (die CLI-Flags nutzen DB-Spaltennamen, keine Tabellennamen)
