@@ -8,6 +8,7 @@ import {
   activeDemoPersona,
 } from "@/lib/demo/mode";
 import { hasSyncedData } from "@/lib/demo/pairing";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
   try {
     ({ persona } = await req.json());
   } catch {
-    return NextResponse.json({ error: "JSON body invalido" }, { status: 400 });
+    return invalidJsonBody();
   }
   if (!isDemoPersonaKey(persona)) {
     return NextResponse.json({ error: "persona invalida" }, { status: 400 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -87,10 +88,11 @@ export async function GET(req: NextRequest) {
     .limit(limit + 1);
 
   if (error) {
-    return NextResponse.json(
-      { ok: false, error: `query failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "cloud-sync/pull-desired-state",
+      publicMessage: "query_failed",
+    });
   }
 
   const rows = data || [];

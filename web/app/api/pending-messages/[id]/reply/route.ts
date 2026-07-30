@@ -4,6 +4,8 @@ import { isSupabaseConfigured, workspaceHasDb } from "@/lib/workspace";
 import { getWorkspacePath } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { replyPendingMessageLocal } from "@/lib/local-queries";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +31,7 @@ export async function POST(
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { error: "body JSON non valido" },
-      { status: 400 },
-    );
+    return invalidJsonBody();
   }
   const reply = typeof body.reply === "string" ? body.reply.trim() : "";
   if (!reply) {
@@ -100,7 +99,10 @@ export async function POST(
     .select("id");
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, {
+      status: 500,
+      scope: "pending-messages/[id]/reply",
+    });
   }
   return NextResponse.json({ ok: true, changed: (data?.length ?? 0) > 0 });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     .eq("user_id", verified.data.userId);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, { status: 500, scope: "cloud-sync/revoke" });
   }
   return NextResponse.json({ ok: true, revoked: true });
 }

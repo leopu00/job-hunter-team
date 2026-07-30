@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +36,7 @@ export async function PATCH(
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { ok: false, error: "invalid JSON body" },
-      { status: 400 },
-    );
+    return invalidJsonBody();
   }
   const status = String(body.status || "")
     .trim()
@@ -72,10 +71,10 @@ export async function PATCH(
   const { data, error } = await query.select("id, status").maybeSingle();
 
   if (error) {
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "cloud-sync/team-commands/[id]",
+    });
   }
   if (!data) {
     return NextResponse.json(

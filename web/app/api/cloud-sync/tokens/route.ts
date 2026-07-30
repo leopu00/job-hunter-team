@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { generateSyncToken } from "@/lib/cloud-sync/tokens";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, { status: 500, scope: "cloud-sync/tokens" });
   return NextResponse.json({ tokens: data ?? [] });
 }
 
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, { status: 500, scope: "cloud-sync/tokens" });
   return NextResponse.json({ ...data, token }, { status: 201 });
 }
 
@@ -145,6 +146,6 @@ export async function DELETE(req: NextRequest) {
     .eq("user_id", user.id);
 
   if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, { status: 500, scope: "cloud-sync/tokens" });
   return NextResponse.json({ ok: true });
 }

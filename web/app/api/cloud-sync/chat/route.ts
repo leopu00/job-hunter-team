@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -79,10 +81,11 @@ export async function GET(req: NextRequest) {
     .limit(limit);
 
   if (error) {
-    return NextResponse.json(
-      { ok: false, error: `query failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "cloud-sync/chat",
+      publicMessage: "query_failed",
+    });
   }
 
   return NextResponse.json({ ok: true, messages: data || [] });
@@ -106,10 +109,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { ok: false, error: "body JSON non valido" },
-      { status: 400 },
-    );
+    return invalidJsonBody();
   }
 
   // Solo UUID ben formati: gli id arrivano dal GET qui sopra, e un valore
@@ -132,10 +132,11 @@ export async function POST(req: NextRequest) {
       .in("id", ids)
       .select("id");
     if (error) {
-      return NextResponse.json(
-        { ok: false, error: `ack failed: ${error.message}` },
-        { status: 500 },
-      );
+      return sanitizedError(error, {
+        status: 500,
+        scope: "cloud-sync/chat",
+        publicMessage: "ack_failed",
+      });
     }
     delivered = (data || []).length;
   }

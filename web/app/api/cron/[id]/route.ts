@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readStore, writeStore } from "@/lib/cron-store";
 import { requireAuth, requireLocalWrite } from "@/lib/auth";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const store = readStore();

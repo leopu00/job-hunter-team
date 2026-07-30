@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
 import { isDemoLegacyId, findDemoPositionByLegacyId } from "@/lib/demo/data";
 import { activeDemoPersona } from "@/lib/demo/mode";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,10 @@ export async function GET(
     .is("deleted_at", null)
     .maybeSingle();
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, {
+      status: 500,
+      scope: "positions/[legacyId]/summary",
+    });
   }
 
   // Stesso fallback del vecchio toCard: posizioni pre-mig-049 senza

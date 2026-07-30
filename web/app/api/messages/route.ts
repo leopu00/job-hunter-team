@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
 import { requireLocalWrite } from "@/lib/auth";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +31,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON body invalido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const agent = typeof body.agent === "string" ? body.agent.trim() : "";
@@ -59,8 +61,7 @@ export async function POST(req: NextRequest) {
     .select()
     .single();
 
-  if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return sanitizedError(error, { status: 500, scope: "messages" });
   return NextResponse.json({ message: data });
 }
 
@@ -88,8 +89,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, error } = await q;
-  if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return sanitizedError(error, { status: 500, scope: "messages" });
   return NextResponse.json({ messages: data ?? [] });
 }
 
@@ -108,7 +108,7 @@ export async function PATCH(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON body invalido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const id = typeof body.id === "string" ? body.id : null;
@@ -133,8 +133,7 @@ export async function PATCH(req: NextRequest) {
     .select()
     .maybeSingle();
 
-  if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return sanitizedError(error, { status: 500, scope: "messages" });
   if (!data)
     return NextResponse.json(
       { error: "Messaggio non trovato" },
