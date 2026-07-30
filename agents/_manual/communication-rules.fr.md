@@ -1,50 +1,56 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
-# 💬 Règles de communication inter-agents
+<!-- @translation: fr, ai-translated 2026-07-30 -->
+# 💬 Règles de communication inter-agents — lean, pull par défaut
 
-Les agents JHT se coordonnent principalement via la **base de données**, pas via tmux. La BD porte l'état stable du pipeline ; tmux est réservé aux **signaux en temps réel** qui ne peuvent pas attendre le prochain cycle de polling.
+Les agents JHT se coordonnent **pull-first**. Par défaut, on *découvre* l'état dont on a besoin, on ne
+le *demande* pas. Un message tmux est l'**exception**, réservée à ce qu'un pair ne peut vraiment pas
+trouver tout seul.
 
-## 🗄️ Coordination via BD (le défaut)
+> **Pourquoi lean.** Un protocole push-heavy (broadcasts de statut, ACK de routine, pings « tu es
+> vivant ? ») brûle des tokens des deux côtés — l'émetteur écrit un tour, le destinataire réveille un
+> tour pour répondre — et détourne les agents du vrai travail. Presque tout ce trafic ne porte aucune
+> action. Coupe-le.
 
-Les passages de relais dans le pipeline se font naturellement via la BD — aucune notification tmux nécessaire :
+## 🪜 La hiérarchie de coordination — BD → capture-pane → message
 
-| Passage de relais | Mécanisme |
-|---|---|
-| 🕵️ Scout → 👨‍🔬 Analyst | L'Analyst interroge `next-for-analista` en continu ; voit immédiatement les nouvelles lignes avec `status = new` |
-| 👨‍🔬 Analyst → 👨‍💻 Scorer | Le Scorer interroge `next-for-scorer` ; prend les lignes avec `status = checked` |
-| 👨‍💻 Scorer → 👨‍🏫 Writer | Le Writer interroge `next-for-scrittore` ordonné par `score DESC` ; prend les lignes avec `status = scored` ≥ 50 |
-| 👨‍🏫 Writer → 👤 Utilisateur | La position arrive à `status = ready` + `applications.critic_verdict = PASS` ; le tableau de bord du Captain l'affiche |
+Prends toujours le **tier le moins cher qui répond à ta question**. Monte d'un tier seulement quand
+celui du dessous ne peut vraiment pas.
 
-**Règle générale** : si le prochain agent dans le pipeline peut voir le nouvel état en exécutant sa requête standard `next-for-X`, **n'envoyez pas de message tmux**. Envoyer un tmux à chaque batch crée du bruit et risque des messages perdus sur les panneaux occupés.
+| Tier | Outil | Sert à | Coût |
+|---|---|---|---|
+| **1. BD** | `db_query.py` (`next-for-*`, status, `last_checked`, flags) | **état partagé** — ce qui est en file, ce qui est pris, ce qui est fini, scores, cycle de vie | le moins cher, déterministe, sans race |
+| **2. capture-pane** | `tmux capture-pane -p -S -N` sur la session du pair | **« que fait X en ce moment ? »** — il travaille, il est bloqué sur un fetch, idle, coincé | pas cher (aucun tour chez le pair), mais c'est un **snapshot racy** — ne jamais s'y fier comme état durable |
+| **3. message tmux** | `jht-tmux-send` | **action que le pair ne peut pas découvrir** + **événements de sécurité** (voir la barre ci-dessous) | cher — un tour de chaque côté ; c'est l'exception |
 
-## 📡 tmux est réservé aux signaux en temps réel
+**Règle générale :** si la réponse est dans la BD, interroge la BD. Si tu as besoin de savoir ce qu'un
+collègue fait *à cet instant*, regarde son pane — **ne lui envoie pas de message pour le lui demander**.
+N'envoie un message que quand aucun des deux ne marche.
 
-Envoyez un message tmux uniquement quand le destinataire doit agir *maintenant* et ne peut pas attendre le prochain poll de la BD :
+## 🚧 La barre pour un message tmux (push)
 
-| Type | Quand l'utiliser | Temps réel nécessaire car… |
-|---|---|---|
-| `URG` | Captain → workers (FREEZE / throttle / kill) sur signal du Sentinel | Le dépassement du rate-limit est imminent — le polling de la BD est trop lent |
-| `URG` | Sentinel → Captain sur changement d'état réel (pic, violation, crash) | Idem |
-| `FEEDBACK` | Analyst → Scout sur les schémas de rejet (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`) | Le Scout doit adapter la **prochaine** requête, pas après un cycle de polling |
-| `REQ` / `RES` | Requête interactive entre agents (rare) | Réponse synchrone attendue |
-| `ACK` | Réponse confirmant qu'un `URG` a été reçu et appliqué | Le Captain doit savoir que le throttle/freeze a pris effet |
+N'envoie un message **que** si l'une de ces conditions est vraie :
 
-## 📨 Enveloppe du message
+1. **Vrai hand-off** — le pair doit *faire* quelque chose qu'il ne peut pas découvrir depuis sa propre
+   boucle `next-for-X` ni depuis la BD. Exemples : Writer → Critico pour démarrer la boucle de review du
+   CV ; Capitano → worker pour spawn / throttle / kill ; Analyste → Scout `FEEDBACK` qui doit changer la
+   *prochaine* requête.
+2. **Événement de sécurité** — `LOCKED` / `403`, halt, kill, crash, un dépassement de rate imminent que
+   le polling BD est trop lent à attraper. Sentinel → Capitano uniquement.
+3. **Côté utilisateur** — une demande de l'humain ou une réponse à l'humain (canal séparé ; voir les
+   manuels de rôle).
 
-Chaque message inter-agents utilise une enveloppe étiquetée sur une seule ligne :
+### ✂️ Ce qui est COUPÉ (à ne pas envoyer)
 
-```
-[@from -> @to] [TYPE] payload
-```
-
-`TYPE` est l'un de `URG · FEEDBACK · REQ · RES · ACK · INFO · REPORT` — mais en V5, seuls les 5 premiers sont utilisés en routine (voir tableau ci-dessus).
-
-## 🛠️ Envoi : `jht-tmux-send`
-
-```bash
-jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
-```
-
-⚠️ **N'utilisez jamais `tmux send-keys` brut pour les messages inter-agents.** Les TUI de Codex et Kimi perdent le caractère Enter s'il arrive dans le même appel `send-keys` que le corps du texte, causant des deadlocks silencieux. Le wrapper gère texte + Enter de manière atomique avec une pause de rendu. Skill dans `agents/_tools/jht-tmux-send`.
+- **ACK à vide** — « reçu, contexte mis à jour », « ok, j'attends ». Si le message n'exigeait aucune
+  action et que l'émetteur n'a pas *besoin* de la confirmation pour avancer, **ne dis rien**. (Voir
+  `ACK` plus bas pour le cas rare.)
+- **Broadcasts de statut** — « @all check 10:14, files vides, tout le monde en standby ». Tout ça est
+  observable : les files sont dans la BD, l'activité dans les panes. Ne le raconte pas à tout le monde.
+  (Pour l'observabilité lisible par un humain, écris dans l'event-log structuré, pas dans les panes des
+  pairs.)
+- **« Tu es vivant ? / tu en es où ? »** — utilise capture-pane (Tier 2). Ne brûle jamais le tour d'un
+  pair pour lui demander un statut qu'il devrait s'arrêter pour écrire.
+- **Reconfirmations / ordres répétés** — si tu as déjà envoyé un ordre, ne le renvoie pas à chaque tick.
+  Le bridge / la mailbox le livre une seule fois.
 
 ## 🔇 Produire est silencieux — l'état, le Capitano va le chercher
 
@@ -56,7 +62,7 @@ coûte un tour entier et, avec le partage automatique des modèles, il tourne su
 Scout / Analyste / Scorer tournent sur **Sonnet** : un « fait » du Scorer réveille l'agent le plus cher
 de la flotte pour ne rien faire.
 
-Le côté pull existait déjà et il est meilleur :
+Le côté pull existait déjà et il est nettement meilleur :
 
 ```bash
 python3 /app/shared/skills/db_query.py recent-activity --minutes 60
@@ -64,7 +70,9 @@ python3 /app/shared/skills/db_query.py recent-activity --minutes 60
 
 Un appel rend les compteurs par agent plus chaque transition avec timestamp, acteur, position et motif
 — `#22 checked→scored`, `#27 new→excluded — [DEAD_LINK]`. **Un `DONE` porte moins d'information que la
-ligne qui l'a produit.**
+ligne qui l'a produit.** (Le même protocole avait déjà tué le flood par item : un Analyste a réveillé le
+Capitano **25 fois en une nuit**, un ping par position. Les deux bookends « polis » ont disparu à leur
+tour.)
 
 ### ⚠️ Ce qui reste en PUSH — l'asymétrie est tout l'enjeu
 
@@ -74,70 +82,156 @@ doivent donc toujours partir **tout de suite**, parce qu'ils ne laissent **aucun
 
 | Signal | Quand |
 |---|---|
-| **BLOQUÉ** | tu as cessé de produire : outil cassé après l'échelle `resilience`, `403` / `LOCKED`, sources vraiment sèches (`[SCOUT-ESAUSTO]`), un élément en file que tu ne peux ni traiter ni sauter |
+| **BLOCKED** | tu as cessé de produire : outil cassé après l'échelle `resilience`, `403` / `LOCKED`, sources vraiment sèches (`[SCOUT-ESAUSTO]`), un élément en file que tu ne peux ni traiter ni sauter |
 | **Conflit** | deux collègues sur le même enregistrement / territoire et vous n'arrivez pas à trancher entre vous |
 | **Demande de décision** | un `REQ` auquel seul le Capitano peut répondre (arbitrage de taxonomie, scaling, un choix côté utilisateur) |
 
-Tout le reste — début, avancement, fin — est en pull. **Si tu t'arrêtes sans le dire, personne ne s'en
-aperçoit.**
+Tout le reste — début, avancement, fin — est en pull. Ils restent permis comme avant, parce que ce sont
+des *décisions* et non de la narration : un `FEEDBACK` à un Scout, un `URG` de sécurité. **Si tu
+t'arrêtes sans le dire, personne ne s'en aperçoit.**
 
-## ⏰ Signaux obligatoires par rôle
+## 🗄️ Tier 1 — coordination via BD (le défaut)
 
-Ce que chaque rôle DOIT envoyer via tmux (tout le reste est géré via BD) :
+Les passages de relais du pipeline passent par la BD — **aucun tmux nécessaire** :
+
+| Passage de relais | Mécanisme |
+|---|---|
+| 🕵️ Scout → 👨‍🔬 Analyste | L'Analyste interroge `next-for-analista` ; voit les lignes fraîches avec `status = new` |
+| 👨‍🔬 Analyste → 👨‍💻 Scorer | Le Scorer interroge `next-for-scorer` ; prend les lignes avec `status = checked` |
+| 👨‍💻 Scorer → 👨‍🏫 Writer | Le Writer interroge `next-for-scrittore` (`score DESC`) ; prend les lignes avec `status = scored` ≥ 50 |
+| 👨‍🏫 Writer → 👤 Utilisateur | La position arrive à `status = ready` + `applications.critic_verdict = PASS` ; elle apparaît sur le tableau de bord |
+
+**Prendre un enregistrement sans message** — les pairs évitent la même ligne grâce aux verrous décrits
+dans [`anti-collision.md`](anti-collision.md) : dedup pré-INSERT + partition circles/sources pour le
+Scout ; watermark `last_checked` pour Analyste/Scorer ; flip vers `status = writing` pour le Writer.
+**La première écriture gagne.** Tu n'annonces pas « je prends l'ID 42 » — le claim *est* le verrou ; le
+pair le lit dans la BD.
+
+## 👀 Tier 2 — capture-pane (observe, ne demande pas)
+
+Pour comprendre ce que fait un collègue **sans le déranger** :
+
+```bash
+tmux capture-pane -t <PEER_SESSION> -p -S -40
+```
+
+Cherche : le spinner / `esc to interrupt` (vivant, en plein tour), un prompt shell nu (idle /
+possiblement coincé), un fetch bloqué. Ça remplace entièrement les messages « tu es vivant ? / c'est
+quoi ton statut ? ».
+
+⚠️ **C'est un snapshot, pas l'état.** Tu peux attraper un tour en plein rendu. Utilise-le pour la
+*liveness / l'activité*, **jamais** comme source de vérité de l'état partagé — ça, c'est toujours la BD
+(Tier 1). Le verdict sur un pair *peut-être mort* revient au Dottore (`liveness-check`), pas à une
+lecture réflexe.
+
+## 📨 Tier 3 — enveloppe du message et types
+
+Enveloppe étiquetée sur une seule ligne :
+
+```
+[@from -> @to] [TYPE] payload
+```
+
+Jeu de types réduit (prends le plus étroit qui convient) :
+
+| Type | Quand |
+|---|---|
+| `URG` | Sécurité / agis maintenant : Capitano → worker (throttle / freeze / kill) ; Sentinel → Capitano (dépassement, crash, LOCKED) |
+| `FEEDBACK` | Analyste → Scout, schémas de rejet (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`) qui doivent changer la prochaine requête |
+| `REQ` / `RES` | Une vraie requête synchrone attendant une réponse (rare) — un vrai hand-off, pas une question de statut |
+| `BLOCKED` | Worker → Capitano : tu as **cessé de produire** et ça ne laisse aucune trace en BD (outil cassé, `403`/`LOCKED`, sources sèches, un élément que tu ne peux ni traiter ni sauter). Depuis le 2026-07-27, c'est le seul signal qui sépare un blocage d'un travail silencieux — `recent-activity` ne peut pas le montrer, puisqu'un agent arrêté disparaît de cette liste |
+
+`ACK` — **seulement** quand l'émetteur a réellement besoin de savoir que l'action a pris effet pour
+avancer en sécurité (ex. le Capitano doit confirmer qu'un `FREEZE` a été appliqué avant de scaler). Ce
+n'est **pas** une réponse de routine. Si un ordre n'a pas besoin de confirmation pour être sûr, le
+destinataire l'applique en silence. `INFO` / `REPORT` sont dépréciés pour le trafic entre pairs :
+envoie la narration à l'event-log, pas dans les panes.
+
+## 🛠️ Envoi : `jht-tmux-send`
+
+```bash
+jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
+```
+
+⚠️ **Jamais de `tmux send-keys` brut pour les messages inter-agents.** Les TUI Codex/Kimi perdent le
+caractère Enter quand il arrive avec le corps, causant des deadlocks silencieux. Le wrapper gère texte +
+Enter de manière atomique. Il est **busy-aware** : il attend la fin du tour du pair puis livre
+(`exit 0`) ; `exit 4` = pair vivant mais toujours occupé au-delà du budget → **réessaie plus tard, ne
+spawn pas / ne te remets pas à raisonner** ; `exit 3` = peut-être mort → verdict du Dottore, pas un
+réflexe. Skill : `agents/_skills/tmux-send/jht-tmux-send`.
+
+**Sur un envoi échoué / occupé :** mets-le en file (la `bridge_mailbox` que le Capitano draine),
+**n'ouvre pas** un nouveau tour de raisonnement pour « réfléchir » à l'échec. Le retry est mécanique,
+pas cognitif.
+
+## ⏰ Signaux obligatoires par rôle (tout le reste est en pull)
 
 ### 🕵️ Scout
-- Reçoit des `FEEDBACK` des Analysts → adapte les requêtes ; répond `ACK`
+- **Ne t'annonce jamais** au Capitano — pas de `[START]`, pas de `[DONE]`, rien par résultat. Les INSERT
+  sont le rapport ; il les lit dans `recent-activity`. Push uniquement quand tu es **BLOCKED et que tu
+  ne produis plus** (y compris `[SCOUT-ESAUSTO]`) ou en conflit avec un autre Scout.
+- Reçoit du `FEEDBACK` des Analystes → adapte la prochaine requête. **Pas d'ACK** sauf si l'Analyste a
+  posé un `REQ`.
 
-### 👨‍🔬 Analyst
-- Envoie un `FEEDBACK` à un Scout quand :
-  - 3 exclusions consécutives de la même source avec le même tag, OU
-  - Taux d'exclusion >60% dans un seul batch d'un Scout
+### 👨‍🔬 Analyste
+- **Ne t'annonce jamais** au Capitano — pas de `[START]`, pas de `[DONE]`, rien par position. Le flip
+  vers `checked` est le rapport. Push uniquement quand tu es **BLOCKED et que tu ne produis plus**, ou
+  pour un `REQ` d'arbitrage de taxonomie.
+- N'envoie du `FEEDBACK` à un Scout que sur un vrai schéma : 3 exclusions consécutives avec le même tag
+  depuis une même source, OU > 60 % de taux d'exclusion dans un batch d'un Scout. Sinon, silence (la BD
+  porte le relais).
 
 ### 👨‍💻 Scorer
-- *(pas de tmux — les passages de relais du pipeline sont gérés via BD ; les statistiques de distribution des scores apparaissent sur le tableau de bord du Captain)*
+- **Ne t'annonce jamais** au Capitano — pas de `[START]`, pas de `[DONE]`, rien par score. Chaque score
+  est une ligne de BD qu'il récupère dans `recent-activity`. Push uniquement quand tu es **BLOCKED et
+  que tu ne produis plus**. Le relais du pipeline passe par la BD ; les insights sortent sur le tableau
+  de bord / l'event-log.
 
 ### 👨‍🏫 Writer
-- Reçoit `URG FREEZE` du Captain → termine le round Critic en cours (ne jamais abandonner une review en cours), puis `ACK` et mise en veille jusqu'à ce que le throttle revienne à T0/T1
+- **Ne t'annonce jamais** au Capitano — pas de `[START]` quand tu prends un job CV, pas de `[DONE]`
+  quand il atterrit en `ready` : la transition `writing → ready` est dans la BD. Push uniquement quand
+  tu es **BLOCKED et que tu ne produis plus** (boucle Critico coincée, données de profil manquantes).
+- Sur `URG FREEZE` du Capitano : termine le round Critic en cours (ne jamais abandonner une review en
+  cours), puis ralentis. C'est ici seulement que l'`ACK` s'impose — le cas rare du confirmer-pour-
+  avancer.
 
 ### 💂 Sentinel
-- Edge-triggered : ne parle que lorsque l'état change réellement (pic d'utilisation, violation de projection, crash d'agent). Envoie `URG` au Captain avec l'action proposée (throttle / freeze / kill). N'envoie jamais directement aux workers — le Captain est la passerelle.
+- Edge-triggered, **uniquement pendant les heures de travail**. Ne parle **que** sur un vrai changement
+  d'état (pic, dépassement, crash, `LOCKED`). Un message par edge — jamais de réémission. Ne broadcast
+  jamais aux workers (le Capitano est la passerelle). État stable → silence.
 
-### 👨‍✈️ Captain
-- Envoie des ordres `URG` aux workers (FREEZE, niveau de throttle, kill) sur signal du Sentinel
-- Envoie des `REQ` pour la coordination interactive (rare)
-- Transmet le feedback utilisateur de la Phase 5 au rôle concerné
-- Lit l'état du pipeline depuis la BD, pas depuis les panneaux des workers — ne remet jamais en question un agent en se connectant à son tmux
+### 👨‍✈️ Capitano
+- `URG` aux workers (throttle / freeze / kill / spawn) sur signal du Sentinel ou sur un besoin observé
+  du pipeline.
+- Lit l'état du pipeline dans la **BD**, l'activité des agents via **capture-pane** — ne narre jamais de
+  statut aux pairs, ne renvoie jamais un ordre déjà donné.
 
 ## 📥 Lire les messages des pairs
 
-Vous n'avez pas besoin de scanner tmux avant *chaque* action — la plupart de la coordination passe par la BD. À la place :
-
-- **Entre les unités de travail** (après avoir terminé une position, avant d'en prendre une nouvelle), faites un rapide `tmux capture-pane -p -S -20` sur votre propre session.
-- **Priorisez `URG` et `FEEDBACK`** : agissez dessus avant de prendre du nouveau travail.
-- Un message entrant pendant que vous êtes en pleine tâche sera déjà dans votre contexte (le wrapper l'écrit dans votre panneau) ; vous n'avez pas besoin de faire du polling, remarquez-le simplement avant de démarrer la prochaine itération.
+Tu ne scannes pas tmux avant chaque action — l'essentiel de la coordination est dans la BD.
+- **Entre unités de travail** (après une position, avant d'en prendre une autre) : un rapide
+  `tmux capture-pane -p -S -20` sur **ta propre** session pour repérer un `URG` / `FEEDBACK` entrant.
+- Priorise `URG` / `FEEDBACK` ; agis avant de prendre du travail neuf.
+- Un message qui arrive en plein task est déjà dans ton contexte (le wrapper l'a écrit dans ton pane) —
+  il suffit de le remarquer avant l'itération suivante.
 
 ## ⏸️ Throttle : pauses tracées
 
-Chaque fois que vous voulez ralentir votre boucle pour respecter le budget de rate
-(refroidissement après un batch, freeze post-`URG`, "attendre l'upstream", …),
-**utilisez la skill `throttle`, jamais un simple `sleep`** :
+Pour ralentir ta boucle (cooldown, post-`URG`, attente de l'upstream), utilise la skill `throttle`,
+**jamais un simple `sleep`** :
 
 ```bash
 jht-throttle <seconds> --agent <your-name> [--reason "..."]
 ```
 
-Chaque appel ajoute un événement à `$JHT_HOME/logs/throttle-events.jsonl`,
-pour que le Captain et le tableau de bord puissent voir qui est en pause et pour
-combien de temps. Le simple `sleep` n'est autorisé que pour les attentes très courtes (≤ 5 s)
-entre les tentatives, où la journalisation serait du bruit.
-
-Captain : quand vous ordonnez à un worker de ralentir, nommez la skill explicitement,
-ex. `[URG] Throttle: jht-throttle 180 --agent scout-1 --reason "rate budget"`.
-Ne dites pas "sleep 3 minutes" — cela contourne la journalisation.
+Chaque appel journalise dans `$JHT_HOME/logs/throttle-events.jsonl`, pour que le Capitano et le tableau
+de bord voient qui est en pause et combien de temps. Le `sleep` nu uniquement pour des attentes de retry
+≤ 5 s. Capitano : nomme la skill explicitement dans l'ordre (`[URG] jht-throttle 180 --agent scout-1
+--reason "rate budget"`), jamais « sleep 3 minutes ».
 
 Voir : [`../_skills/throttle/SKILL.md`](../_skills/throttle/SKILL.md).
 
 ## 🔗 Voir aussi
 
-- 🛡️ [`anti-collision.md`](anti-collision.md) — mécanismes de verrouillage (claim avant de travailler)
+- 🛡️ [`anti-collision.md`](anti-collision.md) — verrous claim-before-work (comment se coordonner via la BD)
 - 🧭 [`../_team/architettura.md`](../_team/architettura.md) — vue d'ensemble du pipeline (qui alimente qui)
