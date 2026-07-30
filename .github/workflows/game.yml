@@ -1,15 +1,29 @@
 name: Game — Native desktop matrix
 
+# `shared/skills/burn_intent.py` non e' un file di gioco, ma
+# `game/tools/burn_mode_selftest.gd` lo legge e ne confronta il contenuto con la
+# copia GDScript dell'avviso di deroga alla spesa. Senza questa riga il guard
+# del drift non girava proprio nella PR che lo puo' rompere: si tocca il file
+# Python, il workflow non parte, e la copia nel gioco resta indietro
+# promettendo reti di sicurezza che il modulo non ha piu'.
+#
+# `enrichment_policy.py` e `db_query.py` (letti da
+# `tools/coordinator_policy_selftest.py`) hanno la stessa forma e NON sono qui
+# di proposito: quel selftest e' oggi nel tier `watch`, cioe' non blocca, e non
+# vale ~30 minuti di runner su tre OS a ogni modifica Python. Quando passera' a
+# `gate` vanno aggiunti anche loro, altrimenti si ricrea questo stesso buco.
 on:
   push:
     paths:
       - "game/**"
+      - "shared/skills/burn_intent.py"
       - ".github/workflows/game.yml"
   pull_request:
     branches:
       - master
     paths:
       - "game/**"
+      - "shared/skills/burn_intent.py"
       - ".github/workflows/game.yml"
   workflow_dispatch:
 
