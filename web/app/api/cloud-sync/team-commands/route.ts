@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +44,11 @@ export async function GET(req: NextRequest) {
     .limit(limit);
 
   if (error) {
-    return NextResponse.json(
-      { ok: false, error: `query failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "cloud-sync/team-commands",
+      publicMessage: "query_failed",
+    });
   }
   return NextResponse.json({ ok: true, commands: data || [] });
 }

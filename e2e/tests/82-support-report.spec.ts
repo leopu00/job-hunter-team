@@ -24,7 +24,9 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
  * un motivo esplicito. Ricetta in e2e/README.md § "Sessione".
  */
 
-const BASE = process.env.BASE_URL || "http://localhost:3000";
+// ⚠️ Percorsi **relativi**, mai una costante BASE locale: la destinazione la
+// decide `use.baseURL` della config, che è anche dove vive la scelta di
+// `localhost` invece di `127.0.0.1` (playwright.config.ts:1-25).
 
 /**
  * Stato del canale, sondato UNA VOLTA per esecuzione.
@@ -38,7 +40,7 @@ let statoCanale: "ok" | "assente" | "esaurito" | null = null;
 
 async function sondaCanale(page: Page) {
   if (statoCanale) return statoCanale;
-  const res = await page.request.post(`${BASE}/api/feedback`, {
+  const res = await page.request.post("/api/feedback", {
     data: {
       client: "e2e-probe",
       happened: "sonda e2e: verifica che il canale sia configurato",
@@ -96,7 +98,7 @@ async function invioPossibileOrSkip(page: Page) {
  * Chiude anche il banner dei cookie, che altrimenti copre il pulsante di invio.
  */
 async function apriModulo(page: Page) {
-  await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
+  await page.goto("/contact", { waitUntil: "domcontentloaded" });
   const categorie = page.locator("fieldset button[aria-pressed]");
   await categorie.first().waitFor();
   const seconda = categorie.nth(1);
@@ -108,7 +110,7 @@ async function apriModulo(page: Page) {
 }
 
 async function sessioneOrSkip(page: Page) {
-  const dash = await page.request.get(`${BASE}/dashboard`, { maxRedirects: 0 });
+  const dash = await page.request.get("/dashboard", { maxRedirects: 0 });
   test.skip(
     dash.status() === 307,
     "serve una sessione autenticata per l'area riservata — vedi e2e/README.md § Sessione",
@@ -179,10 +181,10 @@ async function superaWizard(page: Page) {
 // non riceve eventi. Fallimento intermittente in CI il 2026-07-27 — lo stesso
 // test era passato in 2.4s quattordici minuti prima.
 async function apriDialogo(page: Page, da = "/dashboard") {
-  await page.goto(`${BASE}${da}`, { waitUntil: "domcontentloaded" });
+  await page.goto(da, { waitUntil: "domcontentloaded" });
   await superaWizard(page);
   if (!page.url().includes(da)) {
-    await page.goto(`${BASE}${da}`, { waitUntil: "domcontentloaded" });
+    await page.goto(da, { waitUntil: "domcontentloaded" });
   }
   const account = page.getByRole("button", { name: /account:/i });
   await account.waitFor({ state: "visible" });
@@ -199,7 +201,7 @@ async function apriDialogo(page: Page, da = "/dashboard") {
 
 test.describe("pagina pubblica /contact", () => {
   test("il modulo ha i campi che servono", async ({ page }) => {
-    await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
+    await page.goto("/contact", { waitUntil: "domcontentloaded" });
     await expect(page.locator("#c-nome")).toBeVisible();
     await expect(page.locator("#c-email")).toBeVisible();
     await expect(page.locator("#c-oggetto")).toBeVisible();
@@ -211,7 +213,7 @@ test.describe("pagina pubblica /contact", () => {
   test("gli indirizzi sono cliccabili, per chi preferisce il suo client", async ({
     page,
   }) => {
-    await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
+    await page.goto("/contact", { waitUntil: "domcontentloaded" });
     await expect(
       page.locator('a[href="mailto:support@jobhunterteam.ai"]'),
     ).toBeVisible();
@@ -223,7 +225,7 @@ test.describe("pagina pubblica /contact", () => {
   test("il campo trappola resta fuori dallo schermo e dagli screen reader", async ({
     page,
   }) => {
-    await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
+    await page.goto("/contact", { waitUntil: "domcontentloaded" });
     const esca = page.locator("#c-website");
     await expect(esca).toHaveCount(1);
     // Non `toBeHidden()`: è fuori viewport ma tecnicamente renderizzato. Ciò

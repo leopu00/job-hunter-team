@@ -125,7 +125,7 @@ Monorepo: [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](sh
 
 JHT is built by a solo maintainer orchestrating AI agents on parallel `devN` branches — external contributions come in as `feat/`/`fix/` branches → PR ([`CONTRIBUTING.md`](.github/CONTRIBUTING.md)).
 
-- Start here: [`good first issue`](https://github.com/leopu00/job-hunter-team/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) · bigger directions: [contributor missions M1–M5](docs/about/ROADMAP.md#-where-you-can-help--contributor-missions)
+- Start here: [`good first issue`](https://github.com/leopu00/job-hunter-team/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) · bigger directions: [contributor missions M1–M10](docs/about/ROADMAP.md#-where-you-can-help--contributor-missions)
 - Beta tester? [`docs/guides/BETA.md`](docs/guides/BETA.md) — we want real job-seekers to break things
 - Security issue? [`SECURITY.md`](SECURITY.md) — responsible disclosure, please no public issue
 

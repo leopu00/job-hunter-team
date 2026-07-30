@@ -108,6 +108,10 @@ If your change introduces a design decision that isn't obvious from the diff (ne
 
 Load-bearing invariants live in ADRs — breaking them breaks the rest of the system.
 
+## Working on the office (the desktop application)
+
+The Godot office in [`game/`](../game/) is the only native desktop client. Its docs live next to the code in [`game/docs/`](../game/docs/): start from [`GDD.md`](../game/docs/GDD.md) (product design), [`FIRST-RUN.md`](../game/docs/FIRST-RUN.md) (the token-free first-run contract) and [`DATA-ADAPTER.md`](../game/docs/DATA-ADAPTER.md) (how scenes get team data without knowing about Supabase).
+
 ## Working on agents
 
 Agents are the specialized pipeline workers (Scout, Analyst, Scorer, Writer, Critic, …). Two folders to know about:

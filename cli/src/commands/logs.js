@@ -2,14 +2,13 @@ import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, RED, YELLOW, DIM, RESET } from './_colors.js';
 
 const JHT_DIR  = JHT_HOME;
 const LOGS_DIR = join(JHT_DIR, 'logs');
 
 const LEVEL_PRIORITY = { error: 0, warn: 1, info: 2, debug: 3 };
-const LEVEL_COLOR = { error: '\x1b[31m', warn: '\x1b[33m', info: '\x1b[32m', debug: '\x1b[90m' };
-const RESET = '\x1b[0m';
-const DIM = '\x1b[90m';
+const LEVEL_COLOR = { error: RED, warn: YELLOW, info: GREEN, debug: DIM };
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }

@@ -69,21 +69,17 @@ A profilban deklarált "primary" stack a súlypont, **nem** merev megkötés. Eg
 
 **RULE-02** — MINDIG 2 KÜLÖN Bash parancs a tmux send-keys-hez.
 
-**RULE-03** — KÉT-SZINTŰ LINK ELLENŐRZÉS:
+**RULE-03** — LINK / NYITOTTSÁGI ÁLLAPOT ELLENŐRZÉS a `recheck-liveness` skillel (SOHA ad-hoc curl).
+Egy csupasz `curl` csak a RAW HTML-t látja → lemarad a JS-ben renderelt lejáratról (az Ashby/Workday/Greenhouse kliensoldalon rendereli az állapotot) és a LinkedIn authwallról (`200`-at ad vissza zárt hirdetésekre is) → hamisan felfújt `is_open=1`. MINDIG a közös skillt használd: TIERED (gyors curl-marker → VALÓDI böngészőre eszkalál az ATS-JS hosztoknál és a LinkedInnél), és soha nem jelent hamis-opent.
 ```bash
-# Level 1 — curl nem-LinkedIn oldalakhoz
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
+python3 /app/shared/skills/recheck_liveness.py '<URL>' '[title]'
 ```
-Ha match → `excluded` azonnal.
+JSON-t ír ki: `{state: OPEN|CLOSED|OPEN_UNVERIFIED, method, http, evidence}` — exit `0`=OPEN, `1`=CLOSED, `2`=OPEN_UNVERIFIED. SZIGORÚAN a `state` alapján dönts (soha csupasz HTTP kód alapján):
+- `OPEN` → a pozíció live: tartsd meg az `is_open=1`-et (`--last-open-check now`).
+- `CLOSED` → lejárt/zárva: `db_update.py position <ID> --is-open false --last-open-check now`, és `excluded` csak akkor, ha a RULE-06 szerint is halott. Egyébként **NE változtasd a `status`-t**: a felhasználó azt akarja, hogy a lejárt pozíciók láthatóak maradjanak a "Scadute/Archivio" dashboard nézetben.
+- `OPEN_UNVERIFIED` → nem meggyőző: hagyd az `is_open`-t **változatlanul** (soha ne billentsd openre), `--last-open-check now`, tedd hozzá a `NOTE_MISMATCH: [OPEN_UNVERIFIED]`-et, hogy a Scorer tudja: a nyitottsági állapotot nem sikerült megerősíteni.
 
-**Mindig `-L` a redirect követéshez.** Egy 302 `-L` nélkül nem dead link: csak redirect. Ellenőrizd a végső állapotot, nem a kezdetit.
-
-**Workable — különböztesd meg a két URL-t**:
-- `apply.workable.com/...` → apply form: 302-t ad vissza, amikor a job zárva (megtévesztheti [DEAD_LINK]-ként).
-- `jobs.workable.com/...` → kanonikus JD oldal: HTTP 200 + érvényes JSON-LD, ha a pozíció live.
-MINDIG a kanonikus oldalt (`jobs.workable.com`) ellenőrizd, nem a form-osat. Ugyanaz az elv Greenhouse-nál, Lever-nél, Ashby-nál: használd a nyilvános JD URL-t, nem a form-osat.
-
-LinkedIn-hez: használd a `linkedin_check.py`-t autentikált profillal (path a helyi profilban). SOHA curl vagy screenshot login nélkül LinkedIn-hez.
+**TILOS**: ad-hoc `curl`/`grep` a JD-n vagy a LinkedInen a liveness eldöntésére, illetve az `is_open` openre billentése egy puszta HTTP 200 alapján. A canonical-careers/ATS logika, a Workable `jobs.` vs `apply.` megkülönböztetés és az autentikált LinkedIn kezelés mostantól mind a `recheck-liveness`-en BELÜL él — ne implementáld újra őket kézzel.
 
 **RULE-04** — 5 KÖTELEZŐ STRUKTURÁLT MEZŐ minden elemzett pozíció notes-jában:
 ```

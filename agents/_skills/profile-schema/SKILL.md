@@ -1,150 +1,150 @@
 ---
 name: profile-schema
-description: "Single source of truth dello SCHEMA del candidate_profile.yml — il formato canonico che TUTTO il team produce e consuma. Modello a 3 livelli: core congelato + blocchi standard + blocchi custom liberi. Definisce i 6 `kind` di blocco che il web sa rendere e la regola di governance (nessun agente inventa il formato). Ogni write del profilo va validato con `jht profile validate`. Riferita da profile-yaml, onboarding-flow, parse-cv, cv-structure."
+description: "Single source of truth for the SCHEMA of candidate_profile.yml — the canonical format that the WHOLE team produces and consumes. 3-level model: frozen core + standard blocks + free custom blocks. Defines the 6 block `kind`s the web knows how to render and the governance rule (no agent invents the format). Every profile write must be validated with `jht profile validate`. Referenced by profile-yaml, onboarding-flow, parse-cv, cv-structure."
 allowed-tools: Bash(jht profile validate *), Bash(python3 *)
 ---
 
-# profile-schema — il formato canonico del profilo
+# profile-schema — the canonical profile format
 
-Tutti scrivono e leggono lo stesso profilo: l'Assistente lo costruisce, il web lo mostra,
-Analista/Scorer/Scrittore lo consumano. Se ognuno usa chiavi diverse, il web non sa
-renderizzare e il push perde dati. Questa skill è **l'unico formato concordato**. La
-definizione macchina-verificabile vive in:
-- `shared/config/profile-schema.ts` (tipi Zod, lato web)
-- `shared/skills/validate_profile.py` (gate runtime, lato agenti/CLI)
+Everyone writes and reads the same profile: the Assistente builds it, the web displays it,
+Analista/Scorer/Scrittore consume it. If everyone uses different keys, the web cannot
+render and the push loses data. This skill is **the only agreed format**. The
+machine-verifiable definition lives in:
+- `shared/config/profile-schema.ts` (Zod types, web side)
+- `shared/skills/validate_profile.py` (runtime gate, agent/CLI side)
 
-## 🎚️ Modello a 3 livelli
+## 🎚️ 3-level model
 
 ```
-L1 CORE      campi congelati e mandatori → tipizzati, interrogabili (matching, /map)
-L2 STANDARD  slot raccomandati (about, goals, preferences, strengths) → blocchi
-L3 CUSTOM    carta bianca: blocchi su misura per QUESTA persona → blocchi
+L1 CORE      frozen and mandatory fields → typed, queryable (matching, /map)
+L2 STANDARD  recommended slots (about, goals, preferences, strengths) → blocks
+L3 CUSTOM    free rein: blocks tailored to THIS person → blocks
 ```
 
-L2 e L3 sono entrambi **blocchi** nello stesso array `blocks:`. La differenza è solo che
-gli L2 usano `key` raccomandate (sotto); gli L3 hanno `key` libera che scegli tu.
+L2 and L3 are both **blocks** in the same `blocks:` array. The only difference is that
+L2 uses recommended `key`s (below); L3 has a free `key` that you choose.
 
-## 🧊 L1 — core (sempre presente, mai inventare le chiavi)
+## 🧊 L1 — core (always present, never invent the keys)
 
 ```yaml
-name: <str>                 # mandatorio
-target_role: <str>          # mandatorio
-location: <str>             # mandatorio
-experience_years: <int>     # mandatorio (>= 0)
-has_degree: <true|false>    # mandatorio
-seniority_target: <str>     # mandatorio (junior|mid|senior|…)
-email: <str>                # opzionale
-timezone: <str>             # opzionale
-nationality: <str>          # opzionale
-birth_year: <int>           # opzionale
-industry: <str>             # opzionale
+name: <str>                 # mandatory
+target_role: <str>          # mandatory
+location: <str>             # mandatory
+experience_years: <int>     # mandatory (>= 0)
+has_degree: <true|false>    # mandatory
+seniority_target: <str>     # mandatory (junior|mid|senior|…)
+email: <str>                # optional
+timezone: <str>             # optional
+nationality: <str>          # optional
+birth_year: <int>           # optional
+industry: <str>             # optional
 
-skills:                     # mandatorio, primary >= 1
+skills:                     # mandatory, primary >= 1
   primary: [<str>, …]
   secondary: [<str>, …]
-languages:                  # mandatorio, >= 1.  ⚠️ chiave 'language' (NON 'name')
+languages:                  # mandatory, >= 1.  ⚠️ key 'language' (NOT 'name')
   - language: <str>
     level: <str>
-experience:                 # lista, ognuna company+role
+experience:                 # list, each one company+role
   - company: <str>
     role: <str>
-    period: "Sep 2021 - Feb 2023"   # raw; il web la mostra in TIMELINE
+    period: "Sep 2021 - Feb 2023"   # raw; the web shows it in the TIMELINE
     summary: |- …
 education:
   - institution: <str>
     degree: <str>
     year: <str>
-work_authorization:         # lista tipizzata (NON {eu,ch,…} annidato)
+work_authorization:         # typed list (NOT {eu,ch,…} nested)
   - region: eu
     status: "EU citizen — free movement"
-location_preferences: [<città>, …]
-contacts:                   # PII — il web la mostra reveal-on-click
+location_preferences: [<city>, …]
+contacts:                   # PII — the web shows it reveal-on-click
   email: …  phone: …  linkedin: …  github: …  website: …  address: …
 ```
 
-## 🧩🎨 L2/L3 — `blocks` (il cuore della flessibilità)
+## 🧩🎨 L2/L3 — `blocks` (the heart of the flexibility)
 
 ```yaml
 blocks:
-  - key: <slug stabile>       # about / goals / preferences / strengths (L2) oppure libero (L3)
-    kind: <uno dei 6 sotto>   # il "contratto" di rendering
-    title: <titolo mostrato>
-    ord: <int opzionale>      # ordine
-    content: <forma dipende dal kind>
+  - key: <stable slug>        # about / goals / preferences / strengths (L2) or free (L3)
+    kind: <one of the 6 below>  # the rendering "contract"
+    title: <displayed title>
+    ord: <int optional>       # order
+    content: <shape depends on the kind>
 ```
 
-### I 6 `kind` (sono TUTTI — non inventarne altri)
+### The 6 `kind`s (these are ALL of them — do not invent others)
 
-| kind | content | quando |
+| kind | content | when |
 |---|---|---|
-| `narrative` | stringa markdown (1ª persona) | testi raccontati: about, goals, aspirazioni |
-| `key_points` | `[{heading, text}]` | preferenze, punti di forza (sezionati, NON un blob) |
-| `tag_list` | `[<str>]` | competenze extra, interessi, città, ruoli target |
-| `key_value` | `[{label, value}]` | dati a coppie: "consulting fit", dettagli settore |
-| `timeline` | `[{title, subtitle, period, detail}]` | sequenze datate ulteriori |
-| `distribution` | `[{label, value}]` | quando un donut/grafico aiuta (es. mix città) |
+| `narrative` | markdown string (1st person) | narrated texts: about, goals, aspirations |
+| `key_points` | `[{heading, text}]` | preferences, strengths (sectioned, NOT one blob) |
+| `tag_list` | `[<str>]` | extra skills, interests, cities, target roles |
+| `key_value` | `[{label, value}]` | paired data: "consulting fit", industry details |
+| `timeline` | `[{title, subtitle, period, detail}]` | further dated sequences |
+| `distribution` | `[{label, value}]` | when a donut/chart helps (e.g. city mix) |
 
-`narrative` è il **fallback universale**: se un dato non entra negli altri 5, usalo lì.
+`narrative` is the **universal fallback**: if a datum does not fit the other 5, put it there.
 
-### Esempi reali
+### Real examples
 
 ```yaml
 blocks:
   - key: about
     kind: narrative
-    title: Chi sono
+    title: About me
     content: |-
-      Sono un analista di credit risk con due anni in private equity…
+      I am a credit risk analyst with two years in private equity…
   - key: strengths
     kind: key_points
-    title: Punti di forza
+    title: Strengths
     content:
-      - heading: Analisi del credito
-        text: Due diligence forense, rating, revisione portafogli.
-      - heading: Comunicazione
-        text: Presento deep dive di settore e case study.
-  - key: consulting_fit            # ← L3 custom, key libera
+      - heading: Credit analysis
+        text: Forensic due diligence, ratings, portfolio reviews.
+      - heading: Communication
+        text: I present sector deep dives and case studies.
+  - key: consulting_fit            # ← L3 custom, free key
     kind: key_value
-    title: Affinità consulting
+    title: Consulting fit
     content:
-      - label: Interesse
-        value: Alto, su temi finance/transaction/strategy
-      - label: Punto debole
-        value: Voti non sempre adatti ai track più selettivi
+      - label: Interest
+        value: High, on finance/transaction/strategy topics
+      - label: Weak spot
+        value: Grades not always a match for the most selective tracks
   - key: beyond_work               # ← L3 custom
     kind: tag_list
-    title: Oltre il lavoro
-    content: [Skateboard downhill (campione HU), Canottaggio, Teatro]
+    title: Beyond work
+    content: [Downhill skateboarding (HU champion), Rowing, Theatre]
 ```
 
-## 🤝 Governance — NON inventare il formato
+## 🤝 Governance — do NOT invent the format
 
-Ogni profilo è diverso e va mostrato al meglio: hai **carta bianca sul contenuto** dei
-blocchi L3. Ma il **formato è congelato**. Regole:
+Every profile is different and deserves to be shown at its best: you have **free rein on the
+content** of the L3 blocks. But the **format is frozen**. Rules:
 
-1. **Mai inventare un `kind`** fuori dai 6. Se un dato non entra, usa `narrative`.
-2. **Mai inventare chiavi L1** o rinominarle (es. `languages[].name` ❌ → `language` ✅).
-3. Se ti serve davvero un nuovo `kind` o un nuovo campo core, **proponilo al Capitano** —
-   l'estensione dello schema passa da qui (e da `profile-schema.ts` + `validate_profile.py`),
-   mai da una convenzione locale del singolo agente.
+1. **Never invent a `kind`** outside the 6. If a datum does not fit, use `narrative`.
+2. **Never invent L1 keys** or rename them (e.g. `languages[].name` ❌ → `language` ✅).
+3. If you really need a new `kind` or a new core field, **propose it to the Capitano** —
+   schema extensions go through here (and through `profile-schema.ts` + `validate_profile.py`),
+   never through a local convention of a single agent.
 
-## ✅ Validazione obbligatoria dopo OGNI write
+## ✅ Mandatory validation after EVERY write
 
-Sostituisce il vecchio `yaml.safe_load` "è YAML valido" con "è conforme allo schema":
+It replaces the old `yaml.safe_load` "it is valid YAML" with "it conforms to the schema":
 
 ```bash
 jht profile validate
-# oppure diretto:
+# or directly:
 python3 /app/shared/skills/validate_profile.py "$JHT_HOME/profile/candidate_profile.yml"
 ```
 
-`VALID_PROFILE` → prosegui. `INVALID_PROFILE` → leggi gli `ERROR:`, correggi, rivalida.
-I `WARN:` (es. chiave legacy) non bloccano ma vanno sistemati quando tocchi quella sezione.
-**Non parlare all'utente finché non è `VALID_PROFILE`** (un profilo rotto svuota la UI).
+`VALID_PROFILE` → carry on. `INVALID_PROFILE` → read the `ERROR:` lines, fix, revalidate.
+The `WARN:` lines (e.g. a legacy key) do not block but should be cleaned up when you touch that section.
+**Do not talk to the user until it is `VALID_PROFILE`** (a broken profile empties the UI).
 
 ## See also
 
-- `profile-yaml` — meccanica di scrittura/validazione del file (usa QUESTO schema)
-- `profile-summaries` — i testi narrativi → diventano blocchi `kind: narrative`
-- `onboarding-flow` — quando aggiornare cosa
+- `profile-yaml` — the write/validate mechanics of the file (it uses THIS schema)
+- `profile-summaries` — the narrative texts → they become `kind: narrative` blocks
+- `onboarding-flow` — when to update what
 - `shared/config/profile-schema.ts` · `shared/skills/validate_profile.py`

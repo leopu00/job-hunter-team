@@ -1,0 +1,365 @@
+======================================================================
+  REPORT E2E — FRESH SETUP + MULTI-PROFILO
+  Worker: @jht-e2e | Data: 2026-03-14
+  Repo testato: https://github.com/leopu00/job-hunter-team
+======================================================================
+
+══════════════════════════════════════════════════════════════════════
+TASK 1 — TEST SETUP.SH END-TO-END (simulazione nuovo utente)
+══════════════════════════════════════════════════════════════════════
+
+Ambiente di test:
+  OS: macOS 25.3.0 (Darwin)
+  Python Homebrew: /opt/homebrew/bin/python3 v3.14.2
+  Python Anaconda: /opt/anaconda3/bin/python3 v3.12.4
+  tmux: 3.6
+
+────────────────────────────────────────────────────────────────────
+STEP 1 — Creazione directory di test
+────────────────────────────────────────────────────────────────────
+Comando: rm -rf /tmp/jht-test-fresh && mkdir /tmp/jht-test-fresh
+Risultato: OK
+Output: Directory creata con successo
+
+────────────────────────────────────────────────────────────────────
+STEP 2 — git clone
+────────────────────────────────────────────────────────────────────
+Comando: git clone https://github.com/leopu00/job-hunter-team.git .
+Risultato: OK
+Output: Cloning into '.' ... EXIT_CODE: 0
+
+File presenti dopo clone:
+  LICENSE, README.md, .env.example, .gitignore,
+  candidate_profile.yml.example, requirements.txt,
+  setup.sh, shared/, analista/, archi/, scorer/,
+  scout/, scrittore/, docs/, tests/
+
+Nota: candidate_profile.yml (dati reali) NON presente nel clone
+come atteso — e' gitignored. Solo .example viene distribuito.
+
+────────────────────────────────────────────────────────────────────
+STEP 3a — setup.sh con Python Homebrew 3.14 (FAIL)
+────────────────────────────────────────────────────────────────────
+Comando: chmod +x setup.sh && ./setup.sh
+Risultato: FAIL al passo [2/7] Installazione dipendenze Python
+
+Errore completo:
+  error: externally-managed-environment (PEP 668)
+  × This environment is externally managed
+  pip3 non puo' installare pyyaml senza --break-system-packages
+  EXIT_CODE: 1
+
+Causa: Python 3.14 installato via Homebrew su macOS ha
+  adottato PEP 668 che blocca pip3 system-wide per proteggere
+  l'installazione Homebrew. L'utente tipico su macOS con
+  Python moderno (>= 3.12 Homebrew) incorre in questo errore.
+
+Impatto: il setup FALLISCE SILENZIOSAMENTE per una larga
+  percentuale di utenti macOS. Il messaggio di errore e' lungo
+  e tecnico — non intuitivo per un utente alle prime armi.
+
+────────────────────────────────────────────────────────────────────
+STEP 3b — setup.sh con Python Anaconda 3.12 (OK)
+────────────────────────────────────────────────────────────────────
+Comando: PATH="/opt/anaconda3/bin:$PATH" ./setup.sh
+Risultato: OK — SETUP COMPLETATO CON SUCCESSO
+
+Output step per step:
+  [1/7] Prerequisiti:    OK (python3 3.12, pip3 25.1.1, tmux 3.6)
+  [2/7] Dipendenze:      OK (pyyaml installato, requirements.txt OK)
+  [3/7] .env:            OK (.env creato da .env.example)
+                         WARN: inserire ANTHROPIC_API_KEY
+  [4/7] candidate_profile.yml: OK (creato da .example)
+                         WARN: compilare profilo personale
+  [5/7] Directory:       OK (shared/data/, shared/data/applications/)
+  [6/7] DB init:         OK (Database inizializzato: shared/data/jobs.db)
+                         Tutte le tabelle a 0 righe (fresh install)
+  [7/7] Verifica DB:     OK (integrita' verificata senza errori)
+
+EXIT_CODE: 0
+
+────────────────────────────────────────────────────────────────────
+STEP 4 — Verifica file creati dal setup
+────────────────────────────────────────────────────────────────────
+.env:                    OK (creato da .env.example, 1989 bytes)
+candidate_profile.yml:   OK (creato da .example, 5847 bytes)
+shared/data/jobs.db:     OK (64K, SQLite inizializzato)
+
+Risultato: PASS
+
+────────────────────────────────────────────────────────────────────
+STEP 5 — Verifica PyYAML accessibile
+────────────────────────────────────────────────────────────────────
+Comando: python3 -c 'import yaml; print(yaml.__version__)'
+
+Con Python Homebrew 3.14:  FAIL (ModuleNotFoundError: No module named 'yaml')
+Con Python Anaconda 3.12:  OK → output: 6.0.3
+
+Risultato: FAIL con python3 di sistema, PASS con Anaconda
+
+Nota: requirements.txt contiene solo "pyyaml". Se setup.sh
+fallisce allo step 2 (PEP 668), pyyaml non viene installato
+e TUTTI i successivi script yaml falliscono.
+
+────────────────────────────────────────────────────────────────────
+STEP 6 — Verifica DB (dashboard)
+────────────────────────────────────────────────────────────────────
+Comando: python3 shared/skills/db_query.py dashboard
+Output:
+  JOB HUNTER — DASHBOARD (Schema V2)
+  Posizioni totali: 0
+  Company ID: 0/0 posizioni collegate (0%)
+EXIT_CODE: 0
+
+Risultato: PASS
+  Il dashboard funziona su DB vuoto senza crash.
+  Dashboard mostra correttamente 0 posizioni per fresh install.
+
+────────────────────────────────────────────────────────────────────
+STEP 7 — Verifica user_version DB
+────────────────────────────────────────────────────────────────────
+Comando: python3 -c 'import sqlite3; c=sqlite3.connect("shared/data/jobs.db"); print(c.execute("PRAGMA user_version").fetchone())'
+Output: (2,)
+EXIT_CODE: 0
+
+Risultato: PASS
+  user_version = 2 confermato. db_init.py setta correttamente
+  la versione a 2, a differenza di ensure_schema() che lascia
+  user_version=0 (bug documentato nel report precedente e2e-edge-cases).
+  Con fresh setup da db_init.py, il problema NON si manifesta.
+
+────────────────────────────────────────────────────────────────────
+STEP 8 — Parsing candidate_profile.yml
+────────────────────────────────────────────────────────────────────
+Comando: python3 -c 'import yaml; p=yaml.safe_load(open("candidate_profile.yml")); print(p.get("name","MANCANTE"))'
+Output: Nome Cognome
+EXIT_CODE: 0
+
+Risultato: PASS
+  candidate_profile.yml (copiato da .example) si parsa correttamente.
+  Il valore "Nome Cognome" e' il placeholder atteso dall'example.
+
+────────────────────────────────────────────────────────────────────
+RIEPILOGO TASK 1
+────────────────────────────────────────────────────────────────────
+
+STEP | DESCRIZIONE                        | RISULTATO
+-----|------------------------------------|-----------
+  1  | rm -rf + mkdir directory test      | OK
+  2  | git clone repo                     | OK
+  3  | chmod + ./setup.sh                 | FAIL (PEP668 Python 3.14 Homebrew)
+  3b | setup.sh con Anaconda Python       | OK (workaround)
+  4  | Verifica file .env, profile, db    | PASS
+  5  | PyYAML accessibile                 | FAIL (Homebrew) / PASS (Anaconda)
+  6  | db_query.py dashboard              | PASS
+  7  | user_version = 2                   | PASS
+  8  | candidate_profile.yml parsing      | PASS
+
+BUG CRITICO TROVATO:
+  [BUG-SETUP-01] setup.sh fallisce su macOS con Python >= 3.12
+  installato via Homebrew a causa di PEP 668
+  (externally-managed-environment).
+
+  Fix consigliato: in setup.sh, step 2, usare:
+    pip3 install --quiet --user pyyaml
+  oppure:
+    pip3 install --quiet --break-system-packages pyyaml
+  oppure rilevare e usare python3 -m pip con venv:
+    python3 -m venv .venv && .venv/bin/pip install pyyaml
+
+══════════════════════════════════════════════════════════════════════
+TASK 2 — TEST MULTI-PROFILO (Laura Bianchi - Senior DevOps)
+══════════════════════════════════════════════════════════════════════
+
+Azioni preliminari:
+  cp candidate_profile.yml candidate_profile_backup.yml  → OK
+  Backup: 5847 bytes, copia corretta del profilo .example
+
+Profilo creato:
+  name: Laura Bianchi
+  target_role: Senior DevOps Engineer
+  experience_years: 10
+  has_degree: true
+  skills: [Python, Kubernetes, AWS, Terraform, Docker, CI/CD,
+           Linux, Ansible, Prometheus, Grafana]
+  languages: [italiano/madrelingua, inglese/C1, tedesco/B1]
+  location_preferences: [Remote EU, Hybrid Milano, Hybrid Berlino]
+  experience: 3 ruoli (Senior DevOps 3a, DevOps Eng 4a, SysAdmin 3a)
+  education: Laurea + 2 certificazioni AWS/CKA
+  projects: 2 (k8s-homelab, terraform-aws-modules)
+
+────────────────────────────────────────────────────────────────────
+TEST 2.1 — Parsing snippet scorer (chiavi top-level)
+────────────────────────────────────────────────────────────────────
+Comando: python3 -c "import yaml; p=yaml.safe_load(open('candidate_profile.yml')); ..."
+Output:
+  name: Laura Bianchi                               OK
+  target_role: Senior DevOps Engineer               OK
+  experience_years: 10                              OK
+  has_degree: True                                  OK
+  skills: [Python, Kubernetes, AWS, Terraform,
+           Docker, CI/CD, Linux, Ansible,
+           Prometheus, Grafana]                     OK
+  filters: {max_experience_required: 12,
+            min_score_for_writing: 55, ...}         OK
+  languages: [it/madrelingua, en/C1, de/B1]        OK
+  location_preferences: [Remote EU, Hybrid
+           Milano, Hybrid Berlino]                  OK
+
+EXIT_CODE: 0
+Risultato: PASS — tutti i campi scorer si parsano correttamente
+
+────────────────────────────────────────────────────────────────────
+TEST 2.2 — Parsing snippet scrittore (sezione candidate)
+────────────────────────────────────────────────────────────────────
+Comando: python3 -c "... c = p['candidate']; print('Nome:', c['name']); ..."
+Output:
+  Nome: Laura Bianchi                               OK
+  Skills: {languages: [Python, Bash],
+           frameworks: [Ansible, Terraform],
+           tools: [Docker, Kubernetes, ...],
+           cloud: [AWS, GCP]}                       OK
+  Exp ruoli: [Senior DevOps Engineer,
+              DevOps Engineer,
+              SysAdmin Linux]                       OK (3 ruoli)
+  Exp companies: [CloudScale GmbH,
+                  Fintech Solutions Srl,
+                  WebAgency Roma]                   OK
+  Education: [Laurea Magistrale in Informatica,
+              AWS Certified...,
+              Certified Kubernetes...CKA]           OK (3 entry)
+  Projects: [k8s-homelab, terraform-aws-modules]   OK (2 progetti)
+  Languages: [it/madrelingua, en/C1, de/B1]        OK
+  Strengths: 4 punti di forza                      OK
+
+EXIT_CODE: 0
+Risultato: PASS — snippet scrittore funziona completamente
+
+────────────────────────────────────────────────────────────────────
+TEST 2.3 — Analisi candidate_profile.yml.example per profilo senior
+────────────────────────────────────────────────────────────────────
+
+CONFRONTO CAMPI TOP-LEVEL:
+  Campi in .example non in Laura:  nessuno (set vuoto)
+  Campi in Laura non in .example:  nessuno (set vuoto)
+  => L'example copre TUTTI i campi necessari per un profilo senior.
+
+CONFRONTO SEZIONE candidate:
+  Campi in example.candidate non in Laura.candidate: nessuno
+  Campi in Laura.candidate non in example.candidate: nessuno
+  => La struttura candidate e' pienamente compatibile.
+
+CONFRONTO SEZIONE filters:
+  Filtri in example non in Laura:  nessuno
+  Filtri in Laura non in example:  nessuno
+  => Tutti i filtri documentati coprono il caso d'uso senior.
+
+────────────────────────────────────────────────────────────────────
+CAMPI MANCANTI / MIGLIORAMENTI SUGGERITI PER L'EXAMPLE
+────────────────────────────────────────────────────────────────────
+
+L'analisi strutturale non ha trovato campi mancanti, ma esistono
+GAP DOCUMENTALI e SEMANTICI per un profilo senior:
+
+[GAP-01] has_degree DEFAULT FALSE — non intuitivo per senior
+  L'example ha has_degree: false.
+  Un profilo senior spesso ha una laurea. Il default false potrebbe
+  indurre errore: il candidato dimentica di impostarlo a true.
+  Suggerimento: aggiungere commento esplicativo nell'example:
+    has_degree: true  # true se hai una laurea (default: false)
+
+[GAP-02] experience: SOLO 1 ENTRY COMMENTATA
+  L'example mostra 1 ruolo attivo e 1 ruolo commentato.
+  Un profilo senior ha tipicamente 3-5 ruoli. L'example potrebbe
+  mostrare almeno 2 ruoli attivi per guidare l'utente senior.
+
+[GAP-03] education: SOLO 1 ENTRY ATTIVA
+  L'example mostra 1 istruzione attiva (corso generico) e 1 commentata.
+  Un senior ha laurea + certificazioni. L'example potrebbe esplicitare
+  il formato certificazioni (es. AWS, CKA) per guidarne la compilazione.
+
+[GAP-04] skills.tools E skills.cloud — LISTA VUOTA PER CLOUD
+  L'example ha cloud: []  con commento (AWS, GCP).
+  Per un profilo DevOps/Cloud Engineer, cloud dovrebbe avere esempi
+  piu' ricchi e visibili, non solo commentati.
+
+[GAP-05] NESSUNA SEZIONE "certifications" DEDICATA
+  Il profilo senior tipicamente ha certificazioni (CKA, AWS SA, etc.)
+  che vanno nel CV ma non trovano una sezione dedicata nell'example.
+  Attualmente sono messe in education, che puo' confondere.
+  Suggerimento: aggiungere sezione opzionale:
+    certifications:
+      - name: "AWS Certified Solutions Architect - Professional"
+        issuer: "Amazon Web Services"
+        year: 2021
+        credential_id: ""  # opzionale
+
+[GAP-06] scoring_weights — NESSUN COMMENTO SUI RANGE
+  I pesi in scoring_weights non hanno commenti sui valori min/max.
+  Un utente senior potrebbe voler aumentare il peso stack_match
+  non sapendo che la somma deve restare a 100.
+  Suggerimento: aggiungere commento "# totale deve essere 100"
+
+[GAP-07] target_roles_priority — NON DOCUMENTATO COME PRIORITA'
+  Il campo e' chiaro nel nome, ma manca documentazione su come
+  lo scorer lo usa. Un DevOps senior ha ruoli molto diversi
+  (Platform, SRE, Cloud Architect) — utile sapere come influisce.
+
+[GAP-08] CANDIDATE.SKILLS CON STRUTTURA DIVERSA DA TOP-LEVEL SKILLS
+  La sezione top-level skills e' una lista piatta:
+    skills: [Python, Kubernetes, ...]
+  La sezione candidate.skills e' un dizionario per categoria:
+    candidate.skills: {languages: [...], frameworks: [...]}
+  Questa INCOERENZA non e' documentata. Lo scorer usa la lista
+  piatta, lo scrittore usa il dizionario. Un utente puo' confondersi
+  e aggiornare solo una delle due sezioni, rendendo scorer e
+  scrittore out-of-sync.
+  Questo e' il GAP PIU' CRITICO per un profilo senior con molte
+  skills distribuite in piu' categorie.
+
+────────────────────────────────────────────────────────────────────
+RIEPILOGO TASK 2
+────────────────────────────────────────────────────────────────────
+
+TEST   | DESCRIZIONE                          | RISULTATO
+-------|--------------------------------------|-----------
+ 2.1   | Parsing snippet scorer (top-level)   | PASS
+ 2.2   | Parsing snippet scrittore (candidate)| PASS
+ 2.3   | Confronto example vs profilo senior  | 8 GAP documentali trovati
+
+Il profilo YAML di Laura Bianchi e' stato creato e parsato
+correttamente. L'example ha la struttura giusta ma manca di
+documentazione adeguata per guidare un profilo senior avanzato.
+
+Il GAP piu' critico e' la duplicazione non documentata tra
+skills top-level (lista piatta) e candidate.skills (dict).
+
+══════════════════════════════════════════════════════════════════════
+RIEPILOGO GENERALE E PRIORITA' FIX
+══════════════════════════════════════════════════════════════════════
+
+CRITICI (bloccanti per nuovi utenti):
+  [BUG-SETUP-01] setup.sh fallisce su Python 3.14 Homebrew (PEP 668)
+                 Impatto: alta percentuale utenti macOS bloccata
+                 Fix: pip install --user oppure venv in setup.sh
+
+DOCUMENTALI (non bloccanti, ma confondono):
+  [GAP-08] Doppia struttura skills non documentata (critico per senior)
+  [GAP-05] Nessuna sezione certifications dedicata
+  [GAP-01] has_degree default false non commentato adeguatamente
+  [GAP-02] Solo 1 ruolo experience attivo nell'example
+  [GAP-06] Nessun commento su range scoring_weights
+
+MINORI:
+  [GAP-03] Education non mostra format certificazioni
+  [GAP-04] cloud: [] senza esempi visibili per DevOps
+  [GAP-07] target_roles_priority non documentato come priorita'
+
+FILE PRODOTTI:
+  /tmp/jht-test-fresh/candidate_profile.yml        (profilo Laura Bianchi)
+  /tmp/jht-test-fresh/candidate_profile_backup.yml (backup .example)
+  /tmp/jht-test-fresh/test-report-fresh-setup.txt  (questo report)
+
+======================================================================
+EOF — Report generato da @jht-e2e il 2026-03-14
+======================================================================

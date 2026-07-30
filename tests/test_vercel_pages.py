@@ -1,12 +1,23 @@
 """
-Test HTTP pagine Vercel — Job Hunter Team QA.
+Smoke post-deploy sulle pagine Vercel — Job Hunter Team QA.
 
 Verifica che tutte le pagine Next.js deployate su Vercel:
 - Rispondano (non 404/500)
 - Richiedano autenticazione (401/redirect) senza sessione
 - Le route dinamiche /positions/[id] esistano e siano protette
 
-Eseguire con: pytest tests/test_vercel_pages.py -v
+⚠️ QUESTO FILE INTERROGA UN SITO VIVO, NON IL CODICE DELLA PR.
+È marcato `@pytest.mark.production` (a livello di modulo) ed è ESCLUSO dal job
+`pytest` di `.github/workflows/test.yml`, che gira con `-m "not production"`.
+Gira invece nel job `smoke` schedulato dello stesso workflow, dopo il deploy.
+
+Il motivo è quello che il job `e2e` già scrive nello stesso workflow: una CI
+che dipende dal sito vivo è rossa quando cade qualcosa che non c'entra con la
+PR, e verde-per-skip quando il runner non raggiunge Vercel (le `URLError`
+diventano `pytest.skip`). Un test che non può essere rosso per il codice sotto
+esame non appartiene al gate della PR.
+
+Eseguire con: pytest tests/test_vercel_pages.py -v -m production
 Richiede: VERCEL_URL env var oppure usa l'URL di default.
 """
 
@@ -14,6 +25,11 @@ import os
 import urllib.request
 import urllib.error
 import pytest
+
+# Tutto il modulo parla con la produzione: il marker sta sul modulo, così un
+# test nuovo aggiunto qui è coperto dal giorno che nasce e non può rientrare
+# di soppiatto nel gate delle PR.
+pytestmark = pytest.mark.production
 
 VERCEL_URL = os.environ.get(
     "VERCEL_URL",

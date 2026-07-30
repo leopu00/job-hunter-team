@@ -8,6 +8,7 @@ import {
   isLocalTokenAuthenticated,
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -131,10 +132,11 @@ export async function POST(
     .select("id")
     .single();
   if (error) {
-    return NextResponse.json(
-      { error: `Supabase insert failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "positions/[legacyId]/ticket",
+      publicMessage: "insert_failed",
+    });
   }
   return NextResponse.json({
     id: String(data.id),

@@ -8,17 +8,34 @@ Browser-driven end-to-end tests for the Job Hunter Team **web** surface.
 ## Layout
 
 ```
-tests/             3 live specs — these run, in CI and locally
+tests/             4 live specs — these run, in CI and locally
 tests/quarantine/  75 specs kept for parts, excluded from every run
 playwright.config.ts
 ```
 
-## State of the suite (triaged 2026-07-26)
+## State of the suite (triaged 2026-07-26, counts checked 2026-07-30)
 
-**What runs: 37 tests in 3 files** — `39-og-twitter-image` (social/PWA metadata),
-`80-welcome-wizard`, `81-demo-mode`. They run on every push and PR
-(`.github/workflows/test.yml`, job `e2e`) against `next start` in cloud mode
-with a real session.
+**What runs: 47 tests in 4 files** — `npx playwright test --list` is the source
+of this number, not this paragraph:
+
+| Spec | Tests | What it covers |
+|---|---|---|
+| `39-og-twitter-image` | 21 | social/PWA metadata: OG and Twitter images, icons, manifest |
+| `80-welcome-wizard` | 10 | `/welcome`, the new cloud user's first run |
+| `81-demo-mode` | 6 | the protected area serving the demo dataset |
+| `82-support-report` | 10 | reporting a problem: `/contact` and the dashboard dialog |
+
+They run on every push and PR (`.github/workflows/test.yml`, job `e2e`) against
+`next start` in cloud mode with a real session.
+
+⚠️ **These specs are meant to be able to fail.** Until 2026-07-30
+`39-og-twitter-image` guarded all 21 of its tests with
+`if (res.status() === 404) test.skip(...)`: deleting `web/app/opengraph-image.tsx`
+produced six skipped tests labelled "not deployed yet", not a red run — the
+quarantine defect, alive inside a promoted spec. Those guards now assert
+`toBe(200)`. Every asset they reach for is in the repository, so a 404 is a
+regression; if the job goes red because `next start` does not produce one of
+them, that is the suite doing its job for the first time.
 
 **What does not: the other 75 specs**, moved to [`tests/quarantine/`](tests/quarantine/README.md).
 The 2026-07-25 measurement of the full suite — 770 passed · 574 skipped ·
@@ -35,9 +52,25 @@ documented path, not a rewrite: see the quarantine README.
 
 Tracked in `BACKLOG.md` as **[JHT-E2E-STALE]**.
 
-The rule for anything new: **skip loudly**. What can be tested anonymously runs
-on every execution; what needs a session skips with a message that says so —
-`80-welcome-wizard.spec.ts` is the model.
+The rule for anything new: **skip loudly, and only on the environment**. What
+can be tested anonymously runs on every execution; what needs a session, a
+cloud deploy mode or a configured delivery channel skips with a message naming
+that condition — `80-welcome-wizard.spec.ts` and `82-support-report.spec.ts`
+are the models. A missing file, a 404 on a route the repo contains, a meta tag
+`layout.tsx` declares: those are failures. "Not deployed yet" is not an
+environment.
+
+Two more rules, both of which the live specs have broken before:
+
+- **No local `BASE` constant.** Use relative paths and let `use.baseURL` decide
+  the target, in one place. A private `process.env.BASE_URL || <default>` makes
+  the config inert, and every such default has been wrong at least once — one
+  pointed at production, two at `127.0.0.1`.
+- **No `networkidle`.** But do not just delete it: replace it with
+  `domcontentloaded` plus an anchor on something that proves what the test needs
+  is there — a retrying assertion, an `expect.poll` on a count, a button whose
+  `aria-pressed` only flips after hydration.
+  `82-support-report.spec.ts:88-100` is the model.
 
 ## How to run
 
@@ -73,7 +106,7 @@ green run there proved something nobody uses.
 > this reason.
 
 ```bash
-npm test                  # the 3 live specs
+npm test                  # the 4 live specs
 npm run test:quarantine   # the 75 retired ones, on purpose
 npm run test:report       # open the HTML report
 ```

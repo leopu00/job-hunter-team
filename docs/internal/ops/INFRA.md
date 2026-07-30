@@ -55,12 +55,12 @@ Three channels today, each with a different audience:
 - **💬 Telegram** — **3-bot bidirectional bridge** (decisione 2026-05-13 rev2): Assistente (orchestrator user-facing), Capitano (status + decisioni operative), Mentor (career coach always-on). Tutti e tre obbligatori nell'onboarding wizard, routing per ruolo via `tg-bridge` + skill `jht-telegram-send` distribuita. Roadmap futura ([`docs/about/ROADMAP.md`](../../about/ROADMAP.md)): per-agent 1:1 chat (Scout/Critic/Writer/Scorer/Sentinel) + "team forum" channel.
 - **⌨️ CLI + tmux** *(technical users)* — `jht team attach <agent>` to drop directly into the agent's tmux session and watch it work live (raw model output, tool calls, decisions). Useful for debugging, for understanding what the agents are actually doing, and for power users who prefer the terminal.
 
-In addition, the `jht ...` CLI is intentionally driveable by other AI agents — see [`docs/AI-AGENT-INTEGRATION.md`](../../guides/AI-AGENT-INTEGRATION.md). Your Claude Code / 🦞 OpenClaw / Codex / Cursor can configure and start JHT for you autonomously.
+In addition, the `jht ...` CLI is intentionally driveable by other AI agents — see [`docs/guides/AI-AGENT-INTEGRATION.md`](../../guides/AI-AGENT-INTEGRATION.md). Your Claude Code / 🦞 OpenClaw / Codex / Cursor can configure and start JHT for you autonomously.
 
 ## Related
 
-- 🎯 [`docs/VISION.md`](../../about/VISION.md) — design philosophy, why local-first, why no SaaS
-- 💳 [`docs/PROVIDERS.md`](../../about/PROVIDERS.md) — supported subscriptions matrix
-- 📊 [`docs/MONITORING.md`](../../about/MONITORING.md) — Bridge/Sentinel monitoring stack (architecture + test data)
-- 🔒 [`docs/MAINTAINERS.md`](MAINTAINERS.md) — internal operations reference
-- 🗺️ [`docs/ROADMAP.md`](../../about/ROADMAP.md) — what's coming next
+- 🎯 [`docs/about/VISION.md`](../../about/VISION.md) — design philosophy, why local-first, why no SaaS
+- 💳 [`docs/about/PROVIDERS.md`](../../about/PROVIDERS.md) — supported subscriptions matrix
+- 📊 [`docs/about/MONITORING.md`](../../about/MONITORING.md) — Bridge/Sentinel monitoring stack (architecture + test data)
+- 🔒 [`docs/internal/ops/MAINTAINERS.md`](MAINTAINERS.md) — internal operations reference
+- 🗺️ [`docs/about/ROADMAP.md`](../../about/ROADMAP.md) — what's coming next

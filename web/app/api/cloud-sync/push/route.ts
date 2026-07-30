@@ -10,6 +10,8 @@ import {
   normalizeCriticVerdict,
   normalizePositionStatus,
 } from "@/lib/sync-vocabulary";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -346,10 +348,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { error: "body JSON non valido" },
-      { status: 400 },
-    );
+    return invalidJsonBody();
   }
 
   const positions = Array.isArray(body.positions) ? body.positions : [];
@@ -424,10 +423,11 @@ export async function POST(req: NextRequest) {
         .select("id, legacy_id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `companies upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "companies_upsert_failed",
+        });
       }
       companiesUpserted = upserted?.length ?? 0;
       for (const row of upserted ?? []) {
@@ -584,10 +584,11 @@ export async function POST(req: NextRequest) {
       .select("id, legacy_id");
 
     if (error) {
-      return NextResponse.json(
-        { error: `positions upsert: ${error.message}` },
-        { status: 500 },
-      );
+      return sanitizedError(error, {
+        status: 500,
+        scope: "cloud-sync/push",
+        publicMessage: "positions_upsert_failed",
+      });
     }
 
     positionsUpserted = upserted?.length ?? 0;
@@ -626,10 +627,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `scores upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "scores_upsert_failed",
+        });
       }
       scoresUpserted = upserted?.length ?? 0;
     }
@@ -674,10 +676,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `applications upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "applications_upsert_failed",
+        });
       }
       applicationsUpserted = upserted?.length ?? 0;
     }
@@ -734,10 +737,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `position_highlights upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "position_highlights_upsert_failed",
+        });
       }
       highlightsUpserted = upserted?.length ?? 0;
     }
@@ -800,10 +804,11 @@ export async function POST(req: NextRequest) {
       );
 
       if (error) {
-        return NextResponse.json(
-          { error: `pending_user_messages upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "pending_user_messages_upsert_failed",
+        });
       }
       pendingMessagesUpserted =
         typeof upsertedCount === "number" ? upsertedCount : payload.length;
@@ -866,10 +871,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `sentinel_ticks upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "sentinel_ticks_upsert_failed",
+        });
       }
       sentinelTicksUpserted = upserted?.length ?? 0;
     }
@@ -989,10 +995,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `position_transitions upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "position_transitions_upsert_failed",
+        });
       }
       positionTransitionsUpserted = upserted?.length ?? 0;
     }

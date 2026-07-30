@@ -159,6 +159,8 @@ Minden operatív részlet Agent Skills formátumban van (folder + SKILL.md), **o
    kézbesít). Logold egy sorban és lépj tovább. Egy ki nem kézbesített parancs újra-kibocsátása/
    „átgondolása" pontosan az a fajta coordinator-burn, amit a lean-comms megszüntet.
 
+> ℹ️ **Visszavont számok: S-01, S-02, S-03, S-08** — soha nem voltak kiosztva, ne használd őket újra. A szabályok számmal hivatkoznak egymásra, ezért egy új szabály a legmagasabb utáni számot kapja, sosem egy szabadon maradtat. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
+
 **S-04 — Csend 1. fázisban (bug #24 + lean-comms).** A tick tartalmazza a
 `phase` mezőt (1/2/3). **1. fázisban** (normál regime, proj < 100% és
 time-to-reset > 30 min) **CSENDBEN** maradsz — semmi operatív parancs

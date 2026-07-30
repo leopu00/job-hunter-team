@@ -1,20 +1,15 @@
 import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { JHT_HOME } from '../jht-paths.js';
+import { BOLD, GREEN, RED, DIM, RESET } from './_colors.js';
+import { retiredStoreDetail } from './_retired-stores.js';
 
 const JHT_DIR        = JHT_HOME;
 const TASKS_PATH     = join(JHT_DIR, 'tasks', 'tasks.json');
 const ANALYTICS_PATH = join(JHT_DIR, 'analytics', 'analytics.json');
 const SESSIONS_PATH  = join(JHT_DIR, 'sessions', 'sessions.json');
 const DEPLOY_DIR     = join(JHT_DIR, 'deploy');
-
-const BOLD  = '\x1b[1m';
-const GREEN = '\x1b[32m';
-const RED   = '\x1b[31m';
-const DIM   = '\x1b[90m';
-const RESET = '\x1b[0m';
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
@@ -39,6 +34,16 @@ async function handleReport(options) {
   console.log(`  ${BOLD}  Generato: ${new Date().toLocaleString('it-IT')}${RESET}`);
   console.log(`  ${BOLD}═══════════════════════════════════════${RESET}\n`);
 
+  // Task / API / Sessioni leggono tre store che nessuno scrive più dal
+  // 2026-07-25. Un report che li stampa a zero racconta un progetto fermo:
+  // la sezione dice invece che la fonte non c'è. Il resto del report (moduli,
+  // deploy, git) legge dati vivi e resta com'è.
+  const has = {
+    tasks:     await fileExists(TASKS_PATH),
+    analytics: await fileExists(ANALYTICS_PATH),
+    sessions:  await fileExists(SESSIONS_PATH),
+  };
+
   // Task
   const taskStore = await readJsonSafe(TASKS_PATH);
   const tasks = (taskStore?.tasks ?? []).filter(t => (t.createdAt ?? 0) >= since);
@@ -48,11 +53,15 @@ async function handleReport(options) {
   const rate = tasks.length > 0 ? Math.round((succeeded / tasks.length) * 100) : 0;
 
   console.log(`  ${BOLD}Task${RESET}`);
-  console.log(`    Totali:       ${tasks.length}`);
-  console.log(`    ${GREEN}Completati:${RESET}   ${succeeded}`);
-  console.log(`    ${RED}Falliti:${RESET}      ${failed}`);
-  console.log(`    In corso:     ${running}`);
-  console.log(`    Success rate: ${rate}%\n`);
+  if (!has.tasks) {
+    console.log(`    ${DIM}${retiredStoreDetail('tasks')}${RESET}\n`);
+  } else {
+    console.log(`    Totali:       ${tasks.length}`);
+    console.log(`    ${GREEN}Completati:${RESET}   ${succeeded}`);
+    console.log(`    ${RED}Falliti:${RESET}      ${failed}`);
+    console.log(`    In corso:     ${running}`);
+    console.log(`    Success rate: ${rate}%\n`);
+  }
 
   // API / Analytics
   const analyticsStore = await readJsonSafe(ANALYTICS_PATH);
@@ -62,10 +71,14 @@ async function handleReport(options) {
   const errors = entries.filter(e => !e.success).length;
 
   console.log(`  ${BOLD}API${RESET}`);
-  console.log(`    Chiamate:     ${entries.length}`);
-  console.log(`    Token:        ${tokens > 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens}`);
-  console.log(`    Costo:        $${cost.toFixed(4)}`);
-  console.log(`    Errori:       ${errors}\n`);
+  if (!has.analytics) {
+    console.log(`    ${DIM}${retiredStoreDetail('analytics')}${RESET}\n`);
+  } else {
+    console.log(`    Chiamate:     ${entries.length}`);
+    console.log(`    Token:        ${tokens > 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens}`);
+    console.log(`    Costo:        $${cost.toFixed(4)}`);
+    console.log(`    Errori:       ${errors}\n`);
+  }
 
   // Sessioni
   const sessStore = await readJsonSafe(SESSIONS_PATH);
@@ -74,9 +87,13 @@ async function handleReport(options) {
   const totalMsgs = sessions.reduce((s, sess) => s + (sess.messageCount ?? 0), 0);
 
   console.log(`  ${BOLD}Sessioni${RESET}`);
-  console.log(`    Totali:       ${sessions.length}`);
-  console.log(`    Attive:       ${active}`);
-  console.log(`    Messaggi:     ${totalMsgs}\n`);
+  if (!has.sessions) {
+    console.log(`    ${DIM}${retiredStoreDetail('sessions')}${RESET}\n`);
+  } else {
+    console.log(`    Totali:       ${sessions.length}`);
+    console.log(`    Attive:       ${active}`);
+    console.log(`    Messaggi:     ${totalMsgs}\n`);
+  }
 
   // Moduli attivi
   const sharedDirs = [];

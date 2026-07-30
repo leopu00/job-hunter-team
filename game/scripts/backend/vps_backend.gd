@@ -46,69 +46,35 @@ static func ensure_known_host(host: String) -> Dictionary:
 		OS.execute("chmod", ["600", path])
 	return {"ok": true, "path": path}
 
+
+## Cartella dei payload spediti al container: file `.py` (e il compose `.yml`)
+## VERI, non stringhe cieche dentro GDScript. Così hanno evidenziazione,
+## formatter e soprattutto un test — `tools/python_payload_syntax_test.py` li
+## compila tutti, non più solo quelli che rispettano una convenzione di nome.
+const PAYLOAD_DIR := "res://scripts/backend/payloads/"
+
+## Legge un payload dal pacchetto. Quello che torna è una stringa identica a
+## com'era la `const`: i `%d`/`%s` restano SEGNAPOSTO GDScript e il chiamante
+## continua ad applicare `%` prima di spedire lo script — la sostituzione non
+## è cambiata, è cambiato solo da dove arriva il testo.
+##
+## ⚠️ Export: i `.py`/`.yml` non sono risorse Godot, quindi finiscono nel
+## pacchetto solo grazie a `include_filter` in export_presets.cfg. Se ne
+## uscissero, qui arriverebbe una stringa vuota e il gioco esportato
+## smetterebbe di parlare con la VPS senza che un test locale se ne accorga:
+## per questo l'assenza è un errore rumoroso e non un silenzio.
+static func payload(name: String) -> String:
+	var text := FileAccess.get_file_as_string(PAYLOAD_DIR + name)
+	if text.strip_edges() == "":
+		push_error("payload assente dal pacchetto: " + name)
+	return text
+
+
 ## Stato EFFETTIVO del turno, non semplice presenza tmux. Le tre TUI
 ## supportate mostrano un marker di interrupt mentre il modello/tool sta
 ## lavorando; quando il composer è fermo il marker sparisce. In dubbio si
 ## ritorna idle: è meglio un falso fermo che inventare lavoro e movimento.
-const AGENT_ACTIVITY_PY := """
-import json, subprocess, time
-
-def run(args):
-    try:
-        return subprocess.run(args, capture_output=True, text=True, timeout=4).stdout
-    except Exception:
-        return None
-
-def tail_of(session):
-    pane = run(['tmux', 'capture-pane', '-t', session, '-p'])
-    if pane is None:
-        return None
-    return '\\n'.join(pane.splitlines()[-14:]).lower()
-
-def classify(tail):
-    busy = any(x in tail for x in (
-        'esc to interrupt', 'to interrupt', 'ctrl+c to stop',
-        'ctrl-c to stop', 'working (', 'thinking…', 'thinking...'))
-    paused = any(x in tail for x in (
-        'max number of steps reached', 'send another message to continue',
-        'usage limit reached', 'rate limit reached', 'paused'))
-    if busy:
-        if any(x in tail for x in ('running tool', 'running command', 'web search', 'fetching')):
-            return 'working', 'tool in esecuzione'
-        if 'thinking' in tail:
-            return 'working', 'elaborazione'
-        return 'working', 'turno in corso'
-    if paused:
-        return 'paused', 'in attesa di ripresa'
-    return 'idle', 'sessione attiva, nessun turno in corso'
-
-raw = run(['tmux', 'list-sessions', '-F', '#{session_name}']) or ''
-out = {}
-retry = []
-for session in [x.strip() for x in raw.splitlines() if x.strip()]:
-    tail = tail_of(session)
-    if tail is None:
-        # cattura fallita: NON è idle, il client mantiene l'ultimo stato
-        out[session] = {'status': 'unknown', 'detail': 'pane non osservabile'}
-        continue
-    status, detail = classify(tail)
-    if status == 'idle':
-        retry.append(session)  # forse è il flicker della barra: ricontrolla
-    out[session] = {'status': status, 'detail': detail}
-# Secondo campione per i soli 'idle' (falsi idle 03:5x): la TUI nasconde
-# il marker per un attimo tra due step dello stesso turno — se al secondo
-# sguardo il marker c'è, l'agente sta lavorando.
-if retry:
-    time.sleep(0.35)
-    for session in retry:
-        tail = tail_of(session)
-        if tail is None:
-            continue
-        status, detail = classify(tail)
-        if status != 'idle':
-            out[session] = {'status': status, 'detail': detail}
-print(json.dumps(out, ensure_ascii=False))
-"""
+static var AGENT_ACTIVITY_PY := payload("agent_activity.py")
 
 ## Roster, chat e throttle in UN solo giro ssh e UNA sola docker exec: la
 ## catena POSIX (;, 2>/dev/null) vive in un blocco a apici singoli parsato
@@ -182,116 +148,11 @@ const METRICS_EVERY := 1    # dashboard VPS: un campione ogni ~8 secondi
 
 ## Metriche host + container, lette sulla VPS senza privilegi aggiuntivi e
 ## senza scritture. Il doppio campione /proc/stat rende la CPU percentuale.
-const HOST_METRICS_PY := """
-import json, os, time, shutil, subprocess
-
-def cpu():
-    v = list(map(int, open('/proc/stat').readline().split()[1:]))
-    return sum(v), v[3] + (v[4] if len(v) > 4 else 0)
-
-def meminfo():
-    out = {}
-    for line in open('/proc/meminfo'):
-        k, v = line.split(':', 1)
-        out[k] = int(v.strip().split()[0]) * 1024
-    return out
-
-a_t, a_i = cpu(); time.sleep(0.18); b_t, b_i = cpu()
-cpu_pct = 100.0 * (1.0 - (b_i-a_i) / max(1, b_t-a_t))
-m = meminfo(); mt = m.get('MemTotal', 1); ma = m.get('MemAvailable', 0)
-st = m.get('SwapTotal', 0); sf = m.get('SwapFree', 0)
-d = shutil.disk_usage('/')
-rx = tx = 0
-for line in open('/proc/net/dev').read().splitlines()[2:]:
-    name, vals = line.split(':', 1)
-    if name.strip() == 'lo': continue
-    p = vals.split(); rx += int(p[0]); tx += int(p[8])
-sample = dict(
-    ts=time.time(), cpu_pct=round(cpu_pct, 1),
-    ram_pct=round(100*(mt-ma)/mt, 1), ram_used=mt-ma, ram_total=mt,
-    swap_pct=round(100*(st-sf)/st, 1) if st else 0,
-    disk_pct=round(100*d.used/d.total, 1), disk_used=d.used, disk_total=d.total,
-    load1=round(os.getloadavg()[0], 2), uptime_s=float(open('/proc/uptime').read().split()[0]),
-    rx_bytes=rx, tx_bytes=tx)
-try:
-    raw = subprocess.check_output(['docker','stats','--no-stream','--format','{{json .}}','jht'], text=True)
-    ds = json.loads(raw.strip())
-    sample['container_cpu_pct'] = float(str(ds.get('CPUPerc','0')).replace('%',''))
-    sample['container_mem_pct'] = float(str(ds.get('MemPerc','0')).replace('%',''))
-    sample['container_mem'] = str(ds.get('MemUsage','—'))
-    ins = json.loads(subprocess.check_output(['docker','inspect','jht'], text=True))[0]
-    sample['container_status'] = str(ins.get('State',{}).get('Status','?'))
-    sample['container_pids'] = int(ins.get('State',{}).get('Pid',0) != 0)
-    sample['container_restarts'] = int(ins.get('RestartCount',0))
-except Exception as e:
-    sample['container_status'] = 'errore metriche'
-print(json.dumps(sample))
-"""
+static var HOST_METRICS_PY := payload("host_metrics.py")
 
 ## RSS per sessione tmux (pane + intero albero discendenti) e serie token
 ## reali già prodotte dal token-meter della VPS.
-const AGENT_METRICS_PY := """
-import json, subprocess, time
-from collections import deque
-from datetime import datetime
-
-def run(args):
-    try: return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL)
-    except Exception: return ''
-
-panes = {}
-for line in run(['tmux','list-panes','-a','-F','#{session_name}|#{pane_pid}']).splitlines():
-    try:
-        name, pid = line.split('|', 1); panes[name.lower()] = int(pid)
-    except Exception: pass
-procs = {}
-for line in run(['ps','-eo','pid=,ppid=,rss=']).splitlines():
-    try:
-        pid, ppid, rss = map(int, line.split()); procs[pid] = (ppid, rss)
-    except Exception: pass
-children = {}
-for pid, (ppid, rss) in procs.items(): children.setdefault(ppid, []).append(pid)
-def tree_rss(root):
-    todo=[root]; seen=set(); total=0
-    while todo:
-        pid=todo.pop()
-        if pid in seen: continue
-        seen.add(pid); total += procs.get(pid,(0,0))[1]; todo.extend(children.get(pid,[]))
-    return total * 1024
-agent_ram = {name: tree_rss(pid) for name,pid in panes.items()}
-agent_cpu={}
-agent_vitals_ts=''
-agent_vitals_age_s=-1
-try:
-    with open('/jht_home/logs/agent-vitals.jsonl') as f:
-        tail=deque((line for line in f if line.strip()), maxlen=1)
-    if tail:
-        vitals=json.loads(tail[0])
-        agent_vitals_ts=str(vitals.get('ts') or '')
-        for name, values in (vitals.get('agents') or {}).items():
-            agent_cpu[str(name).lower()]=float((values or {}).get('cpu_pct') or 0)
-        if agent_vitals_ts:
-            sampled=datetime.fromisoformat(agent_vitals_ts.replace('Z','+00:00')).timestamp()
-            agent_vitals_age_s=max(0, round(time.time()-sampled, 1))
-except Exception: pass
-series=[]
-generated_at=''
-window_h=0
-bucket_sec=0
-try:
-    usage=json.load(open('/jht_home/logs/agent-usage-table.json'))
-    series=(usage.get('series_kt_per_bucket') or [])[-36:]
-    generated_at=str(usage.get('generated_at') or '')
-    window_h=float(usage.get('window_h') or 0)
-    bucket_sec=int(usage.get('bucket_sec') or 0)
-except Exception: pass
-print(json.dumps({'agent_ram':agent_ram,'agent_cpu':agent_cpu,
-                  'agent_vitals_ts':agent_vitals_ts,
-                  'agent_vitals_age_s':agent_vitals_age_s,
-                  'token_series':series,
-                  'generated_at':generated_at,'window_h':window_h,
-                  'bucket_sec':bucket_sec}))
-"""
+static var AGENT_METRICS_PY := payload("agent_metrics.py")
 
 ## Storico usage in un solo round-trip: serie della sentinella (usage%
 ## 5h + weekly, append-only da luglio), token-meter.csv (token pesati,
@@ -299,137 +160,7 @@ print(json.dumps({'agent_ram':agent_ram,'agent_cpu':agent_cpu,
 ## skill del pacing, /app/shared/skills). Filtro e downsampling avvengono
 ## QUI sulla VPS: il gioco riceve al massimo qualche centinaio di bucket,
 ## mai i file interi. Placeholder: %d from_ts, %d to_ts, %d bucket_sec.
-const USAGE_HISTORY_PY := """
-import csv, json, subprocess
-from datetime import datetime, timezone
-
-FROM_TS = float(%d)
-TO_TS = float(%d)
-BUCKET = max(60, int(%d))
-
-def iso_to_unix(s):
-    try:
-        return datetime.fromisoformat(str(s)).timestamp()
-    except Exception:
-        return 0.0
-
-def bucket_of(t):
-    return int(t // BUCKET) * BUCKET
-
-out = {'ok': True, 'sentinel': [], 'meter': [], 'throttle': [], 'agents': {}}
-
-# ── sentinel-data.jsonl: usage%% finestra 5h, weekly, velocity, proj ──
-try:
-    acc = {}
-    for line in open('/jht_home/logs/sentinel-data.jsonl'):
-        try:
-            row = json.loads(line)
-        except Exception:
-            continue
-        t = iso_to_unix(row.get('ts'))
-        if t < FROM_TS or t > TO_TS:
-            continue
-        b = acc.setdefault(bucket_of(t), {'n': 0, 'usage': 0.0, 'weekly': 0.0,
-                                          'velocity': 0.0, 'velocity_ideal': 0.0,
-                                          'projection': 0.0})
-        b['n'] += 1
-        b['usage'] += float(row.get('usage') or 0)
-        b['weekly'] += float(row.get('weekly_usage') or 0)
-        b['velocity'] += float(row.get('velocity_smooth') or 0)
-        b['velocity_ideal'] += float(row.get('velocity_ideal') or 0)
-        b['projection'] += float(row.get('projection') or 0)
-    for t in sorted(acc):
-        b = acc[t]
-        n = max(1, b['n'])
-        out['sentinel'].append({'t': t,
-            'usage': round(b['usage'] / n, 2),
-            'weekly': round(b['weekly'] / n, 2),
-            'velocity': round(b['velocity'] / n, 2),
-            'velocity_ideal': round(b['velocity_ideal'] / n, 2),
-            'projection': round(b['projection'] / n, 2)})
-except Exception as e:
-    out['sentinel_error'] = str(e)
-
-# ── throttle-events.jsonl: secondi di pausa pacing per bucket ────────
-try:
-    acc = {}
-    for line in open('/jht_home/logs/throttle-events.jsonl'):
-        try:
-            row = json.loads(line)
-        except Exception:
-            continue
-        if str(row.get('event')) != 'start':
-            continue
-        t = float(row.get('ts_unix') or 0)
-        if t < FROM_TS or t > TO_TS:
-            continue
-        b = acc.setdefault(bucket_of(t), {'throttle_s': 0.0, 'pauses': 0})
-        b['throttle_s'] += float(row.get('applied_sec') or 0)
-        b['pauses'] += 1
-    for t in sorted(acc):
-        d = dict(acc[t]); d['t'] = t
-        out['throttle'].append(d)
-except Exception as e:
-    out['throttle_error'] = str(e)
-
-# ── token-meter.csv: livello token pesati (finestra rolling 5h) ──────
-try:
-    acc = {}
-    with open('/jht_home/logs/token-meter.csv') as f:
-        for row in csv.DictReader(f):
-            t = iso_to_unix(row.get('ts'))
-            if t < FROM_TS or t > TO_TS:
-                continue
-            # ultimo campione del bucket: e' un livello, non un delta
-            acc[bucket_of(t)] = {
-                'weighted_kt': round(float(row.get('weighted') or 0) / 1000.0, 1),
-                'events': int(float(row.get('events') or 0))}
-    for t in sorted(acc):
-        d = dict(acc[t]); d['t'] = t
-        out['meter'].append(d)
-except Exception as e:
-    out['meter_error'] = str(e)
-
-# ── per-agente: kT delta per bucket dai log CLI (skill del pacing) ───
-try:
-    now = datetime.now(timezone.utc).timestamp()
-    since_min = max(5.0, (now - FROM_TS) / 60.0)
-    raw = subprocess.check_output(
-        ['python3', '/app/shared/skills/token-by-agent-series.py',
-         '--since-min', str(round(since_min, 1)),
-         '--bucket-sec', str(BUCKET)],
-        text=True, stderr=subprocess.DEVNULL, timeout=240)
-    data = json.loads(raw)
-    # la skill produce serie CUMULATIVE per agente: qui si torna al
-    # delta per bucket (il "quanto in quel momento" dei grafici),
-    # scorrendo TUTTE le righe cosi' il primo bucket in range non
-    # eredita il cumulato precedente.
-    names = data.get('agents', [])
-    prev = {a: 0.0 for a in names}
-    series = []
-    totals = {a: 0.0 for a in names}
-    for row in data.get('series', []):
-        t = iso_to_unix(row.get('ts'))
-        keep = FROM_TS <= t <= TO_TS
-        slim = {'t': t}
-        for a in names:
-            cur = float(row.get(a) or 0)
-            delta = max(0.0, cur - prev[a])
-            prev[a] = cur
-            if keep and delta > 0:
-                slim[a] = round(delta, 2)
-                totals[a] += delta
-        if keep:
-            series.append(slim)
-    out['agents'] = {
-        'names': names,
-        'series': series,
-        'totals_kt': {a: round(v, 2) for a, v in totals.items()}}
-except Exception as e:
-    out['agents_error'] = str(e)
-
-print(json.dumps(out, separators=(',', ':')))
-"""
+static var USAGE_HISTORY_PY := payload("usage_history.py")
 
 ## Storico del SINGOLO RUOLO per la scheda agente: token per bucket
 ## (tutte le istanze del ruolo), conversione in % delle finestre 5h e
@@ -439,372 +170,11 @@ print(json.dumps(out, separators=(',', ':')))
 ## contesto (telemetria per-agente storica: non esiste, vedi report
 ## 19/07). Placeholder: %d from, %d to, %d bucket, '%s' ruolo (validato
 ## [a-z0-9-] dal chiamante — mai testo libero qui dentro).
-const AGENT_HISTORY_PY := """
-import csv, json, sqlite3, subprocess
-from datetime import datetime, timezone
-
-FROM_TS = float(%d)
-TO_TS = float(%d)
-BUCKET = max(60, int(%d))
-ROLE = '%s'
-
-def iso_to_unix(s):
-    # i ts di sqlite (CURRENT_TIMESTAMP) sono naive UTC: senza offset
-    # esplicito il fuso va imposto, non dedotto dal sistema
-    try:
-        d = datetime.fromisoformat(str(s).replace(' ', 'T').replace('Z', '+00:00'))
-        if d.tzinfo is None:
-            d = d.replace(tzinfo=timezone.utc)
-        return d.timestamp()
-    except Exception:
-        return 0.0
-
-def bucket_of(t):
-    return int(t // BUCKET) * BUCKET
-
-def mine(name):
-    n = str(name).lower()
-    return n == ROLE or n.startswith(ROLE + '-')
-
-def to_rows(acc, fn=lambda v: v):
-    return [{'t': t, 'v': fn(acc[t])} for t in sorted(acc)]
-
-out = {'ok': True, 'agent': ROLE, 'series': {}}
-
-# ── token kT per bucket (serie cumulativa della skill → delta) ───────
-try:
-    now = datetime.now(timezone.utc).timestamp()
-    since_min = max(5.0, (now - FROM_TS) / 60.0)
-    raw = subprocess.check_output(
-        ['python3', '/app/shared/skills/token-by-agent-series.py',
-         '--since-min', str(round(since_min, 1)),
-         '--bucket-sec', str(BUCKET)],
-        text=True, stderr=subprocess.DEVNULL, timeout=240)
-    data = json.loads(raw)
-    all_names = data.get('agents', [])
-    names = [a for a in all_names if mine(a)]
-    prev = {a: 0.0 for a in all_names}
-    acc = {}
-    team = {}
-    for row in data.get('series', []):
-        t = iso_to_unix(row.get('ts'))
-        keep = FROM_TS <= t <= TO_TS
-        for a in all_names:
-            cur = float(row.get(a) or 0)
-            delta = max(0.0, cur - prev[a])
-            prev[a] = cur
-            if keep and delta > 0:
-                team[bucket_of(t)] = team.get(bucket_of(t), 0.0) + delta
-                if a in names:
-                    acc[bucket_of(t)] = acc.get(bucket_of(t), 0.0) + delta
-    out['series']['tokens_kt'] = to_rows(acc, lambda v: round(v, 2))
-except Exception as e:
-    out['tokens_error'] = str(e)
-    acc, team = {}, {}
-
-# ── quota finestre: delta usage%% della sentinella x fetta token del
-# ruolo nel bucket. Auto-consistente: nessuna dipendenza dai pesi del
-# token-meter (che pesa i token diversamente dalla serie per-agente).
-try:
-    lv = {}
-    for line in open('/jht_home/logs/sentinel-data.jsonl'):
-        try:
-            row = json.loads(line)
-        except Exception:
-            continue
-        t = iso_to_unix(row.get('ts'))
-        # un bucket di margine PRIMA della finestra: il primo delta
-        # visibile ha bisogno del livello precedente
-        if t < FROM_TS - BUCKET or t > TO_TS:
-            continue
-        b = lv.setdefault(bucket_of(t), {'n': 0, 'u': 0.0, 'w': 0.0})
-        b['n'] += 1
-        b['u'] += float(row.get('usage') or 0)
-        b['w'] += float(row.get('weekly_usage') or 0)
-    ts_sorted = sorted(lv)
-    p5, pw = [], []
-    for i in range(1, len(ts_sorted)):
-        t0, t1 = ts_sorted[i - 1], ts_sorted[i]
-        if t1 < FROM_TS or t1 > TO_TS:
-            continue
-        a0, a1 = lv[t0], lv[t1]
-        du = max(0.0, a1['u'] / max(1, a1['n']) - a0['u'] / max(1, a0['n']))
-        dw = max(0.0, a1['w'] / max(1, a1['n']) - a0['w'] / max(1, a0['n']))
-        share = acc.get(t1, 0.0) / team[t1] if team.get(t1) else 0.0
-        if share > 0:
-            p5.append({'t': t1, 'v': round(du * share, 3)})
-            pw.append({'t': t1, 'v': round(dw * share, 4)})
-    out['series']['pct_5h'] = p5
-    out['series']['pct_weekly'] = pw
-except Exception as e:
-    out['pct_error'] = str(e)
-
-# ── pause pacing del ruolo ───────────────────────────────────────────
-try:
-    acc = {}
-    for line in open('/jht_home/logs/throttle-events.jsonl'):
-        try:
-            row = json.loads(line)
-        except Exception:
-            continue
-        if str(row.get('event')) != 'start' or not mine(row.get('agent')):
-            continue
-        t = float(row.get('ts_unix') or 0)
-        if FROM_TS <= t <= TO_TS:
-            acc[bucket_of(t)] = acc.get(bucket_of(t), 0.0) + \
-                float(row.get('applied_sec') or 0)
-    out['series']['throttle_s'] = to_rows(acc)
-except Exception as e:
-    out['throttle_error'] = str(e)
-
-# ── azioni jobs.db del ruolo (conteggio per bucket) ──────────────────
-try:
-    acc = {}
-    def add_ts(s):
-        t = iso_to_unix(s)
-        if FROM_TS <= t <= TO_TS:
-            acc[bucket_of(t)] = acc.get(bucket_of(t), 0) + 1
-    db = sqlite3.connect('file:/jht_home/jobs.db?mode=ro', uri=True)
-    like = ROLE + '-%%'
-    for (ts,) in db.execute(
-            'SELECT ts FROM position_state_transitions '
-            'WHERE by_agent = ? OR by_agent LIKE ?', (ROLE, like)):
-        add_ts(ts)
-    # scrittore e critico non passano dalle transitions: i loro eventi
-    # vivono su applications (written_at / critic_reviewed_at)
-    if ROLE == 'scrittore':
-        for (ts,) in db.execute(
-                'SELECT written_at FROM applications '
-                'WHERE written_at IS NOT NULL'):
-            add_ts(ts)
-    if ROLE == 'critico':
-        for (ts,) in db.execute(
-                'SELECT critic_reviewed_at FROM applications '
-                'WHERE critic_reviewed_at IS NOT NULL'):
-            add_ts(ts)
-    db.close()
-    out['series']['db_actions'] = to_rows(acc)
-except Exception as e:
-    out['db_error'] = str(e)
-
-# ── cpu/rss VERI del ruolo da agent-vitals.jsonl (sampler 19/07:
-# attribuzione JHT_AGENT_NAME in /proc/*/environ, somma istanze,
-# media per bucket). Vuoto finche' il sampler non gira.
-try:
-    acc = {}
-    for line in open('/jht_home/logs/agent-vitals.jsonl'):
-        try:
-            row = json.loads(line)
-        except Exception:
-            continue
-        t = iso_to_unix(row.get('ts'))
-        if not (FROM_TS <= t <= TO_TS):
-            continue
-        cpu = rss = 0.0
-        hit = False
-        for name, v in (row.get('agents') or {}).items():
-            if mine(name):
-                hit = True
-                cpu += float(v.get('cpu_pct') or 0)
-                rss += float(v.get('rss_mb') or 0)
-        if not hit:
-            continue
-        b = acc.setdefault(bucket_of(t), {'n': 0, 'cpu': 0.0, 'rss': 0.0})
-        b['n'] += 1
-        b['cpu'] += cpu
-        b['rss'] += rss
-    out['series']['cpu_agent_pct'] = [
-        {'t': t, 'v': round(acc[t]['cpu'] / max(1, acc[t]['n']), 1)}
-        for t in sorted(acc)]
-    out['series']['ram_agent_mb'] = [
-        {'t': t, 'v': round(acc[t]['rss'] / max(1, acc[t]['n']), 1)}
-        for t in sorted(acc)]
-except Exception as e:
-    out['agent_vitals_error'] = str(e)
-
-# ── contesto container: cpu/ram %% da vitals.jsonl (media per bucket) ─
-try:
-    acc = {}
-    for line in open('/jht_home/logs/vitals.jsonl'):
-        try:
-            row = json.loads(line)
-        except Exception:
-            continue
-        t = iso_to_unix(row.get('ts'))
-        if not (FROM_TS <= t <= TO_TS):
-            continue
-        b = acc.setdefault(bucket_of(t), {'n': 0, 'cpu': 0.0, 'ram': 0.0})
-        b['n'] += 1
-        b['cpu'] += float((row.get('cpu') or {}).get('pct') or 0)
-        b['ram'] += float((row.get('mem') or {}).get('pct') or 0)
-    out['series']['cpu_pct'] = [
-        {'t': t, 'v': round(acc[t]['cpu'] / max(1, acc[t]['n']), 1)}
-        for t in sorted(acc)]
-    out['series']['ram_pct'] = [
-        {'t': t, 'v': round(acc[t]['ram'] / max(1, acc[t]['n']), 1)}
-        for t in sorted(acc)]
-except Exception as e:
-    out['vitals_error'] = str(e)
-
-print(json.dumps(out, separators=(',', ':')))
-"""
+static var AGENT_HISTORY_PY := payload("agent_history.py")
 
 ## Config team + usage REALI, già in forma di coppie [etichetta, valore]
 ## per le sezioni della sidebar. SOLO campi safe: mai chiavi/credenziali.
-const SETTINGS_PY := """
-import json, os
-out = {}
-try:
-    c = json.load(open('/jht_home/jht.config.json'))
-except Exception:
-    c = {}
-ap = str(c.get('active_provider', ''))
-p = (c.get('providers') or {}).get(ap, {}) or {}
-auth_paths = {
-    'claude': ['/jht_home/.claude/.credentials.json'],
-    'anthropic': ['/jht_home/.claude/.credentials.json'],
-    'openai': ['/jht_home/.codex/auth.json', '/jht_home/.codex/credentials.json'],
-    'codex': ['/jht_home/.codex/auth.json', '/jht_home/.codex/credentials.json'],
-    'kimi': ['/jht_home/.kimi/credentials/kimi-code.json',
-             '/jht_home/.config/kimi-cli/credentials.json'],
-    'moonshot': ['/jht_home/.kimi/credentials/kimi-code.json',
-                 '/jht_home/.config/kimi-cli/credentials.json'],
-}
-out['active_provider'] = ap
-out['provider_auth_ready'] = any(os.path.isfile(x) and os.path.getsize(x) > 0
-                                 for x in auth_paths.get(ap.lower(), []))
-sub = p.get('subscription')
-if isinstance(sub, dict):
-    sub = sub.get('email') or ', '.join(str(v) for v in sub.values())
-out['provider'] = [
-    ['Provider attivo', ap or '—'],
-    ['Modello', str(p.get('model', '—'))],
-    ['Abbonamento', str(sub or '—')],
-    ['Autenticazione', str(p.get('auth_method', '—'))],
-]
-wh = ((c.get('team') or {}).get('working_hours') or {})
-out['hours'] = [
-    ['Timezone', str(wh.get('timezone', '—'))],
-    ['Finestre di lavoro', json.dumps(wh.get('windows', '—'), ensure_ascii=False)[:120]],
-]
-out['hours_raw'] = wh
-n = c.get('notifications') or {}
-out['email'] = [
-    ['Notifiche', 'attive' if n.get('enabled') else 'spente'],
-    ['Canali', ', '.join(map(str, n.get('channels') or [])) or '—'],
-]
-try:
-    ec = json.load(open('/jht_home/credentials/email_monitor.json'))
-except Exception:
-    ec = {}
-out['email_account'] = {
-    'configured': bool(ec.get('user')),
-    'email': str(ec.get('user') or ''),
-    'host': str(ec.get('imap_host') or ''),
-}
-try:
-    cc = json.load(open('/jht_home/cloud.json'))
-except Exception:
-    cc = {}
-out['cloud_account'] = {
-    'configured': bool(cc.get('enabled') and cc.get('token')),
-    'base_url': str(cc.get('base_url') or ''),
-    'user_id': str(cc.get('user_id') or ''),
-    'token_name': str(cc.get('token_name') or ''),
-}
-tg = (((c.get('channels') or {}).get('telegram') or {}).get('bots') or {})
-out['telegram_bots'] = {
-    role: {
-        'configured': bool((tg.get(role) or {}).get('bot_token')),
-        'chat_ready': bool((tg.get(role) or {}).get('chat_id')),
-    }
-    for role in ('assistente', 'capitano', 'mentor')
-}
-a = c.get('analytics') or {}
-out['advanced'] = [
-    ['Config version', str(c.get('version', '—'))],
-    ['Analytics', 'on' if a.get('enabled') else 'off'],
-    ['Retention (giorni)', str(a.get('retention_days', '—'))],
-]
-try:
-    import yaml
-    prof = yaml.safe_load(open('/jht_home/profile/candidate_profile.yml')) or {}
-    rows = []
-    for key, label in [('name', 'Nome'), ('target_role', 'Ruolo target'),
-                       ('location', 'Localita'), ('experience_years', 'Anni di esperienza'),
-                       ('seniority_target', 'Seniority target'), ('industry', 'Settore'),
-                       ('nationality', 'Nazionalita')]:
-        if prof.get(key) is not None:
-            rows.append([label, str(prof[key])])
-    skills = (prof.get('skills') or {}).get('primary') or []
-    if skills:
-        rows.append(['Skill primarie', ', '.join(map(str, skills[:8]))])
-    sal = prof.get('salary_target') or prof.get('salary') or {}
-    if isinstance(sal, dict) and sal:
-        lo = sal.get('min') or sal.get('lo')
-        hi = sal.get('max') or sal.get('hi')
-        cur = sal.get('currency') or 'EUR'
-        if lo or hi:
-            rows.append(['Salary target', str(lo) + ' - ' + str(hi) + ' ' + str(cur)])
-    elif sal:
-        rows.append(['Salary target', str(sal)[:80]])
-    if rows:
-        out['profile'] = rows
-    raw = {}
-    for key in ['name', 'email', 'target_role', 'location', 'experience_years',
-                'seniority_target', 'industry', 'nationality']:
-        if prof.get(key) is not None:
-            raw[key] = str(prof[key])
-    raw['skills_primary'] = ', '.join(map(str, skills))
-    raw['languages'] = ', '.join(map(str, prof.get('languages') or []))
-    if isinstance(sal, dict):
-        raw['salary_min'] = str(sal.get('min') or sal.get('lo') or '')
-        raw['salary_max'] = str(sal.get('max') or sal.get('hi') or '')
-        raw['salary_currency'] = str(sal.get('currency') or 'EUR')
-    out['profile_raw'] = raw
-except Exception:
-    pass
-try:
-    ps = json.load(open('/jht_home/logs/pacing-bridge-state.json'))
-    out['work_phase'] = str(ps.get('work_phase', ''))
-except Exception:
-    pass
-# Finestra di consumo del provider: serve al gioco per DIRE all'utente
-# perche il team non risponde. Senza, chi scrive in chat durante un
-# lockout vede solo silenzio e conclude che l'app e rotta.
-try:
-    last = None
-    with open('/jht_home/logs/sentinel-data.jsonl') as fh:
-        for row in fh:
-            row = row.strip()
-            if row:
-                last = row
-    s = json.loads(last) if last else {}
-    usage = s.get('usage')
-    if isinstance(usage, (int, float)):
-        out['budget_window'] = {
-            'usage_pct': float(usage),
-            'reset_at': str(s.get('reset_at') or ''),
-            'reset_at_unix': s.get('reset_at_unix'),
-            'weekly_pct': s.get('weekly_usage'),
-            'status': str(s.get('status') or ''),
-            'sample_ts': str(s.get('ts') or ''),
-        }
-except Exception:
-    pass
-try:
-    u = json.load(open('/jht_home/logs/agent-usage-table.json'))
-    tot = {}
-    for row in u.get('series_kt_per_bucket', []):
-        for k, v in row.items():
-            if k != 'ts':
-                tot[k] = round(tot.get(k, 0) + float(v), 1)
-    out['usage'] = {'window_h': u.get('window_h'), 'per_agent_kt': tot,
-                    'generated_at': str(u.get('generated_at', ''))}
-except Exception:
-    pass
-print(json.dumps(out, ensure_ascii=False))
-"""
+static var SETTINGS_PY := payload("settings.py")
 
 ## Le TUI fullscreen (in particolare Claude) usano l'alternate screen:
 ## tmux vede soltanto l'altezza corrente della pane e history_size resta 0,
@@ -815,308 +185,17 @@ print(json.dumps(out, ensure_ascii=False))
 ## Non esportiamo i blocchi `thinking` riservati del provider: la vista
 ## replica l'attivita osservabile (testo, tool e relativi output), proprio
 ## come il terminale, senza trasformarsi in un canale interattivo.
-const TERMINAL_HISTORY_PY := """
-import base64, json
-from collections import deque
-from pathlib import Path
-
-agent = base64.b64decode('%s').decode('utf-8')
-project = Path('/jht_home/.claude/projects') / ('-jht-home-agents-' + agent)
-files = list(project.glob('*.jsonl')) if project.is_dir() else []
-if not files:
-    print(json.dumps({'ok': False, 'text_b64': '', 'events': 0}))
-    raise SystemExit
-source = max(files, key=lambda p: p.stat().st_mtime)
-rows = deque(maxlen=1200)
-with source.open('r', encoding='utf-8', errors='replace') as handle:
-    for row in handle:
-        rows.append(row)
-
-def clean(value, limit):
-    if isinstance(value, str):
-        text = value
-    elif value is None:
-        return ''
-    else:
-        try:
-            text = json.dumps(value, ensure_ascii=False)
-        except Exception:
-            text = str(value)
-    text = text.replace(chr(0), '').strip()
-    if len(text) > limit:
-        text = text[:limit] + '\u2026'
-    return text
-
-def content_text(value, limit):
-    if isinstance(value, str):
-        return clean(value, limit)
-    if isinstance(value, list):
-        parts = []
-        for item in value:
-            if isinstance(item, dict):
-                part = item.get('text', item.get('content', ''))
-            else:
-                part = item
-            rendered = clean(part, limit)
-            if rendered:
-                parts.append(rendered)
-        return clean('\\n'.join(parts), limit)
-    if isinstance(value, dict):
-        return clean(value.get('text', value.get('content', value)), limit)
-    return clean(value, limit)
-
-out = []
-events = 0
-for row in rows:
-    try:
-        item = json.loads(row)
-    except Exception:
-        continue
-    kind = str(item.get('type', ''))
-    message = item.get('message') or {}
-    blocks = message.get('content', []) if isinstance(message, dict) else []
-    if isinstance(blocks, str):
-        blocks = [{'type': 'text', 'text': blocks}]
-    if not isinstance(blocks, list):
-        continue
-    stamp = str(item.get('timestamp', ''))[11:19]
-    lead = ('[' + stamp + '] ') if stamp else ''
-    if kind == 'assistant':
-        for block in blocks:
-            if not isinstance(block, dict):
-                continue
-            block_kind = str(block.get('type', ''))
-            if block_kind == 'text':
-                body = clean(block.get('text', ''), 8000)
-                if body:
-                    out.append('\u25cf ' + lead + body)
-                    events += 1
-            elif block_kind == 'tool_use':
-                name = clean(block.get('name', 'tool'), 80)
-                data = block.get('input', {})
-                detail = ''
-                if isinstance(data, dict):
-                    for key in ('command', 'file_path', 'path', 'url', 'query', 'pattern'):
-                        if data.get(key):
-                            detail = clean(data.get(key), 1800)
-                            break
-                if not detail:
-                    detail = clean(data, 1000)
-                out.append('\u2514 ' + lead + name + (': ' + detail if detail else ''))
-                events += 1
-    elif kind == 'user':
-        for block in blocks:
-            if not isinstance(block, dict) or block.get('type') != 'tool_result':
-                continue
-            body = content_text(block.get('content', ''), 3000)
-            if body:
-                out.append('  ' + lead + 'output: ' + body)
-                events += 1
-
-text = '\\n\\n'.join(out)
-if len(text) > 450000:
-    text = '\u2026 storico precedente omesso \u2026\\n\\n' + text[-450000:]
-payload = base64.b64encode(text.encode('utf-8')).decode('ascii')
-print(json.dumps({'ok': True, 'text_b64': payload, 'events': events,
-                  'source': source.name}))
-"""
+static var TERMINAL_HISTORY_PY := payload("terminal_history.py")
 
 ## Snapshot per la console del Coordinatore: legge soltanto file di policy e
 ## jobs.db. Le query sono contatori operativi, non modificano le posizioni.
-const COORDINATOR_STATE_PY := """
-import json, os, sqlite3, sys
-sys.path.insert(0, '/app/shared/skills')
-from _db import DB_PATH, ensure_schema
-from enrichment_policy import load_policy, logo_min_score
-
-profile = os.path.join(os.path.dirname(DB_PATH), 'profile')
-maintenance_path = os.path.join(profile, 'capitano-maintenance.json')
-maintenance_raw = {}
-try:
-    maintenance_raw = json.load(open(maintenance_path, encoding='utf-8'))
-except Exception:
-    pass
-orders = maintenance_raw.get('orders', {}) if isinstance(maintenance_raw, dict) else {}
-if not isinstance(orders, dict):
-    orders = {}
-maintenance = {
-    # Modalità CURA (ex 'maintenance'): valore canonico 'care' dal 2026-07-30,
-    # 'maintenance' resta valido (file scritti da versioni precedenti / andris).
-    'enabled': maintenance_raw.get('mode') in ('care', 'maintenance'),
-    'stop_search': bool(orders.get('stop_search', True)),
-    'discard_expired_rotating': bool(orders.get('discard_expired_rotating', True)),
-    'cv_min_score': int(orders.get('cv_min_score', 90)),
-    'pre_check_liveness_for_cv': bool(orders.get('pre_check_liveness_for_cv', True)),
-}
-
-policy = load_policy()
-# Compatibilità rolling-deploy: il gioco può essere più nuovo dell'immagine
-# container per qualche minuto. Le opzioni fini si leggono dal JSON già
-# normalizzato anche quando gli helper nuovi non sono ancora nell'immagine.
-geo_section = policy.get('geocode_missing', {})
-geo = {
-    'min_score': geo_section.get('min_score'),
-    'non_remote_only': bool(geo_section.get('non_remote_only', True)),
-}
-recheck_section = policy.get('recheck_weekly', {})
-recheck = {
-    'min_score': int(recheck_section.get('min_score', 70)),
-    'older_than_days': int(recheck_section.get('older_than_days', 14)),
-}
-enrichment = {
-    'economy': bool(policy.get('economy', False)),
-    'logo_enabled': bool(policy.get('logo', {}).get('enabled', True)),
-    'logo_min_score': logo_min_score(policy),
-    'geocode_enabled': bool(policy.get('geocode_missing', {}).get('enabled', True)),
-    'geocode_min_score': geo.get('min_score'),
-    'geocode_non_remote_only': bool(geo.get('non_remote_only', True)),
-    'recheck_enabled': bool(policy.get('recheck_weekly', {}).get('enabled', True)),
-    'recheck_min_score': int(recheck.get('min_score', 70)),
-    'recheck_older_days': int(recheck.get('older_than_days', 14)),
-}
-
-conn = sqlite3.connect(DB_PATH)
-conn.row_factory = sqlite3.Row
-ensure_schema(conn)
-def count(sql, params=()):
-    try:
-        return int(conn.execute(sql, params).fetchone()[0])
-    except Exception:
-        return 0
-
-queue_counts = {
-    'new': count("SELECT COUNT(*) FROM positions WHERE status='new'"),
-    'analysis': count("SELECT COUNT(*) FROM positions WHERE status='checked'"),
-    'scored': count("SELECT COUNT(*) FROM positions WHERE status='scored'"),
-    'expired': count("SELECT COUNT(*) FROM positions WHERE status!='excluded' AND expires_at IS NOT NULL AND expires_at < datetime('now')"),
-}
-geo_sql = ("SELECT COUNT(*) FROM positions p "
-           "WHERE p.status!='excluded' "
-           "AND (p.office_lat IS NULL OR p.office_geocoded IS NULL OR p.office_geocoded=0)")
-geo_params = []
-if geo.get('min_score') is not None:
-    geo_sql += " AND EXISTS (SELECT 1 FROM scores s WHERE s.position_id=p.id AND s.total_score>=?)"
-    geo_params.append(int(geo['min_score']))
-if geo.get('non_remote_only', True):
-    geo_sql += " AND LOWER(COALESCE(p.work_mode,''))!='remote'"
-queue_counts['geocode'] = count(geo_sql, tuple(geo_params))
-
-logo_score = logo_min_score(policy)
-logo_sql = ("SELECT COUNT(*) FROM companies c "
-            "WHERE (c.logo_fetched IS NULL OR c.logo_fetched=0) "
-            "AND EXISTS (SELECT 1 FROM positions p WHERE p.company_id=c.id AND p.status!='excluded')")
-logo_params = []
-if logo_score is not None:
-    logo_sql += " AND EXISTS (SELECT 1 FROM positions p JOIN scores s ON s.position_id=p.id WHERE p.company_id=c.id AND p.status!='excluded' AND s.total_score>=?)"
-    logo_params.append(int(logo_score))
-queue_counts['logos'] = count(logo_sql, tuple(logo_params))
-queue_counts['recheck'] = count("SELECT COUNT(DISTINCT p.id) FROM positions p "
-   "JOIN scores s ON s.position_id=p.id "
-   "WHERE p.status!='excluded' AND s.total_score>=? "
-   "AND (p.last_checked IS NULL OR p.last_checked < datetime('now', ?))",
-   (int(recheck['min_score']), '-' + str(int(recheck['older_than_days'])) + ' days'))
-
-directives = []
-for row in conn.execute("SELECT id,body,kind,status,sort_order,created_at,updated_at "
-                        "FROM team_directives WHERE status='active' "
-                        "ORDER BY sort_order,created_at"):
-    directives.append(dict(row))
-conn.close()
-print(json.dumps({'ok': True, 'maintenance': maintenance,
-                  'enrichment': enrichment, 'queue_counts': queue_counts,
-                  'directives': directives}, ensure_ascii=False))
-"""
+static var COORDINATOR_STATE_PY := payload("coordinator_state.py")
 
 ## Payload validato e scritto atomicamente nei due file canonici. Il JSON
 ## arriva base64 nello script (mai interpolato in una shell).
-const COORDINATOR_SAVE_PY := """
-import base64, json, os, sys
-sys.path.insert(0, '/app/shared/skills')
-from _db import DB_PATH
-data = json.loads(base64.b64decode('%s').decode('utf-8'))
-profile = os.path.join(os.path.dirname(DB_PATH), 'profile')
-os.makedirs(profile, exist_ok=True)
+static var COORDINATOR_SAVE_PY := payload("coordinator_save.py")
 
-def boolean(value, default=False):
-    return value if isinstance(value, bool) else default
-def integer(value, default, lo, hi):
-    try: value = int(value)
-    except Exception: value = default
-    return max(lo, min(hi, value))
-def nullable_score(value):
-    if value is None or str(value).strip().lower() in ('', 'null', 'none'):
-        return None
-    return integer(value, 0, 0, 100)
-def atomic(path, value):
-    tmp = path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as handle:
-        json.dump(value, handle, indent=2, ensure_ascii=False)
-        handle.write('\\n')
-    os.replace(tmp, path)
-
-m = data.get('maintenance', {})
-maintenance_path = os.path.join(profile, 'capitano-maintenance.json')
-if boolean(m.get('enabled')):
-    maintenance = {
-        'mode': 'care',
-        'orders': {
-            'stop_search': boolean(m.get('stop_search'), True),
-            'discard_expired_rotating': boolean(m.get('discard_expired_rotating'), True),
-            'cv_min_score': integer(m.get('cv_min_score'), 90, 0, 100),
-            'pre_check_liveness_for_cv': boolean(m.get('pre_check_liveness_for_cv'), True),
-        },
-    }
-    atomic(maintenance_path, maintenance)
-else:
-    try: os.unlink(maintenance_path)
-    except FileNotFoundError: pass
-
-e = data.get('enrichment', {})
-policy = {
-    'economy': boolean(e.get('economy')),
-    'logo': {
-        'enabled': boolean(e.get('logo_enabled'), True),
-        'min_score': nullable_score(e.get('logo_min_score')),
-    },
-    'geocode_missing': {
-        'enabled': boolean(e.get('geocode_enabled'), True),
-        'min_score': nullable_score(e.get('geocode_min_score')),
-        'non_remote_only': boolean(e.get('geocode_non_remote_only'), True),
-    },
-    'recheck_weekly': {
-        'enabled': boolean(e.get('recheck_enabled'), True),
-        'min_score': integer(e.get('recheck_min_score'), 70, 0, 100),
-        'older_than_days': integer(e.get('recheck_older_days'), 14, 1, 365),
-    },
-}
-atomic(os.path.join(profile, 'enrichment-policy.json'), policy)
-print(json.dumps({'ok': True, 'maintenance': maintenance if boolean(m.get('enabled')) else None,
-                  'enrichment': policy}, ensure_ascii=False))
-"""
-
-const COORDINATOR_DIRECTIVE_PY := """
-import base64, json, sys
-sys.path.insert(0, '/app/shared/skills')
-from _db import get_db, ensure_schema
-data = json.loads(base64.b64decode('%s').decode('utf-8'))
-conn = get_db(); ensure_schema(conn)
-action = str(data.get('action', ''))
-if action == 'add':
-    body = str(data.get('body', '')).strip()
-    kind = str(data.get('kind', 'order'))
-    if not body or len(body) > 2000 or kind not in ('order','strategy','formation','note'):
-        raise ValueError('direttiva non valida')
-    order = conn.execute("SELECT COALESCE(MAX(sort_order),0)+1 FROM team_directives WHERE status='active'").fetchone()[0]
-    conn.execute("INSERT INTO team_directives(body,kind,status,sort_order,created_by) VALUES(?,?,'active',?,'user')", (body,kind,order))
-elif action == 'archive':
-    directive_id = int(data.get('id', 0))
-    if directive_id <= 0: raise ValueError('id non valido')
-    conn.execute("UPDATE team_directives SET status='archived', archived_at=datetime('now','localtime'), updated_at=datetime('now','localtime') WHERE id=? AND status='active'", (directive_id,))
-else:
-    raise ValueError('azione non valida')
-conn.commit(); conn.close()
-print(json.dumps({'ok': True, 'action': action}, ensure_ascii=False))
-"""
+static var COORDINATOR_DIRECTIVE_PY := payload("coordinator_directive.py")
 
 ## Stato della deroga agli automatismi di spesa. Non reimplementa nulla:
 ## interroga shared/skills/burn_intent.py, che è il punto unico di verità
@@ -1129,62 +208,12 @@ print(json.dumps({'ok': True, 'action': action}, ensure_ascii=False))
 ## `never_yields`, `default_hours` e `max_hours` viaggiano col dato perché
 ## l'avviso all'utente li NOMINA: se un giorno la lista cambia nel modulo
 ## Python, l'avviso cambia con lei senza aspettare una release del gioco.
-const BURN_INTENT_PY := """
-import json, sys
-sys.path.insert(0, '/app/shared/skills')
-try:
-    import burn_intent
-except Exception:
-    # Deploy sfasato: il gioco può essere più nuovo dell'immagine del
-    # container per qualche minuto. Dirlo è meglio che offrire un
-    # interruttore che non comanda nulla (come COORDINATOR_STATE_PY).
-    print(json.dumps({'ok': True, 'supported': False}))
-    raise SystemExit(0)
-
-from datetime import datetime, timezone
-
-st = burn_intent.status()
-remaining = 0.0
-if st.get('active'):
-    try:
-        expires = datetime.fromisoformat(str(st.get('expires_at')))
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
-        remaining = (expires - datetime.now(timezone.utc)).total_seconds()
-    except Exception:
-        remaining = float(st.get('remaining_min') or 0) * 60.0
-st['ok'] = True
-st['supported'] = True
-st['remaining_sec'] = int(max(0.0, remaining))
-st['never_yields'] = list(burn_intent.NEVER_YIELDS)
-st['default_hours'] = burn_intent.DEFAULT_HOURS
-st['max_hours'] = burn_intent.MAX_HOURS
-print(json.dumps(st, ensure_ascii=False))
-"""
+static var BURN_INTENT_PY := payload("burn_intent.py")
 
 ## Concessione/revoca. Passa da grant()/revoke() del modulo, così scrittura
 ## atomica, clamp delle ore e riga di audit restano dove sono già testati:
 ## il gioco pilota la deroga, non ne tiene una seconda copia.
-const BURN_INTENT_SET_PY := """
-import base64, json, sys
-sys.path.insert(0, '/app/shared/skills')
-import burn_intent
-
-data = json.loads(base64.b64decode('%s').decode('utf-8'))
-# Il motivo finisce nell'audit log e nel banner letto dagli agenti: è la
-# traccia di CHI ha tolto i freni, e resta in italiano come gli altri
-# messaggi che il backend manda al team.
-if bool(data.get('active')):
-    payload = burn_intent.grant(data.get('hours', burn_intent.DEFAULT_HOURS),
-                                "concessa dall'utente dal pannello del Coordinatore",
-                                'user')
-    out = {'ok': True, 'action': 'grant', 'expires_at': payload['expires_at'],
-           'hours': payload['hours']}
-else:
-    burn_intent.revoke("revocata dall'utente dal pannello del Coordinatore")
-    out = {'ok': True, 'action': 'revoke'}
-print(json.dumps(out, ensure_ascii=False))
-"""
+static var BURN_INTENT_SET_PY := payload("burn_intent_set.py")
 
 var _ip := ""
 var _key := ""
@@ -1849,52 +878,7 @@ func _chat_sent(agent: String, ok: bool, error: String) -> void:
 ## I campi viaggiano BASE64 (json) dentro lo script python → file+stdin,
 ## mai in una shell. Prima di riscrivere, backup timestampato sul posto.
 
-const PROFILE_SAVE_PY := """
-import json, base64, shutil, time, yaml
-data = json.loads(base64.b64decode('%s').decode('utf-8'))
-path = '/jht_home/profile/candidate_profile.yml'
-try:
-    prof = yaml.safe_load(open(path)) or {}
-except Exception:
-    prof = {}
-try:
-    shutil.copy2(path, path + '.bak-' + time.strftime('%%Y%%m%%dT%%H%%M%%S'))
-except Exception:
-    pass
-for key in ['name', 'email', 'target_role', 'location', 'experience_years',
-            'seniority_target', 'industry', 'nationality', 'work_mode',
-            'runtime_location', 'career_priority', 'search_style',
-            'mentor_cadence']:
-    if key in data and str(data[key]).strip() != '':
-        v = str(data[key]).strip()
-        # i numerici restano numeri nel yml (experience_years: 1, non '1')
-        try:
-            v = int(v)
-        except ValueError:
-            try:
-                v = float(v)
-            except ValueError:
-                pass
-        prof[key] = v
-if 'skills_primary' in data:
-    skills = [s.strip() for s in str(data['skills_primary']).split(',') if s.strip()]
-    prof.setdefault('skills', {})['primary'] = skills
-if 'languages' in data:
-    prof['languages'] = [s.strip() for s in str(data['languages']).split(',') if s.strip()]
-if data.get('salary_min') or data.get('salary_max'):
-    sal_key = 'salary_target' if 'salary_target' in prof or 'salary' not in prof else 'salary'
-    sal = prof.get(sal_key) if isinstance(prof.get(sal_key), dict) else {}
-    lo_key = 'lo' if 'lo' in sal else 'min'
-    hi_key = 'hi' if 'hi' in sal else 'max'
-    if data.get('salary_min'):
-        sal[lo_key] = int(float(data['salary_min']))
-    if data.get('salary_max'):
-        sal[hi_key] = int(float(data['salary_max']))
-    sal['currency'] = str(data.get('salary_currency', sal.get('currency', 'EUR')))
-    prof[sal_key] = sal
-yaml.safe_dump(prof, open(path, 'w'), allow_unicode=True, sort_keys=False)
-print(json.dumps(dict(ok=True)))
-"""
+static var PROFILE_SAVE_PY := payload("profile_save.py")
 
 ## Storico usage on-demand (pannelli di monitoraggio risorse). Un solo
 ## worker alla volta: le richieste durante un fetch in corso vengono
@@ -1990,56 +974,7 @@ func _do_save_profile(fields: Dictionary) -> void:
 ## seniority_target, ≥2 skill, ≥1 lingua. Chi SCRIVE il profilo resta
 ## l'agente assistente: il gioco osserva e basta, come la pagina web.
 
-const PROFILE_STATUS_PY := """
-import json, os
-prof = {}
-try:
-    import yaml
-    prof = yaml.safe_load(open('/jht_home/profile/candidate_profile.yml')) or {}
-except Exception:
-    pass
-def s(v):
-    return str(v).strip() if v is not None else ''
-skills = prof.get('skills') or {}
-skill_list = []
-if isinstance(skills, dict):
-    for v in skills.values():
-        if isinstance(v, list):
-            skill_list += [s(x) for x in v if s(x)]
-elif isinstance(skills, list):
-    skill_list = [s(x) for x in skills if s(x)]
-def lang_str(x):
-    if isinstance(x, dict):
-        return ' '.join(s(v) for v in x.values() if s(v))
-    return s(x)
-langs = prof.get('languages') or []
-if not isinstance(langs, list):
-    langs = [langs]
-langs = [lang_str(x) for x in langs if lang_str(x)]
-pos = prof.get('positioning') or {}
-contacts = pos.get('contacts') or {}
-email = s(prof.get('email')) or s(contacts.get('email'))
-seniority = s(prof.get('seniority_target')) or s(pos.get('seniority_target'))
-required = dict(
-    name=s(prof.get('name')) != '',
-    email=email != '',
-    target_role=s(prof.get('target_role')) != '',
-    location=s(prof.get('location')) != '',
-    experience_years=prof.get('experience_years') is not None,
-    seniority_target=seniority != '',
-    skills=len(skill_list) >= 2,
-    languages=len(langs) >= 1,
-)
-ready = os.path.exists('/jht_home/profile/ready.flag') or all(required.values())
-view = dict(
-    name=s(prof.get('name')), email=email,
-    target_role=s(prof.get('target_role')), location=s(prof.get('location')),
-    experience_years=s(prof.get('experience_years')),
-    seniority_target=seniority, skills=skill_list[:12], languages=langs[:8],
-)
-print(json.dumps(dict(profile=view, required=required, ready=ready),
-                 ensure_ascii=False))
-"""
+static var PROFILE_STATUS_PY := payload("profile_status.py")
 
 var _profile_watch := false
 
@@ -2145,20 +1080,7 @@ static func _safe_filename(name: String) -> String:
 
 const ARTIFACT_MAX_BYTES := 10 * 1024 * 1024  # stesso tetto dell'upload
 
-const ARTIFACT_PY := """
-import base64, json, os
-path = base64.b64decode('%s').decode('utf-8')
-real = os.path.realpath(path)
-if not (real.startswith('/jht_user/') or real.startswith('/jht_home/')):
-    print(json.dumps(dict(ok=False, error='percorso fuori dalle aree dati')))
-elif not os.path.isfile(real):
-    print(json.dumps(dict(ok=False, error='file non trovato sul container')))
-elif os.path.getsize(real) > %d:
-    print(json.dumps(dict(ok=False, error='file oltre i 10 MB')))
-else:
-    with open(real, 'rb') as f:
-        print(json.dumps(dict(ok=True, b64=base64.b64encode(f.read()).decode())))
-"""
+static var ARTIFACT_PY := payload("artifact.py")
 
 func fetch_artifact(path: String) -> void:
 	# thread one-shot: un pdf da qualche centinaio di KB non deve
@@ -2193,19 +1115,7 @@ func _do_fetch_artifact(path: String) -> void:
 ## sezione (load→update→dump preserva tutto il resto, credenziali
 ## incluse — che non lasciano mai il container), con backup prima.
 
-const HOURS_SAVE_PY := """
-import json, base64, shutil, time
-data = json.loads(base64.b64decode('%s').decode('utf-8'))
-path = '/jht_home/jht.config.json'
-c = json.load(open(path))
-try:
-    shutil.copy2(path, path + '.bak-' + time.strftime('%%Y%%m%%dT%%H%%M%%S'))
-except Exception:
-    pass
-c.setdefault('team', {})['working_hours'] = data
-json.dump(c, open(path, 'w'), indent=2, ensure_ascii=False)
-print(json.dumps(dict(ok=True)))
-"""
+static var HOURS_SAVE_PY := payload("hours_save.py")
 
 func save_working_hours(wh: Dictionary) -> void:
 	_queue_worker(_do_save_hours.bind(wh))
@@ -2229,25 +1139,7 @@ func _do_save_hours(wh: Dictionary) -> void:
 
 const TICKET_MAX_LEN := 2000  # stesso limite della route web
 
-const TICKET_PY := """
-import sqlite3, base64, json
-text = base64.b64decode('%s').decode('utf-8')
-pid = %d
-db = sqlite3.connect('/jht_home/jobs.db')
-try:
-    db.execute('PRAGMA journal_mode=WAL')
-    db.execute('PRAGMA foreign_keys=ON')
-    if db.execute('SELECT id FROM positions WHERE id=?', (pid,)).fetchone() is None:
-        print(json.dumps(dict(ok=False, error='posizione inesistente')))
-    else:
-        cur = db.execute(
-            "INSERT INTO position_tickets (position_id, request_text, kind, status) "
-            "VALUES (?, ?, 'custom', 'open')", (pid, text))
-        db.commit()
-        print(json.dumps(dict(ok=True, id=cur.lastrowid)))
-finally:
-    db.close()
-"""
+static var TICKET_PY := payload("ticket.py")
 
 func create_ticket(position_id: int, text: String) -> void:
 	var t := text.strip_edges().left(TICKET_MAX_LEN)

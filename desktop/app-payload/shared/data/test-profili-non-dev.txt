@@ -1,0 +1,382 @@
+======================================================================
+  REPORT E2E — TEST PROFILI NON-DEV (3 profili)
+  Worker: @jht-e2e | Data: 2026-03-15
+  Clone: /tmp/jht-test-fresh (github.com/leopu00/job-hunter-team)
+======================================================================
+
+Ambiente:
+  Python: /opt/anaconda3/bin/python3 v3.12.4 (PATH anaconda prioritario)
+  PyYAML: 6.0.3
+  Profili testati: A=Marketing Manager, B=Product Manager, C=Data Analyst
+
+══════════════════════════════════════════════════════════════════════
+PROFILO A — GIULIA FERRARI (Digital Marketing Manager)
+══════════════════════════════════════════════════════════════════════
+
+Dati profilo:
+  name: Giulia Ferrari | target_role: Digital Marketing Manager
+  experience_years: 8 | has_degree: true | location: Remote EU
+  skills: [Google Ads, Meta Ads, HubSpot, Salesforce, SEO,
+           Copywriting, Email Marketing, Analytics]
+  languages: [italiano/madrelingua, inglese/C1, spagnolo/B1]
+  location_preferences: [Remote EU, Remote Worldwide]
+
+────────────────────────────────────────────────────────────────────
+TEST A.1 — Snippet scorer (chiavi top-level)
+────────────────────────────────────────────────────────────────────
+Output:
+  name: Giulia Ferrari                                   OK
+  target_role: Digital Marketing Manager                 OK
+  experience_years: 8                                    OK
+  has_degree: True                                       OK
+  skills: [Google Ads, Meta Ads, HubSpot, Salesforce,
+           SEO, Copywriting, Email Marketing, Analytics] OK
+  filters: {max_experience_required: 12,
+            min_score_for_writing: 50,
+            exclude_seniority: [director, VP, C-level],
+            exclude_geo: [US-only, UK work auth required]} OK
+EXIT_CODE: 0
+Risultato: PASS
+
+────────────────────────────────────────────────────────────────────
+TEST A.2 — Snippet scrittore (sezione candidate)
+────────────────────────────────────────────────────────────────────
+Output:
+  Nome: Giulia Ferrari                                   OK
+  Skills keys: [primary, secondary, learning]            WARN (struttura custom)
+  Skills primary: [Google Ads, Meta Ads, HubSpot, Salesforce] OK
+  Skills secondary: [SEO, Copywriting, Email Marketing, Analytics, CRM] OK
+  Skills learning: [AI Marketing, Marketing Automation]  OK
+  Exp ruoli: [Senior Digital Marketing Specialist,
+              Marketing Specialist]                       OK
+  Exp duration: [4 anni, 4 anni]                         INFO (campo extra)
+EXIT_CODE: 0
+Risultato: PASS (snippet scrittore personalizzato)
+
+  ATTENZIONE: il parsing funziona SOLO con snippet personalizzato.
+  Se lo scrittore usa il codice standard che accede a
+  c['skills']['languages'] / c['skills']['frameworks'] / etc.,
+  genera KeyError immediato (confermato, vedi Bug A-01).
+
+────────────────────────────────────────────────────────────────────
+TEST A.3 — Confronto con example
+────────────────────────────────────────────────────────────────────
+Top-level:         nessun campo mancante / nessun campo extra     OK
+Filtri mancanti:   exclude_languages, required_stack_overlap,     WARN
+                   exclude_experience_years_min, min_score_threshold
+scoring_weights:   chiavi 'growth' e 'company' al posto di        BUG
+                   'crescita' e 'azienda' (come da example)
+candidate:         nessun campo mancante / nessun campo extra     OK
+candidate.skills:  struttura COMPLETAMENTE DIVERSA dall'example:  BUG
+  - example usa:   {languages, frameworks, databases, tools, cloud}
+  - profilo A usa: {primary, secondary, learning}
+  - Incompatibilita' TOTALE con codice scrittore standard
+experience[0]:     campo 'duration' extra non nel example         INFO
+
+══════════════════════════════════════════════════════════════════════
+PROFILO B — ANDREA CONTI (Product Manager)
+══════════════════════════════════════════════════════════════════════
+
+Dati profilo:
+  name: Andrea Conti | target_role: Product Manager
+  experience_years: 5 | has_degree: true | location: Remote EU
+  skills: [Figma, Jira, Product Roadmap, User Stories,
+           A/B Testing, Agile/Scrum, SQL base, Data Analysis]
+
+────────────────────────────────────────────────────────────────────
+TEST B.1 — Snippet scorer
+────────────────────────────────────────────────────────────────────
+Output:
+  name: Andrea Conti                                     OK
+  target_role: Product Manager                           OK
+  experience_years: 5                                    OK
+  has_degree: True                                       OK
+  skills: [Figma, Jira, Product Roadmap, User Stories,
+           A/B Testing, Agile/Scrum, SQL base, Data Analysis] OK
+  filters: {max_experience_required: 8,
+            min_score_for_writing: 50, ...}              OK
+EXIT_CODE: 0
+Risultato: PASS
+
+────────────────────────────────────────────────────────────────────
+TEST B.2 — Snippet scrittore
+────────────────────────────────────────────────────────────────────
+Output:
+  Nome: Andrea Conti                                     OK
+  Skills keys: [languages, frameworks, databases,
+                tools, cloud]                            OK (struttura example)
+  Skills languages: [SQL base]                          WARN (SQL non e' un linguaggio di programmazione)
+  Skills frameworks: [Agile/Scrum, Product Roadmap]     WARN (non sono framework software)
+  Skills databases: [Amplitude, Mixpanel]               WARN (non sono DB, sono analytics tools)
+  Skills tools: [Figma, Jira, Confluence, A/B Testing]  OK (corretto semanticamente)
+  Skills cloud: []                                       OK (lista vuota, no cloud per PM)
+  Exp ruoli: [Product Manager, Associate PM]             OK
+  Education: [Laurea in Economia e Management]           OK
+EXIT_CODE: 0
+Risultato: PASS strutturale — WARN semantico
+
+────────────────────────────────────────────────────────────────────
+TEST B.3 — Confronto con example
+────────────────────────────────────────────────────────────────────
+Top-level:         nessun campo mancante                          OK
+Filtri mancanti:   exclude_languages, required_stack_overlap,     WARN
+                   exclude_experience_years_min, min_score_threshold
+scoring_weights:   'growth'/'company' invece di 'crescita'/'azienda' BUG
+candidate.skills:  struttura example rispettata                   OK
+  PERO' uso semanticamente sbagliato delle categorie:
+  - SQL in 'languages': accettabile (e' un linguaggio query)
+  - Agile/Scrum in 'frameworks': improprio (metodologia, non framework)
+  - Amplitude/Mixpanel in 'databases': sbagliato (sono analytics SaaS)
+  - cloud: [] OK (un PM non ha skills cloud dirette)
+experience[0]:     campo 'duration' extra                         INFO
+
+══════════════════════════════════════════════════════════════════════
+PROFILO C — SOFIA RICCI (Data Analyst)
+══════════════════════════════════════════════════════════════════════
+
+Dati profilo:
+  name: Sofia Ricci | target_role: Data Analyst
+  experience_years: 3 | has_degree: true | location: Milano / Remote EU
+  skills: [Excel, Power BI, Tableau, SQL, R,
+           Data Visualization, Statistical Analysis]
+
+────────────────────────────────────────────────────────────────────
+TEST C.1 — Snippet scorer
+────────────────────────────────────────────────────────────────────
+Output:
+  name: Sofia Ricci                                      OK
+  target_role: Data Analyst                              OK
+  experience_years: 3                                    OK
+  has_degree: True                                       OK
+  skills: [Excel, Power BI, Tableau, SQL, R,
+           Data Visualization, Statistical Analysis]     OK
+  filters: {max_experience_required: 5, ...}             OK
+EXIT_CODE: 0
+Risultato: PASS
+
+────────────────────────────────────────────────────────────────────
+TEST C.2 — Snippet scrittore
+────────────────────────────────────────────────────────────────────
+Output:
+  Nome: Sofia Ricci                                      OK
+  Skills languages: [SQL, R]                            WARN (R non e' un linguaggio di programmazione classico)
+  Skills frameworks: [Statistical Analysis]             WARN (non e' un framework)
+  Skills databases: [Excel]                             BUG-SEM (Excel non e' un database)
+  Skills tools: [Power BI, Tableau, Data Visualization] OK
+  Skills cloud: []                                       OK
+  Exp ruoli: [Data Analyst]                              OK
+  Education: [Laurea in Statistica]                      OK
+  Projects (lista vuota): []                             WARN (vedi Bug C-01)
+EXIT_CODE: 0
+Risultato: PASS strutturale — WARN/BUG semantici
+
+Test aggiuntivo — accesso projects[0] su lista vuota:
+  Iterazione for-in vuota: OK (nessun crash)
+  Accesso diretto projects[0]: IndexError (list index out of range)
+  => Se lo scrittore accede a c['projects'][0] senza check: CRASH
+
+────────────────────────────────────────────────────────────────────
+TEST C.3 — Confronto con example
+────────────────────────────────────────────────────────────────────
+Top-level:         nessun campo mancante                          OK
+Filtri mancanti:   exclude_languages, required_stack_overlap,     WARN
+                   exclude_experience_years_min, min_score_threshold
+scoring_weights:   'growth'/'company' invece di 'crescita'/'azienda' BUG
+candidate.skills:  struttura example rispettata                   OK
+  USO SEMANTICAMENTE SBAGLIATO delle categorie:
+  - SQL, R in 'languages': parzialmente accettabile
+  - Statistical Analysis in 'frameworks': sbagliato (e' una disciplina)
+  - Excel in 'databases': sbagliato (e' un foglio di calcolo)
+  - cloud: [] OK
+experience[0]:     campo 'duration' extra                         INFO
+projects:          lista VUOTA — rischio IndexError               WARN
+
+══════════════════════════════════════════════════════════════════════
+BUG E PROBLEMI TROVATI — TUTTI I PROFILI
+══════════════════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────────────
+[BUG-NDV-01] scoring_weights: chiavi IT/EN miste — CRITICO
+────────────────────────────────────────────────────────────────────
+Impatto:    TUTTI e 3 i profili (A, B, C)
+Problema:   L'example usa 'crescita' e 'azienda' (italiano).
+            Tutti e 3 i profili usano 'growth' e 'company' (inglese).
+            Evidenza diretta:
+              KeyError scoring_weights['crescita'] → BUG confermato
+              KeyError scoring_weights['azienda']  → BUG confermato
+Scenario:   Se il codice scorer fa p['scoring_weights']['crescita']
+            o p['scoring_weights']['azienda'], CRASH con KeyError
+            su TUTTI i profili non-dev testati.
+Causa:      L'example e il CLAUDE.md degli agenti usano nomi italiani,
+            ma e' naturale per un nuovo utente usare l'inglese.
+            L'incoerenza non e' documentata ne' validata.
+Fix:        Scegliere una lingua e uniformarla. Preferibile: inglese.
+            Oppure accettare entrambe le varianti nel codice:
+              score_weights.get('crescita', score_weights.get('growth', 10))
+            Meglio ancora: aggiungere validazione in setup.sh o in
+            un modulo config.py che normalizza le chiavi.
+
+────────────────────────────────────────────────────────────────────
+[BUG-NDV-02] candidate.skills struttura custom Profilo A — CRITICO
+────────────────────────────────────────────────────────────────────
+Impatto:    Profilo A (Marketing Manager) — qualsiasi profilo che usa
+            struttura alternativa a {languages, frameworks, tools, ...}
+Problema:   Profilo A usa {primary, secondary, learning} invece di
+            {languages, frameworks, databases, tools, cloud}.
+            Se lo scrittore accede a c['skills']['languages']:
+              KeyError: 'languages' → CRASH immediato
+            Stesso per 'frameworks', 'databases', 'tools', 'cloud'.
+Causa:      La struttura example e' pensata esclusivamente per
+            developer. Un marketer non ha 'frameworks' o 'cloud'.
+            L'utente tenta di adattare la struttura in modo logico
+            (primary/secondary) ma rompe la compatibilita'.
+Fix:        Vedi sezione RACCOMANDAZIONI STRUTTURALI.
+
+────────────────────────────────────────────────────────────────────
+[BUG-NDV-03] projects: [] lista vuota — WARN potenziale crash
+────────────────────────────────────────────────────────────────────
+Impatto:    Profilo C (Data Analyst) — qualsiasi profilo senza progetti
+Problema:   projects: [] e' YAML valido. L'iterazione e' safe.
+            Se pero' il codice usa c['projects'][0] senza check len:
+              IndexError: list index out of range
+Evidenza:   Test confermato (vedi output TEST C.2)
+Fix:        In codice scrittore, aggiungere:
+              if c.get('projects'):
+                  primo = c['projects'][0]
+
+────────────────────────────────────────────────────────────────────
+[WARN-NDV-04] Filtri mancanti in tutti i profili — WARN comportamentale
+────────────────────────────────────────────────────────────────────
+Impatto:    TUTTI e 3 i profili (A, B, C)
+Filtri assenti in tutti i profili:
+  - exclude_languages       (nessun filtro su lingue richieste)
+  - required_stack_overlap  (nessun minimo overlap skills per scout)
+  - exclude_experience_years_min (nessun filtro anni minimi)
+  - min_score_threshold     (nessun threshold minimo per scout)
+Rischio:    Lo scout potrebbe inserire posizioni senza filtraggio
+            adeguato se il codice non usa valori di default sicuri.
+Fix:        Aggiungere valori default nel codice per filtri mancanti.
+            O aggiungere questi filtri al template minimo nell'example
+            con valori precompilati commentati.
+
+────────────────────────────────────────────────────────────────────
+[INFO-NDV-05] Campo 'duration' extra in experience — INFO
+────────────────────────────────────────────────────────────────────
+Impatto:    TUTTI e 3 i profili
+Problema:   Tutti i profili aggiungono 'duration' (es. "4 anni") ai
+            ruoli experience. Non e' nell'example (solo role, company,
+            period, description, highlights).
+            Il campo viene ignorato silenziosamente dal codice → no crash.
+Osservazione: 'duration' e' ridondante con 'period' ma utile per CV.
+Fix:        Aggiungere 'duration' come campo opzionale documentato
+            nell'example, oppure chiarire che e' ignorato.
+
+══════════════════════════════════════════════════════════════════════
+ANALISI STRUTTURALE — candidate.skills INADEGUATA PER NON-DEV
+══════════════════════════════════════════════════════════════════════
+
+La struttura candidate.skills nell'example e' pensata SOLO per developer:
+  {languages, frameworks, databases, tools, cloud}
+
+Per profili non-dev, questo schema e' semanticamente inadeguato:
+
+PROFILO          | FORZATURA SEMANTICA
+-----------------|-------------------------------------------------
+Marketing (A)    | IMPOSSIBILE mappare: usa struttura custom
+                 | primary/secondary/learning → incompatibile
+Product Mgr (B)  | SQL in 'languages': accettabile
+                 | Agile/Scrum in 'frameworks': improprio
+                 | Amplitude/Mixpanel in 'databases': sbagliato
+Data Analyst (C) | SQL/R in 'languages': parzialmente ok
+                 | Statistical Analysis in 'frameworks': sbagliato
+                 | Excel in 'databases': sbagliato semanticamente
+                 | cloud: [] sempre vuoto
+
+CONSEGUENZA:
+  - Un marketing manager non riesce a compilare la sezione senza
+    forzature o struttura custom incompatibile
+  - Lo scrittore riceve dati semanticamente sbagliati e potrebbe
+    generare CV con categorizzazioni errate (es. "Excel" nella
+    sezione "Databases" del CV)
+
+SOLUZIONE PROPOSTA — Struttura universale flessibile:
+
+  candidate:
+    skills:
+      # Per developer: usa languages/frameworks/databases/tools/cloud
+      # Per non-dev: usa primary/secondary/tools (ignora il resto)
+      # Struttura OPZIONALE — usa solo le categorie rilevanti per te
+      primary: []       # skill principali (qualsiasi ruolo)
+      secondary: []     # skill secondarie (qualsiasi ruolo)
+      tools: []         # tool e software (tutti i ruoli)
+      # Categorie opzionali solo per developer:
+      languages: []     # linguaggi di programmazione
+      frameworks: []    # framework e librerie
+      databases: []     # database e storage
+      cloud: []         # cloud provider e servizi
+
+  Con questa struttura:
+  - Lo scrittore usa primary+secondary+tools come base universale
+  - Per dev, usa anche languages+frameworks+databases+cloud
+  - Nessun KeyError per nessun tipo di profilo
+
+══════════════════════════════════════════════════════════════════════
+RACCOMANDAZIONI STRUTTURALI (prioritizzate)
+══════════════════════════════════════════════════════════════════════
+
+[P1 — CRITICO] Uniformare scoring_weights a una sola lingua
+  Scegliere inglese (growth/company) o italiano (crescita/azienda)
+  in modo coerente tra example, CLAUDE.md agenti e codice scorer.
+  Aggiungere validazione o normalizzazione nel codice.
+
+[P1 — CRITICO] Rendere candidate.skills universale
+  Modificare la struttura skills da dev-centric a universale.
+  Proposta: mantenere primary/secondary/tools come base minima
+  e rendere languages/frameworks/databases/cloud opzionali.
+  Aggiornare lo scrittore per accedere a skills con .get() sicuro.
+
+[P2 — IMPORTANTE] Aggiungere check projects vuoto nel codice scrittore
+  Prima di accedere a c['projects'][0], verificare len > 0.
+
+[P2 — IMPORTANTE] Documentare filtri raccomandati per non-dev
+  Aggiungere sezione commentata nell'example con filtri tipici
+  per profili non-dev (min_score_threshold piu' basso, etc.)
+
+[P3 — MINORE] Documentare campo 'duration' in experience
+  Aggiungere al example come campo opzionale o chiarire che e' ignorato.
+
+[P3 — MINORE] Aggiungere profili esempio non-dev
+  Creare candidate_profile_marketing.yml.example,
+  candidate_profile_pm.yml.example,
+  candidate_profile_analyst.yml.example
+  nella directory docs/ o examples/ per guidare utenti non-dev.
+
+══════════════════════════════════════════════════════════════════════
+RIEPILOGO RISULTATI
+══════════════════════════════════════════════════════════════════════
+
+TEST                                   | A-MKT | B-PM  | C-DA
+---------------------------------------|-------|-------|------
+Scorer snippet (top-level)             | PASS  | PASS  | PASS
+Scrittore snippet (candidate)          | PASS* | PASS* | PASS*
+Compatibilita' example (struttura)     | FAIL  | PASS  | PASS
+Compatibilita' semantica skills        | FAIL  | WARN  | WARN
+scoring_weights chiavi corrette        | FAIL  | FAIL  | FAIL
+Filtri completi (vs example)           | WARN  | WARN  | WARN
+projects vuoto sicuro                  | n/a   | n/a   | WARN
+
+* PASS solo con snippet personalizzato; lo scrittore standard
+  con accesso diretto a c['skills']['languages'] darebbe CRASH
+  su profilo A e warning semantici su B e C.
+
+BUG CRITICI CONFERMATI (KeyError in runtime): 2
+  - BUG-NDV-01: scoring_weights chiavi miste IT/EN
+  - BUG-NDV-02: candidate.skills struttura incompatibile (profilo A)
+
+FILE PRODOTTI:
+  /tmp/jht-test-fresh/candidate_profile.yml  (ultima versione: profilo C)
+  /tmp/jht-test-fresh/shared/data/test-profili-non-dev.txt (questo report)
+
+======================================================================
+EOF — Report generato da @jht-e2e il 2026-03-15
+======================================================================

@@ -490,8 +490,9 @@ def test_agent_watchdog_keeps_bridge_supervision_during_standby():
     respawna/refresha AGENTI ma continua a sorvegliare i BRIDGE — un bridge
     morto e non rispawnato sarebbe uno standby eterno."""
     src = _src(LAUNCHER_DIR / "agent-watchdog.sh")
-    m = re.search(
-        r'if \[ -e "\$TEAM_STANDBY_FLAG" \]; then(.*?)\n    continue', src, re.S)
+    # Il gate NON è più `[ -e <flag> ]` ma il predicato unico `standby_active`
+    # ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS]): un flag scaduto non è standby.
+    m = re.search(r'if standby_active; then(.*?)\n    continue', src, re.S)
     assert m, "gate standby assente dal loop dell'agent-watchdog"
     branch = m.group(1)
     assert "maybe_respawn_bridges" in branch, "la sveglia resta senza respawn"

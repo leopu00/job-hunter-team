@@ -36,7 +36,6 @@ Config:
   JHT_HOME                                        — dir config (default ~/.jht)
 """
 
-import fcntl
 import importlib.util
 import json
 import os
@@ -1497,12 +1496,6 @@ def write_log(entry):
 
 # ── Singleton lock ──────────────────────────────────────────────────────
 
-# Il file handle del lock resta aperto per TUTTA la vita del processo: è il
-# possesso del fd a tenere il flock. Se il modulo lo lasciasse andare, il GC
-# chiuderebbe il fd e il lock cadrebbe.
-_LOCK_FH = None
-
-
 def acquire_singleton_lock():
     """Singleton ATOMICO via flock. Esci se un altro bridge è già vivo.
 
@@ -1513,44 +1506,24 @@ def acquire_singleton_lock():
     start-agent.sh bridge, e team-commands-poller.js → bridge-control.sh)
     possono partire in parallelo.
 
-    flock(LOCK_EX|LOCK_NB) è atomico a livello di kernel e si rilascia da solo
-    quando il processo muore (anche di SIGKILL), quindi non lascia lock stale
-    da ripulire — a differenza del PID file, che sopravvive ai crash.
-
+    La meccanica vive in `shared/skills/singleton_lock.py` ([BRIDGE-SINGLETON-
+    PARTIAL]): era duplicata qui e nel pacing-bridge, e assente negli altri
+    cinque membri della suite lanciata dallo stesso blocco di start-agent.sh.
     Il PID file continua a essere scritto: lo leggono la UI
     (web/app/api/bridge/status/route.ts) e pid1.
+
+    Modulo non caricabile → si prosegue SENZA lock: meglio un bridge senza
+    lock che nessun bridge (il kill-by-marker dello spawner resta come rete).
     """
-    global _LOCK_FH
-    try:
-        fh = open(LOCK_FILE, "a+", encoding="utf-8")
-    except OSError as e:
-        # Filesystem non scrivibile: meglio un bridge senza lock che nessun
-        # bridge (il kill-by-marker dello spawner resta come rete).
-        print(f"[bridge V5] WARN lockfile non apribile ({e}) — proseguo senza lock")
-        return
-    try:
-        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
+    mod = _load_skill_module("singleton_lock", "singleton_lock.py")
+    if mod is None:
+        print("[bridge V5] WARN singleton_lock non caricabile — proseguo senza lock")
         try:
-            fh.seek(0)
-            other = fh.read().strip() or "?"
+            PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
         except OSError:
-            other = "?"
-        fh.close()
-        print(f"[bridge V5] altra istanza viva (pid={other}), exit")
-        sys.exit(0)
-    _LOCK_FH = fh
-    try:
-        fh.seek(0)
-        fh.truncate()
-        fh.write(str(os.getpid()))
-        fh.flush()
-    except OSError:
-        pass
-    try:
-        PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
-    except OSError:
-        pass
+            pass
+        return
+    mod.acquire_singleton(LOCK_FILE, pid_file=PID_FILE, label="bridge V5")
 
 
 # ── Helper: chiama compute_metrics skill per scrivere sample ────────────

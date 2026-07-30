@@ -3,7 +3,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { getScorerStats } from "@/lib/queries";
 import ScorerLiveSection from "./_components/ScorerLiveSection";
-import AgentInteraction from "@/components/AgentInteraction";
+import AgentInteraction from "@/app/components/AgentInteraction";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";

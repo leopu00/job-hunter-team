@@ -11,8 +11,8 @@ import { activeDemoPersona } from "@/lib/demo/mode";
 import { hasSyncedData } from "@/lib/demo/pairing";
 import DemoBanner from "@/app/components/demo/DemoBanner";
 import { getRequestLocale } from "@/lib/request-locale";
-import Navbar from "@/components/NavbarChrome";
-import MainChrome from "@/components/MainChrome";
+import Navbar from "@/app/components/NavbarChrome";
+import MainChrome from "@/app/components/MainChrome";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },

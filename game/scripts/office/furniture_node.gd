@@ -6,24 +6,15 @@ extends StaticBody2D
 
 const FRONT_H := 26.0  # altezza della faccia frontale (effetto 3/4)
 
-## Colori per kind: [piano, fronte, dettaglio]
+## Colori per kind: [piano, fronte, dettaglio]. Solo i kind DAVVERO istanziati
+## da FurnitureDefs/DepartmentDefs: una chiave in piu' e' una mappa che mente su
+## cosa esiste in ufficio, e tiene in vita l'arte che le sta dietro. Il gate e'
+## `tools/asset_orphan_audit.py --keys`, dentro `tools/run.sh test`.
+## I kind senza voce qui cadono sul default di _draw (Palette.ROW/CARD/BORDER).
 const KIND_COLORS := {
-	"desk": [Color("#5e4a33"), Color("#453624"), Color("#16161d")],
-	"desk_wide": [Color("#3a3a46"), Color("#26262f"), Color("#16161d")],
-	# varianti reparto (ufficio caotico-creativo): legni e vernici diversi
-	"desk_a": [Color("#5e4a33"), Color("#453624"), Color("#16161d")],
-	"desk_b": [Color("#6b5a45"), Color("#4e4232"), Color("#16161d")],
-	"desk_c": [Color("#4a4438"), Color("#363228"), Color("#16161d")],
-	"desk_d": [Color("#543f35"), Color("#3d2e26"), Color("#16161d")],
-	"desk_e": [Color("#3d4a52"), Color("#2b363d"), Color("#16161d")],
-	"desk_f": [Color("#5a4a58"), Color("#423645"), Color("#16161d")],
 	"printer": [Color("#3a3a46"), Color("#26262f"), Color("#b8b8d0")],
 	"table_low": [Color("#4a3b29"), Color("#352a1d"), Color("#16161d")],
-	"sofa": [Color("#333f5c"), Color("#252e44"), Color("#1a2032")],
-	"armchair": [Color("#3c4866"), Color("#2a3349"), Color("#1a2032")],
 	"shelf_h": [Color("#42342a"), Color("#2f251d"), Color("#5e4a33")],
-	"shelf_v": [Color("#42342a"), Color("#2f251d"), Color("#5e4a33")],
-	"coffee": [Color("#3a3a46"), Color("#26262f"), Color("#f5c518")],
 	"lab_bench": [Color("#3f4652"), Color("#2b303a"), Color("#7fffb2")],
 	"blackboard": [Color("#1d2420"), Color("#141a16"), Color("#7a7a96")],
 	"lamp": [Color("#2e3d35"), Color("#1f2a24"), Color("#f5c518")],
@@ -31,26 +22,19 @@ const KIND_COLORS := {
 }
 
 ## Sprite pittorici consegnati da dev1-art (gen-art); se assenti, blockout.
+##
+## Serve solo ai kind il cui file NON si chiama come loro: gli altri li trova
+## gia' il fallback "nome file = kind" piu' sotto (riga ~150). Stessa regola di
+## KIND_COLORS: qui dentro solo kind istanziati, o l'audit degli asset diventa
+## cieco proprio sull'arte che questa mappa trattiene.
 const GEN_ART := {
-	"desk": "res://assets/gen-art/furniture/desk.png",
-	"desk_wide": "res://assets/gen-art/furniture/desk_wide.png",
-	"sofa": "res://assets/gen-art/furniture/sofa_bright.png",
-	"armchair": "res://assets/gen-art/furniture/armchair.png",
 	"table_low": "res://assets/gen-art/furniture/coffee_table.png",
 	"shelf_h": "res://assets/gen-art/furniture/bookshelf.png",
-	"coffee": "res://assets/gen-art/furniture/coffee_bar.png",
+	"lamp": "res://assets/gen-art/furniture/floor_lamp.png",
 	"lab_bench": "res://assets/gen-art/furniture/lab_bench.png",
 	"blackboard": "res://assets/gen-art/furniture/blackboard.png",
 	"plant": "res://assets/gen-art/furniture/plant.png",
-	"lamp": "res://assets/gen-art/furniture/floor_lamp.png",
 	"corkboard": "res://assets/gen-art/furniture/corkboard.png",
-	"water_cooler": "res://assets/gen-art/furniture/water_cooler.png",
-	"desk_a": "res://assets/gen-art/furniture/desk_a.png",
-	"desk_b": "res://assets/gen-art/furniture/desk_b.png",
-	"desk_c": "res://assets/gen-art/furniture/desk_c.png",
-	"desk_d": "res://assets/gen-art/furniture/desk_d.png",
-	"desk_e": "res://assets/gen-art/furniture/desk_e.png",
-	"desk_f": "res://assets/gen-art/furniture/desk_f.png",
 	"printer": "res://assets/gen-art/furniture/printer.png",
 }
 

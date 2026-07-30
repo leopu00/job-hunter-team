@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, { status: 500, scope: "positions/feedback" });
   }
   return NextResponse.json({ feedback: data ?? [], days, limit });
 }

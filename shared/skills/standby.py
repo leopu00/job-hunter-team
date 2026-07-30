@@ -66,8 +66,30 @@ sempre — un team che spende si vede (e si rimette in standby), un team muto
 in eterno è l'incidente da quattro giorni e mezzo in forma peggiore. Il
 sentinel-bridge rimuove da sé un flag invalido e lo scrive nel log.
 
+## Un solo predicato per tutti ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS])
+
+Chi deve solo TACERE (i bridge) e chi deve RIACCENDERE (watchdog, roster)
+devono rispondere alla STESSA domanda: «lo standby è attivo ADESSO?». Gatare
+sulla nuda esistenza del file è la risposta sbagliata per i secondi: un flag
+SCADUTO (`until` passato) non è più standby, e se chi doveva rimuoverlo è
+morto nessuno respawnerebbe più niente — lo standby eterno, cioè il caso che
+il flag esiste per rendere impossibile. Il predicato unico è:
+
+  • Python : `standby.is_active(home=…)`  (`home` esplicito per i chiamanti
+             che risolvono `JHT_HOME` a ogni chiamata)
+  • shell  : `python3 standby.py active [--quiet]` → exit 0 attivo / 1 no,
+             e su stdout lo STATO in una parola (`active|expired|invalid|off`)
+
+Lo stato su stdout non è decorazione: è quello che rende il fallback dei
+chiamanti bash **fail-closed**. Un exit code 1 è ambiguo (può venire da un
+traceback), una parola no: se non arriva `active|expired|invalid|off` il
+chiamante ricade sul vecchio `[ -e <flag> ]` invece di concludere «non in
+standby» — un errore Python che riaccende il team a spesa zero è peggio del
+bug che si sta correggendo. Errore interno del CLI → exit 3, mai 1.
+
 Uso:
   python3 standby.py status [--json]
+  python3 standby.py active [--quiet]
   python3 standby.py on  --reason "…" [--until <iso>] [--wake-on-weekly [pct]]
   python3 standby.py off [--reason "…"]
 """
@@ -88,7 +110,8 @@ from typing import Optional
 JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
 # Stessa posizione e stessa forma di `.team-halted.flag` / `.burn-intent.flag`:
 # chi deve leggerlo lo trova dove già cerca gli altri.
-STANDBY_FLAG = JHT_HOME / ".team-standby.flag"
+FLAG_NAME = ".team-standby.flag"
+STANDBY_FLAG = JHT_HOME / FLAG_NAME
 # Un record per transizione (enter|exit|wake_check): risponde a «quanto è stato
 # in standby» e «perché non si è svegliato», le due domande che arriveranno.
 STANDBY_LOG = JHT_HOME / "logs" / "standby.jsonl"
@@ -148,11 +171,25 @@ def _parse_wake_on(value) -> Optional[dict]:
     return {"weekly_below": float(wb)}
 
 
-def read() -> Optional[dict]:
+def flag_path(home=None) -> Path:
+    """Path del flag.
+
+    `home=None` → la costante di modulo, risolta all'import (e ripuntabile dai
+    test, come la fixture di burn_intent). Un `home` ESPLICITO serve ai
+    chiamanti che risolvono `JHT_HOME` a ogni chiamata — stepcap-watchdog e
+    team_roster lo fanno di proposito — così il predicato risponde sulla loro
+    home invece che su quella congelata all'import di questo modulo.
+    """
+    if home is None:
+        return STANDBY_FLAG
+    return Path(home) / FLAG_NAME
+
+
+def read(home=None) -> Optional[dict]:
     """Payload del flag, o None se assente/illeggibile/SENZA condizione di
     uscita (fail-closed: non è uno standby valido)."""
     try:
-        raw = STANDBY_FLAG.read_text(encoding="utf-8")
+        raw = flag_path(home).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
     try:
@@ -168,13 +205,13 @@ def read() -> Optional[dict]:
     return data
 
 
-def status(now: Optional[datetime] = None) -> dict:
+def status(now: Optional[datetime] = None, home=None) -> dict:
     """Stato leggibile: {active, state, since, until, wake_on, reason, ...}."""
     base = {"active": False, "state": STATE_OFF, "since": None, "until": None,
             "wake_on": None, "reason": None, "requested_by": None}
-    if not STANDBY_FLAG.exists():
+    if not flag_path(home).exists():
         return base
-    data = read()
+    data = read(home)
     if data is None:
         # Il flag c'è ma non vale come standby: lo dice lo stato, così il
         # sentinel-bridge può rimuoverlo e loggarlo invece di ignorarlo muto.
@@ -196,10 +233,16 @@ def status(now: Optional[datetime] = None) -> dict:
     }
 
 
-def is_active(now: Optional[datetime] = None) -> bool:
-    """True SOLO se lo standby esiste, è valido e non è scaduto. Mai solleva."""
+def is_active(now: Optional[datetime] = None, home=None) -> bool:
+    """True SOLO se lo standby esiste, è valido e non è scaduto. Mai solleva.
+
+    È IL predicato: lo chiamano sia chi deve tacere (bridge) sia chi deve
+    riaccendere (agent-watchdog, doctor-watchdog, stepcap-watchdog,
+    team_roster, codex-auth-healer), così le due metà del team non possono
+    più dare risposte opposte alla stessa domanda.
+    """
     try:
-        return bool(status(now)["active"])
+        return bool(status(now, home)["active"])
     except Exception:      # noqa: BLE001 — un guard non può abbattere un bridge
         return False
 
@@ -437,6 +480,13 @@ def main(argv: list[str]) -> int:
     p_st = sub.add_parser("status", help="stato corrente dello standby")
     p_st.add_argument("--json", action="store_true", help="output machine-readable")
 
+    p_ac = sub.add_parser(
+        "active",
+        help="predicato per gli script shell: exit 0 se lo standby è ATTIVO, "
+             "1 se non lo è (off/scaduto/invalido), 3 su errore interno")
+    p_ac.add_argument("-q", "--quiet", action="store_true",
+                      help="niente stdout: conta solo l'exit code")
+
     p_on = sub.add_parser("on", help="entra in standby (serve una condizione di uscita)")
     p_on.add_argument("--reason", default="", help="perché (finisce nei log)")
     p_on.add_argument("--until", default=None,
@@ -451,6 +501,16 @@ def main(argv: list[str]) -> int:
     p_off.add_argument("--reason", default="", help="perché (finisce nei log)")
 
     args = ap.parse_args(argv)
+
+    if args.cmd == "active":
+        # Una PAROLA su stdout (non solo l'exit code): è quello che permette al
+        # chiamante bash di distinguere «non in standby» da «non ho potuto
+        # rispondere» e ricadere sul vecchio `[ -e <flag> ]` invece di
+        # riaccendere il team per un errore Python.
+        st = status()
+        if not args.quiet:
+            print(st["state"])
+        return 0 if st["active"] else 1
 
     if args.cmd == "status":
         st = status()
@@ -510,4 +570,12 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except SystemExit:
+        raise
+    except Exception as _e:      # noqa: BLE001
+        # MAI exit 1 per un guasto: 1 significa «non in standby» per i
+        # chiamanti shell. 3 = «non lo so», e loro ricadono sul fallback.
+        print(f"[standby] ERRORE interno: {_e}", file=sys.stderr)
+        sys.exit(3)

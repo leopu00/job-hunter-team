@@ -2,6 +2,7 @@ import { readFile, writeFile, readdir, mkdir, access, unlink } from 'node:fs/pro
 import { join } from 'node:path';
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes, scryptSync } from 'node:crypto';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, RED, DIM, BOLD, RESET } from './_colors.js';
 
 const JHT_DIR   = JHT_HOME;
 const CREDS_DIR = join(JHT_DIR, 'credentials');
@@ -15,12 +16,6 @@ const AUTH_TAG_LENGTH = 16;
 const SALT_LENGTH = 32;
 const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_DIGEST = 'sha512';
-
-const GREEN  = '\x1b[32m';
-const RED    = '\x1b[31m';
-const DIM    = '\x1b[90m';
-const BOLD   = '\x1b[1m';
-const RESET  = '\x1b[0m';
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }

@@ -4,6 +4,8 @@ import { isSupabaseConfigured } from "@/lib/workspace";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 import { generateSyncToken } from "@/lib/cloud-sync/tokens";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +88,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON body atteso" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const claimedUserId = (body.user_id || "").trim();
@@ -193,7 +195,10 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, {
+      status: 500,
+      scope: "cloud-sync/device-register",
+    });
   }
 
   // Segna lo stato di onboarding: il consume del pairing token = setup

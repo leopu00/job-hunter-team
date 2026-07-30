@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
 import { isCloudDeploy } from "@/lib/deploy-mode";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -62,8 +64,7 @@ export async function GET(req: NextRequest) {
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return sanitizedError(error, { status: 500, scope: "team-state" });
   return NextResponse.json({ state: data ?? null });
 }
 
@@ -76,7 +77,7 @@ export async function PATCH(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON body invalido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   let allowed: readonly string[] =
@@ -177,7 +178,6 @@ export async function PATCH(req: NextRequest) {
     .select()
     .single();
 
-  if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return sanitizedError(error, { status: 500, scope: "team-state" });
   return NextResponse.json({ state: data });
 }

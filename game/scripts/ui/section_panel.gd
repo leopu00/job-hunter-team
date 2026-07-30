@@ -1,8 +1,30 @@
 class_name SectionPanel
 extends CanvasLayer
-## Pannello di una sezione della sidebar (scheletro): titolo + placeholder.
-## Il contenuto vero arriva sezione per sezione con la migrazione dalla
-## desktop app. Si chiude con la ✕ o ricliccando la voce in sidebar.
+## La finestra a schermo intero di una sezione della sidebar. NON è più uno
+## scheletro: la migrazione dalla desktop app è finita e qui dentro vivono
+## TUTTE le 28 sezioni del gioco (attivazione, statistiche, mappa, team,
+## agenti, attività, app, dashboard, notifiche, chat, posizioni, feedback,
+## VPS e le dodici pagine di configurazione). Si chiude con la ✕ o
+## ricliccando la voce in sidebar.
+##
+## Come è fatto — il guscio è uno solo, costruito in _ready(): breadcrumb,
+## titolo + ✕, schede fratelli (SidebarDefs.tabs_for) e un _content vuoto.
+## Tutto il resto passa da _build(page), un unico `match section` che sceglie
+## il costruttore della pagina; `page` è la SOTTO-pagina della stessa sezione
+## (positions → elenco o dettaglio, agents → elenco o scheda agente, stats →
+## grafici o usage, feedback → form o anteprima) e non tocca la sidebar.
+## _build_placeholder() è ormai solo il ramo `_:` di sicurezza — una sezione
+## nuova senza costruttore, o una pagina config senza righe da mostrare.
+##
+## ⚠️ Il file è oltre 4.000 righe con ~130 metodi: è un indice di pagine, non
+## una classe coesa. Per orientarsi si parte SEMPRE dal `match` di _build() —
+## da lì il nome del costruttore porta al blocco giusto. Se aggiungi una
+## sezione, aggiungila al match e tienile il costruttore accanto alle sue
+## sorelle: l'ordine dei blocchi segue l'ordine del match, non l'alfabeto.
+##
+## Il pannello NON conosce la sidebar: per saltare altrove emette `navigate`
+## e per passare un contesto usa le static pending_* qui sotto, consumate al
+## primo build della sezione di destinazione.
 
 signal closed
 ## Chiesto un salto a un'altra sezione (es. box pipeline → positions):
@@ -171,8 +193,9 @@ static func _tab_style(active: bool, hover: bool) -> StyleBoxFlat:
 
 var _content: VBoxContainer
 
-## Contenuto per sezione: le viste migrate hanno il loro builder, le altre
-## mostrano il placeholder finché non vengono portate dalla desktop app.
+## Sotto-pagina corrente DENTRO la sezione ("" = pagina principale; "detail",
+## "agent", "usage", "preview"). Serve a ricostruire il contenuto senza
+## rifare il guscio quando un refresh del bus arriva mentre si è in dettaglio.
 var _current_page := ""
 
 func _build(page := "") -> void:

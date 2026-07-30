@@ -8,6 +8,7 @@ import {
   isLocalTokenAuthenticated,
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -142,10 +143,11 @@ async function handleToggle(
     .eq("legacy_id", legacyId)
     .maybeSingle();
   if (error) {
-    return NextResponse.json(
-      { error: `Supabase query failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "positions/[legacyId]/recheck-request",
+      publicMessage: "query_failed",
+    });
   }
   if (!row) {
     return NextResponse.json(

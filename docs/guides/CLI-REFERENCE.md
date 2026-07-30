@@ -6,6 +6,12 @@ Systematic reference of every `jht` command. For onboarding flows see
 [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md), which references the
 relevant commands inline.
 
+> ℹ️ **`jht --help` is not the full list.** Bare `jht`, `jht --help` and
+> `jht -h` print a deliberately short "essential" help (5 commands) to keep a
+> fresh install readable. The complete list of every registered subcommand is
+> **`jht help`**. Per-command help (`jht cloud --help`, `jht burn on --help`)
+> is unabridged.
+
 ## Two layers
 
 JHT exposes the `jht` command on the host. The host wrapper
@@ -100,8 +106,10 @@ via wipe + re-pair, not concurrent runs.
 | `jht providers list`          | Node  | List supported providers (claude, codex, kimi).                    |
 | `jht providers current`       | Node  | Show the currently active provider + model.                        |
 | `jht providers use <id>`      | Node  | Set `active_provider` in `jht.config.json`.                        |
-| `jht providers update [id]`   | Node  | `npm install -g` (or `uv tool install` for Kimi) inside the container. Without `id`, updates the active one. |
-| `jht providers check`         | Node  | Verify the provider's CLI is installed and reachable.              |
+| `jht providers update [id]`   | Node  | `npm install -g` (or `uv tool install` for Kimi) inside the container. Without `id`, updates **every** supported provider. |
+| `jht providers autoupdate`    | Node  | Boot step: updates the CLI of the **active** provider only, then re-checks the model pin. Fail-safe — never fails the boot. Disable with `JHT_PROVIDER_AUTOUPDATE=0`. |
+| `jht providers model-pin`     | Node  | Revisits the model the provider CLI pinned at login: picks among the aliases the config already lists (wider window), probes it, and only then writes it. `--dry-run` reports without writing; `JHT_MODEL_PIN=<alias>` freezes the choice. |
+| `jht providers check`         | Node  | List providers with an update available (scriptable, exit 1 if any). |
 
 ## Team
 
@@ -113,35 +121,106 @@ the container).
 | `jht team list`                      | Node  | List all known agents + current status.                     |
 | `jht team status`                    | Node  | Compact one-line summary (running/stopped counts).          |
 | `jht team start [agente]`            | Node  | Start one agent, or the whole team if no name.              |
-| `jht team stop [agente]`             | Node  | Stop one agent. Pass `--all` (where supported) for full stop. |
+| `jht team stop [agente]`             | Node  | Stop one agent, or `-a/--all` to stop every agent.          |
 | `jht team send <agente> <messaggio>` | Node  | Send a one-shot message to an agent's stdin.                |
 | `jht team chat <agente>`             | Node  | Open an interactive chat with an agent's stdin/stdout.      |
 
 > 💡 To reload an agent after editing `jht.config.json`:
 > `jht team stop --all && jht team start`.
 
+## Spending & pace
+
+Two switches, opposite directions, same shape (`status` / `on` / `off`). They
+are what you reach for **during** a budget problem, so they are here rather
+than buried in "Advanced". Both write inside the container (the team home
+belongs to the container user); `status` also works with the container down,
+by reading the flag file directly.
+
+| Command                              | Layer | What it does                                                |
+|--------------------------------------|-------|-------------------------------------------------------------|
+| `jht burn status` (alias `burn-intent`) | Node | Is the spending override active, and how long is left.      |
+| `jht burn on [--hours N] [--reason "…"]` | Node | "The budget is not a constraint" — suspends the automatic brakes. Default 5h (one window), **hard cap 12h**. |
+| `jht burn off [--reason "…"]`        | Node  | Revokes the override immediately; the automatic brakes come back. |
+| `jht standby status`                 | Node  | Is standby active, and on what wake-up condition.            |
+| `jht standby on --reason "…" (--until <iso> \| --wake-on-weekly [pct])` | Node | Zero-spend standby: stops the **core** roles too. An exit condition is **mandatory**. |
+| `jht standby off [--reason "…"]`     | Node  | Leaves standby now: clears the flag, then `[RIPRENDI]` to everyone. |
+
+**`jht burn`** — the automatic brakes (daily-halt, hour gate, `WORKER_FLOOR`,
+the throttle ladder) act on numbers alone; without this command the only way to
+say "spend, I mean it" was to dismantle them by hand, and one of them put
+itself back. The override **expires** — there is no permanent form, because
+every hand-made flag stayed on until someone remembered it.
+
+What `burn` never suspends: `weekly-halt` (past it the provider stops
+answering), `host_agent_cap` (a RAM ceiling — exceeding it *lowers* output),
+SC-09 (one position per iteration), `freeze_team` (last net before lockout).
+
+**`jht standby`** — with every worker throttled to 3600s and zero positions
+produced, the weekly still climbed ~2 points/hour: the residual spend is the
+core roles plus the three bridges, which no pacing lever touches. Standby
+silences all of them without losing the alarm clock — the bridges keep
+*reading* the quota (that costs no model turn) and the sentinel bridge wakes
+the team when the exit condition is met. `--wake-on-weekly` (default 100 =
+at the reset) is the usual one.
+
+The exit condition is refused if absent, on purpose. And `halted` wins over
+everything: with `.team-halted.flag` present, leaving standby does **not**
+restart the team — the user's stop is not negotiable.
+
+```bash
+jht burn on --hours 3 --reason "shortlist due tomorrow"
+jht standby on --wake-on-weekly --reason "weekly at 96%, wait for the reset"
+```
+
 ## Cloud sync
 
 Supabase-backed sync of `positions`, `scores`, `applications`. See also
 [`VPS-SETUP.md`](VPS-SETUP.md) §9 for pairing flows.
 
+All 19 subcommands, grouped by what you'd reach for them.
+
+**Pairing & state**
+
 | Command                       | Layer | What it does                                                          |
 |-------------------------------|-------|-----------------------------------------------------------------------|
 | `jht cloud login [flags]`     | Node  | Browser device-flow pairing. Saves `~/.jht/cloud.json` (mode 0600).   |
-| `jht cloud pair [flags]`      | Node  | Non-interactive pairing from a `.pairing-token` (used by `install.sh --pairing-token`). |
+| `jht cloud pair [flags]`      | Node  | Non-interactive pairing from a `.pairing-token` (used by pid1 on first VPS boot, and by `install.sh --pairing-token`). |
 | `jht cloud enable --token <t>` | Node  | Alternative pairing — paste a `jht_sync_…` token manually.            |
 | `jht cloud status`            | Node  | Show sync state + last push timestamp.                                |
-| `jht cloud push [flags]`      | Node  | One-shot sync of local SQLite → cloud.                                |
-| `jht cloud daemon [flags]`    | Node  | Long-running push loop (used by container's PID 1).                   |
+| `jht cloud preflight`         | Node  | Is there already an active team for this user? Exit **0** = free, **2** = taken. Run before provisioning a second machine — one team per user is a hard invariant. |
 | `jht cloud disable`           | Node  | Stop sync, revoke this device token on the server, then remove it locally. |
-| `jht cloud realtime-listen`   | Node  | HTTP long-poll subscriber for `team_commands` (legacy, in cutover to team_state). Backing file: `cli/src/lib/team-commands-poller.js`. |
-| `jht cloud team-state-listen` | Node  | Desired-state reconciler: polls `team_state`, applies `should_run`/`restart_token` via `jht team start\|stop\|restart`. Co-spawned by pid1 alongside `realtime-listen` during cutover. |
+
+**One-shot sync (each of these is also what the cron jobs call)**
+
+| Command                          | Layer | What it does                                                       |
+|----------------------------------|-------|--------------------------------------------------------------------|
+| `jht cloud push [flags]`         | Node  | Local SQLite → cloud, one shot. `--dry-run` shows what would go.    |
+| `jht cloud bootstrap-status`     | Node  | State of the automatic first-period push on a new account: remaining budget and next decision. |
+| `jht cloud pull-desired-state`   | Node  | Cloud → local: brings back the user-driven flags (`write_requested`). `--full` ignores the cursor (7-day server-side lookback), `--limit <n>` caps rows per call (default 500, max 2000). |
+| `jht cloud chat-sync`            | Node  | One lap of the chat lane: `chat.jsonl` ↔ SQLite, delivery to the agent pane, push to cloud. |
+| `jht cloud sync-tickets`         | Node  | Ticket round-trip cloud ↔ VPS: pulls the user's tickets in, pushes the team's resolutions out. `--full` ignores the cursors (7-day lookback). |
+| `jht cloud sync-directives`      | Node  | Board round-trip (`team_directives`) cloud ↔ VPS: pulls dashboard edits in, pushes local directives out. `--full` = 30-day lookback. |
+| `jht cloud pull-profile`         | Node  | Downloads the profile into `candidate_profile.yml`, **only if absent**. `--force` overwrites a local profile. |
+| `jht cloud restore`              | Node  | Rebuilds local SQLite from the cloud snapshot (positions/scores/applications). Destructive — `--confirm-restore` skips the prompt for CI/scripts. |
+
+**Long-running (spawned by pid1, not by you)**
+
+| Command                          | Layer | What it does                                                       |
+|----------------------------------|-------|--------------------------------------------------------------------|
+| `jht cloud daemon [flags]`       | Node  | Continuous push loop. `--interval <sec>` (env `JHT_CLOUD_PUSH_INTERVAL_SEC`). |
+| `jht cloud realtime-listen`      | Node  | HTTP long-poll subscriber for `team_commands` (legacy, in cutover to team_state). Backing file: `cli/src/lib/team-commands-poller.js`. |
+| `jht cloud team-state-listen`    | Node  | Desired-state reconciler: polls `team_state`, applies `should_run`/`restart_token` via `jht team start\|stop\|restart`. Co-spawned by pid1 alongside `realtime-listen` during cutover. |
+| `jht cloud messages-listen`      | Node  | Poller for `user_to_agent_messages`: forwards web → tmux pane.      |
+| `jht cloud file-bridge-listen`   | Node  | File-bridge poller: index + on-demand upload of CVs/attachments to the web. |
 
 **Key flags:**
 - `--url <url>` (most subcommands) — override the cloud base URL (self-hosted).
 - `--name <name>` (login, pair) — name the token on the web dashboard.
 - `--no-push` (login, enable) — skip the initial data push.
 - `--force` (pair) — re-pair even if `cloud.json` already exists.
+- `--db <path>` (push, pull-desired-state, sync-tickets, sync-directives,
+  restore) — SQLite path, default `~/.jht/jobs.db`.
+- `--silent` (the boot-time syncs) — minimal output.
 - `--local-only` (disable) — remove the local token without server revocation
   (offline recovery only; normally use the safer default).
 
@@ -151,7 +230,7 @@ Supabase-backed sync of `positions`, `scores`, `applications`. See also
 |--------------------------------------|-------|-------------------------------------------------------------------------|
 | `jht config get [key]`               | Node  | Print one key (dot-notation) or the whole config when no key.           |
 | `jht config set <key> <value>`       | Node  | Write a key (dot-notation; creates intermediate objects automatically). |
-| `jht profile validate [file]`        | Node  | Validate the candidate profile against the canonical schema (defaults to `$JHT_HOME/profile/candidate_profile.yml`). The Scorer refuses to score without a valid profile, so this is the first thing to run when scores stop appearing. |
+| `jht profile validate [file]`        | Node  | Validate the candidate profile against the canonical schema (defaults to `$JHT_HOME/profile/candidate_profile.yml`). `--strict` treats legacy-key warnings as errors; `--json` prints `{ok, errors, warnings}`. The Scorer refuses to score without a valid profile, so this is the first thing to run when scores stop appearing. |
 
 > ⚠️ `config set` bypasses the wizard's validation. For Telegram tokens,
 > prefer the interactive wizard so `getMe` + chat_id long-poll run.
@@ -178,10 +257,10 @@ concentrates the same budget into fewer hours rather than saving it.
 | `jht agents`                         | Node  | Detailed agent process list with PIDs and tmux sessions.    |
 | `jht logs [flags]`                   | Both  | Wrapper streams `docker logs`. Inside Node, `--agent <name>` filters per-agent. |
 | `jht sentinella status`              | Node  | Sentinella module summary (last tick, throttle level).      |
-| `jht sentinella tail`                | Node  | Live monitoring stream.                                     |
-| `jht sentinella graph`               | Node  | ASCII graph of token usage over time.                       |
-| `jht stats`                          | Node  | DB stats (positions found, applications, scores).           |
-| `jht report`                         | Node  | Generate a Markdown report of recent activity.              |
+| `jht sentinella tail [-n N] [-f]`    | Node  | Last N ticks (default 20); `-f/--follow` streams new ones.  |
+| `jht sentinella graph [-n N]`        | Node  | ASCII sparkline of usage over the last N ticks (default 40). |
+| `jht stats`                          | Node  | Aggregate stats (tasks, API, sessions). Reads the JSON stores — see the retired-store caveat below. |
+| `jht report`                         | Node  | Textual project-status report. Same caveat as `jht stats`.  |
 
 ## Data & lifecycle
 
@@ -193,12 +272,36 @@ concentrates the same budget into fewer hours rather than saving it.
 | `jht reset creds`                    | Node  | Wipe provider credentials only.                               |
 | `jht reset config`                   | Node  | Wipe `jht.config.json` only.                                  |
 | `jht reset full`                     | Node  | Wipe both + jobs.db. Asks for confirmation.                   |
-| `jht export <source>`                | Node  | Export positions / applications / DB to a portable format.    |
-| `jht import <file>`                  | Node  | Import a previously-exported file.                            |
-| `jht migrate`                        | Node  | Apply pending SQLite migrations.                              |
+| `jht export <source>`                | Node  | Export one JSON store. `<source>` is `sessions` \| `tasks` \| `config` \| `analytics` — **not** positions/applications/jobs.db. See below. |
+| `jht import <file> -t <target>`      | Node  | Import a previously-exported file. `-t/--target` is **required**: `sessions` \| `tasks` \| `config`. |
+| `jht migrate`                        | Node  | Apply pending config migrations.                              |
 | `jht positions list`                 | Node  | List positions in the local DB. `--json` for machine output.  |
 | `jht positions show <id>`            | Node  | Detail view of one position. `--json` for machine output.     |
-| `jht positions dashboard`            | Node  | TTY-friendly position dashboard. `--json` for machine output. |
+| `jht positions dashboard`            | Node  | Pipeline summary (totals by status). `--json` for machine output. |
+
+### `export` / `import` — what they actually move
+
+Both work on the **JSON stores under `$JHT_HOME`**, one file at a time. They do
+not touch `jobs.db`, so they are not the way to move positions, scores or
+applications — for those, use `jht positions list --json` or `jht cloud push` /
+`jht cloud restore`.
+
+```bash
+jht export config -o /tmp/cfg.json     # sources: sessions | tasks | config | analytics
+jht export analytics --csv --from 2026-07-01 --to 2026-07-31
+jht import /tmp/cfg.json -t config     # targets: sessions | tasks | config  (no analytics)
+```
+
+`-t/--target` is a **required** option on `import`: without it the command
+exits immediately with `error: required option '-t, --target <target>' not
+specified`. `--replace` swaps the whole store (default is a merge that skips
+duplicates by id); `--dry-run` validates without writing.
+
+> ⚠️ Three of the four sources — `sessions`, `tasks`, `analytics` — have had no
+> writer since the text UI was removed (2026-07-25). Exporting them today gives
+> you whatever was left behind, not current activity; the live picture is in
+> `jht positions`, `jht agents`, `jht status`. The same caveat applies to
+> `jht sessions`, `jht stats` and `jht report`, which read those files.
 
 ### `--json` — machine-readable output
 
@@ -258,13 +361,14 @@ line, so a script can check the outcome without reading prose.
 
 | Command                              | What it does                                                |
 |--------------------------------------|-------------------------------------------------------------|
-| `jht cron list`                      | List all scheduled tasks with their cron expression.        |
-| `jht cron add <name>`                | Add a new task (interactive: prompt for cron expression).   |
-| `jht cron remove <id>`               | Remove a task by ID.                                        |
-| `jht cron run <id>`                  | Run a task immediately (out-of-band).                       |
-| `jht cron status`                    | Show next-fire times for all tasks.                         |
+| `jht cron list [-a]`                 | List all jobs; `-a/--all` includes the disabled ones.       |
+| `jht cron add <name> -s <schedule>`  | Add a job. `-s/--schedule` is **required**; also `-d/--description`, `-p/--payload <json>`, `--once` (delete after the first run). |
+| `jht cron remove <id>`               | Remove a job by ID.                                         |
+| `jht cron run <id> [-f]`             | Run a job now, out-of-band; `-f/--force` even if it isn't due. |
+| `jht cron status`                    | State of the cron system.                                   |
 
-Examples: `jht cron add cloud-push '*/15 * * * *'` for 15-min cloud sync.
+`--schedule` accepts a cron expression, `every:30m` / `every:2h`, or
+`at:2026-04-04T09:00`. Example: `jht cron add cloud-push -s '*/15 * * * *'`.
 
 ## Advanced / internal
 
@@ -273,18 +377,27 @@ These exist for developers and power-users. Skip if you're onboarding.
 | Command                              | What it does                                                |
 |--------------------------------------|-------------------------------------------------------------|
 | `jht container up\|down\|recreate\|status\|logs` | Same as the host-layer commands but with finer-grained subcommand structure. Lives in the Node CLI for environments where the wrapper isn't installed. |
-| `jht cache [clear]`                  | Manage the cache directory.                                 |
+| `jht cache [action]`                 | Cache directory: `stats` (default), `prune`, `clear`.       |
 | `jht tools [action]`                 | Audit the shared Python user-base the agents install into: `stats`, `list`, `outdated`, `dups`. |
-| `jht context`                        | Manage `CLAUDE.md`/`AGENTS.md` context files per agent.     |
-| `jht hooks [action]`                 | Manage event hooks (pre-submit, post-score, etc.).          |
-| `jht webhooks [action]`              | Manage outbound webhooks.                                   |
-| `jht notifications [action]`         | Manage notification channels (beyond Telegram).             |
-| `jht plugins [action]`               | Plugin system (early stage).                                |
-| `jht templates [action]`             | Manage CV / cover-letter templates.                         |
-| `jht sessions`                       | List / kill agent sessions.                                 |
-| `jht secrets [action]`               | Secret store integration (`secret-ref` style).              |
-| `jht keyring [action]`               | OS keyring integration (macOS Keychain / Windows Credential Manager / libsecret). |
-| `jht pid1`                           | Container entrypoint — bootstraps tmux, cloud daemon, agent supervisor. **Do not run on host.** |
+| `jht notifications [action]` (alias `notif`) | Manage notification channels (beyond Telegram).     |
+| `jht sessions`                       | List sessions with status and stats. Reads `sessions.json` — see the retired-store caveat above. |
+| `jht secrets [action]`               | Encrypted secret store: `list`, `set`, `get`, `delete`.     |
+| `jht keyring [action]`               | OS keyring integration for the `JHT_CREDENTIALS_KEY` passphrase (macOS Keychain / Windows Credential Manager / libsecret; needs `@napi-rs/keyring`). |
+| `jht pid1`                           | Container entrypoint — bridges + watchdog, plus the cloud daemon once `cloud.json` appears. **Do not run on host.** |
+
+### Registered but not wired up
+
+These commands parse, print and exit successfully — but nothing downstream
+consumes what they configure. They are listed so that a `jht help` reader
+doesn't mistake them for working features; treat them as placeholders.
+
+| Command                              | Why it does nothing yet                                     |
+|--------------------------------------|-------------------------------------------------------------|
+| `jht context [action]`               | Context engine — no consumer: the sources never reach the agents. (`status`, `sources`, `clear`) |
+| `jht hooks [action]`                 | No executor: the hooks are never run. (`list`, `enable`, `disable`, `show`) |
+| `jht webhooks [action]`              | No dispatcher: the events are never delivered. (`list`, `create`, `delete`, `test`) |
+| `jht plugins [action]`               | No loader: the plugins are never loaded. (`list`, `enable`, `disable`) |
+| `jht templates [action]`             | No renderer hooked to the pipeline. (`list`, `preview`)     |
 
 ---
 
@@ -304,6 +417,12 @@ jht team stop --all && jht team start
 # Daily check
 jht status && jht doctor
 
+# Budget emergency: park the team until the weekly resets
+jht standby on --wake-on-weekly --reason "weekly at 97%"
+
+# The opposite: let it spend for one window
+jht burn on --hours 5 --reason "interview on Friday"
+
 # Push data to cloud now (instead of waiting for the daemon)
 jht cloud push
 
@@ -313,6 +432,8 @@ jht reset full
 
 ## Where to find more
 
+- `jht help` — every registered command, in one list. (`jht --help` on its own
+  prints the short essential help; see the note at the top.)
 - `jht <command> --help` — every command supports `--help`.
 - [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — runbook for AI agents driving setup.
 - [`docs/internal/ops/vps.md`](../internal/ops/vps.md) — design rationale for the host/container split.

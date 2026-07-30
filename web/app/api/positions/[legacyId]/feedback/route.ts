@@ -8,6 +8,8 @@ import {
   serializeDemoFeedback,
   DEMO_FEEDBACK_COOKIE,
 } from "@/lib/demo/mode";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +49,7 @@ export async function POST(
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON body invalido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const action =
@@ -136,7 +138,10 @@ export async function POST(
     .single();
 
   if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, {
+      status: 500,
+      scope: "positions/[legacyId]/feedback",
+    });
   return NextResponse.json({ feedback: data });
 }
 
@@ -180,6 +185,9 @@ export async function GET(
     .order("created_at", { ascending: false });
 
   if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, {
+      status: 500,
+      scope: "positions/[legacyId]/feedback",
+    });
   return NextResponse.json({ feedback: data ?? [] });
 }

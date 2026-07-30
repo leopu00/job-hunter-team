@@ -1,103 +1,108 @@
 ---
 name: agent-emergency
-description: Capitano — gestisce un agente sospettato BLOCCATO IN UN LOOP ATTIVO (vivo e che genera turni, ma ripete lo stesso ciclo senza produrre: ping-loop di ACK con un peer, stessa azione/query a vuoto). Copre la crepa fra C-08 (morto/silenzioso → Dottore) e C-12 (brucia con cadenza 0.00/min → kill). Scala graduata Dottore-FIRST → kill+respawn-pulito solo se persiste o brucia budget. Rilevamento deterministico (capture-pane diff + 0 avanzamento DB), decisione di escalation all'LLM.
+description: Capitano — handles an agent suspected of being STUCK IN AN ACTIVE LOOP (alive and generating turns, but repeating the same cycle without producing anything: ACK ping-loop with a peer, same action/query going nowhere). Covers the crack between C-08 (dead/silent → Dottore) and C-12 (burning at cadence 0.00/min → kill). Graduated ladder, Dottore-FIRST → kill+clean-respawn only if it persists or burns budget. Deterministic detection (capture-pane diff + 0 DB progress), escalation decision left to the LLM.
 allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
-# agent-emergency — agente in loop attivo
+# agent-emergency — agent stuck in an active loop
 
-## Perché esiste (la crepa fra C-08 e C-12)
+## Why it exists (the crack between C-08 and C-12)
 
-I segnali esistenti coprono due casi:
-- **C-08** — agente **morto / silenzioso** (pane = bash, nessun turno) → diagnosi del **Dottore**.
-- **C-12** — agente che **brucia con `cadenza 0.00/min`, zero checkpoint** → kill candidate.
+The existing signals cover two cases:
+- **C-08** — a **dead / silent** agent (pane = bash, no turns) → **Dottore** diagnosis.
+- **C-12** — an agent **burning with `cadenza 0.00/min`, zero checkpoints** → kill candidate.
 
-Manca il terzo: **agente VIVO e ATTIVO che RIPETE lo stesso ciclo senza produrre**. Genera turni
-(quindi NON è "dead" e NON ha `cadenza 0.00`), ma non avanza. Esempi reali:
-- due sessioni che si rimbalzano **ACK** all'infinito (ping-loop di coordinamento);
-- un worker che ripete la **stessa query / stessa azione** a vuoto;
-- un agente che ri-elabora lo stesso messaggio non consegnato.
+The third one is missing: **an agent that is ALIVE and ACTIVE and REPEATS the same cycle without
+producing anything**. It generates turns (so it is NOT "dead" and does NOT have `cadenza 0.00`), but
+it makes no progress. Real examples:
+- two sessions bouncing **ACK** off each other forever (coordination ping-loop);
+- a worker repeating the **same query / same action** to no effect;
+- an agent re-processing the same undelivered message.
 
-Era invisibile → il Capitano non interveniva. Questa skill lo rende rilevabile e gestibile.
+It used to be invisible → the Capitano never stepped in. This skill makes it detectable and
+manageable.
 
-## Quando usarla
+## When to use it
 
-**Su SOSPETTO**, non a tappeto e non a ogni tick. Fai partire questa procedura quando noti uno di
-questi indizi (di solito mentre fai altro): un agente che da un po' "lavora" ma la sua coda non
-cala / nessuna nuova posizione cambia stato; oppure in chat/pane vedi lo stesso scambio ripetersi.
+**On SUSPICION**, not across the board and not on every tick. Start this procedure when you notice
+one of these hints (usually while doing something else): an agent that has been "working" for a
+while but whose queue is not shrinking / no new position changes state; or you see the same exchange
+repeating in the chat/pane.
 
-## 1. Rilevamento DETERMINISTICO (niente "a occhio")
+## 1. DETERMINISTIC detection (no eyeballing)
 
-Conferma il loop con due check economici — **nessun messaggio all'agente** (non disturbarlo, è Tier-2
-pull):
+Confirm the loop with two cheap checks — **no message to the agent** (do not disturb it, this is
+Tier-2 pull):
 
 ```bash
-# (a) RIPETIZIONE — la pane mostra lo stesso scambio/output N volte?
-#     Due cattute a distanza: se il contenuto "nuovo" è identico → ripete.
+# (a) REPETITION — does the pane show the same exchange/output N times?
+#     Two captures spaced apart: if the "new" content is identical → it is repeating.
 tmux capture-pane -t <SESSION> -p -S -60 > /tmp/ae_1.txt
 sleep 20
 tmux capture-pane -t <SESSION> -p -S -60 > /tmp/ae_2.txt
-diff /tmp/ae_1.txt /tmp/ae_2.txt        # poche/nessuna differenza "di lavoro" = sospetto loop
+diff /tmp/ae_1.txt /tmp/ae_2.txt        # little/no "real work" difference = suspected loop
 
-# (b) 0 AVANZAMENTO DB — l'agente è "attivo" ma non muove nulla nel DB?
-#     Se disponibile, l'helper by-agent dell'osservabilità (riusa
-#     position_state_transitions): 0 transizioni recenti di questo agente = non produce.
-python3 /app/shared/skills/db_query.py recent-activity   # by_agent: 0 per la sessione = nessun output
-#     Fallback generico: la coda a monte dell'agente NON cala fra due check
-#     (es. next-for-analista invariata mentre ANALISTA-N "lavora").
+# (b) 0 DB PROGRESS — is the agent "active" but moving nothing in the DB?
+#     If available, the by-agent observability helper (it reuses
+#     position_state_transitions): 0 recent transitions for this agent = no output.
+python3 /app/shared/skills/db_query.py recent-activity   # by_agent: 0 for the session = no output
+#     Generic fallback: the queue upstream of the agent does NOT shrink between two checks
+#     (e.g. next-for-analista unchanged while ANALISTA-N is "working").
 ```
 
-**Verdetto LOOP** = (a) ripetizione **E** (b) 0 avanzamento, su ≥ 2-3 osservazioni. Se invece la pane
-mostra `Working… / esc to interrupt` con contenuto che cambia, è un **task lungo VIVO** (C-08 bis):
-NON è un loop, lascia stare.
+**LOOP verdict** = (a) repetition **AND** (b) 0 progress, over ≥ 2-3 observations. If instead the
+pane shows `Working… / esc to interrupt` with content that keeps changing, it is a **long task that
+is ALIVE** (C-08 bis): that is NOT a loop, leave it alone.
 
-## 2. Scala graduata — Dottore-FIRST
+## 2. Graduated ladder — Dottore-FIRST
 
-### Rung 1 — Dottore straordinario (PRIMO intervento)
+### Rung 1 — extraordinary Dottore round (FIRST intervention)
 
-Spesso un refresh del contesto rompe il loop **senza perdere lo stato**. Usa la skill `spawn-doctor`:
+A context refresh often breaks the loop **without losing state**. Use the `spawn-doctor` skill:
 
 ```bash
 bash /app/.launcher/spawn-doctor.sh
 sleep 10
 jht-tmux-send DOTTORE \
-  "[@$MY_ID -> @dottore] [REQ] Round mirato: <SESSION> sembra in LOOP attivo (ripete <cosa>, 0 avanzamento DB su N tick). Diagnostica e, se confermato, refresh/ripara la sessione. Riporta con [RES]."
-# Attendi il [RES] del Dottore — niente polling.
+  "[@$MY_ID -> @dottore] [REQ] Targeted round: <SESSION> looks stuck in an active LOOP (it repeats <what>, 0 DB progress over N ticks). Diagnose it and, if confirmed, refresh/repair the session. Report back with [RES]."
+# Wait for the Dottore's [RES] — no polling.
 ```
 
-### Rung 2 — Kill (+ respawn) — SOLO se serve
+### Rung 2 — Kill (+ respawn) — ONLY if needed
 
-Killa **solo se**: il loop **persiste dopo il Dottore**, *oppure* sta **bruciando budget in modo
-serio** (rate alto + 0 produzione per ≥ N tick e non c'è tempo per la diagnosi).
+Kill **only if**: the loop **persists after the Dottore**, *or* it is **burning budget seriously**
+(high rate + 0 output for ≥ N ticks and there is no time for a diagnosis).
 
-⚠️ **SAFEGUARD anti-doppio-spawn col watchdog.** `agent-watchdog.sh` respawna automaticamente (≤30s)
-**solo i 3 agenti core**: `ASSISTENTE`, `CAPITANO`, `MENTOR`. NON copre i worker. Quindi il respawn
-dipende dal target:
+⚠️ **SAFEGUARD against double-spawn with the watchdog.** `agent-watchdog.sh` automatically respawns
+(≤30s) **only the 3 core agents**: `ASSISTENTE`, `CAPITANO`, `MENTOR`. It does NOT cover the workers.
+So the respawn depends on the target:
 
-- **Target = agente CORE (ASSISTENTE / MENTOR)** → **SOLO kill**. Il watchdog lo rileva e lo
-  **respawna pulito da solo** (`jht team start <role>`, idempotente, stato fresco). **NON** fare anche
-  tu `start-agent.sh` → sarebbe doppio-spawn (la race segnalata). Il "backoff" è di fatto l'intervallo
-  del watchdog (~30s). (Il CAPITANO sei tu: non è mai il target — non ti killi da solo.)
+- **Target = CORE agent (ASSISTENTE / MENTOR)** → **kill ONLY**. The watchdog detects it and
+  **respawns it clean on its own** (`jht team start <role>`, idempotent, fresh state). Do **NOT** run
+  `start-agent.sh` yourself as well → that would be a double-spawn (the race that was reported). The
+  "backoff" is effectively the watchdog interval (~30s). (The CAPITANO is you: it is never the target
+  — you do not kill yourself.)
   ```bash
-  tmux kill-session -t <SESSION>     # STOP qui: il watchdog respawna clean in ≤30s
+  tmux kill-session -t <SESSION>     # STOP here: the watchdog respawns clean within 30s
   ```
-- **Target = WORKER (Scout / Analista / Scorer / Scrittore / Critico)** → il watchdog NON li copre,
-  quindi **kill + backoff + respawn tu** (nessuna race):
+- **Target = WORKER (Scout / Analista / Scorer / Scrittore / Critico)** → the watchdog does NOT cover
+  them, so **you kill + backoff + respawn** (no race):
   ```bash
   tmux kill-session -t <SESSION>
-  sleep 5                                                 # backoff: non rientrare subito nel loop
-  bash /app/.launcher/start-agent.sh <role> <N>          # respawn PULITO (stato fresco)
+  sleep 5                                                 # backoff: do not fall straight back into the loop
+  bash /app/.launcher/start-agent.sh <role> <N>          # CLEAN respawn (fresh state)
   ```
 
-Il backoff + il respawn a stato fresco evitano che riparta esattamente nello stesso ciclo; il
-non-respawn-sui-core evita la corsa col watchdog.
+The backoff + the fresh-state respawn keep it from restarting in exactly the same cycle; not
+respawning the core agents avoids the race with the watchdog.
 
-## Regole
+## Rules
 
-- **Dottore PRIMA, kill DOPO.** Mai kill al primo sospetto: un task lungo legittimo sembra "fermo"
-  ma è vivo (C-08 bis). Il kill è l'ultima istanza.
-- **Rilevamento e kill sono deterministici; l'escalation la decidi tu (LLM).** Non startene a
-  fissare le pane ad ogni tick: applica questa procedura quando un sospetto matura.
-- **Non disturbare il peer per indagare.** I check sono pull (capture-pane + DB), nessun messaggio
-  all'agente sospetto (che aggiungerebbe un altro turno al loop).
-- **Mai kill di sessioni `*-WORKER-*` di servizio** se non sai cosa sono — verifica il ruolo prima.
+- **Dottore FIRST, kill AFTER.** Never kill on the first suspicion: a legitimate long task looks
+  "stuck" but is alive (C-08 bis). The kill is the last resort.
+- **Detection and kill are deterministic; the escalation is your call (LLM).** Do not sit staring at
+  the panes on every tick: apply this procedure when a suspicion matures.
+- **Do not disturb the peer to investigate.** The checks are pull (capture-pane + DB), no message to
+  the suspected agent (which would just add another turn to the loop).
+- **Never kill service `*-WORKER-*` sessions** if you do not know what they are — check the role
+  first.

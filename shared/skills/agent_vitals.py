@@ -30,6 +30,12 @@ from pathlib import Path
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 OUT_FILE = JHT_HOME / "logs" / "agent-vitals.jsonl"
 PID_FILE = JHT_HOME / "logs" / "agent-vitals.pid"
+# Lockfile del singleton (flock), file DEDICATO e mai cancellato: il PID file
+# lo ripulisce chi riavvia la suite, e cancellare un file flockato ne rompe la
+# mutua esclusione ([BRIDGE-SINGLETON-PARTIAL]). Qui il PID file da solo non
+# era nemmeno riletto: due daemon lanciati insieme si sovrascrivevano il pid e
+# campionavano entrambi lo stesso /proc, raddoppiando le righe del JSONL.
+LOCK_FILE = JHT_HOME / "logs" / "agent-vitals.lock"
 INTERVAL_S = float(os.environ.get("JHT_AGENT_VITALS_INTERVAL", "30"))
 MAX_LINES = 20000  # 30s/tick → ~7 giorni
 CLK_TCK = os.sysconf("SC_CLK_TCK")
@@ -131,14 +137,33 @@ def append_line(agents: dict) -> None:
         pass
 
 
+def _acquire_singleton() -> None:
+    """Uno solo di me (flock) + PID file. Modulo non caricabile → si prosegue
+    scrivendo il solo PID file: meglio un daemon senza lock che nessun daemon."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from singleton_lock import acquire_singleton
+        acquire_singleton(LOCK_FILE, pid_file=PID_FILE, label="agent-vitals")
+        return
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        print(f"[agent-vitals] WARN singleton_lock non caricabile ({e}) — "
+              f"proseguo senza lock", flush=True)
+    try:
+        PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PID_FILE.write_text(str(os.getpid()))
+    except OSError:
+        pass
+
+
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "current":
         prev = scan()
         time.sleep(2.0)
         print(json.dumps(sample(prev, scan(), 2.0), indent=2))
         return
-    PID_FILE.parent.mkdir(parents=True, exist_ok=True)
-    PID_FILE.write_text(str(os.getpid()))
+    _acquire_singleton()
     print(f"[agent-vitals] pid={os.getpid()} tick={INTERVAL_S:.0f}s "
           f"out={OUT_FILE}", flush=True)
     prev = scan()

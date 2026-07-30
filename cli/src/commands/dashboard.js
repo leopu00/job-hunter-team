@@ -11,10 +11,7 @@
  * dove sono finite le cose ed esce con codice 0.
  */
 
-const DIM = '\x1b[90m';
-const BOLD = '\x1b[1m';
-const YELLOW = '\x1b[33m';
-const RESET = '\x1b[0m';
+import { DIM, YELLOW, BOLD, RESET } from './_colors.js';
 
 function handleDashboard() {
   console.log(`\n  ${BOLD}JHT — Dashboard${RESET}\n`);

@@ -19,3 +19,4 @@ recheck-liveness
 # costs a full turn of THIS agent's model, and orders still come from the
 # Capitano, never from the chat.
 chat-worker
+salary-estimate

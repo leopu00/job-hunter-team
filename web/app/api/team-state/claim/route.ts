@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -55,10 +56,11 @@ export async function POST(req: NextRequest) {
   };
 
   if (existing.error) {
-    return NextResponse.json(
-      { error: existing.error.message },
-      { status: 500 },
-    );
+    return sanitizedError(existing.error, {
+      status: 500,
+      scope: "team-state/claim",
+      publicMessage: "query_failed",
+    });
   }
 
   const current = existing.data;
@@ -133,7 +135,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, { status: 500, scope: "team-state/claim" });
   return NextResponse.json({
     state: data,
     claimed_device_id: token.tokenId,

@@ -41,7 +41,6 @@ COVERED = {
     'send_user_chat':         'team',       # jht team send / chat
     'open_agent_chat':        'team',
     'open_agent_terminal':    'logs',
-    'request_usage_history':  'stats',
     'request_agent_history':  'agents',
     'load_vps_config':        'cloud',
     'save_vps_config':        'cloud',
@@ -49,7 +48,6 @@ COVERED = {
     'connect_local_backend':  'container',
     'disconnect_backend':     'container',
     'pipeline_counts':        'positions',  # jht positions dashboard
-    'kpi_summary':            'stats',
     'save_user_profile':      'profile',
     'ensure_assistant':       'team',
     # La deroga alla spesa: il gioco pilota la stessa `burn_intent.grant/revoke`
@@ -95,6 +93,18 @@ NOT_APPLICABLE = {
 # Verbi scoperti e ancora senza controparte: ognuno con il tag che li traccia.
 # Svuotare questo dizionario è il lavoro; finché non è vuoto, almeno è scritto.
 KNOWN_GAPS = {
+    # Stavano in COVERED, mappati su `stats`. Ma `jht stats` legge
+    # `tasks.json`, `analytics.json` e `sessions.json`, che nessuno scrive più
+    # da quando la TUI è stata rimossa (2026-07-25): rispondeva zeri, e il
+    # test certificava come coperto un verbo che non risponde niente. Un test
+    # che mente è peggio di un test che manca. Tornano in COVERED quando
+    # `stats` leggerà una fonte viva — `jobs.db`, come `positions`.
+    'request_usage_history':
+        "storico dei consumi: `jht stats` non ha più una fonte "
+        "— [CLI-PHANTOM-DATA-COMMANDS]",
+    'kpi_summary':
+        "riepilogo KPI: `jht stats` non ha più una fonte "
+        "— [CLI-PHANTOM-DATA-COMMANDS]",
     'fetch_artifact':
         "scaricare un CV/allegato prodotto dal team — [JHT-CLI-AGENT-PARITY]",
     'upload_user_document':

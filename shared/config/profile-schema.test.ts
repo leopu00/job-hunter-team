@@ -1,9 +1,11 @@
 /**
  * Test unitari — shared/config/profile-schema
- * Esegui: node --experimental-strip-types --test shared/config/profile-schema.test.ts
+ *
+ * Girano dentro la suite vitest di `tests/js` (include `../../shared/**\/*.test.ts`).
+ * Prima usavano `node:test` e nessun runner li raccoglieva: passavano solo se
+ * qualcuno li lanciava a mano, cioè mai in CI.
  */
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { validateCandidateProfile, BLOCK_KINDS } from "./profile-schema.ts";
 
 const VALID = {
@@ -20,19 +22,19 @@ const VALID = {
 describe("validateCandidateProfile", () => {
   it("accetta un profilo minimo valido", () => {
     const r = validateCandidateProfile(VALID);
-    assert.equal(r.ok, true);
-    assert.equal(r.errors.length, 0);
+    expect(r.ok).toBe(true);
+    expect(r.errors.length).toBe(0);
   });
 
   it("rifiuta un profilo senza campi mandatori", () => {
     const r = validateCandidateProfile({ name: "X" });
-    assert.equal(r.ok, false);
-    assert.ok(r.errors.length > 0);
+    expect(r.ok).toBe(false);
+    expect(r.errors.length).toBeGreaterThan(0);
   });
 
   it("rifiuta skills.primary vuoto", () => {
     const r = validateCandidateProfile({ ...VALID, skills: { primary: [] } });
-    assert.equal(r.ok, false);
+    expect(r.ok).toBe(false);
   });
 
   it("rifiuta un kind di blocco non valido", () => {
@@ -40,7 +42,7 @@ describe("validateCandidateProfile", () => {
       ...VALID,
       blocks: [{ key: "x", kind: "donut", title: "X", content: [] }],
     });
-    assert.equal(r.ok, false);
+    expect(r.ok).toBe(false);
   });
 
   it("accetta i 6 kind validi con content corretto", () => {
@@ -75,10 +77,10 @@ describe("validateCandidateProfile", () => {
         },
       ],
     });
-    assert.equal(r.ok, true);
+    expect(r.ok).toBe(true);
   });
 
   it("il vocabolario kind ha esattamente 6 renderer", () => {
-    assert.equal(BLOCK_KINDS.length, 6);
+    expect(BLOCK_KINDS.length).toBe(6);
   });
 });

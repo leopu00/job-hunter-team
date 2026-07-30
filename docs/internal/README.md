@@ -17,6 +17,7 @@ Organizzate per **categoria** in sotto-cartelle. Come scrivere una nuova nota: v
 | [`experiments/`](experiments/) | Simulazioni, studi, playbook, case study |
 | [`roadmap/`](roadmap/) | Piani tecnici, backlog, tracker, idee parcheggiate |
 | [`ops/`](ops/) | Infra, VPS, release, triage, credenziali |
+| [`assets/`](assets/) | Materiale grafico interno: TODO arte, diagrammi sorgente |
 | [`_archive/`](_archive/) | Note superate, conservate per git-blame |
 
 File di root: [`landing-image-prompts.md`](landing-image-prompts.md) (prompt immagini del sito + rifiniture aperte) ·
@@ -73,6 +74,8 @@ Note datate su incidenti specifici, diagnosi, investigazioni e osservazioni.
 | Data | File | Topic |
 |---|---|---|
 | 2026-07-27 | [`2026-07-27-tailwind-layer-vs-extension-css.md`](postmortems/2026-07-27-tailwind-layer-vs-extension-css.md) | 🧩 Header/liste invisibili su desktop: le utility Tailwind v4 in `@layer` perdono contro il `.hidden` non-layerizzato iniettato dalle estensioni — fix proposto, non applicato |
+| 2026-07-18 | [`2026-07-18-provider-vendor-enum-config-ready.md`](postmortems/2026-07-18-provider-vendor-enum-config-ready.md) | 🧨 Timebomb `config_ready`: `active_provider` scrive il nome-vendor, il watchdog conosceva i nomi-CLI → pipeline ferma ~44h in totale silenzio, seconda VPS armata e non detonata |
+| 2026-07-15 | [`2026-07-15-cloud-sync-413-freeze.md`](postmortems/2026-07-15-cloud-sync-413-freeze.md) | 🔌 Cloud-sync fermo ~14h: cursore del pull congelato → churn di `updated_at` → push oltre il limite del body (HTTP 413), guasto auto-alimentato che nessun watchdog ha visto |
 | 2026-07-02 | [`2026-07-02-kimi-codex-token-forensics.md`](postmortems/2026-07-02-kimi-codex-token-forensics.md) | Misura token Kimi vs Codex in 2 passate: coordinatori ~20% uguali, budget ~2,7×, €/token ≈ pari → living doc economia |
 | 2026-07-02 | [`2026-07-02-daily-halt-standby-leak.md`](postmortems/2026-07-02-daily-halt-standby-leak.md) | Daily hard-stop su betaB: funziona ma lo standby perde ~1–2%/notte (risvegli da timer di throttle) — fix aperti |
 | 2026-07-01 | [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md) | Capitano Kimi `--no-thinking` inverte C-10 e ordina 30 CV mai richiesti → Capitano thinking ON (deployato) |
@@ -136,6 +139,15 @@ Piani tecnici, backlog, tracker e idee parcheggiate. Aggiornati finché aperti.
 |---|---|
 | [`MINOR-TRACKER.md`](roadmap/MINOR-TRACKER.md) | Tracker mini-fix e debt non-blocker (CI/lint, cross-platform, TODO inline, note) |
 | [`db-schema-optimization.md`](roadmap/db-schema-optimization.md) | Evoluzione schema jobs.db (position_events, critic rounds, captain_decisions) — alimenta la missione M7 |
+| [`2026-07-30-ticket-throttle-engine-external.md`](roadmap/2026-07-30-ticket-throttle-engine-external.md) | `[THROTTLE-ENGINE-EXTERNAL]`: il timer esce dal processo dell'agente — `until` assoluti su disco, ack firmato dall'agente |
+| [`2026-07-30-ticket-mode-injection-hourly-prompt.md`](roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md) | `[MODE-INJECTION-HOURLY-PROMPT]`: la modalità corrente iniettata ogni ora nel prompt del Capitano, letta da disco a ogni chiamata |
+| [`2026-07-30-db-audit-observations.md`](roadmap/2026-07-30-db-audit-observations.md) | Audit del DB: code senza limite, dedup URL, e cosa ne è seguito |
+| [`2026-07-29-ticket-team-standby-zero-spend.md`](roadmap/2026-07-29-ticket-team-standby-zero-spend.md) | `[TEAM-STANDBY-ZERO-SPEND]`: nessuna leva attuale azzera il costo di un team acceso — fermare anche i ruoli core |
+| [`2026-07-29-ticket-doctor-unblock-and-session-ttl.md`](roadmap/2026-07-29-ticket-doctor-unblock-and-session-ttl.md) | `[DOCTOR-UNBLOCK-AND-TTL]`: il Dottore deve sbloccare, sessioni con TTL 12h — dall'incidente delle undici ore ferme con quota abbondante |
+| [`2026-07-28-ticket-stepcap-throttle-resume.md`](roadmap/2026-07-28-ticket-stepcap-throttle-resume.md) | `[STEPCAP-THROTTLE-RESUME]`: ripresa automatica degli agenti fermi sul cap di step (`stepcap-watchdog.py`, implementato; resta la verifica su container vero) |
+| [`2026-07-28-ticket-provider-cli-autoupdate.md`](roadmap/2026-07-28-ticket-provider-cli-autoupdate.md) | `[PROVIDER-CLI-AUTOUPDATE]`: auto-aggiornamento della CLI del provider all'avvio — nessun componente aveva quel compito, modello indietro di una generazione per undici giorni |
+| [`2026-07-28-burn-on-demand-gates.md`](roadmap/2026-07-28-burn-on-demand-gates.md) | Gli automatismi di spesa non cedono all'ordine dell'utente: cinque deroghe manuali per una notte di burn, il sistema non sa che l'utente ha deciso diversamente |
+| [`2026-07-27-scorer-per-user-weights.md`](roadmap/2026-07-27-scorer-per-user-weights.md) | Pesi dello Scorer per-utente: default nel codice + override dal profilo, al posto della tabella hardcoded negli spec in 8 lingue |
 | [`2026-06-30-B1-deterministic-pacing-idea.md`](roadmap/2026-06-30-B1-deterministic-pacing-idea.md) | Idea B1: pacing deterministico ATTUA + LLM SUPERVISIONA (parcheggiata; partire da shadow-log) |
 | [`2026-06-25-pacing-future-ideas.md`](roadmap/2026-06-25-pacing-future-ideas.md) | Even-spread giornaliero (cap→target) + riserva budget per richieste utente (aperte) |
 | [`2026-06-20-proj-volatile-pacing-todo.md`](roadmap/2026-06-20-proj-volatile-pacing-todo.md) | `[PACING-PROJ-VOLATILE]`: gate del bridge su `proj` volatile — deferred, non toccare a caldo |
@@ -155,6 +167,14 @@ Infra, deploy, lifecycle, accessi.
 | [`triage.md`](ops/triage.md) | Triage feedback / bug report (tabella `feedback_tickets`) |
 | [`access-and-credentials.md`](ops/access-and-credentials.md) | Accessi e credenziali |
 | [`MAINTAINERS.md`](ops/MAINTAINERS.md) | Coordinamento maintainer: Supabase, Vercel, OAuth, code signing |
+
+## 🎨 assets/
+
+Materiale grafico interno (sorgenti SVG dei diagrammi, brief per la pipeline `gen-art`).
+
+| File | Topic |
+|---|---|
+| [`TODO-ART.md`](assets/TODO-ART.md) | Cosa manca da disegnare: i sei ritratti `pensieroso` (Lotto 1, chiuso su dev6 il 29/07) e il Lotto 2 ancora aperto — formato, ancore, criteri di accettazione |
 
 ## 🗄️ _archive/
 
@@ -196,3 +216,10 @@ Regole pratiche per scrivere e mantenere questi doc senza doversi studiare la st
    valgono come storia di come ci siamo arrivati.
 7. **Riferimenti nel codice.** Se un doc è citato in commenti di codice (`.launcher/`, `cli/`,
    `agents/`, test, migration), aggiornare i path quando lo si sposta (`grep -rn` sul basename).
+8. **L'indice è testato.** `tests/test_docs_internal_index.py` confronta i `.md` presenti sotto
+   `docs/internal/` con i link di questo README e fallisce sui non indicizzati. La regola 1 resta
+   valida: le note **in root** sono esenti (è lì che si scrive al volo), come lo sono i `README.md`
+   delle sotto-cartelle. Tutto il resto va indicizzato — se un file è davvero solo di passaggio,
+   la via giusta è cancellarlo o archiviarlo, non allargare l'esenzione. La root non è però un
+   deposito illimitato: oltre 12 note non smistate il test fallisce lo stesso, che è la regola 2
+   scritta in codice.

@@ -1,22 +1,39 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
+import { JHT_HOME } from '../jht-paths.js';
+import { isRetiredStore, retiredStoreNotice } from './_retired-stores.js';
 
-function resolveHomeDir() {
-  return process.env.JHT_HOME || process.env.HOME || process.env.USERPROFILE || homedir();
-}
+const JHT_DIR = JHT_HOME;
 
-const JHT_DIR = join(resolveHomeDir(), '.jht');
+// Fino a oggi questo file si calcolava la home da solo e poi ci aggiungeva
+// `.jht`, ma JHT_HOME *è già* la JHT home (`/jht_home` nel container): il
+// risultato era `<jht home>/.jht/...`, una cartella che nessun altro comando
+// tocca. Chi ci ha dei dati li ritrova ancora, ma solo in lettura e solo
+// quando la posizione giusta è vuota: qui dentro non si scrive più.
+const LEGACY_JHT_DIR = join(JHT_DIR, '.jht');
 
 const SOURCES = {
-  sessions:  { path: join(JHT_DIR, 'sessions', 'sessions.json'), key: 'sessions' },
-  tasks:     { path: join(JHT_DIR, 'tasks', 'tasks.json'),       key: 'tasks' },
-  config:    { path: join(JHT_DIR, 'jht.config.json'),           key: null },
-  analytics: { path: join(JHT_DIR, 'analytics', 'analytics.json'), key: 'entries' },
+  sessions:  { rel: ['sessions', 'sessions.json'],   key: 'sessions' },
+  tasks:     { rel: ['tasks', 'tasks.json'],         key: 'tasks' },
+  config:    { rel: ['jht.config.json'],             key: null },
+  analytics: { rel: ['analytics', 'analytics.json'], key: 'entries' },
 };
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
+}
+
+/**
+ * Posizione canonica, con un ripiego di sola lettura sulla vecchia.
+ * `missing` significa "in nessuna delle due"; il path restituito è allora
+ * quello canonico, perché è quello che ha senso mostrare all'utente.
+ */
+async function resolveSourcePath(rel) {
+  const canonical = join(JHT_DIR, ...rel);
+  if (await fileExists(canonical)) return { path: canonical, legacy: false, missing: false };
+  const legacy = join(LEGACY_JHT_DIR, ...rel);
+  if (await fileExists(legacy)) return { path: legacy, legacy: true, missing: false };
+  return { path: canonical, legacy: false, missing: true };
 }
 
 function toCsv(rows) {
@@ -38,13 +55,25 @@ async function handleExport(source, options) {
     return;
   }
 
-  if (!(await fileExists(src.path))) {
-    console.error(`  File non trovato: ${src.path}`);
+  const found = await resolveSourcePath(src.rel);
+  if (found.missing) {
+    // Tre delle quattro sorgenti non hanno più nessuno che le scriva: dire
+    // "file non trovato" e basta manda l'utente a cercare un file che non
+    // arriverà mai.
+    if (isRetiredStore(source)) {
+      console.error(retiredStoreNotice([source]));
+      console.error('');
+    } else {
+      console.error(`  File non trovato: ${found.path}`);
+    }
     process.exitCode = 1;
     return;
   }
+  if (found.legacy) {
+    console.log(`  Letto da una posizione lasciata da una versione precedente: ${found.path}`);
+  }
 
-  const raw = await readFile(src.path, 'utf-8');
+  const raw = await readFile(found.path, 'utf-8');
   const data = JSON.parse(raw);
   const items = src.key ? (data[src.key] ?? []) : data;
 

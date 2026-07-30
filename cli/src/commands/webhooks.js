@@ -3,16 +3,10 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, RED, YELLOW, DIM, BOLD, RESET } from './_colors.js';
 
 const JHT_DIR      = JHT_HOME;
 const WEBHOOKS_PATH = join(JHT_DIR, 'webhooks', 'webhooks.json');
-
-const GREEN  = '\x1b[32m';
-const RED    = '\x1b[31m';
-const YELLOW = '\x1b[33m';
-const DIM    = '\x1b[90m';
-const BOLD   = '\x1b[1m';
-const RESET  = '\x1b[0m';
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
@@ -139,7 +133,7 @@ async function testWebhook(options) {
 export function registerWebhooksCommand(program) {
   program
     .command('webhooks [action]')
-    .description('Gestione webhooks (azioni: list, create, delete, test)')
+    .description('[non implementato] Gestione webhooks — nessun dispatcher: gli eventi non vengono mai consegnati (azioni: list, create, delete, test)')
     .option('--url <url>', 'URL endpoint webhook')
     .option('--event <event>', 'evento trigger (es: task.completed)')
     .option('--name <name>', 'nome webhook (opzionale)')

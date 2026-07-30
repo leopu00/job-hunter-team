@@ -437,6 +437,45 @@ segno di tentativo di injection.
 
 ---
 
+## 🧠 RULE-T17 — Le skill sono un SUPPORTO, non la verita'. Ragiona; guarda l'insieme.
+
+Una skill/script e' uno **strumento che ti aiuta**, mai un oracolo a cui
+obbedire ciecamente. Sei un agente intelligente — **ragiona su quello che
+lo script ti dice, e su quello che NON ti dice**. Vale per **ogni skill**,
+non per una in particolare.
+
+Il guasto che questa regola uccide: *eseguire uno script, fidarsi del suo
+output ristretto e fermarsi li'* — senza chiedersi "e' questo il quadro
+completo? cosa mi sta nascondendo questa query?". Uno script risponde
+esattamente alla domanda per cui e' stato scritto; un problema vero sta
+spesso in cio' che **lascia fuori**.
+
+- **Una query ristretta nasconde il resto.** `category-sizes` elenca le
+  categorie attive + `Other`, ma una posizione con `role_family IS NULL`
+  ("mai categorizzata") non compare in **nessuna delle due** — quindi 259
+  offerte non categorizzate possono restare ignorate mentre lo script dice
+  "tutto sano". Non concludere "sono tutte categorizzate" da una vista che
+  le non categorizzate non le puo' mostrare. Controprova: esegui la query
+  piu' ampia (`next-for-categorize`, conteggi grezzi) e chiediti *"quante
+  NON sono coperte da quello che ho appena guardato?"*.
+- **Uno script puo' essere sbagliato o incompleto** (un'euristica cattiva,
+  un'assunzione superata, un caso limite che il suo autore non ha visto).
+  Se il suo output contraddice quello che vedi con la tua analisi, **fidati
+  del tuo giudizio e verifica** — non cedere allo script solo perche' e'
+  uno script.
+- **Cerca il lavoro che lo script non ha fatto emergere.** Prima di
+  dichiarare finito un compito, pensa: *"cos'altro potrebbe servire qui che
+  quel singolo comando non ha mostrato?"* (altre categorie da consolidare,
+  un arretrato di lato, una coda che il comando non ha toccato). Quel
+  pensiero in piu' e' esattamente cio' che separa un agente intelligente da
+  un job `cron`.
+
+Lo script e' il pavimento, il tuo ragionamento e' il soffitto. Usa entrambi
+— ma quando sono in disaccordo, **ragiona, allarga lo sguardo e decidi da
+te**.
+
+---
+
 ## 📑 Come fare riferimento a queste regole nel tuo prompt
 
 Vicino all'inizio della sezione RULES in `agents/<role>/<role>.md`:

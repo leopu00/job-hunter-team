@@ -143,7 +143,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
    > - 🔵 **Codex**: `npm install -g @openai/codex`
    > - 🌙 **Kimi**: see [Moonshot docs](https://github.com/MoonshotAI/kimi-cli) — installed via Python `uv`, not npm
    >
-   > See [`docs/PROVIDERS.md`](../about/PROVIDERS.md) for the full provider matrix.
+   > See [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) for the full provider matrix.
 5. **Clone** — `git clone --depth 1 --branch $JHT_BRANCH $JHT_REPO_URL
    $JHT_INSTALL_DIR`. If already present, fetches and `git reset --hard
    origin/$JHT_BRANCH`.
@@ -305,9 +305,9 @@ Tickets to file on `scripts/install.sh` itself (not on this doc):
 ## 📚 Related
 
 - 🚀 [`docs/guides/QUICKSTART.md`](QUICKSTART.md) — the human-friendly install guide (4 paths)
-- 💳 [`docs/PROVIDERS.md`](../about/PROVIDERS.md) — supported subscriptions matrix
-- 🦞 [`docs/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
-- 📐 [`docs/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram and deployment modes
-- 🧪 [`docs/BETA.md`](BETA.md) — beta tester program (report install issues here)
-- 🔒 [`docs/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — internal operations reference
+- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — supported subscriptions matrix
+- 🦞 [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
+- 📐 [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram and deployment modes
+- 🧪 [`docs/guides/BETA.md`](BETA.md) — beta tester program (report install issues here)
+- 🔒 [`docs/internal/ops/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — internal operations reference
 - 📐 [ADR-0004](../adr/0004-subscription-only-no-api-keys.md) — why subscription-only, no API keys
