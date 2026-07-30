@@ -16,7 +16,10 @@ esiste traffico di rete né tmux. Sono coperti:
   • il rifiuto di un documento oltre i 20 MB e il fallimento del download,
     che devono comunque avvisare l'agente invece di sparire;
   • il loop principale: whitelist sul chat_id, `/start` non inoltrato,
-    avanzamento dell'offset, e sopravvivenza a un handler che solleva.
+    avanzamento dell'offset, e sopravvivenza a un handler che solleva;
+  • la consegna at-least-once: un update che solleva viene **ritentato**
+    (offset fermo dietro di lui), e uno che solleva sempre finisce in
+    dead-letter con un avviso all'agente invece di bloccare la coda.
 
 Eseguire:
     pytest tests/test_tg_bridge.py -v
@@ -25,6 +28,7 @@ Eseguire:
 import importlib.util
 import io
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -440,3 +444,339 @@ def test_main_sopravvive_a_una_risposta_non_json(bridge, monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         bridge.main()
     assert bridge._sent == []
+
+
+# ── Consegna at-least-once: ritentativi e dead-letter ───────────────────
+#
+# Il difetto che questi test presidiano: l'offset avanzava PRIMA del dispatch,
+# quindi un handler che sollevava faceva sparire l'update per sempre — già
+# confermato a Telegram, mai riprocessato, nessun errore visibile all'utente.
+# Il rimedio non può però essere il solo "avanza dopo": un update che solleva
+# *sempre* diventerebbe un blocco permanente per tutta la coda dietro di lui.
+# Servono entrambe le proprietà, ed è quello che si verifica qui.
+
+class _FakeTelegram:
+    """Un getUpdates finto che rispetta l'offset, come il server vero.
+
+    È il punto chiave: se il bridge non avanza l'offset, l'update torna al
+    poll successivo. Un fake che ignorasse `offset=` renderebbe questi test
+    incapaci di distinguere un ritentativo da una perdita.
+    """
+
+    def __init__(self, updates, max_polls=10):
+        self.updates = updates
+        self.max_polls = max_polls
+        self.polls = 0
+        self.serviti = []   # update_id restituiti a ogni poll
+
+    def urlopen(self, url, timeout=None):
+        self.polls += 1
+        if self.polls > self.max_polls:
+            raise KeyboardInterrupt
+        target = url if isinstance(url, str) else url.full_url
+        m = re.search(r"[?&]offset=(-?\d+)", target)
+        off = int(m.group(1)) if m else 0
+        batch = [u for u in self.updates if u.get("update_id", off) >= off]
+        self.serviti.append([u.get("update_id") for u in batch])
+        return _FakeResp(json.dumps({"result": batch}).encode())
+
+
+def _run_main(mod, monkeypatch, fake):
+    """main() contro un fake Telegram, con lo stato su disco davvero attivo."""
+    monkeypatch.setattr(mod, "read_config", lambda: ("tok", 999))
+    monkeypatch.setattr(mod, "setup_bot_commands", lambda token: None)
+    monkeypatch.setattr(mod.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(mod.urllib.request, "urlopen", fake.urlopen)
+    with pytest.raises(KeyboardInterrupt):
+        mod.main()
+
+
+def _stato(mod):
+    return json.loads(mod.STATE_PATH.read_text())
+
+
+def _solleva(exc):
+    def _f(*_a, **_k):
+        raise exc
+    return _f
+
+
+def _handler_che_fallisce_le_prime(bridge, monkeypatch, volte):
+    """handle_text che solleva le prime `volte` chiamate, poi funziona."""
+    reale = bridge.handle_text
+    conteggio = {"n": 0}
+
+    def _flaky(msg):
+        conteggio["n"] += 1
+        if conteggio["n"] <= volte:
+            raise RuntimeError("tmux non ancora pronto")
+        reale(msg)
+
+    monkeypatch.setattr(bridge, "handle_text", _flaky)
+    return conteggio
+
+
+def test_un_errore_transitorio_non_perde_il_messaggio(bridge, monkeypatch):
+    """Il cuore del ticket: prima, questo messaggio spariva in silenzio."""
+    _handler_che_fallisce_le_prime(bridge, monkeypatch, volte=1)
+    fake = _FakeTelegram([_msg(10, text="il mio CV e' pronto")], max_polls=3)
+    _run_main(bridge, monkeypatch, fake)
+
+    assert bridge._sent == ["[@utente -> @assistente] [TG] il mio CV e' pronto"]
+    assert _stato(bridge)["last_offset"] == 10
+    # Il secondo poll ha davvero richiesto di nuovo lo stesso update.
+    assert fake.serviti[0] == [10] and fake.serviti[1] == [10]
+    assert not bridge.DEADLETTER_PATH.exists()
+
+
+def test_offset_fermo_dietro_l_update_fallito(bridge, monkeypatch):
+    """Finché non è consegnato, l'offset non deve superarlo: è l'unica cosa
+    che impedisce a Telegram di considerarlo confermato."""
+    monkeypatch.setattr(bridge, "handle_text", _solleva(RuntimeError("boom")))
+    fake = _FakeTelegram([_msg(42, text="ciao")], max_polls=1)
+    _run_main(bridge, monkeypatch, fake)
+
+    stato = _stato(bridge)
+    assert stato["last_offset"] == 0
+    assert stato["attempts"] == {"42": 1}
+    assert bridge._sent == []
+
+
+def test_i_messaggi_dietro_non_vengono_ne_persi_ne_riordinati(bridge, monkeypatch):
+    """Fermare il batch sul primo errore costa un poll, ma preserva l'ordine:
+    un agente che legge le buste fuori sequenza risponde alla domanda sbagliata."""
+    _handler_che_fallisce_le_prime(bridge, monkeypatch, volte=1)
+    fake = _FakeTelegram([
+        _msg(1, text="primo"),
+        _msg(2, text="secondo"),
+        _msg(3, text="terzo"),
+    ], max_polls=3)
+    _run_main(bridge, monkeypatch, fake)
+
+    assert bridge._sent == [
+        "[@utente -> @assistente] [TG] primo",
+        "[@utente -> @assistente] [TG] secondo",
+        "[@utente -> @assistente] [TG] terzo",
+    ]
+    assert _stato(bridge)["last_offset"] == 3
+
+
+def test_un_update_velenoso_non_blocca_la_coda(bridge, monkeypatch):
+    """Il rischio introdotto dal fix: un update che solleva sempre potrebbe
+    diventare un ritentativo infinito, cioè un guasto peggiore di quello
+    corretto. Dopo MAX_UPDATE_ATTEMPTS deve essere scartato e la coda ripartire."""
+    reale = bridge.handle_text
+
+    def _handler(msg):
+        if msg.get("text") == "veleno":
+            raise KeyError("payload malformato")
+        reale(msg)
+
+    monkeypatch.setattr(bridge, "handle_text", _handler)
+
+    fake = _FakeTelegram([
+        _msg(1, text="veleno"),
+        _msg(2, text="messaggio buono in coda"),
+    ], max_polls=6)
+    _run_main(bridge, monkeypatch, fake)
+
+    # Il messaggio dietro è arrivato, e l'offset è oltre entrambi.
+    assert "[@utente -> @assistente] [TG] messaggio buono in coda" in bridge._sent
+    assert _stato(bridge)["last_offset"] == 2
+    assert _stato(bridge).get("attempts") in (None, {})
+    # Esattamente MAX_UPDATE_ATTEMPTS tentativi, non uno di più.
+    assert fake.serviti[:3] == [[1, 2], [1, 2], [1, 2]]
+    assert fake.serviti[3] == []
+
+
+def test_l_update_scartato_finisce_su_file_e_l_agente_lo_sa(bridge, monkeypatch):
+    """Regola di progetto: l'utente non apre un terminale. Un messaggio non
+    consegnabile va annunciato, non lasciato dedurre dal silenzio."""
+    monkeypatch.setattr(bridge, "handle_text", _solleva(ValueError("rotto")))
+    fake = _FakeTelegram([_msg(7, text="qualcosa")], max_polls=4)
+    _run_main(bridge, monkeypatch, fake)
+
+    avvisi = [s for s in bridge._sent if "[TG-UNDELIVERED]" in s]
+    assert len(avvisi) == 1
+    assert "update_id=7" in avvisi[0]
+    assert f"attempts={bridge.MAX_UPDATE_ATTEMPTS}" in avvisi[0]
+    assert "ValueError" in avvisi[0]
+
+    righe = bridge.DEADLETTER_PATH.read_text().strip().splitlines()
+    assert len(righe) == 1
+    rec = json.loads(righe[0])
+    assert rec["update_id"] == 7
+    assert rec["attempts"] == bridge.MAX_UPDATE_ATTEMPTS
+    assert rec["error"] == "ValueError: rotto"
+    # L'update intero è conservato: senza il payload il dead-letter è inutile.
+    assert rec["update"]["message"]["text"] == "qualcosa"
+    assert rec["role"] == "assistente"
+
+
+def test_i_tentativi_sopravvivono_al_riavvio_del_bridge(monkeypatch, tmp_path):
+    """Se il contatore vivesse in memoria, un respawn (start-agent.sh lo fa)
+    lo azzererebbe e l'update velenoso bloccherebbe la coda per sempre, un
+    riavvio alla volta."""
+    def _avvia(max_polls):
+        mod = _load_bridge(monkeypatch, tmp_path)
+        inviati = []
+        monkeypatch.setattr(mod, "tmux_send", lambda t: inviati.append(t))
+        monkeypatch.setattr(mod, "handle_text", _solleva(RuntimeError("veleno")))
+        _run_main(mod, monkeypatch, _FakeTelegram([_msg(3, text="x")], max_polls=max_polls))
+        return mod, inviati
+
+    primo, inviati1 = _avvia(max_polls=2)
+    assert json.loads(primo.STATE_PATH.read_text())["attempts"] == {"3": 2}
+    assert not any("[TG-UNDELIVERED]" in s for s in inviati1)
+
+    # Riavvio: modulo ricaricato da zero, stesso JHT_HOME.
+    secondo, inviati2 = _avvia(max_polls=1)
+    assert any("[TG-UNDELIVERED]" in s for s in inviati2)
+    assert secondo.DEADLETTER_PATH.exists()
+
+
+def test_lo_scarto_legittimo_non_conta_come_fallimento(bridge, monkeypatch):
+    """Chat estranea, /start e tipi sconosciuti sono update *gestiti*: non
+    devono lasciare tentativi appesi nello stato né finire in dead-letter."""
+    fake = _FakeTelegram([
+        _msg(1, chat=12345, text="estraneo"),
+        _msg(2, text="/start"),
+        _msg(3, sticker={"file_id": "s"}),
+        {"update_id": 4, "channel_post": {"text": "non mio"}},
+    ], max_polls=2)
+    _run_main(bridge, monkeypatch, fake)
+
+    assert bridge._sent == []
+    assert _stato(bridge)["last_offset"] == 4
+    assert _stato(bridge).get("attempts") in (None, {})
+    assert not bridge.DEADLETTER_PATH.exists()
+
+
+def test_update_senza_id_non_ferma_il_loop(bridge, monkeypatch):
+    fake = _FakeTelegram([
+        {"message": {"chat": {"id": 999}, "text": "senza id"}},
+        _msg(5, text="con id"),
+    ], max_polls=1)
+    _run_main(bridge, monkeypatch, fake)
+    assert bridge._sent == ["[@utente -> @assistente] [TG] con id"]
+
+
+# ── Guard dimensione: campo assente ≠ file piccolo ──────────────────────
+
+@pytest.mark.parametrize("valore,atteso", [
+    (1234, 1234),
+    (0, 0),
+    (None, None),        # campo assente: sconosciuto, non zero
+    ("1234", None),      # stringa: non è un intero
+    (True, None),        # bool è int in Python: non deve passare per 1
+])
+def test_declared_size_riconosce_solo_interi_veri(bridge, valore, atteso):
+    doc = {} if valore is None else {"file_size": valore}
+    assert bridge.declared_size(doc) == atteso
+
+
+def _fake_download(mod, monkeypatch, corpo: bytes, meta_size=None):
+    """getFile + download finti. Ritorna la lista degli URL aperti."""
+    aperti = []
+
+    def _urlopen(url, timeout=None):
+        target = url if isinstance(url, str) else url.full_url
+        aperti.append(target)
+        if "/getFile" in target:
+            result = {"file_path": "documents/file.bin"}
+            if meta_size is not None:
+                result["file_size"] = meta_size
+            return _FakeResp(json.dumps({"ok": True, "result": result}).encode())
+        return _FakeResp(corpo)
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", _urlopen)
+    return aperti
+
+
+def test_file_size_assente_non_e_un_file_piccolo(bridge, monkeypatch):
+    """Il difetto: `doc.get("file_size", 0)` faceva passare il guard e il
+    download procedeva senza limite. Ora il tetto è applicato sullo stream."""
+    monkeypatch.setattr(bridge, "MAX_DOC_SIZE_BYTES", 100)
+    monkeypatch.setattr(bridge, "DOWNLOAD_CHUNK_BYTES", 16)
+    _fake_download(bridge, monkeypatch, b"x" * 5000)
+
+    bridge.handle_document("tok", {"document": {
+        "file_id": "AAA", "file_name": "senza-size.pdf",
+    }})
+
+    assert "[TG-DOC-REJECT]" in bridge._sent[0]
+    assert "senza-size.pdf" in bridge._sent[0]
+    assert not any("[TG-DOC]" in s for s in bridge._sent)
+    # Nessun parziale abbandonato nella inbox: un agente lo leggerebbe come buono.
+    assert list(bridge.INBOX_DIR.glob("*")) == []
+
+
+@pytest.mark.parametrize("size", ["9999", True, None, [1]])
+def test_file_size_non_intero_non_bypassa_il_guard(bridge, monkeypatch, size):
+    monkeypatch.setattr(bridge, "MAX_DOC_SIZE_BYTES", 100)
+    monkeypatch.setattr(bridge, "DOWNLOAD_CHUNK_BYTES", 16)
+    _fake_download(bridge, monkeypatch, b"y" * 1000)
+
+    doc = {"file_id": "AAA", "file_name": "sospetto.pdf"}
+    if size is not None:
+        doc["file_size"] = size
+    bridge.handle_document("tok", {"document": doc})
+
+    assert "[TG-DOC-REJECT]" in bridge._sent[0]
+
+
+def test_file_size_assente_ma_file_piccolo_viene_consegnato(bridge, monkeypatch):
+    """Il fix non deve diventare un rifiuto a tappeto: senza `file_size` un CV
+    da 50 byte passa, e la size della busta viene dal file su disco."""
+    monkeypatch.setattr(bridge, "MAX_DOC_SIZE_BYTES", 100)
+    monkeypatch.setattr(bridge, "DOWNLOAD_CHUNK_BYTES", 16)
+    _fake_download(bridge, monkeypatch, b"z" * 50)
+
+    bridge.handle_document("tok", {"document": {
+        "file_id": "AAA", "file_name": "cv.pdf", "mime_type": "application/pdf",
+    }})
+
+    busta = bridge._sent[0]
+    assert "[TG-DOC]" in busta
+    assert "size=50" in busta
+    assert (bridge.INBOX_DIR / "cv.pdf").read_bytes() == b"z" * 50
+
+
+def test_size_dichiarata_da_getfile_evita_il_download(bridge, monkeypatch):
+    """Se è l'API a dire quanto pesa, si risparmia il traffico: il file
+    non viene mai richiesto."""
+    monkeypatch.setattr(bridge, "MAX_DOC_SIZE_BYTES", 100)
+    aperti = _fake_download(bridge, monkeypatch, b"w" * 5000, meta_size=999_999)
+
+    bridge.handle_document("tok", {"document": {
+        "file_id": "AAA", "file_name": "grosso.pdf",
+    }})
+
+    assert "[TG-DOC-REJECT]" in bridge._sent[0]
+    assert all("/getFile" in u for u in aperti)
+
+
+def test_foto_e_vocale_oltre_limite_avvisano_invece_di_sparire(bridge, monkeypatch):
+    monkeypatch.setattr(bridge, "MAX_DOC_SIZE_BYTES", 100)
+    monkeypatch.setattr(bridge, "DOWNLOAD_CHUNK_BYTES", 16)
+    _fake_download(bridge, monkeypatch, b"p" * 5000)
+
+    bridge.handle_photo("tok", {"photo": [{"file_id": "pppppppppp"}]})
+    bridge.handle_voice("tok", {"voice": {"file_id": "vvvvvvvvvv"}})
+
+    assert len(bridge._sent) == 2
+    assert all("[TG-DOC-REJECT]" in s for s in bridge._sent)
+
+
+def test_download_fallito_non_lascia_parziali(bridge, monkeypatch):
+    def _urlopen(url, timeout=None):
+        target = url if isinstance(url, str) else url.full_url
+        if "/getFile" in target:
+            return _FakeResp(json.dumps({
+                "ok": True, "result": {"file_path": "documents/file.bin"}
+            }).encode())
+        raise OSError("connessione interrotta")
+
+    monkeypatch.setattr(bridge.urllib.request, "urlopen", _urlopen)
+    assert bridge.fetch_file("tok", "AAA", "meta.pdf") is None
+    assert list(bridge.INBOX_DIR.glob("*")) == []

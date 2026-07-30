@@ -22,6 +22,10 @@ Architettura (pattern simile a sentinel-bridge.py):
     $JHT_HOME/profile/inbox/<filename>, invia [TG-DOC] path=... name=...
   • Whitelist su chat_id: solo l'utente del config (canale 1:1, anti-spam)
   • Persistenza offset in $JHT_HOME/tg-bridge-state-<role>.json (per-ruolo)
+  • At-least-once: l'offset avanza DOPO il dispatch. Un update che solleva
+    viene ritentato (max MAX_UPDATE_ATTEMPTS, contatore persistito nello
+    state file), poi finisce in $JHT_HOME/tg-bridge-deadletter-<role>.jsonl
+    con un avviso [TG-UNDELIVERED] all'agente e la coda riparte
   • Singleton per-ruolo: kill orchestrato da start-agent.sh
 
 Outbound (telegram-send) e' una skill agente che usa jht-telegram-send
@@ -70,9 +74,30 @@ if BOT_ROLE not in VALID_ROLES:
 # State file e default target session sono derivati dal ruolo. Cosi' 3 bridge
 # paralleli (uno per bot) non si pestano i piedi sull'offset file.
 STATE_PATH = JHT_HOME / f"tg-bridge-state-{BOT_ROLE}.json"
+DEADLETTER_PATH = JHT_HOME / f"tg-bridge-deadletter-{BOT_ROLE}.jsonl"
 TARGET_SESSION = os.environ.get("JHT_TG_TARGET_SESSION", BOT_ROLE.upper())
 POLL_TIMEOUT_SEC = 30
 MAX_DOC_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard limit Bot API
+DOWNLOAD_CHUNK_BYTES = 64 * 1024
+
+# Quante volte riprovare un update che sollleva prima di dichiararlo veleno.
+# Il compromesso: sotto questa soglia l'offset NON avanza (nessun messaggio
+# perso per un errore transitorio), sopra l'update finisce in dead-letter e la
+# coda riparte (nessun update velenoso puo' bloccare i messaggi dietro di se').
+MAX_UPDATE_ATTEMPTS = 3
+RETRY_BACKOFF_SEC = 2
+
+
+class DocumentTooLarge(Exception):
+    """Il download ha superato MAX_DOC_SIZE_BYTES mentre era in corso.
+
+    Serve quando l'API omette `file_size`: il limite non e' verificabile
+    prima, quindi lo si applica sullo stream.
+    """
+
+    def __init__(self, downloaded: int):
+        super().__init__(f"{downloaded}B > {MAX_DOC_SIZE_BYTES}B")
+        self.downloaded = downloaded
 
 
 # ── Commands per Telegram Bot API setMyCommands ────────────────────────
@@ -185,9 +210,28 @@ def load_offset() -> int:
         return 0
 
 
-def save_offset(offset: int) -> None:
+def load_attempts() -> dict[int, int]:
+    """Tentativi gia' spesi per update_id, persistiti insieme all'offset.
+
+    Vivono su disco e non in memoria perche' altrimenti un riavvio del bridge
+    (start-agent.sh lo respawna) azzererebbe il contatore: un update velenoso
+    tornerebbe a bloccare la coda per sempre, un riavvio alla volta.
+    """
+    if os.environ.get("JHT_TG_OFFSET_RESET") == "1":
+        return {}
     try:
-        STATE_PATH.write_text(json.dumps({"last_offset": offset}))
+        raw = json.loads(STATE_PATH.read_text()).get("attempts") or {}
+        return {int(k): int(v) for k, v in raw.items()}
+    except Exception:
+        return {}
+
+
+def save_offset(offset: int, attempts: dict[int, int] | None = None) -> None:
+    state: dict = {"last_offset": offset}
+    if attempts:
+        state["attempts"] = {str(k): int(v) for k, v in attempts.items()}
+    try:
+        STATE_PATH.write_text(json.dumps(state))
     except Exception as e:
         log(f"warn: save offset failed: {e}")
 
@@ -206,14 +250,25 @@ def tmux_send(text: str) -> None:
 
 
 def fetch_file(token: str, file_id: str, dest_name: str) -> Path | None:
-    """Bot API getFile + download via file_path. Restituisce Path locale o None."""
+    """Bot API getFile + download via file_path. Restituisce Path locale o None.
+
+    Il tetto dei 20 MB e' applicato **sullo stream**, non solo sul `file_size`
+    dichiarato: l'API puo' omettere il campo, e un campo assente non e' un file
+    piccolo. Se lo supera solleva DocumentTooLarge (il parziale viene rimosso),
+    cosi' il chiamante puo' dire all'utente *perche'* e non solo che e' fallito.
+    """
+    local: Path | None = None
     try:
         url = f"https://api.telegram.org/bot{token}/getFile?file_id={file_id}"
         meta = json.loads(urllib.request.urlopen(url, timeout=10).read())
         if not meta.get("ok"):
             log(f"getFile failed: {meta}")
             return None
-        file_path = meta["result"]["file_path"]
+        result = meta.get("result") or {}
+        declared = result.get("file_size")
+        if isinstance(declared, int) and not isinstance(declared, bool) and declared > MAX_DOC_SIZE_BYTES:
+            raise DocumentTooLarge(declared)
+        file_path = result["file_path"]
         dl_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
         INBOX_DIR.mkdir(parents=True, exist_ok=True)
         # Anti-clobber: prefisso timestamp se nome gia' presente
@@ -221,14 +276,37 @@ def fetch_file(token: str, file_id: str, dest_name: str) -> Path | None:
         if local.exists():
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
             local = INBOX_DIR / f"{ts}-{dest_name}"
+        written = 0
         with urllib.request.urlopen(dl_url, timeout=60) as r, open(local, "wb") as f:
-            f.write(r.read())
+            while True:
+                chunk = r.read(DOWNLOAD_CHUNK_BYTES)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > MAX_DOC_SIZE_BYTES:
+                    raise DocumentTooLarge(written)
+                f.write(chunk)
         # Owner: il container gira come jht (uid 1001); siamo gia' jht quindi
         # il file e' suo. Niente chown necessario.
         return local
+    except DocumentTooLarge as e:
+        log(f"fetch_file: oltre il limite ({e}) — download interrotto")
+        _discard_partial(local)
+        raise
     except Exception as e:
         log(f"fetch_file error: {e}")
+        _discard_partial(local)
         return None
+
+
+def _discard_partial(local: Path | None) -> None:
+    """Niente file mezzi scaricati nella inbox: un agente li leggerebbe come buoni."""
+    if local is None:
+        return
+    try:
+        local.unlink(missing_ok=True)
+    except Exception as e:
+        log(f"warn: cleanup parziale fallito: {e}")
 
 
 # ── Dispatch messaggi ───────────────────────────────────────────────────
@@ -242,32 +320,64 @@ def handle_text(msg: dict) -> None:
     tmux_send(envelope)
 
 
+def declared_size(payload: dict) -> int | None:
+    """`file_size` solo se e' davvero un intero. Campo assente ≠ file piccolo.
+
+    Ritornare None significa "sconosciuto": il limite non e' verificabile prima
+    del download e va applicato sullo stream, mai dato per rispettato.
+    """
+    size = payload.get("file_size")
+    if isinstance(size, bool) or not isinstance(size, int):
+        return None
+    return size
+
+
+def reject_too_large(name: str, size_bytes: int | None) -> None:
+    quanto = f"{size_bytes // 1024 // 1024} MB" if size_bytes is not None else "oltre il limite"
+    log(f"doc {name} oltre limite ({size_bytes}B) — skip")
+    tmux_send(
+        f"[@system -> @{TARGET_SESSION.lower()}] [TG-DOC-REJECT] "
+        f"file '{name}' oltre 20 MB ({quanto}). "
+        f"Chiedi all'utente di rimandarlo in formato piu' piccolo."
+    )
+
+
 def handle_document(token: str, msg: dict) -> None:
     doc = msg["document"]
-    size = doc.get("file_size", 0)
+    size = declared_size(doc)
     name = doc.get("file_name", f"file-{doc['file_id'][:8]}")
     mime = doc.get("mime_type", "application/octet-stream")
-    if size > MAX_DOC_SIZE_BYTES:
-        log(f"doc {name} oltre limite ({size}B) — skip")
-        tmux_send(
-            f"[@system -> @{TARGET_SESSION.lower()}] [TG-DOC-REJECT] "
-            f"file '{name}' oltre 20 MB ({size//1024//1024} MB). "
-            f"Chiedi all'utente di rimandarlo in formato piu' piccolo."
-        )
+    if size is not None and size > MAX_DOC_SIZE_BYTES:
+        reject_too_large(name, size)
         return
-    local = fetch_file(token, doc["file_id"], name)
+    if size is None:
+        log(f"doc {name}: file_size assente — il limite sara' applicato sullo stream")
+    try:
+        local = fetch_file(token, doc["file_id"], name)
+    except DocumentTooLarge as e:
+        reject_too_large(name, e.downloaded)
+        return
     if not local:
         tmux_send(
             f"[@system -> @{TARGET_SESSION.lower()}] [TG-DOC-ERROR] "
             f"download di '{name}' fallito — chiedi all'utente di riprovare."
         )
         return
+    if size is None:
+        size = _size_on_disk(local)
     envelope = (
         f"[@utente -> @{TARGET_SESSION.lower()}] [TG-DOC] "
         f"path={local} name={name} mime={mime} size={size}"
     )
     log(f"doc {name} → {local} ({size}B)")
     tmux_send(envelope)
+
+
+def _size_on_disk(local: Path) -> int:
+    try:
+        return local.stat().st_size
+    except Exception:
+        return 0
 
 
 def handle_photo(token: str, msg: dict) -> None:
@@ -277,7 +387,11 @@ def handle_photo(token: str, msg: dict) -> None:
         return
     largest = max(photos, key=lambda p: p.get("file_size", 0))
     name = f"photo-{largest['file_id'][:10]}.jpg"
-    local = fetch_file(token, largest["file_id"], name)
+    try:
+        local = fetch_file(token, largest["file_id"], name)
+    except DocumentTooLarge as e:
+        reject_too_large(name, e.downloaded)
+        return
     if not local:
         return
     envelope = (
@@ -291,7 +405,11 @@ def handle_photo(token: str, msg: dict) -> None:
 def handle_voice(token: str, msg: dict) -> None:
     v = msg["voice"]
     name = f"voice-{v['file_id'][:10]}.ogg"
-    local = fetch_file(token, v["file_id"], name)
+    try:
+        local = fetch_file(token, v["file_id"], name)
+    except DocumentTooLarge as e:
+        reject_too_large(name, e.downloaded)
+        return
     if not local:
         return
     envelope = (
@@ -303,12 +421,79 @@ def handle_voice(token: str, msg: dict) -> None:
     tmux_send(envelope)
 
 
+# ── Dispatch di un singolo update ───────────────────────────────────────
+
+def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
+    """Instrada UN update. Solleva: e' main() a decidere ritentare o scartare.
+
+    Tutto cio' che e' una decisione legittima (chat non in whitelist, /start,
+    tipo sconosciuto) ritorna normalmente: quegli update sono *gestiti*, non
+    falliti, e la coda deve avanzare oltre.
+    """
+    uid = u.get("update_id")
+    m = u.get("message") or u.get("edited_message")
+    if not m:
+        return
+    chat_id = m.get("chat", {}).get("id")
+    if chat_id != allowed_chat:
+        log(f"drop update uid={uid} chat={chat_id} (not whitelisted)")
+        return
+    # Skippa /start: e' solo per attivare la chat col bot,
+    # l'Assistente non deve trattarlo come messaggio reale.
+    if (m.get("text") or "").strip() == "/start":
+        log(f"uid={uid} /start ack (no forward)")
+        return
+    if "text" in m:
+        handle_text(m)
+    elif "document" in m:
+        handle_document(token, m)
+    elif "photo" in m:
+        handle_photo(token, m)
+    elif "voice" in m:
+        handle_voice(token, m)
+    else:
+        log(f"uid={uid} message kind sconosciuto, skip")
+
+
+def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
+    """Ultima spiaggia per un update che fallisce sempre.
+
+    Lo mette su file *e* lo dice all'agente: la regola di progetto e' che
+    l'utente non deve aprire un terminale, quindi un messaggio non consegnato
+    dev'essere annunciato, non lasciato dedurre dal silenzio.
+    """
+    uid = u.get("update_id")
+    reason = f"{type(err).__name__}: {err}"
+    record = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "role": BOT_ROLE,
+        "update_id": uid,
+        "attempts": attempts,
+        "error": reason,
+        "update": u,
+    }
+    try:
+        DEADLETTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(DEADLETTER_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+    except Exception as e:
+        log(f"warn: scrittura dead-letter fallita: {e}")
+    log(f"DEAD-LETTER uid={uid} dopo {attempts} tentativi ({reason}) — la coda riparte")
+    tmux_send(
+        f"[@system -> @{TARGET_SESSION.lower()}] [TG-UNDELIVERED] "
+        f"update_id={uid} attempts={attempts} error={reason} file={DEADLETTER_PATH} — "
+        f"un messaggio dell'utente non e' stato consegnato: avvisalo e chiedigli di rimandarlo."
+    )
+
+
 # ── Main loop ───────────────────────────────────────────────────────────
 
 def main() -> None:
     token, allowed_chat = read_config()
     offset = load_offset()
-    log(f"start: role={BOT_ROLE} target={TARGET_SESSION} allowed_chat={allowed_chat} offset={offset}")
+    attempts = load_attempts()
+    log(f"start: role={BOT_ROLE} target={TARGET_SESSION} allowed_chat={allowed_chat} "
+        f"offset={offset} pending_retry={len(attempts)}")
 
     # F-1.A: bootstrap commands cliccabili nel menu Telegram. Idempotente,
     # non blocca il long-poll se l'API è temporaneamente irraggiungibile.
@@ -338,33 +523,36 @@ def main() -> None:
             )
             r = urllib.request.urlopen(url, timeout=POLL_TIMEOUT_SEC + 5).read()
             d = json.loads(r)
+            ritenta = False
             for u in d.get("result", []):
-                uid = u["update_id"]
+                uid = u.get("update_id")
+                if not isinstance(uid, int):
+                    log(f"update senza update_id valido, skip: {str(u)[:120]}")
+                    continue
+                try:
+                    dispatch_update(token, allowed_chat, u)
+                except Exception as e:
+                    tentativi = attempts.get(uid, 0) + 1
+                    if tentativi < MAX_UPDATE_ATTEMPTS:
+                        # Offset fermo prima di uid: Telegram ce lo ripropone.
+                        # Fermiamo anche il resto del batch per non consegnare
+                        # fuori ordine i messaggi che stanno dietro.
+                        attempts[uid] = tentativi
+                        log(f"dispatch uid={uid} fallito ({e}) — tentativo "
+                            f"{tentativi}/{MAX_UPDATE_ATTEMPTS}, ritento al prossimo poll")
+                        ritenta = True
+                        break
+                    # Veleno: tentativi esauriti. Si scarta, si avvisa, si va
+                    # avanti — un update rotto non puo' zittire tutta la coda.
+                    dead_letter(u, e, tentativi)
+                    attempts.pop(uid, None)
+                else:
+                    attempts.pop(uid, None)
                 if uid > offset:
                     offset = uid
-                m = u.get("message") or u.get("edited_message")
-                if not m:
-                    continue
-                chat_id = m.get("chat", {}).get("id")
-                if chat_id != allowed_chat:
-                    log(f"drop update uid={uid} chat={chat_id} (not whitelisted)")
-                    continue
-                # Skippa /start: e' solo per attivare la chat col bot,
-                # l'Assistente non deve trattarlo come messaggio reale.
-                if m.get("text", "").strip() == "/start":
-                    log(f"uid={uid} /start ack (no forward)")
-                    continue
-                if "text" in m:
-                    handle_text(m)
-                elif "document" in m:
-                    handle_document(token, m)
-                elif "photo" in m:
-                    handle_photo(token, m)
-                elif "voice" in m:
-                    handle_voice(token, m)
-                else:
-                    log(f"uid={uid} message kind sconosciuto, skip")
-            save_offset(offset)
+            save_offset(offset, attempts)
+            if ritenta:
+                time.sleep(RETRY_BACKOFF_SEC)
         except urllib.error.HTTPError as e:
             log(f"HTTP {e.code}: {e.reason} — sleep 10s")
             time.sleep(10)
