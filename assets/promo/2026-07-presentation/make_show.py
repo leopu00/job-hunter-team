@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
-"""Video di presentazione JHT con VOCE e MUSICA — 3 versioni, 1280x720.
+"""Video di presentazione JHT — versione FINALE (sober), 1280x720, ~73 s.
 
-Evoluzione di make_presentation.py sul feedback utente (30/07):
-  - MENO testo a schermo: la voce narrante racconta, a schermo restano solo
-    titoli, numeri, nomi e indirizzi;
-  - il sito è mostrato con le pagine PRIVATE vere in DEMO MODE (riprese
-    Playwright di record_web.py: globo /map, /positions, /swipe — dati
-    inventati per costruzione, banner "Demo mode · sample data" in quadro);
-  - tre versioni audio sullo stesso montaggio: warm (Samantha + bossa),
-    sober (Daniel, senza musica), upbeat (Karen + electro).
+Evoluzione della tornata a 3 versioni sul feedback utente (30/07): ha scelto
+la `sober` (Daniel en_GB, NIENTE musica) e ha chiesto:
+  - la VOCE dice meno (7 battute invece di 12) e va più lenta: pause vere,
+    cinque scene mute — il silenzio è parte del montaggio;
+  - lo SCHERMO invece mostra di più: le informazioni tolte dal parlato
+    diventano didascalie (ruoli e mansioni, Writers/Critics, ask·steer·
+    approve, scores·salaries, swipe) e numeri grandi (658/520/307/71);
+  - ritmo disteso: ~73 s totali invece di 61.
 
-Il video si monta UNA volta; poi si muxano le tre tracce audio.
+Il video si monta UNA volta; poi si muxa la traccia voce.
 I frame non toccano mai il disco: ogni scena PIL viene piped a ffmpeg
 (rawvideo su stdin) — il disco della macchina è quasi pieno.
 
 Prerequisiti:
-  scenes/capture/{office,dept,chat}/   riprese del gioco (approvate, riusate)
+  scenes/capture/{office,dept,chat}/   riprese del gioco (record_clips.sh)
   webrec/web_{map,positions,swipe}.webm  riprese web (record_web.py)
-  audio/{warm,sober,upbeat}/segNN.wav    voce (make_voiceover.py)
-  audio/music_{bossa,electro}.wav        basi (make_music.py)
+  audio/sober/segNN.wav                voce (make_voiceover.py)
 
-Output: jht-show-{warm,sober,upbeat}.mp4 accanto allo script.
+Output: jht-show-sober.mp4 accanto allo script.
 """
 import math, os, shutil, subprocess, sys
 from PIL import Image, ImageDraw, ImageFont
@@ -90,33 +89,34 @@ def agent_img(name, box_w, box_h):
     return ag.resize((int(ag.width * r), int(ag.height * r)), Image.LANCZOS)
 
 # ── timeline ───────────────────────────────────────────────────────────
-# (nome, durata_s). Le durate DEVONO contenere il segmento voce più lungo
-# delle tre versioni (verificato sotto). xfade 0.5 s fra tutte le scene.
+# (nome, durata_s). Più lunghe della tornata precedente (61 → ~73 s): il
+# ritmo chiesto dall'utente è disteso, la voce non rincorre il montaggio.
+# Ogni durata DEVE contenere il suo segmento voce (verificato sotto).
+# xfade 0.5 s fra tutte le scene.
 FADE = 0.5
 SCENES = [
-    ("hook",     3.8),
-    ("reveal",   3.3),
-    ("meeting",  5.0),
-    ("roles",    6.9),
-    ("dept",     6.0),
-    ("office",   8.4),
-    ("chat",     6.8),
-    ("globe",    8.2),
-    ("webpages", 4.4),
-    ("results",  4.8),
-    ("box",      4.5),
-    ("cta",      4.4),
+    ("hook",     4.6),
+    ("reveal",   4.8),
+    ("meeting",  5.5),   # muta: didascalia roles/captain/budget
+    ("roles",    9.0),
+    ("dept",     6.5),   # muta: didascalia Writers/Critics
+    ("office",   9.5),
+    ("chat",     6.5),   # muta: didascalia ask·steer·approve
+    ("globe",    9.0),
+    ("webpages", 6.5),   # muta: didascalie scores·salaries / swipe
+    ("results",  6.0),   # muta: parlano i numeri grandi
+    ("box",      6.0),
+    ("cta",      5.0),
 ]
 DURS = [d for _, d in SCENES]
-VO_LEAD = 0.4      # la voce parte 0.4 s dopo l'inizio scena
+VO_LEAD = 0.6      # la voce parte 0.6 s dopo l'inizio scena (respiro)
 
 def scene_start(k):
     return sum(DURS[:k]) - FADE * k
 
+# Una sola versione: la "sober" scelta dall'utente — Daniel, senza musica.
 VERSIONS = {
-    "warm":   {"music": os.path.join(AUD, "music_bossa.wav"),   "gain": 0.20},
-    "sober":  {"music": None,                                   "gain": 0.0},
-    "upbeat": {"music": os.path.join(AUD, "music_electro.wav"), "gain": 0.20},
+    "sober": {"music": None, "gain": 0.0},
 }
 
 # la voce più lunga deve stare nella scena (con lead); piccoli sfori nel
@@ -158,6 +158,26 @@ def ffprobe_dur(path):
                          capture_output=True, text=True)
     return float(out.stdout.strip())
 
+# ── didascalie (lower third) ───────────────────────────────────────────
+# Le informazioni TOLTE dal parlato non spariscono: diventano didascalie.
+# Pillola scura centrata in basso, una o due righe, JetBrains Mono.
+def caption_layer(lines, y_bottom=700, size=25):
+    ly = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(ly)
+    f_ = font("Medium", size)
+    lh = int(size * 1.5)
+    tw = max(d.textlength(s, font=f_) for s in lines)
+    pad_x, pad_y = 26, 14
+    bh = lh * len(lines) + 2 * pad_y - (lh - size)
+    x0 = (W - tw) / 2 - pad_x
+    y0 = y_bottom - bh
+    d.rounded_rectangle([x0, y0, x0 + tw + 2 * pad_x, y_bottom], radius=12,
+                        fill=(16, 18, 30, 235))
+    for i, s in enumerate(lines):
+        d.text((W / 2, y0 + pad_y + size / 2 + i * lh + 2), s, font=f_,
+               fill=(225, 228, 242), anchor="mm")
+    return ly
+
 # ── browser bar per le scene web ───────────────────────────────────────
 BAR_H = 40
 def browser_bar(url):
@@ -171,32 +191,50 @@ def browser_bar(url):
            fill=(200, 205, 220), anchor="mm")
     return bar
 
-def web_segment(name, src, t0, t1, speed, url):
+def _overlay_png(name, caption):
+    """PNG full-frame con la didascalia, per l'overlay ffmpeg."""
+    png = os.path.join(BUILD, f"{name}_cap.png")
+    caption_layer(caption).save(png)
+    return png
+
+def web_segment(name, src, t0, t1, speed, url, caption=None):
     """Ritaglia [t0,t1] dalla ripresa web, la accelera di `speed`, taglia i
     40px in basso (barra controlli mozzata dal viewport) e mette la barra
-    browser disegnata in alto. Ritorna il path del segmento."""
+    browser disegnata in alto (+ didascalia opzionale). Ritorna il path."""
     seg = os.path.join(BUILD, f"{name}.mp4")
     bar_png = os.path.join(BUILD, f"{name}_bar.png")
     browser_bar(url).save(bar_png)
     vf = (f"trim=start={t0}:end={t1},setpts=(PTS-STARTPTS)/{speed},"
           f"crop={W}:{H - BAR_H}:0:0,pad={W}:{H}:0:{BAR_H}:color=#101220,"
           f"fps={FPS}")
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", src, "-i", bar_png]
+    fc = f"[0:v]{vf}[v];[v][1:v]overlay=0:0"
+    if caption:
+        cmd += ["-i", _overlay_png(name, caption)]
+        fc += "[vb];[vb][2:v]overlay=0:0"
     subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-i", src, "-i", bar_png,
-         "-filter_complex", f"[0:v]{vf}[v];[v][1:v]overlay=0:0[out]",
-         "-map", "[out]", "-c:v", "libx264", "-crf", "18", "-preset", "fast",
-         "-pix_fmt", "yuv420p", seg], check=True)
+        cmd + ["-filter_complex", fc + "[out]",
+               "-map", "[out]", "-c:v", "libx264", "-crf", "18",
+               "-preset", "fast", "-pix_fmt", "yuv420p", seg], check=True)
     return seg
 
-def game_segment(name, clip, skip, dur):
-    """Ripresa del gioco: PNG 1920x1080 → 1280x720, dal frame `skip`."""
+def game_segment(name, clip, skip, dur, caption=None):
+    """Ripresa del gioco: PNG 1920x1080 → 1280x720, dal frame `skip`,
+    con didascalia opzionale in basso (le scene mute la usano al posto
+    della voce)."""
     seg = os.path.join(BUILD, f"{name}.mp4")
-    subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-framerate", str(FPS),
-         "-start_number", str(skip), "-i", f"{CAP}/{clip}/f%08d.png",
-         "-frames:v", str(int(dur * FPS)),
-         "-vf", f"scale={W}:{H}", "-c:v", "libx264", "-crf", "18",
-         "-preset", "fast", "-pix_fmt", "yuv420p", seg], check=True)
+    cmd = ["ffmpeg", "-y", "-v", "error", "-framerate", str(FPS),
+           "-start_number", str(skip), "-i", f"{CAP}/{clip}/f%08d.png"]
+    if caption:
+        cmd += ["-i", _overlay_png(name, caption),
+                "-filter_complex",
+                f"[0:v]scale={W}:{H}[v];[v][1:v]overlay=0:0[out]",
+                "-map", "[out]"]
+    else:
+        cmd += ["-vf", f"scale={W}:{H}"]
+    subprocess.run(cmd + ["-frames:v", str(int(dur * FPS)),
+                          "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                          "-pix_fmt", "yuv420p", seg], check=True)
     return seg
 
 # ── scene PIL ──────────────────────────────────────────────────────────
@@ -250,6 +288,7 @@ def sc_reveal(dur):
 def sc_meeting(dur):
     src = Image.open(f"{PUB}/landing-hero.png").convert("RGB")
     s0 = max(W / src.width, H / src.height)
+    cap = caption_layer(["clear roles · a captain · a weekly budget"])
     def frame(t):
         p = ease_io(t / dur)
         z = 1.0 + 0.12 * p
@@ -259,7 +298,9 @@ def sc_meeting(dur):
         px = max(0, min(src.width - cw, cx - cw / 2))
         py = max(0, min(src.height - ch, cy - ch / 2))
         fr = src.crop((int(px), int(py), int(px + cw), int(py + ch)))
-        return fr.resize((W, H), Image.LANCZOS).convert("RGBA")
+        fr = fr.resize((W, H), Image.LANCZOS).convert("RGBA")
+        alpha_paste(fr, cap, ease_out((t - 0.9) / 0.5))
+        return fr
     return frame
 
 STEPS = ["Scouts", "Analysts", "Scorers", "Writers", "Critics"]
@@ -286,19 +327,22 @@ def pipeline_bar(active):
     return ly
 
 def sc_roles(dur):
-    """Tre ritratti in staffetta (Scouts→Analysts→Scorers), solo il nome
-    del ruolo + barra pipeline: il resto lo dice la voce."""
+    """Tre ritratti in staffetta (Scouts→Analysts→Scorers): nome del ruolo,
+    MANSIONE sotto (era una battuta della voce, ora è testo) + barra
+    pipeline + badge punteggio."""
     sub = dur / 3.0
     cards = []
-    for i, (img, role) in enumerate((("agents-scouts.png", "The Scouts"),
-                                     ("agents-analyst.png", "The Analysts"),
-                                     ("agents-scorer.png", "The Scorers"))):
+    for i, (img, role, duty) in enumerate((
+            ("agents-scouts.png", "The Scouts", "sweep the job boards"),
+            ("agents-analyst.png", "The Analysts", "read every posting"),
+            ("agents-scorer.png", "The Scorers", "rate the fit — 0 to 100"))):
         ag = agent_img(img, 620, 560)
         lyr_ag = layer()
         lyr_ag.alpha_composite(ag, (620 + (620 - ag.width) // 2,
                                     80 + (560 - ag.height) // 2))
         lyr_txt = layer(); d = ImageDraw.Draw(lyr_txt)
         d.text((80, 300), role, font=font("ExtraBold", 54), fill=TITLE)
+        d.text((80, 378), duty, font=font("Regular", 27), fill=MUTED)
         cards.append((lyr_txt, lyr_ag, pipeline_bar({i})))
     badge = layer(); dbadge = ImageDraw.Draw(badge)
     def frame(t):
@@ -406,21 +450,27 @@ def build_video():
     segs["box"] = pipe_scene("box", DURS[10], sc_box(DURS[10]))
     segs["cta"] = pipe_scene("cta", DURS[11], sc_cta(DURS[11]))
     print("riprese del gioco…")
-    segs["dept"] = game_segment("dept", "dept", 40, DURS[4])
+    segs["dept"] = game_segment("dept", "dept", 40, DURS[4],
+                                caption=["Writers tailor your CV, position by position",
+                                         "Critics review every draft"])
     segs["office"] = game_segment("office", "office", 40, DURS[5])
-    segs["chat"] = game_segment("chat", "chat", 70, DURS[6])
+    segs["chat"] = game_segment("chat", "chat", 70, DURS[6],
+                                caption=["chat with your team — ask · steer · approve"])
     print("riprese web (demo mode)…")
+    g1 = min(15.7, ffprobe_dur(f"{WEB}/web_map.webm") - 0.3)
     segs["globe"] = web_segment("globe", f"{WEB}/web_map.webm",
-                                5.2, 15.7, (15.7 - 5.2) / DURS[7],
+                                5.2, g1, (g1 - 5.2) / DURS[7],
                                 "jobhunterteam.ai/map — your private hunt map")
     # webpages: positions + swipe in un segmento solo, stacco secco interno
     half = DURS[8] / 2
     pos = web_segment("wp_pos", f"{WEB}/web_positions.webm",
                       3.8, 7.3, (7.3 - 3.8) / half,
-                      "jobhunterteam.ai/positions")
+                      "jobhunterteam.ai/positions",
+                      caption=["every position · match score · salary"])
     swi = web_segment("wp_swipe", f"{WEB}/web_swipe.webm",
                       4.4, 7.9, (7.9 - 4.4) / half,
-                      "jobhunterteam.ai/swipe")
+                      "jobhunterteam.ai/swipe",
+                      caption=["swipe to decide"])
     both = os.path.join(BUILD, "webpages.mp4")
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", pos, "-i", swi,
                     "-filter_complex", "[0:v][1:v]concat=n=2:v=1[out]",
@@ -465,9 +515,9 @@ def vo_gain(path, target_db=-18.0):
 
 def vo_schedule(version):
     """Attacchi della voce: ancorati all'inizio scena (+VO_LEAD) ma mai
-    sovrapposti al segmento precedente — un minimo di respiro tra le frasi.
-    Senza questo, i segmenti lunghi (es. Daniel) sforavano nella frase dopo."""
-    GAP = 0.3
+    sovrapposti al segmento precedente. GAP largo: le pause fra le frasi
+    sono parte del ritmo chiesto dall'utente, non tempo da recuperare."""
+    GAP = 0.6
     vo = [float(l.split()[1])
           for l in open(os.path.join(AUD, version, "durations.txt"))]
     starts, prev_end = [], 0.0

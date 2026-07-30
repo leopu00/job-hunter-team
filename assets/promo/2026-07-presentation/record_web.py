@@ -19,6 +19,9 @@ Prerequisiti:
   #   NEXT_PUBLIC_JHT_DEPLOY=cloud NEXT_PUBLIC_APP_URL=http://localhost:3007 \
   #   JHT_HOME=~/.jht-web-dev-empty JHT_WEB_DEMO_PERSONA=software \
   #   npm run dev -- -p 3007
+  # ⚠️ nella JHT_HOME "vuota" serve i18n-prefs.json = {"locale":"en"}:
+  # i titoli server-side (es. pannello score di /map) leggono QUELLA, non il
+  # cookie NEXT_LOCALE, e senza file cadono sul default italiano.
 
 Output: webrec/<nome>.webm (gitignored) + webrec/<nome>.first.png di controllo.
 """
