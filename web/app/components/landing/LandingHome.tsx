@@ -29,9 +29,12 @@ function Hero() {
   const { t } = useLandingI18n();
 
   return (
-    <section className="flex flex-col items-center px-6 pt-28 pb-12 text-center">
+    // Niente px-6 sulla section: il globo sotto deve arrivare ai bordi
+    // della finestra, quindi il padding orizzontale sta sui soli blocchi
+    // di testo (titolo e paragrafo introduttivo).
+    <section className="flex flex-col items-center pt-28 pb-12 text-center">
       <div
-        className="w-full max-w-4xl mx-auto"
+        className="w-full max-w-4xl mx-auto px-6"
         style={{ animation: "fade-in 0.6s ease both" }}
       >
         <h1 className="w-full text-3xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-[var(--color-white)] leading-[1.1] mb-6">
@@ -51,38 +54,24 @@ function Hero() {
 
       {/* Vetrina hero — il globo delle posizioni (riuso del globo di
           /map in modalità showcase: ruota da solo, vola sulle città e
-          mostra pin dimostrativi con punteggi). Stesso "pannello /
-          viewport" coerente con lo stile matrix-grid + comics: bordo
-          netto (linea della griglia, adattivo al tema) e brackets HUD
-          verdi ai 4 angoli, stile vignetta da fumetto / mirino da
-          terminale. */}
+          mostra pin dimostrativi con punteggi). Full-bleed su richiesta:
+          niente box, niente bordo, niente brackets — la fascia occupa
+          tutta la larghezza della finestra. Il fuori-colonna si ottiene
+          per layout (padding solo sui blocchi di testo), NON con 100vw:
+          su desktop 100vw include la barra di scorrimento (overflow
+          orizzontale) e il body è zoomato (--zoom), che falserebbe il
+          calcolo. Il raccordo con la pagina lo fanno le sfumature
+          interne a LandingGlobe. */}
       <div
-        className="relative w-full max-w-6xl mx-auto mt-12"
+        className="w-full mt-12"
         style={{ animation: "fade-in 0.8s ease 0.15s both" }}
       >
-        <div className="relative border border-[var(--color-border)]">
-          <LandingGlobe />
-          {/* Brackets HUD ai 4 angoli (L formate da due bordi), sporgenti un
-              filo oltre il pannello per un look da mirino/terminale. */}
-          {[
-            "top-0 left-0 border-t-2 border-l-2",
-            "top-0 right-0 border-t-2 border-r-2",
-            "bottom-0 left-0 border-b-2 border-l-2",
-            "bottom-0 right-0 border-b-2 border-r-2",
-          ].map((pos, i) => (
-            <span
-              key={i}
-              aria-hidden="true"
-              className={`pointer-events-none absolute ${pos} w-6 h-6`}
-              style={{ borderColor: "var(--color-green)", margin: "-2px" }}
-            />
-          ))}
-        </div>
+        <LandingGlobe />
       </div>
 
       {/* Paragrafo introduttivo — descrive la piattaforma, sotto l'hero. */}
       <p
-        className="mt-10 max-w-2xl mx-auto text-[14px] md:text-[16px] text-[var(--color-bright)] leading-relaxed"
+        className="mt-10 max-w-2xl mx-auto px-6 text-[14px] md:text-[16px] text-[var(--color-bright)] leading-relaxed"
         style={{ animation: "fade-in 0.8s ease 0.3s both" }}
       >
         {t("home_intro")}
