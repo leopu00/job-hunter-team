@@ -80,8 +80,8 @@ function buildConversations(messages: PendingMessage[]): Conversation[] {
 }
 
 // Pallino-avatar dell'agente. [JHT-CHAT-UNIFY] Non piu' l'emoji del ruolo
-// ma il ritratto disegnato ritagliato al busto — lo stesso volto che
-// l'utente vede nel videogioco. L'anello col colore del ruolo resta.
+// ma il ritratto in stile fumetto ritagliato sul volto — lo stesso volto
+// della pagina /agents. L'anello col colore del ruolo resta.
 function AgentDot({
   agent,
   locale,
