@@ -263,7 +263,7 @@ func _process(_delta: float) -> void:
 		_undecoded = _undecoded.slice(cut)
 	var visible := _screen.text()
 	if visible.length() > MAX_VISIBLE_CHARS:
-		visible = "… output precedente omesso …\n" + visible.right(MAX_VISIBLE_CHARS)
+		visible = UIStrings.t("term.truncated") + "\n" + visible.right(MAX_VISIBLE_CHARS)
 	# Il testo NON si tocca mentre l'utente sta selezionando: né durante il
 	# trascinamento (mouse premuto), né dopo, finché tiene la selezione. Tutto
 	# ciò che arriva resta nel modello di schermo e compare appena molla.
@@ -362,13 +362,13 @@ func _build_ui() -> void:
 	var titles := VBoxContainer.new()
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(titles)
-	var title_prefix := "LOGIN " if _is_login_flow() else ""
-	titles.add_child(TerminalTheme.label(title_prefix + str(spec.get("title", provider)).to_upper(),
-			24, Palette.WHITE, "xbold"))
+	var raw_title := str(spec.get("title", provider)).to_upper()
+	var title := UIStrings.t("term.title_login") % raw_title if _is_login_flow() else raw_title
+	titles.add_child(TerminalTheme.label(title, 24, Palette.WHITE, "xbold"))
 	var hint := TerminalTheme.label(str(spec.get("hint", "")), 13, Palette.YELLOW)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	titles.add_child(hint)
-	_status = TerminalTheme.label("● AVVIO CONSOLE…", 13, Palette.YELLOW, "bold")
+	_status = TerminalTheme.label(UIStrings.t("term.status_starting"), 13, Palette.YELLOW, "bold")
 	_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	header.add_child(_status)
 	var close_button := Button.new()
@@ -393,22 +393,22 @@ func _build_ui() -> void:
 	# finirla (login Kimi, 25/07 — il primo tentativo di fix guardava
 	# get_selected_text(), che durante il trascinamento è ancora vuoto).
 	_output.gui_input.connect(_on_output_gui_input)
-	_output.text = "Preparazione del terminale interattivo…"
+	_output.text = UIStrings.t("term.preparing")
 	col.add_child(_output)
 
 	var url_row := HBoxContainer.new()
 	url_row.add_theme_constant_override("separation", 8)
 	col.add_child(url_row)
-	var url_label := TerminalTheme.label("LINK RILEVATO", 12, Palette.MUTED, "medium")
+	var url_label := TerminalTheme.label(UIStrings.t("term.url_label"), 12, Palette.MUTED, "medium")
 	url_row.add_child(url_label)
 	_open_url = Button.new()
-	_open_url.text = "APRI NEL BROWSER"
+	_open_url.text = UIStrings.t("term.open_browser")
 	_open_url.disabled = true
 	_open_url.pressed.connect(func() -> void:
 		if _last_url != "": OS.shell_open(_last_url))
 	url_row.add_child(_open_url)
 	_copy_url = Button.new()
-	_copy_url.text = "COPIA LINK"
+	_copy_url.text = UIStrings.t("term.copy_link")
 	_copy_url.disabled = true
 	_copy_url.pressed.connect(func() -> void:
 		if _last_url != "": DisplayServer.clipboard_set(_last_url))
@@ -419,20 +419,20 @@ func _build_ui() -> void:
 	# Il rilevamento automatico non può coprire ogni CLI: Kimi stampa il codice
 	# dentro l'URL, Claude lo mette su una riga a sé.
 	var copy_all := Button.new()
-	copy_all.text = "COPIA TESTO"
-	copy_all.tooltip_text = "Copia tutto l'output della console"
+	copy_all.text = UIStrings.t("term.copy_all")
+	copy_all.tooltip_text = UIStrings.t("term.copy_all_tip")
 	copy_all.pressed.connect(func() -> void:
 		DisplayServer.clipboard_set(_screen.text())
-		copy_all.text = "COPIATO ✓"
+		copy_all.text = UIStrings.t("term.copied")
 		await get_tree().create_timer(1.5).timeout
 		if is_instance_valid(copy_all):
-			copy_all.text = "COPIA TESTO")
+			copy_all.text = UIStrings.t("term.copy_all"))
 	url_row.add_child(copy_all)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	url_row.add_child(spacer)
 	var paste := Button.new()
-	paste.text = "INCOLLA"
+	paste.text = UIStrings.t("term.paste")
 	paste.pressed.connect(func() -> void:
 		_input.text += DisplayServer.clipboard_get()
 		_input.grab_focus())
@@ -442,7 +442,7 @@ func _build_ui() -> void:
 	input_row.add_theme_constant_override("separation", 8)
 	col.add_child(input_row)
 	_input = LineEdit.new()
-	_input.placeholder_text = "Incolla qui il codice di verifica e premi Invio"
+	_input.placeholder_text = UIStrings.t("term.input_hint")
 	_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_input.text_submitted.connect(_submit_line)
 	input_row.add_child(_input)
@@ -453,18 +453,19 @@ func _build_ui() -> void:
 	if login_command != "":
 		var login_btn := Button.new()
 		login_btn.text = login_command.to_upper()
-		login_btn.tooltip_text = "Manda %s alla console e avvia il login" % login_command
+		login_btn.tooltip_text = UIStrings.t("term.login_cmd_tip") % login_command
 		login_btn.add_theme_color_override("font_color", Palette.GREEN)
 		login_btn.pressed.connect(func() -> void: _send(login_command + "\r"))
 		input_row.add_child(login_btn)
 	for entry in [["↑", "\u001b[A"], ["↓", "\u001b[B"], ["TAB", "\t"],
-			["INVIO", "\r"], ["CTRL+C", "\u0003"]]:
+			[UIStrings.t("term.key_enter"), "\r"], ["CTRL+C", "\u0003"]]:
 		var button := Button.new()
 		button.text = str(entry[0])
 		button.pressed.connect(_send.bind(str(entry[1])))
 		input_row.add_child(button)
 	_done = Button.new()
-	_done.text = "HO COMPLETATO IL LOGIN" if _is_login_flow() else "HO FINITO · CHIUDI"
+	_done.text = UIStrings.t("term.done_login") if _is_login_flow() \
+			else UIStrings.t("term.done_plain")
 	_done.add_theme_color_override("font_color", Palette.GREEN)
 	_done.pressed.connect(_complete)
 	col.add_child(_done)
@@ -474,7 +475,7 @@ func _run_process() -> void:
 	var process := OS.execute_with_pipe(str(spec.get("path", "")),
 			PackedStringArray(spec.get("args", PackedStringArray())), true)
 	if process.is_empty():
-		call_deferred("_process_failed", "Impossibile avviare la console interna")
+		call_deferred("_process_failed", UIStrings.t("term.err_start"))
 		return
 	_mutex.lock()
 	_stdio = process["stdio"]
@@ -503,7 +504,7 @@ func _run_process() -> void:
 
 
 func _process_started() -> void:
-	_status.text = "● CONSOLE INTERATTIVA"
+	_status.text = UIStrings.t("term.status_interactive")
 	_status.add_theme_color_override("font_color", Palette.GREEN)
 	_input.grab_focus()
 
@@ -518,15 +519,16 @@ func _queue_byte(byte: int) -> void:
 
 func _process_failed(message: String) -> void:
 	_finished = true
-	_status.text = "● ERRORE"
+	_status.text = UIStrings.t("term.status_error")
 	_status.add_theme_color_override("font_color", Palette.RED)
 	_output.text = message
 
 
 func _process_finished(code: int) -> void:
 	_finished = true
-	_status.text = ("● LOGIN TERMINATO" if _is_login_flow() else "● COMANDO TERMINATO") \
-			if code == 0 else "● PROCESSO CHIUSO (%d)" % code
+	_status.text = (UIStrings.t("term.status_login_done") if _is_login_flow() \
+			else UIStrings.t("term.status_cmd_done")) if code == 0 \
+			else UIStrings.t("term.status_closed") % code
 	_status.add_theme_color_override("font_color", Palette.GREEN if code == 0 else Palette.YELLOW)
 	_refresh_setup()
 
@@ -563,7 +565,7 @@ func _complete() -> void:
 		close()
 		return
 	_done.disabled = true
-	_done.text = "VERIFICO IL LOGIN…"
+	_done.text = UIStrings.t("term.verifying")
 	var deadline := Time.get_ticks_msec() + AUTH_WAIT_MS
 	while Time.get_ticks_msec() < deadline:
 		_refresh_setup()
@@ -574,14 +576,12 @@ func _complete() -> void:
 	# chiudere in silenzio facendo credere all'utente di aver finito.
 	if not is_instance_valid(_done):
 		return
-	_status.text = "● LOGIN NON ANCORA RILEVATO"
+	_status.text = UIStrings.t("term.status_not_detected")
 	_status.add_theme_color_override("font_color", Palette.YELLOW)
 	_done.disabled = false
-	_done.text = "HO COMPLETATO IL LOGIN"
-	_output.text += "\n\n[JHT] Non trovo ancora le credenziali del provider. " \
-			+ "Se il login nel browser è andato a buon fine, lascia questa " \
-			+ "console aperta ancora qualche secondo: la spunta verde arriva " \
-			+ "da sola appena il CLI le salva."
+	_done.text = UIStrings.t("term.done_login")
+	var note := "\n\n" + UIStrings.t("term.auth_not_found")
+	_output.text += note
 
 
 func _matching_auth_ready(next: Dictionary) -> bool:
@@ -596,9 +596,9 @@ func _on_setup_status(next: Dictionary) -> void:
 	var ready := _matching_auth_ready(next)
 	if ready and not _auth_was_ready and not _auth_autoclose_started:
 		_auth_autoclose_started = true
-		_status.text = "● LOGIN RILEVATO · CONFIGURAZIONE AGGIORNATA"
+		_status.text = UIStrings.t("term.status_detected")
 		_status.add_theme_color_override("font_color", Palette.GREEN)
-		_done.text = "✓ LOGIN COMPLETATO"
+		_done.text = UIStrings.t("term.login_complete")
 		_done.disabled = true
 		_finish_authenticated.call_deferred()
 	_auth_was_ready = ready

@@ -626,33 +626,7 @@ static func auth_match(provider: String, _home: String = "") -> String:
 ## SSH del passo 01. E quello che non si riesce a leggere di là resta IGNOTO:
 ## mai verde, e mai sostituito col valore di questo disco — un ripiego
 ## silenzioso qui non peggiora l'informazione, la falsifica.
-const CHECKLIST_PY := """
-import json, os
-AUTH = %s
-HOME = '/jht_home'
-try:
-    c = json.load(open(HOME + '/jht.config.json'))
-except Exception:
-    c = None
-out = {'config_read': isinstance(c, dict)}
-if not isinstance(c, dict):
-    c = {}
-out['active_provider'] = str(c.get('active_provider') or '')
-declared = c.get('providers') if isinstance(c.get('providers'), dict) else {}
-out['providers'] = dict((k, {'plan': str((v or {}).get('plan') or '')})
-                        for k, v in declared.items() if isinstance(v, dict))
-team = c.get('team') if isinstance(c.get('team'), dict) else {}
-out['team'] = {'working_hours': team.get('working_hours') or {}}
-auth = {}
-for name, paths in AUTH.items():
-    for rel in paths:
-        full = HOME + '/' + rel
-        if os.path.isfile(full) and os.path.getsize(full) > 0:
-            auth[name] = rel
-            break
-out['auth'] = auth
-print(json.dumps(out))
-"""
+static var CHECKLIST_PY := VpsBackend.payload("checklist.py")
 
 
 ## Una sola andata e ritorno per i tre passi. Il profilo usa lo STESSO script
@@ -988,56 +962,7 @@ static func _find_compose_file() -> String:
 
 ## Il compose di produzione è image-only (GHCR): basta scriverlo su disco,
 ## niente payload da spedire. Copia funzionale di /docker-compose.yml.
-const RUNTIME_COMPOSE := """# Job Hunter Team — runtime container (scritto dal gioco)
-# Copia funzionale di docker-compose.yml del repo (image-only, GHCR).
-services:
-  jht:
-    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}
-    container_name: jht
-    command: ["pid1"]
-    environment:
-      - HOME=/jht_home
-      - JHT_HOME=/jht_home
-      - JHT_USER_DIR=/jht_user
-      - JHT_HOST_TYPE=${JHT_HOST_TYPE:-}
-      - JHT_LANG=${JHT_LANG:-en}
-      - JHT_USER_TZ=${JHT_USER_TZ:-UTC}
-      - IS_CONTAINER=1
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
-      - NEXT_PUBLIC_JHT_DEPLOY=${NEXT_PUBLIC_JHT_DEPLOY:-local}
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
-      - TURBOPACK_WATCH_POLL=true
-      # CLI dei provider FUORI dal bind-mount: su Windows ~/.jht e' C:\
-      # vista da WSL2 e scriverci costa ~158x (misurato: 200 file piccoli
-      # = 11.209 ms contro 71 ms sul disco del container). npm e uv ne
-      # creano decine di migliaia, ed e' il motivo per cui installare un
-      # provider su Windows richiedeva un'attesa interminabile mentre su
-      # Linux bastava mezzo minuto.
-      - NPM_CONFIG_PREFIX=/opt/jht-deps/npm-global
-      - NPM_CONFIG_CACHE=/opt/jht-deps/npm-cache
-      - UV_TOOL_DIR=/opt/jht-deps/uv-tools
-      - UV_TOOL_BIN_DIR=/opt/jht-deps/bin
-      - UV_CACHE_DIR=/opt/jht-deps/uv-cache
-      - PATH=/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/jht_home/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
-    volumes:
-      - ${HOME}/.jht:/jht_home
-      - ${HOME}/Documents/Job Hunter Team:/jht_user
-      # Volume Docker: sul disco della VM, non sul mount dell'host.
-      - jht-deps:/opt/jht-deps
-    # Nessuna porta esposta: la dashboard browser su localhost e' stata
-    # ritirata — l'interazione locale passa dal gioco (docker exec).
-    stdin_open: true
-    tty: true
-    restart: unless-stopped
-
-volumes:
-  jht-deps:
-"""
+static var RUNTIME_COMPOSE := VpsBackend.payload("runtime_compose.yml")
 
 
 static func _ensure_compose_file() -> String:
@@ -2473,68 +2398,10 @@ func delete_telegram_bot(role: String) -> void:
 	_start_action("telegram", _do_delete_telegram_bot.bind(role, _vps_config()))
 
 
-const TELEGRAM_SAVE_PY := """
-import json, os, sys, urllib.parse, urllib.request
-p = json.load(sys.stdin)
-role, token, chat_id = p['role'], p['token'], str(p.get('chat_id') or '')
-def call(method, query=''):
-    url = 'https://api.telegram.org/bot' + urllib.parse.quote(token, safe=':') + '/' + method + query
-    with urllib.request.urlopen(url, timeout=12) as response:
-        return json.loads(response.read().decode('utf-8'))
-try:
-    me = call('getMe')
-    if not me.get('ok'):
-        raise RuntimeError(me.get('description') or 'getMe failed')
-    if not chat_id:
-        updates = call('getUpdates', '?timeout=2&limit=20')
-        for update in reversed(updates.get('result') or []):
-            message = update.get('message') or update.get('edited_message') or {}
-            chat = message.get('chat') or {}
-            if chat.get('id') is not None:
-                chat_id = str(chat['id'])
-                break
-    if not chat_id:
-        raise RuntimeError('Apri il bot, premi Start e riprova: chat non ancora rilevata')
-    path = '/jht_home/jht.config.json'
-    try:
-        config = json.load(open(path))
-    except Exception:
-        config = {}
-    channels = config.setdefault('channels', {})
-    telegram = channels.setdefault('telegram', {})
-    bots = telegram.setdefault('bots', {})
-    bots[role] = {'bot_token': token, 'chat_id': chat_id}
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    temp = path + '.game-tmp'
-    with open(temp, 'w') as output:
-        json.dump(config, output, ensure_ascii=False, indent=2)
-        output.write('\\n')
-    os.replace(temp, path)
-    print(json.dumps({'ok': True, 'username': me['result'].get('username', ''),
-                      'chat_id': chat_id}), file=sys.stderr)
-except Exception as exc:
-    print(json.dumps({'ok': False, 'error': str(exc)}), file=sys.stderr)
-    raise SystemExit(2)
-"""
+static var TELEGRAM_SAVE_PY := VpsBackend.payload("telegram_save.py")
 
 
-const TELEGRAM_DELETE_PY := """
-import json, os, sys
-role = json.load(sys.stdin)['role']
-path = '/jht_home/jht.config.json'
-try:
-    config = json.load(open(path))
-except Exception:
-    config = {}
-bots = (((config.get('channels') or {}).get('telegram') or {}).get('bots') or {})
-bots.pop(role, None)
-temp = path + '.game-tmp'
-with open(temp, 'w') as output:
-    json.dump(config, output, ensure_ascii=False, indent=2)
-    output.write('\\n')
-os.replace(temp, path)
-print(json.dumps({'ok': True}), file=sys.stderr)
-"""
+static var TELEGRAM_DELETE_PY := VpsBackend.payload("telegram_delete.py")
 
 
 static func _do_save_telegram_bot(role: String, token: String, chat_id: String,

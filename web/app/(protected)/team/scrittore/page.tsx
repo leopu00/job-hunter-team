@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
-import AgentInteraction from "@/components/AgentInteraction";
+import AgentInteraction from "@/app/components/AgentInteraction";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";

@@ -20,8 +20,6 @@ agents/_tools/** text eol=lf
 cli/bin/** text eol=lf
 .githooks/** text eol=lf
 
-# Agent Skills source (SKILL.md + scripts) — letti dal container Linux
-.skills-source/** text eol=lf
 *.md text eol=lf
 
 # File testuali di Godot: l'editor li riscrive sempre LF, senza queste

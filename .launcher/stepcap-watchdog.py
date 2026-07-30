@@ -512,16 +512,37 @@ def clear_throttle(agent: str) -> None:
         pass
 
 
+def _standby_active(home: Path) -> bool:
+    """Standby ATTIVO adesso, secondo l'UNICO predicato del team
+    ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS], `shared/skills/standby.py`).
+
+    Il flag porta la sua condizione di uscita: uno SCADUTO non è più standby e
+    non deve tenere fermi gli agenti sul cap all'infinito. `home` è esplicito
+    perché qui la home si risolve a ogni chiamata (`_home()`), mentre in
+    standby.py è una costante di modulo risolta all'import.
+
+    Fail-CLOSED: modulo non caricabile → il vecchio `.exists()`. Riprendere gli
+    agenti a spesa zero per un import rotto sarebbe peggio del bug.
+    """
+    mod = _load_shared("standby", "standby.py")
+    if mod is None or not hasattr(mod, "is_active"):
+        return (home / ".team-standby.flag").exists()
+    try:
+        return bool(mod.is_active(home=home))
+    except Exception as exc:  # noqa: BLE001
+        _log("standby predicato fallito (%s) — fallback su .exists()" % exc)
+        return (home / ".team-standby.flag").exists()
+
+
 # ── Gate di sicurezza ─────────────────────────────────────────────────────
 def _halt_flags():
     home, logs = _home(), _logs_dir()
     return (
         ("team-halted", home / ".team-halted.flag"),
-        # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): in standby anche
-        # questo watchdog tace — niente nudge, niente kick-off. La sveglia è
-        # del sentinel-bridge; alla rimozione del flag il retry (GATE_RETRY_SEC)
-        # riprende gli agenti ancora fermi sul cap.
-        ("team-standby", home / ".team-standby.flag"),
+        # Lo standby NON è in questa lista: non si valuta sull'esistenza del
+        # file ma col predicato `_standby_active()` — un flag SCADUTO non è più
+        # standby, e continuare a leggerlo come tale terrebbe gli agenti fermi
+        # sul cap all'infinito. Vedi resume_gate().
         # daily-halt lo scrivono i tre bridge in logs/; la variante in home
         # è controllata comunque, così un cambio di posizione non ci acceca.
         ("daily-halt", logs / "daily-halt.flag"),
@@ -538,6 +559,12 @@ def resume_gate(now: float, live_workers: int = 0):
     nessuna deroga, nemmeno con `.burn-intent.flag` attivo — la deroga
     dell'utente riguarda gli automatismi di SPESA, e un halt resta un halt.
     """
+    # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): in standby questo
+    # watchdog tace — niente nudge, niente kick-off. La sveglia è del
+    # sentinel-bridge; quando lo standby non è più ATTIVO (flag rimosso O
+    # scaduto) il retry (GATE_RETRY_SEC) riprende gli agenti fermi sul cap.
+    if _standby_active(_home()):
+        return "team-standby"
     for name, path in _halt_flags():
         try:
             if path.exists():

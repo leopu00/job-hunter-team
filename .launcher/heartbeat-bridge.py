@@ -80,10 +80,39 @@ SCOUT_EXHAUST_LOOKBACK_H = float(
 TARGET = os.environ.get("JHT_HEARTBEAT_SESSION", "CAPITANO")
 DB_QUERY = "/app/shared/skills/db_query.py"
 TICKET_PY = "/app/shared/skills/ticket.py"
+# Lockfile del singleton (flock), file DEDICATO: il PID file lo cancellano
+# bridge-control.sh e pid1, e cancellare un file flockato ne rompe la mutua
+# esclusione. Due heartbeat vivi = [HEARTBEAT] DOPPIO al Capitano ogni ora,
+# cioè turni LLM doppi sul modello più caro ([BRIDGE-SINGLETON-PARTIAL]).
+LOCK_FILE = LOGS_DIR / "heartbeat-bridge.lock"
+PID_FILE = LOGS_DIR / "heartbeat-bridge.pid"
 
 
 def _log(msg):
     print(f"[heartbeat-bridge] {msg}", file=sys.stdout, flush=True)
+
+
+def _acquire_singleton():
+    """Uno solo di me. Modulo non caricabile → si prosegue senza lock (meglio
+    un battito senza lock che nessun battito: il kill-by-marker dello spawner
+    resta come rete)."""
+    try:
+        import importlib.util
+        for cand in (Path("/app/shared/skills/singleton_lock.py"),
+                     Path(__file__).resolve().parent.parent
+                     / "shared" / "skills" / "singleton_lock.py"):
+            if not cand.exists():
+                continue
+            spec = importlib.util.spec_from_file_location("singleton_lock", cand)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            mod.acquire_singleton(LOCK_FILE, pid_file=PID_FILE,
+                                  label="heartbeat-bridge")
+            return
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        _log(f"WARN singleton_lock non caricabile ({e}) — proseguo senza lock")
 
 
 def _db_count(cmd):
@@ -515,8 +544,11 @@ def main():
     once = "--once" in sys.argv
     send = ("--send" in sys.argv) or not once
     if once:
+        # `--once` è diagnostico e non compete con nulla: niente lock, così non
+        # esce silenziosamente quando il daemon è vivo.
         tick(datetime.now(timezone.utc), send)
         return
+    _acquire_singleton()
     _log(f"up — heartbeat orario al {TARGET}, jht_home={JHT_HOME}")
     while True:
         now = datetime.now(timezone.utc)

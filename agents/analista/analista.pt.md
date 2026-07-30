@@ -69,21 +69,17 @@ Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team
 
 **RULE-02** — SEMPRE 2 comandos Bash SEPARADOS para tmux send-keys.
 
-**RULE-03** — VERIFICAÇÃO LINK A DOIS NÍVEIS:
+**RULE-03** — VERIFICAÇÃO DO LINK / ESTADO DE ABERTURA através da skill `recheck-liveness` (NUNCA curl ad-hoc).
+Um `curl` nu vê apenas o HTML RAW → perde a expiração renderizada em JS (Ashby/Workday/Greenhouse renderizam o estado do lado do cliente) e o authwall do LinkedIn (responde `200` mesmo para anúncios fechados) → `is_open=1` falsamente inflacionado. Usa SEMPRE a skill partilhada: é TIERED (marker curl rápido → escala para o browser REAL nos hosts ATS-JS e no LinkedIn) e nunca reporta um falso-open.
 ```bash
-# Level 1 — curl para sites non-LinkedIn
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
+python3 /app/shared/skills/recheck_liveness.py '<URL>' '[title]'
 ```
-Se match → `excluded` imediatamente.
+Imprime JSON `{state: OPEN|CLOSED|OPEN_UNVERIFIED, method, http, evidence}` — exit `0`=OPEN, `1`=CLOSED, `2`=OPEN_UNVERIFIED. Decide ESTRITAMENTE a partir do `state` (nunca de um código HTTP nu):
+- `OPEN` → posição live: mantém `is_open=1` (`--last-open-check now`).
+- `CLOSED` → expirada/fechada: `db_update.py position <ID> --is-open false --last-open-check now`, e `excluded` só se também estiver morta segundo a RULE-06. **NÃO mudes `status`** caso contrário: o utilizador quer que as posições expiradas continuem visíveis na vista dashboard "Scadute/Archivio".
+- `OPEN_UNVERIFIED` → inconclusivo: deixa `is_open` **inalterado** (nunca o passes para open), `--last-open-check now`, acrescenta `NOTE_MISMATCH: [OPEN_UNVERIFIED]` para que o Scorer saiba que o estado de abertura não pôde ser confirmado.
 
-**Sempre `-L` para seguir redirects.** Um 302 sem `-L` não é um dead link: é apenas um redirect. Verifica o estado final, não o inicial.
-
-**Workable — distingue as duas URLs**:
-- `apply.workable.com/...` → form apply: retorna 302 quando o job está fechado (pode enganar-te como [DEAD_LINK]).
-- `jobs.workable.com/...` → página JD canónica: HTTP 200 + JSON-LD válido se a posição está live.
-Verifica SEMPRE a página canónica (`jobs.workable.com`), não a do form. Mesmo princípio para Greenhouse, Lever, Ashby: usa a URL JD pública, não a do form.
-
-Para LinkedIn: usa `linkedin_check.py` com um perfil autenticado (path no perfil local). NUNCA curl ou screenshot sem login para LinkedIn.
+**PROIBIDO**: `curl`/`grep` ad-hoc sobre a JD ou sobre o LinkedIn para decidir a liveness, ou passar `is_open` para open a partir de um simples HTTP 200. A lógica canonical-careers/ATS, a distinção Workable `jobs.` vs `apply.` e o tratamento autenticado do LinkedIn vivem agora DENTRO de `recheck-liveness` — não os reimplementes à mão.
 
 **RULE-04** — 5 CAMPOS ESTRUTURADOS OBRIGATÓRIOS nas notes de cada posição analisada:
 ```

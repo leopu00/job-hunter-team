@@ -43,6 +43,25 @@ WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
 # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): un Dottore/Mantenitore
 # spawnato in standby è un turno LLM speso mentre il team è fermo di proposito.
 TEAM_STANDBY_FLAG="$JHT_HOME/.team-standby.flag"
+STANDBY_PY="${JHT_STANDBY_PY:-/app/shared/skills/standby.py}"
+[ -f "$STANDBY_PY" ] || STANDBY_PY="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/shared/skills/standby.py"
+
+# Standby ATTIVO adesso? Stesso predicato unico degli altri respawner
+# ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS]): un flag SCADUTO non è più standby,
+# e continuare a gatarci sopra terrebbe Dottore e Mantenitore spenti per
+# sempre se chi doveva rimuoverlo è morto. Fail-CLOSED: qualunque esito non
+# riconosciuto (python assente, modulo rotto) ricade sul solo
+# `[ -e "$TEAM_STANDBY_FLAG" ]`, mai su «non in standby».
+standby_active() {
+  [ -e "$TEAM_STANDBY_FLAG" ] || return 1
+  local state
+  state="$(JHT_HOME="$JHT_HOME" python3 "$STANDBY_PY" active 2>/dev/null)"
+  case "$state" in
+    active)              return 0 ;;
+    expired|invalid|off) return 1 ;;
+    *)                   return 0 ;;   # fallback: il flag c'è → standby
+  esac
+}
 halt_log_tick=0
 offhours_log_tick=0
 
@@ -52,10 +71,10 @@ last_fallback=0
 while true; do
   # Team-halted gate: se l'utente ha cliccato Stop, weekly-halt è attivo o il
   # team è in standby a spesa zero, NON spawnare dottore/mantenitore.
-  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || [ -e "$TEAM_STANDBY_FLAG" ]; then
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || standby_active; then
     if [ $((halt_log_tick % 8)) -eq 0 ]; then
-      if [ -e "$TEAM_STANDBY_FLAG" ]; then
-        log "standby flag presente — spawn dottore/mantenitore disabilitato"
+      if standby_active; then
+        log "standby ATTIVO — spawn dottore/mantenitore disabilitato"
       else
         log "halt flag presente — spawn dottore disabilitato"
       fi

@@ -3,6 +3,8 @@ import fs from "fs";
 import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from "@/lib/jht-paths";
 import { ALL_PROVIDERS } from "@/lib/providers";
 import { requireAuth, requireLocalWrite } from "@/lib/auth";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +101,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const activeProvider = sanitizeString(body.active_provider);
@@ -177,7 +179,10 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "errore scrittura";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return sanitizedError(err, {
+      status: 500,
+      scope: "setup",
+      publicMessage: "config_write_failed",
+    });
   }
 }

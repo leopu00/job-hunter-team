@@ -9,4 +9,8 @@ norecursedirs = [
 ]
 markers = [
   "slow: test che creano risorse reali (venv, processi pesanti)",
+  # Smoke post-deploy: HTTP contro il sito vivo (jobhunterteam.ai), NON contro
+  # il codice della PR. Escluso dal job `pytest` con `-m \"not production\"` e
+  # eseguito dal job `smoke` schedulato in .github/workflows/test.yml.
+  "production: test che interrogano il deploy di produzione via HTTP",
 ]

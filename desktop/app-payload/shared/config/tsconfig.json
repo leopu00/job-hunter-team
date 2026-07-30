@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "typeRoots": ["../../web/node_modules/@types"],
+    "paths": {
+      "zod": ["../../web/node_modules/zod"]
+    }
+  },
+  "include": ["./**/*.ts"]
+}

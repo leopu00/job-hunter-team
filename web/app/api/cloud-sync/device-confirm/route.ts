@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/workspace";
 import { generateSyncToken } from "@/lib/cloud-sync/tokens";
 import { normalizeUserCode } from "@/lib/cloud-sync/pairing";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON body atteso" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const userCode = normalizeUserCode(body.user_code);

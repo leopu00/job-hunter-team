@@ -1,16 +1,11 @@
 import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, YELLOW, DIM, BOLD, RESET } from './_colors.js';
+import { retiredStoreNotice } from './_retired-stores.js';
 
 const JHT_DIR       = JHT_HOME;
 const SESSIONS_PATH = join(JHT_DIR, 'sessions', 'sessions.json');
-
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const DIM = '\x1b[90m';
-const BOLD = '\x1b[1m';
-const RESET = '\x1b[0m';
 
 const STATE_CFG = {
   active: { icon: `${GREEN}●${RESET}`, label: `${GREEN}attiva${RESET}` },
@@ -35,8 +30,13 @@ function fmtDuration(start, end) {
 }
 
 async function handleSessions(options) {
+  // "Nessuna sessione trovata" suonava come un elenco vuoto. Il file non
+  // esiste perché nessuno lo scrive più dal 2026-07-25, ed è un'altra cosa.
   if (!(await fileExists(SESSIONS_PATH))) {
-    console.log(`\n  ${DIM}Nessuna sessione trovata.${RESET}\n`);
+    console.log(`\n  ${BOLD}JHT — Sessioni${RESET}\n`);
+    console.log(retiredStoreNotice(['sessions']));
+    console.log('');
+    process.exitCode = 1;
     return;
   }
 

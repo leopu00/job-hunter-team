@@ -3,7 +3,7 @@
 import { scoreSpectrumCss } from "@/lib/score-color";
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
-import AgentInteraction from "@/components/AgentInteraction";
+import AgentInteraction from "@/app/components/AgentInteraction";
 import { useLocale } from "@/lib/use-locale";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { intlTag } from "@/lib/locale-tag";

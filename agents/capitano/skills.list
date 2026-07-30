@@ -17,6 +17,17 @@ telegram-send
 # Notifiche utente con fallback Telegram -> dashboard web (batch ready, alert)
 notify-user
 
+# C-04 bis IMPONE questa skill per ogni ora comunicata all'utente (Telegram,
+# charts, status): l'utente e' CEST/CET e legge "03:11" come ora locale quando
+# era UTC. Senza la skill installata la regola rimanda a qualcosa che l'agente
+# non ha, e o inventa il formato o lo salta.
+format-time
+
+# C-21 IMPONE il diario giornaliero: a ogni risveglio (context-refresh Dottore,
+# nuova finestra, reboot) leggi l'handoff di ieri PRIMA di lavorare, altrimenti
+# ripeti gli stessi errori di pacing. Un file al giorno.
+captain-diary
+
 # Pickup risposte utente arrivate via dashboard web (marker prompt-injection)
 user-reply-check
 

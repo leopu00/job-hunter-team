@@ -32,6 +32,12 @@ position-insert
 # Email sourcing (day-start): poll the dedicated team inbox, any platform
 email-monitor
 
+# Stack di accesso web (F-2) — il Capitano lo NOMINA nei suoi ordini
+# (capitano.md: "uno Scout ne fa il poll, skill `scout-web-access`"), quindi
+# deve stare nel workspace dello Scout, non del Capitano: anti-bot robust
+# scrape, sessione LinkedIn, poll IMAP, claim workspace multi-Scout, freshness.
+scout-web-access
+
 # User chat (game / desktop app). A [CHAT] landing in your pane is answered
 # with ONE short jht-send and then you go straight back to work: the reply
 # costs a full turn of THIS agent's model, and orders still come from the

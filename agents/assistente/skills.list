@@ -27,6 +27,12 @@ spawn-doctor
 
 # Profile maintenance — the Assistente's daily loop
 profile-yaml
+# profile-yaml/SKILL.md linka `../profile-schema/SKILL.md` nel contesto di una
+# validazione obbligatoria: start-agent.sh copia le skill PIATTE in
+# ~/.claude/skills/<nome>, quindi il `../` risolve solo se profile-schema e'
+# installata accanto. L'Assistente scrive candidate_profile.yml, che tutto il
+# team consuma: senza lo schema canonico il formato se lo inventa.
+profile-schema
 profile-summaries
 onboarding-flow
 

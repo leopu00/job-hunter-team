@@ -50,7 +50,6 @@ shared/data/incoming/
 !web/public/**/*.png
 !web/app/**/*.png
 !assets/banner.png
-!desktop/assets/icon.png
 # Arte di gioco GENERATA (niente screenshot qui: zero PII by design)
 !game/assets/**/*.png
 # Reference visivi del gioco generati da Codex su dati mock (zero PII)
@@ -79,12 +78,7 @@ shared/secrets/*
 # ── BUILD E DIPENDENZE ──────────────────────────────────────
 node_modules/
 
-# Rust build artifacts
-launcher/target/
-
-# Desktop build artifacts
-desktop/dist/
-desktop/app-payload/
+# NB: gli export del gioco Godot (game/builds/) sono ignorati da game/.gitignore.
 
 # Download binaries (served at runtime, not committed)
 web/public/downloads/
@@ -96,7 +90,6 @@ __pycache__/
 .vercel/
 dist/
 build/
-!desktop/build/
 
 # ── OS ───────────────────────────────────────────────────────
 .DS_Store

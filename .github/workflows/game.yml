@@ -1,15 +1,29 @@
 name: Game — Native desktop matrix
 
+# `shared/skills/burn_intent.py` non e' un file di gioco, ma
+# `game/tools/burn_mode_selftest.gd` lo legge e ne confronta il contenuto con la
+# copia GDScript dell'avviso di deroga alla spesa. Senza questa riga il guard
+# del drift non girava proprio nella PR che lo puo' rompere: si tocca il file
+# Python, il workflow non parte, e la copia nel gioco resta indietro
+# promettendo reti di sicurezza che il modulo non ha piu'.
+#
+# `enrichment_policy.py` e `db_query.py` (letti da
+# `tools/coordinator_policy_selftest.py`) hanno la stessa forma e NON sono qui
+# di proposito: quel selftest e' oggi nel tier `watch`, cioe' non blocca, e non
+# vale ~30 minuti di runner su tre OS a ogni modifica Python. Quando passera' a
+# `gate` vanno aggiunti anche loro, altrimenti si ricrea questo stesso buco.
 on:
   push:
     paths:
       - "game/**"
+      - "shared/skills/burn_intent.py"
       - ".github/workflows/game.yml"
   pull_request:
     branches:
       - master
     paths:
       - "game/**"
+      - "shared/skills/burn_intent.py"
       - ".github/workflows/game.yml"
   workflow_dispatch:
 
@@ -17,7 +31,11 @@ jobs:
   test-export:
     name: ${{ matrix.label }} — test, export, smoke
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # 30 -> 45: gli avvii di Godot per job passano da ~26 a ~49 (i 15 selftest
+    # del tier `watch` che nessuna CI eseguiva, piu' l'import che run.sh fa da
+    # se'). Il margine serve a non far scadere il job proprio mentre osserviamo
+    # i test nuovi: un timeout si legge come un rosso di quei test, e non lo e'.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -58,90 +76,17 @@ jobs:
       - name: Import and parse project
         run: godot --headless --path game --import
 
-      - name: Run deterministic game tests
+      # La lista dei test NON e' piu' qui: vive in `game/tools/test-matrix.txt`,
+      # unica fonte consumata anche da run.sh e da run.ps1. Prima del
+      # 2026-07-30 esistevano tre copie divergenti e 15 selftest su 45 non
+      # venivano eseguiti da nessuna CI, fra cui quelli scritti apposta per il
+      # TOUR v3 e per il wizard: il `game/README.md` prometteva piu' di quanto
+      # questo semaforo controllasse.
+      - name: Run deterministic game tests (gate)
         if: runner.os != 'Windows'
-        run: |
-          godot --headless --path game --script res://tools/nav_grid_selftest.gd
-          godot --headless --path game --script res://tools/speech_bubble_selftest.gd
-          godot --headless --path game --script res://tools/pipeline_queue_selftest.gd
-          godot --headless --path game --script res://tools/embedded_terminal_selftest.gd
-          godot --headless --path game --script res://tools/redactor_selftest.gd
-          godot --headless --path game --script res://tools/diagnostics_selftest.gd
-          godot --headless --path game --script res://tools/theme_selftest.gd
-          godot --headless --path game --script res://tools/budget_notice_selftest.gd
-          # L'avviso della deroga alla spesa NOMINA i freni che non cedono e
-          # il tetto di ore: sono copiati da shared/skills/burn_intent.py, e
-          # una copia che resta indietro promette reti di sicurezza che il
-          # modulo non ha piu'. Questo test confronta la copia col sorgente.
-          godot --headless --path game --script res://tools/burn_mode_selftest.gd
-          godot --headless --path game --script res://tools/doc_preview_selftest.gd
-          # La terza via all'uscita ("esci, il team continua") e l'attesa del
-          # thread di spegnimento. Nessuna delle due si vede a schermo: si
-          # sbagliano in silenzio e si scoprono la mattina dopo, dal lavoro
-          # non fatto o dal container rimasto acceso tutta la notte.
-          godot --headless --path game --script res://tools/headless_exit_selftest.gd
-          # L'aggiornamento automatico. Si sbaglia in tre modi che a schermo si
-          # assomigliano tutti a "non succede niente": non avvisare mai,
-          # proporre un DECLASSAMENTO (alfabeticamente "0.3.10" viene prima di
-          # "0.3.9"), o installare un pacchetto firmato da qualcun altro —
-          # perche' la notarizzazione dice che Apple lo ha esaminato, non che
-          # e' il nostro. Nessuno dei tre si vede in un test manuale: il primo
-          # e l'ultimo si scoprirebbero da un utente.
-          godot --headless --path game --script res://tools/update_check_selftest.gd
-          # /bin/sh: solo POSIX, ed e' il motivo per cui non e' in run.ps1.
-          godot --headless --path game --script res://tools/terminal_selection_selftest.gd
-          # Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO
-          # sull'italiano e i dizionari tradotti si caricano pigramente:
-          # senza questa riga sedici chiavi duplicate in ui_en.gd passavano
-          # in verde e rompevano l'avvio in tutte le lingue tranne una.
-          godot --headless --path game --script res://tools/i18n_parity_selftest.gd
-          # Il patto del riordino della sidebar: le voci raccolte in schede o
-          # dietro "Impostazioni" restano raggiungibili e tradotte. Una sezione
-          # caduta da tutti gli elenchi non fa rumore, semplicemente sparisce.
-          godot --headless --path game --script res://tools/sidebar_nav_selftest.gd
-          # I cognomi degli agenti. Sono identita', non decorazione: se la
-          # mappa ruolo+numero smettesse di essere una funzione pura, "scout-2"
-          # cambierebbe nome fra un riavvio e l'altro senza che nulla si
-          # rompa. Il test tiene fermi determinismo, assenza di omonimi,
-          # fallback oltre la lista e — cosa che a schermo si vedrebbe solo
-          # come un rettangolo vuoto — che ogni carattere di ogni cognome
-          # esista gia' nei dizionari delle 7 lingue.
-          godot --headless --path game --script res://tools/agent_names_selftest.gd
-          # Il costo a riposo: la finestra senza focus deve disegnare di meno,
-          # ma il tetto fps del primo piano va restituito ALLA LETTERA (chi ha
-          # il profilo ridotto gira a 30, non a 60) e a ritmo lento i passi di
-          # fisica devono coprire il frame, altrimenti il motore butta il tempo
-          # in eccesso e la scena rallenta davvero.
-          godot --headless --path game --script res://tools/idle_pace_selftest.gd
-          VPS_OUT="$(JHT_VPS_CONTRACT_TEST=1 godot --headless --path game --quit-after 3 2>&1)"
-          printf '%s\n' "$VPS_OUT" | grep "VPS-CONTRACT-TEST PASS"
-          PIPE_OUT="$(JHT_SCENE=office JHT_PIPELINE_FORCE_TEST=scout godot --headless --path game 2>&1)"
-          printf '%s\n' "$PIPE_OUT" | grep "PIPELINE-FORCE-TEST PASS"
-          SWITCH_OUT="$(JHT_SCENE=office JHT_BACKEND_SWITCH_TEST=1 godot --headless --path game 2>&1)"
-          printf '%s\n' "$SWITCH_OUT" | grep "BACKEND-SWITCH-TEST PASS"
-          DOCTOR_OUT="$(JHT_SCENE=office JHT_DOCTOR_TEST=scout-4 godot --headless --path game 2>&1)"
-          printf '%s\n' "$DOCTOR_OUT" | grep "SIMULATION-DOCTOR-TEST PASS"
-          FEEDBACK_OUT="$(JHT_SCENE=office JHT_FEEDBACK_PANEL_TEST=1 godot --headless --path game 2>&1)"
-          printf '%s\n' "$FEEDBACK_OUT" | grep "FEEDBACK-PANEL-TEST PASS"
-          GUIDED_OUT="$(JHT_SCENE=office JHT_GUIDED_TEST=1 godot --headless --path game 2>&1)"
-          printf '%s\n' "$GUIDED_OUT" | grep "GUIDED-ONBOARDING-TEST PASS"
-          # La pagina di chat a fumetti: che le vignette esistano, siano
-          # nell'ordine della storia, che quella dell'agente resti bianca col
-          # testo nero (e' una richiesta esplicita, non una scelta di tema) con
-          # la coda verso il suo ritratto e quella dell'utente dalla parte
-          # opposta, che il giro utente->canale->risposta passi davvero dal bus
-          # con un ruolo OPERATIVO, e che rileggere indietro non venga
-          # interrotto dal messaggio successivo.
-          COMIC_OUT="$(JHT_SCENE=office JHT_COMIC_CHAT_TEST=1 godot --headless --path game 2>&1)"
-          printf '%s\n' "$COMIC_OUT" | grep "COMIC-CHAT-TEST PASS"
-          GFX_OUT="$(JHT_SCENE=office JHT_GFX_TEST=1 godot --headless --path game 2>&1)"
-          printf '%s\n' "$GFX_OUT" | grep "GFX-PROFILE-TEST PASS"
-          TEXT_OUT="$(JHT_SCENE=office JHT_WORLD_TEXT_TEST=1 godot --headless --path game 2>&1)"
-          printf '%s\n' "$TEXT_OUT" | grep "WORLD-TEXT-TEST PASS"
-          GFXPANEL_OUT="$(JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1 godot --headless --path game 2>&1)"
-          printf '%s\n' "$GFXPANEL_OUT" | grep "GRAPHICS-PANEL-TEST PASS"
+        run: bash game/tools/run.sh test gate
 
-      - name: Run deterministic game tests through PowerShell
+      - name: Run deterministic game tests through PowerShell (gate)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -149,7 +94,44 @@ jobs:
             Select-Object -First 1
           if (-not $GodotExe) { throw "setup-godot executable not found" }
           $env:JHT_GODOT_BIN = $GodotExe.FullName
-          ./game/tools/run.ps1 test
+          ./game/tools/run.ps1 test gate
+
+      # --------------------------- TIER `watch` - IN OSSERVAZIONE, NON ROTTO --
+      # Questi test (marcati `watch` in game/tools/test-matrix.txt) sono verdi
+      # in locale - triage 2026-07-30, Godot 4.7 stable su macOS: 18 su 18 PASS
+      # - ma non hanno MAI girato su un runner pulito. Renderli bloccanti in un
+      # colpo solo significherebbe scoprire su master, e a valle di una PR
+      # innocente, se dipendono da `~/.jht`, dal tempo di boot o dal numero di
+      # core del runner.
+      #
+      # `continue-on-error: true` NON vuol dire "ignorati": il passo compare nel
+      # riepilogo del job con il suo esito, e il runner esegue TUTTA la lista
+      # anche dopo un rosso, proprio per dare il quadro completo che serve a
+      # promuoverli.
+      #
+      # PER TOGLIERE `continue-on-error`: servono ~10 esecuzioni consecutive
+      # verdi sui tre OS (Windows compreso - li' la catena di avvii Godot e'
+      # gia' andata in ACCESS_VIOLATION due volte). Poi si sposta la voce da
+      # `watch` a `gate` in test-matrix.txt, a scaglioni e non tutta insieme; e
+      # quando il tier `watch` resta vuoto questi due passi si cancellano.
+      # ATTENZIONE: promuovendo `coordinator_policy` vanno aggiunti al `paths:`
+      # in cima anche `shared/skills/enrichment_policy.py` e
+      # `shared/skills/db_query.py`.
+      - name: Run game tests under observation (watch - non blocking)
+        if: runner.os != 'Windows'
+        continue-on-error: true
+        run: bash game/tools/run.sh test watch
+
+      - name: Run game tests under observation through PowerShell (watch - non blocking)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $GodotExe = Get-ChildItem (Join-Path $HOME "godot") -Filter "Godot*.exe" -File |
+            Select-Object -First 1
+          if (-not $GodotExe) { throw "setup-godot executable not found" }
+          $env:JHT_GODOT_BIN = $GodotExe.FullName
+          ./game/tools/run.ps1 test watch
 
       # L'export e' il passo piu' pesante e arriva per ultimo, dopo ~26
       # invocazioni di Godot nello stesso job. Ogni chiusura lascia risorse

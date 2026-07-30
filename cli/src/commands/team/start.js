@@ -8,8 +8,10 @@ import {
   sessionName, parseAgentArg, resolveConfig, getAgentDir, usingContainer,
   JHT_HOME, JHT_USER_DIR, JHT_DB_PATH, JHT_CONFIG_PATH,
 } from './agents.js';
-import { execInContainer } from '../../utils/container-proxy.js';
+import { execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 
+// Serve solo al path host legacy (tmux fuori dal container): dentro al
+// container gli argomenti passano separati, senza shell di mezzo.
 function shellEscape(value) {
   return String(value).replace(/'/g, "'\\''");
 }
@@ -206,18 +208,14 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
   const agent = AGENTS.find((a) => a.role === role);
   const useInstance = agent?.multi && instance;
   const scriptArgs = useInstance ? [role, instance] : [role];
-  const quoted = scriptArgs.map((a) => `'${shellEscape(a)}'`).join(' ');
 
-  const envParts = [];
-  if (mode === 'fast') envParts.push("JHT_MODE='fast'");
-  if (env) {
-    for (const [k, v] of Object.entries(env)) {
-      envParts.push(`${k}='${shellEscape(v)}'`);
-    }
-  }
-  const prefix = envParts.length ? envParts.join(' ') + ' ' : '';
-  const cmd = `${prefix}bash /app/.launcher/start-agent.sh ${quoted}`;
-  const r = execInContainer(cmd);
+  // Argomenti ed env passati separati (docker exec -e / spawn env): niente
+  // stringa di shell da quotare a mano, quindi niente quarta variante di
+  // escaping da tenere allineata alle altre tre.
+  const childEnv = { ...(mode === 'fast' ? { JHT_MODE: 'fast' } : {}), ...(env || {}) };
+  const r = execScriptInContainer('/app/.launcher/start-agent.sh', scriptArgs, {
+    env: Object.keys(childEnv).length ? childEnv : null,
+  });
   if (r.code === 0) {
     console.log(`  ${c.green('✓')} ${sName} avviato`);
     return 'started';

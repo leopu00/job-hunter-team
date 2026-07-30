@@ -5,6 +5,7 @@ import os from "os";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +132,7 @@ export async function PATCH(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const prefs = load();

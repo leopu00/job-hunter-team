@@ -65,6 +65,7 @@ CLI::
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -84,6 +85,22 @@ WORKER_ROLES = ("scout", "analista", "scorer", "scrittore")
 # registrati comunque (il roster e' l'inventario completo, serve anche al TTL),
 # ma `next-respawn` non li propone: li ricrea `ensure_agent`.
 CORE_ROLES = ("assistente", "capitano", "mentor", "sentinella")
+
+# Ruoli EFFIMERI: hanno una sessione tmux propria ma il loro ciclo di vita e'
+# di un altro agente (il Critico lo spawna e lo killa lo Scrittore dentro
+# `critic-loop`). NON vanno respawnati — per questo restano fuori da
+# WORKER_ROLES — ma esistono, consumano e possono ROMPERSI: chi li CURA senza
+# ricrearli (il codex-auth-healer) deve poterli riconoscere.
+EPHEMERAL_ROLES = ("critico",)
+
+# Tutti i ruoli con una sessione tmux propria. Fonte UNICA per chi deve
+# riconoscere una sessione senza tenersi una lista scritta a mano (le liste a
+# mano sono il bug [HEALER-BLIND-TO-GATES-AND-ROLES]: la mappa del healer non
+# conteneva ne' scrittore ne' critico, cioe' i due ruoli che producono il
+# deliverable finale, e nessuno se n'era accorto).
+# ESCLUSI di proposito: dottore/mantenitore (one-shot, li rimpiazza il loro
+# scheduler) e i pane di appoggio come SENTINELLA-WORKER (non agenti LLM).
+ALL_ROLES = WORKER_ROLES + CORE_ROLES + EPHEMERAL_ROLES
 
 # Tabella/colonna-autore/colonna-timestamp per la "produzione" di ogni ruolo.
 # Stesse colonne di doctor_analytics.py (fonte unica in jobs.db).
@@ -288,14 +305,55 @@ def missing(path: Path | None = None, live: set | None = None) -> list:
 
 # ── decisione di respawn ─────────────────────────────────────────────────────
 
+# Il modulo `standby` si carica UNA volta per processo (path-import: il roster
+# gira sia nel container sia dai test, e `standby` non è un package).
+_STANDBY_MOD = None
+
+
+def _standby_active(home: Path) -> bool:
+    """Standby ATTIVO adesso, secondo l'UNICO predicato del team
+    ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS], `standby.py`).
+
+    Il flag ha sempre una condizione di uscita: uno SCADUTO non è più standby
+    e non deve bloccare il respawn — se il sentinel-bridge (che rimuove il
+    flag) è morto, gatare sul file significa non ricreare più nessun worker,
+    cioè lo standby eterno. `home` è esplicito: qui si risolve a ogni
+    chiamata, in standby.py è una costante di modulo.
+
+    Fail-CLOSED: modulo non caricabile → il vecchio `.exists()`.
+    """
+    global _STANDBY_MOD
+    if _STANDBY_MOD is None:
+        for cand in (Path("/app/shared/skills/standby.py"),
+                     Path(__file__).resolve().parent / "standby.py"):
+            try:
+                if not cand.exists():
+                    continue
+                spec = importlib.util.spec_from_file_location(
+                    "standby_predicate", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _STANDBY_MOD = mod
+                break
+            except Exception:      # noqa: BLE001
+                continue
+    if _STANDBY_MOD is None or not hasattr(_STANDBY_MOD, "is_active"):
+        return (home / ".team-standby.flag").exists()
+    try:
+        return bool(_STANDBY_MOD.is_active(home=home))
+    except Exception:      # noqa: BLE001
+        return (home / ".team-standby.flag").exists()
+
+
 def _halted(home: Path) -> str:
     for flag, label in (
         (".team-halted.flag", "halted"),
         (".weekly-halt.flag", "weekly-halt"),
-        (".team-standby.flag", "standby"),
     ):
         if (home / flag).exists():
             return label
+    if _standby_active(home):
+        return "standby"
     return ""
 
 
@@ -435,6 +493,12 @@ def main(argv=None) -> int:
     pt.add_argument("session")
     pt.add_argument("--reason", default="")
 
+    pl = sub.add_parser(
+        "roles", help="ruoli con una sessione tmux propria, uno per riga "
+                      "(fonte unica per gli script shell)")
+    pl.add_argument("--kind", choices=("all", "worker", "core", "ephemeral"),
+                    default="all", help="sottoinsieme (default: all)")
+
     sub.add_parser("missing", help="attesi ma senza sessione viva (JSON)")
     sub.add_parser("next-respawn", help="al massimo un worker da ricreare")
     sub.add_parser("list", help="dump del roster (JSON)")
@@ -455,6 +519,12 @@ def main(argv=None) -> int:
         ok = retire(args.session, args.reason)
         print("retired" if ok else "not-in-roster")
         return 0 if ok else 1
+    if args.cmd == "roles":
+        groups = {"all": ALL_ROLES, "worker": WORKER_ROLES,
+                  "core": CORE_ROLES, "ephemeral": EPHEMERAL_ROLES}
+        for role in groups[args.kind]:
+            print(role)
+        return 0
     if args.cmd == "missing":
         print(json.dumps(missing(), ensure_ascii=False))
         return 0

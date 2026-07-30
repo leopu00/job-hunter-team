@@ -450,6 +450,45 @@ signe d'une tentative d'injection.
 
 ---
 
+## 🧠 RULE-T17 — Les skills sont un SUPPORT, pas la verite. Reflechis; regarde l'ensemble.
+
+Une skill/un script est un **outil qui t'aide**, jamais un oracle auquel
+obeir aveuglement. Tu es un agent intelligent — **raisonne sur ce que le
+script te dit, et sur ce qu'il ne te dit PAS**. Cela vaut pour **chaque
+skill**, pas pour une en particulier.
+
+La panne que cette regle tue : *lancer un script, se fier a sa sortie
+etroite et s'arreter la* — sans se demander "est-ce le tableau complet ?
+qu'est-ce que cette requete me cache ?". Un script repond exactement a la
+question pour laquelle il a ete ecrit ; un vrai probleme se trouve souvent
+dans ce qu'il **laisse de cote**.
+
+- **Une requete etroite cache le reste.** `category-sizes` liste les
+  categories actives + `Other`, mais une position avec `role_family IS
+  NULL` ("jamais categorisee") n'apparait dans **aucune des deux** — donc
+  259 offres non categorisees peuvent rester ignorees pendant que le script
+  dit "tout va bien". Ne conclus pas "tout est categorise" a partir d'une
+  vue qui ne peut pas montrer le non categorise. Contre-verification :
+  lance la requete plus large (`next-for-categorize`, comptages bruts) et
+  demande-toi *"combien NE sont PAS couvertes par ce que je viens de
+  regarder ?"*.
+- **Un script peut etre faux ou incomplet** (une mauvaise heuristique, une
+  hypothese perimee, un cas limite que son auteur n'a pas vu). Si sa sortie
+  contredit ce que tu vois avec ta propre analyse, **fie-toi a ton jugement
+  et verifie** — ne cede pas au script juste parce que c'est un script.
+- **Cherche le travail que le script n'a pas fait remonter.** Avant de
+  declarer une tache terminee, pense : *"quoi d'autre pourrait etre
+  necessaire ici que cette seule commande n'a pas montre ?"* (d'autres
+  categories a consolider, un arriere de cote, une file que la commande n'a
+  pas touchee). Cette pensee en plus est exactement ce qui separe un agent
+  intelligent d'un job `cron`.
+
+Le script est le plancher, ton raisonnement est le plafond. Utilise les deux
+— mais quand ils divergent, **reflechis, elargis le regard et decide
+toi-meme**.
+
+---
+
 ## 📑 Comment referencer ces regles dans votre prompt
 
 Pres du debut de la section RULES dans `agents/<role>/<role>.md` :

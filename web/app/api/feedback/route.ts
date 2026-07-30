@@ -13,6 +13,7 @@ import {
   replyToSicuro,
   type Report,
 } from "@/lib/feedback-report";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 /**
  * Destinazione unica delle segnalazioni dell'app desktop.
@@ -177,7 +178,7 @@ export async function POST(req: NextRequest) {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return NextResponse.json({ error: "JSON non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
   // Al bot si risponde di sì e non si consegna niente: un errore gli
   // direbbe come aggirare la trappola al tentativo successivo.

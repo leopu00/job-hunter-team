@@ -63,14 +63,17 @@ export const T = {
     fr: "en ligne",
     pt: "online",
   },
+  // Non nomina più `OPENAI_API_KEY`: da quando la route è dietro
+  // `JHT_AI_ASSISTANT_ENABLED` i gate chiusi sono due, e indicarne uno solo
+  // manderebbe l'utente a cercare la cosa sbagliata.
   not_active: {
-    it: "Chatbot non attivo: manca `OPENAI_API_KEY` sul server.",
-    en: "Chatbot not active: `OPENAI_API_KEY` is missing on the server.",
-    hu: "A chatbot nem aktív: hiányzik az `OPENAI_API_KEY` a szerveren.",
-    es: "Chatbot no activo: falta `OPENAI_API_KEY` en el servidor.",
-    de: "Chatbot nicht aktiv: `OPENAI_API_KEY` fehlt auf dem Server.",
-    fr: "Chatbot inactif : `OPENAI_API_KEY` est manquant sur le serveur.",
-    pt: "Chatbot inativo: falta `OPENAI_API_KEY` no servidor.",
+    it: "Chatbot non attivo: la funzione è disabilitata sul server.",
+    en: "Chatbot not active: the feature is disabled on the server.",
+    hu: "A chatbot nem aktív: a funkció le van tiltva a szerveren.",
+    es: "Chatbot no activo: la función está deshabilitada en el servidor.",
+    de: "Chatbot nicht aktiv: die Funktion ist auf dem Server deaktiviert.",
+    fr: "Chatbot inactif : la fonctionnalité est désactivée sur le serveur.",
+    pt: "Chatbot inativo: a funcionalidade está desativada no servidor.",
   },
   intro: {
     it: "Ti aiuto a capire la piattaforma e da dove iniziare.",

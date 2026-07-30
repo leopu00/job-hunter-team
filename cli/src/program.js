@@ -47,15 +47,22 @@ import { registerPid1Command } from './commands/pid1.js';
 // install: VPS fresca → 30+ sotto-comandi spaventano e nascondono i 5
 // che servono davvero. Vedi docs/internal/ops/vps.md → "P1 — Help post-install
 // troppo lunga".
+//
+// Restano CINQUE: la lista è corta apposta, quindi ogni voce che si aggiunge
+// ne toglie un'altra. `dashboard` è stato tolto il 2026-07-30 — è deprecato dal
+// 2026-07-23 (la dashboard locale non esiste più, il comando stampa solo dove
+// sono finite le cose) e la prima schermata dopo l'install non può raccomandare
+// un comando che non fa niente. Al suo posto `team`, senza il quale l'help
+// essenziale non diceva in nessun punto come si avvia il team.
 const ESSENTIAL_HELP = `Usage: jht [command]
 
 Job Hunter Team — CLI
 
 Comandi essenziali:
   setup        Configurazione iniziale (lancia il wizard)
+  team         Avvia e ferma gli agenti (jht team start)
   status       Stato del sistema (container, agenti, db)
   agents       Lista agenti e task in corso
-  dashboard    Apri la dashboard web
   doctor       Diagnostica setup e dipendenze
 
 Per la lista completa di tutti i comandi:

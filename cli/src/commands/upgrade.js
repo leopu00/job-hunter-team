@@ -2,12 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
-
-const GREEN  = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const DIM    = '\x1b[90m';
-const BOLD   = '\x1b[1m';
-const RESET  = '\x1b[0m';
+import { GREEN, RED, YELLOW, DIM, BOLD, RESET } from './_colors.js';
 
 function getRepoRoot() {
   try { return execSync('git rev-parse --show-toplevel 2>/dev/null', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim(); }
@@ -96,7 +91,7 @@ async function handleUpgrade(options) {
       execSync('git pull --ff-only 2>&1', { cwd: root, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
       console.log(`  ${GREEN}✓ Codice aggiornato${RESET}`);
     } catch (e) {
-      console.error(`  \x1b[31m✗ git pull fallito: ${e.message.split('\n')[0]}\x1b[0m`);
+      console.error(`  ${RED}✗ git pull fallito: ${e.message.split('\n')[0]}${RESET}`);
       process.exitCode = 1;
       return;
     }

@@ -2,6 +2,32 @@
 """Sync sim 5 SQLite (~/.jht-sim-d2/jobs.db nel container jht-sim-d2)
 verso Supabase prod, scope `user_id = <email>`.
 
+╔══════════════════════════════════════════════════════════════════════╗
+║ ⚠️  QUESTO SCRIPT SCRIVE SU PRODUZIONE.                              ║
+║                                                                      ║
+║ Fa PATCH sulla tabella `positions` del Supabase di PRODUZIONE, con   ║
+║ la SERVICE_ROLE key — che BYPASSA la RLS: se il filtro user_id è     ║
+║ sbagliato, tocca i dati di altri utenti. Non è un dry-run per        ║
+║ default: senza --dry-run scrive davvero, riga per riga, e non c'è    ║
+║ rollback. Le modifiche non sono reversibili se non ripristinando     ║
+║ un backup del progetto Supabase.                                     ║
+║                                                                      ║
+║ Prima di lanciarlo: gira SEMPRE prima con --dry-run, controlla i     ║
+║ conteggi "matched"/"no_match", e conferma con l'utente. Vedi anche   ║
+║ il sanity-check post-sync in fondo al main(), che verifica la        ║
+║ non-contaminazione degli altri user_id.                              ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+STATO (aggiornato 2026-07-30): script ORFANO. Nessun altro file della
+repo lo invoca — è un one-off nato per le simulazioni di location
+enrichment / office geocoding di maggio-giugno 2026 (ultimo commit
+3fe123565, 2026-06-04; contesto in
+docs/internal/experiments/2026-05-25-sim-5-office-geocoding-mario-rossi-report.md).
+È conservato come riferimento, non come strumento di routine: dipende
+da un container `jht-sim-d2` e da un dataset sim che oggi potrebbero
+non esistere più. Se serve riusarlo, rileggilo prima: non è
+manutenuto.
+
 Match key: `url` (unique nel dataset). Per ogni position sim con
 enrichment popolato, PATCH solo i campi enrichment+office sul record
 Supabase corrispondente. NON tocca status, notes, scores, salary.
@@ -9,7 +35,7 @@ Supabase corrispondente. NON tocca status, notes, scores, salary.
 Usage (preflight):
     SUPABASE_URL=https://...supabase.co \\
     SUPABASE_SERVICE_ROLE_KEY=eyJ... \\
-    python3 scripts/sim/sync-sim-to-supabase.py [--email <e>] [--dry-run]
+    python3 scripts/sim/sync-sim-to-supabase.py [--email <e>] --dry-run
 
 Default email: owner@example.com
 """

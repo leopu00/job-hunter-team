@@ -32,6 +32,7 @@ import {
 } from "@/lib/messages-thread";
 import { MAX_CHAT_BODY, isChatAgent } from "@/lib/chat-agents";
 import AgentAvatar from "@/app/components/AgentAvatar";
+import { useFocusTrap } from "@/app/components/use-focus-trap";
 import type { PendingMessage } from "@/lib/types";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./MessagesDrawer.i18n";
@@ -106,6 +107,11 @@ export default function MessagesDrawer() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+
+  // Il drawer blocca lo scroll del body e copre la pagina con un backdrop:
+  // e' modale di fatto, quindi il Tab non deve uscirne finche' e' aperto.
+  useFocusTrap(drawerRef, open);
 
   const refresh = useCallback(async () => {
     try {
@@ -301,7 +307,9 @@ export default function MessagesDrawer() {
           />
           {/* Pannello */}
           <aside
+            ref={drawerRef}
             role="dialog"
+            aria-modal="true"
             aria-label={tr("title")}
             className="absolute inset-y-0 right-0 w-[min(94vw,400px)] flex flex-col border-l border-[var(--color-border)]"
             style={{

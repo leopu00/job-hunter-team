@@ -5,6 +5,16 @@ user-facing to the most internal.
 
 ---
 
+## 🎮 [`game/docs/`](../game/docs/) — the native desktop application
+The Godot office is the only desktop client, and its docs stay colocated with the
+code in [`game/docs/`](../game/docs/) — this index points at them, it does not host them.
+Three entry points:
+- 🏛️ [`GDD.md`](../game/docs/GDD.md) — current product design: what the office is, the rooms, what each agent does on screen
+- 👋 [`FIRST-RUN.md`](../game/docs/FIRST-RUN.md) — first-run contract: the token-free showroom conversation, and where the provider boundary sits
+- 🔌 [`DATA-ADAPTER.md`](../game/docs/DATA-ADAPTER.md) — the contract between the game and the team's data (`TeamData` autoload, no Supabase in the scenes)
+
+Also there: `ROADMAP` · `ASSETS` · `SPRITES` · `ANALISI-GIOCHI` · `RESEARCH-DOSSIER`.
+
 ## 🎯 [`about/`](about/) — what JHT is and whether it works
 Public docs for anyone evaluating JHT, in two clusters (see the [index](about/README.md)):
 - 📖 **Narrative:** `VISION` · `STORY` · `ROADMAP`

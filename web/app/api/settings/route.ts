@@ -3,6 +3,8 @@ import { requireLocalWrite } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from "@/lib/jht-paths";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +51,7 @@ export async function PATCH(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   let existing: Record<string, unknown> = {};
@@ -84,10 +86,11 @@ export async function PATCH(req: NextRequest) {
     );
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "errore" },
-      { status: 500 },
-    );
+    return sanitizedError(err, {
+      status: 500,
+      scope: "settings",
+      publicMessage: "config_write_failed",
+    });
   }
 }
 
@@ -98,7 +101,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   // Danger zone actions
@@ -120,10 +123,11 @@ export async function POST(req: NextRequest) {
       );
       return NextResponse.json({ ok: true });
     } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "errore reset" },
-        { status: 500 },
-      );
+      return sanitizedError(err, {
+        status: 500,
+        scope: "settings",
+        publicMessage: "config_reset_failed",
+      });
     }
   }
   if (body._action === "clear_cache") {
@@ -134,10 +138,11 @@ export async function POST(req: NextRequest) {
       fs.mkdirSync(cacheDir, { recursive: true });
       return NextResponse.json({ ok: true });
     } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "errore cache" },
-        { status: 500 },
-      );
+      return sanitizedError(err, {
+        status: 500,
+        scope: "settings",
+        publicMessage: "cache_clear_failed",
+      });
     }
   }
 
@@ -222,9 +227,10 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "errore scrittura" },
-      { status: 500 },
-    );
+    return sanitizedError(err, {
+      status: 500,
+      scope: "settings",
+      publicMessage: "config_write_failed",
+    });
   }
 }
