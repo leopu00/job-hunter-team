@@ -20,10 +20,23 @@ export default defineConfig({
     // stavano lì da sempre ma nessun runner li includeva — verdi per
     // definizione perché mai eseguiti. Il default `include` è relativo a
     // questa cartella e non risale, quindi il path esplicito serve.
+    //
+    // Il terzo è la stessa trappola un livello più in là: i test di
+    // `shared/config/` (profile-schema + il cross-check zod ↔
+    // shared/skills/validate_profile.py) usavano `node:test` e nessun job li
+    // eseguiva. Il cross-check è un guard di drift TS ↔ Python: si rompe
+    // proprio nelle PR che toccano il lato Python, dove pytest gira e questo
+    // non girava. Sono stati convertiti a vitest per entrare qui.
     include: [
       "**/*.{test,spec}.?(c|m)[jt]s?(x)",
       "../../web/lib/**/*.test.ts",
+      "../../shared/**/*.test.ts",
     ],
-    exclude: ["**/node_modules/**"],
+    // `**/node_modules/**` è ancorato alla root del progetto (tests/js): non
+    // copre i `node_modules` raggiunti risalendo con `../..`. Senza il secondo
+    // pattern l'include di `shared/` raccoglie la suite interna di `zod`
+    // (~1900 test di una dipendenza, 3 file rossi per pacchetti che non
+    // installiamo) e la suite del repo sparisce nel rumore.
+    exclude: ["**/node_modules/**", "../../**/node_modules/**"],
   },
 });
