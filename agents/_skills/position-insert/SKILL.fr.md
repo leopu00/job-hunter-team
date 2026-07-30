@@ -141,7 +141,7 @@ Si vous avez 2 Analystes, alterner la cible du ping pour équilibrer la charge (
 - ❌ Vérifier avec `curl` sans `-L` — un 302 vers un `/careers` générique semble vivant sans suivi de redirection ; vous inséreriez un JD mort.
 - ❌ Vérifier le formulaire de candidature sur Workable au lieu de la page JD canonique — liens morts faux positifs.
 - ❌ Utiliser `fetch` MCP sur `linkedin.com` / `wellfound.com` — bloqué, vous obtenez une bannière 403 au lieu du JD.
-- ❌ Contourner le wrapper avec `python3 -c "import sqlite3; INSERT ..."` — casse les invariants de dédup et le suivi `found-by`.
+- ❌ Contourner le wrapper avec `python3 -c "import sqlite3; INSERT ..."` — casse les invariants de dédup et le suivi `found-by`, et la DB le refuse désormais : `positions.url` est UNIQUE. `UNIQUE constraint failed: positions.url` veut dire que l'annonce est déjà dans la DB — retour au Gate 1, ne pas réessayer avec une URL retouchée.
 - ❌ Définir `--status` à autre chose que le défaut `new` (le Scout ne définit jamais le statut manuellement ; le wrapper s'en charge).
 
 ## Voir aussi

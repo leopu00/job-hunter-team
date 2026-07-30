@@ -64,6 +64,11 @@ def ensure_schema(conn: sqlite3.Connection):
       su quali posizioni vuole le coordinate ufficio precise; l'Analista
       esegue la skill `office-geocoding` solo quando il flag è acceso.
       Replica del pattern Writer-on-demand. Vedi BACKLOG (2026-05-31).
+    - `positions.url` UNIQUE (indice parziale `idx_positions_url_unique`):
+      la dedup era un check-then-insert senza vincolo sotto, quindi due Scout
+      sulla stessa fonte potevano scrivere lo stesso annuncio due volte. I
+      duplicati già presenti NON vengono cancellati — vedi la politica in
+      `_migrate_positions_url_unique` (2026-07-30).
     """
     _run_migrations(conn)
     conn.executescript("""
@@ -591,6 +596,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_position_tickets_cloud_id(conn)
     _migrate_companies_logo(conn)
     _migrate_pending_messages_chat_turns(conn)
+    _migrate_positions_url_unique(conn)
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -673,6 +679,173 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
     ).fetchone()
     return row is not None
+
+
+def _index_exists(conn: sqlite3.Connection, index: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?", (index,)
+    ).fetchone()
+    return row is not None
+
+
+# Precedenza fra righe che condividono un URL: vince quella su cui è stato
+# fatto più lavoro. È la stessa scala già dichiarata in
+# `db_migrate_v2.step1_cleanup` — non ne inventiamo una seconda.
+_URL_WINNER_ORDER = """
+    ORDER BY has_app DESC, has_score DESC,
+             CASE p.status
+                 WHEN 'applied'  THEN 10 WHEN 'response' THEN 9
+                 WHEN 'ready'    THEN 8  WHEN 'review'   THEN 7
+                 WHEN 'writing'  THEN 6  WHEN 'scored'   THEN 5
+                 WHEN 'checked'  THEN 4  WHEN 'new'      THEN 3
+                 WHEN 'excluded' THEN 1  ELSE 0
+             END DESC,
+             p.id ASC
+"""
+
+
+def _log_url_dedup(entries) -> None:
+    """Audit JSONL degli URL spostati dalla migrazione UNIQUE.
+
+    Su un DB di un utente vero questa migrazione tocca dati che l'utente
+    vede: deve restare una traccia leggibile anche a mesi di distanza. Come
+    `db_insert._log_dedup_skip`, non blocca mai la migrazione se la
+    directory dei log non è scrivibile — il lavoro vero è già a posto.
+    """
+    import sys
+    for e in entries:
+        print(
+            f"[migrate] positions.url duplicato: #{e['moved_id']} spostato su "
+            f"'{e['new_url']}' (vince #{e['winner_id']})",
+            file=sys.stderr,
+        )
+    try:
+        import json
+        from datetime import datetime, timezone
+        log_dir = os.path.join(os.environ.get('JHT_HOME', '/jht_home'), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        ts = datetime.now(timezone.utc).isoformat()
+        with open(os.path.join(log_dir, 'url-dedup.log'), 'a', encoding='utf-8') as f:
+            for e in entries:
+                f.write(json.dumps({"ts": ts, **e}) + "\n")
+    except (OSError, ValueError):
+        pass
+
+
+def _resolve_duplicate_urls(conn: sqlite3.Connection) -> list:
+    """Rende unici gli URL già duplicati SENZA cancellare nessuna riga.
+
+    Vedi la politica dichiarata in `_migrate_positions_url_unique`.
+    Ritorna la lista degli spostamenti fatti (vuota se non c'era nulla).
+    """
+    groups = conn.execute(
+        "SELECT url FROM positions "
+        "WHERE url IS NOT NULL AND url <> '' "
+        "GROUP BY url HAVING COUNT(*) > 1"
+    ).fetchall()
+    if not groups:
+        return []
+
+    # `applications`/`scores` esistono sempre insieme a `positions` sui DB
+    # veri, ma la migrazione gira anche a metà creazione di un DB nuovo.
+    has_app = (
+        "EXISTS(SELECT 1 FROM applications a WHERE a.position_id = p.id)"
+        if _table_exists(conn, 'applications') else "0"
+    )
+    has_score = (
+        "EXISTS(SELECT 1 FROM scores s WHERE s.position_id = p.id)"
+        if _table_exists(conn, 'scores') else "0"
+    )
+
+    moved = []
+    for group in groups:
+        url = group['url']
+        rows = conn.execute(
+            f"SELECT p.id, p.status, {has_app} AS has_app, {has_score} AS has_score "
+            f"FROM positions p WHERE p.url = ? {_URL_WINNER_ORDER}",
+            (url,),
+        ).fetchall()
+        winner = rows[0]
+        for loser in rows[1:]:
+            # Frammento, non query string: `#...` non viaggia al server, il
+            # link continua ad aprire la stessa pagina. L'id del perdente è
+            # nel suffisso perché tre righe sullo stesso URL non finiscano
+            # con due stringhe identiche.
+            new_url = f"{url}#jht-duplicate-{loser['id']}-of-{winner['id']}"
+            note = (
+                f"[jht] URL duplicato di #{winner['id']}: la riga resta, "
+                f"l'URL è stato reso unico con un frammento "
+                f"(migrazione UNIQUE su positions.url)."
+            )
+            conn.execute(
+                "UPDATE positions "
+                "SET url = ?, notes = CASE WHEN notes IS NULL OR notes = '' "
+                "                          THEN ? ELSE notes || char(10) || ? END "
+                "WHERE id = ?",
+                (new_url, note, note, loser['id']),
+            )
+            moved.append({
+                "url": url,
+                "winner_id": winner['id'],
+                "moved_id": loser['id'],
+                "new_url": new_url,
+            })
+
+    if moved:
+        _log_url_dedup(moved)
+    return moved
+
+
+def _migrate_positions_url_unique(conn: sqlite3.Connection) -> None:
+    """`positions.url` diventa UNIQUE — e nessuna riga viene cancellata.
+
+    Prima c'era solo `idx_positions_url`, non-unico: la dedup era un
+    check-then-insert e fra il SELECT e l'INSERT non c'era niente a impedire
+    che due Scout sulla stessa fonte scrivessero lo stesso annuncio due
+    volte. La transazione `BEGIN IMMEDIATE` in `db_insert.insert_position` è
+    la prima linea; questo indice è l'ultima, quella che vale anche per chi
+    scrive fuori dal wrapper (`python3 -c "import sqlite3 …"` — anti-pattern
+    già visto, vedi i trigger anti-'now' qui sopra).
+
+    POLITICA sui duplicati preesistenti — **nessun DELETE**. Questa funzione
+    gira dentro `ensure_schema`, cioè a ogni invocazione di ogni agente,
+    senza backup e senza nessuno che guardi: cancellare righe qui sarebbe una
+    perdita di dati silenziosa su un DB vero, e il trigger
+    `positions_tombstone` la propagherebbe pure al cloud. Quindi, per ogni
+    gruppo di righe che condividono un URL:
+
+    - vince la riga con più lavoro sopra (application > score > status più
+      avanzato > id più basso) e tiene l'URL invariato;
+    - le altre RESTANO, con lo stesso URL più un frammento
+      `#jht-duplicate-<id>-of-<id-vincitore>`, più una riga in `notes`;
+    - ogni spostamento va su stderr e in `$JHT_HOME/logs/url-dedup.log`.
+
+    Fail-safe: se malgrado tutto l'indice non nasce, la funzione NON solleva.
+    `ensure_schema` è chiamata da ogni agente a ogni giro: romperla per un
+    vincolo di igiene sarebbe peggio del vincolo mancante. Resta
+    `idx_positions_url` e resta la transazione, che è ciò che chiude la race.
+
+    Indice PARZIALE (`url IS NOT NULL AND url <> ''`): in SQLite i NULL sono
+    distinti fra loro, quindi le righe senza URL non si darebbero fastidio
+    comunque, ma la stringa vuota sì — e nessuno la considera un'identità.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if _index_exists(conn, 'idx_positions_url_unique'):
+        return  # già migrato: costa una lettura di sqlite_master per giro
+    try:
+        _resolve_duplicate_urls(conn)
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_positions_url_unique "
+            "ON positions(url) WHERE url IS NOT NULL AND url <> ''"
+        )
+    except sqlite3.Error as exc:
+        import sys
+        print(
+            f"[migrate] indice unico su positions.url NON creato ({exc}). "
+            "La dedup resta affidata alla transazione in db_insert.py.",
+            file=sys.stderr,
+        )
 
 
 def _migrate_positions_status_review(conn: sqlite3.Connection) -> None:
