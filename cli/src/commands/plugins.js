@@ -2,17 +2,14 @@ import { readFile, readdir, writeFile, access, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 
 const JHT_DIR     = JHT_HOME;
 const PLUGINS_DIR = join(JHT_DIR, 'plugins');
 const CONFIG_PATH = join(JHT_DIR, 'plugins-config.json');
 
-const OK = '\x1b[32m●\x1b[0m';
-const OFF = '\x1b[90m○\x1b[0m';
-const DIM = '\x1b[90m';
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RESET = '\x1b[0m';
+const OK = c.green('●');
+const OFF = c.gray('○');
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }

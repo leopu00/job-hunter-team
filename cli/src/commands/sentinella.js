@@ -12,19 +12,9 @@ import { Command } from 'commander';
 import { readFileSync, existsSync, statSync, watchFile } from 'node:fs';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
+import { c as col } from './_colors.js';
 
 const JSONL_PATH = join(JHT_HOME, 'logs', 'sentinel-data.jsonl');
-
-const col = {
-  green:  (s) => `\x1b[32m${s}\x1b[0m`,
-  red:    (s) => `\x1b[31m${s}\x1b[0m`,
-  yellow: (s) => `\x1b[33m${s}\x1b[0m`,
-  cyan:   (s) => `\x1b[36m${s}\x1b[0m`,
-  magenta:(s) => `\x1b[35m${s}\x1b[0m`,
-  blue:   (s) => `\x1b[34m${s}\x1b[0m`,
-  bold:   (s) => `\x1b[1m${s}\x1b[0m`,
-  dim:    (s) => `\x1b[2m${s}\x1b[0m`,
-};
 
 const STATUS_COLOR = {
   OK: col.green,

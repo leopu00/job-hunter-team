@@ -2,6 +2,7 @@ import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { JHT_HOME } from '../jht-paths.js';
+import { BOLD, GREEN, RED, DIM, RESET } from './_colors.js';
 import { retiredStoreDetail } from './_retired-stores.js';
 
 const JHT_DIR        = JHT_HOME;
@@ -9,12 +10,6 @@ const TASKS_PATH     = join(JHT_DIR, 'tasks', 'tasks.json');
 const ANALYTICS_PATH = join(JHT_DIR, 'analytics', 'analytics.json');
 const SESSIONS_PATH  = join(JHT_DIR, 'sessions', 'sessions.json');
 const DEPLOY_DIR     = join(JHT_DIR, 'deploy');
-
-const BOLD  = '\x1b[1m';
-const GREEN = '\x1b[32m';
-const RED   = '\x1b[31m';
-const DIM   = '\x1b[90m';
-const RESET = '\x1b[0m';
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }

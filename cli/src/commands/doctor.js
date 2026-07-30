@@ -5,6 +5,22 @@ import { execSync } from 'node:child_process'
 import * as clack from '@clack/prompts'
 import pc from 'picocolors'
 import { JHT_HOME } from '../jht-paths.js';
+import { isInteractive } from './_colors.js'
+
+/**
+ * Spinner solo su TTY. [CLI-OUTPUT-NOT-MACHINE-SAFE]
+ * Lo spinner di clack anima nascondendo il cursore (`\x1b[?25l`) e riscrivendo
+ * la riga: sequenze che picocolors non disattiva perche' non sono colore.
+ * `jht doctor > diagnosi.txt` e' un gesto normale — non deve raccoglierle.
+ */
+function spinner() {
+  if (isInteractive()) return clack.spinner()
+  return {
+    start: (msg) => { if (msg) clack.log.info(msg) },
+    stop:  (msg) => { if (msg) clack.log.info(msg) },
+    message: (msg) => { if (msg) clack.log.info(msg) },
+  }
+}
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -142,7 +158,7 @@ function printCheck({ ok, warn, skip, msg, hint }) {
 async function handleDoctor() {
   clack.intro(pc.bold('JHT — Doctor'))
 
-  const s = clack.spinner()
+  const s = spinner()
 
   s.start('Verifica in corso…')
 

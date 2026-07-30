@@ -2,15 +2,10 @@ import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, YELLOW, DIM, BOLD, RESET } from './_colors.js';
 
 const JHT_DIR       = JHT_HOME;
 const TEMPLATES_DIR = join(JHT_DIR, 'templates');
-
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const DIM = '\x1b[90m';
-const BOLD = '\x1b[1m';
-const RESET = '\x1b[0m';
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }

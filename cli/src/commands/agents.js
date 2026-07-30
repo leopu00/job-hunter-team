@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, RED, YELLOW, DIM, BOLD, RESET } from './_colors.js';
 
 const JHT_DIR     = JHT_HOME;
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
@@ -17,13 +18,6 @@ const AGENTS = [
   { id: 'critico',    name: 'Critico',     session: 'CRITICO' },
   { id: 'assistente', name: 'Assistente',  session: 'ASSISTENTE' },
 ];
-
-const GREEN = '\x1b[32m';
-const RED = '\x1b[31m';
-const YELLOW = '\x1b[33m';
-const DIM = '\x1b[90m';
-const BOLD = '\x1b[1m';
-const RESET = '\x1b[0m';
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }

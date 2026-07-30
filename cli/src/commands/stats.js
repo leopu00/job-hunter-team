@@ -1,19 +1,13 @@
 import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, RED, YELLOW, DIM, BOLD, RESET } from './_colors.js';
 import { retiredStoreDetail, retiredStoreNotice } from './_retired-stores.js';
 
 const JHT_DIR        = JHT_HOME;
 const TASKS_PATH     = join(JHT_DIR, 'tasks', 'tasks.json');
 const ANALYTICS_PATH = join(JHT_DIR, 'analytics', 'analytics.json');
 const SESSIONS_PATH  = join(JHT_DIR, 'sessions', 'sessions.json');
-
-const DIM = '\x1b[90m';
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
-const BOLD = '\x1b[1m';
-const RESET = '\x1b[0m';
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }

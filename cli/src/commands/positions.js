@@ -19,27 +19,7 @@ import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { containerRunning, execInContainer, CONTAINER_NAME } from '../utils/container-proxy.js';
 import { JHT_DB_PATH } from '../jht-paths.js';
-
-// shared/skills/ risolto relativo a QUESTO file, non alla cwd:
-// cli/src/commands → cli/src → cli → <repo root> → shared/skills/…
-//
-// Il path relativo di prima (`shared/skills/<skill>`) funzionava solo se
-// l'utente lanciava `jht` dalla radice del repo. Ma `jht` è installato come
-// symlink in $JHT_BIN_DIR ed è pensato per essere chiamato da qualsiasi
-// cartella, quindi sul percorso nativo (senza container) ogni comando che
-// passa di qui moriva con un errore di Python — `can't open file '<cwd>/shared/…'`.
-// `import.meta.url` è il percorso REALE del modulo anche quando l'eseguibile è
-// raggiunto via symlink (Node risolve i symlink salvo `--preserve-symlinks`),
-// quindi la radice del repo si ricava da qui in modo affidabile.
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SKILLS_DIR = join(__dirname, '../../../shared/skills');
-
-const c = {
-  green:  (s) => `\x1b[32m${s}\x1b[0m`,
-  red:    (s) => `\x1b[31m${s}\x1b[0m`,
-  yellow: (s) => `\x1b[33m${s}\x1b[0m`,
-  dim:    (s) => `\x1b[2m${s}\x1b[0m`,
-};
+import { c } from './_colors.js';
 
 /**
  * Esegue una skill Python di shared/skills (container se attivo, host altrimenti).
