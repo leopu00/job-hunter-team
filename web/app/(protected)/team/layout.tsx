@@ -42,7 +42,7 @@ const META: Record<string, { title: string; description: string }> = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  const m = META[getServerLocale()] ?? META.en;
+  const m = META[await getServerLocale()] ?? META.en;
   return { title: m.title, description: m.description };
 }
 
