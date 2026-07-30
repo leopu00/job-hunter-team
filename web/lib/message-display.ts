@@ -37,9 +37,13 @@ const AGENT_LABELS: Record<string, LocaleDict> = {
 };
 
 // [JHT-CHAT-UNIFY] Le icone della chat non sono più emoji: sono i ritratti
-// disegnati degli agenti, gli stessi che l'utente vede nel videogioco,
-// ritagliati al busto. I PNG li produce `scripts/gen-chat-avatars.py` dai
-// ritratti a layer in `game/assets/characters/gen/portraits/`.
+// degli agenti in stile fumetto, gli stessi che la pagina /agents mostra a
+// piena larghezza (`/agents-coordinator.png` e compagnia), ritagliati sul
+// volto. Non sono gli sprite del videogioco: quelli restano nel gioco.
+//
+// I PNG a 96px li produce `scripts/gen-chat-avatars.py` dalle illustrazioni
+// in `web/public/agents-*.png` — servirle intere qui vorrebbe dire scaricare
+// 400 KB-1,1 MB per disegnarli in un cerchio da 30 px.
 //
 // `emoji` resta come fallback per un mittente fuori roster (un agente che
 // notifica e che non ha ritratto) e per i contesti solo-testo.
