@@ -44,6 +44,11 @@ LOGS_DIR = JHT_HOME / "logs"
 SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 STATE_FILE = LOGS_DIR / "window-ratio-state.json"
 CONFIG_FILE = JHT_HOME / "jht.config.json"
+# Lockfile del singleton del DAEMON (--watch), file dedicato. Due daemon vivi
+# aggiornerebbero la stessa EMA due volte per tick, cioè una calibrazione
+# falsata ([BRIDGE-SINGLETON-PARTIAL]). Il one-shot non lo prende: è
+# diagnostica e non deve uscire in silenzio se il daemon è su.
+LOCK_FILE = LOGS_DIR / "window-ratio-meter.lock"
 
 # Soglie:
 #   MIN_DELTA_5H_ACCUM_PCT — `usage` e `weekly_usage` dal bridge sono INTERI
@@ -280,7 +285,22 @@ def run_once(verbose: bool = False) -> dict:
     return new_state
 
 
+def _acquire_singleton() -> None:
+    """Uno solo di me. Modulo non caricabile → si prosegue senza lock: meglio
+    un daemon senza lock che nessuna calibrazione."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from singleton_lock import acquire_singleton
+        acquire_singleton(LOCK_FILE, label="window-ratio-meter")
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        print(f"[window-ratio-meter] WARN singleton_lock non caricabile ({e}) "
+              f"— proseguo senza lock", flush=True)
+
+
 def run_watch(tick_sec: int = WATCH_TICK_SEC) -> None:
+    _acquire_singleton()
     print(
         f"[window-ratio-meter] up — tick={tick_sec}s jht_home={JHT_HOME}",
         flush=True,
