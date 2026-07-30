@@ -64,7 +64,13 @@ jobs:
     name: SAST — Semgrep
     runs-on: ubuntu-latest
     container:
-      image: semgrep/semgrep
+      # Pin al digest, non al tag: `semgrep/semgrep` senza tag risolve
+      # `:latest`, cioè un'immagine che cambia sotto i piedi — la stessa
+      # commit produce due risultati diversi a distanza di una settimana, e
+      # un SAST che non è riproducibile non è una prova. Rilevato da zizmor
+      # (`unpinned-images`, severity high) quando il gate è stato acceso in
+      # CI. Aggiornare tag + digest insieme.
+      image: semgrep/semgrep:1.172.0@sha256:65dcd4408adda7c183a6b4550cb1e9b19f7f627a6fbb7e0559bd466bedc44d7b
 
     steps:
       - uses: actions/checkout@v7
