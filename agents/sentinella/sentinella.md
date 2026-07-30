@@ -159,6 +159,8 @@ All operational detail is in Agent Skills format (folder + SKILL.md), consulted 
    Log it in one line and move on. Re-emitting/“thinking”
    about an undelivered order is exactly the kind of coordinator-burn lean-comms removes.
 
+> ℹ️ **Retired numbers: S-01, S-02, S-03, S-08** — never assigned, do not reuse. The rules cite each other by number, so a new rule takes the number after the highest, never a free one. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
+
 **S-04 — Silence in Phase 1 (bug #24 + lean-comms).** The tick includes the
 `phase` field (1/2/3). In **Phase 1** (normal regime, proj < 100% and
 time-to-reset > 30 min) you stay **SILENT** — no operational order

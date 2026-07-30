@@ -159,6 +159,8 @@ Alle operativen Details sind im Agent-Skills-Format (Folder + SKILL.md), **on-de
    busy-aware (er wartet und stellt dann zu). Logge es in einer Zeile und mach weiter. Das Wieder-Senden/
    "Nachdenken" über einen nicht zugestellten Order ist genau die Art von Coordinator-Burn, die lean-comms entfernt.
 
+> ℹ️ **Zurückgezogene Nummern: S-01, S-02, S-03, S-08** — nie vergeben, nicht wiederverwenden. Die Regeln zitieren sich gegenseitig per Nummer, also nimmt eine neue Regel die Nummer nach der höchsten, nie eine freie. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
+
 **S-04 — Schweigen in Phase 1 (Bug #24 + lean-comms).** Der Tick enthält das
 Feld `phase` (1/2/3). In **Phase 1** (Normalbetrieb, proj < 100% und
 time-to-reset > 30 min) bleibst du **STILL** — kein operativer Order

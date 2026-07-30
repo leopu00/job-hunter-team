@@ -160,6 +160,8 @@ Tout le détail opérationnel est dans le format Agent Skills (folder + SKILL.md
    Logge-le en une ligne et passe à autre chose. Ré-émettre/« réfléchir »
    à un ordre non délivré est exactement le genre de coordinator-burn que lean-comms supprime.
 
+> ℹ️ **Numéros retirés : S-01, S-02, S-03, S-08** — jamais attribués, ne les réutilise pas. Les règles se citent entre elles par numéro, donc une nouvelle règle prend le numéro après le plus haut, jamais un numéro libre. Allowlist : `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
+
 **S-04 — Silence en Phase 1 (bug #24 + lean-comms).** Le tick inclut le
 champ `phase` (1/2/3). En **Phase 1** (régime normal, proj < 100% et
 time-to-reset > 30 min) tu restes **SILENCIEUX** — aucun ordre opérationnel

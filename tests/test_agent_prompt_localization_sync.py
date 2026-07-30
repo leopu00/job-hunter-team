@@ -16,7 +16,10 @@ Questo test fa fail se:
   5. una `team-rules.<locale>.md` non definisce esattamente le stesse RULE-Txx del
      file EN (2026-07-30: T17 esisteva solo in EN e `start-agent.sh` copia la
      variante localizzata SOPRA il baseline nella workdir runtime, quindi per 6
-     locale su 7 l'agente ereditava una regola che il suo file non conteneva).
+     locale su 7 l'agente ereditava una regola che il suo file non conteneva);
+  6. le numerazioni di ruolo `C-xx` (Capitano) e `S-xx` (Sentinella) hanno buchi
+     non dichiarati: i numeri ritirati vanno messi in `RETIRED_ROLE_RULES`, cosi'
+     un buco resta leggibile come scelta e non come riferimento perso.
 
 Fix quando fallisce: aggiornare il range/la citazione nel file segnalato. La frase
 attorno al range e' localizzata: si tocca SOLO il range (`T01..Txx`), non la prosa.
@@ -39,6 +42,25 @@ RANGE_RE = re.compile(r'\bT(\d{2})\.\.T(\d{2})\b')
 RULE_REF_RE = re.compile(r'\bRULE-T(\d{2})\b')
 # Le intestazioni in team-rules.md: `## 🛡️ RULE-T16 — ...`
 RULE_HEADING_RE = re.compile(r'^#+\s.*\bRULE-T(\d{2})\b', re.MULTILINE)
+
+# Le numerazioni LOCALI di ruolo: nel prompt una regola si DEFINISCE aprendo la
+# riga in grassetto (`**C-07 — ...**`, `**S-04 — ...**`); ovunque altro e' una
+# citazione. Le varianti `bis`/`ter`/`b`/`c` non aprono un numero nuovo.
+ROLE_RULE_PREFIXES = {'capitano': 'C', 'sentinella': 'S'}
+
+# Numeri RITIRATI: buchi deliberati nelle numerazioni di ruolo, non riferimenti
+# persi. Servono perche' le regole si citano fra loro per numero: riusare un
+# numero libero collide con le citazioni storiche. Ogni voce va anche NOMINATA
+# nel prompt (test_retired_role_rules_are_declared_in_every_prompt), in tutte e
+# 7 le lingue. Chi ritira una regola aggiunge qui il numero; chi ne aggiunge una
+# nuova prende il numero DOPO il piu' alto, mai uno di questi.
+RETIRED_ROLE_RULES = {
+    # C-06: mai assegnato — la sezione fu rinumerata e il numero resto' libero.
+    'capitano': {6},
+    # S-01..S-03, S-08: mai assegnati — la numerazione della Sentinella nasce da
+    # S-04 e salta S-08 (verificato 2026-07-30: zero riferimenti in tutta la repo).
+    'sentinella': {1, 2, 3, 8},
+}
 
 # Drift skill gia' esistente al momento in cui il gate e' stato scritto (2026-07-26):
 # la skill e' citata nel prompt EN ma non nella localizzazione. Non e' stato sanato
@@ -122,6 +144,12 @@ def _team_rules_files():
 def _team_rule_headings(path):
     """Numeri delle RULE-Txx DEFINITE (intestazione) nel file."""
     return {int(n) for n in RULE_HEADING_RE.findall(_read(path))}
+
+
+def _role_rule_numbers(path, prefix):
+    """Numeri di regola di ruolo DEFINITI nel file (non le citazioni)."""
+    rx = re.compile(r'^\*\*' + prefix + r'-(\d{2})\b', re.MULTILINE)
+    return {int(n) for n in rx.findall(_read(path))}
 
 
 def test_team_rules_numbering_is_contiguous():
@@ -279,4 +307,83 @@ def test_team_rules_localizations_define_the_same_rules():
     assert not problems, (
         'regole team-wide disallineate fra EN e localizzazioni:\n  '
         + '\n  '.join(problems)
+    )
+
+
+def test_role_rule_numbering_is_contiguous_modulo_retired():
+    """`C-xx`/`S-xx` sono contigue una volta aggiunti i numeri di RETIRED_ROLE_RULES.
+
+    Un buco non dichiarato e' ambiguo — regola ritirata o riferimento perso? — e
+    il prossimo che aggiunge una regola rischia di riusare il numero libero,
+    collidendo con le citazioni storiche. Chi ritira una regola la dichiara in
+    `RETIRED_ROLE_RULES`; chi ne aggiunge una prende il numero dopo il piu' alto.
+    """
+    problems = []
+    for role, prefix in ROLE_RULE_PREFIXES.items():
+        retired = RETIRED_ROLE_RULES.get(role, set())
+        for _lang, path in _prompt_files(role):
+            found = _role_rule_numbers(path, prefix)
+            rel = path.relative_to(REPO_ROOT)
+            if not found:
+                problems.append(f'{rel}: nessuna definizione {prefix}-xx trovata')
+                continue
+            reused = sorted(found & retired)
+            if reused:
+                problems.append(
+                    f'{rel}: definisce {", ".join(f"{prefix}-{n:02d}" for n in reused)}, '
+                    f'ma e\' in RETIRED_ROLE_RULES[{role!r}] — riusare un numero '
+                    f'ritirato collide con le citazioni storiche; scegli il numero '
+                    f'dopo il piu\' alto, oppure togli la voce dall\'allowlist'
+                )
+            gaps = sorted(set(range(1, max(found) + 1)) - found - retired)
+            if gaps:
+                problems.append(
+                    f'{rel}: buchi non dichiarati '
+                    f'{", ".join(f"{prefix}-{n:02d}" for n in gaps)} — se sono '
+                    f'ritirati aggiungili a RETIRED_ROLE_RULES[{role!r}], '
+                    f'altrimenti la regola e\' andata persa'
+                )
+    assert not problems, 'numerazioni di ruolo bucate:\n  ' + '\n  '.join(problems)
+
+
+def test_role_rule_numbering_identical_across_localizations():
+    """EN e le 6 localizzazioni dello stesso ruolo definiscono gli STESSI `C-xx`/`S-xx`."""
+    problems = []
+    for role, prefix in ROLE_RULE_PREFIXES.items():
+        seen = {lang: _role_rule_numbers(path, prefix)
+                for lang, path in _prompt_files(role)}
+        baseline = seen.get('en', set())
+        for lang, found in seen.items():
+            if lang == 'en' or found == baseline:
+                continue
+            missing = sorted(baseline - found)
+            extra = sorted(found - baseline)
+            problems.append(
+                f'{role}.{lang}: manca {[f"{prefix}-{n:02d}" for n in missing] or "-"}, '
+                f'in piu\' {[f"{prefix}-{n:02d}" for n in extra] or "-"}'
+            )
+    assert not problems, (
+        'numerazioni di ruolo divergenti fra localizzazioni:\n  ' + '\n  '.join(problems)
+    )
+
+
+def test_retired_role_rules_are_declared_in_every_prompt():
+    """Ogni numero ritirato e' NOMINATO nel prompt, in tutte e 7 le lingue.
+
+    L'allowlist da sola vive nel test: chi legge il prompt vedrebbe solo un salto.
+    La nota nel prompt e' la meta' leggibile della dichiarazione, e questo test la
+    tiene agganciata all'allowlist perche' non possa divergere.
+    """
+    problems = []
+    for role, prefix in ROLE_RULE_PREFIXES.items():
+        for n in sorted(RETIRED_ROLE_RULES.get(role, set())):
+            token = f'{prefix}-{n:02d}'
+            for _lang, path in _prompt_files(role):
+                if token not in _read(path):
+                    problems.append(
+                        f'{path.relative_to(REPO_ROOT)}: {token} e\' in '
+                        f'RETIRED_ROLE_RULES ma il prompt non lo nomina'
+                    )
+    assert not problems, (
+        'numeri ritirati non dichiarati nel prompt:\n  ' + '\n  '.join(problems)
     )
