@@ -102,6 +102,17 @@ KNOWN_SKILL_GAPS = {
 # agent-emergency, agent-unblock, graceful-shutdown); qui resta il resto.
 # Formato: (skill, locale).
 KNOWN_SKILL_LOCALIZATION_GAPS = {
+    # Capitano — diario giornaliero. Esiste solo il baseline EN. E' entrata
+    # nell'allowlist il 30/07 non perche' sia peggiorata, ma perche' e' stata
+    # DICHIARATA in capitano/skills.list: C-21 la impone, e prima non veniva
+    # installata affatto. Passare da "assente" a "in inglese" e' un progresso;
+    # la riga qui sotto e' cio' che impedisce al residuo di sparire di nuovo.
+    ('captain-diary', 'it'),
+    ('captain-diary', 'es'),
+    ('captain-diary', 'fr'),
+    ('captain-diary', 'de'),
+    ('captain-diary', 'pt'),
+    ('captain-diary', 'hu'),
     # Capitano — burst del primo avvio. Manca il baseline EN in 5 lingue (l'it c'e').
     ('first-run-burst', 'es'),
     ('first-run-burst', 'fr'),
