@@ -298,6 +298,15 @@ def _send(msg):
                                text=True, timeout=90)
             if r.returncode == 0:
                 return True
+            # rc=5 = "vivo ma muto": il testo è nel composer ma l'Enter non è
+            # mai stato processato. Non è un nudge saltato che il prossimo giro
+            # recupera — è uno stato che resta. Va detto, o 7 nudge orari
+            # consecutivi sembrano consegnati e il destinatario è fermo.
+            if r.returncode == 5:
+                print(f"[heartbeat-bridge] {TARGET} VIVA MA MUTA (rc=5): nudge "
+                      f"nel composer ma turno mai partito — va sbloccata a mano",
+                      file=sys.stderr, flush=True)
+                return False
         except FileNotFoundError:
             continue
         except Exception:
