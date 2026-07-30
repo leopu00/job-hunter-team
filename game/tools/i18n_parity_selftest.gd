@@ -9,14 +9,16 @@ extends SceneTree
 ## (EN a 471 chiavi su 624, le altre cinque a 327): questo test è il gate che
 ## impedisce che si riformi.
 ##
-## Cinque contratti, tutti e cinque necessari:
+## Sei contratti, tutti e sei necessari:
 ##  1. stesse chiavi in tutte e 7 le lingue (né mancanti né orfane);
 ##  2. nessun valore vuoto — una stringa vuota è peggio dell'italiano;
 ##  3. stessi segnaposto printf dell'italiano: un %d che diventa %s fa saltare
 ##     il format a runtime, e succede solo nella lingua tradotta male;
 ##  4. ogni chiave citata nei sorgenti esiste davvero in S, altrimenti t()
 ##     restituisce la chiave e l'utente si ritrova a leggere "vps.step_key";
-##  5. i NOMI DI SCENA DEI RUOLI passano dai dizionari e sono tradotti davvero.
+##  5. i NOMI DI SCENA DEI RUOLI passano dai dizionari e sono tradotti davvero;
+##  6. nelle superfici elencate in LITERAL_FREE_SURFACES nessuna frase è scritta
+##     a mano dentro `.text` / `.tooltip_text` / `.placeholder_text`.
 ##
 ## Il quinto contratto è nato da un difetto vero: registrando il gioco in
 ## inglese, la colonna delle chat elencava "Il Coordinatore", "Il Mentor",
@@ -39,6 +41,23 @@ const ROLE_NAME_SURFACES := {
 	"res://scripts/ui/chat_panel.gd": "CharacterDefs.role_name(",
 }
 
+## Sesto contratto: superfici in cui NESSUNA frase può essere scritta a mano.
+##
+## I primi cinque contratti vedono solo ciò che passa già da t(): un file che
+## assegna la frase direttamente — `label.text = "Avvio console…"` — è invisibile
+## a tutti e cinque e resta italiano in tutte e sette le lingue. È esattamente
+## come l'onboarding del primo avvio è rimasto monolingue mentre il dizionario
+## cresceva a 800 chiavi con un gate dedicato: nessun test poteva accorgersene.
+##
+## Qui si guarda l'assegnazione, non la chiave: in questi file il lato destro di
+## `.text` / `.tooltip_text` / `.placeholder_text` non può essere un letterale
+## che contiene parole. Simboli e separatori ("✕", "↑", "· ") restano leciti —
+## non si traducono e obbligarli a passare dal dizionario sarebbe rumore.
+const LITERAL_FREE_SURFACES := [
+	"res://scripts/setup/scripted_onboarding.gd",
+	"res://scripts/ui/embedded_terminal.gd",
+]
+
 var _failures: Array[String] = []
 ## I dizionari tradotti già caricati da _check_lang, per non rileggerli.
 var _dicts := {}
@@ -51,6 +70,7 @@ func _init() -> void:
 		_check_lang(lang, it)
 	_check_keys_used_in_sources(it)
 	_check_role_names(it)
+	_check_no_hardcoded_labels()
 	if _failures.is_empty():
 		print("I18N-PARITY-TEST PASS (%d chiavi × %d lingue)" % [it.size(), LANGS.size() + 1])
 		quit(0)
@@ -230,6 +250,47 @@ func _check_role_names(it: Dictionary) -> void:
 				src.contains(str(ROLE_NAME_SURFACES[path])),
 				"non chiama più %s: i nomi sono tornati scritti a mano"
 				% ROLE_NAME_SURFACES[path])
+
+
+## Nessuna frase scritta a mano nelle superfici dichiarate sopra.
+##
+## Si legge la riga intera dopo `.text =` (o `+=`), non solo il primo letterale:
+## `x.text = "SÌ" if cond else "NO"` ne nasconde due, e il secondo è quello che
+## si dimentica di tradurre. Un letterale è "una frase" se contiene almeno due
+## lettere di fila — così "✕", "↑" e " · " non fanno rumore, mentre "OK" sì.
+func _check_no_hardcoded_labels() -> void:
+	var assign := RegEx.new()
+	assign.compile('\\.(text|tooltip_text|placeholder_text)\\s*\\+?=(.*)$')
+	var literal := RegEx.new()
+	literal.compile('"([^"]*)"')
+	# Le chiavi passate al dizionario sono letterali legittimi: si tolgono prima
+	# di guardare cosa resta, altrimenti ogni riga corretta sembrerebbe un errore.
+	var lookup := RegEx.new()
+	lookup.compile('UIStrings\\.t\\("[^"]*"\\)')
+	var words := RegEx.new()
+	words.compile('\\p{L}{2,}')
+	for path: String in LITERAL_FREE_SURFACES:
+		var src := FileAccess.get_file_as_string(path)
+		_check("%s leggibile" % path.get_file(), src != "", "file vuoto o assente")
+		if src == "":
+			continue
+		var found: Array[String] = []
+		var line_no := 0
+		for line in src.split("\n"):
+			line_no += 1
+			if line.strip_edges().begins_with("#"):
+				continue
+			var hit := assign.search(line)
+			if hit == null:
+				continue
+			var rhs := lookup.sub(hit.get_string(2), "", true)
+			for m in literal.search_all(rhs):
+				if words.search(m.get_string(1)) != null:
+					found.append('%s:%d "%s"' % [path.get_file(), line_no,
+							m.get_string(1)])
+		_check("%s senza etichette scritte a mano" % path.get_file(), found.is_empty(),
+				"%d letterali assegnati a .text/.tooltip_text/.placeholder_text: %s"
+				% [found.size(), _head(found)])
 
 
 func _gd_files(dir_path: String) -> PackedStringArray:

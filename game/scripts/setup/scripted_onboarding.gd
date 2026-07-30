@@ -72,11 +72,9 @@ func _announce_skip(what: String) -> void:
 	_reconciled[what] = true
 	match what:
 		"runtime":
-			_reply("coordinatore", _tr("Lo spazio di lavoro della squadra è già pronto su questo computer: salto il passaggio.",
-					"The team’s workspace is already prepared on this computer: skipping that step."))
+			_reply("coordinatore", UIStrings.t("onb.skip.runtime"))
 		"provider":
-			_reply("coordinatore", _tr("Vedo che un servizio di intelligenza è già collegato su questo computer: tengo quello e andiamo avanti. Potrai cambiarlo quando vuoi da Provider.",
-					"I can see an intelligence service is already connected on this computer: I’ll keep it and move on. You can change it any time from Provider."))
+			_reply("coordinatore", UIStrings.t("onb.skip.provider"))
 
 
 static func normalize_agent(value: String) -> String:
@@ -337,107 +335,104 @@ func _ensure_started(agent: String) -> void:
 func _opening(agent: String) -> String:
 	match agent:
 		"assistente":
-			return _tr("Ciao, sono l’Assistente. Vorrei conoscerti un po’, così tutto l’ufficio saprà quali lavori cercare per te. Ti farò domande brevi e potrai correggere ogni risposta dalla pagina Profilo.",
-					"Hi, I’m the Assistant. I’d like to get to know you so the whole office understands what work to seek for you. I’ll ask short questions and you can edit every answer later in Profile.")
+			return UIStrings.t("onb.opening.assistente")
 		"coordinatore":
-			return _tr("Benvenuto in ufficio. Io sono il Coordinatore: preparo la casa della squadra, collego gli strumenti di cui ha bisogno e faccio partire il lavoro. Ti accompagno io, un passo alla volta.",
-					"Welcome to the office. I’m the Coordinator: I prepare the team’s workplace, connect the tools it needs and start the work. I’ll guide you one step at a time.")
+			return UIStrings.t("onb.opening.coordinatore")
 		_:
-			return _tr("Io sono il Mentor. Prima che il team parta voglio capire che tipo di ricerca vuoi: prudente, equilibrata o ambiziosa. Sono preferenze, non vincoli permanenti.",
-					"I’m the Mentor. Before the team starts, I want to understand the kind of search you want: cautious, balanced or ambitious. These are preferences, not permanent constraints.")
+			return UIStrings.t("onb.opening.mentor")
 
 
 func _assistant_options(step: String) -> Array:
 	match step:
 		"intro": return _opts([
-			["start", "Iniziamo dal mio obiettivo", "Let’s start with my goal"],
-			["profile", "Preferisco compilare il profilo completo", "I prefer the full profile form"],
-			["later", "Prima voglio esplorare l’ufficio", "I want to explore the office first"],
+			["start", UIStrings.t("onb.a.intro.start")],
+			["profile", UIStrings.t("onb.a.intro.profile")],
+			["later", UIStrings.t("onb.a.intro.later")],
 		])
 		"role": return _opts([
-			["software", "Software / engineering", "Software / engineering"],
-			["data", "Data / AI", "Data / AI"],
-			["product", "Product / project management", "Product / project management"],
-			["design", "Design / UX / ricerca utente", "Design / UX / user research"],
-			["business", "Sales / marketing / operations", "Sales / marketing / operations"],
-			["security", "Cybersecurity / infrastruttura", "Cybersecurity / infrastructure"],
-			["other", "Un altro ambito o più ruoli", "Another field or multiple roles"],
+			["software", UIStrings.t("onb.a.role.software")],
+			["data", UIStrings.t("onb.a.role.data")],
+			["product", UIStrings.t("onb.a.role.product")],
+			["design", UIStrings.t("onb.a.role.design")],
+			["business", UIStrings.t("onb.a.role.business")],
+			["security", UIStrings.t("onb.a.role.security")],
+			["other", UIStrings.t("onb.a.role.other")],
 		])
 		"specialty": return _assistant_specialty_options()
 		"current_status": return _opts([
-			["employed", "Lavoro già e cerco senza urgenza", "I’m employed and searching without urgency"],
-			["active", "Lavoro già, ma voglio cambiare presto", "I’m employed but want to change soon"],
-			["available", "Sono disponibile da subito", "I’m available immediately"],
-			["graduate", "Studio o mi sono appena laureato/a", "I’m studying or recently graduated"],
-			["freelance", "Sono freelance o consulente", "I’m a freelancer or consultant"],
-			["returning", "Rientro dopo una pausa", "I’m returning after a break"],
+			["employed", UIStrings.t("onb.a.status.employed")],
+			["active", UIStrings.t("onb.a.status.active")],
+			["available", UIStrings.t("onb.a.status.available")],
+			["graduate", UIStrings.t("onb.a.status.graduate")],
+			["freelance", UIStrings.t("onb.a.status.freelance")],
+			["returning", UIStrings.t("onb.a.status.returning")],
 		])
 		"experience": return _opts([
-			["entry", "Nessuna esperienza professionale", "No professional experience"],
-			["junior", "Meno di 2 anni", "Under 2 years"],
-			["mid", "Tra 2 e 5 anni", "Between 2 and 5 years"],
-			["senior", "Tra 5 e 10 anni", "Between 5 and 10 years"],
-			["lead", "Più di 10 anni / leadership", "Over 10 years / leadership"],
-			["career", "Sto cambiando carriera", "I’m changing careers"],
+			["entry", UIStrings.t("onb.a.exp.entry")],
+			["junior", UIStrings.t("onb.a.exp.junior")],
+			["mid", UIStrings.t("onb.a.exp.mid")],
+			["senior", UIStrings.t("onb.a.exp.senior")],
+			["lead", UIStrings.t("onb.a.exp.lead")],
+			["career", UIStrings.t("onb.a.exp.career")],
 		])
 		"confidence": return _opts([
-			["exact", "Voglio restare molto vicino alle mie competenze", "Stay very close to my current skills"],
-			["adjacent", "Va bene un ruolo adiacente con qualcosa da imparare", "An adjacent role with some learning is fine"],
-			["stretch", "Accetto ruoli sfidanti anche se non copro tutto", "Include stretch roles even if I lack some requirements"],
-			["retrain", "Sono disposto/a a riqualificarmi seriamente", "I’m willing to retrain substantially"],
-			["discover", "Non lo so ancora: aiutami a scoprirlo", "I’m unsure: help me discover it"],
+			["exact", UIStrings.t("onb.a.conf.exact")],
+			["adjacent", UIStrings.t("onb.a.conf.adjacent")],
+			["stretch", UIStrings.t("onb.a.conf.stretch")],
+			["retrain", UIStrings.t("onb.a.conf.retrain")],
+			["discover", UIStrings.t("onb.a.conf.discover")],
 		])
 		"mode": return _opts([
-			["remote", "Solo remoto", "Remote only"],
-			["remote_first", "Preferisco remoto, ma valuto ibrido", "Remote-first, but I’ll consider hybrid"],
-			["hybrid", "Preferisco ibrido", "I prefer hybrid"],
-			["onsite", "Preferisco in presenza", "I prefer on-site"],
-			["flexible", "Sono flessibile", "I’m flexible"],
+			["remote", UIStrings.t("onb.a.mode.remote")],
+			["remote_first", UIStrings.t("onb.a.mode.remote_first")],
+			["hybrid", UIStrings.t("onb.a.mode.hybrid")],
+			["onsite", UIStrings.t("onb.a.mode.onsite")],
+			["flexible", UIStrings.t("onb.a.mode.flexible")],
 		])
 		"where": return _opts([
-			["local", "Solo vicino a dove vivo", "Only near where I live"],
-			["italy", "Tutta Italia", "Anywhere in Italy"],
-			["eu", "Unione Europea / SEE", "European Union / EEA"],
-			["europe", "Europa, anche fuori UE", "Europe, including outside the EU"],
-			["worldwide", "Tutto il mondo", "Worldwide"],
-			["remote_only", "Solo opportunità remote", "Remote opportunities only"],
+			["local", UIStrings.t("onb.a.where.local")],
+			["italy", UIStrings.t("onb.a.where.italy")],
+			["eu", UIStrings.t("onb.a.where.eu")],
+			["europe", UIStrings.t("onb.a.where.europe")],
+			["worldwide", UIStrings.t("onb.a.where.worldwide")],
+			["remote_only", UIStrings.t("onb.a.where.remote_only")],
 		])
 		"relocation": return _opts([
-			["never", "Non voglio trasferirmi", "I don’t want to relocate"],
-			["same_country", "Solo nella mia nazione", "Only within my country"],
-			["eu", "Sì, all’interno dell’Europa", "Yes, within Europe"],
-			["worldwide", "Sì, anche fuori Europa", "Yes, outside Europe too"],
-			["sponsored", "Solo con visto e relocation pagati", "Only with visa sponsorship and paid relocation"],
-			["depends", "Dipende dall’opportunità", "It depends on the opportunity"],
+			["never", UIStrings.t("onb.a.reloc.never")],
+			["same_country", UIStrings.t("onb.a.reloc.same_country")],
+			["eu", UIStrings.t("onb.a.reloc.eu")],
+			["worldwide", UIStrings.t("onb.a.reloc.worldwide")],
+			["sponsored", UIStrings.t("onb.a.reloc.sponsored")],
+			["depends", UIStrings.t("onb.a.reloc.depends")],
 		])
 		"contract": return _opts([
-			["employee", "Solo assunzione da dipendente", "Permanent employee roles only"],
-			["permanent", "Preferisco indeterminato, valuto altro", "Prefer permanent, consider others"],
-			["contractor", "Preferisco contractor / partita IVA", "Prefer contractor / self-employed"],
-			["freelance", "Cerco progetti freelance", "I’m looking for freelance projects"],
-			["internship", "Valuto stage o apprendistato", "I’ll consider internships or apprenticeships"],
-			["any", "Il tipo di contratto è secondario", "Contract type is secondary"],
+			["employee", UIStrings.t("onb.a.contract.employee")],
+			["permanent", UIStrings.t("onb.a.contract.permanent")],
+			["contractor", UIStrings.t("onb.a.contract.contractor")],
+			["freelance", UIStrings.t("onb.a.contract.freelance")],
+			["internship", UIStrings.t("onb.a.contract.internship")],
+			["any", UIStrings.t("onb.a.contract.any")],
 		])
 		"salary": return _opts([
-			["hard_floor", "Ho una soglia minima non negoziabile", "I have a non-negotiable minimum"],
-			["improve", "Voglio migliorare la retribuzione attuale", "I want to improve my current compensation"],
-			["market", "Cerco una retribuzione in linea col mercato", "I want market-rate compensation"],
-			["equity", "Valuto molto equity e bonus", "Equity and bonuses matter a lot"],
-			["secondary", "Per ora stipendio secondario", "Compensation is secondary for now"],
-			["unknown", "Non so ancora quale cifra chiedere", "I don’t know what to ask for yet"],
+			["hard_floor", UIStrings.t("onb.a.salary.hard_floor")],
+			["improve", UIStrings.t("onb.a.salary.improve")],
+			["market", UIStrings.t("onb.a.salary.market")],
+			["equity", UIStrings.t("onb.a.salary.equity")],
+			["secondary", UIStrings.t("onb.a.salary.secondary")],
+			["unknown", UIStrings.t("onb.a.salary.unknown")],
 		])
 		"company": return _opts([
-			["startup", "Startup piccola e veloce", "Small, fast startup"],
-			["scaleup", "Scale-up in crescita", "Growing scale-up"],
-			["established", "Azienda strutturata", "Established company"],
-			["enterprise", "Grande impresa / multinazionale", "Large enterprise / multinational"],
-			["public", "Pubblico, ricerca o non-profit", "Public sector, research or non-profit"],
-			["any", "Nessuna preferenza: conta il ruolo", "No preference: the role matters"],
+			["startup", UIStrings.t("onb.a.company.startup")],
+			["scaleup", UIStrings.t("onb.a.company.scaleup")],
+			["established", UIStrings.t("onb.a.company.established")],
+			["enterprise", UIStrings.t("onb.a.company.enterprise")],
+			["public", UIStrings.t("onb.a.company.public")],
+			["any", UIStrings.t("onb.a.company.any")],
 		])
 		"finish": return _opts([
-			["complete_profile", "Completo ora i dati personali", "Complete personal data now"],
-			["coordinator", "Passo al Coordinatore", "Continue with the Coordinator"],
-			["mentor", "Prima definisco la strategia col Mentor", "Define strategy with the Mentor first"],
+			["complete_profile", UIStrings.t("onb.a.finish.complete_profile")],
+			["coordinator", UIStrings.t("onb.a.finish.coordinator")],
+			["mentor", UIStrings.t("onb.a.finish.mentor")],
 		])
 	return []
 
@@ -445,34 +440,34 @@ func _assistant_options(step: String) -> Array:
 func _assistant_specialty_options() -> Array:
 	match str(_draft.get("target_role", "")):
 		"Software Engineering": return _opts([
-			["backend", "Backend / API / sistemi distribuiti", "Backend / APIs / distributed systems"],
-			["frontend", "Frontend / mobile / UI engineering", "Frontend / mobile / UI engineering"],
-			["fullstack", "Full-stack", "Full-stack"],
-			["platform", "Platform / DevOps / cloud", "Platform / DevOps / cloud"],
-			["embedded", "Embedded / robotics / hardware", "Embedded / robotics / hardware"],
-			["open", "Più specializzazioni", "Multiple specializations"],
+			["backend", UIStrings.t("onb.a.spec.sw.backend")],
+			["frontend", UIStrings.t("onb.a.spec.sw.frontend")],
+			["fullstack", UIStrings.t("onb.a.spec.sw.fullstack")],
+			["platform", UIStrings.t("onb.a.spec.sw.platform")],
+			["embedded", UIStrings.t("onb.a.spec.sw.embedded")],
+			["open", UIStrings.t("onb.a.spec.sw.open")],
 		])
 		"Data / AI": return _opts([
-			["data_science", "Data science / analytics", "Data science / analytics"],
-			["ml", "Machine learning / applied AI", "Machine learning / applied AI"],
-			["genai", "LLM / generative AI / agenti", "LLMs / generative AI / agents"],
-			["data_engineering", "Data engineering / BI", "Data engineering / BI"],
-			["research", "Ricerca AI", "AI research"],
-			["open", "Sono aperto/a a più aree", "I’m open to multiple areas"],
+			["data_science", UIStrings.t("onb.a.spec.data.data_science")],
+			["ml", UIStrings.t("onb.a.spec.data.ml")],
+			["genai", UIStrings.t("onb.a.spec.data.genai")],
+			["data_engineering", UIStrings.t("onb.a.spec.data.data_engineering")],
+			["research", UIStrings.t("onb.a.spec.data.research")],
+			["open", UIStrings.t("onb.a.spec.data.open")],
 		])
 		"Product / Project Management": return _opts([
-			["product", "Product management", "Product management"],
-			["project", "Project / program management", "Project / program management"],
-			["technical_pm", "Technical product management", "Technical product management"],
-			["delivery", "Delivery / agile / operations", "Delivery / agile / operations"],
-			["founder", "Product leadership / founder’s office", "Product leadership / founder’s office"],
+			["product", UIStrings.t("onb.a.spec.pm.product")],
+			["project", UIStrings.t("onb.a.spec.pm.project")],
+			["technical_pm", UIStrings.t("onb.a.spec.pm.technical_pm")],
+			["delivery", UIStrings.t("onb.a.spec.pm.delivery")],
+			["founder", UIStrings.t("onb.a.spec.pm.founder")],
 		])
 	return _opts([
-		["specialist", "Voglio restare specialista", "I want to remain a specialist"],
-		["generalist", "Preferisco un ruolo generalista", "I prefer a generalist role"],
-		["leadership", "Cerco responsabilità di leadership", "I’m seeking leadership responsibility"],
-		["individual", "Preferisco contribuire senza gestire persone", "I prefer an individual-contributor path"],
-		["explore", "Voglio esplorare più direzioni", "I want to explore several directions"],
+		["specialist", UIStrings.t("onb.a.spec.gen.specialist")],
+		["generalist", UIStrings.t("onb.a.spec.gen.generalist")],
+		["leadership", UIStrings.t("onb.a.spec.gen.leadership")],
+		["individual", UIStrings.t("onb.a.spec.gen.individual")],
+		["explore", UIStrings.t("onb.a.spec.gen.explore")],
 	])
 
 
@@ -480,13 +475,13 @@ func _choose_assistant(id: String) -> void:
 	match str(_steps["assistente"]):
 		"intro":
 			if id == "profile":
-				_reply("assistente", _tr("Perfetto. Ti apro la scheda personale: puoi compilarla con calma e le informazioni restano nel tuo ufficio.", "Perfect. I’ll open your personal profile: you can complete it at your own pace and the information stays in your office."))
+				_reply("assistente", UIStrings.t("onb.a.intro.reply_profile"))
 				action_requested.emit("open_section", {"section": "profile"})
 				_steps["assistente"] = "finish"
 			elif id == "later":
-				_reply("assistente", _tr("Va benissimo. Torna da me quando vuoi: nessuna scelta viene persa e il setup non blocca l’ufficio.", "That’s fine. Come back whenever you want: no choice is lost and setup never blocks the office."))
+				_reply("assistente", UIStrings.t("onb.a.intro.reply_later"))
 			else:
-				_reply("assistente", _tr("Che famiglia di ruolo descrive meglio ciò che cerchi?", "Which role family best describes what you’re looking for?"))
+				_reply("assistente", UIStrings.t("onb.a.intro.reply_start"))
 				_steps["assistente"] = "role"
 		"role":
 			var roles := {"software": "Software Engineering", "data": "Data / AI",
@@ -494,11 +489,11 @@ func _choose_assistant(id: String) -> void:
 					"business": "Business / Operations", "security": "Security / Infrastructure",
 					"other": "Da definire / multidisciplinare"}
 			_draft["target_role"] = roles.get(id, "Da definire")
-			_reply("assistente", _tr("Ottimo. Dentro quest’area, quale direzione ti somiglia di più?", "Great. Within that area, which direction fits you best?"))
+			_reply("assistente", UIStrings.t("onb.a.role.reply"))
 			_steps["assistente"] = "specialty"
 		"specialty":
 			_preferences["target_specialty"] = id
-			_reply("assistente", _tr("Ora inquadriamo il livello: quanta esperienza professionale porti con te?", "Now let’s frame your level: how much professional experience do you bring?"))
+			_reply("assistente", UIStrings.t("onb.a.specialty.reply"))
 			_steps["assistente"] = "experience"
 		"experience":
 			var exp := {"entry": ["0", "entry"], "junior": ["1", "junior"],
@@ -506,39 +501,39 @@ func _choose_assistant(id: String) -> void:
 					"lead": ["12", "lead"], "career": ["0", "career-change"]}
 			_draft["experience_years"] = exp[id][0]
 			_draft["seniority_target"] = exp[id][1]
-			_reply("assistente", _tr("E qual è la tua situazione adesso? Cambia molto il ritmo con cui il team deve cercare.", "What is your current situation? It changes the pace the team should use."))
+			_reply("assistente", UIStrings.t("onb.a.exp.reply"))
 			_steps["assistente"] = "current_status"
 		"current_status":
 			_preferences["current_status"] = id
-			_reply("assistente", _tr("Quanto vuoi che esploriamo anche lavori per cui non sembri perfetto sulla carta?", "How much should we explore jobs for which you may not look perfect on paper?"))
+			_reply("assistente", UIStrings.t("onb.a.status.reply"))
 			_steps["assistente"] = "confidence"
 		"confidence":
 			_preferences["skills_stretch"] = id
-			_reply("assistente", _tr("Come preferisci lavorare nella quotidianità?", "How do you prefer to work day to day?"))
+			_reply("assistente", UIStrings.t("onb.a.conf.reply"))
 			_steps["assistente"] = "mode"
 		"mode":
 			_preferences["work_mode"] = id
-			_reply("assistente", _tr("In quali luoghi vuoi che il reparto Ricerca cerchi per cominciare? Potrai cambiare idea quando vuoi.", "Where should the Research department look to begin with? You can change your mind at any time."))
+			_reply("assistente", UIStrings.t("onb.a.mode.reply"))
 			_steps["assistente"] = "where"
 		"where":
 			var places := {"local": "Vicino alla residenza", "italy": "Italia",
 					"eu": "Unione Europea / SEE", "europe": "Europa",
 					"worldwide": "Worldwide", "remote_only": "Remote"}
 			_draft["location"] = places.get(id, "")
-			_reply("assistente", _tr("Per una posizione davvero giusta, quanto sei disponibile a trasferirti?", "For the right position, how open are you to relocating?"))
+			_reply("assistente", UIStrings.t("onb.a.where.reply"))
 			_steps["assistente"] = "relocation"
 		"relocation":
 			_preferences["relocation"] = id
 			_preferences["requires_sponsorship"] = id == "sponsored"
-			_reply("assistente", _tr("Quale rapporto di lavoro vuoi privilegiare?", "Which employment relationship should we prioritize?"))
+			_reply("assistente", UIStrings.t("onb.a.reloc.reply"))
 			_steps["assistente"] = "contract"
 		"contract":
 			_preferences["contract_preference"] = id
-			_reply("assistente", _tr("Che peso deve avere la retribuzione nella selezione? La cifra esatta potrai metterla nel Profilo.", "How much should compensation influence selection? You can enter the exact figure in Profile."))
+			_reply("assistente", UIStrings.t("onb.a.contract.reply"))
 			_steps["assistente"] = "salary"
 		"salary":
 			_preferences["compensation_strategy"] = id
-			_reply("assistente", _tr("In quale tipo di organizzazione pensi di rendere meglio?", "In what kind of organization do you think you’ll perform best?"))
+			_reply("assistente", UIStrings.t("onb.a.salary.reply"))
 			_steps["assistente"] = "company"
 		"company":
 			_preferences["company_stage"] = id
@@ -552,75 +547,75 @@ func _choose_assistant(id: String) -> void:
 			else:
 				action_requested.emit("open_scripted_chat", {"agent": "coordinatore"})
 			_completed["assistente"] = true
-			_reply("assistente", _tr("Adesso l’ufficio ti conosce già un po’ meglio. Quando avremo collegato la sua intelligenza, qui potrai anche scrivermi liberamente.", "The office already knows you a little better now. Once its intelligence is connected, you’ll also be able to write to me freely here."))
+			_reply("assistente", UIStrings.t("onb.a.finish.reply"))
 
 
 func _coordinator_options(step: String) -> Array:
 	match step:
 		"intro": return _opts([
-			["local", "Il team lavorerà su questo computer", "The team will run on this computer"],
-			["vps", "Il team lavorerà su un computer online sempre acceso", "The team will run on an always-on online computer"],
-			["explain", "Spiegami la differenza", "Explain the difference"],
+			["local", UIStrings.t("onb.c.intro.local")],
+			["vps", UIStrings.t("onb.c.intro.vps")],
+			["explain", UIStrings.t("onb.c.intro.explain")],
 		])
 		"runtime": return _opts([
-			["start", "Prepara o controlla lo spazio di lavoro", "Prepare or check the workspace"],
-			["repair", "Installa o ripara lo spazio di lavoro", "Install or repair the workspace"],
-			["ready", "Lo spazio di lavoro è già pronto", "The workspace is already ready"],
+			["start", UIStrings.t("onb.c.runtime.start")],
+			["repair", UIStrings.t("onb.c.runtime.repair")],
+			["ready", UIStrings.t("onb.c.runtime.ready")],
 		])
 		"provider": return _opts([
-			["codex", "Codex con ChatGPT", "Codex with ChatGPT"],
-			["claude", "Claude Code", "Claude Code"],
-			["kimi", "Kimi", "Kimi"],
-			["compare", "Aiutami a scegliere", "Help me choose"],
+			["codex", UIStrings.t("onb.c.provider.codex")],
+			["claude", UIStrings.t("onb.c.provider.claude")],
+			["kimi", UIStrings.t("onb.c.provider.kimi")],
+			["compare", UIStrings.t("onb.c.provider.compare")],
 		])
 		"login": return _opts([
-			["login", "Apri il login nell’app", "Open login inside the app"],
-			["different", "Scelgo un altro provider", "Choose another provider"],
-			["check", "Ho completato il login: ricontrolla", "I completed login: check again"],
+			["login", UIStrings.t("onb.c.login.login")],
+			["different", UIStrings.t("onb.c.login.different")],
+			["check", UIStrings.t("onb.c.login.check")],
 		])
 		"profile": return _opts([
-			["open_profile", "Completa o verifica il profilo", "Complete or review the profile"],
-			["already", "Il profilo è già completo", "The profile is already complete"],
+			["open_profile", UIStrings.t("onb.c.profile.open_profile")],
+			["already", UIStrings.t("onb.c.profile.already")],
 		])
 		"autonomy": return _opts([
-			["review_all", "Voglio approvare ogni candidatura", "I want to approve every application"],
-			["review_cv", "Prepara tutto, ma fammi approvare i documenti", "Prepare everything, but let me approve documents"],
-			["high_score", "Procedi da solo soltanto con le occasioni migliori", "Proceed alone only with the best opportunities"],
-			["autonomous", "Automatizza il più possibile", "Automate as much as possible"],
-			["observe", "Per ora osserva e non eseguire azioni esterne", "For now observe and take no external actions"],
+			["review_all", UIStrings.t("onb.c.autonomy.review_all")],
+			["review_cv", UIStrings.t("onb.c.autonomy.review_cv")],
+			["high_score", UIStrings.t("onb.c.autonomy.high_score")],
+			["autonomous", UIStrings.t("onb.c.autonomy.autonomous")],
+			["observe", UIStrings.t("onb.c.autonomy.observe")],
 		])
 		"budget": return _opts([
-			["minimal", "Risparmio massimo: fate soltanto l’essenziale", "Maximum savings: do only what is essential"],
-			["careful", "Risparmioso: qualità dove conta", "Economical: quality where it matters"],
-			["balanced", "Bilanciato", "Balanced"],
-			["quality", "Privilegia la qualità", "Prioritize quality"],
-			["unrestricted", "Nessun limite finché produce valore", "No limit while it creates value"],
+			["minimal", UIStrings.t("onb.c.budget.minimal")],
+			["careful", UIStrings.t("onb.c.budget.careful")],
+			["balanced", UIStrings.t("onb.c.budget.balanced")],
+			["quality", UIStrings.t("onb.c.budget.quality")],
+			["unrestricted", UIStrings.t("onb.c.budget.unrestricted")],
 		])
 		"privacy": return _opts([
-			["strict", "Minimizza sempre i dati condivisi", "Always minimize shared data"],
-			["cv_only", "Usa solo ciò che compare nel CV", "Use only what appears in my CV"],
-			["contextual", "Usa i miei dati quando sono pertinenti", "Use my data when relevant"],
-			["ask_sensitive", "Chiedimi conferma per dati sensibili", "Ask before using sensitive data"],
-			["standard", "Impostazioni standard", "Standard settings"],
+			["strict", UIStrings.t("onb.c.privacy.strict")],
+			["cv_only", UIStrings.t("onb.c.privacy.cv_only")],
+			["contextual", UIStrings.t("onb.c.privacy.contextual")],
+			["ask_sensitive", UIStrings.t("onb.c.privacy.ask_sensitive")],
+			["standard", UIStrings.t("onb.c.privacy.standard")],
 		])
 		"availability": return _opts([
-			["office", "Solo in orario lavorativo", "Business hours only"],
-			["evenings", "Soprattutto sera e weekend", "Mostly evenings and weekends"],
-			["always", "Può lavorare 24/7", "It may work 24/7"],
-			["manual", "Solo quando lo avvio io", "Only when I start it"],
-			["custom", "Configuro orari personalizzati", "Configure custom hours"],
+			["office", UIStrings.t("onb.c.availability.office")],
+			["evenings", UIStrings.t("onb.c.availability.evenings")],
+			["always", UIStrings.t("onb.c.availability.always")],
+			["manual", UIStrings.t("onb.c.availability.manual")],
+			["custom", UIStrings.t("onb.c.availability.custom")],
 		])
 		"channels": return _opts([
-			["telegram", "Ricevi gli aggiornamenti su Telegram", "Receive updates on Telegram"],
-			["email", "Fai controllare una casella per gli avvisi di lavoro", "Have a mailbox checked for job alerts"],
-			["cloud", "Collega uno spazio online opzionale", "Connect an optional online space"],
-			["skip_channels", "Per ora continuo senza canali opzionali", "Continue without optional channels for now"],
+			["telegram", UIStrings.t("onb.c.channels.telegram")],
+			["email", UIStrings.t("onb.c.channels.email")],
+			["cloud", UIStrings.t("onb.c.channels.cloud")],
+			["skip_channels", UIStrings.t("onb.c.channels.skip_channels")],
 		])
 		"team": return _opts([
-			["start_team", "Attiva il team", "Activate the team"],
-			["overview", "Mostrami la checklist", "Show me the checklist"],
-			["mentor", "Prima parlo con il Mentor", "Talk to the Mentor first"],
-			["review", "Rivediamo le mie impostazioni operative", "Review my operating settings"],
+			["start_team", UIStrings.t("onb.c.team.start_team")],
+			["overview", UIStrings.t("onb.c.team.overview")],
+			["mentor", UIStrings.t("onb.c.team.mentor")],
+			["review", UIStrings.t("onb.c.team.review")],
 		])
 	return []
 
@@ -629,68 +624,68 @@ func _choose_coordinator(id: String) -> void:
 	match str(_steps["coordinatore"]):
 		"intro":
 			if id == "explain":
-				_reply("coordinatore", _tr("Su questo computer è più semplice e la squadra riposa quando lo spegni. Un computer online resta acceso anche mentre sei lontano. In entrambi i casi le chiavi dell’ufficio restano nelle tue mani.", "This computer is simpler and the team rests when you turn it off. An online computer stays on while you are away. Either way, you keep the office keys."))
+				_reply("coordinatore", UIStrings.t("onb.c.intro.reply_explain"))
 			else:
 				_preferences["runtime_location"] = id
 				if id == "vps":
-					_reply("coordinatore", _tr("Ti apro la configurazione del computer online. La procedura ti chiederà dove si trova e come accedervi, spiegandoti ogni passaggio. Poi torniamo qui.", "I’ll open online-computer setup. It will ask where the computer is and how to access it, explaining each step. Then we’ll return here."))
+					_reply("coordinatore", UIStrings.t("onb.c.intro.reply_vps"))
 					action_requested.emit("open_section", {"section": "vps"})
 				else:
-					_reply("coordinatore", _tr("Partiamo preparando uno spazio di lavoro riservato alla squadra su questo computer. Posso controllarlo o guidarti nell’installazione.", "Let’s prepare a private workspace for the team on this computer. I can check it or guide you through installation."))
+					_reply("coordinatore", UIStrings.t("onb.c.intro.reply_local"))
 				_steps["coordinatore"] = "runtime"
 		"runtime":
 			if id == "start":
 				SetupService.start_container()
-				_reply("coordinatore", _tr("Controllo avviato. Lo stato in alto si aggiornerà da solo; intanto scegliamo quale intelligenza assisterà la squadra.", "Check started. The status above updates itself; meanwhile, let’s choose which intelligence will assist the team."))
+				_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_start"))
 			elif id == "repair":
 				SetupService.open_runtime_install()
-				_reply("coordinatore", _tr("Ho aperto qui dentro l’installazione guidata. Segui i passaggi e poi torna da me.", "I opened guided installation in here. Follow the steps, then come back to me."))
+				_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_repair"))
 			else:
 				SetupService.refresh()
-				_reply("coordinatore", _tr("Ricevuto. Scegli ora quale servizio assisterà la squadra nel suo lavoro.", "Got it. Now choose which service will assist the team in its work."))
+				_reply("coordinatore", UIStrings.t("onb.c.runtime.reply_ready"))
 			_steps["coordinatore"] = "provider"
 		"provider":
 			if id == "compare":
-				_reply("coordinatore", _tr("Codex è la scelta più collaudata, Claude è apprezzato per la precisione e Kimi tende a essere più economico. Puoi usare il servizio a cui sei già abbonato e cambiare idea in seguito.", "Codex is the most proven choice, Claude is known for precision and Kimi tends to be less expensive. You can use a service you already subscribe to and change later."))
+				_reply("coordinatore", UIStrings.t("onb.c.provider.reply_compare"))
 			else:
 				_provider_choice = id
 				if OS.get_environment("JHT_GUIDED_TEST") != "1":
 					SetupService.select_provider(id)
-				_reply("coordinatore", _tr("Scelta registrata. Il collegamento avverrà qui dentro; il browser si aprirà soltanto per confermare il tuo abbonamento.", "Choice recorded. The connection happens in here; the browser opens only to confirm your subscription."))
+				_reply("coordinatore", UIStrings.t("onb.c.provider.reply_chosen"))
 				_steps["coordinatore"] = "login"
 		"login":
 			if id == "different":
 				_steps["coordinatore"] = "provider"
-				_reply("coordinatore", _tr("Va bene, scegliamo di nuovo.", "Okay, let’s choose again."))
+				_reply("coordinatore", UIStrings.t("onb.c.login.reply_different"))
 			elif id == "login":
 				if not bool(SetupService.status.get("container_running", false)):
-					_reply("coordinatore", _tr("Prima dobbiamo preparare lo spazio di lavoro della squadra. Ti apro la pagina giusta.", "First we need to prepare the team’s workspace. I’ll open the right page."))
+					_reply("coordinatore", UIStrings.t("onb.c.login.reply_no_container"))
 					action_requested.emit("open_section", {"section": "docker"})
 				elif _provider_choice != "":
 					SetupService.open_provider_login(_provider_choice)
-					_reply("coordinatore", _tr("Segui le istruzioni che compaiono qui dentro. Quando hai terminato, torna da me e chiedimi di controllare.", "Follow the instructions shown in here. When you are done, come back and ask me to check."))
+					_reply("coordinatore", UIStrings.t("onb.c.login.reply_opened"))
 			elif id == "check":
 				SetupService.refresh()
-				_reply("coordinatore", _tr("Verifica avviata. Ora completiamo il Profilo, così ogni reparto saprà per chi sta lavorando.", "Verification started. Now let’s complete Profile so every department knows whom it is working for."))
+				_reply("coordinatore", UIStrings.t("onb.c.login.reply_check"))
 				_steps["coordinatore"] = "profile"
 			else:
 				_steps["coordinatore"] = "provider"
 		"profile":
 			if id == "open_profile":
 				action_requested.emit("open_section", {"section": "profile"})
-			_reply("coordinatore", _tr("Ora decidiamo quanta autonomia dare alla squadra. Le azioni esterne restano sempre tracciabili.", "Now let’s decide how much autonomy to give the team. External actions always remain traceable."))
+			_reply("coordinatore", UIStrings.t("onb.c.profile.reply"))
 			_steps["coordinatore"] = "autonomy"
 		"autonomy":
 			_preferences["approval_mode"] = id
-			_reply("coordinatore", _tr("Quanto vuoi che l’ufficio risparmi? Più prudenza significa meno lavoro superfluo; più libertà significa più approfondimenti.", "How much should the office save? More caution means less unnecessary work; more freedom means more in-depth work."))
+			_reply("coordinatore", UIStrings.t("onb.c.autonomy.reply"))
 			_steps["coordinatore"] = "budget"
 		"budget":
 			_preferences["token_budget_style"] = id
-			_reply("coordinatore", _tr("Quale regola sulla riservatezza devo far rispettare a tutti i colleghi?", "Which privacy rule should every colleague follow?"))
+			_reply("coordinatore", UIStrings.t("onb.c.budget.reply"))
 			_steps["coordinatore"] = "privacy"
 		"privacy":
 			_preferences["privacy_mode"] = id
-			_reply("coordinatore", _tr("In quali orari vuoi che l’ufficio lavori e quando preferisci non essere disturbato?", "When should the office work, and when would you rather not be disturbed?"))
+			_reply("coordinatore", UIStrings.t("onb.c.privacy.reply"))
 			_steps["coordinatore"] = "availability"
 		"availability":
 			_preferences["team_availability"] = id
@@ -701,19 +696,19 @@ func _choose_coordinator(id: String) -> void:
 		"channels":
 			if id == "skip_channels":
 				_steps["coordinatore"] = "team"
-				_reply("coordinatore", _tr("Nessun problema: Telegram, email e cloud restano configurabili in qualsiasi momento.", "No problem: Telegram, email and cloud remain available at any time."))
+				_reply("coordinatore", UIStrings.t("onb.c.channels.reply_skip"))
 			else:
 				var sections := {"telegram": "telegram", "email": "email", "cloud": "account"}
 				action_requested.emit("open_section", {"section": sections.get(id, "activation")})
-				_reply("coordinatore", _tr("Ho aperto la configurazione. Quando hai finito, torna in questa conversazione: le altre opzioni resteranno qui.", "I opened the configuration. When you finish, return to this conversation; the other choices will remain here."))
+				_reply("coordinatore", UIStrings.t("onb.c.channels.reply_open"))
 		"team":
 			if id == "start_team":
 				if bool(SetupService.status.get("ready", false)):
 					SetupService.start_team()
 					_completed["coordinatore"] = true
-					_reply("coordinatore", _tr("L’ufficio sta aprendo. Vedrai i colleghi raggiungere le loro scrivanie man mano che prendono servizio.", "The office is opening. You’ll see colleagues reach their desks as they begin work."))
+					_reply("coordinatore", UIStrings.t("onb.c.team.reply_start"))
 				else:
-					_reply("coordinatore", _tr("Manca ancora almeno un requisito. Apro la checklist, così vediamo esattamente quale.", "At least one requirement is still missing. I’ll open the checklist so we can see exactly which one."))
+					_reply("coordinatore", UIStrings.t("onb.c.team.reply_missing"))
 					action_requested.emit("open_section", {"section": "activation"})
 			elif id == "overview":
 				action_requested.emit("open_section", {"section": "activation"})
@@ -721,76 +716,76 @@ func _choose_coordinator(id: String) -> void:
 				action_requested.emit("open_scripted_chat", {"agent": "mentor"})
 			else:
 				_steps["coordinatore"] = "autonomy"
-				_reply("coordinatore", _tr("Ripartiamo dal livello di autonomia. Le nuove risposte sostituiranno le preferenze precedenti.", "Let’s restart from autonomy. New answers will replace the previous preferences."))
+				_reply("coordinatore", UIStrings.t("onb.c.team.reply_review"))
 
 
 func _mentor_options(step: String) -> Array:
 	match step:
 		"intro": return _opts([
-			["stability", "Priorità alla stabilità", "Prioritize stability"],
-			["growth", "Priorità alla crescita", "Prioritize growth"],
-			["salary", "Priorità alla retribuzione", "Prioritize compensation"],
-			["balance", "Priorità all’equilibrio", "Prioritize balance"],
-			["meaning", "Priorità all’impatto e al significato", "Prioritize impact and meaning"],
-			["learning", "Priorità all’apprendimento", "Prioritize learning"],
-			["reentry", "Priorità a rientrare nel mercato", "Prioritize re-entering the market"],
+			["stability", UIStrings.t("onb.m.intro.stability")],
+			["growth", UIStrings.t("onb.m.intro.growth")],
+			["salary", UIStrings.t("onb.m.intro.salary")],
+			["balance", UIStrings.t("onb.m.intro.balance")],
+			["meaning", UIStrings.t("onb.m.intro.meaning")],
+			["learning", UIStrings.t("onb.m.intro.learning")],
+			["reentry", UIStrings.t("onb.m.intro.reentry")],
 		])
 		"motivation": return _opts([
-			["escape", "Voglio uscire da una situazione che non mi fa stare bene", "I want to leave a situation that isn’t good for me"],
-			["plateau", "Mi sento fermo/a e voglio crescere", "I feel stuck and want to grow"],
-			["layoff", "Ho perso il lavoro o temo di perderlo", "I lost my job or fear losing it"],
-			["curious", "Sto bene, ma voglio capire cosa offre il mercato", "I’m fine, but want to explore the market"],
-			["life_change", "È cambiata la mia vita e il lavoro deve adattarsi", "My life changed and work must adapt"],
-			["first_job", "Cerco il mio primo vero ingresso", "I’m looking for my first real opportunity"],
+			["escape", UIStrings.t("onb.m.motivation.escape")],
+			["plateau", UIStrings.t("onb.m.motivation.plateau")],
+			["layoff", UIStrings.t("onb.m.motivation.layoff")],
+			["curious", UIStrings.t("onb.m.motivation.curious")],
+			["life_change", UIStrings.t("onb.m.motivation.life_change")],
+			["first_job", UIStrings.t("onb.m.motivation.first_job")],
 		])
 		"style": return _opts([
-			["cautious", "Poche opportunità, molto selezionate", "Few, highly selected opportunities"],
-			["balanced", "Un equilibrio tra qualità e scoperta", "Balance quality and discovery"],
-			["ambitious", "Mostrami anche opportunità sfidanti", "Include stretch opportunities"],
-			["volume", "Voglio esplorare un volume ampio", "I want to explore a broad volume"],
-			["experimental", "Proviamo strade diverse e impariamo dai risultati", "Try several paths and learn from results"],
+			["cautious", UIStrings.t("onb.m.style.cautious")],
+			["balanced", UIStrings.t("onb.m.style.balanced")],
+			["ambitious", UIStrings.t("onb.m.style.ambitious")],
+			["volume", UIStrings.t("onb.m.style.volume")],
+			["experimental", UIStrings.t("onb.m.style.experimental")],
 		])
 		"risk": return _opts([
-			["very_low", "Evitiamo rischi: requisiti quasi perfetti", "Avoid risk: near-perfect requirements"],
-			["low", "Qualche scommessa, ma motivata", "A few well-reasoned bets"],
-			["medium", "Metà match solidi, metà opportunità ambiziose", "Half solid matches, half stretch opportunities"],
-			["high", "Preferisco puntare in alto", "I prefer aiming high"],
-			["adaptive", "Adatta il rischio ai risultati", "Adapt risk based on results"],
+			["very_low", UIStrings.t("onb.m.risk.very_low")],
+			["low", UIStrings.t("onb.m.risk.low")],
+			["medium", UIStrings.t("onb.m.risk.medium")],
+			["high", UIStrings.t("onb.m.risk.high")],
+			["adaptive", UIStrings.t("onb.m.risk.adaptive")],
 		])
 		"pace": return _opts([
-			["gentle", "Ritmo leggero, senza pressione", "A light pace, without pressure"],
-			["steady", "Costante ogni settimana", "Steady every week"],
-			["intensive", "Ricerca intensa per poche settimane", "Intensive search for a few weeks"],
-			["urgent", "Massima urgenza", "Maximum urgency"],
-			["adaptive", "Adatta il ritmo alle opportunità", "Adapt the pace to opportunities"],
+			["gentle", UIStrings.t("onb.m.pace.gentle")],
+			["steady", UIStrings.t("onb.m.pace.steady")],
+			["intensive", UIStrings.t("onb.m.pace.intensive")],
+			["urgent", UIStrings.t("onb.m.pace.urgent")],
+			["adaptive", UIStrings.t("onb.m.pace.adaptive")],
 		])
 		"tone": return _opts([
-			["gentle", "Empatico e incoraggiante", "Empathetic and encouraging"],
-			["direct", "Diretto, senza giri di parole", "Direct and plain-spoken"],
-			["analytical", "Analitico, con dati e motivazioni", "Analytical, with data and reasoning"],
-			["challenging", "Sfidami quando mi sto limitando", "Challenge me when I’m limiting myself"],
-			["brief", "Molto sintetico", "Very concise"],
+			["gentle", UIStrings.t("onb.m.tone.gentle")],
+			["direct", UIStrings.t("onb.m.tone.direct")],
+			["analytical", UIStrings.t("onb.m.tone.analytical")],
+			["challenging", UIStrings.t("onb.m.tone.challenging")],
+			["brief", UIStrings.t("onb.m.tone.brief")],
 		])
 		"feedback": return _opts([
-			["daily", "Un riepilogo breve ogni giorno", "A short daily summary"],
-			["twice_week", "Due aggiornamenti alla settimana", "Two updates per week"],
-			["weekly", "Un punto strategico settimanale", "A weekly strategy review"],
-			["milestones", "Scrivimi solo per decisioni importanti", "Only message me for important decisions"],
-			["on_demand", "Solo quando lo chiedo io", "Only when I ask"],
+			["daily", UIStrings.t("onb.m.feedback.daily")],
+			["twice_week", UIStrings.t("onb.m.feedback.twice_week")],
+			["weekly", UIStrings.t("onb.m.feedback.weekly")],
+			["milestones", UIStrings.t("onb.m.feedback.milestones")],
+			["on_demand", UIStrings.t("onb.m.feedback.on_demand")],
 		])
 		"dealbreakers": return _opts([
-			["culture", "Ambiente tossico o valori incompatibili", "Toxic culture or incompatible values"],
-			["hours", "Straordinari e reperibilità frequenti", "Frequent overtime and on-call work"],
-			["commute", "Pendolarismo o presenza eccessiva", "Excessive commute or on-site requirements"],
-			["instability", "Contratto o azienda troppo instabili", "Unstable contract or company"],
-			["ethics", "Settori o prodotti che non condivido", "Industries or products I don’t support"],
-			["none", "Nessun veto generale: valuto caso per caso", "No general veto: evaluate case by case"],
+			["culture", UIStrings.t("onb.m.dealbreakers.culture")],
+			["hours", UIStrings.t("onb.m.dealbreakers.hours")],
+			["commute", UIStrings.t("onb.m.dealbreakers.commute")],
+			["instability", UIStrings.t("onb.m.dealbreakers.instability")],
+			["ethics", UIStrings.t("onb.m.dealbreakers.ethics")],
+			["none", UIStrings.t("onb.m.dealbreakers.none")],
 		])
 		"finish": return _opts([
-			["done", "Confermo queste preferenze", "Confirm these preferences"],
-			["hours", "Configura gli orari del team", "Configure team working hours"],
-			["restart", "Voglio ricominciare", "Start over"],
-			["assistant", "Torno dall’Assistente", "Return to the Assistant"],
+			["done", UIStrings.t("onb.m.finish.done")],
+			["hours", UIStrings.t("onb.m.finish.hours")],
+			["restart", UIStrings.t("onb.m.finish.restart")],
+			["assistant", UIStrings.t("onb.m.finish.assistant")],
 		])
 	return []
 
@@ -799,31 +794,31 @@ func _choose_mentor(id: String) -> void:
 	match str(_steps["mentor"]):
 		"intro":
 			_preferences["career_priority"] = id
-			_reply("mentor", _tr("Capito. Qual è la ragione più vera per cui stai cercando adesso?", "Understood. What is the truest reason you’re searching now?"))
+			_reply("mentor", UIStrings.t("onb.m.intro.reply"))
 			_steps["mentor"] = "motivation"
 		"motivation":
 			_preferences["search_motivation"] = id
-			_reply("mentor", _tr("Quanto vuoi che il team allarghi il campo oltre il match più ovvio?", "How far should the team look beyond the most obvious match?"))
+			_reply("mentor", UIStrings.t("onb.m.motivation.reply"))
 			_steps["mentor"] = "style"
 		"style":
 			_preferences["search_style"] = id
-			_reply("mentor", _tr("Quanta incertezza sei disposto/a ad accettare per una possibilità migliore?", "How much uncertainty will you accept for a better opportunity?"))
+			_reply("mentor", UIStrings.t("onb.m.style.reply"))
 			_steps["mentor"] = "risk"
 		"risk":
 			_preferences["risk_tolerance"] = id
-			_reply("mentor", _tr("Che ritmo vuoi sostenere senza bruciarti?", "What pace can you sustain without burning out?"))
+			_reply("mentor", UIStrings.t("onb.m.risk.reply"))
 			_steps["mentor"] = "pace"
 		"pace":
 			_preferences["search_pace"] = id
-			_reply("mentor", _tr("Come vuoi che ti parli quando vedo un problema o un’occasione?", "How should I speak to you when I see a problem or opportunity?"))
+			_reply("mentor", UIStrings.t("onb.m.pace.reply"))
 			_steps["mentor"] = "tone"
 		"tone":
 			_preferences["feedback_tone"] = id
-			_reply("mentor", _tr("Con quale frequenza vuoi un mio intervento?", "How often would you like me to step in?"))
+			_reply("mentor", UIStrings.t("onb.m.tone.reply"))
 			_steps["mentor"] = "feedback"
 		"feedback":
 			_preferences["mentor_cadence"] = id
-			_reply("mentor", _tr("Ultima domanda sostanziale: quale segnale deve farmi scartare subito una posizione?", "One last substantial question: what should make me reject a position immediately?"))
+			_reply("mentor", UIStrings.t("onb.m.feedback.reply"))
 			_steps["mentor"] = "dealbreakers"
 		"dealbreakers":
 			_preferences["primary_dealbreaker"] = id
@@ -832,7 +827,7 @@ func _choose_mentor(id: String) -> void:
 		"finish":
 			if id == "hours":
 				action_requested.emit("open_section", {"section": "hours"})
-				_reply("mentor", _tr("Gli orari dicono alla squadra quando lavorare e quando lasciarti in pace. Torna qui dopo averli salvati.", "Working hours tell the team when to work and when to leave you in peace. Return here after saving them."))
+				_reply("mentor", UIStrings.t("onb.m.finish.reply_hours"))
 			elif id == "restart":
 				_history["mentor"] = []
 				for key in ["career_priority", "search_motivation", "search_style",
@@ -845,7 +840,7 @@ func _choose_mentor(id: String) -> void:
 				action_requested.emit("open_scripted_chat", {"agent": "assistente"})
 			else:
 				_completed["mentor"] = true
-				_reply("mentor", _tr("Ho preso nota. Quando l’ufficio sarà al lavoro, potremo continuare questa conversazione liberamente ogni volta che ne avrai bisogno.", "I’ve taken note. Once the office is working, we can continue this conversation freely whenever you need it."))
+				_reply("mentor", UIStrings.t("onb.m.finish.reply_done"))
 
 
 func _reply(agent: String, text: String) -> void:
@@ -858,33 +853,33 @@ func _assistant_finish_reply() -> String:
 	var status := str(_preferences.get("current_status", "employed"))
 	var parts: Array[String] = []
 	if mode in ["remote", "remote_first"] and str(_preferences.get("relocation", "")) == "never":
-		parts.append(_tr("terrò il perimetro remoto molto rigido", "I’ll keep the remote boundary strict"))
+		parts.append(UIStrings.t("onb.a.finish.part_remote"))
 	elif bool(_preferences.get("requires_sponsorship", false)):
-		parts.append(_tr("filtrerò subito visto e relocation", "I’ll filter visa and relocation immediately"))
+		parts.append(UIStrings.t("onb.a.finish.part_sponsor"))
 	if stretch in ["stretch", "retrain"]:
-		parts.append(_tr("il reparto Compatibilità considererà anche lavori in cui puoi crescere", "the Compatibility department will also consider jobs you can grow into"))
+		parts.append(UIStrings.t("onb.a.finish.part_stretch"))
 	elif stretch == "exact":
-		parts.append(_tr("il reparto Compatibilità resterà vicino a ciò che sai già fare bene", "the Compatibility department will stay close to what you already do well"))
+		parts.append(UIStrings.t("onb.a.finish.part_exact"))
 	if status in ["available", "active"]:
-		parts.append(_tr("la ricerca partirà con un ritmo sostenuto", "the search will start at a brisk pace"))
+		parts.append(UIStrings.t("onb.a.finish.part_fast"))
 	elif status == "employed":
-		parts.append(_tr("privilegeremo qualità e discrezione rispetto al volume", "we’ll favor quality and discretion over volume"))
+		parts.append(UIStrings.t("onb.a.finish.part_quality"))
 	var tailored := "; ".join(parts)
 	if tailored.is_empty():
-		tailored = _tr("useremo queste preferenze per scegliere e spiegare ogni opportunità", "we’ll use these preferences to choose and explain every opportunity")
-	return _tr("Ho preparato un profilo su misura: %s. Nella scheda personale puoi aggiungere nome, contatti, lingue, competenze e cifre esatte.", "I prepared a tailored profile: %s. In your personal profile you can add your name, contact details, languages, skills and exact figures.") % tailored
+		tailored = UIStrings.t("onb.a.finish.part_default")
+	return UIStrings.t("onb.a.finish.summary") % tailored
 
 
 func _coordinator_policy_reply() -> String:
 	var autonomy := str(_preferences.get("approval_mode", "review_all"))
 	var budget := str(_preferences.get("token_budget_style", "balanced"))
 	var privacy := str(_preferences.get("privacy_mode", "standard"))
-	var summary := _tr("approvazione manuale", "manual approval")
-	if autonomy == "review_cv": summary = _tr("preparazione automatica con approvazione dei documenti", "automatic preparation with document approval")
-	elif autonomy == "high_score": summary = _tr("iniziativa riservata alle opportunità migliori", "initiative limited to the best opportunities")
-	elif autonomy == "autonomous": summary = _tr("autonomia estesa e tracciata", "broad, traceable autonomy")
-	elif autonomy == "observe": summary = _tr("sola osservazione, nessuna azione esterna", "observation only, no external actions")
-	return _tr("Regole dell’ufficio registrate: %s; livello di risparmio %s; riservatezza %s. Ora scegliamo se collegare un modo opzionale per ricevere aggiornamenti.", "Office rules recorded: %s; savings level %s; privacy %s. Now let’s choose whether to connect an optional way to receive updates.") % [summary, budget, privacy]
+	var summary := UIStrings.t("onb.c.policy.manual")
+	if autonomy == "review_cv": summary = UIStrings.t("onb.c.policy.review_cv")
+	elif autonomy == "high_score": summary = UIStrings.t("onb.c.policy.high_score")
+	elif autonomy == "autonomous": summary = UIStrings.t("onb.c.policy.autonomous")
+	elif autonomy == "observe": summary = UIStrings.t("onb.c.policy.observe")
+	return UIStrings.t("onb.c.policy.summary") % [summary, budget, privacy]
 
 
 func _mentor_finish_reply() -> String:
@@ -892,7 +887,8 @@ func _mentor_finish_reply() -> String:
 	var style := str(_preferences.get("search_style", "balanced"))
 	var risk := str(_preferences.get("risk_tolerance", "medium"))
 	var pace := str(_preferences.get("search_pace", "steady"))
-	return _tr("La tua bussola ora è chiara: priorità %s, ricerca %s, rischio %s e ritmo %s. Il veto principale resta %s. Non è una gabbia: se i risultati raccontano altro, te lo dirò.", "Your compass is now clear: %s priority, %s search, %s risk and %s pace. Your primary veto remains %s. It is not a cage: if results tell a different story, I’ll say so.") % [priority, style, risk, pace, str(_preferences.get("primary_dealbreaker", "none"))]
+	return UIStrings.t("onb.m.finish.summary") % [priority, style, risk, pace,
+			str(_preferences.get("primary_dealbreaker", "none"))]
 
 
 func _append(agent: String, role: String, text: String) -> void:
@@ -904,10 +900,13 @@ func _append(agent: String, role: String, text: String) -> void:
 	})
 
 
+## Righe [id, etichetta]. L'etichetta arriva già tradotta dal dizionario nel
+## punto in cui l'opzione è dichiarata: così il gate i18n, che cerca le chiamate
+## a UIStrings nei sorgenti, vede anche le chiavi delle risposte guidate.
 func _opts(rows: Array) -> Array:
 	var out: Array = []
 	for row in rows:
-		out.append({"id": row[0], "label": _tr(str(row[1]), str(row[2]))})
+		out.append({"id": row[0], "label": str(row[1])})
 	return out
 
 
@@ -940,10 +939,6 @@ static func _display_value(value: Variant) -> String:
 	if value is Dictionary:
 		return JSON.stringify(value)
 	return str(value)
-
-
-static func _tr(it: String, en: String) -> String:
-	return en if UIStrings.lang == "en" else it
 
 
 func _save_state() -> void:
