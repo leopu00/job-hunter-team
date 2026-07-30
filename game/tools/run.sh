@@ -131,10 +131,37 @@ case "$MODE" in
 		OUT="$(JHT_SCENE=office JHT_NOVPS=1 godot --headless --quit-after 15 . 2>&1)"
 		BOOT_CODE=$?
 		set -e
-		ERRS="$(printf '%s\n' "$OUT" | grep -E "SCRIPT ERROR|Parse Error|ERROR:" || true)"
-		if [ "$BOOT_CODE" -ne 0 ] || [ -n "$ERRS" ]; then
+		# Godot 4.7 headless non esce mai pulito: DOPO che il gioco ha già
+		# girato, lo smontaggio del motore stampa "N resources still in use at
+		# exit" e "RID allocations … were leaked at exit" — con exit 0. Prese
+		# per errori di runtime rendevano questo gate rosso a prescindere dal
+		# codice, e un gate sempre rosso non dice niente a nessuno: insegna solo
+		# a ignorarlo.
+		#
+		# Il criterio è POSIZIONALE, non una lista di stringhe da perdonare.
+		# Quelle righe arrivano tutte dopo l'ultima riga di gioco, quando il
+		# SceneTree è già chiuso e nessuno script può più girare: si taglia il
+		# log alla prima riga di smontaggio e si giudica quello che viene PRIMA.
+		# Nella coda si tollerano SOLO le forme note di leak, così un errore
+		# vero che uscisse là in fondo (un salvataggio che fallisce in uscita,
+		# uno SCRIPT ERROR da _exit_tree) continua a far rosso.
+		TEARDOWN='(ObjectDB instances were leaked at exit|resources still in use at exit|RID allocations of type .* leaked at exit)'
+		RUN_OUT="$(printf '%s\n' "$OUT" | awk -v re="$TEARDOWN" '$0 ~ re { tail = 1 } !tail')"
+		EXIT_OUT="$(printf '%s\n' "$OUT" | awk -v re="$TEARDOWN" '$0 ~ re { tail = 1 } tail')"
+		ERRS="$(printf '%s\n' "$RUN_OUT" | grep -E "SCRIPT ERROR|Parse Error|ERROR:" || true)"
+		ERRS="$ERRS$(printf '%s\n' "$EXIT_OUT" | grep -E "SCRIPT ERROR|Parse Error|ERROR:" \
+			| grep -vE "$TEARDOWN" || true)"
+		# Terza gamba: un gate che non può più fallire è cieco quanto uno che
+		# non può passare. Un avvio muto (scena mai costruita, uscita immediata)
+		# non produce errori e passerebbe: qui si pretende la prova che
+		# l'ufficio si sia costruito davvero.
+		ALIVE="$(printf '%s\n' "$RUN_OUT" | grep -F "[scene] ufficio pronto" || true)"
+		if [ "$BOOT_CODE" -ne 0 ] || [ -n "$ERRS" ] || [ -z "$ALIVE" ]; then
 			printf '%s\n' "$OUT" >&2
 			echo "[run.sh] Godot exit $BOOT_CODE" >&2
+			if [ -z "$ALIVE" ]; then
+				echo "[run.sh] l'ufficio non si è mai costruito (manca '[scene] ufficio pronto')" >&2
+			fi
 			echo "[run.sh] BOOT KO" >&2
 			exit 1
 		fi
