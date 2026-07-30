@@ -150,11 +150,64 @@ signature=$(printf '%s' "$message" | head -c 30)
 # TUI e' irricettiva (morta). Un pane occupato e' un agente VIVO: aspettiamo
 # che torni idle prima di typeare, MAI typeare dentro un turno in corso.
 # Causa radice dell'overspawn 07/06 (docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
+#
+# ⚠️ FALSO-OCCUPATO (andris 30/07, seconda volta in un giorno). Fino al 30/07
+# questo match era una substring su TUTTO il pane, prosa del transcript inclusa.
+# Il Capitano ha scritto nella propria risposta:
+#     All three workers are idle at the prompt (no spinner, no "esc to
+#     interrupt") — halted as expected.
+# e da quel momento OGNI jht-tmux-send verso di lui ha visto il pane occupato,
+# atteso 90s e rinunciato con exit 4: 16 tick PACE-GUARD non consegnati, 10 di
+# fila. Si e' auto-zittito citando la stringa magica. Un agente puo' e deve
+# poter parlare del proprio stato senza diventare irraggiungibile.
+#
+# Ora si distingue la RIGA DI STATO dalla prosa con tre criteri, tarati su righe
+# vere raccolte dalla flotta:
+#   ◦ Working (16s • esc to interrupt)                       → STATO   (leone)
+#   ● All three workers running (esc to interrupt). Recording…→ prosa (ashley)
+#   All three are now running (esc to interrupt confirmed…).  → prosa (ashley)
+#   …then confirm esc to interrupt before calling it fixed.   → prosa (delia)
+# 1. solo le ultime righe del pane: l'indicatore vive sopra al composer, il
+#    transcript scorre in alto;
+# 2. dopo la frase la riga deve finire quasi subito (una riga di stato chiude
+#    con ")" o con un token tipo "· ctrl+t to show todos", non con un discorso);
+# 3. niente virgolette prima della frase: se e' citata, e' prosa.
+# Nel dubbio si risponde "non occupato": l'errore innocuo e' typeare in un pane
+# libero, non restare muti per ore.
+busy_scan_lines="${JHT_TMUX_BUSY_SCAN_LINES:-10}"
+
 _pane_busy() {
-  case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
-    *"esc to interrupt"*|*"to interrupt"*) return 0 ;;
-    *) return 1 ;;
-  esac
+  local line lower before after rest
+  while IFS= read -r line; do
+    lower=$(printf '%s' "$line" | tr 'A-Z' 'a-z')
+    case "$lower" in
+      *"esc to interrupt"*) ;;
+      *) continue ;;
+    esac
+    before="${lower%%esc to interrupt*}"
+    after="${lower#*esc to interrupt}"
+    # (3) citata → prosa
+    case "$before" in
+      *\"|*\'|*“|*«) continue ;;
+    esac
+    # (2) la frase e' seguita da un discorso → prosa. Una riga di stato dopo la
+    # frase o CHIUDE subito — ")" e spazi — o continua con un separatore e un
+    # altro token di stato ("· ctrl+t to show todos)"). Se invece riprende con
+    # una parola ("(esc to interrupt confirmed on each)") e' una frase.
+    if [ "${#after}" -gt 40 ]; then
+      continue
+    fi
+    rest=$(printf '%s' "$after" | sed 's/[) ]*$//; s/^ *//')
+    case "$rest" in
+      "") ;;
+      "·"*|"•"*|"|"*|","*|"-"*) ;;
+      *) continue ;;
+    esac
+    return 0
+  done <<EOF
+$(printf '%s\n' "$1" | tail -n "$busy_scan_lines")
+EOF
+  return 1
 }
 
 # Quanto attendere che un turno in corso finisca prima di rinunciare (exit 4,

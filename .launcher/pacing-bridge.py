@@ -1229,6 +1229,52 @@ def send_to_capitano(msg: str) -> int:
     return r.returncode
 
 
+def escalate_mute_to_capitano(streak: int) -> bool:
+    """Notifica il CAPITANO che il target è "vivo ma muto" (rc=5) da `streak` tick.
+
+    Diverso da rc=3 per DIAGNOSI e per CURA. rc=3 = pane irricettiva → può
+    finire in respawn. rc=5 = la TUI accetta il testo e ignora l'Enter: il pane
+    è vivo, ha solo una riga appesa nel composer. Respawnarlo butterebbe via un
+    agente sano; la cura è sbloccarlo. Serve un canale separato perché rc=5 è
+    uno stato PERSISTENTE — resta finché qualcuno non interviene — mentre rc=4
+    (occupato) si risolve da solo a fine turno.
+    """
+    cmd_path = _resolve_tmux_send()
+    if cmd_path is None:
+        return False
+    msg = (
+        f"[BRIDGE] {TARGET_SESSION} VIVA MA MUTA da {streak} tick consecutivi "
+        f"(jht-tmux-send rc=5: testo accettato nel composer, Enter mai "
+        f"processato) → i tick di pacing NON le arrivano e la condizione NON si "
+        f"risolve da sola. NON respawnare: il pane è vivo e il lavoro in corso "
+        f"andrebbe perso. Sbloccala — leggi il pane "
+        f"(tmux capture-pane -t {TARGET_SESSION} -p | tail -8), poi liberale il "
+        f"prompt e falle ripartire il loop con un messaggio vero; considera "
+        f"risolto solo dopo aver visto 'esc to interrupt' nel pane. "
+        f"Log: {LOGS_DIR}/pacing-bridge.log"
+    )
+    try:
+        r = subprocess.run(
+            [cmd_path, ESCALATION_SESSION, msg],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    if r.returncode != 0:
+        print(
+            f"[pacing-bridge] escalation MUTA a {ESCALATION_SESSION} fallita "
+            f"rc={r.returncode} stderr={r.stderr.strip()}",
+            file=sys.stderr,
+        )
+        return False
+    print(
+        f"[pacing-bridge] ESCALATION MUTA → {ESCALATION_SESSION}: "
+        f"{TARGET_SESSION} muta da {streak} tick",
+        file=sys.stderr,
+    )
+    return True
+
+
 def escalate_unreceptive_to_capitano(streak: int) -> bool:
     """Notifica il CAPITANO che il target pacing è irricettivo da `streak` tick.
 
@@ -1503,6 +1549,9 @@ def loop():
 
     # Tick consecutivi con target irricettivo (rc=3) → soglia → escalation.
     unreceptive_streak = 0
+    # Tick consecutivi con target "vivo ma muto" (rc=5) → soglia → escalation
+    # SEPARATA: stessa invisibilità, cura opposta (sbloccare, non respawnare).
+    mute_streak = 0
 
     while True:
         nxt = next_quarter()
@@ -1583,6 +1632,19 @@ def loop():
                     unreceptive_streak = 0
             elif rc != 3:
                 unreceptive_streak = 0
+            # rc=5 ("vivo ma muto") ha uno streak SUO. Contarlo insieme a rc=0
+            # e rc=4 — come faceva questo blocco prima — lo trattava come tick
+            # consegnato: lo streak si azzerava, lo stato veniva riscritto col
+            # countdown avanzato, e un target muto per ore restava invisibile
+            # nei log. Non è rc=3 (che può portare a respawn) e non è rc=4
+            # (che si risolve a fine turno): è persistente e va sbloccato.
+            if rc == 5 and TARGET_SESSION != ESCALATION_SESSION:
+                mute_streak += 1
+                if mute_streak >= UNRECEPTIVE_ESCALATE_AFTER:
+                    escalate_mute_to_capitano(mute_streak)
+                    mute_streak = 0
+            elif rc != 5:
+                mute_streak = 0
         except Exception as e:
             # Non vogliamo che un errore di un tick affossi il loop.
             print(f"[pacing-bridge] errore tick {now.isoformat()}: {e}",
