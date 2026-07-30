@@ -12,7 +12,7 @@ nomi storici rispondevano male. Questa è la risposta unica.
 |---|---|---|---|---|
 | `sentinel-bridge.py` | **sensore usage** — fetch del provider attivo (codex JSONL / kimi HTTP / claude HTTP), scrive `sentinel-data.jsonl`, campiona i vitals | **adattiva ~2–10 min** (g-spot aware, ancorata ai :00/:05…, floor 15s) | **SENTINELLA** | `[BRIDGE TICK]` / `[BRIDGE FAILURE]` |
 | `pacing-bridge.py` | **report di pacing** — velocità team, kT/agente, verdetto SFORO/MARGINE/ALLINEATO. *Non è un sensore*: legge `sentinel-data.jsonl`, non lo scrive | **15 min** (:00/:15/:30/:45 UTC) | **SENTINELLA** | `[BRIDGE PACING]` |
-| `heartbeat-bridge.py` | **nudge orario** — sveglia il Capitano quando la Sentinella tace, con un segnale deterministico sui dati DB (code, top-consumer, budget) | **oraria** (allo scoccare dell'ora); **off-hours tace** | **CAPITANO** | `[HEARTBEAT]` |
+| `heartbeat-bridge.py` | **nudge orario** — sveglia il Capitano quando la Sentinella tace, con un segnale deterministico sui dati DB (code, top-consumer, budget); in coda a ogni messaggio la sezione `[MODALITÀ CORRENTE]` letta da disco | **oraria** (allo scoccare dell'ora); **off-hours tace** | **CAPITANO** | `[HEARTBEAT]` |
 
 **Regola da tenere a mente:** *due dei tre parlano alla SENTINELLA* (sensore +
 report di pacing); **solo `heartbeat-bridge` parla al CAPITANO**. La Sentinella è
@@ -54,6 +54,19 @@ l'unica analista del budget; il Capitano riceve il pacing in **pull on-demand**
   rigenerato). Il Mantenitore lo GC al primo sweep — nessun intervento richiesto.
 - Off-hours e daily-halt: sia `heartbeat-bridge` sia `pacing-bridge` tacciono
   quando `work_phase=OFF` o esiste `daily-halt.flag` (team in standby).
+- **Modalità corrente iniettata (`[MODE-INJECTION-HOURLY-PROMPT]`, 2026-07-30)**:
+  in coda a **ogni** messaggio dell'`heartbeat-bridge` c'è la sezione
+  `[MODALITÀ CORRENTE]` composta da `shared/skills/mode_banner.py`, che legge
+  **da disco a ogni invio** `profile/capitano-maintenance.json`, le direttive
+  attive di `team_directives` e i freni operativi, e chiude dichiarando che in
+  caso di contrasto **vince il file**. `MODE: normal` si inietta uguale:
+  l'assenza della sezione può significare solo «bridge rotto». Con un ordine in
+  vigore l'ora di **silenzio** della rotazione salta — un promemoria che non
+  parte non è un promemoria — mentre standby/daily-halt/off-hours restano gate
+  invariati. Due conseguenze correlate: la stessa sezione entra nel `[RESUME]`
+  del Capitano (skill `session-refresh`, 7 lingue), e con `stop_search` sul
+  disco il bridge **non ordina più** lo spawn Scout di C-05, che
+  contraddirebbe la sezione nello stesso messaggio. I worker non la ricevono.
 - **Intento dell'utente (`.burn-intent.flag`, 2026-07-28)**: tutti e tre i bridge
   lo leggono **prima** di applicare un freno di spesa (`shared/skills/burn_intent.py`,
   `jht burn on|off|status`). Con la deroga viva il `daily-halt` non viene scritto,
