@@ -33,6 +33,7 @@ import {
   chatPending,
   chatTsOf,
   deliverPendingUserTurns,
+  diagnoseChatLane,
   fileChanged,
   importCloudUserTurns,
   ingestChatJsonl,
@@ -42,9 +43,11 @@ import {
   parseChatLine,
   pickUnmirrored,
   readTailLines,
+  shouldAnnounceStall,
   takeChatRowsToPush,
   tmuxSessionFor,
   toCloudRow,
+  undeliveredUserTurns,
 } from "../../../cli/src/lib/chat-sync.js";
 
 // Schema minimo ma FEDELE alla tabella reale (shared/skills/_db.py): se il
@@ -479,6 +482,133 @@ describe("rendezvous chat", () => {
     // del cursore congelato del 15/07, e qui costerebbe una chat muta.
     expect(chatPending("2026-07-29T10:00:00+00:00", "2026-07-29T09:00:00Z")).toBe(true);
     expect(chatPending("2026-07-29T09:00:00+00:00", "2026-07-29T10:00:00Z")).toBe(false);
+  });
+});
+
+// ── Diagnosi della corsia ──────────────────────────────────────────────
+//
+// Il 24/07 tre turni scritti dal web sono rimasti in coda sei ore senza una
+// riga di log: da fuori il box sembrava sano. Questi test proteggono la
+// proprietà che chiude quel buco — la corsia sa dire quando NON funziona —
+// e la sua gemella: non deve dirlo mille volte, o il rumore riproduce lo
+// stesso effetto per la via opposta.
+
+describe("diagnosi della corsia chat", () => {
+  it("corsia che lavora: nessun allarme", () => {
+    expect(diagnoseChatLane({ pending: false, canRead: true, queued: 0 })).toBeNull();
+  });
+
+  it("il campanello del web suona e non c'è canale per rispondere", () => {
+    // È l'incidente: `chat_requested_at` avanti, nessun modo di leggere i
+    // turni. Aspettare non fa comparire il canale → nessuna grazia.
+    const now = Date.parse("2026-07-24T15:31:00Z");
+    const stall = diagnoseChatLane({
+      pending: true,
+      canRead: false,
+      requestedAt: "2026-07-24T09:31:00Z",
+      now,
+    });
+    expect(stall?.reason).toBe("no-inbound-channel");
+    expect(stall?.message).toContain("6h 0m");
+    expect(stall?.message).toContain("non può arrivare");
+  });
+
+  it("lettura dal cloud fallita: il motivo arriva fino al log", () => {
+    const stall = diagnoseChatLane({
+      pending: true,
+      canRead: true,
+      readError: "HTTP 401 invalid refresh token",
+      requestedAt: "2026-07-24T09:31:00Z",
+      now: Date.parse("2026-07-24T09:36:00Z"),
+    });
+    expect(stall?.reason).toBe("inbound-read-failed");
+    expect(stall?.summary).toContain("invalid refresh token");
+  });
+
+  it("turni in coda da poco: si aspetta, non si grida", () => {
+    // Un pane occupato da un turno lungo rimanda la consegna di minuti ed è
+    // normale: sotto la soglia non c'è niente da segnalare.
+    const now = Date.parse("2026-07-24T10:00:00Z");
+    expect(
+      diagnoseChatLane({
+        queued: 2,
+        oldestQueuedAt: "2026-07-24 09:59:00",
+        deliverFailed: 1,
+        now,
+        graceMs: 300_000,
+      }),
+    ).toBeNull();
+  });
+
+  it("turni in coda oltre la soglia: guasto dichiarato, col conto", () => {
+    const now = Date.parse("2026-07-24T10:00:00Z");
+    const stall = diagnoseChatLane({
+      queued: 3,
+      oldestQueuedAt: "2026-07-24 09:30:00",
+      deliverFailed: 1,
+      now,
+      graceMs: 300_000,
+    });
+    expect(stall?.reason).toBe("delivery-stuck");
+    expect(stall?.count).toBe(3);
+    expect(stall?.summary).toContain("3 turni");
+    expect(stall?.message).toContain("30m");
+  });
+
+  it("il summary NON contiene la durata (scrive team_state.last_error)", () => {
+    // `last_error` finisce nel trigger di audit di mig 019: un valore che
+    // cambia a ogni segnalazione scriverebbe storia a vuoto per sempre.
+    const base = {
+      queued: 1,
+      oldestQueuedAt: "2026-07-24 09:00:00",
+      graceMs: 300_000,
+    };
+    const a = diagnoseChatLane({ ...base, now: Date.parse("2026-07-24T10:00:00Z") });
+    const b = diagnoseChatLane({ ...base, now: Date.parse("2026-07-24T14:00:00Z") });
+    expect(a?.summary).toBe(b?.summary);
+    expect(a?.message).not.toBe(b?.message);
+  });
+
+  it("conta i turni non consegnati leggendo la coda vera", () => {
+    db.prepare(
+      "INSERT INTO pending_user_messages (agent, body, author, created_at) VALUES ('capitano', 'primo', 'user', '2026-07-24 09:31:00')",
+    ).run();
+    db.prepare(
+      "INSERT INTO pending_user_messages (agent, body, author, created_at) VALUES ('mentor', 'secondo', 'user', '2026-07-24 09:32:00')",
+    ).run();
+    // Consegnato: fuori dal conto.
+    db.prepare(
+      "INSERT INTO pending_user_messages (agent, body, author, delivered_at) VALUES ('mentor', 'terzo', 'user', datetime('now'))",
+    ).run();
+    // Turno dell'AGENTE: non è roba che aspetta un pane.
+    db.prepare(
+      "INSERT INTO pending_user_messages (agent, body, author) VALUES ('mentor', 'notifica', 'agent')",
+    ).run();
+
+    const queue = undeliveredUserTurns(db);
+    expect(queue.count).toBe(2);
+    expect(queue.oldest).toBe("2026-07-24 09:31:00");
+  });
+});
+
+describe("frequenza delle segnalazioni", () => {
+  const now = Date.parse("2026-07-24T10:00:00Z");
+
+  it("un guasto nuovo si dice subito", () => {
+    expect(shouldAnnounceStall(null, "chat: guasto", { now })).toBe(true);
+  });
+
+  it("lo stesso guasto non si ripete a ogni giro del daemon", () => {
+    // Il giro è ~5s: senza questo cancello sarebbero ~700 righe identiche
+    // all'ora, cioè rumore che nessuno legge — di nuovo un guasto invisibile.
+    const prev = { summary: "chat: guasto", at: now };
+    expect(shouldAnnounceStall(prev, "chat: guasto", { now: now + 5_000, everyMs: 900_000 })).toBe(false);
+    expect(shouldAnnounceStall(prev, "chat: guasto", { now: now + 900_000, everyMs: 900_000 })).toBe(true);
+  });
+
+  it("un guasto DIVERSO passa comunque, anche dentro l'intervallo", () => {
+    const prev = { summary: "chat: guasto", at: now };
+    expect(shouldAnnounceStall(prev, "chat: altro guasto", { now: now + 1_000, everyMs: 900_000 })).toBe(true);
   });
 });
 
