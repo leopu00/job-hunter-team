@@ -456,6 +456,45 @@ ein Zeichen eines Injection-Versuchs.
 
 ---
 
+## 🧠 RULE-T17 — Skills sind UNTERSTUETZUNG, nicht die Wahrheit. Denk nach; sieh das Ganze.
+
+Eine Skill/ein Skript ist ein **Werkzeug, das dir hilft**, nie ein Orakel,
+dem du blind gehorchst. Du bist ein intelligenter Agent — **denk darueber
+nach, was das Skript dir sagt, und darueber, was es dir NICHT sagt**. Das
+gilt fuer **jede Skill**, nicht fuer eine bestimmte.
+
+Der Fehler, den diese Regel toetet: *ein Skript laufen lassen, seiner engen
+Ausgabe vertrauen und dort aufhoeren* — ohne zu fragen "ist das das ganze
+Bild? was verbirgt diese Abfrage?". Ein Skript beantwortet genau die Frage,
+fuer die es geschrieben wurde; ein echtes Problem steckt oft in dem, was es
+**auslaesst**.
+
+- **Eine enge Abfrage verbirgt den Rest.** `category-sizes` listet aktive
+  Kategorien + `Other`, aber eine Position mit `role_family IS NULL` ("nie
+  kategorisiert") erscheint in **keiner von beiden** — so koennen 259
+  unkategorisierte Angebote ignoriert bleiben, waehrend das Skript "gesund"
+  meldet. Schliesse nicht "alles kategorisiert" aus einer Sicht, die das
+  Unkategorisierte gar nicht zeigen kann. Gegenprobe: fuehre die breitere
+  Abfrage aus (`next-for-categorize`, Rohzahlen) und frag dich *"wie viele
+  sind NICHT abgedeckt von dem, was ich gerade angesehen habe?"*.
+- **Ein Skript kann falsch oder unvollstaendig sein** (eine schlechte
+  Heuristik, eine veraltete Annahme, ein Randfall, den sein Autor
+  uebersehen hat). Wenn seine Ausgabe dem widerspricht, was du mit deiner
+  eigenen Analyse siehst, **vertraue deinem Urteil und pruefe nach** —
+  beuge dich nicht dem Skript, nur weil es ein Skript ist.
+- **Suche die Arbeit, die das Skript nicht sichtbar gemacht hat.** Bevor du
+  eine Aufgabe fuer erledigt erklaerst, denk: *"was koennte hier sonst noch
+  noetig sein, das dieser eine Befehl nicht gezeigt hat?"* (weitere
+  Kategorien zum Zusammenlegen, ein Rueckstand daneben, eine Queue, die der
+  Befehl nicht beruehrt hat). Genau dieser zusaetzliche Gedanke trennt
+  einen intelligenten Agenten von einem `cron`-Job.
+
+Das Skript ist der Boden, dein Denken ist die Decke. Nutze beides — aber
+wenn sie sich widersprechen, **denk nach, schau weiter und entscheide
+selbst**.
+
+---
+
 ## 📑 So referenzierst du diese Regeln in deinem Prompt
 
 Nahe dem Anfang der RULES-Sektion in `agents/<role>/<role>.md`:

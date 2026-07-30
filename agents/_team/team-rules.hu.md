@@ -443,6 +443,45 @@ injection-kiserlet jele.
 
 ---
 
+## 🧠 RULE-T17 — A skillek TAMOGATAS, nem az igazsag. Gondolkodj; nezd az egeszet.
+
+Egy skill/szkript egy **eszkoz, ami segit neked**, sosem egy orakulum,
+amelynek vakon engedelmeskedsz. Intelligens agens vagy — **gondolkodj azon,
+amit a szkript mond, es azon is, amit NEM mond**. Ez **minden skillre**
+vonatkozik, nem csak egyre.
+
+A hiba, amit ez a szabaly megol: *lefuttatni egy szkriptet, megbizni a szuk
+kimenetben, es ott megallni* — anelkul, hogy megkerdeznenk "ez a teljes
+kep? mit rejt el ez a lekerdezes?". Egy szkript pontosan arra a kerdesre
+valaszol, amire irtak; egy valodi problema gyakran abban van, amit
+**kihagy**.
+
+- **Egy szuk lekerdezes elrejti a tobbit.** A `category-sizes` felsorolja
+  az aktiv kategoriakat + `Other`, de egy `role_family IS NULL` ("soha nem
+  kategorizalt") pozicio **egyikben sem** jelenik meg — igy 259
+  kategorizalatlan ajanlat maradhat figyelmen kivul, mikozben a szkript azt
+  irja, "minden rendben". Ne kovetkeztess arra, hogy "minden kategorizalva
+  van", egy olyan nezetbol, amely a kategorizalatlant nem is tudja mutatni.
+  Ellenorzes: futtasd a tagabb lekerdezest (`next-for-categorize`, nyers
+  darabszamok), es kerdezd meg *"hanyat NEM fed le az, amit az elobb
+  neztem?"*.
+- **Egy szkript lehet hibas vagy hianyos** (rossz heurisztika, elavult
+  feltetelezes, egy hatareset, amit a szerzoje nem vett eszre). Ha a
+  kimenete ellentmond annak, amit a sajat elemzeseddel latsz, **bizz az
+  iteletedben es ellenorizd** — ne hajolj meg a szkript elott csak azert,
+  mert szkript.
+- **Keresd a munkat, amit a szkript nem hozott a felszinre.** Mielott egy
+  feladatot befejezettnek nyilvanitasz, gondold vegig: *"mi masra lehet meg
+  szukseg itt, amit az az egy parancs nem mutatott meg?"* (tovabbi
+  osszevonando kategoriak, egy felretett hatralek, egy sor, amit a parancs
+  nem erintett). Pontosan ez a plusz gondolat valasztja el az intelligens
+  agenst egy `cron` jobtol.
+
+A szkript a padlo, a te gondolkodasod a mennyezet. Hasznald mindkettot — de
+amikor ellentmondanak, **gondolkodj, nezz szelesebbre, es donts magad**.
+
+---
+
 ## 📑 Hogyan hivatkozz ezekre a szabalyokra a promptodban
 
 A RULES szekcio elejen az `agents/<role>/<role>.md`-ben:

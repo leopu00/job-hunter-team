@@ -12,7 +12,11 @@ Questo test fa fail se:
      effettivamente presente in `agents/_team/team-rules.md`;
   2. due localizzazioni dello stesso ruolo dichiarano range diversi;
   3. un prompt cita una RULE-Txx che in team-rules.md non esiste (riferimento morto);
-  4. una skill di `skills.list` citata nel prompt EN sparisce da una localizzazione.
+  4. una skill di `skills.list` citata nel prompt EN sparisce da una localizzazione;
+  5. una `team-rules.<locale>.md` non definisce esattamente le stesse RULE-Txx del
+     file EN (2026-07-30: T17 esisteva solo in EN e `start-agent.sh` copia la
+     variante localizzata SOPRA il baseline nella workdir runtime, quindi per 6
+     locale su 7 l'agente ereditava una regola che il suo file non conteneva).
 
 Fix quando fallisce: aggiornare il range/la citazione nel file segnalato. La frase
 attorno al range e' localizzata: si tocca SOLO il range (`T01..Txx`), non la prosa.
@@ -105,6 +109,19 @@ def _skills_list(role):
         return []
     return [ln.strip() for ln in _read(sl).splitlines()
             if ln.strip() and not ln.strip().startswith('#')]
+
+
+def _team_rules_files():
+    """[(lang, Path)] per team-rules: EN baseline + le 6 localizzazioni."""
+    files = [('en', TEAM_RULES)]
+    for loc in LOCALES:
+        files.append((loc, TEAM_RULES.parent / f'team-rules.{loc}.md'))
+    return files
+
+
+def _team_rule_headings(path):
+    """Numeri delle RULE-Txx DEFINITE (intestazione) nel file."""
+    return {int(n) for n in RULE_HEADING_RE.findall(_read(path))}
 
 
 def test_team_rules_numbering_is_contiguous():
@@ -225,4 +242,41 @@ def test_localizations_cite_the_same_skills_as_en():
     assert not stale, (
         'voci obsolete in KNOWN_SKILL_GAPS (gap sanato, togliere dalla lista):\n  '
         + '\n  '.join(stale)
+    )
+
+
+def test_team_rules_localizations_exist():
+    """Le 6 `team-rules.<locale>.md` esistono accanto al baseline EN."""
+    missing = [str(p.relative_to(REPO_ROOT))
+               for _lang, p in _team_rules_files() if not p.exists()]
+    assert not missing, 'team-rules localizzate mancanti:\n  ' + '\n  '.join(missing)
+
+
+def test_team_rules_localizations_define_the_same_rules():
+    """Ogni `team-rules.<locale>.md` definisce ESATTAMENTE le RULE-Txx del file EN.
+
+    E' il bug del 2026-07-30: `RULE-T17` esisteva solo in EN e le 6 localizzazioni
+    si fermavano a T16, mentre tutti i prompt di ruolo (7 lingue) dichiarano di
+    ereditare fino all'ultima. `start-agent.sh` copia `team-rules.$USER_LOCALE.md`
+    SOPRA `team-rules.md` nella workdir runtime: per 6 locale su 7 l'agente riceveva
+    un file che si fermava a T16 mentre il suo prompt gli prometteva T17.
+
+    Il gate precedente leggeva solo il baseline EN e non apriva mai le varianti.
+    """
+    baseline = _team_rule_headings(TEAM_RULES)
+    problems = []
+    for lang, path in _team_rules_files():
+        if lang == 'en':
+            continue
+        if not path.exists():
+            continue  # gia' segnalato da test_team_rules_localizations_exist
+        found = _team_rule_headings(path)
+        rel = path.relative_to(REPO_ROOT)
+        for n in sorted(baseline - found):
+            problems.append(f'{rel}: manca RULE-T{n:02d} (definita in EN)')
+        for n in sorted(found - baseline):
+            problems.append(f'{rel}: definisce RULE-T{n:02d}, assente in EN')
+    assert not problems, (
+        'regole team-wide disallineate fra EN e localizzazioni:\n  '
+        + '\n  '.join(problems)
     )
