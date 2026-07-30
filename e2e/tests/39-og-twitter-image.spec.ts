@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /**
  * FLUSSO 39 — OG IMAGE E TWITTER IMAGE
@@ -33,6 +33,37 @@ import { test, expect } from '@playwright/test';
 // `127.0.0.1` (vedi playwright.config.ts:1-25). Con i percorsi relativi la
 // destinazione la decide la config, in un punto solo.
 
+/**
+ * Apre la homepage e legge il `content` di un tag del <head>, aspettando che
+ * ci sia.
+ *
+ * ⚠️ Sostituisce `waitUntil: 'networkidle'`, che questa repo ha già pagato ed
+ * è vietato — ma toglierlo senza un ancoraggio esplicito sposta solo il
+ * problema: `page.evaluate` **fotografa** il DOM nell'istante in cui viene
+ * chiamato e, se il documento finale non è ancora arrivato, restituisce
+ * stringa vuota. Il test fallirebbe dicendo «og:image assente» quando il meta
+ * c'è: la stessa classe di errore, con la freccia puntata altrove.
+ *
+ * Qui l'ancoraggio è il tag stesso: `waitFor({ state: 'attached' })` non torna
+ * finché il <head> non lo contiene. Non serve invece attendere l'idratazione —
+ * questi meta li rende il server da `web/app/layout.tsx` e dai file
+ * `*-image.tsx`, React non li tocca — e per questo l'ancora giusta è
+ * l'elemento, non un pulsante che reagisce.
+ *
+ * Ritorna stringa vuota se il tag non compare entro l'attesa: sono le
+ * asserzioni dei singoli test a dire, con parole loro, cosa manca.
+ */
+async function metaContent(page: Page, selector: string): Promise<string> {
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const tag = page.locator(selector).first();
+  const presente = await tag
+    .waitFor({ state: 'attached', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!presente) return '';
+  return (await tag.getAttribute('content')) ?? '';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SUITE 1 — Open Graph Image
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,20 +89,14 @@ test.describe('Open Graph Image — /opengraph-image', () => {
   });
 
   test('homepage: meta og:image punta a una URL valida', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const ogImage = await page.evaluate(() =>
-      document.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? ''
-    );
+    const ogImage = await metaContent(page, 'meta[property="og:image"]');
     // Il meta lo genera Next dal file opengraph-image.tsx: se manca, manca il
     // file o la sua registrazione nei metadata — non l'ambiente.
     expect(ogImage, 'og:image assente dal <head>').toMatch(/^https?:\/\//);
   });
 
   test('homepage: og:image è raggiungibile (200)', async ({ page, request }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const ogImage = await page.evaluate(() =>
-      document.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? ''
-    );
+    const ogImage = await metaContent(page, 'meta[property="og:image"]');
     expect(ogImage, 'og:image assente dal <head>').toMatch(/^https?:\/\//);
     // Si segue il **percorso**, non l'URL assoluto: `metadataBase` assolutizza
     // og:image sul dominio pubblico quando NEXT_PUBLIC_SITE_URL non è
@@ -83,13 +108,8 @@ test.describe('Open Graph Image — /opengraph-image', () => {
   });
 
   test('homepage: og:image ha dimensioni (width/height meta)', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const ogWidth = await page.evaluate(() =>
-      document.querySelector('meta[property="og:image:width"]')?.getAttribute('content') ?? ''
-    );
-    const ogHeight = await page.evaluate(() =>
-      document.querySelector('meta[property="og:image:height"]')?.getAttribute('content') ?? ''
-    );
+    const ogWidth = await metaContent(page, 'meta[property="og:image:width"]');
+    const ogHeight = await metaContent(page, 'meta[property="og:image:height"]');
     // Next li deriva dall'export `size` di opengraph-image.tsx: senza, le
     // anteprime social ritagliano l'immagine a caso.
     expect(parseInt(ogWidth), 'og:image:width assente o non numerica').toBeGreaterThan(0);
@@ -123,18 +143,12 @@ test.describe('Twitter Image — /twitter-image', () => {
   });
 
   test('homepage: meta twitter:image punta a URL valida', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const twitterImage = await page.evaluate(() =>
-      document.querySelector('meta[name="twitter:image"]')?.getAttribute('content') ?? ''
-    );
+    const twitterImage = await metaContent(page, 'meta[name="twitter:image"]');
     expect(twitterImage, 'twitter:image assente dal <head>').toMatch(/^https?:\/\//);
   });
 
   test('homepage: twitter:card è "summary_large_image"', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const card = await page.evaluate(() =>
-      document.querySelector('meta[name="twitter:card"]')?.getAttribute('content') ?? ''
-    );
+    const card = await metaContent(page, 'meta[name="twitter:card"]');
     // È il tipo dichiarato in web/app/layout.tsx ed è l'unico che mostra
     // l'immagine grande: `summary` la ridurrebbe a una miniatura quadrata.
     expect(card, 'twitter:card diverso da quello dichiarato in layout.tsx').toBe('summary_large_image');
@@ -179,13 +193,23 @@ test.describe('Apple icon e favicon', () => {
   // davvero dichiarate si scarichino — un href sbagliato nel <head> è muto in
   // pagina e visibile solo come tab senza icona.
   test('homepage: ogni icona dichiarata nel <head> risponde 200', async ({ page, request }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const hrefs = await page.evaluate(() =>
-      Array.from(
-        document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
-      ).map((l) => l.getAttribute('href') ?? '')
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const icone = page.locator(
+      'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]'
     );
-    expect(hrefs.length, 'nessun <link rel="icon"> nel <head>').toBeGreaterThan(0);
+    // L'ancoraggio che sostituisce `networkidle`: si aspetta che almeno un
+    // link ci sia prima di raccoglierli tutti. Contarli subito dopo
+    // `domcontentloaded` darebbe zero su un <head> non ancora completo, e il
+    // test fallirebbe accusando il prodotto di non dichiarare icone.
+    await expect
+      .poll(() => icone.count(), {
+        message: 'nessun <link rel="icon"> nel <head>',
+        timeout: 10_000,
+      })
+      .toBeGreaterThan(0);
+    const hrefs = (await icone.evaluateAll((els) =>
+      els.map((l) => l.getAttribute('href') ?? '')
+    )).filter(Boolean);
     for (const href of hrefs) {
       // Come sopra: se l'href è assoluto se ne segue il percorso, così la
       // richiesta resta sul server sotto test.
@@ -196,12 +220,15 @@ test.describe('Apple icon e favicon', () => {
   });
 
   test('homepage: <link rel="icon"> o <link rel="apple-touch-icon"> presente', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const iconLink = await page.evaluate(() => {
-      const icon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]');
-      return icon ? icon.getAttribute('href') : null;
-    });
-    expect(iconLink, 'nessun <link rel="icon"> nel <head>').toBeTruthy();
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(
+      page
+        .locator('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
+        .first(),
+      'nessun <link rel="icon"> nel <head>'
+      // `toHaveAttribute` riprova finché l'elemento non c'è: è l'attesa
+      // esplicita al posto di `networkidle`.
+    ).toHaveAttribute('href', /.+/, { timeout: 10_000 });
   });
 
 });
@@ -228,18 +255,15 @@ test.describe('Manifest e PWA', () => {
   });
 
   test('homepage: <link rel="manifest"> presente', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const manifest = await page.evaluate(() =>
-      document.querySelector('link[rel="manifest"]')?.getAttribute('href') ?? ''
-    );
-    expect(manifest, 'nessun <link rel="manifest"> nel <head>').toBeTruthy();
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(
+      page.locator('link[rel="manifest"]').first(),
+      'nessun <link rel="manifest"> nel <head>'
+    ).toHaveAttribute('href', /.+/, { timeout: 10_000 });
   });
 
   test('homepage: meta theme-color presente', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    const themeColor = await page.evaluate(() =>
-      document.querySelector('meta[name="theme-color"]')?.getAttribute('content') ?? ''
-    );
+    const themeColor = await metaContent(page, 'meta[name="theme-color"]');
     // Deve essere un colore valido (hex, rgb, named)
     expect(themeColor, 'theme-color assente dal <head>').toMatch(/#[0-9a-f]{3,6}|rgb\(|hsl\(|\w+/i);
   });

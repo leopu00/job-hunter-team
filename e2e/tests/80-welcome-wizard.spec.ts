@@ -46,9 +46,18 @@ async function cloudOrSkip(page: Page) {
  * dicendo cosa gli manca — invece di fallire o, peggio, di tacere.
  */
 async function wizardOrSkip(page: Page) {
-  await page.goto(WELCOME, { waitUntil: "networkidle" });
+  await page.goto(WELCOME, { waitUntil: "domcontentloaded" });
   const firstStep = page.getByRole("button", { name: "Italiano", exact: true });
-  const visible = await firstStep.isVisible().catch(() => false);
+  // Il primo step è l'ancoraggio esplicito che sostituisce `networkidle`: il
+  // wizard è un client component, e un `isVisible()` letto subito dopo
+  // `domcontentloaded` risponderebbe "no" mentre il bottone sta per comparire
+  // — cioè farebbe skippare **per il motivo sbagliato** proprio i test che
+  // dovrebbero girare. Qui si concede il tempo di montare, e solo dopo si
+  // conclude che la pagina protetta non è stata servita.
+  const visible = await firstStep
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
   test.skip(
     !visible,
     "serve una sessione autenticata per entrare nell'area riservata — vedi e2e/README.md § Sessione",
