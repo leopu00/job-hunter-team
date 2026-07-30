@@ -132,33 +132,45 @@ async function sessioneOrSkip(page: Page) {
  * Il wizard offre lui stesso la via d'uscita, ed è quella che si usa qui.
  */
 async function superaWizard(page: Page) {
-  // Il redirect al wizard è client-side: subito dopo `goto` l'URL può essere
-  // ancora quello chiesto e il wizard non ancora montato. Il `count()`
-  // istantaneo che stava qui leggeva quel buco e restituiva 0 — e ci lasciava
-  // DENTRO il wizard credendo di averlo saltato.
+  // Il redirect al wizard è client-side, quindi subito dopo `goto` la pagina
+  // mente due volte: l'URL è ancora quello chiesto e il wizard non è montato.
   //
-  // Da lì il fallimento non somiglia più alla sua causa: il wizard mostra la
+  // Due tentativi già falliti su questa stessa riga, per la stessa ragione di
+  // fondo — decidere su un segnale letto TROPPO PRESTO:
+  //   · un `count()` istantaneo sul pulsante restituiva 0 e ci lasciava dentro
+  //     il wizard credendo di averlo saltato;
+  //   · aspettare l'URL non serve a niente se il pattern include anche la meta
+  //     richiesta: dopo `goto('/dashboard')` l'URL È già `/dashboard`, la
+  //     waitForURL passa nello stesso istante e il controllo su `/welcome`
+  //     esce prima che il redirect sia partito. Gara spostata, non vinta:
+  //     verde il 30/07 la mattina, rossa lo stesso giorno il pomeriggio.
+  //
+  // Da lì il fallimento non somiglia più alla sua causa: il wizard disegna la
   // navbar, quindi il menu utente si apre e la voce esiste davvero, ma il
-  // re-render la stacca e il click resta appeso 30 secondi. Il rosso in CI
-  // parlava del menu (30/07, due volte di fila sullo stesso commit); il menu
-  // non c'entrava nulla.
+  // re-render la stacca e il click resta appeso 30 secondi. Il rosso parlava
+  // del menu; il menu non c'entrava nulla.
   //
-  // Quindi si aspetta che l'URL si fermi su una delle due sponde prima di
-  // decidere. `catch` vuoto: se non si ferma su nessuna, il controllo qui
-  // sotto è comunque corretto e sarà il chiamante a fallire con un messaggio
-  // suo.
-  await page
-    .waitForURL(/\/(welcome|dashboard|positions|map)\b/, { timeout: 15_000 })
-    .catch(() => {});
-  if (!page.url().includes("/welcome")) return;
-
-  // È un <button> con onClick, non un <a>: il wizard naviga da codice.
+  // Quindi non si guarda più né l'URL né il conteggio: si aspetta l'ESITO,
+  // cioè che il pulsante del wizard si manifesti entro un tempo onesto. Se
+  // compare siamo nel wizard e lo saltiamo; se non compare il wizard non c'è,
+  // e l'attesa era il prezzo per saperlo con certezza invece che per fortuna.
   const salta = page.getByRole("button", {
     name: /salta|skip|saltar|passer|überspringen|kihagy/i,
   });
-  await salta.first().waitFor({ state: "visible", timeout: 15_000 });
+  const nelWizard = await salta
+    .first()
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!nelWizard) return;
+
+  // È un <button> con onClick, non un <a>: il wizard naviga da codice.
   await salta.first().click();
   await page.waitForURL(/\/dashboard|\/positions|\/map/, { timeout: 15_000 });
+  // Il redirect cambia l'URL prima che la pagina nuova sia interattiva: senza
+  // questo, il click successivo sul menu utente può ancora colpire il DOM del
+  // wizard in smontaggio.
+  await page.waitForLoadState("domcontentloaded");
 }
 
 // Apre il dialogo dal menu utente. Menu e dialogo sono due passaggi distinti:
