@@ -1,18 +1,26 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
+import { JHT_HOME } from '../jht-paths.js';
 
-function resolveHomeDir() {
-  return process.env.JHT_HOME || process.env.HOME || process.env.USERPROFILE || homedir();
-}
+const JHT_DIR = JHT_HOME;
 
-const JHT_DIR = join(resolveHomeDir(), '.jht');
+// Fino a oggi questo file si calcolava la home da solo e poi ci aggiungeva
+// `.jht`, ma JHT_HOME *è già* la JHT home (`/jht_home` nel container). Il
+// merge leggeva e la scrittura finiva in `<jht home>/.jht/...`, che nessuno
+// rilegge: `jht import -t config` stampava "Config importata" e non
+// ripristinava niente. Ora si scrive solo nella posizione canonica; la
+// vecchia resta leggibile, come base del merge, per chi ci ha dei dati.
+const LEGACY_JHT_DIR = join(JHT_DIR, '.jht');
 
 const TARGETS = {
-  sessions: { path: join(JHT_DIR, 'sessions', 'sessions.json'), key: 'sessions', idField: 'id' },
-  tasks:    { path: join(JHT_DIR, 'tasks', 'tasks.json'),       key: 'tasks',    idField: 'taskId' },
-  config:   { path: join(JHT_DIR, 'jht.config.json'),           key: null,        idField: null },
+  sessions: { rel: ['sessions', 'sessions.json'], key: 'sessions', idField: 'id' },
+  tasks:    { rel: ['tasks', 'tasks.json'],       key: 'tasks',    idField: 'taskId' },
+  config:   { rel: ['jht.config.json'],           key: null,       idField: null },
 };
+
+function targetPath(cfg) {
+  return join(JHT_DIR, ...cfg.rel);
+}
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
@@ -20,6 +28,19 @@ async function fileExists(p) {
 
 async function readJsonSafe(p) {
   try { return JSON.parse(await readFile(p, 'utf-8')); } catch { return null; }
+}
+
+/**
+ * Contenuto attuale del target: quello canonico, o — se non c'è — quello
+ * lasciato dalla vecchia posizione sbagliata. Sola lettura: il risultato del
+ * merge torna comunque nella posizione canonica.
+ */
+async function readCurrent(cfg) {
+  const canonical = targetPath(cfg);
+  if (await fileExists(canonical)) return { data: await readJsonSafe(canonical), from: canonical, legacy: false };
+  const legacy = join(LEGACY_JHT_DIR, ...cfg.rel);
+  if (await fileExists(legacy)) return { data: await readJsonSafe(legacy), from: legacy, legacy: true };
+  return { data: null, from: canonical, legacy: false };
 }
 
 async function writeJsonSafe(p, data) {
@@ -84,10 +105,11 @@ async function handleImport(file, options) {
 
   const cfg = TARGETS[target];
   const mode = options.replace ? 'replace' : 'merge';
+  const dest = targetPath(cfg);
 
   if (target === 'config') {
-    await writeJsonSafe(cfg.path, data);
-    console.log(`\n  Config importata (${mode})`);
+    await writeJsonSafe(dest, data);
+    console.log(`\n  Config importata (${mode}) → ${dest}`);
     return;
   }
 
@@ -96,20 +118,24 @@ async function handleImport(file, options) {
   if (mode === 'replace') {
     const store = { [cfg.key]: items, updatedAt: Date.now() };
     if (target === 'tasks') store.version = 1;
-    await writeJsonSafe(cfg.path, store);
-    console.log(`\n  ${items.length} record importati (replace)`);
+    await writeJsonSafe(dest, store);
+    console.log(`\n  ${items.length} record importati (replace) → ${dest}`);
     return;
   }
 
   // Merge
-  const existing = (await readJsonSafe(cfg.path)) ?? {};
+  const base = await readCurrent(cfg);
+  if (base.legacy) {
+    console.log(`  Base del merge letta da una posizione lasciata da una versione precedente: ${base.from}`);
+  }
+  const existing = base.data ?? {};
   const current = existing[cfg.key] ?? [];
   const ids = new Set(current.map(r => r[cfg.idField]));
   const added = items.filter(r => !ids.has(r[cfg.idField]));
   existing[cfg.key] = [...current, ...added];
   existing.updatedAt = Date.now();
-  await writeJsonSafe(cfg.path, existing);
-  console.log(`\n  ${added.length} record importati, ${items.length - added.length} duplicati saltati (merge)`);
+  await writeJsonSafe(dest, existing);
+  console.log(`\n  ${added.length} record importati, ${items.length - added.length} duplicati saltati (merge) → ${dest}`);
 }
 
 export function registerImportCommand(program) {
