@@ -9,6 +9,39 @@ import {
 import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 
+/**
+ * Proxy chat AI — **spento di default** dietro `JHT_AI_ASSISTANT_ENABLED`.
+ *
+ * COME SI ACCENDE: `JHT_AI_ASSISTANT_ENABLED=1` nell'ambiente del server
+ * (più `OPENAI_API_KEY`, che a flag spento la POST non legge nemmeno).
+ * Qualunque altro valore — variabile assente compresa — lascia la route
+ * spenta. Acceso, il comportamento è identico a com'era prima del flag.
+ *
+ * PERCHÉ È SPENTO: la UI che la usava — `app/components/FloatingChat.tsx` —
+ * non è montata da `app/layout.tsx`, quindi in produzione questo POST non ha
+ * chiamanti legittimi; resta però deployato e spende la nostra
+ * `OPENAI_API_KEY` a ogni richiesta (vedi il commento su
+ * MAX_MESSAGES_PER_HOUR più sotto). Chi ha commentato la UI non l'ha
+ * rimossa: la decisione se la feature torna non è ancora stata presa. Il
+ * flag spegne la spesa lasciando il codice al suo posto, ed è reversibile
+ * in un modo in cui cancellare la feature non sarebbe.
+ *
+ * PERCHÉ 404 E NON 403: un 403 confermerebbe che dietro questo path c'è un
+ * proxy OpenAI, da riprovare con le credenziali giuste. Il 404 dice invece
+ * la verità operativa — qui non c'è nessun endpoint — ed è esattamente la
+ * risposta che si otterrebbe se il file fosse stato cancellato, cioè lo
+ * stato che il flag emula in modo reversibile.
+ *
+ * Il controllo è la **prima** istruzione della POST: precede `requireAuth`,
+ * il rate limit, la lettura di `OPENAI_API_KEY` e qualunque fetch upstream,
+ * così a flag spento la route non può costare nulla.
+ */
+const ASSISTANT_ENABLED_ENV = "JHT_AI_ASSISTANT_ENABLED";
+
+function isAssistantEnabled(): boolean {
+  return process.env[ASSISTANT_ENABLED_ENV]?.trim() === "1";
+}
+
 export const dynamic = "force-dynamic";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -101,21 +134,38 @@ function extractUpstreamError(payload: unknown): string | null {
 }
 
 /**
- * GET — suggerimenti statici e se il chatbot è configurato. Nessun gate:
+ * GET — suggerimenti statici e se il chatbot è utilizzabile. Nessun gate:
  * non spende nulla e non dice nulla oltre a "il bottone è attivo o no",
  * che è già visibile dalla UI.
+ *
+ * `configured` qui significa "utilizzabile", non "c'è una chiave": a flag
+ * spento la POST risponde 404, quindi la UI deve mostrarsi offline e
+ * disabilitare l'input invece di spedire messaggi che non arriveranno da
+ * nessuna parte. `enabled` espone il flag a parte, per diagnosi.
  */
 export async function GET() {
+  const enabled = isAssistantEnabled();
   const { configured, model } = getAssistantConfig();
   return NextResponse.json({
     history: [],
     suggestions: AI_ASSISTANT_SUGGESTIONS,
-    configured,
+    configured: enabled && configured,
+    enabled,
     model,
   });
 }
 
 export async function POST(req: Request) {
+  // Gate di spesa, prima di tutto il resto per costruzione: nessuna chiave
+  // letta, nessun fetch upstream, nessun bucket di rate limit consumato.
+  // Il perché del flag e del 404 è nel commento in testa al file.
+  if (!isAssistantEnabled()) {
+    return NextResponse.json(
+      { error: "Assistente AI non disponibile.", configured: false },
+      { status: 404 },
+    );
+  }
+
   // Sessione richiesta: è la stessa regola delle altre route che leggono
   // dati dell'utente, e qui in più c'è una spesa. Su un deploy senza
   // Supabase (desktop puro) requireAuth passa da sé — il rate limit sotto

@@ -55,7 +55,6 @@ const LAYOUT_T: Record<Locale, { noscript: string; skip: string }> = {
 const GlobalSearch = dynamic(() =>
   import("./components/GlobalSearch").then((m) => m.GlobalSearch),
 );
-const FloatingChat = dynamic(() => import("./components/FloatingChat"));
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -192,8 +191,14 @@ export default async function RootLayout({
               <ToastProvider>
                 <KeyboardShortcutsProvider>
                   <GlobalSearch />
-                  {/* FloatingChat nascosto temporaneamente - feature non implementata */}
-                  {/* <FloatingChat /> */}
+                  {/*
+                    `components/FloatingChat.tsx` esiste ma NON è montato: la
+                    feature è ferma, non rimossa. Anche la route che la serve
+                    (`api/ai-assistant`) è spenta dietro
+                    `JHT_AI_ASSISTANT_ENABLED`. Per riattivarla servono
+                    entrambe le cose: il flag sul server e il `dynamic()` +
+                    `<FloatingChat />` qui.
+                  */}
                   <MainContent>{children}</MainContent>
                 </KeyboardShortcutsProvider>
               </ToastProvider>
