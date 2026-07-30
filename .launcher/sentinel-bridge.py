@@ -480,10 +480,21 @@ def jht_tmux_send(session, text):
     # zero auto-recovery (setsid detached, fuori dal respawn di pid1). Vedi postmortem
     # docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md. Degrada a "tick saltato".
     try:
-        return subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode == 0
+        rc = subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode
     except (subprocess.TimeoutExpired, OSError) as e:
         print(f"[bridge V6] WARN jht_tmux_send({session}): {e}", file=sys.stderr)
         return False
+    if rc != 0:
+        # Il bool basta al chiamante, ma il MOTIVO no: rc=4 (occupato) si
+        # risolve da solo al prossimo tick, rc=5 (vivo ma muto) NO — resta
+        # finché qualcuno non sblocca il composer. Senza distinguerli nel log,
+        # ore di messaggi persi sono indistinguibili da un turno lungo.
+        why = {3: "irricettiva (forse morta/wedged)",
+               4: "occupata (turno in corso) → si risolve da sé",
+               5: "VIVA MA MUTA (Enter mai processato) → NON si risolve da sé, va sbloccata"}
+        print(f"[bridge V6] WARN jht_tmux_send({session}) rc={rc}: "
+              f"{why.get(rc, 'errore')}", file=sys.stderr)
+    return rc == 0
 
 
 def _daily_halt_active():
