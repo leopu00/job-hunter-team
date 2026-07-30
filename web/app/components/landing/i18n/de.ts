@@ -85,8 +85,6 @@ export const de: Record<string, string> = {
   footer_links_aria: "Fußzeilen-Links",
 
   // LandingHome: hero alt + Abschnitte
-  home_hero_alt:
-    "Comic-Illustration: ein Team von KI-Agenten — alle mit derselben schwarzen Sonnenbrille — sitzt an einem langen Konferenztisch in einem eleganten Hochhausbüro, während ein stehender Agent Diagramme an einer Tafel präsentiert.",
   home_team_alt:
     "Drei Team-Agenten in voller Größe: der Scout mit einer Lupe, der Analyst im Laborkittel, der Schreiber mit einer Federkielfeder — alle mit Sonnenbrille.",
   home_setup_alt:
