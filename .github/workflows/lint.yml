@@ -53,3 +53,58 @@ jobs:
 
       - name: Prettier check — shared/
         run: npx prettier --check "shared/**/*.ts" --ignore-path /dev/null
+
+  # `.pre-commit-config.yaml` configura quattro hook che nessuna pipeline
+  # eseguiva: `grep` su .github/workflows/ dava zero risultati e l'unico
+  # installer dell'hook è scripts/setup.sh, marcato deprecated dal suo stesso
+  # README. Quattro gate configurati e mai eseguiti sono quattro gate che non
+  # esistono.
+  #
+  # Qui girano i due che proteggono ciò che cambia più spesso: i workflow.
+  # `pre-commit run` accetta un solo hook-id per invocazione, quindi due step.
+  # Le versioni restano quelle pinnate in .pre-commit-config.yaml — una sola
+  # fonte di verità, il workflow non le duplica.
+  #
+  # Restano fuori, di proposito:
+  #  - `detect-secrets`: `.secrets.baseline` è del 2026-04-27 e oggi il hook
+  #    esce 1 con 55 finding su 20 file (i18n del gioco, i selftest del
+  #    redactor, le pagine /secrets e /providers del web — false-positive da
+  #    auditare, non secret). Accenderlo senza rigenerare la baseline
+  #    significa un gate rosso al primo run, che è il modo più rapido per
+  #    farlo disattivare. Rigenerare la baseline è un audit a sé.
+  #  - `npm-audit-prod`: `security.yml` ha già un job `npm audit` sulle
+  #    dipendenze di produzione, non serve un secondo posto in cui gira.
+  workflow-gates:
+    name: pre-commit — actionlint + zizmor
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # L'hook actionlint è `language: golang`: pre-commit si scarica la
+      # toolchain e la compila al primo run. Senza cache sono ~2 minuti per
+      # ogni PR, spesi sempre sulla stessa versione pinnata.
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-py3.12-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Install pre-commit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pre-commit
+
+      # Sintassi dei workflow + best practice (uses inesistenti, expression
+      # rotte, shell malformate).
+      - name: actionlint
+        run: pre-commit run --all-files --show-diff-on-failure actionlint
+
+      # Audit di sicurezza dei workflow: poison pipeline, input non fidati,
+      # template injection, immagini non pinnate.
+      - name: zizmor
+        run: pre-commit run --all-files --show-diff-on-failure zizmor
