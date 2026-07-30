@@ -27,7 +27,12 @@ import {
 } from "@/lib/message-display";
 import MessageBody from "@/app/components/MessageBody";
 import AgentAvatar from "@/app/components/AgentAvatar";
+import ChatDeliveryMark from "@/app/components/ChatDeliveryMark";
 import { usePendingMessagesLive } from "@/app/hooks/usePendingMessagesLive";
+import { useChatLaneLive } from "@/app/hooks/useChatLaneLive";
+import { chatTurnDelivery, hasStalledTurn } from "@/lib/chat-delivery";
+import { makeT } from "@/lib/i18n-dict";
+import { CHAT_DELIVERY_T } from "@/lib/chat-delivery.i18n";
 import {
   THREAD_T,
   optimisticUserTurn,
@@ -206,6 +211,38 @@ export default function MessagesList({ initialMessages }: Props) {
         .sort((a, b) => a.created_at.localeCompare(b.created_at)),
     [messages, activeAgent],
   );
+
+  // ── Stato di consegna dei turni scritti dall'utente ─────────────────
+  // Fino al 24/07 la bolla dell'utente diceva solo "esiste": tre messaggi
+  // sono rimasti sei ore senza arrivare all'agente e la chat non aveva
+  // modo di dirlo — una bolla ferma non si distingue da un agente che sta
+  // pensando. `lane` è il rendezvous della corsia (team_state), la riga
+  // porta il suo `delivered_at`: insieme dicono lo stato vero.
+  const lane = useChatLaneLive();
+  const td = makeT(CHAT_DELIVERY_T, locale);
+
+  // Orologio interno. Senza, una bolla resterebbe "inviato" per sempre
+  // anche quando l'attesa l'ha resa un guasto: i re-render arrivano coi
+  // messaggi nuovi, e il caso da coprire è proprio quello in cui non ne
+  // arriva nessuno. Costa zero (nessuna rete) e batte solo finché c'è
+  // qualcosa in attesa.
+  //
+  // Parte da 0 — cioè "non ancora montato" — di proposito: con quel valore
+  // nessun turno risulta in ritardo, quindi il markup del server e quello
+  // della prima render del client coincidono e l'idratazione non si
+  // lamenta. Il tempo vero entra dopo il mount, dove esiste davvero.
+  const [clock, setClock] = useState(0);
+  const waiting = thread.some(
+    (m) =>
+      m.author === "user" && !m.delivered_at && !m.id.startsWith("pending:"),
+  );
+  useEffect(() => {
+    setClock(Date.now());
+    if (!waiting) return;
+    const id = window.setInterval(() => setClock(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [waiting]);
+  const stalled = hasStalledTurn(thread, lane, clock);
 
   // Non letti = turni dell'AGENTE non ancora ack-ati: quelli scritti
   // dall'utente nascono già letti.
@@ -506,6 +543,10 @@ export default function MessagesList({ initialMessages }: Props) {
                         <span className="text-[9px] text-[var(--color-dim)]">
                           {formatRelative(m.created_at, locale)}
                         </span>
+                        <ChatDeliveryMark
+                          state={chatTurnDelivery(m, lane, clock)}
+                          locale={locale}
+                        />
                       </div>
                       <MessageBody
                         text={m.body}
@@ -647,6 +688,22 @@ export default function MessagesList({ initialMessages }: Props) {
                 role="alert"
               >
                 {error}
+              </div>
+            )}
+            {/* Il segno giallo sulla bolla dice CHE COSA; qui si dice cosa
+                significa e cosa NON fare (riscrivere lo stesso messaggio).
+                Uno solo per conversazione: ripeterlo bolla per bolla
+                sarebbe la stessa notizia gridata cinque volte. */}
+            {stalled && !error && (
+              <div
+                className="mb-2 px-3 py-1.5 rounded border text-[10px] leading-relaxed"
+                style={{
+                  borderColor: "var(--color-yellow)",
+                  color: "var(--color-yellow)",
+                }}
+                role="status"
+              >
+                {td("stalled_hint")}
               </div>
             )}
             <div
