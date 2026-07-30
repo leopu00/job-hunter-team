@@ -62,6 +62,18 @@ const MIRROR_MAX_AGE_MS = Number(process.env.JHT_CHAT_MIRROR_MAX_AGE_MS || 48 * 
 /** `jht-tmux-send` fa busy-wait fino a 90s: il cap qui gli lascia margine. */
 const DELIVER_TIMEOUT_MS = Number(process.env.JHT_CHAT_DELIVER_TIMEOUT_MS || 120_000);
 
+/**
+ * Quanto un turno dell'utente può restare in coda prima che l'attesa
+ * diventi un guasto da dichiarare. Il giro veloce del daemon è ~5s e il
+ * paracadute ~5min; un pane occupato da un turno lungo può rimandare la
+ * consegna di qualche minuto ed è normale. Sotto questa soglia gridare
+ * sarebbe rumore, sopra è il sintomo che nessuno sta più ritirando.
+ */
+const STALL_AFTER_MS = Number(process.env.JHT_CHAT_STALL_AFTER_MS || 300_000);
+
+/** Ogni quanto RIPETERE una segnalazione che resta vera (vedi shouldAnnounceStall). */
+const STALL_REPEAT_MS = Number(process.env.JHT_CHAT_STALL_REPEAT_MS || 900_000);
+
 // ── Funzioni pure (il grosso della logica, testabile senza box) ─────────
 
 /** Directory dell'agente sotto `<JHT_HOME>/agents/`. */
@@ -378,6 +390,88 @@ export function toCloudRow(row, userId) {
   };
 }
 
+// ── Il canale col cloud della corsia chat ───────────────────────────────
+
+/** Cloud di default, quando `cloud.json` non porta un `base_url`. */
+const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
+
+/**
+ * Il verso web→agente ha bisogno di due sole cose dal cloud: leggere i turni
+ * dell'utente non ancora consegnati e dire "consegnati". Esistono DUE strade
+ * per farlo, con la stessa forma, e la corsia non deve sapere quale sta
+ * usando:
+ *
+ *   · `directChatChannel` — Supabase diretto (`JHT_SUPABASE_DIRECT=1`).
+ *     Preferito quando c'è: meno hop, e su Supabase Pro le letture non si
+ *     pagano a chiamata.
+ *   · `vercelChatChannel` — `/api/cloud-sync/chat` col token del box.
+ *
+ * PERCHÉ ESISTE IL SECONDO — non è ridondante, è l'unico che gira sul fleet.
+ * Il lettore diretto è OPT-IN e documentato come "default OFF → nessun
+ * cambio sul fleet" (docs/internal/architecture/daemon-sync-redesign.md):
+ * su 4 box di produzione su 5 quel flag è spento e `cloud.json` non ha
+ * nemmeno `supabase_url`/`supabase_refresh_token`, quindi `getDirectReader`
+ * ritorna `null`. Finché il pull viveva solo sul lettore diretto, su un box
+ * in configurazione standard il turno scritto dal web restava su Supabase e
+ * non veniva ritirato MAI: chat morta in silenzio, senza un errore in log
+ * (diagnosticato sul box di produzione, 2026-07-30). Il verso opposto
+ * funzionava perché passa dal token del box su Vercel — che è esattamente il
+ * canale che questo ramo riusa.
+ */
+export function directChatChannel(reader) {
+  return {
+    kind: 'direct',
+    readUndeliveredUserChat: (opts) => reader.readUndeliveredUserChat(opts),
+    async closeRendezvous(ids = []) {
+      if (ids.length > 0) await reader.markUserChatDelivered(ids);
+      await reader.patchTeamState({ chat_delivered_at: new Date().toISOString() });
+    },
+  };
+}
+
+/**
+ * Stessa forma, sul token del box via Vercel. Ack e chiusura del rendezvous
+ * viaggiano in UNA sola POST: sono la stessa decisione ("ho consegnato"), e
+ * separarle lascerebbe la finestra in cui i turni risultano consegnati ma il
+ * rendezvous ancora aperto — cioè il giro dopo rilegge una coda vuota.
+ */
+export function vercelChatChannel(config, { fetchFn = fetch } = {}) {
+  const baseUrl = String(config?.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const url = `${baseUrl}/api/cloud-sync/chat`;
+  const headers = {
+    Authorization: `Bearer ${config?.token}`,
+    'Content-Type': 'application/json',
+  };
+  return {
+    kind: 'vercel',
+    async readUndeliveredUserChat({ limit = 50 } = {}) {
+      const res = await fetchFn(`${url}?limit=${encodeURIComponent(limit)}`, { headers });
+      if (!res.ok) throw new Error(`GET /api/cloud-sync/chat: HTTP ${res.status}`);
+      const body = await res.json().catch(() => null);
+      return Array.isArray(body?.messages) ? body.messages : [];
+    },
+    async closeRendezvous(ids = []) {
+      const res = await fetchFn(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ delivered_ids: ids }),
+      });
+      if (!res.ok) throw new Error(`POST /api/cloud-sync/chat: HTTP ${res.status}`);
+    },
+  };
+}
+
+/**
+ * Il canale da usare per questo box: diretto se c'è, altrimenti Vercel.
+ * `null` solo per un box senza token — cioè non appaiato, dove non c'è
+ * nessun cloud da cui ritirare niente.
+ */
+export function chatChannelFor(config, reader, options = {}) {
+  if (reader) return directChatChannel(reader);
+  if (!config?.token) return null;
+  return vercelChatChannel(config, options);
+}
+
 // ── Passo 4: cloud → pane tmux dell'agente ──────────────────────────────
 
 /**
@@ -541,4 +635,152 @@ export async function deliverPendingUserTurns(
   }
 
   return { delivered, failed };
+}
+
+// ── Passo 6: la corsia sa dire quando NON funziona ──────────────────────
+//
+// Il 24/07 tre turni scritti dal web sono rimasti in coda sei ore e il
+// daemon non ha detto NULLA: zero righe di log, zero errori, un box che da
+// fuori sembrava sano. Un guasto muto è peggio di uno rumoroso, perché non
+// si distingue da "sta ancora pensando" — l'utente vedeva le sue bolle
+// inviate e aspettava una risposta che non poteva arrivare.
+//
+// Queste funzioni non riparano niente: fanno EMERGERE lo stato. Sono pure
+// (o quasi: una sola SELECT) proprio perché il percorso che le usa gira
+// ogni pochi secondi e va potuto testare senza un box.
+
+/** Timestamp SQLite (`YYYY-MM-DD HH:MM:SS`, UTC senza suffisso) → epoch ms. */
+export function parseStamp(value) {
+  if (!value) return NaN;
+  const s = String(value);
+  if (s.includes('T') || s.endsWith('Z') || /[+-]\d\d:\d\d$/.test(s)) return Date.parse(s);
+  return Date.parse(`${s.replace(' ', 'T')}Z`);
+}
+
+/** Attesa leggibile a colpo d'occhio in un log: `6h 12m`, `3m`, `45s`. */
+export function formatWaited(ms) {
+  const sec = Math.max(0, Math.floor(Number(ms) / 1000));
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  return `${h}h ${min % 60}m`;
+}
+
+/**
+ * Quanti turni dell'utente aspettano ancora il pane, e da quando. È la
+ * coda che il daemon deve saper guardare in faccia: `delivered_at` NULL
+ * significa "l'agente non l'ha mai visto", per qualunque ragione.
+ */
+export function undeliveredUserTurns(db, { agents = CHAT_AGENTS } = {}) {
+  const placeholders = agents.map(() => '?').join(', ');
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n, MIN(created_at) AS oldest
+         FROM pending_user_messages
+        WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders})`
+    )
+    .get(...agents);
+  return { count: Number(row?.n || 0), oldest: row?.oldest ?? null };
+}
+
+/**
+ * Diagnosi della corsia: `null` se sta lavorando, altrimenti il guasto.
+ *
+ * Tre modi di essere muti, in ordine di gravità:
+ *   · `no-inbound-channel` — il campanello del web suona (`chat_requested_at`
+ *     più recente di `chat_delivered_at`) e il box non ha proprio il canale
+ *     per andare a prendersi i turni. Nessuna grazia: aspettare non lo fa
+ *     comparire, e finché manca NESSUN messaggio dal web arriverà mai;
+ *   · `inbound-read-failed` — il canale c'è ma la lettura è fallita;
+ *   · `delivery-stuck` — i turni sono entrati in SQLite e nessuno li porta
+ *     al pane da più di `graceMs` (pane morto, sessione tmux sbagliata,
+ *     agente fermo).
+ *
+ * `summary` è STABILE a parità di guasto — ci finisce dentro
+ * `team_state.last_error`, e il trigger di audit (mig 019) scrive una riga
+ * di storia a ogni valore diverso: la durata, che cambia sempre, sta solo
+ * nel log.
+ */
+export function diagnoseChatLane({
+  pending = false,
+  requestedAt = null,
+  canRead = true,
+  readError = null,
+  queued = 0,
+  oldestQueuedAt = null,
+  deliverFailed = 0,
+  now = Date.now(),
+  graceMs = STALL_AFTER_MS,
+} = {}) {
+  const waitedSince = (value) => {
+    const ms = parseStamp(value);
+    return Number.isFinite(ms) ? Math.max(0, now - ms) : 0;
+  };
+  // La stessa frase in coda a ogni segnalazione: dice PERCHÉ importa, che
+  // è l'informazione che mancava a chi guardava i log del 24/07.
+  const tail = "l'utente vede il messaggio come inviato e aspetta una risposta che non può arrivare";
+
+  if (pending && !canRead) {
+    const waitingMs = waitedSince(requestedAt);
+    return {
+      reason: 'no-inbound-channel',
+      count: 0,
+      waitingMs,
+      summary: 'chat: turni scritti dal web non ritirabili (nessun canale di lettura verso il cloud)',
+      message:
+        `chat: il web ha turni in attesa da ${formatWaited(waitingMs)} e questo box non ha modo di ritirarli ` +
+        `(nessun canale di lettura verso il cloud) — ${tail}`,
+    };
+  }
+
+  if (pending && readError) {
+    const waitingMs = waitedSince(requestedAt);
+    return {
+      reason: 'inbound-read-failed',
+      count: 0,
+      waitingMs,
+      summary: `chat: lettura dei turni dal cloud fallita (${String(readError).slice(0, 160)})`,
+      message:
+        `chat: lettura dei turni dal cloud fallita (${String(readError).slice(0, 160)}), ` +
+        `in attesa da ${formatWaited(waitingMs)} — ${tail}`,
+    };
+  }
+
+  if (queued > 0) {
+    const waitingMs = waitedSince(oldestQueuedAt);
+    if (waitingMs >= graceMs) {
+      const why = deliverFailed > 0
+        ? `${deliverFailed} consegne al pane fallite in questo giro`
+        : 'nessuna consegna riuscita';
+      return {
+        reason: 'delivery-stuck',
+        count: queued,
+        waitingMs,
+        summary: `chat: ${queued} turni dell'utente non consegnati all'agente`,
+        message:
+          `chat: ${queued} turni dell'utente fermi da ${formatWaited(waitingMs)} senza arrivare al pane ` +
+          `(${why}) — ${tail}`,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Un guasto va detto, ma detto una volta ogni tanto.
+ *
+ * Il daemon passa di qui ogni pochi secondi: ripetere la stessa riga a
+ * ogni giro riempirebbe i log di migliaia di copie identiche, cioè
+ * costruirebbe un rumore che nessuno legge — di nuovo un guasto
+ * invisibile, per la via opposta. Si parla al CAMBIO di stato (guasto
+ * nuovo o diverso) e poi a intervalli.
+ *
+ * @param {{summary:string, at:number}|null} prev ultima segnalazione emessa
+ */
+export function shouldAnnounceStall(prev, summary, { now = Date.now(), everyMs = STALL_REPEAT_MS } = {}) {
+  if (!summary) return false;
+  if (!prev || prev.summary !== summary) return true;
+  return now - Number(prev.at || 0) >= everyMs;
 }
