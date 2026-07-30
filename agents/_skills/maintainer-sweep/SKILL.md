@@ -1,121 +1,121 @@
 ---
 name: maintainer-sweep
-description: "Lo sweep di manutenzione INFRA del Mantenitore 👷‍♂️ (gemello del Dottore, scope infrastruttura non agenti). Una passata giornaliera one-shot: canary di liveness dei processi salva-vita del container (bridge/daemon/watchdog) via process_health.py, smoke-test dei tool mission-critical (browser/LinkedIn) via tool_health.py, audit/consolidamento deps fuori standard, GC di script e tmp orfani, de-dup di script ricorrenti, freschezza deps, trend disco/RAM. Single-writer: il Mantenitore è l'UNICO che ripara l'infra; le azioni DISTRUTTIVE (delete/archive) le PROPONE, il Capitano decide. Esito in append su mantenitore-logbook.jsonl."
+description: "The Mantenitore's INFRA maintenance sweep 👷‍♂️ (twin of the Dottore, scoped to infrastructure rather than agents). One daily one-shot pass: liveness canary of the container's life-support processes (bridge/daemon/watchdog) via process_health.py, smoke-test of the mission-critical tools (browser/LinkedIn) via tool_health.py, audit/consolidation of off-standard deps, GC of orphaned scripts and tmp files, de-dup of recurring scripts, dep freshness, disk/RAM trend. Single-writer: the Mantenitore is the ONLY one who repairs the infra; DESTRUCTIVE actions (delete/archive) it PROPOSES, the Capitano decides. Outcome appended to mantenitore-logbook.jsonl."
 allowed-tools: Bash(python3 /app/shared/skills/process_health.py *), Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/sync_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(python3 /app/shared/skills/log_archive.py *), Bash(bash /app/.launcher/start-agent.sh *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
 ---
 
-# maintainer-sweep — tenere sana l'INFRA, in silenzio e a-prova-di-regressione
+# maintainer-sweep — keeping the INFRA healthy, quietly and regression-proof
 
-Il Mantenitore è il gemello del Dottore: **Dottore = salute degli AGENTI** (sessioni, token, context-refresh); **Mantenitore = salute dell'INFRA** (tool, deps, disco, script). One-shot per day: boot → sweep → logbook → STANDBY (stay idle, no self-terminate; the next spawn replaces you, kill-then-create). Budget ~10 min. Confine netto, zero overlap col Dottore.
+The Mantenitore is the twin of the Dottore: **Dottore = health of the AGENTS** (sessions, tokens, context-refresh); **Mantenitore = health of the INFRA** (tools, deps, disk, scripts). One-shot per day: boot → sweep → logbook → STANDBY (stay idle, no self-terminate; the next spawn replaces you, kill-then-create). Budget ~10 min. Sharp boundary, zero overlap with the Dottore.
 
-> **Perché esiste:** il bug `libatk` (browser morto, LinkedIn non verificabile) è rimasto invisibile per ore perché *nessuno smoke-testava i tool e nessuno teneva l'infra*. Lo sweep rende STRUTTURALE quella vigilanza.
+> **Why it exists:** the `libatk` bug (browser dead, LinkedIn unverifiable) stayed invisible for hours because *nobody smoke-tested the tools and nobody looked after the infra*. The sweep makes that vigilance STRUCTURAL.
 
-## Regola d'oro — single-writer + propose-not-delete
-Il Mantenitore **ripara** l'infra (installa deps mancanti, consolida, sistema). Ma ogni azione **DISTRUTTIVA** (delete/archive di file, cleanup disco) la **PROPONE** al Capitano con il comando esatto; **il Capitano decide** (come nel redesign usage-monitoring). Mai cancellare di testa propria.
+## Golden rule — single-writer + propose-not-delete
+The Mantenitore **repairs** the infra (installs missing deps, consolidates, fixes). But every **DESTRUCTIVE** action (deleting/archiving files, disk cleanup) it **PROPOSES** to the Capitano with the exact command; **the Capitano decides** (as in the usage-monitoring redesign). Never delete on your own initiative.
 
-## Lo sweep (gli step, in ordine)
+## The sweep (the steps, in order)
 
-### 0. 🫀 Liveness canary dei processi salva-vita (la rete di sicurezza)
-**PRIMO step, prima di tutto.** I bridge/daemon che fanno vivere il container (sentinel-bridge, pacing-bridge, heartbeat-bridge, window-ratio-meter, codex-auth-healer + tg-bridge) sono lanciati `setsid` detached → **fuori dal respawn-on-crash di pid1**. L'`agent-watchdog` (`maybe_respawn_bridges`) li risorveglia ogni 30s, MA se anche quello fallisse (bug, flap-cap raggiunto, watchdog stesso degradato) tu sei **l'ultima rete**: al primo sweep del giorno rilevi e ripari. Senza questo canary, un daemon morto resta invisibile per ore (è esattamente com'è successo al sentinel-bridge su betaC il 2026-06-27 → 8h ciechi sull'usage).
+### 0. 🫀 Liveness canary of the life-support processes (the safety net)
+**FIRST step, before anything else.** The bridges/daemons that keep the container alive (sentinel-bridge, pacing-bridge, heartbeat-bridge, window-ratio-meter, codex-auth-healer + tg-bridge) are launched `setsid` detached → **outside pid1's respawn-on-crash**. The `agent-watchdog` (`maybe_respawn_bridges`) rewatches them every 30s, BUT if that were to fail too (bug, flap-cap reached, watchdog itself degraded) you are **the last net**: on the first sweep of the day you detect and repair. Without this canary a dead daemon stays invisible for hours (that is exactly what happened to the sentinel-bridge on betaC on 2026-06-27 → 8h blind on usage).
 ```bash
 python3 /app/shared/skills/process_health.py summary
 ```
-Stampa OK/DEAD per ogni processo atteso (bridge-suite, pid1-child, daemon, tg-bridge). Per i MORTI:
-- **gruppo `bridge-suite`** (detached, riparabili da te) → **RIPARA** subito, è un respawn non-distruttivo:
+It prints OK/DEAD for each expected process (bridge-suite, pid1-child, daemon, tg-bridge). For the DEAD ones:
+- **`bridge-suite` group** (detached, repairable by you) → **REPAIR** immediately, it is a non-destructive respawn:
   ```bash
-  bash /app/.launcher/start-agent.sh bridge      # rispawna l'intera suite (idempotente)
+  bash /app/.launcher/start-agent.sh bridge      # respawns the whole suite (idempotent)
   ```
-  poi **ri-esegui il canary** per confermare che sono tornati vivi. Log `processes_respawned`.
-- **tg-bridge** mancante (e bot Telegram configurati) → `bash /app/.launcher/start-agent.sh tg-bridge`.
-- **gruppo `pid1-child` / `daemon` / `core`** (agent-watchdog, doctor-watchdog, auto-report-loop, cloud-daemon, pid1) → questi DOVREBBE rispawnarli pid1: se sono morti è un problema più profondo → **ESCALA al Capitano** via `jht-tmux-send` (NON tentare di rispawnarli a mano: li orfaneresti). Mai lasciarlo silenzioso.
+  then **re-run the canary** to confirm they are alive again. Log `processes_respawned`.
+- **tg-bridge** missing (and Telegram bots configured) → `bash /app/.launcher/start-agent.sh tg-bridge`.
+- **`pid1-child` / `daemon` / `core` group** (agent-watchdog, doctor-watchdog, auto-report-loop, cloud-daemon, pid1) → these are pid1's job to respawn: if they are dead the problem runs deeper → **ESCALATE to the Capitano** via `jht-tmux-send` (do NOT try to respawn them by hand: you would orphan them). Never leave it silent.
 
-Se tutti vivi → log `processes_health: all_ok` e prosegui. Questo è il gemello-per-i-PROCESSI dello smoke-test-per-i-TOOL dello step 1.
+If everything is alive → log `processes_health: all_ok` and move on. This is the twin-for-PROCESSES of step 1's smoke-test-for-TOOLS.
 
-### 0.5 ☁️ Canary della CLOUD-SYNC (pull + push)
-Subito dopo il canary dei processi. La sync locale↔cloud si è incantata due volte
-(pull churn: cursore congelato → riscriveva ~500 posizioni/tick; push 413:
-payload monolitico troppo grande → cursore mai avanzato → dashboard cloud ferma
-~14h). I bug di codice sono corretti, ma la vigilanza va resa STRUTTURALE.
+### 0.5 ☁️ CLOUD-SYNC canary (pull + push)
+Right after the process canary. The local↔cloud sync has jammed twice
+(pull churn: frozen cursor → it rewrote ~500 positions/tick; push 413:
+monolithic payload too large → cursor never advanced → cloud dashboard stuck
+for ~14h). The code bugs are fixed, but the vigilance has to be made STRUCTURAL.
 ```bash
-python3 /app/shared/skills/sync_health.py summary        # oppure --json
+python3 /app/shared/skills/sync_health.py summary        # or --json
 ```
-Legge in sola lettura i cursori (`.cloud-sync-cursor.json`, `.cloud-pull-cursor.json`),
-`positions.updated_at` max nel DB e la coda di `logs/daemon.log`. Ritorna
-`problems[]` con severità. Esito:
-- **nessun problema** → log `sync_health: ok` e prosegui.
-- **push_behind / push_errors (HIGH)** → il push non arriva al cloud. NON è
-  riparabile da te a mano in sicurezza (single-writer sul DB = il team). **ESCALA
-  al Capitano** via `jht-tmux-send` col dettaglio del check (lag + conteggio 413).
-  Se il check suggerisce il drain di emergenza (`JHT_PUSH_POS_CHUNK=40`), gira la
-  proposta al Capitano, non agire di testa.
-- **pull_churn (MEDIUM)** → segnala al Capitano che il pull sta riapplicando
-  troppe righe (sintomo di cursore non convergente / fix non deployato).
-- **cursor_stale (MEDIUM)** → evidenza secondaria; includila nell'escalation solo
-  se accompagna un segnale HIGH.
-Log l'esito in `sync_health` nell'entry del logbook (vedi sotto). Regola d'oro
-invariata: **rileva + segnala, mai log-and-forget** (è lo stesso errore del bug
-libatk e del sentinel-bridge, qui sui CURSORI di sync).
+It reads the cursors read-only (`.cloud-sync-cursor.json`, `.cloud-pull-cursor.json`),
+the max `positions.updated_at` in the DB and the tail of `logs/daemon.log`. It returns
+`problems[]` with severity. Outcome:
+- **no problem** → log `sync_health: ok` and move on.
+- **push_behind / push_errors (HIGH)** → the push is not reaching the cloud. It is NOT
+  safely repairable by you by hand (single-writer on the DB = the team). **ESCALATE
+  to the Capitano** via `jht-tmux-send` with the check details (lag + 413 count).
+  If the check suggests the emergency drain (`JHT_PUSH_POS_CHUNK=40`), pass the
+  proposal to the Capitano, do not act on your own.
+- **pull_churn (MEDIUM)** → report to the Capitano that the pull is re-applying
+  too many rows (symptom of a non-converging cursor / fix not deployed).
+- **cursor_stale (MEDIUM)** → secondary evidence; include it in the escalation only
+  if it accompanies a HIGH signal.
+Log the outcome under `sync_health` in the logbook entry (see below). The golden rule
+is unchanged: **detect + report, never log-and-forget** (it is the same mistake as the
+libatk bug and the sentinel-bridge, here on the sync CURSORS).
 
-### 1. 🩺 Smoke-test tool mission-critical (il cuore)
+### 1. 🩺 Smoke-test of the mission-critical tools (the heart)
 ```bash
 python3 /app/shared/skills/tool_health.py --json
 ```
-Ritorna `tools_health` con `{status: OK|BROKEN|UNKNOWN, evidence}` per ogni tool (browser/Playwright, linkedin_check, …) + `broken[]`.
-- **BROKEN** → **RIPARA** subito: `jht-install <dep>` (es. le `.so` Chromium) poi ri-esegui il check. Se riparato → log `repaired`.
-- **BROKEN non riparabile** → **ESCALA al Capitano** col fix ESATTO via `jht-tmux-send` (es. "browser giù: `sudo playwright install-deps`; finché non risolto LinkedIn = OPEN_UNVERIFIED"). Mai lasciarlo silenzioso.
-- Questo è lo STESSO `tool_health.py` che alimenta il gate build-time (dev1) e il `tools_health` nel tick: una sola fonte di verità sullo stato dei tool.
+It returns `tools_health` with `{status: OK|BROKEN|UNKNOWN, evidence}` for each tool (browser/Playwright, linkedin_check, …) + `broken[]`.
+- **BROKEN** → **REPAIR** immediately: `jht-install <dep>` (e.g. the Chromium `.so` files) then re-run the check. If repaired → log `repaired`.
+- **BROKEN and not repairable** → **ESCALATE to the Capitano** with the EXACT fix via `jht-tmux-send` (e.g. "browser down: `sudo playwright install-deps`; until it is fixed LinkedIn = OPEN_UNVERIFIED"). Never leave it silent.
+- This is the SAME `tool_health.py` that feeds the build-time gate (dev1) and the `tools_health` field in the tick: a single source of truth on tool status.
 
-### 2. 📦 Audit deps fuori standard → consolida
-Deps installate fuori dai prefissi standard (`/opt/jht-deps`, `PLAYWRIGHT_BROWSERS_PATH`, npm prefix, venv) → reinstalla nello standard via `jht-install`, così non sono sparpagliate. Log quali consolidate.
+### 2. 📦 Audit off-standard deps → consolidate
+Deps installed outside the standard prefixes (`/opt/jht-deps`, `PLAYWRIGHT_BROWSERS_PATH`, npm prefix, venv) → reinstall them into the standard one via `jht-install`, so they are not scattered around. Log which ones you consolidated.
 
-### 3. 🧹 GC di script/tmp orfani
-Script temporanei lasciati da agenti **killati** (sessione non più in `tmux ls`) e tmp scaduti (> N ore). Lista i candidati → **PROPONI** la cancellazione al Capitano (azione distruttiva), non cancellare diretto.
+### 3. 🧹 GC of orphaned scripts/tmp files
+Temporary scripts left behind by **killed** agents (session no longer in `tmux ls`) and expired tmp files (> N hours). List the candidates → **PROPOSE** the deletion to the Capitano (destructive action), do not delete directly.
 
-### 4. 🔁 De-dup script ricorrenti
-Script quasi-identici ripetuti da più agenti → **proponi** una skill canonica unica (non riscrivere al volo). Log la proposta.
+### 4. 🔁 De-dup of recurring scripts
+Near-identical scripts repeated by several agents → **propose** a single canonical skill (do not rewrite it on the fly). Log the proposal.
 
-### 5. 📅 Freschezza deps
-Librerie/strumenti deprecati o versioni rotte / tool cruciali irraggiungibili → segnala al Capitano (no auto-upgrade rischioso).
+### 5. 📅 Dep freshness
+Deprecated libraries/tools or broken versions / crucial tools unreachable → report to the Capitano (no risky auto-upgrade).
 
-### 6. 💾 Disco / RAM + trend + VITALS in croce
-`du` sui path grossi, `free` per la RAM. Per **`disk.used_pct` usa SEMPRE `df`** — comando canonico:
+### 6. 💾 Disk / RAM + trend + VITALS cross-check
+`du` on the big paths, `free` for RAM. For **`disk.used_pct` ALWAYS use `df`** — canonical command:
 ```bash
-df -P /jht_home | awk 'NR==2 {gsub("%","",$5); print $5}'   # es. 30  (percentuale come la riporta df)
+df -P /jht_home | awk 'NR==2 {gsub("%","",$5); print $5}'   # e.g. 30  (percentage as df reports it)
 ```
-**MAI** ricavarlo da `statvfs`/`os.statvfs` (`f_bavail`/`f_blocks`): i reserved-block lo gonfiano ~3× → falsi allarmi (es. 88% riportato contro 30% reale). Confronta col **trend dell'ultimo logbook**: se cresce verso una soglia → discuti col Capitano cosa archiviare/cancellare (lui decide). Log i numeri + il delta.
-**Poi METTI IN CROCE il time-series dei vitals** (il bridge campiona RAM+CPU del container ogni pochi minuti su `vitals.jsonl`):
+**NEVER** derive it from `statvfs`/`os.statvfs` (`f_bavail`/`f_blocks`): reserved blocks inflate it ~3× → false alarms (e.g. 88% reported against a real 30%). Compare it with the **trend from the last logbook**: if it is growing towards a threshold → discuss with the Capitano what to archive/delete (he decides). Log the numbers + the delta.
+**Then CROSS-CHECK the vitals time-series** (the bridge samples the container's RAM+CPU every few minutes into `vitals.jsonl`):
 ```bash
 python3 /app/shared/skills/host_vitals.py summary --hours 24
 ```
-Ti dà **picco/media RAM+CPU + l'ORA del picco** delle ultime 24h. **Correla i picchi col *quando*** (es. RAM 92% alle 03:00 con 3 analisti attivi; CPU al massimo durante uno script pesante): è il dato che affina la diagnosi più del solo snapshot istantaneo. Se un picco è anomalo → segnalalo al Capitano. Log `vitals_24h` (picco RAM/CPU + ora) nell'entry. NB la Sentinella riceve l'allarme SOLO se RAM/CPU >95% live; la lettura storica e la correlazione sono **compito TUO**.
+It gives you **peak/average RAM+CPU + the TIME of the peak** for the last 24h. **Correlate the peaks with the *when*** (e.g. RAM 92% at 03:00 with 3 analysts active; CPU maxed out during a heavy script): that is the data that sharpens the diagnosis far more than an instantaneous snapshot alone. If a peak looks anomalous → report it to the Capitano. Log `vitals_24h` (RAM/CPU peak + time) in the entry. NB the Sentinella only receives the alarm if RAM/CPU is >95% live; reading the history and correlating it is **YOUR job**.
 
-### 6.5 🗜️ Archiviazione storici di monitoraggio (ordine Leone 19/07 — CODICE, non discrezione)
-Gli storici append-only (`sentinel-data.jsonl`, `token-meter.csv`,
-`throttle-events.jsonl`, `agent-vitals.jsonl`, `vitals.jsonl`) crescono per
-sempre: alimentano i grafici usage del gioco, quindi NON vanno mai cancellati
-a mano — vanno **archiviati col flow deterministico**:
+### 6.5 🗜️ Archiving of monitoring histories (Leone's order 19/07 — CODE, not discretion)
+The append-only histories (`sentinel-data.jsonl`, `token-meter.csv`,
+`throttle-events.jsonl`, `agent-vitals.jsonl`, `vitals.jsonl`) grow forever:
+they feed the game's usage charts, so they must never be deleted
+by hand — they must be **archived with the deterministic flow**:
 ```bash
-python3 /app/shared/skills/log_archive.py status          # profondità e pesi
-python3 /app/shared/skills/log_archive.py run             # taglia>30g → zip settimanali
+python3 /app/shared/skills/log_archive.py status          # depth and sizes
+python3 /app/shared/skills/log_archive.py run             # cut >30d → weekly zips
 ```
-Cosa fa `run` (tutto in codice, tu leggi il summary JSON): le settimane più
-vecchie di 30 giorni escono dai file vivi ed entrano in
-`logs/archive/logs-<YYYY>-Www.zip` (lo zip della settimana si amplia a ogni
-giro); il taglio è atomico e una riga entra nello zip PRIMA di sparire dal
-vivo. Se lo spazio si riempie (archivio >500MB o <1GB liberi) elimina da solo
-gli zip PIÙ VECCHI e te li elenca in `pruned`.
-- Frequenza: 1×/settimana basta (domenica); nei giorni feriali solo `status`
-  se il disco allo step 6 è in crescita anomala.
-- `pruned` NON vuoto → riportalo ESPLICITO nel logbook e avvisa il Capitano
-  (è l'unica perdita di dati del flow, autorizzata da Leone solo sotto
-  pressione di spazio).
-- Eccezione DELIBERATA alla regola d'oro: questo flow è pre-autorizzato da
-  Leone (19/07) — non serve chiedere OK al Capitano per `run`; per qualunque
-  altra cancellazione fuori dal flow, la regola single-writer resta.
-- Log nell'entry: `log_archive: {archived_rows, weeks, pruned, free_gb}`.
+What `run` does (all in code, you just read the JSON summary): the weeks older
+than 30 days leave the live files and enter
+`logs/archive/logs-<YYYY>-Www.zip` (the week's zip grows on every
+pass); the cut is atomic and a row enters the zip BEFORE it disappears from the
+live file. If space runs out (archive >500MB or <1GB free) it deletes the
+OLDEST zips by itself and lists them for you under `pruned`.
+- Frequency: 1×/week is enough (Sunday); on weekdays only `status`
+  if the disk at step 6 is growing abnormally.
+- `pruned` NOT empty → report it EXPLICITLY in the logbook and warn the Capitano
+  (it is the only data loss in the flow, authorized by Leone only under
+  space pressure).
+- DELIBERATE exception to the golden rule: this flow is pre-authorized by
+  Leone (19/07) — you do not need the Capitano's OK for `run`; for any
+  other deletion outside the flow, the single-writer rule stands.
+- Log in the entry: `log_archive: {archived_rows, weeks, pruned, free_gb}`.
 
 ## Logbook (append-only)
-Ogni sweep scrive UNA entry densa in `/jht_home/logs/mantenitore-logbook.jsonl` (gemello del logbook Dottore), così il prossimo Mantenitore vede il trend:
+Every sweep writes ONE dense entry to `/jht_home/logs/mantenitore-logbook.jsonl` (twin of the Dottore's logbook), so the next Mantenitore can see the trend:
 ```json
 {"ts":"ISO-UTC","slot":"maintainer-daily","processes_health":{"all_ok":true,"dead":[]},
  "processes_respawned":[...],"sync_health":{"healthy":true,"problems":[]},
@@ -123,21 +123,21 @@ Ogni sweep scrive UNA entry densa in `/jht_home/logs/mantenitore-logbook.jsonl` 
  "escalated":[...],"deps_consolidated":[...],"gc_proposed":[...],"dedup_proposed":[...],
  "disk":{"used_pct":N,"delta_vs_last":N},"ram":{...},"duration_sec":N,"capitano_ack":"..."}
 ```
-Append con `>>`, mai overwrite. Sintesi densa (come le note di viaggio del Dottore/Capitano): cosa ho trovato, cosa ho riparato, cosa ho proposto.
+Append with `>>`, never overwrite. Dense summary (like the Dottore's/Capitano's travel notes): what I found, what I repaired, what I proposed.
 
-## Anti-pattern
-- ❌ Cancellare/archiviare senza OK del Capitano (single-writer: proponi). UNICA eccezione: il flow `log_archive.py` dello step 6.5, pre-autorizzato da Leone.
-- ❌ Auto-upgrade di librerie a versioni nuove (rischio rottura) — segnala, non aggiornare di testa.
-- ❌ Lasciare un tool BROKEN senza riparare NÉ escalare (è esattamente il bug libatk silenzioso).
-- ❌ Lasciare un bridge/daemon DEAD senza riparare NÉ escalare (lo stesso errore, sui PROCESSI: è il crash sentinel-bridge betaC 2026-06-27).
-- ❌ Sconfinare nella salute degli AGENTI (sessioni/token/context) — quello è il Dottore.
+## Anti-patterns
+- ❌ Deleting/archiving without the Capitano's OK (single-writer: propose). ONLY exception: the `log_archive.py` flow of step 6.5, pre-authorized by Leone.
+- ❌ Auto-upgrading libraries to new versions (breakage risk) — report, do not upgrade on your own.
+- ❌ Leaving a BROKEN tool without repairing NOR escalating (that is exactly the silent libatk bug).
+- ❌ Leaving a bridge/daemon DEAD without repairing NOR escalating (the same mistake, on the PROCESSES: it is the sentinel-bridge crash on betaC 2026-06-27).
+- ❌ Straying into the health of the AGENTS (sessions/tokens/context) — that is the Dottore's.
 
 ## See also
-- `shared/skills/process_health.py` — il canary di liveness dei processi salva-vita usato allo step 0 (rete di sicurezza giornaliera; gemello-per-i-processi del tool_health).
-- `shared/skills/sync_health.py` — il canary della cloud-sync usato allo step 0.5 (pull churn / push 413 / cursori stale); read-only, gemello-per-la-SYNC di process_health/tool_health.
-- `shared/skills/tool_health.py` — lo smoke-test riusato allo step 1 (anche gate build-time + tick).
-- `shared/skills/log_archive.py` — l'archiviatore deterministico dello step 6.5 (taglio settimane >30g → zip, prune sotto pressione spazio).
-- `.launcher/agent-watchdog.sh` — il recovery VELOCE (ogni 30s, `maybe_respawn_bridges`) di cui lo step 0 è la rete di sicurezza giornaliera; lezione del 27/06: i bridge partono `setsid` detached, quindi né il respawn di pid1 né `agent-watchdog` (che respawna le sessioni tmux, non i processi Python) li coprono — se crashano restano giù fino al restart del container.
-- `agents/mantenitore/mantenitore.md` — la persona/lifecycle del Mantenitore (dev3).
-- `agents/_skills/resilience/SKILL.md` — la ladder anti-silenzio degli agenti (dev3); il suo step "classify" riusa `tool_health.py`.
-- `agents/_skills/liveness-check/SKILL.md` — il gemello lato Dottore (salute agenti), per struttura.
+- `shared/skills/process_health.py` — the liveness canary of the life-support processes used at step 0 (daily safety net; the twin-for-processes of tool_health).
+- `shared/skills/sync_health.py` — the cloud-sync canary used at step 0.5 (pull churn / push 413 / stale cursors); read-only, the twin-for-SYNC of process_health/tool_health.
+- `shared/skills/tool_health.py` — the smoke-test reused at step 1 (also build-time gate + tick).
+- `shared/skills/log_archive.py` — the deterministic archiver of step 6.5 (cuts weeks >30d → zip, prunes under space pressure).
+- `.launcher/agent-watchdog.sh` — the FAST recovery (every 30s, `maybe_respawn_bridges`) for which step 0 is the daily safety net; lesson of 27/06: the bridges start `setsid` detached, so neither pid1's respawn nor `agent-watchdog` (which respawns tmux sessions, not Python processes) covers them — if they crash they stay down until the container restarts.
+- `agents/mantenitore/mantenitore.md` — the Mantenitore's persona/lifecycle (dev3).
+- `agents/_skills/resilience/SKILL.md` — the anti-silence ladder for agents (dev3); its "classify" step reuses `tool_health.py`.
+- `agents/_skills/liveness-check/SKILL.md` — the twin on the Dottore side (agent health), for structure.

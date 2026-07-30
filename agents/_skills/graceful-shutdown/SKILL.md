@@ -4,59 +4,59 @@ description: Close the working day on request from the user. Triggered by a `[SH
 allowed-tools: Bash(jht-tmux-send *), Bash(node /app/cli/bin/jht.js team *), Bash(touch /jht_home/.shutdown-ready.flag), Bash(python3 /app/shared/skills/captain_diary.py *)
 ---
 
-# graceful-shutdown — chiudere la giornata quando l'utente esce
+# graceful-shutdown — closing the day when the user leaves
 
-L'utente sta chiudendo l'applicazione. Senza di te gli agenti verrebbero
-troncati a metà lavoro: uno Scout in mezzo a un giro di board, uno Scrittore
-con un CV a metà. **Il tuo compito è che nessuno perda il punto in cui era.**
+The user is closing the application. Without you the agents would be cut off
+mid-work: a Scout halfway through a board sweep, a Writer with a half-written
+CV. **Your job is that nobody loses the point they had reached.**
 
-Il gioco ti ha mandato `[@utente -> @capitano] [SHUTDOWN] …` e ora **aspetta un
-flag da te**: finché non lo crei, la finestra resta aperta e mostra all'utente
-quanti agenti stanno ancora lavorando.
+The game sent you `[@utente -> @capitano] [SHUTDOWN] …` and is now **waiting for
+a flag from you**: until you create it, the window stays open and shows the user
+how many agents are still working.
 
-## Procedura
+## Procedure
 
-1. **Chiedi a tutti di annotare e fermarsi.** A ogni sessione viva manda:
-
-   ```bash
-   jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [SHUTDOWN] Chiusura richiesta dall'utente. Scrivi sull'agenda a che punto sei (ultima board, ultima posizione salvata, cosa resta), poi fermati. Non iniziare nuovo lavoro."
-   ```
-
-   Una riga per agente, con il suo nome vero. Chi sta scrivendo su disco
-   finisce il file corrente: interrompere una scrittura è peggio che aspettare
-   qualche secondo.
-
-2. **Annota tu la giornata** nel diario, così il Capitano di domani riprende il
-   filo:
+1. **Ask everyone to write down where they are and stop.** To every live session
+   send:
 
    ```bash
-   python3 /app/shared/skills/captain_diary.py append "Chiusura richiesta dall'utente: <chi stava facendo cosa>"
+   jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [SHUTDOWN] Shutdown requested by the user. Write in your agenda where you got to (last board, last position saved, what is left), then stop. Do not start new work."
    ```
 
-3. **Ferma gli agenti** quando hanno confermato (o dopo una attesa ragionevole:
-   non tenere l'utente fermo più di un paio di minuti per un agente che non
-   risponde):
+   One line per agent, with its real name. Whoever is writing to disk finishes
+   the current file: interrupting a write is worse than waiting a few seconds.
+
+2. **Record the day yourself** in the diary, so tomorrow's Captain picks up the
+   thread:
+
+   ```bash
+   python3 /app/shared/skills/captain_diary.py append "Shutdown requested by the user: <who was doing what>"
+   ```
+
+3. **Stop the agents** once they have confirmed (or after a reasonable wait: do
+   not keep the user waiting more than a couple of minutes for an agent that
+   does not answer):
 
    ```bash
    node /app/cli/bin/jht.js team stop --all
    node /app/cli/bin/jht.js team stop assistente
    ```
 
-4. **Crea il flag.** È l'ultima cosa che fai: dice al gioco che può spegnere il
-   container e uscire.
+4. **Create the flag.** It is the last thing you do: it tells the game it can
+   shut the container down and exit.
 
    ```bash
    touch /jht_home/.shutdown-ready.flag
    ```
 
-## Regole
+## Rules
 
-- **Il flag va creato SEMPRE**, anche se qualcosa è andato storto. Se non lo
-  crei, l'utente resta davanti a una finestra che aspetta te — e finirà per
-  chiudere a forza, che è esattamente ciò che questa skill evita.
-- **Non negoziare la chiusura.** L'utente ha deciso: il tuo compito è renderla
-  ordinata, non discuterla o rimandarla.
-- **Niente lavoro nuovo** dal momento in cui ricevi `[SHUTDOWN]`: nessuno
-  spawn, nessun nuovo giro, nessuna scalata.
-- Se un agente non risponde, annotalo nel diario e vai avanti: meglio perdere
-  il punto di UN agente che bloccare la chiusura di tutti.
+- **The flag must ALWAYS be created**, even if something went wrong. If you do
+  not create it, the user is left staring at a window waiting for you — and will
+  end up force-quitting, which is exactly what this skill prevents.
+- **Do not negotiate the shutdown.** The user has decided: your job is to make
+  it orderly, not to argue with it or postpone it.
+- **No new work** from the moment you receive `[SHUTDOWN]`: no spawns, no new
+  sweeps, no scaling up.
+- If an agent does not answer, note it in the diary and move on: better to lose
+  the resume point of ONE agent than to block the shutdown for everyone.
