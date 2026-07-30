@@ -3,10 +3,10 @@
 // `jht team send <agente> "<msg>"` — manda un singolo messaggio
 // `jht team chat <agente>`         — REPL interattivo (readline)
 //
-// Usa la stessa identica logica di /api/team/send della web UI:
-//   tmux send-keys -t <SESSION> -- '<msg>'
-//   tmux send-keys -t <SESSION> Enter
-// Se il container e' attivo si passa per docker exec, altrimenti tmux host.
+// Usa la stessa identica logica di /api/team/send della web UI: consegna via
+// `jht-tmux-send`, che verifica il pane prima e dopo l'Enter e distingue i
+// modi di fallire (2/3/4/5). Se il container e' attivo si passa per docker
+// exec, altrimenti tmux host.
 
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
@@ -43,24 +43,42 @@ function resolveSession(agentArg) {
   return null;
 }
 
-/** Invia un messaggio testuale all'agente (una riga, + Enter). */
+// Perche' un exit code merita una frase e non un "invio fallito": l'utente
+// deve sapere se riprovare fra un minuto (occupato), se l'agente va sbloccato
+// (muto) o se e' davvero giu'. Vedi agents/_skills/tmux-send/SKILL.md.
+const SEND_ERRORS = {
+  2: 'sessione non attiva',
+  3: 'agente non ricettivo (pane bloccato o TUI giu\')',
+  4: 'agente occupato su un turno lungo — riprova fra poco',
+  5: 'agente bloccato: il messaggio e\' nel prompt ma non e\' partito — va sbloccato',
+};
+
+/** Invia un messaggio testuale all'agente e ne VERIFICA la consegna. */
 function sendMessage(session, message) {
+  // MAI `tmux send-keys` a mano: esce 0 appena la sessione esiste, quindi
+  // dichiarerebbe consegnato anche un messaggio che la TUI ha ignorato. Il
+  // wrapper aspetta il pane libero, verifica che il testo sia comparso e
+  // ricontrolla che il turno sia davvero partito.
   const escaped = bashSingleQuote(message);
-  const sendCmd = `tmux send-keys -t '${session}' -- '${escaped}'`;
-  const enterCmd = `tmux send-keys -t '${session}' Enter`;
+  const args = `'${session}' '${escaped}'`;
+  const cmd =
+    `if command -v jht-tmux-send >/dev/null 2>&1; then jht-tmux-send ${args}; ` +
+    `else /app/agents/_skills/tmux-send/jht-tmux-send ${args}; fi`;
+  const fail = (code, raw) => ({
+    ok: false,
+    code,
+    error: SEND_ERRORS[code] || (raw || '').split('\n')[0] || `exit ${code}`,
+  });
   if (usingContainer()) {
-    const r1 = execInContainer(sendCmd);
-    if (r1.code !== 0) return { ok: false, error: r1.stderr || r1.stdout };
-    const r2 = execInContainer(enterCmd);
-    if (r2.code !== 0) return { ok: false, error: r2.stderr || r2.stdout };
+    const r = execInContainer(cmd);
+    if (r.code !== 0) return fail(r.code, r.stderr || r.stdout);
     return { ok: true };
   }
   try {
-    execSync(sendCmd, { stdio: 'ignore' });
-    execSync(enterCmd, { stdio: 'ignore' });
+    execSync(cmd, { stdio: 'ignore' });
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return fail(err.status, err.message);
   }
 }
 
