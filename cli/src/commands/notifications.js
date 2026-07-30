@@ -2,16 +2,10 @@ import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, YELLOW, RED, DIM, BOLD, RESET } from './_colors.js';
 
 const JHT_DIR    = JHT_HOME;
 const NOTIF_PATH = join(JHT_DIR, 'notifications', 'notifications.json');
-
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
-const DIM = '\x1b[90m';
-const BOLD = '\x1b[1m';
-const RESET = '\x1b[0m';
 
 const LEVEL_COLOR = { info: GREEN, warning: YELLOW, error: RED, success: GREEN };
 

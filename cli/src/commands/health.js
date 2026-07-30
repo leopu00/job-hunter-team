@@ -2,6 +2,7 @@ import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, RED, YELLOW, DIM, RESET } from './_colors.js';
 import { retiredStoreDetail } from './_retired-stores.js';
 
 const JHT_DIR = JHT_HOME;
@@ -73,8 +74,7 @@ async function checkAgents() {
 }
 
 const ICON = { ok: '●', warn: '◐', error: '✗', gone: '·' };
-const COLOR = { ok: '\x1b[32m', warn: '\x1b[33m', error: '\x1b[31m', gone: '\x1b[90m' };
-const RESET = '\x1b[0m';
+const COLOR = { ok: GREEN, warn: YELLOW, error: RED, gone: DIM };
 
 async function handleHealth() {
   console.log('\n  JHT — Health Check\n');

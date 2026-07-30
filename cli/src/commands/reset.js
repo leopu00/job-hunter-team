@@ -4,6 +4,23 @@ import { homedir } from 'node:os'
 import * as clack from '@clack/prompts'
 import pc from 'picocolors'
 import { JHT_HOME } from '../jht-paths.js';
+import { isInteractive } from './_colors.js'
+
+/**
+ * Spinner solo su TTY. [CLI-OUTPUT-NOT-MACHINE-SAFE]
+ * Lo spinner di clack anima nascondendo il cursore (`\x1b[?25l`) e riscrivendo
+ * la riga: sequenze che picocolors non disattiva perche' non sono colore.
+ * Fuori dal terminale finiscono nel file o nella pipe del chiamante, quindi li
+ * sostituiamo con due righe di log statiche.
+ */
+function spinner() {
+  if (isInteractive()) return clack.spinner()
+  return {
+    start: (msg) => { if (msg) clack.log.info(msg) },
+    stop:  (msg) => { if (msg) clack.log.info(msg) },
+    message: (msg) => { if (msg) clack.log.info(msg) },
+  }
+}
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -142,7 +159,7 @@ async function handleReset(opts) {
 
   // ── Execute ───────────────────────────────────────────────────────────
 
-  const s = clack.spinner()
+  const s = spinner()
   s.start('Eliminazione in corso…')
   const { deleted, skipped } = await executeReset(scope.targets)
   s.stop('Eliminazione completata')

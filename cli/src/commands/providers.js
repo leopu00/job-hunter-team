@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
 import { refreshModelPin } from './model-pin.js';
+import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
 
 const JHT_DIR     = JHT_HOME;
@@ -35,12 +36,9 @@ function normalizeId(id) {
   return null;
 }
 
-const OK = '\x1b[32m●\x1b[0m';
-const WARN = '\x1b[33m◐\x1b[0m';
-const ERR = '\x1b[31m✗\x1b[0m';
-const DIM = '\x1b[90m';
-const YELLOW = '\x1b[33m';
-const RESET = '\x1b[0m';
+const OK = c.green('●');
+const WARN = c.yellow('◐');
+const ERR = c.red('✗');
 
 // ── Version detection ───────────────────────────────────────────────────────
 // Specchio di web/app/api/providers/route.ts. I path risolvono dal HOST
@@ -116,7 +114,7 @@ async function handleProviders() {
     const authMethod = provCfg?.auth_method ?? (hasEnv ? 'env' : hasCred ? 'file' : 'nessuna');
     const model = provCfg?.model ?? '—';
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
-    const activeLabel = isActive ? ' \x1b[32m[ATTIVO]\x1b[0m' : '';
+    const activeLabel = isActive ? ` ${GREEN}[ATTIVO]${RESET}` : '';
 
     console.log(`  ${icon}  ${known.name}${activeLabel}`);
     console.log(`     ${DIM}ID: ${id} · Modello: ${model} · Auth: ${authMethod}${RESET}`);
@@ -140,7 +138,7 @@ async function handleProviders() {
     for (const id of custom) {
       const p = providers[id];
       const isActive = activeProvider === id;
-      const activeLabel = isActive ? ' \x1b[32m[ATTIVO]\x1b[0m' : '';
+      const activeLabel = isActive ? ` ${GREEN}[ATTIVO]${RESET}` : '';
       console.log(`  ${WARN}  ${id}${activeLabel} — modello: ${p?.model ?? '—'}`);
     }
     console.log('');

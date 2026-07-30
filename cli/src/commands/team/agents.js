@@ -35,13 +35,10 @@ export const AGENTS = [
 // spawnato automaticamente con il Capitano da start-agent.sh.
 export const DEFAULT_TEAM = ['capitano', 'scout:1', 'analista:1', 'scorer:1', 'scrittore:1', 'critico'];
 
-export const c = {
-  green:  (s) => `\x1b[32m${s}\x1b[0m`,
-  red:    (s) => `\x1b[31m${s}\x1b[0m`,
-  yellow: (s) => `\x1b[33m${s}\x1b[0m`,
-  bold:   (s) => `\x1b[1m${s}\x1b[0m`,
-  dim:    (s) => `\x1b[2m${s}\x1b[0m`,
-};
+// Colori: firma invariata (`c.green(s) -> string`), implementazione delegata a
+// picocolors via ../_colors.js — cosi' i 4 moduli team che importano `c` da qui
+// smettono di emettere ANSI quando l'output non e' un terminale.
+export { c } from '../_colors.js';
 
 export function tmuxAvailable() {
   try { execSync('command -v tmux', { stdio: 'ignore' }); return true; }
