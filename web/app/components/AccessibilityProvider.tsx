@@ -29,14 +29,21 @@ export function useFocusTrap(
   useEffect(() => {
     if (!active || !ref.current) return;
     const el = ref.current;
-    const nodes = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE));
-    if (!nodes.length) return;
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
+    // Re-query on every Tab: a dialog's focusable set changes while it is
+    // open (search results appear, a conversation replaces the list), and a
+    // list captured at mount would wrap on nodes no longer in the document.
+    const focusables = () =>
+      Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE));
+    const initial = focusables();
+    if (!initial.length) return;
     const prev = document.activeElement as HTMLElement | null;
-    first.focus();
+    initial[0].focus();
     const trap = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
+      const nodes = focusables();
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
       if (e.shiftKey) {
         if (document.activeElement === first) {
           e.preventDefault();

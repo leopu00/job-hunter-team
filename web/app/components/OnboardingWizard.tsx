@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { readLocaleCookie } from "@/lib/use-locale";
+import { useFocusTrap } from "./AccessibilityProvider";
 
 /* ── i18n inline ──────────────────────────────────────────────────── */
 
@@ -166,6 +167,10 @@ export default function OnboardingWizard() {
   const [rect, setRect] = useState<Rect | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Il tour si dichiara aria-modal: il Tab deve restare fra Indietro e
+  // Avanti, non scorrere la pagina oscurata sotto lo spotlight.
+  useFocusTrap(dialogRef, visible);
+
   const t = useCallback((k: keyof typeof T) => T[k][lang], [lang]);
 
   useEffect(() => {
@@ -251,6 +256,14 @@ export default function OnboardingWizard() {
   useEffect(() => {
     if (!visible) return;
     const h = (e: KeyboardEvent) => {
+      // Con il focus dentro il tooltip, Invio su un bottone fa gia' scattare
+      // il suo onClick: senza questa guardia l'handler globale avanzerebbe
+      // di un secondo passo sullo stesso tasto.
+      if (
+        e.key === "Enter" &&
+        (e.target as HTMLElement | null)?.closest?.("button")
+      )
+        return;
       if (e.key === "Escape") dismiss();
       else if (e.key === "ArrowRight" || e.key === "Enter") next();
       else if (e.key === "ArrowLeft") back();

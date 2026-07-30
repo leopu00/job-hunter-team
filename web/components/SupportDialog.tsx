@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
+import { useFocusTrap } from "@/app/components/AccessibilityProvider";
 import type { Locale } from "@/i18n/config";
 
 /**
@@ -210,6 +211,11 @@ export default function SupportDialog({
   const [stato, setStato] = useState<"idle" | "invio" | "ok">("idle");
   const [errore, setErrore] = useState("");
   const primo = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Il trap gira prima dell'effetto sotto, che riporta il focus sul primo
+  // campo: l'ordine degli effetti decide chi vince, e deve vincere il campo.
+  useFocusTrap(dialogRef, true);
 
   useEffect(() => {
     primo.current?.focus();
@@ -268,6 +274,7 @@ export default function SupportDialog({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={t.title}
