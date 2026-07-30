@@ -630,6 +630,8 @@ const S := {
 	"common.readonly_chat": "// sola lettura — usa la chat nativa dell'agente",
 	"common.data_incoming": "// dati in arrivo dalla VPS…",
 	"common.updated": "aggiornato: %s",
+	# il backend È collegato: è la singola funzione che non implementa
+	"common.backend_unsupported": "Il backend collegato non offre questa funzione.",
 
 	# ── Badge simulazione / dati reali ────────────────────────────────
 	"sim.live_vps": "● DATI REALI — VPS",

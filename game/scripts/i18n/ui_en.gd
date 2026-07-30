@@ -544,6 +544,7 @@ const S := {
 	"common.readonly_chat": "// read-only — use the agent's native chat",
 	"common.data_incoming": "// data incoming from the VPS…",
 	"common.updated": "updated: %s",
+	"common.backend_unsupported": "The connected backend does not provide this feature.",
 
 	"sim.live_vps": "● REAL DATA — VPS",
 	"sim.live_local": "● REAL DATA — THIS COMPUTER",
