@@ -139,8 +139,6 @@ Piani tecnici, backlog, tracker e idee parcheggiate. Aggiornati finché aperti.
 |---|---|
 | [`MINOR-TRACKER.md`](roadmap/MINOR-TRACKER.md) | Tracker mini-fix e debt non-blocker (CI/lint, cross-platform, TODO inline, note) |
 | [`db-schema-optimization.md`](roadmap/db-schema-optimization.md) | Evoluzione schema jobs.db (position_events, critic rounds, captain_decisions) — alimenta la missione M7 |
-| [`2026-07-30-ticket-throttle-engine-external.md`](roadmap/2026-07-30-ticket-throttle-engine-external.md) | `[THROTTLE-ENGINE-EXTERNAL]`: il throttle esce dal dominio degli agenti → motore Python, notifica tmux, flag di stato (implementato 30/07, ritiro dai prompt aperto) |
-| [`2026-07-30-ticket-mode-injection-hourly-prompt.md`](roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md) | `[MODE-INJECTION-HOURLY-PROMPT]`: la modalità operativa iniettata nel messaggio periodico del Capitano (`mode_banner.py` + heartbeat-bridge + `session-refresh`) — implementato |
 | [`2026-07-29-ticket-team-standby-zero-spend.md`](roadmap/2026-07-29-ticket-team-standby-zero-spend.md) | `[TEAM-STANDBY-ZERO-SPEND]`: nessuna leva attuale azzera il costo di un team acceso — fermare anche i ruoli core |
 | [`2026-07-29-ticket-doctor-unblock-and-session-ttl.md`](roadmap/2026-07-29-ticket-doctor-unblock-and-session-ttl.md) | `[DOCTOR-UNBLOCK-AND-TTL]`: il Dottore deve sbloccare, sessioni con TTL 12h — dall'incidente delle undici ore ferme con quota abbondante |
 | [`2026-07-28-ticket-stepcap-throttle-resume.md`](roadmap/2026-07-28-ticket-stepcap-throttle-resume.md) | `[STEPCAP-THROTTLE-RESUME]`: ripresa automatica degli agenti fermi sul cap di step (`stepcap-watchdog.py`, implementato; resta la verifica su container vero) |
