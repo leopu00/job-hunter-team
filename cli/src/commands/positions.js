@@ -14,8 +14,25 @@
 
 import { Command } from 'commander';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { containerRunning, execInContainer, CONTAINER_NAME } from '../utils/container-proxy.js';
 import { JHT_DB_PATH } from '../jht-paths.js';
+
+// shared/skills/ risolto relativo a QUESTO file, non alla cwd:
+// cli/src/commands → cli/src → cli → <repo root> → shared/skills/…
+//
+// Il path relativo di prima (`shared/skills/<skill>`) funzionava solo se
+// l'utente lanciava `jht` dalla radice del repo. Ma `jht` è installato come
+// symlink in $JHT_BIN_DIR ed è pensato per essere chiamato da qualsiasi
+// cartella, quindi sul percorso nativo (senza container) ogni comando che
+// passa di qui moriva con un errore di Python — `can't open file '<cwd>/shared/…'`.
+// `import.meta.url` è il percorso REALE del modulo anche quando l'eseguibile è
+// raggiunto via symlink (Node risolve i symlink salvo `--preserve-symlinks`),
+// quindi la radice del repo si ricava da qui in modo affidabile.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SKILLS_DIR = join(__dirname, '../../../shared/skills');
 
 const c = {
   green:  (s) => `\x1b[32m${s}\x1b[0m`,
@@ -44,10 +61,26 @@ export function runSkill(skill, args) {
     if (r.stderr) process.stderr.write(r.stderr);
     return r.code ?? 1;
   }
-  const r = spawnSync('python3', [`shared/skills/${skill}`, ...args], {
+  // Fuori dal container la skill va cercata sul disco: se non c'è, il fallimento
+  // deve essere un messaggio del prodotto — chi legge `python3: can't open file`
+  // non ha modo di capire che gli manca il codice del team, non Python.
+  const skillPath = join(SKILLS_DIR, skill);
+  if (!existsSync(skillPath)) {
+    console.error(c.red(`✗ skill non trovata: ${skillPath}`));
+    console.error(c.dim(
+      `  Serve il container ${CONTAINER_NAME} attivo (jht team start) oppure una copia`,
+    ));
+    console.error(c.dim('  completa del repo: questo comando gira sulle skill in shared/skills/.'));
+    return 2;
+  }
+  const r = spawnSync('python3', [skillPath, ...args], {
     stdio: 'inherit',
     env: { ...process.env, JHT_DB: JHT_DB_PATH },
   });
+  if (r.error) {
+    console.error(c.red(`✗ impossibile eseguire python3: ${r.error.message}`));
+    return 2;
+  }
   return r.status ?? 1;
 }
 
