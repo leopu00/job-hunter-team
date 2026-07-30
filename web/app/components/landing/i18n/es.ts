@@ -86,8 +86,6 @@ export const es: Record<string, string> = {
   footer_links_aria: "Enlaces del pie de página",
 
   // LandingHome: hero alt + secciones
-  home_hero_alt:
-    "Ilustración estilo cómic: un equipo de agentes IA — todos con las mismas gafas de sol negras — sentados alrededor de una larga mesa de reuniones en una elegante oficina de rascacielos, mientras un agente de pie presenta gráficos en una pizarra.",
   home_team_alt:
     "Tres agentes del equipo de cuerpo entero: el Scout con una lupa, el Analista con bata de laboratorio, el Escritor con una pluma de ave — todos con gafas de sol.",
   home_setup_alt:

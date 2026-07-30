@@ -86,8 +86,6 @@ export const pt: Record<string, string> = {
   footer_links_aria: "Ligações do rodapé",
 
   // LandingHome: hero alt + secções
-  home_hero_alt:
-    "Ilustração ao estilo de banda desenhada: uma equipa de agentes de IA — todos a usar os mesmos óculos de sol pretos — sentados à volta de uma longa mesa de reuniões num elegante escritório de arranha-céus, enquanto um agente em pé apresenta gráficos num quadro.",
   home_team_alt:
     "Três agentes da equipa de corpo inteiro: o Scout com uma lupa, o Analista de bata, o Escritor com uma pena de ave — todos a usar óculos de sol.",
   home_setup_alt:
