@@ -1,6 +1,7 @@
 # TICKET — Throttle fuori dal dominio degli agenti: motore Python, notifica tmux, flag di stato
 
-**Stato**: da implementare · **Tag**: `[THROTTLE-ENGINE-EXTERNAL]` ·
+**Stato**: implementato (2026-07-30), ritiro dai prompt ancora da fare ·
+**Tag**: `[THROTTLE-ENGINE-EXTERNAL]` ·
 **Decisione utente**: 2026-07-30 ·
 **Correlato**: `[STEPCAP-THROTTLE-RESUME]`, `[TMUX-SEND-LOST-ENTER-ON-CLAUDE]`
 
@@ -114,3 +115,54 @@ loggato su `logs/throttle-engine.jsonl`.
    viene comunque consegnata (Space+Enter / verifica post-invio), non persa in silenzio.
 6. **Burn-intent**: con deroga attiva, valori sotto il floor passano; senza, il motore
    applica floor+ladder — gli agenti non cambiano di una riga.
+
+---
+
+## Stato dell'implementazione (2026-07-30)
+
+Tutti e sei i test di accettazione sono in `tests/test_throttle_engine.py` e passano.
+
+Fatto:
+
+- `shared/skills/throttle_engine.py` — daemon + CLI (`register` / `ack` / `check` /
+  `status` / `--once` / `--health`). Stato in `state/throttle-flags.json`, log su
+  `logs/throttle-engine.jsonl`. Nessun timer in memoria: ogni giro confronta gli
+  `until` letti da disco, quindi un respawn non ne perde nemmeno uno.
+- Avviato da `pid1` accanto agli altri watchdog, con respawn a 5s e kill nello
+  shutdown; atteso da `process_health.py` (gruppo `pid1-child`); il boot del
+  container pulisce i flag (ogni agente è una nuova istanza).
+- Tool nuovi: `agents/_tools/throttle`, `throttle-ack`, `throttle-set`.
+- I tre `jht-throttle*` sono shim sul motore. `jht-throttle` e `jht-throttle-wait`
+  ATTENDONO ancora in-turn, per non cambiare la semantica che i prompt attuali si
+  aspettano — ma l'attesa è ora una comodità: se il processo muore, il timer è del
+  motore e la sveglia arriva comunque. A fine attesa firmano l'ack, così il motore
+  non sveglia un agente già ripartito.
+- `stepcap-watchdog` ha il controllo `NOTIFIED > N min → escalation`
+  (`check_missing_acks`, evento `notified_no_ack`, soglia da
+  `throttle_engine.NOTIFIED_ACK_MAX_SEC`).
+- Skill in tutte e 7 le lingue: `throttle` riscritta, `throttle-ack` e
+  `throttle-set` nuove, registrate negli `skills.list` dei ruoli.
+- `logs/throttle-events.jsonl` continua a essere scritto (record `start`/`end`/
+  `checkpoint`, stesso schema), dal motore invece che da `throttle.py`: lo leggono
+  `throttle-series.py` e il conteggio della cadenza del `pacing-bridge`, e spegnerlo
+  avrebbe tolto al Capitano il dato con cui calibra la durata.
+
+Deliberatamente NON fatto (fuori dai componenti elencati sopra):
+
+- **Ritiro dai prompt.** I prompt di ruolo e `agents/_manual/communication-rules.md`
+  (7 lingue) insegnano ancora il gate `jht-throttle-check || jht-throttle-wait` e la
+  regola `timeout: N+30`. Funzionano — sono gli shim — ma raccontano il vecchio
+  contratto. La migrazione va fatta *sostituendo* quei paragrafi, non aggiungendo la
+  regola nuova accanto alla vecchia: due contratti nello stesso prompt sono peggio di
+  uno stantio.
+- **`pace_guard --apply`** resta come API manuale. Nessun automatismo la chiama (era
+  già così su master) e il suo docstring spiega perché cancellarla non aggiungerebbe
+  sicurezza.
+- **`shared/skills/throttle.py`** non viene più invocato da nessun percorso del
+  throttle, ma non è stato rimosso: è ancora citato negli `allowed-tools` di skill e
+  prompt non migrati, e cancellarlo prima di quel giro romperebbe l'autorizzazione
+  invece del comportamento.
+- **`spawn_stagger.py` e `stepcap-watchdog.py`** scrivono ancora il vecchio
+  `state/throttle-<agente>.json` (stagger del primo ciclo, pausa prima della
+  ripresa). Non sono nei componenti del ticket, quindi `check`/`wait` continuano a
+  leggerlo insieme al flag del motore, prendendo la scadenza più lontana.

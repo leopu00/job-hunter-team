@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# throttle-set — l'UNICA superficie di scrittura dei ritmi. Solo il Capitano.
+#
+# Wrapper su `shared/skills/throttle-config.py`, che già possiede floor, ladder
+# e deroga a termine. Qui non si aggiunge logica: si dà un nome corto al gesto
+# di governo, così la scrittura del throttle ha un solo posto da cui passa.
+#
+# ## Perché non serve avvisare nessuno
+#
+# Il motore rilegge la config **all'armamento di ogni timer**. Quindi un valore
+# cambiato qui morde al ciclo SUCCESSIVO dell'agente, da solo: niente messaggi
+# tmux, niente rilettura da parte dei worker, e il ciclo in corso non viene
+# alterato (il suo `until` era già stato calcolato). I worker non vedono mai un
+# numero e non sanno quanto aspettano.
+#
+# ## Uso
+#
+#   throttle-set <agente> <secondi>              # un agente
+#   throttle-set scout-1=660 analista-1=300 ...   # più agenti, 1 write atomico
+#   throttle-set --dump                          # i valori EFFETTIVI correnti
+#   throttle-set --get <agente>                   # il valore effettivo di uno
+#   throttle-set --reset                          # azzera tutti gli override
+#
+# I secondi si agganciano alla ladder coprima e non scendono sotto il worker
+# floor (5min) — salvo deroga a termine dell'utente. Quello che leggi indietro è
+# l'EFFETTIVO, non quello che hai chiesto: è il valore che l'agente subirà.
+#
+# ## Exit codes
+#
+#   0 → scritto / letto
+#   1 → argomenti invalidi, valore fuori range, o skill non trovata
+
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CFG="/app/shared/skills/throttle-config.py"
+[ -f "$CFG" ] || CFG="${SCRIPT_DIR}/../../shared/skills/throttle-config.py"
+if [ ! -f "$CFG" ]; then
+  echo "error: throttle-config.py non trovato" >&2
+  exit 1
+fi
+
+usage() {
+  cat <<'HLP'
+Usage: throttle-set <agent> <seconds>
+       throttle-set <agent>=<seconds> [<agent>=<seconds> ...]
+       throttle-set --dump | --get <agent> | --reset
+Unica superficie di scrittura dei ritmi. Il motore rilegge la config quando arma
+il timer: il nuovo valore morde al ciclo successivo dell'agente, senza messaggi.
+HLP
+}
+
+case "${1:-}" in
+  ""|-h|--help) usage; [ -z "${1:-}" ] && exit 1 || exit 0 ;;
+  --dump)  exec python3 "$CFG" dump ;;
+  --reset) exec python3 "$CFG" reset ;;
+  --get)
+    if [ -z "${2:-}" ]; then
+      echo "error: --get richiede un agente" >&2
+      exit 1
+    fi
+    exec python3 "$CFG" get "$2"
+    ;;
+esac
+
+# Forma `agent=seconds ...` → bulk-set (un solo write atomico).
+case "$1" in
+  *=*) exec python3 "$CFG" bulk-set "$@" ;;
+esac
+
+# Forma `agent seconds`.
+if [ -z "${2:-}" ]; then
+  echo "error: secondi richiesti — uso: throttle-set <agente> <secondi>" >&2
+  exit 1
+fi
+exec python3 "$CFG" set "$1" "$2"

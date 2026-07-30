@@ -13,6 +13,9 @@ db-update
 
 # Throttle (cooldown loop, freeze)
 throttle
+# Wake-up ack: first command after every throttle pause. Without it the
+# flag stays on NOTIFIED and the watchdog escalates on a healthy agent.
+throttle-ack
 
 # Resilience ladder (SC-08): su resume/batch con tool rotto → retry/ripara/alt/OPEN_UNVERIFIED,
 # mai stop silenzioso (no falso new=0).
