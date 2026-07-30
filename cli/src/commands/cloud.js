@@ -2595,7 +2595,12 @@ async function handleChatSync(options = {}) {
     await reportChatLane(chat, config, reader, chat.diagnoseChatLane({
       pending,
       requestedAt: state?.chat_requested_at ?? null,
-      canRead: !!reader,
+      // `channel`, non `reader`: da quando il pull ha il ripiego via Vercel
+      // col token del box, un box senza letture dirette RIESCE a ritirare i
+      // turni. Diagnosticare sul solo `reader` significherebbe gridare "non
+      // ho modo di ritirarli" su 4 box su 5 mentre la chat funziona — e un
+      // allarme sempre acceso insegna a ignorare gli allarmi.
+      canRead: !!channel,
       readError,
       queued: queue.count,
       oldestQueuedAt: queue.oldest,
