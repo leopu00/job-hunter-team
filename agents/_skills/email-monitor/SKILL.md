@@ -1,88 +1,88 @@
 ---
 name: email-monitor
-description: "Day-start sourcing dalla casella email DEDICATA del team (l'utente vi inoltra i propri job alert). Sorgente a più alta accuratezza: l'alert è già pre-filtrato sull'intento dell'utente. Poll IMAP di QUALSIASI piattaforma (LinkedIn/Glassdoor/Indeed + board nazionali/di città/di nicchia), crea posizioni col tag source, idempotente per Message-ID. Il VOLUME lo bilancia il Capitano (C-16): a inizio giornata si legge l'email PRIMA dello scraping web; su flood si ingeriscono solo le salienti, così il funnel arriva allo SCORE."
+description: "Day-start sourcing from the team's DEDICATED mailbox (the user forwards their own job alerts to it). Highest-accuracy source: the alert is already pre-filtered on the user's intent. IMAP poll of ANY platform (LinkedIn/Glassdoor/Indeed + national/city/niche boards), creates positions with the source tag, idempotent by Message-ID. VOLUME is balanced by the Captain (C-16): at day start read the email BEFORE web scraping; on a flood ingest only the salient ones, so the funnel reaches the SCORE."
 allowed-tools: Bash(python3 /app/shared/skills/email_monitor.py *), Bash(python3 /app/shared/skills/scout_dedup.py *), Bash(python3 /app/shared/skills/db_insert.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
-# email-monitor — leggere i job alert inoltrati, a inizio giornata
+# email-monitor — reading forwarded job alerts, at day start
 
-L'utente crea un'email **dedicata** (es. `nome.jht@gmail.com`) e imposta sul
-proprio client delle **regole di inoltro** che ci mandano i job alert (LinkedIn,
-Glassdoor, Indeed **e qualsiasi altra piattaforma** che notifica via mail). Tu
-leggi quella casella e trasformi gli alert in posizioni. È la sorgente più
-**accurata** (l'alert è già filtrato sul target dall'utente) e la più
-**economica in token** (niente scraping alla cieca).
+The user creates a **dedicated** email address (e.g. `name.jht@gmail.com`) and
+sets up **forwarding rules** in their own client that send us the job alerts
+(LinkedIn, Glassdoor, Indeed **and any other platform** that notifies by mail).
+You read that mailbox and turn the alerts into positions. It is the most
+**accurate** source (the alert is already filtered on the target by the user) and
+the most **token-cheap** one (no blind scraping).
 
-> 📍 **Opzionale ma consigliata.** Se non è configurata, il team lavora come
-> prima (web sourcing). Niente blocco.
+> 📍 **Optional but recommended.** If it is not configured, the team works as
+> before (web sourcing). Nothing is blocked.
 
-## Quando
+## When
 
-- **A inizio finestra di lavoro** (day-start): leggi l'email **PRIMA** dello
-  scraping web. Gli alert notturni sono già lì.
-- Poi al massimo ogni ~30 min (l'IMAP server-side rate-limita oltre, e nuovi
-  alert non arrivano più spesso). Non pollare più frequente.
-- Claim della sorgente in STEP 0 (`scout-coord`): `scout_workspace.py claim
-  <agent> email:<box>` — un solo Scout per la casella, niente collisioni.
+- **At the start of the work window** (day-start): read the email **BEFORE** web
+  scraping. Overnight alerts are already there.
+- Then at most every ~30 min (the IMAP server rate-limits beyond that, and new
+  alerts do not arrive more often). Do not poll more frequently.
+- Claim the source in STEP 0 (`scout-coord`): `scout_workspace.py claim
+  <agent> email:<box>` — one Scout only per mailbox, no collisions.
 
-## Procedura
+## Procedure
 
-### 1. È configurata?
+### 1. Is it configured?
 ```bash
 python3 /app/shared/skills/email_monitor.py status
 ```
-`configured=false` → la casella non c'è: salta, fai web sourcing normale.
-`any_platform=true` significa che processiamo **l'intera** inbox dedicata (nessun
-`from_filters` ristretto) → ogni mittente che l'utente inoltra viene letto.
+`configured=false` → the mailbox is not there: skip, do normal web sourcing.
+`any_platform=true` means we process the **entire** dedicated inbox (no narrow
+`from_filters`) → every sender the user forwards gets read.
 
-### 2. Stima il VOLUME (economico, no body fetch)
+### 2. Estimate the VOLUME (cheap, no body fetch)
 ```bash
 python3 /app/shared/skills/email_monitor.py count
 ```
-Ritorna `new_total` + `by_sender`. Serve a **te e al Capitano** per capire se è
-un volume gestibile o un **flood**. Su flood, **il Capitano (C-16) ti dice
-quante / quali** ingerire: l'obiettivo è che le posizioni arrivino a uno
-**score**, non accumularne 200 mai valutate.
+Returns `new_total` + `by_sender`. It tells **you and the Captain** whether this
+is a manageable volume or a **flood**. On a flood, **the Captain (C-16) tells you
+how many / which ones** to ingest: the goal is that positions reach a **score**,
+not to pile up 200 that are never evaluated.
 
 ### 3. Poll → leads
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
 ```
-Ogni riga JSONL è un lead: `{"url","source","subject","sender","received_at"}`.
-- `source` = `linkedin-email` / `glassdoor-email` / `indeed-email` per i provider
-  noti, `email:<domain>` per qualsiasi altra piattaforma (estrazione generica).
-- L'idempotency (Message-ID in `state/email_monitor_seen.json`) garantisce che un
-  re-run **non** riprocessi gli stessi alert.
+Every JSONL line is a lead: `{"url","source","subject","sender","received_at"}`.
+- `source` = `linkedin-email` / `glassdoor-email` / `indeed-email` for the known
+  providers, `email:<domain>` for any other platform (generic extraction).
+- Idempotency (Message-ID in `state/email_monitor_seen.json`) guarantees that a
+  re-run does **not** reprocess the same alerts.
 
-### 4. Per ogni lead → i 5 gate di `position-insert`
-Tratta ogni `url` **esattamente come un hit web**: dedup (`scout_dedup.py`) →
-verifica link attivo → fetch JD → 4 filtri Scout → INSERT in `positions`
-(`status=new`). **Mantieni il tag `--source`** del lead (`linkedin-email`,
-`email:<domain>`): è ciò che rende **misurabile l'accuratezza per sorgente** sulla
-dashboard. JD obbligatoria (SC-02): se non riesci a recuperarla, non inventarla.
+### 4. For every lead → the 5 gates of `position-insert`
+Treat each `url` **exactly like a web hit**: dedup (`scout_dedup.py`) → check the
+link is live → fetch the JD → 4 Scout filters → INSERT into `positions`
+(`status=new`). **Keep the lead's `--source` tag** (`linkedin-email`,
+`email:<domain>`): it is what makes **per-source accuracy measurable** on the
+dashboard. JD is mandatory (SC-02): if you cannot retrieve it, do not invent it.
 
-## Bilanciamento (giudizio del Capitano, C-16)
+## Balancing (Captain's judgement, C-16)
 
-Leggere è gratis (`poll`/`count`), **elaborare** fino allo score costa. Il
-decisore è il Capitano, non una formula:
-- Volume ragionevole → elaborale tutte (più segnale è meglio).
-- Flood → porta avanti solo le **salienti**, con due criteri dai soli metadati
-  (gratis): **(1) match col profilo/target** dell'utente (ruolo/keyword nel
-  `subject`/titolo) e **(2) freschezza** (`received_at` più recente). Le altre si
-  riprendono nelle finestre successive.
-- Obiettivo: le posizioni **arrivano a uno score**, non si accumulano non
-  valutate. Niente soglie fisse — il Capitano decide quante in base al budget.
+Reading is free (`poll`/`count`), **processing** up to the score costs. The
+decision-maker is the Captain, not a formula:
+- Reasonable volume → process them all (more signal is better).
+- Flood → carry forward only the **salient** ones, with two criteria taken from
+  metadata alone (free): **(1) match with the user's profile/target** (role or
+  keyword in the `subject`/title) and **(2) freshness** (most recent
+  `received_at`). The rest are picked up in the following windows.
+- Goal: positions **reach a score**, they do not pile up unevaluated. No fixed
+  thresholds — the Captain decides how many based on the budget.
 
-## Anti-pattern
+## Anti-patterns
 
-- ❌ Pollare più spesso di ~30 min (rate-limit IMAP, nessun nuovo alert).
-- ❌ INSERT senza JD completa (SC-02) o senza il tag `source`.
-- ❌ Creare a valanga su flood ignorando il giudizio del Capitano (C-16): si gonfia
-  la coda di posizioni che non arriveranno mai a uno score.
-- ❌ Bypassare il dedup (SC-05): gli stessi alert si ripetono ogni giorno.
+- ❌ Polling more often than ~30 min (IMAP rate-limit, no new alerts anyway).
+- ❌ INSERT without the full JD (SC-02) or without the `source` tag.
+- ❌ Creating in bulk on a flood, ignoring the Captain's judgement (C-16): it
+  inflates the queue with positions that will never reach a score.
+- ❌ Bypassing the dedup (SC-05): the same alerts repeat every day.
 
 ## See also
 
-- `position-insert` — i 5 gate di INSERT (il tuo flusso standard).
-- `scout-coord` — claim della sorgente `email:*` a boot (anti-collisione).
-- `circles-and-sources` — il sourcing web, da fare DOPO l'email a inizio giornata.
+- `position-insert` — the 5 INSERT gates (your standard flow).
+- `scout-coord` — claim of the `email:*` source at boot (anti-collision).
+- `circles-and-sources` — web sourcing, to be done AFTER the email at day start.

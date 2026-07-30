@@ -4,125 +4,126 @@ description: Extract the company logo for a company in the companies table and s
 allowed-tools: Bash(python3 *), Bash(curl *), Bash(jq *), WebSearch, WebFetch
 ---
 
-# logo-extraction — logo aziendale per la pagina posizione
+# logo-extraction — the company logo for the position page
 
-Il web mostra il logo dell'azienda sulla pagina di dettaglio posizione.
-Il logo vive sulla riga `companies` (UNA per azienda: 1000 posizioni
-Wizz Air = 1 logo) come data-URI base64 piccolo, e viaggia col sync
-companies esistente. Nessun upload, nessuno storage esterno.
+The web shows the company logo on the position detail page. The logo
+lives on the `companies` row (ONE per company: 1000 Wizz Air positions
+= 1 logo) as a small base64 data-URI, and travels with the existing
+companies sync. No upload, no external storage.
 
-## 3 colonne da popolare (le scrive `logo_fetch.py`, MAI a mano)
+## 3 columns to fill in (`logo_fetch.py` writes them, NEVER by hand)
 
 ```
-logo          text  data-URI base64 (png/jpeg/webp/ico), <= ~35KB raw
-logo_source   text  URL da cui il logo è stato estratto (audit/refresh)
-logo_fetched  bool  true = estrazione TENTATA (anche se fallita) —
-                    pattern office_geocoded: l'azienda esce dalla coda
-                    next-for-logo-missing e non si riprova a ogni giro
+logo          text  base64 data-URI (png/jpeg/webp/ico), <= ~35KB raw
+logo_source   text  URL the logo was extracted from (audit/refresh)
+logo_fetched  bool  true = extraction ATTEMPTED (even if it failed) —
+                    office_geocoded pattern: the company leaves the
+                    next-for-logo-missing queue, no retry every round
 ```
 
-## REGOLA d'oro: azienda giusta, sito giusto
+## GOLDEN RULE: right company, right site
 
-**Il logo sbagliato è peggio di nessun logo.** Prima di lanciare il
-fetch verifica che `companies.website` appartenga DAVVERO all'azienda
-della posizione (non un omonimo, non l'aggregatore che ha pubblicato
-l'annuncio, non il gruppo madre sbagliato). In dubbio: web search
-`"<Company> official site"` e confronta col settore/paese della riga.
+**The wrong logo is worse than no logo.** Before launching the fetch,
+verify that `companies.website` REALLY belongs to the company of the
+position (not a namesake, not the aggregator that published the ad, not
+the wrong parent group). When in doubt: web search
+`"<Company> official site"` and compare with the sector/country on the row.
 
-- Annuncio pubblicato da agenzia/recruiter (Manpower, Randstad, ...) MA
-  per conto di un hotel/azienda nominata → il logo è dell'azienda della
-  riga `companies` collegata alla posizione, qualunque essa sia.
-- Catena vs proprietà (es. "CARDO ROMA, Autograph Collection"): usa il
-  logo del brand che compare come `companies.name`.
+- Ad published by an agency/recruiter (Manpower, Randstad, ...) BUT on
+  behalf of a named hotel/company → the logo is that of the company on the
+  `companies` row linked to the position, whichever it is.
+- Chain vs property (e.g. "CARDO ROMA, Autograph Collection"): use the
+  logo of the brand that appears as `companies.name`.
 
 ## Workflow
 
-### Step 0 — La coda
+### Step 0 — The queue
 
 ```bash
 python3 /app/shared/skills/db_query.py next-for-logo-missing
 ```
 
-Elenca le aziende con posizioni vive e logo mai tentato, ordinate per
-numero di posizioni (prima le più visibili). `NO WEBSITE (cercalo
-prima)` = fai prima Step 1.
+Lists companies with live positions and a logo never attempted, ordered by
+number of positions (most visible first). `NO WEBSITE (cercalo
+prima)` = do Step 1 first.
 
-### Step 1 — Website mancante? Trovalo e salvalo
+### Step 1 — Website missing? Find it and save it
 
 ```bash
-# dopo web search "<Company> official website":
+# after a web search "<Company> official website":
 python3 /app/shared/skills/db_update.py company "<Company>" \
   --website https://www.wizzair.com
 ```
 
-### Step 2 — Fetch automatico (il percorso normale)
+### Step 2 — Automatic fetch (the normal path)
 
 ```bash
 python3 /app/shared/skills/logo_fetch.py "<Company>"
 ```
 
-Lo script: scarica la homepage, prova `apple-touch-icon` → `icon`
-grandi → `og:image` → `/favicon.*`, valida formato (png/jpeg/webp/ico,
-MAI svg), peso (200B–35KB) e lato minimo (>=32px), salva il data-URI e
-marca `logo_fetched=1`. Output JSON su stdout. `--dry-run` per provare
-senza scrivere, `--force` per sostituire un logo esistente.
+The script: downloads the homepage, tries `apple-touch-icon` → large
+`icon` → `og:image` → `/favicon.*`, validates format (png/jpeg/webp/ico,
+NEVER svg), weight (200B–35KB) and minimum side (>=32px), saves the
+data-URI and marks `logo_fetched=1`. JSON output on stdout. `--dry-run` to
+try without writing, `--force` to replace an existing logo.
 
-### Step 3 — Sito anti-bot o senza icona usabile → `--from-url`
+### Step 3 — Anti-bot site or no usable icon → `--from-url`
 
-Se Step 2 dà `NO_CANDIDATE` (siti come marriott.com bloccano i bot):
+If Step 2 returns `NO_CANDIDATE` (sites like marriott.com block bots):
 
 1. Web search `"<Company> logo png"` / `"<Company> press kit logo"` /
-   pagina Wikipedia dell'azienda (i file Wikimedia hanno URL diretti).
-2. Trova l'**URL diretto dell'immagine** (deve finire in .png/.jpg/
-   .webp/.ico o comunque servire l'immagine raw, non una pagina HTML).
+   the company's Wikipedia page (Wikimedia files have direct URLs).
+2. Find the **direct image URL** (it must end in .png/.jpg/.webp/.ico, or
+   at least serve the raw image, not an HTML page).
 3. ```bash
    python3 /app/shared/skills/logo_fetch.py "<Company>" \
      --from-url "https://upload.wikimedia.org/.../Wizz_Air_logo.png"
    ```
-   La stessa validazione (peso/formato/dimensioni) si applica: se
-   l'immagine è troppo pesante cerca una variante più piccola
-   (thumbnail Wikimedia: sostituisci nel path `/1200px-` con `/240px-`).
+   The same validation (weight/format/size) applies: if the image is too
+   heavy, look for a smaller variant (Wikimedia thumbnail: replace
+   `/1200px-` with `/240px-` in the path).
 
-### Step 4 — Niente di usabile dopo 3 tentativi → marca e passa oltre
+### Step 4 — Nothing usable after 3 attempts → mark it and move on
 
 ```bash
 python3 /app/shared/skills/logo_fetch.py "<Company>" --mark-attempted
 ```
 
-`logo_fetched=1` con logo NULL: la pagina web mostra il fallback a
-iniziali, l'azienda esce dalla coda. NON insistere oltre 3 tentativi.
+`logo_fetched=1` with a NULL logo: the web page shows the initials
+fallback, the company leaves the queue. Do NOT insist beyond 3 attempts.
 
-## Policy di risparmio (enrichment-policy)
+## Saving policy (enrichment-policy)
 
-Il fetch autonomo rispetta `$JHT_HOME/profile/enrichment-policy.json`
-(controlla con `python3 /app/shared/skills/enrichment_policy.py show`).
-Risposte possibili di `logo_fetch.py`:
+The autonomous fetch respects `$JHT_HOME/profile/enrichment-policy.json`
+(check it with `python3 /app/shared/skills/enrichment_policy.py show`).
+Possible answers from `logo_fetch.py`:
 
-- `POLICY_DISABLED` — risparmio attivo (`economy=true`) o
-  `logo.enabled=false`: NON estrarre, non è un errore. Vai avanti.
-- `POLICY_SCORE_GATE` — l'azienda non ha ancora posizioni vive con
-  score ≥ `logo.min_score`: NON insistere. Non marca `logo_fetched`:
-  quando lo Scorer supera la soglia, l'azienda rientra in coda da sola.
+- `POLICY_DISABLED` — saving mode is on (`economy=true`) or
+  `logo.enabled=false`: do NOT extract, it is not an error. Move on.
+- `POLICY_SCORE_GATE` — the company has no live positions yet with a
+  score ≥ `logo.min_score`: do NOT insist. It does not mark
+  `logo_fetched`: when the Scorer crosses the threshold, the company
+  re-enters the queue on its own.
 
-`--force` scavalca la policy: usalo SOLO su richiesta esplicita
-dell'utente, mai in autonomia.
+`--force` overrides the policy: use it ONLY on an explicit request from
+the user, never on your own initiative.
 
-## Qualità attesa
+## Expected quality
 
-- **Preferisci** icone quadrate 96–256px (apple-touch-icon è l'ideale).
-- 32–48px (favicon) è accettabile come ripiego: il riquadro web è
-  piccolo. Sotto 32px lo script rifiuta da solo.
-- Il cap 35KB è **rigido** (protegge DB e sync): non aggirarlo, cerca
-  una variante più leggera.
+- **Prefer** square icons 96–256px (apple-touch-icon is ideal).
+- 32–48px (favicon) is acceptable as a fallback: the web box is small.
+  Below 32px the script rejects it by itself.
+- The 35KB cap is **hard** (it protects DB and sync): do not work around
+  it, look for a lighter variant.
 
-## Vietati
+## Forbidden
 
-- ❌ Logo di un'azienda OMONIMA o del gruppo sbagliato (verifica web!)
-- ❌ Logo dell'aggregatore/job-board (LinkedIn, Indeed) al posto
-  dell'azienda
-- ❌ Scrivere `logo`/`logo_source`/`logo_fetched` a mano con db_update:
-  passa SEMPRE da `logo_fetch.py` (è l'unico che valida)
-- ❌ SVG, immagini >35KB, icone <32px (lo script li rifiuta: non
-  cercare di aggirarlo)
-- ❌ Screenshot della homepage o ritagli: solo file-logo reali
-- ❌ Più di 3 tentativi per azienda: marca `--mark-attempted` e avanti
+- ❌ The logo of a NAMESAKE company or of the wrong group (verify on the web!)
+- ❌ The logo of the aggregator/job board (LinkedIn, Indeed) instead of
+  the company's
+- ❌ Writing `logo`/`logo_source`/`logo_fetched` by hand with db_update:
+  ALWAYS go through `logo_fetch.py` (it is the only one that validates)
+- ❌ SVG, images >35KB, icons <32px (the script rejects them: do not try
+  to work around it)
+- ❌ Homepage screenshots or crops: real logo files only
+- ❌ More than 3 attempts per company: mark `--mark-attempted` and move on

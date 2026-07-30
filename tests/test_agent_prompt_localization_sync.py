@@ -30,6 +30,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = REPO_ROOT / 'agents'
+SKILLS_DIR = AGENTS_DIR / '_skills'
 TEAM_RULES = AGENTS_DIR / '_team' / 'team-rules.md'
 
 # Le 6 localizzazioni affiancate al file EN baseline (`<role>.md`).
@@ -171,6 +172,33 @@ def test_every_role_has_all_localizations():
             if not p.exists():
                 missing.append(str(p.relative_to(REPO_ROOT)))
     assert not missing, 'localizzazioni mancanti:\n  ' + '\n  '.join(missing)
+
+
+def test_skill_en_baseline_is_not_a_copy_of_italian():
+    """`SKILL.md` (baseline EN) non e' mai IDENTICO a `SKILL.it.md`.
+
+    Origin: 2026-07-30 — `graceful-shutdown/SKILL.md` e `SKILL.it.md` erano
+    byte-identici: il "baseline EN" era la traduzione italiana copiata. Il
+    baseline e' la lingua di fallback (`start-agent.sh` ci ricade per ogni
+    locale privo di variante), quindi un utente `en` riceveva la skill in
+    italiano. Controllo GREZZO apposta: due file identici sono la prova che la
+    traduzione non e' mai avvenuta, e questo l'avrebbe intercettato al primo
+    commit. Non pretende di riconoscere la lingua — quello lo fa la review.
+    """
+    same = []
+    for d in sorted(SKILLS_DIR.iterdir()):
+        if not d.is_dir():
+            continue
+        base = d / 'SKILL.md'
+        it = d / 'SKILL.it.md'
+        if not (base.exists() and it.exists()):
+            continue
+        if _read(base) == _read(it):
+            same.append(d.name)
+    assert not same, (
+        'baseline EN identico alla traduzione IT (il baseline e\' il fallback '
+        'per ogni locale: va scritto in inglese):\n  ' + '\n  '.join(same)
+    )
 
 
 def test_inherited_rule_range_reaches_last_team_rule():

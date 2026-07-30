@@ -20,33 +20,33 @@ Create the directory if it does not exist:
 mkdir -p "$JHT_HOME/profile"
 ```
 
-## Live update — incremental, after EVERY rilevant input
+## Live update — incremental, after EVERY relevant input
 
 The frontend polls the file every ~2s. Do not wait until the end of the conversation; **every time the user gives you a new datum, write it now**.
 
-- "mi chiamo Mario" → write `name: Mario` immediately.
-- "cerco un ruolo da cuoco" → update `target_role: cuoco` immediately.
+- "my name is Mario" → write `name: Mario` immediately.
+- "I'm looking for a job as a cook" → update `target_role: cook` immediately.
 - file uploaded with experience details → after the Read, update **all** the fields in one Write.
 
 Each new datum = one `Write` or `Edit` on the file. Then validate. Then keep the conversation moving.
 
 ## Mandatory validation after EVERY write/edit
 
-Valida contro lo **schema canonico** (non solo "è YAML parsabile"): vedi la skill
-[`profile-schema`](../profile-schema/SKILL.md) per lo schema completo.
+Validate against the **canonical schema** (not just "it parses as YAML"): see the
+[`profile-schema`](../profile-schema/SKILL.md) skill for the full schema.
 
 ```bash
 jht profile validate
-# fallback diretto:
+# direct fallback:
 # python3 /app/shared/skills/validate_profile.py "$JHT_HOME/profile/candidate_profile.yml"
 ```
 
-`VALID_PROFILE` → prosegui. `INVALID_PROFILE` → leggi gli `ERROR:` (campo + motivo),
-correggi quel campo, rivalida. I `WARN:` (chiavi legacy, es. `languages[].name` invece
-di `language`) non bloccano ma vanno sistemati quando tocchi quella sezione.
+`VALID_PROFILE` → carry on. `INVALID_PROFILE` → read the `ERROR:` lines (field + reason),
+fix that field, revalidate. The `WARN:` lines (legacy keys, e.g. `languages[].name` instead
+of `language`) do not block but should be cleaned up when you touch that section.
 
-**Do NOT continue the conversation with the user until `VALID_PROFILE`.** Un profilo rotto
-svuota l'intero pannello sinistro; l'utente pensa che l'app sia crashata.
+**Do NOT continue the conversation with the user until `VALID_PROFILE`.** A broken profile
+empties the whole left panel; the user thinks the app has crashed.
 
 If you forgot to add the validation step you can be sure the file is broken — there is no "probably ok". Always run it.
 
@@ -57,8 +57,8 @@ The frontend's parser is strict. Five rules that prevent every issue we have see
 1. **Block scalar (`|-` or `>-`) for any text > 60 characters** — descriptions, summaries, free notes, strengths. Inline strings break on commas, colons, quotes, newlines, parentheses.
    ```yaml
    summary: |-
-     Qui puoi scrivere testo lungo, anche con virgole, due punti, apici,
-     a capo, parentesi: il parser lo prende cosi' com'e'.
+     Here you can write long text, with commas, colons, apostrophes,
+     newlines, parentheses: the parser takes it exactly as it is.
    ```
 2. **Quote inline strings with special chars** — if you must keep a string inline and it contains `"`, `:`, `#`, `&`, `*`, `>`, `|`, `%`, `@`, wrap it in double quotes (`"…"`) or switch to block scalar.
 3. **Space after every `:`** — `role: Senior` ✅ · `role:Senior` ❌.
@@ -70,178 +70,178 @@ The frontend's parser is strict. Five rules that prevent every issue we have see
 The frontend has a fallback that unlocks "Vai alla dashboard" when these are present + non-empty (so the user can proceed even before you create `ready.flag`). Populate them all:
 
 ```yaml
-name: <Nome Cognome>
-target_role: <ruolo target — frase descrittiva>
-target_roles_priority:        # 2-5 titoli di ruolo CONCRETI e cercabili, in priorità
-  - <es. "Investment Analyst">  # è il campo "Ruoli desiderati" che la UI mostra
-  - <es. "Private Equity Analyst">  # e su cui lo Scout cerca (NON la frase di target_role)
-location: <città o area>
+name: <First Last>
+target_role: <target role — descriptive phrase>
+target_roles_priority:        # 2-5 CONCRETE, searchable role titles, in priority order
+  - <e.g. "Investment Analyst">  # it is the "Ruoli desiderati" field the UI shows
+  - <e.g. "Private Equity Analyst">  # and the one the Scout searches on (NOT the target_role phrase)
+location: <city or area>
 experience_years: <int>
 has_degree: <true|false>
 seniority_target: <junior|mid|senior>
-industry: <settore>
+industry: <sector>
 
 skills:
-  primary: [...]              # >= 2 voci
+  primary: [...]              # >= 2 entries
   secondary: [...]
 
-languages:                    # >= 1 voce
-  - language: <nome>
+languages:                    # >= 1 entry
+  - language: <name>
     level: <A1..C2 | native>
 
 candidate:
-  name: <stesso di sopra>
-  target_role: <stesso di sopra>
+  name: <same as above>
+  target_role: <same as above>
   contacts:
     email: ...
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 voce, ognuna con company/role/years/summary
+  experience:                 # >= 1 entry, each with company/role/years/summary
     - company: ...
       role: ...
-      years: ...              # es. "Mar 2022 - in corso" — usato per durata reale
+      years: ...              # e.g. "Mar 2022 - present" — used for the real duration
       summary: |-
         ...
-  education:                  # >= 1 voce, ognuna con institution/degree/year
+  education:                  # >= 1 entry, each with institution/degree/year
     - institution: ...
       degree: ...
       year: ...
-  strengths:                  # 2-4 qualità come voci brevi (è il campo "Punti di forza"
-    - <es. "Modellazione DCF">  # della UI). Stessa lista che racconti in strengths.md;
-    - <es. "Analisi del rischio di credito">  # qui in forma di tag, lì in forma narrativa
+  strengths:                  # 2-4 qualities as short entries (it is the UI's "Punti di forza"
+    - <e.g. "DCF modelling">  # field). Same list you narrate in strengths.md;
+    - <e.g. "Credit risk analysis">  # here as tags, there in narrative form
 
-preferences:                  # CHIAVI ESATTE — il frontend cerca proprio queste
+preferences:                  # EXACT KEYS — the frontend looks for exactly these
   work_mode: <remoto|ibrido|in sede|flessibile>
-  work_mode_flexibility: <opzionale, testo libero>
+  work_mode_flexibility: <optional, free text>
   relocation: <true|false|"per la giusta posizione">
-  salary_annual_eur: <es. "30-35k" | null>
+  salary_annual_eur: <e.g. "30-35k" | null>
 
 sector_details:
-  <chiavi libere, snake_case — vedi sezione sotto>
+  <free keys, snake_case — see the section below>
 ```
 
-Le chiavi `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` sono lette letteralmente dal frontend per popolare la sezione "Preferenze di lavoro". Nomi alternativi (`work_location`, `flexible`, `remote`) restano scritti ma invisibili all'utente.
+The keys `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` are read literally by the frontend to populate the "Preferenze di lavoro" section. Alternative names (`work_location`, `flexible`, `remote`) stay written but are invisible to the user.
 
-Schema completo + esempi: `docs/examples/candidate_profile.yml.example` (per documentazione, **NON copiarne i valori** — vedi anti-hallucination).
+Full schema + examples: `docs/examples/candidate_profile.yml.example` (for documentation, **do NOT copy its values** — see anti-hallucination).
 
-## `sector_details` — chiavi libere per il settore dell'utente
+## `sector_details` — free keys for the user's sector
 
-Sezione generica key/value che il frontend mostra come lista. Le chiavi le scegli tu in base al mestiere dell'utente. Esempi reali:
+A generic key/value section that the frontend shows as a list. You choose the keys based on the user's trade. Real examples:
 
 ```yaml
-# Cucina
+# Kitchen
 sector_details:
   specializzazione: Pasticceria
   brigate: "ristoranti grandi (10+ persone in cucina)"
   patenti: ["HACCP", "antincendio rischio medio"]
   ruolo_attuale: "Capo partita salata"
 
-# Sanità
+# Healthcare
 sector_details:
   specializzazione_infermieristica: "Area critica"
   iscrizione_albo: "OPI Roma n. 12345"
   reparti: ["Pronto soccorso", "Terapia intensiva"]
   turni_abituali: "notturni + festivi"
 
-# Edile / impianti
+# Construction / plant engineering
 sector_details:
   patenti: ["CAP carrello elevatore", "PES/PAV", "patentino ponteggi"]
   specializzazione: "Impianti elettrici industriali"
   anni_cantiere: 12
 
-# Insegnamento
+# Teaching
 sector_details:
   classe_concorso: "A-12 (Italiano, Storia)"
   anni_ruolo: 8
   specializzazione_sostegno: true
 ```
 
-Regole:
-- Chiavi in `snake_case`, brevi e leggibili.
-- Inserisci solo chiavi con valore reale del candidato. Se non sai → ometti (mai `null` / `""`).
-- Valori: stringa, numero, booleano, array di stringhe.
-- Settore non in lista → inventa le chiavi giuste tu, basandoti su cosa è importante in quel mestiere. Es. camionista: `patente: CE+CQC`, `anni_alla_guida: 15`, `tratte_abituali: [...]`.
+Rules:
+- Keys in `snake_case`, short and readable.
+- Only add keys with a real value for the candidate. If you do not know → omit (never `null` / `""`).
+- Values: string, number, boolean, array of strings.
+- Sector not in the list → invent the right keys yourself, based on what matters in that trade. E.g. truck driver: `patente: CE+CQC`, `anni_alla_guida: 15`, `tratte_abituali: [...]`.
 
-## `ready.flag` — sblocco "Vai alla dashboard"
+## `ready.flag` — unlocking "Vai alla dashboard"
 
-Il bottone è disabilitato di default. Il frontend lo abilita SE:
-- esiste `$JHT_HOME/profile/ready.flag` (il flag esplicito che TU crei), **OPPURE**
-- il backend rileva che lo schema minimo è già completo (fallback automatico).
+The button is disabled by default. The frontend enables it IF:
+- `$JHT_HOME/profile/ready.flag` exists (the explicit flag that YOU create), **OR**
+- the backend detects that the minimum schema is already complete (automatic fallback).
 
-Quindi spesso il bottone è già sbloccato dal fallback quando il profilo è completo — **non annunciare lo sblocco se non sei stato tu a fare il flag**.
+So the button is often already unlocked by the fallback when the profile is complete — **do not announce the unlock if you were not the one who made the flag**.
 
-### Quando creare il flag (3 step RIGIDI, mai saltarli, mai cambiarli di ordine)
+### When to create the flag (3 STRICT steps, never skip them, never reorder them)
 
 ```bash
-# 1. Crea il flag con timestamp UTC
+# 1. Create the flag with a UTC timestamp
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
 
-# 2. VERIFICA che il file esista davvero (può fallire silenziosamente:
-#    permessi, dir mancante, quota disco, ecc.)
+# 2. VERIFY that the file really exists (it can fail silently:
+#    permissions, missing dir, disk quota, etc.)
 test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 
-# 3. SOLO se passo 2 = FLAG_OK → manda il messaggio in chat.
-#    Se FLAG_MISSING → fix (es. mkdir -p) e ripeti dal passo 1.
-#    NON annunciare MAI lo sblocco senza FLAG_OK nel passo precedente.
+# 3. ONLY if step 2 = FLAG_OK → send the message in the chat.
+#    If FLAG_MISSING → fix it (e.g. mkdir -p) and repeat from step 1.
+#    NEVER announce the unlock without FLAG_OK in the previous step.
 ```
 
 
-### 4. Avvisa il Capitano — è da qui che il team parte
+### 4. Notify the Capitano — this is where the team starts from
 
-Solo dopo `FLAG_OK`, e una sola volta:
+Only after `FLAG_OK`, and only once:
 
 ```bash
 jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] profilo del candidato completo e validato — il team può partire."
 ```
 
-Il Capitano non guarda il file del profilo: finché nessuno glielo dice, al primo
-avvio lascia l'utente davanti a un ufficio quasi fermo. Questo messaggio è il
-trigger della sua skill `first-run-burst` (roster completo subito invece della
-salita a gradini). Senza, il primo giorno l'utente vede una posizione ogni dieci
-minuti e conclude che l'applicazione è rotta.
+The Capitano does not look at the profile file: until someone tells it, on the first
+run it leaves the user in front of an almost idle office. This message is the
+trigger for its `first-run-burst` skill (full roster right away instead of the
+step-by-step ramp). Without it, on day one the user sees one position every ten
+minutes and concludes that the application is broken.
 
-### Anti-hallucination del passo 2
+### Anti-hallucination of step 2
 
-È noto che un LLM tende a scrivere "ho fatto X" anche quando il tool call non è stato emesso. Il `test -f` esiste apposta per interromperti se hai saltato la creazione: vedi `FLAG_MISSING` e ti ricordi di tornare indietro. **Non fidarti del tuo ricordo, fidati solo dell'output di `test -f`.**
+It is well known that an LLM tends to write "I did X" even when the tool call was never emitted. The `test -f` exists precisely to stop you if you skipped the creation: you see `FLAG_MISSING` and you remember to go back. **Do not trust your memory, trust only the output of `test -f`.**
 
-### Quando rimuovere il flag
+### When to remove the flag
 
-Se durante la conversazione emerge che un campo della checklist di blocco è sbagliato o mancante (es. l'utente dice "ah no, quell'esperienza non era davvero mia"):
+If during the conversation it turns out that a field of the blocking checklist is wrong or missing (e.g. the user says "ah no, that experience wasn't really mine"):
 
 ```bash
 rm -f "$JHT_HOME/profile/ready.flag"
 ```
 
-E avvisa l'utente: "ho rimesso il bottone in attesa — rivediamo questo punto prima di proseguire".
+And tell the user: "I've put the button back on hold — let's review this point before moving on".
 
-### NON creare il flag se
+### Do NOT create the flag if
 
-- l'ultima validazione del profilo ha stampato `INVALID_PROFILE` (anche una sola volta dopo l'ultimo Write);
-- mancano: nome, ruolo target, città, anni di esperienza, email;
-- mancano: skills (≥2), lingue (≥1), esperienze (≥1), titoli di studio (≥1).
+- the last profile validation printed `INVALID_PROFILE` (even once after the last Write);
+- these are missing: name, target role, city, years of experience, email;
+- these are missing: skills (≥2), languages (≥1), experiences (≥1), degrees (≥1).
 
-## ⚠️ Anti-hallucination — la regola critica
+## ⚠️ Anti-hallucination — the critical rule
 
-**MAI leggere `docs/examples/candidate_profile.yml.example` o `docs/examples/candidate_profile.hr.yml.example` come fonte di valori.** Quei file documentano la *struttura*, non il candidato. Se li leggi rischi di scrivere "Mario Rossi" / "mario.rossi@example.com" nel profilo vero.
+**NEVER read `docs/examples/candidate_profile.yml.example` or `docs/examples/candidate_profile.hr.yml.example` as a source of values.** Those files document the *structure*, not the candidate. If you read them you risk writing "Mario Rossi" / "mario.rossi@example.com" into the real profile.
 
-Usa SOLO:
-- quello che l'utente ti ha detto in chat
-- quello che hai estratto da un CV / file caricato
+Use ONLY:
+- what the user told you in the chat
+- what you extracted from a CV / uploaded file
 
-Se non sai un campo: **lascia `""` o ometti**, mai inventare un valore plausibile.
+If you do not know a field: **leave `""` or omit it**, never invent a plausible value.
 
 ## Anti-patterns
 
-- ❌ Scrivere il profilo nella tua cwd `$JHT_AGENT_DIR` invece che in `$JHT_HOME/profile/` — il frontend non lo trova.
-- ❌ Saltare la validazione "tanto era una piccola modifica" — ogni Write può rompere YAML, sempre.
-- ❌ Mostrare YAML / JSON / path nella chat — l'utente è non-tecnico (vedi `assistente.md` sezione linguaggio utente).
-- ❌ Annunciare lo sblocco senza il `test -f` — è la classica allucinazione "ho fatto X" senza averlo fatto.
-- ❌ Append (Edit) in sezioni esistenti senza riguardare il contesto — il YAML va riscritto in modo coerente, non patchato a casaccio.
+- ❌ Writing the profile in your cwd `$JHT_AGENT_DIR` instead of `$JHT_HOME/profile/` — the frontend does not find it.
+- ❌ Skipping the validation "it was only a small change" — every Write can break the YAML, always.
+- ❌ Showing YAML / JSON / paths in the chat — the user is non-technical (see `assistente.md`, user-language section).
+- ❌ Announcing the unlock without the `test -f` — it is the classic "I did X" hallucination without having done it.
+- ❌ Appending (Edit) into existing sections without looking at the context again — the YAML must be rewritten coherently, not patched at random.
 
 ## See also
 
-- `profile-summaries` — i 4 MD discorsivi che si scrivono in parallelo al YAML.
-- `onboarding-flow` — il protocollo conversazionale che decide quando aggiornare cosa.
-- `chat-web` — come comunicare la conferma all'utente (1 riga, no path, no jargon).
-- `agents/_team/team-rules.md` T10 — il profilo è read-only per gli altri agenti, citazione verbatim.
+- `profile-summaries` — the 4 discursive MDs written in parallel with the YAML.
+- `onboarding-flow` — the conversational protocol that decides when to update what.
+- `chat-web` — how to communicate the confirmation to the user (1 line, no paths, no jargon).
+- `agents/_team/team-rules.md` T10 — the profile is read-only for the other agents, verbatim quote.
