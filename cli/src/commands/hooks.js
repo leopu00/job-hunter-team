@@ -151,7 +151,7 @@ async function showHook(id) {
 export function registerHooksCommand(program) {
   program
     .command('hooks [action]')
-    .description('Gestione hooks (azioni: list, enable, disable, show)')
+    .description('[non implementato] Gestione hooks — nessun esecutore: gli hook non vengono mai eseguiti (azioni: list, enable, disable, show)')
     .option('--id <id>', 'ID hook')
     .action(handleHooks);
 }

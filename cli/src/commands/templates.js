@@ -129,7 +129,7 @@ async function previewTemplate(options) {
 export function registerTemplatesCommand(program) {
   program
     .command('templates [action]')
-    .description('Gestione template (azioni: list, preview)')
+    .description('[non implementato] Gestione template — nessun renderer collegato alla pipeline (azioni: list, preview)')
     .option('-n, --name <name>', 'nome template per preview')
     .option('-l, --lines <n>', 'righe da mostrare nel preview (default 40)', '40')
     .action(handleTemplates);

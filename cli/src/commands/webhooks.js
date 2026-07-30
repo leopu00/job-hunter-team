@@ -139,7 +139,7 @@ async function testWebhook(options) {
 export function registerWebhooksCommand(program) {
   program
     .command('webhooks [action]')
-    .description('Gestione webhooks (azioni: list, create, delete, test)')
+    .description('[non implementato] Gestione webhooks — nessun dispatcher: gli eventi non vengono mai consegnati (azioni: list, create, delete, test)')
     .option('--url <url>', 'URL endpoint webhook')
     .option('--event <event>', 'evento trigger (es: task.completed)')
     .option('--name <name>', 'nome webhook (opzionale)')
