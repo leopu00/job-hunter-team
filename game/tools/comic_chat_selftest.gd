@@ -105,15 +105,24 @@ func _check_bubbles() -> void:
 			"la coda dell'agente non punta al suo ritratto (destra)")
 	_check(int(user_bubble["tail_dir"]) == -1,
 			"la coda dell'utente non punta a sinistra")
-	_check(str(snap["portrait_slug"]) == "scout",
+	_check(str(snap["portrait_slug"]) == "scout-1",
 			"ritratto sbagliato per lo scout: " + str(snap["portrait_slug"]))
+	# Il lotto per istanza e' completo: ogni scrivania deve risolvere la propria
+	# cartella prima del fallback di ruolo. Questo controlla insieme naming,
+	# import Godot e ordine di precedenza di ComicChat.portrait_slug().
+	for role in ["scout", "analista", "scorer", "scrittore", "critico"]:
+		for number in range(1, 7):
+			var uid := "%s-%d" % [role, number]
+			var resolved := ComicChat.portrait_slug(uid)
+			_check(resolved == uid,
+					"ritratto di %s risolto in %s" % [uid, resolved])
 	# Gli uid del sistema vero non sono tutti "ruolo-numero": la sessione che
 	# lo Scrittore apre al Critico è CRITICO-S1, la Sentinella ha un worker, e
 	# il Coordinatore sulla VPS si chiama capitano. Nessuno di questi deve
 	# restare senza faccia.
 	for pair in [["critico-s1", "critico"], ["sentinella-worker", "sentinella"],
 			["capitano", "coordinatore"], ["capitano-1", "coordinatore"],
-			["scrittore-2", "scrittore"], ["dottore", "dottore"]]:
+			["scrittore-7", "scrittore"], ["dottore", "dottore"]]:
 		var got := ComicChat.portrait_slug(str(pair[0]))
 		_check(got == str(pair[1]),
 				"ritratto di %s risolto in %s invece di %s" % [pair[0], got, pair[1]])

@@ -159,15 +159,20 @@ const translations = {
   },
   dl_mode_desktop_title: { it: "Desktop", en: "Desktop", hu: "Asztali" },
   dl_mode_terminal_title: { it: "CLI", en: "CLI", hu: "CLI" },
-  dl_desktop_soon_desc: {
-    it: "L'app desktop è in arrivo per tutti e tre i sistemi operativi: la stiamo rifinendo e non è ancora scaricabile. Nel frattempo installi tutto dalla CLI.",
-    en: "The desktop app is coming to all three operating systems: we're polishing it and it's not downloadable yet. In the meantime, the CLI installs everything.",
-    hu: "Az asztali app hamarosan érkezik mindhárom operációs rendszerre: még csiszoljuk, ezért egyelőre nem tölthető le. Addig a CLI-vel mindent telepíthetsz.",
+  dl_desktop_beta_desc: {
+    it: "L'app desktop è l'ufficio dove vedi il team lavorare. È in beta: la usiamo tutti i giorni, ma cambia spesso. Se preferisci una strada più collaudata, resta la CLI.",
+    en: "The desktop app is the office where you watch the team work. It is in beta: we use it daily, but it changes often. If you prefer a more settled path, the CLI is still there.",
+    hu: "Az asztali app az iroda, ahol a csapatot dolgozni látod. Bétában van: naponta használjuk, de gyakran változik. Ha kiforrottabb utat szeretnél, a CLI továbbra is elérhető.",
   },
-  dl_desktop_soon_badge: {
-    it: "In arrivo",
-    en: "Coming soon",
-    hu: "Hamarosan",
+  dl_desktop_beta_badge: {
+    it: "Beta",
+    en: "Beta",
+    hu: "Béta",
+  },
+  dl_desktop_unsigned_note: {
+    it: "Su macOS l'app è firmata e notarizzata: si apre con un doppio clic. Su Windows non è firmata, quindi SmartScreen mostra «Windows ha protetto il PC»: clicca «Ulteriori informazioni» e poi «Esegui comunque». Su Linux l'archivio va estratto e reso eseguibile.",
+    en: "On macOS the app is signed and notarized: it opens with a double click. On Windows it is not signed, so SmartScreen shows “Windows protected your PC”: click “More info”, then “Run anyway”. On Linux, extract the archive and make it executable.",
+    hu: "macOS-en az app aláírt és notarizált: dupla kattintással megnyílik. Windowson nincs aláírva, ezért a SmartScreen kiírja: „A Windows megvédte a számítógépét” — kattints a „További információk”, majd a „Futtatás mindenképp” gombra. Linuxon csomagold ki az archívumot és tedd futtathatóvá.",
   },
   dl_help_text: {
     it: "Non sai dove installarlo?",

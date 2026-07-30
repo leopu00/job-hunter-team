@@ -73,21 +73,46 @@ function New-GodotProcessInfo {
     return $Info
 }
 
+# Il runner Windows va in ACCESS_VIOLATION (0xC0000005 = -1073741819) durante
+# la catena di ~26 avvii di Godot che questo blocco esegue in fila. Ogni uscita
+# lascia risorse dietro di se' ("N ObjectDB instances were leaked", "N resources
+# still in use") e a un certo punto un avvio non regge -- ma **il punto si
+# sposta**: il 2026-07-29 e' caduto sull'export, il 2026-07-30 su
+# sidebar_nav_selftest, che nel run precedente era passato.
+#
+# Un crash che cambia bersaglio non e' il segnale di un test rotto: e' il segnale
+# che l'ambiente non regge la sequenza. Il rimedio e' dare fiato fra un processo
+# e il successivo e riprovare **una** volta il singolo avvio, gridandolo nel
+# log. Un test davvero rotto fallisce anche al secondo tentativo, e con lo
+# stesso codice d'uscita: quella distinzione resta intatta.
 function Invoke-Godot {
     param([string[]]$GodotArguments)
-    if ($IsWindowsHost) {
-        $Process = [System.Diagnostics.Process]::Start(
-            (New-GodotProcessInfo -GodotArguments $GodotArguments -CaptureOutput $false)
-        )
-        $Process.WaitForExit()
-        $ExitCode = $Process.ExitCode
-        $Process.Dispose()
-    }
-    else {
-        & $Godot @GodotArguments
-        $ExitCode = $LASTEXITCODE
-    }
-    if ($ExitCode -ne 0) {
+    $Attempt = 0
+    while ($true) {
+        $Attempt++
+        if ($IsWindowsHost) {
+            $Process = [System.Diagnostics.Process]::Start(
+                (New-GodotProcessInfo -GodotArguments $GodotArguments -CaptureOutput $false)
+            )
+            $Process.WaitForExit()
+            $ExitCode = $Process.ExitCode
+            $Process.Dispose()
+            # Lascia al sistema il tempo di riprendersi gli handle del processo
+            # appena uscito, prima di avviarne un altro.
+            Start-Sleep -Milliseconds 400
+        }
+        else {
+            & $Godot @GodotArguments
+            $ExitCode = $LASTEXITCODE
+        }
+        if ($ExitCode -eq 0) { return }
+        # -1073741819 = 0xC0000005 ACCESS_VIOLATION: il motore e' morto, non ha
+        # fallito un'asserzione. Solo questo caso merita un secondo tentativo.
+        if ($IsWindowsHost -and $Attempt -eq 1 -and $ExitCode -eq -1073741819) {
+            Write-Host "::warning::Godot crashato (0xC0000005) su $($GodotArguments -join ' ') -- riprovo una volta"
+            Start-Sleep -Seconds 5
+            continue
+        }
         throw "Godot exited with code $ExitCode"
     }
 }
@@ -150,6 +175,10 @@ try {
             # qui la parte che conta e' proprio che l'installazione automatica
             # resti spenta.
             Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/update_check_selftest.gd")
+			& python tools/audit_character_sheets.py
+			if ($LASTEXITCODE -ne 0) { throw "character sheet audit failed" }
+			& python tools/audit_instance_portraits.py
+			if ($LASTEXITCODE -ne 0) { throw "instance portrait audit failed" }
 			python tools/python_payload_syntax_test.py
 			if ($LASTEXITCODE -ne 0) { throw "Embedded Python payload test failed" }
 			$env:JHT_SCENE = "office"
