@@ -838,6 +838,13 @@ const S := {
 	"setup.phase_container": "CONTAINER JHT",
 	"setup.phase_team": "TEAM",
 	"setup.phase_running": "in corso adesso…",
+	# Barra di avanzamento dell'attivazione: percentuale SOLO dove il dato
+	# esiste (byte del pull), tempo trascorso sempre, stallo dichiarato.
+	"setup.progress_phase": "FASE %d DI %d — %s",
+	"setup.progress_elapsed": "trascorsi %s",
+	"setup.progress_no_meter": "Questa fase non riporta una percentuale di avanzamento: conta il tempo trascorso.",
+	"setup.progress_eta": "~%s rimanenti",
+	"setup.progress_stalled": "Nessun aggiornamento da %d s — la rete potrebbe essere lenta.",
 	"setup.image_ready": "scaricata e pronta",
 	"setup.image_missing": "da scaricare (qualche GB, dipende dalla rete)",
 	"setup.container_busy": "◌ ATTIVAZIONE IN CORSO…",

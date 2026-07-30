@@ -1048,6 +1048,10 @@ func _build_activation() -> void:
 	start.add_theme_color_override("font_color", Palette.GREEN)
 	start.pressed.connect(SetupService.start_team)
 	bottom.add_child(start)
+	# L'attivazione lunga (container o team) mostra la barra anche qui: è la
+	# finestra da cui in genere si preme il pulsante.
+	if SetupService.busy() and SetupService.current_action in ["container", "team"]:
+		_content.add_child(SetupProgress.new())
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
 	_restore_action_note()
@@ -1148,6 +1152,12 @@ func _build_container_setup() -> void:
 			UIStrings.t("setup.phase_running") if team_phase
 			else (UIStrings.t("setup.team_on") if bool(s.get("team_running", false))
 			else UIStrings.t("setup.team_stopped")))
+	# Mentre l'attivazione gira, la filiera dice DOVE si è e la barra dice
+	# QUANTO manca (o, onestamente, che la fase non riporta una percentuale).
+	# Il widget si aggiorna da solo sui segnali: nessuna ricostruzione del
+	# pannello ai tick del pull (~1.5s).
+	if busy or team_phase:
+		_content.add_child(SetupProgress.new())
 	_content.add_child(HSeparator.new())
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)

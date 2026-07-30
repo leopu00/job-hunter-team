@@ -9,6 +9,12 @@ signal action_changed(action: String, running: bool, message: String, ok: bool)
 ## segnale la UI sa solo che "qualcosa gira", non a che punto è — e l'utente
 ## non sa se aspettare o ripremere (feedback 30/07).
 signal phase_changed(action: String, phase: String)
+## Avanzamento STRUTTURATO del pull dell'immagine (byte scaricati/totali per
+## livello, dallo stream di `docker compose pull`). Il messaggio testuale di
+## action_changed non basta a una barra: serve il numero, non la frase.
+## fraction è -1.0 finché docker non ha dichiarato nessuna dimensione — la UI
+## in quel caso NON deve inventare una percentuale.
+signal pull_progress(info: Dictionary)
 ## La UI del gioco ospita il processo in una console modale. Il servizio non
 ## deve mai aprire Terminal.app/cmd/xterm fuori dall'applicazione.
 signal terminal_requested(context: String, spec: Dictionary)
@@ -65,6 +71,12 @@ var _action_running := false
 ## lasciarli premibili e muti mentre il worker lavora.
 var current_action := ""
 var action_phase := ""
+## Quando sono partite l'azione e la fase corrente (Time.get_ticks_msec) e
+## l'ultimo avanzamento pull ricevuto: un pannello ricostruito a metà pull
+## riparte da qui invece che da una barra vuota.
+var action_started_ms := 0
+var phase_started_ms := 0
+var last_pull := {}
 var _timer: Timer
 
 
@@ -1100,6 +1112,11 @@ func _compose_stream(compose: String, args: PackedStringArray,
 	var pending := ""
 	var tail := ""            # ultime righe complete, per il messaggio d'errore
 	var layers := {}          # id livello → ultima riga di stato vista
+	# id livello → {got, total} in MB, SOLO byte di download (righe
+	# "Downloading x/y"). Le righe "Extracting x/y" riportano i byte
+	# DECOMPRESSI: sommarli ai totali di download gonfierebbe la barra.
+	# A "Download complete" il livello si blocca sul suo totale.
+	var layer_bytes := {}
 	var last_output_ms := Time.get_ticks_msec()
 	var last_ui_ms := 0
 	while true:
@@ -1125,6 +1142,19 @@ func _compose_stream(compose: String, args: PackedStringArray,
 				var parts: PackedStringArray = line.split(" ", false, 1)
 				if parts.size() == 2 and parts[0].is_valid_hex_number():
 					layers[parts[0]] = parts[1]
+					var status := parts[1].to_lower()
+					if status.begins_with("downloading"):
+						var found := sizes.search(parts[1])
+						if found != null:
+							layer_bytes[parts[0]] = {
+								"got": _to_mb(found.get_string(1), found.get_string(2)),
+								"total": _to_mb(found.get_string(3), found.get_string(4)),
+							}
+					elif layer_bytes.has(parts[0]) and (status.contains("complete")
+							or status.begins_with("extracting")
+							or status.begins_with("verifying")):
+						# download di questo livello finito: acquisito per intero
+						layer_bytes[parts[0]]["got"] = layer_bytes[parts[0]]["total"]
 		else:
 			if not OS.is_process_running(pid):
 				# Drain finale: il processo può uscire con dati ancora in coda
@@ -1151,6 +1181,8 @@ func _compose_stream(compose: String, args: PackedStringArray,
 		if Time.get_ticks_msec() - last_ui_ms > 1500 and not layers.is_empty():
 			last_ui_ms = Time.get_ticks_msec()
 			_progress("container", _pull_progress_text(layers, sizes))
+			call_deferred("_apply_pull_progress",
+					_pull_progress_info(layers, layer_bytes))
 	return {"ok": not _stream_failed(tail), "spawned": true, "tail": tail}
 
 
@@ -1184,6 +1216,24 @@ static func _pull_progress_text(layers: Dictionary, sizes: RegEx) -> String:
 	if total_bytes > 0.0:
 		text += " · %.0f/%.0f MB" % [got_bytes, total_bytes]
 	return text + "…"
+
+
+## Il dato VERO su cui poggia la barra: byte di download acquisiti/totali dei
+## livelli che hanno dichiarato una dimensione. Finché nessuno l'ha dichiarata
+## fraction resta -1.0: la UI mostra attività, non una percentuale inventata.
+## Il totale può CRESCERE mentre docker scopre le dimensioni degli altri
+## livelli: è il dato reale, non un difetto da mascherare.
+static func _pull_progress_info(layers: Dictionary, layer_bytes: Dictionary) -> Dictionary:
+	var got := 0.0
+	var total := 0.0
+	for id in layer_bytes:
+		got += float(layer_bytes[id]["got"])
+		total += float(layer_bytes[id]["total"])
+	return {
+		"got_mb": got, "total_mb": total,
+		"fraction": clampf(got / total, 0.0, 1.0) if total > 0.0 else -1.0,
+		"layers": layers.size(),
+	}
 
 
 static func _to_mb(value: String, unit: String) -> float:
@@ -2792,6 +2842,9 @@ func _start_action(action: String, callable: Callable) -> void:
 	_action_running = true
 	current_action = action
 	action_phase = ""
+	action_started_ms = Time.get_ticks_msec()
+	phase_started_ms = action_started_ms
+	last_pull = {}
 	Log.info("setup", "azione avviata: " + action)
 	action_changed.emit(action, true, "operazione in corso…", true)
 	WorkerThreadPool.add_task(_run_action.bind(action, callable))
@@ -2806,7 +2859,18 @@ func _set_phase(phase: String) -> void:
 
 func _apply_phase(phase: String) -> void:
 	action_phase = phase
+	phase_started_ms = Time.get_ticks_msec()
+	# Fase nuova, contatore nuovo: i byte del pull non descrivono la fase
+	# successiva e una barra piena ereditata mentirebbe.
+	last_pull = {}
 	phase_changed.emit(current_action, phase)
+
+
+## Avanzamento pull ricevuto dal worker (deferred): memorizzato per i pannelli
+## ricostruiti a metà azione, poi annunciato a chi ascolta.
+func _apply_pull_progress(info: Dictionary) -> void:
+	last_pull = info
+	pull_progress.emit(info)
 
 
 func _run_action(action: String, callable: Callable) -> void:
@@ -2818,6 +2882,7 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	_action_running = false
 	current_action = ""
 	action_phase = ""
+	last_pull = {}
 	Log.info("setup", "azione %s → %s: %s" % [action,
 			"ok" if bool(result.get("ok", false)) else "FALLITA",
 			str(result.get("message", ""))])
