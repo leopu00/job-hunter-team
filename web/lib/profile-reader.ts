@@ -1,4 +1,5 @@
-import yaml from "js-yaml";
+// js-yaml 5 espone solo named export: il default non esiste piu'.
+import * as yaml from "js-yaml";
 import fs from "fs";
 import type { CandidateProfile } from "./types";
 import { JHT_PROFILE_YAML } from "./jht-paths";
