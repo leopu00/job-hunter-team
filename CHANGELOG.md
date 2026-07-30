@@ -5,6 +5,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.3] — 2026-07-30
+
+**Everyone in the office has their own face** — the portrait gap opened by the comic chat in 0.3.2 is closed, and the download page finally hands out the app.
+
+### 🎨 Portraits
+
+- **The six missing `pensieroso` poses** — assistant, coordinator, critic, writer, sentinel, maintainer. The chat switches to that pose *while an agent is composing its reply*, and those six were silently falling back to `neutro`: waiting looked exactly like answered, which is the one thing the pose exists to say.
+- **Sixty per-instance portraits**, `neutro` and `pensieroso` for all thirty desks across the five departments. These are not new characters: the office already gave each agent a face by desk, and the chat was the side flattening them onto the role — so `scout-1` and `scout-5` shared one portrait while sitting as visibly different people ten metres apart. Each face is derived from that desk's own sprite. The `a` variants deliberately reuse the role portrait, because they *are* the same identity: the department lead.
+- **Overlapping and clipped sprite frames repaired** across the character sheets, plus two audit tools that make the whole thing checkable without opening the game: `audit_instance_portraits.py` (format, alpha, import files, lead mapping) and `audit_character_sheets.py` (36 sheets, frame geometry).
+
+Combined with the surnames from 0.3.2, opening a chat now reads `HOLMES · SCOUT-1` next to the face that agent actually has at their desk.
+
+### 🌐 Web
+
+- **The desktop app is downloadable from the site**, marked beta, for all three systems. The Desktop tab had announced "coming soon" since 2026-07-03 while three releases shipped past it. Links resolve through `releases/latest/download/`, so a new release no longer requires touching the site.
+- The unsigned platforms are stated up front instead of left to be discovered: Windows will show SmartScreen and the note names the two buttons to press; Linux needs the archive extracted and made executable. macOS opens on a double click, which is what the notarization bought.
+
+### 🧪 Also
+
+- **A first-run wizard was failing the report-dialog specs**, and no HTTP guard could have seen it: `/dashboard` answers 200 and the wizard takes over on the client after hydration, so the spec waited thirty seconds for a menu that was never going to render — while the screen showed a language picker. A session minted fresh for every CI run is by definition one the wizard has never met.
+- **The Windows export gets a settled process and one loud retry.** It segfaulted mid-packing on 2026-07-29 with every self-test green above it, then passed on rerun — intermittent, which is worse than broken, because a random red makes a release semaphore worthless.
+
+---
+
 ## [0.3.2] — 2026-07-29
 
 **Talking to the team, and the team not getting stuck** — 75 commits since v0.3.1. Two days spent on things found by running the product rather than by reading it: a coordinator lost for eleven hours behind a single unsent line, a chat that had never delivered anything, and a window that burned more CPU than the whole team it was watching.
