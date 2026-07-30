@@ -378,6 +378,88 @@ export function toCloudRow(row, userId) {
   };
 }
 
+// ── Il canale col cloud della corsia chat ───────────────────────────────
+
+/** Cloud di default, quando `cloud.json` non porta un `base_url`. */
+const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
+
+/**
+ * Il verso web→agente ha bisogno di due sole cose dal cloud: leggere i turni
+ * dell'utente non ancora consegnati e dire "consegnati". Esistono DUE strade
+ * per farlo, con la stessa forma, e la corsia non deve sapere quale sta
+ * usando:
+ *
+ *   · `directChatChannel` — Supabase diretto (`JHT_SUPABASE_DIRECT=1`).
+ *     Preferito quando c'è: meno hop, e su Supabase Pro le letture non si
+ *     pagano a chiamata.
+ *   · `vercelChatChannel` — `/api/cloud-sync/chat` col token del box.
+ *
+ * PERCHÉ ESISTE IL SECONDO — non è ridondante, è l'unico che gira sul fleet.
+ * Il lettore diretto è OPT-IN e documentato come "default OFF → nessun
+ * cambio sul fleet" (docs/internal/architecture/daemon-sync-redesign.md):
+ * su 4 box di produzione su 5 quel flag è spento e `cloud.json` non ha
+ * nemmeno `supabase_url`/`supabase_refresh_token`, quindi `getDirectReader`
+ * ritorna `null`. Finché il pull viveva solo sul lettore diretto, su un box
+ * in configurazione standard il turno scritto dal web restava su Supabase e
+ * non veniva ritirato MAI: chat morta in silenzio, senza un errore in log
+ * (diagnosticato sul box di produzione, 2026-07-30). Il verso opposto
+ * funzionava perché passa dal token del box su Vercel — che è esattamente il
+ * canale che questo ramo riusa.
+ */
+export function directChatChannel(reader) {
+  return {
+    kind: 'direct',
+    readUndeliveredUserChat: (opts) => reader.readUndeliveredUserChat(opts),
+    async closeRendezvous(ids = []) {
+      if (ids.length > 0) await reader.markUserChatDelivered(ids);
+      await reader.patchTeamState({ chat_delivered_at: new Date().toISOString() });
+    },
+  };
+}
+
+/**
+ * Stessa forma, sul token del box via Vercel. Ack e chiusura del rendezvous
+ * viaggiano in UNA sola POST: sono la stessa decisione ("ho consegnato"), e
+ * separarle lascerebbe la finestra in cui i turni risultano consegnati ma il
+ * rendezvous ancora aperto — cioè il giro dopo rilegge una coda vuota.
+ */
+export function vercelChatChannel(config, { fetchFn = fetch } = {}) {
+  const baseUrl = String(config?.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const url = `${baseUrl}/api/cloud-sync/chat`;
+  const headers = {
+    Authorization: `Bearer ${config?.token}`,
+    'Content-Type': 'application/json',
+  };
+  return {
+    kind: 'vercel',
+    async readUndeliveredUserChat({ limit = 50 } = {}) {
+      const res = await fetchFn(`${url}?limit=${encodeURIComponent(limit)}`, { headers });
+      if (!res.ok) throw new Error(`GET /api/cloud-sync/chat: HTTP ${res.status}`);
+      const body = await res.json().catch(() => null);
+      return Array.isArray(body?.messages) ? body.messages : [];
+    },
+    async closeRendezvous(ids = []) {
+      const res = await fetchFn(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ delivered_ids: ids }),
+      });
+      if (!res.ok) throw new Error(`POST /api/cloud-sync/chat: HTTP ${res.status}`);
+    },
+  };
+}
+
+/**
+ * Il canale da usare per questo box: diretto se c'è, altrimenti Vercel.
+ * `null` solo per un box senza token — cioè non appaiato, dove non c'è
+ * nessun cloud da cui ritirare niente.
+ */
+export function chatChannelFor(config, reader, options = {}) {
+  if (reader) return directChatChannel(reader);
+  if (!config?.token) return null;
+  return vercelChatChannel(config, options);
+}
+
 // ── Passo 4: cloud → pane tmux dell'agente ──────────────────────────────
 
 /**
