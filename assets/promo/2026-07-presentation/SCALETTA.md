@@ -1,100 +1,117 @@
-# Video di presentazione JHT — scaletta (~59 s · senza audio · testi in INGLESE)
+# Video di presentazione JHT — con VOCE e MUSICA (~61 s · 3 versioni · inglese)
 
-Due montaggi dalla STESSA scaletta e dalle STESSE riprese:
+Evoluzione del montaggio muto (v. storia git) sul feedback utente del 30/07:
 
-- **orizzontale** 1280×720 — `make_presentation.py` → `jht-presentation.mp4`
-- **verticale** 9:16 720×1280 (cellulare) — `make_vertical.py` →
-  `jht-presentation-vertical.mp4`. Non è un ritaglio centrale: ogni scena è
-  ricomposta per la colonna stretta e nelle riprese del gioco il ritaglio
-  SEGUE il soggetto (replica del percorso camera della regia).
+1. **pagine web PRIVATE al posto del case study pubblico** — soprattutto il
+   globo di `/map`, più `/positions` e `/swipe`, registrate in **demo mode**
+   (dati inventati per costruzione, banner "DEMO MODE · sample data" sempre
+   in quadro);
+2. **meno testo, più intrattenimento** — le didascalie sono sparite quasi
+   tutte: parla la voce narrante; a schermo restano titoli, nomi, numeri e
+   indirizzi;
+3. **voce narrante** — `say` di macOS (niente voci Premium installate:
+   pulito ma riconoscibilmente sintetico);
+4. **musica di sottofondo** — basi PROCEDURALI sintetizzate in numpy
+   (nessun campione, nessun download: zero problemi di diritti).
 
-Impianto PIL + ffmpeg ripreso dal promo v0.2.0; verticale impostato sulla
-lezione di `regia/lanci/2026-07-v0.2.0/promo-video/make_tiktok.py`. Tre
-scene sono **riprese vere del gioco** registrate con la Movie Maker mode di
-Godot (`record_clips.sh` + `game/tools/promo_director.gd`): rendering
-fotogramma per fotogramma, deterministico, niente cattura schermo.
-Transizioni: xfade 0,5 s tra ogni scena.
+## Le tre versioni (stesso montaggio video, audio diversi)
 
-**Regola d'oro delle riprese (feedback utente 30/07: «si vede molto poco»):
-la camera sta ADDOSSO agli agenti.** Campo largo solo come apertura breve
-(~1,5 s montati); il resto della scena vive a zoom ≥ 1.95, dove un agente è
-alto ~150 px e una vignetta si legge anche a 720p su un telefono.
+| Versione | Voce | Musica | Carattere |
+|----------|------|--------|-----------|
+| `warm`   | Samantha (en_US) | bossa lounge ~112 BPM | calda, racconta |
+| `sober`  | Daniel (en_GB)   | **nessuna**           | asciutta, precisa |
+| `upbeat` | Karen (en_AU)    | electro-bossa ~120 BPM con cassa | giocosa, ritmo su |
 
-| # | Tempo | Scena | Contenuto a schermo |
-|---|-------|-------|---------------------|
-| 1 | 0:00–0:04 | Hook | "Job hunting is a second job." + le tre incombenze quotidiane |
-| 2 | 0:04–0:08 | Reveal | Wordmark "Job Hunter Team" · "a team of AI agents that hunts jobs for you" · `$ jht team start` con cursore |
-| 3 | 0:08–0:12 | La squadra | Illustrazione della riunione (landing-hero) con Ken Burns · "A real team: clear roles, a Captain, a weekly budget to respect." |
-| 4 | 0:12–0:14 | The Scouts | Ritratto + "They sweep the job boards. Day and night." · barra pipeline |
-| 5 | 0:14–0:17 | The Analysts | "They read every posting. They extract what matters." |
-| 6 | 0:17–0:19 | The Scorers | "A score for every position: how well it fits you, 0-100." + badge animato 0→84/100 |
-| 7 | 0:19–0:26 | **RIPRESA VERA — reparto Scrittori** | Campo stretto (zoom 2.05→2.18) sulle due scrivanie occupate, lenta carrellata; vignette inglesi sui CV · didascalie Writers/Critics su pastiglia |
-| 8 | 0:26–0:35 | **RIPRESA VERA — l'ufficio** (il punto emotivo) | ~1,5 s di totale (fit larghezza), poi SPINTA dentro il Research fino a due Scout a zoom ~2 col globo olografico; vignette leggibili · "Not a dashboard: an office, inside a video game." → "Watch them work for you, while you do something else." |
-| 9 | 0:35–0:44 | **RIPRESA VERA — la chat** | Pagina a fumetti (JHT_PROMO=chat) che si scrive da sola: vignette, "sta scrivendo…", risposta · "And you talk to them, like teammates." |
-| 10 | 0:44–0:48 | Il sito | Screenshot pubblico e anonimo del case study (mappa Europa) in una finestra browser · "Follow the hunt from the web, anywhere." |
-| 11 | 0:48–0:52 | Risultati | KPI da dati pubblici e anonimi (beta tester, 3 giu → 3 lug 2026): 658 positions found · 520 analysed and scored · 307 strong matches ≥70 · 71/100 average match |
-| 12 | 0:52–0:55 | Open source | Illustrazione "the box" · "Open source (MIT). Runs in a container on your machine: your data stays yours." |
-| 13 | 0:55–0:59 | CTA | Wordmark · "free · open source · in beta" · jobhunterteam.ai · github.com/leopu00/job-hunter-team |
+Output (tutti ~61 s, ~17 MB):
 
-## Riprese vere del gioco (scene 7, 8, 9)
+- `jht-show-{warm,sober,upbeat}.mp4` — orizzontale 1280x720
+- `jht-show-vertical-{warm,sober,upbeat}.mp4` — verticale 720x1280
 
-- Registrate da `record_clips.sh` con `godot --write-movie` (Godot 4.7,
-  Movie Maker mode): sequenze PNG 1920×1080 a 30 fps in `scenes/capture/`.
-  L'orizzontale le riscala a 1280×720; il verticale ritaglia una colonna
-  608×1080 che insegue il soggetto e la riscala a 720×1280. Nessuna cattura
-  schermo.
-- **Camera vicina** (`game/tools/promo_director.gd`):
-  - `office`: 2,6 s di totale → spinta di 3,6 s dentro il Research fino a
-    zoom 1.95 sulle due scrivanie occupate (sedute ~(542,482)/(569,629),
-    quasi in colonna: la stessa ripresa regge il ritaglio 9:16), poi lenta
-    deriva a zoom 2.02. Vignette dei due Scout DOPO l'arrivo della camera,
-    e tenute sotto il banner UI "SIMULATION — not real data" (al primo ciak
-    lo copriva: rifatto).
-  - `dept`: carrellata (620,1640)→(700,1655) a zoom 2.05→2.18 sulle due
-    scrivanie occupate degli Scrittori; il centro y tiene la targa
-    "APPLICATIONS" fuori dal quadro (mezza targa tagliata è peggio di
-    nessuna) e libera la fascia bassa per le didascalie.
-  - una vignetta per agente in campo: SpeechBubble tiene la prima per 60 s
-    (MIN_HOLD), una seconda non apparirebbe mai nel ciak.
-- Ufficio in **showroom** (`JHT_NOVPS=1`): nessun backend, nessun dato reale.
-  Ogni testo in scena è INVENTATO e in inglese.
-- UI del gioco in inglese (`JHT_LANG=en`); le scritte di scena non ancora
-  localizzate (targhe reparto, insegne di passaggio) sono doppiate in inglese
-  per la sola durata del ciak (`game/tools/promo_dept_signs.gd`). I nomi
-  propri degli agenti (Il Coordinatore, Holmes…) sono il brand, identici in
-  tutte e sette le lingue.
-- Le didascalie del montaggio stanno su una **pastiglia scura** centrata: mai
-  testo sopra testo del gioco. Nella scena chat orizzontale la pastiglia sta
-  a y=560, sopra la targa "HOLMES · SCOUT-1" (y≈603) e sotto l'ultima
-  vignetta. Verificato su fotogrammi estratti (`extract_check_frames.py`, ora
-  su ENTRAMBI i formati) che nessuna didascalia copra etichette di reparto,
-  vignette o targhe.
+## Timeline (12 scene, xfade 0,5 s — condivisa dai due formati)
 
-## Verticale (make_vertical.py)
+| # | Scena | Durata | Contenuto | Voce (sintesi) |
+|---|-------|--------|-----------|----------------|
+| 1 | hook | 3,8 | "Job hunting is a second job." | il problema |
+| 2 | reveal | 3,3 | wordmark + `$ jht team start` | il reveal |
+| 3 | meeting | 5,0 | illustrazione riunione (Ken Burns) | ruoli, capitano, budget |
+| 4 | roles | 6,9 | staffetta Scouts→Analysts→Scorers + badge 84/100 | cosa fanno |
+| 5 | dept | 6,0 | **RIPRESA GIOCO** reparto Scrittori | writers & critics |
+| 6 | office | 8,4 | **RIPRESA GIOCO** l'ufficio (spinta sul Research) | "not a dashboard" |
+| 7 | chat | 6,8 | **RIPRESA GIOCO** chat a fumetti | "like teammates" |
+| 8 | globe | 8,2 | **WEB PRIVATO** `/map`: Europa → sfera → rientro sui pin | il globo |
+| 9 | webpages | 4,4 | **WEB PRIVATO** `/positions` + `/swipe` (stacco secco) | scores, swipe |
+| 10 | results | 4,8 | KPI del mese reale (658/520/307/71) | i numeri |
+| 11 | box | 4,5 | the-box: "Open source (MIT)" | dati tuoi |
+| 12 | cta | 4,4 | wordmark · jobhunterteam.ai · github | congedo |
 
-- Scene di testo REIMPAGINATE per la colonna (titoli su due righe, corpi
-  proporzionati), mai rimpicciolite dall'orizzontale.
-- Riprese del gioco: ritaglio 608×1080 che insegue la colonna dei soggetti
-  ricalcolando il percorso camera della regia fotogramma per fotogramma
-  (`_office_cam`/`_dept_cam`, stessa easing sinusoidale della tween Godot).
-- Chat: COMPOSITO — header, colonna vignette a tutta larghezza (il testo
-  esce più grande che nell'orizzontale), ritratto con targa sotto, sfondo
-  griglia brand.
+La voce è ancorata all'inizio scena (+0,4 s) ma schedulata in sequenza con
+gap minimo 0,3 s (`vo_schedule`): i segmenti lunghi non si accavallano mai.
 
-## Asset statici (tutti già nel repo, nessun dato personale)
+## Riprese web private (record_web.py)
 
-- `web/public/landing-hero.png`, `web/public/the-box.png` — illustrazioni brand
-- `web/public/agents-{scouts,analyst,scorer}.png` — ritratti dei ruoli
-- `assets/screenshots/beta2-map.png` — case study pubblico e anonimo (stesso screenshot del README)
-- Font: JetBrains Mono (brand) da `~/Library/Fonts`
+- Playwright **Chromium headed** (GPU vera: il globo WebGL in headless
+  cade su SwiftShader) contro il dev server del worktree su :3007 con la
+  ricetta canonica (`NEXT_PUBLIC_JHT_DEPLOY=cloud`, `JHT_HOME` vuota) +
+  `JHT_WEB_DEMO_PERSONA=software`.
+- Login con l'**account di test e2e** (`node e2e/scripts/refresh-auth-state.mjs`
+  → storage state; credenziali MAI stampate). Il gate del layout passa per
+  sessione vera; i dati veri dell'account non compaiono comunque: il ramo
+  demo in `web/lib/queries.ts` precede ogni query.
+- **Nessun dato reale in video**: aziende e posizioni sono il dataset demo
+  (`web/lib/demo/`), il banner "DEMO MODE — sample data" resta in quadro.
+- Tema dark forzato (`jht-theme`), qualità globo `high` (`jht-map-quality`),
+  overlay dev di Next nascosto via CSS.
+- Coreografia globo: vista Europa → 4 tacche di zoom-out fino alla sfera →
+  rotazione (drag) andata-ritorno → click sul bottone "Overview — show all
+  pins" (flyTo certo sui pin, niente zoom alla cieca). Dopo il click,
+  `window.scrollTo(0,0)`: l'auto-scroll di Playwright spostava la pagina
+  di ~20 px.
+- Desktop 1280x720 (scene orizzontali) e mobile 390x693 @2x (verticale).
+
+## Musica (make_music.py) — scelta e onestà
+
+Sul Mac non ci sono campioni royalty-free né synth: le basi sono
+**sintetizzate da zero** (numpy): giro I–vi–ii–V (Cmaj9 Am9 Dm9 G13),
+basso bossa tonica-quinta, comping "Rhodes" sincopato, shaker, rim-click;
+la variante electro aggiunge cassa 4/4 e pluck in sedicesimi. Mixate a
+~9 dB sotto la voce. Risultato: musichetta da ascensore VOLUTA — semplice
+e riconoscibilmente sintetica ma pulita; la versione `sober` esiste apposta
+per chi la preferisce senza. Per una musica "vera" servirebbe una traccia
+con licenza fornita dall'utente.
+
+## Verticale (make_show_vert.py)
+
+- Ritaglio 608x1080 che SEGUE il soggetto nelle riprese del gioco (replica
+  del percorso camera di `promo_director.gd`), chat come composito.
+- **Fix badge mozzato**: il ritaglio 9:16 tagliava il badge di gioco
+  («SIMULATION — not real (»). Ora una banda opaca in alto porta il badge
+  COMPLETO "SIMULATION — not real data" disegnato ex novo e copre il
+  residuo tagliato. Verificato sui fotogrammi estratti.
+- Web: riprese MOBILI vere (globo e swipe come li vede un telefono, banner
+  demo per intero).
 
 ## Rigenerare
 
 ```bash
-./record_clips.sh                       # riprese del gioco → scenes/capture/
-python3 make_presentation.py            # → jht-presentation.mp4 (1280×720)
-python3 make_vertical.py                # → jht-presentation-vertical.mp4 (720×1280)
-python3 extract_check_frames.py         # → scenes/check/ fotogrammi di verifica (g_* e v_*)
+# riprese web (server dev :3007 in demo mode + auth e2e, vedi sopra)
+python3 record_web.py                    # → webrec/*.webm
+# audio
+python3 make_voiceover.py                # → audio/{warm,sober,upbeat}/segNN.wav
+python3 make_music.py                    # → audio/music_{bossa,electro}.wav
+# montaggi (il video si monta una volta, poi si muxano le 3 tracce)
+python3 make_show.py                     # → jht-show-{warm,sober,upbeat}.mp4
+python3 make_show_vert.py                # → jht-show-vertical-*.mp4
+python3 remux_only.py [versioni]         # solo audio, senza rimontare
+python3 extract_final_frames.py h v      # fotogrammi di verifica
 ```
 
-`scenes/`, `scenes-vert/` e i `.mp4` sono ignorati da git (vedi `.gitignore`).
+I sorgenti intermedi (`scenes/`, `webrec/`, `audio/`, `build*/`) e gli
+`.mp4` sono gitignored. Le riprese del gioco in `scenes/capture/` sono
+quelle APPROVATE (Movie Maker Godot, showroom `JHT_NOVPS=1`, tutto
+inventato e in inglese): riusate, non rigirate.
+
+## Asset statici (tutti già nel repo, nessun dato personale)
+
+- `web/public/landing-hero.png`, `web/public/the-box.png`
+- `web/public/agents-{scouts,analyst,scorer}.png`
+- Font: JetBrains Mono (brand) da `~/Library/Fonts`
