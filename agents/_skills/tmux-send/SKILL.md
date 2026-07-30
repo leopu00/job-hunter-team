@@ -12,7 +12,9 @@ Shell wrapper colocated at `/app/agents/_skills/tmux-send/jht-tmux-send` (also o
 
 Ink-based TUIs (Codex, Kimi Code) **drop the Enter** if it arrives in the same `tmux send-keys` call as the text body. Text is sent character-by-character; Ink must finish rendering before accepting another keystroke. If you call `tmux send-keys "msg" Enter`, the message stays in the peer's input buffer without being submitted → silent inter-agent deadlock.
 
-The wrapper handles it atomically: `text → sleep 0.3 → Enter → sleep 0.5 → Enter` (the second Enter is idempotent for robustness).
+The wrapper handles it atomically: it types the text, **re-reads the pane to confirm the text landed**, sends Enter, then **re-reads the pane again to confirm the turn actually started**. Delivery is not "having typed" — it is "having seen the turn start".
+
+> ⚠️ There is a second, nastier state: the TUI **accepts the text and ignores the Enter**, leaving the line hanging in the composer while the agent sits idle for hours. Seen 4 times in 3 days on one box, Captain included, when a message arrives while the peer is closing a long turn. The wrapper now retries the Enter and, if the turn still doesn't start, returns **`5`** instead of falsely reporting success.
 
 ## Usage
 
@@ -78,9 +80,14 @@ Pipeline hand-offs (Scout→Analyst→Scorer→Writer) are **status flips**, not
 
 ## Exit codes
 
-- `0` — message delivered
+- `0` — message delivered **and submitted** (verified: the turn started)
 - `1` — missing arguments
 - `2` — target session does not exist (check the name with `tmux ls`)
+- `3` — text never appeared and the pane is not busy → unreceptive TUI. **The only code that suggests dead/wedged.**
+- `4` — peer busy on a long turn beyond the wait budget → **alive**. Retry later, never respawn.
+- `5` — text accepted but never submitted ("alive but mute") → **alive**. Retry later, never respawn.
+
+> Only `3` may lead to a liveness check and respawn. `4` and `5` both mean the peer is alive: treating them as death is how over-spawning starts.
 
 ## Rules
 

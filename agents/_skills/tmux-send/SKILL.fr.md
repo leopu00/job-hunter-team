@@ -13,7 +13,9 @@ Wrapper shell situe dans `/app/agents/_skills/tmux-send/jht-tmux-send` (egalemen
 
 Les TUI basees sur Ink (Codex, Kimi Code) **perdent l'Enter** s'il arrive dans le meme appel `tmux send-keys` que le corps du message. Le texte est envoye caractere par caractere ; Ink doit terminer le rendu avant d'accepter une autre frappe de touche. Si vous appelez `tmux send-keys "msg" Enter`, le message reste dans le tampon d'entree du pair sans etre soumis → deadlock silencieux entre agents.
 
-Le wrapper gere cela de maniere atomique : `text → sleep 0.3 → Enter → sleep 0.5 → Enter` (le second Enter est idempotent par robustesse).
+Le wrapper gere cela de maniere atomique : il tape le texte, **relit le panneau pour confirmer qu'il est apparu**, envoie Enter, puis **relit a nouveau le panneau pour confirmer que le tour a vraiment demarre**. La livraison n'est pas "avoir tape" : c'est "avoir vu le tour demarrer".
+
+> ⚠️ Il existe un second etat, plus insidieux : la TUI **accepte le texte et ignore l'Enter**, laissant la ligne suspendue dans le composer pendant que l'agent reste immobile des heures. Vu 4 fois en 3 jours sur un seul VPS, Capitaine inclus, quand un message arrive pendant que le pair termine un tour long. Le wrapper reessaie desormais l'Enter et, si le tour ne demarre toujours pas, retourne **`5`** au lieu de declarer faussement un succes.
 
 ## Utilisation
 
@@ -64,9 +66,14 @@ Types standards (voir `agents/_manual/communication-rules.md` pour la taxonomie 
 
 ## Codes de sortie
 
-- `0` — message delivre
+- `0` — message delivre **et soumis** (verifie : le tour a demarre)
 - `1` — arguments manquants
 - `2` — la session cible n'existe pas (verifiez le nom avec `tmux ls`)
+- `3` — le texte n'est jamais apparu et le panneau n'est pas occupe → TUI non receptive. **Le seul code qui suggere morte/bloquee.**
+- `4` — pair occupe sur un tour long au-dela du budget d'attente → **vivant**. Reessayez plus tard, ne jamais respawner.
+- `5` — texte accepte mais jamais soumis ("vivant mais muet") → **vivant**. Reessayez plus tard, ne jamais respawner.
+
+> Seul `3` peut mener a un liveness-check et a un respawn. `4` et `5` signifient tous deux que le pair est vivant : les traiter comme une mort est exactement ainsi que commencent les over-spawn.
 
 ## Regles
 

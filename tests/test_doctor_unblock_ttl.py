@@ -814,7 +814,11 @@ def test_sender_recovers_a_lost_enter_on_a_claude_pane(tmux_factory, home):
     assert not (home / "jht.config.json").exists()
     r = _send(tmux, home, "SCOUT-1", "[@capitano -> @scout-1] [MSG] riprendi la coda")
     assert r.returncode == 0, (r.stdout, r.stderr)
-    assert "Space+Enter" in r.stdout
+    # Il recupero si dichiara col numero di submit: "submit 2" = il primo Enter
+    # è andato perso e il secondo (preceduto da Space) è passato. La verifica è
+    # sul FATTO, non sulla frase: la formulazione è cambiata fondendo le due
+    # implementazioni concorrenti di questa correzione (dev1/dev7, 30/07).
+    assert "submit 2" in r.stdout, r.stdout
     assert tmux.draft("SCOUT-1") == "", "il messaggio è rimasto nel prompt"
 
 
@@ -828,7 +832,10 @@ def test_sender_does_not_claim_success_when_the_text_stayed_in_the_prompt(tmux_f
     msg = "[@capitano -> @scout-1] [MSG] riprendi la coda"
     r = _send(tmux, home, "SCOUT-1", msg)
     assert r.returncode == 5, (r.returncode, r.stdout, r.stderr)
-    assert "submit NON e' confermato" in r.stderr
+    # Quello che conta è che il messaggio dica "vivo, non morto": chi legge non
+    # deve respawnare un agente che ha solo una riga appesa nel composer.
+    assert "NON lo ha submittato" in r.stderr, r.stderr
+    assert "NON respawnare" in r.stderr, r.stderr
     assert msg in tmux.draft("SCOUT-1")
     # e il Dottore lo trova dove lo cerca
     pending = [json.loads(l) for l in
@@ -861,7 +868,18 @@ def test_sender_still_reports_a_dead_pane_as_three(tmux_factory, home):
 
 
 def test_sender_exit_codes_are_documented():
+    # Il 5 va documentato IN TESTA al file, dove chi legge cerca il contratto
+    # dei codici: se sparisse, il primo che incontra un exit 5 non saprebbe se
+    # l'agente è vivo o morto, e nel dubbio lo respawnerebbe.
+    #
+    # Si asserisce sui FATTI del contratto, non sulla frase esatta: fondendo le
+    # due implementazioni concorrenti (dev1/dev7, 30/07) la formulazione è
+    # cambiata mentre il comportamento è rimasto lo stesso, e un test agganciato
+    # alla frase avrebbe segnalato una regressione che non c'era.
     src = SENDER.read_text()
-    assert "#   5 → testo DIGITATO ma submit NON confermato" in src
-    assert "_submit_confirmed" in src
-    assert "_composer_holds" in src
+    assert "#   5 →" in src, "il codice 5 non è più nella tabella dei codici"
+    assert "vivo" in src.lower() and "respawn" in src.lower(), \
+        "il 5 non dice più che l'agente è VIVO e non va respawnato"
+    # Le due funzioni della verifica: il submit si CONTROLLA, non si presume.
+    assert "_submitted" in src
+    assert "_composer_line" in src
