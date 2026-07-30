@@ -18,12 +18,19 @@ entrambi i controlli. Vedi `docs/internal/roadmap/2026-07-28-ticket-stepcap-thro
 Ciclo (default 60s), per ogni sessione WORKER (i core NON si nudgeano in
 automatico — il Capitano non è un worker):
 
-  1. RILEVAZIONE — `tmux capture-pane -p -t <SESSIONE>`, ultime 40 righe.
-     **Doppia condizione, non opzionale**: il marcatore deve comparire nelle
-     ultime righe NON VUOTE *e* l'hash del pane deve essere IDENTICO al giro
-     precedente. Il marcatore resta nello scrollback anche dopo la ripresa:
-     trovarlo non basta, e senza il secondo controllo questo watchdog diventa
-     un generatore di nudge a raffica su un agente che sta lavorando.
+  1. RILEVAZIONE — `tmux capture-pane -p -t <SESSIONE>`, ultime 40 righe. Due
+     strade, entrambe ancorate all'hash del pane IDENTICO al giro precedente:
+     (a) col marcatore nelle ultime righe NON VUOTE → stallo subito. Il
+         marcatore resta nello scrollback anche dopo la ripresa: trovarlo non
+         basta, e senza il controllo sull'hash questo watchdog diventa un
+         generatore di nudge a raffica su un agente che sta lavorando.
+     (b) SENZA marcatore, se il pane non si muove per `IDLE_STALL_ROUNDS` giri
+         → stallo lo stesso. Aggiunta il 2026-07-30, dopo che quattro VPS
+         riportavano `stalled: 0` in contemporanea con worker fermi da ore:
+         i marcatori esistono solo per Kimi, quindi la strada (a) da sola
+         rendeva il watchdog inerte su tutto il resto della flotta. Gli stalli
+         che ci hanno morso — turno abortito su 429, riga appesa nel composer,
+         attesa di una sveglia soppressa — non stampano nulla.
   2. THROTTLE — si scrive `$JHT_HOME/state/throttle-<agent>.json` nello stesso
      formato di `agents/_tools/jht-throttle`, con durata presa dalla
      `THROTTLE_LADDER` di `shared/skills/throttle-config.py` partendo dal rung
@@ -120,6 +127,14 @@ NOTIFIED_ACK_MAX_SEC = os.environ.get("JHT_STEPCAP_ACK_MAX")
 ACK_ESCALATE_COOLDOWN_SEC = float(os.environ.get("JHT_STEPCAP_ACK_COOLDOWN", "3600"))
 CAPTAIN_SESSION = os.environ.get("JHT_STEPCAP_CAPTAIN", "CAPITANO")
 TMUX_BUFFER = "jht-stepcap"
+# Giri consecutivi di pane IMMOBILE che valgono uno stallo anche SENZA
+# marcatore. Un turno in corso non è immobile — il timer del render cambia a
+# ogni secondo, quindi l'hash cambia; immobile vuol dire che non sta uscendo
+# nulla. A INTERVAL_SEC=60 il default sono 15 minuti di nulla, abbastanza da
+# non confondere una pausa con uno stallo. Serve perché lo stallo che ci ha
+# morso non porta marcatori: turno abortito su 429, riga appesa nel composer,
+# agente in attesa di una sveglia soppressa. Nessuno di questi stampa niente.
+IDLE_STALL_ROUNDS = int(os.environ.get("JHT_STEPCAP_IDLE_ROUNDS", "15"))
 
 # ── Marcatori per PROVIDER ────────────────────────────────────────────────
 # Il testo cambia da CLI a CLI: cablarne uno solo rende il watchdog inutile al
@@ -128,6 +143,15 @@ TMUX_BUFFER = "jht-stepcap"
 # testo non è ancora stato osservato, e si riempiono man mano.
 STEP_CAP_MARKERS = {
     "kimi": ("Max number of steps reached",),
+    # Vuote NON per dimenticanza: Claude e Codex non stampano un marcatore di
+    # step-cap noto. Finché la rilevazione dipendeva SOLO da questa tabella,
+    # però, il watchdog era inerte su tutte le VPS che non girano su Kimi:
+    # `find_marker` tornava sempre None, il blocco (d) usciva subito e
+    # l'heartbeat riportava `stalled: 0` per sempre. Misurato il 2026-07-30 su
+    # 4 VPS contemporaneamente — con worker fermi da 7h, agenti morti su un 429
+    # e pane con la riga appesa nel composer, tutti classificati `phase: idle`.
+    # Da lì la rilevazione senza marcatore qui sotto (IDLE_STALL_ROUNDS): non
+    # servono i marcatori per accorgersi che un pane non si muove.
     "claude": (),
     "codex": (),
 }
@@ -436,6 +460,7 @@ def _new_entry(created=None) -> dict:
         "produced": None,       # produzione all'ultimo stallo (baseline)
         "resume_hash": None,
         "last_escalate_ts": None,
+        "immobile": 0,          # giri consecutivi di pane fermo senza marcatore
     }
 
 
@@ -593,7 +618,7 @@ def _handle_agent(session, agent, entry, now, live_workers):
             emit("resume_failed", agent=agent, ts=now, session=session,
                  consecutive=entry.get("consecutive"))
         entry.update(phase="idle", hash=current, resume_hash=None,
-                     stall_hash=None)
+                     stall_hash=None, immobile=0)
         return
 
     # (b) Throttle in corso.
@@ -606,7 +631,8 @@ def _handle_agent(session, agent, entry, now, live_workers):
             emit("recovered", agent=agent, ts=now, session=session,
                  consecutive=entry.get("consecutive"))
             clear_throttle(agent)
-            entry.update(phase="idle", hash=current, until=None, stall_hash=None)
+            entry.update(phase="idle", hash=current, until=None, stall_hash=None,
+                         immobile=0)
             return
         gate = resume_gate(now, live_workers)
         if gate:
@@ -625,7 +651,8 @@ def _handle_agent(session, agent, entry, now, live_workers):
         else:
             emit("resume_send_failed", agent=agent, ts=now, session=session,
                  consecutive=entry.get("consecutive"))
-            entry.update(phase="idle", hash=None, until=None, stall_hash=None)
+            entry.update(phase="idle", hash=None, until=None, stall_hash=None,
+                         immobile=0)
         return
 
     # (c) Escalation in corso: non si tocca più finché il pane non cambia.
@@ -633,14 +660,32 @@ def _handle_agent(session, agent, entry, now, live_workers):
         if current != entry.get("stall_hash"):
             emit("recovered", agent=agent, ts=now, session=session,
                  consecutive=entry.get("consecutive"))
-            entry.update(phase="idle", hash=current, stall_hash=None)
+            entry.update(phase="idle", hash=current, stall_hash=None, immobile=0)
         return
 
-    # (d) RILEVAZIONE — doppia condizione: marcatore in coda E pane immobile.
+    # (d) RILEVAZIONE. Due strade verso lo stesso verdetto:
+    #     - marcatore in coda E pane immobile → stallo subito (via storica);
+    #     - nessun marcatore ma pane immobile da IDLE_STALL_ROUNDS giri →
+    #       stallo lo stesso. Senza questa seconda strada il watchdog vede
+    #       solo gli stalli che si annunciano da soli, cioè quasi nessuno.
     previous = entry.get("hash")
     entry["hash"] = current
-    if not marker or previous is None or previous != current:
+    if previous is None or previous != current:
+        entry["immobile"] = 0
         return
+    if marker:
+        entry["immobile"] = 0
+    else:
+        rounds = int(entry.get("immobile") or 0) + 1
+        entry["immobile"] = rounds
+        if rounds < IDLE_STALL_ROUNDS:
+            return
+        # Fermo DEVE essere fermo: durante un halt o fuori finestra l'immobilità
+        # è il comportamento giusto. Si continua a contare (così alla riapertura
+        # il verdetto è immediato) ma non si chiama stallo ciò che è un ordine.
+        if resume_gate(now, live_workers):
+            return
+        marker = f"nessun marcatore: pane immobile da {rounds} giri"
 
     produced = produced_count(agent)
     baseline = entry.get("produced")
