@@ -132,14 +132,33 @@ async function sessioneOrSkip(page: Page) {
  * Il wizard offre lui stesso la via d'uscita, ed è quella che si usa qui.
  */
 async function superaWizard(page: Page) {
+  // Il redirect al wizard è client-side: subito dopo `goto` l'URL può essere
+  // ancora quello chiesto e il wizard non ancora montato. Il `count()`
+  // istantaneo che stava qui leggeva quel buco e restituiva 0 — e ci lasciava
+  // DENTRO il wizard credendo di averlo saltato.
+  //
+  // Da lì il fallimento non somiglia più alla sua causa: il wizard mostra la
+  // navbar, quindi il menu utente si apre e la voce esiste davvero, ma il
+  // re-render la stacca e il click resta appeso 30 secondi. Il rosso in CI
+  // parlava del menu (30/07, due volte di fila sullo stesso commit); il menu
+  // non c'entrava nulla.
+  //
+  // Quindi si aspetta che l'URL si fermi su una delle due sponde prima di
+  // decidere. `catch` vuoto: se non si ferma su nessuna, il controllo qui
+  // sotto è comunque corretto e sarà il chiamante a fallire con un messaggio
+  // suo.
+  await page
+    .waitForURL(/\/(welcome|dashboard|positions|map)\b/, { timeout: 15_000 })
+    .catch(() => {});
+  if (!page.url().includes("/welcome")) return;
+
   // È un <button> con onClick, non un <a>: il wizard naviga da codice.
   const salta = page.getByRole("button", {
     name: /salta|skip|saltar|passer|überspringen|kihagy/i,
   });
-  if (await salta.count()) {
-    await salta.first().click();
-    await page.waitForURL(/\/dashboard|\/positions|\/map/, { timeout: 15_000 });
-  }
+  await salta.first().waitFor({ state: "visible", timeout: 15_000 });
+  await salta.first().click();
+  await page.waitForURL(/\/dashboard|\/positions|\/map/, { timeout: 15_000 });
 }
 
 // Apre il dialogo dal menu utente. Menu e dialogo sono due passaggi distinti:
