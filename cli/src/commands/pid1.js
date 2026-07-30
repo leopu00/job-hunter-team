@@ -44,6 +44,7 @@ const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
 const DOCTOR_WATCHDOG_SCRIPT = '/app/.launcher/doctor-watchdog.sh';
 const STEPCAP_WATCHDOG_SCRIPT = '/app/.launcher/stepcap-watchdog.py';
+const THROTTLE_ENGINE_SCRIPT = '/app/shared/skills/throttle_engine.py';
 const AUTO_REPORT_LOOP_SCRIPT = '/app/.launcher/auto-report-loop.sh';
 const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
 
@@ -483,6 +484,12 @@ async function cleanupStaleBridgeState() {
   for (const name of targets) {
     try { await unlink(join(logs, name)); } catch { /* ENOENT atteso */ }
   }
+  // Flag dei throttle: un boot del container respawna OGNI agente, quindi
+  // nessuna pausa registrata prima descrive piu' un'istanza viva. Lasciarli li'
+  // farebbe partire una sveglia "[RIPRENDI]" a raffica su agenti appena nati.
+  // NB: questo NON e' il caso del respawn del solo daemon (pid1 resta vivo e non
+  // ripassa da qui) — la' i timer DEVONO sopravvivere, ed e' il punto del motore.
+  try { await unlink(join(JHT_HOME, 'state', 'throttle-flags.json')); } catch { /* ENOENT atteso */ }
 }
 
 /**
@@ -797,6 +804,41 @@ async function dispatch() {
   };
   startStepcapWatchdog();
 
+  // ── Motore dei throttle: il tempo esce dal dominio dell'agente. Prima il
+  // throttle era un contratto che l'agente onorava da solo, bloccando il
+  // proprio processo — e quando quel processo moriva col timeout della tool
+  // call, nessuno lo svegliava piu' (2026-07-30: 2h15m di stallo su un
+  // Analista, con la sessione classificata `idle` = sana). Il daemon possiede i
+  // timer, li tiene SU DISCO (un respawn non ne perde nessuno) e manda la
+  // sveglia via il sender protetto. Va qui, accanto ai bridge, proprio perche'
+  // NON deve essere figlio di nessuna shell di agente.
+  let throttleEngineChild = null;
+  let throttleEngineRespawnTimer = null;
+  const startThrottleEngine = () => {
+    if (throttleEngineChild && !throttleEngineChild.killed) return;
+    pid1Log('starting throttle-engine (timer dei throttle + sveglia via tmux)');
+    throttleEngineChild = spawnLabeled('throttle-engine', '/usr/bin/env', [
+      'python3',
+      '-u',
+      THROTTLE_ENGINE_SCRIPT,
+    ]);
+    throttleEngineChild.on('exit', (code, signal) => {
+      const exited = throttleEngineChild;
+      throttleEngineChild = null;
+      if (shuttingDown) return;
+      pid1Log(`throttle-engine exited (code=${code} signal=${signal})`);
+      if (throttleEngineRespawnTimer) clearTimeout(throttleEngineRespawnTimer);
+      throttleEngineRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('throttle-engine respawn dopo crash');
+          startThrottleEngine();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  startThrottleEngine();
+
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
   let daemonChild = null;
@@ -1064,6 +1106,8 @@ async function dispatch() {
     if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
     if (stepcapChild && !stepcapChild.killed) stepcapChild.kill(sig);
     if (stepcapRespawnTimer) clearTimeout(stepcapRespawnTimer);
+    if (throttleEngineChild && !throttleEngineChild.killed) throttleEngineChild.kill(sig);
+    if (throttleEngineRespawnTimer) clearTimeout(throttleEngineRespawnTimer);
     if (autoReportChild && !autoReportChild.killed) autoReportChild.kill(sig);
     if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
     stopTgBridge();

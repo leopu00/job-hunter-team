@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# throttle — registra la tua pausa nel motore e RITORNA SUBITO.
+#
+# Una chiamata, niente sleep, niente `&`, niente wait. Il tempo non è più tuo:
+# il motore (`shared/skills/throttle_engine.py`, daemon avviato da pid1) legge
+# la durata calibrata dal Capitano, arma il timer SU DISCO e ti sveglia via
+# tmux quando scade. Tu non sai quanto aspetti e non devi saperlo.
+#
+# ## Cosa devi fare dopo averlo chiamato
+#
+# CHIUDERE IL TURNO. Non un altro task, non un altro comando: il turno finisce
+# qui. Se continui a lavorare dopo questa chiamata giri senza pausa, che è
+# esattamente ciò che il throttle esiste per evitare.
+#
+# ## Cosa succede al risveglio
+#
+# Ti arriva un messaggio `[RIPRENDI]`. Il tuo PRIMO comando deve essere
+# `throttle-ack <tuo-nome>`: è ciò che chiude il ciclo. Un flag fermo su
+# `NOTIFIED` è la prova che un agente ha ricevuto la sveglia e non ha
+# risposto — su quella prova il watchdog escala.
+#
+# ## Uso
+#
+#   throttle <tuo-nome> [--reason "..."]
+#   throttle --agent <tuo-nome> [--reason "..."]     # forma compatibile
+#   throttle <tuo-nome> <secondi> [--reason "..."]   # richiesta esplicita:
+#                                                    # passa comunque da
+#                                                    # floor + ladder
+#
+# ## Exit codes
+#
+#   0 → timer armato (o durata 0 = nessuna pausa: continua)
+#   1 → argomenti invalidi / motore non trovato
+
+set -eu
+
+AGENT=""
+SECONDS_REQ=""
+REASON=""
+
+while [ $# -gt 0 ]; do
+  case "${1:-}" in
+    --agent)  AGENT="${2:-}"; shift 2 ;;
+    --reason) REASON="${2:-}"; shift 2 ;;
+    -h|--help)
+      cat <<'HLP'
+Usage: throttle <agent> [seconds] [--reason "..."]
+       throttle --agent scout-1
+Registra la pausa nel motore e ritorna SUBITO. Poi CHIUDI IL TURNO: il motore
+ti sveglia via tmux. Al risveglio, primo comando: throttle-ack <agent>.
+HLP
+      exit 0
+      ;;
+    *)
+      if echo "${1:-}" | grep -qE '^[0-9]+$'; then
+        [ -n "$SECONDS_REQ" ] || SECONDS_REQ="$1"
+      elif [ -z "$AGENT" ]; then
+        AGENT="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$AGENT" ]; then
+  echo "error: agente richiesto — uso: throttle <tuo-nome>" >&2
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE="/app/shared/skills/throttle_engine.py"
+[ -f "$ENGINE" ] || ENGINE="${SCRIPT_DIR}/../../shared/skills/throttle_engine.py"
+if [ ! -f "$ENGINE" ]; then
+  echo "error: throttle_engine.py non trovato" >&2
+  exit 1
+fi
+
+ARGS=( "$ENGINE" register "$AGENT" )
+[ -n "$SECONDS_REQ" ] && ARGS+=( "$SECONDS_REQ" )
+[ -n "$REASON" ] && ARGS+=( --reason "$REASON" )
+
+exec python3 "${ARGS[@]}"
