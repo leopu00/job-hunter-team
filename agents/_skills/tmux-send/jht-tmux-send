@@ -63,8 +63,9 @@
 #       (probabile bash nudo post-crash / modal bloccato): unico segnale "morto".
 #   4 → TUI occupata (turno in corso) oltre il budget d'attesa → agente VIVO:
 #       messaggio NON consegnato in sincrono, il chiamante deve RIPROVARE piu'
-#       tardi, MAI spawnare un rimpiazzo. "Busy != morto" (vedi
-#       docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
+#       tardi, MAI spawnare un rimpiazzo. "Busy != morto": confonderli e' la
+#       causa radice dell'overspawn del 07/06 (6→16 agenti in 3 giorni, weekly
+#       Codex al 100%, halt forzato di ~3,5 giorni).
 #   5 → testo DIGITATO ma submit NON confermato dopo tutti i tentativi: la TUI
 #       e' probabilmente congelata. Il messaggio e' nel composer del
 #       destinatario, che ora appare occupato a tutti: e' un caso da Dottore
@@ -165,7 +166,8 @@ signature=$(printf '%s' "$message" | head -c 30)
 # digitato → la signature non comparirebbe mai e concluderemmo a torto che la
 # TUI e' irricettiva (morta). Un pane occupato e' un agente VIVO: aspettiamo
 # che torni idle prima di typeare, MAI typeare dentro un turno in corso.
-# Causa radice dell'overspawn 07/06 (docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
+# Causa radice dell'overspawn 07/06: il clone prende il sopravvento mentre
+# l'originale, vivo, resta acceso come zombie a bruciare budget.
 _pane_busy() {
   case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
     *"esc to interrupt"*|*"to interrupt"*) return 0 ;;

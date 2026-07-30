@@ -137,7 +137,7 @@ Append con `>>`, mai overwrite. Sintesi densa (come le note di viaggio del Dotto
 - `shared/skills/sync_health.py` — il canary della cloud-sync usato allo step 0.5 (pull churn / push 413 / cursori stale); read-only, gemello-per-la-SYNC di process_health/tool_health.
 - `shared/skills/tool_health.py` — lo smoke-test riusato allo step 1 (anche gate build-time + tick).
 - `shared/skills/log_archive.py` — l'archiviatore deterministico dello step 6.5 (taglio settimane >30g → zip, prune sotto pressione spazio).
-- `.launcher/agent-watchdog.sh` — il recovery VELOCE (ogni 30s, `maybe_respawn_bridges`) di cui lo step 0 è la rete di sicurezza giornaliera; vedi `docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md`.
+- `.launcher/agent-watchdog.sh` — il recovery VELOCE (ogni 30s, `maybe_respawn_bridges`) di cui lo step 0 è la rete di sicurezza giornaliera; lezione del 27/06: i bridge partono `setsid` detached, quindi né il respawn di pid1 né `agent-watchdog` (che respawna le sessioni tmux, non i processi Python) li coprono — se crashano restano giù fino al restart del container.
 - `agents/mantenitore/mantenitore.md` — la persona/lifecycle del Mantenitore (dev3).
 - `agents/_skills/resilience/SKILL.md` — la ladder anti-silenzio degli agenti (dev3); il suo step "classify" riusa `tool_health.py`.
 - `agents/_skills/liveness-check/SKILL.md` — il gemello lato Dottore (salute agenti), per struttura.
