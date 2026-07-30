@@ -8,7 +8,7 @@ Get the team running in **about 10 minutes**, depending on the path you pick.
 
 ## ⚠️ Before you start
 
-JHT runs ~**400M tokens/month** (many agents working in parallel, around the clock). To make this affordable, **JHT runs on LLM subscriptions, not pay-per-use API keys** — see [`docs/PROVIDERS.md`](../about/PROVIDERS.md) and [ADR-0004](../adr/0004-subscription-only-no-api-keys.md).
+JHT runs ~**400M tokens/month** (many agents working in parallel, around the clock). To make this affordable, **JHT runs on LLM subscriptions, not pay-per-use API keys** — see [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) and [ADR-0004](../adr/0004-subscription-only-no-api-keys.md).
 
 You need an active subscription to **one** of:
 
@@ -41,7 +41,7 @@ If you already use a personal AI assistant (Claude Code, OpenClaw, Codex, Cursor
 
 > *"Set up Job Hunter Team for me. I have a [Claude Max x20 / Kimi Pro / Codex Pro] subscription. Walk me through what you need."*
 
-…and it will figure out the rest. The `jht` CLI is intentionally designed to be driven by other AI agents — see [`docs/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) for prompt examples and the full integration guide.
+…and it will figure out the rest. The `jht` CLI is intentionally designed to be driven by other AI agents — see [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) for prompt examples and the full integration guide.
 
 ---
 
@@ -146,7 +146,7 @@ jht team start
 jht container logs -f
 ```
 
-See [`docs/CLI-INSTALL.md`](CLI-INSTALL.md) for the full CLI reference.
+See [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md) for the full CLI reference.
 
 ---
 
@@ -239,7 +239,7 @@ jht providers use claude    # switch active provider
 jht providers update        # update CLI versions
 ```
 
-Full CLI reference: [`docs/CLI-INSTALL.md`](CLI-INSTALL.md).
+Full CLI reference: [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md).
 
 ---
 
@@ -247,21 +247,21 @@ Full CLI reference: [`docs/CLI-INSTALL.md`](CLI-INSTALL.md).
 
 - **Setup not finishing?** Run `jht doctor` — it tells you exactly what's missing
 - **Team won't start?** `jht container status` then `jht container logs -f`
-- **Hitting rate limits?** `jht sentinella status` shows the current usage projection — see [`docs/MONITORING.md`](../about/MONITORING.md) for what the numbers mean
+- **Hitting rate limits?** `jht sentinella status` shows the current usage projection — see [`docs/about/MONITORING.md`](../about/MONITORING.md) for what the numbers mean
 - **Bug or unclear behavior?** Open an issue with the labels suggested in `.github/ISSUE_TEMPLATE/bug_report.md`
-- **Want to be a beta tester?** See [`docs/BETA.md`](BETA.md)
+- **Want to be a beta tester?** See [`docs/guides/BETA.md`](BETA.md)
 
 ---
 
 ## 📚 Where to look next
 
 - 📘 [`README.md`](../../README.md) — project overview, story, manifesto
-- 📋 [`docs/STORY.md`](../about/STORY.md) — origin story (legacy team results)
-- 💳 [`docs/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick
-- 🦞 [`docs/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive JHT
-- 🎯 [`docs/VISION.md`](../about/VISION.md) — design philosophy, anti-goals, the Mentor
-- 🧪 [`docs/BETA.md`](BETA.md) — join the beta program
-- 📊 [`docs/MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel test data
-- 🗺️ [`docs/ROADMAP.md`](../about/ROADMAP.md) — what's coming next
-- 🛠️ [`docs/CLI-INSTALL.md`](CLI-INSTALL.md) — full CLI reference
-- 🏗️ [`docs/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram
+- 📋 [`docs/about/STORY.md`](../about/STORY.md) — origin story (legacy team results)
+- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick
+- 🦞 [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive JHT
+- 🎯 [`docs/about/VISION.md`](../about/VISION.md) — design philosophy, anti-goals, the Mentor
+- 🧪 [`docs/guides/BETA.md`](BETA.md) — join the beta program
+- 📊 [`docs/about/MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel test data
+- 🗺️ [`docs/about/ROADMAP.md`](../about/ROADMAP.md) — what's coming next
+- 🛠️ [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md) — full CLI reference
+- 🏗️ [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram
