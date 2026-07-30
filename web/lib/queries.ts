@@ -132,233 +132,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
-// ── Posizioni ordinate per ULTIMA azione qualsiasi ────────────────
-export type RecentlyTouchedPosition = PositionWithScore & {
-  last_action_at: string;
-  last_action_by: string;
-  last_action_actor: string;
-  voto: number | null;
-};
-
-type CloudRecentEvent = {
-  positionId: string;
-  ts: string;
-  role: string;
-  actor: string;
-};
-
+// ── Helper relazioni Supabase ─────────────────────────────────────
+// PostgREST rende una relazione ora come array ora come oggetto a
+// seconda della cardinalità dedotta: normalizziamo al primo elemento.
 function firstRelated<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
-}
-
-function recordCloudEvent(
-  events: Map<string, CloudRecentEvent>,
-  positionId: string | null | undefined,
-  ts: string | null | undefined,
-  role: string,
-  actor?: string | null,
-) {
-  if (!positionId || !ts) return;
-  const time = Date.parse(ts);
-  if (!Number.isFinite(time)) return;
-  const prev = events.get(positionId);
-  if (prev && Date.parse(prev.ts) >= time) return;
-  events.set(positionId, {
-    positionId,
-    ts,
-    role,
-    actor: actor || role,
-  });
-}
-
-async function getRecentlyTouchedPositionsCloud(
-  limit: number,
-): Promise<RecentlyTouchedPosition[]> {
-  if (!isSupabaseConfigured) return [];
-  const supabase = await createClient();
-  const sampleLimit = Math.min(200, Math.max(40, limit * 5));
-
-  const [
-    foundRes,
-    checkedRes,
-    scoredRes,
-    writtenRes,
-    reviewedRes,
-    appliedRes,
-    responseRes,
-  ] = await Promise.all([
-    supabase
-      .from("positions")
-      .select("id, found_at, found_by")
-      .not("found_at", "is", null)
-      .is("deleted_at", null)
-      .order("found_at", { ascending: false })
-      .limit(sampleLimit),
-    supabase
-      .from("positions")
-      .select("id, last_checked")
-      .not("last_checked", "is", null)
-      .is("deleted_at", null)
-      .order("last_checked", { ascending: false })
-      .limit(sampleLimit),
-    supabase
-      .from("scores")
-      .select("position_id, scored_at, scored_by")
-      .not("scored_at", "is", null)
-      .is("deleted_at", null)
-      .order("scored_at", { ascending: false })
-      .limit(sampleLimit),
-    supabase
-      .from("applications")
-      .select("position_id, written_at, written_by")
-      .not("written_at", "is", null)
-      .is("deleted_at", null)
-      .order("written_at", { ascending: false })
-      .limit(sampleLimit),
-    supabase
-      .from("applications")
-      .select("position_id, critic_reviewed_at, reviewed_by")
-      .not("critic_reviewed_at", "is", null)
-      .is("deleted_at", null)
-      .order("critic_reviewed_at", { ascending: false })
-      .limit(sampleLimit),
-    supabase
-      .from("applications")
-      .select("position_id, applied_at")
-      .not("applied_at", "is", null)
-      .is("deleted_at", null)
-      .order("applied_at", { ascending: false })
-      .limit(sampleLimit),
-    supabase
-      .from("applications")
-      .select("position_id, response_at")
-      .not("response_at", "is", null)
-      .is("deleted_at", null)
-      .order("response_at", { ascending: false })
-      .limit(sampleLimit),
-  ]);
-
-  if (
-    foundRes.error ||
-    checkedRes.error ||
-    scoredRes.error ||
-    writtenRes.error ||
-    reviewedRes.error ||
-    appliedRes.error ||
-    responseRes.error
-  ) {
-    return getRecentPositions(limit) as Promise<RecentlyTouchedPosition[]>;
-  }
-
-  const events = new Map<string, CloudRecentEvent>();
-  for (const p of foundRes.data ?? []) {
-    recordCloudEvent(events, p.id, p.found_at, "scout", p.found_by);
-  }
-  for (const p of checkedRes.data ?? []) {
-    recordCloudEvent(events, p.id, p.last_checked, "analista", "analista");
-  }
-  for (const s of scoredRes.data ?? []) {
-    recordCloudEvent(events, s.position_id, s.scored_at, "scorer", s.scored_by);
-  }
-  for (const a of writtenRes.data ?? []) {
-    recordCloudEvent(
-      events,
-      a.position_id,
-      a.written_at,
-      "scrittore",
-      a.written_by,
-    );
-  }
-  for (const a of reviewedRes.data ?? []) {
-    recordCloudEvent(
-      events,
-      a.position_id,
-      a.critic_reviewed_at,
-      "critico",
-      a.reviewed_by,
-    );
-  }
-  for (const a of appliedRes.data ?? []) {
-    recordCloudEvent(events, a.position_id, a.applied_at, "user", "user");
-  }
-  for (const a of responseRes.data ?? []) {
-    recordCloudEvent(events, a.position_id, a.response_at, "user", "user");
-  }
-
-  const ids = Array.from(events.keys());
-  if (ids.length === 0) {
-    return getRecentPositions(limit) as Promise<RecentlyTouchedPosition[]>;
-  }
-
-  const { data, error } = await supabase
-    .from("positions")
-    .select(
-      `
-      id, legacy_id, title, company, location, remote_type,
-      salary_declared_min, salary_declared_max, url, source,
-      found_at, status, notes, last_checked, found_by, score,
-      scores ( total_score, scored_at, scored_by ),
-      applications (
-        critic_score, written_at, written_by,
-        critic_reviewed_at, reviewed_by, applied_at, response_at
-      )
-    `,
-    )
-    .in("id", ids)
-    .is("deleted_at", null);
-
-  if (error || !data) return [];
-
-  const positions = (data as any[]).map((p: any) => {
-    const event = events.get(p.id);
-    if (!event) return null;
-    const score = firstRelated<any>(p.scores);
-    const application = firstRelated<any>(p.applications);
-    return {
-      ...p,
-      scores: undefined,
-      applications: undefined,
-      score: p.score ?? score?.total_score ?? null,
-      scored_at: score?.scored_at ?? null,
-      last_action_at: event.ts,
-      last_action_by: event.role,
-      last_action_actor: event.actor,
-      voto:
-        typeof application?.critic_score === "number"
-          ? application.critic_score
-          : null,
-    } as RecentlyTouchedPosition;
-  });
-
-  return positions
-    .filter(
-      (p: RecentlyTouchedPosition | null): p is RecentlyTouchedPosition =>
-        p !== null,
-    )
-    .sort(
-      (a: RecentlyTouchedPosition, b: RecentlyTouchedPosition) =>
-        Date.parse(b.last_action_at) - Date.parse(a.last_action_at),
-    )
-    .slice(0, limit);
-}
-
-export async function getRecentlyTouchedPositions(
-  limit = 15,
-): Promise<RecentlyTouchedPosition[]> {
-  const w = await ws();
-  if (w) {
-    try {
-      return local.getRecentlyTouchedPositionsLocal(w, limit);
-    } catch {
-      return [];
-    }
-  }
-  try {
-    return getRecentlyTouchedPositionsCloud(limit);
-  } catch {
-    return [];
-  }
 }
 
 // ── Recent positions with scores ───────────────────────────────────
@@ -1119,7 +898,7 @@ export async function getSwipeDecks(limit = 1000): Promise<{
 
 // Sceglie l'evento con timestamp più recente tra i candidati passati.
 // Usato sia dal path cloud sia (replicato) dal path locale per derivare
-// last_action_at/by/actor in modo coerente con getRecentlyTouchedPositions.
+// last_action_at/by/actor con lo stesso mapping ruolo/attore.
 export type LastActionCandidate = {
   ts: string | null | undefined;
   by: string;
@@ -1173,7 +952,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       (p.score as number | null) ??
       (typeof s?.total_score === "number" ? s.total_score : null);
     // last_action_at + chi: stesso mapping ruolo/attore di
-    // getRecentlyTouchedPositions, ma derivato inline per riga.
+    // pickLastAction, ma derivato inline per riga.
     const {
       at: last_action_at,
       by: last_action_by,
@@ -1483,64 +1262,6 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
     });
   });
   return out;
-}
-
-// ── Position state-history (timestamp delle transizioni) ──────────
-// Restituisce per ogni posizione i timestamp delle transizioni di
-// stato, sufficienti a ricostruire la composizione della pipeline a
-// un istante T arbitrario (slider temporale nel dashboard).
-export type PositionStateHistory = {
-  id: string;
-  status: string;
-  critic_verdict: string | null;
-  found_at: string | null;
-  last_checked: string | null;
-  scored_at: string | null;
-  written_at: string | null;
-  critic_reviewed_at: string | null;
-  applied_at: string | null;
-  response_at: string | null;
-};
-
-export async function getPositionStateHistory(): Promise<
-  PositionStateHistory[]
-> {
-  const w = await ws();
-  if (w) {
-    try {
-      return local.getPositionStateHistoryLocal(w);
-    } catch {
-      return [];
-    }
-  }
-  if (!isSupabaseConfigured) return [];
-
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("positions")
-    .select(
-      "id, status, found_at, last_checked, scores(scored_at), applications(written_at, critic_reviewed_at, critic_verdict, applied_at, response_at)",
-    )
-    .is("deleted_at", null);
-  if (error || !data) return [];
-  return (data as any[]).map((p) => {
-    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores;
-    const app = Array.isArray(p.applications)
-      ? p.applications[0]
-      : p.applications;
-    return {
-      id: String(p.id),
-      status: p.status,
-      critic_verdict: app?.critic_verdict ?? null,
-      found_at: p.found_at ?? null,
-      last_checked: p.last_checked ?? null,
-      scored_at: score?.scored_at ?? null,
-      written_at: app?.written_at ?? null,
-      critic_reviewed_at: app?.critic_reviewed_at ?? null,
-      applied_at: app?.applied_at ?? null,
-      response_at: app?.response_at ?? null,
-    };
-  });
 }
 
 // ── Position type distribution ──────────────────────────────────────
