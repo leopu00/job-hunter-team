@@ -3534,7 +3534,13 @@ func _build_team() -> void:
 		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(tag)
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label(UIStrings.t("team.core"), 15, Palette.MUTED))
+	# i tre nomi vengono da role.* invece che dalla riga tradotta: erano
+	# rimasti in italiano in tutte e 7 le lingue, e composti così non
+	# possono più divergere da quello che si legge in scena
+	_content.add_child(TerminalTheme.label(UIStrings.t("team.core") % [
+			CharacterDefs.role_name("coordinatore"),
+			CharacterDefs.role_name("mentor"),
+			CharacterDefs.role_name("assistente")], 15, Palette.MUTED))
 
 ## Tutti gli agenti in scena con stato del ruolo. Con la VPS collegata:
 ## il roster VERO (sessioni tmux attive), aggiornato a ogni poll.
