@@ -9,6 +9,9 @@ tmux-send
 # Throttle (cooldown — rare for a one-shot, used only if the Writer
 # delays the kill)
 throttle
+# Wake-up ack: first command after every throttle pause. Without it the
+# flag stays on NOTIFIED and the watchdog escalates on a healthy agent.
+throttle-ack
 
 # Critico-only operative skill (the entire review contract)
 blind-review
