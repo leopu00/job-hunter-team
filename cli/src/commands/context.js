@@ -127,6 +127,6 @@ async function contextClear() {
 export function registerContextCommand(program) {
   program
     .command('context [action]')
-    .description('Context engine — stato, sorgenti, pulizia cache (azioni: status, sources, clear)')
+    .description('[non implementato] Context engine — nessun consumatore: le sorgenti non alimentano gli agenti (azioni: status, sources, clear)')
     .action(handleContext);
 }

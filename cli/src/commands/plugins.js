@@ -108,7 +108,7 @@ async function togglePlugin(id, enable) {
 export function registerPluginsCommand(program) {
   program
     .command('plugins [action]')
-    .description('Gestione plugin (azioni: list, enable, disable)')
+    .description('[non implementato] Gestione plugin — nessun loader: i plugin non vengono mai caricati (azioni: list, enable, disable)')
     .option('--id <id>', 'ID del plugin da attivare/disattivare')
     .action(handlePlugins);
 }
