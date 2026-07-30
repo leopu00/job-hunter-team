@@ -8,6 +8,7 @@ import {
   isLocalTokenAuthenticated,
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -96,10 +97,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
   if (error) {
-    return NextResponse.json(
-      { error: `Supabase query failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "team-directives",
+      publicMessage: "query_failed",
+    });
   }
   return NextResponse.json({ directives: data || [], source: "cloud" });
 }
@@ -171,10 +173,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .select("id")
     .single();
   if (error) {
-    return NextResponse.json(
-      { error: `Supabase insert failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "team-directives",
+      publicMessage: "insert_failed",
+    });
   }
   return NextResponse.json({ id: String(data.id), source: "cloud" });
 }
@@ -249,10 +252,11 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     .eq("id", id)
     .eq("user_id", userId);
   if (error) {
-    return NextResponse.json(
-      { error: `Supabase update failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "team-directives",
+      publicMessage: "update_failed",
+    });
   }
   return NextResponse.json({ ok: true, source: "cloud" });
 }

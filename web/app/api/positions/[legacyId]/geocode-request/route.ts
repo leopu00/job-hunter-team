@@ -168,11 +168,11 @@ async function toggleViaCloud(
     .maybeSingle();
 
   if (error) {
-    return {
-      ok: false,
-      status: 500,
-      body: { error: `Supabase query failed: ${error.message}` },
-    };
+    // Questo helper ritorna un BODY, non una NextResponse: `sanitizedError`
+    // non è applicabile qui, quindi ne replichiamo il contratto — dettaglio
+    // nei log del server, codice stabile al client.
+    console.error(`[positions/geocode-request] 500 ${error.message}`);
+    return { ok: false, status: 500, body: { error: "query_failed" } };
   }
   if (!row) {
     return {

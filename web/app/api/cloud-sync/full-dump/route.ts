@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -61,10 +62,11 @@ export async function GET(req: NextRequest) {
       .is("deleted_at", null)
       .limit(ROW_CAP_PER_TABLE + 1);
     if (error) {
-      return NextResponse.json(
-        { ok: false, error: `${table} dump failed: ${error.message}` },
-        { status: 500 },
-      );
+      return sanitizedError(error, {
+        status: 500,
+        scope: "cloud-sync/full-dump",
+        publicMessage: `${table}_dump_failed`,
+      });
     }
     const rows = data || [];
     if (rows.length > ROW_CAP_PER_TABLE) {

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { isDemoPositionId } from "@/lib/demo/data";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,7 @@ export async function POST(req: NextRequest) {
   try {
     ({ position_id: positionId } = await req.json());
   } catch {
-    return NextResponse.json({ error: "Body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
   // [JHT-WEB-DEMO] Posizione demo: niente riga in position_views, lo stato
   // "vista" delle demo è derivato dall'età (vedi getSeenPositionIds).
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
     // FK violata = posizione inesistente/cancellata: per il client è
     // indifferente, niente 500 rumorosi su un fire-and-forget.
     const status = error.code === "23503" ? 404 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+    return sanitizedError(error, { status, scope: "positions/seen" });
   }
   return NextResponse.json({ ok: true });
 }

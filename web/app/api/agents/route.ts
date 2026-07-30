@@ -10,6 +10,7 @@ import { runBash } from "@/lib/shell";
 import { requireAuth, isLocalRequest } from "@/lib/auth";
 import { enqueueIfRemote } from "@/lib/team-bus";
 import { createClient } from "@/lib/supabase/server";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 export const dynamic = "force-dynamic";
 
@@ -235,7 +236,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const agentId = typeof body.agentId === "string" ? body.agentId.trim() : "";

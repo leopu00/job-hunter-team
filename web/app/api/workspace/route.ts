@@ -9,6 +9,7 @@ import {
   JHT_USER_OUTPUT_DIR,
 } from "@/lib/jht-paths";
 import { requireAuth } from "@/lib/auth";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,11 @@ export async function POST() {
     fs.mkdirSync(JHT_USER_UPLOADS_DIR, { recursive: true });
     fs.mkdirSync(JHT_USER_OUTPUT_DIR, { recursive: true });
   } catch (err: unknown) {
-    const msg =
-      err instanceof Error
-        ? err.message
-        : "Impossibile creare la cartella utente";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return sanitizedError(err, {
+      status: 500,
+      scope: "workspace",
+      publicMessage: "user_dir_create_failed",
+    });
   }
   return NextResponse.json({ ok: true, ...workspaceState() });
 }

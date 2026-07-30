@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { DEVICE_CODE_RE } from "@/lib/cloud-sync/pairing";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON body atteso" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const device_code = body.device_code?.trim() ?? "";
@@ -100,7 +102,10 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, {
+      status: 500,
+      scope: "cloud-sync/device-poll",
+    });
   }
   if (!session) {
     return NextResponse.json({ status: "not_found" }, { status: 404 });

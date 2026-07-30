@@ -8,6 +8,7 @@ import {
 } from "@/lib/ai-assistant";
 import { requireAuth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 /**
  * Proxy chat AI — **spento di default** dietro `JHT_AI_ASSISTANT_ENABLED`.
@@ -194,7 +195,7 @@ export async function POST(req: Request) {
   try {
     body = (await req.json()) as AssistantRequestBody;
   } catch {
-    return NextResponse.json({ error: "JSON non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const message = body.message?.trim();
