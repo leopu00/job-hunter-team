@@ -2159,15 +2159,18 @@ func _build_appearance() -> void:
 	var choices := HBoxContainer.new()
 	choices.add_theme_constant_override("separation", 16)
 	_content.add_child(choices)
+	# Solo testo: il ☀ del tema chiaro era un pittogramma dipendente dai font
+	# di sistema (regola: niente emoji nella UI di prodotto), e un ◐ da solo
+	# sull'altra scheda non racconterebbe una coppia.
 	for spec in [
-		[Palette.MODE_LIGHT, "☀", "appearance.light", "appearance.light_desc"],
-		[Palette.MODE_DARK, "◐", "appearance.dark", "appearance.dark_desc"],
+		[Palette.MODE_LIGHT, "appearance.light", "appearance.light_desc"],
+		[Palette.MODE_DARK, "appearance.dark", "appearance.dark_desc"],
 	]:
 		var selected: bool = Palette.mode == spec[0]
 		var button := Button.new()
-		button.text = "%s  %s%s\n%s" % [spec[1],
-				UIStrings.t(spec[2]).to_upper(), "  ✓" if selected else "",
-				UIStrings.t(spec[3])]
+		button.text = "%s%s\n%s" % [
+				UIStrings.t(spec[1]).to_upper(), "  ✓" if selected else "",
+				UIStrings.t(spec[2])]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.custom_minimum_size = Vector2(360, 104)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2455,7 +2458,7 @@ func _build_agent_page() -> void:
 	var title_row := HBoxContainer.new()
 	title_row.add_theme_constant_override("separation", 14)
 	_content.add_child(title_row)
-	title_row.add_child(TerminalTheme.label(ROLE_EMOJI.get(slug, "●"), 22, Palette.GREEN))
+	title_row.add_child(_role_icon(slug, 24.0))
 	title_row.add_child(TerminalTheme.label(
 			str(agent.get("name", slug.capitalize())), 22, Palette.WHITE, "xbold"))
 	title_row.add_child(TerminalTheme.label(
@@ -3712,7 +3715,7 @@ func _build_agents() -> void:
 			row.add_theme_constant_override("separation", 12)
 			_content.add_child(row)
 			var slug := str(a.get("slug", "?"))
-			row.add_child(TerminalTheme.label(ROLE_EMOJI.get(slug, "●"), 14, Palette.GREEN))
+			row.add_child(_role_icon(slug, 16.0))
 			# il nome apre la pagina dell'agente (come /team/<slug> sul web)
 			var name_btn := Button.new()
 			name_btn.flat = true
@@ -3741,9 +3744,12 @@ func _build_agents() -> void:
 		var color: Color = DepartmentDefs.DEPARTMENTS[dept_id]["color"] \
 				if dept_id != "" else Palette.MUTED
 		row.add_child(TerminalTheme.label("●", 13, color))
+		# "regular", non "": TerminalTheme.label indicizza il dizionario dei
+		# font col peso, e la stringa vuota faceva abortire la costruzione
+		# dell'intera lista mock (visibile solo senza team collegato).
 		var name_lbl := TerminalTheme.label(def["name"], 16,
 				Palette.BRIGHT if def.get("lead", false) else Palette.BASE,
-				"medium" if def.get("lead", false) else "")
+				"medium" if def.get("lead", false) else "regular")
 		name_lbl.custom_minimum_size = Vector2(220, 0)
 		row.add_child(name_lbl)
 		var status: Dictionary = TeamData.agent_status().get(def["slug"], {})
@@ -3753,12 +3759,24 @@ func _build_agents() -> void:
 		st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(st)
 
-## Emoji-ruolo per l'attribuzione per-istanza (scout-2, scorer-1…).
-const ROLE_EMOJI := {
-	"scout": "🔍", "analista": "🧠", "scorer": "🎯", "scrittore": "✍",
-	"critico": "🧐", "capitano": "🧭", "coordinatore": "🧭", "sentinella": "🛡",
-	"assistente": "📋", "mentor": "🎓", "dottore": "🩺", "mantenitore": "🔧",
+## Icona vettoriale per ruolo (id di SidebarIcon): niente emoji nella UI di
+## prodotto — i pittogrammi dipendono dai font di sistema e su Linux restavano
+## rettangoli vuoti (stessa ragione per cui la sidebar disegna le sue icone).
+const ROLE_ICON := {
+	"scout": "search", "analista": "chip", "scorer": "target",
+	"scrittore": "pen", "critico": "scale", "capitano": "compass",
+	"coordinatore": "compass", "sentinella": "shield", "assistente": "doc",
+	"mentor": "grad", "dottore": "medcross", "mantenitore": "gear",
 }
+
+
+## L'icona di ruolo pronta da mettere in riga accanto al nome. Per un ruolo
+## sconosciuto SidebarIcon disegna il cerchietto neutro: mai un glifo dubbio.
+static func _role_icon(slug: String, side: float) -> SidebarIcon:
+	var icon := SidebarIcon.new(ROLE_ICON.get(slug, ""), Palette.GREEN)
+	icon.custom_minimum_size = Vector2(side, side)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return icon
 
 ## Feed attività: il registro transizioni VERO quando la VPS è collegata
 ## (chi ha fatto cosa, con l'istanza), altrimenti il mock.
@@ -3784,9 +3802,7 @@ func _build_activity() -> void:
 			when.custom_minimum_size = Vector2(140, 0)
 			row.add_child(when)
 			var by := str(t.get("by_agent", "?") if t.get("by_agent") else "?")
-			var base := by.split("-")[0]
-			var who := TerminalTheme.label("%s %s"
-					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(by)],
+			var who := TerminalTheme.label(AgentNames.display_name(by),
 					13, Palette.MINT, "medium")
 			who.custom_minimum_size = Vector2(210, 0)
 			row.add_child(who)
@@ -4020,7 +4036,7 @@ func _build_notifs() -> void:
 				var status := str(t.get("status", ""))
 				var req := str(t.get("request_text", "")).left(70)
 				if status == "resolved":
-					items.append({"ts": str(t.get("created_at", "")), "icon": "✔",
+					items.append({"ts": str(t.get("created_at", "")), "icon": "✓",
 							"color": Palette.MINT,
 							"text": UIStrings.t("notifs.ticket_resolved") % req})
 				elif status == "assigned":
@@ -4096,9 +4112,8 @@ func _build_chat() -> void:
 					str(msg.get("ts", "")).replace("T", " ").left(16), 13, Palette.DIM)
 			when.custom_minimum_size = Vector2(130, 0)
 			row.add_child(when)
-			var base := str(msg.get("from", "?")).split("-")[0]
 			# Mittente e destinatario nella stessa cella: solo cognomi.
-			var who := TerminalTheme.label("%s %s → %s" % [ROLE_EMOJI.get(base, "•"),
+			var who := TerminalTheme.label("%s → %s" % [
 					AgentNames.short_name(str(msg.get("from", "?"))),
 					AgentNames.short_name(str(msg.get("to", "?")))],
 					13, Palette.MINT, "medium")
@@ -4211,9 +4226,7 @@ func _build_usage() -> void:
 			var row := HBoxContainer.new()
 			row.add_theme_constant_override("separation", 12)
 			_content.add_child(row)
-			var base := str(agent).split("-")[0]
-			var lbl := TerminalTheme.label("%s %s"
-					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(str(agent))],
+			var lbl := TerminalTheme.label(AgentNames.display_name(str(agent)),
 					14, Palette.BASE)
 			lbl.custom_minimum_size = Vector2(270, 0)
 			row.add_child(lbl)
