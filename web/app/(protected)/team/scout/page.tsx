@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { getScoutStats } from "@/lib/queries";
 import ScoutLiveSection from "./_components/ScoutLiveSection";
-import AgentInteraction from "@/components/AgentInteraction";
+import AgentInteraction from "@/app/components/AgentInteraction";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
