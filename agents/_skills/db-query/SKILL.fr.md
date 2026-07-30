@@ -67,6 +67,39 @@ python3 /app/shared/skills/db_query.py next-for-critico   # ⚠️ legacy — en
 
 Chacun retourne le prochain lot prêt pour ce rôle, suivant le flux de statut V5 : `new → checked → scored → writing → ready → applied → response` (avec `excluded` comme sortie de secours à chaque étape).
 
+### La limite est une valeur par défaut, pas un plafond
+
+Chaque file imprime les **20 premières lignes** et déclare toujours **combien il y en a au
+total** — `Posizioni new pronte per analisi (mostrate 20 di 1375)`. Regarde ce second
+nombre : c'est le backlog, et il ne disparaît pas parce que les lignes ont été coupées.
+
+```bash
+# Combien en voir, c'est toi qui décides
+python3 /app/shared/skills/db_query.py next-for-categorize --limit 100
+python3 /app/shared/skills/db_query.py next-for-categorize --all     # toutes (= --limit 0)
+python3 /app/shared/skills/db_query.py next-for-categorize --json    # {"total": 1375, "shown": 20, "rows": [...]}
+```
+
+Pourquoi ce défaut existe (mesuré le 2026-07-30) : sans limite,
+`next-for-geocode-missing` imprimait **1.375 lignes ≈ 19.500 tokens** à 2.000 positions, et
+en imprimerait **~195.000** à 20.000 — une seule commande, plus qu'une fenêtre de contexte
+entière. Le défaut te protège de ce que personne n'a demandé ; il ne décide **pas** à ta
+place : choisis le nombre selon ce que tu fais — 20 pour prendre l'élément suivant, `--all`
+pour un audit, le total seul pour dimensionner un backlog.
+
+Et tu n'es pas confiné à ces commandes : cette skill accorde `Bash(python3 *)`, donc écrire
+ta propre requête avec ton propre `LIMIT` est légitime chaque fois que la file toute faite
+n'est pas la question que tu as vraiment.
+
+```bash
+python3 -c "
+import os, sqlite3
+db = sqlite3.connect(os.environ.get('JHT_DB', '/jht_home/jobs.db'))
+for row in db.execute('SELECT id, title FROM positions WHERE role_family IS NULL LIMIT 50'):
+    print(row)
+"
+```
+
 ## Quand l'utiliser
 
 - Avant les décisions de scaling (le Capitano doit savoir s'il y a ≥ 3 enregistrements `checked` avant de spawner un SCORER)
