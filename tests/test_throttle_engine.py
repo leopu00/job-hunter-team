@@ -536,8 +536,11 @@ def test_6b_in_deroga_i_valori_sotto_il_floor_passano(home, burn, monkeypatch):
     """Con la deroga attiva il numero chiesto vale così com'è. È una decisione
     economica dell'utente sulla velocità, e vive in `effective()` — il motore
     la applica, gli agenti non la conoscono."""
-    burn.grant(hours=5, reason="stanotte spremete",
-               now=datetime.fromtimestamp(T0, timezone.utc))
+    # Deroga concessa ADESSO, non a T0: `effective()` chiede a `burn_intent`
+    # se la deroga è viva usando l'orologio di sistema, mentre `now=T0` governa
+    # solo il timer. Ancorare la concessione a T0 rende il test verde o rosso
+    # a seconda dell'ora in cui gira.
+    burn.grant(hours=5, reason="stanotte spremete")
     set_config(home, **{"scout-1": 60})
     eng._MODULE_CACHE.clear()
     tc = _load("throttle_config_burn", SKILLS_DIR / "throttle-config.py")
@@ -551,7 +554,9 @@ def test_6b_in_deroga_i_valori_sotto_il_floor_passano(home, burn, monkeypatch):
 
 def test_6c_alla_scadenza_della_deroga_il_freno_torna_da_solo(home, burn,
                                                              monkeypatch):
-    past = datetime.fromtimestamp(T0, timezone.utc) - timedelta(hours=6)
+    # Scaduta rispetto all'orologio di sistema, che è quello che `effective()`
+    # consulta: concessa sei ore fa per cinque.
+    past = datetime.now(timezone.utc) - timedelta(hours=6)
     burn.grant(hours=5, now=past)
     set_config(home, **{"scout-1": 60})
     eng._MODULE_CACHE.clear()
@@ -570,7 +575,7 @@ def test_6d_la_chiamata_dellagente_e_identica_nei_due_casi(home, burn,
     plain = eng.register("scout-1", now=T0)
     assert set(plain) == {"agent", "armed", "applied_sec", "until"}
 
-    burn.grant(hours=2, now=datetime.fromtimestamp(T0, timezone.utc))
+    burn.grant(hours=2)
     eng._MODULE_CACHE.clear()
     tc = _load("throttle_config_same_call", SKILLS_DIR / "throttle-config.py")
     tc._BURN_INTENT_MOD = burn
