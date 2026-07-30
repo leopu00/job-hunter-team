@@ -56,8 +56,15 @@ function Get-TestMatrix {
             Kind     = $F[1]
             Tier     = $F[2]
             Platform = $F[3]
-            Env      = $(if ($F[4] -eq "-") { @() } else { $F[4].Split(" ") })
-            Target   = $(if ($F[5] -eq "-") { @() } else { $F[5].Split(" ") })
+            # `@(...)` attorno a Split NON e' ridondante: su una riga con UN
+            # solo campo (nessuno spazio) Split restituisce una STRINGA, non un
+            # array, e da li' `$T.Target[0]` indicizza il primo CARATTERE. Il
+            # risultato era `--script res://t` su ogni selftest, cioe' l'intera
+            # matrice rossa su Windows con l'errore "Resource file not found:
+            # res://t", che non somiglia affatto alla sua causa. macOS e Linux
+            # non lo vedevano: run.sh non passa da qui.
+            Env      = @(if ($F[4] -eq "-") { @() } else { $F[4].Split(" ") })
+            Target   = @(if ($F[5] -eq "-") { @() } else { $F[5].Split(" ") })
             Marker   = $(if ($F[6] -eq "-") { $null } else { $F[6] })
         }
     }

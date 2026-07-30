@@ -391,9 +391,15 @@ jobs:
             NOTES=$(printf "%s\n" "$NOTES" | sed '/^[[:space:]]*$/d')
           fi
 
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Un blocco solo invece di tre redirezioni, e `$GITHUB_OUTPUT` fra
+          # virgolette: shellcheck le segnala entrambe (SC2129, SC2086) e da
+          # oggi actionlint gira nel workflow di lint, quindi le sue note sono
+          # diventate un semaforo rosso invece che un suggerimento.
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Download desktop app artifacts
         uses: actions/download-artifact@v8
