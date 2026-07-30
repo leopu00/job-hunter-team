@@ -14,6 +14,10 @@ zero — per conservare identità, abiti, crop e proporzioni.
 
 ## Lotto 1 — Sei `pensieroso` mancanti · priorità ALTA
 
+**Completato su `dev6` il 2026-07-29**: i sei PNG sono stati derivati dalle
+rispettive ancore, normalizzati a 1120×1520 RGBA e verificati anche su fondo
+scuro. Il Lotto 2 resta aperto.
+
 ### Perché serve
 
 La chat a fumetti mostra il ritratto dell'agente accanto alle vignette e passa a
@@ -41,6 +45,12 @@ quella posa doveva dare.
 ---
 
 ## Lotto 2 — I volti per istanza · priorità MEDIA
+
+**Completato su `dev6` il 2026-07-29**: consegnate e importate le due emozioni
+operative (`neutro`, `pensieroso`) per tutte le 30 istanze dei cinque reparti,
+60 PNG in totale. Le varianti `a` riusano intenzionalmente il ritratto del
+ruolo, perché sono la stessa identità; le varianti `b–f` sono state derivate
+dai rispettivi sprite e controllate insieme in un contact sheet globale.
 
 ### Perché serve, e cosa NON è
 
@@ -156,3 +166,9 @@ bash game/tools/run.sh shot /tmp/chat.png JHT_COMIC_CHAT=scout JHT_NOVPS=1 JHT_S
 Un volto mancante non rompe nulla e non lascia traccia a schermo: il ripiego è
 silenzioso, ed è il motivo per cui questi sei buchi sono rimasti invisibili fino
 al 29/07.
+
+Controllo statico della consegna completa:
+
+```bash
+python3 game/tools/audit_instance_portraits.py
+```
