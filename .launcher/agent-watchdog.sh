@@ -424,6 +424,30 @@ WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
 # semantica diversa — halted = "l'utente ha fermato il team" (tutto giù),
 # standby = sospensione tecnica che si risveglia da sola via sentinel-bridge.
 TEAM_STANDBY_FLAG="$JHT_HOME/.team-standby.flag"
+STANDBY_PY="${JHT_STANDBY_PY:-/app/shared/skills/standby.py}"
+[ -f "$STANDBY_PY" ] || STANDBY_PY="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/shared/skills/standby.py"
+
+# Standby ATTIVO adesso? UN solo predicato per tutto il team
+# ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS]): il flag porta con sé la sua
+# condizione di uscita (`until`/`wake_on`), quindi un flag SCADUTO non è più
+# standby. Gatare sulla nuda esistenza del file lascerebbe questo watchdog a
+# non respawnare più nulla se chi doveva rimuovere il flag è morto — lo
+# standby eterno, cioè il caso che il flag esiste per rendere impossibile.
+#
+# Fail-CLOSED: il predicato risponde con una PAROLA su stdout; qualunque altro
+# esito (python assente, modulo rotto, traceback) ricade sul comportamento
+# storico `[ -e "$TEAM_STANDBY_FLAG" ]`. Riaccendere il team a spesa zero per
+# un errore Python sarebbe peggio del bug che stiamo correggendo.
+standby_active() {
+  [ -e "$TEAM_STANDBY_FLAG" ] || return 1
+  local state
+  state="$(JHT_HOME="$JHT_HOME" python3 "$STANDBY_PY" active 2>/dev/null)"
+  case "$state" in
+    active)              return 0 ;;
+    expired|invalid|off) return 1 ;;
+    *)                   return 0 ;;   # fallback: il flag c'è → standby
+  esac
+}
 halt_log_tick=0
 standby_log_tick=0
 # Contatore per rendere LOUD un config_ready=false PERSISTENTE (ramo else in fondo
@@ -460,9 +484,9 @@ while true; do
   # standby sono LORO la sveglia (il sentinel-bridge valuta until/wake_on a
   # ogni tick) e un bridge morto senza respawn = standby eterno. È l'unica
   # differenza rispetto al gate halted qui sopra, ed è deliberata.
-  if [ -e "$TEAM_STANDBY_FLAG" ]; then
+  if standby_active; then
     if [ $((standby_log_tick % 20)) -eq 0 ]; then
-      log "standby: .team-standby.flag presente — respawn/refresh agenti sospesi; bridge supervision ATTIVA (la sveglia)"
+      log "standby: standby ATTIVO — respawn/refresh agenti sospesi; bridge supervision ATTIVA (la sveglia)"
     fi
     standby_log_tick=$((standby_log_tick + 1))
     if config_ready; then
@@ -472,7 +496,7 @@ while true; do
     continue
   fi
   if [ "$standby_log_tick" -gt 0 ]; then
-    log "standby: flag rimosso — riprendo respawn/refresh agenti"
+    log "standby: non più attivo (flag rimosso o scaduto) — riprendo respawn/refresh agenti"
     standby_log_tick=0
   fi
 
