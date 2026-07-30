@@ -1,21 +1,21 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { useLocale } from '@/lib/use-locale'
-import type { Locale } from '@/i18n/config'
+import Link from "next/link";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 
 const T: Record<Locale, { login: string }> = {
-  it: { login: 'Accedi' },
-  en: { login: 'Sign in' },
-  es: { login: 'Iniciar sesión' },
-  fr: { login: 'Se connecter' },
-  de: { login: 'Anmelden' },
-  hu: { login: 'Bejelentkezés' },
-  pt: { login: 'Entrar' },
-}
+  it: { login: "Accedi" },
+  en: { login: "Sign in" },
+  es: { login: "Iniciar sesión" },
+  fr: { login: "Se connecter" },
+  de: { login: "Anmelden" },
+  hu: { login: "Bejelentkezés" },
+  pt: { login: "Entrar" },
+};
 
 export default function LoginButton() {
-  const t = T[useLocale()]
+  const t = T[useLocale()];
   return (
     <Link
       href="/?login=true"
@@ -23,5 +23,5 @@ export default function LoginButton() {
     >
       {t.login}
     </Link>
-  )
+  );
 }

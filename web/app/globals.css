@@ -3,35 +3,35 @@
 /* ── Design tokens ───────────────────────────────────────────────── */
 @theme inline {
   /* Backgrounds */
-  --color-void:   #060608;
-  --color-deep:   #0c0c10;
-  --color-panel:  #111116;
-  --color-card:   #16161d;
-  --color-row:    #1a1a22;
+  --color-void: #060608;
+  --color-deep: #0c0c10;
+  --color-panel: #111116;
+  --color-card: #16161d;
+  --color-row: #1a1a22;
 
   /* Borders */
-  --color-border:      #252530;
+  --color-border: #252530;
   --color-border-glow: #2e2e3d;
 
   /* Text */
-  --color-dim:    #4a4a5e;
-  --color-muted:  #7a7a96;
-  --color-base:   #b8b8d0;
+  --color-dim: #4a4a5e;
+  --color-muted: #7a7a96;
+  --color-base: #b8b8d0;
   --color-bright: #e0e0f0;
-  --color-white:  #f0f0fa;
-  --color-grid:   rgba(255, 255, 255, 0.018);
+  --color-white: #f0f0fa;
+  --color-grid: rgba(255, 255, 255, 0.018);
 
   /* Accents */
-  --color-green:  #00e87a;
-  --color-ready:  #7fffb2; /* verde mint stato 'ready' / score alto */
+  --color-green: #00e87a;
+  --color-ready: #7fffb2; /* verde mint stato 'ready' / score alto */
   --color-yellow: #f5c518;
-  --color-blue:   #4d9fff;
-  --color-red:    #ff4560;
+  --color-blue: #4d9fff;
+  --color-red: #ff4560;
   --color-orange: #ff8c42;
   --color-purple: #a855f7;
 
   /* Font */
-  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --font-mono: "JetBrains Mono", "Courier New", monospace;
 
   /* Scoped tokens (override per-theme dove serve, non toccano --color-*). */
   --sync-warn: #d4a85a;
@@ -48,44 +48,57 @@
 
 /* ── Light theme overrides ───────────────────────────────────────── */
 html[data-theme="light"] {
-  --color-void:         #f0f0f7;
-  --color-deep:         #e8e8f2;
-  --color-panel:        #ededf5;
-  --color-card:         #e4e4ef;
-  --color-row:          #dcdcea;
-  --color-border:       #c8c8dc;
-  --color-border-glow:  #b8b8d0;
-  --color-dim:          #8080a8;
-  --color-muted:        #505070;
-  --color-base:         #282848;
-  --color-bright:       #18183a;
-  --color-white:        #0a0a20;
-  --color-grid:         rgba(0, 0, 0, 0.022);
-  --sync-warn:          #8b6914;
+  --color-void: #f0f0f7;
+  --color-deep: #e8e8f2;
+  --color-panel: #ededf5;
+  --color-card: #e4e4ef;
+  --color-row: #dcdcea;
+  --color-border: #c8c8dc;
+  --color-border-glow: #b8b8d0;
+  --color-dim: #8080a8;
+  --color-muted: #505070;
+  --color-base: #282848;
+  --color-bright: #18183a;
+  --color-white: #0a0a20;
+  --color-grid: rgba(0, 0, 0, 0.022);
+  --sync-warn: #8b6914;
   /* I verdi fosforescenti (dark) sono troppo chiari su sfondo bianco: in light
      teniamo LA STESSA tinta verde-foglia a piena saturazione, solo abbassata
      di luminosità quel tanto che basta a leggerla (NON desaturata/spenta).
      Vale per link/titoli, score alti, voto critico PASS, 'ready'/'applied'. */
-  --color-green:        #0ec85c;
-  --color-ready:        #22d36a;
+  --color-green: #0ec85c;
+  --color-ready: #22d36a;
 }
 
 /* ── Base ────────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
-html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 72px;
+}
 
 /* Niente color override: il testo selezionato mantiene il suo colore naturale,
    così resta leggibile sia su sfondi scuri (shell JHT) sia su superfici chiare
    come le card Tailwind (bg-white) di /case-studies. Solo lo sfondo è mint. */
-::selection { background: rgba(0, 232, 122, 0.25); }
-::-moz-selection { background: rgba(0, 232, 122, 0.25); }
+::selection {
+  background: rgba(0, 232, 122, 0.25);
+}
+::-moz-selection {
+  background: rgba(0, 232, 122, 0.25);
+}
 
 /* Zoom globale UI: simula il Cmd++ del browser in un unico posto.
    In Chromium `100vh` resta calcolato sul viewport NON zoomato, quindi
    qualsiasi container con altezza fissa in vh va diviso per --zoom per
    non traboccare. Vale anche per min-height del body sotto. */
-:root { --zoom: 1.15; }
+:root {
+  --zoom: 1.15;
+}
 
 body {
   background-color: var(--color-void);
@@ -102,7 +115,7 @@ body {
 /* Ambient grid — matrix infinito, sfondo tinta unita + griglia
    principale appena percepibile. Niente scanline orizzontali. */
 body::after {
-  content: '';
+  content: "";
   position: fixed;
   inset: 0;
   background-image:
@@ -118,23 +131,37 @@ body::after {
    light /case-studies page) can override the default heading color. Unlayered
    element rules would otherwise win over layered utilities. */
 @layer base {
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-mono);
     color: var(--color-white);
     line-height: 1.2;
   }
 }
 
-a { color: var(--color-green); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a {
+  color: var(--color-green);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
 /* Chronicle index cards: never underline the card on hover (only border + title highlight) */
 a.chronicle-card,
 a.chronicle-card:hover,
 a.chronicle-card *,
-a.chronicle-card:hover * { text-decoration: none !important; }
+a.chronicle-card:hover * {
+  text-decoration: none !important;
+}
 /* Contribute cards: il titolo-link ha UNA sola sottolineatura (dallo span);
    l'ancora non deve aggiungerne una seconda sull'hover (regola a:hover globale). */
-a.contrib-title:hover { text-decoration: none !important; }
+a.contrib-title:hover {
+  text-decoration: none !important;
+}
 
 /* ── Section label ───────────────────────────────────────────────── */
 .section-label {
@@ -150,7 +177,7 @@ a.contrib-title:hover { text-decoration: none !important; }
 }
 
 .section-label::before {
-  content: '';
+  content: "";
   display: block;
   width: 3px;
   height: 14px;
@@ -160,7 +187,7 @@ a.contrib-title:hover { text-decoration: none !important; }
 }
 
 .section-label::after {
-  content: '';
+  content: "";
   flex: 1;
   height: 1px;
   background: var(--color-border);
@@ -178,24 +205,70 @@ a.contrib-title:hover { text-decoration: none !important; }
   white-space: nowrap;
 }
 
-.badge-new      { background:#2a2a35; color:#7a7a96; border:1px solid #333340; }
-.badge-checked  { background:#4d9fff1a; color:#4d9fff; border:1px solid #4d9fff33; }
-.badge-scored   { background:#a855f71a; color:#a855f7; border:1px solid #a855f733; }
-.badge-writing  { background:#f5c5181a; color:#f5c518; border:1px solid #f5c51833; }
-.badge-review   { background:#ff8c421a; color:#ff8c42; border:1px solid #ff8c4233; }
-.badge-ready    { background:#00e87a1a; color:var(--color-ready); border:1px solid #00e87a33; }
-.badge-applied  { background:#00e87a33; color:#00e87a; border:1px solid #00e87a; box-shadow:0 0 6px #00e87a22; }
-.badge-excluded { background:#ff45601a; color:#ff4560; border:1px solid #ff456033; }
+.badge-new {
+  background: #2a2a35;
+  color: #7a7a96;
+  border: 1px solid #333340;
+}
+.badge-checked {
+  background: #4d9fff1a;
+  color: #4d9fff;
+  border: 1px solid #4d9fff33;
+}
+.badge-scored {
+  background: #a855f71a;
+  color: #a855f7;
+  border: 1px solid #a855f733;
+}
+.badge-writing {
+  background: #f5c5181a;
+  color: #f5c518;
+  border: 1px solid #f5c51833;
+}
+.badge-review {
+  background: #ff8c421a;
+  color: #ff8c42;
+  border: 1px solid #ff8c4233;
+}
+.badge-ready {
+  background: #00e87a1a;
+  color: var(--color-ready);
+  border: 1px solid #00e87a33;
+}
+.badge-applied {
+  background: #00e87a33;
+  color: #00e87a;
+  border: 1px solid #00e87a;
+  box-shadow: 0 0 6px #00e87a22;
+}
+.badge-excluded {
+  background: #ff45601a;
+  color: #ff4560;
+  border: 1px solid #ff456033;
+}
 
 /* ── Animations ──────────────────────────────────────────────────── */
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.5; transform: scale(0.7); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.7);
+  }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Lo shrink del <main> quando l'assistente fluttuante e` aperto e` gestito
@@ -203,7 +276,9 @@ a.contrib-title:hover { text-decoration: none !important; }
    CSS qui creava conflitti di specificity con `mx-auto` e simili utility. */
 
 /* ── Forms ───────────────────────────────────────────────────────── */
-input, textarea, select {
+input,
+textarea,
+select {
   font-family: var(--font-mono);
   font-size: 13px;
   background: var(--color-deep);
@@ -216,16 +291,21 @@ input, textarea, select {
   transition: border-color 0.15s;
 }
 
-input:hover, textarea:hover, select:hover {
+input:hover,
+textarea:hover,
+select:hover {
   border-color: var(--color-border-glow);
 }
 
-input:focus, textarea:focus, select:focus {
+input:focus,
+textarea:focus,
+select:focus {
   border-color: var(--color-green);
   box-shadow: 0 0 0 2px #00e87a12;
 }
 
-input::placeholder, textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--color-dim);
 }
 
@@ -246,20 +326,46 @@ label {
 }
 
 /* ── Scrollbar ───────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--color-void); }
-::-webkit-scrollbar-thumb { background: var(--color-border-glow); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-void);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-glow);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
 
 /* Barra di scroll orizzontale "in alto" (TableScrollSync): sempre visibile
    e più spessa, così non sfugge come quella nativa in fondo. L'altezza
    esplicita è necessaria perché lo spacer interno è alto 1px: senza, la
    scrollbar verrebbe ritagliata e risulterebbe invisibile. */
-.h-scroll-top { height: 14px; scrollbar-width: thin; scrollbar-color: var(--color-muted) var(--color-panel); }
-.h-scroll-top::-webkit-scrollbar { height: 12px; -webkit-appearance: none; appearance: none; }
-.h-scroll-top::-webkit-scrollbar-track { background: var(--color-panel); border-radius: 6px; }
-.h-scroll-top::-webkit-scrollbar-thumb { background: var(--color-muted); border-radius: 6px; }
-.h-scroll-top::-webkit-scrollbar-thumb:hover { background: var(--color-bright); }
+.h-scroll-top {
+  height: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-muted) var(--color-panel);
+}
+.h-scroll-top::-webkit-scrollbar {
+  height: 12px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.h-scroll-top::-webkit-scrollbar-track {
+  background: var(--color-panel);
+  border-radius: 6px;
+}
+.h-scroll-top::-webkit-scrollbar-thumb {
+  background: var(--color-muted);
+  border-radius: 6px;
+}
+.h-scroll-top::-webkit-scrollbar-thumb:hover {
+  background: var(--color-bright);
+}
 
 /* ── Focus visible ──────────────────────────────────────────────── */
 :focus-visible {
@@ -267,10 +373,11 @@ label {
   outline-offset: 2px;
 }
 
-
 /* ── Reduced motion ─────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -281,8 +388,8 @@ label {
 /* ── High contrast ───���─────────────────────────────────────────── */
 @media (prefers-contrast: more) {
   :root {
-    --color-dim:    #7a7a94;
-    --color-muted:  #9a9ab4;
+    --color-dim: #7a7a94;
+    --color-muted: #9a9ab4;
     --color-border: #3a3a50;
     --color-border-glow: #4a4a60;
   }
@@ -290,9 +397,22 @@ label {
 
 /* ── Print ─���────────────────────────────────────────────────────── */
 @media print {
-  body::before, body::after { display: none !important; }
-  aside[role="navigation"] { display: none !important; }
-  nav[aria-label="breadcrumb"] { display: none !important; }
-  #main-content { margin-left: 0 !important; }
-  * { color: #000 !important; background: #fff !important; box-shadow: none !important; }
+  body::before,
+  body::after {
+    display: none !important;
+  }
+  aside[role="navigation"] {
+    display: none !important;
+  }
+  nav[aria-label="breadcrumb"] {
+    display: none !important;
+  }
+  #main-content {
+    margin-left: 0 !important;
+  }
+  * {
+    color: #000 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
 }

@@ -38,7 +38,9 @@ function absTop(el: Element): number {
  *  sul link di un altro tester, PRIMA della navigazione. */
 export function rememberCurrentSection(): void {
   if (typeof window === "undefined") return;
-  const els = Array.from(document.querySelectorAll<HTMLElement>("[data-cs-anchor]"));
+  const els = Array.from(
+    document.querySelectorAll<HTMLElement>("[data-cs-anchor]"),
+  );
   if (els.length === 0) {
     pending = null;
     return;
@@ -93,7 +95,8 @@ export function restoreSection(): void {
     // Fallback: sezione assente su questo tester → si torna alla presentazione
     // del profilo (in cima), senza offset.
     const el =
-      exact ?? document.querySelector<HTMLElement>('[data-cs-anchor="profile"]');
+      exact ??
+      document.querySelector<HTMLElement>('[data-cs-anchor="profile"]');
     if (el) {
       const top = Math.round(absTop(el)); // ASSOLUTA: cambia solo col layout
       // offset solo se la sezione esiste davvero, clampato alla sua altezza
