@@ -1131,8 +1131,18 @@ export default function JobsGlobe({
   // → transizioni nette, nessuna ricomposizione continua (era la causa
   // dei pin "che si muovono").
   const [viewLevel, setViewLevel] = useState<ViewLevel>(0);
-  const clustered =
-    viewLevel === 2 ? grouped : viewLevel === 1 ? cityGrouped : countryGrouped;
+  // Vetrina landing: aggregazione SPENTA — sempre regime "esatto", un
+  // pin per offerta alle sue coordinate, a qualunque zoom (scelta utente
+  // 30/07: in home niente fasci col contatore, ogni segnaposto è UNA
+  // posizione). I dati demo hanno coordinate tutte distinte, quindi ogni
+  // gruppo è un singleton: nessuna etichetta-numero sotto ai pin.
+  const clustered = showcase
+    ? grouped
+    : viewLevel === 2
+      ? grouped
+      : viewLevel === 1
+        ? cityGrouped
+        : countryGrouped;
 
   useEffect(() => {
     const map = mapRef.current;
