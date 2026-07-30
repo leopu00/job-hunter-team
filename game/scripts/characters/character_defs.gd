@@ -7,6 +7,8 @@ class_name CharacterDefs
 const GEN := "res://assets/characters/gen/"
 const SHEETS := "res://assets/characters/sheets/"
 
+## I "name" qui dentro sono l'italiano di riferimento: a schermo va sempre
+## role_name(slug), che li cerca nei dizionari delle 7 lingue.
 const AGENTS := {
 	"coordinatore": {
 		"name": "Il Coordinatore",
@@ -175,17 +177,50 @@ const VARIANT_BY_DESK := {
 	"critici": {0: "a", 1: "b", 2: "c", 3: "d", 4: "e", 5: "f"},
 }
 
+## Il nome di scena del ruolo, nella lingua dell'interfaccia.
+##
+## I nomi qui sopra restano l'italiano di RIFERIMENTO (una costante non può
+## chiamare t(), e serve comunque una rete quando la chiave manca), ma la
+## targhetta che l'utente legge passa dai dizionari come tutto il resto:
+## finché non lo faceva, la colonna delle chat restava in italiano dentro
+## un'interfaccia inglese.
+static func role_name(slug: String) -> String:
+	return _localized("role." + slug, str(AGENTS.get(slug, {}).get("name", slug)))
+
+
+## Nome del collega numerato di un reparto ("Ricercatore 02"): forma breve,
+## senza articolo, perché il numero le sta subito dietro.
+static func worker_name(dept_id: String, number: int) -> String:
+	var role: Dictionary = DEPT_ROLES[dept_id]
+	return "%s %02d" % [_localized("role_short." + str(role["slug"]),
+			str(role["label"])), number]
+
+
+## t() restituisce la CHIAVE quando non la conosce: una targhetta con scritto
+## "role.scout" è peggio di una targhetta in italiano, quindi qui la chiave
+## non tradotta ripiega sul nome di riferimento.
+static func _localized(key: String, fallback: String) -> String:
+	var translated: String = UIStrings.t(key)
+	return fallback if translated == key else translated
+
+
 static var _spawn_cache: Array = []
+## Lingua con cui la cache è stata costruita: i nomi ci sono dentro, e il
+## cambio lingua da Impostazioni non riavvia il gioco.
+static var _spawn_cache_lang := ""
 
 ## L'organico completo della scena: un Dictionary per agente con
 ## slug (ruolo: sheet/dialoghi/chatter), name, spot e — per chi è in
 ## reparto — dept + desk. I lavoratori condividono ruolo e chatter del lead.
 static func spawn_list() -> Array:
-	if not _spawn_cache.is_empty():
+	if not _spawn_cache.is_empty() and _spawn_cache_lang == UIStrings.lang:
 		return _spawn_cache
+	_spawn_cache = []
+	_spawn_cache_lang = UIStrings.lang
 	for slug in AGENTS:
 		var def: Dictionary = AGENTS[slug].duplicate(true)
 		def["slug"] = slug
+		def["name"] = role_name(slug)
 		def["lead"] = true
 		if def.has("dept"):
 			def["variant"] = VARIANT_BY_DESK[def["dept"]][def["desk"]]
@@ -198,7 +233,7 @@ static func spawn_list() -> Array:
 			_spawn_cache.append({
 				"slug": role["slug"],
 				"variant": VARIANT_BY_DESK[dept_id][desk_i],
-				"name": "%s %02d" % [role["label"], n],
+				"name": worker_name(dept_id, n),
 				"dept": dept_id,
 				"desk": desk_i,
 				"lead": false,

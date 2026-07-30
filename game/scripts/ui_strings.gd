@@ -187,6 +187,34 @@ const S := {
 	"dept.close": "click fuori per chiudere",
 	"dept.inbox": "Inbox: %d fogli in attesa",
 
+	# ── Nomi di scena dei ruoli ───────────────────────────────────
+	# La targhetta di ogni agente: quello che l'utente legge nella colonna
+	# delle chat, sulla targa dei dialoghi e nella scheda. Vivono qui e non
+	# più dentro CharacterDefs/TourGuide perché erano l'unica famiglia di
+	# etichette scritta a mano in italiano: con l'interfaccia in inglese la
+	# colonna delle chat restava italiana in mezzo a tutto il resto tradotto.
+	# La chiave si compone a runtime ("role." + slug), quindi il controllo
+	# sui sorgenti di i18n_parity_selftest non la vede: la copertura gliela
+	# dà _check_role_names, che legge direttamente CharacterDefs.
+	"role.coordinatore": "Il Coordinatore",
+	"role.scout": "Il Ricercatore",
+	"role.analista": "L'Analista",
+	"role.scorer": "Il Consulente",
+	"role.scrittore": "Il Redattore",
+	"role.critico": "Il Revisore",
+	"role.mentor": "Il Mentor",
+	"role.assistente": "L'Assistente",
+	"role.mantenitore": "Il Mantenitore",
+	"role.dottore": "Il Dottore",
+	"role.sentinella": "Il Tesoriere",
+	# Forma breve dei soli ruoli di reparto: si numera ("Ricercatore 02")
+	# per i colleghi oltre il lead, quindi niente articolo.
+	"role_short.scout": "Ricercatore",
+	"role_short.analista": "Analista",
+	"role_short.scorer": "Consulente",
+	"role_short.scrittore": "Redattore",
+	"role_short.critico": "Revisore",
+
 	# ── Scheda agente ─────────────────────────────────────────────
 	"agent.activity": "ULTIME ATTIVITÀ",
 	"agent.activity_none": "nessuna attività registrata",
@@ -726,7 +754,10 @@ const S := {
 
 	# ── Sezione Team ──────────────────────────────────────────────────
 	"team.desks": "%d/%d postazioni",
-	"team.core": "Core: Il Coordinatore · Il Mentor · L'Assistente",
+	# I tre nomi arrivano da role.* e non sono scritti qui dentro: la riga
+	# era identica in tutte e 7 le lingue (italiana anche in inglese) e la
+	# parità di chiavi non poteva accorgersene.
+	"team.core": "Core: %s · %s · %s",
 	"team.stop": "FERMA TEAM",
 	"team.start": "AVVIA TEAM",
 	"team.setup": "SETUP E STATO",

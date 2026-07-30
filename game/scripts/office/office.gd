@@ -423,10 +423,8 @@ func _ready() -> void:
 	# Preview/E2E del dialogo first-run anche senza backend o agente attivo.
 	var guided_chat := OS.get_environment("JHT_GUIDED_CHAT")
 	if guided_chat != "" and ScriptedOnboarding.supports(guided_chat):
-		var guided_names := {"assistente": "Assistente",
-				"coordinatore": "Coordinatore", "mentor": "Mentor"}
 		_chat_panel = ChatPanel.new(guided_chat,
-				str(guided_names.get(guided_chat, guided_chat.capitalize())), _chat_roster())
+				CharacterDefs.role_name(guided_chat), _chat_roster())
 		add_child(_chat_panel)
 
 	# TEST-AUTO: JHT_CHATMENU=1 apre il menu delle chat 1-a-1 (tasto C)
@@ -790,7 +788,11 @@ func _tour_selftest() -> void:
 			var scene := TourGuide.scene_for(stop)
 			check.call(str(scene.get("portrait", "")) == stop,
 					"ritratto del collega errato per la tappa " + stop)
-			check.call(str(scene.get("name", "")) != "L'Assistente",
+			# il confronto passa da role_name e non da una stringa italiana
+			# scritta qui: con l'interfaccia in un'altra lingua un literal
+			# non combacerebbe più e il controllo passerebbe sempre
+			check.call(str(scene.get("name", ""))
+							!= CharacterDefs.role_name("assistente"),
 					"il reparto parla ancora con la voce dell'Assistente: " + stop)
 	check.call(Dialogues.greeting() in ["Buongiorno", "Buon pomeriggio", "Buonasera"],
 			"saluto orario fuori catalogo")
@@ -2554,7 +2556,8 @@ func _tour_open_stop_dialogue(stop: String) -> void:
 	add_child(ui)
 	ui.action_triggered.connect(_on_tour_dialogue_action)
 	ui.open(str(scene.get("portrait", "assistente")),
-			str(scene.get("name", "L'Assistente")), str(scene.get("tree", "")))
+			str(scene.get("name", CharacterDefs.role_name("assistente"))),
+			str(scene.get("tree", "")))
 	ui.closed.connect(func() -> void:
 		if host == _tour_staged_host:
 			_tour_staged_host = null
