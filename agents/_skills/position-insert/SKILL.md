@@ -140,7 +140,7 @@ If you have 2 Analysts, alternate the ping target to balance load (Analysts also
 - ❌ Verifying with `curl` without `-L` — a 302 to a generic `/careers` looks alive without follow-redirect; you'd insert a dead JD.
 - ❌ Verifying the apply form on Workable instead of the canonical JD page — false-positive dead links.
 - ❌ Using `fetch` MCP on `linkedin.com` / `wellfound.com` — blocked, gets you a 403 banner instead of the JD.
-- ❌ Bypassing the wrapper with `python3 -c "import sqlite3; INSERT ..."` — breaks dedup invariants and `found-by` tracking.
+- ❌ Bypassing the wrapper with `python3 -c "import sqlite3; INSERT ..."` — breaks dedup invariants and `found-by` tracking, and the DB now refuses it: `positions.url` is UNIQUE. `UNIQUE constraint failed: positions.url` means the posting is already in the DB — go back to Gate 1, do not retry with a tweaked URL.
 - ❌ Setting `--status` to anything other than the default `new` (the Scout never sets status manually; the wrapper handles it).
 
 ## See also
