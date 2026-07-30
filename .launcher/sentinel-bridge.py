@@ -765,6 +765,28 @@ def fetch_codex_rollout():
         if isinstance(weekly_resets_unix, (int, float)):
             weekly_reset_at = _fmt_reset(weekly_resets_unix)  # DATA completa
             weekly_reset_at_unix = float(weekly_resets_unix)
+
+        # Piani a finestra UNICA settimanale (es. plan_type "prolite",
+        # 2026-07-30): primary ha window_minutes=10080 (7gg) e secondary è
+        # null. Con la mappatura classica il budget settimanale finirebbe in
+        # `usage` (che tutta la logica a valle tratta come finestra 5h, la cui
+        # saturazione vale "qualche ora di pausa" — qui invece vale GIORNI di
+        # silenzio) e ogni protezione weekly resterebbe cieca: weekly_usage
+        # None spegne SOPRA-PACE, proj_weekly e il freno weekly-halt. Il
+        # payload dichiara già la durata della finestra: se primary è ≥ 1
+        # giorno, primary È il weekly e va riportato su ENTRAMBI gli assi —
+        # su `usage` perché resta l'unico vincolo reale (il pacing 5h, che
+        # riempie al 100% entro reset_at, diventa di fatto un pacer
+        # settimanale corretto), e sui campi weekly perché è ciò che sono.
+        try:
+            window_min = float(primary.get("window_minutes") or 0)
+        except (TypeError, ValueError):
+            window_min = 0
+        if weekly is None and window_min >= 1440:
+            weekly = usage
+            weekly_reset_at = reset_at
+            weekly_reset_at_unix = reset_at_unix
+
         return {
             "usage": usage,
             "reset_at": reset_at,
