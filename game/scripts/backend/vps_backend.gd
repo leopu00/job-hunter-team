@@ -940,7 +940,9 @@ orders = maintenance_raw.get('orders', {}) if isinstance(maintenance_raw, dict) 
 if not isinstance(orders, dict):
     orders = {}
 maintenance = {
-    'enabled': maintenance_raw.get('mode') == 'maintenance',
+    # Modalità CURA (ex 'maintenance'): valore canonico 'care' dal 2026-07-30,
+    # 'maintenance' resta valido (file scritti da versioni precedenti / andris).
+    'enabled': maintenance_raw.get('mode') in ('care', 'maintenance'),
     'stop_search': bool(orders.get('stop_search', True)),
     'discard_expired_rotating': bool(orders.get('discard_expired_rotating', True)),
     'cv_min_score': int(orders.get('cv_min_score', 90)),
@@ -959,7 +961,7 @@ geo = {
 recheck_section = policy.get('recheck_weekly', {})
 recheck = {
     'min_score': int(recheck_section.get('min_score', 70)),
-    'older_than_days': int(recheck_section.get('older_than_days', 7)),
+    'older_than_days': int(recheck_section.get('older_than_days', 14)),
 }
 enrichment = {
     'economy': bool(policy.get('economy', False)),
@@ -970,7 +972,7 @@ enrichment = {
     'geocode_non_remote_only': bool(geo.get('non_remote_only', True)),
     'recheck_enabled': bool(policy.get('recheck_weekly', {}).get('enabled', True)),
     'recheck_min_score': int(recheck.get('min_score', 70)),
-    'recheck_older_days': int(recheck.get('older_than_days', 7)),
+    'recheck_older_days': int(recheck.get('older_than_days', 14)),
 }
 
 conn = sqlite3.connect(DB_PATH)
@@ -1056,7 +1058,7 @@ m = data.get('maintenance', {})
 maintenance_path = os.path.join(profile, 'capitano-maintenance.json')
 if boolean(m.get('enabled')):
     maintenance = {
-        'mode': 'maintenance',
+        'mode': 'care',
         'orders': {
             'stop_search': boolean(m.get('stop_search'), True),
             'discard_expired_rotating': boolean(m.get('discard_expired_rotating'), True),
@@ -1084,7 +1086,7 @@ policy = {
     'recheck_weekly': {
         'enabled': boolean(e.get('recheck_enabled'), True),
         'min_score': integer(e.get('recheck_min_score'), 70, 0, 100),
-        'older_than_days': integer(e.get('recheck_older_days'), 7, 1, 365),
+        'older_than_days': integer(e.get('recheck_older_days'), 14, 1, 365),
     },
 }
 atomic(os.path.join(profile, 'enrichment-policy.json'), policy)

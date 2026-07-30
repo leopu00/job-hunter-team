@@ -35,8 +35,11 @@ with tempfile.TemporaryDirectory(prefix="jht-coordinator-") as home:
         "enabled": True, "min_score": 72, "older_than_days": 14,
     }
     geo = run(QUERY, "next-for-geocode-missing", env=env)
-    recheck = run(QUERY, "next-for-recheck-weekly", env=env)
+    recheck = run(QUERY, "next-for-recheck-due", env=env)
+    # L'alias legacy resta valido (prompt/sessioni vive pre-rinomina).
+    recheck_legacy = run(QUERY, "next-for-recheck-weekly", env=env)
     assert "score >= 65, non remote" in geo
     assert "score>=72" in recheck and ">14gg" in recheck
+    assert "score>=72" in recheck_legacy and ">14gg" in recheck_legacy
 
 print("COORDINATOR-POLICY-TEST PASS")
