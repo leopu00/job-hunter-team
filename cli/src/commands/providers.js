@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
 import { refreshModelPin } from './model-pin.js';
+import { isContainer } from '../../../shared/runtime/container.js';
 import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
 
@@ -261,7 +262,7 @@ async function handleUpdate(id) {
   }
 
   // Branch in-container vs host:
-  // - Sul container (IS_CONTAINER=1, path Docker via wrapper bash) non c'e'
+  // - Sul container (isContainer(), path Docker via wrapper bash) non c'e'
   //   docker daemon: eseguiamo i comandi npm/uv direttamente. L'install
   //   scrive nei prefissi su /opt/jht-deps (volume Docker dal 2026-07-26,
   //   prima era il bind-mount /jht_home/.npm-global), quindi persiste
@@ -269,7 +270,7 @@ async function handleUpdate(id) {
   // - Sull'host (path "from source", contributor) usiamo docker compose run
   //   per ottenere un container effimero isolato (evita rename collisions
   //   sui binari npm in uso dal container running).
-  if (process.env.IS_CONTAINER === '1') {
+  if (isContainer()) {
     const res = await handleUpdateInContainer(targets);
     if (!res.ok) process.exit(1);
     console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
@@ -535,8 +536,8 @@ async function autoUpdateOnce() {
     console.log(`${AU} disabilitato (JHT_PROVIDER_AUTOUPDATE=${process.env.JHT_PROVIDER_AUTOUPDATE}): nessun tentativo di update`);
     return;
   }
-  if (process.env.IS_CONTAINER !== '1') {
-    console.log(`${AU} skip: fuori dal container (IS_CONTAINER≠1). Dall'host si aggiorna con 'jht providers update <id>'`);
+  if (!isContainer()) {
+    console.log(`${AU} skip: fuori dal container. Dall'host si aggiorna con 'jht providers update <id>'`);
     return;
   }
 
@@ -621,7 +622,7 @@ async function handleModelPin(opts = {}) {
     return;
   }
   let dryRun = !!opts.dryRun;
-  if (!dryRun && process.env.IS_CONTAINER !== '1') {
+  if (!dryRun && !isContainer()) {
     console.log(`${AU} fuori dal container: eseguo in dry-run (il config del provider e' dell'utente del container)`);
     dryRun = true;
   }

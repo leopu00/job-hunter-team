@@ -17,7 +17,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { containerRunning, execInContainer, CONTAINER_NAME } from '../utils/container-proxy.js';
+import { containerRunning, execArgvInContainer, CONTAINER_NAME } from '../utils/container-proxy.js';
 import { JHT_DB_PATH } from '../jht-paths.js';
 import { c } from './_colors.js';
 
@@ -30,11 +30,11 @@ import { c } from './_colors.js';
  */
 export function runSkill(skill, args) {
   if (containerRunning()) {
-    // Escape a apici singoli: gli argomenti includono testo libero scritto
+    // Argomenti separati, senza shell: includono testo libero scritto
     // dall'utente (note di esclusione, corpo di una direttiva, risposta a un
-    // ticket), quindi un apice o un `$` non deve poter uscire dalla stringa.
-    const escaped = args.map((a) => `'${String(a).replace(/'/g, "'\\''")}'`).join(' ');
-    const r = execInContainer(`python3 /app/shared/skills/${skill} ${escaped}`, {
+    // ticket), e per un apice o un `$` non esiste più una stringa da cui
+    // uscire.
+    const r = execArgvInContainer(['python3', `/app/shared/skills/${skill}`, ...args.map(String)], {
       timeoutMs: 30_000,
     });
     process.stdout.write(r.stdout);

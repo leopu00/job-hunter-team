@@ -4,11 +4,11 @@
 // `jht team chat <agente>`         — REPL interattivo (readline)
 //
 // Usa la stessa identica logica di /api/team/send della web UI:
-//   tmux send-keys -t <SESSION> -- '<msg>'
+//   tmux send-keys -t <SESSION> -- <msg>
 //   tmux send-keys -t <SESSION> Enter
 // Se il container e' attivo si passa per docker exec, altrimenti tmux host.
 
-import { execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import {
@@ -16,12 +16,22 @@ import {
   tmuxAvailable, isSessionActive, sessionName, parseAgentArg,
   usingContainer, getActiveSessions, isAgentSession,
 } from './agents.js';
-import { execInContainer } from '../../utils/container-proxy.js';
+import { execArgvInContainer } from '../../utils/container-proxy.js';
 
-// Escape per passare il messaggio dentro single-quote bash:
-//   ' -> '\''   $ -> \$   ` -> \`
-function bashSingleQuote(msg) {
-  return msg.replace(/'/g, "'\\''").replace(/\$/g, '\\$').replace(/`/g, '\\`');
+// tmux viene invocato per argv, senza shell di mezzo: il messaggio arriva
+// all'agente esatto come l'utente l'ha scritto. Prima passava da una
+// stringa `bash -c` con un escaping tutto suo (apice + `$` + backtick
+// backslashati) che, dentro apici singoli, recapitava letteralmente `\$` e
+// `` \` `` — l'unica delle quattro implementazioni di quoting del CLI con
+// semantica diversa dalle altre.
+function runTmux(args) {
+  if (usingContainer()) {
+    const r = execArgvInContainer(['tmux', ...args]);
+    return { ok: r.ok && r.code === 0, stdout: r.stdout, error: r.stderr || r.stdout };
+  }
+  const r = spawnSync('tmux', args, { encoding: 'utf8' });
+  if (r.error) return { ok: false, stdout: '', error: r.error.message };
+  return { ok: r.status === 0, stdout: r.stdout || '', error: r.stderr || '' };
 }
 
 /**
@@ -45,37 +55,17 @@ function resolveSession(agentArg) {
 
 /** Invia un messaggio testuale all'agente (una riga, + Enter). */
 function sendMessage(session, message) {
-  const escaped = bashSingleQuote(message);
-  const sendCmd = `tmux send-keys -t '${session}' -- '${escaped}'`;
-  const enterCmd = `tmux send-keys -t '${session}' Enter`;
-  if (usingContainer()) {
-    const r1 = execInContainer(sendCmd);
-    if (r1.code !== 0) return { ok: false, error: r1.stderr || r1.stdout };
-    const r2 = execInContainer(enterCmd);
-    if (r2.code !== 0) return { ok: false, error: r2.stderr || r2.stdout };
-    return { ok: true };
-  }
-  try {
-    execSync(sendCmd, { stdio: 'ignore' });
-    execSync(enterCmd, { stdio: 'ignore' });
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  const r1 = runTmux(['send-keys', '-t', session, '--', message]);
+  if (!r1.ok) return { ok: false, error: r1.error };
+  const r2 = runTmux(['send-keys', '-t', session, 'Enter']);
+  if (!r2.ok) return { ok: false, error: r2.error };
+  return { ok: true };
 }
 
 /** Cattura il pane della sessione (ultime N righe). */
 function capturePane(session, lines = 30) {
-  const cmd = `tmux capture-pane -t '${session}' -p -S -${lines} 2>/dev/null`;
-  if (usingContainer()) {
-    const r = execInContainer(cmd);
-    return r.code === 0 ? r.stdout : '';
-  }
-  try {
-    return execSync(cmd, { encoding: 'utf8' });
-  } catch {
-    return '';
-  }
+  const r = runTmux(['capture-pane', '-t', session, '-p', '-S', `-${lines}`]);
+  return r.ok ? r.stdout : '';
 }
 
 // ── send: one-shot ─────────────────────────────────────────────────

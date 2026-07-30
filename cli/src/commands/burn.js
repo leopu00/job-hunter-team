@@ -21,32 +21,28 @@
 // pattern di `jht wh simulate`.
 
 import { Command } from 'commander';
-import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
+import { execScriptInContainer } from '../utils/container-proxy.js';
 
-// Dentro il container il wrapper `jht` gira già lì (niente binario `docker`);
-// dall'host vero si passa da `docker exec`. Stesso schema di working-hours.js.
-const IN_CONTAINER = existsSync('/app/shared/skills');
+// Il trasporto verso il container (docker exec dall'host, esecuzione diretta
+// se il CLI gira già dentro) è tutto in container-proxy.js: qui non si
+// costruiscono più argv `docker`, e `--reason` arriva alla skill come
+// argomento separato, senza passare da una shell.
 const SKILL = '/app/shared/skills/burn_intent.py';
 const INTENT_FLAG = join(JHT_HOME, '.burn-intent.flag');
 
-function runSkill(args) {
-  return new Promise((resolve, reject) => {
-    const [cmd, cmdArgs] = IN_CONTAINER
-      ? ['python3', [SKILL, ...args]]
-      : ['docker', ['exec', 'jht', 'python3', SKILL, ...args]];
-    const p = spawn(cmd, cmdArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '', err = '';
-    p.stdout.on('data', (d) => { out += d; });
-    p.stderr.on('data', (d) => { err += d; });
-    p.on('error', reject);
-    p.on('close', (code) => {
-      if (code !== 0) reject(new Error(`rc=${code} ${err.trim()}`));
-      else resolve(out);
-    });
-  });
+// LANCIA sempre in caso di fallimento — container giù, docker assente o skill
+// che esce != 0. Il fallback di sola lettura qui sotto vive su questo throw:
+// se runSkill diventasse silenziosa, `burn status` smetterebbe di rispondere
+// proprio quando il team è spento.
+async function runSkill(args) {
+  const r = execScriptInContainer(SKILL, args, { interpreter: 'python3' });
+  if (!r.ok || r.code !== 0) {
+    throw new Error(`rc=${r.code} ${(r.stderr || '').trim()}`.trim());
+  }
+  return r.stdout;
 }
 
 // Fallback di sola lettura per quando il container è giù: lo stato è comunque

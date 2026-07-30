@@ -1,15 +1,13 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import { JHT_HOME } from '../jht-paths.js';
+import { execArgvInContainer } from '../utils/container-proxy.js';
 
 // #9 — `jht wh simulate` girava SEMPRE via `docker exec jht`, ma il wrapper
 // `jht` esegue già DENTRO il container (JHT_SHELL_VIA=docker:jht): da lì non
-// esiste il binario `docker` → `spawn docker ENOENT`. Se siamo già nel
-// container (lo `/app/shared/skills` esiste) eseguiamo il comando diretto;
-// solo dall'host vero passiamo da `docker exec`.
-const IN_CONTAINER = existsSync('/app/shared/skills');
+// esiste il binario `docker` → `spawn docker ENOENT`. La scelta fra i due casi
+// non si rifà più qui: la fa container-proxy.js, che è anche l'unico posto in
+// cui vive la domanda «sono nel container?».
 
 const CONFIG_FILE = join(JHT_HOME, 'jht.config.json');
 const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -176,28 +174,24 @@ async function handleClear() {
   console.log('✓ Working hours rimosse → team 24/7');
 }
 
-function dockerExec(args) {
-  return new Promise((resolve, reject) => {
-    // Dentro il container: esegui diretto (niente docker). Dall'host: docker exec.
-    const [cmd, cmdArgs] = IN_CONTAINER
-      ? [args[0], args.slice(1)]
-      : ['docker', ['exec', 'jht', ...args]];
-    const p = spawn(cmd, cmdArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '', err = '';
-    p.stdout.on('data', d => out += d);
-    p.stderr.on('data', d => err += d);
-    p.on('error', reject);
-    p.on('close', code => {
-      if (code !== 0) reject(new Error(`docker exec rc=${code} ${err}`));
-      else resolve(out);
-    });
-  });
+// La simulazione è un `import` di due moduli Python + un calcolo: sta
+// abbondantemente sotto i 30s di default di execArgvInContainer, ma il
+// timeout qui è esplicito perché prima non ce n'era nessuno e un container
+// in avvio lento non deve tradursi in un errore criptico.
+const SIMULATE_TIMEOUT_MS = 60_000;
+
+function runPython(args) {
+  const r = execArgvInContainer(['python3', ...args], { timeoutMs: SIMULATE_TIMEOUT_MS });
+  if (!r.ok || r.code !== 0) {
+    throw new Error(`rc=${r.code} ${(r.stderr || '').trim()}`.trim());
+  }
+  return r.stdout;
 }
 
 async function handleSimulate() {
   try {
-    const out = await dockerExec([
-      'python3', '-c',
+    const out = runPython([
+      '-c',
       `import sys,json
 sys.path.insert(0,'/app/shared/skills')
 import work_hours_target as wht, provider_capacity as pcap

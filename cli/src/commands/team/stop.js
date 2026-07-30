@@ -5,7 +5,7 @@ import {
   isSessionActive, sessionName, parseAgentArg,
   usingContainer, isAgentSession,
 } from './agents.js';
-import { execInContainer } from '../../utils/container-proxy.js';
+import { execArgvInContainer } from '../../utils/container-proxy.js';
 
 // Sessioni considerate 'core' — non le killiamo con 'stop --all' per
 // non spegnere la chat utente. Regola nata con la route web
@@ -52,7 +52,7 @@ export function stopAction(agentArg, options = {}) {
   let stopped = 0;
   for (const s of targets.sort()) {
     if (usingContainer()) {
-      const r = execInContainer(`tmux kill-session -t '${s.replace(/'/g, "'\\''")}' 2>&1`);
+      const r = execArgvInContainer(['tmux', 'kill-session', '-t', s]);
       if (r.code === 0) {
         console.log(`  ${c.green('✓')} ${s} fermato`);
         stopped++;
