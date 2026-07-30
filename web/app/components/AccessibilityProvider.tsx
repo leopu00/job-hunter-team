@@ -77,16 +77,6 @@ export function AccessibilityProvider({
 
   return (
     <A11yContext.Provider value={{ announce }}>
-      {/* Skip to main content — visible on focus only */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded focus:text-[11px] focus:font-bold focus:outline-none"
-        style={{ background: "var(--color-green)", color: "var(--color-void)" }}
-        tabIndex={0}
-      >
-        Salta al contenuto principale
-      </a>
-
       {/* Aria live regions (sr-only) */}
       <div
         ref={politeRef}
