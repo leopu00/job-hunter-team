@@ -119,6 +119,34 @@ describe("FloatingChat", () => {
     expect(dict).toContain("Sto pensando");
     expect(dict).toContain("Apri AI Assistant");
   });
+  it("il layout non importa più il componente", () => {
+    // La feature è ferma, non rimossa: chi la rimonta deve accendere anche
+    // il flag lato server, altrimenti la chat torna visibile e ogni
+    // messaggio prende un 404. Le due cose vanno riattivate insieme.
+    expect(readSrc("app/layout.tsx")).not.toMatch(/dynamic\([^)]*FloatingChat/);
+  });
+});
+
+/* ── /api/ai-assistant — gate di spesa ── */
+describe("api/ai-assistant flag", () => {
+  // Il gate vive in una route mai importata dai test: typecheck e build non
+  // possono accorgersi se sparisce, quindi lo si asserisce sul sorgente.
+  const src = readSrc("app/api/ai-assistant/route.ts");
+  it("la POST è dietro JHT_AI_ASSISTANT_ENABLED, spento di default", () => {
+    expect(src).toContain("JHT_AI_ASSISTANT_ENABLED");
+    // Spento di default = si accende SOLO con un valore esplicito.
+    expect(src).toMatch(/isAssistantEnabled[^}]*===\s*['"]1['"]/);
+  });
+  it("il gate precede chiave, rate limit e fetch upstream, e risponde 404", () => {
+    const body = src.slice(src.indexOf("export async function POST"));
+    const gate = body.indexOf("if (!isAssistantEnabled())");
+    expect(gate).toBeGreaterThanOrEqual(0);
+    expect(gate).toBeLessThan(body.indexOf("requireAuth()"));
+    expect(gate).toBeLessThan(body.indexOf("checkRateLimit"));
+    expect(gate).toBeLessThan(body.indexOf("getAssistantConfig()"));
+    expect(gate).toBeLessThan(body.indexOf("fetch(OPENAI_RESPONSES_URL"));
+    expect(body.slice(gate, gate + 300)).toContain("status: 404");
+  });
 });
 
 /* ── SecretRef JS wizard (cli) ── */
