@@ -65,6 +65,7 @@ CLI::
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -304,14 +305,55 @@ def missing(path: Path | None = None, live: set | None = None) -> list:
 
 # ── decisione di respawn ─────────────────────────────────────────────────────
 
+# Il modulo `standby` si carica UNA volta per processo (path-import: il roster
+# gira sia nel container sia dai test, e `standby` non è un package).
+_STANDBY_MOD = None
+
+
+def _standby_active(home: Path) -> bool:
+    """Standby ATTIVO adesso, secondo l'UNICO predicato del team
+    ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS], `standby.py`).
+
+    Il flag ha sempre una condizione di uscita: uno SCADUTO non è più standby
+    e non deve bloccare il respawn — se il sentinel-bridge (che rimuove il
+    flag) è morto, gatare sul file significa non ricreare più nessun worker,
+    cioè lo standby eterno. `home` è esplicito: qui si risolve a ogni
+    chiamata, in standby.py è una costante di modulo.
+
+    Fail-CLOSED: modulo non caricabile → il vecchio `.exists()`.
+    """
+    global _STANDBY_MOD
+    if _STANDBY_MOD is None:
+        for cand in (Path("/app/shared/skills/standby.py"),
+                     Path(__file__).resolve().parent / "standby.py"):
+            try:
+                if not cand.exists():
+                    continue
+                spec = importlib.util.spec_from_file_location(
+                    "standby_predicate", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _STANDBY_MOD = mod
+                break
+            except Exception:      # noqa: BLE001
+                continue
+    if _STANDBY_MOD is None or not hasattr(_STANDBY_MOD, "is_active"):
+        return (home / ".team-standby.flag").exists()
+    try:
+        return bool(_STANDBY_MOD.is_active(home=home))
+    except Exception:      # noqa: BLE001
+        return (home / ".team-standby.flag").exists()
+
+
 def _halted(home: Path) -> str:
     for flag, label in (
         (".team-halted.flag", "halted"),
         (".weekly-halt.flag", "weekly-halt"),
-        (".team-standby.flag", "standby"),
     ):
         if (home / flag).exists():
             return label
+    if _standby_active(home):
+        return "standby"
     return ""
 
 
