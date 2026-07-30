@@ -663,3 +663,70 @@ def test_sei_scout_sullo_stesso_url_scrivono_una_riga_sola(tmp_path):
     assert rcs.count(0) == 1, f"deve inserire uno solo: {rcs} {outs}"
     assert set(rcs) <= {0, 1}, (
         f"un perdente è crepato invece di riportare il duplicato: {rcs} {outs}")
+
+
+# ── Gate 1 dello Scout: check-url ha lo stesso ancoraggio del livello 0 ──────
+#
+# `db_query.check_url` era il gemello peggiore del difetto del livello 0: il suo
+# pattern aveva un `%` anche FRA `view/` e l'id (`%/jobs/view/%<id>%`), quindi
+# bastava che quelle cifre comparissero in un punto qualsiasi di un URL job-view
+# perche' dicesse TROVATA. E' il primo gate che lo Scout interroga: un falso
+# positivo qui gli fa saltare un annuncio nuovo prima ancora di inserirlo.
+
+def _check_url_out(tmp_path, monkeypatch, rows, needle):
+    import importlib
+    import sqlite3
+    db = tmp_path / "jobs.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE positions (id INTEGER PRIMARY KEY, title TEXT, "
+                 "company TEXT, url TEXT, status TEXT)")
+    conn.executemany("INSERT INTO positions (title,company,url,status) "
+                     "VALUES (?,?,?,?)", rows)
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("JHT_DB", str(db))
+    sys.path.insert(0, SKILLS_DIR)
+    import _db
+    importlib.reload(_db)
+    dq = importlib.import_module("db_query")
+    importlib.reload(dq)
+    monkeypatch.setattr(dq, "ensure_schema", lambda c: None)
+
+    import io
+    from contextlib import redirect_stdout
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        dq.check_url(needle)
+    return buf.getvalue()
+
+
+def test_check_url_non_confonde_un_id_col_suo_prolungamento(tmp_path, monkeypatch):
+    out = _check_url_out(
+        tmp_path, monkeypatch,
+        [("Altro annuncio", "ACME",
+          "https://www.linkedin.com/jobs/view/43814702861", "new")],
+        "4381470286")
+    assert "NON TROVATA" in out, (
+        "4381470286 non e' 43814702861: un TROVATA qui fa saltare allo Scout "
+        "un annuncio nuovo")
+
+
+def test_check_url_trova_ancora_lid_giusto(tmp_path, monkeypatch):
+    out = _check_url_out(
+        tmp_path, monkeypatch,
+        [("Annuncio", "ACME",
+          "https://www.linkedin.com/jobs/view/43814702861", "new")],
+        "43814702861")
+    assert "TROVATA" in out and "NON TROVATA" not in out
+
+
+def test_check_url_ignora_un_id_altrui_in_query_string(tmp_path, monkeypatch):
+    out = _check_url_out(
+        tmp_path, monkeypatch,
+        [("Annuncio", "ACME",
+          "https://www.linkedin.com/jobs/view/1111111111?currentJobId=4381470286",
+          "new")],
+        "4381470286")
+    assert "NON TROVATA" in out, (
+        "l'id sta nella query string, non nel path: non e' quell'annuncio")

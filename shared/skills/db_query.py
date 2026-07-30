@@ -49,6 +49,10 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, active_categories
+# Importato, non ricopiato: una seconda regex per lo stesso id divergerebbe dalla
+# prima al primo cambio di formato degli URL — e' gia' successo con la copia
+# stale di `check_duplicate` dentro tests/test_scoring_logic.py.
+from db_insert import extract_linkedin_job_id
 
 
 # ── Output macchina ─────────────────────────────────────────────────────
@@ -915,10 +919,22 @@ def check_url(url_or_id):
     ensure_schema(conn)
 
     if url_or_id.isdigit():
-        r = conn.execute(
+        # Stesso ancoraggio del livello 0 di `db_insert.check_duplicate`, e per
+        # lo stesso motivo — qui pero' pesava di piu': il pattern aveva un `%`
+        # anche FRA `view/` e l'id, quindi bastava che quelle cifre comparissero
+        # in un punto qualsiasi di un URL job-view perche' questo Gate 1 dello
+        # Scout dicesse TROVATA e gli facesse saltare un annuncio nuovo.
+        # Il LIKE resta un prefiltro (nessun URL da cui `extract_linkedin_job_id`
+        # ritorni <id> puo' non contenere `/jobs/view/<id>`), e il verdetto lo
+        # da' la riestrazione dell'id dal path del candidato.
+        r = None
+        for cand in conn.execute(
             "SELECT id, title, company, url, status FROM positions WHERE url LIKE ?",
-            (f"%/jobs/view/%{url_or_id}%",)
-        ).fetchone()
+            (f"%/jobs/view/{url_or_id}%",)
+        ):
+            if extract_linkedin_job_id(cand['url']) == url_or_id:
+                r = cand
+                break
     else:
         r = conn.execute(
             "SELECT id, title, company, url, status FROM positions WHERE url = ?",
