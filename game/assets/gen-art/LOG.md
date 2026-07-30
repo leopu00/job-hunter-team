@@ -384,3 +384,18 @@ ritratti richiesti.
   vengano davvero preferite al fallback di ruolo. Esito: `COMIC-CHAT-TEST PASS`.
 - Regressione conclusiva: `bash game/tools/run.sh test` → `[run.sh] TEST OK`,
   inclusi 36/36 fogli personaggio e 60/60 ritratti per istanza.
+
+### 2026-07-30 — Camminata del Coordinatore rimontata
+
+- La verifica temporale ha mostrato che `walk_up` conteneva una seconda banda
+  grafica staccata sotto il corpo e che i sei profili variavano troppo poco:
+  il controllo precedente sui soli bordi non poteva rilevarlo.
+- Rigenerata con la skill `imagegen` la sorgente
+  `characters/sources/core/coordinatore_a_walk.png`: stessa identità, completo
+  oliva e tratto pittorico; 6 frame cronologici per fronte, retro e profilo,
+  ciclo contact→down→pass specchiato e nessun elemento sovrapposto.
+- Sostituite chirurgicamente soltanto le righe `walk` 3–5 del foglio finale;
+  idle, work e carry sono rimaste pixel-identiche.
+- Esteso `audit_character_sheets.py` per respingere frammenti verticali
+  staccati nei frame di camminata. Il vecchio foglio fallisce la nuova
+  regressione; quello corretto passa.
