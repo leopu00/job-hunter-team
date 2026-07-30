@@ -27,6 +27,7 @@ import { join } from "node:path";
 import {
   CHAT_AGENTS,
   authorFromRole,
+  chatChannelFor,
   chatEnvelope,
   chatFileFor,
   chatPending,
@@ -486,5 +487,171 @@ describe("perimetro delle chat web", () => {
     // Se questa lista divergesse da web/lib/chat-agents.ts, la route
     // accetterebbe un messaggio che nessun pane riceverà mai.
     expect([...CHAT_AGENTS].sort()).toEqual(["assistente", "capitano", "mentor"]);
+  });
+});
+
+// ── Il canale col cloud: il caso del fleet ─────────────────────────────
+//
+// Il difetto che questi test avrebbero preso (diagnosticato sul box di
+// produzione il 2026-07-30): il pull dei turni scritti dal web viveva SOLO
+// sul lettore Supabase-diretto, che è opt-in (`JHT_SUPABASE_DIRECT=1`) e sul
+// fleet è spento — 4 box su 5. Con `reader = null` il ramo di pull non
+// partiva mai: il messaggio restava su Supabase e la chat web→agente era
+// morta in silenzio, senza un errore in log. Il verso opposto funzionava,
+// il che rendeva il guasto ancora più difficile da vedere.
+//
+// Da qui in poi la corsia deve consegnare ANCHE senza lettore diretto.
+
+const BOX_CONFIG = {
+  base_url: "https://jobhunterteam.ai",
+  token: "jht_sync_esempio",
+  user_id: "00000000-0000-4000-8000-000000000000",
+  enabled: true,
+};
+
+type FetchCall = { url: string; method: string; auth?: string; body?: unknown };
+
+/** Cloud finto: serve i turni sul GET e registra l'ack del POST. */
+function fakeCloud(messages: Record<string, unknown>[]) {
+  const calls: FetchCall[] = [];
+  const fetchFn = async (url: string, init?: Record<string, any>) => {
+    const method = (init?.method as string) || "GET";
+    calls.push({
+      url: String(url),
+      method,
+      auth: init?.headers?.Authorization,
+      body: init?.body ? JSON.parse(init.body as string) : undefined,
+    });
+    if (method === "GET") {
+      return { ok: true, status: 200, json: async () => ({ ok: true, messages }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, delivered: messages.length }) };
+  };
+  return { fetchFn, calls };
+}
+
+describe("canale della chat senza lettore diretto", () => {
+  it("un box senza JHT_SUPABASE_DIRECT ha comunque un canale", () => {
+    const channel = chatChannelFor(BOX_CONFIG, null, { fetchFn: async () => ({}) as any });
+    expect(channel?.kind).toBe("vercel");
+  });
+
+  it("col lettore diretto resta il canale diretto (costa meno)", () => {
+    const reader = { readUndeliveredUserChat: async () => [], markUserChatDelivered: async () => {}, patchTeamState: async () => {} };
+    expect(chatChannelFor(BOX_CONFIG, reader as any)?.kind).toBe("direct");
+  });
+
+  it("senza token non c'è cloud da cui ritirare nulla", () => {
+    expect(chatChannelFor({ base_url: "https://jobhunterteam.ai" }, null)).toBeNull();
+  });
+
+  it("il turno scritto dal web arriva al pane anche con reader = null", async () => {
+    const cloud = fakeCloud([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        legacy_id: -1753790000000,
+        agent: "capitano",
+        body: "ci sei?",
+        created_at: "2026-07-30T10:00:00Z",
+      },
+    ]);
+    const channel = chatChannelFor(BOX_CONFIG, null, { fetchFn: cloud.fetchFn });
+
+    // La condizione in cui gira il pull: il web ha suonato il campanello e
+    // il box non ha ancora consegnato.
+    expect(chatPending("2026-07-30T10:00:00Z", null)).toBe(true);
+
+    // ── La corsia, negli stessi passi del daemon ──
+    const rows = await channel!.readUndeliveredUserChat({ limit: 50 });
+    const importedIds = importCloudUserTurns(db, rows, { jhtHome: home });
+    const sends: string[][] = [];
+    const sent = await deliverPendingUserTurns(db, {
+      sendFn: async (agent: string, body: string) => {
+        sends.push([agent, body]);
+        return { ok: true, code: 0 };
+      },
+    });
+
+    // Il punto: consegnato davvero, non "in coda".
+    expect(sent).toEqual({ delivered: 1, failed: 0 });
+    expect(sends).toEqual([["capitano", "ci sei?"]]);
+    expect(rowsOf()[0].delivered_at).not.toBeNull();
+    // …e visibile anche nella chat del videogioco.
+    expect(readFileSync(chatFileFor(home, "capitano"), "utf-8")).toContain("ci sei?");
+
+    // ── Ack + chiusura del rendezvous ──
+    await channel!.closeRendezvous(importedIds);
+
+    const get = cloud.calls.find((c) => c.method === "GET");
+    expect(get?.url).toContain("/api/cloud-sync/chat");
+    // Stessa autenticazione del push: il token del box, non un secondo schema.
+    expect(get?.auth).toBe("Bearer jht_sync_esempio");
+    const post = cloud.calls.find((c) => c.method === "POST");
+    expect(post?.auth).toBe("Bearer jht_sync_esempio");
+    expect(post?.body).toEqual({
+      delivered_ids: ["11111111-1111-4111-8111-111111111111"],
+    });
+  });
+
+  it("a chat ferma non parte NESSUNA chiamata verso Vercel", async () => {
+    // Il costo Vercel del progetto scala con i poller dei box (~75% di
+    // riduzione ottenuta proprio togliendo chiamate a vuoto): il giro veloce
+    // passa di qui ogni ~5s, cioè ~17k volte al giorno per box. Costruire il
+    // canale non deve toccare la rete, e il pull parte SOLO col campanello
+    // suonato — `chatPending` falso ⇒ zero richieste, come oggi.
+    const cloud = fakeCloud([]);
+    const channel = chatChannelFor(BOX_CONFIG, null, { fetchFn: cloud.fetchFn });
+    expect(channel).not.toBeNull();
+    expect(cloud.calls).toHaveLength(0);
+
+    // Nessun messaggio mai scritto, e messaggio già consegnato: i due modi
+    // in cui una chat sta ferma.
+    expect(chatPending(null, null)).toBe(false);
+    expect(chatPending("2026-07-30T10:00:00Z", "2026-07-30T10:00:01Z")).toBe(false);
+    expect(cloud.calls).toHaveLength(0);
+  });
+
+  it("un errore HTTP non finge la consegna", async () => {
+    // Se il pull ingoiasse l'errore ritornando [], il rendezvous verrebbe
+    // chiuso su una coda vuota e il turno dell'utente sarebbe perso.
+    const channel = chatChannelFor(BOX_CONFIG, null, {
+      fetchFn: async () => ({ ok: false, status: 500, json: async () => ({}) }) as any,
+    });
+    await expect(channel!.readUndeliveredUserChat({ limit: 10 })).rejects.toThrow(/500/);
+    await expect(channel!.closeRendezvous(["x"])).rejects.toThrow(/500/);
+  });
+
+  it("la corsia in cloud.js non è più gatata sul lettore diretto", () => {
+    // Il difetto era una sola condizione: `if (pending && reader)`. Questo
+    // controllo è sul SORGENTE perché typecheck e lint non lo vedrebbero.
+    const src = readFileSync(
+      join(__dirname, "../../../cli/src/commands/cloud.js"),
+      "utf-8",
+    );
+    expect(src).not.toMatch(/pending\s*&&\s*reader/);
+    expect(src).toContain("chat.chatChannelFor(config, reader)");
+    // La guardia che tiene a zero le chiamate a chat ferma.
+    expect(src).toContain("if (pending && channel)");
+  });
+
+  it("la chat resta nel giro veloce del daemon (~5s), non in quello pesante", () => {
+    // Spostarla sotto `doHeavy` la porterebbe da 5s a 60s di latenza: è il
+    // contrario dell'obiettivo, e non lo vedrebbe nessun altro test.
+    const src = readFileSync(
+      join(__dirname, "../../../cli/src/commands/cloud.js"),
+      "utf-8",
+    );
+    const chatCall = src.indexOf(
+      "await handleChatSync({ silent: true, config, state: rendezvousState })",
+    );
+    const rendezvousRead = src.indexOf(
+      "rendezvousState = await readRendezvousState(config, { silent: true })",
+    );
+    expect(rendezvousRead).toBeGreaterThan(-1);
+    // Dopo la lettura di team_state (che è già pagata dal pulsante "Sync
+    // now") e prima del blocco pesante che la segue.
+    expect(chatCall).toBeGreaterThan(rendezvousRead);
+    const heavyAfter = src.indexOf("if (doHeavy) {", rendezvousRead);
+    expect(chatCall).toBeLessThan(heavyAfter);
   });
 });
