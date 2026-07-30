@@ -42,7 +42,7 @@ const DEMO_ACTOR_BY_STATUS: Record<string, string> = {
 };
 
 export default async function DashboardPage() {
-  const locale = getServerLocale();
+  const locale = await getServerLocale();
   const t = getDashboardT(locale);
 
   // [JHT-ONBOARDING-IN-GAME 18/07] Niente più redirect a /onboarding: la
