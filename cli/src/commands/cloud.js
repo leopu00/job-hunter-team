@@ -2488,6 +2488,12 @@ async function handleSyncRendezvous(options = {}) {
  * 057/060) e non da Supabase diretto: la policy di INSERT dell'utente
  * ammette solo i PROPRI turni, non quelli dell'agente — ed è giusto così.
  * È una manciata di righe piccole per messaggio scambiato, non un battito.
+ *
+ * Il passo 1 (pull) ha la stessa scelta di canale, ma al contrario: prova il
+ * lettore Supabase-diretto quando c'è (costa meno) e ripiega su
+ * `/api/cloud-sync/chat` col token del box. Il ripiego NON è una cintura di
+ * sicurezza: è la strada normale del fleet, dove `JHT_SUPABASE_DIRECT` è
+ * spento — vedi `chatChannelFor` in chat-sync.js.
  */
 async function handleChatSync(options = {}) {
   const silent = options.silent === true;
@@ -2519,7 +2525,13 @@ async function handleChatSync(options = {}) {
     return;
   }
 
+  // Il canale col cloud: Supabase diretto se il flag opt-in è acceso,
+  // altrimenti il token del box su /api/cloud-sync/chat. Il ramo diretto
+  // resta preferito perché costa meno; quello Vercel è l'unico che esiste
+  // sul fleet, dove `JHT_SUPABASE_DIRECT` è spento — vedi il perché disteso
+  // in chat-sync.js, sopra `directChatChannel`.
   const reader = getDirectReader(config);
+  const channel = chat.chatChannelFor(config, reader);
   let importedIds = [];
 
   try {
@@ -2528,9 +2540,9 @@ async function handleChatSync(options = {}) {
     // del rendezvous "Sync now"): zero letture Supabase in più.
     const state = options.state || null;
     const pending = chat.chatPending(state?.chat_requested_at, state?.chat_delivered_at);
-    if (pending && reader) {
+    if (pending && channel) {
       try {
-        const cloudRows = await reader.readUndeliveredUserChat({ limit: 50 });
+        const cloudRows = await channel.readUndeliveredUserChat({ limit: 50 });
         importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome: JHT_HOME });
       } catch (err) {
         log('warn', `chat-sync: lettura turni utente fallita: ${err.message}`);
@@ -2563,10 +2575,9 @@ async function handleChatSync(options = {}) {
     // ── Chiusura del rendezvous ────────────────────────────────────────
     // Solo se abbiamo davvero consegnato tutto quello che era in coda: con
     // un pane occupato il flag resta aperto e il giro dopo ritenta.
-    if (pending && reader && sent.failed === 0) {
+    if (pending && channel && sent.failed === 0) {
       try {
-        if (importedIds.length > 0) await reader.markUserChatDelivered(importedIds);
-        await reader.patchTeamState({ chat_delivered_at: new Date().toISOString() });
+        await channel.closeRendezvous(importedIds);
       } catch (err) {
         log('warn', `chat-sync: ack consegna fallito: ${err.message}`);
       }
