@@ -15,17 +15,13 @@
 **/.env
 **/.env.*
 !**/.env.example
-desktop/dist
-desktop/release
-launcher/target
 # Client host-side e artefatti non-runtime: il container esegue SOLO gli
-# agenti (cli/shared/agents). Il gioco Godot (game/) e l'app Electron
-# (desktop/) girano sull'host e i loro asset stanno nell'exe/installer
-# (embed_pck) — NON qui. Includerli in `COPY . .` gonfiava l'immagine di
-# centinaia di MB (game/assets ~369MB, game/builds fino a ~690MB) senza che
-# il container li tocchi mai (Leone 24/07).
+# agenti (cli/shared/agents). Il gioco Godot (game/) gira sull'host e i suoi
+# asset stanno nell'exe/installer (embed_pck) — NON qui. Includerlo in
+# `COPY . .` gonfiava l'immagine di centinaia di MB (game/assets ~369MB,
+# game/builds fino a ~690MB) senza che il container li tocchi mai
+# (Leone 24/07).
 game/
-desktop/
 docs/
 tests/
 e2e/
