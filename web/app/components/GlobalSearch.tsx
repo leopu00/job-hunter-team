@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useDashboardT } from "./DashboardI18n";
+import { useFocusTrap } from "./AccessibilityProvider";
 
 type ItemDef = {
   id: string;
@@ -132,6 +133,7 @@ export function GlobalSearch() {
   const [selected, setSelected] = useState(0);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { t } = useDashboardT();
 
@@ -186,6 +188,8 @@ export function GlobalSearch() {
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 50);
   }, [open]);
+
+  useFocusTrap(dialogRef, open);
 
   const results: Array<Item & { indices: number[] }> =
     query.length < 1
@@ -243,6 +247,7 @@ export function GlobalSearch() {
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={t("gs_dialog_label")}
