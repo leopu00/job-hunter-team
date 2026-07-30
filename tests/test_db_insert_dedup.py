@@ -1,8 +1,14 @@
 """Test dedup positions in shared/skills/db_insert.py.
 
-Focus: city normalization + synonym map che addresses anomalia #3 da
-docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md (7 (title, company)
-duplicate quando stessa position arriva da source multipli).
+Due famiglie di test, un solo tema — che una posizione buona non venga
+scartata come doppione, e che un doppione non entri due volte:
+
+1. city normalization + synonym map, che addresses anomalia #3 da
+   docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md (7
+   (title, company) duplicate quando stessa position arriva da source
+   multipli);
+2. correttezza del livello 0 (LinkedIn job ID) — [DEDUP-URL-CORRECTNESS],
+   audit del 2026-07-30.
 
 Eseguire:
     pytest tests/test_db_insert_dedup.py -v
@@ -195,3 +201,169 @@ class TestCheckDuplicate:
             location='Munich'
         )
         assert existing is not None, "München should match Munich via diacritic+synonym"
+
+
+# ---------------------------------------------------------------------------
+# Livello 0 — LinkedIn job ID: dedup sì, sottostringa no
+#
+# [DEDUP-URL-CORRECTNESS]. `url LIKE '%<id>%'` non sa dove finisce l'id:
+# cercando 4381470286 matchava la riga il cui id è 43814702861, e una
+# posizione NUOVA veniva scartata come doppione con il log a dire che era un
+# doppione. Il livello 0 deve restare (lo stesso annuncio LinkedIn circola con
+# URL diversi): quello che sparisce è il falso positivo, non la dedup.
+# ---------------------------------------------------------------------------
+
+class TestLinkedInJobIdLevel0:
+
+    def test_un_id_prefisso_di_un_altro_non_e_un_duplicato(self, in_memory_db):
+        """Il caso misurato in laboratorio: 4381470286 vs 43814702861."""
+        conn = in_memory_db
+        _insert_test_row(conn, 'Backend Dev', 'Acme', 'Milan',
+                         url='https://www.linkedin.com/jobs/view/43814702861')
+
+        existing, match_type = db_insert.check_duplicate(
+            conn,
+            url='https://www.linkedin.com/jobs/view/4381470286',
+            company='Beta Corp', title='Data Engineer', location='Rome',
+        )
+        assert existing is None, (
+            f"4381470286 non è 43814702861: match spurio ({match_type}) — "
+            "una posizione buona verrebbe scartata come doppione"
+        )
+
+    def test_il_verso_opposto_e_altrettanto_sbagliato(self, in_memory_db):
+        """L'id più lungo cercato contro il più corto già in tabella."""
+        conn = in_memory_db
+        _insert_test_row(conn, 'Backend Dev', 'Acme', 'Milan',
+                         url='https://www.linkedin.com/jobs/view/4381470286')
+
+        existing, _ = db_insert.check_duplicate(
+            conn,
+            url='https://www.linkedin.com/jobs/view/43814702861',
+            company='Beta Corp', title='Data Engineer', location='Rome',
+        )
+        assert existing is None
+
+    def test_current_job_id_di_un_altro_annuncio_non_crea_un_duplicato(self, in_memory_db):
+        """L'id sta nel path; `currentJobId=` in query string è un altro annuncio.
+
+        È il caso che rende il difetto IMMEDIATO, non solo latente: basta che
+        uno Scout salvi un URL con la query string così com'è.
+        """
+        conn = in_memory_db
+        _insert_test_row(
+            conn, 'Backend Dev', 'Acme', 'Milan',
+            url='https://www.linkedin.com/jobs/view/1111111111?currentJobId=4381470286')
+
+        existing, match_type = db_insert.check_duplicate(
+            conn,
+            url='https://www.linkedin.com/jobs/view/4381470286',
+            company='Beta Corp', title='Data Engineer', location='Rome',
+        )
+        assert existing is None, (
+            f"match su un currentJobId= altrui ({match_type}): l'id dell'annuncio "
+            "è quello del path"
+        )
+
+    def test_lo_stesso_annuncio_con_url_diversi_resta_un_duplicato(self, in_memory_db):
+        """La funzione del livello 0, quella da NON perdere."""
+        conn = in_memory_db
+        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome',
+                         url='https://www.linkedin.com/jobs/view/4381470286')
+
+        existing, match_type = db_insert.check_duplicate(
+            conn,
+            url='https://it.linkedin.com/jobs/view/4381470286?refId=abc&trackingId=xyz',
+            company='Beta Srl', title='Data Eng', location='Roma',
+        )
+        assert existing is not None, "stesso annuncio, URL diverso: è un duplicato"
+        assert (match_type or '').startswith('LinkedIn job ID'), match_type
+
+    def test_lo_stesso_annuncio_con_current_job_id_proprio_resta_un_duplicato(self, in_memory_db):
+        """`?currentJobId=` che ripete l'id del path non deve confondere."""
+        conn = in_memory_db
+        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome',
+                         url='https://www.linkedin.com/jobs/view/4381470286')
+
+        existing, match_type = db_insert.check_duplicate(
+            conn,
+            url='https://www.linkedin.com/jobs/view/4381470286?currentJobId=4381470286',
+            company='Beta Srl', title='Data Eng', location='Roma',
+        )
+        assert existing is not None
+        assert (match_type or '').startswith('LinkedIn job ID'), match_type
+
+    def test_trova_la_riga_giusta_anche_se_il_prefiltro_ne_pesca_un_altra(self, in_memory_db):
+        """Il duplicato vero può arrivare DOPO un candidato preso di striscio.
+
+        Con `fetchone` la query restituiva la prima riga che il LIKE toccava:
+        se era quella dall'id più lungo, il duplicato vero non veniva mai
+        guardato. Serve scorrere i candidati, non fermarsi al primo.
+        """
+        conn = in_memory_db
+        _insert_test_row(conn, 'Backend Dev', 'Acme', 'Milan',
+                         url='https://www.linkedin.com/jobs/view/43814702861')
+        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome',
+                         url='https://www.linkedin.com/jobs/view/4381470286')
+
+        existing, match_type = db_insert.check_duplicate(
+            conn,
+            url='https://www.linkedin.com/jobs/view/4381470286?refId=q',
+            company='Beta Srl', title='Data Eng', location='Roma',
+        )
+        assert existing is not None, "il duplicato vero è la seconda riga, non la prima"
+        assert existing['company'] == 'Beta Corp', dict(existing)
+
+    def test_url_non_linkedin_non_passa_dal_livello_0(self, in_memory_db):
+        """Un id che compare in un URL non-LinkedIn non è un LinkedIn job ID."""
+        conn = in_memory_db
+        _insert_test_row(conn, 'Backend Dev', 'Acme', 'Milan',
+                         url='https://jobs.lever.co/acme/4381470286')
+
+        existing, _ = db_insert.check_duplicate(
+            conn,
+            url='https://www.linkedin.com/jobs/view/4381470286',
+            company='Beta Corp', title='Data Engineer', location='Rome',
+        )
+        assert existing is None
+
+
+class TestLivelli1e3RestanoIntatti:
+    """Il fix tocca SOLO il livello 0: gli altri tre devono comportarsi uguale."""
+
+    def test_livello_1_url_esatto_anche_su_url_linkedin(self, in_memory_db):
+        conn = in_memory_db
+        url = 'https://www.linkedin.com/jobs/view/4381470286'
+        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome', url=url)
+
+        existing, match_type = db_insert.check_duplicate(
+            conn, url=url, company='Beta Corp', title='Data Engineer', location='Rome')
+        assert existing is not None
+        # L'URL esatto è anche lo stesso job id: vince il livello 0, che è
+        # più specifico. Quello che conta è che il duplicato sia visto.
+        assert match_type is not None
+
+    def test_livello_1_url_esatto_non_linkedin(self, in_memory_db):
+        conn = in_memory_db
+        url = 'https://jobs.lever.co/acme/abc-123'
+        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome', url=url)
+
+        existing, match_type = db_insert.check_duplicate(
+            conn, url=url, company='Altro', title='Altro Titolo', location='Berlin')
+        assert existing is not None
+        assert match_type == 'URL esatto'
+
+    def test_livello_2_e_3_ancora_raggiungibili_da_un_url_linkedin(self, in_memory_db):
+        """Un URL LinkedIn che non matcha al livello 0 deve cadere sui livelli
+        successivi, non uscire dalla funzione."""
+        conn = in_memory_db
+        _insert_test_row(conn, 'Software Engineer', 'Acme Corp', 'Milan, Italy',
+                         url='https://www.linkedin.com/jobs/view/1111111111')
+
+        existing, match_type = db_insert.check_duplicate(
+            conn,
+            url='https://www.linkedin.com/jobs/view/2222222222',
+            company='Acme Corp', title='Software Engineer', location='Milano, IT',
+        )
+        assert existing is not None
+        assert 'city-norm' in (match_type or ''), match_type
