@@ -1,8 +1,28 @@
 # TICKET — La modalità operativa va iniettata nel messaggio periodico del Capitano
 
-**Stato**: da implementare · **Tag**: `[MODE-INJECTION-HOURLY-PROMPT]` ·
+**Stato**: implementato 2026-07-30 · **Tag**: `[MODE-INJECTION-HOURLY-PROMPT]` ·
 **Decisione utente**: 2026-07-30 ·
 **Correlato**: C-18, `[DOCTOR-UNBLOCK-AND-TTL]`
+
+> **Implementazione**: `shared/skills/mode_banner.py` compone la sezione leggendo
+> da disco a ogni chiamata; `.launcher/heartbeat-bridge.py` la accoda a ogni
+> messaggio (e con `stop_search` sul disco smette di ordinare lo spawn Scout di
+> C-05, che la contraddirebbe nello stesso messaggio); la skill
+> `session-refresh` la accoda al `[RESUME]` del Capitano in tutte e 7 le lingue.
+> 29 test in `tests/test_mode_injection.py`.
+>
+> **Due scelte diverse dal ticket**, entrambe deliberate:
+> 1. **L'ora di silenzio della rotazione salta** quando c'è un ordine in vigore.
+>    Il ticket prometteva «al peggio si perde per un'ora», ma la rotazione tace
+>    un'ora su tre: senza questo, il buco reale era di due ore. Costo: al massimo
+>    un messaggio in più ogni tre ore, e solo a modalità non-normale.
+> 2. **La bacheca non viene popolata automaticamente** quando l'utente imposta
+>    una modalità. Il bridge la LEGGE (ed è il punto), ma scriverci in automatico
+>    l'ordine già presente in `capitano-maintenance.json` renderebbe la sezione
+>    ridondante — lo stesso ordine due volte in ogni messaggio orario — e
+>    creerebbe una seconda fonte di verità sulla stessa cosa, con la domanda
+>    aperta di chi la archivia. La sezione dichiara `DIRETTIVE ATTIVE: nessuna`
+>    a ogni battito, che è il promemoria di popolarla a mano.
 
 ---
 
