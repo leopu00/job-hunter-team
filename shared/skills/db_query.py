@@ -27,6 +27,19 @@ Uso:
 Ogni comando di lettura (positions, position, companies, company, dashboard,
 stats, recent-activity) accetta `--json`: una riga JSON su stdout invece della
 tabella. Serve a `jht ... --json` e agli agenti LLM che guidano JHT.
+
+Le code `next-for-*` accettano `--limit N`, `--all` e `--json`. Stampano le
+prime N righe (default 20) e dichiarano SEMPRE quante ne esistono in totale:
+
+  python3 db_query.py next-for-categorize             # prime 20 di N
+  python3 db_query.py next-for-categorize --limit 100 # ne vuoi di più
+  python3 db_query.py next-for-categorize --all       # tutte (= --limit 0)
+  python3 db_query.py next-for-categorize --json      # {total, shown, rows: [...]}
+
+Il limite è un DEFAULT, non un tetto: serve a non riversare l'intera coda in un
+contesto senza che nessuno l'abbia chiesto. Chi ha bisogno di altro alza il
+limite — o si scrive la propria query SQL con il proprio LIMIT, che la skill
+`db-query` consente già (`allowed-tools: Bash(python3 *)`).
 """
 
 import argparse
@@ -462,27 +475,138 @@ def recent_activity(minutes=30, limit=40, as_json=False):
     conn.close()
 
 
-def next_for_role(role, min_score=None, older_than_days=None):
+# ── Code di lavoro: il limite è un DEFAULT, non un tetto ────────────────
+#
+# Perché esiste (audit 2026-07-30, docs/internal/roadmap/2026-07-30-db-audit-
+# observations.md): nessuna coda aveva un limite, quindi una sola invocazione
+# riversava l'intero backlog nel contesto di un agente. Misurato col codice
+# vero a 2.000 posizioni: `next-for-geocode-missing` = 1.375 righe / 78 KB /
+# ~19.500 token; a 20.000 posizioni 13.741 righe ≈ 195.000 token, cioè più di
+# una finestra di contesto in un comando solo.
+#
+# Il difetto NON è «l'agente vede troppe righe» — gli agenti devono poter
+# interrogare il DB come ritengono. È «il comando ne stampa 13.000 senza che
+# nessuno l'abbia chiesto». Quindi:
+#   · `--limit N` su OGNI coda: chi sa cosa sta facendo sceglie il suo numero;
+#   · `--all` / `--limit 0`: nessun limite, quando serve davvero;
+#   · e soprattutto la coda dichiara SEMPRE il totale, non solo le righe
+#     stampate — «(mostrate 20 di 1375)». Un limite silenzioso che nasconde il
+#     backlog sarebbe peggio del problema originale: è lo stesso difetto già
+#     noto di `recent-activity`, che elenca chi produce e quindi fa *sparire*
+#     chi è fermo.
+# La via SQL libera resta aperta e documentata: la skill `db-query` concede
+# `Bash(python3 *)`, quindi una query custom con il proprio LIMIT è già lecita.
+#
+# Perché 20, uguale per tutte le code: una coda di lavoro serve a prendere il
+# prossimo item, non a fotografare il backlog — l'Analista lavora UNA posizione
+# per turno, lo Scorer una alla volta, e il quadro d'insieme (quante ce ne sono)
+# ora arriva dal totale, che si vede sempre. 20 è un turno di lavoro abbondante
+# (~1 KB) e resta lo stesso numero su tutte le code, così il contratto è uno
+# solo da spiegare nei prompt in 7 lingue invece di undici numeri da ricordare.
+DEFAULT_QUEUE_LIMIT = 20
+
+
+def _sql_limit(limit):
+    """Traduce il limite scelto dall'agente in un valore per `LIMIT ?`.
+
+    `None` = non specificato → default della coda. `0` (e `--all`) = nessun
+    limite → `-1`, che in SQLite significa "senza tetto". Negativi = come 0.
+    """
+    if limit is None:
+        limit = DEFAULT_QUEUE_LIMIT
+    limit = int(limit)
+    return limit if limit > 0 else -1
+
+
+def _emit_queue(conn, role, label, rows, sql_limit, as_json):
+    """Uscita comune delle code: righe stampate + TOTALE in coda.
+
+    Il totale NON viene da una seconda query: ogni SELECT porta
+    `COUNT(*) OVER () AS _total`, che SQLite calcola sull'intero result set
+    PRIMA di applicare il LIMIT. Una passata sola, totale esatto anche quando
+    il limite taglia.
+    """
+    total = rows[0]['_total'] if rows else 0
+    shown = len(rows)
+
+    if as_json:
+        emit_json({
+            'queue': role,
+            'label': label,
+            # sempre presente: una coda spenta dalla policy dice `false` qui, e
+            # chi legge non deve dedurlo dall'assenza di righe (vedi
+            # _emit_disabled_queue).
+            'enabled': True,
+            'total': total,
+            'shown': shown,
+            'limit': None if sql_limit < 0 else sql_limit,
+            'rows': [{k: v for k, v in dict(r).items() if k != '_total'}
+                     for r in rows],
+        })
+        conn.close()
+        return
+
+    if not rows:
+        print(f"\n{label}: nessuna.")
+        conn.close()
+        return
+
+    counted = str(total) if shown == total else f"mostrate {shown} di {total}"
+    print(f"\n{label} ({counted}):")
+    for r in rows:
+        extra = ""
+        if 'total_score' in r.keys():
+            extra = f" [score: {r['total_score']}]"
+        print(f"  #{r['id']} {r['company'][:20]:<20} {r['title'][:35]}{extra}")
+    if shown < total:
+        print(f"  … altre {total - shown} in coda. Il limite è un default, non "
+              f"un tetto: --limit N per vederne di più, --all per tutte.")
+    conn.close()
+
+
+def _emit_disabled_queue(conn, role, label, message, as_json):
+    """Coda spenta dalla enrichment-policy: è uno stato voluto, non un errore.
+    In JSON deve restare distinguibile da una coda vuota (`enabled: false`)."""
+    if as_json:
+        emit_json({
+            'queue': role,
+            'label': label,
+            'enabled': False,
+            'total': 0,
+            'shown': 0,
+            'limit': None,
+            'rows': [],
+        })
+    else:
+        print(message)
+    conn.close()
+
+
+def next_for_role(role, min_score=None, older_than_days=None, limit=None,
+                  as_json=False):
     conn = get_db()
     ensure_schema(conn)
+    lim = _sql_limit(limit)
 
     if role == 'analista':
         rows = conn.execute("""
-            SELECT p.id, p.title, p.company, p.found_at
+            SELECT p.id, p.title, p.company, p.found_at, COUNT(*) OVER () AS _total
             FROM positions p
             WHERE p.status = 'new'
             ORDER BY p.found_at ASC
-        """).fetchall()
+            LIMIT ?
+        """, (lim,)).fetchall()
         label = "Posizioni new pronte per analisi"
 
     elif role == 'scorer':
         rows = conn.execute("""
-            SELECT p.id, p.title, p.company, p.found_at
+            SELECT p.id, p.title, p.company, p.found_at, COUNT(*) OVER () AS _total
             FROM positions p
             LEFT JOIN scores s ON s.position_id = p.id
             WHERE p.status = 'checked' AND s.id IS NULL
             ORDER BY p.found_at ASC
-        """).fetchall()
+            LIMIT ?
+        """, (lim,)).fetchall()
         label = "Posizioni checked senza score"
 
     elif role == 'scrittore':
@@ -491,7 +615,7 @@ def next_for_role(role, min_score=None, older_than_days=None):
         # esplicitamente selezionato dal dashboard web o via Telegram
         # (`/cv <id>`). Vedi BACKLOG [JHT-WRITER-ON-DEMAND].
         rows = conn.execute("""
-            SELECT p.id, p.title, p.company, s.total_score
+            SELECT p.id, p.title, p.company, s.total_score, COUNT(*) OVER () AS _total
             FROM positions p
             JOIN scores s ON s.position_id = p.id
             LEFT JOIN applications a ON a.position_id = p.id
@@ -500,17 +624,19 @@ def next_for_role(role, min_score=None, older_than_days=None):
               AND a.id IS NULL
               AND p.status = 'scored'
             ORDER BY p.write_requested_at ASC, s.total_score DESC
-        """).fetchall()
+            LIMIT ?
+        """, (lim,)).fetchall()
         label = "Posizioni con CV richiesto dall'utente (scored >= 50, no application)"
 
     elif role == 'critico':
         rows = conn.execute("""
-            SELECT p.id, p.title, p.company, a.written_by
+            SELECT p.id, p.title, p.company, a.written_by, COUNT(*) OVER () AS _total
             FROM positions p
             JOIN applications a ON a.position_id = p.id
             WHERE a.status = 'review' AND a.critic_verdict IS NULL
             ORDER BY a.id ASC
-        """).fetchall()
+            LIMIT ?
+        """, (lim,)).fetchall()
         label = "Application in review senza verdict"
 
     elif role == 'geocoding':
@@ -519,12 +645,14 @@ def next_for_role(role, min_score=None, older_than_days=None):
         # l'utente ha esplicitamente selezionato dal dashboard web (button
         # "Geocodifica") o via Telegram. Replica del pattern Writer-on-demand.
         rows = conn.execute("""
-            SELECT p.id, p.title, p.company, p.loc_city, p.loc_country_code
+            SELECT p.id, p.title, p.company, p.loc_city, p.loc_country_code,
+                   COUNT(*) OVER () AS _total
             FROM positions p
             WHERE p.geocode_requested = 1
               AND (p.office_geocoded IS NULL OR p.office_geocoded = 0)
             ORDER BY p.geocode_requested_at ASC
-        """).fetchall()
+            LIMIT ?
+        """, (lim,)).fetchall()
         label = "Posizioni con geocoding richiesto dall'utente (non ancora geocodate)"
 
     elif role == 'recheck':
@@ -536,13 +664,15 @@ def next_for_role(role, min_score=None, older_than_days=None):
         # last_open_check aggiornato DOPO recheck_requested_at → esce dalla coda
         # senza azzerare il flag (una nuova richiesta sposta avanti il timestamp).
         rows = conn.execute("""
-            SELECT p.id, p.title, p.company, p.expires_at, p.last_open_check
+            SELECT p.id, p.title, p.company, p.expires_at, p.last_open_check,
+                   COUNT(*) OVER () AS _total
             FROM positions p
             WHERE p.recheck_requested = 1
               AND (p.last_open_check IS NULL
                    OR p.last_open_check < p.recheck_requested_at)
             ORDER BY p.recheck_requested_at ASC
-        """).fetchall()
+            LIMIT ?
+        """, (lim,)).fetchall()
         label = "Posizioni con richeck richiesto dall'utente (liveness on-demand)"
 
     elif role == 'categorize':
@@ -566,12 +696,14 @@ def next_for_role(role, min_score=None, older_than_days=None):
             drift_clause = "OR (p.role_family <> 'Other')"
             qparams = []
         rows = conn.execute(f"""
-            SELECT p.id, p.title, p.company, p.location, p.role_family
+            SELECT p.id, p.title, p.company, p.location, p.role_family,
+                   COUNT(*) OVER () AS _total
             FROM positions p
             WHERE (p.role_family IS NULL {drift_clause})
               AND p.status IN ('checked','scored','writing','review','ready')
             ORDER BY (p.role_family IS NOT NULL), p.created_at ASC
-        """, qparams).fetchall()
+            LIMIT ?
+        """, qparams + [lim]).fetchall()
         label = "Posizioni da (ri)categorizzare (mancante o drift → registro emergente)"
 
     elif role == 'salary-precise':
@@ -580,12 +712,14 @@ def next_for_role(role, min_score=None, older_than_days=None):
         # produce il breakdown preciso (azienda + media web + tasse + NETTO) in
         # salary_precise. Processa SOLO i flaggati non ancora prodotti.
         rows = conn.execute("""
-            SELECT p.id, p.title, p.company, p.salary_precise_requested_at
+            SELECT p.id, p.title, p.company, p.salary_precise_requested_at,
+                   COUNT(*) OVER () AS _total
             FROM positions p
             WHERE p.salary_precise_requested = 1
               AND (p.salary_precise IS NULL OR TRIM(p.salary_precise) = '')
             ORDER BY p.salary_precise_requested_at ASC
-        """).fetchall()
+            LIMIT ?
+        """, (lim,)).fetchall()
         label = "Posizioni con stima salary precisa richiesta dall'utente"
 
     elif role == 'recheck-weekly':
@@ -602,16 +736,18 @@ def next_for_role(role, min_score=None, older_than_days=None):
         # vedi enrichment_policy.py. Coda vuota per policy = stato voluto.
         from enrichment_policy import is_enabled, disabled_reason, recheck_options
         if not is_enabled('recheck_weekly'):
-            print(f"\nRecheck settimanale manutenzione: "
-                  f"OFF — {disabled_reason('recheck_weekly')}.")
-            conn.close()
+            _emit_disabled_queue(
+                conn, role, "Recheck settimanale manutenzione",
+                f"\nRecheck settimanale manutenzione: "
+                f"OFF — {disabled_reason('recheck_weekly')}.", as_json)
             return
         opts = recheck_options()
         min_score = opts['min_score'] if min_score is None else min_score
         older_than_days = (opts['older_than_days'] if older_than_days is None
                            else older_than_days)
         rows = conn.execute("""
-            SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score
+            SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score,
+                   COUNT(*) OVER () AS _total
             FROM positions p
             JOIN (SELECT position_id, MAX(total_score) AS total_score
                   FROM scores GROUP BY position_id) s ON s.position_id = p.id
@@ -620,7 +756,8 @@ def next_for_role(role, min_score=None, older_than_days=None):
               AND (p.last_checked IS NULL
                    OR p.last_checked < datetime('now', ?))
             ORDER BY (p.last_checked IS NOT NULL), p.last_checked ASC
-        """, (min_score, f'-{older_than_days} days')).fetchall()
+            LIMIT ?
+        """, (min_score, f'-{older_than_days} days', lim)).fetchall()
         label = (f"Recheck settimanale manutenzione "
                  f"(vive, score>={min_score}, non verificate da >{older_than_days}gg)")
 
@@ -633,9 +770,10 @@ def next_for_role(role, min_score=None, older_than_days=None):
         # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata.
         from enrichment_policy import is_enabled, disabled_reason, geocode_options
         if not is_enabled('geocode_missing'):
-            print(f"\nGeocoding manutenzione: "
-                  f"OFF — {disabled_reason('geocode_missing')}.")
-            conn.close()
+            _emit_disabled_queue(
+                conn, role, "Geocoding manutenzione",
+                f"\nGeocoding manutenzione: "
+                f"OFF — {disabled_reason('geocode_missing')}.", as_json)
             return
         opts = geocode_options()
         score_gate = ""
@@ -651,7 +789,8 @@ def next_for_role(role, min_score=None, older_than_days=None):
             remote_gate = """
               AND LOWER(COALESCE(p.work_mode, '')) != 'remote'"""
         rows = conn.execute(f"""
-            SELECT p.id, p.title, p.company, p.location, p.loc_city, p.loc_country_code
+            SELECT p.id, p.title, p.company, p.location, p.loc_city, p.loc_country_code,
+                   COUNT(*) OVER () AS _total
             FROM positions p
             WHERE p.status != 'excluded'
               AND (p.office_lat IS NULL
@@ -659,7 +798,8 @@ def next_for_role(role, min_score=None, older_than_days=None):
               {score_gate}
               {remote_gate}
             ORDER BY p.found_at DESC
-        """, tuple(params)).fetchall()
+            LIMIT ?
+        """, tuple(params + [lim])).fetchall()
         label = ("Geocoding manutenzione (posizioni vive senza coordinate ufficio"
                  + (f", score >= {opts['min_score']}" if opts['min_score'] is not None else "")
                  + (", non remote" if opts['non_remote_only'] else "") + ")")
@@ -679,12 +819,13 @@ def next_for_role(role, min_score=None, older_than_days=None):
         # lo Scorer supera la soglia l'azienda rientra da sola).
         from enrichment_policy import is_enabled, disabled_reason, logo_min_score
         if not is_enabled('logo'):
-            print(f"\nLogo manutenzione: OFF — {disabled_reason('logo')}.")
-            conn.close()
+            _emit_disabled_queue(
+                conn, role, "Logo manutenzione",
+                f"\nLogo manutenzione: OFF — {disabled_reason('logo')}.", as_json)
             return
         ms = logo_min_score()
         score_gate = ""
-        params: tuple = ()
+        params: list = []
         if ms is not None:
             score_gate = """
               AND EXISTS (SELECT 1 FROM positions p2
@@ -692,37 +833,32 @@ def next_for_role(role, min_score=None, older_than_days=None):
                           WHERE p2.company_id = c.id
                             AND p2.status != 'excluded'
                             AND s2.total_score >= ?)"""
-            params = (ms,)
+            params = [ms]
+        # `COUNT(*) OVER ()` dopo un GROUP BY conta i GRUPPI (le aziende), che è
+        # esattamente il totale di questa coda: le window function si applicano
+        # alle righe già aggregate.
         rows = conn.execute(f"""
             SELECT c.id, c.name AS company,
                    COUNT(p.id) || ' posizioni vive · '
-                     || COALESCE(c.website, 'NO WEBSITE (cercalo prima)') AS title
+                     || COALESCE(c.website, 'NO WEBSITE (cercalo prima)') AS title,
+                   COUNT(*) OVER () AS _total
             FROM companies c
             JOIN positions p ON p.company_id = c.id AND p.status != 'excluded'
             WHERE (c.logo_fetched IS NULL OR c.logo_fetched = 0)
               {score_gate}
             GROUP BY c.id
             ORDER BY COUNT(p.id) DESC, c.name ASC
-        """, params).fetchall()
+            LIMIT ?
+        """, tuple(params + [lim])).fetchall()
         label = ("Logo manutenzione (aziende con posizioni vive senza logo"
                  + (f", best-score >= {ms}" if ms is not None else "") + ")")
 
     else:
         print(f"Ruolo sconosciuto: {role}")
+        conn.close()
         return
 
-    if not rows:
-        print(f"\n{label}: nessuna.")
-        return
-
-    print(f"\n{label} ({len(rows)}):")
-    for r in rows:
-        extra = ""
-        if 'total_score' in r.keys():
-            extra = f" [score: {r['total_score']}]"
-        print(f"  #{r['id']} {r['company'][:20]:<20} {r['title'][:35]}{extra}")
-
-    conn.close()
+    _emit_queue(conn, role, label, rows, lim, as_json)
 
 
 def query_application(position_id):
@@ -850,23 +986,35 @@ def main():
     ra.add_argument('--limit', type=int, default=40)
     ra.add_argument('--json', action='store_true', help=JSON_HELP)
 
-    # next-for-*
-    sub.add_parser('next-for-analista')
-    sub.add_parser('next-for-scorer')
-    sub.add_parser('next-for-scrittore')
-    sub.add_parser('next-for-critico')
-    sub.add_parser('next-for-geocoding')
-    sub.add_parser('next-for-recheck')
-    sub.add_parser('next-for-categorize')
-    sub.add_parser('next-for-salary-precise')
+    # next-for-*: ogni coda accetta --limit / --all / --json. Il default (20) è
+    # un default e non un tetto — vedi DEFAULT_QUEUE_LIMIT — e il TOTALE in coda
+    # viene stampato comunque, così alzare il limite è una scelta informata.
+    def queue_parser(name):
+        q = sub.add_parser(name)
+        q.add_argument('--limit', type=int, default=None,
+                       help=f'Quante righe stampare (default {DEFAULT_QUEUE_LIMIT}); '
+                            f'0 = tutte. Il totale in coda è sempre dichiarato.')
+        q.add_argument('--all', action='store_true',
+                       help='Nessun limite: stampa tutta la coda (= --limit 0).')
+        q.add_argument('--json', action='store_true', help=JSON_HELP)
+        return q
+
+    queue_parser('next-for-analista')
+    queue_parser('next-for-scorer')
+    queue_parser('next-for-scrittore')
+    queue_parser('next-for-critico')
+    queue_parser('next-for-geocoding')
+    queue_parser('next-for-recheck')
+    queue_parser('next-for-categorize')
+    queue_parser('next-for-salary-precise')
     # Maintenance-mode queues (2026-07-13): autonome ma cadenzate/gated (vedi next_for_role).
-    rw = sub.add_parser('next-for-recheck-weekly')
+    rw = queue_parser('next-for-recheck-weekly')
     rw.add_argument('--min-score', type=int, default=None,
                     help='Score minimo; omesso = valore della enrichment policy (default 70).')
     rw.add_argument('--older-than-days', type=int, default=None,
                     help='Anzianità minima; omesso = enrichment policy (default 7 giorni).')
-    sub.add_parser('next-for-geocode-missing')
-    sub.add_parser('next-for-logo-missing')
+    queue_parser('next-for-geocode-missing')
+    queue_parser('next-for-logo-missing')
 
     # active-categories <user_id> (tassonomia emergente): nomi role_family
     # ATTIVI del registro per l'utente. Consumato dal write-guard (db_update)
@@ -994,12 +1142,17 @@ def main():
         flag = '  ⚠ DA CATEGORIZZARE SUBITO (next-for-categorize) — NULL non è una categoria' if uncat else ''
         print(f"  {uncat:>4}  NON categorizzate (role_family IS NULL){flag}")
         conn.close()
-    elif args.cmd == 'next-for-recheck-weekly':
-        next_for_role('recheck-weekly', min_score=args.min_score,
-                      older_than_days=args.older_than_days)
     elif args.cmd.startswith('next-for-'):
         role = args.cmd.replace('next-for-', '')
-        next_for_role(role)
+        next_for_role(
+            role,
+            # solo next-for-recheck-weekly porta questi due
+            min_score=getattr(args, 'min_score', None),
+            older_than_days=getattr(args, 'older_than_days', None),
+            # --all è la forma esplicita di "so cosa sto chiedendo": nessun limite
+            limit=0 if args.all else args.limit,
+            as_json=args.json,
+        )
 
 
 if __name__ == '__main__':
