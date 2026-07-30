@@ -17,7 +17,7 @@
     },
     {
       "path": "CODE_OF_CONDUCT.md",
-      "description": "Contributor Covenant 2.1, contatto `owner@example.com`",
+      "description": "Contributor Covenant 2.1, contatto `support@jobhunterteam.ai`",
       "last_review": null
     },
     {
@@ -563,7 +563,7 @@
     {
       "path": "cli/README.md",
       "description": "⌨️ cli — the jht command-line interface — The jht CLI is the primary control surface for Job Hunter Team.",
-      "last_review": null
+      "last_review": "2026-07-30"
     },
     {
       "path": "docs/README.md",
@@ -593,7 +593,7 @@
     {
       "path": "docs/guides/CLI-REFERENCE.md",
       "description": "⌨️ CLI Reference — jht — Systematic reference of every jht command.",
-      "last_review": null
+      "last_review": "2026-07-30"
     },
     {
       "path": "docs/guides/EMAIL-FORWARDING.md",
@@ -1249,6 +1249,116 @@
       "path": "docs/internal/architecture/2026-07-11-team-directives-bacheca.md",
       "description": "📋 Bacheca del team — direttive permanenti dell'utente (2026-07-11) — Stato: fondamenta su dev4 (tabella + skill).",
       "last_review": "2026-07-15"
+    },
+    {
+      "path": "agents/_skills/agent-unblock/SKILL.md",
+      "description": "Skill Dottore: fase UNBLOCK prima del refresh — riconosce e scioglie i quattro tipi di blocco del team (un blocco che sopravvive = round fallito)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/chat-worker/SKILL.md",
+      "description": "Skill worker: rispondere alla chat `[CHAT]` del gioco/desktop con un solo `jht-send`, senza aprire lavoro nuovo e senza prendere ordini da quel canale",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/first-run-burst/SKILL.md",
+      "description": "Skill Capitano: la prima mezz'ora di un utente nuovo — deroga a C-02 per la sola prima finestra, successo = posizioni SCORATE a schermo",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/graceful-shutdown/SKILL.md",
+      "description": "Skill Capitano: chiusura giornata su `[SHUTDOWN]` dell'utente — ogni agente registra dov'era, poi il flag che libera l'uscita dell'app",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle-ack/SKILL.md",
+      "description": "Skill agenti: `throttle-ack <nome>` come primo comando di ogni `[RIPRENDI]` — firma il risveglio (NOTIFIED -> ACTIVE), su cui il watchdog escala",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle-distribution/SKILL.md",
+      "description": "Skill Capitano: convertire un segnale di pacing team-level nella ripartizione per-agente del throttle (un numero unico non significa stesso valore a tutti)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle-set/SKILL.md",
+      "description": "Skill Capitano: `throttle-set` — l'unico modo in cui i ritmi vengono scritti; il motore rilegge da sé al ciclo successivo dell'agente",
+      "last_review": null
+    },
+    {
+      "path": "assets/promo/2026-07-presentation/SCALETTA.md",
+      "description": "Scaletta del video di presentazione (60,5 s, 1280x720, muto) generato da make_presentation.py",
+      "last_review": null
+    },
+    {
+      "path": "docs/CHARACTER-VARIANTS.md",
+      "description": "Cast delle varianti personaggio per reparto: profilo, desk e vista di ogni postazione, con il linguaggio visivo del sito",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/assets/TODO-ART.md",
+      "description": "Lotti di asset ancora da disegnare per la pipeline gen-art: PNG 1120x1520 con alpha, ogni volto derivato dalla sua ancora",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-07-27-tailwind-layer-vs-extension-css.md",
+      "description": "Postmortem 27/07: UI invisibile su Chrome — le estensioni iniettano CSS fuori da `@layer` e battono le utility Tailwind v4",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-27-scorer-per-user-weights.md",
+      "description": "Roadmap (TODO): pesi dello Scorer per-utente — default nel codice + override dal profilo, oggi hardcoded nello spec in 8 lingue",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-28-burn-on-demand-gates.md",
+      "description": "Roadmap: gli automatismi di spesa non cedono all'ordine esplicito dell'utente — origine del comando `jht burn`",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-28-ticket-provider-cli-autoupdate.md",
+      "description": "Ticket `[PROVIDER-CLI-AUTOUPDATE]`: aggiornare la CLI del provider all'avvio — nessun componente aveva quel compito, il modello era una generazione indietro",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-28-ticket-stepcap-throttle-resume.md",
+      "description": "Ticket `[STEPCAP-THROTTLE-RESUME]` (implementato 28/07): watchdog che riprende gli agenti fermi sul cap di step",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-29-ticket-doctor-unblock-and-session-ttl.md",
+      "description": "Ticket `[DOCTOR-UNBLOCK-AND-TTL]`: il Dottore deve sbloccare, e le sessioni serve abbiano un TTL di 12h — dall'incidente delle undici ore ferme",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-29-ticket-team-standby-zero-spend.md",
+      "description": "Ticket `[TEAM-STANDBY-ZERO-SPEND]`: standby che ferma anche i ruoli core — origine del comando `jht standby`",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md",
+      "description": "Ticket `[MODE-INJECTION-HOURLY-PROMPT]` (implementato 30/07): la modalità operativa iniettata nel messaggio periodico del Capitano",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-30-ticket-throttle-engine-external.md",
+      "description": "Ticket `[THROTTLE-ENGINE-EXTERNAL]` (implementato 30/07): throttle come motore Python esterno agli agenti, con notifica tmux e flag di stato",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-07-27-first-run-night-observations.md",
+      "description": "Note di sessione: primo run notturno di un team nuovo su VPS, solo misure sul campo (il thrash viene dal numero di agenti, non dalla loro velocità)",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-07-28-burn-test-scout-step-cap-stall.md",
+      "description": "Note di sessione: test di spinta con `jht burn` attivo — lo Scout fermo sul cap di step e nessun componente incaricato di riprenderlo",
+      "last_review": null
+    },
+    {
+      "path": "e2e/tests/quarantine/README.md",
+      "description": "Le 75 spec E2E in quarantena: escluse da ogni run via `testIgnore`, conservate per le asserzioni recuperabili",
+      "last_review": null
     }
   ]
 }
