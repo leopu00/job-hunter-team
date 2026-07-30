@@ -67,6 +67,39 @@ python3 /app/shared/skills/db_query.py next-for-critico   # ⚠️ legacy — em
 
 Cada um retorna o próximo lote pronto para esse papel, seguindo o fluxo de status V5: `new → checked → scored → writing → ready → applied → response` (com `excluded` como saída a partir de qualquer passo).
 
+### O limite é um default, não um teto
+
+Cada fila imprime as **primeiras 20 linhas** e declara sempre **quantas existem no total** —
+`Posizioni new pronte per analisi (mostrate 20 di 1375)`. Olha para o segundo número: é o
+backlog, e não desaparece só porque as linhas foram cortadas.
+
+```bash
+# Quantas ver decides tu
+python3 /app/shared/skills/db_query.py next-for-categorize --limit 100
+python3 /app/shared/skills/db_query.py next-for-categorize --all     # todas (= --limit 0)
+python3 /app/shared/skills/db_query.py next-for-categorize --json    # {"total": 1375, "shown": 20, "rows": [...]}
+```
+
+Porque existe o default (medido a 2026-07-30): sem limite, `next-for-geocode-missing`
+imprimia **1.375 linhas ≈ 19.500 tokens** com 2.000 posições, e imprimiria **~195.000** com
+20.000 — um único comando, mais do que uma janela de contexto inteira. O default protege-te
+do que ninguém pediu; **não** decide por ti: escolhe o número conforme o que estás a fazer —
+20 para pegar no próximo item, `--all` para uma auditoria, só o total para dimensionar um
+backlog.
+
+E não estás confinado a estes comandos: esta skill concede `Bash(python3 *)`, portanto
+escrever a tua própria query com o teu próprio `LIMIT` é legítimo sempre que a fila pronta
+não for a pergunta que tens de facto.
+
+```bash
+python3 -c "
+import os, sqlite3
+db = sqlite3.connect(os.environ.get('JHT_DB', '/jht_home/jobs.db'))
+for row in db.execute('SELECT id, title FROM positions WHERE role_family IS NULL LIMIT 50'):
+    print(row)
+"
+```
+
 ## Quando usar
 
 - Antes de decisões de escalonamento (Capitano precisa saber se há ≥ 3 registos `checked` antes de spawnar um SCORER)
