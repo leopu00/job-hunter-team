@@ -21,6 +21,13 @@ import { containerRunning, execArgvInContainer, CONTAINER_NAME } from '../utils/
 import { JHT_DB_PATH } from '../jht-paths.js';
 import { c } from './_colors.js';
 
+// Le skill si risolvono dal percorso di QUESTO modulo, mai dalla cwd: il CLI
+// e' installato via symlink in $JHT_BIN_DIR, quindi la cwd dell'utente e'
+// arbitraria e un path relativo faceva fallire ogni comando fuori dal repo con
+// un errore di Python. `fileURLToPath(import.meta.url)` risolve al file reale,
+// non al link.
+const SKILLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../shared/skills');
+
 /**
  * Esegue una skill Python di shared/skills (container se attivo, host altrimenti).
  *
