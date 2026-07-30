@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { readLocalOr } from "@/lib/local-workspace";
 import { getScoutActivityLocal } from "@/lib/local-queries";
@@ -6,6 +7,13 @@ import { getScoutActivityLocal } from "@/lib/local-queries";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  // [WEB-10-DATA-ROUTES-UNGUARDED] Feed di lavoro del team: dati
+  // dell'utente, non una pagina pubblica. Unico chiamante
+  // `app/(protected)/team/scout`. La RLS con anon key resta il backstop,
+  // ma il gate è qui — «ogni handler si difende da sé» (middleware.ts).
+  const denied = await requireAuth();
+  if (denied) return denied;
+
   // Local-only (host localhost + jobs.db): leggi dal DB locale, mai Supabase.
   const fromLocal = await readLocalOr("scout/activity", getScoutActivityLocal);
   if (fromLocal !== null) return NextResponse.json(fromLocal);
