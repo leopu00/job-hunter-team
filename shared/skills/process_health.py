@@ -51,6 +51,13 @@ EXPECTED = [
     # check del Dottore (`stepcap-watchdog.py --health`). Il predecessore di
     # questo meccanismo aveva il processo vivo e la funzione morta da ~26h.
     ("stepcap-watchdog",   "stepcap-watchdog.py",   "pid1-child"),
+    # 30/07: il motore dei throttle. Se muore, nessun agente in `IN_THROTTLE`
+    # viene piu' svegliato — e senza questo canary la morte sarebbe invisibile
+    # esattamente come quella del suo predecessore (il figlio detached di
+    # `jht-throttle`, 2h15m di stallo il 2026-07-30). Meta' facile della
+    # domanda: il PROCESSO e' vivo. L'altra meta' (la FUNZIONE e' viva) la dice
+    # la freschezza di logs/throttle-engine.jsonl → `throttle_engine.py --health`.
+    ("throttle-engine",    "throttle_engine.py",    "pid1-child"),
     ("auto-report-loop",   "auto-report-loop.sh",   "pid1-child"),
     ("cloud-daemon",       "cloud daemon",          "daemon"),
     # 2026-07-23: 'dashboard' RIMOSSA dalla lista — la web UI locale è stata

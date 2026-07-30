@@ -173,6 +173,23 @@ senza che nessuno glielo suggerisse:
 È lo stesso principio del watchdog di progresso in `[STEPCAP-THROTTLE-RESUME]`: **non
 chiedere se il processo è vivo, chiedere se il database avanza.**
 
+### Aggiunta (30/07): kill senza `roster retire` = respawn immediato
+
+Osservato su un box in manutenzione: il coordinatore ha killato uno Scout e uno Scorer
+per eseguire l'ordine «niente sourcing», e **il watchdog li ha respawnati entro un
+minuto**, perché il kill nudo non li aveva tolti dal roster atteso. Lo Scout resuscitato
+ha sorgente 6 posizioni *contro* l'ordine prima di essere ritirato correttamente.
+
+Due conseguenze per questo ticket:
+
+1. La sorveglianza dei worker della Parte A-bis deve leggere il roster **transazionale**:
+   un worker si rimuove con `team_roster.py retire` (o equivalente) e il watchdog non
+   respawna ciò che è stato ritirato. Kill e retire vanno resi un'operazione sola nella
+   skill del coordinatore — il kill nudo non deve esistere come percorso.
+2. Il Dottore, nella fase di sblocco, quando trova una sessione assente deve chiedersi
+   **se è stata ritirata di proposito** prima di segnalarla o ricrearla: il roster è la
+   fonte, non l'elenco tmux.
+
 ## Parte B — TTL di 12 ore su ogni sessione agente
 
 ### Stato attuale

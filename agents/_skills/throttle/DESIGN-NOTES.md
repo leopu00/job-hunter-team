@@ -1,5 +1,35 @@
 # throttle — note di design e roadmap
 
+> ## ⚠️ SUPERATO dal 2026-07-30 — leggi prima questo
+>
+> Tutto il documento qui sotto discute come far reggere il **blocco in-turn**
+> dell'agente: quale timeout passare alla tool call, come sopravvivere al kill
+> del parent, come ribloccarsi dopo. Quella domanda non esiste più, perché la
+> risposta era sbagliata in radice: **finché il tempo sta nel processo
+> dell'agente, morire di quel processo significa perdere la pausa** — il
+> 2026-07-30 è costato 2h15m di stallo, con il watchdog che riportava la
+> sessione `idle` = sana.
+>
+> Il disegno attuale: l'agente chiama `throttle <suo-nome>`, che **ritorna
+> subito**, e poi CHIUDE IL TURNO. Il timer appartiene a un motore che non è
+> figlio di nessuna shell di agente, lo tiene su disco (un suo riavvio non ne
+> perde nemmeno uno) e manda la sveglia via tmux. Al risveglio l'agente firma
+> con `throttle-ack <suo-nome>`, e quella firma è ciò che rende un flag fermo
+> su `NOTIFIED` una **prova** di non-reattività.
+>
+> Conseguenze pratiche, se stai leggendo per capire cosa fare:
+>
+> - **Non serve più calcolare `timeout: N+30`** su nessuna tool call. La
+>   chiamata dura millisecondi.
+> - `Killed by timeout (60s)` su un throttle non è più un caso da
+>   interpretare: non può accadere.
+> - `jht-throttle` / `jht-throttle-check` / `jht-throttle-wait` esistono ancora
+>   come shim sopra il motore, per i prompt non ancora migrati. Se hanno la
+>   scelta, gli agenti usano `throttle` + `throttle-ack`.
+>
+> Il testo storico resta qui perché spiega **perché** tre soluzioni diverse allo
+> stesso problema hanno fallito: era il problema a essere mal posto.
+
 Documento di stato sul lavoro fatto attorno al "blocco hard" del throttle.
 Riassume il problema, le soluzioni considerate, la decisione finale e lo
 stato attuale del codice in sandbox + JHT proper. **Da rivedere in un
