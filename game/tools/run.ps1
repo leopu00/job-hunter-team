@@ -1,6 +1,15 @@
+# run.ps1 e' il "run.sh test" di chi sviluppa su Windows: senza, un PC Windows
+# non vede il guard delle 7 lingue prima di pushare.
+#
+# La lista dei test NON vive qui: sta in tools/test-matrix.txt, unica fonte
+# consumata anche da run.sh e da .github/workflows/game.yml. Le voci marcate
+# `posix` vengono saltate, ma A VOCE: un test che sparisce in silenzio e' un
+# test perduto, ed e' esattamente cosi' che le tre liste erano divergite.
 param(
     [ValidateSet("boot", "test", "play")]
-    [string]$Mode = "boot"
+    [string]$Mode = "boot",
+    [ValidateSet("gate", "watch", "all")]
+    [string]$Tier = "all"
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,10 +38,38 @@ if (Test-Path -LiteralPath $Godot) {
         $Godot = $GodotTarget
     }
 }
-$EnvNames = @(
-    "JHT_NOVPS", "JHT_VPS_CONTRACT_TEST", "JHT_SCENE",
-    "JHT_PIPELINE_FORCE_TEST", "JHT_DOCTOR_TEST", "JHT_COMIC_CHAT_TEST"
-)
+
+# --- tools/test-matrix.txt: unica fonte di verita' dei selftest ---------------
+# Formato: id|kind|tier|platform|env|target|marker  (documentato nel file).
+function Get-TestMatrix {
+    $Path = Join-Path $PSScriptRoot "test-matrix.txt"
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "tools/test-matrix.txt non trovato: nessun test da eseguire"
+    }
+    Get-Content -LiteralPath $Path | ForEach-Object {
+        $Line = $_.Trim()
+        if ($Line -eq "" -or $Line.StartsWith("#")) { return }
+        $F = $Line.Split("|")
+        if ($F.Count -ne 7) { throw "riga malformata in test-matrix.txt: $Line" }
+        [pscustomobject]@{
+            Id       = $F[0]
+            Kind     = $F[1]
+            Tier     = $F[2]
+            Platform = $F[3]
+            Env      = $(if ($F[4] -eq "-") { @() } else { $F[4].Split(" ") })
+            Target   = $(if ($F[5] -eq "-") { @() } else { $F[5].Split(" ") })
+            Marker   = $(if ($F[6] -eq "-") { $null } else { $F[6] })
+        }
+    }
+}
+
+$TestMatrix = @(Get-TestMatrix)
+
+# Le variabili d'ambiente da salvare e ripristinare escono dalla matrice, non
+# da un elenco a mano che restava indietro a ogni test aggiunto.
+$EnvNames = @("JHT_NOVPS") + @(
+    $TestMatrix | ForEach-Object { $_.Env } | ForEach-Object { $_.Split("=")[0] }
+) | Select-Object -Unique
 $SavedEnv = @{}
 foreach ($Name in $EnvNames) {
     $SavedEnv[$Name] = if (Test-Path "Env:$Name") { (Get-Item "Env:$Name").Value } else { $null }
@@ -140,6 +177,72 @@ function Invoke-GodotCaptured {
     return $Output
 }
 
+# Esegue il tier richiesto della matrice. Come run.sh, NON si ferma al primo
+# rosso: il riepilogo finale vale piu' del secondo risparmiato, e sul tier
+# `watch` (test mai passati da una CI) e' proprio il quadro completo che serve.
+function Invoke-TestMatrix {
+    param([string]$Want)
+    $Selected = @($TestMatrix | Where-Object { $Want -eq "all" -or $_.Tier -eq $Want })
+    if ($Selected.Count -eq 0) {
+        throw "tier '$Want' non seleziona nessun test (gate|watch|all)"
+    }
+    $Failed = @()
+    $Skipped = @()
+    foreach ($T in $Selected) {
+        if ($T.Platform -eq "posix") {
+            Write-Host "[run.ps1] SKIP $($T.Id) -- dichiarato POSIX-only in test-matrix.txt"
+            $Skipped += $T.Id
+            continue
+        }
+        foreach ($Name in $EnvNames) {
+            if ($Name -eq "JHT_NOVPS") { continue }
+            Remove-Item "Env:$Name" -ErrorAction SilentlyContinue
+        }
+        foreach ($Pair in $T.Env) {
+            $Kv = $Pair.Split("=", 2)
+            Set-Item "Env:$($Kv[0])" $Kv[1]
+        }
+        Write-Host "[run.ps1] $($T.Id) ($($T.Tier)/$($T.Kind)) ..."
+        try {
+            switch ($T.Kind) {
+                "script" {
+                    $ScriptPath = $T.Target[0]
+                    Invoke-Godot -GodotArguments @(
+                        "--headless", "--script", "res://$ScriptPath")
+                }
+                "run" {
+                    $GodotArgs = @("--headless") + $T.Target + @(".")
+                    $Out = Invoke-GodotCaptured -GodotArguments $GodotArgs
+                    if ($T.Marker -and $Out -notmatch [regex]::Escape($T.Marker)) {
+                        # Uscire 0 senza stampare il marker significa che le
+                        # asserzioni non sono state eseguite: e' un rosso.
+                        throw "marker atteso e MAI stampato: $($T.Marker)`n$Out"
+                    }
+                }
+                "python" {
+                    $PyScript = $T.Target[0]
+                    & python $PyScript
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "$PyScript exited with code $LASTEXITCODE"
+                    }
+                }
+                default { throw "kind sconosciuto '$($T.Kind)' in test-matrix.txt" }
+            }
+            Write-Host "[run.ps1]   PASS $($T.Id)"
+        }
+        catch {
+            Write-Host "[run.ps1]   FAIL $($T.Id): $_"
+            $Failed += $T.Id
+        }
+    }
+    if ($Skipped.Count -gt 0) {
+        Write-Host "[run.ps1] saltati perche' POSIX-only: $($Skipped -join ', ')"
+    }
+    if ($Failed.Count -gt 0) {
+        throw "TEST KO -- $($Failed.Count)/$($Selected.Count) falliti: $($Failed -join ', ')"
+    }
+}
+
 $LocationPushed = $false
 try {
     Push-Location $GameDir
@@ -150,77 +253,8 @@ try {
 
     switch ($Mode) {
         "test" {
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/nav_grid_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/speech_bubble_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/pipeline_queue_selftest.gd")
-			Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/embedded_terminal_selftest.gd")
-            # Self-test indipendenti dalla piattaforma: asseriscono su dati del
-            # repo (dizionari, tema, font imbarcati) e su trasformazioni pure.
-            # Stanno qui perche' run.ps1 e' il "run.sh test" di chi sviluppa su
-            # Windows: senza, un PC Windows non vede il guard delle 7 lingue
-            # prima di pushare. terminal_selection_selftest.gd resta escluso:
-            # apre "/bin/sh" senza il ramo Windows che ha embedded_terminal.
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/theme_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/budget_notice_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/burn_mode_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/doc_preview_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/i18n_parity_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/sidebar_nav_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/agent_names_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/idle_pace_selftest.gd")
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/headless_exit_selftest.gd")
-            # L'aggiornamento automatico: si aggiorna solo in avanti, si
-            # installa da solo SOLO dove il pacchetto e' firmato, e non va in
-            # rete quando non deve. Windows non ha un export firmato, quindi
-            # qui la parte che conta e' proprio che l'installazione automatica
-            # resti spenta.
-            Invoke-Godot -GodotArguments @("--headless", "--script", "res://tools/update_check_selftest.gd")
-			& python tools/audit_character_sheets.py
-			if ($LASTEXITCODE -ne 0) { throw "character sheet audit failed" }
-			& python tools/audit_instance_portraits.py
-			if ($LASTEXITCODE -ne 0) { throw "instance portrait audit failed" }
-			python tools/python_payload_syntax_test.py
-			if ($LASTEXITCODE -ne 0) { throw "Embedded Python payload test failed" }
-			$env:JHT_SCENE = "office"
-			$env:JHT_GUIDED_TEST = "1"
-			$out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
-			Remove-Item Env:JHT_GUIDED_TEST
-			Remove-Item Env:JHT_SCENE
-			if ($out -notmatch "GUIDED-ONBOARDING-TEST PASS") { throw $out }
-
-			# Pagina di chat a fumetti: vignette, ordine, colori distinti fra
-			# agente e utente, code opposte e scroll all'indietro. Invoke-GodotCaptured
-			# solleva gia' da se' su exit code != 0; il match sulla riga e' il
-			# secondo controllo, non l'unico.
-			$env:JHT_SCENE = "office"
-			$env:JHT_COMIC_CHAT_TEST = "1"
-			$out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
-			Remove-Item Env:JHT_COMIC_CHAT_TEST
-			Remove-Item Env:JHT_SCENE
-			if ($out -notmatch "COMIC-CHAT-TEST PASS") { throw $out }
-
-            $env:JHT_VPS_CONTRACT_TEST = "1"
-            $out = Invoke-GodotCaptured -GodotArguments @("--headless", "--quit-after", "3", ".")
-            Remove-Item Env:JHT_VPS_CONTRACT_TEST
-            if ($out -notmatch "VPS-CONTRACT-TEST PASS") { throw $out }
-
-            $env:JHT_SCENE = "office"
-            $env:JHT_PIPELINE_FORCE_TEST = "scout"
-            $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
-            Remove-Item Env:JHT_PIPELINE_FORCE_TEST
-            if ($out -notmatch "PIPELINE-FORCE-TEST PASS") { throw $out }
-
-            $env:JHT_BACKEND_SWITCH_TEST = "1"
-            $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
-            Remove-Item Env:JHT_BACKEND_SWITCH_TEST
-            if ($out -notmatch "BACKEND-SWITCH-TEST PASS") { throw $out }
-
-            $env:JHT_DOCTOR_TEST = "scout-4"
-            $out = Invoke-GodotCaptured -GodotArguments @("--headless", ".")
-            Remove-Item Env:JHT_DOCTOR_TEST
-            Remove-Item Env:JHT_SCENE
-            if ($out -notmatch "SIMULATION-DOCTOR-TEST PASS") { throw $out }
-            Write-Host "[run.ps1] TEST OK"
+            Invoke-TestMatrix -Want $Tier
+            Write-Host "[run.ps1] TEST OK (tier=$Tier)"
         }
         "boot" {
             $env:JHT_SCENE = "office"
