@@ -46,6 +46,40 @@ jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
 
 ⚠️ **Nunca use `tmux send-keys` diretamente para mensagens entre agentes.** As TUIs do Codex e Kimi perdem o carácter Enter se este chegar na mesma chamada `send-keys` do corpo do texto, causando deadlocks silenciosos. O wrapper trata texto + Enter de forma atómica com uma pausa de renderização. Skill em `agents/_tools/jht-tmux-send`.
 
+## 🔇 Produzir é silencioso — o estado vai o Capitano buscá-lo
+
+Um worker toca o Capitano **zero vezes** para contar progresso. Nem por item, nem nos extremos: os
+bookends `[START]` / `[DONE]` foram **removidos a 2026-07-27**. Medido numa equipa de primeiro
+arranque, ~1,5h de histórico: **37 mensagens chegaram ao Capitano, 30 (81%) puro estado** — 12 `DONE`,
+8 `START`, 8 `INFO`, 2 `ACK` — contra 3-6 que pediam mesmo uma decisão. Cada uma custa-lhe um turno
+inteiro e, com a divisão automática de modelos, ele corre em **Opus** enquanto Scout / Analista /
+Scorer correm em **Sonnet**: um "feito" do Scorer acorda o agente mais caro da frota para não fazer
+nada.
+
+O lado pull já existia e é melhor:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 60
+```
+
+Uma chamada devolve as contagens por agente mais cada transição com timestamp, ator, posição e motivo
+— `#22 checked→scored`, `#27 new→excluded — [DEAD_LINK]`. **Um `DONE` leva menos informação do que a
+linha que o produziu.**
+
+### ⚠️ O que continua PUSH — a assimetria é o ponto
+
+`recent-activity` mostra **quem produz**, por isso um agente que parou **desaparece da lista** em vez
+de saltar à vista: do lado do Capitano o teu silêncio e o teu trabalho são iguais. Estes três têm por
+isso de continuar a ser enviados **já**, porque não deixam **rasto na DB**:
+
+| Sinal | Quando |
+|---|---|
+| **BLOQUEADO** | deixaste de produzir: ferramenta partida depois da escada `resilience`, `403` / `LOCKED`, fontes mesmo secas (`[SCOUT-ESAUSTO]`), um item na fila que não consegues nem trabalhar nem saltar |
+| **Conflito** | dois colegas sobre o mesmo registo / território e não conseguem resolvê-lo entre si |
+| **Pedido de decisão** | um `REQ` a que só o Capitano pode responder (arbitragem de taxonomia, scaling, uma escolha virada ao utilizador) |
+
+Tudo o resto — início, progresso, fim — é pull. **Se paras e não o dizes, ninguém dá por isso.**
+
 ## ⏰ Sinais obrigatórios por função
 
 O que cada função DEVE enviar via tmux (tudo o resto é via BD):

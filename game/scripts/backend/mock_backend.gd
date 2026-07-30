@@ -91,7 +91,7 @@ func _boot() -> void:
 	if not _running:
 		return
 	bus.publish_state(BackendBus.CONNECTED, "VPS simulata (mock)")
-	bus.publish_agents(_roster.duplicate(true))
+	bus.publish_agents(_published_roster())
 	# baseline del registro attività (contratto: transitions sul bus
 	# PRIMA di positions_updated) — le reazioni partono dal refresh dopo
 	bus.transitions = []
@@ -201,7 +201,23 @@ func _roster_loop() -> void:
 						a["status"] = ev["status"]
 						a["throttle_secs"] = ev.get("throttle_secs", 0.0)
 						break
-		bus.publish_agents(_roster.duplicate(true))
+		bus.publish_agents(_published_roster())
+
+
+## Copia del roster pronta per il bus, coi cognomi già dentro il nome —
+## esattamente quello che VpsBackend._parse_roster consegna con la VPS
+## accesa. Il mock è il riferimento vivo di quel contratto: se qui gli
+## agenti restassero "Scout 02" lo showroom mostrerebbe un ufficio diverso
+## da quello vero, e i cognomi si vedrebbero solo a VPS accesa.
+##
+## Si compone sulla copia e mai su `_roster`: la lista di lavoro resta la
+## sorgente, il nome resta un fatto di presentazione.
+func _published_roster() -> Array:
+	var out := _roster.duplicate(true)
+	for a: Dictionary in out:
+		a["name"] = AgentNames.display_name(
+				str(a.get("uid", a.get("slug", ""))), str(a.get("name", "")))
+	return out
 
 ## Una transizione nuova in testa al registro ogni 12-20 secondi (la
 ## prima presto, per vederla subito nei test), poi refresh come farebbe
@@ -246,7 +262,7 @@ func open_chat(agent: String) -> void:
 	if _profile_watch and agent.begins_with("assistente") and _chat_msgs.is_empty():
 		_chat_msgs.append({"role": "assistant", "text": WIZ_REPLIES[0],
 				"ts": Time.get_unix_time_from_system(), "done": true})
-	bus.agent_chat_updated.emit(agent, _chat_msgs.duplicate(true))
+	bus.publish_agent_chat(agent, _chat_msgs.duplicate(true))
 
 func close_chat() -> void:
 	_chat_agent = ""
@@ -303,6 +319,31 @@ func archive_team_directive(directive_id: int) -> void:
 	_coord_state["directives"] = active
 	bus.publish_coordinator_action("directive_archive", true, "")
 	bus.publish_coordinator_state(_coord_state.duplicate(true))
+
+## Deroga alla spesa nello showroom: nessun flag su disco, una scadenza
+## simulata in memoria. Serve perché l'interruttore si comporti come quello
+## vero — compreso lo scorrere del tempo residuo — senza che chi sta ancora
+## configurando il prodotto veda un comando morto.
+var _burn_deadline_msec := 0
+
+func _burn_payload() -> Dictionary:
+	var left := maxf(0.0, (_burn_deadline_msec - Time.get_ticks_msec()) / 1000.0)
+	return {"readable": true, "supported": true, "active": left > 0.0,
+		"state": "active" if left > 0.0 else "off",
+		"remaining_sec": int(left), "never_yields": BurnMode.NEVER_YIELDS,
+		"default_hours": BurnMode.DEFAULT_HOURS, "max_hours": BurnMode.MAX_HOURS}
+
+func fetch_burn_intent() -> void:
+	bus.publish_burn_intent(_burn_payload())
+
+func set_burn_intent(active: bool, hours: float) -> void:
+	# Stesso clamp del modulo Python: nello showroom non deve esistere una
+	# durata che sulla macchina vera verrebbe rifiutata.
+	var h := clampf(hours, 0.25, float(BurnMode.MAX_HOURS))
+	_burn_deadline_msec = int(Time.get_ticks_msec() + h * 3600.0 * 1000.0) \
+			if active else 0
+	bus.publish_burn_intent_action(active, true, "")
+	bus.publish_burn_intent(_burn_payload())
 
 func _mock_terminal_loop(agent: String, generation: int) -> void:
 	var lines := PackedStringArray([
@@ -363,9 +404,14 @@ func _mock_reply(agent: String) -> void:
 	_chat_msgs.append(response)
 	_publish_chat_state(agent)
 
+## Il mock è il riferimento vivo del contratto: pubblica dalla PORTA del bus
+## (publish_agent_chat), non emettendo il segnale a mano. Emettendolo a mano
+## saltava il pezzo che spegne l'attesa quando la risposta arriva — coi
+## puntini "sta rispondendo" accesi per sempre, che è proprio il difetto che
+## il VpsBackend non ha (usa la porta) e che nessuno vedeva in simulazione.
 func _publish_chat_state(agent: String) -> void:
 	if _chat_agent == agent:
-		bus.agent_chat_updated.emit(agent, _chat_msgs.duplicate(true))
+		bus.publish_agent_chat(agent, _chat_msgs.duplicate(true))
 
 ## ── Onboarding simulato (wizard senza VPS) ───────────────────────────
 ## Contratto opzionale dell'adapter (open_profile_watch / ensure_assistant

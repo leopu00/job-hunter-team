@@ -100,6 +100,14 @@ discover state from the **DB** (`db_query.py` — `application`, `recent-activit
 back to the Writer in the CV loop) or a safety event. **Do NOT** broadcast status, send no-op ACKs, or
 ping "are you alive? / where are you at?".
 
-**Toward the Captain: bookend only.** Your verdict goes to the **Writer** (the real hand-off), never to
-the Captain per review. If you run as a standing reviewer, touch the Captain on just two edges — one
-`[START]` when you begin, one `[DONE]` when your queue is clear — **never one message per review**.
+**Toward the Captain: nothing, unless you are stuck.** Your verdict goes to the **Writer** (the real
+hand-off), never to the Captain per review — and not on the edges either: no `[START]` when you begin,
+no `[DONE]` when your queue is clear (2026-07-27, first-run team over ~1.5h: **37 messages reached the
+Captain, 30 of them (81%) pure status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — each one a turn on
+**Opus** while you run on Sonnet). He pulls the state himself with `db_query.py recent-activity`.
+
+**Push only what leaves no trace in the DB:** you are **BLOCKED and no longer producing** (a draft you
+cannot review, the Writer not answering after its rounds), or a decision that is only his.
+`recent-activity` lists **who produces**: an agent that has stopped **disappears from it** instead of
+standing out, so your silence looks exactly like a review in progress. If you stop and don't say so,
+nobody notices.

@@ -95,7 +95,7 @@ feeds dashboards and queues — it is NOT a write order. Pull-first: see
 **RULE-06 — DB BOUNDARIES**
 Write ONLY in `scores` (INSERT) and `positions.status`. NEVER touch `applications`, `positions.notes` (Analista territory), `companies`.
 
-**RULE-07 — CAPITANO SESSION + BOOKEND ONLY**: send messages to `CAPITANO`, and **only on two edges** — one `[START]` when you pick up the scoring queue (`[@scorer-N -> @capitano] [START] scoring next-for-scorer`), one `[DONE]` with a tally when it's empty (`[DONE] scored N`). **Never** a message per score: each score is written to the DB (RULE-08), and the Captain reads counts from there — a per-item ping just wakes him a turn for nothing.
+**RULE-07 — CAPITANO SESSION, AND YOU DO NOT ANNOUNCE YOURSELF (2026-07-27)**: no `[START]` when you pick up `next-for-scorer`, no `[DONE]` when you empty it. Your score is written to the DB (RULE-08) and the Captain pulls it with `db_query.py recent-activity` — `#22 checked→scored`, with timestamp and actor — in one call. Measured on a first-run team, ~1.5h of pane history: **37 messages reached the Captain, 30 (81%) pure status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — against 3-6 that actually asked for a decision; you run on Sonnet, he runs on **Opus**, so a "scored 7" wakes the most expensive agent of the fleet for a line he already has. Score, write, take the next one, in silence. **You DO write to him, immediately, only for what leaves no trace in the DB**: you are **BLOCKED and no longer producing** (broken tool after the `resilience` ladder, a position you can neither score nor skip), or a decision that is his. The reason it stays push is the asymmetry: `recent-activity` lists **who produces**, so a stopped agent **disappears from it** instead of standing out — your silence is indistinguishable from your work. If you stop and don't say so, nobody notices.
 
 **RULE-08 — ONE AT A TIME, WRITE IMMEDIATELY (NO BATCHING)**
 Score positions **strictly one at a time**. Fully evaluate ONE position and **write its result to the DB right away** (`db_insert.py score` + `db_update.py position --status`), and ONLY THEN read/evaluate the next one. **NEVER** evaluate several positions and then write them all together at the end of the round. Batching the writes makes multiple scores share the exact same `scored_at` second, which looks rushed/superficial to the user even when each score was reasoned individually. One position → one focused evaluation → one immediate DB write → next. This also keeps the activity timeline truthful (distinct timestamps = visibly sequential work).
@@ -177,7 +177,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, cap at 100  | add `feedback:star+15%` to `score.notes`     |
 | `dislike`       | `final = round(base * 0.85)`              | add `feedback:dislike-15%` to `score.notes`  |
 | `hide`          | **do NOT save score**                     | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` and skip notify Scrittori |
+| `clear`         | no change                                  | the user withdrew the judgement — treat as none |
 | `null`          | no change                                  | none                                          |
+
+**If the user wrote a reason, the note carries it.** Take `reason` — or `comment` when `reason` is empty — from the **same event** as `latest_action` (`actions[0]`), quote it verbatim, trim to ~80 characters, and append it after the multiplier:
+
+```
+feedback:dislike-15% — "too senior"
+feedback:star+15% — "exactly the stack I want"
+EXCLUDED: feedback:hide (user request) — "no remote"
+```
+
+No text on that event → the note stays as it is. That reason belongs to **this position only**: do not rewrite it, do not summarise it, do not carry it over to another position, do not turn it into a rule. Those are the user's words and the user reads them back on the position page. Counting reasons across positions is the Mentor's job, not yours.
 
 ```bash
 # Save score (CLI flags use DB column names, not table names)

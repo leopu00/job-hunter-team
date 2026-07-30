@@ -234,3 +234,168 @@ dialogo con "LO SCRITTORE"): esistono i ritratti di soli 6 ruoli
   in-world; le emozioni sono derivate dalla rispettiva ancora per conservare
   identità, abiti, crop e proporzioni. Alpha e dimensioni sono stati validati
   prima dell'import Godot.
+
+---
+
+## Richiesta 2026-07-29 — chat a fumetti
+
+> **Elenco operativo completo, con la mappa agente→variante già risolta:**
+> [`docs/internal/assets/TODO-ART.md`](../../../docs/internal/assets/TODO-ART.md)
+
+La chat a fumetti mostra il ritratto dell'agente accanto alle vignette e usa
+`pensieroso` mentre l'agente sta scrivendo la risposta. Sei ruoli non ce
+l'hanno e ricadono in silenzio su `neutro`: l'attesa non si distingue dalla
+risposta arrivata, che è proprio la cosa che quella posa doveva comunicare.
+
+**Mancanti** — `assets/gen-art/portraits/<slug>/full_pensieroso.png`,
+stesso formato dei 14 del 22/07 (1120x1520, alpha, derivati dall'ancora del
+ruolo per conservare identità, abiti, crop e proporzioni):
+
+| slug | ancora da cui derivare | ha già |
+|---|---|---|
+| `assistente` | `full_neutro.png` | caldo, divertito, neutro, sorpreso |
+| `coordinatore` | `full_neutro.png` | caldo, neutro, severo |
+| `critico` | `full_neutro.png` | caldo, divertito, neutro, severo |
+| `scrittore` | `full_neutro.png` | caldo, neutro |
+| `sentinella` | `full_neutro.png` | caldo, neutro, severo |
+| `mantenitore` | `full_neutro.png` | caldo, neutro |
+
+Chi li ha già, come riferimento della posa: `scout`, `analista`, `scorer`,
+`dottore`, `mentor`.
+
+### Secondo pezzo: i volti per istanza — NON sono facce nuove
+
+⚠️ Correzione alla prima stesura di questa nota, che chiedeva genericamente
+"volti per istanza". La richiesta è più precisa, e sbagliarla produrrebbe
+personaggi che non esistono.
+
+**In ufficio ogni agente ha già il suo volto**, assegnato per scrivania in
+`CharacterDefs.VARIANT_BY_DESK`, con sprite reali in
+`assets/characters/sheets/<ruolo>_<lettera>.png`:
+
+```
+scout / analisti / scorer / scrittori:  desk 0→b, 1→a, 2→c, 3→d, 4→e, 5→f
+critici:                                desk 0→a, 1→b, 2→c, 3→d, 4→e, 5→f
+```
+
+**In chat, invece, si vede il ritratto del RUOLO** (`portrait_view.gd:39`
+carica `gen-art/portraits/<slug>/full_neutro.png`): parlare con `scout-1`,
+`scout-2` o `scout-5` mostra sempre la stessa faccia, mentre in sala sono tre
+persone diverse. Nota che il primo Scout non è nemmeno la variante `a` ma la
+`b`, quindi il ritratto generico può non corrispondere a **nessuno** dei
+presenti.
+
+Quindi non servono facce inventate: servono i ritratti **delle varianti che
+esistono già**, derivati dallo sprite corrispondente per conservare identità,
+abiti e proporzioni — esattamente come i quattordici del 22/07 sono stati
+derivati dagli sprite in-world.
+
+Destinazione, che il codice già cerca per primo (`ComicChat.portrait_slug()`)
+e che quindi non richiede modifiche:
+
+```
+assets/gen-art/portraits/<ruolo>-<n>/full_<emozione>.png
+        dove <n> è il numero dell'agente e la variante da ritrarre
+        si legge da VARIANT_BY_DESK[<reparto>][<n>-1]
+```
+
+Esempio: `portraits/scout-1/` ritrae la variante **b**, `portraits/scout-2/`
+la variante **a**, `portraits/critico-1/` la variante **a**.
+
+Priorità: **dopo** i sei `pensieroso` — là manca un'informazione (l'attesa
+non si distingue dalla risposta), qui manca la corrispondenza fra chi vedi in
+ufficio e chi ti risponde in chat.
+
+### 2026-07-29 — Lotto 1 completato: sei `pensieroso`
+
+| slug | file | esito |
+|---|---|---|
+| assistente | `portraits/assistente/full_pensieroso.png` | ✅ identità e crop preservati |
+| coordinatore | `portraits/coordinatore/full_pensieroso.png` | ✅ identità e abiti preservati |
+| critico | `portraits/critico/full_pensieroso.png` | ✅ documento e mani preservati |
+| scrittore | `portraits/scrittore/full_pensieroso.png` | ✅ penna e pagina preservate |
+| sentinella | `portraits/sentinella/full_pensieroso.png` | ✅ notebook e cintura preservati |
+| mantenitore | `portraits/mantenitore/full_pensieroso.png` | ✅ chiave e attrezzi preservati |
+
+Generazione via skill `imagegen`, un asset per chiamata, usando il ritratto
+`full_neutro` come ancora e i `pensieroso` approvati come riferimento di posa.
+Il chroma-key è stato scelto per personaggio per non confliggere con gli abiti;
+ogni finale è 1120×1520 RGBA, ha angoli trasparenti ed è stato controllato in
+composito sul fondo scuro della chat. Il primo tentativo dell'Assistente su
+magenta è stato scartato perché il matte rendeva semitrasparenti pelle e abiti;
+la rigenerazione su verde ha superato il controllo. L'import Godot riesce; lo
+screenshot automatico non è stato acquisito perché macOS ha congelato il
+present della finestra occlusa, caso già documentato in `tools/run.sh`.
+
+### 2026-07-29 — Audit e riparazione animazioni agenti
+
+- `coordinatore_a`: la traccia `work_side` conteneva due corpi sovrapposti in
+  tutti e quattro i frame. Rigenerata soltanto la sorgente work 4×3 e sostituita
+  la traccia, lasciando inalterate idle/walk/carry.
+- `scorer_a`: scoperto dallo stesso audit un secondo `work_side` con doppia
+  sagoma; applicata la stessa riparazione chirurgica.
+- `analista_b`: il sorgente della camminata aveva il volto del sesto frame
+  laterale tagliato sul bordo destro. Rigenerata la griglia walk 6×3 con
+  margini completi e ricostruita la sheet.
+- Aggiunto `tools/audit_character_sheets.py`: verifica canvas, celle richieste,
+  bordi, aggancio piedi, larghezze anomale e doppie sagome fra le viste work.
+  Il vecchio Coordinatore fallisce il controllo; le tre sheet corrette passano.
+- `slice_agent_sheet.py` ora limita anche la larghezza del frame a 248 px,
+  oltre al clamp verticale già presente, così un profilo largo non può essere
+  troncato durante l'impaginazione.
+
+### 2026-07-29 — Lotto 2, istanze 1–2
+
+Completati `full_neutro.png` e `full_pensieroso.png` per `scout-1..2`,
+`analista-1..2`, `scorer-1..2`, `scrittore-1..2` e `critico-1..2`.
+
+- Le cinque varianti `a` sono le identità principali già ritratte nelle
+  cartelle di ruolo: i file sono stati riusati senza alterazioni.
+- Le cinque varianti `b` sono state ricostruite dai tre angoli dei rispettivi
+  sprite, con il ritratto di ruolo usato soltanto come riferimento di crop,
+  luce e tratto. I `pensieroso` sono poi stati derivati dai nuovi neutri.
+- Tutte le nuove generazioni hanno usato una chiamata `imagegen` per asset e
+  chroma verde o blu scelto in base al guardaroba; il matte è stato controllato
+  su fondo scuro.
+- Verifica: 20/20 PNG 1120×1520 RGBA, sfondo alpha e import Godot
+  presente. Godot 4.7 completa l'import ma continua a stampare i noti avvisi
+  di risorse residue in uscita.
+
+### 2026-07-29 — Lotto 2 completato: tutte le 30 istanze
+
+Completati `full_neutro.png` e `full_pensieroso.png` anche per le istanze 3–6
+di Scout, Analisti, Scorer, Scrittori e Critici. Il Lotto 2 contiene ora 60/60
+ritratti richiesti.
+
+- Ogni neutro `b–f` è stato derivato dalla scheda a tre viste del relativo
+  sprite, usando il neutro di ruolo come riferimento di resa; ogni pensieroso
+  è stato poi derivato dal neutro approvato della stessa istanza.
+- Chroma verde per Scout, Analisti, Scorer e Critici; chroma blu per gli
+  Scrittori, così le loro palette marrone/oliva restano integre. Tutti i matte
+  sono stati ispezionati su fondo scuro.
+- Il contact sheet finale confronta le 30 pose neutre con le 30 pensierose:
+  palette di reparto, occhiali, identità, guardaroba e variazione espressiva
+  restano coerenti. I lead conservano intenzionalmente il crop storico più
+  ravvicinato dei ritratti principali.
+- Aggiunto `tools/audit_instance_portraits.py`, eseguito anche da `run.sh test`
+  e `run.ps1 test`: controlla presenza, 1120×1520 RGBA, trasparenza superiore,
+  import Godot e corrispondenza esatta delle cinque varianti `a` con i lead.
+- Aggiornato `comic_chat_selftest.gd` per verificare che tutte le 30 cartelle
+  vengano davvero preferite al fallback di ruolo. Esito: `COMIC-CHAT-TEST PASS`.
+- Regressione conclusiva: `bash game/tools/run.sh test` → `[run.sh] TEST OK`,
+  inclusi 36/36 fogli personaggio e 60/60 ritratti per istanza.
+
+### 2026-07-30 — Camminata del Coordinatore rimontata
+
+- La verifica temporale ha mostrato che `walk_up` conteneva una seconda banda
+  grafica staccata sotto il corpo e che i sei profili variavano troppo poco:
+  il controllo precedente sui soli bordi non poteva rilevarlo.
+- Rigenerata con la skill `imagegen` la sorgente
+  `characters/sources/core/coordinatore_a_walk.png`: stessa identità, completo
+  oliva e tratto pittorico; 6 frame cronologici per fronte, retro e profilo,
+  ciclo contact→down→pass specchiato e nessun elemento sovrapposto.
+- Sostituite chirurgicamente soltanto le righe `walk` 3–5 del foglio finale;
+  idle, work e carry sono rimaste pixel-identiche.
+- Esteso `audit_character_sheets.py` per respingere frammenti verticali
+  staccati nei frame di camminata. Il vecchio foglio fallisce la nuova
+  regressione; quello corretto passa.

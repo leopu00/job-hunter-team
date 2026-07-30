@@ -3,10 +3,18 @@
 // [JHT-MESSAGES-CHAT] /messages come chat stile messenger (scelta utente
 // 20/07): sidebar sinistra con le tre conversazioni — Assistente, Mentor,
 // Capitano — e, sotto, la presentazione dell'agente selezionato; a destra
-// il thread di bolle con composer centrato stile ChatGPT. La risposta
-// rapida aggancia l'ultimo messaggio dell'agente senza user_reply (l'API
-// di reply è per-messaggio); aprire una conversazione marca i suoi non
-// letti come letti, come nel drawer della navbar (MessagesDrawer).
+// il thread di bolle con composer centrato stile ChatGPT.
+//
+// [JHT-CHAT-UNIFY] Due cambi di sostanza:
+//  · si SCRIVE, non si "risponde". Prima il composer si agganciava
+//    all'ultimo messaggio dell'agente ancora senza `user_reply` e, quando
+//    non ce n'erano, si spegneva mostrando "Nessun messaggio in attesa di
+//    risposta" — cioè quasi sempre. Ora ogni turno è una riga
+//    (`author='user'`), il composer è sempre vivo e il messaggio arriva al
+//    pane tmux dell'agente entro pochi secondi.
+//  · le icone sono i ritratti disegnati (AgentAvatar), non emoji.
+// Le vecchie `user_reply` continuano a rendersi: le conversazioni già
+// salvate restano leggibili com'erano.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -18,25 +26,35 @@ import {
   KIND_BORDER,
 } from "@/lib/message-display";
 import MessageBody from "@/app/components/MessageBody";
+import AgentAvatar from "@/app/components/AgentAvatar";
+import ChatDeliveryMark from "@/app/components/ChatDeliveryMark";
 import { usePendingMessagesLive } from "@/app/hooks/usePendingMessagesLive";
+import { useChatLaneLive } from "@/app/hooks/useChatLaneLive";
+import { chatTurnDelivery, hasStalledTurn } from "@/lib/chat-delivery";
+import { makeT } from "@/lib/i18n-dict";
+import { CHAT_DELIVERY_T } from "@/lib/chat-delivery.i18n";
 import {
   THREAD_T,
+  optimisticUserTurn,
   postAcks,
-  postReply,
+  postChat,
   unreadIdsOf,
   withAgentAcked,
-  withReply,
+  withConfirmedTurn,
+  withoutTurn,
 } from "@/lib/messages-thread";
+import { CHAT_AGENTS, MAX_CHAT_BODY } from "@/lib/chat-agents";
 import type { PendingMessage } from "@/lib/types";
 
 interface Props {
   initialMessages: PendingMessage[];
 }
 
-// Le tre conversazioni fisse, nell'ordine voluto dall'utente (20/07:
-// Assistente, Mentor, Capitano). Eventuali mittenti fuori roster
-// compaiono come voci extra in coda.
-const CORE_AGENTS = ["assistente", "mentor", "capitano"];
+// Le tre conversazioni del web, nell'ordine voluto dall'utente. Sono FISSE:
+// con gli altri agenti si parla dal videogioco, dove ognuno ha il suo
+// pannello. Un messaggio arrivato da un mittente fuori da questa lista
+// resta nel drawer della navbar, non apre una quarta chat qui.
+const CORE_AGENTS: readonly string[] = CHAT_AGENTS;
 
 // Presentazione dell'agente selezionato (prosa, niente etichette):
 // sintesi dei prompt in agents/{assistente,mentor,capitano}/*.md.
@@ -95,7 +113,11 @@ const T: Record<string, Record<string, string>> = {
 };
 
 export default function MessagesList({ initialMessages }: Props) {
-  const [messages, setMessages] = useState<PendingMessage[]>(initialMessages);
+  // Solo i turni delle tre conversazioni: un mittente fuori roster non deve
+  // comparire qui (resta nel drawer della navbar, che li mostra tutti).
+  const [messages, setMessages] = useState<PendingMessage[]>(() =>
+    initialMessages.filter((m) => CORE_AGENTS.includes(m.agent)),
+  );
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,20 +193,14 @@ export default function MessagesList({ initialMessages }: Props) {
     };
   }, []);
 
-  // Conversazioni: le tre core sempre presenti + eventuali mittenti extra.
-  const agents = useMemo(() => {
-    const extra = Array.from(new Set(messages.map((m) => m.agent))).filter(
-      (a) => !CORE_AGENTS.includes(a),
-    );
-    return [...CORE_AGENTS, ...extra];
-  }, [messages]);
+  const agents = CORE_AGENTS;
 
   // Conversazione iniziale: l'agente col messaggio più recente, altrimenti
   // l'Assistente (prima voce).
   const [activeAgent, setActiveAgent] = useState<string>(() => {
-    const latest = [...initialMessages].sort((a, b) =>
-      b.created_at.localeCompare(a.created_at),
-    )[0];
+    const latest = [...initialMessages]
+      .filter((m) => CORE_AGENTS.includes(m.agent))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
     return latest?.agent ?? "assistente";
   });
 
@@ -196,8 +212,44 @@ export default function MessagesList({ initialMessages }: Props) {
     [messages, activeAgent],
   );
 
+  // ── Stato di consegna dei turni scritti dall'utente ─────────────────
+  // Fino al 24/07 la bolla dell'utente diceva solo "esiste": tre messaggi
+  // sono rimasti sei ore senza arrivare all'agente e la chat non aveva
+  // modo di dirlo — una bolla ferma non si distingue da un agente che sta
+  // pensando. `lane` è il rendezvous della corsia (team_state), la riga
+  // porta il suo `delivered_at`: insieme dicono lo stato vero.
+  const lane = useChatLaneLive();
+  const td = makeT(CHAT_DELIVERY_T, locale);
+
+  // Orologio interno. Senza, una bolla resterebbe "inviato" per sempre
+  // anche quando l'attesa l'ha resa un guasto: i re-render arrivano coi
+  // messaggi nuovi, e il caso da coprire è proprio quello in cui non ne
+  // arriva nessuno. Costa zero (nessuna rete) e batte solo finché c'è
+  // qualcosa in attesa.
+  //
+  // Parte da 0 — cioè "non ancora montato" — di proposito: con quel valore
+  // nessun turno risulta in ritardo, quindi il markup del server e quello
+  // della prima render del client coincidono e l'idratazione non si
+  // lamenta. Il tempo vero entra dopo il mount, dove esiste davvero.
+  const [clock, setClock] = useState(0);
+  const waiting = thread.some(
+    (m) =>
+      m.author === "user" && !m.delivered_at && !m.id.startsWith("pending:"),
+  );
+  useEffect(() => {
+    setClock(Date.now());
+    if (!waiting) return;
+    const id = window.setInterval(() => setClock(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [waiting]);
+  const stalled = hasStalledTurn(thread, lane, clock);
+
+  // Non letti = turni dell'AGENTE non ancora ack-ati: quelli scritti
+  // dall'utente nascono già letti.
   const unreadBy = (agent: string) =>
-    messages.filter((m) => m.agent === agent && !m.acknowledged_at).length;
+    messages.filter(
+      (m) => m.agent === agent && m.author !== "user" && !m.acknowledged_at,
+    ).length;
 
   // Aprire una conversazione marca i suoi non letti (stile messenger, come
   // nel drawer): ottimista + fire-and-forget, il server riallinea al reload.
@@ -229,7 +281,10 @@ export default function MessagesList({ initialMessages }: Props) {
   // guardando), come farebbe openChat.
   usePendingMessagesLive(
     useCallback((row, event) => {
-      if (row.delivered_via !== "web") return;
+      // [JHT-CHAT-UNIFY] Niente più filtro su `delivered_via`: una risposta
+      // spinta anche su Telegram resta parte della conversazione e deve
+      // comparire qui. Si filtra invece per conversazione: le tre del web.
+      if (!CORE_AGENTS.includes(row.agent)) return;
       const cur = messagesRef.current;
       const idx = cur.findIndex((m) => m.id === row.id);
       if (idx < 0 && event === "UPDATE") return; // fuori finestra: ignora
@@ -318,20 +373,25 @@ export default function MessagesList({ initialMessages }: Props) {
     };
   }, [panelH, activeAgent]);
 
-  const replyTarget = [...thread].reverse().find((m) => !m.user_reply);
-
+  // Il messaggio parte SEMPRE: non c'è più un "bersaglio" da agganciare.
+  // La bolla compare subito (ottimistica) e viene sostituita dalla riga
+  // vera appena il server risponde; se l'invio fallisce sparisce e il testo
+  // torna nel composer, così non si perde quello che si era scritto.
   async function handleSend() {
-    if (!replyTarget) return;
-    const reply = replyText.trim();
-    if (!reply) return;
+    const text = replyText.trim();
+    if (!text || sending) return;
+    const agent = activeAgent;
+    const optimistic = optimisticUserTurn(agent, text);
     setSending(true);
     setError(null);
+    setReplyText("");
+    setMessages((ms) => [optimistic, ...ms]);
     try {
-      await postReply(replyTarget.id, reply);
-      const now = new Date().toISOString();
-      setMessages((ms) => withReply(ms, replyTarget.id, reply, now));
-      setReplyText("");
+      const confirmed = await postChat(agent, text);
+      setMessages((ms) => withConfirmedTurn(ms, optimistic.id, confirmed));
     } catch (e) {
+      setMessages((ms) => withoutTurn(ms, optimistic.id));
+      setReplyText(text);
       setError((e as Error).message);
     } finally {
       setSending(false);
@@ -365,24 +425,12 @@ export default function MessagesList({ initialMessages }: Props) {
             compact && active ? `inset 0 -2px 0 0 ${info.color}` : undefined,
         }}
       >
-        <span
-          aria-hidden
-          className={
-            compact
-              ? "text-[15px] leading-none"
-              : "w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-[18px] leading-none"
-          }
-          style={
-            compact
-              ? undefined
-              : {
-                  background: `color-mix(in srgb, ${info.color} 14%, var(--color-panel))`,
-                  border: `1px solid color-mix(in srgb, ${info.color} 55%, transparent)`,
-                }
-          }
-        >
-          {info.emoji}
-        </span>
+        <AgentAvatar
+          agent={agent}
+          locale={locale}
+          size={compact ? 22 : 36}
+          ring={!compact}
+        />
         <span className="text-[11px] font-bold tracking-wide flex-1 min-w-0 truncate">
           {info.name}
         </span>
@@ -421,9 +469,7 @@ export default function MessagesList({ initialMessages }: Props) {
         {activeBio && (
           <div className="flex-1 min-h-0 overflow-y-auto border-t border-[var(--color-border)] px-5 py-5">
             <div className="flex items-center gap-2.5 mb-3">
-              <span aria-hidden className="text-[22px] leading-none">
-                {activeInfo.emoji}
-              </span>
+              <AgentAvatar agent={activeAgent} locale={locale} size={30} ring />
               <span
                 className="text-[13px] font-bold"
                 style={{ color: activeInfo.color }}
@@ -475,50 +521,9 @@ export default function MessagesList({ initialMessages }: Props) {
               )}
               {thread.map((m) => (
                 <div key={m.id} className="flex flex-col gap-2">
-                  {/* Bolla dell'agente */}
-                  <div className="flex items-end gap-2 max-w-[85%] self-start">
-                    <span aria-hidden className="text-[16px] leading-none mb-1">
-                      {agentInfo(m.agent, locale).emoji}
-                    </span>
-                    <div
-                      className="rounded-lg rounded-bl-sm px-4 py-3 border-l-2 min-w-0"
-                      style={{
-                        background: "var(--color-card)",
-                        borderLeftColor: KIND_BORDER[m.kind],
-                      }}
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        {m.kind !== "notification" && (
-                          <span
-                            className="text-[7.5px] font-semibold tracking-[0.14em] uppercase px-1 py-px rounded"
-                            style={{
-                              color: KIND_BORDER[m.kind],
-                              border: `1px solid ${KIND_BORDER[m.kind]}`,
-                            }}
-                          >
-                            {kindLabel(m.kind, locale)}
-                          </span>
-                        )}
-                        <span className="text-[9px] text-[var(--color-dim)]">
-                          {formatRelative(m.created_at, locale)}
-                        </span>
-                      </div>
-                      <MessageBody
-                        text={m.body}
-                        className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
-                      />
-                      {m.related_position_id && (
-                        <Link
-                          href={`/positions/${m.related_position_id}`}
-                          className="inline-block mt-1.5 text-[10px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-                        >
-                          {tr("see_position")}
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                  {/* Risposta dell'utente */}
-                  {m.user_reply && (
+                  {/* Turno scritto dall'utente: una riga a sé (author='user'),
+                      non più una reply appesa a un messaggio dell'agente. */}
+                  {m.author === "user" ? (
                     <div
                       className="max-w-[85%] self-end rounded-lg rounded-br-sm px-4 py-3"
                       style={{
@@ -526,23 +531,103 @@ export default function MessagesList({ initialMessages }: Props) {
                           "color-mix(in srgb, var(--color-green) 10%, var(--color-card))",
                         border:
                           "1px solid color-mix(in srgb, var(--color-green) 30%, transparent)",
+                        // Un turno non ancora confermato dal server resta
+                        // leggermente smorzato: la conferma è visibile.
+                        opacity: m.id.startsWith("pending:") ? 0.65 : 1,
                       }}
                     >
                       <div className="flex items-center gap-2 mb-1.5 justify-end">
                         <span className="text-[9px] font-semibold text-[var(--color-green)]">
                           {tr("you")}
                         </span>
-                        {m.user_reply_at && (
-                          <span className="text-[9px] text-[var(--color-dim)]">
-                            {formatRelative(m.user_reply_at, locale)}
-                          </span>
-                        )}
+                        <span className="text-[9px] text-[var(--color-dim)]">
+                          {formatRelative(m.created_at, locale)}
+                        </span>
+                        <ChatDeliveryMark
+                          state={chatTurnDelivery(m, lane, clock)}
+                          locale={locale}
+                        />
                       </div>
                       <MessageBody
-                        text={m.user_reply}
+                        text={m.body}
                         className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
                       />
                     </div>
+                  ) : (
+                    <>
+                      {/* Bolla dell'agente */}
+                      <div className="flex items-end gap-2 max-w-[85%] self-start">
+                        <AgentAvatar
+                          agent={m.agent}
+                          locale={locale}
+                          size={22}
+                          className="mb-1"
+                        />
+                        <div
+                          className="rounded-lg rounded-bl-sm px-4 py-3 border-l-2 min-w-0"
+                          style={{
+                            background: "var(--color-card)",
+                            borderLeftColor: KIND_BORDER[m.kind],
+                          }}
+                        >
+                          <div className="flex items-center gap-2 mb-1.5">
+                            {m.kind !== "notification" && (
+                              <span
+                                className="text-[7.5px] font-semibold tracking-[0.14em] uppercase px-1 py-px rounded"
+                                style={{
+                                  color: KIND_BORDER[m.kind],
+                                  border: `1px solid ${KIND_BORDER[m.kind]}`,
+                                }}
+                              >
+                                {kindLabel(m.kind, locale)}
+                              </span>
+                            )}
+                            <span className="text-[9px] text-[var(--color-dim)]">
+                              {formatRelative(m.created_at, locale)}
+                            </span>
+                          </div>
+                          <MessageBody
+                            text={m.body}
+                            className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
+                          />
+                          {m.related_position_id && (
+                            <Link
+                              href={`/positions/${m.related_position_id}`}
+                              className="inline-block mt-1.5 text-[10px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                            >
+                              {tr("see_position")}
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                      {/* Risposta dell'utente */}
+                      {m.user_reply && (
+                        <div
+                          className="max-w-[85%] self-end rounded-lg rounded-br-sm px-4 py-3"
+                          style={{
+                            background:
+                              "color-mix(in srgb, var(--color-green) 10%, var(--color-card))",
+                            border:
+                              "1px solid color-mix(in srgb, var(--color-green) 30%, transparent)",
+                          }}
+                        >
+                          <div className="flex items-center gap-2 mb-1.5 justify-end">
+                            <span className="text-[9px] font-semibold text-[var(--color-green)]">
+                              {tr("you")}
+                            </span>
+                            {m.user_reply_at && (
+                              <span className="text-[9px] text-[var(--color-dim)]">
+                                {formatRelative(m.user_reply_at, locale)}
+                              </span>
+                            )}
+                          </div>
+                          <MessageBody
+                            text={m.user_reply}
+                            className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]"
+                          />
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               ))}
@@ -605,6 +690,22 @@ export default function MessagesList({ initialMessages }: Props) {
                 {error}
               </div>
             )}
+            {/* Il segno giallo sulla bolla dice CHE COSA; qui si dice cosa
+                significa e cosa NON fare (riscrivere lo stesso messaggio).
+                Uno solo per conversazione: ripeterlo bolla per bolla
+                sarebbe la stessa notizia gridata cinque volte. */}
+            {stalled && !error && (
+              <div
+                className="mb-2 px-3 py-1.5 rounded border text-[10px] leading-relaxed"
+                style={{
+                  borderColor: "var(--color-yellow)",
+                  color: "var(--color-yellow)",
+                }}
+                role="status"
+              >
+                {td("stalled_hint")}
+              </div>
+            )}
             <div
               className="flex items-end gap-2 rounded-2xl border px-3 py-2 transition-colors focus-within:border-[var(--color-border-glow)]"
               style={{
@@ -623,19 +724,15 @@ export default function MessagesList({ initialMessages }: Props) {
                   }
                 }}
                 rows={1}
-                maxLength={4000}
-                disabled={!replyTarget || sending}
-                placeholder={
-                  replyTarget ? tr("reply_placeholder") : tr("no_reply_target")
-                }
+                maxLength={MAX_CHAT_BODY}
+                disabled={sending}
+                placeholder={tr("write_to").replace("{name}", activeInfo.name)}
                 className="flex-1 px-2 py-1.5 text-[12.5px] bg-transparent border-none resize-none text-[var(--color-base)] disabled:opacity-50 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => void handleSend()}
-                disabled={
-                  !replyTarget || sending || replyText.trim().length === 0
-                }
+                disabled={sending || replyText.trim().length === 0}
                 aria-label={tr("send")}
                 className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-default"
                 style={{

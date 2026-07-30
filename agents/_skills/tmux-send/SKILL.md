@@ -52,12 +52,12 @@ Always keep the structured prefix:
 
 Standard types (see `agents/_manual/communication-rules.md` for full taxonomy and per-role expectations):
 
-- `INFO` — status update / generic operational message (no reply expected)
+- `BLOCKED` — worker → Captain: you have **STOPPED producing** and it leaves no trace in the DB (broken tool, `403`/`LOCKED`, dry sources, an item you can neither process nor skip). Since 2026-07-27 this is the ONLY thing that tells a stall apart from silent work
 - `URG` — real-time order requiring immediate action (FREEZE, throttle, kill)
 - `FEEDBACK` — coaching upstream with a rejection tag (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`)
 - `REQ` / `RES` — synchronous request/response between agents
 - `ACK` — acknowledge an `URG` or `REQ` you can't service yet
-- `REPORT` — final outcome of a unit of work
+- ~~`INFO` / `REPORT`~~ — **retired for peer traffic** (2026-07-27): they were 8 of the 30 pure-status messages that woke the Captain in ~1.5h. Progress is pulled from `db_query.py recent-activity`, not narrated
 
 > 💬 `[CHAT]` is reserved for **user → agent** messages from the web UI (see Captain's prompt protocol). Don't use it for inter-agent traffic.
 

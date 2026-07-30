@@ -388,10 +388,17 @@ func _ready() -> void:
 		BackendBus.chat_message.connect(_on_chat_message)
 		BackendBus.positions_updated.connect(_on_transitions)
 		BackendBus.telemetry_updated.connect(_on_agent_cpu_telemetry)
+		BackendBus.backend_reset.connect(_on_backend_reset)
 		if not BackendBus.agents.is_empty():
 			sync_agents(BackendBus.agents)
 		if not BackendBus.transitions.is_empty():
 			_on_transitions([])  # snapshot già sul bus: assorbito come baseline
+		if BackendBus.state != BackendBus.DISCONNECTED and not _piles_synced:
+			# Backend già collegato quando la scena nasce (rientro in ufficio
+			# dopo aver cambiato macchina): le pile partono dai SUOI conteggi —
+			# zero se il box è appena stato creato — mai dal seme casuale di
+			# scenografia, che sarebbe un numero inventato.
+			_reseed_piles()
 		if not BackendBus.telemetry.is_empty():
 			_on_agent_cpu_telemetry(BackendBus.telemetry, BackendBus.telemetry_history)
 		SetupService.status_changed.connect(_on_setup_status_changed)
@@ -416,10 +423,8 @@ func _ready() -> void:
 	# Preview/E2E del dialogo first-run anche senza backend o agente attivo.
 	var guided_chat := OS.get_environment("JHT_GUIDED_CHAT")
 	if guided_chat != "" and ScriptedOnboarding.supports(guided_chat):
-		var guided_names := {"assistente": "Assistente",
-				"coordinatore": "Coordinatore", "mentor": "Mentor"}
 		_chat_panel = ChatPanel.new(guided_chat,
-				str(guided_names.get(guided_chat, guided_chat.capitalize())), _chat_roster())
+				CharacterDefs.role_name(guided_chat), _chat_roster())
 		add_child(_chat_panel)
 
 	# TEST-AUTO: JHT_CHATMENU=1 apre il menu delle chat 1-a-1 (tasto C)
@@ -427,6 +432,17 @@ func _ready() -> void:
 		get_tree().create_timer(2.5).timeout.connect(_open_chat_menu)
 	if OS.get_environment("JHT_CHAT_UI_TEST") == "1":
 		_chat_ui_selftest.call_deferred()
+	# TEST-AUTO: la pagina a fumetti si verifica da sé, in un nodo suo
+	# (tools/comic_chat_selftest.gd) invece che qui dentro: il corpo del test
+	# è lungo quanto la feature e questa _ready è già una lista di ganci.
+	if OS.get_environment("JHT_COMIC_CHAT_TEST") == "1":
+		add_child(load("res://tools/comic_chat_selftest.gd").new())
+	# SHOT: JHT_COMIC_CHAT=<ruolo> apre la pagina a fumetti su una
+	# conversazione già scritta — è l'unico modo di fotografarla senza un
+	# team vivo (run.sh shot out.png JHT_COMIC_CHAT=scout).
+	var comic_shot := OS.get_environment("JHT_COMIC_CHAT")
+	if comic_shot != "":
+		_comic_chat_shot.call_deferred(comic_shot)
 
 	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza throttle e rimozione roster,
 	# senza aspettare il ciclo eventi del mock.
@@ -440,6 +456,8 @@ func _ready() -> void:
 	var pipeline_force_test := OS.get_environment("JHT_PIPELINE_FORCE_TEST")
 	if pipeline_force_test != "":
 		_pipeline_force_selftest.call_deferred(pipeline_force_test)
+	if OS.get_environment("JHT_BACKEND_SWITCH_TEST") == "1":
+		_backend_switch_selftest.call_deferred()
 	var entry_test := OS.get_environment("JHT_ENTRY_TEST")
 	if entry_test != "":
 		_entry_selftest.call_deferred(entry_test)
@@ -770,7 +788,11 @@ func _tour_selftest() -> void:
 			var scene := TourGuide.scene_for(stop)
 			check.call(str(scene.get("portrait", "")) == stop,
 					"ritratto del collega errato per la tappa " + stop)
-			check.call(str(scene.get("name", "")) != "L'Assistente",
+			# il confronto passa da role_name e non da una stringa italiana
+			# scritta qui: con l'interfaccia in un'altra lingua un literal
+			# non combacerebbe più e il controllo passerebbe sempre
+			check.call(str(scene.get("name", ""))
+							!= CharacterDefs.role_name("assistente"),
 					"il reparto parla ancora con la voce dell'Assistente: " + stop)
 	check.call(Dialogues.greeting() in ["Buongiorno", "Buon pomeriggio", "Buonasera"],
 			"saluto orario fuori catalogo")
@@ -1098,11 +1120,11 @@ func _guided_onboarding_selftest() -> void:
 	add_child(panel)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check.call(panel._choices.get_child_count() >= 2, "bottoni guided non renderizzati")
-	check.call(not panel._input.editable and panel._send_btn.disabled,
+	check.call(panel._view.choices.get_child_count() >= 2, "bottoni guided non renderizzati")
+	check.call(not panel._view.input.editable and panel._view.send_button.disabled,
 			"testo libero acceso prima del provider")
 	var pressed_first := false
-	for child in panel._choices.get_children():
+	for child in panel._view.choices.get_children():
 		if child is Button:
 			(child as Button).pressed.emit()
 			pressed_first = true
@@ -1138,9 +1160,9 @@ func _guided_onboarding_selftest() -> void:
 	panel._refresh_chat_mode()
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check.call(panel._input.editable and not panel._send_btn.disabled,
+	check.call(panel._view.input.editable and not panel._view.send_button.disabled,
 			"testo libero non abilitato dopo provider + agente")
-	check.call(panel._choices.get_child_count() == 0,
+	check.call(panel._view.choices.get_child_count() == 0,
 			"le risposte authored non spariscono dopo il login provider")
 	panel._on_updated("assistente", [{"role": "assistant", "text": "Scegli tu.",
 			"done": true, "choices": [
@@ -1149,7 +1171,7 @@ func _guided_onboarding_selftest() -> void:
 			]}])
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check.call(panel._choices.get_child_count() == 3,
+	check.call(panel._view.choices.get_child_count() == 3,
 			"risposte suggerite generate dall'agente non renderizzate")
 	# Il modulo profilo deve esistere anche senza LLM e includere proprio i
 	# campi che determinano il gate ready (email e lingue comprese).
@@ -1854,6 +1876,38 @@ func _chat_selftest(role: String, send: bool) -> void:
 				BackendBus.send_user_chat(a.slug, "Come procede il lavoro?")
 			return
 
+## Apre la pagina a fumetti su una conversazione seminata, per lo screenshot.
+## Il mock serve a rendere l'agente "conversabile" (can_chat_with); le battute
+## le scriviamo noi, perché una foto deve mostrare la forma della pagina —
+## vignette dell'agente e dell'utente, code opposte, ritratto — non l'esito
+## casuale di un mock.
+func _comic_chat_shot(role: String) -> void:
+	if BackendBus.state == BackendBus.DISCONNECTED:
+		BackendBus.set_backend(MockBackend.new())
+	await get_tree().create_timer(1.5).timeout
+	var uid := role
+	for a in BackendBus.agents:
+		if str(a.get("slug", "")) == role:
+			uid = str(a.get("uid", role))
+			break
+	var display := role.capitalize()
+	for a in BackendBus.agents:
+		if str(a.get("uid", "")) == uid:
+			display = str(a.get("name", display))
+	_chat_panel = ChatPanel.new(uid, display, _chat_roster())
+	add_child(_chat_panel)
+	_chat_panel.closed.connect(func() -> void: _chat_panel = null)
+	await get_tree().process_frame
+	BackendBus.publish_agent_chat(uid, [
+		{"role": "assistant", "done": true,
+			"text": "Ho finito il giro delle board: sei posizioni nuove, quattro remote in UE."},
+		{"role": "user", "done": true,
+			"text": "Ottimo. Puoi concentrarti sulle remote?"},
+		{"role": "assistant", "done": true,
+			"text": "Fatto: da adesso do priorità alle remote e passo le altre all'Analista."},
+	])
+
+
 func _chat_ui_selftest() -> void:
 	await get_tree().process_frame
 	BackendBus.clear_chat_unread()
@@ -1868,7 +1922,19 @@ func _chat_ui_selftest() -> void:
 	var badge_ok := sidebar != null and "1" in sidebar._tab.text
 	_open_chat_menu()
 	await get_tree().process_frame
-	var menu_ok := _chat_menu != null and _chat_menu._agents.size() == 3
+	# Il menu elenca ESATTAMENTE il roster conversabile della scena. Il numero
+	# fisso "3" non va più bene: dal 2026-07-28 anche i ruoli operativi hanno
+	# la skill di risposta, e un numero scritto a mano avrebbe solo detto
+	# quanti erano il giorno in cui il test è stato scritto. Quello che conta
+	# è che il menu e il roster non divergano, e che un WORKER ci sia davvero.
+	var expected_roster := _chat_roster()
+	var has_worker := false
+	for entry: Dictionary in expected_roster:
+		if BackendBus._chat_role(str(entry.get("slug", ""))) == "scout":
+			has_worker = true
+	var menu_ok := _chat_menu != null \
+			and _chat_menu._agents.size() == expected_roster.size() \
+			and has_worker
 	var coordinator := _find_agent("coordinatore")
 	if _chat_menu:
 		_chat_menu.close(false)
@@ -2490,7 +2556,8 @@ func _tour_open_stop_dialogue(stop: String) -> void:
 	add_child(ui)
 	ui.action_triggered.connect(_on_tour_dialogue_action)
 	ui.open(str(scene.get("portrait", "assistente")),
-			str(scene.get("name", "L'Assistente")), str(scene.get("tree", "")))
+			str(scene.get("name", CharacterDefs.role_name("assistente"))),
+			str(scene.get("tree", "")))
 	ui.closed.connect(func() -> void:
 		if host == _tour_staged_host:
 			_tour_staged_host = null
@@ -2804,7 +2871,8 @@ func deliver_chat(from_uid: String, to_uid: String, text: String) -> void:
 				to_label = _name_of(to_uid)
 		speaker.say(text, to_label)
 		if target and not target.is_dissolving():
-			target.show_received_message(speaker.display_name)
+			target.show_received_message(
+					AgentNames.short_name(speaker.uid, speaker.display_name))
 
 ## Risolve uid reale o ruolo. Nei self-test offline "scout-4" sceglie la
 ## quarta istanza del ruolo, mentre sulla VPS vince sempre l'uid esatto.
@@ -2831,11 +2899,20 @@ func _find_agent(ref: String) -> AgentNPC:
 		return null
 	return matches[mini(requested_index - 1, matches.size() - 1)]
 
+## Come si chiama il destinatario di un messaggio, dentro una vignetta sopra
+## la testa: il SOLO cognome. La vignetta si allarga col testo più lungo che
+## contiene, e "→ Holmes · scout-1" la farebbe crescere oltre la scrivania per
+## dire due volte la stessa cosa. Il nome per esteso vive nei pannelli, dove
+## c'è la riga intera.
+##
+## Chi non ha un cognome tiene il suo nome di scena; chi non è nemmeno in
+## scena resta l'uid, come prima — un destinatario fuori campo va comunque
+## detto.
 func _name_of(uid: String) -> String:
 	for agent in agents:
 		if agent.uid == uid:
-			return agent.display_name
-	return uid
+			return AgentNames.short_name(uid, agent.display_name)
+	return AgentNames.short_name(uid)
 
 ## ── Scena reattiva al registro attività ──────────────────────────────
 
@@ -2886,15 +2963,20 @@ func _sync_piles(hold_seconds := 0.0) -> void:
 	if preview.size() == 2 and PILE_PHASE.has(preview[0]) \
 			and str(preview[1]).is_valid_int():
 		counts[PILE_PHASE[preview[0]]] = maxi(0, int(preview[1]))
+	# Primo snapshot di QUESTA connessione: pile e scaffale si agganciano di
+	# colpo. Senza l'aggancio immediato la deriva foglio-per-foglio partirebbe
+	# dai numeri della macchina precedente e li terrebbe a schermo per un
+	# minuto (694 → 14 = oltre ottanta secondi).
+	var first_paint := not _piles_synced
 	for dept_id in PILE_PHASE:
 		if PaperPile.inbox.has(dept_id):
 			# Rapporto esatto 1:1. Il primo snapshot è immediato; i successivi
 			# aspettano il viaggio fisico dell'agente prima di riconciliarsi.
 			PaperPile.inbox[dept_id].set_target(
-					int(counts[PILE_PHASE[dept_id]]), not _piles_synced, hold_seconds)
+					int(counts[PILE_PHASE[dept_id]]), first_paint, hold_seconds)
 	_piles_synced = true
 	var ready := int(counts["cv_ready"])
-	OutputShelf.set_ready(ready)
+	OutputShelf.set_ready(ready, first_paint)
 	# Un PASS in più: è il Critico, ultimo anello, a portare il CV nello
 	# scaffale dei pronti. Lo Scrittore lo aveva lasciato sulla propria pila.
 	if _last_ready >= 0 and ready > _last_ready:
@@ -2977,6 +3059,99 @@ func _react_to_transition(t: Dictionary) -> void:
 	# poll della TUI vede gia idle, il viaggio fisico deve ancora avvenire.
 	actor.perform_pipeline_step(true, to_st)
 	Log.debug("scene", "reazione %s: %s → %s" % [by, what, to_st])
+
+## Cambio di connessione (BackendBus.backend_reset): pile, scaffale e registro
+## delle transizioni descrivevano UN'ALTRA macchina. Vengono azzerati DENTRO
+## il frame del cambio — il bus è già svuotato quando arriva questo segnale —
+## così non esiste un fotogramma coi conteggi del box precedente. Il caso
+## misurato il 27/07: box nuovo con 14 posizioni, pila dello Scorer ferma sulle
+## 694 righe `scored` di quello di prima perché uno snapshot vuoto non
+## riseminava nulla e i target restavano quelli vecchi.
+func _on_backend_reset() -> void:
+	_tr_seen.clear()
+	_tr_baseline = false
+	_last_ready = -1
+	_reseed_piles()
+	# LED di attività: senza campione fresco nessun agente resta verde con la
+	# CPU misurata sulla macchina di prima.
+	_on_agent_cpu_telemetry({}, [])
+
+## Riallinea pile e scaffale ai conteggi che il bus ha ADESSO, di colpo, e
+## lascia il prossimo snapshot come "prima pittura": quello arriva da un'altra
+## macchina e deve agganciarsi altrettanto di colpo, non risalire un foglio
+## alla volta partendo da zero.
+func _reseed_piles() -> void:
+	_piles_synced = false
+	_sync_piles()
+	_piles_synced = false
+
+## Regressione del cambio macchina (JHT_BACKEND_SWITCH_TEST=1). Riproduce la
+## misura del 27/07 senza due VPS: box A con 694 righe `scored`, cambio di
+## connessione, box B con 14 posizioni appena trovate. Le asserzioni dopo il
+## cambio NON attendono alcun frame: se una pila conservasse il numero del box
+## A, quel numero sarebbe già stato disegnato.
+func _backend_switch_selftest() -> void:
+	await get_tree().process_frame
+	var failures: Array[String] = []
+	var check := func(ok: bool, message: String) -> void:
+		if not ok:
+			failures.append(message)
+	var shelf := OutputShelf.instance
+	if shelf == null:
+		print("BACKEND-SWITCH-TEST FAIL nessuno scaffale in scena")
+		get_tree().quit(1)
+		return
+	var box_a: Array = []
+	for i in 694:
+		box_a.append({"id": i + 1, "status": "scored", "write_requested": 0})
+	for i in 6:
+		box_a.append({"id": 1000 + i, "status": "ready", "write_requested": 1,
+				"critic_verdict": "PASS"})
+	BackendBus.transitions = [{"position_id": 1, "ts": "2026-07-27T10:00:00Z",
+			"to_state": "scored", "by_agent": "scorer-1"}]
+	_piles_synced = false  # prima pittura: è come essersi appena collegati
+	BackendBus.publish_positions(box_a)
+	var scorer: PaperPile = PaperPile.inbox["scorer"]
+	check.call(scorer.count == 694 and int(scorer.debug_snapshot()["target"]) == 694,
+			"box A: pila scorer %s" % JSON.stringify(scorer.debug_snapshot()))
+	check.call(shelf._real == 6 and shelf._visual == 6,
+			"box A: scaffale %d/%d" % [shelf._real, shelf._visual])
+
+	# Cambio macchina. Da qui niente del box A può restare né sul bus né a
+	# schermo, e non si concede un solo frame di tolleranza.
+	BackendBus.set_backend(null)
+	check.call(BackendBus.positions.is_empty(),
+			"le posizioni del box precedente sono ancora sul bus")
+	check.call(BackendBus.transitions.is_empty(),
+			"le transizioni del box precedente sono ancora sul bus")
+	var counts: Dictionary = BackendBus.pipeline_counts()
+	var zeroed := true
+	for value in counts.values():
+		zeroed = zeroed and int(value) == 0
+	check.call(zeroed, "pipeline_counts non azzerati: %s" % JSON.stringify(counts))
+	for dept_id in PILE_PHASE:
+		var pile: PaperPile = PaperPile.inbox[dept_id]
+		check.call(pile.count == 0 and int(pile.debug_snapshot()["target"]) == 0,
+				"pila %s non azzerata: %s" % [dept_id,
+						JSON.stringify(pile.debug_snapshot())])
+	check.call(shelf._real == 0 and shelf._visual == 0,
+			"scaffale non azzerato: %d/%d" % [shelf._real, shelf._visual])
+
+	# Box B: le sue 14 posizioni si agganciano di colpo, senza risalire un
+	# foglio alla volta e senza passare dai numeri di prima.
+	var box_b: Array = []
+	for i in 14:
+		box_b.append({"id": i + 1, "status": "new", "write_requested": 0})
+	BackendBus.publish_positions(box_b)
+	var scout: PaperPile = PaperPile.inbox["scout"]
+	check.call(scout.count == 14 and int(scout.debug_snapshot()["target"]) == 14,
+			"box B: pila scout %s" % JSON.stringify(scout.debug_snapshot()))
+	check.call(scorer.count == 0,
+			"box B: la pila scorer conserva %d fogli del box precedente" % scorer.count)
+	var ok: bool = failures.is_empty()
+	print("BACKEND-SWITCH-TEST ", "PASS " if ok else "FAIL ",
+			JSON.stringify(failures))
+	get_tree().quit(0 if ok else 1)
 
 ## Primo snapshot backend: le postazioni tornano nel pool e il roster
 ## locale di ambientazione lascia la scena — comanda lo stato reale.
@@ -3354,6 +3529,8 @@ func _add_hud() -> void:
 	theme_root.add_child(_team_hud)
 	theme_root.add_child(SimBadge.new())  # SIMULAZIONE vs DATI REALI
 	theme_root.add_child(BudgetNotice.new())  # perche il team tace, quando tace
+	theme_root.add_child(HeadlessNotice.new())  # hanno lavorato senza di te
+	theme_root.add_child(UpdateNotice.new())  # c'e una versione piu recente
 	var hint := TerminalTheme.label(
 			UIStrings.t("office.camera_hint"),
 			15, Palette.DIM)

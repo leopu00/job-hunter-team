@@ -43,6 +43,8 @@ const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
 const DOCTOR_WATCHDOG_SCRIPT = '/app/.launcher/doctor-watchdog.sh';
+const STEPCAP_WATCHDOG_SCRIPT = '/app/.launcher/stepcap-watchdog.py';
+const THROTTLE_ENGINE_SCRIPT = '/app/shared/skills/throttle_engine.py';
 const AUTO_REPORT_LOOP_SCRIPT = '/app/.launcher/auto-report-loop.sh';
 const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
 
@@ -482,6 +484,58 @@ async function cleanupStaleBridgeState() {
   for (const name of targets) {
     try { await unlink(join(logs, name)); } catch { /* ENOENT atteso */ }
   }
+  // Flag dei throttle: un boot del container respawna OGNI agente, quindi
+  // nessuna pausa registrata prima descrive piu' un'istanza viva. Lasciarli li'
+  // farebbe partire una sveglia "[RIPRENDI]" a raffica su agenti appena nati.
+  // NB: questo NON e' il caso del respawn del solo daemon (pid1 resta vivo e non
+  // ripassa da qui) — la' i timer DEVONO sopravvivere, ed e' il punto del motore.
+  try { await unlink(join(JHT_HOME, 'state', 'throttle-flags.json')); } catch { /* ENOENT atteso */ }
+}
+
+/**
+ * [PROVIDER-CLI-AUTOUPDATE] Aggiorna la CLI del provider ATTIVO prima di
+ * qualunque cosa che la usi. Delegato a `jht providers autoupdate` (stesso
+ * pattern di runMigrate/runUnstuckPositions: pid1 spawna sotto-comandi invece
+ * di importare i moduli dei comandi).
+ *
+ * SEQUENZIALE, non in parallelo ai bridge. Misurato sui due percorsi reali —
+ * `npm install -g @anthropic-ai/claude-code@latest` 1,5s e la coppia
+ * `pip install -U uv` + `uv tool install --force kimi-cli` ~6s — l'attesa e'
+ * un'inezia rispetto ai ~48s di stagger che il boot gia' spende sui 4 agenti.
+ * Farlo in parallelo avrebbe richiesto di trattenere comunque tutti i percorsi
+ * che spawnano agenti (auto-start, agent-watchdog ogni 30s, doctor-watchdog):
+ * complessita' e una finestra di rischio — sostituire il binario sotto una TUI
+ * appena partita — per guadagnare pochi secondi. Il caso degenere (registry che
+ * accetta e poi tace) e' chiuso dal timeout per-step dentro providers.js.
+ *
+ * Lo stesso sotto-comando fa anche il secondo passo [PROVIDER-MODEL-PIN]:
+ * rivedere il modello che la CLI si e' pinnata al primo login. Deve girare qui
+ * e non altrove — dopo l'update (la prova la fa la CLI nuova) e PRIMA di
+ * qualunque spawn, perche' ogni sessione legge il modello all'avvio: e' il solo
+ * punto del boot dove un cambio entra in vigore senza riavviare niente.
+ *
+ * Fail-safe: qualunque esito, si prosegue. Se l'update non riesce il team
+ * lavora con la CLI gia' installata; se il modello candidato non risponde alla
+ * prova, il pin resta com'e' e il Capitano riceve un finding.
+ */
+async function runProviderAutoUpdate() {
+  pid1Log('provider CLI auto-update + revisione modello (prima dei bridge; JHT_PROVIDER_AUTOUPDATE=0 per spegnerlo, JHT_MODEL_PIN=<x> per fissare il modello)');
+  await new Promise((resolve) => {
+    const child = spawnLabeled('provider-update', process.execPath, [
+      JHT_ENTRY,
+      'providers',
+      'autoupdate',
+    ]);
+    child.on('exit', (code) => {
+      if (code === 0) pid1Log('provider CLI auto-update concluso');
+      else pid1Log(`provider CLI auto-update exit ${code} — proseguo con la CLI gia' presente`);
+      resolve();
+    });
+    child.on('error', (err) => {
+      pid1Log(`provider CLI auto-update spawn error: ${err.message} — proseguo con la CLI gia' presente`);
+      resolve();
+    });
+  });
 }
 
 async function dispatch() {
@@ -499,6 +553,11 @@ async function dispatch() {
 
   // Pulizia pid/state file orfani dei bridge (pre-teardown).
   await cleanupStaleBridgeState();
+
+  // Aggiornamento della CLI del provider attivo. Qui e non piu' avanti: da
+  // questo punto in poi il boot spawna bridge, watchdog e agenti, e un update
+  // fatto dopo sostituirebbe il binario sotto processi vivi.
+  await runProviderAutoUpdate();
 
   // Pair non-interattivo PRIMA di partire il daemon: cosi' il watcher
   // su cloud.json non scatta a vuoto e il daemon parte subito col token
@@ -710,6 +769,75 @@ async function dispatch() {
     });
   };
   startDoctorWatchdog();
+
+  // ── Step-cap watchdog: l'unico che guarda se un agente PROGREDISCE, non
+  // se esiste. Il cap max_steps=100 interrompe l'agente senza terminarlo: la
+  // sessione resta viva, il pane risponde, e l'agente aspetta un input che
+  // nessuno mandava (2026-07-28: l'unico Scout attivo fermo cosi', coda
+  // Analisti vuota, Scorer a secco — e ogni indicatore di salute verde).
+  // Rileva il marcatore + pane immobile, mette in throttle, poi riprende via
+  // buffer tmux. Stesso pattern di respawn degli altri watchdog.
+  let stepcapChild = null;
+  let stepcapRespawnTimer = null;
+  const startStepcapWatchdog = () => {
+    if (stepcapChild && !stepcapChild.killed) return;
+    pid1Log('starting stepcap-watchdog (ripresa agenti fermi sul cap di step, tick 60s)');
+    stepcapChild = spawnLabeled('stepcap-watchdog', '/usr/bin/env', [
+      'python3',
+      '-u',
+      STEPCAP_WATCHDOG_SCRIPT,
+    ]);
+    stepcapChild.on('exit', (code, signal) => {
+      const exited = stepcapChild;
+      stepcapChild = null;
+      if (shuttingDown) return;
+      pid1Log(`stepcap-watchdog exited (code=${code} signal=${signal})`);
+      if (stepcapRespawnTimer) clearTimeout(stepcapRespawnTimer);
+      stepcapRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('stepcap-watchdog respawn dopo crash');
+          startStepcapWatchdog();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  startStepcapWatchdog();
+
+  // ── Motore dei throttle: il tempo esce dal dominio dell'agente. Prima il
+  // throttle era un contratto che l'agente onorava da solo, bloccando il
+  // proprio processo — e quando quel processo moriva col timeout della tool
+  // call, nessuno lo svegliava piu' (2026-07-30: 2h15m di stallo su un
+  // Analista, con la sessione classificata `idle` = sana). Il daemon possiede i
+  // timer, li tiene SU DISCO (un respawn non ne perde nessuno) e manda la
+  // sveglia via il sender protetto. Va qui, accanto ai bridge, proprio perche'
+  // NON deve essere figlio di nessuna shell di agente.
+  let throttleEngineChild = null;
+  let throttleEngineRespawnTimer = null;
+  const startThrottleEngine = () => {
+    if (throttleEngineChild && !throttleEngineChild.killed) return;
+    pid1Log('starting throttle-engine (timer dei throttle + sveglia via tmux)');
+    throttleEngineChild = spawnLabeled('throttle-engine', '/usr/bin/env', [
+      'python3',
+      '-u',
+      THROTTLE_ENGINE_SCRIPT,
+    ]);
+    throttleEngineChild.on('exit', (code, signal) => {
+      const exited = throttleEngineChild;
+      throttleEngineChild = null;
+      if (shuttingDown) return;
+      pid1Log(`throttle-engine exited (code=${code} signal=${signal})`);
+      if (throttleEngineRespawnTimer) clearTimeout(throttleEngineRespawnTimer);
+      throttleEngineRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('throttle-engine respawn dopo crash');
+          startThrottleEngine();
+        }
+      }, 5000);
+      void exited;
+    });
+  };
+  startThrottleEngine();
 
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
@@ -976,6 +1104,10 @@ async function dispatch() {
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
     if (doctorWatchdogChild && !doctorWatchdogChild.killed) doctorWatchdogChild.kill(sig);
     if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
+    if (stepcapChild && !stepcapChild.killed) stepcapChild.kill(sig);
+    if (stepcapRespawnTimer) clearTimeout(stepcapRespawnTimer);
+    if (throttleEngineChild && !throttleEngineChild.killed) throttleEngineChild.kill(sig);
+    if (throttleEngineRespawnTimer) clearTimeout(throttleEngineRespawnTimer);
     if (autoReportChild && !autoReportChild.killed) autoReportChild.kill(sig);
     if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
     stopTgBridge();

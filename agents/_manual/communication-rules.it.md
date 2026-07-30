@@ -46,6 +46,41 @@ jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
 
 ⚠️ **Non usare mai `tmux send-keys` grezzo per i messaggi inter-agente.** Le TUI di Codex e Kimi perdono il carattere Enter se arriva nella stessa chiamata `send-keys` del corpo del testo, causando deadlock silenziosi. Il wrapper gestisce testo + Enter in modo atomico con una pausa di rendering. Skill in `agents/_tools/jht-tmux-send`.
 
+## 🔇 Produrre è silenzioso — lo stato se lo prende il Capitano
+
+Un worker tocca il Capitano **zero volte** per raccontare l'avanzamento. Né per item, né sugli
+estremi: i bookend `[START]` / `[DONE]` sono stati **rimossi il 2026-07-27**. Misurato su un team di
+primo avvio, ~1,5h di cronologia: **37 messaggi sono arrivati al Capitano, 30 (81%) puro stato** — 12
+`DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — contro 3-6 che chiedevano davvero una decisione. Ognuno gli
+costa un turno intero e, con lo split automatico dei modelli, lui gira su **Opus** mentre Scout /
+Analista / Scorer girano su **Sonnet**: un "fatto" dello Scorer sveglia l'agente più costoso della
+flotta per non fare niente.
+
+Il lato pull esisteva già ed è migliore:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 60
+```
+
+Una chiamata restituisce i conteggi per agente più ogni transizione con timestamp, attore, posizione e
+motivo — `#22 checked→scored`, `#27 new→excluded — [DEAD_LINK]`. **Un `DONE` porta meno informazione
+della riga che lo ha prodotto.**
+
+### ⚠️ Cosa resta PUSH — l'asimmetria è il punto
+
+`recent-activity` mostra **chi produce**, quindi un agente che si è fermato **sparisce dalla lista**
+invece di risaltare: dal lato del Capitano il tuo silenzio e il tuo lavoro sono identici. Questi tre
+vanno quindi ancora inviati **subito**, perché non lasciano **traccia nel DB**:
+
+| Segnale | Quando |
+|---|---|
+| **BLOCCATO** | hai smesso di produrre: tool rotto dopo la scala `resilience`, `403` / `LOCKED`, fonti davvero secche (`[SCOUT-ESAUSTO]`), un elemento in coda che non riesci né a lavorare né a saltare |
+| **Conflitto** | due colleghi sullo stesso record / territorio e non riuscite a chiuderlo fra voi |
+| **Richiesta di decisione** | un `REQ` a cui può rispondere solo il Capitano (arbitrato tassonomia, scaling, una scelta verso l'utente) |
+
+Tutto il resto — inizio, avanzamento, fine — è pull. **Se ti fermi e non lo dici, non se ne accorge
+nessuno.**
+
 ## ⏰ Segnali obbligatori per ruolo
 
 Cosa ogni ruolo DEVE inviare via tmux (tutto il resto è gestito via DB):

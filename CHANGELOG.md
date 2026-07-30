@@ -5,9 +5,114 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.3] — 2026-07-30
+
+**Everyone in the office has their own face** — the portrait gap opened by the comic chat in 0.3.2 is closed, and the download page finally hands out the app.
+
+### 🎨 Portraits
+
+- **The six missing `pensieroso` poses** — assistant, coordinator, critic, writer, sentinel, maintainer. The chat switches to that pose *while an agent is composing its reply*, and those six were silently falling back to `neutro`: waiting looked exactly like answered, which is the one thing the pose exists to say.
+- **Sixty per-instance portraits**, `neutro` and `pensieroso` for all thirty desks across the five departments. These are not new characters: the office already gave each agent a face by desk, and the chat was the side flattening them onto the role — so `scout-1` and `scout-5` shared one portrait while sitting as visibly different people ten metres apart. Each face is derived from that desk's own sprite. The `a` variants deliberately reuse the role portrait, because they *are* the same identity: the department lead.
+- **Overlapping and clipped sprite frames repaired** across the character sheets, plus two audit tools that make the whole thing checkable without opening the game: `audit_instance_portraits.py` (format, alpha, import files, lead mapping) and `audit_character_sheets.py` (36 sheets, frame geometry).
+
+Combined with the surnames from 0.3.2, opening a chat now reads `HOLMES · SCOUT-1` next to the face that agent actually has at their desk.
+
+### 🌐 Web
+
+- **The desktop app is downloadable from the site**, marked beta, for all three systems. The Desktop tab had announced "coming soon" since 2026-07-03 while three releases shipped past it. Links resolve through `releases/latest/download/`, so a new release no longer requires touching the site.
+- The unsigned platforms are stated up front instead of left to be discovered: Windows will show SmartScreen and the note names the two buttons to press; Linux needs the archive extracted and made executable. macOS opens on a double click, which is what the notarization bought.
+
+### 🧪 Also
+
+- **A first-run wizard was failing the report-dialog specs**, and no HTTP guard could have seen it: `/dashboard` answers 200 and the wizard takes over on the client after hydration, so the spec waited thirty seconds for a menu that was never going to render — while the screen showed a language picker. A session minted fresh for every CI run is by definition one the wizard has never met.
+- **The Windows export gets a settled process and one loud retry.** It segfaulted mid-packing on 2026-07-29 with every self-test green above it, then passed on rerun — intermittent, which is worse than broken, because a random red makes a release semaphore worthless.
+
+---
+
+## [0.3.2] — 2026-07-29
+
+**Talking to the team, and the team not getting stuck** — 75 commits since v0.3.1. Two days spent on things found by running the product rather than by reading it: a coordinator lost for eleven hours behind a single unsent line, a chat that had never delivered anything, and a window that burned more CPU than the whole team it was watching.
+
+### 🎭 Every agent can be talked to, in comic balloons
+
+- **The office chat is a comic page.** Portrait on the right, balloons in the middle, composer at the bottom: the agent's balloon is always white with black ink and its tail points at the character's head; yours is mirrored, tinted, and sits underneath. Scrolling back reads the conversation; a message arriving while you read does not yank the page away.
+- **Every operative role can now answer** — Scout, Analyst, Scorer, Writer, Critic, on top of the three coordinators. The skill keeps it cheap on purpose: answer from context only, one to three sentences, one reply and back to work. Answering is a turn of that agent's model, so a chat that becomes a conversation is a chat that stops production. The Critic can answer but may **not accept candidate information** through it — its blind review is the only thing its verdict is worth. Doctor, Maintainer and Sentinel stay out, each for a stated reason.
+- **Agents have surnames**, as a pure function of role and number: `scout-1` is Holmes on every machine, forever — the same rule that already governs desks and faces. Detectives for the Scouts, scientists for the Analysts, people who put points on the board for the Scorers (Ronaldo, Sinner, an archer), writers and critics for the rest. The technical uid never changes; only what you read does. Two places deliberately keep the bare uid, because a name there would be a lie: the pooled consumption row (six agents' spend, one workdir) and labels that show a tmux session name.
+
+### 💬 One chat, and a reply that arrives
+
+The web chat did not work, and the reason was not a bug but **four missing links**. A message written on the site reached the box within a minute and then waited: nobody was responsible for putting it in front of the agent, who was expected to go and look on its own initiative. The reply, once written, waited again — for the user to press *Sync now*, since periodic pushes were disabled to protect quota. And whatever did arrive was filtered out of the page by a `delivered_via='web'` clause that Telegram-delivered messages never match. A message sent twenty hours earlier had simply never been delivered to anyone.
+
+Now the turn reaches the agent's pane **within about five seconds** and the answer is on the browser in as many, over a lane that costs nothing while the conversation is idle — every step is fronted by a local guard, so a quiet chat touches neither Supabase nor Vercel. Game and site are **one conversation**: `chat.jsonl` on the box is the meeting point, mirrored both ways with the turn's own timestamp as the dedup key, so what you write in the office you find on the site, and the other way round. Replies written with `jht-send`, which never reached the cloud at all, now do.
+
+The composer also stopped going dark: it used to attach itself to the agent's last message, so once you had answered them all there was nothing left to write into — the schema could not represent a message **you** started. Migration `060` (additive; until it is applied everything degrades to the previous behaviour, declared and silent). The three chat icons are now the agents' drawn portraits, cropped to the bust.
+
+### 🩺 The team stops getting stuck
+
+- **A step-capped agent is resumed.** The `max_steps=100` cap interrupts an agent without terminating it: the session stays alive, the pane ends on *"Send another message to continue"*, and it waits for an input no component was responsible for sending. Found in production with the only active Scout stalled that way — the Analysts' queue emptied, the Scorers starved, and every health indicator read green, because the existing watchdogs check that a session *exists*. The new watchdog asks whether the **database advances**, applies a throttle before resuming (the cap is usually a rabbit-hole; resuming instantly sends the agent back into the same loop), and escalates to the Captain on the fourth consecutive stall instead of nudging forever.
+- **The Doctor dissolves blocks instead of reporting them.** It had diagnosed a deadlock perfectly — an unsent line in the coordinator's pane, an agent looping on retries for hours — written it down, and stood by while the team stayed frozen for six more hours. It now has an unblock phase that runs before anything else, and a round that leaves a block alive is logged as **failed**. It still never touches text you typed: it forwards the question to the Assistant and tells the coordinator to carry on meanwhile.
+- **The sender stopped lying.** `jht-tmux-send` returned success right after pressing Enter, without checking. When the key was lost the message sat in the composer — and unsent text makes a pane look busy to everyone, turning one lost Enter into a permanent deadlock. It now re-reads the pane, looking only at the prompt line (after a successful submit the text is still on screen, in the transcript). The `Space+Enter` reinforcement is no longer gated to Kimi: the failure was reproduced on Claude.
+- **Sessions expire at 12 hours**, on age alone — no context threshold, no PARKED state, no health heuristic can override it, and a test greps the function body to keep it that way. In the incident the sessions were 38, 29 and 27 hours old and every heuristic said *healthy*. Enforced by the watchdog too, because the Doctor is an agent and can itself be stuck.
+- **Workers are watched.** The deterministic safety net covered only the four core roles, so four dead workers went unnoticed with no log line and no respawn. It now reads the live roster — with three guards against fighting the coordinator, since "dead" and "deliberately removed" are genuinely indistinguishable today.
+
+### 💰 Spending
+
+- **`jht standby on`** — a running team costs money even with every worker at maximum throttle: measured at ~2 weekly points per hour on a completely idle pipeline, which hit the wall and froze the team for four and a half days. The residual is the core roles and the bridges, none of which the throttle governs. In standby **the bridges keep reading and stop talking**: quota is read over HTTP, which costs no model turn, so the alarm clock survives at zero cost. It always carries an exit condition — a standby that cannot end is refused.
+- **The Captain is woken 81% less.** Of 37 inbound messages in an hour and a half, 30 were pure status — and he runs on the most expensive model in the fleet while the workers run on the cheapest. The workers no longer announce start and finish; what leaves no trace in the database (blocked, conflicts, decisions) still arrives immediately. He pulls the rest with one query that rides inside the hourly beat he was taking anyway. The asymmetry is written down where it bites: that query shows who *produces*, so a stalled agent **disappears** from it — a missing name is exactly what you must go and look at.
+- **The spawn offset comes from the rung.** It was a fixed ten minutes, unrelated to the period the workers would actually run on; with N workers sharing period T the spacing that spreads them is T/N. Measured from the previous worker's phase rather than from now, because a burst spawns back-to-back and everyone would otherwise land in the same minute.
+
+### 🖥️ The window
+
+- **The game used to cost more CPU than the team it was watching** — 37% against ~8% each for five agents, at 75 °C. Measured before touching anything: headless 3.8% against 31.8% windowed, so seven eighths of the bill is frames drawn, not logic. Now 10 fps unfocused and 3 minimized: **31% → 14.7% → 4.6%**. Two traps defused on the way: the adaptive graphics calibration would have read our own low frame rate as a struggling machine and pixelated the world *while nobody was watching*, persisting it to disk; and below 7.5 fps Godot discards game time, so a three-hour absence would have come back minutes behind.
+- **Closing the window no longer means stopping the team.** Three explicit ways out, each with its consequence written next to it: stop the team and close, **leave the agents working** (with the budget still running, said out loud), or close everything immediately without waiting for anyone to save their place. Coming back, a band tells you how long the team worked without you.
+- **The sidebar went from 28 rows to 13** without losing a destination: the five monitoring views became tabs of one window, the twelve configuration pages tiles behind *Impostazioni*. No section id was renamed, so every deep link and the whole guided tour still resolve.
+- **The app notices a new version.** Until now whoever installed 0.3.0 stayed on 0.3.0 forever, without being told otherwise. On macOS it can install it, and only after proving the package is *ours*: signature, Gatekeeper, and the team anchor compared against the running copy — notarization alone means Apple looked at it, not that we built it. The package must also start before anything is replaced, and rolls back if it does not. On Windows and Linux, where the exports are unsigned, it opens the release page and nothing else.
+
+### 🔒 Also
+
+The provider CLI refreshes itself at boot and **substitutes** a stale model pin instead of deleting it (deleting brought the old one straight back, because that is the plan's default); a tag now runs the same self-tests as a push; Windows users are told what the SmartScreen warning is and what to click; and the `soft_pause_team` brake is classified in writing as a safety net that does not yield to the user's spending derogation — it fires when *no* usage number can be read, and yielding there would not mean spending more, it would mean spending blind.
+
+---
+
+## [0.3.1] — 2026-07-28
+
+**Connecting a real VPS, and giving the throttle back to the Captain** — 43 commits since v0.3.0. All five game fixes below were found by connecting the freshly released 0.3.0 to a newly provisioned box on a provider that is not Hetzner; two of them made activation impossible there. The other half of the release moves pacing decisions out of scripts and into the agents who are supposed to make them.
+
+### 🖥️ Native desktop application
+
+- **A VPS can be connected as any SSH user, not just `root`.** The connect panel hardcoded `root@` in seven call sites, so it only ever worked with providers that hand out root — Hetzner. On OVHcloud the connection died with `Permission denied (publickey)` because that box logs you in as `ubuntu`, and AWS (`ubuntu`/`ec2-user`), Google Cloud and Azure (the account name) are no different. There is now an **SSH user** field next to the IP, default `root`, persisted with the rest of the VPS configuration; an empty value behaves exactly as before, so saved configurations are untouched. The SSH check went with it: it required `id -u = 0` and would have rejected a correctly-connected `ubuntu` box, so it now accepts root **or** passwordless `sudo` **or** a working `docker info`.
+- **The activation checklist grades the connected box, not the laptop.** Steps 02-04 read the local `~/.jht/` while connected to a VPS: a correctly provisioned box could never reach 4/4 (so the activation gate never opened), and — worse — step 03 went **green while validating a different tester's profile** left over on the operator's machine. Every probe now travels the same transport as step 01, and a remote value that cannot be read renders as **unknown**, never as the local one and never as green.
+- **Switching VPS no longer leaves the previous machine's state on the bus.** The office kept drawing the old box's pipeline — a 692→697 paper pile against 14 positions actually in the new database — because a freshly provisioned box publishes an empty list and the re-seed only ran on non-empty ones. The audit found much more than the counters surviving a reconnect: CPU telemetry, `live_settings` (which fed back into the setup screen as the active provider), chat history with its unread badges, coordinator state, usage history and profile status. All of it is now invalidated and re-seeded before the first paint, covered by a new headless self-test. With one box per beta tester, this was showing one user another user's work.
+- **The map fetches the office address and how sure the team is of it.** `office_address` appeared in no `.gd` file at all: the exact street address the Analysts work to obtain could not be displayed anywhere, and without `office_verified` a pin resolved to a street number rendered identically to one resolved to the city centroid — 30 geocoded positions collapsing onto 24 distinct points, which reads as a broken map. Verified offices are now a filled disc labelled with the company; everything else in that city is a single hollow ring marked `≈ City (n)`, and the address appears in the position card.
+- **The SSH key fingerprint is recomputed when the key changes.** It was written once while the panel was built, into a label nobody kept a reference to: picking a different key left the previous fingerprint on screen while the *new* key was the one actually used. That field exists to be compared against what the provider shows, so a stale value does not merely mislead — it turns an anti-MITM check into false assurance. When it cannot be computed it now says so instead of falling back to anything.
+
+### 🤖 Pacing — decisions move from scripts to agents
+
+- **The pace guard advises, the Captain decides.** It used to rewrite the worker throttle at every bridge sample, which made any manual override last less than five minutes. It now measures, produces a verdict and writes one line to the Captain — nothing applies it automatically. The reason is not ceremony: its correction is **one number for everybody**, derived from the most-braked worker, and it slowed the Analyst and the Scorer — the two roles that turn a backlog into a position *with a score* — exactly as hard as a Scout that was over-sourcing.
+- **New `throttle-distribution` skill** (7 languages) that owns the arithmetic of *who* pays the cut and *how much*: share answers who, production data answers who is worth slowing, and the role asymmetry says the Analyst and the Scorer go last. It also owns the do-nothing cases, because an intervention at every tick is noise and waking the Captain costs real budget. A pre-existing calibration formula was corrected along the way: it was linear and computed before the floor, producing 40-second durations that the 5-minute floor silently clamped to 300.
+- **Coprime throttle ladder.** The rungs were 5, 10, 15, 20, 25, 30, 40, 50, 60 minutes — every one a multiple of five, so two workers on different rungs resynchronised *by construction*: 5+10 collided every 10 minutes. Each coincidence was a burst of simultaneous requests. The rungs are now prime minutes (1, 2, 3, 5, 7, 11, 13, 17, 23, 31, 41, 53, 60); worst-case time between any pair goes from 10 to 35 minutes.
+- **Per-agent exemption from the worker floor**, deliberately not a global switch — the floor exists because of a measured incident, and removing it everywhere reproduces the July 15 night burn where floor and hard-stop were both off.
+
+### 🔥 The user can suspend the spending automatisms
+
+`jht burn on [--hours N]` — when the user orders *"the budget is not a constraint"*, that order finally has a place to live instead of five separate derogations dismantled by hand. Ten points consult it **before** braking rather than after: the three bridges before writing `daily-halt`, the working-hours gate, and `throttle-config` — which matters most, because the floor and the ladder apply **on read**, which is why every manual override used to snap back to 300 seconds on its own.
+
+It expires by itself (5 hours by default, one window; hard cap 12) and it reaches the agents, which was the requirement that made this hard: a technical derogation is not enough if the prompts do not know about it. On 2026-07-27 six workers had been exempted in code and the coordinator re-narrowed the exemption *in good faith*, correctly citing its own rule, undoing the user's order. So the Captain gets **C-23** and the Sentinella **S-10**, in all seven languages, both stating that narrowing the derogation is not theirs to do. The Sentinella's evening reserve stands down with the daily cap — it is the same ceiling under another name — and the brake re-arms immediately at expiry, bypassing its own cooldown.
+
+**Four brakes never yield**, and they are a code constant rather than prose: `weekly-halt` (beyond it the provider stops answering), `host_agent_cap` (19 sessions → load 24 on 6 cores → SSH unreachable: forcing it produces *less*), one-position-per-iteration, and `freeze_team`.
+
+### 🐳 Container, CLI & CI
+
+- **The provider CLI refreshes itself at boot.** A production VPS was running a CLI eleven days old, on a model one generation behind, with two agents stuck at 565k and 168k tokens against a 262k window — the current release offers 1M. Nobody noticed because no component had the job. The update now runs before the team starts, fails safe (no network, no problem: the container boots with the CLI it has), touches only the active provider, and **never changes the model** — a newer one is reported to the Captain as a finding, because that decision costs money and is the user's.
+- **Doctor and Maintainer can find the provider CLI again.** Their tmux pane PATH is a hardcoded list that never gained `/opt/jht-deps/npm-global/bin` after dependencies moved into the volume, so both spawns died with `REPL non partito` and retried in a loop while sixteen agents worked normally. `/opt/jht-deps/python/bin` (where `uv` lives) was missing too. The list now also **inherits** the container PATH, so the next time an install location moves nothing rots silently.
+- **Five self-tests existed and no workflow ran them** — including the seven-language parity guard, written specifically to prevent a repeat of the duplicated keys that broke startup in every language except Italian. They are now wired into `game.yml` and `release.yml`.
+- **Notarization survives a network blip.** `notarytool --wait` exits on the first network error: during the 0.3.0 release the runner lost the network after 45 minutes of waiting and discarded a submission that was perfectly valid — Apple's queue ran 4h30 that day. Submission and polling are now separate, and a failed query is retried rather than treated as a verdict.
+
+---
+
 ## [0.3.0] — 2026-07-27
 
-**The native-application cycle** — 2026-07-06 → 2026-07-27, 842 commits since v0.2.0. The desktop surface moved from an Electron launcher wrapping a web dashboard to a **native Godot office**; the browser is now cloud-only. Three user-visible removals are listed under *Breaking changes* below — read those first if you are upgrading an existing install.
+**The native-application cycle** — 2026-07-06 → 2026-07-27, 842 commits since v0.2.0. The desktop surface moved from an Electron launcher wrapping a web dashboard to a **native Godot office**; the browser is now cloud-only. Four user-visible removals are listed under *Breaking changes* below — read those first if you are upgrading an existing install.
 
 ### 💥 Breaking changes
 

@@ -65,6 +65,22 @@ Celle non usate = completamente trasparenti.
    di (128, 360) ±12 px — niente "scivolamento" verticale tra frame.
 3. **Identità**: occhiali scuri ovali/allungati SEMPRE (firma degli agenti);
    palette abiti coerente col ruolo; niente pixel art, niente flat vector.
+4. **Margini**: nessuna figura tocca i bordi superiore o laterali della
+   cella. Lo slicer limita sia altezza sia larghezza; il volto non deve essere
+   già tagliato nel sorgente.
+5. **Continuità**: ogni frame di camminata contiene una sola sagoma verticale;
+   niente scarpe, teste o altri frammenti staccati che tremano fuori sequenza.
+
+Audit statico di tutti i fogli principali:
+
+```bash
+python3 tools/audit_character_sheets.py
+```
+
+Il controllo misura anche le pose `work` contro le altre angolazioni, segnala
+le doppie sagome sovrapposte e intercetta frammenti staccati nei cicli `walk`.
+`--strict-unused` rende errore anche l'arte nelle celle che il rig non usa;
+senza il flag quelle celle legacy vengono ignorate.
 
 ## Foglio seduto (opzionale): `<slug>_sit.png`
 

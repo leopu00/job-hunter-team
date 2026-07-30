@@ -7,6 +7,9 @@
 tmux-send
 rate-budget
 throttle
+# Wake-up ack: first command after every throttle pause. Without it the
+# flag stays on NOTIFIED and the watchdog escalates on a healthy agent.
+throttle-ack
 
 # Emergency: spawn fresh DOTTORE quando rilevi che un agente smette di
 # consumare token in piena finestra (sospetta zombie). Post-mortem

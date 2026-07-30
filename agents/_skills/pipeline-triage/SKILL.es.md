@@ -39,6 +39,26 @@ De `positions` (P), `scores` (S), `applications` (A), computar:
 
 También útil: `python3 /app/shared/skills/db_query.py dashboard` para estado de un vistazo + instancias activas por rol.
 
+## Paso 1 bis — quién produce y quién se ha callado (2026-07-27)
+
+Los workers ya no envían `[START]` / `[DONE]` (esos bookends eran 30 de los 37 mensajes que recibió el
+Capitano en ~1,5h en un equipo de primer arranque). Su avance se tira desde aquí:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 30
+```
+
+⚠️ **Lista quién PRODUCE, así que un agente en stall desaparece de ella en lugar de destacar.** Un
+backlog que no se vacía no es automáticamente un worker que falta: puede ser un worker vivo y
+atascado, y spawnear un segundo deja al primero quemando. Antes de decidir, cruza tres fuentes:
+
+| Vivo (`tmux list-sessions`) | Cola (`next-for-*`) | Transiciones (`recent-activity`) | Veredicto |
+|---|---|---|---|
+| sí | no vacía | 0 | **STALL** — confirma con `capture-pane`, luego `agent-emergency` (Dottore-first → kill). **No** spawnees un segundo encima |
+| sí | no vacía | > 0 | está trabajando — es un problema de capacidad, ve al Paso 2 |
+| sí | vacía | 0 | idle legítimo — déjalo en paz (tras un `[SCOUT-ESAUSTO]` la quiescencia es deliberada) |
+| no | no vacía | 0 | falta de verdad — spawnéalo (Paso 2) |
+
 ## Paso 2 — elegir prioridad (cuello de botella primero, nunca trabajo nuevo)
 
 Aplicar la tabla de arriba a abajo. Detenerse en la primera condición que coincida.

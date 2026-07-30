@@ -46,6 +46,42 @@ jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
 
 ⚠️ **Verwende niemals rohes `tmux send-keys` für Inter-Agenten-Nachrichten.** Die TUIs von Codex und Kimi verlieren das Enter-Zeichen, wenn es im selben `send-keys`-Aufruf wie der Textinhalt ankommt, was zu stillen Deadlocks führt. Der Wrapper behandelt Text + Enter atomar mit einer Render-Pause. Skill unter `agents/_tools/jht-tmux-send`.
 
+## 🔇 Produzieren ist still — den Zustand holt sich der Capitano
+
+Ein Worker berührt den Capitano **null Mal**, um Fortschritt zu melden. Weder pro Item noch an den
+Rändern: die Bookends `[START]` / `[DONE]` wurden am **2026-07-27 entfernt**. Gemessen an einem Team
+beim Erststart, ~1,5h Verlauf: **37 Nachrichten erreichten den Capitano, 30 davon (81 %) reiner
+Status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — gegenüber 3-6, die wirklich eine Entscheidung
+verlangten. Jede kostet ihn eine volle Runde, und mit dem automatischen Modell-Split läuft er auf
+**Opus**, während Scout / Analyst / Scorer auf **Sonnet** laufen: ein „fertig" des Scorers weckt den
+teuersten Agenten der Flotte, damit er nichts tut.
+
+Die Pull-Seite gab es bereits, und sie ist besser:
+
+```bash
+python3 /app/shared/skills/db_query.py recent-activity --minutes 60
+```
+
+Ein Aufruf liefert die Zahlen pro Agent plus jede Transition mit Timestamp, Akteur, Position und Grund
+— `#22 checked→scored`, `#27 new→excluded — [DEAD_LINK]`. **Ein `DONE` trägt weniger Information als
+die Zeile, die es erzeugt hat.**
+
+### ⚠️ Was PUSH bleibt — die Asymmetrie ist der Punkt
+
+`recent-activity` zeigt, **wer produziert** — ein Agent, der stehen geblieben ist, **verschwindet aus
+der Liste**, statt aufzufallen: von der Seite des Capitano sehen dein Schweigen und deine Arbeit gleich
+aus. Diese drei müssen daher weiterhin **sofort** gesendet werden, weil sie **keine Spur in der DB**
+hinterlassen:
+
+| Signal | Wann |
+|---|---|
+| **BLOCKIERT** | du produzierst nicht mehr: Tool nach der `resilience`-Leiter kaputt, `403` / `LOCKED`, Quellen wirklich trocken (`[SCOUT-ESAUSTO]`), ein Queue-Element, das du weder bearbeiten noch überspringen kannst |
+| **Konflikt** | zwei Kollegen auf demselben Datensatz / Territorium, und ihr klärt es untereinander nicht |
+| **Entscheidungsanfrage** | ein `REQ`, das nur der Capitano beantworten kann (Taxonomie-Schiedsspruch, Skalierung, eine Entscheidung Richtung Nutzer) |
+
+Alles andere — Start, Fortschritt, Abschluss — ist Pull. **Wenn du aufhörst und nichts sagst, merkt es
+niemand.**
+
 ## ⏰ Pflicht-Signale pro Rolle
 
 Was jede Rolle via tmux senden MUSS (alles andere ist DB-gesteuert):

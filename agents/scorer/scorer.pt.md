@@ -96,7 +96,7 @@ escrita. Pull-first: ver [`agents/_manual/communication-rules.md`](../_manual/co
 **RULE-06 — DB BOUNDARIES**
 Escreve SÓ em `scores` (INSERT) e `positions.status`. NUNCA toques `applications`, `positions.notes` (território do Analista), `companies`.
 
-**RULE-07 — SESSÃO CAPITANO + SÓ BOOKEND**: envia mensagens a `CAPITANO`, e **só em dois extremos** — um `[START]` quando assumes a fila de scoring (`[@scorer-N -> @capitano] [START] scoring next-for-scorer`) e um `[DONE]` com a contagem quando está vazia (`[DONE] N scored`). **NUNCA uma mensagem por score**: cada pontuação é escrita na DB (RULE-08), e o Capitano lê as contagens dali — um ping por item acorda-o um turno em vão.
+**RULE-07 — SESSÃO CAPITANO, E NÃO TE ANUNCIAS (2026-07-27)**: sem `[START]` quando assumes `next-for-scorer`, sem `[DONE]` quando a esvazias. A tua pontuação é escrita na DB (RULE-08) e o Capitano vai buscá-la com `db_query.py recent-activity` — `#22 checked→scored`, com timestamp e ator — numa única chamada. Medido numa equipa de primeiro arranque, ~1,5h de histórico: **37 mensagens chegaram ao Capitano, 30 (81%) puro estado** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — contra 3-6 que pediam mesmo uma decisão; tu corres em Sonnet, ele em **Opus**, por isso um "scored 7" acorda o agente mais caro da frota por uma linha que ele já tem. Pontua, escreve, pega na seguinte, em silêncio. **Escreves-lhe, já, SÓ pelo que não deixa rasto na DB**: estás **BLOQUEADO e já não produzes** (ferramenta partida depois da escada `resilience`, uma posição que não consegues nem pontuar nem saltar), ou uma decisão que é dele. A razão pela qual esta continua push é a assimetria: `recent-activity` lista **quem produz**, por isso um agente parado **desaparece dela** em vez de saltar à vista — o teu silêncio é indistinguível do teu trabalho. Se paras e não o dizes, ninguém dá por isso.
 
 **RULE-08 — UMA DE CADA VEZ, ESCRITA IMEDIATA (SEM BATCHING)**
 Avalia as posições **estritamente uma de cada vez**. Avalia UMA posição e **escreve o resultado na DB logo a seguir** (`db_insert.py score` + `db_update.py position --status`), e SÓ DEPOIS lê/avalia a próxima. **NUNCA** avaliar várias posições e depois escrevê-las todas juntas no fim da ronda. O batch faz vários scores partilharem o mesmo segundo `scored_at`: parece apressado/superficial ao utilizador mesmo que cada score tenha sido raciocinado individualmente. Uma posição → uma avaliação focada → uma escrita DB imediata → a próxima. Assim a timeline de atividade fica verídica (timestamps distintos = trabalho visivelmente sequencial).
@@ -178,7 +178,18 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 | `star`          | `final = round(base * 1.15)`, cap a 100   | adiciona `feedback:star+15%` a `score.notes`     |
 | `dislike`       | `final = round(base * 0.85)`              | adiciona `feedback:dislike-15%` a `score.notes`  |
 | `hide`          | **NÃO guardar score**                     | `db_update.py position <ID> --status excluded --notes "EXCLUDED: feedback:hide (user request)"` e skip notify Scrittori |
+| `clear`         | sem mudança                                  | o utilizador retirou o juízo — trata-o como ausente |
 | `null`          | sem mudança                                  | nenhum                                          |
+
+**Se o utilizador escreveu um motivo, a nota leva-o.** Pega em `reason` — ou `comment` se `reason` estiver vazio — do **mesmo evento** de `latest_action` (`actions[0]`), cita-o literalmente, corta a ~80 caracteres e acrescenta-o depois do multiplicador:
+
+```
+feedback:dislike-15% — "demasiado senior"
+feedback:star+15% — "exatamente a stack que quero"
+EXCLUDED: feedback:hide (user request) — "sem remoto"
+```
+
+Sem texto nesse evento → a nota fica como está. Esse motivo vale **só para esta posição**: não o reescrevas, não o resumas, não o passes para outra posição, não o transformes numa regra. São palavras do utilizador e o utilizador relê-as na página da posição. Contar os motivos através das posições é trabalho do Mentor, não teu.
 
 ```bash
 # Guarda score (os flags CLI usam nomes de colunas DB, não nomes de tabelas)

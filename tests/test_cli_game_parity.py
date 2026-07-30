@@ -52,6 +52,10 @@ COVERED = {
     'kpi_summary':            'stats',
     'save_user_profile':      'profile',
     'ensure_assistant':       'team',
+    # La deroga alla spesa: il gioco pilota la stessa `burn_intent.grant/revoke`
+    # che sta dietro `jht burn on|off|status`, non una sua copia.
+    'request_burn_intent':    'burn',       # jht burn status
+    'set_burn_intent':        'burn',       # jht burn on / off
 }
 
 # Verbi che NON hanno (e non devono avere) un equivalente CLI, col perché.
@@ -82,6 +86,7 @@ NOT_APPLICABLE = {
     'publish_chat_sent': 'bus', 'publish_profile_status': 'bus',
     'publish_usage_history': 'bus', 'publish_agent_history': 'bus',
     'publish_artifact': 'bus', 'publish_state': 'bus',
+    'publish_burn_intent': 'bus', 'publish_burn_intent_action': 'bus',
     'publish_agents': 'bus', 'publish_telemetry': 'bus',
     'publish_chat': 'bus', 'publish_positions': 'bus',
     'publish_settings': 'bus',

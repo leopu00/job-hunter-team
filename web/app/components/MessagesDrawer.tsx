@@ -22,13 +22,16 @@ import {
 import MessageBody, { stripInlineMarkdown } from "@/app/components/MessageBody";
 import { usePendingMessagesLive } from "@/app/hooks/usePendingMessagesLive";
 import {
-  THREAD_T,
+  optimisticUserTurn,
   postAcks,
-  postReply,
+  postChat,
   unreadIdsOf,
   withAgentAcked,
-  withReply,
+  withConfirmedTurn,
+  withoutTurn,
 } from "@/lib/messages-thread";
+import { MAX_CHAT_BODY, isChatAgent } from "@/lib/chat-agents";
+import AgentAvatar from "@/app/components/AgentAvatar";
 import type { PendingMessage } from "@/lib/types";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./MessagesDrawer.i18n";
@@ -76,8 +79,9 @@ function buildConversations(messages: PendingMessage[]): Conversation[] {
   return convs;
 }
 
-// Pallino-avatar dell'agente: l'emoji del ruolo come foto profilo (scelta
-// utente 20/07), su anello del colore del ruolo. size in px.
+// Pallino-avatar dell'agente. [JHT-CHAT-UNIFY] Non piu' l'emoji del ruolo
+// ma il ritratto in stile fumetto ritagliato sul volto — lo stesso volto
+// della pagina /agents. L'anello col colore del ruolo resta.
 function AgentDot({
   agent,
   locale,
@@ -87,23 +91,7 @@ function AgentDot({
   locale: string;
   size?: number;
 }) {
-  const info = agentInfo(agent, locale);
-  return (
-    <span
-      aria-hidden
-      className="shrink-0 rounded-full flex items-center justify-center"
-      style={{
-        width: size,
-        height: size,
-        fontSize: Math.round(size * 0.52),
-        lineHeight: 1,
-        background: `color-mix(in srgb, ${info.color} 14%, var(--color-panel))`,
-        border: `1px solid color-mix(in srgb, ${info.color} 55%, transparent)`,
-      }}
-    >
-      {info.emoji}
-    </span>
-  );
+  return <AgentAvatar agent={agent} locale={locale} size={size} ring />;
 }
 
 export default function MessagesDrawer() {
@@ -156,8 +144,10 @@ export default function MessagesDrawer() {
   // regrediscono mai lo stato ottimistico locale (ack/reply appena fatti).
   usePendingMessagesLive(
     useCallback((row, event) => {
-      // Il widget web mostra solo il canale web (stesso filtro dell'API).
-      if (row.delivered_via !== "web") return;
+      // [JHT-CHAT-UNIFY] Niente filtro su `delivered_via`: quella colonna
+      // dice su quale canale e' stata spinta la notifica, non se il turno
+      // fa parte della conversazione. Filtrarla nascondeva sul web tutte le
+      // risposte anche inoltrate su Telegram.
       const cur = messagesRef.current;
       const idx = cur.findIndex((m) => m.id === row.id);
       if (idx < 0 && event === "UPDATE") return; // riga fuori finestra: ignora
@@ -224,24 +214,28 @@ export default function MessagesDrawer() {
     if (active) chatEndRef.current?.scrollIntoView({ block: "end" });
   }, [activeAgent, messages.length, active]);
 
-  // La risposta rapida aggancia l'ULTIMO messaggio dell'agente senza
-  // user_reply (l'API di reply è per-messaggio).
-  const replyTarget = active
-    ? [...active.messages].reverse().find((m) => !m.user_reply)
-    : undefined;
+  // [JHT-CHAT-UNIFY] Si scrive, non si "risponde": il composer non dipende
+  // piu' dall'esistenza di un messaggio dell'agente senza risposta. Resta
+  // spento solo per un mittente fuori dalle tre chat (un agente che notifica
+  // e con cui, dal web, non si conversa: la sua chat vive nel videogioco).
+  const canWrite = !!active && isChatAgent(active.agent);
 
   async function handleSend() {
-    if (!replyTarget) return;
-    const reply = replyText.trim();
-    if (!reply) return;
+    if (!active || !canWrite || sending) return;
+    const text = replyText.trim();
+    if (!text) return;
+    const agent = active.agent;
+    const optimistic = optimisticUserTurn(agent, text);
     setSending(true);
     setError(null);
+    setReplyText("");
+    setMessages((ms) => [optimistic, ...ms]);
     try {
-      await postReply(replyTarget.id, reply);
-      const now = new Date().toISOString();
-      setMessages((ms) => withReply(ms, replyTarget.id, reply, now));
-      setReplyText("");
+      const confirmed = await postChat(agent, text);
+      setMessages((ms) => withConfirmedTurn(ms, optimistic.id, confirmed));
     } catch (e) {
+      setMessages((ms) => withoutTurn(ms, optimistic.id));
+      setReplyText(text);
       setError((e as Error).message);
     } finally {
       setSending(false);
@@ -549,20 +543,19 @@ export default function MessagesDrawer() {
                         }
                       }}
                       rows={1}
-                      maxLength={4000}
-                      disabled={!replyTarget || sending}
-                      placeholder={
-                        replyTarget
-                          ? tr("reply_placeholder")
-                          : tr("no_reply_target")
-                      }
+                      maxLength={MAX_CHAT_BODY}
+                      disabled={!canWrite || sending}
+                      placeholder={tr("write_to").replace(
+                        "{name}",
+                        agentInfo(active.agent, locale).name,
+                      )}
                       className="flex-1 px-3 py-2 text-[11.5px] bg-[var(--color-card)] border border-[var(--color-border)] rounded resize-none text-[var(--color-base)] disabled:opacity-50 focus:outline-none focus:border-[var(--color-border-glow)]"
                     />
                     <button
                       type="button"
                       onClick={() => void handleSend()}
                       disabled={
-                        !replyTarget || sending || replyText.trim().length === 0
+                        !canWrite || sending || replyText.trim().length === 0
                       }
                       aria-label={tr("send")}
                       className="w-8 h-8 shrink-0 rounded flex items-center justify-center cursor-pointer border transition-colors disabled:opacity-40 disabled:cursor-default"
