@@ -33,6 +33,17 @@ automatico — il Capitano non è un worker):
   3. RIPRESA — alla scadenza, messaggio via BUFFER tmux (mai `send-keys` col
      testo inline: il quoting salta al primo apice).
 
+## Il secondo segnale: un ack che non arriva (2026-07-30)
+
+Il ciclo sopra guarda il PANE, e il pane non sa dire se un agente è inattivo o
+bloccato. Il motore dei throttle (`shared/skills/throttle_engine.py`) produce un
+segnale che invece lo sa: manda la sveglia, mette il flag su `NOTIFIED`, e
+aspetta che sia **l'agente** a flipparlo su `ACTIVE` con `throttle-ack`. Un flag
+fermo su `NOTIFIED` oltre la soglia non è «forse idle»: la sveglia è partita e
+non ha risposto. Questo watchdog legge quella lista (`notified_without_ack()`) e
+la porta al Capitano — è il segnale che gli mancava per distinguere `idle` da
+`bloccato`, il buco che tutti i watchdog attuali condividono.
+
 Backoff sugli stalli consecutivi (il contatore si azzera solo quando l'agente
 PRODUCE una riga nuova a suo nome, non quando riparte — ripartire e rifermarsi
 non è progresso):
@@ -101,6 +112,12 @@ ESCALATE_COOLDOWN_SEC = float(os.environ.get("JHT_STEPCAP_ESCALATE_COOLDOWN", "3
 # tardi. 15 min tiene il log leggibile durante un halt lungo e resta una prova
 # periodica che il watchdog è vivo e sta aspettando, non che si è dimenticato.
 GATE_RETRY_SEC = float(os.environ.get("JHT_STEPCAP_GATE_RETRY", "900"))
+# Soglia dell'ack mancato. Default: quella del motore dei throttle, così esiste
+# UN numero e non due che divergono. L'env serve ai test e alla diagnosi.
+NOTIFIED_ACK_MAX_SEC = os.environ.get("JHT_STEPCAP_ACK_MAX")
+# Un agente fermo su NOTIFIED resta fermo: senza cooldown il Capitano riceve lo
+# stesso avviso a ogni giro (60s) finché qualcuno non interviene.
+ACK_ESCALATE_COOLDOWN_SEC = float(os.environ.get("JHT_STEPCAP_ACK_COOLDOWN", "3600"))
 CAPTAIN_SESSION = os.environ.get("JHT_STEPCAP_CAPTAIN", "CAPITANO")
 TMUX_BUFFER = "jht-stepcap"
 
@@ -185,6 +202,10 @@ def _load_shared(name: str, filename: str):
 
 def _throttle_config():
     return _load_shared("throttle_config", "throttle-config.py")
+
+
+def _throttle_engine():
+    return _load_shared("throttle_engine", "throttle_engine.py")
 
 
 def ladder() -> list:
@@ -667,6 +688,62 @@ def _handle_agent(session, agent, entry, now, live_workers):
             % (agent, consecutive, max(1, seconds // 60)))
 
 
+def check_missing_acks(state: dict, now: float) -> list:
+    """Agenti che hanno ricevuto la sveglia e non hanno firmato: ESCALATION.
+
+    È l'altro segnale di questo watchdog, e l'unico DETERMINISTICO. Il ciclo del
+    cap di step guarda il pane e deve indovinare; qui non si indovina: il motore
+    dei throttle ha mandato la sveglia, ha scritto `NOTIFIED` con l'ora, e ha
+    lasciato l'ack all'agente. Se il flag è ancora lì dopo N minuti l'agente non
+    è inattivo — non ha risposto a una richiesta che gli è arrivata.
+
+    Nessun nudge: questo watchdog non sa cosa ha bloccato l'agente e riprovare a
+    scrivergli è ciò che ha già fallito. Si porta la prova al Capitano, che
+    decide (`/clear` o respawn).
+    """
+    mod = _throttle_engine()
+    if mod is None:
+        return []
+    try:
+        limit = float(NOTIFIED_ACK_MAX_SEC) if NOTIFIED_ACK_MAX_SEC \
+            else float(mod.NOTIFIED_ACK_MAX_SEC)
+        stuck = mod.notified_without_ack(now=now, max_sec=limit)
+    except Exception as exc:  # noqa: BLE001 — il segnale nuovo non abbatte il giro
+        _log("lettura dei flag di throttle fallita: %s" % exc)
+        return []
+    if not stuck:
+        # Nessuno fermo: si buttano i cooldown, così un agente che si ribloccasse
+        # domani viene segnalato subito e non dopo un'ora di silenzio.
+        state.pop("ack_escalations", None)
+        return []
+
+    sent = state.setdefault("ack_escalations", {})
+    if not isinstance(sent, dict):
+        sent = {}
+        state["ack_escalations"] = sent
+    for row in stuck:
+        agent = row["agent"]
+        emit("notified_no_ack", agent=agent, ts=now, session=row.get("session"),
+             waiting_sec=row.get("waiting_sec"), threshold_sec=int(limit))
+        last = sent.get(agent) or 0
+        if now - float(last) < ACK_ESCALATE_COOLDOWN_SEC:
+            continue
+        sent[agent] = now
+        notify_captain(
+            "[DA @SISTEMA A @CAPITANO] %s ha ricevuto la sveglia dal motore dei "
+            "throttle %d min fa e non ha ancora firmato l'ack (flag fermo su "
+            "NOTIFIED). Non è «forse idle»: la sveglia è arrivata e non ha "
+            "risposto, quindi è bloccato. Non gli scrivo altro — decidi tu "
+            "(`/clear` o respawn). Prova: state/throttle-flags.json, storico "
+            "logs/throttle-engine.jsonl."
+            % (agent, max(1, int(row.get("waiting_sec", 0) // 60))))
+    # Un agente che ha firmato non deve portarsi dietro il suo cooldown.
+    live = {row["agent"] for row in stuck}
+    for gone in [a for a in sent if a not in live]:
+        sent.pop(gone, None)
+    return stuck
+
+
 def tick(now=None) -> dict:
     """Un giro completo. Ritorna lo stato aggiornato (comodo per i test)."""
     now = time.time() if now is None else float(now)
@@ -694,12 +771,21 @@ def tick(now=None) -> dict:
     for gone in [a for a in agents if a not in seen]:
         agents.pop(gone, None)
 
+    # Ack mancati: fuori dal ciclo per sessione, perché il segnale non viene dal
+    # pane e vale anche per un agente che il pane mostrerebbe perfettamente sano.
+    try:
+        missing_acks = check_missing_acks(state, now)
+    except Exception as exc:  # noqa: BLE001
+        _log("controllo degli ack fallito: %s" % exc)
+        missing_acks = []
+
     last_hb = state.get("last_heartbeat")
     if last_hb is None or (now - float(last_hb)) >= HEARTBEAT_SEC:
         state["last_heartbeat"] = now
         stalled = sum(1 for e in agents.values()
                       if e.get("phase") in ("throttled", "escalated"))
-        emit("heartbeat", ts=now, watched=live_workers, stalled=stalled)
+        emit("heartbeat", ts=now, watched=live_workers, stalled=stalled,
+             no_ack=len(missing_acks) or None)
 
     write_state(state)
     return state

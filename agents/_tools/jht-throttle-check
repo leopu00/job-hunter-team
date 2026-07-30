@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# jht-throttle-check — pre-task gate per il pattern detached.
+# jht-throttle-check — SHIM di compatibilità: sei ancora in pausa?
+#
+# ⚠️ Deprecato assieme a `jht-throttle`. Nel disegno nuovo il gate pre-task non
+# serve più: non riprendi da solo, ti sveglia il motore. Resta per i prompt che
+# ancora aprono l'iterazione con `jht-throttle-check <me> || jht-throttle-wait <me>`.
+#
+# Interroga `throttle_engine.py check`, che guarda DUE fonti e prende la più
+# lontana: il flag del motore (`state/throttle-flags.json`) e il vecchio state
+# file per-agente (`state/throttle-<agente>.json`), che `spawn_stagger.py`
+# scrive per staggerare un worker appena nato e `stepcap-watchdog.py` per
+# metterlo in pausa prima di riprenderlo. Ignorare il secondo vorrebbe dire che
+# quei due meccanismi smettono silenziosamente di gatare gli agenti.
 #
 # Exit code:
-#   0 → l'agente NON è in throttle, può procedere col task.
-#   1 → l'agente È ancora in throttle (state.until > NOW). Stampa
-#       "STILL_THROTTLED remaining=Xs" su stderr. L'agente DEVE
-#       chiamare `jht-throttle-wait` per ribloccarsi finché il
-#       throttle non scade.
-#
-# Quando esiste un check positivo: il subprocess Python detached del
-# precedente `jht-throttle` sta ancora dormendo, oppure il PARENT
-# bash è stato killato dal timeout della tool call e l'agente è ora
-# libero per errore. In entrambi i casi il prossimo task non deve
-# partire finché until non è passato.
-#
-# Uso:
-#   jht-throttle-check <agent>
+#   0 → non sei in pausa, puoi procedere.
+#   1 → sei ancora in pausa. Stampa "STILL_THROTTLED ... remaining=Xs" su
+#       stderr. Chiudi il turno: la sveglia arriva dal motore.
+#   2 → argomenti mancanti.
 #
 # Nessun side effect, solo lettura. Sicuro chiamare ad alta frequenza.
 
@@ -27,26 +28,13 @@ if [ -z "$AGENT" ]; then
   exit 2
 fi
 
-JHT_HOME="${JHT_HOME:-/jht_home}"
-STATE_FILE="$JHT_HOME/state/throttle-${AGENT}.json"
-
-if [ ! -f "$STATE_FILE" ]; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE="/app/shared/skills/throttle_engine.py"
+[ -f "$ENGINE" ] || ENGINE="${SCRIPT_DIR}/../../shared/skills/throttle_engine.py"
+if [ ! -f "$ENGINE" ]; then
+  # Motore assente: fail-open. Un gate che blocca l'agente perché non riesce a
+  # leggere lo stato lo ferma per sempre, ed è il guasto peggiore dei due.
   exit 0
 fi
 
-UNTIL=$(grep -o '"until":[0-9]*' "$STATE_FILE" 2>/dev/null | head -1 | cut -d: -f2)
-if [ -z "$UNTIL" ]; then
-  exit 0
-fi
-
-NOW=$(date '+%s')
-if [ "$NOW" -lt "$UNTIL" ]; then
-  REMAINING=$(( UNTIL - NOW ))
-  echo "STILL_THROTTLED agent=$AGENT remaining=${REMAINING}s" >&2
-  exit 1
-fi
-
-# until già passato: state file rimasto stale (parent killato senza
-# cleanup). Lo rimuoviamo qui per pulizia.
-rm -f "$STATE_FILE" 2>/dev/null || true
-exit 0
+exec python3 "$ENGINE" check "$AGENT"

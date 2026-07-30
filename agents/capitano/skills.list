@@ -56,4 +56,11 @@ agent-emergency
 
 # Throttle config + on-demand rate-budget probe (rare, for ad-hoc diagnosis)
 throttle
+# Wake-up ack: first command after every throttle pause. Without it the
+# flag stays on NOTIFIED and the watchdog escalates on a healthy agent.
+throttle-ack
+# The ONLY surface that writes the team's rhythms. The engine re-reads the
+# config when it arms each timer, so a change bites on the agent's next cycle
+# by itself: never send a number over tmux.
+throttle-set
 rate-budget

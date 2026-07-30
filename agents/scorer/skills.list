@@ -7,6 +7,9 @@ db-query
 db-insert
 db-update
 throttle
+# Wake-up ack: first command after every throttle pause. Without it the
+# flag stays on NOTIFIED and the watchdog escalates on a healthy agent.
+throttle-ack
 
 # User feedback signal (like/dislike/hide/star from web dashboard) — multiplier on final score
 feedback-query
