@@ -254,12 +254,8 @@ const translations = {
     hu: "Lábléc hivatkozások",
   },
 
-  // ─── LandingHome: hero alt + sezioni ──────────────────────────────
-  home_hero_alt: {
-    it: "Illustrazione a fumetto: un team di agenti AI — tutti con gli stessi occhiali da sole neri — seduto attorno a un lungo tavolo da riunione in un elegante ufficio in grattacielo, mentre un agente in piedi presenta dei grafici su una lavagna.",
-    en: "Comic-style illustration: a team of AI agents — all wearing the same black sunglasses — seated around a long boardroom table in an elegant high-rise office, while one standing agent presents charts on a whiteboard.",
-    hu: "Képregény stílusú illusztráció: AI ügynökök csapata — mind ugyanazt a fekete napszemüveget viselve — egy hosszú tárgyalóasztal körül ül egy elegáns felhőkarcoló irodában, miközben egy álló ügynök diagramokat mutat be egy táblán.",
-  },
+  // ─── LandingHome: sezioni ─────────────────────────────────────────
+  // (l'alt dell'hero ora vive in LandingGlobe.i18n.ts col globo)
   home_team_alt: {
     it: "Tre agenti del team a figura intera: lo Scout con la lente, l'Analista in camice, lo Scrittore con la penna d'oca — tutti con gli occhiali da sole.",
     en: "Three full-body team agents: the Scout with a magnifying glass, the Analyst in a lab coat, the Writer with a quill pen — all wearing sunglasses.",
