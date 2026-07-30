@@ -118,6 +118,45 @@ Quindi:
   `Bash(python3 *)`, quindi una query custom con il proprio `LIMIT` è già
   possibile e va **documentata**, non ristretta.
 
+### ✅ Come è stato implementato (2026-07-30)
+
+**Default: 20 righe, uguale su tutte e undici le code.** Una coda di lavoro
+serve a prendere il prossimo item, non a fotografare il backlog — l'Analista
+lavora *una* posizione per turno, lo Scorer una alla volta — e il quadro
+d'insieme adesso arriva dal totale, che si vede sempre. Numeri diversi per coda
+sarebbero stati undici cose da ricordare in 7 lingue, per un guadagno che nessuna
+misura giustifica: 20 righe sono ~1 KB.
+
+**Il totale non costa una seconda query.** Ogni `SELECT` porta
+`COUNT(*) OVER () AS _total`: SQLite calcola le window function sull'intero
+result set **prima** del `LIMIT`, quindi una passata sola dà righe tagliate e
+totale esatto. Sulla coda `logo-missing`, che è aggregata per azienda, il
+`COUNT(*) OVER ()` dopo il `GROUP BY` conta i **gruppi** — cioè le aziende in
+coda, che è il numero giusto.
+
+| superficie | prima | dopo |
+|---|---|---|
+| uscita umana | `Coda (1375):` + 1.375 righe | `Coda (mostrate 20 di 1375):` + 20 righe + come alzarlo |
+| `--limit N` | non esisteva | su tutte le code |
+| nessun limite | era l'unico comportamento | esplicito: `--all` o `--limit 0` |
+| `--json` | non esisteva sulle code | `{queue, label, total, shown, limit, rows[]}` |
+| coda spenta dalla policy | frase «OFF — …» | idem, e in JSON `enabled: false` — distinguibile da una coda vuota |
+
+**Un consumatore andava riparato insieme**: `.launcher/heartbeat-bridge.py`
+contava le **righe stampate** per dire al Capitano quanto è lunga la coda. Con
+un limite avrebbe riportato «20» su un backlog di 1.375 — cioè proprio il numero
+che gli farebbe smettere di scalare. Ora legge il `total` da `--json --limit 1`.
+
+**Regressione chiusa a chiave**: un test sul sorgente vieta
+`sub.add_parser('next-for-…')` diretto — le code passano tutte da
+`queue_parser()`, che aggiunge `--limit/--all/--json`. Una coda nuova non può
+nascere senza limite in silenzio.
+
+Fuori scope, per scelta: `positions` e `companies` non hanno un limite di
+default (stampano una riga compatta per posizione e sono comandi *di ricerca*,
+non code di lavoro) — se un giorno diventassero un problema, il pattern da
+copiare è questo.
+
 ---
 
 ## 🟡 Due difetti di correttezza trovati strada facendo
