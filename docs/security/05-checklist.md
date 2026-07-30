@@ -252,12 +252,12 @@ Explicit decisions to **not do** now, documented in [`03-implementation-tradeoff
 
 Surfaced from the OpenClaw comparison ([`02-openclaw-comparison.md`](02-openclaw-comparison.md)). Not in the 27 internal-audit findings, but **blockers for the public release**.
 
-- [x] **Generic SSRF dispatcher** — `shared/net/ssrf.ts`
-  - Faithful port of OpenClaw `src/shared/net/ip.ts` (IPv4/IPv6 special-use, IPv4-mapped IPv6 normalisation, embedded-IPv4 sentinel detection for 6to4 / Teredo / NAT64 / ISATAP / RFC6052), `infra/net/hostname.ts`, plus a distilled `ssrf.ts` (350 lines): `validateUrl`, `resolveAndAssertPublicHostname`, `safeFetch` with manual redirect handling and per-hop revalidation, `SsrFBlockedError`, hostname allowlist patterns, RFC2544 benchmark policy. Dispatcher-level DNS pinning via undici Agent is deferred (documented limitation: small TOCTOU window if an attacker controls authoritative DNS with very low TTL — out of JHT's single-user threat model).
-  - Tests: 80/80 pass on the OpenClaw fixture set translated to `node:test`.
-  - Integrated at: `web/api/webhooks` test-ping (user-controlled URL → `safeFetch` + strict policy) and `web/api/gateway` (env-controlled → `validateUrl` + `allowedHostnames: ['localhost', '127.0.0.1', '::1']`, replacing the regex-only homemade check that missed IPv6/embedded-IPv4 evasions).
-  - Follow-ups (non-blocker, tracked in BACKLOG): port to Python for `shared/skills/check_links.py`; expose to `cli/` (currently JS-only, would need a build step to consume the TS module); apply to `web/api/{deploy,pipelines,download,cloud-sync}` operator URLs as defence-in-depth.
-  - Merged: 2743c3a6 (primitives) + d55e822d (dispatcher + tests) + 43594a50 (webhooks integration) + fae92be6 (gateway refactor)
+- [ ] **Generic SSRF dispatcher** — module removed, **no SSRF guard is integrated anywhere**
+  - A port of the OpenClaw primitives did land (`web/lib/ssrf.ts` + `web/lib/net/{ssrf,ip,hostname,string-coerce}.ts`, 1,134 lines: `validateUrl`, `resolveAndAssertPublicHostname`, `safeFetch`, `SsrFBlockedError`, IPv4/IPv6 special-use detection). It was **never called by any route**: every occurrence of `safeFetch`/`validateUrl` in the repo was internal to the module itself.
+  - The previous version of this entry claimed integration at `web/api/webhooks` test-ping and `web/api/gateway`. **Neither route has ever existed in this repo** — the claim was false.
+  - Removed on 2026-07-30 rather than left in place: dead code that a checklist declares active is worse than no code, because the next person reads the checklist and assumes the guard is there. The implementation is in git history (`git log --diff-filter=D -- web/lib/net/ssrf.ts`) and can be restored verbatim.
+  - Why there is no gap today: the 5 server-side `fetch()` in `web/` (`api/ai-assistant`, `api/cloud-sync/device-register`, `api/feedback` ×3) all target hard-coded hosts (`api.openai.com`, `api.resend.com`, `api.github.com`) or an env-provided URL. **None of them takes a URL supplied by the user**, so there is no user-controlled outbound-fetch surface to protect.
+  - ⚠️ **Precondition for future work:** the first route that fetches a user-supplied (or user-influenced) URL must reintroduce a guard *before* shipping. Restore the module from history instead of writing a new regex check.
 
 ---
 
