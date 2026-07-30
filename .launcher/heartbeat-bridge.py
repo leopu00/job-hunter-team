@@ -87,24 +87,26 @@ def _log(msg):
 
 
 def _db_count(cmd):
-    """Conta le righe-posizione di un db_query (next-for-*). Ritorna int o None.
-    Robusto: "nessuna"/"non" → 0; errori → None (campo omesso, non inventato)."""
+    """Quante posizioni ci sono in una coda (`next-for-*`). Ritorna int o None.
+
+    Legge il TOTALE dichiarato da `--json` invece di contare le righe stampate:
+    dal 2026-07-30 le code hanno un limite di default (20), quindi contare le
+    righe direbbe al Capitano "20" su una coda da 1.375 — proprio il numero che
+    lo farebbe smettere di scalare. `--limit 1` perché la riga non serve: il
+    totale è calcolato prima del limite. Errori → None (campo omesso dal
+    battito, mai inventato).
+    """
     try:
         out = subprocess.run(
-            ["python3", DB_QUERY, cmd], capture_output=True, text=True, timeout=30
+            ["python3", DB_QUERY, cmd, "--json", "--limit", "1"],
+            capture_output=True, text=True, timeout=30,
         ).stdout
     except Exception:
         return None
-    low = out.lower()
-    if "nessun" in low or "no positions" in low or "vuota" in low or "empty" in low:
-        return 0
-    # conta righe che sembrano una posizione (iniziano con # o con un id numerico)
-    n = 0
-    for line in out.splitlines():
-        s = line.strip()
-        if s.startswith("#") or (s[:1].isdigit() and "|" in s):
-            n += 1
-    return n
+    try:
+        return int(json.loads(out.strip().splitlines()[-1])["total"])
+    except Exception:
+        return None
 
 
 def _tickets_open():

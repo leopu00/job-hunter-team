@@ -141,7 +141,7 @@ Ha 2 Analistad van, valtogasd a ping celpontot a terheles elosztasa erdekeben (a
 - ❌ Ellenorzes `curl`-lel `-L` nelkul — egy 302-es atiranyitas egy generikus `/careers` oldalra kovetesi atiranyitas nelkul elonek tunik; halott JD-t szurnal be.
 - ❌ A jelentkezesi urlap ellenorzese Workable-on a kanonikus JD-oldal helyett — hamis pozitiv halott linkek.
 - ❌ `fetch` MCP hasznalata `linkedin.com` / `wellfound.com` oldalon — blokkolt, 403-as bannert kapsz a JD helyett.
-- ❌ A wrapper megkerulese `python3 -c "import sqlite3; INSERT ..."`-vel — megtoeri a dedup-invariansokat es a `found-by` koveteset.
+- ❌ A wrapper megkerulese `python3 -c "import sqlite3; INSERT ..."`-vel — megtoeri a dedup-invariansokat es a `found-by` koveteset, es most mar az adatbazis is visszautasitja: a `positions.url` UNIQUE. A `UNIQUE constraint failed: positions.url` azt jelenti, hogy a hirdetes mar bent van — vissza az 1. kapuhoz, ne probald ujra modositott URL-lel.
 - ❌ `--status` beallitasa az alapertelmezett `new`-tol elterore (a Scout soha nem allit be statuszt manuálisan; a wrapper kezeli).
 
 ## Lasd meg
