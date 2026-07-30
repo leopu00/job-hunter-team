@@ -15,6 +15,7 @@ Salary (V2 — dichiarato vs stimato):
 
 import argparse
 import re
+import sqlite3
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -235,53 +236,100 @@ def check_duplicate(conn, url, company, title, location=None):
     return None, None
 
 
+def _rollback_quietly(conn):
+    """ROLLBACK che non copre l'errore vero se la transazione è già chiusa."""
+    try:
+        conn.execute("ROLLBACK")
+    except sqlite3.Error:
+        pass
+
+
 def insert_position(args):
     conn = get_db()
     ensure_schema(conn)
 
-    # Check duplicati PRIMA dell'inserimento (bug #25 SC-05: 3 livelli)
-    existing, match_type = check_duplicate(
-        conn, args.url, args.company, args.title, getattr(args, 'location', None),
-    )
-    if existing:
-        print(f"⚠️  DUPLICATO ({match_type}): '{args.company} — {args.title}' già presente come #{existing['id']} ({existing['company']} — {existing['title']}). INSERT annullato.")
+    # Dedup e INSERT sono UNA transazione, non due momenti scollegati.
+    #
+    # Il check-then-insert nudo lascia una finestra fra il SELECT e l'INSERT:
+    # due Scout sulla stessa fonte guardano entrambi un DB in cui la posizione
+    # non c'è ancora, e la scrivono tutti e due. Oggi non capita perché C-21
+    # divide i territori, ma è esattamente la configurazione che
+    # [SOURCE-YIELD-MEMORY] vuole valutare (due Scout insieme su LinkedIn):
+    # il vincolo va messo prima che quella configurazione arrivi.
+    #
+    # `BEGIN IMMEDIATE` prende il lock di scrittura SUBITO, non al primo
+    # INSERT: il secondo processo si mette in coda (busy timeout 10s, vedi
+    # get_db) e quando entra il suo SELECT vede già la riga dell'altro, quindi
+    # riporta un duplicato invece di crearne uno. `isolation_level = None`
+    # toglie di mezzo la gestione implicita di sqlite3 e ci lascia il
+    # controllo esplicito di BEGIN/COMMIT/ROLLBACK.
+    conn.isolation_level = None
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        # Check duplicati PRIMA dell'inserimento (bug #25 SC-05: 4 livelli)
+        existing, match_type = check_duplicate(
+            conn, args.url, args.company, args.title, getattr(args, 'location', None),
+        )
+        if existing:
+            _rollback_quietly(conn)
+            print(f"⚠️  DUPLICATO ({match_type}): '{args.company} — {args.title}' già presente come #{existing['id']} ({existing['company']} — {existing['title']}). INSERT annullato.")
+            conn.close()
+            sys.exit(1)
+
+        # Auto-resolve company_id
+        company_id = resolve_company_id(conn, args.company)
+
+        cur = conn.execute("""
+            INSERT INTO positions (title, company, company_id, location,
+                                   remote_type,
+                                   salary_declared_min, salary_declared_max, salary_declared_currency,
+                                   salary_estimated_min, salary_estimated_max, salary_estimated_currency,
+                                   salary_estimated_source,
+                                   url, source, jd_text, requirements,
+                                   found_by, deadline, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (args.title, args.company, company_id, args.location,
+              args.remote_type,
+              args.salary_declared_min, args.salary_declared_max, args.salary_declared_currency or 'EUR',
+              args.salary_estimated_min, args.salary_estimated_max, args.salary_estimated_currency or 'EUR',
+              args.salary_estimated_source,
+              args.url, args.source, args.jd_text,
+              args.requirements, args.found_by, args.deadline, args.notes))
+
+        # Bug #14: log la transizione iniziale (None → 'new') con by_agent =
+        # JHT_AGENT_NAME (es. scout-1). Senza questa entry il funnel parte
+        # da "scored" come stato visibile più antico — pessimo per metriche
+        # di throughput a livello pipeline.
+        position_id = cur.lastrowid
+        actor = os.environ.get('JHT_AGENT_NAME') or args.found_by or 'unknown'
+        conn.execute(
+            "INSERT INTO position_state_transitions "
+            "(position_id, from_state, to_state, by_agent, notes) "
+            "VALUES (?, NULL, 'new', ?, ?)",
+            (position_id, actor, 'initial INSERT'),
+        )
+        conn.execute("COMMIT")
+    except SystemExit:
+        raise
+    except sqlite3.IntegrityError as exc:
+        _rollback_quietly(conn)
+        # L'indice unico su `positions.url` è l'ultima parola sulla race, non
+        # la prima: con BEGIN IMMEDIATE non dovrebbe mai scattare da questo
+        # percorso. Se scatta, qualcuno ha scritto lo stesso URL fuori dal
+        # wrapper — trattiamolo come il duplicato che è, non come un crash.
+        # Gli altri IntegrityError (i CHECK di lunghezza su title/company/
+        # location, mig 015) devono invece restare visibili: sono bug di
+        # parsing dello Scout e vanno letti nel suo turno.
+        if 'UNIQUE' not in str(exc).upper():
+            conn.close()
+            raise
+        print(f"⚠️  DUPLICATO (URL già presente, vincolo UNIQUE): '{args.company} — {args.title}' — {args.url}. INSERT annullato.")
         conn.close()
         sys.exit(1)
+    except BaseException:
+        _rollback_quietly(conn)
+        raise
 
-    # Auto-resolve company_id
-    company_id = resolve_company_id(conn, args.company)
-
-    cur = conn.execute("""
-        INSERT INTO positions (title, company, company_id, location,
-                               remote_type,
-                               salary_declared_min, salary_declared_max, salary_declared_currency,
-                               salary_estimated_min, salary_estimated_max, salary_estimated_currency,
-                               salary_estimated_source,
-                               url, source, jd_text, requirements,
-                               found_by, deadline, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (args.title, args.company, company_id, args.location,
-          args.remote_type,
-          args.salary_declared_min, args.salary_declared_max, args.salary_declared_currency or 'EUR',
-          args.salary_estimated_min, args.salary_estimated_max, args.salary_estimated_currency or 'EUR',
-          args.salary_estimated_source,
-          args.url, args.source, args.jd_text,
-          args.requirements, args.found_by, args.deadline, args.notes))
-
-    # Bug #14: log la transizione iniziale (None → 'new') con by_agent =
-    # JHT_AGENT_NAME (es. scout-1). Senza questa entry il funnel parte
-    # da "scored" come stato visibile più antico — pessimo per metriche
-    # di throughput a livello pipeline.
-    position_id = cur.lastrowid
-    actor = os.environ.get('JHT_AGENT_NAME') or args.found_by or 'unknown'
-    conn.execute(
-        "INSERT INTO position_state_transitions "
-        "(position_id, from_state, to_state, by_agent, notes) "
-        "VALUES (?, NULL, 'new', ?, ?)",
-        (position_id, actor, 'initial INSERT'),
-    )
-
-    conn.commit()
     cid_info = f" (company_id={company_id})" if company_id else " (company_id=NULL — azienda non in DB)"
     print(f"Posizione inserita con ID: {position_id}{cid_info}")
     conn.close()

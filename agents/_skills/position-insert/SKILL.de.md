@@ -141,7 +141,7 @@ Wenn du 2 Analysten hast, wechsle das Ping-Ziel ab, um die Last zu verteilen (An
 - ❌ Verifizierung mit `curl` ohne `-L` — eine 302-Weiterleitung auf eine generische `/careers`-Seite sieht ohne Follow-Redirect lebendig aus; du wuerdest eine tote JD einfuegen.
 - ❌ Das Bewerbungsformular auf Workable verifizieren statt die kanonische JD-Seite — falsch-positive tote Links.
 - ❌ `fetch` MCP auf `linkedin.com` / `wellfound.com` verwenden — blockiert, liefert ein 403-Banner statt der JD.
-- ❌ Den Wrapper umgehen mit `python3 -c "import sqlite3; INSERT ..."` — bricht Dedup-Invarianten und `found-by`-Tracking.
+- ❌ Den Wrapper umgehen mit `python3 -c "import sqlite3; INSERT ..."` — bricht Dedup-Invarianten und `found-by`-Tracking, und die DB weist es jetzt ebenfalls ab: `positions.url` ist UNIQUE. `UNIQUE constraint failed: positions.url` heisst, die Anzeige ist schon in der DB — zurueck zu Gate 1, nicht mit veraenderter URL neu versuchen.
 - ❌ `--status` auf etwas anderes als den Standard `new` setzen (der Scout setzt den Status nie manuell; der Wrapper erledigt das).
 
 ## Siehe auch
