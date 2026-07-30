@@ -4,6 +4,11 @@ extends Node
 
 signal status_changed(status: Dictionary)
 signal action_changed(action: String, running: bool, message: String, ok: bool)
+## Fase dell'azione lunga in corso ("engine" → "image" → "container", "team").
+## L'attivazione è un processo a più fasi dietro UN pulsante: senza questo
+## segnale la UI sa solo che "qualcosa gira", non a che punto è — e l'utente
+## non sa se aspettare o ripremere (feedback 30/07).
+signal phase_changed(action: String, phase: String)
 ## La UI del gioco ospita il processo in una console modale. Il servizio non
 ## deve mai aprire Terminal.app/cmd/xterm fuori dall'applicazione.
 signal terminal_requested(context: String, spec: Dictionary)
@@ -54,7 +59,20 @@ var status := {
 
 var _probe_running := false
 var _action_running := false
+## Nome dell'azione in corso ("" quando il servizio è fermo) e sua fase
+## corrente: sono lo stato che i pannelli leggono per disegnare i pulsanti
+## nel modo giusto (disabilitato + etichetta di avanzamento) invece di
+## lasciarli premibili e muti mentre il worker lavora.
+var current_action := ""
+var action_phase := ""
 var _timer: Timer
+
+
+## L'azione lunga è in corso: i pulsanti che avviano azioni devono dirlo
+## (il guard su _action_running scarta il click, ma senza feedback l'utente
+## non può saperlo).
+func busy() -> bool:
+	return _action_running
 
 
 func _ready() -> void:
@@ -841,6 +859,7 @@ static func _do_stop_container(vps: Dictionary) -> Dictionary:
 ## visibile (il pull dell'immagine GHCR è lungo: l'utente deve vederlo).
 func _do_start_container() -> Dictionary:
 	Log.call_deferred("info", "setup", "attiva container: probe del daemon Docker")
+	_set_phase("engine")
 	var daemon := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Server.Version}}"] ))
 	if daemon["code"] != 0:
@@ -877,6 +896,7 @@ func _do_start_container() -> Dictionary:
 		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
 	_ensure_host_dirs()
 	Log.call_deferred("info", "setup", "attivazione: pull + compose up da " + compose)
+	_set_phase("image")
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
 			"Controllo aggiornamenti del team…")
 	if not bool(pull["ok"]):
@@ -884,6 +904,7 @@ func _do_start_container() -> Dictionary:
 				"pull immagine fallito, proseguo con la copia locale: "
 				+ str(pull.get("tail", "")).right(200))
 		_progress("container", "Aggiornamento non riuscito: uso l'immagine già scaricata…")
+	_set_phase("container")
 	return _compose_up_with_progress(compose)
 
 
@@ -897,6 +918,7 @@ func update_runtime() -> void:
 
 
 func _do_update_runtime() -> Dictionary:
+	_set_phase("engine")
 	var daemon := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Server.Version}}"] ))
 	if daemon["code"] != 0:
@@ -906,12 +928,14 @@ func _do_update_runtime() -> Dictionary:
 		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
 	_ensure_host_dirs()
 	var before := _local_image_id()
+	_set_phase("image")
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
 			"Cerco una versione più recente del team…")
 	if not bool(pull["ok"]):
 		return {"ok": false, "message": "Aggiornamento non riuscito: " \
 				+ str(pull.get("tail", "")).strip_edges().right(200)}
 	var after := _local_image_id()
+	_set_phase("container")
 	var recreated := _compose_up_with_progress(compose)
 	if not bool(recreated["ok"]):
 		return recreated
@@ -2724,6 +2748,7 @@ func control_agent(role: String, restart: bool) -> void:
 
 
 func _do_start_team(vps: Dictionary) -> Dictionary:
+	_set_phase("team")
 	var res := _run_ssh(vps, "docker exec jht node /app/cli/bin/jht.js team start") \
 			if not vps.is_empty() else _run("docker", PackedStringArray([
 					"exec", "jht", "node", "/app/cli/bin/jht.js", "team", "start"] ))
@@ -2765,9 +2790,23 @@ static func _run_cli(vps: Dictionary, args: PackedStringArray) -> Dictionary:
 
 func _start_action(action: String, callable: Callable) -> void:
 	_action_running = true
+	current_action = action
+	action_phase = ""
 	Log.info("setup", "azione avviata: " + action)
 	action_changed.emit(action, true, "operazione in corso…", true)
 	WorkerThreadPool.add_task(_run_action.bind(action, callable))
+
+
+## Fase corrente dell'azione, annunciata DAL worker: sicura da chiamare da un
+## thread (l'emit avviene deferred sul main). La fase resta valida finché
+## l'azione non ne dichiara un'altra o non termina.
+func _set_phase(phase: String) -> void:
+	call_deferred("_apply_phase", phase)
+
+
+func _apply_phase(phase: String) -> void:
+	action_phase = phase
+	phase_changed.emit(current_action, phase)
 
 
 func _run_action(action: String, callable: Callable) -> void:
@@ -2777,6 +2816,8 @@ func _run_action(action: String, callable: Callable) -> void:
 
 func _finish_action(action: String, result: Dictionary) -> void:
 	_action_running = false
+	current_action = ""
+	action_phase = ""
 	Log.info("setup", "azione %s → %s: %s" % [action,
 			"ok" if bool(result.get("ok", false)) else "FALLITA",
 			str(result.get("message", ""))])

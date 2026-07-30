@@ -831,6 +831,20 @@ const S := {
 	"setup.tour_mentor": "MENTOR",
 	"setup.runtime_version": "VERSIONE RUNTIME",
 	"setup.container_stop": "FERMA CONTAINER",
+	# Filiera di attivazione del container: le fasi REALI dietro l'unico
+	# pulsante, nell'ordine in cui succedono.
+	"setup.phase_engine": "MOTORE DOCKER",
+	"setup.phase_image": "IMMAGINE DEL TEAM",
+	"setup.phase_container": "CONTAINER JHT",
+	"setup.phase_team": "TEAM",
+	"setup.phase_running": "in corso adesso…",
+	"setup.image_ready": "scaricata e pronta",
+	"setup.image_missing": "da scaricare (qualche GB, dipende dalla rete)",
+	"setup.container_busy": "◌ ATTIVAZIONE IN CORSO…",
+	"setup.team_starting": "◌ AVVIO IN CORSO…",
+	"setup.team_stopping": "◌ ARRESTO IN CORSO…",
+	"setup.team_on": "al lavoro",
+	"setup.provider_needs_container": "Prima accendi il container (passo 01): il login si svolge nella sua console.",
 	"setup.provider_active": "  ·  ATTIVO",
 	"setup.provider_logout": "DISCONNETTI ACCOUNT",
 
