@@ -24,7 +24,12 @@ from profile_gate import check_minimum_viable_profile
 
 
 def extract_linkedin_job_id(url):
-    """Estrae l'ID numerico da URL LinkedIn (es. linkedin.com/jobs/view/4381470286)."""
+    """Estrae l'ID numerico da URL LinkedIn (es. linkedin.com/jobs/view/4381470286).
+
+    L'id sta nel PATH. Un `currentJobId=` nella query string non e' l'id di
+    questo annuncio: e' l'annuncio che l'utente stava guardando quando ha
+    aperto il link, e la regex non lo guarda apposta.
+    """
     if not url:
         return None
     match = re.search(r'linkedin\.com/jobs/view/(\d+)', url)
@@ -137,11 +142,14 @@ def _log_dedup_skip(level, existing_id, skipped_url, company, title):
 
 
 def check_duplicate(conn, url, company, title, location=None):
-    """Dedup gerarchica a 3 livelli (bug #25 / SC-05).
+    """Dedup gerarchica a 4 livelli, 0-3 (bug #25 / SC-05).
 
     Ritorna (existing_row, match_type) — sys.exit gestito dal caller.
     Manteniamo `LinkedIn job ID` come Livello 0 (era già attivo prima
-    del fix): è la regola più affidabile quando l'URL è LinkedIn-shaped.
+    del fix): è la regola più affidabile quando l'URL è LinkedIn-shaped,
+    perché lo stesso annuncio circola con URL diversi. Il match è ancorato
+    al segmento `/jobs/view/<id>` e riconfermato sull'id estratto dal path
+    del candidato: dedup sì, sottostringa no.
 
     Livello 1 — URL esatto.
     Livello 2 — Azienda + titolo identici + location uguale (o entrambe NULL/'').
@@ -155,15 +163,34 @@ def check_duplicate(conn, url, company, title, location=None):
     spreco di token Scout (la verifica + dedup ripartirebbero da zero).
     """
     # Livello 0 (storico) — LinkedIn job ID
+    #
+    # Il LIKE e' un PREFILTRO, non il verdetto. Un `LIKE '%<id>%'` non sa dove
+    # l'id finisce: cercando 4381470286 pescava la riga il cui id e'
+    # 43814702861, e una posizione NUOVA veniva scartata come doppione — con
+    # il log a dire che era un doppione. Latente finche' gli id LinkedIn hanno
+    # 10 cifre, sistematico all'undicesima, immediato se un URL salvato porta
+    # un altro `currentJobId=` in query string (l'id lo leggiamo dal path, il
+    # LIKE scandiva tutta la stringa).
+    #
+    # Ancoriamo su due lati: il prefiltro chiede il segmento `/jobs/view/<id>`
+    # (nessun URL da cui `extract_linkedin_job_id` ritorni <id> puo' non
+    # contenerlo, quindi non perdiamo candidati), e ogni candidato viene poi
+    # CONFERMATO riestraendo l'id dal suo path con la stessa funzione. Il
+    # match vale solo se i due id sono lo stesso id — che e' la definizione
+    # del livello 0. `fetchall` e non `fetchone`: il duplicato vero puo'
+    # arrivare dopo un candidato che il prefiltro ha preso di striscio.
     linkedin_id = extract_linkedin_job_id(url)
     if linkedin_id:
-        existing = conn.execute(
-            "SELECT id, title, company FROM positions WHERE url LIKE ?",
-            (f'%{linkedin_id}%',)
-        ).fetchone()
-        if existing:
-            _log_dedup_skip(0, existing['id'], url, company, title)
-            return existing, f"LinkedIn job ID {linkedin_id}"
+        # `linkedin_id` e' \d+ e il prefisso e' letterale: nessun carattere
+        # speciale di LIKE (% _) puo' finire nel pattern.
+        candidates_l0 = conn.execute(
+            "SELECT id, title, company, url FROM positions WHERE url LIKE ?",
+            (f'%/jobs/view/{linkedin_id}%',)
+        ).fetchall()
+        for cand in candidates_l0:
+            if extract_linkedin_job_id(cand['url']) == linkedin_id:
+                _log_dedup_skip(0, cand['id'], url, company, title)
+                return cand, f"LinkedIn job ID {linkedin_id}"
 
     # Livello 1 — URL esatto
     if url:
