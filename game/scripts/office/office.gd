@@ -444,6 +444,12 @@ func _ready() -> void:
 	if comic_shot != "":
 		_comic_chat_shot.call_deferred(comic_shot)
 
+	# RIPRESE PROMO: JHT_PROMO=office|dept|chat monta la regia delle riprese
+	# del video di presentazione (tools/promo_director.gd) — camera, vignette
+	# e chat con testi inventati in inglese, per --write-movie. Nessun dato reale.
+	if OS.get_environment("JHT_PROMO") != "":
+		add_child(load("res://tools/promo_director.gd").new())
+
 	# TEST-AUTO: JHT_THROTTLE_TEST=1 forza throttle e rimozione roster,
 	# senza aspettare il ciclo eventi del mock.
 	if OS.get_environment("JHT_THROTTLE_TEST") == "1":

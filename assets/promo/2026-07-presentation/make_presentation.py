@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Video di presentazione JHT — 60 s, 1280x720, testo in italiano.
+"""Video di presentazione JHT — 60 s, 1280x720, testo a schermo in INGLESE.
 
 Impianto ripreso da regia/lanci/2026-07-v0.2.0/promo-video/make_video.py
 (frame PIL a 30 fps per scena + montaggio ffmpeg con xfade).
+
+Tre scene sono RIPRESE VERE del gioco (Movie Maker mode di Godot, vedi
+record_clips.sh): l'ufficio in movimento, il reparto Scrittori/Critici e la
+chat a fumetti che si scrive da sola. Vanno registrate PRIMA del montaggio:
+
+  ./record_clips.sh          # → scenes/capture/{office,dept,chat}/f*.png
 
 Percorsi configurabili via env:
   JHT_REPO   root del repo da cui leggere le immagini
@@ -10,14 +16,13 @@ Percorsi configurabili via env:
   JHT_OUT    basename di output senza estensione
              (default: jht-presentation accanto allo script)
 
-Asset usati (tutti illustrazioni o screenshot pubblici/anonimi già nel repo):
+Asset statici (tutti illustrazioni o screenshot pubblici/anonimi già nel repo):
   web/public/landing-hero.png            riunione della squadra (fumetto)
-  web/public/agents-{scouts,analyst,scorer,writer,critic}.png
-  game/docs/reference/office-reference.png   l'ufficio del videogioco
+  web/public/agents-{scouts,analyst,scorer}.png
   assets/screenshots/beta2-map.png       case study pubblico e anonimo
   web/public/the-box.png                 il container/sandbox
 """
-import math, os, shutil, subprocess
+import math, os, shutil, subprocess, sys
 from PIL import Image, ImageDraw, ImageFont
 
 W, H, FPS = 1280, 720, 30
@@ -27,6 +32,7 @@ REPO = os.environ.get("JHT_REPO",
 OUT_BASE = os.environ.get("JHT_OUT", os.path.join(ROOT, "jht-presentation"))
 PUB = f"{REPO}/web/public"
 SC = os.path.join(ROOT, "scenes")
+CAP = os.path.join(SC, "capture")
 FDIR = os.path.expanduser("~/Library/Fonts")
 
 def font(weight, size):
@@ -45,6 +51,7 @@ GREEN   = (14, 200, 92)
 STRONG  = (21, 128, 61)
 BLUE    = (77, 159, 255)
 CAPTION = (244, 246, 250)
+PILL    = (10, 12, 28, 205)
 
 def ease_out(p):
     p = max(0.0, min(1.0, p))
@@ -94,14 +101,24 @@ def save_scene(name, frames, hold):
         fr.convert("RGB").save(f"{d}/{i:04d}.png")
     return d, hold
 
+# le riprese del gioco vivono in scenes/capture/ e NON vanno rifatte a ogni
+# montaggio: si azzera tutto tranne capture/
 if os.path.isdir(SC):
-    shutil.rmtree(SC)
-os.makedirs(SC)
+    for entry in os.listdir(SC):
+        if entry != "capture":
+            p = os.path.join(SC, entry)
+            shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
+else:
+    os.makedirs(SC)
+
+for clip in ("office", "dept", "chat"):
+    if not os.path.isdir(os.path.join(CAP, clip)):
+        sys.exit(f"manca scenes/capture/{clip}/ — lancia prima ./record_clips.sh")
 
 scenes = []   # (dir, hold_sec, xfade_transition_to_next)
 
 # ---------------------------------------------------------------- helpers UI
-STEPS = ["Scout", "Analisti", "Scorer", "Scrittori", "Critici"]
+STEPS = ["Scouts", "Analysts", "Scorers", "Writers", "Critics"]
 
 def pipeline_bar(active):
     """Barra pipeline in basso; `active` = set di indici evidenziati."""
@@ -143,6 +160,26 @@ def caption_layer(text, y_bottom=668, size=31):
         y += lh
     return ly
 
+def pill_layer(text, y_center, size=29):
+    """Didascalia su pastiglia scura: leggibile sopra le riprese del gioco
+    senza oscurarle con lo scrim, e mai testo-su-testo (la pastiglia copre)."""
+    ly = layer(); d = ImageDraw.Draw(ly)
+    f_ = font("Bold", size)
+    lines = text.split("\n")
+    lh = int(size * 1.5)
+    tw = max(d.textlength(ln, font=f_) for ln in lines)
+    th = lh * len(lines)
+    pad_x, pad_y = 30, 14
+    x0 = (W - tw) / 2 - pad_x
+    y0 = y_center - th / 2 - pad_y
+    d.rounded_rectangle([x0, y0, x0 + tw + pad_x * 2, y0 + th + pad_y * 2],
+                        radius=14, fill=PILL)
+    y = y_center - (lh * (len(lines) - 1)) / 2
+    for ln in lines:
+        d.text((W // 2, y), ln, font=f_, fill=CAPTION, anchor="mm")
+        y += lh
+    return ly
+
 def kb_scene(name, img_path, dur, z0, z1, c0, c1, captions, hold, trans):
     """Ken Burns: crop-cover animato + scrim + didascalie con fade in/out.
     captions = [(testo, t_in, t_out), …]"""
@@ -167,14 +204,35 @@ def kb_scene(name, img_path, dur, z0, z1, c0, c1, captions, hold, trans):
         frames.append(fr)
     scenes.append((*save_scene(name, frames, hold), trans))
 
+def game_scene(name, clip, skip, dur, captions, trans, pill_y=648):
+    """RIPRESA VERA del gioco: monta i frame di scenes/capture/<clip>/
+    (1920x1080, Movie Maker di Godot) riscalati a 1280x720, saltando i primi
+    `skip` frame di caricamento. captions = [(testo, t_in, t_out), …] su
+    pastiglia scura centrata a pill_y."""
+    cdir = os.path.join(CAP, clip)
+    files = sorted(f for f in os.listdir(cdir) if f.endswith(".png"))
+    n = int(dur * FPS)
+    if skip + n > len(files):
+        sys.exit(f"clip '{clip}': servono {skip + n} frame, trovati {len(files)}")
+    caps = [(pill_layer(txt, pill_y), t_in, t_out) for txt, t_in, t_out in captions]
+    frames = []
+    for i in range(n):
+        t = i / FPS
+        fr = Image.open(os.path.join(cdir, files[skip + i])).convert("RGB")
+        fr = fr.resize((W, H), Image.LANCZOS).convert("RGBA")
+        for ly, t_in, t_out in caps:
+            alpha_paste(fr, ly, fade_io(t, t_in, t_out))
+        frames.append(fr)
+    scenes.append((*save_scene(name, frames, 0.0), trans))
+
 # ================================================================ S1 hook
-# "Cercare lavoro è un secondo lavoro." + le tre incombenze quotidiane
+# "Job hunting is a second job." + le tre incombenze quotidiane
 t1 = layer(); d = ImageDraw.Draw(t1)
-d.text((W//2, 240), "Cercare lavoro", font=font("ExtraBold", 64), fill=TITLE, anchor="mm")
-d.text((W//2, 325), "è un secondo lavoro.", font=font("ExtraBold", 64), fill=TITLE, anchor="mm")
-bullets = ["bacheche da scandagliare, ogni giorno",
-           "annunci da leggere e qualificare",
-           "CV e lettere da riscrivere su misura"]
+d.text((W//2, 240), "Job hunting", font=font("ExtraBold", 64), fill=TITLE, anchor="mm")
+d.text((W//2, 325), "is a second job.", font=font("ExtraBold", 64), fill=TITLE, anchor="mm")
+bullets = ["job boards to sweep, every day",
+           "postings to read and qualify",
+           "CVs and letters to tailor, role by role"]
 b_layers = []
 for k, b in enumerate(bullets):
     ly = layer(); d = ImageDraw.Draw(ly)
@@ -190,7 +248,7 @@ for i in range(int(3.4 * FPS)):
         q = ease_out((t - 0.9 - 0.45 * k) / 0.5)
         alpha_paste(fr, ly, q, dy=14 * (1 - q))
     frames.append(fr)
-scenes.append((*save_scene("s01", frames, 2.8), "fade"))
+scenes.append((*save_scene("s01", frames, 1.4), "fade"))
 
 # ================================================================ S2 reveal
 f_t = font("ExtraBold", 82)
@@ -201,7 +259,7 @@ lyr_title = layer(); d = ImageDraw.Draw(lyr_title)
 d.text((tx, H//2 - 130), "Job Hunter ", font=f_t, fill=TITLE)
 d.text((tx + w1, H//2 - 130), "Team", font=f_t, fill=GREEN)
 lyr_tag = layer(); d = ImageDraw.Draw(lyr_tag)
-d.text((W//2, H//2 + 40), "una squadra di agenti AI che cerca lavoro per te",
+d.text((W//2, H//2 + 40), "a team of AI agents that hunts jobs for you",
        font=font("Regular", 27), fill=MUTED, anchor="mm")
 f_p = font("Regular", 25)
 prompt = "$ jht team start"
@@ -212,7 +270,7 @@ d.text((px, H//2 + 110), prompt, font=f_p, fill=GREEN)
 cursor = layer(); d = ImageDraw.Draw(cursor)
 d.rectangle([px + pw, H//2 + 112, px + pw + 13, H//2 + 138], fill=GREEN)
 frames = []
-for i in range(int(3.6 * FPS)):
+for i in range(int(3.4 * FPS)):
     t = i / FPS
     fr = BGF.copy()
     p = ease_out(t / 0.55)
@@ -223,16 +281,16 @@ for i in range(int(3.6 * FPS)):
     if pp >= 1 and (t % 1.0) < 0.6:
         alpha_paste(fr, cursor, 1)
     frames.append(fr)
-scenes.append((*save_scene("s02", frames, 1.6), "fade"))
+scenes.append((*save_scene("s02", frames, 0.6), "fade"))
 
 # ================================================================ S3 la squadra (riunione)
-kb_scene("s03", f"{PUB}/landing-hero.png", 6.6, 1.0, 1.12,
+kb_scene("s03", f"{PUB}/landing-hero.png", 4.6, 1.0, 1.12,
          (0.50, 0.46), (0.55, 0.44),
-         [("Una squadra vera: ruoli chiari, un Capitano,\nun budget settimanale da rispettare.", 0.7, 6.2)],
+         [("A real team: clear roles, a Captain,\na weekly budget to respect.", 0.6, 4.2)],
          0.0, "slideleft")
 
 # ================================================================ ruoli (pipeline)
-def role_scene(name, img, role, desc, active, trans, hold=2.9,
+def role_scene(name, img, role, desc, active, trans, hold=1.8,
                render=1.0, extra=None):
     lyr_txt = layer(); d = ImageDraw.Draw(lyr_txt)
     d.text((72, 235), role, font=font("ExtraBold", 52), fill=TITLE)
@@ -260,10 +318,10 @@ def role_scene(name, img, role, desc, active, trans, hold=2.9,
         frames.append(fr)
     scenes.append((*save_scene(name, frames, hold), trans))
 
-role_scene("s04", "agents-scouts.png", "Gli Scout",
-           "Perlustrano le bacheche\ndi annunci. Giorno e notte.", {0}, "slideleft")
-role_scene("s05", "agents-analyst.png", "Gli Analisti",
-           "Leggono ogni annuncio.\nEstraggono ciò che conta.", {1}, "slideleft")
+role_scene("s04", "agents-scouts.png", "The Scouts",
+           "They sweep the job boards.\nDay and night.", {0}, "slideleft")
+role_scene("s05", "agents-analyst.png", "The Analysts",
+           "They read every posting.\nThey extract what matters.", {1}, "slideleft")
 
 # Scorer: badge col punteggio che sale
 def scorer_badge(fr, t):
@@ -274,31 +332,41 @@ def scorer_badge(fr, t):
     d.rectangle([72, 470, 560, 562], fill=CARD, outline=BORDER, width=2)
     n = int(round(84 * ease_out((t - 0.7) / 1.5)))
     d.text((100, 516), f"{n:2d}/100", font=font("ExtraBold", 42), fill=GREEN, anchor="lm")
-    d.text((280, 516), "match col tuo profilo", font=font("Regular", 20), fill=MUTED, anchor="lm")
+    d.text((280, 516), "match with your profile", font=font("Regular", 20), fill=MUTED, anchor="lm")
     alpha_paste(fr, ly, a)
 
-role_scene("s06", "agents-scorer.png", "Gli Scorer",
-           "Un punteggio a ogni posizione:\nquanto è adatta a te, 0-100.", {2}, "slideleft",
-           hold=1.5, render=2.6, extra=scorer_badge)
+role_scene("s06", "agents-scorer.png", "The Scorers",
+           "A score for every position:\nhow well it fits you, 0-100.", {2}, "slideleft",
+           hold=0.6, render=2.6, extra=scorer_badge)
 
-role_scene("s07a", "agents-writer.png", "Gli Scrittori",
-           "CV e lettere cuciti su misura,\nposizione per posizione.", {3}, "slideleft",
-           hold=1.9)
-role_scene("s07b", "agents-critic.png", "I Critici",
-           "Revisione cieca dei documenti.\nTre round, senza sconti.", {4}, "fade",
-           hold=1.9)
+# ================================================================ S7 Scrittori e Critici — RIPRESA VERA
+# La fabbrica dei CV vista da vicino: carrellata sul reparto Scrittori.
+game_scene("s07", "dept", 40, 7.0,
+           [("The Writers tailor CVs and cover letters,\nposition by position.", 0.5, 3.4),
+            ("The Critics blind-review every document.\nThree rounds, no mercy.", 3.8, 6.7)],
+           "fade")
 
-# ================================================================ S8 l'ufficio (il videogioco)
-kb_scene("s08", f"{REPO}/game/docs/reference/office-reference.png", 8.8, 1.32, 1.0,
-         (0.42, 0.55), (0.50, 0.50),
-         [("Non un cruscotto: un ufficio, dentro un videogioco.", 0.6, 4.4),
-          ("Li guardi lavorare per te, mentre tu fai altro.", 4.8, 8.4)],
-         0.0, "fade")
+# ================================================================ S8 l'ufficio — RIPRESA VERA
+# Il punto emotivo: l'ufficio del videogioco in movimento, coi reparti che
+# chiacchierano in inglese.
+game_scene("s08", "office", 40, 10.0,
+           [("Not a dashboard: an office, inside a video game.", 0.7, 5.0),
+            ("Watch them work for you,\nwhile you do something else.", 5.5, 9.6)],
+           "fade")
 
-# ================================================================ S9 il sito
+# ================================================================ S9 la chat — RIPRESA VERA
+# La pagina a fumetti che si scrive da sola: vignette, "sta scrivendo…",
+# risposta. Pastiglia più in alto: la barra di input vive a fondo pagina e la
+# targa "HOLMES · SCOUT-1" sta a y≈603 — a 560 la pastiglia non la tocca.
+game_scene("s09", "chat", 40, 9.5,
+           [("And you talk to them, like teammates.", 0.6, 4.4),
+            ("Ask, steer, approve — in plain language.", 5.0, 9.1)],
+           "fade", pill_y=560)
+
+# ================================================================ S10 il sito
 head9 = layer(); d = ImageDraw.Draw(head9)
-d.text((W//2, 64), "E dal sito la segui ovunque.", font=font("Bold", 40), fill=TITLE, anchor="mm")
-d.text((W//2, 116), "la mappa della caccia · i punteggi · il budget", font=font("Regular", 24), fill=DIM, anchor="mm")
+d.text((W//2, 64), "Follow the hunt from the web, anywhere.", font=font("Bold", 40), fill=TITLE, anchor="mm")
+d.text((W//2, 116), "the hunt map · the scores · the budget", font=font("Regular", 24), fill=DIM, anchor="mm")
 shot = Image.open(f"{REPO}/assets/screenshots/beta2-map.png").convert("RGB")
 sw = 800
 sh_ = int(shot.height * sw / shot.width)
@@ -318,9 +386,9 @@ for i in range(int(1.4 * FPS)):
     p = ease_out((t - 0.2) / 0.6)
     alpha_paste(fr, card9, p, dy=46 * (1 - p))
     frames.append(fr)
-scenes.append((*save_scene("s09", frames, 3.6), "slideleft"))
+scenes.append((*save_scene("s10", frames, 2.4), "slideleft"))
 
-# ================================================================ S10 risultati (dati pubblici e anonimi)
+# ================================================================ S11 risultati (dati pubblici e anonimi)
 def kpi_card_layer(x, y, cw, ch, num, lab, col):
     ly = layer(); d = ImageDraw.Draw(ly)
     d.rectangle([x, y, x + cw, y + ch], fill=CARD, outline=BORDER, width=2)
@@ -329,11 +397,11 @@ def kpi_card_layer(x, y, cw, ch, num, lab, col):
     return ly
 
 head10 = layer(); d = ImageDraw.Draw(head10)
-d.text((W//2, 74), "Un mese vero, in autonomia", font=font("Bold", 36), fill=TITLE, anchor="mm")
-d.text((W//2, 124), "dati pubblici e anonimi · un beta tester · 3 giu → 3 lug 2026",
+d.text((W//2, 74), "One real month, hands-off", font=font("Bold", 36), fill=TITLE, anchor="mm")
+d.text((W//2, 124), "public, anonymised data · one beta tester · Jun 3 → Jul 3, 2026",
        font=font("Regular", 23), fill=DIM, anchor="mm")
-stats = [("658", "posizioni trovate", TITLE), ("520", "analizzate e valutate", BLUE),
-         ("307", "match forti · punteggio ≥70", STRONG), ("71/100", "match medio", GREEN)]
+stats = [("658", "positions found", TITLE), ("520", "analysed and scored", BLUE),
+         ("307", "strong matches · score ≥70", STRONG), ("71/100", "average match", GREEN)]
 cw_, ch_, gap = 520, 190, 36
 gx, gy = (W - cw_*2 - gap)//2, 172
 cards10 = []
@@ -350,12 +418,12 @@ for i in range(int(1.8 * FPS)):
         p = ease_out((t - 0.25 - 0.15 * k) / 0.45)
         alpha_paste(fr, ly, p, dy=36 * (1 - p))
     frames.append(fr)
-scenes.append((*save_scene("s10", frames, 4.4), "fade"))
+scenes.append((*save_scene("s11", frames, 2.8), "fade"))
 
-# ================================================================ S11 open source / il container
+# ================================================================ S12 open source / il container
 head11 = layer(); d = ImageDraw.Draw(head11)
 d.text((W//2, 74), "Open source (MIT).", font=font("ExtraBold", 46), fill=TITLE, anchor="mm")
-d.text((W//2, 134), "Gira in un container sulla tua macchina: i tuoi dati restano tuoi.",
+d.text((W//2, 134), "Runs in a container on your machine: your data stays yours.",
        font=font("Regular", 26), fill=MUTED, anchor="mm")
 box = Image.open(f"{PUB}/the-box.png").convert("RGBA")
 bb = box.getchannel("A").getbbox()
@@ -373,16 +441,16 @@ for i in range(int(1.4 * FPS)):
     p = ease_out((t - 0.25) / 0.6)
     alpha_paste(fr, lyr_box, p, dy=40 * (1 - p))
     frames.append(fr)
-scenes.append((*save_scene("s11", frames, 3.4), "smoothup"))
+scenes.append((*save_scene("s12", frames, 2.2), "smoothup"))
 
-# ================================================================ S12 CTA
+# ================================================================ S13 CTA
 cta = []
 ly = layer(); d = ImageDraw.Draw(ly)
 d.text((tx, 232), "Job Hunter ", font=f_t, fill=TITLE)
 d.text((tx + w1, 232), "Team", font=f_t, fill=GREEN)
 cta.append((ly, 0.0))
 ly = layer(); d = ImageDraw.Draw(ly)
-d.text((W//2, 402), "gratuito · open source · in beta", font=font("Regular", 26), fill=MUTED, anchor="mm")
+d.text((W//2, 402), "free · open source · in beta", font=font("Regular", 26), fill=MUTED, anchor="mm")
 cta.append((ly, 0.3))
 ly = layer(); d = ImageDraw.Draw(ly)
 d.text((W//2, 490), "jobhunterteam.ai", font=font("Bold", 38), fill=GREEN, anchor="mm")
@@ -398,7 +466,7 @@ for i in range(int(2.0 * FPS)):
         p = ease_out((t - delay) / 0.5)
         alpha_paste(fr, ly, p, dy=26 * (1 - p))
     frames.append(fr)
-scenes.append((*save_scene("s12", frames, 4.0), None))
+scenes.append((*save_scene("s13", frames, 2.6), None))
 
 # ================================================================ assembly
 print("scene renderizzate, assemblo…")
