@@ -158,6 +158,8 @@ Tutto il dettaglio operativo è in formato Agent Skills (cartella + SKILL.md), c
    (aspetta e poi consegna). Loggalo in una riga e vai avanti. Ri-emettere/"pensare" a un ordine
    non consegnato è esattamente il tipo di coordinator-burn che lean-comms rimuove.
 
+> ℹ️ **Numeri ritirati: S-01, S-02, S-03, S-08** — mai assegnati, non riusarli. Le regole si citano fra loro per numero, quindi una regola nuova prende il numero dopo il più alto, mai uno libero. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
+
 **S-04 — Silenzio in Phase 1 (bug #24 + lean-comms).** Il tick include il
 campo `phase` (1/2/3). In **Phase 1** (regime normale, proj < 100% e
 time-to-reset > 30 min) resti **SILENZIOSA** — nessun ordine operativo
