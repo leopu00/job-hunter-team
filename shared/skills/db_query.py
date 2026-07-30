@@ -16,9 +16,10 @@ Uso:
   python3 db_query.py next-for-recheck      # posizioni da ri-verificare liveness (scadute)
   python3 db_query.py next-for-categorize   # posizioni senza role_family (backlog categoria)
   python3 db_query.py next-for-salary-precise # posizioni con salary preciso richiesto dall'utente
-  python3 db_query.py next-for-recheck-weekly  # MANUTENZIONE: recheck cadenzato (vive, score>=70, non verif. da >7gg)
-  python3 db_query.py next-for-geocode-missing # MANUTENZIONE: geocoding vive senza coordinate ufficio
-  python3 db_query.py next-for-logo-missing  # MANUTENZIONE: aziende (con posizioni vive) senza logo
+  python3 db_query.py next-for-recheck-due   # MODALITÀ CURA: recheck cadenzato (vive, score>=70, non verif. da >14gg, score DESC)
+                                            # alias legacy: next-for-recheck-weekly
+  python3 db_query.py next-for-geocode-missing # MODALITÀ CURA: geocoding vive senza coordinate ufficio
+  python3 db_query.py next-for-logo-missing  # MODALITÀ CURA: aziende (con posizioni vive) senza logo
   python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
                                             # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
@@ -462,7 +463,40 @@ def recent_activity(minutes=30, limit=40, as_json=False):
     conn.close()
 
 
-def next_for_role(role, min_score=None, older_than_days=None):
+def recheck_due_rows(conn, min_score=None, older_than_days=None):
+    """Coda del recheck cadenzato della MODALITÀ CURA (ex "recheck-weekly").
+
+    Condivisa tra `next-for-recheck-due` e `recheck_batch.py` (il pre-filtro
+    meccanico dell'Analista), così query e gate restano UNICI. Applica la
+    enrichment-policy: ritorna None se la coda è disabilitata (stato voluto).
+    Altrimenti ritorna (rows, min_score, older_than_days) con le posizioni
+    ordinate per SCORE DECRESCENTE (prima le migliori — ordine 2026-07-30),
+    a parità di score prima le mai verificate, poi le più stantie.
+    """
+    from enrichment_policy import is_enabled, recheck_options
+    if not is_enabled('recheck_weekly'):
+        return None
+    opts = recheck_options()
+    min_score = opts['min_score'] if min_score is None else min_score
+    older_than_days = (opts['older_than_days'] if older_than_days is None
+                       else older_than_days)
+    rows = conn.execute("""
+        SELECT p.id, p.title, p.company, p.url, p.last_checked, p.expires_at,
+               s.total_score
+        FROM positions p
+        JOIN (SELECT position_id, MAX(total_score) AS total_score
+              FROM scores GROUP BY position_id) s ON s.position_id = p.id
+        WHERE p.status != 'excluded'
+          AND s.total_score >= ?
+          AND (p.last_checked IS NULL
+               OR p.last_checked < datetime('now', ?))
+        ORDER BY s.total_score DESC, (p.last_checked IS NOT NULL),
+                 p.last_checked ASC
+    """, (min_score, f'-{older_than_days} days')).fetchall()
+    return rows, min_score, older_than_days
+
+
+def next_for_role(role, min_score=None, older_than_days=None, limit=None):
     conn = get_db()
     ensure_schema(conn)
 
@@ -588,52 +622,45 @@ def next_for_role(role, min_score=None, older_than_days=None):
         """).fetchall()
         label = "Posizioni con stima salary precisa richiesta dall'utente"
 
-    elif role == 'recheck-weekly':
-        # MAINTENANCE MODE (2026-07-13): recheck-liveness AUTONOMO ma cadenzato, per
-        # la modalità manutenzione (capitano-maintenance.json). NON è il vecchio
+    elif role == 'recheck-due':
+        # MODALITÀ CURA (2026-07-13 come "maintenance", rinominata + ritarata
+        # 2026-07-30): recheck-liveness AUTONOMO ma cadenzato, per la modalità
+        # cura (capitano-maintenance.json — filename storico). NON è il vecchio
         # recheck-continuo che causò il weekly burn (C-13): due gate lo tengono a bada —
         # (1) solo posizioni VIVE con best-score >= min_score (default 70: le migliori,
-        # quelle che vale la pena tenere fresche); (2) cadenza SETTIMANALE per posizione
-        # (ricontrolla solo chi non è verificato da > older_than_days giorni, default 7,
-        # via last_checked). Una posizione verificata oggi esce dalla coda per una
-        # settimana → consumo limitato e prevedibile. L'Analista aggiorna last_checked
-        # col recheck-liveness. Da usare SOLO in maintenance mode.
+        # quelle che vale la pena tenere fresche); (2) cadenza QUINDICINALE per posizione
+        # (ricontrolla solo chi non è verificato da > older_than_days giorni, default 14,
+        # via last_checked). Una posizione verificata oggi esce dalla coda per due
+        # settimane → consumo limitato e prevedibile. Ordine: SCORE DESC (prima le
+        # migliori). Il lavoro meccanico lo fa recheck_batch.py; l'Analista decide
+        # SOLO sui casi ambigui (l'esclusione non è mai di uno script).
+        # Da usare SOLO in modalità cura.
         # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata —
         # vedi enrichment_policy.py. Coda vuota per policy = stato voluto.
-        from enrichment_policy import is_enabled, disabled_reason, recheck_options
-        if not is_enabled('recheck_weekly'):
-            print(f"\nRecheck settimanale manutenzione: "
+        from enrichment_policy import disabled_reason
+        due = recheck_due_rows(conn, min_score, older_than_days)
+        if due is None:
+            print(f"\nRecheck cadenzato (modalità cura): "
                   f"OFF — {disabled_reason('recheck_weekly')}.")
             conn.close()
             return
-        opts = recheck_options()
-        min_score = opts['min_score'] if min_score is None else min_score
-        older_than_days = (opts['older_than_days'] if older_than_days is None
-                           else older_than_days)
-        rows = conn.execute("""
-            SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score
-            FROM positions p
-            JOIN (SELECT position_id, MAX(total_score) AS total_score
-                  FROM scores GROUP BY position_id) s ON s.position_id = p.id
-            WHERE p.status != 'excluded'
-              AND s.total_score >= ?
-              AND (p.last_checked IS NULL
-                   OR p.last_checked < datetime('now', ?))
-            ORDER BY (p.last_checked IS NOT NULL), p.last_checked ASC
-        """, (min_score, f'-{older_than_days} days')).fetchall()
-        label = (f"Recheck settimanale manutenzione "
-                 f"(vive, score>={min_score}, non verificate da >{older_than_days}gg)")
+        rows, min_score, older_than_days = due
+        if limit is None:
+            limit = 15  # bounded di default: la coda intera in contesto è spreco
+        label = (f"Recheck cadenzato modalità cura "
+                 f"(vive, score>={min_score}, non verificate da >{older_than_days}gg, "
+                 f"score DESC)")
 
     elif role == 'geocode-missing':
-        # MAINTENANCE MODE (2026-07-13): geocoding AUTONOMO delle coordinate ufficio per
+        # MODALITÀ CURA (2026-07-13): geocoding AUTONOMO delle coordinate ufficio per
         # le posizioni VIVE che ne sono ancora sprovviste. A differenza di 'geocoding'
         # (on-demand, flag geocode_requested dell'utente — che NON passa dalla policy:
         # se l'utente chiede, si fa), qui l'Analista arricchisce in autonomia.
-        # Da usare SOLO in maintenance mode.
+        # Da usare SOLO in modalità cura.
         # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata.
         from enrichment_policy import is_enabled, disabled_reason, geocode_options
         if not is_enabled('geocode_missing'):
-            print(f"\nGeocoding manutenzione: "
+            print(f"\nGeocoding modalità cura: "
                   f"OFF — {disabled_reason('geocode_missing')}.")
             conn.close()
             return
@@ -660,26 +687,26 @@ def next_for_role(role, min_score=None, older_than_days=None):
               {remote_gate}
             ORDER BY p.found_at DESC
         """, tuple(params)).fetchall()
-        label = ("Geocoding manutenzione (posizioni vive senza coordinate ufficio"
+        label = ("Geocoding modalità cura (posizioni vive senza coordinate ufficio"
                  + (f", score >= {opts['min_score']}" if opts['min_score'] is not None else "")
                  + (", non remote" if opts['non_remote_only'] else "") + ")")
 
     elif role == 'logo-missing':
-        # MAINTENANCE MODE (mig 056): logo aziendale per la pagina posizione web.
+        # MODALITÀ CURA (mig 056): logo aziendale per la pagina posizione web.
         # Coda per AZIENDE (non posizioni): companies con almeno una posizione
         # viva e logo mai tentato (logo_fetched 0/NULL — pattern office_geocoded:
         # un tentativo fallito marca logo_fetched=1 via `logo_fetch.py
         # --mark-attempted` e l'azienda esce dalla coda, niente retry a ogni
         # sweep). Ordinata per numero di posizioni vive → prima le aziende più
         # visibili sul sito. L'Analista esegue la skill `logo-extraction`.
-        # Da usare SOLO in maintenance mode.
+        # Da usare SOLO in modalità cura.
         # Enrichment-policy (risparmio): coda vuota A CODICE se disabilitata;
         # con `logo.min_score` entrano SOLO le aziende con almeno una posizione
         # viva a best-score >= soglia (il gate non marca logo_fetched → quando
         # lo Scorer supera la soglia l'azienda rientra da sola).
         from enrichment_policy import is_enabled, disabled_reason, logo_min_score
         if not is_enabled('logo'):
-            print(f"\nLogo manutenzione: OFF — {disabled_reason('logo')}.")
+            print(f"\nLogo modalità cura: OFF — {disabled_reason('logo')}.")
             conn.close()
             return
         ms = logo_min_score()
@@ -704,7 +731,7 @@ def next_for_role(role, min_score=None, older_than_days=None):
             GROUP BY c.id
             ORDER BY COUNT(p.id) DESC, c.name ASC
         """, params).fetchall()
-        label = ("Logo manutenzione (aziende con posizioni vive senza logo"
+        label = ("Logo modalità cura (aziende con posizioni vive senza logo"
                  + (f", best-score >= {ms}" if ms is not None else "") + ")")
 
     else:
@@ -715,12 +742,16 @@ def next_for_role(role, min_score=None, older_than_days=None):
         print(f"\n{label}: nessuna.")
         return
 
+    shown = rows if not limit else rows[:limit]
     print(f"\n{label} ({len(rows)}):")
-    for r in rows:
+    for r in shown:
         extra = ""
         if 'total_score' in r.keys():
             extra = f" [score: {r['total_score']}]"
         print(f"  #{r['id']} {r['company'][:20]:<20} {r['title'][:35]}{extra}")
+    if len(rows) > len(shown):
+        print(f"  … (+{len(rows) - len(shown)} altre; mostrate le prime "
+              f"{len(shown)} — usa --limit per cambiarle)")
 
     conn.close()
 
@@ -859,12 +890,17 @@ def main():
     sub.add_parser('next-for-recheck')
     sub.add_parser('next-for-categorize')
     sub.add_parser('next-for-salary-precise')
-    # Maintenance-mode queues (2026-07-13): autonome ma cadenzate/gated (vedi next_for_role).
-    rw = sub.add_parser('next-for-recheck-weekly')
+    # Code della MODALITÀ CURA (2026-07-13 come "maintenance", rinominata
+    # 2026-07-30): autonome ma cadenzate/gated (vedi next_for_role).
+    # `next-for-recheck-weekly` resta come alias legacy (prompt/sessioni vive).
+    rw = sub.add_parser('next-for-recheck-due',
+                        aliases=['next-for-recheck-weekly'])
     rw.add_argument('--min-score', type=int, default=None,
                     help='Score minimo; omesso = valore della enrichment policy (default 70).')
     rw.add_argument('--older-than-days', type=int, default=None,
-                    help='Anzianità minima; omesso = enrichment policy (default 7 giorni).')
+                    help='Anzianità minima; omesso = enrichment policy (default 14 giorni).')
+    rw.add_argument('--limit', type=int, default=None,
+                    help='Righe mostrate (default 15; 0 = tutte). La coda resta ordinata score DESC.')
     sub.add_parser('next-for-geocode-missing')
     sub.add_parser('next-for-logo-missing')
 
@@ -994,9 +1030,10 @@ def main():
         flag = '  ⚠ DA CATEGORIZZARE SUBITO (next-for-categorize) — NULL non è una categoria' if uncat else ''
         print(f"  {uncat:>4}  NON categorizzate (role_family IS NULL){flag}")
         conn.close()
-    elif args.cmd == 'next-for-recheck-weekly':
-        next_for_role('recheck-weekly', min_score=args.min_score,
-                      older_than_days=args.older_than_days)
+    elif args.cmd in ('next-for-recheck-due', 'next-for-recheck-weekly'):
+        next_for_role('recheck-due', min_score=args.min_score,
+                      older_than_days=args.older_than_days,
+                      limit=args.limit)
     elif args.cmd.startswith('next-for-'):
         role = args.cmd.replace('next-for-', '')
         next_for_role(role)

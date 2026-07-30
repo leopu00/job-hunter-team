@@ -4,8 +4,9 @@ File: `$JHT_HOME/profile/enrichment-policy.json` (accanto a
 `capitano-maintenance.json`; risolto come dirname(jobs.db)/profile/).
 File ASSENTE = tutto abilitato (comportamento storico, zero migrazioni).
 
-Governa SOLO l'enrichment autonomo/maintenance (spesa decisa dalla
-macchina): coda logo, geocode-missing, recheck-weekly. Le richieste
+Governa SOLO l'enrichment autonomo della MODALITÀ CURA (ex "maintenance",
+rinominata 2026-07-30 — spesa decisa dalla macchina): coda logo,
+geocode-missing, recheck-due. Le richieste
 ESPLICITE dell'utente (geocode_requested, recheck_requested,
 salary_precise_requested, write_requested) NON passano di qui — se
 l'utente chiede, si fa.
@@ -19,15 +20,20 @@ Formato:
     "geocode_missing": {"enabled": true, "min_score": null,
                          "non_remote_only": true},
     "recheck_weekly":  {"enabled": true, "min_score": 70,
-                         "older_than_days": 7}
+                         "older_than_days": 14}
   }
+
+NB: la sezione si chiama ancora `recheck_weekly` (contratto su disco,
+scritto anche dalla Console del gioco — non rinominare senza migrare i
+file live), ma la cadenza di DEFAULT è QUINDICINALE (14gg, 2026-07-30):
+si ricontrollano le posizioni trovate/verificate 2 settimane prima.
 
 `logo.min_score` (es. 70): estrai il logo solo per aziende con ALMENO
 una posizione viva con best score >= soglia. Il gate NON marca
 `logo_fetched` → quando lo Scorer supera la soglia, l'azienda rientra
 in coda da sola.
 
-Enforcement A CODICE (filosofia maintenance-mode di C-18): le code in
+Enforcement A CODICE (filosofia modalità-cura di C-18): le code in
 `db_query.py` tornano vuote col motivo, e `logo_fetch.py` rifiuta con
 POLICY_DISABLED / POLICY_SCORE_GATE. I prompt spiegano solo che una
 coda vuota per policy è stato VOLUTO, non un bug.
@@ -46,7 +52,7 @@ Uso CLI:
   python3 enrichment_policy.py set geocode_missing.non_remote_only true
   python3 enrichment_policy.py set recheck_weekly.enabled false
   python3 enrichment_policy.py set recheck_weekly.min_score 65
-  python3 enrichment_policy.py set recheck_weekly.older_than_days 14
+  python3 enrichment_policy.py set recheck_weekly.older_than_days 21
 
 Output: una riga JSON su stdout (exit 0 ok / 1 errore).
 """
@@ -65,7 +71,8 @@ DEFAULT_POLICY = {
         "enabled": True, "min_score": None, "non_remote_only": True,
     },
     "recheck_weekly": {
-        "enabled": True, "min_score": 70, "older_than_days": 7,
+        # Cadenza QUINDICINALE di default (14gg, 2026-07-30; era 7).
+        "enabled": True, "min_score": 70, "older_than_days": 14,
     },
 }
 
@@ -160,7 +167,7 @@ def recheck_options(policy: dict | None = None) -> dict:
     section = p.get("recheck_weekly", {})
     return {
         "min_score": int(section.get("min_score", 70)),
-        "older_than_days": int(section.get("older_than_days", 7)),
+        "older_than_days": int(section.get("older_than_days", 14)),
     }
 
 
