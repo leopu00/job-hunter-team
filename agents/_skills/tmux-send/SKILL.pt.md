@@ -13,7 +13,9 @@ Wrapper shell localizado em `/app/agents/_skills/tmux-send/jht-tmux-send` (tambe
 
 TUIs baseadas em Ink (Codex, Kimi Code) **perdem o Enter** se este chegar na mesma chamada `tmux send-keys` junto com o corpo da mensagem. O texto e enviado caractere por caractere; o Ink precisa terminar a renderizacao antes de aceitar outra tecla. Se voce chamar `tmux send-keys "msg" Enter`, a mensagem fica no buffer de entrada do peer sem ser enviada → deadlock silencioso entre agentes.
 
-O wrapper trata isso atomicamente: `text → sleep 0.3 → Enter → sleep 0.5 → Enter` (o segundo Enter e idempotente para robustez).
+O wrapper trata isso atomicamente: digita o texto, **rele o painel para confirmar que apareceu**, envia Enter, e **rele o painel novamente para confirmar que o turno realmente arrancou**. A entrega nao e "ter escrito": e "ter visto o turno arrancar".
+
+> ⚠️ Existe um segundo estado, mais insidioso: a TUI **aceita o texto e ignora o Enter**, deixando a linha pendurada no composer enquanto o agente fica parado durante horas. Visto 4 vezes em 3 dias numa unica VPS, Capitao incluido, quando uma mensagem chega enquanto o peer esta a fechar um turno longo. O wrapper agora repete o Enter e, se o turno continuar sem arrancar, devolve **`5`** em vez de declarar falsamente sucesso.
 
 ## Uso
 
@@ -64,9 +66,14 @@ Tipos padrao (veja `agents/_manual/communication-rules.md` para a taxonomia comp
 
 ## Codigos de saida
 
-- `0` — mensagem entregue
+- `0` — mensagem entregue **e submetida** (verificado: o turno arrancou)
 - `1` — argumentos ausentes
 - `2` — sessao de destino nao existe (verifique o nome com `tmux ls`)
+- `3` — texto nunca apareceu e o painel nao esta ocupado → TUI nao receptiva. **O unico codigo que sugere morta/encravada.**
+- `4` — peer ocupado num turno longo alem do orcamento de espera → **vivo**. Tente mais tarde, nunca respawnar.
+- `5` — texto aceite mas nunca submetido ("vivo mas mudo") → **vivo**. Tente mais tarde, nunca respawnar.
+
+> So `3` pode levar a um liveness-check e a um respawn. `4` e `5` significam ambos que o peer esta vivo: trata-los como morte e exatamente como comecam os over-spawn.
 
 ## Regras
 

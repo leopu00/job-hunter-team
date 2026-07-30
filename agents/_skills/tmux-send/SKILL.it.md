@@ -13,7 +13,9 @@ Wrapper shell situato in `/app/agents/_skills/tmux-send/jht-tmux-send` (anche ne
 
 Le TUI basate su Ink (Codex, Kimi Code) **perdono l'Enter** se arriva nella stessa chiamata `tmux send-keys` insieme al corpo del messaggio. Il testo viene inviato carattere per carattere; Ink deve completare il rendering prima di accettare un'altra pressione di tasto. Se chiami `tmux send-keys "msg" Enter`, il messaggio resta nel buffer di input del peer senza essere inviato → deadlock silenzioso tra agenti.
 
-Il wrapper gestisce tutto atomicamente: `text → sleep 0.3 → Enter → sleep 0.5 → Enter` (il secondo Enter è idempotente per robustezza).
+Il wrapper gestisce tutto atomicamente: digita il testo, **rilegge il pane per confermare che sia comparso**, manda Enter, e **rilegge di nuovo il pane per confermare che il turno sia davvero partito**. La consegna non è "aver scritto": è "aver visto partire il turno".
+
+> ⚠️ Esiste un secondo stato, più insidioso: la TUI **accetta il testo e ignora l'Enter**, lasciando la riga appesa nel composer mentre l'agente resta fermo per ore. Visto 4 volte in 3 giorni su una sola VPS, Capitano incluso, quando un messaggio arriva mentre il peer sta chiudendo un turno lungo. Ora il wrapper ritenta l'Enter e, se il turno non parte comunque, restituisce **`5`** invece di dichiarare falsamente successo.
 
 ## Utilizzo
 
@@ -64,9 +66,14 @@ Tipi standard (vedi `agents/_manual/communication-rules.md` per la tassonomia co
 
 ## Codici di uscita
 
-- `0` — messaggio consegnato
+- `0` — messaggio consegnato **e submittato** (verificato: il turno è partito)
 - `1` — argomenti mancanti
 - `2` — la sessione di destinazione non esiste (verifica il nome con `tmux ls`)
+- `3` — testo mai apparso e pane non occupato → TUI irricettiva. **L'unico codice che suggerisce morta/wedged.**
+- `4` — peer occupato su un turno lungo oltre il budget d'attesa → **vivo**. Riprova più tardi, mai respawnare.
+- `5` — testo accettato ma mai submittato ("vivo ma muto") → **vivo**. Riprova più tardi, mai respawnare.
+
+> Solo `3` può portare a un liveness-check e a un respawn. `4` e `5` significano entrambi che il peer è vivo: trattarli come morte è esattamente come iniziano gli over-spawn.
 
 ## Regole
 

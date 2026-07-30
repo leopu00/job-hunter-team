@@ -13,7 +13,9 @@ Shell wrapper helye: `/app/agents/_skills/tmux-send/jht-tmux-send` (szinten eler
 
 Az Ink-alapu TUI-k (Codex, Kimi Code) **elveszitik az Entert**, ha az ugyanabban a `tmux send-keys` hivasban erkezik, mint az uzenet torzse. A szoveg karakterenkent kerul elkuldésre; az Ink-nek be kell fejeznie a renderelest, mielott ujabb billentyuletest fogadna. Ha meghivod a `tmux send-keys "msg" Enter` parancsot, az uzenet a partner bemeneti puffereben marad elkuldetlen → csendes holtpont az agensek kozott.
 
-A wrapper atomikusan kezeli: `text → sleep 0.3 → Enter → sleep 0.5 → Enter` (a masodik Enter idempotens a robusztussag erdekeben).
+A wrapper atomikusan kezeli: begepeli a szoveget, **ujraolvassa a panelt, hogy megerositse, megjelent-e**, elkuldi az Entert, majd **ismet ujraolvassa a panelt, hogy megerositse, a kor valoban elindult**. A kezbesites nem az, hogy "begepelted": az, hogy "lattad elindulni a kort".
+
+> ⚠️ Letezik egy masodik, alattomosabb allapot: a TUI **elfogadja a szoveget es figyelmen kivul hagyja az Entert**, a sor a composerben log, mikozben az agent orakig all. 3 nap alatt 4-szer eszlelve egyetlen VPS-en, a Kapitanyt is beleertve, amikor egy uzenet akkor erkezik, amikor a peer egy hosszu kort zar le. A wrapper most ujraprobalja az Entert, es ha a kor igy sem indul el, **`5`**-ot ad vissza ahelyett, hogy hamisan sikert jelentene.
 
 ## Hasznalat
 
@@ -64,9 +66,14 @@ Standard tipusok (lasd `agents/_manual/communication-rules.md` a teljes taxonomi
 
 ## Kilpesi kodok
 
-- `0` — uzenet kezbesitve
+- `0` — uzenet kezbesitve **es elkuldve** (ellenorizve: a kor elindult)
 - `1` — hianyzo argumentumok
 - `2` — a celszessio nem letezik (ellenorizd a nevet a `tmux ls` paranccsal)
+- `3` — a szoveg soha nem jelent meg es a panel nem foglalt → nem fogado TUI. **Az egyetlen kod, ami halott/beragadt allapotra utal.**
+- `4` — a peer hosszu koron dolgozik a varakozasi kereten tul → **el**. Probald ujra kesobb, soha ne respawnolj.
+- `5` — a szoveget elfogadta, de soha nem kuldte el ("el, de nema") → **el**. Probald ujra kesobb, soha ne respawnolj.
+
+> Csak a `3` vezethet liveness-checkhez es respawnhoz. A `4` es az `5` egyarant azt jelenti, hogy a peer el: halalkent kezelni oket pontosan igy kezdodik a tulzott spawnolas.
 
 ## Szabalyok
 
