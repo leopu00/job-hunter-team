@@ -359,7 +359,7 @@ Path "expert" per chi vuole girare nativo: clone repo + Node + tmux + provider C
 |--------------------------------------------|--------------------------------------------------------------------------|
 | `cli/bin/jht.js`                           | Rinominato → `cli/bin/main.js`                                          |
 | `cli/utils/container-proxy.js`             | **Eliminato** (~152 righe)                                              |
-| `cli/src/commands/team.js`                 | `tmux ...` diretto, non più `execInContainer`                          |
+| `cli/src/commands/team/` (`start.js`, `stop.js`, …) | `tmux ...` diretto, non più `execInContainer`                   |
 | `cli/src/commands/container.js`            | Spostato sul wrapper bash; sotto-comando `status` resta in Node read-only |
 | `cli/src/commands/sentinella.js`           | `tmux capture-pane` diretto                                             |
 | `Dockerfile`                               | Alias `jht=node /app/cli/bin/main.js` in `/etc/profile.d/jht.sh`        |
