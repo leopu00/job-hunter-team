@@ -88,7 +88,14 @@ if [ "$ROLE" = "worker" ]; then
   _ensure_claude_onboarding "$JHT_HOME"
   tmux new-session -d -x 220 -y 50 -s "$WORKER_SESSION" -c "$JHT_HOME"
   tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
-  tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH'" C-m
+  # ⚠️ Le doppie esterne sono obbligatorie: con "export PATH='...:\$PATH'" il
+  # \$ resta letterale e gli apici SINGOLI impediscono l'espansione, quindi al
+  # pane arriva una directory chiamata "$PATH" e /usr/bin, /bin & co. spariscono
+  # → `claude` non si trova → il pane resta bash per sempre. Era così fino al
+  # 2026-07-30: è l'ultimo ramo rimasto col difetto documentato a riga 167.
+  # I percorsi /opt/jht-deps/* non sono opzionali: da quando le dipendenze
+  # vivono nel volume, `providers update` installa lì i CLI.
+  tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:$PATH'" C-m
   tmux send-keys -t "$WORKER_SESSION" "export IS_SANDBOX=1" C-m
   # marcatore per agent_vitals.py: il worker era l'unico senza flag
   tmux send-keys -t "$WORKER_SESSION" "export JHT_AGENT_NAME='sentinella-worker'" C-m
@@ -117,6 +124,26 @@ if [ "$ROLE" = "worker" ]; then
     done
     tmux send-keys -t '$WORKER_SESSION' Enter
   " >/dev/null 2>&1 < /dev/null &
+  # Il REPL è partito davvero? Finora questa riga stampava "✓ avviato" a
+  # prescindere: col PATH rotto il pane restava un bash nudo, il singleton
+  # sopra ("già attivo") lo rendeva DEFINITIVO — la sessione esiste, quindi non
+  # verrà mai ricreata — e i consumatori (check_usage.py, sentinel-bridge)
+  # controllano solo `tmux has-session`. Risultato: il fallback /usage esisteva
+  # solo sulla carta, e mancava proprio quando serve, cioè quando l'HTTP di
+  # Anthropic risponde 429. Un guscio va segnalato e rimosso, non ereditato.
+  _w_up=0
+  for _i in $(seq 1 12); do
+    sleep 1
+    case "$(tmux display-message -p -t "$WORKER_SESSION" '#{pane_current_command}' 2>/dev/null || echo "")" in
+      ""|bash|sh|zsh|dash|-bash|-sh|-zsh) : ;;
+      *) _w_up=1; break ;;
+    esac
+  done
+  if [ "$_w_up" -ne 1 ]; then
+    echo "✗ $WORKER_SESSION: REPL non partito (pane resta una shell) — sessione rimossa" >&2
+    tmux kill-session -t "$WORKER_SESSION" 2>/dev/null || true
+    exit 1
+  fi
   echo "✓ $WORKER_SESSION avviato (fallback /usage TUI per bridge)"
   exit 0
 fi

@@ -184,6 +184,56 @@ def test_1b_lo_stallo_e_seguito_dal_throttle(home, monkeypatch):
     assert state["applied_sec"] == throttled[0]["throttle_sec"]
 
 
+# ── Test 1c — lo stallo SENZA marcatore ──────────────────────────────────
+# Il 2026-07-30 quattro VPS riportavano `stalled: 0` in contemporanea mentre i
+# loro worker erano fermi da ore: la rilevazione richiedeva un marcatore, e i
+# marcatori esistono solo per Kimi. Turno abortito su 429, riga appesa nel
+# composer, attesa di una sveglia soppressa — nessuno di questi stampa niente.
+IDLE_PANE = (
+    "● Coda vuota. Resto in attesa del prossimo batch.\n"
+    "\n"
+    "╭──────────────────────────────────────────╮\n"
+    "│ >                                        │\n"
+    "╰──────────────────────────────────────────╯\n"
+)
+
+
+def test_1c_pane_immobile_senza_marcatore_e_uno_stallo(home, monkeypatch):
+    """Nessun marcatore, ma il pane non si muove per IDLE_STALL_ROUNDS giri."""
+    monkeypatch.setattr(wd, "IDLE_STALL_ROUNDS", 5)
+    fake = FakeTmux({"SCORER-2": IDLE_PANE}).install(monkeypatch)
+    for i in range(5):
+        wd.tick(now=T0 + i * 60)
+        assert events("detected") == [], "scattato al giro %d, troppo presto" % i
+    wd.tick(now=T0 + 5 * 60)
+    det = events("detected")
+    assert len(det) == 1
+    assert "immobile" in det[0]["marker"]
+
+
+def test_1d_il_pane_che_si_muove_azzera_il_contatore(home, monkeypatch):
+    """Una riga nuova a metà strada rimette il conteggio a zero: sta lavorando."""
+    monkeypatch.setattr(wd, "IDLE_STALL_ROUNDS", 5)
+    fake = FakeTmux({"SCORER-2": IDLE_PANE}).install(monkeypatch)
+    for i in range(4):
+        wd.tick(now=T0 + i * 60)
+    fake.panes["SCORER-2"] += "● preso #918 dalla coda\n"
+    for i in range(4, 9):
+        wd.tick(now=T0 + i * 60)
+    assert events("detected") == []
+
+
+def test_1e_fuori_finestra_limmobilita_non_e_uno_stallo(home, monkeypatch):
+    """Con un halt attivo il fermo è l'ordine, non il guasto: nessun detected."""
+    monkeypatch.setattr(wd, "IDLE_STALL_ROUNDS", 3)
+    (home / "logs").mkdir(parents=True, exist_ok=True)
+    (home / "logs" / "daily-halt.flag").write_text("{}", encoding="utf-8")
+    FakeTmux({"SCORER-2": IDLE_PANE}).install(monkeypatch)
+    for i in range(8):
+        wd.tick(now=T0 + i * 60)
+    assert events("detected") == []
+
+
 # ── Test 2 — nessun falso positivo ───────────────────────────────────────
 def test_2a_agente_che_lavora_non_genera_eventi(home, monkeypatch):
     """Il marcatore c'è (ciclo precedente) ma il pane si muove: sta lavorando."""
