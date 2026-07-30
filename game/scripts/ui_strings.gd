@@ -469,7 +469,7 @@ const S := {
 	"pos.ticket_placeholder": "scrivi una richiesta al team su questa posizione…",
 	"pos.ticket_send": "APRI TICKET",
 	"pos.ticket_sending": "invio del ticket alla VPS…",
-	"pos.ticket_ok": "✔ ticket aperto — il Coordinatore lo prenderà in carico",
+	"pos.ticket_ok": "✓ ticket aperto — il Coordinatore lo prenderà in carico",
 	"pos.ticket_err": "✘ ticket non creato: %s",
 	"pos.ticket_need_vps": "// collega la VPS per aprire ticket col team",
 	"pos.found": "trovata da %s · %s",
@@ -515,7 +515,7 @@ const S := {
 	"prof.salary": "SALARY TARGET (min / max / valuta)",
 	"prof.save": "▶ SALVA PROFILO",
 	"prof.saving": "salvataggio sulla VPS…",
-	"prof.saved": "✔ profilo salvato — il team lo userà dal prossimo giro",
+	"prof.saved": "✓ profilo salvato — il team lo userà dal prossimo giro",
 	"prof.save_err": "✘ salvataggio fallito: %s",
 
 	# ── Mappa OSM ─────────────────────────────────────────────────
@@ -545,7 +545,7 @@ const S := {
 	"hours.estimate": "≈ %.0f ore attive/settimana → stima ~%.1f posizioni nuove/giorno · budget riproporzionato al %d%% dell'attuale",
 	"hours.invalid": "✘ finestra non valida: giorni mon…sun e orari HH:MM",
 	"hours.save": "▶ SALVA ORARI",
-	"hours.saved": "✔ orari salvati — il pacing del team si adegua dal prossimo tick",
+	"hours.saved": "✓ orari salvati — il pacing del team si adegua dal prossimo tick",
 
 	# ── Impostazioni → Lingua ─────────────────────────────────────
 	"lang.intro": "Lingua dell'interfaccia — le 7 lingue del sito.",
@@ -797,7 +797,7 @@ const S := {
 	"setup.start_team": "▶ ATTIVA IL TEAM",
 	"setup.team_running": "● TEAM ATTIVO",
 	"setup.team_stopped": "non ancora avviato",
-	"setup.team_locked": "⚡ TEAM NON ANCORA ATTIVO · SETUP %d/4 — COMPLETA ORA  →",
+	"setup.team_locked": "TEAM NON ANCORA ATTIVO · SETUP %d/4 — COMPLETA ORA  →",
 	"setup.container_lead": "Il container isola il team e conserva i dati in ~/.jht. L’ufficio resta visitabile anche quando è spento.",
 	"setup.docker_ready": "runtime disponibile",
 	"setup.docker_missing": "runtime spento o non installato",

@@ -15,6 +15,7 @@ var _buttons := {}  # id sezione → Button
 var _icons := {}  # id sezione → SidebarIcon (segue il colore del testo)
 var _open := false
 var _setup_cta: Button
+var _setup_cta_icon: SidebarIcon
 var _tab: Button
 
 func _init() -> void:
@@ -38,6 +39,25 @@ func _ready() -> void:
 	_setup_cta.add_theme_font_size_override("font_size", 14)
 	_setup_cta.add_theme_color_override("font_color", Palette.YELLOW)
 	_setup_cta.pressed.connect(_open_activation)
+	# Il fulmine è l'icona vettoriale della sidebar, non il glifo ⚡: i
+	# pittogrammi dipendono dai font di sistema (regola: niente emoji nella
+	# UI di prodotto). Figlio ancorato a sinistra, testo allineato dopo.
+	_setup_cta.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		# Dal tema condiviso, non dal Button (fuori dall'albero risolverebbe
+		# il tema di default): stesso stile, solo il margine per l'icona.
+		var sb: StyleBox = TerminalTheme.get_theme() \
+				.get_stylebox(state, "Button").duplicate()
+		sb.content_margin_left = 44
+		_setup_cta.add_theme_stylebox_override(state, sb)
+	_setup_cta_icon = SidebarIcon.new("bolt", Palette.YELLOW)
+	_setup_cta_icon.anchor_top = 0.5
+	_setup_cta_icon.anchor_bottom = 0.5
+	_setup_cta_icon.offset_left = 16
+	_setup_cta_icon.offset_right = 34
+	_setup_cta_icon.offset_top = -9
+	_setup_cta_icon.offset_bottom = 9
+	_setup_cta.add_child(_setup_cta_icon)
 	root.add_child(_setup_cta)
 	SetupService.status_changed.connect(_on_setup_status)
 	ScriptedOnboarding.action_requested.connect(_on_guided_action)
@@ -299,10 +319,12 @@ func _on_setup_status(status: Dictionary) -> void:
 	var ready := bool(status.get("ready", false))
 	var running := bool(status.get("team_running", false))
 	_setup_cta.visible = not (ready and running)
-	_setup_cta.text = "⚡  " + (UIStrings.t("setup.ready_to_start") if ready \
-			else UIStrings.t("setup.cta") % int(status.get("completed", 0)))
+	_setup_cta.text = UIStrings.t("setup.ready_to_start") if ready \
+			else UIStrings.t("setup.cta") % int(status.get("completed", 0))
 	_setup_cta.add_theme_color_override("font_color",
 			Palette.GREEN if ready else Palette.YELLOW)
+	if is_instance_valid(_setup_cta_icon):
+		_setup_cta_icon.color = Palette.GREEN if ready else Palette.YELLOW
 
 
 func _on_guided_action(action: String, payload: Dictionary) -> void:

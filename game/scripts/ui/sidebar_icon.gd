@@ -183,6 +183,46 @@ func _draw() -> void:
 				var dir := Vector2(cos(a), sin(a))
 				_line(Vector2(0.50, 0.50) + dir * 0.28,
 						Vector2(0.50, 0.50) + dir * 0.44, s, w * 1.4)
+		"search":
+			# lente: il mestiere degli Scout (al posto dell'emoji 🔍)
+			_circle(Vector2(0.42, 0.42), 0.26, s, w)
+			_line(Vector2(0.62, 0.62), Vector2(0.90, 0.90), s, w)
+		"pen":
+			# matita in diagonale: gli Scrittori (al posto di ✍)
+			_poly([Vector2(0.62, 0.12), Vector2(0.88, 0.38), Vector2(0.36, 0.90),
+					Vector2(0.10, 0.90), Vector2(0.10, 0.64)], s, w, true)
+			_line(Vector2(0.52, 0.22), Vector2(0.78, 0.48), s, w)
+		"scale":
+			# bilancia: i Critici giudicano (al posto di 🧐)
+			_line(Vector2(0.50, 0.14), Vector2(0.50, 0.80), s, w)
+			_line(Vector2(0.18, 0.26), Vector2(0.82, 0.26), s, w)
+			_line(Vector2(0.34, 0.88), Vector2(0.66, 0.88), s, w)
+			_line(Vector2(0.18, 0.26), Vector2(0.18, 0.44), s, w)
+			_line(Vector2(0.82, 0.26), Vector2(0.82, 0.44), s, w)
+			_arc(Vector2(0.18, 0.44), 0.13, 0.0, PI, s, w)
+			_arc(Vector2(0.82, 0.44), 0.13, 0.0, PI, s, w)
+		"compass":
+			# bussola: Capitano e Coordinatore fanno rotta (al posto di 🧭)
+			_circle(Vector2(0.50, 0.50), 0.40, s, w)
+			_poly([Vector2(0.64, 0.32), Vector2(0.44, 0.44), Vector2(0.36, 0.68),
+					Vector2(0.56, 0.56)], s, w, true)
+		"shield":
+			# scudo: la Sentinella (al posto di 🛡)
+			_poly([Vector2(0.50, 0.08), Vector2(0.86, 0.22), Vector2(0.86, 0.52),
+					Vector2(0.50, 0.92), Vector2(0.14, 0.52), Vector2(0.14, 0.22)],
+					s, w, true)
+		"grad":
+			# tocco accademico: il Mentor (al posto di 🎓)
+			_poly([Vector2(0.50, 0.14), Vector2(0.92, 0.36), Vector2(0.50, 0.58),
+					Vector2(0.08, 0.36)], s, w, true)
+			_line(Vector2(0.92, 0.36), Vector2(0.92, 0.58), s, w)
+			_dot(Vector2(0.92, 0.63), 0.05, s)
+			_arc(Vector2(0.50, 0.80), 0.24, PI, TAU, s, w)
+		"medcross":
+			# croce medica: il Dottore (al posto di 🩺)
+			_circle(Vector2(0.50, 0.50), 0.40, s, w)
+			_line(Vector2(0.50, 0.30), Vector2(0.50, 0.70), s, w)
+			_line(Vector2(0.30, 0.50), Vector2(0.70, 0.50), s, w)
 		"bug":
 			# Scarabeo di profilo: corpo, testa, dorso e tre paia di zampe.
 			# Il glifo 🐞 sarebbe stato un rettangolo vuoto su Linux.
