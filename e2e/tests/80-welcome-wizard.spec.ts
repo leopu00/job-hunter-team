@@ -16,17 +16,24 @@ import { test, expect, type Page } from "@playwright/test";
  *
  *   cd web && JHT_HOME=/tmp/empty NEXT_PUBLIC_JHT_DEPLOY=cloud \
  *     npm run dev -- -p 3008
- *   cd e2e && BASE_URL=http://127.0.0.1:3008 npx playwright test 80-welcome
+ *   cd e2e && BASE_URL=http://localhost:3008 npx playwright test 80-welcome
  *
  * Design record: docs/internal/architecture/2026-07-22-web-demo-mode-and-welcome.md
  */
 
-const BASE = process.env.BASE_URL || "http://127.0.0.1:3000";
-const WELCOME = `${BASE}/welcome?preview=1`;
+// ⚠️ Percorsi **relativi**, mai una costante BASE locale. Qui c'era
+// `process.env.BASE_URL || "http://127.0.0.1:3000"`, che aggirava
+// `use.baseURL` della config e ne ribaltava proprio la scelta documentata:
+// contro `next dev` l'host deve essere `localhost`, perché con `127.0.0.1`
+// Next rifiuta l'upgrade WebSocket dell'HMR e **React non idrata** — cioè
+// esattamente il modo in cui questi test falliscono senza dire perché
+// (playwright.config.ts:1-25). Con i percorsi relativi la destinazione la
+// decide la config, in un punto solo.
+const WELCOME = "/welcome?preview=1";
 
 /** La demo esiste solo sul deploy cloud: altrove /api/demo risponde 404. */
 async function cloudOrSkip(page: Page) {
-  const res = await page.request.get(`${BASE}/api/demo`);
+  const res = await page.request.get("/api/demo");
   test.skip(
     res.status() === 404,
     "server non in modalità cloud (NEXT_PUBLIC_JHT_DEPLOY=cloud)",
@@ -89,7 +96,7 @@ test.describe("/welcome — accessibile solo a chi è autenticato", () => {
 
   test("le pagine dell'area riservata rimandano al login", async ({ page }) => {
     for (const path of ["/dashboard", "/positions"]) {
-      const res = await page.request.get(`${BASE}${path}`, {
+      const res = await page.request.get(path, {
         maxRedirects: 0,
       });
       // 307 verso /?login=true (anonimo) oppure 200 (sessione attiva).
@@ -109,32 +116,32 @@ test.describe("/welcome — API della demo", () => {
   test("attivazione e stato: POST poi GET raccontano la stessa cosa", async ({
     page,
   }) => {
-    const post = await page.request.post(`${BASE}/api/demo`, {
+    const post = await page.request.post("/api/demo", {
       data: { persona: "software" },
     });
     expect(post.ok()).toBe(true);
-    const state = await (await page.request.get(`${BASE}/api/demo`)).json();
+    const state = await (await page.request.get("/api/demo")).json();
     expect(state.persona).toBe("software");
   });
 
   test("uscita dalla demo: DELETE azzera la persona", async ({ page }) => {
-    await page.request.post(`${BASE}/api/demo`, {
+    await page.request.post("/api/demo", {
       data: { persona: "design" },
     });
-    await page.request.delete(`${BASE}/api/demo`);
-    const state = await (await page.request.get(`${BASE}/api/demo`)).json();
+    await page.request.delete("/api/demo");
+    const state = await (await page.request.get("/api/demo")).json();
     expect(state.persona).toBe(null);
   });
 
   test("una persona inventata viene rifiutata con 400", async ({ page }) => {
-    const res = await page.request.post(`${BASE}/api/demo`, {
+    const res = await page.request.post("/api/demo", {
       data: { persona: "astrologia" },
     });
     expect(res.status()).toBe(400);
   });
 
   test("un body non-JSON viene rifiutato con 400", async ({ page }) => {
-    const res = await page.request.post(`${BASE}/api/demo`, {
+    const res = await page.request.post("/api/demo", {
       data: "non-json",
       headers: { "Content-Type": "application/json" },
     });
@@ -145,7 +152,7 @@ test.describe("/welcome — API della demo", () => {
 test.describe("/welcome — percorso completo (serve sessione)", () => {
   test.beforeEach(async ({ page }) => {
     await cloudOrSkip(page);
-    await page.request.delete(`${BASE}/api/demo`);
+    await page.request.delete("/api/demo");
     await wizardOrSkip(page);
   });
 
@@ -214,7 +221,7 @@ test.describe("/welcome — percorso completo (serve sessione)", () => {
           .click(),
       () => page.waitForURL(/\/dashboard/, { timeout: 4000 }),
     );
-    const state = await (await page.request.get(`${BASE}/api/demo`)).json();
+    const state = await (await page.request.get("/api/demo")).json();
     expect(state.persona).toBe("software");
   });
 

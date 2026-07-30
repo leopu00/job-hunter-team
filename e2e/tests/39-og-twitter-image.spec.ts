@@ -25,7 +25,13 @@ import { test, expect } from '@playwright/test';
  * Suite 4: Manifest e PWA
  */
 
-const BASE = process.env.BASE_URL || 'https://jobhunterteam.ai';
+// ⚠️ Percorsi **relativi**, mai una costante BASE locale. Qui c'era
+// `process.env.BASE_URL || 'https://jobhunterteam.ai'`: senza BASE_URL questo
+// file interrogava la **produzione**, cioè uno dei quattro motivi per cui 75
+// spec sono finite in quarantena. Costruendo le URL a mano si aggira anche
+// `use.baseURL` della config — dove vive la scelta di `localhost` invece di
+// `127.0.0.1` (vedi playwright.config.ts:1-25). Con i percorsi relativi la
+// destinazione la decide la config, in un punto solo.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUITE 1 — Open Graph Image
@@ -33,26 +39,26 @@ const BASE = process.env.BASE_URL || 'https://jobhunterteam.ai';
 test.describe('Open Graph Image — /opengraph-image', () => {
 
   test('GET /opengraph-image risponde 200', async ({ request }) => {
-    const res = await request.get(`${BASE}/opengraph-image`);
+    const res = await request.get('/opengraph-image');
     expect(res.status(), 'web/app/opengraph-image.tsx non è servita').toBe(200);
   });
 
   test('/opengraph-image: Content-Type è image/', async ({ request }) => {
-    const res = await request.get(`${BASE}/opengraph-image`);
+    const res = await request.get('/opengraph-image');
     expect(res.status(), 'web/app/opengraph-image.tsx non è servita').toBe(200);
     const ct = res.headers()['content-type'] ?? '';
     expect(ct, 'OG image non è un\'immagine').toMatch(/^image\//);
   });
 
   test('/opengraph-image: dimensioni ragionevoli (> 1KB)', async ({ request }) => {
-    const res = await request.get(`${BASE}/opengraph-image`);
+    const res = await request.get('/opengraph-image');
     expect(res.status(), 'web/app/opengraph-image.tsx non è servita').toBe(200);
     const body = await res.body();
     expect(body.length, 'OG image troppo piccola — probabilmente vuota').toBeGreaterThan(1024);
   });
 
   test('homepage: meta og:image punta a una URL valida', async ({ page }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     const ogImage = await page.evaluate(() =>
       document.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? ''
     );
@@ -62,7 +68,7 @@ test.describe('Open Graph Image — /opengraph-image', () => {
   });
 
   test('homepage: og:image è raggiungibile (200)', async ({ page, request }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     const ogImage = await page.evaluate(() =>
       document.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? ''
     );
@@ -72,12 +78,12 @@ test.describe('Open Graph Image — /opengraph-image', () => {
     // impostata, e seguire quell'URL interrogherebbe la produzione invece del
     // server sotto test — CI rossa per un sito che non c'entra con la PR.
     const { pathname, search } = new URL(ogImage);
-    const res = await request.get(`${BASE}${pathname}${search}`);
+    const res = await request.get(`${pathname}${search}`);
     expect(res.status(), `og:image (${pathname}) non è servita`).toBe(200);
   });
 
   test('homepage: og:image ha dimensioni (width/height meta)', async ({ page }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     const ogWidth = await page.evaluate(() =>
       document.querySelector('meta[property="og:image:width"]')?.getAttribute('content') ?? ''
     );
@@ -98,26 +104,26 @@ test.describe('Open Graph Image — /opengraph-image', () => {
 test.describe('Twitter Image — /twitter-image', () => {
 
   test('GET /twitter-image risponde 200', async ({ request }) => {
-    const res = await request.get(`${BASE}/twitter-image`);
+    const res = await request.get('/twitter-image');
     expect(res.status(), 'web/app/twitter-image.tsx non è servita').toBe(200);
   });
 
   test('/twitter-image: Content-Type è image/', async ({ request }) => {
-    const res = await request.get(`${BASE}/twitter-image`);
+    const res = await request.get('/twitter-image');
     expect(res.status(), 'web/app/twitter-image.tsx non è servita').toBe(200);
     const ct = res.headers()['content-type'] ?? '';
     expect(ct, 'twitter-image non è un\'immagine').toMatch(/^image\//);
   });
 
   test('/twitter-image: dimensioni ragionevoli (> 1KB)', async ({ request }) => {
-    const res = await request.get(`${BASE}/twitter-image`);
+    const res = await request.get('/twitter-image');
     expect(res.status(), 'web/app/twitter-image.tsx non è servita').toBe(200);
     const body = await res.body();
     expect(body.length, 'twitter-image troppo piccola').toBeGreaterThan(1024);
   });
 
   test('homepage: meta twitter:image punta a URL valida', async ({ page }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     const twitterImage = await page.evaluate(() =>
       document.querySelector('meta[name="twitter:image"]')?.getAttribute('content') ?? ''
     );
@@ -125,7 +131,7 @@ test.describe('Twitter Image — /twitter-image', () => {
   });
 
   test('homepage: twitter:card è "summary_large_image"', async ({ page }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     const card = await page.evaluate(() =>
       document.querySelector('meta[name="twitter:card"]')?.getAttribute('content') ?? ''
     );
@@ -142,24 +148,24 @@ test.describe('Twitter Image — /twitter-image', () => {
 test.describe('Apple icon e favicon', () => {
 
   test('GET /apple-icon risponde 200', async ({ request }) => {
-    const res = await request.get(`${BASE}/apple-icon`);
+    const res = await request.get('/apple-icon');
     expect(res.status(), 'web/app/apple-icon.tsx non è servita').toBe(200);
   });
 
   test('/apple-icon: Content-Type è image/', async ({ request }) => {
-    const res = await request.get(`${BASE}/apple-icon`);
+    const res = await request.get('/apple-icon');
     expect(res.status(), 'web/app/apple-icon.tsx non è servita').toBe(200);
     const ct = res.headers()['content-type'] ?? '';
     expect(ct).toMatch(/^image\//);
   });
 
   test('GET /icon.svg risponde 200', async ({ request }) => {
-    const res = await request.get(`${BASE}/icon.svg`);
+    const res = await request.get('/icon.svg');
     expect(res.status(), '/icon.svg non è servita').toBe(200);
   });
 
   test('/icon.svg: Content-Type è image/svg', async ({ request }) => {
-    const res = await request.get(`${BASE}/icon.svg`);
+    const res = await request.get('/icon.svg');
     expect(res.status(), '/icon.svg non è servita').toBe(200);
     const ct = res.headers()['content-type'] ?? '';
     expect(ct).toMatch(/svg|image/i);
@@ -173,7 +179,7 @@ test.describe('Apple icon e favicon', () => {
   // davvero dichiarate si scarichino — un href sbagliato nel <head> è muto in
   // pagina e visibile solo come tab senza icona.
   test('homepage: ogni icona dichiarata nel <head> risponde 200', async ({ page, request }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     const hrefs = await page.evaluate(() =>
       Array.from(
         document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
@@ -181,14 +187,16 @@ test.describe('Apple icon e favicon', () => {
     );
     expect(hrefs.length, 'nessun <link rel="icon"> nel <head>').toBeGreaterThan(0);
     for (const href of hrefs) {
-      const url = href.startsWith('http') ? href : `${BASE}${href}`;
+      // Come sopra: se l'href è assoluto se ne segue il percorso, così la
+      // richiesta resta sul server sotto test.
+      const url = href.startsWith('http') ? new URL(href).pathname : href;
       const res = await request.get(url);
       expect(res.status(), `icona dichiarata ma non servita: ${href}`).toBe(200);
     }
   });
 
   test('homepage: <link rel="icon"> o <link rel="apple-touch-icon"> presente', async ({ page }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     const iconLink = await page.evaluate(() => {
       const icon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]');
       return icon ? icon.getAttribute('href') : null;
@@ -204,12 +212,12 @@ test.describe('Apple icon e favicon', () => {
 test.describe('Manifest e PWA', () => {
 
   test('GET /manifest.json risponde 200', async ({ request }) => {
-    const res = await request.get(`${BASE}/manifest.json`);
+    const res = await request.get('/manifest.json');
     expect(res.status(), 'web/public/manifest.json non è servito').toBe(200);
   });
 
   test('/manifest.json: JSON valido con name e icons', async ({ request }) => {
-    const res = await request.get(`${BASE}/manifest.json`);
+    const res = await request.get('/manifest.json');
     expect(res.status(), 'web/public/manifest.json non è servito').toBe(200);
     const body = await res.json().catch(() => null);
     expect(body, 'manifest.json non è JSON').not.toBeNull();
@@ -220,7 +228,7 @@ test.describe('Manifest e PWA', () => {
   });
 
   test('homepage: <link rel="manifest"> presente', async ({ page }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     const manifest = await page.evaluate(() =>
       document.querySelector('link[rel="manifest"]')?.getAttribute('href') ?? ''
     );
@@ -228,7 +236,7 @@ test.describe('Manifest e PWA', () => {
   });
 
   test('homepage: meta theme-color presente', async ({ page }) => {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
     const themeColor = await page.evaluate(() =>
       document.querySelector('meta[name="theme-color"]')?.getAttribute('content') ?? ''
     );
