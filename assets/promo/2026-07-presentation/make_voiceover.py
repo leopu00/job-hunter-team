@@ -1,81 +1,54 @@
 #!/usr/bin/env python3
-"""Voce narrante del video di presentazione — 3 versioni con `say` di macOS.
+"""Voce narrante del video di presentazione — versione FINALE, `say` di macOS.
 
-Ogni versione ha UNA voce e un copione a segmenti: un segmento per scena del
-montaggio (make_show.py). I file escono in audio/<versione>/segNN.wav e la
-durata di ogni segmento viene stampata e scritta in audio/<versione>/durations.txt,
-così il montaggio può verificare che il parlato stia nella finestra della scena.
+Una sola versione ("sober", Daniel en_GB, niente musica): è quella scelta
+dall'utente fra le tre della tornata precedente. Il copione è stato TAGLIATO
+da 12 a 7 battute — la voce dice solo l'essenziale, il resto passa a schermo
+(didascalie, numeri, etichette — vedi make_show.py). Rate abbassato da 168 a
+155 e cinque scene lasciate MUTE: il silenzio fra le frasi è voluto.
 
-Le voci sono quelle di sistema (niente Premium installate): il risultato è
-riconoscibilmente sintetico ma pulito. La punteggiatura governa le pause.
+Un segmento per scena del montaggio (testo vuoto = scena senza voce). I file
+escono in audio/<versione>/segNN.wav; le durate finiscono in durations.txt,
+così il montaggio verifica che ogni frase stia nella finestra della sua scena.
+
+La voce è quella di sistema (niente Premium installate): riconoscibilmente
+sintetica ma pulita. La punteggiatura governa le pause interne.
 """
 import os, subprocess, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 AUD = os.path.join(ROOT, "audio")
 
-# ── Copioni ────────────────────────────────────────────────────────────
-# Un elemento per scena: (testo, ). Testo vuoto = scena senza voce.
+# ── Copione ────────────────────────────────────────────────────────────
 # Scene: 01 hook · 02 reveal · 03 meeting · 04 roles · 05 writers ·
 #        06 office · 07 chat · 08 globe · 09 web-pages · 10 results ·
 #        11 open-source · 12 CTA
+# Battute tolte rispetto alla tornata precedente (ora dette dallo SCHERMO):
+#   meeting  → didascalia "clear roles · a captain · a weekly budget"
+#   roles    → mansioni sotto i ritratti ("sweep the job boards", …)
+#   dept     → didascalia Writers/Critics
+#   chat     → didascalia "ask · steer · approve"
+#   webpages → didascalie "match scores · salaries" / "swipe to decide"
+#   results  → i numeri grandi del mese reale (658 · 520 · 307 · 71)
 
 VERSIONS = {
-    # A — calda, americana, con bossa sotto: racconta.
-    "warm": {
-        "voice": "Samantha",
-        "rate": 170,
-        "lines": [
-            "Job hunting? That's a second job.",
-            "So we built you a team. Job Hunter Team.",
-            "Real roles, a captain, and a weekly budget to respect.",
-            "Scouts sweep the boards. Analysts read every posting. Scorers rate the fit, zero to a hundred.",
-            "Writers tailor your CV for each position. Critics review every draft. No mercy.",
-            "And here's the thing: it's not a dashboard. It's an office, inside a video game. You watch them work, while you do something else.",
-            "You talk to them like teammates. Ask, steer, approve.",
-            "Away from your desk? Open the web app. Every position they found, pinned on your own globe.",
-            "Scores, salaries. Swipe to decide.",
-            "One real month, hands off: six hundred fifty eight positions found.",
-            "It's open source, and it runs on your machine. Your data stays yours.",
-            "Job Hunter Team. Free, and in beta.",
-        ],
-    },
-    # B — britannica, sobria, SENZA musica: asciutta e precisa.
+    # Daniel en_GB, sobria, SENZA musica — la versione scelta.
     "sober": {
         "voice": "Daniel",
-        "rate": 168,
+        "rate": 155,
         "lines": [
             "Job hunting is a second job.",
-            "This is Job Hunter Team.",
-            "A team of AI agents: clear roles, a captain, a weekly budget.",
-            "Scouts sweep the job boards. Analysts read each posting. Scorers rate the fit from zero to one hundred.",
-            "Writers tailor your CV, position by position. Critics review every draft.",
+            "So we built you a team. Job Hunter Team.",
+            "",
+            "Your agents find the positions, and score every match against your profile.",
+            "",
             "It is not a dashboard. It is an office, inside a video game. You watch your team work, while you do something else.",
-            "You talk to them like teammates. Ask, steer, approve.",
-            "And from anywhere, the web app: every position, pinned on your globe.",
-            "Scores, salaries, quick reviews.",
-            "In one real month it found six hundred fifty eight positions.",
-            "Open source. It runs on your machine; your data stays yours.",
+            "",
+            "And from anywhere: every position they found, on your own globe.",
+            "",
+            "",
+            "Open source. It runs on your machine, and your data stays yours.",
             "Job Hunter Team. Free, and in beta.",
-        ],
-    },
-    # C — australiana, giocosa, elettro-bossa sotto: ritmo su.
-    "upbeat": {
-        "voice": "Karen",
-        "rate": 178,
-        "lines": [
-            "Job hunting? Feels like a second job, right?",
-            "Meet your new team. Job Hunter Team.",
-            "Real roles, a captain, a weekly budget. A proper team.",
-            "Scouts sweep the boards all night. Analysts read everything. Scorers rate the fit, zero to a hundred.",
-            "Writers tailor your CV. Critics tear the drafts apart. No mercy.",
-            "Best part? It's not a dashboard. It's an office, in a video game. Watch them work. Go live your life.",
-            "Chat with them like teammates. Ask, steer, approve.",
-            "On the go? Open the web app. Every position, pinned on your globe.",
-            "Scores, salaries. Swipe, done.",
-            "One month, hands off: six hundred fifty eight positions.",
-            "Open source, runs on your machine. Your data stays yours.",
-            "Job Hunter Team. Free, in beta. Come say hi.",
         ],
     },
 }

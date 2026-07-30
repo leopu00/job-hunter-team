@@ -68,11 +68,16 @@ const OFFICE_CHATTER := [
 ## bordo è peggio di nessuna targa, e la pastiglia delle didascalie del
 ## montaggio vive proprio lì. Viewport del movie: 1920x1080, mezzo campo
 ## orizzontale = 960/zoom.
+## NB (30/07, seconda tornata): il reparto è ora a "quadrante d'orologio"
+## (sei scrivanie radiali attorno alla rosetta del tappeto). Le vecchie
+## costanti (620,1640 z2.05→2.18) inquadravano il tappeto vuoto: ritarate
+## empiricamente su una sonda statica — a z~1.8 entrano tutte e sei le
+## scrivanie coi due Scrittori al lavoro, come nel girato approvato.
 const DEPT_SECONDS := 9.0
-const DEPT_FROM := Vector2(620.0, 1640.0)
-const DEPT_TO := Vector2(700.0, 1655.0)
-const DEPT_ZOOM_FROM := 2.05
-const DEPT_ZOOM_TO := 2.18
+const DEPT_FROM := Vector2(700.0, 1650.0)
+const DEPT_TO := Vector2(715.0, 1660.0)
+const DEPT_ZOOM_FROM := 1.80
+const DEPT_ZOOM_TO := 1.92
 const DEPT_CHATTER := [
 	[1.6, "scrittore-1", "Cover letter drafted: one page, role-specific."],
 	[4.4, "scrittore-2", "CV variant ready for the remote-first posting."],
@@ -164,6 +169,9 @@ func _dept_clip() -> void:
 func _chat_clip() -> void:
 	await get_tree().process_frame
 	_dress_set_english()
+	# Anche qui: le targhe di stato ("AL LAVORO") sono solo in italiano e
+	# restano leggibili dietro la pagina chat semi-trasparente — via.
+	_silence_state_tags()
 	var display := AgentNames.display_name(CHAT_AGENT)
 	# NIENTE colonna roster: con al più una voce ComicChat non la mostra.
 	# In lista finirebbero "Il Coordinatore" (nome proprio del brand, uguale

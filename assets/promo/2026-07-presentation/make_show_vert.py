@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Versione VERTICALE 9:16 (720x1280) del video con voce e musica.
+"""Versione VERTICALE 9:16 (720x1280) del video finale (sober, senza musica).
 
-Stessa timeline e stessi audio di make_show.py (le tracce si riusano pari
-pari: durate identiche scena per scena); ogni scena è RICOMPOSTA per la
-colonna stretta, mai un ritaglio cieco:
+Stessa timeline e stessa voce di make_show.py (la traccia si riusa pari
+pari: durate identiche scena per scena), stesse didascalie a schermo;
+ogni scena è RICOMPOSTA per la colonna stretta, mai un ritaglio cieco:
 
   - riprese del gioco: ritaglio 608x1080 che SEGUE il soggetto (replica del
     percorso camera di game/tools/promo_director.gd) + BANDA "SIMULATION —
@@ -16,7 +16,7 @@ colonna stretta, mai un ritaglio cieco:
     il globo e lo swipe come li vede un telefono;
   - scene testo reimpaginate in colonna.
 
-Output: jht-show-vertical-{warm,sober,upbeat}.mp4
+Output: jht-show-vertical-sober.mp4
 """
 import math, os, subprocess, sys
 from PIL import Image, ImageDraw, ImageFont
@@ -92,9 +92,13 @@ OFF_DRIFT_TO = (640.0, 520.0, 2.02)
 OFFICE_SUBJECT_X = 555.0
 
 DEPT_SECONDS = 9.0
-DEPT_FROM = (620.0, 1640.0, 2.05)
-DEPT_TO = (700.0, 1655.0, 2.18)
-DEPT_SUBJECT_X = 528.0
+DEPT_FROM = (700.0, 1650.0, 1.80)
+DEPT_TO = (715.0, 1660.0, 1.92)
+# 500, non il centro dei due Scrittori (~470): le vignette dei fumetti si
+# appoggiano a destra delle scrivanie e a 470 la seconda usciva dal ritaglio
+# tagliata a metà parola (misurato sul frame nativo 103: vignetta fino a
+# x≈865 col crop che chiudeva a 832).
+DEPT_SUBJECT_X = 500.0
 
 def _lerp3(a, b, p):
     return tuple(a[k] + (b[k] - a[k]) * p for k in range(3))
@@ -114,6 +118,24 @@ def subject_crop_x(cam, subject_x):
     cx, _cy, z = cam
     sx = (subject_x - cx) * z + CAP_W / 2.0
     return max(0.0, min(CAP_W - CROP_W, sx - CROP_W / 2.0))
+
+# ── didascalie (lower third, colonna) ──────────────────────────────────
+def caption_layer(lines, y_bottom=1225, size=22):
+    ly = layer()
+    d = ImageDraw.Draw(ly)
+    f_ = font("Medium", size)
+    lh = int(size * 1.5)
+    tw = max(d.textlength(s, font=f_) for s in lines)
+    pad_x, pad_y = 22, 13
+    bh = lh * len(lines) + 2 * pad_y - (lh - size)
+    x0 = (W - tw) / 2 - pad_x
+    y0 = y_bottom - bh
+    d.rounded_rectangle([x0, y0, x0 + tw + 2 * pad_x, y_bottom], radius=12,
+                        fill=(16, 18, 30, 235))
+    for i, s in enumerate(lines):
+        d.text((W / 2, y0 + pad_y + size / 2 + i * lh + 2), s, font=f_,
+               fill=(225, 228, 242), anchor="mm")
+    return ly
 
 # ── banda SIMULATION (fix del badge mozzato) ───────────────────────────
 def sim_band():
@@ -135,13 +157,14 @@ def sim_band():
 
 SIM_BAND = sim_band()
 
-def game_scene_vert(name, clip, skip, dur, cam_fn, subject_x):
+def game_scene_vert(name, clip, skip, dur, cam_fn, subject_x, caption=None):
     files = sorted(f for f in os.listdir(os.path.join(CAP, clip))
                    if f.endswith(".png"))
     n = int(dur * FPS)
     if skip + n > len(files):
         sys.exit(f"clip '{clip}': servono {skip + n} frame, trovati {len(files)}")
     cdir = os.path.join(CAP, clip)
+    cap_ly = caption_layer(caption) if caption else None
     def frame(t):
         i = int(t * FPS)
         t_cap = (skip + i) / FPS
@@ -150,6 +173,8 @@ def game_scene_vert(name, clip, skip, dur, cam_fn, subject_x):
         fr = src.crop((int(x0), 0, int(x0) + CROP_W, CAP_H))
         fr = fr.resize((W, H), Image.LANCZOS).convert("RGBA")
         fr.alpha_composite(SIM_BAND, (0, 0))
+        if cap_ly is not None:
+            fr.alpha_composite(cap_ly)
         return fr
     return pipe_scene(name, dur, frame)
 
@@ -198,6 +223,8 @@ def sc_reveal(dur):
 
 def sc_meeting(dur):
     src = Image.open(f"{PUB}/landing-hero.png").convert("RGB")
+    cap = caption_layer(["clear roles · a captain", "a weekly budget"],
+                        y_bottom=1180)
     def frame(t):
         p = ease_io(t / dur)
         z = 1.0 + 0.12 * p
@@ -208,7 +235,9 @@ def sc_meeting(dur):
         px0 = max(0, min(src.width - cw, cx - cw / 2))
         py0 = max(0, min(src.height - ch, cy - ch / 2))
         fr = src.crop((int(px0), int(py0), int(px0 + cw), int(py0 + ch)))
-        return fr.resize((W, H), Image.LANCZOS).convert("RGBA")
+        fr = fr.resize((W, H), Image.LANCZOS).convert("RGBA")
+        alpha_paste(fr, cap, ease_out((t - 0.9) / 0.5))
+        return fr
     return frame
 
 STEPS = HS.STEPS
@@ -237,14 +266,16 @@ def pipeline_bar(active, y=1180):
 def sc_roles(dur):
     sub = dur / 3.0
     cards = []
-    for i, (img, role) in enumerate((("agents-scouts.png", "The Scouts"),
-                                     ("agents-analyst.png", "The Analysts"),
-                                     ("agents-scorer.png", "The Scorers"))):
+    for i, (img, role, duty) in enumerate((
+            ("agents-scouts.png", "The Scouts", "sweep the job boards"),
+            ("agents-analyst.png", "The Analysts", "read every posting"),
+            ("agents-scorer.png", "The Scorers", "rate the fit — 0 to 100"))):
         ag = agent_img(img, 560)
         lyr_ag = layer()
         lyr_ag.alpha_composite(ag, ((W - ag.width) // 2, 150))
         lyr_txt = layer(); d = ImageDraw.Draw(lyr_txt)
         d.text((W//2, 800), role, font=font("ExtraBold", 46), fill=TITLE, anchor="mm")
+        d.text((W//2, 852), duty, font=font("Regular", 24), fill=MUTED, anchor="mm")
         cards.append((lyr_txt, lyr_ag, pipeline_bar({i})))
     def frame(t):
         k = min(2, int(t / sub))
@@ -287,6 +318,8 @@ def sc_chat(name, skip, dur):
     pw_ = CHAT_PORTRAIT[2] - CHAT_PORTRAIT[0]
     ph_ = CHAT_PORTRAIT[3] - CHAT_PORTRAIT[1]
     pscale = 560.0 / ph_
+    cap = caption_layer(["chat with your team", "ask · steer · approve"],
+                        y_bottom=1258)
     def frame(t):
         i = int(t * FPS)
         src = Image.open(os.path.join(cdir, files[skip + i])).convert("RGB")
@@ -300,6 +333,7 @@ def sc_chat(name, skip, dur):
         por = src.crop(CHAT_PORTRAIT).resize(
             (int(pw_ * pscale), int(ph_ * pscale)), Image.LANCZOS)
         fr.paste(por, ((W - por.width) // 2, 620))
+        fr.alpha_composite(cap)
         return fr
     return pipe_scene(name, dur, frame)
 
@@ -373,15 +407,22 @@ def sc_cta(dur):
     return frame
 
 # ── riprese web mobili ─────────────────────────────────────────────────
-def web_segment_vert(name, src, t0, t1, speed):
-    """Ripresa mobile 780x1386 → 720x1280 (ritaglio 9:16 esatto + scala)."""
+def web_segment_vert(name, src, t0, t1, speed, caption=None):
+    """Ripresa mobile 780x1386 → 720x1280 (ritaglio 9:16 esatto + scala),
+    con didascalia opzionale in basso."""
     seg = os.path.join(BUILD, f"{name}.mp4")
     vf = (f"trim=start={t0}:end={t1},setpts=(PTS-STARTPTS)/{speed},"
           f"crop=779:1385:0:0,scale={W}:{H},fps={FPS}")
-    subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-i", src, "-vf", vf,
-         "-c:v", "libx264", "-crf", "18", "-preset", "fast",
-         "-pix_fmt", "yuv420p", seg], check=True)
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", src]
+    if caption:
+        png = os.path.join(BUILD, f"{name}_cap.png")
+        caption_layer(caption).save(png)
+        cmd += ["-i", png, "-filter_complex",
+                f"[0:v]{vf}[v];[v][1:v]overlay=0:0[out]", "-map", "[out]"]
+    else:
+        cmd += ["-vf", vf]
+    subprocess.run(cmd + ["-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                          "-pix_fmt", "yuv420p", seg], check=True)
     return seg
 
 # ── montaggio ──────────────────────────────────────────────────────────
@@ -397,7 +438,9 @@ def build_video():
     segs["cta"] = pipe_scene("cta", DURS[11], sc_cta(DURS[11]))
     print("riprese del gioco (ritaglio a seguire + banda SIMULATION)…")
     segs["dept"] = game_scene_vert("dept", "dept", 40, DURS[4],
-                                   dept_cam, DEPT_SUBJECT_X)
+                                   dept_cam, DEPT_SUBJECT_X,
+                                   caption=["Writers tailor your CV",
+                                            "Critics review every draft"])
     segs["office"] = game_scene_vert("office", "office", 40, DURS[5],
                                      office_cam, OFFICE_SUBJECT_X)
     segs["chat"] = sc_chat("chat", 70, DURS[6])
@@ -409,7 +452,9 @@ def build_video():
     sd = HS.ffprobe_dur(f"{WEB}/web_swipe_m.webm")
     s0, s1 = 3.6, min(9.4, sd - 0.2)
     segs["webpages"] = web_segment_vert("webpages", f"{WEB}/web_swipe_m.webm",
-                                        s0, s1, (s1 - s0) / DURS[8])
+                                        s0, s1, (s1 - s0) / DURS[8],
+                                        caption=["match scores · salaries",
+                                                 "swipe to decide"])
 
     print("assemblaggio con xfade…")
     order = [segs[name] for name, _ in SCENES]
