@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
+import { RETIRED_SINCE, isRetiredStore, retiredStoreFile } from './_retired-stores.js';
 
 const JHT_DIR = JHT_HOME;
 
@@ -97,6 +98,17 @@ async function handleImport(file, options) {
   }
 
   console.log(`  Trovati ${v.count} record da importare`);
+
+  // Scrivere nel posto giusto non basta se in quel posto non guarda più
+  // nessuno: `sessions.json` e `tasks.json` li leggeva la vecchia interfaccia
+  // testuale. I dati si conservano, ma l'utente deve sapere che importarli
+  // non li rimette in circolo da nessuna parte.
+  if (isRetiredStore(target)) {
+    console.log('');
+    console.log(`  Nota: ${retiredStoreFile(target)} non ha più un lettore nel prodotto.`);
+    console.log(`  Il file viene scritto e conservato, ma nessuna schermata lo mostra —`);
+    console.log(`  lo leggeva la vecchia interfaccia testuale, rimossa il ${RETIRED_SINCE}.`);
+  }
 
   if (options.dryRun) {
     console.log('  (dry-run — nessuna modifica applicata)');

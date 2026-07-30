@@ -1,8 +1,8 @@
 import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { JHT_HOME } from '../jht-paths.js';
+import { retiredStoreDetail } from './_retired-stores.js';
 
 const JHT_DIR = JHT_HOME;
 
@@ -21,9 +21,13 @@ async function checkConfig() {
   catch { return { name: 'Config', status: 'error', detail: 'JSON non valido' }; }
 }
 
+// `sessions.json` e `analytics.json` non hanno più uno scrittore dal
+// 2026-07-25: segnalarli come warning teneva l'health check in stato degradato
+// per sempre, per una cosa che l'utente non può sistemare. Lo stato `gone` li
+// racconta per quello che sono e non entra nel conteggio.
 async function checkSessions() {
   const p = join(JHT_DIR, 'sessions', 'sessions.json');
-  if (!(await fileExists(p))) return { name: 'Sessioni', status: 'warn', detail: 'file non trovato' };
+  if (!(await fileExists(p))) return { name: 'Sessioni', status: 'gone', detail: retiredStoreDetail('sessions') };
   try {
     const data = JSON.parse(await readFile(p, 'utf-8'));
     const active = (data.sessions ?? []).filter(s => s.state === 'active').length;
@@ -33,7 +37,7 @@ async function checkSessions() {
 
 async function checkAnalytics() {
   const p = join(JHT_DIR, 'analytics', 'analytics.json');
-  if (!(await fileExists(p))) return { name: 'Analytics', status: 'warn', detail: 'file non trovato' };
+  if (!(await fileExists(p))) return { name: 'Analytics', status: 'gone', detail: retiredStoreDetail('analytics') };
   try {
     const data = JSON.parse(await readFile(p, 'utf-8'));
     return { name: 'Analytics', status: 'ok', detail: `${data.entries?.length ?? 0} entry` };
@@ -68,8 +72,8 @@ async function checkAgents() {
   } catch { return { name: 'Agenti', status: 'warn', detail: 'tmux non disponibile' }; }
 }
 
-const ICON = { ok: '●', warn: '◐', error: '✗' };
-const COLOR = { ok: '\x1b[32m', warn: '\x1b[33m', error: '\x1b[31m' };
+const ICON = { ok: '●', warn: '◐', error: '✗', gone: '·' };
+const COLOR = { ok: '\x1b[32m', warn: '\x1b[33m', error: '\x1b[31m', gone: '\x1b[90m' };
 const RESET = '\x1b[0m';
 
 async function handleHealth() {
@@ -82,6 +86,7 @@ async function handleHealth() {
 
   const errors = checks.filter(c => c.status === 'error').length;
   const warns = checks.filter(c => c.status === 'warn').length;
+  const gone = checks.filter(c => c.status === 'gone').length;
   const overall = errors > 0 ? 'error' : warns > 2 ? 'warn' : 'ok';
 
   for (const c of checks) {
@@ -91,7 +96,8 @@ async function handleHealth() {
   }
 
   const overallLabel = overall === 'ok' ? 'OK' : overall === 'warn' ? 'WARNING' : 'ERROR';
-  console.log(`\n  Stato: ${COLOR[overall]}${overallLabel}${RESET} — ${checks.length - errors - warns} ok, ${warns} warning, ${errors} errori\n`);
+  const coda = gone > 0 ? `, ${gone} senza più una fonte` : '';
+  console.log(`\n  Stato: ${COLOR[overall]}${overallLabel}${RESET} — ${checks.length - errors - warns - gone} ok, ${warns} warning, ${errors} errori${coda}\n`);
 }
 
 export function registerHealthCommand(program) {

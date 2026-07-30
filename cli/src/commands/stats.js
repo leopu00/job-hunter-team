@@ -1,7 +1,7 @@
 import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { retiredStoreDetail, retiredStoreNotice } from './_retired-stores.js';
 
 const JHT_DIR        = JHT_HOME;
 const TASKS_PATH     = join(JHT_DIR, 'tasks', 'tasks.json');
@@ -36,6 +36,24 @@ async function handleStats(options) {
 
   console.log(`\n  JHT — Statistiche (ultimi ${days} giorni)\n`);
 
+  // Le tre sezioni leggono tre store che nessuno scrive più. Quando mancano
+  // tutte e tre non c'è nessuna statistica da dare: dirlo una volta vale più
+  // di tre blocchi di zeri. Exit code 1 perché anche uno script deve poter
+  // distinguere "nessun dato" da "nessuna attività".
+  const has = {
+    tasks:     await fileExists(TASKS_PATH),
+    analytics: await fileExists(ANALYTICS_PATH),
+    sessions:  await fileExists(SESSIONS_PATH),
+  };
+  const assenti = Object.keys(has).filter(k => !has[k]);
+
+  if (assenti.length === 3) {
+    console.log(retiredStoreNotice(['tasks', 'analytics', 'sessions']));
+    console.log('');
+    process.exitCode = 1;
+    return;
+  }
+
   // Task
   const taskStore = await readJsonSafe(TASKS_PATH);
   const tasks = (taskStore?.tasks ?? []).filter(t => (t.createdAt ?? 0) >= since);
@@ -46,11 +64,15 @@ async function handleStats(options) {
   const avgDur = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
 
   console.log(`  ${BOLD}Task${RESET}`);
-  console.log(`  ${DIM}Totali:${RESET}    ${tasks.length}`);
-  console.log(`  ${GREEN}Successo:${RESET}  ${succeeded}   ${RED}Falliti:${RESET} ${failed}   ${YELLOW}In corso:${RESET} ${running}`);
-  if (tasks.length > 0) {
-    const rate = Math.round((succeeded / tasks.length) * 100);
-    console.log(`  ${DIM}Success rate:${RESET} ${rate}%   ${DIM}Durata media:${RESET} ${fmtDuration(avgDur)}`);
+  if (!has.tasks) {
+    console.log(`  ${DIM}${retiredStoreDetail('tasks')}${RESET}`);
+  } else {
+    console.log(`  ${DIM}Totali:${RESET}    ${tasks.length}`);
+    console.log(`  ${GREEN}Successo:${RESET}  ${succeeded}   ${RED}Falliti:${RESET} ${failed}   ${YELLOW}In corso:${RESET} ${running}`);
+    if (tasks.length > 0) {
+      const rate = Math.round((succeeded / tasks.length) * 100);
+      console.log(`  ${DIM}Success rate:${RESET} ${rate}%   ${DIM}Durata media:${RESET} ${fmtDuration(avgDur)}`);
+    }
   }
 
   // Analytics
@@ -63,9 +85,13 @@ async function handleStats(options) {
   const avgLat = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
 
   console.log(`\n  ${BOLD}API${RESET}`);
-  console.log(`  ${DIM}Chiamate:${RESET}  ${entries.length}   ${RED}Errori:${RESET} ${errors}`);
-  console.log(`  ${DIM}Token:${RESET}     ${totalTokens > 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens}`);
-  console.log(`  ${DIM}Costo:${RESET}     $${totalCost.toFixed(4)}   ${DIM}Latenza media:${RESET} ${avgLat}ms`);
+  if (!has.analytics) {
+    console.log(`  ${DIM}${retiredStoreDetail('analytics')}${RESET}`);
+  } else {
+    console.log(`  ${DIM}Chiamate:${RESET}  ${entries.length}   ${RED}Errori:${RESET} ${errors}`);
+    console.log(`  ${DIM}Token:${RESET}     ${totalTokens > 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens}`);
+    console.log(`  ${DIM}Costo:${RESET}     $${totalCost.toFixed(4)}   ${DIM}Latenza media:${RESET} ${avgLat}ms`);
+  }
 
   // Per provider
   const byProvider = new Map();
@@ -89,8 +115,12 @@ async function handleStats(options) {
   const totalMsgs = sessions.reduce((s, sess) => s + (sess.messageCount ?? 0), 0);
 
   console.log(`\n  ${BOLD}Sessioni${RESET}`);
-  console.log(`  ${DIM}Totali:${RESET}    ${sessions.length}   ${GREEN}Attive:${RESET} ${active}`);
-  console.log(`  ${DIM}Messaggi:${RESET}  ${totalMsgs}`);
+  if (!has.sessions) {
+    console.log(`  ${DIM}${retiredStoreDetail('sessions')}${RESET}`);
+  } else {
+    console.log(`  ${DIM}Totali:${RESET}    ${sessions.length}   ${GREEN}Attive:${RESET} ${active}`);
+    console.log(`  ${DIM}Messaggi:${RESET}  ${totalMsgs}`);
+  }
 
   console.log('');
 }

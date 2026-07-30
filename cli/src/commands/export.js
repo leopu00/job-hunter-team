@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
+import { isRetiredStore, retiredStoreNotice } from './_retired-stores.js';
 
 const JHT_DIR = JHT_HOME;
 
@@ -56,7 +57,15 @@ async function handleExport(source, options) {
 
   const found = await resolveSourcePath(src.rel);
   if (found.missing) {
-    console.error(`  File non trovato: ${found.path}`);
+    // Tre delle quattro sorgenti non hanno più nessuno che le scriva: dire
+    // "file non trovato" e basta manda l'utente a cercare un file che non
+    // arriverà mai.
+    if (isRetiredStore(source)) {
+      console.error(retiredStoreNotice([source]));
+      console.error('');
+    } else {
+      console.error(`  File non trovato: ${found.path}`);
+    }
     process.exitCode = 1;
     return;
   }
