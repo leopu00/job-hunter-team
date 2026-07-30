@@ -1,6 +1,20 @@
 #!/usr/bin/env python3
 """Estrae positions da Supabase prod come `seed.json` per la sim.
 
+STATO (aggiornato 2026-07-30): script ORFANO. Nessun altro file della
+repo lo invoca — è un one-off nato per le simulazioni di location
+enrichment / office geocoding di maggio-giugno 2026 (ultimo commit
+3fe123565, 2026-06-04; contesto in
+docs/internal/experiments/2026-05-25-sim-5-office-geocoding-mario-rossi-report.md).
+È conservato come riferimento, non come strumento di routine, e non è
+manutenuto.
+
+⚠️ LEGGE dalla PRODUZIONE con la SERVICE_ROLE key, che BYPASSA la RLS:
+qualunque errore nel filtro user_id estrae dati di altri utenti in un
+file locale. Sola lettura — non scrive nulla su Supabase (per la
+direzione opposta, che scrive davvero, vedi sync-sim-to-supabase.py e
+il suo avviso).
+
 Filtra per `user_id` risolto da email (default: owner@example.com).
 Scrive ~/.jht-sim-d2/seed.json con tutti i campi raw che `seed_import.py`
 si aspetta. Non include i campi di enrichment (role_family, loc_*, work_*,
@@ -11,7 +25,7 @@ Output: array JSON, una entry per posizione.
 Usage:
     SUPABASE_URL=https://...supabase.co \\
     SUPABASE_SERVICE_ROLE_KEY=eyJ... \\
-    python3 web/scripts/sim/extract-seed-from-supabase.py [--email <e>] [--out <path>] [--status-any]
+    python3 scripts/sim/extract-seed-from-supabase.py [--email <e>] [--out <path>] [--status-any]
 
 Default email: owner@example.com
 Default out:   ~/.jht-sim-d2/seed.json
