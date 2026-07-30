@@ -469,7 +469,7 @@ const S := {
 	"pos.ticket_placeholder": "scrivi una richiesta al team su questa posizione…",
 	"pos.ticket_send": "APRI TICKET",
 	"pos.ticket_sending": "invio del ticket alla VPS…",
-	"pos.ticket_ok": "✔ ticket aperto — il Coordinatore lo prenderà in carico",
+	"pos.ticket_ok": "✓ ticket aperto — il Coordinatore lo prenderà in carico",
 	"pos.ticket_err": "✘ ticket non creato: %s",
 	"pos.ticket_need_vps": "// collega la VPS per aprire ticket col team",
 	"pos.found": "trovata da %s · %s",
@@ -515,7 +515,7 @@ const S := {
 	"prof.salary": "SALARY TARGET (min / max / valuta)",
 	"prof.save": "▶ SALVA PROFILO",
 	"prof.saving": "salvataggio sulla VPS…",
-	"prof.saved": "✔ profilo salvato — il team lo userà dal prossimo giro",
+	"prof.saved": "✓ profilo salvato — il team lo userà dal prossimo giro",
 	"prof.save_err": "✘ salvataggio fallito: %s",
 
 	# ── Mappa OSM ─────────────────────────────────────────────────
@@ -545,7 +545,7 @@ const S := {
 	"hours.estimate": "≈ %.0f ore attive/settimana → stima ~%.1f posizioni nuove/giorno · budget riproporzionato al %d%% dell'attuale",
 	"hours.invalid": "✘ finestra non valida: giorni mon…sun e orari HH:MM",
 	"hours.save": "▶ SALVA ORARI",
-	"hours.saved": "✔ orari salvati — il pacing del team si adegua dal prossimo tick",
+	"hours.saved": "✓ orari salvati — il pacing del team si adegua dal prossimo tick",
 
 	# ── Impostazioni → Lingua ─────────────────────────────────────
 	"lang.intro": "Lingua dell'interfaccia — le 7 lingue del sito.",
@@ -797,7 +797,7 @@ const S := {
 	"setup.start_team": "▶ ATTIVA IL TEAM",
 	"setup.team_running": "● TEAM ATTIVO",
 	"setup.team_stopped": "non ancora avviato",
-	"setup.team_locked": "⚡ TEAM NON ANCORA ATTIVO · SETUP %d/4 — COMPLETA ORA  →",
+	"setup.team_locked": "TEAM NON ANCORA ATTIVO · SETUP %d/4 — COMPLETA ORA  →",
 	"setup.container_lead": "Il container isola il team e conserva i dati in ~/.jht. L’ufficio resta visitabile anche quando è spento.",
 	"setup.docker_ready": "runtime disponibile",
 	"setup.docker_missing": "runtime spento o non installato",
@@ -831,6 +831,27 @@ const S := {
 	"setup.tour_mentor": "MENTOR",
 	"setup.runtime_version": "VERSIONE RUNTIME",
 	"setup.container_stop": "FERMA CONTAINER",
+	# Filiera di attivazione del container: le fasi REALI dietro l'unico
+	# pulsante, nell'ordine in cui succedono.
+	"setup.phase_engine": "MOTORE DOCKER",
+	"setup.phase_image": "IMMAGINE DEL TEAM",
+	"setup.phase_container": "CONTAINER JHT",
+	"setup.phase_team": "TEAM",
+	"setup.phase_running": "in corso adesso…",
+	# Barra di avanzamento dell'attivazione: percentuale SOLO dove il dato
+	# esiste (byte del pull), tempo trascorso sempre, stallo dichiarato.
+	"setup.progress_phase": "FASE %d DI %d — %s",
+	"setup.progress_elapsed": "trascorsi %s",
+	"setup.progress_no_meter": "Questa fase non riporta una percentuale di avanzamento: conta il tempo trascorso.",
+	"setup.progress_eta": "~%s rimanenti",
+	"setup.progress_stalled": "Nessun aggiornamento da %d s — la rete potrebbe essere lenta.",
+	"setup.image_ready": "scaricata e pronta",
+	"setup.image_missing": "da scaricare (qualche GB, dipende dalla rete)",
+	"setup.container_busy": "◌ ATTIVAZIONE IN CORSO…",
+	"setup.team_starting": "◌ AVVIO IN CORSO…",
+	"setup.team_stopping": "◌ ARRESTO IN CORSO…",
+	"setup.team_on": "al lavoro",
+	"setup.provider_needs_container": "Prima accendi il container (passo 01): il login si svolge nella sua console.",
 	"setup.provider_active": "  ·  ATTIVO",
 	"setup.provider_logout": "DISCONNETTI ACCOUNT",
 
