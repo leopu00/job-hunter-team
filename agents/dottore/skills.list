@@ -26,3 +26,4 @@ daily-restart-wave
 # Maintenance (end-of-round only, conditional)
 cache-prune
 py-tools-audit
+cv-disk-audit
