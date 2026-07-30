@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# throttle-ack — chiudi il ciclo del throttle: `NOTIFIED → ACTIVE`.
+#
+# È il PRIMO comando di ogni tuo risveglio, prima di qualunque altra cosa.
+# Il motore mette il flag su `IN_THROTTLE` e poi su `NOTIFIED`: il passaggio a
+# `ACTIVE` è **solo tuo**. Per questo un flag fermo su `NOTIFIED` oltre la
+# soglia non è «forse idle»: è la prova che la sveglia è arrivata e l'agente
+# non ha risposto. È il segnale su cui il watchdog escala — e l'unico modo per
+# distinguere un agente inattivo da un agente bloccato.
+#
+# ## Uso
+#
+#   throttle-ack <tuo-nome>
+#
+# Poi torna subito al tuo loop: l'ack non è un report, è una firma. Un risveglio
+# che finisce in un ack e poi in attesa di ordini produce un falso «coda vuota».
+#
+# ## Exit codes
+#
+#   0 → flag su ACTIVE (o già ACTIVE: idempotente)
+#   1 → ack RIFIUTATO perché la tua pausa non è finita: chiudi il turno, ti
+#       sveglio io. Oppure argomenti invalidi / motore non trovato.
+
+set -eu
+
+AGENT="${1:-}"
+case "$AGENT" in
+  ""|-h|--help)
+    cat <<'HLP'
+Usage: throttle-ack <agent>
+Primo comando di ogni risveglio: flippa il tuo flag NOTIFIED → ACTIVE.
+HLP
+    [ -z "$AGENT" ] && exit 1 || exit 0
+    ;;
+  --agent) AGENT="${2:-}" ;;
+esac
+
+if [ -z "$AGENT" ]; then
+  echo "error: agente richiesto — uso: throttle-ack <tuo-nome>" >&2
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE="/app/shared/skills/throttle_engine.py"
+[ -f "$ENGINE" ] || ENGINE="${SCRIPT_DIR}/../../shared/skills/throttle_engine.py"
+if [ ! -f "$ENGINE" ]; then
+  echo "error: throttle_engine.py non trovato" >&2
+  exit 1
+fi
+
+exec python3 "$ENGINE" ack "$AGENT"

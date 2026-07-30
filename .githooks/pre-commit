@@ -43,7 +43,7 @@ BLOCKED_FILES=""
 while IFS= read -r file; do
     # Permetti file senza estensione noti + file in .githooks/
     basename=$(basename "$file")
-    if [[ "$basename" == "LICENSE" || "$basename" == "CODEOWNERS" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" || "$basename" == "jht-send" || "$basename" == "jht-tmux-send" || "$basename" == "jht-telegram-send" || "$basename" == "jht-throttle" || "$basename" == "jht-throttle-check" || "$basename" == "jht-throttle-wait" || "$basename" == "token-rate-now" || "$basename" == "jht-notify-user" || "$basename" == "jht-check-user-replies" || "$basename" == "jht-install" ]]; then
+    if [[ "$basename" == "LICENSE" || "$basename" == "CODEOWNERS" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" || "$basename" == "jht-send" || "$basename" == "jht-tmux-send" || "$basename" == "jht-telegram-send" || "$basename" == "jht-throttle" || "$basename" == "jht-throttle-check" || "$basename" == "jht-throttle-wait" || "$basename" == "throttle" || "$basename" == "throttle-ack" || "$basename" == "throttle-set" || "$basename" == "token-rate-now" || "$basename" == "jht-notify-user" || "$basename" == "jht-check-user-replies" || "$basename" == "jht-install" ]]; then
         continue
     fi
     if [[ "$file" == .githooks/* ]]; then
