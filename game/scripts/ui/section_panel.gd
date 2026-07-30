@@ -941,12 +941,27 @@ func _on_feedback_submit(running: bool, ok: bool, message: String, ticket: Strin
 # ── Attivazione iniziale (ufficio aperto, lavoro sotto gate) ─────────
 
 var _setup_message: Label
+## Specchio locale di SetupService.busy(): serve a ricostruire il pannello UNA
+## volta quando un'azione parte o finisce (i progressi intermedi arrivano ogni
+## ~1.5s e non devono rifare la UI, solo aggiornare la riga di stato).
+var _setup_busy_ui := false
+## Ultimo messaggio d'azione, per non perderlo quando il pannello si ricostruisce
+## a metà operazione (cambio fase, avvio azione).
+var _action_note := ""
+var _action_note_color: Color = Palette.DIM
+## Le azioni di setup che i pannelli attivazione/docker/provider/team sanno
+## rappresentare coi loro pulsanti: al loro avvio/fine il pannello va ridisegnato.
+const SETUP_ACTIONS := ["container", "team", "provider", "plan", "install"]
+const SETUP_SECTIONS := ["activation", "docker", "provider", "team"]
 
 func _listen_setup() -> void:
 	if not SetupService.status_changed.is_connected(_on_setup_refresh):
 		SetupService.status_changed.connect(_on_setup_refresh)
 	if not SetupService.action_changed.is_connected(_on_setup_action):
 		SetupService.action_changed.connect(_on_setup_action)
+	if not SetupService.phase_changed.is_connected(_on_setup_phase):
+		SetupService.phase_changed.connect(_on_setup_phase)
+	_setup_busy_ui = SetupService.busy()
 
 
 func _build_activation() -> void:
@@ -1018,15 +1033,28 @@ func _build_activation() -> void:
 	summary.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bottom.add_child(summary)
 	var start := Button.new()
-	start.text = UIStrings.t("setup.team_running") if bool(s.get("team_running", false)) \
-			else UIStrings.t("setup.start_team")
-	start.disabled = not bool(s.get("ready", false)) or bool(s.get("team_running", false))
+	# Tre stati, tre etichette: attivo (●), avvio in corso (◌, mentre il
+	# comando gira), pronto da premere (▶). Prima il pulsante restava "ATTIVA
+	# IL TEAM" anche durante l'avvio e non diceva se il click era passato.
+	if bool(s.get("team_running", false)):
+		start.text = UIStrings.t("setup.team_running")
+	elif SetupService.busy() and SetupService.current_action == "team":
+		start.text = UIStrings.t("setup.team_starting")
+	else:
+		start.text = UIStrings.t("setup.start_team")
+	start.disabled = not bool(s.get("ready", false)) \
+			or bool(s.get("team_running", false)) or SetupService.busy()
 	start.add_theme_font_size_override("font_size", 17)
 	start.add_theme_color_override("font_color", Palette.GREEN)
 	start.pressed.connect(SetupService.start_team)
 	bottom.add_child(start)
+	# L'attivazione lunga (container o team) mostra la barra anche qui: è la
+	# finestra da cui in genere si preme il pulsante.
+	if SetupService.busy() and SetupService.current_action in ["container", "team"]:
+		_content.add_child(SetupProgress.new())
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
+	_restore_action_note()
 
 
 func _setup_gate(parent: HBoxContainer, number: String, title: String,
@@ -1084,24 +1112,52 @@ func _provider_status_text(s: Dictionary) -> String:
 func _build_container_setup() -> void:
 	_listen_setup()
 	var s: Dictionary = SetupService.status
+	# L'attivazione è UN pulsante ma un processo a più fasi: motore Docker →
+	# immagine → container → team. Le righe qui sotto sono quella filiera,
+	# nell'ordine in cui succede davvero, e durante l'attivazione la fase in
+	# corso è marcata ◌: l'utente vede A CHE PUNTO è, non solo che "qualcosa
+	# gira" (feedback 30/07).
+	var busy := SetupService.busy() and SetupService.current_action == "container"
+	var phase: String = SetupService.action_phase if busy else ""
 	_content.add_child(TerminalTheme.label(UIStrings.t("setup.container_lead"),
 			15, Palette.BASE))
 	_content.add_child(HSeparator.new())
-	_setup_state_row("DOCKER", bool(s.get("docker_running", false)),
-			UIStrings.t("setup.docker_ready") if bool(s.get("docker_running", false))
-			else UIStrings.t("setup.docker_missing"))
-	_setup_state_row("CONTAINER JHT", bool(s.get("container_running", false)),
-			str(s.get("container_state", "missing")))
-	_setup_state_row("TEAM", bool(s.get("team_running", false)),
-			UIStrings.t("setup.team_running") if bool(s.get("team_running", false))
-			else UIStrings.t("setup.team_stopped"))
+	_setup_phase_row(UIStrings.t("setup.phase_engine"),
+			_phase_state(bool(s.get("docker_running", false)), phase == "engine"),
+			UIStrings.t("setup.phase_running") if phase == "engine"
+			else (UIStrings.t("setup.docker_ready") if bool(s.get("docker_running", false))
+			else UIStrings.t("setup.docker_missing")))
+	_setup_phase_row(UIStrings.t("setup.phase_image"),
+			_phase_state(str(s.get("image_id", "")) != "" or bool(s.get("remote", false)),
+					phase == "image"),
+			UIStrings.t("setup.phase_running") if phase == "image"
+			else (UIStrings.t("setup.image_ready") if str(s.get("image_id", "")) != ""
+					or bool(s.get("remote", false))
+			else UIStrings.t("setup.image_missing")))
+	_setup_phase_row(UIStrings.t("setup.phase_container"),
+			_phase_state(bool(s.get("container_running", false)), phase == "container"),
+			UIStrings.t("setup.phase_running") if phase == "container"
+			else str(s.get("container_state", "missing")))
 	# Runtime obsoleto: il container gira su un'immagine diversa da quella
 	# scaricata. Senza questa riga l'utente resta su una versione vecchia
 	# senza avere modo di accorgersene.
 	if bool(s.get("container_exists", false)) and not bool(s.get("remote", false)):
-		_setup_state_row(UIStrings.t("setup.runtime_version"), not bool(s.get("runtime_stale", false)),
+		_setup_phase_row(UIStrings.t("setup.runtime_version"),
+				"warn" if bool(s.get("runtime_stale", false)) else "done",
 				UIStrings.t("setup.runtime_stale") if bool(s.get("runtime_stale", false))
 				else UIStrings.t("setup.runtime_current"))
+	var team_phase := SetupService.busy() and SetupService.current_action == "team"
+	_setup_phase_row(UIStrings.t("setup.phase_team"),
+			_phase_state(bool(s.get("team_running", false)), team_phase),
+			UIStrings.t("setup.phase_running") if team_phase
+			else (UIStrings.t("setup.team_on") if bool(s.get("team_running", false))
+			else UIStrings.t("setup.team_stopped")))
+	# Mentre l'attivazione gira, la filiera dice DOVE si è e la barra dice
+	# QUANTO manca (o, onestamente, che la fase non riporta una percentuale).
+	# Il widget si aggiorna da solo sui segnali: nessuna ricostruzione del
+	# pannello ai tick del pull (~1.5s).
+	if busy or team_phase:
+		_content.add_child(SetupProgress.new())
 	_content.add_child(HSeparator.new())
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
@@ -1111,19 +1167,28 @@ func _build_container_setup() -> void:
 	# comandi erano riparazioni messe in fila come se fossero alternative, e
 	# costringevano l'utente a scegliere fra opzioni che non deve conoscere
 	# (Leone, 25/07). Ora compaiono SOLO nel caso in cui servono davvero.
+	# Mentre l'azione gira il pulsante LO DICE e non è premibile: prima restava
+	# identico e muto, e l'utente non sapeva se ripremere (feedback 30/07).
 	var start := Button.new()
-	start.text = UIStrings.t("setup.container_recheck") \
-			if bool(s.get("container_running", false)) else UIStrings.t("setup.container_start")
+	if busy:
+		start.text = UIStrings.t("setup.container_busy")
+		start.disabled = true
+	elif bool(s.get("container_running", false)):
+		start.text = UIStrings.t("setup.container_recheck")
+		start.pressed.connect(SetupService.refresh)
+	else:
+		start.text = UIStrings.t("setup.container_start")
+		start.pressed.connect(SetupService.start_container)
+	start.disabled = start.disabled or SetupService.busy()
 	start.add_theme_font_size_override("font_size", 16)
 	start.add_theme_color_override("font_color", Palette.GREEN)
-	start.pressed.connect(SetupService.refresh if bool(s.get("container_running", false)) \
-			else SetupService.start_container)
 	actions.add_child(start)
 	# Docker assente: senza motore non si accende niente, e questa è l'unica
 	# azione sensata da offrire.
 	if not bool(s.get("docker_available", false)) and not bool(s.get("remote", false)):
 		var install := Button.new()
 		install.text = UIStrings.t("setup.docker_install")
+		install.disabled = SetupService.busy()
 		install.add_theme_color_override("font_color", Palette.YELLOW)
 		install.pressed.connect(SetupService.open_runtime_install)
 		actions.add_child(install)
@@ -1132,35 +1197,79 @@ func _build_container_setup() -> void:
 			and not bool(s.get("remote", false)):
 		var update := Button.new()
 		update.text = UIStrings.t("setup.runtime_update")
+		update.disabled = SetupService.busy()
 		update.add_theme_color_override("font_color", Palette.YELLOW)
 		update.pressed.connect(SetupService.update_runtime)
 		actions.add_child(update)
-	if bool(s.get("container_running", false)):
-		var stop := Button.new()
-		stop.text = UIStrings.t("setup.container_stop")
-		stop.add_theme_color_override("font_color", Palette.RED)
-		stop.pressed.connect(SetupService.stop_container)
-		actions.add_child(stop)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
+	_restore_action_note()
+	_content.add_child(HSeparator.new())
+	# Riga sotto, con un peso diverso: navigazione (piatta, a sinistra) e
+	# azione distruttiva (rossa, isolata a destra). Prima FERMA CONTAINER
+	# stava in mezzo alla fila, spalla a spalla con ATTIVA e con lo stesso
+	# peso visivo: un click di troppo e il container era giù.
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 12)
+	_content.add_child(footer)
+	var back := Button.new()
+	back.flat = true
+	back.text = UIStrings.t("setup.back_overview")
+	back.add_theme_color_override("font_color", Palette.MUTED)
+	back.pressed.connect(func() -> void: navigate.emit("activation"))
+	footer.add_child(back)
 	# La seconda strada, alla pari della prima: il team può vivere su una VPS e
 	# questa finestra restare lo specchio da cui lo si guarda. Prima esisteva
 	# solo in Impostazioni, fuori dal percorso di setup.
 	if not bool(s.get("remote", false)):
 		var to_vps := Button.new()
+		to_vps.flat = true
 		to_vps.text = UIStrings.t("setup.use_vps")
 		to_vps.add_theme_color_override("font_color", Palette.BLUE)
 		to_vps.pressed.connect(func() -> void: navigate.emit("vps"))
-		actions.add_child(to_vps)
-	# Il ritorno alla checklist sta in fondo: è navigazione, non un'azione,
-	# e in mezzo agli altri sembrava una scelta alla pari.
-	var back := Button.new()
-	back.text = UIStrings.t("setup.back_overview")
-	back.add_theme_color_override("font_color", Palette.MUTED)
-	back.pressed.connect(func() -> void: navigate.emit("activation"))
-	actions.add_child(back)
-	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
-	_content.add_child(_setup_message)
+		footer.add_child(to_vps)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(spacer)
+	if bool(s.get("container_running", false)):
+		var stop := Button.new()
+		stop.text = UIStrings.t("setup.container_stop")
+		stop.disabled = SetupService.busy()
+		stop.add_theme_color_override("font_color", Palette.RED)
+		stop.pressed.connect(SetupService.stop_container)
+		footer.add_child(stop)
 
 
+## Una riga della filiera di attivazione. Quattro stati, quattro letture:
+## ✓ fatto (verde) · ◌ in corso adesso (giallo) · ○ ancora da fare (spento)
+## · ⚠ richiede attenzione (giallo). Niente emoji: glifi del font mono.
+const PHASE_GLYPHS := {"done": "✓", "active": "◌", "pending": "○", "warn": "⚠"}
+
+static func _phase_state(done: bool, active: bool) -> String:
+	if active:
+		return "active"
+	return "done" if done else "pending"
+
+
+func _setup_phase_row(label_text: String, state: String, detail: String) -> void:
+	var tint: Color = Palette.GREEN if state == "done" \
+			else (Palette.YELLOW if state in ["active", "warn"] else Palette.DIM)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	_content.add_child(row)
+	row.add_child(TerminalTheme.label(
+			str(PHASE_GLYPHS.get(state, "○")), 15, tint))
+	var label := TerminalTheme.label(label_text, 15,
+			Palette.BRIGHT if state != "pending" else Palette.MUTED, "medium")
+	label.custom_minimum_size = Vector2(220, 0)
+	row.add_child(label)
+	var value := TerminalTheme.label(detail, 14,
+			Palette.YELLOW if state == "active" else Palette.MUTED)
+	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(value)
+
+
+## Riga di stato binaria (account, email): ● verde/giallo + dettaglio.
 func _setup_state_row(label_text: String, ok: bool, detail: String) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -1172,6 +1281,16 @@ func _setup_state_row(label_text: String, ok: bool, detail: String) -> void:
 	var value := TerminalTheme.label(detail, 14, Palette.MUTED)
 	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(value)
+
+
+## Rimette nella riga di stato l'ultimo messaggio d'azione dopo una
+## ricostruzione del pannello: senza, il cambio fase cancellava il progresso
+## del pull a metà download.
+func _restore_action_note() -> void:
+	if SetupService.busy() and _action_note != "" \
+			and is_instance_valid(_setup_message):
+		_setup_message.text = _action_note
+		_setup_message.add_theme_color_override("font_color", _action_note_color)
 
 
 func _build_provider_setup() -> void:
@@ -1193,6 +1312,7 @@ func _build_provider_setup() -> void:
 		_provider_card(list, provider, s)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
+	_restore_action_note()
 
 
 func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> void:
@@ -1230,6 +1350,7 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 	if not active:
 		var choose := Button.new()
 		choose.text = UIStrings.t("setup.provider_choose")
+		choose.disabled = SetupService.busy()
 		choose.pressed.connect(SetupService.select_provider.bind(provider))
 		actions.add_child(choose)
 	else:
@@ -1240,6 +1361,13 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 		login.add_theme_color_override("font_color", Palette.GREEN)
 		login.pressed.connect(SetupService.open_provider_login.bind(provider))
 		actions.add_child(login)
+		# Pulsante spento senza spiegazione = pulsante rotto: se il container è
+		# giù si dice PERCHÉ il login non è premibile e cosa fare prima.
+		if not bool(s.get("container_running", false)):
+			var why := TerminalTheme.label(
+					UIStrings.t("setup.provider_needs_container"), 11, Palette.YELLOW)
+			why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			actions.add_child(why)
 		# Login fatto ma non ancora visto: serve RIGUARDARE, non rifare. Il
 		# pulsante di sopra reinstalla il CLI e riapre la console da capo —
 		# usarlo per "controlla di nuovo" costa minuti e riporta al punto di
@@ -1327,11 +1455,30 @@ func _on_setup_action(action: String, running: bool, message: String, ok: bool) 
 	# senza questo il pannello resterebbe su "non disponibile" fino a riaprirlo.
 	if action == "vps-key" and not running:
 		_refresh_vps_fingerprint()
+	_action_note = ("◌ " if running else ("✓ " if ok else "⚠ ")) + message
+	_action_note_color = Palette.YELLOW if running \
+			else (Palette.GREEN if ok else Palette.RED)
+	# Avvio o fine di un'azione di setup: i pulsanti devono cambiare stato
+	# (disabilitati + etichetta "in corso") SUBITO, non al prossimo probe.
+	# Solo al fronte di salita/discesa: i progressi intermedi arrivano ogni
+	# ~1.5s durante il pull e ricostruire la UI a quel ritmo la renderebbe
+	# incliccabile.
+	if action in SETUP_ACTIONS and section in SETUP_SECTIONS \
+			and running != _setup_busy_ui:
+		_setup_busy_ui = running
+		_build(_current_page)
 	if not is_instance_valid(_setup_message):
 		return
-	_setup_message.text = ("◌ " if running else ("✓ " if ok else "⚠ ")) + message
-	_setup_message.add_theme_color_override("font_color",
-			Palette.YELLOW if running else (Palette.GREEN if ok else Palette.RED))
+	_setup_message.text = _action_note
+	_setup_message.add_theme_color_override("font_color", _action_note_color)
+
+
+## Cambio fase dell'attivazione (motore → immagine → container): il pannello
+## Docker sposta il marcatore ◌ sulla riga giusta. Succede tre volte per
+## attivazione, il costo della ricostruzione è irrilevante.
+func _on_setup_phase(_action: String, _phase: String) -> void:
+	if section == "docker" and is_instance_valid(_content):
+		_build(_current_page)
 
 # ── Sistema VPS / container ──────────────────────────────────────────
 
@@ -2012,15 +2159,18 @@ func _build_appearance() -> void:
 	var choices := HBoxContainer.new()
 	choices.add_theme_constant_override("separation", 16)
 	_content.add_child(choices)
+	# Solo testo: il ☀ del tema chiaro era un pittogramma dipendente dai font
+	# di sistema (regola: niente emoji nella UI di prodotto), e un ◐ da solo
+	# sull'altra scheda non racconterebbe una coppia.
 	for spec in [
-		[Palette.MODE_LIGHT, "☀", "appearance.light", "appearance.light_desc"],
-		[Palette.MODE_DARK, "◐", "appearance.dark", "appearance.dark_desc"],
+		[Palette.MODE_LIGHT, "appearance.light", "appearance.light_desc"],
+		[Palette.MODE_DARK, "appearance.dark", "appearance.dark_desc"],
 	]:
 		var selected: bool = Palette.mode == spec[0]
 		var button := Button.new()
-		button.text = "%s  %s%s\n%s" % [spec[1],
-				UIStrings.t(spec[2]).to_upper(), "  ✓" if selected else "",
-				UIStrings.t(spec[3])]
+		button.text = "%s%s\n%s" % [
+				UIStrings.t(spec[1]).to_upper(), "  ✓" if selected else "",
+				UIStrings.t(spec[2])]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.custom_minimum_size = Vector2(360, 104)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2308,7 +2458,7 @@ func _build_agent_page() -> void:
 	var title_row := HBoxContainer.new()
 	title_row.add_theme_constant_override("separation", 14)
 	_content.add_child(title_row)
-	title_row.add_child(TerminalTheme.label(ROLE_EMOJI.get(slug, "●"), 22, Palette.GREEN))
+	title_row.add_child(_role_icon(slug, 24.0))
 	title_row.add_child(TerminalTheme.label(
 			str(agent.get("name", slug.capitalize())), 22, Palette.WHITE, "xbold"))
 	title_row.add_child(TerminalTheme.label(
@@ -3494,9 +3644,17 @@ func _build_team() -> void:
 	_content.add_child(controls)
 	var running := not BackendBus.agents.is_empty() or bool(
 			SetupService.status.get("team_running", false))
+	var team_busy := SetupService.busy() and SetupService.current_action == "team"
 	var primary := Button.new()
-	primary.text = UIStrings.t("team.stop") if running else UIStrings.t("team.start")
-	primary.disabled = not bool(SetupService.status.get("ready", false)) and not running
+	# Mentre il comando gira l'etichetta dice COSA sta succedendo (avvio o
+	# arresto, dedotto dallo stato di partenza) e il pulsante non è premibile.
+	if team_busy:
+		primary.text = UIStrings.t("setup.team_stopping") if running \
+				else UIStrings.t("setup.team_starting")
+	else:
+		primary.text = UIStrings.t("team.stop") if running else UIStrings.t("team.start")
+	primary.disabled = (not bool(SetupService.status.get("ready", false)) \
+			and not running) or SetupService.busy()
 	primary.add_theme_color_override("font_color", Palette.RED if running else Palette.GREEN)
 	primary.pressed.connect(SetupService.stop_team if running else SetupService.start_team)
 	controls.add_child(primary)
@@ -3507,6 +3665,7 @@ func _build_team() -> void:
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_setup_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	controls.add_child(_setup_message)
+	_restore_action_note()
 	_content.add_child(HSeparator.new())
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]
@@ -3556,7 +3715,7 @@ func _build_agents() -> void:
 			row.add_theme_constant_override("separation", 12)
 			_content.add_child(row)
 			var slug := str(a.get("slug", "?"))
-			row.add_child(TerminalTheme.label(ROLE_EMOJI.get(slug, "●"), 14, Palette.GREEN))
+			row.add_child(_role_icon(slug, 16.0))
 			# il nome apre la pagina dell'agente (come /team/<slug> sul web)
 			var name_btn := Button.new()
 			name_btn.flat = true
@@ -3585,9 +3744,12 @@ func _build_agents() -> void:
 		var color: Color = DepartmentDefs.DEPARTMENTS[dept_id]["color"] \
 				if dept_id != "" else Palette.MUTED
 		row.add_child(TerminalTheme.label("●", 13, color))
+		# "regular", non "": TerminalTheme.label indicizza il dizionario dei
+		# font col peso, e la stringa vuota faceva abortire la costruzione
+		# dell'intera lista mock (visibile solo senza team collegato).
 		var name_lbl := TerminalTheme.label(def["name"], 16,
 				Palette.BRIGHT if def.get("lead", false) else Palette.BASE,
-				"medium" if def.get("lead", false) else "")
+				"medium" if def.get("lead", false) else "regular")
 		name_lbl.custom_minimum_size = Vector2(220, 0)
 		row.add_child(name_lbl)
 		var status: Dictionary = TeamData.agent_status().get(def["slug"], {})
@@ -3597,12 +3759,24 @@ func _build_agents() -> void:
 		st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(st)
 
-## Emoji-ruolo per l'attribuzione per-istanza (scout-2, scorer-1…).
-const ROLE_EMOJI := {
-	"scout": "🔍", "analista": "🧠", "scorer": "🎯", "scrittore": "✍",
-	"critico": "🧐", "capitano": "🧭", "coordinatore": "🧭", "sentinella": "🛡",
-	"assistente": "📋", "mentor": "🎓", "dottore": "🩺", "mantenitore": "🔧",
+## Icona vettoriale per ruolo (id di SidebarIcon): niente emoji nella UI di
+## prodotto — i pittogrammi dipendono dai font di sistema e su Linux restavano
+## rettangoli vuoti (stessa ragione per cui la sidebar disegna le sue icone).
+const ROLE_ICON := {
+	"scout": "search", "analista": "chip", "scorer": "target",
+	"scrittore": "pen", "critico": "scale", "capitano": "compass",
+	"coordinatore": "compass", "sentinella": "shield", "assistente": "doc",
+	"mentor": "grad", "dottore": "medcross", "mantenitore": "gear",
 }
+
+
+## L'icona di ruolo pronta da mettere in riga accanto al nome. Per un ruolo
+## sconosciuto SidebarIcon disegna il cerchietto neutro: mai un glifo dubbio.
+static func _role_icon(slug: String, side: float) -> SidebarIcon:
+	var icon := SidebarIcon.new(ROLE_ICON.get(slug, ""), Palette.GREEN)
+	icon.custom_minimum_size = Vector2(side, side)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return icon
 
 ## Feed attività: il registro transizioni VERO quando la VPS è collegata
 ## (chi ha fatto cosa, con l'istanza), altrimenti il mock.
@@ -3628,9 +3802,7 @@ func _build_activity() -> void:
 			when.custom_minimum_size = Vector2(140, 0)
 			row.add_child(when)
 			var by := str(t.get("by_agent", "?") if t.get("by_agent") else "?")
-			var base := by.split("-")[0]
-			var who := TerminalTheme.label("%s %s"
-					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(by)],
+			var who := TerminalTheme.label(AgentNames.display_name(by),
 					13, Palette.MINT, "medium")
 			who.custom_minimum_size = Vector2(210, 0)
 			row.add_child(who)
@@ -3864,7 +4036,7 @@ func _build_notifs() -> void:
 				var status := str(t.get("status", ""))
 				var req := str(t.get("request_text", "")).left(70)
 				if status == "resolved":
-					items.append({"ts": str(t.get("created_at", "")), "icon": "✔",
+					items.append({"ts": str(t.get("created_at", "")), "icon": "✓",
 							"color": Palette.MINT,
 							"text": UIStrings.t("notifs.ticket_resolved") % req})
 				elif status == "assigned":
@@ -3940,9 +4112,8 @@ func _build_chat() -> void:
 					str(msg.get("ts", "")).replace("T", " ").left(16), 13, Palette.DIM)
 			when.custom_minimum_size = Vector2(130, 0)
 			row.add_child(when)
-			var base := str(msg.get("from", "?")).split("-")[0]
 			# Mittente e destinatario nella stessa cella: solo cognomi.
-			var who := TerminalTheme.label("%s %s → %s" % [ROLE_EMOJI.get(base, "•"),
+			var who := TerminalTheme.label("%s → %s" % [
 					AgentNames.short_name(str(msg.get("from", "?"))),
 					AgentNames.short_name(str(msg.get("to", "?")))],
 					13, Palette.MINT, "medium")
@@ -4055,9 +4226,7 @@ func _build_usage() -> void:
 			var row := HBoxContainer.new()
 			row.add_theme_constant_override("separation", 12)
 			_content.add_child(row)
-			var base := str(agent).split("-")[0]
-			var lbl := TerminalTheme.label("%s %s"
-					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(str(agent))],
+			var lbl := TerminalTheme.label(AgentNames.display_name(str(agent)),
 					14, Palette.BASE)
 			lbl.custom_minimum_size = Vector2(270, 0)
 			row.add_child(lbl)
