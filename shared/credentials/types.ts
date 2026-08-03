@@ -50,6 +50,32 @@ export type ResolvedCredential = {
   source: CredentialSource;
 };
 
+/**
+ * Esito della lettura di una credenziale dal disco.
+ *
+ * Serve a distinguere i tre modi in cui una lettura può non produrre una
+ * credenziale, che `null` da solo confondeva:
+ *   - `absent`             → il file non esiste (mai salvata, o cancellata);
+ *   - `corrupted`          → il file c'è ma non è decifrabile. Copre anche il
+ *                            caso "passphrase diversa da quella di scrittura":
+ *                            con AES-GCM i due casi sono indistinguibili;
+ *   - `missing_passphrase` → il file c'è ed è integro, ma nessuna sorgente
+ *                            fornisce la passphrase. Il dato è recuperabile:
+ *                            manca la chiave, non la credenziale.
+ */
+export type CredentialReadStatus =
+  | "ok"
+  | "absent"
+  | "corrupted"
+  | "missing_passphrase";
+
+/** Risultato di una lettura credenziale che non lancia mai. */
+export type CredentialReadResult =
+  | { status: "ok"; credential: Credential }
+  | { status: "absent" }
+  | { status: "corrupted" }
+  | { status: "missing_passphrase"; message: string; envVar: string };
+
 /** Dati criptati salvati su disco */
 export type EncryptedPayload = {
   version: 1;
