@@ -545,6 +545,29 @@ def update_application(args):
     updates = []
     params = []
 
+    # L'identità dello Scrittore appartiene al write path, non al Critico.
+    # `--written-by` è la fonte esplicita; per le scritture degli artefatti
+    # accettiamo anche JHT_AGENT_NAME, esportato da start-agent.sh. Il vecchio
+    # codice leggeva JHT_AGENT_ID, che il launcher non ha mai esportato: il
+    # fallback era quindi morto. Limitarlo ai campi writer-owned evita che un
+    # update del Critico attribuisca per errore a sé un CV creato senza autore.
+    writer_fields_changed = any((
+        args.written_at,
+        args.cv_path,
+        args.cl_path,
+        args.cv_pdf_path,
+        args.cl_pdf_path,
+    ))
+    written_by = (args.written_by or '').strip()
+    if not written_by and writer_fields_changed:
+        written_by = (
+            os.environ.get('JHT_AGENT_NAME')
+            or os.environ.get('JHT_AGENT_ID', '')
+        ).strip()
+    if written_by:
+        updates.append("written_by = ?")
+        params.append(written_by)
+
     if args.status:
         updates.append("status = ?")
         params.append(args.status)
@@ -626,8 +649,9 @@ def update_application(args):
             print(f"⚠️  position_id={args.position_id} non esiste in positions. Abort INSERT.")
             conn.close()
             return
-        # Default: written_at=now se non specificato; written_by se passato
-        # via --reviewed-by NON va qui, va nel campo reviewed_by.
+        # Default: written_at=now se non specificato. `written_by`, quando
+        # disponibile, è già nella lista UPDATE/INSERT costruita sopra;
+        # --reviewed-by resta invece confinato al campo reviewed_by.
         # Costruiamo INSERT solo coi campi noti dall'UPDATE + position_id.
         ins_cols = ['position_id']
         ins_vals = [args.position_id]
@@ -647,11 +671,6 @@ def update_application(args):
         if 'written_at' not in ins_cols:
             ins_cols.append('written_at')
             ins_placeholders.append("datetime('now', 'localtime')")
-        # written_by da $JHT_AGENT_ID se settato (start-agent.sh lo esporta)
-        if 'written_by' not in ins_cols and os.environ.get('JHT_AGENT_ID'):
-            ins_cols.append('written_by')
-            ins_placeholders.append('?')
-            ins_vals.append(os.environ['JHT_AGENT_ID'])
         sql = f"INSERT INTO applications ({', '.join(ins_cols)}) VALUES ({', '.join(ins_placeholders)})"
         conn.execute(sql, ins_vals)
         conn.commit()
@@ -758,6 +777,7 @@ def main():
     a.add_argument('--critic-notes')
     a.add_argument('--critic-round', type=int, help='Numero round critico (1 o 2)')
     a.add_argument('--reviewed-by')
+    a.add_argument('--written-by', help='Identità dello Scrittore; fallback a JHT_AGENT_NAME quando si salvano artefatti CV/CL')
     a.add_argument('--written-at', help='Quando il CV è stato creato (YYYY-MM-DD HH:MM o "now")')
     a.add_argument('--applied-at', help='Quando la candidatura è stata inviata')
     a.add_argument('--applied-via')
