@@ -804,6 +804,28 @@ def test_sender_normal_delivery_still_exits_zero(tmux_factory, home):
     assert keys == ["Enter"], keys
 
 
+def test_sender_verifies_a_long_message_from_the_visible_tail(tmux_factory, home):
+    """La testa di un prompt lungo può essere già fuori dal pane.
+
+    Il sender deve riconoscere la coda ancora visibile, inviare Enter una sola
+    volta e non concatenare tre copie dello stesso ordine nel composer.
+    """
+    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "ok"}})
+    exe = tmux.bin / "tmux"
+    exe.write_text(FAKE_TMUX.replace(
+        'save(s); print(render(sess)); sys.exit(0)',
+        'save(s); print(render(sess)[-120:]); sys.exit(0)'))
+    exe.chmod(0o755)
+    msg = "[@capitano -> @scout-1] [MSG] " + ("batch molto lungo " * 80) + "CODA-UNIVOCA"
+
+    r = _send(tmux, home, "SCOUT-1", msg)
+
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    literal = [c for c in tmux.calls("send-keys", session="SCOUT-1") if "-l" in c]
+    assert len(literal) == 1, "il messaggio non deve essere ridigitato e duplicato"
+    assert tmux.draft("SCOUT-1") == ""
+
+
 def test_sender_recovers_a_lost_enter_on_a_claude_pane(tmux_factory, home):
     """Il pane ignora l'Enter a freddo: Space+Enter recupera, e vale su Claude.
 

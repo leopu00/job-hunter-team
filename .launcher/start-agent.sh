@@ -15,7 +15,7 @@ set -euo pipefail
 # /usr/bin:/bin:...) — manca /jht_home/.npm-global/bin dove vivono
 # codex/claude/kimi, e lo script esce con "codex: command not found".
 # Esportiamo esplicitamente sempre i path dei CLI qui.
-export PATH="/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+export PATH="/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 
 DEV_TEAM_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DEV_TEAM_DIR/config.sh"
@@ -439,6 +439,27 @@ case "$ROLE" in
     ;;
 esac
 
+# Capitano, watchdog e operatore possono chiedere lo stesso spawn quasi nello
+# stesso istante. Prima il controllo `tmux has-session` arrivava DOPO `rm -rf`
+# delle cartelle skill: due start concorrenti cancellavano la destinazione
+# mentre l'altro processo la copiava (`cp: ... No such file or directory`).
+# Serializziamo per sessione e riconosciamo l'idempotenza prima di toccare la
+# workdir. `flock` è disponibile nel container Linux; fuori dal container il
+# fallback conserva il comportamento storico.
+if command -v flock >/dev/null 2>&1; then
+  mkdir -p "${JHT_HOME:-/jht_home}/locks"
+  exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
+  if ! flock -w 30 9; then
+    echo "Errore: timeout attendendo lo spawn concorrente di '$SESSION'." >&2
+    exit 1
+  fi
+fi
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "Sessione '$SESSION' già attiva."
+  echo "Connettiti con: tmux attach -t \"$SESSION\""
+  exit 0
+fi
+
 # Determina effort in base al mode
 if [ "$MODE" = "fast" ]; then
   effort="low"
@@ -843,13 +864,6 @@ fi
 echo "  → $_skills_count skill(s) distribuite in $CLAUDE_SKILLS_DIR + $AGENTS_SKILLS_DIR"
 unset _line _name _src _skill _skills_count
 
-# ── Avvia agente ─────────────────────────────────────────────────────────────
-if tmux has-session -t "$SESSION" 2>/dev/null; then
-  echo "Sessione '$SESSION' già attiva."
-  echo "Connettiti con: tmux attach -t \"$SESSION\""
-  exit 0
-fi
-
 # ── Warmup ~/.claude.json se manca ──────────────────────────────────────────
 # Bug osservato 2026-05-12: Claude Code 2.1.139 considera "loggato" solo se
 # ESISTONO ENTRAMBI $JHT_HOME/.claude/.credentials.json E $JHT_HOME/.claude.json.
@@ -1196,4 +1210,3 @@ if [ "$ROLE" = "sentinella" ]; then
   _msg="[@utente -> @sentinella] [MSG] Avvio. Aspetta il primo [BRIDGE TICK]."
   _kickoff "$SESSION" "$_msg"
 fi
-
