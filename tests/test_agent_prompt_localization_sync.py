@@ -165,13 +165,6 @@ KNOWN_SKILL_LOCALIZATION_GAPS = {
     ('game-reply-options', 'de'),
     ('game-reply-options', 'pt'),
     ('game-reply-options', 'hu'),
-    # Mantenitore — sweep infra. Monolingue.
-    ('maintainer-sweep', 'it'),
-    ('maintainer-sweep', 'es'),
-    ('maintainer-sweep', 'fr'),
-    ('maintainer-sweep', 'de'),
-    ('maintainer-sweep', 'pt'),
-    ('maintainer-sweep', 'hu'),
     # Analista — recheck liveness annunci. Monolingue.
     ('recheck-liveness', 'it'),
     ('recheck-liveness', 'es'),
