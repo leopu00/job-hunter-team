@@ -178,20 +178,23 @@ def update_position(args):
         if row is not None:
             previous_status = row[0] if not hasattr(row, "keys") else row["status"]
 
-    # Evidenza: la fotografia va presa PRIMA, e la validazione pure. Un
-    # office_verified=true senza prova viene rifiutato qui, con il DB ancora
-    # intatto — non dopo aver scritto, quando l'unico rimedio sarebbe una
-    # patch sui dati.
     # `getattr`: update_position è invocata anche con Namespace costruiti a
-    # mano da altri moduli, che non conoscono i flag di evidenza.
+    # mano da altri moduli, che non conoscono i flag dello storico.
     m_action = getattr(args, 'action', None)
+    m_outcome = getattr(args, 'outcome', None)
     evidence = maintenance_log.evidence_from_args(args)
-    if getattr(args, 'office_verified', None) is not None:
+
+    # Un controllo che non ha concluso nulla non può chiudere la posizione.
+    # Rifiutato QUI, prima di scrivere: il rimedio dopo sarebbe una patch sui
+    # dati, e nel frattempo l'offerta sarebbe già sparita dal radar.
+    if m_outcome:
         try:
-            maintenance_log.check_verified_claim(
-                "office_verified", args.office_verified, evidence)
-        except maintenance_log.EvidenceError as e:
-            print(f"⚠️  SCRITTURA RIFIUTATA: {e}")
+            maintenance_log.check_closing_write(
+                "is_open", getattr(args, 'is_open', None), m_outcome)
+            maintenance_log.check_closing_write(
+                "status", getattr(args, 'status', None), m_outcome)
+        except maintenance_log.MaintenanceError as e:
+            print(f"⚠️  CHIUSURA RIFIUTATA: {e}")
             conn.close()
             sys.exit(1)
     before_snapshot = (_snapshot(conn, "positions", args.id,
@@ -445,12 +448,12 @@ def update_position(args):
             n = maintenance_log.record_diffs(
                 conn, "position", args.id, m_action,
                 _diffs(before_snapshot, after_snapshot),
-                outcome=getattr(args, 'outcome', None), evidence=evidence,
+                outcome=m_outcome, evidence=evidence,
                 duration_ms=getattr(args, 'duration_ms', None), by_agent=actor)
-        except maintenance_log.EvidenceError as e:
-            # Rollback esplicito: se l'evidenza non regge, la modifica non
-            # deve restare. L'alternativa — scrivere e non loggare — è
-            # esattamente il buco che questa tabella chiude.
+        except maintenance_log.MaintenanceError as e:
+            # Rete di sicurezza: il controllo pre-scrittura guarda gli
+            # argomenti, questo guarda il diff reale. Se una chiusura passa
+            # comunque, la si annulla invece di lasciarla a metà.
             conn.rollback()
             print(f"⚠️  SCRITTURA ANNULLATA: {e}")
             conn.close()
@@ -701,8 +704,8 @@ def main():
     p.add_argument('--office-lon', type=float, help='Longitudine WGS84 ufficio (es. 12.4829321)')
     p.add_argument('--office-address', help='Indirizzo completo ufficio (display_name del geocoder)')
     p.add_argument('--office-geocoded', choices=['true', 'false'], help='true se è stato fatto geocoding (anche se fallito)')
-    p.add_argument('--office-verified', choices=['true', 'false'], help='true se SEI SICURO sia l\'ufficio giusto; false se city-level/multi-ambiguo — richiede --evidence-url + --evidence-code 2xx')
-    # Log di evidenza: --action apre l'evento, il resto lo rende verificabile.
+    p.add_argument('--office-verified', choices=['true', 'false'], help='true se SEI SICURO sia l\'ufficio giusto; false se city-level/multi-ambiguo')
+    # Storico dei controlli: --action registra il giro, --outcome ne dice l'esito.
     maintenance_log.add_cli_args(p)
 
     # company

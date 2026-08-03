@@ -14,7 +14,6 @@ Salary (V2 — dichiarato vs stimato):
 """
 
 import argparse
-import hashlib
 import re
 import sys
 import os
@@ -355,21 +354,12 @@ def insert_score(args):
                  for f in SCORE_TRACKED_FIELDS
                  if str(previous.get(f)) != str(current.get(f))]
         evidence = maintenance_log.evidence_from_args(args)
-        # L'impronta del breakdown è l'unica prova disponibile per un
-        # giudizio: nessuna URL può dire se uno score è giusto. Se l'agente
-        # non la passa la calcoliamo dal testo che ha appena scritto — un
-        # breakdown byte-identico al precedente produce lo stesso hash, e il
-        # no-op resta visibile.
-        if not evidence.get("hash") and args.breakdown:
-            evidence["hash"] = hashlib.sha256(
-                args.breakdown.strip().encode("utf-8")).hexdigest()
-            evidence["kind"] = evidence.get("kind") or "manual"
         try:
             maintenance_log.record_diffs(
                 conn, "position", args.position_id, action, diffs,
                 outcome=getattr(args, 'outcome', None), evidence=evidence,
                 duration_ms=getattr(args, 'duration_ms', None))
-        except maintenance_log.EvidenceError as e:
+        except maintenance_log.MaintenanceError as e:
             conn.rollback()
             print(f"⚠️  SCORE ANNULLATO: {e}")
             conn.close()
