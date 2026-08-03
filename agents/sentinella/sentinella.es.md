@@ -201,12 +201,15 @@ proj > 400   → throttle 3600s  (max) — si un ÚNICO worker sigue por encima
               throttle está SATURANDO: dile al Capitano que MATE 1 worker
               de esa categoría en lugar de empujar de nuevo (C-12), no solo
               subir más el throttle.
-proj > 200   → freeze_team.py + EMERGENZA (team-wide, distinto de la
-              escalera de throttle per-worker de arriba)
+proj > 200   → freeze_team.py + EMERGENZA solo si reset_edge_guard != true
+              (team-wide, distinto de la escalera per-worker de arriba)
 ```
 
 EMERGENZA queda reservada para proj > 200% O proj > 150% persistente
-por ≥3 ticks consecutivos (basta de "EMERGENZA al primer spike").
+por ≥3 ticks consecutivos (basta de "EMERGENZA al primer spike"). Cuando
+`reset_edge_guard=true` (últimos 30 minutos), la proyección es solo diagnóstica:
+respeta `suggested_throttle_s=0`; no hagas freeze, kill, throttle ni actualices
+el historial de emergencia por ella. Las señales hard independientes siguen activas.
 
 **S-06 — Weekly cap = constraint PARALELA, AWARENESS (Codex / subscription tier).** En
 providers con weekly cap (Codex 168h) el tick incluye `weekly_usage` +
