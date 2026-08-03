@@ -21,7 +21,7 @@ export default function FloatingChat() {
     setSuggestions(data.suggestions ?? [])
   }, [])
 
-  useEffect(() => { if (open && messages.length === 0) fetchHistory() }, [open, messages.length, fetchHistory])
+  useEffect(() => { if (open && messages.length === 0) queueMicrotask(fetchHistory) }, [open, messages.length, fetchHistory])
   useEffect(() => { if (open) scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [messages, open])
 
   useEffect(() => {

@@ -27,14 +27,14 @@ export default function TagInput({
     s.toLowerCase().includes(input.toLowerCase().trim()) && !tags.includes(s)
   ).slice(0, 8)
 
-  const addTag = useCallback((raw: string) => {
+  const addTag = (raw: string) => {
     const tag = raw.trim().replace(/,+$/, '').trim()
     if (!tag || tags.includes(tag) || tags.length >= maxTags) return
     onChange([...tags, tag])
     setInput('')
     setOpen(false)
     setFocusIdx(-1)
-  }, [tags, onChange, maxTags])
+  }
 
   const removeTag = useCallback((idx: number) => {
     onChange(tags.filter((_, i) => i !== idx))

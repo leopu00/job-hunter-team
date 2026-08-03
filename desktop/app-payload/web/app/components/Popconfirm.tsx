@@ -67,7 +67,7 @@ export function Popconfirm({
   const close = useCallback(() => setOpen(false), [])
 
   const confirm = () => { close(); onConfirm() }
-  const cancel  = () => { close(); onCancel?.() }
+  const cancel  = useCallback(() => { close(); onCancel?.() }, [close, onCancel])
 
   // ESC + click outside
   useEffect(() => {

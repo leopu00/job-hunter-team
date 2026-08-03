@@ -60,7 +60,7 @@ export default function AlertsPage() {
     setAlerts(data.alerts ?? []); setTotal(data.total ?? 0); setEnabled(data.enabled ?? 0);
   }, [channelFilter])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const toggle = async (id: string, en: boolean) => {
     await fetch('/api/alerts', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, enabled: en }) }).catch(() => null);

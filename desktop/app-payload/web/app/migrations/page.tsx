@@ -47,7 +47,7 @@ export default function MigrationsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchState() }, [fetchState])
+  useEffect(() => { queueMicrotask(fetchState) }, [fetchState])
 
   const runMigrations = async () => {
     setRunning(true); setMsg(null)

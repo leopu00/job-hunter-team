@@ -28,7 +28,7 @@ export default function CookieConsent() {
 
   useEffect(() => {
     try {
-      if (!localStorage.getItem(STORAGE_KEY)) setVisible(true)
+    if (!localStorage.getItem(STORAGE_KEY)) queueMicrotask(() => setVisible(true))
     } catch { /* SSR / privacy mode */ }
   }, [])
 

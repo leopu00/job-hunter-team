@@ -1,7 +1,7 @@
 'use client'
 
 import { PROVIDERS } from './providers'
-import { Card, NavButtons, btnPrimary } from './ui'
+import { Card, NavButtons } from './ui'
 import type { FormState } from './types'
 
 interface Props {

@@ -49,8 +49,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const t = resolveInitialTheme()
     const actual = resolveActual(t)
-    setThemeState(t)
-    setResolved(actual)
+    queueMicrotask(() => {
+      setThemeState(t)
+      setResolved(actual)
+    })
     applyTheme(actual)
   }, [])
 

@@ -86,7 +86,7 @@ export default function InterviewsPage() {
     setInterviews(data.interviews ?? []); setTotal(data.total ?? 0); setUpcoming(data.upcoming ?? 0); setPassed(data.passed ?? 0);
   }, [outcomeFilter])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const FILTERS = [{ key: 'all', label: 'tutti' }, { key: 'pending', label: 'in attesa' }, { key: 'passed', label: 'superati' }, { key: 'failed', label: 'non superati' }];
 

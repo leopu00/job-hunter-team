@@ -64,7 +64,7 @@ export default function ErrorsPage() {
     setErrors(data.errors ?? []); setTypes(data.types ?? []); setOpenCount(data.openCount ?? 0);
   }, [filter, typeFilter])
 
-  useEffect(() => { fetchErrors() }, [fetchErrors])
+  useEffect(() => { queueMicrotask(fetchErrors) }, [fetchErrors])
 
   const updateStatus = async (id: string, status: ErrorStatus) => {
     await fetch('/api/errors', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }).catch(() => null);

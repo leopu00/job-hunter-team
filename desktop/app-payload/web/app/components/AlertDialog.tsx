@@ -44,7 +44,6 @@ function useFocusTrap(ref: React.RefObject<HTMLElement | null>, active: boolean)
     const sel = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     const focusables = () => Array.from(el.querySelectorAll<HTMLElement>(sel))
     const first = () => focusables()[0]
-    const last  = () => focusables().at(-1)
     first()?.focus()
     const trap = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return
@@ -175,4 +174,3 @@ export function AlertDialog({
     </>
   )
 }
-

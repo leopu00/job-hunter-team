@@ -235,11 +235,10 @@ function WeeklyChart({ weeks, ariaLabel }: { weeks: { week: string; count: numbe
 
 function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
   const total = data.reduce((s, d) => s + d.value, 0)
-  let offset = 0
-  const segments = data.map(d => {
+  const segments = data.map((d, index) => {
     const pct = total > 0 ? (d.value / total) * 100 : 0
+    const offset = data.slice(0, index).reduce((sum, item) => sum + (total > 0 ? (item.value / total) * 100 : 0), 0)
     const seg = { ...d, pct, offset }
-    offset += pct
     return seg
   })
 
@@ -305,8 +304,6 @@ function Heatmap({ days, lessLabel, moreLabel, ariaLabel }: { days: { date: stri
     return '#00e87a'
   }
 
-  const totalCommits = days.reduce((s, d) => s + d.count, 0)
-
   return (
     <div role="img" aria-label={ariaLabel}>
       <div className="overflow-x-auto">
@@ -358,7 +355,7 @@ function StatsContent() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { queueMicrotask(fetchData) }, [])
 
   const formatDate = (iso: string) => {
     try {

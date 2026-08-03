@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
+import { useNow } from '@/lib/use-now'
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead'
 type JobPriority = 'low' | 'normal' | 'high' | 'critical'
@@ -29,9 +30,9 @@ function StatCard({ label, value, color }: { label: string; value: number; color
   )
 }
 
-function JobRow({ job, onRetry }: { job: JobRecord; onRetry?: (id: string) => void }) {
+function JobRow({ job, now, onRetry }: { job: JobRecord; now: number; onRetry?: (id: string) => void }) {
   const cfg = STATUS_CFG[job.status]
-  const age = Math.floor((Date.now() - job.createdAt) / 60000)
+  const age = Math.floor((now - job.createdAt) / 60000)
   const ageLabel = age < 1 ? 'adesso' : age < 60 ? `${age}m fa` : `${Math.floor(age / 60)}h fa`
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors text-[11px]">
@@ -52,6 +53,7 @@ function JobRow({ job, onRetry }: { job: JobRecord; onRetry?: (id: string) => vo
 type Tab = 'overview' | 'pending' | 'running' | 'completed' | 'dead'
 
 export default function QueuePage() {
+  const now = useNow(60_000)
   const [stats, setStats] = useState<QueueStats>({ queued: 0, running: 0, succeeded: 0, failed: 0, dead: 0, totalProcessed: 0 })
   const [pending, setPending] = useState<JobRecord[]>([])
   const [running, setRunning] = useState<JobRecord[]>([])
@@ -63,14 +65,14 @@ export default function QueuePage() {
     const res = await fetch('/api/queue').catch(() => null)
     if (!res?.ok) return
     const data = await res.json()
-    setStats(data.stats ?? stats)
+    if (data.stats) setStats(data.stats)
     setPending(data.pending ?? [])
     setRunning(data.running ?? [])
     setCompleted(data.completed ?? [])
     setDeadLetter(data.deadLetter ?? [])
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
   useEffect(() => { const id = setInterval(fetchData, 5000); return () => clearInterval(id) }, [fetchData])
 
   const retryJob = async (jobId: string) => {
@@ -134,7 +136,7 @@ export default function QueuePage() {
         <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)] hover:border-[var(--color-border-glow)] transition-colors">
           {jobsForTab.length === 0
             ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun job.</p></div>
-            : jobsForTab.map(j => <JobRow key={j.id} job={j} onRetry={tab === 'dead' ? retryJob : undefined} />)
+            : jobsForTab.map(j => <JobRow key={j.id} job={j} now={now} onRetry={tab === 'dead' ? retryJob : undefined} />)
           }
         </div>
       )}

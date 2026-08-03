@@ -49,7 +49,7 @@ export function BottomSheet({
 
   // Reset snap quando si apre
   useEffect(() => {
-    if (open) { setSnap(defaultSnap); setDy(0); setClosing(false) }
+    if (open) queueMicrotask(() => { setSnap(defaultSnap); setDy(0); setClosing(false) })
   }, [open, defaultSnap])
 
   // Scroll lock

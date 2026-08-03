@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
+import { useNow } from '@/lib/use-now'
 
 type Reminder = { id: string; type: string; title: string; jobTitle?: string; company?: string; dueDate: number; status: 'pending' | 'done' | 'snoozed'; note?: string }
 type Summary = { total: number; pending: number; overdue: number; done: number }
@@ -19,8 +20,8 @@ const STATUS_CFG: Record<string, { label: string; color: string }> = {
   snoozed: { label: 'Rinviato', color: '#fca130' },
 }
 
-function timeLabel(ts: number): string {
-  const diff = ts - Date.now(), d = Math.ceil(diff / 86400000);
+function timeLabel(ts: number, now: number): string {
+  const diff = ts - now, d = Math.ceil(diff / 86400000);
   if (d < -1) return `${Math.abs(d)}g fa`;
   if (d === -1) return 'Ieri';
   if (d === 0) return 'Oggi';
@@ -28,10 +29,10 @@ function timeLabel(ts: number): string {
   return `tra ${d}g`;
 }
 
-function ReminderRow({ rem, onStatus }: { rem: Reminder; onStatus: (id: string, status: string) => void }) {
+function ReminderRow({ rem, now, onStatus }: { rem: Reminder; now: number; onStatus: (id: string, status: string) => void }) {
   const type = TYPE_CFG[rem.type] ?? TYPE_CFG.custom;
   const stat = STATUS_CFG[rem.status] ?? STATUS_CFG.pending;
-  const overdue = rem.status === 'pending' && rem.dueDate < Date.now();
+  const overdue = rem.status === 'pending' && rem.dueDate < now;
   return (
     <div className="flex items-center gap-3 px-5 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors" style={{ opacity: rem.status === 'done' ? 0.5 : 1 }}>
       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: overdue ? 'var(--color-red)' : type.color }} />
@@ -43,7 +44,7 @@ function ReminderRow({ rem, onStatus }: { rem: Reminder; onStatus: (id: string, 
         {(rem.jobTitle || rem.company) && <p className="text-[9px] text-[var(--color-dim)] truncate">{rem.jobTitle}{rem.company ? ` · ${rem.company}` : ''}</p>}
         {rem.note && <p className="text-[9px] text-[var(--color-dim)] italic mt-0.5">{rem.note}</p>}
       </div>
-      <span className="text-[9px] font-mono w-16 text-right" style={{ color: overdue ? 'var(--color-red)' : 'var(--color-dim)' }}>{timeLabel(rem.dueDate)}</span>
+      <span className="text-[9px] font-mono w-16 text-right" style={{ color: overdue ? 'var(--color-red)' : 'var(--color-dim)' }}>{timeLabel(rem.dueDate, now)}</span>
       <span className="text-[8px] font-bold px-1.5 py-0.5 rounded w-16 text-center" style={{ color: stat.color, border: `1px solid ${stat.color}` }}>{stat.label}</span>
       <div className="flex gap-1">
         {rem.status !== 'done' && <button onClick={() => onStatus(rem.id, 'done')} aria-label="Segna come completato" className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer font-bold" style={{ color: 'var(--color-green)', border: '1px solid var(--color-border)' }}>✓</button>}
@@ -55,6 +56,7 @@ function ReminderRow({ rem, onStatus }: { rem: Reminder; onStatus: (id: string, 
 }
 
 export default function RemindersPage() {
+  const now = useNow(60_000)
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [summary, setSummary] = useState<Summary>({ total: 0, pending: 0, overdue: 0, done: 0 })
   const [adding, setAdding] = useState(false)
@@ -68,7 +70,7 @@ export default function RemindersPage() {
     setReminders(d.reminders ?? []); setSummary(d.summary ?? {})
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const updateStatus = async (id: string, status: string) => {
     await fetch('/api/reminders', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }).catch(() => null)
@@ -126,7 +128,7 @@ export default function RemindersPage() {
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {filtered.length === 0
           ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun promemoria.</p></div>
-          : filtered.map(r => <ReminderRow key={r.id} rem={r} onStatus={updateStatus} />)}
+          : filtered.map(r => <ReminderRow key={r.id} rem={r} now={now} onStatus={updateStatus} />)}
       </div>
     </div>
   )

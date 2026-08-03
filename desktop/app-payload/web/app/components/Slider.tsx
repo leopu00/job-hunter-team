@@ -65,6 +65,7 @@ function Thumb({ value, min, max, step, onDrag, disabled, label }: ThumbProps) {
     const onMove  = (e: MouseEvent)  => move(e.clientX)
     const onTouch = (e: TouchEvent)  => move(e.touches[0].clientX)
     const stop    = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', stop); document.removeEventListener('touchmove', onTouch); document.removeEventListener('touchend', stop) }
+    move(clientX)
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', stop)
     document.addEventListener('touchmove', onTouch)

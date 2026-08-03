@@ -61,6 +61,7 @@ export default function RichTextEditor({ value = '', onChange, placeholder = 'Sc
   const editorRef  = useRef<HTMLDivElement>(null)
   const lastHtml   = useRef(value)
   const [focused, setFocused] = useState(false)
+  const [hasContent, setHasContent] = useState(Boolean(value))
   const [activeFormats, setActiveFormats] = useState<Set<string>>(new Set())
 
   // Inizializza contenuto
@@ -68,8 +69,9 @@ export default function RichTextEditor({ value = '', onChange, placeholder = 'Sc
     if (editorRef.current && editorRef.current.innerHTML !== value) {
       editorRef.current.innerHTML = value
       lastHtml.current = value
+      queueMicrotask(() => setHasContent(Boolean(value)))
     }
-  }, []) // solo mount
+  }, [value])
 
   // Aggiorna formati attivi al cambio selezione
   const updateFormats = useCallback(() => {
@@ -80,7 +82,7 @@ export default function RichTextEditor({ value = '', onChange, placeholder = 'Sc
   const handleInput = useCallback(() => {
     if (!editorRef.current) return
     const clean = sanitize(editorRef.current.innerHTML)
-    if (clean !== lastHtml.current) { lastHtml.current = clean; onChange?.(clean) }
+    if (clean !== lastHtml.current) { lastHtml.current = clean; setHasContent(Boolean(clean)); onChange?.(clean) }
     updateFormats()
   }, [onChange, updateFormats])
 
@@ -94,7 +96,6 @@ export default function RichTextEditor({ value = '', onChange, placeholder = 'Sc
       // Forza https se manca schema
       if (!/^https?:\/\//i.test(arg)) arg = 'https://' + arg
     }
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     document.execCommand(action.cmd, false, arg)
     handleInput()
   }, [disabled, handleInput])
@@ -139,7 +140,7 @@ export default function RichTextEditor({ value = '', onChange, placeholder = 'Sc
           }}
         />
         {/* Placeholder */}
-        {!lastHtml.current && !focused && (
+        {!hasContent && !focused && (
           <div style={{ position: 'absolute', top: 10, left: 12, fontSize: 12, color: 'var(--color-dim)', pointerEvents: 'none' }}>
             {placeholder}
           </div>

@@ -60,7 +60,7 @@ export default function MemoryPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const current = data?.files.find(f => f.name === selected)
 

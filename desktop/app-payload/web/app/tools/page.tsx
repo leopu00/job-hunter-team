@@ -60,7 +60,7 @@ export default function ToolsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   async function handleToggle(id: string, enabled: boolean) {
     setToggling(id)

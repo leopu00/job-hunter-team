@@ -35,7 +35,7 @@ export default function DatabasePage() {
     setLoading(false);
   }, [])
 
-  useEffect(() => { fetchTables() }, [fetchTables])
+  useEffect(() => { queueMicrotask(fetchTables) }, [fetchTables])
 
   const runQuery = async () => {
     setError(''); setResult(null);

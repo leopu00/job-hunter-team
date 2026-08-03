@@ -32,7 +32,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const { data, error } = await supabase.from('positions').select('status')
   if (error || !data) return EMPTY_STATS
 
-  const counts = data.reduce((acc: Record<string, number>, row: any) => {
+  const counts = data.reduce((acc: Record<string, number>, row: { status: string }) => {
     acc[row.status] = (acc[row.status] ?? 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -59,7 +59,7 @@ export async function getRecentPositions(limit = 15): Promise<PositionWithScore[
     .order('found_at', { ascending: false })
     .limit(limit)
   if (error || !data) return []
-  return data.map((p: any) => ({ ...p, score: p.scores?.total_score ?? undefined }))
+  return (data as PositionWithScore[]).map((p) => ({ ...p, score: p.scores?.total_score ?? undefined }))
 }
 
 // ── All positions with optional filters ────────────────────────────
@@ -89,7 +89,7 @@ export async function getPositions(opts?: {
 
   const { data, error } = await query
   if (error || !data) return []
-  return data.map((p: any) => ({ ...p, score: p.score ?? p.scores?.total_score ?? undefined, scores: p.scores ?? undefined }))
+  return (data as PositionWithScore[]).map((p) => ({ ...p, score: p.score ?? p.scores?.total_score ?? undefined, scores: p.scores ?? undefined }))
 }
 
 // ── Single position with all details ───────────────────────────────
@@ -163,7 +163,7 @@ export async function getRisposteCount(): Promise<number> {
   const supabase = await createClient()
   const { data, error } = await supabase.from('applications').select('id').or('status.eq.response,response.not.is.null')
   if (error || !data) return 0
-  return new Set(data.map((r: any) => r.id)).size
+  return new Set((data as Array<{ id: string }>).map((r) => r.id)).size
 }
 
 // ── Score distribution ──────────────────────────────────────────────
@@ -178,8 +178,8 @@ export async function getScoreDistribution() {
   const { data, error } = await supabase.from('positions').select('score, scores(total_score)').not('status', 'eq', 'excluded')
   if (error || !data) return empty
 
-  const scores = data.map((r: any) => (r.score as number | null) ?? (r as any).scores?.total_score ?? null)
-  const withScore = scores.filter((s: any): s is number => s != null && s > 0)
+  const scores = (data as Array<{ score: number | null; scores?: { total_score: number | null } | null }>).map((r) => r.score ?? r.scores?.total_score ?? null)
+  const withScore = scores.filter((s): s is number => s != null && s > 0)
   const buckets = [
     { label: '76\u2013100', min: 76, max: 100, color: 'var(--color-green)' },
     { label: '61\u201375',  min: 61, max: 75,  color: 'var(--color-yellow)' },
@@ -213,7 +213,7 @@ export async function getPositionsByStatus(): Promise<Record<string, number>> {
   const supabase = await createClient()
   const { data, error } = await supabase.from('positions').select('status')
   if (error || !data) return {}
-  return data.reduce((acc: Record<string, number>, row: any) => { acc[row.status] = (acc[row.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
+  return (data as Array<{ status: string }>).reduce((acc: Record<string, number>, row) => { acc[row.status] = (acc[row.status] ?? 0) + 1; return acc }, {})
 }
 
 // ── Scout stats ─────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ export async function getScoutStats() {
     supabase.from('applications').select('position_id').or('status.eq.response,response.not.is.null'),
   ])
   if (posRes.error || !posRes.data) return []
-  const respondedPositionIds = new Set((appRes.data as any[] ?? []).map((a: any) => a.position_id))
+  const respondedPositionIds = new Set((appRes.data as Array<{ position_id: string }> ?? []).map((a) => a.position_id))
   const grouped: Record<string, { total: number; excluded: number; applied: number; responded: number }> = {}
   for (const row of posRes.data) {
     const key = row.found_by ?? 'sconosciuto'
@@ -309,8 +309,9 @@ export async function getApplicationStats(): Promise<Record<string, number>> {
   const supabase = await createClient()
   const { data, error } = await supabase.from('applications').select('status, applied')
   if (error || !data) return {}
-  const counts = data.reduce((acc: Record<string, number>, row: any) => { acc[row.status] = (acc[row.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
+  const applicationRows = data as Array<{ status: string; applied: boolean }>
+  const counts = applicationRows.reduce((acc: Record<string, number>, row) => { acc[row.status] = (acc[row.status] ?? 0) + 1; return acc }, {})
   counts['_total'] = data.length
-  counts['_sent'] = data.filter((r: any) => r.applied).length
+  counts['_sent'] = applicationRows.filter((r) => r.applied).length
   return counts
 }

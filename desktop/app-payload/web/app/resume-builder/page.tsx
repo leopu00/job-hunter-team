@@ -38,7 +38,7 @@ export default function ResumeBuilderPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const save = async () => {
     setSaving(true);

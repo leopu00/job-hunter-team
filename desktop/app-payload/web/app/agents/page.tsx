@@ -93,7 +93,7 @@ export default function AgentsPage() {
     })))
   }, [])
 
-  useEffect(() => { fetchStatus() }, [fetchStatus])
+  useEffect(() => { queueMicrotask(fetchStatus) }, [fetchStatus])
   useEffect(() => {
     const id = setInterval(fetchStatus, 5000)
     return () => clearInterval(id)

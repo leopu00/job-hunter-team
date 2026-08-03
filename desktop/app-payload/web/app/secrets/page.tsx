@@ -33,7 +33,7 @@ export default function SecretsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchSecrets() }, [fetchSecrets])
+  useEffect(() => { queueMicrotask(fetchSecrets) }, [fetchSecrets])
 
   const reveal = async (id: string) => {
     const res = await fetch(`/api/secrets?id=${id}`).catch(() => null)

@@ -110,15 +110,20 @@ export default function TreeView({
   const [focusedId, setFocused] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const expanded = expandedIds ?? internalExpanded
-  const toggle   = onToggle ?? ((id: string) => setInternalExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n }))
+  const expanded = useMemo(() => expandedIds ?? internalExpanded, [expandedIds, internalExpanded])
+  const toggle   = onToggle ?? ((id: string) => setInternalExpanded(s => {
+    const n = new Set(s)
+    if (n.has(id)) n.delete(id)
+    else n.add(id)
+    return n
+  }))
   const select   = onSelect ?? (() => {})
 
   const filtered = useMemo(() => filterNodes(nodes, search), [nodes, search])
   // Auto-expand tutti se c'è ricerca
-  const effectiveExpanded = search
+  const effectiveExpanded = useMemo(() => search
     ? new Set(filtered.flatMap(function walk(n): string[] { return [n.id, ...(n.children?.flatMap(walk) ?? [])] }))
-    : expanded
+    : expanded, [expanded, filtered, search])
 
   const flat = useMemo(() => flatVisible(filtered, effectiveExpanded), [filtered, effectiveExpanded])
 

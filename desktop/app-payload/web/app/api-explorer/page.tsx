@@ -55,7 +55,7 @@ export default function ApiExplorerPage() {
     setGrouped(data.grouped ?? {}); setModules(data.modules ?? []); setTotal(data.total ?? 0);
   }, [moduleFilter, methodFilter])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const METHODS = ['all', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
   const filteredGroups = Object.entries(grouped).map(([mod, eps]) => {

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { LandingI18nProvider, useLandingI18n } from '../components/landing/LandingI18n'
+import { LandingI18nProvider, useLandingI18n, type StringKeys } from '../components/landing/LandingI18n'
 import LandingNav from '../components/landing/LandingNav'
 import { LandingFooter } from '../components/landing/LandingCTA'
 import ScrollToTop from '../components/landing/ScrollToTop'
@@ -12,8 +12,8 @@ import FadeInSection from '../components/landing/FadeInSection'
 
 type Step = {
   n: string
-  titleKey: string
-  descKey: string
+  titleKey: StringKeys
+  descKey: StringKeys
   icon: () => React.ReactNode
   mockup: () => React.ReactNode
 }
@@ -63,7 +63,7 @@ function DemoContent() {
                 aria-selected={i === activeStep}
                 aria-controls={`demo-panel-${i}`}
                 id={`demo-tab-${i}`}
-                aria-label={`Passo ${s.n}: ${t(s.titleKey as any)}`}
+                aria-label={`Passo ${s.n}: ${t(s.titleKey)}`}
                 className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all"
                 style={{
                   background: i === activeStep ? 'var(--color-green)' : 'var(--color-panel)',
@@ -98,13 +98,13 @@ function DemoContent() {
                 </div>
                 <div>
                   <h2 className="text-[16px] sm:text-[18px] font-bold text-[var(--color-white)]">
-                    {t(STEPS[activeStep].titleKey as any)}
+                    {t(STEPS[activeStep].titleKey)}
                   </h2>
                 </div>
               </div>
 
               <p className="text-[12px] sm:text-[13px] text-[var(--color-muted)] leading-relaxed mb-6">
-                {t(STEPS[activeStep].descKey as any)}
+                {t(STEPS[activeStep].descKey)}
               </p>
 
               {/* Step navigation */}
@@ -112,7 +112,7 @@ function DemoContent() {
                 {activeStep > 0 && (
                   <button
                     onClick={() => setActiveStep(activeStep - 1)}
-                    aria-label={`Passo precedente: ${t(STEPS[activeStep - 1].titleKey as any)}`}
+                    aria-label={`Passo precedente: ${t(STEPS[activeStep - 1].titleKey)}`}
                     className="px-4 py-2 rounded-lg text-[11px] font-semibold transition-all"
                     style={{ background: 'var(--color-panel)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
@@ -122,7 +122,7 @@ function DemoContent() {
                 {activeStep < STEPS.length - 1 ? (
                   <button
                     onClick={() => setActiveStep(activeStep + 1)}
-                    aria-label={`${t('demo_next')}: ${t(STEPS[activeStep + 1].titleKey as any)}`}
+                    aria-label={`${t('demo_next')}: ${t(STEPS[activeStep + 1].titleKey)}`}
                     className="px-4 py-2 rounded-lg text-[11px] font-semibold transition-all"
                     style={{ background: 'rgba(0,232,122,0.1)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.25)', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
@@ -177,9 +177,9 @@ function DemoContent() {
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-[12px] font-bold text-[var(--color-green)]">{s.n}</span>
-                    <span className="text-[12px] font-semibold text-[var(--color-white)]">{t(s.titleKey as any)}</span>
+                    <span className="text-[12px] font-semibold text-[var(--color-white)]">{t(s.titleKey)}</span>
                   </div>
-                  <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">{t(s.descKey as any)}</p>
+                  <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">{t(s.descKey)}</p>
                 </button>
               ))}
             </div>
@@ -354,7 +354,7 @@ function ApproveMockup() {
           <span className="text-[9px] px-2 py-0.5 rounded" style={{ background: 'rgba(0,232,122,0.1)', color: 'var(--color-green)', border: '1px solid rgba(0,232,122,0.2)' }}>Critico: OK</span>
         </div>
         <div className="text-[10px] text-[var(--color-dim)] mb-3">
-          Revisione completata dal Critico. Nessun problema trovato. Pronto per l'invio.
+          Revisione completata dal Critico. Nessun problema trovato. Pronto per l&apos;invio.
         </div>
         <div className="flex gap-2">
           <div className="flex-1 text-center py-1.5 rounded-lg text-[11px] font-bold" style={{ background: 'var(--color-green)', color: '#000' }}>

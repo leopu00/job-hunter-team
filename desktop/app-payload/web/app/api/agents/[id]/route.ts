@@ -47,7 +47,7 @@ function readJsonSafe<T>(filePath: string): T | null {
 
 function loadAgentConfig(agentId: string): Record<string, unknown> | null {
   const cfg = readJsonSafe<{ agents?: { list?: Record<string, unknown>[] } }>(CONFIG_PATH)
-  return cfg?.agents?.list?.find((a: any) => a.id === agentId) as Record<string, unknown> ?? null
+  return cfg?.agents?.list?.find((a) => a.id === agentId) as Record<string, unknown> ?? null
 }
 
 function loadAgentLogs(agentId: string, tail: number): { ts: string; level: string; msg: string }[] {
@@ -68,8 +68,12 @@ function loadAgentLogs(agentId: string, tail: number): { ts: string; level: stri
 function loadAgentTasks(agentId: string): Record<string, unknown>[] {
   const store = readJsonSafe<{ entries?: Record<string, unknown>[] }>(TASKS_PATH)
   if (!store?.entries) return []
-  return store.entries.filter((t: any) => t.agentId === agentId)
-    .sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 50)
+  return store.entries.filter((t) => t.agentId === agentId)
+    .sort((a, b) => {
+      const aCreatedAt = typeof a.createdAt === 'number' ? a.createdAt : 0
+      const bCreatedAt = typeof b.createdAt === 'number' ? b.createdAt : 0
+      return bCreatedAt - aCreatedAt
+    }).slice(0, 50)
 }
 
 type RouteCtx = { params: Promise<{ id: string }> }

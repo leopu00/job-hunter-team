@@ -3,6 +3,22 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
+type ScoredPosition = {
+  id: string | number
+  legacy_id: number | null
+  title: string
+  company: string
+  location: string | null
+  remote_type: string | null
+  notes?: string | null
+}
+type ScoredActivity = {
+  positions: ScoredPosition
+  total_score: number
+  scored_at: string
+  scored_by?: string | null
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -61,7 +77,7 @@ export async function GET() {
     const excluded_today = excludedTodayRes.count ?? 0
 
     // Recent scored: flatten join
-    const recent_scored = (scoredRes.data ?? []).map((s: any) => ({
+    const recent_scored = (scoredRes.data as ScoredActivity[] ?? []).map((s) => ({
       id: s.positions.id,
       legacy_id: s.positions.legacy_id,
       title: s.positions.title,
@@ -74,7 +90,7 @@ export async function GET() {
     }))
 
     // Recent excluded: flatten join
-    const recent_excluded = (excludedRes.data ?? []).map((s: any) => ({
+    const recent_excluded = (excludedRes.data as ScoredActivity[] ?? []).map((s) => ({
       id: s.positions.id,
       legacy_id: s.positions.legacy_id,
       title: s.positions.title,

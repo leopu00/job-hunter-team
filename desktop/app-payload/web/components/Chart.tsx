@@ -112,10 +112,10 @@ export function PieChart({ data, width = 160, height = 160, showLegend }: ChartP
   const total = data.reduce((s, d) => s + d.value, 0) || 1
   const cx = width / 2; const cy = height / 2; const r = Math.min(cx, cy) - 8; const ir = r * 0.5
 
-  let angle = -Math.PI / 2
   const arcs = data.map((d, i) => {
     const slice = (d.value / total) * Math.PI * 2
-    const a1 = angle; angle += slice; const a2 = angle
+    const a1 = -Math.PI / 2 + data.slice(0, i).reduce((sum, item) => sum + (item.value / total) * Math.PI * 2, 0)
+    const a2 = a1 + slice
     const x1 = cx + r * Math.cos(a1); const y1 = cy + r * Math.sin(a1)
     const x2 = cx + r * Math.cos(a2); const y2 = cy + r * Math.sin(a2)
     const xi1 = cx + ir * Math.cos(a1); const yi1 = cy + ir * Math.sin(a1)

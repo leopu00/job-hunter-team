@@ -59,7 +59,7 @@ export default function HooksPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchHooks() }, [fetchHooks])
+  useEffect(() => { queueMicrotask(fetchHooks) }, [fetchHooks])
 
   const activeCount = hooks.filter(h => h.enabled).length
   const totalEvents = hooks.reduce((s, h) => s + h.events.length, 0)

@@ -27,7 +27,6 @@ function PageContent() {
   const router = useRouter()
   const authError = params.get('error') === 'auth_failed'
   const wantsLogin = params.get('login') === 'true'
-  const wantsChange = params.get('change') === 'true'
 
   const [loading, setLoading] = useState(true)
 
@@ -57,7 +56,7 @@ function PageContent() {
       }
     }
     // La landing page si mostra SEMPRE — nessun redirect automatico
-    setLoading(false)
+    queueMicrotask(() => setLoading(false))
   }, [wantsLogin])
 
   if (loading) return null

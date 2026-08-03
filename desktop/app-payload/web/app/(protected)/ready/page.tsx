@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { getApplicationsByStatus, getPositions } from '@/lib/queries'
-import type { ApplicationWithPosition, PositionWithScore } from '@/lib/types'
+import type { ApplicationWithPosition } from '@/lib/types'
 
 const DRIVE_BASE = 'https://drive.google.com/file/d'
 

@@ -49,7 +49,7 @@ export default function FeedbackPage() {
     setItems(d.feedback ?? []); setSummary(d.summary ?? {})
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const submit = async () => {
     if (!form.description.trim() || !form.rating) return

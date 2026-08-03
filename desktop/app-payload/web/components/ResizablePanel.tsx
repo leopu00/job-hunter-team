@@ -38,7 +38,7 @@ export default function ResizablePanel({
   const containerRef           = useRef<HTMLDivElement>(null)
   const isH                    = direction === 'horizontal'
 
-  const clamp = (v: number) => Math.min(maxSize, Math.max(minSize, v))
+  const clamp = useCallback((v: number) => Math.min(maxSize, Math.max(minSize, v)), [maxSize, minSize])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -62,7 +62,7 @@ export default function ResizablePanel({
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
-  }, [isH, minSize, maxSize, onResize])
+  }, [isH, onResize, clamp])
 
   // Touch support
   const startResizeTouch = useCallback((e: React.TouchEvent) => {
@@ -88,7 +88,7 @@ export default function ResizablePanel({
     }
     window.addEventListener('touchmove', onMove, { passive: false })
     window.addEventListener('touchend', onEnd)
-  }, [isH, minSize, maxSize, onResize])
+  }, [isH, onResize, clamp])
 
   // Blocca selezione testo durante drag
   useEffect(() => {

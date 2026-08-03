@@ -17,7 +17,7 @@ export default function LanguageSwitcher() {
     setLocales(data.locales ?? [])
   }, [])
 
-  useEffect(() => { fetchLocale() }, [fetchLocale])
+  useEffect(() => { queueMicrotask(fetchLocale) }, [fetchLocale])
 
   const switchLocale = async (code: string) => {
     setOpen(false)

@@ -65,12 +65,13 @@ export default function TaskDetailPage() {
     setLoading(false)
   }, [id])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
+  const taskStatus = data?.status
   useEffect(() => {
-    if (data && (data.status === 'queued' || data.status === 'running')) {
+    if (taskStatus === 'queued' || taskStatus === 'running') {
       const iv = setInterval(fetchData, 5000); return () => clearInterval(iv)
     }
-  }, [fetchData, data?.status])
+  }, [fetchData, taskStatus])
 
   const color = STATUS_COLORS[data?.status ?? ''] ?? 'var(--color-dim)'
 

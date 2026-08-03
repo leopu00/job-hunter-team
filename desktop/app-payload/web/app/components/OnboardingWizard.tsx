@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import Link from 'next/link'
 
 /* ── i18n inline (standalone, no provider needed) ─────────────────── */
 
@@ -76,9 +75,11 @@ export default function OnboardingWizard() {
   const t = useCallback((key: keyof typeof T) => T[key][lang], [lang])
 
   useEffect(() => {
-    setLangState(getLang())
     const done = localStorage.getItem(STORAGE_KEY)
-    if (!done) setVisible(true)
+    queueMicrotask(() => {
+      setLangState(getLang())
+      if (!done) setVisible(true)
+    })
   }, [])
 
   const dismiss = useCallback(() => {
@@ -151,7 +152,7 @@ export default function OnboardingWizard() {
     }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
-  }, [visible, step])
+  }, [visible, step, dismiss])
 
   if (!visible) return null
 

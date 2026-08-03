@@ -72,7 +72,8 @@ export default function Carousel({
   }
   const onTouchEnd = () => {
     if (Math.abs(touchDelta.current) > 40) {
-      touchDelta.current < 0 ? next() : prev()
+      if (touchDelta.current < 0) next()
+      else prev()
       resetAuto()
     }
     touchStart.current = null; setDragging(false)
@@ -84,7 +85,7 @@ export default function Carousel({
   const onMouseUp   = (e: React.MouseEvent) => {
     if (mouseStart.current === null) return
     const delta = e.clientX - mouseStart.current
-    if (Math.abs(delta) > 40) { delta < 0 ? next() : prev(); resetAuto() }
+    if (Math.abs(delta) > 40) { if (delta < 0) next(); else prev(); resetAuto() }
     mouseStart.current = null
   }
 

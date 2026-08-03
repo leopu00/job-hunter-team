@@ -62,7 +62,7 @@ export default function StatusPage() {
     setOverall(data.overall ?? 'operational'); setOperational(data.operational ?? 0); setTotal(data.total ?? 0);
   }, [])
 
-  useEffect(() => { fetchData(); const t = setInterval(fetchData, 5000); return () => clearInterval(t) }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData); const t = setInterval(fetchData, 5000); return () => clearInterval(t) }, [fetchData])
 
   const overallCfg = STATUS_CFG[overall];
 

@@ -64,7 +64,7 @@ export default function BackupPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchBackups() }, [fetchBackups])
+  useEffect(() => { queueMicrotask(fetchBackups) }, [fetchBackups])
 
   const createBackup = async () => {
     setCreating(true)

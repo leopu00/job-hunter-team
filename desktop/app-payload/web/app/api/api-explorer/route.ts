@@ -51,11 +51,11 @@ function scanApiDir(dir: string, prefix: string): EndpointInfo[] {
     try { content = fs.readFileSync(filePath, 'utf-8'); } catch { continue; }
 
     const description = extractDescription(content);
-    const module = prefix.split('/').filter(Boolean)[0] ?? 'root';
+    const moduleName = prefix.split('/').filter(Boolean)[0] ?? 'root';
     let m;
     while ((m = METHOD_REGEX.exec(content)) !== null) {
       const method = m[1] as HttpMethod;
-      endpoints.push({ method, path: `/api${prefix}`, module, description, params: extractParams(content, method) });
+      endpoints.push({ method, path: `/api${prefix}`, module: moduleName, description, params: extractParams(content, method) });
     }
     METHOD_REGEX.lastIndex = 0;
   }
