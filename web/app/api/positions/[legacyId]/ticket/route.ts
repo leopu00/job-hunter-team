@@ -67,9 +67,10 @@ export async function POST(
       db.pragma("journal_mode = WAL");
       db.pragma("foreign_keys = ON");
       const exists = db
-        .prepare<[number], { id: number }>(
-          "SELECT id FROM positions WHERE id = ?",
-        )
+        .prepare<
+          [number],
+          { id: number }
+        >("SELECT id FROM positions WHERE id = ?")
         .get(legacyId);
       if (!exists) {
         return NextResponse.json(
