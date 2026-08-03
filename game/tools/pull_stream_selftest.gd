@@ -251,7 +251,7 @@ func _fallback_end_to_end() -> void:
 	var res: Dictionary = svc._compose_stream(compose,
 			PackedStringArray(["pull", "jht"]), "test")
 	await process_frame  # flusha i call_deferred(_apply_pull_progress)
-	var modern_calls := _calls(modern.path_join("docker"))
+	var modern_calls := _compose_calls(modern.path_join("docker"))
 	_check("moderno: stream concluso bene", bool(res.get("ok", false)),
 			str(res.get("tail", "")).right(160))
 	_check("moderno: UNA sola invocazione (flag accettato)",
@@ -269,7 +269,7 @@ func _fallback_end_to_end() -> void:
 	OS.set_environment("PATH", legacy + ":" + old_path)
 	res = svc._compose_stream(compose, PackedStringArray(["pull", "jht"]), "test")
 	await process_frame
-	var legacy_calls := _calls(legacy.path_join("docker"))
+	var legacy_calls := _compose_calls(legacy.path_join("docker"))
 	_check("ripiego: stream concluso bene in modalità testo",
 			bool(res.get("ok", false)), str(res.get("tail", "")).right(160))
 	_check("ripiego: DUE invocazioni (flag rifiutato, rilancio senza)",
@@ -297,6 +297,14 @@ func _write_stub(path: String, body: String) -> void:
 	OS.execute("chmod", PackedStringArray(["+x", path]))
 
 
-func _calls(stub_path: String) -> PackedStringArray:
+## Il probe host dell'autoload può interrogare lo stesso stub mentre questo
+## test gira (per esempio con `docker image inspect`). Qui il contratto sotto
+## esame è il numero e l'ordine delle sole invocazioni compose: una chiamata
+## di diagnostica concorrente non deve trasformarsi in un falso fallimento.
+func _compose_calls(stub_path: String) -> PackedStringArray:
 	var text := FileAccess.get_file_as_string(stub_path + ".calls.log")
-	return text.strip_edges().split("\n", false)
+	var compose_calls := PackedStringArray()
+	for line in text.strip_edges().split("\n", false):
+		if line.begins_with("compose "):
+			compose_calls.append(line)
+	return compose_calls
