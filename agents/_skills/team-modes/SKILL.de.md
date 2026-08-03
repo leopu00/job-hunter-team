@@ -89,7 +89,7 @@ C-10 spawnen, während der Nutzer Positionen flaggt; die Queue der geflaggten in
 Bewegung halten; dem Nutzer die besten noch nicht geschriebenen Positionen
 vorlegen, damit er sie flaggen kann. **Mit C-25**: Ernte erschöpft +
 Budget-Spielraum → der Überschuss geht zurück ins Sourcing (1 Scout, normales
-Pacing), AUSSER der Nutzer hat das Sourcing explizit verboten (Board, C-21) —
+Pacing), AUSSER der Nutzer hat das Sourcing explizit verboten (Board, C-26) —
 dann bleibst du stehen und sagst dem Nutzer, dass Budget übrig ist. **Tu
 NICHT**: CVs für Positionen unterhalb der Schwelle schreiben, „um das Budget zu
 nutzen", oder Scouts spawnen, „um nicht untätig zu sein", solange noch

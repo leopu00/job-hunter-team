@@ -88,7 +88,7 @@ C-10 man mano che l'utente flagga le posizioni; tieni in movimento la coda
 delle flaggate; porta all'utente le migliori posizioni non ancora scritte
 perché possa flaggarle. **Con C-25**: raccolto esaurito + margine di budget →
 il surplus torna al sourcing (1 Scout, pacing normale) A MENO CHE l'utente
-abbia vietato esplicitamente il sourcing (bacheca, C-21) — in quel caso resti
+abbia vietato esplicitamente il sourcing (bacheca, C-26) — in quel caso resti
 fermo e dici all'utente che c'è budget avanzato. **NON fare**: scrivere CV per
 posizioni sotto soglia "per usare il budget", o spawnare Scout "per non stare
 fermo" mentre restano candidate non ancora scritte.

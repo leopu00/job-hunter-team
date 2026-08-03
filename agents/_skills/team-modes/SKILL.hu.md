@@ -87,7 +87,7 @@ Scrittorét on-demand, ahogy a felhasználó flaggeli a pozíciókat; tartsd
 mozgásban a flaggeltek sorát; tedd a felhasználó elé a legjobb, még meg nem írt
 pozíciókat, hogy flaggelhesse őket. **C-25-tel**: a betakarítás kimerült +
 budget-mozgástér → a többlet visszamegy a sourcingra (1 Scout, normál pacing),
-KIVÉVE ha a felhasználó kifejezetten megtiltotta a sourcingot (tábla, C-21) —
+KIVÉVE ha a felhasználó kifejezetten megtiltotta a sourcingot (tábla, C-26) —
 akkor a helyeden maradsz, és elmondod a felhasználónak, hogy van fel nem
 használt budget. **NE tedd**: a küszöb alatti pozíciókra CV-t írni, „hogy
 elmenjen a budget", vagy Scoutot spawnolni, „hogy ne állj tétlenül", amíg
