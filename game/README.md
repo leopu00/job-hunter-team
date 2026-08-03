@@ -31,6 +31,14 @@ neither is enough alone: the **render scale** of the world (drawn in a reduced
 original profile and it changed nothing: a machine doing 8fps never touches the
 cap.
 
+The performance profile also keeps depth cues and onboarding markers in a
+cheaper form: one furniture shadow instead of three, a two-pass static agent
+aura, and a two-pass quest diamond without glow. On the reference 16-agent
+office this reduced the representative Compatibility-renderer census from 831
+to 519 draw calls (−37.5%) while retaining sprites, status labels, speech and
+department colors. `JHT_CENSUS=1` also reports the aggregate cost of each agent
+subpart so future visual changes cannot hide inside a single `agent_npc` total.
+
 Left alone, the game calibrates itself: it samples the framerate for 10 seconds
 after entering the office, drops to the step that matches what it measured, and
 keeps watching while you play — it goes further down when the office fills up

@@ -649,6 +649,40 @@ func _census_group(branch: Node, baseline: int) -> void:
 	Log.info("census", "dentro %s:" % _census_name(branch))
 	for row in costs:
 		Log.info("census", "  %-26s %4d draw call su %3d nodi" % [row[0], row[1], row[2]])
+	# `agent_npc` era il ramo più caro ma restava una scatola nera: corpo,
+	# ombra, aura e tre indicatori finivano nello stesso numero. Misuriamo i
+	# figli omologhi di tutti gli agenti insieme, così il profilo low-spec può
+	# togliere decorazione senza sacrificare a intuito testo o stato reale.
+	var agents: Array[CanvasItem] = []
+	for nodes: Array in groups.values():
+		for node: CanvasItem in nodes:
+			if node is AgentNPC:
+				agents.append(node)
+	if not agents.is_empty():
+		await _census_agent_parts(agents, baseline)
+
+
+func _census_agent_parts(agents: Array[CanvasItem], baseline: int) -> void:
+	var groups := {}
+	for agent: CanvasItem in agents:
+		for child in agent.get_children():
+			if child is CanvasItem:
+				var key := _census_name(child)
+				if not groups.has(key):
+					groups[key] = []
+				groups[key].append(child)
+	var costs := []
+	for key in groups:
+		for node: CanvasItem in groups[key]:
+			node.visible = false
+		var without := await _draw_calls()
+		for node: CanvasItem in groups[key]:
+			node.visible = true
+		costs.append([key, baseline - without, groups[key].size()])
+	costs.sort_custom(func(a: Array, b: Array) -> bool: return a[1] > b[1])
+	Log.info("census", "dentro agent_npc:")
+	for row in costs:
+		Log.info("census", "    %-24s %4d draw call su %3d nodi" % [row[0], row[1], row[2]])
 
 
 ## I nodi creati da codice restano anonimi (@Node2D@41): il nome dello script
@@ -1398,7 +1432,13 @@ func _map_panel_selftest() -> void:
 	world._flat._target_tile_signature = ""
 	world._flat._ensure_target_tiles()
 	var target_prefix := "%d/" % int(ceil(world._flat._target_zoom))
-	var tile_queue_ok := world._flat._queue.size() < 100
+	# La quantità giusta dipende dalla superficie del pannello: su viewport
+	# grandi una soglia fissa di 100 bocciava 121 tile tutte corrette, senza
+	# alcun livello obsoleto. Il margine coincide con una tile per lato più gli
+	# arrotondamenti floor/ceil usati da `_ensure_target_tiles`.
+	var tile_queue_cap := (ceili(world._flat.size.x / OsmMap.TILE) + 4) \
+			* (ceili(world._flat.size.y / OsmMap.TILE) + 4)
+	var tile_queue_ok := world._flat._queue.size() <= tile_queue_cap
 	for queued_key in world._flat._queue:
 		tile_queue_ok = tile_queue_ok and str(queued_key).begins_with(target_prefix)
 	world._flat.fly_to(Vector2(18.0686, 59.3293), 10.0)
@@ -1448,6 +1488,9 @@ func _map_panel_selftest() -> void:
 			print("MAP-PANEL-TEST details base=", base_ok, " count=", card_count,
 					" hint=", hint_ok, " cluster=", cluster_ok,
 					" auto_zoom=", auto_zoom_ok, " tile_queue=", tile_queue_ok,
+					" queue_cap=", tile_queue_cap,
+					" queue=", world._flat._queue,
+					" inflight=", world._flat._inflight.keys(),
 					" route=", route_ok, " requested=", route_state["section"],
 					" pending=", SectionPanel.pending_detail,
 					" detail=", detail_ok, " page=", detail_panel._current_page,

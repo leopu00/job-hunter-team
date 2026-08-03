@@ -268,11 +268,15 @@ func _draw() -> void:
 	var front := Rect2(Vector2(-w / 2.0, -FRONT_H), Vector2(w, FRONT_H))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(item["id"])
-	# ombra a terra morbida (tre passate concentriche, non un rettangolo netto)
-	for i in 3:
-		var grow := 4.0 + i * 9.0
+	# Ogni mobile testurizzato costa lo sprite PIÙ queste ombre. Con 71 mobili
+	# i tre pass concentrici da soli erano ~210 draw call: sul profilo low-spec
+	# usiamo un'ellisse unica, abbastanza per ancorare l'arte al pavimento.
+	var shadow_passes := 1 if GfxProfile.low() else 3
+	for i in shadow_passes:
+		var grow := 8.0 if shadow_passes == 1 else 4.0 + i * 9.0
+		var alpha := 0.12 if shadow_passes == 1 else 0.10 - i * 0.03
 		draw_set_transform(Vector2(0, -2), 0.0, Vector2(1.0, 0.30))
-		draw_circle(Vector2.ZERO, w * 0.52 + grow, Color(0, 0, 0, 0.10 - i * 0.03))
+		draw_circle(Vector2.ZERO, w * 0.52 + grow, Color(0, 0, 0, alpha))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _textured:
 		return  # lo sprite pittorico (figlio) fa il resto
