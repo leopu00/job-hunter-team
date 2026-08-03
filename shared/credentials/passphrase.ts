@@ -23,14 +23,29 @@ import { createRequire } from "node:module";
 const KEYRING_SERVICE = "jht-credentials";
 
 export class MissingPassphraseError extends Error {
-  constructor(envVarName: string) {
-    super(buildMissingPassphraseMessage(envVarName));
+  /** Nome dell'env var che il chiamante si aspettava. */
+  readonly envVarName: string;
+
+  /**
+   * @param envVarName - env var interrogata (finisce nel messaggio).
+   * @param context - prima riga opzionale che dice **cosa** manca e a quale
+   *   dato si riferisce (es. quale provider). Serve a chi legge il messaggio
+   *   fuori da un terminale: senza contesto "passphrase non trovata" non dice
+   *   se il segreto sia perso o solo illeggibile.
+   */
+  constructor(envVarName: string, context?: string) {
+    super(buildMissingPassphraseMessage(envVarName, context));
     this.name = "MissingPassphraseError";
+    this.envVarName = envVarName;
   }
 }
 
-function buildMissingPassphraseMessage(envVarName: string): string {
+function buildMissingPassphraseMessage(
+  envVarName: string,
+  context?: string,
+): string {
   return [
+    ...(context ? [context, ``] : []),
     `JHT credential passphrase non trovata.`,
     ``,
     `Imposta una passphrase robusta in uno di questi modi:`,

@@ -428,22 +428,156 @@ describe("Storage — passphrase mancante", () => {
     expect(existsSync(join(credDir, "claude.enc.json"))).toBe(false);
   });
 
-  it("readCredential senza passphrase ritorna null invece di segnalare l'errore", async () => {
-    // Comportamento attuale: il catch di readCredential inghiotte anche
-    // MissingPassphraseError, quindi una credenziale ESISTENTE e integra
-    // diventa indistinguibile da una assente. Test di documentazione: se il
-    // codice smettesse di essere fail-silent qui, questa aspettativa va
-    // aggiornata di proposito.
-    const { home, storage } = await withIsolatedHome("passphrase-presente");
+  /**
+   * Asserisce che `fn` lanci una MissingPassphraseError e la restituisce.
+   *
+   * Volutamente su `name` e non su `instanceof`: dopo `vi.resetModules()` i
+   * moduli reimportati portano con sé una *nuova* classe
+   * `MissingPassphraseError`, diversa per identità da quella importata in
+   * testa a questo file. Un `toThrowError(MissingPassphraseError)` fallirebbe
+   * pur essendo l'errore giusto.
+   */
+  function expectMissingPassphrase(fn: () => unknown): Error {
+    let caught: unknown;
+    try {
+      fn();
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).name).toBe(MissingPassphraseError.name);
+    return caught as Error;
+  }
+
+  /** Scrive una credenziale, poi ricarica i moduli senza passphrase. */
+  async function credenzialeSenzaPassphrase(): Promise<{
+    credDir: string;
+    storage: StorageModule;
+    manager: ManagerModule;
+  }> {
+    const { home, credDir, storage } = await withIsolatedHome("passphrase-presente");
     storage.writeCredential("claude", apiKeyCred("sk-esiste"));
+
+    process.env.JHT_HOME = home;
+    delete process.env.JHT_CREDENTIALS_KEY;
+    vi.resetModules();
+    return {
+      credDir,
+      storage: await importStorage(),
+      manager: await importManager(),
+    };
+  }
+
+  it("readCredential su credenziale integra senza passphrase lancia invece di fingere che non esista", async () => {
+    // Prima questo caso tornava null: una credenziale ESISTENTE e integra era
+    // indistinguibile da una mai salvata, e chi perdeva JHT_CREDENTIALS_KEY
+    // andava a cercare un problema che non c'era. Ora legge come la scrittura.
+    const { credDir, storage } = await credenzialeSenzaPassphrase();
+
+    const err = expectMissingPassphrase(() => storage.readCredential("claude"));
+    // Il messaggio deve dire COSA manca, e che il dato è ancora lì.
+    expect(err.message).toMatch(/manca la passphrase/i);
+    expect(err.message).toContain("JHT_CREDENTIALS_KEY");
+    expect(err.message).toContain("claude");
+
+    // La lettura fallita non tocca il file.
+    expect(storage.hasStoredCredential("claude")).toBe(true);
+    expect(existsSync(join(credDir, "claude.enc.json"))).toBe(true);
+  });
+
+  it("credenziale mai salvata + passphrase assente → null, non un errore di passphrase", async () => {
+    // Il file viene controllato prima della passphrase: reclamare una chiave
+    // per un dato che non esiste sarebbe la stessa confusione al contrario.
+    const { storage } = await withIsolatedHome(null);
+    expect(storage.readCredential("claude")).toBeNull();
+    expect(storage.inspectCredential("claude")).toEqual({ status: "absent" });
+  });
+
+  it("file illeggibile + passphrase assente → corrotto vince: nessun errore di passphrase", async () => {
+    const { home, credDir, storage } = await withIsolatedHome("passphrase-presente");
+    storage.writeCredential("claude", apiKeyCred("sk-x"));
+    writeFileSync(join(credDir, "claude.enc.json"), "{ non json", { mode: 0o600 });
 
     process.env.JHT_HOME = home;
     delete process.env.JHT_CREDENTIALS_KEY;
     vi.resetModules();
     const reloaded: StorageModule = await importStorage();
 
+    expect(reloaded.inspectCredential("claude")).toEqual({ status: "corrupted" });
     expect(reloaded.readCredential("claude")).toBeNull();
-    expect(reloaded.hasStoredCredential("claude")).toBe(true);
+  });
+
+  it("inspectCredential distingue i quattro esiti senza lanciare", async () => {
+    const cred = apiKeyCred("sk-inspect");
+    const { home, credDir, storage } = await withIsolatedHome("passphrase-presente");
+    storage.writeCredential("claude", cred);
+
+    expect(storage.inspectCredential("claude")).toEqual({ status: "ok", credential: cred });
+    expect(storage.inspectCredential("openai")).toEqual({ status: "absent" });
+
+    writeFileSync(join(credDir, "kimi.enc.json"), JSON.stringify({ apiKey: "x" }), { mode: 0o600 });
+    expect(storage.inspectCredential("kimi")).toEqual({ status: "corrupted" });
+
+    process.env.JHT_HOME = home;
+    delete process.env.JHT_CREDENTIALS_KEY;
+    vi.resetModules();
+    const reloaded: StorageModule = await importStorage();
+
+    const result = reloaded.inspectCredential("claude");
+    expect(result.status).toBe("missing_passphrase");
+    if (result.status !== "missing_passphrase") throw new Error("stato inatteso");
+    expect(result.envVar).toBe("JHT_CREDENTIALS_KEY");
+    expect(result.message).toMatch(/manca la passphrase/i);
+    expect(result.message).toContain("claude");
+  });
+
+  it("passphrase sbagliata resta 'corrupted': con GCM non è distinguibile da un file manomesso", async () => {
+    const { home, storage } = await withIsolatedHome("passphrase-giusta");
+    storage.writeCredential("claude", apiKeyCred("sk-protetta"));
+
+    process.env.JHT_HOME = home;
+    process.env.JHT_CREDENTIALS_KEY = "passphrase-sbagliata";
+    vi.resetModules();
+    const reloaded: StorageModule = await importStorage();
+
+    expect(reloaded.inspectCredential("claude")).toEqual({ status: "corrupted" });
+    expect(reloaded.readCredential("claude")).toBeNull();
+  });
+
+  it("il manager propaga l'errore di passphrase invece di riportare 'non configurato'", async () => {
+    const { manager } = await credenzialeSenzaPassphrase();
+
+    expectMissingPassphrase(() => manager.resolveApiKey("claude"));
+    expectMissingPassphrase(() => manager.resolveApiKey("claude", "file-first"));
+    expectMissingPassphrase(() => manager.resolveCredential("claude"));
+  });
+
+  it("resolveOAuthToken senza passphrase lancia: il token c'è, non è leggibile", async () => {
+    const { home, storage } = await withIsolatedHome("passphrase-presente");
+    storage.writeCredential("claude_max", {
+      type: "oauth", provider: "claude_max", accessToken: "tok", savedAt: 1,
+    });
+
+    process.env.JHT_HOME = home;
+    delete process.env.JHT_CREDENTIALS_KEY;
+    vi.resetModules();
+    const manager: ManagerModule = await importManager();
+
+    expectMissingPassphrase(() => manager.resolveOAuthToken("claude_max"));
+    expectMissingPassphrase(() => manager.resolveCredential("claude_max"));
+  });
+
+  it("env-first: con l'env var valorizzata il file cifrato non viene nemmeno aperto", async () => {
+    // Regressione da evitare: rendere loud la lettura non deve rompere chi
+    // passa già la chiave dall'ambiente e ha un file orfano su disco.
+    const { manager } = await credenzialeSenzaPassphrase();
+    process.env[ENV_VAR_MAP.claude] = "sk-da-env";
+
+    const resolved = manager.resolveApiKey("claude");
+    expect(resolved?.source).toBe("env");
+    expect((resolved?.credential as ApiKeyCredential).apiKey).toBe("sk-da-env");
+    // In file-first il file serve davvero, quindi lì l'errore deve emergere.
+    expectMissingPassphrase(() => manager.resolveApiKey("claude", "file-first"));
   });
 });
 
