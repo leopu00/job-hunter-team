@@ -37,6 +37,10 @@ respondio. Es una medida, no una hipotesis, y el watchdog la escala al Capitan.
 
 - **Primer comando, siempre.** Antes de leer tu cola, antes de cualquier tool,
   antes de responder a nadie.
+- **El daily halt prevalece sobre el despertar.** El comando comprueba
+  `$JHT_HOME/logs/daily-halt.flag` junto con el ack. Si imprime
+  `DAILY_HALT_ACTIVE`, no trabajes ni escribas al Capitan: cierra el turno. El
+  motor mantiene armado el temporizador y te despierta al retirarse el flag.
 - **Luego trabaja de inmediato.** Firmar y quedarse quieto produce un falso «cola
   vacia» que engana al Capitan y al pacing. Un despertar es una senal para
   *trabajar*.
@@ -48,8 +52,8 @@ respondio. Es una medida, no una hipotesis, y el watchdog la escala al Capitan.
 ## Exit codes
 
 - `0` — flag en `ACTIVE` (idempotente: firmar dos veces es inocuo)
-- `1` — ack **rechazado** porque tu pausa no ha terminado: cierra el turno, el
-  motor te despertara. O argumentos invalidos / motor ausente.
+- `1` — ack **rechazado** porque la pausa no termino o daily halt esta activo:
+  cierra el turno; el motor te despertara. O argumentos invalidos / motor ausente.
 
 ## Ejemplo
 

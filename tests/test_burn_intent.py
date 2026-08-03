@@ -161,7 +161,7 @@ def test_sentinel_bridge_consults_intent_before_writing_daily_halt():
     assert "if _daily_hardstop_disabled() or _bi_on:" in src, (
         "il ramo che NON scrive l'halt deve considerare l'intento utente")
     consult = src.index("_bi = _burn_intent_status()")
-    write = src.index("DAILY_HALT_FLAG.write_text")
+    write = src.index("_activate_daily_halt(_hc, _hcap, _hb)")
     assert consult < write, (
         "l'intento va letto PRIMA della scrittura del flag: fra scrittura e "
         "rimozione il team è già stato messo in ESC")

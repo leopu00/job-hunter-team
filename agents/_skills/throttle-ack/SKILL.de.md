@@ -38,6 +38,10 @@ Watchdog eskaliert sie an den Kapitaen.
 
 - **Erster Befehl, immer.** Vor dem Lesen deiner Queue, vor jedem Tool, bevor du
   irgendjemandem antwortest.
+- **Daily Halt gewinnt gegen den Weckruf.** Der Befehl prueft
+  `$JHT_HOME/logs/daily-halt.flag` zusammen mit dem Ack. Bei
+  `DAILY_HALT_ACTIVE` arbeitest du nicht und schreibst dem Kapitaen nicht:
+  beende den Turn. Die Engine haelt den Timer aktiv und weckt dich nach dem Flag.
 - **Dann sofort arbeiten.** Unterschreiben und dann stillstehen erzeugt ein
   falsches "Queue leer", das den Kapitaen und das Pacing taeuscht. Ein Weckruf ist
   ein Signal zu *arbeiten*.
@@ -50,8 +54,8 @@ Watchdog eskaliert sie an den Kapitaen.
 ## Exit codes
 
 - `0` — Flag auf `ACTIVE` (idempotent: zweimal unterschreiben ist harmlos)
-- `1` — Ack **abgelehnt**, weil deine Pause nicht vorbei ist: beende deinen Zug,
-  die Engine weckt dich. Oder ungueltige Argumente / Engine fehlt.
+- `1` — Ack **abgelehnt**, weil die Pause nicht vorbei oder Daily Halt aktiv ist:
+  beende deinen Zug; die Engine weckt dich. Oder ungueltige Argumente / Engine fehlt.
 
 ## Beispiel
 

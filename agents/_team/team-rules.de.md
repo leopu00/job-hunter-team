@@ -80,6 +80,13 @@ an, was du tust — mitten in einem Tool-Call falls noetig — und warte
 auf `[RIPRENDI]` vom Kapitaen. Wiederhole die unterbrochene Aktion
 nicht.
 
+Pruefe bei **jedem Aufwachen**, vor Arbeit oder Nachrichten an andere
+Agenten, `$JHT_HOME/logs/daily-halt.flag`. Bei einem Throttle-Wake tut
+dies `throttle-ack`: `DAILY_HALT_ACTIVE` bedeutet, den Turn sofort zu
+beenden. Solange der Flag existiert, pingen Worker den Kapitaen nicht;
+der Kapitaen ignoriert timerbedingte `[READY]`-Meldungen und antwortet
+nicht. Alle schweigen, bis der Flag entfernt ist und `[RIPRENDI]` kommt.
+
 ---
 
 ## 🔄 RULE-T08 — Keine Endlosschleifen, nie still sterben

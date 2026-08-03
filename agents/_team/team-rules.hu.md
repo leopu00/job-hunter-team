@@ -74,6 +74,14 @@ amit csinalsz — akar egy tool-call kozepen is — es vard meg a
 `[RIPRENDI]` uzenetet a Kapitanytol. Ne probald ujra a megszakitott
 muveletet.
 
+**Minden ebredeskor**, munka vagy agentek kozti uzenet elott ellenorizd a
+`$JHT_HOME/logs/daily-halt.flag` fajlt. Throttle ebredesnel ezt a
+`throttle-ack` teszi meg: a `DAILY_HALT_ACTIVE` azt jelenti, hogy azonnal
+zard le a kort. Amig a flag letezik, a workerek nem pingelik a Kapitanyt;
+a Kapitany figyelmen kivul hagyja az idozito altal kivaltott `[READY]`
+uzeneteket es nem valaszol. Mindenki csendben marad, amig a flag el nem
+tunik es meg nem erkezik a `[RIPRENDI]`.
+
 ---
 
 ## 🔄 RULE-T08 — Nincs vegtelen ciklus, soha ne halj meg csendben
