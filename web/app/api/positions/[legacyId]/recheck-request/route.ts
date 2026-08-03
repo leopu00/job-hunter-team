@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { requireAuth } from "@/lib/auth";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
@@ -28,6 +29,8 @@ async function handleToggle(
   legacyIdParam: string,
   requested: boolean,
 ): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const legacyId = Number.parseInt(legacyIdParam, 10);
   if (!Number.isInteger(legacyId) || legacyId <= 0) {
     return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });
@@ -50,10 +53,9 @@ async function handleToggle(
     try {
       db.pragma("journal_mode = WAL");
       const row = db
-        .prepare<
-          [number],
-          { id: number }
-        >("SELECT id FROM positions WHERE id = ?")
+        .prepare<[number], { id: number }>(
+          "SELECT id FROM positions WHERE id = ?",
+        )
         .get(legacyId);
       if (!row) {
         return NextResponse.json(
@@ -90,10 +92,9 @@ async function handleToggle(
     try {
       db.pragma("journal_mode = WAL");
       const row = db
-        .prepare<
-          [number],
-          { id: number }
-        >("SELECT id FROM positions WHERE id = ?")
+        .prepare<[number], { id: number }>(
+          "SELECT id FROM positions WHERE id = ?",
+        )
         .get(legacyId);
       if (!row) {
         return NextResponse.json(

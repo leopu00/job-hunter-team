@@ -1409,6 +1409,11 @@
       "path": "docs/internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md",
       "description": "Missione M4: protocollo riproducibile per varianza Kimi 88→92 e confronto parametrico PAYG/subscription, con gap dati live",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-08-03-local-vault-design.md",
+      "description": "[JHT-LOCAL-VAULT]: envelope encryption, broker runtime, migrazione senza plaintext persistente e decisioni ADR prima della crypto",
+      "last_review": null
     }
   ]
 }

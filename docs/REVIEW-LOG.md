@@ -333,6 +333,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/architecture/2026-08-03-maintenance-evidence-log-design.md](./internal/architecture/2026-08-03-maintenance-evidence-log-design.md) | Design di maintenance_events: storico append-only dei controlli, esiti e protezione dalle chiusure inconclusive | — | 2026-08-03 | ✅ |
 | [docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md](./internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md) | [PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi | — | 2026-08-03 | ✅ |
 | [docs/internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md](./internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) | Missione M4: protocollo riproducibile per varianza Kimi 88→92 e confronto parametrico PAYG/subscription, con gap dati live | — | — | ✅ |
+| [docs/internal/architecture/2026-08-03-local-vault-design.md](./internal/architecture/2026-08-03-local-vault-design.md) | [JHT-LOCAL-VAULT]: envelope encryption, broker runtime, migrazione senza plaintext persistente e decisioni ADR prima della crypto | — | — | ✅ |
 
 
 ## 🔒 docs/security

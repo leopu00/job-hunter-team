@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireLocalWrite } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import { JHT_PROFILE_DIR } from "@/lib/jht-paths";
 import fs from "fs";
 import path from "path";
@@ -20,6 +20,8 @@ function findAvatar(dir: string): string | null {
 
 /** GET — serve avatar image or 204 if none */
 export async function GET() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const avatarPath = findAvatar(JHT_PROFILE_DIR);
   if (!avatarPath) return new NextResponse(null, { status: 204 });
 
@@ -38,6 +40,8 @@ export async function GET() {
 
 /** POST — upload avatar (single image) */
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const ro = await requireLocalWrite();
   if (ro) return ro;
   let formData: FormData;
@@ -93,6 +97,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — remove avatar */
 export async function DELETE() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const ro = await requireLocalWrite();
   if (ro) return ro;
   for (const ext of [".png", ".jpg", ".jpeg", ".webp"]) {

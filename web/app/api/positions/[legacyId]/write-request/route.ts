@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { requireAuth } from "@/lib/auth";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
@@ -298,6 +299,8 @@ async function handleToggle(
   legacyIdParam: string,
   requested: boolean,
 ): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const legacyId = Number.parseInt(legacyIdParam, 10);
   if (!Number.isInteger(legacyId) || legacyId <= 0) {
     return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });

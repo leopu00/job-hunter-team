@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { requireAuth } from "@/lib/auth";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
@@ -60,6 +61,8 @@ async function cloudGuard(req: NextRequest): Promise<NextResponse | null> {
 
 // ── GET: elenco direttive (attive + archiviate) ────────────────────────────
 export async function GET(req: NextRequest): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const db = localDbOrNull();
   if (db) {
     try {
@@ -108,6 +111,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
 // ── POST: crea una direttiva ───────────────────────────────────────────────
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const body = (await req.json().catch(() => ({}))) as {
     body?: string;
     kind?: string;
@@ -184,6 +189,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
 // ── PATCH: modifica il testo o archivia una direttiva ──────────────────────
 export async function PATCH(req: NextRequest): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const body = (await req.json().catch(() => ({}))) as {
     id?: number | string;
     body?: string;

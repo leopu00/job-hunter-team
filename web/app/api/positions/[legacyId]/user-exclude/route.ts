@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { requireAuth } from "@/lib/auth";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
@@ -387,7 +388,11 @@ export async function POST(
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const { legacyId } = await params;
-  return (await demoNoop(legacyId)) ?? handle(req, legacyId, "exclude");
+  const demo = await demoNoop(legacyId);
+  if (demo) return demo;
+  const denied = await requireAuth();
+  if (denied) return denied;
+  return handle(req, legacyId, "exclude");
 }
 
 export async function DELETE(
@@ -395,5 +400,9 @@ export async function DELETE(
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const { legacyId } = await params;
-  return (await demoNoop(legacyId)) ?? handle(req, legacyId, "unexclude");
+  const demo = await demoNoop(legacyId);
+  if (demo) return demo;
+  const denied = await requireAuth();
+  if (denied) return denied;
+  return handle(req, legacyId, "unexclude");
 }

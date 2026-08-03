@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
-import { isLocalRequest } from "@/lib/auth";
+import { isLocalRequest, requireAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +50,8 @@ function getAgentInfo(session: string) {
 }
 
 export async function GET() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   if (!(await isLocalRequest())) {
     // Cloud: inferisco active per ogni agente dallo storico team_commands.
     // Per ogni target (capitano/scout/...) o per 'all', l'ultimo done con
