@@ -154,6 +154,12 @@ python3 /app/shared/skills/db_update.py position <ID> \
   --action geocode --outcome updated
 ```
 
+`--action geocode` + `--office-geocoded true|false` is also the completion
+ACK for an on-demand request: `db_update.py` clears `geocode_requested` in
+the same SQLite transaction as the result. Do not toggle the request by hand.
+Care-mode jobs use the same write path but remain selected exclusively by
+`next-for-geocode-missing` and its enrichment-policy gates.
+
 Per skip dopo 3 tentativi:
 ```bash
 python3 /app/shared/skills/db_update.py position <ID> \

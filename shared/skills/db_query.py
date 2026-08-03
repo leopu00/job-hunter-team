@@ -899,17 +899,19 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         # Geocoding-on-demand (V8, 2026-05-31): filtro `geocode_requested = 1`.
         # L'Analista esegue `office-geocoding` solo per le posizioni che
         # l'utente ha esplicitamente selezionato dal dashboard web (button
-        # "Geocodifica") o via Telegram. Replica del pattern Writer-on-demand.
+        # "Geocodifica") o via Telegram. Il flag è la coda: db_update lo
+        # azzera atomicamente insieme al risultato terminale. Non filtrare su
+        # office_geocoded: il bottone "Ricalcola" deve poter richiedere nuove
+        # coordinate anche per una posizione già geocodificata.
         rows = conn.execute("""
             SELECT p.id, p.title, p.company, p.loc_city, p.loc_country_code,
                    COUNT(*) OVER () AS _total
             FROM positions p
             WHERE p.geocode_requested = 1
-              AND (p.office_geocoded IS NULL OR p.office_geocoded = 0)
             ORDER BY p.geocode_requested_at ASC
             LIMIT ?
         """, (lim,)).fetchall()
-        label = "Posizioni con geocoding richiesto dall'utente (non ancora geocodate)"
+        label = "Posizioni con geocoding richiesto dall'utente (anche ricalcoli)"
 
     elif role == 'recheck':
         # RECHECK ON-DEMAND (2026-06-18): NON più autonomo. L'Analista ri-verifica
