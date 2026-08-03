@@ -14,6 +14,7 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 | [🤖 AI-AGENT-INTEGRATION](AI-AGENT-INTEGRATION.md) | AI assistants / devs driving JHT programmatically |
 | [🔌 ADDING-A-PROVIDER](ADDING-A-PROVIDER.md) | Contributors — ADR gate, runtime seams, evidence and anti-drift checks |
 | [🏠 LOCAL-SCORER](LOCAL-SCORER.md) | Operators evaluating the experimental one-role local-model spike |
+| [📦 M4-EVIDENCE-BUNDLES](M4-EVIDENCE-BUNDLES.md) | Operators — validate and package scrubbed entry-tier evidence without turning fixtures into live claims |
 
 ## 📧 Email sourcing (recommended)
 

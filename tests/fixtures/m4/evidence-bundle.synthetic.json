@@ -1,0 +1,45 @@
+{
+  "$schema": "https://jobhunterteam.ai/schemas/m4-evidence-bundle-v1.schema.json",
+  "schema_version": 1,
+  "bundle_id": "m4-synthetic-fixture-bundle",
+  "tested_commit": "4badacadf7e3638d1d8d525fb31bc47ec3d065cb",
+  "provenance": {
+    "classification": "fixture",
+    "source_type": "synthetic_fixture",
+    "scrubbed_export": true,
+    "description": "Repository fixture for deterministic validation; not observed provider data."
+  },
+  "analyses": {
+    "kimi_windows": {
+      "dataset_id": "kimi-windows-synthetic-fixture",
+      "provenance": {
+        "classification": "fixture",
+        "source_type": "synthetic_fixture",
+        "scrubbed_export": true,
+        "description": "Synthetic reset windows that exercise grouping and headroom arithmetic."
+      },
+      "input": {
+        "path": "kimi-windows.synthetic.json",
+        "sha256": "5cc1621d4fe78ddaf617d04e8ee60cf7f8f578156f7a9319663f2fd0ca20f5cd"
+      },
+      "parameters": {
+        "targets": [88, 92],
+        "min_windows": 5
+      }
+    },
+    "cost_comparison": {
+      "dataset_id": "cost-scenario-synthetic-fixture",
+      "provenance": {
+        "classification": "fixture",
+        "source_type": "synthetic_fixture",
+        "scrubbed_export": true,
+        "description": "Synthetic unit arithmetic with no vendor price claims."
+      },
+      "input": {
+        "path": "cost-scenario.synthetic.json",
+        "sha256": "bb48bddbeb6732b82a96fa096eae72fc056db976afefe3133dfa3d9bec143c44"
+      },
+      "parameters": {}
+    }
+  }
+}
