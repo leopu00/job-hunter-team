@@ -98,25 +98,26 @@ function listAction(options, command) {
   if (o.source) args.push('--source', o.source);
   if (o.json) args.push('--json');
   const code = runDbQuery(args);
-  if (code !== 0) process.exit(code);
+  if (code !== 0) process.exitCode = code;
 }
 
 function showAction(id, options, command) {
   if (!id) {
     console.error(c.red('Uso: jht positions show <id|legacy_id>'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const args = ['position', String(id)];
   if (opts(options, command).json) args.push('--json');
   const code = runDbQuery(args);
-  if (code !== 0) process.exit(code);
+  if (code !== 0) process.exitCode = code;
 }
 
 function dashboardAction(options, command) {
   const args = ['dashboard'];
   if (opts(options, command).json) args.push('--json');
   const code = runDbQuery(args);
-  if (code !== 0) process.exit(code);
+  if (code !== 0) process.exitCode = code;
 }
 
 // ── Verbi di DECISIONE ────────────────────────────────────────────────
@@ -130,21 +131,28 @@ function dashboardAction(options, command) {
 // il passaggio degli argomenti. Ogni verbo stampa la riga JSON della skill ed
 // eredita il suo exit code (0 ok / 1 rifiutato), così è verificabile in uno
 // script senza leggere il testo.
+//
+// L'exit code si posa su `process.exitCode`, non su `process.exit()`: quando il
+// container è attivo `runSkill` consegna l'output della skill con
+// `process.stdout.write`, e su una pipe quella scrittura è asincrona. Un
+// `process.exit()` sulla riga dopo tronca la riga JSON che il chiamante sta
+// leggendo — cioè proprio il contratto che questi verbi promettono agli script.
+// Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
 
 function excludeAction(id, options) {
   const args = ['exclude', String(id), '--reason', options.reason];
   if (options.note) args.push('--note', options.note);
-  process.exit(runSkill('user_exclude.py', args));
+  process.exitCode = runSkill('user_exclude.py', args);
 }
 
 function restoreAction(id) {
-  process.exit(runSkill('user_exclude.py', ['restore', String(id)]));
+  process.exitCode = runSkill('user_exclude.py', ['restore', String(id)]);
 }
 
 function requestCvAction(id, options) {
-  process.exit(runSkill('write_request.py', [
+  process.exitCode = runSkill('write_request.py', [
     String(id), '--mode', options.off ? 'off' : 'on',
-  ]));
+  ]);
 }
 
 export function registerPositionsCommand(program) {
