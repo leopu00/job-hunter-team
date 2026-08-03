@@ -21,7 +21,13 @@ Questo test fa fail se:
      non dichiarati: i numeri ritirati vanno messi in `RETIRED_ROLE_RULES`, cosi'
      un buco resta leggibile come scelta e non come riferimento perso;
   7. lo stesso numero `C-xx`/`S-xx` e' DEFINITO due volte nello stesso file
-     (2026-07-30: `capitano.md` aveva due C-21 — i gate su `set` non lo vedono).
+     (2026-07-30: `capitano.md` aveva due C-21 — i gate su `set` non lo vedono);
+  8. un divieto del baseline EN non si ritrova nella traduzione, o vi si ritrova
+     senza i token su cui verte (co-occorrenza: marcatore E oggetto del divieto);
+  9. la traduzione ORDINA in un blocco eseguibile cio' che il baseline vieta —
+     e' il caso 2026-07-30 dell'Analista, che citava `recheck-liveness` e in un
+     blocco bash ordinava il `curl` che l'inglese vieta: il punto 4 lo dava per
+     buono perche' guarda solo se il nome della skill compare da qualche parte.
 
 Fix quando fallisce: aggiornare il range/la citazione nel file segnalato. La frase
 attorno al range e' localizzata: si tocca SOLO il range (`T01..Txx`), non la prosa.
@@ -50,6 +56,38 @@ RULE_HEADING_RE = re.compile(r'^#+\s.*\bRULE-T(\d{2})\b', re.MULTILINE)
 # riga in grassetto (`**C-07 — ...**`, `**S-04 — ...**`); ovunque altro e' una
 # citazione. Le varianti `bis`/`ter`/`b`/`c` non aprono un numero nuovo.
 ROLE_RULE_PREFIXES = {'capitano': 'C', 'sentinella': 'S'}
+
+# La parola con cui un prompt apre un DIVIETO, lingua per lingua. E' vocabolario,
+# non policy: la traduzione di "FORBIDDEN" nei sette prompt. Serve perche' il
+# divieto e' l'unica parte del testo che va ritrovata nella localizzazione per
+# sapere DOVE guardare.
+FORBIDDEN_MARKERS = {
+    'en': 'FORBIDDEN', 'it': 'VIETATO', 'es': 'PROHIBIDO', 'fr': 'INTERDIT',
+    'de': 'VERBOTEN', 'pt': 'PROIBIDO', 'hu': 'TILOS',
+}
+# Un token tecnico fra backtick: `curl`, `is_open`, `recheck-liveness`.
+BACKTICK_RE = re.compile(r'`([^`\n]+)`')
+# Un blocco recintato ```...```: nel prompt e' un ORDINE DI ESEGUIRE.
+FENCE_RE = re.compile(r'^```.*?^```', re.MULTILINE | re.DOTALL)
+
+# COMANDI che il baseline EN vieta di eseguire, per ruolo. Tabella a mano, e
+# piccola apposta: il Markdown porta i token del divieto ma NON la loro polarita'.
+# Nel paragrafo `FORBIDDEN` dell'Analista convivono il comando proibito (`curl`),
+# l'alternativa prescritta (`recheck-liveness`), l'oggetto da proteggere
+# (`is_open`) e semplici esempi di URL (`jobs.`/`apply.`): niente nel testo dice
+# quale sia quale, quindi derivarli tutti come "proibiti" produrrebbe falsi
+# positivi. Chi aggiunge una voce qui la ancora al baseline — il test fallisce se
+# il token non compare (piu') in un divieto EN, cosi' la tabella non invecchia.
+FORBIDDEN_IN_CODE_BLOCKS = {
+    # Il curl nudo che l'Analista non deve piu' fare a mano: RULE-03 impone
+    # `recheck-liveness`. Le sei traduzioni lo ORDINAVANO in un blocco bash fino
+    # al 2026-07-30, pur citando la skill — di qui il check.
+    # `grep` sta nello STESSO divieto ma NON e' qui: la RULE-03 lo vieta sulla
+    # JD, non in assoluto, e l'header dell'Analista lo usa lecitamente per
+    # ricavare il proprio numero di sessione. Ennesima prova che la polarita'
+    # non si deriva: due token nella stessa riga, uno proibito e uno no.
+    ('analista', 'curl'),
+}
 
 # Numeri RITIRATI: buchi deliberati nelle numerazioni di ruolo, non riferimenti
 # persi. Servono perche' le regole si citano fra loro per numero: riusare un
@@ -245,6 +283,58 @@ def _role_rule_numbers(path, prefix):
     return {int(n) for n in rx.findall(_read(path))}
 
 
+def _forbidden_blocks(path, marker):
+    """Testo dei blocchi che APRONO un divieto con `marker`.
+
+    Un blocco e' la riga del marcatore (in grassetto o in intestazione: nella
+    prosa la stessa parola e' solo enfasi) piu' cio' che le sta sotto fino alla
+    fine del paragrafo, elenco puntato incluso — nell'Analista il divieto sta
+    tutto sulla riga, nella Sentinella e' un'intestazione seguita da bullet.
+    """
+    lines = _read(path).split('\n')
+    blocks = []
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        if marker in ln and (ln.startswith('#') or '**' in ln):
+            buf = [ln]
+            j = i + 1
+            while j < len(lines):
+                nxt = lines[j]
+                if nxt.strip():
+                    buf.append(nxt)
+                    j += 1
+                    continue
+                # riga vuota: si prosegue solo se sotto c'e' ancora un elenco
+                k = j
+                while k < len(lines) and not lines[k].strip():
+                    k += 1
+                # `- voce`, non `**RULE-04**`: il grassetto apre con `*` anche lui
+                if k < len(lines) and re.match(r'\s*[-+*]\s', lines[k]):
+                    buf.extend(lines[j:k + 1])
+                    j = k + 1
+                    continue
+                break
+            blocks.append('\n'.join(buf))
+            i = j
+            continue
+        i += 1
+    return blocks
+
+
+def _forbidden_tokens(path, marker):
+    """Token tecnici (fra backtick) nominati dai divieti del file."""
+    out = set()
+    for block in _forbidden_blocks(path, marker):
+        out.update(BACKTICK_RE.findall(block))
+    return out
+
+
+def _code_fences(path):
+    """Corpo dei blocchi recintato ```...``` del file: cio' che l'agente ESEGUE."""
+    return FENCE_RE.findall(_read(path))
+
+
 def test_team_rules_numbering_is_contiguous():
     """Le regole in team-rules.md sono T01..TNN senza buchi (ancora del gate)."""
     nums = sorted(int(n) for n in RULE_HEADING_RE.findall(_read(TEAM_RULES)))
@@ -429,6 +519,88 @@ def test_localizations_cite_the_same_skills_as_en():
     assert not stale, (
         'voci obsolete in KNOWN_SKILL_GAPS (gap sanato, togliere dalla lista):\n  '
         + '\n  '.join(stale)
+    )
+
+
+def test_en_prohibitions_survive_translation():
+    """Se il baseline EN VIETA qualcosa, la traduzione vieta le STESSE cose.
+
+    Meta' del check di co-occorrenza, e la meta' interamente DERIVATA: i token
+    proibiti si leggono dal baseline (i backtick dentro il paragrafo che apre
+    con `FORBIDDEN`) e vanno ritrovati dentro il paragrafo che apre col
+    marcatore della lingua. Nessuna lista scritta a mano: cambia il divieto in
+    EN, cambia da solo cio' che le sei traduzioni devono contenere.
+
+    Origin: 2026-07-30 — il gate delle skill guarda solo se il NOME della skill
+    compare da qualche parte, e le sei traduzioni dell'Analista citavano
+    `recheck-liveness` mentre ordinavano il `curl` che l'inglese vieta: skill
+    presente, divieto sparito, gate verde.
+    """
+    problems = []
+    for role in _roles():
+        en_path = AGENTS_DIR / role / f'{role}.md'
+        expected = _forbidden_tokens(en_path, FORBIDDEN_MARKERS['en'])
+        if not expected:
+            continue
+        for lang, path in _prompt_files(role):
+            if lang == 'en':
+                continue
+            found = _forbidden_tokens(path, FORBIDDEN_MARKERS[lang])
+            rel = path.relative_to(REPO_ROOT)
+            if not found:
+                problems.append(
+                    f'{rel}: il baseline EN ha un divieto su '
+                    f'{sorted(expected)}, qui non c\'e\' nessun blocco '
+                    f'"{FORBIDDEN_MARKERS[lang]}"'
+                )
+                continue
+            for tok in sorted(expected - found):
+                problems.append(f'{rel}: il divieto EN nomina `{tok}`, qui no')
+    assert not problems, (
+        'divieti del baseline EN non riprodotti nelle localizzazioni:\n  '
+        + '\n  '.join(problems)
+    )
+
+
+def test_translations_never_prescribe_what_en_forbids():
+    """Cio' che il baseline VIETA non compare in un blocco eseguibile, in nessuna lingua.
+
+    L'altra meta' della co-occorrenza, e quella che nessun test puo' derivare:
+    il marcatore dice CHE c'e' un divieto, i backtick dicono su COSA verte, ma
+    il Markdown non dice quale token sia la cosa proibita e quale l'alternativa
+    prescritta. Quella polarita' sta in `FORBIDDEN_IN_CODE_BLOCKS` — tabella, per
+    onesta', con ogni voce ancorata al baseline qui sotto.
+
+    Il perimetro e' il blocco recintato, non tutto il file, e non e' una
+    scorciatoia: nominare `curl` nella prosa e' LEGITTIMO (il baseline stesso
+    spiega perche' un curl nudo sbaglia, e le traduzioni traducono quella prosa),
+    metterlo in un blocco ```bash``` e' un ORDINE DI ESEGUIRLO. E' esattamente la
+    forma che aveva il bug: un blocco `curl -s -L ... | grep` nei sei file.
+    """
+    stale = []
+    problems = []
+    for role, token in sorted(FORBIDDEN_IN_CODE_BLOCKS):
+        en_path = AGENTS_DIR / role / f'{role}.md'
+        if token not in _forbidden_tokens(en_path, FORBIDDEN_MARKERS['en']):
+            stale.append(
+                f'({role!r}, {token!r}): {en_path.relative_to(REPO_ROOT)} non lo '
+                f'vieta (piu\'?) — togli la voce o rimetti il divieto in EN'
+            )
+            continue
+        for lang, path in _prompt_files(role):
+            for fence in _code_fences(path):
+                if re.search(r'(?<![\w-])' + re.escape(token) + r'(?![\w-])', fence):
+                    problems.append(
+                        f'{path.relative_to(REPO_ROOT)} ({lang}): blocco eseguibile '
+                        f'con `{token}`, che il baseline EN vieta'
+                    )
+                    break
+    assert not stale, (
+        'voci di FORBIDDEN_IN_CODE_BLOCKS non piu\' ancorate al baseline:\n  '
+        + '\n  '.join(stale)
+    )
+    assert not problems, (
+        'il prompt ORDINA cio\' che il baseline VIETA:\n  ' + '\n  '.join(problems)
     )
 
 
