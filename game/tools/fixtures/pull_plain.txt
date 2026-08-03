@@ -6,8 +6,8 @@
 # kept intact, so first/last timestamps and final per-layer states are
 # the real ones.
 # NOTE: not a single `Downloading` line carries a total (`x/y`).
-1785753867.609882089  Image python:3.12 Pulling 
-1785753867.611206682  Image node:22 Pulling 
+1785753867.609882089  Image python:3.12 Pulling
+1785753867.611206682  Image node:22 Pulling
 1785753870.341713710  90d1f3b8a822 Pulling fs layer 0B
 1785753870.343444213  9e002cae30c4 Pulling fs layer 0B
 1785753870.345148826  b453535073b6 Pulling fs layer 0B
@@ -1378,7 +1378,7 @@
 1785753962.936459111  34e7f1cb7a29 Downloading 205.5MB
 1785753963.028627972  90d1f3b8a822 Pull complete 0B
 1785753963.038029743  34e7f1cb7a29 Downloading 207.6MB
-1785753963.084845601  Image python:3.12 Pulled 
+1785753963.084845601  Image python:3.12 Pulled
 1785753963.136934357  34e7f1cb7a29 Downloading 208.7MB
 1785753963.236236010  34e7f1cb7a29 Downloading 209.7MB
 1785753963.338182039  34e7f1cb7a29 Downloading 211.6MB
@@ -1476,4 +1476,4 @@
 1785753972.440573349  ec53e715ea47 Pull complete 0B
 1785753972.541628706  b5082ce0961a Pull complete 0B
 1785753972.641117592  160cb63e6a29 Pull complete 0B
-1785753972.676256005  Image node:22 Pulled 
+1785753972.676256005  Image node:22 Pulled
