@@ -46,8 +46,9 @@
 #       (probabile bash nudo post-crash / modal bloccato): unico segnale "morto".
 #   4 → TUI occupata (turno in corso) oltre il budget d'attesa → agente VIVO:
 #       messaggio NON consegnato in sincrono, il chiamante deve RIPROVARE piu'
-#       tardi, MAI spawnare un rimpiazzo. "Busy != morto" (vedi
-#       docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
+#       tardi, MAI spawnare un rimpiazzo. "Busy != morto": confonderli e' la
+#       causa radice dell'overspawn del 07/06 (6→16 agenti in 3 giorni,
+#       weekly Codex al 100%, halt forzato di ~3,5 giorni).
 #   5 → testo ACCETTATO nel composer ma submit mai avvenuto dopo N Enter →
 #       agente VIVO ma incastrato ("vivo ma muto"). Come rc=4 il chiamante deve
 #       RIPROVARE, MAI spawnare un rimpiazzo: il pane non e' morto, ha solo una
@@ -149,7 +150,8 @@ signature=$(printf '%s' "$message" | head -c 30)
 # digitato → la signature non comparirebbe mai e concluderemmo a torto che la
 # TUI e' irricettiva (morta). Un pane occupato e' un agente VIVO: aspettiamo
 # che torni idle prima di typeare, MAI typeare dentro un turno in corso.
-# Causa radice dell'overspawn 07/06 (docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
+# Causa radice dell'overspawn del 07/06: 6→16 agenti in 3 giorni, weekly Codex
+# al 100%, halt forzato di ~3,5 giorni.
 #
 # ⚠️ FALSO-OCCUPATO (andris 30/07, seconda volta in un giorno). Fino al 30/07
 # questo match era una substring su TUTTO il pane, prosa del transcript inclusa.
