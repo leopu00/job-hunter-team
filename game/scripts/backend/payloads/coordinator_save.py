@@ -24,9 +24,27 @@ def atomic(path, value):
 
 m = data.get('maintenance', {})
 maintenance_path = os.path.join(profile, 'capitano-maintenance.json')
-if boolean(m.get('enabled')):
+# Modalità di lavoro (enum chiuso 2026-08). Contratto del file:
+#   assenza = search → si CANCELLA;
+#   care    → mode 'care' + gli `orders` fini della cura;
+#   le altre (harvest/calibration/saving) → solo {'mode': ...}: cosa
+#   implicano vive nel manuale delle modalità e nell'enforcement a codice
+#   (enrichment_policy legge mode=saving da qui), non in flag duplicati.
+# Un valore fuori enum degrada via il vecchio toggle (enabled → care/search):
+# è anche il ramo di compatibilità per un client che non manda ancora 'mode'.
+MODES = ('search', 'harvest', 'care', 'calibration', 'saving')
+mode = m.get('mode')
+if mode == 'maintenance':
+    mode = 'care'
+if mode not in MODES:
+    mode = 'care' if boolean(m.get('enabled')) else 'search'
+if mode == 'search':
+    maintenance = None
+    try: os.unlink(maintenance_path)
+    except FileNotFoundError: pass
+elif mode == 'care':
     maintenance = {
-        'mode': 'maintenance',
+        'mode': 'care',
         'orders': {
             'stop_search': boolean(m.get('stop_search'), True),
             'discard_expired_rotating': boolean(m.get('discard_expired_rotating'), True),
@@ -36,8 +54,8 @@ if boolean(m.get('enabled')):
     }
     atomic(maintenance_path, maintenance)
 else:
-    try: os.unlink(maintenance_path)
-    except FileNotFoundError: pass
+    maintenance = {'mode': mode}
+    atomic(maintenance_path, maintenance)
 
 e = data.get('enrichment', {})
 policy = {
@@ -58,5 +76,5 @@ policy = {
     },
 }
 atomic(os.path.join(profile, 'enrichment-policy.json'), policy)
-print(json.dumps({'ok': True, 'maintenance': maintenance if boolean(m.get('enabled')) else None,
+print(json.dumps({'ok': True, 'mode': mode, 'maintenance': maintenance,
                   'enrichment': policy}, ensure_ascii=False))
