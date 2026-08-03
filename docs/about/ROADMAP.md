@@ -101,7 +101,7 @@ New here? These are the **missions** we'd love a hand with — bigger directions
 | **M1** | 🃏 Quick-feedback cards on offers (swipe / buttons → the team learns your taste). The backend action already exists (`user-exclude` + the async request lane); the card UX is the work. | Frontend / UX | 🟡 medium |
 | **M2** | 📱 Control & stop the team from your phone — today the phone gets the read-only dashboard and Telegram; full control needs a mobile-friendly surface over the interaction plane. | Mobile + API | 🔴 large |
 | **M3** | 🛡️ Harden security — prompt-injection fencing on ingested job descriptions, uniform auth gates across routes, sync-token lifecycle policy. | Security / Backend | 🔴 large |
-| **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — the blocker is projection precision and coordinator overhead, not raw budget; every new provider also stress-tests the pacing abstraction. | Integrations | 🟡 medium |
+| **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — reproducible [Kimi variance and cost tooling](../internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) now exists, but no live export in the repo validates 88→92 or a PAYG buying claim yet; any fourth CLI remains gated by [ADR-0002 and the provider checklist](../guides/ADDING-A-PROVIDER.md). | Integrations | 🟡 medium |
 | **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — start by swapping a single role (the Scorer is the most self-contained) and measure quality against the case-study baselines. | LLM / infra | 🔴 large |
 
 > 🖥️ **Native app** — the highest-impact contribution area right now: onboarding recovery, accessibility, packaging/signing and macOS/Windows/Linux QA live in [`game/`](../../game/).

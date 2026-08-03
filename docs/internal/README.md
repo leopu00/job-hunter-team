@@ -120,6 +120,7 @@ Simulazioni, studi comparativi, playbook e case study.
 
 | Data | File | Topic |
 |---|---|---|
+| 2026-08-03 | [`2026-08-03-m4-entry-tier-evidence-protocol.md`](experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) | M4: strumenti riproducibili per varianza Kimi e costi PAYG/subscription; distingue fixture da evidenza live e registra gli input esterni mancanti |
 | 2026-08-03 | [`2026-08-03-regia-video-campagna.md`](experiments/2026-08-03-regia-video-campagna.md) | Regia del video di campagna «The Night Shift»: una posizione che attraversa l'ufficio di notte, il puntatore come spettatore |
 | 2026-06-13 | [`2026-06-13-kimi-quota-tiers-discovery.md`](experiments/2026-06-13-kimi-quota-tiers-discovery.md) | Kimi: i 3 tier di quota + il buco `totalQuota` |
 | 2026-05-25 | [`2026-05-25-sim-5-office-geocoding-mario-rossi-report.md`](experiments/2026-05-25-sim-5-office-geocoding-mario-rossi-report.md) | Sim 5 — office geocoding (profilo Mario Rossi) |
