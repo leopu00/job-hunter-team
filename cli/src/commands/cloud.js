@@ -35,6 +35,17 @@ const CLOUD_TICKETS_CURSOR_FILE = join(JHT_HOME, '.cloud-tickets-cursor.json');
 // Cursor sync bacheca (team_directives, round-trip cloud↔VPS): { pull_since,
 // push_since } su updated_at. Vedi handleDirectiveSync.
 const CLOUD_DIRECTIVES_CURSOR_FILE = join(JHT_HOME, '.cloud-directives-cursor.json');
+// Un cambio di device autoritativo apre una nuova ownership epoch. I cursor
+// locali del device che prende il controllo non possono essere considerati
+// validi rispetto alle scritture fatte nel frattempo dall'altro device: al
+// takeover li cancelliamo e lasciamo che i sync ripartano dalla propria
+// baseline sicura (full push o lookback server-side, a seconda della corsia).
+const CLOUD_OWNERSHIP_CURSOR_FILES = [
+  CLOUD_CURSOR_FILE,
+  CLOUD_PULL_CURSOR_FILE,
+  CLOUD_TICKETS_CURSOR_FILE,
+  CLOUD_DIRECTIVES_CURSOR_FILE,
+];
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -473,6 +484,115 @@ async function checkActiveDeviceConflict(baseUrl, token) {
   } catch {
     return { conflict: false };
   }
+}
+
+/**
+ * Invalida best-effort i cursor legati alla precedente ownership epoch.
+ * ENOENT e' un successo: quel flusso ripartira' gia' senza cursor. Gli altri
+ * errori vengono restituiti al chiamante, perche' il claim remoto e' ormai
+ * avvenuto e non va mascherato come fallito o ritentato automaticamente.
+ */
+async function invalidateCloudOwnershipCursors() {
+  let removed = 0;
+  const failed = [];
+  for (const path of CLOUD_OWNERSHIP_CURSOR_FILES) {
+    try {
+      await unlink(path);
+      removed += 1;
+    } catch (err) {
+      if (err?.code !== 'ENOENT') failed.push({ path, error: err.message });
+    }
+  }
+  return { removed, failed };
+}
+
+/**
+ * Claim esplicito del team per questo token. Senza --force conserva il lock
+ * fresco di un altro device; con --force il server effettua atomicamente il
+ * takeover e rende non autoritativo il token precedente.
+ */
+export async function handleClaim(options = {}) {
+  const config = await loadCloudConfig();
+  if (!config?.enabled || !config.base_url || !config.token) {
+    console.error(pc.red('Cloud sync non abilitato: claim richiede pairing prima.'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const baseUrl = String(config.base_url).replace(/\/+$/, '');
+  const deviceLabel =
+    process.env.JHT_DEVICE_LABEL ||
+    config.token_name ||
+    (process.env.IS_CONTAINER === '1' ? 'container' : 'cli');
+
+  let res;
+  let body;
+  try {
+    res = await fetch(`${baseUrl}/api/team-state/claim`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        force: options.force === true,
+        device_label: deviceLabel,
+      }),
+    });
+    body = await res.json().catch(() => ({}));
+  } catch (err) {
+    console.error(pc.red(`Claim fallito per errore di rete: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!res.ok) {
+    if (res.status === 409 && body.error === 'device_already_claimed') {
+      console.error(
+        pc.yellow(
+          `Claim occupato dal device ${body.current_device_id ?? 'unknown'}` +
+          (Number.isFinite(body.heartbeat_age_seconds)
+            ? ` (heartbeat ${body.heartbeat_age_seconds}s fa).`
+            : '.')
+        )
+      );
+      console.error(
+        pc.dim(
+          `  claimed_at: ${body.claimed_at ?? 'unknown'}\n` +
+          `  Per prendere il controllo adesso: jht cloud claim --force`
+        )
+      );
+      process.exitCode = 2;
+      return;
+    }
+    console.error(
+      pc.red(`Claim fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`)
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const claimedDeviceId = body.claimed_device_id ?? body.state?.active_device_id ?? 'unknown';
+  const evictedDeviceId = body.evicted_device_id ?? null;
+  console.log(pc.green('✓ Claim del team acquisito'));
+  console.log(pc.dim(`  device attivo: ${claimedDeviceId}`));
+
+  if (!evictedDeviceId) {
+    console.log(pc.dim('  Nessun altro device evicted; claim libero o gia\' appartenente a questo device.'));
+    return;
+  }
+
+  console.log(pc.yellow(`  Device precedente evicted: ${evictedDeviceId}`));
+  const invalidated = await invalidateCloudOwnershipCursors();
+  console.log(
+    pc.dim(
+      `  Cursor locali invalidati: ${invalidated.removed}; il prossimo sync ripartira' senza cursor precedenti.`
+    )
+  );
+  for (const failure of invalidated.failed) {
+    console.error(pc.yellow(`  warn: cursor non rimosso (${failure.path}): ${failure.error}`));
+  }
+  if (invalidated.failed.length > 0) process.exitCode = 1;
 }
 
 async function handleLogin(options) {
@@ -1190,6 +1310,7 @@ async function handlePush(options) {
         outcome.aborted = true;
         if (res.status === 409 && res.body.error === 'not_active_device') {
           console.error(pc.red(`Push rifiutato (HTTP 409 not_active_device): un altro device ha il claim (active_device_id=${res.body.active_device_id ?? 'unknown'}).`));
+          console.error(pc.dim('  Per riprendere il controllo: jht cloud claim --force'));
         } else {
           console.error(pc.red(`Push fallito (HTTP ${res.status}): ${res.body.error || 'errore sconosciuto'}`));
         }
@@ -3271,6 +3392,12 @@ export function registerCloudCommand(program) {
     .command('status')
     .description('Mostra stato cloud sync')
     .action(handleStatus);
+
+  cloud
+    .command('claim')
+    .description('Prende il claim del team per questo device (usa --force per un takeover)')
+    .option('--force', 'Evicta il device attivo e invalida i cursor locali precedenti')
+    .action(handleClaim);
 
   cloud
     .command('push')
