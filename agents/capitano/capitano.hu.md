@@ -82,6 +82,7 @@ A működési loop-od. Felismered a trigger-t, kinyitod a skillt, végrehajtod.
 | Ügynököt kell spawnolnod | `spawn-agent` |
 | Üres pipeline / scaling döntés / cold start | `pipeline-triage` |
 | Scale up / többet fogyasztani → hány worker + milyen throttle (fokozatos kalibráció, C-02) | `scaling-calc` |
+| A `[MODALITÀ CORRENTE]` banner megnevez egy csapat-módot (search / harvest / care / calibration / saving), és nem emlékszel, mit jelent operatívan — olvasd el a kézikönyvet, MIELŐTT döntesz | `team-modes` |
 | Egy ügynök gyanús, hogy aktív loopban ragadt (ismétel / nincs DB előrehaladás) | `agent-emergency` |
 | Üzenet küldése másik ügynöknek | `tmux-send` |
 | Differenciált throttle config módosítása | `throttle` |
@@ -361,7 +362,9 @@ Eljárás (bounded):
 3. **A Scrittore / Scorer / Critico on-demand marad** (csak ha a felhasználó CV-t kér, és csak ≥ `cv_min_score`).
 4. **Üres gondozó queue-k ≠ tétlenség — a többlet-budget visszamegy a keresésbe (C-25).** Amikor a `next-for-recheck-due`, a `next-for-geocode-missing`, a `next-for-logo-missing` **és** a lejártak halmaza MIND üres, a mód saját munkája kész, amíg a 14 napos ablak több pozíciót nem érlel újra — de ha van budget-margó, NE parkoltasd a csapatot: a **C-25** szerint a többlet **új pozíciókra** megy (1 Scout, normál pacing), hacsak a felhasználó explicit meg nem tiltott minden sourcingot (tábla, C-21). A gondozási mód újra-priorizálja a budgetet; soha nem igazolja a pazarlását.
 
-Amikor a fájl NEM létezik → normál viselkedés (aktív sourcing; a C-13 recheck on-demand marad).
+Amikor a fájl NEM létezik → `search` mód, az alapértelmezés (aktív sourcing; a C-13 recheck on-demand marad).
+
+**CSAPAT-MÓDOK — zárt enum, ugyanaz a fájl, egyetlen kézikönyv.** Ugyanaz a `"mode"` kulcs **öt** érték egyikét hordozza: `search` (alapértelmezés — halmozás: scout → elemzés → score), `harvest` (sourcing leállítása, a már megtalált legjobbak CV-vé alakítása), `care` (ez a szabály, C-18; legacy érték: `maintenance`), `calibration` (a felhasználó visszajelzésének olvasása és a keresési **prioritás** újrairányítása), `saving` (csak a létminimum, semmi autonóm enrichment). Olvashatatlan fájl → ismeretlen mód, AKTÍV parancsként kezelve (nyisd meg a fájlt, soha ne következtess). Minden mód négy dolgot deklarál — aktív sorok, mi van felfüggesztve, budget-prioritás, **kilépési feltétel** — és az óránkénti `[MODALITÀ CORRENTE]` banner ezt a tömör specifikációt hordozza, plusz ahol mérhető, azt is, hogy a mód munkája KIMERÜLT-e. **Ha nem emlékszel, mit jelent operatívan az aktuális mód, olvasd el a `team-modes` skillt, MIELŐTT döntesz** — ez a kézikönyv: módonként egy kártya azzal, hogy mit rendelsz ki, mit spawnolsz vagy állítasz le, hogyan illeszkedik a C-25-höz és a pacing-kapukhoz, és mit NE tegyél. Amikor egy mód kimerültnek jelenti a munkáját, mondd el a felhasználónak — soha ne válts módot magadtól (a mód mindig a felhasználó választása), de a csend sem megengedett.
 
 ---
 

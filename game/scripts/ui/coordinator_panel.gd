@@ -14,7 +14,14 @@ var _directives: VBoxContainer
 var _command: TextEdit
 var _permanent: CheckButton
 
-var _maintenance: CheckButton
+## Le 5 modalità di lavoro (enum chiuso, contratto 2026-08): il valore scelto
+## finisce in profile/capitano-maintenance.json alla chiave "mode" (filename
+## storico — vedi coordinator_save.py). Assenza del file = "search".
+const WORK_MODES: Array[String] = ["search", "harvest", "care",
+		"calibration", "saving"]
+var _mode_group := ButtonGroup.new()
+var _mode_buttons := {}       # mode → CheckBox (radio)
+var _mode_data_labels := {}   # mode → Label col dato che motiva la scelta
 var _stop_search: CheckButton
 var _discard_expired: CheckButton
 var _cv_score: SpinBox
@@ -191,23 +198,23 @@ func _build_ui() -> void:
 	body.add_child(columns)
 	var work := _section_card(columns, UIStrings.t("coord.mode"),
 			UIStrings.t("coord.mode_desc"), Palette.YELLOW)
-	var maintenance_block := _feature_block(work,
-			UIStrings.t("coord.maintenance"),
-			UIStrings.t("coord.maintenance_tip"), Palette.YELLOW)
-	_maintenance = maintenance_block["toggle"]
-	_maintenance_options = _options_box(maintenance_block["body"])
-	_stop_search = _compact_check(_maintenance_options,
-			UIStrings.t("coord.stop_search"))
-	_discard_expired = _compact_check(_maintenance_options,
-			UIStrings.t("coord.expired"))
-	_cv_score = _spin(_maintenance_options, UIStrings.t("coord.cv_score"),
-			0, 100, 90)
-	_precheck_cv = _compact_check(_maintenance_options,
-			UIStrings.t("coord.precheck"))
-	var normal_note := TerminalTheme.label(UIStrings.t("coord.normal_note"),
-			11, Palette.DIM)
-	normal_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	work.add_child(normal_note)
+	# Il selettore: una voce per modalità, ognuna con nome, cosa implica e
+	# quando sceglierla — la scelta si capisce da qui, senza documentazione.
+	for mode: String in WORK_MODES:
+		var option := _mode_option(work, mode)
+		if mode == "care":
+			# Le opzioni fini della cura vivono DENTRO la sua voce: sono
+			# gli `orders` che il file scrive solo quando la cura è attiva.
+			_maintenance_options = _options_box(option["body"])
+			_stop_search = _compact_check(_maintenance_options,
+					UIStrings.t("coord.stop_search"))
+			_discard_expired = _compact_check(_maintenance_options,
+					UIStrings.t("coord.expired"))
+			_cv_score = _spin(_maintenance_options,
+					UIStrings.t("coord.cv_score"), 0, 100, 90)
+			_precheck_cv = _compact_check(_maintenance_options,
+					UIStrings.t("coord.precheck"))
+	(_mode_buttons["search"] as CheckBox).set_pressed_no_signal(true)
 
 	var automation := _section_card(columns, UIStrings.t("coord.automation"),
 			UIStrings.t("coord.automation_desc"), Palette.BLUE)
@@ -248,8 +255,7 @@ func _build_ui() -> void:
 	_recheck_score = _spin(pair, UIStrings.t("coord.score"), 0, 100, 65)
 	_recheck_days = _spin(pair, UIStrings.t("coord.days"), 1, 365, 14)
 
-	for toggle in [_maintenance, _economy, _geo_enabled, _logo_enabled,
-			_recheck_enabled]:
+	for toggle in [_economy, _geo_enabled, _logo_enabled, _recheck_enabled]:
 		toggle.toggled.connect(func(_pressed: bool) -> void:
 			_refresh_control_states())
 
@@ -599,6 +605,84 @@ func _feature_block(parent: Container, title: String, description: String,
 	return {"body": box, "toggle": toggle, "panel": panel}
 
 
+## Il colore che identifica ogni modalità nel selettore e nel badge.
+func _mode_color(mode: String) -> Color:
+	match mode:
+		"harvest":
+			return Palette.ORANGE
+		"care":
+			return Palette.YELLOW
+		"calibration":
+			return Palette.BLUE
+		"saving":
+			return Palette.PURPLE
+		_:
+			return Palette.GREEN
+
+
+## Una voce del selettore delle modalità: radio + nome, poi una riga su cosa
+## implica e una su quando ha senso sceglierla. Sotto, quando il backend li
+## fornisce, i numeri che motivano la scelta (es. quante posizioni buone
+## restano senza CV) — il click migliore è quello che non va inventato.
+func _mode_option(parent: Container, mode: String) -> Dictionary:
+	var color := _mode_color(mode)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _card_style(Palette.DEEP,
+			Palette.BORDER, 12))
+	parent.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 5)
+	panel.add_child(box)
+	var radio := CheckBox.new()
+	radio.text = UIStrings.t("coord.mode_" + mode)
+	radio.button_group = _mode_group
+	radio.add_theme_font_size_override("font_size", 13)
+	box.add_child(radio)
+	var what := TerminalTheme.label(UIStrings.t("coord.mode_%s_what" % mode),
+			10, Palette.MUTED)
+	what.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(what)
+	var when := TerminalTheme.label(UIStrings.t("coord.mode_%s_when" % mode),
+			10, Palette.DIM)
+	when.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(when)
+	var data := TerminalTheme.label("", 10, color, "bold")
+	data.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	data.visible = false
+	box.add_child(data)
+	_mode_buttons[mode] = radio
+	_mode_data_labels[mode] = data
+	radio.toggled.connect(func(on: bool) -> void:
+		panel.add_theme_stylebox_override("panel", _card_style(Palette.DEEP,
+				Color(color.r, color.g, color.b, 0.72) if on else Palette.BORDER,
+				12))
+		_refresh_control_states())
+	return {"body": box, "panel": panel}
+
+
+## La modalità selezionata nel pannello (non necessariamente già salvata).
+func _selected_mode() -> String:
+	for mode: String in WORK_MODES:
+		var radio: BaseButton = _mode_buttons.get(mode)
+		if radio != null and radio.button_pressed:
+			return mode
+	return "search"
+
+
+## I numeri accanto alle voci del selettore. Un backend più vecchio (o il
+## mock senza dati) può non fornirli: in quel caso la riga resta nascosta —
+## meglio nessun numero di un numero inventato.
+func _update_mode_data(counts: Dictionary) -> void:
+	for entry in [["harvest", "coord.mode_harvest_data"],
+			["calibration", "coord.mode_calibration_data"]]:
+		var label: Label = _mode_data_labels.get(entry[0])
+		if label == null:
+			continue
+		label.visible = counts.has(entry[0])
+		if counts.has(entry[0]):
+			label.text = UIStrings.t(entry[1]) % int(counts.get(entry[0], 0))
+
+
 func _options_box(parent: Container) -> VBoxContainer:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 7)
@@ -678,7 +762,10 @@ func _save_settings() -> void:
 	_status_text(UIStrings.t("coord.saving"), Palette.YELLOW)
 	BackendBus.save_coordinator_settings({
 		"maintenance": {
-			"enabled": _maintenance.button_pressed,
+			# "mode" è il contratto nuovo (enum chiuso); "enabled" resta per
+			# compatibilità con chi legge ancora il toggle binario.
+			"mode": _selected_mode(),
+			"enabled": _selected_mode() == "care",
 			"stop_search": _stop_search.button_pressed,
 			"discard_expired_rotating": _discard_expired.button_pressed,
 			"cv_min_score": int(_cv_score.value),
@@ -719,12 +806,12 @@ func _send_order(prompt: String) -> void:
 func _refresh_control_states() -> void:
 	if _maintenance_options == null:
 		return
-	var maintenance_on := _maintenance.button_pressed
-	_maintenance_options.modulate.a = 1.0 if maintenance_on else 0.34
-	_stop_search.disabled = not maintenance_on
-	_discard_expired.disabled = not maintenance_on
-	_cv_score.editable = maintenance_on
-	_precheck_cv.disabled = not maintenance_on
+	var care_on := _selected_mode() == "care"
+	_maintenance_options.modulate.a = 1.0 if care_on else 0.34
+	_stop_search.disabled = not care_on
+	_discard_expired.disabled = not care_on
+	_cv_score.editable = care_on
+	_precheck_cv.disabled = not care_on
 
 	var economy_on := _economy.button_pressed
 	_automation_options.modulate.a = 0.34 if economy_on else 1.0
@@ -747,7 +834,17 @@ func _refresh_control_states() -> void:
 func _apply_state(state: Dictionary) -> void:
 	var maintenance: Dictionary = state.get("maintenance", {})
 	var enrichment: Dictionary = state.get("enrichment", {})
-	_maintenance.button_pressed = bool(maintenance.get("enabled", false))
+	var mode := str(maintenance.get("mode", ""))
+	if mode == "maintenance":
+		mode = "care"
+	if not WORK_MODES.has(mode):
+		# Backend più vecchio (solo toggle binario) o valore fuori enum.
+		mode = "care" if bool(maintenance.get("enabled", false)) else "search"
+	var radio: BaseButton = _mode_buttons.get(mode)
+	if radio != null:
+		# `button_pressed = true` lascia al ButtonGroup il de-selezionare
+		# le altre voci (set_pressed_no_signal non lo farebbe).
+		radio.button_pressed = true
 	_stop_search.button_pressed = bool(maintenance.get("stop_search", true))
 	_discard_expired.button_pressed = bool(
 			maintenance.get("discard_expired_rotating", true))
@@ -764,10 +861,9 @@ func _apply_state(state: Dictionary) -> void:
 	_recheck_enabled.button_pressed = bool(enrichment.get("recheck_enabled", true))
 	_recheck_score.value = float(enrichment.get("recheck_min_score", 70))
 	_recheck_days.value = float(enrichment.get("recheck_older_days", 7))
-	_mode_badge.text = "● " + (UIStrings.t("coord.mode_maintenance") \
-			if _maintenance.button_pressed else UIStrings.t("coord.mode_normal"))
-	_mode_badge.add_theme_color_override("font_color",
-			Palette.YELLOW if _maintenance.button_pressed else Palette.GREEN)
+	_mode_badge.text = "● " + UIStrings.t("coord.mode_" + mode).to_upper()
+	_mode_badge.add_theme_color_override("font_color", _mode_color(mode))
+	_update_mode_data(state.get("queue_counts", {}))
 	_build_queue_cards(state.get("queue_counts", {}))
 	_build_directives(state.get("directives", []))
 	_refresh_control_states()

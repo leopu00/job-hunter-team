@@ -688,9 +688,14 @@ func _do_save_coordinator_settings(settings: Dictionary) -> void:
 		return
 	_do_fetch_coordinator_state()
 	# I file sono enforcement a codice; questo messaggio sveglia inoltre il
-	# Capitano e gli fa ricalcolare subito assegnazioni e code.
+	# Capitano e gli fa ricalcolare subito assegnazioni e code. La modalità
+	# viaggia nel testo perché il Capitano non debba dedurla dal diff dei file.
+	var mode := str((settings.get("maintenance", {}) as Dictionary).get(
+			"mode", ""))
+	var mode_note := "" if mode == "" else "Modalità di lavoro: " + mode + ". "
 	_do_send_chat("coordinatore",
-			"Impostazioni operative aggiornate dalla console. Rileggi " \
+			"Impostazioni operative aggiornate dalla console. " + mode_note \
+			+ "Rileggi " \
 			+ "/jht_home/profile/capitano-maintenance.json (se presente) e " \
 			+ "/jht_home/profile/enrichment-policy.json; applicale ora e " \
 			+ "ribilancia il team rispettando budget e code.")
