@@ -56,6 +56,13 @@ EXCLUDE_DIR_PARTS = {
     "__pycache__", ".pytest_cache",
     # Storia congelata: si conserva, non si rilegge.
     "_archive", "archive",
+    # Payload vendorizzato dell'app Electron, eliminata il 2026-07-19: sono
+    # copie di file i cui originali (`agents/alfa/`, `shared/docs/`) non
+    # esistono più. Indicizzarle chiederebbe di rileggere periodicamente
+    # documentazione che descrive un'applicazione che non spediamo, e ogni
+    # riga sarebbe un invito a "aggiornarla" — cioè a curare un fossile.
+    # Se un giorno la cartella esce dal repo, questa riga cade da sé.
+    "app-payload",
 }
 
 # Le traduzioni dei prompt/skill (`<nome>.<locale>.md`) NON entrano nel
