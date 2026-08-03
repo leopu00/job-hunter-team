@@ -201,12 +201,15 @@ proj > 400   → throttle 3600s  (max) — ha EGYETLEN worker még mindig a
               throttle SZATURÁLÓDIK: mondd a Capitanónak, hogy KILLELJEN 1 workert
               abból a kategóriából ahelyett, hogy újra nudge-olna (C-12), ne csak
               tovább emelje a throttle-t.
-proj > 200   → freeze_team.py + EMERGENZA (csapat-szintű, a fenti per-worker
-              throttle létrától eltérő)
+proj > 200   → freeze_team.py + EMERGENZA csak ha reset_edge_guard != true
+              (csapatszintű, a fenti per-worker throttle létrától eltérő)
 ```
 
 EMERGENZA fenntartva proj > 200%-ra VAGY perzisztens proj > 150%-ra
-≥3 egymás utáni tickre (nincs többé "EMERGENZA az első spike-nál").
+≥3 egymás utáni tickre (nincs többé "EMERGENZA az első spike-nál"). Ha
+`reset_edge_guard=true` (utolsó 30 perc), a projection csak diagnosztikai adat:
+tartsd be a `suggested_throttle_s=0` értéket; emiatt ne legyen freeze, kill,
+throttle vagy vészhelyzeti history-frissítés. A független hard jelek aktívak maradnak.
 
 **S-06 — Weekly cap = PÁRHUZAMOS constraint, AWARENESS (Codex / subscription tier).** Weekly
 cap-pel rendelkező provider-eken (Codex 168h) a tick tartalmazza a `weekly_usage` +

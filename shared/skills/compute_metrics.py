@@ -122,6 +122,12 @@ EPSILON_VEL = 0.5
 # diverge troppo da last_hour_delta (= seconda linea di difesa).
 MIN_DT_MIN_FOR_VELOCITY = 0.5
 
+# Negli ultimi 30 minuti la proiezione della finestra e' troppo sensibile per
+# guidare azioni distruttive: resta visibile per audit, ma non deve cambiare
+# status ne' generare throttle. Il reset reale (drop > RESET_DROP) continua a
+# essere gestito separatamente.
+RESET_EDGE_GUARD_HOURS = 0.5
+
 
 def hours_until(reset_hhmm):
     """HH:MM (UTC) → ore float mancanti; se passato, assume domani."""
@@ -136,6 +142,27 @@ def hours_until(reset_hhmm):
     if target <= now:
         target += timedelta(days=1)
     return (target - now).total_seconds() / 3600
+
+
+def _hours_until_reset(parsed, now):
+    """Ore al reset usando l'epoch quando disponibile.
+
+    L'HH:MM da solo e' ambiguo subito dopo il confine: ``hours_until`` lo
+    sposterebbe al giorno successivo. L'epoch e' il dato canonico e permette
+    anche di riconoscere un reset appena scaduto senza riarmare i trigger.
+    """
+    reset_unix = parsed.get("reset_at_unix")
+    if (isinstance(reset_unix, (int, float))
+            and not isinstance(reset_unix, bool)
+            and math.isfinite(reset_unix)):
+        return (float(reset_unix) - now.timestamp()) / 3600.0
+    fallback_hours = hours_until(parsed.get("reset_at"))
+    # ``hours_until`` interpreta un HH:MM appena passato come "domani". Per
+    # una finestra primaria (5h) un valore oltre 23.5h e' invece il minuto
+    # appena scaduto: manteniamolo nel grace period del reset edge.
+    if fallback_hours is not None and fallback_hours > 23.5:
+        return fallback_hours - 24.0
+    return fallback_hours
 
 
 def _parse_iso(ts):
@@ -227,7 +254,11 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
     #
     # Manteniamo velocity_smooth (EMA) per indicatori tecnici / debug,
     # ma il proj usa la session_avg.
-    hours_to_reset = hours_until(parsed.get("reset_at"))
+    hours_to_reset = _hours_until_reset(parsed, now)
+    reset_edge_guard = (
+        hours_to_reset is not None
+        and -RESET_EDGE_GUARD_HOURS <= hours_to_reset <= RESET_EDGE_GUARD_HOURS
+    )
     velocity_ideal = None
     projection = None
     projection_naive = None
@@ -294,6 +325,10 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
     # Capitano "MANTIENI".
     if reset_event:
         status, throttle = "RESET", 0
+    elif reset_edge_guard:
+        # La projection resta nel sample per diagnosi, ma al confine non e'
+        # actionable: nessun ATTENZIONE/throttle da un numero volatile.
+        status, throttle = "OK", 0
     elif projection is not None and projection > PROJ_HIGH:
         status, throttle = "ATTENZIONE", 1
     elif projection is not None and PROJ_STEADY_LOW <= projection <= PROJ_STEADY_HIGH:
@@ -359,11 +394,11 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
     #
     # Fase 1 (normale): proj < 100% e time-to-reset > 30 min → Sentinella
     #                   solo INFO, Capitano modula throttle in autonomia.
-    # Fase 2 (critico): proj > 100% O time-to-reset ≤ 30 min con proj alto
+    # Fase 2 (critico): proj > 100% fuori dal reset edge
     #                   → Sentinella suggerisce throttle scala continua.
-    # Fase 3 (chiusura): time-to-reset ≤ 30 min → Sentinella domina
-    #                   (freeze in target G-spot 90-95%, comportamento OK
-    #                   già attuale).
+    # Fase 3 (chiusura): time-to-reset ≤ 30 min → guard reset-edge.
+    #                   La projection resta osservabile ma non azionabile:
+    #                   nessun throttle/freeze basato su una stima volatile.
     #
     # `suggested_throttle_s` è scala continua (vs i 3 valori discreti
     # {0, 300, 600} del passato). Mappatura dalla doc bug #24, estesa fino a
@@ -381,7 +416,7 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
     # tick, regola S-05) via freeze_team.py — non più codificata qui come -1.
     # Quando un singolo worker resta sopra vel_target dopo un throttle 1800-3600s
     # per ≥2 tick, la leva giusta è il KILL (C-12), non alzare ancora il throttle.
-    if hours_to_reset is not None and hours_to_reset <= 0.5:
+    if reset_edge_guard:
         phase = 3
     elif projection is not None and projection > 100:
         phase = 2
@@ -389,7 +424,7 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         phase = 1
 
     suggested_throttle_s = 0
-    if projection is not None:
+    if projection is not None and not reset_edge_guard:
         p = projection
         if p > 400:
             suggested_throttle_s = 3600  # max (= jht-throttle.py MAX_SLEEP)
@@ -466,6 +501,9 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         # comanda). Vedi sentinella.md S-04/S-05 + capitano.md C-07.
         "phase": phase,
         "suggested_throttle_s": suggested_throttle_s,
+        # True negli ultimi 30 min (e fino a 30 min dopo un epoch appena
+        # scaduto): i consumer devono ignorare i trigger projection-only.
+        "reset_edge_guard": reset_edge_guard,
         # CHOKE POINT data-completa (2026-06-30): reset_at/weekly_reset_at sono
         # le stringhe human che leggono Capitano/Sentinella/UI. Le derivo SEMPRE
         # dall'epoch (_unix) con la DATA di calendario completa — un solo punto
