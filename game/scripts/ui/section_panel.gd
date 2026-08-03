@@ -409,11 +409,13 @@ func _build_account() -> void:
 			else UIStrings.t("account.login")
 	login.disabled = not bool(SetupService.status.get("container_running", false))
 	login.add_theme_color_override("font_color", Palette.GREEN)
+	login.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	login.pressed.connect(SetupService.open_cloud_login.bind(true))
 	actions.add_child(login)
 	var other_login := Button.new()
 	other_login.text = UIStrings.t("account.other_account")
 	other_login.disabled = not bool(SetupService.status.get("container_running", false))
+	other_login.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	other_login.pressed.connect(SetupService.open_cloud_login.bind(false))
 	actions.add_child(other_login)
 	for entry in [["account.status", "status"], ["account.sync_now", "push"],
@@ -421,14 +423,17 @@ func _build_account() -> void:
 		var button := Button.new()
 		button.text = UIStrings.t(str(entry[0]))
 		button.disabled = not configured
+		button.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		button.pressed.connect(SetupService.open_cloud_command.bind(str(entry[1])))
 		actions.add_child(button)
-	if configured:
-		var disable := Button.new()
-		disable.text = UIStrings.t("account.disable_sync")
-		disable.add_theme_color_override("font_color", Palette.RED)
-		disable.pressed.connect(_confirm_cloud_disable)
-		_content.add_child(disable)
+	# Login spento senza spiegazione = login rotto: il pairing si svolge nella
+	# console del container, e se il container è giù va detto qui (stesso
+	# trattamento dell'hint sotto il login del provider).
+	if not bool(SetupService.status.get("container_running", false)):
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.provider_needs_container"), 11, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	var recovery := HBoxContainer.new()
 	recovery.add_theme_constant_override("separation", 10)
 	_content.add_child(recovery)
@@ -436,6 +441,7 @@ func _build_account() -> void:
 	restore.text = UIStrings.t("account.restore")
 	restore.disabled = not configured
 	restore.add_theme_color_override("font_color", Palette.YELLOW)
+	restore.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	restore.pressed.connect(SetupService.open_cloud_command.bind("restore"))
 	recovery.add_child(restore)
 	var manage := Button.new()
@@ -443,6 +449,18 @@ func _build_account() -> void:
 	manage.pressed.connect(func() -> void:
 		OS.shell_open("https://jobhunterteam.ai/settings/cloud-sync"))
 	recovery.add_child(manage)
+	# L'azione che smonta (DISATTIVA SYNC) sta in fondo alla riga, isolata da
+	# uno spacer: prima era un pulsante pieno in mezzo al pannello, con lo
+	# stesso peso visivo delle azioni ordinarie.
+	if configured:
+		var recovery_spacer := Control.new()
+		recovery_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		recovery.add_child(recovery_spacer)
+		var disable := Button.new()
+		disable.text = UIStrings.t("account.disable_sync")
+		disable.add_theme_color_override("font_color", Palette.RED)
+		disable.pressed.connect(_confirm_cloud_disable)
+		recovery.add_child(disable)
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("account.privacy_note"),
 			12, Palette.DIM))
@@ -505,25 +523,39 @@ func _build_email() -> void:
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
+	# Primaria (salva), aiuto neutro, e la distruttiva (rimuovi) in fondo alla
+	# riga oltre lo spacer: prima RIMUOVI stava spalla a spalla con SALVA.
 	var save := Button.new()
 	save.text = UIStrings.t("email.save")
 	save.disabled = not bool(SetupService.status.get("container_running", false))
 	save.add_theme_color_override("font_color", Palette.GREEN)
+	save.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	save.pressed.connect(func() -> void:
 		SetupService.save_email(email.text, password.text)
 		password.clear())
 	actions.add_child(save)
-	var remove := Button.new()
-	remove.text = UIStrings.t("email.remove")
-	remove.disabled = not configured
-	remove.add_theme_color_override("font_color", Palette.RED)
-	remove.pressed.connect(SetupService.delete_email)
-	actions.add_child(remove)
 	var help := Button.new()
 	help.text = UIStrings.t("email.help")
 	help.pressed.connect(func() -> void:
 		OS.shell_open("https://support.google.com/accounts/answer/185833"))
 	actions.add_child(help)
+	var actions_spacer := Control.new()
+	actions_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(actions_spacer)
+	var remove := Button.new()
+	remove.text = UIStrings.t("email.remove")
+	remove.disabled = not configured
+	remove.add_theme_color_override("font_color", Palette.RED)
+	remove.add_theme_color_override("font_disabled_color", Palette.MUTED)
+	remove.pressed.connect(SetupService.delete_email)
+	actions.add_child(remove)
+	# SALVA spento perché la credenziale la scrive il container: senza questa
+	# riga il pulsante è muto e sembra un difetto del modulo.
+	if not bool(SetupService.status.get("container_running", false)):
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.needs_container_cmd"), 11, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
 
@@ -534,6 +566,13 @@ func _build_telegram() -> void:
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("tg.intro"),
 			14, Palette.MUTED))
+	# I tre SALVA delle schede qui sotto scrivono nel container: se è spento
+	# sono disabilitati tutti e tre per la stessa ragione, detta UNA volta.
+	if not bool(SetupService.status.get("container_running", false)):
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.needs_container_cmd"), 12, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
@@ -600,6 +639,7 @@ func _build_telegram() -> void:
 		save.text = UIStrings.t("tg.save")
 		save.disabled = not bool(SetupService.status.get("container_running", false))
 		save.add_theme_color_override("font_color", Palette.GREEN)
+		save.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		save.pressed.connect(func() -> void:
 			SetupService.save_telegram_bot(role, token.text, chat_id.text)
 			token.clear())
@@ -632,6 +672,7 @@ func _build_advanced() -> void:
 	doctor.text = UIStrings.t("advanced.doctor")
 	doctor.disabled = not bool(SetupService.status.get("container_running", false))
 	doctor.add_theme_color_override("font_color", Palette.GREEN)
+	doctor.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	doctor.pressed.connect(SetupService.open_doctor)
 	actions.add_child(doctor)
 	var setup := Button.new()
@@ -648,6 +689,13 @@ func _build_advanced() -> void:
 	report.text = UIStrings.t("feedback.send")
 	report.pressed.connect(func() -> void: navigate.emit("feedback"))
 	actions.add_child(report)
+	# La diagnostica gira NEL container: spenta col container giù, e lo dice —
+	# proprio a chi apre questa pagina perché qualcosa non va.
+	if not bool(SetupService.status.get("container_running", false)):
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.needs_container_cmd"), 11, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	var files := HBoxContainer.new()
 	files.add_theme_constant_override("separation", 10)
 	_content.add_child(files)
@@ -973,8 +1021,18 @@ var _setup_busy_ui := false
 var _action_note := ""
 var _action_note_color: Color = Palette.DIM
 ## Le azioni di setup che i pannelli attivazione/docker/provider/team sanno
-## rappresentare coi loro pulsanti: al loro avvio/fine il pannello va ridisegnato.
-const SETUP_ACTIONS := ["container", "team", "provider", "plan", "install"]
+## rappresentare coi loro pulsanti: al loro avvio/fine il pannello va
+## ridisegnato. Ci sono TUTTE le azioni a corsia unica di SetupService, non
+## solo quelle che nascono in questi pannelli: una migrazione VPS lanciata
+## altrove spegne anche i pulsanti di qui, e al suo termine devono riaccendersi
+## subito, non al prossimo probe.
+const SETUP_ACTIONS := ["container", "team", "provider", "plan", "install",
+		"email", "telegram", "agent",
+		"vps-key", "vps-test", "vps-provision", "vps-migrate"]
+## Le sezioni che si ricostruiscono all'avvio/fine di un'azione. Il pannello
+## VPS NON c'è di proposito: ha campi di testo (IP, chiave, utente) e una
+## ricostruzione a metà azione butterebbe via quello che l'utente ha scritto —
+## lì i pulsanti si spengono/riaccendono sul posto (_vps_action_buttons).
 const SETUP_SECTIONS := ["activation", "docker", "provider", "team"]
 
 func _listen_setup() -> void:
@@ -1069,8 +1127,20 @@ func _build_activation() -> void:
 			or bool(s.get("team_running", false)) or SetupService.busy()
 	start.add_theme_font_size_override("font_size", 17)
 	start.add_theme_color_override("font_color", Palette.GREEN)
+	# Il tema tiene VERDE anche il disabilitato (serve alle tab attive): qui lo
+	# stato deve vedersi — verde se il team è ATTIVO (disabled usato come
+	# distintivo), giallo se sta lavorando lui, muto se aspetta altro.
+	start.add_theme_color_override("font_disabled_color",
+			Palette.GREEN if bool(s.get("team_running", false)) \
+			else (Palette.YELLOW if SetupService.busy() \
+			and SetupService.current_action == "team" else Palette.MUTED))
 	start.pressed.connect(SetupService.start_team)
 	bottom.add_child(start)
+	# ATTIVA IL TEAM spento perché gira UN'ALTRA azione (es. l'attivazione del
+	# container): la ragione va detta. Quando l'azione è proprio il team,
+	# l'etichetta "AVVIO IN CORSO" parla già da sola.
+	if SetupService.busy() and SetupService.current_action != "team":
+		_busy_hint(_content)
 	# L'attivazione lunga (container o team) mostra la barra anche qui: è la
 	# finestra da cui in genere si preme il pulsante.
 	if SetupService.busy() and SetupService.current_action in ["container", "team"]:
@@ -1169,12 +1239,16 @@ func _build_container_setup() -> void:
 				"warn" if bool(s.get("runtime_stale", false)) else "done",
 				UIStrings.t("setup.runtime_stale") if bool(s.get("runtime_stale", false))
 				else UIStrings.t("setup.runtime_current"))
+	# La riga TEAM chiude la filiera (l'attivazione ESISTE per arrivare qui) ma
+	# è SOLA LETTURA: l'avvio vive nella checklist «Attiva team» e nel pannello
+	# Team, e una terza strada qui sarebbe un secondo posto in cui agire per la
+	# stessa cosa. Quando è spento, il dettaglio dice dove si agisce.
 	var team_phase := SetupService.busy() and SetupService.current_action == "team"
 	_setup_phase_row(UIStrings.t("setup.phase_team"),
 			_phase_state(bool(s.get("team_running", false)), team_phase),
 			UIStrings.t("setup.phase_running") if team_phase
 			else (UIStrings.t("setup.team_on") if bool(s.get("team_running", false))
-			else UIStrings.t("setup.team_stopped")))
+			else UIStrings.t("setup.team_row_info")))
 	# Mentre l'attivazione gira, la filiera dice DOVE si è e la barra dice
 	# QUANTO manca (o, onestamente, che la fase non riporta una percentuale).
 	# Il widget si aggiorna da solo sui segnali: nessuna ricostruzione del
@@ -1205,13 +1279,19 @@ func _build_container_setup() -> void:
 	start.disabled = start.disabled or SetupService.busy()
 	start.add_theme_font_size_override("font_size", 16)
 	start.add_theme_color_override("font_color", Palette.GREEN)
+	# Spento perché lavora LUI → giallo (stato vivo); spento perché lavora
+	# un'altra azione → muto. Il verde del tema mentirebbe in entrambi i casi.
+	start.add_theme_color_override("font_disabled_color",
+			Palette.YELLOW if busy else Palette.MUTED)
 	actions.add_child(start)
 	# Docker assente: senza motore non si accende niente, e questa è l'unica
-	# azione sensata da offrire.
+	# azione sensata da offrire. Resta premibile ANCHE mentre un'azione gira:
+	# non passa dalla corsia di SetupService (apre la console incorporata) e
+	# l'unica azione possibile con Docker assente è la fase engine che sta
+	# proprio aspettando che il runtime compaia — installarlo la sblocca.
 	if not bool(s.get("docker_available", false)) and not bool(s.get("remote", false)):
 		var install := Button.new()
 		install.text = UIStrings.t("setup.docker_install")
-		install.disabled = SetupService.busy()
 		install.add_theme_color_override("font_color", Palette.YELLOW)
 		install.pressed.connect(SetupService.open_runtime_install)
 		actions.add_child(install)
@@ -1222,8 +1302,12 @@ func _build_container_setup() -> void:
 		update.text = UIStrings.t("setup.runtime_update")
 		update.disabled = SetupService.busy()
 		update.add_theme_color_override("font_color", Palette.YELLOW)
+		update.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		update.pressed.connect(SetupService.update_runtime)
 		actions.add_child(update)
+	# Vale per tutti i pulsanti spenti del pannello, FERMA CONTAINER incluso:
+	# condividono la stessa corsia unica, quindi la stessa ragione.
+	_busy_hint(_content)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
 	_restore_action_note()
@@ -1259,6 +1343,7 @@ func _build_container_setup() -> void:
 		stop.text = UIStrings.t("setup.container_stop")
 		stop.disabled = SetupService.busy()
 		stop.add_theme_color_override("font_color", Palette.RED)
+		stop.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		stop.pressed.connect(SetupService.stop_container)
 		footer.add_child(stop)
 
@@ -1316,6 +1401,37 @@ func _restore_action_note() -> void:
 		_setup_message.add_theme_color_override("font_color", _action_note_color)
 
 
+## Come si chiama, per l'utente, l'azione a corsia unica in corso adesso.
+## Serve alla riga che spiega i pulsanti spenti: "operazione in corso" secco
+## obbliga a indovinare QUALE, e chi non indovina ripreme.
+static func _busy_action_label() -> String:
+	match SetupService.current_action:
+		"container":
+			return UIStrings.t("setup.busy_container")
+		"team":
+			return UIStrings.t("setup.busy_team")
+		"provider", "plan", "install":
+			return UIStrings.t("setup.busy_provider")
+		_:
+			return UIStrings.t("setup.busy_vps") \
+					if SetupService.current_action.begins_with("vps") \
+					else UIStrings.t("setup.busy_generic")
+
+
+## La riga sotto ai pulsanti spenti durante un'azione: dice COSA sta girando e
+## che si riaccendono da soli. Un pulsante disabilitato e muto è
+## indistinguibile da uno rotto (feedback 30/07). Chi chiama decide quando
+## aggiungerla: qui si decide solo come è fatta.
+func _busy_hint(parent: Container) -> void:
+	if not SetupService.busy():
+		return
+	var hint := TerminalTheme.label(
+			UIStrings.t("setup.busy_note") % _busy_action_label(),
+			12, Palette.YELLOW)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(hint)
+
+
 func _build_provider_setup() -> void:
 	_listen_setup()
 	var s: Dictionary = SetupService.status
@@ -1323,6 +1439,9 @@ func _build_provider_setup() -> void:
 			15, Palette.BASE))
 	_content.add_child(TerminalTheme.label(UIStrings.t("setup.provider_note"),
 			13, Palette.YELLOW))
+	# USA QUESTO PROVIDER e i tagli d'abbonamento condividono la corsia unica
+	# di SetupService: mentre gira un'azione sono spenti, e qui si dice perché.
+	_busy_hint(_content)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1374,6 +1493,7 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 		var choose := Button.new()
 		choose.text = UIStrings.t("setup.provider_choose")
 		choose.disabled = SetupService.busy()
+		choose.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		choose.pressed.connect(SetupService.select_provider.bind(provider))
 		actions.add_child(choose)
 	else:
@@ -1382,6 +1502,7 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 				else UIStrings.t("setup.provider_subscription_login")
 		login.disabled = not bool(s.get("container_running", false))
 		login.add_theme_color_override("font_color", Palette.GREEN)
+		login.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		login.pressed.connect(SetupService.open_provider_login.bind(provider))
 		actions.add_child(login)
 		# Pulsante spento senza spiegazione = pulsante rotto: se il container è
@@ -1399,6 +1520,7 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 			var recheck := Button.new()
 			recheck.text = UIStrings.t("setup.provider_recheck")
 			recheck.disabled = not bool(s.get("container_running", false))
+			recheck.add_theme_color_override("font_disabled_color", Palette.MUTED)
 			recheck.pressed.connect(func() -> void:
 				recheck.text = UIStrings.t("setup.provider_rechecking")
 				SetupService.refresh())
@@ -1462,6 +1584,11 @@ func _plan_picker(col: VBoxContainer, provider: String, s: Dictionary) -> void:
 				else "%s %s$" % [str(plan.get("label", plan_id)), price]
 		button.toggle_mode = true
 		button.button_pressed = plan_id == chosen
+		# select_plan passa dalla corsia unica: durante un'azione il click
+		# verrebbe scartato in silenzio ma il toggle resterebbe premuto a
+		# schermo — un salvataggio che sembra avvenuto e non è avvenuto.
+		button.disabled = SetupService.busy()
+		button.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		if plan_id == chosen:
 			button.add_theme_color_override("font_color", Palette.GREEN)
 		button.pressed.connect(SetupService.select_plan.bind(provider, plan_id))
@@ -1490,6 +1617,10 @@ func _on_setup_action(action: String, running: bool, message: String, ok: bool) 
 			and running != _setup_busy_ui:
 		_setup_busy_ui = running
 		_build(_current_page)
+	# Il pannello VPS non si ricostruisce (ha campi di testo da preservare):
+	# pulsanti e riga-ragione si aggiornano sul posto.
+	if section == "vps":
+		_refresh_vps_busy()
 	if not is_instance_valid(_setup_message):
 		return
 	_setup_message.text = _action_note
@@ -3359,12 +3490,19 @@ var _vps_key: LineEdit
 var _vps_state_lbl: Label
 var _vps_fingerprint_lbl: Label
 var _vps_agents_box: VBoxContainer
+## I pulsanti del pannello VPS che passano dalla corsia unica di SetupService
+## (genera chiave, verifica SSH, prepara, migra, collega/scollega): durante
+## un'azione si spengono e si riaccendono SUL POSTO — il pannello ha campi di
+## testo e una ricostruzione butterebbe via l'IP appena scritto.
+var _vps_action_buttons: Array = []
+var _vps_busy_hint: Label
 
 ## Il form del PRIMO PASSO backend: IP + chiave SSH → VpsBackend reale.
 ## Stato e roster arrivano live dal BackendBus (il collegamento resta
 ## vivo anche a pannello chiuso: vive nell'autoload, non qui).
 func _build_vps() -> void:
 	_listen_setup()
+	_vps_action_buttons.clear()
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.intro"), 15, Palette.MUTED))
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("vps.steps"),
@@ -3390,7 +3528,7 @@ func _build_vps() -> void:
 		_vps_key.text = SetupService.default_vps_key_path()
 		_refresh_vps_fingerprint()
 		SetupService.generate_vps_key())
-	_vps_key.get_parent().add_child(generate)
+	_vps_key.get_parent().add_child(_vps_gate(generate))
 	var copy_public := Button.new()
 	copy_public.text = UIStrings.t("vps.key_copy")
 	copy_public.pressed.connect(func() -> void:
@@ -3423,6 +3561,11 @@ func _build_vps() -> void:
 			UIStrings.t("vps.fingerprint_note"),
 			12, Palette.DIM))
 
+	# La fila segue il flusso e il peso delle azioni: COLLEGA è la primaria (il
+	# caso comune: la VPS esiste già), verifica e preparazione sono il percorso
+	# di chi parte da zero, e SCOLLEGA — l'unica che smonta qualcosa — sta
+	# isolata a destra, non spalla a spalla con la primaria (stesso schema del
+	# footer del pannello Docker).
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 16)
 	_content.add_child(actions)
@@ -3431,37 +3574,45 @@ func _build_vps() -> void:
 	connect_btn.add_theme_font_size_override("font_size", 16)
 	connect_btn.add_theme_color_override("font_color", Palette.GREEN)
 	connect_btn.pressed.connect(_connect_vps)
-	actions.add_child(connect_btn)
-	var disconnect_btn := Button.new()
-	disconnect_btn.text = UIStrings.t("vps.disconnect")
-	disconnect_btn.add_theme_font_size_override("font_size", 16)
-	disconnect_btn.add_theme_color_override("font_color", Palette.MUTED)
-	# Una disconnessione richiesta dall'utente deve sopravvivere al riavvio;
-	# altrimenti vps.cfg ricollegherebbe silenziosamente la stessa VPS al boot.
-	disconnect_btn.pressed.connect(func() -> void: BackendBus.switch_to_local_backend())
-	actions.add_child(disconnect_btn)
+	actions.add_child(_vps_gate(connect_btn))
 	var test_ssh := Button.new()
 	test_ssh.text = UIStrings.t("vps.verify_ssh")
 	test_ssh.add_theme_color_override("font_color", Palette.MINT)
 	test_ssh.pressed.connect(func() -> void:
 		SetupService.test_vps_connection(_vps_ip.text, _vps_key.text,
 				_vps_user.text))
-	actions.add_child(test_ssh)
+	actions.add_child(_vps_gate(test_ssh))
 	var install := Button.new()
 	install.text = UIStrings.t("vps.prepare")
 	install.add_theme_color_override("font_color", Palette.YELLOW)
 	install.pressed.connect(func() -> void:
 		SetupService.provision_vps(_vps_ip.text, _vps_key.text,
 				_vps_user.text))
-	actions.add_child(install)
+	actions.add_child(_vps_gate(install))
+	var actions_spacer := Control.new()
+	actions_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(actions_spacer)
+	var disconnect_btn := Button.new()
+	disconnect_btn.text = UIStrings.t("vps.disconnect")
+	disconnect_btn.add_theme_color_override("font_color", Palette.MUTED)
+	# Una disconnessione richiesta dall'utente deve sopravvivere al riavvio;
+	# altrimenti vps.cfg ricollegherebbe silenziosamente la stessa VPS al boot.
+	disconnect_btn.pressed.connect(func() -> void: BackendBus.switch_to_local_backend())
+	actions.add_child(_vps_gate(disconnect_btn))
 	var console_install := Button.new()
 	console_install.text = UIStrings.t("vps.advanced")
 	console_install.flat = true
 	console_install.pressed.connect(func() -> void:
 		SetupService.open_vps_install(_vps_ip.text, _vps_key.text,
 				_vps_user.text))
-	_content.add_child(console_install)
+	_content.add_child(_vps_gate(console_install))
 
+	# La ragione dei pulsanti spenti, aggiornata sul posto dagli stessi segnali
+	# che li spengono: il pannello non si ricostruisce (perderebbe i campi).
+	_vps_busy_hint = TerminalTheme.label("", 12, Palette.YELLOW)
+	_vps_busy_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(_vps_busy_hint)
+	_refresh_vps_busy()
 	_vps_state_lbl = TerminalTheme.label("", 16, Palette.MUTED, "medium")
 	_content.add_child(_vps_state_lbl)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
@@ -3485,14 +3636,13 @@ func _build_vps() -> void:
 	migrate.add_theme_color_override("font_color", Palette.YELLOW)
 	migrate.pressed.connect(func() -> void:
 		_confirm_vps_migration("vps" if source_mode.selected == 1 else "local"))
-	migration.add_child(migrate)
+	migration.add_child(_vps_gate(migrate))
 	var migrate_local := Button.new()
 	migrate_local.text = UIStrings.t("vps.migrate_to_local")
-	migrate_local.disabled = str(cfg.get("ip", "")) == "" \
-			or str(cfg.get("key_path", "")) == ""
 	migrate_local.add_theme_color_override("font_color", Palette.BLUE)
 	migrate_local.pressed.connect(_confirm_local_migration)
-	migration.add_child(migrate_local)
+	migration.add_child(_vps_gate(migrate_local,
+			str(cfg.get("ip", "")) == "" or str(cfg.get("key_path", "")) == ""))
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("vps.migration_note"),
 			12, Palette.DIM))
@@ -3535,6 +3685,35 @@ func _confirm_local_migration() -> void:
 	dialog.confirmed.connect(dialog.queue_free)
 	add_child(dialog)
 	dialog.popup_centered(Vector2i(700, 300))
+
+## Registra un pulsante del pannello VPS che deve spegnersi durante le azioni
+## a corsia unica. `base_disabled` è la ragione PROPRIA del pulsante (es.
+## nessuna VPS sorgente salvata) e sopravvive alla fine dell'azione.
+func _vps_gate(button: Button, base_disabled := false) -> Button:
+	button.set_meta("base_disabled", base_disabled)
+	button.disabled = base_disabled or SetupService.busy()
+	# Il tema terminale mantiene il colore pieno ANCHE da disabilitato (stessa
+	# trappola annotata sul pulsante del form feedback): senza questa riga un
+	# pulsante spento resta verde acceso e sembra solo rotto.
+	button.add_theme_color_override("font_disabled_color", Palette.MUTED)
+	_vps_action_buttons.append(button)
+	return button
+
+
+## Stato occupato applicato sul posto: pulsanti e riga-ragione, senza
+## ricostruire il pannello (i campi IP/chiave/utente vanno preservati).
+func _refresh_vps_busy() -> void:
+	var running := SetupService.busy()
+	for entry in _vps_action_buttons:
+		var button := entry as Button
+		if is_instance_valid(button):
+			button.disabled = bool(button.get_meta("base_disabled", false)) \
+					or running
+	if is_instance_valid(_vps_busy_hint):
+		_vps_busy_hint.text = (UIStrings.t("setup.busy_note")
+				% _busy_action_label()) if running else ""
+		_vps_busy_hint.visible = running
+
 
 func _vps_input(label_text: String, value: String, placeholder: String) -> LineEdit:
 	var row := HBoxContainer.new()
@@ -3679,6 +3858,10 @@ func _build_team() -> void:
 	primary.disabled = (not bool(SetupService.status.get("ready", false)) \
 			and not running) or SetupService.busy()
 	primary.add_theme_color_override("font_color", Palette.RED if running else Palette.GREEN)
+	# Spento perché lavora lui → giallo; spento per un'altra ragione → muto
+	# (il verde-da-disabilitato del tema qui sarebbe una bugia).
+	primary.add_theme_color_override("font_disabled_color",
+			Palette.YELLOW if team_busy else Palette.MUTED)
 	primary.pressed.connect(SetupService.stop_team if running else SetupService.start_team)
 	controls.add_child(primary)
 	var setup := Button.new()
@@ -3689,6 +3872,11 @@ func _build_team() -> void:
 	_setup_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	controls.add_child(_setup_message)
 	_restore_action_note()
+	# Pulsante spento perché gira un'ALTRA azione di setup (attivazione
+	# container, migrazione…): la ragione va detta. Quando l'azione è il team,
+	# parla già l'etichetta AVVIO/ARRESTO IN CORSO.
+	if SetupService.busy() and SetupService.current_action != "team":
+		_busy_hint(_content)
 	_content.add_child(HSeparator.new())
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]
