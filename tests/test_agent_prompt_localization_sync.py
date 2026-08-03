@@ -153,12 +153,6 @@ KNOWN_SKILL_LOCALIZATION_GAPS = {
     ('captain-diary', 'de'),
     ('captain-diary', 'pt'),
     ('captain-diary', 'hu'),
-    # Capitano — burst del primo avvio. Manca il baseline EN in 5 lingue (l'it c'e').
-    ('first-run-burst', 'es'),
-    ('first-run-burst', 'fr'),
-    ('first-run-burst', 'de'),
-    ('first-run-burst', 'pt'),
-    ('first-run-burst', 'hu'),
     # Assistente/Capitano/Mentor — opzioni di risposta nel gioco (l'it c'e').
     ('game-reply-options', 'es'),
     ('game-reply-options', 'fr'),
