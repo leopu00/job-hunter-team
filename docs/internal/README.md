@@ -73,6 +73,7 @@ Note datate su incidenti specifici, diagnosi, investigazioni e osservazioni.
 
 | Data | File | Topic |
 |---|---|---|
+| 2026-08-03 | [`2026-08-03-beta5-cold-enter-team-freeze.md`](postmortems/2026-08-03-beta5-cold-enter-team-freeze.md) | 🧊 Team fermo 5 giorni (-80% produzione) senza un allarme: un `Enter` a freddo non viene processato dalla TUI, la cura si autoesclude come `draft_user`, `stepcap` riporta `stalled: 0` per costruzione e il TTL kill+recreate maschera tutto |
 | 2026-07-27 | [`2026-07-27-tailwind-layer-vs-extension-css.md`](postmortems/2026-07-27-tailwind-layer-vs-extension-css.md) | 🧩 Header/liste invisibili su desktop: le utility Tailwind v4 in `@layer` perdono contro il `.hidden` non-layerizzato iniettato dalle estensioni — fix proposto, non applicato |
 | 2026-07-18 | [`2026-07-18-provider-vendor-enum-config-ready.md`](postmortems/2026-07-18-provider-vendor-enum-config-ready.md) | 🧨 Timebomb `config_ready`: `active_provider` scrive il nome-vendor, il watchdog conosceva i nomi-CLI → pipeline ferma ~44h in totale silenzio, seconda VPS armata e non detonata |
 | 2026-07-15 | [`2026-07-15-cloud-sync-413-freeze.md`](postmortems/2026-07-15-cloud-sync-413-freeze.md) | 🔌 Cloud-sync fermo ~14h: cursore del pull congelato → churn di `updated_at` → push oltre il limite del body (HTTP 413), guasto auto-alimentato che nessun watchdog ha visto |
