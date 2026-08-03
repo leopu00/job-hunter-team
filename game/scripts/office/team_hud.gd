@@ -59,9 +59,11 @@ func _process(delta: float) -> void:
 	if _accum < 5.0:
 		return
 	_accum = 0.0
-	# con lo snapshot VPS l'HUD dice i numeri veri; la barra budget è
-	# solo del mock (il consumo reale vive nella pagina Utilizzo)
-	if not BackendBus.positions.is_empty():
+	# Con un backend vero anche un database VUOTO e' un dato: 0 posizioni, non
+	# il fallback showroom 3/72. La simulazione resta ammessa soltanto quando
+	# il backend non e' live o le posizioni sono esplicitamente marcate demo.
+	# La barra budget è solo del mock (il consumo reale vive in Utilizzo).
+	if BackendBus.is_live() and not BackendBus.positions_are_demo:
 		var kpi: Dictionary = BackendBus.kpi_summary()
 		_positions.text = str(kpi["found_today"])
 		_score.text = str(kpi["avg_score"])
