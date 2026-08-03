@@ -1,0 +1,135 @@
+name: Windows dev smoke
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/windows-dev-smoke.yml"
+      - "web/**"
+      - "shared/**"
+      - "package.json"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/windows-dev-smoke.yml"
+      - "web/**"
+      - "shared/**"
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-dev-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  next-dev:
+    name: next dev — first GET on Windows
+    runs-on: windows-2022
+    timeout-minutes: 8
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: |
+            web/package-lock.json
+            shared/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      # La pagina iniziale importa lo schema condiviso, che risolve le proprie
+      # dipendenze dalla directory shared/ anche durante il dev server.
+      - name: Install shared dependencies
+        working-directory: shared
+        run: npm ci
+
+      # Aspettiamo solo che la porta accetti connessioni TCP, senza anticipare
+      # la richiesta HTTP: la GET qui sotto resta davvero la prima e forza la
+      # prima compilazione Turbopack, cioe il punto in cui #99 si bloccava.
+      - name: Start next dev and require HTTP 200 on the first GET
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $webDirectory = Join-Path $env:GITHUB_WORKSPACE "web"
+          $stdoutLog = Join-Path $env:RUNNER_TEMP "next-dev.stdout.log"
+          $stderrLog = Join-Path $env:RUNNER_TEMP "next-dev.stderr.log"
+          $server = $null
+
+          try {
+            $server = Start-Process `
+              -FilePath "npm.cmd" `
+              -ArgumentList @("run", "dev", "--", "--hostname", "127.0.0.1", "--port", "3000") `
+              -WorkingDirectory $webDirectory `
+              -RedirectStandardOutput $stdoutLog `
+              -RedirectStandardError $stderrLog `
+              -PassThru
+
+            $listening = $false
+            for ($attempt = 1; $attempt -le 90; $attempt++) {
+              if ($server.HasExited) {
+                throw "next dev exited before opening port 3000 (exit $($server.ExitCode))"
+              }
+
+              $socket = [System.Net.Sockets.TcpClient]::new()
+              try {
+                $connect = $socket.ConnectAsync("127.0.0.1", 3000)
+                if ($connect.Wait(1000) -and $socket.Connected) {
+                  $listening = $true
+                  Write-Host "Port 3000 ready after $attempt attempt(s)"
+                  break
+                }
+              } catch {
+                # Il server non ascolta ancora: ritenta entro il timeout.
+              } finally {
+                $socket.Dispose()
+              }
+
+              Start-Sleep -Seconds 1
+            }
+
+            if (-not $listening) {
+              throw "next dev did not open port 3000 within 90 seconds"
+            }
+
+            # curl non segue redirect per default: 200 deve essere la risposta
+            # diretta di GET /, non il risultato finale di una catena 3xx.
+            $status = & curl.exe `
+              --silent `
+              --show-error `
+              --output NUL `
+              --write-out "%{http_code}" `
+              --max-time 180 `
+              "http://127.0.0.1:3000/"
+            $curlExit = $LASTEXITCODE
+
+            if ($curlExit -ne 0 -or $status -ne "200") {
+              throw "first GET / failed (curl exit $curlExit, HTTP $status)"
+            }
+
+            Write-Host "First GET / returned HTTP 200 on Windows"
+          } finally {
+            if ($null -ne $server -and -not $server.HasExited) {
+              # npm.cmd avvia un processo Node figlio: /T chiude l'intero
+              # albero, evitando di lasciare il runner con next dev attivo.
+              & taskkill.exe /PID $server.Id /T /F 2>&1 | Out-Null
+              $LASTEXITCODE = 0
+              $server.WaitForExit(10000) | Out-Null
+            }
+
+            foreach ($log in @($stdoutLog, $stderrLog)) {
+              if (Test-Path $log) {
+                Write-Host "--- $([System.IO.Path]::GetFileName($log)) ---"
+                Get-Content $log
+              }
+            }
+          }
