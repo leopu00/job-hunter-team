@@ -3,18 +3,27 @@
 
 Stessa timeline e stessa voce di make_show.py (la traccia si riusa pari
 pari: durate identiche scena per scena), stesse didascalie a schermo;
-ogni scena è RICOMPOSTA per la colonna stretta, mai un ritaglio cieco:
+ogni scena è RICOMPOSTA per la colonna stretta, mai un ritaglio cieco.
 
-  - riprese del gioco: ritaglio 608x1080 che SEGUE il soggetto (replica del
-    percorso camera di game/tools/promo_director.gd) + BANDA "SIMULATION —
-    not real data" disegnata per intero in alto: nel montaggio precedente il
-    badge di gioco veniva mozzato dal ritaglio («SIMULATION — not real (»),
-    che è peggio di niente. La banda copre il badge tagliato e dichiara
-    la simulazione con il testo COMPLETO;
-  - chat: composito (header + colonna vignette a tutta larghezza + ritratto);
-  - web: riprese MOBILI vere (viewport 390x693 dsf2 di record_web.py):
-    il globo e lo swipe come li vede un telefono;
-  - scene testo reimpaginate in colonna.
+Tornata 03/08 — l'utente ha segnalato SEZIONI MALE INQUADRATE; riviste
+tutte le scene fotogramma per fotogramma e ritarate qui:
+  - meeting: il pan Ken Burns spingeva il Capitano FUORI dal quadro (a fine
+    scena restava solo il braccio); ora la colonna è ancorata a lui;
+  - roles/Scouts: l'illustrazione è tagliata a x=0 già nel PNG sorgente e
+    il ritaglio centrato mostrava la scrivania mozzata a mezz'aria; ora il
+    bordo tagliato coincide col bordo sinistro del quadro;
+  - office: la finestra non replica più la camera del gioco (che lasciava
+    la targa RESEARCH mozzata a metà parola e la vignetta fuori quadro):
+    x0 è un percorso diretto misurato sui frame nativi — panoramica piena,
+    sweep rapido, chiusura con vignetta e TUTTI e due gli scout in campo;
+  - dept: finestra misurata sui frame nativi: due vignette complete,
+    Scrittore intero e scritta APPLICATIONS sul pavimento per INTERO
+    (prima era mozzata a entrambi i lati);
+  - la banda opaca "SIMULATION — not real data" in alto resta: badge
+    sempre completo anche in colonna (soluzione già confermata).
+
+Chat: composito (header + vignette a tutta larghezza + ritratto).
+Web: riprese MOBILI vere (viewport 390x693 dsf2 di record_web.py).
 
 Output: jht-show-vertical-sober.mp4
 """
@@ -57,14 +66,6 @@ def layer():
 
 alpha_paste = HS.alpha_paste
 
-def agent_img(name, height):
-    ag = Image.open(f"{PUB}/{name}").convert("RGBA")
-    bb = ag.getchannel("A").getbbox()
-    if bb:
-        ag = ag.crop(bb)
-    r = height / ag.height
-    return ag.resize((int(ag.width * r), int(ag.height * r)), Image.LANCZOS)
-
 def pipe_scene(name, dur, frame_fn):
     seg = os.path.join(BUILD, f"{name}.mp4")
     n = int(round(dur * FPS))
@@ -81,43 +82,29 @@ def pipe_scene(name, dur, frame_fn):
         sys.exit(f"ffmpeg fallito su {name}")
     return seg
 
-# ── percorso camera del gioco (copia di promo_director.gd) ─────────────
+# ── finestra 9:16 sulle riprese del gioco ──────────────────────────────
+# Non si replica più la camera del gioco proiettando un soggetto fisso:
+# quel mapping, durante push e drift, lasciava testi mozzati e vignette
+# fuori quadro (segnalato dall'utente). x0 è ora un PERCORSO DIRETTO nel
+# tempo di ripresa, tarato misurando i frame nativi 1920x1080:
+#   - office: 0 in panoramica (targa RESEARCH e bottone menu interi),
+#     sweep rapido durante il push-in, poi 450 fisso: vignetta "Boards
+#     swept…" completa (x 548-1010) e tutti e due gli scout in campo;
+#   - dept: da 265 a 242 (il girato zooma piano): vignette complete,
+#     Scrittore intero, APPLICATIONS sul pavimento tutta leggibile.
 CAP_W, CAP_H = 1920, 1080
 CROP_W = 608
 
-OFF_HOLD, OFF_PUSH, OFF_DRIFT = 2.6, 3.6, 6.8
-OFF_WIDE = (1700.0, 950.0, 1920.0 / 3400.0)
-OFF_CLOSE = (660.0, 528.0, 1.95)
-OFF_DRIFT_TO = (640.0, 520.0, 2.02)
-OFFICE_SUBJECT_X = 555.0
+def office_x0(t):
+    # lo sweep chiude a t=5.2, PRIMA che la vignetta compaia (t≈5.4):
+    # così il fumetto nasce già tutto dentro il quadro.
+    if t <= 3.0:
+        return 0.0
+    return 450.0 * ease_io((t - 3.0) / 2.2)
 
-DEPT_SECONDS = 9.0
-DEPT_FROM = (700.0, 1650.0, 1.80)
-DEPT_TO = (715.0, 1660.0, 1.92)
-# 500, non il centro dei due Scrittori (~470): le vignette dei fumetti si
-# appoggiano a destra delle scrivanie e a 470 la seconda usciva dal ritaglio
-# tagliata a metà parola (misurato sul frame nativo 103: vignetta fino a
-# x≈865 col crop che chiudeva a 832).
-DEPT_SUBJECT_X = 500.0
-
-def _lerp3(a, b, p):
-    return tuple(a[k] + (b[k] - a[k]) * p for k in range(3))
-
-def office_cam(t):
-    if t <= OFF_HOLD:
-        return OFF_WIDE
-    if t <= OFF_HOLD + OFF_PUSH:
-        return _lerp3(OFF_WIDE, OFF_CLOSE, ease_io((t - OFF_HOLD) / OFF_PUSH))
-    return _lerp3(OFF_CLOSE, OFF_DRIFT_TO,
-                  ease_io((t - OFF_HOLD - OFF_PUSH) / OFF_DRIFT))
-
-def dept_cam(t):
-    return _lerp3(DEPT_FROM, DEPT_TO, ease_io(t / DEPT_SECONDS))
-
-def subject_crop_x(cam, subject_x):
-    cx, _cy, z = cam
-    sx = (subject_x - cx) * z + CAP_W / 2.0
-    return max(0.0, min(CAP_W - CROP_W, sx - CROP_W / 2.0))
+def dept_x0(t):
+    p = max(0.0, min(1.0, (t - 3.33) / 4.0))
+    return 265.0 - 23.0 * p
 
 # ── didascalie (lower third, colonna) ──────────────────────────────────
 def caption_layer(lines, y_bottom=1225, size=22):
@@ -134,6 +121,23 @@ def caption_layer(lines, y_bottom=1225, size=22):
                         fill=(16, 18, 30, 235))
     for i, s in enumerate(lines):
         d.text((W / 2, y0 + pad_y + size / 2 + i * lh + 2), s, font=f_,
+               fill=(225, 228, 242), anchor="mm")
+    return ly
+
+def caption_band(lines, size=22):
+    """Variante a BANDA piena al piede del quadro (come la banda SIMULATION
+    in testa): serve dove il ritaglio 9:16 lascia sul fondo testo di scena
+    non componibile — nella scena dept la scritta APPLICATIONS sul pavimento
+    spuntava mozzata ai lati della pillola. La banda opaca la copre tutta."""
+    ly = layer()
+    d = ImageDraw.Draw(ly)
+    f_ = font("Medium", size)
+    lh = int(size * 1.5)
+    pad_y = 16
+    bh = lh * len(lines) + 2 * pad_y - (lh - size)
+    d.rectangle([0, H - bh, W, H], fill=(16, 18, 30, 255))
+    for i, s in enumerate(lines):
+        d.text((W / 2, H - bh + pad_y + size / 2 + i * lh + 2), s, font=f_,
                fill=(225, 228, 242), anchor="mm")
     return ly
 
@@ -157,19 +161,22 @@ def sim_band():
 
 SIM_BAND = sim_band()
 
-def game_scene_vert(name, clip, skip, dur, cam_fn, subject_x, caption=None):
+def game_scene_vert(name, clip, skip, dur, x0_fn, caption=None, band=False):
     files = sorted(f for f in os.listdir(os.path.join(CAP, clip))
                    if f.endswith(".png"))
     n = int(dur * FPS)
     if skip + n > len(files):
         sys.exit(f"clip '{clip}': servono {skip + n} frame, trovati {len(files)}")
     cdir = os.path.join(CAP, clip)
-    cap_ly = caption_layer(caption) if caption else None
+    if caption:
+        cap_ly = caption_band(caption) if band else caption_layer(caption)
+    else:
+        cap_ly = None
     def frame(t):
         i = int(t * FPS)
         t_cap = (skip + i) / FPS
         src = Image.open(os.path.join(cdir, files[skip + i])).convert("RGB")
-        x0 = subject_crop_x(cam_fn(t_cap), subject_x)
+        x0 = max(0.0, min(CAP_W - CROP_W, x0_fn(t_cap)))
         fr = src.crop((int(x0), 0, int(x0) + CROP_W, CAP_H))
         fr = fr.resize((W, H), Image.LANCZOS).convert("RGBA")
         fr.alpha_composite(SIM_BAND, (0, 0))
@@ -227,10 +234,14 @@ def sc_meeting(dur):
                         y_bottom=1180)
     def frame(t):
         p = ease_io(t / dur)
-        z = 1.0 + 0.12 * p
+        # Colonna ancorata al CAPITANO (x≈450-760 nell'illustrazione): il
+        # vecchio pan cx 0.50→0.55 lo spingeva fuori quadro — a fine scena
+        # restava solo il braccio (segnalato dall'utente). Zoom più sobrio
+        # (1.05) e deriva minima: lui e la mano sulla lavagna restano dentro.
+        z = 1.0 + 0.05 * p
         ch = src.height / z
         cw = ch * W / H
-        cx = (0.50 + 0.05 * p) * src.width
+        cx = 560.0 + 15.0 * p
         cy = 0.46 * src.height
         px0 = max(0, min(src.width - cw, cx - cw / 2))
         py0 = max(0, min(src.height - ch, cy - ch / 2))
@@ -270,9 +281,32 @@ def sc_roles(dur):
             ("agents-scouts.png", "The Scouts", "sweep the job boards"),
             ("agents-analyst.png", "The Analysts", "read every posting"),
             ("agents-scorer.png", "The Scorers", "rate the fit — 0 to 100"))):
-        ag = agent_img(img, 560)
-        lyr_ag = layer()
-        lyr_ag.alpha_composite(ag, ((W - ag.width) // 2, 150))
+        # Ritratti DENTRO la colonna: prima si scalava solo sull'altezza e
+        # Analysts/Scorers sbordavano; peggio, il PNG degli Scouts è già
+        # tagliato a x=0 nel sorgente e il ritaglio centrato mostrava la
+        # scrivania mozzata a mezz'aria sul fondo a griglia (segnalato).
+        # Ora: Scouts a filo del bordo sinistro (il taglio del disegno
+        # coincide col bordo del quadro), gli altri adattati a 720x560.
+        if img == "agents-scouts.png":
+            ag = Image.open(f"{PUB}/{img}").convert("RGBA")
+            bb = ag.getchannel("A").getbbox()
+            if bb:
+                ag = ag.crop(bb)
+            r = W / ag.width
+            ag = ag.resize((W, int(ag.height * r)), Image.LANCZOS)
+            lyr_ag = layer()
+            lyr_ag.alpha_composite(ag, (0, 150 + (610 - ag.height) // 2))
+        else:
+            ag = Image.open(f"{PUB}/{img}").convert("RGBA")
+            bb = ag.getchannel("A").getbbox()
+            if bb:
+                ag = ag.crop(bb)
+            r = min((W - 20) / ag.width, 560 / ag.height)
+            ag = ag.resize((int(ag.width * r), int(ag.height * r)),
+                           Image.LANCZOS)
+            lyr_ag = layer()
+            lyr_ag.alpha_composite(ag, ((W - ag.width) // 2,
+                                        150 + (560 - ag.height) // 2))
         lyr_txt = layer(); d = ImageDraw.Draw(lyr_txt)
         d.text((W//2, 800), role, font=font("ExtraBold", 46), fill=TITLE, anchor="mm")
         d.text((W//2, 852), duty, font=font("Regular", 24), fill=MUTED, anchor="mm")
@@ -436,14 +470,18 @@ def build_video():
     segs["results"] = pipe_scene("results", DURS[9], sc_results(DURS[9]))
     segs["box"] = pipe_scene("box", DURS[10], sc_box(DURS[10]))
     segs["cta"] = pipe_scene("cta", DURS[11], sc_cta(DURS[11]))
-    print("riprese del gioco (ritaglio a seguire + banda SIMULATION)…")
-    segs["dept"] = game_scene_vert("dept", "dept", 40, DURS[4],
-                                   dept_cam, DEPT_SUBJECT_X,
+    print("riprese del gioco (finestra tarata sui nativi + banda SIMULATION)…")
+    # stessi skip di make_show.py: dept a f100 (due vignette subito),
+    # chat a f115 (scambio già avviato, chiude sull'ultima risposta).
+    # band=True: la didascalia dept è una banda piena al piede che copre la
+    # scritta APPLICATIONS sul pavimento, altrimenti mozzata ai lati.
+    segs["dept"] = game_scene_vert("dept", "dept", 100, DURS[4], dept_x0,
                                    caption=["Writers tailor your CV",
-                                            "Critics review every draft"])
+                                            "Critics review every draft"],
+                                   band=True)
     segs["office"] = game_scene_vert("office", "office", 40, DURS[5],
-                                     office_cam, OFFICE_SUBJECT_X)
-    segs["chat"] = sc_chat("chat", 70, DURS[6])
+                                     office_x0)
+    segs["chat"] = sc_chat("chat", 115, DURS[6])
     print("riprese web mobili…")
     md = HS.ffprobe_dur(f"{WEB}/web_map_m.webm")
     t0, t1 = 5.0, min(15.5, md - 0.2)
