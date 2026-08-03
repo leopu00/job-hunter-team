@@ -484,6 +484,51 @@ static func _run(path: String, args: PackedStringArray) -> Dictionary:
 	return {"code": code, "out": "\n".join(PackedStringArray(output)).strip_edges()}
 
 
+## Cerca `exe` fra le cartelle del PATH, come farebbe la shell. Ritorna il
+## percorso pieno, o "" se non c'è.
+##
+## Perché guardare il filesystem: su POSIX OS.execute passa dalla shell, e per
+## un comando inesistente la shell esce 127 — MAI il -1 che il probe assumeva
+## (misurato su macOS, Godot 4.7: code=127, stderr "sh: docker: command not
+## found"). Ma 127 da solo non basta a dichiarare "assente": è lo stesso numero
+## che restituirebbe un docker PRESENTE che esce 127, e il testo d'errore della
+## shell cambia con la shell e col locale — non è un contratto. L'esistenza del
+## file nel PATH invece distingue i due casi senza interpretare né numeri né
+## messaggi: è il criterio meno ambiguo che Godot mette a disposizione.
+static func _which(exe: String) -> String:
+	var windows := OS.get_name() == "Windows"
+	# Su Windows il comando è un file con estensione (docker.exe); .cmd/.bat
+	# coprono gli shim. Su POSIX il nome è nudo.
+	var names := PackedStringArray([exe + ".exe", exe + ".cmd", exe + ".bat"]) \
+			if windows else PackedStringArray([exe])
+	for dir in OS.get_environment("PATH").split(";" if windows else ":", false):
+		for name in names:
+			var candidate := String(dir).path_join(String(name))
+			if not FileAccess.file_exists(candidate):
+				continue
+			# Su POSIX un file nel PATH senza bit di esecuzione non è un
+			# comando: la shell risponderebbe "permission denied" (126).
+			if windows or (FileAccess.get_unix_permissions(candidate)
+					& (FileAccess.UNIX_EXECUTE_OWNER | FileAccess.UNIX_EXECUTE_GROUP
+					| FileAccess.UNIX_EXECUTE_OTHER)) != 0:
+				return candidate
+	return ""
+
+
+## L'eseguibile esiste su questa macchina? Due prove, in quest'ordine:
+## 1) il file nel PATH (_which) — prova diretta, indipendente dai codici;
+## 2) in subordine, la prova comportamentale: `probe_code` è l'esito di un
+##    lancio vero. 0 o un codice "suo" dicono che QUALCOSA ha risposto anche
+##    se il PATH scan lo mancasse (shim esotici) — è la rete che impedisce a
+##    questo cambio di regredire il ramo Windows, dove -1 = lancio fallito
+##    funzionava già. Restano esclusi i due codici che la shell POSIX usa per
+##    conto proprio: 127 (comando non trovato) e 126 (trovato ma non
+##    eseguibile) — con un binario davvero presente li scavalca la prova 1.
+static func _exec_present(exe: String, probe_code: int) -> bool:
+	return _which(exe) != "" \
+			or (probe_code != -1 and probe_code != 126 and probe_code != 127)
+
+
 static func runtime_image() -> String:
 	var custom := OS.get_environment("JHT_IMAGE").strip_edges()
 	return custom if custom != "" else DEFAULT_RUNTIME_IMAGE
@@ -508,9 +553,16 @@ static func _probe_host(home: String) -> Dictionary:
 		"team_running": false,
 		"image_id": "", "container_image_id": "", "runtime_stale": false,
 	}
+	# Presenza e stato del motore sono DUE domande, e le risponde chi le sa:
+	# la presenza il filesystem (_exec_present), lo stato del daemon il codice
+	# d'uscita di `docker version` (0 = attivo, altro = installato ma spento).
+	# Il vecchio `code != -1` valeva solo su Windows: su POSIX un docker
+	# assente esce 127 via shell, mai -1, quindi docker_available restava true
+	# e INSTALLA DOCKER — l'unica strada per chi arriva senza motore — non
+	# compariva mai su macOS e Linux.
 	var version := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Client.Version}}|{{.Server.Version}}"] ))
-	d["docker_available"] = version["code"] != -1
+	d["docker_available"] = _exec_present("docker", int(version["code"]))
 	d["docker_running"] = version["code"] == 0
 	if d["docker_running"]:
 		var inspect := _run("docker", PackedStringArray(["inspect", "jht",
@@ -1280,7 +1332,12 @@ static func _launch_docker_runtime() -> Dictionary:
 			OS.create_process(DOCKER_DESKTOP_WIN, PackedStringArray())
 			return {"ok": true, "message": "Docker Desktop avviato: attendo il motore…"}
 		"macOS":
-			if _run("colima", PackedStringArray(["version"] ))["code"] != -1:
+			# Stesso criterio del probe: su POSIX un comando assente esce 127,
+			# mai -1 — col vecchio confronto questo ramo partiva anche senza
+			# colima, dichiarava "Colima avviato" a vuoto e non ripiegava mai
+			# su Docker Desktop.
+			if _exec_present("colima",
+					int(_run("colima", PackedStringArray(["version"]))["code"])):
 				OS.create_process("colima", PackedStringArray(["start"]))
 				return {"ok": true, "message": "Colima avviato: attendo il motore…"}
 			if DirAccess.dir_exists_absolute("/Applications/Docker.app"):

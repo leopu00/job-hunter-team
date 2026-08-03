@@ -90,6 +90,13 @@ setup_progress|script|gate|any|-|tools/setup_progress_selftest.gd|-
 # livello). Su POSIX prova anche il ripiego con un finto docker che rifiuta
 # il flag come i compose meno recenti.
 pull_stream|script|gate|any|-|tools/pull_stream_selftest.gd|-
+# Il rilevamento Docker del probe: assente / spento / attivo sono tre schermate
+# (installa · avvia il motore · procedi). Su POSIX un binario assente esce 127
+# via shell, mai -1: senza questa riga il collasso "assente ⇒ presente" — cioè
+# INSTALLA DOCKER mai raggiungibile su macOS e Linux — passava in verde. I
+# finti docker nel PATH girano solo su POSIX; su Windows restano le sezioni
+# pure (_which e la rete comportamentale sui codici).
+docker_probe|script|gate|any|-|tools/docker_probe_selftest.gd|-
 # I cognomi degli agenti. Sono identita', non decorazione: se la mappa
 # ruolo+numero smettesse di essere una funzione pura, "scout-2" cambierebbe
 # nome fra un riavvio e l'altro senza che nulla si rompa.
