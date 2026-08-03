@@ -5,3 +5,6 @@ webrec/
 audio/
 build/
 build-vert/
+build-play/
+build-play-vert/
+__pycache__/
