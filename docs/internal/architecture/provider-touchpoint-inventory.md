@@ -34,7 +34,8 @@ agent role.
 The executable seam is therefore:
 
 ```text
-Scorer launch → local OpenAI-compatible adapter → validated JSON
+Scorer launch → canonical liveness probe → local OpenAI-compatible adapter
+              → validated base JSON → canonical latest-feedback lookup
               → shadow output (default)
               → existing db_insert/db_update skills (experimental write mode)
 ```
@@ -49,9 +50,12 @@ All other roles continue through the normal provider CLI launch path.
 - Case-study JSON files contain historical score distributions, not the same
   positions independently rescored for the same candidate. They are calibration
   context, not a quality oracle.
-- The interactive Scorer also verifies job liveness and applies feedback-derived
-  multipliers. The spike does neither yet, so shadow is the default and write
-  mode is labeled experimental.
+- Liveness and feedback parity reuse `recheck_liveness.py` and
+  `feedback_query.py`; the adapter does not maintain competing URL markers or
+  a second feedback reader. An unverifiable URL or malformed feedback blocks
+  score/status persistence, while the feedback skill's canonical no-signal
+  payload stays neutral. Shadow remains the default because deterministic seam
+  parity still says nothing about local-model quality.
 - Local inference removes the LLM request from the cloud only for this role. It
   does not remove network use elsewhere in JHT.
 
