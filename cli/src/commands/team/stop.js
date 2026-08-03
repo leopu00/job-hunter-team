@@ -12,10 +12,14 @@ import { execArgvInContainer } from '../../utils/container-proxy.js';
 // `/api/team/stop-all` (rimossa il 2026-07-25): ASSISTENTE va preservato.
 const KEEP_ALIVE_ON_STOP_ALL = new Set(['ASSISTENTE']);
 
+// Le guardie usano `process.exitCode` + `return`: stesso codice osservato (1),
+// ma stderr fa in tempo a svuotarsi prima che il processo termini.
+// Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
 export function stopAction(agentArg, options = {}) {
   if (!usingContainer() && !tmuxAvailable()) {
     console.error(c.red('Errore: tmux non trovato sull\'host e container jht non attivo.'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const sessions = getActiveSessions();
@@ -34,7 +38,8 @@ export function stopAction(agentArg, options = {}) {
     if (!parsed) {
       console.error(c.red(`Ruolo "${agentArg}" non riconosciuto.`));
       console.error('Ruoli validi: ' + AGENTS.map((a) => a.role).join(', '));
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
     const sName = sessionName(parsed.role, parsed.instance);
     if (!isSessionActive(sName)) {

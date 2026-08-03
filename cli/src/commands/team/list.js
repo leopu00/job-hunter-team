@@ -35,10 +35,14 @@ export function listAction() {
 
 export function statusAction() {
   // Se il container gira, tmux sta dentro lui — non serve averlo sull'host.
+  // `process.exitCode` + `return` invece di `process.exit()`: l'exit code resta
+  // 1, ma le due righe di stderr — fra cui quella che dice come rimediare —
+  // fanno in tempo a uscire. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
   if (!usingContainer() && !tmuxAvailable()) {
     console.error(c.red('Errore: tmux non trovato sull\'host e container jht non attivo.'));
     console.error(c.dim('  Avvia il container con: docker compose up -d jht'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const sessions = getActiveSessions();
