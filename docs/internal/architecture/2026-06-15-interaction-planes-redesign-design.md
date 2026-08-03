@@ -1,6 +1,6 @@
 # Interaction Planes — Redesign (2026-06-15)
 
-> **Design / decision doc.** Sposta l'**interazione** col team fuori dal web cloud, sul **desktop**. Il web diventa una **dashboard di sola lettura**. **Telegram** torna **opzionale**. La **VPS** si interagisce *come fosse locale* via **tunnel SSH**.
+> **Design / decision doc.** Sposta l'**interazione** col team fuori dal web cloud, sul **desktop**. Il web diventa una **dashboard di sola lettura**, con una sola capacità di sicurezza stop-only per le emergenze da telefono. **Telegram** torna **opzionale**. La **VPS** si interagisce *come fosse locale* via **tunnel SSH**.
 >
 > **Status: PROPOSTA** — ordina la visione utente del 2026-06-15 (post beta-test). Da validare prima di implementare. Ribalta una fetta del refactor cloud "desired-state" shippato fine maggio: **leggere § "Cosa si ritira" con attenzione**.
 >
@@ -30,6 +30,45 @@ Da qui due piani netti:
 - **Telegram** → canale async **opzionale** per quando sei lontano dal desktop (consigliato, non obbligatorio). In alternativa: e-mail.
 
 Conseguenza diretta (il motivo del cambio): si **smette di costruire** il "web cloud interattivo" — niente più chat/comandi/sincronizzazione-live del team via Vercel→Supabase→VPS. È il "lavoro inutile" che il beta-test ha rivelato.
+
+## Mobile: PWA di stato + STOP, Telegram-first per il resto (decisione 2026-08-03)
+
+M2 non riapre il command bus del browser. Sul telefono servono due tempi diversi:
+
+- **guardare e reagire a un'emergenza:** la PWA/dashboard è il percorso più affidabile, perché è già autenticata, non richiede di configurare Telegram e rende evidente lo stato osservato;
+- **conversare e dare istruzioni asincrone:** Telegram resta il percorso mobile-first consigliato, con il cockpit desktop/tunnel come superficie completa.
+
+L'inventario delle route necessarie da mobile è quindi deliberatamente corto:
+
+| Route | Metodo | Capacità mobile | Scrittura |
+|---|---|---|---|
+| `/team` | GET | attività, stato desired/observed, heartbeat e bacheca | no |
+| `/api/team-state` | GET | stato aggiornabile su richiesta | no |
+| `/api/team-state/emergency-stop` | POST | porta esclusivamente `should_run` a `false` | sì, stop-only |
+| route dati (`/dashboard`, `/positions`, `/map`, `/team/log`) | GET | dashboard consultabile | no |
+| Telegram | canale async | conversazione e istruzioni lontano dal desktop | secondo il contratto dei bot |
+
+Non sono route mobile: `/api/team/command`, le route shell degli agenti, start,
+restart, configurazione, terminale e upload arbitrario. Restano nel cockpit
+desktop, locale o sopra il tunnel SSH.
+
+### Contratto dello STOP d'emergenza
+
+La route richiede la sessione Supabase del browser, il CSRF same-origin del
+middleware e un bucket dedicato di 3 richieste/minuto per utente. Accetta solo
+il body esatto `{"confirm":"STOP"}` e fa un upsert idempotente di
+`team_state.should_run=false` più un nuovo `emergency_stop_requested_at`. Non
+accetta action, target, argomenti o testo da inoltrare. Il device chiude il
+rendezvous con `emergency_stop_completed_at`, così un secondo stop dopo una
+ripartenza locale è un evento nuovo e non resta confuso col primo.
+
+Il daemon associato legge la stessa riga già usata per i rendezvous sync/chat.
+Solo `should_run === false` con una richiesta valida non ancora completata
+esegue il comando hard-coded `jht team stop`; nessun dato web entra nella shell. Con
+Realtime la richiesta arriva come evento, con il poll esistente come
+paracadute. Lo start resta volutamente impossibile dal cloud: uno STOP rubato è
+recuperabile dal proprietario, uno START rubato consumerebbe budget e
+riattiverebbe processi senza presenza fisica.
 
 ---
 

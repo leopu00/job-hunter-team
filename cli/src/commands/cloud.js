@@ -2367,8 +2367,16 @@ async function handleDirectiveSync(options = {}) {
 async function readRendezvousState(config, { silent = true } = {}) {
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const reader = getDirectReader(config);
-  const withChat = ['sync_requested_at', 'sync_completed_at', 'chat_requested_at', 'chat_delivered_at'];
-  const legacy = ['sync_requested_at', 'sync_completed_at'];
+  const stopState = [
+    'should_run', 'is_running',
+    'emergency_stop_requested_at', 'emergency_stop_completed_at',
+  ];
+  const withChat = [
+    'sync_requested_at', 'sync_completed_at',
+    'chat_requested_at', 'chat_delivered_at',
+    ...stopState,
+  ];
+  const legacy = ['sync_requested_at', 'sync_completed_at', ...stopState];
 
   if (reader) {
     try {
@@ -3008,8 +3016,18 @@ async function handleDaemon(options) {
         console.error(pc.yellow(`  daemon chat-sync error: ${err.message}`));
       }
 
+      // [M2-MOBILE-STOP] La sola convergenza di controllo ammessa dal cloud:
+      // desired=false + rendezvous pendente → comando fisso `jht team stop`. Riusa
+      // la riga già letta per sync/chat: nessuna invocation o query extra.
+      try {
+        const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
+        await reconcileEmergencyStop(config, rendezvousState);
+      } catch (err) {
+        console.error(pc.yellow(`  daemon emergency-stop error: ${err.message}`));
+      }
+
       // ── Heartbeat "VPS online": ogni intervalSec ── (reconcileOnce solo-heartbeat;
-      // lo start/stop del team passa dal desktop, non dal cloud).
+      // start/restart restano desktop; lo stop cloud è la lane stretta sopra).
       if (doHeavy) {
         try {
           const prevRc = process.exitCode;
@@ -3092,6 +3110,19 @@ async function runRealtimeLoop({ config, isRunning }) {
   };
   const chatLocalSec = Math.max(1, parseInt(process.env.JHT_CHAT_LOCAL_SEC || '5', 10) || 5);
   const chatTimer = setInterval(() => { void runChatSync('local', null); }, chatLocalSec * 1000);
+  let emergencyStopping = false;
+  const runEmergencyStop = async (tag, state) => {
+    if (emergencyStopping) return;
+    emergencyStopping = true;
+    try {
+      const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
+      await reconcileEmergencyStop(config, state);
+    } catch (e) {
+      console.error(pc.yellow(`  ${tag} emergency-stop error: ${e.message}`));
+    } finally {
+      emergencyStopping = false;
+    }
+  };
 
   let rt = null;
   try {
@@ -3103,6 +3134,8 @@ async function runRealtimeLoop({ config, isRunning }) {
       void runSync('realtime');
       // Stessa riga, stesso evento: `chat_requested_at` viaggia qui dentro.
       void runChatSync('realtime', payload?.new ?? null);
+      // E lo STOP mobile viaggia nello stesso evento, senza un altro poller.
+      void runEmergencyStop('realtime', payload?.new ?? null);
     });
 
     // ── Tappa 3: ticket → Realtime ── cambio su position_tickets → ticket-sync.
@@ -3152,7 +3185,9 @@ async function runRealtimeLoop({ config, isRunning }) {
       await runTicketSync('parachute');
       // La chat ha già il suo battito locale corto: qui serve solo a
       // recuperare il PULL dal cloud se l'evento team_state si è perso.
-      await runChatSync('parachute', await readRendezvousState(config));
+      const state = await readRendezvousState(config);
+      await runChatSync('parachute', state);
+      await runEmergencyStop('parachute', state);
     }
     // Desired-state ~ogni 5min (poll lento, niente Realtime).
     if (tick % everyDesired === 0) {
