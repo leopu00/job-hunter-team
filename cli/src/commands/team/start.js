@@ -156,8 +156,12 @@ async function startActionContainer(agentArg, options = {}) {
       console.log(c.dim(`  ℹ pull profilo non applicato: ${lastLine}`));
     }
 
+    // Il delay di ogni voce serve a far stabilizzare la voce precedente. In
+    // un retry idempotente, se la precedente era già attiva, ripetere tutti i
+    // 41 secondi di attesa non protegge nulla e fa sembrare morto il click.
+    let previousStarted = false;
     for (const item of bootstrap) {
-      if (item.preDelayMs && item.preDelayMs > 0) {
+      if (previousStarted && item.preDelayMs && item.preDelayMs > 0) {
         console.log(c.dim(`  ⏳ Attendo ${Math.round(item.preDelayMs / 1000)}s prima di ${item.session}...`));
         await sleep(item.preDelayMs);
       }
@@ -165,6 +169,7 @@ async function startActionContainer(agentArg, options = {}) {
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
       else errored++;
+      previousStarted = result === 'started';
     }
   } else {
     const parsed = parseAgentArg(agentArg);

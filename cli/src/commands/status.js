@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { JHT_HOME } from '../jht-paths.js';
+import { AGENTS, isAgentSession } from './team/agents.js';
 
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_FILE = join(CONFIG_DIR, 'jht.config.json');
@@ -58,7 +59,12 @@ async function handleStatus() {
 
   // Tmux sessions
   const sessions = getTmuxSessions();
-  const jhtSessions = sessions.filter(s => s.startsWith('JHT-') || s.startsWith('lab-'));
+  // I container moderni usano CAPITANO / SCOUT-1 / ASSISTENTE, mentre il
+  // vecchio path host antepone JHT-. Il filtro precedente riconosceva solo il
+  // secondo formato e mostrava "0" dentro un team perfettamente operativo.
+  const jhtSessions = sessions.filter(s =>
+    s.startsWith('lab-') || AGENTS.some(agent => isAgentSession(s, agent))
+  );
   console.log(`\n  Sessioni tmux JHT: ${jhtSessions.length}`);
   for (const s of jhtSessions) {
     console.log(`    - ${s}`);

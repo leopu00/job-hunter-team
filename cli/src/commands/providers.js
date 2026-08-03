@@ -498,6 +498,30 @@ function detectInstalledVersion(target) {
   return versionFromBinary(target) ?? versionFromDisk(target);
 }
 
+/**
+ * Per i provider npm, chiedere la versione pubblicata costa molto meno di un
+ * `npm install -g` no-op e non riscrive migliaia di file nel volume Docker.
+ * Se il registry non risponde o restituisce un formato inatteso si torna al
+ * percorso fail-safe storico: tentare l'installazione vera.
+ */
+function versionFromNpmRegistry(target) {
+  const pkgName = UPDATE_NPM_PKG[target];
+  if (!pkgName) return null;
+  const timeout = (Number(process.env.JHT_PROVIDER_VERSION_CHECK_TIMEOUT_SEC) || 15) * 1000;
+  try {
+    const r = spawnSync('npm', ['view', `${pkgName}@latest`, 'version'], {
+      encoding: 'utf-8',
+      timeout,
+      env: { ...process.env, ...NPM_PREFIX_ENV },
+    });
+    if (r.status !== 0 || r.error) return null;
+    const m = SEMVER_RE.exec(`${r.stdout || ''}\n${r.stderr || ''}`);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Provider attivo + modello dichiarato in jht.config.json. */
 async function readActiveProvider() {
   if (!(await fileExists(CONFIG_PATH))) return { id: null, model: null };
@@ -568,7 +592,16 @@ async function autoUpdateOnce() {
   const before = detectInstalledVersion(target);
   console.log(`${AU} provider attivo '${active.id}' → aggiorno SOLO ${target} (installata: ${before ?? 'sconosciuta'})`);
 
-  const res = await handleUpdateInContainer([target]);
+  const published = versionFromNpmRegistry(target);
+  const alreadyLatest = !!before && !!published && before === published;
+  let res;
+  if (alreadyLatest) {
+    console.log(`${AU} ${target}: registry ${published}, installazione saltata (versione gia' corrente)`);
+    res = { ok: true, failed: [], reason: '', skipped: true };
+  } else {
+    if (published) console.log(`${AU} ${target}: registry ${published}, installazione necessaria`);
+    res = await handleUpdateInContainer([target]);
+  }
   const after = detectInstalledVersion(target);
 
   // Criterio 2: il log dice SEMPRE prima → dopo, e dice esplicitamente quando
