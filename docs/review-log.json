@@ -1344,6 +1344,51 @@
       "path": "game/assets/_attic/README.md",
       "description": "Perche' questi asset sono archiviati invece che cancellati, e come rientrerebbero",
       "last_review": null
+    },
+    {
+      "path": "agents/_skills/recheck-batch/SKILL.md",
+      "description": "Ricontrollo a lotti delle posizioni: quali sono dovute e in che ordine",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/team-modes/SKILL.md",
+      "description": "Le modalita' operative del team e cosa cambia in ciascuna",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle-ack/SKILL.md",
+      "description": "L'agente firma la propria sveglia: un risveglio non firmato e' prova di stallo",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle-set/SKILL.md",
+      "description": "L'agente registra la pausa nel motore esterno, non nel proprio processo",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-08-03-regia-video-campagna.md",
+      "description": "Trattamento della campagna video, costruito attorno al gioco",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-08-03-beta5-cold-enter-team-freeze.md",
+      "description": "beta5: un Enter a freddo congela il team — analisi e rimedio",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-30-db-audit-observations.md",
+      "description": "Osservazioni dall'audit del DB: cosa e' emerso e cosa resta da decidere",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md",
+      "description": "[MODE-INJECTION-HOURLY-PROMPT]: la modalita' operativa nel messaggio orario del Capitano",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-30-ticket-throttle-engine-external.md",
+      "description": "[THROTTLE-ENGINE-EXTERNAL]: il throttle esce dal dominio degli agenti",
+      "last_review": null
     }
   ]
 }
