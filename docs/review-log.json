@@ -1399,6 +1399,16 @@
       "path": "docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md",
       "description": "[PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi",
       "last_review": null
+    },
+    {
+      "path": "docs/guides/ADDING-A-PROVIDER.md",
+      "description": "Guida contributor: gate ADR-0002, touchpoint runtime/provider, evidenza live richiesta e check anti-drift",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md",
+      "description": "Missione M4: protocollo riproducibile per varianza Kimi 88→92 e confronto parametrico PAYG/subscription, con gap dati live",
+      "last_review": null
     }
   ]
 }
