@@ -454,13 +454,18 @@ def insert_score(args):
 def insert_application(args):
     conn = get_db()
     ensure_schema(conn)
+    written_by = (
+        args.written_by
+        or os.environ.get('JHT_AGENT_NAME')
+        or os.environ.get('JHT_AGENT_ID', '')
+    ).strip() or None
     cur = conn.execute("""
         INSERT OR REPLACE INTO applications (position_id, cv_path, cl_path,
                                               cv_pdf_path, cl_pdf_path,
                                               written_by, written_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (args.position_id, args.cv_path, args.cl_path,
-          args.cv_pdf_path, args.cl_pdf_path, args.written_by,
+          args.cv_pdf_path, args.cl_pdf_path, written_by,
           args.written_at))
     conn.commit()
     print(f"Application inserita per posizione {args.position_id}")
