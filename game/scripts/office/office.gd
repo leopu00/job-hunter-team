@@ -1283,8 +1283,13 @@ func _spawn_showroom() -> void:
 
 func _on_setup_status_changed(status: Dictionary) -> void:
 	var authenticated := bool(status.get("provider_authenticated", false))
+	var team_running := bool(status.get("team_running", false))
 	for agent in agents:
 		if agent.uid == "":
+			# Gli NPC senza uid sono guide di showroom, non processi LLM. Prima
+			# dell'avvio esplicito non possono dichiararsi "AL LAVORO": restano
+			# presenti e cliccabili per presentare i reparti, ma IN ATTESA.
+			agent.set_backend_status("working" if team_running else "idle")
 			agent.set_story_marker(not authenticated,
 					bool(_story_seen.get(agent.slug, false)))
 	if _tour_enabled and TourGuide.active() and not authenticated:

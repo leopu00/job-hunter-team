@@ -34,7 +34,11 @@ func _ready() -> void:
 	# completi e porta alla checklist senza nascondere il mondo di gioco.
 	_setup_cta = Button.new()
 	_setup_cta.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_setup_cta.position = Vector2(-190, 18)
+	# Il badge di verità (SIMULAZIONE / DATI REALI) occupa la prima riga in
+	# alto al centro. A y=18 questo CTA lo copriva perfettamente: l'utente
+	# vedeva KPI demo e agenti "AL LAVORO" senza l'unica etichetta che diceva
+	# che non erano dati reali. La checklist vive nella seconda riga.
+	_setup_cta.position = Vector2(-190, 58)
 	_setup_cta.custom_minimum_size = Vector2(380, 44)
 	_setup_cta.add_theme_font_size_override("font_size", 14)
 	_setup_cta.add_theme_color_override("font_color", Palette.YELLOW)
