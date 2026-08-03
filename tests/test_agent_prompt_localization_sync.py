@@ -19,7 +19,15 @@ Questo test fa fail se:
      locale su 7 l'agente ereditava una regola che il suo file non conteneva);
   6. le numerazioni di ruolo `C-xx` (Capitano) e `S-xx` (Sentinella) hanno buchi
      non dichiarati: i numeri ritirati vanno messi in `RETIRED_ROLE_RULES`, cosi'
-     un buco resta leggibile come scelta e non come riferimento perso.
+     un buco resta leggibile come scelta e non come riferimento perso;
+  7. lo stesso numero `C-xx`/`S-xx` e' DEFINITO due volte nello stesso file
+     (2026-07-30: `capitano.md` aveva due C-21 — i gate su `set` non lo vedono);
+  8. un divieto del baseline EN non si ritrova nella traduzione, o vi si ritrova
+     senza i token su cui verte (co-occorrenza: marcatore E oggetto del divieto);
+  9. la traduzione ORDINA in un blocco eseguibile cio' che il baseline vieta —
+     e' il caso 2026-07-30 dell'Analista, che citava `recheck-liveness` e in un
+     blocco bash ordinava il `curl` che l'inglese vieta: il punto 4 lo dava per
+     buono perche' guarda solo se il nome della skill compare da qualche parte.
 
 Fix quando fallisce: aggiornare il range/la citazione nel file segnalato. La frase
 attorno al range e' localizzata: si tocca SOLO il range (`T01..Txx`), non la prosa.
@@ -48,6 +56,38 @@ RULE_HEADING_RE = re.compile(r'^#+\s.*\bRULE-T(\d{2})\b', re.MULTILINE)
 # riga in grassetto (`**C-07 — ...**`, `**S-04 — ...**`); ovunque altro e' una
 # citazione. Le varianti `bis`/`ter`/`b`/`c` non aprono un numero nuovo.
 ROLE_RULE_PREFIXES = {'capitano': 'C', 'sentinella': 'S'}
+
+# La parola con cui un prompt apre un DIVIETO, lingua per lingua. E' vocabolario,
+# non policy: la traduzione di "FORBIDDEN" nei sette prompt. Serve perche' il
+# divieto e' l'unica parte del testo che va ritrovata nella localizzazione per
+# sapere DOVE guardare.
+FORBIDDEN_MARKERS = {
+    'en': 'FORBIDDEN', 'it': 'VIETATO', 'es': 'PROHIBIDO', 'fr': 'INTERDIT',
+    'de': 'VERBOTEN', 'pt': 'PROIBIDO', 'hu': 'TILOS',
+}
+# Un token tecnico fra backtick: `curl`, `is_open`, `recheck-liveness`.
+BACKTICK_RE = re.compile(r'`([^`\n]+)`')
+# Un blocco recintato ```...```: nel prompt e' un ORDINE DI ESEGUIRE.
+FENCE_RE = re.compile(r'^```.*?^```', re.MULTILINE | re.DOTALL)
+
+# COMANDI che il baseline EN vieta di eseguire, per ruolo. Tabella a mano, e
+# piccola apposta: il Markdown porta i token del divieto ma NON la loro polarita'.
+# Nel paragrafo `FORBIDDEN` dell'Analista convivono il comando proibito (`curl`),
+# l'alternativa prescritta (`recheck-liveness`), l'oggetto da proteggere
+# (`is_open`) e semplici esempi di URL (`jobs.`/`apply.`): niente nel testo dice
+# quale sia quale, quindi derivarli tutti come "proibiti" produrrebbe falsi
+# positivi. Chi aggiunge una voce qui la ancora al baseline — il test fallisce se
+# il token non compare (piu') in un divieto EN, cosi' la tabella non invecchia.
+FORBIDDEN_IN_CODE_BLOCKS = {
+    # Il curl nudo che l'Analista non deve piu' fare a mano: RULE-03 impone
+    # `recheck-liveness`. Le sei traduzioni lo ORDINAVANO in un blocco bash fino
+    # al 2026-07-30, pur citando la skill — di qui il check.
+    # `grep` sta nello STESSO divieto ma NON e' qui: la RULE-03 lo vieta sulla
+    # JD, non in assoluto, e l'header dell'Analista lo usa lecitamente per
+    # ricavare il proprio numero di sessione. Ennesima prova che la polarita'
+    # non si deriva: due token nella stessa riga, uno proibito e uno no.
+    ('analista', 'curl'),
+}
 
 # Numeri RITIRATI: buchi deliberati nelle numerazioni di ruolo, non riferimenti
 # persi. Servono perche' le regole si citano fra loro per numero: riusare un
@@ -101,61 +141,19 @@ KNOWN_SKILL_GAPS = {
 # meno margine per improvvisare. Quelle sono gia' state fatte (2026-07-30:
 # agent-emergency, agent-unblock, graceful-shutdown); qui resta il resto.
 # Formato: (skill, locale).
+# ── Eccezione DICHIARATA E TEMPORANEA ────────────────────────────────────
+# Questa lista era stata SVUOTATA traducendo tutte le skill: e' un traguardo,
+# non un dettaglio, e va difeso.
+#
+# `team-modes` (il manuale delle modalita' operative) rientra qui per un solo
+# motivo: nasce su un ramo in inglese mentre un altro ramo chiudeva il debito
+# di traduzione, e fondendoli e' l'unica rimasta indietro. La traduzione e'
+# gia' assegnata: **questa lista deve tornare vuota**.
+#
+# Finche' e' qui, un Capitano che gira in spagnolo riceve il manuale in
+# inglese senza che nulla lo segnali — cioe' esattamente il guasto silenzioso
+# che questo test esiste per impedire.
 KNOWN_SKILL_LOCALIZATION_GAPS = {
-    # Capitano — diario giornaliero. Esiste solo il baseline EN. E' entrata
-    # nell'allowlist il 30/07 non perche' sia peggiorata, ma perche' e' stata
-    # DICHIARATA in capitano/skills.list: C-21 la impone, e prima non veniva
-    # installata affatto. Passare da "assente" a "in inglese" e' un progresso;
-    # la riga qui sotto e' cio' che impedisce al residuo di sparire di nuovo.
-    ('captain-diary', 'it'),
-    ('captain-diary', 'es'),
-    ('captain-diary', 'fr'),
-    ('captain-diary', 'de'),
-    ('captain-diary', 'pt'),
-    ('captain-diary', 'hu'),
-    # Capitano — burst del primo avvio. Manca il baseline EN in 5 lingue (l'it c'e').
-    ('first-run-burst', 'es'),
-    ('first-run-burst', 'fr'),
-    ('first-run-burst', 'de'),
-    ('first-run-burst', 'pt'),
-    ('first-run-burst', 'hu'),
-    # Assistente/Capitano/Mentor — opzioni di risposta nel gioco (l'it c'e').
-    ('game-reply-options', 'es'),
-    ('game-reply-options', 'fr'),
-    ('game-reply-options', 'de'),
-    ('game-reply-options', 'pt'),
-    ('game-reply-options', 'hu'),
-    # Mantenitore — sweep infra. Monolingue.
-    ('maintainer-sweep', 'it'),
-    ('maintainer-sweep', 'es'),
-    ('maintainer-sweep', 'fr'),
-    ('maintainer-sweep', 'de'),
-    ('maintainer-sweep', 'pt'),
-    ('maintainer-sweep', 'hu'),
-    # Analista — recheck liveness annunci. Monolingue.
-    ('recheck-liveness', 'it'),
-    ('recheck-liveness', 'es'),
-    ('recheck-liveness', 'fr'),
-    ('recheck-liveness', 'de'),
-    ('recheck-liveness', 'pt'),
-    ('recheck-liveness', 'hu'),
-    # Scout/Mantenitore — ladder anti-silenzio. Monolingue.
-    ('resilience', 'it'),
-    ('resilience', 'es'),
-    ('resilience', 'fr'),
-    ('resilience', 'de'),
-    ('resilience', 'pt'),
-    ('resilience', 'hu'),
-    # Capitano — calcolo dello scaling. Monolingue.
-    ('scaling-calc', 'it'),
-    ('scaling-calc', 'es'),
-    ('scaling-calc', 'fr'),
-    ('scaling-calc', 'de'),
-    ('scaling-calc', 'pt'),
-    ('scaling-calc', 'hu'),
-    # Capitano — manuale delle modalità del team (2026-08-03). Monolingue come
-    # le altre skill operative del Capitano (scaling-calc, captain-diary): il
-    # baseline EN e' il fallback per tutti i locale.
     ('team-modes', 'it'),
     ('team-modes', 'es'),
     ('team-modes', 'fr'),
@@ -163,6 +161,10 @@ KNOWN_SKILL_LOCALIZATION_GAPS = {
     ('team-modes', 'pt'),
     ('team-modes', 'hu'),
 }
+# Vuota dal 2026-08-03: le sette skill che vivevano qui sono tradotte in tutte
+# e sei le lingue. Da adesso una skill DICHIARATA in un manifest senza le sue
+# localizzazioni fa cadere il gate subito, invece di essere ammessa qui e poi
+# dimenticata. Se una voce torna, deve portare la ragione e una data.
 
 
 def _roles():
@@ -220,10 +222,88 @@ def _team_rule_headings(path):
     return {int(n) for n in RULE_HEADING_RE.findall(_read(path))}
 
 
+def _role_rule_definitions(path, prefix):
+    """[(numero, n_riga)] delle regole di ruolo DEFINITE, IN ORDINE e CON i duplicati.
+
+    Serve dove l'insieme non basta: un numero definito due volte sopravvive a
+    qualunque confronto fra `set`, perche' i set deduplicano.
+
+    Le varianti `bis`/`ter` (e i suffissi `b`/`c`, gia' esclusi dal `\\b`) NON
+    aprono un numero nuovo: sono estensioni della regola omonima, quindi non
+    contano come definizioni e non sono collisioni.
+    """
+    rx = re.compile(
+        r'^\*\*' + prefix + r'-(\d{2})(?!\s*(?:bis|ter|quater)\b)\b',
+        re.MULTILINE,
+    )
+    text = _read(path)
+    return [(int(m.group(1)), text.count('\n', 0, m.start()) + 1)
+            for m in rx.finditer(text)]
+
+
 def _role_rule_numbers(path, prefix):
-    """Numeri di regola di ruolo DEFINITI nel file (non le citazioni)."""
+    """Numeri di regola di ruolo DEFINITI nel file (non le citazioni).
+
+    Regex PERMISSIVA apposta — `C-22 bis` vale come C-22. Non e' un dettaglio:
+    nelle sei localizzazioni del Capitano la C-22 "prima run" non c'e', c'e'
+    solo la sua `bis`, ed e' un drift a se' (gia' tracciato in KNOWN_SKILL_GAPS
+    come `first-run-burst`). Stringere qui lo trasformerebbe in un fallimento di
+    contiguita', che non e' quello che questo test misura.
+    """
     rx = re.compile(r'^\*\*' + prefix + r'-(\d{2})\b', re.MULTILINE)
     return {int(n) for n in rx.findall(_read(path))}
+
+
+def _forbidden_blocks(path, marker):
+    """Testo dei blocchi che APRONO un divieto con `marker`.
+
+    Un blocco e' la riga del marcatore (in grassetto o in intestazione: nella
+    prosa la stessa parola e' solo enfasi) piu' cio' che le sta sotto fino alla
+    fine del paragrafo, elenco puntato incluso — nell'Analista il divieto sta
+    tutto sulla riga, nella Sentinella e' un'intestazione seguita da bullet.
+    """
+    lines = _read(path).split('\n')
+    blocks = []
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        if marker in ln and (ln.startswith('#') or '**' in ln):
+            buf = [ln]
+            j = i + 1
+            while j < len(lines):
+                nxt = lines[j]
+                if nxt.strip():
+                    buf.append(nxt)
+                    j += 1
+                    continue
+                # riga vuota: si prosegue solo se sotto c'e' ancora un elenco
+                k = j
+                while k < len(lines) and not lines[k].strip():
+                    k += 1
+                # `- voce`, non `**RULE-04**`: il grassetto apre con `*` anche lui
+                if k < len(lines) and re.match(r'\s*[-+*]\s', lines[k]):
+                    buf.extend(lines[j:k + 1])
+                    j = k + 1
+                    continue
+                break
+            blocks.append('\n'.join(buf))
+            i = j
+            continue
+        i += 1
+    return blocks
+
+
+def _forbidden_tokens(path, marker):
+    """Token tecnici (fra backtick) nominati dai divieti del file."""
+    out = set()
+    for block in _forbidden_blocks(path, marker):
+        out.update(BACKTICK_RE.findall(block))
+    return out
+
+
+def _code_fences(path):
+    """Corpo dei blocchi recintato ```...``` del file: cio' che l'agente ESEGUE."""
+    return FENCE_RE.findall(_read(path))
 
 
 def test_team_rules_numbering_is_contiguous():
@@ -413,6 +493,88 @@ def test_localizations_cite_the_same_skills_as_en():
     )
 
 
+def test_en_prohibitions_survive_translation():
+    """Se il baseline EN VIETA qualcosa, la traduzione vieta le STESSE cose.
+
+    Meta' del check di co-occorrenza, e la meta' interamente DERIVATA: i token
+    proibiti si leggono dal baseline (i backtick dentro il paragrafo che apre
+    con `FORBIDDEN`) e vanno ritrovati dentro il paragrafo che apre col
+    marcatore della lingua. Nessuna lista scritta a mano: cambia il divieto in
+    EN, cambia da solo cio' che le sei traduzioni devono contenere.
+
+    Origin: 2026-07-30 — il gate delle skill guarda solo se il NOME della skill
+    compare da qualche parte, e le sei traduzioni dell'Analista citavano
+    `recheck-liveness` mentre ordinavano il `curl` che l'inglese vieta: skill
+    presente, divieto sparito, gate verde.
+    """
+    problems = []
+    for role in _roles():
+        en_path = AGENTS_DIR / role / f'{role}.md'
+        expected = _forbidden_tokens(en_path, FORBIDDEN_MARKERS['en'])
+        if not expected:
+            continue
+        for lang, path in _prompt_files(role):
+            if lang == 'en':
+                continue
+            found = _forbidden_tokens(path, FORBIDDEN_MARKERS[lang])
+            rel = path.relative_to(REPO_ROOT)
+            if not found:
+                problems.append(
+                    f'{rel}: il baseline EN ha un divieto su '
+                    f'{sorted(expected)}, qui non c\'e\' nessun blocco '
+                    f'"{FORBIDDEN_MARKERS[lang]}"'
+                )
+                continue
+            for tok in sorted(expected - found):
+                problems.append(f'{rel}: il divieto EN nomina `{tok}`, qui no')
+    assert not problems, (
+        'divieti del baseline EN non riprodotti nelle localizzazioni:\n  '
+        + '\n  '.join(problems)
+    )
+
+
+def test_translations_never_prescribe_what_en_forbids():
+    """Cio' che il baseline VIETA non compare in un blocco eseguibile, in nessuna lingua.
+
+    L'altra meta' della co-occorrenza, e quella che nessun test puo' derivare:
+    il marcatore dice CHE c'e' un divieto, i backtick dicono su COSA verte, ma
+    il Markdown non dice quale token sia la cosa proibita e quale l'alternativa
+    prescritta. Quella polarita' sta in `FORBIDDEN_IN_CODE_BLOCKS` — tabella, per
+    onesta', con ogni voce ancorata al baseline qui sotto.
+
+    Il perimetro e' il blocco recintato, non tutto il file, e non e' una
+    scorciatoia: nominare `curl` nella prosa e' LEGITTIMO (il baseline stesso
+    spiega perche' un curl nudo sbaglia, e le traduzioni traducono quella prosa),
+    metterlo in un blocco ```bash``` e' un ORDINE DI ESEGUIRLO. E' esattamente la
+    forma che aveva il bug: un blocco `curl -s -L ... | grep` nei sei file.
+    """
+    stale = []
+    problems = []
+    for role, token in sorted(FORBIDDEN_IN_CODE_BLOCKS):
+        en_path = AGENTS_DIR / role / f'{role}.md'
+        if token not in _forbidden_tokens(en_path, FORBIDDEN_MARKERS['en']):
+            stale.append(
+                f'({role!r}, {token!r}): {en_path.relative_to(REPO_ROOT)} non lo '
+                f'vieta (piu\'?) — togli la voce o rimetti il divieto in EN'
+            )
+            continue
+        for lang, path in _prompt_files(role):
+            for fence in _code_fences(path):
+                if re.search(r'(?<![\w-])' + re.escape(token) + r'(?![\w-])', fence):
+                    problems.append(
+                        f'{path.relative_to(REPO_ROOT)} ({lang}): blocco eseguibile '
+                        f'con `{token}`, che il baseline EN vieta'
+                    )
+                    break
+    assert not stale, (
+        'voci di FORBIDDEN_IN_CODE_BLOCKS non piu\' ancorate al baseline:\n  '
+        + '\n  '.join(stale)
+    )
+    assert not problems, (
+        'il prompt ORDINA cio\' che il baseline VIETA:\n  ' + '\n  '.join(problems)
+    )
+
+
 def test_team_rules_localizations_exist():
     """Le 6 `team-rules.<locale>.md` esistono accanto al baseline EN."""
     missing = [str(p.relative_to(REPO_ROOT))
@@ -448,6 +610,38 @@ def test_team_rules_localizations_define_the_same_rules():
         'regole team-wide disallineate fra EN e localizzazioni:\n  '
         + '\n  '.join(problems)
     )
+
+
+def test_role_rule_numbers_are_defined_once_per_file():
+    """Uno stesso numero `C-xx`/`S-xx` non e' DEFINITO due volte nello stesso file.
+
+    Origin: 2026-07-30 — `capitano.md` definiva **C-21 due volte**: «Scout as a
+    SQUAD» e «Passing the baton: the daily diary». Le sei localizzazioni ne
+    avevano una sola (lo squad), quindi la regola del diario — citata dalla
+    tabella di routing come `captain-diary` → C-21 — non esisteva in 6 lingue su
+    7, e il Capitano non inglese non ereditava mai l'handoff giornaliero.
+
+    Ne' il gate di contiguita' ne' quello di allineamento fra localizzazioni
+    potevano vederlo: entrambi lavorano su `set` di numeri, e un set deduplica.
+    Serve contare le DEFINIZIONI, non i numeri distinti. Una collisione e'
+    sempre un difetto: due regole diverse sotto lo stesso numero rendono
+    ambigua ogni citazione (`vedi C-21`) e ne nascondono una alla traduzione.
+    """
+    problems = []
+    for role, prefix in ROLE_RULE_PREFIXES.items():
+        for _lang, path in _prompt_files(role):
+            seen = {}
+            for n, line in _role_rule_definitions(path, prefix):
+                seen.setdefault(n, []).append(line)
+            for n, lines in sorted(seen.items()):
+                if len(lines) > 1:
+                    problems.append(
+                        f'{path.relative_to(REPO_ROOT)}: {prefix}-{n:02d} definita '
+                        f'{len(lines)} volte (righe {", ".join(map(str, lines))}) — '
+                        f'due regole sotto lo stesso numero: rinumerane una '
+                        f'(il numero DOPO il piu\' alto) e aggiorna le citazioni'
+                    )
+    assert not problems, 'numeri di regola definiti piu\' di una volta:\n  ' + '\n  '.join(problems)
 
 
 def test_role_rule_numbering_is_contiguous_modulo_retired():

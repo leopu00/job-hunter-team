@@ -16,7 +16,12 @@
 import { Command } from 'commander';
 import { runSkill } from './positions.js';
 
-const run = (skill, args) => process.exit(runSkill(skill, args));
+// L'esito si posa su `process.exitCode` e si lascia terminare il processo da
+// solo. Con `process.exit()` l'uscita era immediata, e l'output della skill —
+// che `runSkill` scrive con `process.stdout.write` quando passa dal container —
+// poteva restare in un buffer di pipe mai drenato: l'agente che legge il JSON
+// riceveva una riga tagliata a metà. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
+const run = (skill, args) => { process.exitCode = runSkill(skill, args); };
 
 export function registerTicketCommand(program) {
   const cmd = new Command('ticket')

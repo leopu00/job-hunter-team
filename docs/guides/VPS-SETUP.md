@@ -8,9 +8,14 @@ Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS
 > 🥉 "tier tech user" path: manual SSH + `curl install.sh | bash`. The
 > 🥇 The non-technical path now lives in the native Godot office; follow
 > [`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md).
-> For an honest comparison between the 3 execution modes (local PC /
-> dedicated PC / VPS) → `docs/guides/VPS-COMPARISON.md`
-> *(pending — `[JHT-VPS-COMPARISON-DOC]`)*.
+
+> ℹ️ **There is no comparison between the execution modes yet.** An honest
+> decision tree (local PC / dedicated PC / VPS) has never been written —
+> earlier revisions of this page pointed at a `VPS-COMPARISON.md` that has
+> never existed. It is tracked in [`BACKLOG.md`](../../BACKLOG.md) as
+> `[JHT-VPS-COMPARISON-DOC]`. The only version that exists today is the
+> three-line tree under "Verità scomoda" in
+> [`../internal/ops/vps.md`](../internal/ops/vps.md).
 
 ## Design references
 

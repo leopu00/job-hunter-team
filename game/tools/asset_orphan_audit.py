@@ -24,10 +24,17 @@ invece OGNI stringa letterale del sorgente come candidato: e' volutamente
 eccessivo, perche' il costo di un falso orfano (arte cancellata) e' molto piu'
 alto di quello di un falso raggiungibile.
 
-Cio' che ``exclude_filter`` tiene fuori dal build non e' "orfano": e' gia'
-fuori, e l'audit non lo guarda.  I pattern li legge da ``export_presets.cfg``
-invece di duplicarli, e se i tre preset non concordano si ferma: quella
-divergenza e' esattamente il difetto che deve far vedere.
+Cio' che non entra nel build non e' "orfano": e' gia' fuori, e l'audit non lo
+guarda.  Le due vie per restarne fuori si leggono entrambe dalla loro sorgente,
+invece di duplicarle qui:
+
+  * un ``.gdignore`` nella cartella — Godot non la scandisce affatto, quindi
+    dentro non c'e' nessuna risorsa (``assets/_attic/``);
+  * ``exclude_filter`` nei preset — la risorsa esiste ma non viene impacchettata
+    (``assets/characters/sources/``, che serve viva a un tool di build).
+
+Dei preset si pretende che i tre concordino: se divergono l'audit si ferma,
+perche' quella divergenza e' esattamente il difetto che deve far vedere.
 
 In piu' l'audit tiene oneste le due mappe di ``furniture_node.gd``: una chiave
 di ``GEN_ART``/``KIND_COLORS`` che non corrisponde ad alcun ``"kind"``
@@ -112,14 +119,28 @@ def excluded_patterns() -> list[str]:
     return [p for p in values.pop().split(",") if p]
 
 
+def gdignored_dirs() -> list[Path]:
+    """Cartelle che un ``.gdignore`` toglie dal filesystem-risorse.
+
+    Godot non le scandisce: dentro non esiste nessuna risorsa, quindi niente
+    import, niente ``.import``, niente ``uid://`` e niente nel ``.pck``. Non
+    sono "orfane", sono archiviate apposta. Si guarda il file che legge il
+    motore, non un elenco da tenere allineato a mano.
+    """
+    return [p.parent for p in ASSETS.rglob(".gdignore")]
+
+
 def collect_assets() -> list[str]:
     """Path ``assets/...`` che finiscono davvero nel build."""
     import fnmatch
 
     patterns = excluded_patterns()
+    ignored = gdignored_dirs()
     out = []
     for path in sorted(ASSETS.rglob("*")):
         if not path.is_file() or path.suffix not in ASSET_SUFFIXES:
+            continue
+        if any(d in path.parents for d in ignored):
             continue
         rel = path.relative_to(GAME).as_posix()
         if any(fnmatch.fnmatch("res://" + rel, p) for p in patterns):

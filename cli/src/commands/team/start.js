@@ -190,8 +190,14 @@ async function startActionContainer(agentArg, options = {}) {
   // il poller (cli/src/lib/team-commands-poller.js) usa l'exit code per
   // marcare team_commands.status='error' invece di 'done' silent. Skipped
   // (= già attivo) conta come success per l'utente.
+  //
+  // `process.exitCode` e non `process.exit()`: il poller lancia `jht team start`
+  // come processo figlio e ne legge lo stdout oltre al codice, quindi troncare
+  // l'output con un'uscita immediata gli toglierebbe proprio le righe d'errore
+  // che registra. Il codice osservato non cambia: questa è l'ultima istruzione
+  // della funzione. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
   if (started === 0 && skipped === 0) {
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -236,11 +242,13 @@ export async function startAction(agentArg, options) {
 
   if (!tmuxAvailable()) {
     console.error(c.red('Errore: tmux non trovato. Installa con: brew install tmux'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (!claudeAvailable()) {
     console.error(c.red('Errore: Claude CLI non trovato.'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const { repoRoot } = resolveConfig();

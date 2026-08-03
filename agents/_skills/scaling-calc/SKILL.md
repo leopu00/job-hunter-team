@@ -1,66 +1,66 @@
 ---
 name: scaling-calc
-description: Calibrazione graduale del roster — misura il burn di 1 worker, calcola quanti worker e con quale throttle servono per centrare la velocità-target, e spawna a scaglioni (mai in 6ª marcia).
+description: Gradual calibration of the roster — measure the burn of 1 worker, compute how many workers and which throttle it takes to hit the target speed, and spawn in stages (never in 6th gear).
 ---
 
-# 🎚️ scaling-calc — salire di marcia per gradini, non in 6ª
+# 🎚️ scaling-calc — change gear one step at a time, not straight into 6th
 
-Quando il team apre la finestra di lavoro (o devi consumare di più), **NON** partire
-in 6ª marcia ("tanto budget → spawna 5 scout / throttle a 0"): non sai ancora quanto
-consuma davvero un worker in QUESTO ciclo. Si calibra a gradini.
+When the team opens the work window (or you need to consume more), do **NOT** set
+off in 6th gear ("plenty of budget → spawn 5 scouts / throttle to 0"): you do not
+yet know how much a worker really consumes in THIS cycle. You calibrate by steps.
 
-## Procedura
+## Procedure
 
-**1. Parti con 1 SOLO worker** al floor (5min, il minimo per i worker).
+**1. Start with 1 SINGLE worker** at the floor (5min, the minimum for workers).
 
-**2. Osserva ~30 min** per misurare il burn reale. Leggi il burn del worker:
+**2. Observe for ~30 min** to measure the real burn. Read the worker's burn:
 ```
-python3 /app/shared/skills/rate_budget.py            # velocità-target sostenibile (S)
-# burn per-agente: dalla tabella che la Sentinella ti gira, o:
+python3 /app/shared/skills/rate_budget.py            # sustainable target speed (S)
+# per-agent burn: from the table the Sentinella forwards you, or:
 python3 /app/shared/skills/agent-speed-table.py
 ```
-Prendi: **S** = velocità sostenibile (es. `sustainable_burn` %weekly/h) e **b** = burn
-misurato del worker (stessa unità).
+Take: **S** = sustainable speed (e.g. `sustainable_burn` %weekly/h) and **b** = the
+worker's measured burn (same unit).
 
-**3. Calcola** roster + throttle:
+**3. Compute** roster + throttle:
 ```
 python3 /app/agents/_skills/scaling-calc/scaling_calc.py --target <S> --measured <b>
-# se hai osservato N worker a throttle T:
-python3 .../scaling_calc.py --target <S> --measured <b_totale> --workers <N> --throttle <T>
+# if you observed N workers at throttle T:
+python3 .../scaling_calc.py --target <S> --measured <b_total> --workers <N> --throttle <T>
 ```
-Ti dà: **quanti worker**, **quale throttle**, e un **piano a scaglioni**.
+It gives you: **how many workers**, **which throttle**, and a **staged plan**.
 
-**4. Spawna a SCAGLIONI** seguendo il piano: **uno per volta**, **ri-misurando** prima del
-successivo (~10 min bastano a vedere il burn del nuovo arrivato). MAI spawnare il blocco
-intero in un colpo.
+**4. Spawn IN STAGES** following the plan: **one at a time**, **re-measuring** before the
+next one (~10 min is enough to see the newcomer's burn). NEVER spawn the whole block
+in one go.
 
-> Quei 10 minuti sono una **finestra di osservazione**, non uno sfasamento: la distanza di
-> fase fra due worker dello stesso gradino è `T/N` (periodo diviso il numero di worker che
-> lo condividono) e la applica il launcher da sé allo spawn. Non è un numero da decidere
-> qui, e non è una costante: su un gradino da 5 minuti tre worker si vogliono a 100s l'uno
-> dall'altro.
+> Those 10 minutes are an **observation window**, not a phase offset: the phase distance
+> between two workers on the same step is `T/N` (the period divided by the number of
+> workers sharing it) and the launcher applies it by itself at spawn time. It is not a
+> number to decide here, and it is not a constant: on a 5-minute step, three workers want
+> to be 100s apart from each other.
 
-## Le due leve
-- **Worker sotto-target** (1 worker brucia meno del target) → la leva è il **numero di
-  worker** (parallelismo), tutti **al floor**. Aggiungili a scaglioni.
-- **Worker sopra-target** (1 worker già brucia più del target) → la leva è il **throttle**:
-  tieni 1 worker e **alza** il suo throttle (lo strumento ti dà il valore esatto). NON
-  azzerare mai il throttle (i worker hanno floor 5min comunque).
+## The two levers
+- **Worker under target** (1 worker burns less than the target) → the lever is the **number
+  of workers** (parallelism), all **at the floor**. Add them in stages.
+- **Worker over target** (1 worker already burns more than the target) → the lever is the
+  **throttle**: keep 1 worker and **raise** its throttle (the tool gives you the exact
+  value). NEVER zero the throttle out (workers have a 5min floor anyway).
 
-## Cosa NON fare
-- ❌ "Team ON, tanto budget → ACCELERA tutto" — è la frenesia che brucia una finestra di
-  budget in 25 min su zero output. **ACCELERARE = sali di UN gradino** (un worker in più,
-  o un gradino di throttle in meno **fino al floor**), poi ri-misura.
-- ❌ Spawnare 2-3 worker insieme. Sempre **scaglionati**.
-- ❌ Throttle a 0 su un worker (impossibile: floor 5min; e comunque è ciò che fa marathon).
+## What NOT to do
+- ❌ "Team ON, plenty of budget → SPEED EVERYTHING UP" — that is the frenzy that burns a
+  budget window in 25 min for zero output. **SPEEDING UP = go up ONE step** (one more
+  worker, or one throttle step less **down to the floor**), then re-measure.
+- ❌ Spawning 2-3 workers together. Always **staggered**.
+- ❌ Throttle at 0 on a worker (impossible: 5min floor; and it is what marathons are made of anyway).
 
-## Esempio
-1 scout al floor (5min) ha bruciato **1.4%/h**, target sostenibile **0.7%/h**:
+## Example
+1 scout at the floor (5min) burned **1.4%/h**, sustainable target **0.7%/h**:
 ```
 scaling_calc.py --target 0.7 --measured 1.4
-→ 1 worker @ 600s (10min) → burn ≈ 0.7/h   (basta alzare il throttle, niente spawn)
+→ 1 worker @ 600s (10min) → burn ≈ 0.7/h   (just raise the throttle, no spawn)
 ```
-Se invece 1 scout brucia solo **0.3%/h** con target 0.7:
+If instead 1 scout burns only **0.3%/h** with a target of 0.7:
 ```
-→ 2 worker @ 300s (floor), scaglionati: spawn #1, osserva 10min, ri-misura, poi #2.
+→ 2 workers @ 300s (floor), staged: spawn #1, observe 10min, re-measure, then #2.
 ```

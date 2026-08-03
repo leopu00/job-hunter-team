@@ -39,14 +39,6 @@ db-update
 # a gradini, perché il risultato che conta è una posizione CON PUNTEGGIO.
 first-run-burst
 
-# Il MANUALE delle modalità del team (search/harvest/care/calibration/saving).
-# Il banner orario [MODALITÀ CORRENTE] porta la specifica compatta; quando il
-# Capitano non ricorda cosa implica la modalità corrente — quali code
-# assegnare, cosa spawnare o fermare, come si compone con C-25 — la risposta
-# va LETTA qui prima di decidere, non dedotta da un contesto che un refresh
-# può aver azzerato (18 giorni di manutenzione persa, luglio 2026).
-team-modes
-
 # Coordination (the Captain's daily operational loop)
 spawn-agent
 sentinel-orders
@@ -75,11 +67,5 @@ agent-emergency
 
 # Throttle config + on-demand rate-budget probe (rare, for ad-hoc diagnosis)
 throttle
-# Wake-up ack: first command after every throttle pause. Without it the
-# flag stays on NOTIFIED and the watchdog escalates on a healthy agent.
-throttle-ack
-# The ONLY surface that writes the team's rhythms. The engine re-reads the
-# config when it arms each timer, so a change bites on the agent's next cycle
-# by itself: never send a number over tmux.
-throttle-set
 rate-budget
+team-modes

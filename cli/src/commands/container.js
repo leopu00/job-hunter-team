@@ -110,8 +110,18 @@ async function ensureDockerDaemon() {
 }
 
 // ── up ─────────────────────────────────────────────────────────────
+// Ogni fallimento segna `process.exitCode` e RITORNA. Il `return` non e'
+// cosmetico: con `process.exit()` la funzione non proseguiva mai, e i tre passi
+// di `up` (create → chown → start) sono in sequenza — senza il `return` un
+// `docker compose up --no-start` fallito lascerebbe partire lo `start` su un
+// container che non esiste. `recreateAction` fa `await upAction()` come ultima
+// istruzione, quindi nemmeno da li' resta codice da saltare.
+// Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
 async function upAction() {
-  if (!(await ensureDockerDaemon())) process.exit(1);
+  if (!(await ensureDockerDaemon())) {
+    process.exitCode = 1;
+    return;
+  }
 
   if (containerRunning()) {
     console.log(c.yellow(`Container '${CONTAINER_NAME}' gia' attivo.`));
@@ -121,7 +131,8 @@ async function upAction() {
   // Passo 1: create (senza avviare) per avere il volume anonimo .next
   if (!dockerCompose(['up', '--no-start', 'jht'])) {
     console.error(c.red('docker compose up --no-start fallito'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   // Passo 2: chown del volume .next
   console.log(c.dim('  Fix ownership /app/web/.next...'));
@@ -129,7 +140,8 @@ async function upAction() {
   // Passo 3: start
   if (!dockerCompose(['start', 'jht'])) {
     console.error(c.red('docker compose start fallito'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log(c.green(`✓ Container ${CONTAINER_NAME} avviato`));
   console.log(c.dim('  Interazione: app desktop JHT  ·  logs: jht container logs -f'));
@@ -145,7 +157,8 @@ function downAction() {
   // compose stop preserva il container (ripartenza veloce con `up`)
   if (!dockerCompose(['stop', 'jht'])) {
     console.error(c.red('docker compose stop fallito'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log(c.green(`✓ Container ${CONTAINER_NAME} fermato (non rimosso)`));
   console.log(c.dim('  Per rimuoverlo: docker rm jht'));
@@ -208,6 +221,13 @@ function logsAction(options = {}) {
     stdio: 'inherit',
     env: { ...process.env, MSYS_NO_PATHCONV: '1' },
   });
+  // Qui `process.exit()` RESTA, a differenza del resto del file. `logs -f` e'
+  // long-running e passa `stdio: 'inherit'`: non c'e' nulla di nostro in un
+  // buffer da drenare (scrive direttamente il figlio), quindi la conversione non
+  // guadagnerebbe nulla, e propagare l'uscita di un figlio interattivo tramite
+  // `process.exitCode` dipende dal fatto che nessun handle resti aperto — un
+  // rischio di appendere il comando in cambio di zero. Vedi
+  // [CLI-NO-GLOBAL-ERROR-HANDLER].
   child.on('exit', (code) => process.exit(code ?? 0));
 }
 

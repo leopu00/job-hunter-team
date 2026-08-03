@@ -1,37 +1,38 @@
 ---
 name: recheck-liveness
-description: Verifica se un annuncio di lavoro è ANCORA APERTO senza falsi-aperti. Sostituisce il curl ad-hoc (HTTP 200 = "aperto") che NON vede l'expiry renderizzato in JavaScript (Ashby/Workday/Greenhouse) né l'authwall LinkedIn (200 anche per i chiusi). Usala SEMPRE nel recheck; non marcare mai is_open a mano da un solo HTTP 200.
+description: Check whether a job posting is STILL OPEN without producing false-opens. Replaces the ad-hoc curl (HTTP 200 = "open") that does NOT see the expiry rendered in JavaScript (Ashby/Workday/Greenhouse) nor the LinkedIn authwall (200 for closed ones too). ALWAYS use it in the recheck; never set is_open by hand off a single HTTP 200.
 allowed-tools: Bash(python3 /app/shared/skills/recheck_liveness.py *)
 ---
 
-# recheck-liveness — "il job è ancora aperto?" fatto bene
+# recheck-liveness — "is the job still open?", done properly
 
-## Perché esiste
-Il vecchio recheck era un curl improvvisato (`code=200 marker=none → aperto`). curl
-vede solo l'HTML GREZZO, quindi su molti ATS (Ashby/Workday/Greenhouse) e su
-LinkedIn lo status "scaduto/chiuso" è renderizzato in JS o dietro authwall → curl
-non lo vede → `is_open=1` su job già CHIUSI. Dati sporchi a valle (score, mappa).
+## Why it exists
+The old recheck was an improvised curl (`code=200 marker=none → open`). curl only
+sees the RAW HTML, so on many ATS (Ashby/Workday/Greenhouse) and on LinkedIn the
+"expired/closed" status is rendered in JS or sits behind an authwall → curl does
+not see it → `is_open=1` on jobs that are already CLOSED. Dirty data downstream
+(score, map).
 
-## Come si usa
+## How to use it
 ```sh
-python3 /app/shared/skills/recheck_liveness.py "<url>" "[titolo opzionale]"
+python3 /app/shared/skills/recheck_liveness.py "<url>" "[optional title]"
 ```
-Output JSON + exit code:
-| state | exit | significato |
+JSON output + exit code:
+| state | exit | meaning |
 |---|---|---|
-| `OPEN` | 0 | aperto verificato |
-| `CLOSED` | 1 | chiuso/scaduto (404/410 o closed-marker) |
-| `OPEN_UNVERIFIED` | 2 | impossibile verificare (host JS/authwall + browser giù) |
+| `OPEN` | 0 | verified open |
+| `CLOSED` | 1 | closed/expired (404/410 or closed-marker) |
+| `OPEN_UNVERIFIED` | 2 | impossible to verify (JS/authwall host + browser down) |
 
-## Cosa fa (tiered)
-1. **curl** veloce: HTTP code + scan dei closed-marker (EN+IT) + 404/410.
-2. host **ATS-JS / LinkedIn** o code ambiguo → **escala al BROWSER** (Playwright
-   render) e ri-scan dei marker sull'HTML RENDERIZZATO.
-3. ancora incerto → **`OPEN_UNVERIFIED`** — MAI un falso-aperto (pattern `resilience`).
+## What it does (tiered)
+1. fast **curl**: HTTP code + scan for closed-markers (EN+IT) + 404/410.
+2. **ATS-JS / LinkedIn** host or ambiguous code → **escalate to the BROWSER**
+   (Playwright render) and re-scan the markers on the RENDERED HTML.
+3. still uncertain → **`OPEN_UNVERIFIED`** — NEVER a false-open (`resilience` pattern).
 
-## Regola d'oro
-- `is_open=1` **SOLO** se `state == OPEN`.
-- `state == CLOSED` → `status='expired'` + nota con `evidence`.
-- `state == OPEN_UNVERIFIED` → **lascia `is_open` invariato** + nota `[OPEN_UNVERIFIED]`;
-  NON spacciarlo per aperto.
-- **Vietato** il curl ad-hoc "200 = aperto" per decidere la liveness.
+## Golden rule
+- `is_open=1` **ONLY** if `state == OPEN`.
+- `state == CLOSED` → `status='expired'` + a note carrying the `evidence`.
+- `state == OPEN_UNVERIFIED` → **leave `is_open` unchanged** + an `[OPEN_UNVERIFIED]` note;
+  do NOT pass it off as open.
+- The ad-hoc "200 = open" curl is **forbidden** as a way to decide liveness.
