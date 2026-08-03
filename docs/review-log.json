@@ -1424,6 +1424,11 @@
       "path": "docs/internal/architecture/provider-touchpoint-inventory.md",
       "description": "Machine-checked inventory of provider-specific seams and the narrow M5 Local Scorer architecture boundary",
       "last_review": "2026-08-03"
+    },
+    {
+      "path": "docs/guides/M4-EVIDENCE-BUNDLES.md",
+      "description": "Versioned M4 evidence-bundle operator guide: scrubbed export boundary, hashes, provenance classes, fixture/live fail-closed rules, and external-validation limits",
+      "last_review": null
     }
   ]
 }

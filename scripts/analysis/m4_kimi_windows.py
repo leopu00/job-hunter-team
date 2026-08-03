@@ -23,6 +23,7 @@ from typing import Iterable
 
 
 SCHEMA_VERSION = 1
+TOOL_VERSION = "1.0.0"
 KIMI_NAMES = {"kimi", "moonshot"}
 
 

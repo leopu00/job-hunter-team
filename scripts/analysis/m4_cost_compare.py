@@ -16,6 +16,7 @@ from pathlib import Path
 
 
 SCHEMA_VERSION = 1
+TOOL_VERSION = "1.0.0"
 TOKEN_KEYS = ("uncached_input", "cached_input", "output")
 
 
