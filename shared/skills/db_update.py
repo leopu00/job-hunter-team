@@ -47,6 +47,13 @@ MAINTENANCE_TRACKED_FIELDS = (
     "jd_summary", "jd_text", "notes",
 )
 
+# Lato azienda: `logo_fetch` e `website_fetch` sono azioni di manutenzione a
+# tutti gli effetti, e senza questo non avrebbero dove essere registrate.
+COMPANY_TRACKED_FIELDS = (
+    "website", "logo", "logo_source", "logo_fetched",
+    "sector", "hq_country", "size",
+)
+
 
 def _snapshot(conn, table, row_id, fields):
     """Valori correnti dei campi tracciati. `{}` se la riga non esiste."""
@@ -469,6 +476,15 @@ def update_company(args):
     conn = get_db()
     ensure_schema(conn)
 
+    m_action = getattr(args, 'action', None)
+    row = conn.execute(
+        "SELECT id FROM companies WHERE name = ?", (args.name,)).fetchone()
+    company_id = (row[0] if row and not hasattr(row, "keys") else
+                  row["id"] if row else None)
+    before_snapshot = (_snapshot(conn, "companies", company_id,
+                                 COMPANY_TRACKED_FIELDS)
+                       if (m_action and company_id) else {})
+
     updates = []
     params = []
 
@@ -506,6 +522,17 @@ def update_company(args):
 
     params.append(args.name)
     conn.execute(f"UPDATE companies SET {', '.join(updates)} WHERE name = ?", params)
+
+    if m_action and company_id:
+        after_snapshot = _snapshot(conn, "companies", company_id,
+                                   COMPANY_TRACKED_FIELDS)
+        maintenance_log.record_diffs(
+            conn, "company", company_id, m_action,
+            _diffs(before_snapshot, after_snapshot),
+            outcome=getattr(args, 'outcome', None),
+            evidence=maintenance_log.evidence_from_args(args),
+            duration_ms=getattr(args, 'duration_ms', None))
+
     conn.commit()
     print(f"Azienda '{args.name}' aggiornata: {', '.join(updates)}")
     conn.close()
@@ -720,6 +747,7 @@ def main():
     c.add_argument('--glassdoor-rating', type=float)
     c.add_argument('--analyzed-by')
     c.add_argument('--website', help='Sito ufficiale (usato da logo-extraction)')
+    maintenance_log.add_cli_args(c)
 
     # application
     a = sub.add_parser('application')

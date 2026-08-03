@@ -119,12 +119,22 @@ db_query.py maintenance-report [--days N]   # copertura, verificate, invariate, 
 | dove | cosa |
 |---|---|
 | `shared/skills/maintenance_log.py` | vocabolari, regola, scrittura |
-| `shared/skills/db_update.py` | snapshot prima / diff dopo, stessa transazione dell'UPDATE |
+| `shared/skills/db_update.py` | posizioni **e aziende**: snapshot prima / diff dopo, stessa transazione dell'UPDATE |
 | `shared/skills/db_insert.py` | `insert_score`: diff col punteggio precedente |
 | `shared/skills/db_query.py` | `check-history`, `maintenance-report` |
 | `tests/test_maintenance_log.py` | 29 test |
 
-`--action` è **opt-in**: senza, `db_update`/`db_insert` si comportano esattamente come prima. Finché le skill di manutenzione non lo passano, `check-history` risponderà "nessun controllo a storico" — che è la verità, non un guasto.
+`--action` è **opt-in**: senza, `db_update`/`db_insert` si comportano esattamente come prima.
+
+Skill aggiornate perché lo passino:
+
+| skill | action |
+|---|---|
+| `recheck-liveness` | `liveness_check` — con la tabella `state` → `--outcome` e il divieto scritto in chiaro |
+| `office-geocoding` | `geocode` (7 lingue) |
+| `db-update` | documentazione di riferimento dei nuovi flag |
+
+`logo-extraction` scrive su `companies`, per questo l'aggancio copre anche `update_company` (`logo_fetch`, `website_fetch`): senza, due delle sette azioni non avrebbero dove essere registrate.
 
 > ⚠️ `last_checked` e `last_open_check` sono **esclusi dal diff** di proposito. Cambiano ad ogni chiamata per costruzione: includerli farebbe risultare `updated` ogni singolo controllo, e la distinzione fra "ha cambiato qualcosa" e "non ha cambiato niente" sparirebbe. Trovato al primo smoke test.
 
@@ -132,6 +142,6 @@ db_query.py maintenance-report [--days N]   # copertura, verificate, invariate, 
 
 ## Aperto
 
-1. **Le skill di manutenzione non passano ancora `--action`/`--outcome`** (liveness, geocode, logo, sito). Finché non lo fanno, la tabella resta vuota: è il prossimo passo e va fatto sulle quattro skill.
+1. **`logo-extraction` non passa ancora `--action logo_fetch`**: il percorso di scrittura è agganciato, la skill no. Manca anche `jd_refresh` (non c'è una skill dedicata) e `rescore` (nessuno chiama `--action rescore`).
 2. **Retention**: una riga per controllo. Sui volumi osservati (~100-200/giorno per VPS) è irrilevante per mesi, ma prima o poi serve un roll-up.
 3. **`scores` ha lo stesso problema di sovrascrittura** ed è agganciato, ma nessuno chiama ancora `--action rescore`.
