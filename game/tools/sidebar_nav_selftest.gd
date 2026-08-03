@@ -2,8 +2,10 @@ extends SceneTree
 ## Self-test headless della navigazione laterale.
 ## Esecuzione: godot --headless --path game --script res://tools/sidebar_nav_selftest.gd
 ##
-## La sidebar è passata da ventotto righe a tredici raccogliendo le viste di
+## La sidebar è passata da ventotto righe a quattordici raccogliendo le viste di
 ## monitoraggio in schede e le pagine di configurazione dietro "Impostazioni".
+## Profilo è volutamente una voce diretta: nasconderlo di nuovo renderebbe più
+## difficile completare o correggere il dato da cui dipende tutto il team.
 ## Il patto di quel riordino è che NESSUNA sezione sia sparita: è cambiata la
 ## strada, non la destinazione. Ma "sparita" non fa rumore — la voce semplicemente
 ## non c'è più in nessun elenco, e nessun test la reclama.
@@ -26,6 +28,8 @@ func _init() -> void:
 		for item in group["items"]:
 			rows.append(str(item["id"]))
 	_check("righe in sidebar", rows.size() > 0, "GROUPS è vuoto")
+	_check("profilo direttamente raggiungibile", rows.has("profile"),
+			"Profilo è stato nascosto dietro un contenitore")
 
 	# 1 + 2: ogni sezione nascosta ha una e una sola riga che la ospita
 	var hidden: Array[String] = []
