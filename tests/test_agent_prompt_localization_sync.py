@@ -165,13 +165,6 @@ KNOWN_SKILL_LOCALIZATION_GAPS = {
     ('game-reply-options', 'de'),
     ('game-reply-options', 'pt'),
     ('game-reply-options', 'hu'),
-    # Analista — recheck liveness annunci. Monolingue.
-    ('recheck-liveness', 'it'),
-    ('recheck-liveness', 'es'),
-    ('recheck-liveness', 'fr'),
-    ('recheck-liveness', 'de'),
-    ('recheck-liveness', 'pt'),
-    ('recheck-liveness', 'hu'),
     # Scout/Mantenitore — ladder anti-silenzio. Monolingue.
     ('resilience', 'it'),
     ('resilience', 'es'),
