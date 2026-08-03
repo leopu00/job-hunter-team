@@ -12,7 +12,7 @@ Job Hunter Team.
 | 🐳 **Dev (container)** | `dev-up.sh` · `dev-down.sh` · `dev-up-additional.sh` · `dev-down-additional.sh` |
 | 🏷️ **Release** | `build-release.sh` · `check-release-version.sh` |
 | 🧪 **Simulation** | `sim/` — `sim-up.sh` / `sim-down.sh` / `sim-reset.sh`, Supabase seed import/export |
-| 📊 **Analysis** | `analysis/m4_kimi_windows.py` (Kimi window variance/headroom) · `analysis/m4_cost_compare.py` (explicit-unit PAYG/subscription scenarios) |
+| 📊 **Analysis** | `analysis/m4_kimi_windows.py` (Kimi window variance/headroom) · `analysis/m4_cost_compare.py` (explicit-unit PAYG/subscription scenarios) · `analysis/m5_score_quality.py` (distribution-only and paired Local Scorer comparisons) |
 | 🧰 **Wrappers / misc** | `jht-wrapper.sh` · `jht-wrapper.ps1` · `migrate-deliverables-to-user-dir.sh` · `review-log.py` · `pre-commit` |
 | ✅ **Test** | `test-fullflow-wsl.sh` · `test-providers.sh` |
 

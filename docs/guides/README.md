@@ -13,6 +13,7 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 | [⌨️ CLI-REFERENCE](CLI-REFERENCE.md) | CLI users — full `jht` command reference |
 | [🤖 AI-AGENT-INTEGRATION](AI-AGENT-INTEGRATION.md) | AI assistants / devs driving JHT programmatically |
 | [🔌 ADDING-A-PROVIDER](ADDING-A-PROVIDER.md) | Contributors — ADR gate, runtime seams, evidence and anti-drift checks |
+| [🏠 LOCAL-SCORER](LOCAL-SCORER.md) | Operators evaluating the experimental one-role local-model spike |
 
 ## 📧 Email sourcing (recommended)
 

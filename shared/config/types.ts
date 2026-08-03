@@ -80,8 +80,21 @@ export interface WorkingHoursConfig {
   windows: WorkingHoursWindow[];
 }
 
+export interface LocalScorerConfig {
+  enabled: boolean;
+  backend: "openai_compatible";
+  /** Ollama/llama.cpp endpoint reachable from the runtime container. */
+  base_url: string;
+  model: string;
+  /** `shadow` never changes the queue; `write` persists validated scores. */
+  mode: "shadow" | "write";
+  timeout_seconds: number;
+  poll_seconds: number;
+}
+
 export interface TeamSettings {
   working_hours?: WorkingHoursConfig;
+  local_scorer?: LocalScorerConfig;
 }
 
 // --- Config Root ---

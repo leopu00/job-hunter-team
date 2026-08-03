@@ -51,9 +51,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-08-03 | ✅ |
-| [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-07-30 | ✅ |
+| [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-08-03 | ✅ |
 | [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-07-29 | ✅ |
-| [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-07-31 | ✅ |
+| [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-08-03 | ✅ |
 | [agents/scorer/scorer.md](../agents/scorer/scorer.md) | 🎯 Scorer — assegna score 0-100 alle posizioni filtrate | — | 2026-07-29 | ✅ |
 | [agents/scrittore/scrittore.md](../agents/scrittore/scrittore.md) | ✍️ Scrittore — genera CV + cover letter per posizione | — | 2026-07-29 | ✅ |
 | [agents/critico/critico.md](../agents/critico/critico.md) | 🧐 Critico — review qualità CV/cover prima dell'invio | — | 2026-07-29 | ✅ |
@@ -69,7 +69,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [agents/_team/architettura.md](../agents/_team/architettura.md) | Architettura V5 4-tier (Bridge → Sentinella → Capitano → agenti) | — | 2026-07-03 | ✅ |
-| [agents/_team/team-rules.md](../agents/_team/team-rules.md) | Regole condivise team (RULE-T*), inherited da tutti gli agenti | — | 2026-06-28 | ✅ |
+| [agents/_team/team-rules.md](../agents/_team/team-rules.md) | Regole condivise team (RULE-T*), inherited da tutti gli agenti | — | 2026-08-03 | ✅ |
 | [agents/_manual/anti-collision.md](../agents/_manual/anti-collision.md) | Come evitare scritture concorrenti sul DB tra agenti | — | 2026-06-02 | ✅ |
 | [agents/_manual/communication-rules.md](../agents/_manual/communication-rules.md) | Regole comunicazione inter-agent (jht-tmux-send, jht-send) | — | 2026-07-29 | ✅ |
 | [agents/_manual/db-schema.md](../agents/_manual/db-schema.md) | Schema SQLite `~/.jht/jobs.db` (5 tabelle) | — | 2026-07-24 | ✅ |
@@ -141,7 +141,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/throttle-distribution/SKILL.md](../agents/_skills/throttle-distribution/SKILL.md) | Skill Capitano: convertire un segnale di pacing team-level nella ripartizione per-agente del throttle (un numero unico non significa stesso valore a tutti) | — | 2026-07-28 | ✅ |
 | [agents/_skills/recheck-batch/SKILL.md](../agents/_skills/recheck-batch/SKILL.md) | Ricontrollo a lotti delle posizioni: quali sono dovute e in che ordine | — | 2026-07-30 | ✅ |
 | [agents/_skills/team-modes/SKILL.md](../agents/_skills/team-modes/SKILL.md) | Le modalita' operative del team e cosa cambia in ciascuna | — | 2026-08-03 | ✅ |
-| [agents/_skills/throttle-ack/SKILL.md](../agents/_skills/throttle-ack/SKILL.md) | L'agente firma la propria sveglia: un risveglio non firmato e' prova di stallo | — | 2026-07-30 | ✅ |
+| [agents/_skills/throttle-ack/SKILL.md](../agents/_skills/throttle-ack/SKILL.md) | L'agente firma la propria sveglia: un risveglio non firmato e' prova di stallo | — | 2026-08-03 | ✅ |
 | [agents/_skills/throttle-set/SKILL.md](../agents/_skills/throttle-set/SKILL.md) | L'agente registra la pausa nel motore esterno, non nel proprio processo | — | 2026-07-30 | ✅ |
 
 
@@ -152,7 +152,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/sentinella/_skills/check-usage-http/SKILL.md](../agents/sentinella/_skills/check-usage-http/SKILL.md) | Check usage via endpoint HTTP provider | — | 2026-04-28 | ✅ |
 | [agents/sentinella/_skills/check-usage-tui/SKILL.md](../agents/sentinella/_skills/check-usage-tui/SKILL.md) | Check usage via TUI/CLI provider | — | 2026-04-28 | ✅ |
 | [agents/sentinella/_skills/decision-throttle/SKILL.md](../agents/sentinella/_skills/decision-throttle/SKILL.md) | Logica decisione throttle (STEADY/ATTENZIONE/EMERGENZA) | — | 2026-06-21 | ✅ |
-| [agents/sentinella/_skills/emergency-handling/SKILL.md](../agents/sentinella/_skills/emergency-handling/SKILL.md) | Gestione emergenze rate (HARD FREEZE, PAUSA TEAM) | — | 2026-04-28 | ✅ |
+| [agents/sentinella/_skills/emergency-handling/SKILL.md](../agents/sentinella/_skills/emergency-handling/SKILL.md) | Gestione emergenze rate (HARD FREEZE, PAUSA TEAM) | — | 2026-08-03 | ✅ |
 | [agents/sentinella/_skills/memory-state/SKILL.md](../agents/sentinella/_skills/memory-state/SKILL.md) | Stato in memoria Sentinella tra tick | — | 2026-04-28 | ✅ |
 | [agents/sentinella/_skills/order-formats/SKILL.md](../agents/sentinella/_skills/order-formats/SKILL.md) | Format ordini protocollo (MANTIENI/SCALA UP/RIENTRO) | — | 2026-05-22 | ✅ |
 
@@ -181,7 +181,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [docs/about/STORY.md](./about/STORY.md) | Origin story (legacy 200 offerte/5 colloqui in 2 settimane) | — | 2026-07-03 | ✅ |
 | [docs/about/VISION.md](./about/VISION.md) | Vision long-term, Maestro 🧙‍♂️, "AI on the side of workers | — | 2026-07-01 | ✅ |
-| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica per fasi (open source → desktop) | — | 2026-07-25 | ✅ |
+| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica per fasi (open source → desktop) | — | 2026-08-03 | ✅ |
 | [docs/about/PROVIDERS.md](./about/PROVIDERS.md) | Matrice provider Claude/Codex/Kimi con costi e tier | — | 2026-07-03 | ✅ |
 | [docs/about/MONITORING.md](./about/MONITORING.md) | Stack monitoring V5 (Bridge + Sentinella event-driven) | — | 2026-07-03 | ✅ |
 | [docs/about/RESULTS.md](./about/RESULTS.md) | Risultati reali utenti beta (matrice persona × provider) | — | 2026-07-03 | ✅ |
@@ -216,6 +216,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/README.md](./guides/README.md) | 📘 docs/guides — user & operator guides — How to install, run, and operate Job Hunter Team. | — | 2026-07-19 | ✅ |
 | [docs/guides/VPS-SETUP-WIZARD.md](./guides/VPS-SETUP-WIZARD.md) | VPS setup from the native office — This is the current non-terminal path for running Job Hunter Team on an | — | 2026-07-26 | ✅ |
 | [docs/guides/ADDING-A-PROVIDER.md](./guides/ADDING-A-PROVIDER.md) | Guida contributor: gate ADR-0002, touchpoint runtime/provider, evidenza live richiesta e check anti-drift | — | — | ✅ |
+| [docs/guides/LOCAL-SCORER.md](./guides/LOCAL-SCORER.md) | Experimental role-scoped Local Scorer setup, quality harness, hardware evidence requirements, and explicit zero-cloud limits | 2026-08-03 | — | 🟢 |
 
 
 ## 🛰️ docs/internal
@@ -228,7 +229,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-06-13-fix-batch-recheck-pacing-design.md](./internal/architecture/2026-06-13-fix-batch-recheck-pacing-design.md) | 🔧 Fix-batch 2026-06-13 — recheck quality · scout-resume · pacing · non_producing · totalQuota — Stato: approvato dall'utente ("implementa tutto"), distribuito a 3. | — | 2026-06-14 | ✅ |
 | [docs/internal/architecture/2026-06-13-maintainer-toolhealth-resilience-design.md](./internal/architecture/2026-06-13-maintainer-toolhealth-resilience-design.md) | 👷‍♂️ Mantenitore 👷‍♂️ + Tool-Health + Resilience — Design unificato — Data: 2026-06-13 · Autori: dev1, dev2, dev3 (panel) · Stato: approvato dall'utente, in implementazione | — | 2026-06-25 | ✅ |
-| [docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md](./internal/architecture/2026-06-15-interaction-planes-redesign-design.md) | Interaction Planes — Redesign (2026-06-15) — Design / decision doc. | — | 2026-07-23 | ✅ |
+| [docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md](./internal/architecture/2026-06-15-interaction-planes-redesign-design.md) | Interaction Planes — Redesign (2026-06-15) — Design / decision doc. | — | 2026-08-03 | ✅ |
 | [docs/internal/architecture/2026-06-15-lean-comms-redesign.md](./internal/architecture/2026-06-15-lean-comms-redesign.md) | 📡 Lean-comms redesign — pull-default, push solo per l'importante — Data: 2026-06-15 · Owner spec: dev1 · Implementazione: dev1 + dev2 + dev3 (insieme, | — | 2026-07-03 | ✅ |
 | [docs/internal/architecture/2026-06-20-data-sync-and-dashboard-split-design.md](./internal/architecture/2026-06-20-data-sync-and-dashboard-split-design.md) | 🔄 Data sync + dashboard split — design (2026-06-20) — Design / decision doc. | — | 2026-07-25 | ✅ |
 | [docs/internal/architecture/2026-06-20-taxonomy-brain-driven-redesign.md](./internal/architecture/2026-06-20-taxonomy-brain-driven-redesign.md) | 🧠 Tassonomia role_family resa BRAIN-DRIVEN — recon, redesign, deploy — Data: 2026-06-20 · Stato: ✅ IMPLEMENTATO + DEPLOYATO + betaA RESETTATO · | — | 2026-07-03 | ✅ |
@@ -334,6 +335,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md](./internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md) | [PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi | — | 2026-08-03 | ✅ |
 | [docs/internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md](./internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) | Missione M4: protocollo riproducibile per varianza Kimi 88→92 e confronto parametrico PAYG/subscription, con gap dati live | — | — | ✅ |
 | [docs/internal/architecture/2026-08-03-local-vault-design.md](./internal/architecture/2026-08-03-local-vault-design.md) | [JHT-LOCAL-VAULT]: envelope encryption, broker runtime, migrazione senza plaintext persistente e decisioni ADR prima della crypto | — | — | ✅ |
+| [docs/internal/architecture/provider-touchpoint-inventory.md](./internal/architecture/provider-touchpoint-inventory.md) | Machine-checked inventory of provider-specific seams and the narrow M5 Local Scorer architecture boundary | 2026-08-03 | — | 🟢 |
 
 
 ## 🔒 docs/security

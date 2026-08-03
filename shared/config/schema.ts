@@ -130,8 +130,34 @@ export const WorkingHoursSchema = z
     },
   );
 
+export const LocalScorerSchema = z.object({
+  enabled: z.boolean().default(false),
+  backend: z.literal("openai_compatible").default("openai_compatible"),
+  base_url: z
+    .string()
+    .url()
+    .refine((value) => {
+      try {
+        const url = new URL(value);
+        return (
+          url.protocol === "http:" &&
+          ["localhost", "127.0.0.1", "[::1]", "host.docker.internal"].includes(
+            url.hostname,
+          )
+        );
+      } catch {
+        return false;
+      }
+    }, "base_url deve puntare a un endpoint HTTP locale"),
+  model: z.string().min(1, "model obbligatorio"),
+  mode: z.enum(["shadow", "write"]).default("shadow"),
+  timeout_seconds: z.number().int().min(1).max(600).default(120),
+  poll_seconds: z.number().int().min(5).max(3600).default(120),
+});
+
 export const TeamSettingsSchema = z.object({
   working_hours: WorkingHoursSchema.optional(),
+  local_scorer: LocalScorerSchema.optional(),
 });
 
 // --- Root schema ---
