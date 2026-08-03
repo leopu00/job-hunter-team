@@ -141,30 +141,14 @@ KNOWN_SKILL_GAPS = {
 # meno margine per improvvisare. Quelle sono gia' state fatte (2026-07-30:
 # agent-emergency, agent-unblock, graceful-shutdown); qui resta il resto.
 # Formato: (skill, locale).
-# ── Eccezione DICHIARATA E TEMPORANEA ────────────────────────────────────
-# Questa lista era stata SVUOTATA traducendo tutte le skill: e' un traguardo,
-# non un dettaglio, e va difeso.
-#
-# `team-modes` (il manuale delle modalita' operative) rientra qui per un solo
-# motivo: nasce su un ramo in inglese mentre un altro ramo chiudeva il debito
-# di traduzione, e fondendoli e' l'unica rimasta indietro. La traduzione e'
-# gia' assegnata: **questa lista deve tornare vuota**.
-#
-# Finche' e' qui, un Capitano che gira in spagnolo riceve il manuale in
-# inglese senza che nulla lo segnali — cioe' esattamente il guasto silenzioso
-# che questo test esiste per impedire.
-KNOWN_SKILL_LOCALIZATION_GAPS = {
-    ('team-modes', 'it'),
-    ('team-modes', 'es'),
-    ('team-modes', 'fr'),
-    ('team-modes', 'de'),
-    ('team-modes', 'pt'),
-    ('team-modes', 'hu'),
-}
+KNOWN_SKILL_LOCALIZATION_GAPS = set()
 # Vuota dal 2026-08-03: le sette skill che vivevano qui sono tradotte in tutte
-# e sei le lingue. Da adesso una skill DICHIARATA in un manifest senza le sue
-# localizzazioni fa cadere il gate subito, invece di essere ammessa qui e poi
-# dimenticata. Se una voce torna, deve portare la ragione e una data.
+# e sei le lingue. L'ultima a rientrare e poi uscire e' stata `team-modes` (il
+# manuale delle modalita' operative): nata su un ramo in inglese mentre un
+# altro ramo chiudeva il debito di traduzione, tradotta in tutte e sei le
+# lingue il 2026-08-03. Da adesso una skill DICHIARATA in un manifest senza le
+# sue localizzazioni fa cadere il gate subito, invece di essere ammessa qui e
+# poi dimenticata. Se una voce torna, deve portare la ragione e una data.
 
 
 def _roles():
