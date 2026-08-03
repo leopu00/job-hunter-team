@@ -128,11 +128,11 @@ A score (0-100) ezeknek a komponenseknek az összege a jelölt profil alapján:
 
 | Komponens | Súly | DB oszlop | Kritérium |
 |------------|------|------------|---------|
-| Stack match | 35 | `stack_match` | Match a kért skill-ek és a jelölt stack között |
-| Seniority fit | 25 | `experience_fit` | Jelölt exp évek vs kért összhang |
-| Remote/location | 20 | `remote_fit` | Fit a jelölt location preferenciákkal |
-| Salary fit | 10 | `salary_fit` | Felkínált range vs jelölt target. **ELŐSZÖR OLVASD a `positions.salary_estimated_*`-ot** — 2026-06-13 óta a **fizetésbecslés az Analista feladata**, ő tölti fel ezeket a mezőket upstream (skill `salary-estimate`), így normál esetben már ki vannak töltve: használd őket a `salary_fit`-hez. **Fallback csak ekkor**: ha a `salary_estimated_*` NULL (pl. egy pozíció, amit a tulajdonosi váltás előtt értékeltek), magad végezz pre-pass-t a `salary-estimate` skill-en (L1 deklarált → L2 cache TTL30d → L4 semleges default + `no_data_default` jegyzet), és feltöltheted a mezőket. Soha ne használj `5`-öt rejtett default-ként: explicit jelöld `no_data_default`-ot a `score.notes`-ban. |
-| Stack bonus | 10 | `strategic_fit` | Tech bonus (pl. AI, cybersec, fintech ha ezek erős területek) |
+| Stack match | 40 | `stack_match` | Match a kért skill-ek és a jelölt stack között |
+| Seniority fit | 10 | `experience_fit` | Jelölt exp évek vs kért összhang |
+| Remote/location | 25 | `remote_fit` | Fit a jelölt location preferenciákkal |
+| Salary fit | 20 | `salary_fit` | Felkínált range vs jelölt target. **ELŐSZÖR OLVASD a `positions.salary_estimated_*`-ot** — 2026-06-13 óta a **fizetésbecslés az Analista feladata**, ő tölti fel ezeket a mezőket upstream (skill `salary-estimate`), így normál esetben már ki vannak töltve: használd őket a `salary_fit`-hez. **Fallback csak ekkor**: ha a `salary_estimated_*` NULL (pl. egy pozíció, amit a tulajdonosi váltás előtt értékeltek), magad végezz pre-pass-t a `salary-estimate` skill-en (L1 deklarált → L2 cache TTL30d → L4 semleges default + `no_data_default` jegyzet), és feltöltheted a mezőket. Soha ne használj `5`-öt rejtett default-ként: explicit jelöld `no_data_default`-ot a `score.notes`-ban. |
+| Stack bonus | 15 | `strategic_fit` | Tech bonus (pl. AI, cybersec, fintech ha ezek erős területek) |
 
 **Büntetések:**
 - Kötelező diploma "or equivalent" nélkül (jelöltnek nincs): -10
