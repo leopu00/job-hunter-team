@@ -1,4 +1,4 @@
-import yaml from 'js-yaml'
+import { load as loadYaml } from 'js-yaml'
 import fs from 'fs'
 import path from 'path'
 import type { CandidateProfile } from './types'
@@ -14,7 +14,7 @@ export function readProfile(workspacePath: string): CandidateProfile | null {
   for (const p of paths) {
     if (fs.existsSync(p)) {
       try {
-        const raw = yaml.load(fs.readFileSync(p, 'utf8')) as any
+        const raw = loadYaml(fs.readFileSync(p, 'utf8')) as any
         if (!raw) return null
         return mapYamlToProfile(raw)
       } catch {
@@ -38,7 +38,7 @@ export function readWorkspaceProfile(workspacePath: string): CandidateProfile | 
   }
   if (!fs.existsSync(p)) return null
   try {
-    const raw = yaml.load(fs.readFileSync(p, 'utf8')) as any
+    const raw = loadYaml(fs.readFileSync(p, 'utf8')) as any
     if (!raw) return null
     const profile = mapYamlToProfile(raw)
     if (!profile.name && !profile.target_role) return null
