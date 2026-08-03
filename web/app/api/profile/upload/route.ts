@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireLocalWrite } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import { JHT_USER_UPLOADS_DIR } from "@/lib/jht-paths";
 import fs from "fs";
 import path from "path";
@@ -19,6 +19,8 @@ const ALLOWED_EXTENSIONS = [
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const ro = await requireLocalWrite();
   if (ro) return ro;
   let formData: FormData;

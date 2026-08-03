@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireLocalWrite } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as os from "node:os";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { sanitizedError } from "@/lib/error-response";
 
@@ -174,6 +173,8 @@ function defaultStats(): ChannelStats {
 
 /** GET — lista canali con stato, capabilities e stats */
 export async function GET(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const filter = req.nextUrl.searchParams.get("status");
   const config = loadConfig();
   const allStats = loadStats();
@@ -214,6 +215,8 @@ export async function GET(req: NextRequest) {
 
 /** PUT — toggle enable/disable canale */
 export async function PUT(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const ro = await requireLocalWrite();
   if (ro) return ro;
   try {

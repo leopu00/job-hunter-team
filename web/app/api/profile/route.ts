@@ -3,12 +3,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { isProfileComplete, readWorkspaceProfile } from "@/lib/profile-reader";
-import { isLocalRequest } from "@/lib/auth";
+import { isLocalRequest, requireAuth } from "@/lib/auth";
 import { JHT_PROFILE_READY_FLAG } from "@/lib/jht-paths";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   // Due sorgenti, una per corsia: sul cloud il profilo è la riga
   // `candidate_profiles` dell'utente loggato, in locale è il YAML nel
   // workspace di chi ha aperto l'app.
