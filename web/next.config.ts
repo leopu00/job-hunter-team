@@ -57,6 +57,12 @@ const nextConfig: NextConfig = {
     '*': [
       path.join(MONOREPO_ROOT, 'cli/**'),
       path.join(MONOREPO_ROOT, 'agents/**'),
+      // Il gioco Godot: la cartella più pesante del monorepo (centinaia di
+      // MB tra scene, asset e export) e il web non ne importa niente — le
+      // uniche occorrenze di `game/` sotto web/ sono commenti che indicano
+      // dove vive l'onboarding. Restava tracciata solo perché escluderla
+      // cambia la build Vercel, che è una decisione e non una pulizia.
+      path.join(MONOREPO_ROOT, 'game/**'),
       path.join(MONOREPO_ROOT, 'e2e/**'),
       path.join(MONOREPO_ROOT, 'tests/**'),
       path.join(MONOREPO_ROOT, 'docs/**'),

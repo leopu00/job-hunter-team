@@ -56,6 +56,14 @@ export function saveApiKey(provider: ApiKeyProvider, apiKey: string): void {
   writeCredential(provider, credential);
 }
 
+/**
+ * Risolve una API key da env var o file cifrato.
+ *
+ * @throws {MissingPassphraseError} se la credenziale su file serve davvero ma
+ *   la passphrase manca. In `env-first` con env var valorizzata il file non
+ *   viene nemmeno aperto: una passphrase mancante non deve rompere chi sta già
+ *   passando la chiave dall'ambiente.
+ */
 export function resolveApiKey(
   provider: ApiKeyProvider,
   precedence: CredentialPrecedence = "env-first",
@@ -65,33 +73,25 @@ export function resolveApiKey(
   }
 
   const envKey = readEnvKey(provider);
-  const fileCredential = readCredential(provider) as ApiKeyCredential | null;
+  const fromEnv = (apiKey: string): ResolvedCredential => ({
+    credential: { type: "api_key", provider, apiKey, savedAt: 0 },
+    source: "env",
+  });
 
-  if (precedence === "env-first") {
-    if (envKey) {
-      return {
-        credential: { type: "api_key", provider, apiKey: envKey, savedAt: 0 },
-        source: "env",
-      };
-    }
-    if (fileCredential?.type === "api_key") {
-      return { credential: fileCredential, source: "file" };
-    }
-  } else {
-    if (fileCredential?.type === "api_key") {
-      return { credential: fileCredential, source: "file" };
-    }
-    if (envKey) {
-      return {
-        credential: { type: "api_key", provider, apiKey: envKey, savedAt: 0 },
-        source: "env",
-      };
-    }
+  if (precedence === "env-first" && envKey) return fromEnv(envKey);
+
+  const fileCredential = readCredential(provider) as ApiKeyCredential | null;
+  if (fileCredential?.type === "api_key") {
+    return { credential: fileCredential, source: "file" };
   }
+  if (envKey) return fromEnv(envKey);
   return null;
 }
 
 export function deleteApiKey(provider: ApiKeyProvider): boolean {
+  if (!API_KEY_PROVIDERS.has(provider)) {
+    throw new Error(`Provider non supportato: ${provider}`);
+  }
   return deleteCredential(provider);
 }
 
@@ -120,6 +120,10 @@ export function saveOAuthToken(
   writeCredential(provider, credential);
 }
 
+/**
+ * @throws {MissingPassphraseError} se il token è su disco ma la passphrase
+ *   manca: il token esiste, semplicemente non è leggibile.
+ */
 export function resolveOAuthToken(
   provider: OAuthProvider,
 ): (OAuthCredential & { isExpired: boolean }) | null {
@@ -135,6 +139,9 @@ export function resolveOAuthToken(
 }
 
 export function deleteOAuthToken(provider: OAuthProvider): boolean {
+  if (!OAUTH_PROVIDERS.has(provider)) {
+    throw new Error(`Provider OAuth non supportato: ${provider}`);
+  }
   return deleteCredential(provider);
 }
 

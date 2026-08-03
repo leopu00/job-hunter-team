@@ -11,6 +11,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -23,16 +24,54 @@ import {
   generateSalt,
   isValidPayload,
 } from "./crypto.js";
-import { resolveJhtPassphrase } from "./passphrase.js";
-import type { Credential, EncryptedPayload } from "./types.js";
+import { MissingPassphraseError, resolveJhtPassphrase } from "./passphrase.js";
+import type {
+  Credential,
+  CredentialReadResult,
+  EncryptedPayload,
+} from "./types.js";
 
 const CREDENTIALS_DIR = JHT_CREDENTIALS_DIR;
 const SALT_FILE = join(CREDENTIALS_DIR, ".salt");
 const FILE_MODE = 0o600;
+const DIR_MODE = 0o700;
+const PASSPHRASE_ENV_VAR = "JHT_CREDENTIALS_KEY";
 
+/** Il chmod di irrigidimento fallito viene segnalato una volta sola. */
+let dirModeWarned = false;
+
+/**
+ * Crea la directory credenziali, o irrigidisce quella che trova.
+ *
+ * `mode` di `mkdirSync` vale **solo** alla creazione: una directory già
+ * esistente a 0755 — lasciata da un altro tool o ripristinata da un backup —
+ * non veniva mai corretta. I file dentro restano 0600, quindi il danno è
+ * l'enumerabilità: chiunque sul sistema può sapere per quali provider esiste
+ * una credenziale.
+ */
 function ensureDir(): void {
   if (!existsSync(CREDENTIALS_DIR)) {
-    mkdirSync(CREDENTIALS_DIR, { recursive: true, mode: 0o700 });
+    mkdirSync(CREDENTIALS_DIR, { recursive: true, mode: DIR_MODE });
+    return;
+  }
+
+  try {
+    if ((statSync(CREDENTIALS_DIR).mode & 0o077) === 0) return;
+    chmodSync(CREDENTIALS_DIR, DIR_MODE);
+  } catch (error) {
+    // ~/.jht appartiene al container (uid 1001): un chmod dall'utente host
+    // fallisce con EPERM, e su filesystem senza permessi POSIX non si applica
+    // affatto. È una misura di difesa in profondità, non una precondizione:
+    // se non riesce si avvisa e si prosegue, perché bloccare l'avvio qui
+    // renderebbe illeggibili credenziali perfettamente valide.
+    if (!dirModeWarned) {
+      dirModeWarned = true;
+      console.warn(
+        `[credentials] permessi di ${CREDENTIALS_DIR} non irrigiditi a 0700 ` +
+          `(${(error as NodeJS.ErrnoException).code ?? "errore"}): la ` +
+          `directory resta leggibile da altri utenti del sistema.`,
+      );
+    }
   }
 }
 
@@ -61,7 +100,20 @@ function resolveMasterKey(passphrase: string): Buffer {
  * → throw `MissingPassphraseError`. Niente piu' fallback machine-derived.
  */
 function resolvePassphrase(): string {
-  return resolveJhtPassphrase({ envVar: "JHT_CREDENTIALS_KEY" });
+  return resolveJhtPassphrase({ envVar: PASSPHRASE_ENV_VAR });
+}
+
+/**
+ * Errore di passphrase mancante contestualizzato sul provider: dice che il
+ * dato c'è e cosa serve per leggerlo, non solo che la lettura è fallita.
+ */
+function missingPassphraseError(provider: string): MissingPassphraseError {
+  return new MissingPassphraseError(
+    PASSPHRASE_ENV_VAR,
+    `Manca la passphrase, non la credenziale: «${provider}» è salvata e ` +
+      `integra in ${CREDENTIALS_DIR}, ma senza ${PASSPHRASE_ENV_VAR} non è ` +
+      `decifrabile. Il file non è stato toccato.`,
+  );
 }
 
 function credentialPath(provider: string): string {
@@ -85,24 +137,71 @@ export function writeCredential(
 }
 
 /**
- * Legge e decifra una credenziale da disco.
- * Ritorna null se il file non esiste o è corrotto.
+ * Legge una credenziale distinguendo i motivi del fallimento, senza mai
+ * lanciare. È la forma da usare dove «passphrase mancante» va mostrata
+ * all'utente invece di interrompere il flusso (status page, wizard, health).
+ *
+ * L'ordine dei controlli non è casuale: il file viene ispezionato **prima**
+ * della passphrase, così una credenziale mai salvata resta `absent` anche
+ * quando la passphrase manca — non ha senso reclamare una chiave per un dato
+ * che non c'è.
  */
-export function readCredential(provider: string): Credential | null {
+export function inspectCredential(provider: string): CredentialReadResult {
   const path = credentialPath(provider);
-  if (!existsSync(path)) return null;
+  if (!existsSync(path)) return { status: "absent" };
+
+  let payload: EncryptedPayload;
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
+    if (!isValidPayload(parsed)) return { status: "corrupted" };
+    payload = parsed;
+  } catch {
+    return { status: "corrupted" };
+  }
+
+  let passphrase: string;
+  try {
+    passphrase = resolvePassphrase();
+  } catch (error) {
+    if (error instanceof MissingPassphraseError) {
+      return {
+        status: "missing_passphrase",
+        message: missingPassphraseError(provider).message,
+        envVar: PASSPHRASE_ENV_VAR,
+      };
+    }
+    throw error;
+  }
 
   try {
-    const raw = readFileSync(path, "utf-8");
-    const payload = JSON.parse(raw) as unknown;
-    if (!isValidPayload(payload)) return null;
-
-    const passphrase = resolvePassphrase();
     const key = resolveMasterKey(passphrase);
-    return decrypt<Credential>(payload, key);
+    return { status: "ok", credential: decrypt<Credential>(payload, key) };
   } catch {
-    return null;
+    // Auth tag GCM fallito, salt sostituito, passphrase diversa da quella di
+    // scrittura: casi crittograficamente indistinguibili fra loro.
+    return { status: "corrupted" };
   }
+}
+
+/**
+ * Legge e decifra una credenziale da disco.
+ *
+ * Ritorna `null` se il file non esiste o non è decifrabile (corrotto, oppure
+ * cifrato con un'altra passphrase — con GCM i due casi non si distinguono).
+ *
+ * @throws {MissingPassphraseError} se il file esiste ed è integro ma nessuna
+ *   sorgente fornisce la passphrase. Prima questo caso tornava `null`, cioè
+ *   una credenziale recuperabile veniva riportata come mai salvata, in
+ *   contraddizione con `writeCredential` che invece lancia. Chi ha bisogno di
+ *   un esito senza eccezioni usi `inspectCredential`.
+ */
+export function readCredential(provider: string): Credential | null {
+  const result = inspectCredential(provider);
+  if (result.status === "ok") return result.credential;
+  if (result.status === "missing_passphrase") {
+    throw missingPassphraseError(provider);
+  }
+  return null;
 }
 
 /**

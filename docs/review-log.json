@@ -1271,18 +1271,8 @@
       "last_review": null
     },
     {
-      "path": "agents/_skills/throttle-ack/SKILL.md",
-      "description": "Skill agenti: `throttle-ack <nome>` come primo comando di ogni `[RIPRENDI]` — firma il risveglio (NOTIFIED -> ACTIVE), su cui il watchdog escala",
-      "last_review": null
-    },
-    {
       "path": "agents/_skills/throttle-distribution/SKILL.md",
       "description": "Skill Capitano: convertire un segnale di pacing team-level nella ripartizione per-agente del throttle (un numero unico non significa stesso valore a tutti)",
-      "last_review": null
-    },
-    {
-      "path": "agents/_skills/throttle-set/SKILL.md",
-      "description": "Skill Capitano: `throttle-set` — l'unico modo in cui i ritmi vengono scritti; il motore rilegge da sé al ciclo successivo dell'agente",
       "last_review": null
     },
     {
@@ -1336,16 +1326,6 @@
       "last_review": null
     },
     {
-      "path": "docs/internal/roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md",
-      "description": "Ticket `[MODE-INJECTION-HOURLY-PROMPT]` (implementato 30/07): la modalità operativa iniettata nel messaggio periodico del Capitano",
-      "last_review": null
-    },
-    {
-      "path": "docs/internal/roadmap/2026-07-30-ticket-throttle-engine-external.md",
-      "description": "Ticket `[THROTTLE-ENGINE-EXTERNAL]` (implementato 30/07): throttle come motore Python esterno agli agenti, con notifica tmux e flag di stato",
-      "last_review": null
-    },
-    {
       "path": "docs/sessions/2026-07-27-first-run-night-observations.md",
       "description": "Note di sessione: primo run notturno di un team nuovo su VPS, solo misure sul campo (il thrash viene dal numero di agenti, non dalla loro velocità)",
       "last_review": null
@@ -1358,6 +1338,11 @@
     {
       "path": "e2e/tests/quarantine/README.md",
       "description": "Le 75 spec E2E in quarantena: escluse da ogni run via `testIgnore`, conservate per le asserzioni recuperabili",
+      "last_review": null
+    },
+    {
+      "path": "game/assets/_attic/README.md",
+      "description": "Perche' questi asset sono archiviati invece che cancellati, e come rientrerebbero",
       "last_review": null
     }
   ]

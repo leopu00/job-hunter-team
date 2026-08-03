@@ -27,7 +27,7 @@ Public users will ask: *"does it work for my role? on my provider? at my cost?"*
 
 - 📝 Use JHT for your real job search for **at least 2 weeks**
 - 📊 Share your **numbers** at the end (offers analyzed, CVs sent, interviews — see the [`RESULTS.md`](../about/RESULTS.md) template)
-- 🐛 File **issues** for everything that confused, broke, or surprised you — the workflow is in [`docs/guides/FEEDBACK-TICKETING.md`](FEEDBACK-TICKETING.md)
+- 🐛 **Report** everything that confused, broke, or surprised you. From the office, the sidebar has **System → "Report a problem"** (also reachable from the diagnostics screen): prefer it for bugs, because it attaches a snapshot of your machine that is stripped of personal data — and shows it to you before sending. From the web app, the same entry is in the account menu (avatar, top-right); without an account, the [`/contact`](https://jobhunterteam.ai/contact) form. GitHub issues are welcome too if you have an account. Everything lands in the same inbox — how it is routed is in [`docs/guides/FEEDBACK-TICKETING.md`](FEEDBACK-TICKETING.md)
 - 🗣️ Be available for a **30-minute call** at the end of the test period
 - 🧪 **No cherry-picking** — report failures and rate-limit incidents too. Bad cells matter as much as good ones.
 
@@ -84,4 +84,4 @@ If "rough edges" doesn't scare you, you're the kind of beta tester we need.
 - [`STORY.md`](../about/STORY.md) — why this project exists
 - [`RESULTS.md`](../about/RESULTS.md) — case study template + published results
 - [`MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel monitoring stack (architecture + test data)
-- [`docs/guides/FEEDBACK-TICKETING.md`](FEEDBACK-TICKETING.md) — how to file useful feedback
+- [`docs/guides/FEEDBACK-TICKETING.md`](FEEDBACK-TICKETING.md) — where the report buttons are, and where reports end up

@@ -384,8 +384,8 @@ fallback, no la primera parada.
 ### Patron de fallo a EVITAR
 
 ```
-❌ "Mi dispiace, non posso processare i messaggi vocali in questo momento.
-    Puoi rimandarmi il messaggio in testo?"
+❌ "Lo siento, no puedo procesar los mensajes de voz en este momento.
+    ¿Puedes reenviarme el mensaje en texto?"
 
 ✅ (acknowledge instantly) "Got it, processing the voice note…"
    (in background: install whisper if missing → transcribe → reply with content)
