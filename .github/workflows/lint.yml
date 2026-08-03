@@ -54,6 +54,44 @@ jobs:
       - name: Prettier check — shared/
         run: npx prettier --check "shared/**/*.ts" --ignore-path /dev/null
 
+  # `scripts/review-log.py sync` non era agganciato a niente: il registro è
+  # stato riallineato a mano il 2026-07-30 (49 date, 22 file) e da lì in poi
+  # nulla impediva che si sfasasse di nuovo. Qui gira la variante read-only.
+  #
+  # Perché CI e non un hook pre-commit:
+  #  - un hook che rigenera `docs/REVIEW-LOG.md` e lo mette in stage cambia il
+  #    contenuto del commit dell'utente. È invasivo e sorprende;
+  #  - e non funzionerebbe comunque. La colonna `🔄 Update` viene da
+  #    `git log -1 --format=%cs`: al momento del pre-commit il commit non
+  #    esiste ancora, quindi ogni .md in stage porterebbe la data
+  #    *precedente*. Il file nascerebbe già sfasato.
+  #
+  # `check` non scrive niente e non tocca mai `last_review` — la colonna
+  # «letto» resta vuota finché qualcuno legge davvero. Confronta solo
+  # l'insieme dei file e le colonne che vengono dal JSON; le due colonne
+  # derivate da git sono escluse, altrimenti il gate sarebbe rosso su ogni PR
+  # che tocca un .md, per un motivo che nessuno può correggere.
+  #
+  # Gira su ogni PR e non solo su quelle che toccano un .md: filtrare per path
+  # a livello di workflow gaterebbe anche ESLint e Prettier, e un check
+  # skippato che la branch protection aspetta blocca la PR. Il job costa
+  # ~15 secondi e non installa dipendenze.
+  review-log:
+    name: Review log — indice allineato
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        # Basta il checkout shallow: `check` non legge la history (le uniche
+        # colonne che la userebbero sono proprio quelle che non confronta).
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: review-log check
+        run: python scripts/review-log.py check
+
   # `.pre-commit-config.yaml` configura quattro hook che nessuna pipeline
   # eseguiva: `grep` su .github/workflows/ dava zero risultati e l'unico
   # installer dell'hook è scripts/setup.sh, marcato deprecated dal suo stesso
