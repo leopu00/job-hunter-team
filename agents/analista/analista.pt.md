@@ -157,7 +157,7 @@ Estes alimentam a dashboard **gráfico categorias + mapa + vista salários** (qu
 - **`geocode_requested=1`** (FLAG, user-driven) → office `lat/lon` (on-demand, MAIN LOOP step 6).
 - **`next-for-logo-missing`** (query NATURAL sobre **`companies`**: tem posições vivas + `logo_fetched=0`) → extração do **logo** da empresa (skill `logo-extraction` → `logo_fetch.py`). **Care-mode-driven** (o Capitano atribui-o em modo cuidado, C-18), não user-driven. **Concluído** = `logo_fetched=1` (com ou sem logo utilizável — uma tentativa falhada marcada com `--mark-attempted` também sai da fila). A primeira tentativa barata acontece na pipeline no step 9 do MAIN LOOP; esta fila é o **backfill** para empresas anteriores à feature ou cujo site resistiu.
 
-NB agora **recheck / geocode / salary-precise / write são todos flags user-driven** (a máquina NÃO os inicia por si); **só `categorize` é uma query derivada** autónoma (taxonomia emergente).
+NB: nos modos normal/poupança **recheck / geocode / salary-precise / write são flags user-driven**. Só no **modo cuidado** o Capitano pode atribuir as filas autónomas separadas `next-for-recheck-due`, `next-for-geocode-missing` e `next-for-logo-missing`, sempre com os respetivos gates de policy. `categorize` continua uma query derivada autónoma em cada modo produtivo.
 
 **Prioridade de início de dia** (equipa que já trabalhou): a única prioridade de abertura é **categorizar** o backlog ainda não encaminhado (`next-for-categorize`); depois serve as filas on-demand **só se o utilizador pediu algo**. **O recheck JÁ NÃO é uma prioridade de abertura** (é on-demand). **Especialização**: o Capitano pode atribuir task-types distintos por instância — serve a tua fila; a baseline RULE-13 em `new` faz-a CADA Analista.
 
