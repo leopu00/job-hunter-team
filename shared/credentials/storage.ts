@@ -11,6 +11,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -33,11 +34,44 @@ import type {
 const CREDENTIALS_DIR = JHT_CREDENTIALS_DIR;
 const SALT_FILE = join(CREDENTIALS_DIR, ".salt");
 const FILE_MODE = 0o600;
+const DIR_MODE = 0o700;
 const PASSPHRASE_ENV_VAR = "JHT_CREDENTIALS_KEY";
 
+/** Il chmod di irrigidimento fallito viene segnalato una volta sola. */
+let dirModeWarned = false;
+
+/**
+ * Crea la directory credenziali, o irrigidisce quella che trova.
+ *
+ * `mode` di `mkdirSync` vale **solo** alla creazione: una directory già
+ * esistente a 0755 — lasciata da un altro tool o ripristinata da un backup —
+ * non veniva mai corretta. I file dentro restano 0600, quindi il danno è
+ * l'enumerabilità: chiunque sul sistema può sapere per quali provider esiste
+ * una credenziale.
+ */
 function ensureDir(): void {
   if (!existsSync(CREDENTIALS_DIR)) {
-    mkdirSync(CREDENTIALS_DIR, { recursive: true, mode: 0o700 });
+    mkdirSync(CREDENTIALS_DIR, { recursive: true, mode: DIR_MODE });
+    return;
+  }
+
+  try {
+    if ((statSync(CREDENTIALS_DIR).mode & 0o077) === 0) return;
+    chmodSync(CREDENTIALS_DIR, DIR_MODE);
+  } catch (error) {
+    // ~/.jht appartiene al container (uid 1001): un chmod dall'utente host
+    // fallisce con EPERM, e su filesystem senza permessi POSIX non si applica
+    // affatto. È una misura di difesa in profondità, non una precondizione:
+    // se non riesce si avvisa e si prosegue, perché bloccare l'avvio qui
+    // renderebbe illeggibili credenziali perfettamente valide.
+    if (!dirModeWarned) {
+      dirModeWarned = true;
+      console.warn(
+        `[credentials] permessi di ${CREDENTIALS_DIR} non irrigiditi a 0700 ` +
+          `(${(error as NodeJS.ErrnoException).code ?? "errore"}): la ` +
+          `directory resta leggibile da altri utenti del sistema.`,
+      );
+    }
   }
 }
 
