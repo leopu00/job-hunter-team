@@ -1,50 +1,50 @@
 #!/usr/bin/env python3
 """Voce narrante del video di presentazione — generazione ISOLATA dal montaggio.
 
-Copione RICCO (tornata 03/08-bis): l'utente preferiva la versione a 12 battute
-alla dimagrita a 7 — qui 11 battute che recuperano i contenuti tagliati (i
-cinque ruoli e cosa fanno, la chat con gli agenti, i numeri reali del mese),
-senza affastellare: una battuta per scena, l'unica scena muta è webpages
-(parla a didascalie). Il montaggio dimensiona le scene sulle durate REALI dei
-wav (durations.txt), quindi il testo può respirare senza mai essere compresso.
+Copione «Now Playable» (regia 03/08, §6): otto battute V1..V8, PAROLA PER
+PAROLA dalla regia approvata — niente riscritture in produzione (§7.4: le
+formule sulla copertura web sono quelle verificate, non si «migliorano»).
+Tono: brillante, complice, da trailer di gioco raccontato da un amico.
+Il montaggio dimensiona le scene sulle durate REALI dei wav (durations.txt).
 
-Motore: ElevenLabs (George — Warm, Captivating Storyteller, en-GB), scelto
-confrontando 4 candidate maschili sulla stessa frase (George/Roger/Brian/
-Bill): Brian correva monotono (21 caratteri/s, IQR f0 17 Hz), Bill teatrale
-e lento (14,5 c/s, IQR 74), Roger e George alla pari sul passo (~17,5 c/s)
-ma George ha dizione più nitida (centroide 3,7 kHz) su un baritono caldo
-(f0 mediana 124 Hz) — ed è la voce disegnata per narrazione. Il vecchio
-motore `say` (Daniel) resta come fallback offline: basta cambiare ENGINE.
+Motore: ElevenLabs, voce George (Warm, Captivating Storyteller, en-GB).
+George era stato scelto per il taglio narrativo precedente; per il registro
+nuovo è stato RIMESSO in discussione con un'audizione misurata sulla V1
+contro tre voci più «da trailer» (Liam, Charlie, Will):
+  | voce    | c/s  | f0 med | centroide | sd RMS |
+  | George  | 15,7 |  137   |  2320 Hz  | 0,099  |  ← tenuto
+  | Liam    | 14,9 |  131   |  1883 Hz  | 0,093  |
+  | Charlie | 17,3 |  120   |   971 Hz  | 0,106  |
+  | Will    | 17,1 |  117   |  2333 Hz  | 0,074  |
+George sulla battuta-esca è il più brillante dei quattro dove conta: dizione
+nitida quanto Will (centroide alla pari) ma con la consegna più viva
+(sd RMS massima a parità di nitidezza) e la f0 più alta — regge il sorriso
+del registro nuovo senza perdere l'autorevolezza che disinnesca il
+«sembra un giochino». Charlie è energico ma impastato (971 Hz), Will chiaro
+ma piatto, Liam più lento. I wav dell'audizione sono in audio/candidates/.
 
 La chiave API sta in ~/.config/jht/elevenlabs.env e NON va mai stampata.
 
-Output: audio/sober/segNN.wav (48 kHz mono) + durations.txt.
+Output: audio/play/segNN.wav (48 kHz mono) + durations.txt.
 """
 import json, os, subprocess, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 AUD = os.path.join(ROOT, "audio")
-VERSION = "sober"          # nome cartella: stabile, così il montaggio non cambia
+VERSION = "play"           # regia «Now Playable»; la cartella sober/ resta
 
-# ── Copione (un elemento per scena del montaggio; "" = scena muta) ─────
-# Scene: 01 hook · 02 reveal · 03 meeting · 04 roles · 05 dept ·
-#        06 office · 07 chat · 08 globe · 09 webpages · 10 results ·
-#        11 box · 12 cta
-# 11 battute (~750 caratteri): recuperate dal copione ricco le ex 3/4/5/7/10
-# che l'utente rimpiangeva (ruoli, Writers/Critics, chat, numeri del mese).
+# ── Copione (un elemento per scena del montaggio: V1..V8, regia §6) ────
+# Scene: 01 open · 02 click · 03 pixels · 04 tailor · 05 globe ·
+#        06 swipe · 07 home · 08 cta
 LINES = [
-    "Job hunting is a second job.",
-    "So we built you a team. Job Hunter Team.",
-    "A team of AI agents, with clear roles, a captain, and a weekly budget.",
-    "Scouts sweep the job boards. Analysts read every posting. And Scorers rate each match against your profile, from zero to one hundred.",
-    "Writers tailor your CV, position by position. Critics review every draft.",
-    "It is not a dashboard. It is an office, inside a video game. You watch your team work, while you do something else.",
-    "And you talk to them like teammates. Ask, steer, approve.",
-    "From anywhere: every position they found, on your own globe.",
-    "",
-    "In one real month, hands off, they found six hundred and fifty-eight positions.",
-    "Open source. It runs on your machine, and your data stays yours.",
-    "Job Hunter Team. Free, and in beta.",
+    "This looks like a video game. It is. It's also your job search.",
+    "This is Job Hunter Team — an office full of AI agents hunting jobs for you. And you're the boss: click anyone, ask anything, give orders.",
+    "Don't let the pixels fool you. These characters run on frontier AI — the models behind today's top assistants — working one case: yours.",
+    "They learn your profile and score every role against it — this one's an eighty-eight. Your CV gets rewritten for that exact posting… and reviewed, hard, until it passes.",
+    "And they don't browse one site's catalog. The big boards. The niche ones. Company career pages. The open web. Wherever jobs are posted — that's where they hunt.",
+    "Then the best part: you call it. Swipe — yes… no… next. The last word is always yours.",
+    "All of it runs on your own computer — your data never leaves home. And the office never closes: at work, on holiday, asleep — your team keeps hunting.",
+    "Job Hunter Team. Free. Open source. Your job hunt — now playable.",
 ]
 
 
