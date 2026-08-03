@@ -1389,6 +1389,16 @@
       "path": "docs/internal/roadmap/2026-07-30-ticket-throttle-engine-external.md",
       "description": "[THROTTLE-ENGINE-EXTERNAL]: il throttle esce dal dominio degli agenti",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-08-03-maintenance-evidence-log-design.md",
+      "description": "Design di maintenance_events: storico append-only dei controlli, esiti e protezione dalle chiusure inconclusive",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md",
+      "description": "[PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi",
+      "last_review": null
     }
   ]
 }

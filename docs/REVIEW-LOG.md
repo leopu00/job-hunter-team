@@ -29,7 +29,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [README.md](../README.md) | Entry point del repo: vision, install, panoramica team agenti, provider | — | 2026-07-30 | ✅ |
-| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-07-30 | ✅ |
+| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-08-03 | ✅ |
 | [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-07-30 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Responsible disclosure + contatti security | — | 2026-07-26 | ✅ |
@@ -83,7 +83,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [agents/_skills/db-insert/SKILL.md](../agents/_skills/db-insert/SKILL.md) | INSERT su positions/companies/position_highlights | — | 2026-07-03 | ✅ |
 | [agents/_skills/db-query/SKILL.md](../agents/_skills/db-query/SKILL.md) | SELECT helper read-only sul DB jobs | — | 2026-07-30 | ✅ |
-| [agents/_skills/db-update/SKILL.md](../agents/_skills/db-update/SKILL.md) | UPDATE stato/score di righe esistenti | — | 2026-06-13 | ✅ |
+| [agents/_skills/db-update/SKILL.md](../agents/_skills/db-update/SKILL.md) | UPDATE stato/score di righe esistenti | — | 2026-08-03 | ✅ |
 | [agents/_skills/rate-budget/SKILL.md](../agents/_skills/rate-budget/SKILL.md) | Calcolo budget rate-limit per provider | — | 2026-06-30 | ✅ |
 | [agents/_skills/tmux-send/SKILL.md](../agents/_skills/tmux-send/SKILL.md) | Invio messaggi inter-agent via tmux send-keys | — | 2026-07-30 | ✅ |
 | [agents/_skills/throttle/SKILL.md](../agents/_skills/throttle/SKILL.md) | Throttle azioni agente per restare in budget | — | 2026-07-30 | ✅ |
@@ -120,7 +120,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/mentor-output/SKILL.md](../agents/_skills/mentor-output/SKILL.md) | How the Mentor speaks once a pattern from mentor-patterns has crossed the threshold. | — | 2026-05-13 | ✅ |
 | [agents/_skills/mentor-patterns/SKILL.md](../agents/_skills/mentor-patterns/SKILL.md) | The five patterns the Mentor hunts in the records to decide WHEN to speak. | — | 2026-07-28 | ✅ |
 | [agents/_skills/notify-user/SKILL.md](../agents/_skills/notify-user/SKILL.md) | Notify the user with automatic fallback. | — | 2026-06-13 | ✅ |
-| [agents/_skills/office-geocoding/SKILL.md](../agents/_skills/office-geocoding/SKILL.md) | Geocode the precise office building (lat/lon/address) for a position AFTER location-enrichment has populated… | — | 2026-05-26 | ✅ |
+| [agents/_skills/office-geocoding/SKILL.md](../agents/_skills/office-geocoding/SKILL.md) | Geocode the precise office building (lat/lon/address) for a position AFTER location-enrichment has populated… | — | 2026-08-03 | ✅ |
 | [agents/_skills/parse-cv/SKILL.md](../agents/_skills/parse-cv/SKILL.md) | Pre-process a CV/profile file (PDF, DOCX, ODT, RTF) into plain text BEFORE feeding it to the LLM context. | — | 2026-05-18 | ✅ |
 | [agents/_skills/position-insert/SKILL.md](../agents/_skills/position-insert/SKILL.md) | The 5-gate sequence the Scout runs for EACH candidate position before INSERTing into positions: dedup → link… | — | 2026-07-30 | ✅ |
 | [agents/_skills/profile-schema/SKILL.md](../agents/_skills/profile-schema/SKILL.md) | Single source of truth dello SCHEMA del candidate_profile.yml — il formato canonico che TUTTO il team produce e… | — | 2026-07-30 | ✅ |
@@ -329,6 +329,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/roadmap/2026-07-30-db-audit-observations.md](./internal/roadmap/2026-07-30-db-audit-observations.md) | Osservazioni dall'audit del DB: cosa e' emerso e cosa resta da decidere | — | 2026-07-30 | ✅ |
 | [docs/internal/roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md](./internal/roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md) | [MODE-INJECTION-HOURLY-PROMPT]: la modalita' operativa nel messaggio orario del Capitano | — | 2026-07-30 | ✅ |
 | [docs/internal/roadmap/2026-07-30-ticket-throttle-engine-external.md](./internal/roadmap/2026-07-30-ticket-throttle-engine-external.md) | [THROTTLE-ENGINE-EXTERNAL]: il throttle esce dal dominio degli agenti | — | 2026-07-30 | ✅ |
+| [docs/internal/architecture/2026-08-03-maintenance-evidence-log-design.md](./internal/architecture/2026-08-03-maintenance-evidence-log-design.md) | Design di maintenance_events: storico append-only dei controlli, esiti e protezione dalle chiusure inconclusive | — | 2026-08-03 | ✅ |
+| [docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md](./internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md) | [PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi | — | 2026-08-03 | ✅ |
 
 
 ## 🔒 docs/security
@@ -387,7 +389,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [scripts/case-study-extract/README.md](../scripts/case-study-extract/README.md) | Case study VPS extraction toolkit — Read-only dump of an entire JHT VPS run for offline analysis. | — | 2026-07-03 | ✅ |
 | [shared/README.md](../shared/README.md) | 🧩 shared — shared core library — Cross-cutting logic shared across the CLI, TUI, agents, and monitoring stack. | — | 2026-07-25 | ✅ |
 | [web/README.md](../web/README.md) | 🌐 web — dashboard (Next.js) — The Job Hunter Team web dashboard: positions, scoring, map/globe, team telemetry, | — | 2026-07-25 | ✅ |
-| [assets/promo/2026-07-presentation/SCALETTA.md](../assets/promo/2026-07-presentation/SCALETTA.md) | Scaletta del video di presentazione (60,5 s, 1280x720, muto) generato da make_presentation.py | — | 2026-07-30 | ✅ |
+| [assets/promo/2026-07-presentation/SCALETTA.md](../assets/promo/2026-07-presentation/SCALETTA.md) | Scaletta del video di presentazione (60,5 s, 1280x720, muto) generato da make_presentation.py | — | 2026-08-03 | ✅ |
 | [docs/CHARACTER-VARIANTS.md](./CHARACTER-VARIANTS.md) | Cast delle varianti personaggio per reparto: profilo, desk e vista di ogni postazione, con il linguaggio visivo del sito | — | 2026-07-25 | ✅ |
 | [e2e/tests/quarantine/README.md](../e2e/tests/quarantine/README.md) | Le 75 spec E2E in quarantena: escluse da ogni run via `testIgnore`, conservate per le asserzioni recuperabili | — | 2026-07-26 | ✅ |
 
