@@ -117,9 +117,28 @@ def md_link(path: str) -> str:
 
 
 def scan_repo() -> list[str]:
+    """Return Markdown files that belong to the repository.
+
+    Git is the source of truth here: ignored or otherwise untracked notes can
+    live beside a worktree, but must never leak into the committed review log.
+    Filtering out missing paths also preserves the old behaviour for tracked
+    files deleted from the working tree.
+    """
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.md"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        check=True,
+    ).stdout.split("\0")
+
     paths: list[str] = []
-    for p in REPO_ROOT.rglob("*.md"):
-        rel = p.relative_to(REPO_ROOT)
+    for path in tracked:
+        if not path:
+            continue
+        rel = Path(path)
+        if not (REPO_ROOT / rel).is_file():
+            continue
         if any(part in EXCLUDE_DIR_PARTS for part in rel.parts):
             continue
         if rel.name == "REVIEW-LOG.md":
