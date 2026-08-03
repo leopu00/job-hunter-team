@@ -85,6 +85,29 @@ func _run() -> void:
 	w.apply_phase("container", "container")
 	_check("fase nuova: barra di nuovo indeterminata", w._bar.fraction < 0.0)
 
+	# Pull SENZA totale (docker moderni su pipe non dichiarano mai la
+	# dimensione): niente percentuale né ETA, ma i byte scaricati SÌ —
+	# "890 MB scaricati" batte una barra muta.
+	w.apply_phase("container", "image")
+	w.apply_progress({"got_mb": 890.0, "total_mb": 0.0,
+			"fraction": -1.0, "layers": 14})
+	_check("pull cieco: barra indeterminata", w._bar.fraction < 0.0)
+	_check("pull cieco: i byte scaricati sono a video",
+			w._detail_lbl.text.contains("890 MB"), w._detail_lbl.text)
+	_check("pull cieco: nessuna percentuale",
+			not w._detail_lbl.text.contains("%"), w._detail_lbl.text)
+	_check("pull cieco: nessuna ETA",
+			not w._detail_lbl.text.contains(
+					UIStrings.t("setup.progress_eta").split("%")[0].strip_edges()),
+			w._detail_lbl.text)
+	# Col rate misurato (due campioni oltre la finestra) compare anche il MB/s.
+	w.apply_progress({"got_mb": 950.0, "total_mb": 0.0,
+			"fraction": -1.0, "layers": 14})
+	w._samples = [[0, 100.0], [10000, 200.0]]
+	w._refresh()
+	_check("pull cieco: rate misurato a video",
+			w._detail_lbl.text.contains("MB/s"), w._detail_lbl.text)
+
 	_bytes_accounting()
 	_formats()
 
