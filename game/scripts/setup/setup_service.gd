@@ -484,6 +484,51 @@ static func _run(path: String, args: PackedStringArray) -> Dictionary:
 	return {"code": code, "out": "\n".join(PackedStringArray(output)).strip_edges()}
 
 
+## Cerca `exe` fra le cartelle del PATH, come farebbe la shell. Ritorna il
+## percorso pieno, o "" se non c'è.
+##
+## Perché guardare il filesystem: su POSIX OS.execute passa dalla shell, e per
+## un comando inesistente la shell esce 127 — MAI il -1 che il probe assumeva
+## (misurato su macOS, Godot 4.7: code=127, stderr "sh: docker: command not
+## found"). Ma 127 da solo non basta a dichiarare "assente": è lo stesso numero
+## che restituirebbe un docker PRESENTE che esce 127, e il testo d'errore della
+## shell cambia con la shell e col locale — non è un contratto. L'esistenza del
+## file nel PATH invece distingue i due casi senza interpretare né numeri né
+## messaggi: è il criterio meno ambiguo che Godot mette a disposizione.
+static func _which(exe: String) -> String:
+	var windows := OS.get_name() == "Windows"
+	# Su Windows il comando è un file con estensione (docker.exe); .cmd/.bat
+	# coprono gli shim. Su POSIX il nome è nudo.
+	var names := PackedStringArray([exe + ".exe", exe + ".cmd", exe + ".bat"]) \
+			if windows else PackedStringArray([exe])
+	for dir in OS.get_environment("PATH").split(";" if windows else ":", false):
+		for name in names:
+			var candidate := String(dir).path_join(String(name))
+			if not FileAccess.file_exists(candidate):
+				continue
+			# Su POSIX un file nel PATH senza bit di esecuzione non è un
+			# comando: la shell risponderebbe "permission denied" (126).
+			if windows or (FileAccess.get_unix_permissions(candidate)
+					& (FileAccess.UNIX_EXECUTE_OWNER | FileAccess.UNIX_EXECUTE_GROUP
+					| FileAccess.UNIX_EXECUTE_OTHER)) != 0:
+				return candidate
+	return ""
+
+
+## L'eseguibile esiste su questa macchina? Due prove, in quest'ordine:
+## 1) il file nel PATH (_which) — prova diretta, indipendente dai codici;
+## 2) in subordine, la prova comportamentale: `probe_code` è l'esito di un
+##    lancio vero. 0 o un codice "suo" dicono che QUALCOSA ha risposto anche
+##    se il PATH scan lo mancasse (shim esotici) — è la rete che impedisce a
+##    questo cambio di regredire il ramo Windows, dove -1 = lancio fallito
+##    funzionava già. Restano esclusi i due codici che la shell POSIX usa per
+##    conto proprio: 127 (comando non trovato) e 126 (trovato ma non
+##    eseguibile) — con un binario davvero presente li scavalca la prova 1.
+static func _exec_present(exe: String, probe_code: int) -> bool:
+	return _which(exe) != "" \
+			or (probe_code != -1 and probe_code != 126 and probe_code != 127)
+
+
 static func runtime_image() -> String:
 	var custom := OS.get_environment("JHT_IMAGE").strip_edges()
 	return custom if custom != "" else DEFAULT_RUNTIME_IMAGE
@@ -508,9 +553,16 @@ static func _probe_host(home: String) -> Dictionary:
 		"team_running": false,
 		"image_id": "", "container_image_id": "", "runtime_stale": false,
 	}
+	# Presenza e stato del motore sono DUE domande, e le risponde chi le sa:
+	# la presenza il filesystem (_exec_present), lo stato del daemon il codice
+	# d'uscita di `docker version` (0 = attivo, altro = installato ma spento).
+	# Il vecchio `code != -1` valeva solo su Windows: su POSIX un docker
+	# assente esce 127 via shell, mai -1, quindi docker_available restava true
+	# e INSTALLA DOCKER — l'unica strada per chi arriva senza motore — non
+	# compariva mai su macOS e Linux.
 	var version := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Client.Version}}|{{.Server.Version}}"] ))
-	d["docker_available"] = version["code"] != -1
+	d["docker_available"] = _exec_present("docker", int(version["code"]))
 	d["docker_running"] = version["code"] == 0
 	if d["docker_running"]:
 		var inspect := _run("docker", PackedStringArray(["inspect", "jht",
@@ -1010,11 +1062,18 @@ func _compose_up_with_progress(compose: String) -> Dictionary:
 
 
 ## Esegue un sottocomando compose in background riportando il progresso del
-## pull nel pannello. L'esito non guarda l'exit code (leggerlo dopo il reap
-## logga falsi errori su macOS): chi chiama verifica lo stato reale — il
-## container per `up`, l'id dell'immagine per `pull` — e qui si segnala solo
-## se il processo è partito e se lo stream contiene errori. Gira nel worker
-## dell'azione: i delay non toccano il main thread.
+## pull nel pannello. Prova PRIMA `--progress json` — flag GLOBALE di compose,
+## va prima del sottocomando — perché è l'unica modalità che dichiara i byte
+## totali per livello: su pipe non-TTY la modalità plain stampa SOLO i byte
+## scaricati («<id> Downloading 12.5MB», misurato su Docker 29.6.1/compose
+## v5.3.0: zero righe col totale su 6599), quindi lì una percentuale non
+## esiste. Le versioni di compose senza il flag muoiono subito con "unknown
+## flag": si rilancia in modalità testo, che resta il ripiego.
+## L'esito non guarda l'exit code (leggerlo dopo il reap logga falsi errori
+## su macOS): chi chiama verifica lo stato reale — il container per `up`,
+## l'id dell'immagine per `pull` — e qui si segnala solo se il processo è
+## partito e se lo stream contiene errori. Gira nel worker dell'azione: i
+## delay non toccano il main thread.
 func _compose_stream(compose: String, args: PackedStringArray,
 		lead: String) -> Dictionary:
 	if OS.get_name() == "Windows" and OS.get_environment("HOME") == "":
@@ -1022,28 +1081,40 @@ func _compose_stream(compose: String, args: PackedStringArray,
 		# figli ereditano l'ambiente del gioco.
 		OS.set_environment("HOME", OS.get_environment("USERPROFILE"))
 	_progress("container", lead)
-	# Niente --progress: su pipe (non-TTY) compose è già in modalità plain e
-	# il flag non esiste nelle versioni meno recenti.
-	var argv := PackedStringArray(["compose", "-f", compose])
+	var argv := PackedStringArray(["compose", "--progress", "json", "-f", compose])
 	argv.append_array(args)
+	var streamed := _stream_compose(argv, true)
+	if bool(streamed.get("unknown_flag", false)):
+		Log.call_deferred("info", "setup",
+				"compose senza --progress json: ripiego sul parser testuale")
+		argv = PackedStringArray(["compose", "-f", compose])
+		argv.append_array(args)
+		streamed = _stream_compose(argv, false)
+	return streamed
+
+
+## Spawn e lettura dei pipe di UN processo compose; json_mode sceglie il
+## parser delle righe, tutto il resto (drain finale, timeout, tick UI) è
+## identico nelle due modalità.
+func _stream_compose(argv: PackedStringArray, json_mode: bool) -> Dictionary:
 	var process := OS.execute_with_pipe("docker", argv, false)
 	if process.is_empty():
 		return {"ok": false, "spawned": false, "tail": "docker compose non eseguibile"}
 	var stdio: FileAccess = process["stdio"]
 	var stderr: FileAccess = process["stderr"]
 	var pid := int(process["pid"])
-	var sizes := RegEx.new()
-	sizes.compile("([0-9.]+)\\s*([kKmMgG]?i?B)/([0-9.]+)\\s*([kKmMgG]?i?B)")
 	var pending := ""
 	var tail := ""            # ultime righe complete, per il messaggio d'errore
 	var layers := {}          # id livello → ultima riga di stato vista
-	# id livello → {got, total} in MB, SOLO byte di download (righe
-	# "Downloading x/y"). Le righe "Extracting x/y" riportano i byte
-	# DECOMPRESSI: sommarli ai totali di download gonfierebbe la barra.
-	# A "Download complete" il livello si blocca sul suo totale.
+	# id livello → {got, total} in MB, SOLO byte di download. I byte di
+	# "Extracting" sono DECOMPRESSI: sommarli ai conteggi di download
+	# gonfierebbe la barra. Vedi _parse_json_pull_line/_parse_text_pull_line.
 	var layer_bytes := {}
 	var last_output_ms := Time.get_ticks_msec()
-	var last_ui_ms := 0
+	# "Mai emesso": il primo avanzamento parte col primo dato utile, non
+	# dopo il primo intervallo (ticks_msec riparte da zero a ogni avvio: 0
+	# qui NON significa "tanto tempo fa").
+	var last_ui_ms := -100000
 	while true:
 		var got_data := false
 		for pipe: FileAccess in [stdio, stderr]:
@@ -1064,22 +1135,10 @@ func _compose_stream(compose: String, args: PackedStringArray,
 				tail += line + "\n"
 				if tail.length() > 1200:
 					tail = tail.right(1200)
-				var parts: PackedStringArray = line.split(" ", false, 1)
-				if parts.size() == 2 and parts[0].is_valid_hex_number():
-					layers[parts[0]] = parts[1]
-					var status := parts[1].to_lower()
-					if status.begins_with("downloading"):
-						var found := sizes.search(parts[1])
-						if found != null:
-							layer_bytes[parts[0]] = {
-								"got": _to_mb(found.get_string(1), found.get_string(2)),
-								"total": _to_mb(found.get_string(3), found.get_string(4)),
-							}
-					elif layer_bytes.has(parts[0]) and (status.contains("complete")
-							or status.begins_with("extracting")
-							or status.begins_with("verifying")):
-						# download di questo livello finito: acquisito per intero
-						layer_bytes[parts[0]]["got"] = layer_bytes[parts[0]]["total"]
+				if json_mode:
+					_parse_json_pull_line(line, layers, layer_bytes)
+				else:
+					_parse_text_pull_line(line, layers, layer_bytes)
 		else:
 			if not OS.is_process_running(pid):
 				# Drain finale: il processo può uscire con dati ancora in coda
@@ -1105,9 +1164,19 @@ func _compose_stream(compose: String, args: PackedStringArray,
 			OS.delay_msec(80)
 		if Time.get_ticks_msec() - last_ui_ms > 1500 and not layers.is_empty():
 			last_ui_ms = Time.get_ticks_msec()
-			_progress("container", _pull_progress_text(layers, sizes))
+			_progress("container", _pull_progress_text(layers, layer_bytes))
 			call_deferred("_apply_pull_progress",
 					_pull_progress_info(layers, layer_bytes))
+	# L'ultimo stato VERO arriva sempre alla barra: senza questa emissione lo
+	# stato finale (tipicamente il 100%) resterebbe indietro di un tick.
+	if not layers.is_empty():
+		call_deferred("_apply_pull_progress",
+				_pull_progress_info(layers, layer_bytes))
+	# `--progress json` sconosciuto: i compose meno recenti muoiono subito con
+	# "unknown flag: --progress" (verificato su compose reale). Non è un
+	# errore del pull: è il segnale di rilanciare in modalità testo.
+	if json_mode and tail.to_lower().contains("unknown flag"):
+		return {"ok": false, "spawned": true, "unknown_flag": true, "tail": tail}
 	return {"ok": not _stream_failed(tail), "spawned": true, "tail": tail}
 
 
@@ -1122,41 +1191,120 @@ static func _stream_failed(tail: String) -> bool:
 	return false
 
 
-## Riassunto leggibile del pull: parti completate e byte scaricati/totali
-## quando docker li espone nelle righe di stato.
-static func _pull_progress_text(layers: Dictionary, sizes: RegEx) -> String:
+## Le dimensioni nelle righe di stato testuali: "12.3MB/456.7MB" (docker meno
+## recenti, col totale) oppure "12.3MB" da solo (docker moderni su pipe
+## non-TTY, che il totale non lo stampano MAI).
+static var SIZES_PAIR_RE := RegEx.create_from_string(
+		"([0-9.]+)\\s*([kKmMgG]?i?B)/([0-9.]+)\\s*([kKmMgG]?i?B)")
+static var SIZE_RE := RegEx.create_from_string("([0-9.]+)\\s*([kKmMgG]?i?B)")
+
+
+## Una riga di `docker compose --progress json`: un evento JSON per riga, coi
+## byte VERI in `current`/`total`. Le righe senza `parent_id` sono l'immagine
+## intera ("Pulling"/"Pulled"), non un livello. Stesse cautele del testo: i
+## byte di "Extracting" sono DECOMPRESSI e non entrano nei conteggi di
+## download; a "Download complete"/"Extracting"/"Pull complete" il livello si
+## blocca sul suo totale.
+static func _parse_json_pull_line(line: String, layers: Dictionary,
+		layer_bytes: Dictionary) -> void:
+	if not line.begins_with("{"):
+		return
+	var parsed: Variant = JSON.parse_string(line)
+	if not (parsed is Dictionary):
+		return
+	var evt: Dictionary = parsed
+	var id := str(evt.get("id", ""))
+	if id == "" or not evt.has("parent_id"):
+		return
+	var text := str(evt.get("text", ""))
+	layers[id] = (text + " " + str(evt.get("details", ""))).strip_edges()
+	var lower := text.to_lower()
+	if lower == "downloading":
+		var total := float(evt.get("total", 0))
+		if total > 0.0:
+			layer_bytes[id] = {"got": float(evt.get("current", 0)) / 1048576.0,
+					"total": total / 1048576.0}
+	elif layer_bytes.has(id) and (lower.contains("complete")
+			or lower.begins_with("extracting") or lower.begins_with("verifying")):
+		layer_bytes[id]["got"] = layer_bytes[id]["total"]
+
+
+## Una riga di stato in modalità testo: "<id> <stato> [dimensioni]". Sui
+## docker moderni le righe "Downloading" NON portano mai il totale (misurato:
+## 0 su 6599 in un pull reale su pipe non-TTY): si tiene comunque il conteggio
+## dei byte scaricati (total=0), così la UI può dire "X MB scaricati a Y MB/s"
+## invece di restare muta — percentuale ed ETA restano onestamente assenti.
+## Il formato "x/y" dei docker meno recenti resta riconosciuto.
+static func _parse_text_pull_line(line: String, layers: Dictionary,
+		layer_bytes: Dictionary) -> void:
+	var parts: PackedStringArray = line.split(" ", false, 1)
+	if parts.size() != 2 or not parts[0].is_valid_hex_number():
+		return
+	layers[parts[0]] = parts[1]
+	var status := parts[1].to_lower()
+	if status.begins_with("downloading"):
+		var pair := SIZES_PAIR_RE.search(parts[1])
+		if pair != null:
+			layer_bytes[parts[0]] = {
+				"got": _to_mb(pair.get_string(1), pair.get_string(2)),
+				"total": _to_mb(pair.get_string(3), pair.get_string(4)),
+			}
+			return
+		var single := SIZE_RE.search(parts[1])
+		if single != null:
+			var entry: Dictionary = layer_bytes.get(parts[0],
+					{"got": 0.0, "total": 0.0})
+			entry["got"] = _to_mb(single.get_string(1), single.get_string(2))
+			layer_bytes[parts[0]] = entry
+	elif layer_bytes.has(parts[0]) and (status.contains("complete")
+			or status.begins_with("extracting")
+			or status.begins_with("verifying")):
+		# Download del livello finito: col totale noto ci si blocca lì; senza
+		# totale si tiene l'ultimo conteggio visto ("Download complete 0B"
+		# azzererebbe byte realmente scaricati).
+		if float(layer_bytes[parts[0]]["total"]) > 0.0:
+			layer_bytes[parts[0]]["got"] = layer_bytes[parts[0]]["total"]
+
+
+## Riassunto leggibile del pull: parti completate e byte scaricati (col
+## totale accanto solo quando i livelli l'hanno davvero dichiarato).
+static func _pull_progress_text(layers: Dictionary, layer_bytes: Dictionary) -> String:
 	var done := 0
-	var got_bytes := 0.0
-	var total_bytes := 0.0
 	for id in layers:
 		var status := str(layers[id]).to_lower()
-		if status.contains("complete") or status.contains("already exists") \
-				or status.contains("exists"):
+		if status.contains("complete") or status.contains("exists"):
 			done += 1
-		var found := sizes.search(str(layers[id]))
-		if found != null:
-			got_bytes += _to_mb(found.get_string(1), found.get_string(2))
-			total_bytes += _to_mb(found.get_string(3), found.get_string(4))
+	var info := _pull_progress_info(layers, layer_bytes)
 	var text := "Scarico l'immagine del team: %d/%d parti" % [done, layers.size()]
-	if total_bytes > 0.0:
-		text += " · %.0f/%.0f MB" % [got_bytes, total_bytes]
+	if float(info["fraction"]) >= 0.0:
+		text += " · %.0f/%.0f MB" % [float(info["got_mb"]), float(info["total_mb"])]
+	elif float(info["got_mb"]) > 0.0:
+		text += " · %.0f MB scaricati" % float(info["got_mb"])
 	return text + "…"
 
 
 ## Il dato VERO su cui poggia la barra: byte di download acquisiti/totali dei
-## livelli che hanno dichiarato una dimensione. Finché nessuno l'ha dichiarata
-## fraction resta -1.0: la UI mostra attività, non una percentuale inventata.
-## Il totale può CRESCERE mentre docker scopre le dimensioni degli altri
-## livelli: è il dato reale, non un difetto da mascherare.
+## livelli. La percentuale esiste SOLO se OGNI livello tracciato ha dichiarato
+## il suo totale (modalità JSON, o i vecchi docker col formato "x/y"): con un
+## totale parziale sarebbe gonfiata, e senza totali (docker moderni in
+## modalità testo) fraction resta -1.0 — la UI mostra i byte scaricati e il
+## rate misurato, non una percentuale inventata. Il totale può CRESCERE
+## mentre docker scopre le dimensioni degli altri livelli: è il dato reale,
+## non un difetto da mascherare.
 static func _pull_progress_info(layers: Dictionary, layer_bytes: Dictionary) -> Dictionary:
 	var got := 0.0
 	var total := 0.0
+	var total_known := not layer_bytes.is_empty()
 	for id in layer_bytes:
 		got += float(layer_bytes[id]["got"])
-		total += float(layer_bytes[id]["total"])
+		var layer_total := float(layer_bytes[id]["total"])
+		total += layer_total
+		if layer_total <= 0.0:
+			total_known = false
 	return {
 		"got_mb": got, "total_mb": total,
-		"fraction": clampf(got / total, 0.0, 1.0) if total > 0.0 else -1.0,
+		"fraction": clampf(got / total, 0.0, 1.0) \
+				if total_known and total > 0.0 else -1.0,
 		"layers": layers.size(),
 	}
 
@@ -1184,7 +1332,12 @@ static func _launch_docker_runtime() -> Dictionary:
 			OS.create_process(DOCKER_DESKTOP_WIN, PackedStringArray())
 			return {"ok": true, "message": "Docker Desktop avviato: attendo il motore…"}
 		"macOS":
-			if _run("colima", PackedStringArray(["version"] ))["code"] != -1:
+			# Stesso criterio del probe: su POSIX un comando assente esce 127,
+			# mai -1 — col vecchio confronto questo ramo partiva anche senza
+			# colima, dichiarava "Colima avviato" a vuoto e non ripiegava mai
+			# su Docker Desktop.
+			if _exec_present("colima",
+					int(_run("colima", PackedStringArray(["version"]))["code"])):
 				OS.create_process("colima", PackedStringArray(["start"]))
 				return {"ok": true, "message": "Colima avviato: attendo il motore…"}
 			if DirAccess.dir_exists_absolute("/Applications/Docker.app"):

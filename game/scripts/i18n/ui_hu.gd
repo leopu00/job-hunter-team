@@ -739,6 +739,7 @@ const S := {
 	"setup.progress_phase": "%d/%d. FÁZIS — %s",
 	"setup.progress_elapsed": "eltelt idő: %s",
 	"setup.progress_no_meter": "Ez a fázis nem jelez százalékos előrehaladást: az eltelt idő számít.",
+	"setup.progress_downloaded": "%s letöltve (a teljes méret nem ismert)",
 	"setup.progress_eta": "~%s van hátra",
 	"setup.progress_stalled": "Nincs frissítés %d másodperce — lehet, hogy lassú a hálózat.",
 	"setup.image_ready": "letöltve és készen áll",
