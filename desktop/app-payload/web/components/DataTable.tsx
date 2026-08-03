@@ -76,7 +76,12 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
   /* ── Selection ── */
   const allSelected = sorted.length > 0 && sorted.every(r => selected.has(r.id))
   const toggleAll   = () => setSelected(allSelected ? new Set() : new Set(sorted.map(r => r.id)))
-  const toggleRow   = (id: string) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleRow   = (id: string) => setSelected(s => {
+    const n = new Set(s)
+    if (n.has(id)) n.delete(id)
+    else n.add(id)
+    return n
+  })
 
   /* ── Export ── */
   const handleExport = () => {

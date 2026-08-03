@@ -21,7 +21,7 @@ function SearchRow({ ss, onToggle, onDelete }: { ss: SavedSearch; onToggle: (id:
           <p className="text-[11px] text-[var(--color-bright)] font-medium truncate">{ss.name}</p>
           {ss.newCount > 0 && <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-green)', color: '#000' }}>{ss.newCount} nuovi</span>}
         </div>
-        <p className="text-[9px] text-[var(--color-dim)] font-mono truncate">"{ss.query}" {filters && `· ${filters}`}</p>
+          <p className="text-[9px] text-[var(--color-dim)] font-mono truncate">&quot;{ss.query}&quot; {filters && `· ${filters}`}</p>
       </div>
       <span className="text-[9px] text-[var(--color-dim)]">{FREQ_LABEL[ss.frequency] ?? ss.frequency}</span>
       <span className="text-[9px] text-[var(--color-dim)] w-14 text-right">{timeAgo(ss.lastRun)}</span>
@@ -47,7 +47,7 @@ export default function SavedSearchesPage() {
     setSearches(data.searches ?? []); setTotal(data.total ?? 0); setTotalNew(data.totalNew ?? 0);
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const toggle = async (id: string) => {
     await fetch('/api/saved-searches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toggleId: id }) }).catch(() => null);

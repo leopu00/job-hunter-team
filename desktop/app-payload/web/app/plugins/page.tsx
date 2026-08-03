@@ -72,7 +72,7 @@ export default function PluginsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchPlugins() }, [fetchPlugins])
+  useEffect(() => { queueMicrotask(fetchPlugins) }, [fetchPlugins])
 
   async function handleToggle(id: string, enabled: boolean) {
     setToggling(id)

@@ -48,7 +48,7 @@ export default function PerformancePage() {
     setAvgLoad(data.avgLoadMs ?? 0)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const maxLoad = Math.max(...pages.map(p => p.loadTimeMs), 300)
   const sorted = [...pages].sort((a, b) => b.loadTimeMs - a.loadTimeMs)

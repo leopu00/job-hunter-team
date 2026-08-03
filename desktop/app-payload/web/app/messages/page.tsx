@@ -34,7 +34,7 @@ export default function MessagesPage() {
     setThreads(data.threads ?? []); setUnreadCount(data.unreadCount ?? 0)
   }, [filter])
 
-  useEffect(() => { fetchThreads() }, [fetchThreads])
+  useEffect(() => { queueMicrotask(fetchThreads) }, [fetchThreads])
 
   const openThread = async (id: string) => {
     const res = await fetch(`/api/messages?threadId=${id}`).catch(() => null)

@@ -76,7 +76,9 @@ export function GlobalSearch() {
   const router   = useRouter()
 
   useEffect(() => {
-    try { setRecent(JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')) } catch { /* ignore */ }
+    queueMicrotask(() => {
+      try { setRecent(JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')) } catch { /* ignore */ }
+    })
   }, [])
 
   const openSearch = useCallback(() => { setOpen(true); setQuery(''); setSelected(0) }, [])

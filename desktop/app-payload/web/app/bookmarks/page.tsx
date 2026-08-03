@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 type Bookmark = { id: string; jobTitle: string; company: string; url?: string; note?: string; tags: string[]; savedAt: number }
 type SortMode = 'date' | 'company'
@@ -29,7 +29,7 @@ export default function BookmarksPage() {
     setBookmarks(data.bookmarks ?? []); setAllTags(data.allTags ?? [])
   }, [filterTag, sort, search])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const addBookmark = async () => {
     if (!title.trim() || !company.trim()) return

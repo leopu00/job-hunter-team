@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 
 /* ── Tipi ── */
 export interface Hotkey {
@@ -41,13 +41,13 @@ function eventToCombo(e: KeyboardEvent): string {
 
 /* ── Provider ── */
 export function HotkeysProvider({ children, defaultScope = 'global' }: { children: React.ReactNode; defaultScope?: string }) {
-  const hotkeysRef = useRef<Hotkey[]>([])
+  const [hotkeys, setHotkeys] = useState<Hotkey[]>([])
   const [activeScope, setScope] = useState(defaultScope)
   const [showCheatsheet, setShow] = useState(false)
 
   const register = useCallback((h: Hotkey) => {
-    hotkeysRef.current = [...hotkeysRef.current, h]
-    return () => { hotkeysRef.current = hotkeysRef.current.filter(x => x !== h) }
+    setHotkeys(current => [...current, h])
+    return () => { setHotkeys(current => current.filter(x => x !== h)) }
   }, [])
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function HotkeysProvider({ children, defaultScope = 'global' }: { childre
       // Shortcut speciale: '?' apre cheatsheet
       if (combo === '?' || combo === 'shift+/') { e.preventDefault(); setShow(v => !v); return }
 
-      hotkeysRef.current.forEach(h => {
+      hotkeys.forEach(h => {
         if (h.enabled === false) return
         if (h.scope && h.scope !== activeScope) return
         if (normalizeKeys(h.keys) !== combo) return
@@ -71,13 +71,13 @@ export function HotkeysProvider({ children, defaultScope = 'global' }: { childre
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [activeScope])
+  }, [activeScope, hotkeys])
 
   return (
-    <Ctx.Provider value={{ register, activeScope, setScope, all: hotkeysRef.current }}>
+    <Ctx.Provider value={{ register, activeScope, setScope, all: hotkeys }}>
       {children}
       {showCheatsheet && (
-        <Cheatsheet hotkeys={hotkeysRef.current} onClose={() => setShow(false)} />
+        <Cheatsheet hotkeys={hotkeys} onClose={() => setShow(false)} />
       )}
     </Ctx.Provider>
   )

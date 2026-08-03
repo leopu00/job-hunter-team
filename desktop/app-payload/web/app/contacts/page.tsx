@@ -64,7 +64,7 @@ export default function ContactsPage() {
     setLoading(false);
   }, [debouncedSearch])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const addContact = async () => {
     if (!newName.trim()) return;

@@ -41,7 +41,7 @@ export default function AchievementsPage() {
     setLoading(false)
   }, [filterCat])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const fmtDate = (ts?: number) => ts ? new Date(ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : ''
   const CATEGORIES: Category[] = ['applications', 'networking', 'skills', 'streak', 'profile']

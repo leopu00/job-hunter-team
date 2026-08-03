@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { errorCode } from '@/lib/errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,8 +48,8 @@ function load(): QueueState {
     const raw = fs.readFileSync(QUEUE_PATH, 'utf-8')
     const parsed = JSON.parse(raw) as QueueState
     return parsed?.version === 1 ? parsed : emptyState()
-  } catch (e: any) {
-    if (e.code === 'ENOENT') return emptyState()
+  } catch (e) {
+    if (errorCode(e) === 'ENOENT') return emptyState()
     throw e
   }
 }

@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { errorCode } from '@/lib/errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,8 +37,8 @@ function load(): TaskStore {
     const raw = fs.readFileSync(TASKS_PATH, 'utf-8')
     const parsed = JSON.parse(raw) as TaskStore
     return Array.isArray(parsed?.tasks) ? parsed : { version: 1, updatedAt: Date.now(), tasks: [] }
-  } catch (e: any) {
-    if (e.code === 'ENOENT') return { version: 1, updatedAt: Date.now(), tasks: [] }
+  } catch (e) {
+    if (errorCode(e) === 'ENOENT') return { version: 1, updatedAt: Date.now(), tasks: [] }
     throw e
   }
 }

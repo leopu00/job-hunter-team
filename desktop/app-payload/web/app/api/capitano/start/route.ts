@@ -24,7 +24,7 @@ export async function POST() {
     await runScript(scriptPath, 'alfa')
 
     return NextResponse.json({ ok: true, message: 'Capitano avviato' })
-  } catch (err: any) {
+  } catch (err) {
     console.error('[capitano/start]', err)
     return NextResponse.json(
       { ok: false, error: 'Errore nell\'avvio del Capitano, riprova' },

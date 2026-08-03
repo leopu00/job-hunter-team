@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 export type RatingSize = 'sm' | 'md' | 'lg'
 
@@ -28,7 +28,7 @@ const SIZE_MAP: Record<RatingSize, { fontSize: number; gap: number; labelSize: n
 
 /* ── Stella SVG con fill parziale ── */
 function Star({ fill, fontSize, icon, color }: { fill: number; fontSize: number; icon: string; color: string }) {
-  const id = `clip-${Math.random().toString(36).slice(2)}`
+  const id = useId()
   if (icon !== '★') {
     // Emoji — usa opacity per simulare fill parziale
     return (

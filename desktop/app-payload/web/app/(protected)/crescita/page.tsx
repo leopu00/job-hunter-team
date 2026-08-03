@@ -98,7 +98,7 @@ export default async function CrescitaPage() {
       <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors mb-10" style={{ animation: 'fade-in 0.35s ease both 0.1s' }}>
         <div className="space-y-3">
           {POS_PIPELINE.map(step => {
-            const count = (posStats as any)[step.key] ?? 0
+            const count = posStats[step.key as keyof typeof posStats] ?? 0
             const pct = posTotal > 0 ? (count / posTotal) * 100 : 0
             return (
               <div key={step.key} className="flex items-center gap-3">

@@ -30,7 +30,9 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    try { setRecents(JSON.parse(localStorage.getItem(LS_KEY) ?? '[]')) } catch {}
+    queueMicrotask(() => {
+      try { setRecents(JSON.parse(localStorage.getItem(LS_KEY) ?? '[]')) } catch {}
+    })
   }, [open])
 
   useEffect(() => {

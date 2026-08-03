@@ -71,7 +71,7 @@ export default function HistoryPage() {
     setActivities((await res.json()).activities ?? [])
   }, [filterAction, days])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const clearHistory = async () => { await fetch('/api/history?all=true', { method: 'DELETE' }); fetchData() }
 

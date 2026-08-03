@@ -43,13 +43,14 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     try {
       const res = await fetch('/api/team/status')
       const data = await res.json()
-      const matching = (data.agents ?? [])
-        .filter((a: any) => {
+      const matching = ((data.agents ?? []) as Array<{ session?: string }>)
+        .filter((a) => {
           const s = (a.session ?? '').toUpperCase()
           const prefix = sessionPrefix.toUpperCase()
           return s === prefix || s.startsWith(`${prefix}-`)
         })
-        .map((a: any) => ({ session: a.session, active: true }))
+        .filter((a): a is { session: string } => typeof a.session === 'string')
+        .map((a) => ({ session: a.session, active: true }))
       setSessions(matching)
       // Auto-seleziona la prima sessione se non ce n'e' una attiva
       if (matching.length > 0 && (!activeSession || !matching.some((m: AgentSession) => m.session === activeSession))) {
@@ -77,13 +78,13 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
   }, [activeSession])
 
   useEffect(() => {
-    fetchSessions()
+    queueMicrotask(fetchSessions)
     const id = setInterval(fetchSessions, 5000)
     return () => clearInterval(id)
   }, [fetchSessions])
 
   useEffect(() => {
-    if (activeSession) fetchTerminal()
+    if (activeSession) queueMicrotask(fetchTerminal)
     const id = setInterval(fetchTerminal, 3000)
     return () => clearInterval(id)
   }, [activeSession, fetchTerminal])

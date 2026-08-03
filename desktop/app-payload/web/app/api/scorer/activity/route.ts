@@ -3,6 +3,24 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
+type ScoreActivityRow = {
+  position_id: string | number
+  total_score: number
+  scored_at: string
+  scored_by: string | null
+  positions: { title?: string; company?: string; location?: string; remote_type?: string } | null
+}
+
+type QueuePosition = {
+  id: string | number
+  title: string
+  company: string
+  location: string | null
+  remote_type: string | null
+  found_at: string
+  notes: string | null
+}
+
 export async function GET() {
   try {
   const supabase = await createClient()
@@ -50,7 +68,7 @@ export async function GET() {
         .gte('scored_at', todayISO),
     ])
 
-  const todayScores = (todayScoredRes.data as any[] ?? []).map((s: any) => s.total_score as number)
+  const todayScores = (todayScoredRes.data as Array<{ total_score: number }> ?? []).map((s) => s.total_score)
   const scoredToday = todayScores.length
   const excludedToday = todayScores.filter((s: number) => s < 40).length
   const avgToday =
@@ -58,12 +76,12 @@ export async function GET() {
       ? +(todayScores.reduce((a: number, b: number) => a + b, 0) / scoredToday).toFixed(1)
       : null
 
-  const mapScore = (s: any) => ({
+  const mapScore = (s: ScoreActivityRow) => ({
     id: s.position_id,
-    title: (s.positions as any)?.title ?? '—',
-    company: (s.positions as any)?.company ?? '—',
-    location: (s.positions as any)?.location ?? '',
-    remote_type: (s.positions as any)?.remote_type ?? '',
+    title: s.positions?.title ?? '—',
+    company: s.positions?.company ?? '—',
+    location: s.positions?.location ?? '',
+    remote_type: s.positions?.remote_type ?? '',
     total_score: s.total_score,
     scored_at: s.scored_at,
     scored_by: s.scored_by,
@@ -77,7 +95,7 @@ export async function GET() {
       excluded_today: excludedToday,
       avg_score_today: avgToday,
     },
-    queue: (queueRes.data as any[] ?? []).map((p: any) => ({
+    queue: (queueRes.data as QueuePosition[] ?? []).map((p) => ({
       id: p.id,
       title: p.title,
       company: p.company,

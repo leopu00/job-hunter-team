@@ -35,7 +35,7 @@ function checkTelegram(): Omit<Integration, 'id' | 'name' | 'description'> {
   } catch { return { status: 'disconnected', detail: null, last_sync: null } }
 }
 
-function checkEnvOrCred(envKeys: string[], credNames: string[], label: string): Omit<Integration, 'id' | 'name' | 'description'> {
+function checkEnvOrCred(envKeys: string[], credNames: string[]): Omit<Integration, 'id' | 'name' | 'description'> {
   const envHit = envKeys.find(k => process.env[k])
   if (envHit) return { status: 'connected', detail: `via env ${envHit}`, last_sync: null }
   const file = credFile(...credNames)
@@ -47,13 +47,13 @@ export async function GET() {
   const integrations: Integration[] = [
     { id: 'telegram', name: 'Telegram',  description: 'Bot per notifiche e comandi del team',           ...checkTelegram() },
     { id: 'github',   name: 'GitHub',    description: 'Push commit, PR e webhook repository',
-      ...checkEnvOrCred(['GITHUB_TOKEN', 'GH_TOKEN'], ['github_token', 'github.json'], 'GitHub') },
+      ...checkEnvOrCred(['GITHUB_TOKEN', 'GH_TOKEN'], ['github_token', 'github.json']) },
     { id: 'linkedin', name: 'LinkedIn',  description: 'Ricerca posizioni e candidature automatiche',
-      ...checkEnvOrCred(['LINKEDIN_EMAIL', 'LINKEDIN_PASS'], ['linkedin_cookies.json', 'linkedin.json'], 'LinkedIn') },
+      ...checkEnvOrCred(['LINKEDIN_EMAIL', 'LINKEDIN_PASS'], ['linkedin_cookies.json', 'linkedin.json']) },
     { id: 'gmail',    name: 'Gmail',     description: 'Invio email e gestione candidature',
-      ...checkEnvOrCred(['GMAIL_USER', 'GMAIL_PASS', 'GOOGLE_CREDENTIALS'], ['gmail_credentials.json', 'gmail.json', 'google_credentials.json'], 'Gmail') },
+      ...checkEnvOrCred(['GMAIL_USER', 'GMAIL_PASS', 'GOOGLE_CREDENTIALS'], ['gmail_credentials.json', 'gmail.json', 'google_credentials.json']) },
     { id: 'vercel',   name: 'Vercel',    description: 'Deploy automatico del frontend',
-      ...checkEnvOrCred(['VERCEL_TOKEN', 'VERCEL_ORG_ID'], ['vercel_token', 'vercel.json'], 'Vercel') },
+      ...checkEnvOrCred(['VERCEL_TOKEN', 'VERCEL_ORG_ID'], ['vercel_token', 'vercel.json']) },
   ]
   const summary = {
     connected:    integrations.filter(i => i.status === 'connected').length,

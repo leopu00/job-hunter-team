@@ -135,7 +135,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ template: tpl })
   }
 
-  let summaries: TemplateSummary[] = templates.map(({ content, frontmatter, raw, ...rest }) => rest)
+  let summaries: TemplateSummary[] = templates.map((template) => ({
+    name: template.name,
+    filePath: template.filePath,
+    title: template.title,
+    summary: template.summary,
+    category: template.category,
+    variables: template.variables,
+    charCount: template.charCount,
+  }))
   if (category) summaries = summaries.filter(t => t.category === category)
   const categories = [...new Set(templates.map(t => t.category))].sort()
   return NextResponse.json({ templates: summaries, total: summaries.length, categories })

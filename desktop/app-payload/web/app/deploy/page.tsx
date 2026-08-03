@@ -62,7 +62,7 @@ export default function DeployPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchReport() }, [fetchReport])
+  useEffect(() => { queueMicrotask(fetchReport) }, [fetchReport])
   useEffect(() => {
     const id = setInterval(fetchReport, 30_000)
     return () => clearInterval(id)

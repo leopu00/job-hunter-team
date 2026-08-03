@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     await runBash(`tmux send-keys -t ASSISTENTE Enter`)
 
     return NextResponse.json({ ok: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? 'send failed' }, { status: 500 })
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'send failed' }, { status: 500 })
   }
 }

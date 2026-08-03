@@ -3,6 +3,18 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
+type ScoutPosition = {
+  id: string | number
+  title: string
+  company: string
+  location: string | null
+  remote_type: string | null
+  found_at: string
+  found_by?: string | null
+  status?: string
+  notes?: string | null
+}
+
 export async function GET() {
   try {
   const supabase = await createClient()
@@ -51,7 +63,7 @@ export async function GET() {
       found_today: foundTodayRes.count ?? 0,
       total_new: totalNewRes.count ?? 0,
     },
-    queue: (queueRes.data as any[] ?? []).map((p: any) => ({
+    queue: (queueRes.data as ScoutPosition[] ?? []).map((p) => ({
       id: p.id,
       title: p.title,
       company: p.company,
@@ -60,7 +72,7 @@ export async function GET() {
       found_at: p.found_at,
       found_by: p.found_by,
     })),
-    recent: (recentRes.data as any[] ?? []).map((p: any) => ({
+    recent: (recentRes.data as ScoutPosition[] ?? []).map((p) => ({
       id: p.id,
       title: p.title,
       company: p.company,
@@ -70,7 +82,7 @@ export async function GET() {
       found_by: p.found_by,
       status: p.status,
     })),
-    excluded_today: (excludedTodayRes.data as any[] ?? []).map((p: any) => ({
+    excluded_today: (excludedTodayRes.data as ScoutPosition[] ?? []).map((p) => ({
       id: p.id,
       title: p.title,
       company: p.company,

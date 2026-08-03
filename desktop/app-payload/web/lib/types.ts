@@ -133,7 +133,7 @@ export interface CandidateProfile {
   location_preferences: LocationPreference[] | null
   job_titles: string[] | null
   salary_target: { currency: string; italy_min: number; italy_max: number; remote_eu_min: number; remote_eu_max: number } | null
-  positioning: Record<string, any> | null
+  positioning: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }

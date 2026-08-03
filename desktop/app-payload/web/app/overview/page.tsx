@@ -77,7 +77,7 @@ export default function OverviewPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => { queueMicrotask(fetchAll) }, [fetchAll])
   useEffect(() => { const iv = setInterval(fetchAll, 15000); return () => clearInterval(iv) }, [fetchAll])
 
   const SECTIONS = [

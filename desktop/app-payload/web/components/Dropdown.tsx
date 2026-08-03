@@ -32,9 +32,6 @@ export default function Dropdown({ trigger, items, onSelect, align = 'left', min
   const containerRef = useRef<HTMLDivElement>(null)
   const menuRef      = useRef<HTMLDivElement>(null)
 
-  // Indici navigabili (no separator, no disabled)
-  const navigable = items.filter(i => !i.disabled)
-
   // Chiudi su click fuori
   useEffect(() => {
     const fn = (e: MouseEvent) => { if (!containerRef.current?.contains(e.target as Node)) { setOpen(false); setFocusIdx(-1) } }
@@ -43,7 +40,7 @@ export default function Dropdown({ trigger, items, onSelect, align = 'left', min
   }, [])
 
   // Focus prima voce all'apertura
-  useEffect(() => { if (open) setFocusIdx(-1) }, [open])
+  useEffect(() => { if (open) queueMicrotask(() => setFocusIdx(-1)) }, [open])
 
   const handleTriggerKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setFocusIdx(0) }

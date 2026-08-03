@@ -23,7 +23,7 @@ export async function POST() {
     }
 
     return NextResponse.json({ ok: true, folder })
-  } catch (err: any) {
+  } catch {
     // Fallback: python3
     try {
       const repoRoot = path.resolve(process.cwd(), '..')
@@ -40,8 +40,8 @@ export async function POST() {
       }
 
       return NextResponse.json({ ok: true, folder })
-    } catch (err2: any) {
-      return NextResponse.json({ ok: false, folder: null, error: err2?.message ?? 'Python non trovato' })
+    } catch (err2) {
+      return NextResponse.json({ ok: false, folder: null, error: err2 instanceof Error ? err2.message : 'Python non trovato' })
     }
   }
 }

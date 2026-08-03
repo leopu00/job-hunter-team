@@ -22,15 +22,15 @@ export async function POST() {
         }
         await runBash(`tmux kill-session -t "${session}"`)
         results.push({ session, status: 'killed' })
-      } catch (err: any) {
-        results.push({ session, status: 'error', error: err?.message })
+      } catch (err) {
+        results.push({ session, status: 'error', error: err instanceof Error ? err.message : undefined })
       }
     }
 
     return NextResponse.json({ ok: true, results })
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? 'Stop team fallito' },
+      { ok: false, error: err instanceof Error ? err.message : 'Stop team fallito' },
       { status: 500 }
     )
   }

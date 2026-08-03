@@ -55,7 +55,7 @@ export default function WorkersPage() {
     setOnlineCount(data.onlineCount ?? 0)
   }, [])
 
-  useEffect(() => { fetchWorkers() }, [fetchWorkers])
+  useEffect(() => { queueMicrotask(fetchWorkers) }, [fetchWorkers])
   useEffect(() => { const id = setInterval(fetchWorkers, 5000); return () => clearInterval(id) }, [fetchWorkers])
 
   const filtered = filter === 'all' ? workers : workers.filter(w => w.status === filter)

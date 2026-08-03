@@ -1,3 +1,5 @@
+'use client'
+
 export type InterviewType   = 'phone' | 'video' | 'onsite' | 'technical' | 'hr'
 export type InterviewStatus = 'scheduled' | 'completed' | 'cancelled' | 'rescheduled'
 
@@ -31,8 +33,8 @@ const STATUS_CFG: Record<InterviewStatus, { label: string; color: string }> = {
   rescheduled: { label: 'riprogrammato',color: 'var(--color-orange)' },
 }
 
-function countdown(ms: number): { label: string; urgent: boolean } {
-  const diff = ms - Date.now()
+function countdown(ms: number, now: number): { label: string; urgent: boolean } {
+  const diff = ms - now
   const days = Math.floor(diff / 86400000)
   const hours = Math.floor(diff / 3600000)
   const mins  = Math.floor(diff / 60000)
@@ -55,15 +57,17 @@ function fmtDateTime(ms: number): string {
 
 export interface InterviewCardProps {
   interview: Interview
+  /** Live clock supplied once by the owning page/list (for example via useNow). */
+  now: number
   compact?: boolean
   onClick?: (interview: Interview) => void
 }
 
-export default function InterviewCard({ interview, compact = false, onClick }: InterviewCardProps) {
+export default function InterviewCard({ interview, now, compact = false, onClick }: InterviewCardProps) {
   const typeCfg   = TYPE_CFG[interview.type]
   const statusCfg = STATUS_CFG[interview.status]
-  const cd        = countdown(interview.scheduledAt)
-  const isPast    = interview.scheduledAt < Date.now()
+  const cd        = countdown(interview.scheduledAt, now)
+  const isPast    = interview.scheduledAt < now
 
   return (
     <div

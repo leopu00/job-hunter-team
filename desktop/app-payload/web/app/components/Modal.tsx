@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ function useFocusTrap(ref: React.RefObject<HTMLElement | null>, active: boolean)
 
 export function Modal({ open, onClose, title, size = 'md', footer, hideClose, children, className, width, ariaLabel }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
-  const titleId   = `modal-title-${Math.random().toString(36).slice(2)}`
+  const titleId   = useId()
 
   // Escape
   useEffect(() => {

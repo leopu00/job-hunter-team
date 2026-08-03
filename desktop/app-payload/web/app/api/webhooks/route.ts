@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { errorCode, errorMessage } from '@/lib/errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,8 +31,8 @@ function load(): WebhookStore {
   try {
     const p = JSON.parse(fs.readFileSync(WEBHOOKS_PATH, 'utf-8')) as WebhookStore
     return p?.webhooks ? p : { version: 1, webhooks: [] }
-  } catch (e: any) {
-    if (e.code === 'ENOENT') return { version: 1, webhooks: [] }
+  } catch (e) {
+    if (errorCode(e) === 'ENOENT') return { version: 1, webhooks: [] }
     throw e
   }
 }
@@ -70,8 +71,8 @@ export async function POST(req: NextRequest) {
       wh.lastStatus = res.status
       save(store)
       return NextResponse.json({ ok: true, status: res.status })
-    } catch (err: any) {
-      return NextResponse.json({ ok: false, error: err.message ?? 'timeout' }, { status: 502 })
+    } catch (err) {
+      return NextResponse.json({ ok: false, error: errorMessage(err, 'timeout') }, { status: 502 })
     }
   }
 
@@ -103,7 +104,9 @@ export async function PUT(req: NextRequest) {
   const idx = store.webhooks.findIndex(w => w.id === body.id)
   if (idx === -1) return NextResponse.json({ ok: false, error: 'webhook non trovato' }, { status: 404 })
 
-  const { id: _, createdAt: __, ...fields } = body
+  const fields = { ...body }
+  delete fields.id
+  delete fields.createdAt
   Object.assign(store.webhooks[idx]!, fields)
   save(store)
   return NextResponse.json({ ok: true, webhook: store.webhooks[idx] })

@@ -97,7 +97,7 @@ export default function CredentialsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchProviders() }, [fetchProviders])
+  useEffect(() => { queueMicrotask(fetchProviders) }, [fetchProviders])
 
   async function handleDelete(provider: string) {
     const res = await fetch(`/api/credentials?provider=${provider}`, { method: 'DELETE' }).catch(() => null)

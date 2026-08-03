@@ -3,6 +3,25 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
+type WriterPosition = {
+  id: string | number
+  legacy_id: number | null
+  title: string
+  company: string
+  location?: string | null
+  remote_type?: string | null
+  total_score?: number | null
+}
+type WriterQueueRow = { total_score: number; positions: WriterPosition }
+type WriterApplicationRow = {
+  positions: WriterPosition
+  written_by: string | null
+  critic_score: number | null
+  critic_round?: number | null
+  critic_verdict: string | null
+  written_at?: string | null
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -49,7 +68,7 @@ export async function GET() {
     ])
 
     // Queue: flatten join
-    const queue = (queueRes.data ?? []).map((s: any) => ({
+    const queue = (queueRes.data as WriterQueueRow[] ?? []).map((s) => ({
       id: s.positions.id,
       legacy_id: s.positions.legacy_id,
       title: s.positions.title,
@@ -60,7 +79,7 @@ export async function GET() {
     }))
 
     // In progress: flatten join
-    const in_progress = (inProgressRes.data ?? []).map((a: any) => ({
+    const in_progress = (inProgressRes.data as WriterApplicationRow[] ?? []).map((a) => ({
       id: a.positions.id,
       legacy_id: a.positions.legacy_id,
       title: a.positions.title,
@@ -73,7 +92,7 @@ export async function GET() {
     }))
 
     // Recent completed: flatten join
-    const recent_completed = (completedRes.data ?? []).map((a: any) => ({
+    const recent_completed = (completedRes.data as WriterApplicationRow[] ?? []).map((a) => ({
       id: a.positions.id,
       legacy_id: a.positions.legacy_id,
       title: a.positions.title,

@@ -60,7 +60,7 @@ export default function TemplatesPage() {
     setLoading(false)
   }, [filterCat])
 
-  useEffect(() => { fetchList() }, [fetchList])
+  useEffect(() => { queueMicrotask(fetchList) }, [fetchList])
 
   const selectTemplate = async (name: string) => {
     setSelected(name); setPreview(''); setVarValues({}); setCopied(false)

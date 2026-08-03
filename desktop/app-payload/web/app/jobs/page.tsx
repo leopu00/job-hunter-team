@@ -62,7 +62,7 @@ export default function JobsPage() {
     setLoading(false);
   }, [statusFilter, debouncedSearch])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const FILTERS = [
     { key: 'all', label: 'tutti' }, { key: 'saved', label: 'salvati' }, { key: 'applied', label: 'candidati' },

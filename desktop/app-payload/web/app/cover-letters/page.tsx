@@ -57,7 +57,7 @@ export default function CoverLettersPage() {
     setLetters(data.letters ?? []); setTotal(data.total ?? 0); setDrafts(data.drafts ?? 0); setFinals(data.finals ?? 0);
   }, [statusFilter])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const FILTERS = [{ key: 'all', label: 'tutte' }, { key: 'draft', label: `bozze (${drafts})` }, { key: 'final', label: `finali (${finals})` }];
 

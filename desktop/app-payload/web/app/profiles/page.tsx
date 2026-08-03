@@ -72,7 +72,7 @@ export default function ProfilesPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>

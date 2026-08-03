@@ -108,7 +108,7 @@ export default function ProvidersPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const available = data?.providers.filter(p => p.available).length ?? 0
 

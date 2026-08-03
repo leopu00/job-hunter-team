@@ -26,7 +26,7 @@ const SYMBOLS: Record<string, string> = {
   EUR: '€', USD: '$', GBP: '£', CHF: 'Fr', JPY: '¥', CAD: 'CA$', AUD: 'A$',
 }
 
-function formatDisplay(value: number, locale: string, currency: string): string {
+function formatDisplay(value: number, locale: string): string {
   return new Intl.NumberFormat(locale, {
     style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 2,
   }).format(value)
@@ -57,12 +57,12 @@ export function CurrencyInput({
 }: CurrencyInputProps) {
   const id        = useId()
   const inputRef  = useRef<HTMLInputElement>(null)
-  const [raw, setRaw]       = useState(value != null ? formatDisplay(value, locale, currency) : '')
+  const [raw, setRaw]       = useState(value != null ? formatDisplay(value, locale) : '')
   const [editing, setEditing] = useState(false)
 
   // Sync quando value cambia esternamente
   useEffect(() => {
-    if (!editing) setRaw(value != null ? formatDisplay(value, locale, currency) : '')
+    if (!editing) queueMicrotask(() => setRaw(value != null ? formatDisplay(value, locale) : ''))
   }, [value, locale, currency, editing])
 
   const symbol    = SYMBOLS[currency] ?? currency
@@ -85,7 +85,7 @@ export function CurrencyInput({
     }
     const clamped = min != null && parsed < min ? min : max != null && parsed > max ? max : parsed
     onChange(clamped)
-    setRaw(formatDisplay(clamped, locale, currency))
+    setRaw(formatDisplay(clamped, locale))
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -122,7 +122,7 @@ export function CurrencyInput({
           value={raw}
           onChange={e => setRaw(e.target.value)}
           onFocus={onFocus} onBlur={onBlur} onKeyDown={onKeyDown}
-          placeholder={placeholder ?? (editing ? '0' : formatDisplay(0, locale, currency))}
+          placeholder={placeholder ?? (editing ? '0' : formatDisplay(0, locale))}
           disabled={disabled}
           aria-label={label ?? `Importo in ${currency}`}
           aria-invalid={!!error}
@@ -142,9 +142,9 @@ export function CurrencyInput({
       {(min != null || max != null) && !error && (
         <span style={{ fontSize: 9, color: 'var(--color-dim)', fontFamily: 'var(--font-mono)' }}>
           {min != null && max != null
-            ? `${formatDisplay(min, locale, currency)} – ${formatDisplay(max, locale, currency)} ${currency}`
-            : min != null ? `min. ${formatDisplay(min, locale, currency)} ${currency}`
-            : `max. ${formatDisplay(max!, locale, currency)} ${currency}`}
+            ? `${formatDisplay(min, locale)} – ${formatDisplay(max, locale)} ${currency}`
+            : min != null ? `min. ${formatDisplay(min, locale)} ${currency}`
+            : `max. ${formatDisplay(max!, locale)} ${currency}`}
         </span>
       )}
 

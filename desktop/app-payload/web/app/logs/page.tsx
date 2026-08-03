@@ -59,14 +59,14 @@ export default function LogsPage() {
 
   useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t) }, [search])
 
-  const fetchLogs = useCallback(async (append = false) => {
+  const fetchLogs = useCallback(async (append = false, offset = 0) => {
     const params = new URLSearchParams()
     if (date) params.set('date', date)
     if (level !== 'all') params.set('level', level)
     if (subsystem) params.set('subsystem', subsystem)
     if (debouncedSearch) params.set('search', debouncedSearch)
     params.set('limit', String(PAGE_SIZE))
-    if (append) params.set('offset', String(entries.length))
+    if (append) params.set('offset', String(offset))
     const res = await fetch(`/api/logs?${params}`).catch(() => null)
     if (!res?.ok) return
     const data = await res.json()
@@ -77,21 +77,21 @@ export default function LogsPage() {
     setDates(data.dates ?? [])
     setSubsystems(data.subsystems ?? [])
     if (!date && data.date) setDate(data.date)
-  }, [date, level, subsystem, debouncedSearch, entries.length])
+  }, [date, level, subsystem, debouncedSearch])
 
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return
     setLoading(true)
-    await fetchLogs(true)
+    await fetchLogs(true, entries.length)
     setLoading(false)
-  }, [fetchLogs, loading, hasMore])
+  }, [fetchLogs, loading, hasMore, entries.length])
 
-  useEffect(() => { fetchLogs() }, [date, level, subsystem, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { queueMicrotask(fetchLogs) }, [fetchLogs])
   useEffect(() => {
     if (!autoRefresh) return
     const id = setInterval(() => fetchLogs(), 5000)
     return () => clearInterval(id)
-  }, [date, level, subsystem, debouncedSearch, autoRefresh]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchLogs, autoRefresh])
 
   // IntersectionObserver per scroll infinito
   useEffect(() => {

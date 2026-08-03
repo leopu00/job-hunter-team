@@ -41,10 +41,10 @@ async function checkHttp(name: string, url: string): Promise<ServiceHealth> {
     const ms = Date.now() - start
     const ok = res.status < 500
     return { name, url, ok, status: ok ? 'ok' : 'error', httpStatus: res.status, ms }
-  } catch (err: any) {
+  } catch (err) {
     const ms = Date.now() - start
-    const isTimeout = err?.name === 'AbortError'
-    return { name, url, ok: false, status: isTimeout ? 'timeout' : 'error', ms, error: err?.message }
+    const isTimeout = err instanceof Error && err.name === 'AbortError'
+    return { name, url, ok: false, status: isTimeout ? 'timeout' : 'error', ms, error: err instanceof Error ? err.message : undefined }
   }
 }
 

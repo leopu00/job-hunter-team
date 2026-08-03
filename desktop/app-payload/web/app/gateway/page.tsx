@@ -68,7 +68,7 @@ export default function GatewayPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
   useEffect(() => {
     const id = setInterval(fetchData, 15_000)
     return () => clearInterval(id)

@@ -36,10 +36,10 @@ export default function SchedulerPage() {
     if (!res?.ok) return
     const data = await res.json()
     setTasks(data.tasks ?? [])
-    setStats(data.stats ?? stats)
+    if (data.stats) setStats(data.stats)
   }, [filter])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
   useEffect(() => { const id = setInterval(fetchData, 3000); return () => clearInterval(id) }, [fetchData])
 
   const cancelTask = async (id: string) => {

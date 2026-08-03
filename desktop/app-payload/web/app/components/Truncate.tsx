@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -105,7 +105,7 @@ export function TruncateCell({ children, maxWidth = 240, lines = 1 }: TruncateCe
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    setOverflow(el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)
+    queueMicrotask(() => setOverflow(el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1))
   }, [children])
 
   const cellStyle: CSSProperties = lines === 1 ? {
@@ -145,7 +145,7 @@ export function useTruncated(text: string): [React.RefObject<HTMLElement | null>
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    setTruncated(el.scrollHeight > el.clientHeight + 2 || el.scrollWidth > el.clientWidth + 1)
+    queueMicrotask(() => setTruncated(el.scrollHeight > el.clientHeight + 2 || el.scrollWidth > el.clientWidth + 1))
   }, [text])
   return [ref, truncated]
 }

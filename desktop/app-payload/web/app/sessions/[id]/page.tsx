@@ -64,7 +64,7 @@ export default function SessionDetailPage() {
     setLoading(false)
   }, [id])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
   useEffect(() => {
     if (data?.state === 'active') { const iv = setInterval(fetchData, 5000); return () => clearInterval(iv) }
   }, [fetchData, data?.state])

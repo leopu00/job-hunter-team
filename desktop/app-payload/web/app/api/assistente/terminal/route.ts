@@ -57,9 +57,9 @@ export async function POST() {
     }
 
     return NextResponse.json({ ok: true })
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? 'Apertura terminale fallita' },
+      { ok: false, error: err instanceof Error ? err.message : 'Apertura terminale fallita' },
       { status: 500 }
     )
   }
