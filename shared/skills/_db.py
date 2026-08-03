@@ -329,32 +329,30 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pst_ts ON position_state_transitions(ts);
     CREATE INDEX IF NOT EXISTS idx_pst_to_state ON position_state_transitions(to_state, ts);
 
-    -- Event-log di EVIDENZA della manutenzione (design 2026-08-03).
+    -- Storico dei controlli di manutenzione (design 2026-08-03).
     --
-    -- Perché serve: `last_checked`, `last_open_check`, `updated_at` e
-    -- `last_actor` sono stato last-write-wins. Provano che una riga è stata
-    -- riscritta, non che il lavoro sia stato fatto — quindi un agente che
-    -- scrive il timestamp senza aprire l'URL è INDISTINGUIBILE da uno che ha
-    -- lavorato, e il timestamp è anche la metrica con cui lo si giudica.
-    -- Misurato sul campo: office_geocoded 1418/1418 (100%) contro
-    -- office_verified 36/1418 (2,5%) — lo scarto si vedeva solo perché per
-    -- l'ufficio esistono per caso due colonne distinte. Per recheck, logo e
-    -- sito quella seconda colonna non c'è, quindi lo stesso scarto sarebbe
-    -- stato invisibile.
+    -- Due cose che oggi il DB non sa dire.
     --
-    -- Il principio: `checked` (ho guardato) ≠ `verified` (ho una prova), e
-    -- l'evidenza deve essere RI-DERIVABILE DA TERZI (status HTTP + hash del
-    -- contenuto), mai prosa. Una frase l'agente può inventarla come inventa
-    -- il timestamp; un hash un secondo attore lo ricalcola e lo confronta.
+    -- 1) `last_checked` e `last_open_check` tengono SOLO l'ultima data: ad
+    --    ogni giro la precedente sparisce. Quindi non si può rispondere a
+    --    "quante volte l'abbiamo guardata", "da quanto non la tocchiamo",
+    --    "quante volte abbiamo provato a verificarla senza riuscirci". Qui
+    --    ogni controllo lascia una riga, anche quello che non ha cambiato
+    --    niente: sapere che una posizione è stata guardata è metà del punto.
     --
-    -- `before`/`after` tengono il DIFF, non il fatto nudo: è quello che rende
-    -- misurabile il tasso di no-op (outcome='unchanged' sul totale), cioè la
-    -- quota di manutenzione che non ha cambiato niente. Oggi quel dato non
-    -- esiste in nessuna forma.
+    -- 2) Quando un controllo NON riesce a stabilire se l'offerta è ancora
+    --    aperta, la posizione deve restare viva. Non sapere non è sapere che
+    --    è scaduta, e chiudere per dubbio è perdere un'occasione in silenzio.
+    --    L'outcome `inconclusive` (e unreachable/skipped/failed) VIETA la
+    --    scrittura di is_open=false e status excluded/expired — la regola
+    --    esisteva solo come prosa nella skill recheck-liveness, ora la
+    --    impone maintenance_log.check_closing_write().
+    --
+    -- I campi evidence_* sono OPZIONALI: ricordano cosa aveva risposto la
+    -- fonte (un 403 ricorrente racconta un authwall, non un annuncio morto).
     --
     -- Append-only. Le INSERT le fanno db_update.py e db_insert.py tramite
-    -- maintenance_log.py, che valida vocabolario ed evidenza: mai scrivere
-    -- qui a mano da altri script.
+    -- maintenance_log.py: mai scrivere qui a mano da altri script.
     CREATE TABLE IF NOT EXISTS maintenance_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -1,43 +1,33 @@
 #!/usr/bin/env python3
-"""Event-log di evidenza della manutenzione — validazione e scrittura.
+"""Storico dei controlli di manutenzione, e protezione dell'incerto.
 
-Perché esiste
--------------
-I campi di manutenzione delle posizioni (`last_checked`, `last_open_check`,
-`updated_at`, `last_actor`) sono **stato last-write-wins**: provano che una
-riga è stata riscritta, non che il lavoro sia stato fatto. Un agente che
-scrive il timestamp senza aprire l'URL è indistinguibile da uno che ha
-lavorato — e quel timestamp è anche la metrica con cui si giudica il suo
-lavoro, quindi l'incentivo punta dalla parte sbagliata.
+Due cose, entrambe semplici.
 
-Il principio, unico e non negoziabile:
+1. STORICO — quando una posizione è stata trovata e quando è stata
+   ricontrollata, con che esito. Oggi `last_checked` tiene solo l'ULTIMA data:
+   la storia si sovrascrive ad ogni giro, quindi non si può rispondere a
+   "quante volte l'abbiamo guardata", "da quanto non la tocchiamo",
+   "quante volte non siamo riusciti a verificarla". Qui ogni controllo lascia
+   una riga.
 
-    `checked` (ho guardato) ≠ `verified` (ho una prova),
-    e `verified` non si scrive senza evidenza RI-DERIVABILE DA TERZI.
+2. L'INCERTO NON SI BUTTA — se un agente non riesce ad accertare se
+   un'offerta è ancora aperta, quell'offerta **resta viva**. Non sapere non è
+   sapere che è scaduta, e una posizione chiusa per dubbio è un'opportunità
+   persa senza motivo. La skill `recheck-liveness` lo dice già
+   (`OPEN_UNVERIFIED` → lascia `is_open` invariato), ma è prosa: nessuna riga
+   di codice lo impedisce. Qui lo impedisce.
 
-Ri-derivabile significa status HTTP + hash del contenuto: numeri che un
-secondo attore può ricalcolare e confrontare. Una descrizione in prosa non
-serve a niente — l'agente può scriverla falsa esattamente come scrive falso
-il timestamp. Questo modulo NON impedisce di mentire: rende la menzogna
-verificabile a campione. È una differenza di grado, ed è tutta la differenza
-che si può ottenere restando dentro il team.
-
-Cosa NON fa
------------
-Non decide se il lavoro è stato fatto. Registra un'affermazione insieme a
-ciò che serve per smentirla. Il controllo a campione (ri-scaricare e
-riconfrontare gli hash) va fatto FUORI dagli agenti, altrimenti resta
-autocertificazione — solo meglio strutturata.
-
-Vedi `docs/internal/architecture/2026-08-03-maintenance-evidence-log-design.md`.
+I campi `evidence_*` sono OPZIONALI: servono a ricordare cosa aveva risposto
+la fonte (status, URL) quando serve capire perché un controllo è andato come
+è andato. Non sono un obbligo e non gatekeepano niente.
 """
 
 import os
 
 # ── Vocabolari chiusi ────────────────────────────────────────────────────
-# Chiusi per scelta: un vocabolario aperto si riempie di sinonimi ("check",
-# "checked", "verifica") e rende inaggregabile proprio la metrica per cui la
-# tabella esiste.
+# Chiusi perché un vocabolario aperto si riempie di sinonimi ("check",
+# "checked", "verifica") e rende inaggregabile proprio il conteggio per cui
+# lo storico esiste.
 
 ACTIONS = (
     "liveness_check",   # l'annuncio esiste ancora?
@@ -49,179 +39,101 @@ ACTIONS = (
     "rescore",          # ri-valutazione dello Scorer
 )
 
-# Due famiglie, due nozioni di prova — perché hanno due modi diversi di
-# essere finte.
-#
-# ESTERNE: toccano una fonte fuori dal DB. Sono verificabili nel senso pieno
-# (status HTTP + hash del contenuto), e un terzo può ri-scaricare e
-# riconfrontare.
-#
-# DI GIUDIZIO: non esiste una fonte da interrogare — nessuna URL dice se uno
-# score è giusto. Qui la prova possibile è l'IMPRONTA DELL'ARTEFATTO che
-# giustifica la decisione (l'hash del breakdown, del motivo di esclusione).
-# Non dimostra che il giudizio sia buono; dimostra che è stato RI-FORMULATO.
-# Un ri-score con breakdown byte-identico al precedente è, quasi certamente,
-# una copia — ed è proprio il no-op che vogliamo poter contare.
-EXTERNAL_ACTIONS = (
-    "liveness_check", "geocode", "logo_fetch", "website_fetch", "jd_refresh",
-)
-JUDGEMENT_ACTIONS = ("exclude", "rescore")
-
 OUTCOMES = (
     "confirmed_open",    # verificato: c'è ancora
     "confirmed_closed",  # verificato: non c'è più
+    "inconclusive",      # NON si è riusciti a stabilirlo → la posizione resta viva
     "updated",           # un campo è cambiato
-    "unchanged",         # verificato, nulla da cambiare
+    "unchanged",         # nulla da cambiare
     "unreachable",       # fonte irraggiungibile
     "skipped",           # non tentato (throttle, fuori scope)
     "failed",            # tentato, errore
 )
 
-# Gli esiti che AFFERMANO una verifica. Senza evidenza sono opinioni, e
-# `unchanged` è in lista apposta: è l'esito più frequente della manutenzione
-# ed è esattamente quello in cui conviene di più non fare niente.
-OUTCOMES_REQUIRING_EVIDENCE = (
-    "confirmed_open",
-    "confirmed_closed",
-    "updated",
-    "unchanged",
-)
+# Esiti che dicono "non lo so". È la categoria che protegge il portafoglio:
+# da qui non si può concludere niente sulla posizione.
+INCONCLUSIVE_OUTCOMES = ("inconclusive", "unreachable", "failed", "skipped")
 
 EVIDENCE_KINDS = ("http", "api", "manual", "none")
 
-# Kind che valgono come prova ri-derivabile. `manual` e `none` non ci sono:
-# descrivono un'affermazione umana o assente, che nessuno può ricalcolare.
-EVIDENCE_KINDS_VERIFIABLE = ("http", "api")
 
-
-class EvidenceError(ValueError):
-    """Evidenza mancante o incoerente: la scrittura va rifiutata, non corretta."""
+class MaintenanceError(ValueError):
+    """Scrittura incoerente con l'esito dichiarato: va rifiutata, non corretta."""
 
 
 def add_cli_args(parser):
-    """Aggiunge i flag di evidenza a un subparser di db_update/db_insert."""
+    """Aggiunge i flag dello storico a un subparser di db_update/db_insert."""
     parser.add_argument(
         "--action", choices=list(ACTIONS),
-        help="Operazione di manutenzione in corso (abilita il log di evidenza)")
+        help="Operazione di manutenzione in corso (registra il controllo nello storico)")
     parser.add_argument(
         "--outcome", choices=list(OUTCOMES),
-        help="Esito dichiarato; se omesso viene dedotto dal diff")
-    parser.add_argument(
-        "--evidence-kind", choices=list(EVIDENCE_KINDS),
-        help="Natura della prova: http/api sono ri-derivabili, manual/none no")
-    parser.add_argument("--evidence-url", help="URL effettivamente interrogato")
-    parser.add_argument("--evidence-code", type=int, help="Status HTTP della risposta")
-    parser.add_argument(
-        "--evidence-hash",
-        help="sha256 del contenuto normalizzato (permette il riconfronto)")
+        help="Esito del controllo. Usa 'inconclusive' se non sei riuscito a "
+             "stabilire se l'offerta è aperta: la posizione resta viva.")
+    parser.add_argument("--evidence-kind", choices=list(EVIDENCE_KINDS),
+                        help="Natura della fonte consultata (opzionale)")
+    parser.add_argument("--evidence-url", help="URL interrogato (opzionale)")
+    parser.add_argument("--evidence-code", type=int, help="Status HTTP (opzionale)")
+    parser.add_argument("--evidence-hash", help="Hash del contenuto (opzionale)")
     parser.add_argument("--duration-ms", type=int, help="Durata dell'operazione")
     return parser
 
 
 def evidence_from_args(args):
-    """Estrae il dict di evidenza dagli argomenti CLI.
-
-    `evidence_kind` si deduce quando l'agente passa una URL senza dichiararlo:
-    è la dimenticanza più comune e non vale la pena rifiutare la scrittura per
-    un flag ridondante.
-    """
+    """Estrae i dati della fonte dagli argomenti CLI. Tutto opzionale."""
     kind = getattr(args, "evidence_kind", None)
     url = getattr(args, "evidence_url", None)
     code = getattr(args, "evidence_code", None)
     if not kind and (url or code is not None):
         kind = "http"
-    return {
-        "kind": kind,
-        "url": url,
-        "code": code,
-        "hash": getattr(args, "evidence_hash", None),
-    }
+    return {"kind": kind, "url": url, "code": code,
+            "hash": getattr(args, "evidence_hash", None)}
 
 
-def _is_verifiable_external(evidence):
-    """Evidenza di un'azione ESTERNA: ri-scaricabile e riconfrontabile.
+# ── La regola che protegge il portafoglio ────────────────────────────────
+#
+# Chiudere una posizione è l'unica operazione di manutenzione IRREVERSIBILE
+# nei fatti: una volta fuori dal radar non la si guarda più, e se era ancora
+# aperta l'occasione è persa in silenzio. Tutto il resto (una coordinata
+# sbagliata, un logo mancante) si corregge al giro dopo.
+#
+# Quindi: si chiude solo se si SA che è chiusa. Un controllo che non è
+# riuscito a stabilirlo lascia le cose come stanno e si ritenta.
 
-    Serve il tris: un kind verificabile, un puntatore alla fonte e una
-    risposta. Uno status 404 è un'evidenza legittima di `confirmed_closed`,
-    ma non prova che una posizione sia ancora aperta — per quello la coerenza
-    esito/status la controlla `validate`.
-    """
-    if not evidence:
-        return False
-    if evidence.get("kind") not in EVIDENCE_KINDS_VERIFIABLE:
-        return False
-    if not evidence.get("url"):
-        return False
-    return evidence.get("code") is not None
-
-
-def _is_verifiable_judgement(evidence):
-    """Evidenza di un'azione DI GIUDIZIO: l'impronta dell'artefatto prodotto."""
-    return bool(evidence and evidence.get("hash"))
+CLOSING_WRITES = {
+    "is_open": ("false", "0", 0, False),
+    "status": ("excluded", "expired"),
+}
 
 
-def is_verifiable(action, evidence):
-    """L'evidenza regge, per il tipo di azione che si sta dichiarando."""
-    if action in JUDGEMENT_ACTIONS:
-        return _is_verifiable_judgement(evidence)
-    return _is_verifiable_external(evidence)
+def check_closing_write(field, value, outcome):
+    """Vieta di chiudere una posizione su un controllo non concluso."""
+    if outcome not in INCONCLUSIVE_OUTCOMES:
+        return
+    closing = CLOSING_WRITES.get(field)
+    if not closing or value not in closing:
+        return
+    raise MaintenanceError(
+        f"outcome '{outcome}' significa che NON hai potuto verificare, e "
+        f"'{field}={value}' chiuderebbe la posizione. Non sapere non è sapere "
+        "che è scaduta: una posizione chiusa per dubbio è un'occasione persa "
+        "senza motivo. Lasciala viva — il controllo resta a storico e verrà "
+        "ritentata. Chiudila solo con outcome 'confirmed_closed'."
+    )
 
 
-def validate(action, outcome, evidence):
-    """Rifiuta le combinazioni che renderebbero il log inutile.
-
-    Solleva `EvidenceError` con un messaggio che dice cosa passare, non solo
-    cosa manca: chi legge l'errore è un agente che deve correggere il comando
-    al tentativo successivo.
-    """
+def validate(action, outcome):
     if action not in ACTIONS:
-        raise EvidenceError(
+        raise MaintenanceError(
             f"action '{action}' non valida. Ammesse: {', '.join(ACTIONS)}")
     if outcome not in OUTCOMES:
-        raise EvidenceError(
+        raise MaintenanceError(
             f"outcome '{outcome}' non valido. Ammessi: {', '.join(OUTCOMES)}")
 
-    if outcome in OUTCOMES_REQUIRING_EVIDENCE and not is_verifiable(action, evidence):
-        if action in JUDGEMENT_ACTIONS:
-            raise EvidenceError(
-                f"outcome '{outcome}' su '{action}' afferma un giudizio "
-                "riformulato: passa --evidence-hash <sha256 del breakdown o "
-                "del motivo>. Serve a distinguere una rivalutazione vera da "
-                "una copia del giudizio precedente. Se non hai rivalutato, "
-                "l'esito corretto è 'skipped'.")
-        raise EvidenceError(
-            f"outcome '{outcome}' afferma una verifica: serve evidenza "
-            "ri-derivabile. Passa --evidence-url <url interrogato> e "
-            "--evidence-code <status HTTP>, e --evidence-hash <sha256> se hai "
-            "letto il contenuto. Se non hai aperto la fonte l'esito corretto è "
-            "'skipped' o 'unreachable', non un confirmed."
-        )
 
-    code = (evidence or {}).get("code")
-    if outcome == "confirmed_open" and isinstance(code, int) and code >= 400:
-        raise EvidenceError(
-            f"confirmed_open con status {code}: la fonte non ha risposto OK. "
-            "Se l'annuncio non c'è più l'esito è 'confirmed_closed'; se la "
-            "fonte è caduta è 'unreachable'.")
-    if outcome == "confirmed_closed" and isinstance(code, int) and 200 <= code < 300:
-        raise EvidenceError(
-            f"confirmed_closed con status {code}: la pagina risponde OK. Se è "
-            "servita ma l'annuncio non c'è più, passa --evidence-hash del "
-            "contenuto che lo dimostra e usa 'updated' su is_open.")
-
-
-def derive_outcome(action, diffs, evidence):
-    """Esito dedotto quando l'agente non lo dichiara.
-
-    Regola volutamente conservativa: senza evidenza che regge non si deduce
-    mai un esito che afferma una verifica. Dedurre `unchanged` da un UPDATE a
-    vuoto rimetterebbe in piedi esattamente il problema che questa tabella
-    esiste per risolvere — una scrittura che si autocertifica.
-    """
-    ok = is_verifiable(action, evidence)
-    if diffs:
-        return "updated" if ok else "skipped"
-    return "unchanged" if ok else "skipped"
+def derive_outcome(diffs):
+    """Esito dedotto quando l'agente non lo dichiara: ha cambiato qualcosa o no."""
+    return "updated" if diffs else "unchanged"
 
 
 def actor():
@@ -243,13 +155,10 @@ def _as_text(value):
 def record(conn, target_type, target_id, action, outcome, *,
            field=None, before=None, after=None, evidence=None,
            duration_ms=None, by_agent=None):
-    """Scrive UN evento. Non fa commit: sta nella transazione del chiamante.
-
-    Deliberato: l'evento e la modifica che descrive devono atterrare insieme o
-    non atterrare affatto. Un log che sopravvive a un UPDATE fallito racconta
-    lavoro mai avvenuto, che è il difetto da cui siamo partiti.
+    """Scrive UNA riga di storico. Non fa commit: sta nella transazione del
+    chiamante, così il controllo e la modifica che descrive atterrano insieme.
     """
-    validate(action, outcome, evidence)
+    validate(action, outcome)
     ev = evidence or {}
     conn.execute(
         "INSERT INTO maintenance_events "
@@ -267,11 +176,13 @@ def record_diffs(conn, target_type, target_id, action, diffs, *,
                  outcome=None, evidence=None, duration_ms=None, by_agent=None):
     """Un evento per campo cambiato; uno solo se non è cambiato niente.
 
-    `diffs` è una lista di `(field, before, after)`. Il caso "niente è
-    cambiato" produce comunque una riga: è il no-op, cioè il dato che serve
-    misurare.
+    `diffs` è una lista di `(field, before, after)`. Anche il caso "niente è
+    cambiato" lascia una riga: serve a sapere che la posizione è stata
+    guardata, che è metà del punto di tenere uno storico.
     """
-    outcome = outcome or derive_outcome(action, diffs, evidence)
+    outcome = outcome or derive_outcome(diffs)
+    for field, _before, after in diffs:
+        check_closing_write(field, after, outcome)
     if not diffs:
         record(conn, target_type, target_id, action, outcome,
                evidence=evidence, duration_ms=duration_ms, by_agent=by_agent)
@@ -283,27 +194,22 @@ def record_diffs(conn, target_type, target_id, action, diffs, *,
     return len(diffs)
 
 
-# ── Regola dura sui campi `*_verified` ───────────────────────────────────
-# Un campo che si chiama "verified" è una promessa fatta a chi legge la
-# dashboard. Senza questo controllo la prossima passata automatica si
-# dichiara verifica esattamente come ha fatto quella che ha portato
-# office_geocoded al 100% e office_verified al 2,5%.
+def unverified_streak(conn, position_id):
+    """Quanti controlli di liveness di fila non hanno concluso nulla.
 
-VERIFIED_FIELDS = ("office_verified",)
-
-
-def check_verified_claim(field, value, evidence):
-    """Chi scrive `<campo>_verified = 1` deve avere una prova 2xx."""
-    if field not in VERIFIED_FIELDS:
-        return
-    truthy = value in (1, "1", True, "true")
-    if not truthy:
-        return
-    code = (evidence or {}).get("code")
-    if (not _is_verifiable_external(evidence)
-            or not (isinstance(code, int) and 200 <= code < 300)):
-        raise EvidenceError(
-            f"{field}=true richiede una verifica dimostrabile: --evidence-url "
-            "e --evidence-code 2xx (più --evidence-hash se hai letto il "
-            "contenuto). Per una geocodifica automatica non verificata a mano "
-            "usa --office-geocoded true e lascia office_verified com'è.")
+    Serve a distinguere "non l'abbiamo ancora guardata" da "la guardiamo da
+    settimane e non riusciamo mai a leggerla": la seconda è un problema di
+    fonte da segnalare, non una posizione da buttare.
+    """
+    rows = conn.execute(
+        "SELECT outcome FROM maintenance_events "
+        "WHERE target_type = 'position' AND target_id = ? "
+        "AND action = 'liveness_check' ORDER BY id DESC", (position_id,)
+    ).fetchall()
+    streak = 0
+    for (outcome,) in rows:
+        if outcome in INCONCLUSIVE_OUTCOMES:
+            streak += 1
+        else:
+            break
+    return streak

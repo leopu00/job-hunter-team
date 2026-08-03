@@ -1,179 +1,137 @@
-# 🔬 Log di evidenza della manutenzione — design 2026-08-03
+# 🔬 Storico dei controlli di manutenzione — design 2026-08-03
 
-**Stato**: ✅ **implementato** il 2026-08-03 (passi 1-5 del rollout). Non ancora deployato sulle VPS: richiede rebuild immagine.
+**Stato**: ✅ implementato il 2026-08-03. Non ancora deployato sulle VPS: richiede rebuild immagine.
 
-## Il problema
+Due problemi distinti, una tabella sola.
 
-Con lo schema attuale **non è possibile stabilire se il lavoro di manutenzione sia stato fatto**. Si può solo stabilire che una riga è stata riscritta.
+---
 
-Tutti i campi che dovrebbero raccontare la manutenzione sono **stato last-write-wins**:
+## Problema 1 — la storia dei controlli si sovrascrive
 
-| campo | cosa prova | cosa non prova |
+`positions.last_checked` e `last_open_check` tengono **solo l'ultima data**. Ad ogni giro di manutenzione la precedente sparisce. Quindi non è possibile rispondere a domande elementari:
+
+- quante volte abbiamo guardato questa posizione?
+- da quanto non la tocchiamo?
+- quante volte abbiamo provato a verificarla **senza riuscirci**?
+
+Lo stesso vale per `scores`: `INSERT OR REPLACE` sovrascrive in silenzio, quindi un re-score che lascia il punteggio identico è indistinguibile da un re-score mai eseguito.
+
+Conseguenza pratica: le cifre di manutenzione (*"94 posizioni ricontrollate in 4 giorni"*) contano **righe toccate**, non controlli. Non c'è modo di sapere quanti di quei 94 abbiano concluso qualcosa.
+
+---
+
+## Problema 2 — l'incerto rischia di finire nel cestino
+
+Quando un agente non riesce ad accertare se un annuncio è ancora aperto, l'esito corretto è **lasciare la posizione com'è e ritentare**. Non sapere non è sapere che è scaduta.
+
+La skill `recheck-liveness` lo prescrive già, con un vocabolario a tre stati:
+
+| state | significato | cosa fare |
 |---|---|---|
-| `positions.last_checked` | una data è stata scritta | che l'URL sia stato aperto |
-| `positions.last_open_check` | idem | che l'annuncio fosse vivo |
-| `positions.updated_at` | la riga è stata riscritta | quale campo, da quale valore a quale |
-| `positions.last_actor` | chi ha toccato per **ultimo** | nessuna storia: si sovrascrive |
-| `positions.office_geocoded` | esiste una coordinata | da dove arriva, e se qualcuno l'ha guardata |
+| `OPEN` | aperto verificato | `is_open=1` |
+| `CLOSED` | 404/410 o closed-marker | `status='expired'` |
+| `OPEN_UNVERIFIED` | authwall, JS, browser giù | **lascia `is_open` invariato** |
 
-Ne segue che **un agente che scrive il timestamp senza fare nulla è indistinguibile da uno che ha lavorato**. E siccome il timestamp è anche la metrica con cui si giudica il suo lavoro, l'incentivo punta nella direzione sbagliata.
+Ma è **prosa in un file di skill**: nessuna riga di codice la impone. Un agente che scrive `--is-open false` dopo un controllo fallito lo può fare, e nessuno se ne accorge — la posizione esce dal radar e nessuno la guarda più.
 
-### Come si è manifestato
-
-Su una VPS beta in modalità `maintenance` (ordine: *recheck 7gg, geocoding ufficio, logo, sito azienda*), dopo quattro giorni:
-
-```
-office geocodificato   1418 / 1418   (100%)
-office verificato        36 / 1418   (2,5%)
-```
-
-Il 100% è credibile solo come **passata automatica in blocco**; la verifica vera è ferma al 2,5%. Lo scarto si è potuto vedere **solo** perché per l'ufficio esistono per caso due campi distinti, `office_geocoded` e `office_verified`. Per il recheck, il logo e il sito quel secondo campo non c'è: lì lo stesso scarto sarebbe **invisibile**.
-
-> ⚠️ Tutte le cifre di manutenzione prodotte finora (*"94 posizioni ricontrollate in 4 giorni"*) vanno lette come **"94 righe toccate"**. Non sono una misura del lavoro svolto.
+> ⚠️ Chiudere una posizione è l'unica operazione di manutenzione **irreversibile nei fatti**. Una coordinata sbagliata o un logo mancante si correggono al giro dopo; un'offerta chiusa per dubbio è un'occasione persa in silenzio. È l'unica scrittura che merita un divieto nel codice.
 
 ---
 
-## Principio
+## Schema
 
-> Distinguere **`checked`** (ho guardato) da **`verified`** (ho una prova), e non accettare mai `verified` senza un'evidenza **ri-derivabile da terzi**.
-
-Un log in cui l'agente scrive in prosa cos'ha fatto non risolve niente: può scrivere il falso lì come lo scrive nel timestamp. L'evidenza deve essere qualcosa che **un secondo attore può ricalcolare e confrontare** — status HTTP e hash del contenuto, non una frase.
-
----
-
-## Schema proposto
-
-Una sola tabella nuova, append-only, modellata su `position_state_transitions` (stesse convenzioni: `id` autoincrement, `ts` con default, `by_agent`, indici per target e per tempo).
+Una tabella append-only, modellata su `position_state_transitions` (stesse convenzioni: `id` autoincrement, `ts` con default, `by_agent`, indici per target e per tempo).
 
 ```sql
 CREATE TABLE IF NOT EXISTS maintenance_events (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     ts            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     by_agent      TEXT NOT NULL,
-
-    -- Che cosa è stato toccato
     target_type   TEXT NOT NULL,      -- position | company
     target_id     INTEGER NOT NULL,
-
-    -- Che cosa si stava facendo
-    action        TEXT NOT NULL,      -- vedi vocabolario
-    outcome       TEXT NOT NULL,      -- vedi vocabolario
-
-    -- Il diff, non il fatto
-    field         TEXT,
+    action        TEXT NOT NULL,
+    outcome       TEXT NOT NULL,
+    field         TEXT,               -- campo toccato (NULL = controllo senza modifiche)
     before        TEXT,
     after         TEXT,
-
-    -- L'evidenza, ri-derivabile
-    evidence_kind TEXT,               -- http | api | manual | none
+    evidence_kind TEXT,               -- opzionali: cosa aveva risposto la fonte
     evidence_url  TEXT,
-    evidence_code INTEGER,            -- status HTTP
-    evidence_hash TEXT,               -- sha256 del contenuto normalizzato
-
+    evidence_code INTEGER,
+    evidence_hash TEXT,
     duration_ms   INTEGER
 );
-
-CREATE INDEX IF NOT EXISTS idx_me_target  ON maintenance_events(target_type, target_id, ts);
-CREATE INDEX IF NOT EXISTS idx_me_ts      ON maintenance_events(ts);
-CREATE INDEX IF NOT EXISTS idx_me_outcome ON maintenance_events(action, outcome, ts);
 ```
 
-### Vocabolario chiuso
+I campi `evidence_*` sono **opzionali**: servono a ricordare *perché* un controllo è andato come è andato (uno status 403 ricorrente racconta un authwall, non una posizione morta). Non gatekeepano niente.
 
-`action` — **liveness_check** · **geocode** · **logo_fetch** · **website_fetch** · **jd_refresh** · **exclude** · **rescore**
+### Vocabolari chiusi
 
-Le azioni si dividono in due famiglie, perché hanno **due modi diversi di essere finte**:
+Chiusi perché un vocabolario aperto si riempie di sinonimi (`check`, `checked`, `verifica`) e rende inaggregabile proprio il conteggio per cui lo storico esiste.
 
-| famiglia | azioni | che prova serve |
-|---|---|---|
-| **esterne** | `liveness_check` `geocode` `logo_fetch` `website_fetch` `jd_refresh` | status HTTP + URL: un terzo ri-scarica e riconfronta |
-| **di giudizio** | `exclude` `rescore` | hash dell'**artefatto** (breakdown, motivo) |
-
-Nessuna URL può dire se uno score è giusto: pretendere uno status HTTP su un `rescore` renderebbe la regola una formalità da aggirare. Per un giudizio la prova possibile è l'impronta di ciò che lo motiva — non dimostra che sia buono, dimostra che è stato **ri-formulato**. Un re-score con breakdown byte-identico produce lo stesso hash, e il no-op resta visibile.
+`action` — `liveness_check` · `geocode` · `logo_fetch` · `website_fetch` · `jd_refresh` · `exclude` · `rescore`
 
 `outcome`:
 
-| valore | significato | richiede evidenza |
-|---|---|---|
-| `confirmed_open` | l'annuncio esiste ancora | ✅ sì |
-| `confirmed_closed` | l'annuncio non esiste più | ✅ sì |
-| `updated` | un campo è cambiato | ✅ sì |
-| `unchanged` | verificato, nulla da cambiare | ✅ sì |
-| `unreachable` | fonte irraggiungibile | ⬜ no (è il fallimento) |
-| `skipped` | non tentato (throttle, fuori scope) | ⬜ no |
-| `failed` | tentato, errore | ⬜ no |
-
-**`unchanged` richiede evidenza**: è il caso più frequente della manutenzione, ed è esattamente quello in cui è più comodo non fare niente.
-
----
-
-## Dove si aggancia
-
-`shared/skills/db_update.py` è **l'unico punto di scrittura** che gli agenti usano, e costruisce già una lista `changed` con i campi modificati. È lì che va l'aggancio:
-
-1. leggere i valori **prima** dell'`UPDATE` (oggi non si fa: si scrive e basta);
-2. eseguire `UPDATE` e `INSERT` in `maintenance_events` **nella stessa transazione**;
-3. rifiutare l'update quando `action` lo richiede e l'evidenza manca — con `rollback()`, perché scrivere senza loggare è precisamente il buco da chiudere.
-
-> ⚠️ **`last_checked` e `last_open_check` sono esclusi dal diff**, e non è una svista. Cambiano ad ogni chiamata per costruzione: includerli renderebbe ogni evento un `updated` e il tasso di no-op sarebbe **sempre zero**. Si ricostruirebbe, dentro la tabella che serve a smascherarlo, esattamente l'inganno di partenza — la prova di lavoro che consiste nell'aver scritto l'ora. (Difetto trovato e corretto durante l'implementazione, al primo smoke test.)
-
-Stessa cosa su `scores`: `INSERT OR REPLACE` sovrascrive in silenzio, quindi `db_insert.py insert_score` fotografa il punteggio precedente e registra il diff. `scored_by` e i timestamp restano fuori dai campi tracciati per lo stesso motivo.
-
-Un solo file, un solo chokepoint: nessun agente può aggiornare senza lasciare l'evento. Le scritture inline via `python3 -c "import sqlite3..."` restano possibili e aggirerebbero il log — stesso problema già affrontato per i timestamp `'now'`, e stessa cura: un **trigger educativo** che le rifiuta con un messaggio che insegna il pattern corretto (vedi `applications_reject_str_now_insert` in `shared/skills/_db.py`).
-
-### Regola dura sul `verified`
-
-`office_verified = 1` (e i futuri `*_verified`) si può scrivere **solo** contestualmente a un evento con `evidence_kind='http'` e `evidence_code` 2xx. Non è un controllo cosmetico: è l'unica cosa che impedisce alla prossima passata automatica di dichiararsi verifica.
-
----
-
-## Cosa se ne ricava
-
-| metrica | come | a cosa serve |
-|---|---|---|
-| **tasso di no-op** | `outcome='unchanged'` / totale eventi | misura diretta del lavoro finto |
-| **copertura reale** | target distinti con evento negli ultimi N giorni / portafoglio | il "94 in 4 giorni" diventa un numero vero |
-| **profondità** | eventi `confirmed_*` / eventi totali | quanto della manutenzione è verifica |
-| **costo per record verificato** | incrocio col consumo del round | risponde a *"il weekly bruciato è servito?"* |
-| **agente inerte** | eventi per `by_agent` per giorno | oggi si vede solo `last_actor`, che si sovrascrive |
-
-Il primo indicatore è quello che mancava. Se la manutenzione produce `unchanged` sul 95% dei record senza evidenza, il team sta girando a vuoto — e oggi quel dato **non esiste in nessuna forma**.
-
----
-
-## Costi e limiti
-
-- **Scritture**: una riga per operazione. Sul volume osservato (~100-200 tocchi/giorno per VPS) è irrilevante; va comunque messa una **retention di 60 giorni** con roll-up mensile per target, altrimenti la tabella diventa il file più grande del DB.
-- **Non impedisce di mentire**: un agente può ancora inventare `evidence_hash`. La difesa non è la tabella, è la **ri-derivabilità**: un secondo attore (Dottore, o uno script fuori dal team) ri-scarica un campione e confronta gli hash. Senza quel controllo a campione, il log resta autocertificazione — solo meglio strutturata.
-- **Non retroattivo**: le righe già in DB restano senza storia. Il conteggio "verificato" riparte da zero, ed è corretto che sia così.
-- **Sync cloud**: fuori scope per ora. La tabella è diagnostica interna; se poi serve in dashboard, va aggiunta al set di `db_to_supabase.py` con una migration numerata lato Supabase.
-
----
-
-## Rollout
-
-| passo | dove |
+| valore | significato |
 |---|---|
-| 1 | `CREATE TABLE` idempotente in `shared/skills/_db.py`, accanto a `position_state_transitions` |
-| 2 | aggancio in `shared/skills/db_update.py` (lettura *before*, insert in transazione, rifiuto senza evidenza) |
-| 3 | flag `--evidence-url` / `--evidence-code` / `--evidence-hash` nella CLI di `db_update.py` |
-| 4 | aggiornamento delle skill di manutenzione perché passino l'evidenza (liveness, geocode, logo, sito) |
-| 5 | query di lettura in `shared/skills/db_query.py`: `maintenance-report [--days N] [--json]` |
-| 6 | trigger educativo contro le `INSERT`/`UPDATE` inline che scavalcano la skill |
-| 7 | campionamento di ri-verifica indipendente (senza, il punto 2 è autocertificazione) |
+| `confirmed_open` | verificato: c'è ancora |
+| `confirmed_closed` | verificato: non c'è più |
+| **`inconclusive`** | **non si è riusciti a stabilirlo** |
+| `updated` | un campo è cambiato |
+| `unchanged` | nulla da cambiare |
+| `unreachable` | fonte irraggiungibile |
+| `skipped` | non tentato |
+| `failed` | tentato, errore |
 
-**Fatti**: 1, 2, 3, 5 — più il percorso `rescore` su `scores`, coperto da `tests/test_maintenance_log.py` (26 test).
-
-**Aperti**: il **4** (le skill di manutenzione non passano ancora `--action`, quindi il log è disponibile ma vuoto finché non le si aggiorna), il **6** e soprattutto il **7**, che è quello che rende il sistema onesto e l'unico che va fatto **fuori dagli agenti**.
-
-`--action` è opzionale per costruzione: senza, `db_update`/`db_insert` si comportano esattamente come prima. Serve a non spezzare la flotta durante il rollout — ma finché il passo 4 non è fatto, `maintenance-report` risponderà "nessun evento", che è la verità e non un guasto.
-
-> ⛔ **Eccezione: `office_verified=true` è gated SUBITO**, anche senza `--action`. È l'unico campo che oggi promette una verifica a chi legge la dashboard, ed è quello su cui abbiamo la prova del difetto (100% contro 2,5%). Le skill che lo scrivono senza `--evidence-url` + `--evidence-code` 2xx **falliscono con exit 1** finché non passano la prova. È una rottura voluta e visibile, preferita a un altro mese di dati che si autocertificano.
+Gli ultimi quattro — `inconclusive`, `unreachable`, `skipped`, `failed` — formano il gruppo **"non lo so"**, ed è quello che fa scattare la protezione.
 
 ---
 
-## Domande aperte
+## La regola
 
-1. **`scores` ha lo stesso problema?** Un re-score che non cambia il punteggio oggi è indistinguibile da un re-score mai eseguito. Probabilmente sì, stessa cura.
-2. **Retention 60 giorni è la scelta giusta**, o serve tenere per sempre almeno gli `confirmed_closed` (sono la storia di *perché* una posizione è stata chiusa)?
-3. **Chi fa il campionamento del punto 7?** Il Dottore è dentro il team e soggetto agli stessi guasti; un cron esterno è più credibile ma è un pezzo di infrastruttura in più.
+```
+outcome ∈ {inconclusive, unreachable, skipped, failed}
+    ⇒ VIETATO scrivere is_open=false o status ∈ {excluded, expired}
+```
+
+Rifiutata **prima** di scrivere (exit 1 con un messaggio che spiega cosa fare), con una rete di sicurezza sul diff reale che fa `rollback` se una chiusura passa comunque.
+
+Non tocca nient'altro: con un esito incerto l'agente può ancora aggiornare note, coordinate, summary. Il divieto è solo sulla chiusura. E **riaprire non è mai bloccato** — non perde niente.
+
+---
+
+## Cosa se ne legge
+
+```
+db_query.py check-history <id>              # quando trovata, quante volte guardata, con che esito
+db_query.py maintenance-report [--days N]   # copertura, verificate, invariate, senza esito
+```
+
+`check-history` segnala anche la **serie di controlli non conclusi** consecutivi. Serve a distinguere due situazioni che oggi si confondono:
+
+- *"non l'abbiamo ancora guardata"* → va guardata
+- *"la guardiamo da tre settimane e non riusciamo mai a leggerla"* → è un problema di **fonte** da segnalare, non una posizione da buttare
+
+---
+
+## Aggancio
+
+| dove | cosa |
+|---|---|
+| `shared/skills/maintenance_log.py` | vocabolari, regola, scrittura |
+| `shared/skills/db_update.py` | snapshot prima / diff dopo, stessa transazione dell'UPDATE |
+| `shared/skills/db_insert.py` | `insert_score`: diff col punteggio precedente |
+| `shared/skills/db_query.py` | `check-history`, `maintenance-report` |
+| `tests/test_maintenance_log.py` | 29 test |
+
+`--action` è **opt-in**: senza, `db_update`/`db_insert` si comportano esattamente come prima. Finché le skill di manutenzione non lo passano, `check-history` risponderà "nessun controllo a storico" — che è la verità, non un guasto.
+
+> ⚠️ `last_checked` e `last_open_check` sono **esclusi dal diff** di proposito. Cambiano ad ogni chiamata per costruzione: includerli farebbe risultare `updated` ogni singolo controllo, e la distinzione fra "ha cambiato qualcosa" e "non ha cambiato niente" sparirebbe. Trovato al primo smoke test.
+
+---
+
+## Aperto
+
+1. **Le skill di manutenzione non passano ancora `--action`/`--outcome`** (liveness, geocode, logo, sito). Finché non lo fanno, la tabella resta vuota: è il prossimo passo e va fatto sulle quattro skill.
+2. **Retention**: una riga per controllo. Sui volumi osservati (~100-200/giorno per VPS) è irrilevante per mesi, ma prima o poi serve un roll-up.
+3. **`scores` ha lo stesso problema di sovrascrittura** ed è agganciato, ma nessuno chiama ancora `--action rescore`.

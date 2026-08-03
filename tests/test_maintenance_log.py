@@ -1,10 +1,17 @@
-"""Test del log di evidenza della manutenzione.
+"""Test dello storico dei controlli di manutenzione.
 
-Il difetto da cui nasce: `last_checked` & co. sono stato last-write-wins, quindi
-un agente che scrive il timestamp senza lavorare è indistinguibile da uno che
-ha lavorato. Questi test coprono la sola cosa che rende diverso il nuovo
-percorso — **un esito che afferma una verifica non si può scrivere senza una
-prova**, e un no-op resta contabilizzato come tale invece di sparire.
+Due cose da garantire:
+
+1. **Lo storico non si sovrascrive** — `last_checked` tiene solo l'ultima
+   data, qui ogni controllo lascia una riga, anche quello che non ha
+   cambiato niente (sapere che una posizione è stata guardata è metà del
+   punto).
+
+2. **L'incerto non si butta** — un controllo che non è riuscito a stabilire
+   se l'offerta è aperta NON può chiuderla. Non sapere non è sapere che è
+   scaduta, e una posizione chiusa per dubbio è un'occasione persa in
+   silenzio. La skill `recheck-liveness` lo prescrive già a parole; questi
+   test verificano che ora lo impedisca il codice.
 
 Eseguire:
     pytest tests/test_maintenance_log.py -v
@@ -23,15 +30,8 @@ sys.path.insert(0, SKILLS_DIR)
 import maintenance_log as ml  # noqa: E402
 
 
-HTTP_OK = {"kind": "http", "url": "https://example.test/job/1", "code": 200,
-           "hash": "a" * 64}
-HTTP_404 = {"kind": "http", "url": "https://example.test/job/1", "code": 404}
-NO_EVIDENCE = {"kind": None, "url": None, "code": None, "hash": None}
-
-
 @pytest.fixture
 def conn():
-    """DB in memoria con la sola tabella sotto test."""
     c = sqlite3.connect(":memory:")
     c.execute("""
         CREATE TABLE maintenance_events (
@@ -50,146 +50,130 @@ def conn():
     c.close()
 
 
-# ── Il cuore: nessuna verifica senza prova ───────────────────────────────
+# ── La regola che protegge il portafoglio ────────────────────────────────
 
-class TestEvidenceRequired:
+class TestUncertainNeverCloses:
 
-    @pytest.mark.parametrize("outcome", ml.OUTCOMES_REQUIRING_EVIDENCE)
-    def test_claim_without_evidence_is_refused(self, outcome):
-        """Anche `unchanged` va provato: è l'esito più comodo da falsificare."""
-        with pytest.raises(ml.EvidenceError):
-            ml.validate("liveness_check", outcome, NO_EVIDENCE)
+    @pytest.mark.parametrize("outcome", ml.INCONCLUSIVE_OUTCOMES)
+    def test_cannot_close_is_open(self, outcome):
+        with pytest.raises(ml.MaintenanceError):
+            ml.check_closing_write("is_open", "false", outcome)
 
-    def test_unreachable_needs_nothing(self):
-        """Il fallimento non afferma niente, quindi non deve provare niente."""
-        ml.validate("liveness_check", "unreachable", NO_EVIDENCE)
-        ml.validate("liveness_check", "skipped", NO_EVIDENCE)
-        ml.validate("liveness_check", "failed", NO_EVIDENCE)
+    @pytest.mark.parametrize("outcome", ml.INCONCLUSIVE_OUTCOMES)
+    @pytest.mark.parametrize("status", ["excluded", "expired"])
+    def test_cannot_exclude(self, outcome, status):
+        with pytest.raises(ml.MaintenanceError):
+            ml.check_closing_write("status", status, outcome)
 
-    def test_prose_is_not_evidence(self):
-        """`manual` non è ri-derivabile: nessun terzo può ricalcolarlo."""
-        with pytest.raises(ml.EvidenceError):
-            ml.validate("liveness_check", "confirmed_open",
-                        {"kind": "manual", "url": "ho guardato", "code": 200})
+    def test_confirmed_closed_may_close(self):
+        """Quando la prova c'è, chiudere è giusto e deve passare."""
+        ml.check_closing_write("is_open", "false", "confirmed_closed")
+        ml.check_closing_write("status", "expired", "confirmed_closed")
 
-    def test_url_without_status_is_not_evidence(self):
-        with pytest.raises(ml.EvidenceError):
-            ml.validate("liveness_check", "confirmed_open",
-                        {"kind": "http", "url": "https://x.test", "code": None})
+    def test_uncertain_may_still_update_other_fields(self):
+        """Il divieto è solo sulla chiusura: il resto del lavoro passa."""
+        ml.check_closing_write("office_lat", "41.9", "inconclusive")
+        ml.check_closing_write("notes", "irraggiungibile", "unreachable")
 
-    def test_http_ok_passes(self):
-        ml.validate("liveness_check", "confirmed_open", HTTP_OK)
+    def test_reopening_is_never_blocked(self):
+        """Riaprire non perde niente: non va mai ostacolato."""
+        ml.check_closing_write("is_open", "true", "inconclusive")
 
-
-class TestOutcomeStatusCoherence:
-    """Un esito che contraddice il proprio status è una prova contro sé stesso."""
-
-    def test_confirmed_open_with_404_refused(self):
-        with pytest.raises(ml.EvidenceError):
-            ml.validate("liveness_check", "confirmed_open", HTTP_404)
-
-    def test_confirmed_closed_with_200_refused(self):
-        with pytest.raises(ml.EvidenceError):
-            ml.validate("liveness_check", "confirmed_closed", HTTP_OK)
-
-    def test_confirmed_closed_with_404_passes(self):
-        ml.validate("liveness_check", "confirmed_closed", HTTP_404)
-
-
-class TestJudgementActions:
-    """Per uno score non esiste una URL da interrogare: la prova è l'artefatto."""
-
-    def test_rescore_needs_hash_not_url(self):
-        with pytest.raises(ml.EvidenceError):
-            ml.validate("rescore", "updated", NO_EVIDENCE)
-        ml.validate("rescore", "updated", {"kind": "manual", "hash": "b" * 64})
-
-    def test_http_evidence_not_required_for_judgement(self):
-        """Un hash basta: pretendere uno status HTTP renderebbe la regola falsa."""
-        ml.validate("exclude", "unchanged", {"hash": "c" * 64})
-
-
-class TestDeriveOutcome:
-    """Senza prova non si deduce mai un esito che afferma qualcosa."""
-
-    def test_diff_with_evidence_is_updated(self):
-        assert ml.derive_outcome(
-            "liveness_check", [("is_open", 1, 0)], HTTP_404) == "updated"
-
-    def test_no_diff_with_evidence_is_unchanged(self):
-        assert ml.derive_outcome("liveness_check", [], HTTP_OK) == "unchanged"
-
-    def test_without_evidence_everything_is_skipped(self):
-        assert ml.derive_outcome("liveness_check", [], NO_EVIDENCE) == "skipped"
-        assert ml.derive_outcome(
-            "liveness_check", [("is_open", 1, 0)], NO_EVIDENCE) == "skipped"
-
-
-class TestVerifiedClaim:
-    """`office_verified` è una promessa fatta a chi legge la dashboard."""
-
-    def test_true_without_evidence_refused(self):
-        with pytest.raises(ml.EvidenceError):
-            ml.check_verified_claim("office_verified", "true", NO_EVIDENCE)
-
-    def test_true_with_404_refused(self):
-        """Una pagina che non risponde non verifica un indirizzo."""
-        with pytest.raises(ml.EvidenceError):
-            ml.check_verified_claim("office_verified", "true", HTTP_404)
-
-    def test_true_with_200_passes(self):
-        ml.check_verified_claim("office_verified", "true", HTTP_OK)
-
-    def test_false_needs_nothing(self):
-        """Dichiarare NON verificato non è un'affermazione da provare."""
-        ml.check_verified_claim("office_verified", "false", NO_EVIDENCE)
-
-    def test_other_fields_untouched(self):
-        ml.check_verified_claim("office_geocoded", "true", NO_EVIDENCE)
-
-
-class TestRecord:
-
-    def test_no_diff_still_writes_one_row(self, conn):
-        """Il no-op è il dato: se non lo scrivessimo sparirebbe, come oggi."""
-        n = ml.record_diffs(conn, "position", 42, "liveness_check", [],
-                            evidence=HTTP_OK, by_agent="scout-1")
-        assert n == 1
-        row = conn.execute(
-            "SELECT outcome, field, evidence_code FROM maintenance_events"
-        ).fetchone()
-        assert row == ("unchanged", None, 200)
-
-    def test_one_row_per_changed_field(self, conn):
-        diffs = [("is_open", 1, 0), ("status", "ready", "excluded")]
-        n = ml.record_diffs(conn, "position", 7, "liveness_check", diffs,
-                            evidence=HTTP_404, by_agent="analista-1")
-        assert n == 2
-        rows = conn.execute(
-            "SELECT field, before, after, outcome FROM maintenance_events "
-            "ORDER BY field").fetchall()
-        assert rows == [("is_open", "1", "0", "updated"),
-                        ("status", "ready", "excluded", "updated")]
-
-    def test_invalid_action_refused_before_write(self, conn):
-        with pytest.raises(ml.EvidenceError):
-            ml.record(conn, "position", 1, "inventata", "unchanged",
-                      evidence=HTTP_OK)
+    def test_closing_blocked_end_to_end(self, conn):
+        """Il divieto vale anche sul percorso reale, dal diff."""
+        with pytest.raises(ml.MaintenanceError):
+            ml.record_diffs(conn, "position", 5, "liveness_check",
+                            [("is_open", 1, "false")], outcome="inconclusive")
         assert conn.execute(
             "SELECT COUNT(*) FROM maintenance_events").fetchone()[0] == 0
+
+
+# ── Lo storico ───────────────────────────────────────────────────────────
+
+class TestHistory:
+
+    def test_check_that_changed_nothing_is_still_recorded(self, conn):
+        """Un controllo senza modifiche è comunque un controllo avvenuto."""
+        n = ml.record_diffs(conn, "position", 42, "liveness_check", [],
+                            outcome="confirmed_open", by_agent="scout-1")
+        assert n == 1
+        assert conn.execute(
+            "SELECT outcome FROM maintenance_events").fetchone()[0] == "confirmed_open"
+
+    def test_one_row_per_changed_field(self, conn):
+        diffs = [("is_open", 1, 0), ("status", "ready", "expired")]
+        n = ml.record_diffs(conn, "position", 7, "liveness_check", diffs,
+                            outcome="confirmed_closed", by_agent="analista-1")
+        assert n == 2
+        rows = conn.execute(
+            "SELECT field, before, after FROM maintenance_events "
+            "ORDER BY field").fetchall()
+        assert rows == [("is_open", "1", "0"), ("status", "ready", "expired")]
+
+    def test_history_accumulates_instead_of_overwriting(self, conn):
+        """È la differenza con `last_checked`, che tiene solo l'ultimo giro."""
+        for _ in range(3):
+            ml.record_diffs(conn, "position", 9, "liveness_check", [],
+                            outcome="confirmed_open")
+        assert conn.execute(
+            "SELECT COUNT(*) FROM maintenance_events").fetchone()[0] == 3
 
     def test_none_stays_none(self, conn):
         """`None` non deve diventare la stringa 'None': è un valore assente."""
         ml.record(conn, "position", 1, "geocode", "updated", field="office_lat",
-                  before=None, after=41.9, evidence=HTTP_OK)
+                  before=None, after=41.9)
         row = conn.execute(
             "SELECT before, after FROM maintenance_events").fetchone()
-        assert row[0] is None
-        assert row[1] == "41.9"
+        assert row == (None, "41.9")
+
+    def test_invalid_action_refused_before_write(self, conn):
+        with pytest.raises(ml.MaintenanceError):
+            ml.record(conn, "position", 1, "inventata", "unchanged")
+        assert conn.execute(
+            "SELECT COUNT(*) FROM maintenance_events").fetchone()[0] == 0
 
     def test_no_commit_inside_record(self, conn):
-        """L'evento deve poter essere annullato con la modifica che descrive."""
-        ml.record(conn, "position", 1, "geocode", "unchanged", evidence=HTTP_OK)
+        """Il controllo dev'essere annullabile con la modifica che descrive."""
+        ml.record(conn, "position", 1, "geocode", "unchanged")
         conn.rollback()
         assert conn.execute(
             "SELECT COUNT(*) FROM maintenance_events").fetchone()[0] == 0
+
+    def test_evidence_is_optional(self, conn):
+        """I dati della fonte aiutano a capire, non sono un obbligo."""
+        ml.record(conn, "position", 1, "liveness_check", "confirmed_open")
+        ml.record(conn, "position", 1, "liveness_check", "confirmed_open",
+                  evidence={"kind": "http", "url": "https://x.test", "code": 200})
+        assert conn.execute(
+            "SELECT COUNT(*) FROM maintenance_events").fetchone()[0] == 2
+
+
+class TestDeriveOutcome:
+
+    def test_changed_is_updated(self):
+        assert ml.derive_outcome([("is_open", 1, 0)]) == "updated"
+
+    def test_nothing_changed_is_unchanged(self):
+        assert ml.derive_outcome([]) == "unchanged"
+
+
+class TestUnverifiedStreak:
+    """Distinguere "mai guardata" da "non riusciamo mai a leggerla"."""
+
+    def test_counts_consecutive_inconclusive(self, conn):
+        for outcome in ("confirmed_open", "inconclusive", "unreachable"):
+            ml.record(conn, "position", 3, "liveness_check", outcome)
+        assert ml.unverified_streak(conn, 3) == 2
+
+    def test_resets_after_a_conclusive_check(self, conn):
+        for outcome in ("inconclusive", "inconclusive", "confirmed_open"):
+            ml.record(conn, "position", 4, "liveness_check", outcome)
+        assert ml.unverified_streak(conn, 4) == 0
+
+    def test_zero_when_never_checked(self, conn):
+        assert ml.unverified_streak(conn, 99) == 0
+
+    def test_ignores_other_actions(self, conn):
+        """Un geocoding fallito non dice niente sulla liveness dell'annuncio."""
+        ml.record(conn, "position", 5, "geocode", "failed")
+        assert ml.unverified_streak(conn, 5) == 0
