@@ -314,7 +314,7 @@ const STYLE_DARK =
 const STYLE_LIGHT =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
-type PositionCoord = {
+export type PositionCoord = {
   id: string;
   title: string;
   company: string;
@@ -500,6 +500,20 @@ function matchScoreColor(s: number | null): string {
   return scoreSpectrumCss(s ?? null);
 }
 
+// Modalità "vetrina" (landing pubblica): il globo mostra dati
+// dimostrativi forniti dal chiamante invece di chiamare l'API (che sulla
+// landing non è autenticata), non registra alcuna interazione utente
+// (niente drag/zoom/click: la pagina deve poter scorrere sopra al
+// canvas, soprattutto su mobile) e consegna l'istanza mappa al
+// chiamante, che pilota la camera dall'esterno (rotazione + voli).
+// onTierChange espone i degradi del monitor FPS: la landing lo usa per
+// ripiegare su un'immagine statica quando la macchina non regge.
+export type GlobeShowcase = {
+  positions: PositionCoord[];
+  onMapReady?: (map: MaplibreMap) => void;
+  onTierChange?: (tier: MapTier) => void;
+};
+
 // Data "trovata il" leggibile (gg/mm/aaaa). Solo client (la vignetta
 // si renderizza on-click), niente rischio di hydration mismatch.
 function formatFoundDate(ts: string | null): string | null {
@@ -521,6 +535,7 @@ export default function JobsGlobe({
   bottomCenterExtra = null,
   focusPosition = null,
   familyColors = {},
+  showcase = null,
 }: {
   fullscreen?: boolean;
   selectedTypes?: string[];
@@ -541,6 +556,8 @@ export default function JobsGlobe({
   focusPosition?: { id: string; tick: number } | null;
   // Mappa tipologia → colore (dalla donut) per il puntino nella vignetta.
   familyColors?: Record<string, string>;
+  // Modalità vetrina della landing: vedi GlobeShowcase.
+  showcase?: GlobeShowcase | null;
 } = {}) {
   const { resolvedTheme } = useTheme();
   const locale = useLocale();
@@ -577,6 +594,10 @@ export default function JobsGlobe({
   // Registry icone gruppo registrate sulla mappa: iconId -> true. Permette
   // di rimuoverle quando il set di gruppi visibili cambia (filtri).
   const registeredIconsRef = useRef<Set<string>>(new Set());
+  // Vetrina landing: letta via ref dagli effect a dipendenze vuote
+  // (mount della mappa, fetch dati) — la prop non cambia dopo il mount.
+  const showcaseRef = useRef<GlobeShowcase | null>(showcase);
+  showcaseRef.current = showcase;
 
   // --- Qualità grafica adattiva (vedi lib/map-perf.ts) -------------------
   // `pref` è la scelta esplicita dell'utente ("auto" = adattiva);
@@ -743,6 +764,14 @@ export default function JobsGlobe({
 
   // Fetch data
   useEffect(() => {
+    // Vetrina: dati dimostrativi già in mano al chiamante, nessuna
+    // chiamata a /api/positions/coords (richiede l'area riservata).
+    const sc = showcaseRef.current;
+    if (sc) {
+      setData(sc.positions);
+      setLoaded(true);
+      return;
+    }
     fetch("/api/positions/coords")
       .then((r) => (r.ok ? r.json() : []))
       .then((d: PositionCoord[]) => {
@@ -758,6 +787,7 @@ export default function JobsGlobe({
     const container = mapContainerRef.current;
 
     const boot = profileRef.current;
+    const isShowcase = showcaseRef.current != null;
     const map = new maplibregl.Map({
       container,
       style: themeRef.current === "light" ? STYLE_LIGHT : STYLE_DARK,
@@ -766,6 +796,9 @@ export default function JobsGlobe({
       attributionControl: { compact: true },
       pitch: 0,
       bearing: 0,
+      // Vetrina: nessun handler drag/zoom/rotate — i tocchi passano
+      // attraverso il canvas e la pagina continua a scorrere (mobile).
+      interactive: !isShowcase,
       // Qualità: pixelRatio e fadeDuration si possono dare SOLO qui
       // (fadeDuration non ha setter pubblico), quindi il tier di boot
       // deve essere già quello giusto. Il degrado runtime agisce poi su
@@ -958,6 +991,9 @@ export default function JobsGlobe({
     //  • gruppo coincidente (più posizioni sulla STESSA coordinata, es.
     //    stesso hotel) → popup-lista dei membri, ancorato al pin.
     map.on("click", LAYER_DOT_ID, (e) => {
+      // Vetrina: niente selezione/zoom da click, la camera è pilotata
+      // dall'autopilota della landing.
+      if (showcaseRef.current) return;
       // I fasci sono icone alte: i loro box di click si sovrappongono,
       // quindi e.features[0] (il top in z-order) NON è quello puntato.
       // Interroghiamo un riquadro attorno al click e scegliamo la
@@ -1037,6 +1073,8 @@ export default function JobsGlobe({
     });
 
     map.on("mouseenter", LAYER_DOT_ID, () => {
+      // In vetrina i pin non sono cliccabili: niente cursore "mano".
+      if (showcaseRef.current) return;
       map.getCanvas().style.cursor = "pointer";
     });
     map.on("mouseleave", LAYER_DOT_ID, () => {
@@ -1048,6 +1086,10 @@ export default function JobsGlobe({
     // Renderizziamo bottoni custom (zoom +/-/nord) nella barra in
     // basso-centro, orizzontali e affiancati a "Vista generale".
     mapRef.current = map;
+
+    // Vetrina: consegna l'istanza al chiamante, che avvia l'autopilota
+    // (rotazione lenta + voli sulle città) quando la mappa è pronta.
+    showcaseRef.current?.onMapReady?.(map);
 
     // Misura la fluidità reale e corregge il tier. Attivo solo in
     // modalità auto: se l'utente ha scelto un livello a mano, quello
@@ -1061,6 +1103,9 @@ export default function JobsGlobe({
           `[JobsGlobe] qualità ${info.direction === "down" ? "ridotta" : "aumentata"} a "${next}" (${info.fps.toFixed(0)} fps misurati)`,
         );
         setTier(next);
+        // La vetrina osserva i degradi: se si scende a "low" la landing
+        // abbandona il globo vivo per l'immagine statica.
+        showcaseRef.current?.onTierChange?.(next);
       },
     );
 
@@ -1086,8 +1131,18 @@ export default function JobsGlobe({
   // → transizioni nette, nessuna ricomposizione continua (era la causa
   // dei pin "che si muovono").
   const [viewLevel, setViewLevel] = useState<ViewLevel>(0);
-  const clustered =
-    viewLevel === 2 ? grouped : viewLevel === 1 ? cityGrouped : countryGrouped;
+  // Vetrina landing: aggregazione SPENTA — sempre regime "esatto", un
+  // pin per offerta alle sue coordinate, a qualunque zoom (scelta utente
+  // 30/07: in home niente fasci col contatore, ogni segnaposto è UNA
+  // posizione). I dati demo hanno coordinate tutte distinte, quindi ogni
+  // gruppo è un singleton: nessuna etichetta-numero sotto ai pin.
+  const clustered = showcase
+    ? grouped
+    : viewLevel === 2
+      ? grouped
+      : viewLevel === 1
+        ? cityGrouped
+        : countryGrouped;
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1298,6 +1353,9 @@ export default function JobsGlobe({
   // (filtri donut/histogram di /map o primo fetch), riadatta la
   // vista per inquadrare i pin attualmente mostrati.
   useEffect(() => {
+    // Vetrina: la camera appartiene all'autopilota della landing, il
+    // refit automatico sui dati la strapperebbe via a metà volo.
+    if (showcaseRef.current) return;
     const map = mapRef.current;
     if (!map || !layersReadyRef.current || displayData.length === 0) return;
     const vp = bestViewport(displayData);
@@ -1402,7 +1460,7 @@ export default function JobsGlobe({
             di /map). Tutti nella stessa riga flex centrata → l'insieme
             si ricentra da solo e "Vista generale" si sposta quando
             compaiono i filtri. */}
-        {loaded && (
+        {loaded && !showcase && (
           <div
             className="absolute z-10"
             style={{
