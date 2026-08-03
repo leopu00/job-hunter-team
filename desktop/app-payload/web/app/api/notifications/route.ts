@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { errorCode } from '@/lib/errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,8 +38,8 @@ function load(): NotificationStore {
     const raw = fs.readFileSync(STORE_PATH, 'utf-8')
     const parsed = JSON.parse(raw) as NotificationStore
     return Array.isArray(parsed?.notifications) ? parsed : empty()
-  } catch (e: any) {
-    if (e.code === 'ENOENT') return empty()
+  } catch (e) {
+    if (errorCode(e) === 'ENOENT') return empty()
     throw e
   }
 }

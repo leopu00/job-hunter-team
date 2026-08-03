@@ -23,7 +23,7 @@ export async function POST() {
     await runScript(scriptPath, 'sentinella')
 
     return NextResponse.json({ ok: true, message: 'Sentinella avviata' })
-  } catch (err: any) {
+  } catch (err) {
     console.error('[sentinella/start]', err)
     return NextResponse.json(
       { ok: false, error: 'Errore nell\'avvio della Sentinella, riprova' },

@@ -69,7 +69,7 @@ export function useInfiniteScroll<T>(
     setHasMore(true)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { queueMicrotask(load) }, [load])
 
   return { items, hasMore, loading, loadMore: load, reset, resetKey: resetKey.current }
 }

@@ -6,10 +6,7 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const _status = searchParams.get('status');
-
+export async function GET() {
   return NextResponse.json({
     tasks: [],
     stats: { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0 },

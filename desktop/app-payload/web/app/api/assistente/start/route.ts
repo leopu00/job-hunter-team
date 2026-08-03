@@ -58,9 +58,9 @@ export async function POST(req: Request) {
     await runScript(scriptPath, 'assistente')
 
     return NextResponse.json({ ok: true, message: 'Assistente avviato' })
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? 'Avvio fallito' },
+      { ok: false, error: err instanceof Error ? err.message : 'Avvio fallito' },
       { status: 500 }
     )
   }

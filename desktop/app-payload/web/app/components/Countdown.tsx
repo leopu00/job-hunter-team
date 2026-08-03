@@ -46,12 +46,10 @@ const FLIP_STYLE = `
 function FlipDigit({ value, color }: { value: string; color: string }) {
   const [prev, setPrev] = useState(value)
   const [flipping, setFlipping] = useState(false)
-  const next = useRef(value)
 
   useEffect(() => {
     if (value === prev) return
-    next.current = value
-    setFlipping(true)
+    queueMicrotask(() => setFlipping(true))
     const t = setTimeout(() => { setPrev(value); setFlipping(false) }, 300)
     return () => clearTimeout(t)
   }, [value, prev])
@@ -77,7 +75,7 @@ function FlipDigit({ value, color }: { value: string; color: string }) {
       </div>
       {/* Bottom half */}
       <div style={{ position: 'absolute', bottom: 0, width: '100%', height: '50%', zIndex: flipping ? 3 : 1 }}>
-        {cell(flipping ? next.current : value, flipping ? 'flip-bot' : undefined)}
+        {cell(value, flipping ? 'flip-bot' : undefined)}
       </div>
     </div>
   )

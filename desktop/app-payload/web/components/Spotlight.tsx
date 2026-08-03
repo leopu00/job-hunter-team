@@ -56,11 +56,11 @@ export default function Spotlight({ steps, active, onFinish, onSkip, padding = 8
     const r = el.getBoundingClientRect()
     setTargetRect({ top: r.top - padding, left: r.left - padding, width: r.width + padding * 2, height: r.height + padding * 2 })
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-  }, [step?.target, padding])
+  }, [step, padding])
 
   useEffect(() => {
     if (!active) return
-    measureTarget()
+    queueMicrotask(measureTarget)
     window.addEventListener('resize', measureTarget)
     window.addEventListener('scroll', measureTarget, true)
     return () => { window.removeEventListener('resize', measureTarget); window.removeEventListener('scroll', measureTarget, true) }
@@ -68,12 +68,18 @@ export default function Spotlight({ steps, active, onFinish, onSkip, padding = 8
 
   useEffect(() => { if (active) tooltipRef.current?.focus() }, [active, currentIdx])
 
-  const next = () => {
+  const next = useCallback(() => {
     if (currentIdx < steps.length - 1) setCurrentIdx(i => i + 1)
     else { setCurrentIdx(0); onFinish() }
-  }
-  const prev = () => { if (currentIdx > 0) setCurrentIdx(i => i - 1) }
-  const skip = () => { setCurrentIdx(0); onSkip?.() ?? onFinish() }
+  }, [currentIdx, onFinish, steps.length])
+  const prev = useCallback(() => {
+    if (currentIdx > 0) setCurrentIdx(i => i - 1)
+  }, [currentIdx])
+  const skip = useCallback(() => {
+    setCurrentIdx(0)
+    if (onSkip) onSkip()
+    else onFinish()
+  }, [onFinish, onSkip])
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
@@ -84,7 +90,7 @@ export default function Spotlight({ steps, active, onFinish, onSkip, padding = 8
     }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
-  }, [active, currentIdx])
+  }, [active, next, prev, skip])
 
   if (!active || !step) return null
 

@@ -25,7 +25,7 @@ export default function MainContent({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (pathname !== prevPath.current) {
-      setFade(true)
+      queueMicrotask(() => setFade(true))
       prevPath.current = pathname
       const t = setTimeout(() => setFade(false), 200)
       return () => clearTimeout(t)

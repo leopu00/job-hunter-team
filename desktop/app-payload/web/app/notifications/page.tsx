@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
+import { useNow } from '@/lib/use-now'
 
 type Priority = 'low' | 'normal' | 'high' | 'urgent'
 type NType = 'info' | 'warning' | 'success' | 'error'
@@ -20,8 +21,8 @@ const PRIO_CFG: Record<Priority, { label: string; color: string }> = {
   high: { label: 'alta', color: 'var(--color-yellow)' }, urgent: { label: 'urgente', color: 'var(--color-red)' },
 }
 
-function NotifRow({ n, onRead, onDelete }: { n: Notif; onRead: (id: string) => void; onDelete: (id: string) => void }) {
-  const age = Math.floor((Date.now() - n.timestamp) / 60000)
+function NotifRow({ n, now, onRead, onDelete }: { n: Notif; now: number; onRead: (id: string) => void; onDelete: (id: string) => void }) {
+  const age = Math.floor((now - n.timestamp) / 60000)
   const ageLabel = age < 1 ? 'adesso' : age < 60 ? `${age}m fa` : age < 1440 ? `${Math.floor(age / 60)}h fa` : `${Math.floor(age / 1440)}g fa`
   const t = TYPE_CFG[n.type] ?? TYPE_CFG.info
   return (
@@ -62,6 +63,7 @@ type FilterType = 'all' | NType
 type FilterRead = 'all' | 'unread' | 'read'
 
 export default function NotificationsPage() {
+  const now = useNow(60_000)
   const [items, setItems] = useState<Notif[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [filterType, setFilterType] = useState<FilterType>('all')
@@ -81,7 +83,7 @@ export default function NotificationsPage() {
     setUnreadCount(data.unreadCount ?? 0)
   }, [filterType, filterRead])
 
-  useEffect(() => { fetchNotifs() }, [fetchNotifs])
+  useEffect(() => { queueMicrotask(fetchNotifs) }, [fetchNotifs])
   useEffect(() => { const id = setInterval(fetchNotifs, 5000); return () => clearInterval(id) }, [fetchNotifs])
 
   const markRead = async (id: string) => { await fetch(`/api/notifications?id=${id}`, { method: 'PATCH' }); fetchNotifs() }
@@ -160,7 +162,7 @@ export default function NotificationsPage() {
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {items.length === 0
           ? <div className="flex flex-col items-center py-16"><p className="text-[var(--color-dim)] text-[12px]">Nessuna notifica trovata.</p></div>
-          : items.map(n => <NotifRow key={n.id} n={n} onRead={markRead} onDelete={deleteOne} />)
+          : items.map(n => <NotifRow key={n.id} n={n} now={now} onRead={markRead} onDelete={deleteOne} />)
         }
       </div>
     </div>

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import Image from 'next/image'
 import type { CandidateProfile } from '@/lib/types'
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
@@ -30,7 +31,7 @@ function useLang(): Lang {
   const [lang, setLang] = useState<Lang>('it')
   useEffect(() => {
     const stored = localStorage.getItem('jht-lang')
-    if (stored === 'en') setLang('en')
+    if (stored === 'en') queueMicrotask(() => setLang('en'))
   }, [])
   return lang
 }
@@ -73,7 +74,7 @@ function useAnimatedCount(target: number, duration = 800): number {
   const [count, setCount] = useState(0)
   const startRef = useRef<number | null>(null)
   useEffect(() => {
-    if (target === 0) { setCount(0); return }
+    if (target === 0) { queueMicrotask(() => setCount(0)); return }
     startRef.current = null
     let raf: number
     const step = (ts: number) => {
@@ -112,7 +113,7 @@ interface Props {
 
 export default function ProfileStats({ profile }: Props) {
   const lang = useLang()
-  const t = (k: string) => T[k]?.[lang] ?? k
+  const t = useCallback((k: string) => T[k]?.[lang] ?? k, [lang])
 
   const completion = calcCompletion(profile)
   const animatedCompletion = useAnimatedCount(completion)
@@ -190,7 +191,7 @@ export default function ProfileStats({ profile }: Props) {
       setAvatarUploading(false)
       e.target.value = ''
     }
-  }, [lang])
+  }, [t])
 
   const totalApps = Object.values(appCounts).reduce((s, n) => s + n, 0)
 
@@ -210,14 +211,14 @@ export default function ProfileStats({ profile }: Props) {
         {/* Avatar */}
         <div className="relative flex-shrink-0 group">
           <div
-            className="w-20 h-20 rounded-full overflow-hidden flex items-center justify-center"
+            className="relative w-20 h-20 rounded-full overflow-hidden flex items-center justify-center"
             style={{
               background: avatarUrl ? 'transparent' : 'var(--color-green)/15',
               border: '2px solid var(--color-green)',
             }}
           >
             {avatarUrl ? (
-              <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              <Image src={avatarUrl} alt="Avatar" fill sizes="80px" unoptimized className="object-cover" />
             ) : (
               <span className="text-xl font-bold" style={{ color: 'var(--color-green)' }}>
                 {initials}

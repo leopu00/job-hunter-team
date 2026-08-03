@@ -120,7 +120,7 @@ export default function ScoutLiveSection() {
   }, [])
 
   useEffect(() => {
-    fetch_()
+    queueMicrotask(fetch_)
     const id = setInterval(fetch_, 8000)
     return () => clearInterval(id)
   }, [fetch_])

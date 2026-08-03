@@ -75,9 +75,8 @@ export default function VirtualList<T>({
 
   // Espone tramite ref imperativo
   useEffect(() => {
-    ;(containerRef.current as HTMLDivElement & { scrollToIndex?: typeof scrollToIndex })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      && ((containerRef.current as any).scrollToIndex = scrollToIndex)
+    const container = containerRef.current as (HTMLDivElement & { scrollToIndex?: typeof scrollToIndex }) | null
+    if (container) container.scrollToIndex = scrollToIndex
   }, [scrollToIndex])
 
   const visibleItems = []

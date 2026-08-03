@@ -20,15 +20,9 @@ export default function Cropper({ src, aspectRatio = 1, onCrop, onCancel, output
   const [zoom, setZoom]     = useState(1)
   const [rotate, setRotate] = useState(0)
   const [crop, setCrop]     = useState<Crop>({ x: 60, y: 60, w: 200, h: 200 })
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
   const [dragging, setDragging] = useState<'move' | 'resize' | null>(null)
   const dragStart  = useRef({ mx: 0, my: 0, crop: crop })
-
-  /* ── Carica immagine ── */
-  useEffect(() => {
-    const img = new Image(); img.crossOrigin = 'anonymous'
-    img.onload = () => { imgRef.current = img; draw() }
-    img.src = src
-  }, [src])
 
   /* ── Disegna canvas ── */
   const draw = useCallback(() => {
@@ -81,7 +75,26 @@ export default function Cropper({ src, aspectRatio = 1, onCrop, onCancel, output
     })
   }, [crop, zoom, rotate])
 
-  useEffect(() => { draw() }, [draw])
+  /* ── Carica immagine ── */
+  useEffect(() => {
+    let active = true
+    const img = new Image(); img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      if (!active) return
+      imgRef.current = img
+      setLoadedSrc(src)
+    }
+    img.src = src
+    return () => {
+      active = false
+      img.onload = null
+      if (imgRef.current === img) imgRef.current = null
+    }
+  }, [src])
+
+  useEffect(() => {
+    if (loadedSrc === src) queueMicrotask(draw)
+  }, [draw, loadedSrc, src])
 
   /* ── Mouse interaction ── */
   const onMouseDown = (e: React.MouseEvent) => {

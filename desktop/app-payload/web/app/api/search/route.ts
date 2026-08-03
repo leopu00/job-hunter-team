@@ -8,6 +8,8 @@ export const dynamic = 'force-dynamic'
 const JHT_DIR = path.join(os.homedir(), '.jht')
 
 type SearchResult = { type: string; id: string; title: string; detail: string; href: string }
+type SearchSession = { id: string; label?: string; channelId?: string; state?: string; messageCount?: number }
+type SearchTask = { id: string; name?: string; status?: string; agentId?: string }
 
 function readJsonSafe<T>(p: string): T | null {
   try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return null }
@@ -26,21 +28,21 @@ function searchAgents(q: string): SearchResult[] {
 }
 
 function searchSessions(q: string): SearchResult[] {
-  const store = readJsonSafe<{ sessions?: any[] }>(path.join(JHT_DIR, 'sessions', 'sessions.json'))
+  const store = readJsonSafe<{ sessions?: SearchSession[] }>(path.join(JHT_DIR, 'sessions', 'sessions.json'))
   if (!store?.sessions) return []
   return store.sessions
-    .filter((s: any) => (s.label ?? '').toLowerCase().includes(q) || s.id.includes(q) || (s.channelId ?? '').includes(q))
+    .filter((s) => (s.label ?? '').toLowerCase().includes(q) || s.id.includes(q) || (s.channelId ?? '').includes(q))
     .slice(0, 10)
-    .map((s: any) => ({ type: 'session', id: s.id, title: s.label ?? s.id.slice(0, 12), detail: `${s.state} · ${s.channelId} · ${s.messageCount} msg`, href: `/sessions/${s.id}` }))
+    .map((s) => ({ type: 'session', id: s.id, title: s.label ?? s.id.slice(0, 12), detail: `${s.state} · ${s.channelId} · ${s.messageCount} msg`, href: `/sessions/${s.id}` }))
 }
 
 function searchTasks(q: string): SearchResult[] {
-  const store = readJsonSafe<{ entries?: any[] }>(path.join(JHT_DIR, 'tasks', 'tasks.json'))
+  const store = readJsonSafe<{ entries?: SearchTask[] }>(path.join(JHT_DIR, 'tasks', 'tasks.json'))
   if (!store?.entries) return []
   return store.entries
-    .filter((t: any) => (t.name ?? '').toLowerCase().includes(q) || (t.id ?? '').includes(q))
+    .filter((t) => (t.name ?? '').toLowerCase().includes(q) || (t.id ?? '').includes(q))
     .slice(0, 10)
-    .map((t: any) => ({ type: 'task', id: t.id, title: t.name ?? t.id, detail: `${t.status} · ${t.agentId ?? 'no agent'}`, href: `/tasks` }))
+    .map((t) => ({ type: 'task', id: t.id, title: t.name ?? t.id, detail: `${t.status} · ${t.agentId ?? 'no agent'}`, href: `/tasks` }))
 }
 
 function searchPlugins(q: string): SearchResult[] {

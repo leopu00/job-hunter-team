@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ export function Avatar({ name = '', src, status, size = 'md', color, square = fa
           border:       `${cfg.border}px solid ${acColor}40`,
         }}>
         {showImg
-          ? <img src={src} alt={name} className="w-full h-full object-cover"
+          ? <Image src={src} alt={name} fill sizes={`${cfg.px}px`} unoptimized className="object-cover"
               style={{ borderRadius: radius - cfg.border }}
               onError={() => setImgError(true)} />
           : <span className="font-bold select-none leading-none"

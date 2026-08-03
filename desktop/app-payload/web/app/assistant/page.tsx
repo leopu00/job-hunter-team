@@ -80,8 +80,8 @@ export default function AssistantPage() {
   }, [])
 
   useEffect(() => {
-    fetchStatus()
-    fetchMessages()
+    queueMicrotask(fetchStatus)
+    queueMicrotask(fetchMessages)
     const si = setInterval(fetchStatus, 5000)
     const cm = setInterval(fetchMessages, 3000)
     return () => { clearInterval(si); clearInterval(cm) }

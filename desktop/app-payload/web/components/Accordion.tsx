@@ -41,7 +41,7 @@ function AccordionPanel({ item, open, onToggle, divided, variant }: {
     const el = bodyRef.current
     if (!el) return
     if (open) {
-      setVisible(true)
+      queueMicrotask(() => setVisible(true))
       setHeight(el.scrollHeight)
       const t = window.setTimeout(() => setHeight('auto'), 260)
       return () => clearTimeout(t)

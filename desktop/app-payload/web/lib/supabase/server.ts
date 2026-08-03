@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 
 export async function createClient() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    return createMockServerClient() as any
+    return createMockServerClient() as ReturnType<typeof createServerClient>
   }
 
   const cookieStore = await cookies()
@@ -31,18 +31,21 @@ export async function createClient() {
 }
 
 // Mock inline per funzionamento senza Supabase
-function createMockServerClient(): any {
+function createMockServerClient(): unknown {
   const MOCK_ERROR = { message: 'Supabase not configured', code: 'NOT_CONFIGURED' }
   const MOCK_RESULT = { data: null, error: MOCK_ERROR }
 
-  function mockChain(): any {
-    const chain: any = {
+  function mockChain(): Record<string, unknown> {
+    const chain: Record<string, unknown> = {
       select: () => chain, insert: () => chain, update: () => chain, delete: () => chain,
       eq: () => chain, neq: () => chain, not: () => chain, or: () => chain,
       gte: () => chain, lte: () => chain, order: () => chain, limit: () => chain, range: () => chain,
       single: () => Promise.resolve(MOCK_RESULT),
       maybeSingle: () => Promise.resolve(MOCK_RESULT),
-      then: (resolve: any, reject?: any) => Promise.resolve(MOCK_RESULT).then(resolve, reject),
+      then: (
+        resolve: (value: typeof MOCK_RESULT) => unknown,
+        reject?: (reason: unknown) => unknown,
+      ) => Promise.resolve(MOCK_RESULT).then(resolve, reject),
     }
     return chain
   }

@@ -60,7 +60,7 @@ export default function GitPage() {
     setTotalAhead(data.totalCommitsAhead ?? 0)
   }, [])
 
-  useEffect(() => { fetchGit() }, [fetchGit])
+  useEffect(() => { queueMicrotask(fetchGit) }, [fetchGit])
 
   const activeBranches = branches.filter(b => b.ahead > 0 || b.name === 'main' || b.name === 'master')
 

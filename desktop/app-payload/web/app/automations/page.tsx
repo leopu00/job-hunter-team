@@ -69,7 +69,7 @@ export default function AutomationsPage() {
     setLoading(false);
   }, [trigFilter, actFilter])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const toggle = async (id: string, en: boolean) => {
     await fetch('/api/automations', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, enabled: en }) }).catch(() => null);

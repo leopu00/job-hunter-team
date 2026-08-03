@@ -63,7 +63,7 @@ export default function SegmentedControl({
       top:   pad,
       height: h - pad * 2,
     })
-  }, [active, segments, size])
+  }, [active, segments, size, h])
 
   const select = (seg: Segment) => {
     if (disabled || seg.disabled) return

@@ -59,7 +59,7 @@ export default function PositionDetailLoading() {
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
             <div className="h-3 w-32 rounded bg-[var(--color-border)] mb-4 animate-pulse" />
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-2.5 rounded bg-[var(--color-border)] mb-2.5 animate-pulse" style={{ width: `${75 + Math.random() * 25}%` }} />
+                  <div key={i} className="h-2.5 rounded bg-[var(--color-border)] mb-2.5 animate-pulse" style={{ width: `${75 + (i * 7) % 26}%` }} />
             ))}
           </div>
         </div>

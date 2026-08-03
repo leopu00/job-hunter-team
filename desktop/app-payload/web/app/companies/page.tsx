@@ -10,7 +10,6 @@ const SIZE_LABEL: Record<string, string> = { startup: 'Startup', small: 'Piccola
 const HIST_CLR: Record<string, string> = { offer: 'var(--color-green)', interview: 'var(--color-yellow)', applied: '#61affe', rejected: 'var(--color-red)', saved: 'var(--color-dim)' }
 
 function Stars({ rating }: { rating: number }) {
-  const full = Math.floor(rating); const half = rating - full >= 0.5;
   return <span className="text-[10px] font-mono" style={{ color: rating >= 4 ? 'var(--color-green)' : rating >= 3 ? 'var(--color-yellow)' : 'var(--color-red)' }}>{rating.toFixed(1)}</span>;
 }
 
@@ -78,7 +77,7 @@ export default function CompaniesPage() {
     setLoading(false);
   }, [sectorFilter, debouncedSearch])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>

@@ -52,12 +52,12 @@ export function OnboardingTour({ steps, active, onComplete, onSkip }: Onboarding
 
   useEffect(() => {
     if (!active) return
-    setIdx(0)
+    queueMicrotask(() => setIdx(0))
   }, [active])
 
   useEffect(() => {
     if (!active) return
-    measure()
+    queueMicrotask(measure)
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
   }, [active, measure])
@@ -68,7 +68,7 @@ export function OnboardingTour({ steps, active, onComplete, onSkip }: Onboarding
   }
   const prev = () => { if (idx > 0) setIdx(i => i - 1) }
 
-  useEffect(() => { if (active) measure() }, [idx, active, measure])
+  useEffect(() => { if (active) queueMicrotask(measure) }, [idx, active, measure])
 
   if (!active) return null
 

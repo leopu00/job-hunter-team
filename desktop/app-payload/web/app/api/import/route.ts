@@ -33,6 +33,18 @@ function writeJsonSafe(p: string, data: unknown): void {
 
 type ValidationResult = { ok: boolean; errors: string[]; count: number }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function recordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => item != null && typeof item === 'object' && !Array.isArray(item))
+    : []
+}
+
 function validateSessions(data: unknown): ValidationResult {
   const errors: string[] = []
   if (!data || typeof data !== 'object') { errors.push('JSON non valido'); return { ok: false, errors, count: 0 } }
@@ -68,7 +80,7 @@ function validateConfig(data: unknown): ValidationResult {
 
 function validateJhEntity(data: unknown, entity: string): ValidationResult {
   const errors: string[] = []
-  const items = Array.isArray(data) ? data : (data as any)?.data
+  const items = Array.isArray(data) ? data : asRecord(data).data
   if (!Array.isArray(items)) { errors.push('Dati devono essere un array o { data: [...] }'); return { ok: false, errors, count: 0 } }
   const req = JH_REQUIRED[entity] ?? []
   for (let i = 0; i < Math.min(items.length, 10); i++) {
@@ -107,8 +119,10 @@ export async function POST(req: NextRequest) {
   }
 
   const isJh = ['jobs', 'contacts', 'companies'].includes(target)
-  const incoming = body.data as Record<string, unknown>
-  const items = isJh ? (Array.isArray(incoming) ? incoming : (incoming as any).data ?? []) as unknown[] : ((incoming.sessions ?? incoming.tasks ?? incoming.data) as unknown[])
+  const incoming = asRecord(body.data)
+  const items = isJh
+    ? recordArray(Array.isArray(body.data) ? body.data : incoming.data)
+    : recordArray(incoming.sessions ?? incoming.tasks ?? incoming.data)
 
   if (mode === 'replace') {
     if (isJh) { writeJsonSafe(filePath, items) }
@@ -118,10 +132,10 @@ export async function POST(req: NextRequest) {
 
   // Merge: aggiungi solo record con ID nuovo
   if (isJh) {
-    const current = readJsonSafe<unknown[]>(filePath) ?? []
+    const current = readJsonSafe<Record<string, unknown>[]>(filePath) ?? []
     const existing = Array.isArray(current) ? current : []
-    const ids = new Set(existing.map((r: any) => r.id))
-    const added = items.filter((r: any) => !ids.has(r.id))
+    const ids = new Set(existing.map((r) => r.id))
+    const added = items.filter((r) => !ids.has(r.id))
     writeJsonSafe(filePath, [...existing, ...added])
     return NextResponse.json({ ok: true, count: added.length, skipped: items.length - added.length, mode })
   }
@@ -129,11 +143,11 @@ export async function POST(req: NextRequest) {
   const existing = readJsonSafe<Record<string, unknown>>(filePath) ?? {}
   const key = target === 'sessions' ? 'sessions' : 'tasks'
   const idField = target === 'sessions' ? 'id' : 'taskId'
-  const current = (existing as any)[key] ?? []
-  const ids = new Set(current.map((r: any) => r[idField]))
-  const added = items.filter((r: any) => !ids.has(r[idField]))
-  ;(existing as any)[key] = [...current, ...added]
-  ;(existing as any).updatedAt = Date.now()
+  const current = recordArray(existing[key])
+  const ids = new Set(current.map((r) => r[idField]))
+  const added = items.filter((r) => !ids.has(r[idField]))
+  existing[key] = [...current, ...added]
+  existing.updatedAt = Date.now()
   writeJsonSafe(filePath, existing)
   return NextResponse.json({ ok: true, count: added.length, skipped: items.length - added.length, mode })
 }

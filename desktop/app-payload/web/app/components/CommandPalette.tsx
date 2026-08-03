@@ -51,7 +51,7 @@ export function CommandPalette({ commands, open, onClose }: CommandPaletteProps)
   const listRef  = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (open) { setQuery(''); setActive(0); setTimeout(() => inputRef.current?.focus(), 10) }
+    if (open) queueMicrotask(() => { setQuery(''); setActive(0); setTimeout(() => inputRef.current?.focus(), 10) })
   }, [open])
 
   useEffect(() => {

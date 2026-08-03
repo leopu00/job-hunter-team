@@ -63,7 +63,7 @@ export default function SkillsPage() {
     setSkills(data.skills ?? []); setRadar(data.radarTop6 ?? [])
   }, [filterCat])
 
-  useEffect(() => { fetchSkills() }, [fetchSkills])
+  useEffect(() => { queueMicrotask(fetchSkills) }, [fetchSkills])
 
   const addSkill = async () => {
     if (!newName.trim()) return

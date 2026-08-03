@@ -37,7 +37,7 @@ export default function WebhooksPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const toggle = async (wh: Webhook) => {
     await fetch('/api/webhooks', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: wh.id, enabled: !wh.enabled }) }).catch(() => null)

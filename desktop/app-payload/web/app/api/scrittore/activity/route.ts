@@ -3,6 +3,31 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
+type ScoreRelation = { total_score: number | null }
+type ApplicationRelation = {
+  written_by?: string | null
+  critic_score?: number | null
+  critic_verdict?: string | null
+  critic_round?: number | null
+  written_at?: string | null
+  critic_reviewed_at?: string | null
+}
+type WriterPositionRow = {
+  id: string | number
+  title: string
+  company: string
+  location?: string | null
+  remote_type?: string | null
+  notes?: string | null
+  status: string
+  scores?: ScoreRelation | ScoreRelation[] | null
+  applications?: ApplicationRelation | ApplicationRelation[] | null
+}
+
+function firstRelation<T>(value: T | T[] | null | undefined): T | undefined {
+  return Array.isArray(value) ? value[0] : value ?? undefined
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -17,10 +42,10 @@ export async function GET() {
       .limit(30)
 
     // Filtra score >= 50 e ordina
-    const queue = (queueData ?? [])
-      .map((p: any) => ({ ...p, total_score: p.scores?.[0]?.total_score ?? p.scores?.total_score ?? null }))
-      .filter((p: any) => p.total_score != null && p.total_score >= 50)
-      .sort((a: any, b: any) => b.total_score - a.total_score)
+    const queue = (queueData as WriterPositionRow[] ?? [])
+      .map((p) => ({ ...p, total_score: firstRelation(p.scores)?.total_score ?? null }))
+      .filter((p): p is typeof p & { total_score: number } => p.total_score != null && p.total_score >= 50)
+      .sort((a, b) => b.total_score - a.total_score)
       .slice(0, 15)
 
     // In progress: status writing o review
@@ -35,7 +60,7 @@ export async function GET() {
       .order('id', { ascending: false })
       .limit(20)
 
-    const inProgress = (inProgressData ?? []).map((p: any) => {
+    const inProgress = (inProgressData as WriterPositionRow[] ?? []).map((p) => {
       const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
       const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
       return {
@@ -63,7 +88,7 @@ export async function GET() {
       .order('last_checked', { ascending: false })
       .limit(10)
 
-    const recentCompleted = (completedData ?? []).map((p: any) => {
+    const recentCompleted = (completedData as WriterPositionRow[] ?? []).map((p) => {
       const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
       const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
       return {
@@ -102,7 +127,7 @@ export async function GET() {
 
     let avgCriticScore: number | null = null
     if (avgData && avgData.length > 0) {
-      const sum = avgData.reduce((acc: number, r: any) => acc + (r.critic_score ?? 0), 0)
+      const sum = (avgData as Array<{ critic_score: number | null }>).reduce((acc, r) => acc + (r.critic_score ?? 0), 0)
       avgCriticScore = Math.round((sum / avgData.length) * 10) / 10
     }
 

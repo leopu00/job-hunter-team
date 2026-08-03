@@ -35,8 +35,10 @@ export default function AuditPage() {
   const [page,    setPage]    = useState(1)
 
   useEffect(() => {
-    setPage(1)
-    setLoading(true)
+    queueMicrotask(() => {
+      setPage(1)
+      setLoading(true)
+    })
     const qs = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v))).toString()
     fetch(`/api/audit${qs ? '?' + qs : ''}`).then(r => r.json()).then(d => {
       setEvents(d.events ?? [])

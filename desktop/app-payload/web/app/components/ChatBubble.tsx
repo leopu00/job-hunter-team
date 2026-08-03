@@ -1,5 +1,7 @@
 'use client'
 
+import Image from 'next/image'
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type ChatRole = 'user' | 'assistant'
@@ -28,10 +30,10 @@ function BubbleAvatar({ value, role }: { value?: string; role: ChatRole }) {
   const label  = value && !isUrl ? value.slice(0, 2).toUpperCase() : (role === 'user' ? 'U' : 'AI')
 
   return (
-    <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold overflow-hidden"
+    <div className="relative flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold overflow-hidden"
       style={{ background: `${color}20`, border: `1.5px solid ${color}44`, color }}>
       {isUrl
-        ? <img src={value} alt={role} className="w-full h-full object-cover" />
+        ? <Image src={value!} alt={role} fill sizes="28px" unoptimized className="object-cover" />
         : label
       }
     </div>

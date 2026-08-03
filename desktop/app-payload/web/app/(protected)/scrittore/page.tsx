@@ -173,7 +173,7 @@ export default function ScrittorePage() {
   }, [])
 
   useEffect(() => {
-    fetchData()
+    queueMicrotask(fetchData)
     const id = setInterval(fetchData, 8000)
     return () => clearInterval(id)
   }, [fetchData])

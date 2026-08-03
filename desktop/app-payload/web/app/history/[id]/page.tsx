@@ -61,11 +61,11 @@ export default function HistoryDetailPage() {
     setLoadingMore(false)
   }, [id])
 
-  useEffect(() => { fetchPage(1) }, [fetchPage])
+  useEffect(() => { queueMicrotask(() => fetchPage(1)) }, [fetchPage])
 
   useEffect(() => {
     if (!loading && allMessages.length > 0) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [loading])
+  }, [loading, allMessages.length])
 
   const loadOlder = () => {
     if (!data || data.page >= data.pages || loadingMore) return

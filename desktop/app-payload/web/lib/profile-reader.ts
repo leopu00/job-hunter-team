@@ -14,8 +14,8 @@ export function readProfile(workspacePath: string): CandidateProfile | null {
   for (const p of paths) {
     if (fs.existsSync(p)) {
       try {
-        const raw = loadYaml(fs.readFileSync(p, 'utf8')) as any
-        if (!raw) return null
+        const raw = asRecord(loadYaml(fs.readFileSync(p, 'utf8')))
+        if (!Object.keys(raw).length) return null
         return mapYamlToProfile(raw)
       } catch {
         return null
@@ -38,8 +38,8 @@ export function readWorkspaceProfile(workspacePath: string): CandidateProfile | 
   }
   if (!fs.existsSync(p)) return null
   try {
-    const raw = loadYaml(fs.readFileSync(p, 'utf8')) as any
-    if (!raw) return null
+    const raw = asRecord(loadYaml(fs.readFileSync(p, 'utf8')))
+    if (!Object.keys(raw).length) return null
     const profile = mapYamlToProfile(raw)
     if (!profile.name && !profile.target_role) return null
     // Rigetta il file template non compilato (valori placeholder dell'esempio)
@@ -50,72 +50,109 @@ export function readWorkspaceProfile(workspacePath: string): CandidateProfile | 
   }
 }
 
-function mapYamlToProfile(raw: any): CandidateProfile {
-  const candidate = raw.candidate ?? {}
-  const personal = raw.personal ?? {}
+function asRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function optionalNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function stringArray(value: unknown): string[] | null {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : null
+}
+
+function mapYamlToProfile(raw: Record<string, unknown>): CandidateProfile {
+  const candidate = asRecord(raw.candidate)
+  const personal = asRecord(raw.personal)
 
   // Skills: cerca in candidate.skills, raw.skills (dict o lista)
   let skills: Record<string, string[]> | null = null
   const rawSkills = candidate.skills ?? raw.skills
   if (rawSkills && typeof rawSkills === 'object' && !Array.isArray(rawSkills)) {
-    skills = rawSkills
+    skills = Object.fromEntries(
+      Object.entries(rawSkills).map(([key, value]) => [key, stringArray(value) ?? []]),
+    )
   } else if (Array.isArray(rawSkills)) {
-    skills = { primary: rawSkills }
+    skills = { primary: rawSkills.filter((item): item is string => typeof item === 'string') }
   }
 
   // Languages: normalizza lingua/livello -> language/level
   const rawLangs = candidate.languages ?? raw.languages ?? []
   const languages = Array.isArray(rawLangs)
-    ? rawLangs.map((l: any) => ({
-        language: l.language ?? l.lingua ?? '',
-        level: l.level ?? l.livello ?? '',
-      }))
+    ? rawLangs.map((value) => {
+        const language = asRecord(value)
+        return {
+          language: optionalString(language.language ?? language.lingua) ?? '',
+          level: optionalString(language.level ?? language.livello) ?? '',
+        }
+      })
     : null
 
   // Location preferences
   const rawLoc = raw.location_preferences ?? []
   const location_preferences = Array.isArray(rawLoc)
-    ? rawLoc.map((l: any) => {
-        if (typeof l === 'string') return { type: l }
-        return l
+    ? rawLoc.flatMap((value) => {
+        if (typeof value === 'string') return [{ type: value }]
+        const location = asRecord(value)
+        const type = optionalString(location.type)
+        if (!type) return []
+        return [{
+          type,
+          region: optionalString(location.region) ?? undefined,
+          cities: stringArray(location.cities) ?? undefined,
+          max_days: optionalNumber(location.max_days) ?? undefined,
+          note: optionalString(location.note) ?? undefined,
+        }]
       })
     : null
 
   // Salary target
-  const rawSalary = raw.salary_target ?? {}
-  const salary_target = rawSalary.min != null
+  const rawSalary = asRecord(raw.salary_target)
+  const salaryMin = optionalNumber(rawSalary.min)
+  const salaryMax = optionalNumber(rawSalary.max)
+  const salary_target = salaryMin != null
     ? {
-        currency: rawSalary.currency ?? 'EUR',
-        italy_min: rawSalary.min ?? 0,
-        italy_max: rawSalary.max ?? 0,
-        remote_eu_min: rawSalary.remote_eu_min ?? rawSalary.min ?? 0,
-        remote_eu_max: rawSalary.remote_eu_max ?? rawSalary.max ?? 0,
+        currency: optionalString(rawSalary.currency) ?? 'EUR',
+        italy_min: salaryMin,
+        italy_max: salaryMax ?? 0,
+        remote_eu_min: optionalNumber(rawSalary.remote_eu_min) ?? salaryMin,
+        remote_eu_max: optionalNumber(rawSalary.remote_eu_max) ?? salaryMax ?? 0,
       }
     : null
 
   // Contacts: cerca in candidate.contacts o personal
-  const contacts = candidate.contacts ?? {
-    email: personal.email,
-    phone: personal.phone,
-    linkedin: personal.linkedin,
-    github: personal.github,
-    website: personal.website,
-  }
+  const contacts = Object.keys(asRecord(candidate.contacts)).length
+    ? asRecord(candidate.contacts)
+    : {
+        email: personal.email,
+        phone: personal.phone,
+        linkedin: personal.linkedin,
+        github: personal.github,
+        website: personal.website,
+      }
+  const notes = asRecord(raw.notes)
 
   return {
     id: 'local',
     user_id: 'local',
-    name: candidate.name ?? personal.name ?? raw.name ?? null,
-    email: contacts.email ?? personal.email ?? null,
-    target_role: candidate.target_role ?? raw.target_role ?? (raw.target_roles?.[0]) ?? null,
-    location: raw.location ?? personal.location ?? null,
-    experience_years: raw.experience_years ?? null,
+    name: optionalString(candidate.name ?? personal.name ?? raw.name),
+    email: optionalString(contacts.email ?? personal.email),
+    target_role: optionalString(candidate.target_role ?? raw.target_role) ?? stringArray(raw.target_roles)?.[0] ?? null,
+    location: optionalString(raw.location ?? personal.location),
+    experience_years: optionalNumber(raw.experience_years),
     experience_months: null,
-    has_degree: raw.has_degree ?? false,
+    has_degree: typeof raw.has_degree === 'boolean' ? raw.has_degree : false,
     skills,
     languages,
     location_preferences,
-    job_titles: raw.target_roles_priority ?? raw.target_roles ?? null,
+    job_titles: stringArray(raw.target_roles_priority) ?? stringArray(raw.target_roles),
     salary_target,
     positioning: {
       seniority_target: raw.seniority_target,
@@ -127,7 +164,7 @@ function mapYamlToProfile(raw: any): CandidateProfile {
       contacts,
       career_goals: candidate.career_goals,
       aspirations: candidate.aspirations,
-      free_notes: candidate.free_notes ?? (typeof raw.notes === 'string' ? raw.notes : raw.notes ? Object.entries(raw.notes).map(([k, v]) => `${k}: ${v}`).join('\n') : undefined),
+      free_notes: optionalString(candidate.free_notes) ?? (typeof raw.notes === 'string' ? raw.notes : Object.keys(notes).length ? Object.entries(notes).map(([k, v]) => `${k}: ${String(v)}`).join('\n') : undefined),
     },
     created_at: '',
     updated_at: '',

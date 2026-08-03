@@ -88,12 +88,6 @@ export default function PinInput({
 
   const handleFocus = (i: number) => refs.current[i]?.select()
 
-  const borderColor = (i: number) => {
-    if (invalid)             return 'var(--color-red, #ff4d4d)'
-    if (document.activeElement === refs.current[i]) return 'var(--color-green, #00e87a)'
-    return 'var(--color-border)'
-  }
-
   return (
     <div
       style={{ display: 'inline-flex', alignItems: 'center', gap }}

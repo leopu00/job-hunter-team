@@ -75,8 +75,8 @@ export default function SettingsPage() {
       const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ app: { name: s.app_name, language: s.language }, notifications: s.notifications }) })
       const d = await r.json()
-      d.ok ? toast('Impostazioni salvate', 'success')
-           : toast(d.error ?? 'Errore', 'error')
+      if (d.ok) toast('Impostazioni salvate', 'success')
+      else toast(d.error ?? 'Errore', 'error')
     } catch { toast('Errore di rete', 'error') }
     finally { setBusy(false) }
   }, [s, toast])
@@ -87,8 +87,8 @@ export default function SettingsPage() {
       const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ _action: act }) })
       const d = await r.json()
-      d.ok ? toast(`${label} completato`, 'success')
-           : toast(d.error ?? 'Errore', 'error')
+      if (d.ok) toast(`${label} completato`, 'success')
+      else toast(d.error ?? 'Errore', 'error')
     } catch { toast('Errore di rete', 'error') }
     finally { setBusy(false) }
   }, [toast])

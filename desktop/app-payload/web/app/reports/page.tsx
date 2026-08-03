@@ -35,7 +35,7 @@ export default function ReportsPage() {
     setLoading(false)
   }, [period])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const maxSent = Math.max(...monthly.map(m => m.sent), 1)
   const maxPhase = Math.max(...phases.map(p => p.avgDays), 1)

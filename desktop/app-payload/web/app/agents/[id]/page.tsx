@@ -68,7 +68,7 @@ export default function AgentDetailPage() {
     setLoading(false)
   }, [id])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
   useEffect(() => { const iv = setInterval(fetchData, 10000); return () => clearInterval(iv) }, [fetchData])
 
   const TABS = [

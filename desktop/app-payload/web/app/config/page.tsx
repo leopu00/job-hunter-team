@@ -48,7 +48,7 @@ export default function ConfigPage() {
     }
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const handleChange = useCallback((val: string) => {
     setText(val)

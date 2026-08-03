@@ -36,7 +36,7 @@ export default function ComparePage() {
     setAvailable((await res.json()).available ?? [])
   }, [])
 
-  useEffect(() => { fetchAvailable() }, [fetchAvailable])
+  useEffect(() => { queueMicrotask(fetchAvailable) }, [fetchAvailable])
 
   const toggle = (id: string) => setSelected(p => p.includes(id) ? p.filter(x => x !== id) : p.length >= 4 ? p : [...p, id])
 

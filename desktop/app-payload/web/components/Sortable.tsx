@@ -68,13 +68,6 @@ export default function Sortable({ items, onReorder, handle = true, disabled = f
 
   const reset = () => { setDragId(null); setOverId(null) }
 
-  /* ── Placeholder index ── */
-  const placeholderIdx = (() => {
-    if (!dragId || !overId) return -1
-    const to = getOverIdx()
-    return dragPos === 'after' ? to + 1 : to
-  })()
-
   return (
     <div role="list" style={{ display: 'flex', flexDirection: 'column', gap }}>
       {items.map((item, i) => {

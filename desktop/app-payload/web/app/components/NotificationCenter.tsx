@@ -109,7 +109,7 @@ export function NotificationCenter() {
 
   // Load on mount + listen for pushes
   useEffect(() => {
-    reload()
+    queueMicrotask(reload)
     listeners.add(reload)
     return () => { listeners.delete(reload) }
   }, [reload])

@@ -59,12 +59,19 @@ export default function MediaPlayer({ src, type = 'video', autoPlay = false, pos
     if (type === 'video') hideTimer.current = setTimeout(() => setShow(false), 2500)
   }, [type])
 
+  const toggleFS = useCallback(() => {
+    const c = containerRef.current
+    if (!c) return
+    if (!document.fullscreenElement) void c.requestFullscreen()
+    else void document.exitFullscreen()
+  }, [])
+
   /* ── Keyboard ── */
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
       const m = mediaRef.current; if (!m) return
       if (['INPUT','TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return
-      if (e.key === ' ')           { e.preventDefault(); playing ? m.pause() : m.play() }
+      if (e.key === ' ')           { e.preventDefault(); if (playing) m.pause(); else void m.play() }
       if (e.key === 'ArrowRight')  { e.preventDefault(); m.currentTime = Math.min(m.currentTime + 5, duration) }
       if (e.key === 'ArrowLeft')   { e.preventDefault(); m.currentTime = Math.max(m.currentTime - 5, 0) }
       if (e.key === 'ArrowUp')     { e.preventDefault(); m.volume = Math.min(m.volume + 0.1, 1); setVolume(m.volume) }
@@ -74,10 +81,9 @@ export default function MediaPlayer({ src, type = 'video', autoPlay = false, pos
     }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
-  }, [playing, duration])
+  }, [playing, duration, toggleFS])
 
-  const togglePlay = () => { const m = mediaRef.current; if (!m) return; playing ? m.pause() : m.play() }
-  const toggleFS   = () => { const c = containerRef.current; if (!c) return; !document.fullscreenElement ? c.requestFullscreen() : document.exitFullscreen() }
+  const togglePlay = () => { const m = mediaRef.current; if (!m) return; if (playing) m.pause(); else void m.play() }
 
   /* ── Progress drag ── */
   const seek = (e: React.MouseEvent | MouseEvent) => {

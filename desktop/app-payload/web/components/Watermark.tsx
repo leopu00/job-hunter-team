@@ -27,7 +27,6 @@ export default function Watermark({
   layer = 'overlay',
   className,
 }: WatermarkProps) {
-  const id          = useId().replace(/:/g, '')
   const containerRef = useRef<HTMLDivElement>(null)
   const [dataUrl, setDataUrl] = useState<string>('')
 
@@ -64,7 +63,7 @@ export default function Watermark({
     ctx.fillText(text, 0, 0)
     ctx.restore()
 
-    setDataUrl(canvas.toDataURL())
+    queueMicrotask(() => setDataUrl(canvas.toDataURL()))
   }, [text, rotate, opacity, fontSize, color, gap])
 
   const patternStyle: React.CSSProperties = dataUrl ? {

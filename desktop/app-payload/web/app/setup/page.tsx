@@ -30,7 +30,7 @@ export default function SetupPage() {
 
   useEffect(() => {
     if (step !== 'prereq') return
-    setLoading(true)
+    queueMicrotask(() => setLoading(true))
     ;(async () => {
       const items: Check[] = [{ label: 'Browser moderno', ok: true }]
       try {
