@@ -462,7 +462,7 @@ const translations = {
   ob_s5_launched:    { it: 'Scout avviato!',                  en: 'Scout launched!' },
 } as const
 
-type StringKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends string ? K : never }[keyof typeof translations]
+export type StringKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends string ? K : never }[keyof typeof translations]
 type ArrayKeys = { [K in keyof typeof translations]: (typeof translations)[K]['it'] extends readonly string[] ? K : never }[keyof typeof translations]
 
 interface I18nCtx {
@@ -487,7 +487,7 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>('it')
 
   useEffect(() => {
-    setLangState(getSavedLang())
+    queueMicrotask(() => setLangState(getSavedLang()))
   }, [])
 
   useEffect(() => {

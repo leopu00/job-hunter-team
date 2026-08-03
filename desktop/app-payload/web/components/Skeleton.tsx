@@ -15,9 +15,9 @@ export interface SkeletonProps {
 }
 
 /* ── Base shimmer block ── */
-function Bone({ w, h, r = 6, style }: { w?: number|string; h?: number|string; r?: number; style?: React.CSSProperties }) {
+function Bone({ w, h, r = 6, style, className }: { w?: number|string; h?: number|string; r?: number; style?: React.CSSProperties; className?: string }) {
   return (
-    <div style={{
+    <div className={className} style={{
       width: w ?? '100%', height: h ?? 14, borderRadius: r,
       background: 'var(--color-row)',
       backgroundImage: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)',
@@ -131,7 +131,7 @@ export default function Skeleton({ variant = 'text', rows = 5, width, height, ro
   if (variant === 'chart')   return <ChartSkeleton />
 
   // 'text' | 'custom'
-  return <Bone w={width ?? '100%'} h={height ?? 14} r={rounded ? 999 : 6} />
+  return <Bone w={width ?? '100%'} h={height ?? 14} r={rounded ? 999 : 6} className={className} />
 }
 
 /* ── CSS keyframe (iniettato una sola volta) ── */

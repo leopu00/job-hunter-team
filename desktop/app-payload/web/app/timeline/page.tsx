@@ -14,10 +14,6 @@ const TYPE_CFG: Record<string, { label: string; color: string }> = {
   update: { label: 'Aggiornamento', color: 'var(--color-dim)' },
 }
 
-function fmtDate(ts: number): string {
-  return new Date(ts).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: undefined })
-}
-
 function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 }
@@ -50,7 +46,7 @@ export default function TimelinePage() {
     setEvents(d.events ?? []); setTotal(d.total ?? 0); setTypes(d.types ?? [])
   }, [typeFilter, days])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const groups = groupByDate(events)
 

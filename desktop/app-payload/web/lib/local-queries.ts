@@ -10,6 +10,32 @@ import type {
   Application,
 } from './types'
 
+type PositionRow = Omit<Position, 'id' | 'company_id'> & {
+  id: number
+  company_id: number | null
+  score?: number | null
+  stack_match?: number | null
+  remote_fit?: number | null
+  salary_fit?: number | null
+  experience_fit?: number | null
+  strategic_fit?: number | null
+}
+type ScoreRow = Omit<Score, 'id' | 'position_id'> & { id: number; position_id: number }
+type CompanyRow = Omit<Company, 'id' | 'hq'> & { id: number; hq_country?: string | null }
+type ApplicationRow = Omit<Application, 'id' | 'position_id' | 'applied'> & {
+  id: number
+  position_id: number
+  applied: number | boolean
+}
+type ApplicationWithPositionRow = ApplicationRow & {
+  p_id?: number | null
+  p_title?: string | null
+  p_company?: string | null
+  p_status?: Position['status'] | null
+  p_url?: string | null
+}
+type PositionHighlightRow = { id: number; position_id: number; type: PositionHighlight['type']; text: string }
+
 // Helpers per convertire ID integer -> string (compatibilita' con tipi TS)
 function sid(v: number | null | undefined): string { return v != null ? String(v) : '' }
 
@@ -48,7 +74,7 @@ export function getRecentPositionsLocal(ws: string, limit = 15): PositionWithSco
     WHERE p.status != 'excluded'
     ORDER BY p.found_at DESC
     LIMIT ?
-  `).all(limit) as any[]
+  `).all(limit) as PositionRow[]
 
   return rows.map(r => mapPosition(r))
 }
@@ -60,7 +86,7 @@ export function getPositionsLocal(ws: string, opts?: {
 }): PositionWithScore[] {
   const db = getDb(ws)
   const where: string[] = []
-  const params: any[] = []
+  const params: Array<string | number> = []
 
   if (opts?.status && opts.status !== 'all') {
     where.push('p.status = ?')
@@ -92,7 +118,7 @@ export function getPositionsLocal(ws: string, opts?: {
     ORDER BY p.found_at DESC
     ${limitClause} ${offsetClause}
   `
-  const rows = db.prepare(sql).all(...params) as any[]
+  const rows = db.prepare(sql).all(...params) as PositionRow[]
   return rows.map(r => mapPosition(r))
 }
 
@@ -104,16 +130,16 @@ export function getPositionByIdLocal(ws: string, id: string): {
   const db = getDb(ws)
   const numId = Number(id)
 
-  const pos = db.prepare('SELECT * FROM positions WHERE id = ?').get(numId) as any
+  const pos = db.prepare('SELECT * FROM positions WHERE id = ?').get(numId) as PositionRow | undefined
   if (!pos) return null
 
-  const score = db.prepare('SELECT * FROM scores WHERE position_id = ?').get(numId) as any
-  const highlights = db.prepare('SELECT * FROM position_highlights WHERE position_id = ? ORDER BY type').all(numId) as any[]
-  const app = db.prepare('SELECT * FROM applications WHERE position_id = ?').get(numId) as any
+  const score = db.prepare('SELECT * FROM scores WHERE position_id = ?').get(numId) as ScoreRow | undefined
+  const highlights = db.prepare('SELECT * FROM position_highlights WHERE position_id = ? ORDER BY type').all(numId) as PositionHighlightRow[]
+  const app = db.prepare('SELECT * FROM applications WHERE position_id = ?').get(numId) as ApplicationRow | undefined
 
   let company: Company | null = null
   if (pos.company_id) {
-    const c = db.prepare('SELECT * FROM companies WHERE id = ?').get(pos.company_id) as any
+    const c = db.prepare('SELECT * FROM companies WHERE id = ?').get(pos.company_id) as CompanyRow | undefined
     if (c) company = mapCompany(c)
   }
 
@@ -134,7 +160,7 @@ export function getApplicationsLocal(ws: string): ApplicationWithPosition[] {
     FROM applications a
     LEFT JOIN positions p ON p.id = a.position_id
     ORDER BY a.written_at DESC
-  `).all() as any[]
+  `).all() as ApplicationWithPositionRow[]
 
   return rows.map(r => mapAppWithPosition(r))
 }
@@ -148,7 +174,7 @@ export function getApplicationsByStatusLocal(ws: string, status: string): Applic
     LEFT JOIN positions p ON p.id = a.position_id
     WHERE a.status = ?
     ORDER BY a.response_at DESC
-  `).all(status) as any[]
+  `).all(status) as ApplicationWithPositionRow[]
 
   return rows.map(r => mapAppWithPosition(r))
 }
@@ -162,7 +188,7 @@ export function getRisposteLocal(ws: string): ApplicationWithPosition[] {
     LEFT JOIN positions p ON p.id = a.position_id
     WHERE a.status = 'response' OR a.response IS NOT NULL
     ORDER BY a.response_at DESC
-  `).all() as any[]
+  `).all() as ApplicationWithPositionRow[]
 
   return rows.map(r => mapAppWithPosition(r))
 }
@@ -231,9 +257,9 @@ export function getPositionsByStatusLocal(ws: string): Record<string, number> {
 // ── Scout stats ─────────────────────────────────────────────────────
 export function getScoutStatsLocal(ws: string) {
   const db = getDb(ws)
-  const positions = db.prepare('SELECT id, found_by, status FROM positions').all() as any[]
+  const positions = db.prepare('SELECT id, found_by, status FROM positions').all() as Array<Pick<PositionRow, 'id' | 'found_by' | 'status'>>
   const respondedIds = new Set(
-    (db.prepare("SELECT position_id FROM applications WHERE status = 'response' OR response IS NOT NULL").all() as any[])
+    (db.prepare("SELECT position_id FROM applications WHERE status = 'response' OR response IS NOT NULL").all() as Array<Pick<ApplicationRow, 'position_id'>>)
       .map(r => r.position_id)
   )
 
@@ -274,7 +300,7 @@ export function getScorerStatsLocal(ws: string) {
 // ── Scrittore stats ─────────────────────────────────────────────────
 export function getScrittoreStatsLocal(ws: string) {
   const db = getDb(ws)
-  const rows = db.prepare('SELECT written_by, critic_verdict, applied FROM applications').all() as any[]
+  const rows = db.prepare('SELECT written_by, critic_verdict, applied FROM applications').all() as Array<Pick<ApplicationRow, 'written_by' | 'critic_verdict' | 'applied'>>
   const grouped: Record<string, { total: number; pass: number; needsWork: number; sent: number }> = {}
   for (const row of rows) {
     const key = row.written_by ?? 'sconosciuto'
@@ -290,10 +316,10 @@ export function getScrittoreStatsLocal(ws: string) {
 // ── Analista stats ──────────────────────────────────────────────────
 export function getAnalistaStatsLocal(ws: string) {
   const db = getDb(ws)
-  const rows = db.prepare('SELECT analyzed_by, verdict FROM companies WHERE analyzed_by IS NOT NULL').all() as any[]
+  const rows = db.prepare('SELECT analyzed_by, verdict FROM companies WHERE analyzed_by IS NOT NULL').all() as Array<Pick<CompanyRow, 'analyzed_by' | 'verdict'>>
   const grouped: Record<string, { total: number; go: number; cautious: number; noGo: number }> = {}
   for (const row of rows) {
-    const key = row.analyzed_by
+    const key = row.analyzed_by ?? 'sconosciuto'
     if (!grouped[key]) grouped[key] = { total: 0, go: 0, cautious: 0, noGo: 0 }
     grouped[key].total++
     if (row.verdict === 'GO') grouped[key].go++
@@ -306,10 +332,10 @@ export function getAnalistaStatsLocal(ws: string) {
 // ── Critico stats ───────────────────────────────────────────────────
 export function getCriticoStatsLocal(ws: string) {
   const db = getDb(ws)
-  const rows = db.prepare('SELECT reviewed_by, critic_verdict FROM applications WHERE reviewed_by IS NOT NULL').all() as any[]
+  const rows = db.prepare('SELECT reviewed_by, critic_verdict FROM applications WHERE reviewed_by IS NOT NULL').all() as Array<Pick<ApplicationRow, 'reviewed_by' | 'critic_verdict'>>
   const grouped: Record<string, { total: number; pass: number; needsWork: number; reject: number }> = {}
   for (const row of rows) {
-    const key = row.reviewed_by
+    const key = row.reviewed_by ?? 'sconosciuto'
     if (!grouped[key]) grouped[key] = { total: 0, pass: 0, needsWork: 0, reject: 0 }
     grouped[key].total++
     if (row.critic_verdict === 'PASS') grouped[key].pass++
@@ -332,7 +358,7 @@ export function getApplicationStatsLocal(ws: string): Record<string, number> {
 
 // ── Mapping helpers ─────────────────────────────────────────────────
 
-function mapPosition(r: any): PositionWithScore {
+function mapPosition(r: PositionRow): PositionWithScore {
   return {
     id: sid(r.id), legacy_id: r.legacy_id ?? null, title: r.title, company: r.company,
     company_id: r.company_id ? sid(r.company_id) : null,
@@ -347,14 +373,14 @@ function mapPosition(r: any): PositionWithScore {
     score: r.score ?? undefined,
     scores: r.stack_match != null ? {
       id: '', position_id: sid(r.id), total_score: r.score ?? 0,
-      stack_match: r.stack_match, remote_fit: r.remote_fit, salary_fit: r.salary_fit,
-      experience_fit: r.experience_fit ?? null, strategic_fit: r.strategic_fit,
+      stack_match: r.stack_match, remote_fit: r.remote_fit ?? null, salary_fit: r.salary_fit ?? null,
+      experience_fit: r.experience_fit ?? null, strategic_fit: r.strategic_fit ?? null,
       breakdown: null, notes: null, scored_by: null, scored_at: '',
     } : undefined,
   }
 }
 
-function mapPositionFull(r: any): Position {
+function mapPositionFull(r: PositionRow): Position {
   return {
     id: sid(r.id), legacy_id: r.legacy_id ?? null, title: r.title, company: r.company,
     company_id: r.company_id ? sid(r.company_id) : null,
@@ -369,7 +395,7 @@ function mapPositionFull(r: any): Position {
   }
 }
 
-function mapScore(r: any): Score {
+function mapScore(r: ScoreRow): Score {
   return {
     id: sid(r.id), position_id: sid(r.position_id), total_score: r.total_score,
     stack_match: r.stack_match, remote_fit: r.remote_fit, salary_fit: r.salary_fit,
@@ -378,7 +404,7 @@ function mapScore(r: any): Score {
   }
 }
 
-function mapCompany(r: any): Company {
+function mapCompany(r: CompanyRow): Company {
   return {
     id: sid(r.id), name: r.name, website: r.website, hq: r.hq_country ?? null,
     sector: r.sector, size: r.size, glassdoor_rating: r.glassdoor_rating,
@@ -387,7 +413,7 @@ function mapCompany(r: any): Company {
   }
 }
 
-function mapApplication(r: any): Application {
+function mapApplication(r: ApplicationRow): Application {
   return {
     id: sid(r.id), position_id: sid(r.position_id),
     cv_path: r.cv_path, cl_path: r.cl_path, cv_pdf_path: r.cv_pdf_path, cl_pdf_path: r.cl_pdf_path,
@@ -400,7 +426,7 @@ function mapApplication(r: any): Application {
   }
 }
 
-function mapAppWithPosition(r: any): ApplicationWithPosition {
+function mapAppWithPosition(r: ApplicationWithPositionRow): ApplicationWithPosition {
   return {
     ...mapApplication(r),
     positions: {

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 import { EmptyState } from './components/EmptyState'
+import { useNow } from '@/lib/use-now'
 
 type TaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'timed_out' | 'cancelled' | 'lost'
 type TaskRecord = { taskId: string; label?: string; task: string; agentId?: string; status: TaskStatus; createdAt: number; endedAt?: number }
@@ -29,9 +30,9 @@ function StatusBadge({ status }: { status: TaskStatus }) {
   )
 }
 
-function TaskRow({ task, onCancel }: { task: TaskRecord; onCancel: (id: string) => void }) {
+function TaskRow({ task, now, onCancel }: { task: TaskRecord; now: number; onCancel: (id: string) => void }) {
   const isActive = ACTIVE_STATUSES.has(task.status)
-  const age = Math.floor((Date.now() - task.createdAt) / 60000)
+  const age = Math.floor((now - task.createdAt) / 60000)
   const ageLabel = age < 1 ? 'adesso' : age < 60 ? `${age}m fa` : `${Math.floor(age / 60)}h fa`
   return (
     <div className="flex items-start gap-4 px-5 py-3.5 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors">
@@ -60,6 +61,7 @@ function TaskRow({ task, onCancel }: { task: TaskRecord; onCancel: (id: string) 
 }
 
 export default function TasksPage() {
+  const now = useNow(60_000)
   const [tasks, setTasks] = useState<TaskRecord[]>([])
   const [filter, setFilter] = useState<'all' | 'active' | 'terminal'>('all')
   const [showForm, setShowForm] = useState(false)
@@ -75,7 +77,7 @@ export default function TasksPage() {
     setTasks(data.tasks ?? [])
   }, [filter])
 
-  useEffect(() => { fetchTasks() }, [fetchTasks])
+  useEffect(() => { queueMicrotask(fetchTasks) }, [fetchTasks])
   useEffect(() => {
     const id = setInterval(fetchTasks, 5000)
     return () => clearInterval(id)
@@ -159,7 +161,7 @@ export default function TasksPage() {
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {tasks.length === 0
           ? <EmptyState icon="📋" title="Nessun task" description="I task degli agenti appariranno qui." size="md" />
-          : tasks.map(t => <TaskRow key={t.taskId} task={t} onCancel={cancelTask} />)
+          : tasks.map(t => <TaskRow key={t.taskId} task={t} now={now} onCancel={cancelTask} />)
         }
       </div>
     </div>

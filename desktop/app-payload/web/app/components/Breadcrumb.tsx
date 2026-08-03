@@ -152,7 +152,7 @@ export default function Breadcrumb() {
         style={{ color: 'var(--color-dim)', fontSize: 12 }}><span aria-hidden="true">🏠</span></Link>
 
       {/* Crumbs */}
-      {visible.map((item, i) => {
+      {visible.map((item) => {
         if (item === 'collapse') return <CollapseDropdown key="collapse" hidden={hidden} />
         const crumb = item as Crumb
         return (

@@ -37,7 +37,7 @@ export default function AiAssistantPage() {
     setMessages(data.history ?? []); setSuggestions(data.suggestions ?? []);
   }, [])
 
-  useEffect(() => { fetchHistory() }, [fetchHistory])
+  useEffect(() => { queueMicrotask(fetchHistory) }, [fetchHistory])
   useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [messages])
 
   const send = async (text?: string) => {

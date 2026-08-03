@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
+import { useNow } from '@/lib/use-now'
 
 type Metrics = { cpuUsage: number; memoryUsedMB: number; memoryTotalMB: number; memoryPercent: number; uptimeSeconds: number; loadAvg: number[] }
 type Agent = { agentId: string; lastSeen: number; status: 'alive' | 'stale' | 'dead'; metadata?: Record<string, unknown> }
@@ -31,6 +32,7 @@ function formatUptime(s: number): string {
 }
 
 export default function MonitoringPage() {
+  const now = useNow(1000)
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [agents, setAgents] = useState<Agent[]>([])
   const [alerts, setAlerts] = useState<Alert[]>([])
@@ -44,7 +46,7 @@ export default function MonitoringPage() {
     setAlerts(data.alerts ?? [])
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
   useEffect(() => { const id = setInterval(fetchData, 3000); return () => clearInterval(id) }, [fetchData])
 
   return (
@@ -90,7 +92,7 @@ export default function MonitoringPage() {
             ? <div className="py-12 text-center"><p className="text-[var(--color-dim)] text-[12px]">Nessun agente registrato.</p></div>
             : agents.map(a => {
               const cfg = STATUS_CFG[a.status] || STATUS_CFG.dead;
-              const ago = Math.floor((Date.now() - a.lastSeen) / 1000);
+              const ago = Math.floor((now - a.lastSeen) / 1000);
               return (
                 <div key={a.agentId} className="flex items-center gap-4 px-5 py-3 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors">
                   <span className="text-[12px] font-semibold font-mono text-[var(--color-bright)]">{a.agentId}</span>

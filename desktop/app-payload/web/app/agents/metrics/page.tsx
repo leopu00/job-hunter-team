@@ -80,7 +80,7 @@ export default function AgentMetricsPage() {
     setLoading(false)
   }, [days])
 
-  useEffect(() => { setLoading(true); fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(() => { setLoading(true); void fetchData() }) }, [fetchData])
 
   const active = data?.agents.filter(a => a.tasks.total > 0 || a.api.calls > 0) ?? []
 

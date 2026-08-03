@@ -67,7 +67,7 @@ export default function CommandPalette() {
   // Ricerca dinamica via /api/search
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
-    if (query.length < 2) { setExtra([]); return }
+    if (query.length < 2) { queueMicrotask(() => setExtra([])); return }
     timerRef.current = setTimeout(async () => {
       const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`).catch(() => null)
       if (!res?.ok) return

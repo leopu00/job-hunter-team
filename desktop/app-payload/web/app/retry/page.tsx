@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
+import { useNow } from '@/lib/use-now'
 
 type BreakerInfo = {
   id: string; label: string; state: 'closed' | 'open' | 'half-open'
@@ -39,15 +40,15 @@ function StateBadge({ state }: { state: string }) {
   )
 }
 
-function ago(ts?: number): string {
+function ago(ts: number | undefined, now: number): string {
   if (!ts) return '—'
-  const s = Math.floor((Date.now() - ts) / 1000)
+  const s = Math.floor((now - ts) / 1000)
   if (s < 60) return `${s}s fa`
   if (s < 3600) return `${Math.floor(s / 60)}m fa`
   return `${Math.floor(s / 3600)}h fa`
 }
 
-function BreakerCard({ b, onReset, resetting }: { b: BreakerInfo; onReset: (id: string) => void; resetting: string | null }) {
+function BreakerCard({ b, now, onReset, resetting }: { b: BreakerInfo; now: number; onReset: (id: string) => void; resetting: string | null }) {
   const failPct = b.failureThreshold > 0 ? Math.min(100, (b.failures / b.failureThreshold) * 100) : 0
   return (
     <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
@@ -74,8 +75,8 @@ function BreakerCard({ b, onReset, resetting }: { b: BreakerInfo; onReset: (id: 
       </div>
       <div className="flex items-center justify-between">
         <div className="text-[9px] text-[var(--color-dim)]">
-          {b.lastFailureAt ? `Ultimo fail: ${ago(b.lastFailureAt)}` : 'Nessun fallimento'}
-          {b.state === 'open' && b.openedAt && ` · Reset tra ${Math.max(0, Math.ceil((b.resetTimeoutMs - (Date.now() - b.openedAt)) / 1000))}s`}
+          {b.lastFailureAt ? `Ultimo fail: ${ago(b.lastFailureAt, now)}` : 'Nessun fallimento'}
+          {b.state === 'open' && b.openedAt && ` · Reset tra ${Math.max(0, Math.ceil((b.resetTimeoutMs - (now - b.openedAt)) / 1000))}s`}
         </div>
         {b.state !== 'closed' && (
           <button onClick={() => onReset(b.id)} disabled={resetting === b.id}
@@ -90,6 +91,7 @@ function BreakerCard({ b, onReset, resetting }: { b: BreakerInfo; onReset: (id: 
 }
 
 export default function RetryPage() {
+  const now = useNow(1000)
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [resetting, setResetting] = useState<string | null>(null)
@@ -100,7 +102,7 @@ export default function RetryPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
   useEffect(() => { const iv = setInterval(fetchData, 5000); return () => clearInterval(iv) }, [fetchData])
 
   async function handleReset(id: string) {
@@ -138,7 +140,7 @@ export default function RetryPage() {
             <StatCard label="Semi-aperti" value={String(data.summary.halfOpen)} color="var(--color-yellow)" />
           </div>
           <div className="grid md:grid-cols-2 gap-3">
-            {data.breakers.map((b, i) => <div key={b.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><BreakerCard b={b} onReset={handleReset} resetting={resetting} /></div>)}
+            {data.breakers.map((b, i) => <div key={b.id} style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}><BreakerCard b={b} now={now} onReset={handleReset} resetting={resetting} /></div>)}
           </div>
         </>
       )}

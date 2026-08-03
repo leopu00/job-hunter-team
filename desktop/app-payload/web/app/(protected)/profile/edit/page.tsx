@@ -93,6 +93,14 @@ export default function ProfileEditPage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const loadFiles = async () => {
+    try {
+      const res = await fetch('/api/profile/files')
+      const data = await res.json()
+      setUploadedFiles(data.files ?? [])
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -162,16 +170,8 @@ export default function ProfileEditPage() {
       setLoading(false)
     }
     load()
-    loadFiles()
+    queueMicrotask(loadFiles)
   }, [])
-
-  const loadFiles = async () => {
-    try {
-      const res = await fetch('/api/profile/files')
-      const data = await res.json()
-      setUploadedFiles(data.files ?? [])
-    } catch { /* ignore */ }
-  }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files

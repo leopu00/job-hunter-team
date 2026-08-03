@@ -76,7 +76,7 @@ export default function Collapsible({
     if (timerRef.current) clearTimeout(timerRef.current)
 
     if (open) {
-      setVisible(true)
+      queueMicrotask(() => setVisible(true))
       // Misura scrollHeight nel prossimo frame
       requestAnimationFrame(() => {
         setHeight(el.scrollHeight)

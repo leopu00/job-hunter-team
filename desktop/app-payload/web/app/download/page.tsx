@@ -81,7 +81,7 @@ function DownloadContent() {
   })
 
   useEffect(() => {
-    setDetectedOS(detectOS())
+    queueMicrotask(() => setDetectedOS(detectOS()))
     fetch('/api/download')
       .then(r => r.json())
       .then((data: ReleaseData) => setRelease(data))

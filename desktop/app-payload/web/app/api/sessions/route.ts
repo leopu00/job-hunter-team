@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { errorCode } from '@/lib/errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,8 +38,8 @@ function loadStore(): SessionStore {
     const parsed = JSON.parse(raw) as SessionStore
     if (!parsed?.sessions) return { version: 1, sessions: [] }
     return parsed
-  } catch (err: any) {
-    if (err.code === 'ENOENT') return { version: 1, sessions: [] }
+  } catch (err) {
+    if (errorCode(err) === 'ENOENT') return { version: 1, sessions: [] }
     throw err
   }
 }

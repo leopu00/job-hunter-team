@@ -46,12 +46,10 @@ function PieChart({ data }: { data: StatusItem[] }) {
   const total = data.reduce((s, d) => s + d.count, 0)
   if (total === 0) return null
   const CX = 70, CY = 70, R = 60
-  let angle = -Math.PI / 2
-  const slices = data.map(d => {
+  const slices = data.map((d, index) => {
     const pct = d.count / total
-    const start = angle
-    angle += pct * 2 * Math.PI
-    const end = angle
+    const start = -Math.PI / 2 + data.slice(0, index).reduce((sum, item) => sum + (item.count / total) * 2 * Math.PI, 0)
+    const end = start + pct * 2 * Math.PI
     const large = pct > 0.5 ? 1 : 0
     const x1 = CX + R * Math.cos(start), y1 = CY + R * Math.sin(start)
     const x2 = CX + R * Math.cos(end), y2 = CY + R * Math.sin(end)
@@ -102,7 +100,7 @@ export default function AnalyticsPage() {
     if (res?.ok) setData(await res.json())
   }, [days])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const jh = data?.jobHunting
   const PERIODS = [{ v: 7, l: '7g' }, { v: 30, l: '30g' }, { v: 90, l: '90g' }]

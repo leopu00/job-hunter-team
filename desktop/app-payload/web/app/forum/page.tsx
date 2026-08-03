@@ -48,7 +48,7 @@ export default function ForumPage() {
     }).catch(() => setLoading(false))
   }, [filter])
 
-  useEffect(() => { load() }, [filter])
+  useEffect(() => { queueMicrotask(load) }, [load])
 
   useEffect(() => {
     const id = setInterval(() => load(), 5_000)

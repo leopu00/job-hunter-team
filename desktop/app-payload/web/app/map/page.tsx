@@ -45,7 +45,7 @@ export default function MapPage() {
     setClusters(d.clusters ?? []); setTotalJobs(d.totalJobs ?? 0); setAreas(d.areas ?? [])
   }, [filter])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   return (
     <div style={{ animation: 'fade-in 0.35s ease both' }}>

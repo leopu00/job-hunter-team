@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import Image from 'next/image'
 
 export interface PreviewFile {
   id: string
@@ -102,7 +103,7 @@ function FileItem({
     >
       {/* Thumbnail o icona */}
       {img && file.url
-        ? <img src={file.url} alt={file.name} loading="lazy" decoding="async" style={thumbStyle} />
+        ? <Image src={file.url} alt={file.name} width={thumbSize} height={thumbSize} unoptimized style={thumbStyle} />
         : <div style={iconStyle}>{getIcon(file.name)}</div>
       }
 

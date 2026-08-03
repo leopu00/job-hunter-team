@@ -35,12 +35,14 @@ export default function Sidebar() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  useEffect(() => { setMobileOpen(false) }, [pathname])
+  useEffect(() => { queueMicrotask(() => setMobileOpen(false)) }, [pathname])
 
   useEffect(() => {
     try {
-      setFavs(JSON.parse(localStorage.getItem('jht:sb-favs') ?? '[]'))
-      setCollapsed(localStorage.getItem('jht:sb-coll') === 'true')
+      queueMicrotask(() => {
+        setFavs(JSON.parse(localStorage.getItem('jht:sb-favs') ?? '[]'))
+        setCollapsed(localStorage.getItem('jht:sb-coll') === 'true')
+      })
     } catch {}
   }, [])
 

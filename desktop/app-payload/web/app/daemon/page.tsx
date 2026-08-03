@@ -72,7 +72,7 @@ export default function DaemonPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
   useEffect(() => { const id = setInterval(fetchData, 10_000); return () => clearInterval(id) }, [fetchData])
 
   const handleAction = useCallback(async (service: string, action: 'start' | 'stop' | 'restart') => {

@@ -110,15 +110,15 @@ export async function POST() {
           `(sleep 4 && tmux send-keys -t "${agent.session}" Enter && sleep 3 && tmux send-keys -t "${agent.session}" Enter) &>/dev/null &`
         ).catch(() => {})
         results.push({ session: agent.session, role: agent.role, status: 'started' })
-      } catch (err: any) {
-        results.push({ session: agent.session, role: agent.role, status: 'error', error: err?.message })
+      } catch (err) {
+        results.push({ session: agent.session, role: agent.role, status: 'error', error: err instanceof Error ? err.message : undefined })
       }
     }
 
     return NextResponse.json({ ok: true, results })
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? 'Avvio team fallito' },
+      { ok: false, error: err instanceof Error ? err.message : 'Avvio team fallito' },
       { status: 500 }
     )
   }

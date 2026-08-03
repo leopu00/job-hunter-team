@@ -57,7 +57,7 @@ export default function ActivityPage() {
     setLoading(false)
   }, [page, filter])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const onFilter = (f: typeof filter) => { setFilter(f); setPage(1) }
 

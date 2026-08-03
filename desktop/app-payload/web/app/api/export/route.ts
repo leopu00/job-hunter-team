@@ -14,6 +14,10 @@ function readJsonSafe<T>(p: string): T | null {
   try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return null }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
+}
+
 const DATE_FIELDS = ['createdAt', 'createdAtMs', 'appliedAt', 'date', 'timestamp', 'closedAt', 'lastContact'];
 
 function filterByDate(items: Record<string, unknown>[], since: number, until: number): Record<string, unknown>[] {
@@ -28,8 +32,10 @@ function filterByDate(items: Record<string, unknown>[], since: number, until: nu
 
 function loadWrapped(file: string, key?: string): (since: number, until: number) => Record<string, unknown>[] {
   return (since, until) => {
-    const raw = readJsonSafe<Record<string, unknown>>(path.join(JHT_DIR, file));
-    const items = key ? (raw as any)?.[key] ?? [] : Array.isArray(raw) ? raw : [];
+    const raw = readJsonSafe<unknown>(path.join(JHT_DIR, file));
+    const wrapped = isRecord(raw) ? raw : null;
+    const value = key ? wrapped?.[key] : raw;
+    const items = Array.isArray(value) ? value.filter(isRecord) : [];
     return filterByDate(items, since, until);
   };
 }

@@ -90,7 +90,7 @@ export default function ChannelsPage() {
     setConnectedCount(data.connectedCount ?? 0)
   }, [filter])
 
-  useEffect(() => { fetchChannels() }, [fetchChannels])
+  useEffect(() => { queueMicrotask(fetchChannels) }, [fetchChannels])
   useEffect(() => { const id = setInterval(fetchChannels, 5000); return () => clearInterval(id) }, [fetchChannels])
 
   const toggleChannel = async (id: ChannelId, enabled: boolean) => {

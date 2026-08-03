@@ -29,10 +29,6 @@ function hasEnvKey(provider: string): boolean {
   return !!(envVar && process.env[envVar]?.trim())
 }
 
-function hasStoredCredential(provider: string): boolean {
-  return fs.existsSync(path.join(CREDS_DIR, `${provider}.json`))
-}
-
 function readCredentialMeta(provider: string): { type: string; savedAt: number; source: string } | null {
   if (hasEnvKey(provider)) {
     return { type: 'api_key', savedAt: 0, source: 'env' }

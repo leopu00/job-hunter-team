@@ -127,13 +127,11 @@ function DonutChart({ categories }: { categories: Record<string, number> }) {
   if (!entries.length) return null
   const total = entries.reduce((s, e) => s + e[1], 0)
 
-  let cumPct = 0
-  const parts = entries.map(([cat, count]) => {
+  const parts = entries.map(([cat, count], index) => {
     const pct = (count / total) * 100
     const color = CAT_COLORS[cat] ?? '#888'
-    const part = `${color} ${cumPct.toFixed(1)}% ${(cumPct + pct).toFixed(1)}%`
-    cumPct += pct
-    return part
+    const start = entries.slice(0, index).reduce((sum, entry) => sum + (entry[1] / total) * 100, 0)
+    return `${color} ${start.toFixed(1)}% ${(start + pct).toFixed(1)}%`
   })
 
   return (
@@ -175,7 +173,7 @@ export default function AnalistaPage() {
   }, [])
 
   useEffect(() => {
-    fetchData()
+    queueMicrotask(fetchData)
     const id = setInterval(fetchData, 8000)
     return () => clearInterval(id)
   }, [fetchData])

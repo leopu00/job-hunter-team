@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { errorCode } from '@/lib/errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,8 +29,8 @@ function load(): SecretStore {
     const raw = fs.readFileSync(SECRETS_PATH, 'utf-8')
     const p = JSON.parse(raw) as SecretStore
     return p?.secrets ? p : { version: 1, secrets: [] }
-  } catch (e: any) {
-    if (e.code === 'ENOENT') return { version: 1, secrets: [] }
+  } catch (e) {
+    if (errorCode(e) === 'ENOENT') return { version: 1, secrets: [] }
     throw e
   }
 }

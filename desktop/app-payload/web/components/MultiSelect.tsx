@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 export interface MSOption { value: string; label: string; disabled?: boolean }
 
@@ -28,6 +28,7 @@ export default function MultiSelect({
   const [query, setQuery] = useState('')
   const containerRef      = useRef<HTMLDivElement>(null)
   const searchRef         = useRef<HTMLInputElement>(null)
+  const optionsId         = useId()
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (!containerRef.current?.contains(e.target as Node)) setOpen(false) }
@@ -54,11 +55,11 @@ export default function MultiSelect({
     <div ref={containerRef} style={{ position: 'relative', width }}>
       {/* Trigger */}
       <div
-        role="combobox" aria-expanded={open} aria-haspopup="listbox"
+        role="combobox" aria-expanded={open} aria-controls={optionsId} aria-haspopup="listbox"
         tabIndex={disabled ? -1 : 0}
         onClick={() => !disabled && setOpen(o => !o)}
         onKeyDown={e => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); !disabled && setOpen(o => !o) }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!disabled) setOpen(o => !o) }
           if (e.key === 'Escape') setOpen(false)
         }}
         style={{
@@ -109,7 +110,7 @@ export default function MultiSelect({
           </div>
 
           {/* Opzioni */}
-          <div role="listbox" aria-multiselectable="true" style={{ maxHeight: 200, overflowY: 'auto' }}>
+          <div id={optionsId} role="listbox" aria-multiselectable="true" style={{ maxHeight: 200, overflowY: 'auto' }}>
             {filtered.length === 0 && (
               <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--color-dim)', textAlign: 'center' }}>Nessun risultato</div>
             )}

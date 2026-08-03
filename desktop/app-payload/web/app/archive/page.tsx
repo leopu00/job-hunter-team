@@ -31,10 +31,15 @@ export default function ArchivePage() {
     setItems(d.archive ?? []); setTotal(d.total ?? 0); setCounts(d.counts ?? {})
   }, [filter])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { queueMicrotask(fetchData) }, [fetchData])
 
   const toggleSelect = (id: string) => {
-    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+    setSelected(prev => {
+      const s = new Set(prev)
+      if (s.has(id)) s.delete(id)
+      else s.add(id)
+      return s
+    })
   }
 
   const selectAll = () => {

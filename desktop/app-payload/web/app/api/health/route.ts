@@ -26,8 +26,8 @@ function checkSessions(): ModuleCheck {
   const p = path.join(JHT_DIR, 'sessions', 'sessions.json')
   if (!fileExists(p)) return { id: 'sessions', label: 'Sessioni', status: 'warn', detail: 'Nessun file sessioni' }
   try {
-    const data = JSON.parse(fs.readFileSync(p, 'utf-8'))
-    const active = data.sessions?.filter((s: any) => s.state === 'active').length ?? 0
+    const data = JSON.parse(fs.readFileSync(p, 'utf-8')) as { sessions?: Array<{ state?: string }> }
+    const active = data.sessions?.filter((s) => s.state === 'active').length ?? 0
     return { id: 'sessions', label: 'Sessioni', status: 'ok', detail: `${data.sessions?.length ?? 0} sessioni, ${active} attive` }
   } catch { return { id: 'sessions', label: 'Sessioni', status: 'error', detail: 'File corrotto' } }
 }
