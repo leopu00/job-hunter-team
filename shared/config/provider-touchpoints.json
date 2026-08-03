@@ -7,7 +7,7 @@
     {"id": "setup-catalog", "concern": "onboarding provider catalog", "path": "cli/wizard/setup-helpers.js", "anchors": ["AI_PROVIDERS", "active_provider"]},
     {"id": "provider-cli", "concern": "list, select, install, update, and model pin", "path": "cli/src/commands/providers.js", "anchors": ["KNOWN_PROVIDERS", "active_provider"]},
     {"id": "agent-launch", "concern": "provider CLI dispatch and local Scorer dispatch", "path": ".launcher/start-agent.sh", "anchors": ["extract_provider_info", "LOCAL_SCORER_RUNNER"]},
-    {"id": "local-scorer-adapter", "concern": "OpenAI-compatible request, response validation, and persistence boundary", "path": "shared/skills/local_scorer.py", "anchors": ["request_score", "score_to_db_args"]},
+    {"id": "local-scorer-adapter", "concern": "OpenAI-compatible request, canonical liveness/feedback parity, response validation, and persistence boundary", "path": "shared/skills/local_scorer.py", "anchors": ["check_liveness", "request_score", "apply_feedback", "score_to_db_args"]},
     {"id": "provider-health", "concern": "runtime provider health checks", "path": "cli/src/commands/doctor.js", "anchors": ["active_provider", "providers"]},
     {"id": "usage-fetch", "concern": "provider-specific usage collection", "path": "shared/skills/check_usage.py", "anchors": ["provider", "claude"]},
     {"id": "usage-record", "concern": "normalize provider usage samples", "path": "shared/skills/usage_record.py", "anchors": ["provider", "usage"]},

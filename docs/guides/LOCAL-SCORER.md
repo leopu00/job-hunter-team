@@ -6,8 +6,9 @@ system: every other role still uses `active_provider`, and optional cloud sync,
 Telegram, sourcing sites, and the public web plane retain their existing
 network behavior.
 
-The safe default is `shadow`: the worker scores queued positions and prints
-validated results, but does not write to SQLite or advance the queue.
+The safe default is `shadow`: the worker checks liveness, reads feedback,
+scores eligible queued positions, and prints validated results, but does not
+write to SQLite or advance the queue.
 
 ## Runtime contract
 
@@ -69,16 +70,38 @@ Set `mode: "write"` only after reviewing the paired evaluation. In write mode,
 each response must pass deterministic checks before existing DB skills are
 called:
 
+- the canonical tiered `recheck_liveness.py` skill must return `OPEN` before
+  the model is called;
 - every rubric component is an integer in its documented range;
 - `total_score` equals the five components minus explicit penalties;
 - the `scored`/`excluded` decision matches the existing 40-point threshold;
 - the interactive 0–25 experience component is normalized to the DB's 0–10
   persistence range at one audited boundary;
+- the canonical latest event from `feedback_query.py check` is applied after
+  the validated base score: like ×1.10, star ×1.15, dislike ×0.85, hide skips
+  the score and excludes the position, while clear/no feedback is neutral;
 - malformed output leaves the position in `checked`.
 
-This spike does **not** yet reproduce the interactive Scorer's live URL check or
-feedback-derived multiplier. That is why write mode is experimental and why a
-distribution match alone is not a promotion gate.
+The one-shot JSON contains a `parity` object with normalized liveness evidence
+and the feedback action, base/final totals, multiplier, and outcome. This is an
+audit result, not a hardware or quality benchmark.
+
+Liveness and feedback fail closed around persistence:
+
+- `CLOSED` excludes the position without writing a score;
+- `OPEN_UNVERIFIED` writes neither score, status, `is_open`, nor
+  `last_checked`, so an uncertain probe cannot make the row disappear from a
+  queue/freshness gate;
+- a malformed feedback payload writes no score or status;
+- the feedback skill's explicit `no-signal (...)` response remains neutral, as
+  required by its canonical contract, so an intentionally disabled or
+  unreachable cloud does not block scoring;
+- shadow mode performs the read-only probes but emits no DB command, including
+  for closed, hidden, or unverifiable positions.
+
+Write mode remains experimental: parity with these two deterministic seams
+does not establish local-model quality, supported hardware, or zero-cloud
+operation, and a distribution match alone is not a promotion gate.
 
 ## Quality harness
 
@@ -158,6 +181,6 @@ Until a row with that evidence is committed, hardware support remains
 - Adapter, JSON parsing, range checks, persistence mapping, and quality math
   remain green in deterministic tests.
 - A real paired dataset is collected on the target hardware.
-- The missing URL and feedback behavior is implemented or explicitly accepted
-  as a narrower Scorer contract.
+- URL liveness and latest-feedback behavior remain covered by deterministic
+  parity tests against their canonical skill contracts.
 - Only then may M5 progress from “one-role spike” toward additional local roles.
