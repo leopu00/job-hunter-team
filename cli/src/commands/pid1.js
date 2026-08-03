@@ -27,7 +27,7 @@
  *   3. default `local` (sicuro: comportamento storico)
  */
 
-import { readFile, access, unlink } from 'node:fs/promises';
+import { readFile, access, unlink, writeFile } from 'node:fs/promises';
 import { existsSync, createWriteStream, mkdirSync, statSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -39,6 +39,7 @@ const JHT_HOME = '/jht_home';
 const HOST_ENV_PATH = `${JHT_HOME}/host.env`;
 const CLOUD_JSON_PATH = `${JHT_HOME}/cloud.json`;
 const JHT_CONFIG_PATH = `${JHT_HOME}/jht.config.json`;
+const TEAM_HALTED_FLAG = `${JHT_HOME}/.team-halted.flag`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
@@ -145,6 +146,31 @@ async function hasActiveProviderConfigured() {
 }
 
 /**
+ * Una nuova installazione non puo' spendere token prima del click esplicito
+ * su "Attiva team". Il container nasce prima di provider, profilo e orari:
+ * in quel momento mettiamo lo stesso gate persistente usato dallo Stop.
+ *
+ * `ensure_assistant` lancia direttamente il solo Assistente e continua quindi
+ * a funzionare durante l'onboarding. `jht team start` senza ruolo rimuove il
+ * flag; watchdog, Dottore e Mantenitore restano invece spenti fino ad allora.
+ * Le installazioni gia' configurate non ricevono retroattivamente il gate.
+ */
+async function ensureInitialTeamHalt() {
+  if (existsSync(TEAM_HALTED_FLAG) || (await hasActiveProviderConfigured())) {
+    return;
+  }
+  try {
+    await writeFile(TEAM_HALTED_FLAG, 'initial-setup\n', { flag: 'wx', mode: 0o600 });
+    pid1Log('initial setup: team-halted gate creato — attendo Attiva team');
+  } catch (err) {
+    if (err?.code !== 'EEXIST') {
+      pid1Log(`initial setup: impossibile creare team-halted gate (${err.message})`);
+      throw err;
+    }
+  }
+}
+
+/**
  * Verifica che il provider attivo abbia credenziali OAuth valide. Senza
  * questa gate, gli agenti partono in "LLM not set" se l'utente non ha
  * ancora completato OAuth nel wizard terminal embedded (caso visto
@@ -205,8 +231,7 @@ async function startUserFacingAgents() {
   // Source of truth: team_state.should_run. Il reconciler creerà/rimuoverà
   // il flag al prossimo polling. Senza questo gate, il container post-restart
   // partiva sempre con agenti attivi anche se l'utente li aveva spenti.
-  const teamHaltedFlag = join(JHT_HOME, '.team-halted.flag');
-  if (existsSync(teamHaltedFlag)) {
+  if (existsSync(TEAM_HALTED_FLAG)) {
     pid1Log('auto-start agenti SKIPPED: .team-halted.flag presente (user ha cliccato Stop)');
     return;
   }
@@ -546,6 +571,11 @@ async function dispatch() {
   // e il container ha bisogno dei campi delle versioni successive per far
   // funzionare provider OAuth, channels, agents.list. Idempotente.
   await runMigrate();
+
+  // Fail-safe del primo setup: prima di avviare qualunque watchdog LLM,
+  // impedisce il burst automatico. Il solo Assistente resta avviabile dal
+  // wizard e il click esplicito su `team start` rimuove questo gate.
+  await ensureInitialTeamHalt();
 
   // Reset positions stuck in writing/checked dal boot precedente (HALT,
   // kill mid-run). Idempotente, skip se jobs.db non esiste ancora.
