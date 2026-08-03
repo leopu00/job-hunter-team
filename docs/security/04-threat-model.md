@@ -160,7 +160,9 @@ Reports lacking a reproducible PoC or that fail to demonstrate a boundary bypass
 ### Outbound
 - LLM API: requests to `api.anthropic.com`, `api.openai.com`, `api.moonshot.cn` authenticated with the user's API key.
 - Cloud-sync: Supabase URL configured by the user.
-- Job scout: fetch toward job-board sites (LinkedIn, Greenhouse, Lever, etc.) — SSRF policy applied.
+- Job scout: fetch toward job-board sites (LinkedIn, Greenhouse, Lever, etc.) — **no SSRF guard** (correction 2026-07-30).
+
+> **Correction — 2026-07-30.** Until this date the line above read "SSRF policy applied". That was false, and it was the third place in this folder repeating it (the other two, in [`05-checklist.md`](05-checklist.md) and [`06-post-fix-comparison.md`](06-post-fix-comparison.md) §7, were corrected the same day). The scout is Python and never went through the TypeScript module the claim referred to; that module (`web/lib/ssrf.ts` + `web/lib/net/*`, 1,134 lines) had **no importer anywhere in the repo** and was deleted on 2026-07-30. **JHT has no SSRF guard.** The URLs the scout fetches come from the board configuration, not from user input, so there is no live exposure today — but the first surface that fetches a user-supplied URL must reintroduce a guard *before* shipping. The deleted implementation is recoverable verbatim from git history (`git log --diff-filter=D -- web/lib/net/ssrf.ts`).
 
 ### Telemetry
 - No automatic telemetry.
