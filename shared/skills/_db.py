@@ -329,6 +329,54 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pst_ts ON position_state_transitions(ts);
     CREATE INDEX IF NOT EXISTS idx_pst_to_state ON position_state_transitions(to_state, ts);
 
+    -- Event-log di EVIDENZA della manutenzione (design 2026-08-03).
+    --
+    -- Perché serve: `last_checked`, `last_open_check`, `updated_at` e
+    -- `last_actor` sono stato last-write-wins. Provano che una riga è stata
+    -- riscritta, non che il lavoro sia stato fatto — quindi un agente che
+    -- scrive il timestamp senza aprire l'URL è INDISTINGUIBILE da uno che ha
+    -- lavorato, e il timestamp è anche la metrica con cui lo si giudica.
+    -- Misurato sul campo: office_geocoded 1418/1418 (100%) contro
+    -- office_verified 36/1418 (2,5%) — lo scarto si vedeva solo perché per
+    -- l'ufficio esistono per caso due colonne distinte. Per recheck, logo e
+    -- sito quella seconda colonna non c'è, quindi lo stesso scarto sarebbe
+    -- stato invisibile.
+    --
+    -- Il principio: `checked` (ho guardato) ≠ `verified` (ho una prova), e
+    -- l'evidenza deve essere RI-DERIVABILE DA TERZI (status HTTP + hash del
+    -- contenuto), mai prosa. Una frase l'agente può inventarla come inventa
+    -- il timestamp; un hash un secondo attore lo ricalcola e lo confronta.
+    --
+    -- `before`/`after` tengono il DIFF, non il fatto nudo: è quello che rende
+    -- misurabile il tasso di no-op (outcome='unchanged' sul totale), cioè la
+    -- quota di manutenzione che non ha cambiato niente. Oggi quel dato non
+    -- esiste in nessuna forma.
+    --
+    -- Append-only. Le INSERT le fanno db_update.py e db_insert.py tramite
+    -- maintenance_log.py, che valida vocabolario ed evidenza: mai scrivere
+    -- qui a mano da altri script.
+    CREATE TABLE IF NOT EXISTS maintenance_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        by_agent TEXT NOT NULL,
+        target_type TEXT NOT NULL,       -- position | company
+        target_id INTEGER NOT NULL,
+        action TEXT NOT NULL,            -- vocabolario chiuso, vedi maintenance_log.ACTIONS
+        outcome TEXT NOT NULL,           -- vocabolario chiuso, vedi maintenance_log.OUTCOMES
+        field TEXT,                      -- campo toccato (NULL = esito senza scrittura)
+        before TEXT,                     -- valore prima, come stringa
+        after TEXT,                      -- valore dopo, come stringa
+        evidence_kind TEXT,              -- http | api | manual | none
+        evidence_url TEXT,
+        evidence_code INTEGER,           -- status HTTP
+        evidence_hash TEXT,              -- sha256 del contenuto normalizzato
+        duration_ms INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_me_target ON maintenance_events(target_type, target_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_me_ts ON maintenance_events(ts);
+    CREATE INDEX IF NOT EXISTS idx_me_outcome ON maintenance_events(action, outcome, ts);
+    CREATE INDEX IF NOT EXISTS idx_me_agent ON maintenance_events(by_agent, ts);
+
     -- Trigger educativi: rifiutano la stringa letterale 'now' nei timestamp
     -- e suggeriscono il pattern corretto. Audit 2026-05-02 mostro' 8 record
     -- con written_at='now' (stringa di 3 caratteri) finiti nel DB perche'

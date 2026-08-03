@@ -25,6 +25,58 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, resolve_company_id, _column_exists
 import role_taxonomy
+import maintenance_log
+
+# Campi il cui valore racconta la manutenzione. Vengono fotografati PRIMA
+# dell'UPDATE e riletti dopo, così l'evento registra il diff e non il fatto
+# nudo: senza before/after non è misurabile il tasso di no-op, che è la sola
+# metrica capace di distinguere il lavoro dal timestamp scritto a vuoto.
+# Lista fissa e non dedotta dagli argomenti: un campo si aggiunge qui
+# consapevolmente, non per effetto collaterale di un flag nuovo.
+#
+# ⚠️ `last_checked` e `last_open_check` sono ESCLUSI di proposito, e non è una
+# dimenticanza. Cambiano ad ogni singola chiamata per costruzione, quindi
+# includerli renderebbe OGNI evento un `updated` e il tasso di no-op sarebbe
+# sempre zero: si ricostruirebbe, dentro la tabella che serve a smascherarlo,
+# esattamente l'inganno da cui siamo partiti — la prova di lavoro che consiste
+# nell'aver scritto l'ora.
+MAINTENANCE_TRACKED_FIELDS = (
+    "status", "url", "deadline", "expires_at", "is_open",
+    "office_lat", "office_lon", "office_address",
+    "office_geocoded", "office_verified",
+    "jd_summary", "jd_text", "notes",
+)
+
+
+def _snapshot(conn, table, row_id, fields):
+    """Valori correnti dei campi tracciati. `{}` se la riga non esiste."""
+    present = [f for f in fields if _column_exists(conn, table, f)]
+    if not present:
+        return {}
+    row = conn.execute(
+        f"SELECT {', '.join(present)} FROM {table} WHERE id = ?", (row_id,)
+    ).fetchone()
+    if row is None:
+        return {}
+    if hasattr(row, "keys"):
+        return {f: row[f] for f in present}
+    return dict(zip(present, row))
+
+
+def _diffs(before, after):
+    """`[(campo, prima, dopo)]` per i soli campi realmente cambiati.
+
+    Il confronto è sulla rappresentazione testuale: SQLite restituisce 1 dove
+    la CLI passa 'true', e un diff che segnala come cambiato un valore
+    identico gonfierebbe il conteggio degli `updated` proprio a scapito degli
+    `unchanged` — cioè del numero che stiamo cercando di misurare.
+    """
+    out = []
+    for field, old in before.items():
+        new = after.get(field)
+        if str(old) != str(new):
+            out.append((field, old, new))
+    return out
 
 # Lettore delle categorie ATTIVE del registro emergente. Usa la funzione
 # canonica di _db (active_categories, lane registro dev2: user_id=None →
@@ -125,6 +177,26 @@ def update_position(args):
         ).fetchone()
         if row is not None:
             previous_status = row[0] if not hasattr(row, "keys") else row["status"]
+
+    # Evidenza: la fotografia va presa PRIMA, e la validazione pure. Un
+    # office_verified=true senza prova viene rifiutato qui, con il DB ancora
+    # intatto — non dopo aver scritto, quando l'unico rimedio sarebbe una
+    # patch sui dati.
+    # `getattr`: update_position è invocata anche con Namespace costruiti a
+    # mano da altri moduli, che non conoscono i flag di evidenza.
+    m_action = getattr(args, 'action', None)
+    evidence = maintenance_log.evidence_from_args(args)
+    if getattr(args, 'office_verified', None) is not None:
+        try:
+            maintenance_log.check_verified_claim(
+                "office_verified", args.office_verified, evidence)
+        except maintenance_log.EvidenceError as e:
+            print(f"⚠️  SCRITTURA RIFIUTATA: {e}")
+            conn.close()
+            sys.exit(1)
+    before_snapshot = (_snapshot(conn, "positions", args.id,
+                                 MAINTENANCE_TRACKED_FIELDS)
+                       if m_action else {})
 
     updates = []
     params = []
@@ -363,6 +435,27 @@ def update_position(args):
             "VALUES (?, ?, ?, ?, ?)",
             (args.id, previous_status, args.status, actor, transition_notes),
         )
+
+    # Evento di manutenzione, nella STESSA transazione dell'UPDATE: un log che
+    # sopravvive a una scrittura fallita racconterebbe lavoro mai avvenuto.
+    if m_action:
+        after_snapshot = _snapshot(conn, "positions", args.id,
+                                   MAINTENANCE_TRACKED_FIELDS)
+        try:
+            n = maintenance_log.record_diffs(
+                conn, "position", args.id, m_action,
+                _diffs(before_snapshot, after_snapshot),
+                outcome=getattr(args, 'outcome', None), evidence=evidence,
+                duration_ms=getattr(args, 'duration_ms', None), by_agent=actor)
+        except maintenance_log.EvidenceError as e:
+            # Rollback esplicito: se l'evidenza non regge, la modifica non
+            # deve restare. L'alternativa — scrivere e non loggare — è
+            # esattamente il buco che questa tabella chiude.
+            conn.rollback()
+            print(f"⚠️  SCRITTURA ANNULLATA: {e}")
+            conn.close()
+            sys.exit(1)
+        changed.append(f"[{m_action}] {n} evento/i")
 
     conn.commit()
     print(f"Posizione {args.id} aggiornata: {', '.join(changed)}")
@@ -608,7 +701,9 @@ def main():
     p.add_argument('--office-lon', type=float, help='Longitudine WGS84 ufficio (es. 12.4829321)')
     p.add_argument('--office-address', help='Indirizzo completo ufficio (display_name del geocoder)')
     p.add_argument('--office-geocoded', choices=['true', 'false'], help='true se è stato fatto geocoding (anche se fallito)')
-    p.add_argument('--office-verified', choices=['true', 'false'], help='true se SEI SICURO sia l\'ufficio giusto; false se city-level/multi-ambiguo')
+    p.add_argument('--office-verified', choices=['true', 'false'], help='true se SEI SICURO sia l\'ufficio giusto; false se city-level/multi-ambiguo — richiede --evidence-url + --evidence-code 2xx')
+    # Log di evidenza: --action apre l'evento, il resto lo rende verificabile.
+    maintenance_log.add_cli_args(p)
 
     # company
     c = sub.add_parser('company')
