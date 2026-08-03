@@ -8,7 +8,7 @@ Thanks for considering a contribution. Bug reports, feature ideas, documentation
 - **Report bugs and ideas** — use the [Bug Report](ISSUE_TEMPLATE/bug_report.md) and [Feature Request](ISSUE_TEMPLATE/feature_request.md) templates
 - **Improve docs** — PRs against `docs/`, the README, or the ADRs are always appreciated
 - **Fix a bug / ship a feature** — follow the PR flow below
-- **Share feedback from the app** — the in-app `/feedback` page is wired to a ticketing backend (see [`docs/guides/FEEDBACK-TICKETING.md`](../docs/guides/FEEDBACK-TICKETING.md))
+- **Share feedback from the app** — signed in, the account menu (avatar, top-right) has a **"Report a problem"** entry; not signed in, use the [`/contact`](https://jobhunterteam.ai/contact) form. Both land in the same inbox — the runbook is [`docs/guides/FEEDBACK-TICKETING.md`](../docs/guides/FEEDBACK-TICKETING.md)
 
 ## Triage and response time
 
