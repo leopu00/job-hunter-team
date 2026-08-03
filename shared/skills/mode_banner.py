@@ -580,6 +580,15 @@ def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
         if not isinstance(thr, (int, float)) or isinstance(thr, bool):
             thr = HARVEST_DEFAULT_CV_MIN_SCORE
         try:
+            # Gli stessi predicati di `next-for-harvest` in db_query.py — la
+            # coda è la fonte di verità e la stima deve contare le SUE righe,
+            # non un soprainsieme. Senza `status='scored'` finivano nel conto
+            # anche le `ready` (122 su una VPS reale) e le posizioni chiuse o
+            # scadute: il banner non avrebbe mai dichiarato un falso «finito»
+            # — sovrastimare è conservativo — ma il numero mostrato al
+            # Capitano era di un'altra coda. Se quei predicati cambiano di là,
+            # vanno cambiati qui: la duplicazione è voluta (il banner non
+            # importa db_query) ma non è libera.
             n = _count(conn, """
                 SELECT COUNT(*)
                 FROM positions p
@@ -587,9 +596,11 @@ def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
                       FROM scores GROUP BY position_id) s
                   ON s.position_id = p.id
                 LEFT JOIN applications a ON a.position_id = p.id
-                WHERE p.status != 'excluded'
+                WHERE a.id IS NULL
+                  AND p.status = 'scored'
                   AND s.ts >= ?
-                  AND a.id IS NULL
+                  AND COALESCE(p.is_open, 1) != 0
+                  AND (p.expires_at IS NULL OR p.expires_at >= date('now'))
             """, (thr,))
         finally:
             try:
