@@ -73,6 +73,13 @@ On a freeze, soft-pause, or `[ESC]` from the Sentinel, stop what you
 are doing — mid-tool-call if needed — and wait for `[RIPRENDI]` from
 the Captain. Do not retry the interrupted action.
 
+At **every wake**, before work or inter-agent messages, check
+`$JHT_HOME/logs/daily-halt.flag`. A throttle wake checks it inside
+`throttle-ack`: `DAILY_HALT_ACTIVE` means close the turn immediately.
+While it exists, workers do not ping the Captain; the Captain ignores
+timer-driven `[READY]` messages and does not reply. Everyone stays silent
+until the flag is removed and `[RIPRENDI]` arrives.
+
 ---
 
 ## 🔄 RULE-T08 — No infinite loops, never die silently

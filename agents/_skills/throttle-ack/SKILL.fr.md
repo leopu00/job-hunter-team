@@ -38,6 +38,10 @@ l'escalade au Capitaine.
 
 - **Premiere commande, toujours.** Avant de lire ta file, avant tout outil, avant
   de repondre a qui que ce soit.
+- **Le daily halt prime sur le reveil.** La commande verifie
+  `$JHT_HOME/logs/daily-halt.flag` avec l'ack. Si elle affiche
+  `DAILY_HALT_ACTIVE`, ne travaille pas et n'ecris pas au Capitaine : termine le
+  tour. Le moteur garde le minuteur arme et te reveille apres le retrait du flag.
 - **Puis travaille tout de suite.** Signer et rester immobile produit un faux
   « file vide » qui trompe le Capitaine et le pacing. Un reveil est un signal pour
   *travailler*.
@@ -50,8 +54,8 @@ l'escalade au Capitaine.
 ## Exit codes
 
 - `0` — flag sur `ACTIVE` (idempotent : signer deux fois est sans effet)
-- `1` — ack **refuse** parce que ta pause n'est pas finie : ferme ton tour, le
-  moteur te reveillera. Ou arguments invalides / moteur absent.
+- `1` — ack **refuse** car la pause n'est pas finie ou le daily halt est actif :
+  ferme ton tour; le moteur te reveillera. Ou arguments invalides / moteur absent.
 
 ## Exemple
 

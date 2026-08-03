@@ -74,6 +74,14 @@ que vous faites — en plein milieu d'un tool-call si necessaire — et
 attendez `[RIPRENDI]` du Capitaine. Ne retentez pas l'action
 interrompue.
 
+A **chaque reveil**, avant de travailler ou d'envoyer un message entre
+agents, verifiez `$JHT_HOME/logs/daily-halt.flag`. Un reveil de throttle
+le verifie dans `throttle-ack` : `DAILY_HALT_ACTIVE` signifie terminer
+le tour immediatement. Tant qu'il existe, les workers ne contactent pas
+le Capitaine ; le Capitaine ignore les `[READY]` issus d'un timer et ne
+repond pas. Tous restent silencieux jusqu'au retrait du flag et a
+`[RIPRENDI]`.
+
 ---
 
 ## 🔄 RULE-T08 — Pas de boucles infinies, ne jamais mourir en silence

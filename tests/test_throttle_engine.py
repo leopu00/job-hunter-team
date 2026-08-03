@@ -611,6 +611,48 @@ def test_con_un_halt_la_sveglia_non_parte_e_non_si_perde(home, flag_path):
     assert flag("scout-1")["state"] == eng.NOTIFIED
 
 
+def test_daily_halt_chiude_la_race_di_un_wake_gia_consegnato(home):
+    """Il flag puo' nascere fra `notified` e il primo `throttle-ack`.
+
+    In quel varco il gate del daemon non basta piu': e' l'ack lato agente che
+    deve rifiutare ACTIVE, tacere col Capitano e rimettere il timer in attesa.
+    """
+    set_config(home, **{"scout-1": 300})
+    eng.register("scout-1", now=T0)
+    eng.tick(now=T0 + 300)
+    assert flag("scout-1")["state"] == eng.NOTIFIED
+
+    halt = home / "logs" / "daily-halt.flag"
+    halt.parent.mkdir(parents=True, exist_ok=True)
+    halt.write_text("{}", encoding="utf-8")
+    res = eng.ack("scout-1", now=T0 + 301)
+
+    assert res == {
+        "agent": "scout-1", "ok": False, "state": eng.IN_THROTTLE,
+        "previous": eng.NOTIFIED,
+        "remaining_sec": int(max(eng.GATE_RETRY_SEC,
+                                  eng.DAILY_HALT_RETRY_SEC)),
+        "reason": "daily-halt",
+    }
+    assert flag("scout-1")["state"] == eng.IN_THROTTLE
+    assert events("ack_suppressed")[0]["gate"] == "daily-halt"
+    assert SENT and len(SENT) == 1, "l'ack non deve produrre un secondo wake"
+
+
+def test_ack_daily_halt_non_perde_la_ripartenza(home):
+    halt = home / "logs" / "daily-halt.flag"
+    halt.parent.mkdir(parents=True, exist_ok=True)
+    halt.write_text("{}", encoding="utf-8")
+    res = eng.ack("analista-2", now=T0)
+    assert res["reason"] == "daily-halt"
+    retry_at = flag("analista-2")["until"]
+
+    halt.unlink()
+    eng.tick(now=retry_at)
+    assert SENT[-1]["agent"] == "analista-2"
+    assert flag("analista-2")["state"] == eng.NOTIFIED
+
+
 def test_fuori_dalle_working_hours_non_si_sveglia(home):
     (home / "jht.config.json").write_text(json.dumps({
         "team": {"working_hours": {
