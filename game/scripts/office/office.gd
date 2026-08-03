@@ -333,6 +333,12 @@ func _ready() -> void:
 		_selftests.office = self
 		add_child(_selftests)
 
+	# RIPRESE PROMO: JHT_PROMO=office|dept|chat monta la regia delle riprese
+	# del video di presentazione (tools/promo_director.gd) — camera, vignette
+	# e chat con testi inventati in inglese, per --write-movie. Nessun dato reale.
+	if OS.get_environment("JHT_PROMO") != "":
+		add_child(load("res://tools/promo_director.gd").new())
+
 func _on_chat_message(msg: Dictionary) -> void:
 	deliver_chat(msg.get("from", ""), msg.get("to", "all"), msg.get("text", ""))
 
