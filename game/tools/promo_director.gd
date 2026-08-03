@@ -132,12 +132,18 @@ const HANDOFF_EN := {
 ## ── Costanti dei clip «Now Playable» ─────────────────────────────────
 ## Ritmo di cammino: i viaggi forzati marciano a PIPELINE_SPEED (185 px/s),
 ## come i veri passaggi di pipeline — il lavoro si vede come lavoro.
-## Zoom sempre ≥ 1.9 (regola: vignette leggibili a 720p, mai campi larghi).
+## ZOOM: i primi ciak erano stati tarati (a loro insaputa) col profilo
+## grafico «performance» persistito in graphics.cfg: mondo in SubViewport
+## al 60% (1152 px utili). Le riprese si fanno ADESSO col profilo full
+## (mode="full" in user://graphics.cfg, mai col profilo ridotto): stessa
+## inquadratura = zoom vecchi × 1920/1152 (1.6667). L'equivalente della
+## vecchia regola «zoom ≥ 1.9» è quindi «zoom ≥ 3.17»: vignette leggibili
+## a 720p, mai campi larghi.
 
 ## Scena 1 — lo Scout lead siede a ~(542,482) (showroom, desk 1 Research);
 ## la camera lo insegue con mezzo busto d'aria sopra la testa.
 const OPEN_TRACK_OFFSET := Vector2(0.0, -40.0)
-const OPEN_ZOOM := 1.95
+const OPEN_ZOOM := 3.25
 const OPEN_FORCE_AT := 0.8          # si alza quasi subito: la scena è sua
 const OPEN_PRINTER_PAUSE := 1.6     # sosta fissa alla stampante (ciak ripetibile)
 
@@ -146,7 +152,7 @@ const OPEN_PRINTER_PAUSE := 1.6     # sosta fissa alla stampante (ciak ripetibil
 ## è la seduta VERA dello Scout lead (desk 1 Research, ~(569,629)) più
 ## l'aria sopra la testa, come la lascia la carrellata della Scena 1.
 const CLICK_CAM_CENTER := Vector2(569.0, 589.0)
-const CLICK_CAM_ZOOM := 1.95
+const CLICK_CAM_ZOOM := 3.25
 const CLICK_HOVER_AT := 2.0         # highlight di hover (il puntatore arriva)
 const CLICK_OPEN_AT := 2.6          # CLIC: la pagina chat si apre qui
 const CLICK_REPLY := "Show me the best one first."
@@ -165,25 +171,25 @@ const CLICK_REPLY2_AT := 6.4        # «On it — pulling the file now.»
 ## «SIMULATION» (visto sui frame del primo ciak) — qui la camera tiene
 ## l'aria SOTTO, così la vignetta respira fra banner e testa.
 const WORK_TRACK_OFFSET := Vector2(0.0, 40.0)
-const WORK_ZOOM := 1.95
+const WORK_ZOOM := 3.25
 const WORK_FORCE_AT := 0.8
 const WORK_PILE_PAUSE := 1.0
 const WORK_VERIFY_TEXT := "Posting verified: real company, salary confirmed."
 ## Quadro FISSO della vignetta di verifica (la seduta dell'Analista è a
 ## ~(2549,564), contro il muro nord): centro sotto la seduta quel tanto che
 ## fa respirare la vignetta fra banner SIMULATION e testa.
-const WORK_SEAT_CENTER := Vector2(2549.0, 560.0)
+const WORK_SEAT_CENTER := Vector2(2549.0, 572.0)
 ## Quanto la vignetta resta in quadro prima dello stacco sulla macchina da
 ## scrivere (lo stacco è agganciato alla seduta, non a un orologio).
 const WORK_B_HOLD := 3.4
 ## Parte B: primo piano dello Scrittore alla macchina da scrivere. La camera
 ## TAGLIA (teleport): lo stacco netto è il linguaggio del montaggio.
 const WORK_B_CENTER := Vector2(500.0, 1670.0)
-const WORK_B_ZOOM := 2.3
+const WORK_B_ZOOM := 3.83
 
 ## Scena 4 — tre stacchi. A: Scorer lead (seduto a ~(1356,1158)).
 const TAILOR_A_CENTER := Vector2(1370.0, 1120.0)
-const TAILOR_A_ZOOM := 2.05
+const TAILOR_A_ZOOM := 3.42
 const TAILOR_A_BUBBLE_AT := 1.2
 const TAILOR_A_TEXT := "Match with your profile: 88/100."
 ## B: lo Scrittore, stesso reparto della Scena 3b ma CON la vignetta: il
@@ -191,7 +197,8 @@ const TAILOR_A_TEXT := "Match with your profile: 88/100."
 ## dietro il banner SIMULATION (visto sui frame del primo ciak: «CV
 ## re■■■■■■» col banner sopra la parola).
 const TAILOR_B_AT := 6.0
-const TAILOR_B_CENTER := Vector2(500.0, 1630.0)
+const TAILOR_B_CENTER := Vector2(500.0, 1655.0)
+const TAILOR_B_ZOOM := 3.4
 const TAILOR_B_BUBBLE_AT := 7.4
 const TAILOR_B_TEXT := "CV rewritten for this exact posting."
 ## C: il Critico lead ritira dalla vaschetta Scrittori, rilegge alla
@@ -202,7 +209,7 @@ const TAILOR_B_TEXT := "CV rewritten for this exact posting."
 ## sotto finirebbe dietro il banner SIMULATION.
 const TAILOR_C_AT := 12.0
 const TAILOR_C_TRACK_OFFSET := Vector2(0.0, -40.0)
-const TAILOR_C_ZOOM := 1.9
+const TAILOR_C_ZOOM := 3.17
 const TAILOR_C_PILE_PAUSE := 0.9
 const TAILOR_C_DESK_PAUSE := 2.4
 const TAILOR_C_SHELF_PAUSE := 1.2
@@ -211,8 +218,8 @@ const TAILOR_C_TEXT := "Review, round two: pass."
 ## Scena 7b — notte: la scrivania dello Scout lead nella pozza della
 ## lampada (lo stesso personaggio dell'apertura: il cerchio si chiude).
 const NIGHT_CENTER := Vector2(569.0, 580.0)
-const NIGHT_ZOOM_FROM := 2.02
-const NIGHT_ZOOM_TO := 2.10
+const NIGHT_ZOOM_FROM := 3.37
+const NIGHT_ZOOM_TO := 3.50
 const NIGHT_SECONDS := 9.0
 
 var _office: Node
@@ -342,6 +349,9 @@ func _open_day_clip() -> void:
 	_track_offset = OPEN_TRACK_OFFSET
 	_track_cam = _mount_camera(scout.global_position + OPEN_TRACK_OFFSET, OPEN_ZOOM)
 	await get_tree().create_timer(OPEN_FORCE_AT).timeout
+	# Anche qui: partenza solo da seduta stabile (vedi Scena 3 — un ciak ha
+	# mostrato lo Scout congelato dal callback del tween di seduta).
+	await _wait_desk_stable(scout)
 	# Il viaggio VERO dello Scout (stampante → lettura alla scrivania), con
 	# pause fisse: la pausa lunga al rientro lo tiene seduto fino a fine ciak
 	# (ed è il quadro da cui riparte la Scena 2).
@@ -488,7 +498,7 @@ func _tailor_88_clip() -> void:
 	_pulse_at(4.0, scorer)
 	await get_tree().create_timer(TAILOR_B_AT).timeout
 	cam.position = TAILOR_B_CENTER
-	cam.zoom = Vector2(WORK_B_ZOOM, WORK_B_ZOOM)
+	cam.zoom = Vector2(TAILOR_B_ZOOM, TAILOR_B_ZOOM)
 	var writer := _find("scrittore-1")
 	if writer:
 		writer._pause = 900.0
