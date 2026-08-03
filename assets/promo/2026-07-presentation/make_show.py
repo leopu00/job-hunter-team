@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
-"""Video di presentazione JHT — versione DENSA (sober), 1280x720, ~53 s.
+"""Video di presentazione JHT — copione RICCO, riprese 1:1, 1280x720, ~67 s.
 
-Tornata del 03/08 sul feedback utente: la versione da 73,5 s aveva pause di
-2,4-16 s e cinque scene mute — "il silenzio serve a far respirare, non a far
-aspettare". Qui:
-  - il copione NON cambia (le 7 battute approvate, stessa voce Daniel);
-  - le pause fra le battute scendono a ~1-1,5 s dove le scene adiacenti sono
-    parlate; le scene mute si accorciano a 3,5-4,6 s invece di correre vuote;
-  - dove una battuta non sta nella sua scena NON si accelera il parlato:
-    la voce scavalca il taglio (L-cut sulla scena office→chat, J-cut della
-    battuta box che parte sul finale di results) — è montaggio, non fretta;
-  - il ritmo del PARLATO resta quello scelto dall'utente (rate 155): il
-    guadagno viene tutto dal togliere i vuoti.
+Tornata del 03/08-bis sul feedback utente:
+  1. "avete velocizzato il video … non va bene": le riprese ora girano a
+     VELOCITÀ NATURALE, sempre. Niente setpts che comprime il tempo, niente
+     atempo: se una ripresa non sta nella scena si TAGLIA (si sceglie la
+     finestra migliore), non si accelera. web_segment non ha più il
+     parametro speed.
+  2. "il testo va migliorato … mi piaceva com'era prima più ricco": copione
+     a 11 battute (make_voiceover.py) che recupera ruoli, chat e numeri.
+  3. Le DURATE delle scene si calcolano dalle durate REALI della voce
+     (lead + wav + coda): più testo = scene più lunghe, mai compresse.
 
 Il video si monta UNA volta; poi si muxa la traccia voce. Le durate della
 voce si rileggono SEMPRE da audio/<v>/durations.txt: cambiare motore vocale
-(make_voiceover.py) riflow-a la schedule senza toccare questo file.
+(make_voiceover.py) riflow-a durate e schedule senza toccare questo file.
 I frame non toccano mai il disco: ogni scena PIL viene piped a ffmpeg
 (rawvideo su stdin) — il disco della macchina è quasi pieno.
 
@@ -94,50 +93,55 @@ def agent_img(name, box_w, box_h):
     return ag.resize((int(ag.width * r), int(ag.height * r)), Image.LANCZOS)
 
 # ── timeline ───────────────────────────────────────────────────────────
-# (nome, durata_s). Tornata 03/08: scene mute corte (3,5-4,6 s), scene
-# parlate dimensionate su lead + durata REALE della battuta + coda ~1-1,3 s.
-# La battuta office (7,5 s) NON sta nella sua scena: prosegue di proposito
-# sulla scena chat (L-cut). xfade 0.5 s fra tutte le scene.
+# Ogni scena parlata dura lead + durata REALE della battuta + coda: il testo
+# ricco allunga il video (65-80 s accettati dall'utente), MAI il contrario —
+# niente battute in gabbia, niente L/J-cut necessari, niente riprese
+# accelerate per farci stare la voce. Le scene mute hanno durata fissa
+# (tempo di lettura delle didascalie). xfade 0.5 s fra tutte le scene.
 FADE = 0.5
-SCENES = [
-    ("hook",     3.6),
-    ("reveal",   4.4),
-    ("meeting",  3.5),   # muta: didascalia roles/captain/budget
-    ("roles",    6.6),
-    ("dept",     4.0),   # muta: didascalia Writers/Critics + 2 vignette
-    ("office",   6.5),   # la voce prosegue sulla scena chat (L-cut)
-    ("chat",     4.6),   # coda della voce office + didascalia ask·steer·approve
-    ("globe",    6.5),
-    ("webpages", 4.6),   # muta: didascalie scores·salaries / swipe
-    ("results",  4.4),   # muta: parlano i numeri grandi
-    ("box",      5.6),   # la voce parte 1,4 s PRIMA della scena (J-cut)
-    ("cta",      5.0),
+# (nome, lead_voce, coda, durata_minima; mute = (nome, None, None, durata))
+SPEC = [
+    ("hook",     0.6, 1.0, 3.6),
+    ("reveal",   0.5, 1.2, 4.2),
+    ("meeting",  0.5, 0.9, 4.0),
+    ("roles",    0.4, 0.9, 6.0),
+    ("dept",     0.4, 0.9, 4.0),
+    ("office",   0.4, 1.2, 6.0),   # coda lunga: la 2ª vignetta ha il suo beat
+    ("chat",     0.4, 0.9, 4.0),
+    ("globe",    0.5, 1.3, 5.0),
+    ("webpages", None, None, 5.6), # muta: didascalie scores·salaries / swipe
+    ("results",  0.5, 1.3, 5.0),
+    ("box",      0.4, 1.1, 5.0),
+    ("cta",      0.4, 2.2, 5.0),
 ]
-DURS = [d for _, d in SCENES]
-VO_LEAD = 0.5      # attacco voce di default: 0.5 s dopo l'inizio scena
-# Offset per-scena rispetto all'inizio scena: negativo = J-cut (la battuta
-# comincia sul finale della scena precedente, da manuale di montaggio).
-VO_OFF = {"box": -1.4}
 
-def scene_start(k):
-    return sum(DURS[:k]) - FADE * k
-
-# Una sola versione: la "sober" scelta dall'utente — Daniel, senza musica.
+# Una sola versione: la "sober" scelta dall'utente — ora voce ElevenLabs
+# George (make_voiceover.py), senza musica.
 VERSIONS = {
     "sober": {"music": None, "gain": 0.0},
 }
 
 # Le durate della voce arrivano SEMPRE dai file (durations.txt): se si
-# rigenera l'audio con un altro motore, la schedule si riadatta da sola.
+# rigenera l'audio con un altro motore, durate e schedule si riadattano.
 def vo_durs(version):
     dpath = os.path.join(AUD, version, "durations.txt")
     if not os.path.isfile(dpath):
         sys.exit(f"manca {dpath} — lancia prima make_voiceover.py")
     vo = [float(l.split()[1]) for l in open(dpath)]
-    if len(vo) != len(SCENES):
+    if len(vo) != len(SPEC):
         sys.exit(f"durations.txt ha {len(vo)} segmenti, la timeline "
-                 f"{len(SCENES)} scene: riallineare make_voiceover.py")
+                 f"{len(SPEC)} scene: riallineare make_voiceover.py")
     return vo
+
+VO = vo_durs("sober")
+DURS = [max(mind, (lead + VO[k] + tail)) if lead is not None and VO[k] > 0
+        else mind
+        for k, (name, lead, tail, mind) in enumerate(SPEC)]
+SCENES = [(name, DURS[k]) for k, (name, _, _, _) in enumerate(SPEC)]
+LEADS = [lead if lead is not None else 0.0 for _, lead, _, _ in SPEC]
+
+def scene_start(k):
+    return sum(DURS[:k]) - FADE * k
 
 os.makedirs(BUILD, exist_ok=True)
 
@@ -204,14 +208,20 @@ def _overlay_png(name, caption):
     caption_layer(caption).save(png)
     return png
 
-def web_segment(name, src, t0, t1, speed, url, caption=None):
-    """Ritaglia [t0,t1] dalla ripresa web, la accelera di `speed`, taglia i
-    40px in basso (barra controlli mozzata dal viewport) e mette la barra
-    browser disegnata in alto (+ didascalia opzionale). Ritorna il path."""
+def web_segment(name, src, t0, dur, url, caption=None):
+    """Ritaglia la finestra [t0, t0+dur] dalla ripresa web A VELOCITÀ
+    NATURALE (regola dell'utente: mai accelerare — se la ripresa è più lunga
+    della scena si sceglie una finestra più corta, non si comprime il tempo),
+    taglia i 40px in basso (barra controlli mozzata dal viewport) e mette la
+    barra browser disegnata in alto (+ didascalia opzionale)."""
+    if t0 + dur > ffprobe_dur(src) - 0.1:
+        sys.exit(f"{name}: finestra {t0}+{dur:.2f}s oltre la ripresa {src}")
     seg = os.path.join(BUILD, f"{name}.mp4")
     bar_png = os.path.join(BUILD, f"{name}_bar.png")
     browser_bar(url).save(bar_png)
-    vf = (f"trim=start={t0}:end={t1},setpts=(PTS-STARTPTS)/{speed},"
+    # setpts qui RIBASA solo i timestamp a zero dopo il trim: nessun fattore
+    # di velocità (il vecchio /speed è stato eliminato di proposito).
+    vf = (f"trim=start={t0}:end={t0 + dur},setpts=PTS-STARTPTS,"
           f"crop={W}:{H - BAR_H}:0:0,pad={W}:{H}:0:{BAR_H}:color=#101220,"
           f"fps={FPS}")
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", src, "-i", bar_png]
@@ -226,9 +236,14 @@ def web_segment(name, src, t0, t1, speed, url, caption=None):
     return seg
 
 def game_segment(name, clip, skip, dur, caption=None):
-    """Ripresa del gioco: PNG 1920x1080 → 1280x720, dal frame `skip`,
-    con didascalia opzionale in basso (le scene mute la usano al posto
-    della voce)."""
+    """Ripresa del gioco A VELOCITÀ NATURALE (30 fps girati = 30 fps
+    montati): PNG 1920x1080 → 1280x720 dal frame `skip`, con didascalia
+    opzionale. Se i frame non bastano si ESCE: mai allungare o comprimere."""
+    avail = len([f for f in os.listdir(os.path.join(CAP, clip))
+                 if f.endswith(".png")])
+    if skip + int(dur * FPS) > avail:
+        sys.exit(f"clip '{clip}': servono {skip + int(dur * FPS)} frame, "
+                 f"trovati {avail}")
     seg = os.path.join(BUILD, f"{name}.mp4")
     cmd = ["ffmpeg", "-y", "-v", "error", "-framerate", str(FPS),
            "-start_number", str(skip), "-i", f"{CAP}/{clip}/f%08d.png"]
@@ -293,9 +308,10 @@ def sc_reveal(dur):
     return frame
 
 def sc_meeting(dur):
+    # niente didascalia: ora la scena è PARLATA (battuta 3, ruoli/capitano/
+    # budget) — il testo a schermo duplicherebbe la voce.
     src = Image.open(f"{PUB}/landing-hero.png").convert("RGB")
     s0 = max(W / src.width, H / src.height)
-    cap = caption_layer(["clear roles · a captain · a weekly budget"])
     def frame(t):
         p = ease_io(t / dur)
         z = 1.0 + 0.12 * p
@@ -306,7 +322,6 @@ def sc_meeting(dur):
         py = max(0, min(src.height - ch, cy - ch / 2))
         fr = src.crop((int(px), int(py), int(px + cw), int(py + ch)))
         fr = fr.resize((W, H), Image.LANCZOS).convert("RGBA")
-        alpha_paste(fr, cap, ease_out((t - 0.9) / 0.5))
         return fr
     return frame
 
@@ -333,11 +348,18 @@ def pipeline_bar(active):
             x += d.textlength(sep, font=f_off)
     return ly
 
+# Cambi carta sincronizzati con le cesure REALI della battuta 4 (misurate
+# con silencedetect su seg03: le frasi finiscono a 1,78 s e 3,85 s; +lead).
+# Se si rigenera la voce vanno rimisurate (comando nella SCALETTA).
+ROLE_SWITCH = (0.4 + 1.85, 0.4 + 3.95)
+
+def role_idx(t):
+    return 0 if t < ROLE_SWITCH[0] else (1 if t < ROLE_SWITCH[1] else 2)
+
 def sc_roles(dur):
     """Tre ritratti in staffetta (Scouts→Analysts→Scorers): nome del ruolo,
-    MANSIONE sotto (era una battuta della voce, ora è testo) + barra
-    pipeline + badge punteggio."""
-    sub = dur / 3.0
+    mansione sotto, barra pipeline + badge punteggio. La voce ora NOMINA i
+    tre ruoli: i cambi carta seguono le cesure della battuta, non dur/3."""
     cards = []
     for i, (img, role, duty) in enumerate((
             ("agents-scouts.png", "The Scouts", "sweep the job boards"),
@@ -351,10 +373,9 @@ def sc_roles(dur):
         d.text((80, 300), role, font=font("ExtraBold", 54), fill=TITLE)
         d.text((80, 378), duty, font=font("Regular", 27), fill=MUTED)
         cards.append((lyr_txt, lyr_ag, pipeline_bar({i})))
-    badge = layer(); dbadge = ImageDraw.Draw(badge)
     def frame(t):
-        k = min(2, int(t / sub))
-        tk = t - k * sub
+        k = role_idx(t)
+        tk = t - (0 if k == 0 else ROLE_SWITCH[k - 1])
         lyr_txt, lyr_ag, bar = cards[k]
         fr = BGF.copy()
         p = ease_out(tk / 0.4)
@@ -456,30 +477,35 @@ def build_video():
     segs["results"] = pipe_scene("results", DURS[9], sc_results(DURS[9]))
     segs["box"] = pipe_scene("box", DURS[10], sc_box(DURS[10]))
     segs["cta"] = pipe_scene("cta", DURS[11], sc_cta(DURS[11]))
-    print("riprese del gioco…")
-    # skip tarati sulla timeline corta: dept parte a f100 così ENTRAMBE le
-    # vignette compaiono nei primi 1,1 s (a f40 la seconda arrivava a scena
-    # quasi finita); chat parte a f115 con lo scambio già avviato e chiude
-    # sull'ultima risposta. office resta a f40: panoramica + push-in.
-    segs["dept"] = game_segment("dept", "dept", 100, DURS[4],
-                                caption=["Writers tailor your CV, position by position",
-                                         "Critics review every draft"])
+    print("riprese del gioco (velocità naturale)…")
+    # dept: allineata alla FINE della clip (le due vignette restano a lungo
+    # in quadro e la chiusura cade sull'ultimo frame girato); niente
+    # didascalia: ora la scena è parlata (battuta 5, Writers/Critics).
+    dept_skip = max(0, 270 - int(DURS[4] * FPS))
+    segs["dept"] = game_segment("dept", "dept", dept_skip, DURS[4])
+    # office: dal f40 (panoramica) — la scena lunga arriva alla 2ª vignetta.
     segs["office"] = game_segment("office", "office", 40, DURS[5])
-    segs["chat"] = game_segment("chat", "chat", 115, DURS[6],
-                                caption=["chat with your team — ask · steer · approve"])
-    print("riprese web (demo mode)…")
-    g1 = min(15.7, ffprobe_dur(f"{WEB}/web_map.webm") - 0.3)
+    # chat: f115, scambio già avviato (taratura approvata); niente
+    # didascalia: la battuta 7 dice già ask/steer/approve.
+    segs["chat"] = game_segment("chat", "chat", 115, DURS[6])
+    print("riprese web (demo mode, velocità naturale)…")
+    # Finestre 1:1 scelte sui fotogrammi: la durata è quella della scena,
+    # t0 seleziona il tratto migliore della ripresa (mai comprimere).
+    # globe 6,2→: fine vista Europa → zoom-out alla sfera → rotazione.
     segs["globe"] = web_segment("globe", f"{WEB}/web_map.webm",
-                                5.2, g1, (g1 - 5.2) / DURS[7],
+                                6.2, DURS[7],
                                 "jobhunterteam.ai/map — your private hunt map")
     # webpages: positions + swipe in un segmento solo, stacco secco interno
     half = DURS[8] / 2
+    # positions 4,3→: tabella già scrollata (l'intestazione a inizio clip
+    # non è ancora localizzata: si resta nella zona tutta in inglese)
     pos = web_segment("wp_pos", f"{WEB}/web_positions.webm",
-                      3.8, 7.3, (7.3 - 3.8) / half,
+                      4.3, half,
                       "jobhunterteam.ai/positions",
                       caption=["every position · match score · salary"])
+    # swipe 5,2→: fine carta 1 → swipe → carta 2 → swipe → carta 3
     swi = web_segment("wp_swipe", f"{WEB}/web_swipe.webm",
-                      4.4, 7.9, (7.9 - 4.4) / half,
+                      5.2, half,
                       "jobhunterteam.ai/swipe",
                       caption=["swipe to decide"])
     both = os.path.join(BUILD, "webpages.mp4")
@@ -525,16 +551,15 @@ def vo_gain(path, target_db=-18.0):
     return 1.0
 
 def vo_schedule(version, verbose=False):
-    """Attacchi della voce: ancorati all'inizio scena (+VO_LEAD, o l'offset
-    per-scena di VO_OFF per i J-cut) e mai sovrapposti al segmento
-    precedente (GAP minimo 0.9 s). Le battute possono scavalcare i tagli
-    (L-cut): il vincolo è il flusso del parlato, non la gabbia della scena."""
-    GAP = 0.9
+    """Attacchi della voce: ancorati all'inizio scena (+lead per-scena) e
+    mai sovrapposti al segmento precedente (GAP minimo 0.8 s). Con le scene
+    dimensionate sulla voce non servono più L/J-cut: ogni battuta vive
+    per intero nella sua scena, a velocità naturale."""
+    GAP = 0.8
     vo = vo_durs(version)
     starts, prev_end = [], 0.0
     for k in range(len(SCENES)):
-        off = VO_OFF.get(SCENES[k][0], VO_LEAD)
-        s = max(scene_start(k) + off, prev_end + GAP)
+        s = max(scene_start(k) + LEADS[k], prev_end + GAP)
         starts.append(s)
         if vo[k] > 0:
             prev_end = s + vo[k]

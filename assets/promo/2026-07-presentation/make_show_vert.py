@@ -2,23 +2,24 @@
 """Versione VERTICALE 9:16 (720x1280) del video finale (sober, senza musica).
 
 Stessa timeline e stessa voce di make_show.py (la traccia si riusa pari
-pari: durate identiche scena per scena), stesse didascalie a schermo;
-ogni scena è RICOMPOSTA per la colonna stretta, mai un ritaglio cieco.
+pari: durate identiche scena per scena — ora calcolate dalla durata REALE
+delle battute); ogni scena è RICOMPOSTA per la colonna stretta.
 
-Tornata 03/08 — l'utente ha segnalato SEZIONI MALE INQUADRATE; riviste
-tutte le scene fotogramma per fotogramma e ritarate qui:
-  - meeting: il pan Ken Burns spingeva il Capitano FUORI dal quadro (a fine
-    scena restava solo il braccio); ora la colonna è ancorata a lui;
-  - roles/Scouts: l'illustrazione è tagliata a x=0 già nel PNG sorgente e
-    il ritaglio centrato mostrava la scrivania mozzata a mezz'aria; ora il
-    bordo tagliato coincide col bordo sinistro del quadro;
-  - office: la finestra non replica più la camera del gioco (che lasciava
-    la targa RESEARCH mozzata a metà parola e la vignetta fuori quadro):
-    x0 è un percorso diretto misurato sui frame nativi — panoramica piena,
-    sweep rapido, chiusura con vignetta e TUTTI e due gli scout in campo;
-  - dept: finestra misurata sui frame nativi: due vignette complete,
-    Scrittore intero e scritta APPLICATIONS sul pavimento per INTERO
-    (prima era mozzata a entrambi i lati);
+Tornata 03/08-bis:
+  - RIPRESE A VELOCITÀ NATURALE: come nell'orizzontale, web_segment_vert
+    non ha più il parametro speed — si sceglie la finestra, non si comprime;
+  - residuo segnalato dall'utente (~24 s, lettere mozzate in basso a
+    sinistra): era la scritta a pavimento del reparto RESEARCH ("They scout
+    the web for openings for you") che transita nel girato durante il push
+    della camera di gioco; il vecchio sweep della colonna la incrociava a
+    metà transito lasciando frammenti fermi sul bordo. Ora lo sweep parte
+    QUANDO la scritta scivola via (f150) e la insegue verso destra: il testo
+    esce dal bordo in movimento (pan naturale), mai frammenti statici; la
+    chiusura a x0=455 tiene in quadro ENTRAMBE le vignette (la 2ª,
+    "Two look promising…", occupa x605-1058 nei frame nativi);
+  - didascalie tolte dove ora parla la voce (meeting, chat); su dept la
+    banda al piede resta (copre la scritta APPLICATIONS mozzata dal
+    ritaglio) ma con testo NON doppione della battuta;
   - la banda opaca "SIMULATION — not real data" in alto resta: badge
     sempre completo anche in colonna (soluzione già confermata).
 
@@ -83,24 +84,28 @@ def pipe_scene(name, dur, frame_fn):
     return seg
 
 # ── finestra 9:16 sulle riprese del gioco ──────────────────────────────
-# Non si replica più la camera del gioco proiettando un soggetto fisso:
-# quel mapping, durante push e drift, lasciava testi mozzati e vignette
-# fuori quadro (segnalato dall'utente). x0 è ora un PERCORSO DIRETTO nel
-# tempo di ripresa, tarato misurando i frame nativi 1920x1080:
-#   - office: 0 in panoramica (targa RESEARCH e bottone menu interi),
-#     sweep rapido durante il push-in, poi 450 fisso: vignetta "Boards
-#     swept…" completa (x 548-1010) e tutti e due gli scout in campo;
-#   - dept: da 265 a 242 (il girato zooma piano): vignette complete,
-#     Scrittore intero, APPLICATIONS sul pavimento tutta leggibile.
+# x0 è un PERCORSO DIRETTO nel tempo di ripresa, tarato sui frame nativi
+# 1920x1080. Taratura 03/08-bis per la scena office (residuo segnalato):
+#   - f40-150: x0=60 — panoramica; a 60 la pillola "→ QUALITY CHECK"
+#     (x570-660) entra INTERA nel quadro invece di restare mozzata al bordo;
+#     la scritta RESEARCH piccola (x185-400) resta in campo per intero;
+#   - f135-150: la scritta a pavimento del Research cresce ed entra dal
+#     bordo sinistro del girato: a colonna ferma è un ingresso dal bordo
+#     (pan naturale), nessun frammento statico;
+#   - f150-176: lo sweep INSEGUE la scritta che scivola in basso a destra
+#     (x0 60→455): il testo esce di quadro in movimento, mentre la vignetta
+#     "Boards swept…" (x548-1010) viene rivelata dallo sweep;
+#   - f176+: fermo a 455: entrambe le vignette complete (la 2ª occupa
+#     x605-1058) e tutti e due gli scout in campo.
 CAP_W, CAP_H = 1920, 1080
 CROP_W = 608
 
 def office_x0(t):
-    # lo sweep chiude a t=5.2, PRIMA che la vignetta compaia (t≈5.4):
-    # così il fumetto nasce già tutto dentro il quadro.
-    if t <= 3.0:
-        return 0.0
-    return 450.0 * ease_io((t - 3.0) / 2.2)
+    # chiusura a f172 (t=5.73): a quel punto la scritta a pavimento è già
+    # tutta a sinistra di x455 — niente sliver d'angolo dopo lo sweep
+    if t <= 5.0:
+        return 60.0
+    return 60.0 + 395.0 * ease_io((t - 5.0) / 0.72)
 
 def dept_x0(t):
     p = max(0.0, min(1.0, (t - 3.33) / 4.0))
@@ -134,10 +139,15 @@ def caption_band(lines, size=22):
     f_ = font("Medium", size)
     lh = int(size * 1.5)
     pad_y = 16
-    bh = lh * len(lines) + 2 * pad_y - (lh - size)
+    # minimo 118px: con lo skip anticipato di dept (f74) la scritta
+    # APPLICATIONS a pavimento parte con le cime a y display ~1185 e scende
+    # col lento zoom del girato — la banda deve coprirla dal primo frame
+    ch = lh * len(lines) - (lh - size)
+    bh = max(118, ch + 2 * pad_y)
     d.rectangle([0, H - bh, W, H], fill=(16, 18, 30, 255))
+    y0 = H - bh + (bh - ch) / 2          # testo centrato nella banda
     for i, s in enumerate(lines):
-        d.text((W / 2, H - bh + pad_y + size / 2 + i * lh + 2), s, font=f_,
+        d.text((W / 2, y0 + size / 2 + i * lh + 2), s, font=f_,
                fill=(225, 228, 242), anchor="mm")
     return ly
 
@@ -173,9 +183,11 @@ def game_scene_vert(name, clip, skip, dur, x0_fn, caption=None, band=False):
     else:
         cap_ly = None
     def frame(t):
-        i = int(t * FPS)
-        t_cap = (skip + i) / FPS
-        src = Image.open(os.path.join(cdir, files[skip + i])).convert("RGB")
+        # clamp: pipe_scene arrotonda la durata al frame (int(round)) e può
+        # chiedere UN frame oltre la clip — si ripete l'ultimo, mai IndexError
+        i = min(skip + int(t * FPS), len(files) - 1)
+        t_cap = i / FPS
+        src = Image.open(os.path.join(cdir, files[i])).convert("RGB")
         x0 = max(0.0, min(CAP_W - CROP_W, x0_fn(t_cap)))
         fr = src.crop((int(x0), 0, int(x0) + CROP_W, CAP_H))
         fr = fr.resize((W, H), Image.LANCZOS).convert("RGBA")
@@ -229,9 +241,9 @@ def sc_reveal(dur):
     return frame
 
 def sc_meeting(dur):
+    # niente didascalia: la scena ora è parlata (battuta 3) — il testo a
+    # schermo duplicherebbe la voce.
     src = Image.open(f"{PUB}/landing-hero.png").convert("RGB")
-    cap = caption_layer(["clear roles · a captain", "a weekly budget"],
-                        y_bottom=1180)
     def frame(t):
         p = ease_io(t / dur)
         # Colonna ancorata al CAPITANO (x≈450-760 nell'illustrazione): il
@@ -247,7 +259,6 @@ def sc_meeting(dur):
         py0 = max(0, min(src.height - ch, cy - ch / 2))
         fr = src.crop((int(px0), int(py0), int(px0 + cw), int(py0 + ch)))
         fr = fr.resize((W, H), Image.LANCZOS).convert("RGBA")
-        alpha_paste(fr, cap, ease_out((t - 0.9) / 0.5))
         return fr
     return frame
 
@@ -275,7 +286,7 @@ def pipeline_bar(active, y=1180):
     return ly
 
 def sc_roles(dur):
-    sub = dur / 3.0
+    # cambi carta sulle cesure REALI della battuta (HS.ROLE_SWITCH)
     cards = []
     for i, (img, role, duty) in enumerate((
             ("agents-scouts.png", "The Scouts", "sweep the job boards"),
@@ -312,8 +323,8 @@ def sc_roles(dur):
         d.text((W//2, 852), duty, font=font("Regular", 24), fill=MUTED, anchor="mm")
         cards.append((lyr_txt, lyr_ag, pipeline_bar({i})))
     def frame(t):
-        k = min(2, int(t / sub))
-        tk = t - k * sub
+        k = HS.role_idx(t)
+        tk = t - (0 if k == 0 else HS.ROLE_SWITCH[k - 1])
         lyr_txt, lyr_ag, bar = cards[k]
         fr = BGF.copy()
         q = ease_out(tk / 0.45)
@@ -352,11 +363,11 @@ def sc_chat(name, skip, dur):
     pw_ = CHAT_PORTRAIT[2] - CHAT_PORTRAIT[0]
     ph_ = CHAT_PORTRAIT[3] - CHAT_PORTRAIT[1]
     pscale = 560.0 / ph_
-    cap = caption_layer(["chat with your team", "ask · steer · approve"],
-                        y_bottom=1258)
+    # niente didascalia: la battuta 7 dice già ask/steer/approve
     def frame(t):
-        i = int(t * FPS)
-        src = Image.open(os.path.join(cdir, files[skip + i])).convert("RGB")
+        # stesso clamp di game_scene_vert (pipe_scene arrotonda al frame)
+        i = min(skip + int(t * FPS), len(files) - 1)
+        src = Image.open(os.path.join(cdir, files[i])).convert("RGB")
         fr = BGF.copy()
         head = src.crop(CHAT_HEADER).resize(
             (int((CHAT_HEADER[2] - CHAT_HEADER[0]) * 1.2),
@@ -367,7 +378,6 @@ def sc_chat(name, skip, dur):
         por = src.crop(CHAT_PORTRAIT).resize(
             (int(pw_ * pscale), int(ph_ * pscale)), Image.LANCZOS)
         fr.paste(por, ((W - por.width) // 2, 620))
-        fr.alpha_composite(cap)
         return fr
     return pipe_scene(name, dur, frame)
 
@@ -441,11 +451,16 @@ def sc_cta(dur):
     return frame
 
 # ── riprese web mobili ─────────────────────────────────────────────────
-def web_segment_vert(name, src, t0, t1, speed, caption=None):
+def web_segment_vert(name, src, t0, dur, caption=None):
     """Ripresa mobile 780x1386 → 720x1280 (ritaglio 9:16 esatto + scala),
-    con didascalia opzionale in basso."""
+    A VELOCITÀ NATURALE: si sceglie la finestra [t0, t0+dur], mai comprimere
+    (il vecchio parametro speed è stato eliminato di proposito)."""
+    if t0 + dur > HS.ffprobe_dur(src) - 0.1:
+        sys.exit(f"{name}: finestra {t0}+{dur:.2f}s oltre la ripresa {src}")
     seg = os.path.join(BUILD, f"{name}.mp4")
-    vf = (f"trim=start={t0}:end={t1},setpts=(PTS-STARTPTS)/{speed},"
+    # setpts qui RIBASA solo i timestamp dopo il trim: nessun fattore di
+    # velocità.
+    vf = (f"trim=start={t0}:end={t0 + dur},setpts=PTS-STARTPTS,"
           f"crop=779:1385:0:0,scale={W}:{H},fps={FPS}")
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", src]
     if caption:
@@ -471,26 +486,26 @@ def build_video():
     segs["box"] = pipe_scene("box", DURS[10], sc_box(DURS[10]))
     segs["cta"] = pipe_scene("cta", DURS[11], sc_cta(DURS[11]))
     print("riprese del gioco (finestra tarata sui nativi + banda SIMULATION)…")
-    # stessi skip di make_show.py: dept a f100 (due vignette subito),
-    # chat a f115 (scambio già avviato, chiude sull'ultima risposta).
-    # band=True: la didascalia dept è una banda piena al piede che copre la
-    # scritta APPLICATIONS sul pavimento, altrimenti mozzata ai lati.
-    segs["dept"] = game_scene_vert("dept", "dept", 100, DURS[4], dept_x0,
-                                   caption=["Writers tailor your CV",
-                                            "Critics review every draft"],
+    # stessi skip di make_show.py (dept allineata alla fine della clip,
+    # chat a f115 — taratura approvata). La banda dept resta perché copre
+    # la scritta APPLICATIONS mozzata dal ritaglio, ma il testo NON è più
+    # il doppione della battuta (ora parlata): etichetta il reparto.
+    dept_skip = max(0, 270 - int(DURS[4] * HS.FPS))
+    segs["dept"] = game_scene_vert("dept", "dept", dept_skip, DURS[4], dept_x0,
+                                   caption=["the Applications department"],
                                    band=True)
     segs["office"] = game_scene_vert("office", "office", 40, DURS[5],
                                      office_x0)
     segs["chat"] = sc_chat("chat", 115, DURS[6])
-    print("riprese web mobili…")
-    md = HS.ffprobe_dur(f"{WEB}/web_map_m.webm")
-    t0, t1 = 5.0, min(15.5, md - 0.2)
+    print("riprese web mobili (velocità naturale)…")
+    # globe 6,0→: fine vista Europa → zoom-out alla sfera → rotazione
     segs["globe"] = web_segment_vert("globe", f"{WEB}/web_map_m.webm",
-                                     t0, t1, (t1 - t0) / DURS[7])
+                                     6.0, DURS[7])
+    # swipe: finestra allineata alla FINE della clip così ogni carta appare
+    # una volta sola (prima del rewind finale la ML card torna in scena)
     sd = HS.ffprobe_dur(f"{WEB}/web_swipe_m.webm")
-    s0, s1 = 3.6, min(9.4, sd - 0.2)
     segs["webpages"] = web_segment_vert("webpages", f"{WEB}/web_swipe_m.webm",
-                                        s0, s1, (s1 - s0) / DURS[8],
+                                        sd - 0.15 - DURS[8], DURS[8],
                                         caption=["match scores · salaries",
                                                  "swipe to decide"])
 
