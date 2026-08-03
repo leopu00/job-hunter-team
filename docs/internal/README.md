@@ -72,6 +72,7 @@ Note datate su incidenti specifici, diagnosi, investigazioni e osservazioni.
 
 | Data | File | Topic |
 |---|---|---|
+| 2026-08-03 | [`2026-08-03-beta5-cold-enter-team-freeze.md`](postmortems/2026-08-03-beta5-cold-enter-team-freeze.md) | 🧊 Team fermo 5 giorni (-80% produzione) senza un allarme: un `Enter` a freddo non viene processato dalla TUI, la cura si autoesclude come `draft_user`, `stepcap` riporta `stalled: 0` per costruzione e il TTL kill+recreate maschera tutto |
 | 2026-07-27 | [`2026-07-27-tailwind-layer-vs-extension-css.md`](postmortems/2026-07-27-tailwind-layer-vs-extension-css.md) | 🧩 Header/liste invisibili su desktop: le utility Tailwind v4 in `@layer` perdono contro il `.hidden` non-layerizzato iniettato dalle estensioni — fix proposto, non applicato |
 | 2026-07-02 | [`2026-07-02-kimi-codex-token-forensics.md`](postmortems/2026-07-02-kimi-codex-token-forensics.md) | Misura token Kimi vs Codex in 2 passate: coordinatori ~20% uguali, budget ~2,7×, €/token ≈ pari → living doc economia |
 | 2026-07-02 | [`2026-07-02-daily-halt-standby-leak.md`](postmortems/2026-07-02-daily-halt-standby-leak.md) | Daily hard-stop su betaB: funziona ma lo standby perde ~1–2%/notte (risvegli da timer di throttle) — fix aperti |
