@@ -29,6 +29,11 @@ cd tests/js && npm install && cd ../..
 # Shared/cron dependencies
 npm install --prefix shared/cron
 
+# Python dependencies — the agents, the launcher and the scripts are Python,
+# and so are the tests under `tests/` (`tests/test_*.py`)
+pip install -r requirements.txt
+pip install pytest
+
 # Pre-commit hooks (security gates: detect-secrets, actionlint, zizmor, npm-audit-prod)
 pip install pre-commit
 pre-commit install
@@ -98,6 +103,8 @@ Rules:
 - [ ] `npm run lint` passes (in `web/`)
 - [ ] `npm run format:check` passes (from repo root)
 - [ ] `npm test` passes (in `tests/js/`)
+- [ ] `python -m pytest tests/ -q -m "not production"` passes (from repo root — same command CI runs; the `production` marker is for post-deploy smoke tests against the live site)
+- [ ] `game/tools/run.sh test gate` passes, if you touched `game/` (needs `godot` on `PATH`)
 - [ ] `pre-commit run --all-files` passes (security hooks: secrets, actionlint, zizmor, npm-audit-prod)
 - [ ] No sensitive files included (PDF, DB, credentials, personal data)
 - [ ] Branch rebased on `master` before opening the PR
@@ -112,12 +119,16 @@ Load-bearing invariants live in ADRs — breaking them breaks the rest of the sy
 
 The Godot office in [`game/`](../game/) is the only native desktop client. Its docs live next to the code in [`game/docs/`](../game/docs/): start from [`GDD.md`](../game/docs/GDD.md) (product design), [`FIRST-RUN.md`](../game/docs/FIRST-RUN.md) (the token-free first-run contract) and [`DATA-ADAPTER.md`](../game/docs/DATA-ADAPTER.md) (how scenes get team data without knowing about Supabase).
 
+To run it you need `godot` on your `PATH`; from the repo root, `game/tools/run.sh play` opens the office and `game/tools/run.sh test gate` runs the self-test tier that has to be green before a PR (`all` adds the slower ones; the list itself lives in [`game/tools/test-matrix.txt`](../game/tools/test-matrix.txt)). Both re-import resources first and refuse to start while another Godot instance of the project is open.
+
 ## Working on agents
 
 Agents are the specialized pipeline workers (Scout, Analyst, Scorer, Writer, Critic, …). Two folders to know about:
 
 - **[`agents/_team/`](../agents/_team/)** — team-wide overview (composition, pipeline, who-does-what). Start here to understand how the whole team fits together.
 - **[`agents/_manual/`](../agents/_manual/)** — operational reference docs that individual agents consult at runtime (DB schema, anti-collision contract, communication protocol, tmux sessions). If you're adding a new agent, the existing prompts under `agents/<role>/<role>.md` plus the `_manual/` references give you the contracts to respect (anti-collision, DB schema, communication envelope) — no separate guide needed.
+
+⚠️ **A role prompt is 7 files, not one.** `agents/<role>/<role>.md` is the English baseline; next to it live six localizations (`it`, `es`, `fr`, `de`, `pt`, `hu`), and at runtime an agent is started from the localized variant when one exists — so an English-only edit never reaches the other six. The gate is [`tests/test_agent_prompt_localization_sync.py`](../tests/test_agent_prompt_localization_sync.py): run it, and its failure message names the file and what to align. It is a **Python** test, so `npm test` will not see the breakage.
 
 Note: the set of **supported agent CLIs** (Claude Code, Codex, Kimi) is closed by [ADR 0002](../docs/adr/0002-three-supported-agent-clis.md). Adding a fourth CLI requires a new ADR, not just a PR.
 
