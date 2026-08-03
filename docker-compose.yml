@@ -94,6 +94,11 @@ services:
       - ${HOME}/Documents/Job Hunter Team:/jht_user
       # Volume Docker (dentro la VM su Windows/macOS: veloce), non bind.
       - jht-deps:/opt/jht-deps
+    # Permette allo spike Scorer di raggiungere Ollama/llama.cpp avviato
+    # sull'host anche su Docker Engine Linux. L'endpoint resta opt-in e il
+    # runner accetta esclusivamente host locali.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # Nessuna porta esposta: la dashboard web locale e' stata ritirata
     # (2026-07-23) — l'interazione passa dall'app desktop (docker exec).
     stdin_open: true

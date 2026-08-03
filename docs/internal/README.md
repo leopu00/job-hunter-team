@@ -36,6 +36,7 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 
 | File | Topic |
 |---|---|
+| [`provider-touchpoint-inventory.md`](architecture/provider-touchpoint-inventory.md) | 🧭 Machine-checked map of provider-specific seams and the role-scoped M5 Local Scorer boundary |
 | [`2026-08-03-maintenance-evidence-log-design.md`](architecture/2026-08-03-maintenance-evidence-log-design.md) | 🔬 `maintenance_events` append-only: oggi i campi di manutenzione sono stato last-write-wins, quindi chi scrive il timestamp senza lavorare è indistinguibile da chi lavora — evidenza ri-derivabile (status + hash), aggancio unico in `db_update.py`, tasso di no-op come metrica |
 | [`cloud-sync-architecture.md`](architecture/cloud-sync-architecture.md) | Sync DB locale ↔ Supabase: cosa va in cloud, macro-event design, chat unificata gioco↔web (mig 060) |
 | [`2026-07-22-web-demo-mode-and-welcome.md`](architecture/2026-07-22-web-demo-mode-and-welcome.md) | 🎭 Demo mode cloud (4 personas × 56 posizioni × 7 lingue) + wizard `/welcome`: stato nei cookie, ramo demo in testa a `lib/queries.ts`, scritture no-op |

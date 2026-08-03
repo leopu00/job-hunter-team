@@ -12,6 +12,7 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 | [📦 CLI-INSTALL](CLI-INSTALL.md) | CLI users — deep dive on the `install.sh` one-liner |
 | [⌨️ CLI-REFERENCE](CLI-REFERENCE.md) | CLI users — full `jht` command reference |
 | [🤖 AI-AGENT-INTEGRATION](AI-AGENT-INTEGRATION.md) | AI assistants / devs driving JHT programmatically |
+| [🏠 LOCAL-SCORER](LOCAL-SCORER.md) | Operators evaluating the experimental one-role local-model spike |
 
 ## 📧 Email sourcing (recommended)
 
