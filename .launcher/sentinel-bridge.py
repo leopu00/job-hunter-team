@@ -36,6 +36,7 @@ Config:
   JHT_HOME                                        — dir config (default ~/.jht)
 """
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -702,6 +703,143 @@ def _esc_all_sessions():
         except (subprocess.SubprocessError, OSError):
             pass
     return paused
+
+
+def _session_pane_signatures():
+    """Snapshot compatto dell'output visibile per ogni sessione tmux.
+
+    Il daily-halt deve accorgersi di una sessione che torna a parlare senza
+    mandarle un messaggio (che spenderebbe un altro turno). Il pane e' gia' la
+    fonte usata dai watchdog per osservare il TUI: qui ne conserviamo solo un
+    digest, mai il contenuto, dentro al flag del daily halt.
+    """
+    try:
+        out = subprocess.run(
+            ["tmux", "list-sessions", "-F", "#{session_name}"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return {}
+    if out.returncode != 0:
+        return {}
+    signatures = {}
+    for session in (ln.strip() for ln in out.stdout.splitlines() if ln.strip()):
+        try:
+            pane = subprocess.run(
+                ["tmux", "capture-pane", "-p", "-t", session, "-S", "-120"],
+                capture_output=True, timeout=10,
+            )
+        except (subprocess.SubprocessError, OSError):
+            continue
+        if pane.returncode == 0:
+            signatures[session] = hashlib.sha256(pane.stdout).hexdigest()
+    return signatures
+
+
+def _esc_sessions(sessions):
+    """ESC best-effort a un insieme esplicito; seam piccolo per i test."""
+    escaped = []
+    for session in sessions:
+        try:
+            res = subprocess.run(
+                ["tmux", "send-keys", "-t", session, "Escape"],
+                capture_output=True, timeout=10,
+            )
+        except (subprocess.SubprocessError, OSError):
+            continue
+        if res.returncode == 0:
+            escaped.append(session)
+    return escaped
+
+
+def _write_daily_halt_payload(payload):
+    """Write atomico: il daemon del throttle legge questo file in parallelo."""
+    try:
+        DAILY_HALT_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        tmp = DAILY_HALT_FLAG.with_suffix(".flag.tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, DAILY_HALT_FLAG)
+        return True
+    except OSError:
+        return False
+
+
+def _activate_daily_halt(consumed, cap, budget):
+    """Chiude il gate PRIMA dell'ESC, poi registra le sessioni interrotte.
+
+    Scrivere il flag dopo l'ESC lasciava una race: un timer poteva scadere fra
+    i due passi e consegnare un wake senza che il motore vedesse ancora il
+    daily halt. Il secondo write completa solo l'osservabilita'; la protezione
+    e' gia' attiva quando parte il primo ESC.
+    """
+    payload = {
+        "halted_at": datetime.now(timezone.utc).isoformat(),
+        "consumed_pct": consumed,
+        "cap_pct": cap,
+        "budget_pct": budget,
+        "sessions": [],
+        "pane_signatures": _session_pane_signatures(),
+    }
+    _write_daily_halt_payload(payload)
+    paused = _esc_all_sessions()
+    payload["sessions"] = paused
+    _write_daily_halt_payload(payload)
+    return paused
+
+
+def _enforce_daily_halt():
+    """Ri-ESCa le sessioni che producono output mentre il daily halt e' vivo.
+
+    Il primo ESC interrompe solo il turno corrente. Un timer consegnato nella
+    race o una sessione nata dopo puo' parlare di nuovo: confrontiamo il pane
+    con lo snapshot precedente ad ogni tick (5 min), ri-ESCando solo i pane
+    cambiati. Un flag vecchio/privo di snapshot e una sessione nuova sono
+    trattati come sospetti e ricevono un ESC iniziale. Ogni errore e' fail-safe
+    per il bridge: niente eccezioni fuori da questa cintura.
+    """
+    if not _daily_halt_active():
+        return []
+    try:
+        payload = json.loads(DAILY_HALT_FLAG.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            payload = {}
+    except (OSError, ValueError):
+        payload = {}
+
+    current = _session_pane_signatures()
+    if not current:
+        return []
+    previous = payload.get("pane_signatures")
+    if not isinstance(previous, dict):
+        previous = {}
+    talking = sorted(
+        session for session, signature in current.items()
+        if previous.get(session) != signature
+    )
+    escaped = _esc_sessions(talking)
+    # Una consegna ESC fallita NON va marcata come gestita: conservando il
+    # digest precedente (o nessuno, per una sessione nuova) il prossimo tick
+    # la considera ancora attiva e ritenta. Le sessioni scomparse vengono
+    # invece potate naturalmente dallo snapshot corrente.
+    escaped_set = set(escaped)
+    accepted = dict(current)
+    for session in talking:
+        if session in escaped_set:
+            continue
+        if session in previous:
+            accepted[session] = previous[session]
+        else:
+            accepted.pop(session, None)
+    payload["pane_signatures"] = accepted
+    if escaped:
+        payload["last_reesc_at"] = datetime.now(timezone.utc).isoformat()
+        payload["reesc_count"] = (
+            int(payload.get("reesc_count") or 0) + len(escaped)
+        )
+        print("[bridge V6] DAILY-HALT cintura: nuova attivita' in %s -> ESC"
+              % ",".join(escaped))
+    _write_daily_halt_payload(payload)
+    return escaped
 
 
 def _sample_vitals_and_maybe_alert():
@@ -2081,6 +2219,14 @@ def main():
         # della deroga stessa.
         _standby_step(parsed)
 
+        # [PACING-DAILY-HALT-STANDBY-LEAK] — l'ESC iniziale ferma solo il
+        # turno corrente. Finche' il flag e' vivo osserviamo i pane senza
+        # parlare agli agenti e ri-ESCiamo chi produce nuovo output. Con una
+        # deroga burn-intent attiva non si applica: sotto, sul path leggibile,
+        # il proprietario del lifecycle rimuove il flag esistente.
+        if not _bi_on:
+            _enforce_daily_halt()
+
         if parsed:
             # ── Path successo: scrivi sample, tick alla Sentinella ────
             parsed["provider"] = provider
@@ -2279,15 +2425,7 @@ def main():
                             jht_tmux_send(_s, f"[BRIDGE ALERT] {_alert}")
                     print(f"[bridge V6] {now_h} DAILY-CAP HIT oggi={_hc:.1f}% cap={_hcap:.1f}% → ESC a tutto il team tra 30s")
                     time.sleep(30)
-                    _paused = _esc_all_sessions()
-                    try:
-                        DAILY_HALT_FLAG.write_text(json.dumps({
-                            "halted_at": datetime.now(timezone.utc).isoformat(),
-                            "consumed_pct": _hc, "cap_pct": _hcap, "budget_pct": _hb,
-                            "sessions": _paused,
-                        }), encoding="utf-8")
-                    except OSError:
-                        pass
+                    _paused = _activate_daily_halt(_hc, _hcap, _hb)
                     print(f"[bridge V6] {now_h} DAILY-HALT attivo: ESC a {len(_paused)} sessioni; bridge in silenzio fino al giorno dopo")
 
             if not within_hours:

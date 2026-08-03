@@ -109,6 +109,12 @@ MAX_LOG_AGE_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_MAX_AGE",
 # Quando un gate blocca la sveglia non si molla l'agente: si ricontrolla più
 # tardi. Stessa scelta (e stesso valore) dello stepcap-watchdog.
 GATE_RETRY_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_GATE_RETRY", "900"))
+# Un wake consegnato un istante PRIMA che il daily hard-stop scriva il flag
+# puo arrivare all'agente dopo l'ESC iniziale. In quel caso `throttle-ack` e'
+# l'ultimo choke point deterministico prima che l'agente torni a lavorare o
+# pinghi il Capitano: lo rimettiamo in attesa lunga, senza generare messaggi.
+DAILY_HALT_RETRY_SEC = float(os.environ.get(
+    "JHT_THROTTLE_ENGINE_DAILY_HALT_RETRY", "3600"))
 # Sveglia non consegnata (pane occupato, TUI in boot): si riprova presto e per
 # un numero BOUNDED di volte, poi si rallenta a GATE_RETRY_SEC e si avvisa il
 # Capitano. Non si abbandona mai un agente: un timer che smette di riprovare
@@ -375,6 +381,25 @@ def get_flag(agent: str) -> dict:
     return entry if isinstance(entry, dict) else {}
 
 
+def _daily_halt_active() -> bool:
+    """Il solo gate del daily cap, letto anche dal percorso agente (`ack`).
+
+    Non usa `wake_gate`: un ack gia' consegnato deve chiudere la race del
+    daily-halt senza cambiare le semantiche esistenti di working-hours,
+    standby o burn-intent. La variante in home resta compatibile con le
+    installazioni che hanno spostato il flag fuori da `logs/`.
+    """
+    home = _home()
+    for path in (home / "logs" / "daily-halt.flag",
+                 home / ".daily-halt.flag"):
+        try:
+            if path.exists():
+                return True
+        except OSError:
+            continue
+    return False
+
+
 # ── Registrazione (la chiama l'agente, e ritorna SUBITO) ──────────────────
 def register(agent: str, seconds=None, reason=None, session=None,
              now=None) -> dict:
@@ -447,6 +472,37 @@ def ack(agent: str, now=None) -> dict:
     now = time.time() if now is None else float(now)
     state = read_flags()
     entry = state["agents"].get(agent)
+
+    # [PACING-DAILY-HALT-STANDBY-LEAK] — chiude la race fra una sveglia gia'
+    # consegnata e l'ESC del bridge. Non si passa mai ad ACTIVE, quindi il
+    # worker non entra nel loop e non manda il vecchio `[READY]` al Capitano.
+    # Il timer lungo non e' una nuova decisione di pacing: e' solo il prossimo
+    # istante di retry; anche alla scadenza il daemon ricontrolla il flag prima
+    # di svegliare. Tolto il flag, la sveglia non e' persa.
+    if _daily_halt_active():
+        previous = entry.get("state") if isinstance(entry, dict) else None
+        session = session_for(agent, entry)
+        retry = max(GATE_RETRY_SEC, DAILY_HALT_RETRY_SEC)
+        if not isinstance(entry, dict):
+            entry = {}
+            state["agents"][agent] = entry
+        entry.update({
+            "state": IN_THROTTLE,
+            "since": int(now),
+            "until": int(now + retry),
+            "timer_armed_at": int(now),
+            "applied_sec": int(retry),
+            "session": session,
+            "reason": "daily-halt",
+            "notify_attempts": 0,
+            "pause_id": entry.get("pause_id") or "%s-%d" % (agent, int(now)),
+        })
+        write_flags(state)
+        emit("ack_suppressed", agent=agent, ts=now, previous=previous,
+             gate="daily-halt", retry_sec=int(retry), session=session)
+        return {"agent": agent, "ok": False, "state": IN_THROTTLE,
+                "previous": previous, "remaining_sec": int(retry),
+                "reason": "daily-halt"}
 
     if not isinstance(entry, dict):
         # Nessun flag: un ack di un agente che non era in pausa è innocuo e
@@ -894,9 +950,16 @@ def main(argv=None) -> int:
             print("THROTTLE_ACK agent=%s %s→ACTIVE"
                   % (res["agent"], res.get("previous") or "none"))
         else:
-            print("ACK_REFUSED agent=%s remaining=%ss — sei ancora in pausa, "
-                  "ti sveglio io: chiudi il turno"
-                  % (res["agent"], res.get("remaining_sec")), file=sys.stderr)
+            if res.get("reason") == "daily-halt":
+                print("DAILY_HALT_ACTIVE agent=%s retry=%ss — NON lavorare, "
+                      "NON scrivere al Capitano: chiudi il turno; il motore "
+                      "ti svegliera' dopo la rimozione del flag"
+                      % (res["agent"], res.get("remaining_sec")),
+                      file=sys.stderr)
+            else:
+                print("ACK_REFUSED agent=%s remaining=%ss — sei ancora in pausa, "
+                      "ti sveglio io: chiudi il turno"
+                      % (res["agent"], res.get("remaining_sec")), file=sys.stderr)
         return 0 if res.get("ok") else 1
 
     if args.cmd == "check":

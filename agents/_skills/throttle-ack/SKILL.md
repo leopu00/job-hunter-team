@@ -37,6 +37,10 @@ the Capitano.
 
 - **First command, always.** Before reading your queue, before any tool, before
   answering anyone.
+- **A daily halt wins over the wake.** The command checks
+  `$JHT_HOME/logs/daily-halt.flag` atomically with the ack. If it prints
+  `DAILY_HALT_ACTIVE`, do not work and do not message the Capitano: close the
+  turn. The engine keeps the timer armed and will wake you after the flag goes.
 - **Then work immediately.** Acknowledging and then sitting idle produces a fake
   "queue empty" that misleads the Capitano and the pacing. A wake-up is a signal
   to *work*.
@@ -48,8 +52,8 @@ the Capitano.
 ## Exit codes
 
 - `0` — flag on `ACTIVE` (idempotent: acking twice is harmless)
-- `1` — ack **refused** because your pause is not over: close your turn, the
-  engine will wake you. Or invalid arguments / engine missing.
+- `1` — ack **refused** because your pause is not over or daily halt is active:
+  close your turn, the engine will wake you. Or invalid arguments / engine missing.
 
 ## Example
 

@@ -38,6 +38,10 @@ eszkalalja a Kapitanyhoz.
 
 - **Elso parancs, mindig.** A varolistad elolvasasa elott, barmely tool elott,
   mielott barkinek valaszolnal.
+- **A daily halt felulirja a felkeltest.** A parancs az ack-kel egyutt ellenorzi
+  a `$JHT_HOME/logs/daily-halt.flag` fajlt. `DAILY_HALT_ACTIVE` eseten ne
+  dolgozz es ne irj a Kapitanynak: zard le a kort. A motor tovabbra is
+  elesen tartja az idozitot, es a flag eltunese utan felkelt.
 - **Utana azonnal dolgozz.** Alairni es aztan tetlenul allni hamis «ures
   varolistat» hoz letre, ami megteveszti a Kapitanyt es a pacinget. A felkeltes
   jelzes a *munkara*.
@@ -49,8 +53,8 @@ eszkalalja a Kapitanyhoz.
 ## Exit codes
 
 - `0` — a flag `ACTIVE` (idempotens: ketszer alairni artalmatlan)
-- `1` — az ack **elutasitva**, mert a szunetd nem ert veget: zard le a korodet, a
-  motor felkelt. Vagy ervenytelen argumentumok / nincs motor.
+- `1` — az ack **elutasitva**, mert a szunet nem ert veget vagy daily halt aktiv:
+  zard le a korodet; a motor felkelt. Vagy ervenytelen argumentumok / nincs motor.
 
 ## Pelda
 

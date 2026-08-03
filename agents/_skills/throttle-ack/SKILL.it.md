@@ -37,6 +37,10 @@ ha risposto. È una misura, non un'ipotesi, e il watchdog la scala al Capitano.
 
 - **Primo comando, sempre.** Prima di leggere la coda, prima di ogni tool, prima
   di rispondere a chiunque.
+- **Il daily halt vince sul risveglio.** Il comando controlla
+  `$JHT_HOME/logs/daily-halt.flag` insieme all'ack. Se stampa
+  `DAILY_HALT_ACTIVE`, non lavorare e non scrivere al Capitano: chiudi il turno.
+  Il motore tiene armato il timer e ti risveglia dopo la rimozione del flag.
 - **Poi lavora subito.** Firmare e restare fermo produce un falso «coda vuota»
   che inganna il Capitano e il pacing. Un risveglio è un segnale per *lavorare*.
 - **Non usarlo per chiudere una pausa in anticipo.** Un ack mandato mentre il tuo
@@ -47,8 +51,8 @@ ha risposto. È una misura, non un'ipotesi, e il watchdog la scala al Capitano.
 ## Exit codes
 
 - `0` — flag su `ACTIVE` (idempotente: firmare due volte è innocuo)
-- `1` — ack **rifiutato** perché la tua pausa non è finita: chiudi il turno, il
-  motore ti sveglia. Oppure argomenti invalidi / motore assente.
+- `1` — ack **rifiutato** perché la pausa non è finita o il daily halt è attivo:
+  chiudi il turno, il motore ti sveglia. Oppure argomenti invalidi / motore assente.
 
 ## Esempio
 
