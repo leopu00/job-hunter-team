@@ -5,6 +5,13 @@
 **State on 2026-08-03:** analysis tooling shipped; live inputs still required
 for a target or price decision.
 
+The two tools can now be run as one validated, versioned evidence bundle via
+[`m4_evidence_bundle.py`](../../../scripts/analysis/m4_evidence_bundle.py).
+The [operator guide](../../guides/M4-EVIDENCE-BUNDLES.md) defines the scrubbed
+export boundary, provenance classes and archive workflow. Bundle validation
+records hashes, tool implementations and the tested runtime commit; it still
+does not replace the external evidence listed below.
+
 ## What the repository can substantiate today
 
 Historical investigations report these preliminary observations:
@@ -68,6 +75,23 @@ behavior.
 - the resulting JSON report archived with dataset provenance and CLI version.
 
 Until those inputs exist, **88→92 remains unvalidated**.
+
+## Reproducible bundle boundary
+
+The machine-readable manifest schema is
+[`shared/schemas/m4-evidence-bundle-v1.schema.json`](../../../shared/schemas/m4-evidence-bundle-v1.schema.json).
+One deterministic fixture command exercises both analyzers:
+
+```bash
+python3 scripts/analysis/m4_evidence_bundle.py \
+  tests/fixtures/m4/evidence-bundle.synthetic.json \
+  --format markdown
+```
+
+The assembler fails on hash mismatches, missing or mismatched provenance,
+unknown schema fields/versions, raw identifying or secret fields, and any
+attempt to label a known fixture as live. Its generated findings repeat the
+provenance classification instead of relying on filenames or operator memory.
 
 ## Tool 2 — pay-per-use versus subscription
 
