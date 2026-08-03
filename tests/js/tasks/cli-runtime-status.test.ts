@@ -69,6 +69,18 @@ describe("CLI — nomi sessione del runtime container", () => {
 });
 
 describe("team start — retry reattivo", () => {
+  it("fa un no-op prima di sync e bridge quando tutto il core è già vivo", () => {
+    const source = readFileSync(
+      path.join(REPO, "cli", "src", "commands", "team", "start.js"),
+      "utf-8",
+    );
+    const earlyNoop = source.indexOf("coreSessions.every");
+    const firstCloudSync = source.indexOf("cloud pull-desired-state");
+    expect(earlyNoop).toBeGreaterThan(0);
+    expect(earlyNoop).toBeLessThan(firstCloudSync);
+    expect(source).toContain("Team gia operativo: nessun bridge o sync riavviato.");
+  });
+
   it("applica lo stagger solo quando la voce precedente è stata avviata", () => {
     const source = readFileSync(
       path.join(REPO, "cli", "src", "commands", "team", "start.js"),
