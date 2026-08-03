@@ -20,6 +20,9 @@ Uso:
                                             # alias legacy: next-for-recheck-weekly
   python3 db_query.py next-for-geocode-missing # MODALITÀ CURA: geocoding vive senza coordinate ufficio
   python3 db_query.py next-for-logo-missing  # MODALITÀ CURA: aziende (con posizioni vive) senza logo
+  python3 db_query.py next-for-harvest       # MODALITÀ RACCOLTO: score alto senza CV, migliori prime
+  python3 db_query.py next-for-calibration   # MODALITÀ CALIBRAZIONE: feedback utente non consumato
+  python3 db_query.py calibration-consume    # segna il feedback come consumato (watermark)
   python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
                                             # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
@@ -41,6 +44,15 @@ Il limite è un DEFAULT, non un tetto: serve a non riversare l'intera coda in un
 contesto senza che nessuno l'abbia chiesto. Chi ha bisogno di altro alza il
 limite — o si scrive la propria query SQL con il proprio LIMIT, che la skill
 `db-query` consente già (`allowed-tools: Bash(python3 *)`).
+
+VINCOLO DI INTEGRITÀ [SCORE-INTEGRITY-NO-UPSTREAM-FILTER] — vale per OGNI
+coda di questo file, e in particolare per `next-for-calibration`: il feedback
+dell'utente può cambiare DOVE il team comincia (priorità di ricerca, ordine
+delle code), MAI cosa viene fatto entrare nel DB o come viene scorato. Un
+filtro a monte guidato dal feedback gonfierebbe gli score da solo: l'utente
+leggerebbe come misura oggettiva una lista che abbiamo pre-selezionato noi.
+Queste code sono SOLA LETTURA sul portafoglio; l'unica scrittura di questo
+file è il watermark di calibrazione (un file in profile/, non il DB).
 """
 
 import argparse
@@ -523,6 +535,89 @@ def _sql_limit(limit):
     return limit if limit > 0 else -1
 
 
+# ── Modalità RACCOLTO e CALIBRAZIONE (2026-08) ──────────────────────────
+#
+# I numeri che le motivano (misurati sulle 4 VPS reali il 30/07): su ~4.500
+# posizioni, ~990 hanno score >= 75 ma solo ~330 hanno un CV — sourcing,
+# analisi e scoring sono già stati PAGATI e il valore resta fermo all'ultimo
+# metro (harvest). Il feedback dell'utente (48 esclusioni + 25 ticket sulla
+# sola VPS leone) esiste e non riorienta nulla (calibration).
+
+# Soglia di default della coda harvest: 75 è la leva già nota del burn weekly
+# ("CV score >= 75", finding 2026-07-19) e la stessa soglia con cui sono stati
+# misurati i numeri qui sopra. Override con --min-score.
+HARVEST_MIN_SCORE = 75
+
+# Watermark della calibrazione: "consumato" = feedback con timestamp <= al
+# watermark. Il file (non il DB: nessuna migrazione, stessa cartella della
+# enrichment-policy) avanza SOLO con `calibration-consume`, mai leggendo la
+# coda — leggere non è recepire. Un file assente o corrotto vale epoch: si
+# ripresenta TUTTO il feedback, mai il contrario (perdere feedback in silenzio
+# sarebbe il difetto peggiore per una coda di ascolto).
+CALIBRATION_EPOCH = '1970-01-01 00:00:00'
+
+
+def calibration_watermark_path():
+    from _db import DB_PATH
+    return os.path.join(os.path.dirname(DB_PATH), 'profile',
+                        'calibration-watermark.json')
+
+
+def read_calibration_watermark():
+    """Il timestamp fino al quale il feedback risulta consumato (incluso)."""
+    try:
+        with open(calibration_watermark_path(), encoding='utf-8') as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return CALIBRATION_EPOCH
+    ts = data.get('consumed_through') if isinstance(data, dict) else None
+    if isinstance(ts, str) and ts.strip():
+        return ts.strip()
+    return CALIBRATION_EPOCH
+
+
+def calibration_consume(through=None):
+    """Avanza il watermark: il feedback fino a `through` (incluso) è consumato.
+
+    `through` omesso = tutto il feedback presente ORA nel DB (per chi ha letto
+    la coda con --all). Chi ha letto una coda TRONCATA deve passare
+    `--through <ts dell'ultima riga letta>`: consumare quello che non si è
+    letto è esattamente il difetto che il watermark esiste per impedire.
+    Il watermark non retrocede mai. Timestamp confrontati come stringhe UTC di
+    CURRENT_TIMESTAMP: watermark e feedback vengono dalla stessa sorgente
+    (il DB), quindi niente clock-skew col processo che consuma.
+    """
+    conn = get_db()
+    ensure_schema(conn)
+    latest = conn.execute("""
+        SELECT MAX(ts) FROM (
+            SELECT MAX(user_excluded_at) AS ts FROM positions
+             WHERE user_excluded_at IS NOT NULL
+            UNION ALL
+            SELECT MAX(created_at) FROM position_tickets
+        )
+    """).fetchone()[0]
+    conn.close()
+    prev = read_calibration_watermark()
+    target = str(through).strip() if through else (latest or prev)
+    if target <= prev:
+        emit_json({'ok': True, 'consumed_through': prev, 'advanced': False,
+                   'note': 'nessun feedback più nuovo del watermark'})
+        return 0
+    path = calibration_watermark_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump({'consumed_through': target, 'previous': prev,
+                   'consumed_by': os.environ.get('JHT_AGENT_NAME', 'unknown')},
+                  f, ensure_ascii=False, indent=2)
+        f.write('\n')
+    os.replace(tmp, path)
+    emit_json({'ok': True, 'consumed_through': target, 'previous': prev,
+               'advanced': True})
+    return 0
+
+
 def _emit_queue(conn, role, label, rows, sql_limit, as_json):
     """Uscita comune delle code: righe stampate + TOTALE in coda.
 
@@ -562,7 +657,14 @@ def _emit_queue(conn, role, label, rows, sql_limit, as_json):
         extra = ""
         if 'total_score' in r.keys():
             extra = f" [score: {r['total_score']}]"
-        print(f"  #{r['id']} {r['company'][:20]:<20} {r['title'][:35]}{extra}")
+        # Le code di feedback (calibration) portano il TIPO e il testo
+        # dell'utente: senza, la riga dice "quale posizione" ma non "perché".
+        prefix = f"[{r['kind']}] " if 'kind' in r.keys() else ""
+        detail = ""
+        if 'detail' in r.keys() and r['detail']:
+            detail = f" — {str(r['detail'])[:60]}"
+        print(f"  #{r['id']} {prefix}{r['company'][:20]:<20} "
+              f"{r['title'][:35]}{extra}{detail}")
     if shown < total:
         print(f"  … altre {total - shown} in coda. Il limite è un default, non "
               f"un tetto: --limit N per vederne di più, --all per tutte.")
@@ -895,6 +997,80 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         label = ("Logo modalità cura (aziende con posizioni vive senza logo"
                  + (f", best-score >= {ms}" if ms is not None else "") + ")")
 
+    elif role == 'harvest':
+        # MODALITÀ RACCOLTO (2026-08): posizioni con best-score alto che NON
+        # hanno ancora un CV — il valore già pagato (sourcing+analisi+scoring)
+        # fermo all'ultimo metro. Lo score vive in `scores.total_score` (best
+        # per posizione), il CV in `applications`: "senza CV" = nessuna riga
+        # applications. Solo `status='scored'`: gli stati successivi
+        # (writing/review/ready/...) un'application ce l'hanno già, e `ready`
+        # in particolare significa CV PRONTO — non è raccolto, è consegna.
+        # Vive + non scadute: un CV per un annuncio morto è spesa buttata.
+        # Ordine dichiarato: score DESC (migliori prime), a parità la più
+        # vecchia prima (found_at ASC — è lì da più tempo, scade prima).
+        # A differenza di next-for-scrittore NON filtra write_requested: la
+        # scelta della modalità harvest È l'autorizzazione esplicita
+        # dell'utente a convertire le migliori senza selezionarle una a una.
+        if min_score is None:
+            min_score = HARVEST_MIN_SCORE
+        rows = conn.execute("""
+            SELECT p.id, p.title, p.company, p.found_at, s.total_score,
+                   COUNT(*) OVER () AS _total
+            FROM positions p
+            JOIN (SELECT position_id, MAX(total_score) AS total_score
+                  FROM scores GROUP BY position_id) s ON s.position_id = p.id
+            LEFT JOIN applications a ON a.position_id = p.id
+            WHERE a.id IS NULL
+              AND p.status = 'scored'
+              AND s.total_score >= ?
+              AND COALESCE(p.is_open, 1) != 0
+              AND (p.expires_at IS NULL OR p.expires_at >= date('now'))
+            ORDER BY s.total_score DESC, p.found_at ASC
+            LIMIT ?
+        """, (min_score, lim)).fetchall()
+        label = (f"Raccolto: posizioni vive con score >= {min_score} "
+                 f"senza CV (migliori prime)")
+
+    elif role == 'calibration':
+        # MODALITÀ CALIBRAZIONE (2026-08): il feedback dell'utente non ancora
+        # CONSUMATO — esclusioni (`user_excluded_*`, con la causa) e ticket
+        # (`position_tickets`, qualunque status: anche un ticket risolto dice
+        # cosa interessa all'utente). "Consumato" = timestamp <= al watermark
+        # (vedi read_calibration_watermark): la coda si svuota SOLO con
+        # `calibration-consume`, dopo che il Capitano ha riorientato le
+        # priorità. Ordine dichiarato: cronologico (ts ASC) — il feedback si
+        # recepisce nell'ordine in cui l'utente l'ha dato.
+        #
+        # ⚠️ [SCORE-INTEGRITY-NO-UPSTREAM-FILTER] Questa coda alimenta un
+        # riorientamento delle PRIORITÀ (dove il team comincia a cercare),
+        # MAI un filtro a monte su cosa entra nel DB o su come si scora: un
+        # gate d'ingresso guidato dal feedback gonfierebbe gli score da solo
+        # e trasformerebbe una misura in una lista pre-scelta da noi.
+        wm = read_calibration_watermark()
+        rows = conn.execute("""
+            SELECT kind, id, title, company, detail, ts,
+                   COUNT(*) OVER () AS _total
+            FROM (
+                SELECT 'esclusione' AS kind, p.id, p.title, p.company,
+                       TRIM(COALESCE(p.user_excluded_reason, '') || ' ' ||
+                            COALESCE(p.user_excluded_note, '')) AS detail,
+                       p.user_excluded_at AS ts
+                FROM positions p
+                WHERE p.user_excluded_at IS NOT NULL
+                  AND p.user_excluded_at > ?
+                UNION ALL
+                SELECT 'ticket' AS kind, p.id, p.title, p.company,
+                       t.request_text AS detail, t.created_at AS ts
+                FROM position_tickets t
+                JOIN positions p ON p.id = t.position_id
+                WHERE t.created_at > ?
+            )
+            ORDER BY ts ASC
+            LIMIT ?
+        """, (wm, wm, lim)).fetchall()
+        label = ("Calibrazione: feedback utente non ancora consumato "
+                 "(esclusioni + ticket; si svuota con calibration-consume)")
+
     else:
         print(f"Ruolo sconosciuto: {role}")
         conn.close()
@@ -1062,13 +1238,35 @@ def main():
     queue_parser('next-for-categorize')
     queue_parser('next-for-salary-precise')
     # Maintenance-mode queues (2026-07-13): autonome ma cadenzate/gated (vedi next_for_role).
-    rw = queue_parser('next-for-recheck-weekly')
-    rw.add_argument('--min-score', type=int, default=None,
-                    help='Score minimo; omesso = valore della enrichment policy (default 70).')
-    rw.add_argument('--older-than-days', type=int, default=None,
-                    help='Anzianità minima; omesso = enrichment policy (default 7 giorni).')
+    # Il nome canonico è `next-for-recheck-due` (rinomina modalità cura); il
+    # dispatch accettava già entrambi ma solo l'alias legacy era REGISTRATO,
+    # quindi il nome che la docstring pubblicizza usciva con errore argparse
+    # (lo vedeva coordinator_policy_selftest.py, rosso fino a questo fix).
+    rd = queue_parser('next-for-recheck-due')
+    rw = queue_parser('next-for-recheck-weekly')  # alias legacy
+    for q in (rd, rw):
+        q.add_argument('--min-score', type=int, default=None,
+                       help='Score minimo; omesso = valore della enrichment policy (default 70).')
+        q.add_argument('--older-than-days', type=int, default=None,
+                       help='Anzianità minima; omesso = enrichment policy (default 14 giorni).')
     queue_parser('next-for-geocode-missing')
     queue_parser('next-for-logo-missing')
+    # Modalità RACCOLTO e CALIBRAZIONE (2026-08): vedi next_for_role.
+    hv = queue_parser('next-for-harvest')
+    hv.add_argument('--min-score', type=int, default=None,
+                    help=f'Best-score minimo (default {HARVEST_MIN_SCORE}, '
+                         f'la leva misurata del burn weekly).')
+    queue_parser('next-for-calibration')
+
+    # calibration-consume: l'UNICO modo di svuotare next-for-calibration.
+    # Scrive il watermark su file (profile/), non nel DB.
+    cc = sub.add_parser('calibration-consume')
+    cc.add_argument('--through', default=None,
+                    help='Consuma fino a questo timestamp UTC incluso (il ts '
+                         "dell'ultima riga letta). Omesso = tutto il feedback "
+                         'presente ORA — usalo solo se hai letto la coda con '
+                         '--all: consumare il non-letto è il difetto che il '
+                         'watermark impedisce.')
 
     # active-categories <user_id> (tassonomia emergente): nomi role_family
     # ATTIVI del registro per l'utente. Consumato dal write-guard (db_update)
@@ -1196,6 +1394,8 @@ def main():
         flag = '  ⚠ DA CATEGORIZZARE SUBITO (next-for-categorize) — NULL non è una categoria' if uncat else ''
         print(f"  {uncat:>4}  NON categorizzate (role_family IS NULL){flag}")
         conn.close()
+    elif args.cmd == 'calibration-consume':
+        return calibration_consume(through=args.through)
     elif args.cmd in ('next-for-recheck-due', 'next-for-recheck-weekly'):
         # `as_json` come TUTTE le altre code: questo ramo nasce dalla rinomina
         # in modalità cura (che ha aggiunto l'alias legacy) e il sistema del
@@ -1209,7 +1409,8 @@ def main():
         role = args.cmd.replace('next-for-', '')
         next_for_role(
             role,
-            # solo next-for-recheck-weekly porta questi due
+            # next-for-recheck-weekly li porta entrambi; next-for-harvest
+            # porta solo --min-score. Le altre code: entrambi None.
             min_score=getattr(args, 'min_score', None),
             older_than_days=getattr(args, 'older_than_days', None),
             # --all è la forma esplicita di "so cosa sto chiedendo": nessun limite
