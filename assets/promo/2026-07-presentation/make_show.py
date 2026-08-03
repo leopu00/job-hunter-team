@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Video di presentazione JHT — versione FINALE (sober), 1280x720, ~73 s.
+"""Video di presentazione JHT — versione DENSA (sober), 1280x720, ~53 s.
 
-Evoluzione della tornata a 3 versioni sul feedback utente (30/07): ha scelto
-la `sober` (Daniel en_GB, NIENTE musica) e ha chiesto:
-  - la VOCE dice meno (7 battute invece di 12) e va più lenta: pause vere,
-    cinque scene mute — il silenzio è parte del montaggio;
-  - lo SCHERMO invece mostra di più: le informazioni tolte dal parlato
-    diventano didascalie (ruoli e mansioni, Writers/Critics, ask·steer·
-    approve, scores·salaries, swipe) e numeri grandi (658/520/307/71);
-  - ritmo disteso: ~73 s totali invece di 61.
+Tornata del 03/08 sul feedback utente: la versione da 73,5 s aveva pause di
+2,4-16 s e cinque scene mute — "il silenzio serve a far respirare, non a far
+aspettare". Qui:
+  - il copione NON cambia (le 7 battute approvate, stessa voce Daniel);
+  - le pause fra le battute scendono a ~1-1,5 s dove le scene adiacenti sono
+    parlate; le scene mute si accorciano a 3,5-4,6 s invece di correre vuote;
+  - dove una battuta non sta nella sua scena NON si accelera il parlato:
+    la voce scavalca il taglio (L-cut sulla scena office→chat, J-cut della
+    battuta box che parte sul finale di results) — è montaggio, non fretta;
+  - il ritmo del PARLATO resta quello scelto dall'utente (rate 155): il
+    guadagno viene tutto dal togliere i vuoti.
 
-Il video si monta UNA volta; poi si muxa la traccia voce.
+Il video si monta UNA volta; poi si muxa la traccia voce. Le durate della
+voce si rileggono SEMPRE da audio/<v>/durations.txt: cambiare motore vocale
+(make_voiceover.py) riflow-a la schedule senza toccare questo file.
 I frame non toccano mai il disco: ogni scena PIL viene piped a ffmpeg
 (rawvideo su stdin) — il disco della macchina è quasi pieno.
 
@@ -89,27 +94,30 @@ def agent_img(name, box_w, box_h):
     return ag.resize((int(ag.width * r), int(ag.height * r)), Image.LANCZOS)
 
 # ── timeline ───────────────────────────────────────────────────────────
-# (nome, durata_s). Più lunghe della tornata precedente (61 → ~73 s): il
-# ritmo chiesto dall'utente è disteso, la voce non rincorre il montaggio.
-# Ogni durata DEVE contenere il suo segmento voce (verificato sotto).
-# xfade 0.5 s fra tutte le scene.
+# (nome, durata_s). Tornata 03/08: scene mute corte (3,5-4,6 s), scene
+# parlate dimensionate su lead + durata REALE della battuta + coda ~1-1,3 s.
+# La battuta office (7,5 s) NON sta nella sua scena: prosegue di proposito
+# sulla scena chat (L-cut). xfade 0.5 s fra tutte le scene.
 FADE = 0.5
 SCENES = [
-    ("hook",     4.6),
-    ("reveal",   4.8),
-    ("meeting",  5.5),   # muta: didascalia roles/captain/budget
-    ("roles",    9.0),
-    ("dept",     6.5),   # muta: didascalia Writers/Critics
-    ("office",   9.5),
-    ("chat",     6.5),   # muta: didascalia ask·steer·approve
-    ("globe",    9.0),
-    ("webpages", 6.5),   # muta: didascalie scores·salaries / swipe
-    ("results",  6.0),   # muta: parlano i numeri grandi
-    ("box",      6.0),
+    ("hook",     3.6),
+    ("reveal",   4.4),
+    ("meeting",  3.5),   # muta: didascalia roles/captain/budget
+    ("roles",    6.6),
+    ("dept",     4.0),   # muta: didascalia Writers/Critics + 2 vignette
+    ("office",   6.5),   # la voce prosegue sulla scena chat (L-cut)
+    ("chat",     4.6),   # coda della voce office + didascalia ask·steer·approve
+    ("globe",    6.5),
+    ("webpages", 4.6),   # muta: didascalie scores·salaries / swipe
+    ("results",  4.4),   # muta: parlano i numeri grandi
+    ("box",      5.6),   # la voce parte 1,4 s PRIMA della scena (J-cut)
     ("cta",      5.0),
 ]
 DURS = [d for _, d in SCENES]
-VO_LEAD = 0.6      # la voce parte 0.6 s dopo l'inizio scena (respiro)
+VO_LEAD = 0.5      # attacco voce di default: 0.5 s dopo l'inizio scena
+# Offset per-scena rispetto all'inizio scena: negativo = J-cut (la battuta
+# comincia sul finale della scena precedente, da manuale di montaggio).
+VO_OFF = {"box": -1.4}
 
 def scene_start(k):
     return sum(DURS[:k]) - FADE * k
@@ -119,18 +127,17 @@ VERSIONS = {
     "sober": {"music": None, "gain": 0.0},
 }
 
-# la voce più lunga deve stare nella scena (con lead); piccoli sfori nel
-# crossfade sono ok ma mai sovrapporsi al segmento successivo
-for v in VERSIONS:
-    dpath = os.path.join(AUD, v, "durations.txt")
+# Le durate della voce arrivano SEMPRE dai file (durations.txt): se si
+# rigenera l'audio con un altro motore, la schedule si riadatta da sola.
+def vo_durs(version):
+    dpath = os.path.join(AUD, version, "durations.txt")
     if not os.path.isfile(dpath):
         sys.exit(f"manca {dpath} — lancia prima make_voiceover.py")
     vo = [float(l.split()[1]) for l in open(dpath)]
-    for k in range(len(SCENES)):
-        end_in_scene = VO_LEAD + vo[k]
-        if end_in_scene > DURS[k] + FADE - 0.1:
-            sys.exit(f"[{v}] voce seg{k:02d} ({vo[k]:.2f}s) non sta nella "
-                     f"scena {SCENES[k][0]} ({DURS[k]}s)")
+    if len(vo) != len(SCENES):
+        sys.exit(f"durations.txt ha {len(vo)} segmenti, la timeline "
+                 f"{len(SCENES)} scene: riallineare make_voiceover.py")
+    return vo
 
 os.makedirs(BUILD, exist_ok=True)
 
@@ -450,11 +457,15 @@ def build_video():
     segs["box"] = pipe_scene("box", DURS[10], sc_box(DURS[10]))
     segs["cta"] = pipe_scene("cta", DURS[11], sc_cta(DURS[11]))
     print("riprese del gioco…")
-    segs["dept"] = game_segment("dept", "dept", 40, DURS[4],
+    # skip tarati sulla timeline corta: dept parte a f100 così ENTRAMBE le
+    # vignette compaiono nei primi 1,1 s (a f40 la seconda arrivava a scena
+    # quasi finita); chat parte a f115 con lo scambio già avviato e chiude
+    # sull'ultima risposta. office resta a f40: panoramica + push-in.
+    segs["dept"] = game_segment("dept", "dept", 100, DURS[4],
                                 caption=["Writers tailor your CV, position by position",
                                          "Critics review every draft"])
     segs["office"] = game_segment("office", "office", 40, DURS[5])
-    segs["chat"] = game_segment("chat", "chat", 70, DURS[6],
+    segs["chat"] = game_segment("chat", "chat", 115, DURS[6],
                                 caption=["chat with your team — ask · steer · approve"])
     print("riprese web (demo mode)…")
     g1 = min(15.7, ffprobe_dur(f"{WEB}/web_map.webm") - 0.3)
@@ -513,20 +524,34 @@ def vo_gain(path, target_db=-18.0):
             return 10 ** ((target_db - rms) / 20)
     return 1.0
 
-def vo_schedule(version):
-    """Attacchi della voce: ancorati all'inizio scena (+VO_LEAD) ma mai
-    sovrapposti al segmento precedente. GAP largo: le pause fra le frasi
-    sono parte del ritmo chiesto dall'utente, non tempo da recuperare."""
-    GAP = 0.6
-    vo = [float(l.split()[1])
-          for l in open(os.path.join(AUD, version, "durations.txt"))]
+def vo_schedule(version, verbose=False):
+    """Attacchi della voce: ancorati all'inizio scena (+VO_LEAD, o l'offset
+    per-scena di VO_OFF per i J-cut) e mai sovrapposti al segmento
+    precedente (GAP minimo 0.9 s). Le battute possono scavalcare i tagli
+    (L-cut): il vincolo è il flusso del parlato, non la gabbia della scena."""
+    GAP = 0.9
+    vo = vo_durs(version)
     starts, prev_end = [], 0.0
     for k in range(len(SCENES)):
-        s = max(scene_start(k) + VO_LEAD, prev_end + GAP)
+        off = VO_OFF.get(SCENES[k][0], VO_LEAD)
+        s = max(scene_start(k) + off, prev_end + GAP)
         starts.append(s)
-        prev_end = s + vo[k]
+        if vo[k] > 0:
+            prev_end = s + vo[k]
     if prev_end > sum(DURS) - FADE * (len(SCENES) - 1) - 0.1:
         sys.exit(f"[{version}] la voce sborda dal video ({prev_end:.1f}s)")
+    if verbose:
+        # Profilo delle pause: è il numero che l'utente ha contestato
+        # (prima 2,4-16 s), quindi lo stampiamo a ogni build.
+        print("pause fra le battute:")
+        last_end, last_k = None, None
+        for k in range(len(SCENES)):
+            if vo[k] <= 0:
+                continue
+            if last_end is not None:
+                print(f"  {SCENES[last_k][0]:>8} → {SCENES[k][0]:<8} "
+                      f"{starts[k] - last_end:5.2f}s")
+            last_end, last_k = starts[k] + vo[k], k
     return starts
 
 
@@ -534,7 +559,7 @@ def mux(video, version, out_path):
     cfg = VERSIONS[version]
     vdir = os.path.join(AUD, version)
     total = ffprobe_dur(video)
-    starts = vo_schedule(version)
+    starts = vo_schedule(version, verbose=True)
     inputs, fparts, mixin = ["-i", video], [], []
     idx = 1
     for k in range(len(SCENES)):
