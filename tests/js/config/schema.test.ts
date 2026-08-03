@@ -137,6 +137,24 @@ describe('validateConfig — config valide', () => {
     expect(r.success).toBe(true);
   });
 
+  it('accetta lo Scorer locale role-scoped senza cambiare active_provider', () => {
+    const r = validateConfig({
+      ...validClaudeConfig,
+      team: {
+        local_scorer: {
+          enabled: true,
+          base_url: 'http://host.docker.internal:11434/v1',
+          model: 'model-installed-by-user',
+        },
+      },
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.active_provider).toBe('claude');
+      expect(r.data.team?.local_scorer?.mode).toBe('shadow');
+    }
+  });
+
   it('accetta canale telegram con 3 bot configurati', () => {
     const r = validateConfig({
       ...validClaudeConfig,
@@ -230,6 +248,20 @@ describe('validateConfig — errori schema', () => {
       },
       channels: {},
       workspace: '/tmp/test-jht',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rifiuta uno Scorer "locale" che invia dati a un host remoto', () => {
+    const r = validateConfig({
+      ...validClaudeConfig,
+      team: {
+        local_scorer: {
+          enabled: true,
+          base_url: 'https://api.example.com/v1',
+          model: 'not-local',
+        },
+      },
     });
     expect(r.success).toBe(false);
   });

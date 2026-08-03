@@ -582,6 +582,31 @@ case "$PROVIDER" in
     ;;
 esac
 
+# Override sperimentale e ROLE-SCOPED della missione M5. Non aggiunge un
+# quarto provider globale: active_provider continua a governare tutti gli
+# altri agenti. Il runner rilegge e valida la config (incluso host locale)
+# prima di toccare la coda dello Scorer.
+if [ "$(printf '%s' "$ROLE" | tr 'A-Z' 'a-z')" = "scorer" ] && \
+   [ -f "$JHT_CONFIG_FILE" ] && command -v python3 >/dev/null 2>&1 && \
+   python3 - "$JHT_CONFIG_FILE" >/dev/null 2>&1 <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        cfg = json.load(handle)
+    raise SystemExit(0 if cfg.get("team", {}).get("local_scorer", {}).get("enabled") is True else 1)
+except (OSError, TypeError, ValueError):
+    raise SystemExit(1)
+PYEOF
+then
+  LOCAL_SCORER_RUNNER="/app/shared/skills/local_scorer.py"
+  [ -f "$LOCAL_SCORER_RUNNER" ] || LOCAL_SCORER_RUNNER="$DEV_TEAM_DIR/../shared/skills/local_scorer.py"
+  CLI_BIN="python3"
+  CLI_ARGS="$LOCAL_SCORER_RUNNER serve"
+  CLI_ENV_PREFIX=""
+  PROVIDER="local-scorer"
+  AUTH_METHOD="local-endpoint"
+fi
+
 # Verifica prerequisiti della CLI scelta
 if ! command -v "$CLI_BIN" &>/dev/null; then
   echo "Errore: comando '$CLI_BIN' non trovato (provider configurato: ${PROVIDER:-claude})."
@@ -943,9 +968,11 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_NAME='$AGENT_NAME'" Enter
   tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
-  # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
-  sleep 8
-  tmux send-keys -t "$SESSION" Enter
+  if [ "$CLI_BIN" != "python3" ]; then
+    # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
+    sleep 8
+    tmux send-keys -t "$SESSION" Enter
+  fi
 else
   # -x/-y: dimensioni pane senza client attaccato. Di default tmux usa
   # 80x24 quando la sessione è detached, e capture-pane restituisce output
@@ -973,7 +1000,8 @@ else
   # Loop: 60 iterazioni × 2s = 120s totali. Il dialog appare 5-30s dopo il
   # CLI start; 120s copre anche partenze lente (rete, immagine grossa).
   # Exit immediato appena uno dei pattern matcha → no overhead a regime.
-  setsid sh -c '
+  if [ "$CLI_BIN" != "python3" ]; then
+    setsid sh -c '
     _sess="'"$SESSION"'"
     _i=0
     _login_handled=0
@@ -1003,7 +1031,8 @@ else
       _i=$((_i + 1))
     done
     tmux send-keys -t "$_sess" Enter
-  ' >/dev/null 2>&1 < /dev/null &
+    ' >/dev/null 2>&1 < /dev/null &
+  fi
 fi
 
 # ── Sfasamento iniziale del worker ──────────────────────────────────────────
@@ -1196,4 +1225,3 @@ if [ "$ROLE" = "sentinella" ]; then
   _msg="[@utente -> @sentinella] [MSG] Avvio. Aspetta il primo [BRIDGE TICK]."
   _kickoff "$SESSION" "$_msg"
 fi
-

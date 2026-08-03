@@ -1399,6 +1399,16 @@
       "path": "docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md",
       "description": "[PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi",
       "last_review": null
+    },
+    {
+      "path": "docs/guides/LOCAL-SCORER.md",
+      "description": "Experimental role-scoped Local Scorer setup, quality harness, hardware evidence requirements, and explicit zero-cloud limits",
+      "last_review": "2026-08-03"
+    },
+    {
+      "path": "docs/internal/architecture/provider-touchpoint-inventory.md",
+      "description": "Machine-checked inventory of provider-specific seams and the narrow M5 Local Scorer architecture boundary",
+      "last_review": "2026-08-03"
     }
   ]
 }
