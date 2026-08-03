@@ -19,7 +19,8 @@ function readLocalCounts(): SyncCounts {
     for (const t of ["positions", "scores", "applications"] as const) {
       try {
         const row = db.prepare(`SELECT count(*) AS c FROM ${t}`).get() as
-          { c: number } | undefined;
+          | { c: number }
+          | undefined;
         counts[t] = row?.c ?? 0;
       } catch {
         // tabella mancante: lascia 0
