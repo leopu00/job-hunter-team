@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSupabaseConfigured } from '@/lib/workspace'
 import { createClient } from '@/lib/supabase/server'
-import yaml from 'js-yaml'
+import { dump as dumpYaml } from 'js-yaml'
 import fs from 'fs'
 import path from 'path'
 
@@ -182,7 +182,7 @@ function saveToYaml(req: NextRequest, profile: Record<string, unknown>) {
   }
 
   try {
-    const yamlStr = yaml.dump(yamlData, { lineWidth: 120, noRefs: true })
+    const yamlStr = dumpYaml(yamlData, { lineWidth: 120, noRefs: true })
     fs.writeFileSync(profilePath, yamlStr, 'utf-8')
     return NextResponse.json({ ok: true, path: profilePath })
   } catch (err: unknown) {
