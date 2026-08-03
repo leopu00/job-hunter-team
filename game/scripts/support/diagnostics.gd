@@ -133,10 +133,18 @@ static func _runtime_section() -> Dictionary:
 			data[key] = status.get(key, "?")
 	else:
 		# Senza autoload (selftest headless) le sonde base restano possibili.
+		# Stesso criterio di setup_service._exec_present ma replicato SENZA
+		# caricare quello script: questa sonda può girare prima che gli
+		# autoload esistano, dove setup_service.gd non compila e la sua load
+		# fallita resterebbe in cache per tutti (vedi pull_stream_selftest).
+		# Il vecchio `code != -1` diceva "installato" anche su POSIX senza
+		# docker: lì un comando assente esce 127 via shell (126 = trovato ma
+		# non eseguibile), mai -1 — quello è solo il lancio fallito di Windows.
 		var version := _run("docker", PackedStringArray(["version", "--format",
 				"{{.Server.Version}}"]))
-		data["docker_available"] = int(version.get("code", -1)) != -1
-		data["docker_running"] = int(version.get("code", -1)) == 0
+		var code := int(version.get("code", -1))
+		data["docker_available"] = code != -1 and code != 126 and code != 127
+		data["docker_running"] = code == 0
 	var bus := _autoload("BackendBus")
 	if bus != null:
 		# MAI l'IP della VPS: identifica l'infrastruttura dell'utente. Il modo

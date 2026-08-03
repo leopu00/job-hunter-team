@@ -141,11 +141,21 @@ func _refresh() -> void:
 	var fraction := float(_info.get("fraction", -1.0))
 	_bar.fraction = fraction
 	_tick()  # il tempo trascorso è aggiornato SUBITO, non al prossimo secondo
-	if fraction < 0.0:
-		# Niente dato → niente percentuale: barra di attività e la ragione.
-		_detail_lbl.text = UIStrings.t("setup.progress_no_meter")
-		return
 	var got := float(_info.get("got_mb", 0.0))
+	if fraction < 0.0:
+		if got <= 0.0:
+			# Nessun dato di nessun tipo: barra di attività e la ragione.
+			_detail_lbl.text = UIStrings.t("setup.progress_no_meter")
+			return
+		# I docker moderni su pipe non dichiarano MAI il totale: percentuale
+		# ed ETA non esistono, ma i byte scaricati e il rate misurato sì —
+		# "890 MB scaricati · 6.2 MB/s" batte una barra muta.
+		var partial := UIStrings.t("setup.progress_downloaded") % _fmt_mb(got)
+		var dl_rate := _measured_rate()
+		if dl_rate > 0.0:
+			partial += " · %.1f MB/s" % dl_rate
+		_detail_lbl.text = partial
+		return
 	var total := float(_info.get("total_mb", 0.0))
 	var text := "%s / %s · %d%%" % [_fmt_mb(got), _fmt_mb(total),
 			int(round(fraction * 100.0))]
