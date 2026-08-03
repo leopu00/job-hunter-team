@@ -165,13 +165,6 @@ KNOWN_SKILL_LOCALIZATION_GAPS = {
     ('game-reply-options', 'de'),
     ('game-reply-options', 'pt'),
     ('game-reply-options', 'hu'),
-    # Scout/Mantenitore — ladder anti-silenzio. Monolingue.
-    ('resilience', 'it'),
-    ('resilience', 'es'),
-    ('resilience', 'fr'),
-    ('resilience', 'de'),
-    ('resilience', 'pt'),
-    ('resilience', 'hu'),
     # Capitano — calcolo dello scaling. Monolingue.
     ('scaling-calc', 'it'),
     ('scaling-calc', 'es'),
