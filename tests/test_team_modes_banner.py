@@ -74,7 +74,8 @@ def make_db(home):
             id INTEGER PRIMARY KEY, company_id INTEGER,
             status TEXT DEFAULT 'scored', last_checked TIMESTAMP,
             expires_at TIMESTAMP, office_lat REAL,
-            office_geocoded INTEGER DEFAULT 0, work_mode TEXT);
+            office_geocoded INTEGER DEFAULT 0, work_mode TEXT,
+            is_open INTEGER);
         CREATE TABLE scores (
             id INTEGER PRIMARY KEY, position_id INTEGER, total_score INTEGER);
         CREATE TABLE applications (
@@ -87,13 +88,13 @@ def make_db(home):
 def add_position(conn, pid, score=None, status="scored", cv=False,
                  last_checked="2026-08-01 00:00:00", expires_at=None,
                  office_geocoded=1, office_lat=1.0, work_mode="hybrid",
-                 company_id=None):
+                 company_id=None, is_open=1):
     conn.execute(
         "INSERT INTO positions (id, company_id, status, last_checked, "
-        "expires_at, office_lat, office_geocoded, work_mode) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "expires_at, office_lat, office_geocoded, work_mode, is_open) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (pid, company_id, status, last_checked, expires_at, office_lat,
-         office_geocoded, work_mode))
+         office_geocoded, work_mode, is_open))
     if score is not None:
         conn.execute("INSERT INTO scores (position_id, total_score) "
                      "VALUES (?, ?)", (pid, score))
