@@ -331,6 +331,65 @@ describe("Storage — permessi dei file", () => {
     storage.writeCredential("claude", apiKeyCred("sk-riscritto"));
     expect(statSync(join(credDir, "claude.enc.json")).mode & 0o777).toBe(0o600);
   });
+
+  it("una directory credenziali preesistente e permissiva viene irrigidita a 0700", async () => {
+    // `mode` di mkdirSync vale solo alla creazione: una dir lasciata a 0755 da
+    // un altro tool (o ripristinata da un backup) restava enumerabile da
+    // chiunque, pur con i file dentro a 0600.
+    const { credDir, storage } = await withIsolatedHome();
+    mkdirSync(credDir, { recursive: true, mode: 0o755 });
+    chmodSync(credDir, 0o755);
+    expect(statSync(credDir).mode & 0o777).toBe(0o755);
+
+    // Basta un'operazione qualsiasi che tocchi la directory.
+    expect(storage.listStoredProviders()).toEqual([]);
+    expect(statSync(credDir).mode & 0o777).toBe(0o700);
+
+    storage.writeCredential("claude", apiKeyCred("sk-dir"));
+    expect(statSync(credDir).mode & 0o777).toBe(0o700);
+  });
+
+  it("un chmod che fallisce (dir di proprietà del container) non rompe l'avvio", async () => {
+    const home = mkdtempSync(join(tmpdir(), "jht-cred-test-"));
+    expect(home.startsWith(tmpdir())).toBe(true);
+    tempHomes.push(home);
+    process.env.JHT_HOME = home;
+    process.env.JHT_CREDENTIALS_KEY = "passphrase-di-test";
+
+    const credDir = join(home, "credentials");
+    mkdirSync(credDir, { recursive: true, mode: 0o755 });
+    chmodSync(credDir, 0o755);
+
+    vi.resetModules();
+    vi.doMock("node:fs", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("node:fs")>();
+      return {
+        ...actual,
+        default: actual,
+        chmodSync: () => {
+          const err: NodeJS.ErrnoException = new Error("operation not permitted");
+          err.code = "EPERM";
+          throw err;
+        },
+      };
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      const storage: StorageModule = await importStorage();
+      // Non lancia: l'irrigidimento è difesa in profondità, non precondizione.
+      expect(storage.listStoredProviders()).toEqual([]);
+      expect(statSync(credDir).mode & 0o777).toBe(0o755);
+      // Segnalato, ma una volta sola per processo: niente spam a ogni lettura.
+      storage.listStoredProviders();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain("EPERM");
+    } finally {
+      warn.mockRestore();
+      vi.doUnmock("node:fs");
+      vi.resetModules();
+    }
+  });
 });
 
 describe("Storage — file corrotto e passphrase sbagliata", () => {
