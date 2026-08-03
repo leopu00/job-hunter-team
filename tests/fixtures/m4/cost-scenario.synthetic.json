@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "scenario_id": "synthetic-unit-test-not-vendor-pricing",
+  "currency": "EUR",
+  "period_days": 30,
+  "workload": {
+    "uncached_input_tokens_per_day": 1000000,
+    "cached_input_tokens_per_day": 2000000,
+    "output_tokens_per_day": 500000
+  },
+  "pay_per_use": {
+    "uncached_input_currency_per_million_tokens": 2,
+    "cached_input_currency_per_million_tokens": 0.2,
+    "output_currency_per_million_tokens": 8,
+    "fixed_currency_per_period": 0
+  },
+  "subscription": {
+    "price_currency_per_billing_period": 20,
+    "billing_period_days": 30,
+    "subscriptions_required": 1,
+    "capacity_assumption": "workload_fits"
+  }
+}

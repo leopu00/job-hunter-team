@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from "@/lib/jht-paths";
-import { ALL_PROVIDERS } from "@/lib/providers";
+import { ACTIVE_PROVIDERS } from "@/lib/providers";
 import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
@@ -11,12 +11,10 @@ export const dynamic = "force-dynamic";
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_PATH = JHT_CONFIG_PATH;
 
-// Provider accettati come `active_provider`. La lista canonica è ALL_PROVIDERS
-// (`lib/providers.ts`, condivisa con /api/credentials): qui la riusiamo e
-// aggiungiamo `anthropic`, alias storico di `claude` che alcune config sul
-// disco usano ancora come valore di `active_provider`. La vecchia lista
-// scritta a mano qui aveva "kimi" due volte e ignorava i provider OAuth.
-const VALID_PROVIDERS = ["anthropic", ...ALL_PROVIDERS] as const;
+// Provider accettati come `active_provider`: runtime canonici + alias legacy.
+// I nomi delle credenziali OAuth non sono processi avviabili e quindi non
+// appartengono a questo contratto.
+const VALID_PROVIDERS = ACTIVE_PROVIDERS;
 
 function sanitizeString(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;

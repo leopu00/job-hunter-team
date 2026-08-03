@@ -3,6 +3,7 @@ import { requireLocalWrite } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from "@/lib/jht-paths";
+import { ACTIVE_PROVIDERS } from "@/lib/providers";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_PATH = JHT_CONFIG_PATH;
-const PROVIDERS = ["anthropic", "claude", "openai", "kimi", "kimi"] as const;
+const PROVIDERS = ACTIVE_PROVIDERS;
 
 function sanitize(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;

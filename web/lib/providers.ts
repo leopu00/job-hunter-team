@@ -20,3 +20,18 @@ export const ALL_PROVIDERS = [
 ] as const;
 
 export type Provider = (typeof ALL_PROVIDERS)[number];
+
+/**
+ * Nomi validi per il runtime del team.
+ *
+ * Non confondere i provider di credenziali OAuth (`chatgpt_pro`,
+ * `claude_max`) con un runtime: il processo da avviare resta codex/claude.
+ * `anthropic` e `codex` sono alias storici ancora scritti da alcune config.
+ */
+export const ACTIVE_PROVIDER_ALIASES = ["anthropic", "codex"] as const;
+export const ACTIVE_PROVIDERS = [
+  ...API_KEY_PROVIDERS,
+  ...ACTIVE_PROVIDER_ALIASES,
+] as const;
+
+export type ActiveProvider = (typeof ACTIVE_PROVIDERS)[number];
