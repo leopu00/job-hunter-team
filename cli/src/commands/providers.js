@@ -154,7 +154,8 @@ async function handleUse(id) {
   const normalized = normalizeId(id);
   if (!normalized) {
     console.error(`${ERR}  provider '${id}' non riconosciuto. Supportati: ${Object.keys(KNOWN_PROVIDERS).join(', ')}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   let config = {};
   if (await fileExists(CONFIG_PATH)) {
@@ -258,7 +259,8 @@ async function handleUpdate(id) {
 
   if (targets.length === 0) {
     console.error(`${ERR}  provider '${id}' non riconosciuto. Supportati: claude, codex, kimi`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   // Branch in-container vs host:
@@ -272,7 +274,10 @@ async function handleUpdate(id) {
   //   sui binari npm in uso dal container running).
   if (isContainer()) {
     const res = await handleUpdateInContainer(targets);
-    if (!res.ok) process.exit(1);
+    if (!res.ok) {
+      process.exitCode = 1;
+      return;
+    }
     console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
     return;
   }
@@ -280,7 +285,8 @@ async function handleUpdate(id) {
   const repoRoot = findRepoRoot();
   if (!repoRoot || !existsSync(join(repoRoot, 'docker-compose.yml'))) {
     console.error(`${ERR}  docker-compose.yml non trovato. Esegui dalla root del repo JHT.`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const homeDir = homedir();
@@ -307,7 +313,14 @@ async function handleUpdate(id) {
     if (!failed) console.log(`  ${OK}  ${target} aggiornato`);
   }
 
-  if (failed > 0) process.exit(1);
+  // `return` esplicito: con `process.exit()` bastava segnare il codice per
+  // fermare tutto, con `process.exitCode` il flusso prosegue — e senza il
+  // `return` il consiglio "riavvia gli agenti" verrebbe stampato proprio a chi
+  // l'aggiornamento e' fallito. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
+  if (failed > 0) {
+    process.exitCode = 1;
+    return;
+  }
 
   console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
 }
@@ -658,7 +671,12 @@ async function handleCheck() {
   for (const u of updates) {
     console.log(`${u.id} ${u.installed} ${u.latest}`);
   }
-  process.exit(1);
+  // Exit 1 = "c'e' almeno un update", ed e' il contratto scriptabile di questo
+  // comando: chi lo chiama legge PRIMA le righe e POI il codice. Con
+  // `process.exit()` subito dopo il ciclo di `console.log`, su una pipe quelle
+  // righe potevano restare nel buffer — il codice diceva "ci sono update" e
+  // l'output non diceva quali. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
+  process.exitCode = 1;
 }
 
 async function handleCurrent() {
