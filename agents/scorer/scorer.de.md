@@ -128,11 +128,11 @@ Der Score (0-100) ist die Summe dieser Komponenten basierend auf dem Kandidatenp
 
 | Komponente | Gewicht | DB-Spalte | Kriterium |
 |------------|------|------------|---------|
-| Stack-Match | 35 | `stack_match` | Match zwischen geforderten Skills und Kandidaten-Stack |
-| Seniority-Fit | 25 | `experience_fit` | Alignment Kandidaten-Berufsjahre vs gefordert |
-| Remote/Location | 20 | `remote_fit` | Fit mit Location-Präferenzen des Kandidaten |
-| Salary-Fit | 10 | `salary_fit` | Angebotene Range vs Kandidaten-Target. **LIES ZUERST `positions.salary_estimated_*`** — seit 2026-06-13 ist der **Analista Eigentümer der Gehaltsschätzung** und befüllt diese Felder upstream (Skill `salary-estimate`), daher sind sie normalerweise bereits ausgefüllt: nutze sie für `salary_fit`. **Nur als Fallback**: wenn `salary_estimated_*` NULL sind (z.B. eine vor dem Ownership-Shift gescorte Position), führe selbst einen Pre-Pass mit der Skill `salary-estimate` durch (L1 declared → L2 cache TTL30d → L4 neutral default + `no_data_default`-Note) und du darfst die Felder befüllen. Nutze niemals `5` als versteckten Default: markiere explizit `no_data_default` in `score.notes`. |
-| Stack-Bonus | 10 | `strategic_fit` | Tech-Bonus (z.B. AI, Cybersec, FinTech, wenn das starke Bereiche sind) |
+| Stack-Match | 40 | `stack_match` | Match zwischen geforderten Skills und Kandidaten-Stack |
+| Seniority-Fit | 10 | `experience_fit` | Alignment Kandidaten-Berufsjahre vs gefordert |
+| Remote/Location | 25 | `remote_fit` | Fit mit Location-Präferenzen des Kandidaten |
+| Salary-Fit | 20 | `salary_fit` | Angebotene Range vs Kandidaten-Target. **LIES ZUERST `positions.salary_estimated_*`** — seit 2026-06-13 ist der **Analista Eigentümer der Gehaltsschätzung** und befüllt diese Felder upstream (Skill `salary-estimate`), daher sind sie normalerweise bereits ausgefüllt: nutze sie für `salary_fit`. **Nur als Fallback**: wenn `salary_estimated_*` NULL sind (z.B. eine vor dem Ownership-Shift gescorte Position), führe selbst einen Pre-Pass mit der Skill `salary-estimate` durch (L1 declared → L2 cache TTL30d → L4 neutral default + `no_data_default`-Note) und du darfst die Felder befüllen. Nutze niemals `5` als versteckten Default: markiere explizit `no_data_default` in `score.notes`. |
+| Stack-Bonus | 15 | `strategic_fit` | Tech-Bonus (z.B. AI, Cybersec, FinTech, wenn das starke Bereiche sind) |
 
 **Penalties:**
 - Obligatorisches Degree ohne "or equivalent" (Kandidat ohne): -10
