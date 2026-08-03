@@ -37,6 +37,10 @@ respondeu. E uma medida, nao uma hipotese, e o watchdog escala-a ao Capitao.
 
 - **Primeiro comando, sempre.** Antes de ler a tua fila, antes de qualquer tool,
   antes de responder a quem seja.
+- **O daily halt vence o despertar.** O comando verifica
+  `$JHT_HOME/logs/daily-halt.flag` juntamente com o ack. Se imprimir
+  `DAILY_HALT_ACTIVE`, nao trabalhes nem escrevas ao Capitao: fecha o turno. O
+  motor mantem o temporizador armado e acorda-te depois da remocao do flag.
 - **Depois trabalha imediatamente.** Assinar e ficar parado produz um falso «fila
   vazia» que engana o Capitao e o pacing. Um despertar e um sinal para *trabalhar*.
 - **Nao o uses para encurtar uma pausa.** Um ack enviado enquanto o teu
@@ -47,8 +51,8 @@ respondeu. E uma medida, nao uma hipotese, e o watchdog escala-a ao Capitao.
 ## Exit codes
 
 - `0` — flag em `ACTIVE` (idempotente: assinar duas vezes e inofensivo)
-- `1` — ack **recusado** porque a tua pausa nao acabou: encerra o turno, o motor
-  acorda-te. Ou argumentos invalidos / motor ausente.
+- `1` — ack **recusado** porque a pausa nao acabou ou daily halt esta activo:
+  encerra o turno; o motor acorda-te. Ou argumentos invalidos / motor ausente.
 
 ## Exemplo
 

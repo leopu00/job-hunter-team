@@ -78,6 +78,14 @@ Ante un freeze, soft-pause o `[ESC]` de la Sentinella, detente en lo
 que estes haciendo — a mitad de una tool-call si es necesario — y
 espera `[RIPRENDI]` del Capitan. No reintentes la accion interrumpida.
 
+En **cada despertar**, antes de trabajar o enviar mensajes entre agentes,
+comprueba `$JHT_HOME/logs/daily-halt.flag`. Un despertar de throttle lo
+comprueba dentro de `throttle-ack`: `DAILY_HALT_ACTIVE` significa cerrar
+el turno de inmediato. Mientras exista, los workers no hacen ping al
+Capitan; el Capitan ignora los `[READY]` activados por temporizador y no
+responde. Todos guardan silencio hasta que se retire el flag y llegue
+`[RIPRENDI]`.
+
 ---
 
 ## 🔄 RULE-T08 — Sin bucles infinitos, nunca morir en silencio
