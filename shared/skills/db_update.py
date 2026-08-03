@@ -390,6 +390,22 @@ def update_position(args):
         params.append(1 if args.office_verified == 'true' else 0)
         changed.append(f"office_verified={args.office_verified}")
 
+    # Geocoding on-demand: la richiesta e il risultato devono atterrare nella
+    # STESSA transazione. In precedenza `geocode_requested` restava acceso
+    # dopo il completamento e `next-for-geocoding` provava a dedurre l'ACK da
+    # `office_geocoded`. Questo rendeva impossibile un ricalcolo: una nuova
+    # richiesta su una riga già geocodificata veniva nascosta dalla coda.
+    #
+    # Richiediamo entrambi i segnali espliciti usati dalla skill canonica:
+    # `--action geocode` identifica la lane e `--office-geocoded true|false`
+    # dichiara che il tentativo è terminato (anche dopo ricerca esaustiva
+    # fallita). La lane care-mode non accende il flag, quindi l'UPDATE a 0 è
+    # un no-op semantico e NON trasforma il geocoding in lavoro automatico.
+    if m_action == 'geocode' and args.office_geocoded is not None:
+        updates.append("geocode_requested = 0")
+        updates.append("geocode_requested_at = NULL")
+        changed.append("geocode_requested=acknowledged")
+
     # Expiry tracking (espansione Analista — RULE-12 richeck giornaliero).
     # expires_at: ISO YYYY-MM-DD da deadline_extract; "" => NULL (sconosciuta).
     if args.expires_at is not None:

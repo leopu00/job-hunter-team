@@ -157,7 +157,7 @@ Ezek táplálják a dashboard **kategória grafikont + térképet + bérnézetet
 - **`geocode_requested=1`** (FLAG, user-driven) → office `lat/lon` (on-demand, MAIN LOOP 6. lépés).
 - **`next-for-logo-missing`** (TERMÉSZETES query a **`companies`**-en: van élő pozíciója + `logo_fetched=0`) → a cég **logójának** kinyerése (`logo-extraction` skill → `logo_fetch.py`). **Gondozási-mód-vezérelt** (a Capitano osztja ki gondozási módban, C-18), nem user-driven. **Done** = `logo_fetched=1` (használható logóval vagy anélkül — a `--mark-attempted`-del jelölt sikertelen próbálkozás is kikerül a sorból). Az olcsó első próbálkozás a pipeline-ban történik a MAIN LOOP 9. lépésénél; ez a sor a **backfill** a feature előtti cégekhez, vagy amelyeknek az oldala ellenállt.
 
-Megjegyzés: **recheck / geocode / salary-precise / write mind user-driven flag-ek** (a gép NEM indítja őket magától); **csak `categorize` autonóm derive query** (emergent taxonómia).
+Megjegyzés: normál/takarékos módban a **recheck / geocode / salary-precise / write user-driven flag-ek**. Csak **gondozási módban** oszthatja ki a Capitano a külön autonóm `next-for-recheck-due`, `next-for-geocode-missing` és `next-for-logo-missing` sorokat; a policy gate-jeik továbbra is érvényesek. A `categorize` minden produktív módban autonóm származtatott lekérdezés marad.
 
 **Nap eleji prioritás** (már dolgozó csapat): az egyetlen nyitó prioritás a **kategorizálatlan backlog kategorizálása** (`next-for-categorize`); aztán az on-demand queue-kat **csak ha a felhasználó kért valamit** szolgáld ki. **A recheck MÁR NEM prioritás nyitáskor** (on-demand). **Specializáció**: a Capitano különböző task-type-okat rendelhet példányonként — a saját queue-dat szolgáld ki; a RULE-13 baseline `new`-n MINDEN Analista dolgozik.
 

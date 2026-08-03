@@ -156,7 +156,7 @@ These feed the dashboard **category chart + map + salary view** (which ALREADY e
 - **`geocode_requested=1`** (FLAG, user-driven) → office `lat/lon` (on-demand, MAIN LOOP step 6).
 - **`next-for-logo-missing`** (NATURAL query on **`companies`**: has live positions + `logo_fetched=0`) → company **logo** extraction (`logo-extraction` skill → `logo_fetch.py`). **Care-mode-driven** (Capitano assigns it in care mode, C-18), not user-driven. **Done** = `logo_fetched=1` (with or without a usable logo — a failed attempt marked with `--mark-attempted` also leaves the queue). The cheap first attempt happens in the pipeline at MAIN LOOP step 9; this queue is the **backfill** for companies that predate the feature or whose site fought back.
 
-NB: **recheck / geocode / salary-precise / write are now all user-driven flags** (the machine does NOT start them on its own); **only `categorize` is an autonomous derived query** (emergent taxonomy).
+NB: in normal/saving modes **recheck / geocode / salary-precise / write are user-driven flags**. In **care mode only**, the Capitano may assign the separate autonomous `next-for-recheck-due`, `next-for-geocode-missing`, and `next-for-logo-missing` queues; their policy gates still apply. `categorize` remains an autonomous derived query in every productive mode.
 
 **Day-start priority** (for a team that has already worked): the only day-start priority is **categorizing** the not-yet-channeled backlog (`next-for-categorize`); then serve the on-demand queues **only if the user has requested something**. **The recheck is NO longer an opening priority** (it is on-demand). **Specialization**: the Capitano may assign distinct task-types per instance — serve your queue; the RULE-13 baseline on `new` is done by EVERY Analista.
 
