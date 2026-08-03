@@ -6,7 +6,8 @@ import { GREEN, RED, DIM, BOLD, RESET } from './_colors.js';
 
 const JHT_DIR   = JHT_HOME;
 const CREDS_DIR = join(JHT_DIR, 'credentials');
-const KEY_ENV   = 'JHT_SECRET_KEY';
+const KEY_ENV = 'JHT_CREDENTIALS_KEY';
+const LEGACY_KEY_ENV = 'JHT_SECRET_KEY';
 
 // AES-256-GCM con KDF PBKDF2 (allineato a shared/credentials/crypto.ts)
 const ALGORITHM = 'aes-256-gcm';
@@ -22,7 +23,10 @@ async function fileExists(p) {
 }
 
 function getPassphrase() {
-  return process.env[KEY_ENV] ?? null;
+  // Un solo nome canonico condiviso con `jht keyring` e
+  // shared/credentials. Il vecchio nome resta read-compatible per non rendere
+  // illeggibili vault esistenti durante la migrazione.
+  return process.env[KEY_ENV] ?? process.env[LEGACY_KEY_ENV] ?? null;
 }
 
 /** Cifra `text` con AES-256-GCM. Salt random per file, derivazione PBKDF2. */
@@ -120,6 +124,7 @@ async function setSecret(options) {
     console.error(`\n  ${RED}✗${RESET}  ${BOLD}${KEY_ENV} non impostata.${RESET}`);
     console.error(`  ${DIM}I secret devono essere cifrati a riposo. Imposta una passphrase:${RESET}`);
     console.error(`    ${BOLD}export ${KEY_ENV}="<passphrase robusta>"${RESET}`);
+    console.error(`  ${DIM}(${LEGACY_KEY_ENV} resta accettata solo come fallback legacy.)${RESET}`);
     console.error(`  ${DIM}Salvala anche nel tuo shell rc (~/.bashrc, ~/.zshrc) per persistenza,${RESET}`);
     console.error(`  ${DIM}o in un OS keyring (Keychain/Credential Manager/SecretService).${RESET}\n`);
     process.exitCode = 1;

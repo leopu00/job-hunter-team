@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { createClient } from "@/lib/supabase/server";
 import { getLocalDbPath, localDbExists } from "@/lib/cloud-sync/local";
 import { readSyncState } from "@/lib/cloud-sync/state";
-import { isLocalRequest } from "@/lib/auth";
+import { isLocalRequest, requireAuth } from "@/lib/auth";
 import type { SyncCounts } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +19,7 @@ function readLocalCounts(): SyncCounts {
     for (const t of ["positions", "scores", "applications"] as const) {
       try {
         const row = db.prepare(`SELECT count(*) AS c FROM ${t}`).get() as
-          | { c: number }
-          | undefined;
+          { c: number } | undefined;
         counts[t] = row?.c ?? 0;
       } catch {
         // tabella mancante: lascia 0
@@ -33,6 +32,8 @@ function readLocalCounts(): SyncCounts {
 }
 
 export async function GET() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   // Su Vercel non c'è SQLite locale → readLocalCounts torna 0 → confronto
   // local vs cloud sempre false → banner mostra falso "Da sincronizzare"
   // anche se i dati sono perfettamente in sync su Supabase. La pagina cloud

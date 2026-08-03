@@ -1,6 +1,9 @@
 # 🔐 Access & Credentials — guida consolidata
 
-> Last updated: 2026-05-26. Owner: `docs/internal/ops/vps.md` ne è il "padre" architetturale; questo file consolida solo la sezione **accesso alla macchina** (Local PC / Dedicated PC / VPS) + **dove vivono le credenziali**.
+> Last audited against code: 2026-08-03 (`[JHT-ACCESS-CREDENTIALS-GAPS]`).
+> Owner: `docs/internal/ops/vps.md` ne è il "padre" architetturale; questo
+> file consolida la sezione **accesso alla macchina** (Local PC / Dedicated PC /
+> VPS) + **dove vivono le credenziali**.
 
 ## 0. Perché esiste questo doc
 
@@ -36,16 +39,28 @@ Cosa può un LLM agent     tutto (è in-host) leggere SSH key      **autonomous 
 
 ## 2. Storage convention — dove vivono davvero le credenziali
 
-**Realtà del codice** al 2026-05-26 (verificata su `master`):
+**Realtà del codice** al 2026-08-03 (verificata sui file citati):
 
 | Credenziale | Convention nome | Storage canonico (doc) | **Storage usato dal codice (reale)** | Gap |
 |---|---|---|---|---|
 | SSH private key | `~/.ssh/jht_hetzner` | filesystem 0600 | filesystem 0600 ✅ | nessuno |
-| SSH passphrase | n/a | OS keyring via `jht keyring` | **scollegato** — `jht keyring` salva solo `JHT_CREDENTIALS_KEY`, non la passphrase SSH | 🔴 vedi #6 |
-| Hetzner API token | `HCLOUD_TOKEN` | OS keyring (vps.md §289) | `process.env.HCLOUD_TOKEN` + fallback `JHT_HETZNER_API_TOKEN` (`web/lib/hetzner.ts:49`) | 🟡 doc dice keyring, codice legge env |
-| Generic secrets | `jht secrets set/get` | file cifrato AES-256-GCM in `~/.jht/credentials/` | implementato ✅ (`cli/src/commands/secrets.js`) | nessuno ma vedi #5 |
-| Passphrase di `jht secrets` | `JHT_CREDENTIALS_KEY` | OS keyring via `@napi-rs/keyring` | implementato ✅ (`cli/src/commands/keyring.js`) — service `jht-credentials` | nessuno |
-| Supabase session token | n/a | OS keychain via OAuth desktop | (in dev1) cookie + keychain mediato dalla desktop app | per beta 0 ok |
+| SSH passphrase | n/a | OS keyring via `jht keyring` | **non collegata**: nessun wizard/keychain SSH nel codice corrente | 🔴 aperto |
+| Hetzner API token | `HCLOUD_TOKEN` | secrets/keyring | **nessun client Hetzner attivo** nel codice corrente; la vecchia citazione a `web/lib/hetzner.ts` è fossile | 🟡 serve decisione prima del path B2 |
+| Generic secrets CLI | `jht secrets set/get` | file cifrato in `~/.jht/credentials/` | AES-256-GCM + PBKDF2-SHA512, file `0600`; `JHT_CREDENTIALS_KEY` canonica, `JHT_SECRET_KEY` solo fallback legacy | 🟡 store duplicato rispetto a `shared/credentials/` |
+| Passphrase store condiviso | `JHT_CREDENTIALS_KEY` | env → OS keyring | `shared/credentials/passphrase.ts` prova env, poi `@napi-rs/keyring`; la dipendenza non è installata dal manifest standard, quindi env è oggi il path affidabile | 🟡 keyring non garantito |
+| Email app-password | `credentials/email_monitor.json` | locale `0600` | **JSON in chiaro** scritto da `game/scripts/setup/setup_service.gd`, letto da `email_monitor.py` e chat skills | 🔴 principale target del vault |
+| Supabase session | cookie SSR | cookie HttpOnly / token local device | route cloud: sessione Supabase; route locali: `jht_local_token` + `requireAuth`; sync: `jht_sync_*` separato, revocabile/scadibile | ✅ tre lane separate |
+
+Correzioni applicate dall'audit 2026-08-03:
+
+- il CLI `secrets` e il payload desktop ora preferiscono davvero
+  `JHT_CREDENTIALS_KEY`, coerente con keyring e shared storage; il vecchio
+  `JHT_SECRET_KEY` resta solo in lettura per compatibilità;
+- il payload desktop non conserva più la copia storica CBC/plaintext: usa lo
+  stesso GCM fail-closed del CLI sorgente;
+- le API che toccano SQLite/config/file locali passano dal gate uniforme
+  sessione/local-token prima di leggere o scrivere; il device-token cloud-sync
+  resta una lane distinta e non è stato indebolito.
 
 **Path canonici per platform:**
 
@@ -69,19 +84,25 @@ Linux
   Config        /home/<user>/.jht/jht.config.json
 ```
 
-`JHT_HOME` env var override-a la root su tutte e tre (testato in CI).
+`JHT_HOME` override-a la root per CLI/shared code. Le copie/payload devono
+restare sincronizzate: l'audit ha trovato proprio una copia desktop obsoleta del
+secret store e ora un test impedisce che torni al fallback plaintext.
 
 ---
 
-## 3. Path B2 — LLM agent autonomous setup
+## 3. Path B2 — contratto desiderato, **non implementato end-to-end**
 
 Citato come 1-liner in `vps.md` L425; qui ne dettagliamo il contratto.
 
-### 3.1 Discovery contract — che cosa l'LLM cerca, in che ordine
+Non esiste oggi un endpoint `/api/agent/discovery`, un client Hetzner attivo o
+un comando `jht setup --autonomous`. Quanto segue è il contratto da
+implementare, non una capability da promettere all'utente.
+
+### 3.1 Discovery contract target — che cosa l'LLM cerca, in che ordine
 
 ```
-1.  $env:HCLOUD_TOKEN            (preferred — env var, immediate)
-2.  jht secrets get HCLOUD_TOKEN  (se keyring sbloccato → AES decrypt)
+1.  $env:HCLOUD_TOKEN             (headless/CI, se esplicitamente iniettata)
+2.  jht secrets get HCLOUD_TOKEN  (richiede JHT_CREDENTIALS_KEY disponibile)
 3.  $env:JHT_HETZNER_API_TOKEN    (fallback legacy)
 4.  prompt all'utente             (ultima spiaggia: chiedi & salva via `jht secrets set`)
 ```
@@ -108,7 +129,7 @@ SSH key discovery:
 Verificato empiricamente: dare a un LLM agent (Claude Code, Codex, Kimi) **solo** la variabile `HCLOUD_TOKEN` è sufficiente per il setup VPS end-to-end. Il flow è:
 
 ```
-1. echo $env:HCLOUD_TOKEN                                    # discovery
+1. test -n "$HCLOUD_TOKEN"                                  # verifica presenza, NON stamparlo
 2. ssh-keygen -t ed25519 -N "" -f ~/.ssh/jht_bootstrap       # keypair locale
 3. POST  /v1/ssh_keys      { name, public_key }              # upload pubkey
 4. POST  /v1/servers       { server_type, image,             # create con key
@@ -123,7 +144,11 @@ Verificato empiricamente: dare a un LLM agent (Claude Code, Codex, Kimi) **solo*
 
 **Rispondere alla domanda "ma il token mi dà accesso alla macchina?"**: **sì, indirettamente ma in pratica subito** — l'API token consente di creare un server includendo nella create request una SSH key (anche appena generata dall'agent localmente), e ti permette inoltre lifecycle, snapshot, destroy, rescue mode, web console. Non c'è shell interattiva *senza* SSH, ma SSH + key fresh è uno step automatizzabile da chiunque abbia il token.
 
-**Decisione operativa per beta 0** (riallinea `vps.md` L376-386): il path A (utente paste IP a mano) resta **default per il wizard desktop** — non vogliamo che la desktop app crei VPS automaticamente con la carta dell'utente. Il path B2 (token-only autonomous) è il flow **raccomandato per LLM agent** che l'utente avvia esplicitamente con `jht setup --autonomous` (o equivalente) o quando un AI coding assistant locale (Claude Code/Codex/Kimi) viene incaricato di "tirare su la VPS". Doc esplicita 6.4 del punch list.
+**Decisione operativa corrente:** il path A (utente configura la macchina e
+fornisce l'host) resta l'unico path supportato. Il flusso B2 sopra diventa
+supportato solo quando esisteranno comando, discovery contract, redaction dei
+log, test con token a scope minimo e una conferma utente prima delle operazioni
+billing/distruttive. Fino ad allora non va presentato come feature disponibile.
 
 ### 3.3 Sicurezza — chi autorizza l'LLM ad usare le credenziali?
 
@@ -136,38 +161,25 @@ Futuro v1+: gate esplicito `jht credentials grant <scope> --expiry 1h` che gener
 
 ---
 
-## 4. Recovery scenarios — 5 casi concreti
+## 4. Recovery scenarios — stato verificato
 
-### S1. Nuovo PC, ho ancora accesso al vecchio
-1. Vecchio PC: `jht backup export ~/Desktop/jht-backup.tar.gz.enc`
-2. Nuovo PC: install desktop app + OAuth Supabase
-3. `jht backup import ~/Desktop/jht-backup.tar.gz.enc` (chiede passphrase)
-4. SSH key + secrets pull-ati, VPS riconosciuta
+Il documento precedente descriveva comandi inesistenti (`jht backup
+export/import`) e attribuiva al backup proprietà che non ha. Il codice corrente
+offre `jht backup create/list/restore`: copia una piccola allowlist di file di
+configurazione sotto `~/.jht/backups/`, **non cifra l'archivio, non include DB,
+SSH key o `credentials/`, e non esegue un round-trip su un nuovo PC**.
 
-### S2. Nuovo PC, vecchio PC perso/distrutto
-1. Install desktop app + OAuth Supabase (stesso account)
-2. App pulla config cifrato da Supabase
-3. User incolla passphrase (mostrata 1 volta al setup originale)
-4. ⚠️ Hetzner API token: ricreabile da portale (`console.hetzner.cloud → Security → API tokens → Generate`)
-5. ⚠️ SSH key: l'app genera nuova keypair effimera passphraseless
-6. App usa Hetzner API token per iniettare la nuova pubkey nella VPS
-7. ✅ Dashboard riconnessa, dati nella VPS intatti
+| Scenario | Cosa funziona oggi | Gap/rischio |
+|---|---|---|
+| stesso PC, config corrotta | `jht backup restore --name <nome>` per i soli file nell'allowlist | non è disaster recovery |
+| nuovo PC, vecchio disponibile | copia manuale controllata di DB/config/key/credenziali + reinstallazione | nessun export cifrato e testato |
+| vecchio PC perso | dati cloud sincronizzati recuperabili dopo login; token provider revocabili dal provider | segreti locali e SSH key non sono recuperabili da JHT |
+| passphrase vault persa | nessun recupero crittografico, per design | serve export di recovery o reinserimento dei segreti |
+| SSH key/passphrase persa | recovery manuale dal provider/console o altra key autorizzata | nessuna automazione JHT verificata |
 
-### S3. PC stesso, ho perso la passphrase SSH key
-1. La key è "morta" — non puoi sbloccarla
-2. Path A (con token): genera key effimera, inietta via Hetzner API (vedi S2 punto 5-6), poi cancella la vecchia
-3. Path B (senza token): rescue mode dal portale, monta disk, sostituisci `authorized_keys` a mano
-4. Aggiorna `jht.config.json` per puntare alla nuova key
-
-### S4. PC stesso, Hetzner API token revocato / scaduto
-- Ricreabile sempre: `console.hetzner.cloud → Security → API tokens`
-- Aggiorna `$env:HCLOUD_TOKEN` (Windows) o `~/.jht/credentials/HCLOUD_TOKEN.enc` via `jht secrets set HCLOUD_TOKEN`
-- Niente impatto sull'SSH (key è separata)
-
-### S5. Dedicated PC (Phase 2) — IP locale è cambiato
-- Se LAN statico: nessun problema, IP invariato
-- Se DHCP: aggiorna `jht.config.json` campo `dedicated_pc.host` con nuovo IP
-- Se tunnel Tailscale: l'hostname Tailscale non cambia → niente da fare ✅ (motivo per cui Tailscale è opt-in raccomandato anche su Mode 2)
+Finché `[JHT-BACKUP-ROUNDTRIP]` non include DB, inventario dei secret (mai i
+valori in chiaro), cifratura autenticata, manifest/versione e test restore su
+directory vuota, la UI/docs non devono chiamarlo backup completo.
 
 ---
 
@@ -182,8 +194,15 @@ A) SSH key passphrase                B) JHT secrets passphrase
    protegge ~/.ssh/jht_hetzner          protegge ~/.jht/credentials/*.enc
    usata da: ssh, ssh-add               usata da: jht secrets get
    storage: nessun automatismo (!)       storage: OS keyring (jht keyring set)
-   default: chiede ogni volta            default: chiede 1x poi cached
+   default: chiede ogni volta            affidabile oggi: env JHT_CREDENTIALS_KEY
 ```
+
+`jht keyring` e `shared/credentials/passphrase.ts` contengono l'integrazione
+opzionale `@napi-rs/keyring`, ma il pacchetto non è nel manifest standard:
+non va descritto come disponibile in ogni installazione. Inoltre un processo
+figlio non può esportare una variabile nell'ambiente della shell padre: quando
+si usa il comando CLI, il ponte esplicito è
+`export JHT_CREDENTIALS_KEY="$(jht keyring get)"`, senza loggare il valore.
 
 ### 5.2 Gap noto (🔴 punch list)
 
@@ -215,12 +234,13 @@ Cosa nella doc non è ancora codice — ticket da aprire (o referenziati esisten
 
 | # | Item | Stato | Ticket |
 |---|---|---|---|
-| 6.1 | SSH passphrase → salvataggio automatico in OS keyring quando settata in wizard | ❌ doc lo promette, codice no | nuovo: `[JHT-SSH-PASSPHRASE-KEYRING]` |
-| 6.2 | `web/lib/hetzner.ts` legge anche da `jht secrets get HCLOUD_TOKEN` come fallback | ❌ legge solo env | nuovo: `[JHT-HETZNER-TOKEN-SECRETS]` |
-| 6.3 | Dedicated PC mode (Phase 2) — doc accesso completa | ⬜ Phase 2 roadmap | esistente: `[JHT-DEDICATED-PC]` (vedi BACKLOG) |
-| 6.4 | LLM agent path B2 — convention scritta dentro un README discoverable | ❌ solo qui | nuovo: `[JHT-LLM-AGENT-CONTRACT]` — esporre `/api/agent/discovery` |
-| 6.5 | Credentials grant scope+expiry per LLM remoti | ⬜ v1+ | nuovo: `[JHT-CRED-SCOPED-GRANT]` |
-| 6.6 | `jht backup export/import` end-to-end test su scenario S1 | 🟡 partial | esistente: `[JHT-BACKUP-ROUNDTRIP]` |
+| 6.1 | SSH passphrase → OS keyring/ssh-agent, con comportamento cross-platform testato | ❌ aperto | `[JHT-SSH-PASSPHRASE-KEYRING]` |
+| 6.2 | Scegliere/reintrodurre client Hetzner e leggere token dal secret broker, non da log/prompt | ❌ nessun client corrente | `[JHT-HETZNER-TOKEN-SECRETS]` |
+| 6.3 | Eliminare il JSON plaintext `email_monitor.json` a favore del vault/runtime materialization | ❌ aperto, priorità più alta | `[JHT-LOCAL-VAULT]` |
+| 6.4 | Installare/supportare davvero keyring oppure dichiarare env-only per platform headless | 🟡 codice opzionale, dep assente | `[JHT-KEYRING-DISTRIBUTION]` |
+| 6.5 | Discovery contract per agent locali, senza rivelare valori dei secret | ❌ aperto | `[JHT-LLM-AGENT-CONTRACT]` |
+| 6.6 | Credentials grant scope+expiry per agent remoti | ⬜ design futuro | `[JHT-CRED-SCOPED-GRANT]` |
+| 6.7 | Backup cifrato completo + restore su directory vuota | ❌ il comando attuale è solo config snapshot | `[JHT-BACKUP-ROUNDTRIP]` |
 
 ---
 
@@ -229,6 +249,8 @@ Cosa nella doc non è ancora codice — ticket da aprire (o referenziati esisten
 - `docs/internal/ops/vps.md` — architettura completa Mode 3 (VPS), decisioni lockate 2026-05-13
 - `cli/src/commands/secrets.js` — implementazione `jht secrets` AES-256-GCM
 - `cli/src/commands/keyring.js` — implementazione `jht keyring` per passphrase JHT_CREDENTIALS_KEY
-- `web/lib/hetzner.ts` — client API Hetzner (read-only oggi, opt-in lifecycle)
-- `desktop/vps/ssh-exec.js` — wrapper SSH per desktop app
+- `shared/credentials/{crypto,storage,passphrase}.ts` — store GCM condiviso
+- `game/scripts/setup/setup_service.gd` — writer corrente del JSON email plaintext
+- `shared/skills/email_monitor.py` — reader corrente della password email
+- `docs/internal/architecture/2026-08-03-local-vault-design.md` — design vault implementabile, senza nuova crittografia ad hoc
 - Memory globale: `feedback_ssh_key_passphrase_batchmode`, `feedback_hetzner_token_scope_verify`

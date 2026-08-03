@@ -331,6 +331,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/roadmap/2026-07-30-ticket-throttle-engine-external.md](./internal/roadmap/2026-07-30-ticket-throttle-engine-external.md) | [THROTTLE-ENGINE-EXTERNAL]: il throttle esce dal dominio degli agenti | — | 2026-07-30 | ✅ |
 | [docs/internal/architecture/2026-08-03-maintenance-evidence-log-design.md](./internal/architecture/2026-08-03-maintenance-evidence-log-design.md) | Design di maintenance_events: storico append-only dei controlli, esiti e protezione dalle chiusure inconclusive | — | 2026-08-03 | ✅ |
 | [docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md](./internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md) | [PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi | — | 2026-08-03 | ✅ |
+| [docs/internal/architecture/2026-08-03-local-vault-design.md](./internal/architecture/2026-08-03-local-vault-design.md) | [JHT-LOCAL-VAULT]: envelope encryption, broker runtime, migrazione senza plaintext persistente e decisioni ADR prima della crypto | — | — | ✅ |
 
 
 ## 🔒 docs/security

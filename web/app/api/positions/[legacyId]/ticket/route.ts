@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { requireAuth } from "@/lib/auth";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
@@ -28,6 +29,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ legacyId: string }> },
 ): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   // [JHT-DASHBOARD-NATIVE] L'auth cloud (resolveUser) è spostata sotto, al solo
   // path cloud: la scrittura locale (INSERT su SQLite) vale sia per il browser
   // sia per il desktop nativo (local-token) e non ha bisogno di un utente cloud.
@@ -64,10 +67,9 @@ export async function POST(
       db.pragma("journal_mode = WAL");
       db.pragma("foreign_keys = ON");
       const exists = db
-        .prepare<
-          [number],
-          { id: number }
-        >("SELECT id FROM positions WHERE id = ?")
+        .prepare<[number], { id: number }>(
+          "SELECT id FROM positions WHERE id = ?",
+        )
         .get(legacyId);
       if (!exists) {
         return NextResponse.json(

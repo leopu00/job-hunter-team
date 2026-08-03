@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadJhtConfig } from "@/lib/json-files";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,8 @@ function calcBackoff(retry: RetryConfig): number[] {
 }
 
 export async function GET() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const config = loadConfig();
   const rlCfg = config.rate_limiter ?? {};
   const globalWindow: WindowConfig = {
