@@ -130,13 +130,15 @@ python3 /app/shared/skills/db_update.py position <ID> \
   --office-lon 12.4829321 \
   --office-address "Via Roma 1, 00100 Roma, Italy" \
   --office-geocoded true \
-  --office-verified true
+  --office-verified true \
+  --action geocode --outcome updated
 ```
 
 Para skip después de 3 intentos:
 ```bash
 python3 /app/shared/skills/db_update.py position <ID> \
-  --office-geocoded false --office-verified false
+  --office-geocoded false --office-verified false \
+  --action geocode --outcome failed
 # (lat/lon/address quedan NULL)
 ```
 
