@@ -47,9 +47,19 @@ const rel = (p: string) => path.relative(WEB, p);
 // ───────────────────────────────────────────────────────────────────────
 // `*.i18n.ts` è la convenzione nuova; `*-i18n.ts` sono i due dizionari
 // che erano già in un file a parte prima dell'estrazione.
+//
+// `.i18n.tsx` non è un caso di bordo: le guide `email-forwarding` e
+// `team-gmail` hanno voci che contengono JSX (link, `<code>`), quindi il
+// dizionario deve stare in un `.tsx`. Sono i due file più grandi del
+// repo e restavano fuori dalla rete — protetti dal solo `tsc`, che
+// verifica il tipo `Record<Locale, …>` ma non che le voci ci siano
+// davvero tutte.
 const extracted = walk(
   WEB,
-  (f) => f.endsWith(".i18n.ts") || f.endsWith("-i18n.ts"),
+  (f) =>
+    f.endsWith(".i18n.ts") ||
+    f.endsWith(".i18n.tsx") ||
+    f.endsWith("-i18n.ts"),
 );
 
 describe("dizionari estratti (*.i18n.ts)", () => {
@@ -73,9 +83,42 @@ describe("dizionari estratti (*.i18n.ts)", () => {
         const top = dict as Record<string, unknown>;
         // Due forme in circolazione. Per chiave: `{ saluto: { it, en, … } }`.
         // Per lingua: `{ it: { saluto, … }, en: { … } }` — quella di
-        // dashboard-i18n. Si distinguono da cosa c'è al primo livello.
-        const perLingua = LOCALES.every((l) => l in top);
-        if (perLingua) {
+        // dashboard-i18n. Si distinguono da cosa c'è al primo livello: la
+        // seconda ha SOLO codici lingua.
+        //
+        // Il riconoscimento non può pretendere che i sette ci siano già,
+        // com'era prima: se ne manca uno la forma non viene più
+        // riconosciuta, il dizionario scivola nel ramo "per chiave", lì
+        // nessuna voce ha una proprietà `en` e il controllo esce verde.
+        // Togliere una lingua intera — l'errore che questo test esiste per
+        // vedere — passava così inosservato.
+        const chiaviTop = Object.keys(top);
+        const soloLingue =
+          chiaviTop.length > 0 &&
+          chiaviTop.every((k) => (LOCALES as readonly string[]).includes(k));
+        if (soloLingue) {
+          const mancanti = LOCALES.filter((l) => !(l in top));
+          if (mancanti.length) {
+            problemi.push(
+              `${exportName}: manca del tutto ${mancanti.join(", ")}`,
+            );
+            continue;
+          }
+          // Per lingua ha due sotto-forme. Piatta: `{ it: "…", en: "…" }`,
+          // una sola frase per lingua (il `DESKTOP_SOON` delle guide).
+          // Annidata: `{ it: { saluto, … } }`. Distinguerle serve, perché
+          // `Object.keys()` su una stringa restituisce gli indici dei
+          // caratteri: la forma piatta finirebbe a confrontare lunghezze
+          // di frasi e a dichiarare "manca la chiave 109" sulla lingua
+          // che traduce più corto dell'inglese.
+          const piatta = LOCALES.every((l) => typeof top[l] === "string");
+          if (piatta) {
+            for (const loc of LOCALES) {
+              const s = top[loc] as string;
+              if (!s.trim()) problemi.push(`${exportName}.${loc}: è vuota`);
+            }
+            continue;
+          }
           const riferimento = Object.keys(top.en as object).sort();
           for (const loc of LOCALES) {
             const chiavi = Object.keys(top[loc] as object).sort();
