@@ -251,7 +251,18 @@ describe("SQLite → chat.jsonl", () => {
         "INSERT INTO pending_user_messages (agent, body, author, created_at) VALUES ('mentor', ?, 'agent', '2026-07-29 10:00:00')",
       ).run(body);
     }
-    const res = mirrorDbTurnsToJsonl(db, { jhtHome: home, agents: ["mentor"] });
+    // `now` iniettato, come fanno gli altri test del file: senza, il caso
+    // dipende dall'orologio di chi lo esegue. La data qui è fissa e
+    // `MIRROR_MAX_AGE_MS` è 48h, quindi dal 2026-07-31 in poi queste due
+    // righe cadevano nel ramo "storico vecchio" (marcate, non specchiate) e
+    // `mirrored` tornava 0 — un rosso che non parla del difetto che il test
+    // descrive. Quello che si vuole provare è la chiave di dedup, non la
+    // finestra: l'istante di osservazione va fissato insieme al dato.
+    const res = mirrorDbTurnsToJsonl(db, {
+      jhtHome: home,
+      agents: ["mentor"],
+      now: Date.parse("2026-07-29T10:00:30Z"),
+    });
     expect(res.mirrored).toBe(2);
     const ts = rowsOf().map((r) => r.chat_ts);
     expect(new Set(ts).size).toBe(2);
