@@ -165,13 +165,6 @@ KNOWN_SKILL_LOCALIZATION_GAPS = {
     ('game-reply-options', 'de'),
     ('game-reply-options', 'pt'),
     ('game-reply-options', 'hu'),
-    # Capitano — calcolo dello scaling. Monolingue.
-    ('scaling-calc', 'it'),
-    ('scaling-calc', 'es'),
-    ('scaling-calc', 'fr'),
-    ('scaling-calc', 'de'),
-    ('scaling-calc', 'pt'),
-    ('scaling-calc', 'hu'),
 }
 
 
