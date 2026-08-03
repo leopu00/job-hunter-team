@@ -1,6 +1,6 @@
 # 🔬 Log di evidenza della manutenzione — design 2026-08-03
 
-**Stato**: proposta di design. Schema non ancora applicato.
+**Stato**: ✅ **implementato** il 2026-08-03 (passi 1-5 del rollout). Non ancora deployato sulle VPS: richiede rebuild immagine.
 
 ## Il problema
 
@@ -80,7 +80,16 @@ CREATE INDEX IF NOT EXISTS idx_me_outcome ON maintenance_events(action, outcome,
 
 ### Vocabolario chiuso
 
-`action` — **liveness_check** · **geocode** · **logo_fetch** · **website_fetch** · **jd_refresh** · **exclude** · **rescore_request**
+`action` — **liveness_check** · **geocode** · **logo_fetch** · **website_fetch** · **jd_refresh** · **exclude** · **rescore**
+
+Le azioni si dividono in due famiglie, perché hanno **due modi diversi di essere finte**:
+
+| famiglia | azioni | che prova serve |
+|---|---|---|
+| **esterne** | `liveness_check` `geocode` `logo_fetch` `website_fetch` `jd_refresh` | status HTTP + URL: un terzo ri-scarica e riconfronta |
+| **di giudizio** | `exclude` `rescore` | hash dell'**artefatto** (breakdown, motivo) |
+
+Nessuna URL può dire se uno score è giusto: pretendere uno status HTTP su un `rescore` renderebbe la regola una formalità da aggirare. Per un giudizio la prova possibile è l'impronta di ciò che lo motiva — non dimostra che sia buono, dimostra che è stato **ri-formulato**. Un re-score con breakdown byte-identico produce lo stesso hash, e il no-op resta visibile.
 
 `outcome`:
 
@@ -104,7 +113,11 @@ CREATE INDEX IF NOT EXISTS idx_me_outcome ON maintenance_events(action, outcome,
 
 1. leggere i valori **prima** dell'`UPDATE` (oggi non si fa: si scrive e basta);
 2. eseguire `UPDATE` e `INSERT` in `maintenance_events` **nella stessa transazione**;
-3. rifiutare l'update quando `action` lo richiede e l'evidenza manca.
+3. rifiutare l'update quando `action` lo richiede e l'evidenza manca — con `rollback()`, perché scrivere senza loggare è precisamente il buco da chiudere.
+
+> ⚠️ **`last_checked` e `last_open_check` sono esclusi dal diff**, e non è una svista. Cambiano ad ogni chiamata per costruzione: includerli renderebbe ogni evento un `updated` e il tasso di no-op sarebbe **sempre zero**. Si ricostruirebbe, dentro la tabella che serve a smascherarlo, esattamente l'inganno di partenza — la prova di lavoro che consiste nell'aver scritto l'ora. (Difetto trovato e corretto durante l'implementazione, al primo smoke test.)
+
+Stessa cosa su `scores`: `INSERT OR REPLACE` sovrascrive in silenzio, quindi `db_insert.py insert_score` fotografa il punteggio precedente e registra il diff. `scored_by` e i timestamp restano fuori dai campi tracciati per lo stesso motivo.
 
 Un solo file, un solo chokepoint: nessun agente può aggiornare senza lasciare l'evento. Le scritture inline via `python3 -c "import sqlite3..."` restano possibili e aggirerebbero il log — stesso problema già affrontato per i timestamp `'now'`, e stessa cura: un **trigger educativo** che le rifiuta con un messaggio che insegna il pattern corretto (vedi `applications_reject_str_now_insert` in `shared/skills/_db.py`).
 
@@ -145,11 +158,17 @@ Il primo indicatore è quello che mancava. Se la manutenzione produce `unchanged
 | 2 | aggancio in `shared/skills/db_update.py` (lettura *before*, insert in transazione, rifiuto senza evidenza) |
 | 3 | flag `--evidence-url` / `--evidence-code` / `--evidence-hash` nella CLI di `db_update.py` |
 | 4 | aggiornamento delle skill di manutenzione perché passino l'evidenza (liveness, geocode, logo, sito) |
-| 5 | query di lettura in `shared/skills/db_query.py`: `maintenance-report [--days N]` |
+| 5 | query di lettura in `shared/skills/db_query.py`: `maintenance-report [--days N] [--json]` |
 | 6 | trigger educativo contro le `INSERT`/`UPDATE` inline che scavalcano la skill |
 | 7 | campionamento di ri-verifica indipendente (senza, il punto 2 è autocertificazione) |
 
-I passi 1-3 sono la base minima utile: da soli rendono già misurabile il tasso di no-op. I passi 4-5 rendono il dato leggibile. Il **7 è quello che rende il sistema onesto**, ed è l'unico che va fatto fuori dagli agenti.
+**Fatti**: 1, 2, 3, 5 — più il percorso `rescore` su `scores`, coperto da `tests/test_maintenance_log.py` (26 test).
+
+**Aperti**: il **4** (le skill di manutenzione non passano ancora `--action`, quindi il log è disponibile ma vuoto finché non le si aggiorna), il **6** e soprattutto il **7**, che è quello che rende il sistema onesto e l'unico che va fatto **fuori dagli agenti**.
+
+`--action` è opzionale per costruzione: senza, `db_update`/`db_insert` si comportano esattamente come prima. Serve a non spezzare la flotta durante il rollout — ma finché il passo 4 non è fatto, `maintenance-report` risponderà "nessun evento", che è la verità e non un guasto.
+
+> ⛔ **Eccezione: `office_verified=true` è gated SUBITO**, anche senza `--action`. È l'unico campo che oggi promette una verifica a chi legge la dashboard, ed è quello su cui abbiamo la prova del difetto (100% contro 2,5%). Le skill che lo scrivono senza `--evidence-url` + `--evidence-code` 2xx **falliscono con exit 1** finché non passano la prova. È una rottura voluta e visibile, preferita a un altro mese di dati che si autocertificano.
 
 ---
 

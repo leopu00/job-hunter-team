@@ -425,6 +425,73 @@ def stats(as_json=False):
     conn.close()
 
 
+def maintenance_report(days=7, as_json=False):
+    """Quanto della manutenzione ha cambiato davvero qualcosa.
+
+    Legge `maintenance_events` (design 2026-08-03). La riga che conta è il
+    **tasso di no-op**: `unchanged` sul totale. Un giro di manutenzione che
+    produce quasi solo `unchanged` non è un giro tranquillo — è un giro che
+    non ha fatto niente, e prima di questa tabella non c'era modo di dirlo.
+    `skipped` va letto insieme: è l'esito che il log assegna quando l'evidenza
+    non regge, quindi un `skipped` alto significa scritture senza prova.
+    """
+    conn = get_db()
+    ensure_schema(conn)
+    cut = f"-{int(days)} days"
+
+    rows = conn.execute(
+        "SELECT action, outcome, COUNT(*) FROM maintenance_events "
+        "WHERE ts > datetime('now', ?) GROUP BY action, outcome "
+        "ORDER BY action, COUNT(*) DESC", (cut,)
+    ).fetchall()
+    by_agent = conn.execute(
+        "SELECT by_agent, COUNT(*) FROM maintenance_events "
+        "WHERE ts > datetime('now', ?) GROUP BY by_agent "
+        "ORDER BY COUNT(*) DESC", (cut,)
+    ).fetchall()
+    covered = conn.execute(
+        "SELECT COUNT(DISTINCT target_id) FROM maintenance_events "
+        "WHERE ts > datetime('now', ?) AND target_type = 'position'", (cut,)
+    ).fetchone()[0]
+    portfolio = conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
+
+    total = sum(r[2] for r in rows)
+    noop = sum(r[2] for r in rows if r[1] == 'unchanged')
+    unproven = sum(r[2] for r in rows if r[1] == 'skipped')
+    verified = sum(r[2] for r in rows if r[1] in ('confirmed_open', 'confirmed_closed'))
+
+    if as_json:
+        emit_json({
+            'days': days, 'events': total,
+            'noop_rate': round(noop / total, 3) if total else None,
+            'unproven_rate': round(unproven / total, 3) if total else None,
+            'verified': verified,
+            'coverage': {'targets': covered, 'portfolio': portfolio},
+            'by_action': [{'action': a, 'outcome': o, 'n': n} for a, o, n in rows],
+            'by_agent': [{'agent': a, 'n': n} for a, n in by_agent],
+        })
+        conn.close()
+        return
+
+    print(f"\n📊 Manutenzione, ultimi {days} giorni — {total} eventi")
+    if not total:
+        print("   Nessun evento registrato: le skill di manutenzione non stanno")
+        print("   passando --action, oppure non ha lavorato nessuno.")
+        conn.close()
+        return
+    print(f"   copertura: {covered} posizioni distinte su {portfolio} in portafoglio")
+    print(f"   no-op (unchanged):     {noop:>5}  ({noop / total:.0%})")
+    print(f"   senza prova (skipped): {unproven:>5}  ({unproven / total:.0%})")
+    print(f"   verifiche (confirmed): {verified:>5}  ({verified / total:.0%})")
+    print("\n   per azione:")
+    for action, outcome, n in rows:
+        print(f"     {action:<16} {outcome:<18} {n}")
+    print("\n   per agente:")
+    for agent, n in by_agent:
+        print(f"     {agent:<20} {n}")
+    conn.close()
+
+
 def recent_activity(minutes=30, limit=40, as_json=False):
     """Event-log OSSERVABILITÀ (lean-comms redesign): chi ha mosso quali posizioni,
     quando. Sostituisce i broadcast 'status' inter-agente — invece di narrare in chat
@@ -900,6 +967,11 @@ def main():
     # cv-pdf-paths (bug #26 cv-disk-audit): 1 path per riga, script-friendly
     sub.add_parser('cv-pdf-paths')
 
+    # maintenance-report: tasso di no-op del lavoro di manutenzione
+    mr = sub.add_parser('maintenance-report')
+    mr.add_argument('--days', type=int, default=7)
+    mr.add_argument('--json', action='store_true', help=JSON_HELP)
+
     args = parser.parse_args()
 
     if args.cmd == 'positions':
@@ -927,6 +999,8 @@ def main():
         dashboard(as_json=args.json)
     elif args.cmd == 'stats':
         stats(as_json=args.json)
+    elif args.cmd == 'maintenance-report':
+        maintenance_report(days=args.days, as_json=args.json)
     elif args.cmd == 'recent-activity':
         recent_activity(args.minutes, args.limit, as_json=args.json)
     elif args.cmd == 'application':
