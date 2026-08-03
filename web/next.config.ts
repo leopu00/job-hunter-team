@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import { PHASE_PRODUCTION_BUILD } from 'next/constants'
 import withBundleAnalyzerInit from '@next/bundle-analyzer';
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -44,10 +45,9 @@ const securityHeaders = [
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
 ]
 
-const nextConfig: NextConfig = {
+const baseNextConfig: NextConfig = {
   output: 'standalone',
   env: { NEXT_PUBLIC_APP_VERSION: APP_VERSION },
-  outputFileTracingRoot: MONOREPO_ROOT,
   // Pattern path-assoluti relativi al MONOREPO_ROOT: i glob `../X/**`
   // erano relativi a CWD (web/) e funzionavano in build locale ma su
   // Vercel CWD = MONOREPO_ROOT, quindi `../` esce dalla project root
@@ -76,8 +76,8 @@ const nextConfig: NextConfig = {
   // Turbopack root: lasciamo sempre cwd (web/). Usare MONOREPO_ROOT scatena
   // un loop nel resolver di @tailwindcss/postcss che spawna worker che non
   // muoiono (leak RAM lineare → freeze Mac, vedi crash 25/04). Per il
-  // file-tracing del build resta outputFileTracingRoot sopra; quello vale
-  // per `next build --output=standalone` e non tocca il dev server.
+  // file-tracing del build la factory sotto aggiunge outputFileTracingRoot;
+  // quello vale per `next build --output=standalone` e non tocca il dev server.
   turbopack: {},
   // Sposta il devtools indicator a bottom-right per liberare bottom-left
   // ai widget custom dell'app (es. ProfileAssistantFab).
@@ -128,4 +128,17 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default withBundleAnalyzer(nextConfig);
+export function createNextConfig(phase: string): NextConfig {
+  // `outputFileTracingRoot` serve a `next build --output=standalone`. In dev,
+  // Turbopack lo riusa come root del resolver e su Windows risale al
+  // node_modules del monorepo, saturando CPU/IO al primo GET.
+  return phase === PHASE_PRODUCTION_BUILD
+    ? { ...baseNextConfig, outputFileTracingRoot: MONOREPO_ROOT }
+    : baseNextConfig
+}
+
+function configureNext(phase: string): NextConfig {
+  return withBundleAnalyzer(createNextConfig(phase))
+}
+
+export default configureNext
