@@ -50,6 +50,7 @@ const FLAG_HOOKS := {
 	"JHT_COMIC_CHAT_TEST": "_arm_comic_chat_selftest",
 	"JHT_THROTTLE_TEST": "_throttle_selftest",
 	"JHT_BACKEND_SWITCH_TEST": "_backend_switch_selftest",
+	"JHT_SETUP_BUSY_TEST": "_setup_busy_selftest",
 }
 
 ## Ganci con argomento: scattano quando la variabile non è vuota, e il valore
@@ -384,6 +385,118 @@ func _graphics_panel_selftest() -> void:
 	print("GRAPHICS-PANEL-TEST %s %s" % ["PASS" if ok else "FAIL",
 			JSON.stringify(result)])
 	get_tree().quit(0 if ok else 1)
+
+
+## I pannelli di setup durante un'azione lunga: ogni pulsante spento deve dire
+## PERCHÉ (la riga-ragione), la riga TEAM della filiera Docker resta
+## informativa, e il pannello VPS si spegne/riaccende SUL POSTO senza perdere
+## quello che l'utente ha scritto nei campi. È il contratto del feedback 30/07
+## ("tutto grigio e muto durante il pull"): senza questo test tornerebbe in
+## silenzio al primo refactor dei pannelli.
+func _setup_busy_selftest() -> void:
+	await get_tree().process_frame
+	var result := {}
+	var was_running: bool = SetupService._action_running
+	var was_action: String = SetupService.current_action
+	# ── Azione "container" in corso, iniettata nel servizio vero ────────
+	SetupService._action_running = true
+	SetupService.current_action = "container"
+	var busy_note: String = UIStrings.t("setup.busy_note") \
+			% UIStrings.t("setup.busy_container")
+	for section in ["activation", "docker", "provider", "team"]:
+		var panel := SectionPanel.new(str(section), 24.0)
+		office.add_child(panel)
+		await get_tree().process_frame
+		result[str(section) + "_riga_ragione"] = \
+				_panel_has_label(panel, busy_note)
+		if section == "docker":
+			result["docker_team_riga_informativa"] = _panel_has_label(panel,
+					UIStrings.t("setup.team_row_info"))
+			var primary := _panel_button(panel, UIStrings.t("setup.container_busy"))
+			result["docker_primario_dice_in_corso"] = primary != null \
+					and primary.disabled
+		if section == "activation":
+			var start := _panel_button(panel, UIStrings.t("setup.start_team"))
+			result["attivazione_start_spento"] = start == null or start.disabled
+		if section == "provider":
+			var choose := _panel_button(panel, UIStrings.t("setup.provider_choose"))
+			result["provider_scelta_spenta"] = choose == null or choose.disabled
+		await _busy_shot("busy-" + str(section))
+		panel.queue_free()
+		await get_tree().process_frame
+	# ── Pannello VPS: gating sul posto, campi preservati ─────────────────
+	SetupService._action_running = false
+	SetupService.current_action = ""
+	var vps := SectionPanel.new("vps", 24.0)
+	office.add_child(vps)
+	await get_tree().process_frame
+	var verify := _panel_button(vps, UIStrings.t("vps.verify_ssh"))
+	var connect_btn := _panel_button(vps, UIStrings.t("vps.connect_existing"))
+	result["vps_pulsanti_attivi_a_riposo"] = verify != null \
+			and not verify.disabled and connect_btn != null \
+			and not connect_btn.disabled
+	vps._vps_ip.text = "203.0.113.7"
+	SetupService._action_running = true
+	SetupService.current_action = "vps-migrate"
+	SetupService.action_changed.emit("vps-migrate", true, "in corso", true)
+	await get_tree().process_frame
+	result["vps_pulsanti_spenti_in_azione"] = verify.disabled \
+			and connect_btn.disabled
+	result["vps_riga_ragione_parlante"] = is_instance_valid(vps._vps_busy_hint) \
+			and vps._vps_busy_hint.visible \
+			and vps._vps_busy_hint.text.contains(UIStrings.t("setup.busy_vps"))
+	result["vps_campo_ip_preservato"] = vps._vps_ip.text == "203.0.113.7"
+	await _busy_shot("busy-vps")
+	SetupService._action_running = false
+	SetupService.current_action = ""
+	SetupService.action_changed.emit("vps-migrate", false, "fatto", true)
+	await get_tree().process_frame
+	result["vps_pulsanti_riaccesi_a_fine"] = not verify.disabled \
+			and not connect_btn.disabled and not vps._vps_busy_hint.visible
+	vps.queue_free()
+	await get_tree().process_frame
+	# ── A riposo la riga-ragione NON deve esserci ────────────────────────
+	var idle := SectionPanel.new("docker", 24.0)
+	office.add_child(idle)
+	await get_tree().process_frame
+	result["docker_niente_ragione_a_riposo"] = not _panel_has_label(idle,
+			UIStrings.t("setup.busy_container"))
+	await _busy_shot("idle-docker")
+	idle.queue_free()
+	SetupService._action_running = was_running
+	SetupService.current_action = was_action
+	var ok := true
+	for key in result:
+		ok = ok and bool(result[key])
+	print("SETUP-BUSY-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify(result)])
+	get_tree().quit(0 if ok else 1)
+
+
+## Scatto opzionale per l'audit visivo del test qui sopra (solo con finestra:
+## headless non disegna). JHT_SETUP_BUSY_SHOTS=<cartella> per attivarlo.
+func _busy_shot(name: String) -> void:
+	var dir := OS.get_environment("JHT_SETUP_BUSY_SHOTS")
+	if dir == "":
+		return
+	await get_tree().create_timer(0.4).timeout
+	var img := get_viewport().get_texture().get_image()
+	if img != null and not img.is_empty():
+		img.save_png(dir.path_join(name + ".png"))
+
+
+static func _panel_has_label(panel: Node, needle: String) -> bool:
+	for node in panel.find_children("*", "Label", true, false):
+		if (node as Label).text.contains(needle):
+			return true
+	return false
+
+
+static func _panel_button(panel: Node, needle: String) -> Button:
+	for node in panel.find_children("*", "Button", true, false):
+		if (node as Button).text.contains(needle):
+			return node
+	return null
 
 
 ## Il contenuto grezzo di un file in `user://`, o un array vuoto se non c'è.
