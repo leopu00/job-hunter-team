@@ -19,7 +19,9 @@ Questo test fa fail se:
      locale su 7 l'agente ereditava una regola che il suo file non conteneva);
   6. le numerazioni di ruolo `C-xx` (Capitano) e `S-xx` (Sentinella) hanno buchi
      non dichiarati: i numeri ritirati vanno messi in `RETIRED_ROLE_RULES`, cosi'
-     un buco resta leggibile come scelta e non come riferimento perso.
+     un buco resta leggibile come scelta e non come riferimento perso;
+  7. lo stesso numero `C-xx`/`S-xx` e' DEFINITO due volte nello stesso file
+     (2026-07-30: `capitano.md` aveva due C-21 — i gate su `set` non lo vedono).
 
 Fix quando fallisce: aggiornare il range/la citazione nel file segnalato. La frase
 attorno al range e' localizzata: si tocca SOLO il range (`T01..Txx`), non la prosa.
@@ -104,7 +106,7 @@ KNOWN_SKILL_GAPS = {
 KNOWN_SKILL_LOCALIZATION_GAPS = {
     # Capitano — diario giornaliero. Esiste solo il baseline EN. E' entrata
     # nell'allowlist il 30/07 non perche' sia peggiorata, ma perche' e' stata
-    # DICHIARATA in capitano/skills.list: C-21 la impone, e prima non veniva
+    # DICHIARATA in capitano/skills.list: C-26 la impone, e prima non veniva
     # installata affatto. Passare da "assente" a "in inglese" e' un progresso;
     # la riga qui sotto e' cio' che impedisce al residuo di sparire di nuovo.
     ('captain-diary', 'it'),
@@ -211,8 +213,34 @@ def _team_rule_headings(path):
     return {int(n) for n in RULE_HEADING_RE.findall(_read(path))}
 
 
+def _role_rule_definitions(path, prefix):
+    """[(numero, n_riga)] delle regole di ruolo DEFINITE, IN ORDINE e CON i duplicati.
+
+    Serve dove l'insieme non basta: un numero definito due volte sopravvive a
+    qualunque confronto fra `set`, perche' i set deduplicano.
+
+    Le varianti `bis`/`ter` (e i suffissi `b`/`c`, gia' esclusi dal `\\b`) NON
+    aprono un numero nuovo: sono estensioni della regola omonima, quindi non
+    contano come definizioni e non sono collisioni.
+    """
+    rx = re.compile(
+        r'^\*\*' + prefix + r'-(\d{2})(?!\s*(?:bis|ter|quater)\b)\b',
+        re.MULTILINE,
+    )
+    text = _read(path)
+    return [(int(m.group(1)), text.count('\n', 0, m.start()) + 1)
+            for m in rx.finditer(text)]
+
+
 def _role_rule_numbers(path, prefix):
-    """Numeri di regola di ruolo DEFINITI nel file (non le citazioni)."""
+    """Numeri di regola di ruolo DEFINITI nel file (non le citazioni).
+
+    Regex PERMISSIVA apposta — `C-22 bis` vale come C-22. Non e' un dettaglio:
+    nelle sei localizzazioni del Capitano la C-22 "prima run" non c'e', c'e'
+    solo la sua `bis`, ed e' un drift a se' (gia' tracciato in KNOWN_SKILL_GAPS
+    come `first-run-burst`). Stringere qui lo trasformerebbe in un fallimento di
+    contiguita', che non e' quello che questo test misura.
+    """
     rx = re.compile(r'^\*\*' + prefix + r'-(\d{2})\b', re.MULTILINE)
     return {int(n) for n in rx.findall(_read(path))}
 
@@ -439,6 +467,38 @@ def test_team_rules_localizations_define_the_same_rules():
         'regole team-wide disallineate fra EN e localizzazioni:\n  '
         + '\n  '.join(problems)
     )
+
+
+def test_role_rule_numbers_are_defined_once_per_file():
+    """Uno stesso numero `C-xx`/`S-xx` non e' DEFINITO due volte nello stesso file.
+
+    Origin: 2026-07-30 — `capitano.md` definiva **C-21 due volte**: «Scout as a
+    SQUAD» e «Passing the baton: the daily diary». Le sei localizzazioni ne
+    avevano una sola (lo squad), quindi la regola del diario — citata dalla
+    tabella di routing come `captain-diary` → C-21 — non esisteva in 6 lingue su
+    7, e il Capitano non inglese non ereditava mai l'handoff giornaliero.
+
+    Ne' il gate di contiguita' ne' quello di allineamento fra localizzazioni
+    potevano vederlo: entrambi lavorano su `set` di numeri, e un set deduplica.
+    Serve contare le DEFINIZIONI, non i numeri distinti. Una collisione e'
+    sempre un difetto: due regole diverse sotto lo stesso numero rendono
+    ambigua ogni citazione (`vedi C-21`) e ne nascondono una alla traduzione.
+    """
+    problems = []
+    for role, prefix in ROLE_RULE_PREFIXES.items():
+        for _lang, path in _prompt_files(role):
+            seen = {}
+            for n, line in _role_rule_definitions(path, prefix):
+                seen.setdefault(n, []).append(line)
+            for n, lines in sorted(seen.items()):
+                if len(lines) > 1:
+                    problems.append(
+                        f'{path.relative_to(REPO_ROOT)}: {prefix}-{n:02d} definita '
+                        f'{len(lines)} volte (righe {", ".join(map(str, lines))}) — '
+                        f'due regole sotto lo stesso numero: rinumerane una '
+                        f'(il numero DOPO il piu\' alto) e aggiorna le citazioni'
+                    )
+    assert not problems, 'numeri di regola definiti piu\' di una volta:\n  ' + '\n  '.join(problems)
 
 
 def test_role_rule_numbering_is_contiguous_modulo_retired():
