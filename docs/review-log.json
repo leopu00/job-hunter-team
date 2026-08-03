@@ -1414,6 +1414,16 @@
       "path": "docs/internal/architecture/2026-08-03-local-vault-design.md",
       "description": "[JHT-LOCAL-VAULT]: envelope encryption, broker runtime, migrazione senza plaintext persistente e decisioni ADR prima della crypto",
       "last_review": null
+    },
+    {
+      "path": "docs/guides/LOCAL-SCORER.md",
+      "description": "Experimental role-scoped Local Scorer setup, quality harness, hardware evidence requirements, and explicit zero-cloud limits",
+      "last_review": "2026-08-03"
+    },
+    {
+      "path": "docs/internal/architecture/provider-touchpoint-inventory.md",
+      "description": "Machine-checked inventory of provider-specific seams and the narrow M5 Local Scorer architecture boundary",
+      "last_review": "2026-08-03"
     }
   ]
 }

@@ -84,6 +84,7 @@
 
 ## 🤖 Team & agents
 
+- 🟡 **[JHT-LOCAL-MODELS-M5]** *(M5 / issue #93)* — the first executable seam is shipped: only Scorer can opt into a host-local OpenAI-compatible endpoint, defaulting to shadow mode; provider touchpoints and comparison math are machine-checked. Still open before any “zero cloud” claim: paired same-position quality data, real hardware measurements, live URL/feedback parity, operator UX, and replacement of the other roles. Guide: [`docs/guides/LOCAL-SCORER.md`](docs/guides/LOCAL-SCORER.md).
 - ⬜ **[JHT-RENAME-COORDINATOR]** — rename Capitano → Coordinatore everywhere (prompts ×7 languages, tmux session names, launcher, CLI labels, web routes/i18n). Done so far: public `/agents` page only. Needs a dedicated session with a compat alias so live teams don't break.
 - ⬜ **[CAPITANO-SPAWN-MODES]** — let the Captain pick a spawn *mode* (e.g. batch-of-Scouts phase, then Analysts) instead of only "+1 per role"; with the 5-min throttle floor, parallelism is the budget lever.
 - ⬜ **[JHT-CAPITANO-PROMPT-DRIFT]** — agent-prompt translations lag the EN base (C-14/C-17, RULE-13/14/15, SC-08, C-09b, C-05b across de/es/fr/hu/pt). Deferred to one end-of-cycle mass translation pass; EN-locale teams unaffected.

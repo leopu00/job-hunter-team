@@ -76,8 +76,8 @@ The maintainer's own sequencing (contributor missions below run in parallel and 
 | Horizon | Focus |
 |---|---|
 | **Now** *(weeks)* | **Native onboarding QA above all**: test install → office → container → provider login → profile → team up on macOS/Windows/Linux; harden recovery paths and observe the two multi-week Kimi beta teams. |
-| **Next** *(1–2 months)* | **Native app public beta polish** — signing, installer/upgrade UX and notifications · **local models (M5) groundwork** — start with a single role swap (Scorer) and measure against the case-study baselines · **Kimi €40 out of beta** if month-scale observation holds. |
-| **Later** *(a quarter and beyond)* | The large missions as they attract contributors — mobile surface (M2 — the read-only web dashboard already covers the phone well, so full mobile *control* is deliberately not urgent; early community interest in a companion PWA exists) · pay-per-use €-budget (M8) · Mentor as a first-class surface (M6) · **interview practice agent (M9)** and an **opt-in auto-submit lane (M10)** — both born from launch feedback · fine-grained team observability with a who-did-what-when timeline (M7, enabled by the [DB schema evolution](../internal/roadmap/db-schema-optimization.md)). |
+| **Next** *(1–2 months)* | **Native app public beta polish** — signing, installer/upgrade UX and notifications · **local models (M5) groundwork** — the role-scoped Scorer adapter and shadow harness are executable; real paired quality and hardware validation are still open · **Kimi €40 out of beta** if month-scale observation holds. |
+| **Later** *(a quarter and beyond)* | The large missions as they attract contributors — broader mobile control beyond the shipped M2 emergency stop · pay-per-use €-budget (M8) · Mentor as a first-class surface (M6) · **interview practice agent (M9)** and an **opt-in auto-submit lane (M10)** — both born from launch feedback · fine-grained team observability with a who-did-what-when timeline (M7, enabled by the [DB schema evolution](../internal/roadmap/db-schema-optimization.md)). |
 
 ---
 
@@ -102,7 +102,7 @@ New here? These are the **missions** we'd love a hand with — bigger directions
 | **M2** | 📱 Mobile team safety — `/team` is a touch-friendly read-only status/activity view and the PWA has one authenticated stop-only emergency action. Telegram remains mobile-first for async conversation; start/restart/config stay in the desktop interaction plane. | Mobile + API | ✅ shipped |
 | **M3** | 🛡️ Harden security — prompt-injection fencing on ingested job descriptions, uniform auth gates across routes, sync-token lifecycle policy. | Security / Backend | 🔴 large |
 | **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — reproducible [Kimi variance and cost tooling](../internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) now exists, but no live export in the repo validates 88→92 or a PAYG buying claim yet; any fourth CLI remains gated by [ADR-0002 and the provider checklist](../guides/ADDING-A-PROVIDER.md). | Integrations | 🟡 medium |
-| **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — start by swapping a single role (the Scorer is the most self-contained) and measure quality against the case-study baselines. | LLM / infra | 🔴 large |
+| **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — **one-role spike shipped, mission still open**: Scorer can use a host-local OpenAI-compatible endpoint in shadow/write mode, with a machine-checked provider inventory and deterministic comparison harness. No whole-team or hardware claim yet: paired quality, live URL/feedback parity, real hardware evidence, and every additional role remain open. | LLM / infra | 🔴 large |
 
 > 🖥️ **Native app** — the highest-impact contribution area right now: onboarding recovery, accessibility, packaging/signing and macOS/Windows/Linux QA live in [`game/`](../../game/).
 

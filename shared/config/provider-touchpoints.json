@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "canonical_team_providers": ["claude", "openai", "kimi"],
+  "touchpoints": [
+    {"id": "config-schema", "concern": "validation and role-scoped local override", "path": "shared/config/schema.ts", "anchors": ["AIProviderSchema", "LocalScorerSchema"]},
+    {"id": "config-types", "concern": "canonical TypeScript provider names", "path": "shared/config/types.ts", "anchors": ["AIProviderName", "LocalScorerConfig"]},
+    {"id": "setup-catalog", "concern": "onboarding provider catalog", "path": "cli/wizard/setup-helpers.js", "anchors": ["AI_PROVIDERS", "active_provider"]},
+    {"id": "provider-cli", "concern": "list, select, install, update, and model pin", "path": "cli/src/commands/providers.js", "anchors": ["KNOWN_PROVIDERS", "active_provider"]},
+    {"id": "agent-launch", "concern": "provider CLI dispatch and local Scorer dispatch", "path": ".launcher/start-agent.sh", "anchors": ["extract_provider_info", "LOCAL_SCORER_RUNNER"]},
+    {"id": "local-scorer-adapter", "concern": "OpenAI-compatible request, response validation, and persistence boundary", "path": "shared/skills/local_scorer.py", "anchors": ["request_score", "score_to_db_args"]},
+    {"id": "provider-health", "concern": "runtime provider health checks", "path": "cli/src/commands/doctor.js", "anchors": ["active_provider", "providers"]},
+    {"id": "usage-fetch", "concern": "provider-specific usage collection", "path": "shared/skills/check_usage.py", "anchors": ["provider", "claude"]},
+    {"id": "usage-record", "concern": "normalize provider usage samples", "path": "shared/skills/usage_record.py", "anchors": ["provider", "usage"]},
+    {"id": "capacity-policy", "concern": "provider capacity and pacing", "path": "shared/skills/provider_capacity.py", "anchors": ["read_active_provider", "provider"]},
+    {"id": "plan-registry", "concern": "subscription plan semantics", "path": "shared/skills/plan_registry.py", "anchors": ["normalize_provider", "active_provider"]},
+    {"id": "web-provider-data", "concern": "cloud UI provider metadata", "path": "web/lib/providers.ts", "anchors": ["Provider", "claude"]},
+    {"id": "web-credentials", "concern": "credential status API", "path": "web/app/api/credentials/route.ts", "anchors": ["provider", "credentials"]},
+    {"id": "container-network", "concern": "host endpoint reachability from the runtime", "path": "docker-compose.yml", "anchors": ["host.docker.internal:host-gateway"]}
+  ]
+}
