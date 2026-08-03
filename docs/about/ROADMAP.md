@@ -29,7 +29,7 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
          🖥️ Local PC      🏠 Dedicated PC    ☁️ Self-hosted VPS
 ```
 
-**Two interaction planes** (decision 2026-06-15): the **data plane** is one-way and read-only everywhere — container → Supabase → the public web dashboard (positions, scores, map, case studies; usable from a phone or a work PC). The **interaction plane** — chat, files, start/stop, config — lives in the native Godot office, connected directly to a local team or over SSH to a VPS. Telegram is the optional async channel. Full rationale: [`docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`](../internal/architecture/2026-06-15-interaction-planes-redesign-design.md).
+**Two interaction planes** (decision 2026-06-15): the **data plane** is one-way and read-only everywhere — container → Supabase → the public web dashboard (positions, scores, map, case studies; usable from a phone or a work PC). The **interaction plane** — chat, files, start/restart, config — lives in the native Godot office, connected directly to a local team or over SSH to a VPS. Telegram is the optional async channel. The sole cloud safety exception is an authenticated, rate-limited, stop-only emergency action on mobile; it cannot run arbitrary commands or start the team. Full rationale: [`docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`](../internal/architecture/2026-06-15-interaction-planes-redesign-design.md).
 
 **Guiding principles** — the constraints every roadmap item respects:
 
@@ -99,7 +99,7 @@ New here? These are the **missions** we'd love a hand with — bigger directions
 | # | Mission | Good for | Size |
 |---|---------|----------|------|
 | **M1** | 🃏 Quick-feedback cards on offers (swipe / buttons → the team learns your taste). The backend action already exists (`user-exclude` + the async request lane); the card UX is the work. | Frontend / UX | 🟡 medium |
-| **M2** | 📱 Control & stop the team from your phone — today the phone gets the read-only dashboard and Telegram; full control needs a mobile-friendly surface over the interaction plane. | Mobile + API | 🔴 large |
+| **M2** | 📱 Mobile team safety — `/team` is a touch-friendly read-only status/activity view and the PWA has one authenticated stop-only emergency action. Telegram remains mobile-first for async conversation; start/restart/config stay in the desktop interaction plane. | Mobile + API | ✅ shipped |
 | **M3** | 🛡️ Harden security — prompt-injection fencing on ingested job descriptions, uniform auth gates across routes, sync-token lifecycle policy. | Security / Backend | 🔴 large |
 | **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — the blocker is projection precision and coordinator overhead, not raw budget; every new provider also stress-tests the pacing abstraction. | Integrations | 🟡 medium |
 | **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — start by swapping a single role (the Scorer is the most self-contained) and measure quality against the case-study baselines. | LLM / infra | 🔴 large |

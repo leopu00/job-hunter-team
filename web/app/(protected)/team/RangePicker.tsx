@@ -156,7 +156,7 @@ export default function RangePicker({
       </div>
 
       {/* Range custom */}
-      <div className="flex items-center gap-2">
+      <div className="flex max-w-full flex-wrap items-center gap-2">
         <span className="text-[10px] text-[var(--color-dim)] uppercase tracking-widest">
           {t.from}
         </span>
@@ -165,7 +165,7 @@ export default function RangePicker({
           value={from}
           max={to}
           onChange={(e) => e.target.value && apply(e.target.value, to)}
-          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors"
+          className="min-h-11 min-w-0 bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors"
           style={{ colorScheme: "dark", fontFamily: "inherit" }}
         />
         <span className="text-[10px] text-[var(--color-dim)] uppercase tracking-widest">
@@ -177,7 +177,7 @@ export default function RangePicker({
           min={from}
           max={today}
           onChange={(e) => e.target.value && apply(from, e.target.value)}
-          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors"
+          className="min-h-11 min-w-0 bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors"
           style={{ colorScheme: "dark", fontFamily: "inherit" }}
         />
         <span className="text-[10px] text-[var(--color-dim)] tabular-nums">

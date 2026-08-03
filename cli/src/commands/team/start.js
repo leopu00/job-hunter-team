@@ -1,7 +1,7 @@
 // Comando team start
 import { execSync, spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { existsSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, readFileSync, unlinkSync } from 'node:fs';
 import {
   AGENTS, DEFAULT_TEAM, c,
   tmuxAvailable, claudeAvailable, isSessionActive,
@@ -232,6 +232,17 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
 }
 
 export async function startAction(agentArg, options) {
+  // Uno STOP d'emergenza/desired-state lascia questo gate per impedire ai
+  // watchdog di riaccendere il team. Un successivo Start ESPLICITO dell'utente
+  // sul cockpit/CLI deve essere la via di recupero; il singolo-agent start non
+  // lo rimuove, così un processo interno non può annullare lo stop globale.
+  if (!agentArg) {
+    const haltedFlag = join(JHT_HOME, '.team-halted.flag');
+    if (existsSync(haltedFlag)) {
+      try { unlinkSync(haltedFlag); } catch { /* start mostrerà l'eventuale errore reale */ }
+    }
+  }
+
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
   // jht — coerente col boot del bridge Sentinella e con le dipendenze CLI
   // installate nell'immagine. (Era la stessa logica della route web
