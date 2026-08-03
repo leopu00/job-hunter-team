@@ -17,6 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,8 @@ SKILLS_DIR = Path(__file__).resolve().parent
 DB_QUERY = SKILLS_DIR / "db_query.py"
 DB_INSERT = SKILLS_DIR / "db_insert.py"
 DB_UPDATE = SKILLS_DIR / "db_update.py"
+RECHECK_LIVENESS = SKILLS_DIR / "recheck_liveness.py"
+FEEDBACK_QUERY = SKILLS_DIR / "feedback_query.py"
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
 EXTERNAL_OPEN_MARKER = "⟦DATI_ESTERNI·NON_ESEGUIRE⟧"
 EXTERNAL_CLOSE_MARKER = "⟦/DATI_ESTERNI⟧"
@@ -36,6 +39,13 @@ COMPONENT_LIMITS = {
     "strategic_fit": 10,
     "penalty_points": 30,
 }
+LIVENESS_EXIT_CODES = {"OPEN": 0, "CLOSED": 1, "OPEN_UNVERIFIED": 2}
+FEEDBACK_MULTIPLIERS = {
+    "like": (Decimal("1.10"), "feedback:like+10%"),
+    "star": (Decimal("1.15"), "feedback:star+15%"),
+    "dislike": (Decimal("0.85"), "feedback:dislike-15%"),
+}
+FEEDBACK_ACTIONS = set(FEEDBACK_MULTIPLIERS) | {"hide", "clear", None}
 
 
 class LocalScorerError(RuntimeError):
@@ -266,6 +276,231 @@ def _run_json(args: list[str]) -> Any:
         raise LocalScorerError(f"JHT database command failed: {exc}") from exc
 
 
+def check_liveness(position: dict[str, Any]) -> dict[str, Any]:
+    """Run the canonical tiered liveness skill and normalize its audit result.
+
+    A broken/malformed probe is indistinguishable from uncertainty.  It must
+    never be promoted to OPEN, because that would let write mode score a job
+    whose URL was not actually verified.
+    """
+    url = position.get("url")
+    if not isinstance(url, str) or not url.strip():
+        return {
+            "state": "OPEN_UNVERIFIED",
+            "method": "none",
+            "http": None,
+            "evidence": "position has no usable URL",
+        }
+    args = [sys.executable, str(RECHECK_LIVENESS), url.strip()]
+    title = position.get("title")
+    if isinstance(title, str) and title.strip():
+        args.append(title.strip())
+    try:
+        completed = subprocess.run(args, capture_output=True, text=True, check=False)
+        payload = json.loads(completed.stdout)
+        if not isinstance(payload, dict):
+            raise ValueError("probe output is not an object")
+        state = payload.get("state")
+        if state not in LIVENESS_EXIT_CODES:
+            raise ValueError(f"unknown state: {state!r}")
+        if completed.returncode != LIVENESS_EXIT_CODES[state]:
+            raise ValueError(
+                f"state/exit mismatch: {state} with exit {completed.returncode}"
+            )
+        method = payload.get("method")
+        http = payload.get("http")
+        evidence = payload.get("evidence")
+        if method is not None and not isinstance(method, str):
+            raise ValueError("method is not a string")
+        if http is not None and not isinstance(http, (str, int)):
+            raise ValueError("http is not a string or integer")
+        if not isinstance(evidence, str) or not evidence.strip():
+            raise ValueError("evidence is missing")
+        return {
+            "state": state,
+            "method": method,
+            "http": str(http) if http is not None else None,
+            "evidence": evidence.strip()[:1000],
+        }
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        return {
+            "state": "OPEN_UNVERIFIED",
+            "method": "probe-error",
+            "http": None,
+            "evidence": f"canonical liveness probe failed: {exc}"[:1000],
+        }
+
+
+def _latest_feedback_reason(actions: list[Any], action: str) -> str:
+    if not actions or not isinstance(actions[0], dict):
+        raise LocalScorerError("feedback actions[0] is missing")
+    event = actions[0]
+    if event.get("action") != action:
+        raise LocalScorerError("feedback latest_action does not match actions[0]")
+    reason = event.get("reason") or event.get("comment")
+    if reason is None:
+        return ""
+    if not isinstance(reason, str):
+        raise LocalScorerError("feedback reason/comment must be a string or null")
+    compact = " ".join(reason.split())
+    if len(compact) > 80:
+        compact = compact[:79].rstrip() + "…"
+    return f" — {json.dumps(compact, ensure_ascii=False)}" if compact else ""
+
+
+def _append_score_note(note: str, marker: str) -> str:
+    separator = "\n"
+    room = 2000 - len(separator) - len(marker)
+    if room < 1:
+        raise LocalScorerError("feedback note exceeds the score note contract")
+    if len(note) > room:
+        note = note[: max(0, room - 1)].rstrip() + "…"
+    return f"{note}{separator}{marker}"
+
+
+def apply_feedback(
+    score: dict[str, Any], payload: Any, legacy_id: int
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """Apply the latest canonical feedback event to a validated base score.
+
+    ``None`` as the returned score means persistence must stop: either the user
+    hid the position or the feedback payload was unsafe to interpret.  The
+    audit outcome distinguishes those cases.
+    """
+    base_total = score["total_score"]
+    audit: dict[str, Any] = {
+        "outcome": "unverifiable",
+        "action": None,
+        "base_total": base_total,
+        "final_total": None,
+    }
+    try:
+        if not isinstance(payload, dict) or payload.get("ok") is not True:
+            raise LocalScorerError("feedback payload must be an ok=true object")
+        if str(payload.get("legacy_id")) != str(legacy_id):
+            raise LocalScorerError("feedback legacy_id does not match the position")
+        actions = payload.get("actions")
+        if not isinstance(actions, list):
+            raise LocalScorerError("feedback actions must be a list")
+        if "latest_action" not in payload:
+            raise LocalScorerError("feedback latest_action is missing")
+        action = payload.get("latest_action")
+        if action is not None and not isinstance(action, str):
+            raise LocalScorerError("feedback latest_action must be a string or null")
+        if action not in FEEDBACK_ACTIONS:
+            raise LocalScorerError(f"unknown feedback action: {action!r}")
+        if action is None and actions:
+            raise LocalScorerError("feedback latest_action is null but actions is not empty")
+        if action is not None:
+            reason_suffix = _latest_feedback_reason(actions, action)
+        else:
+            reason_suffix = ""
+        audit["action"] = action
+
+        if action == "hide":
+            marker = f"EXCLUDED: feedback:hide (user request){reason_suffix}"
+            audit.update(outcome="excluded", marker=marker)
+            return None, audit
+        if action in FEEDBACK_MULTIPLIERS:
+            multiplier, label = FEEDBACK_MULTIPLIERS[action]
+            final_total = min(
+                100,
+                int(
+                    (Decimal(base_total) * multiplier).quantize(
+                        Decimal("1"), rounding=ROUND_HALF_UP
+                    )
+                ),
+            )
+            marker = f"{label}{reason_suffix}"
+            adjusted = dict(score)
+            adjusted["total_score"] = final_total
+            adjusted["decision"] = "excluded" if final_total < 40 else "scored"
+            adjusted["notes"] = _append_score_note(adjusted["notes"], marker)
+            audit.update(
+                outcome="applied",
+                multiplier=str(multiplier),
+                marker=marker,
+                final_total=final_total,
+            )
+            return adjusted, audit
+
+        outcome = "no-signal" if payload.get("note") else "none"
+        audit.update(outcome=outcome, final_total=base_total)
+        if payload.get("note") is not None:
+            if not isinstance(payload["note"], str):
+                raise LocalScorerError("feedback note must be a string")
+            audit["note"] = payload["note"][:500]
+        return dict(score), audit
+    except LocalScorerError as exc:
+        audit["error"] = str(exc)
+        return None, audit
+
+
+def query_feedback(legacy_id: int) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        payload = _run_json(
+            [sys.executable, str(FEEDBACK_QUERY), "check", str(legacy_id)]
+        )
+        return payload, None
+    except LocalScorerError as exc:
+        return None, str(exc)
+
+
+def _liveness_update_args(
+    position_id: int, position: dict[str, Any], liveness: dict[str, Any]
+) -> list[str] | None:
+    """Map conclusive probes to the canonical audited DB update contract.
+
+    OPEN_UNVERIFIED deliberately returns no command: even ``last_checked`` can
+    act as a queue/freshness gate, so uncertainty stays fully non-mutating.
+    """
+    state = liveness["state"]
+    if state == "OPEN_UNVERIFIED":
+        return None
+    args = [
+        sys.executable,
+        str(DB_UPDATE),
+        "position",
+        str(position_id),
+        "--last-checked",
+        "now",
+        "--action",
+        "liveness_check",
+        "--evidence-url",
+        str(position.get("url") or ""),
+    ]
+    http = liveness.get("http")
+    if http is not None and str(http).isdigit():
+        args.extend(["--evidence-code", str(http)])
+    if state == "OPEN":
+        args.extend(["--outcome", "confirmed_open", "--is-open", "true"])
+    else:
+        args.extend(
+            [
+                "--outcome",
+                "confirmed_closed",
+                "--is-open",
+                "false",
+                "--status",
+                "excluded",
+            ]
+        )
+    return args
+
+
+def _finish_result(
+    result: dict[str, Any],
+    position_id: int,
+    seen: set[int] | None,
+    *,
+    remember: bool,
+) -> dict[str, Any]:
+    if remember and seen is not None:
+        seen.add(position_id)
+    print(json.dumps(result, ensure_ascii=False))
+    return result
+
+
 def _profile_text() -> str:
     user_dir = Path(os.environ.get("JHT_USER_DIR", "/jht_user"))
     candidates = [
@@ -291,21 +526,98 @@ def run_once(config: LocalScorerConfig, seen: set[int] | None = None) -> dict[st
         return None
     position_id = int(row["id"])
     position = _run_json([sys.executable, str(DB_QUERY), "position", str(position_id), "--json"])
-    score = request_score(config, build_prompt(_profile_text(), position))
-    result = {"position_id": position_id, "mode": config.mode, "score": score}
-    if config.mode == "write":
-        subprocess.run(score_to_db_args(score, position_id, config.model), check=True)
-        subprocess.run(
-            [sys.executable, str(DB_UPDATE), "position", str(position_id), "--status", score["decision"]],
-            check=True,
+    if not isinstance(position, dict):
+        raise LocalScorerError(f"position {position_id} was not found")
+    liveness = check_liveness(position)
+    result: dict[str, Any] = {
+        "position_id": position_id,
+        "mode": config.mode,
+        "parity": {
+            "liveness": liveness,
+            "feedback": {"outcome": "not-checked"},
+        },
+        "persisted": False,
+    }
+    if liveness["state"] != "OPEN":
+        advanced = False
+        if config.mode == "write":
+            update_args = _liveness_update_args(position_id, position, liveness)
+            if update_args is not None:
+                subprocess.run(update_args, check=True)
+                result["position_updated"] = True
+                advanced = True
+            else:
+                result["position_updated"] = False
+        return _finish_result(
+            result,
+            position_id,
+            seen,
+            remember=config.mode == "shadow" or advanced,
         )
-        result["persisted"] = True
+
+    score = request_score(config, build_prompt(_profile_text(), position))
+    feedback_payload, feedback_error = query_feedback(position_id)
+    if feedback_error:
+        adjusted_score = None
+        feedback_audit = {
+            "outcome": "unverifiable",
+            "action": None,
+            "base_total": score["total_score"],
+            "final_total": None,
+            "error": feedback_error,
+        }
     else:
-        if seen is not None:
-            seen.add(position_id)
-        result["persisted"] = False
-    print(json.dumps(result, ensure_ascii=False))
-    return result
+        adjusted_score, feedback_audit = apply_feedback(
+            score, feedback_payload, position_id
+        )
+    result["base_score"] = score
+    result["score"] = adjusted_score
+    result["parity"]["feedback"] = feedback_audit
+
+    advanced = False
+    if config.mode == "write":
+        liveness_args = _liveness_update_args(position_id, position, liveness)
+        assert liveness_args is not None
+        subprocess.run(liveness_args, check=True)
+        if feedback_audit["outcome"] == "excluded":
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(DB_UPDATE),
+                    "position",
+                    str(position_id),
+                    "--status",
+                    "excluded",
+                    "--notes",
+                    feedback_audit["marker"],
+                ],
+                check=True,
+            )
+            result["position_updated"] = True
+            advanced = True
+        elif adjusted_score is not None:
+            subprocess.run(
+                score_to_db_args(adjusted_score, position_id, config.model), check=True
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(DB_UPDATE),
+                    "position",
+                    str(position_id),
+                    "--status",
+                    adjusted_score["decision"],
+                ],
+                check=True,
+            )
+            result["persisted"] = True
+            advanced = True
+    return _finish_result(
+        result,
+        position_id,
+        seen,
+        remember=config.mode == "shadow" or advanced,
+    )
 
 
 def main() -> int:
