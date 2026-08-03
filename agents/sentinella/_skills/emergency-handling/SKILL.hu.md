@@ -11,7 +11,7 @@ allowed-tools: Bash(python3 *)
 
 Ezen feltételek bármelyike → azonnali parancs küldése cooldown nélkül:
 
-- `proj > 200%` (katasztrofális)
+- `proj > 200%` (katasztrofális) **és** `reset_edge_guard != true`
 - `velocità_smussata > velocità_ideale × 5` (robbanás)
 - `usage ≥ 90%` abszolút (hard limit)
 
@@ -25,7 +25,15 @@ Esc x2-t küld az összes operatívnak (kizárva CAPITANO/ASSISTENTE/SENTINELLA/
 
 Beállítja: `freeze_active = True`.
 
-## 📊 Triggerek a vészhelyzeti zónában (proj > 100%)
+### Guard a reset határán (utolsó 30 perc)
+
+Ha a tick `reset_edge_guard=true` értéket tartalmaz, a projection csak
+diagnosztikai adat: `proj` miatt ne legyen freeze, throttle vagy kill, és ne
+frissítsd az `emergency_proj_history` értékét, tartós `proj > 150%` esetén sem.
+Maradjon `suggested_throttle_s=0`. A független hard jelek (`usage >= 90%`,
+bridge FATAL) továbbra is aktívak.
+
+## 📊 Triggerek a vészhelyzeti zónában (proj > 100%, inaktív guard)
 
 Tartsd karban az `emergency_proj_history` (utolsó 5) és `emergency_proj_min` értékeket. Három trigger:
 

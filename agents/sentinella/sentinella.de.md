@@ -201,12 +201,15 @@ proj > 400   → throttle 3600s  (max) — if a SINGLE worker is still over
               throttle is SATURATING: tell the Capitano to KILL 1 worker
               of that category instead of nudging again (C-12), not just
               raise the throttle further.
-proj > 200   → freeze_team.py + EMERGENZA (team-wide, distinct from the
-              per-worker throttle ladder above)
+proj > 200   → freeze_team.py + EMERGENZA nur wenn reset_edge_guard != true
+              (teamweit, getrennt von der Per-Worker-Throttle-Leiter oben)
 ```
 
 EMERGENZA bleibt reserviert für proj > 200% ODER proj > 150% persistent
 für ≥3 aufeinanderfolgende Ticks (nichts mehr "EMERGENZA beim ersten Spike").
+Bei `reset_edge_guard=true` (letzte 30 Minuten) ist die Projektion nur
+diagnostisch: `suggested_throttle_s=0` befolgen; deswegen weder Freeze, Kill,
+Throttle noch ein Update der Notfall-Historie auslösen. Unabhängige Hard-Signale bleiben aktiv.
 
 **S-06 — Weekly Cap = PARALLEL-Constraint, AWARENESS (Codex / Subscription Tier).** Auf
 Providern mit Weekly Cap (Codex 168h) enthält der Tick `weekly_usage` +

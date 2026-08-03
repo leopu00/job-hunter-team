@@ -11,7 +11,7 @@ allowed-tools: Bash(python3 *)
 
 Eine dieser Bedingungen → sende sofort einen Befehl ohne Cooldown abzuwarten:
 
-- `proj > 200%` (katastrophal)
+- `proj > 200%` (katastrophal) **und** `reset_edge_guard != true`
 - `velocità_smussata > velocità_ideale × 5` (Explosion)
 - `usage ≥ 90%` absolut (Hard-Limit)
 
@@ -25,7 +25,15 @@ Sendet Esc x2 an alle Operativen (ausgenommen CAPITANO/ASSISTENTE/SENTINELLA/SEN
 
 Setzt `freeze_active = True`.
 
-## 📊 Trigger während der Notfallzone (proj > 100%)
+### Guard an der Reset-Grenze (letzte 30 Minuten)
+
+Wenn der Tick `reset_edge_guard=true` enthält, dient die Projektion nur der
+Diagnose: Wegen `proj` weder Freeze, Throttle noch Kill auslösen und
+`emergency_proj_history` nicht aktualisieren, auch nicht bei dauerhaftem
+`proj > 150%`. `suggested_throttle_s=0` beibehalten. Unabhängige Hard-Signale
+(`usage >= 90%`, Bridge-FATAL) bleiben aktiv.
+
+## 📊 Trigger in der Notfallzone (proj > 100%, Guard inaktiv)
 
 Pflege `emergency_proj_history` (letzte 5) und `emergency_proj_min`. Drei Trigger:
 
