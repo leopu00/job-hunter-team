@@ -141,6 +141,7 @@ Piani tecnici, backlog, tracker e idee parcheggiate. Aggiornati finché aperti.
 |---|---|
 | [`MINOR-TRACKER.md`](roadmap/MINOR-TRACKER.md) | Tracker mini-fix e debt non-blocker (CI/lint, cross-platform, TODO inline, note) |
 | [`db-schema-optimization.md`](roadmap/db-schema-optimization.md) | Evoluzione schema jobs.db (position_events, critic rounds, captain_decisions) — alimenta la missione M7 |
+| [`2026-08-03-ticket-video-campagna-now-playable.md`](roadmap/2026-08-03-ticket-video-campagna-now-playable.md) | `[PROMO-VIDEO-NOW-PLAYABLE]`: video di campagna sospeso a lavoro quasi finito — dove sta il girato, i 3 fix già in master, cosa manca |
 | [`2026-07-30-ticket-throttle-engine-external.md`](roadmap/2026-07-30-ticket-throttle-engine-external.md) | `[THROTTLE-ENGINE-EXTERNAL]`: il timer esce dal processo dell'agente — `until` assoluti su disco, ack firmato dall'agente |
 | [`2026-07-30-ticket-mode-injection-hourly-prompt.md`](roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md) | `[MODE-INJECTION-HOURLY-PROMPT]`: la modalità corrente iniettata ogni ora nel prompt del Capitano, letta da disco a ogni chiamata |
 | [`2026-07-30-db-audit-observations.md`](roadmap/2026-07-30-db-audit-observations.md) | Audit del DB: code senza limite, dedup URL, e cosa ne è seguito |
