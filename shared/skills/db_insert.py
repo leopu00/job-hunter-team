@@ -22,6 +22,28 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, resolve_company_id
 from profile_gate import check_minimum_viable_profile
+import maintenance_log
+
+# Campi di uno score che, cambiando, dicono che la rivalutazione è avvenuta.
+# `scored_by` e i timestamp restano fuori: cambiano anche quando il giudizio
+# è identico, e includerli farebbe passare per `updated` ogni ricopiatura.
+SCORE_TRACKED_FIELDS = (
+    "total_score", "stack_match", "remote_fit", "salary_fit",
+    "experience_fit", "strategic_fit", "breakdown", "notes",
+)
+
+
+def _snapshot_score(conn, position_id):
+    """Score corrente della posizione. `{}` se non è mai stata valutata."""
+    row = conn.execute(
+        f"SELECT {', '.join(SCORE_TRACKED_FIELDS)} FROM scores "
+        "WHERE position_id = ?", (position_id,)
+    ).fetchone()
+    if row is None:
+        return {}
+    if hasattr(row, "keys"):
+        return {f: row[f] for f in SCORE_TRACKED_FIELDS}
+    return dict(zip(SCORE_TRACKED_FIELDS, row))
 
 
 def extract_linkedin_job_id(url):
@@ -382,6 +404,16 @@ def insert_score(args):
 
     conn = get_db()
     ensure_schema(conn)
+
+    # `INSERT OR REPLACE` sovrascrive in silenzio: senza fotografare il
+    # punteggio precedente, un re-score che lascia il totale identico è
+    # indistinguibile da un re-score mai eseguito. È lo stesso difetto dei
+    # campi di manutenzione, sulla tabella `scores`.
+    # `getattr`: insert_score è chiamata anche con Namespace costruiti a mano
+    # (test, dashboard), che non conoscono i flag di evidenza.
+    action = getattr(args, 'action', None)
+    previous = _snapshot_score(conn, args.position_id) if action else {}
+
     cur = conn.execute("""
         INSERT OR REPLACE INTO scores (position_id, total_score, stack_match, remote_fit,
                                         salary_fit, experience_fit, strategic_fit,
@@ -390,8 +422,32 @@ def insert_score(args):
     """, (args.position_id, args.total, args.stack_match, args.remote_fit,
           args.salary_fit, args.experience_fit, args.strategic_fit,
           args.breakdown, args.notes, args.scored_by))
+
+    if action:
+        current = _snapshot_score(conn, args.position_id)
+        diffs = [(f, previous.get(f), current.get(f))
+                 for f in SCORE_TRACKED_FIELDS
+                 if str(previous.get(f)) != str(current.get(f))]
+        evidence = maintenance_log.evidence_from_args(args)
+        try:
+            maintenance_log.record_diffs(
+                conn, "position", args.position_id, action, diffs,
+                outcome=getattr(args, 'outcome', None), evidence=evidence,
+                duration_ms=getattr(args, 'duration_ms', None))
+        except maintenance_log.MaintenanceError as e:
+            conn.rollback()
+            print(f"⚠️  SCORE ANNULLATO: {e}")
+            conn.close()
+            sys.exit(1)
+
     conn.commit()
-    print(f"Score inserito per posizione {args.position_id}: {args.total}/100")
+    if action and previous and not diffs:
+        # Detto a voce: un re-score che non muove nulla è un'informazione,
+        # non un errore — ma va vista, non sepolta in un contatore.
+        print(f"Score invariato per posizione {args.position_id}: "
+              f"{args.total}/100 (nessun campo cambiato)")
+    else:
+        print(f"Score inserito per posizione {args.position_id}: {args.total}/100")
     conn.close()
 
 
@@ -475,6 +531,9 @@ def main():
     s.add_argument('--cons')
     s.add_argument('--notes')
     s.add_argument('--scored-by')
+    # Re-score tracciabile: --action rescore registra il diff col punteggio
+    # precedente, così un re-score che non muove nulla si vede.
+    maintenance_log.add_cli_args(s)
 
     # application
     a = sub.add_parser('application')

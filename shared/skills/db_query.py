@@ -66,6 +66,7 @@ from _db import get_db, ensure_schema, active_categories
 # prima al primo cambio di formato degli URL — e' gia' successo con la copia
 # stale di `check_duplicate` dentro tests/test_scoring_logic.py.
 from db_insert import extract_linkedin_job_id
+import maintenance_log
 
 
 # ── Output macchina ─────────────────────────────────────────────────────
@@ -452,6 +453,120 @@ def stats(as_json=False):
         conn.close()
         return
     print(f"\npositions: {counts['positions']} | companies: {counts['companies']} | scores: {counts['scores']} | applications: {counts['applications']} | schema: V{version}")
+    conn.close()
+
+
+def check_history(position_id, as_json=False):
+    """Storico dei controlli di una posizione: quando trovata, quando guardata.
+
+    Risponde a quello che `last_checked` non può dire, perché tiene solo
+    l'ultima data e sovrascrive la storia: quante volte l'abbiamo
+    ricontrollata, con che esito, e da quanto non la tocchiamo.
+    """
+    conn = get_db()
+    ensure_schema(conn)
+    pos = conn.execute(
+        "SELECT title, company, found_at, created_at, last_checked, "
+        "last_open_check, is_open, status FROM positions WHERE id = ?",
+        (position_id,)).fetchone()
+    if pos is None:
+        print(f"Posizione {position_id} non trovata.")
+        conn.close()
+        sys.exit(1)
+    events = conn.execute(
+        "SELECT ts, by_agent, action, outcome, field, before, after, "
+        "evidence_code FROM maintenance_events "
+        "WHERE target_type = 'position' AND target_id = ? ORDER BY id",
+        (position_id,)).fetchall()
+    streak = maintenance_log.unverified_streak(conn, position_id)
+
+    if as_json:
+        emit_json({'position': dict(pos), 'unverified_streak': streak,
+                   'checks': rows_to_dicts(events)})
+        conn.close()
+        return
+
+    print(f"\n#{position_id} {pos['title']} — {pos['company']}")
+    print(f"   trovata:        {pos['found_at'] or pos['created_at']}")
+    print(f"   ultimo check:   {pos['last_checked'] or '—'}")
+    print(f"   stato:          {pos['status']} · is_open={pos['is_open']}")
+    if streak:
+        # Non è un errore della posizione: è un problema di FONTE. Va detto,
+        # altrimenti l'unica reazione possibile resta buttarla via.
+        print(f"   ⚠️  {streak} controlli di fila senza esito — fonte "
+              "problematica, NON un motivo per chiuderla")
+    if not events:
+        print("\n   Nessun controllo a storico (le skill non passano --action).")
+        conn.close()
+        return
+    print(f"\n   {len(events)} controlli:")
+    for e in events:
+        what = f" {e['field']}: {e['before']} → {e['after']}" if e['field'] else ""
+        code = f" [{e['evidence_code']}]" if e['evidence_code'] else ""
+        print(f"     {e['ts']}  {e['by_agent']:<14} {e['action']:<15} "
+              f"{e['outcome']}{code}{what}")
+    conn.close()
+
+
+def maintenance_report(days=7, as_json=False):
+    """Quanto lavoro di manutenzione è stato fatto, e su quante posizioni.
+
+    Legge `maintenance_events`. La riga da guardare è quella dei controlli
+    **senza esito**: sono posizioni che non riusciamo a verificare, e vanno
+    ritentate o segnalate come fonte problematica — mai chiuse per dubbio.
+    """
+    conn = get_db()
+    ensure_schema(conn)
+    cut = f"-{int(days)} days"
+
+    rows = conn.execute(
+        "SELECT action, outcome, COUNT(*) FROM maintenance_events "
+        "WHERE ts > datetime('now', ?) GROUP BY action, outcome "
+        "ORDER BY action, COUNT(*) DESC", (cut,)).fetchall()
+    by_agent = conn.execute(
+        "SELECT by_agent, COUNT(*) FROM maintenance_events "
+        "WHERE ts > datetime('now', ?) GROUP BY by_agent "
+        "ORDER BY COUNT(*) DESC", (cut,)).fetchall()
+    covered = conn.execute(
+        "SELECT COUNT(DISTINCT target_id) FROM maintenance_events "
+        "WHERE ts > datetime('now', ?) AND target_type = 'position'",
+        (cut,)).fetchone()[0]
+    portfolio = conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
+
+    total = sum(r[2] for r in rows)
+    noop = sum(r[2] for r in rows if r[1] == 'unchanged')
+    unresolved = sum(r[2] for r in rows
+                     if r[1] in maintenance_log.INCONCLUSIVE_OUTCOMES)
+    confirmed = sum(r[2] for r in rows
+                    if r[1] in ('confirmed_open', 'confirmed_closed'))
+
+    if as_json:
+        emit_json({
+            'days': days, 'events': total, 'unchanged': noop,
+            'unresolved': unresolved, 'confirmed': confirmed,
+            'coverage': {'targets': covered, 'portfolio': portfolio},
+            'by_action': [{'action': a, 'outcome': o, 'n': n} for a, o, n in rows],
+            'by_agent': [{'agent': a, 'n': n} for a, n in by_agent],
+        })
+        conn.close()
+        return
+
+    print(f"\n📊 Manutenzione, ultimi {days} giorni — {total} controlli")
+    if not total:
+        print("   Nessun controllo a storico: le skill di manutenzione non")
+        print("   passano ancora --action, oppure non ha lavorato nessuno.")
+        conn.close()
+        return
+    print(f"   copertura:   {covered} posizioni distinte su {portfolio} in portafoglio")
+    print(f"   verificate:  {confirmed:>5}")
+    print(f"   invariate:   {noop:>5}")
+    print(f"   senza esito: {unresolved:>5}  ← da ritentare, MAI da chiudere")
+    print("\n   per azione:")
+    for action, outcome, n in rows:
+        print(f"     {action:<16} {outcome:<18} {n}")
+    print("\n   per agente:")
+    for agent, n in by_agent:
+        print(f"     {agent:<20} {n}")
     conn.close()
 
 
@@ -1300,6 +1415,16 @@ def main():
     # cv-pdf-paths (bug #26 cv-disk-audit): 1 path per riga, script-friendly
     sub.add_parser('cv-pdf-paths')
 
+    # maintenance-report: tasso di no-op del lavoro di manutenzione
+    mr = sub.add_parser('maintenance-report')
+    mr.add_argument('--days', type=int, default=7)
+    mr.add_argument('--json', action='store_true', help=JSON_HELP)
+
+    # check-history: quando trovata, quante volte ricontrollata, con che esito
+    ch = sub.add_parser('check-history')
+    ch.add_argument('id', type=int)
+    ch.add_argument('--json', action='store_true', help=JSON_HELP)
+
     args = parser.parse_args()
 
     if args.cmd == 'positions':
@@ -1327,6 +1452,10 @@ def main():
         dashboard(as_json=args.json)
     elif args.cmd == 'stats':
         stats(as_json=args.json)
+    elif args.cmd == 'maintenance-report':
+        maintenance_report(days=args.days, as_json=args.json)
+    elif args.cmd == 'check-history':
+        check_history(args.id, as_json=args.json)
     elif args.cmd == 'recent-activity':
         recent_activity(args.minutes, args.limit, as_json=args.json)
     elif args.cmd == 'application':

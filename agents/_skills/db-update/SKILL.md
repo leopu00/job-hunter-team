@@ -99,6 +99,45 @@ with raw SQL: a `python3 -c "import sqlite3; UPDATE positions SET
 status=..."` workaround skips the transition log and makes throughput /
 funnel charts undercount.
 
+### Maintenance checks leave a history (`--action` / `--outcome`)
+
+`last_checked` and `last_open_check` hold only the **latest** date: every pass
+overwrites the previous one, so nothing records how many times a position was
+looked at, or how often a check failed to conclude anything.
+
+Pass `--action` on maintenance work and the check is kept in
+`maintenance_events`, one row per changed field — or one row anyway when
+nothing changed, because knowing a position was looked at is half the point.
+
+```sh
+db_update.py position 412 --last-checked now \
+  --action liveness_check --outcome confirmed_open --is-open true \
+  --evidence-url "<url>" --evidence-code 200
+```
+
+`--action`: `liveness_check` · `geocode` · `logo_fetch` · `website_fetch` ·
+`jd_refresh` · `exclude` · `rescore`
+
+`--outcome`: `confirmed_open` · `confirmed_closed` · **`inconclusive`** ·
+`updated` · `unchanged` · `unreachable` · `skipped` · `failed`. Omit it and it
+is derived from whether anything changed.
+
+`--evidence-url` / `--evidence-code` / `--evidence-hash` are optional context:
+a 403 that keeps recurring tells you about an authwall, not about a dead
+posting.
+
+> ⛔ **An unresolved check may not close a position.** With `--outcome`
+> `inconclusive`, `unreachable`, `skipped` or `failed`, writing
+> `--is-open false` or `--status excluded|expired` is refused with exit 1.
+> Not knowing is not the same as knowing it expired, and a position binned on
+> a doubt is an opportunity lost in silence — leave it alive, the check stays
+> in the history and it will be retried. Everything else still goes through:
+> notes, coordinates, summaries. Reopening is never blocked.
+
+Read it back with `db_query.py check-history <id>`, which also reports the
+streak of consecutive unresolved checks — that is a **source** problem to
+report, not a position to discard.
+
 ### Single-writer gate on `applications.status='ready'` (bug #21)
 
 `applications.status='ready'` is **set exclusively by the Scrittore** in
