@@ -277,7 +277,7 @@ func close_terminal() -> void:
 	_terminal_generation += 1
 
 var _coord_state := {
-	"maintenance": {"enabled": false, "stop_search": false,
+	"maintenance": {"mode": "search", "enabled": false, "stop_search": false,
 		"discard_expired_rotating": true, "cv_min_score": 90,
 		"pre_check_liveness_for_cv": true},
 	"enrichment": {"economy": false, "logo_enabled": true,
@@ -285,8 +285,11 @@ var _coord_state := {
 		"geocode_min_score": 65, "geocode_non_remote_only": true,
 		"recheck_enabled": true, "recheck_min_score": 65,
 		"recheck_older_days": 14},
+	# harvest/calibration alimentano i numeri accanto al selettore modalità:
+	# lo showroom deve mostrare la stessa esperienza del backend vero.
 	"queue_counts": {"new": 8, "analysis": 23, "scored": 41,
-		"geocode": 17, "logos": 12, "recheck": 29, "expired": 6},
+		"geocode": 17, "logos": 12, "recheck": 29, "expired": 6,
+		"harvest": 19, "calibration": 4},
 	"directives": [
 		{"id": 1, "body": "Dai priorità alle posizioni AI Engineering remote UE.",
 			"kind": "strategy", "status": "active"},

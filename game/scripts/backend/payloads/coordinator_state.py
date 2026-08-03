@@ -13,13 +13,23 @@ except Exception:
 orders = maintenance_raw.get('orders', {}) if isinstance(maintenance_raw, dict) else {}
 if not isinstance(orders, dict):
     orders = {}
+# Modalità di lavoro (enum chiuso 2026-08): search|harvest|care|calibration|
+# saving. File assente = search; 'maintenance' resta valido ( = care, file
+# scritti da versioni precedenti / andris). Normalizzato QUI e non importando
+# enrichment_policy.current_mode: il gioco può essere più nuovo dell'immagine
+# container per qualche minuto (rolling deploy) e l'helper potrebbe non
+# esserci ancora. Un valore fuori enum degrada a 'search' SOLO per la UI: la
+# Console deve comunque mostrare uno stato selezionabile — il freno di spesa
+# (enrichment_policy) lo tratta invece come sospensione, lato container.
+WORK_MODES = ('search', 'harvest', 'care', 'calibration', 'saving')
+raw_mode = maintenance_raw.get('mode') if isinstance(maintenance_raw, dict) else None
+if raw_mode == 'maintenance':
+    raw_mode = 'care'
+mode = raw_mode if raw_mode in WORK_MODES else 'search'
 maintenance = {
-    # Modalità CURA (ex 'maintenance'): valore canonico 'care' dal 2026-07-30,
-    # 'maintenance' resta valido (file scritti da versioni precedenti / andris).
-    # Recuperato fondendo il refactoring che ha spostato questo Python fuori
-    # dal .gd: il file esterno nasceva dalla versione PRECEDENTE alla rinomina,
-    # e prenderlo tale e quale avrebbe spento la modalità cura nel gioco.
-    'enabled': maintenance_raw.get('mode') in ('care', 'maintenance'),
+    'mode': mode,
+    # Compat col vecchio toggle binario (client che leggono ancora 'enabled').
+    'enabled': mode == 'care',
     'stop_search': bool(orders.get('stop_search', True)),
     'discard_expired_rotating': bool(orders.get('discard_expired_rotating', True)),
     'cv_min_score': int(orders.get('cv_min_score', 90)),
@@ -92,6 +102,34 @@ queue_counts['recheck'] = count("SELECT COUNT(DISTINCT p.id) FROM positions p "
    "WHERE p.status!='excluded' AND s.total_score>=? "
    "AND (p.last_checked IS NULL OR p.last_checked < datetime('now', ?))",
    (int(recheck['min_score']), '-' + str(int(recheck['older_than_days'])) + ' days'))
+
+# Dati a supporto del selettore modalità (stessa semantica delle code
+# `next-for-harvest` / `next-for-calibration` di db_query.py; soglia 75 =
+# HARVEST_MIN_SCORE, la leva misurata del burn weekly). SQL replicato come
+# per geo/logo/recheck qui sopra: il payload deve girare anche su un'immagine
+# container che non conosce ancora le code nuove.
+queue_counts['harvest'] = count(
+    "SELECT COUNT(*) FROM positions p "
+    "JOIN (SELECT position_id, MAX(total_score) AS total_score "
+    "      FROM scores GROUP BY position_id) s ON s.position_id=p.id "
+    "LEFT JOIN applications a ON a.position_id=p.id "
+    "WHERE a.id IS NULL AND p.status='scored' AND s.total_score>=75 "
+    "AND COALESCE(p.is_open,1)!=0 "
+    "AND (p.expires_at IS NULL OR p.expires_at>=date('now'))")
+calibration_wm = '1970-01-01 00:00:00'
+try:
+    _wm = json.load(open(os.path.join(profile, 'calibration-watermark.json'),
+                         encoding='utf-8'))
+    if isinstance(_wm, dict) and isinstance(_wm.get('consumed_through'), str) \
+            and _wm['consumed_through'].strip():
+        calibration_wm = _wm['consumed_through'].strip()
+except Exception:
+    pass  # file assente/corrotto = epoch: si RIPRESENTA tutto, mai il contrario
+queue_counts['calibration'] = count(
+    "SELECT (SELECT COUNT(*) FROM positions "
+    "        WHERE user_excluded_at IS NOT NULL AND user_excluded_at > ?) "
+    "     + (SELECT COUNT(*) FROM position_tickets WHERE created_at > ?)",
+    (calibration_wm, calibration_wm))
 
 directives = []
 for row in conn.execute("SELECT id,body,kind,status,sort_order,created_at,updated_at "

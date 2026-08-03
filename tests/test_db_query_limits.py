@@ -52,9 +52,12 @@ QUEUES = [
     'next-for-recheck',
     'next-for-categorize',
     'next-for-salary-precise',
+    'next-for-recheck-due',
     'next-for-recheck-weekly',
     'next-for-geocode-missing',
     'next-for-logo-missing',
+    'next-for-harvest',
+    'next-for-calibration',
 ]
 
 # Seed in un interprete SEPARATO (stessa ragione di tests/test_db_query_json.py:
