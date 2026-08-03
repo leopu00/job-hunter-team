@@ -80,6 +80,16 @@ i18n_parity|script|gate|any|-|tools/i18n_parity_selftest.gd|-
 # "Impostazioni" restano raggiungibili e tradotte. Una sezione caduta da tutti
 # gli elenchi non fa rumore, semplicemente sparisce.
 sidebar_nav|script|gate|any|-|tools/sidebar_nav_selftest.gd|-
+# La barra dell'attivazione: percentuale solo dove il dato esiste, stallo
+# dichiarato, contabilita' dei byte del pull. (Mancava dalla matrice: il
+# selftest esisteva dal 30/07 ma non girava in NESSUNA CI.)
+setup_progress|script|gate|any|-|tools/setup_progress_selftest.gd|-
+# Il parser dello stream di `docker compose pull` sui due pull REALI di
+# tools/fixtures/: modalita' testo (dove docker NON dichiara mai il totale:
+# byte e rate si', percentuale no) e `--progress json` (byte veri per
+# livello). Su POSIX prova anche il ripiego con un finto docker che rifiuta
+# il flag come i compose meno recenti.
+pull_stream|script|gate|any|-|tools/pull_stream_selftest.gd|-
 # I cognomi degli agenti. Sono identita', non decorazione: se la mappa
 # ruolo+numero smettesse di essere una funzione pura, "scout-2" cambierebbe
 # nome fra un riavvio e l'altro senza che nulla si rompa.
