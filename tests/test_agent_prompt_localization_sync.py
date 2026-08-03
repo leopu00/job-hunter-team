@@ -141,25 +141,11 @@ KNOWN_SKILL_GAPS = {
 # meno margine per improvvisare. Quelle sono gia' state fatte (2026-07-30:
 # agent-emergency, agent-unblock, graceful-shutdown); qui resta il resto.
 # Formato: (skill, locale).
-KNOWN_SKILL_LOCALIZATION_GAPS = {
-    # Capitano — diario giornaliero. Esiste solo il baseline EN. E' entrata
-    # nell'allowlist il 30/07 non perche' sia peggiorata, ma perche' e' stata
-    # DICHIARATA in capitano/skills.list: C-26 la impone, e prima non veniva
-    # installata affatto. Passare da "assente" a "in inglese" e' un progresso;
-    # la riga qui sotto e' cio' che impedisce al residuo di sparire di nuovo.
-    ('captain-diary', 'it'),
-    ('captain-diary', 'es'),
-    ('captain-diary', 'fr'),
-    ('captain-diary', 'de'),
-    ('captain-diary', 'pt'),
-    ('captain-diary', 'hu'),
-    # Assistente/Capitano/Mentor — opzioni di risposta nel gioco (l'it c'e').
-    ('game-reply-options', 'es'),
-    ('game-reply-options', 'fr'),
-    ('game-reply-options', 'de'),
-    ('game-reply-options', 'pt'),
-    ('game-reply-options', 'hu'),
-}
+KNOWN_SKILL_LOCALIZATION_GAPS = set()
+# Vuota dal 2026-08-03: le sette skill che vivevano qui sono tradotte in tutte
+# e sei le lingue. Da adesso una skill DICHIARATA in un manifest senza le sue
+# localizzazioni fa cadere il gate subito, invece di essere ammessa qui e poi
+# dimenticata. Se una voce torna, deve portare la ragione e una data.
 
 
 def _roles():
