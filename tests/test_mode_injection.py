@@ -18,14 +18,16 @@ verifica la logica dietro le cuciture (come test_team_standby/test_stepcap_watch
   1. Sopravvive al refresh → un modulo bridge caricato FRESCO (= respawn, stato
                              azzerato) rimette la sezione nel primo battito, e
                              il `[RESUME]` del Dottore la rilegge da disco.
-  2. Il file vince        → la sezione dichiara `maintenance` e chiude con «vince
+  2. Il file vince        → la sezione dichiara `care` (dal 2026-08-03 il
+                             valore legacy `maintenance` è canonicalizzato,
+                             restando visibile nel banner) e chiude con «vince
                              questa»; e il bridge smette di ORDINARE lo spawn
                              Scout che contraddirebbe `stop_search`.
   3. Cambio a caldo       → riscrivendo il JSON fra due battiti, il secondo
                              messaggio porta i valori nuovi (lettura da disco,
                              nessun riavvio).
-  4. `normal` esplicito   → senza file di manutenzione la sezione c'è e dice
-                             `MODE: normal`; mai assente, in nessun ramo.
+  4. `search` esplicito   → senza file di manutenzione la sezione c'è e dice
+                             `MODE: search`; mai assente, in nessun ramo.
   5. Bacheca inclusa      → una direttiva scritta dal vero `team_directives.py`
                              compare nell'iniezione successiva.
   6. Regressione 18 gg    → 432 battiti (18 giorni) con l'ordine attivo: la
@@ -267,7 +269,7 @@ def test_1_un_bridge_appena_nato_rimette_l_ordine_nel_primo_battito(home):
     b = Bridge(home, tag="heartbeat_reborn", sessions=["CAPITANO", "ANALISTA-1"])
     msg = b.tick(T0 + timedelta(days=2, hours=3))
     assert msg is not None, "il primo battito dopo il refresh non ha detto nulla"
-    assert "MODE: maintenance" in msg
+    assert "MODE: care" in msg
     assert "VINCE QUESTA" in msg
 
 
@@ -304,7 +306,7 @@ def test_2_il_file_vince_e_lo_dice(home):
     set_mode(home, MAINT_ORDERS)
     b = Bridge(home, sessions=["CAPITANO", "ANALISTA-1"])
     msg = b.tick(T0)
-    assert "MODE: maintenance" in msg
+    assert "MODE: care" in msg
     assert "NIENTE Scout" in msg
     assert "cv_min_score: 90" in msg
     assert msg.rstrip().endswith(
@@ -318,7 +320,7 @@ def test_2b_senza_modalita_il_bridge_ordina_lo_spawn_scout(home):
     b = Bridge(home, sessions=["CAPITANO", "ANALISTA-1"])
     msg = b.tick(T0)
     assert "il sourcing è FERMO" in msg and "spawna 1 Scout ORA" in msg
-    assert "MODE: normal" in msg
+    assert "MODE: search" in msg
 
 
 def test_2c_in_stop_search_il_bridge_non_ordina_piu_uno_spawn_scout(home):
@@ -331,7 +333,7 @@ def test_2c_in_stop_search_il_bridge_non_ordina_piu_uno_spawn_scout(home):
     msg = b.tick(T0)
     assert "spawna 1 Scout" not in msg
     assert "il sourcing è FERMO" not in msg
-    assert "MODE: maintenance" in msg
+    assert "MODE: care" in msg
 
 
 def test_2d_un_file_illeggibile_non_autorizza_lo_spawn(home):
@@ -365,7 +367,7 @@ def test_3_cambio_a_caldo_senza_riavviare_il_bridge(home):
     set_mode(home, MAINT_ORDERS)
     b = Bridge(home, sessions=["CAPITANO", "ANALISTA-1"])
     first = b.tick(T0)
-    assert "cv_min_score: 90" in first and "MODE: maintenance" in first
+    assert "cv_min_score: 90" in first and "MODE: care" in first
 
     set_mode(home, {"stop_search": False, "cv_min_score": 75})
     second = b.tick(T0 + timedelta(hours=1))
@@ -374,7 +376,7 @@ def test_3_cambio_a_caldo_senza_riavviare_il_bridge(home):
     # Revoca: il file sparisce → il battito successivo dice `normal`, esplicito.
     (home / "profile" / "capitano-maintenance.json").unlink()
     third = b.tick(T0 + timedelta(hours=2))
-    assert "MODE: normal" in third
+    assert "MODE: search" in third
 
 
 def test_3b_il_bridge_cacha_il_modulo_mai_lo_stato():
@@ -400,7 +402,7 @@ def test_4_normal_si_inietta_uguale(home):
     b = Bridge(home, sessions=["CAPITANO", "SCOUT-1"])
     msg = b.tick(T0)
     assert msg is not None
-    assert "MODE: normal" in msg and "VINCE QUESTA" in msg
+    assert "MODE: search" in msg and "VINCE QUESTA" in msg
 
 
 def test_4b_la_sezione_e_in_coda_a_ogni_ramo_del_nudge(home):
@@ -418,7 +420,7 @@ def test_4b_la_sezione_e_in_coda_a_ogni_ramo_del_nudge(home):
         b.state.update(patch)
         msg = b.tick(T0)          # 09:00 → hour%3 == 0, la rotazione parla
         assert msg is not None, f"caso {i}: nessun messaggio"
-        assert "MODE: normal" in msg, f"caso {i}: sezione assente"
+        assert "MODE: search" in msg, f"caso {i}: sezione assente"
         assert msg.rstrip().endswith("azzerato da un refresh."), f"caso {i}"
 
 
@@ -438,7 +440,7 @@ def test_4d_con_un_ordine_in_vigore_l_ora_di_silenzio_salta(home):
     b = Bridge(home, sessions=["CAPITANO", "ANALISTA-1"])
     rounds = b.hourly(T0.replace(hour=0), 24)
     assert all(m is not None for _, m in rounds)
-    assert all("MODE: maintenance" in m for _, m in rounds)
+    assert all("MODE: care" in m for _, m in rounds)
 
 
 def test_4e_i_gate_del_battito_restano_intatti(home):
@@ -533,7 +535,7 @@ def test_6_diciotto_giorni_di_battiti_non_perdono_l_ordine(home):
     b = Bridge(home, tag="heartbeat_before_refresh",
                sessions=["CAPITANO", "ANALISTA-1"])
     day1 = b.hourly(T0, 24)
-    assert all(m is None or "MODE: maintenance" in m for _, m in day1)
+    assert all(m is None or "MODE: care" in m for _, m in day1)
 
     # 13/07: refresh del contesto. Il Capitano riparte da zero e il bridge
     # stesso viene respawnato — nessuno dei due ricorda niente.
@@ -544,7 +546,7 @@ def test_6_diciotto_giorni_di_battiti_non_perdono_l_ordine(home):
     assert len(rounds) == 432
     missing = [t for t, m in rounds if m is None]
     assert missing == [], f"{len(missing)} battiti muti: l'ordine si perde"
-    without = [t for t, m in rounds if "MODE: maintenance" not in m]
+    without = [t for t, m in rounds if "MODE: care" not in m]
     assert without == [], f"{len(without)} battiti senza l'ordine"
     ordered_scout = [t for t, m in rounds if "spawna 1 Scout" in m]
     assert ordered_scout == [], (
@@ -560,7 +562,7 @@ def test_6b_revocare_l_ordine_a_giorni_di_distanza_vale_subito(home):
     set_mode(home, MAINT_ORDERS)
     b = Bridge(home, sessions=["CAPITANO", "ANALISTA-1"])
     b.hourly(T0, 48)
-    assert "MODE: maintenance" in b.sent[-1]
+    assert "MODE: care" in b.sent[-1]
     (home / "profile" / "capitano-maintenance.json").unlink()
     b.tick(T0 + timedelta(hours=48))
-    assert "MODE: normal" in b.sent[-1]
+    assert "MODE: search" in b.sent[-1]

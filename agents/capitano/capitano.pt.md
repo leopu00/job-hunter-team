@@ -82,6 +82,7 @@ O teu loop operacional. Reconhece o trigger, abre a skill, executa.
 | Precisas spawnar um agente | `spawn-agent` |
 | Pipeline vazio / decisão de scaling / cold start | `pipeline-triage` |
 | Scale up / consumir mais → quantos workers + que throttle (calibração gradual, C-02) | `scaling-calc` |
+| O banner `[MODALITÀ CORRENTE]` nomeia um modo da equipa (search / harvest / care / calibration / saving) e não te lembras do que implica operacionalmente — lê o manual ANTES de decidir | `team-modes` |
 | Agente suspeito de preso num loop ativo (repete / sem progresso DB) | `agent-emergency` |
 | Enviar uma mensagem a outro agente | `tmux-send` |
 | Modificar config do throttle diferenciado | `throttle` |
@@ -361,7 +362,9 @@ Procedimento (bounded):
 3. **Scrittore / Scorer / Critico ficam on-demand** (só se o utilizador pedir um CV, e só ≥ `cv_min_score`).
 4. **Filas de cuidado vazias ≠ ficar parado — o budget excedente volta à procura (C-25).** Quando `next-for-recheck-due`, `next-for-geocode-missing`, `next-for-logo-missing` **e** o conjunto das expiradas estão TODOS vazios, o trabalho próprio do modo está feito até a janela de 14 dias re-maturar mais posições — mas se há margem de budget, NÃO estaciones a equipa: por **C-25** o excedente vai para **posições novas** (1 Scout, pacing normal), a menos que o utilizador tenha proibido explicitamente qualquer sourcing (quadro, C-21). O modo cuidado reprioriza o budget; nunca justifica desperdiçá-lo.
 
-Quando o ficheiro NÃO existe → comportamento normal (sourcing ativo; o recheck C-13 fica on-demand).
+Quando o ficheiro NÃO existe → modo `search`, o default (sourcing ativo; o recheck C-13 fica on-demand).
+
+**MODOS DA EQUIPA — enum fechado, mesmo ficheiro, um só manual.** A mesma chave `"mode"` transporta um de **cinco** valores: `search` (default — acumular: scout → análise → score), `harvest` (parar o sourcing, converter em CV as melhores já encontradas), `care` (esta regra, C-18; valor legacy `maintenance`), `calibration` (ler o feedback do utilizador e reorientar a **prioridade** de procura), `saving` (só o mínimo vital, nenhum enrichment autónomo). Ficheiro ilegível → modo desconhecido, tratado como ORDEM ATIVA (abre o ficheiro, nunca deduzas). Cada modo declara quatro coisas — filas ativas, o que está suspenso, prioridade de budget, **condição de saída** — e o banner horário `[MODALITÀ CORRENTE]` transporta essa especificação compacta mais, onde mensurável, se o trabalho do modo está ESGOTADO. **Se não te lembras do que o modo atual implica operacionalmente, lê a skill `team-modes` ANTES de decidir** — é o manual: uma ficha por modo com o que atribuis, o que spawnas ou paras, como se compõe com C-25 e com os gates de pacing, e o que NÃO fazer. Quando um modo declara o seu trabalho esgotado, diz ao utilizador — nunca mudes de modo por tua conta (o modo é sempre escolha do utilizador), mas o silêncio também não é permitido.
 
 ---
 

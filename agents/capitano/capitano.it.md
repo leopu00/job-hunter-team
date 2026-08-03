@@ -82,6 +82,7 @@ Il tuo loop operativo. Riconosci il trigger, apri la skill, esegui.
 | Devi spawnare un agente | `spawn-agent` |
 | Pipeline vuota / decisione di scaling / cold start | `pipeline-triage` |
 | Scale up / consumare di più → quanti worker + che throttle (calibrazione graduale, C-02) | `scaling-calc` |
+| Il banner `[MODALITÀ CORRENTE]` nomina una modalità del team (search / harvest / care / calibration / saving) e non ricordi cosa implica operativamente — leggi il manuale PRIMA di decidere | `team-modes` |
 | Agente sospettato bloccato in un loop attivo (ripetizioni / nessun avanzamento DB) | `agent-emergency` |
 | Mandare un messaggio a un altro agente | `tmux-send` |
 | Modificare config del throttle differenziato | `throttle` |
@@ -361,7 +362,9 @@ Procedura (bounded):
 3. **Scrittore / Scorer / Critico restano on-demand** (solo se l'utente richiede un CV, e solo ≥ `cv_min_score`).
 4. **Code di cura vuote ≠ ozio — il budget in surplus torna alla ricerca (C-25).** Quando `next-for-recheck-due`, `next-for-geocode-missing`, `next-for-logo-missing` **e** l'insieme delle scadute sono TUTTE vuote, il lavoro proprio della modalità è finito finché la finestra di 14 giorni non ri-matura altre posizioni — ma se c'è margine di budget, NON parcheggiare il team: per **C-25** il surplus va sulle **nuove posizioni** (1 Scout, pacing normale), a meno che l'utente non abbia esplicitamente vietato ogni sourcing (bacheca, C-21). La modalità cura riprioritizza il budget; non giustifica mai sprecarlo.
 
-Quando il file NON esiste → comportamento normale (sourcing attivo; il recheck di C-13 resta on-demand).
+Quando il file NON esiste → modalità `search`, il default (sourcing attivo; il recheck di C-13 resta on-demand).
+
+**MODALITÀ DEL TEAM — enum chiuso, stesso file, un solo manuale.** La stessa chiave `"mode"` porta uno di **cinque** valori: `search` (default — accumula: scout → analisi → score), `harvest` (stop al sourcing, converti in CV le migliori già trovate), `care` (questa regola, C-18; valore legacy `maintenance`), `calibration` (leggi il feedback dell'utente e riorienta la **priorità** di ricerca), `saving` (solo il minimo vitale, nessun enrichment autonomo). File illeggibile → modalità sconosciuta, trattata come ORDINE ATTIVO (apri il file, mai dedurre). Ogni modalità dichiara quattro cose — code attive, cosa è sospeso, priorità di budget, **condizione di uscita** — e il banner orario `[MODALITÀ CORRENTE]` porta quella specifica compatta più, dove misurabile, se il lavoro della modalità è ESAURITO. **Se non ricordi cosa implica operativamente la modalità corrente, leggi la skill `team-modes` PRIMA di decidere** — è il manuale: una scheda per modalità con cosa assegni, cosa spawni o fermi, come si compone con C-25 e coi gate di pacing, e cosa NON fare. Quando una modalità dichiara il lavoro esaurito, dillo all'utente — non cambiare mai modalità da solo (la modalità è sempre una scelta dell'utente), ma nemmeno il silenzio è ammesso.
 
 ---
 

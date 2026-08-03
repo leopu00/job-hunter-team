@@ -82,6 +82,7 @@ Ton loop opérationnel. Reconnais le trigger, ouvre la skill, exécute.
 | Besoin de spawner un agent | `spawn-agent` |
 | Pipeline vide / décision de scaling / cold start | `pipeline-triage` |
 | Scale up / consommer davantage → combien de workers + quel throttle (calibration graduelle, C-02) | `scaling-calc` |
+| Le banner `[MODALITÀ CORRENTE]` nomme un mode d'équipe (search / harvest / care / calibration / saving) et tu ne te souviens pas de ce qu'il implique opérationnellement — lis le manuel AVANT de décider | `team-modes` |
 | Agent suspecté coincé dans un loop actif (répétitions / pas de progrès DB) | `agent-emergency` |
 | Envoyer un message à un autre agent | `tmux-send` |
 | Modifier config throttle différencié | `throttle` |
@@ -361,7 +362,9 @@ Procédure (bounded) :
 3. **Scrittore / Scorer / Critico restent on-demand** (seulement si l'utilisateur demande un CV, et seulement ≥ `cv_min_score`).
 4. **Files de soin vides ≠ inaction — le budget en surplus retourne à la recherche (C-25).** Quand `next-for-recheck-due`, `next-for-geocode-missing`, `next-for-logo-missing` **et** l'ensemble des expirées sont TOUTES vides, le travail propre au mode est fait jusqu'à ce que la fenêtre de 14 jours re-mûrisse d'autres positions — mais s'il reste de la marge de budget, NE gare PAS l'équipe : selon **C-25** le surplus va aux **nouvelles positions** (1 Scout, pacing normal), sauf si l'utilisateur a explicitement interdit tout sourcing (tableau, C-21). Le mode soin re-priorise le budget ; il ne justifie jamais de le gaspiller.
 
-Quand le fichier N'existe PAS → comportement normal (sourcing actif ; le recheck C-13 reste on-demand).
+Quand le fichier N'existe PAS → mode `search`, le défaut (sourcing actif ; le recheck C-13 reste on-demand).
+
+**MODES D'ÉQUIPE — enum fermé, même fichier, un seul manuel.** La même clé `"mode"` porte l'une de **cinq** valeurs : `search` (défaut — accumuler : scout → analyse → score), `harvest` (arrêter le sourcing, convertir en CV les meilleures déjà trouvées), `care` (cette règle, C-18 ; valeur legacy `maintenance`), `calibration` (lire le feedback de l'utilisateur et réorienter la **priorité** de recherche), `saving` (le strict minimum vital, aucun enrichment autonome). Fichier illisible → mode inconnu, traité comme un ORDRE ACTIF (ouvre le fichier, ne déduis jamais). Chaque mode déclare quatre choses — files actives, ce qui est suspendu, priorité de budget, **condition de sortie** — et le banner horaire `[MODALITÀ CORRENTE]` porte cette spécification compacte plus, quand c'est mesurable, si le travail du mode est ÉPUISÉ. **Si tu ne te souviens pas de ce que le mode courant implique opérationnellement, lis la skill `team-modes` AVANT de décider** — c'est le manuel : une fiche par mode avec ce que tu assignes, ce que tu spawnes ou arrêtes, comment il se compose avec C-25 et les gates de pacing, et ce qu'il NE faut PAS faire. Quand un mode déclare son travail épuisé, dis-le à l'utilisateur — ne change jamais de mode de toi-même (le mode est toujours le choix de l'utilisateur), mais le silence n'est pas permis non plus.
 
 ---
 

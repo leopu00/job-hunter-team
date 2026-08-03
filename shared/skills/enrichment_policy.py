@@ -38,6 +38,16 @@ Enforcement A CODICE (filosofia modalità-cura di C-18): le code in
 POLICY_DISABLED / POLICY_SCORE_GATE. I prompt spiegano solo che una
 coda vuota per policy è stato VOLUTO, non un bug.
 
+MODALITÀ DI LAVORO (2026-08, enum chiuso in `capitano-maintenance.json`,
+chiave `"mode"`): search | harvest | care | calibration | saving.
+Questo modulo NON duplica quel file — lo LEGGE (`current_mode()`), e la
+modalità `saving` compone con la policy: `is_enabled()` risponde False
+per ogni enrichment autonomo quando `mode == "saving"`, qualunque cosa
+dicano `economy` e i flag fini. Una sola fonte di verità per la
+modalità (il file mode), una sola per i flag fini (questo JSON): uscire
+da `saving` ripristina da solo la policy che c'era prima, perché la
+policy non è mai stata toccata.
+
 Chi scrive il file: la Console del Coordinatore nel videogioco o il
 Capitano SU ORDINE dell'utente («vai su risparmio» →
 `enrichment_policy.py set economy true`). Mai di iniziativa propria.
@@ -95,6 +105,50 @@ def policy_path() -> str:
                         "enrichment-policy.json")
 
 
+# ── Modalità di lavoro (contratto 2026-08) ──────────────────────────────
+#
+# Valore alla chiave "mode" di `profile/capitano-maintenance.json` (il
+# FILENAME è storico: vive su VPS in produzione, non rinominarlo — vedi il
+# commento in game/scripts/backend/vps_backend.gd). File assente = search.
+MODES = ("search", "harvest", "care", "calibration", "saving")
+MODE_UNKNOWN = "unknown"
+
+
+def mode_path() -> str:
+    return os.path.join(os.path.dirname(DB_PATH), "profile",
+                        "capitano-maintenance.json")
+
+
+def current_mode() -> str:
+    """La modalità di lavoro corrente, letta da disco a OGNI chiamata.
+
+    Ritorna un valore di MODES, oppure MODE_UNKNOWN. Normalizzazioni:
+      · file assente → "search" (il default del contratto);
+      · "maintenance" (valore storico pre-rinomina) → "care";
+      · file presente ma illeggibile, o valore fuori enum → MODE_UNKNOWN.
+    MODE_UNKNOWN NON diventa "search": per un freno di spesa la direzione
+    sicura è trattare l'ignoto come un ordine attivo (stessa scelta di
+    mode_banner.py) — quindi niente enrichment autonomo finché un umano
+    non guarda il file.
+    """
+    try:
+        with open(mode_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return "search"
+    except (json.JSONDecodeError, OSError):
+        return MODE_UNKNOWN
+    if not isinstance(data, dict):
+        return MODE_UNKNOWN
+    mode = data.get("mode")
+    if not isinstance(mode, str) or not mode.strip():
+        return MODE_UNKNOWN
+    mode = mode.strip()
+    if mode == "maintenance":   # valore storico (file scritti pre-2026-07-30)
+        return "care"
+    return mode if mode in MODES else MODE_UNKNOWN
+
+
 def load_policy() -> dict:
     """Policy corrente, con i default per chiavi/file mancanti.
 
@@ -137,8 +191,13 @@ def is_enabled(kind: str, policy: dict | None = None) -> bool:
     """True se l'enrichment autonomo `kind` è consentito ORA.
 
     kind ∈ {"logo", "geocode_missing", "recheck_weekly"}.
-    `economy` (risparmio) vince su tutto.
+    Precedenza: modalità `saving` (o mode illeggibile) > `economy` > flag
+    fine. La modalità NON riscrive la policy: la sovrasta finché dura, e
+    quando l'utente esce da `saving` i flag fini tornano a valere da soli.
     """
+    mode = current_mode()
+    if mode == "saving" or mode == MODE_UNKNOWN:
+        return False
     p = policy or load_policy()
     if p.get("economy"):
         return False
@@ -173,6 +232,12 @@ def recheck_options(policy: dict | None = None) -> dict:
 
 def disabled_reason(kind: str, policy: dict | None = None) -> str:
     """Motivo leggibile per code/log ("" se abilitato)."""
+    mode = current_mode()
+    if mode == "saving":
+        return "modalità RISPARMIO attiva (mode=saving)"
+    if mode == MODE_UNKNOWN:
+        return ("capitano-maintenance.json presente ma non interpretabile: "
+                "enrichment autonomo sospeso finché un umano non lo guarda")
     p = policy or load_policy()
     if p.get("economy"):
         return "policy RISPARMIO attiva (economy=true)"
@@ -227,7 +292,11 @@ def main() -> None:
             pol = load_policy()
             print(json.dumps(
                 {"ok": True, "path": policy_path(),
-                 "exists": os.path.exists(policy_path()), "policy": pol},
+                 "exists": os.path.exists(policy_path()), "policy": pol,
+                 # La modalità NON vive in questo file (fonte: mode_path())
+                 # ma decide se la policy si applica: mostrarla qui evita
+                 # il "perché la coda è OFF se enabled=true?".
+                 "mode": current_mode()},
                 ensure_ascii=False))
             return
         section, field, how = _SETTABLE[args.key]

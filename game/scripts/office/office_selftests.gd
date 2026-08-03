@@ -2071,15 +2071,21 @@ func _coordinator_selftest() -> void:
 			and office._coordinator_panel._directives.get_child_count() >= 1 \
 			and office._coordinator_panel._queue_grid.get_child_count() == 7 \
 			and office._coordinator_panel._stop_search.disabled \
-			and office._coordinator_panel._geo_score.editable
+			and office._coordinator_panel._geo_score.editable \
+			and office._coordinator_panel._mode_buttons.size() == 5 \
+			and office._coordinator_panel._selected_mode() == "search" \
+			and (office._coordinator_panel._mode_data_labels["harvest"] as Label).visible
 	if panel_ok:
-		office._coordinator_panel._maintenance.button_pressed = true
+		# Selezione modalità cura dal selettore (ex toggle _maintenance): le
+		# opzioni fini si sbloccano e il salvataggio propaga `mode`.
+		var care: BaseButton = office._coordinator_panel._mode_buttons["care"]
+		care.button_pressed = true
 		office._coordinator_panel._geo_score.value = 72
 		controls_ok = controls_ok and not office._coordinator_panel._stop_search.disabled
 		office._coordinator_panel._save_settings()
 	await get_tree().process_frame
-	var save_ok := bool(BackendBus.coordinator_state.get("maintenance", {}) \
-			.get("enabled", false)) \
+	var save_ok := str(BackendBus.coordinator_state.get("maintenance", {}) \
+			.get("mode", "")) == "care" \
 			and int(BackendBus.coordinator_state.get("enrichment", {}) \
 			.get("geocode_min_score", 0)) == 72
 	var before: int = BackendBus.coordinator_state.get("directives", []).size()
