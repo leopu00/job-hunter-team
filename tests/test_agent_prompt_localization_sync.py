@@ -153,6 +153,15 @@ KNOWN_SKILL_LOCALIZATION_GAPS = {
     ('scaling-calc', 'de'),
     ('scaling-calc', 'pt'),
     ('scaling-calc', 'hu'),
+    # Capitano — manuale delle modalità del team (2026-08-03). Monolingue come
+    # le altre skill operative del Capitano (scaling-calc, captain-diary): il
+    # baseline EN e' il fallback per tutti i locale.
+    ('team-modes', 'it'),
+    ('team-modes', 'es'),
+    ('team-modes', 'fr'),
+    ('team-modes', 'de'),
+    ('team-modes', 'pt'),
+    ('team-modes', 'hu'),
 }
 
 

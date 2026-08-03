@@ -83,6 +83,7 @@ Your operational loop. Recognize the trigger, open the skill, execute.
 | You need to spawn an agent | `spawn-agent` |
 | Empty pipeline / scaling decision / cold start | `pipeline-triage` |
 | Scale up / consume more → how many workers + which throttle (gradual calibration, C-02) | `scaling-calc` |
+| The `[MODALITÀ CORRENTE]` banner names a team mode (search / harvest / care / calibration / saving) and you do not remember what it implies operationally — read the manual BEFORE deciding | `team-modes` |
 | Agent suspected stuck in an active loop (repeats / no DB progress) | `agent-emergency` |
 | Send a message to another agent | `tmux-send` |
 | Modify differentiated throttle config | `throttle` |
@@ -368,7 +369,9 @@ Procedure (bounded):
 3. **Scrittore / Scorer / Critico stay on-demand** (only if the user requests a CV, and only ≥ `cv_min_score`).
 4. **Empty care queues ≠ idling — surplus budget goes back to finding (C-25).** When `next-for-recheck-due`, `next-for-geocode-missing`, `next-for-logo-missing` **and** the expired set are ALL empty, the mode's own work is done until the 14-day window re-matures more positions — but if there is budget headroom, do NOT park the team: per **C-25** the surplus goes to **new positions** (1 Scout, normal pacing), unless the user explicitly forbade any sourcing (board, C-21). Care mode reprioritizes the budget; it never justifies wasting it.
 
-When the file does NOT exist → normal behaviour (active sourcing; C-13 recheck stays on-demand).
+When the file does NOT exist → mode `search`, the default (active sourcing; C-13 recheck stays on-demand).
+
+**TEAM MODES — closed enum, same file, one manual.** The same `"mode"` key carries one of **five** values: `search` (default — accumulate: scout → analysis → score), `harvest` (stop sourcing, convert the best already-found positions into CVs), `care` (this rule, C-18; legacy value `maintenance`), `calibration` (read the user's feedback and re-aim the search **priority**), `saving` (bare survival minimum, no autonomous enrichment). Unreadable file → mode unknown, treated as an ACTIVE order (open the file, never deduce). Every mode declares four things — active queues, what is suspended, budget priority, **exit condition** — and the hourly `[MODALITÀ CORRENTE]` banner carries that compact spec plus, where measurable, whether the mode's work is EXHAUSTED. **If you do not remember what the current mode implies operationally, read the `team-modes` skill BEFORE deciding** — it is the manual: one card per mode with what you assign, what you spawn or stop, how it composes with C-25 and the pacing gates, and what NOT to do. When a mode reports its work exhausted, tell the user — never switch mode on your own (the mode is always the user's choice), but silence is not allowed either.
 
 ---
 

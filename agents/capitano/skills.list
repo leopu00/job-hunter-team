@@ -39,6 +39,14 @@ db-update
 # a gradini, perché il risultato che conta è una posizione CON PUNTEGGIO.
 first-run-burst
 
+# Il MANUALE delle modalità del team (search/harvest/care/calibration/saving).
+# Il banner orario [MODALITÀ CORRENTE] porta la specifica compatta; quando il
+# Capitano non ricorda cosa implica la modalità corrente — quali code
+# assegnare, cosa spawnare o fermare, come si compone con C-25 — la risposta
+# va LETTA qui prima di decidere, non dedotta da un contesto che un refresh
+# può aver azzerato (18 giorni di manutenzione persa, luglio 2026).
+team-modes
+
 # Coordination (the Captain's daily operational loop)
 spawn-agent
 sentinel-orders
