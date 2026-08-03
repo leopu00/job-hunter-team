@@ -3019,15 +3019,38 @@ static func graceful_shutdown_ready() -> bool:
 
 
 ## Esegue lo spegnimento. Bloccante: la chiama un thread, non il main loop.
+##
+## `OS.execute` qui non va usato: se Docker Desktop smette di rispondere il
+## worker non torna più e game.gd, che deve attenderlo prima di smontare gli
+## autoload, resta per sempre sul velo di chiusura. Tre budget da 5 secondi
+## tengono l'intera sequenza sotto la rete di sicurezza dei 20 secondi.
+const SHUTDOWN_COMMAND_TIMEOUT_MS := 5000
+
+
+static func _run_shutdown_command(argv: PackedStringArray) -> Dictionary:
+	var pid := OS.create_process("docker", argv, false)
+	if pid <= 0:
+		return {"code": -1, "timeout": false}
+	var started := Time.get_ticks_msec()
+	while OS.is_process_running(pid):
+		if Time.get_ticks_msec() - started >= SHUTDOWN_COMMAND_TIMEOUT_MS:
+			OS.kill(pid)
+			return {"code": -1, "timeout": true}
+		OS.delay_msec(20)
+	return {"code": OS.get_process_exit_code(pid), "timeout": false}
+
+
 func shutdown_team() -> void:
 	for argv: PackedStringArray in shutdown_commands(_vps_config()):
-		var res := _run("docker", argv)
-		Log.call_deferred("info", "setup", "spegnimento: docker %s → %d"
-				% [" ".join(argv), res["code"]])
+		var res := _run_shutdown_command(argv)
+		var suffix := " (timeout %ds)" % (SHUTDOWN_COMMAND_TIMEOUT_MS / 1000) \
+				if bool(res.get("timeout", false)) else ""
+		Log.call_deferred("info", "setup", "spegnimento: docker %s → %d%s"
+				% [" ".join(argv), res["code"], suffix])
 
 
 func _vps_config() -> Dictionary:
-	return BackendBus.load_vps_config() if BackendBus.is_live() else {}
+	return BackendBus.load_vps_config() if BackendBus.is_remote() else {}
 
 
 static func _run_ssh(vps: Dictionary, command: String) -> Dictionary:
