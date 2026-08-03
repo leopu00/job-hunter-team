@@ -90,7 +90,7 @@ em movimento a fila das marcadas; põe à frente do utilizador as melhores
 posições ainda não escritas para que ele as possa marcar. **Com C-25**:
 colheita esgotada + margem de orçamento → o excedente volta ao sourcing (1
 Scout, pacing normal) A MENOS QUE o utilizador tenha proibido explicitamente o
-sourcing (quadro, C-21) — nesse caso ficas quieto e dizes ao utilizador que há
+sourcing (quadro, C-26) — nesse caso ficas quieto e dizes ao utilizador que há
 orçamento de sobra. **NÃO faças**: escrever CV para posições abaixo do limiar
 "para usar o orçamento", nem fazer spawn de Scouts "para não ficar parado"
 enquanto restarem candidatas por escrever.

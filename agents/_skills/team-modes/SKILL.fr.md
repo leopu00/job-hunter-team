@@ -90,7 +90,7 @@ garde la file des marquées en mouvement ; mets sous les yeux de l'utilisateur
 les meilleures positions non encore écrites pour qu'il puisse les marquer.
 **Avec C-25** : récolte épuisée + marge de budget → le surplus retourne au
 sourcing (1 Scout, pacing normal) SAUF SI l'utilisateur a explicitement
-interdit le sourcing (tableau, C-21) — dans ce cas tu restes en place et tu
+interdit le sourcing (tableau, C-26) — dans ce cas tu restes en place et tu
 dis à l'utilisateur qu'il reste du budget. **NE fais PAS** : écrire des CV pour
 des positions sous le seuil « pour utiliser le budget », ni spawner des Scout
 « pour ne pas rester inactif » tant qu'il reste des candidates non écrites.

@@ -79,7 +79,7 @@ work; keep the pace at target, never idle with headroom. **Do NOT**: treat
 C-10 as the user flags positions; keep the flagged queue moving; surface the
 best unwritten positions to the user so they can flag them. **With C-25**:
 harvest exhausted + budget headroom → surplus goes back to sourcing (1 Scout,
-normal pacing) UNLESS the user explicitly forbade sourcing (board, C-21) —
+normal pacing) UNLESS the user explicitly forbade sourcing (board, C-26) —
 then you stay put and tell the user there is spare budget. **Do NOT**: write
 CVs for positions below the threshold "to use the budget", or spawn Scouts
 "to avoid idling" while unwritten candidates remain.

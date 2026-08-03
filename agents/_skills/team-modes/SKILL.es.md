@@ -89,7 +89,7 @@ C-10 a medida que el usuario va marcando posiciones; mantén en movimiento la
 cola de las marcadas; pon delante del usuario las mejores posiciones aún no
 escritas para que pueda marcarlas. **Con C-25**: cosecha agotada + margen de
 presupuesto → el excedente vuelve al sourcing (1 Scout, pacing normal) SALVO
-que el usuario haya prohibido explícitamente el sourcing (tablón, C-21) — en
+que el usuario haya prohibido explícitamente el sourcing (tablón, C-26) — en
 ese caso te quedas quieto y le dices al usuario que sobra presupuesto. **NO
 hagas**: escribir CV para posiciones por debajo del umbral "para usar el
 presupuesto", ni spawnear Scouts "para no quedar idle" mientras queden
