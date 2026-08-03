@@ -42,6 +42,7 @@ const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 // rate budget weekly). Source of truth: team_state.should_run.
 const TEAM_HALTED_FLAG = join(JHT_HOME, '.team-halted.flag');
 const JHT_BIN = '/app/cli/bin/jht.js';
+const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 // Cadenza adattiva (vedi poll-tier.js): 5s solo dopo un cambio di should_run,
 // poi backoff ≤30s (cap a idle: il controllo start/stop resta reattivo).
@@ -187,11 +188,13 @@ async function reconcile(baseUrl, token, state) {
 // il design 2026-06-20: bus real-time di controllo + reconciler da ritirare). Qui resta
 // SOLO l'heartbeat "VPS online" (dato OSSERVATO, non controllo), scritto diretto su
 // Supabase. Lo standalone runTeamStateReconciler (escape hatch JHT_CLOUD_CONTROL_POLLERS=1)
-// conserva ancora il vecchio reconcile completo per chi lo ri-abilita.
+// conserva ancora il vecchio reconcile completo per chi lo ri-abilita. M2
+// mantiene nel daemon default una sola eccezione: il rendezvous stop-only
+// autenticato, implementato da reconcileEmergencyStop qui sotto.
 export async function reconcileOnce() {
   const config = await loadCloudConfig();
   if (!config?.enabled) return { ok: false, skipped: 'cloud-not-enabled' };
-  const baseUrl = (config.base_url || '').replace(/\/+$/, '');
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const token = config.token;
   if (!baseUrl || !token) return { ok: false, skipped: 'missing-credentials' };
   if (existsSync(WEEKLY_HALT_FLAG)) return { ok: true, skipped: 'weekly-halt' };
@@ -210,6 +213,48 @@ export async function reconcileOnce() {
     }).catch(() => {});
   }
   return { ok: true, action: null };
+}
+
+/**
+ * L'unica convergenza cloud mantenuta nel daemon di default: STOP d'emergenza.
+ *
+ * La decisione è esportata e pura per rendere verificabile il fail-closed:
+ * timestamp mancanti/invalidi o un evento già completato non eseguono nulla.
+ */
+export function emergencyStopRequired(state) {
+  if (state?.should_run !== false) return false;
+  const requested = Date.parse(state.emergency_stop_requested_at || '');
+  const completed = Date.parse(state.emergency_stop_completed_at || '');
+  return Number.isFinite(requested)
+    && (!Number.isFinite(completed) || requested > completed);
+}
+
+export async function reconcileEmergencyStop(config, state) {
+  if (!emergencyStopRequired(state)) {
+    return { ok: true, action: null };
+  }
+  if (!config?.enabled) return { ok: false, skipped: 'cloud-not-enabled' };
+
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const token = config.token;
+  if (!baseUrl || !token) return { ok: false, skipped: 'missing-credentials' };
+
+  log('warn', 'reconcile.emergency-stop');
+  // Nessun valore proveniente dal web entra negli argomenti: questa è una
+  // capacità stop-only, non la riapertura del command bus generico.
+  const { r, updates } = await applyAction(
+    baseUrl,
+    token,
+    'stopped',
+    ['team', 'stop'],
+  );
+  if (r.ok) {
+    updates.emergency_stop_completed_at = state.emergency_stop_requested_at;
+  }
+  await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
+    log('error', 'emergency-stop.observe-write-failed', { err: err.message })
+  );
+  return { ok: r.ok, action: 'stopped' };
 }
 
 export async function runTeamStateReconciler() {

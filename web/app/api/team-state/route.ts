@@ -48,6 +48,9 @@ const OBSERVED_FIELDS = [
   // Il box marca chat_delivered_at dopo aver consegnato i turni al pane
   // dell'agente: chiude il rendezvous di chat_requested_at.
   "chat_delivered_at",
+  // Ack del solo rendezvous STOP mobile. Il device non può creare richieste:
+  // emergency_stop_requested_at è scritto esclusivamente dalla route browser.
+  "emergency_stop_completed_at",
 ] as const;
 
 type DesiredField = (typeof DESIRED_FIELDS)[number];
