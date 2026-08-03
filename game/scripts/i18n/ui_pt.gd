@@ -739,6 +739,7 @@ const S := {
 	"setup.progress_phase": "FASE %d DE %d — %s",
 	"setup.progress_elapsed": "%s decorridos",
 	"setup.progress_no_meter": "Esta fase não informa uma porcentagem de progresso: o que conta é o tempo decorrido.",
+	"setup.progress_downloaded": "%s baixados (tamanho total não informado)",
 	"setup.progress_eta": "~%s restantes",
 	"setup.progress_stalled": "Sem atualização há %d s — a rede pode estar lenta.",
 	"setup.image_ready": "transferida e pronta",
