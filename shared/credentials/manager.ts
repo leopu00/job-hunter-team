@@ -89,6 +89,9 @@ export function resolveApiKey(
 }
 
 export function deleteApiKey(provider: ApiKeyProvider): boolean {
+  if (!API_KEY_PROVIDERS.has(provider)) {
+    throw new Error(`Provider non supportato: ${provider}`);
+  }
   return deleteCredential(provider);
 }
 
@@ -136,6 +139,9 @@ export function resolveOAuthToken(
 }
 
 export function deleteOAuthToken(provider: OAuthProvider): boolean {
+  if (!OAUTH_PROVIDERS.has(provider)) {
+    throw new Error(`Provider OAuth non supportato: ${provider}`);
+  }
   return deleteCredential(provider);
 }
 

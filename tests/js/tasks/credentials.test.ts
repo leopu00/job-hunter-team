@@ -764,6 +764,34 @@ describe("Manager — OAuth", () => {
   });
 });
 
+describe("Manager — validazione provider sulle delete", () => {
+  it("deleteApiKey e deleteOAuthToken rifiutano i provider fuori dal loro insieme", async () => {
+    const { manager } = await withIsolatedHome();
+
+    const oauthComeApiKey = "claude_max" as unknown as Parameters<typeof manager.deleteApiKey>[0];
+    expect(() => manager.deleteApiKey(oauthComeApiKey)).toThrowError(/non supportato/i);
+
+    const apiKeyComeOauth = "claude" as unknown as Parameters<typeof manager.deleteOAuthToken>[0];
+    expect(() => manager.deleteOAuthToken(apiKeyComeOauth)).toThrowError(/non supportato/i);
+
+    const sconosciuto = "gemini" as unknown as Parameters<typeof manager.deleteApiKey>[0];
+    expect(() => manager.deleteApiKey(sconosciuto)).toThrowError(/non supportato/i);
+  });
+
+  it("una stringa arbitraria non arriva mai al path del file", async () => {
+    // Il vincolo era solo di tipo TypeScript: a runtime la stringa finiva
+    // grezza in join(dir, `${provider}.enc.json`).
+    const { home, credDir, manager } = await withIsolatedHome();
+    mkdirSync(credDir, { recursive: true, mode: 0o700 });
+    const fuori = join(home, "altro.enc.json");
+    writeFileSync(fuori, "non sono una credenziale", { mode: 0o600 });
+
+    const traversal = "../altro" as unknown as Parameters<typeof manager.deleteApiKey>[0];
+    expect(() => manager.deleteApiKey(traversal)).toThrowError(/non supportato/i);
+    expect(existsSync(fuori)).toBe(true);
+  });
+});
+
 describe("Manager — interfaccia unificata", () => {
   it("resolveCredential smista API key e OAuth, e rifiuta i provider sconosciuti", async () => {
     const { manager } = await withIsolatedHome();
