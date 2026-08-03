@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JHT_USER_UPLOADS_DIR } from "@/lib/jht-paths";
 import { isSupabaseConfigured } from "@/lib/workspace";
-import { isLocalRequest, requireLocalWrite } from "@/lib/auth";
+import { isLocalRequest, requireAuth, requireLocalWrite } from "@/lib/auth";
 import { activeDemoPersona } from "@/lib/demo/mode";
 import { createClient } from "@/lib/supabase/server";
 import fs from "fs";
@@ -18,10 +18,13 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   // Demo mode: il candidato fittizio non ha file sincronizzati — lista
   // vuota, MAI il filesystem locale (su dev :3002 mostrerebbe i CV veri
-  // della macchina; feedback utente 23/07).
+  // della macchina; feedback utente 23/07). Questa fixture pubblica deve
+  // precedere l'auth: il layout demo non crea volutamente una sessione.
   if (await activeDemoPersona()) {
     return NextResponse.json({ files: [], mode: "cloud" });
   }
+  const denied = await requireAuth();
+  if (denied) return denied;
   if (isSupabaseConfigured && !(await isLocalRequest())) {
     const supabase = await createClient();
     const {
@@ -67,6 +70,8 @@ export async function GET() {
 }
 
 export async function DELETE(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const ro = await requireLocalWrite();
   if (ro) return ro;
   const { name } = await req.json();

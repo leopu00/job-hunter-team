@@ -91,7 +91,7 @@
 - ⬜ **[JHT-DOCTOR-DAILY-RESTART]** / **[JHT-TOKEN-MONITOR-WRITER-CRITIC]** — post-MVP residuals (restart coverage; Writer+Critic metered as one unit).
 - ⬜ **[JHT-MENTOR-SKILLS]** *(M6)* — add Mentor-specific skills as testing reveals needs.
 - ⬜ **[JHT-AGENT-PROMPTS-V2]** — deep section-by-section validation of the agent prompts.
-- ⬜ **[JHT-ACCESS-CREDENTIALS-GAPS]** *(M3)* — access & credentials doc-vs-code gaps.
+- ✅ **[JHT-ACCESS-CREDENTIALS-GAPS]** *(M3, audited 2026-08-03)* — doc-vs-code audit completed in [`access-and-credentials.md`](docs/internal/ops/access-and-credentials.md): canonical key env fixed, stale desktop plaintext fallback removed, unsupported Hetzner/backup/keyring claims corrected; residual implementation gaps split explicitly in the punch list.
 - ⬜ Skill distribution punch list — Python script colocation, `_lib/` for shared deps, smoke + full-team integration tests → [`docs/internal/architecture/skill-distribution.md`](docs/internal/architecture/skill-distribution.md); includes **[JHT-SKILLS-SYMLINK-TEST]** and **[JHT-SKILLS-CODEX-KIMI-DISCOVERY]**.
 
 ## 🗄️ DB & filesystem hygiene
@@ -158,6 +158,6 @@
 
 - ⚪ **[JHT-POSITIONS-SWIPE-TRIAGE]** *(M1)* — swipe-style rapid triage of positions; backend action exists (`user-exclude` + async request lane), the card UX is the work.
 - ⚪ **[JHT-MANAGED-INBOX]** — team email inbox auto-provisioned by us · **[JHT-EMAIL-OAUTH]** — Gmail via OAuth instead of app-password.
-- ⚪ **[JHT-LOCAL-VAULT]** *(M3)* — master password → encrypted vault for local secrets.
+- ⚪ **[JHT-LOCAL-VAULT]** *(M3)* — implementazione ancora parked; design implementabile e threat-modelled completato in [`2026-08-03-local-vault-design.md`](docs/internal/architecture/2026-08-03-local-vault-design.md). Blocchi prima del codice: ADR su libreria/KDF/AEAD, keyring-vs-password, runtime broker/tmpfs e test nativi; niente crittografia improvvisata.
 - ⚪ **[JHT-COST-VALIDATION-PAYG-VS-SUB]** *(M8)* — €40 of pay-per-use Kimi tokens vs the €40 subscription, measured.
 - ⚪ Idle enrichment & LLM-driven position classifier → files in [`docs/internal/roadmap/`](docs/internal/roadmap/).

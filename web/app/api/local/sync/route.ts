@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Database from "better-sqlite3";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
 import { getLocalDbPath, localDbExists } from "@/lib/cloud-sync/local";
 import { writeSyncState } from "@/lib/cloud-sync/state";
 import {
@@ -165,6 +166,8 @@ function readTable<T>(
 }
 
 export async function POST() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   if (!(await localDbExists())) {
     return NextResponse.json(
       {

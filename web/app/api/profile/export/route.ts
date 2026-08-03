@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   let profile = null;
 
   if (isSupabaseConfigured) {

@@ -1399,6 +1399,11 @@
       "path": "docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md",
       "description": "[PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-08-03-local-vault-design.md",
+      "description": "[JHT-LOCAL-VAULT]: envelope encryption, broker runtime, migrazione senza plaintext persistente e decisioni ADR prima della crypto",
+      "last_review": null
     }
   ]
 }
