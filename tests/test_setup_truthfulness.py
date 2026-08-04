@@ -65,7 +65,8 @@ def test_runtime_installer_keeps_tty_and_reports_command_failure():
     assert "JHTExit=" in setup
     assert '"/v:on"' not in setup
     assert "_with_windows_exit_report(command, exit_report_token)" in setup
-    assert r'''call set \"JHT_EXIT_CODE=%%%%errorlevel%%%%\"''' in setup
+    assert r'''call set JHT_EXIT_CODE=^%%errorlevel^%%''' in setup
+    assert r'''call set \"JHT_EXIT_CODE=''' not in setup
     assert '"reports_exit": true' in setup
     assert '"exit_report_token": exit_report_token' in setup
     assert '"where winget >nul 2>&1 & if errorlevel 1 "' in setup
