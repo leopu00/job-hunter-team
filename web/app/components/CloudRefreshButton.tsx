@@ -64,7 +64,7 @@ const T: Record<
     hourAgo: (n) => (n === 1 ? "1 ora fa" : `${n} ore fa`),
     daysAgo: (n) => (n === 1 ? "1 giorno fa" : `${n} giorni fa`),
     updated: (rel) => `Aggiornato ${rel}`,
-    networkError: "Errore di rete",
+    networkError: "Controlla la connessione e riprova.",
     syncing: "Sync…",
     syncNow: "Sync now",
     title: "Chiedi alla VPS un aggiornamento dei dati ora",
@@ -86,7 +86,7 @@ const T: Record<
     hourAgo: (n) => (n === 1 ? "1 hour ago" : `${n} hours ago`),
     daysAgo: (n) => (n === 1 ? "1 day ago" : `${n} days ago`),
     updated: (rel) => `Updated ${rel}`,
-    networkError: "Network error",
+    networkError: "Check your connection and try again.",
     syncing: "Sync…",
     syncNow: "Sync now",
     title: "Ask the VPS for a data refresh now",
@@ -107,7 +107,7 @@ const T: Record<
     hourAgo: (n) => (n === 1 ? "hace 1 hora" : `hace ${n} horas`),
     daysAgo: (n) => (n === 1 ? "hace 1 día" : `hace ${n} días`),
     updated: (rel) => `Actualizado ${rel}`,
-    networkError: "Error de red",
+    networkError: "Comprueba tu conexión e inténtalo de nuevo.",
     syncing: "Sync…",
     syncNow: "Sync now",
     title: "Pedir a la VPS una actualización de datos ahora",
@@ -129,7 +129,7 @@ const T: Record<
     hourAgo: (n) => (n === 1 ? "il y a 1 heure" : `il y a ${n} heures`),
     daysAgo: (n) => (n === 1 ? "il y a 1 jour" : `il y a ${n} jours`),
     updated: (rel) => `Mis à jour ${rel}`,
-    networkError: "Erreur réseau",
+    networkError: "Vérifiez votre connexion et réessayez.",
     syncing: "Sync…",
     syncNow: "Sync now",
     title: "Demander au VPS une actualisation des données maintenant",
@@ -151,7 +151,7 @@ const T: Record<
     hourAgo: (n) => (n === 1 ? "vor 1 Stunde" : `vor ${n} Stunden`),
     daysAgo: (n) => (n === 1 ? "vor 1 Tag" : `vor ${n} Tagen`),
     updated: (rel) => `Aktualisiert ${rel}`,
-    networkError: "Netzwerkfehler",
+    networkError: "Prüfe deine Verbindung und versuche es erneut.",
     syncing: "Sync…",
     syncNow: "Sync now",
     title: "Den VPS jetzt um eine Datenaktualisierung bitten",
@@ -173,7 +173,7 @@ const T: Record<
     hourAgo: (n) => (n === 1 ? "1 órája" : `${n} órája`),
     daysAgo: (n) => (n === 1 ? "1 napja" : `${n} napja`),
     updated: (rel) => `Frissítve ${rel}`,
-    networkError: "Hálózati hiba",
+    networkError: "Ellenőrizd a kapcsolatot, majd próbáld újra.",
     syncing: "Sync…",
     syncNow: "Sync now",
     title: "Kérj a VPS-től friss adatfrissítést most",
@@ -195,7 +195,7 @@ const T: Record<
     hourAgo: (n) => (n === 1 ? "há 1 hora" : `há ${n} horas`),
     daysAgo: (n) => (n === 1 ? "há 1 dia" : `há ${n} dias`),
     updated: (rel) => `Atualizado ${rel}`,
-    networkError: "Erro de rede",
+    networkError: "Verifique sua conexão e tente novamente.",
     syncing: "Sync…",
     syncNow: "Sync now",
     title: "Pedir ao VPS uma atualização dos dados agora",
@@ -233,6 +233,8 @@ const REFRESH_THROTTLE_MS = 90_000;
 // fuori da un'operazione richiesta esplicitamente.
 const REQUEST_TIMEOUT_MS = 180_000;
 const REQUEST_POLL_MS = 1_000;
+const REQUEST_START_TIMEOUT_MS = 15_000;
+const REQUEST_READ_TIMEOUT_MS = 10_000;
 
 export default function CloudRefreshButton() {
   const router = useRouter();
@@ -398,6 +400,7 @@ export default function CloudRefreshButton() {
       const res = await fetch("/api/team-state", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(REQUEST_START_TIMEOUT_MS),
         // Il valore è solo un trigger: la route lo timbra lato server
         // (orologio browser fuori dall'equazione del rendezvous).
         body: JSON.stringify({ sync_requested_at: new Date().toISOString() }),
@@ -426,9 +429,9 @@ export default function CloudRefreshButton() {
         d.state?.sync_completed_at ?? baselineRef.current ?? null;
       requestedAtRef.current = d.state?.sync_requested_at ?? null;
       requestArmedRef.current = true;
-    } catch (err) {
+    } catch {
       if (mounted.current && requestTokenRef.current === token) {
-        setError(err instanceof Error ? err.message : t.networkError);
+        setError(t.networkError);
         setSyncing(false);
         pendingRef.current = false;
         requestArmedRef.current = false;
@@ -451,6 +454,7 @@ export default function CloudRefreshButton() {
         try {
           const statusRes = await fetch("/api/team-state", {
             cache: "no-store",
+            signal: AbortSignal.timeout(REQUEST_READ_TIMEOUT_MS),
           });
           if (!statusRes.ok)
             return {
