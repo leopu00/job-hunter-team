@@ -117,6 +117,22 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
+  // Gli esiti Sync now richiedono il CAS su expected_requested_at. Lasciare
+  // aperto il vecchio PATCH permetterebbe a un daemon che sta servendo A di
+  // chiudere B arrivata nel frattempo. Il segnale di freschezza generico e'
+  // scritto server-side da /api/cloud-sync/push, non passa da questa corsia.
+  if (
+    source === "token" &&
+    ("sync_completed_at" in update ||
+      (typeof update.last_action === "string" &&
+        update.last_action.startsWith("sync:")))
+  ) {
+    return NextResponse.json(
+      { error: "sync_observed_endpoint_required" },
+      { status: 409 },
+    );
+  }
+
   // [JHT-SYNC-UX] `sync_requested_at` è un rendezvous confrontato con
   // `sync_completed_at` scritto dalla VPS: se arrivasse l'orologio del
   // BROWSER (skew arbitrario sulle macchine utente) la richiesta potrebbe
@@ -177,22 +193,6 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // Esito terminale del rendezvous sync: sul fallback HTTP l'orologio
-    // della VPS non deve decidere se il browser riconosce il risultato.
-    // Timbriamo lato server e garantiamo `last_action_at > requested_at`
-    // anche se la richiesta e' nel futuro rispetto a questo processo.
-    if (
-      typeof update.last_action === "string" &&
-      update.last_action.startsWith("sync:")
-    ) {
-      const requestedMs = Date.parse(tsCheck.data?.sync_requested_at ?? "");
-      const serverMs = Date.now();
-      update.last_action_at = new Date(
-        Number.isNaN(requestedMs)
-          ? serverMs
-          : Math.max(serverMs, requestedMs + 1),
-      ).toISOString();
-    }
   }
 
   const { data, error } = await supabase

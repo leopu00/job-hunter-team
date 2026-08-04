@@ -65,6 +65,7 @@ test.describe("rendezvous web-VPS", () => {
         contentType: "application/json",
         body: JSON.stringify({
           state: {
+            sync_requested_at: requestedAt,
             sync_completed_at: observedCompletion,
             last_action: completed ? "sync:completed" : null,
             last_action_at: completed
@@ -78,7 +79,10 @@ test.describe("rendezvous web-VPS", () => {
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     // Il nome accessibile cambia da "Sync now" a "Sync…" durante il giro.
     const button = page.getByRole("button", { name: /Sync/ }).first();
-    await expect(button).toBeVisible();
+    // Il bottone compare dopo il probe client `/api/local/sync/status`:
+    // attenderlo prova anche che React ha idratato la pagina. In `next dev`
+    // una compilazione a freddo puo' superare i 5s di default.
+    await expect(button).toBeVisible({ timeout: 15_000 });
     await button.click();
     await expect(button).toBeDisabled();
     allowCompletion = true;
@@ -148,11 +152,15 @@ test.describe("rendezvous web-VPS", () => {
     const composer = page.locator("textarea").last();
     await expect(composer).toBeVisible();
     await composer.fill(fixtureBody);
-    await composer.press("Enter");
+    // L'abilitazione deriva dallo state React, quindi e' un segnale stabile
+    // che il composer non e' soltanto HTML SSR ancora privo di handler.
+    const send = page.getByRole("button", { name: /Invia|Send/ }).last();
+    await expect(send).toBeEnabled({ timeout: 15_000 });
+    await send.click();
 
-    await expect(page.getByText(fixtureBody, { exact: true })).toHaveCount(1);
     await expect.poll(() => inserts).toBe(1);
     await expect.poll(() => signalRetries).toBe(1);
+    await expect(page.getByText(fixtureBody, { exact: true })).toHaveCount(1);
     expect(
       await page.evaluate(
         () => performance.getEntriesByType("navigation").length,
