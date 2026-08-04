@@ -49,7 +49,10 @@ export const CHAT_AGENTS = ['assistente', 'capitano', 'mentor'];
 const TAIL_BYTES = 96 * 1024;
 
 /** Turni consegnati al pane per giro: oltre, si aspetta il tick dopo. */
-const MAX_DELIVER_PER_TICK = 5;
+export const MAX_DELIVER_PER_TICK = 5;
+
+/** Il pull può essere più largo della consegna, ma non implica ACK del batch. */
+export const CLOUD_CHAT_PULL_LIMIT = 50;
 
 /**
  * Quanto indietro può andare il mirror SQLite → `chat.jsonl`. Serve solo al
@@ -73,6 +76,9 @@ const STALL_AFTER_MS = Number(process.env.JHT_CHAT_STALL_AFTER_MS || 300_000);
 
 /** Ogni quanto RIPETERE una segnalazione che resta vera (vedi shouldAnnounceStall). */
 const STALL_REPEAT_MS = Number(process.env.JHT_CHAT_STALL_REPEAT_MS || 900_000);
+
+/** Una richiesta cloud della chat non può bloccare il giro veloce per sempre. */
+const CLOUD_REQUEST_TIMEOUT_MS = Number(process.env.JHT_CHAT_HTTP_TIMEOUT_MS || 15_000);
 
 // ── Funzioni pure (il grosso della logica, testabile senza box) ─────────
 
@@ -418,15 +424,43 @@ const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
  * funzionava perché passa dal token del box su Vercel — che è esattamente il
  * canale che questo ramo riusa.
  */
-export function directChatChannel(reader) {
+export function directChatChannel(reader, config, options = {}) {
+  // Gli ACK riga restano sulla via diretta economica. La chiusura usa invece
+  // l'unico proprietario del CAS (la route HTTP), così A non può chiudere B.
+  const closeChannel = vercelChatChannel(config, options);
+  const acknowledgeDelivery = async (
+    ids = [],
+    { closeRendezvous = false, expectedRequestedAt = null } = {},
+  ) => {
+    if (ids.length > 0) await reader.markUserChatDelivered(ids);
+    if (closeRendezvous) {
+      return closeChannel.acknowledgeDelivery([], {
+        closeRendezvous: true,
+        expectedRequestedAt,
+      });
+    }
+    return { closed: false, superseded: false };
+  };
   return {
     kind: 'direct',
     readUndeliveredUserChat: (opts) => reader.readUndeliveredUserChat(opts),
-    async closeRendezvous(ids = []) {
-      if (ids.length > 0) await reader.markUserChatDelivered(ids);
-      await reader.patchTeamState({ chat_delivered_at: new Date().toISOString() });
+    acknowledgeDelivery,
+    async closeRendezvous(ids = [], expectedRequestedAt = null) {
+      return acknowledgeDelivery(ids, { closeRendezvous: true, expectedRequestedAt });
     },
   };
+}
+
+/**
+ * Classificazione stabile e priva di dettagli infrastrutturali per gli errori
+ * di trasporto. Il valore può finire in `team_state.last_error`: non deve mai
+ * contenere URL, hostname, token o il body restituito dal server.
+ */
+export function cloudRequestFailure(error) {
+  const name = String(error?.name || '').toLowerCase();
+  const code = String(error?.code || '').toLowerCase();
+  if (name.includes('timeout') || name === 'aborterror' || code === 'etimedout') return 'timeout';
+  return 'request_failed';
 }
 
 /**
@@ -435,28 +469,49 @@ export function directChatChannel(reader) {
  * separarle lascerebbe la finestra in cui i turni risultano consegnati ma il
  * rendezvous ancora aperto — cioè il giro dopo rilegge una coda vuota.
  */
-export function vercelChatChannel(config, { fetchFn = fetch } = {}) {
+export function vercelChatChannel(
+  config,
+  { fetchFn = fetch, timeoutMs = CLOUD_REQUEST_TIMEOUT_MS } = {},
+) {
+  const requestTimeoutMs = Math.max(1_000, Number(timeoutMs) || CLOUD_REQUEST_TIMEOUT_MS);
   const baseUrl = String(config?.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const url = `${baseUrl}/api/cloud-sync/chat`;
   const headers = {
     Authorization: `Bearer ${config?.token}`,
     'Content-Type': 'application/json',
   };
+  const acknowledgeDelivery = async (
+    ids = [],
+    { closeRendezvous = false, expectedRequestedAt = null } = {},
+  ) => {
+    const res = await fetchFn(url, {
+      method: 'POST',
+      headers,
+      signal: AbortSignal.timeout(requestTimeoutMs),
+      body: JSON.stringify({
+        delivered_ids: ids,
+        close_rendezvous: closeRendezvous,
+        expected_requested_at: expectedRequestedAt,
+      }),
+    });
+    if (res.status === 409) return { closed: false, superseded: true };
+    if (!res.ok) throw new Error(`POST /api/cloud-sync/chat: HTTP ${res.status}`);
+    return { closed: closeRendezvous, superseded: false };
+  };
   return {
     kind: 'vercel',
     async readUndeliveredUserChat({ limit = 50 } = {}) {
-      const res = await fetchFn(`${url}?limit=${encodeURIComponent(limit)}`, { headers });
+      const res = await fetchFn(`${url}?limit=${encodeURIComponent(limit)}`, {
+        headers,
+        signal: AbortSignal.timeout(requestTimeoutMs),
+      });
       if (!res.ok) throw new Error(`GET /api/cloud-sync/chat: HTTP ${res.status}`);
       const body = await res.json().catch(() => null);
       return Array.isArray(body?.messages) ? body.messages : [];
     },
-    async closeRendezvous(ids = []) {
-      const res = await fetchFn(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ delivered_ids: ids }),
-      });
-      if (!res.ok) throw new Error(`POST /api/cloud-sync/chat: HTTP ${res.status}`);
+    acknowledgeDelivery,
+    async closeRendezvous(ids = [], expectedRequestedAt = null) {
+      return acknowledgeDelivery(ids, { closeRendezvous: true, expectedRequestedAt });
     },
   };
 }
@@ -467,8 +522,8 @@ export function vercelChatChannel(config, { fetchFn = fetch } = {}) {
  * nessun cloud da cui ritirare niente.
  */
 export function chatChannelFor(config, reader, options = {}) {
-  if (reader) return directChatChannel(reader);
   if (!config?.token) return null;
+  if (reader) return directChatChannel(reader, config, options);
   return vercelChatChannel(config, options);
 }
 
@@ -531,8 +586,8 @@ export function chatTsOf(row) {
  * quella nativa a legacy_id negativo) e ripusharla creerebbe un doppione
  * con un legacy_id diverso.
  *
- * @returns id delle righe CLOUD importate (anche quelle già presenti: sono
- *          da marcare consegnate comunque, o resterebbero in coda per sempre)
+ * @returns id delle righe CLOUD importate (anche quelle già presenti). Una
+ *          destinazione senza pane supportato non è importata né ACKata.
  */
 export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS } = {}) {
   const insert = db.prepare(
@@ -550,9 +605,9 @@ export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS }
     const body = typeof row.body === 'string' ? row.body : '';
     if (!body.trim()) continue;
     // Fuori dalle tre figure con cui si chatta dal web: non c'è un pane a
-    // cui consegnarlo. Si marca comunque, altrimenti resta in coda a vita.
+    // cui consegnarlo. Non fingere una consegna: la corsia resta aperta e il
+    // dato anomalo è correggibile lato server senza perdere il turno.
     if (!agents.includes(agent)) {
-      imported.push(row.id);
       continue;
     }
     const ts = chatTsOf(row);
@@ -580,6 +635,29 @@ export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS }
     imported.push(row.id);
   }
   return imported;
+}
+
+/**
+ * Restituisce soltanto gli ID cloud il cui gemello locale è stato davvero
+ * consegnato. Importare una riga non equivale a consegnarla: il worker limita
+ * intenzionalmente gli invii per tick.
+ */
+export function deliveredCloudUserTurnIds(db, rows, { agents = CHAT_AGENTS } = {}) {
+  const delivered = db.prepare(
+    `SELECT 1 AS hit
+       FROM pending_user_messages
+      WHERE agent = ? AND chat_ts = ? AND delivered_at IS NOT NULL
+      LIMIT 1`
+  );
+  const ids = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (row?.id == null || typeof row.body !== 'string' || !row.body.trim()) continue;
+    const agent = String(row.agent || '').toLowerCase();
+    if (agents.includes(agent) && delivered.get(agent, chatTsOf(row))?.hit === 1) {
+      ids.push(row.id);
+    }
+  }
+  return ids;
 }
 
 // ── Passo 4: turni dell'utente → pane tmux dell'agente ──────────────────
