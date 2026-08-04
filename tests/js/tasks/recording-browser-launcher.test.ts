@@ -76,8 +76,21 @@ describe("launcher Playwright per riprese web", () => {
       "/positions",
     ]) {
       expect(() => recordingTarget(route)).toThrow(
-        "JHT_RECORDING_ROUTE deve essere esattamente",
+        "JHT_RECORDING_PATH deve essere esattamente",
       );
+    }
+  });
+
+  it("rifiuta l'env ROUTE revocata invece di aprire il dashboard di default", () => {
+    const previous = process.env.JHT_RECORDING_ROUTE;
+    process.env.JHT_RECORDING_ROUTE = "/messages";
+    try {
+      expect(() => recordingTarget()).toThrow(
+        "JHT_RECORDING_ROUTE non e' supportata",
+      );
+    } finally {
+      if (previous === undefined) delete process.env.JHT_RECORDING_ROUTE;
+      else process.env.JHT_RECORDING_ROUTE = previous;
     }
   });
 

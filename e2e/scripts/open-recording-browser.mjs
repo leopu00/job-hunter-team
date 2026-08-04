@@ -4,7 +4,7 @@
  * storage state Playwright in un profilo del browser nativo.
  *
  * Uso dalla root del repository:
- *   JHT_RECORDING_PROFILE=software JHT_RECORDING_ROUTE=/messages npm --prefix e2e run recording-browser
+ *   JHT_RECORDING_PROFILE=software JHT_RECORDING_PATH=/messages npm --prefix e2e run recording-browser
  *
  * Non esegue login, reset, POST o DELETE. Il contesto e' effimero: applica il
  * solo storage state privato al Chromium lanciato da Playwright e lo elimina
@@ -60,7 +60,7 @@ async function main() {
     target = recordingTarget();
   } catch {
     fail(
-      `JHT_RECORDING_ROUTE deve essere una delle route esatte: ${[...ALLOWED_RECORDING_ROUTES].join(", ")}`,
+      `JHT_RECORDING_PATH deve essere una delle route esatte: ${[...ALLOWED_RECORDING_ROUTES].join(", ")}`,
     );
     return;
   }
