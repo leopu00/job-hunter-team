@@ -473,7 +473,9 @@ jobs:
 
             ---
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for the full history.
-          draft: false
+          # Gli asset restano invisibili al pubblico finche' HQ-MASTER non li
+          # riscarica dalla draft e passa `release_artifacts.py audit`.
+          draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             release-assets/*.exe
