@@ -5,6 +5,11 @@ deterministic data. They do **not** use the public demo mode: no
 `jht_demo_persona` cookie is written, so the protected layout never mounts the
 demo banner.
 
+Every reset also pins the recording UI to the **light** theme. It writes
+`theme: "light"` for the local/game workspace and `jht-theme=light` into both
+production and localhost browser origins. The result does not depend on the
+recorder's operating-system theme.
+
 Four aliases cover different candidates and job markets:
 
 | Alias | Candidate focus | Seed |
@@ -63,6 +68,7 @@ $XDG_DATA_HOME/jht/recording-profiles/<alias>/
   agents/{assistente,mentor,capitano}/chat.jsonl
   profile/candidate_profile.yml
   profile/ready.flag
+  user/{applications,allegati,critiche,cv,output}/
 ```
 
 When XDG variables are unset, the standard `~/.config` and `~/.local/share`
@@ -82,9 +88,17 @@ const context = await browser.newContext({
 });
 ```
 
-The generated state contains the Supabase session plus `jht-tour-done=1` in
-localStorage. It contains no `jht_demo_persona`, so dashboard, positions, map,
-swipe and profile all use real Supabase queries and render without the banner.
+The generated state contains the Supabase session plus `jht-tour-done=1` and
+`jht-theme=light` in localStorage. It contains no `jht_demo_persona`, so
+dashboard, positions, map, swipe and profile all use real Supabase queries,
+render in light mode and show neither the demo banner nor its `CONNECT YOUR
+TEAM` / `EXIT DEMO` actions.
+
+The automated pre-take gate also calls `DELETE /api/demo` and reloads the
+dashboard before accepting the first recordable frame. This clears a stale
+demo cookie even if someone accidentally reused an existing browser context;
+the gate then checks the API state and the context cookie jar before checking
+the rendered dashboard and messages.
 
 ## Game recording
 
@@ -95,9 +109,18 @@ game resolve the **same** recording directory:
 
 ```bash
 PROFILE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/jht/recording-profiles/software"
-docker compose -f "$HOME/.jht/runtime/docker-compose.yml" -f "$PROFILE_ROOT/compose.recording.yml" up -d --force-recreate
+docker compose -p rel004 -f "$HOME/.jht/runtime/docker-compose.yml" -f "$PROFILE_ROOT/compose.recording.yml" up -d --force-recreate
 JHT_HOME="$PROFILE_ROOT" /path/to/job-hunter-team-game
 ```
+
+The override binds both `/jht_home` and `/jht_user` below the synthetic
+profile, forces `JHT_HOST_TYPE=local` and `restart: "no"`, and blanks
+cloud/provider environment values inherited from the host. It therefore
+cannot mount the real user directory, reuse pairing or provider auth, or
+restart alongside the normal team. Keep the `-p rel004` project name in every
+Compose command. `LocalBackend` addresses the fixed container name `jht`; if a
+normal `jht` already exists, Compose fails on the name collision instead of
+reusing it. Do not stop that container as part of the recording workflow.
 
 The `JHT_HOME` on the game process is required too: `LocalBackend` reads
 command output from that host directory while the container writes the same
@@ -117,7 +140,13 @@ npm run recording-profile -- verify --all
 
 This checks SQLite integrity, expected row counts (including chat), cloud row
 content, required runtime artifacts, cloud profile/onboarding/contact state and
-that the stored browser state has no demo cookie. `verify` never creates an
-account: missing local credentials are an error. The release gate
-additionally opens the protected dashboard with the generated state and checks
-that no visible text contains the demo banner label.
+that the stored browser state has no demo cookie and pins `jht-theme=light` for
+both supported origins. It also resolves the installed base Compose plus the
+generated override (without starting Docker) and rejects any `/jht_home` or
+`/jht_user` source outside the synthetic profile, a non-local host type, a
+restart policy, inherited cloud/provider values or a container name that the
+game cannot address. `verify` never creates an account: missing local
+credentials are an error. The release gate additionally opens the protected
+dashboard and messages with the generated state, verifies the rendered
+`data-theme=light`, and rejects the exact demo copy and the `CONNECT YOUR TEAM`
+/ `EXIT DEMO` actions.

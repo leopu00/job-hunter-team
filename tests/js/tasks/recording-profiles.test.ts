@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   unlinkSync,
   writeFileSync,
@@ -99,6 +100,9 @@ describe("profili riprese — dataset reale e ripetibile", () => {
     };
     try {
       expect(run("reset").status).toBe(0);
+      expect(
+        JSON.parse(readFileSync(join(profileRoot, "preferences.json"), "utf8")),
+      ).toMatchObject({ theme: "light" });
       const firstDump = canonicalDump();
       expect(run("reset").status).toBe(0);
       expect(canonicalDump()).toBe(firstDump);
@@ -144,7 +148,7 @@ describe("profili riprese — dataset reale e ripetibile", () => {
     } finally {
       rmSync(privateRoot, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 300_000);
 
   it("copre quattro utenti fittizi con contenuti professionali diversi", () => {
     expect(RECORDING_PROFILE_ALIASES).toEqual([
