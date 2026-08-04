@@ -15,7 +15,8 @@ relevant commands inline.
 ## Two layers
 
 JHT exposes the `jht` command on the host. The host wrapper
-(`scripts/jht-wrapper.sh`, ~165 LOC) handles **lifecycle / TTY-bound**
+([`scripts/jht-wrapper.sh`](../../scripts/jht-wrapper.sh)) handles
+**lifecycle / TTY-bound**
 commands directly; everything else is forwarded to the Node CLI **inside
 the long-running `jht` container** via `docker exec`. The split is
 deliberate — see [`docs/internal/ops/vps.md`](../internal/ops/vps.md):
@@ -37,7 +38,7 @@ can use them simultaneously — that's the design:
 
 | Surface          | Role                                   | Talks to the container via                |
 |------------------|----------------------------------------|-------------------------------------------|
-| Desktop launcher | Provisioning + lifecycle UI            | local Docker / SSH + `docker exec`        |
+| Native office    | Provisioning + lifecycle UI            | local Docker / SSH + `docker exec`        |
 | **CLI (`jht`)**  | Dev + AI agents + power user           | host wrapper → `docker exec`              |
 | Web dashboard    | User interaction (positions, team)     | Supabase realtime + sync API              |
 | Telegram         | Mobile chat with the agents            | bridge process inside the container       |
@@ -253,9 +254,9 @@ concentrates the same budget into fewer hours rather than saving it.
 
 | Command                              | Layer | What it does                                                |
 |--------------------------------------|-------|-------------------------------------------------------------|
-| `jht status`                         | Both  | Wrapper: container name/state/image. Forwarded inside, also lists agent processes. |
+| `jht status`                         | Host  | Container name, state, start time and image. Use `jht team status` or `jht agents` for agent processes. |
 | `jht agents`                         | Node  | Detailed agent process list with PIDs and tmux sessions.    |
-| `jht logs [flags]`                   | Both  | Wrapper streams `docker logs`. Inside Node, `--agent <name>` filters per-agent. |
+| `jht logs [flags]`                   | Host  | Streams `docker logs`; accepts Docker log flags such as `-f` and `--tail N`. |
 | `jht sentinella status`              | Node  | Sentinella module summary (last tick, throttle level).      |
 | `jht sentinella tail [-n N] [-f]`    | Node  | Last N ticks (default 20); `-f/--follow` streams new ones.  |
 | `jht sentinella graph [-n N]`        | Node  | ASCII sparkline of usage over the last N ticks (default 40). |
@@ -404,8 +405,8 @@ doesn't mistake them for working features; treat them as placeholders.
 ## Common workflows
 
 ```bash
-# Fresh setup (Local or VPS — same command)
-jht up && jht setup
+# Fresh setup (the wrapper starts the container automatically)
+jht setup
 
 # Reload after editing jht.config.json
 jht team stop --all && jht team start

@@ -1,6 +1,8 @@
 # 🎯 JHT Threat Model
 
-> Pre-launch draft. When the project goes public, this file (with minor edits) becomes `SECURITY.md` at the repo root.
+> Current technical threat model. The root [`SECURITY.md`](../../SECURITY.md)
+> is the concise reporting policy; this document retains the architecture and
+> abuse-case analysis behind it.
 
 **Inspired by:** [OpenClaw `SECURITY.md`](https://github.com/openclaw/openclaw/blob/main/SECURITY.md) — "personal assistant trust model" pattern.
 

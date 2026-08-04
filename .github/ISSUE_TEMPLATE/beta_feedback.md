@@ -1,11 +1,11 @@
 ---
-name: Beta tester feedback
+name: Run feedback
 about: Share what worked, what didn't, what would help — no technical knowledge required
-labels: beta-feedback, triage
+labels: triage
 ---
 
 <!--
-Thanks for testing JHT! We're in beta and your feedback is gold.
+Thanks for testing JHT. A reproducible account of what happened is useful.
 Just answer what feels relevant — leave the rest blank. No need
 to be technical to file this.
 -->
@@ -40,7 +40,12 @@ message, a missing explanation — anything. -->
 
 ## Screenshots or recordings (optional)
 
-<!-- Drag and drop here if you want. Especially useful if something looked off. -->
+<!--
+Only attach material that is safe for a public repository. Crop or redact
+names, email addresses, CV/application content, machine addresses, hostnames,
+account identifiers and tokens. Never upload a raw database, configuration
+file or credential store.
+-->
 
 ## Anything else?
 

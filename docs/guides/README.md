@@ -29,11 +29,11 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 | [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Non-tech — native office VPS setup (Path 2) |
 | [☁️ VPS-SETUP](VPS-SETUP.md) | Technical — manual Hetzner setup via SSH |
 
-## 🧪 Beta & feedback
+## 🧪 Testing & feedback
 
 | Guide | For whom |
 |---|---|
-| [🧪 BETA](BETA.md) | Beta testers — the program, what we ask, how to apply |
+| [🧪 BETA](BETA.md) | Users and operators — report issues safely and publish reproducible run evidence |
 | [💬 FEEDBACK-TICKETING](FEEDBACK-TICKETING.md) | Operators — feedback/bug ticketing setup |
 
 ---

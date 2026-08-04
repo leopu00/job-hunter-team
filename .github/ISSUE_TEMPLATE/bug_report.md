@@ -35,10 +35,13 @@ Before opening: search existing issues for the same symptom.
 
 <!--
 Paste the relevant lines. Useful sources, in order:
-- container logs: `jht container logs` or `docker logs jht`
+- container logs: `jht logs --tail 200` or `docker logs --tail 200 jht`
 - agent pane: `tmux capture-pane -t <SESSION> -p -S -200`
 - sentinel state: `jht sentinella status` and `jht sentinella tail`
 - web/Next.js: browser DevTools console + Network tab
+Before pasting, remove names, email addresses, CV/application content,
+machine addresses, hostnames, account identifiers and tokens. Never upload a
+raw database, configuration file or credential store to this public issue.
 Wrap large blocks in ```...``` so they fold.
 -->
 
@@ -48,7 +51,10 @@ Wrap large blocks in ```...``` so they fold.
 
 ## Screenshots
 
-<!-- Drag & drop here if the bug is visual. Skip otherwise. -->
+<!--
+Drag & drop here if the bug is visual. Skip otherwise. Crop or redact the same
+private data listed above before uploading to this public repository.
+-->
 
 ## What you already tried
 
@@ -65,5 +71,5 @@ e.g. "ran `jht doctor`", "wiped ~/.jht and re-ran setup",
 
 <!--
 Once submitted, expect a triage label within ~48h (see
-docs/internal/ops/triage.md for the contract). No fix SLA in beta.
+docs/internal/ops/triage.md for the contract). No fix SLA is promised.
 -->
