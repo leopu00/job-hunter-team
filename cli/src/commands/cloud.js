@@ -2827,8 +2827,11 @@ export async function handleChatSync(options = {}) {
     let ackFailed = false;
     if (pending && channel && !readError && (deliveredCloudIds.length > 0 || closeRendezvous)) {
       try {
-        await channel.acknowledgeDelivery(deliveredCloudIds, { closeRendezvous });
-        acked = closeRendezvous;
+        const acknowledgement = await channel.acknowledgeDelivery(deliveredCloudIds, {
+          closeRendezvous,
+          expectedRequestedAt: state?.chat_requested_at ?? null,
+        });
+        acked = closeRendezvous && acknowledgement?.closed !== false;
       } catch (err) {
         ackFailed = true;
         log('warn', `chat-sync: ack consegna fallito (${chat.cloudRequestFailure(err)})`);
