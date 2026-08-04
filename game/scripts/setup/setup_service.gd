@@ -1491,6 +1491,32 @@ static func _provider_tui_login(provider: String) -> String:
 const PTY_ROWS := 40
 const PTY_COLS := 120
 
+## Il pipe interattivo di Godot viene raccolto quando arriva EOF: a quel punto
+## su macOS chiedere l'exit code al PID produce il falso errore "not a child".
+## Il guscio scrive quindi l'esito come OSC (invisibile nel renderer terminale)
+## prima di uscire; EmbeddedTerminal lo legge dai byte grezzi e può distinguere
+## davvero successo e fallimento.
+static func _with_exit_report(command: String, token: String) -> String:
+	# Il comando gira in una subshell: anche un suo `exit N` non può saltare il
+	# report del wrapper esterno. fd3 è il canale di controllo verso Godot e
+	# viene chiuso nel figlio: il comando ospitato non può falsificarlo.
+	return ("( exec 3>&-; %s\n); _jht_exit=$?; " \
+			+ "printf '\\033]1337;JHTExit=%s:%%s\\007' \"$_jht_exit\" >&3; " \
+			+ "exit \"$_jht_exit\"") % [command, token]
+
+
+## Windows non espone l'exit code del processo raccolto da Godot. Delayed
+## expansion non può restare attiva sul comando ospitato: cambierebbe i path e
+## gli argomenti contenenti `!`. `call` espande ERRORLEVEL soltanto DOPO il
+## comando; PowerShell scrive l'OSC e termina con lo stesso codice catturato.
+static func _with_windows_exit_report(command: String, token: String) -> String:
+	return ("( %s ) 1>&2 & call set \"JHT_EXIT_CODE=%%%%errorlevel%%%%\" & " \
+			+ "powershell.exe -NoProfile -NonInteractive -Command " \
+			+ "\"[Console]::Out.Write([char]27 + ']1337;JHTExit=%s:' " \
+			+ "+ $env:JHT_EXIT_CODE + [char]7); " \
+			+ "exit [int]$env:JHT_EXIT_CODE\"") \
+			% [command, token]
+
 
 ## Senza `stty` la pty aperta da `script` nasce 0×0 — misurato sia su macOS
 ## sia su Ubuntu 24.04, e `docker exec -it` propaga quello 0×0 dentro al
@@ -1507,23 +1533,30 @@ static func _with_pty_size(command: String) -> String:
 static func embedded_terminal_spec(title: String, hint: String, command: String) -> Dictionary:
 	var path := "/bin/sh"
 	var args := PackedStringArray()
+	var exit_report_token := Crypto.new().generate_random_bytes(16).hex_encode()
 	match OS.get_name():
 		"macOS":
-			args = PackedStringArray(["-lc", "script -q /dev/null /bin/sh -lc " \
-					+ _shell_quote(_with_pty_size(command)) + " 1>&2"])
+			args = PackedStringArray(["-lc", "3>&1 script -q /dev/null /bin/sh -lc " \
+					+ _shell_quote(_with_pty_size(
+							_with_exit_report(command, exit_report_token))) + " 1>&2"])
 		"Windows":
 			path = "cmd.exe"
 			# ConPTY non è ancora esposto da Godot: il device flow Codex resta
 			# pienamente interattivo; Claude/Kimi ricevono comunque stdin.
-			args = PackedStringArray(["/d", "/s", "/c", command + " 1>&2"])
+			args = PackedStringArray(["/d", "/s", "/c",
+					_with_windows_exit_report(command, exit_report_token)])
 		_:
-			args = PackedStringArray(["-lc", "script -qefc " \
-					+ _shell_quote(_with_pty_size(command)) + " /dev/null 1>&2"])
+			args = PackedStringArray(["-lc", "3>&1 script -qefc " \
+					+ _shell_quote(_with_pty_size(
+							_with_exit_report(command, exit_report_token))) \
+					+ " /dev/null 1>&2"])
 	return {
 		"path": path,
 		"args": args,
 		"title": title,
 		"hint": hint,
+		"reports_exit": true,
+		"exit_report_token": exit_report_token,
 	}
 
 
@@ -1596,23 +1629,43 @@ func open_runtime_install() -> void:
 	if OS.get_name() == "Windows":
 		# Niente bash su Windows: winget se c'è (gestisce lui il prompt UAC),
 		# altrimenti la pagina ufficiale di download nel browser.
-		var command := "where winget >nul 2>&1 && " \
-				+ "(winget install -e --id Docker.DockerDesktop " \
-				+ "--accept-package-agreements --accept-source-agreements) || " \
+		# `if` separa davvero assenza e fallimento: un errore di winget non deve
+		# cadere nel fallback browser e trasformarsi in un falso exit 0.
+		var command := "where winget >nul 2>&1 & if errorlevel 1 " \
 				+ "(echo winget non disponibile: apro la pagina di download di Docker Desktop... " \
-				+ "& start https://www.docker.com/products/docker-desktop/)"
+				+ "& start \"\" https://www.docker.com/products/docker-desktop/) else " \
+				+ "(winget install -e --id Docker.DockerDesktop " \
+				+ "--accept-package-agreements --accept-source-agreements)"
 		terminal_requested.emit("runtime-install", embedded_terminal_spec(
 				"Installazione Docker Desktop",
 				"Conferma l'autorizzazione di Windows se appare. Al termine avvia Docker Desktop " \
 				+ "una prima volta (accetta i termini), poi torna qui e premi ATTIVA CONTAINER.",
 				command))
 		return
-	var command := "curl -fsSL https://jobhunterteam.ai/install.sh | " \
-			+ "JHT_SKIP_ONBOARD=1 bash"
+	var command := _posix_runtime_install_command()
 	terminal_requested.emit("runtime-install", embedded_terminal_spec(
 			"Installazione runtime JHT",
-			"L'installazione resta dentro il gioco. Potrebbe chiedere la password amministratore del computer.",
+			"L'installazione resta dentro il gioco. Se richiesta, inserisci qui la password amministratore del computer.",
 			command))
+
+
+## Scaricare prima su file lascia stdin collegato alla PTY incorporata. Con il
+## vecchio `curl | bash`, Homebrew vedeva invece una pipe, passava da solo in
+## modalità non interattiva e sudo non poteva chiedere la password. Il PATH
+## esplicito copre inoltre le app macOS lanciate da Finder, che non ereditano
+## /opt/homebrew/bin pur avendo già Homebrew installato.
+static func _posix_runtime_install_command() -> String:
+	return "export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; " \
+			+ "jht_installer=\"$(mktemp \"${TMPDIR:-/tmp}/jht-install.XXXXXX\")\" && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 129' HUP && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 130' INT && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 143' TERM && " \
+			+ "curl -fsSL https://jobhunterteam.ai/install.sh -o \"$jht_installer\" && " \
+			+ "JHT_SKIP_ONBOARD=1 /bin/bash \"$jht_installer\"; " \
+			+ "_jht_install_code=$?; " \
+			+ "trap - HUP INT TERM; " \
+			+ "[ -z \"${jht_installer:-}\" ] || rm -f \"$jht_installer\"; " \
+			+ "(exit \"$_jht_install_code\")"
 
 
 static func default_vps_key_path() -> String:
