@@ -212,6 +212,10 @@ var _open_url: Button
 var _copy_url: Button
 var _done: Button
 var _mutex := Mutex.new()
+## `stdio` è duplex e viene usato dal report reader e dal main thread. Le pipe
+## sono non bloccanti, quindi questo mutex serializza ogni accesso senza mai
+## trattenere il lock in attesa di output del figlio.
+var _stdio_mutex := Mutex.new()
 var _auth_was_ready := false
 var _auth_autoclose_started := false
 var _screen := TermScreen.new()
@@ -482,7 +486,7 @@ func _build_ui() -> void:
 
 func _run_process() -> void:
 	var process := OS.execute_with_pipe(str(spec.get("path", "")),
-			PackedStringArray(spec.get("args", PackedStringArray())), true)
+			PackedStringArray(spec.get("args", PackedStringArray())), false)
 	if process.is_empty():
 		call_deferred("_process_failed", UIStrings.t("term.err_start"))
 		return
@@ -500,15 +504,17 @@ func _run_process() -> void:
 	# FileAccess sui pipe non espone i byte disponibili. Una lettura per byte
 	# consegna immediatamente anche prompt corti in attesa di input; la UI li
 	# aggrega una volta per frame evitando migliaia di redraw.
-	while not _closing and is_instance_valid(_stderr) and not _stderr.eof_reached():
+	while not _closing and is_instance_valid(_stderr):
 		var one := _stderr.get_buffer(1)
-		if not one.is_empty() and not (_stderr.eof_reached() and one[0] == 0):
+		if not one.is_empty():
 			call_deferred("_queue_byte", one[0])
-		else:
-			OS.delay_msec(2)
-	# EOF è già la conferma affidabile che il pipe figlio è terminato. Chiamare
-	# is_process_running/get_process_exit_code dopo che Godot lo ha raccolto
-	# genera un falso errore "PID is not a child" su macOS.
+			continue
+		# FileAccess*Pipe.eof_reached() resta sempre false. Sui pipe non
+		# bloccanti una lettura vuota significa invece "nessun dato ORA": la
+		# vita del processo distingue l'attesa dall'EOF senza troncare output.
+		if _pid > 0 and not OS.is_process_running(_pid):
+			break
+		OS.delay_msec(2)
 	_mutex.lock()
 	_process_exited = true
 	_mutex.unlock()
@@ -523,9 +529,18 @@ func _run_report_reader() -> void:
 	# marker completo è necessariamente il report finale del wrapper.
 	var report := PackedByteArray()
 	var expected_token := str(spec.get("exit_report_token", ""))
-	while not _closing and is_instance_valid(_stdio) and not _stdio.eof_reached():
-		var one := _stdio.get_buffer(1)
-		if one.is_empty() or (_stdio.eof_reached() and one[0] == 0):
+	while not _closing:
+		_stdio_mutex.lock()
+		var pipe_valid := is_instance_valid(_stdio)
+		var one := _stdio.get_buffer(1) if pipe_valid \
+				else PackedByteArray()
+		_stdio_mutex.unlock()
+		if one.is_empty():
+			_mutex.lock()
+			var process_exited := _process_exited
+			_mutex.unlock()
+			if not pipe_valid or process_exited:
+				break
 			OS.delay_msec(2)
 			continue
 		report.append(one[0])
@@ -637,11 +652,11 @@ func _submit_line(text: String) -> void:
 
 
 func _send(data: String) -> void:
-	_mutex.lock()
+	_stdio_mutex.lock()
 	if is_instance_valid(_stdio) and not _finished:
 		_stdio.store_buffer(data.to_utf8_buffer())
 		_stdio.flush()
-	_mutex.unlock()
+	_stdio_mutex.unlock()
 	_input.grab_focus()
 
 
@@ -722,10 +737,12 @@ func close() -> void:
 	if _closing:
 		return
 	_closing = true
-	_mutex.lock()
+	_stdio_mutex.lock()
 	if is_instance_valid(_stdio):
 		_stdio.store_8(3)
 		_stdio.flush()
+	_stdio_mutex.unlock()
+	_mutex.lock()
 	if _pid > 0 and not _process_exited:
 		OS.kill(_pid)
 	_mutex.unlock()
