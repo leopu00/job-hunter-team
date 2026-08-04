@@ -1,16 +1,43 @@
 # 🏗️ Infrastructure — Job Hunter Team
 
-> 📐 **High-level deployment diagram.** It shows the unit of deployment (the container), the deployment locations (local / dedicated / self-hosted VPS), and the optional sync to managed storage. Not every agent is drawn individually — the full team composition is documented in the [README](../../README.md) and in `agents/`.
->
-> Source: [`infra.d2`](../../assets/infra.d2).
-
-![JHT infrastructure](../../assets/infra.svg)
+> 📐 **Current deployment and web-surface map.** It shows the unit of
+> deployment, the deployment locations and the browser origins that are
+> meaningful today. The older diagram showed the retired local dashboard and
+> is intentionally not used as an operational reference.
 
 ## At a glance
 
 ### 🐳 Docker container — the unit of deployment
 
 Everything operational runs inside a single container: the agent team and local storage (SQLite for structured data, files for CVs and output). Same image, same behavior, whether it runs on a personal PC, a dedicated home computer, or a self-hosted VPS.
+
+The shipped container exposes **no HTTP port**. The native Godot application is
+the control surface: it uses `docker exec` for a local team and SSH for a VPS.
+The browser is a separate cloud surface, not a route into the runtime
+container.
+
+### 🌐 Web surfaces and local origins
+
+Use this table to identify an origin before opening it or recording against it.
+Every localhost entry is a development or recording process explicitly started
+by a contributor; none is a product endpoint exposed by the runtime
+container.
+
+| Port / origin | State | Purpose | Public or shipped user surface? |
+| --- | --- | --- | --- |
+| `http://localhost:3000` | **Retired as a shipped surface** on 2026-07-23 | The old container-served local dashboard. Bare `npm run dev` can still make a developer's Next process choose its default port, and an older E2E default still names it; neither restores the product dashboard. | No |
+| `http://localhost:3001` | Active when a contributor starts the local host development mode | Main local Next development origin, with the host process using the local container integration. | No — development only |
+| `http://localhost:3002` | Active when a contributor starts the parallel local host development mode | A second local development origin using the same integration. | No — development only |
+| `http://localhost:3003` | Active when a contributor starts cloud-mode development | Local Next development origin configured for the cloud deployment mode. | No — development only |
+| `http://localhost:3005` | **Historical only** (2026-05-23) | An ad-hoc `next dev` host mentioned for `dev2` in the isolated simulation Compose file. That simulation container published no ports and was never a product dashboard. | No |
+| `http://localhost:3008` | Active only for the controlled recording/E2E flow | The isolated cloud-mode origin paired with the recording auth-state and pre-take gates. It was introduced independently on 2026-08-04. | No — recording/development only |
+| `https://jobhunterteam.ai` | Current production browser origin | The cloud site and authenticated, read-mostly dashboard. | Yes — the only shipped browser surface |
+
+This is **not a migration from `:3005` to `:3008`**. `:3005` is an old
+simulation-side development reference. `:3008` was created separately for
+release recording and its origin-specific storage state. Browser storage is
+origin-scoped, so recording state for `:3008` must not be reused for any other
+localhost port.
 
 ### 🔀 Where the team runs — three modes, one location at a time
 
@@ -22,9 +49,11 @@ The same Docker image runs in all three modes — only the host machine changes:
 2. **🏠 Dedicated computer** — a second PC at home (old laptop, mini-PC, spare desktop), plugged in and left on for weeks/months. Same setup as Local, just different hardware. Planned UX in PHASE 2 (LAN discovery + SSH-based setup).
 3. **☁️ Self-hosted VPS** ⭐ **target setup** — a small server rented from a cloud provider (Hetzner ~€4.5/mo, AWS, GCP). Cheaper than buying a dedicated PC and rented only during the active job-hunt months. The team runs in the user's own VPS — there is no managed JHT service. Planned UX in PHASE 3 (one-click provisioning).
 
-The dashboard is served by the container itself:
-- Local / Dedicated → `localhost:3000`
-- Self-hosted VPS → published on the VPS's public IP (or reached through the desktop SSH tunnel — see [`JHT-VPS-TUNNEL`](../../../BACKLOG.md))
+The local dashboard previously served at `localhost:3000` was removed on
+2026-07-23 (`303a6ec60`), as recorded in the [0.3.0 changelog](../../../CHANGELOG.md).
+Local and VPS interaction moved to the native application via `docker exec` or
+SSH, respectively; the browser is cloud-only. A VPS therefore does not publish
+the runtime dashboard on its network address.
 
 ### ☁️ Optional managed storage (read-only mirror)
 
@@ -41,7 +70,14 @@ This is **opt-in for Local PC**, **mandatory for VPS** (the VPS uses cloud stora
 
 > 📡 **No LLM calls happen on the managed storage side.** The agents always run inside the local container. Supabase and Drive are storage only.
 
-> 🔄 **Sync model (aggiornato 2026-05-31)**: ibrido **push macro-events + pull desired-state**. Il container è source-of-truth dei *risultati* (positions/scores/applications) che vengono pushati a Supabase ogni ~60s come delta. In direzione opposta, le **intenzioni utente** che entrano dal web (start/stop team, "scrivi CV", chat, like/dislike) sono modellate come desired-state Kubernetes-style e tornano al container via 2 long-poller HTTP (`team-state-reconciler` + `team-commands-poller` legacy) + endpoint dedicato `/api/cloud-sync/pull-desired-state` per i flag per-row (es. `write_requested`).
+> 🔄 **Sync model (updated 2026-08-04):** the container remains the source of
+> truth for results (positions, scores and applications) and mirrors deltas to
+> Supabase. In the opposite direction, the cloud accepts only narrow,
+> user-scoped request lanes: chat, persistent team directives, per-position CV
+> requests and bounded feedback/actions. The mobile emergency control is
+> stop-only. The web surface cannot expose shell access, arbitrary commands,
+> team start/restart or general configuration; those stay in the native
+> application.
 >
 > **Bootstrap automatico**: quando l'utente fa login con lo stesso account su un **container nuovo/vuoto** (es. nuova VPS appena installata, o nuovo PC dopo perdita del vecchio), l'app rileva che il DB locale è vuoto e fa un **pull automatico** dal cloud — DB locale allineato, da lì in poi sync normale. Niente comandi manuali, niente backup/restore Docker volume.
 >
@@ -51,7 +87,10 @@ This is **opt-in for Local PC**, **mandatory for VPS** (the VPS uses cloud stora
 
 Three channels today, each with a different audience:
 
-- **🌐 Browser** (web dashboard — `localhost:3000` for Local/Dedicated, public URL for self-hosted VPS) — the user can address **any agent** individually. Talking to the Captain is the recommended default (it coordinates the pipeline), but the user can reach any team member directly.
+- **🌐 Browser** ([`jobhunterteam.ai`](https://jobhunterteam.ai)) — the
+  production browser surface is cloud-only. With cloud sync enabled, it is
+  read-mostly and offers the bounded request lanes described above; it cannot
+  control the local or VPS runtime directly.
 - **💬 Telegram** — **3-bot bidirectional bridge** (decisione 2026-05-13 rev2): Assistente (orchestrator user-facing), Capitano (status + decisioni operative), Mentor (career coach always-on). Tutti e tre obbligatori nell'onboarding wizard, routing per ruolo via `tg-bridge` + skill `jht-telegram-send` distribuita. Roadmap futura ([`docs/about/ROADMAP.md`](../../about/ROADMAP.md)): per-agent 1:1 chat (Scout/Critic/Writer/Scorer/Sentinel) + "team forum" channel.
 - **⌨️ CLI + tmux** *(technical users)* — `jht team attach <agent>` to drop directly into the agent's tmux session and watch it work live (raw model output, tool calls, decisions). Useful for debugging, for understanding what the agents are actually doing, and for power users who prefer the terminal.
 
