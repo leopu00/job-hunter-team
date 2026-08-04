@@ -4,6 +4,12 @@ Contenuti **deprecati ma conservati** per riferimento. Non sono più parte
 dell'app; niente di tutto ciò è cablato nel codice. Vivono qui solo come
 memoria storica / eventuale materiale riutilizzabile.
 
+## Piani di lancio ritirati (2026-08-04)
+
+- [`2026-06-CLI-DEMO-STORYBOARD.md`](2026-06-CLI-DEMO-STORYBOARD.md) — storyboard
+  mai eseguibile: dipendeva da comandi e fixture inesistenti ed è stato
+  sostituito dalla produzione nativa della release ufficiale.
+
 ## Schermate onboarding rimosse (2026-06-23)
 
 Ex step del wizard desktop, tolti nello snellimento del flusso perché
