@@ -292,7 +292,7 @@ function WorkspaceView({
         </div>
 
         <p className="mt-4 text-center text-[10px] text-[var(--color-dim)]">
-          v0.1.0-alpha · Job Hunter Team
+          v0.3.4 · Job Hunter Team
         </p>
       </div>
 

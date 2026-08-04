@@ -34,7 +34,7 @@ $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { '
 $RuntimeDir  = if ($env:JHT_RUNTIME_DIR)    { $env:JHT_RUNTIME_DIR }    else { Join-Path $env:USERPROFILE '.jht\runtime' }
 $ComposeFile = if ($env:JHT_COMPOSE_FILE)   { $env:JHT_COMPOSE_FILE }   else { Join-Path $RuntimeDir 'docker-compose.yml' }
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
-$RawBase     = if ($env:JHT_RAW_BASE)       { $env:JHT_RAW_BASE.TrimEnd('/') } else { 'https://raw.githubusercontent.com/leopu00/job-hunter-team/master' }
+$RawBase     = if ($env:JHT_RAW_BASE)       { $env:JHT_RAW_BASE.TrimEnd('/') } else { 'https://raw.githubusercontent.com/leopu00/job-hunter-team/production' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
 
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
@@ -78,7 +78,7 @@ function Require-ComposeFile {
     Write-Err "compose file non trovato: $ComposeFile"
     Write-Info "Esegui di nuovo install.ps1 oppure scarica manualmente:"
     Write-Info "  New-Item -ItemType Directory -Force '$RuntimeDir' | Out-Null"
-    Write-Info "  iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/docker-compose.yml -OutFile '$ComposeFile'"
+    Write-Info "  iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/production/docker-compose.yml -OutFile '$ComposeFile'"
     exit 1
   }
 }
@@ -340,7 +340,7 @@ function Invoke-RuntimeUpgrade {
     Write-UpgradeNote 'Scarico l immagine piu recente...'
     if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Download immagine non riuscito' $false; return 1 }
     $candidateRef = ((& docker compose -f $newCompose --project-directory $RuntimeDir config --images 2>$null | Select-Object -First 1) -as [string]).Trim()
-    if (-not $candidateRef) { $candidateRef = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht:latest' } }
+    if (-not $candidateRef) { $candidateRef = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht:0.3.4' } }
     $candidateImage = ((& docker image inspect $candidateRef --format '{{.Id}}' 2>$null | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateImage) { $candidateImage = 'sconosciuta' }
     if (-not (Write-UpgradeJournal 'pulled' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile aggiornare il journal' $false; return 1 }

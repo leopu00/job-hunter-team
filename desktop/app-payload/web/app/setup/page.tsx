@@ -193,7 +193,7 @@ export default function SetupPage() {
           </Card>
         )}
 
-        <p className="mt-6 text-center text-[9px]" style={{ color: 'var(--color-dim)' }}>v0.1.0-alpha · Job Hunter Team</p>
+        <p className="mt-6 text-center text-[9px]" style={{ color: 'var(--color-dim)' }}>v0.3.4 · Job Hunter Team</p>
       </div>
     </main>
   )

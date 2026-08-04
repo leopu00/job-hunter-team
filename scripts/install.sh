@@ -29,10 +29,10 @@
 # ║    --dry-run               Only show the actions that would be executed  ║
 # ║    --branch <name>         Source branch for wrapper+compose             ║
 # ║                            (same as JHT_BRANCH=<name>, default           ║
-# ║                            master). Example to test dev-1:               ║
+# ║                            production). Example to test dev-1:           ║
 # ║      curl ...install.sh | bash -s -- --branch dev-1                      ║
 # ║    JHT_BRANCH=dev-1        Source branch (env var, alternative to        ║
-# ║                            --branch). default: master                    ║
+# ║                            --branch). default: production                ║
 # ║    JHT_INSTALL_DIR         Where to clone the repo (default: $HOME/.jht/src,║
 # ║                            only used by --no-docker)                     ║
 # ║    JHT_RUNTIME_DIR         Where to download docker-compose.yml          ║
@@ -40,7 +40,7 @@
 # ║    JHT_BIN_DIR             Where to put the jht wrapper (default:        ║
 # ║                            $HOME/.local/bin)                             ║
 # ║    JHT_IMAGE               Container image override (default:            ║
-# ║                            ghcr.io/leopu00/jht:latest)                   ║
+# ║                            ghcr.io/leopu00/jht:0.3.4)                    ║
 # ║    JHT_RAW_BASE            Base URL override for downloads               ║
 # ║                            (default: https://raw.githubusercontent.com/  ║
 # ║                                      leopu00/job-hunter-team/<BRANCH>)   ║
@@ -57,7 +57,7 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────
 REPO_URL="${JHT_REPO_URL:-https://github.com/leopu00/job-hunter-team.git}"
-BRANCH="${JHT_BRANCH:-master}"
+BRANCH="${JHT_BRANCH:-production}"
 INSTALL_DIR="${JHT_INSTALL_DIR:-$HOME/.jht/src}"
 
 # BIN_DIR automatic choice:
@@ -73,7 +73,10 @@ else
 fi
 
 RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
-IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}"
+IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.4}"
+# Il compose scaricato può evolvere sul canale production; l'installer di
+# questa release deve comunque avviare l'immagine dichiarata qui.
+export JHT_IMAGE="$IMAGE"
 MIN_NODE_MAJOR=22
 
 # ── Arguments ─────────────────────────────────────────────────────────────
