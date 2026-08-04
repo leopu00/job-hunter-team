@@ -1,59 +1,10 @@
-"use client";
+import { cookies } from "next/headers";
+import { PublicLoadingShell } from "./components/PublicLoadingShell";
+import { publicLoadingLocaleFromCookieStore } from "./public-loading.i18n";
 
-import { useLocale } from "@/lib/use-locale";
+export default async function Loading() {
+  const cookieStore = await cookies();
+  const locale = publicLoadingLocaleFromCookieStore(cookieStore);
 
-const T: Record<string, Record<string, string>> = {
-  loading: {
-    it: "Caricamento",
-    en: "Loading",
-    hu: "Betöltés",
-    es: "Cargando",
-    de: "Wird geladen",
-    fr: "Chargement",
-    pt: "Carregando",
-  },
-  loading_lower: {
-    it: "caricamento…",
-    en: "loading…",
-    hu: "betöltés…",
-    es: "cargando…",
-    de: "wird geladen…",
-    fr: "chargement…",
-    pt: "carregando…",
-  },
-};
-
-export default function Loading() {
-  const locale = useLocale();
-  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
-  return (
-    <main
-      role="status"
-      aria-busy="true"
-      aria-label={tr("loading")}
-      className="min-h-screen flex items-center justify-center"
-    >
-      <div className="flex flex-col items-center gap-3">
-        <div className="flex gap-1.5" aria-hidden="true">
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="w-2 h-2 rounded-full animate-bounce"
-              style={{
-                background: "var(--color-green)",
-                animationDelay: `${i * 0.15}s`,
-                animationDuration: "0.9s",
-              }}
-            />
-          ))}
-        </div>
-        <p
-          className="text-[10px] uppercase tracking-widest"
-          style={{ color: "var(--color-dim)" }}
-        >
-          {tr("loading_lower")}
-        </p>
-      </div>
-    </main>
-  );
+  return <PublicLoadingShell locale={locale} />;
 }
