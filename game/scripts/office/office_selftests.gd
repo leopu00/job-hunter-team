@@ -870,7 +870,21 @@ func _tour_selftest() -> void:
 		check.call(camera_hint != null \
 				and camera_hint.mouse_filter == Control.MOUSE_FILTER_IGNORE,
 				"l'hint della camera intercetta il click sulla reception")
-		office._on_world_click(marker_center)
+		# Attraversa anche FreeCamera: la vecchia implementazione rileggeva il
+		# cursore globale invece del pixel dell'evento e questo self-test falliva
+		# senza spostare davvero il mouse della macchina che esegue Godot.
+		var marker_screen: Vector2 = \
+				office.get_viewport().get_canvas_transform() * marker_center
+		var press := InputEventMouseButton.new()
+		press.button_index = MOUSE_BUTTON_LEFT
+		press.position = marker_screen
+		press.pressed = true
+		var release := InputEventMouseButton.new()
+		release.button_index = MOUSE_BUTTON_LEFT
+		release.position = marker_screen
+		release.pressed = false
+		office._camera._unhandled_input(press)
+		office._camera._unhandled_input(release)
 		await get_tree().process_frame
 		var welcome: DialogueUI = find_dialogue.call()
 		check.call(welcome != null and welcome._tree.has("ready"),
