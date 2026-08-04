@@ -162,6 +162,22 @@ export default function LandingNav() {
             {t("nav_home")}
           </Link>
           <Link
+            href="/run"
+            aria-current={currentPage("/run")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/run")}
+          >
+            {t("nav_run")}
+          </Link>
+          <Link
+            href="/download"
+            aria-current={currentPage("/download")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/download")}
+          >
+            {t("nav_download")}
+          </Link>
+          <Link
             href="/agents"
             aria-current={currentPage("/agents")}
             className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
@@ -193,40 +209,6 @@ export default function LandingNav() {
           >
             {t("nav_case_studies")}
           </Link>
-          <div className="relative group">
-            <Link
-              href="/download"
-              aria-current={currentPage("/download")}
-              className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
-              style={navLinkStyle("/download")}
-            >
-              {t("nav_download")}
-            </Link>
-            <div className="absolute left-1/2 -translate-x-1/2 top-full pt-2 hidden group-hover:block">
-              <div
-                className="overflow-hidden"
-                style={{
-                  background: "var(--color-void)",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                  minWidth: 150,
-                }}
-              >
-                <Link
-                  href="/run"
-                  aria-current={currentPage("/run")}
-                  className="block px-4 py-2.5 text-[11px] tracking-wide text-center whitespace-nowrap no-underline transition-colors hover:bg-[var(--color-card)] hover:text-[var(--color-bright)]"
-                  style={{
-                    color:
-                      pathname === "/run"
-                        ? "var(--color-green)"
-                        : "var(--color-muted)",
-                  }}
-                >
-                  {t("nav_run")}
-                </Link>
-              </div>
-            </div>
-          </div>
           <Link
             href="/pricing"
             aria-current={currentPage("/pricing")}
@@ -331,6 +313,24 @@ export default function LandingNav() {
             {t("nav_home")}
           </Link>
           <Link
+            href="/run"
+            aria-current={currentPage("/run")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/run")}
+          >
+            {t("nav_run")}
+          </Link>
+          <Link
+            href="/download"
+            aria-current={currentPage("/download")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/download")}
+          >
+            {t("nav_download")}
+          </Link>
+          <Link
             href="/agents"
             aria-current={currentPage("/agents")}
             onClick={() => setMobileOpen(false)}
@@ -365,24 +365,6 @@ export default function LandingNav() {
             style={navLinkStyle("/case-studies")}
           >
             {t("nav_case_studies")}
-          </Link>
-          <Link
-            href="/download"
-            aria-current={currentPage("/download")}
-            onClick={() => setMobileOpen(false)}
-            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/download")}
-          >
-            {t("nav_download")}
-          </Link>
-          <Link
-            href="/run"
-            aria-current={currentPage("/run")}
-            onClick={() => setMobileOpen(false)}
-            className="text-[12px] py-2 pl-4 border-l border-[var(--color-border)] hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/run")}
-          >
-            {t("nav_run")}
           </Link>
           <Link
             href="/pricing"

@@ -187,7 +187,6 @@ const PAGE = {
       "Con il login apri la dashboard da qualsiasi browser, anche dal telefono, e segui la squadra ovunque ti trovi.",
     ctrlWeb:
       "Il login resta sempre facoltativo: se preferisci, i tuoi dati restano solo sul tuo computer, senza alcun cloud.",
-    soon: "In arrivo",
     ctaDownload: "Installa →",
     back: "← Torna alla home",
   },
@@ -211,7 +210,6 @@ const PAGE = {
       "With login, open the dashboard from any browser, even your phone, and follow the team wherever you are.",
     ctrlWeb:
       "Login always stays optional: if you prefer, your data stays only on your computer, with no cloud at all.",
-    soon: "Coming soon",
     ctaDownload: "Install →",
     back: "← Back to home",
   },
@@ -235,7 +233,6 @@ const PAGE = {
       "Con el inicio de sesión abres la dashboard desde cualquier navegador, incluso desde el móvil, y sigues al equipo estés donde estés.",
     ctrlWeb:
       "El inicio de sesión siempre es opcional: si lo prefieres, tus datos se quedan solo en tu ordenador, sin ninguna nube.",
-    soon: "Próximamente",
     ctaDownload: "Instalar →",
     back: "← Volver al inicio",
   },
@@ -259,7 +256,6 @@ const PAGE = {
       "Avec la connexion, ouvrez la dashboard depuis n'importe quel navigateur, même votre téléphone, et suivez l'équipe où que vous soyez.",
     ctrlWeb:
       "La connexion reste toujours facultative : si vous préférez, vos données restent uniquement sur votre ordinateur, sans aucun cloud.",
-    soon: "Bientôt disponible",
     ctaDownload: "Installer →",
     back: "← Retour à l'accueil",
   },
@@ -283,7 +279,6 @@ const PAGE = {
       "Mit Anmeldung öffnest du die Dashboard von jedem Browser aus, sogar vom Handy, und verfolgst das Team, wo immer du bist.",
     ctrlWeb:
       "Die Anmeldung bleibt immer optional: Wenn du möchtest, bleiben deine Daten nur auf deinem Computer, ganz ohne Cloud.",
-    soon: "Demnächst",
     ctaDownload: "Installieren →",
     back: "← Zurück zur Startseite",
   },
@@ -307,7 +302,6 @@ const PAGE = {
       "Bejelentkezéssel bármelyik böngészőből megnyitod a dashboardot, akár a telefonodról is, és bárhol követheted a csapatot.",
     ctrlWeb:
       "A bejelentkezés mindig opcionális marad: ha úgy szeretnéd, az adataid csak a saját gépeden maradnak, felhő nélkül.",
-    soon: "Hamarosan",
     ctaDownload: "Telepítés →",
     back: "← Vissza a főoldalra",
   },
@@ -331,7 +325,6 @@ const PAGE = {
       "Com o início de sessão abres a dashboard a partir de qualquer navegador, até do telemóvel, e acompanhas a equipa onde quer que estejas.",
     ctrlWeb:
       "O início de sessão é sempre opcional: se preferires, os teus dados ficam só no teu computador, sem qualquer nuvem.",
-    soon: "Em breve",
     ctaDownload: "Instalar →",
     back: "← Voltar ao início",
   },
@@ -342,10 +335,8 @@ function SetupContent() {
   const L = (PAGE[lang as Lang] ? lang : "en") as Lang;
   const p = PAGE[L];
 
-  // L'app desktop non è ancora scaricabile: la riga resta ma con il tag
-  // "in arrivo" (come il tab Desktop su /download).
-  const ctrlRows: { label: string; body: string; soon?: boolean }[] = [
-    { label: p.ctrlDesktopLabel, body: p.ctrlDesktopBody, soon: true },
+  const ctrlRows: { label: string; body: string }[] = [
+    { label: p.ctrlDesktopLabel, body: p.ctrlDesktopBody },
     { label: p.ctrlTerminalLabel, body: p.ctrlTerminalBody },
   ];
   if ("ctrlBrowserLabel" in p && "ctrlBrowserBody" in p) {
@@ -424,18 +415,13 @@ function SetupContent() {
             {p.ctrlIntro}
           </p>
           <div className="border-t border-[var(--color-border)]">
-            {ctrlRows.map(({ label, body, soon }) => (
+            {ctrlRows.map(({ label, body }) => (
               <div
                 key={label}
                 className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-1.5 sm:gap-6 py-4 border-b border-[var(--color-border)]"
               >
                 <div className="text-[13px] font-bold text-[var(--color-white)]">
                   {label}
-                  {soon && (
-                    <span className="ml-2 sm:ml-0 sm:mt-1.5 sm:block sm:w-fit text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
-                      {p.soon}
-                    </span>
-                  )}
                 </div>
                 <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
                   {body}

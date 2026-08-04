@@ -51,8 +51,8 @@ const DESKTOP_ASSET: Record<PlatformId, string> = {
 
 type DlKey = Parameters<ReturnType<typeof useLandingI18n>["t"]>[0];
 const MODES: { id: InstallMode; labelKey: DlKey }[] = [
-  { id: "terminal", labelKey: "dl_mode_terminal_title" },
   { id: "desktop", labelKey: "dl_mode_desktop_title" },
+  { id: "terminal", labelKey: "dl_mode_terminal_title" },
 ];
 
 type PlatformId = "mac" | "windows" | "linux";
@@ -145,7 +145,7 @@ const REQ_OS: Record<Lang, ReqOs> = {
 
 function DownloadContent() {
   const { t, lang } = useLandingI18n();
-  const [installMode, setInstallMode] = useState<InstallMode>("terminal");
+  const [installMode, setInstallMode] = useState<InstallMode>("desktop");
 
   const terminalCommand = CLI_SETUP_CMD;
   const ro = REQ_OS[(REQ_OS[lang as Lang] ? lang : "en") as Lang];
@@ -184,6 +184,9 @@ function DownloadContent() {
                   <button
                     key={m.id}
                     onClick={() => setInstallMode(m.id)}
+                    aria-pressed={active}
+                    data-install-mode={m.id}
+                    data-active={active}
                     className="px-4 py-4 text-left transition-colors"
                     style={{
                       background: active ? "var(--color-card)" : "transparent",
