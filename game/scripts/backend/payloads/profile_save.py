@@ -1,4 +1,4 @@
-import json, base64, shutil, time, yaml
+import json, base64, re, shutil, time, yaml
 data = json.loads(base64.b64decode('%s').decode('utf-8'))
 path = '/jht_home/profile/candidate_profile.yml'
 try:
@@ -28,7 +28,28 @@ if 'skills_primary' in data:
     skills = [s.strip() for s in str(data['skills_primary']).split(',') if s.strip()]
     prof.setdefault('skills', {})['primary'] = skills
 if 'languages' in data:
-    prof['languages'] = [s.strip() for s in str(data['languages']).split(',') if s.strip()]
+    # La UI presenta gli oggetti YAML in forma umana e reversibile:
+    # "Italiano (madrelingua), Inglese (C1)". Prima riceveva invece la
+    # repr dei dict e la spezzava sulle virgole, corrompendo il profilo anche
+    # con un semplice Salva senza modifiche.
+    existing = prof.get('languages') if isinstance(prof.get('languages'), list) else []
+    existing_by_name = {
+        str(item.get('language', item.get('name', ''))).strip().casefold(): item
+        for item in existing if isinstance(item, dict)
+    }
+    languages = []
+    for raw in str(data['languages']).split(','):
+        value = raw.strip()
+        if not value:
+            continue
+        match = re.fullmatch(r'(.+?)\s*\(([^()]*)\)\s*', value)
+        if match:
+            languages.append({'language': match.group(1).strip(),
+                              'level': match.group(2).strip()})
+            continue
+        previous = existing_by_name.get(value.casefold())
+        languages.append(dict(previous) if previous is not None else value)
+    prof['languages'] = languages
 if data.get('salary_min') or data.get('salary_max'):
     sal_key = 'salary_target' if 'salary_target' in prof or 'salary' not in prof else 'salary'
     sal = prof.get(sal_key) if isinstance(prof.get(sal_key), dict) else {}

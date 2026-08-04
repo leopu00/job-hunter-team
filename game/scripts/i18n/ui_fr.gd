@@ -466,6 +466,7 @@ const S := {
 	"hours.windows": "FENÊTRES (jours · de → à)",
 	"hours.add": "+ AJOUTER UNE FENÊTRE",
 	"hours.estimate": "≈ %.0f heures actives/semaine → est. ~%.1f nouvelles positions/jour · budget recalibré à %d%% de l'actuel",
+	"hours.estimate_first": "≈ %.0f heures actives/semaine · l'estimation et le budget seront disponibles après la première semaine",
 	"hours.invalid": "✘ fenêtre invalide : jours mon…sun et heures HH:MM",
 	"hours.save": "▶ ENREGISTRER LES HORAIRES",
 	"hours.saved": "✓ horaires enregistrés — le pacing de l'équipe s'adapte dès le prochain tick",

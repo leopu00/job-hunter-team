@@ -2106,6 +2106,25 @@ static func _hhmm(t: String) -> float:
 		return 0.0
 	return float(parts[0].to_int()) + float(parts[1].to_int()) / 60.0
 
+## Valori puri della stima, separati dalla UI anche per coprire il primo
+## avvio. Senza una finestra corrente non esiste una baseline da cui
+## riproporzionare: trattarla come una singola ora produceva percentuali e
+## volumi enormi proprio nella schermata mostrata ai nuovi utenti.
+static func _hours_estimate_values(cur_windows: Array, new_windows: Array,
+		found7: int) -> Dictionary:
+	var new_h := _hours_per_week(new_windows)
+	var cur_h := _hours_per_week(cur_windows)
+	if cur_h <= 0.0:
+		return {"has_baseline": false, "new_hours": new_h}
+	var rate := float(found7) / cur_h
+	return {
+		"has_baseline": true,
+		"new_hours": new_h,
+		"positions_per_day": rate * new_h / 7.0,
+		"budget_percent": int(round(new_h / cur_h * 100.0)),
+	}
+
+
 ## La stima dinamica: rate storico (posizioni degli ultimi 7 giorni per
 ## ora attiva del config corrente) proiettato sulle ore del form.
 func _refresh_hours_estimate() -> void:
@@ -2116,8 +2135,6 @@ func _refresh_hours_estimate() -> void:
 	for w in cur_raw.get("windows", []):
 		cur_windows.append({"days": ", ".join(PackedStringArray(w.get("days", []))),
 				"start": str(w.get("start", "")), "end": str(w.get("end", ""))})
-	var cur_h := maxf(1.0, _hours_per_week(cur_windows))
-	var new_h := _hours_per_week(_hours_windows)
 	var week_ago := Time.get_unix_time_from_system() - 7 * 86400
 	var found7 := 0
 	for p in BackendBus.positions:
@@ -2125,10 +2142,14 @@ func _refresh_hours_estimate() -> void:
 				str(p.get("found_at", "")).left(19))
 		if ts > 0 and float(ts) >= week_ago:
 			found7 += 1
-	var rate := float(found7) / cur_h          # posizioni per ora attiva
-	var est_day := rate * new_h / 7.0
+	var estimate := _hours_estimate_values(cur_windows, _hours_windows, found7)
+	if not bool(estimate["has_baseline"]):
+		_hours_estimate_lbl.text = UIStrings.t("hours.estimate_first") % [
+				estimate["new_hours"]]
+		return
 	_hours_estimate_lbl.text = UIStrings.t("hours.estimate") % [
-			new_h, est_day, int(round(new_h / cur_h * 100.0))]
+			estimate["new_hours"], estimate["positions_per_day"],
+			estimate["budget_percent"]]
 
 func _save_hours() -> void:
 	var windows: Array = []
@@ -2199,7 +2220,7 @@ func _build_profile() -> void:
 		lbl.custom_minimum_size = Vector2(220, 0)
 		grid.add_child(lbl)
 		var edit := LineEdit.new()
-		edit.text = str(raw.get(f[0], ""))
+		edit.text = _profile_field_text(str(f[0]), raw.get(f[0], ""))
 		edit.custom_minimum_size = Vector2(560, 0)
 		edit.add_theme_font_size_override("font_size", 15)
 		grid.add_child(edit)
@@ -2243,6 +2264,28 @@ func _build_profile() -> void:
 	_prof_status = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_prof_status)
 	_prof_save_btn = save
+
+
+## Il profilo YAML può conservare le lingue come oggetti
+## `{language, level}`. `str(Array)` le mostrava come dizionari Python e,
+## premendo Salva senza cambiare nulla, il payload le spezzava sulle virgole.
+## La UI usa invece una forma editabile e reversibile: "Italiano
+## (madrelingua), Inglese (C1)".
+static func _profile_field_text(key: String, value: Variant) -> String:
+	if key != "languages" or not value is Array:
+		return str(value)
+	var parts: Array[String] = []
+	for item in value as Array:
+		if item is Dictionary:
+			var language := str(item.get("language", item.get("name", ""))).strip_edges()
+			var level := str(item.get("level", "")).strip_edges()
+			if language != "":
+				parts.append(language + (" (" + level + ")" if level != "" else ""))
+		else:
+			var text := str(item).strip_edges()
+			if text != "":
+				parts.append(text)
+	return ", ".join(parts)
 
 var _prof_save_btn: Button
 

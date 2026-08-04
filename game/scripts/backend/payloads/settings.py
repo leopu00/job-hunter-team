@@ -102,7 +102,18 @@ try:
         if prof.get(key) is not None:
             raw[key] = str(prof[key])
     raw['skills_primary'] = ', '.join(map(str, skills))
-    raw['languages'] = ', '.join(map(str, prof.get('languages') or []))
+    # Il profilo canonico usa anche oggetti {language, level}. Esporre str(dict)
+    # alla LineEdit produceva testo Python e il successivo Salva lo corrompeva.
+    language_parts = []
+    for item in prof.get('languages') or []:
+        if isinstance(item, dict):
+            name = str(item.get('language') or item.get('name') or '').strip()
+            level = str(item.get('level') or '').strip()
+            if name:
+                language_parts.append(name + (' (' + level + ')' if level else ''))
+        elif str(item).strip():
+            language_parts.append(str(item).strip())
+    raw['languages'] = ', '.join(language_parts)
     if isinstance(sal, dict):
         raw['salary_min'] = str(sal.get('min') or sal.get('lo') or '')
         raw['salary_max'] = str(sal.get('max') or sal.get('hi') or '')
