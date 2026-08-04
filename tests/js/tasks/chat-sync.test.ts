@@ -32,6 +32,7 @@ import {
   chatFileFor,
   chatPending,
   chatTsOf,
+  cloudRequestFailure,
   deliverPendingUserTurns,
   diagnoseChatLane,
   fileChanged,
@@ -354,11 +355,11 @@ describe("turni scritti dal web", () => {
     expect(rowsOf()).toHaveLength(1);
   });
 
-  it("un mittente fuori dalle tre chat si marca senza scriverlo", () => {
+  it("un mittente fuori dalle tre chat non si finge consegnato", () => {
     const ids = importCloudUserTurns(db, [
       { id: "uuid-9", legacy_id: -1, agent: "scout", body: "ehi" },
     ]);
-    expect(ids).toEqual(["uuid-9"]);
+    expect(ids).toEqual([]);
     expect(rowsOf()).toHaveLength(0);
   });
 });
@@ -682,6 +683,35 @@ describe("canale della chat senza lettore diretto", () => {
     expect(chatChannelFor(BOX_CONFIG, reader as any)?.kind).toBe("direct");
   });
 
+  it("anche il canale diretto chiude via CAS e preserva gli ID se A e' superseded", async () => {
+    const marked: string[][] = [];
+    let blindPatches = 0;
+    let body: Record<string, unknown> | undefined;
+    const reader = {
+      readUndeliveredUserChat: async () => [],
+      markUserChatDelivered: async (ids: string[]) => { marked.push(ids); },
+      patchTeamState: async () => { blindPatches += 1; },
+    };
+    const channel = chatChannelFor(BOX_CONFIG, reader as any, {
+      fetchFn: async (_url: string, init?: Record<string, any>) => {
+        body = JSON.parse(init?.body || "{}");
+        return { ok: false, status: 409 } as Response;
+      },
+    });
+    const result = await channel!.acknowledgeDelivery(["00000000-0000-4000-8000-000000000001"], {
+      closeRendezvous: true,
+      expectedRequestedAt: "2026-08-04T10:00:00Z",
+    });
+    expect(marked).toEqual([["00000000-0000-4000-8000-000000000001"]]);
+    expect(blindPatches).toBe(0);
+    expect(body).toEqual({
+      delivered_ids: [],
+      close_rendezvous: true,
+      expected_requested_at: "2026-08-04T10:00:00Z",
+    });
+    expect(result).toEqual({ closed: false, superseded: true });
+  });
+
   it("senza token non c'è cloud da cui ritirare nulla", () => {
     expect(chatChannelFor({ base_url: "https://jobhunterteam.ai" }, null)).toBeNull();
   });
@@ -731,6 +761,8 @@ describe("canale della chat senza lettore diretto", () => {
     expect(post?.auth).toBe("Bearer jht_sync_esempio");
     expect(post?.body).toEqual({
       delivered_ids: ["11111111-1111-4111-8111-111111111111"],
+      close_rendezvous: true,
+      expected_requested_at: null,
     });
   });
 
@@ -762,6 +794,27 @@ describe("canale della chat senza lettore diretto", () => {
     await expect(channel!.closeRendezvous(["x"])).rejects.toThrow(/500/);
   });
 
+  it("GET e ACK hanno una deadline e gli errori restano sanitizzati", async () => {
+    const signals: AbortSignal[] = [];
+    const channel = chatChannelFor(BOX_CONFIG, null, {
+      timeoutMs: 10_000,
+      fetchFn: async (_url: string, init?: Record<string, any>) => {
+        signals.push(init?.signal);
+        return init?.method === "POST"
+          ? ({ ok: true, status: 200 } as Response)
+          : ({ ok: true, status: 200, json: async () => ({ messages: [] }) } as any);
+      },
+    });
+    await channel!.readUndeliveredUserChat();
+    await channel!.closeRendezvous([]);
+    expect(signals).toHaveLength(2);
+    expect(signals.every((signal) => signal instanceof AbortSignal)).toBe(true);
+
+    const timeout = Object.assign(new Error("host-riservato"), { name: "TimeoutError" });
+    expect(cloudRequestFailure(timeout)).toBe("timeout");
+    expect(cloudRequestFailure(new Error("url-riservato"))).toBe("request_failed");
+  });
+
   it("la corsia in cloud.js non è più gatata sul lettore diretto", () => {
     // Il difetto era una sola condizione: `if (pending && reader)`. Questo
     // controllo è sul SORGENTE perché typecheck e lint non lo vedrebbero.
@@ -773,6 +826,23 @@ describe("canale della chat senza lettore diretto", () => {
     expect(src).toContain("chat.chatChannelFor(config, reader)");
     // La guardia che tiene a zero le chiamate a chat ferma.
     expect(src).toContain("if (pending && channel)");
+  });
+
+  it("il worker importa node:sqlite prima di aprire il DB", () => {
+    // Regressione del guasto live: `new DatabaseSync` senza import cadeva nel
+    // catch silenzioso del daemon e la corsia non girava mai.
+    const src = readFileSync(
+      join(__dirname, "../../../cli/src/commands/cloud.js"),
+      "utf-8",
+    );
+    const start = src.indexOf("export async function handleChatSync");
+    const end = src.indexOf("let chatLaneAlert", start);
+    const worker = src.slice(start, end);
+    const importAt = worker.indexOf("await import('node:sqlite')");
+    const openAt = worker.indexOf("new DatabaseSync(dbPath");
+    expect(importAt).toBeGreaterThan(0);
+    expect(openAt).toBeGreaterThan(importAt);
+    expect(worker).toContain("log('error', `chat-sync: giro fallito");
   });
 
   it("la chat resta nel giro veloce del daemon (~5s), non in quello pesante", () => {

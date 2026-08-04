@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "pretest": "npm --prefix ../../cli ci",
     "test": "vitest run",
     "test:watch": "vitest"
   },
