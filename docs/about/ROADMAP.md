@@ -64,7 +64,7 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 | 🖥️ **Native office** (Godot, all-in-one) | **Published build, release hardening** | Office, onboarding, embedded provider console, local/VPS lifecycle, profile, email, Telegram, cloud sync, job data, map, agents and observability are native. Electron and the local web dashboard are gone: the browser is cloud-only. macOS releases are signed and notarized; Windows and Linux artifacts are unsigned. Open: Windows signing, installer and auto-update polish. |
 | ☁️ **VPS provisioning** (bring-up via SSH) | **Shipped** | The native office brings a team up on any VPS (SSH key + IP, provider install, embedded login console, Telegram setup). Multi-cloud adapters deliberately not pursued — see the scope note below. |
 | 📡 **Budget monitoring** (Bridge + Sentinel) | **Proven at month scale on Codex** | Weekly-aware pacing closed 4 straight weekly cycles at 99–100% with zero overshoot ([case study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Open: Kimi projection precision (±10–15% → tier stays **beta**, two multi-week teams in observation), €20 entry tiers not viable yet (→ mission M4). |
-| 🌍 **Internationalization** (7 languages) | **Essentially done** | EN base + it/hu/es/de/fr/pt across agent prompts, UI, landing, docs pages. Open: `LOCALES` drift (`shared/i18n/types.ts` omits `hu`; API default `'it'` vs `DEFAULT_LOCALE='en'`), `mantenitore` agent overlays, translator-facing guide, native-speaker review. |
+| 🌍 **Internationalization** (7 languages) | **Essentially done** | EN base + it/hu/es/de/fr/pt across agent prompts, native UI and web. The current web locale contract is [`web/i18n/config.ts`](../../web/i18n/config.ts), which includes all seven. Remaining work is translator guidance, coverage cleanup and native-speaker review. |
 | 💬 **Async channels** (Telegram · email) | **Telegram shipped & validated** | 3 Telegram bots (Assistant/Captain/Mentor) via wizard, skippable since 2026-06-15 — **field-validated, and the recommended channel for teams on a VPS or dedicated PC**. Email: job-alert sourcing shipped ([`EMAIL-FORWARDING.md`](../guides/EMAIL-FORWARDING.md)); two-way agent email is implemented but still untested. Horizon: per-agent 1:1 chat, directed messages (`@scout find python jobs in EU`), "team forum" view (→ mission M7), **WhatsApp** as an additional channel on the same three-door model. |
 | 🌐 **Public website & release assets** | **Website live; release media in preparation** | Landing, case studies and docs are live in 7 languages. Release work now focuses on clean native-format trailers, concise tutorials, screenshots and checksums; recordings with simulation/demo banners are not release assets. |
 | 🚢 **OSS hygiene** | **Established** | LICENSE, Code of Conduct, security policy, issue templates, label taxonomy and triage workflow are in place. FAQ, VPS comparison and distribution listings remain normal follow-up work. |
@@ -94,20 +94,20 @@ prerequisites or promises of a delivery date.
   NOW                          NEXT                         LATER
   (release work)               (near term)                  (later)
   ────────────────────────     ────────────────────────     ────────────────────────
-  • desktop setup e2e          • M1 quick-feedback cards     • M2 mobile team control
-    (all three OSes)           • M4 cheaper tiers +          • M9 interview practice
-  • case studies                  more providers             • M10 opt-in auto-submit
-                               • M3 harden security
+  • desktop setup e2e          • M4 cheaper tiers +          • M7 fine-grained observability
+    (all three OSes)              more providers             • M9 interview practice
+  • case studies               • M3 harden security          • M10 opt-in auto-submit
                                • M5 fully-local models ⭐
 ```
 
-| # | Mission | Engineering focus | Size |
+M1 quick-feedback cards and M2 mobile team safety are already shipped, so
+they live in [`CHANGELOG.md`](../../CHANGELOG.md) rather than this future list.
+
+| # | Direction | Engineering focus | Size |
 |---|---------|----------|------|
-| **M1** | 🃏 Quick-feedback cards on offers (swipe / buttons → the team learns your taste). The backend action already exists (`user-exclude` + the async request lane); the card UX is the work. | Frontend / UX | 🟡 medium |
-| **M2** | 📱 Mobile team safety — `/team` is a touch-friendly read-only status/activity view and the PWA has one authenticated stop-only emergency action. Telegram remains mobile-first for async conversation; start/restart/config stay in the desktop interaction plane. | Mobile + API | ✅ shipped |
 | **M3** | 🛡️ Harden security — prompt-injection fencing on ingested job descriptions, uniform auth gates across routes, sync-token lifecycle policy. | Security / Backend | 🔴 large |
 | **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — reproducible [Kimi variance and cost tooling](../internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) now exists, but no live export in the repo validates 88→92 or a PAYG buying claim yet; any fourth CLI remains gated by [ADR-0002 and the provider checklist](../guides/ADDING-A-PROVIDER.md). | Integrations | 🟡 medium |
-| **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — **one-role spike shipped, mission still open**: Scorer can use a host-local OpenAI-compatible endpoint in shadow/write mode, with a machine-checked provider inventory and deterministic comparison harness. No whole-team or hardware claim yet: paired quality, live URL/feedback parity, real hardware evidence, and every additional role remain open. | LLM / infra | 🔴 large |
+| **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — a one-role Scorer spike exists with a machine-checked provider inventory and deterministic comparison harness. Whole-team support remains unavailable: paired quality, live URL/feedback parity, real hardware evidence and additional roles are still required. | LLM / infra | 🔴 large |
 
 > 🖥️ **Native app** — the highest-priority engineering area remains
 > onboarding recovery, accessibility, packaging/signing and cross-platform QA
@@ -120,8 +120,8 @@ prerequisites or promises of a delivery date.
 | **M6** | 🧙‍♂️ Mentor as a first-class citizen — dedicated web + desktop page, deeper tuning | The career-coach agent is live but buried in chat; it deserves its own surface. |
 | **M7** | 📊 Fine-grained observability + user feedback — full who-did-what-when timeline per offer | Builds on the [schema evolution plan](../internal/roadmap/db-schema-optimization.md) (`position_events` is the enabler). |
 | **M8** | 💳 Pay-per-use API mode with a **€-budget** the Sentinel enforces | Turns the budget guardian from "subscription %" into real money limits — and makes JHT usable without any subscription. |
-| **M9** | 🎤 Interview practice agent — mock interviews **tailored to a specific position** (its JD, seniority, company), with feedback after each round | Born from launch feedback: once JHT finds the right match, rehearsing for *that* interview is the natural next step. Extends the Mentor (pairs with M6). |
-| **M10** | 📮 Opt-in auto-submit lane — **off by default**, per-user explicit opt-in, hard caps, and only for drafts that clear the Critic gate | Requested repeatedly since launch. The quality-over-volume principle stays the default and the public stance; this is a bounded escape hatch for users who explicitly want it, never spam-by-design. |
+| **M9** | 🎤 Interview practice agent — mock interviews **tailored to a specific position** (its JD, seniority, company), with feedback after each round | Rehearsing for a strong match is a natural extension of the Mentor (pairs with M6). |
+| **M10** | 📮 Opt-in auto-submit lane — **off by default**, per-user explicit opt-in, hard caps, and only for drafts that clear the Critic gate | A possible bounded exception for users who explicitly choose it; quality-over-volume remains the default. |
 
 Work moves into a tracking issue when it is scheduled. Shipped behavior remains
 in the changelog, not on this forward-looking page.

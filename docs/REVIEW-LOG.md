@@ -205,9 +205,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-07-25 | ✅ |
+| [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-08-04 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-08-04 | ✅ |
-| [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-08-03 | ✅ |
+| [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-08-04 | ✅ |
 | [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-08-04 | ✅ |
 | [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-08-04 | ✅ |
 | [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-07-25 | ✅ |
