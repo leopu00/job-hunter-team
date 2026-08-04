@@ -24,9 +24,24 @@ if git diff --cached --name-only | grep -qx "$HOOK_PATH"; then
     fi
 fi
 
-# ── CLAUDE.md PROTECTION ─────────────────────────────────────
-if git diff --cached --name-only | grep -qiE '(^|/)CLAUDE\.md$'; then
-    echo -e "${RED}BLOCCATO: CLAUDE.md non deve essere committato.${NC}"
+# ── FILE D'IDENTITA' AGENTE (CLAUDE.md / AGENTS.md) ──────────
+# Sono artefatti di RUNTIME, scritti nella workdir dell'agente dagli spawner:
+# .launcher/start-agent.sh (JHT) e e2e-agents/spawn-e2e-agent.sh (collaudatori
+# E2E). Il template nel repo e' la fonte di verita': la copia si rigenera a ogni
+# spawn, quindi committarla congela un prompt che il template ha gia' superato.
+# Convenzione provider: Claude Code legge CLAUDE.md, Codex e Kimi AGENTS.md —
+# vanno bloccati entrambi, in qualunque directory.
+# --diff-filter=ACM: una eventuale RIMOZIONE resta permessa, cosi' un file
+# entrato per errore in passato puo' essere ripulito.
+IDENTITY_FILES=$(git diff --cached --name-only --diff-filter=ACM \
+    | grep -iE '(^|/)(CLAUDE|AGENTS)\.md$' || true)
+if [ -n "$IDENTITY_FILES" ]; then
+    echo -e "${RED}BLOCCATO: file d'identita' agente, non committabili:${NC}"
+    echo "$IDENTITY_FILES" | sed 's/^/  /'
+    echo ""
+    echo -e "${YELLOW}Sono generati a runtime. Correggi il TEMPLATE, non la copia:${NC}"
+    echo -e "${YELLOW}  agents/<ruolo>/<ruolo>.md            (agenti JHT)${NC}"
+    echo -e "${YELLOW}  e2e-agents/templates/<ruolo>/...     (collaudatori E2E)${NC}"
     exit 1
 fi
 
