@@ -83,22 +83,11 @@ via wipe + re-pair, not concurrent runs.
 | `jht doctor`                     | Node  | Surfaces Docker, Node, auth, DB checks. **Must** exit 0 before declaring setup done.    |
 | `jht health`                     | Node  | Granular service health (Supabase pairing, provider creds, bridge).                     |
 
-**Key `jht setup` flags** (for `--non-interactive` mode):
-
-```
---provider <name>             claude | openai | kimi  (default: claude)
---auth-method <method>        api_key | subscription  (default: api_key)
---api-key <key>               plaintext key
---secret-mode <mode>          plaintext | env | file  (default: plaintext)
---secret-env <name>           env var name when secret-mode=env
---secret-file <path>          file path when secret-mode=file
---subscription-email <email>  required when auth-method=subscription
---subscription-token <token>  optional; OAuth CLI usually handles this
---model <model>               override default model
---skip-health                 skip the post-config health check
---reset                       wipe existing config and start over
---non-interactive             no prompts; every required value must be a flag
-```
+The supported public onboarding path is the interactive, subscription-only
+wizard followed by `jht oauth-login` in a second terminal. The CLI still
+exposes legacy non-interactive and secret-bearing setup flags for controlled
+development environments; they are not a public install path and must never
+be copied with credential values into shell history, issues or logs.
 
 ## Providers
 
@@ -176,7 +165,7 @@ jht standby on --wake-on-weekly --reason "weekly at 96%, wait for the reset"
 ## Cloud sync
 
 Supabase-backed sync of `positions`, `scores`, `applications`. See also
-[`VPS-SETUP.md`](VPS-SETUP.md) §9 for pairing flows.
+[`VPS-SETUP.md`](VPS-SETUP.md) for the pairing flow.
 
 All 19 subcommands, grouped by what you'd reach for them.
 
@@ -186,7 +175,6 @@ All 19 subcommands, grouped by what you'd reach for them.
 |-------------------------------|-------|-----------------------------------------------------------------------|
 | `jht cloud login [flags]`     | Node  | Browser device-flow pairing. Saves `~/.jht/cloud.json` (mode 0600).   |
 | `jht cloud pair [flags]`      | Node  | Non-interactive pairing from a `.pairing-token` (used by pid1 on first VPS boot, and by `install.sh --pairing-token`). |
-| `jht cloud enable --token <t>` | Node  | Alternative pairing — paste a `jht_sync_…` token manually.            |
 | `jht cloud status`            | Node  | Show sync state + last push timestamp.                                |
 | `jht cloud preflight`         | Node  | Is there already an active team for this user? Exit **0** = free, **2** = taken. Run before provisioning a second machine — one team per user is a hard invariant. |
 | `jht cloud disable`           | Node  | Stop sync, revoke this device token on the server, then remove it locally. |

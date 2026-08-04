@@ -26,8 +26,8 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 
 | Guide | For whom |
 |---|---|
-| [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Non-tech — native office VPS setup (Path 2) |
-| [☁️ VPS-SETUP](VPS-SETUP.md) | Technical — manual Hetzner setup via SSH |
+| [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Native-office users — guided setup for an existing VPS |
+| [☁️ VPS-SETUP](VPS-SETUP.md) | CLI users — manual setup for an existing Linux VPS |
 
 ## 🧪 Testing & feedback
 

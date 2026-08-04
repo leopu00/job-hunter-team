@@ -242,7 +242,7 @@
     },
     {
       "path": "docs/guides/AI-AGENT-INTEGRATION.md",
-      "description": "Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor)",
+      "description": "Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI",
       "last_review": null
     },
     {
@@ -297,7 +297,7 @@
     },
     {
       "path": "docs/guides/VPS-SETUP.md",
-      "description": "☁️ VPS setup — JHT on Hetzner Cloud — Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS",
+      "description": "Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi",
       "last_review": null
     },
     {
