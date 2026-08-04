@@ -504,6 +504,7 @@ func _run_process() -> void:
 	# FileAccess sui pipe non espone i byte disponibili. Una lettura per byte
 	# consegna immediatamente anche prompt corti in attesa di input; la UI li
 	# aggrega una volta per frame evitando migliaia di redraw.
+	var observed_exit := false
 	while not _closing and is_instance_valid(_stderr):
 		var one := _stderr.get_buffer(1)
 		if not one.is_empty():
@@ -513,13 +514,15 @@ func _run_process() -> void:
 		# bloccanti una lettura vuota significa invece "nessun dato ORA": la
 		# vita del processo distingue l'attesa dall'EOF senza troncare output.
 		if _pid > 0 and not OS.is_process_running(_pid):
+			observed_exit = true
 			break
 		OS.delay_msec(2)
-	_mutex.lock()
-	_process_exited = true
-	_mutex.unlock()
-	if not bool(spec.get("reports_exit", false)):
-		call_deferred("_process_finished", -1 if _closing else 0)
+	if observed_exit:
+		_mutex.lock()
+		_process_exited = true
+		_mutex.unlock()
+		if not bool(spec.get("reports_exit", false)) and not _closing:
+			call_deferred("_process_finished", 0)
 
 
 func _run_report_reader() -> void:
@@ -553,6 +556,10 @@ func _run_report_reader() -> void:
 
 
 func _process_started() -> void:
+	# Un comando istantaneo può consegnare il report dal reader prima che questo
+	# deferred venga eseguito. Non riscrivere mai un esito finale in INTERATTIVO.
+	if _closing or _finished:
+		return
 	_status.text = UIStrings.t("term.status_interactive")
 	_status.add_theme_color_override("font_color", Palette.GREEN)
 	_input.grab_focus()
