@@ -32,7 +32,8 @@ func _refresh() -> void:
 	# Un collegamento vero puo' convivere per qualche secondo con le posizioni
 	# showroom. Finche' il bus le marca demo, il badge deve continuare a dire
 	# SIMULAZIONE; "connesso" non rende reali quei numeri.
-	_apply_state(BackendBus.is_live(), BackendBus.positions_are_demo)
+	var live_positions: bool = BackendBus.is_live() and not BackendBus.positions_are_demo
+	_apply_state(live_positions, false)
 
 
 func _apply_state(backend_live: bool, positions_demo: bool) -> void:
