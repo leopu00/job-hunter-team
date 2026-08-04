@@ -1,6 +1,6 @@
 # Daily hard-stop (#2) — validato end-to-end sul team di betaD (beta-3)
 
-**Data:** 2026-07-01 · **VPS:** beta-3 `ubuntu-4gb-fsn1-b3` (203.0.113.40, betaD — luxury
+**Data:** 2026-07-01 · **VPS:** beta-3 `host.invalid` (203.0.113.40, betaD — luxury
 hospitality, provider Kimi) · **Immagine:** `13057f2a` (deploy del 2026-07-01 ~15:32 UTC).
 
 ## TL;DR
