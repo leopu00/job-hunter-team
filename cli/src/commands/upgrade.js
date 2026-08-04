@@ -1,121 +1,41 @@
-import { readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { execSync } from 'node:child_process';
-import { GREEN, RED, YELLOW, DIM, BOLD, RESET } from './_colors.js';
+import { GREEN, YELLOW, DIM, RESET } from './_colors.js';
 
-function getRepoRoot() {
-  try { return execSync('git rev-parse --show-toplevel 2>/dev/null', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim(); }
-  catch { return null; }
-}
+/**
+ * The product runtime is an immutable Docker image. The host-side `jht`
+ * wrapper owns its update transaction because only it can pull, recreate and
+ * roll back the container. This command still exists inside the image so a
+ * direct `docker exec ... jht upgrade` fails clearly instead of attempting an
+ * unsafe and ineffective git/npm mutation under /app.
+ */
+function handleUpgrade(options) {
+  const result = {
+    ok: false,
+    changed: false,
+    phase: 'host_required',
+    previous: { version: '', image: '' },
+    current: { version: '', image: '' },
+    restartRequired: false,
+    message: 'L aggiornamento del runtime deve essere eseguito dall host con jht upgrade.',
+    rolledBack: false,
+  };
 
-async function getCurrentVersion() {
-  // Prova package.json del progetto
-  const root = getRepoRoot();
-  if (root) {
-    try {
-      const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf-8'));
-      return pkg.version ?? '0.0.0';
-    } catch { /* skip */ }
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+  } else {
+    console.log(`\n  ${YELLOW}Aggiornamento runtime host richiesto.${RESET}`);
+    console.log(`  ${DIM}Esegui sul computer/VPS che ospita Docker:${RESET} ${GREEN}jht upgrade${RESET}`);
+    console.log(`  ${DIM}Il comando host scarica, verifica e rende attiva la nuova immagine;${RESET}`);
+    console.log(`  ${DIM}se il controllo fallisce ripristina l ultima versione funzionante.${RESET}\n`);
   }
-  // Fallback al package.json del CLI
-  try {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const pkg = JSON.parse(await readFile(join(__dirname, '..', '..', 'package.json'), 'utf-8'));
-    return pkg.version ?? '0.0.0';
-  } catch { return '0.0.0'; }
-}
-
-function getCurrentCommit() {
-  try { return execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim(); }
-  catch { return null; }
-}
-
-function getCurrentBranch() {
-  try { return execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim(); }
-  catch { return null; }
-}
-
-function getRemoteCommits() {
-  try {
-    execSync('git fetch origin --quiet 2>/dev/null', { stdio: ['pipe', 'pipe', 'pipe'] });
-    const branch = getCurrentBranch();
-    if (!branch) return null;
-    const count = execSync(`git rev-list HEAD..origin/${branch} --count 2>/dev/null`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-    return parseInt(count, 10) || 0;
-  } catch { return null; }
-}
-
-async function handleUpgrade(options) {
-  console.log(`\n  ${BOLD}JHT — Upgrade${RESET}\n`);
-
-  const version = await getCurrentVersion();
-  const commit = getCurrentCommit();
-  const branch = getCurrentBranch();
-
-  console.log(`  ${DIM}Versione:${RESET}  ${version}`);
-  console.log(`  ${DIM}Branch:${RESET}    ${branch ?? 'sconosciuto'}`);
-  console.log(`  ${DIM}Commit:${RESET}    ${commit ?? 'sconosciuto'}`);
-
-  if (options.check || !options.apply) {
-    console.log(`\n  ${DIM}Controllo aggiornamenti...${RESET}`);
-    const behind = getRemoteCommits();
-
-    if (behind === null) {
-      console.log(`  ${YELLOW}Impossibile contattare il remote.${RESET}\n`);
-      return;
-    }
-
-    if (behind === 0) {
-      console.log(`  ${GREEN}Già aggiornato — nessun update disponibile.${RESET}\n`);
-      return;
-    }
-
-    console.log(`  ${YELLOW}${behind} commit disponibili su origin/${branch}.${RESET}`);
-    if (!options.apply) {
-      console.log(`\n  ${DIM}Per aggiornare: jht upgrade --apply${RESET}\n`);
-      return;
-    }
-  }
-
-  if (options.apply) {
-    const root = getRepoRoot();
-    if (!root) {
-      console.error('  Non in un repository git.');
-      process.exitCode = 1;
-      return;
-    }
-
-    console.log(`\n  ${DIM}Aggiornamento in corso...${RESET}`);
-    try {
-      execSync('git pull --ff-only 2>&1', { cwd: root, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-      console.log(`  ${GREEN}✓ Codice aggiornato${RESET}`);
-    } catch (e) {
-      console.error(`  ${RED}✗ git pull fallito: ${e.message.split('\n')[0]}${RESET}`);
-      process.exitCode = 1;
-      return;
-    }
-
-    // Reinstalla dipendenze se necessario
-    try {
-      console.log(`  ${DIM}Installazione dipendenze...${RESET}`);
-      execSync('npm install --silent 2>&1', { cwd: root, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-      console.log(`  ${GREEN}✓ Dipendenze aggiornate${RESET}`);
-    } catch {
-      console.log(`  ${YELLOW}! npm install fallito — prova manualmente${RESET}`);
-    }
-
-    const newCommit = getCurrentCommit();
-    const newVersion = await getCurrentVersion();
-    console.log(`\n  ${GREEN}Aggiornamento completato: ${version} → ${newVersion} (${newCommit})${RESET}\n`);
-  }
+  process.exitCode = 2;
 }
 
 export function registerUpgradeCommand(program) {
   program
     .command('upgrade')
-    .description('Controlla e applica aggiornamenti')
-    .option('-c, --check', 'solo controlla se ci sono aggiornamenti')
-    .option('-a, --apply', 'applica aggiornamento (git pull + npm install)')
+    .description('Aggiorna il runtime dal wrapper host Docker')
+    .option('-c, --check', 'compatibile con il wrapper host; qui non modifica nulla')
+    .option('-a, --apply', 'compatibile con il wrapper host; qui non modifica nulla')
+    .option('--json', 'emette il contratto JSON per un chiamante GUI')
     .action(handleUpgrade);
 }

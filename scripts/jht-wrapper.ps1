@@ -34,6 +34,8 @@ $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { '
 $RuntimeDir  = if ($env:JHT_RUNTIME_DIR)    { $env:JHT_RUNTIME_DIR }    else { Join-Path $env:USERPROFILE '.jht\runtime' }
 $ComposeFile = if ($env:JHT_COMPOSE_FILE)   { $env:JHT_COMPOSE_FILE }   else { Join-Path $RuntimeDir 'docker-compose.yml' }
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
+$RawBase     = if ($env:JHT_RAW_BASE)       { $env:JHT_RAW_BASE.TrimEnd('/') } else { 'https://raw.githubusercontent.com/leopu00/job-hunter-team/master' }
+$WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
 
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
 # Formato file: VAR=value per riga, ignora # e righe vuote.
@@ -111,6 +113,235 @@ function Ensure-Up {
   }
 }
 
+# ── Upgrade runtime, transazionale e host-side ────────────────────────────
+# L'installazione utente e' image-only. Git/NPM nel container non puo'
+# aggiornare il prodotto e lascerebbe meta' deploy; il wrapper host prepara il
+# candidato, conserva l'ultima immagine buona in un journal e fa rollback se
+# il nuovo container non riesce a eseguire il suo CLI.
+$script:UpgradeJson = $false
+$script:UpgradeStage = ''
+$script:UpgradeLock = ''
+$script:UpgradeJournal = ''
+$script:UpgradeRollbackDir = ''
+
+function ConvertTo-UpgradeField {
+  param([object]$Value)
+  return ([regex]::Replace([string]$Value, '[^A-Za-z0-9._,:+@/\-]', '')).Substring(0, [Math]::Min(220, ([regex]::Replace([string]$Value, '[^A-Za-z0-9._,:+@/\-]', '')).Length))
+}
+
+function Write-UpgradeResult {
+  param(
+    [bool]$Ok, [bool]$Changed, [string]$Phase,
+    [string]$PreviousVersion, [string]$PreviousImage,
+    [string]$CurrentVersion, [string]$CurrentImage,
+    [bool]$RestartRequired, [string]$Message, [bool]$RolledBack
+  )
+  $result = [ordered]@{
+    ok = $Ok; changed = $Changed; phase = $Phase
+    previous = [ordered]@{ version = ConvertTo-UpgradeField $PreviousVersion; image = ConvertTo-UpgradeField $PreviousImage }
+    current = [ordered]@{ version = ConvertTo-UpgradeField $CurrentVersion; image = ConvertTo-UpgradeField $CurrentImage }
+    restartRequired = $RestartRequired; message = $Message; rolledBack = $RolledBack
+  }
+  if ($script:UpgradeJson) {
+    [Console]::Out.WriteLine(($result | ConvertTo-Json -Compress -Depth 4))
+  } elseif ($Ok) {
+    Write-Host "Aggiornamento completato: $PreviousVersion ($PreviousImage) -> $CurrentVersion ($CurrentImage). $Message" -ForegroundColor Green
+  } else {
+    Write-Err "Aggiornamento non completato ($Phase): $Message"
+    if ($RolledBack) { Write-Info 'Runtime precedente ripristinato.' }
+  }
+}
+
+function Write-UpgradeNote { param([string]$Message) if (-not $script:UpgradeJson) { Write-Info $Message } }
+
+function Invoke-UpgradeCompose {
+  param([string]$File, [Parameter(ValueFromRemainingArguments)] [string[]]$ComposeArgs)
+  $all = @('compose', '-f', $File, '--project-directory', $RuntimeDir) + $ComposeArgs
+  if ($script:UpgradeJson) { & docker @all *> $null } else { & docker @all }
+  return $LASTEXITCODE -eq 0
+}
+
+function Test-UpgradeDockerReady {
+  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return $false }
+  & docker info *> $null
+  return $LASTEXITCODE -eq 0
+}
+
+function Get-UpgradeImage {
+  $value = (& docker inspect $Container --format '{{.Image}}' 2>$null | Select-Object -First 1)
+  if ($LASTEXITCODE -ne 0) { return '' }
+  return ([string]$value).Trim()
+}
+
+function Get-UpgradeVersion {
+  $value = (& docker exec $Container node $NodeEntry --version 2>$null | Select-Object -First 1)
+  if ($LASTEXITCODE -ne 0) { return '' }
+  return ([string]$value).Trim()
+}
+
+function Test-UpgradeRunning {
+  for ($i = 0; $i -lt 20; $i++) {
+    if ((Test-ContainerUp) -and (Get-UpgradeVersion)) { return $true }
+    Start-Sleep -Milliseconds 500
+  }
+  return $false
+}
+
+function Replace-UpgradeFile {
+  param([string]$Source, [string]$Target, [bool]$Executable = $false)
+  $parent = Split-Path -Parent $Target
+  $temp = Join-Path $parent ('.' + (Split-Path -Leaf $Target) + '.upgrade.' + [guid]::NewGuid().ToString('N'))
+  try {
+    [IO.File]::Copy($Source, $temp, $true)
+    if (Test-Path $Target) { [IO.File]::Replace($temp, $Target, $null) } else { [IO.File]::Move($temp, $Target) }
+    return $true
+  } catch {
+    Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    return $false
+  }
+}
+
+function Write-UpgradeJournal {
+  param([string]$Phase, [string]$OldImage, [bool]$WasRunning)
+  $value = [ordered]@{ version = 1; phase = $Phase; rollback_dir = $script:UpgradeRollbackDir; old_image = $OldImage; was_running = $WasRunning }
+  $temp = "$script:UpgradeJournal.tmp.$PID"
+  try {
+    [IO.File]::WriteAllText($temp, ($value | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+    if (Test-Path $script:UpgradeJournal) { [IO.File]::Replace($temp, $script:UpgradeJournal, $null) } else { [IO.File]::Move($temp, $script:UpgradeJournal) }
+    return $true
+  } catch {
+    Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    return $false
+  }
+}
+
+function Remove-UpgradeTransaction {
+  Remove-Item -LiteralPath $script:UpgradeJournal -Force -ErrorAction SilentlyContinue
+  if ($script:UpgradeRollbackDir -and (Test-Path $script:UpgradeRollbackDir)) {
+    Remove-Item -LiteralPath (Join-Path $script:UpgradeRollbackDir 'docker-compose.yml') -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $script:UpgradeRollbackDir 'jht-wrapper.ps1') -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $script:UpgradeRollbackDir -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Restore-UpgradePrevious {
+  if (-not (Test-Path $script:UpgradeJournal)) { return $false }
+  try { $journal = Get-Content -LiteralPath $script:UpgradeJournal -Raw | ConvertFrom-Json } catch { return $false }
+  $rollback = [string]$journal.rollback_dir
+  $prefix = ([IO.Path]::GetFullPath($RuntimeDir)).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar + '.upgrade-rollback-'
+  $fullRollback = if ($rollback) { [IO.Path]::GetFullPath($rollback) } else { '' }
+  if (-not $fullRollback.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+  if (-not (Test-Path (Join-Path $fullRollback 'docker-compose.yml')) -or -not (Test-Path (Join-Path $fullRollback 'jht-wrapper.ps1'))) { return $false }
+  if (-not (Replace-UpgradeFile (Join-Path $fullRollback 'docker-compose.yml') $ComposeFile)) { return $false }
+  if (-not (Replace-UpgradeFile (Join-Path $fullRollback 'jht-wrapper.ps1') $WrapperPath)) { return $false }
+  if ([bool]$journal.was_running) {
+    if (-not $journal.old_image) { return $false }
+    $before = $env:JHT_IMAGE
+    $env:JHT_IMAGE = [string]$journal.old_image
+    $ok = Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $Container
+    $env:JHT_IMAGE = $before
+    if (-not $ok -or -not (Test-UpgradeRunning)) { return $false }
+  } else {
+    if (-not (Invoke-UpgradeCompose $ComposeFile 'rm' '-s' '-f' $Container)) { return $false }
+  }
+  $script:UpgradeRollbackDir = $fullRollback
+  Remove-UpgradeTransaction
+  return $true
+}
+
+function Enter-UpgradeLock {
+  $script:UpgradeLock = Join-Path $RuntimeDir '.upgrade.lock'
+  try {
+    New-Item -ItemType Directory -Path $script:UpgradeLock -ErrorAction Stop | Out-Null
+    Set-Content -LiteralPath (Join-Path $script:UpgradeLock 'pid') -Value $PID -NoNewline
+    return $true
+  } catch {
+    $pidFile = Join-Path $script:UpgradeLock 'pid'
+    $holder = if (Test-Path $pidFile) { Get-Content -LiteralPath $pidFile -Raw } else { '' }
+    if ($holder -and (Get-Process -Id ([int]$holder) -ErrorAction SilentlyContinue)) { return $false }
+    Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $script:UpgradeLock -Force -ErrorAction SilentlyContinue
+    try {
+      New-Item -ItemType Directory -Path $script:UpgradeLock -ErrorAction Stop | Out-Null
+      Set-Content -LiteralPath (Join-Path $script:UpgradeLock 'pid') -Value $PID -NoNewline
+      return $true
+    } catch { return $false }
+  }
+}
+
+function Clear-UpgradeEphemeral {
+  if ($script:UpgradeStage -and (Test-Path $script:UpgradeStage)) { Remove-Item -LiteralPath $script:UpgradeStage -Recurse -Force -ErrorAction SilentlyContinue }
+  if ($script:UpgradeLock -and (Test-Path $script:UpgradeLock)) {
+    Remove-Item -LiteralPath (Join-Path $script:UpgradeLock 'pid') -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $script:UpgradeLock -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Invoke-RuntimeUpgrade {
+  param([string[]]$UpgradeArgs)
+  $checkOnly = $false
+  foreach ($arg in $UpgradeArgs) {
+    if ($arg -eq '--json') { $script:UpgradeJson = $true }
+    elseif ($arg -eq '--check') { $checkOnly = $true }
+    elseif ($arg -ne '--apply') { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Opzione upgrade non supportata' $false; return 2 }
+  }
+  if (-not (Enter-UpgradeLock)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Un aggiornamento e gia in corso' $false; return 1 }
+  $script:UpgradeJournal = Join-Path $RuntimeDir '.upgrade-journal'
+  try {
+    if (-not (Test-UpgradeDockerReady) -or -not (Test-Path $ComposeFile) -or -not (Test-Path $WrapperPath)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Docker o runtime host non disponibile' $false; return 1 }
+    if ((Test-Path $script:UpgradeJournal) -and -not (Restore-UpgradePrevious)) { Write-UpgradeResult $false $false 'recovery' 'unknown' 'none' 'unknown' 'none' $false 'Recovery dell upgrade precedente non riuscita' $false; return 1 }
+    $wasRunning = Test-ContainerUp
+    $oldImage = if ($wasRunning) { Get-UpgradeImage } else { 'none' }
+    $oldVersion = if ($wasRunning) { Get-UpgradeVersion } else { 'non-installata' }
+    if (-not $oldImage) { $oldImage = 'none' }; if (-not $oldVersion) { $oldVersion = 'sconosciuta' }
+    $script:UpgradeStage = Join-Path $RuntimeDir ('.upgrade-stage-' + $PID + '-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $script:UpgradeStage -ErrorAction Stop | Out-Null
+    $newCompose = Join-Path $script:UpgradeStage 'docker-compose.yml'; $newWrapper = Join-Path $script:UpgradeStage 'jht-wrapper.ps1'
+    Write-UpgradeNote 'Scarico runtime aggiornato...'
+    try {
+      Invoke-WebRequest -UseBasicParsing -Uri "$RawBase/docker-compose.yml" -OutFile $newCompose
+      Invoke-WebRequest -UseBasicParsing -Uri "$RawBase/scripts/jht-wrapper.ps1" -OutFile $newWrapper
+      [scriptblock]::Create((Get-Content -LiteralPath $newWrapper -Raw)) | Out-Null
+    } catch { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Runtime remoto non valido o non raggiungibile' $false; return 1 }
+    if (-not (Invoke-UpgradeCompose $newCompose 'config' '-q')) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Compose remoto non valido' $false; return 1 }
+    $metadataChanged = -not ((Get-FileHash $newCompose).Hash -eq (Get-FileHash $ComposeFile).Hash) -or -not ((Get-FileHash $newWrapper).Hash -eq (Get-FileHash $WrapperPath).Hash)
+    $script:UpgradeRollbackDir = Join-Path $RuntimeDir ('.upgrade-rollback-' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + '-' + $PID)
+    New-Item -ItemType Directory -Path $script:UpgradeRollbackDir -ErrorAction Stop | Out-Null
+    Copy-Item -LiteralPath $ComposeFile -Destination (Join-Path $script:UpgradeRollbackDir 'docker-compose.yml')
+    Copy-Item -LiteralPath $WrapperPath -Destination (Join-Path $script:UpgradeRollbackDir 'jht-wrapper.ps1')
+    if (-not (Write-UpgradeJournal 'prepared' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile preparare il rollback' $false; return 1 }
+    Write-UpgradeNote 'Scarico l immagine piu recente...'
+    if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Download immagine non riuscito' $false; return 1 }
+    $candidateRef = ((& docker compose -f $newCompose --project-directory $RuntimeDir config --images 2>$null | Select-Object -First 1) -as [string]).Trim()
+    if (-not $candidateRef) { $candidateRef = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht:latest' } }
+    $candidateImage = ((& docker image inspect $candidateRef --format '{{.Id}}' 2>$null | Select-Object -First 1) -as [string]).Trim()
+    if (-not $candidateImage) { $candidateImage = 'sconosciuta' }
+    if (-not (Write-UpgradeJournal 'pulled' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile aggiornare il journal' $false; return 1 }
+    if ($checkOnly) { Remove-UpgradeTransaction; $changed = ($candidateImage -ne $oldImage) -or $metadataChanged; Write-UpgradeResult $true $changed 'check' $oldVersion $oldImage $oldVersion $candidateImage $changed 'Controllo completato; nessuna modifica al runtime' $false; return 0 }
+    Write-UpgradeNote 'Attivo il nuovo runtime...'
+    if (-not (Invoke-UpgradeCompose $newCompose 'up' '-d' '--force-recreate' $Container) -or -not (Write-UpgradeJournal 'candidate_started' $oldImage $wasRunning) -or -not (Test-UpgradeRunning)) {
+      $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'verify' $oldVersion $oldImage $oldVersion $oldImage $false 'Il nuovo runtime non ha superato la verifica' $rolledBack; return 1
+    }
+    $newVersion = Get-UpgradeVersion; if (-not $newVersion) { $newVersion = 'sconosciuta' }
+    if (-not (Replace-UpgradeFile $newCompose $ComposeFile) -or -not (Replace-UpgradeFile $newWrapper $WrapperPath) -or -not (Write-UpgradeJournal 'metadata_committed' $oldImage $wasRunning)) {
+      $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'commit' $oldVersion $oldImage $oldVersion $oldImage $false 'Metadata runtime non persistiti' $rolledBack; return 1
+    }
+    Remove-UpgradeTransaction
+    $changed = ($candidateImage -ne $oldImage) -or $metadataChanged
+    Write-UpgradeResult $true $changed 'complete' $oldVersion $oldImage $newVersion $candidateImage $false 'Nuova versione attiva e verificata' $false
+    return 0
+  } catch {
+    if (Test-Path $script:UpgradeJournal) {
+      $rolledBack = Restore-UpgradePrevious
+    } else {
+      Remove-UpgradeTransaction
+      $rolledBack = $false
+    }
+    Write-UpgradeResult $false $false 'unexpected' 'unknown' 'none' 'unknown' 'none' $false 'Errore inatteso durante l aggiornamento' $rolledBack
+    return 1
+  } finally { Clear-UpgradeEphemeral }
+}
+
 # Decide se passare -it a docker exec: serve solo se stdin/stdout sono terminali.
 # Su Windows pwsh, [Console]::IsInputRedirected restituisce true quando lo
 # script gira sotto pipe / redirect — in quel caso usiamo -i (no TTY).
@@ -160,11 +391,8 @@ switch ($Sub) {
   }
 
   'upgrade' {
-    Require-Docker
-    Require-ComposeFile
-    Invoke-Compose pull
-    Invoke-Compose up -d
-    break
+    $code = Invoke-RuntimeUpgrade $Rest
+    exit $code
   }
 
   'logs' {

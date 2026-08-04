@@ -30,6 +30,12 @@ RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
 COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
 HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
+# `jht upgrade` aggiorna anche i due file host scaricati dall'installer. Il
+# wrapper non puo' fidarsi di un checkout Git (la distribuzione utente e'
+# image-only), quindi la fonte e' la stessa raw release dell'installer. Chi
+# prova una release di branch puo' fissarla esplicitamente con JHT_RAW_BASE.
+RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/${JHT_BRANCH:-master}}"
+WRAPPER_PATH="${JHT_WRAPPER_PATH:-$0}"
 
 # Carica la host env (scritta da host-setup.sh: JHT_HOST_TYPE=vps|local).
 # Il wizard Node usa JHT_HOST_TYPE per attivare step obbligatori (cloud
@@ -145,6 +151,366 @@ ensure_up() {
   fi
 }
 
+# ── Upgrade runtime, transazionale e host-side ────────────────────────────
+#
+# L'immagine del prodotto e' l'unita' di deploy: dentro /app non c'e' un
+# checkout Git e un `git pull` li' sarebbe sia inefficace sia pericoloso. Il
+# wrapper host possiede quindi l'intero aggiornamento: prepara compose+wrapper
+# nuovi, pullla l'immagine, ricrea il container e la verifica DAVVERO prima di
+# rendere persistenti i metadata host. Un journal fuori dal container conserva
+# l'immagine e i file precedenti: un kill a meta' viene rollbackato al prossimo
+# `jht upgrade`, mai lasciato come deploy ambiguo.
+
+UPGRADE_JSON=0
+UPGRADE_STAGE=""
+UPGRADE_LOCK=""
+UPGRADE_JOURNAL=""
+UPGRADE_ROLLBACK_DIR=""
+
+upgrade_safe_field() {
+  # I valori arrivano da Docker e dal CLI, ma il JSON e' un contratto per la
+  # GUI: non permettere mai newline/quote non attese nel frame finale.
+  LC_ALL=C printf '%s' "${1:-}" | tr -cd '[:alnum:].,:_+@/-' | cut -c1-220
+}
+
+upgrade_result() {
+  # ok changed phase previous-version previous-image current-version
+  # current-image restart-required message rolled-back
+  local ok="$1" changed="$2" phase="$3" previous_version="$4" previous_image="$5"
+  local current_version="$6" current_image="$7" restart_required="$8" message="$9" rolled_back="${10}"
+  previous_version="$(upgrade_safe_field "$previous_version")"
+  previous_image="$(upgrade_safe_field "$previous_image")"
+  current_version="$(upgrade_safe_field "$current_version")"
+  current_image="$(upgrade_safe_field "$current_image")"
+  if [ "$UPGRADE_JSON" = "1" ]; then
+    printf '{"ok":%s,"changed":%s,"phase":"%s","previous":{"version":"%s","image":"%s"},"current":{"version":"%s","image":"%s"},"restartRequired":%s,"message":"%s","rolledBack":%s}\n' \
+      "$ok" "$changed" "$phase" "$previous_version" "$previous_image" \
+      "$current_version" "$current_image" "$restart_required" "$message" "$rolled_back"
+  elif [ "$ok" = "true" ]; then
+    printf 'Aggiornamento completato: %s (%s) -> %s (%s). %s\n' \
+      "$previous_version" "$previous_image" "$current_version" "$current_image" "$message"
+  else
+    printf 'Aggiornamento non completato (%s): %s. %s\n' "$phase" "$message" \
+      "${rolled_back:+Runtime precedente ripristinato.}" >&2
+  fi
+}
+
+upgrade_note() {
+  [ "$UPGRADE_JSON" = "1" ] || info "$*"
+}
+
+upgrade_run() {
+  if [ "$UPGRADE_JSON" = "1" ]; then
+    "$@" >/dev/null 2>&1
+  else
+    "$@"
+  fi
+}
+
+upgrade_docker_ready() {
+  command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
+}
+
+upgrade_compose_ready() {
+  [ -f "$COMPOSE_FILE" ]
+}
+
+upgrade_compose() {
+  local file="$1"
+  shift
+  MSYS_NO_PATHCONV=1 docker compose -f "$file" --project-directory "$RUNTIME_DIR" "$@"
+}
+
+upgrade_image() {
+  docker inspect "$CONTAINER" --format '{{.Image}}' 2>/dev/null || true
+}
+
+upgrade_version() {
+  docker exec "$CONTAINER" node "$NODE_ENTRY" --version 2>/dev/null \
+    | head -n 1 | tr -d '\r\n' || true
+}
+
+upgrade_verify_running() {
+  local tries=20
+  while [ "$tries" -gt 0 ]; do
+    if container_up && [ -n "$(upgrade_version)" ]; then
+      return 0
+    fi
+    tries=$((tries - 1))
+    sleep 0.5
+  done
+  return 1
+}
+
+upgrade_atomic_replace() {
+  local source="$1" target="$2" mode="${3:-}"
+  local parent base tmp
+  parent="$(dirname "$target")"
+  base="$(basename "$target")"
+  tmp="$(mktemp "$parent/.${base}.upgrade.XXXXXX")" || return 1
+  if ! cp "$source" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if [ -n "$mode" ] && ! chmod "$mode" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv -f "$tmp" "$target"
+}
+
+upgrade_journal_value() {
+  local key="$1"
+  [ -f "$UPGRADE_JOURNAL" ] || return 0
+  sed -n "s/^${key}=//p" "$UPGRADE_JOURNAL" | head -n 1
+}
+
+upgrade_write_journal() {
+  local phase="$1" old_image="$2" was_running="$3"
+  local tmp="${UPGRADE_JOURNAL}.tmp.$$"
+  umask 077
+  {
+    printf 'version=1\n'
+    printf 'phase=%s\n' "$phase"
+    printf 'rollback_dir=%s\n' "$UPGRADE_ROLLBACK_DIR"
+    printf 'old_image=%s\n' "$old_image"
+    printf 'was_running=%s\n' "$was_running"
+  } > "$tmp" || return 1
+  mv -f "$tmp" "$UPGRADE_JOURNAL"
+}
+
+upgrade_remove_transaction() {
+  rm -f "$UPGRADE_JOURNAL"
+  if [ -n "$UPGRADE_ROLLBACK_DIR" ] && [ -d "$UPGRADE_ROLLBACK_DIR" ]; then
+    rm -f "$UPGRADE_ROLLBACK_DIR/docker-compose.yml" "$UPGRADE_ROLLBACK_DIR/jht-wrapper.sh"
+    rmdir "$UPGRADE_ROLLBACK_DIR" 2>/dev/null || true
+  fi
+}
+
+upgrade_cleanup_ephemeral() {
+  if [ -n "$UPGRADE_STAGE" ] && [ -d "$UPGRADE_STAGE" ]; then
+    rm -rf "$UPGRADE_STAGE"
+  fi
+  if [ -n "$UPGRADE_LOCK" ] && [ -d "$UPGRADE_LOCK" ]; then
+    rm -f "$UPGRADE_LOCK/pid"
+    rmdir "$UPGRADE_LOCK" 2>/dev/null || true
+  fi
+}
+
+upgrade_restore_previous() {
+  # Il journal e' stato scritto PRIMA di compose up. Ripristinare prima i
+  # metadata e poi l'immagine rende il retry idempotente anche se il processo
+  # viene interrotto durante il rollback stesso.
+  local rollback_dir old_image was_running
+  rollback_dir="$(upgrade_journal_value rollback_dir)"
+  old_image="$(upgrade_journal_value old_image)"
+  was_running="$(upgrade_journal_value was_running)"
+  # Journal assente/corrotto non deve mai trasformarsi in un path arbitrario
+  # da sovrascrivere: il solo rollback ammesso e' quello creato da questo
+  # wrapper sotto la sua runtime directory.
+  case "$rollback_dir" in
+    "$RUNTIME_DIR"/.upgrade-rollback-*) ;;
+    *) return 1 ;;
+  esac
+  [ -n "$rollback_dir" ] && [ -d "$rollback_dir" ] || return 1
+  [ -f "$rollback_dir/docker-compose.yml" ] || return 1
+  [ -f "$rollback_dir/jht-wrapper.sh" ] || return 1
+  upgrade_atomic_replace "$rollback_dir/docker-compose.yml" "$COMPOSE_FILE" || return 1
+  upgrade_atomic_replace "$rollback_dir/jht-wrapper.sh" "$WRAPPER_PATH" 755 || return 1
+
+  if [ "$was_running" = "1" ]; then
+    [ -n "$old_image" ] || return 1
+    if ! JHT_IMAGE="$old_image" upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$CONTAINER"; then
+      return 1
+    fi
+    upgrade_verify_running || return 1
+  else
+    # Prima non c'era un runtime attivo: un candidato fallito non deve restare
+    # come container morto che l'utente scambia per un'installazione sana.
+    upgrade_run upgrade_compose "$COMPOSE_FILE" rm -sf "$CONTAINER" || return 1
+  fi
+  UPGRADE_ROLLBACK_DIR="$rollback_dir"
+  upgrade_remove_transaction
+  return 0
+}
+
+upgrade_recover_if_needed() {
+  [ -f "$UPGRADE_JOURNAL" ] || return 0
+  upgrade_note "Rilevato upgrade interrotto: ripristino l'ultima versione verificata..."
+  upgrade_restore_previous
+}
+
+upgrade_acquire_lock() {
+  UPGRADE_LOCK="$RUNTIME_DIR/.upgrade.lock"
+  if mkdir "$UPGRADE_LOCK" 2>/dev/null; then
+    printf '%s\n' "$$" > "$UPGRADE_LOCK/pid"
+    return 0
+  fi
+  local holder=""
+  [ -f "$UPGRADE_LOCK/pid" ] && holder="$(cat "$UPGRADE_LOCK/pid" 2>/dev/null || true)"
+  if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+    return 1
+  fi
+  # Un kill -9 lascia solo la nostra directory lock. Non usare rm -rf: se il
+  # contenuto non e' esattamente il lock conosciuto, fallire e' piu' sicuro.
+  rm -f "$UPGRADE_LOCK/pid"
+  rmdir "$UPGRADE_LOCK" 2>/dev/null || return 1
+  mkdir "$UPGRADE_LOCK" || return 1
+  printf '%s\n' "$$" > "$UPGRADE_LOCK/pid"
+}
+
+handle_runtime_upgrade() {
+  local check_only=0 old_image old_version candidate_image candidate_version candidate_ref
+  local was_running=0 changed=false rolled_back=false phase="preflight"
+  local candidate_compose candidate_wrapper metadata_changed=false
+  for arg in "$@"; do
+    case "$arg" in
+      --json) UPGRADE_JSON=1 ;;
+      --check) check_only=1 ;;
+      --apply) ;; # compatibilita' con il vecchio contratto CLI
+      *)
+        upgrade_result false false preflight unknown none unknown none false "Opzione upgrade non supportata" false
+        return 2
+        ;;
+    esac
+  done
+
+  if ! upgrade_acquire_lock; then
+    upgrade_result false false preflight unknown none unknown none false "Un aggiornamento e gia in corso" false
+    return 1
+  fi
+  UPGRADE_JOURNAL="$RUNTIME_DIR/.upgrade-journal"
+  trap upgrade_cleanup_ephemeral EXIT INT TERM
+
+  if ! upgrade_docker_ready; then
+    upgrade_result false false preflight unknown none unknown none false "Docker non e disponibile" false
+    return 1
+  fi
+  if ! upgrade_compose_ready; then
+    upgrade_result false false preflight unknown none unknown none false "Runtime compose non disponibile" false
+    return 1
+  fi
+  # Stesso preflight di `jht up`: su VPS installate da root l'immagine nuova
+  # deve poter riaprire i bind mount al primo boot, non solo il container che
+  # era gia' in vita prima dell'upgrade.
+  ensure_bind_owner
+  if ! upgrade_recover_if_needed; then
+    upgrade_result false false recovery unknown none unknown none false "Recovery dell upgrade precedente non riuscita" false
+    return 1
+  fi
+  if [ ! -f "$WRAPPER_PATH" ]; then
+    upgrade_result false false preflight unknown none unknown none false "Wrapper host non leggibile" false
+    return 1
+  fi
+
+  if container_up; then
+    was_running=1
+    old_image="$(upgrade_image)"
+    old_version="$(upgrade_version)"
+  else
+    old_image=""
+    old_version="non-installata"
+  fi
+  old_image="${old_image:-none}"
+  old_version="${old_version:-sconosciuta}"
+
+  UPGRADE_STAGE="$(mktemp -d "$RUNTIME_DIR/.upgrade-stage.XXXXXX")" || {
+    upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Spazio temporaneo non disponibile" false
+    return 1
+  }
+  candidate_compose="$UPGRADE_STAGE/docker-compose.yml"
+  candidate_wrapper="$UPGRADE_STAGE/jht-wrapper.sh"
+  upgrade_note "Scarico runtime aggiornato..."
+  if ! upgrade_run curl -fsSL "${RAW_BASE%/}/docker-compose.yml" -o "$candidate_compose" \
+      || ! upgrade_run curl -fsSL "${RAW_BASE%/}/scripts/jht-wrapper.sh" -o "$candidate_wrapper" \
+      || ! bash -n "$candidate_wrapper" \
+      || ! upgrade_run upgrade_compose "$candidate_compose" config -q; then
+    upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Runtime remoto non valido o non raggiungibile" false
+    return 1
+  fi
+  if ! cmp -s "$candidate_compose" "$COMPOSE_FILE" || ! cmp -s "$candidate_wrapper" "$WRAPPER_PATH"; then
+    metadata_changed=true
+  fi
+
+  UPGRADE_ROLLBACK_DIR="$RUNTIME_DIR/.upgrade-rollback-$(date +%s)-$$"
+  if ! mkdir "$UPGRADE_ROLLBACK_DIR" \
+      || ! cp "$COMPOSE_FILE" "$UPGRADE_ROLLBACK_DIR/docker-compose.yml" \
+      || ! cp "$WRAPPER_PATH" "$UPGRADE_ROLLBACK_DIR/jht-wrapper.sh" \
+      || ! upgrade_write_journal prepared "$old_image" "$was_running"; then
+    upgrade_remove_transaction
+    upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Impossibile preparare il rollback" false
+    return 1
+  fi
+
+  phase="pull"
+  upgrade_note "Scarico l immagine piu recente..."
+  if ! upgrade_run upgrade_compose "$candidate_compose" pull "$CONTAINER"; then
+    upgrade_remove_transaction
+    upgrade_result false false pull "$old_version" "$old_image" "$old_version" "$old_image" false "Download immagine non riuscito" false
+    return 1
+  fi
+  # Il compose nuovo e' la fonte di verita': non assumere che l'immagine
+  # resti per sempre latest o che un override JHT_IMAGE punti allo stesso ref.
+  candidate_ref="$(upgrade_compose "$candidate_compose" config --images 2>/dev/null | head -n 1)"
+  candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}}" --format '{{.Id}}' 2>/dev/null || true)"
+  candidate_image="${candidate_image:-sconosciuta}"
+  upgrade_write_journal pulled "$old_image" "$was_running" || {
+    upgrade_result false false pull "$old_version" "$old_image" "$old_version" "$old_image" false "Impossibile aggiornare il journal" false
+    return 1
+  }
+
+  if [ "$check_only" = "1" ]; then
+    upgrade_remove_transaction
+    if [ "$candidate_image" = "$old_image" ]; then
+      changed=false
+    else
+      changed=true
+    fi
+    upgrade_result true "$changed" check "$old_version" "$old_image" "$old_version" "$candidate_image" "$changed" "Controllo completato; nessuna modifica al runtime" false
+    return 0
+  fi
+
+  phase="activate"
+  upgrade_note "Attivo il nuovo runtime..."
+  if ! upgrade_run upgrade_compose "$candidate_compose" up -d --force-recreate "$CONTAINER"; then
+    if upgrade_restore_previous; then rolled_back=true; fi
+    upgrade_result false false activate "$old_version" "$old_image" "$old_version" "$old_image" false "Avvio della nuova versione fallito" "$rolled_back"
+    return 1
+  fi
+  upgrade_write_journal candidate_started "$old_image" "$was_running" || {
+    if upgrade_restore_previous; then rolled_back=true; fi
+    upgrade_result false false activate "$old_version" "$old_image" "$old_version" "$old_image" false "Journal non persistito dopo avvio" "$rolled_back"
+    return 1
+  }
+
+  phase="verify"
+  upgrade_note "Verifico il runtime aggiornato..."
+  if ! upgrade_verify_running; then
+    if upgrade_restore_previous; then rolled_back=true; fi
+    upgrade_result false false verify "$old_version" "$old_image" "$old_version" "$old_image" false "Il nuovo runtime non ha superato la verifica" "$rolled_back"
+    return 1
+  fi
+  candidate_version="$(upgrade_version)"
+  candidate_version="${candidate_version:-sconosciuta}"
+
+  phase="commit"
+  if ! upgrade_atomic_replace "$candidate_compose" "$COMPOSE_FILE" \
+      || ! upgrade_atomic_replace "$candidate_wrapper" "$WRAPPER_PATH" 755 \
+      || ! upgrade_write_journal metadata_committed "$old_image" "$was_running"; then
+    if upgrade_restore_previous; then rolled_back=true; fi
+    upgrade_result false false commit "$old_version" "$old_image" "$old_version" "$old_image" false "Metadata runtime non persistiti" "$rolled_back"
+    return 1
+  fi
+
+  upgrade_remove_transaction
+  if [ "$candidate_image" = "$old_image" ] && [ "$metadata_changed" = "false" ]; then
+    changed=false
+  else
+    changed=true
+  fi
+  upgrade_result true "$changed" complete "$old_version" "$old_image" "$candidate_version" "$candidate_image" false "Nuova versione attiva e verificata" false
+}
+
 # Decide se passare -it a docker exec: serve solo se stdin/stdout sono terminali.
 # Il check va fatto QUI nel parent shell, NON dentro $(...): la command
 # substitution chiude/reindirizza stdin+stdout del subshell, quindi
@@ -190,11 +556,7 @@ case "$SUB" in
     ;;
 
   upgrade)
-    require_docker
-    require_compose_file
-    ensure_bind_owner
-    compose pull
-    compose up -d
+    handle_runtime_upgrade "${@:2}"
     ;;
 
   logs)
