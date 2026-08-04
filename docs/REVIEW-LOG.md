@@ -154,7 +154,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [game/PROMPT.md](../game/PROMPT.md) | PROMPT — Prototipo videogioco "JHT: The Office" (esperienza gamificata di Job Hunter Team) — Il progetto game/ è ora l'unica applicazione desktop di Job Hunter Team. | — | 2026-07-19 | ✅ |
 | [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-07-25 | ✅ |
-| [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (mac-leone:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-07-22 | ✅ |
+| [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-07-22 | ✅ |
 | [game/docs/ANALISI-GIOCHI.md](../game/docs/ANALISI-GIOCHI.md) | Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace. | — | 2026-07-07 | ✅ |
 | [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-07-22 | ✅ |
 | [game/docs/DATA-ADAPTER.md](../game/docs/DATA-ADAPTER.md) | Data adapter — contratto fra gioco e dati del team — Il gioco non conosce Supabase né la dashboard: parla solo con l'autoload | — | 2026-07-11 | ✅ |

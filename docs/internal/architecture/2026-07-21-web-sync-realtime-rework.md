@@ -14,7 +14,7 @@
 
 ## 1. 🐛 L'incidente che ha innescato tutto (chat web)
 
-**Sintomo** (2026-07-21, sito deployato, account leone.puglisi): reply scritta nella
+**Sintomo** (2026-07-21, sito deployato, account P01): reply scritta nella
 chat → visibile finché la pagina resta aperta → **sparita al reload**, nessuna
 risposta mai arrivata dall'agente.
 

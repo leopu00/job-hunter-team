@@ -1,4 +1,4 @@
-# 🎨 gen-art — log dell'Art Director (mac-leone:dev1-art)
+# 🎨 gen-art — log dell'Art Director (host.invalid:dev1-art)
 
 Asset generati via Codex CLI (tmux `codex-dev1`), giudicati contro:
 - `web/public/agents-*.png` + `the-box.png` (identità personaggi, tratto)
@@ -8,7 +8,7 @@ Asset generati via Codex CLI (tmux `codex-dev1`), giudicati contro:
 - `game/docs/refs/disco-elysium/*.jpg`
 
 Regola: nessun file esistente viene toccato; solo file nuovi qui dentro.
-Il master (`mac-leone:dev1-game-master`) integra.
+Il master (`host.invalid:dev1-game-master`) integra.
 
 ## Sessioni
 
