@@ -219,7 +219,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/LOCAL-SCORER.md](./guides/LOCAL-SCORER.md) | Experimental role-scoped Local Scorer setup, quality harness, hardware evidence requirements, and explicit zero-cloud limits | 2026-08-03 | 2026-08-03 | 🟢 |
 | [docs/guides/M4-EVIDENCE-BUNDLES.md](./guides/M4-EVIDENCE-BUNDLES.md) | Versioned M4 evidence-bundle operator guide: scrubbed export boundary, hashes, provenance classes, fixture/live fail-closed rules, and external-validation limits | — | 2026-08-03 | ✅ |
 | [docs/guides/TUTORIALS.md](./guides/TUTORIALS.md) | Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives | — | 2026-08-04 | ✅ |
-| [docs/guides/TUTORIALS-LOCALIZATIONS.md](./guides/TUTORIALS-LOCALIZATIONS.md) | _(da compilare nel JSON)_ | — | — | ✅ |
+| [docs/guides/TUTORIALS-LOCALIZATIONS.md](./guides/TUTORIALS-LOCALIZATIONS.md) | Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian | — | — | ✅ |
 
 
 ## 🛰️ docs/internal
