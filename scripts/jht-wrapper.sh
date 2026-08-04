@@ -307,17 +307,30 @@ upgrade_restore_previous() {
   # Il journal e' stato scritto PRIMA di compose up. Ripristinare prima i
   # metadata e poi l'immagine rende il retry idempotente anche se il processo
   # viene interrotto durante il rollback stesso.
-  local rollback_dir old_image was_running
+  local rollback_dir runtime_real old_image was_running phase version
   rollback_dir="$(upgrade_journal_value rollback_dir)"
   old_image="$(upgrade_journal_value old_image)"
   was_running="$(upgrade_journal_value was_running)"
+  phase="$(upgrade_journal_value phase)"
+  version="$(upgrade_journal_value version)"
   # Journal assente/corrotto non deve mai trasformarsi in un path arbitrario
   # da sovrascrivere: il solo rollback ammesso e' quello creato da questo
-  # wrapper sotto la sua runtime directory.
+  # wrapper sotto la sua runtime directory. Normalizzare PRIMA del controllo
+  # impedisce anche `.upgrade-rollback-x/../../qualcosa` e symlink esterni.
+  runtime_real="$(cd -P "$RUNTIME_DIR" 2>/dev/null && pwd -P)" || return 1
+  rollback_dir="$(cd -P "$rollback_dir" 2>/dev/null && pwd -P)" || return 1
   case "$rollback_dir" in
-    "$RUNTIME_DIR"/.upgrade-rollback-*) ;;
+    "$runtime_real"/.upgrade-rollback-*) ;;
     *) return 1 ;;
   esac
+  [ "$version" = "1" ] || return 1
+  case "$phase" in prepared|pulled|candidate_started|metadata_committed) ;; *) return 1 ;; esac
+  case "$was_running" in 0|1) ;; *) return 1 ;; esac
+  if [ "$was_running" = "1" ]; then
+    printf '%s' "$old_image" | grep -Eq '^sha256:[A-Za-z0-9]+$' || return 1
+  elif [ "$old_image" != "none" ]; then
+    return 1
+  fi
   [ -n "$rollback_dir" ] && [ -d "$rollback_dir" ] || return 1
   [ -f "$rollback_dir/docker-compose.yml" ] || return 1
   [ -f "$rollback_dir/jht-wrapper.sh" ] || return 1
