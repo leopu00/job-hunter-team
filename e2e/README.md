@@ -15,7 +15,7 @@ playwright.config.ts
 
 ## State of the suite (triaged 2026-07-26, counts checked 2026-07-30)
 
-**What runs: 47 tests in 4 files** — `npx playwright test --list` is the source
+**What runs: 48 tests in 5 files** — `npx playwright test --list` is the source
 of this number, not this paragraph:
 
 | Spec | Tests | What it covers |
@@ -24,6 +24,7 @@ of this number, not this paragraph:
 | `80-welcome-wizard` | 10 | `/welcome`, the new cloud user's first run |
 | `81-demo-mode` | 6 | the protected area serving the demo dataset |
 | `82-support-report` | 10 | reporting a problem: `/contact` and the dashboard dialog |
+| `83-recording-profile` | 1 | private opt-in gate: real seeded account, no demo banner |
 
 They run on every push and PR (`.github/workflows/test.yml`, job `e2e`) against
 `next start` in cloud mode with a real session.
