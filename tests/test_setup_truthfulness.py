@@ -65,8 +65,19 @@ def test_runtime_installer_keeps_tty_and_reports_command_failure():
     assert "JHTExit=" in setup
     assert '"/v:on"' not in setup
     assert "_with_windows_exit_report(command, exit_report_token)" in setup
-    assert r'''call set JHT_EXIT_CODE=^%%errorlevel^%%''' in setup
-    assert r'''call set \"JHT_EXIT_CODE=''' not in setup
+    windows_wrapper = setup[
+        setup.index("static func _with_windows_exit_report(") :
+        setup.index("static func _with_pty_size(")
+    ]
+    assert 'path = "powershell.exe"' in setup
+    assert '"-NoProfile", "-NonInteractive", "-Command"' in setup
+    assert "Marshalls.utf8_to_base64(command)" in windows_wrapper
+    assert "[Convert]::FromBase64String" in windows_wrapper
+    assert "& $env:COMSPEC /d /s /c $jht_command 1>&2" in windows_wrapper
+    assert "$jht_exit = [int]$LASTEXITCODE" in windows_wrapper
+    assert "call set" not in windows_wrapper
+    assert "errorlevel" not in windows_wrapper
+    assert "( %s )" not in windows_wrapper
     assert '"reports_exit": true' in setup
     assert '"exit_report_token": exit_report_token' in setup
     assert '"where winget >nul 2>&1 & if errorlevel 1 "' in setup
