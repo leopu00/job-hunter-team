@@ -131,11 +131,14 @@ func _run() -> void:
 			"echo literal!value!", exit_token)
 	ok = ok and windows_wrapper.contains("[Convert]::FromBase64String")
 	ok = ok and windows_wrapper.contains(Marshalls.utf8_to_base64("echo literal!value!"))
-	ok = ok and windows_wrapper.contains("& $env:COMSPEC /d /s /c $jht_command")
+	ok = ok and windows_wrapper.contains(
+			"$jht_hosted = '( ' + $jht_command + ' ) 1>&2'")
+	ok = ok and windows_wrapper.contains("& $env:COMSPEC /d /s /c $jht_hosted")
 	ok = ok and windows_wrapper.contains("$LASTEXITCODE")
 	ok = ok and windows_wrapper.contains("[Console]::Out.Write")
 	ok = ok and not windows_wrapper.contains("literal!value!")
 	ok = ok and not windows_wrapper.contains("call set")
+	ok = ok and not windows_wrapper.contains("$jht_command 1>&2")
 	# Il figlio conosce il token e invia subito un falso successo sul proprio
 	# stdout, poi resta vivo: il gruppo Windows e fd3 POSIX devono confinare quel
 	# marker sul pipe visibile. Solo il report di controllo finale (23) chiude la
