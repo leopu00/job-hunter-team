@@ -1674,6 +1674,11 @@ func _add_hud() -> void:
 	var hint := TerminalTheme.label(
 			UIStrings.t("office.camera_hint"),
 			15, Palette.DIM)
+	hint.name = "CameraHint"
+	# È testo informativo sopra il mondo, non un controllo: col filtro STOP
+	# predefinito intercettava proprio i click sulla reception in fondo-centro
+	# prima che arrivassero alla FreeCamera.
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	hint.position = Vector2(-hint.size.x / 2.0, -30)
 	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
