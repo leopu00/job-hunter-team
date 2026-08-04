@@ -18,6 +18,8 @@ import yaml from "js-yaml";
 import {
   RECORDING_PROFILE_ALIASES,
   buildRecordingProfileDataset,
+  isRecordingAccountMetadata,
+  redactRecordingError,
   type RecordingProfileAlias,
   type RecordingProfileDataset,
 } from "../lib/recording-profile";
@@ -31,6 +33,14 @@ const XDG_DATA =
   process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
 const CONFIG_ROOT = path.join(XDG_CONFIG, "jht", "recording-profiles");
 const DATA_ROOT = path.join(XDG_DATA, "jht", "recording-profiles");
+const READY_CONTENT = "ready\n";
+const HOST_ENV_CONTENT = "JHT_HOST_TYPE=local\n";
+const PREFERENCES_CONTENT =
+  JSON.stringify(
+    { theme: "dark", language: "en", ui_state: { tour_done: true } },
+    null,
+    2,
+  ) + "\n";
 
 type Credentials = { email: string; password: string };
 type Command = "reset" | "verify";
@@ -132,6 +142,14 @@ async function credentialsFor(alias: RecordingProfileAlias) {
   return parseEnvFile(credentialPath(alias)) ?? createPrivateAccount(alias);
 }
 
+function existingCredentialsFor(alias: RecordingProfileAlias): Credentials {
+  const credentials = parseEnvFile(credentialPath(alias));
+  if (!credentials) {
+    throw new Error(`${alias}: credenziali locali assenti; verify non crea account`);
+  }
+  return credentials;
+}
+
 function localCandidateYaml(dataset: RecordingProfileDataset): string {
   const p = dataset.candidateProfile;
   const positioning = (p.positioning ?? {}) as Record<string, unknown>;
@@ -161,6 +179,39 @@ function localCandidateYaml(dataset: RecordingProfileDataset): string {
     },
   };
   return yaml.dump(doc, { noRefs: true, lineWidth: 100, sortKeys: false });
+}
+
+function localChatJsonl(
+  dataset: RecordingProfileDataset,
+  agent: string,
+): string {
+  const lines = dataset.chatTurns
+    .filter((turn) => turn.agent === agent)
+    .map((turn) =>
+      JSON.stringify({
+        role: turn.author === "user" ? "user" : "assistant",
+        text: turn.body,
+        ts: turn.chat_ts,
+        done: true,
+      }),
+    )
+    .join("\n");
+  return `${lines}\n`;
+}
+
+function recordingComposeOverride(profilePath: string): string {
+  return yaml.dump(
+    {
+      services: {
+        jht: {
+          volumes: [
+            { type: "bind", source: profilePath, target: "/jht_home" },
+          ],
+        },
+      },
+    },
+    { noRefs: true, lineWidth: 100, sortKeys: false },
+  );
 }
 
 function insertRows(
@@ -220,6 +271,8 @@ function materializeLocal(dataset: RecordingProfileDataset): void {
           analyzed_by: company.analyzed_by,
           analyzed_at: company.analyzed_at,
           verdict: company.verdict,
+          created_at: company.created_at,
+          updated_at: company.updated_at,
         },
       ]);
     });
@@ -288,36 +341,26 @@ function materializeLocal(dataset: RecordingProfileDataset): void {
     localCandidateYaml(dataset),
     { mode: 0o600 },
   );
-  fs.writeFileSync(path.join(stage, "profile", "ready.flag"), "ready\n", {
+  fs.writeFileSync(path.join(stage, "profile", "ready.flag"), READY_CONTENT, {
     mode: 0o600,
   });
   fs.writeFileSync(
     path.join(stage, "preferences.json"),
-    JSON.stringify(
-      { theme: "dark", language: "en", ui_state: { tour_done: true } },
-      null,
-      2,
-    ) + "\n",
+    PREFERENCES_CONTENT,
     { mode: 0o600 },
   );
-  fs.writeFileSync(path.join(stage, "host.env"), "JHT_HOST_TYPE=local\n", {
+  fs.writeFileSync(path.join(stage, "host.env"), HOST_ENV_CONTENT, {
     mode: 0o600,
   });
+  fs.writeFileSync(
+    path.join(stage, "compose.recording.yml"),
+    recordingComposeOverride(finalRoot),
+    { mode: 0o600 },
+  );
   for (const agent of ["assistente", "mentor", "capitano"]) {
     const agentRoot = path.join(stage, "agents", agent);
     fs.mkdirSync(agentRoot, { recursive: true, mode: 0o700 });
-    const lines = dataset.chatTurns
-      .filter((turn) => turn.agent === agent)
-      .map((turn) =>
-        JSON.stringify({
-          role: turn.author === "user" ? "user" : "assistant",
-          text: turn.body,
-          ts: turn.chat_ts,
-          done: true,
-        }),
-      )
-      .join("\n");
-    fs.writeFileSync(path.join(agentRoot, "chat.jsonl"), `${lines}\n`, {
+    fs.writeFileSync(path.join(agentRoot, "chat.jsonl"), localChatJsonl(dataset, agent), {
       mode: 0o600,
     });
   }
@@ -332,6 +375,17 @@ function chunk<T>(rows: T[], size = 100): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
   return out;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 async function assertOk(
@@ -359,6 +413,11 @@ async function materializeCloud(
 ): Promise<Session> {
   const { client, session, config } = await signIn(credentials);
   const userId = session.user.id;
+  if (!isRecordingAccountMetadata(session.user.user_metadata, dataset.alias)) {
+    throw new Error(
+      `${dataset.alias}: le credenziali locali non appartengono al profilo riprese atteso`,
+    );
+  }
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
     throw new Error(
@@ -376,6 +435,14 @@ async function materializeCloud(
   await assertOk(
     `${dataset.alias}: elimina thread`,
     admin.from("pending_user_messages").delete().eq("user_id", userId),
+  );
+  await assertOk(
+    `${dataset.alias}: elimina contatti`,
+    admin.from("candidate_contacts").delete().eq("user_id", userId),
+  );
+  await assertOk(
+    `${dataset.alias}: elimina blocchi profilo`,
+    admin.from("candidate_blocks").delete().eq("user_id", userId),
   );
   await assertOk(
     `${dataset.alias}: elimina transizioni`,
@@ -412,6 +479,7 @@ async function materializeCloud(
     verdict: row.verdict,
     logo: null,
     deleted_at: null,
+    created_at: row.created_at,
   }));
   for (const rows of chunk(companies)) {
     await assertOk(`${dataset.alias}: inserisce aziende`, client.from("companies").insert(rows));
@@ -428,9 +496,14 @@ async function materializeCloud(
     ["position_highlights", dataset.highlights],
   ] as const) {
     for (const part of chunk(rows)) {
+      const cloudPart = part.map((row) => {
+        const cloudRow: Record<string, unknown> = { ...row, user_id: userId };
+        delete cloudRow.updated_at;
+        return cloudRow;
+      });
       await assertOk(
         `${dataset.alias}: inserisce ${table}`,
-        client.from(table).insert(part.map((row) => ({ ...row, user_id: userId }))),
+        client.from(table).insert(cloudPart),
       );
     }
   }
@@ -534,8 +607,20 @@ function verifyLocal(dataset: RecordingProfileDataset): void {
   const root = profileRoot(dataset.alias);
   const dbPath = path.join(root, "jobs.db");
   const profilePath = path.join(root, "profile", "candidate_profile.yml");
-  if (!fs.existsSync(dbPath) || !fs.existsSync(profilePath)) {
+  const artifacts = [
+    [profilePath, localCandidateYaml(dataset)],
+    [path.join(root, "profile", "ready.flag"), READY_CONTENT],
+    [path.join(root, "preferences.json"), PREFERENCES_CONTENT],
+    [path.join(root, "host.env"), HOST_ENV_CONTENT],
+    [path.join(root, "compose.recording.yml"), recordingComposeOverride(root)],
+  ] as const;
+  if (!fs.existsSync(dbPath)) {
     throw new Error(`${dataset.alias}: profilo locale assente; esegui reset`);
+  }
+  for (const [file, expected] of artifacts) {
+    if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== expected) {
+      throw new Error(`${dataset.alias}: artifact locale mancante o alterato: ${file}`);
+    }
   }
   const db = new Database(dbPath, { readonly: true });
   const count = (table: string) =>
@@ -543,28 +628,27 @@ function verifyLocal(dataset: RecordingProfileDataset): void {
   if (db.pragma("integrity_check", { simple: true }) !== "ok") {
     throw new Error(`${dataset.alias}: integrity_check fallito`);
   }
-  if (count("positions") !== dataset.positions.length) {
-    throw new Error(`${dataset.alias}: conteggio posizioni locale inatteso`);
-  }
-  if (count("scores") !== dataset.scores.length) {
-    throw new Error(`${dataset.alias}: conteggio score locale inatteso`);
-  }
-  if (count("pending_user_messages") !== dataset.chatTurns.length) {
-    throw new Error(`${dataset.alias}: conteggio thread locale inatteso`);
+  for (const [table, expected] of [
+    ["companies", dataset.companies.length],
+    ["positions", dataset.positions.length],
+    ["scores", dataset.scores.length],
+    ["applications", dataset.applications.length],
+    ["position_highlights", dataset.highlights.length],
+    ["pending_user_messages", dataset.chatTurns.length],
+  ] as const) {
+    if (count(table) !== expected) {
+      db.close();
+      throw new Error(`${dataset.alias}: conteggio locale ${table} inatteso`);
+    }
   }
   db.close();
   for (const agent of ["assistente", "mentor", "capitano"]) {
     const chatPath = path.join(root, "agents", agent, "chat.jsonl");
-    const expected = dataset.chatTurns.filter((turn) => turn.agent === agent).length;
-    if (!fs.existsSync(chatPath)) {
-      throw new Error(`${dataset.alias}: thread locale ${agent} assente`);
-    }
-    const actual = fs
-      .readFileSync(chatPath, "utf8")
-      .split("\n")
-      .filter(Boolean).length;
-    if (actual !== expected) {
-      throw new Error(`${dataset.alias}: thread locale ${agent} incompleto`);
+    if (
+      !fs.existsSync(chatPath) ||
+      fs.readFileSync(chatPath, "utf8") !== localChatJsonl(dataset, agent)
+    ) {
+      throw new Error(`${dataset.alias}: thread locale ${agent} mancante o alterato`);
     }
   }
 }
@@ -573,26 +657,116 @@ async function verifyCloud(
   dataset: RecordingProfileDataset,
   credentials: Credentials,
 ): Promise<void> {
-  const { client } = await signIn(credentials);
+  const { client, session } = await signIn(credentials);
+  if (!isRecordingAccountMetadata(session.user.user_metadata, dataset.alias)) {
+    throw new Error(`${dataset.alias}: identita cloud non valida`);
+  }
   for (const [table, expected] of [
+    ["companies", dataset.companies.length],
     ["positions", dataset.positions.length],
     ["scores", dataset.scores.length],
     ["applications", dataset.applications.length],
     ["position_highlights", dataset.highlights.length],
     ["pending_user_messages", dataset.chatTurns.length],
+    ["candidate_profiles", 1],
+    ["candidate_contacts", 0],
+    ["candidate_blocks", 0],
+    ["user_onboarding_state", 1],
   ] as const) {
+    const primaryColumn =
+      table === "candidate_contacts" || table === "user_onboarding_state"
+        ? "user_id"
+        : "id";
     const { count, error } = await client
       .from(table)
-      .select("id", { count: "exact", head: true });
+      .select(primaryColumn, { count: "exact", head: true });
     if (error || count !== expected) {
       throw new Error(`${dataset.alias}: verifica cloud ${table} fallita`);
     }
   }
+
+  const profileFields = [
+    "id",
+    "user_id",
+    "name",
+    "email",
+    "target_role",
+    "location",
+    "experience_years",
+    "experience_months",
+    "has_degree",
+    "skills",
+    "languages",
+    "location_preferences",
+    "job_titles",
+    "salary_target",
+    "positioning",
+  ] as const;
+  const { data: profile, error: profileError } = await client
+    .from("candidate_profiles")
+    .select(profileFields.join(","))
+    .single();
+  const expectedProfile = {
+    ...Object.fromEntries(
+      profileFields
+        .filter((field) => field !== "user_id")
+        .map((field) => [field, dataset.candidateProfile[field]]),
+    ),
+    user_id: session.user.id,
+  };
+  if (
+    profileError ||
+    !profile ||
+    stableJson(profile) !== stableJson(expectedProfile)
+  ) {
+    throw new Error(`${dataset.alias}: profilo cloud incompleto o alterato`);
+  }
+
+  const onboardingFields = [
+    "vps_setup_completed_at",
+    "profile_configured_at",
+    "first_team_run_at",
+    "tour_done_at",
+  ] as const;
+  const { data: onboarding, error: onboardingError } = await client
+    .from("user_onboarding_state")
+    .select(onboardingFields.join(","))
+    .single();
+  if (
+    onboardingError ||
+    !onboarding ||
+    onboardingFields.some(
+      (field) =>
+        Date.parse(
+          String((onboarding as unknown as Record<string, unknown>)[field]),
+        ) !==
+        Date.parse(dataset.anchor),
+    )
+  ) {
+    throw new Error(`${dataset.alias}: onboarding cloud incompleto o alterato`);
+  }
+
   const state = JSON.parse(
     fs.readFileSync(path.join(profileRoot(dataset.alias), "auth-state.json"), "utf8"),
-  ) as { cookies?: Array<{ name: string }> };
-  if (state.cookies?.some((cookie) => cookie.name === "jht_demo_persona")) {
-    throw new Error(`${dataset.alias}: auth-state contiene il cookie demo`);
+  ) as {
+    cookies?: Array<{ name: string }>;
+    origins?: Array<{ localStorage?: Array<{ name: string; value: string }> }>;
+  };
+  const cookies = state.cookies ?? [];
+  const hasAuth = cookies.some(
+    (cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"),
+  );
+  const tourDone = state.origins?.some((origin) =>
+    origin.localStorage?.some(
+      (entry) => entry.name === "jht-tour-done" && entry.value === "1",
+    ),
+  );
+  if (
+    !hasAuth ||
+    !tourDone ||
+    cookies.some((cookie) => cookie.name === "jht_demo_persona")
+  ) {
+    throw new Error(`${dataset.alias}: auth-state incompleto o con cookie demo`);
   }
 }
 
@@ -610,7 +784,7 @@ async function main() {
     }
     verifyLocal(dataset);
     if (!localOnly) {
-      const credentials = await credentialsFor(alias);
+      const credentials = existingCredentialsFor(alias);
       await verifyCloud(dataset, credentials);
     }
     console.log(
@@ -623,7 +797,13 @@ async function main() {
 
 main().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
-  // Gli errori delle API non devono riversare payload o identificativi.
-  console.error(`ERRORE profili riprese: ${message.replace(/[\w.+-]+@[\w.-]+/g, "<redacted>")}`);
+  // Gli errori delle API/filesystem non devono riversare payload, path o ID.
+  console.error(
+    `ERRORE profili riprese: ${redactRecordingError(message, [
+      CONFIG_ROOT,
+      DATA_ROOT,
+      os.homedir(),
+    ])}`,
+  );
   process.exit(1);
 });

@@ -45,8 +45,10 @@ test.describe("profilo riprese autenticato", () => {
         timeout: 10_000,
       })
       .toBeGreaterThan(0);
-    for (const link of await positionLinks.all()) {
-      const href = (await link.getAttribute("href")) ?? "";
+    const hrefs = await positionLinks.evaluateAll((links) =>
+      links.map((link) => link.getAttribute("href") ?? ""),
+    );
+    for (const href of hrefs) {
       expect(href, "id demo trasferito invece di UUID reale").not.toContain(
         "/positions/demo-",
       );

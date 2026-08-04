@@ -32,6 +32,12 @@ RLS intentionally prevents a user session from impersonating an agent. The
 command never stores that key and never prints an email, user id, token or
 filesystem path. Account credentials remain in local 0600 files.
 
+Before deleting anything, the reset checks the authenticated account metadata
+for both `purpose=recording-profile` and the requested alias. A stale or
+misplaced credential file therefore fails closed instead of touching another
+account. Existing contact rows are removed on every reset; no email, phone,
+social profile or website is copied from the source personas.
+
 For a single scene, replace `--all` with `software`, `marketing`, `finance` or
 `design`. To recreate only the game/local workspaces without touching cloud
 state:
@@ -53,6 +59,7 @@ $XDG_CONFIG_HOME/jht/recording-profiles/<alias>.env
 $XDG_DATA_HOME/jht/recording-profiles/<alias>/
   auth-state.json
   jobs.db
+  compose.recording.yml
   agents/{assistente,mentor,capitano}/chat.jsonl
   profile/candidate_profile.yml
   profile/ready.flag
@@ -81,8 +88,20 @@ swipe and profile all use real Supabase queries and render without the banner.
 
 ## Game recording
 
-Each alias directory is a complete `JHT_HOME`: point the recording runtime at
-it before starting the local container/game. The SQLite database contains the
+Each alias directory is a complete `JHT_HOME`, but setting that variable in a
+shell is not enough: the production Compose file normally mounts the host's
+`~/.jht` at `/jht_home`. Use the generated override so the container and the
+game resolve the **same** recording directory:
+
+```bash
+PROFILE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/jht/recording-profiles/software"
+docker compose -f "$HOME/.jht/runtime/docker-compose.yml" -f "$PROFILE_ROOT/compose.recording.yml" up -d --force-recreate
+JHT_HOME="$PROFILE_ROOT" /path/to/job-hunter-team-game
+```
+
+The `JHT_HOME` on the game process is required too: `LocalBackend` reads
+command output from that host directory while the container writes the same
+files through `/jht_home`. The SQLite database contains the
 same positions, scores, applications, highlights and six chat turns as the
 cloud account. The three matching `chat.jsonl` files make the Assistente,
 Mentor and Capitano threads immediately visible in the game; the profile YAML
@@ -97,6 +116,8 @@ npm run recording-profile -- verify --all
 ```
 
 This checks SQLite integrity, expected row counts (including chat), cloud row
-counts and that the stored browser state has no demo cookie. The release gate
+content, required runtime artifacts, cloud profile/onboarding/contact state and
+that the stored browser state has no demo cookie. `verify` never creates an
+account: missing local credentials are an error. The release gate
 additionally opens the protected dashboard with the generated state and checks
 that no visible text contains the demo banner label.
