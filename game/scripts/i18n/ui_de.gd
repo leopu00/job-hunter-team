@@ -471,6 +471,7 @@ const S := {
 	"hours.saved": "✓ Arbeitszeiten gespeichert — das Team-Pacing passt sich ab dem nächsten Tick an",
 
 	"lang.intro": "Sprache der Oberfläche — die 7 Sprachen der Website.",
+	"lang.narrative_note": "// Hinweis: Die erzählte Tour und ihre Auswahlmöglichkeiten sind derzeit auf Italienisch verfügbar",
 	"lang.note": "// gilt sofort für die Panels; bereits offene neu öffnen, um sie übersetzt zu sehen",
 
 	"stats.hint": "// auf einen Balken klicken zum Filtern: die anderen Diagramme aktualisieren sich",

@@ -51,6 +51,7 @@ const FLAG_HOOKS := {
 	"JHT_THROTTLE_TEST": "_throttle_selftest",
 	"JHT_BACKEND_SWITCH_TEST": "_backend_switch_selftest",
 	"JHT_SETUP_BUSY_TEST": "_setup_busy_selftest",
+	"JHT_BUBBLE_LAYOUT_TEST": "_bubble_layout_selftest",
 }
 
 ## Ganci con argomento: scattano quando la variabile non è vuota, e il valore
@@ -595,6 +596,66 @@ func _world_text_selftest() -> void:
 	get_tree().quit(0 if ok else 1)
 
 
+## Tre persone volutamente vicine e tre messaggi lunghi: è la regressione del
+## burst reale in cui le vignette si dipingevano una sopra l'altra e sulle
+## teste. Con JHT_SHOT il test resta vivo fino allo scatto visuale.
+func _bubble_layout_selftest() -> void:
+	await get_tree().process_frame
+	if office.agents.size() < 3:
+		print("BUBBLE-LAYOUT-TEST FAIL {\"agents\":false}")
+		get_tree().quit(1)
+		return
+	var center := Vector2(1700, 920)
+	var texts := [
+		"Ho trovato nuove posizioni e le sto passando al reparto analisi.",
+		"Controllo requisiti, stipendio e modalità di lavoro prima dello score.",
+		"La prima opportunità è pronta: compatibilità alta e motivazione chiara.",
+	]
+	var actors: Array[AgentNPC] = []
+	for i in 3:
+		var actor: AgentNPC = office.agents[i]
+		actor.start_talk()
+		actor.position = center + Vector2((i - 1) * 105.0, 0)
+		actor.say(texts[i])
+		actors.append(actor)
+	var cam := Camera2D.new()
+	cam.position = center + Vector2(0, -135)
+	cam.zoom = Vector2(1.55, 1.55)
+	office._stage.add_child(cam)
+	cam.make_current()
+	for _frame in 6:
+		await get_tree().process_frame
+	office._layout_speech_bubbles(true)
+	await get_tree().process_frame
+	var rects: Array[Rect2] = []
+	for actor in actors:
+		rects.append(actor.speech.layout_rect_global(true))
+	var bounds: Rect2 = office._speech_layout_bounds()
+	var boxes_clear := true
+	for i in rects.size():
+		for j in range(i + 1, rects.size()):
+			boxes_clear = boxes_clear and not rects[i].intersects(rects[j])
+	var heads_clear := true
+	var inside_bounds := true
+	for rect in rects:
+		inside_bounds = inside_bounds and bounds.encloses(rect)
+		for agent in office.agents:
+			heads_clear = heads_clear and not rect.intersects(
+					office._speech_head_rect(agent))
+	var lifted: bool = actors[1].speech.debug_snapshot()["layout_offset"] != Vector2.ZERO \
+			or actors[2].speech.debug_snapshot()["layout_offset"] != Vector2.ZERO
+	var named := true
+	for actor in actors:
+		named = named and not str(
+				actor.speech.debug_snapshot()["speaker_label"]).is_empty()
+	var ok: bool = boxes_clear and heads_clear and inside_bounds and lifted and named
+	print("BUBBLE-LAYOUT-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify({"boxes_clear": boxes_clear, "heads_clear": heads_clear,
+				"inside_bounds": inside_bounds, "lifted": lifted, "named": named})])
+	if OS.get_environment("JHT_SHOT") == "":
+		get_tree().quit(0 if ok else 1)
+
+
 ## Fotografia della scena costruita: quanti CanvasItem visibili, da quale ramo
 ## arrivano e — con la finestra aperta, non headless — quante draw call costa
 ## ciascun ramo. La misura è differenziale: si spegne un ramo, si guarda di
@@ -649,6 +710,40 @@ func _census_group(branch: Node, baseline: int) -> void:
 	Log.info("census", "dentro %s:" % _census_name(branch))
 	for row in costs:
 		Log.info("census", "  %-26s %4d draw call su %3d nodi" % [row[0], row[1], row[2]])
+	# `agent_npc` era il ramo più caro ma restava una scatola nera: corpo,
+	# ombra, aura e tre indicatori finivano nello stesso numero. Misuriamo i
+	# figli omologhi di tutti gli agenti insieme, così il profilo low-spec può
+	# togliere decorazione senza sacrificare a intuito testo o stato reale.
+	var agents: Array[CanvasItem] = []
+	for nodes: Array in groups.values():
+		for node: CanvasItem in nodes:
+			if node is AgentNPC:
+				agents.append(node)
+	if not agents.is_empty():
+		await _census_agent_parts(agents, baseline)
+
+
+func _census_agent_parts(agents: Array[CanvasItem], baseline: int) -> void:
+	var groups := {}
+	for agent: CanvasItem in agents:
+		for child in agent.get_children():
+			if child is CanvasItem:
+				var key := _census_name(child)
+				if not groups.has(key):
+					groups[key] = []
+				groups[key].append(child)
+	var costs := []
+	for key in groups:
+		for node: CanvasItem in groups[key]:
+			node.visible = false
+		var without := await _draw_calls()
+		for node: CanvasItem in groups[key]:
+			node.visible = true
+		costs.append([key, baseline - without, groups[key].size()])
+	costs.sort_custom(func(a: Array, b: Array) -> bool: return a[1] > b[1])
+	Log.info("census", "dentro agent_npc:")
+	for row in costs:
+		Log.info("census", "    %-24s %4d draw call su %3d nodi" % [row[0], row[1], row[2]])
 
 
 ## I nodi creati da codice restano anonimi (@Node2D@41): il nome dello script
@@ -1398,7 +1493,13 @@ func _map_panel_selftest() -> void:
 	world._flat._target_tile_signature = ""
 	world._flat._ensure_target_tiles()
 	var target_prefix := "%d/" % int(ceil(world._flat._target_zoom))
-	var tile_queue_ok := world._flat._queue.size() < 100
+	# La quantità giusta dipende dalla superficie del pannello: su viewport
+	# grandi una soglia fissa di 100 bocciava 121 tile tutte corrette, senza
+	# alcun livello obsoleto. Il margine coincide con una tile per lato più gli
+	# arrotondamenti floor/ceil usati da `_ensure_target_tiles`.
+	var tile_queue_cap := (ceili(world._flat.size.x / OsmMap.TILE) + 4) \
+			* (ceili(world._flat.size.y / OsmMap.TILE) + 4)
+	var tile_queue_ok := world._flat._queue.size() <= tile_queue_cap
 	for queued_key in world._flat._queue:
 		tile_queue_ok = tile_queue_ok and str(queued_key).begins_with(target_prefix)
 	world._flat.fly_to(Vector2(18.0686, 59.3293), 10.0)
@@ -1448,6 +1549,9 @@ func _map_panel_selftest() -> void:
 			print("MAP-PANEL-TEST details base=", base_ok, " count=", card_count,
 					" hint=", hint_ok, " cluster=", cluster_ok,
 					" auto_zoom=", auto_zoom_ok, " tile_queue=", tile_queue_ok,
+					" queue_cap=", tile_queue_cap,
+					" queue=", world._flat._queue,
+					" inflight=", world._flat._inflight.keys(),
 					" route=", route_ok, " requested=", route_state["section"],
 					" pending=", SectionPanel.pending_detail,
 					" detail=", detail_ok, " page=", detail_panel._current_page,

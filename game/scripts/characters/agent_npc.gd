@@ -199,6 +199,9 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	speech.position = SPEECH_BUBBLE_POS
 	speech.z_index = 3
 	add_child(speech)
+	# Il layout può spostare una vignetta per evitare teste e altri messaggi:
+	# il nome dentro il riquadro mantiene inequivocabile chi sta parlando.
+	speech.set_speaker_label(display_name)
 
 	state_tag = AgentStateTag.new()
 	state_tag.position = STATE_TAG_POS

@@ -27,6 +27,7 @@ var _stage: Node
 var _pixel_stage: SubViewportContainer
 var _pixel_layer: CanvasLayer
 var _render_scale := 1.0
+var _speech_layout_timer := 0.0
 
 func _ready() -> void:
 	_seat_audit = OS.get_environment("JHT_SEAT_AUDIT")
@@ -342,8 +343,64 @@ func _ready() -> void:
 func _on_chat_message(msg: Dictionary) -> void:
 	deliver_chat(msg.get("from", ""), msg.get("to", "all"), msg.get("text", ""))
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_update_hover()
+	_speech_layout_timer -= delta
+	if _speech_layout_timer <= 0.0:
+		_speech_layout_timer = 0.1
+		_layout_speech_bubbles()
+
+
+## Il layout vive nell'ufficio perché solo qui è nota la posizione di tutti gli
+## agenti. Dieci aggiornamenti al secondo bastano per chi cammina e tengono il
+## costo irrilevante anche sul ThinkPad low-spec.
+func _layout_speech_bubbles(immediate := false) -> void:
+	var items := []
+	var heads: Array[Rect2] = []
+	for agent in agents:
+		if not is_instance_valid(agent) or not agent.visible:
+			continue
+		heads.append(_speech_head_rect(agent))
+		if agent.speech != null and agent.speech.layout_visible():
+			items.append({
+				"id": agent.get_instance_id(),
+				"anchor": agent.global_position,
+				"rect": agent.speech.layout_rect_global(false),
+			})
+	var offsets := SpeechBubbleLayout.arrange(items, heads,
+			_speech_layout_bounds())
+	for agent in agents:
+		if is_instance_valid(agent) and agent.speech != null:
+			agent.speech.set_layout_offset(
+				offsets.get(agent.get_instance_id(), Vector2.ZERO), immediate)
+
+
+func _speech_head_rect(agent: AgentNPC) -> Rect2:
+	# Include capelli e volto, non l'intero corpo: una vignetta può stare sopra
+	# una persona ma non deve cancellarne identità/espressione.
+	return Rect2(agent.global_position + Vector2(-34, -104), Vector2(68, 86))
+
+
+func _speech_layout_bounds() -> Rect2:
+	var first_speech: SpeechBubble = null
+	for agent in agents:
+		if is_instance_valid(agent) and agent.speech != null \
+				and agent.speech.layout_visible():
+			first_speech = agent.speech
+			break
+	if first_speech == null:
+		return Rect2()
+	var vp := first_speech.get_viewport()
+	var screen := vp.get_visible_rect().size
+	var inv := vp.get_canvas_transform().affine_inverse()
+	# La fascia alta contiene badge di verità, setup e HUD. Riservarla evita
+	# vignette formalmente dentro camera ma nascoste sotto l'interfaccia.
+	var scale_factor := maxf(0.1, _render_scale)
+	var a := inv * Vector2(12.0 * scale_factor, 112.0 * scale_factor)
+	var b := inv * Vector2(screen.x - 12.0 * scale_factor,
+			screen.y - 12.0 * scale_factor)
+	return Rect2(Vector2(minf(a.x, b.x), minf(a.y, b.y)),
+			Vector2(absf(b.x - a.x), absf(b.y - a.y)))
 
 
 var _registry: RegistryPanel
@@ -1283,8 +1340,13 @@ func _spawn_showroom() -> void:
 
 func _on_setup_status_changed(status: Dictionary) -> void:
 	var authenticated := bool(status.get("provider_authenticated", false))
+	var team_running := bool(status.get("team_running", false))
 	for agent in agents:
 		if agent.uid == "":
+			# Gli NPC senza uid sono guide di showroom, non processi LLM. Prima
+			# dell'avvio esplicito non possono dichiararsi "AL LAVORO": restano
+			# presenti e cliccabili per presentare i reparti, ma IN ATTESA.
+			agent.set_backend_status("working" if team_running else "idle")
 			agent.set_story_marker(not authenticated,
 					bool(_story_seen.get(agent.slug, false)))
 	if _tour_enabled and TourGuide.active() and not authenticated:

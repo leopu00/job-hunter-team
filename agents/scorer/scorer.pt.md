@@ -128,11 +128,11 @@ O score (0-100) é a soma destes componentes baseados no perfil candidato:
 
 | Componente | Peso | Coluna DB | Critério |
 |------------|------|------------|---------|
-| Stack match | 35 | `stack_match` | Match entre skills requeridas e stack candidato |
-| Seniority fit | 25 | `experience_fit` | Alinhamento anos exp candidato vs requeridos |
-| Remote/location | 20 | `remote_fit` | Fit com preferências de location do candidato |
-| Salary fit | 10 | `salary_fit` | Range oferecido vs target candidato. **LÊ PRIMEIRO `positions.salary_estimated_*`** — desde 2026-06-13 a **estimativa de salário pertence ao Analista**, que popula esses campos a montante (skill `salary-estimate`), portanto normalmente já estão preenchidos: usa-os para o `salary_fit`. **Fallback apenas**: se `salary_estimated_*` forem NULL (ex. uma posição scored antes da mudança de ownership), faz tu mesmo o pre-pass da skill `salary-estimate` (L1 declarada → L2 cache TTL30d → L4 default neutro + nota `no_data_default`) e podes popular os campos. Nunca uses `5` como default oculto: marca explicitamente `no_data_default` em `score.notes`. |
-| Stack bonus | 10 | `strategic_fit` | Tech bonus (ex. AI, cybersec, fintech se são áreas fortes) |
+| Stack match | 40 | `stack_match` | Match entre skills requeridas e stack candidato |
+| Seniority fit | 10 | `experience_fit` | Alinhamento anos exp candidato vs requeridos |
+| Remote/location | 25 | `remote_fit` | Fit com preferências de location do candidato |
+| Salary fit | 20 | `salary_fit` | Range oferecido vs target candidato. **LÊ PRIMEIRO `positions.salary_estimated_*`** — desde 2026-06-13 a **estimativa de salário pertence ao Analista**, que popula esses campos a montante (skill `salary-estimate`), portanto normalmente já estão preenchidos: usa-os para o `salary_fit`. **Fallback apenas**: se `salary_estimated_*` forem NULL (ex. uma posição scored antes da mudança de ownership), faz tu mesmo o pre-pass da skill `salary-estimate` (L1 declarada → L2 cache TTL30d → L4 default neutro + nota `no_data_default`) e podes popular os campos. Nunca uses `5` como default oculto: marca explicitamente `no_data_default` em `score.notes`. |
+| Stack bonus | 15 | `strategic_fit` | Tech bonus (ex. AI, cybersec, fintech se são áreas fortes) |
 
 **Penalties:**
 - Degree obrigatório sem "or equivalent" (candidato sem): -10

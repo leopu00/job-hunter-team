@@ -34,7 +34,11 @@ func _ready() -> void:
 	# completi e porta alla checklist senza nascondere il mondo di gioco.
 	_setup_cta = Button.new()
 	_setup_cta.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_setup_cta.position = Vector2(-190, 18)
+	# Il badge di verità (SIMULAZIONE / DATI REALI) occupa la prima riga in
+	# alto al centro. A y=18 questo CTA lo copriva perfettamente: l'utente
+	# vedeva KPI demo e agenti "AL LAVORO" senza l'unica etichetta che diceva
+	# che non erano dati reali. La checklist vive nella seconda riga.
+	_setup_cta.position = Vector2(-190, 58)
 	_setup_cta.custom_minimum_size = Vector2(380, 44)
 	_setup_cta.add_theme_font_size_override("font_size", 14)
 	_setup_cta.add_theme_color_override("font_color", Palette.YELLOW)
@@ -95,7 +99,10 @@ func _ready() -> void:
 	_tab.add_theme_stylebox_override("normal", tab_style)
 	_tab.add_theme_stylebox_override("hover", tab_hover)
 	_tab.add_theme_stylebox_override("pressed", tab_hover.duplicate())
-	_tab.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Il menu e' raggiungibile con Tab anche quando il mouse non e' disponibile.
+	# Non cancellare il focus: senza bordo il cursore da tastiera esiste, ma
+	# l'utente non puo' sapere dove si trova.
+	_tab.add_theme_stylebox_override("focus", tab_hover.duplicate())
 	_tab.position = Vector2(10, 150)
 	_tab.pressed.connect(toggle)
 	root.add_child(_tab)
@@ -220,7 +227,9 @@ func _nav_button(item: Dictionary) -> Control:
 	btn.add_theme_stylebox_override("normal", _row_style(Palette.ROW, 0.0, false))
 	btn.add_theme_stylebox_override("hover", _row_style(Palette.ROW, 0.85, true))
 	btn.add_theme_stylebox_override("pressed", _row_style(Palette.DEEP, 1.0, true))
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Stesso segnale verde dell'hover: Tab deve essere un percorso visibile,
+	# non soltanto tecnicamente funzionante.
+	btn.add_theme_stylebox_override("focus", _row_style(Palette.ROW, 0.85, true))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.pressed.connect(func() -> void: _select(item["id"]))
 	btn.set_meta("label", SidebarDefs.nav_label(item))

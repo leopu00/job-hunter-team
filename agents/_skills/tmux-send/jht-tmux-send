@@ -140,10 +140,13 @@ with open(os.path.join(log_dir, "messages.jsonl"), "a") as f:
 PYEOF
 fi
 
-# Signature per la verify: primi 30 char del messaggio. Substring perche'
-# le TUI wrappano righe lunghe e il messaggio nel pane puo' essere spezzato
-# su piu' righe, rendendo un match full-string impossibile.
-signature=$(printf '%s' "$message" | head -c 30)
+# Signature per la verify: testa E coda del messaggio. La testa basta per i
+# messaggi corti, ma un prompt lungo puo' occupare piu' dell'altezza del pane:
+# mentre Ink lo rende, i primi caratteri scorrono fuori da capture-pane e il
+# sender conclude a torto che il testo non sia mai apparso. La coda resta
+# invece accanto al cursore ed e' quindi la prova piu' stabile.
+signature_head=$(printf '%s' "$message" | head -c 30)
+signature_tail=$(printf '%s' "$message" | tail -c 30)
 
 # Busy-detection: codex / claude / kimi mostrano "esc to interrupt" mentre
 # l'agente e' a meta' turno. In quello stato il composer NON eco-a il testo
@@ -318,7 +321,8 @@ for try in $(seq 1 "$attempts"); do
   # QUELLO CHE SI VEDE, altrimenti lo step 6 crede sempre di aver submittato.
   submit_probe=""
   case "$pane" in
-    *"$signature"*)       submit_probe="$signature" ;;
+    *"$signature_tail"*)  submit_probe="$signature_tail" ;;
+    *"$signature_head"*)  submit_probe="$signature_head" ;;
     *"Pasted text"*)      submit_probe="Pasted text" ;;
     *"pasted text"*)      submit_probe="pasted text" ;;
     *"Pasted Content"*)   submit_probe="Pasted Content" ;;

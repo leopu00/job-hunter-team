@@ -20,6 +20,8 @@ func _ready() -> void:
 	margin.add_child(_label)
 	BackendBus.connection_changed.connect(func(_s: int, _d: String) -> void:
 		_refresh())
+	BackendBus.positions_updated.connect(func(_positions: Array) -> void:
+		_refresh())
 	_refresh()
 
 ## Il testo cambia larghezza (SIMULAZIONE vs DATI REALI): il ricentraggio
@@ -29,7 +31,10 @@ func _notification(what: int) -> void:
 		position = Vector2((get_parent_area_size().x - size.x) / 2.0, 14)
 
 func _refresh() -> void:
-	var live: bool = BackendBus.is_live()
+	# Un collegamento vero puo' convivere per qualche secondo con le posizioni
+	# showroom. Finche' il bus le marca demo, il badge deve continuare a dire
+	# SIMULAZIONE; "connesso" non rende reali quei numeri.
+	var live: bool = BackendBus.is_live() and not BackendBus.positions_are_demo
 	var color: Color = Palette.GREEN if live else Palette.YELLOW
 	_label.text = UIStrings.t("sim.live_vps" if BackendBus.is_remote() \
 			else "sim.live_local") if live else UIStrings.t("sim.mock")
