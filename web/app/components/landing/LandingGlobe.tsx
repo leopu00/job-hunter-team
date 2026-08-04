@@ -347,8 +347,12 @@ export default function LandingGlobe() {
           l'immagine ferma deve portarselo scritto accanto). */}
       {mode !== "live" && (
         <div
-          className="absolute bottom-1 right-2 z-10 pointer-events-none text-[8px]"
-          style={{ color: "var(--color-muted)" }}
+          className="jht-globe-static-credit absolute bottom-2 right-2 z-10 pointer-events-none rounded-sm px-1.5 py-1 text-[10px] leading-tight"
+          style={{
+            color: "var(--color-muted)",
+            background:
+              "color-mix(in srgb, var(--color-panel) 78%, transparent)",
+          }}
         >
           © CARTO · © OpenStreetMap contributors
         </div>
@@ -394,7 +398,7 @@ export default function LandingGlobe() {
           esempio, non risultati reali. */}
       <div
         aria-hidden
-        className="jht-globe-badge absolute top-3 right-3 z-10 pointer-events-none px-2 py-1 border border-[var(--color-border)] text-[9px] font-semibold tracking-[0.18em] uppercase text-[var(--color-muted)]"
+        className="jht-globe-badge absolute top-3 right-3 z-10 pointer-events-none px-2.5 py-1.5 sm:px-2 sm:py-1 border border-[var(--color-border)] text-[11px] sm:text-[9px] font-semibold tracking-[0.18em] uppercase text-[var(--color-muted)]"
         style={{
           background: "color-mix(in srgb, var(--color-panel) 78%, transparent)",
         }}
@@ -406,7 +410,7 @@ export default function LandingGlobe() {
       {stop && (
         <div
           aria-hidden
-          className="jht-globe-card absolute left-3 bottom-3 sm:left-5 sm:bottom-5 z-10 pointer-events-none border border-[var(--color-border)] rounded-md p-3 text-[11px] w-[248px] sm:w-[280px]"
+          className="jht-globe-card absolute left-3 bottom-3 sm:left-5 sm:bottom-5 z-10 pointer-events-none border border-[var(--color-border)] rounded-md p-2.5 sm:p-3 text-[12px] sm:text-[11px] w-[216px] sm:w-[280px]"
           style={{
             maxWidth: "calc(100% - 24px)",
             background:
@@ -416,20 +420,20 @@ export default function LandingGlobe() {
           }}
         >
           <div
-            className="text-[8px] font-semibold tracking-widest uppercase mb-1"
+            className="text-[10px] sm:text-[8px] leading-tight font-semibold tracking-[0.08em] sm:tracking-widest uppercase mb-1"
             style={{ color: "var(--color-green)" }}
           >
             {tr("card_kicker")}
           </div>
           <div className="flex items-baseline gap-2 mb-1.5">
             <span
-              className="font-bold text-[13px] leading-tight"
+              className="font-bold text-[14px] sm:text-[13px] leading-tight"
               style={{ color: "var(--color-white)" }}
             >
               {stop.city}
             </span>
             <span
-              className="text-[10px]"
+              className="text-[11px] sm:text-[10px]"
               style={{ color: "var(--color-muted)" }}
             >
               {/* Il continente rende leggibile il filo del viaggio:
@@ -440,7 +444,7 @@ export default function LandingGlobe() {
           {stopRows.map((p) => (
             <div
               key={p.id}
-              className="flex items-center justify-between gap-3 py-1.5"
+              className="flex items-center justify-between gap-3 py-1 sm:py-1.5"
               style={{ borderTop: "1px solid var(--color-border)" }}
             >
               <span className="min-w-0">
@@ -451,7 +455,7 @@ export default function LandingGlobe() {
                   {p.title}
                 </span>
                 <span
-                  className="block text-[10px] truncate"
+                  className="block text-[11px] sm:text-[10px] truncate"
                   style={{ color: "var(--color-muted)" }}
                 >
                   {p.company}
