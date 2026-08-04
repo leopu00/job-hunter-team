@@ -6,8 +6,11 @@ import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import { createClient } from "@/lib/supabase/client";
 import {
+  syncTerminalOutcome,
   timestampAdvanced,
   waitForSyncOutcome,
+  type SyncObservation,
+  type SyncTerminalOutcome,
 } from "@/lib/sync-rendezvous";
 
 // "Sync now" lato CLOUD ([JHT-DATA-SYNC] fase 3). Mirror del CloudSyncStatusBanner
@@ -54,6 +57,7 @@ const T: Record<
     syncTimedOut: string;
     syncPushFailed: string;
     syncAckFailed: string;
+    syncSuperseded: string;
   }
 > = {
   it: {
@@ -77,6 +81,8 @@ const T: Record<
       "La VPS non è riuscita a inviare i dati. Controlla lo stato del team e riprova.",
     syncAckFailed:
       "I dati potrebbero essere arrivati, ma manca la conferma. Attendi qualche secondo e riprova.",
+    syncSuperseded:
+      "Una richiesta più recente ha sostituito questa sincronizzazione. Segui la scheda più recente.",
   },
   en: {
     now: "now",
@@ -98,6 +104,8 @@ const T: Record<
       "The VPS couldn't send the data. Check the team status and try again.",
     syncAckFailed:
       "The data may have arrived, but confirmation is missing. Wait a few seconds and try again.",
+    syncSuperseded:
+      "A newer request replaced this sync. Follow the most recent tab.",
   },
   es: {
     now: "ahora",
@@ -120,6 +128,8 @@ const T: Record<
       "El VPS no pudo enviar los datos. Comprueba el estado del equipo e inténtalo de nuevo.",
     syncAckFailed:
       "Puede que los datos hayan llegado, pero falta la confirmación. Espera unos segundos e inténtalo de nuevo.",
+    syncSuperseded:
+      "Una solicitud más reciente reemplazó esta sincronización. Sigue la pestaña más reciente.",
   },
   fr: {
     now: "maintenant",
@@ -142,6 +152,8 @@ const T: Record<
       "Le VPS n'a pas pu envoyer les données. Vérifiez l'état de l'équipe et réessayez.",
     syncAckFailed:
       "Les données sont peut-être arrivées, mais la confirmation manque. Attendez quelques secondes et réessayez.",
+    syncSuperseded:
+      "Une demande plus récente a remplacé cette synchronisation. Suivez l'onglet le plus récent.",
   },
   de: {
     now: "jetzt",
@@ -164,6 +176,8 @@ const T: Record<
       "Der VPS konnte die Daten nicht senden. Prüfe den Teamstatus und versuche es erneut.",
     syncAckFailed:
       "Die Daten sind möglicherweise angekommen, aber die Bestätigung fehlt. Warte kurz und versuche es erneut.",
+    syncSuperseded:
+      "Eine neuere Anfrage hat diese Synchronisierung ersetzt. Folge dem neuesten Tab.",
   },
   hu: {
     now: "most",
@@ -186,6 +200,8 @@ const T: Record<
       "A VPS nem tudta elküldeni az adatokat. Ellenőrizd a csapat állapotát, majd próbáld újra.",
     syncAckFailed:
       "Az adatok megérkezhettek, de nincs megerősítés. Várj néhány másodpercet, majd próbáld újra.",
+    syncSuperseded:
+      "Egy újabb kérés felváltotta ezt a szinkronizálást. A legutóbbi lapot kövesd.",
   },
   pt: {
     now: "agora",
@@ -208,6 +224,8 @@ const T: Record<
       "O VPS não conseguiu enviar os dados. Verifique o status da equipe e tente novamente.",
     syncAckFailed:
       "Os dados podem ter chegado, mas falta a confirmação. Aguarde alguns segundos e tente novamente.",
+    syncSuperseded:
+      "Uma solicitação mais recente substituiu esta sincronização. Acompanhe a aba mais recente.",
   },
 };
 
@@ -376,6 +394,21 @@ export default function CloudRefreshButton() {
     doRefresh(false);
   }
 
+  function finishTerminalOutcome(outcome: SyncTerminalOutcome) {
+    if (outcome.status === "completed") {
+      applyCompletion(outcome.completedAt, true);
+      return;
+    }
+    pendingRef.current = false;
+    requestArmedRef.current = false;
+    requestTokenRef.current++;
+    setSyncing(false);
+    if (outcome.status === "timeout") setError(t.syncTimedOut);
+    else if (outcome.status === "push_failed") setError(t.syncPushFailed);
+    else if (outcome.status === "ack_failed") setError(t.syncAckFailed);
+    else setError(t.syncSuperseded);
+  }
+
   // Tab di nuovo visibile con dati arretrati → recupera il refresh rimandato.
   useEffect(() => {
     const onVisible = () => {
@@ -458,24 +491,28 @@ export default function CloudRefreshButton() {
           });
           if (!statusRes.ok)
             return {
+              requestedAt: null,
               completedAt: null,
               lastAction: null,
               lastActionAt: null,
             };
           const status = (await statusRes.json()) as {
             state?: {
+              sync_requested_at?: string | null;
               sync_completed_at?: string | null;
               last_action?: string | null;
               last_action_at?: string | null;
             } | null;
           };
           return {
+            requestedAt: status.state?.sync_requested_at ?? null,
             completedAt: status.state?.sync_completed_at ?? null,
             lastAction: status.state?.last_action ?? null,
             lastActionAt: status.state?.last_action_at ?? null,
           };
         } catch {
           return {
+            requestedAt: null,
             completedAt: null,
             lastAction: null,
             lastActionAt: null,
@@ -494,15 +531,13 @@ export default function CloudRefreshButton() {
           applyCompletion(outcome.completedAt, true);
           return;
         }
-        pendingRef.current = false;
-        requestArmedRef.current = false;
-        setSyncing(false);
-        if (outcome?.status === "timeout") setError(t.syncTimedOut);
-        else if (outcome?.status === "push_failed")
-          setError(t.syncPushFailed);
-        else if (outcome?.status === "ack_failed")
-          setError(t.syncAckFailed);
-        else setError(t.vpsSlow);
+        if (outcome) finishTerminalOutcome(outcome);
+        else {
+          pendingRef.current = false;
+          requestArmedRef.current = false;
+          setSyncing(false);
+          setError(t.vpsSlow);
+        }
       }
     });
   }
@@ -515,8 +550,30 @@ export default function CloudRefreshButton() {
     if (!remote || !loggedIn) return;
     const supabase = createClient();
 
-    type StateRow = { sync_completed_at?: string | null };
+    type StateRow = {
+      sync_requested_at?: string | null;
+      sync_completed_at?: string | null;
+      last_action?: string | null;
+      last_action_at?: string | null;
+    };
     const apply = (row: StateRow | null) => {
+      if (pendingRef.current && requestArmedRef.current) {
+        const observation: SyncObservation = {
+          requestedAt: row?.sync_requested_at ?? null,
+          completedAt: row?.sync_completed_at ?? null,
+          lastAction: row?.last_action ?? null,
+          lastActionAt: row?.last_action_at ?? null,
+        };
+        const outcome = syncTerminalOutcome(
+          observation,
+          baselineRef.current,
+          requestedAtRef.current,
+        );
+        if (outcome) finishTerminalOutcome(outcome);
+        // Durante un rendezvous il solo timestamp non basta: CAS + request id
+        // devono correlare l'ACK al tab corrente.
+        return;
+      }
       applyCompletion(row?.sync_completed_at ?? null);
     };
 
@@ -524,7 +581,9 @@ export default function CloudRefreshButton() {
       try {
         const { data } = await supabase
           .from("team_state")
-          .select("sync_completed_at")
+          .select(
+            "sync_requested_at,sync_completed_at,last_action,last_action_at",
+          )
           .maybeSingle();
         if (mounted.current) apply(data as StateRow | null);
       } catch {

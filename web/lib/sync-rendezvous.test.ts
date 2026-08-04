@@ -41,6 +41,7 @@ describe("round-trip client -> VPS -> client senza evento Realtime", () => {
       baselineCompletion: baseline,
       requestedAt,
       readObservation: async () => ({
+        requestedAt,
         completedAt: states[reads++] ?? null,
         lastAction: null,
         lastActionAt: null,
@@ -69,6 +70,7 @@ describe("round-trip client -> VPS -> client senza evento Realtime", () => {
       baselineCompletion: baseline,
       requestedAt: "2026-08-04T14:00:01.000Z",
       readObservation: async () => ({
+        requestedAt: "2026-08-04T14:00:01.000Z",
         completedAt: baseline,
         lastAction: null,
         lastActionAt: null,
@@ -95,7 +97,12 @@ describe("round-trip client -> VPS -> client senza evento Realtime", () => {
       readObservation: async () => {
         reads += 1;
         cancelled = true;
-        return { completedAt: null, lastAction: null, lastActionAt: null };
+        return {
+          requestedAt: "2026-08-04T14:00:01.000Z",
+          completedAt: null,
+          lastAction: null,
+          lastActionAt: null,
+        };
       },
       isCancelled: () => cancelled,
       sleep: async () => {
@@ -120,6 +127,7 @@ describe("failure server correlato al click", () => {
     expect(
       syncTerminalOutcome(
         {
+          requestedAt,
           completedAt: baseline,
           lastAction,
           lastActionAt: "2026-08-04T14:00:02.000Z",
@@ -135,6 +143,7 @@ describe("failure server correlato al click", () => {
     expect(
       syncTerminalOutcome(
         {
+          requestedAt,
           completedAt,
           lastAction: "sync:completed",
           lastActionAt: "2026-08-04T14:00:02.001Z",
@@ -149,6 +158,7 @@ describe("failure server correlato al click", () => {
     expect(
       syncTerminalOutcome(
         {
+          requestedAt,
           completedAt: "non-una-data",
           lastAction: "sync:completed",
           lastActionAt: "2026-08-04T14:00:02.001Z",
@@ -163,6 +173,7 @@ describe("failure server correlato al click", () => {
     expect(
       syncTerminalOutcome(
         {
+          requestedAt,
           completedAt: baseline,
           lastAction: "sync:push_failed",
           lastActionAt: requestedAt,
@@ -174,6 +185,7 @@ describe("failure server correlato al click", () => {
     expect(
       syncTerminalOutcome(
         {
+          requestedAt,
           completedAt: baseline,
           lastAction: "chat:request_failed",
           lastActionAt: "2026-08-04T14:00:02.000Z",
@@ -185,6 +197,7 @@ describe("failure server correlato al click", () => {
     expect(
       syncTerminalOutcome(
         {
+          requestedAt,
           completedAt: baseline,
           lastAction: "sync:timeout",
           lastActionAt: "2026-08-04T14:00:02.000Z",
@@ -195,13 +208,29 @@ describe("failure server correlato al click", () => {
     ).toBeNull();
   });
 
-  it("un completion nuovo prevale su un action precedente", () => {
+  it("un failure terminale correlato prevale su freshness successiva", () => {
     expect(
       syncTerminalOutcome(
         {
+          requestedAt,
           completedAt: "2026-08-04T14:00:03.000Z",
           lastAction: "sync:push_failed",
           lastActionAt: "2026-08-04T14:00:02.000Z",
+        },
+        baseline,
+        requestedAt,
+      ),
+    ).toEqual({ status: "push_failed" });
+  });
+
+  it("un completion nuovo ignora un failure della richiesta precedente", () => {
+    expect(
+      syncTerminalOutcome(
+        {
+          requestedAt,
+          completedAt: "2026-08-04T14:00:03.000Z",
+          lastAction: "sync:push_failed",
+          lastActionAt: "2026-08-04T14:00:00.500Z",
         },
         baseline,
         requestedAt,
@@ -210,5 +239,35 @@ describe("failure server correlato al click", () => {
       status: "completed",
       completedAt: "2026-08-04T14:00:03.000Z",
     });
+  });
+
+  it("non attribuisce a un tab il completion della richiesta concorrente", () => {
+    expect(
+      syncTerminalOutcome(
+        {
+          requestedAt: "2026-08-04T14:00:03.000Z",
+          completedAt: "2026-08-04T14:00:04.000Z",
+          lastAction: "sync:completed",
+          lastActionAt: "2026-08-04T14:00:04.000Z",
+        },
+        baseline,
+        requestedAt,
+      ),
+    ).toEqual({ status: "superseded" });
+  });
+
+  it("ignora un evento Realtime vecchio arrivato dopo la propria PATCH", () => {
+    expect(
+      syncTerminalOutcome(
+        {
+          requestedAt: "2026-08-04T14:00:00.500Z",
+          completedAt: "2026-08-04T14:00:02.000Z",
+          lastAction: "sync:completed",
+          lastActionAt: "2026-08-04T14:00:02.000Z",
+        },
+        baseline,
+        requestedAt,
+      ),
+    ).toBeNull();
   });
 });

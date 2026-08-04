@@ -23,6 +23,7 @@ export function timestampAdvanced(
 export type SyncFailureStatus = "timeout" | "push_failed" | "ack_failed";
 
 export interface SyncObservation {
+  requestedAt: string | null;
   completedAt: string | null;
   lastAction: string | null;
   lastActionAt: string | null;
@@ -30,6 +31,7 @@ export interface SyncObservation {
 
 export type SyncTerminalOutcome =
   | { status: "completed"; completedAt: string }
+  | { status: "superseded" }
   | { status: SyncFailureStatus };
 
 /**
@@ -42,33 +44,44 @@ export function syncTerminalOutcome(
   baselineCompletion: string | null,
   requestedAt: string | null,
 ): SyncTerminalOutcome | null {
-  if (timestampAdvanced(observation.completedAt, baselineCompletion)) {
-    return { status: "completed", completedAt: observation.completedAt! };
-  }
-
-  if (!requestedAt || !observation.lastActionAt) return null;
+  if (!requestedAt || !observation.requestedAt) return null;
   const requestedMs = Date.parse(requestedAt);
-  const actionMs = Date.parse(observation.lastActionAt);
-  if (
-    Number.isNaN(requestedMs) ||
-    Number.isNaN(actionMs) ||
-    actionMs <= requestedMs
-  )
-    return null;
+  const observedRequestMs = Date.parse(observation.requestedAt);
+  if (Number.isNaN(requestedMs) || Number.isNaN(observedRequestMs)) return null;
+
+  // Ogni tab osserva soltanto l'ACK della richiesta aperta dal proprio PATCH.
+  // Se una richiesta piu' nuova ha sostituito questa riga, l'attesa corrente
+  // termina senza attribuirsi il completion dell'altro tab. Un evento piu'
+  // vecchio puo' invece essere una consegna Realtime in ritardo e va ignorato.
+  if (observedRequestMs > requestedMs) return { status: "superseded" };
+  if (observedRequestMs < requestedMs) return null;
+
+  const actionMs = Date.parse(observation.lastActionAt ?? "");
+  const actionIsCurrent = Number.isFinite(actionMs) && actionMs > requestedMs;
   const action = observation.lastAction;
+  // Un segnale di freschezza generico può avanzare `sync_completed_at` dopo
+  // un failure già pubblicato. L'esito terminale correlato deve prevalere:
+  // quel click non diventa verde retroattivamente.
+  if (actionIsCurrent && action === "sync:timeout")
+    return { status: "timeout" };
+  if (actionIsCurrent && action === "sync:push_failed")
+    return { status: "push_failed" };
+  if (actionIsCurrent && action === "sync:ack_failed")
+    return { status: "ack_failed" };
   // La VPS puo' completare mentre la PATCH che apre il rendezvous sta ancora
   // tornando al browser. In quel caso la risposta contiene gia' il nuovo
   // completion e il client lo adotta come baseline: l'action atomica e
   // correlata evita di attendere un secondo avanzamento che non arrivera'.
   if (
+    actionIsCurrent &&
     action === "sync:completed" &&
     observation.completedAt &&
     !Number.isNaN(Date.parse(observation.completedAt))
   )
     return { status: "completed", completedAt: observation.completedAt };
-  if (action === "sync:timeout") return { status: "timeout" };
-  if (action === "sync:push_failed") return { status: "push_failed" };
-  if (action === "sync:ack_failed") return { status: "ack_failed" };
+  if (timestampAdvanced(observation.completedAt, baselineCompletion)) {
+    return { status: "completed", completedAt: observation.completedAt! };
+  }
   return null;
 }
 
