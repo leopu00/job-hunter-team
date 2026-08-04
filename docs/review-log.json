@@ -1177,7 +1177,7 @@
     },
     {
       "path": "game/assets/gen-art/LOG.md",
-      "description": "🎨 gen-art — log dell'Art Director (mac-leone:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro",
+      "description": "🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro",
       "last_review": null
     },
     {
