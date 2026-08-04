@@ -27,6 +27,14 @@ SCOUT_COORD = os.path.join(SKILLS_DIR, 'scout_coord.py')
 
 AGENTS_DIR = os.path.join(REPO_ROOT, 'agents')
 
+SCORER_COMPONENT_RANGES = {
+    'stack_match': 40,
+    'experience_fit': 10,
+    'remote_fit': 25,
+    'salary_fit': 20,
+    'strategic_fit': 15,
+}
+
 # ---------------------------------------------------------------------------
 # Helper (stesso pattern di test_pipeline.py)
 # ---------------------------------------------------------------------------
@@ -44,6 +52,24 @@ with open({repr(script)}) as _f:
 exec(_code, {{'__file__': {repr(script)}, '__name__': '__main__'}})
 """)
     return subprocess.run([sys.executable, str(wrapper)], capture_output=True, text=True)
+
+
+def test_scorer_prompts_match_the_database_component_ranges():
+    """Ogni prompt localizzato deve insegnare gli stessi limiti del DB."""
+    scorer_dir = os.path.join(AGENTS_DIR, 'scorer')
+    prompts = [
+        os.path.join(scorer_dir, name)
+        for name in os.listdir(scorer_dir)
+        if name == 'scorer.md' or (name.startswith('scorer.') and name.endswith('.md'))
+    ]
+    assert prompts
+    for prompt in prompts:
+        with open(prompt, encoding='utf-8') as handle:
+            text = handle.read()
+        for column, maximum in SCORER_COMPONENT_RANGES.items():
+            assert f'| {maximum} | `{column}` |' in text, (
+                f'{os.path.basename(prompt)} non documenta {column}=0-{maximum}'
+            )
 
 
 @pytest.fixture()

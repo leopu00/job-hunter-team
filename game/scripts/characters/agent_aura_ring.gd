@@ -23,6 +23,12 @@ func set_hovered(on: bool) -> void:
 
 func _process(delta: float) -> void:
 	_phase += delta
+	# Sul profilo low-spec l'aura statica viene rasterizzata una volta sola:
+	# 16 agenti × quattro primitive antialiasate costavano 129 draw call e
+	# continuavano a ritessellarsi anche senza interazione. L'hover resta vivo
+	# perché è feedback diretto del mouse.
+	if GfxProfile.low() and not hovered:
+		return
 	# Il respiro a riposo e quasi impercettibile; in hover diventa un segnale
 	# intenzionale, senza lampeggi aggressivi nell'ufficio pieno.
 	# Cadenza a riposo 4 Hz: l'onda (sin a 1.7 rad/s) resta fluida, ma le 16
@@ -33,6 +39,15 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var wave := 0.5 + 0.5 * sin(_phase * (4.8 if hovered else 1.7))
+	if GfxProfile.low() and not hovered:
+		# Identità di reparto conservata con due primitive, senza i tre anelli di
+		# glow. È deliberatamente stabile: niente redraw periodici a riposo.
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.46))
+		draw_circle(Vector2.ZERO, 31.0,
+				Color(accent.r, accent.g, accent.b, 0.10))
+		draw_arc(Vector2.ZERO, 34.0, 0.0, TAU, 20,
+				Color(accent.r, accent.g, accent.b, 0.72), 3.2, true)
+		return
 	# Anche al minimo zoom il tratto deve restare sopra i due pixel percepiti:
 	# la vecchia aura da 2 world-pixel e alpha 0.24 spariva sul tappeto. Lo
 	# stato base ora e gia un neon leggibile; l'hover aggiunge dimensione,

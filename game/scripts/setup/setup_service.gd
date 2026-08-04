@@ -280,6 +280,15 @@ func _self_test_vps_setup() -> void:
 	_finalize(gated)
 	if not bool(gated.get("ready", false)):
 		failures.append("setup completo non riconosciuto come pronto")
+	if _tmux_has_operational_team("ASSISTENTE\nDOTTORE\nMANTENITORE\n"):
+		failures.append("sessione tecnica scambiata per team operativo")
+	if not _tmux_has_operational_team("ASSISTENTE\nCAPITANO\n"):
+		failures.append("Capitano attivo non riconosciuto come team operativo")
+	if _agents_have_operational_team([{"role": "assistente", "active": true}]):
+		failures.append("Assistente remoto scambiato per team operativo")
+	if not _agents_have_operational_team([
+			{"role": "coordinatore", "active": true}]):
+		failures.append("Coordinatore remoto non riconosciuto come team operativo")
 
 	# ── La cartella dati è del team: nessuno la tocca alle spalle ────────
 	# Tre bug diversi in una giornata (config non scrivibile, runtime non
@@ -385,7 +394,7 @@ func _apply_probe(next: Dictionary) -> void:
 		next["container_exists"] = true
 		next["container_running"] = true
 		next["container_state"] = "running · VPS"
-		next["team_running"] = not BackendBus.agents.is_empty()
+		next["team_running"] = _agents_have_operational_team(BackendBus.agents)
 		var remote_provider := _ui_provider_id(str(
 				BackendBus.live_settings.get("active_provider", "")))
 		if remote_provider != "":
@@ -589,7 +598,8 @@ static func _probe_host(home: String) -> Dictionary:
 		if d["container_running"]:
 			var tmux := _run("docker", PackedStringArray(["exec", "jht", "tmux",
 					"list-sessions", "-F", "#{session_name}"] ))
-			d["team_running"] = tmux["code"] == 0 and str(tmux["out"]) != ""
+			d["team_running"] = tmux["code"] == 0 \
+					and _tmux_has_operational_team(str(tmux["out"]))
 	var config := _read_json(home.path_join("jht.config.json"))
 	d["hours_ready"] = _has_working_hours(config)
 	var active := _ui_provider_id(str(config.get("active_provider", "")))
@@ -601,6 +611,30 @@ static func _probe_host(home: String) -> Dictionary:
 		d["active_plan"] = _declared_plan(config, active)
 		d["plan_ready"] = str(d["active_plan"]) != ""
 	return d
+
+
+## L'Assistente e' autorizzato a vivere durante l'onboarding del profilo; anche
+## Dottore/Mantenitore sono sessioni tecniche, non il team operativo richiesto
+## dall'utente. Il Capitano nasce soltanto dal vero `team start` e ne e' quindi
+## il marker minimo affidabile. "Qualunque tmux" faceva apparire TEAM ATTIVO e
+## disabilitava il pulsante mentre il setup era ancora 1/4.
+static func _tmux_has_operational_team(raw: String) -> bool:
+	for session in raw.split("\n", false):
+		if str(session).strip_edges() == "CAPITANO":
+			return true
+	return false
+
+
+static func _agents_have_operational_team(agents: Array) -> bool:
+	for value in agents:
+		if not (value is Dictionary):
+			continue
+		var agent := value as Dictionary
+		var role := str(agent.get("role", "")).strip_edges().to_lower()
+		if role in ["capitano", "coordinatore"] \
+				and bool(agent.get("active", true)):
+			return true
+	return false
 
 
 ## Quale abbonamento ha l'utente. Il provider da solo non basta: un piano da
@@ -2985,15 +3019,38 @@ static func graceful_shutdown_ready() -> bool:
 
 
 ## Esegue lo spegnimento. Bloccante: la chiama un thread, non il main loop.
+##
+## `OS.execute` qui non va usato: se Docker Desktop smette di rispondere il
+## worker non torna più e game.gd, che deve attenderlo prima di smontare gli
+## autoload, resta per sempre sul velo di chiusura. Tre budget da 5 secondi
+## tengono l'intera sequenza sotto la rete di sicurezza dei 20 secondi.
+const SHUTDOWN_COMMAND_TIMEOUT_MS := 5000
+
+
+static func _run_shutdown_command(argv: PackedStringArray) -> Dictionary:
+	var pid := OS.create_process("docker", argv, false)
+	if pid <= 0:
+		return {"code": -1, "timeout": false}
+	var started := Time.get_ticks_msec()
+	while OS.is_process_running(pid):
+		if Time.get_ticks_msec() - started >= SHUTDOWN_COMMAND_TIMEOUT_MS:
+			OS.kill(pid)
+			return {"code": -1, "timeout": true}
+		OS.delay_msec(20)
+	return {"code": OS.get_process_exit_code(pid), "timeout": false}
+
+
 func shutdown_team() -> void:
 	for argv: PackedStringArray in shutdown_commands(_vps_config()):
-		var res := _run("docker", argv)
-		Log.call_deferred("info", "setup", "spegnimento: docker %s → %d"
-				% [" ".join(argv), res["code"]])
+		var res := _run_shutdown_command(argv)
+		var suffix := " (timeout %ds)" % (SHUTDOWN_COMMAND_TIMEOUT_MS / 1000) \
+				if bool(res.get("timeout", false)) else ""
+		Log.call_deferred("info", "setup", "spegnimento: docker %s → %d%s"
+				% [" ".join(argv), res["code"], suffix])
 
 
 func _vps_config() -> Dictionary:
-	return BackendBus.load_vps_config() if BackendBus.is_live() else {}
+	return BackendBus.load_vps_config() if BackendBus.is_remote() else {}
 
 
 static func _run_ssh(vps: Dictionary, command: String) -> Dictionary:

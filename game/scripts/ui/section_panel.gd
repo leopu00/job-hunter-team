@@ -2421,12 +2421,14 @@ func _build_language() -> void:
 		btn.add_theme_color_override("font_color",
 				Palette.GREEN if selected else Palette.BASE)
 		btn.add_theme_color_override("font_hover_color", Palette.MINT)
-		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		var code := str(l)
 		btn.pressed.connect(func() -> void:
 			UIStrings.set_lang(code)
 			_build())
 		_content.add_child(btn)
+	if UIStrings.lang != "it":
+		_content.add_child(_wrapped_label(
+				UIStrings.t("lang.narrative_note"), 13, Palette.YELLOW))
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("lang.note"), 13, Palette.DIM))
 

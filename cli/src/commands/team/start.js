@@ -105,6 +105,24 @@ async function startActionContainer(agentArg, options = {}) {
   let errored = 0;
 
   if (useBootstrap) {
+    // Un secondo click su "Avvia team" mentre il core e' gia' operativo non
+    // deve rifare quattro sync cloud, riavviare i daemon bridge e ripetere gli
+    // stagger. Oltre a 30-40 secondi di attesa, quel lavoro interrompeva
+    // processi sani proprio mentre l'utente cercava soltanto conferma. I
+    // watchdog del container sorvegliano separatamente bridge e worker: con i
+    // quattro agenti core vivi, Start e' quindi un no-op idempotente.
+    const coreSessions = ['ASSISTENTE', 'SENTINELLA', 'MENTOR', 'CAPITANO'];
+    if (coreSessions.every((session) => isSessionActive(session))) {
+      for (const session of coreSessions) {
+        console.log(`  ${c.yellow('⏭')} ${session} — gia attivo`);
+      }
+      console.log('');
+      console.log(`Risultato: ${c.green('0 avviati')}, ${c.yellow('4 gia attivi')}`);
+      console.log(c.dim('  Team gia operativo: nessun bridge o sync riavviato.'));
+      console.log('');
+      return;
+    }
+
     // Pull desired-state cloud → SQLite locale PRIMA dello spawn agenti:
     // recupera write_requested cliccato via web mentre container era
     // offline. Senza questo step, il Capitano non vede mai i flag toggle-on
@@ -156,8 +174,12 @@ async function startActionContainer(agentArg, options = {}) {
       console.log(c.dim(`  ℹ pull profilo non applicato: ${lastLine}`));
     }
 
+    // Il delay di ogni voce serve a far stabilizzare la voce precedente. In
+    // un retry idempotente, se la precedente era già attiva, ripetere tutti i
+    // 41 secondi di attesa non protegge nulla e fa sembrare morto il click.
+    let previousStarted = false;
     for (const item of bootstrap) {
-      if (item.preDelayMs && item.preDelayMs > 0) {
+      if (previousStarted && item.preDelayMs && item.preDelayMs > 0) {
         console.log(c.dim(`  ⏳ Attendo ${Math.round(item.preDelayMs / 1000)}s prima di ${item.session}...`));
         await sleep(item.preDelayMs);
       }
@@ -165,6 +187,7 @@ async function startActionContainer(agentArg, options = {}) {
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
       else errored++;
+      previousStarted = result === 'started';
     }
   } else {
     const parsed = parseAgentArg(agentArg);

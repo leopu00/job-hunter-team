@@ -471,6 +471,7 @@ const S := {
 	"hours.saved": "✓ horarios guardados — el pacing del equipo se adapta desde el próximo tick",
 
 	"lang.intro": "Idioma de la interfaz — los 7 idiomas del sitio.",
+	"lang.narrative_note": "// nota: el recorrido narrativo y sus opciones están disponibles actualmente en italiano",
 	"lang.note": "// se aplica al momento a los paneles; reabre los ya abiertos para verlos traducidos",
 
 	"stats.hint": "// clic en una barra para filtrar: los demás gráficos se actualizan",

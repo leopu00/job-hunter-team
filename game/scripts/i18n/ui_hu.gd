@@ -471,6 +471,7 @@ const S := {
 	"hours.saved": "✓ munkaidő elmentve — a pacing a következő ticktől alkalmazkodik",
 
 	"lang.intro": "A felület nyelve — a weboldal 7 nyelve.",
+	"lang.narrative_note": "// megjegyzés: a történetvezérelt túra és választásai jelenleg olaszul érhetők el",
 	"lang.note": "// azonnal érvényes a panelekre; a már nyitottakat nyisd újra a fordításhoz",
 
 	"stats.hint": "// kattints egy sávra a szűréshez: a többi grafikon frissül",

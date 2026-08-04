@@ -53,6 +53,8 @@ function makeSandbox(opts: {
   /** Esito degli step: 'ok', 'bump' (cambia versione), 'fail', 'hang' (non torna mai). */
   update?: "ok" | "bump" | "fail" | "hang";
   newVersion?: string;
+  /** Versione esposta dal registry npm; per default segue l'esito atteso. */
+  publishedVersion?: string;
 }): Sandbox {
   const root = mkdtempSync(path.join(tmpdir(), "jht-autoupdate-"));
   const bin = path.join(root, "bin");
@@ -70,9 +72,19 @@ function makeSandbox(opts: {
     outcome === "ok" ? "exit 0" :
     outcome === "hang" ? "sleep 60" :
     'echo "npm error code ENOTFOUND registry.npmjs.org" >&2\nexit 1';
-  for (const tool of ["npm", "sh"]) {
-    writeExec(path.join(bin, tool), `echo "$*" >> "${root}/${tool}.calls"\n${effect}`);
-  }
+  const published = opts.publishedVersion
+    ?? (outcome === "bump" ? (opts.newVersion ?? "9.9.9")
+      : outcome === "ok" ? (opts.version ?? "1.0.0")
+        : "9.9.9");
+  writeExec(path.join(bin, "npm"), [
+    `echo "$*" >> "${root}/npm.calls"`,
+    'if [ "$1" = "view" ]; then',
+    `  echo "${published}"`,
+    '  exit 0',
+    'fi',
+    effect,
+  ].join("\n"));
+  writeExec(path.join(bin, "sh"), `echo "$*" >> "${root}/sh.calls"\n${effect}`);
 
   const providers: Record<string, unknown> = { [opts.provider]: { auth_method: "subscription" } };
   if (opts.model) (providers[opts.provider] as Record<string, unknown>).model = opts.model;
@@ -132,6 +144,8 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     expect(r.out).toContain("2.4.0 → 2.4.0");
     expect(r.out).toContain("INVARIATA");
     expect(r.out).toContain("era gia' all'ultima versione");
+    expect(r.out).toContain("installazione saltata");
+    expect(sb.calls("npm").some((c) => c.startsWith("install "))).toBe(false);
     // Nessun rumore al Capitano quando non è successo niente.
     expect(sb.mailbox()).toHaveLength(0);
   });
@@ -178,6 +192,7 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     const npmCalls = sb.calls("npm").join("\n");
     expect(npmCalls).toContain("@anthropic-ai/claude-code@latest");
     expect(npmCalls).not.toContain("@openai/codex");
+    expect(npmCalls).not.toContain("install -g");
     expect(sb.calls("sh")).toHaveLength(0);
   });
 
