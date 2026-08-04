@@ -54,6 +54,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - uses: chickensoft-games/setup-godot@v2.4.1
         with:
           version: 4.7.0
@@ -309,10 +313,29 @@ jobs:
           tar -C builds/linux -czf builds/linux/job-hunter-team-linux-x64.tar.gz \
             job-hunter-team.x86_64
 
+      # Il sidecar nasce sullo stesso runner e DOPO firma/notarizzazione e
+      # packaging. Il job release ricalcola l'hash dei byte scaricati e rifiuta
+      # un asset se tag, commit, dimensione o SHA-256 non coincidono: un file
+      # recuperato da un altro run non puo' essere pubblicato per errore.
+      - name: Record immutable build identity
+        env:
+          RELEASE_ASSET: ${{ matrix.artifact_path }}
+        run: |
+          TAG_SHA="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          python scripts/release_artifacts.py record \
+            --asset "$RELEASE_ASSET" \
+            --output "${RELEASE_ASSET}.provenance.json" \
+            --tag "$GITHUB_REF_NAME" \
+            --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-root .
+
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_path }}
+          path: |
+            ${{ matrix.artifact_path }}
+            ${{ matrix.artifact_path }}.provenance.json
 
   release:
     name: GitHub Release
@@ -328,7 +351,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Ensure tag points to production HEAD
+        id: source
         run: |
           git fetch origin production --depth=1
           TAG_SHA=$(git rev-list -n 1 "${GITHUB_REF_NAME}")
@@ -338,6 +366,7 @@ jobs:
             echo "Tag releases only from the current production HEAD."
             exit 1
           fi
+          echo "tag_sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v7
         with:
@@ -408,6 +437,21 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Verify tagged artifact provenance and write SHA-256 checksums
+        env:
+          TAG_SHA: ${{ steps.source.outputs.tag_sha }}
+        run: |
+          python scripts/release_artifacts.py verify \
+            --directory release-assets \
+            --expected-asset job-hunter-team.exe \
+            --expected-asset job-hunter-team.zip \
+            --expected-asset job-hunter-team-linux-x64.tar.gz \
+            --tag "$GITHUB_REF_NAME" \
+            --commit "$TAG_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --checksums release-assets/SHA256SUMS \
+            --provenance release-assets/RELEASE-PROVENANCE.json
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -425,6 +469,8 @@ jobs:
 
             `job-hunter-team.exe` is not code-signed, so Windows shows a **"Windows protected your PC"** screen on first launch: click **More info** → **Run anyway**. The macOS `.zip` is signed and notarized by Apple; the Linux `.tar.gz` is unsigned as well.
 
+            `SHA256SUMS` verifies the downloaded bytes. `RELEASE-PROVENANCE.json` records the exact tagged commit from which every attached asset was built.
+
             ---
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for the full history.
           draft: false
@@ -433,5 +479,7 @@ jobs:
             release-assets/*.exe
             release-assets/*.zip
             release-assets/*.tar.gz
+            release-assets/SHA256SUMS
+            release-assets/RELEASE-PROVENANCE.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
