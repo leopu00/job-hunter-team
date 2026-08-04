@@ -732,6 +732,7 @@ describe("canale della chat senza lettore diretto", () => {
     expect(post?.auth).toBe("Bearer jht_sync_esempio");
     expect(post?.body).toEqual({
       delivered_ids: ["11111111-1111-4111-8111-111111111111"],
+      close_rendezvous: true,
     });
   });
 
