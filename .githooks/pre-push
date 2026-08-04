@@ -22,14 +22,12 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     # Cancellazione di un ref: niente contenuto da ispezionare.
     [ "$local_sha" = "$ZERO" ] && continue
 
-    if [ "$remote_sha" = "$ZERO" ]; then
-        # Ref nuovo sul remote: sono nuovi solo i commit che nessun altro ref
-        # remoto raggiunge gia'. Senza `--not --remotes` un branch appena creato
-        # farebbe rileggere l'intera storia del repo a ogni push.
-        commits=$(git rev-list "$local_sha" --not --remotes || true)
-    else
-        commits=$(git rev-list "${remote_sha}..${local_sha}" || true)
-    fi
+    # Ispeziona soltanto commit non ancora raggiungibili da alcun ref remoto.
+    # Un merge master -> production rende raggiungibili dalla production molti
+    # commit gia' pubblicati su origin/master: riesaminarli non aggiunge
+    # protezione e genera falsi blocchi su esempi storici. Il nuovo merge commit,
+    # invece, non e' ancora su alcun ref remoto e viene sempre controllato.
+    commits=$(git rev-list "$local_sha" --not --remotes || true)
 
     [ -z "$commits" ] && continue
 
@@ -59,6 +57,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
               | grep -oE '[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' \
               | grep -vE '@(jobhunterteam\.ai|example\.(com|org|net)|[a-z-]+\.invalid|users\.noreply\.github\.com|anthropic\.com)$' \
               | grep -vE '^(nome|name|nombre|nom|user|utente|tuo|your|your_name|email)[._-]?[a-z]*@' \
+              | grep -vE '^((deinname|nev|oteunome|tunombre|tuonome|votrenom|yourname)\.jht@gmail\.com|nev@gmx\.com|(jobalerts-noreply|jobs-listings)@linkedin\.com)$' \
               | grep -vE '@(types|supabase|vercel|next|radix-ui|testing-library|eslint|babel|playwright|tailwindcss)/' \
               | sort -u | head -2 || true)
         [ -n "$mails" ] && OFFENDING="$OFFENDING\n  ${commit:0:9}  email: $(echo "$mails" | tr '\n' ' ')"
