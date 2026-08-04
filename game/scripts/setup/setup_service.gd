@@ -1507,10 +1507,11 @@ static func _with_exit_report(command: String, token: String) -> String:
 
 ## Windows non espone l'exit code del processo raccolto da Godot. Delayed
 ## expansion non può restare attiva sul comando ospitato: cambierebbe i path e
-## gli argomenti contenenti `!`. `call` espande ERRORLEVEL soltanto DOPO il
-## comando; PowerShell scrive l'OSC e termina con lo stesso codice catturato.
+## gli argomenti contenenti `!`. Il caret conserva i percento alla prima
+## espansione di `cmd /c`, così `call` legge ERRORLEVEL solo dopo il comando.
+## PowerShell scrive l'OSC e termina con lo stesso codice catturato.
 static func _with_windows_exit_report(command: String, token: String) -> String:
-	return ("( %s ) 1>&2 & call set \"JHT_EXIT_CODE=%%%%errorlevel%%%%\" & " \
+	return ("( %s ) 1>&2 & call set JHT_EXIT_CODE=^%%errorlevel^%% & " \
 			+ "powershell.exe -NoProfile -NonInteractive -Command " \
 			+ "\"[Console]::Out.Write([char]27 + ']1337;JHTExit=%s:' " \
 			+ "+ $env:JHT_EXIT_CODE + [char]7); " \
