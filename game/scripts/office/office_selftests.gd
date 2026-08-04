@@ -1428,16 +1428,36 @@ func _guided_onboarding_selftest() -> void:
 			"il pannello Docker non segnala il runtime da aggiornare")
 	check.call(docker_buttons.contains(UIStrings.t("setup.runtime_update")),
 			"il pannello Docker non offre l'aggiornamento del runtime")
-	check.call(SetupService._runtime_pull_can_fallback("sha256:locale"),
-			"un pull offline scarta l'immagine locale già pronta")
-	check.call(not SetupService._runtime_pull_can_fallback(""),
-			"un pull fallito senza immagine locale viene trattato come recuperabile")
-	check.call(SetupService._runtime_update_result_message(
-			"sha256:nuova", "sha256:nuova", "sha256:vecchia").contains("aggiornato"),
-			"la ricreazione di un container stale viene dichiarata già aggiornata")
-	check.call(SetupService._runtime_update_result_message(
-			"sha256:uguale", "sha256:uguale", "sha256:uguale").contains("già"),
-			"un runtime davvero invariato non viene riconosciuto")
+	# Il gioco non ricostruisce piu' pull/compose: il wrapper host e' l'unico
+	# proprietario del deploy. stdout deve quindi essere UNA riga JSON finale;
+	# l'exit code e il campo ok devono concordare prima che la UI dica successo.
+	var upgrade_ok := SetupService.parse_upgrade_result(JSON.stringify({
+		"ok": true, "changed": true, "phase": "complete",
+		"previous": {"version": "1.0.0", "image": "sha256:old"},
+		"current": {"version": "1.1.0", "image": "sha256:new"},
+		"restartRequired": false, "message": "Aggiornamento completato",
+		"rolledBack": false,
+	}), 0)
+	check.call(bool(upgrade_ok.get("ok", false))
+			and str(upgrade_ok.get("current", {}).get("version", "")) == "1.1.0",
+			"il risultato JSON valido dell'upgrade non espone la versione attiva")
+	var upgrade_rollback := SetupService.parse_upgrade_result(JSON.stringify({
+		"ok": false, "changed": false, "phase": "recovery",
+		"previous": {"version": "1.0.0", "image": "sha256:old"},
+		"current": {"version": "1.0.0", "image": "sha256:old"},
+		"restartRequired": false, "message": "Ripristino completato",
+		"rolledBack": true,
+	}), 1)
+	check.call(not bool(upgrade_rollback.get("ok", true))
+			and bool(upgrade_rollback.get("rolledBack", false)),
+			"il rollback host-side non viene dichiarato alla UI")
+	var upgrade_bad_frame := SetupService.parse_upgrade_result(
+			JSON.stringify(upgrade_ok) + "\nlog diagnostico", 0)
+	check.call(bool(upgrade_bad_frame.get("protocol_error", false)),
+			"stdout con piu' righe viene accettato come risposta upgrade")
+	var upgrade_bad_exit := SetupService.parse_upgrade_result(JSON.stringify(upgrade_ok), 1)
+	check.call(bool(upgrade_bad_exit.get("protocol_error", false)),
+			"successo JSON e exit failure possono divergere")
 	docker_panel.queue_free()
 
 	# Scelta dell'abbonamento: i tagli devono andare A CAPO. Con cinque in
