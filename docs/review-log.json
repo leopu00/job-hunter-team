@@ -1439,6 +1439,16 @@
       "path": "docs/internal/ops/recording-profiles.md",
       "description": "Procedura interna per generare e verificare profili sintetici deterministici destinati alle registrazioni web e gioco",
       "last_review": null
+    },
+    {
+      "path": "docs/guides/TUTORIALS.md",
+      "description": "Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/TUTORIALS-LOCALIZATIONS.md",
+      "description": "Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian",
+      "last_review": null
     }
   ]
 }

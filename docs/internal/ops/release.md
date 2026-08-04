@@ -6,9 +6,12 @@ Cutting a release means pushing a `vX.Y.Z` tag that points at the **`production`
 
 ---
 
-## 🔢 The four version fields
+## 🔢 Release version fields
 
-`scripts/check-release-version.sh` is the first CI job and it compares the tag against **four** places. All of them must be bumped together:
+`scripts/check-release-version.sh` is the first CI job. It compares the tag
+against the application metadata below, every distributed package manifest and
+lockfile, the NSIS fallback, the embedded payload displays, and every
+production container reference. All of them must be bumped together:
 
 | Where | Field | Format for tag `v0.2.1` |
 |---|---|---|
@@ -28,31 +31,35 @@ scripts/check-release-version.sh v0.2.1
 
 Exit codes: `1` no tag resolvable · `2` malformed tag · `3` version mismatch.
 
-### The other `package.json` files
+### The other `package.json` files and lockfiles
 
-`web/`, `cli/`, `shared/`, `shared/cron/`, `tui/` and `e2e/` are private
-sub-packages: nothing publishes them and CI does not check their `version`.
-They had drifted to four different numbers by July 2026 (0.1.7 … 0.1.13), which
-told a contributor nothing except a wrong story.
+`web/`, `cli/`, `cli/wizard/`, `shared/`, `shared/cron/`, `e2e/` and the
+packages under `desktop/app-payload/` follow the root release version. Some are
+private packages. The `desktop/app-payload/` tree is a retained legacy/internal
+payload and is not built by `release.yml`; keeping its metadata aligned avoids
+shipping or inspecting a tree that falsely identifies itself as another
+release.
 
-**Rule (2026-07-25): they follow the root version.** Bump them together with the
-four fields above — a one-liner is enough:
+**Rule (updated 2026-08-04): manifests and both version fields in every matching
+`package-lock.json` follow the root version.** Regenerate locks with
+`npm install --package-lock-only --ignore-scripts`; do not edit only the first
+JSON field, because a stale `packages[""]` entry makes `npm ci` install a tree
+different from the manifest.
 
 ```bash
-V=$(node -p "require('./package.json').version")
-for f in web cli shared shared/cron tui e2e; do
-  node -e "const p='$f/package.json',fs=require('fs'),j=JSON.parse(fs.readFileSync(p));j.version='$V';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
-done
+scripts/check-release-version.sh vX.Y.Z
 ```
 
-They are still **not** part of `check-release-version.sh`: a mismatch there
-must not block a release, it is bookkeeping.
+`tests/js` is the only package deliberately excluded: it is a repository test
+runner and is not shipped. `scripts/dev-up.sh` likewise stays on the moving
+`latest` development image; every installer, production compose and runtime
+fallback is pinned to `ghcr.io/leopu00/jht:X.Y.Z`.
 
 ---
 
 ## ✅ Pre-release checklist
 
-- [ ] **Bump the four version fields** above to the new `X.Y.Z`.
+- [ ] **Bump every checked version field and regenerate every lockfile** for the new `X.Y.Z`.
 - [ ] **Update `CHANGELOG.md`** — rename the `[Unreleased]` heading to `[X.Y.Z] — YYYY-MM-DD` and open a fresh empty `[Unreleased]` block above it. The release job extracts the body of `## [X.Y.Z]` as the GitHub Release notes; if that block is missing it silently falls back to a `git log` dump, which is how a release ends up with unreadable notes.
 - [ ] Run `scripts/check-release-version.sh vX.Y.Z` locally — it must print `OK`.
 - [ ] Run the test suites: `npm test` (vitest + pytest) and, if the game changed, `npm run app:test`.
@@ -86,11 +93,16 @@ git push origin v0.2.1
 
 | Platform | Preset | Asset |
 |---|---|---|
-| Windows x64 | `Windows Desktop` | `job-hunter-team.exe` (NSIS installer) |
+| Windows x64 | `Windows Desktop` | `job-hunter-team.exe` (bare Godot executable) |
 | macOS Universal 2 | `macOS` | `job-hunter-team.zip` (signed, notarized, stapled) |
 | Linux x64 | `Linux` | `job-hunter-team-linux-x64.tar.gz` |
 
 Asset names do **not** carry the version — the GitHub Release tag is the version. There is no separate Windows ARM64 installer any more (the Electron pipeline produced one; the Godot export targets x64, which runs under Windows-on-ARM emulation).
+
+`game/installer/windows.nsi` is a dormant/manual packaging fallback. Its
+metadata is version-gated so a manual build cannot claim `0.0.0`, but the
+release workflow does not invoke `makensis` and does not publish an NSIS setup
+artifact.
 
 > The public `/download` page does not resolve GitHub assets: it hands out the CLI one-liner (`curl -fsSL https://jobhunterteam.ai/install.sh | bash`) and points at `/run`. Release artifacts are for people who download from the GitHub Releases page.
 
@@ -109,7 +121,7 @@ npm run app:dist          # scripts/build-release.sh auto — export for the hos
 
 ## 🔧 If CI fails
 
-**Version check.** Don't force-push the tag. Delete it, fix the four fields, commit, re-tag:
+**Version check.** Don't force-push the tag. Delete it, fix every reported field, commit, re-tag:
 
 ```bash
 git push origin :refs/tags/vX.Y.Z     # remove the broken tag remote-side

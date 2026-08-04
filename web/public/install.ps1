@@ -35,7 +35,7 @@
 # ║                                                                          ║
 # ║  Parameters:                                                             ║
 # ║    -DryRun           Show the actions without running them               ║
-# ║    -Branch <name>    Source branch (default: master)                     ║
+# ║    -Branch <name>    Source branch (default: production)                 ║
 # ║    -PairingToken     Opaque token for VPS pairing (skips the wizard)     ║
 # ║    -SkipOnboard      Do not launch the wizard at the end                 ║
 # ║                                                                          ║
@@ -45,7 +45,7 @@
 [CmdletBinding()]
 param(
   [switch]$DryRun,
-  [string]$Branch = $(if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'master' }),
+  [string]$Branch = $(if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }),
   [string]$PairingToken = '',
   [switch]$SkipOnboard
 )
@@ -56,7 +56,8 @@ $ErrorActionPreference = 'Stop'
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $env:USERPROFILE '.jht\runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
-$Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:latest' }
+$Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht:0.3.4' }
+$env:JHT_IMAGE = $Image
 $RawBase    = if ($env:JHT_RAW_BASE)    { $env:JHT_RAW_BASE }    else { "https://raw.githubusercontent.com/leopu00/job-hunter-team/$Branch" }
 
 $TotalSteps = 5

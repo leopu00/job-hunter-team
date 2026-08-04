@@ -1,3 +1,4 @@
+import pkg from '../package.json' with { type: 'json' };
 import { Command } from 'commander';
 import { registerSetupCommand } from './commands/setup.js';
 import { registerConfigCommand } from './commands/config.js';
@@ -34,7 +35,7 @@ export function buildProgram() {
   program
     .name('jht')
     .description('Job Hunter Team — CLI')
-    .version('0.1.0');
+    .version(pkg.version);
 
   registerSetupCommand(program);
   registerConfigCommand(program);

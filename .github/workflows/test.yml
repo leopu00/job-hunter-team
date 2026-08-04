@@ -234,11 +234,92 @@ jobs:
           chmod 600 .auth-credentials
           node scripts/refresh-auth-state.mjs
 
+          # Il token nasce durante il job, quindi GitHub non può conoscerlo
+          # come secret statico. Registriamo come mask sia il cookie completo
+          # sia i token contenuti nel payload: se Playwright stampa il call log
+          # di una richiesta fallita, gli header restano comunque redatti.
+          node <<'NODE'
+          const { readFileSync } = require("node:fs");
+          const state = JSON.parse(readFileSync("auth-state.json", "utf8"));
+
+          const masks = new Set();
+          const addMask = (value) => {
+            if (typeof value === "string" && value.length >= 8 && !value.includes("\n")) {
+              masks.add(value);
+              // Playwright può includere lo stesso valore in URL/query string.
+              // GitHub maschera per corrispondenza testuale: registriamo quindi
+              // anche le due rappresentazioni percent-encoded più comuni.
+              masks.add(encodeURI(value));
+              masks.add(encodeURIComponent(value));
+            }
+          };
+          const addSensitiveLeaves = (value) => {
+            if (typeof value === "string") {
+              addMask(value);
+            } else if (Array.isArray(value)) {
+              value.forEach(addSensitiveLeaves);
+            } else if (value && typeof value === "object") {
+              Object.values(value).forEach(addSensitiveLeaves);
+            }
+          };
+          const decodeSession = (encoded) => {
+            if (!encoded.startsWith("base64-")) return;
+            try {
+              const session = JSON.parse(
+                Buffer.from(encoded.slice("base64-".length), "base64url").toString("utf8"),
+              );
+              addMask(JSON.stringify(session));
+              addSensitiveLeaves(session);
+            } catch {
+              // I singoli chunk sono già mascherati. La ricostruzione sotto
+              // copre il formato Supabase corrente; un formato futuro non
+              // deve trasformare il masking difensivo in un gate rosso.
+            }
+          };
+
+          addMask(process.env.E2E_EMAIL);
+          addMask(process.env.E2E_PASSWORD);
+
+          const cookieGroups = new Map();
+          for (const cookie of state.cookies ?? []) {
+            addMask(cookie.value);
+            const baseName = cookie.name.replace(/\.\d+$/, "");
+            const key = `${cookie.domain}\0${baseName}`;
+            const group = cookieGroups.get(key) ?? [];
+            group.push(cookie);
+            cookieGroups.set(key, group);
+          }
+          for (const group of cookieGroups.values()) {
+            group.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+            const encoded = group.map((cookie) => cookie.value).join("");
+            addMask(encoded);
+            decodeSession(encoded);
+          }
+
+          for (const origin of state.origins ?? []) {
+            for (const item of origin.localStorage ?? []) {
+              addMask(item.value);
+              try {
+                addSensitiveLeaves(JSON.parse(item.value));
+              } catch {
+                // Il valore completo è già nella mask.
+              }
+            }
+          }
+
+          for (const value of masks) {
+            console.log(`::add-mask::${value}`);
+          }
+          NODE
+
       - name: Run e2e specs
         working-directory: e2e
         env:
           BASE_URL: http://localhost:3011
-        run: npx playwright test --reporter=list
+        # Gli spec 80/81 mutano la stessa sessione demo. Due worker possono
+        # sovrapporre POST/DELETE e bloccare le route server-rendered fino al
+        # timeout; un worker rende deterministico il gate autenticato.
+        run: npx playwright test --reporter=list --workers=1
 
       # Le credenziali non devono sopravvivere al job nemmeno in un artifact.
       - name: Wipe the session
@@ -250,10 +331,12 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
-          path: |
-            e2e/reports/
-            e2e/test-results/
+          # Report HTML, trace e video possono incorporare header/cookie e non
+          # sono sanificabili con ::add-mask::. Sul repo pubblico conserviamo
+          # soltanto screenshot di UI sintetica, mai gli archivi di rete.
+          name: playwright-failure-screenshots
+          path: e2e/test-results/**/*.png
+          if-no-files-found: ignore
           retention-days: 7
 
   # Smoke post-deploy: i 38 test `@pytest.mark.production` che il job `pytest`

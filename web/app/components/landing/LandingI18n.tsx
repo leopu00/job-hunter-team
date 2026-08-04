@@ -143,9 +143,9 @@ const translations = {
 
   // Download page
   dl_desc: {
-    it: "La dashboard di JHT si avvia da terminale, con setup CLI e TUI. Il runtime gira sul tuo computer e i dati restano sotto il tuo controllo.",
-    en: "The JHT dashboard is started from the terminal, via the CLI and TUI setup. The runtime runs on your machine and your data stays under your control.",
-    hu: "A JHT irányítópultja a terminálból indul, CLI és TUI beállítással. A futtatókörnyezet a gépeden fut, és az adataid a te ellenőrzésed alatt maradnak.",
+    it: "Scarica l'app desktop per configurare e seguire il tuo team. La CLI resta disponibile per chi preferisce il terminale.",
+    en: "Download the desktop app to set up and follow your team. The CLI remains available if you prefer the terminal.",
+    hu: "Töltsd le az asztali appot a csapat beállításához és követéséhez. Ha a terminált kedveled, a CLI továbbra is elérhető.",
   },
   dl_back: { it: "← Indietro", en: "← Back", hu: "← Vissza" },
   dl_title_1: {

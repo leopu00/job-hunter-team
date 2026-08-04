@@ -11,49 +11,49 @@ const META: Record<
   it: {
     title: "Installa",
     description:
-      "Installa Job Hunter Team da terminale (CLI). Il tuo team di agenti AI gira sul tuo computer — open source, locale, privato.",
+      "Scarica l'app desktop di Job Hunter Team oppure installalo dal terminale con la CLI. Il tuo team di agenti AI gira sul tuo computer — open source, locale, privato.",
     jsonLdDescription:
       "Un team di agenti AI che automatizza la ricerca di lavoro. Open source, locale, privato.",
   },
   en: {
     title: "Install",
     description:
-      "Install Job Hunter Team from the terminal (CLI). Your AI agent team runs on your own computer — open source, local, private.",
+      "Download the Job Hunter Team desktop app, or install it from the terminal with the CLI. Your AI agent team runs on your own computer — open source, local, private.",
     jsonLdDescription:
       "A team of AI agents that automates the job search. Open source, local, private.",
   },
   es: {
     title: "Instalar",
     description:
-      "Instala Job Hunter Team desde la terminal (CLI). Tu equipo de agentes de IA se ejecuta en tu propio ordenador — open source, local, privado.",
+      "Descarga la app de escritorio de Job Hunter Team o instálalo desde la terminal con la CLI. Tu equipo de agentes de IA se ejecuta en tu propio ordenador — open source, local, privado.",
     jsonLdDescription:
       "Un equipo de agentes de IA que automatiza la búsqueda de empleo. Open source, local, privado.",
   },
   fr: {
     title: "Installer",
     description:
-      "Installez Job Hunter Team depuis le terminal (CLI). Votre équipe d'agents IA s'exécute sur votre propre ordinateur — open source, locale, privée.",
+      "Téléchargez l'app de bureau Job Hunter Team ou installez-la depuis le terminal avec la CLI. Votre équipe d'agents IA s'exécute sur votre propre ordinateur — open source, locale, privée.",
     jsonLdDescription:
       "Une équipe d'agents IA qui automatise la recherche d'emploi. Open source, locale, privée.",
   },
   de: {
     title: "Installieren",
     description:
-      "Installiere Job Hunter Team über das Terminal (CLI). Dein KI-Agententeam läuft auf deinem eigenen Computer — open source, lokal, privat.",
+      "Lade die Job Hunter Team Desktop-App herunter oder installiere sie über das Terminal mit der CLI. Dein KI-Agententeam läuft auf deinem eigenen Computer — Open Source, lokal, privat.",
     jsonLdDescription:
       "Ein Team von KI-Agenten, das die Jobsuche automatisiert. Open source, lokal, privat.",
   },
   hu: {
     title: "Telepítés",
     description:
-      "Telepítsd a Job Hunter Teamet a terminálból (CLI). Az MI-ügynökökből álló csapatod a saját számítógépeden fut — open source, helyi, privát.",
+      "Töltsd le a Job Hunter Team asztali appját, vagy telepítsd terminálból a CLI-val. Az MI-ügynökökből álló csapatod a saját számítógépeden fut — open source, helyi, privát.",
     jsonLdDescription:
       "MI-ügynökökből álló csapat, amely automatizálja az álláskeresést. Open source, helyi, privát.",
   },
   pt: {
     title: "Instalar",
     description:
-      "Instala o Job Hunter Team a partir do terminal (CLI). A tua equipa de agentes de IA corre no teu próprio computador — open source, local, privada.",
+      "Descarrega a app de ambiente de trabalho Job Hunter Team ou instala-a a partir do terminal com a CLI. A tua equipa de agentes de IA corre no teu próprio computador — open source, local, privada.",
     jsonLdDescription:
       "Uma equipa de agentes de IA que automatiza a procura de emprego. Open source, local, privada.",
   },
@@ -81,15 +81,15 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jobhunterteam.ai";
 async function DownloadJsonLd() {
   const [nonce, locale] = await Promise.all([getNonce(), getRequestLocale()]);
   const m = META[locale] ?? META.en;
-  // 2026-07-03: niente `downloadUrl`/`softwareVersion` — l'app desktop non è più
-  // scaricabile dal web (si installa via CLI). Non dichiariamo un installer
-  // diretto nei dati strutturati. `installUrl` punta alla pagina d'installazione.
+  // La pagina lascia scegliere piattaforma e modalità; i pulsanti risolvono gli
+  // asset della release più recente. `installUrl` resta quindi la pagina
+  // d'installazione, non un singolo file dipendente dalla piattaforma.
   const data = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "Job Hunter Team",
     applicationCategory: "BusinessApplication",
-    operatingSystem: "macOS, Linux, Windows (WSL)",
+    operatingSystem: "macOS, Windows, Linux",
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     installUrl: `${SITE_URL}/download`,
     description: m.jsonLdDescription,

@@ -55,7 +55,7 @@ function Hero() {
 
       {/* Vetrina hero — il globo delle posizioni (riuso del globo di
           /map in modalità showcase: ruota da solo, vola sulle città e
-          mostra pin dimostrativi con punteggi). Full-bleed su richiesta:
+          mostra ricerche localizzate con punteggi). Full-bleed su richiesta:
           niente box, niente bordo, niente brackets — la fascia occupa
           tutta la larghezza della finestra. Il fuori-colonna si ottiene
           per layout (padding solo sui blocchi di testo), NON con 100vw:

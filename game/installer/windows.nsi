@@ -1,12 +1,16 @@
 ; Job Hunter Team — installer Windows per l'export Godot.
 ; Build (dal Mac, da game/):
-;   makensis -DVERSION=0.2.1 installer/windows.nsi
+;   makensis -DVERSION=0.3.4 installer/windows.nsi
 ; Richiede: builds/windows/job-hunter-team.exe (export "Windows Desktop")
-; e installer/icon.ico. Output: builds/windows/job-hunter-team-<ver>-windows-x64-setup.exe
+; e installer/icon.ico. Output stabile per releases/latest/download/:
+; builds/windows/job-hunter-team-windows-x64-setup.exe
 ; Install per-utente (no admin), come il vecchio installer Electron. /S = silenzioso.
 
 !ifndef VERSION
-  !define VERSION "0.0.0"
+  !define VERSION "0.3.4"
+!endif
+!ifndef VERSION_NUMERIC
+  !define VERSION_NUMERIC "${VERSION}.0"
 !endif
 
 Unicode true
@@ -14,7 +18,7 @@ Unicode true
 !include "FileFunc.nsh"
 
 Name "Job Hunter Team"
-OutFile "..\builds\windows\job-hunter-team-${VERSION}-windows-x64-setup.exe"
+OutFile "..\builds\windows\job-hunter-team-windows-x64-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\Job Hunter Team"
 InstallDirRegKey HKCU "Software\Job Hunter Team" "InstallDir"
 RequestExecutionLevel user
@@ -25,10 +29,10 @@ SetCompressor zlib
 CRCCheck off
 
 ; Metadati del file installer (proprietà → dettagli)
-VIProductVersion "${VERSION}.0"
+VIProductVersion "${VERSION_NUMERIC}"
 VIAddVersionKey "ProductName" "Job Hunter Team"
 VIAddVersionKey "ProductVersion" "${VERSION}"
-VIAddVersionKey "FileVersion" "${VERSION}.0"
+VIAddVersionKey "FileVersion" "${VERSION_NUMERIC}"
 VIAddVersionKey "FileDescription" "Job Hunter Team — The Office (installer)"
 VIAddVersionKey "LegalCopyright" "Copyright © Job Hunter Team"
 VIAddVersionKey "CompanyName" "Job Hunter Team"

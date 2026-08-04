@@ -5,6 +5,56 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+---
+
+## [0.3.4] — 2026-08-04
+
+**A release you can trust at the moment it says “ready”** — the web, game,
+CLI, embedded payload and runtime image now identify the same build; setup,
+sync and updates fail closed instead of presenting stale or simulated state as
+live.
+
+### 🖥️ Desktop and runtime
+
+- The first-run and recording profiles now open on a light, live surface with
+  no demo banner; the simulation badge remains visible until both the backend
+  and positions are genuinely live.
+- Setup and the embedded terminal keep truthful process ownership and exit
+  status across macOS, Linux and Windows, including interrupted installers and
+  PowerShell-hosted commands.
+- Runtime upgrades are host-owned, transactional and crash-safe: they acquire
+  a lock, journal each phase, verify the candidate and restore the previous
+  image and metadata on failure. The game exposes an explicit, user-triggered
+  update check instead of polling or silently restarting Docker.
+
+### 🔄 Web, chat and job-search autonomy
+
+- Web↔VPS synchronization now correlates every request and acknowledgement,
+  uses compare-and-swap closure, and acknowledges only rows actually
+  delivered. A newer request can no longer be closed by an older worker.
+- Applications remain user-initiated: deadlines exist only when requested,
+  empty states are neutral, and the UI no longer turns streaks or deficits into
+  pressure to apply.
+- The public site gains the Landing Globe, localized tutorial and trailer
+  routes in publish-off mode, a localized non-blank loading shell, and improved
+  mobile readability without publishing media ahead of approval.
+
+### 🔒 Release integrity
+
+- Public authenticated E2E runs are serialized and mask the complete session
+  family — cookie chunks, reconstructed cookie, token/header values, storage
+  state and URL-encoded variants. Public CI no longer retains traces, videos or
+  network-bearing reports.
+- Private identity and machine data are rejected by repository hooks and the
+  public fixtures/security documentation use synthetic values only.
+- Every publishable component and lockfile is aligned to `0.3.4`; the Godot
+  export and NSIS metadata match, and production installers/compose files pin
+  `ghcr.io/leopu00/jht:0.3.4` instead of a moving `latest` image.
+
+---
+
 ## [0.3.3] — 2026-07-30
 
 **Everyone in the office has their own face** — the portrait gap opened by the comic chat in 0.3.2 is closed, and the download page finally hands out the app.
