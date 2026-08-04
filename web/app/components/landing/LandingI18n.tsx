@@ -64,6 +64,7 @@ const translations = {
     hu: "Studies",
   },
   nav_project: { it: "Il progetto", en: "Project", hu: "Projekt" },
+  nav_tutorials: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
   nav_login: { it: "Accedi", en: "Sign in", hu: "Bejelentkezés" },
 
   // Hero
@@ -105,6 +106,7 @@ const translations = {
   footer_product: { it: "Prodotto", en: "Product", hu: "Termék" },
   footer_stats: { it: "Progetto", en: "Project", hu: "Projekt" },
   footer_resources: { it: "Risorse", en: "Resources", hu: "Források" },
+  footer_tutorials: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
   footer_contacts: { it: "Contatti", en: "Contacts", hu: "Kapcsolat" },
   nav_contact: {
     it: "Contatti",
@@ -131,6 +133,10 @@ const translations = {
     en: "Open Source under MIT License",
     hu: "Nyílt forráskód MIT licenc alatt",
   },
+  tutorials_title: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
+  tutorial_game_title: { it: "Gioco", en: "Game", hu: "Játék" },
+  tutorial_web_title: { it: "Web", en: "Web", hu: "Web" },
+  trailer_title: { it: "Trailer", en: "Trailer", hu: "Előzetes" },
   theme_system: { it: "sistema", en: "system", hu: "rendszer" },
   theme_dark: { it: "notte", en: "night", hu: "éjszaka" },
   theme_light: { it: "giorno", en: "day", hu: "nappal" },
@@ -323,9 +329,9 @@ const translations = {
 } as const;
 
 type StringKeys = {
-  [K in keyof typeof translations]: (typeof translations)[K]["it"] extends string
-    ? K
-    : never;
+  [
+    K in keyof typeof translations
+  ]: (typeof translations)[K]["it"] extends string ? K : never;
 }[keyof typeof translations];
 interface I18nCtx {
   lang: Lang;

@@ -5,6 +5,7 @@ import { LandingI18nProvider, useLandingI18n } from "./LandingI18n";
 import LandingCTA, { LandingFooter } from "./LandingCTA";
 import LandingNav from "./LandingNav";
 import LandingGlobe from "./LandingGlobe";
+import TrailerTeaser from "../public-media/TrailerTeaser";
 
 // Landing pubblica — nuova struttura.
 // Header (nav) + hero (titolo + immagine + intro) + sezioni di anteprima
@@ -63,11 +64,14 @@ function Hero() {
           calcolo. Il raccordo con la pagina lo fanno le sfumature
           interne a LandingGlobe. */}
       <div
+        data-landing-globe
         className="w-full mt-12"
         style={{ animation: "fade-in 0.8s ease 0.15s both" }}
       >
         <LandingGlobe />
       </div>
+
+      <TrailerTeaser />
 
       {/* Paragrafo introduttivo — descrive la piattaforma, sotto l'hero. */}
       <p

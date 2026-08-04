@@ -21,6 +21,7 @@ export const pt: Record<string, string> = {
   nav_github: "GitHub",
   nav_download: "Instalar",
   nav_project: "Projeto",
+  nav_tutorials: "Tutoriais",
   nav_pricing: "Preços",
   nav_login: "Entrar",
 
@@ -40,12 +41,17 @@ export const pt: Record<string, string> = {
   footer_product: "Produto",
   footer_stats: "Projeto",
   footer_resources: "Recursos",
+  footer_tutorials: "Tutoriais",
   footer_contacts: "Contactos",
   nav_contact: "Contacto",
   footer_bug: "Reportar um erro",
   footer_privacy: "Política de Privacidade",
   footer_terms: "Termos de Serviço",
   footer_copyright: "Open Source sob licença MIT",
+  tutorials_title: "Tutoriais",
+  tutorial_game_title: "Jogo",
+  tutorial_web_title: "Web",
+  trailer_title: "Trailer",
 
   // Download page
   dl_desc:
