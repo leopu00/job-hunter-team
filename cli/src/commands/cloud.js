@@ -2862,18 +2862,25 @@ let chatLaneAlert = null;
  * "manca il canale diretto", e senza la seconda strada la segnalazione
  * morirebbe insieme a ciò che segnala.
  */
-async function patchTeamStateBestEffort(config, reader, fields) {
+export async function patchTeamStateBestEffort(config, reader, fields, options = {}) {
+  const timeoutMs = Math.max(
+    1,
+    Number(options.timeoutMs ?? process.env.JHT_SYNC_OBSERVED_TIMEOUT_MS ?? 15_000) || 15_000,
+  );
+  const signal = options.signal || AbortSignal.timeout(timeoutMs);
+  const fetchFn = options.fetchFn || fetch;
   if (reader) {
     try {
-      await reader.patchTeamState(fields);
+      await reader.patchTeamState(fields, { signal });
       return true;
     } catch { /* canale diretto rotto: si prova da Vercel */ }
   }
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   try {
-    const res = await fetch(`${baseUrl}/api/team-state`, {
+    const res = await fetchFn(`${baseUrl}/api/team-state`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
+      signal,
       body: JSON.stringify(fields),
     });
     return res.ok;

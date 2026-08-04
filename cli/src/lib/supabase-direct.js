@@ -55,12 +55,13 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
   let currentRefresh = refreshToken;
 
   /** Scambia il refresh_token con un access_token fresco. Ruota e persiste. */
-  async function refresh() {
+  async function refresh(signal) {
     let res;
     try {
       res = await fetch(authUrl, {
         method: 'POST',
         headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+        signal,
         body: JSON.stringify({ refresh_token: currentRefresh }),
       });
     } catch (err) {
@@ -92,9 +93,9 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
   }
 
   /** Garantisce un access_token valido (refresh se mancante o in scadenza). */
-  async function ensureToken() {
+  async function ensureToken(signal) {
     if (!accessToken || Date.now() >= expiresAtMs - REFRESH_SKEW_MS) {
-      await refresh();
+      await refresh(signal);
     }
     return accessToken;
   }
@@ -106,7 +107,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
    */
   async function rest(path, opts = {}) {
     const doFetch = async () => {
-      await ensureToken();
+      await ensureToken(opts.signal);
       const headers = {
         apikey: anonKey,
         Authorization: `Bearer ${accessToken}`,
@@ -118,6 +119,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
       return fetch(`${restBase}/${path}`, {
         method: opts.method || 'GET',
         headers,
+        signal: opts.signal,
         body: opts.body ? JSON.stringify(opts.body) : undefined,
       });
     };
@@ -270,12 +272,13 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
    * Aggiorna campi della propria riga team_state (es. ack `sync_completed_at`).
    * Filtro user_id esplicito oltre alla RLS.
    */
-  async function patchTeamState(fields) {
+  async function patchTeamState(fields, { signal } = {}) {
     const filter = userId ? `user_id=eq.${userId}` : 'user_id=not.is.null';
     await rest(`team_state?${filter}`, {
       method: 'PATCH',
       body: fields,
       prefer: 'return=minimal',
+      signal,
     });
   }
 

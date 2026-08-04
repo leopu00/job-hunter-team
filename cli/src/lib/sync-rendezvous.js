@@ -65,7 +65,7 @@ export async function acknowledgeSync({
   const fields = { ...observed, sync_completed_at: completedAt };
   if (reader) {
     try {
-      await reader.patchTeamState(fields);
+      await reader.patchTeamState(fields, { signal });
       return { status: 'completed', completedAt, via: 'direct' };
     } catch {
       // Il canale diretto è un'ottimizzazione: il token HTTP resta il fallback.
