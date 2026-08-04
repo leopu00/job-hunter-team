@@ -151,10 +151,13 @@ export async function PATCH(req: NextRequest) {
   if (source === "token") {
     const tsCheck = (await supabase
       .from("team_state")
-      .select("active_device_id")
+      .select("active_device_id, sync_requested_at")
       .eq("user_id", userId)
       .maybeSingle()) as {
-      data: { active_device_id: string | null } | null;
+      data: {
+        active_device_id: string | null;
+        sync_requested_at: string | null;
+      } | null;
       error: { message: string } | null;
     };
     if (
@@ -172,6 +175,23 @@ export async function PATCH(req: NextRequest) {
         },
         { status: 409 },
       );
+    }
+
+    // Esito terminale del rendezvous sync: sul fallback HTTP l'orologio
+    // della VPS non deve decidere se il browser riconosce il risultato.
+    // Timbriamo lato server e garantiamo `last_action_at > requested_at`
+    // anche se la richiesta e' nel futuro rispetto a questo processo.
+    if (
+      typeof update.last_action === "string" &&
+      update.last_action.startsWith("sync:")
+    ) {
+      const requestedMs = Date.parse(tsCheck.data?.sync_requested_at ?? "");
+      const serverMs = Date.now();
+      update.last_action_at = new Date(
+        Number.isNaN(requestedMs)
+          ? serverMs
+          : Math.max(serverMs, requestedMs + 1),
+      ).toISOString();
     }
   }
 
