@@ -48,10 +48,12 @@ test.describe("shell pubblico tutorial e trailer", () => {
     );
   });
 
-  test("le card restano responsive sul viewport stretto", async ({
-    browser,
-  }) => {
+  test("le card restano responsive sul viewport stretto", async (
+    { browser },
+    testInfo,
+  ) => {
     const context = await browser.newContext({
+      baseURL: testInfo.project.use.baseURL,
       viewport: { width: 375, height: 812 },
     });
     const page = await context.newPage();
