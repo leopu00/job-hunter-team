@@ -12,7 +12,11 @@
 import type { PositionCoord } from "@/app/components/JobsGlobe";
 
 export type LandingContinentId =
-  "europe" | "america" | "australia" | "asia" | "middle_east";
+  | "europe"
+  | "america"
+  | "australia"
+  | "asia"
+  | "middle_east";
 
 type ShowcaseCity = {
   city: string;
