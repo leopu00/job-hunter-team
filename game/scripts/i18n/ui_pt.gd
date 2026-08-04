@@ -466,6 +466,7 @@ const S := {
 	"hours.windows": "JANELAS (dias · de → até)",
 	"hours.add": "+ ADICIONAR JANELA",
 	"hours.estimate": "≈ %.0f horas ativas/semana → est. ~%.1f novas posições/dia · orçamento reescalado para %d%% do atual",
+	"hours.estimate_first": "≈ %.0f horas ativas/semana · a estimativa e o orçamento estarão disponíveis após a primeira semana",
 	"hours.invalid": "✘ janela inválida: dias mon…sun e horários HH:MM",
 	"hours.save": "▶ SALVAR HORÁRIOS",
 	"hours.saved": "✓ horários salvos — o pacing da equipe se adapta a partir do próximo tick",

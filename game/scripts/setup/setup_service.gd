@@ -1000,19 +1000,46 @@ func _do_update_runtime() -> Dictionary:
 		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
 	_ensure_host_dirs()
 	var before := _local_image_id()
+	var used_before := _run("docker", PackedStringArray(["inspect", "jht",
+			"--format", "{{.Image}}"] ))
+	var container_before := str(used_before.get("out", "")).strip_edges() \
+			if used_before.get("code", -1) == 0 else ""
 	_set_phase("image")
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
 			"Cerco una versione più recente del team…")
 	if not bool(pull["ok"]):
-		return {"ok": false, "message": "Aggiornamento non riuscito: " \
-				+ str(pull.get("tail", "")).strip_edges().right(200)}
+		# Un'immagine può essere già arrivata da un installer, da un archivio
+		# offline o da una build di collaudo. In quel caso lo stato mostra
+		# correttamente "aggiornamento pronto", ma rendere il pull obbligatorio
+		# impediva proprio la ricreazione che il pulsante promette. Se l'immagine
+		# locale esiste continuiamo con compose up; senza alcuna copia locale,
+		# invece, il pull resta giustamente fatale.
+		if not _runtime_pull_can_fallback(before):
+			return {"ok": false, "message": "Aggiornamento non riuscito: " \
+					+ str(pull.get("tail", "")).strip_edges().right(200)}
+		Log.call_deferred("warn", "setup",
+				"pull runtime non disponibile: uso l'immagine locale già pronta")
+		_progress("container", "Download non disponibile: applico l'immagine locale già pronta…")
 	var after := _local_image_id()
 	_set_phase("container")
 	var recreated := _compose_up_with_progress(compose)
 	if not bool(recreated["ok"]):
 		return recreated
-	return {"ok": true, "message": "Runtime aggiornato: il team gira sulla versione più recente." \
-			if after != before else "Runtime già aggiornato: nessuna versione più recente."}
+	return {"ok": true, "message": _runtime_update_result_message(
+			before, after, container_before)}
+
+
+static func _runtime_pull_can_fallback(local_image_id: String) -> bool:
+	return local_image_id.strip_edges() != ""
+
+
+static func _runtime_update_result_message(before: String, after: String,
+		container_before: String) -> String:
+	var recreated_stale := after != "" and container_before != "" \
+			and after != container_before
+	return "Runtime aggiornato: il team gira sulla versione più recente." \
+			if after != before or recreated_stale \
+			else "Runtime già aggiornato: nessuna versione più recente."
 
 
 static func _local_image_id() -> String:

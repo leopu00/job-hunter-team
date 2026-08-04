@@ -555,6 +555,7 @@ const S := {
 	"hours.first_time": "Non hai ancora scelto gli orari: parti da una di queste proposte e correggila come vuoi.",
 	"hours.need_team": "Per impostare gli orari serve il team acceso: torna al passo 01 e avvia il container.",
 	"hours.estimate": "≈ %.0f ore attive/settimana → stima ~%.1f posizioni nuove/giorno · budget riproporzionato al %d%% dell'attuale",
+	"hours.estimate_first": "≈ %.0f ore attive/settimana · stima e budget saranno disponibili dopo la prima settimana",
 	"hours.invalid": "✘ finestra non valida: giorni mon…sun e orari HH:MM",
 	"hours.save": "▶ SALVA ORARI",
 	"hours.saved": "✓ orari salvati — il pacing del team si adegua dal prossimo tick",
