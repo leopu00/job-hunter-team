@@ -35,9 +35,11 @@ uname -m
 free -h
 ```
 
-Continue only with `x86_64` and sufficient memory. The host preflight can
-offer a swap setup on low-memory Linux systems; review and confirm that change
-when prompted.
+Continue only with `x86_64` and sufficient memory. On a VPS with less than
+8 GB of RAM and less than 1 GB of active swap, the non-interactive host
+preflight creates a 2 GB `/swapfile`. Treat that as an installer side effect:
+inspect the helper and authorize it before running the installer, or configure
+at least 1 GB of swap yourself first so the helper skips the change.
 
 ## 2. Inspect and run the installer
 
