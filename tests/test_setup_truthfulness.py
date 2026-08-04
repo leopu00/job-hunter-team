@@ -96,6 +96,35 @@ def test_runtime_installer_keeps_tty_and_reports_command_failure():
     assert '"term.done_plain": "CHIUDI CONSOLE"' in strings
 
 
+def test_runtime_upgrade_uses_only_the_host_json_contract():
+    setup = _src("game/scripts/setup/setup_service.gd")
+    panel = _src("game/scripts/ui/section_panel.gd")
+    upgrade = setup[
+        setup.index("func update_runtime()") : setup.index("## Dove vive il file compose")
+    ]
+
+    # Il gioco e' solo il client del deploy transazionale: non puo' avere un
+    # secondo percorso compose/docker exec che salti journal e rollback.
+    assert '"upgrade", _do_update_runtime.bind(_vps_config())' in upgrade
+    assert 'PackedStringArray(["upgrade", "--json"])' in upgrade
+    assert 'exec \\\"$JHT_BIN\\\" upgrade --json' in upgrade
+    assert "docker exec" not in upgrade
+    assert "_compose_stream" not in upgrade
+    assert "_compose_up_with_progress" not in upgrade
+
+    # stdout e' un unico frame; stderr viene drenato ma non interpretato come
+    # JSON. Il codice di processo e `ok` devono restare coerenti.
+    assert "static func parse_upgrade_result(stdout: String, exit_code: int)" in upgrade
+    assert 'frame.contains("\\n")' in upgrade
+    assert "(exit_code == 0) != bool(result[\"ok\"])" in upgrade
+    assert "var stderr: FileAccess = process[\"stderr\"]" in upgrade
+    assert "stderr e' intenzionalmente scartato" in upgrade
+
+    assert '"upgrade"' in panel[panel.index("const SETUP_ACTIONS") : panel.index("const SETUP_SECTIONS")]
+    assert "setup.runtime_update_busy" in panel
+    assert "setup.busy_upgrade" in panel
+
+
 def test_runtime_installer_cleans_download_when_interrupted(tmp_path):
     setup = _src("game/scripts/setup/setup_service.gd")
     function = setup[

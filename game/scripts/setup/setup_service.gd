@@ -77,6 +77,10 @@ var action_phase := ""
 var action_started_ms := 0
 var phase_started_ms := 0
 var last_pull := {}
+## Ultimo responso atomico di `jht upgrade --json`. Resta separato dallo
+## stato Docker: il wrapper host ha gia' ricreato e verificato il container,
+## quindi il gioco deve soltanto mostrarne l'esito, mai dedurre un deploy.
+var last_upgrade := {}
 var _timer: Timer
 
 
@@ -980,72 +984,150 @@ func _do_start_container() -> Dictionary:
 	return _compose_up_with_progress(compose)
 
 
-## Aggiornamento esplicito del runtime: scarica l'immagine più recente e
-## ricrea il container solo se serve (compose lo fa da sé quando l'immagine
-## referenziata cambia). Il bind-mount ~/.jht resta intatto: nessun dato perso.
+## Aggiornamento esplicito del runtime. Il deploy e' posseduto dal wrapper
+## host: journal, lock, pull, rollback e verifica devono avere UNA sola
+## implementazione, quindi questa UI non invoca mai docker/compose direttamente.
 func update_runtime() -> void:
 	if _action_running:
 		return
-	_start_action("container", _do_update_runtime)
+	_start_action("upgrade", _do_update_runtime.bind(_vps_config()),
+			UIStrings.t("setup.upgrade_running"))
 
 
-func _do_update_runtime() -> Dictionary:
-	_set_phase("engine")
-	var daemon := _run("docker", PackedStringArray(["version", "--format",
-			"{{.Server.Version}}"] ))
-	if daemon["code"] != 0:
-		return {"ok": false, "message": "Docker non risponde: avvia prima il runtime."}
-	var compose := _ensure_compose_file()
-	if compose == "":
-		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
-	_ensure_host_dirs()
-	var before := _local_image_id()
-	var used_before := _run("docker", PackedStringArray(["inspect", "jht",
-			"--format", "{{.Image}}"] ))
-	var container_before := str(used_before.get("out", "")).strip_edges() \
-			if used_before.get("code", -1) == 0 else ""
-	_set_phase("image")
-	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
-			"Cerco una versione più recente del team…")
-	if not bool(pull["ok"]):
-		# Un'immagine può essere già arrivata da un installer, da un archivio
-		# offline o da una build di collaudo. In quel caso lo stato mostra
-		# correttamente "aggiornamento pronto", ma rendere il pull obbligatorio
-		# impediva proprio la ricreazione che il pulsante promette. Se l'immagine
-		# locale esiste continuiamo con compose up; senza alcuna copia locale,
-		# invece, il pull resta giustamente fatale.
-		if not _runtime_pull_can_fallback(before):
-			return {"ok": false, "message": "Aggiornamento non riuscito: " \
-					+ str(pull.get("tail", "")).strip_edges().right(200)}
-		Log.call_deferred("warn", "setup",
-				"pull runtime non disponibile: uso l'immagine locale già pronta")
-		_progress("container", "Download non disponibile: applico l'immagine locale già pronta…")
-	var after := _local_image_id()
-	_set_phase("container")
-	var recreated := _compose_up_with_progress(compose)
-	if not bool(recreated["ok"]):
-		return recreated
-	return {"ok": true, "message": _runtime_update_result_message(
-			before, after, container_before)}
+static func _do_update_runtime(vps: Dictionary) -> Dictionary:
+	return _run_vps_upgrade(vps) if not vps.is_empty() else _run_local_upgrade()
 
 
-static func _runtime_pull_can_fallback(local_image_id: String) -> bool:
-	return local_image_id.strip_edges() != ""
+## Il protocollo di upgrade e' volutamente stretto: stdout e' una sola riga
+## JSON finale. Qualunque log extra o risultato incoerente resta un errore
+## sicuro, anziche' trasformare diagnostica non strutturata in uno stato UI.
+static func parse_upgrade_result(stdout: String, exit_code: int) -> Dictionary:
+	var frame := stdout.replace("\r\n", "\n")
+	if frame.ends_with("\n"):
+		frame = frame.left(-1)
+	if frame == "" or frame.contains("\n") or frame != frame.strip_edges():
+		return _upgrade_protocol_failure()
+	var parsed: Variant = JSON.parse_string(frame)
+	if not (parsed is Dictionary) or not _upgrade_result_shape_valid(parsed):
+		return _upgrade_protocol_failure()
+	var result: Dictionary = parsed.duplicate(true)
+	if (exit_code == 0) != bool(result["ok"]):
+		return _upgrade_protocol_failure()
+	return result
 
 
-static func _runtime_update_result_message(before: String, after: String,
-		container_before: String) -> String:
-	var recreated_stale := after != "" and container_before != "" \
-			and after != container_before
-	return "Runtime aggiornato: il team gira sulla versione più recente." \
-			if after != before or recreated_stale \
-			else "Runtime già aggiornato: nessuna versione più recente."
+static func _upgrade_result_shape_valid(result: Dictionary) -> bool:
+	for key in ["ok", "changed", "restartRequired", "rolledBack"]:
+		if not result.has(key) or not (result[key] is bool):
+			return false
+	for key in ["phase", "message"]:
+		if not result.has(key) or not (result[key] is String):
+			return false
+	if not str(result["phase"]) in ["preflight", "pull", "activate", "verify",
+			"commit", "complete", "recovery", "unexpected"]:
+		return false
+	for key in ["previous", "current"]:
+		if not result.has(key) or not (result[key] is Dictionary):
+			return false
+		var version: Variant = result[key].get("version")
+		var image: Variant = result[key].get("image")
+		if not (version is String) or not (image is String):
+			return false
+	return true
 
 
-static func _local_image_id() -> String:
-	var found := _run("docker", PackedStringArray(["image", "inspect",
-			runtime_image(), "--format", "{{.Id}}"] ))
-	return str(found["out"]).strip_edges() if found["code"] == 0 else ""
+static func _upgrade_protocol_failure() -> Dictionary:
+	return {"ok": false, "changed": false, "phase": "unexpected",
+			"previous": {"version": "", "image": ""},
+			"current": {"version": "", "image": ""},
+			"restartRequired": false, "message": "", "rolledBack": false,
+			"protocol_error": true}
+
+
+static func _host_jht_path() -> String:
+	var found := _which("jht")
+	if found != "":
+		return found
+	var home := OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" \
+			else OS.get_environment("HOME")
+	var candidates := PackedStringArray()
+	if OS.get_name() == "Windows":
+		candidates = PackedStringArray([home.path_join(".local/bin/jht.cmd"),
+				home.path_join(".local/bin/jht.ps1")])
+	else:
+		candidates = PackedStringArray([home.path_join(".local/bin/jht"), "/usr/local/bin/jht"])
+	for candidate in candidates:
+		if FileAccess.file_exists(candidate):
+			return candidate
+	return ""
+
+
+static func _run_local_upgrade() -> Dictionary:
+	var jht := _host_jht_path()
+	if jht == "":
+		return _upgrade_protocol_failure()
+	if OS.get_name() == "Windows" and (jht.to_lower().ends_with(".cmd") \
+			or jht.to_lower().ends_with(".bat")):
+		return _run_upgrade_json("cmd.exe", PackedStringArray(["/d", "/s", "/c",
+				_local_quote(jht) + " upgrade --json"]))
+	if OS.get_name() == "Windows" and jht.to_lower().ends_with(".ps1"):
+		var powershell := _which("pwsh")
+		if powershell == "":
+			powershell = _which("powershell")
+		return _run_upgrade_json(powershell, PackedStringArray(["-NoProfile",
+				"-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", jht,
+				"upgrade", "--json"]))
+	return _run_upgrade_json(jht, PackedStringArray(["upgrade", "--json"]))
+
+
+static func _vps_upgrade_command() -> String:
+	return "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
+			+ "[ -n \"$JHT_BIN\" ] || exit 127; exec \"$JHT_BIN\" upgrade --json"
+
+
+static func _run_vps_upgrade(vps: Dictionary) -> Dictionary:
+	return _run_upgrade_json("ssh", _ssh_args(vps, _vps_upgrade_command()))
+
+
+## A differenza di _run, conserva stdout e stderr separati: stderr e' solo
+## diagnostica del wrapper/SSH e non puo' contaminare il singolo frame JSON.
+## Il worker drena sempre entrambi i pipe per non bloccare un upgrade lungo.
+static func _run_upgrade_json(path: String, args: PackedStringArray) -> Dictionary:
+	if path == "":
+		return _upgrade_protocol_failure()
+	var process := OS.execute_with_pipe(path, args, false)
+	if process.is_empty():
+		return _upgrade_protocol_failure()
+	var stdio: FileAccess = process["stdio"]
+	var stderr: FileAccess = process["stderr"]
+	var stdout := PackedByteArray()
+	var stdout_overflow := false
+	var pid := int(process["pid"])
+	while OS.is_process_running(pid):
+		var out_chunk: PackedByteArray = stdio.get_buffer(65536)
+		if out_chunk.size() > 0:
+			if stdout.size() + out_chunk.size() > 32768:
+				stdout_overflow = true
+			else:
+				stdout.append_array(out_chunk)
+		# stderr e' intenzionalmente scartato: il contratto lascia li' i log.
+		stderr.get_buffer(65536)
+		OS.delay_msec(20)
+	# Drain finale: l'ultimo frame puo' arrivare dopo l'exit del processo.
+	for _attempt in 3:
+		var out_chunk: PackedByteArray = stdio.get_buffer(65536)
+		if out_chunk.size() > 0:
+			if stdout.size() + out_chunk.size() > 32768:
+				stdout_overflow = true
+			else:
+				stdout.append_array(out_chunk)
+		stderr.get_buffer(65536)
+		OS.delay_msec(20)
+	stdio.close()
+	stderr.close()
+	return _upgrade_protocol_failure() if stdout_overflow \
+			else parse_upgrade_result(stdout.get_string_from_utf8(),
+					OS.get_process_exit_code(pid))
 
 
 ## Dove vive il file compose. NON in `~/.jht`: quella cartella diventa del
@@ -2256,10 +2338,18 @@ func _prepare_local_migration_target() -> Dictionary:
 	_ensure_host_dirs()
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
 			"Preparo l'immagine del team sul computer…")
-	if not bool(pull.get("ok", false)) and _local_image_id() == "":
+	if not bool(pull.get("ok", false)) and _local_runtime_image_id() == "":
 		return {"ok": false, "message": "Immagine runtime non disponibile: " \
 				+ str(pull.get("tail", "")).right(220)}
 	return {"ok": true}
+
+
+## La migrazione verifica se il pull ha almeno lasciato un'immagine locale
+## utilizzabile. Non e' il percorso di upgrade: quello passa solo dal wrapper.
+static func _local_runtime_image_id() -> String:
+	var found := _run("docker", PackedStringArray(["image", "inspect",
+			runtime_image(), "--format", "{{.Id}}"] ))
+	return str(found["out"]).strip_edges() if found["code"] == 0 else ""
 
 
 func _apply_archive_to_local(archive: String, stamp: String,
@@ -2974,7 +3064,8 @@ static func _run_cli(vps: Dictionary, args: PackedStringArray) -> Dictionary:
 	return _run_ssh(vps, command)
 
 
-func _start_action(action: String, callable: Callable) -> void:
+func _start_action(action: String, callable: Callable,
+		start_message := "operazione in corso…") -> void:
 	_action_running = true
 	current_action = action
 	action_phase = ""
@@ -2982,7 +3073,7 @@ func _start_action(action: String, callable: Callable) -> void:
 	phase_started_ms = action_started_ms
 	last_pull = {}
 	Log.info("setup", "azione avviata: " + action)
-	action_changed.emit(action, true, "operazione in corso…", true)
+	action_changed.emit(action, true, start_message, true)
 	WorkerThreadPool.add_task(_run_action.bind(action, callable))
 
 
@@ -3019,6 +3110,9 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	current_action = ""
 	action_phase = ""
 	last_pull = {}
+	if action == "upgrade":
+		last_upgrade = result.duplicate(true)
+		result["message"] = _upgrade_ui_message(result)
 	Log.info("setup", "azione %s → %s: %s" % [action,
 			"ok" if bool(result.get("ok", false)) else "FALLITA",
 			str(result.get("message", ""))])
@@ -3032,6 +3126,31 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	elif bool(result.get("ok", false)) and bool(result.get("activate_local", false)):
 		BackendBus.switch_to_local_backend()
 	refresh()
+
+
+## Solo qui, sul main thread, il responso strutturato diventa testo UI. Il
+## backend ha gia' svolto restart/verify: restartRequired e' informazione per
+## l'utente, non un ordine al gioco di eseguire un secondo riavvio.
+func _upgrade_ui_message(result: Dictionary) -> String:
+	if bool(result.get("protocol_error", false)):
+		return UIStrings.t("setup.upgrade_protocol_error")
+	var lines := PackedStringArray()
+	var phase := str(result.get("phase", ""))
+	if phase != "":
+		lines.append(UIStrings.t("setup.upgrade_phase") % phase)
+	var message := str(result.get("message", "")).strip_edges()
+	if message != "":
+		lines.append(message)
+	var current: Dictionary = result.get("current", {})
+	var version := str(current.get("version", "")).strip_edges()
+	if version != "":
+		lines.append(UIStrings.t("setup.upgrade_current") % version)
+	if bool(result.get("rolledBack", false)):
+		lines.append(UIStrings.t("setup.upgrade_rolled_back"))
+	if bool(result.get("restartRequired", false)):
+		lines.append(UIStrings.t("setup.upgrade_restart_required"))
+	return "\n".join(lines) if not lines.is_empty() \
+			else UIStrings.t("setup.upgrade_protocol_error")
 
 
 ## Comandi di spegnimento da eseguire quando l'utente chiude il gioco.
@@ -3136,10 +3255,14 @@ func _vps_config() -> Dictionary:
 
 
 static func _run_ssh(vps: Dictionary, command: String) -> Dictionary:
+	return _run("ssh", _ssh_args(vps, command))
+
+
+static func _ssh_args(vps: Dictionary, command: String) -> PackedStringArray:
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 	var known := VpsBackend.known_hosts_path(str(vps.get("ip", "")))
 	var target := _ssh_target(vps)
-	return _run("ssh", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
+	return PackedStringArray(["-i", key, "-o", "BatchMode=yes",
 			"-o", "IdentitiesOnly=yes", "-o", "ConnectTimeout=8",
 			"-o", "StrictHostKeyChecking=yes",
-			"-o", "UserKnownHostsFile=" + known, target, command]))
+			"-o", "UserKnownHostsFile=" + known, target, command])
