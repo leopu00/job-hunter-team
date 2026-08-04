@@ -405,10 +405,10 @@ func _refresh_docker_button(status: Dictionary) -> void:
 		status_key = "setup.docker_missing"
 		tint = Palette.RED
 	elif runtime == "stopped":
-		status_key = "setup.runtime_check_unknown"
+		status_key = "setup.container_todo"
 		tint = Palette.YELLOW
 	_docker_icon.color = tint
-	var check_key := ""
+	var check_key := "setup.runtime_check_current"
 	if check_state == "checking":
 		check_key = "setup.runtime_check_busy"
 	elif check_state == "available":
@@ -418,7 +418,7 @@ func _refresh_docker_button(status: Dictionary) -> void:
 	elif check_state == "unknown":
 		check_key = "setup.runtime_check_unknown"
 	_docker_button.tooltip_text = UIStrings.t("side.docker") + " · " \
-			+ UIStrings.t(check_key if check_key != "" else status_key)
+			+ UIStrings.t(status_key) + " · " + UIStrings.t(check_key)
 	if not is_instance_valid(_docker_badge):
 		return
 	var badge := str(view["badge"])
