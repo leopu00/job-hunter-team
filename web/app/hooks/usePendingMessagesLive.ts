@@ -83,21 +83,21 @@ export function usePendingMessagesLive(
     let channel: any = null;
 
     void (async () => {
-      const { data } = (await supabase.auth.getSession()) as {
-        data: {
-          session: { access_token: string; user: { id: string } } | null;
-        };
-      };
-      if (cancelled || !data.session) return;
-      if (supabase.realtime?.setAuth) {
-        await supabase.realtime.setAuth(data.session.access_token);
-      }
-      const userId = data.session.user.id;
-      // subscribe() può LANCIARE SINCRONO dal costruttore WebSocket
-      // (Safari su http://localhost: "The operation is insecure") →
-      // dentro questa IIFE async diventerebbe unhandledRejection. Senza
-      // realtime il drawer degrada al fetch: nessun crash.
       try {
+        const { data } = (await supabase.auth.getSession()) as {
+          data: {
+            session: { access_token: string; user: { id: string } } | null;
+          };
+        };
+        if (cancelled || !data.session) return;
+        if (supabase.realtime?.setAuth) {
+          await supabase.realtime.setAuth(data.session.access_token);
+        }
+        const userId = data.session.user.id;
+        // Auth, subscribe() e il costruttore WebSocket possono fallire sia
+        // in modo asincrono sia sincrono. Tutto resta nello stesso catch:
+        // senza Realtime il drawer degrada al fetch, non a un rejection non
+        // gestito che spezza la pagina.
         channel = supabase
           .channel(`pending_user_messages:live:${userId}`)
           .on(
