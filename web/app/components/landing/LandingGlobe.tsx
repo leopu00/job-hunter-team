@@ -394,19 +394,7 @@ export default function LandingGlobe() {
         }}
       />
 
-      {/* Dicitura demo: sobria ma sempre visibile — i punteggi sono un
-          esempio, non risultati reali. */}
-      <div
-        aria-hidden
-        className="jht-globe-badge absolute top-3 right-3 z-10 pointer-events-none px-2.5 py-1.5 sm:px-2 sm:py-1 border border-[var(--color-border)] text-[11px] sm:text-[9px] font-semibold tracking-[0.18em] uppercase text-[var(--color-muted)]"
-        style={{
-          background: "color-mix(in srgb, var(--color-panel) 78%, transparent)",
-        }}
-      >
-        {tr("demo_badge")}
-      </div>
-
-      {/* Card della tappa: città + posizioni dimostrative con score. */}
+      {/* Card della tappa: città + opportunità della sua ricerca. */}
       {stop && (
         <div
           aria-hidden
