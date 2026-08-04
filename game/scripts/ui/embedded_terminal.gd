@@ -201,6 +201,10 @@ var _pid := -1
 var _closing := false
 var _finished := false
 var _process_exited := false
+## La terminazione ha un solo proprietario. Serve soprattutto nel bordo in cui
+## `close()` precede la pubblicazione del PID: chi pubblica il PID vede
+## `_closing` sotto lo stesso mutex e prende in carico il kill.
+var _kill_requested := false
 var _pending_bytes := PackedByteArray()
 var _raw_bytes := PackedByteArray()
 var _report_bytes := PackedByteArray()
@@ -484,9 +488,13 @@ func _build_ui() -> void:
 	col.add_child(_done)
 
 
-func _run_process() -> void:
-	var process := OS.execute_with_pipe(str(spec.get("path", "")),
+func _spawn_process() -> Dictionary:
+	return OS.execute_with_pipe(str(spec.get("path", "")),
 			PackedStringArray(spec.get("args", PackedStringArray())), false)
+
+
+func _run_process() -> void:
+	var process := _spawn_process()
 	if process.is_empty():
 		call_deferred("_process_failed", UIStrings.t("term.err_start"))
 		return
@@ -494,7 +502,17 @@ func _run_process() -> void:
 	_stdio = process["stdio"]
 	_stderr = process["stderr"]
 	_pid = int(process["pid"])
+	# Handshake close/spawn: o `close()` trova il PID già pubblicato e ne prende
+	# ownership, oppure questa pubblicazione trova `_closing` e lo termina qui.
+	# Non esiste più una finestra in cui entrambi vedono "nessun PID da uccidere".
+	var kill_after_spawn := -1
+	if _closing and not _process_exited and not _kill_requested:
+		_kill_requested = true
+		kill_after_spawn = _pid
 	_mutex.unlock()
+	if kill_after_spawn > 0:
+		OS.kill(kill_after_spawn)
+		return
 	if bool(spec.get("reports_exit", false)):
 		# stdout è un canale di controllo separato: un reader indipendente evita
 		# che l'EOF di stderr tronchi un report più lungo dell'output ospitato.
@@ -740,32 +758,39 @@ func _refresh_setup() -> void:
 		setup.call("refresh")
 
 
+func _claim_process_for_close() -> int:
+	var pid_to_kill := -1
+	_mutex.lock()
+	_closing = true
+	if _pid > 0 and not _process_exited and not _kill_requested:
+		_kill_requested = true
+		pid_to_kill = _pid
+	_mutex.unlock()
+	return pid_to_kill
+
+
 func close() -> void:
 	if _closing:
 		return
-	_closing = true
+	var pid_to_kill := _claim_process_for_close()
 	_stdio_mutex.lock()
 	if is_instance_valid(_stdio):
 		_stdio.store_8(3)
 		_stdio.flush()
 	_stdio_mutex.unlock()
-	_mutex.lock()
-	if _pid > 0 and not _process_exited:
-		OS.kill(_pid)
-	_mutex.unlock()
+	if pid_to_kill > 0:
+		OS.kill(pid_to_kill)
 	closed.emit()
 	queue_free()
 
 
 func _exit_tree() -> void:
-	_closing = true
 	# Anche chi smonta la console con queue_free (es. una console che ne
 	# sostituisce un'altra) non deve lasciare orfano il processo figlio:
 	# il 22/07 un compose doppio è sopravvissuto proprio così.
-	_mutex.lock()
-	if _pid > 0 and not _process_exited:
-		OS.kill(_pid)
-	_mutex.unlock()
+	var pid_to_kill := _claim_process_for_close()
+	if pid_to_kill > 0:
+		OS.kill(pid_to_kill)
 	if _thread != null and _thread.is_started():
 		_thread.wait_to_finish()
 	if _report_thread != null and _report_thread.is_started():
