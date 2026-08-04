@@ -116,9 +116,12 @@ PRIVATE_HITS=""
 
 # IPv4 pubblici. Esclusi: loopback, RFC1918, link-local, multicast/broadcast e
 # i range di documentazione (192.0.2 / 198.51.100 / 203.0.113).
+# Prima degli allowlist accetta solo IPv4 canonici: i path SVG contengono spesso
+# sequenze decimali come `1.067.133.167` o ottetti >255, che non sono indirizzi.
 IP_FOUND=$(git diff --cached -U0 --diff-filter=ACM 2>/dev/null \
     | grep -E "^\+" \
     | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' \
+    | awk -F. '{ valid=1; for (i=1; i<=4; i++) if ($i !~ /^(0|[1-9][0-9]*)$/ || $i > 255) valid=0; if (valid) print }' \
     | grep -vE '^(127\.|0\.|10\.|192\.168\.|169\.254\.|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|255\.|22[4-9]\.|23[0-9]\.|172\.(1[6-9]|2[0-9]|3[01])\.)' \
     | sort -u | head -3 || true)
 if [ -n "$IP_FOUND" ]; then
@@ -127,9 +130,11 @@ fi
 
 # Email reali. Whitelist: domini del progetto, esempi, pacchetti npm scoped e i
 # segnaposto usati nelle skill (nome.jht@, your_name@, ...).
+# Il local-part deve iniziare con un carattere alfanumerico: così un decoratore
+# aggiunto nel diff (`+@pytest.fixture`) non viene interpretato come una mail.
 MAIL_FOUND=$(git diff --cached -U0 --diff-filter=ACM 2>/dev/null \
     | grep -E "^\+" \
-    | grep -oE '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' \
+    | grep -oE '[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' \
     | grep -vE '@(jobhunterteam\.ai|example\.(com|org|net)|[a-z-]+\.invalid|users\.noreply\.github\.com|anthropic\.com)$' \
     | grep -vE '^(nome|name|nombre|nom|user|utente|tuo|your|your_name|email)[._-]?[a-z]*@' \
     | grep -vE '@(types|supabase|vercel|next|radix-ui|testing-library|eslint|babel|playwright|tailwindcss)/' \
