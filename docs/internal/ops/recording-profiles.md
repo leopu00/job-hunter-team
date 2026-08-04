@@ -6,9 +6,10 @@ deterministic data. They do **not** use the public demo mode: no
 demo banner.
 
 Every reset also pins the recording UI to the **light** theme. It writes
-`theme: "light"` for the local/game workspace and `jht-theme=light` into both
-production and localhost browser origins. The result does not depend on the
-recorder's operating-system theme.
+`theme: "light"` for the local/game workspace and `jht-theme=light` into the
+two exact browser origins: `https://jobhunterteam.ai` and
+`http://localhost:3008`. The result does not depend on the recorder's
+operating-system theme.
 
 Four aliases cover different candidates and job markets:
 
@@ -92,6 +93,23 @@ const context = await browser.newContext({
   storageState: process.env.JHT_RECORDING_AUTH_STATE,
 });
 ```
+
+### Exact origin and route
+
+The local recording origin is **exactly** `http://localhost:3008`. Start at
+`http://localhost:3008/`, or use
+`http://localhost:3008/?login=true` to enter the login flow. Once a valid
+authentication callback establishes the matching auth state, its default
+continuation is `/dashboard`; that is the protected page used for the first
+authenticated recording frame.
+
+`http://localhost:3008` is an origin-specific recording/development exception,
+not a reintroduction of the shipped local dashboard. The product's
+`localhost:3000` dashboard was retired on 2026-07-23. The recording profile
+introduced `:3008` separately on 2026-08-04 (`f577a1278`), and the storage
+state plus pre-take gate were then fixed to that exact origin (`9d106b676`).
+Do not substitute `:3005`: that port was only an earlier, ad-hoc `dev2` Next
+development reference for a simulation, never a user-facing dashboard.
 
 The generated state contains the Supabase session plus `jht-tour-done=1` and
 `jht-theme=light` in localStorage. It contains no `jht_demo_persona`, so
