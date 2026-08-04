@@ -1491,6 +1491,18 @@ static func _provider_tui_login(provider: String) -> String:
 const PTY_ROWS := 40
 const PTY_COLS := 120
 
+## Il pipe interattivo di Godot viene raccolto quando arriva EOF: a quel punto
+## su macOS chiedere l'exit code al PID produce il falso errore "not a child".
+## Il guscio scrive quindi l'esito come OSC (invisibile nel renderer terminale)
+## prima di uscire; EmbeddedTerminal lo legge dai byte grezzi e può distinguere
+## davvero successo e fallimento.
+static func _with_exit_report(command: String) -> String:
+	# Il comando gira in una subshell: anche un suo `exit N` non può saltare il
+	# report del wrapper esterno. Stdin resta la stessa PTY interattiva.
+	return ("( %s\n); _jht_exit=$?; " \
+			+ "printf '\\033]1337;JHTExit=%%s\\007' \"$_jht_exit\" >&2; " \
+			+ "exit \"$_jht_exit\"") % command
+
 
 ## Senza `stty` la pty aperta da `script` nasce 0×0 — misurato sia su macOS
 ## sia su Ubuntu 24.04, e `docker exec -it` propaga quello 0×0 dentro al
@@ -1507,23 +1519,27 @@ static func _with_pty_size(command: String) -> String:
 static func embedded_terminal_spec(title: String, hint: String, command: String) -> Dictionary:
 	var path := "/bin/sh"
 	var args := PackedStringArray()
+	var reports_exit := false
 	match OS.get_name():
 		"macOS":
+			reports_exit = true
 			args = PackedStringArray(["-lc", "script -q /dev/null /bin/sh -lc " \
-					+ _shell_quote(_with_pty_size(command)) + " 1>&2"])
+					+ _shell_quote(_with_pty_size(_with_exit_report(command))) + " 1>&2"])
 		"Windows":
 			path = "cmd.exe"
 			# ConPTY non è ancora esposto da Godot: il device flow Codex resta
 			# pienamente interattivo; Claude/Kimi ricevono comunque stdin.
 			args = PackedStringArray(["/d", "/s", "/c", command + " 1>&2"])
 		_:
+			reports_exit = true
 			args = PackedStringArray(["-lc", "script -qefc " \
-					+ _shell_quote(_with_pty_size(command)) + " /dev/null 1>&2"])
+					+ _shell_quote(_with_pty_size(_with_exit_report(command))) + " /dev/null 1>&2"])
 	return {
 		"path": path,
 		"args": args,
 		"title": title,
 		"hint": hint,
+		"reports_exit": reports_exit,
 	}
 
 
@@ -1607,12 +1623,26 @@ func open_runtime_install() -> void:
 				+ "una prima volta (accetta i termini), poi torna qui e premi ATTIVA CONTAINER.",
 				command))
 		return
-	var command := "curl -fsSL https://jobhunterteam.ai/install.sh | " \
-			+ "JHT_SKIP_ONBOARD=1 bash"
+	var command := _posix_runtime_install_command()
 	terminal_requested.emit("runtime-install", embedded_terminal_spec(
 			"Installazione runtime JHT",
-			"L'installazione resta dentro il gioco. Potrebbe chiedere la password amministratore del computer.",
+			"L'installazione resta dentro il gioco. Se richiesta, inserisci qui la password amministratore del computer.",
 			command))
+
+
+## Scaricare prima su file lascia stdin collegato alla PTY incorporata. Con il
+## vecchio `curl | bash`, Homebrew vedeva invece una pipe, passava da solo in
+## modalità non interattiva e sudo non poteva chiedere la password. Il PATH
+## esplicito copre inoltre le app macOS lanciate da Finder, che non ereditano
+## /opt/homebrew/bin pur avendo già Homebrew installato.
+static func _posix_runtime_install_command() -> String:
+	return "export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; " \
+			+ "jht_installer=\"$(mktemp \"${TMPDIR:-/tmp}/jht-install.XXXXXX\")\" && " \
+			+ "curl -fsSL https://jobhunterteam.ai/install.sh -o \"$jht_installer\" && " \
+			+ "JHT_SKIP_ONBOARD=1 /bin/bash \"$jht_installer\"; " \
+			+ "_jht_install_code=$?; " \
+			+ "[ -z \"${jht_installer:-}\" ] || rm -f \"$jht_installer\"; " \
+			+ "(exit \"$_jht_install_code\")"
 
 
 static func default_vps_key_path() -> String:

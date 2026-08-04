@@ -72,6 +72,32 @@ func _run() -> void:
 		"active_provider": "codex", "provider_authenticated": true})
 	await create_timer(1.1).timeout
 	ok = ok and not is_instance_valid(terminal)
+	# Fallimento reale del comando: il wrapper POSIX comunica il codice con
+	# un OSC invisibile. La console deve dichiarare l'errore, mostrare una via
+	# di riprova e non usare mai il vecchio CTA auto-certificante "HO FINITO".
+	ok = ok and EmbeddedTerminal._exit_code_from_raw(
+			"prima\u001b]1337;JHTExit=23\u0007dopo") == 23
+	ok = ok and EmbeddedTerminal._exit_code_from_raw("nessun report") == -1
+	var failure_status := "non eseguito su Windows"
+	if not is_windows:
+		var setup_script: GDScript = load("res://scripts/setup/setup_service.gd")
+		var failure := EmbeddedTerminal.new("runtime-install",
+				setup_script.embedded_terminal_spec("Runtime self-test", "test",
+						"printf 'simulated installer error\\n' >&2; exit 23"))
+		root.add_child(failure)
+		for _i in 80:
+			if failure._finished:
+				break
+			await create_timer(0.05).timeout
+		await create_timer(0.1).timeout
+		failure_status = failure._status.text
+		ok = ok and failure._finished
+		ok = ok and failure._status.text == UIStrings.t("term.status_cmd_failed") % 23
+		ok = ok and failure._done.text == UIStrings.t("term.close_retry")
+		ok = ok and failure._output.text.contains(UIStrings.t("term.runtime_install_failed"))
+		ok = ok and not failure._done.text.contains("HO FINITO")
+		failure.close()
 	print("EMBEDDED-TERMINAL-TEST ", "PASS" if ok else "FAIL",
-			" pid=", pid, " output=", visible, " auto_auth_close=", ok)
+			" pid=", pid, " output=", visible, " auto_auth_close=", ok,
+			" failure_status=", failure_status)
 	quit(0 if ok else 1)

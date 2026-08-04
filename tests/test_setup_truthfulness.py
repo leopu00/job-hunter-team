@@ -38,3 +38,36 @@ def test_showroom_agents_wait_until_operational_team_exists():
     office = _src("game/scripts/office/office.gd")
     assert 'var team_running := bool(status.get("team_running", false))' in office
     assert 'agent.set_backend_status("working" if team_running else "idle")' in office
+
+
+def test_runtime_installer_keeps_tty_and_reports_command_failure():
+    setup = _src("game/scripts/setup/setup_service.gd")
+    terminal = _src("game/scripts/ui/embedded_terminal.gd")
+    strings = _src("game/scripts/ui_strings.gd")
+    runtime_command = setup[
+        setup.index("static func _posix_runtime_install_command()") :
+        setup.index("static func default_vps_key_path()")
+    ]
+
+    # curl|bash consegnava allo script uno stdin non-TTY: Homebrew passava in
+    # non-interactive e sudo non poteva chiedere la password nella console.
+    assert "jobhunterteam.ai/install.sh |" not in runtime_command
+    assert r'install.sh -o \"$jht_installer\"' in runtime_command
+    assert "JHTExit=" in setup
+
+    # EOF non equivale a successo: il codice riportato dal wrapper determina
+    # uno stato rosso e un CTA di riprova, mai una dichiarazione dell'utente.
+    assert 'code = _captured_exit_code()' in terminal
+    assert 'UIStrings.t("term.status_cmd_failed") % code' in terminal
+    assert 'UIStrings.t("term.close_retry")' in terminal
+    assert '"term.done_plain": "CHIUDI CONSOLE"' in strings
+
+
+def test_macos_installer_finds_homebrew_from_finder_path():
+    installer = _src("scripts/install.sh")
+    block = installer[
+        installer.index("install_brew_if_missing()") :
+        installer.index("install_colima_macos()")
+    ]
+    assert "/opt/homebrew/bin/brew /usr/local/bin/brew" in block
+    assert 'eval "$("$brew_bin" shellenv)"' in block
