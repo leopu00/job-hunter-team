@@ -104,8 +104,7 @@ const S := {
 
 	# ── Registro candidature ──────────────────────────────────────────
 	"registry.title": "REGISTRO CANDIDATURE",
-	"registry.streak": "STREAK %d giorni · %d freeze",
-	"registry.empty": "nessuna candidatura ancora — parla col reparto Ricerca",
+	"registry.empty": "osservare il mercato e' un uso completo di JHT",
 	"registry.stage_0": "inviata",
 	"registry.stage_1": "screening",
 	"registry.stage_2": "colloquio",
@@ -496,7 +495,7 @@ const S := {
 	"apps.ready": "CV pronto",
 	"apps.applied": "inviata",
 	"apps.response": "risposta ricevuta",
-	"apps.empty_live": "nessuna candidatura ancora — i CV pronti compariranno qui",
+	"apps.empty_live": "il monitoraggio delle candidature e' opzionale; osservare il mercato e' un uso completo di JHT",
 	"notifs.ticket_resolved": "ticket risolto: %s",
 	"notifs.ticket_assigned": "ticket in lavorazione: %s",
 	"notifs.scored": "studiata dal reparto Compatibilità: %s",
@@ -885,8 +884,6 @@ const S := {
 	"kpi.positions_total": "POSIZIONI TOTALI",
 	"kpi.positions_list": "POSIZIONI DI OGGI",
 	"kpi.budget_used": "BUDGET USATO",
-	"kpi.streak": "STREAK",
-	"kpi.streak_value": "%d giorni · %d freeze",
 	"kpi.apps_by_stage": "CANDIDATURE PER STADIO",
 	"kpi.provider": "PROVIDER",
 	"kpi.actions_today": "AZIONI OGGI",

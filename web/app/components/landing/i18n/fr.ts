@@ -3,7 +3,7 @@
 export const fr: Record<string, string> = {
   // Chiavi aggiunte (allineamento i18n)
   home_intro:
-    "Job Hunter Team est une équipe d'agents IA autonomes qui cherchent un emploi pour vous, sans relâche. Chaque agent est un spécialiste : l'un repère les offres, un autre les analyse en détail et un autre attribue à chacune une note, selon sa proximité avec ce qui compte vraiment pour vous. Sur votre demande, ils préparent aussi le CV pour votre candidature. Et quand les candidatures envoyées ne suffisent pas à trouver un emploi, un agent dédié vous accompagne : il vous aide à vous orienter sur le marché du travail et à vous rapprocher du poste que vous désirez. C'est vous qui donnez la direction et gardez le dernier mot ; le reste, l'équipe s'en charge, en privé, sur votre propre machine.",
+    "Job Hunter Team est une équipe d'agents IA autonomes qui cherchent un emploi pour vous, sans relâche. Chaque agent est un spécialiste : l'un repère les offres, un autre les analyse en détail et un autre attribue à chacune une note, selon sa proximité avec ce qui compte vraiment pour vous. Sur votre demande, ils préparent aussi le CV pour votre candidature. Un agent dédié vous aide aussi à vous orienter sur le marché du travail et à vous rapprocher du poste que vous désirez. Observer le marché est un usage complet du produit. C'est vous qui donnez la direction et gardez le dernier mot ; le reste, l'équipe s'en charge, en privé, sur votre propre machine.",
   theme_system: "système",
   theme_dark: "nuit",
   theme_light: "jour",

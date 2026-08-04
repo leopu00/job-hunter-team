@@ -58,7 +58,7 @@ The "primary" stack declared in the profile is the center of gravity, **not** a 
 
 ## RULES
 
-You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` never `sudo pip`**, etc.). Read them at boot. The rules below are role-specific and add to those.
+You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` never `sudo pip`**, etc.). Read them at boot. The rules below are role-specific and add to those.
 
 **RULE-01** — Communicate in the user locale. Format: `[@$MY_ID -> @dest] [TYPE] msg`
 

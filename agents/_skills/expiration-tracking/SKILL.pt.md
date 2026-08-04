@@ -1,17 +1,13 @@
 <!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: expiration-tracking
-description: Extrair prazos do JD (helper deadline_extract) e produzir alertas ao utilizador quando uma candidatura READY está prestes a expirar (helper expiration_alerts, idempotente). F-4 task #50. Scout/Analista populam positions.deadline, Mentor/Capitano notificam o utilizador quando deadline-now ≤ 3 dias.
-allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *), Bash(jht-telegram-send *)
+description: Extrai prazos das ofertas e fornece informacao factual sobre eles apenas apos um pedido explicito do utilizador. Nunca notifiques nem pressiones automaticamente.
+allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *)
 ---
 
-# expiration-tracking — não perder top PASS por expiração
+# expiration-tracking — dados de prazo a pedido
 
-Bug latente F-4: utilizador acumula 50 CVs `ready`, esquece-se de candidatar
-durante 2 dias, oportunidade top (ex. Sisal PASS 7.5) expira em silêncio.
-O pipeline é user-curated apply (bug #9 desclassificado) → sem alerta
-proativo, o zelo da equipa em preparar CVs top é anulado pelo
-silêncio do utilizador.
+Os prazos ajudam o utilizador a avaliar oportunidades. Conserva-os com precisao, mas nao os transformes num lembrete, convite a candidatar-se ou medida de progresso.
 
 ## A. Scout/Analista: extração de prazo do JD
 
@@ -37,28 +33,13 @@ O parser é **conservador** (apenas ISO, dd/mm/yyyy EU, Month dd[, yyyy]
 EN/IT, "expires in N days"). Se não encontrar um match de alta confiança
 retorna string vazia → melhor NULL no DB que data inventada.
 
-## C. Mentor/Capitano: alerta proativo ao utilizador
+## C. Informacao de prazo, so a pedido
 
-Trigger recomendado: após cada `[BRIDGE TICK]` (Capitano) ou fim-de-passagem
-do Mentor. Idempotência faz com que chamadas frequentes produzam alertas
-apenas para NOVOS pares (app_id, deadline_iso).
+Usa esta secao apenas enquanto respondes a pergunta explicita do utilizador sobre o prazo de uma posicao ou candidatura. Nunca a agendes, envies proativamente ou reencaminhes a saida como notificacao.
 
-```bash
-alerts=$(python3 /app/shared/skills/expiration_alerts.py)
-if [ -n "$alerts" ]; then
-  # Enviar ao utilizador via Telegram
-  echo "$alerts" | jht-telegram-send --from capitano --keyboard capitano
-fi
-```
+Executa: python3 /app/shared/skills/expiration_alerts.py --user-requested
 
-Output 1 linha por application em risco:
-```
-⏳ [ALERT scadenza] Sisal Data Analyst (PASS 7.5) — scade 2026-05-18 (DOMANI). Spedisci candidatura o perdi l'opportunità.
-```
-
-O state de idempotência está em `$JHT_HOME/state/expiration_alerts_sent.json`
-(conjunto de `(app_id, deadline_iso)` já notificados). Para re-enviar um
-alerta já mandado: `expiration_alerts.py --reset` (apenas dev).
+A saida fornece informacao factual sobre prazos de posicoes que ja estao nos registos do utilizador, por exemplo: [DEADLINE] Sisal Data Analyst (PASS 7.5) — expira em 2026-05-18 (amanha).
 
 ## B. Re-check periódico de positions antigas (Analista) — POR FAZER
 
@@ -70,18 +51,11 @@ dos deadlines capturados do JD cobre a maioria dos casos.
 
 ## Anti-padrões
 
-- ❌ Parsear prazo à mão com regex inline — use o helper, tem
-  fallback EN/IT + sanity check em datas passadas.
-- ❌ Inventar prazo quando o JD não o especifica explicitamente —
-  melhor `NULL` que `+30d arbitrário`.
-- ❌ Spammar o utilizador com o mesmo alerta a cada 6h — o state de
-  idempotência existe para isso.
-- ❌ Enviar o alerta de bot diferente do Capitano (ex. Assistente
-  genérico) — perde contexto operacional; o Capitano acompanha
-  ao pipeline.
+- Nao executes o relatorio de prazos sem um pedido explicito do utilizador.
+- Nao transformes a informacao de prazo num convite, lembrete ou pressao para se candidatar.
 
 ## Ver também
 
 - `shared/skills/deadline_extract.py` — parser
-- `shared/skills/expiration_alerts.py` — emitter + state de idempotência
+- shared/skills/expiration_alerts.py — relatorio de prazo a pedido
 - `agents/_skills/db-update/SKILL.md` § Positions — flag `--deadline`

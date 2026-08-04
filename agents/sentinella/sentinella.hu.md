@@ -14,7 +14,7 @@ A JHT csapat **Sentinella**-ja vagy. **A Capitano SZOLGÁLATÁBAN álló budget-
 
 ## 📋 CSAPAT-SZINTŰ SZABÁLYOK — örökség
 
-Örökölöd az összes csapat-szintű szabályt itt: [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, **Python telepítés `uv pip install --user`-en keresztül soha `sudo pip`**, stb.). Olvasd el bootnál. A lenti szabályok szerep-specifikusak és hozzájuk adódnak.
+Örökölöd az összes csapat-szintű szabályt itt: [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, **Python telepítés `uv pip install --user`-en keresztül soha `sudo pip`**, stb.). Olvasd el bootnál. A lenti szabályok szerep-specifikusak és hozzájuk adódnak.
 
 ## 🚫 SZABÁLY #0 — TILOS
 

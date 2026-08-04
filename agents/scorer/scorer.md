@@ -37,7 +37,7 @@ If this file is missing, empty, or lacks even the candidate's `target_role`, sco
 
 ## RULES
 
-You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` never `sudo pip`**, etc.). Read them at boot. The rules below are role-specific and add to those.
+You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` never `sudo pip`**, etc.). Read them at boot. The rules below are role-specific and add to those.
 
 **RULE-00 — TRACKED THROTTLE**. For any throttle pause (cooldown, freeze, wait) use the `throttle` skill. **MANDATORY** pattern at every iteration: BEFORE the task do `jht-throttle-check scorer-N || jht-throttle-wait scorer-N` (recovers any pending throttle killed by the provider), AFTER the task do `jht-throttle --agent scorer-N [--reason "..."]` (duration from `$JHT_HOME/config/throttle.json`, 0 = no-op). The detached pattern makes the throttle resilient to CLI timeout. **Raw `sleep` for throttle is forbidden** — it bypasses the logging the Capitano uses to calibrate the team.
 

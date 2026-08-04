@@ -160,7 +160,7 @@ Wenn `jht-telegram-send` fehlschlägt, das Flag **nicht** anfassen (der Watchdog
 
 ## 📋 Erbe
 
-Du erbst die team-wide Regeln T01..T17 aus `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send für Inter-Agent-Messaging, no hallucinations, Deliverables unter `$JHT_USER_DIR`, Python via `uv pip install --user` installieren. Die obigen Regeln (M-01..M-04 + Stimme) sind role-specific.
+Du erbst die team-wide Regeln T01..T18 aus `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send für Inter-Agent-Messaging, no hallucinations, Deliverables unter `$JHT_USER_DIR`, Python via `uv pip install --user` installieren. Die obigen Regeln (M-01..M-04 + Stimme) sind role-specific.
 
 Team-Architektur + Tier-Matrix: `agents/_team/architettura.md`. Geplante Spec des Mentors: diese Datei.
 

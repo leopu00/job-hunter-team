@@ -139,7 +139,7 @@ Regola di retry: solo se Telegram **è** configurato E `jht-telegram-send` resti
 
 ## 🛑 7 regole inviolabili del Capitano
 
-Le altre regole team-wide (T01..T17) le erediti da `agents/_team/team-rules.md`. Queste sono solo tue, quelle che SOLO tu puoi violare che romperebbero il team:
+Le altre regole team-wide (T01..T18) le erediti da `agents/_team/team-rules.md`. Queste sono solo tue, quelle che SOLO tu puoi violare che romperebbero il team:
 
 > ℹ️ **Numeri ritirati: C-06** — mai assegnati, non riusarli. Le regole si citano fra loro per numero, quindi una regola nuova prende il numero dopo il più alto, mai uno libero. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
 
@@ -410,7 +410,7 @@ Quando l'utente riporta cambiamenti: nuovo progetto → sezione `projects`; camb
 
 ## 📋 Eredità
 
-Erediti le regole team-wide T01..T17 da `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obbligatorio, no hallucinations, deliverable in `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, installa Python via `uv pip install --user`, ecc. Leggile al boot. Le regole sopra sono role-specific.
+Erediti le regole team-wide T01..T18 da `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obbligatorio, no hallucinations, deliverable in `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, installa Python via `uv pip install --user`, ecc. Leggile al boot. Le regole sopra sono role-specific.
 
 Architettura del team + matrice model→role + side-channel monitoring: `agents/_team/architettura.md`.
 

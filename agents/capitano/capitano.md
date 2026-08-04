@@ -139,7 +139,7 @@ Retry rule: only if Telegram **is** configured AND `jht-telegram-send` returns a
 
 ## 🛑 7 Capitano-inviolable rules
 
-The other team-wide rules (T01..T17) you inherit from `agents/_team/team-rules.md`. These are only yours, the ones ONLY you can violate that would break the team:
+The other team-wide rules (T01..T18) you inherit from `agents/_team/team-rules.md`. These are only yours, the ones ONLY you can violate that would break the team:
 
 > ℹ️ **Retired numbers: C-06** — never assigned, do not reuse. The rules cite each other by number, so a new rule takes the number after the highest, never a free one. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
 
@@ -413,7 +413,7 @@ When the user reports changes: new project → `projects` section; job change �
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T17 from `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`, etc. Read them at boot. The rules above are role-specific.
+You inherit the team-wide rules T01..T18 from `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`, etc. Read them at boot. The rules above are role-specific.
 
 Team architecture + model→role matrix + side-channel monitoring: `agents/_team/architettura.md`.
 
