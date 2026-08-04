@@ -20,6 +20,7 @@
     "dev:down": "bash scripts/dev-down.sh",
     "lint": "npm run lint --prefix web",
     "format:check": "npx prettier --check \"web/app/**/*.{ts,tsx}\" \"shared/**/*.ts\"",
+    "recording-profile": "npm --prefix web run recording-profile --",
     "app:test": "./game/tools/run.sh test",
     "app:dev": "./game/tools/run.sh play",
     "app:dist": "./scripts/build-release.sh auto"
