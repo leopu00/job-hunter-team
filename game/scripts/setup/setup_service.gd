@@ -1498,21 +1498,23 @@ const PTY_COLS := 120
 ## davvero successo e fallimento.
 static func _with_exit_report(command: String, token: String) -> String:
 	# Il comando gira in una subshell: anche un suo `exit N` non può saltare il
-	# report del wrapper esterno. Stdin resta la stessa PTY interattiva.
-	return ("( %s\n); _jht_exit=$?; " \
-			+ "printf '\\033]1337;JHTExit=%s:%%s\\007' \"$_jht_exit\" >&2; " \
+	# report del wrapper esterno. fd3 è il canale di controllo verso Godot e
+	# viene chiuso nel figlio: il comando ospitato non può falsificarlo.
+	return ("( exec 3>&-; %s\n); _jht_exit=$?; " \
+			+ "printf '\\033]1337;JHTExit=%s:%%s\\007' \"$_jht_exit\" >&3; " \
 			+ "exit \"$_jht_exit\"") % [command, token]
 
 
 ## Windows non espone l'exit code del processo raccolto da Godot. Delayed
-## expansion conserva l'esito del comando prima di invocare PowerShell, usato
-## soltanto per scrivere la stessa sequenza OSC invisibile del wrapper POSIX.
+## expansion non può restare attiva sul comando ospitato: cambierebbe i path e
+## gli argomenti contenenti `!`. `call` espande ERRORLEVEL soltanto DOPO il
+## comando; PowerShell scrive l'OSC e termina con lo stesso codice catturato.
 static func _with_windows_exit_report(command: String, token: String) -> String:
-	return ("( %s ) 1>&2 & set \"_jht_exit=!errorlevel!\" & " \
-			+ "set \"JHT_EXIT_CODE=!_jht_exit!\" & " \
+	return ("( %s ) 1>&2 & call set \"JHT_EXIT_CODE=%%%%errorlevel%%%%\" & " \
 			+ "powershell.exe -NoProfile -NonInteractive -Command " \
-			+ "\"[Console]::Error.Write([char]27 + ']1337;JHTExit=%s:' " \
-			+ "+ $env:JHT_EXIT_CODE + [char]7)\" & exit /b !_jht_exit!") \
+			+ "\"[Console]::Out.Write([char]27 + ']1337;JHTExit=%s:' " \
+			+ "+ $env:JHT_EXIT_CODE + [char]7); " \
+			+ "exit [int]$env:JHT_EXIT_CODE\"") \
 			% [command, token]
 
 
@@ -1534,17 +1536,17 @@ static func embedded_terminal_spec(title: String, hint: String, command: String)
 	var exit_report_token := Crypto.new().generate_random_bytes(16).hex_encode()
 	match OS.get_name():
 		"macOS":
-			args = PackedStringArray(["-lc", "script -q /dev/null /bin/sh -lc " \
+			args = PackedStringArray(["-lc", "3>&1 script -q /dev/null /bin/sh -lc " \
 					+ _shell_quote(_with_pty_size(
 							_with_exit_report(command, exit_report_token))) + " 1>&2"])
 		"Windows":
 			path = "cmd.exe"
 			# ConPTY non è ancora esposto da Godot: il device flow Codex resta
 			# pienamente interattivo; Claude/Kimi ricevono comunque stdin.
-			args = PackedStringArray(["/d", "/v:on", "/s", "/c",
+			args = PackedStringArray(["/d", "/s", "/c",
 					_with_windows_exit_report(command, exit_report_token)])
 		_:
-			args = PackedStringArray(["-lc", "script -qefc " \
+			args = PackedStringArray(["-lc", "3>&1 script -qefc " \
 					+ _shell_quote(_with_pty_size(
 							_with_exit_report(command, exit_report_token))) \
 					+ " /dev/null 1>&2"])
@@ -1627,11 +1629,13 @@ func open_runtime_install() -> void:
 	if OS.get_name() == "Windows":
 		# Niente bash su Windows: winget se c'è (gestisce lui il prompt UAC),
 		# altrimenti la pagina ufficiale di download nel browser.
-		var command := "where winget >nul 2>&1 && " \
-				+ "(winget install -e --id Docker.DockerDesktop " \
-				+ "--accept-package-agreements --accept-source-agreements) || " \
+		# `if` separa davvero assenza e fallimento: un errore di winget non deve
+		# cadere nel fallback browser e trasformarsi in un falso exit 0.
+		var command := "where winget >nul 2>&1 & if errorlevel 1 " \
 				+ "(echo winget non disponibile: apro la pagina di download di Docker Desktop... " \
-				+ "& start https://www.docker.com/products/docker-desktop/)"
+				+ "& start \"\" https://www.docker.com/products/docker-desktop/) else " \
+				+ "(winget install -e --id Docker.DockerDesktop " \
+				+ "--accept-package-agreements --accept-source-agreements)"
 		terminal_requested.emit("runtime-install", embedded_terminal_spec(
 				"Installazione Docker Desktop",
 				"Conferma l'autorizzazione di Windows se appare. Al termine avvia Docker Desktop " \
@@ -1653,7 +1657,9 @@ func open_runtime_install() -> void:
 static func _posix_runtime_install_command() -> String:
 	return "export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; " \
 			+ "jht_installer=\"$(mktemp \"${TMPDIR:-/tmp}/jht-install.XXXXXX\")\" && " \
-			+ "trap 'rm -f \"$jht_installer\"; exit 130' HUP INT TERM && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 129' HUP && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 130' INT && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 143' TERM && " \
 			+ "curl -fsSL https://jobhunterteam.ai/install.sh -o \"$jht_installer\" && " \
 			+ "JHT_SKIP_ONBOARD=1 /bin/bash \"$jht_installer\"; " \
 			+ "_jht_install_code=$?; " \
