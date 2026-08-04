@@ -9,6 +9,7 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 | Guide | For whom |
 |---|---|
 | [🚀 QUICKSTART](QUICKSTART.md) | Everyone — the 4 install paths, then your first run |
+| [🎓 TUTORIALS](TUTORIALS.md) | Everyone — text-first game and web walkthroughs, with optional videos |
 | [📦 CLI-INSTALL](CLI-INSTALL.md) | CLI users — deep dive on the `install.sh` one-liner |
 | [⌨️ CLI-REFERENCE](CLI-REFERENCE.md) | CLI users — full `jht` command reference |
 | [🤖 AI-AGENT-INTEGRATION](AI-AGENT-INTEGRATION.md) | AI assistants / devs driving JHT programmatically |
