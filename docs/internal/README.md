@@ -172,6 +172,7 @@ Infra, deploy, lifecycle, accessi.
 | [`vps.md`](ops/vps.md) | Design VPS: host/container split, providers, install UX, lifecycle |
 | [`release.md`](ops/release.md) | Processo release (tag → CI → GitHub Release) |
 | [`triage.md`](ops/triage.md) | Triage feedback / bug report (tabella `feedback_tickets`) |
+| [`recording-profiles.md`](ops/recording-profiles.md) | Profili sintetici deterministici e gate di isolamento per registrazioni web e gioco |
 | [`access-and-credentials.md`](ops/access-and-credentials.md) | Accessi e credenziali |
 | [`MAINTAINERS.md`](ops/MAINTAINERS.md) | Coordinamento maintainer: Supabase, Vercel, OAuth, code signing |
 
