@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n/config";
+import { defaultLocale, locales } from "@/i18n/config";
 
 export const PUBLIC_LOADING_COPY: Record<
   Locale,
@@ -40,3 +41,20 @@ export const PUBLIC_LOADING_COPY: Record<
     recovery: "Se a página não aparecer em breve, atualize-a.",
   },
 };
+
+/** The loading route reads the request cookie on the server before its first paint. */
+export function publicLoadingLocale(cookieValue: string | undefined): Locale {
+  return (locales as string[]).includes(cookieValue ?? "")
+    ? (cookieValue as Locale)
+    : defaultLocale;
+}
+
+type LocaleCookieStore = {
+  get(name: string): { value: string } | undefined;
+};
+
+export function publicLoadingLocaleFromCookieStore(
+  cookieStore: LocaleCookieStore,
+): Locale {
+  return publicLoadingLocale(cookieStore.get("NEXT_LOCALE")?.value);
+}
