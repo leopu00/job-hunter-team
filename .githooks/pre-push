@@ -42,14 +42,34 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
                 OFFENDING="$OFFENDING\n  ${commit:0:9}  $f"
             done <<< "$hits"
         fi
+
+        # Dati privati: stessi criteri del pre-commit, applicati a cio' che sta
+        # per raggiungere il remote. Serve perche' --no-verify scavalca il
+        # pre-commit, e un IP di VPS pubblicato non si cancella: si revoca.
+        added=$(git diff-tree --no-commit-id -p -r --diff-filter=ACM "$commit" 2>/dev/null | grep -E "^\+" || true)
+        ips=$(printf '%s' "$added" \
+              | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' \
+              | grep -vE '^(127\.|0\.|10\.|192\.168\.|169\.254\.|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|255\.|22[4-9]\.|23[0-9]\.|172\.(1[6-9]|2[0-9]|3[01])\.)' \
+              | sort -u | head -2 || true)
+        [ -n "$ips" ] && OFFENDING="$OFFENDING\n  ${commit:0:9}  IP pubblico: $(echo "$ips" | tr '\n' ' ')"
+
+        mails=$(printf '%s' "$added" \
+              | grep -oE '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' \
+              | grep -vE '@(jobhunterteam\.ai|example\.(com|org|net)|[a-z-]+\.invalid|users\.noreply\.github\.com|anthropic\.com)$' \
+              | grep -vE '^(nome|name|nombre|nom|user|utente|tuo|your|your_name|email)[._-]?[a-z]*@' \
+              | grep -vE '@(types|supabase|vercel|next|radix-ui|testing-library|eslint|babel|playwright|tailwindcss)/' \
+              | sort -u | head -2 || true)
+        [ -n "$mails" ] && OFFENDING="$OFFENDING\n  ${commit:0:9}  email: $(echo "$mails" | tr '\n' ' ')"
     done <<< "$commits"
 done
 
 if [ -n "$OFFENDING" ]; then
-    echo -e "${RED}PUSH BLOCCATO: file d'identita' agente presenti nei commit.${NC}"
+    echo -e "${RED}PUSH BLOCCATO: file d'identita' o dati privati nei commit.${NC}"
     echo -e "$OFFENDING"
     echo ""
-    echo -e "${YELLOW}Sono artefatti di runtime: il template nel repo e' la fonte di verita'.${NC}"
+    echo -e "${YELLOW}Il repo e' pubblico e la storia e' per sempre: IP di VPS, email e${NC}"
+    echo -e "${YELLOW}dati di beta tester non si pubblicano. I file d'identita' sono${NC}"
+    echo -e "${YELLOW}artefatti di runtime: il template nel repo e' la fonte di verita'.${NC}"
     echo -e "${YELLOW}Per toglierli dalla storia che stai pubblicando:${NC}"
     echo -e "${YELLOW}  git rm --cached <file> && git commit --amend    (ultimo commit)${NC}"
     echo -e "${YELLOW}  git rebase -i <base>                            (commit piu' vecchi)${NC}"
