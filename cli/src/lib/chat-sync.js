@@ -74,6 +74,9 @@ const STALL_AFTER_MS = Number(process.env.JHT_CHAT_STALL_AFTER_MS || 300_000);
 /** Ogni quanto RIPETERE una segnalazione che resta vera (vedi shouldAnnounceStall). */
 const STALL_REPEAT_MS = Number(process.env.JHT_CHAT_STALL_REPEAT_MS || 900_000);
 
+/** Una richiesta cloud della chat non può bloccare il giro veloce per sempre. */
+const CLOUD_REQUEST_TIMEOUT_MS = Number(process.env.JHT_CHAT_HTTP_TIMEOUT_MS || 15_000);
+
 // ── Funzioni pure (il grosso della logica, testabile senza box) ─────────
 
 /** Directory dell'agente sotto `<JHT_HOME>/agents/`. */
@@ -430,12 +433,28 @@ export function directChatChannel(reader) {
 }
 
 /**
+ * Classificazione stabile e priva di dettagli infrastrutturali per gli errori
+ * di trasporto. Il valore può finire in `team_state.last_error`: non deve mai
+ * contenere URL, hostname, token o il body restituito dal server.
+ */
+export function cloudRequestFailure(error) {
+  const name = String(error?.name || '').toLowerCase();
+  const code = String(error?.code || '').toLowerCase();
+  if (name.includes('timeout') || name === 'aborterror' || code === 'etimedout') return 'timeout';
+  return 'request_failed';
+}
+
+/**
  * Stessa forma, sul token del box via Vercel. Ack e chiusura del rendezvous
  * viaggiano in UNA sola POST: sono la stessa decisione ("ho consegnato"), e
  * separarle lascerebbe la finestra in cui i turni risultano consegnati ma il
  * rendezvous ancora aperto — cioè il giro dopo rilegge una coda vuota.
  */
-export function vercelChatChannel(config, { fetchFn = fetch } = {}) {
+export function vercelChatChannel(
+  config,
+  { fetchFn = fetch, timeoutMs = CLOUD_REQUEST_TIMEOUT_MS } = {},
+) {
+  const requestTimeoutMs = Math.max(1_000, Number(timeoutMs) || CLOUD_REQUEST_TIMEOUT_MS);
   const baseUrl = String(config?.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const url = `${baseUrl}/api/cloud-sync/chat`;
   const headers = {
@@ -445,7 +464,10 @@ export function vercelChatChannel(config, { fetchFn = fetch } = {}) {
   return {
     kind: 'vercel',
     async readUndeliveredUserChat({ limit = 50 } = {}) {
-      const res = await fetchFn(`${url}?limit=${encodeURIComponent(limit)}`, { headers });
+      const res = await fetchFn(`${url}?limit=${encodeURIComponent(limit)}`, {
+        headers,
+        signal: AbortSignal.timeout(requestTimeoutMs),
+      });
       if (!res.ok) throw new Error(`GET /api/cloud-sync/chat: HTTP ${res.status}`);
       const body = await res.json().catch(() => null);
       return Array.isArray(body?.messages) ? body.messages : [];
@@ -454,6 +476,7 @@ export function vercelChatChannel(config, { fetchFn = fetch } = {}) {
       const res = await fetchFn(url, {
         method: 'POST',
         headers,
+        signal: AbortSignal.timeout(requestTimeoutMs),
         body: JSON.stringify({ delivered_ids: ids }),
       });
       if (!res.ok) throw new Error(`POST /api/cloud-sync/chat: HTTP ${res.status}`);
