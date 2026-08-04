@@ -86,6 +86,7 @@ function makeSandbox({ verifyFails = false }: { verifyFails?: boolean } = {}): S
     '    exit 0 ;;',
     '  image)',
     '    # docker image inspect IMAGE --format {{.Id}}',
+    '    if [ "${FAKE_ABSENT_IMAGE:-}" = "${2:-}" ]; then exit 1; fi',
     '    echo "$FAKE_CANDIDATE"; exit 0 ;;',
     '  exec)',
     '    if [ "${FAKE_VERIFY_FAIL:-0}" = "1" ] && ! echo "$image" | grep -q old; then exit 1; fi',
@@ -241,6 +242,32 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     ].join("\n"), "utf8");
 
     const result = run(sb, {}, ["upgrade", "--json", "--check"]);
+
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: false, phase: "recovery" });
+    expect(sb.state()).toBe("sha256:new");
+    expect(sb.compose()).toContain("example/candidate");
+    expect(sb.journal()).toBe(true);
+  });
+
+  it("rifiuta un digest rollback ben formato ma assente prima di toccare il runtime", () => {
+    const sb = makeSandbox();
+    const rollback = path.join(sb.runtime, ".upgrade-rollback-missing-image");
+    mkdirSync(rollback);
+    copyFileSync(path.join(sb.runtime, "docker-compose.yml"), path.join(rollback, "docker-compose.yml"));
+    copyFileSync(sb.wrapper, path.join(rollback, "jht-wrapper.sh"));
+    writeFileSync(path.join(sb.runtime, "docker-compose.yml"), "services:\n  jht:\n    image: example/candidate\n", "utf8");
+    writeFileSync(path.join(sb.root, "container-image"), "sha256:new", "utf8");
+    writeFileSync(path.join(sb.runtime, ".upgrade-journal"), [
+      "version=1",
+      "phase=candidate_started",
+      `rollback_dir=${rollback}`,
+      "old_image=sha256:deadbeef",
+      "was_running=1",
+      "",
+    ].join("\n"), "utf8");
+
+    const result = run(sb, { FAKE_ABSENT_IMAGE: "sha256:deadbeef" }, ["upgrade", "--json", "--check"]);
 
     expect(result.code).toBe(1);
     expect(JSON.parse(result.stdout)).toMatchObject({ ok: false, phase: "recovery" });

@@ -328,6 +328,11 @@ upgrade_restore_previous() {
   case "$was_running" in 0|1) ;; *) return 1 ;; esac
   if [ "$was_running" = "1" ]; then
     printf '%s' "$old_image" | grep -Eq '^sha256:[A-Za-z0-9]+$' || return 1
+    # `compose pull` puo' aver ritaggato latest: il digest salvato e' utile al
+    # rollback solo se e' ancora presente. Verificalo PRIMA di ripristinare
+    # compose/wrapper, altrimenti un journal corrotto muterebbe metadata per
+    # poi fallire nel tentativo di ricreare l'immagine inesistente.
+    docker image inspect "$old_image" >/dev/null 2>&1 || return 1
   elif [ "$old_image" != "none" ]; then
     return 1
   fi
