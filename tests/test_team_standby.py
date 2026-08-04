@@ -508,6 +508,27 @@ def test_doctor_watchdog_gates_on_standby():
     assert '[ -e "$TEAM_STANDBY_FLAG" ]' in src
 
 
+def test_doctor_watchdog_waits_for_provider_credentials_before_spawning():
+    """Una prima installazione salva active_provider prima di completare OAuth:
+    Doctor/Mantenitore devono restare sospesi come gli agenti user-facing."""
+    src = _src(LAUNCHER_DIR / "doctor-watchdog.sh")
+    loop = src.index("while true; do")
+    gate = src.index("if ! config_ready; then", loop)
+    maint_spawn = src.index('mout=$(bash "$MAINT_SPAWNER"', loop)
+    doctor_spawn = src.index('out=$(bash "$SPAWNER"', loop)
+    assert gate < maint_spawn
+    assert gate < doctor_spawn
+    for provider, marker in (
+        ("kimi", ".kimi/credentials/kimi-code.json"),
+        ("claude", ".claude/.credentials.json"),
+        ("anthropic", ".claude/.credentials.json"),
+        ("codex", ".codex/auth.json"),
+        ("openai", ".codex/auth.json"),
+    ):
+        assert repr(provider) in src
+        assert marker in src
+
+
 # ── CLI: jht standby on|off|status (forma di burn.js) ────────────────────
 
 def test_cli_standby_command_is_registered():
