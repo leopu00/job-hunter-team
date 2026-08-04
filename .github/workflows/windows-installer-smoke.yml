@@ -1,0 +1,74 @@
+name: Windows installer smoke
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/windows-installer-smoke.yml"
+      - "game/export_presets.cfg"
+      - "game/installer/**"
+      - "game/project.godot"
+      - "scripts/build-windows-installer.ps1"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/windows-installer-smoke.yml"
+      - "game/export_presets.cfg"
+      - "game/installer/**"
+      - "game/project.godot"
+      - "scripts/build-windows-installer.ps1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-installer-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nsis:
+    name: NSIS per-user install and uninstall
+    runs-on: windows-2022
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: chickensoft-games/setup-godot@v2.4.1
+        with:
+          version: 4.7.0
+          use-dotnet: false
+          include-templates: true
+
+      - name: Export portable Windows application
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force game/builds/windows | Out-Null
+          & godot --headless --path game --import
+          if ($LASTEXITCODE -ne 0) {
+            throw "Godot import failed with $LASTEXITCODE"
+          }
+          & godot `
+            --headless `
+            --path game `
+            --export-release 'Windows Desktop' `
+            builds/windows/job-hunter-team.exe
+          if ($LASTEXITCODE -ne 0) {
+            throw "Godot export failed with $LASTEXITCODE"
+          }
+          if (-not (Test-Path game/builds/windows/job-hunter-team.exe -PathType Leaf)) {
+            throw 'Portable Windows export missing'
+          }
+
+      # Questo job collauda il candidato ma non lo carica come artifact e non
+      # modifica release.yml: pubblicare installer + portable resta una scelta
+      # esplicita dell'operatore.
+      - name: Build, install, launch and uninstall NSIS candidate
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          ./scripts/build-windows-installer.ps1 -Version $version -Smoke

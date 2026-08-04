@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NSI = ROOT / "game" / "installer" / "windows.nsi"
 BUILDER = ROOT / "scripts" / "build-windows-installer.ps1"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+SMOKE_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer-smoke.yml"
 
 
 def test_nsis_uses_stable_per_user_release_name() -> None:
@@ -37,3 +38,11 @@ def test_release_does_not_publish_staged_installer_yet() -> None:
     assert "build-windows-installer.ps1" not in workflow
     assert "job-hunter-team-windows-x64-setup.exe" not in workflow
     assert "game/builds/windows/job-hunter-team.exe" in workflow
+
+
+def test_native_windows_smoke_is_non_publishing() -> None:
+    workflow = SMOKE_WORKFLOW.read_text()
+    assert "windows-2022" in workflow
+    assert "build-windows-installer.ps1 -Version $version -Smoke" in workflow
+    assert "actions/upload-artifact" not in workflow
+    assert "release.yml" in workflow
