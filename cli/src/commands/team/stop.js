@@ -11,6 +11,14 @@ import { execArgvInContainer } from '../../utils/container-proxy.js';
 // non spegnere la chat utente. Regola nata con la route web
 // `/api/team/stop-all` (rimossa il 2026-07-25): ASSISTENTE va preservato.
 const KEEP_ALIVE_ON_STOP_ALL = new Set(['ASSISTENTE']);
+const STOP_ALL_INFRASTRUCTURE = [
+  /^(?:JHT-)?DOTTORE(?:[-_].*)?$/,
+  /^(?:JHT-)?MANTENITORE(?:[-_].*)?$/,
+];
+
+function isStopAllInfrastructure(session) {
+  return STOP_ALL_INFRASTRUCTURE.some((pattern) => pattern.test(session));
+}
 
 // Le guardie usano `process.exitCode` + `return`: stesso codice osservato (1),
 // ma stderr fa in tempo a svuotarsi prima che il processo termini.
@@ -26,8 +34,23 @@ export function stopAction(agentArg, options = {}) {
   let targets;
 
   if (options.all || !agentArg) {
+    // Prima dello stop, non dopo: se il file non si riesce a creare il
+    // watchdog potrebbe riaccendere gli agenti pochi secondi dopo e la UI
+    // mentirebbe all'utente. `touch` gira nel container anche quando il CLI
+    // viene invocato dall'host.
+    if (usingContainer()) {
+      const halted = execArgvInContainer(['touch', '/jht_home/.team-halted.flag']);
+      if (halted.code !== 0) {
+        console.error(c.red(
+          `Impossibile applicare lo stop persistente: ${halted.stderr || halted.stdout || 'errore sconosciuto'}`
+        ));
+        process.exitCode = 1;
+        return;
+      }
+    }
     targets = sessions.filter((s) =>
-      AGENTS.some((a) => isAgentSession(s, a)) && !KEEP_ALIVE_ON_STOP_ALL.has(s)
+      (AGENTS.some((a) => isAgentSession(s, a)) && !KEEP_ALIVE_ON_STOP_ALL.has(s))
+      || isStopAllInfrastructure(s)
     );
     if (targets.length === 0) {
       console.log(c.yellow('Nessun agente attivo da fermare.'));

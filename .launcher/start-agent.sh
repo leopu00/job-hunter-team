@@ -15,7 +15,7 @@ set -euo pipefail
 # /usr/bin:/bin:...) — manca /jht_home/.npm-global/bin dove vivono
 # codex/claude/kimi, e lo script esce con "codex: command not found".
 # Esportiamo esplicitamente sempre i path dei CLI qui.
-export PATH="/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+export PATH="/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 
 DEV_TEAM_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DEV_TEAM_DIR/config.sh"
@@ -1196,4 +1196,3 @@ if [ "$ROLE" = "sentinella" ]; then
   _msg="[@utente -> @sentinella] [MSG] Avvio. Aspetta il primo [BRIDGE TICK]."
   _kickoff "$SESSION" "$_msg"
 fi
-

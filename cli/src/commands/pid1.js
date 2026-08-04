@@ -27,7 +27,7 @@
  *   3. default `local` (sicuro: comportamento storico)
  */
 
-import { readFile, access, unlink } from 'node:fs/promises';
+import { readFile, access, unlink, writeFile } from 'node:fs/promises';
 import { existsSync, createWriteStream, mkdirSync, statSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -39,6 +39,7 @@ const JHT_HOME = '/jht_home';
 const HOST_ENV_PATH = `${JHT_HOME}/host.env`;
 const CLOUD_JSON_PATH = `${JHT_HOME}/cloud.json`;
 const JHT_CONFIG_PATH = `${JHT_HOME}/jht.config.json`;
+const TEAM_HALTED_FLAG = `${JHT_HOME}/.team-halted.flag`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
@@ -47,6 +48,35 @@ const STEPCAP_WATCHDOG_SCRIPT = '/app/.launcher/stepcap-watchdog.py';
 const THROTTLE_ENGINE_SCRIPT = '/app/shared/skills/throttle_engine.py';
 const AUTO_REPORT_LOOP_SCRIPT = '/app/.launcher/auto-report-loop.sh';
 const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
+
+/**
+ * Serializza gli eventi ravvicinati di fs.watch e ne conserva l'ultimo.
+ * fs.watch può consegnare rename/change insieme; un listener async normale
+ * parte due volte in parallelo e fa superare a entrambe le callback gli
+ * stessi flag `...Started`. Il risultato erano bridge duplicati al primo
+ * salvataggio del provider. Le chiamate durante un giro diventano un solo
+ * giro successivo con gli argomenti più recenti.
+ */
+export function coalesceAsyncCalls(handler) {
+  let running = false;
+  let queued = false;
+  let latestArgs = [];
+  return async (...args) => {
+    latestArgs = args;
+    queued = true;
+    if (running) return;
+    running = true;
+    try {
+      do {
+        queued = false;
+        const callArgs = latestArgs;
+        await handler(...callArgs);
+      } while (queued);
+    } finally {
+      running = false;
+    }
+  };
+}
 
 async function readHostType() {
   const fromEnv = (process.env.JHT_HOST_TYPE || '').trim().toLowerCase();
@@ -145,6 +175,31 @@ async function hasActiveProviderConfigured() {
 }
 
 /**
+ * Una nuova installazione non puo' spendere token prima del click esplicito
+ * su "Attiva team". Il container nasce prima di provider, profilo e orari:
+ * in quel momento mettiamo lo stesso gate persistente usato dallo Stop.
+ *
+ * `ensure_assistant` lancia direttamente il solo Assistente e continua quindi
+ * a funzionare durante l'onboarding. `jht team start` senza ruolo rimuove il
+ * flag; watchdog, Dottore e Mantenitore restano invece spenti fino ad allora.
+ * Le installazioni gia' configurate non ricevono retroattivamente il gate.
+ */
+async function ensureInitialTeamHalt() {
+  if (existsSync(TEAM_HALTED_FLAG) || (await hasActiveProviderConfigured())) {
+    return;
+  }
+  try {
+    await writeFile(TEAM_HALTED_FLAG, 'initial-setup\n', { flag: 'wx', mode: 0o600 });
+    pid1Log('initial setup: team-halted gate creato — attendo Attiva team');
+  } catch (err) {
+    if (err?.code !== 'EEXIST') {
+      pid1Log(`initial setup: impossibile creare team-halted gate (${err.message})`);
+      throw err;
+    }
+  }
+}
+
+/**
  * Verifica che il provider attivo abbia credenziali OAuth valide. Senza
  * questa gate, gli agenti partono in "LLM not set" se l'utente non ha
  * ancora completato OAuth nel wizard terminal embedded (caso visto
@@ -205,8 +260,7 @@ async function startUserFacingAgents() {
   // Source of truth: team_state.should_run. Il reconciler creerà/rimuoverà
   // il flag al prossimo polling. Senza questo gate, il container post-restart
   // partiva sempre con agenti attivi anche se l'utente li aveva spenti.
-  const teamHaltedFlag = join(JHT_HOME, '.team-halted.flag');
-  if (existsSync(teamHaltedFlag)) {
+  if (existsSync(TEAM_HALTED_FLAG)) {
     pid1Log('auto-start agenti SKIPPED: .team-halted.flag presente (user ha cliccato Stop)');
     return;
   }
@@ -547,6 +601,11 @@ async function dispatch() {
   // funzionare provider OAuth, channels, agents.list. Idempotente.
   await runMigrate();
 
+  // Fail-safe del primo setup: prima di avviare qualunque watchdog LLM,
+  // impedisce il burst automatico. Il solo Assistente resta avviabile dal
+  // wizard e il click esplicito su `team start` rimuove questo gate.
+  await ensureInitialTeamHalt();
+
   // Reset positions stuck in writing/checked dal boot precedente (HALT,
   // kill mid-run). Idempotente, skip se jobs.db non esiste ancora.
   await runUnstuckPositions();
@@ -649,27 +708,32 @@ async function dispatch() {
   // entrambi i bridge sono partiti.
   if (!tgBridgeStarted || !sentinelBridgesStarted) {
     let cfgWatcher = null;
+    const reconcileConfig = coalesceAsyncCalls(async () => {
+      await new Promise((r) => setTimeout(r, 250)); // debounce write atomico (tmp+rename)
+      if (!tgBridgeStarted && (await hasTelegramBotsConfigured())) {
+        pid1Log('jht.config.json aggiornato (bot configurati post-wizard): avvio tg-bridge + welcome');
+        startTgBridge();
+        tgBridgeStarted = true;
+        spawn('/bin/bash', [WELCOME_SEND_SCRIPT], { stdio: 'inherit' })
+          .on('exit', (code) => pid1Log(`welcome-send (post-wizard): exit ${code}`));
+      }
+      if (!sentinelBridgesStarted && (await hasActiveProviderConfigured())) {
+        pid1Log('jht.config.json aggiornato (active_provider post-wizard): avvio sentinel + pacing bridge');
+        startSentinelBridges();
+        sentinelBridgesStarted = true;
+      }
+      if (tgBridgeStarted && sentinelBridgesStarted && cfgWatcher) {
+        pid1Log('config watcher: tg-bridge + sentinel/pacing attivi, chiudo il watcher');
+        cfgWatcher.close();
+        cfgWatcher = null;
+      }
+    });
     try {
-      cfgWatcher = watch(dirname(JHT_CONFIG_PATH), { persistent: true }, async (eventType, filename) => {
+      cfgWatcher = watch(dirname(JHT_CONFIG_PATH), { persistent: true }, (eventType, filename) => {
         if (filename !== 'jht.config.json') return;
-        await new Promise((r) => setTimeout(r, 250)); // debounce write atomico (tmp+rename)
-        if (!tgBridgeStarted && (await hasTelegramBotsConfigured())) {
-          pid1Log('jht.config.json aggiornato (bot configurati post-wizard): avvio tg-bridge + welcome');
-          startTgBridge();
-          tgBridgeStarted = true;
-          spawn('/bin/bash', [WELCOME_SEND_SCRIPT], { stdio: 'inherit' })
-            .on('exit', (code) => pid1Log(`welcome-send (post-wizard): exit ${code}`));
-        }
-        if (!sentinelBridgesStarted && (await hasActiveProviderConfigured())) {
-          pid1Log('jht.config.json aggiornato (active_provider post-wizard): avvio sentinel + pacing bridge');
-          startSentinelBridges();
-          sentinelBridgesStarted = true;
-        }
-        if (tgBridgeStarted && sentinelBridgesStarted && cfgWatcher) {
-          pid1Log('config watcher: tg-bridge + sentinel/pacing attivi, chiudo il watcher');
-          cfgWatcher.close();
-          cfgWatcher = null;
-        }
+        void reconcileConfig().catch((err) =>
+          pid1Log(`config reconcile fallito (${err.message}) — riprovo al prossimo salvataggio`),
+        );
       });
       process.on('exit', () => { if (cfgWatcher) cfgWatcher.close(); });
     } catch (err) {
