@@ -44,6 +44,11 @@ describe("launcher Playwright per riprese web", () => {
     expect(setup).not.toMatch(/(?:createElement\("style"|querySelector|locator)/);
     expect(launcher).toContain('await context.route("**/*", getOnly.handle)');
     expect(launcher.match(/page\.goto\(/g)).toHaveLength(1);
+    expect(launcher).not.toContain("BASE_URL");
+    expect(launcher).toContain("if (page.url() !== target)");
+    expect(launcher.indexOf("target = recordingTarget()")).toBeLessThan(
+      launcher.indexOf("browser = await chromium.launch"),
+    );
     expect(launcher).not.toMatch(
       /\b(?:fetch|request\.(?:post|put|patch|delete))\b/,
     );
