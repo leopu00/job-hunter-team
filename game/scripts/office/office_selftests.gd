@@ -51,6 +51,7 @@ const FLAG_HOOKS := {
 	"JHT_THROTTLE_TEST": "_throttle_selftest",
 	"JHT_BACKEND_SWITCH_TEST": "_backend_switch_selftest",
 	"JHT_SETUP_BUSY_TEST": "_setup_busy_selftest",
+	"JHT_BUBBLE_LAYOUT_TEST": "_bubble_layout_selftest",
 }
 
 ## Ganci con argomento: scattano quando la variabile non è vuota, e il valore
@@ -593,6 +594,66 @@ func _world_text_selftest() -> void:
 	print("WORLD-TEXT-TEST %s %s" % ["PASS" if ok else "FAIL",
 			JSON.stringify(result)])
 	get_tree().quit(0 if ok else 1)
+
+
+## Tre persone volutamente vicine e tre messaggi lunghi: è la regressione del
+## burst reale in cui le vignette si dipingevano una sopra l'altra e sulle
+## teste. Con JHT_SHOT il test resta vivo fino allo scatto visuale.
+func _bubble_layout_selftest() -> void:
+	await get_tree().process_frame
+	if office.agents.size() < 3:
+		print("BUBBLE-LAYOUT-TEST FAIL {\"agents\":false}")
+		get_tree().quit(1)
+		return
+	var center := Vector2(1700, 920)
+	var texts := [
+		"Ho trovato nuove posizioni e le sto passando al reparto analisi.",
+		"Controllo requisiti, stipendio e modalità di lavoro prima dello score.",
+		"La prima opportunità è pronta: compatibilità alta e motivazione chiara.",
+	]
+	var actors: Array[AgentNPC] = []
+	for i in 3:
+		var actor: AgentNPC = office.agents[i]
+		actor.start_talk()
+		actor.position = center + Vector2((i - 1) * 105.0, 0)
+		actor.say(texts[i])
+		actors.append(actor)
+	var cam := Camera2D.new()
+	cam.position = center + Vector2(0, -135)
+	cam.zoom = Vector2(1.55, 1.55)
+	office._stage.add_child(cam)
+	cam.make_current()
+	for _frame in 6:
+		await get_tree().process_frame
+	office._layout_speech_bubbles(true)
+	await get_tree().process_frame
+	var rects: Array[Rect2] = []
+	for actor in actors:
+		rects.append(actor.speech.layout_rect_global(true))
+	var bounds: Rect2 = office._speech_layout_bounds()
+	var boxes_clear := true
+	for i in rects.size():
+		for j in range(i + 1, rects.size()):
+			boxes_clear = boxes_clear and not rects[i].intersects(rects[j])
+	var heads_clear := true
+	var inside_bounds := true
+	for rect in rects:
+		inside_bounds = inside_bounds and bounds.encloses(rect)
+		for agent in office.agents:
+			heads_clear = heads_clear and not rect.intersects(
+					office._speech_head_rect(agent))
+	var lifted: bool = actors[1].speech.debug_snapshot()["layout_offset"] != Vector2.ZERO \
+			or actors[2].speech.debug_snapshot()["layout_offset"] != Vector2.ZERO
+	var named := true
+	for actor in actors:
+		named = named and not str(
+				actor.speech.debug_snapshot()["speaker_label"]).is_empty()
+	var ok: bool = boxes_clear and heads_clear and inside_bounds and lifted and named
+	print("BUBBLE-LAYOUT-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify({"boxes_clear": boxes_clear, "heads_clear": heads_clear,
+				"inside_bounds": inside_bounds, "lifted": lifted, "named": named})])
+	if OS.get_environment("JHT_SHOT") == "":
+		get_tree().quit(0 if ok else 1)
 
 
 ## Fotografia della scena costruita: quanti CanvasItem visibili, da quale ramo
