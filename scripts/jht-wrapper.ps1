@@ -234,21 +234,41 @@ function Restore-UpgradePrevious {
   if ([string]$journal.phase -notin @('prepared', 'pulled', 'candidate_started', 'metadata_committed')) { return $false }
   if ($journal.was_running -isnot [bool]) { return $false }
   $rollback = [string]$journal.rollback_dir
-  $prefix = ([IO.Path]::GetFullPath($RuntimeDir)).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar + '.upgrade-rollback-'
-  $fullRollback = if ($rollback) { [IO.Path]::GetFullPath($rollback) } else { '' }
-  if (-not $fullRollback.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $false }
-  if (-not (Test-Path (Join-Path $fullRollback 'docker-compose.yml')) -or -not (Test-Path (Join-Path $fullRollback 'jht-wrapper.ps1'))) { return $false }
-  if (-not (Replace-UpgradeFile (Join-Path $fullRollback 'docker-compose.yml') $ComposeFile)) { return $false }
-  if (-not (Replace-UpgradeFile (Join-Path $fullRollback 'jht-wrapper.ps1') $WrapperPath)) { return $false }
+  try {
+    $runtimeRoot = ([IO.Path]::GetFullPath($RuntimeDir)).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $fullRollback = if ($rollback) { [IO.Path]::GetFullPath($rollback) } else { '' }
+    $rollbackInfo = Get-Item -LiteralPath $fullRollback -Force -ErrorAction Stop
+  } catch { return $false }
+  # Il journal non puo' scegliere una directory arbitraria: accettiamo solo
+  # una directory reale creata direttamente sotto il runtime. `GetFullPath`
+  # rende innocuo anche un prefisso seguito da ../, mentre il rifiuto dei link
+  # evita che un journal corrotto porti fuori dal runtime fisico.
+  if (-not $rollbackInfo.PSIsContainer -or $rollbackInfo.LinkType) { return $false }
+  $rollbackParent = ([IO.Path]::GetFullPath((Split-Path -LiteralPath $fullRollback -Parent))).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $rollbackLeaf = Split-Path -LiteralPath $fullRollback -Leaf
+  if ($rollbackParent -ne $runtimeRoot -or $rollbackLeaf -notmatch '^\.upgrade-rollback-[A-Za-z0-9_-]+$') { return $false }
+  try {
+    $composeSnapshot = Get-Item -LiteralPath (Join-Path $fullRollback 'docker-compose.yml') -Force -ErrorAction Stop
+    $wrapperSnapshot = Get-Item -LiteralPath (Join-Path $fullRollback 'jht-wrapper.ps1') -Force -ErrorAction Stop
+  } catch { return $false }
+  if ($composeSnapshot.PSIsContainer -or $wrapperSnapshot.PSIsContainer -or $composeSnapshot.LinkType -or $wrapperSnapshot.LinkType) { return $false }
   if ([bool]$journal.was_running) {
     if ([string]$journal.old_image -notmatch '^sha256:[A-Za-z0-9]+$') { return $false }
+    # Verifica l'immagine immutabile prima della prima sostituzione metadata:
+    # un digest solo formalmente valido non deve lasciare compose/wrapper in
+    # uno stato diverso se il rollback non puo' ricreare il container.
+    & docker image inspect ([string]$journal.old_image) *> $null
+    if ($LASTEXITCODE -ne 0) { return $false }
+  } elseif ([string]$journal.old_image -ne 'none') { return $false }
+  if (-not (Replace-UpgradeFile $composeSnapshot.FullName $ComposeFile)) { return $false }
+  if (-not (Replace-UpgradeFile $wrapperSnapshot.FullName $WrapperPath)) { return $false }
+  if ([bool]$journal.was_running) {
     $before = $env:JHT_IMAGE
     $env:JHT_IMAGE = [string]$journal.old_image
     $ok = Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $Container
     $env:JHT_IMAGE = $before
     if (-not $ok -or -not (Test-UpgradeRunning)) { return $false }
   } else {
-    if ([string]$journal.old_image -ne 'none') { return $false }
     if (-not (Invoke-UpgradeCompose $ComposeFile 'rm' '-s' '-f' $Container)) { return $false }
   }
   $script:UpgradeRollbackDir = $fullRollback
