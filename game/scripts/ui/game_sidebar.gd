@@ -99,7 +99,10 @@ func _ready() -> void:
 	_tab.add_theme_stylebox_override("normal", tab_style)
 	_tab.add_theme_stylebox_override("hover", tab_hover)
 	_tab.add_theme_stylebox_override("pressed", tab_hover.duplicate())
-	_tab.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Il menu e' raggiungibile con Tab anche quando il mouse non e' disponibile.
+	# Non cancellare il focus: senza bordo il cursore da tastiera esiste, ma
+	# l'utente non puo' sapere dove si trova.
+	_tab.add_theme_stylebox_override("focus", tab_hover.duplicate())
 	_tab.position = Vector2(10, 150)
 	_tab.pressed.connect(toggle)
 	root.add_child(_tab)
@@ -224,7 +227,9 @@ func _nav_button(item: Dictionary) -> Control:
 	btn.add_theme_stylebox_override("normal", _row_style(Palette.ROW, 0.0, false))
 	btn.add_theme_stylebox_override("hover", _row_style(Palette.ROW, 0.85, true))
 	btn.add_theme_stylebox_override("pressed", _row_style(Palette.DEEP, 1.0, true))
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Stesso segnale verde dell'hover: Tab deve essere un percorso visibile,
+	# non soltanto tecnicamente funzionante.
+	btn.add_theme_stylebox_override("focus", _row_style(Palette.ROW, 0.85, true))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.pressed.connect(func() -> void: _select(item["id"]))
 	btn.set_meta("label", SidebarDefs.nav_label(item))

@@ -18,6 +18,9 @@ extends SceneTree
 ##  3. ogni voce ha un'etichetta tradotta — senza la chiave "side.<id>" a
 ##     schermo finisce l'id grezzo ("agent_metrics"), che è successo davvero
 ##     appena le due liste hanno smesso di coincidere.
+##  4. il focus da tastiera resta visibile. Un Button con focus_mode attivo ma
+##     StyleBoxEmpty e' navigabile solo sulla carta: premendo Tab il cursore
+##     sparisce e l'utente non sa quale Invio azionera'.
 
 var _failures: Array[String] = []
 
@@ -62,6 +65,17 @@ func _init() -> void:
 		var key := str(group["key"])
 		_check("titolo gruppo impostazioni: " + key,
 				UIStrings.t(key) != key, "chiave i18n assente")
+
+	# 4: questo selftest gira come SceneTree e quindi non puo' istanziare la
+	# sidebar, che usa gli autoload della scena. Ispeziona la sorgente esatta:
+	# nella sidebar non esiste alcun controllo per cui nascondere il focus sia
+	# desiderabile, quindi una sola ricomparsa di StyleBoxEmpty e' un rosso.
+	var sidebar_source := FileAccess.get_file_as_string(
+			"res://scripts/ui/game_sidebar.gd")
+	_check("focus tastiera visibile",
+			not 'add_theme_stylebox_override("focus", StyleBoxEmpty.new())' \
+					in sidebar_source,
+			"la sidebar contiene di nuovo un controllo con focus invisibile")
 
 	if _failures.is_empty():
 		print("SIDEBAR-NAV-TEST PASS (%d righe, %d sezioni ospitate)"
