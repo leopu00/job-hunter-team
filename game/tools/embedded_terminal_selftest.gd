@@ -3,6 +3,20 @@ extends SceneTree
 ## riconoscimento URL devono funzionare senza Terminal.app/node-pty/Electron.
 
 
+## Trattiene il risultato di `execute_with_pipe` prima che la classe base possa
+## pubblicare il PID. Il test riproduce così deterministicamente close-before-PID
+## senza aggiungere hook di test al percorso di produzione.
+class SpawnBarrierTerminal extends EmbeddedTerminal:
+	var spawned_pid := -1
+	var publish_gate := Semaphore.new()
+
+	func _spawn_process() -> Dictionary:
+		var process := super()
+		spawned_pid = int(process.get("pid", -1))
+		publish_gate.wait()
+		return process
+
+
 func _init() -> void:
 	_run.call_deferred()
 
@@ -201,11 +215,34 @@ func _run() -> void:
 	if close_pid > 0 and not close_killed:
 		OS.kill(close_pid)
 	ok = ok and close_killed
+	# Race deterministico: il processo esiste già, ma il worker non ha ancora
+	# pubblicato `_pid`. `close()` non può ucciderlo subito; dopo la barriera è
+	# il worker, osservando `_closing`, a ereditarne ownership e terminarlo.
+	var early_close := SpawnBarrierTerminal.new("test", close_spec)
+	root.add_child(early_close)
+	for _i in 100:
+		if early_close.spawned_pid > 0:
+			break
+		await create_timer(0.01).timeout
+	var early_close_pid := early_close.spawned_pid
+	var closed_before_publish := early_close_pid > 0 and early_close._pid <= 0
+	early_close.close()
+	early_close.publish_gate.post()
+	var early_close_killed := false
+	for _i in 80:
+		if early_close_pid > 0 and not _pid_exists(early_close_pid, is_windows):
+			early_close_killed = true
+			break
+		await create_timer(0.025).timeout
+	if early_close_pid > 0 and not early_close_killed:
+		OS.kill(early_close_pid)
+	ok = ok and closed_before_publish and early_close_killed
 	print("EMBEDDED-TERMINAL-TEST ", "PASS" if ok else "FAIL",
 			" pid=", pid, " output=", visible, " auto_auth_close=", ok,
 			" failure_status=", failure_status,
 			" missing_status=", missing_status,
 			" close_killed=", close_killed,
+			" early_close_killed=", early_close_killed,
 			" process_exited=", failure_process_exited,
 			" captured_exit=", failure_captured_exit)
 	quit(0 if ok else 1)
