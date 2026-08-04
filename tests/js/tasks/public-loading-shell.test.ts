@@ -1,25 +1,34 @@
-import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { PUBLIC_LOADING_COPY } from "../../../web/app/public-loading.i18n";
+import { PublicLoadingShell } from "../../../web/app/components/PublicLoadingShell";
+import {
+  PUBLIC_LOADING_COPY,
+  publicLoadingLocale,
+  publicLoadingLocaleFromCookieStore,
+} from "../../../web/app/public-loading.i18n";
 
 const REPO = path.resolve(__dirname, "../../..");
-const LOADING_SHELL = path.join(REPO, "web/app/loading.tsx");
+const webRequire = createRequire(path.join(REPO, "web/package.json"));
+const { createElement } = webRequire("react");
+const { renderToStaticMarkup } = webRequire("react-dom/server");
 
 describe("fallback della home pubblica", () => {
-  it("mostra subito una promessa leggibile e un recovery, non solo uno spinner", () => {
-    const source = readFileSync(LOADING_SHELL, "utf8");
+  it("renderizza struttura, promessa e recovery senza annidare un main", () => {
+    const html = renderToStaticMarkup(
+      createElement(PublicLoadingShell, { locale: "en" }),
+    );
 
-    expect(source).toContain("data-public-loading-shell");
-    expect(source).toContain("data-public-loading-promise");
-    expect(source).toContain("data-public-loading-recovery");
-    expect(source).toContain('role="status"');
-    expect(source).toContain('aria-live="polite"');
-    expect(source).toContain("<h1");
-    expect(source).not.toContain("loading_lower");
+    expect(html).toContain("data-public-loading-shell");
+    expect(html).toContain("data-public-loading-promise");
+    expect(html).toContain("data-public-loading-recovery");
+    expect(html).toContain('role="status"');
+    expect(html).toContain(PUBLIC_LOADING_COPY.en.promise);
+    expect(html).toContain(PUBLIC_LOADING_COPY.en.recovery);
+    expect(html).not.toMatch(/<main\b/i);
   });
 
-  it("offre stato, promessa e recovery in tutte le sette lingue", () => {
+  it("usa NEXT_LOCALE al primo render e offre tutte le sette lingue", () => {
     expect(Object.keys(PUBLIC_LOADING_COPY).sort()).toEqual([
       "de",
       "en",
@@ -35,5 +44,18 @@ describe("fallback della home pubblica", () => {
       expect(copy.promise.trim()).not.toBe("");
       expect(copy.recovery.trim()).not.toBe("");
     }
+
+    const locale = publicLoadingLocaleFromCookieStore({
+      get(name) {
+        return name === "NEXT_LOCALE" ? { value: "de" } : undefined;
+      },
+    });
+    const html = renderToStaticMarkup(
+      createElement(PublicLoadingShell, { locale }),
+    );
+    expect(locale).toBe("de");
+    expect(html).toContain(PUBLIC_LOADING_COPY.de.status);
+    expect(html).toContain(PUBLIC_LOADING_COPY.de.promise);
+    expect(publicLoadingLocale("not-a-locale")).toBe("it");
   });
 });
