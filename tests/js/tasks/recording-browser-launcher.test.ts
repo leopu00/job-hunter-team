@@ -36,6 +36,10 @@ describe("launcher Playwright per riprese web", () => {
     expect(setup).toContain('name: "jht_demo_persona"');
     expect(setup).toContain('localStorage.setItem("jht-theme", "light")');
     expect(setup).toContain('localStorage.setItem("jht-tour-done", "1")');
+    expect(setup).toContain("nextjs-portal");
+    expect(setup).toContain("data-nextjs-dev-tools-button");
+    expect(setup).toContain("data-next-badge-root");
+    expect(setup).toContain("display:none!important");
     expect(launcher).toContain('new URL("/dashboard", url)');
     expect(launcher).toContain("url.origin !== LOCAL_RECORDING_ORIGIN");
     expect(launcher).not.toMatch(
