@@ -1027,7 +1027,7 @@ var _action_note_color: Color = Palette.DIM
 ## altrove spegne anche i pulsanti di qui, e al suo termine devono riaccendersi
 ## subito, non al prossimo probe.
 const SETUP_ACTIONS := ["container", "team", "provider", "plan", "install",
-		"email", "telegram", "agent",
+		"email", "telegram", "agent", "upgrade",
 		"vps-key", "vps-test", "vps-provision", "vps-migrate"]
 ## Le sezioni che si ricostruiscono all'avvio/fine di un'azione. Il pannello
 ## VPS NON c'è di proposito: ha campi di testo (IP, chiave, utente) e una
@@ -1211,6 +1211,7 @@ func _build_container_setup() -> void:
 	# corso è marcata ◌: l'utente vede A CHE PUNTO è, non solo che "qualcosa
 	# gira" (feedback 30/07).
 	var busy := SetupService.busy() and SetupService.current_action == "container"
+	var upgrading := SetupService.busy() and SetupService.current_action == "upgrade"
 	var phase: String = SetupService.action_phase if busy else ""
 	_content.add_child(TerminalTheme.label(UIStrings.t("setup.container_lead"),
 			15, Palette.BASE))
@@ -1295,14 +1296,19 @@ func _build_container_setup() -> void:
 		install.add_theme_color_override("font_color", Palette.YELLOW)
 		install.pressed.connect(SetupService.open_runtime_install)
 		actions.add_child(install)
-	# Versione vecchia: lo dice la riga di stato qui sopra, il pulsante la ripara.
-	if bool(s.get("runtime_stale", false)) and bool(s.get("docker_running", false)) \
-			and not bool(s.get("remote", false)):
+	# L'upgrade e' un solo comando host-side: locale chiama il wrapper sul
+	# computer, VPS usa lo stesso canale SSH del setup. Non fare docker exec
+	# qui: journal, rollback e restart appartengono al wrapper.
+	var can_upgrade := bool(s.get("remote", false)) or \
+			(bool(s.get("runtime_stale", false)) and bool(s.get("docker_running", false)))
+	if can_upgrade:
 		var update := Button.new()
-		update.text = UIStrings.t("setup.runtime_update")
+		update.text = UIStrings.t("setup.runtime_update_busy") if upgrading \
+				else UIStrings.t("setup.runtime_update")
 		update.disabled = SetupService.busy()
 		update.add_theme_color_override("font_color", Palette.YELLOW)
-		update.add_theme_color_override("font_disabled_color", Palette.MUTED)
+		update.add_theme_color_override("font_disabled_color",
+				Palette.YELLOW if upgrading else Palette.MUTED)
 		update.pressed.connect(SetupService.update_runtime)
 		actions.add_child(update)
 	# Vale per tutti i pulsanti spenti del pannello, FERMA CONTAINER incluso:
@@ -1408,6 +1414,8 @@ static func _busy_action_label() -> String:
 	match SetupService.current_action:
 		"container":
 			return UIStrings.t("setup.busy_container")
+		"upgrade":
+			return UIStrings.t("setup.busy_upgrade")
 		"team":
 			return UIStrings.t("setup.busy_team")
 		"provider", "plan", "install":
