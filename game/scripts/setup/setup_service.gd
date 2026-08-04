@@ -1496,12 +1496,24 @@ const PTY_COLS := 120
 ## Il guscio scrive quindi l'esito come OSC (invisibile nel renderer terminale)
 ## prima di uscire; EmbeddedTerminal lo legge dai byte grezzi e può distinguere
 ## davvero successo e fallimento.
-static func _with_exit_report(command: String) -> String:
+static func _with_exit_report(command: String, token: String) -> String:
 	# Il comando gira in una subshell: anche un suo `exit N` non può saltare il
 	# report del wrapper esterno. Stdin resta la stessa PTY interattiva.
 	return ("( %s\n); _jht_exit=$?; " \
-			+ "printf '\\033]1337;JHTExit=%%s\\007' \"$_jht_exit\" >&2; " \
-			+ "exit \"$_jht_exit\"") % command
+			+ "printf '\\033]1337;JHTExit=%s:%%s\\007' \"$_jht_exit\" >&2; " \
+			+ "exit \"$_jht_exit\"") % [command, token]
+
+
+## Windows non espone l'exit code del processo raccolto da Godot. Delayed
+## expansion conserva l'esito del comando prima di invocare PowerShell, usato
+## soltanto per scrivere la stessa sequenza OSC invisibile del wrapper POSIX.
+static func _with_windows_exit_report(command: String, token: String) -> String:
+	return ("( %s ) 1>&2 & set \"_jht_exit=!errorlevel!\" & " \
+			+ "set \"JHT_EXIT_CODE=!_jht_exit!\" & " \
+			+ "powershell.exe -NoProfile -NonInteractive -Command " \
+			+ "\"[Console]::Error.Write([char]27 + ']1337;JHTExit=%s:' " \
+			+ "+ $env:JHT_EXIT_CODE + [char]7)\" & exit /b !_jht_exit!") \
+			% [command, token]
 
 
 ## Senza `stty` la pty aperta da `script` nasce 0×0 — misurato sia su macOS
@@ -1519,27 +1531,30 @@ static func _with_pty_size(command: String) -> String:
 static func embedded_terminal_spec(title: String, hint: String, command: String) -> Dictionary:
 	var path := "/bin/sh"
 	var args := PackedStringArray()
-	var reports_exit := false
+	var exit_report_token := Crypto.new().generate_random_bytes(16).hex_encode()
 	match OS.get_name():
 		"macOS":
-			reports_exit = true
 			args = PackedStringArray(["-lc", "script -q /dev/null /bin/sh -lc " \
-					+ _shell_quote(_with_pty_size(_with_exit_report(command))) + " 1>&2"])
+					+ _shell_quote(_with_pty_size(
+							_with_exit_report(command, exit_report_token))) + " 1>&2"])
 		"Windows":
 			path = "cmd.exe"
 			# ConPTY non è ancora esposto da Godot: il device flow Codex resta
 			# pienamente interattivo; Claude/Kimi ricevono comunque stdin.
-			args = PackedStringArray(["/d", "/s", "/c", command + " 1>&2"])
+			args = PackedStringArray(["/d", "/v:on", "/s", "/c",
+					_with_windows_exit_report(command, exit_report_token)])
 		_:
-			reports_exit = true
 			args = PackedStringArray(["-lc", "script -qefc " \
-					+ _shell_quote(_with_pty_size(_with_exit_report(command))) + " /dev/null 1>&2"])
+					+ _shell_quote(_with_pty_size(
+							_with_exit_report(command, exit_report_token))) \
+					+ " /dev/null 1>&2"])
 	return {
 		"path": path,
 		"args": args,
 		"title": title,
 		"hint": hint,
-		"reports_exit": reports_exit,
+		"reports_exit": true,
+		"exit_report_token": exit_report_token,
 	}
 
 
