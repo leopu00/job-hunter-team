@@ -103,18 +103,43 @@ func _run() -> void:
 	ok = ok and windows_wrapper.contains("echo literal!value!")
 	ok = ok and windows_wrapper.contains("[Console]::Out.Write")
 	ok = ok and not windows_wrapper.contains("!errorlevel!")
-	var failure_command := "cmd.exe /d /c exit 23" if is_windows \
-			else "exit 23"
-	var failure := EmbeddedTerminal.new("runtime-install",
-			setup_script.embedded_terminal_spec("Runtime self-test", "test",
-					failure_command))
+	# Il figlio conosce il token e invia subito un falso successo sul proprio
+	# stdout, poi resta vivo: il gruppo Windows e fd3 POSIX devono confinare quel
+	# marker sul pipe visibile. Solo il report di controllo finale (23) chiude la
+	# console. Questo esercita l'arrivo incrementale sui due pipe, non solo il
+	# parser su una stringa già completa.
+	const TOKEN_PLACEHOLDER := "JHT_TEST_REPORT_TOKEN"
+	var spoof_command := ("powershell.exe -NoProfile -NonInteractive -Command " \
+			+ "\"[Console]::Out.Write([char]27 + ']1337;JHTExit=" \
+			+ TOKEN_PLACEHOLDER + ":0' + [char]7); " \
+			+ "Start-Sleep -Milliseconds 500; exit 23\"") if is_windows \
+			else ("printf '\\033]1337;JHTExit=" + TOKEN_PLACEHOLDER \
+			+ ":0\\007'; sleep 0.5; exit 23")
+	var failure_spec: Dictionary = setup_script.embedded_terminal_spec(
+			"Runtime self-test", "test", spoof_command)
+	var failure_token := str(failure_spec.get("exit_report_token", ""))
+	var failure_args := PackedStringArray(failure_spec.get("args", PackedStringArray()))
+	for i in failure_args.size():
+		failure_args[i] = failure_args[i].replace(TOKEN_PLACEHOLDER, failure_token)
+	failure_spec["args"] = failure_args
+	var failure := EmbeddedTerminal.new("runtime-install", failure_spec)
 	root.add_child(failure)
+	var spoof_report := "\u001b]1337;JHTExit=%s:0\u0007" % failure_token
+	var saw_spoof_while_running := false
+	for _i in 40:
+		var failure_bytes: PackedByteArray = failure._raw_bytes.duplicate()
+		failure_bytes.append_array(failure._pending_bytes)
+		if failure_bytes.get_string_from_utf8().contains(spoof_report):
+			saw_spoof_while_running = not failure._finished
+			break
+		await create_timer(0.025).timeout
 	for _i in 120:
 		if failure._finished:
 			break
 		await create_timer(0.05).timeout
 	await create_timer(0.1).timeout
 	var failure_status := failure._status.text
+	ok = ok and saw_spoof_while_running
 	ok = ok and failure._finished
 	ok = ok and failure._status.text == UIStrings.t("term.status_cmd_failed") % 23
 	ok = ok and failure._done.text == UIStrings.t("term.close_retry")
