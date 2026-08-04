@@ -9,6 +9,7 @@ import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
 import {
   acknowledgeSync,
+  observedSyncOutcome,
   pushRendezvousOutcome,
   syncRendezvousPending,
   timeoutFailure,
@@ -2607,19 +2608,32 @@ export async function handleSyncRendezvous(options = {}) {
         : 'push non riuscito';
       console.error(pc.yellow(`  sync-rendezvous: ack NON scritto (${why}) — il web resta "non sincronizzato", ritento al prossimo tick.`));
     }
-    return pushOutcome;
+    const observed = observedSyncOutcome(pushOutcome.status, reqAt);
+    const published = observed
+      ? await patchTeamStateBestEffort(config, reader, observed)
+      : false;
+    return { ...pushOutcome, observed: published };
   }
 
   // Ack `sync_completed_at`: diretto se disponibile, altrimenti PATCH Vercel.
   const nowIso = new Date().toISOString();
+  const completedObserved = observedSyncOutcome('completed', reqAt);
   const ack = await acknowledgeSync({
     reader,
     fetchFn,
     url: `${baseUrl}/api/team-state`,
     token: config.token,
     completedAt: nowIso,
+    observed: completedObserved,
     signal,
   });
+  if (ack.status !== 'completed') {
+    const failedObserved = observedSyncOutcome(ack.status, reqAt);
+    const published = failedObserved
+      ? await patchTeamStateBestEffort(config, reader, failedObserved)
+      : false;
+    ack.observed = published;
+  }
   if (!silent) {
     if (ack.status === 'completed') {
       console.log(pc.green(`✓ Sync now servito: push fresco + ack (${ack.via})`));
@@ -2682,8 +2696,8 @@ export async function handleChatSync(options = {}) {
   let DatabaseSync;
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
-  } catch (err) {
-    log('error', `chat-sync: node:sqlite non disponibile: ${err.message}`);
+  } catch {
+    log('error', 'chat-sync: node:sqlite non disponibile (sqlite_unavailable)');
     return { status: 'sqlite_unavailable' };
   }
 
@@ -2697,7 +2711,8 @@ export async function handleChatSync(options = {}) {
     // `log('error', …)` e non il vecchio `if (!silent)`: un DB non apribile
     // ferma la chat per intero, ed è esattamente ciò che deve farsi vedere
     // anche dal daemon.
-    log('error', `chat-sync: DB non apribile: ${err.message}`);
+    const code = typeof err?.code === 'string' ? err.code : 'open_failed';
+    log('error', `chat-sync: DB non apribile (${code})`);
     return { status: 'db_unavailable' };
   }
   // Le colonne arrivano da _db.py alla prima apertura di un agente: un
@@ -3180,7 +3195,7 @@ async function handleDaemon(options) {
         await handleSyncRendezvous({ silent: true, config, state: rendezvousState });
         process.exitCode = prevSr;
       } catch (err) {
-        console.error(pc.yellow(`  daemon sync-rendezvous error: ${err.message}`));
+        console.error(pc.yellow('  daemon sync-rendezvous error (unexpected_failure)'));
       }
 
       // [JHT-CHAT-UNIFY] Corsia chat: mirror chat.jsonl ⇄ SQLite, consegna al
@@ -3192,7 +3207,7 @@ async function handleDaemon(options) {
         await handleChatSync({ silent: true, config, state: rendezvousState });
         process.exitCode = prevCh;
       } catch (err) {
-        console.error(pc.yellow(`  daemon chat-sync error: ${err.message}`));
+        console.error(pc.yellow('  daemon chat-sync error (unexpected_failure)'));
       }
 
       // [M2-MOBILE-STOP] La sola convergenza di controllo ammessa dal cloud:
@@ -3263,7 +3278,7 @@ async function runRealtimeLoop({ config, isRunning }) {
     if (syncing) return;
     syncing = true;
     try { await handleSyncRendezvous({ silent: true }); }
-    catch (e) { console.error(pc.yellow(`  ${tag} sync-rendezvous error: ${e.message}`)); }
+    catch { console.error(pc.yellow(`  ${tag} sync-rendezvous error (unexpected_failure)`)); }
     finally { syncing = false; }
   };
   let ticketing = false;
@@ -3284,7 +3299,7 @@ async function runRealtimeLoop({ config, isRunning }) {
     if (chatting) return;
     chatting = true;
     try { await handleChatSync({ silent: true, config, state }); }
-    catch (e) { console.error(pc.yellow(`  ${tag} chat-sync error: ${e.message}`)); }
+    catch { console.error(pc.yellow(`  ${tag} chat-sync error (unexpected_failure)`)); }
     finally { chatting = false; }
   };
   const chatLocalSec = Math.max(1, parseInt(process.env.JHT_CHAT_LOCAL_SEC || '5', 10) || 5);

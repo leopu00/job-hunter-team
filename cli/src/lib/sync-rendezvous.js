@@ -27,15 +27,45 @@ export function pushRendezvousOutcome(pushResult) {
   };
 }
 
+const OBSERVABLE_STATUSES = new Set([
+  'completed',
+  'timeout',
+  'push_failed',
+  'ack_failed',
+]);
+
+/**
+ * Stato observed correlabile alla richiesta senza fidarsi dell'orologio VPS:
+ * anche se il box fosse indietro, `last_action_at` è almeno request+1ms.
+ */
+export function observedSyncOutcome(status, requestedAt, now = Date.now()) {
+  if (!OBSERVABLE_STATUSES.has(status)) return null;
+  const requested = Date.parse(requestedAt || '');
+  const at = Number.isFinite(requested) ? Math.max(now, requested + 1) : now;
+  return {
+    last_action: `sync:${status}`,
+    last_action_at: new Date(at).toISOString(),
+  };
+}
+
 /**
  * Scrive l'ACK e considera successo solo una risposta 2xx. Nessun body o
  * messaggio d'errore viene restituito: l'esito può essere loggato senza
  * trascinare URL, hostname o identificatori infrastrutturali.
  */
-export async function acknowledgeSync({ reader, fetchFn = fetch, url, token, completedAt, signal }) {
+export async function acknowledgeSync({
+  reader,
+  fetchFn = fetch,
+  url,
+  token,
+  completedAt,
+  observed = {},
+  signal,
+}) {
+  const fields = { ...observed, sync_completed_at: completedAt };
   if (reader) {
     try {
-      await reader.patchTeamState({ sync_completed_at: completedAt });
+      await reader.patchTeamState(fields);
       return { status: 'completed', completedAt, via: 'direct' };
     } catch {
       // Il canale diretto è un'ottimizzazione: il token HTTP resta il fallback.
@@ -50,7 +80,7 @@ export async function acknowledgeSync({ reader, fetchFn = fetch, url, token, com
         'Content-Type': 'application/json',
       },
       signal,
-      body: JSON.stringify({ sync_completed_at: completedAt }),
+      body: JSON.stringify(fields),
     });
     if (!res.ok) {
       return { status: 'ack_failed', httpStatus: res.status, retryable: res.status >= 500 };
