@@ -2489,6 +2489,61 @@ const POS_STATUS_ORDER := ["new", "checked", "scored", "writing", "review",
 		"ready", "applied", "response", "excluded"]
 const POS_PAGE_SIZES := [25, 50, 100, 200]
 
+## Le posizioni hanno la stessa grammatica visiva del web: superfici distinte,
+## bordi quieti e badge che fanno leggere stato/score prima della prosa. Gli
+## helper restano locali alla sezione: non cambiano il tema globale e quindi
+## non "webbificano" dialoghi, setup o ufficio.
+static func _pos_card(accent := Color.TRANSPARENT,
+		background := Color.TRANSPARENT, padding := 16) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.set_meta("position_card", true)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Palette.CARD if background.a == 0.0 else background
+	style.border_color = Palette.BORDER if accent.a == 0.0 else Color(accent, 0.48)
+	style.set_border_width_all(TerminalTheme.hairline())
+	style.set_corner_radius_all(7)
+	style.content_margin_left = padding
+	style.content_margin_right = padding
+	style.content_margin_top = padding - 2
+	style.content_margin_bottom = padding - 2
+	card.add_theme_stylebox_override("panel", style)
+	return card
+
+
+static func _pos_card_box(parent: Control, accent := Color.TRANSPARENT,
+		background := Color.TRANSPARENT, padding := 16,
+		separation := 9) -> VBoxContainer:
+	var card := _pos_card(accent, background, padding)
+	parent.add_child(card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", separation)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.add_child(box)
+	return box
+
+
+static func _pos_badge(text: String, color: Color,
+		minimum_width := 0, strong := false) -> PanelContainer:
+	var badge := PanelContainer.new()
+	badge.set_meta("position_badge", true)
+	badge.custom_minimum_size.x = minimum_width
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(color, 0.09)
+	style.border_color = Color(color, 0.58)
+	style.set_border_width_all(TerminalTheme.hairline())
+	style.set_corner_radius_all(12)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	badge.add_theme_stylebox_override("panel", style)
+	var label := TerminalTheme.label(text.to_upper(), 12, color,
+			"bold" if strong else "medium")
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge.add_child(label)
+	return badge
+
 ## Filtri attivi (menu → set di valori). Persistono finché il pannello vive.
 var _pos_filters := {
 	"status": {}, "role_family": {}, "loc_country": {}, "work_mode": {},
@@ -2517,17 +2572,20 @@ func _build_positions() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
 		BackendBus.positions_updated.connect(_on_positions_refresh)
 	if BackendBus.positions_are_demo:
-		var demo_note := TerminalTheme.label(
-				UIStrings.t("demo.positions"),
+		var demo_box := _pos_card_box(_content, Palette.YELLOW,
+				Palette.PANEL, 12, 0)
+		var demo_note := TerminalTheme.label(UIStrings.t("demo.positions"),
 				13, Palette.YELLOW, "medium")
 		demo_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_content.add_child(demo_note)
+		demo_box.add_child(demo_note)
 
 	var visible_rows := _pos_filtered(all, "")
 	var active_filters := _pos_active_filter_count()
+	var toolbar := _pos_card_box(_content, Color.TRANSPARENT,
+			Palette.PANEL, 12, 10)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 16)
-	_content.add_child(head)
+	toolbar.add_child(head)
 	var count := TerminalTheme.label(UIStrings.t("pos.count")
 			% [all.size(), visible_rows.size()], 15, Palette.MINT, "medium")
 	count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2559,12 +2617,11 @@ func _build_positions() -> void:
 		var filter_bar := HFlowContainer.new()
 		filter_bar.add_theme_constant_override("h_separation", 10)
 		filter_bar.add_theme_constant_override("v_separation", 8)
-		_content.add_child(filter_bar)
+		toolbar.add_child(filter_bar)
 		_pos_filter_menu(filter_bar, "status", UIStrings.t("pos.f_status"), all)
 		_pos_filter_menu(filter_bar, "role_family", UIStrings.t("pos.f_family"), all)
 		_pos_filter_menu(filter_bar, "work_mode", UIStrings.t("pos.f_mode"), all)
 		_pos_filter_menu(filter_bar, "loc_country", UIStrings.t("pos.f_country"), all)
-	_content.add_child(HSeparator.new())
 
 	if visible_rows.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("pos.no_match"),
@@ -2581,7 +2638,7 @@ func _build_positions() -> void:
 	scroll.custom_minimum_size = Vector2(0, 300)
 	_content.add_child(scroll)
 	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 6)
+	list.add_theme_constant_override("separation", 9)
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
 	for p in visible_rows.slice(start, end):
@@ -3126,45 +3183,63 @@ func _pos_pagination(start: int, end: int, total: int, page_count: int) -> void:
 		_build())
 	footer.add_child(next)
 
-## Una posizione in lista, tabellare full-width come la pagina web:
-## score | titolo — azienda (espande) | famiglia | luogo | salario | stato.
+## Card full-width come la vista responsive del web: score immediato,
+## titolo/azienda dominanti, metadati quieti e stato in un badge riconoscibile.
 func _pos_row(p: Dictionary) -> Control:
+	var card := _pos_card()
+	card.set_meta("position_row", true)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
+	row.add_theme_constant_override("separation", 18)
+	card.add_child(row)
 	var score_v: Variant = p.get("total_score")
 	var score_txt := "—" if score_v == null else str(int(score_v))
 	var score_col: Color = Palette.DIM if score_v == null \
 			else (Palette.MINT if int(score_v) >= 70 else Palette.YELLOW)
-	var score := TerminalTheme.label(score_txt, 17, score_col, "bold")
-	score.custom_minimum_size = Vector2(44, 0)
-	row.add_child(score)
+	var score_badge := _pos_badge(score_txt, score_col, 54, true)
+	score_badge.tooltip_text = UIStrings.t("pos.score_title") % int(score_v) \
+			if score_v != null else UIStrings.t("pos.score_none")
+	row.add_child(score_badge)
+	var identity := VBoxContainer.new()
+	identity.add_theme_constant_override("separation", 2)
+	identity.custom_minimum_size.x = 400
+	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(identity)
 	# il titolo apre la pagina della posizione (come sul web)
 	var title_btn := Button.new()
 	title_btn.flat = true
-	title_btn.text = "%s — %s" % [_pos_value(p, "title"), _pos_value(p, "company")]
+	title_btn.text = _pos_value(p, "title")
 	title_btn.add_theme_font_size_override("font_size", 15)
-	title_btn.add_theme_color_override("font_color", Palette.BRIGHT)
+	title_btn.add_theme_font_override("font", TerminalTheme.font(TerminalTheme.FONT_BOLD))
+	title_btn.add_theme_color_override("font_color", Palette.WHITE)
 	title_btn.add_theme_color_override("font_hover_color", Palette.GREEN)
 	title_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	title_btn.clip_text = true
 	title_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	var pid := int(p.get("id", 0))
+	title_btn.set_meta("position_id", pid)
 	title_btn.pressed.connect(func() -> void:
 		_pos_detail_id = pid
 		Sfx.play_tick()
 		_build("detail"))
-	row.add_child(title_btn)
-	var family := TerminalTheme.label(_pos_value(p, "role_family"), 13, Palette.MUTED)
-	family.custom_minimum_size = Vector2(220, 0)
+	identity.add_child(title_btn)
+	var company := TerminalTheme.label(_pos_value(p, "company"), 13,
+			Palette.BASE, "medium")
+	company.clip_text = true
+	identity.add_child(company)
+	var metadata := VBoxContainer.new()
+	metadata.add_theme_constant_override("separation", 3)
+	metadata.custom_minimum_size.x = 330
+	row.add_child(metadata)
+	var family := TerminalTheme.label(_pos_value(p, "role_family"), 12, Palette.MUTED)
 	family.clip_text = true
-	row.add_child(family)
-	var place := TerminalTheme.label("%s · %s" % [
+	metadata.add_child(family)
+	var place := TerminalTheme.label("%s  ·  %s  ·  %s" % [
 			str(p.get("loc_city", "") if p.get("loc_city") else "—"),
-			_pos_value(p, "loc_country")], 13, Palette.MUTED)
-	place.custom_minimum_size = Vector2(200, 0)
+			_pos_value(p, "loc_country"), _pos_value(p, "work_mode")],
+			12, Palette.DIM)
 	place.clip_text = true
-	row.add_child(place)
+	metadata.add_child(place)
 	var est: bool = p.get("salary_estimated_min") != null
 	var s_min: Variant = p.get("salary_estimated_min") if est else p.get("salary_declared_min")
 	var s_max: Variant = p.get("salary_estimated_max") if est else p.get("salary_declared_max")
@@ -3173,20 +3248,20 @@ func _pos_row(p: Dictionary) -> Control:
 	var s_cur := str(cur_v) if cur_v != null else "EUR"
 	var sal := "—" if s_min == null and s_max == null \
 			else _fmt_salary_eur(s_min, s_max, s_cur)
-	var sal_lbl := TerminalTheme.label(sal, 13,
-			Palette.BASE if sal != "—" else Palette.DIM)
-	sal_lbl.custom_minimum_size = Vector2(110, 0)
+	var sal_lbl := TerminalTheme.label(sal, 14,
+			Palette.MINT if sal != "—" else Palette.DIM, "bold")
+	sal_lbl.custom_minimum_size = Vector2(128, 0)
+	sal_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(sal_lbl)
 	var st := _pos_value(p, "status")
-	var st_lbl := TerminalTheme.label(st, 13,
-			_pos_status_color(st, Palette.MUTED), "medium")
-	st_lbl.custom_minimum_size = Vector2(90, 0)
-	row.add_child(st_lbl)
+	var st_badge := _pos_badge(st, _pos_status_color(st, Palette.MUTED), 104)
+	st_badge.set_meta("position_status", st)
+	row.add_child(st_badge)
 	# aria a destra: la scrollbar non deve coprire lo stato
 	var pad := Control.new()
 	pad.custom_minimum_size = Vector2(14, 0)
 	row.add_child(pad)
-	return row
+	return card
 
 # ── Dettaglio posizione (la pagina del web privato) ───────────────────
 
@@ -3237,23 +3312,34 @@ func _build_pos_detail() -> void:
 		scroll.get_v_scroll_bar().changed.connect(func() -> void:
 			scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value))
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
+	box.add_theme_constant_override("separation", 14)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(box)
 
-	# ── intestazione ──
-	box.add_child(TerminalTheme.label(_pos_value(p, "title"), 22, Palette.WHITE, "xbold"))
+	# ── hero: il web mette identità, stato e numeri decisivi nella prima card ──
+	var st := _pos_value(p, "status")
+	var hero := _pos_card_box(box, _pos_status_color(st, Palette.MUTED),
+			Palette.CARD, 18, 8)
+	var hero_head := HBoxContainer.new()
+	hero_head.add_theme_constant_override("separation", 16)
+	hero.add_child(hero_head)
+	var identity := VBoxContainer.new()
+	identity.add_theme_constant_override("separation", 4)
+	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hero_head.add_child(identity)
+	var title := TerminalTheme.label(_pos_value(p, "title"), 23,
+			Palette.WHITE, "xbold")
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	identity.add_child(title)
 	var sub := HBoxContainer.new()
 	sub.add_theme_constant_override("separation", 14)
-	box.add_child(sub)
+	identity.add_child(sub)
 	sub.add_child(TerminalTheme.label(_pos_value(p, "company"), 16, Palette.BRIGHT, "medium"))
 	sub.add_child(TerminalTheme.label("%s · %s · %s" % [
 			str(p.get("loc_city", "") if p.get("loc_city") else "—"),
 			_pos_value(p, "loc_country"), _pos_value(p, "work_mode")],
 			14, Palette.MUTED))
-	var st := _pos_value(p, "status")
-	sub.add_child(TerminalTheme.label(st, 14,
-			_pos_status_color(st, Palette.MUTED), "bold"))
+	hero_head.add_child(_pos_badge(st, _pos_status_color(st, Palette.MUTED), 116, true))
 	# L'indirizzo che gli Analisti hanno faticato a trovare vive SOLO qui,
 	# accanto a città e paese: è la stessa informazione, alla sua massima
 	# precisione. Con office_verified=0 il team ha ripiegato sul centro città
@@ -3266,7 +3352,7 @@ func _build_pos_detail() -> void:
 				else UIStrings.t("pos.office_approx")
 		var arow := HBoxContainer.new()
 		arow.add_theme_constant_override("separation", 10)
-		box.add_child(arow)
+		hero.add_child(arow)
 		arow.add_child(TerminalTheme.label(UIStrings.t("pos.office_address"),
 				13, Palette.MUTED, "medium"))
 		arow.add_child(TerminalTheme.label(addr, 14,
@@ -3274,7 +3360,7 @@ func _build_pos_detail() -> void:
 		arow.add_child(TerminalTheme.label(tag, 12,
 				Palette.MINT if exact else Palette.DIM, "medium"))
 	if p.get("found_by"):
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.found") % [
+		hero.add_child(TerminalTheme.label(UIStrings.t("pos.found") % [
 				str(p["found_by"]), str(p.get("found_at", "")).left(10)], 13, Palette.DIM))
 	if p.get("url"):
 		# il link all'annuncio si APRE davvero, nel browser di sistema
@@ -3290,15 +3376,21 @@ func _build_pos_detail() -> void:
 		link.tooltip_text = UIStrings.t("pos.open_url")
 		var url := str(p["url"])
 		link.pressed.connect(func() -> void: OS.shell_open(url))
-		box.add_child(link)
+		hero.add_child(link)
 	var open_v: Variant = p.get("is_open")
 	if open_v != null:
-		box.add_child(TerminalTheme.label(
+		var open_row := HBoxContainer.new()
+		hero.add_child(open_row)
+		open_row.add_child(_pos_badge(
 				UIStrings.t("pos.open_yes") if int(open_v) == 1 else UIStrings.t("pos.open_no"),
-				13, Palette.MINT if int(open_v) == 1 else Palette.RED))
-	box.add_child(HSeparator.new())
+				Palette.MINT if int(open_v) == 1 else Palette.RED))
 
-	# ── stipendio (stima del team se c'è, altrimenti il dichiarato) ──
+	# ── panoramica: salario e prosa respirano in una card propria ──
+	var overview := _pos_card_box(box, Color.TRANSPARENT,
+			Palette.CARD, 18, 10)
+	overview.add_child(TerminalTheme.label(UIStrings.t("pos.summary").to_upper(),
+			13, Palette.MUTED, "bold"))
+	# stipendio (stima del team se c'è, altrimenti il dichiarato)
 	var est: bool = p.get("salary_estimated_min") != null or p.get("salary_estimated_max") != null
 	var s_min: Variant = p.get("salary_estimated_min") if est else p.get("salary_declared_min")
 	var s_max: Variant = p.get("salary_estimated_max") if est else p.get("salary_declared_max")
@@ -3312,7 +3404,7 @@ func _build_pos_detail() -> void:
 			rng += "  (%s–%s %s)" % [_fmt_k(s_min), _fmt_k(s_max), cur]
 		var srow := HBoxContainer.new()
 		srow.add_theme_constant_override("separation", 12)
-		box.add_child(srow)
+		overview.add_child(srow)
 		var slbl := TerminalTheme.label(UIStrings.t("pos.salary"), 14, Palette.MUTED, "medium")
 		slbl.custom_minimum_size = Vector2(220, 0)
 		srow.add_child(slbl)
@@ -3323,50 +3415,76 @@ func _build_pos_detail() -> void:
 
 	# ── riassunto annuncio ──
 	if p.get("jd_summary"):
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.summary"), 14, Palette.MUTED, "medium"))
-		box.add_child(_pos_paragraph(str(p["jd_summary"])))
-	box.add_child(HSeparator.new())
+		overview.add_child(_pos_paragraph(str(p["jd_summary"])))
 
 	# ── score breakdown pesato ──
+	var score_accent := Palette.MINT if p.get("total_score") != null \
+			and int(p["total_score"]) >= 70 else Palette.YELLOW
+	var score_box := _pos_card_box(box, score_accent,
+			Palette.CARD, 18, 10)
 	if p.get("total_score") != null:
-		box.add_child(TerminalTheme.label(
+		var score_head := HBoxContainer.new()
+		score_head.add_theme_constant_override("separation", 14)
+		score_box.add_child(score_head)
+		var score_title := TerminalTheme.label(
 				UIStrings.t("pos.score_title") % int(p["total_score"]), 17,
-				Palette.MINT if int(p["total_score"]) >= 70 else Palette.YELLOW, "bold"))
+				score_accent, "bold")
+		score_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		score_head.add_child(score_title)
+		score_head.add_child(_pos_badge("%d / 100" % int(p["total_score"]),
+				score_accent, 96, true))
 		for w in SCORE_WEIGHTS:
 			var val: Variant = p.get(w[0])
 			if val == null:
 				continue
 			var wrow := HBoxContainer.new()
 			wrow.add_theme_constant_override("separation", 12)
-			box.add_child(wrow)
+			score_box.add_child(wrow)
 			var wl := TerminalTheme.label("%s (su %d)" % [w[1], w[2]], 13, Palette.MUTED)
 			wl.custom_minimum_size = Vector2(220, 0)
 			wrow.add_child(wl)
 			var bar := ProgressBar.new()
-			bar.custom_minimum_size = Vector2(220, 12)
+			bar.custom_minimum_size = Vector2(320, 10)
+			bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			bar.max_value = float(w[2])
 			bar.value = float(val)
 			bar.show_percentage = false
-			bar.modulate = Palette.GREEN
+			var ratio := float(val) / float(w[2])
+			var ratio_color := Palette.GREEN if ratio >= 0.7 \
+					else (Palette.YELLOW if ratio >= 0.45 else Palette.RED)
+			# Modulare il ProgressBar verde del tema non cambia davvero fascia
+			# (verde × giallo resta verde nel render). Fill e binario dedicati
+			# rendono il rapporto come sul web e funzionano anche nel tema light.
+			var track := StyleBoxFlat.new()
+			track.bg_color = Palette.DEEP
+			track.border_color = Palette.BORDER
+			track.set_border_width_all(TerminalTheme.hairline())
+			track.set_corner_radius_all(5)
+			var fill := StyleBoxFlat.new()
+			fill.bg_color = ratio_color
+			fill.set_corner_radius_all(5)
+			bar.add_theme_stylebox_override("background", track)
+			bar.add_theme_stylebox_override("fill", fill)
 			wrow.add_child(bar)
 			wrow.add_child(TerminalTheme.label("%d/%d" % [int(val), w[2]],
 					13, Palette.BRIGHT, "medium"))
 		if p.get("score_notes"):
-			box.add_child(TerminalTheme.label(UIStrings.t("pos.score_rationale"),
+			score_box.add_child(TerminalTheme.label(UIStrings.t("pos.score_rationale"),
 					13, Palette.MUTED, "medium"))
-			box.add_child(_pos_paragraph(str(p["score_notes"])))
+			score_box.add_child(_pos_paragraph(str(p["score_notes"])))
 		if p.get("scored_by"):
-			box.add_child(TerminalTheme.label("— %s · %s" % [str(p["scored_by"]),
+			score_box.add_child(TerminalTheme.label("— %s · %s" % [str(p["scored_by"]),
 					str(p.get("scored_at", "")).left(10)], 12, Palette.DIM))
 	else:
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.score_none"), 14, Palette.DIM))
-	box.add_child(HSeparator.new())
+		score_box.add_child(TerminalTheme.label(UIStrings.t("pos.score_none"), 14, Palette.DIM))
 
 	# ── voto del critico (0-10, distinto dallo score) ──
+	var critic_box := _pos_card_box(box, Color.TRANSPARENT,
+			Palette.CARD, 18, 9)
 	if p.get("critic_score") != null:
 		var crow := HBoxContainer.new()
 		crow.add_theme_constant_override("separation", 14)
-		box.add_child(crow)
+		critic_box.add_child(crow)
 		crow.add_child(TerminalTheme.label(
 				UIStrings.t("pos.critic_title") % float(p["critic_score"]),
 				16, Palette.BRIGHT, "bold"))
@@ -3375,73 +3493,78 @@ func _build_pos_detail() -> void:
 			crow.add_child(TerminalTheme.label(verdict, 15,
 					_verdict_color(verdict), "bold"))
 		if p.get("critic_notes"):
-			box.add_child(_pos_paragraph(str(p["critic_notes"])))
+			critic_box.add_child(_pos_paragraph(str(p["critic_notes"])))
 	else:
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.critic_none"), 14, Palette.DIM))
-	box.add_child(HSeparator.new())
+		critic_box.add_child(TerminalTheme.label(UIStrings.t("pos.critic_none"), 14, Palette.DIM))
 
 	# ── punti chiave ──
 	var highlights: Array = p.get("highlights", [])
 	if not highlights.is_empty():
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.highlights"), 14,
-				Palette.MUTED, "medium"))
+		var highlights_box := _pos_card_box(box, Color.TRANSPARENT,
+				Palette.CARD, 18, 9)
+		highlights_box.add_child(TerminalTheme.label(
+				UIStrings.t("pos.highlights").to_upper(), 13,
+				Palette.MUTED, "bold"))
 		for h in highlights:
 			var kind := str(h.get("type", ""))
 			var good := kind.containsn("pro") or kind.containsn("plus") or kind.containsn("match")
 			var bad := kind.containsn("con") or kind.containsn("minus") or kind.containsn("risk")
 			var hrow := HBoxContainer.new()
 			hrow.add_theme_constant_override("separation", 10)
-			box.add_child(hrow)
+			highlights_box.add_child(hrow)
 			hrow.add_child(TerminalTheme.label("▲" if good else ("▼" if bad else "•"), 13,
 					Palette.GREEN if good else (Palette.RED if bad else Palette.MUTED)))
 			hrow.add_child(_pos_paragraph(str(h.get("text", ""))))
-		box.add_child(HSeparator.new())
 
 	# ── esclusione utente ──
 	if p.get("user_excluded_reason"):
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.excluded_title"), 14,
+		var excluded_box := _pos_card_box(box, Palette.RED,
+				Color(Palette.RED, 0.055), 18, 8)
+		excluded_box.add_child(TerminalTheme.label(UIStrings.t("pos.excluded_title"), 14,
 				Palette.RED, "bold"))
 		var reason := str(p["user_excluded_reason"])
 		if p.get("user_excluded_note"):
 			reason += " — " + str(p["user_excluded_note"])
-		box.add_child(_pos_paragraph(reason))
-		box.add_child(HSeparator.new())
+		excluded_box.add_child(_pos_paragraph(reason))
 
 	# ── stato delle azioni on-demand (per ora sola lettura) ──
-	box.add_child(TerminalTheme.label(UIStrings.t("pos.actions"), 14,
-			Palette.MUTED, "medium"))
+	var actions_box := _pos_card_box(box, Color.TRANSPARENT,
+			Palette.CARD, 18, 9)
+	actions_box.add_child(TerminalTheme.label(UIStrings.t("pos.actions").to_upper(), 13,
+			Palette.MUTED, "bold"))
 	for act in [["pos.act_write", "write_requested"],
 			["pos.act_geocode", "geocode_requested"],
 			["pos.act_recheck", "recheck_requested"]]:
 		var requested := int(p.get(act[1], 0) if p.get(act[1]) != null else 0) == 1
 		var arow := HBoxContainer.new()
 		arow.add_theme_constant_override("separation", 12)
-		box.add_child(arow)
+		actions_box.add_child(arow)
 		var al := TerminalTheme.label(UIStrings.t(act[0]), 14, Palette.BASE)
 		al.custom_minimum_size = Vector2(280, 0)
 		arow.add_child(al)
 		arow.add_child(TerminalTheme.label(
 				UIStrings.t("pos.act_requested") if requested else UIStrings.t("pos.act_not_requested"),
 				13, Palette.YELLOW if requested else Palette.DIM, "medium"))
-	box.add_child(TerminalTheme.label(UIStrings.t("pos.act_note"), 12, Palette.DIM))
-	box.add_child(HSeparator.new())
+	actions_box.add_child(TerminalTheme.label(UIStrings.t("pos.act_note"), 12, Palette.DIM))
 
 	# ── ticket col team ──
-	box.add_child(TerminalTheme.label(UIStrings.t("pos.tickets"), 14,
-			Palette.MUTED, "medium"))
+	var tickets_box := _pos_card_box(box, Color.TRANSPARENT,
+			Palette.CARD, 18, 9)
+	tickets_box.add_child(TerminalTheme.label(UIStrings.t("pos.tickets").to_upper(), 13,
+			Palette.MUTED, "bold"))
 	var tickets: Array = p.get("tickets", [])
 	if tickets.is_empty():
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_none"), 13, Palette.DIM))
+		tickets_box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_none"), 13, Palette.DIM))
 	for t in tickets:
 		var trow := HBoxContainer.new()
 		trow.add_theme_constant_override("separation", 12)
-		box.add_child(trow)
+		tickets_box.add_child(trow)
 		trow.add_child(TerminalTheme.label("[%s]" % str(t.get("status", "?")), 13,
 				Palette.MINT if str(t.get("status")) == "resolved" else Palette.YELLOW, "medium"))
 		trow.add_child(_pos_paragraph(str(t.get("request_text", ""))))
 		if t.get("response_text"):
-			box.add_child(_pos_paragraph("↳ " + str(t["response_text"])))
-	_build_ticket_form(box, int(p.get("id", 0)))
+			tickets_box.add_child(_pos_paragraph("↳ " + str(t["response_text"])))
+	_build_ticket_form(tickets_box, int(p.get("id", 0)))
 
 ## Form "nuovo ticket": la richiesta utente→team, l'unica scrittura
 ## remota autorizzata (gate 1). L'esito arriva su ticket_created; la
