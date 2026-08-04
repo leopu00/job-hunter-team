@@ -884,7 +884,16 @@ func _tour_selftest() -> void:
 		release.position = marker_screen
 		release.pressed = false
 		office._camera._unhandled_input(press)
+		# Riproduce la deriva fra i due eventi: la camera guidata può essere
+		# ancora in movimento quando l'utente preme. Il target deve restare
+		# quello campionato dal frame visibile al press.
+		var camera_position: Vector2 = office._camera.position
+		office._camera.position += Vector2(0, -300)
+		office._camera.reset_smoothing()
+		await get_tree().process_frame
 		office._camera._unhandled_input(release)
+		office._camera.position = camera_position
+		office._camera.reset_smoothing()
 		await get_tree().process_frame
 		var welcome: DialogueUI = find_dialogue.call()
 		check.call(welcome != null and welcome._tree.has("ready"),
