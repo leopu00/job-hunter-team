@@ -59,6 +59,7 @@ func _run() -> void:
 		if terminal._finished:
 			break
 		await create_timer(0.05).timeout
+	var success_captured_exit := terminal._captured_exit_code()
 	var all_bytes: PackedByteArray = terminal._raw_bytes.duplicate()
 	all_bytes.append_array(terminal._pending_bytes)
 	var visible := terminal._terminal_text(all_bytes.get_string_from_utf8())
@@ -67,6 +68,11 @@ func _run() -> void:
 		ok = ok and visible.contains("ricevuto:OK")
 	ok = ok and terminal._finished
 	ok = ok and terminal._status.text == UIStrings.t("term.status_cmd_done")
+	if is_windows:
+		# Anche il successo deve arrivare dal marker OSC numerico del wrapper,
+		# non dall'euristica di chiusura pipe di Godot su Windows.
+		ok = ok and success_captured_exit == 0
+		ok = ok and not PackedStringArray(spec.get("args", PackedStringArray())).has("/v:on")
 	# Modello di schermo: il posizionamento colonna (ESC[nG, stile TUI
 	# Claude) deve produrre spazi, non parole incollate; cursor-home + erase
 	# sovrascrivono invece di accodare; il clear screen svuota davvero.
@@ -118,10 +124,11 @@ func _run() -> void:
 	ok = ok and EmbeddedTerminal._exit_code_from_raw("nessun report", exit_token) == -1
 	var windows_wrapper: String = setup_script._with_windows_exit_report(
 			"echo literal!value!", exit_token)
-	ok = ok and windows_wrapper.contains("call set \"JHT_EXIT_CODE=%%errorlevel%%\"")
+	ok = ok and windows_wrapper.contains("call set JHT_EXIT_CODE=^%errorlevel^%")
 	ok = ok and windows_wrapper.contains("echo literal!value!")
 	ok = ok and windows_wrapper.contains("[Console]::Out.Write")
 	ok = ok and not windows_wrapper.contains("!errorlevel!")
+	ok = ok and not windows_wrapper.contains("call set \"")
 	# Il figlio conosce il token e invia subito un falso successo sul proprio
 	# stdout, poi resta vivo: il gruppo Windows e fd3 POSIX devono confinare quel
 	# marker sul pipe visibile. Solo il report di controllo finale (23) chiude la
@@ -239,6 +246,7 @@ func _run() -> void:
 	ok = ok and closed_before_publish and early_close_killed
 	print("EMBEDDED-TERMINAL-TEST ", "PASS" if ok else "FAIL",
 			" pid=", pid, " output=", visible, " auto_auth_close=", ok,
+			" success_exit=", success_captured_exit,
 			" failure_status=", failure_status,
 			" missing_status=", missing_status,
 			" close_killed=", close_killed,
