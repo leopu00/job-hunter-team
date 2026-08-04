@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("il globo pubblico mantiene badge e attribuzione leggibili su mobile", async ({
+test("il globo pubblico mantiene l'attribuzione leggibile su mobile senza badge dimostrativo", async ({
   browser,
 }, testInfo) => {
   const context = await browser.newContext({
@@ -14,28 +14,22 @@ test("il globo pubblico mantiene badge e attribuzione leggibili su mobile", asyn
     expect(response?.status(), "home non risponde").toBe(200);
 
     const globe = page.locator("[data-landing-globe]");
-    const badge = globe.locator(".jht-globe-badge");
     const credit = globe.locator(".jht-globe-static-credit");
 
-    await expect(badge).toBeVisible();
+    await expect(globe.locator(".jht-globe-badge")).toHaveCount(0);
     await expect(credit).toBeVisible();
 
-    const [badgeFont, creditFont, globeRect, creditRect, hasOverflow] =
-      await Promise.all([
-        badge.evaluate((element) =>
-          Number.parseFloat(window.getComputedStyle(element).fontSize),
-        ),
-        credit.evaluate((element) =>
-          Number.parseFloat(window.getComputedStyle(element).fontSize),
-        ),
-        globe.evaluate((element) => element.getBoundingClientRect().toJSON()),
-        credit.evaluate((element) => element.getBoundingClientRect().toJSON()),
-        page.evaluate(
-          () => document.documentElement.scrollWidth > window.innerWidth,
-        ),
-      ]);
+    const [creditFont, globeRect, creditRect, hasOverflow] = await Promise.all([
+      credit.evaluate((element) =>
+        Number.parseFloat(window.getComputedStyle(element).fontSize),
+      ),
+      globe.evaluate((element) => element.getBoundingClientRect().toJSON()),
+      credit.evaluate((element) => element.getBoundingClientRect().toJSON()),
+      page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      ),
+    ]);
 
-    expect(badgeFont, "badge sotto 11px su mobile").toBeGreaterThanOrEqual(11);
     expect(
       creditFont,
       "attribuzione sotto 10px su mobile",

@@ -505,7 +505,8 @@ function matchScoreColor(s: number | null): string {
 // landing non è autenticata), non registra alcuna interazione utente
 // (niente drag/zoom/click: la pagina deve poter scorrere sopra al
 // canvas, soprattutto su mobile) e consegna l'istanza mappa al
-// chiamante, che pilota la camera dall'esterno (rotazione + voli).
+// chiamante solo quando i primi pin sono stati renderizzati: il chiamante
+// può così pilotare la camera senza scoprire la mappa durante uno zoom.
 // onTierChange espone i degradi del monitor FPS: la landing lo usa per
 // ripiegare su un'immagine statica quando la macchina non regge.
 export type GlobeShowcase = {
@@ -598,6 +599,9 @@ export default function JobsGlobe({
   // (mount della mappa, fetch dati) — la prop non cambia dopo il mount.
   const showcaseRef = useRef<GlobeShowcase | null>(showcase);
   showcaseRef.current = showcase;
+  // Il callback della vetrina è un contratto one-shot: cambia tema o tier
+  // può ricreare lo style, ma non deve riavviare il tour dall'inizio.
+  const showcaseReadyRef = useRef(false);
 
   // --- Qualità grafica adattiva (vedi lib/map-perf.ts) -------------------
   // `pref` è la scelta esplicita dell'utente ("auto" = adattiva);
@@ -1087,10 +1091,6 @@ export default function JobsGlobe({
     // basso-centro, orizzontali e affiancati a "Vista generale".
     mapRef.current = map;
 
-    // Vetrina: consegna l'istanza al chiamante, che avvia l'autopilota
-    // (rotazione lenta + voli sulle città) quando la mappa è pronta.
-    showcaseRef.current?.onMapReady?.(map);
-
     // Misura la fluidità reale e corregge il tier. Attivo solo in
     // modalità auto: se l'utente ha scelto un livello a mano, quello
     // resta (il monitor viene staccato dall'effect qui sotto).
@@ -1298,6 +1298,25 @@ export default function JobsGlobe({
       },
     }));
     src.setData({ type: "FeatureCollection", features });
+
+    // Il `load` della mappa arriva prima che source, icone canvas e tile
+    // iniziali siano effettivamente pronti. Il tour della home non deve
+    // iniziare da lì: aspettiamo il primo `idle` DOPO il setData non vuoto,
+    // così il primo zoom trova già globo e pin completi, invece di mostrare
+    // contenuto che arriva a pezzi durante il movimento.
+    if (groups.length > 0 && showcaseRef.current && !showcaseReadyRef.current) {
+      map.once("idle", () => {
+        if (
+          showcaseReadyRef.current ||
+          mapRef.current !== map ||
+          !layersReadyRef.current
+        ) {
+          return;
+        }
+        showcaseReadyRef.current = true;
+        showcaseRef.current?.onMapReady?.(map);
+      });
+    }
   }
 
   const remoteCount = data.filter((d) => d.is_remote).length;
