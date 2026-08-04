@@ -90,7 +90,7 @@ export function usePendingMessagesLive(
       };
       if (cancelled || !data.session) return;
       if (supabase.realtime?.setAuth) {
-        supabase.realtime.setAuth(data.session.access_token);
+        await supabase.realtime.setAuth(data.session.access_token);
       }
       const userId = data.session.user.id;
       // subscribe() può LANCIARE SINCRONO dal costruttore WebSocket

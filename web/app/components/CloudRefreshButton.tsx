@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import { createClient } from "@/lib/supabase/client";
+import {
+  timestampAdvanced,
+  waitForSyncOutcome,
+} from "@/lib/sync-rendezvous";
 
 // "Sync now" lato CLOUD ([JHT-DATA-SYNC] fase 3). Mirror del CloudSyncStatusBanner
 // (che è LOCAL-only): quello pusha SQLite→cloud, questo chiede alla VPS un push
@@ -47,6 +51,9 @@ const T: Record<
     title: string;
     updatedNow: string;
     vpsSlow: string;
+    syncTimedOut: string;
+    syncPushFailed: string;
+    syncAckFailed: string;
   }
 > = {
   it: {
@@ -63,7 +70,13 @@ const T: Record<
     title: "Chiedi alla VPS un aggiornamento dei dati ora",
     updatedNow: "Dati aggiornati",
     vpsSlow:
-      "La VPS non ha ancora risposto — i dati si aggiorneranno da soli appena arriva il push",
+      "Nessuna conferma entro tre minuti. Controlla che il team sia online e riprova.",
+    syncTimedOut:
+      "La sincronizzazione ha impiegato troppo ed è stata interrotta. Riprova.",
+    syncPushFailed:
+      "La VPS non è riuscita a inviare i dati. Controlla lo stato del team e riprova.",
+    syncAckFailed:
+      "I dati potrebbero essere arrivati, ma manca la conferma. Attendi qualche secondo e riprova.",
   },
   en: {
     now: "now",
@@ -79,7 +92,12 @@ const T: Record<
     title: "Ask the VPS for a data refresh now",
     updatedNow: "Data updated",
     vpsSlow:
-      "The VPS hasn't answered yet — data will refresh automatically as soon as its push lands",
+      "No confirmation arrived within three minutes. Check that the team is online and try again.",
+    syncTimedOut: "The sync took too long and was stopped. Try again.",
+    syncPushFailed:
+      "The VPS couldn't send the data. Check the team status and try again.",
+    syncAckFailed:
+      "The data may have arrived, but confirmation is missing. Wait a few seconds and try again.",
   },
   es: {
     now: "ahora",
@@ -95,7 +113,13 @@ const T: Record<
     title: "Pedir a la VPS una actualización de datos ahora",
     updatedNow: "Datos actualizados",
     vpsSlow:
-      "El VPS aún no ha respondido: los datos se actualizarán solos en cuanto llegue su push",
+      "No llegó ninguna confirmación en tres minutos. Comprueba que el equipo esté conectado e inténtalo de nuevo.",
+    syncTimedOut:
+      "La sincronización tardó demasiado y se detuvo. Inténtalo de nuevo.",
+    syncPushFailed:
+      "El VPS no pudo enviar los datos. Comprueba el estado del equipo e inténtalo de nuevo.",
+    syncAckFailed:
+      "Puede que los datos hayan llegado, pero falta la confirmación. Espera unos segundos e inténtalo de nuevo.",
   },
   fr: {
     now: "maintenant",
@@ -111,7 +135,13 @@ const T: Record<
     title: "Demander au VPS une actualisation des données maintenant",
     updatedNow: "Données mises à jour",
     vpsSlow:
-      "Le VPS n'a pas encore répondu — les données se rafraîchiront dès l'arrivée de son push",
+      "Aucune confirmation après trois minutes. Vérifiez que l'équipe est en ligne et réessayez.",
+    syncTimedOut:
+      "La synchronisation a pris trop de temps et a été arrêtée. Réessayez.",
+    syncPushFailed:
+      "Le VPS n'a pas pu envoyer les données. Vérifiez l'état de l'équipe et réessayez.",
+    syncAckFailed:
+      "Les données sont peut-être arrivées, mais la confirmation manque. Attendez quelques secondes et réessayez.",
   },
   de: {
     now: "jetzt",
@@ -127,7 +157,13 @@ const T: Record<
     title: "Den VPS jetzt um eine Datenaktualisierung bitten",
     updatedNow: "Daten aktualisiert",
     vpsSlow:
-      "Der VPS hat noch nicht geantwortet — die Daten aktualisieren sich automatisch, sobald sein Push ankommt",
+      "Innerhalb von drei Minuten kam keine Bestätigung. Prüfe, ob das Team online ist, und versuche es erneut.",
+    syncTimedOut:
+      "Die Synchronisierung dauerte zu lange und wurde beendet. Versuche es erneut.",
+    syncPushFailed:
+      "Der VPS konnte die Daten nicht senden. Prüfe den Teamstatus und versuche es erneut.",
+    syncAckFailed:
+      "Die Daten sind möglicherweise angekommen, aber die Bestätigung fehlt. Warte kurz und versuche es erneut.",
   },
   hu: {
     now: "most",
@@ -143,7 +179,13 @@ const T: Record<
     title: "Kérj a VPS-től friss adatfrissítést most",
     updatedNow: "Adatok frissítve",
     vpsSlow:
-      "A VPS még nem válaszolt — az adatok automatikusan frissülnek, amint megérkezik a push",
+      "Három percen belül nem érkezett megerősítés. Ellenőrizd, hogy a csapat online van-e, majd próbáld újra.",
+    syncTimedOut:
+      "A szinkronizálás túl sokáig tartott, ezért leállt. Próbáld újra.",
+    syncPushFailed:
+      "A VPS nem tudta elküldeni az adatokat. Ellenőrizd a csapat állapotát, majd próbáld újra.",
+    syncAckFailed:
+      "Az adatok megérkezhettek, de nincs megerősítés. Várj néhány másodpercet, majd próbáld újra.",
   },
   pt: {
     now: "agora",
@@ -159,7 +201,13 @@ const T: Record<
     title: "Pedir ao VPS uma atualização dos dados agora",
     updatedNow: "Dados atualizados",
     vpsSlow:
-      "O VPS ainda não respondeu — os dados serão atualizados automaticamente assim que o push chegar",
+      "Nenhuma confirmação chegou em três minutos. Verifique se a equipe está online e tente novamente.",
+    syncTimedOut:
+      "A sincronização demorou demais e foi interrompida. Tente novamente.",
+    syncPushFailed:
+      "O VPS não conseguiu enviar os dados. Verifique o status da equipe e tente novamente.",
+    syncAckFailed:
+      "Os dados podem ter chegado, mas falta a confirmação. Aguarde alguns segundos e tente novamente.",
   },
 };
 
@@ -180,10 +228,11 @@ function formatRelativeTime(iso: string, t: (typeof T)[Locale]): string {
 // render server-side su Vercel — il segnale può arrivare a ogni push della
 // VPS (~30-60s a team attivo), il refetch no.
 const REFRESH_THROTTLE_MS = 90_000;
-// Rete di sicurezza spinner: la VPS in deep-idle polla il rendezvous ogni
-// 120s + tempo di push → 60s (valore storico) scadeva quasi sempre prima
-// del completamento legittimo.
+// Finestra massima del catch-up bounded. Il giro normale del daemon e' <=5s;
+// teniamo margine per deep-idle e push lento senza lasciare un poller vivo
+// fuori da un'operazione richiesta esplicitamente.
 const REQUEST_TIMEOUT_MS = 180_000;
+const REQUEST_POLL_MS = 1_000;
 
 export default function CloudRefreshButton() {
   const router = useRouter();
@@ -201,7 +250,12 @@ export default function CloudRefreshButton() {
   const lastSyncRef = useRef<string | null>(null);
   // Richiesta "Sync now" in corso + baseline (completed al momento del click).
   const pendingRef = useRef(false);
+  // Diventa true solo dopo che la PATCH ha restituito la baseline server:
+  // un catch-up iniziale che corre durante la request non puo' quindi
+  // scambiare un vecchio completion per la risposta al click corrente.
+  const requestArmedRef = useRef(false);
   const baselineRef = useRef<string | null>(null);
+  const requestedAtRef = useRef<string | null>(null);
   const requestTokenRef = useRef(0);
   // Primo valore dal catch-up iniziale: è la baseline, non un avanzamento
   // (i dati SSR appena renderizzati sono già allineati a quel timestamp).
@@ -281,6 +335,45 @@ export default function CloudRefreshButton() {
     showFlash();
   }
 
+  /** Applica un ACK visto indifferentemente da Realtime o dal catch-up. */
+  function applyCompletion(done: string | null, correlated = false) {
+    if (!mounted.current || !done) return;
+    const doneMs = Date.parse(done);
+    if (Number.isNaN(doneMs)) return;
+    const prev = lastSyncRef.current;
+    const isNewKnownCompletion = timestampAdvanced(done, prev);
+    if (isNewKnownCompletion) {
+      lastSyncRef.current = done;
+      setLastSync(done);
+    }
+
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      // Primo valore visto: baseline, salvo una richiesta gia' in volo.
+      if (!pendingRef.current || !requestArmedRef.current) return;
+    }
+
+    if (
+      pendingRef.current &&
+      requestArmedRef.current &&
+      (correlated || timestampAdvanced(done, baselineRef.current))
+    ) {
+      pendingRef.current = false;
+      requestArmedRef.current = false;
+      requestTokenRef.current++; // cancella timeout/poll della richiesta
+      setError(null);
+      setSyncing(false);
+      doRefresh(true);
+      return;
+    }
+    // Un poll puo' rileggere lo stesso ACK gia' visto da Realtime mentre la
+    // PATCH era in volo. Sopra lo accettiamo contro la baseline; fuori da una
+    // richiesta, invece, lo stesso timestamp non causa refresh duplicati.
+    if (!isNewKnownCompletion) return;
+    setError(null);
+    doRefresh(false);
+  }
+
   // Tab di nuovo visibile con dati arretrati → recupera il refresh rimandato.
   useEffect(() => {
     const onVisible = () => {
@@ -294,10 +387,11 @@ export default function CloudRefreshButton() {
   }, []);
 
   async function requestSync() {
-    if (syncing) return;
+    if (syncing || pendingRef.current) return;
     setError(null);
     setSyncing(true);
     pendingRef.current = true;
+    requestArmedRef.current = false;
     baselineRef.current = lastSyncRef.current;
     const token = ++requestTokenRef.current;
     try {
@@ -308,38 +402,105 @@ export default function CloudRefreshButton() {
         // (orologio browser fuori dall'equazione del rendezvous).
         body: JSON.stringify({ sync_requested_at: new Date().toISOString() }),
       });
+      const d = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        state?: {
+          sync_requested_at?: string | null;
+          sync_completed_at?: string | null;
+        } | null;
+      };
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
         if (mounted.current && requestTokenRef.current === token) {
           setError(d.error || `HTTP ${res.status}`);
           setSyncing(false);
           pendingRef.current = false;
+          requestArmedRef.current = false;
         }
         return;
       }
+
+      // La risposta PATCH e' la baseline autorevole del server. Se la
+      // subscription non aveva ancora completato il catch-up iniziale, usare
+      // solo lastSyncRef=null farebbe accettare qualsiasi timestamp storico.
+      baselineRef.current =
+        d.state?.sync_completed_at ?? baselineRef.current ?? null;
+      requestedAtRef.current = d.state?.sync_requested_at ?? null;
+      requestArmedRef.current = true;
     } catch (err) {
       if (mounted.current && requestTokenRef.current === token) {
         setError(err instanceof Error ? err.message : t.networkError);
         setSyncing(false);
         pendingRef.current = false;
+        requestArmedRef.current = false;
       }
       return;
     }
 
-    // Rete di sicurezza: se la VPS non risponde entro la finestra, togliamo
-    // lo spinner e lo diciamo. La subscription resta viva: al push in ritardo
-    // i dati si aggiornano comunque (apply → doRefresh).
-    window.setTimeout(() => {
+    // Realtime e' il fast path. Questo catch-up bounded e' la conferma:
+    // osserva lo stesso ACK anche se l'UPDATE websocket e' andato perso.
+    void waitForSyncOutcome({
+      baselineCompletion: baselineRef.current,
+      requestedAt: requestedAtRef.current,
+      intervalMs: REQUEST_POLL_MS,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      isCancelled: () =>
+        !mounted.current ||
+        !pendingRef.current ||
+        requestTokenRef.current !== token,
+      readObservation: async () => {
+        try {
+          const statusRes = await fetch("/api/team-state", {
+            cache: "no-store",
+          });
+          if (!statusRes.ok)
+            return {
+              completedAt: null,
+              lastAction: null,
+              lastActionAt: null,
+            };
+          const status = (await statusRes.json()) as {
+            state?: {
+              sync_completed_at?: string | null;
+              last_action?: string | null;
+              last_action_at?: string | null;
+            } | null;
+          };
+          return {
+            completedAt: status.state?.sync_completed_at ?? null,
+            lastAction: status.state?.last_action ?? null,
+            lastActionAt: status.state?.last_action_at ?? null,
+          };
+        } catch {
+          return {
+            completedAt: null,
+            lastAction: null,
+            lastActionAt: null,
+          };
+        }
+      },
+    }).then((outcome) => {
       if (
         mounted.current &&
         pendingRef.current &&
         requestTokenRef.current === token
       ) {
+        if (outcome?.status === "completed") {
+          // Il poller ha gia' validato o l'avanzamento della baseline o
+          // l'action `sync:completed` correlata alla richiesta corrente.
+          applyCompletion(outcome.completedAt, true);
+          return;
+        }
         pendingRef.current = false;
+        requestArmedRef.current = false;
         setSyncing(false);
-        setError(t.vpsSlow);
+        if (outcome?.status === "timeout") setError(t.syncTimedOut);
+        else if (outcome?.status === "push_failed")
+          setError(t.syncPushFailed);
+        else if (outcome?.status === "ack_failed")
+          setError(t.syncAckFailed);
+        else setError(t.vpsSlow);
       }
-    }, REQUEST_TIMEOUT_MS);
+    });
   }
 
   // [REALTIME] Sottoscrizione ai cambi di team_state — niente polling. Supabase
@@ -352,39 +513,7 @@ export default function CloudRefreshButton() {
 
     type StateRow = { sync_completed_at?: string | null };
     const apply = (row: StateRow | null) => {
-      if (!mounted.current) return;
-      const done = row?.sync_completed_at ?? null;
-      if (!done) return;
-      const doneMs = Date.parse(done);
-      if (Number.isNaN(doneMs)) return;
-      const prev = lastSyncRef.current;
-      const prevMs = prev ? Date.parse(prev) : NaN;
-      if (!Number.isNaN(prevMs) && doneMs <= prevMs) return; // niente di nuovo
-      lastSyncRef.current = done;
-      setLastSync(done);
-
-      if (!initializedRef.current) {
-        initializedRef.current = true;
-        // Primo valore visto: solo baseline — a meno che un Sync now non sia
-        // già in volo (row team_state appena nata), nel qual caso prosegui.
-        if (!pendingRef.current) return;
-      }
-
-      setError(null);
-      if (pendingRef.current) {
-        const baseMs = baselineRef.current
-          ? Date.parse(baselineRef.current)
-          : 0;
-        if (doneMs > baseMs) {
-          pendingRef.current = false;
-          requestTokenRef.current++; // invalida il timeout dello spinner
-          setSyncing(false);
-          doRefresh(true);
-          return;
-        }
-      }
-      // Push spontaneo della VPS → dati freschi: refresh throttled.
-      doRefresh(false);
+      applyCompletion(row?.sync_completed_at ?? null);
     };
 
     const catchUp = async () => {
@@ -424,7 +553,7 @@ export default function CloudRefreshButton() {
         if (cancelled) return;
         const jwt = data.session?.access_token;
         if (jwt && supabase.realtime?.setAuth) {
-          supabase.realtime.setAuth(jwt);
+          await supabase.realtime.setAuth(jwt);
         }
         channel = supabase
           .channel("cloud-sync-status")
