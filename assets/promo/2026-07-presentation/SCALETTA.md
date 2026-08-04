@@ -1,6 +1,13 @@
 # Video di campagna «Now Playable» — produzione (03/08)
 
-Esecuzione della regia approvata
+> **RITIRATO — NON PUBBLICARE O RIGENERARE.** Questo montaggio del 03/08 è
+> stato respinto per la release pubblica: le riprese web/gioco contengono
+> banner `DEMO`/`SIMULATION` e la call to action presenta il progetto come
+> Beta. File, comandi e timeline sotto restano solo come memoria di produzione;
+> i trailer di release orizzontale e verticale richiedono riprese nuove e
+> pulite, senza overlay o dati personali.
+
+Diario dell'esecuzione della regia allora approvata
 `docs/internal/experiments/2026-08-03-regia-video-campagna.md`: il gioco in
 pieno giorno al fotogramma 1, il puntatore che clicca dal secondo 7, l'88
 come filo conduttore, copione §6 parola per parola. Questo file è il diario
@@ -118,10 +125,10 @@ python3 extract_final_frames.py h v      # fotogrammi di verifica
 
 Le finestre di montaggio (frame e secondi, 1:1) stanno in `shots_play.py`.
 
-## Consegna
+## Stato degli artefatti (ritirati)
 
-- `jht-play.mp4` — 1280x720 · ~75,5 s · ben sotto i 45 MB
-- `jht-play-vertical.mp4` — 720x1280 · ~75,5 s · ben sotto i 45 MB
-- solo voce (niente musica: §7.14, nessuna licenza), inglese, nessun dato
-  reale (gioco showroom + web demo mode, banner sempre in quadro)
-- nessun fattore di velocità ≠ 1 in nessun punto del montaggio
+- `jht-play.mp4` — 1280x720 · ~75,5 s · **non distribuibile**
+- `jht-play-vertical.mp4` — 720x1280 · ~75,5 s · **non distribuibile**
+- I banner sempre in quadro rendono entrambi inadatti alla release ufficiale.
+- I parametri tecnici restano documentati sopra esclusivamente per tracciare
+  il tentativo ritirato.

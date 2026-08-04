@@ -1,548 +1,187 @@
-# ☁️ VPS setup — JHT on Hetzner Cloud
+# ☁️ Manual VPS setup
 
-Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS
-(Ubuntu 24.04 LTS). Validated end-to-end on **2026-05-06** on the
-**CPX22** tier (€9.75/mo: 4 GB RAM / 2 vCPU AMD EPYC / 80 GB SSD, Helsinki).
+This is the current terminal-first path for an existing Linux VPS. For the
+guided path, use the native office and
+[`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md).
 
-> ⚠️ **Tech-only / manual mode.** This document describes the
-> 🥉 "tier tech user" path: manual SSH + `curl install.sh | bash`. The
-> 🥇 The non-technical path now lives in the native Godot office; follow
-> [`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md).
+JHT does not create, bill or delete a VPS in this flow. Choose and provision
+the machine with your infrastructure provider before continuing.
 
-> ℹ️ **There is no comparison between the execution modes yet.** An honest
-> decision tree (local PC / dedicated PC / VPS) has never been written —
-> earlier revisions of this page pointed at a `VPS-COMPARISON.md` that has
-> never existed. It is tracked in [`BACKLOG.md`](../../BACKLOG.md) as
-> `[JHT-VPS-COMPARISON-DOC]`. The only version that exists today is the
-> three-line tree under "Verità scomoda" in
-> [`../internal/ops/vps.md`](../internal/ops/vps.md).
+## Requirements
 
-## Design references
+- an x64 Linux VPS with at least 4 GB of RAM;
+- root access, or an account allowed to install and run Docker;
+- SSH key authentication from your computer;
+- outbound HTTPS access;
+- a dedicated supported provider subscription.
 
-- `docs/internal/ops/vps.md` — consolidated VPS design (3-tier deployment, CLI host/container split, provider comparison, install UX, lifecycle)
-- `docs/internal/architecture/bot-telegram.md` — multi-agent Telegram bot + document ingest
+Use a dedicated SSH key for the server. Examples below use `192.0.2.10`, an
+address reserved for documentation; replace it locally and never put the real
+address in an issue, commit or shared log.
 
-## TL;DR
+## 1. Connect and verify the host
 
-```bash
-# 1. Provision Hetzner CPX22 VPS with SSH key, Ubuntu 24.04.
-ssh -i ~/.ssh/jht_key root@<VPS_IP>
-
-# 2. On the VPS:
-curl -fsSL https://jobhunterteam.ai/install.sh | bash      # 4 steps, ~1 min
-exec bash -l                                                # picks up /etc/profile.d/jht.sh
-jht up                                                      # pull image + start
-jht setup --non-interactive --provider claude \
-  --auth-method subscription --subscription-email tu@example.com --skip-health
-jht providers update claude                                 # install provider CLI
-docker exec -it jht claude                                  # OAuth device flow Anthropic → /login
-jht cloud login                                             # browser pairing VPS↔web account (recommended)
-jht team start                                              # start tmux Captain
-jht team status                                             # verify
-```
-
-See the results on the cloud dashboard:
-
-```
-Browser on your PC → https://jobhunterteam.ai/positions
-   (you're already logged in after `jht cloud login` — the data appears
-    after the team finds the first jobs + auto-push)
-```
-
-## Step-by-step
-
-### 1. Provision the VPS
-
-On [console.hetzner.com](https://console.hetzner.com):
-
-- **Project**: `jht` (create new, avoid Default)
-- **Type**: Shared vCPU → **Regular Performance** → x86 (AMD) → **CPX22**
-  - 4 GB RAM, 2 vCPU AMD EPYC, 80 GB SSD, €9.75/mo
-- **Location**: Falkenstein or Helsinki (EU GDPR)
-- **Image**: Ubuntu 24.04
-- **SSH Keys**: upload a dedicated JHT key (do not reuse your personal one).
-  If you don't have one:
-  ```bash
-  ssh-keygen -t ed25519 -f ~/.ssh/jht_hetzner -C "jht-vps"
-  cat ~/.ssh/jht_hetzner.pub  # copy into Hetzner
-  ```
-- **Volumes / Firewalls / Backups**: skip for the first test
-- **Cloud config**: **leave empty** (NO custom user-data)
-- **Name**: `jht-test` (or whatever you want)
-- Click **Create & Buy now**
-
-Hetzner shows you the IPv4 address. Note it down.
-
-### 2. SSH into the VPS
-
-From PowerShell or Git-Bash on your PC:
+Compare the server fingerprint with the value shown by your infrastructure
+provider before accepting it, then connect with a terminal allocated:
 
 ```bash
-ssh -i ~/.ssh/jht_hetzner root@<VPS_IP>
-# enter key passphrase
+ssh -t -i ~/.ssh/jht_vps root@192.0.2.10
 ```
 
-Verify the host fingerprint (anti-MITM):
+Confirm the architecture and available memory:
 
 ```bash
-# From your PC BEFORE the first SSH:
-ssh-keyscan -t ed25519 <VPS_IP> | ssh-keygen -lf -
+uname -m
+free -h
 ```
 
-Compare the `SHA256:...` with the one shown in the Hetzner console (server details → "Host key fingerprints").
+Continue only with `x86_64` and sufficient memory. On a VPS with less than
+8 GB of RAM and less than 1 GB of active swap, the non-interactive host
+preflight creates a 2 GB `/swapfile`. Treat that as an installer side effect:
+inspect the helper and authorize it before running the installer, or configure
+at least 1 GB of swap yourself first so the helper skips the change.
 
-### 3. (Optional but recommended) Add swap
+## 2. Inspect and run the installer
 
-Hetzner does not configure swap by default. With 8 JHT agents, RAM spikes
-can trigger an OOM kill. **2 GB of preventive swap** saves the day:
+On the VPS:
 
 ```bash
-fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
-echo '/swapfile none swap sw 0 0' >> /etc/fstab
-free -h    # verify: Swap: 2.0Gi
+curl -fsSL https://jobhunterteam.ai/install.sh -o install.sh
+less install.sh
+bash install.sh --dry-run
+bash install.sh
 ```
 
-### 4. Install JHT (one-liner)
+The Docker path:
+
+1. detects the Linux distribution and container runtime;
+2. installs or reuses Docker and Docker Compose;
+3. verifies the daemon;
+4. downloads the Compose file, host wrapper and host preflight helper;
+5. writes `~/.jht/host.env`, prepares the bind-mounted directories and may
+   register the wrapper directory on `PATH`.
+
+Node, Python, tmux and provider command-line interfaces run inside the
+container, not on the VPS host.
+
+The installer launches `jht setup` when the SSH terminal is interactive. If
+it cannot, open a new login shell and run it manually:
 
 ```bash
-curl -fsSL https://jobhunterteam.ai/install.sh | bash
+exec bash -l
+jht setup
 ```
 
-The Docker-mode flow runs 4 steps:
+## 3. Complete browser flows from your computer
 
-1. **System detection** (Ubuntu 24.04 / apt)
-2. **Container runtime** — `apt install docker.io docker-compose-v2`
-3. **Docker verification** (`docker info`)
-4. **Download wrapper + compose** — downloads:
-   - `~/.jht/runtime/docker-compose.yml`
-   - `~/.local/bin/jht` (~165 LOC bash dispatcher)
+The VPS setup wizard first requests cloud pairing, then provider choice and
+subscription login. Follow only the URLs and instructions printed by the
+current CLI; do not copy codes or credentials into chat or public logs.
 
-Final output:
-```
-══════════════════════════════════════════
-  Installation complete!
-══════════════════════════════════════════
-  Container mode active.
-  Next steps:
-      jht up
-      jht setup
-```
-
-> 💡 **No Node, Python, or tmux on the VPS host.** Just `docker` +
-> `bash` + the wrapper. Everything else lives inside the `jht` container.
->
-> If `jht` is not in the PATH, the full path is `~/.local/bin/jht`.
-> Add it to `.bashrc`:
-> ```bash
-> echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
-> source ~/.bashrc
-> ```
-
-### 5. `jht up` — pull image + start container
+When setup reaches provider login, leave it open and connect with a second
+terminal from your computer:
 
 ```bash
-jht up
+ssh -t -i ~/.ssh/jht_vps root@192.0.2.10
+jht oauth-login
 ```
 
-Output: `docker compose up -d` pulls the `ghcr.io/leopu00/jht:latest` image
-(~750 MB, ~30s on the Hetzner mirror) and starts the long-running `jht`
-container with `restart: unless-stopped`. The wrapper automatically runs
-`chown -R 1001:1001 ~/.jht ~/Documents/Job\ Hunter\ Team/` to align the
-bind-mounts to the container uid (`jht` user = 1001).
+Complete the provider's browser authorization, then exit its terminal
+interface. The first wizard detects the credentials and starts the team.
+Telegram is optional and can be configured later.
 
-Verify:
+## 4. Verify before disconnecting
 
 ```bash
-jht status            # name=/jht status=running
-docker ps             # jht ... (no published ports)
-free -h               # memory in use after boot
-jht logs --tail 10    # "mode: VPS" + watchdog/bridge lines
+jht doctor
+jht status
+jht team status
+jht sentinella status
+jht cloud status
 ```
 
-### 6. `jht setup` — provider config
+- `jht doctor` must not report a blocking dependency or authentication error.
+- `jht status` must show the container running.
+- `jht team status` must show the configured agents.
+- `jht cloud status` must confirm the VPS pairing required by this setup path.
 
-> ⚠️ **On the VPS always use `--non-interactive`.** The interactive
-> wizard (clack/prompts) has a known TTY bug via `docker exec -it`: the ↑↓
-> arrows arrive as literal text `^[[A` instead of being intercepted.
-> Tracked as [BUG-CLACK-TTY-DOCKER-EXEC] in the BACKLOG. Workaround:
-> all the CLI flags exist, no need for the wizard.
+The container uses `restart: unless-stopped`, so it returns after a normal host
+reboot. Generated files remain under `~/Documents/Job Hunter Team/`; runtime,
+configuration and credentials remain under `~/.jht/`.
 
-For Claude Max (subscription):
+## Lifecycle and updates
 
 ```bash
-jht setup --non-interactive \
-  --provider claude \
-  --auth-method subscription \
-  --subscription-email tu@example.com \
-  --skip-health
+jht team stop --all   # stop agents, keep the container
+jht team start        # start the configured team
+jht down              # remove the container, preserve mounted data
+jht up                # recreate/start it from the installed Compose file
+jht upgrade           # pull the current image and recreate as needed
 ```
 
-For Codex Plus/Pro:
+`jht upgrade` updates the container image, not the host wrapper or Compose
+file. To refresh installer-managed host files, download and inspect the public
+installer again, then rerun it.
+
+Powering off or removing a VPS is controlled by its provider, not JHT. Confirm
+data retention and billing behavior with that provider before taking either
+action.
+
+## Troubleshooting
+
+### `jht` is not found
+
+Open a new login shell. If it is still missing, use the full wrapper path
+printed by the installer and apply its `PATH` fallback; the location depends
+on whether installation ran as root.
+
+### Docker does not respond
 
 ```bash
-jht setup --non-interactive \
-  --provider openai \
-  --auth-method subscription \
-  --subscription-email tu@example.com \
-  --skip-health
+docker info
 ```
 
-For Kimi:
+Start the host's Docker service using the operating-system instructions, then
+retry `jht up`. JHT does not expose the Docker socket inside its container.
+
+### The host was detected as local
+
+Run the installed preflight with an explicit documentation-safe mode, then
+recreate the container so Compose receives it:
 
 ```bash
-jht setup --non-interactive \
-  --provider kimi \
-  --auth-method subscription \
-  --subscription-email tu@example.com \
-  --skip-health
+~/.jht/runtime/host-setup.sh --host-type=vps
+jht recreate
 ```
 
-For API key (the "metered" pay-per-use alternative, not recommended — see
-ADR-0004):
+### Provider login is not detected
+
+Keep `jht setup` open. In a second SSH terminal, rerun `jht oauth-login`,
+finish the browser flow and exit the provider interface normally.
+
+### The team does not start
 
 ```bash
-jht setup --non-interactive \
-  --provider claude \
-  --auth-method api_key \
-  --api-key sk-ant-api03-... \
-  --skip-health
+jht doctor
+jht status
+jht logs --tail 200
 ```
 
-The config is saved to `~/.jht/jht.config.json`. Verify:
-
-```bash
-cat ~/.jht/jht.config.json
-jht doctor   # should show "Provider: claude"
-```
-
-### 7. `jht providers update` — install the provider CLI in the container
-
-```bash
-jht providers update claude   # or: codex, kimi
-```
-
-What it does: inside the container, it runs `npm install -g @anthropic-ai/claude-code@latest`
-in `/jht_home/.npm-global/` (bind-mounted). Persistent cross-restart.
-
-> For Codex: same command, installs `@openai/codex@latest`.
->
-> For Kimi: uses `uv tool install kimi-cli` (via `pip3 install --user --break-system-packages uv` as bootstrap).
-
-Verify:
-
-```bash
-jht providers   # shows "claude [ACTIVE] — model: claude-sonnet-4-6"
-                # CLI: 2.1.x   ← installed version
-```
-
-### 8. Provider OAuth login — device flow
-
-```bash
-docker exec -it jht claude
-```
-
-Claude Code starts. On the first run it begins the OAuth device flow and
-shows a URL + code like:
-
-```
-Open this URL in the browser:
-https://claude.ai/oauth/device?code=ABCD-EFGH
-```
-
-**Open the URL in the browser on YOUR PC** (not on the VPS, which has no
-GUI browser), sign in with your Claude Max account, confirm the code.
-Claude Code confirms "authenticated".
-
-If it doesn't start automatically, type `/login` inside the Claude prompt.
-
-Exit with `/quit` or `Ctrl+C` twice.
-
-> 💡 The OAuth login writes to `~/.claude/` inside the container, which is
-> bind-mounted to `~/.jht/.claude/` on the VPS host. The login persists
-> cross-restart and cross-rebuild.
-
-### 9. `jht cloud login` — link the VPS to the web account
-
-> 💡 Without this step, the jobs found by the team stay ONLY on the VPS.
-> To see them on the `jobhunterteam.ai/positions` dashboard (or for
-> backup), you need to enable cloud sync. The pairing only needs to be
-> done **once**: the token stays saved in `~/.jht/cloud.json`.
-
-```bash
-jht cloud login
-```
-
-The CLI shows:
-
-```
-Open this URL in the browser:
-  https://jobhunterteam.ai/cli-link
-
-Code to enter:
-  ABCD-1234
-
-Waiting for your confirmation… (TTL ~10 min, polling every 2s)
-```
-
-**On your PC** open the URL in the browser. If you're not logged in, log in
-with Google or GitHub. Type the code shown by the CLI (e.g. `ABCD-1234`),
-confirm. The CLI on the VPS unblocks automatically:
-
-```
-✓ Pairing complete
-  Base URL:   https://jobhunterteam.ai
-  Token name: cli-2026-05-08
-  User ID:    <uuid>
-
-Syncing local data to the cloud...
-✓ Push complete
-  positions:    0 upserted   ← the team hasn't searched yet
-  scores:       0 upserted
-  applications: 0 upserted
-```
-
-> 🔐 **Privacy**: the token lives only inside the VPS (`~/.jht/cloud.json`,
-> mode 0600). It is NEVER exposed in cleartext outside the CLI →
-> server (HTTPS). You can revoke it from [`/settings/cloud-sync`](https://jobhunterteam.ai/settings/cloud-sync).
-
-> 🛠 **Advanced options:**
-> - `jht cloud login --name vps-marco` — suggests a name for the token (visible on the web)
-> - `jht cloud login --no-push` — skip the initial push (CI/scripts)
-> - `jht cloud enable --token jht_sync_xxx` — alternative with manual paste of the token
-
-> 🌍 **Self-hosting cloud** (for those who want to run the dashboard on
-> their own domain): `jht cloud login --url https://my-domain.com`. The
-> dashboard must be deployed with the 3 API routes
-> (`/api/cloud-sync/{device-init,device-poll,device-confirm}`) +
-> migration `008_cloud_sync_pairing.sql` applied.
-
-### 10. `jht team start` — start the agents
-
-```bash
-jht team start
-```
-
-Output:
-```
-Starting agents in the jht container...
-  Mode: default
-  ✓ CAPTAIN started
-Result: 1 started, 0 already active
-  The Captain will scale the other agents according to its thresholds.
-```
-
-The **Captain** starts on its own. **Bridge / Sentinel** monitor it and
-scale up `Scout`, `Analyst`, `Scorer`, `Writer`, `Critic` when
-needed, according to the subscription provider's token budget.
-
-Verify:
-
-```bash
-jht team status        # 1+ agents "jht container"
-jht sentinella tail    # follow live monitoring
-```
-
-### 11. Cloud dashboard — `https://jobhunterteam.ai/positions`
-
-After `jht cloud login` (step 9) the team's data is pushed to the cloud
-dashboard. On **your PC**:
-
-```
-Browser → https://jobhunterteam.ai
-   (you're already logged in from the pairing)
-   ↓
-   /positions  → table of jobs found for you (stack, score, status filters)
-   /team       → agent org chart + chat for each one
-   /sentinella → real-time token usage charts
-   /settings/cloud-sync → manage/revoke the tokens
-```
-
-**When to refresh the cloud data**: `jht cloud login` does an auto-push
-once (at pairing). For subsequent pushes:
-
-```bash
-jht cloud push                       # one-shot manual
-jht cron add cloud-push '*/15 * * * *'   # every 15min (auto-sync)
-```
-
-> 💡 The cloud dashboard is the recommended way. The push is **local→cloud
-> only**: your logs/agent state stay on the VPS, only positions/scores/
-> applications are synchronized.
-
-### 12. (Retired) Web UI on the VPS via SSH tunnel
-
-> 🪦 **Retired 2026-07-23.** The container no longer serves a web UI on
-> `127.0.0.1:3000` — the local/VPS interaction surface is the **desktop
-> app** (it talks to the VPS over SSH directly). For a browser view use
-> the cloud dashboard (`jobhunterteam.ai`, requires login). The SSH
-> tunnel remains useful only for generic debugging, not for a web UI.
-
-## Lifecycle and shutdown
-
-Hetzner has a **billing trap**: "powered off" servers keep billing. To
-stop the bill you need `delete server` or snapshot+delete.
-
-| Command                       | What it does                          | Cost                           | Resume                |
-|-------------------------------|---------------------------------------|--------------------------------|-----------------------|
-| `jht team stop --all`         | Stops agents, container stays up      | €9.75/mo (VPS allocated)       | 1s, `team start`     |
-| `jht down`                    | Stop + remove container, VPS up       | €9.75/mo                       | 5s, `jht up`          |
-| Hetzner snapshot + delete     | Backup snapshot, destroy VPS          | ~€0.10/mo (storage only)       | 90s, recreate VPS     |
-| Hetzner delete server         | Total destruction, data lost          | €0                             | from-scratch          |
-
-> ⚠️ **Powering off via Hetzner ("power off") does NOT stop the bill.**
-> The resources stay allocated. For real pauses → snapshot + delete.
-
-## Update
-
-Image:
-
-```bash
-jht upgrade   # docker compose pull + up -d
-```
-
-Wrapper + compose (in case of a new version):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/master/scripts/jht-wrapper.sh -o ~/.local/bin/jht
-chmod +x ~/.local/bin/jht
-curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/master/docker-compose.yml -o ~/.jht/runtime/docker-compose.yml
-```
-
-## Advanced overrides
-
-All via env var:
-
-| Var                 | Default                                          | Use                                            |
-|---------------------|--------------------------------------------------|------------------------------------------------|
-| `JHT_IMAGE`         | `ghcr.io/leopu00/jht:latest`                     | Test image branches (`:dev-1`, `:v1.0.0`, …)   |
-| `JHT_RUNTIME_DIR`   | `~/.jht/runtime`                                 | Compose path                                   |
-| `JHT_COMPOSE_FILE`  | `$JHT_RUNTIME_DIR/docker-compose.yml`            | Override a specific compose                    |
-| `JHT_CONTAINER_NAME`| `jht`                                            | Multi-instance (not recommended)               |
-| `JHT_BIND_OWNER`    | `1001:1001`                                      | Override bind dir uid/gid (Linux only)         |
-| `JHT_NODE_ENTRY`    | `/app/cli/bin/jht.js`                            | Internal Node CLI path                         |
-
-Example: test the `dev-1` image instead of `latest`:
-
-```bash
-export JHT_IMAGE=ghcr.io/leopu00/jht:dev-1
-jht upgrade
-```
-
-## Troubleshooting / gotcha
-
-### `docker compose: unknown shorthand flag: 'f'`
-
-On Ubuntu 24.04, `apt install docker.io` does NOT install the `docker
-compose` v2 plugin by default. `install.sh` automatically updates it
-with `apt install docker-compose-v2`. If for some reason it's missing:
-
-```bash
-apt install -y docker-compose-v2
-docker compose version
-```
-
-### `EACCES: permission denied, open '/jht_home/jht.config.json'`
-
-Bind dir owned by root (uid 0) but the container runs as uid 1001. The
-wrapper runs an auto-`chown` on `up`/`upgrade`, but if you manually
-modified the paths:
-
-```bash
-chown -R 1001:1001 ~/.jht ~/Documents/Job\ Hunter\ Team
-```
-
-### Wizard `jht setup` (interactive) doesn't receive arrows, shows `^[[A`
-
-TTY clack bug via `docker exec -it`. Workaround: use
-`--non-interactive` with all the flags.
-
-### `jht providers update` error "docker-compose.yml not found"
-
-Command launched outside the container. On the VPS it runs **inside** the
-container (automatic path via env IS_CONTAINER=1, set by the compose).
-If it still fails, verify:
-
-```bash
-docker exec jht env | grep IS_CONTAINER   # should show =1
-```
-
-### Hydration error JSON-LD nonce in the landing
-
-Pre-existing bug `[BUG-CSP-JSONLD-LANDING]` (server-rendered nonce ≠
-client). Cosmetic, doesn't block login. See BACKLOG.
-
-### Web UI auth doesn't work via SSH tunnel `localhost:3000`
-
-🪦 Obsolete (2026-07-23): the container no longer serves a web UI, so
-this can't happen anymore. Interaction = desktop app; browser = cloud
-dashboard (`jobhunterteam.ai`).
-
-### SSH `Permission denied (publickey,password)` with a key that should match
-
-Local fingerprint = Hetzner fingerprint but OpenSSH refuses. Check
-whether the private key is encrypted with a passphrase:
-
-```bash
-ssh-keygen -y -f ~/.ssh/<your-key>
-# If it asks for a passphrase → the key is encrypted
-```
-
-In `BatchMode=yes` (script + automation) OpenSSH cannot decrypt it →
-generates an invalid signature → server rejects. Solutions:
-
-- Add the key to `ssh-agent`: `eval $(ssh-agent) && ssh-add ~/.ssh/<key>`
-- Or generate an ephemeral key without a passphrase for automation:
-  ```bash
-  ssh-keygen -t ed25519 -N "" -f ~/.ssh/jht_ephemeral
-  hcloud ssh-key create --name jht-ephemeral --public-key-from-file ~/.ssh/jht_ephemeral.pub
-  ```
-
-### Hetzner creates the VPS but the SSH key turns out not to be injected
-
-Symptom: `hcloud server create --ssh-key <name>` returns OK but SSH asks
-for a password (and in the create output you see `Root password: ...`).
-Typical cause: the API token has limited permissions even though the UI
-shows the "Read+Write" badges.
-
-```bash
-# Check the scope of the current token:
-hcloud ssh-key list   # if empty/wrong, the token has no SSH scope
-```
-
-Generate a new token with explicit full Read+Write scope from
-`console.hetzner.com/projects/<id>/security/tokens`. Cloud-init
-`user_data` as a fallback is **not reliable** for key injection
-on Hetzner Ubuntu 24.04 — rely only on `--ssh-key` / `ssh_keys` array.
-
-## Monthly costs
-
-| Item                              | €/mo  |
-|-----------------------------------|-------|
-| Hetzner CPX22 (4 GB / 2 vCPU)     | 9.75  |
-| (opt) Snapshot backup ~10 GB      | 0.12  |
-| AI provider (Claude Max x20)      | ~200  |
-| **Total VPS infra**               | **~10**|
-| **Total with subscription**       | **~210**|
-
-The VPS infra costs ~5% of the budget. The subscription provider is the
-main driver.
-
-## Validation history
-
-[JHT-VPS-VALIDATE] closed on 2026-05-06 with the first end-to-end bring-up.
-Bugs found during the bring-up and committed on `dev-1`:
-
-| Commit       | Fix                                                                                  |
-|--------------|--------------------------------------------------------------------------------------|
-| `3f7cfb71`   | Wrapper bash + container-proxy passthrough IS_CONTAINER                              |
-| `fee1d685`   | install.sh redesigned (download instead of generating wrapper inline) + compose split |
-| `c7e29cb6`   | Docs updated for host/container split                                                |
-| `121c6ea3`   | Research VPS providers 2026                                                          |
-| `11900977`   | install.sh adds `docker-compose-v2`                                                  |
-| `86c08174`   | `setup --non-interactive --subscription-email`                                       |
-| `4b10a9db`   | `JHT_IMAGE` override env var in the compose                                          |
-| `f5df9545`   | Tracks `[BUG-CLACK-TTY-DOCKER-EXEC]`                                                 |
-| `cb5b9bab`   | `providers update` IS_CONTAINER + `ensure_bind_owner` chown 1001                     |
-
-For the dev-1 → master merge once the fixes are validated on a real VPS,
-and the subsequent `latest` publish on GHCR.
+Redact names, email addresses, CV/application content, machine addresses,
+hostnames, account identifiers and credentials before sharing any excerpt.
+
+## Native-office migration
+
+The office can move a local or remote team through
+**Settings → Connect VPS → Complete migration**. It stops the source, verifies
+the archive and database, excludes SSH keys and runtime files, stages the
+destination and keeps a verified backup. Do not run both copies after a
+successful migration. The full contract is in
+[`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md).
+
+## Related
+
+- [`QUICKSTART.md`](QUICKSTART.md) — choose native office or CLI
+- [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — safe automation
+- [`CLI-INSTALL.md`](CLI-INSTALL.md) — exact installer behavior
+- [`CLI-REFERENCE.md`](CLI-REFERENCE.md) — lifecycle and operational commands

@@ -1,8 +1,7 @@
 # 📦 CLI install — `jobhunterteam.ai/install.sh`
 
-This document describes how the one-liner installer works **today**
-(behaviour AS-IS, before any further hardening). It is the reference
-for **Path 3 (One-liner installer)** in the [Quickstart](QUICKSTART.md):
+This document describes the current CLI installer. It is the reference for
+**Path 2 (CLI installer)** in the [Quickstart](QUICKSTART.md):
 
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
@@ -24,7 +23,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | Default mode | Docker (macOS: Colima by default or your Docker Desktop via `--runtime`; native Docker on Linux/WSL2) |
 | Expert mode | `--no-docker` (clone + build from source) |
 | OS support | macOS · Linux (apt/dnf/pacman) · WSL2 |
-| Windows native | Use [`install.ps1`](../../scripts/install.ps1) or the native Godot app |
+| Windows | Use [`install.ps1`](../../scripts/install.ps1); Docker Desktop is required |
 
 ---
 
@@ -45,9 +44,10 @@ as a static asset:
 So `https://jobhunterteam.ai/install.sh` is served straight from
 `web/public/install.sh`, which is overwritten at build time.
 
-**Implication** — the endpoint always reflects the `master` branch (or
-whatever branch Vercel is set to deploy). Tagging a release does not
-change what curl returns; deploying does. If we ever want curl to pin to
+**Implication** — the endpoint reflects the commit deployed by Vercel, while
+the installer's default source branch for downloaded runtime files is
+`master`. Tagging a release does not change what curl returns; deploying
+does. If we ever want curl to pin to
 the latest tagged release, this is where we'd change strategy (rewrite
 to `raw.githubusercontent.com/leopu00/job-hunter-team/<tag>/scripts/install.sh`,
 or generate `web/public/install.sh` from the latest GH release tag at
@@ -77,6 +77,8 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `--no-docker` | off | Skip the container, install natively (expert mode) |
 | `--with-docker` | on | Alias kept for retro-compat (Docker is already the default) |
 | `--dry-run` | off | Print every install/download/mutating action without executing any of them |
+| `--runtime <id>` | `colima` | macOS runtime: `colima` or the user's `docker-desktop` |
+| `--branch <name>` | `master` | Source branch for wrapper and Compose downloads |
 | `-h`, `--help` | — | Print the header banner and exit |
 | `JHT_REPO_URL` | `https://github.com/leopu00/job-hunter-team.git` | Repo cloned in native mode |
 | `JHT_BRANCH` | `master` | Branch checked out in native mode + raw download base in Docker mode |
@@ -84,7 +86,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `JHT_RUNTIME_DIR` | `$HOME/.jht/runtime` | Where `docker-compose.yml` lands in Docker mode |
 | `JHT_BIN_DIR` | `$HOME/.local/bin` | Where the `jht` wrapper / symlink lands |
 | `JHT_IMAGE` | `ghcr.io/leopu00/jht:latest` | Container image referenced by the compose |
-| `JHT_RAW_BASE` | `https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_BRANCH` | Base URL for `docker-compose.yml` + `jht-wrapper.sh` downloads |
+| `JHT_RAW_BASE` | `https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_BRANCH` | Base URL for the runtime file downloads |
 | `JHT_SKIP_ONBOARD` | `0` | Skip the post-install `jht setup` wizard |
 
 ### 🐳 Default path — Docker (4 steps)
@@ -110,15 +112,17 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
      sudo.
 3. **Verify Docker** — `docker info`. On Linux falls back to `sudo docker
    info` if the user is not yet in the `docker` group.
-4. **Download wrapper + compose** — `curl -fsSL` of:
+4. **Download runtime files and run host preflight** — `curl -fsSL` of:
    - `$JHT_RAW_BASE/docker-compose.yml` → `$JHT_RUNTIME_DIR/docker-compose.yml`
    - `$JHT_RAW_BASE/scripts/jht-wrapper.sh` → `$JHT_BIN_DIR/jht` (chmod +x)
+   - `$JHT_RAW_BASE/scripts/host-setup.sh` → `$JHT_RUNTIME_DIR/host-setup.sh`
 
-   The image is **not pulled eagerly**: `jht up` (the first command the
-   user runs) does `docker compose up -d`, which pulls the image lazily
-   and starts the long-running container.
+   The preflight records host type, language and timezone in
+   `~/.jht/host.env`; on a low-memory Linux VPS it can also configure the
+   documented swap prerequisite. The installer registers `$JHT_BIN_DIR` on
+   the persistent shell `PATH` when needed.
 
-   The wrapper is a thin (~165 LOC) host-side dispatcher: lifecycle
+   The wrapper is a host-side dispatcher: lifecycle
    commands (`up`/`down`/`restart`/`recreate`/`upgrade`/`logs`/`status`/`shell`)
    call `docker compose` / `docker logs` / `docker inspect`; everything
    else is forwarded as `docker exec -it jht node /app/cli/bin/jht.js
@@ -133,7 +137,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 3. **Node.js ≥ 22** — NodeSource repo on apt/dnf, `brew install
    node@22` on macOS, `pacman -S nodejs npm` on Arch.
 4. **Provider CLI** — `npm install -g @anthropic-ai/claude-cli` (legacy
-   package name, see [Known gaps](#-known-gaps-and-follow-ups)). Failure
+   package name, see [Current limitations](#%EF%B8%8F-current-limitations)). Failure
    here is non-fatal (warns and continues).
 
    > 💡 **Native mode installs only Claude today.** If you plan to use
@@ -147,17 +151,17 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 5. **Clone** — `git clone --depth 1 --branch $JHT_BRANCH $JHT_REPO_URL
    $JHT_INSTALL_DIR`. If already present, fetches and `git reset --hard
    origin/$JHT_BRANCH`.
-6. **Build** — `npm install` + `npx tsc` for `tui/`, `npm install` for
-   `cli/`, then `npm install` for every `shared/*/` workspace that
-   declares dependencies.
+6. **Build** — `npm install` for `cli/`, then `npm install` for every
+   `shared/*/` workspace that declares dependencies.
 7. **Symlink `jht`** — `$JHT_BIN_DIR/jht` → `$JHT_INSTALL_DIR/cli/bin/jht.js`.
 
 ### 🚀 After both paths
 
 - Prints final banner with what was installed, the file layout, and
   uninstall instructions.
-- If stdin/stdout are a TTY and `JHT_SKIP_ONBOARD=0`, prompts to run
-  `jht setup` immediately.
+- If an interactive terminal is available and `JHT_SKIP_ONBOARD=0`, launches
+  `jht setup` immediately. The wizard starts the container, installs the
+  selected provider CLI, waits for subscription login and starts the team.
 
 ### 📁 Where things land
 
@@ -167,10 +171,13 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `~/Documents/Job Hunter Team/` (host) → `/jht_user` (container) | CVs, generated outputs |
 | `$JHT_BIN_DIR/jht` (default `~/.local/bin/jht`) | The wrapper (Docker) or symlink (native) |
 | `$JHT_RUNTIME_DIR/docker-compose.yml` (default `~/.jht/runtime/`, Docker only) | The compose file the wrapper drives |
+| `$JHT_RUNTIME_DIR/host-setup.sh` (Docker on macOS/Linux/WSL2) | Host-type, locale, timezone and VPS preflight helper |
+| `~/.jht/host.env` | Values read by the wrapper and passed into the container |
 | `$JHT_INSTALL_DIR` (default `~/.jht/src`, native only) | The cloned repo |
 
-If `$JHT_BIN_DIR` is not on `$PATH`, the script warns and prints the
-`export PATH=...` line to add to `~/.zshrc` / `~/.bashrc`.
+If `$JHT_BIN_DIR` is not on `$PATH`, the script updates a suitable persistent
+shell profile when it can and prints a manual `export PATH=...` fallback when
+it cannot.
 
 ---
 
@@ -208,39 +215,37 @@ bash scripts/install.sh --dry-run                 # docker path
 bash scripts/install.sh --no-docker --dry-run     # native path
 ```
 
-Both finish in under a second and exit `0`.
-
-Sample output (docker path on a Mac that already has `docker`, no
-Colima, no image pulled):
+Example output (abridged; exact actions depend on the host):
 
 ```text
 ╔══════════════════════════════════════════╗
 ║     Job Hunter Team — Installer          ║
 ╚══════════════════════════════════════════╝
 
-  mode:   Docker (isolato)
+  mode:   Docker (isolated)
   image:  ghcr.io/leopu00/jht:latest
   branch: master
   runtime:$HOME/.jht/runtime
-  dry-run: ON (nessuna modifica al sistema)
+  dry-run: ON (no changes to the system)
 
-[1/4] Rilevamento sistema
+[1/4] System detection
   ✓ macOS
 
 [2/4] Container runtime
-  ▸ Installo Colima (runtime container Apache 2.0, no Docker Desktop)...
+  ▸ Installing Colima...
   [dry-run] would execute: brew install colima
-  ✓ docker CLI gia' installato
+  ✓ docker CLI already installed
   [dry-run] would execute: colima start (se non gia' attivo)
 
-[3/4] Verifica docker
+[3/4] Docker check
   [dry-run] would execute: docker info
 
 [4/4] Download wrapper + docker-compose.yml
   [dry-run] would execute: mkdir -p $HOME/.jht/runtime $HOME/.local/bin
   [dry-run] would download: …/master/docker-compose.yml -> $HOME/.jht/runtime/docker-compose.yml
   [dry-run] would download: …/master/scripts/jht-wrapper.sh -> $HOME/.local/bin/jht
-  [dry-run] would execute: chmod +x $HOME/.local/bin/jht
+  [dry-run] would download: …/master/scripts/host-setup.sh -> $HOME/.jht/runtime/host-setup.sh
+  [dry-run] would execute: chmod +x $HOME/.local/bin/jht $HOME/.jht/runtime/host-setup.sh
 ```
 
 What `--dry-run` covers:
@@ -248,9 +253,10 @@ What `--dry-run` covers:
 - `brew install`, `apt-get install`, `dnf install`, `pacman -S`
 - `curl ... | bash` style one-liners (Homebrew, NodeSource)
 - `colima start`, `systemctl enable --now docker`, `service docker start`
-- `docker info`, image pull (lazy on first `jht up`, no longer eager in install.sh)
+- `docker info` (the image pull is lazy and belongs to the later `jht setup` /
+  `jht up`, so dry-run does not contact the registry)
 - `git clone`, `git fetch`, `git reset` (--no-docker path only)
-- `mkdir -p` on persistent paths, `chmod +x`, `curl -fsSL` of compose+wrapper
+- `mkdir -p` on persistent paths, `chmod +x`, and all three runtime downloads
 - the final `jht setup` wizard (skipped in dry-run)
 
 What `--dry-run` intentionally does **not** do:
@@ -263,42 +269,19 @@ What `--dry-run` intentionally does **not** do:
 
 ---
 
-## 🧭 Tested environments
+## ⚠️ Current limitations
 
-| OS | Mode | Date | Result | Notes |
-|----|------|------|--------|-------|
-| macOS 15 (this Mac) | Docker `--dry-run` | 2026-04-16 | OK, exit 0 | Walks all 5 steps, no side effects. Colima not installed locally — shown as "would execute: brew install colima" |
-| macOS 15 (this Mac) | `--no-docker --dry-run` | 2026-04-16 | OK, exit 0 | Walks all 7 steps. `git`/`tmux`/`node`/`claude` already present, so only clone/build/link are "would execute" |
-| macOS 15 (this Mac) | Docker (real install) | _not run_ | — | Would install Colima system-wide; skipped in this session |
-| Ubuntu 24.04 (`docker run -it ubuntu:24.04`) | Docker `--dry-run` | _not run in this session_ | — | Docker daemon not active locally at verification time; skipped per anti-crash rules |
-| Ubuntu 24.04 | `--no-docker` | _not run_ | — | Needs a clean VM |
-| WSL2 (Ubuntu) | Docker | _not run_ | — | No WSL host available |
-
----
-
-## 🐛 Known gaps and follow-ups
-
-Tickets to file on `scripts/install.sh` itself (not on this doc):
-
-- 🟠 **Wrong Claude package name** — line 505/508 installs the legacy
-  `@anthropic-ai/claude-cli`. The active CLI is `@anthropic-ai/claude-code`
-  (see `desktop/provider-install.js:33`). Update install.sh + add Codex
-  and Kimi as additional optional installs in the native flow.
-- 🌍 **Italian output strings** — install.sh prints user-facing messages
-  in Italian (`Rilevamento sistema`, `Installazione Colima fallita`,
-  `gia' installato`, ...) while the rest of the project is in English.
-  Translate to English (or wire into `shared/i18n/`).
-- 🐧 **Unverified Linux/WSL paths** — run the installer end-to-end on at
-  least one clean Linux VM and one clean WSL2 host; `--dry-run` on Mac
-  is not a substitute.
+- **Expert native mode installs a legacy Claude package** — `--no-docker`
+  still attempts `@anthropic-ai/claude-cli`. The normal Docker path is not
+  affected: `jht setup` installs the selected current CLI through
+  [`cli/src/commands/providers.js`](../../cli/src/commands/providers.js).
 - 📌 **Endpoint pins `master`, not a release tag** — a stable curl
   install would benefit from pinning to the latest GitHub release tag
   (rewrite to `raw.githubusercontent.com/.../<tag>/scripts/install.sh`,
   or generate `web/public/install.sh` from the latest release at build
   time).
-- 🪟 **`setup.ps1` arch/WSL detection** — still doesn't detect CPU
-  architecture (ARM vs AMD64) nor WSL availability before claiming
-  `tmux` works.
+- **Windows requires Docker Desktop** — `install.ps1` verifies it but does not
+  silently accept its license, enable WSL2 or complete a reboot.
 
 ---
 
@@ -308,6 +291,6 @@ Tickets to file on `scripts/install.sh` itself (not on this doc):
 - 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — supported subscriptions matrix
 - 🦞 [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
 - 📐 [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram and deployment modes
-- 🧪 [`docs/guides/BETA.md`](BETA.md) — beta tester program (report install issues here)
+- 🧪 [`docs/guides/BETA.md`](BETA.md) — testing and feedback channels
 - 🔒 [`docs/internal/ops/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — internal operations reference
 - 📐 [ADR-0004](../adr/0004-subscription-only-no-api-keys.md) — why subscription-only, no API keys

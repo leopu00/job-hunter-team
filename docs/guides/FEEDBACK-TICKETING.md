@@ -2,7 +2,8 @@
 
 Operational runbook for the `/api/feedback` endpoint and the surfaces that post to it.
 
-> 🧪 This is the channel beta testers use to report issues — see [`docs/guides/BETA.md`](./BETA.md).
+> 🧪 This is the operational side of the public testing and feedback channels
+> documented in [`docs/guides/BETA.md`](./BETA.md).
 
 ## 🚪 Where users actually report
 
@@ -99,6 +100,6 @@ Two things to know before probing by hand: a **real** `POST` (no `website` field
 
 ## 📚 Related
 
-- 🧪 [`docs/guides/BETA.md`](./BETA.md) — beta tester program (the user-facing flow that funnels into this endpoint)
+- 🧪 [`docs/guides/BETA.md`](./BETA.md) — public testing and feedback channels
 - 🔒 [`docs/internal/ops/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — Supabase access and Vercel env vars
 - 🚢 [`docs/internal/ops/release.md`](../internal/ops/release.md) — full release flow
