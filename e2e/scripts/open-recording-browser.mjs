@@ -93,6 +93,9 @@ async function main() {
     if (response?.status() !== 200) {
       throw new Error("dashboard unavailable");
     }
+    if (page.url() !== target) {
+      throw new Error("recording route redirected");
+    }
     await page.waitForFunction(
       () => document.documentElement.getAttribute("data-theme") === "light",
     );
