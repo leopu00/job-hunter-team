@@ -1444,6 +1444,11 @@
       "path": "docs/guides/TUTORIALS.md",
       "description": "Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives",
       "last_review": null
+    },
+    {
+      "path": "docs/guides/TUTORIALS-LOCALIZATIONS.md",
+      "description": "",
+      "last_review": null
     }
   ]
 }
