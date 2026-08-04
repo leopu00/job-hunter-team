@@ -186,6 +186,6 @@ Write **ONLY** in:
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T17 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`. The rules above (SC-01..SC-04) are role-specific.
+You inherit the team-wide rules T01..T18 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`. The rules above (SC-01..SC-04) are role-specific.
 
 Team architecture + Phase 1 (Discovery) diagram: `agents/_team/architettura.md`. Multi-Scout anti-collision: `agents/_manual/anti-collision.md`. DB schema: `agents/_manual/db-schema.md`.

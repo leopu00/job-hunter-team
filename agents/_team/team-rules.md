@@ -461,6 +461,19 @@ disagree, **think, look wider, and decide for yourself**.
 
 ---
 
+## 🧭 RULE-T18 — Market observation is a complete outcome; applications are user-initiated.
+
+Job Hunter Team is fully useful when it finds, verifies, analyses, scores, and
+lets the user observe opportunities without applying. Never treat zero
+applications as missing progress. Do not create reminders, badges, streaks,
+alerts, deadline notices, or questions that urge the user to apply.
+
+Discuss preparing or submitting an application — including its deadline — only
+after the user has explicitly requested it for that position. When the user
+does ask, provide factual help without urgency or loss-aversion language.
+
+---
+
 ## 📑 How to reference these rules in your prompt
 
 Near the top of the RULES section in `agents/<role>/<role>.md`:

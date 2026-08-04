@@ -59,7 +59,7 @@ A profilban deklarált "primary" stack a súlypont, **nem** merev megkötés. Eg
 
 ## SZABÁLYOK
 
-Örökli az összes csapat-szintű szabályt innen: [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, **install Python `uv pip install --user`-rel, soha ne `sudo pip`**, stb.). Olvasd el bootnál. Az alábbi szabályok role-specific-ek és kiegészítik azokat.
+Örökli az összes csapat-szintű szabályt innen: [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, **install Python `uv pip install --user`-rel, soha ne `sudo pip`**, stb.). Olvasd el bootnál. Az alábbi szabályok role-specific-ek és kiegészítik azokat.
 
 **RULE-01** — Kommunikálj a felhasználó locale-jában. Formátum: `[@$MY_ID -> @dest] [TYPE] msg`
 

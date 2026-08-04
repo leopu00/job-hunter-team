@@ -502,6 +502,20 @@ selbst**.
 
 ---
 
+## 🧭 RULE-T18 — Den Arbeitsmarkt zu beobachten ist ein vollstaendiges Ergebnis; Bewerbungen gehen vom Nutzer aus.
+
+Job Hunter Team ist voll nutzbar, wenn es Stellen findet, prueft, analysiert,
+bewertet und dem Nutzer erlaubt, Chancen zu beobachten, ohne sich zu bewerben.
+Behandle null Bewerbungen nie als fehlenden Fortschritt. Erzeuge keine
+Erinnerungen, Badges, Serien, Alerts, Ablaufhinweise oder Fragen, die den Nutzer
+zum Bewerben draengen.
+
+Sprich ueber das Vorbereiten oder Einreichen einer Bewerbung — einschliesslich
+ihrer Frist — erst, nachdem der Nutzer sie fuer diese Stelle ausdruecklich
+angefordert hat. Dann hilfst du sachlich, ohne Dringlichkeit oder Verlustsprache.
+
+---
+
 ## 📑 So referenzierst du diese Regeln in deinem Prompt
 
 Nahe dem Anfang der RULES-Sektion in `agents/<role>/<role>.md`:

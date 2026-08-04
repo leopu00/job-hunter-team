@@ -3,7 +3,7 @@
 export const de: Record<string, string> = {
   // Chiavi aggiunte (allineamento i18n)
   home_intro:
-    "Job Hunter Team ist ein Team autonomer KI-Agenten, die ununterbrochen für dich nach Arbeit suchen. Jeder Agent ist ein Spezialist: Einer spürt die Stellen auf, einer analysiert sie im Detail und einer vergibt jeder eine Bewertung, je nachdem, wie nah sie an dem ist, was dir wirklich wichtig ist. Auf Wunsch erstellen sie auch den Lebenslauf für deine Bewerbung. Und wenn die versendeten Bewerbungen nicht ausreichen, um Arbeit zu finden, steht dir ein eigener Agent zur Seite: Er hilft dir, dich auf dem Arbeitsmarkt zu orientieren und dich der gewünschten Rolle zu nähern. Du gibst die Richtung vor und behältst das letzte Wort; den Rest übernimmt das Team, privat, auf deiner eigenen Maschine.",
+    "Job Hunter Team ist ein Team autonomer KI-Agenten, die ununterbrochen für dich nach Arbeit suchen. Jeder Agent ist ein Spezialist: Einer spürt die Stellen auf, einer analysiert sie im Detail und einer vergibt jeder eine Bewertung, je nachdem, wie nah sie an dem ist, was dir wirklich wichtig ist. Auf Wunsch erstellen sie auch den Lebenslauf für deine Bewerbung. Ein eigener Agent hilft dir zudem, dich auf dem Arbeitsmarkt zu orientieren und dich der gewünschten Rolle zu nähern. Den Arbeitsmarkt zu beobachten ist eine vollständige Nutzung des Produkts. Du gibst die Richtung vor und behältst das letzte Wort; den Rest übernimmt das Team, privat, auf deiner eigenen Maschine.",
   theme_system: "System",
   theme_dark: "Nacht",
   theme_light: "Tag",
