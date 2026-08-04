@@ -17,15 +17,10 @@ func _run() -> void:
 	# (che vorrebbe la delayed expansion di cmd) resta coperto dai leg POSIX.
 	var is_windows := OS.get_name() == "Windows"
 	var setup_script: GDScript = load("res://scripts/setup/setup_service.gd")
-	var spec: Dictionary
-	if is_windows:
-		spec = setup_script.embedded_terminal_spec("Terminal self-test", "test",
-				"echo Apri https://example.com/device & set /p x=")
-	else:
-		spec = {
-			"path": "/bin/sh", "args": PackedStringArray(["-lc", command]),
-			"title": "Terminal self-test", "hint": "test",
-		}
+	var spec: Dictionary = setup_script.embedded_terminal_spec(
+			"Terminal self-test", "test",
+			"echo Apri https://example.com/device & set /p x=" if is_windows \
+			else command)
 	var terminal := EmbeddedTerminal.new("test", spec)
 	root.add_child(terminal)
 	for _i in 40:
@@ -34,20 +29,18 @@ func _run() -> void:
 		await create_timer(0.05).timeout
 	terminal._send("OK\n")
 	await create_timer(0.5).timeout
-	if is_windows:
-		for _i in 120:
-			if terminal._finished:
-				break
-			await create_timer(0.05).timeout
+	for _i in 120:
+		if terminal._finished:
+			break
+		await create_timer(0.05).timeout
 	var all_bytes: PackedByteArray = terminal._raw_bytes.duplicate()
 	all_bytes.append_array(terminal._pending_bytes)
 	var visible := terminal._terminal_text(all_bytes.get_string_from_utf8())
 	var ok := visible.contains("https://example.com/device")
 	if not is_windows:
 		ok = ok and visible.contains("ricevuto:OK")
-	else:
-		ok = ok and terminal._finished
-		ok = ok and terminal._status.text == UIStrings.t("term.status_cmd_done")
+	ok = ok and terminal._finished
+	ok = ok and terminal._status.text == UIStrings.t("term.status_cmd_done")
 	# Modello di schermo: il posizionamento colonna (ESC[nG, stile TUI
 	# Claude) deve produrre spazi, non parole incollate; cursor-home + erase
 	# sovrascrivono invece di accodare; il clear screen svuota davvero.
@@ -145,10 +138,31 @@ func _run() -> void:
 	ok = ok and failure._done.text == UIStrings.t("term.close_retry")
 	ok = ok and failure._output.text.contains(UIStrings.t("term.runtime_install_failed"))
 	ok = ok and not failure._done.text.contains("HO FINITO")
+	var failure_process_exited := failure._process_exited
+	var failure_captured_exit := failure._captured_exit_code()
 	failure.close()
+	# Protocollo troncato: il wrapper reale scrive un token diverso da quello
+	# atteso, poi chiude entrambi i pipe. Senza un report autenticato la console
+	# deve concludere in errore (-1), non restare INTERATTIVA per sempre.
+	var missing_spec: Dictionary = setup_script.embedded_terminal_spec(
+			"Missing report self-test", "test",
+			"cmd.exe /d /c exit 0" if is_windows else "exit 0")
+	missing_spec["exit_report_token"] = "report_that_will_never_arrive"
+	var missing := EmbeddedTerminal.new("runtime-install", missing_spec)
+	root.add_child(missing)
+	for _i in 120:
+		if missing._finished:
+			break
+		await create_timer(0.05).timeout
+	var missing_status := missing._status.text
+	ok = ok and missing._finished
+	ok = ok and missing_status == UIStrings.t("term.status_cmd_failed") % -1
+	ok = ok and missing._done.text == UIStrings.t("term.close_retry")
+	missing.close()
 	print("EMBEDDED-TERMINAL-TEST ", "PASS" if ok else "FAIL",
 			" pid=", pid, " output=", visible, " auto_auth_close=", ok,
 			" failure_status=", failure_status,
-			" process_exited=", failure._process_exited,
-			" captured_exit=", failure._captured_exit_code())
+			" missing_status=", missing_status,
+			" process_exited=", failure_process_exited,
+			" captured_exit=", failure_captured_exit)
 	quit(0 if ok else 1)
