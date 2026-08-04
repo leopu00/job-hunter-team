@@ -561,6 +561,7 @@ const S := {
 
 	# ── Impostazioni → Lingua ─────────────────────────────────────
 	"lang.intro": "Lingua dell'interfaccia — le 7 lingue del sito.",
+	"lang.narrative_note": "// nota: il tour narrativo e le sue scelte sono attualmente disponibili in italiano",
 	"lang.note": "// si applica subito ai pannelli; riapri quelli già aperti per vederli tradotti",
 
 	# ── Statistiche: grafici cross-filter (come la dashboard web) ─
