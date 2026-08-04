@@ -37,7 +37,7 @@ test.describe("shell pubblico tutorial e trailer", () => {
     ).toBe(true);
   });
 
-  test("/tutorials espone entrambe le ancore senza scaricare media", async ({
+  test("/tutorials mette il testo prima del video e non scarica media", async ({
     page,
   }) => {
     const mediaRequests: string[] = [];
@@ -52,6 +52,31 @@ test.describe("shell pubblico tutorial e trailer", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.locator("#game")).toBeVisible();
     await expect(page.locator("#web")).toBeVisible();
+    await expect(
+      page.locator("#game").getByText("Before you begin"),
+    ).toBeVisible();
+    await expect(
+      page.locator("#game").getByText("Meet the office"),
+    ).toBeVisible();
+    await expect(
+      page.locator("#web").getByText("Start from the dashboard"),
+    ).toBeVisible();
+    await expect(
+      page.locator("#game").getByText("Prefer to watch instead?"),
+    ).toBeVisible();
+    expect(
+      await page.locator("#game").evaluate((section) => {
+        const text = section.querySelector("ol");
+        const video = section.querySelector("[data-video-pending]");
+        return Boolean(
+          text &&
+          video &&
+          text.compareDocumentPosition(video) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        );
+      }),
+      "video montato prima dei passi testuali",
+    ).toBe(true);
     expect(await page.locator("[data-video-pending]").count()).toBe(2);
     expect(await page.locator("video").count()).toBe(0);
     expect(mediaRequests, "media richiesti prima di un click").toEqual([]);
