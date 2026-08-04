@@ -202,6 +202,8 @@ var _finished := false
 var _process_exited := false
 var _pending_bytes := PackedByteArray()
 var _raw_bytes := PackedByteArray()
+var _pending_report_bytes := PackedByteArray()
+var _report_bytes := PackedByteArray()
 var _last_url := ""
 var _output: RichTextLabel
 var _status: Label
@@ -245,24 +247,28 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	if _pending_bytes.is_empty():
+	if _pending_bytes.is_empty() and _pending_report_bytes.is_empty():
 		return
 	_mutex.lock()
 	var chunk := _pending_bytes
 	_pending_bytes = PackedByteArray()
+	var report_chunk := _pending_report_bytes
+	_pending_report_bytes = PackedByteArray()
 	_mutex.unlock()
-	_raw_bytes.append_array(chunk)
-	if _raw_bytes.size() > MAX_RAW_CHARS:
-		_raw_bytes = _raw_bytes.slice(_raw_bytes.size() - MAX_RAW_CHARS)
-	# Su macOS `script` può tenere il pipe formalmente aperto per qualche
-	# istante dopo la fine del figlio. Il report OSC è già la prova completa
-	# dell'esito: applicarlo appena arriva evita una console ferma su
-	# "INTERATTIVA" mentre l'installazione è in realtà fallita.
+	_report_bytes.append_array(report_chunk)
+	# stdout è un canale di controllo separato: i wrapper POSIX chiudono fd3
+	# nel figlio e Windows redirige l'intero gruppo ospitato su stderr. Un marker
+	# completo qui può quindi provenire soltanto dal wrapper dopo il comando.
 	if bool(spec.get("reports_exit", false)) and not _finished:
-		var reported := _exit_code_from_raw(_raw_bytes.get_string_from_utf8(),
+		var reported := _exit_code_from_raw(_report_bytes.get_string_from_utf8(),
 				str(spec.get("exit_report_token", "")))
 		if reported >= 0:
 			_process_finished(reported)
+	if chunk.is_empty():
+		return
+	_raw_bytes.append_array(chunk)
+	if _raw_bytes.size() > MAX_RAW_CHARS:
+		_raw_bytes = _raw_bytes.slice(_raw_bytes.size() - MAX_RAW_CHARS)
 	# Feed incrementale al modello di schermo. Un codepoint UTF-8 può
 	# arrivare spezzato in più letture: gli eventuali byte di coda incompleti
 	# restano in _undecoded fino al prossimo giro (decodificarli subito
@@ -503,13 +509,20 @@ func _run_process() -> void:
 	# consegna immediatamente anche prompt corti in attesa di input; la UI li
 	# aggrega una volta per frame evitando migliaia di redraw.
 	while not _closing and is_instance_valid(_stderr) and not _stderr.eof_reached():
+		var read_any := false
 		var one := _stderr.get_buffer(1)
-		if one.is_empty():
+		if not one.is_empty() and not (_stderr.eof_reached() and one[0] == 0):
+			call_deferred("_queue_byte", one[0])
+			read_any = true
+		# `stdio` è duplex: main thread scrive lo stdin, questo reader consuma
+		# soltanto stdout, riservato dal wrapper al report di controllo.
+		if is_instance_valid(_stdio):
+			var report_one := _stdio.get_buffer(1)
+			if not report_one.is_empty():
+				call_deferred("_queue_report_byte", report_one[0])
+				read_any = true
+		if not read_any:
 			OS.delay_msec(2)
-			continue
-		if _stderr.eof_reached() and one[0] == 0:
-			break
-		call_deferred("_queue_byte", one[0])
 	# EOF è già la conferma affidabile che il pipe figlio è terminato. Chiamare
 	# is_process_running/get_process_exit_code dopo che Godot lo ha raccolto
 	# genera un falso errore "PID is not a child" su macOS.
@@ -530,6 +543,14 @@ func _queue_byte(byte: int) -> void:
 		return
 	_mutex.lock()
 	_pending_bytes.append(byte)
+	_mutex.unlock()
+
+
+func _queue_report_byte(byte: int) -> void:
+	if _closing:
+		return
+	_mutex.lock()
+	_pending_report_bytes.append(byte)
 	_mutex.unlock()
 
 
@@ -594,9 +615,9 @@ static func _exit_code_from_raw(raw: String, expected_token: String) -> int:
 
 
 func _captured_exit_code() -> int:
-	var all_bytes := _raw_bytes.duplicate()
+	var all_bytes := _report_bytes.duplicate()
 	_mutex.lock()
-	all_bytes.append_array(_pending_bytes)
+	all_bytes.append_array(_pending_report_bytes)
 	_mutex.unlock()
 	return _exit_code_from_raw(all_bytes.get_string_from_utf8(),
 			str(spec.get("exit_report_token", "")))

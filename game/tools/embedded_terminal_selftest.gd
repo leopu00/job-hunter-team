@@ -16,14 +16,11 @@ func _run() -> void:
 	# spawn cmd.exe + cattura output/URL + consumo stdin; l'eco "ricevuto:"
 	# (che vorrebbe la delayed expansion di cmd) resta coperto dai leg POSIX.
 	var is_windows := OS.get_name() == "Windows"
+	var setup_script: GDScript = load("res://scripts/setup/setup_service.gd")
 	var spec: Dictionary
 	if is_windows:
-		spec = {
-			"path": "cmd.exe",
-			"args": PackedStringArray(["/d", "/s", "/c",
-					"echo Apri https://example.com/device 1>&2 & set /p x="]),
-			"title": "Terminal self-test", "hint": "test",
-		}
+		spec = setup_script.embedded_terminal_spec("Terminal self-test", "test",
+				"echo Apri https://example.com/device & set /p x=")
 	else:
 		spec = {
 			"path": "/bin/sh", "args": PackedStringArray(["-lc", command]),
@@ -37,12 +34,20 @@ func _run() -> void:
 		await create_timer(0.05).timeout
 	terminal._send("OK\n")
 	await create_timer(0.5).timeout
+	if is_windows:
+		for _i in 120:
+			if terminal._finished:
+				break
+			await create_timer(0.05).timeout
 	var all_bytes: PackedByteArray = terminal._raw_bytes.duplicate()
 	all_bytes.append_array(terminal._pending_bytes)
 	var visible := terminal._terminal_text(all_bytes.get_string_from_utf8())
 	var ok := visible.contains("https://example.com/device")
 	if not is_windows:
 		ok = ok and visible.contains("ricevuto:OK")
+	else:
+		ok = ok and terminal._finished
+		ok = ok and terminal._status.text == UIStrings.t("term.status_cmd_done")
 	# Modello di schermo: il posizionamento colonna (ESC[nG, stile TUI
 	# Claude) deve produrre spazi, non parole incollate; cursor-home + erase
 	# sovrascrivono invece di accodare; il clear screen svuota davvero.
@@ -87,27 +92,38 @@ func _run() -> void:
 			"\u001b]1337;JHTExit=deadbeef:0\u0007" \
 			+ "\u001b]1337;JHTExit=%s:23\u0007" % exit_token,
 			exit_token) == 23
+	var early_report := "\u001b]1337;JHTExit=%s:0\u0007" % exit_token
+	ok = ok and EmbeddedTerminal._exit_code_from_raw(
+			early_report + "\u001b]1337;JHTExit=%s:23\u0007" % exit_token,
+			exit_token) == 23
 	ok = ok and EmbeddedTerminal._exit_code_from_raw("nessun report", exit_token) == -1
-	var failure_status := "non eseguito su Windows"
-	if not is_windows:
-		var setup_script: GDScript = load("res://scripts/setup/setup_service.gd")
-		var failure := EmbeddedTerminal.new("runtime-install",
-				setup_script.embedded_terminal_spec("Runtime self-test", "test",
-						"printf 'simulated installer error\\n' >&2; exit 23"))
-		root.add_child(failure)
-		for _i in 80:
-			if failure._finished:
-				break
-			await create_timer(0.05).timeout
-		await create_timer(0.1).timeout
-		failure_status = failure._status.text
-		ok = ok and failure._finished
-		ok = ok and failure._status.text == UIStrings.t("term.status_cmd_failed") % 23
-		ok = ok and failure._done.text == UIStrings.t("term.close_retry")
-		ok = ok and failure._output.text.contains(UIStrings.t("term.runtime_install_failed"))
-		ok = ok and not failure._done.text.contains("HO FINITO")
-		failure.close()
+	var windows_wrapper: String = setup_script._with_windows_exit_report(
+			"echo literal!value!", exit_token)
+	ok = ok and windows_wrapper.contains("call set \"JHT_EXIT_CODE=%%errorlevel%%\"")
+	ok = ok and windows_wrapper.contains("echo literal!value!")
+	ok = ok and windows_wrapper.contains("[Console]::Out.Write")
+	ok = ok and not windows_wrapper.contains("!errorlevel!")
+	var failure_command := "cmd.exe /d /c exit 23" if is_windows \
+			else "printf 'simulated installer error\\n' >&2; exit 23"
+	var failure := EmbeddedTerminal.new("runtime-install",
+			setup_script.embedded_terminal_spec("Runtime self-test", "test",
+					failure_command))
+	root.add_child(failure)
+	for _i in 120:
+		if failure._finished:
+			break
+		await create_timer(0.05).timeout
+	await create_timer(0.1).timeout
+	var failure_status := failure._status.text
+	ok = ok and failure._finished
+	ok = ok and failure._status.text == UIStrings.t("term.status_cmd_failed") % 23
+	ok = ok and failure._done.text == UIStrings.t("term.close_retry")
+	ok = ok and failure._output.text.contains(UIStrings.t("term.runtime_install_failed"))
+	ok = ok and not failure._done.text.contains("HO FINITO")
+	failure.close()
 	print("EMBEDDED-TERMINAL-TEST ", "PASS" if ok else "FAIL",
 			" pid=", pid, " output=", visible, " auto_auth_close=", ok,
-			" failure_status=", failure_status)
+			" failure_status=", failure_status,
+			" process_exited=", failure._process_exited,
+			" captured_exit=", failure._captured_exit_code())
 	quit(0 if ok else 1)
