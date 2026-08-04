@@ -4,19 +4,23 @@
  * storage state Playwright in un profilo del browser nativo.
  *
  * Uso dalla root del repository:
- *   JHT_RECORDING_PROFILE=software BASE_URL=http://localhost:3008 npm --prefix e2e run recording-browser
+ *   JHT_RECORDING_PROFILE=software JHT_RECORDING_ROUTE=/messages npm --prefix e2e run recording-browser
  *
  * Non esegue login, reset, POST o DELETE. Il contesto e' effimero: applica il
  * solo storage state privato al Chromium lanciato da Playwright e lo elimina
  * alla chiusura della finestra.
  */
 import fs from "node:fs";
+import { chromium } from "@playwright/test";
 import os from "node:os";
 import path from "node:path";
-import { chromium } from "@playwright/test";
+import {
+  ALLOWED_RECORDING_ROUTES,
+  createGetOnlyRequestPolicy,
+  recordingTarget,
+} from "./recording-browser-policy.mjs";
 
 const ALIASES = new Set(["software", "marketing", "finance", "design"]);
-const LOCAL_RECORDING_ORIGIN = "http://localhost:3008";
 
 function fail(message) {
   console.error(`\n✗ ${message}\n`);
@@ -35,20 +39,6 @@ function recordingStatePath(alias) {
   );
 }
 
-function localRecordingDashboard() {
-  const baseURL = process.env.BASE_URL || LOCAL_RECORDING_ORIGIN;
-  let url;
-  try {
-    url = new URL(baseURL);
-  } catch {
-    throw new Error("invalid base URL");
-  }
-  if (url.origin !== LOCAL_RECORDING_ORIGIN) {
-    throw new Error("unexpected recording origin");
-  }
-  return new URL("/dashboard", url).toString();
-}
-
 async function main() {
   const alias = process.env.JHT_RECORDING_PROFILE;
   if (!alias || !ALIASES.has(alias)) {
@@ -65,11 +55,13 @@ async function main() {
     return;
   }
 
-  let dashboard;
+  let target;
   try {
-    dashboard = localRecordingDashboard();
+    target = recordingTarget();
   } catch {
-    fail("BASE_URL deve essere esattamente http://localhost:3008");
+    fail(
+      `JHT_RECORDING_ROUTE deve essere una delle route esatte: ${[...ALLOWED_RECORDING_ROUTES].join(", ")}`,
+    );
     return;
   }
 
@@ -83,6 +75,8 @@ async function main() {
       storageState,
       viewport: null,
     });
+    const getOnly = createGetOnlyRequestPolicy(console.error);
+    await context.route("**/*", getOnly.handle);
 
     // Il context non riusa un profilo nativo. La rimozione e' locale alla sua
     // cookie jar e precede ogni navigazione: nessuna chiamata HTTP di pulizia.
@@ -90,19 +84,10 @@ async function main() {
     await context.addInitScript(() => {
       localStorage.setItem("jht-theme", "light");
       localStorage.setItem("jht-tour-done", "1");
-
-      // Il server recording usa Next in development per restare sullo SHA
-      // congelato. La sua chrome diagnostica non appartiene al prodotto e
-      // non deve entrare nel raw: la nascondiamo prima che Next la monti.
-      const style = document.createElement("style");
-      style.dataset.jhtRecordingChrome = "hidden";
-      style.textContent =
-        "nextjs-portal,[data-nextjs-toast],[data-nextjs-dev-tools-button],[data-next-badge-root]{display:none!important}";
-      document.documentElement.append(style);
     });
 
     const page = await context.newPage();
-    const response = await page.goto(dashboard, {
+    const response = await page.goto(target, {
       waitUntil: "domcontentloaded",
     });
     if (response?.status() !== 200) {
@@ -113,15 +98,18 @@ async function main() {
     );
 
     console.log(
-      "✓ Recording browser pronto: Chromium kiosk su /dashboard in tema light. Ctrl+C per chiudere.",
+      `✓ Recording browser pronto: Chromium kiosk su ${new URL(target).pathname} in tema light. Ctrl+C per chiudere.`,
     );
 
-    await new Promise((resolve) => {
-      const done = () => resolve();
-      process.once("SIGINT", done);
-      process.once("SIGTERM", done);
-      browser.once("disconnected", done);
-    });
+    await Promise.race([
+      new Promise((resolve) => {
+        const done = () => resolve();
+        process.once("SIGINT", done);
+        process.once("SIGTERM", done);
+        browser.once("disconnected", done);
+      }),
+      getOnly.violation,
+    ]);
   } finally {
     if (browser?.isConnected()) await browser.close();
   }
