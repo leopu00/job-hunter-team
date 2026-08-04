@@ -56,10 +56,16 @@ def test_runtime_installer_keeps_tty_and_reports_command_failure():
     assert r'''trap 'rm -f \"$jht_installer\"; exit 130' HUP INT TERM''' in runtime_command
     assert '"trap - HUP INT TERM; "' in runtime_command
     assert "JHTExit=" in setup
+    assert '"/v:on"' in setup
+    assert "_with_windows_exit_report(command, exit_report_token)" in setup
+    assert r'''( %s ) 1>&2 & set \"_jht_exit=!errorlevel!\"''' in setup
+    assert '"reports_exit": true' in setup
+    assert '"exit_report_token": exit_report_token' in setup
 
     # EOF non equivale a successo: il codice riportato dal wrapper determina
     # uno stato rosso e un CTA di riprova, mai una dichiarazione dell'utente.
     assert 'code = _captured_exit_code()' in terminal
+    assert 'str(spec.get("exit_report_token", ""))' in terminal
     assert 'UIStrings.t("term.status_cmd_failed") % code' in terminal
     assert 'UIStrings.t("term.close_retry")' in terminal
     assert '"term.done_plain": "CHIUDI CONSOLE"' in strings

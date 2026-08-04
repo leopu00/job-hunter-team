@@ -8,7 +8,7 @@ signal closed
 
 const MAX_RAW_CHARS := 100000
 const MAX_VISIBLE_CHARS := 50000
-const EXIT_REPORT_PATTERN := "\u001b\\]1337;JHTExit=([0-9]+)\u0007"
+const EXIT_REPORT_PATTERN := "\u001b\\]1337;JHTExit=([0-9a-f]+):([0-9]+)\u0007"
 
 
 ## Modello di schermo minimale (griglia + scrollback) per i TUI raw-mode.
@@ -259,7 +259,8 @@ func _process(_delta: float) -> void:
 	# dell'esito: applicarlo appena arriva evita una console ferma su
 	# "INTERATTIVA" mentre l'installazione è in realtà fallita.
 	if bool(spec.get("reports_exit", false)) and not _finished:
-		var reported := _exit_code_from_raw(_raw_bytes.get_string_from_utf8())
+		var reported := _exit_code_from_raw(_raw_bytes.get_string_from_utf8(),
+				str(spec.get("exit_report_token", "")))
 		if reported >= 0:
 			_process_finished(reported)
 	# Feed incrementale al modello di schermo. Un codepoint UTF-8 può
@@ -575,16 +576,21 @@ func _process_finished(code: int) -> void:
 	_refresh_setup()
 
 
-## Ultimo report vince: un comando ospitato potrebbe stampare byte simili per
-## conto proprio, ma solo il wrapper ne emette uno come ultima sequenza OSC.
-static func _exit_code_from_raw(raw: String) -> int:
+## Il token casuale lega il report a questa singola console: output ospitato che
+## contiene un OSC JHTExit proprio non può finalizzare prematuramente il comando.
+## Fra più report validi dello stesso wrapper vince comunque l'ultimo.
+static func _exit_code_from_raw(raw: String, expected_token: String) -> int:
+	if expected_token == "":
+		return -1
 	var regex := RegEx.new()
 	if regex.compile(EXIT_REPORT_PATTERN) != OK:
 		return -1
 	var matches := regex.search_all(raw)
-	if matches.is_empty():
-		return -1
-	return int(matches[-1].get_string(1))
+	var result := -1
+	for found in matches:
+		if found.get_string(1) == expected_token:
+			result = int(found.get_string(2))
+	return result
 
 
 func _captured_exit_code() -> int:
@@ -592,7 +598,8 @@ func _captured_exit_code() -> int:
 	_mutex.lock()
 	all_bytes.append_array(_pending_bytes)
 	_mutex.unlock()
-	return _exit_code_from_raw(all_bytes.get_string_from_utf8())
+	return _exit_code_from_raw(all_bytes.get_string_from_utf8(),
+			str(spec.get("exit_report_token", "")))
 
 
 func _submit_line(text: String) -> void:

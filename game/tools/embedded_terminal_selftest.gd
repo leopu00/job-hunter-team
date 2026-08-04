@@ -75,9 +75,19 @@ func _run() -> void:
 	# Fallimento reale del comando: il wrapper POSIX comunica il codice con
 	# un OSC invisibile. La console deve dichiarare l'errore, mostrare una via
 	# di riprova e non usare mai il vecchio CTA auto-certificante "HO FINITO".
+	var exit_token := "0123456789abcdef"
 	ok = ok and EmbeddedTerminal._exit_code_from_raw(
-			"prima\u001b]1337;JHTExit=23\u0007dopo") == 23
-	ok = ok and EmbeddedTerminal._exit_code_from_raw("nessun report") == -1
+			"prima\u001b]1337;JHTExit=%s:23\u0007dopo" % exit_token,
+			exit_token) == 23
+	# Un marker formalmente valido ma appartenente a un altro processo non può
+	# anticipare/falsificare l'esito del wrapper di questa console.
+	ok = ok and EmbeddedTerminal._exit_code_from_raw(
+			"\u001b]1337;JHTExit=deadbeef:0\u0007", exit_token) == -1
+	ok = ok and EmbeddedTerminal._exit_code_from_raw(
+			"\u001b]1337;JHTExit=deadbeef:0\u0007" \
+			+ "\u001b]1337;JHTExit=%s:23\u0007" % exit_token,
+			exit_token) == 23
+	ok = ok and EmbeddedTerminal._exit_code_from_raw("nessun report", exit_token) == -1
 	var failure_status := "non eseguito su Windows"
 	if not is_windows:
 		var setup_script: GDScript = load("res://scripts/setup/setup_service.gd")
