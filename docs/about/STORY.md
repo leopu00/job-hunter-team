@@ -32,7 +32,7 @@ Going from "works for one person" to "works for anyone" is a different project e
 
 - 🤖 **A team of specialized agents** — an always-on core (Captain, Sentinel, Assistant, Mentor), a dynamic worker pool the Captain scales 1..N (Scout, Analyst, Scorer, Writer, Critic), and scheduled one-shot agents (Dottore for agent-health, Mantenitore for infra-health) — each with its own prompt, skills, and on-demand tools
 - 🛡️ **A Bridge + Sentinel monitoring layer** that calibrates token usage to within 5–15% of the subscription window, so the team doesn't burn through your quota
-- 🌐 **A web dashboard, a Telegram bot, a CLI, and a desktop app** *(the desktop app is still in development)* — pick the interface that fits how you work
+- 🌐 **A native office, web dashboard, Telegram channel and CLI** — pick the interface that fits how you work
 - 💳 **Subscription-only model** (Claude Max x20, Kimi €40, Codex ~€100) so you know the cost upfront, no per-token surprises — see [`docs/about/PROVIDERS.md`](PROVIDERS.md)
 - 🐳 **Containerized agents** so your local machine stays clean and the same setup works on a VPS
 
@@ -40,11 +40,15 @@ Going from "works for one person" to "works for anyone" is a different project e
 
 - **🧙‍♂️ The Mentor as a first-class surface** — the career-coach agent shipped and is part of the always-on core, but today it lives in chat. It deserves its own web + desktop page and deeper tuning (see the [roadmap](ROADMAP.md), mission M6). The job market changes every month; the team should help you adapt, not just apply.
 - **A €40/month tier that actually works** — if Kimi at €40 holds up for a full month under real load, JHT becomes accessible to anyone, not just people who can afford €200/month for Claude Max.
-- **More case studies, not just mine** — see [`docs/about/RESULTS.md`](RESULTS.md). If you use JHT, share your numbers.
+- **More measured evidence across provider tiers** — the published runs and
+  the evidence format live in [`docs/about/RESULTS.md`](RESULTS.md).
 
-## 🧪 Beta testers wanted
+## 🚀 Start your team
 
-The first beta testers are already running the public version — their data is in [`docs/about/RESULTS.md`](RESULTS.md). If you're job-hunting and want early access in exchange for honest feedback, see [`docs/guides/BETA.md`](../guides/BETA.md).
+The public release, system requirements and first-run paths are in
+[`docs/guides/QUICKSTART.md`](../guides/QUICKSTART.md). Published run data is
+in [`docs/about/RESULTS.md`](RESULTS.md); testing and feedback guidance is in
+[`docs/guides/BETA.md`](../guides/BETA.md).
 
 ---
 

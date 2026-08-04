@@ -2,9 +2,8 @@
 
 Thanks for considering a contribution. Bug reports, feature ideas, documentation improvements, and code PRs are all welcome.
 
-## Ways to help
+## Ways to contribute
 
-- **Pick a mission** — the [contributor missions](../docs/about/ROADMAP.md#-where-you-can-help--contributor-missions) (M1–M10) are the bigger directions we'd love a hand with; each breaks into smaller `good first issue` entry-points. Comment on an issue to claim it.
 - **Report bugs and ideas** — use the [Bug Report](ISSUE_TEMPLATE/bug_report.md) and [Feature Request](ISSUE_TEMPLATE/feature_request.md) templates
 - **Improve docs** — PRs against `docs/`, the README, or the ADRs are always appreciated
 - **Fix a bug / ship a feature** — follow the PR flow below
@@ -12,7 +11,13 @@ Thanks for considering a contribution. Bug reports, feature ideas, documentation
 
 ## Triage and response time
 
-While JHT is in beta we aim to apply a triage label (surface + severity) to every new issue within **48 hours**. We don't commit to a fix SLA in beta, but `severity:blocker` issues get a maintainer acknowledgement within **24 hours** even if the fix takes longer. The full workflow — labels, kanban columns, close reasons — lives in [`docs/internal/ops/triage.md`](../docs/internal/ops/triage.md). The canonical label set is [`/.github/labels.yml`](labels.yml).
+We aim to apply a triage label (surface + severity) to every new issue within
+**48 hours**. We do not commit to a fix service-level agreement, but
+`severity:blocker` issues get a maintainer acknowledgement within **24 hours**
+even if the fix takes longer. The full workflow — labels, kanban columns,
+close reasons — lives in
+[`docs/internal/ops/triage.md`](../docs/internal/ops/triage.md). The canonical
+label set is [`/.github/labels.yml`](labels.yml).
 
 ## Setup
 
@@ -42,7 +47,9 @@ pre-commit install
 jht setup
 ```
 
-Full contributor setup (Node 20+, tmux, agent CLIs, TUI/CLI build from source) is in [`docs/guides/QUICKSTART.md`](../docs/guides/QUICKSTART.md#️-path-4--from-source-contributors) (Path 4 — From source).
+Full contributor setup (Node 24, tmux, agent CLIs, TUI/CLI build from source)
+is in [`docs/guides/QUICKSTART.md`](../docs/guides/QUICKSTART.md#path-4--from-source-contributors)
+(Path 4 — From source).
 
 ## Branches
 
@@ -134,9 +141,10 @@ Note: the set of **supported agent CLIs** (Claude Code, Codex, Kimi) is closed b
 
 ## Cutting a release (maintainers)
 
-Releases are published by pushing a `vX.Y.Z` tag to `master`. Bump the root
-`package.json`, `game/project.godot` and `game/export_presets.cfg` before
-tagging. Godot is the only native desktop artifact. The full checklist lives
+Releases are published by pushing a `vX.Y.Z` tag at the tested commit on the
+`production` branch. Bump the root `package.json`, `game/project.godot` and
+`game/export_presets.cfg` before tagging. Godot is the only native desktop
+artifact. The full checklist lives
 in [`docs/internal/ops/release.md`](../docs/internal/ops/release.md).
 
 ## Code of conduct

@@ -1,8 +1,9 @@
 # 🚀 Quickstart
 
-Get the team running in **about 10 minutes**, depending on the path you pick.
-
-> 🧪 JHT is in beta. The native desktop app is the Godot office in [`game/`](../../game/); the CLI remains available for automation and recovery. If anything goes wrong, see [`BETA.md`](BETA.md).
+Choose the supported path for your operating system and complete its checks in
+order.
+The native office and CLI are two clients of the same containerized team; you
+do not need to install both.
 
 ---
 
@@ -20,53 +21,68 @@ You need an active subscription to **one** of:
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
 
+For a local team, also allow about **3–4 GB of available RAM** while the
+agents are running. The desktop releases support Windows x64, Linux x64 and
+macOS (Intel: 11+; Apple silicon: 13+). The team itself runs in Docker; the
+native office guides that runtime setup before activation.
+
 ---
 
 ## 🛤️ Choose your path
 
 Pick the path that fits how you work:
 
-| | Path | Best for | Time |
-|---|---|---|---|
-| 🦞 | [AI agent drives JHT](#-path-1-let-your-ai-agent-do-it) | You already use Claude Code / OpenClaw / Codex / Cursor | < 5 min |
-| 📦 | [One-liner installer](#-path-3-one-liner-installer-cli-users) | Comfortable with the terminal | ~10 min |
-| 🛠️ | [From source](#%EF%B8%8F-path-4-from-source-contributors) | Contributors, hackers | ~15 min |
-| 🖥️ | [Native app](#%EF%B8%8F-path-2-native-app) | The complete visual office | ~10 min |
+| | Path | Best for |
+|---|---|---|
+| 🖥️ | [Native app](#%EF%B8%8F-path-1-native-app) | The complete visual office |
+| 📦 | [CLI installer](#-path-2-cli-installer) | Terminal, automation, remote administration |
+| 🦞 | [AI agent drives JHT](#-path-3-let-your-ai-agent-do-it) | You already use Claude Code / OpenClaw / Codex / Cursor |
+| 🛠️ | [From source](#%EF%B8%8F-path-4-from-source-contributors) | Contributors |
 
 ---
 
-## 🦞 Path 1 — Let your AI agent do it
-
-If you already use a personal AI assistant (Claude Code, OpenClaw, Codex, Cursor), just tell it:
-
-> *"Set up Job Hunter Team for me. I have a [Claude Max x20 / Kimi Pro / Codex Pro] subscription. Walk me through what you need."*
-
-…and it will figure out the rest. The `jht` CLI is intentionally designed to be driven by other AI agents — see [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) for prompt examples and the full integration guide.
-
----
-
-## 🖥️ Path 2 — Native app
+## 🖥️ Path 1 — Native app
 
 The desktop application is the game-like Godot office. It exposes onboarding, provider login, runtime and VPS controls, profile, email, Telegram, cloud sync, agents and job data without an Electron or external-terminal wrapper.
 
-To run it from source:
+Download the current release from
+[GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest):
 
-```bash
-git clone https://github.com/leopu00/job-hunter-team.git
-cd job-hunter-team
-./game/tools/run.sh dev       # macOS / Linux
-# game\tools\run.ps1 dev      # Windows PowerShell
-```
+| System | Release asset | First launch |
+|---|---|---|
+| Windows x64 | `job-hunter-team.exe` | Run the executable. It is unsigned, so Windows may show **Windows protected your PC**; use **More info → Run anyway** only if the file came from this repository's release page. |
+| macOS | `job-hunter-team.zip` | Unzip and open the app. The release is signed and notarized by Apple. |
+| Linux x64 | `job-hunter-team-linux-x64.tar.gz` | Extract it, then run `./job-hunter-team.x86_64`. The archive preserves the executable bit. |
 
-The office is visible immediately. **Attiva team** then guides you through the three required gates: container, provider login in the embedded console, and candidate profile. Optional email, Telegram, account sync and VPS setup live under **Impostazioni**.
+The office is visible immediately. Select **Activate team** and complete the
+three required gates: container, provider login in the embedded console, and
+candidate profile. The office can launch the runtime installer; Windows users
+must complete Docker Desktop's consent and first-run flow. Optional email,
+Telegram, account sync and VPS setup live under **Settings**.
 
-> 💡 The native office is the **interaction cockpit**. The web dashboard remains read-only; Telegram is the optional async channel for when you're away.
+> The office is the interaction cockpit. The web dashboard reflects synced
+> data; the CLI remains available for automation and recovery.
+
+To run the office from source instead, use the contributor path below.
 
 ---
 
-## 📦 Path 3 — One-liner installer (CLI users)
+## 📦 Path 2 — CLI installer
 
-**macOS / Linux / WSL2:**
+Use this path for terminal-first setup, automation or remote administration.
+It installs the runtime and `jht` command, not the native office.
+
+**Recommended: download, inspect, and preview before running (macOS / Linux /
+WSL2):**
+
+```bash
+curl -fsSL https://jobhunterteam.ai/install.sh -o install.sh
+less install.sh
+bash install.sh --dry-run
+bash install.sh
+```
+
+The shorter form, after you have reviewed it, is:
 
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
@@ -80,25 +96,34 @@ iwr -useb https://jobhunterteam.ai/install.ps1 | iex
 
 > ⚠️ Windows path requires **Docker Desktop** already installed and running. The PowerShell installer doesn't install Docker for you (Docker Desktop is an MSI with its own EULA flow — out of scope for an unattended script).
 
-The script:
+The installer:
 
 1. Detects your OS (macOS / Linux apt+dnf+pacman / WSL2 / Windows PowerShell)
 2. Installs the **Docker runtime** (macOS: Colima by default or your Docker Desktop via `--runtime`; reuses any Docker already running. `docker.io` on Linux/WSL2). On Windows: verifies Docker Desktop is running.
-3. Downloads `docker-compose.yml` to `~/.jht/runtime/` (Windows: `$env:USERPROFILE\.jht\runtime\`)
-4. Downloads the `jht` wrapper (bash on \*nix, PowerShell `jht-wrapper.ps1` on Windows) to `~/.local/bin/jht` (Windows: `$env:USERPROFILE\.local\bin\jht.ps1` + PATH registration)
+3. Downloads `docker-compose.yml`, the host wrapper and, on macOS/Linux, the host preflight helper.
+4. Creates `~/.jht/host.env` and registers the wrapper directory on `PATH` when needed.
 
-The wrapper is a thin host-side dispatcher (~230 lines bash / ~230 lines PowerShell): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/ops/vps.md`](../internal/ops/vps.md) for the design rationale.
+The wrapper handles container lifecycle on the host and forwards operational
+commands to the Node CLI inside the long-running `jht` container. **No Node,
+Python or tmux is required on the host, and the Docker socket is not exposed
+inside the container.** See [`docs/internal/ops/vps.md`](../internal/ops/vps.md)
+for the design rationale.
 
-After install:
+In an interactive terminal, the installer launches the setup wizard
+automatically. If it cannot, or if you skipped onboarding, run:
 
 ```bash
-jht up               # starts the container (pulls image on first run)
-jht setup            # interactive wizard — picks provider, installs CLI, OAuth, team start
-jht doctor           # check prerequisites
-jht team status      # confirm it's running
+jht setup          # starts the container, installs the provider CLI, logs in, starts the team
+jht doctor         # verify configuration and dependencies
+jht team status    # confirm the agents are running
 ```
 
-The wizard handles provider selection + OAuth login + `jht team start` in one go. To switch provider later: `jht providers use claude` (or `codex` / `kimi`) then `jht providers update <id>` to (re)install the CLI.
+Keep the wizard open when it reaches provider login. As instructed on screen,
+open a second terminal and run `jht oauth-login`; complete the provider's
+browser flow, then exit its terminal interface. The wizard detects the saved
+credentials and runs `jht team start`. To switch provider later:
+`jht providers use claude` (or `codex` / `kimi`), followed by
+`jht providers update <id>` to install or update that CLI.
 
 > 📖 Full command list — including the host wrapper (`up`/`down`/`upgrade`/`logs`/`shell`/…) vs the Node CLI split, all subcommands and flags: see [`CLI-REFERENCE.md`](CLI-REFERENCE.md).
 
@@ -109,15 +134,34 @@ You'll end up with two folders:
 | Folder | Purpose | Who touches it |
 |---|---|---|
 | `~/.jht/` | Config, `jobs.db`, agents, credentials, sessions | Agents and CLI only |
-| `~/Documents/Job Hunter Team/` | CVs to analyze, generated output (PDF/MD), attachments | You + the agents |
+| `~/Documents/Job Hunter Team/` | Generated CVs, reviews, attachments and final packets | You + the agents |
 
-> 💡 To skip Docker (expert mode): `curl ... | bash -s -- --no-docker`. You'll need Node 22+, tmux, git, and the provider CLI installed manually.
+> 💡 Expert mode: `bash install.sh --no-docker`. This removes the
+> container boundary and requires Node 22+, tmux, git and the provider CLI on
+> the host. Use it only on a dedicated machine or virtual machine.
+
+---
+
+## 🦞 Path 3 — Let your AI agent do it
+
+If you already use a personal AI assistant (Claude Code, OpenClaw, Codex,
+Cursor), tell it:
+
+> *"Set up Job Hunter Team for me. I have a [Claude Max x20 / Kimi Pro /
+> Codex Pro] subscription. Walk me through what you need."*
+
+The `jht` CLI is designed for this use. Follow
+[`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) for the exact runbook and
+the user-confirmation boundaries.
 
 ---
 
 ## 🛠️ Path 4 — From source (contributors)
 
-For contributors hacking on the repo. See [`.github/CONTRIBUTING.md`](../../.github/CONTRIBUTING.md) for the full PR workflow and conventions.
+For contributors hacking on the repo. Install Docker with Compose, Node 24,
+Python 3.10 or newer and Godot 4.7, then follow
+[`.github/CONTRIBUTING.md`](../../.github/CONTRIBUTING.md) for the full PR
+workflow and conventions.
 
 ```bash
 # 1. Clone
@@ -127,32 +171,43 @@ cd job-hunter-team
 # 2. Spin up the dev container with hot-reload of the local sources
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
-# 3. Or work in host mode if you're iterating on the web UI
+# 3. Configure the dev container
+docker exec -it jht node /app/cli/bin/jht.js setup
+
+# 4. Open the native office (requires Godot 4.7)
+./game/tools/run.sh play
+
+# Or work in host mode if you're iterating on the web UI
 npm --prefix web run dev:host
 ```
 
-> 💡 The two-file pattern (`docker-compose.yml` + `docker-compose.dev.yml`) keeps the production compose image-only (what users get via `install.sh`) while the dev override re-adds `build:` and bind-mounts of `web/`, `agents/`, `shared/`, `.launcher/` for hot-reload. Plain `docker compose up -d` (no `-f` flags) runs the production compose without any local source bindings — useful to verify the GHCR image stands on its own.
+> 💡 The two-file pattern (`docker-compose.yml` + `docker-compose.dev.yml`)
+> keeps the production Compose file image-only (what CLI users get via
+> `install.sh`). The development override rebuilds locally and bind-mounts
+> `agents/`, `shared/` and `.launcher/`; the web app runs separately on the
+> host. Plain `docker compose up -d` uses the published image without source
+> bindings.
 
 For dev tasks specifically:
 
 ```bash
 # Start the team using the local source
-jht team start
+docker exec -it jht node /app/cli/bin/jht.js team start
 
 # Interaction happens in the desktop app (the game). For web-dev only,
 # run the cloud app on the host: cd web && npm run dev:host (:3001)
 
 # Tail logs
-jht container logs -f
+docker logs -f jht
 ```
 
-See [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md) for the full CLI reference.
+See [`CLI-REFERENCE.md`](CLI-REFERENCE.md) for the full CLI reference.
 
 ---
 
-## 🚀 After install — your first run
+## 🚀 First run in the native office
 
-Whichever path you took:
+If you chose the native app:
 
 1. **Open the Godot office.** The office and its agents are immediately
    explorable; setup never traps you in a blocking wizard.
@@ -167,11 +222,17 @@ Whichever path you took:
 4. **Activate the team.** Once runtime, provider and profile are ready, the
    Coordinator starts the agents. Free-text chat then becomes available next
    to the authored replies.
-5. **Review the output.** Applications marked "Ready to submit" land in
-   `~/Documents/Job Hunter Team/applications/`. You decide what to send.
+5. **Review the output.** CVs marked "Ready to submit" land in
+   `~/Documents/Job Hunter Team/cv/`; reviews, attachments and final packets
+   use sibling folders. You decide what to send.
 
 See the detailed [first-run contract](../../game/docs/FIRST-RUN.md) and the
 [native VPS setup guide](VPS-SETUP-WIZARD.md).
+
+If you chose the CLI, `jht setup` is the first-run flow: it selects the
+provider, installs its official CLI, waits for subscription login, and starts
+the team. Run `jht doctor` before considering setup complete. The cloud account,
+Telegram and VPS paths are optional and documented separately.
 
 ---
 
@@ -246,10 +307,10 @@ Full CLI reference: [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md).
 ## 🆘 Help & troubleshooting
 
 - **Setup not finishing?** Run `jht doctor` — it tells you exactly what's missing
-- **Team won't start?** `jht container status` then `jht container logs -f`
+- **Team won't start?** Run `jht status`, then `jht logs -f`
 - **Hitting rate limits?** `jht sentinella status` shows the current usage projection — see [`docs/about/MONITORING.md`](../about/MONITORING.md) for what the numbers mean
-- **Bug or unclear behavior?** Open an issue with the labels suggested in `.github/ISSUE_TEMPLATE/bug_report.md`
-- **Want to be a beta tester?** See [`docs/guides/BETA.md`](BETA.md)
+- **Found a bug or confusing step?** See [`BETA.md`](BETA.md) for testing and
+  feedback channels.
 
 ---
 
@@ -260,7 +321,7 @@ Full CLI reference: [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md).
 - 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick
 - 🦞 [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive JHT
 - 🎯 [`docs/about/VISION.md`](../about/VISION.md) — design philosophy, anti-goals, the Mentor
-- 🧪 [`docs/guides/BETA.md`](BETA.md) — join the beta program
+- 🧪 [`docs/guides/BETA.md`](BETA.md) — testing, feedback and case-study evidence
 - 📊 [`docs/about/MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel test data
 - 🗺️ [`docs/about/ROADMAP.md`](../about/ROADMAP.md) — what's coming next
 - 🛠️ [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md) — full CLI reference
