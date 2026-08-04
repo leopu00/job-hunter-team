@@ -34,7 +34,7 @@ HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
 # wrapper non puo' fidarsi di un checkout Git (la distribuzione utente e'
 # image-only), quindi la fonte e' la stessa raw release dell'installer. Chi
 # prova una release di branch puo' fissarla esplicitamente con JHT_RAW_BASE.
-RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/${JHT_BRANCH:-master}}"
+RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/${JHT_BRANCH:-production}}"
 WRAPPER_PATH="${JHT_WRAPPER_PATH:-$0}"
 
 # Carica la host env (scritta da host-setup.sh: JHT_HOST_TYPE=vps|local).
@@ -90,7 +90,7 @@ require_compose_file() {
   if [ ! -f "$COMPOSE_FILE" ]; then
     err "compose file non trovato: $COMPOSE_FILE"
     info "Esegui di nuovo install.sh oppure scarica manualmente:"
-    info "  mkdir -p $RUNTIME_DIR && curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/master/docker-compose.yml -o $COMPOSE_FILE"
+    info "  mkdir -p $RUNTIME_DIR && curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/production/docker-compose.yml -o $COMPOSE_FILE"
     exit 1
   fi
 }
@@ -476,7 +476,7 @@ handle_runtime_upgrade() {
   # Il compose nuovo e' la fonte di verita': non assumere che l'immagine
   # resti per sempre latest o che un override JHT_IMAGE punti allo stesso ref.
   candidate_ref="$(upgrade_compose "$candidate_compose" config --images 2>/dev/null | head -n 1)"
-  candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}}" --format '{{.Id}}' 2>/dev/null || true)"
+  candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-ghcr.io/leopu00/jht:0.3.4}}" --format '{{.Id}}' 2>/dev/null || true)"
   candidate_image="${candidate_image:-sconosciuta}"
   upgrade_write_journal pulled "$old_image" "$was_running" || {
     upgrade_result false false pull "$old_version" "$old_image" "$old_version" "$old_image" false "Impossibile aggiornare il journal" false

@@ -214,7 +214,7 @@ export default function DemoPage() {
 
 function TerminalMockup() {
   const lines = [
-    { c: 'var(--color-dim)', t: '> Open job-hunter-team-0.1.0-mac.dmg' },
+    { c: 'var(--color-dim)', t: '> Open job-hunter-team-0.3.4-mac.dmg' },
     { c: 'var(--color-dim)', t: '> Drag JHT Desktop to Applications' },
     { c: 'var(--color-dim)', t: '> Launch JHT Desktop' },
     { c: 'var(--color-green)', t: '[ok] Bundled web payload verified' },

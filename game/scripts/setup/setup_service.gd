@@ -50,7 +50,7 @@ const AUTH_PATHS := {
 
 ## Immagine di runtime. Il compose usa la stessa variabile: chi vuole provare
 ## un tag diverso esporta JHT_IMAGE e l'app resta coerente con il container.
-const DEFAULT_RUNTIME_IMAGE := "ghcr.io/leopu00/jht:latest"
+const DEFAULT_RUNTIME_IMAGE := "ghcr.io/leopu00/jht:0.3.4"
 
 var status := {
 	"docker_available": false, "docker_running": false,

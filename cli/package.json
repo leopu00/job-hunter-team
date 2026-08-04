@@ -1,6 +1,6 @@
 {
   "name": "jht-cli",
-  "version": "0.2.1",
+  "version": "0.3.4",
   "private": true,
   "type": "module",
   "bin": {
