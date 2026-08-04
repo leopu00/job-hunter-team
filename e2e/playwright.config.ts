@@ -34,6 +34,7 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const STORAGE_STATE = process.env.E2E_STORAGE_STATE || "auth-state.json";
 const storagePath = path.resolve(__dirname, STORAGE_STATE);
 const hasSession = fs.existsSync(storagePath);
+const isPublicCi = process.env.CI === "true";
 
 if (hasSession) {
   console.log(
@@ -67,9 +68,12 @@ export default defineConfig({
     browserName: "chromium",
     headless: true,
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    // Trace, video e report di rete possono serializzare header e storage
+    // state. In CI il repository è pubblico: teniamo soltanto screenshot di
+    // UI sintetica; localmente restano disponibili gli artefatti diagnostici.
+    video: isPublicCi ? "off" : "retain-on-failure",
     // PRIVACY: non salvare screenshot automatici con dati personali
-    trace: "on-first-retry",
+    trace: isPublicCi ? "off" : "on-first-retry",
     ...(hasSession ? { storageState: storagePath } : {}),
   },
   projects: [

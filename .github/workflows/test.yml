@@ -241,20 +241,74 @@ jobs:
           node <<'NODE'
           const { readFileSync } = require("node:fs");
           const state = JSON.parse(readFileSync("auth-state.json", "utf8"));
-          for (const cookie of state.cookies ?? []) {
-            if (cookie.value) console.log(`::add-mask::${cookie.value}`);
-            if (!cookie.value?.startsWith("base64-")) continue;
+
+          const masks = new Set();
+          const addMask = (value) => {
+            if (typeof value === "string" && value.length >= 8 && !value.includes("\n")) {
+              masks.add(value);
+              // Playwright può includere lo stesso valore in URL/query string.
+              // GitHub maschera per corrispondenza testuale: registriamo quindi
+              // anche le due rappresentazioni percent-encoded più comuni.
+              masks.add(encodeURI(value));
+              masks.add(encodeURIComponent(value));
+            }
+          };
+          const addSensitiveLeaves = (value) => {
+            if (typeof value === "string") {
+              addMask(value);
+            } else if (Array.isArray(value)) {
+              value.forEach(addSensitiveLeaves);
+            } else if (value && typeof value === "object") {
+              Object.values(value).forEach(addSensitiveLeaves);
+            }
+          };
+          const decodeSession = (encoded) => {
+            if (!encoded.startsWith("base64-")) return;
             try {
               const session = JSON.parse(
-                Buffer.from(cookie.value.slice("base64-".length), "base64").toString("utf8"),
+                Buffer.from(encoded.slice("base64-".length), "base64url").toString("utf8"),
               );
-              for (const key of ["access_token", "refresh_token"]) {
-                if (session[key]) console.log(`::add-mask::${session[key]}`);
-              }
+              addMask(JSON.stringify(session));
+              addSensitiveLeaves(session);
             } catch {
-              // Il cookie completo è già mascherato; un formato futuro non
-              // deve trasformare il masking difensivo in un nuovo gate rosso.
+              // I singoli chunk sono già mascherati. La ricostruzione sotto
+              // copre il formato Supabase corrente; un formato futuro non
+              // deve trasformare il masking difensivo in un gate rosso.
             }
+          };
+
+          addMask(process.env.E2E_EMAIL);
+          addMask(process.env.E2E_PASSWORD);
+
+          const cookieGroups = new Map();
+          for (const cookie of state.cookies ?? []) {
+            addMask(cookie.value);
+            const baseName = cookie.name.replace(/\.\d+$/, "");
+            const key = `${cookie.domain}\0${baseName}`;
+            const group = cookieGroups.get(key) ?? [];
+            group.push(cookie);
+            cookieGroups.set(key, group);
+          }
+          for (const group of cookieGroups.values()) {
+            group.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+            const encoded = group.map((cookie) => cookie.value).join("");
+            addMask(encoded);
+            decodeSession(encoded);
+          }
+
+          for (const origin of state.origins ?? []) {
+            for (const item of origin.localStorage ?? []) {
+              addMask(item.value);
+              try {
+                addSensitiveLeaves(JSON.parse(item.value));
+              } catch {
+                // Il valore completo è già nella mask.
+              }
+            }
+          }
+
+          for (const value of masks) {
+            console.log(`::add-mask::${value}`);
           }
           NODE
 
@@ -277,10 +331,12 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
-          path: |
-            e2e/reports/
-            e2e/test-results/
+          # Report HTML, trace e video possono incorporare header/cookie e non
+          # sono sanificabili con ::add-mask::. Sul repo pubblico conserviamo
+          # soltanto screenshot di UI sintetica, mai gli archivi di rete.
+          name: playwright-failure-screenshots
+          path: e2e/test-results/**/*.png
+          if-no-files-found: ignore
           retention-days: 7
 
   # Smoke post-deploy: i 38 test `@pytest.mark.production` che il job `pytest`
