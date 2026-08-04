@@ -164,6 +164,87 @@ def verify_assets(
     return release_provenance
 
 
+def audit_published_release(
+    *, directory: Path, tag: str, commit: str, repository: str
+) -> dict[str, object]:
+    """Re-verify assets downloaded from the GitHub Release draft."""
+    _validate_identity(tag, commit, repository)
+    directory = directory.resolve()
+    checksums_path = directory / "SHA256SUMS"
+    provenance_path = directory / "RELEASE-PROVENANCE.json"
+    try:
+        release_provenance = json.loads(provenance_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ReleaseArtifactError(
+            f"invalid public release provenance: {provenance_path}"
+        ) from exc
+
+    assets = release_provenance.get("assets")
+    if not isinstance(assets, list) or not assets:
+        raise ReleaseArtifactError("public release provenance has no assets")
+    expected_header = {
+        "schema_version": SCHEMA_VERSION,
+        "repository": repository,
+        "tag": tag,
+        "commit": commit,
+    }
+    if {key: release_provenance.get(key) for key in expected_header} != expected_header:
+        raise ReleaseArtifactError("public release provenance identity mismatch")
+
+    expected_names: list[str] = []
+    provenance_by_name: dict[str, dict[str, object]] = {}
+    for entry in assets:
+        if not isinstance(entry, dict):
+            raise ReleaseArtifactError("public release provenance asset is not an object")
+        name = entry.get("asset")
+        if not isinstance(name, str) or Path(name).name != name:
+            raise ReleaseArtifactError(f"invalid public release asset name: {name!r}")
+        if name in provenance_by_name:
+            raise ReleaseArtifactError(f"duplicate public release asset: {name}")
+        expected_names.append(name)
+        provenance_by_name[name] = entry
+    if expected_names != sorted(expected_names):
+        raise ReleaseArtifactError("public release assets are not deterministically sorted")
+
+    try:
+        checksum_lines = checksums_path.read_text().splitlines()
+    except OSError as exc:
+        raise ReleaseArtifactError(f"missing public checksums: {checksums_path}") from exc
+    checksum_by_name: dict[str, str] = {}
+    for line in checksum_lines:
+        match = re.fullmatch(r"([0-9a-f]{64})  ([^/\\]+)", line)
+        if not match or match.group(2) in checksum_by_name:
+            raise ReleaseArtifactError(f"invalid SHA256SUMS line: {line!r}")
+        checksum_by_name[match.group(2)] = match.group(1)
+    if sorted(checksum_by_name) != expected_names:
+        raise ReleaseArtifactError("SHA256SUMS asset set does not match provenance")
+
+    actual_files = {
+        path.name
+        for path in directory.iterdir()
+        if path.is_file()
+        and path.name not in {"SHA256SUMS", "RELEASE-PROVENANCE.json"}
+    }
+    if actual_files != set(expected_names):
+        raise ReleaseArtifactError(
+            "downloaded release asset set differs from provenance: "
+            f"expected={expected_names} actual={sorted(actual_files)}"
+        )
+
+    for name in expected_names:
+        asset = directory / name
+        actual = {
+            "asset": name,
+            "size": asset.stat().st_size,
+            "sha256": _sha256(asset),
+        }
+        if provenance_by_name[name] != actual:
+            raise ReleaseArtifactError(f"downloaded asset differs from provenance: {name}")
+        if checksum_by_name[name] != actual["sha256"]:
+            raise ReleaseArtifactError(f"downloaded asset differs from SHA256SUMS: {name}")
+    return release_provenance
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -184,6 +265,12 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--repository", required=True)
     verify.add_argument("--checksums", type=Path, required=True)
     verify.add_argument("--provenance", type=Path, required=True)
+
+    audit = subparsers.add_parser("audit", help="audit downloaded draft assets")
+    audit.add_argument("--directory", type=Path, required=True)
+    audit.add_argument("--tag", required=True)
+    audit.add_argument("--commit", required=True)
+    audit.add_argument("--repository", required=True)
     return parser
 
 
@@ -199,7 +286,7 @@ def main() -> int:
                 repository=args.repository,
                 source_root=args.source_root,
             )
-        else:
+        elif args.command == "verify":
             result = verify_assets(
                 directory=args.directory,
                 expected_assets=args.expected_asset,
@@ -208,6 +295,13 @@ def main() -> int:
                 repository=args.repository,
                 checksums=args.checksums,
                 provenance=args.provenance,
+            )
+        else:
+            result = audit_published_release(
+                directory=args.directory,
+                tag=args.tag,
+                commit=args.commit,
+                repository=args.repository,
             )
     except ReleaseArtifactError as exc:
         print(f"release-artifacts: ERROR: {exc}")

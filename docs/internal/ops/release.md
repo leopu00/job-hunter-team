@@ -1,6 +1,6 @@
 # 🚢 Release
 
-Cutting a release means pushing a `vX.Y.Z` tag that points at the **`production` HEAD**. CI then runs [`.github/workflows/release.yml`](../../../.github/workflows/release.yml): it verifies the tag against every version field, builds the **native Godot desktop application** on three runners, signs and notarizes the macOS build, builds the web app as a regression gate, and publishes a GitHub Release with the three artifacts attached.
+Cutting a release means pushing a `vX.Y.Z` tag that points at the **`production` HEAD**. CI then runs [`.github/workflows/release.yml`](../../../.github/workflows/release.yml): it verifies the tag against every version field, builds the **native Godot desktop application** on three runners, signs and notarizes the macOS build, builds the web app as a regression gate, and creates a **draft** GitHub Release with the three artifacts attached. The release becomes public only after the downloaded draft passes the independent audit below.
 
 Every platform runner also records the exact tag commit, byte size and SHA-256
 of its final asset **after** signing and packaging. The release job recomputes
@@ -96,7 +96,26 @@ git push origin v0.2.1
   commit and its SHA-256;
 - uploads the artifact.
 
-**3 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the three artifacts, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and only then publishes the GitHub Release. A tag containing `-` (e.g. `v0.3.0-rc1`) is published as a **prerelease**.
+**3 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the three artifacts, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and then creates the GitHub Release as a **draft**. A tag containing `-` (e.g. `v0.3.0-rc1`) is marked as a **prerelease** when published.
+
+**4 · independent draft audit and publication** — download the assets back from
+GitHub, verify the exact public bytes and only then publish:
+
+```bash
+TAG=vX.Y.Z
+AUDIT_DIR="$(mktemp -d)"
+gh release download "$TAG" --dir "$AUDIT_DIR"
+python scripts/release_artifacts.py audit \
+  --directory "$AUDIT_DIR" \
+  --tag "$TAG" \
+  --commit "$(git rev-list -n 1 "$TAG")" \
+  --repository leopu00/job-hunter-team
+gh release edit "$TAG" --draft=false --latest
+```
+
+The audit requires the downloaded asset set to match provenance exactly and
+recomputes every size and SHA-256. If it fails, leave the release in draft and
+fix forward; never publish or replace one file by hand.
 
 ### Artifacts
 

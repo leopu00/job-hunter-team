@@ -10,6 +10,7 @@ import pytest
 
 from scripts.release_artifacts import (
     ReleaseArtifactError,
+    audit_published_release,
     record_asset,
     verify_assets,
 )
@@ -111,6 +112,18 @@ def test_verifies_tag_identity_and_writes_public_checksums(tmp_path: Path) -> No
     assert checksums.read_text().splitlines() == expected_lines
     assert f'"commit": "{commit}"' in provenance.read_text()
 
+    for sidecar in assets.glob("*.provenance.json"):
+        sidecar.unlink()
+    audited = audit_published_release(
+        directory=assets, tag=TAG, commit=commit, repository=REPOSITORY
+    )
+    assert audited == result
+    (assets / names[0]).write_bytes(b"changed after draft upload")
+    with pytest.raises(ReleaseArtifactError, match="differs from provenance"):
+        audit_published_release(
+            directory=assets, tag=TAG, commit=commit, repository=REPOSITORY
+        )
+
 
 def test_rejects_asset_changed_after_runner_recorded_it(tmp_path: Path) -> None:
     repo, commit = _tagged_repo(tmp_path)
@@ -157,6 +170,7 @@ def test_release_workflow_verifies_and_publishes_integrity_files() -> None:
     assert "${{ matrix.artifact_path }}.provenance.json" in workflow
     assert "release-assets/SHA256SUMS" in workflow
     assert "release-assets/RELEASE-PROVENANCE.json" in workflow
+    assert "draft: true" in workflow
     assert workflow.index("release_artifacts.py verify") < workflow.index(
         "softprops/action-gh-release"
     )
