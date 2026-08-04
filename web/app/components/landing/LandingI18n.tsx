@@ -329,9 +329,9 @@ const translations = {
 } as const;
 
 type StringKeys = {
-  [
-    K in keyof typeof translations
-  ]: (typeof translations)[K]["it"] extends string ? K : never;
+  [K in keyof typeof translations]: (typeof translations)[K]["it"] extends string
+    ? K
+    : never;
 }[keyof typeof translations];
 interface I18nCtx {
   lang: Lang;
