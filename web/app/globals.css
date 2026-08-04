@@ -66,8 +66,13 @@ html[data-theme="light"] {
      teniamo LA STESSA tinta verde-foglia a piena saturazione, solo abbassata
      di luminosità quel tanto che basta a leggerla (NON desaturata/spenta).
      Vale per link/titoli, score alti, voto critico PASS, 'ready'/'applied'. */
-  --color-green: #0ec85c;
-  --color-ready: #22d36a;
+  --color-green: #08713a;
+  --color-ready: #08713a;
+  --color-yellow: #795000;
+  --color-blue: #1d5fa7;
+  --color-red: #b6203a;
+  --color-orange: #9a4100;
+  --color-purple: #7330a6;
 }
 
 /* ── Base ────────────────────────────────────────────────────────── */
