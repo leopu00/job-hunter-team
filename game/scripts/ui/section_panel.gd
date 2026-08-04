@@ -1027,7 +1027,7 @@ var _action_note_color: Color = Palette.DIM
 ## altrove spegne anche i pulsanti di qui, e al suo termine devono riaccendersi
 ## subito, non al prossimo probe.
 const SETUP_ACTIONS := ["container", "team", "provider", "plan", "install",
-		"email", "telegram", "agent", "upgrade",
+		"email", "telegram", "agent", "upgrade", "upgrade-check",
 		"vps-key", "vps-test", "vps-provision", "vps-migrate"]
 ## Le sezioni che si ricostruiscono all'avvio/fine di un'azione. Il pannello
 ## VPS NON c'è di proposito: ha campi di testo (IP, chiave, utente) e una
@@ -1212,6 +1212,7 @@ func _build_container_setup() -> void:
 	# gira" (feedback 30/07).
 	var busy := SetupService.busy() and SetupService.current_action == "container"
 	var upgrading := SetupService.busy() and SetupService.current_action == "upgrade"
+	var checking_update := SetupService.busy() and SetupService.current_action == "upgrade-check"
 	var phase: String = SetupService.action_phase if busy else ""
 	_content.add_child(TerminalTheme.label(UIStrings.t("setup.container_lead"),
 			15, Palette.BASE))
@@ -1296,6 +1297,19 @@ func _build_container_setup() -> void:
 		install.add_theme_color_override("font_color", Palette.YELLOW)
 		install.pressed.connect(SetupService.open_runtime_install)
 		actions.add_child(install)
+	# Il controllo disponibilita' e' separato dall'apply: e' una sola azione
+	# dichiarata, richiesta dal pulsante, mai un timer al refresh della UI.
+	var can_check_update := bool(s.get("remote", false)) or bool(s.get("docker_available", false))
+	if can_check_update:
+		var check_update := Button.new()
+		check_update.text = UIStrings.t("setup.runtime_check_busy") if checking_update \
+				else UIStrings.t("setup.runtime_check")
+		check_update.disabled = SetupService.busy()
+		check_update.add_theme_color_override("font_color", Palette.BLUE)
+		check_update.add_theme_color_override("font_disabled_color",
+				Palette.YELLOW if checking_update else Palette.MUTED)
+		check_update.pressed.connect(SetupService.check_runtime_update)
+		actions.add_child(check_update)
 	# L'upgrade e' un solo comando host-side: locale chiama il wrapper sul
 	# computer, VPS usa lo stesso canale SSH del setup. Non fare docker exec
 	# qui: journal, rollback e restart appartengono al wrapper.

@@ -17,6 +17,11 @@ var _open := false
 var _setup_cta: Button
 var _setup_cta_icon: SidebarIcon
 var _tab: Button
+## Controllo Docker compatto nell'header: mantiene la sidebar a quattordici
+## righe anche a 1280×720, ma porta lo stato runtime nel primo punto visibile.
+var _docker_button: Button
+var _docker_icon: SidebarIcon
+var _docker_badge: Label
 
 func _init() -> void:
 	layer = 20
@@ -64,6 +69,7 @@ func _ready() -> void:
 	_setup_cta.add_child(_setup_cta_icon)
 	root.add_child(_setup_cta)
 	SetupService.status_changed.connect(_on_setup_status)
+	SetupService.action_changed.connect(_on_setup_action)
 	ScriptedOnboarding.action_requested.connect(_on_guided_action)
 	_on_setup_status(SetupService.status)
 
@@ -120,6 +126,36 @@ func _ready() -> void:
 	brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var brand_row := HBoxContainer.new()
 	brand_row.add_child(brand)
+	# Docker e' una destinazione diretta, non una quindicesima riga da far
+	# finire sotto lo scroll su schermi bassi. Il check resta invece un pulsante
+	# esplicito del pannello Docker: questo click naviga e non avvia rete.
+	_docker_button = Button.new()
+	_docker_button.flat = true
+	_docker_button.tooltip_text = UIStrings.t("side.docker")
+	_docker_button.custom_minimum_size = Vector2(26, 26)
+	_docker_button.pressed.connect(func() -> void: _select("docker"))
+	_docker_icon = SidebarIcon.new("container", Palette.DIM)
+	_docker_icon.set_anchors_preset(Control.PRESET_CENTER)
+	_docker_icon.offset_left = -9
+	_docker_icon.offset_right = 9
+	_docker_icon.offset_top = -9
+	_docker_icon.offset_bottom = 9
+	_docker_button.add_child(_docker_icon)
+	_docker_badge = Label.new()
+	_docker_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_docker_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_docker_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_docker_badge.add_theme_font_size_override("font_size", 11)
+	_docker_badge.anchor_left = 1.0
+	_docker_badge.anchor_top = 0.0
+	_docker_badge.anchor_right = 1.0
+	_docker_badge.anchor_bottom = 0.0
+	_docker_badge.offset_left = -8
+	_docker_badge.offset_top = -4
+	_docker_badge.offset_right = 4
+	_docker_badge.offset_bottom = 8
+	_docker_button.add_child(_docker_badge)
+	brand_row.add_child(_docker_button)
 	# Uscita a portata di mouse SEMPRE: la voce in fondo a Impostazioni finisce
 	# sotto lo scroll su schermi bassi, e in fullscreen su Wayland non esiste
 	# nemmeno la X della finestra.
@@ -153,6 +189,7 @@ func _ready() -> void:
 	brand_pad.add_theme_constant_override("margin_right", 10)
 	brand_pad.add_child(brand_row)
 	box.add_child(brand_pad)
+	_refresh_docker_button(SetupService.status)
 
 	# TEST-AUTO: JHT_SIDEBAR=1 apre il cassetto al boot (per gli screenshot);
 	# JHT_SECTION=<id> apre anche il pannello di quella sezione. Un solo
@@ -323,17 +360,72 @@ func _open_activation() -> void:
 
 
 func _on_setup_status(status: Dictionary) -> void:
-	if not is_instance_valid(_setup_cta):
-		return
 	var ready := bool(status.get("ready", false))
 	var running := bool(status.get("team_running", false))
-	_setup_cta.visible = not (ready and running)
-	_setup_cta.text = UIStrings.t("setup.ready_to_start") if ready \
-			else UIStrings.t("setup.cta") % int(status.get("completed", 0))
-	_setup_cta.add_theme_color_override("font_color",
-			Palette.GREEN if ready else Palette.YELLOW)
+	if is_instance_valid(_setup_cta):
+		_setup_cta.visible = not (ready and running)
+		_setup_cta.text = UIStrings.t("setup.ready_to_start") if ready \
+				else UIStrings.t("setup.cta") % int(status.get("completed", 0))
+		_setup_cta.add_theme_color_override("font_color",
+				Palette.GREEN if ready else Palette.YELLOW)
 	if is_instance_valid(_setup_cta_icon):
 		_setup_cta_icon.color = Palette.GREEN if ready else Palette.YELLOW
+	_refresh_docker_button(status)
+
+
+func _on_setup_action(action: String, _running: bool, _message: String, _ok: bool) -> void:
+	if action == "upgrade-check":
+		_refresh_docker_button(SetupService.status)
+
+
+## La salute runtime e la disponibilita' update sono due assi diversi: il
+## badge e' giallo soltanto dopo un check esplicito con changed=true. Un check
+## fallito non si trasforma mai in una falsa segnalazione di aggiornamento.
+static func docker_sidebar_state(status: Dictionary, check_state: String) -> Dictionary:
+	var runtime := "active"
+	if not bool(status.get("docker_available", false)) and not bool(status.get("remote", false)):
+		runtime = "unreachable"
+	elif not bool(status.get("docker_running", false)) and not bool(status.get("remote", false)):
+		runtime = "unreachable"
+	elif not bool(status.get("container_running", false)):
+		runtime = "stopped"
+	var badge := check_state if check_state in ["checking", "available", "error"] else ""
+	return {"runtime": runtime, "badge": badge}
+
+
+func _refresh_docker_button(status: Dictionary) -> void:
+	if not is_instance_valid(_docker_button) or not is_instance_valid(_docker_icon):
+		return
+	var check_state := SetupService.runtime_update_check_state()
+	var view := docker_sidebar_state(status, check_state)
+	var runtime := str(view["runtime"])
+	var status_key := "setup.docker_ready"
+	var tint := Palette.GREEN
+	if runtime == "unreachable":
+		status_key = "setup.docker_missing"
+		tint = Palette.RED
+	elif runtime == "stopped":
+		status_key = "setup.runtime_check_unknown"
+		tint = Palette.YELLOW
+	_docker_icon.color = tint
+	var check_key := ""
+	if check_state == "checking":
+		check_key = "setup.runtime_check_busy"
+	elif check_state == "available":
+		check_key = "setup.runtime_check_available"
+	elif check_state == "error":
+		check_key = "setup.runtime_check_error"
+	elif check_state == "unknown":
+		check_key = "setup.runtime_check_unknown"
+	_docker_button.tooltip_text = UIStrings.t("side.docker") + " · " \
+			+ UIStrings.t(check_key if check_key != "" else status_key)
+	if not is_instance_valid(_docker_badge):
+		return
+	var badge := str(view["badge"])
+	_docker_badge.visible = badge != ""
+	_docker_badge.text = "◌" if badge == "checking" else ("!" if badge == "error" else "●")
+	_docker_badge.add_theme_color_override("font_color",
+			Palette.YELLOW if badge in ["checking", "available"] else Palette.RED)
 
 
 func _on_guided_action(action: String, payload: Dictionary) -> void:

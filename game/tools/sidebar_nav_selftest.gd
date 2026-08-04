@@ -76,6 +76,14 @@ func _init() -> void:
 			not 'add_theme_stylebox_override("focus", StyleBoxEmpty.new())' \
 					in sidebar_source,
 			"la sidebar contiene di nuovo un controllo con focus invisibile")
+	# Docker e' un controllo diretto nell'header, non una quindicesima riga:
+	# deve aprire la sua sezione senza avviare di nascosto il check host-side.
+	_check("Docker diretto nell'header",
+			'_docker_button.pressed.connect(func() -> void: _select("docker"))' \
+					in sidebar_source,
+			"l'icona Docker non porta piu' alle impostazioni container")
+	_check("Docker senza polling implicito", "check_runtime_update" not in sidebar_source,
+			"la sidebar avvia il check invece di lasciarlo al click esplicito nel pannello")
 
 	if _failures.is_empty():
 		print("SIDEBAR-NAV-TEST PASS (%d righe, %d sezioni ospitate)"
