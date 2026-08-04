@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  ALLOWED_RECORDING_ROUTES,
+  createGetOnlyRequestPolicy,
+  recordingTarget,
+} from "../../../e2e/scripts/recording-browser-policy.mjs";
 
 const repo = path.resolve(__dirname, "../../..");
 const launcher = fs.readFileSync(
@@ -36,14 +41,68 @@ describe("launcher Playwright per riprese web", () => {
     expect(setup).toContain('name: "jht_demo_persona"');
     expect(setup).toContain('localStorage.setItem("jht-theme", "light")');
     expect(setup).toContain('localStorage.setItem("jht-tour-done", "1")');
-    expect(setup).toContain("nextjs-portal");
-    expect(setup).toContain("data-nextjs-dev-tools-button");
-    expect(setup).toContain("data-next-badge-root");
-    expect(setup).toContain("display:none!important");
-    expect(launcher).toContain('new URL("/dashboard", url)');
-    expect(launcher).toContain("url.origin !== LOCAL_RECORDING_ORIGIN");
+    expect(setup).not.toMatch(/(?:createElement\("style"|querySelector|locator)/);
+    expect(launcher).toContain('await context.route("**/*", getOnly.handle)');
+    expect(launcher.match(/page\.goto\(/g)).toHaveLength(1);
     expect(launcher).not.toMatch(
       /\b(?:fetch|request\.(?:post|put|patch|delete))\b/,
     );
+  });
+
+  it("accetta solo le due route recording esatte sull'origin fisso", () => {
+    expect([...ALLOWED_RECORDING_ROUTES]).toEqual(["/dashboard", "/messages"]);
+    expect(recordingTarget("/dashboard")).toBe(
+      "http://localhost:3008/dashboard",
+    );
+    expect(recordingTarget("/messages")).toBe(
+      "http://localhost:3008/messages",
+    );
+  });
+
+  it("rifiuta route non canoniche prima di avviare Chromium", () => {
+    for (const route of [
+      "https://localhost:3008/dashboard",
+      "http://example.test/messages",
+      "//localhost:3008/dashboard",
+      "/dashboard?take=1",
+      "/messages#thread",
+      "/dashboard/",
+      "/messages/../dashboard",
+      "/positions",
+    ]) {
+      expect(() => recordingTarget(route)).toThrow(
+        "JHT_RECORDING_ROUTE deve essere esattamente",
+      );
+    }
+  });
+
+  it("lascia passare GET e blocca una POST facendo fallire il take", async () => {
+    const logs: string[] = [];
+    const policy = createGetOnlyRequestPolicy((message) => logs.push(message));
+    const get = {
+      request: () => ({ method: () => "GET" }),
+      continue: async () => undefined,
+      abort: async () => undefined,
+    };
+    await policy.handle(get);
+
+    let aborted = false;
+    const post = {
+      request: () => ({ method: () => "POST" }),
+      continue: async () => undefined,
+      abort: async () => {
+        aborted = true;
+      },
+    };
+    const failedTake = expect(policy.violation).rejects.toThrow(
+      "policy GET-only violata: richiesta POST bloccata",
+    );
+    await policy.handle(post);
+    await failedTake;
+
+    expect(aborted).toBe(true);
+    expect(logs).toEqual([
+      "✗ policy GET-only violata: richiesta POST bloccata; take fallito.",
+    ]);
   });
 });
