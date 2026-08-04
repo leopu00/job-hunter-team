@@ -194,4 +194,58 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(sb.compose()).toContain("example/old");
     expect(sb.journal()).toBe(false);
   });
+
+  it("rifiuta fail-closed un journal con rollback path traversal senza toccare il runtime", () => {
+    const sb = makeSandbox();
+    const escaped = path.join(sb.root, "escaped");
+    mkdirSync(escaped);
+    mkdirSync(path.join(sb.runtime, ".upgrade-rollback-traverse"));
+    copyFileSync(path.join(sb.runtime, "docker-compose.yml"), path.join(escaped, "docker-compose.yml"));
+    copyFileSync(sb.wrapper, path.join(escaped, "jht-wrapper.sh"));
+    writeFileSync(path.join(sb.runtime, "docker-compose.yml"), "services:\n  jht:\n    image: example/candidate\n", "utf8");
+    writeFileSync(path.join(sb.root, "container-image"), "sha256:new", "utf8");
+    const escapedThroughPrefix = path.join(sb.runtime, ".upgrade-rollback-traverse", "..", "..", "escaped");
+    writeFileSync(path.join(sb.runtime, ".upgrade-journal"), [
+      "version=1",
+      "phase=candidate_started",
+      `rollback_dir=${escapedThroughPrefix}`,
+      "old_image=sha256:old",
+      "was_running=1",
+      "",
+    ].join("\n"), "utf8");
+
+    const result = run(sb, {}, ["upgrade", "--json", "--check"]);
+
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: false, phase: "recovery" });
+    expect(sb.state()).toBe("sha256:new");
+    expect(sb.compose()).toContain("example/candidate");
+    expect(sb.journal()).toBe(true);
+  });
+
+  it("rifiuta un journal malformato prima di sostituire metadata o container", () => {
+    const sb = makeSandbox();
+    const rollback = path.join(sb.runtime, ".upgrade-rollback-malformed");
+    mkdirSync(rollback);
+    copyFileSync(path.join(sb.runtime, "docker-compose.yml"), path.join(rollback, "docker-compose.yml"));
+    copyFileSync(sb.wrapper, path.join(rollback, "jht-wrapper.sh"));
+    writeFileSync(path.join(sb.runtime, "docker-compose.yml"), "services:\n  jht:\n    image: example/candidate\n", "utf8");
+    writeFileSync(path.join(sb.root, "container-image"), "sha256:new", "utf8");
+    writeFileSync(path.join(sb.runtime, ".upgrade-journal"), [
+      "version=1",
+      "phase=candidate_started",
+      `rollback_dir=${rollback}`,
+      "old_image=not-an-image",
+      "was_running=false",
+      "",
+    ].join("\n"), "utf8");
+
+    const result = run(sb, {}, ["upgrade", "--json", "--check"]);
+
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: false, phase: "recovery" });
+    expect(sb.state()).toBe("sha256:new");
+    expect(sb.compose()).toContain("example/candidate");
+    expect(sb.journal()).toBe(true);
+  });
 });

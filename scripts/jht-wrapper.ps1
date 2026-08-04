@@ -230,6 +230,9 @@ function Remove-UpgradeTransaction {
 function Restore-UpgradePrevious {
   if (-not (Test-Path $script:UpgradeJournal)) { return $false }
   try { $journal = Get-Content -LiteralPath $script:UpgradeJournal -Raw | ConvertFrom-Json } catch { return $false }
+  if ([string]$journal.version -ne '1') { return $false }
+  if ([string]$journal.phase -notin @('prepared', 'pulled', 'candidate_started', 'metadata_committed')) { return $false }
+  if ($journal.was_running -isnot [bool]) { return $false }
   $rollback = [string]$journal.rollback_dir
   $prefix = ([IO.Path]::GetFullPath($RuntimeDir)).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar + '.upgrade-rollback-'
   $fullRollback = if ($rollback) { [IO.Path]::GetFullPath($rollback) } else { '' }
@@ -238,13 +241,14 @@ function Restore-UpgradePrevious {
   if (-not (Replace-UpgradeFile (Join-Path $fullRollback 'docker-compose.yml') $ComposeFile)) { return $false }
   if (-not (Replace-UpgradeFile (Join-Path $fullRollback 'jht-wrapper.ps1') $WrapperPath)) { return $false }
   if ([bool]$journal.was_running) {
-    if (-not $journal.old_image) { return $false }
+    if ([string]$journal.old_image -notmatch '^sha256:[A-Za-z0-9]+$') { return $false }
     $before = $env:JHT_IMAGE
     $env:JHT_IMAGE = [string]$journal.old_image
     $ok = Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $Container
     $env:JHT_IMAGE = $before
     if (-not $ok -or -not (Test-UpgradeRunning)) { return $false }
   } else {
+    if ([string]$journal.old_image -ne 'none') { return $false }
     if (-not (Invoke-UpgradeCompose $ComposeFile 'rm' '-s' '-f' $Container)) { return $false }
   }
   $script:UpgradeRollbackDir = $fullRollback
