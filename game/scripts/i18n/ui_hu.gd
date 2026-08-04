@@ -466,6 +466,7 @@ const S := {
 	"hours.windows": "ABLAKOK (napok · -tól → -ig)",
 	"hours.add": "+ ABLAK HOZZÁADÁSA",
 	"hours.estimate": "≈ %.0f aktív óra/hét → becslés ~%.1f új pozíció/nap · a keret az aktuális %d%%-ára igazítva",
+	"hours.estimate_first": "≈ %.0f aktív óra/hét · a becslés és a keret az első hét után lesz elérhető",
 	"hours.invalid": "✘ érvénytelen ablak: napok mon…sun, idő HH:MM",
 	"hours.save": "▶ IDŐK MENTÉSE",
 	"hours.saved": "✓ munkaidő elmentve — a pacing a következő ticktől alkalmazkodik",

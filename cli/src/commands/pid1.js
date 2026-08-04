@@ -49,6 +49,35 @@ const THROTTLE_ENGINE_SCRIPT = '/app/shared/skills/throttle_engine.py';
 const AUTO_REPORT_LOOP_SCRIPT = '/app/.launcher/auto-report-loop.sh';
 const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
 
+/**
+ * Serializza gli eventi ravvicinati di fs.watch e ne conserva l'ultimo.
+ * fs.watch può consegnare rename/change insieme; un listener async normale
+ * parte due volte in parallelo e fa superare a entrambe le callback gli
+ * stessi flag `...Started`. Il risultato erano bridge duplicati al primo
+ * salvataggio del provider. Le chiamate durante un giro diventano un solo
+ * giro successivo con gli argomenti più recenti.
+ */
+export function coalesceAsyncCalls(handler) {
+  let running = false;
+  let queued = false;
+  let latestArgs = [];
+  return async (...args) => {
+    latestArgs = args;
+    queued = true;
+    if (running) return;
+    running = true;
+    try {
+      do {
+        queued = false;
+        const callArgs = latestArgs;
+        await handler(...callArgs);
+      } while (queued);
+    } finally {
+      running = false;
+    }
+  };
+}
+
 async function readHostType() {
   const fromEnv = (process.env.JHT_HOST_TYPE || '').trim().toLowerCase();
   if (fromEnv) return fromEnv;
@@ -679,27 +708,32 @@ async function dispatch() {
   // entrambi i bridge sono partiti.
   if (!tgBridgeStarted || !sentinelBridgesStarted) {
     let cfgWatcher = null;
+    const reconcileConfig = coalesceAsyncCalls(async () => {
+      await new Promise((r) => setTimeout(r, 250)); // debounce write atomico (tmp+rename)
+      if (!tgBridgeStarted && (await hasTelegramBotsConfigured())) {
+        pid1Log('jht.config.json aggiornato (bot configurati post-wizard): avvio tg-bridge + welcome');
+        startTgBridge();
+        tgBridgeStarted = true;
+        spawn('/bin/bash', [WELCOME_SEND_SCRIPT], { stdio: 'inherit' })
+          .on('exit', (code) => pid1Log(`welcome-send (post-wizard): exit ${code}`));
+      }
+      if (!sentinelBridgesStarted && (await hasActiveProviderConfigured())) {
+        pid1Log('jht.config.json aggiornato (active_provider post-wizard): avvio sentinel + pacing bridge');
+        startSentinelBridges();
+        sentinelBridgesStarted = true;
+      }
+      if (tgBridgeStarted && sentinelBridgesStarted && cfgWatcher) {
+        pid1Log('config watcher: tg-bridge + sentinel/pacing attivi, chiudo il watcher');
+        cfgWatcher.close();
+        cfgWatcher = null;
+      }
+    });
     try {
-      cfgWatcher = watch(dirname(JHT_CONFIG_PATH), { persistent: true }, async (eventType, filename) => {
+      cfgWatcher = watch(dirname(JHT_CONFIG_PATH), { persistent: true }, (eventType, filename) => {
         if (filename !== 'jht.config.json') return;
-        await new Promise((r) => setTimeout(r, 250)); // debounce write atomico (tmp+rename)
-        if (!tgBridgeStarted && (await hasTelegramBotsConfigured())) {
-          pid1Log('jht.config.json aggiornato (bot configurati post-wizard): avvio tg-bridge + welcome');
-          startTgBridge();
-          tgBridgeStarted = true;
-          spawn('/bin/bash', [WELCOME_SEND_SCRIPT], { stdio: 'inherit' })
-            .on('exit', (code) => pid1Log(`welcome-send (post-wizard): exit ${code}`));
-        }
-        if (!sentinelBridgesStarted && (await hasActiveProviderConfigured())) {
-          pid1Log('jht.config.json aggiornato (active_provider post-wizard): avvio sentinel + pacing bridge');
-          startSentinelBridges();
-          sentinelBridgesStarted = true;
-        }
-        if (tgBridgeStarted && sentinelBridgesStarted && cfgWatcher) {
-          pid1Log('config watcher: tg-bridge + sentinel/pacing attivi, chiudo il watcher');
-          cfgWatcher.close();
-          cfgWatcher = null;
-        }
+        void reconcileConfig().catch((err) =>
+          pid1Log(`config reconcile fallito (${err.message}) — riprovo al prossimo salvataggio`),
+        );
       });
       process.on('exit', () => { if (cfgWatcher) cfgWatcher.close(); });
     } catch (err) {

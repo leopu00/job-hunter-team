@@ -1211,6 +1211,11 @@ func _guided_onboarding_selftest() -> void:
 	await get_tree().process_frame
 	check.call(profile_panel._prof_edits.has("email"), "campo email assente dal profilo nativo")
 	check.call(profile_panel._prof_edits.has("languages"), "campo lingue assente dal profilo nativo")
+	check.call(SectionPanel._profile_field_text("languages", [
+			{"language": "Italiano", "level": "madrelingua"},
+			{"language": "Inglese", "level": "C1"},
+		]) == "Italiano (madrelingua), Inglese (C1)",
+			"le lingue strutturate vengono mostrate come dizionari interni")
 	check.call(profile_panel._prof_edits.has("target_role") \
 			and profile_panel._prof_edits["target_role"].text == "Software Engineering",
 			"bozza scripted non precompila il profilo")
@@ -1263,6 +1268,16 @@ func _guided_onboarding_selftest() -> void:
 			"il pannello Docker non segnala il runtime da aggiornare")
 	check.call(docker_buttons.contains(UIStrings.t("setup.runtime_update")),
 			"il pannello Docker non offre l'aggiornamento del runtime")
+	check.call(SetupService._runtime_pull_can_fallback("sha256:locale"),
+			"un pull offline scarta l'immagine locale già pronta")
+	check.call(not SetupService._runtime_pull_can_fallback(""),
+			"un pull fallito senza immagine locale viene trattato come recuperabile")
+	check.call(SetupService._runtime_update_result_message(
+			"sha256:nuova", "sha256:nuova", "sha256:vecchia").contains("aggiornato"),
+			"la ricreazione di un container stale viene dichiarata già aggiornata")
+	check.call(SetupService._runtime_update_result_message(
+			"sha256:uguale", "sha256:uguale", "sha256:uguale").contains("già"),
+			"un runtime davvero invariato non viene riconosciuto")
 	docker_panel.queue_free()
 
 	# Scelta dell'abbonamento: i tagli devono andare A CAPO. Con cinque in
@@ -1335,6 +1350,24 @@ func _guided_onboarding_selftest() -> void:
 			"il giorno spento non sparisce: " + str(finestra["days"]))
 	check.call(not SectionPanel._hours_has_day(finestra, "mon"),
 			"un giorno spento risulta ancora acceso")
+
+	# Al primo avvio non esiste una baseline corrente: i 45h proposti non
+	# possono diventare 4500% né proiettare lo showroom come storico reale.
+	var first_estimate := SectionPanel._hours_estimate_values([], [
+			{"days": "mon, tue, wed, thu, fri", "start": "09:00", "end": "18:00"}
+	], 50)
+	check.call(not bool(first_estimate["has_baseline"]),
+			"il primo avvio inventa una baseline per la stima degli orari")
+	check.call(is_equal_approx(float(first_estimate["new_hours"]), 45.0),
+			"le ore proposte al primo avvio non sono 45")
+	var rescaled := SectionPanel._hours_estimate_values([
+			{"days": "mon, tue, wed, thu, fri", "start": "09:00", "end": "18:00"}
+	], [
+			{"days": "mon, tue, wed, thu, fri", "start": "09:00", "end": "18:00"}
+	], 7)
+	check.call(bool(rescaled["has_baseline"])
+			and int(rescaled["budget_percent"]) == 100,
+			"una finestra invariata non mantiene il budget al 100%")
 
 	# ── Ogni agente al suo banco ────────────────────────────────────────
 	# Il volto è legato alla sedia, e la sedia ora discende dal numero: due

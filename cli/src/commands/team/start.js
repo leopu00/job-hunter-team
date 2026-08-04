@@ -255,10 +255,11 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
 }
 
 export async function startAction(agentArg, options) {
-  // Uno STOP d'emergenza/desired-state lascia questo gate per impedire ai
-  // watchdog di riaccendere il team. Un successivo Start ESPLICITO dell'utente
-  // sul cockpit/CLI deve essere la via di recupero; il singolo-agent start non
-  // lo rimuove, così un processo interno non può annullare lo stop globale.
+  // Uno STOP d'emergenza/desired-state e il primo setup lasciano questo gate
+  // per impedire ai watchdog di riaccendere il team. Un successivo Start
+  // ESPLICITO dell'utente sul cockpit/CLI è la via di recupero; lo start di un
+  // singolo agente (per esempio l'Assistente del profilo) non lo rimuove, così
+  // un processo interno non può annullare lo stop globale.
   if (!agentArg) {
     const haltedFlag = join(JHT_HOME, '.team-halted.flag');
     if (existsSync(haltedFlag)) {
