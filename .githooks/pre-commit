@@ -138,6 +138,7 @@ MAIL_FOUND=$(git diff --cached -U0 --diff-filter=ACM 2>/dev/null \
     | grep -oE '[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' \
     | grep -vE '@(jobhunterteam\.ai|example\.(com|org|net)|[a-z-]+\.invalid|users\.noreply\.github\.com|anthropic\.com)$' \
     | grep -vE '^(nome|name|nombre|nom|user|utente|tuo|your|your_name|email)[._-]?[a-z]*@' \
+    | grep -vE '^((deinname|nev|oteunome|tunombre|tuonome|votrenom|yourname)\.jht@gmail\.com|nev@gmx\.com|(jobalerts-noreply|jobs-listings)@linkedin\.com)$' \
     | grep -vE '@(types|supabase|vercel|next|radix-ui|testing-library|eslint|babel|playwright|tailwindcss)/' \
     | sort -u | head -3 || true)
 if [ -n "$MAIL_FOUND" ]; then

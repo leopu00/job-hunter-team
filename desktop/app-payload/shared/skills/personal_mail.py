@@ -13,8 +13,8 @@ Uso:
   python3 personal_mail.py senders                 # Lista mittenti unici (ultimi 14gg)
   python3 personal_mail.py archive-preview 3677 3676 3671  # Preview archiviazione (dry-run)
   python3 personal_mail.py archive 3677 3676 3671          # Archivia email (rimuovi da inbox)
-  python3 personal_mail.py archive-sender "info@azienda.com"  # Archivia TUTTE le email da un mittente
-  python3 personal_mail.py archive-sender "info@azienda.com" --dry-run  # Preview
+  python3 personal_mail.py archive-sender "info@example.com"  # Archivia TUTTE le email da un mittente
+  python3 personal_mail.py archive-sender "info@example.com" --dry-run  # Preview
 
 NOTA: Tutti gli ID mostrati e accettati sono IMAP UID (stabili, non cambiano dopo archiviazione).
 

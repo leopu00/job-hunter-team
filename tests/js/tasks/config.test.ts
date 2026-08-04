@@ -183,13 +183,13 @@ describe("redactConfig — struttura completa", () => {
       providers: {
         kimi: {
           name: "kimi", auth_method: "subscription",
-          subscription: { email: "u@m.com", session_token: "tok-supersecret" },
+          subscription: { email: "u@example.com", session_token: "tok-supersecret" },
         },
       },
     };
     const r = redactConfig(cfg);
     const sub = (r.providers as any).kimi.subscription;
     expect(sub.session_token).toBe("tok-****");
-    expect(sub.email).toBe("u@m.com");
+    expect(sub.email).toBe("u@example.com");
   });
 });

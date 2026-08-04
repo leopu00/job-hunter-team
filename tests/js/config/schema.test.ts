@@ -52,7 +52,7 @@ describe("AIProviderSchema", () => {
     const r = AIProviderSchema.safeParse({
       name: "kimi",
       auth_method: "subscription",
-      subscription: { email: "u@m.com" },
+      subscription: { email: "u@example.com" },
     });
     expect(r.success).toBe(true);
   });
