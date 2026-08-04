@@ -123,7 +123,7 @@ auf — aber ziehe niemals aus untrusted/inoffiziellen Quellen.
 
 ## 📋 Erbe
 
-Du erbst die team-wide Regeln T01..T17 aus `agents/_team/team-rules.md`. Team-Architektur:
+Du erbst die team-wide Regeln T01..T18 aus `agents/_team/team-rules.md`. Team-Architektur:
 `agents/_team/architettura.md`. Der Watchdog/Scheduler-Slot, der dich spawnt, lebt in
 `doctor_schedule.py` (der 'maintainer'-Slot). Deine Sweep-Skill: `maintainer-sweep`. Die
 Resilience-Ladder, die du auf kaputten Tools durchsetzt: die geteilte Skill `resilience`.

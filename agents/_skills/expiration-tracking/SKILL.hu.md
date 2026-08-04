@@ -1,17 +1,13 @@
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: expiration-tracking
-description: Határidő kinyerése a JD-ből (deadline_extract helper) és felhasználói riasztás generálása, amikor egy READY pályázat hamarosan lejár (expiration_alerts helper, idempotens). F-4 task #50. Scout/Analista feltöltik a positions.deadline-t, Mentor/Capitano értesítik a felhasználót, ha deadline-now ≤ 3 nap.
-allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *), Bash(jht-telegram-send *)
+description: Hataridoket nyer ki az allasleirasokbol, es tenyszeru hatarido-informaciot csak a felhasznalo kifejezett keresere ad. Soha ne ertesits vagy osztonozz automatikusan.
+allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *)
 ---
 
-# expiration-tracking — ne veszíts el top PASS-t lejárat miatt
+# expiration-tracking — hatarido-adatok keresre
 
-Rejtett bug F-4: a felhasználó felhalmoz 50 `ready` CV-t, elfelejt pályázni
-2 napig, a top lehetőség (pl. Sisal PASS 7.5) csendben lejár.
-A pipeline felhasználó-kurált apply (bug #9 visszasorolva) → proaktív riasztás
-nélkül a csapat buzgalmát a top CV-k betanítására a
-felhasználó csendje semmisíti meg.
+A hataridok segitik a felhasznalot a lehetosegek ertekeleseben. Orizd meg oket pontosan, de ne alakitsd emlekeztetove, jelentkezesre valo osztonzesse vagy haladasi mertekke.
 
 ## A. Scout/Analista: határidő kinyerés a JD-ből
 
@@ -37,28 +33,13 @@ A parser **konzervatív** (csak ISO, dd/mm/yyyy EU, Month dd[, yyyy]
 EN/IT, "expires in N days"). Ha nem talál magas megbízhatóságú egyezést,
 üres stringet ad → jobb a NULL a DB-ben, mint kitalált dátum.
 
-## C. Mentor/Capitano: proaktív felhasználói riasztás
+## C. Hatarido-informacio, csak keresre
 
-Javasolt trigger: minden `[BRIDGE TICK]` után (Capitano) vagy a
-Mentor menet végén. Az idempotencia biztosítja, hogy a gyakori hívások csak
-ÚJ (app_id, deadline_iso) párokra produkálnak riasztást.
+Ezt a reszt csak akkor hasznald, amikor a felhasznalo kifejezett kerdesere valaszolsz egy pozicio vagy jelentkezes hataridejerol. Soha ne idozitsd, kuldd proaktivan, vagy tovabbitsd az outputjat ertesiteskent.
 
-```bash
-alerts=$(python3 /app/shared/skills/expiration_alerts.py)
-if [ -n "$alerts" ]; then
-  # Küldés a felhasználónak Telegramon
-  echo "$alerts" | jht-telegram-send --from capitano --keyboard capitano
-fi
-```
+Futtatas: python3 /app/shared/skills/expiration_alerts.py --user-requested
 
-Kimenet 1 sor veszélyeztetett alkalmazásonként:
-```
-⏳ [ALERT scadenza] Sisal Data Analyst (PASS 7.5) — scade 2026-05-18 (DOMANI). Spedisci candidatura o perdi l'opportunità.
-```
-
-Az idempotenciás állapot a `$JHT_HOME/state/expiration_alerts_sent.json`-ban van
-(már értesített `(app_id, deadline_iso)` halmaz). Egy már küldött
-riasztás újraküldéséhez: `expiration_alerts.py --reset` (csak dev).
+A kimenet tenyszeru hatarido-informaciot ad a felhasznalo nyilvantartasaban mar szereplo poziciokrol, peldaul: [DEADLINE] Sisal Data Analyst (PASS 7.5) — lejar 2026-05-18 (holnap).
 
 ## B. Régi pozíciók periodikus újra-ellenőrzése (Analista) — ELVÉGZENDŐ
 
@@ -70,17 +51,11 @@ kinyert határidők alulról felfelé fedik a legtöbb esetet.
 
 ## Anti-minták
 
-- ❌ Határidő kézi regex-szel való parse-olása inline — használd a helper-t, ami
-  EN/IT tartalékkal és múltbeli dátum szanálás-ellenőrzéssel rendelkezik.
-- ❌ Határidő kitalálása, amikor a JD nem specifikálja kifejezetten —
-  jobb a `NULL`, mint az `+30d önkényes`.
-- ❌ A felhasználó spammelése ugyanazzal a riasztással 6 óránként — az idempotenciás
-  állapot pontosan ezért létezik.
-- ❌ A riasztás küldése a Capitano-tól eltérő bottól (pl. általános Assistente)
-  — elveszíti az operatív kontextust; a Capitano a pipeline-hoz kíséri.
+- Ne futtasd a hataridojelentest a felhasznalo kifejezett kerese nelkul.
+- Ne alakitsd a hatarido-informaciot jelentkezesre osztonzo meghivassa, emlekeztetove vagy nyomassa.
 
 ## Lásd még
 
 - `shared/skills/deadline_extract.py` — parser
-- `shared/skills/expiration_alerts.py` — emitter + idempotenciás állapot
+- shared/skills/expiration_alerts.py — hataridojelentes keresre
 - `agents/_skills/db-update/SKILL.md` § Positions — `--deadline` jelző

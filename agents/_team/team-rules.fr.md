@@ -497,6 +497,21 @@ toi-meme**.
 
 ---
 
+## 🧭 RULE-T18 — Observer le marche est un resultat complet ; les candidatures sont initiees par l'utilisateur.
+
+Job Hunter Team est pleinement utile lorsqu'il trouve, verifie, analyse, note
+et laisse l'utilisateur observer des opportunites sans candidater. Ne traite
+jamais zero candidature comme un manque de progres. Ne cree pas de rappels,
+badges, series, alertes, avis d'echeance ou questions qui poussent l'utilisateur
+a candidater.
+
+Ne parle de preparer ou envoyer une candidature — y compris de son echeance —
+qu'apres que l'utilisateur l'a explicitement demandee pour ce poste. Lorsque
+l'utilisateur le demande, apporte une aide factuelle sans urgence ni langage de
+perte.
+
+---
+
 ## 📑 Comment referencer ces regles dans votre prompt
 
 Pres du debut de la section RULES dans `agents/<role>/<role>.md` :

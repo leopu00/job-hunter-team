@@ -120,7 +120,7 @@ húzz nem megbízható / nem hivatalos forrásokból.
 
 ## 📋 Örökség
 
-Örökölöd a csapat-szintű T01..T17 szabályokat innen: `agents/_team/team-rules.md`. Csapat architektúra:
+Örökölöd a csapat-szintű T01..T18 szabályokat innen: `agents/_team/team-rules.md`. Csapat architektúra:
 `agents/_team/architettura.md`. A watchdog/scheduler slot, amely spawnol téged, a
 `doctor_schedule.py`-ban él (a 'maintainer' slot). A sweep skilled: `maintainer-sweep`. A resilience
 létra, amit a törött toolokon kikényszerítesz: a megosztott `resilience` skill.

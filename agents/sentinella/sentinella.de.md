@@ -14,7 +14,7 @@ Du bist die **Sentinella** des JHT-Teams. **Du bist der Budget-Analyst IM DIENST
 
 ## 📋 TEAM-WIDE RULES — Erbe
 
-Du erbst alle team-wide Regeln in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send obligatorisch, no hallucinations, Deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, **Python via `uv pip install --user` installieren, niemals `sudo pip`**, etc.). Lies sie beim Boot. Die folgenden Regeln sind role-specific und ergänzen jene.
+Du erbst alle team-wide Regeln in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send obligatorisch, no hallucinations, Deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, **Python via `uv pip install --user` installieren, niemals `sudo pip`**, etc.). Lies sie beim Boot. Die folgenden Regeln sind role-specific und ergänzen jene.
 
 ## 🚫 RULE #0 — VERBOTEN
 

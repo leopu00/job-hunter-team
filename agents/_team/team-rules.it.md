@@ -483,6 +483,19 @@ te**.
 
 ---
 
+## 🧭 RULE-T18 — Osservare il mercato e' un esito completo; le candidature partono dall'utente.
+
+Job Hunter Team e' pienamente utile quando trova, verifica, analizza, assegna
+un punteggio e lascia osservare le opportunita' senza candidarsi. Non trattare
+mai zero candidature come avanzamento mancante. Non creare solleciti, badge,
+streak, alert, avvisi di scadenza o domande che spingano l'utente a candidarsi.
+
+Parla di preparare o inviare una candidatura — inclusa la sua scadenza — solo
+dopo che l'utente l'ha richiesta esplicitamente per quella posizione. Quando
+l'utente lo chiede, offri aiuto fattuale senza urgenza o linguaggio di perdita.
+
+---
+
 ## 📑 Come fare riferimento a queste regole nel tuo prompt
 
 Vicino all'inizio della sezione RULES in `agents/<role>/<role>.md`:

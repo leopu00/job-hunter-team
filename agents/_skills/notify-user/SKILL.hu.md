@@ -39,8 +39,8 @@ jht-notify-user --agent capitano "Trovate 10 offerte pronte sopra 75/100. Top: A
 # Összefoglaló explicit típussal (a dashboardon fejléccel renderelődik)
 jht-notify-user --agent mentor --kind digest "Settimana 19: 18 offerte analizzate, 4 candidate, gap principale: ruoli senior in EU remote."
 
-# Kérdés — a dashboard válaszmezővel mutatja
-jht-notify-user --agent assistente --kind question "Vuoi che procedo con apply per Acme Senior FE?"
+# Kerdes — csak a felhasznalo altal mar kert jelentkezes tisztazasahoz
+jht-notify-user --agent assistente --kind question "Az Acme Senior FE-hez mar kert jelentkezeshez melyik CV-verziot reszesited elonyben?"
 
 # Pozícióhoz kötve (a pozíció kártyával renderelődik a dashboardon)
 jht-notify-user --agent capitano --position-id 42 "CV pronto per posizione 42. Critic verdict: PASS."

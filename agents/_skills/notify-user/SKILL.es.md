@@ -39,8 +39,8 @@ jht-notify-user --agent capitano "Encontradas 10 ofertas listas por encima de 75
 # Digest con tipo explícito (renderizado con encabezado en el dashboard)
 jht-notify-user --agent mentor --kind digest "Semana 19: 18 ofertas analizadas, 4 candidatas, brecha principal: roles senior en EU remoto."
 
-# Pregunta — el dashboard la muestra con caja de respuesta
-jht-notify-user --agent assistente --kind question "¿Quieres que proceda con el apply para Acme Senior FE?"
+# Pregunta — solo para aclarar una candidatura ya solicitada por el usuario
+jht-notify-user --agent assistente --kind question "Para la candidatura que ya pediste para Acme Senior FE, ¿que version del CV prefieres?"
 
 # Vinculada a una posición (renderiza con la card de la posición en el dashboard)
 jht-notify-user --agent capitano --position-id 42 "CV listo para posición 42. Veredicto Critic: PASS."
