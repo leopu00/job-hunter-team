@@ -2821,8 +2821,10 @@ export async function handleChatSync(options = {}) {
     // esaurito anche la pagina cloud.
     const queue = chat.undeliveredUserTurns(db);
     const deliveredCloudIds = chat.deliveredCloudUserTurnIds(db, cloudRows);
+    const wholeCloudPageDelivered = deliveredCloudIds.length === cloudRows.length;
     const closeRendezvous = pending && !readError && sent.failed === 0 &&
-      queue.count === 0 && cloudRows.length < chat.CLOUD_CHAT_PULL_LIMIT;
+      queue.count === 0 && wholeCloudPageDelivered &&
+      cloudRows.length < chat.CLOUD_CHAT_PULL_LIMIT;
     let acked = false;
     let ackFailed = false;
     if (pending && channel && !readError && (deliveredCloudIds.length > 0 || closeRendezvous)) {

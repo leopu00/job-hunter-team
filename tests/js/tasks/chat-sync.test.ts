@@ -355,11 +355,11 @@ describe("turni scritti dal web", () => {
     expect(rowsOf()).toHaveLength(1);
   });
 
-  it("un mittente fuori dalle tre chat si marca senza scriverlo", () => {
+  it("un mittente fuori dalle tre chat non si finge consegnato", () => {
     const ids = importCloudUserTurns(db, [
       { id: "uuid-9", legacy_id: -1, agent: "scout", body: "ehi" },
     ]);
-    expect(ids).toEqual(["uuid-9"]);
+    expect(ids).toEqual([]);
     expect(rowsOf()).toHaveLength(0);
   });
 });
