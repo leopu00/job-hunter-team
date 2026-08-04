@@ -143,6 +143,18 @@ function applicationStatus(status: string): string {
   return "ready";
 }
 
+/**
+ * `checked` e `writing` descrivono lavoro in corso, non uno snapshot statico.
+ * Il recovery di pid1 li resetta dopo due ore e renderebbe diverso il primo
+ * boot di una ripresa. Li materializziamo gia' nello stato stabile scelto
+ * dallo stesso recovery, senza note/timestamp runtime.
+ */
+function recordingPositionStatus(status: string): string {
+  if (status === "checked") return "new";
+  if (status === "writing") return "scored";
+  return status;
+}
+
 export function buildRecordingProfileDataset(
   alias: RecordingProfileAlias,
   options: { locale?: Locale; anchor?: string } = {},
@@ -214,7 +226,7 @@ export function buildRecordingProfileDataset(
       found_by: p.found_by,
       found_at: p.found_at,
       deadline: p.deadline,
-      status: p.status,
+      status: recordingPositionStatus(p.status),
       score: p.score,
       notes: p.notes,
       last_checked: p.last_checked,
@@ -223,7 +235,9 @@ export function buildRecordingProfileDataset(
       loc_country: p.loc_country,
       loc_city: p.loc_city,
       loc_country_code: p.loc_country_code,
-      write_requested: p.write_requested,
+      // Il profilo e' uno snapshot da osservare: nessun lavoro deve essere
+      // rivendicato dagli agenti durante una ripresa.
+      write_requested: false,
       office_lat: p.office_lat,
       office_lon: p.office_lon,
       office_address: p.office_address,

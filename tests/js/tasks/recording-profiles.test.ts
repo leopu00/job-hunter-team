@@ -107,6 +107,24 @@ describe("profili riprese — dataset reale e ripetibile", () => {
       expect(run("reset").status).toBe(0);
       expect(canonicalDump()).toBe(firstDump);
 
+      const bootRecovery = spawnSync(
+        "python3",
+        [
+          join(repo, "shared", "skills", "unstuck_positions.py"),
+          "--apply",
+          "--include-checked",
+        ],
+        {
+          cwd: repo,
+          env: { ...env, JHT_HOME: profileRoot },
+          encoding: "utf8",
+        },
+      );
+      expect(bootRecovery.status).toBe(0);
+      expect(canonicalDump(), "il recovery del primo boot ha mutato il seed").toBe(
+        firstDump,
+      );
+
       unlinkSync(join(profileRoot, "profile", "ready.flag"));
       const missingReady = run("verify");
       expect(missingReady.status).toBe(1);
@@ -189,22 +207,23 @@ describe("profili riprese — dataset reale e ripetibile", () => {
     );
   });
 
-  it("mantiene pieni tutti gli stadi e le superfici mostrate nei video", () => {
+  it("mantiene pieni gli stadi stabili e le superfici mostrate nei video", () => {
     for (const alias of RECORDING_PROFILE_ALIASES) {
       const data = buildRecordingProfileDataset(alias);
       const statuses = new Set(data.positions.map((p) => p.status));
       expect(statuses).toEqual(
         new Set([
           "new",
-          "checked",
           "scored",
-          "writing",
           "review",
           "ready",
           "applied",
           "response",
           "excluded",
         ]),
+      );
+      expect(data.positions.every((position) => !position.write_requested)).toBe(
+        true,
       );
       expect(data.scores.length).toBeGreaterThan(0);
       expect(data.applications.length).toBeGreaterThan(0);
