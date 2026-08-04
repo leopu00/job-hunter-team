@@ -479,6 +479,7 @@ const S := {
 	"hours.saved": "✓ hours saved — team pacing adapts from the next tick",
 
 	"lang.intro": "Interface language — the site's 7 languages.",
+	"lang.narrative_note": "// note: the narrative tour and its choices are currently available in Italian",
 	"lang.note": "// applies immediately to panels; reopen the ones already open to see them translated",
 
 	"stats.hint": "// click a bar to filter: the other charts update",
