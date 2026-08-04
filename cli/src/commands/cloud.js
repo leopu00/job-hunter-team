@@ -9,9 +9,10 @@ import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
 import {
   acknowledgeSync,
-  observedSyncOutcome,
+  publishSyncOutcome,
   pushRendezvousOutcome,
   syncRendezvousPending,
+  syncRendezvousTerminal,
   timeoutFailure,
 } from '../lib/sync-rendezvous.js';
 import {
@@ -2509,34 +2510,49 @@ async function handleDirectiveSync(options = {}) {
  * risponde 400 sull'intera select, quindi si ritenta con le sole colonne
  * storiche e la corsia chat resta semplicemente ferma.
  */
-async function readRendezvousState(config, { silent = true } = {}) {
+export async function readRendezvousState(config, options = {}) {
+  const silent = options.silent !== false;
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const reader = getDirectReader(config);
+  const reader = options.reader !== undefined ? options.reader : getDirectReader(config);
+  const fetchFn = options.fetchFn || fetch;
+  const timeoutMs = Math.max(
+    1,
+    Number(options.timeoutMs ?? process.env.JHT_RENDEZVOUS_READ_TIMEOUT_MS ?? 15_000) || 15_000,
+  );
+  // Lo stesso budget copre direct moderno, direct legacy e fallback HTTP:
+  // tre timeout consecutivi bloccherebbero il giro veloce e quindi anche chat.
+  const signal = options.signal || AbortSignal.timeout(timeoutMs);
   const stopState = [
     'should_run', 'is_running',
     'emergency_stop_requested_at', 'emergency_stop_completed_at',
   ];
   const withChat = [
     'sync_requested_at', 'sync_completed_at',
+    'last_action', 'last_action_at',
     'chat_requested_at', 'chat_delivered_at',
     ...stopState,
   ];
-  const legacy = ['sync_requested_at', 'sync_completed_at', ...stopState];
+  const legacy = [
+    'sync_requested_at', 'sync_completed_at',
+    'last_action', 'last_action_at',
+    ...stopState,
+  ];
 
   if (reader) {
     try {
-      return await reader.readTeamState(withChat);
+      return await reader.readTeamState(withChat, { signal });
     } catch {
       try {
-        return await reader.readTeamState(legacy);
+        return await reader.readTeamState(legacy, { signal });
       } catch (err) {
         if (!silent) console.error(pc.yellow(`  rendezvous (direct) warn: ${err.message} — fallback Vercel`));
       }
     }
   }
   try {
-    const res = await fetch(`${baseUrl}/api/team-state`, {
+    const res = await fetchFn(`${baseUrl}/api/team-state`, {
       headers: { Authorization: `Bearer ${config.token}` },
+      signal,
     });
     if (!res.ok) return null;
     const body = await res.json().catch(() => ({}));
@@ -2556,9 +2572,17 @@ export async function handleSyncRendezvous(options = {}) {
   const fetchFn = options.fetchFn || fetch;
   const pushFn = options.pushFn || handlePush;
 
+  // Deadline condivisa da lettura, push e ACK. Se il chiamante ha già letto
+  // la riga nel fast loop, lo stesso signal governa comunque il resto.
+  const timeoutMs = Math.max(
+    1_000,
+    Number(options.timeoutMs ?? process.env.JHT_SYNC_REQUEST_TIMEOUT_MS ?? 120_000) || 120_000,
+  );
+  const signal = options.signal || AbortSignal.timeout(timeoutMs);
+
   const state = options.state !== undefined
     ? options.state
-    : await readRendezvousState(config, { silent });
+    : await readRendezvousState(config, { silent, reader, fetchFn, signal });
   if (!state) return { status: 'state_unavailable' };
 
   const reqAt = state.sync_requested_at || null;
@@ -2567,15 +2591,8 @@ export async function handleSyncRendezvous(options = {}) {
   // `Z` o `+00:00`, che hanno ordinamento lessicografico diverso.
   const pending = syncRendezvousPending(reqAt, doneAt);
   if (!pending) return { status: 'idle' };
-
-  // Deadline dell'intera operazione on-demand. Lo stesso signal attraversa
-  // tutti i chunk del push: molti timeout per-chunk consecutivi non possono
-  // trasformare un click in un'attesa senza limite.
-  const timeoutMs = Math.max(
-    1_000,
-    Number(options.timeoutMs ?? process.env.JHT_SYNC_REQUEST_TIMEOUT_MS ?? 120_000) || 120_000,
-  );
-  const signal = options.signal || AbortSignal.timeout(timeoutMs);
+  const terminal = syncRendezvousTerminal(reqAt, state.last_action, state.last_action_at);
+  if (terminal) return { status: terminal, terminal: true };
 
   // Push fresco ORA (resta su Vercel in Fase 1). Isolato dal counter del daemon.
   const prev = process.exitCode;
@@ -2606,33 +2623,31 @@ export async function handleSyncRendezvous(options = {}) {
       const why = pushResult && (pushResult.skipped || 0) > 0
         ? `${pushResult.skipped} righe scartate`
         : 'push non riuscito';
-      console.error(pc.yellow(`  sync-rendezvous: ack NON scritto (${why}) — il web resta "non sincronizzato", ritento al prossimo tick.`));
+      console.error(pc.yellow(`  sync-rendezvous: ack NON scritto (${why}) — esito pubblicato, serve una nuova richiesta per ritentare.`));
     }
-    const observed = observedSyncOutcome(pushOutcome.status, reqAt);
-    const published = observed
-      ? await patchTeamStateBestEffort(config, reader, observed)
-      : false;
-    return { ...pushOutcome, observed: published };
+    const published = await publishSyncOutcomeBestEffort(
+      config, reqAt, pushOutcome.status, { fetchFn },
+    );
+    if (published.status === 'superseded') return published;
+    return { ...pushOutcome, observed: published.status === 'published' };
   }
 
-  // Ack `sync_completed_at`: diretto se disponibile, altrimenti PATCH Vercel.
-  const nowIso = new Date().toISOString();
-  const completedObserved = observedSyncOutcome('completed', reqAt);
+  // ACK compare-and-set: A può chiudere soltanto A, mai una B arrivata mentre
+  // il push era in corso. I timestamp sono generati dal DB/server.
   const ack = await acknowledgeSync({
-    reader,
     fetchFn,
-    url: `${baseUrl}/api/team-state`,
+    url: `${baseUrl}/api/team-state/sync-observed`,
     token: config.token,
-    completedAt: nowIso,
-    observed: completedObserved,
+    expectedRequestedAt: reqAt,
     signal,
   });
-  if (ack.status !== 'completed') {
-    const failedObserved = observedSyncOutcome(ack.status, reqAt);
-    const published = failedObserved
-      ? await patchTeamStateBestEffort(config, reader, failedObserved)
-      : false;
-    ack.observed = published;
+  if (ack.status !== 'completed' && ack.status !== 'superseded') {
+    const failure = ack.status === 'timeout' ? 'timeout' : 'ack_failed';
+    const published = await publishSyncOutcomeBestEffort(
+      config, reqAt, failure, { fetchFn },
+    );
+    if (published.status === 'superseded') return published;
+    ack.observed = published.status === 'published';
   }
   if (!silent) {
     if (ack.status === 'completed') {
@@ -2642,6 +2657,28 @@ export async function handleSyncRendezvous(options = {}) {
     }
   }
   return ack;
+}
+
+/** Pubblicazione failure con budget indipendente dal push già scaduto. */
+async function publishSyncOutcomeBestEffort(
+  config,
+  expectedRequestedAt,
+  outcomeStatus,
+  options = {},
+) {
+  const timeoutMs = Math.max(
+    1,
+    Number(options.timeoutMs ?? process.env.JHT_SYNC_OBSERVED_TIMEOUT_MS ?? 15_000) || 15_000,
+  );
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  return publishSyncOutcome({
+    fetchFn: options.fetchFn || fetch,
+    url: `${baseUrl}/api/team-state/sync-observed`,
+    token: config.token,
+    expectedRequestedAt,
+    outcomeStatus,
+    signal: options.signal || AbortSignal.timeout(timeoutMs),
+  });
 }
 
 /**
@@ -2732,6 +2769,7 @@ export async function handleChatSync(options = {}) {
     ? options.channel
     : chat.chatChannelFor(config, reader);
   let importedIds = [];
+  let cloudRows = [];
   // Motivo della lettura fallita, se fallita: serve alla diagnosi in fondo
   // (il log qui sotto è gated da `silent`, quindi nel daemon non si vede).
   let readError = null;
@@ -2744,7 +2782,7 @@ export async function handleChatSync(options = {}) {
     const pending = chat.chatPending(state?.chat_requested_at, state?.chat_delivered_at);
     if (pending && channel) {
       try {
-        const cloudRows = await channel.readUndeliveredUserChat({ limit: 50 });
+        cloudRows = await channel.readUndeliveredUserChat({ limit: chat.CLOUD_CHAT_PULL_LIMIT });
         importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome });
       } catch (err) {
         readError = chat.cloudRequestFailure(err);
@@ -2776,15 +2814,21 @@ export async function handleChatSync(options = {}) {
       pushed = okIds.length;
     }
 
-    // ── Chiusura del rendezvous ────────────────────────────────────────
-    // Solo se abbiamo davvero consegnato tutto quello che era in coda: con
-    // un pane occupato il flag resta aperto e il giro dopo ritenta.
+    // ── ACK delle sole righe consegnate + eventuale chiusura ───────────
+    // Il pull (50) è più largo del budget di delivery (5): importare non
+    // equivale a consegnare. Si marcano solo i gemelli con delivered_at e si
+    // chiude la corsia soltanto quando non resta coda e sappiamo di aver
+    // esaurito anche la pagina cloud.
+    const queue = chat.undeliveredUserTurns(db);
+    const deliveredCloudIds = chat.deliveredCloudUserTurnIds(db, cloudRows);
+    const closeRendezvous = pending && !readError && sent.failed === 0 &&
+      queue.count === 0 && cloudRows.length < chat.CLOUD_CHAT_PULL_LIMIT;
     let acked = false;
     let ackFailed = false;
-    if (pending && channel && sent.failed === 0 && !readError) {
+    if (pending && channel && !readError && (deliveredCloudIds.length > 0 || closeRendezvous)) {
       try {
-        await channel.closeRendezvous(importedIds);
-        acked = true;
+        await channel.acknowledgeDelivery(deliveredCloudIds, { closeRendezvous });
+        acked = closeRendezvous;
       } catch (err) {
         ackFailed = true;
         log('warn', `chat-sync: ack consegna fallito (${chat.cloudRequestFailure(err)})`);
@@ -2795,7 +2839,6 @@ export async function handleChatSync(options = {}) {
     // Va DOPO tutti i passi, perché solo qui si sa cosa è davvero passato.
     // Non è gated da `silent`: è l'unico punto in cui un guasto della chat
     // può farsi vedere da fuori, e nel daemon `silent` è sempre true.
-    const queue = chat.undeliveredUserTurns(db);
     await reportChatLane(chat, config, reader, chat.diagnoseChatLane({
       pending,
       requestedAt: state?.chat_requested_at ?? null,
@@ -2828,7 +2871,9 @@ export async function handleChatSync(options = {}) {
           ? 'delivery_pending'
           : ackFailed
             ? 'ack_failed'
-            : 'completed',
+            : pending && !acked
+              ? 'delivery_pending'
+              : 'completed',
       pending: !!pending,
       imported: importedIds.length,
       delivered: sent.delivered,

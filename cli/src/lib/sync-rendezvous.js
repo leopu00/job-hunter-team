@@ -11,6 +11,19 @@ export function syncRendezvousPending(requestedAt, completedAt) {
   return !Number.isFinite(completed) || requested > completed;
 }
 
+/** Esito terminale già pubblicato per questa stessa richiesta, se presente. */
+export function syncRendezvousTerminal(requestedAt, lastAction, lastActionAt) {
+  const status = String(lastAction || '').startsWith('sync:')
+    ? String(lastAction).slice('sync:'.length)
+    : '';
+  if (!OBSERVABLE_STATUSES.has(status)) return null;
+  const requested = Date.parse(requestedAt || '');
+  const observed = Date.parse(lastActionAt || '');
+  return Number.isFinite(requested) && Number.isFinite(observed) && observed >= requested
+    ? status
+    : null;
+}
+
 export function timeoutFailure(error) {
   const name = String(error?.name || '').toLowerCase();
   const code = String(error?.code || '').toLowerCase();
@@ -27,7 +40,7 @@ export function pushRendezvousOutcome(pushResult) {
   };
 }
 
-const OBSERVABLE_STATUSES = new Set([
+export const OBSERVABLE_STATUSES = new Set([
   'completed',
   'timeout',
   'push_failed',
@@ -35,58 +48,83 @@ const OBSERVABLE_STATUSES = new Set([
 ]);
 
 /**
- * Stato observed correlabile alla richiesta senza fidarsi dell'orologio VPS:
- * anche se il box fosse indietro, `last_action_at` è almeno request+1ms.
+ * Comando observed correlabile alla richiesta. Non contiene timestamp: quelli
+ * sono proprietà del database/server che applica il CAS, mai del clock VPS.
  */
-export function observedSyncOutcome(status, requestedAt, now = Date.now()) {
+export function observedSyncOutcome(status, requestedAt) {
   if (!OBSERVABLE_STATUSES.has(status)) return null;
   const requested = Date.parse(requestedAt || '');
-  const at = Number.isFinite(requested) ? Math.max(now, requested + 1) : now;
+  if (!Number.isFinite(requested)) return null;
   return {
-    last_action: `sync:${status}`,
-    last_action_at: new Date(at).toISOString(),
+    expected_requested_at: requestedAt,
+    status,
   };
 }
 
 /**
- * Scrive l'ACK e considera successo solo una risposta 2xx. Nessun body o
- * messaggio d'errore viene restituito: l'esito può essere loggato senza
- * trascinare URL, hostname o identificatori infrastrutturali.
+ * Pubblica un esito terminale con compare-and-set sulla richiesta osservata.
+ * Esiste un solo proprietario del CAS: l'endpoint HTTP autenticato col token
+ * device. Restituisce timestamp creati dal server e `applied=false` quando
+ * una richiesta più nuova ha sostituito quella che il box stava servendo.
  */
-export async function acknowledgeSync({
-  reader,
+export async function publishSyncOutcome({
   fetchFn = fetch,
   url,
   token,
-  completedAt,
-  observed = {},
+  expectedRequestedAt,
+  outcomeStatus,
   signal,
 }) {
-  const fields = { ...observed, sync_completed_at: completedAt };
-  if (reader) {
-    try {
-      await reader.patchTeamState(fields, { signal });
-      return { status: 'completed', completedAt, via: 'direct' };
-    } catch {
-      // Il canale diretto è un'ottimizzazione: il token HTTP resta il fallback.
-    }
-  }
+  const command = observedSyncOutcome(outcomeStatus, expectedRequestedAt);
+  if (!command) return { status: 'publish_failed', retryable: false };
 
   try {
     const res = await fetchFn(url, {
-      method: 'PATCH',
+      method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       signal,
-      body: JSON.stringify(fields),
+      body: JSON.stringify(command),
     });
-    if (!res.ok) {
-      return { status: 'ack_failed', httpStatus: res.status, retryable: res.status >= 500 };
+    if (res.status === 409) {
+      return { status: 'superseded', retryable: false, via: 'http' };
     }
-    return { status: 'completed', completedAt, via: 'http' };
+    if (!res.ok) {
+      return { status: 'publish_failed', httpStatus: res.status, retryable: res.status >= 500 };
+    }
+    const result = await res.json().catch(() => null);
+    if (result?.applied !== true || result?.status !== outcomeStatus) {
+      return { status: 'publish_failed', retryable: true };
+    }
+    return {
+      status: 'published',
+      outcomeStatus,
+      syncCompletedAt: result.sync_completed_at ?? null,
+      lastActionAt: result.last_action_at ?? null,
+      via: 'http',
+    };
   } catch (error) {
-    return { status: timeoutFailure(error) ? 'timeout' : 'ack_failed', retryable: true };
+    return { status: timeoutFailure(error) ? 'timeout' : 'publish_failed', retryable: true };
   }
+}
+
+/** ACK di successo: wrapper compatto sul publisher CAS comune. */
+export async function acknowledgeSync(options) {
+  const result = await publishSyncOutcome({ ...options, outcomeStatus: 'completed' });
+  if (result.status === 'published') {
+    return {
+      status: 'completed',
+      completedAt: result.syncCompletedAt,
+      via: result.via,
+    };
+  }
+  if (result.status === 'superseded') return result;
+  if (result.status === 'timeout') return result;
+  return {
+    status: 'ack_failed',
+    ...(result.httpStatus ? { httpStatus: result.httpStatus } : {}),
+    retryable: result.retryable !== false,
+  };
 }

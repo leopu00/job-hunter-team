@@ -258,13 +258,13 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
    * Rimpiazza GET /api/team-state (sync rendezvous + desired-state/reconcile).
    * @param {string[]} [select] colonne; default i campi sync + desired-state.
    */
-  async function readTeamState(select) {
+  async function readTeamState(select, { signal } = {}) {
     const cols = (select && select.length
       ? select
       : ['user_id', 'should_run', 'agents_enabled', 'restart_token',
          'sync_requested_at', 'sync_completed_at', 'active_device_id']
     ).join(',');
-    const rows = await rest(`team_state?select=${encodeURIComponent(cols)}&limit=1`);
+    const rows = await rest(`team_state?select=${encodeURIComponent(cols)}&limit=1`, { signal });
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
 

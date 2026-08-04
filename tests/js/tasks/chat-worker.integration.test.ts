@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   handleChatSync,
+  handleSyncRendezvous,
   patchTeamStateBestEffort,
+  readRendezvousState,
 } from "../../../cli/src/commands/cloud.js";
 
 const SCHEMA = `
@@ -65,8 +67,9 @@ describe("handleChatSync — worker completo", () => {
           created_at: "2026-08-04T10:00:00Z",
         }];
       },
-      async closeRendezvous(ids: string[]) {
+      async acknowledgeDelivery(ids: string[], options: { closeRendezvous: boolean }) {
         expect(ids).toEqual(["00000000-0000-4000-8000-000000000001"]);
+        expect(options.closeRendezvous).toBe(true);
         acks += 1;
       },
     };
@@ -163,5 +166,106 @@ describe("handleChatSync — worker completo", () => {
     expect(directSignal).toBeInstanceOf(AbortSignal);
     expect(httpSignal).toBe(directSignal);
     expect(httpSignal?.aborted).toBe(true);
+  });
+
+  it("non lascia che una GET appesa blocchi il fast loop sync+chat", async () => {
+    let reads = 0;
+    let httpSignal: AbortSignal | undefined;
+    const reader = {
+      async readTeamState(_columns: string[], options?: { signal?: AbortSignal }) {
+        reads += 1;
+        const signal = options?.signal;
+        await new Promise((_resolve, reject) => {
+          if (signal?.aborted) return reject(signal.reason);
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      },
+    };
+    const started = Date.now();
+    const state = await readRendezvousState(CONFIG, {
+      reader,
+      timeoutMs: 20,
+      fetchFn: async (_url: string, init?: { signal?: AbortSignal }) => {
+        httpSignal = init?.signal;
+        throw init?.signal?.reason || new Error("expected aborted signal");
+      },
+    });
+    expect(state).toBeNull();
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(reads).toBe(2);
+    expect(httpSignal?.aborted).toBe(true);
+  });
+
+  it("non lascia che l'ACK della richiesta A chiuda una richiesta B arrivata durante il push", async () => {
+    const requestA = "2026-08-04T10:00:00Z";
+    const requestB = "2026-08-04T10:00:01Z";
+    let currentRequest = requestA;
+    const bodies: Record<string, unknown>[] = [];
+    const result = await handleSyncRendezvous({
+      silent: true,
+      config: CONFIG,
+      reader: null,
+      state: { sync_requested_at: requestA, sync_completed_at: null },
+      pushFn: async () => {
+        currentRequest = requestB;
+        return { ok: true, skipped: 0 };
+      },
+      fetchFn: async (_url: string, init?: Record<string, any>) => {
+        const body = JSON.parse(init?.body || "{}");
+        bodies.push(body);
+        return body.expected_requested_at === currentRequest
+          ? ({ ok: true, status: 200, json: async () => ({ applied: true, status: body.status }) } as any)
+          : ({ ok: false, status: 409 } as Response);
+      },
+    });
+    expect(result).toEqual({ status: "superseded", retryable: false, via: "http" });
+    expect(currentRequest).toBe(requestB);
+    expect(bodies).toEqual([{ expected_requested_at: requestA, status: "completed" }]);
+  });
+
+  it("ACKa soltanto i cloud ID consegnati entro il budget per tick", async () => {
+    const base = Date.now();
+    const rows = Array.from({ length: 7 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+      legacy_id: -(base + i * 1000),
+      agent: "capitano",
+      body: `messaggio ${i + 1}`,
+      created_at: new Date(base + i * 1000).toISOString(),
+    }));
+    const ackedIds = new Set<string>();
+    const acks: Array<{ ids: string[]; close: boolean }> = [];
+    let sends = 0;
+    const channel = {
+      async readUndeliveredUserChat() {
+        return rows.filter((row) => !ackedIds.has(row.id));
+      },
+      async acknowledgeDelivery(ids: string[], options: { closeRendezvous: boolean }) {
+        ids.forEach((id) => ackedIds.add(id));
+        acks.push({ ids: [...ids], close: options.closeRendezvous });
+      },
+    };
+    const run = () => handleChatSync({
+      silent: true,
+      config: CONFIG,
+      dbPath,
+      jhtHome: home,
+      reader: null,
+      channel,
+      state: { chat_requested_at: "2026-08-04T10:00:00Z", chat_delivered_at: null },
+      sendFn: async () => {
+        sends += 1;
+        return { ok: true, code: 0, error: "" };
+      },
+    });
+
+    const first = await run();
+    expect(first).toMatchObject({ status: "delivery_pending", delivered: 5, acked: false });
+    expect(acks[0]).toEqual({ ids: rows.slice(0, 5).map((row) => row.id), close: false });
+    expect(ackedIds.size).toBe(5);
+
+    const second = await run();
+    expect(second).toMatchObject({ delivered: 2, acked: true });
+    expect(acks[1]).toEqual({ ids: rows.slice(5).map((row) => row.id), close: true });
+    expect({ sends, acked: ackedIds.size }).toEqual({ sends: 7, acked: 7 });
   });
 });
