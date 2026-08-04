@@ -28,6 +28,15 @@ lasciavano passivo — su tutte il SOURCING FERMO (nessuno Scout attivo) — con
 invece il VERDETTO deterministico come ORDINE (spawna 1 Scout, C-05), perché il
 "segnale morbido" veniva razionalizzato via e la finestra chiusa a vuoto.
 
+Terzo registro (2026-07-30, [MODE-INJECTION-HOURLY-PROMPT]): in coda a OGNI
+messaggio va la sezione `[MODALITÀ CORRENTE]` — modalità, ordini e direttive
+LETTI DA DISCO in quel momento (`shared/skills/mode_banner.py`). Non è un nudge
+ed è indipendente dal tema: è l'ordine dell'utente che raggiunge il Capitano
+periodicamente, così non può evaporare a un refresh di contesto (18 giorni persi
+nel luglio 2026, vedi il docstring di mode_banner.py). Al peggio si perde per
+un'ora — ed è per questo che l'ora di SILENZIO salta quando c'è un ordine in
+vigore da riferire: un promemoria che non parte non è un promemoria.
+
 Output:
   - stdout (→ $JHT_HOME/logs/heartbeat-bridge.log)
   - tmux send al CAPITANO via jht-tmux-send (single-line)
@@ -71,31 +80,62 @@ SCOUT_EXHAUST_LOOKBACK_H = float(
 TARGET = os.environ.get("JHT_HEARTBEAT_SESSION", "CAPITANO")
 DB_QUERY = "/app/shared/skills/db_query.py"
 TICKET_PY = "/app/shared/skills/ticket.py"
+# Lockfile del singleton (flock), file DEDICATO: il PID file lo cancellano
+# bridge-control.sh e pid1, e cancellare un file flockato ne rompe la mutua
+# esclusione. Due heartbeat vivi = [HEARTBEAT] DOPPIO al Capitano ogni ora,
+# cioè turni LLM doppi sul modello più caro ([BRIDGE-SINGLETON-PARTIAL]).
+LOCK_FILE = LOGS_DIR / "heartbeat-bridge.lock"
+PID_FILE = LOGS_DIR / "heartbeat-bridge.pid"
 
 
 def _log(msg):
     print(f"[heartbeat-bridge] {msg}", file=sys.stdout, flush=True)
 
 
+def _acquire_singleton():
+    """Uno solo di me. Modulo non caricabile → si prosegue senza lock (meglio
+    un battito senza lock che nessun battito: il kill-by-marker dello spawner
+    resta come rete)."""
+    try:
+        import importlib.util
+        for cand in (Path("/app/shared/skills/singleton_lock.py"),
+                     Path(__file__).resolve().parent.parent
+                     / "shared" / "skills" / "singleton_lock.py"):
+            if not cand.exists():
+                continue
+            spec = importlib.util.spec_from_file_location("singleton_lock", cand)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            mod.acquire_singleton(LOCK_FILE, pid_file=PID_FILE,
+                                  label="heartbeat-bridge")
+            return
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        _log(f"WARN singleton_lock non caricabile ({e}) — proseguo senza lock")
+
+
 def _db_count(cmd):
-    """Conta le righe-posizione di un db_query (next-for-*). Ritorna int o None.
-    Robusto: "nessuna"/"non" → 0; errori → None (campo omesso, non inventato)."""
+    """Quante posizioni ci sono in una coda (`next-for-*`). Ritorna int o None.
+
+    Legge il TOTALE dichiarato da `--json` invece di contare le righe stampate:
+    dal 2026-07-30 le code hanno un limite di default (20), quindi contare le
+    righe direbbe al Capitano "20" su una coda da 1.375 — proprio il numero che
+    lo farebbe smettere di scalare. `--limit 1` perché la riga non serve: il
+    totale è calcolato prima del limite. Errori → None (campo omesso dal
+    battito, mai inventato).
+    """
     try:
         out = subprocess.run(
-            ["python3", DB_QUERY, cmd], capture_output=True, text=True, timeout=30
+            ["python3", DB_QUERY, cmd, "--json", "--limit", "1"],
+            capture_output=True, text=True, timeout=30,
         ).stdout
     except Exception:
         return None
-    low = out.lower()
-    if "nessun" in low or "no positions" in low or "vuota" in low or "empty" in low:
-        return 0
-    # conta righe che sembrano una posizione (iniziano con # o con un id numerico)
-    n = 0
-    for line in out.splitlines():
-        s = line.strip()
-        if s.startswith("#") or (s[:1].isdigit() and "|" in s):
-            n += 1
-    return n
+    try:
+        return int(json.loads(out.strip().splitlines()[-1])["total"])
+    except Exception:
+        return None
 
 
 def _tickets_open():
@@ -240,6 +280,57 @@ def _standby_active():
         return False
 
 
+# ── Modalità corrente ([MODE-INJECTION-HOURLY-PROMPT], 2026-07-30) ─────────
+# La sezione `[MODALITÀ CORRENTE]` si compone in `shared/skills/mode_banner.py`,
+# che legge `profile/capitano-maintenance.json`, la bacheca `team_directives` e i
+# flag operativi. Stesso pattern di burn_intent/standby: si cacha il MODULO (un
+# exec per processo), MAI il risultato — la lettura avviene a OGNI invio, che è
+# tutto il senso del ticket: un ordine cambiato a caldo deve valere al battito
+# successivo, non al riavvio del bridge.
+_MODE_BANNER_MOD = None
+
+
+def _mode_banner_mod():
+    global _MODE_BANNER_MOD
+    if _MODE_BANNER_MOD is None:
+        try:
+            import importlib.util
+            for cand in (Path("/app/shared/skills/mode_banner.py"),
+                         Path(__file__).resolve().parent.parent
+                         / "shared" / "skills" / "mode_banner.py"):
+                if not cand.exists():
+                    continue
+                spec = importlib.util.spec_from_file_location("mode_banner", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _MODE_BANNER_MOD = mod
+                break
+        except Exception:  # noqa: BLE001 — un promemoria non abbatte il battito
+            _MODE_BANNER_MOD = None
+    return _MODE_BANNER_MOD
+
+
+def _mode_section():
+    """(sezione, ordini in vigore, sourcing spento) letti DA DISCO adesso.
+
+    Su qualunque guasto ritorna ("", False, False): un modulo non caricabile non deve
+    zittire il battito. L'assenza della sezione resta il segnale «bridge rotto»
+    — ed è per questo che il guasto viene LOGGATO, non ingoiato.
+    """
+    mod = _mode_banner_mod()
+    if mod is None:
+        _log("WARN mode_banner non caricabile: [MODALITÀ CORRENTE] NON iniettata")
+        return ("", False, False)
+    try:
+        snap = mod.snapshot()
+        return (mod.banner(snap=snap),
+                bool(mod.has_standing_orders(snap)),
+                bool(mod.sourcing_stopped(snap)))
+    except Exception as e:  # noqa: BLE001
+        _log(f"WARN [MODALITÀ CORRENTE] non composta: {e}")
+        return ("", False, False)
+
+
 def _scout_exhausted_recently(now):
     """True se uno Scout ha dichiarato [SCOUT-ESAUSTO] nell'ultima finestra di
     lavoro (SCOUT_EXHAUST_LOOKBACK_H). In quel caso le fonti sono DAVVERO secche e
@@ -307,9 +398,18 @@ def choose_nudge(state, now, last_theme):
     #          non ri-ordinare uno Scout che ciclerebbe sulle stesse fonti;
     #      (b) backlog a valle profondo (≥15) → il collo di bottiglia è downstream,
     #          non il sourcing: lo gestisce il ramo (3).
+    #      (c) `stop_search` sul disco (C-18, 2026-07-30) → il sourcing è spento
+    #          PER ORDINE DELL'UTENTE e la coda `new` vuota è lo stato voluto:
+    #          C-05/C-05c sono sospese. Senza questa eccezione il bridge
+    #          ordinerebbe uno spawn Scout contraddicendo, nello STESSO
+    #          messaggio, la sezione [MODALITÀ CORRENTE] che gli sta in coda —
+    #          ed è il verbo con cui i 18 giorni di manutenzione persa si sono
+    #          materializzati in 183 posizioni sorgente.
     #    E non è più un sussurro: è il VERDETTO (spawna Scout) consegnato come ORDINE.
     downstream_deep = (qa or 0) >= 15 or (qs or 0) >= 15
-    if not scouts_live and not downstream_deep and not _scout_exhausted_recently(now):
+    if (not scouts_live and not downstream_deep
+            and not state.get("sourcing_stopped")
+            and not _scout_exhausted_recently(now)):
         return ("sourcing-fermo",
                 f"[HEARTBEAT] Nessuno Scout attivo e nessun [SCOUT-ESAUSTO] oggi "
                 f"(analista={qa}, scorer={qs}, weekly={wk}%) → il sourcing è FERMO. "
@@ -356,6 +456,15 @@ def _send(msg):
                                text=True, timeout=90)
             if r.returncode == 0:
                 return True
+            # rc=5 = "vivo ma muto": il testo è nel composer ma l'Enter non è
+            # mai stato processato. Non è un nudge saltato che il prossimo giro
+            # recupera — è uno stato che resta. Va detto, o 7 nudge orari
+            # consecutivi sembrano consegnati e il destinatario è fermo.
+            if r.returncode == 5:
+                print(f"[heartbeat-bridge] {TARGET} VIVA MA MUTA (rc=5): nudge "
+                      f"nel composer ma turno mai partito — va sbloccata a mano",
+                      file=sys.stderr, flush=True)
+                return False
         except FileNotFoundError:
             continue
         except Exception:
@@ -404,10 +513,25 @@ def tick(now, send):
              f"(daily-halt/off-hours derogati dall'utente)")
     st = gather_state()
     persisted = _read_state()
+    # DA DISCO, adesso: mai da `persisted`, mai da una variabile del giro prima.
+    # Va letto PRIMA di scegliere il nudge, perché `sourcing_stopped` disarma
+    # l'ordine di spawn Scout (C-18 sospende C-05).
+    mode_section, standing_orders, sourcing_stopped = _mode_section()
+    st["sourcing_stopped"] = sourcing_stopped
     theme, msg = choose_nudge(st, now, persisted.get("last_theme"))
     if not msg:
-        _log(f"{now:%H:%M} silent (theme={theme}) state={st}")
-        return
+        # L'ora di silenzio della rotazione salta SOLO se c'è un ordine in
+        # vigore da riferire: quello è il caso in cui il messaggio non è un
+        # nudge in più ma l'unico canale che tiene vivo l'ordine dell'utente.
+        # A modalità normale e bacheca vuota il silenzio resta silenzio.
+        if not (mode_section and standing_orders):
+            _log(f"{now:%H:%M} silent (theme={theme}) state={st}")
+            return
+        theme = "modalita-corrente"
+        msg = ("[HEARTBEAT] Nessuna anomalia da segnalare. Promemoria "
+               "deterministico degli ordini in vigore:")
+    if mode_section:
+        msg = f"{msg} {mode_section}"
     _log(f"{now:%H:%M} nudge[{theme}]: {msg}")
     if send:
         ok = _send(msg)
@@ -420,8 +544,11 @@ def main():
     once = "--once" in sys.argv
     send = ("--send" in sys.argv) or not once
     if once:
+        # `--once` è diagnostico e non compete con nulla: niente lock, così non
+        # esce silenziosamente quando il daemon è vivo.
         tick(datetime.now(timezone.utc), send)
         return
+    _acquire_singleton()
     _log(f"up — heartbeat orario al {TARGET}, jht_home={JHT_HOME}")
     while True:
         now = datetime.now(timezone.utc)

@@ -20,7 +20,7 @@
  Total fix:        0/34                  31/34 (91%)
 ```
 
-> Note: the `34` is the total of findings from the **internal audit**. The OpenClaw comparison surfaced 1 additional non-audit gap (generic SSRF dispatcher) which has since landed; `resolve-system-bin` was deferred with rationale. Including the post-session work on SSRF dispatcher (4 commits) and L1 nonce-based CSP, the public-release total is 33/35 (94%).
+> Note: the `34` is the total of findings from the **internal audit**. The OpenClaw comparison surfaced 1 additional non-audit gap (generic SSRF dispatcher) which was believed closed at the time; it was **not** — the module was never wired to a caller and has since been removed (see §7 and the correction of 2026-07-30). `resolve-system-bin` was deferred with rationale. Counting SSRF as still open, the public-release total is 32/35 (91%).
 
 **New files created in the repo during this session:**
 
@@ -145,9 +145,15 @@ export function safeResolveUnder(baseDir: string, candidate: string): string | n
 
 ---
 
-## 7. SSRF defense — gap closed ✅
+## 7. SSRF defense — ⚠️ gap **not** closed (correction 2026-07-30)
 
-| | OpenClaw | JHT pre-fix | **JHT post-fix** |
+> **Correction — 2026-07-30.** This section recorded the state at the end of the hardening session, and it was wrong about the part that matters. The module it credits was **never called by anything**: every occurrence of `safeFetch`/`validateUrl` in the repo was internal to the module itself, and the "integrated at `web/api/webhooks` / `web/api/gateway`" claim below refers to **two routes that have never existed** in this repo. The 1,134 dead lines (`web/lib/ssrf.ts`, `web/lib/net/{ssrf,ip,hostname,string-coerce}.ts`) have therefore been **deleted** — a checklist that declares an inactive guard is more dangerous than an admitted gap.
+>
+> **Current state: JHT has no SSRF guard.** It also has no surface that needs one: the 5 server-side `fetch()` in `web/` (`api/ai-assistant`, `api/cloud-sync/device-register`, `api/feedback` ×3) all target hard-coded hosts or an env-provided URL, and **none takes a URL supplied by the user**. The first route that fetches a user-supplied URL must reintroduce a guard *before* shipping; the deleted implementation is recoverable verbatim from git history (`git log --diff-filter=D -- web/lib/net/ssrf.ts`).
+>
+> The score and totals in this section are the original session's figures and are **no longer current** — the real score for this row today is **0/10**.
+
+| | OpenClaw | JHT pre-fix | **JHT at the time (module since deleted)** |
 |---|---|---|---|
 | Dedicated module | `src/infra/net/ssrf.ts` 538 LOC | ❌ | ✅ `shared/net/ssrf.ts` (350 LOC distilled) + `shared/net/ip.ts` (faithful port) |
 | DNS pinning anti-rebinding | ✅ resolve once + connect-by-IP | — | 🟡 pre-flight DNS validation + per-IP recheck (no dispatcher-level connect-by-IP — small TOCTOU window remains, documented) |
@@ -157,14 +163,13 @@ export function safeResolveUnder(baseDir: string, candidate: string): string | n
 
 **Score:** 0/10 → **8/10** (Δ +8). The remaining 2 points are dispatcher-level DNS pinning via undici Agent, deferred — out of JHT's single-user threat model.
 
-**What landed:**
-- `shared/net/ssrf.ts` with `validateUrl`, `resolveAndAssertPublicHostname`, `safeFetch` (manual redirect handling, per-hop revalidation, cross-origin sensitive-header stripping, SsrFBlockedError), 80/80 tests pass.
-- Integrated at `web/api/webhooks` test-ping (user-controlled URL) and `web/api/gateway` (env-controlled, replaces homemade regex check).
+**What landed (and was later removed):**
+- `web/lib/net/ssrf.ts` with `validateUrl`, `resolveAndAssertPublicHostname`, `safeFetch` (manual redirect handling, per-hop revalidation, cross-origin sensitive-header stripping, `SsrFBlockedError`).
+- **Integrated: nowhere.** The module had zero importers for its entire life. Deleted 2026-07-30; see the correction at the top of this section.
 
-**Follow-ups (non-blocker):**
-- Python adapter for `shared/skills/check_links.py`.
-- CLI integration (currently JS-only, needs build step).
-- Apply to `web/api/{deploy,pipelines,download,cloud-sync}` for defence-in-depth.
+**If a guard is ever needed again:**
+- Restore the module from git history — do not write a fresh regex check.
+- Wire it at the entry point *first*, then extend to `shared/skills/check_links.py` (Python adapter) and `cli/` (needs a build step to consume the TS module).
 
 ---
 
@@ -237,7 +242,7 @@ When the public release ships, this doc is promoted to `SECURITY.md` at the root
 | Area | OpenClaw | JHT pre-fix | **JHT post-fix** | Δ |
 |---|---|---|---|---|
 | 🔐 Auth gating | 10 | 4 | **9** | +5 |
-| 🌐 SSRF defense | 10 | 0 | **8** | +8 |
+| 🌐 SSRF defense | 10 | 0 | ~~**8**~~ → **0** ⚠️ | 0 |
 | 🚫 Cmd injection | 10 | 5 | **8** | +3 |
 | 🗝️ Secret storage | 9 | 5 | **9** | +4 |
 | 🛡️ CSP / headers | 10 | 6 | **9** | +3 |
@@ -248,23 +253,25 @@ When the public release ships, this doc is promoted to `SECURITY.md` at the root
 | 🤖 Pre-commit / CI | 10 | 3 | **9** | +6 |
 | 📜 Threat model | 10 | 0 | **9** | +9 |
 | 🔬 Audit infrastructure | 10 | 0 | **3** | +3 |
-| **TOTAL / 120** | **114** | **36** | **96** | **+60** |
+| **TOTAL / 120** | **114** | **36** | ~~**96**~~ → **88** | **+52** |
 
 ```
               Pre-fix     ████████░░░░░░░░░░░░░░░░░░░░░░  36/120  (30%)
-              Post-fix    ██████████████████████████░░░░  96/120  (80%)
+              Post-fix    ██████████████████████░░░░░░░░  88/120  (73%)
               OpenClaw    ████████████████████████████░░  114/120 (95%)
                                    ↑
-                          Residual gap: -18 (was -78)
+                          Residual gap: -26 (was -78)
 ```
+
+> The SSRF row was scored 8 at the end of the session on the strength of a module that turned out to be unreachable; the corrected figures above put it back at 0. See §7.
 
 ---
 
 # 🎯 What remains after this session
 
-## ✅ Public-release blockers — closed
+## Public-release blockers — 2 closed, 1 reopened ⚠️
 
-1. ~~**Generic SSRF dispatcher**~~ — `shared/net/ssrf.ts` landed. 350 LOC distilled from OpenClaw, plus `shared/net/ip.ts` faithfully ported. Integrated at the user-controlled URL surfaces (webhooks test, gateway). 80/80 tests pass.
+1. **Generic SSRF dispatcher** — ⚠️ **not closed** (corrected 2026-07-30). The port landed but was never wired to a caller, and the routes it claimed to protect (`web/api/webhooks`, `web/api/gateway`) do not exist. The module was deleted; no SSRF guard is integrated anywhere. Not a live exposure — no route today fetches a user-supplied URL — but the first one that does must reintroduce a guard first. See §7.
 2. ~~**Strict `resolve-system-bin`**~~ — deferred with rationale (JHT has no security-critical shell-out binaries today; `desktop/main.js` deliberately prepends `/opt/homebrew/bin` to PATH for Docker Desktop / Homebrew, which a strict whitelist would break on macOS).
 3. ~~**Nonce-based CSP in production**~~ — `web/middleware.ts` mints a per-request nonce, `script-src 'self' 'nonce-XXX' 'strict-dynamic'` in prod with `'unsafe-inline'` retained only in dev for HMR.
 
@@ -273,7 +280,7 @@ When the public release ships, this doc is promoted to `SECURITY.md` at the root
 4. **`tests/security/`** suite — patterns aligned with OpenClaw `audit-exec-*.test.ts` (today 0 tests, OpenClaw has 43).
 5. **`jht doctor security`** CLI command — diagnostics for missing keys, exposed ports, insecure fallbacks.
 6. **`Dockerfile.sandbox`** optional — only if JHT enables multi-tenant scenarios in the future.
-7. **SSRF coverage extension** — Python adapter for `shared/skills/check_links.py`, CLI integration (currently JS-only), apply to `web/api/{deploy,pipelines,download,cloud-sync}` for defence-in-depth.
+7. ~~**SSRF coverage extension**~~ — moot: there is nothing to extend. No SSRF guard exists in the tree (see §7); the work item is "reintroduce a guard when a route starts fetching a user-supplied URL", not "extend coverage".
 8. **Style-src tightening** — replace `'unsafe-inline'` with `'unsafe-hashes'` for inline `style` JSX attributes once the cost/benefit makes sense (script XSS is the dominant vector).
 
 ---

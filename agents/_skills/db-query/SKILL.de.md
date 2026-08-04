@@ -68,6 +68,39 @@ python3 /app/shared/skills/db_query.py next-for-critico   # ⚠️ Legacy — in
 
 Jeder gibt den nächsten Batch zurück, der für diese Rolle bereit ist, entsprechend dem V5-Statusfluss: `new → checked → scored → writing → ready → applied → response` (mit `excluded` als Ausfahrt von jedem Schritt).
 
+### Das Limit ist ein Default, keine Obergrenze
+
+Jede Warteschlange druckt die **ersten 20 Zeilen** und nennt immer, **wie viele es insgesamt
+sind** — `Posizioni new pronte per analisi (mostrate 20 di 1375)`. Lies die zweite Zahl: das
+ist das Backlog, und es verschwindet nicht, nur weil die Zeilen abgeschnitten wurden.
+
+```bash
+# Wie viele du sehen willst, entscheidest du
+python3 /app/shared/skills/db_query.py next-for-categorize --limit 100
+python3 /app/shared/skills/db_query.py next-for-categorize --all     # alle (= --limit 0)
+python3 /app/shared/skills/db_query.py next-for-categorize --json    # {"total": 1375, "shown": 20, "rows": [...]}
+```
+
+Warum es den Default gibt (gemessen am 2026-07-30): ohne Limit druckte
+`next-for-geocode-missing` bei 2.000 Positionen **1.375 Zeilen ≈ 19.500 Tokens** und würde
+bei 20.000 **~195.000** drucken — ein einziger Befehl, mehr als ein ganzes Kontextfenster.
+Der Default schützt dich vor dem, was niemand angefordert hat; er entscheidet **nicht** für
+dich: wähle die Zahl passend zu deiner Aufgabe — 20, um das nächste Element zu nehmen,
+`--all` für ein Audit, allein die Gesamtzahl, um ein Backlog einzuschätzen.
+
+Und du bist nicht auf diese Befehle beschränkt: diese Skill gewährt `Bash(python3 *)`, also
+ist eine eigene Query mit deinem eigenen `LIMIT` legitim, sobald die fertige Warteschlange
+nicht die Frage ist, die du wirklich hast.
+
+```bash
+python3 -c "
+import os, sqlite3
+db = sqlite3.connect(os.environ.get('JHT_DB', '/jht_home/jobs.db'))
+for row in db.execute('SELECT id, title FROM positions WHERE role_family IS NULL LIMIT 50'):
+    print(row)
+"
+```
+
 ## Wann verwenden
 
 - Vor Skalierungsentscheidungen (Captain muss wissen, ob es ≥ 3 `checked`-Datensätze gibt, bevor ein SCORER gespawnt wird)

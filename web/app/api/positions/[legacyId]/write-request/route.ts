@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { requireAuth } from "@/lib/auth";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
@@ -214,11 +215,10 @@ async function toggleViaCloud(
     .maybeSingle();
 
   if (error) {
-    return {
-      ok: false,
-      status: 500,
-      body: { error: `Supabase query failed: ${error.message}` },
-    };
+    // Helper che ritorna un BODY, non una NextResponse: `sanitizedError` non
+    // è applicabile, quindi ne replichiamo il contratto a mano.
+    console.error(`[positions/write-request] 500 ${error.message}`);
+    return { ok: false, status: 500, body: { error: "query_failed" } };
   }
   if (!row) {
     return {
@@ -299,6 +299,8 @@ async function handleToggle(
   legacyIdParam: string,
   requested: boolean,
 ): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const legacyId = Number.parseInt(legacyIdParam, 10);
   if (!Number.isInteger(legacyId) || legacyId <= 0) {
     return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });

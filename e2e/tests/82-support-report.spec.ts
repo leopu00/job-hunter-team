@@ -24,7 +24,9 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
  * un motivo esplicito. Ricetta in e2e/README.md § "Sessione".
  */
 
-const BASE = process.env.BASE_URL || "http://localhost:3000";
+// ⚠️ Percorsi **relativi**, mai una costante BASE locale: la destinazione la
+// decide `use.baseURL` della config, che è anche dove vive la scelta di
+// `localhost` invece di `127.0.0.1` (playwright.config.ts:1-25).
 
 /**
  * Stato del canale, sondato UNA VOLTA per esecuzione.
@@ -38,7 +40,7 @@ let statoCanale: "ok" | "assente" | "esaurito" | null = null;
 
 async function sondaCanale(page: Page) {
   if (statoCanale) return statoCanale;
-  const res = await page.request.post(`${BASE}/api/feedback`, {
+  const res = await page.request.post("/api/feedback", {
     data: {
       client: "e2e-probe",
       happened: "sonda e2e: verifica che il canale sia configurato",
@@ -96,7 +98,7 @@ async function invioPossibileOrSkip(page: Page) {
  * Chiude anche il banner dei cookie, che altrimenti copre il pulsante di invio.
  */
 async function apriModulo(page: Page) {
-  await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
+  await page.goto("/contact", { waitUntil: "domcontentloaded" });
   const categorie = page.locator("fieldset button[aria-pressed]");
   await categorie.first().waitFor();
   const seconda = categorie.nth(1);
@@ -108,7 +110,7 @@ async function apriModulo(page: Page) {
 }
 
 async function sessioneOrSkip(page: Page) {
-  const dash = await page.request.get(`${BASE}/dashboard`, { maxRedirects: 0 });
+  const dash = await page.request.get("/dashboard", { maxRedirects: 0 });
   test.skip(
     dash.status() === 307,
     "serve una sessione autenticata per l'area riservata — vedi e2e/README.md § Sessione",
@@ -132,33 +134,45 @@ async function sessioneOrSkip(page: Page) {
  * Il wizard offre lui stesso la via d'uscita, ed è quella che si usa qui.
  */
 async function superaWizard(page: Page) {
-  // Il redirect al wizard è client-side: subito dopo `goto` l'URL può essere
-  // ancora quello chiesto e il wizard non ancora montato. Il `count()`
-  // istantaneo che stava qui leggeva quel buco e restituiva 0 — e ci lasciava
-  // DENTRO il wizard credendo di averlo saltato.
+  // Il redirect al wizard è client-side, quindi subito dopo `goto` la pagina
+  // mente due volte: l'URL è ancora quello chiesto e il wizard non è montato.
   //
-  // Da lì il fallimento non somiglia più alla sua causa: il wizard mostra la
+  // Due tentativi già falliti su questa stessa riga, per la stessa ragione di
+  // fondo — decidere su un segnale letto TROPPO PRESTO:
+  //   · un `count()` istantaneo sul pulsante restituiva 0 e ci lasciava dentro
+  //     il wizard credendo di averlo saltato;
+  //   · aspettare l'URL non serve a niente se il pattern include anche la meta
+  //     richiesta: dopo `goto('/dashboard')` l'URL È già `/dashboard`, la
+  //     waitForURL passa nello stesso istante e il controllo su `/welcome`
+  //     esce prima che il redirect sia partito. Gara spostata, non vinta:
+  //     verde il 30/07 la mattina, rossa lo stesso giorno il pomeriggio.
+  //
+  // Da lì il fallimento non somiglia più alla sua causa: il wizard disegna la
   // navbar, quindi il menu utente si apre e la voce esiste davvero, ma il
-  // re-render la stacca e il click resta appeso 30 secondi. Il rosso in CI
-  // parlava del menu (30/07, due volte di fila sullo stesso commit); il menu
-  // non c'entrava nulla.
+  // re-render la stacca e il click resta appeso 30 secondi. Il rosso parlava
+  // del menu; il menu non c'entrava nulla.
   //
-  // Quindi si aspetta che l'URL si fermi su una delle due sponde prima di
-  // decidere. `catch` vuoto: se non si ferma su nessuna, il controllo qui
-  // sotto è comunque corretto e sarà il chiamante a fallire con un messaggio
-  // suo.
-  await page
-    .waitForURL(/\/(welcome|dashboard|positions|map)\b/, { timeout: 15_000 })
-    .catch(() => {});
-  if (!page.url().includes("/welcome")) return;
-
-  // È un <button> con onClick, non un <a>: il wizard naviga da codice.
+  // Quindi non si guarda più né l'URL né il conteggio: si aspetta l'ESITO,
+  // cioè che il pulsante del wizard si manifesti entro un tempo onesto. Se
+  // compare siamo nel wizard e lo saltiamo; se non compare il wizard non c'è,
+  // e l'attesa era il prezzo per saperlo con certezza invece che per fortuna.
   const salta = page.getByRole("button", {
     name: /salta|skip|saltar|passer|überspringen|kihagy/i,
   });
-  await salta.first().waitFor({ state: "visible", timeout: 15_000 });
+  const nelWizard = await salta
+    .first()
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!nelWizard) return;
+
+  // È un <button> con onClick, non un <a>: il wizard naviga da codice.
   await salta.first().click();
   await page.waitForURL(/\/dashboard|\/positions|\/map/, { timeout: 15_000 });
+  // Il redirect cambia l'URL prima che la pagina nuova sia interattiva: senza
+  // questo, il click successivo sul menu utente può ancora colpire il DOM del
+  // wizard in smontaggio.
+  await page.waitForLoadState("domcontentloaded");
 }
 
 // Apre il dialogo dal menu utente. Menu e dialogo sono due passaggi distinti:
@@ -167,10 +181,10 @@ async function superaWizard(page: Page) {
 // non riceve eventi. Fallimento intermittente in CI il 2026-07-27 — lo stesso
 // test era passato in 2.4s quattordici minuti prima.
 async function apriDialogo(page: Page, da = "/dashboard") {
-  await page.goto(`${BASE}${da}`, { waitUntil: "domcontentloaded" });
+  await page.goto(da, { waitUntil: "domcontentloaded" });
   await superaWizard(page);
   if (!page.url().includes(da)) {
-    await page.goto(`${BASE}${da}`, { waitUntil: "domcontentloaded" });
+    await page.goto(da, { waitUntil: "domcontentloaded" });
   }
   const account = page.getByRole("button", { name: /account:/i });
   await account.waitFor({ state: "visible" });
@@ -187,7 +201,7 @@ async function apriDialogo(page: Page, da = "/dashboard") {
 
 test.describe("pagina pubblica /contact", () => {
   test("il modulo ha i campi che servono", async ({ page }) => {
-    await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
+    await page.goto("/contact", { waitUntil: "domcontentloaded" });
     await expect(page.locator("#c-nome")).toBeVisible();
     await expect(page.locator("#c-email")).toBeVisible();
     await expect(page.locator("#c-oggetto")).toBeVisible();
@@ -199,7 +213,7 @@ test.describe("pagina pubblica /contact", () => {
   test("gli indirizzi sono cliccabili, per chi preferisce il suo client", async ({
     page,
   }) => {
-    await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
+    await page.goto("/contact", { waitUntil: "domcontentloaded" });
     await expect(
       page.locator('a[href="mailto:support@jobhunterteam.ai"]'),
     ).toBeVisible();
@@ -211,7 +225,7 @@ test.describe("pagina pubblica /contact", () => {
   test("il campo trappola resta fuori dallo schermo e dagli screen reader", async ({
     page,
   }) => {
-    await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
+    await page.goto("/contact", { waitUntil: "domcontentloaded" });
     const esca = page.locator("#c-website");
     await expect(esca).toHaveCount(1);
     // Non `toBeHidden()`: è fuori viewport ma tecnicamente renderizzato. Ciò

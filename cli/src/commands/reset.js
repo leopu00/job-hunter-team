@@ -4,6 +4,23 @@ import { homedir } from 'node:os'
 import * as clack from '@clack/prompts'
 import pc from 'picocolors'
 import { JHT_HOME } from '../jht-paths.js';
+import { isInteractive } from './_colors.js'
+
+/**
+ * Spinner solo su TTY. [CLI-OUTPUT-NOT-MACHINE-SAFE]
+ * Lo spinner di clack anima nascondendo il cursore (`\x1b[?25l`) e riscrivendo
+ * la riga: sequenze che picocolors non disattiva perche' non sono colore.
+ * Fuori dal terminale finiscono nel file o nella pipe del chiamante, quindi li
+ * sostituiamo con due righe di log statiche.
+ */
+function spinner() {
+  if (isInteractive()) return clack.spinner()
+  return {
+    start: (msg) => { if (msg) clack.log.info(msg) },
+    stop:  (msg) => { if (msg) clack.log.info(msg) },
+    message: (msg) => { if (msg) clack.log.info(msg) },
+  }
+}
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -74,6 +91,14 @@ async function executeReset(targets) {
 
 // ── Main handler ──────────────────────────────────────────────────────────
 
+// Ogni uscita anticipata e' `process.exitCode` + `return`, mai `process.exit()`.
+// Qui il motivo e' piu' concreto che altrove: l'ultima cosa che ogni ramo fa e'
+// un `clack.outro(...)`, cioe' una scrittura sul terminale che dice all'utente
+// se il reset e' stato eseguito o annullato. `process.exit()` sulla riga
+// successiva puo' troncarla, e su un comando distruttivo la riga che dice
+// "Annullato" e' esattamente quella che non si puo' perdere. I codici osservati
+// non cambiano: 1 sugli errori d'uso, 0 sull'annullamento volontario.
+// Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
 async function handleReset(opts) {
   clack.intro(pc.bold('JHT — Reset'))
 
@@ -85,20 +110,21 @@ async function handleReset(opts) {
     if (opts.nonInteractive) {
       clack.log.error('--scope richiesto in modalità --non-interactive')
       clack.outro(pc.red('Annullato'))
-      process.exit(1)
+      process.exitCode = 1
+      return
     }
     scopeKey = await clack.select({
       message: 'Seleziona scope reset',
       options: Object.entries(SCOPES).map(([value, s]) => ({ value, label: s.label })),
       initialValue: 'config',
     })
-    if (clack.isCancel(scopeKey)) { clack.outro(pc.dim('Annullato')); process.exit(0) }
+    if (clack.isCancel(scopeKey)) { clack.outro(pc.dim('Annullato')); return }
   }
 
   const scope = SCOPES[scopeKey]
   if (!scope) {
     clack.log.error(`Scope non valido: ${scopeKey}. Valori: config | creds | full`)
-    clack.outro(pc.red('Annullato')); process.exit(1)
+    clack.outro(pc.red('Annullato')); process.exitCode = 1; return
   }
 
   // ── Build delete list ─────────────────────────────────────────────────
@@ -129,20 +155,20 @@ async function handleReset(opts) {
     confirmed = !!opts.confirmReset
     if (!confirmed) {
       clack.log.error('In --non-interactive richiede --confirm-reset')
-      clack.outro(pc.red('Annullato')); process.exit(1)
+      clack.outro(pc.red('Annullato')); process.exitCode = 1; return
     }
   } else {
     const ans = await clack.confirm({
       message: `Confermi eliminazione scope ${pc.bold(scopeKey)}?`,
       initialValue: false,
     })
-    if (clack.isCancel(ans) || !ans) { clack.outro(pc.dim('Annullato')); process.exit(0) }
+    if (clack.isCancel(ans) || !ans) { clack.outro(pc.dim('Annullato')); return }
     confirmed = true
   }
 
   // ── Execute ───────────────────────────────────────────────────────────
 
-  const s = clack.spinner()
+  const s = spinner()
   s.start('Eliminazione in corso…')
   const { deleted, skipped } = await executeReset(scope.targets)
   s.stop('Eliminazione completata')

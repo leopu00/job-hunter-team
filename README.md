@@ -32,7 +32,7 @@
 
 Job hunting is a second job on top of your job: scanning boards daily, qualifying listings, tailoring every application. JHT hands that grind to a team of AI agents running around the clock — Scout finds positions, Analyst verifies them, Scorer ranks them against your profile, Writer prepares tailored documents, Critic blind-reviews everything — orchestrated by a **Captain**. You only review applications that clear the quality bar.
 
-Everything runs **locally in a container** — your machine or your VPS, your profile, your data, your provider account. JHT itself is **free (MIT)**; it runs on a **dedicated LLM subscription (~€40–200/mo)** — breakdown in [Install](#install), local-model support (€0) is open mission [M5](https://github.com/leopu00/job-hunter-team/issues/93).
+Everything runs **locally in a container** — your machine or your VPS, your profile, your data, your provider account. JHT itself is **free (MIT)**; it runs on a **dedicated LLM subscription (~€40–200/mo)** — breakdown in [Install](#install). A local model can currently shadow or replace the Scorer only; running the whole team without a supported provider is not available.
 
 I built JHT for my own job hunt — ~200 offers analyzed, ~20 tailored applications, **5 interview invites in a few weeks** ([story](docs/about/STORY.md)). Then I rebuilt it as open source. On the public stack, a Codex team ran **one month unattended**: 658 positions found, 520 scored, 307 strong matches, weekly budget self-managed at 99–100% ([results](docs/about/RESULTS.md)).
 
@@ -80,7 +80,18 @@ Each agent is an autonomous AI session on one of the supported CLIs (Claude Code
 
 ## Install
 
-> 🧪 **Beta.** The native desktop application is now the Godot office in [`game/`](game/); the CLI remains available for automation and remote administration. Hit a snag? [`docs/guides/BETA.md`](docs/guides/BETA.md).
+Choose the **native office** for the guided visual experience, or the **CLI**
+for automation and remote administration. Both control the same containerized
+team.
+
+**Before you install:**
+
+- Windows x64, Linux x64, or macOS (Intel: 11+; Apple silicon: 13+);
+- a supported subscription dedicated to JHT (the provider login happens in
+  your browser; JHT does not ask for an API key);
+- a Docker-compatible runtime for the team. The office can guide the install;
+  on Windows, Docker Desktop must complete its own consent and first-run flow;
+- about 3–4 GB of available RAM while the local team is running.
 
 **What it costs** — the team burns ~400M tokens/month, so it needs a flat-rate subscription **dedicated to the team** (a shared account hits rate limits): the same usage on pay-per-use APIs would be $1,000–2,500/mo. Reasoning: [ADR-0004](docs/adr/0004-subscription-only-no-api-keys.md) · details: [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
@@ -90,7 +101,18 @@ Each agent is an autonomous AI session on one of the supported CLIs (Claude Code
 | **Codex** | Plus / Pro | ~€100 | Proven — 1-month autonomous run |
 | **Kimi** | Pro | ~€40 | Beta — in observation |
 
-**Recommended: inspect first, then run** (macOS / Linux / WSL) — the installer is [versioned in this repo](web/public/install.sh) and previews every action:
+**Native office (recommended):** download the current build from
+[GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest).
+The release contains `job-hunter-team.exe` for Windows,
+`job-hunter-team.zip` for macOS, and
+`job-hunter-team-linux-x64.tar.gz` for Linux. The macOS build is signed and
+notarized; Windows and Linux builds are currently unsigned. Open the office and
+select **Activate team**: the checklist requires all four gates — team runtime,
+provider login with a plan selected, candidate profile and working hours —
+before it starts the agents.
+
+**CLI:** inspect first, then run (macOS / Linux / WSL2). The installer is
+[versioned in this repo](scripts/install.sh) and previews every action:
 
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh -o install.sh
@@ -101,7 +123,10 @@ bash install.sh
 
 Or the one-liner, if you've read it and trust it: `curl -fsSL https://jobhunterteam.ai/install.sh | bash`
 
-> It touches exactly two files on the host — `~/.jht/runtime/docker-compose.yml` and the `~/.local/bin/jht` wrapper. Everything else runs inside an isolated container; only `~/.jht` and `~/Documents/Job Hunter Team` are mounted.
+The installer downloads the Compose file, the `jht` host wrapper and its host
+preflight helper. It also creates `~/.jht/host.env` and may add the wrapper
+directory to your shell `PATH`. The agents themselves run in an isolated
+container; only `~/.jht` and `~/Documents/Job Hunter Team` are mounted.
 
 Full walkthrough, expert mode and contributor setup: [`docs/guides/QUICKSTART.md`](docs/guides/QUICKSTART.md).
 
@@ -123,11 +148,9 @@ Monorepo: [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](sh
 
 ## Contributing
 
-JHT is built by a solo maintainer orchestrating AI agents on parallel `devN` branches — external contributions come in as `feat/`/`fix/` branches → PR ([`CONTRIBUTING.md`](.github/CONTRIBUTING.md)).
-
-- Start here: [`good first issue`](https://github.com/leopu00/job-hunter-team/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) · bigger directions: [contributor missions M1–M5](docs/about/ROADMAP.md#-where-you-can-help--contributor-missions)
-- Beta tester? [`docs/guides/BETA.md`](docs/guides/BETA.md) — we want real job-seekers to break things
-- Security issue? [`SECURITY.md`](SECURITY.md) — responsible disclosure, please no public issue
+Bug reports and pull requests are welcome; the workflow is in
+[`CONTRIBUTING.md`](.github/CONTRIBUTING.md). For security issues, follow
+[`SECURITY.md`](SECURITY.md) and do not open a public issue.
 
 ## License
 

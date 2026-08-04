@@ -115,10 +115,12 @@ export default function FloatingChat() {
           from { opacity: 0; transform: translateY(12px) scale(0.97); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
+        @media print { [data-floating-chat] { display: none !important; } }
       `}</style>
 
       {/* Floating button */}
       <button
+        data-floating-chat=""
         onClick={() => setOpen((v) => !v)}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center shadow-lg cursor-pointer border-0 transition-all hover:opacity-90"
         style={{
@@ -159,6 +161,7 @@ export default function FloatingChat() {
       {/* Chat panel */}
       {open && (
         <div
+          data-floating-chat=""
           role="complementary"
           aria-label={tr("panel_label")}
           className="fixed bottom-24 right-6 w-96 flex flex-col rounded-xl overflow-hidden shadow-2xl"

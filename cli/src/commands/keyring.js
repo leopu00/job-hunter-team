@@ -12,16 +12,10 @@
  * come aggiungerla e suggerisce l'env var come fallback.
  */
 import { createRequire } from 'node:module';
+import { GREEN, RED, YELLOW, DIM, BOLD, RESET } from './_colors.js';
 
 const SERVICE = 'jht-credentials';
 const ACCOUNT_DEFAULT = 'JHT_CREDENTIALS_KEY';
-
-const GREEN  = '\x1b[32m';
-const RED    = '\x1b[31m';
-const YELLOW = '\x1b[33m';
-const DIM    = '\x1b[90m';
-const BOLD   = '\x1b[1m';
-const RESET  = '\x1b[0m';
 
 const requireMaybe = (() => {
   try { return createRequire(import.meta.url); } catch { return null; }

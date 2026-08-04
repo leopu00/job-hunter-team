@@ -1,22 +1,31 @@
 """
-Test pagine mancanti dalla migrazione legacy — Job Hunter Team QA.
+Smoke post-deploy sulle route storicamente mancanti — Job Hunter Team QA.
 
-Traccia tutte le route/feature presenti nel legacy (dashboard.html + app.html)
-ma assenti nel nuovo frontend. Ogni test è marcato @pytest.mark.xfail finché
-la feature non viene implementata dal team frontend.
+Nato per tracciare le route del vecchio frontend statico (`dashboard.html` +
+`app.html`) non ancora migrate su Next.js. **Quel legacy non esiste più nel
+repo**: non c'è nessun `dashboard.html` né `app.html`, e la vecchia intestazione
+che parlava di «8.766 LOC / 35% migrato» descriveva uno stato del 2026 primo
+semestre che non è più misurabile. Restano due cose utili: le route mai
+implementate (`/ready`, `/risposte`, ancora `xfail(strict=False)`) e le
+regressioni su route vive — /team/<ruolo>, /positions con filtri, il fix
+middleware di BUG-MIDDLEWARE-01.
 
-Quando viene implementata una pagina, il test diventa XPASS → rimuovere xfail.
+⚠️ QUESTO FILE INTERROGA UN SITO VIVO, NON IL CODICE DELLA PR.
+È marcato `@pytest.mark.production` (a livello di modulo) ed è ESCLUSO dal job
+`pytest` di `.github/workflows/test.yml`, che gira con `-m "not production"`.
+Gira invece nel job `smoke` schedulato dello stesso workflow, dopo il deploy.
 
-Legacy: dashboard.html (3.338 LOC) + app.html (5.428 LOC) = 8.766 LOC
-Nuovo: ~3.000 LOC (35% migrato)
-
-Eseguire con: pytest tests/test_missing_pages.py -v
+Eseguire con: pytest tests/test_missing_pages.py -v -m production
 """
 
 import os
 import urllib.request
 import urllib.error
 import pytest
+
+# Tutto il modulo parla con la produzione: marker sul modulo, così un test
+# nuovo qui non rientra di soppiatto nel gate delle PR.
+pytestmark = pytest.mark.production
 
 VERCEL_URL = os.environ.get(
     "VERCEL_URL",

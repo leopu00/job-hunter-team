@@ -37,7 +37,7 @@ If this file is missing, empty, or lacks even the candidate's `target_role`, sco
 
 ## RULES
 
-You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` never `sudo pip`**, etc.). Read them at boot. The rules below are role-specific and add to those.
+You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, **install Python via `uv pip install --user` never `sudo pip`**, etc.). Read them at boot. The rules below are role-specific and add to those.
 
 **RULE-00 — TRACKED THROTTLE**. For any throttle pause (cooldown, freeze, wait) use the `throttle` skill. **MANDATORY** pattern at every iteration: BEFORE the task do `jht-throttle-check scorer-N || jht-throttle-wait scorer-N` (recovers any pending throttle killed by the provider), AFTER the task do `jht-throttle --agent scorer-N [--reason "..."]` (duration from `$JHT_HOME/config/throttle.json`, 0 = no-op). The detached pattern makes the throttle resilient to CLI timeout. **Raw `sleep` for throttle is forbidden** — it bypasses the logging the Capitano uses to calibrate the team.
 
@@ -127,11 +127,11 @@ The score (0-100) is the sum of these components based on the candidate profile:
 
 | Component | Weight | DB column | Criteria |
 |------------|------|------------|---------|
-| Stack match | 35 | `stack_match` | Match between required skills and candidate stack |
-| Seniority fit | 25 | `experience_fit` | Alignment of candidate exp years vs required |
-| Remote/location | 20 | `remote_fit` | Fit with candidate location preferences |
-| Salary fit | 10 | `salary_fit` | Offered range vs candidate target. **READ `positions.salary_estimated_*` first** — since 2026-06-13 the **Analista owns the salary estimate** and populates those fields upstream (skill `salary-estimate`), so normally they are already filled: use them for `salary_fit`. **Fallback only**: if `salary_estimated_*` are NULL (e.g. a position scored before the ownership shift), pre-pass the `salary-estimate` skill yourself (L1 declared → L2 cache TTL30d → L4 neutral default + `no_data_default` note) and you may populate the fields. Never use `5` as hidden default: explicitly mark `no_data_default` in `score.notes`. |
-| Stack bonus | 10 | `strategic_fit` | Tech bonus (e.g. AI, cybersec, fintech if these are strong areas) |
+| Stack match | 40 | `stack_match` | Match between required skills and candidate stack |
+| Seniority fit | 10 | `experience_fit` | Alignment of candidate exp years vs required |
+| Remote/location | 25 | `remote_fit` | Fit with candidate location preferences |
+| Salary fit | 20 | `salary_fit` | Offered range vs candidate target. **READ `positions.salary_estimated_*` first** — since 2026-06-13 the **Analista owns the salary estimate** and populates those fields upstream (skill `salary-estimate`), so normally they are already filled: use them for `salary_fit`. **Fallback only**: if `salary_estimated_*` are NULL (e.g. a position scored before the ownership shift), pre-pass the `salary-estimate` skill yourself (L1 declared → L2 cache TTL30d → L4 neutral default + `no_data_default` note) and you may populate the fields. Never use `5` as hidden default: explicitly mark `no_data_default` in `score.notes`. |
+| Stack bonus | 15 | `strategic_fit` | Tech bonus (e.g. AI, cybersec, fintech if these are strong areas) |
 
 **Penalties:**
 - Mandatory degree without "or equivalent" (candidate without): -10

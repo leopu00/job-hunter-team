@@ -5,6 +5,8 @@ import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
 import { refreshModelPin } from './model-pin.js';
+import { isContainer } from '../../../shared/runtime/container.js';
+import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
 
 const JHT_DIR     = JHT_HOME;
@@ -35,12 +37,9 @@ function normalizeId(id) {
   return null;
 }
 
-const OK = '\x1b[32m●\x1b[0m';
-const WARN = '\x1b[33m◐\x1b[0m';
-const ERR = '\x1b[31m✗\x1b[0m';
-const DIM = '\x1b[90m';
-const YELLOW = '\x1b[33m';
-const RESET = '\x1b[0m';
+const OK = c.green('●');
+const WARN = c.yellow('◐');
+const ERR = c.red('✗');
 
 // ── Version detection ───────────────────────────────────────────────────────
 // Specchio di web/app/api/providers/route.ts. I path risolvono dal HOST
@@ -116,7 +115,7 @@ async function handleProviders() {
     const authMethod = provCfg?.auth_method ?? (hasEnv ? 'env' : hasCred ? 'file' : 'nessuna');
     const model = provCfg?.model ?? '—';
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
-    const activeLabel = isActive ? ' \x1b[32m[ATTIVO]\x1b[0m' : '';
+    const activeLabel = isActive ? ` ${GREEN}[ATTIVO]${RESET}` : '';
 
     console.log(`  ${icon}  ${known.name}${activeLabel}`);
     console.log(`     ${DIM}ID: ${id} · Modello: ${model} · Auth: ${authMethod}${RESET}`);
@@ -140,7 +139,7 @@ async function handleProviders() {
     for (const id of custom) {
       const p = providers[id];
       const isActive = activeProvider === id;
-      const activeLabel = isActive ? ' \x1b[32m[ATTIVO]\x1b[0m' : '';
+      const activeLabel = isActive ? ` ${GREEN}[ATTIVO]${RESET}` : '';
       console.log(`  ${WARN}  ${id}${activeLabel} — modello: ${p?.model ?? '—'}`);
     }
     console.log('');
@@ -155,7 +154,8 @@ async function handleUse(id) {
   const normalized = normalizeId(id);
   if (!normalized) {
     console.error(`${ERR}  provider '${id}' non riconosciuto. Supportati: ${Object.keys(KNOWN_PROVIDERS).join(', ')}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   let config = {};
   if (await fileExists(CONFIG_PATH)) {
@@ -259,11 +259,12 @@ async function handleUpdate(id) {
 
   if (targets.length === 0) {
     console.error(`${ERR}  provider '${id}' non riconosciuto. Supportati: claude, codex, kimi`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   // Branch in-container vs host:
-  // - Sul container (IS_CONTAINER=1, path Docker via wrapper bash) non c'e'
+  // - Sul container (isContainer(), path Docker via wrapper bash) non c'e'
   //   docker daemon: eseguiamo i comandi npm/uv direttamente. L'install
   //   scrive nei prefissi su /opt/jht-deps (volume Docker dal 2026-07-26,
   //   prima era il bind-mount /jht_home/.npm-global), quindi persiste
@@ -271,9 +272,12 @@ async function handleUpdate(id) {
   // - Sull'host (path "from source", contributor) usiamo docker compose run
   //   per ottenere un container effimero isolato (evita rename collisions
   //   sui binari npm in uso dal container running).
-  if (process.env.IS_CONTAINER === '1') {
+  if (isContainer()) {
     const res = await handleUpdateInContainer(targets);
-    if (!res.ok) process.exit(1);
+    if (!res.ok) {
+      process.exitCode = 1;
+      return;
+    }
     console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
     return;
   }
@@ -281,7 +285,8 @@ async function handleUpdate(id) {
   const repoRoot = findRepoRoot();
   if (!repoRoot || !existsSync(join(repoRoot, 'docker-compose.yml'))) {
     console.error(`${ERR}  docker-compose.yml non trovato. Esegui dalla root del repo JHT.`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const homeDir = homedir();
@@ -308,7 +313,14 @@ async function handleUpdate(id) {
     if (!failed) console.log(`  ${OK}  ${target} aggiornato`);
   }
 
-  if (failed > 0) process.exit(1);
+  // `return` esplicito: con `process.exit()` bastava segnare il codice per
+  // fermare tutto, con `process.exitCode` il flusso prosegue — e senza il
+  // `return` il consiglio "riavvia gli agenti" verrebbe stampato proprio a chi
+  // l'aggiornamento e' fallito. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
+  if (failed > 0) {
+    process.exitCode = 1;
+    return;
+  }
 
   console.log(`\n  ${DIM}Riavvia gli agenti per caricare la nuova versione: jht team stop --all && jht team start${RESET}\n`);
 }
@@ -486,6 +498,30 @@ function detectInstalledVersion(target) {
   return versionFromBinary(target) ?? versionFromDisk(target);
 }
 
+/**
+ * Per i provider npm, chiedere la versione pubblicata costa molto meno di un
+ * `npm install -g` no-op e non riscrive migliaia di file nel volume Docker.
+ * Se il registry non risponde o restituisce un formato inatteso si torna al
+ * percorso fail-safe storico: tentare l'installazione vera.
+ */
+function versionFromNpmRegistry(target) {
+  const pkgName = UPDATE_NPM_PKG[target];
+  if (!pkgName) return null;
+  const timeout = (Number(process.env.JHT_PROVIDER_VERSION_CHECK_TIMEOUT_SEC) || 15) * 1000;
+  try {
+    const r = spawnSync('npm', ['view', `${pkgName}@latest`, 'version'], {
+      encoding: 'utf-8',
+      timeout,
+      env: { ...process.env, ...NPM_PREFIX_ENV },
+    });
+    if (r.status !== 0 || r.error) return null;
+    const m = SEMVER_RE.exec(`${r.stdout || ''}\n${r.stderr || ''}`);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Provider attivo + modello dichiarato in jht.config.json. */
 async function readActiveProvider() {
   if (!(await fileExists(CONFIG_PATH))) return { id: null, model: null };
@@ -537,8 +573,8 @@ async function autoUpdateOnce() {
     console.log(`${AU} disabilitato (JHT_PROVIDER_AUTOUPDATE=${process.env.JHT_PROVIDER_AUTOUPDATE}): nessun tentativo di update`);
     return;
   }
-  if (process.env.IS_CONTAINER !== '1') {
-    console.log(`${AU} skip: fuori dal container (IS_CONTAINER≠1). Dall'host si aggiorna con 'jht providers update <id>'`);
+  if (!isContainer()) {
+    console.log(`${AU} skip: fuori dal container. Dall'host si aggiorna con 'jht providers update <id>'`);
     return;
   }
 
@@ -556,7 +592,16 @@ async function autoUpdateOnce() {
   const before = detectInstalledVersion(target);
   console.log(`${AU} provider attivo '${active.id}' → aggiorno SOLO ${target} (installata: ${before ?? 'sconosciuta'})`);
 
-  const res = await handleUpdateInContainer([target]);
+  const published = versionFromNpmRegistry(target);
+  const alreadyLatest = !!before && !!published && before === published;
+  let res;
+  if (alreadyLatest) {
+    console.log(`${AU} ${target}: registry ${published}, installazione saltata (versione gia' corrente)`);
+    res = { ok: true, failed: [], reason: '', skipped: true };
+  } else {
+    if (published) console.log(`${AU} ${target}: registry ${published}, installazione necessaria`);
+    res = await handleUpdateInContainer([target]);
+  }
   const after = detectInstalledVersion(target);
 
   // Criterio 2: il log dice SEMPRE prima → dopo, e dice esplicitamente quando
@@ -623,7 +668,7 @@ async function handleModelPin(opts = {}) {
     return;
   }
   let dryRun = !!opts.dryRun;
-  if (!dryRun && process.env.IS_CONTAINER !== '1') {
+  if (!dryRun && !isContainer()) {
     console.log(`${AU} fuori dal container: eseguo in dry-run (il config del provider e' dell'utente del container)`);
     dryRun = true;
   }
@@ -659,7 +704,12 @@ async function handleCheck() {
   for (const u of updates) {
     console.log(`${u.id} ${u.installed} ${u.latest}`);
   }
-  process.exit(1);
+  // Exit 1 = "c'e' almeno un update", ed e' il contratto scriptabile di questo
+  // comando: chi lo chiama legge PRIMA le righe e POI il codice. Con
+  // `process.exit()` subito dopo il ciclo di `console.log`, su una pipe quelle
+  // righe potevano restare nel buffer — il codice diceva "ci sono update" e
+  // l'output non diceva quali. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
+  process.exitCode = 1;
 }
 
 async function handleCurrent() {

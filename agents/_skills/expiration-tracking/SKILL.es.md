@@ -1,13 +1,13 @@
 <!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: expiration-tracking
-description: Extrae deadline del JD (helper deadline_extract) y produce alertas al usuario cuando una candidatura READY está por vencer (helper expiration_alerts, idempotente). F-4 task #50. Scout/Analyst pueblan positions.deadline, Mentor/Capitano notifican al usuario cuando deadline-now ≤ 3 días.
-allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *), Bash(jht-telegram-send *)
+description: Extrae deadlines de las ofertas y comunica informacion factual sobre ellas solo cuando el usuario la solicita expresamente. Nunca notifiques ni solicites automaticamente.
+allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *)
 ---
 
-# expiration-tracking — no perder top PASS por vencimiento
+# expiration-tracking — datos de vencimiento bajo peticion
 
-Bug latente F-4: el usuario acumula 50 CVs `ready`, olvida aplicar durante 2 días, oportunidades top (ej. Sisal PASS 7.5) vencen en silencio. El pipeline es user-curated apply (bug #9 degradado) → sin alerta proactiva, el celo del equipo en preparar top CVs se ve anulado por el silencio del usuario.
+Los plazos ayudan al usuario a evaluar oportunidades. Conservalos con precision, pero no los conviertas en un recordatorio, una invitacion a postularse o una medida de progreso.
 
 ## A. Scout/Analyst: extracción de deadline del JD
 
@@ -30,24 +30,13 @@ fi
 
 El parser es **conservador** (solo ISO, dd/mm/yyyy EU, Month dd[, yyyy] EN/IT, "expires in N days"). Si no encuentra un match de alta confianza devuelve cadena vacía → mejor NULL en la DB que fecha inventada.
 
-## C. Mentor/Capitano: alerta proactiva al usuario
+## C. Informacion de vencimiento, solo bajo peticion
 
-Trigger recomendado: después de cada `[BRIDGE TICK]` (Capitano) o al final del pase del Mentor. La idempotencia hace que llamadas frecuentes produzcan alertas solo para NUEVAS parejas (app_id, deadline_iso).
+Usa esta seccion solo al responder la pregunta explicita del usuario sobre la fecha limite de una posicion o candidatura. Nunca la programes, la envies de forma proactiva ni reenvies su salida como notificacion.
 
-```bash
-alerts=$(python3 /app/shared/skills/expiration_alerts.py)
-if [ -n "$alerts" ]; then
-  # Enviar al usuario vía Telegram
-  echo "$alerts" | jht-telegram-send --from capitano --keyboard capitano
-fi
-```
+Ejecuta: python3 /app/shared/skills/expiration_alerts.py --user-requested
 
-Salida 1 línea por application en riesgo:
-```
-⏳ [ALERT scadenza] Sisal Data Analyst (PASS 7.5) — scade 2026-05-18 (DOMANI). Spedisci candidatura o perdi l'opportunità.
-```
-
-El estado de idempotencia está en `$JHT_HOME/state/expiration_alerts_sent.json` (set de `(app_id, deadline_iso)` ya notificados). Para re-enviar una alerta ya enviada: `expiration_alerts.py --reset` (solo dev).
+La salida ofrece informacion factual sobre plazos de posiciones que ya estan en los registros del usuario, por ejemplo: [DEADLINE] Sisal Data Analyst (PASS 7.5) — vence 2026-05-18 (manana).
 
 ## B. Re-verificación periódica de posiciones antiguas (Analyst) — POR HACER
 
@@ -55,13 +44,11 @@ Extensión futura de la skill `liveness-check`: cada 6h, re-fetch URL de las pos
 
 ## Anti-patrones
 
-- ❌ Parsear deadline a mano con regex inline — usa el helper, tiene fallback EN/IT + verificación de sanidad en fechas pasadas.
-- ❌ Inventar deadline cuando el JD no lo especifica explícitamente — mejor `NULL` que `+30d arbitrario`.
-- ❌ Spamear al usuario con la misma alerta cada 6h — el estado de idempotencia existe para eso.
-- ❌ Enviar la alerta desde un bot diferente al Capitano (ej. Assistente genérico) — pierde contexto operativo; el Capitano lo acompaña al pipeline.
+- No ejecutes el informe de vencimientos sin una solicitud explicita del usuario.
+- No conviertas la informacion de vencimiento en una invitacion, recordatorio o presion para postularse.
 
 ## Ver también
 
 - `shared/skills/deadline_extract.py` — parser
-- `shared/skills/expiration_alerts.py` — emisor + estado de idempotencia
+- shared/skills/expiration_alerts.py — informe de vencimientos bajo peticion
 - `agents/_skills/db-update/SKILL.md` § Positions — flag `--deadline`

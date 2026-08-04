@@ -112,6 +112,9 @@ export function LandingFooter() {
             <Link href="/project" className={linkClass}>
               {t("footer_stats")}
             </Link>
+            <Link href="/tutorials" className={linkClass}>
+              {t("footer_tutorials")}
+            </Link>
             <a
               href="https://github.com/leopu00/job-hunter-team/blob/master/CHANGELOG.md"
               target="_blank"

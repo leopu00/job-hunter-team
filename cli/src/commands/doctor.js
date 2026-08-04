@@ -5,6 +5,23 @@ import { execSync } from 'node:child_process'
 import * as clack from '@clack/prompts'
 import pc from 'picocolors'
 import { JHT_HOME } from '../jht-paths.js';
+import { isInteractive } from './_colors.js'
+import { AGENTS, isAgentSession } from './team/agents.js'
+
+/**
+ * Spinner solo su TTY. [CLI-OUTPUT-NOT-MACHINE-SAFE]
+ * Lo spinner di clack anima nascondendo il cursore (`\x1b[?25l`) e riscrivendo
+ * la riga: sequenze che picocolors non disattiva perche' non sono colore.
+ * `jht doctor > diagnosi.txt` e' un gesto normale — non deve raccoglierle.
+ */
+function spinner() {
+  if (isInteractive()) return clack.spinner()
+  return {
+    start: (msg) => { if (msg) clack.log.info(msg) },
+    stop:  (msg) => { if (msg) clack.log.info(msg) },
+    message: (msg) => { if (msg) clack.log.info(msg) },
+  }
+}
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -59,8 +76,22 @@ async function checkProvider() {
   const active = cfg.active_provider
   if (!active) return { warn: true, msg: 'Nessun provider attivo', hint: 'Esegui: jht config set active_provider anthropic' }
   const prov = cfg.providers?.[active]
-  const key = prov?.api_key || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY
-  if (!key && prov?.auth_method !== 'cli') return { warn: true, msg: `Provider ${active} senza API key`, hint: `Imposta ${active.toUpperCase()}_API_KEY` }
+  // Le subscription usano la sessione OAuth della CLI e non hanno, per
+  // definizione, una API key nel config. Segnalarle come incomplete rende il
+  // doctor fuorviante proprio dopo un login riuscito dal wizard desktop.
+  if (prov?.auth_method === 'subscription' || prov?.auth_method === 'cli') {
+    return { ok: true, msg: `Provider: ${active}${prov?.model ? ` (${prov.model})` : ''} — subscription` }
+  }
+
+  // Non lasciare che la key di un provider mascheri la configurazione
+  // incompleta di un altro provider attivo.
+  const envName = active === 'anthropic'
+    ? 'ANTHROPIC_API_KEY'
+    : active === 'openai'
+      ? 'OPENAI_API_KEY'
+      : `${active.toUpperCase()}_API_KEY`
+  const key = prov?.api_key || process.env[envName]
+  if (!key) return { warn: true, msg: `Provider ${active} senza API key`, hint: `Imposta ${envName}` }
   return { ok: true, msg: `Provider: ${active}${prov?.model ? ` (${prov.model})` : ''}` }
 }
 
@@ -115,12 +146,14 @@ function checkWorkers() {
     const sessions = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null', { encoding: 'utf-8', stdio: 'pipe' })
       .trim().split('\n').filter(Boolean)
     if (!sessions.length) return [{ warn: true, msg: 'Nessuna sessione tmux attiva', hint: 'Avvia i worker con il Coordinatore' }]
-    const expected = ['JHT-GATEKEEPER', 'JHT-COORD', 'JHT-FRONTEND']
-    return expected.map(name => {
-      const active = sessions.some(s => s.startsWith(name))
+    const expected = ['assistente', 'capitano', 'mentor', 'sentinella']
+    return expected.map(role => {
+      const agent = AGENTS.find(a => a.role === role)
+      const active = !!agent && sessions.some(s => isAgentSession(s, agent))
+      const name = agent?.prefix ?? role.toUpperCase()
       return active
         ? { ok: true, msg: `${name}: attivo` }
-        : { warn: true, msg: `${name}: non trovato`, hint: `Avvia sessione tmux ${name}` }
+        : { warn: true, msg: `${name}: non trovato`, hint: `Esegui: jht team start ${role}` }
     })
   } catch {
     return [{ skip: true, msg: 'tmux non disponibile — verifica workers manuale' }]
@@ -142,7 +175,7 @@ function printCheck({ ok, warn, skip, msg, hint }) {
 async function handleDoctor() {
   clack.intro(pc.bold('JHT — Doctor'))
 
-  const s = clack.spinner()
+  const s = spinner()
 
   s.start('Verifica in corso…')
 

@@ -65,7 +65,11 @@ const KIND_LABEL: Record<string, Record<string, string>> = {
 
 const KINDS = ["order", "strategy", "formation", "note"];
 
-export default function DirectivesPanel() {
+export default function DirectivesPanel({
+  readOnly = false,
+}: {
+  readOnly?: boolean;
+}) {
   const locale = useLocale();
   const { toast } = useToast();
   const t = makeT(T, locale);
@@ -159,38 +163,41 @@ export default function DirectivesPanel() {
         {t("subtitle")}
       </p>
 
-      {/* form nuova direttiva */}
-      <div className="mb-5 flex flex-col gap-2 sm:flex-row">
-        <textarea
-          value={newBody}
-          onChange={(e) => setNewBody(e.target.value)}
-          placeholder={t("addPlaceholder")}
-          rows={2}
-          maxLength={2000}
-          className="flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[13px] text-[var(--color-white)] placeholder:text-[var(--color-dim)]"
-        />
-        <div className="flex gap-2 sm:flex-col">
-          <select
-            value={newKind}
-            onChange={(e) => setNewKind(e.target.value)}
-            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-2 text-[12px] text-[var(--color-white)]"
-          >
-            {KINDS.map((k) => (
-              <option key={k} value={k}>
-                {kindLabel(k)}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={add}
-            disabled={busy || !newBody.trim()}
-            className="rounded-lg bg-[var(--color-blue)] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
-          >
-            {t("add")}
-          </button>
+      {/* Su /team cloud la bacheca è una vista: gli edit restano nel cockpit
+          desktop, coerentemente con l'interaction-plane. */}
+      {!readOnly && (
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row">
+          <textarea
+            value={newBody}
+            onChange={(e) => setNewBody(e.target.value)}
+            placeholder={t("addPlaceholder")}
+            rows={2}
+            maxLength={2000}
+            className="flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[13px] text-[var(--color-white)] placeholder:text-[var(--color-dim)]"
+          />
+          <div className="flex gap-2 sm:flex-col">
+            <select
+              value={newKind}
+              onChange={(e) => setNewKind(e.target.value)}
+              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-2 text-[12px] text-[var(--color-white)]"
+            >
+              {KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {kindLabel(k)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={add}
+              disabled={busy || !newBody.trim()}
+              className="rounded-lg bg-[var(--color-blue)] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
+            >
+              {t("add")}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* elenco attive */}
       {!loading && active.length === 0 && (
@@ -240,26 +247,28 @@ export default function DirectivesPanel() {
                 <p className="flex-1 whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--color-white)]">
                   {d.body}
                 </p>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditId(d.id);
-                      setEditText(d.body);
-                    }}
-                    className="text-[11px] text-[var(--color-muted)] hover:text-[var(--color-white)]"
-                  >
-                    {t("edit")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => archive(d.id)}
-                    disabled={busy}
-                    className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-white)] disabled:opacity-50"
-                  >
-                    {t("archive")}
-                  </button>
-                </div>
+                {!readOnly && (
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditId(d.id);
+                        setEditText(d.body);
+                      }}
+                      className="text-[11px] text-[var(--color-muted)] hover:text-[var(--color-white)]"
+                    >
+                      {t("edit")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => archive(d.id)}
+                      disabled={busy}
+                      className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-white)] disabled:opacity-50"
+                    >
+                      {t("archive")}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </li>

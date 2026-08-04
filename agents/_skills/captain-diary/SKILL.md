@@ -4,50 +4,50 @@ description: Daily handoff diary for the Captain. The Captain is restarted often
 allowed-tools: Bash(python3 /app/shared/skills/captain_diary.py *)
 ---
 
-# captain-diary — passaggio del testimone tra Capitani
+# captain-diary — the handoff between Captains
 
-Un file per giorno in `$JHT_HOME/logs/captain-diary-YYYY-MM-DD.md`, append-only.
-Serve a **non ripartire da zero ogni riavvio**: le lezioni di pacing di oggi
-passano al Capitano di domani.
+One file per day in `$JHT_HOME/logs/captain-diary-YYYY-MM-DD.md`, append-only.
+Its job is to keep you from **starting over at every restart**: today's pacing
+lessons are handed to tomorrow's Captain.
 
-## Al risveglio (SEMPRE, prima di lavorare)
+## At wake (ALWAYS, before working)
 
-Leggi le note del Capitano del giorno precedente:
+Read the notes left by the previous day's Captain:
 
 ```bash
 python3 /app/shared/skills/captain_diary.py handoff
 ```
 
-Stampa le note di **ieri** (o dell'ultimo giorno lavorato) + ciò che è già
-annotato **oggi**. Erediti le lezioni → **non rifare gli stessi errori**. Se non
-c'è nulla, sei il primo: inizia ad annotare.
+It prints **yesterday's** notes (or those of the last day worked) plus whatever
+is already recorded **today**. You inherit the lessons → **do not repeat the
+same mistakes**. If there is nothing, you are the first: start recording.
 
-## Durante il giorno — annota gli eventi SIGNIFICATIVI
+## During the day — record the SIGNIFICANT events
 
-Una riga, quando succede qualcosa da cui si impara. NON il diario di tutto:
-solo ciò che servirebbe al Capitano di domani.
+One line, whenever something happens that carries a lesson. NOT a diary of
+everything: only what tomorrow's Captain would need.
 
 ```bash
-python3 /app/shared/skills/captain_diary.py add "20:05 — 3 Scout insieme: picco \
-infrenabile in 15 min, 5h di coast per ripagare il debito. Lezione: max 1 Scout \
-poi 30 min di osservazione (C-02)."
+python3 /app/shared/skills/captain_diary.py add "20:05 — 3 Scouts at once: unbrakable \
+spike within 15 min, 5h of coasting to repay the debt. Lesson: max 1 Scout then \
+30 min of observation (C-02)."
 ```
 
-Cosa vale la pena annotare:
-- decisioni di scaling che sono andate male (o bene) — quanti worker, che throttle, cosa è successo;
-- un picco non frenabile e come l'hai recuperato;
-- un kill e perché;
-- un pattern emerso (es. "lo Scout sul sito X consuma il doppio");
-- qualunque cosa che, se la sapessi domani, eviterebbe un errore.
+What is worth recording:
+- scaling decisions that went badly (or well) — how many workers, which throttle, what happened;
+- a spike you could not brake and how you recovered from it;
+- a kill and why;
+- a pattern that emerged (e.g. "the Scout on site X consumes twice as much");
+- anything that, if you knew it tomorrow, would avoid a mistake.
 
-## Rivedere solo oggi
+## Reviewing today only
 
 ```bash
 python3 /app/shared/skills/captain_diary.py today
 ```
 
-## Regola
+## Rule
 
-- Il diario è il **testimone**: leggilo al boot, alimentalo durante il giorno.
-- Note **brevi e azionabili** (un fatto + la lezione), non un log verboso.
-- L'orario lo mette lo strumento: tu scrivi solo il fatto e la lezione.
+- The diary is the **baton**: read it at boot, feed it during the day.
+- Notes must be **short and actionable** (one fact + the lesson), not a verbose log.
+- The timestamp is added by the tool: you write only the fact and the lesson.

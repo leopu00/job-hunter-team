@@ -1,0 +1,10 @@
+scenes/
+scenes-vert/
+*.mp4
+webrec/
+audio/
+build/
+build-vert/
+build-play/
+build-play-vert/
+__pycache__/

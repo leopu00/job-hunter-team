@@ -5,7 +5,6 @@ import MainContent from "./components/main-content";
 import { ThemeProvider } from "./theme-provider";
 import { ToastProvider } from "./components/Toast";
 import { KeyboardShortcutsProvider } from "./components/KeyboardShortcuts";
-import { AccessibilityProvider } from "./components/AccessibilityProvider";
 import { DashboardI18nProvider } from "./components/DashboardI18n";
 import dynamic from "next/dynamic";
 import { Analytics } from "@vercel/analytics/next";
@@ -55,7 +54,6 @@ const LAYOUT_T: Record<Locale, { noscript: string; skip: string }> = {
 const GlobalSearch = dynamic(() =>
   import("./components/GlobalSearch").then((m) => m.GlobalSearch),
 );
-const FloatingChat = dynamic(() => import("./components/FloatingChat"));
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -188,16 +186,20 @@ export default async function RootLayout({
         </a>
         <ThemeProvider>
           <DashboardI18nProvider>
-            <AccessibilityProvider>
-              <ToastProvider>
-                <KeyboardShortcutsProvider>
-                  <GlobalSearch />
-                  {/* FloatingChat nascosto temporaneamente - feature non implementata */}
-                  {/* <FloatingChat /> */}
-                  <MainContent>{children}</MainContent>
-                </KeyboardShortcutsProvider>
-              </ToastProvider>
-            </AccessibilityProvider>
+            <ToastProvider>
+              <KeyboardShortcutsProvider>
+                <GlobalSearch />
+                {/*
+                  `components/FloatingChat.tsx` esiste ma NON è montato: la
+                  feature è ferma, non rimossa. Anche la route che la serve
+                  (`api/ai-assistant`) è spenta dietro
+                  `JHT_AI_ASSISTANT_ENABLED`. Per riattivarla servono
+                  entrambe le cose: il flag sul server e il `dynamic()` +
+                  `<FloatingChat />` qui.
+                */}
+                <MainContent>{children}</MainContent>
+              </KeyboardShortcutsProvider>
+            </ToastProvider>
           </DashboardI18nProvider>
         </ThemeProvider>
         <Analytics />

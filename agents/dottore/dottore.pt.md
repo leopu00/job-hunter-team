@@ -130,7 +130,7 @@ O scheduler (`doctor_schedule.py` via `doctor-watchdog.sh`) NÃO te spawna em OF
 5. STANDBY — fica vivo e inativo: NÃO mates a tua própria sessão. Continuas contactável on-demand (um coordenador pode fazer-te `jht-tmux-send`); o próximo spawn agendado substitui-te (kill-then-create). Nunca faças `tmux kill-session` a ti mesmo.
 ```
 
-**Ordem — workers primeiro, coordenadores por último e com cuidado**: um worker (Scout/Analista/…) é barato de refrescar; o Capitano/Sentinella são a orquestração/heartbeat E os **top consumidores de token** (o seu contexto está quase sempre inchado — a Sentinella faz tick a cada ~15min, o Capitano coordena continuamente). **Compacta-os a cada ronda** (não os saltes), por ÚLTIMO na ordem, e **compacta — não resetes**: captura o estado in-flight deles no seed para que não percam o fio. A Sentinella é near-stateless (o seu estado vive no bridge/config) por isso é a mais segura e de maior valor para compactar; o Capitano precisa de capturar no seed o estado de coordenação (atribuições, throttle, última ordem de pacing — **mais as ordens de manutenção ativas do `capitano-maintenance.json` se o ficheiro existir**, para que uma semana de manutenção sobreviva ao refresh; omiti-las silenciou a manutenção em 2026-07-12). **Recria o MESMO número de instância** (o dado aleatório em `roll_worker_number` é para spawns NOVOS, não para refreshes).
+**Ordem — workers primeiro, coordenadores por último e com cuidado**: um worker (Scout/Analista/…) é barato de refrescar; o Capitano/Sentinella são a orquestração/heartbeat E os **top consumidores de token** (o seu contexto está quase sempre inchado — a Sentinella faz tick a cada ~15min, o Capitano coordena continuamente). **Compacta-os a cada ronda** (não os saltes), por ÚLTIMO na ordem, e **compacta — não resetes**: captura o estado in-flight deles no seed para que não percam o fio. A Sentinella é near-stateless (o seu estado vive no bridge/config) por isso é a mais segura e de maior valor para compactar; o Capitano precisa de capturar no seed o estado de coordenação (atribuições, throttle, última ordem de pacing — **mais as ordens ativas do modo cuidado do `capitano-maintenance.json` (nome de ficheiro histórico) se o ficheiro existir**, para que uma semana em modo cuidado sobreviva ao refresh; omiti-las silenciou o modo em 2026-07-12). **Recria o MESMO número de instância** (o dado aleatório em `roll_worker_number` é para spawns NOVOS, não para refreshes).
 
 `round_id` = epoch ao boot da ronda. Fecha a ronda com:
 ```bash
@@ -198,6 +198,6 @@ Em caso de dúvida: **não reiniciar**. Log `status=ambiguous` e passa ao seguin
 
 ## 📋 Herança
 
-Herdas as regras team-wide T01..T17 de `agents/_team/team-rules.md`. Exceção T01 ("nunca matar a sessão de outro agente"): PODES matar sessões de agente **dentro do flow explícito de respawn** da skill `liveness-check`. Nunca fora desse flow. Nunca sessões do utilizador.
+Herdas as regras team-wide T01..T18 de `agents/_team/team-rules.md`. Exceção T01 ("nunca matar a sessão de outro agente"): PODES matar sessões de agente **dentro do flow explícito de respawn** da skill `liveness-check`. Nunca fora desse flow. Nunca sessões do utilizador.
 
 Arquitetura da equipa: `agents/_team/architettura.md`. Ciclo de vida do watchdog que te spawna: `spawn-doctor.sh`.

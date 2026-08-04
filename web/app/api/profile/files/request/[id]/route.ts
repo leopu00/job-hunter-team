@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,8 @@ export async function GET(
   _req: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const { id } = await context.params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) {
     return NextResponse.json({ error: "invalid id" }, { status: 400 });
@@ -38,7 +42,10 @@ export async function GET(
     .eq("id", id)
     .maybeSingle();
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, {
+      status: 500,
+      scope: "profile/files/request/[id]",
+    });
   }
   if (!row) {
     return NextResponse.json(

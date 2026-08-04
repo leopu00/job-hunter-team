@@ -4,45 +4,45 @@ description: Standardize positions.location free-text into structured loc_*/work
 allowed-tools: Bash(python3 *), Bash(curl *), Bash(jq *), WebSearch
 ---
 
-# location-enrichment — playbook strutturazione location + role_family
+# location-enrichment — location + role_family structuring playbook
 
-L'Analista popola **11 colonne** della tabella `positions` PRIMA di
-marcare `status=checked`. Mai lasciare una position `checked` senza
+The Analista fills **11 columns** of the `positions` table BEFORE
+marking `status=checked`. Never leave a position `checked` without
 location enrichment.
 
-## Le 11 colonne da popolare
+## The 11 columns to fill
 
 ```
-role_family         text   categoria semantica del ruolo
-loc_city            text   città di ufficio (NULL se solo country)
-loc_region          text   regione/stato (opzionale)
-loc_country         text   paese fisico ufficio (NULL se solo continent)
+role_family         text   semantic category of the role
+loc_city            text   office city (NULL if country only)
+loc_region          text   region/state (optional)
+loc_country         text   physical office country (NULL if continent only)
 loc_country_code    text   ISO-3166 alpha-2: IT, IE, HU, ...
 loc_continent       text   Europe | Asia | Americas | Africa | Oceania
 work_mode           text   onsite | hybrid | remote
-work_country        text   paese contrattuale (entity che firma) — MAI NULL
-work_country_code   text   ISO-2 del work_country
-is_multi_location   bool   true se JD elenca più città/paesi
-location_notes      text   note libere analista
+work_country        text   contracting country (the signing entity) — NEVER NULL
+work_country_code   text   ISO-2 of work_country
+is_multi_location   bool   true if the JD lists several cities/countries
+location_notes      text   analyst free-text notes
 ```
 
-## REGOLE comportamentali (CRITICHE — sim 1-2 ha trovato problemi qui)
+## Behavioural RULES (CRITICAL — sim 1-2 found problems here)
 
-### R1 — Una posizione alla volta (NO BATCH)
+### R1 — One position at a time (NO BATCH)
 
-Processa il tuo range una posizione per turno: leggi JD → ragiona →
-db-update → status=checked → prossima. NIENTE caricare 20+ JD in un
-unico turno LLM. Eccezione: 3-5 casi banali senza web search (es.
+Process your range one position per turn: read the JD → reason →
+db-update → status=checked → next. Do NOT load 20+ JDs in a single
+LLM turn. Exception: 3-5 trivial cases with no web search (e.g.
 "Dublin, Ireland" + hybrid).
 
-**Perché**: batch da 17k+ tokens (sim 1) genera responses generiche
-("multi-location + remote + EU") invece di dati specifici per ogni
-record. E gli altri analisti girano a vuoto durante il tuo mega-turn.
+**Why**: a 17k+ token batch (sim 1) produces generic responses
+("multi-location + remote + EU") instead of data specific to each
+record. And the other analysts spin idle during your mega-turn.
 
-### R2 — Peer DB lookup tassonomia (ogni 5-10 record)
+### R2 — Peer DB taxonomy lookup (every 5-10 records)
 
-PRIMA di scegliere un valore `role_family`, controlla cosa hanno usato
-i colleghi:
+BEFORE picking a `role_family` value, check what your colleagues
+have used:
 
 ```bash
 python3 /app/shared/skills/db_query.py raw \
@@ -51,37 +51,37 @@ python3 /app/shared/skills/db_query.py raw \
    GROUP BY role_family ORDER BY n DESC"
 ```
 
-Se trovi una family **semanticamente equivalente**, ALLINEATI al loro
-nome. Esempi sbagliati visti in sim 1:
+If you find a **semantically equivalent** family, ALIGN to their
+name. Wrong examples seen in sim 1:
 
 ```
 ✗ "Translation / Localization" vs "Localization / Language Quality"
-  vs "Language / Localization"           → uno solo
+  vs "Language / Localization"           → only one
 ✗ "Customer Support" vs "Customer Success / Technical"
-  vs "Technical Support"                 → uno solo
-✗ "Technical Engineering" per un Technical Writer  → wrong
+  vs "Technical Support"                 → only one
+✗ "Technical Engineering" for a Technical Writer   → wrong
 ```
 
-Se la posizione è davvero una nuova categoria, annota in
-`location_notes` perché.
+If the position really is a new category, note why in
+`location_notes`.
 
-### R3 — Fallback work_country (MAI NULL su checked)
+### R3 — work_country fallback (NEVER NULL on checked)
 
-Se dopo 2 tentativi di web search non trovi `work_country` con
-certezza, NON lasciarlo NULL. Procedi:
+If after 2 web search attempts you cannot establish `work_country`
+with confidence, do NOT leave it NULL. Proceed:
 
-1. Paese del **posting board** (es. linkedin.it → IT) + nota
+1. Country of the **posting board** (e.g. linkedin.it → IT) + note
    `"work_country inferred from posting board (low confidence)"`
-2. Paese citato in JD come "region" / "office" anche se non sede legale
-3. Ultima istanza: il `loc_continent` come placeholder + nota
+2. Country mentioned in the JD as "region" / "office" even if it is not the legal seat
+3. Last resort: the `loc_continent` as a placeholder + note
    `"work_country=Europe placeholder, entity unverified"`
 
-### R4 — Peer DB lookup città (PRIMA di scrivere `loc_city`)
+### R4 — Peer DB city lookup (BEFORE writing `loc_city`)
 
-Esattamente come R2 per `role_family`, ma per le **città**. PRIMA di
-scrivere `loc_city`, controlla quale forma i colleghi hanno già usato
-per quel paese, così non crei un duplicato in altra lingua
-(Rome vs Roma, Milan vs Milano):
+Exactly like R2 for `role_family`, but for **cities**. BEFORE
+writing `loc_city`, check which form your colleagues have already
+used for that country, so you don't create a duplicate in another
+language (Rome vs Roma, Milan vs Milano):
 
 ```bash
 python3 /app/shared/skills/db_query.py raw \
@@ -90,35 +90,35 @@ python3 /app/shared/skills/db_query.py raw \
    GROUP BY loc_country, loc_city ORDER BY loc_country, n DESC"
 ```
 
-- Se la città è **già presente** in una forma → ALLINEATI a quella
-  (purché rispetti lo standard "esonimo inglese", vedi sotto).
-- Se vedi un duplicato in lingua diversa già nel DB (es. esiste sia
-  `Roma` sia `Rome`), usa la forma **inglese** e annota in
-  `location_notes` la forma da consolidare.
+- If the city is **already present** in one form → ALIGN to it
+  (as long as it respects the "English exonym" standard, see below).
+- If you see a duplicate in a different language already in the DB
+  (e.g. both `Roma` and `Rome` exist), use the **English** form and
+  note in `location_notes` which form has to be consolidated.
 
-## Standard di scrittura
+## Writing standard
 
-### Paesi (`loc_country` / `work_country`)
+### Countries (`loc_country` / `work_country`)
 
-| Sì ✓ | No ✗ |
+| Yes ✓ | No ✗ |
 |---|---|
 | `Italy` | `Italia`, `IT`, `Italie` |
 | `United Kingdom` | `UK`, `Great Britain`, `England` |
 | `Czechia` | `Czech Republic` |
 | `Netherlands` | `Holland`, `The Netherlands` |
-| `Székesfehérvár` | `Szekesfehervar` (preserva sempre i diacritici) |
+| `Székesfehérvár` | `Szekesfehervar` (always preserve the diacritics) |
 | ISO-2 `IT, IE, HU, NL, DE, GB, US, ES` | ISO-3, lowercase |
 
-### Città (`loc_city`) — esonimo INGLESE quando esiste
+### Cities (`loc_city`) — ENGLISH exonym when one exists
 
-**Regola unica**: scrivi sempre la forma **inglese** della città quando
-esiste un esonimo consolidato. Se la città NON ha un esonimo inglese,
-usa il nome locale **preservando i diacritici**. Questo allinea
-l'Analista alla mappa di dedup dello Scout (`_CITY_SYNONYMS` in
-`shared/skills/db_insert.py`) ed elimina i duplicati Rome/Roma,
-Milan/Milano.
+**Single rule**: always write the **English** form of the city when a
+settled exonym exists. If the city does NOT have an English exonym,
+use the local name **preserving the diacritics**. This aligns the
+Analista with the Scout's dedup map (`_CITY_SYNONYMS` in
+`shared/skills/db_insert.py`) and eliminates the Rome/Roma,
+Milan/Milano duplicates.
 
-| Sì ✓ (esonimo EN) | No ✗ (forma locale) |
+| Yes ✓ (EN exonym) | No ✗ (local form) |
 |---|---|
 | `Rome` | `Roma` |
 | `Milan` | `Milano` |
@@ -133,41 +133,41 @@ Milan/Milano.
 | `Prague` | `Praha` |
 | `Brussels` | `Bruxelles` |
 | `Lisbon` | `Lisboa` |
-| `Plzeň` (no esonimo → locale + diacritici) | `Plzen` |
+| `Plzeň` (no exonym → local + diacritics) | `Plzen` |
 
-In dubbio sull'esistenza di un esonimo consolidato, applica il peer DB
-lookup (R4) e **allineati alla forma già presente** per quella città.
+If you are unsure whether a settled exonym exists, apply the peer DB
+lookup (R4) and **align to the form already present** for that city.
 
-## Casi speciali (decisione standard)
+## Special cases (standard decision)
 
 ### A — "Europe Remote" / "EMEA - Flexible" / "Remote"
 
 ```
 loc_city          = NULL
-loc_country       = NULL          # niente paese fisico vincolato
-loc_continent     = "Europe"      # solo se area è esplicita
+loc_country       = NULL          # no physical country bound
+loc_continent     = "Europe"      # only if the area is explicit
 work_mode         = "remote"
-work_country      = <web search HQ azienda → fallback R3>
+work_country      = <web search company HQ → fallback R3>
 is_multi_location = false
 location_notes    = "Remote within EU"
 ```
 
-### B — "Italy" / "Spain" + full_remote (paese + remote)
+### B — "Italy" / "Spain" + full_remote (country + remote)
 
 ```
 loc_country       = "Italy"
 loc_country_code  = "IT"
 loc_continent     = "Europe"
 work_mode         = "remote"
-work_country      = "Italy"       # stesso paese, contratto IT
+work_country      = "Italy"       # same country, IT contract
 work_country_code = "IT"
 ```
 
-### C — "Dublin, Ireland" + hybrid (city+country pulito)
+### C — "Dublin, Ireland" + hybrid (clean city+country)
 
 ```
 loc_city          = "Dublin"
-loc_region        = "Leinster"    # opzionale
+loc_region        = "Leinster"    # optional
 loc_country       = "Ireland"
 loc_country_code  = "IE"
 loc_continent     = "Europe"
@@ -176,7 +176,7 @@ work_country      = "Ireland"
 work_country_code = "IE"
 ```
 
-### D — Multi-location stesso paese ("Barcelona / Malaga")
+### D — Multi-location, same country ("Barcelona / Malaga")
 
 ```
 loc_city          = NULL
@@ -186,7 +186,7 @@ loc_continent     = "Europe"
 work_mode         = "hybrid"
 work_country      = "Spain"
 is_multi_location = true
-location_notes    = "Barcelona or Málaga (candidato sceglie)"
+location_notes    = "Barcelona or Málaga (candidate chooses)"
 ```
 
 ### E — Multi-country ("Amsterdam, Berlin, London, Remote-Europe")
@@ -195,72 +195,72 @@ location_notes    = "Barcelona or Málaga (candidato sceglie)"
 loc_city          = NULL
 loc_country       = NULL
 loc_continent     = "Europe"
-work_mode         = "hybrid"      # o remote
-work_country      = <HQ azienda via web>
+work_mode         = "hybrid"      # or remote
+work_country      = <company HQ via web>
 is_multi_location = true
 location_notes    = "EU multi-country: NL, DE, GB + remote option"
 ```
 
-### F — Area metropolitana vaga ("Greater Bologna Metropolitan Area")
+### F — Vague metropolitan area ("Greater Bologna Metropolitan Area")
 
 ```
-loc_city          = "Bologna"     # promuovi alla città principale
+loc_city          = "Bologna"     # promote to the main city
 loc_country       = "Italy"
-location_notes    = "Area metropolitana Bologna (raggio ~30km)"
+location_notes    = "Bologna metropolitan area (~30km radius)"
 ```
 
-### G — Azienda US con entity EU che assume in Spagna
+### G — US company with an EU entity hiring in Spain
 
 ```
 loc_country       = NULL
 loc_continent     = "Europe"
 work_mode         = "remote"
-work_country      = "Spain"       # entity locale che firma
-location_notes    = "US company (X Inc.), assume tramite entity ES"
+work_country      = "Spain"       # local entity that signs
+location_notes    = "US company (X Inc.), hires through ES entity"
 ```
 
-### H — JD precisa città che lo scout aveva generalizzato
+### H — The JD pins down a city the scout had generalized
 
-Scout aveva scritto "Italy" → JD nel testo specifica "Milano HQ":
-**promuovi a città**.
+The Scout had written "Italy" → the JD text specifies "Milano HQ":
+**promote to city**.
 
 ```
 loc_city          = "Milan"
 loc_country       = "Italy"
-location_notes    = "JD specifica HQ Milano (scout aveva 'Italy')"
+location_notes    = "JD specifies Milan HQ (scout had 'Italy')"
 ```
 
-### I — City abbreviata ("Dublin 2")
+### I — Abbreviated city ("Dublin 2")
 
 ```
 loc_city          = "Dublin"
-loc_region        = "Dublin 2"    # distretto in region
+loc_region        = "Dublin 2"    # district goes in region
 ```
 
-### J — Azienda solo job board (Railsware, Top Remote Talent, ecc.)
+### J — Job-board-only company (Railsware, Top Remote Talent, etc.)
 
-Quando l'azienda è una società distribuita senza HQ chiaro:
-applica fallback R3 (paese del posting board) + annota.
+When the company is a distributed outfit with no clear HQ:
+apply the R3 fallback (posting board country) + note it.
 
-## Vietati assoluti
+## Absolute prohibitions
 
-- ❌ `loc_country = "Europe"` o `"EMEA"` — è continent, non country
-- ❌ Mappare "EMEA" come "Europe" senza controllo (include Middle East + Africa)
-- ❌ `work_country = NULL` su una position `checked` (rompe UI stipendio)
-- ❌ Inventare role_family se i colleghi hanno già usato simili → vedi R2
-- ❌ Scrivere `loc_city` in lingua locale quando esiste l'esonimo
-  inglese (`Roma`, `Milano`, `Napoli` → usa `Rome`, `Milan`, `Naples`)
-  o senza peer DB lookup → vedi R4 + tabella città
-- ❌ Caricare il batch intero del proprio range → vedi R1
-- ❌ **`loc_city = "Remote" / "Anywhere" / "Distributed"`** — NON sono città.
-  Se la position è full-remote senza city specifica, `loc_city = NULL`.
-  Bug osservato in sim 4: A2 ha scritto `loc_city='Remote'` per 8 record
-  (Canonical, Miratech, Link Group, ecc.). Correggi sempre con
-  `db_update --loc-city ""` (stringa vuota = NULL).
+- ❌ `loc_country = "Europe"` or `"EMEA"` — that is a continent, not a country
+- ❌ Mapping "EMEA" to "Europe" without checking (it includes Middle East + Africa)
+- ❌ `work_country = NULL` on a `checked` position (breaks the salary UI)
+- ❌ Inventing a role_family when colleagues have already used similar ones → see R2
+- ❌ Writing `loc_city` in the local language when the English exonym
+  exists (`Roma`, `Milano`, `Napoli` → use `Rome`, `Milan`, `Naples`)
+  or without the peer DB lookup → see R4 + city table
+- ❌ Loading your whole range as one batch → see R1
+- ❌ **`loc_city = "Remote" / "Anywhere" / "Distributed"`** — those are NOT cities.
+  If the position is full-remote with no specific city, `loc_city = NULL`.
+  Bug observed in sim 4: A2 wrote `loc_city='Remote'` on 8 records
+  (Canonical, Miratech, Link Group, etc.). Always fix it with
+  `db_update --loc-city ""` (empty string = NULL).
 
-## Comandi tipo
+## Typical commands
 
-### Salvataggio struttura location completa
+### Saving the complete location structure
 
 ```bash
 python3 /app/shared/skills/db_update.py position <ID> \
@@ -275,7 +275,7 @@ python3 /app/shared/skills/db_update.py position <ID> \
   --location-notes ""
 ```
 
-### Peer lookup tassonomia (eseguilo ogni 5-10 record)
+### Peer taxonomy lookup (run it every 5-10 records)
 
 ```bash
 python3 /app/shared/skills/db_query.py raw \
@@ -284,7 +284,7 @@ python3 /app/shared/skills/db_query.py raw \
    GROUP BY role_family ORDER BY n DESC"
 ```
 
-### Promozione a checked (SOLO dopo enrichment completo)
+### Promotion to checked (ONLY after complete enrichment)
 
 ```bash
 python3 /app/shared/skills/db_update.py position <ID> --status checked \

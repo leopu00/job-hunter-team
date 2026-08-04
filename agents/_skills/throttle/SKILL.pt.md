@@ -1,185 +1,104 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
+<!-- @translation: pt, ai-translated 2026-07-30 -->
 ---
 name: throttle
-description: Pausa o teu loop por N segundos de forma rastreada. Usa SEMPRE isto em vez de `sleep` sempre que quiseres abrandar a tua taxa de iteracao para respeitar o orcamento de rate da equipa. A duracao e lida a partir de $JHT_HOME/config/throttle.json (o Capitao calibra os valores por agente la); passa --agent <teu-nome> e a skill resolve o resto. Usa um padrao de processo filho destacado que sobrevive a qualquer timeout de tool-call do provider (Kimi 60s, Codex 30s, Claude 120s/600s). Combina sempre com `jht-throttle-check` antes de cada tarefa para recuperar se um pai for terminado prematuramente. Regista cada pausa em $JHT_HOME/logs/throttle-events.jsonl. `sleep` para pausas de throttle e PROIBIDO.
-allowed-tools: Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 /app/shared/skills/throttle.py *), Bash(python3 /app/shared/skills/throttle-config.py *)
+description: Registra a tua pausa e ENCERRA O TEU TURNO. O tempo ja nao e teu - um motor fora do teu processo possui o temporizador e acorda-te por tmux quando expira. Usa SEMPRE isto em vez de `sleep` quando quiseres reduzir o teu ritmo de iteracao. Uma chamada, `throttle <teu-nome>`, retorno imediato; nao sabes quanto esperas e nao deves tentar saber. Ao acordar, o teu PRIMEIRO comando e sempre `throttle-ack <teu-nome>`. `sleep` para pausas de throttle e PROIBIDO, e tambem e proibido mandar esta chamada para background com `&` / `nohup` / uma tarefa em background.
+allowed-tools: Bash(throttle *), Bash(throttle-ack *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 /app/shared/skills/throttle_engine.py *)
 ---
 
-# throttle — pausa rastreada
-
-Wrapper de shell em `/app/agents/_tools/jht-throttle`. Chama
-`/app/shared/skills/throttle.py` internamente.
-
-## Porque existe
-
-Ate agora cada agente punha `sleep N` no seu loop "quando lhe parecia certo".
-Funciona, mas a equipa nao tem observabilidade sobre isso: o Capitao nao consegue
-ver *quem* esta a pausar, *durante quanto tempo*, *com que frequencia*. Com esta skill cada
-pausa e adicionada a `$JHT_HOME/logs/throttle-events.jsonl` com o
-nome do agente, os segundos pedidos, os segundos aplicados e um motivo opcional.
-
-O dashboard em `/team` le este ficheiro e mostra um grafico de throttle
-por agente, para que possamos *ver* o ritmo da equipa e ajusta-lo ao longo do tempo.
-
-## Como funciona a calibracao (le isto com atencao)
-
-O Capitao calibra **a duracao** para cada agente em
-`$JHT_HOME/config/throttle.json` atraves de:
+# throttle — registra a pausa, depois para
 
 ```bash
-python3 /app/shared/skills/throttle-config.py set <agent> <seconds>
+throttle <teu-nome> [--reason "..."]
 ```
 
-Tu (o agente operacional) NAO precisas de saber o valor atual.
-Basta chamares:
+Retorna de imediato. Depois **encerra o teu turno**: nenhuma outra tarefa, nenhum
+outro comando.
 
-```bash
-jht-throttle --agent <teu-nome> [--reason "..."]
-```
+## Porque funciona assim
 
-e a skill le a configuracao, dorme esses segundos, regista o
-evento e retorna. Se o Capitao te configurou para 0 (ou nao estas na
-configuracao), a skill retorna imediatamente como no-op — sem log, sem
-sleep, o teu loop corre a velocidade maxima.
+Ate 2026-07-30 o throttle era um contrato que tinhas de cumprir sozinho:
+`jht-throttle` bloqueava *o teu proprio processo* com um ciclo de sleep, e se esse
+processo morresse tinhas de dar por isso e voltar a bloquear-te. Cada falha
+observada em producao nasceu desse desenho. A pior: um Analista lancou
+`jht-throttle … &` dentro de um comando composto que o timeout da tool call matou
+aos 60s. O filho desligado morreu com o pai, o agente fechou o turno convencido de
+que a pausa corria — e **ninguem voltou a acorda-lo**. 2h15m de paragem, com o
+watchdog a reportar a sessao como `idle` = saudavel.
 
-Isto significa:
-
-- O Capitao muda a calibracao com **uma unica escrita na config**, sem
-  orquestracao tmux. A tua proxima chamada apanha o novo valor.
-- Nunca armazenas o valor de throttle na tua propria memoria; nao
-  hardcodas `jht-throttle 60` no teu loop. O Capitao e dono do valor.
-- O Capitao tambem pode dizer-te para chamares a skill **com mais ou menos
-  frequencia** no teu loop (ex. "throttle a cada tarefa" vs "throttle
-  a cada 3 tarefas") — isso e um eixo separado que tu controlas.
-
-## Utilizacao
-
-```bash
-# Recomendado (le a config):
-jht-throttle --agent <teu-nome> [--reason "..."]
-
-# Override explicito (contorna a config; apenas quando o Capitao
-# te diz com um numero especifico):
-jht-throttle <seconds> --agent <teu-nome> [--reason "..."]
-```
-
-## Como funciona internamente (padrao destacado)
-
-`jht-throttle` usa um padrao de **filho destacado** que sobrevive a qualquer
-timeout de tool-call do provider (Kimi 60s, Codex 30s, Claude 120s/600s):
-
-1. Le a config para obter a duracao.
-2. Escreve um ficheiro de estado `$JHT_HOME/state/throttle-<agent>.json` com
-   `until = NOW + duration` (usado por `jht-throttle-check` e
-   `jht-throttle-wait`).
-3. Faz fork de um subprocesso `python3 throttle.py` como filho de init
-   (PPID 1) — fora da arvore de subprocessos do tool-call. Este filho escreve
-   o evento `start`, dorme, e escreve o evento `end` independentemente
-   do que aconteca ao tool-call que o invocou.
-4. O pai (o bash que estas a chamar) bloqueia durante toda a duracao
-   em blocos de sleep de 15 segundos. O sleep em blocos e mais curto do que qualquer
-   timeout de tool-call por defeito do provider, portanto mesmo em Kimi 60s por defeito
-   o pai sobrevive. **O agente permanece bloqueado o tempo todo.**
-5. Se o provider MATAR o pai (ex. nao passaste timeout suficiente
-   no teu tool call): o filho destacado continua a correr e
-   escreve `end` corretamente → nenhum orfao no log. Mas o agente (tu)
-   esta agora livre e poderia erroneamente iniciar a proxima tarefa. Para prevenir
-   isso, ve o **padrao de gate** abaixo.
-
-## Padrao de gate: verifica SEMPRE antes da proxima tarefa
-
-Apos cada `jht-throttle` (e especialmente em iteracoes normais do loop),
-**antes de iniciar uma nova tarefa**, executa:
-
-```bash
-jht-throttle-check <teu-nome>
-# exit 0 → ok, inicia a proxima tarefa
-# exit 1 → "STILL_THROTTLED remaining=Xs" em stderr, tens de esperar
-```
-
-Se `jht-throttle-check` sair com 1, chama imediatamente:
-
-```bash
-jht-throttle-wait <teu-nome>
-# Bloqueia (em blocos de 15s) ate until passar, depois sai.
-```
-
-Este e o caminho de recuperacao: um `jht-throttle` anterior cujo pai foi
-terminado prematuramente pelo timeout do provider. O filho destacado
-ainda esta a dormir, o ficheiro de estado ainda e valido, o check diz-te
-"nao comeces uma tarefa ainda". O wait re-bloqueia-te em seguranca.
-
-O loop seguro completo no teu role prompt:
+Agora o temporizador pertence a um motor que **nao e filho da tua shell**:
 
 ```
-loop:
-    jht-throttle-check <me>          # gate
-    if exit 1:
-        jht-throttle-wait <me>       # re-bloquear
-    do_task()
-    jht-throttle --agent <me>        # pai bloqueia + filho destacado
+TU                           MOTOR (daemon, fora do teu processo)
+ |                              |
+ |-- throttle <me> ------------>|  le a duracao calibrada pelo Capitao
+ |                              |  poe o teu flag em IN_THROTTLE
+ |   (fechas o turno            |  arma o temporizador EM DISCO
+ |    e nao fazes NADA)         |
+ |                              |
+ |<-- [RIPRENDI] por tmux ------|  temporizador expirou -> flag = NOTIFIED
+ |                              |
+ |-- throttle-ack <me> -------->|  TU passas NOTIFIED -> ACTIVE
+ |   (primeiro ato ao acordar)  |
 ```
 
-## Regras
+Um reinicio do daemon nao perde nada: o prazo e um timestamp absoluto em disco,
+portanto nao ha temporizador em memoria para rearmar.
 
-- **NUNCA** uses `sleep N` para pausas de throttle. Usa `jht-throttle` em vez disso.
-  O simples `sleep` so e permitido para esperas muito curtas entre tentativas
-  (≤ 5 s) onde o logging seria ruido.
-- **DEVE correr em FOREGROUND, bloqueante.** `jht-throttle` e a pausa do
-  teu loop — o seu proposito e impedir-te de fazer qualquer outra coisa
-  ate retornar. Executa-o atraves da tua ferramenta de shell bloqueante normal (`Shell`
-  / `Bash`), espera que saia, e so depois emite o proximo tool
-  call. **NAO** o envolvas num `Task`/`TaskOutput`/`bash &`
-  / `nohup` / `disown` em background e continues a trabalhar em paralelo — o pai
-  bloqueia por ti de proposito. (O *filho* destacado corre em
-  background; isso e um detalhe de implementacao interno do
-  wrapper, nao algo que tu facas.)
-- **Verifica SEMPRE antes da proxima tarefa.** Se o teu tool call retornou mais cedo
-  do que os segundos da config (timeout do provider), chama `jht-throttle-check`
-  primeiro. Nao adivinhes.
-- Passa sempre `--agent <teu-nome>` (ex. `scout-1`, `capitano`,
-  `analista-2`) — e a chave pela qual o dashboard agrupa E a chave que o
-  Capitao escreve na config.
-- `--reason` e opcional mas util: um tag curto como
-  `"post-batch"`, `"cooldown after URG"`, `"waiting for analyst"`
-  ajuda mais tarde ao reler os eventos.
+## As regras
+
+- **Nunca passas um numero e nunca ves um.** A duracao vive em
+  `$JHT_HOME/config/throttle.json`, e do Capitao, e o motor le-a *quando arma o
+  temporizador* — assim uma recalibracao morde no teu ciclo **seguinte** sem que
+  ninguem te tenha de avisar. Nao fixes `throttle 600` no teu ciclo.
+- **ENCERRA O TURNO depois da chamada.** A chamada retorna em milissegundos
+  precisamente para que nenhum timeout de tool call a possa matar. Se continuares a
+  trabalhar depois, estas a correr sem pausa nenhuma — exatamente o que o throttle
+  existe para evitar.
+- **NUNCA** a mandes para background (`&`, `nohup`, `disown`, uma tarefa em
+  background). Nao ha nada para mandar para background: nao dorme.
+- **NUNCA** uses `sleep N` cru para uma pausa de throttle. `sleep` serve apenas para
+  esperas muito curtas entre tentativas (≤ 5 s), onde registar seria ruido.
+- **Ao acordar, `throttle-ack <teu-nome>` e o teu primeiro comando** — ve a skill
+  `throttle-ack`. Se o omitires o teu flag fica em `NOTIFIED`, que o watchdog le
+  como prova de que estas bloqueado, e escala ao Capitao por um agente que esta
+  perfeitamente bem.
+- `--reason` e opcional mas util: uma etiqueta curta (`"post-batch"`, `"a espera do
+  critico"`) torna `logs/throttle-engine.jsonl` legivel mais tarde.
 
 ## Exemplos
 
 ```bash
-# Gate pre-tarefa (sempre antes de iniciar uma tarefa)
-jht-throttle-check scout-1 || jht-throttle-wait scout-1
+# Scout, ao terminar uma posicao:
+throttle scout-1 --reason "post-batch"
+# ... e o turno acaba aqui.
 
-# Scout: pausa entre lotes, duracao definida pelo Capitao na config.
-jht-throttle --agent scout-1 --reason "post-batch cooldown"
-
-# Capitao: override explicito (raro, apenas para emergencias)
-jht-throttle 60 --agent capitano --reason "between cycles"
-
-# Escritor: pausa enquanto espera pelo Critico, orientada pela config
-jht-throttle --agent scrittore-1 --reason "waiting critic review"
+# Escritor a espera do Critico:
+throttle scrittore-1 --reason "waiting critic review"
 ```
 
-## Codigos de saida
+## Exit codes
 
-- `0` — pausa realizada e registada, OU a config devolveu 0 (caminho rapido no-op)
-- `1` — argumentos em falta ou invalidos
+- `0` — temporizador armado, ou duracao 0 (sem pausa: o core interativo esta a 0 de
+  proposito, para continuar reativo no chat do utilizador — continua)
+- `1` — argumentos invalidos, ou motor ausente
 
-## Nota do Capitao
+## Comandos obsoletos
 
-Para abrandar um agente, **edita a config**, nao envies um numero via
-tmux:
+`jht-throttle`, `jht-throttle-check` e `jht-throttle-wait` continuam a funcionar:
+hoje sao shims finos sobre o motor, mantidos para os prompts ainda nao migrados.
+Prefere `throttle` + `throttle-ack`. Se te encontrares a calcular timeouts para uma
+tool call (`timeout: N+30`), estas no caminho antigo — ja nao e preciso.
+
+## Nota para o Capitao
+
+Para mudar um ritmo, edita a config — nunca mandes um numero por tmux:
 
 ```bash
-# Agente individual
-python3 /app/shared/skills/throttle-config.py set scout-1 60
-
-# Multi-agente numa unica escrita atomica
-python3 /app/shared/skills/throttle-config.py bulk-set scout-1=60 scrittore-1=120 analista-1=0
-
-# Mostrar o estado atual
-python3 /app/shared/skills/throttle-config.py dump
+throttle-set scout-1 660                       # um agente
+throttle-set scout-1=660 analista-1=300        # varios, 1 escrita atomica
+throttle-set --dump                            # os valores efetivos agora
 ```
 
-Usa tmux apenas para dizer aos agentes para chamarem a skill **com mais ou menos frequencia**
-no seu loop, nao para ditar a duracao.
+A mudanca morde no ciclo seguinte de cada agente, por si so. Usa tmux apenas para
+dizer a um agente que chame a skill **mais ou menos vezes** no seu ciclo, nunca
+para ditar uma duracao.

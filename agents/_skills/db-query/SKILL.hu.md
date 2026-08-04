@@ -67,6 +67,39 @@ python3 /app/shared/skills/db_query.py next-for-critico   # ⚠️ örökség �
 
 Mindegyik a következő, az adott szerepkör számára kész köteget adja vissza, a V5 állapotfolyamot követve: `new → checked → scored → writing → ready → applied → response` (az `excluded` mint bármely lépésből elérhető kilépési lehetőség).
 
+### A limit alapérték, nem plafon
+
+Minden sor az **első 20 tételt** írja ki, és mindig kimondja, **hányan vannak összesen** —
+`Posizioni new pronte per analisi (mostrate 20 di 1375)`. Nézd a második számot: az a
+backlog, és nem tűnik el attól, hogy a sorokat levágtuk.
+
+```bash
+# Hányat látsz, azt te döntöd el
+python3 /app/shared/skills/db_query.py next-for-categorize --limit 100
+python3 /app/shared/skills/db_query.py next-for-categorize --all     # mindet (= --limit 0)
+python3 /app/shared/skills/db_query.py next-for-categorize --json    # {"total": 1375, "shown": 20, "rows": [...]}
+```
+
+Miért van alapérték (2026-07-30-i mérés): limit nélkül a `next-for-geocode-missing`
+2.000 pozíciónál **1.375 sort ≈ 19.500 tokent** írt ki, 20.000-nél pedig **~195.000**-et —
+egyetlen parancs, több mint egy teljes kontextusablak. Az alapérték attól véd meg, amit
+senki nem kért; **nem** dönt helyetted: válaszd a számot ahhoz, amit épp csinálsz — 20 a
+következő tétel felvételéhez, `--all` egy auditnál, önmagában a végösszeg egy backlog
+felméréséhez.
+
+És nem vagy ezekre a parancsokra korlátozva: ez a skill `Bash(python3 *)`-ot ad, tehát saját
+lekérdezést írni saját `LIMIT`-tel jogos, valahányszor a kész sor nem az a kérdés, ami
+valójában érdekel.
+
+```bash
+python3 -c "
+import os, sqlite3
+db = sqlite3.connect(os.environ.get('JHT_DB', '/jht_home/jobs.db'))
+for row in db.execute('SELECT id, title FROM positions WHERE role_family IS NULL LIMIT 50'):
+    print(row)
+"
+```
+
 ## Mikor használd
 
 - Skálázási döntések előtt (a Capitano-nak tudnia kell, van-e ≥ 3 `checked` rekord, mielőtt SCORER-t indít)

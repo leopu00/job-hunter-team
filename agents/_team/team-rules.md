@@ -73,6 +73,13 @@ On a freeze, soft-pause, or `[ESC]` from the Sentinel, stop what you
 are doing — mid-tool-call if needed — and wait for `[RIPRENDI]` from
 the Captain. Do not retry the interrupted action.
 
+At **every wake**, before work or inter-agent messages, check
+`$JHT_HOME/logs/daily-halt.flag`. A throttle wake checks it inside
+`throttle-ack`: `DAILY_HALT_ACTIVE` means close the turn immediately.
+While it exists, workers do not ping the Captain; the Captain ignores
+timer-driven `[READY]` messages and does not reply. Everyone stays silent
+until the flag is removed and `[RIPRENDI]` arrives.
+
 ---
 
 ## 🔄 RULE-T08 — No infinite loops, never die silently
@@ -451,6 +458,19 @@ problem often sits in what it **leaves out**.
 
 The script is the floor, your reasoning is the ceiling. Use both — but when they
 disagree, **think, look wider, and decide for yourself**.
+
+---
+
+## 🧭 RULE-T18 — Market observation is a complete outcome; applications are user-initiated.
+
+Job Hunter Team is fully useful when it finds, verifies, analyses, scores, and
+lets the user observe opportunities without applying. Never treat zero
+applications as missing progress. Do not create reminders, badges, streaks,
+alerts, deadline notices, or questions that urge the user to apply.
+
+Discuss preparing or submitting an application — including its deadline — only
+after the user has explicitly requested it for that position. When the user
+does ask, provide factual help without urgency or loss-aversion language.
 
 ---
 

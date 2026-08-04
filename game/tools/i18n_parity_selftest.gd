@@ -9,19 +9,58 @@ extends SceneTree
 ## (EN a 471 chiavi su 624, le altre cinque a 327): questo test è il gate che
 ## impedisce che si riformi.
 ##
-## Quattro contratti, tutti e quattro necessari:
+## Sei contratti, tutti e sei necessari:
 ##  1. stesse chiavi in tutte e 7 le lingue (né mancanti né orfane);
 ##  2. nessun valore vuoto — una stringa vuota è peggio dell'italiano;
 ##  3. stessi segnaposto printf dell'italiano: un %d che diventa %s fa saltare
 ##     il format a runtime, e succede solo nella lingua tradotta male;
 ##  4. ogni chiave citata nei sorgenti esiste davvero in S, altrimenti t()
-##     restituisce la chiave e l'utente si ritrova a leggere "vps.step_key".
+##     restituisce la chiave e l'utente si ritrova a leggere "vps.step_key";
+##  5. i NOMI DI SCENA DEI RUOLI passano dai dizionari e sono tradotti davvero;
+##  6. nelle superfici elencate in LITERAL_FREE_SURFACES nessuna frase è scritta
+##     a mano dentro `.text` / `.tooltip_text` / `.placeholder_text`.
+##
+## Il quinto contratto è nato da un difetto vero: registrando il gioco in
+## inglese, la colonna delle chat elencava "Il Coordinatore", "Il Mentor",
+## "Ricercatore 02" in mezzo a un'interfaccia tutta inglese. I nomi erano
+## scritti a mano dentro CharacterDefs e TourGuide e non passavano da t(),
+## quindi i primi quattro contratti non potevano vederli: le chiavi c'erano
+## tutte, i valori erano pieni, i segnaposto combaciavano. Un difetto che non
+## rompe niente e si vede solo a schermo è quello che sopravvive più a lungo.
 
 const LANGS := ["en", "hu", "es", "de", "fr", "pt"]
 ## Le cartelle in cui cercare le chiamate a t().
 const SOURCE_DIRS := ["res://scripts"]
 
+## Chi mostra i nomi di scena deve chiederli al dizionario. Una mappa di
+## chiavi perfetta e nessun chiamante è indistinguibile da nessuna mappa: il
+## test resterebbe verde e a schermo tornerebbe l'italiano.
+const ROLE_NAME_SURFACES := {
+	"res://scripts/characters/character_defs.gd": "UIStrings.t(key)",
+	"res://scripts/setup/tour_guide.gd": "CharacterDefs.role_name(",
+	"res://scripts/ui/chat_panel.gd": "CharacterDefs.role_name(",
+}
+
+## Sesto contratto: superfici in cui NESSUNA frase può essere scritta a mano.
+##
+## I primi cinque contratti vedono solo ciò che passa già da t(): un file che
+## assegna la frase direttamente — `label.text = "Avvio console…"` — è invisibile
+## a tutti e cinque e resta italiano in tutte e sette le lingue. È esattamente
+## come l'onboarding del primo avvio è rimasto monolingue mentre il dizionario
+## cresceva a 800 chiavi con un gate dedicato: nessun test poteva accorgersene.
+##
+## Qui si guarda l'assegnazione, non la chiave: in questi file il lato destro di
+## `.text` / `.tooltip_text` / `.placeholder_text` non può essere un letterale
+## che contiene parole. Simboli e separatori ("✕", "↑", "· ") restano leciti —
+## non si traducono e obbligarli a passare dal dizionario sarebbe rumore.
+const LITERAL_FREE_SURFACES := [
+	"res://scripts/setup/scripted_onboarding.gd",
+	"res://scripts/ui/embedded_terminal.gd",
+]
+
 var _failures: Array[String] = []
+## I dizionari tradotti già caricati da _check_lang, per non rileggerli.
+var _dicts := {}
 
 
 func _init() -> void:
@@ -30,6 +69,8 @@ func _init() -> void:
 	for lang in LANGS:
 		_check_lang(lang, it)
 	_check_keys_used_in_sources(it)
+	_check_role_names(it)
+	_check_no_hardcoded_labels()
 	if _failures.is_empty():
 		print("I18N-PARITY-TEST PASS (%d chiavi × %d lingue)" % [it.size(), LANGS.size() + 1])
 		quit(0)
@@ -52,6 +93,7 @@ func _check_lang(lang: String, it: Dictionary) -> void:
 		return
 	var script: GDScript = load(path)
 	var d: Dictionary = script.get_script_constant_map().get("S", {})
+	_dicts[lang] = d
 	_check("%s: dizionario presente" % lang, not d.is_empty(), "S vuoto o assente in " + path)
 
 	var missing: Array[String] = []
@@ -141,6 +183,114 @@ func _check_keys_used_in_sources(it: Dictionary) -> void:
 			"%d sconosciute a UIStrings.S: %s" % [unknown.size(), _head(unknown)])
 	_check("chiamate a UIStrings.t trovate", seen > 0,
 			"nessuna chiamata trovata: il test non sta guardando i sorgenti giusti")
+
+
+## I nomi di scena dei ruoli: "Il Ricercatore", "Ricercatore 02", "Il Mentor".
+##
+## Sono l'unica famiglia di etichette la cui chiave si compone a RUNTIME
+## ("role." + slug), quindi il controllo (4) — che cerca i letterali
+## UIStrings.t("…") nei sorgenti — non le vede. Qui la copertura arriva
+## dall'altra parte: si parte dal roster vero (CharacterDefs) e si pretende
+## che ogni ruolo che il gioco mette in scena abbia la sua chiave. È il pezzo
+## che si accorge del ruolo nuovo aggiunto senza traduzione, che altrimenti
+## comparirebbe in italiano dentro le altre sei lingue senza rompere nulla.
+func _check_role_names(it: Dictionary) -> void:
+	var expected := {}
+	for slug: String in CharacterDefs.AGENTS:
+		expected["role." + slug] = str(CharacterDefs.AGENTS[slug]["name"])
+	for dept_id: String in CharacterDefs.DEPT_ROLES:
+		var role: Dictionary = CharacterDefs.DEPT_ROLES[dept_id]
+		expected["role_short." + str(role["slug"])] = str(role["label"])
+	_check("roster dei ruoli non vuoto", expected.size() >= 11,
+			"solo %d ruoli da CharacterDefs: il test non sta leggendo il roster"
+			% expected.size())
+
+	var missing: Array[String] = []
+	var drifted: Array[String] = []
+	for key: String in expected:
+		if not it.has(key):
+			missing.append(key)
+			continue
+		# La costante in CharacterDefs resta il fallback quando la chiave
+		# manca: se le due si allontanano, la rete di sicurezza mostrerebbe
+		# un nome diverso da quello di tutti i giorni.
+		if str(it[key]) != str(expected[key]):
+			drifted.append('%s: dizionario "%s" ≠ CharacterDefs "%s"'
+					% [key, it[key], expected[key]])
+	_check("nomi di ruolo con una chiave", missing.is_empty(),
+			"%d ruoli senza chiave in UIStrings.S: %s"
+			% [missing.size(), _head(missing)])
+	_check("nomi di ruolo allineati alle costanti", drifted.is_empty(),
+			"%d disallineati: %s" % [drifted.size(), _head(drifted)])
+
+	# Tradotti DAVVERO, non ricopiati dall'italiano. Vale solo per i nomi
+	# lunghi: l'articolo davanti ("Il"/"The"/"Der"/"A") rende la copia
+	# impossibile da confondere con una traduzione legittima. La forma breve
+	# è esclusa apposta — "Analista" è la parola giusta in italiano, spagnolo
+	# e portoghese insieme, e pretenderla diversa sarebbe un falso allarme.
+	var copied: Array[String] = []
+	for lang in LANGS:
+		var d: Dictionary = _dicts.get(lang, {})
+		if d.is_empty():
+			continue
+		for key: String in expected:
+			if not key.begins_with("role."):
+				continue
+			if d.has(key) and str(d[key]) == str(it[key]):
+				copied.append("%s/%s (\"%s\")" % [lang, key, it[key]])
+	_check("nomi di ruolo tradotti", copied.is_empty(),
+			"%d ancora in italiano: %s" % [copied.size(), _head(copied)])
+
+	for path: String in ROLE_NAME_SURFACES:
+		var src := FileAccess.get_file_as_string(path)
+		_check("%s leggibile" % path.get_file(), src != "", "file vuoto o assente")
+		if src == "":
+			continue
+		_check("%s prende i nomi dal dizionario" % path.get_file(),
+				src.contains(str(ROLE_NAME_SURFACES[path])),
+				"non chiama più %s: i nomi sono tornati scritti a mano"
+				% ROLE_NAME_SURFACES[path])
+
+
+## Nessuna frase scritta a mano nelle superfici dichiarate sopra.
+##
+## Si legge la riga intera dopo `.text =` (o `+=`), non solo il primo letterale:
+## `x.text = "SÌ" if cond else "NO"` ne nasconde due, e il secondo è quello che
+## si dimentica di tradurre. Un letterale è "una frase" se contiene almeno due
+## lettere di fila — così "✕", "↑" e " · " non fanno rumore, mentre "OK" sì.
+func _check_no_hardcoded_labels() -> void:
+	var assign := RegEx.new()
+	assign.compile('\\.(text|tooltip_text|placeholder_text)\\s*\\+?=(.*)$')
+	var literal := RegEx.new()
+	literal.compile('"([^"]*)"')
+	# Le chiavi passate al dizionario sono letterali legittimi: si tolgono prima
+	# di guardare cosa resta, altrimenti ogni riga corretta sembrerebbe un errore.
+	var lookup := RegEx.new()
+	lookup.compile('UIStrings\\.t\\("[^"]*"\\)')
+	var words := RegEx.new()
+	words.compile('\\p{L}{2,}')
+	for path: String in LITERAL_FREE_SURFACES:
+		var src := FileAccess.get_file_as_string(path)
+		_check("%s leggibile" % path.get_file(), src != "", "file vuoto o assente")
+		if src == "":
+			continue
+		var found: Array[String] = []
+		var line_no := 0
+		for line in src.split("\n"):
+			line_no += 1
+			if line.strip_edges().begins_with("#"):
+				continue
+			var hit := assign.search(line)
+			if hit == null:
+				continue
+			var rhs := lookup.sub(hit.get_string(2), "", true)
+			for m in literal.search_all(rhs):
+				if words.search(m.get_string(1)) != null:
+					found.append('%s:%d "%s"' % [path.get_file(), line_no,
+							m.get_string(1)])
+		_check("%s senza etichette scritte a mano" % path.get_file(), found.is_empty(),
+				"%d letterali assegnati a .text/.tooltip_text/.placeholder_text: %s"
+				% [found.size(), _head(found)])
 
 
 func _gd_files(dir_path: String) -> PackedStringArray:

@@ -38,6 +38,7 @@ import {
   optimisticUserTurn,
   postAcks,
   postChat,
+  retryChatSignal,
   unreadIdsOf,
   withAgentAcked,
   withConfirmedTurn,
@@ -387,8 +388,11 @@ export default function MessagesList({ initialMessages }: Props) {
     setReplyText("");
     setMessages((ms) => [optimistic, ...ms]);
     try {
-      const confirmed = await postChat(agent, text);
-      setMessages((ms) => withConfirmedTurn(ms, optimistic.id, confirmed));
+      const result = await postChat(agent, text);
+      setMessages((ms) => withConfirmedTurn(ms, optimistic.id, result.message));
+      if (!result.signalled && !(await retryChatSignal())) {
+        setError(tr("delivery_signal_failed"));
+      }
     } catch (e) {
       setMessages((ms) => withoutTurn(ms, optimistic.id));
       setReplyText(text);

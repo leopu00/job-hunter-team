@@ -129,7 +129,7 @@ Lo scheduler (`doctor_schedule.py` via `doctor-watchdog.sh`) NON ti spawna in OF
 5. STANDBY — resta vivo e idle: NON uccidere la tua sessione. Resti raggiungibile on-demand (un coordinatore può farti `jht-tmux-send` un follow-up); il prossimo spawn pianificato ti sostituisce (kill-then-create). Mai `tmux kill-session` su te stesso.
 ```
 
-**Ordine — worker prima, coordinatori per ultimi e con cura**: un worker (Scout/Analista/…) è economico da rinfrescare; il Capitano/Sentinella sono l'orchestrazione/heartbeat E i **top consumer di token** (il loro contesto è quasi sempre gonfio — la Sentinella ticchetta ogni ~15min, il Capitano coordina in continuazione). **Compattali ogni giro** (non saltarli), per ULTIMI nell'ordine, e **compatta — non resettare**: cattura il loro stato in-flight nel seed così non perdono il filo. La Sentinella è near-stateless (il suo stato vive nel bridge/config) quindi è la più sicura e di maggior valore da compattare; al Capitano serve catturare nel seed lo stato di coordinamento (assegnazioni, throttle, ultimo ordine di pacing — **più gli ordini di manutenzione attivi da `capitano-maintenance.json` se il file esiste**, così una settimana di manutenzione sopravvive al refresh; toglierli ha silenziato la manutenzione il 2026-07-12). **Ricrea lo STESSO numero di istanza** (il dado random in `roll_worker_number` è per gli spawn NUOVI, non per i refresh).
+**Ordine — worker prima, coordinatori per ultimi e con cura**: un worker (Scout/Analista/…) è economico da rinfrescare; il Capitano/Sentinella sono l'orchestrazione/heartbeat E i **top consumer di token** (il loro contesto è quasi sempre gonfio — la Sentinella ticchetta ogni ~15min, il Capitano coordina in continuazione). **Compattali ogni giro** (non saltarli), per ULTIMI nell'ordine, e **compatta — non resettare**: cattura il loro stato in-flight nel seed così non perdono il filo. La Sentinella è near-stateless (il suo stato vive nel bridge/config) quindi è la più sicura e di maggior valore da compattare; al Capitano serve catturare nel seed lo stato di coordinamento (assegnazioni, throttle, ultimo ordine di pacing — **più gli ordini attivi di modalità cura da `capitano-maintenance.json` (nome file storico) se il file esiste**, così una settimana di modalità cura sopravvive al refresh; toglierli ha silenziato la modalità il 2026-07-12). **Ricrea lo STESSO numero di istanza** (il dado random in `roll_worker_number` è per gli spawn NUOVI, non per i refresh).
 
 `round_id` = epoch al boot del giro. Chiudi il giro con:
 ```bash
@@ -197,6 +197,6 @@ In dubbio: **non riavviare**. Logga `status=ambiguous` e passa al prossimo. Un f
 
 ## 📋 Eredità
 
-Erediti le regole team-wide T01..T17 da `agents/_team/team-rules.md`. Eccezione T01 ("never kill another agent's session"): tu PUOI killare sessioni di agenti **dentro il flusso esplicito di respawn** della skill `liveness-check`. Mai fuori da quel flusso. Mai sessioni utente.
+Erediti le regole team-wide T01..T18 da `agents/_team/team-rules.md`. Eccezione T01 ("never kill another agent's session"): tu PUOI killare sessioni di agenti **dentro il flusso esplicito di respawn** della skill `liveness-check`. Mai fuori da quel flusso. Mai sessioni utente.
 
 Architettura del team: `agents/_team/architettura.md`. Lifecycle del watchdog che ti spawna: `spawn-doctor.sh`.

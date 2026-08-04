@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { readLocalOr } from "@/lib/local-workspace";
 import { getCriticoActivityLocal } from "@/lib/local-queries";
@@ -6,6 +7,12 @@ import { getCriticoActivityLocal } from "@/lib/local-queries";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  // [WEB-10-DATA-ROUTES-UNGUARDED] Feed di lavoro del team: dati
+  // dell'utente, non una pagina pubblica. Unico chiamante
+  // `app/(protected)/team/critico`.
+  const denied = await requireAuth();
+  if (denied) return denied;
+
   // Local-only (host localhost + jobs.db): leggi dal DB locale, mai Supabase.
   const fromLocal = await readLocalOr("critico", getCriticoActivityLocal);
   if (fromLocal !== null) return NextResponse.json(fromLocal);

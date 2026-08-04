@@ -13,7 +13,9 @@ Shell-Wrapper unter `/app/agents/_skills/tmux-send/jht-tmux-send` (auch im `PATH
 
 Ink-basierte TUIs (Codex, Kimi Code) **verlieren das Enter**, wenn es im selben `tmux send-keys`-Aufruf wie der Nachrichtentext ankommt. Der Text wird Zeichen fuer Zeichen gesendet; Ink muss das Rendering abschliessen, bevor ein weiterer Tastendruck akzeptiert wird. Wenn du `tmux send-keys "msg" Enter` aufrufst, bleibt die Nachricht im Eingabepuffer des Peers, ohne abgesendet zu werden → stiller Deadlock zwischen Agenten.
 
-Der Wrapper behandelt dies atomar: `text → sleep 0.3 → Enter → sleep 0.5 → Enter` (das zweite Enter ist zur Robustheit idempotent).
+Der Wrapper behandelt dies atomar: er tippt den Text, **liest das Panel erneut, um zu bestaetigen, dass er erschienen ist**, sendet Enter und **liest das Panel nochmals, um zu bestaetigen, dass der Zug wirklich gestartet ist**. Zustellung ist nicht "getippt haben": sie ist "den Zug starten gesehen haben".
+
+> ⚠️ Es gibt einen zweiten, heimtueckischeren Zustand: die TUI **akzeptiert den Text und ignoriert das Enter**, sodass die Zeile im Composer haengen bleibt, waehrend der Agent stundenlang stillsteht. 4-mal in 3 Tagen auf einer einzigen VPS beobachtet, Kapitaen eingeschlossen, wenn eine Nachricht eintrifft, waehrend der Peer einen langen Zug abschliesst. Der Wrapper wiederholt jetzt das Enter und gibt, falls der Zug trotzdem nicht startet, **`5`** zurueck, statt faelschlich Erfolg zu melden.
 
 ## Verwendung
 
@@ -64,9 +66,14 @@ Standardtypen (siehe `agents/_manual/communication-rules.md` fuer die vollstaend
 
 ## Exit-Codes
 
-- `0` — Nachricht zugestellt
+- `0` — Nachricht zugestellt **und abgeschickt** (verifiziert: der Zug ist gestartet)
 - `1` — fehlende Argumente
 - `2` — Zielsitzung existiert nicht (pruefe den Namen mit `tmux ls`)
+- `3` — Text nie erschienen und Panel nicht beschaeftigt → TUI nicht empfangsbereit. **Der einzige Code, der tot/verklemmt nahelegt.**
+- `4` — Peer in einem langen Zug ueber das Wartebudget hinaus → **lebendig**. Spaeter erneut versuchen, niemals respawnen.
+- `5` — Text akzeptiert, aber nie abgeschickt ("lebendig, aber stumm") → **lebendig**. Spaeter erneut versuchen, niemals respawnen.
+
+> Nur `3` darf zu einem Liveness-Check und einem Respawn fuehren. `4` und `5` bedeuten beide, dass der Peer lebt: sie als Tod zu behandeln ist genau, wie Over-Spawning beginnt.
 
 ## Regeln
 

@@ -248,9 +248,9 @@ func _on_scripted_action(action: String, payload: Dictionary) -> void:
 		close(false)
 	elif action == "open_scripted_chat":
 		var agent := str(payload.get("agent", "assistente"))
-		var names := {"assistente": "Assistente", "coordinatore": "Coordinatore",
-				"mentor": "Mentor"}
-		_switch_to(agent, str(names.get(agent, agent.capitalize())))
+		# il nome sull'intestazione è lo stesso che l'utente legge in scena
+		# e nella colonna delle chat: uno solo, e nella sua lingua
+		_switch_to(agent, CharacterDefs.role_name(agent))
 
 func _send_text(text: String) -> void:
 	if text.strip_edges().is_empty() or not _view.input.editable:

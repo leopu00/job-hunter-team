@@ -11,7 +11,7 @@ allowed-tools: Bash(python3 *)
 
 L'une de ces conditions → envoie un ordre immédiat sans attendre le cooldown :
 
-- `proj > 200%` (catastrophique)
+- `proj > 200%` (catastrophique) **et** `reset_edge_guard != true`
 - `velocità_smussata > velocità_ideale × 5` (explosion)
 - `usage ≥ 90%` absolu (limite hard)
 
@@ -25,7 +25,15 @@ Envoie Esc x2 à tous les opérationnels (exclut CAPITANO/ASSISTENTE/SENTINELLA/
 
 Définit `freeze_active = True`.
 
-## 📊 Déclencheurs pendant la zone d'urgence (proj > 100%)
+### Guard au bord du reset (30 dernières minutes)
+
+Lorsque le tick contient `reset_edge_guard=true`, la projection est uniquement
+diagnostique : ne déclenche ni freeze, ni throttle, ni kill et ne mets pas à
+jour `emergency_proj_history` à cause de `proj`, y compris pour une persistance
+`proj > 150%`. Garde `suggested_throttle_s=0`. Les signaux hard indépendants
+(`usage >= 90%`, FATAL du bridge) restent actifs.
+
+## 📊 Déclencheurs en zone d'urgence (proj > 100%, guard inactif)
 
 Maintiens `emergency_proj_history` (5 derniers) et `emergency_proj_min`. Trois déclencheurs :
 

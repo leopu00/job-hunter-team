@@ -2,16 +2,11 @@ import { readFile, writeFile, readdir, mkdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, YELLOW, DIM, BOLD, RESET } from './_colors.js';
 
 const JHT_DIR    = JHT_HOME;
 const HOOKS_DIR  = join(JHT_DIR, 'hooks');
 const CONFIG_PATH = join(JHT_DIR, 'hooks-config.json');
-
-const GREEN  = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const DIM    = '\x1b[90m';
-const BOLD   = '\x1b[1m';
-const RESET  = '\x1b[0m';
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
@@ -151,7 +146,7 @@ async function showHook(id) {
 export function registerHooksCommand(program) {
   program
     .command('hooks [action]')
-    .description('Gestione hooks (azioni: list, enable, disable, show)')
+    .description('[non implementato] Gestione hooks — nessun esecutore: gli hook non vengono mai eseguiti (azioni: list, enable, disable, show)')
     .option('--id <id>', 'ID hook')
     .action(handleHooks);
 }

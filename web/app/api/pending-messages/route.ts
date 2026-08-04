@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { sendUserChatLocal } from "@/lib/local-queries";
 import { getMessagesHistory, getPendingMessagesCount } from "@/lib/queries";
 import { CHAT_AGENTS, MAX_CHAT_BODY, isChatAgent } from "@/lib/chat-agents";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +54,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { error: "body JSON non valido" },
-      { status: 400 },
-    );
+    return invalidJsonBody();
   }
 
   const agent =
@@ -143,7 +142,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, { status: 500, scope: "pending-messages" });
   }
 
   // Il campanello per il box. Best-effort DICHIARATO: se fallisce il

@@ -3,10 +3,10 @@
 // `jht team send <agente> "<msg>"` — manda un singolo messaggio
 // `jht team chat <agente>`         — REPL interattivo (readline)
 //
-// Usa la stessa identica logica di /api/team/send della web UI:
-//   tmux send-keys -t <SESSION> -- '<msg>'
-//   tmux send-keys -t <SESSION> Enter
-// Se il container e' attivo si passa per docker exec, altrimenti tmux host.
+// Usa la stessa identica logica di /api/team/send della web UI: consegna via
+// `jht-tmux-send`, che verifica il pane prima e dopo l'Enter e distingue i
+// modi di fallire (2/3/4/5). Se il container e' attivo si passa per docker
+// exec, altrimenti tmux host.
 
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
@@ -43,24 +43,42 @@ function resolveSession(agentArg) {
   return null;
 }
 
-/** Invia un messaggio testuale all'agente (una riga, + Enter). */
+// Perche' un exit code merita una frase e non un "invio fallito": l'utente
+// deve sapere se riprovare fra un minuto (occupato), se l'agente va sbloccato
+// (muto) o se e' davvero giu'. Vedi agents/_skills/tmux-send/SKILL.md.
+const SEND_ERRORS = {
+  2: 'sessione non attiva',
+  3: 'agente non ricettivo (pane bloccato o TUI giu\')',
+  4: 'agente occupato su un turno lungo — riprova fra poco',
+  5: 'agente bloccato: il messaggio e\' nel prompt ma non e\' partito — va sbloccato',
+};
+
+/** Invia un messaggio testuale all'agente e ne VERIFICA la consegna. */
 function sendMessage(session, message) {
+  // MAI `tmux send-keys` a mano: esce 0 appena la sessione esiste, quindi
+  // dichiarerebbe consegnato anche un messaggio che la TUI ha ignorato. Il
+  // wrapper aspetta il pane libero, verifica che il testo sia comparso e
+  // ricontrolla che il turno sia davvero partito.
   const escaped = bashSingleQuote(message);
-  const sendCmd = `tmux send-keys -t '${session}' -- '${escaped}'`;
-  const enterCmd = `tmux send-keys -t '${session}' Enter`;
+  const args = `'${session}' '${escaped}'`;
+  const cmd =
+    `if command -v jht-tmux-send >/dev/null 2>&1; then jht-tmux-send ${args}; ` +
+    `else /app/agents/_skills/tmux-send/jht-tmux-send ${args}; fi`;
+  const fail = (code, raw) => ({
+    ok: false,
+    code,
+    error: SEND_ERRORS[code] || (raw || '').split('\n')[0] || `exit ${code}`,
+  });
   if (usingContainer()) {
-    const r1 = execInContainer(sendCmd);
-    if (r1.code !== 0) return { ok: false, error: r1.stderr || r1.stdout };
-    const r2 = execInContainer(enterCmd);
-    if (r2.code !== 0) return { ok: false, error: r2.stderr || r2.stdout };
+    const r = execInContainer(cmd);
+    if (r.code !== 0) return fail(r.code, r.stderr || r.stdout);
     return { ok: true };
   }
   try {
-    execSync(sendCmd, { stdio: 'ignore' });
-    execSync(enterCmd, { stdio: 'ignore' });
+    execSync(cmd, { stdio: 'ignore' });
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return fail(err.status, err.message);
   }
 }
 
@@ -80,35 +98,46 @@ function capturePane(session, lines = 30) {
 
 // ── send: one-shot ─────────────────────────────────────────────────
 
+// Le guardie segnano `process.exitCode` e ritornano invece di chiamare
+// `process.exit()`: l'exit code osservato resta 1, ma stderr fa in tempo a
+// svuotarsi. Con `process.exit()` il messaggio che spiega COME rimediare
+// ("Controlla con: jht team status") poteva non arrivare mai, perche' su una
+// pipe la console e' asincrona. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
 export function sendAction(agentArg, message) {
   if (!usingContainer() && !tmuxAvailable()) {
     console.error(c.red('Errore: tmux non trovato e container jht non attivo.'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (!agentArg) {
     console.error(c.red('Uso: jht team send <agente> "<messaggio>"'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (!message || typeof message !== 'string') {
     console.error(c.red('Messaggio mancante. Uso: jht team send capitano "ciao"'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (message.length > 1000) {
     console.error(c.red('Messaggio troppo lungo (max 1000 caratteri).'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const session = resolveSession(agentArg);
   if (!session) {
     console.error(c.red(`Nessuna sessione attiva per '${agentArg}'.`));
     console.error(c.dim('  Controlla con: jht team status'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const r = sendMessage(session, message);
   if (!r.ok) {
     console.error(c.red(`Invio fallito: ${(r.error || '').split('\n')[0]}`));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log(c.green(`✓ ${session} <- "${message.length > 60 ? message.slice(0, 57) + '...' : message}"`));
 }
@@ -118,12 +147,14 @@ export function sendAction(agentArg, message) {
 export async function chatAction(agentArg, options = {}) {
   if (!usingContainer() && !tmuxAvailable()) {
     console.error(c.red('Errore: tmux non trovato e container jht non attivo.'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (!agentArg) {
     console.error(c.red('Uso: jht team chat <agente>'));
     console.error(c.dim('  Esempio: jht team chat capitano'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const session = resolveSession(agentArg);
@@ -132,7 +163,8 @@ export async function chatAction(agentArg, options = {}) {
     console.error(c.dim('  Agenti disponibili: ' + getActiveSessions().filter((s) =>
       AGENTS.some((a) => isAgentSession(s, a))
     ).join(', ')));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const rl = createInterface({ input, output, terminal: true });

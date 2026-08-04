@@ -3,11 +3,13 @@ import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { requireAuth } from "@/lib/auth";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +61,8 @@ async function cloudGuard(req: NextRequest): Promise<NextResponse | null> {
 
 // ── GET: elenco direttive (attive + archiviate) ────────────────────────────
 export async function GET(req: NextRequest): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const db = localDbOrNull();
   if (db) {
     try {
@@ -96,16 +100,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
   if (error) {
-    return NextResponse.json(
-      { error: `Supabase query failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "team-directives",
+      publicMessage: "query_failed",
+    });
   }
   return NextResponse.json({ directives: data || [], source: "cloud" });
 }
 
 // ── POST: crea una direttiva ───────────────────────────────────────────────
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const body = (await req.json().catch(() => ({}))) as {
     body?: string;
     kind?: string;
@@ -171,16 +178,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .select("id")
     .single();
   if (error) {
-    return NextResponse.json(
-      { error: `Supabase insert failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "team-directives",
+      publicMessage: "insert_failed",
+    });
   }
   return NextResponse.json({ id: String(data.id), source: "cloud" });
 }
 
 // ── PATCH: modifica il testo o archivia una direttiva ──────────────────────
 export async function PATCH(req: NextRequest): Promise<NextResponse> {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const body = (await req.json().catch(() => ({}))) as {
     id?: number | string;
     body?: string;
@@ -249,10 +259,11 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     .eq("id", id)
     .eq("user_id", userId);
   if (error) {
-    return NextResponse.json(
-      { error: `Supabase update failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "team-directives",
+      publicMessage: "update_failed",
+    });
   }
   return NextResponse.json({ ok: true, source: "cloud" });
 }

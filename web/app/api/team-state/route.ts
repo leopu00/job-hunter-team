@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
 import { isCloudDeploy } from "@/lib/deploy-mode";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,9 @@ const OBSERVED_FIELDS = [
   // Il box marca chat_delivered_at dopo aver consegnato i turni al pane
   // dell'agente: chiude il rendezvous di chat_requested_at.
   "chat_delivered_at",
+  // Ack del solo rendezvous STOP mobile. Il device non può creare richieste:
+  // emergency_stop_requested_at è scritto esclusivamente dalla route browser.
+  "emergency_stop_completed_at",
 ] as const;
 
 type DesiredField = (typeof DESIRED_FIELDS)[number];
@@ -62,8 +67,7 @@ export async function GET(req: NextRequest) {
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return sanitizedError(error, { status: 500, scope: "team-state" });
   return NextResponse.json({ state: data ?? null });
 }
 
@@ -76,7 +80,7 @@ export async function PATCH(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON body invalido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   let allowed: readonly string[] =
@@ -110,6 +114,22 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json(
       { error: "Nessun campo da aggiornare" },
       { status: 400 },
+    );
+  }
+
+  // Gli esiti Sync now richiedono il CAS su expected_requested_at. Lasciare
+  // aperto il vecchio PATCH permetterebbe a un daemon che sta servendo A di
+  // chiudere B arrivata nel frattempo. Il segnale di freschezza generico e'
+  // scritto server-side da /api/cloud-sync/push, non passa da questa corsia.
+  if (
+    source === "token" &&
+    ("sync_completed_at" in update ||
+      (typeof update.last_action === "string" &&
+        update.last_action.startsWith("sync:")))
+  ) {
+    return NextResponse.json(
+      { error: "sync_observed_endpoint_required" },
+      { status: 409 },
     );
   }
 
@@ -147,10 +167,13 @@ export async function PATCH(req: NextRequest) {
   if (source === "token") {
     const tsCheck = (await supabase
       .from("team_state")
-      .select("active_device_id")
+      .select("active_device_id, sync_requested_at")
       .eq("user_id", userId)
       .maybeSingle()) as {
-      data: { active_device_id: string | null } | null;
+      data: {
+        active_device_id: string | null;
+        sync_requested_at: string | null;
+      } | null;
       error: { message: string } | null;
     };
     if (
@@ -177,7 +200,6 @@ export async function PATCH(req: NextRequest) {
     .select()
     .single();
 
-  if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return sanitizedError(error, { status: 500, scope: "team-state" });
   return NextResponse.json({ state: data });
 }

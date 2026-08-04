@@ -40,6 +40,15 @@ export const THREAD_T: Record<string, Record<string, string>> = {
     fr: "Envoyer",
     pt: "Enviar",
   },
+  delivery_signal_failed: {
+    it: "Il messaggio è salvato, ma il team non è stato avvisato. Controlla che sia online e riprova.",
+    en: "The message is saved, but the team could not be notified. Check that it is online and try again.",
+    hu: "Az üzenet mentve van, de a csapat nem kapott értesítést. Ellenőrizd, hogy online van-e, majd próbáld újra.",
+    es: "El mensaje está guardado, pero no se pudo avisar al equipo. Comprueba que esté conectado e inténtalo de nuevo.",
+    de: "Die Nachricht ist gespeichert, aber das Team konnte nicht benachrichtigt werden. Prüfe, ob es online ist, und versuche es erneut.",
+    fr: "Le message est enregistré, mais l'équipe n'a pas pu être prévenue. Vérifiez qu'elle est en ligne et réessayez.",
+    pt: "A mensagem foi salva, mas a equipe não pôde ser avisada. Verifique se ela está online e tente novamente.",
+  },
   see_position: {
     it: "→ vedi posizione",
     en: "→ view position",
@@ -81,10 +90,15 @@ export async function postReply(id: string, reply: string): Promise<void> {
  * una riga esistente). Ritorna il turno creato dal server, che il chiamante
  * usa per rimpiazzare la bolla ottimistica.
  */
+export type PostChatResult = {
+  message: PendingMessage | null;
+  signalled: boolean;
+};
+
 export async function postChat(
   agent: string,
   message: string,
-): Promise<PendingMessage | null> {
+): Promise<PostChatResult> {
   const res = await fetch("/api/pending-messages", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -93,9 +107,34 @@ export async function postChat(
   const body = (await res.json().catch(() => ({}))) as {
     error?: string;
     message?: PendingMessage;
+    signalled?: boolean;
   };
   if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-  return body.message ?? null;
+  return {
+    message: body.message ?? null,
+    // Compatibilita' con server precedenti che non restituivano il campo:
+    // solo un `false` esplicito apre il recupero del campanello.
+    signalled: body.signalled !== false,
+  };
+}
+
+/**
+ * Ritenta soltanto il campanello dopo un INSERT chat gia' riuscito. Non
+ * reinvia il messaggio e quindi non puo' duplicarlo. La route ritimbra il
+ * valore lato server; il timestamp del browser resta un semplice trigger.
+ */
+export async function retryChatSignal(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/team-state", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({ chat_requested_at: new Date().toISOString() }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 /**

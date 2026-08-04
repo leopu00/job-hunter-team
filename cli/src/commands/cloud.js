@@ -8,6 +8,14 @@ import { SupabaseAuthError } from '../lib/supabase-direct.js';
 import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
 import {
+  acknowledgeSync,
+  publishSyncOutcome,
+  pushRendezvousOutcome,
+  syncRendezvousPending,
+  syncRendezvousTerminal,
+  timeoutFailure,
+} from '../lib/sync-rendezvous.js';
+import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
   BOOTSTRAP_STATE_FILE, FIRST_RUN_STATE_FILE,
@@ -35,6 +43,17 @@ const CLOUD_TICKETS_CURSOR_FILE = join(JHT_HOME, '.cloud-tickets-cursor.json');
 // Cursor sync bacheca (team_directives, round-trip cloud↔VPS): { pull_since,
 // push_since } su updated_at. Vedi handleDirectiveSync.
 const CLOUD_DIRECTIVES_CURSOR_FILE = join(JHT_HOME, '.cloud-directives-cursor.json');
+// Un cambio di device autoritativo apre una nuova ownership epoch. I cursor
+// locali del device che prende il controllo non possono essere considerati
+// validi rispetto alle scritture fatte nel frattempo dall'altro device: al
+// takeover li cancelliamo e lasciamo che i sync ripartano dalla propria
+// baseline sicura (full push o lookback server-side, a seconda della corsia).
+const CLOUD_OWNERSHIP_CURSOR_FILES = [
+  CLOUD_CURSOR_FILE,
+  CLOUD_PULL_CURSOR_FILE,
+  CLOUD_TICKETS_CURSOR_FILE,
+  CLOUD_DIRECTIVES_CURSOR_FILE,
+];
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -473,6 +492,115 @@ async function checkActiveDeviceConflict(baseUrl, token) {
   } catch {
     return { conflict: false };
   }
+}
+
+/**
+ * Invalida best-effort i cursor legati alla precedente ownership epoch.
+ * ENOENT e' un successo: quel flusso ripartira' gia' senza cursor. Gli altri
+ * errori vengono restituiti al chiamante, perche' il claim remoto e' ormai
+ * avvenuto e non va mascherato come fallito o ritentato automaticamente.
+ */
+async function invalidateCloudOwnershipCursors() {
+  let removed = 0;
+  const failed = [];
+  for (const path of CLOUD_OWNERSHIP_CURSOR_FILES) {
+    try {
+      await unlink(path);
+      removed += 1;
+    } catch (err) {
+      if (err?.code !== 'ENOENT') failed.push({ path, error: err.message });
+    }
+  }
+  return { removed, failed };
+}
+
+/**
+ * Claim esplicito del team per questo token. Senza --force conserva il lock
+ * fresco di un altro device; con --force il server effettua atomicamente il
+ * takeover e rende non autoritativo il token precedente.
+ */
+export async function handleClaim(options = {}) {
+  const config = await loadCloudConfig();
+  if (!config?.enabled || !config.base_url || !config.token) {
+    console.error(pc.red('Cloud sync non abilitato: claim richiede pairing prima.'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const baseUrl = String(config.base_url).replace(/\/+$/, '');
+  const deviceLabel =
+    process.env.JHT_DEVICE_LABEL ||
+    config.token_name ||
+    (process.env.IS_CONTAINER === '1' ? 'container' : 'cli');
+
+  let res;
+  let body;
+  try {
+    res = await fetch(`${baseUrl}/api/team-state/claim`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        force: options.force === true,
+        device_label: deviceLabel,
+      }),
+    });
+    body = await res.json().catch(() => ({}));
+  } catch (err) {
+    console.error(pc.red(`Claim fallito per errore di rete: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!res.ok) {
+    if (res.status === 409 && body.error === 'device_already_claimed') {
+      console.error(
+        pc.yellow(
+          `Claim occupato dal device ${body.current_device_id ?? 'unknown'}` +
+          (Number.isFinite(body.heartbeat_age_seconds)
+            ? ` (heartbeat ${body.heartbeat_age_seconds}s fa).`
+            : '.')
+        )
+      );
+      console.error(
+        pc.dim(
+          `  claimed_at: ${body.claimed_at ?? 'unknown'}\n` +
+          `  Per prendere il controllo adesso: jht cloud claim --force`
+        )
+      );
+      process.exitCode = 2;
+      return;
+    }
+    console.error(
+      pc.red(`Claim fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`)
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const claimedDeviceId = body.claimed_device_id ?? body.state?.active_device_id ?? 'unknown';
+  const evictedDeviceId = body.evicted_device_id ?? null;
+  console.log(pc.green('✓ Claim del team acquisito'));
+  console.log(pc.dim(`  device attivo: ${claimedDeviceId}`));
+
+  if (!evictedDeviceId) {
+    console.log(pc.dim('  Nessun altro device evicted; claim libero o gia\' appartenente a questo device.'));
+    return;
+  }
+
+  console.log(pc.yellow(`  Device precedente evicted: ${evictedDeviceId}`));
+  const invalidated = await invalidateCloudOwnershipCursors();
+  console.log(
+    pc.dim(
+      `  Cursor locali invalidati: ${invalidated.removed}; il prossimo sync ripartira' senza cursor precedenti.`
+    )
+  );
+  for (const failure of invalidated.failed) {
+    console.error(pc.yellow(`  warn: cursor non rimosso (${failure.path}): ${failure.error}`));
+  }
+  if (invalidated.failed.length > 0) process.exitCode = 1;
 }
 
 async function handleLogin(options) {
@@ -1123,16 +1251,23 @@ async function handlePush(options) {
 
   async function postBatch(payload) {
     try {
-      const r = await fetch(pushUrl, { method: 'POST', headers: authHeaders, body: JSON.stringify(payload) });
+      const r = await fetch(pushUrl, {
+        method: 'POST',
+        headers: authHeaders,
+        signal: options.signal,
+        body: JSON.stringify(payload),
+      });
       const b = await r.json().catch(() => ({}));
       return { status: r.status, ok: r.ok, body: b };
     } catch (err) {
-      return { status: 0, ok: false, body: { error: err.message }, network: true };
+      const name = String(err?.name || '').toLowerCase();
+      const timedOut = name.includes('timeout') || err?.name === 'AbortError';
+      return { status: 0, ok: false, body: {}, network: true, timedOut };
     }
   }
 
   const outcome = {
-    aborted: false, authFailed: false, skipped: 0, requests: 0,
+    aborted: false, authFailed: false, timedOut: false, skipped: 0, requests: 0,
     up: { positions: 0, scores: 0, applications: 0, companies: 0,
           position_highlights: 0, pending_user_messages: 0, tombstones: 0,
           position_transitions: 0 },
@@ -1188,8 +1323,10 @@ async function handlePush(options) {
         }
         // 409 not_active_device o 5xx/altro: non recuperabile in questo giro.
         outcome.aborted = true;
+        if (res.timedOut) outcome.timedOut = true;
         if (res.status === 409 && res.body.error === 'not_active_device') {
           console.error(pc.red(`Push rifiutato (HTTP 409 not_active_device): un altro device ha il claim (active_device_id=${res.body.active_device_id ?? 'unknown'}).`));
+          console.error(pc.dim('  Per riprendere il controllo: jht cloud claim --force'));
         } else {
           console.error(pc.red(`Push fallito (HTTP ${res.status}): ${res.body.error || 'errore sconosciuto'}`));
         }
@@ -1275,7 +1412,11 @@ async function handlePush(options) {
     outcome.requests += 1;
     if (r.ok) addUp(r.body);
     else if (r.status === 401 || r.status === 403) { outcome.aborted = true; outcome.authFailed = true; }
-    else { outcome.aborted = true; console.error(pc.red(`Push profile fallito (HTTP ${r.status}): ${r.body.error || ''}`)); }
+    else {
+      outcome.aborted = true;
+      if (r.timedOut) outcome.timedOut = true;
+      console.error(pc.red(`Push profile fallito (HTTP ${r.status})`));
+    }
   }
 
   // ── Report + cursore ────────────────────────────────────────────────────
@@ -1285,7 +1426,12 @@ async function handlePush(options) {
     // tick. Nessuna riga persa. Segnaliamo il fallimento al chiamante.
     console.error(pc.yellow(`Push interrotto dopo ${outcome.requests} richieste — cursore invariato, ritento al prossimo tick.`));
     process.exitCode = 1;
-    return { ok: false, authFailed: outcome.authFailed, skipped: outcome.skipped };
+    return {
+      ok: false,
+      authFailed: outcome.authFailed,
+      skipped: outcome.skipped,
+      timedOut: outcome.timedOut === true,
+    };
   }
 
   console.log(pc.green(`✓ Push completato in ${outcome.requests} richieste`));
@@ -2364,26 +2510,49 @@ async function handleDirectiveSync(options = {}) {
  * risponde 400 sull'intera select, quindi si ritenta con le sole colonne
  * storiche e la corsia chat resta semplicemente ferma.
  */
-async function readRendezvousState(config, { silent = true } = {}) {
+export async function readRendezvousState(config, options = {}) {
+  const silent = options.silent !== false;
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const reader = getDirectReader(config);
-  const withChat = ['sync_requested_at', 'sync_completed_at', 'chat_requested_at', 'chat_delivered_at'];
-  const legacy = ['sync_requested_at', 'sync_completed_at'];
+  const reader = options.reader !== undefined ? options.reader : getDirectReader(config);
+  const fetchFn = options.fetchFn || fetch;
+  const timeoutMs = Math.max(
+    1,
+    Number(options.timeoutMs ?? process.env.JHT_RENDEZVOUS_READ_TIMEOUT_MS ?? 15_000) || 15_000,
+  );
+  // Lo stesso budget copre direct moderno, direct legacy e fallback HTTP:
+  // tre timeout consecutivi bloccherebbero il giro veloce e quindi anche chat.
+  const signal = options.signal || AbortSignal.timeout(timeoutMs);
+  const stopState = [
+    'should_run', 'is_running',
+    'emergency_stop_requested_at', 'emergency_stop_completed_at',
+  ];
+  const withChat = [
+    'sync_requested_at', 'sync_completed_at',
+    'last_action', 'last_action_at',
+    'chat_requested_at', 'chat_delivered_at',
+    ...stopState,
+  ];
+  const legacy = [
+    'sync_requested_at', 'sync_completed_at',
+    'last_action', 'last_action_at',
+    ...stopState,
+  ];
 
   if (reader) {
     try {
-      return await reader.readTeamState(withChat);
+      return await reader.readTeamState(withChat, { signal });
     } catch {
       try {
-        return await reader.readTeamState(legacy);
+        return await reader.readTeamState(legacy, { signal });
       } catch (err) {
         if (!silent) console.error(pc.yellow(`  rendezvous (direct) warn: ${err.message} — fallback Vercel`));
       }
     }
   }
   try {
-    const res = await fetch(`${baseUrl}/api/team-state`, {
+    const res = await fetchFn(`${baseUrl}/api/team-state`, {
       headers: { Authorization: `Bearer ${config.token}` },
+      signal,
     });
     if (!res.ok) return null;
     const body = await res.json().catch(() => ({}));
@@ -2394,30 +2563,48 @@ async function readRendezvousState(config, { silent = true } = {}) {
   }
 }
 
-async function handleSyncRendezvous(options = {}) {
+export async function handleSyncRendezvous(options = {}) {
   const silent = options.silent === true;
   const config = options.config || (await loadCloudConfig());
-  if (!config || !config.enabled) return;
+  if (!config || !config.enabled) return { status: 'disabled' };
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const reader = getDirectReader(config);
+  const reader = options.reader !== undefined ? options.reader : getDirectReader(config);
+  const fetchFn = options.fetchFn || fetch;
+  const pushFn = options.pushFn || handlePush;
+
+  // Deadline condivisa da lettura, push e ACK. Se il chiamante ha già letto
+  // la riga nel fast loop, lo stesso signal governa comunque il resto.
+  const timeoutMs = Math.max(
+    1_000,
+    Number(options.timeoutMs ?? process.env.JHT_SYNC_REQUEST_TIMEOUT_MS ?? 120_000) || 120_000,
+  );
+  const signal = options.signal || AbortSignal.timeout(timeoutMs);
 
   const state = options.state !== undefined
     ? options.state
-    : await readRendezvousState(config, { silent });
-  if (!state) return;
+    : await readRendezvousState(config, { silent, reader, fetchFn, signal });
+  if (!state) return { status: 'state_unavailable' };
 
   const reqAt = state.sync_requested_at || null;
   const doneAt = state.sync_completed_at || null;
-  // Timestamp ISO (UTC, suffisso Z dal cloud) → confronto lessicografico =
-  // cronologico. Pending se richiesto e non ancora completato dopo la richiesta.
-  const pending = reqAt && (!doneAt || reqAt > doneAt);
-  if (!pending) return;
+  // Non confrontare le stringhe: PostgREST può rendere lo stesso fuso come
+  // `Z` o `+00:00`, che hanno ordinamento lessicografico diverso.
+  const pending = syncRendezvousPending(reqAt, doneAt);
+  if (!pending) return { status: 'idle' };
+  const terminal = syncRendezvousTerminal(reqAt, state.last_action, state.last_action_at);
+  if (terminal) return { status: terminal, terminal: true };
 
   // Push fresco ORA (resta su Vercel in Fase 1). Isolato dal counter del daemon.
   const prev = process.exitCode;
   process.exitCode = 0;
-  const pushResult = await handlePush({});
-  process.exitCode = prev;
+  let pushResult;
+  try {
+    pushResult = await pushFn({ signal });
+  } catch (error) {
+    pushResult = { ok: false, timedOut: timeoutFailure(error), skipped: 0 };
+  } finally {
+    process.exitCode = prev;
+  }
 
   // Ack `sync_completed_at` SOLO su successo PIENO. Prima l'ack veniva scritto
   // sempre → il web segnava "sincronizzato" anche quando il push falliva (o
@@ -2430,41 +2617,68 @@ async function handleSyncRendezvous(options = {}) {
   //     (che con safeCursor NON sono state superate dal cursore). Le righe
   //     scartate sono già loggate in rosso da handlePush e intercettate dal
   //     canary sync_health (Mantenitore) → segnale distinto senza nuovo stato.
-  const pushOk = !!pushResult && pushResult.ok === true && (pushResult.skipped || 0) === 0;
-  if (!pushOk) {
+  const pushOutcome = pushRendezvousOutcome(pushResult);
+  if (pushOutcome.status !== 'ready_to_ack') {
     if (!silent) {
       const why = pushResult && (pushResult.skipped || 0) > 0
         ? `${pushResult.skipped} righe scartate`
         : 'push non riuscito';
-      console.error(pc.yellow(`  sync-rendezvous: ack NON scritto (${why}) — il web resta "non sincronizzato", ritento al prossimo tick.`));
+      console.error(pc.yellow(`  sync-rendezvous: ack NON scritto (${why}) — esito pubblicato, serve una nuova richiesta per ritentare.`));
     }
-    return;
+    const published = await publishSyncOutcomeBestEffort(
+      config, reqAt, pushOutcome.status, { fetchFn },
+    );
+    if (published.status === 'superseded') return published;
+    return { ...pushOutcome, observed: published.status === 'published' };
   }
 
-  // Ack `sync_completed_at`: diretto se disponibile, altrimenti PATCH Vercel.
-  const nowIso = new Date().toISOString();
-  if (reader) {
-    try {
-      await reader.patchTeamState({ sync_completed_at: nowIso });
-      if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack (direct)'));
-      return;
-    } catch (err) {
-      if (!silent) console.error(pc.yellow(`  sync-rendezvous ack (direct) warn: ${err.message} — fallback Vercel`));
+  // ACK compare-and-set: A può chiudere soltanto A, mai una B arrivata mentre
+  // il push era in corso. I timestamp sono generati dal DB/server.
+  const ack = await acknowledgeSync({
+    fetchFn,
+    url: `${baseUrl}/api/team-state/sync-observed`,
+    token: config.token,
+    expectedRequestedAt: reqAt,
+    signal,
+  });
+  if (ack.status !== 'completed' && ack.status !== 'superseded') {
+    const failure = ack.status === 'timeout' ? 'timeout' : 'ack_failed';
+    const published = await publishSyncOutcomeBestEffort(
+      config, reqAt, failure, { fetchFn },
+    );
+    if (published.status === 'superseded') return published;
+    ack.observed = published.status === 'published';
+  }
+  if (!silent) {
+    if (ack.status === 'completed') {
+      console.log(pc.green(`✓ Sync now servito: push fresco + ack (${ack.via})`));
+    } else {
+      console.error(pc.yellow(`  sync-rendezvous: ${ack.status}; ack non confermato`));
     }
   }
-  try {
-    await fetch(`${baseUrl}/api/team-state`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ sync_completed_at: nowIso }),
-    });
-    if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack'));
-  } catch (err) {
-    if (!silent) console.error(pc.yellow(`  sync-rendezvous ack warn: ${err.message}`));
-  }
+  return ack;
+}
+
+/** Pubblicazione failure con budget indipendente dal push già scaduto. */
+async function publishSyncOutcomeBestEffort(
+  config,
+  expectedRequestedAt,
+  outcomeStatus,
+  options = {},
+) {
+  const timeoutMs = Math.max(
+    1,
+    Number(options.timeoutMs ?? process.env.JHT_SYNC_OBSERVED_TIMEOUT_MS ?? 15_000) || 15_000,
+  );
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  return publishSyncOutcome({
+    fetchFn: options.fetchFn || fetch,
+    url: `${baseUrl}/api/team-state/sync-observed`,
+    token: config.token,
+    expectedRequestedAt,
+    outcomeStatus,
+    signal: options.signal || AbortSignal.timeout(timeoutMs),
+  });
 }
 
 /**
@@ -2495,18 +2709,34 @@ async function handleSyncRendezvous(options = {}) {
  * sicurezza: è la strada normale del fleet, dove `JHT_SUPABASE_DIRECT` è
  * spento — vedi `chatChannelFor` in chat-sync.js.
  */
-async function handleChatSync(options = {}) {
+export async function handleChatSync(options = {}) {
   const silent = options.silent === true;
   const config = options.config || (await loadCloudConfig());
-  if (!config || !config.enabled) return;
-  const dbPath = process.env.JHT_DB || JHT_DB_PATH;
-  if (!existsSync(dbPath)) return;
+  if (!config || !config.enabled) return { status: 'disabled' };
+  const dbPath = options.dbPath || process.env.JHT_DB || JHT_DB_PATH;
+  const jhtHome = options.jhtHome || JHT_HOME;
+  if (!existsSync(dbPath)) return { status: 'db_missing' };
 
   const chat = await import('../lib/chat-sync.js');
   const log = (level, msg) => {
     if (silent && level !== 'error') return;
     console.error(level === 'error' ? pc.red(`  ${msg}`) : pc.yellow(`  ${msg}`));
   };
+
+  // `node:sqlite` si importa QUI, come fanno tutte le altre funzioni di questo
+  // file: non esiste un `DatabaseSync` di modulo. Senza questa riga il `new`
+  // qui sotto lanciava "DatabaseSync is not defined" ad ogni giro, l'eccezione
+  // finiva nel catch che segue, e il catch è dietro `silent` — che nel daemon
+  // vale sempre true. Risultato: la corsia chat usciva in silenzio ad ogni
+  // tentativo, per giorni, senza una riga di log. Scoperto il 30/07 solo
+  // eseguendo `jht cloud chat-sync` a mano, dove `silent` è false.
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    log('error', 'chat-sync: node:sqlite non disponibile (sqlite_unavailable)');
+    return { status: 'sqlite_unavailable' };
+  }
 
   let db;
   try {
@@ -2515,14 +2745,18 @@ async function handleChatSync(options = {}) {
     // aspetta il lock invece di saltare il giro.
     db = new DatabaseSync(dbPath, { timeout: 5000 });
   } catch (err) {
-    if (!silent) console.error(pc.yellow(`  chat-sync: DB non apribile: ${err.message}`));
-    return;
+    // `log('error', …)` e non il vecchio `if (!silent)`: un DB non apribile
+    // ferma la chat per intero, ed è esattamente ciò che deve farsi vedere
+    // anche dal daemon.
+    const code = typeof err?.code === 'string' ? err.code : 'open_failed';
+    log('error', `chat-sync: DB non apribile (${code})`);
+    return { status: 'db_unavailable' };
   }
   // Le colonne arrivano da _db.py alla prima apertura di un agente: un
   // container non ancora ri-deployato non deve far esplodere il daemon.
   if (!sqliteHasColumn(db, 'pending_user_messages', 'author')) {
     db.close();
-    return;
+    return { status: 'schema_outdated' };
   }
 
   // Il canale col cloud: Supabase diretto se il flag opt-in è acceso,
@@ -2530,9 +2764,12 @@ async function handleChatSync(options = {}) {
   // resta preferito perché costa meno; quello Vercel è l'unico che esiste
   // sul fleet, dove `JHT_SUPABASE_DIRECT` è spento — vedi il perché disteso
   // in chat-sync.js, sopra `directChatChannel`.
-  const reader = getDirectReader(config);
-  const channel = chat.chatChannelFor(config, reader);
+  const reader = options.reader !== undefined ? options.reader : getDirectReader(config);
+  const channel = options.channel !== undefined
+    ? options.channel
+    : chat.chatChannelFor(config, reader);
   let importedIds = [];
+  let cloudRows = [];
   // Motivo della lettura fallita, se fallita: serve alla diagnosi in fondo
   // (il log qui sotto è gated da `silent`, quindi nel daemon non si vede).
   let readError = null;
@@ -2545,25 +2782,25 @@ async function handleChatSync(options = {}) {
     const pending = chat.chatPending(state?.chat_requested_at, state?.chat_delivered_at);
     if (pending && channel) {
       try {
-        const cloudRows = await channel.readUndeliveredUserChat({ limit: 50 });
-        importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome: JHT_HOME });
+        cloudRows = await channel.readUndeliveredUserChat({ limit: chat.CLOUD_CHAT_PULL_LIMIT });
+        importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome });
       } catch (err) {
-        readError = err.message;
-        log('warn', `chat-sync: lettura turni utente fallita: ${err.message}`);
+        readError = chat.cloudRequestFailure(err);
+        log('warn', `chat-sync: lettura turni utente fallita (${readError})`);
       }
     }
 
     // ── 2/3. Mirror bidirezionale col file che legge il gioco ──────────
-    const cursorFile = join(JHT_HOME, '.chat-mirror-cursor.json');
+    const cursorFile = join(jhtHome, '.chat-mirror-cursor.json');
     const cursor = await chat.loadChatCursor(cursorFile);
-    const ingested = chat.ingestChatJsonl(db, { jhtHome: JHT_HOME, cursor });
+    const ingested = chat.ingestChatJsonl(db, { jhtHome, cursor });
     if (JSON.stringify(ingested.cursor) !== JSON.stringify(cursor)) {
       await chat.saveChatCursor(cursorFile, ingested.cursor);
     }
-    const mirrored = chat.mirrorDbTurnsToJsonl(db, { jhtHome: JHT_HOME });
+    const mirrored = chat.mirrorDbTurnsToJsonl(db, { jhtHome });
 
     // ── 4. Consegna al pane ────────────────────────────────────────────
-    const sent = await chat.deliverPendingUserTurns(db, { log });
+    const sent = await chat.deliverPendingUserTurns(db, { log, sendFn: options.sendFn });
 
     // ── 5. Push dei turni nuovi verso il cloud ─────────────────────────
     const toPush = chat.takeChatRowsToPush(db, { limit: 100 });
@@ -2571,19 +2808,35 @@ async function handleChatSync(options = {}) {
     if (toPush.length > 0) {
       const userId = config.user_id || null;
       const rows = toPush.map((r) => chat.toCloudRow(r, userId));
-      const okIds = await pushChatRows(config, rows, toPush.map((r) => r.id), log);
+      const pushRowsFn = options.pushRowsFn || pushChatRows;
+      const okIds = await pushRowsFn(config, rows, toPush.map((r) => r.id), log);
       chat.markChatRowsPushed(db, okIds);
       pushed = okIds.length;
     }
 
-    // ── Chiusura del rendezvous ────────────────────────────────────────
-    // Solo se abbiamo davvero consegnato tutto quello che era in coda: con
-    // un pane occupato il flag resta aperto e il giro dopo ritenta.
-    if (pending && channel && sent.failed === 0) {
+    // ── ACK delle sole righe consegnate + eventuale chiusura ───────────
+    // Il pull (50) è più largo del budget di delivery (5): importare non
+    // equivale a consegnare. Si marcano solo i gemelli con delivered_at e si
+    // chiude la corsia soltanto quando non resta coda e sappiamo di aver
+    // esaurito anche la pagina cloud.
+    const queue = chat.undeliveredUserTurns(db);
+    const deliveredCloudIds = chat.deliveredCloudUserTurnIds(db, cloudRows);
+    const wholeCloudPageDelivered = deliveredCloudIds.length === cloudRows.length;
+    const closeRendezvous = pending && !readError && sent.failed === 0 &&
+      queue.count === 0 && wholeCloudPageDelivered &&
+      cloudRows.length < chat.CLOUD_CHAT_PULL_LIMIT;
+    let acked = false;
+    let ackFailed = false;
+    if (pending && channel && !readError && (deliveredCloudIds.length > 0 || closeRendezvous)) {
       try {
-        await channel.closeRendezvous(importedIds);
+        const acknowledgement = await channel.acknowledgeDelivery(deliveredCloudIds, {
+          closeRendezvous,
+          expectedRequestedAt: state?.chat_requested_at ?? null,
+        });
+        acked = closeRendezvous && acknowledgement?.closed !== false;
       } catch (err) {
-        log('warn', `chat-sync: ack consegna fallito: ${err.message}`);
+        ackFailed = true;
+        log('warn', `chat-sync: ack consegna fallito (${chat.cloudRequestFailure(err)})`);
       }
     }
 
@@ -2591,7 +2844,6 @@ async function handleChatSync(options = {}) {
     // Va DOPO tutti i passi, perché solo qui si sa cosa è davvero passato.
     // Non è gated da `silent`: è l'unico punto in cui un guasto della chat
     // può farsi vedere da fuori, e nel daemon `silent` è sempre true.
-    const queue = chat.undeliveredUserTurns(db);
     await reportChatLane(chat, config, reader, chat.diagnoseChatLane({
       pending,
       requestedAt: state?.chat_requested_at ?? null,
@@ -2617,8 +2869,26 @@ async function handleChatSync(options = {}) {
         )
       );
     }
+    return {
+      status: readError
+        ? readError
+        : sent.failed > 0
+          ? 'delivery_pending'
+          : ackFailed
+            ? 'ack_failed'
+            : pending && !acked
+              ? 'delivery_pending'
+              : 'completed',
+      pending: !!pending,
+      imported: importedIds.length,
+      delivered: sent.delivered,
+      failed: sent.failed,
+      pushed,
+      acked,
+    };
   } catch (err) {
-    if (!silent) console.error(pc.yellow(`  chat-sync error: ${err.message}`));
+    log('error', `chat-sync: giro fallito (${String(err?.code || err?.name || 'processing_error')})`);
+    return { status: 'processing_error' };
   } finally {
     try { db.close(); } catch { /* già chiuso */ }
   }
@@ -2642,18 +2912,25 @@ let chatLaneAlert = null;
  * "manca il canale diretto", e senza la seconda strada la segnalazione
  * morirebbe insieme a ciò che segnala.
  */
-async function patchTeamStateBestEffort(config, reader, fields) {
+export async function patchTeamStateBestEffort(config, reader, fields, options = {}) {
+  const timeoutMs = Math.max(
+    1,
+    Number(options.timeoutMs ?? process.env.JHT_SYNC_OBSERVED_TIMEOUT_MS ?? 15_000) || 15_000,
+  );
+  const signal = options.signal || AbortSignal.timeout(timeoutMs);
+  const fetchFn = options.fetchFn || fetch;
   if (reader) {
     try {
-      await reader.patchTeamState(fields);
+      await reader.patchTeamState(fields, { signal });
       return true;
     } catch { /* canale diretto rotto: si prova da Vercel */ }
   }
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   try {
-    const res = await fetch(`${baseUrl}/api/team-state`, {
+    const res = await fetchFn(`${baseUrl}/api/team-state`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
+      signal,
       body: JSON.stringify(fields),
     });
     return res.ok;
@@ -2975,7 +3252,7 @@ async function handleDaemon(options) {
         await handleSyncRendezvous({ silent: true, config, state: rendezvousState });
         process.exitCode = prevSr;
       } catch (err) {
-        console.error(pc.yellow(`  daemon sync-rendezvous error: ${err.message}`));
+        console.error(pc.yellow('  daemon sync-rendezvous error (unexpected_failure)'));
       }
 
       // [JHT-CHAT-UNIFY] Corsia chat: mirror chat.jsonl ⇄ SQLite, consegna al
@@ -2987,11 +3264,21 @@ async function handleDaemon(options) {
         await handleChatSync({ silent: true, config, state: rendezvousState });
         process.exitCode = prevCh;
       } catch (err) {
-        console.error(pc.yellow(`  daemon chat-sync error: ${err.message}`));
+        console.error(pc.yellow('  daemon chat-sync error (unexpected_failure)'));
+      }
+
+      // [M2-MOBILE-STOP] La sola convergenza di controllo ammessa dal cloud:
+      // desired=false + rendezvous pendente → comando fisso `jht team stop`. Riusa
+      // la riga già letta per sync/chat: nessuna invocation o query extra.
+      try {
+        const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
+        await reconcileEmergencyStop(config, rendezvousState);
+      } catch (err) {
+        console.error(pc.yellow(`  daemon emergency-stop error: ${err.message}`));
       }
 
       // ── Heartbeat "VPS online": ogni intervalSec ── (reconcileOnce solo-heartbeat;
-      // lo start/stop del team passa dal desktop, non dal cloud).
+      // start/restart restano desktop; lo stop cloud è la lane stretta sopra).
       if (doHeavy) {
         try {
           const prevRc = process.exitCode;
@@ -3048,7 +3335,7 @@ async function runRealtimeLoop({ config, isRunning }) {
     if (syncing) return;
     syncing = true;
     try { await handleSyncRendezvous({ silent: true }); }
-    catch (e) { console.error(pc.yellow(`  ${tag} sync-rendezvous error: ${e.message}`)); }
+    catch { console.error(pc.yellow(`  ${tag} sync-rendezvous error (unexpected_failure)`)); }
     finally { syncing = false; }
   };
   let ticketing = false;
@@ -3069,11 +3356,24 @@ async function runRealtimeLoop({ config, isRunning }) {
     if (chatting) return;
     chatting = true;
     try { await handleChatSync({ silent: true, config, state }); }
-    catch (e) { console.error(pc.yellow(`  ${tag} chat-sync error: ${e.message}`)); }
+    catch { console.error(pc.yellow(`  ${tag} chat-sync error (unexpected_failure)`)); }
     finally { chatting = false; }
   };
   const chatLocalSec = Math.max(1, parseInt(process.env.JHT_CHAT_LOCAL_SEC || '5', 10) || 5);
   const chatTimer = setInterval(() => { void runChatSync('local', null); }, chatLocalSec * 1000);
+  let emergencyStopping = false;
+  const runEmergencyStop = async (tag, state) => {
+    if (emergencyStopping) return;
+    emergencyStopping = true;
+    try {
+      const { reconcileEmergencyStop } = await import('../lib/team-state-reconciler.js');
+      await reconcileEmergencyStop(config, state);
+    } catch (e) {
+      console.error(pc.yellow(`  ${tag} emergency-stop error: ${e.message}`));
+    } finally {
+      emergencyStopping = false;
+    }
+  };
 
   let rt = null;
   try {
@@ -3085,6 +3385,8 @@ async function runRealtimeLoop({ config, isRunning }) {
       void runSync('realtime');
       // Stessa riga, stesso evento: `chat_requested_at` viaggia qui dentro.
       void runChatSync('realtime', payload?.new ?? null);
+      // E lo STOP mobile viaggia nello stesso evento, senza un altro poller.
+      void runEmergencyStop('realtime', payload?.new ?? null);
     });
 
     // ── Tappa 3: ticket → Realtime ── cambio su position_tickets → ticket-sync.
@@ -3134,7 +3436,9 @@ async function runRealtimeLoop({ config, isRunning }) {
       await runTicketSync('parachute');
       // La chat ha già il suo battito locale corto: qui serve solo a
       // recuperare il PULL dal cloud se l'evento team_state si è perso.
-      await runChatSync('parachute', await readRendezvousState(config));
+      const state = await readRendezvousState(config);
+      await runChatSync('parachute', state);
+      await runEmergencyStop('parachute', state);
     }
     // Desired-state ~ogni 5min (poll lento, niente Realtime).
     if (tick % everyDesired === 0) {
@@ -3253,6 +3557,12 @@ export function registerCloudCommand(program) {
     .command('status')
     .description('Mostra stato cloud sync')
     .action(handleStatus);
+
+  cloud
+    .command('claim')
+    .description('Prende il claim del team per questo device (usa --force per un takeover)')
+    .option('--force', 'Evicta il device attivo e invalida i cursor locali precedenti')
+    .action(handleClaim);
 
   cloud
     .command('push')

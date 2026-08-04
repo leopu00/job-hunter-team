@@ -1,8 +1,30 @@
 class_name SectionPanel
 extends CanvasLayer
-## Pannello di una sezione della sidebar (scheletro): titolo + placeholder.
-## Il contenuto vero arriva sezione per sezione con la migrazione dalla
-## desktop app. Si chiude con la ✕ o ricliccando la voce in sidebar.
+## La finestra a schermo intero di una sezione della sidebar. NON è più uno
+## scheletro: la migrazione dalla desktop app è finita e qui dentro vivono
+## TUTTE le 28 sezioni del gioco (attivazione, statistiche, mappa, team,
+## agenti, attività, app, dashboard, notifiche, chat, posizioni, feedback,
+## VPS e le dodici pagine di configurazione). Si chiude con la ✕ o
+## ricliccando la voce in sidebar.
+##
+## Come è fatto — il guscio è uno solo, costruito in _ready(): breadcrumb,
+## titolo + ✕, schede fratelli (SidebarDefs.tabs_for) e un _content vuoto.
+## Tutto il resto passa da _build(page), un unico `match section` che sceglie
+## il costruttore della pagina; `page` è la SOTTO-pagina della stessa sezione
+## (positions → elenco o dettaglio, agents → elenco o scheda agente, stats →
+## grafici o usage, feedback → form o anteprima) e non tocca la sidebar.
+## _build_placeholder() è ormai solo il ramo `_:` di sicurezza — una sezione
+## nuova senza costruttore, o una pagina config senza righe da mostrare.
+##
+## ⚠️ Il file è oltre 4.000 righe con ~130 metodi: è un indice di pagine, non
+## una classe coesa. Per orientarsi si parte SEMPRE dal `match` di _build() —
+## da lì il nome del costruttore porta al blocco giusto. Se aggiungi una
+## sezione, aggiungila al match e tienile il costruttore accanto alle sue
+## sorelle: l'ordine dei blocchi segue l'ordine del match, non l'alfabeto.
+##
+## Il pannello NON conosce la sidebar: per saltare altrove emette `navigate`
+## e per passare un contesto usa le static pending_* qui sotto, consumate al
+## primo build della sezione di destinazione.
 
 signal closed
 ## Chiesto un salto a un'altra sezione (es. box pipeline → positions):
@@ -171,8 +193,9 @@ static func _tab_style(active: bool, hover: bool) -> StyleBoxFlat:
 
 var _content: VBoxContainer
 
-## Contenuto per sezione: le viste migrate hanno il loro builder, le altre
-## mostrano il placeholder finché non vengono portate dalla desktop app.
+## Sotto-pagina corrente DENTRO la sezione ("" = pagina principale; "detail",
+## "agent", "usage", "preview"). Serve a ricostruire il contenuto senza
+## rifare il guscio quando un refresh del bus arriva mentre si è in dettaglio.
 var _current_page := ""
 
 func _build(page := "") -> void:
@@ -386,11 +409,13 @@ func _build_account() -> void:
 			else UIStrings.t("account.login")
 	login.disabled = not bool(SetupService.status.get("container_running", false))
 	login.add_theme_color_override("font_color", Palette.GREEN)
+	login.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	login.pressed.connect(SetupService.open_cloud_login.bind(true))
 	actions.add_child(login)
 	var other_login := Button.new()
 	other_login.text = UIStrings.t("account.other_account")
 	other_login.disabled = not bool(SetupService.status.get("container_running", false))
+	other_login.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	other_login.pressed.connect(SetupService.open_cloud_login.bind(false))
 	actions.add_child(other_login)
 	for entry in [["account.status", "status"], ["account.sync_now", "push"],
@@ -398,14 +423,17 @@ func _build_account() -> void:
 		var button := Button.new()
 		button.text = UIStrings.t(str(entry[0]))
 		button.disabled = not configured
+		button.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		button.pressed.connect(SetupService.open_cloud_command.bind(str(entry[1])))
 		actions.add_child(button)
-	if configured:
-		var disable := Button.new()
-		disable.text = UIStrings.t("account.disable_sync")
-		disable.add_theme_color_override("font_color", Palette.RED)
-		disable.pressed.connect(_confirm_cloud_disable)
-		_content.add_child(disable)
+	# Login spento senza spiegazione = login rotto: il pairing si svolge nella
+	# console del container, e se il container è giù va detto qui (stesso
+	# trattamento dell'hint sotto il login del provider).
+	if not bool(SetupService.status.get("container_running", false)):
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.provider_needs_container"), 11, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	var recovery := HBoxContainer.new()
 	recovery.add_theme_constant_override("separation", 10)
 	_content.add_child(recovery)
@@ -413,6 +441,7 @@ func _build_account() -> void:
 	restore.text = UIStrings.t("account.restore")
 	restore.disabled = not configured
 	restore.add_theme_color_override("font_color", Palette.YELLOW)
+	restore.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	restore.pressed.connect(SetupService.open_cloud_command.bind("restore"))
 	recovery.add_child(restore)
 	var manage := Button.new()
@@ -420,6 +449,18 @@ func _build_account() -> void:
 	manage.pressed.connect(func() -> void:
 		OS.shell_open("https://jobhunterteam.ai/settings/cloud-sync"))
 	recovery.add_child(manage)
+	# L'azione che smonta (DISATTIVA SYNC) sta in fondo alla riga, isolata da
+	# uno spacer: prima era un pulsante pieno in mezzo al pannello, con lo
+	# stesso peso visivo delle azioni ordinarie.
+	if configured:
+		var recovery_spacer := Control.new()
+		recovery_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		recovery.add_child(recovery_spacer)
+		var disable := Button.new()
+		disable.text = UIStrings.t("account.disable_sync")
+		disable.add_theme_color_override("font_color", Palette.RED)
+		disable.pressed.connect(_confirm_cloud_disable)
+		recovery.add_child(disable)
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("account.privacy_note"),
 			12, Palette.DIM))
@@ -482,25 +523,39 @@ func _build_email() -> void:
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
+	# Primaria (salva), aiuto neutro, e la distruttiva (rimuovi) in fondo alla
+	# riga oltre lo spacer: prima RIMUOVI stava spalla a spalla con SALVA.
 	var save := Button.new()
 	save.text = UIStrings.t("email.save")
 	save.disabled = not bool(SetupService.status.get("container_running", false))
 	save.add_theme_color_override("font_color", Palette.GREEN)
+	save.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	save.pressed.connect(func() -> void:
 		SetupService.save_email(email.text, password.text)
 		password.clear())
 	actions.add_child(save)
-	var remove := Button.new()
-	remove.text = UIStrings.t("email.remove")
-	remove.disabled = not configured
-	remove.add_theme_color_override("font_color", Palette.RED)
-	remove.pressed.connect(SetupService.delete_email)
-	actions.add_child(remove)
 	var help := Button.new()
 	help.text = UIStrings.t("email.help")
 	help.pressed.connect(func() -> void:
 		OS.shell_open("https://support.google.com/accounts/answer/185833"))
 	actions.add_child(help)
+	var actions_spacer := Control.new()
+	actions_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(actions_spacer)
+	var remove := Button.new()
+	remove.text = UIStrings.t("email.remove")
+	remove.disabled = not configured
+	remove.add_theme_color_override("font_color", Palette.RED)
+	remove.add_theme_color_override("font_disabled_color", Palette.MUTED)
+	remove.pressed.connect(SetupService.delete_email)
+	actions.add_child(remove)
+	# SALVA spento perché la credenziale la scrive il container: senza questa
+	# riga il pulsante è muto e sembra un difetto del modulo.
+	if not bool(SetupService.status.get("container_running", false)):
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.needs_container_cmd"), 11, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
 
@@ -511,6 +566,13 @@ func _build_telegram() -> void:
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("tg.intro"),
 			14, Palette.MUTED))
+	# I tre SALVA delle schede qui sotto scrivono nel container: se è spento
+	# sono disabilitati tutti e tre per la stessa ragione, detta UNA volta.
+	if not bool(SetupService.status.get("container_running", false)):
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.needs_container_cmd"), 12, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
@@ -577,6 +639,7 @@ func _build_telegram() -> void:
 		save.text = UIStrings.t("tg.save")
 		save.disabled = not bool(SetupService.status.get("container_running", false))
 		save.add_theme_color_override("font_color", Palette.GREEN)
+		save.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		save.pressed.connect(func() -> void:
 			SetupService.save_telegram_bot(role, token.text, chat_id.text)
 			token.clear())
@@ -609,6 +672,7 @@ func _build_advanced() -> void:
 	doctor.text = UIStrings.t("advanced.doctor")
 	doctor.disabled = not bool(SetupService.status.get("container_running", false))
 	doctor.add_theme_color_override("font_color", Palette.GREEN)
+	doctor.add_theme_color_override("font_disabled_color", Palette.MUTED)
 	doctor.pressed.connect(SetupService.open_doctor)
 	actions.add_child(doctor)
 	var setup := Button.new()
@@ -625,6 +689,13 @@ func _build_advanced() -> void:
 	report.text = UIStrings.t("feedback.send")
 	report.pressed.connect(func() -> void: navigate.emit("feedback"))
 	actions.add_child(report)
+	# La diagnostica gira NEL container: spenta col container giù, e lo dice —
+	# proprio a chi apre questa pagina perché qualcosa non va.
+	if not bool(SetupService.status.get("container_running", false)):
+		var why := TerminalTheme.label(
+				UIStrings.t("setup.needs_container_cmd"), 11, Palette.YELLOW)
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content.add_child(why)
 	var files := HBoxContainer.new()
 	files.add_theme_constant_override("separation", 10)
 	_content.add_child(files)
@@ -941,12 +1012,37 @@ func _on_feedback_submit(running: bool, ok: bool, message: String, ticket: Strin
 # ── Attivazione iniziale (ufficio aperto, lavoro sotto gate) ─────────
 
 var _setup_message: Label
+## Specchio locale di SetupService.busy(): serve a ricostruire il pannello UNA
+## volta quando un'azione parte o finisce (i progressi intermedi arrivano ogni
+## ~1.5s e non devono rifare la UI, solo aggiornare la riga di stato).
+var _setup_busy_ui := false
+## Ultimo messaggio d'azione, per non perderlo quando il pannello si ricostruisce
+## a metà operazione (cambio fase, avvio azione).
+var _action_note := ""
+var _action_note_color: Color = Palette.DIM
+## Le azioni di setup che i pannelli attivazione/docker/provider/team sanno
+## rappresentare coi loro pulsanti: al loro avvio/fine il pannello va
+## ridisegnato. Ci sono TUTTE le azioni a corsia unica di SetupService, non
+## solo quelle che nascono in questi pannelli: una migrazione VPS lanciata
+## altrove spegne anche i pulsanti di qui, e al suo termine devono riaccendersi
+## subito, non al prossimo probe.
+const SETUP_ACTIONS := ["container", "team", "provider", "plan", "install",
+		"email", "telegram", "agent", "upgrade", "upgrade-check",
+		"vps-key", "vps-test", "vps-provision", "vps-migrate"]
+## Le sezioni che si ricostruiscono all'avvio/fine di un'azione. Il pannello
+## VPS NON c'è di proposito: ha campi di testo (IP, chiave, utente) e una
+## ricostruzione a metà azione butterebbe via quello che l'utente ha scritto —
+## lì i pulsanti si spengono/riaccendono sul posto (_vps_action_buttons).
+const SETUP_SECTIONS := ["activation", "docker", "provider", "team"]
 
 func _listen_setup() -> void:
 	if not SetupService.status_changed.is_connected(_on_setup_refresh):
 		SetupService.status_changed.connect(_on_setup_refresh)
 	if not SetupService.action_changed.is_connected(_on_setup_action):
 		SetupService.action_changed.connect(_on_setup_action)
+	if not SetupService.phase_changed.is_connected(_on_setup_phase):
+		SetupService.phase_changed.connect(_on_setup_phase)
+	_setup_busy_ui = SetupService.busy()
 
 
 func _build_activation() -> void:
@@ -1018,15 +1114,40 @@ func _build_activation() -> void:
 	summary.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bottom.add_child(summary)
 	var start := Button.new()
-	start.text = UIStrings.t("setup.team_running") if bool(s.get("team_running", false)) \
-			else UIStrings.t("setup.start_team")
-	start.disabled = not bool(s.get("ready", false)) or bool(s.get("team_running", false))
+	# Tre stati, tre etichette: attivo (●), avvio in corso (◌, mentre il
+	# comando gira), pronto da premere (▶). Prima il pulsante restava "ATTIVA
+	# IL TEAM" anche durante l'avvio e non diceva se il click era passato.
+	if bool(s.get("team_running", false)):
+		start.text = UIStrings.t("setup.team_running")
+	elif SetupService.busy() and SetupService.current_action == "team":
+		start.text = UIStrings.t("setup.team_starting")
+	else:
+		start.text = UIStrings.t("setup.start_team")
+	start.disabled = not bool(s.get("ready", false)) \
+			or bool(s.get("team_running", false)) or SetupService.busy()
 	start.add_theme_font_size_override("font_size", 17)
 	start.add_theme_color_override("font_color", Palette.GREEN)
+	# Il tema tiene VERDE anche il disabilitato (serve alle tab attive): qui lo
+	# stato deve vedersi — verde se il team è ATTIVO (disabled usato come
+	# distintivo), giallo se sta lavorando lui, muto se aspetta altro.
+	start.add_theme_color_override("font_disabled_color",
+			Palette.GREEN if bool(s.get("team_running", false)) \
+			else (Palette.YELLOW if SetupService.busy() \
+			and SetupService.current_action == "team" else Palette.MUTED))
 	start.pressed.connect(SetupService.start_team)
 	bottom.add_child(start)
+	# ATTIVA IL TEAM spento perché gira UN'ALTRA azione (es. l'attivazione del
+	# container): la ragione va detta. Quando l'azione è proprio il team,
+	# l'etichetta "AVVIO IN CORSO" parla già da sola.
+	if SetupService.busy() and SetupService.current_action != "team":
+		_busy_hint(_content)
+	# L'attivazione lunga (container o team) mostra la barra anche qui: è la
+	# finestra da cui in genere si preme il pulsante.
+	if SetupService.busy() and SetupService.current_action in ["container", "team"]:
+		_content.add_child(SetupProgress.new())
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
+	_restore_action_note()
 
 
 func _setup_gate(parent: HBoxContainer, number: String, title: String,
@@ -1084,24 +1205,58 @@ func _provider_status_text(s: Dictionary) -> String:
 func _build_container_setup() -> void:
 	_listen_setup()
 	var s: Dictionary = SetupService.status
+	# L'attivazione è UN pulsante ma un processo a più fasi: motore Docker →
+	# immagine → container → team. Le righe qui sotto sono quella filiera,
+	# nell'ordine in cui succede davvero, e durante l'attivazione la fase in
+	# corso è marcata ◌: l'utente vede A CHE PUNTO è, non solo che "qualcosa
+	# gira" (feedback 30/07).
+	var busy := SetupService.busy() and SetupService.current_action == "container"
+	var upgrading := SetupService.busy() and SetupService.current_action == "upgrade"
+	var checking_update := SetupService.busy() and SetupService.current_action == "upgrade-check"
+	var phase: String = SetupService.action_phase if busy else ""
 	_content.add_child(TerminalTheme.label(UIStrings.t("setup.container_lead"),
 			15, Palette.BASE))
 	_content.add_child(HSeparator.new())
-	_setup_state_row("DOCKER", bool(s.get("docker_running", false)),
-			UIStrings.t("setup.docker_ready") if bool(s.get("docker_running", false))
-			else UIStrings.t("setup.docker_missing"))
-	_setup_state_row("CONTAINER JHT", bool(s.get("container_running", false)),
-			str(s.get("container_state", "missing")))
-	_setup_state_row("TEAM", bool(s.get("team_running", false)),
-			UIStrings.t("setup.team_running") if bool(s.get("team_running", false))
-			else UIStrings.t("setup.team_stopped"))
+	_setup_phase_row(UIStrings.t("setup.phase_engine"),
+			_phase_state(bool(s.get("docker_running", false)), phase == "engine"),
+			UIStrings.t("setup.phase_running") if phase == "engine"
+			else (UIStrings.t("setup.docker_ready") if bool(s.get("docker_running", false))
+			else UIStrings.t("setup.docker_missing")))
+	_setup_phase_row(UIStrings.t("setup.phase_image"),
+			_phase_state(str(s.get("image_id", "")) != "" or bool(s.get("remote", false)),
+					phase == "image"),
+			UIStrings.t("setup.phase_running") if phase == "image"
+			else (UIStrings.t("setup.image_ready") if str(s.get("image_id", "")) != ""
+					or bool(s.get("remote", false))
+			else UIStrings.t("setup.image_missing")))
+	_setup_phase_row(UIStrings.t("setup.phase_container"),
+			_phase_state(bool(s.get("container_running", false)), phase == "container"),
+			UIStrings.t("setup.phase_running") if phase == "container"
+			else str(s.get("container_state", "missing")))
 	# Runtime obsoleto: il container gira su un'immagine diversa da quella
 	# scaricata. Senza questa riga l'utente resta su una versione vecchia
 	# senza avere modo di accorgersene.
 	if bool(s.get("container_exists", false)) and not bool(s.get("remote", false)):
-		_setup_state_row(UIStrings.t("setup.runtime_version"), not bool(s.get("runtime_stale", false)),
+		_setup_phase_row(UIStrings.t("setup.runtime_version"),
+				"warn" if bool(s.get("runtime_stale", false)) else "done",
 				UIStrings.t("setup.runtime_stale") if bool(s.get("runtime_stale", false))
 				else UIStrings.t("setup.runtime_current"))
+	# La riga TEAM chiude la filiera (l'attivazione ESISTE per arrivare qui) ma
+	# è SOLA LETTURA: l'avvio vive nella checklist «Attiva team» e nel pannello
+	# Team, e una terza strada qui sarebbe un secondo posto in cui agire per la
+	# stessa cosa. Quando è spento, il dettaglio dice dove si agisce.
+	var team_phase := SetupService.busy() and SetupService.current_action == "team"
+	_setup_phase_row(UIStrings.t("setup.phase_team"),
+			_phase_state(bool(s.get("team_running", false)), team_phase),
+			UIStrings.t("setup.phase_running") if team_phase
+			else (UIStrings.t("setup.team_on") if bool(s.get("team_running", false))
+			else UIStrings.t("setup.team_row_info")))
+	# Mentre l'attivazione gira, la filiera dice DOVE si è e la barra dice
+	# QUANTO manca (o, onestamente, che la fase non riporta una percentuale).
+	# Il widget si aggiorna da solo sui segnali: nessuna ricostruzione del
+	# pannello ai tick del pull (~1.5s).
+	if busy or team_phase:
+		_content.add_child(SetupProgress.new())
 	_content.add_child(HSeparator.new())
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
@@ -1111,56 +1266,138 @@ func _build_container_setup() -> void:
 	# comandi erano riparazioni messe in fila come se fossero alternative, e
 	# costringevano l'utente a scegliere fra opzioni che non deve conoscere
 	# (Leone, 25/07). Ora compaiono SOLO nel caso in cui servono davvero.
+	# Mentre l'azione gira il pulsante LO DICE e non è premibile: prima restava
+	# identico e muto, e l'utente non sapeva se ripremere (feedback 30/07).
 	var start := Button.new()
-	start.text = UIStrings.t("setup.container_recheck") \
-			if bool(s.get("container_running", false)) else UIStrings.t("setup.container_start")
+	if busy:
+		start.text = UIStrings.t("setup.container_busy")
+		start.disabled = true
+	elif bool(s.get("container_running", false)):
+		start.text = UIStrings.t("setup.container_recheck")
+		start.pressed.connect(SetupService.refresh)
+	else:
+		start.text = UIStrings.t("setup.container_start")
+		start.pressed.connect(SetupService.start_container)
+	start.disabled = start.disabled or SetupService.busy()
 	start.add_theme_font_size_override("font_size", 16)
 	start.add_theme_color_override("font_color", Palette.GREEN)
-	start.pressed.connect(SetupService.refresh if bool(s.get("container_running", false)) \
-			else SetupService.start_container)
+	# Spento perché lavora LUI → giallo (stato vivo); spento perché lavora
+	# un'altra azione → muto. Il verde del tema mentirebbe in entrambi i casi.
+	start.add_theme_color_override("font_disabled_color",
+			Palette.YELLOW if busy else Palette.MUTED)
 	actions.add_child(start)
 	# Docker assente: senza motore non si accende niente, e questa è l'unica
-	# azione sensata da offrire.
+	# azione sensata da offrire. Resta premibile ANCHE mentre un'azione gira:
+	# non passa dalla corsia di SetupService (apre la console incorporata) e
+	# l'unica azione possibile con Docker assente è la fase engine che sta
+	# proprio aspettando che il runtime compaia — installarlo la sblocca.
 	if not bool(s.get("docker_available", false)) and not bool(s.get("remote", false)):
 		var install := Button.new()
 		install.text = UIStrings.t("setup.docker_install")
 		install.add_theme_color_override("font_color", Palette.YELLOW)
 		install.pressed.connect(SetupService.open_runtime_install)
 		actions.add_child(install)
-	# Versione vecchia: lo dice la riga di stato qui sopra, il pulsante la ripara.
-	if bool(s.get("runtime_stale", false)) and bool(s.get("docker_running", false)) \
-			and not bool(s.get("remote", false)):
+	# Il controllo disponibilita' e' separato dall'apply: e' una sola azione
+	# dichiarata, richiesta dal pulsante, mai un timer al refresh della UI.
+	var can_check_update := bool(s.get("remote", false)) or bool(s.get("docker_available", false))
+	if can_check_update:
+		var check_update := Button.new()
+		check_update.text = UIStrings.t("setup.runtime_check_busy") if checking_update \
+				else UIStrings.t("setup.runtime_check")
+		check_update.disabled = SetupService.busy()
+		check_update.add_theme_color_override("font_color", Palette.BLUE)
+		check_update.add_theme_color_override("font_disabled_color",
+				Palette.YELLOW if checking_update else Palette.MUTED)
+		check_update.pressed.connect(SetupService.check_runtime_update)
+		actions.add_child(check_update)
+	# L'upgrade e' un solo comando host-side: locale chiama il wrapper sul
+	# computer, VPS usa lo stesso canale SSH del setup. Non fare docker exec
+	# qui: journal, rollback e restart appartengono al wrapper.
+	var can_upgrade := bool(s.get("remote", false)) or \
+			(bool(s.get("runtime_stale", false)) and bool(s.get("docker_running", false)))
+	if can_upgrade:
 		var update := Button.new()
-		update.text = UIStrings.t("setup.runtime_update")
+		update.text = UIStrings.t("setup.runtime_update_busy") if upgrading \
+				else UIStrings.t("setup.runtime_update")
+		update.disabled = SetupService.busy()
 		update.add_theme_color_override("font_color", Palette.YELLOW)
+		update.add_theme_color_override("font_disabled_color",
+				Palette.YELLOW if upgrading else Palette.MUTED)
 		update.pressed.connect(SetupService.update_runtime)
 		actions.add_child(update)
-	if bool(s.get("container_running", false)):
-		var stop := Button.new()
-		stop.text = UIStrings.t("setup.container_stop")
-		stop.add_theme_color_override("font_color", Palette.RED)
-		stop.pressed.connect(SetupService.stop_container)
-		actions.add_child(stop)
+	# Vale per tutti i pulsanti spenti del pannello, FERMA CONTAINER incluso:
+	# condividono la stessa corsia unica, quindi la stessa ragione.
+	_busy_hint(_content)
+	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
+	_content.add_child(_setup_message)
+	_restore_action_note()
+	_content.add_child(HSeparator.new())
+	# Riga sotto, con un peso diverso: navigazione (piatta, a sinistra) e
+	# azione distruttiva (rossa, isolata a destra). Prima FERMA CONTAINER
+	# stava in mezzo alla fila, spalla a spalla con ATTIVA e con lo stesso
+	# peso visivo: un click di troppo e il container era giù.
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 12)
+	_content.add_child(footer)
+	var back := Button.new()
+	back.flat = true
+	back.text = UIStrings.t("setup.back_overview")
+	back.add_theme_color_override("font_color", Palette.MUTED)
+	back.pressed.connect(func() -> void: navigate.emit("activation"))
+	footer.add_child(back)
 	# La seconda strada, alla pari della prima: il team può vivere su una VPS e
 	# questa finestra restare lo specchio da cui lo si guarda. Prima esisteva
 	# solo in Impostazioni, fuori dal percorso di setup.
 	if not bool(s.get("remote", false)):
 		var to_vps := Button.new()
+		to_vps.flat = true
 		to_vps.text = UIStrings.t("setup.use_vps")
 		to_vps.add_theme_color_override("font_color", Palette.BLUE)
 		to_vps.pressed.connect(func() -> void: navigate.emit("vps"))
-		actions.add_child(to_vps)
-	# Il ritorno alla checklist sta in fondo: è navigazione, non un'azione,
-	# e in mezzo agli altri sembrava una scelta alla pari.
-	var back := Button.new()
-	back.text = UIStrings.t("setup.back_overview")
-	back.add_theme_color_override("font_color", Palette.MUTED)
-	back.pressed.connect(func() -> void: navigate.emit("activation"))
-	actions.add_child(back)
-	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
-	_content.add_child(_setup_message)
+		footer.add_child(to_vps)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(spacer)
+	if bool(s.get("container_running", false)):
+		var stop := Button.new()
+		stop.text = UIStrings.t("setup.container_stop")
+		stop.disabled = SetupService.busy()
+		stop.add_theme_color_override("font_color", Palette.RED)
+		stop.add_theme_color_override("font_disabled_color", Palette.MUTED)
+		stop.pressed.connect(SetupService.stop_container)
+		footer.add_child(stop)
 
 
+## Una riga della filiera di attivazione. Quattro stati, quattro letture:
+## ✓ fatto (verde) · ◌ in corso adesso (giallo) · ○ ancora da fare (spento)
+## · ⚠ richiede attenzione (giallo). Niente emoji: glifi del font mono.
+const PHASE_GLYPHS := {"done": "✓", "active": "◌", "pending": "○", "warn": "⚠"}
+
+static func _phase_state(done: bool, active: bool) -> String:
+	if active:
+		return "active"
+	return "done" if done else "pending"
+
+
+func _setup_phase_row(label_text: String, state: String, detail: String) -> void:
+	var tint: Color = Palette.GREEN if state == "done" \
+			else (Palette.YELLOW if state in ["active", "warn"] else Palette.DIM)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	_content.add_child(row)
+	row.add_child(TerminalTheme.label(
+			str(PHASE_GLYPHS.get(state, "○")), 15, tint))
+	var label := TerminalTheme.label(label_text, 15,
+			Palette.BRIGHT if state != "pending" else Palette.MUTED, "medium")
+	label.custom_minimum_size = Vector2(220, 0)
+	row.add_child(label)
+	var value := TerminalTheme.label(detail, 14,
+			Palette.YELLOW if state == "active" else Palette.MUTED)
+	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(value)
+
+
+## Riga di stato binaria (account, email): ● verde/giallo + dettaglio.
 func _setup_state_row(label_text: String, ok: bool, detail: String) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -1174,6 +1411,49 @@ func _setup_state_row(label_text: String, ok: bool, detail: String) -> void:
 	row.add_child(value)
 
 
+## Rimette nella riga di stato l'ultimo messaggio d'azione dopo una
+## ricostruzione del pannello: senza, il cambio fase cancellava il progresso
+## del pull a metà download.
+func _restore_action_note() -> void:
+	if SetupService.busy() and _action_note != "" \
+			and is_instance_valid(_setup_message):
+		_setup_message.text = _action_note
+		_setup_message.add_theme_color_override("font_color", _action_note_color)
+
+
+## Come si chiama, per l'utente, l'azione a corsia unica in corso adesso.
+## Serve alla riga che spiega i pulsanti spenti: "operazione in corso" secco
+## obbliga a indovinare QUALE, e chi non indovina ripreme.
+static func _busy_action_label() -> String:
+	match SetupService.current_action:
+		"container":
+			return UIStrings.t("setup.busy_container")
+		"upgrade":
+			return UIStrings.t("setup.busy_upgrade")
+		"team":
+			return UIStrings.t("setup.busy_team")
+		"provider", "plan", "install":
+			return UIStrings.t("setup.busy_provider")
+		_:
+			return UIStrings.t("setup.busy_vps") \
+					if SetupService.current_action.begins_with("vps") \
+					else UIStrings.t("setup.busy_generic")
+
+
+## La riga sotto ai pulsanti spenti durante un'azione: dice COSA sta girando e
+## che si riaccendono da soli. Un pulsante disabilitato e muto è
+## indistinguibile da uno rotto (feedback 30/07). Chi chiama decide quando
+## aggiungerla: qui si decide solo come è fatta.
+func _busy_hint(parent: Container) -> void:
+	if not SetupService.busy():
+		return
+	var hint := TerminalTheme.label(
+			UIStrings.t("setup.busy_note") % _busy_action_label(),
+			12, Palette.YELLOW)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(hint)
+
+
 func _build_provider_setup() -> void:
 	_listen_setup()
 	var s: Dictionary = SetupService.status
@@ -1181,6 +1461,9 @@ func _build_provider_setup() -> void:
 			15, Palette.BASE))
 	_content.add_child(TerminalTheme.label(UIStrings.t("setup.provider_note"),
 			13, Palette.YELLOW))
+	# USA QUESTO PROVIDER e i tagli d'abbonamento condividono la corsia unica
+	# di SetupService: mentre gira un'azione sono spenti, e qui si dice perché.
+	_busy_hint(_content)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1193,6 +1476,7 @@ func _build_provider_setup() -> void:
 		_provider_card(list, provider, s)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
+	_restore_action_note()
 
 
 func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> void:
@@ -1230,6 +1514,8 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 	if not active:
 		var choose := Button.new()
 		choose.text = UIStrings.t("setup.provider_choose")
+		choose.disabled = SetupService.busy()
+		choose.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		choose.pressed.connect(SetupService.select_provider.bind(provider))
 		actions.add_child(choose)
 	else:
@@ -1238,8 +1524,16 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 				else UIStrings.t("setup.provider_subscription_login")
 		login.disabled = not bool(s.get("container_running", false))
 		login.add_theme_color_override("font_color", Palette.GREEN)
+		login.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		login.pressed.connect(SetupService.open_provider_login.bind(provider))
 		actions.add_child(login)
+		# Pulsante spento senza spiegazione = pulsante rotto: se il container è
+		# giù si dice PERCHÉ il login non è premibile e cosa fare prima.
+		if not bool(s.get("container_running", false)):
+			var why := TerminalTheme.label(
+					UIStrings.t("setup.provider_needs_container"), 11, Palette.YELLOW)
+			why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			actions.add_child(why)
 		# Login fatto ma non ancora visto: serve RIGUARDARE, non rifare. Il
 		# pulsante di sopra reinstalla il CLI e riapre la console da capo —
 		# usarlo per "controlla di nuovo" costa minuti e riporta al punto di
@@ -1248,6 +1542,7 @@ func _provider_card(parent: VBoxContainer, provider: String, s: Dictionary) -> v
 			var recheck := Button.new()
 			recheck.text = UIStrings.t("setup.provider_recheck")
 			recheck.disabled = not bool(s.get("container_running", false))
+			recheck.add_theme_color_override("font_disabled_color", Palette.MUTED)
 			recheck.pressed.connect(func() -> void:
 				recheck.text = UIStrings.t("setup.provider_rechecking")
 				SetupService.refresh())
@@ -1311,6 +1606,11 @@ func _plan_picker(col: VBoxContainer, provider: String, s: Dictionary) -> void:
 				else "%s %s$" % [str(plan.get("label", plan_id)), price]
 		button.toggle_mode = true
 		button.button_pressed = plan_id == chosen
+		# select_plan passa dalla corsia unica: durante un'azione il click
+		# verrebbe scartato in silenzio ma il toggle resterebbe premuto a
+		# schermo — un salvataggio che sembra avvenuto e non è avvenuto.
+		button.disabled = SetupService.busy()
+		button.add_theme_color_override("font_disabled_color", Palette.MUTED)
 		if plan_id == chosen:
 			button.add_theme_color_override("font_color", Palette.GREEN)
 		button.pressed.connect(SetupService.select_plan.bind(provider, plan_id))
@@ -1327,11 +1627,34 @@ func _on_setup_action(action: String, running: bool, message: String, ok: bool) 
 	# senza questo il pannello resterebbe su "non disponibile" fino a riaprirlo.
 	if action == "vps-key" and not running:
 		_refresh_vps_fingerprint()
+	_action_note = ("◌ " if running else ("✓ " if ok else "⚠ ")) + message
+	_action_note_color = Palette.YELLOW if running \
+			else (Palette.GREEN if ok else Palette.RED)
+	# Avvio o fine di un'azione di setup: i pulsanti devono cambiare stato
+	# (disabilitati + etichetta "in corso") SUBITO, non al prossimo probe.
+	# Solo al fronte di salita/discesa: i progressi intermedi arrivano ogni
+	# ~1.5s durante il pull e ricostruire la UI a quel ritmo la renderebbe
+	# incliccabile.
+	if action in SETUP_ACTIONS and section in SETUP_SECTIONS \
+			and running != _setup_busy_ui:
+		_setup_busy_ui = running
+		_build(_current_page)
+	# Il pannello VPS non si ricostruisce (ha campi di testo da preservare):
+	# pulsanti e riga-ragione si aggiornano sul posto.
+	if section == "vps":
+		_refresh_vps_busy()
 	if not is_instance_valid(_setup_message):
 		return
-	_setup_message.text = ("◌ " if running else ("✓ " if ok else "⚠ ")) + message
-	_setup_message.add_theme_color_override("font_color",
-			Palette.YELLOW if running else (Palette.GREEN if ok else Palette.RED))
+	_setup_message.text = _action_note
+	_setup_message.add_theme_color_override("font_color", _action_note_color)
+
+
+## Cambio fase dell'attivazione (motore → immagine → container): il pannello
+## Docker sposta il marcatore ◌ sulla riga giusta. Succede tre volte per
+## attivazione, il costo della ricostruzione è irrilevante.
+func _on_setup_phase(_action: String, _phase: String) -> void:
+	if section == "docker" and is_instance_valid(_content):
+		_build(_current_page)
 
 # ── Sistema VPS / container ──────────────────────────────────────────
 
@@ -1805,6 +2128,25 @@ static func _hhmm(t: String) -> float:
 		return 0.0
 	return float(parts[0].to_int()) + float(parts[1].to_int()) / 60.0
 
+## Valori puri della stima, separati dalla UI anche per coprire il primo
+## avvio. Senza una finestra corrente non esiste una baseline da cui
+## riproporzionare: trattarla come una singola ora produceva percentuali e
+## volumi enormi proprio nella schermata mostrata ai nuovi utenti.
+static func _hours_estimate_values(cur_windows: Array, new_windows: Array,
+		found7: int) -> Dictionary:
+	var new_h := _hours_per_week(new_windows)
+	var cur_h := _hours_per_week(cur_windows)
+	if cur_h <= 0.0:
+		return {"has_baseline": false, "new_hours": new_h}
+	var rate := float(found7) / cur_h
+	return {
+		"has_baseline": true,
+		"new_hours": new_h,
+		"positions_per_day": rate * new_h / 7.0,
+		"budget_percent": int(round(new_h / cur_h * 100.0)),
+	}
+
+
 ## La stima dinamica: rate storico (posizioni degli ultimi 7 giorni per
 ## ora attiva del config corrente) proiettato sulle ore del form.
 func _refresh_hours_estimate() -> void:
@@ -1815,8 +2157,6 @@ func _refresh_hours_estimate() -> void:
 	for w in cur_raw.get("windows", []):
 		cur_windows.append({"days": ", ".join(PackedStringArray(w.get("days", []))),
 				"start": str(w.get("start", "")), "end": str(w.get("end", ""))})
-	var cur_h := maxf(1.0, _hours_per_week(cur_windows))
-	var new_h := _hours_per_week(_hours_windows)
 	var week_ago := Time.get_unix_time_from_system() - 7 * 86400
 	var found7 := 0
 	for p in BackendBus.positions:
@@ -1824,10 +2164,14 @@ func _refresh_hours_estimate() -> void:
 				str(p.get("found_at", "")).left(19))
 		if ts > 0 and float(ts) >= week_ago:
 			found7 += 1
-	var rate := float(found7) / cur_h          # posizioni per ora attiva
-	var est_day := rate * new_h / 7.0
+	var estimate := _hours_estimate_values(cur_windows, _hours_windows, found7)
+	if not bool(estimate["has_baseline"]):
+		_hours_estimate_lbl.text = UIStrings.t("hours.estimate_first") % [
+				estimate["new_hours"]]
+		return
 	_hours_estimate_lbl.text = UIStrings.t("hours.estimate") % [
-			new_h, est_day, int(round(new_h / cur_h * 100.0))]
+			estimate["new_hours"], estimate["positions_per_day"],
+			estimate["budget_percent"]]
 
 func _save_hours() -> void:
 	var windows: Array = []
@@ -1898,7 +2242,7 @@ func _build_profile() -> void:
 		lbl.custom_minimum_size = Vector2(220, 0)
 		grid.add_child(lbl)
 		var edit := LineEdit.new()
-		edit.text = str(raw.get(f[0], ""))
+		edit.text = _profile_field_text(str(f[0]), raw.get(f[0], ""))
 		edit.custom_minimum_size = Vector2(560, 0)
 		edit.add_theme_font_size_override("font_size", 15)
 		grid.add_child(edit)
@@ -1942,6 +2286,28 @@ func _build_profile() -> void:
 	_prof_status = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_prof_status)
 	_prof_save_btn = save
+
+
+## Il profilo YAML può conservare le lingue come oggetti
+## `{language, level}`. `str(Array)` le mostrava come dizionari Python e,
+## premendo Salva senza cambiare nulla, il payload le spezzava sulle virgole.
+## La UI usa invece una forma editabile e reversibile: "Italiano
+## (madrelingua), Inglese (C1)".
+static func _profile_field_text(key: String, value: Variant) -> String:
+	if key != "languages" or not value is Array:
+		return str(value)
+	var parts: Array[String] = []
+	for item in value as Array:
+		if item is Dictionary:
+			var language := str(item.get("language", item.get("name", ""))).strip_edges()
+			var level := str(item.get("level", "")).strip_edges()
+			if language != "":
+				parts.append(language + (" (" + level + ")" if level != "" else ""))
+		else:
+			var text := str(item).strip_edges()
+			if text != "":
+				parts.append(text)
+	return ", ".join(parts)
 
 var _prof_save_btn: Button
 
@@ -2012,15 +2378,18 @@ func _build_appearance() -> void:
 	var choices := HBoxContainer.new()
 	choices.add_theme_constant_override("separation", 16)
 	_content.add_child(choices)
+	# Solo testo: il ☀ del tema chiaro era un pittogramma dipendente dai font
+	# di sistema (regola: niente emoji nella UI di prodotto), e un ◐ da solo
+	# sull'altra scheda non racconterebbe una coppia.
 	for spec in [
-		[Palette.MODE_LIGHT, "☀", "appearance.light", "appearance.light_desc"],
-		[Palette.MODE_DARK, "◐", "appearance.dark", "appearance.dark_desc"],
+		[Palette.MODE_LIGHT, "appearance.light", "appearance.light_desc"],
+		[Palette.MODE_DARK, "appearance.dark", "appearance.dark_desc"],
 	]:
 		var selected: bool = Palette.mode == spec[0]
 		var button := Button.new()
-		button.text = "%s  %s%s\n%s" % [spec[1],
-				UIStrings.t(spec[2]).to_upper(), "  ✓" if selected else "",
-				UIStrings.t(spec[3])]
+		button.text = "%s%s\n%s" % [
+				UIStrings.t(spec[1]).to_upper(), "  ✓" if selected else "",
+				UIStrings.t(spec[2])]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.custom_minimum_size = Vector2(360, 104)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2117,12 +2486,14 @@ func _build_language() -> void:
 		btn.add_theme_color_override("font_color",
 				Palette.GREEN if selected else Palette.BASE)
 		btn.add_theme_color_override("font_hover_color", Palette.MINT)
-		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		var code := str(l)
 		btn.pressed.connect(func() -> void:
 			UIStrings.set_lang(code)
 			_build())
 		_content.add_child(btn)
+	if UIStrings.lang != "it":
+		_content.add_child(_wrapped_label(
+				UIStrings.t("lang.narrative_note"), 13, Palette.YELLOW))
 	_content.add_child(HSeparator.new())
 	_content.add_child(TerminalTheme.label(UIStrings.t("lang.note"), 13, Palette.DIM))
 
@@ -2139,6 +2510,61 @@ static func _pos_status_color(status: String, fallback: Color) -> Color:
 const POS_STATUS_ORDER := ["new", "checked", "scored", "writing", "review",
 		"ready", "applied", "response", "excluded"]
 const POS_PAGE_SIZES := [25, 50, 100, 200]
+
+## Le posizioni hanno la stessa grammatica visiva del web: superfici distinte,
+## bordi quieti e badge che fanno leggere stato/score prima della prosa. Gli
+## helper restano locali alla sezione: non cambiano il tema globale e quindi
+## non "webbificano" dialoghi, setup o ufficio.
+static func _pos_card(accent := Color.TRANSPARENT,
+		background := Color.TRANSPARENT, padding := 16) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.set_meta("position_card", true)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Palette.CARD if background.a == 0.0 else background
+	style.border_color = Palette.BORDER if accent.a == 0.0 else Color(accent, 0.48)
+	style.set_border_width_all(TerminalTheme.hairline())
+	style.set_corner_radius_all(7)
+	style.content_margin_left = padding
+	style.content_margin_right = padding
+	style.content_margin_top = padding - 2
+	style.content_margin_bottom = padding - 2
+	card.add_theme_stylebox_override("panel", style)
+	return card
+
+
+static func _pos_card_box(parent: Control, accent := Color.TRANSPARENT,
+		background := Color.TRANSPARENT, padding := 16,
+		separation := 9) -> VBoxContainer:
+	var card := _pos_card(accent, background, padding)
+	parent.add_child(card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", separation)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.add_child(box)
+	return box
+
+
+static func _pos_badge(text: String, color: Color,
+		minimum_width := 0, strong := false) -> PanelContainer:
+	var badge := PanelContainer.new()
+	badge.set_meta("position_badge", true)
+	badge.custom_minimum_size.x = minimum_width
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(color, 0.09)
+	style.border_color = Color(color, 0.58)
+	style.set_border_width_all(TerminalTheme.hairline())
+	style.set_corner_radius_all(12)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	badge.add_theme_stylebox_override("panel", style)
+	var label := TerminalTheme.label(text.to_upper(), 12, color,
+			"bold" if strong else "medium")
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge.add_child(label)
+	return badge
 
 ## Filtri attivi (menu → set di valori). Persistono finché il pannello vive.
 var _pos_filters := {
@@ -2168,17 +2594,20 @@ func _build_positions() -> void:
 	if not BackendBus.positions_updated.is_connected(_on_positions_refresh):
 		BackendBus.positions_updated.connect(_on_positions_refresh)
 	if BackendBus.positions_are_demo:
-		var demo_note := TerminalTheme.label(
-				UIStrings.t("demo.positions"),
+		var demo_box := _pos_card_box(_content, Palette.YELLOW,
+				Palette.PANEL, 12, 0)
+		var demo_note := TerminalTheme.label(UIStrings.t("demo.positions"),
 				13, Palette.YELLOW, "medium")
 		demo_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_content.add_child(demo_note)
+		demo_box.add_child(demo_note)
 
 	var visible_rows := _pos_filtered(all, "")
 	var active_filters := _pos_active_filter_count()
+	var toolbar := _pos_card_box(_content, Color.TRANSPARENT,
+			Palette.PANEL, 12, 10)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 16)
-	_content.add_child(head)
+	toolbar.add_child(head)
 	var count := TerminalTheme.label(UIStrings.t("pos.count")
 			% [all.size(), visible_rows.size()], 15, Palette.MINT, "medium")
 	count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2210,12 +2639,11 @@ func _build_positions() -> void:
 		var filter_bar := HFlowContainer.new()
 		filter_bar.add_theme_constant_override("h_separation", 10)
 		filter_bar.add_theme_constant_override("v_separation", 8)
-		_content.add_child(filter_bar)
+		toolbar.add_child(filter_bar)
 		_pos_filter_menu(filter_bar, "status", UIStrings.t("pos.f_status"), all)
 		_pos_filter_menu(filter_bar, "role_family", UIStrings.t("pos.f_family"), all)
 		_pos_filter_menu(filter_bar, "work_mode", UIStrings.t("pos.f_mode"), all)
 		_pos_filter_menu(filter_bar, "loc_country", UIStrings.t("pos.f_country"), all)
-	_content.add_child(HSeparator.new())
 
 	if visible_rows.is_empty():
 		_content.add_child(TerminalTheme.label(UIStrings.t("pos.no_match"),
@@ -2232,7 +2660,7 @@ func _build_positions() -> void:
 	scroll.custom_minimum_size = Vector2(0, 300)
 	_content.add_child(scroll)
 	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 6)
+	list.add_theme_constant_override("separation", 9)
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
 	for p in visible_rows.slice(start, end):
@@ -2308,7 +2736,7 @@ func _build_agent_page() -> void:
 	var title_row := HBoxContainer.new()
 	title_row.add_theme_constant_override("separation", 14)
 	_content.add_child(title_row)
-	title_row.add_child(TerminalTheme.label(ROLE_EMOJI.get(slug, "●"), 22, Palette.GREEN))
+	title_row.add_child(_role_icon(slug, 24.0))
 	title_row.add_child(TerminalTheme.label(
 			str(agent.get("name", slug.capitalize())), 22, Palette.WHITE, "xbold"))
 	title_row.add_child(TerminalTheme.label(
@@ -2777,45 +3205,63 @@ func _pos_pagination(start: int, end: int, total: int, page_count: int) -> void:
 		_build())
 	footer.add_child(next)
 
-## Una posizione in lista, tabellare full-width come la pagina web:
-## score | titolo — azienda (espande) | famiglia | luogo | salario | stato.
+## Card full-width come la vista responsive del web: score immediato,
+## titolo/azienda dominanti, metadati quieti e stato in un badge riconoscibile.
 func _pos_row(p: Dictionary) -> Control:
+	var card := _pos_card()
+	card.set_meta("position_row", true)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
+	row.add_theme_constant_override("separation", 18)
+	card.add_child(row)
 	var score_v: Variant = p.get("total_score")
 	var score_txt := "—" if score_v == null else str(int(score_v))
 	var score_col: Color = Palette.DIM if score_v == null \
 			else (Palette.MINT if int(score_v) >= 70 else Palette.YELLOW)
-	var score := TerminalTheme.label(score_txt, 17, score_col, "bold")
-	score.custom_minimum_size = Vector2(44, 0)
-	row.add_child(score)
+	var score_badge := _pos_badge(score_txt, score_col, 54, true)
+	score_badge.tooltip_text = UIStrings.t("pos.score_title") % int(score_v) \
+			if score_v != null else UIStrings.t("pos.score_none")
+	row.add_child(score_badge)
+	var identity := VBoxContainer.new()
+	identity.add_theme_constant_override("separation", 2)
+	identity.custom_minimum_size.x = 400
+	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(identity)
 	# il titolo apre la pagina della posizione (come sul web)
 	var title_btn := Button.new()
 	title_btn.flat = true
-	title_btn.text = "%s — %s" % [_pos_value(p, "title"), _pos_value(p, "company")]
+	title_btn.text = _pos_value(p, "title")
 	title_btn.add_theme_font_size_override("font_size", 15)
-	title_btn.add_theme_color_override("font_color", Palette.BRIGHT)
+	title_btn.add_theme_font_override("font", TerminalTheme.font(TerminalTheme.FONT_BOLD))
+	title_btn.add_theme_color_override("font_color", Palette.WHITE)
 	title_btn.add_theme_color_override("font_hover_color", Palette.GREEN)
 	title_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	title_btn.clip_text = true
 	title_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	var pid := int(p.get("id", 0))
+	title_btn.set_meta("position_id", pid)
 	title_btn.pressed.connect(func() -> void:
 		_pos_detail_id = pid
 		Sfx.play_tick()
 		_build("detail"))
-	row.add_child(title_btn)
-	var family := TerminalTheme.label(_pos_value(p, "role_family"), 13, Palette.MUTED)
-	family.custom_minimum_size = Vector2(220, 0)
+	identity.add_child(title_btn)
+	var company := TerminalTheme.label(_pos_value(p, "company"), 13,
+			Palette.BASE, "medium")
+	company.clip_text = true
+	identity.add_child(company)
+	var metadata := VBoxContainer.new()
+	metadata.add_theme_constant_override("separation", 3)
+	metadata.custom_minimum_size.x = 330
+	row.add_child(metadata)
+	var family := TerminalTheme.label(_pos_value(p, "role_family"), 12, Palette.MUTED)
 	family.clip_text = true
-	row.add_child(family)
-	var place := TerminalTheme.label("%s · %s" % [
+	metadata.add_child(family)
+	var place := TerminalTheme.label("%s  ·  %s  ·  %s" % [
 			str(p.get("loc_city", "") if p.get("loc_city") else "—"),
-			_pos_value(p, "loc_country")], 13, Palette.MUTED)
-	place.custom_minimum_size = Vector2(200, 0)
+			_pos_value(p, "loc_country"), _pos_value(p, "work_mode")],
+			12, Palette.DIM)
 	place.clip_text = true
-	row.add_child(place)
+	metadata.add_child(place)
 	var est: bool = p.get("salary_estimated_min") != null
 	var s_min: Variant = p.get("salary_estimated_min") if est else p.get("salary_declared_min")
 	var s_max: Variant = p.get("salary_estimated_max") if est else p.get("salary_declared_max")
@@ -2824,20 +3270,20 @@ func _pos_row(p: Dictionary) -> Control:
 	var s_cur := str(cur_v) if cur_v != null else "EUR"
 	var sal := "—" if s_min == null and s_max == null \
 			else _fmt_salary_eur(s_min, s_max, s_cur)
-	var sal_lbl := TerminalTheme.label(sal, 13,
-			Palette.BASE if sal != "—" else Palette.DIM)
-	sal_lbl.custom_minimum_size = Vector2(110, 0)
+	var sal_lbl := TerminalTheme.label(sal, 14,
+			Palette.MINT if sal != "—" else Palette.DIM, "bold")
+	sal_lbl.custom_minimum_size = Vector2(128, 0)
+	sal_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(sal_lbl)
 	var st := _pos_value(p, "status")
-	var st_lbl := TerminalTheme.label(st, 13,
-			_pos_status_color(st, Palette.MUTED), "medium")
-	st_lbl.custom_minimum_size = Vector2(90, 0)
-	row.add_child(st_lbl)
+	var st_badge := _pos_badge(st, _pos_status_color(st, Palette.MUTED), 104)
+	st_badge.set_meta("position_status", st)
+	row.add_child(st_badge)
 	# aria a destra: la scrollbar non deve coprire lo stato
 	var pad := Control.new()
 	pad.custom_minimum_size = Vector2(14, 0)
 	row.add_child(pad)
-	return row
+	return card
 
 # ── Dettaglio posizione (la pagina del web privato) ───────────────────
 
@@ -2888,23 +3334,34 @@ func _build_pos_detail() -> void:
 		scroll.get_v_scroll_bar().changed.connect(func() -> void:
 			scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value))
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
+	box.add_theme_constant_override("separation", 14)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(box)
 
-	# ── intestazione ──
-	box.add_child(TerminalTheme.label(_pos_value(p, "title"), 22, Palette.WHITE, "xbold"))
+	# ── hero: il web mette identità, stato e numeri decisivi nella prima card ──
+	var st := _pos_value(p, "status")
+	var hero := _pos_card_box(box, _pos_status_color(st, Palette.MUTED),
+			Palette.CARD, 18, 8)
+	var hero_head := HBoxContainer.new()
+	hero_head.add_theme_constant_override("separation", 16)
+	hero.add_child(hero_head)
+	var identity := VBoxContainer.new()
+	identity.add_theme_constant_override("separation", 4)
+	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hero_head.add_child(identity)
+	var title := TerminalTheme.label(_pos_value(p, "title"), 23,
+			Palette.WHITE, "xbold")
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	identity.add_child(title)
 	var sub := HBoxContainer.new()
 	sub.add_theme_constant_override("separation", 14)
-	box.add_child(sub)
+	identity.add_child(sub)
 	sub.add_child(TerminalTheme.label(_pos_value(p, "company"), 16, Palette.BRIGHT, "medium"))
 	sub.add_child(TerminalTheme.label("%s · %s · %s" % [
 			str(p.get("loc_city", "") if p.get("loc_city") else "—"),
 			_pos_value(p, "loc_country"), _pos_value(p, "work_mode")],
 			14, Palette.MUTED))
-	var st := _pos_value(p, "status")
-	sub.add_child(TerminalTheme.label(st, 14,
-			_pos_status_color(st, Palette.MUTED), "bold"))
+	hero_head.add_child(_pos_badge(st, _pos_status_color(st, Palette.MUTED), 116, true))
 	# L'indirizzo che gli Analisti hanno faticato a trovare vive SOLO qui,
 	# accanto a città e paese: è la stessa informazione, alla sua massima
 	# precisione. Con office_verified=0 il team ha ripiegato sul centro città
@@ -2917,7 +3374,7 @@ func _build_pos_detail() -> void:
 				else UIStrings.t("pos.office_approx")
 		var arow := HBoxContainer.new()
 		arow.add_theme_constant_override("separation", 10)
-		box.add_child(arow)
+		hero.add_child(arow)
 		arow.add_child(TerminalTheme.label(UIStrings.t("pos.office_address"),
 				13, Palette.MUTED, "medium"))
 		arow.add_child(TerminalTheme.label(addr, 14,
@@ -2925,7 +3382,7 @@ func _build_pos_detail() -> void:
 		arow.add_child(TerminalTheme.label(tag, 12,
 				Palette.MINT if exact else Palette.DIM, "medium"))
 	if p.get("found_by"):
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.found") % [
+		hero.add_child(TerminalTheme.label(UIStrings.t("pos.found") % [
 				str(p["found_by"]), str(p.get("found_at", "")).left(10)], 13, Palette.DIM))
 	if p.get("url"):
 		# il link all'annuncio si APRE davvero, nel browser di sistema
@@ -2941,15 +3398,21 @@ func _build_pos_detail() -> void:
 		link.tooltip_text = UIStrings.t("pos.open_url")
 		var url := str(p["url"])
 		link.pressed.connect(func() -> void: OS.shell_open(url))
-		box.add_child(link)
+		hero.add_child(link)
 	var open_v: Variant = p.get("is_open")
 	if open_v != null:
-		box.add_child(TerminalTheme.label(
+		var open_row := HBoxContainer.new()
+		hero.add_child(open_row)
+		open_row.add_child(_pos_badge(
 				UIStrings.t("pos.open_yes") if int(open_v) == 1 else UIStrings.t("pos.open_no"),
-				13, Palette.MINT if int(open_v) == 1 else Palette.RED))
-	box.add_child(HSeparator.new())
+				Palette.MINT if int(open_v) == 1 else Palette.RED))
 
-	# ── stipendio (stima del team se c'è, altrimenti il dichiarato) ──
+	# ── panoramica: salario e prosa respirano in una card propria ──
+	var overview := _pos_card_box(box, Color.TRANSPARENT,
+			Palette.CARD, 18, 10)
+	overview.add_child(TerminalTheme.label(UIStrings.t("pos.summary").to_upper(),
+			13, Palette.MUTED, "bold"))
+	# stipendio (stima del team se c'è, altrimenti il dichiarato)
 	var est: bool = p.get("salary_estimated_min") != null or p.get("salary_estimated_max") != null
 	var s_min: Variant = p.get("salary_estimated_min") if est else p.get("salary_declared_min")
 	var s_max: Variant = p.get("salary_estimated_max") if est else p.get("salary_declared_max")
@@ -2963,7 +3426,7 @@ func _build_pos_detail() -> void:
 			rng += "  (%s–%s %s)" % [_fmt_k(s_min), _fmt_k(s_max), cur]
 		var srow := HBoxContainer.new()
 		srow.add_theme_constant_override("separation", 12)
-		box.add_child(srow)
+		overview.add_child(srow)
 		var slbl := TerminalTheme.label(UIStrings.t("pos.salary"), 14, Palette.MUTED, "medium")
 		slbl.custom_minimum_size = Vector2(220, 0)
 		srow.add_child(slbl)
@@ -2974,50 +3437,76 @@ func _build_pos_detail() -> void:
 
 	# ── riassunto annuncio ──
 	if p.get("jd_summary"):
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.summary"), 14, Palette.MUTED, "medium"))
-		box.add_child(_pos_paragraph(str(p["jd_summary"])))
-	box.add_child(HSeparator.new())
+		overview.add_child(_pos_paragraph(str(p["jd_summary"])))
 
 	# ── score breakdown pesato ──
+	var score_accent := Palette.MINT if p.get("total_score") != null \
+			and int(p["total_score"]) >= 70 else Palette.YELLOW
+	var score_box := _pos_card_box(box, score_accent,
+			Palette.CARD, 18, 10)
 	if p.get("total_score") != null:
-		box.add_child(TerminalTheme.label(
+		var score_head := HBoxContainer.new()
+		score_head.add_theme_constant_override("separation", 14)
+		score_box.add_child(score_head)
+		var score_title := TerminalTheme.label(
 				UIStrings.t("pos.score_title") % int(p["total_score"]), 17,
-				Palette.MINT if int(p["total_score"]) >= 70 else Palette.YELLOW, "bold"))
+				score_accent, "bold")
+		score_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		score_head.add_child(score_title)
+		score_head.add_child(_pos_badge("%d / 100" % int(p["total_score"]),
+				score_accent, 96, true))
 		for w in SCORE_WEIGHTS:
 			var val: Variant = p.get(w[0])
 			if val == null:
 				continue
 			var wrow := HBoxContainer.new()
 			wrow.add_theme_constant_override("separation", 12)
-			box.add_child(wrow)
+			score_box.add_child(wrow)
 			var wl := TerminalTheme.label("%s (su %d)" % [w[1], w[2]], 13, Palette.MUTED)
 			wl.custom_minimum_size = Vector2(220, 0)
 			wrow.add_child(wl)
 			var bar := ProgressBar.new()
-			bar.custom_minimum_size = Vector2(220, 12)
+			bar.custom_minimum_size = Vector2(320, 10)
+			bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			bar.max_value = float(w[2])
 			bar.value = float(val)
 			bar.show_percentage = false
-			bar.modulate = Palette.GREEN
+			var ratio := float(val) / float(w[2])
+			var ratio_color := Palette.GREEN if ratio >= 0.7 \
+					else (Palette.YELLOW if ratio >= 0.45 else Palette.RED)
+			# Modulare il ProgressBar verde del tema non cambia davvero fascia
+			# (verde × giallo resta verde nel render). Fill e binario dedicati
+			# rendono il rapporto come sul web e funzionano anche nel tema light.
+			var track := StyleBoxFlat.new()
+			track.bg_color = Palette.DEEP
+			track.border_color = Palette.BORDER
+			track.set_border_width_all(TerminalTheme.hairline())
+			track.set_corner_radius_all(5)
+			var fill := StyleBoxFlat.new()
+			fill.bg_color = ratio_color
+			fill.set_corner_radius_all(5)
+			bar.add_theme_stylebox_override("background", track)
+			bar.add_theme_stylebox_override("fill", fill)
 			wrow.add_child(bar)
 			wrow.add_child(TerminalTheme.label("%d/%d" % [int(val), w[2]],
 					13, Palette.BRIGHT, "medium"))
 		if p.get("score_notes"):
-			box.add_child(TerminalTheme.label(UIStrings.t("pos.score_rationale"),
+			score_box.add_child(TerminalTheme.label(UIStrings.t("pos.score_rationale"),
 					13, Palette.MUTED, "medium"))
-			box.add_child(_pos_paragraph(str(p["score_notes"])))
+			score_box.add_child(_pos_paragraph(str(p["score_notes"])))
 		if p.get("scored_by"):
-			box.add_child(TerminalTheme.label("— %s · %s" % [str(p["scored_by"]),
+			score_box.add_child(TerminalTheme.label("— %s · %s" % [str(p["scored_by"]),
 					str(p.get("scored_at", "")).left(10)], 12, Palette.DIM))
 	else:
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.score_none"), 14, Palette.DIM))
-	box.add_child(HSeparator.new())
+		score_box.add_child(TerminalTheme.label(UIStrings.t("pos.score_none"), 14, Palette.DIM))
 
 	# ── voto del critico (0-10, distinto dallo score) ──
+	var critic_box := _pos_card_box(box, Color.TRANSPARENT,
+			Palette.CARD, 18, 9)
 	if p.get("critic_score") != null:
 		var crow := HBoxContainer.new()
 		crow.add_theme_constant_override("separation", 14)
-		box.add_child(crow)
+		critic_box.add_child(crow)
 		crow.add_child(TerminalTheme.label(
 				UIStrings.t("pos.critic_title") % float(p["critic_score"]),
 				16, Palette.BRIGHT, "bold"))
@@ -3026,73 +3515,80 @@ func _build_pos_detail() -> void:
 			crow.add_child(TerminalTheme.label(verdict, 15,
 					_verdict_color(verdict), "bold"))
 		if p.get("critic_notes"):
-			box.add_child(_pos_paragraph(str(p["critic_notes"])))
+			critic_box.add_child(_pos_paragraph(str(p["critic_notes"])))
 	else:
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.critic_none"), 14, Palette.DIM))
-	box.add_child(HSeparator.new())
+		critic_box.add_child(TerminalTheme.label(UIStrings.t("pos.critic_none"),
+				14, Palette.MUTED))
 
 	# ── punti chiave ──
 	var highlights: Array = p.get("highlights", [])
 	if not highlights.is_empty():
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.highlights"), 14,
-				Palette.MUTED, "medium"))
+		var highlights_box := _pos_card_box(box, Color.TRANSPARENT,
+				Palette.CARD, 18, 9)
+		highlights_box.add_child(TerminalTheme.label(
+				UIStrings.t("pos.highlights").to_upper(), 13,
+				Palette.MUTED, "bold"))
 		for h in highlights:
 			var kind := str(h.get("type", ""))
 			var good := kind.containsn("pro") or kind.containsn("plus") or kind.containsn("match")
 			var bad := kind.containsn("con") or kind.containsn("minus") or kind.containsn("risk")
 			var hrow := HBoxContainer.new()
 			hrow.add_theme_constant_override("separation", 10)
-			box.add_child(hrow)
+			highlights_box.add_child(hrow)
 			hrow.add_child(TerminalTheme.label("▲" if good else ("▼" if bad else "•"), 13,
 					Palette.GREEN if good else (Palette.RED if bad else Palette.MUTED)))
 			hrow.add_child(_pos_paragraph(str(h.get("text", ""))))
-		box.add_child(HSeparator.new())
 
 	# ── esclusione utente ──
 	if p.get("user_excluded_reason"):
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.excluded_title"), 14,
+		var excluded_box := _pos_card_box(box, Palette.RED,
+				Color(Palette.RED, 0.055), 18, 8)
+		excluded_box.add_child(TerminalTheme.label(UIStrings.t("pos.excluded_title"), 14,
 				Palette.RED, "bold"))
 		var reason := str(p["user_excluded_reason"])
 		if p.get("user_excluded_note"):
 			reason += " — " + str(p["user_excluded_note"])
-		box.add_child(_pos_paragraph(reason))
-		box.add_child(HSeparator.new())
+		excluded_box.add_child(_pos_paragraph(reason))
 
 	# ── stato delle azioni on-demand (per ora sola lettura) ──
-	box.add_child(TerminalTheme.label(UIStrings.t("pos.actions"), 14,
-			Palette.MUTED, "medium"))
+	var actions_box := _pos_card_box(box, Color.TRANSPARENT,
+			Palette.CARD, 18, 9)
+	actions_box.add_child(TerminalTheme.label(UIStrings.t("pos.actions").to_upper(), 13,
+			Palette.BASE, "bold"))
 	for act in [["pos.act_write", "write_requested"],
 			["pos.act_geocode", "geocode_requested"],
 			["pos.act_recheck", "recheck_requested"]]:
 		var requested := int(p.get(act[1], 0) if p.get(act[1]) != null else 0) == 1
 		var arow := HBoxContainer.new()
 		arow.add_theme_constant_override("separation", 12)
-		box.add_child(arow)
+		actions_box.add_child(arow)
 		var al := TerminalTheme.label(UIStrings.t(act[0]), 14, Palette.BASE)
 		al.custom_minimum_size = Vector2(280, 0)
 		arow.add_child(al)
 		arow.add_child(TerminalTheme.label(
 				UIStrings.t("pos.act_requested") if requested else UIStrings.t("pos.act_not_requested"),
-				13, Palette.YELLOW if requested else Palette.DIM, "medium"))
-	box.add_child(TerminalTheme.label(UIStrings.t("pos.act_note"), 12, Palette.DIM))
-	box.add_child(HSeparator.new())
+				13, Palette.YELLOW if requested else Palette.MUTED, "medium"))
+	actions_box.add_child(TerminalTheme.label(UIStrings.t("pos.act_note"), 12, Palette.MUTED))
 
 	# ── ticket col team ──
-	box.add_child(TerminalTheme.label(UIStrings.t("pos.tickets"), 14,
-			Palette.MUTED, "medium"))
+	var tickets_box := _pos_card_box(box, Color.TRANSPARENT,
+			Palette.CARD, 18, 9)
+	tickets_box.add_child(TerminalTheme.label(UIStrings.t("pos.tickets").to_upper(), 13,
+			Palette.BASE, "bold"))
 	var tickets: Array = p.get("tickets", [])
 	if tickets.is_empty():
-		box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_none"), 13, Palette.DIM))
+		tickets_box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_none"),
+				13, Palette.MUTED))
 	for t in tickets:
 		var trow := HBoxContainer.new()
 		trow.add_theme_constant_override("separation", 12)
-		box.add_child(trow)
+		tickets_box.add_child(trow)
 		trow.add_child(TerminalTheme.label("[%s]" % str(t.get("status", "?")), 13,
 				Palette.MINT if str(t.get("status")) == "resolved" else Palette.YELLOW, "medium"))
 		trow.add_child(_pos_paragraph(str(t.get("request_text", ""))))
 		if t.get("response_text"):
-			box.add_child(_pos_paragraph("↳ " + str(t["response_text"])))
-	_build_ticket_form(box, int(p.get("id", 0)))
+			tickets_box.add_child(_pos_paragraph("↳ " + str(t["response_text"])))
+	_build_ticket_form(tickets_box, int(p.get("id", 0)))
 
 ## Form "nuovo ticket": la richiesta utente→team, l'unica scrittura
 ## remota autorizzata (gate 1). L'esito arriva su ticket_created; la
@@ -3100,7 +3596,7 @@ func _build_pos_detail() -> void:
 func _build_ticket_form(box: VBoxContainer, pid: int) -> void:
 	if not BackendBus.is_live():
 		box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_need_vps"),
-				12, Palette.DIM))
+				12, Palette.MUTED))
 		return
 	if not BackendBus.ticket_created.is_connected(_on_ticket_created):
 		BackendBus.ticket_created.connect(_on_ticket_created)
@@ -3186,12 +3682,19 @@ var _vps_key: LineEdit
 var _vps_state_lbl: Label
 var _vps_fingerprint_lbl: Label
 var _vps_agents_box: VBoxContainer
+## I pulsanti del pannello VPS che passano dalla corsia unica di SetupService
+## (genera chiave, verifica SSH, prepara, migra, collega/scollega): durante
+## un'azione si spengono e si riaccendono SUL POSTO — il pannello ha campi di
+## testo e una ricostruzione butterebbe via l'IP appena scritto.
+var _vps_action_buttons: Array = []
+var _vps_busy_hint: Label
 
 ## Il form del PRIMO PASSO backend: IP + chiave SSH → VpsBackend reale.
 ## Stato e roster arrivano live dal BackendBus (il collegamento resta
 ## vivo anche a pannello chiuso: vive nell'autoload, non qui).
 func _build_vps() -> void:
 	_listen_setup()
+	_vps_action_buttons.clear()
 	_content.add_child(TerminalTheme.label(UIStrings.t("vps.intro"), 15, Palette.MUTED))
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("vps.steps"),
@@ -3217,7 +3720,7 @@ func _build_vps() -> void:
 		_vps_key.text = SetupService.default_vps_key_path()
 		_refresh_vps_fingerprint()
 		SetupService.generate_vps_key())
-	_vps_key.get_parent().add_child(generate)
+	_vps_key.get_parent().add_child(_vps_gate(generate))
 	var copy_public := Button.new()
 	copy_public.text = UIStrings.t("vps.key_copy")
 	copy_public.pressed.connect(func() -> void:
@@ -3250,6 +3753,11 @@ func _build_vps() -> void:
 			UIStrings.t("vps.fingerprint_note"),
 			12, Palette.DIM))
 
+	# La fila segue il flusso e il peso delle azioni: COLLEGA è la primaria (il
+	# caso comune: la VPS esiste già), verifica e preparazione sono il percorso
+	# di chi parte da zero, e SCOLLEGA — l'unica che smonta qualcosa — sta
+	# isolata a destra, non spalla a spalla con la primaria (stesso schema del
+	# footer del pannello Docker).
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 16)
 	_content.add_child(actions)
@@ -3258,37 +3766,45 @@ func _build_vps() -> void:
 	connect_btn.add_theme_font_size_override("font_size", 16)
 	connect_btn.add_theme_color_override("font_color", Palette.GREEN)
 	connect_btn.pressed.connect(_connect_vps)
-	actions.add_child(connect_btn)
-	var disconnect_btn := Button.new()
-	disconnect_btn.text = UIStrings.t("vps.disconnect")
-	disconnect_btn.add_theme_font_size_override("font_size", 16)
-	disconnect_btn.add_theme_color_override("font_color", Palette.MUTED)
-	# Una disconnessione richiesta dall'utente deve sopravvivere al riavvio;
-	# altrimenti vps.cfg ricollegherebbe silenziosamente la stessa VPS al boot.
-	disconnect_btn.pressed.connect(func() -> void: BackendBus.switch_to_local_backend())
-	actions.add_child(disconnect_btn)
+	actions.add_child(_vps_gate(connect_btn))
 	var test_ssh := Button.new()
 	test_ssh.text = UIStrings.t("vps.verify_ssh")
 	test_ssh.add_theme_color_override("font_color", Palette.MINT)
 	test_ssh.pressed.connect(func() -> void:
 		SetupService.test_vps_connection(_vps_ip.text, _vps_key.text,
 				_vps_user.text))
-	actions.add_child(test_ssh)
+	actions.add_child(_vps_gate(test_ssh))
 	var install := Button.new()
 	install.text = UIStrings.t("vps.prepare")
 	install.add_theme_color_override("font_color", Palette.YELLOW)
 	install.pressed.connect(func() -> void:
 		SetupService.provision_vps(_vps_ip.text, _vps_key.text,
 				_vps_user.text))
-	actions.add_child(install)
+	actions.add_child(_vps_gate(install))
+	var actions_spacer := Control.new()
+	actions_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(actions_spacer)
+	var disconnect_btn := Button.new()
+	disconnect_btn.text = UIStrings.t("vps.disconnect")
+	disconnect_btn.add_theme_color_override("font_color", Palette.MUTED)
+	# Una disconnessione richiesta dall'utente deve sopravvivere al riavvio;
+	# altrimenti vps.cfg ricollegherebbe silenziosamente la stessa VPS al boot.
+	disconnect_btn.pressed.connect(func() -> void: BackendBus.switch_to_local_backend())
+	actions.add_child(_vps_gate(disconnect_btn))
 	var console_install := Button.new()
 	console_install.text = UIStrings.t("vps.advanced")
 	console_install.flat = true
 	console_install.pressed.connect(func() -> void:
 		SetupService.open_vps_install(_vps_ip.text, _vps_key.text,
 				_vps_user.text))
-	_content.add_child(console_install)
+	_content.add_child(_vps_gate(console_install))
 
+	# La ragione dei pulsanti spenti, aggiornata sul posto dagli stessi segnali
+	# che li spengono: il pannello non si ricostruisce (perderebbe i campi).
+	_vps_busy_hint = TerminalTheme.label("", 12, Palette.YELLOW)
+	_vps_busy_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(_vps_busy_hint)
+	_refresh_vps_busy()
 	_vps_state_lbl = TerminalTheme.label("", 16, Palette.MUTED, "medium")
 	_content.add_child(_vps_state_lbl)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
@@ -3312,14 +3828,13 @@ func _build_vps() -> void:
 	migrate.add_theme_color_override("font_color", Palette.YELLOW)
 	migrate.pressed.connect(func() -> void:
 		_confirm_vps_migration("vps" if source_mode.selected == 1 else "local"))
-	migration.add_child(migrate)
+	migration.add_child(_vps_gate(migrate))
 	var migrate_local := Button.new()
 	migrate_local.text = UIStrings.t("vps.migrate_to_local")
-	migrate_local.disabled = str(cfg.get("ip", "")) == "" \
-			or str(cfg.get("key_path", "")) == ""
 	migrate_local.add_theme_color_override("font_color", Palette.BLUE)
 	migrate_local.pressed.connect(_confirm_local_migration)
-	migration.add_child(migrate_local)
+	migration.add_child(_vps_gate(migrate_local,
+			str(cfg.get("ip", "")) == "" or str(cfg.get("key_path", "")) == ""))
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("vps.migration_note"),
 			12, Palette.DIM))
@@ -3362,6 +3877,35 @@ func _confirm_local_migration() -> void:
 	dialog.confirmed.connect(dialog.queue_free)
 	add_child(dialog)
 	dialog.popup_centered(Vector2i(700, 300))
+
+## Registra un pulsante del pannello VPS che deve spegnersi durante le azioni
+## a corsia unica. `base_disabled` è la ragione PROPRIA del pulsante (es.
+## nessuna VPS sorgente salvata) e sopravvive alla fine dell'azione.
+func _vps_gate(button: Button, base_disabled := false) -> Button:
+	button.set_meta("base_disabled", base_disabled)
+	button.disabled = base_disabled or SetupService.busy()
+	# Il tema terminale mantiene il colore pieno ANCHE da disabilitato (stessa
+	# trappola annotata sul pulsante del form feedback): senza questa riga un
+	# pulsante spento resta verde acceso e sembra solo rotto.
+	button.add_theme_color_override("font_disabled_color", Palette.MUTED)
+	_vps_action_buttons.append(button)
+	return button
+
+
+## Stato occupato applicato sul posto: pulsanti e riga-ragione, senza
+## ricostruire il pannello (i campi IP/chiave/utente vanno preservati).
+func _refresh_vps_busy() -> void:
+	var running := SetupService.busy()
+	for entry in _vps_action_buttons:
+		var button := entry as Button
+		if is_instance_valid(button):
+			button.disabled = bool(button.get_meta("base_disabled", false)) \
+					or running
+	if is_instance_valid(_vps_busy_hint):
+		_vps_busy_hint.text = (UIStrings.t("setup.busy_note")
+				% _busy_action_label()) if running else ""
+		_vps_busy_hint.visible = running
+
 
 func _vps_input(label_text: String, value: String, placeholder: String) -> LineEdit:
 	var row := HBoxContainer.new()
@@ -3494,10 +4038,22 @@ func _build_team() -> void:
 	_content.add_child(controls)
 	var running := not BackendBus.agents.is_empty() or bool(
 			SetupService.status.get("team_running", false))
+	var team_busy := SetupService.busy() and SetupService.current_action == "team"
 	var primary := Button.new()
-	primary.text = UIStrings.t("team.stop") if running else UIStrings.t("team.start")
-	primary.disabled = not bool(SetupService.status.get("ready", false)) and not running
+	# Mentre il comando gira l'etichetta dice COSA sta succedendo (avvio o
+	# arresto, dedotto dallo stato di partenza) e il pulsante non è premibile.
+	if team_busy:
+		primary.text = UIStrings.t("setup.team_stopping") if running \
+				else UIStrings.t("setup.team_starting")
+	else:
+		primary.text = UIStrings.t("team.stop") if running else UIStrings.t("team.start")
+	primary.disabled = (not bool(SetupService.status.get("ready", false)) \
+			and not running) or SetupService.busy()
 	primary.add_theme_color_override("font_color", Palette.RED if running else Palette.GREEN)
+	# Spento perché lavora lui → giallo; spento per un'altra ragione → muto
+	# (il verde-da-disabilitato del tema qui sarebbe una bugia).
+	primary.add_theme_color_override("font_disabled_color",
+			Palette.YELLOW if team_busy else Palette.MUTED)
 	primary.pressed.connect(SetupService.stop_team if running else SetupService.start_team)
 	controls.add_child(primary)
 	var setup := Button.new()
@@ -3507,6 +4063,12 @@ func _build_team() -> void:
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_setup_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	controls.add_child(_setup_message)
+	_restore_action_note()
+	# Pulsante spento perché gira un'ALTRA azione di setup (attivazione
+	# container, migrazione…): la ragione va detta. Quando l'azione è il team,
+	# parla già l'etichetta AVVIO/ARRESTO IN CORSO.
+	if SetupService.busy() and SetupService.current_action != "team":
+		_busy_hint(_content)
 	_content.add_child(HSeparator.new())
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]
@@ -3534,7 +4096,13 @@ func _build_team() -> void:
 		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(tag)
 	_content.add_child(HSeparator.new())
-	_content.add_child(TerminalTheme.label(UIStrings.t("team.core"), 15, Palette.MUTED))
+	# i tre nomi vengono da role.* invece che dalla riga tradotta: erano
+	# rimasti in italiano in tutte e 7 le lingue, e composti così non
+	# possono più divergere da quello che si legge in scena
+	_content.add_child(TerminalTheme.label(UIStrings.t("team.core") % [
+			CharacterDefs.role_name("coordinatore"),
+			CharacterDefs.role_name("mentor"),
+			CharacterDefs.role_name("assistente")], 15, Palette.MUTED))
 
 ## Tutti gli agenti in scena con stato del ruolo. Con la VPS collegata:
 ## il roster VERO (sessioni tmux attive), aggiornato a ogni poll.
@@ -3550,7 +4118,7 @@ func _build_agents() -> void:
 			row.add_theme_constant_override("separation", 12)
 			_content.add_child(row)
 			var slug := str(a.get("slug", "?"))
-			row.add_child(TerminalTheme.label(ROLE_EMOJI.get(slug, "●"), 14, Palette.GREEN))
+			row.add_child(_role_icon(slug, 16.0))
 			# il nome apre la pagina dell'agente (come /team/<slug> sul web)
 			var name_btn := Button.new()
 			name_btn.flat = true
@@ -3579,9 +4147,12 @@ func _build_agents() -> void:
 		var color: Color = DepartmentDefs.DEPARTMENTS[dept_id]["color"] \
 				if dept_id != "" else Palette.MUTED
 		row.add_child(TerminalTheme.label("●", 13, color))
+		# "regular", non "": TerminalTheme.label indicizza il dizionario dei
+		# font col peso, e la stringa vuota faceva abortire la costruzione
+		# dell'intera lista mock (visibile solo senza team collegato).
 		var name_lbl := TerminalTheme.label(def["name"], 16,
 				Palette.BRIGHT if def.get("lead", false) else Palette.BASE,
-				"medium" if def.get("lead", false) else "")
+				"medium" if def.get("lead", false) else "regular")
 		name_lbl.custom_minimum_size = Vector2(220, 0)
 		row.add_child(name_lbl)
 		var status: Dictionary = TeamData.agent_status().get(def["slug"], {})
@@ -3591,12 +4162,24 @@ func _build_agents() -> void:
 		st.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(st)
 
-## Emoji-ruolo per l'attribuzione per-istanza (scout-2, scorer-1…).
-const ROLE_EMOJI := {
-	"scout": "🔍", "analista": "🧠", "scorer": "🎯", "scrittore": "✍",
-	"critico": "🧐", "capitano": "🧭", "coordinatore": "🧭", "sentinella": "🛡",
-	"assistente": "📋", "mentor": "🎓", "dottore": "🩺", "mantenitore": "🔧",
+## Icona vettoriale per ruolo (id di SidebarIcon): niente emoji nella UI di
+## prodotto — i pittogrammi dipendono dai font di sistema e su Linux restavano
+## rettangoli vuoti (stessa ragione per cui la sidebar disegna le sue icone).
+const ROLE_ICON := {
+	"scout": "search", "analista": "chip", "scorer": "target",
+	"scrittore": "pen", "critico": "scale", "capitano": "compass",
+	"coordinatore": "compass", "sentinella": "shield", "assistente": "doc",
+	"mentor": "grad", "dottore": "medcross", "mantenitore": "gear",
 }
+
+
+## L'icona di ruolo pronta da mettere in riga accanto al nome. Per un ruolo
+## sconosciuto SidebarIcon disegna il cerchietto neutro: mai un glifo dubbio.
+static func _role_icon(slug: String, side: float) -> SidebarIcon:
+	var icon := SidebarIcon.new(ROLE_ICON.get(slug, ""), Palette.GREEN)
+	icon.custom_minimum_size = Vector2(side, side)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return icon
 
 ## Feed attività: il registro transizioni VERO quando la VPS è collegata
 ## (chi ha fatto cosa, con l'istanza), altrimenti il mock.
@@ -3622,9 +4205,7 @@ func _build_activity() -> void:
 			when.custom_minimum_size = Vector2(140, 0)
 			row.add_child(when)
 			var by := str(t.get("by_agent", "?") if t.get("by_agent") else "?")
-			var base := by.split("-")[0]
-			var who := TerminalTheme.label("%s %s"
-					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(by)],
+			var who := TerminalTheme.label(AgentNames.display_name(by),
 					13, Palette.MINT, "medium")
 			who.custom_minimum_size = Vector2(210, 0)
 			row.add_child(who)
@@ -3858,7 +4439,7 @@ func _build_notifs() -> void:
 				var status := str(t.get("status", ""))
 				var req := str(t.get("request_text", "")).left(70)
 				if status == "resolved":
-					items.append({"ts": str(t.get("created_at", "")), "icon": "✔",
+					items.append({"ts": str(t.get("created_at", "")), "icon": "✓",
 							"color": Palette.MINT,
 							"text": UIStrings.t("notifs.ticket_resolved") % req})
 				elif status == "assigned":
@@ -3934,9 +4515,8 @@ func _build_chat() -> void:
 					str(msg.get("ts", "")).replace("T", " ").left(16), 13, Palette.DIM)
 			when.custom_minimum_size = Vector2(130, 0)
 			row.add_child(when)
-			var base := str(msg.get("from", "?")).split("-")[0]
 			# Mittente e destinatario nella stessa cella: solo cognomi.
-			var who := TerminalTheme.label("%s %s → %s" % [ROLE_EMOJI.get(base, "•"),
+			var who := TerminalTheme.label("%s → %s" % [
 					AgentNames.short_name(str(msg.get("from", "?"))),
 					AgentNames.short_name(str(msg.get("to", "?")))],
 					13, Palette.MINT, "medium")
@@ -3999,11 +4579,8 @@ func _build_stats() -> void:
 		_content.add_child(usage_link)
 		return
 	var s: Dictionary = TeamData.summary()
-	var streak: Dictionary = TeamData.streak()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
 	_kpi_row(UIStrings.t("kpi.avg_score"), str(s.get("avg_score", 0)), Palette.MINT)
-	_kpi_row(UIStrings.t("kpi.streak"), UIStrings.t("kpi.streak_value")
-			% [streak.get("days", 0), streak.get("freezes", 0)], Palette.ORANGE)
 	_bar_row(UIStrings.t("kpi.budget_used"), s.get("budget_used_pct", 0.0), Palette.GREEN)
 	_content.add_child(HSeparator.new())
 	# candidature per stadio
@@ -4049,9 +4626,7 @@ func _build_usage() -> void:
 			var row := HBoxContainer.new()
 			row.add_theme_constant_override("separation", 12)
 			_content.add_child(row)
-			var base := str(agent).split("-")[0]
-			var lbl := TerminalTheme.label("%s %s"
-					% [ROLE_EMOJI.get(base, "•"), AgentNames.display_name(str(agent))],
+			var lbl := TerminalTheme.label(AgentNames.display_name(str(agent)),
 					14, Palette.BASE)
 			lbl.custom_minimum_size = Vector2(270, 0)
 			row.add_child(lbl)

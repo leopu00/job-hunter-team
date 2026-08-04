@@ -49,8 +49,6 @@ WORKER_BOOT_WAIT_S = 18        # ~15s CLI boot + margine per trust dialog
 USAGE_RENDER_WAIT_S = 4        # attesa dopo Enter perché la modal renderizzi
 CAPTURE_LINES = 300            # righe recenti del pane da catturare
 
-SAFE_CEILING = 95              # soglia di allerta usata dal bridge
-
 
 # ── Provider detection ──────────────────────────────────────────────
 
@@ -255,14 +253,26 @@ def parse_claude_usage(text):
 
 
 def hours_until_reset(reset_hhmm_utc):
+    """Ore mancanti al reset, o None se l'orario non e' interpretabile.
+
+    Il degrado a None deve coprire anche i valori *sintatticamente* validi
+    ma fuori range ("25:00", "12:60"): e' `replace()` a rifiutarli, non lo
+    split, quindi sta dentro il try. Serve davvero — il parser Claude non
+    supera le 23, ma i rami kimi/openai passano qui `sample.get("reset_at")`
+    del bridge senza validarlo, e main() cattura solo KeyboardInterrupt:
+    una ValueError qui abbatteva l'intero comando, perdendo anche l'usage
+    che era gia' stato letto correttamente.
+    """
     if not reset_hhmm_utc:
         return None
+    now = datetime.now(timezone.utc)
     try:
         h, m = map(int, reset_hhmm_utc.split(":"))
-    except ValueError:
+        target = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    except (ValueError, TypeError, AttributeError):
+        # ValueError: split/int falliti, o ora/minuto fuori range.
+        # TypeError/AttributeError: reset_at non e' una stringa.
         return None
-    now = datetime.now(timezone.utc)
-    target = now.replace(hour=h, minute=m, second=0, microsecond=0)
     if target <= now:
         target += timedelta(days=1)
     return (target - now).total_seconds() / 3600
@@ -379,14 +389,27 @@ def check_via_bridge_fetcher(bridge, fn_name, source_label):
 # ── Verdict comune ──────────────────────────────────────────────────
 
 def compute_verdict(usage):
+    """Scala a tre livelli (+ ⚪ quando il dato manca o non e' numerico).
+
+    I confini sono 75 (🟠) e 88 (🔴), crescenti in severita': nessun input
+    puo' produrre un verdict piu' blando di uno emesso a usage inferiore.
+
+    Non esiste un livello intermedio 🟡. Ce n'era il ramo, ancorato a una
+    costante SAFE_CEILING=95 dichiarata «soglia di allerta usata dal
+    bridge», ma era irraggiungibile per costruzione: ogni usage >= 95
+    cadeva gia' in 🔴 (>= 88). Non e' mai stato emesso da quando il file
+    esiste, quindi rimuoverlo non cambia alcun output. La costante e'
+    stata tolta con esso: il bridge non l'ha mai letta (importa da qui
+    solo il parser TUI e ha una sua VITALS_ALERT_PCT), e lasciarla in
+    piedi faceva credere a chi legge che il sistema emetta un livello
+    che invece non esiste.
+    """
     if not isinstance(usage, (int, float)):
         return "⚪ sconosciuto"
     if usage >= 88:
         return "🔴 CRITICO: vicino al rate-limit, freeza subito tutti gli spawn"
     if usage >= 75:
         return "🟠 ATTENZIONE: riduci al minimo, niente spawn extra"
-    if usage >= SAFE_CEILING:
-        return "🟡 SOGLIA: al ceiling del budget, monitora"
     return "🟢 OK: margine disponibile"
 
 

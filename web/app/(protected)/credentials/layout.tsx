@@ -12,7 +12,7 @@ const TITLES: Record<string, string> = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: TITLES[getServerLocale()] ?? TITLES.en };
+  return { title: TITLES[await getServerLocale()] ?? TITLES.en };
 }
 
 export default function CredentialsLayout({

@@ -3,7 +3,12 @@
 # Simula gli effetti di install.sh (no curl: copia da repo locale).
 set -euo pipefail
 
-REPO=/mnt/c/Users/owner/repos/job-hunter-team/dev-1
+# Radice del repo da cui copiare i file. Ricavata dal repo che contiene
+# questo script, così il test gira da qualsiasi clone o worktree e da
+# qualsiasi cwd. Override esplicito: REPO=/path/al/repo ./test-fullflow-wsl.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="${REPO:-$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)}"
+
 TEST_RUNTIME=$HOME/.jht/runtime/test-flow
 TEST_BIN=$HOME/.local/bin/jht-test
 TEST_CONTAINER=jht-flow-test

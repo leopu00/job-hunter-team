@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +13,8 @@ export const dynamic = "force-dynamic";
 // /api/profile/files/request/:id finché ottiene la signed download URL.
 // Vedi docs/internal/file-bridge-on-demand-2026-06-07.md
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const supabase = await createClient();
   const {
     data: { user },
@@ -22,7 +27,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+    return invalidJsonBody();
   }
   const name = String(body.name || "").trim();
   if (!name) {
@@ -38,7 +43,10 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, {
+      status: 500,
+      scope: "profile/files/request",
+    });
   }
   return NextResponse.json({ requestId: data.id });
 }

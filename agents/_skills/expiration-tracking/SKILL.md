@@ -1,16 +1,12 @@
 ---
 name: expiration-tracking
-description: Estrae deadline dal JD (helper deadline_extract) e produce alert utente quando una candidatura READY sta per scadere (helper expiration_alerts, idempotente). F-4 task #50. Scout/Analista popolano positions.deadline, Mentor/Capitano notificano l'utente quando deadline-now ≤ 3 giorni.
-allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *), Bash(jht-telegram-send *)
+description: Extract deadlines from job descriptions and report factual deadline information only after an explicit user request. Never notify or prompt the user automatically.
+allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *)
 ---
 
-# expiration-tracking — non perdere top PASS per scadenza
+# expiration-tracking — deadline data on request
 
-Bug latente F-4: utente accumula 50 CV `ready`, dimentica di applicare
-per 2 giorni, top opportunità (es. Sisal PASS 7.5) scade in silenzio.
-La pipeline è user-curated apply (bug #9 declassato) → senza alert
-proattivo, lo zelo del team ad addestrare top CV viene vanificato dal
-silenzio dell'utente.
+Deadline data helps the user evaluate opportunities. Preserve it accurately, but do not turn it into a reminder, a prompt to apply, or a measure of progress.
 
 ## A. Scout/Analista: estrazione deadline dal JD
 
@@ -36,28 +32,13 @@ Il parser è **conservativo** (solo ISO, dd/mm/yyyy EU, Month dd[, yyyy]
 EN/IT, "expires in N days"). Se non trova un match ad alta confidenza
 restituisce stringa vuota → meglio NULL nel DB che data inventata.
 
-## C. Mentor/Capitano: alert utente proattivo
+## C. Deadline information, only on request
 
-Trigger consigliato: dopo ogni `[BRIDGE TICK]` (Capitano) o end-of-pass
-del Mentor. Idempotenza fa sì che chiamate frequenti producano alert
-solo per NUOVE coppie (app_id, deadline_iso).
+Use this section only while answering the user's explicit question about the deadline of a position or application. Never schedule it, send it proactively, or forward its output as a notification.
 
-```bash
-alerts=$(python3 /app/shared/skills/expiration_alerts.py)
-if [ -n "$alerts" ]; then
-  # Manda all'utente via Telegram
-  echo "$alerts" | jht-telegram-send --from capitano --keyboard capitano
-fi
-```
+Run: python3 /app/shared/skills/expiration_alerts.py --user-requested
 
-Output 1 riga per application a rischio:
-```
-⏳ [ALERT scadenza] Sisal Data Analyst (PASS 7.5) — scade 2026-05-18 (DOMANI). Spedisci candidatura o perdi l'opportunità.
-```
-
-Lo state idempotency è in `$JHT_HOME/state/expiration_alerts_sent.json`
-(set di `(app_id, deadline_iso)` già notificati). Per re-spedire un
-alert già mandato: `expiration_alerts.py --reset` (dev-only).
+The output is factual deadline information for positions already in the user's records, for example: [DEADLINE] Sisal Data Analyst (PASS 7.5) — expires 2026-05-18 (tomorrow).
 
 ## B. Re-check periodica positions vecchie (Analista) — DA FARE
 
@@ -69,18 +50,11 @@ dei deadline catturati dal JD copre la maggior parte dei casi.
 
 ## Anti-patterns
 
-- ❌ Parsare deadline a mano con regex inline — usa il helper, ha
-  fallback EN/IT + sanity check su date passate.
-- ❌ Inventare deadline quando il JD non la specifica esplicitamente —
-  meglio `NULL` che `+30d arbitrario`.
-- ❌ Spammare l'utente con lo stesso alert ogni 6h — l'idempotency
-  state esiste apposta.
-- ❌ Mandare l'alert da bot diverso dal Capitano (es. Assistente
-  generico) — perde contesto operativo; il Capitano lo accompagna
-  alla pipeline.
+- Do not run the deadline report without an explicit user request.
+- Do not turn deadline information into a prompt, reminder, or pressure to apply.
 
 ## See also
 
 - `shared/skills/deadline_extract.py` — parser
-- `shared/skills/expiration_alerts.py` — emitter + idempotency state
+- shared/skills/expiration_alerts.py — on-request deadline reporter
 - `agents/_skills/db-update/SKILL.md` § Positions — `--deadline` flag

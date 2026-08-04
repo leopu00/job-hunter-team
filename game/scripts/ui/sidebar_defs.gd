@@ -5,12 +5,14 @@ class_name SidebarDefs
 ## Le sezioni sono ventotto: elencarle tutte in colonna faceva una sidebar più
 ## alta dello schermo (a 1280×720 "Grafica" era l'ultima riga visibile e le
 ## quattro voci successive esistevano solo per chi scopriva di poter scrollare).
-## Da qui in poi la colonna mostra tredici righe e le altre restano raggiungibili
+## Da qui in poi la colonna mostra quattordici righe e le altre restano raggiungibili
 ## dentro la finestra che le raccoglie:
 ##   • le cinque viste di monitoraggio (MONITOR_SECTIONS) sono schede di una
 ##     stessa finestra "Monitoraggio";
-##   • le dodici pagine di configurazione (SETTINGS_GROUPS) stanno dietro la
+##   • le undici pagine di configurazione (SETTINGS_GROUPS) stanno dietro la
 ##     voce "Impostazioni", che le presenta a riquadri.
+## Il Profilo resta una riga diretta: è parte del percorso critico di avvio e
+## correzione dati, non un'impostazione rara da dover ricordare dove cercare.
 ## Gli id delle sezioni NON cambiano: i deep-link (`navigate.emit`, JHT_SECTION,
 ## l'onboarding guidato) continuano a puntare dove puntavano.
 
@@ -56,6 +58,7 @@ const GROUPS := [
 		"title": "Sistema",
 		"key": "group_system",
 		"items": [
+			{"id": "profile", "icon": "doc", "label": "Profilo"},
 			{"id": "settings", "icon": "gear", "label": "Impostazioni"},
 			{"id": "feedback", "icon": "bug", "label": "Segnala un problema"},
 			# Uscire dal gioco deve essere possibile COL MOUSE. In fullscreen su
@@ -88,7 +91,6 @@ const SETTINGS_GROUPS := [
 			{"id": "vps", "icon": "server"},
 			{"id": "docker", "icon": "container"},
 			{"id": "provider", "icon": "chip"},
-			{"id": "profile", "icon": "doc"},
 			{"id": "hours", "icon": "clock"},
 			{"id": "advanced", "icon": "gear"},
 		],

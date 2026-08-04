@@ -15,7 +15,7 @@ set -euo pipefail
 # /usr/bin:/bin:...) — manca /jht_home/.npm-global/bin dove vivono
 # codex/claude/kimi, e lo script esce con "codex: command not found".
 # Esportiamo esplicitamente sempre i path dei CLI qui.
-export PATH="/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+export PATH="/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 
 DEV_TEAM_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DEV_TEAM_DIR/config.sh"
@@ -23,6 +23,10 @@ source "$DEV_TEAM_DIR/tui-helpers.sh"
 # jht_kill_by_marker / jht_daemon_log — singleton dei daemon detached e log
 # sotto $JHT_HOME/logs con rotazione (vedi daemon-lib.sh).
 source "$DEV_TEAM_DIR/daemon-lib.sh"
+# jht_spawn_user_locale — la cascata del locale utente, condivisa con
+# spawn-doctor.sh/spawn-maintainer.sh: viveva qui e loro non la vedevano,
+# quindi Dottore e Mantenitore restavano in inglese su ogni installazione.
+source "$DEV_TEAM_DIR/spawn-lib.sh"
 
 if [ -z "${1:-}" ]; then
   echo "Uso: $0 <ruolo> [istanza] [mode]"
@@ -88,7 +92,14 @@ if [ "$ROLE" = "worker" ]; then
   _ensure_claude_onboarding "$JHT_HOME"
   tmux new-session -d -x 220 -y 50 -s "$WORKER_SESSION" -c "$JHT_HOME"
   tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
-  tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH'" C-m
+  # ⚠️ Le doppie esterne sono obbligatorie: con "export PATH='...:\$PATH'" il
+  # \$ resta letterale e gli apici SINGOLI impediscono l'espansione, quindi al
+  # pane arriva una directory chiamata "$PATH" e /usr/bin, /bin & co. spariscono
+  # → `claude` non si trova → il pane resta bash per sempre. Era così fino al
+  # 2026-07-30: è l'ultimo ramo rimasto col difetto documentato a riga 167.
+  # I percorsi /opt/jht-deps/* non sono opzionali: da quando le dipendenze
+  # vivono nel volume, `providers update` installa lì i CLI.
+  tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:$PATH'" C-m
   tmux send-keys -t "$WORKER_SESSION" "export IS_SANDBOX=1" C-m
   # marcatore per agent_vitals.py: il worker era l'unico senza flag
   tmux send-keys -t "$WORKER_SESSION" "export JHT_AGENT_NAME='sentinella-worker'" C-m
@@ -117,6 +128,26 @@ if [ "$ROLE" = "worker" ]; then
     done
     tmux send-keys -t '$WORKER_SESSION' Enter
   " >/dev/null 2>&1 < /dev/null &
+  # Il REPL è partito davvero? Finora questa riga stampava "✓ avviato" a
+  # prescindere: col PATH rotto il pane restava un bash nudo, il singleton
+  # sopra ("già attivo") lo rendeva DEFINITIVO — la sessione esiste, quindi non
+  # verrà mai ricreata — e i consumatori (check_usage.py, sentinel-bridge)
+  # controllano solo `tmux has-session`. Risultato: il fallback /usage esisteva
+  # solo sulla carta, e mancava proprio quando serve, cioè quando l'HTTP di
+  # Anthropic risponde 429. Un guscio va segnalato e rimosso, non ereditato.
+  _w_up=0
+  for _i in $(seq 1 12); do
+    sleep 1
+    case "$(tmux display-message -p -t "$WORKER_SESSION" '#{pane_current_command}' 2>/dev/null || echo "")" in
+      ""|bash|sh|zsh|dash|-bash|-sh|-zsh) : ;;
+      *) _w_up=1; break ;;
+    esac
+  done
+  if [ "$_w_up" -ne 1 ]; then
+    echo "✗ $WORKER_SESSION: REPL non partito (pane resta una shell) — sessione rimossa" >&2
+    tmux kill-session -t "$WORKER_SESSION" 2>/dev/null || true
+    exit 1
+  fi
   echo "✓ $WORKER_SESSION avviato (fallback /usage TUI per bridge)"
   exit 0
 fi
@@ -408,6 +439,27 @@ case "$ROLE" in
     ;;
 esac
 
+# Capitano, watchdog e operatore possono chiedere lo stesso spawn quasi nello
+# stesso istante. Prima il controllo `tmux has-session` arrivava DOPO `rm -rf`
+# delle cartelle skill: due start concorrenti cancellavano la destinazione
+# mentre l'altro processo la copiava (`cp: ... No such file or directory`).
+# Serializziamo per sessione e riconosciamo l'idempotenza prima di toccare la
+# workdir. `flock` è disponibile nel container Linux; fuori dal container il
+# fallback conserva il comportamento storico.
+if command -v flock >/dev/null 2>&1; then
+  mkdir -p "${JHT_HOME:-/jht_home}/locks"
+  exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
+  if ! flock -w 30 9; then
+    echo "Errore: timeout attendendo lo spawn concorrente di '$SESSION'." >&2
+    exit 1
+  fi
+fi
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "Sessione '$SESSION' già attiva."
+  echo "Connettiti con: tmux attach -t \"$SESSION\""
+  exit 0
+fi
+
 # Determina effort in base al mode
 if [ "$MODE" = "fast" ]; then
   effort="low"
@@ -551,6 +603,31 @@ case "$PROVIDER" in
     ;;
 esac
 
+# Override sperimentale e ROLE-SCOPED della missione M5. Non aggiunge un
+# quarto provider globale: active_provider continua a governare tutti gli
+# altri agenti. Il runner rilegge e valida la config (incluso host locale)
+# prima di toccare la coda dello Scorer.
+if [ "$(printf '%s' "$ROLE" | tr 'A-Z' 'a-z')" = "scorer" ] && \
+   [ -f "$JHT_CONFIG_FILE" ] && command -v python3 >/dev/null 2>&1 && \
+   python3 - "$JHT_CONFIG_FILE" >/dev/null 2>&1 <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        cfg = json.load(handle)
+    raise SystemExit(0 if cfg.get("team", {}).get("local_scorer", {}).get("enabled") is True else 1)
+except (OSError, TypeError, ValueError):
+    raise SystemExit(1)
+PYEOF
+then
+  LOCAL_SCORER_RUNNER="/app/shared/skills/local_scorer.py"
+  [ -f "$LOCAL_SCORER_RUNNER" ] || LOCAL_SCORER_RUNNER="$DEV_TEAM_DIR/../shared/skills/local_scorer.py"
+  CLI_BIN="python3"
+  CLI_ARGS="$LOCAL_SCORER_RUNNER serve"
+  CLI_ENV_PREFIX=""
+  PROVIDER="local-scorer"
+  AUTH_METHOD="local-endpoint"
+fi
+
 # Verifica prerequisiti della CLI scelta
 if ! command -v "$CLI_BIN" &>/dev/null; then
   echo "Errore: comando '$CLI_BIN' non trovato (provider configurato: ${PROVIDER:-claude})."
@@ -670,31 +747,17 @@ IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 
 # Risoluzione locale del template d'identità.
 # Convenzione: agents/<role>/<role>.<locale>.md → fallback agents/<role>/<role>.md.
-# Cascade lookup (in ordine di priorità):
-#   1. $JHT_LANG (env var) — usata per test rapidi e dagli altri script i18n
-#      (shared/i18n.sh, shared/i18n.py, cli/wizard/i18n.js)
-#   2. $JHT_HOME/i18n-prefs.json::locale — popolato dal desktop wizard
-#   3. host.env::JHT_LANG — persisted dal host-setup.sh preflight
-#   4. default 'en' — la lingua master dei template. (Il `DEFAULT_LOCALE` di
-#      shared/i18n/types.ts, che questa riga citava, è sparito il 2026-07-25
-#      con lo scaffolding TS irraggiungibile: il default vive qui sotto.)
+# La cascata ($JHT_LANG → i18n-prefs.json → host.env → 'en') vive in
+# .launcher/spawn-lib.sh::jht_spawn_user_locale, sourceata in testa a questo
+# file: era codice locale a start-agent.sh, e i due agenti che NON passano da
+# qui (Dottore e Mantenitore, spawnati da spawn-doctor.sh/spawn-maintainer.sh)
+# se ne restavano fuori. Il default 'en' è la lingua master dei template — il
+# `DEFAULT_LOCALE` di shared/i18n/types.ts, che questa riga citava, è sparito
+# il 2026-07-25 con lo scaffolding TS irraggiungibile.
 # Il fallback al baseline (`<role>.md`, sempre EN dal 2026-05-18) è
 # silenzioso perché 'en' è il master language.
 # Vedi docs/internal/experiments/2026-05-06-agent-prompts-i18n.md.
-USER_LOCALE=""
-if [ -n "${JHT_LANG:-}" ]; then
-  USER_LOCALE="$JHT_LANG"
-fi
-PREFS_FILE="${JHT_HOME:-$HOME/.jht}/i18n-prefs.json"
-if [ -z "$USER_LOCALE" ] && [ -f "$PREFS_FILE" ] && command -v jq >/dev/null 2>&1; then
-  USER_LOCALE="$(jq -r '.locale // "en"' "$PREFS_FILE" 2>/dev/null || echo en)"
-  [ "$USER_LOCALE" = "null" ] && USER_LOCALE=""
-fi
-HOST_ENV_FILE="${JHT_HOME:-$HOME/.jht}/host.env"
-if [ -z "$USER_LOCALE" ] && [ -f "$HOST_ENV_FILE" ]; then
-  USER_LOCALE="$(grep -E '^JHT_LANG=' "$HOST_ENV_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"' | head -1)"
-fi
-[ -z "$USER_LOCALE" ] && USER_LOCALE="en"
+USER_LOCALE="$(jht_spawn_user_locale)"
 
 # #7 — welcome i18n: invece di hardcodare il body del welcome in EN nel
 # _welcome_kickoff, pescalo dal catalogo locali (shared/locales/<lang>.json
@@ -826,13 +889,6 @@ fi
 echo "  → $_skills_count skill(s) distribuite in $CLAUDE_SKILLS_DIR + $AGENTS_SKILLS_DIR"
 unset _line _name _src _skill _skills_count
 
-# ── Avvia agente ─────────────────────────────────────────────────────────────
-if tmux has-session -t "$SESSION" 2>/dev/null; then
-  echo "Sessione '$SESSION' già attiva."
-  echo "Connettiti con: tmux attach -t \"$SESSION\""
-  exit 0
-fi
-
 # ── Warmup ~/.claude.json se manca ──────────────────────────────────────────
 # Bug osservato 2026-05-12: Claude Code 2.1.139 considera "loggato" solo se
 # ESISTONO ENTRAMBI $JHT_HOME/.claude/.credentials.json E $JHT_HOME/.claude.json.
@@ -926,9 +982,11 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
   tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_NAME='$AGENT_NAME'" Enter
   tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
-  # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
-  sleep 8
-  tmux send-keys -t "$SESSION" Enter
+  if [ "$CLI_BIN" != "python3" ]; then
+    # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
+    sleep 8
+    tmux send-keys -t "$SESSION" Enter
+  fi
 else
   # -x/-y: dimensioni pane senza client attaccato. Di default tmux usa
   # 80x24 quando la sessione è detached, e capture-pane restituisce output
@@ -956,7 +1014,8 @@ else
   # Loop: 60 iterazioni × 2s = 120s totali. Il dialog appare 5-30s dopo il
   # CLI start; 120s copre anche partenze lente (rete, immagine grossa).
   # Exit immediato appena uno dei pattern matcha → no overhead a regime.
-  setsid sh -c '
+  if [ "$CLI_BIN" != "python3" ]; then
+    setsid sh -c '
     _sess="'"$SESSION"'"
     _i=0
     _login_handled=0
@@ -986,7 +1045,8 @@ else
       _i=$((_i + 1))
     done
     tmux send-keys -t "$_sess" Enter
-  ' >/dev/null 2>&1 < /dev/null &
+    ' >/dev/null 2>&1 < /dev/null &
+  fi
 fi
 
 # ── Sfasamento iniziale del worker ──────────────────────────────────────────
@@ -1179,4 +1239,3 @@ if [ "$ROLE" = "sentinella" ]; then
   _msg="[@utente -> @sentinella] [MSG] Avvio. Aspetta il primo [BRIDGE TICK]."
   _kickoff "$SESSION" "$_msg"
 fi
-

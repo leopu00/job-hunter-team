@@ -13,7 +13,6 @@ import {
   IconChat,
   IconCheckCircle,
   IconChevronLeft,
-  IconChevronRight,
   IconFilter,
   IconMic,
   IconPin,
@@ -76,6 +75,8 @@ import {
   type Verdict,
   type VerdictSignal,
 } from "@/lib/position-verdict";
+import { T } from "./SwipeDeck.i18n";
+import { Chip, DualRange, FilterSection } from "./SwipeDeckParts";
 export type { Verdict };
 
 // Mappatura giudizio → payload feedback (mig 028). 'no' aggiunge anche
@@ -124,424 +125,6 @@ const SPEECH_LANG: Record<Locale, string> = {
   de: "de-DE",
   fr: "fr-FR",
   pt: "pt-PT",
-};
-
-const T: Record<
-  Locale,
-  {
-    title: string;
-    verdicts: Record<Verdict, string>;
-    btnPrev: string;
-    commentPh: string;
-    commentClose: string;
-    commentTitle: string;
-    commentDone: string;
-    voiceStart: string;
-    voiceStop: string;
-    voiceListening: string;
-    voiceError: string;
-    voiceDenied: string;
-    modePending: string;
-    modeReviewed: string;
-    reviewedEmpty: string;
-    emptyTitle: string;
-    emptySubtitle: string;
-    allPositions: string;
-    details: string;
-    remote: Record<string, string>;
-    saveError: string;
-    hintKeys: string;
-    today: string;
-    yesterday: string;
-    daysAgo: string; // template con {n}
-    filters: string;
-    fScore: string;
-    fSalary: string;
-    fCategory: string;
-    fMode: string;
-    fCountry: string;
-    fCity: string;
-    fSource: string;
-    fReset: string;
-    fCount: string; // template con {n}
-    fNoResults: string;
-    fSort: string;
-    sortLabels: Record<string, string>;
-  }
-> = {
-  it: {
-    title: "Swipe",
-    verdicts: {
-      no: "Non interessante",
-      review_low: "Poco interessante",
-      review_ok: "Interessante",
-      top: "Molto interessante",
-    },
-    btnPrev: "Precedente",
-    commentPh: "Aggiungi un commento (facoltativo)…",
-    commentClose: "Chiudi il commento",
-    commentTitle: "Commento",
-    commentDone: "Fatto",
-    voiceStart: "Detta il commento",
-    voiceStop: "Ferma la dettatura",
-    voiceListening: "Ti ascolto…",
-    voiceError: "Dettatura non disponibile su questo dispositivo",
-    voiceDenied:
-      "Permesso per il microfono negato — controlla le impostazioni del browser",
-    modePending: "Da recensire",
-    modeReviewed: "Recensite",
-    reviewedEmpty: "Ancora nessuna posizione recensita.",
-    emptyTitle: "Mazzo finito!",
-    emptySubtitle: "Hai fatto il triage di tutte le posizioni in coda.",
-    allPositions: "Tutte le posizioni",
-    details: "Dettagli",
-    remote: { full_remote: "Remoto", hybrid: "Ibrido", onsite: "In sede" },
-    saveError: "Errore di rete — azione non salvata per",
-    hintKeys: "Tastiera: 1–4 giudizio · ←/→ naviga",
-    today: "oggi",
-    yesterday: "ieri",
-    daysAgo: "{n} giorni fa",
-    filters: "Filtri",
-    fScore: "Score",
-    fSalary: "Stipendio (k€ / anno)",
-    fCategory: "Categoria",
-    fMode: "Modalità",
-    fCountry: "Paese",
-    fCity: "Città",
-    fSource: "Fonte",
-    fReset: "Azzera filtri",
-    fCount: "{n} posizioni",
-    fNoResults: "Nessuna posizione corrisponde ai filtri.",
-    fSort: "Ordinamento",
-    sortLabels: {
-      oldest: "Meno recenti prima",
-      newest: "Più recenti prima",
-      score_desc: "Score: dal più alto",
-      score_asc: "Score: dal più basso",
-      salary_desc: "Stipendio: dal più alto",
-      shuffle: "Casuale (shuffle)",
-    },
-  },
-  en: {
-    title: "Swipe",
-    verdicts: {
-      no: "Not interesting",
-      review_low: "Slightly interesting",
-      review_ok: "Interesting",
-      top: "Very interesting",
-    },
-    btnPrev: "Previous",
-    commentPh: "Add a comment (optional)…",
-    commentClose: "Close the comment",
-    commentTitle: "Comment",
-    commentDone: "Done",
-    voiceStart: "Dictate the comment",
-    voiceStop: "Stop dictation",
-    voiceListening: "Listening…",
-    voiceError: "Dictation not available on this device",
-    voiceDenied: "Microphone permission denied — check your browser settings",
-    modePending: "To review",
-    modeReviewed: "Reviewed",
-    reviewedEmpty: "No reviewed positions yet.",
-    emptyTitle: "Deck finished!",
-    emptySubtitle: "You triaged every queued position.",
-    allPositions: "All positions",
-    details: "Details",
-    remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "On-site" },
-    saveError: "Network error — action not saved for",
-    hintKeys: "Keyboard: 1–4 verdict · ←/→ navigate",
-    today: "today",
-    yesterday: "yesterday",
-    daysAgo: "{n} days ago",
-    filters: "Filters",
-    fScore: "Score",
-    fSalary: "Salary (k€ / yr)",
-    fCategory: "Category",
-    fMode: "Work mode",
-    fCountry: "Country",
-    fCity: "City",
-    fSource: "Source",
-    fReset: "Reset filters",
-    fCount: "{n} positions",
-    fNoResults: "No positions match the filters.",
-    fSort: "Sorting",
-    sortLabels: {
-      oldest: "Oldest first",
-      newest: "Newest first",
-      score_desc: "Score: highest first",
-      score_asc: "Score: lowest first",
-      salary_desc: "Salary: highest first",
-      shuffle: "Random (shuffle)",
-    },
-  },
-  hu: {
-    title: "Swipe",
-    verdicts: {
-      no: "Nem érdekes",
-      review_low: "Kevéssé érdekes",
-      review_ok: "Érdekes",
-      top: "Nagyon érdekes",
-    },
-    btnPrev: "Előző",
-    commentPh: "Megjegyzés hozzáadása (opcionális)…",
-    commentClose: "Megjegyzés bezárása",
-    commentTitle: "Megjegyzés",
-    commentDone: "Kész",
-    voiceStart: "Megjegyzés diktálása",
-    voiceStop: "Diktálás leállítása",
-    voiceListening: "Hallgatlak…",
-    voiceError: "A diktálás nem érhető el ezen az eszközön",
-    voiceDenied:
-      "Mikrofonengedély megtagadva — ellenőrizd a böngésző beállításait",
-    modePending: "Elbírálandó",
-    modeReviewed: "Elbírált",
-    reviewedEmpty: "Még nincs elbírált pozíció.",
-    emptyTitle: "A pakli elfogyott!",
-    emptySubtitle: "Minden sorban álló állást átnéztél.",
-    allPositions: "Összes állás",
-    details: "Részletek",
-    remote: { full_remote: "Távoli", hybrid: "Hibrid", onsite: "Helyszíni" },
-    saveError: "Hálózati hiba — nem mentett művelet:",
-    hintKeys: "Billentyűk: 1–4 ítélet · ←/→ navigálás",
-    today: "ma",
-    yesterday: "tegnap",
-    daysAgo: "{n} napja",
-    filters: "Szűrők",
-    fScore: "Pontszám",
-    fSalary: "Fizetés (k€ / év)",
-    fCategory: "Kategória",
-    fMode: "Munkavégzés",
-    fCountry: "Ország",
-    fCity: "Város",
-    fSource: "Forrás",
-    fReset: "Szűrők törlése",
-    fCount: "{n} pozíció",
-    fNoResults: "Nincs a szűrőknek megfelelő pozíció.",
-    fSort: "Rendezés",
-    sortLabels: {
-      oldest: "Legrégebbi elöl",
-      newest: "Legújabb elöl",
-      score_desc: "Pontszám: legmagasabb elöl",
-      score_asc: "Pontszám: legalacsonyabb elöl",
-      salary_desc: "Fizetés: legmagasabb elöl",
-      shuffle: "Véletlenszerű (shuffle)",
-    },
-  },
-  es: {
-    title: "Swipe",
-    verdicts: {
-      no: "No interesante",
-      review_low: "Poco interesante",
-      review_ok: "Interesante",
-      top: "Muy interesante",
-    },
-    btnPrev: "Anterior",
-    commentPh: "Añade un comentario (opcional)…",
-    commentClose: "Cerrar el comentario",
-    commentTitle: "Comentario",
-    commentDone: "Hecho",
-    voiceStart: "Dictar el comentario",
-    voiceStop: "Detener el dictado",
-    voiceListening: "Escuchando…",
-    voiceError: "Dictado no disponible en este dispositivo",
-    voiceDenied:
-      "Permiso de micrófono denegado — revisa la configuración del navegador",
-    modePending: "Por revisar",
-    modeReviewed: "Revisadas",
-    reviewedEmpty: "Aún no hay posiciones revisadas.",
-    emptyTitle: "¡Mazo terminado!",
-    emptySubtitle: "Has revisado todas las posiciones en cola.",
-    allPositions: "Todas las posiciones",
-    details: "Detalles",
-    remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
-    saveError: "Error de red — acción no guardada para",
-    hintKeys: "Teclado: 1–4 juicio · ←/→ navegar",
-    today: "hoy",
-    yesterday: "ayer",
-    daysAgo: "hace {n} días",
-    filters: "Filtros",
-    fScore: "Puntuación",
-    fSalary: "Salario (k€ / año)",
-    fCategory: "Categoría",
-    fMode: "Modalidad",
-    fCountry: "País",
-    fCity: "Ciudad",
-    fSource: "Fuente",
-    fReset: "Restablecer filtros",
-    fCount: "{n} posiciones",
-    fNoResults: "Ninguna posición coincide con los filtros.",
-    fSort: "Orden",
-    sortLabels: {
-      oldest: "Más antiguas primero",
-      newest: "Más recientes primero",
-      score_desc: "Puntuación: de mayor a menor",
-      score_asc: "Puntuación: de menor a mayor",
-      salary_desc: "Salario: de mayor a menor",
-      shuffle: "Aleatorio (shuffle)",
-    },
-  },
-  de: {
-    title: "Swipe",
-    verdicts: {
-      no: "Uninteressant",
-      review_low: "Wenig interessant",
-      review_ok: "Interessant",
-      top: "Sehr interessant",
-    },
-    btnPrev: "Zurück",
-    commentPh: "Kommentar hinzufügen (optional)…",
-    commentClose: "Kommentar schließen",
-    commentTitle: "Kommentar",
-    commentDone: "Fertig",
-    voiceStart: "Kommentar diktieren",
-    voiceStop: "Diktat beenden",
-    voiceListening: "Ich höre zu…",
-    voiceError: "Diktat auf diesem Gerät nicht verfügbar",
-    voiceDenied: "Mikrofonzugriff verweigert — prüfe die Browser-Einstellungen",
-    modePending: "Zu bewerten",
-    modeReviewed: "Bewertet",
-    reviewedEmpty: "Noch keine bewerteten Stellen.",
-    emptyTitle: "Stapel geschafft!",
-    emptySubtitle: "Du hast alle anstehenden Stellen durchgesehen.",
-    allPositions: "Alle Stellen",
-    details: "Details",
-    remote: { full_remote: "Remote", hybrid: "Hybrid", onsite: "Vor Ort" },
-    saveError: "Netzwerkfehler — Aktion nicht gespeichert für",
-    hintKeys: "Tastatur: 1–4 Urteil · ←/→ navigieren",
-    today: "heute",
-    yesterday: "gestern",
-    daysAgo: "vor {n} Tagen",
-    filters: "Filter",
-    fScore: "Score",
-    fSalary: "Gehalt (k€ / Jahr)",
-    fCategory: "Kategorie",
-    fMode: "Arbeitsmodus",
-    fCountry: "Land",
-    fCity: "Stadt",
-    fSource: "Quelle",
-    fReset: "Filter zurücksetzen",
-    fCount: "{n} Stellen",
-    fNoResults: "Keine Stellen entsprechen den Filtern.",
-    fSort: "Sortierung",
-    sortLabels: {
-      oldest: "Älteste zuerst",
-      newest: "Neueste zuerst",
-      score_desc: "Score: höchste zuerst",
-      score_asc: "Score: niedrigste zuerst",
-      salary_desc: "Gehalt: höchstes zuerst",
-      shuffle: "Zufällig (Shuffle)",
-    },
-  },
-  fr: {
-    title: "Swipe",
-    verdicts: {
-      no: "Pas intéressant",
-      review_low: "Peu intéressant",
-      review_ok: "Intéressant",
-      top: "Très intéressant",
-    },
-    btnPrev: "Précédent",
-    commentPh: "Ajouter un commentaire (facultatif)…",
-    commentClose: "Fermer le commentaire",
-    commentTitle: "Commentaire",
-    commentDone: "Terminé",
-    voiceStart: "Dicter le commentaire",
-    voiceStop: "Arrêter la dictée",
-    voiceListening: "Je vous écoute…",
-    voiceError: "Dictée non disponible sur cet appareil",
-    voiceDenied:
-      "Autorisation du micro refusée — vérifiez les réglages du navigateur",
-    modePending: "À évaluer",
-    modeReviewed: "Évaluées",
-    reviewedEmpty: "Aucun poste évalué pour l\u2019instant.",
-    emptyTitle: "Paquet terminé !",
-    emptySubtitle: "Vous avez trié tous les postes en attente.",
-    allPositions: "Tous les postes",
-    details: "Détails",
-    remote: {
-      full_remote: "Télétravail",
-      hybrid: "Hybride",
-      onsite: "Sur site",
-    },
-    saveError: "Erreur réseau — action non enregistrée pour",
-    hintKeys: "Clavier : 1–4 avis · ←/→ naviguer",
-    today: "aujourd’hui",
-    yesterday: "hier",
-    daysAgo: "il y a {n} jours",
-    filters: "Filtres",
-    fScore: "Score",
-    fSalary: "Salaire (k€ / an)",
-    fCategory: "Catégorie",
-    fMode: "Mode de travail",
-    fCountry: "Pays",
-    fCity: "Ville",
-    fSource: "Source",
-    fReset: "Réinitialiser les filtres",
-    fCount: "{n} postes",
-    fNoResults: "Aucun poste ne correspond aux filtres.",
-    fSort: "Tri",
-    sortLabels: {
-      oldest: "Plus anciens d'abord",
-      newest: "Plus récents d'abord",
-      score_desc: "Score : du plus haut",
-      score_asc: "Score : du plus bas",
-      salary_desc: "Salaire : du plus haut",
-      shuffle: "Aléatoire (shuffle)",
-    },
-  },
-  pt: {
-    title: "Swipe",
-    verdicts: {
-      no: "Não interessante",
-      review_low: "Pouco interessante",
-      review_ok: "Interessante",
-      top: "Muito interessante",
-    },
-    btnPrev: "Anterior",
-    commentPh: "Adicione um comentário (opcional)…",
-    commentClose: "Fechar o comentário",
-    commentTitle: "Comentário",
-    commentDone: "Concluído",
-    voiceStart: "Ditar o comentário",
-    voiceStop: "Parar o ditado",
-    voiceListening: "Ouvindo…",
-    voiceError: "Ditado não disponível neste dispositivo",
-    voiceDenied:
-      "Permissão do microfone negada — verifique as configurações do navegador",
-    modePending: "Por avaliar",
-    modeReviewed: "Avaliadas",
-    reviewedEmpty: "Ainda não há vagas avaliadas.",
-    emptyTitle: "Baralho concluído!",
-    emptySubtitle: "Você triou todas as vagas na fila.",
-    allPositions: "Todas as vagas",
-    details: "Detalhes",
-    remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
-    saveError: "Erro de rede — ação não salva para",
-    hintKeys: "Teclado: 1–4 julgamento · ←/→ navegar",
-    today: "hoje",
-    yesterday: "ontem",
-    daysAgo: "há {n} dias",
-    filters: "Filtros",
-    fScore: "Pontuação",
-    fSalary: "Salário (k€ / ano)",
-    fCategory: "Categoria",
-    fMode: "Modalidade",
-    fCountry: "País",
-    fCity: "Cidade",
-    fSource: "Fonte",
-    fReset: "Repor filtros",
-    fCount: "{n} vagas",
-    fNoResults: "Nenhuma vaga corresponde aos filtros.",
-    fSort: "Ordenação",
-    sortLabels: {
-      oldest: "Mais antigas primeiro",
-      newest: "Mais recentes primeiro",
-      score_desc: "Pontuação: da mais alta",
-      score_asc: "Pontuação: da mais baixa",
-      salary_desc: "Salário: do mais alto",
-      shuffle: "Aleatório (shuffle)",
-    },
-  },
 };
 
 function formatSalary(
@@ -672,6 +255,13 @@ const FLY_MS = 280;
 // Trascinamento orizzontale oltre questa soglia = cambio card.
 const NAV_THRESHOLD = 90;
 
+// Valori distinti e ordinati, scartando vuoti e nulli. Non chiude su
+// niente: sta fuori dal componente perché ricrearla a ogni render la
+// rendeva una dipendenza instabile dei `useMemo` qui sotto, che infatti
+// la omettevano dietro un `eslint-disable`.
+const distinct = (vals: (string | null)[]) =>
+  Array.from(new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean))).sort();
+
 export default function SwipeDeck({
   pending,
   reviewed,
@@ -728,14 +318,9 @@ export default function SwipeDeck({
     filters.sources.length > 0;
   // Valori distinti per le chip (dal mazzo completo). Le città si
   // restringono ai paesi selezionati, come l'albero location di /positions.
-  const distinct = (vals: (string | null)[]) =>
-    Array.from(
-      new Set(vals.map((v) => (v ?? "").trim()).filter(Boolean)),
-    ).sort();
   const deckForLists = mode === "pending" ? pending : reviewed;
   const countries = useMemo(
     () => distinct(deckForLists.map((c) => c.loc_country)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [deckForLists],
   );
   const cities = useMemo(
@@ -749,12 +334,10 @@ export default function SwipeDeck({
           )
           .map((c) => c.loc_city),
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [deckForLists, filters.countries],
   );
   const sources = useMemo(
     () => distinct(deckForLists.map((c) => c.source)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [deckForLists],
   );
   const families = useMemo(
@@ -764,7 +347,6 @@ export default function SwipeDeck({
           deckForLists.map((c) => (c.role_family ?? "").trim()).filter(Boolean),
         ),
       ).sort(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [deckForLists],
   );
   // skip = criterio da ignorare: serve a istogrammi e contatori chip, che
@@ -2121,220 +1703,6 @@ export default function SwipeDeck({
         </div>
       )}
     </div>
-  );
-}
-
-// Sezione collassabile della schermata filtri: header con label,
-// valore/selezione corrente a destra (viola quando il filtro è attivo)
-// e chevron che ruota. Solo gli slider partono aperti.
-function FilterSection({
-  label,
-  meta,
-  metaActive = false,
-  open,
-  onToggle,
-  children,
-}: {
-  label: string;
-  meta?: string;
-  metaActive?: boolean;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border-b" style={{ borderColor: "var(--color-border)" }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between py-3"
-        style={{ background: "none", border: "none", cursor: "pointer" }}
-        aria-expanded={open}
-      >
-        <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-          {label}
-        </span>
-        <span className="flex items-center gap-2">
-          {meta && (
-            <span
-              className="text-[11px] font-semibold tabular-nums"
-              style={{
-                color: metaActive
-                  ? "var(--color-purple)"
-                  : "var(--color-muted)",
-              }}
-            >
-              {meta}
-            </span>
-          )}
-          <span
-            style={{
-              color: "var(--color-dim)",
-              display: "inline-flex",
-              transform: open ? "rotate(90deg)" : "none",
-              transition: "transform 0.15s ease",
-            }}
-            aria-hidden="true"
-          >
-            <IconChevronRight size={14} />
-          </span>
-        </span>
-      </button>
-      {open && <div className="pb-4">{children}</div>}
-    </div>
-  );
-}
-
-// Slider a DOPPIO cursore su una traccia sola (l'HTML nativo non ce l'ha:
-// due <input type=range> sovrapposti con traccia trasparente e pointer-events
-// solo sui pomelli) + istogramma della distribuzione sopra la traccia, con i
-// bin dentro il range selezionato evidenziati (stile filtro-prezzo Airbnb).
-function DualRange({
-  min,
-  max,
-  step,
-  lo,
-  hi,
-  onChange,
-  histo,
-}: {
-  min: number;
-  max: number;
-  step: number;
-  lo: number;
-  hi: number;
-  onChange: (lo: number, hi: number) => void;
-  histo?: number[];
-}) {
-  const pct = (v: number) => ((v - min) / (max - min)) * 100;
-  const maxBin = histo && histo.length ? Math.max(...histo, 1) : 1;
-  return (
-    <div>
-      {histo && (
-        <div className="mb-1 flex h-10 items-end gap-[2px] px-1">
-          {histo.map((n, i) => {
-            const bLo = min + i * ((max - min) / histo.length);
-            const bHi = bLo + (max - min) / histo.length;
-            const inRange = bHi > lo && bLo < hi;
-            return (
-              <div
-                key={i}
-                className="flex-1 rounded-sm"
-                style={{
-                  height: `${Math.max((n / maxBin) * 100, n > 0 ? 8 : 2)}%`,
-                  background: inRange
-                    ? "var(--color-purple)"
-                    : "var(--color-border)",
-                  opacity: inRange ? 0.9 : 0.7,
-                }}
-              />
-            );
-          })}
-        </div>
-      )}
-      <div className="relative h-9">
-        <div
-          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
-          style={{ left: 12, right: 12, background: "var(--color-border)" }}
-        />
-        {/* Il centro del pomello viaggia tra 12px e (100% - 12px), non da
-            bordo a bordo: il riempimento segue la STESSA geometria, sennò
-            sborda oltre i pomelli. */}
-        <div
-          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
-          style={{
-            left: `calc((100% - 24px) * ${pct(lo) / 100} + 12px)`,
-            right: `calc((100% - 24px) * ${(100 - pct(hi)) / 100} + 12px)`,
-            background: "var(--color-purple)",
-          }}
-        />
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={lo}
-          aria-label="min"
-          onChange={(e) => onChange(Math.min(Number(e.target.value), hi), hi)}
-          className="jht-dualrange absolute inset-0 h-full w-full"
-          // Se entrambi i pomelli sono a fondo scala destro, il min deve
-          // stare sopra per restare afferrabile.
-          style={{ zIndex: lo > min + (max - min) / 2 ? 5 : 3 }}
-        />
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={hi}
-          aria-label="max"
-          onChange={(e) => onChange(lo, Math.max(Number(e.target.value), lo))}
-          className="jht-dualrange absolute inset-0 h-full w-full"
-          style={{ zIndex: 4 }}
-        />
-      </div>
-      <style>{`
-        .jht-dualrange {
-          -webkit-appearance: none;
-          appearance: none;
-          background: transparent;
-          pointer-events: none;
-          margin: 0;
-          border: none;
-          outline: none;
-        }
-        .jht-dualrange::-webkit-slider-runnable-track {
-          -webkit-appearance: none;
-          background: transparent;
-        }
-        .jht-dualrange::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          pointer-events: auto;
-          width: 24px;
-          height: 24px;
-          margin-top: 6px;
-          border-radius: 9999px;
-          background: #fff;
-          border: 1px solid var(--color-border);
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-          cursor: pointer;
-        }
-        .jht-dualrange::-moz-range-track {
-          background: transparent;
-        }
-        .jht-dualrange::-moz-range-thumb {
-          pointer-events: auto;
-          width: 22px;
-          height: 22px;
-          border-radius: 9999px;
-          background: #fff;
-          border: 1px solid var(--color-border);
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-          cursor: pointer;
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function Chip({
-  children,
-  color,
-}: {
-  children: React.ReactNode;
-  color?: string;
-}) {
-  return (
-    <span
-      className="px-2 py-0.5 rounded-full border"
-      style={{
-        borderColor: "var(--color-border)",
-        background: "var(--color-row)",
-        color: color ?? "var(--color-base)",
-      }}
-    >
-      {children}
-    </span>
   );
 }
 

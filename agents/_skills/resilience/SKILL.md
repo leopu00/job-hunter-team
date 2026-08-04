@@ -14,7 +14,7 @@ recoverable** instead of silent and fatal.
 
 ## The core rule
 
-**A broken tool is NOT an empty result.** Before you ever write "coda esaurita", `new=0`, or
+**A broken tool is NOT an empty result.** Before you ever write "queue exhausted", `new=0`, or
 "nothing to do", you MUST self-check the tool you depend on. If the tool is broken, you do not have
 "no work" — you have a **repair to do** or an **escalation to raise**.
 
@@ -36,10 +36,11 @@ recoverable** instead of silent and fatal.
      — the authwall returns 200 for closed jobs too.
 4. **Mark, don't drop.** If still inconclusive, leave the data state **UNCHANGED** and tag it
    `OPEN_UNVERIFIED` + a `NOTE_MISMATCH`. Never silently overwrite with a guess.
-5. **Escalate (entro il tetto di 2-3 tentativi, vedi sotto).** Tool broken e non riparabile in
-   ≤2-3 colpi → message the **Capitano** with the EXACT fix: the failing command, the missing
+5. **Escalate (within the 2-3 attempt ceiling, see below).** Tool broken and not repairable in
+   ≤2-3 shots → message the **Capitano** with the EXACT fix: the failing command, the missing
    dependency, and the `jht-install` / Dockerfile line that resolves it. Then **keep working via the
-   alternative method** (o passa a un'altra fonte) — do not stall, ma **non insistere oltre il tetto**.
+   alternative method** (or move to another source) — do not stall, but **do not push past the
+   ceiling** either.
 
 ## What this forbids
 
@@ -70,22 +71,22 @@ else
 fi
 ```
 
-## ⛔ Tetto di testardaggine — max 2-3 tentativi, poi ESCALA (2026-06-26)
+## ⛔ Stubbornness ceiling — max 2-3 attempts, then ESCALATE (2026-06-26)
 
-La testardaggine ha un **budget**, NON è infinita. Per una fonte/tool che fallisce fai **al
-massimo 2-3 tentativi reali** (es. `repair+retry`, poi **UNA** alternativa) — **non** costruire
-wrapper su wrapper né ciclare decine di volte. *Era esattamente il marathon di scout-6: 54 scrape
-LinkedIn + 42 web-search + playwright su misura per **3** inserimenti, ~308 kT bruciati.* La
-*resilience ladder* serve un tetto, sennò diventa un pozzo di token.
+Stubbornness has a **budget**, it is NOT infinite. For a source/tool that keeps failing make **at
+most 2-3 real attempts** (e.g. `repair+retry`, then **ONE** alternative) — do **not** build wrapper
+upon wrapper, and do not loop dozens of times. *That was exactly the scout-6 marathon: 54 LinkedIn
+scrapes + 42 web searches + a bespoke playwright run for **3** insertions, ~308 kT burned.* The
+*resilience ladder* needs a ceiling, otherwise it becomes a token pit.
 
-Esauriti i 2-3 tentativi:
-1. **Fermati su quella fonte** — non insistere oltre.
-2. Lascia il dato `OPEN_UNVERIFIED` (mai sovrascrivere con un guess) **oppure** passa a
-   un'altra fonte/cerchio (round-robin, non drenare la stessa).
-3. **Escala al Capitano** con la diagnosi esatta (comando che fallisce, dipendenza mancante,
-   il `jht-install`/Dockerfile che risolve). **Lui decide** se vale la pena insistere, riparare a
-   monte, o lasciar perdere quel cerchio.
+Once the 2-3 attempts are spent:
+1. **Stop on that source** — do not push further.
+2. Leave the data `OPEN_UNVERIFIED` (never overwrite with a guess) **or** move to another
+   source/circle (round-robin, do not drain the same one).
+3. **Escalate to the Capitano** with the exact diagnosis (the failing command, the missing
+   dependency, the `jht-install`/Dockerfile line that resolves it). **He decides** whether it is
+   worth insisting, repairing upstream, or dropping that circle.
 
-Mission-critical (browser / LinkedIn) = insisti **fino al tetto**, non all'infinito; e solo da
-fonti ufficiali. Un tool rotto resta una **riparazione/escalation**, non una "coda vuota" — ma la
-riparazione costa al massimo 2-3 colpi, poi è il Capitano a decidere.
+Mission-critical (browser / LinkedIn) = insist **up to the ceiling**, not forever; and only from
+official sources. A broken tool stays a **repair/escalation**, not an "empty queue" — but the repair
+costs at most 2-3 shots, and after that it is the Capitano who decides.

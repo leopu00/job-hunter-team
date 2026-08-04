@@ -6,7 +6,11 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
+    // `components/**` was dropped: web/components was folded into
+    // web/app/components, so the glob matched nothing and `app/**` already
+    // covers those files. Keeping it would have quietly re-applied these
+    // relaxations to a web/components/ recreated by mistake.
+    files: ["app/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
     rules: {
       // The app has not been migrated to React Compiler-safe patterns yet.
       "@typescript-eslint/no-explicit-any": "warn",

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -79,10 +81,11 @@ export async function GET(req: NextRequest) {
     .limit(limit);
 
   if (error) {
-    return NextResponse.json(
-      { ok: false, error: `query failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "cloud-sync/chat",
+      publicMessage: "query_failed",
+    });
   }
 
   return NextResponse.json({ ok: true, messages: data || [] });
@@ -102,14 +105,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { delivered_ids?: unknown };
+  let body: {
+    delivered_ids?: unknown;
+    close_rendezvous?: unknown;
+    expected_requested_at?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { ok: false, error: "body JSON non valido" },
-      { status: 400 },
-    );
+    return invalidJsonBody();
   }
 
   // Solo UUID ben formati: gli id arrivano dal GET qui sopra, e un valore
@@ -132,30 +136,66 @@ export async function POST(req: NextRequest) {
       .in("id", ids)
       .select("id");
     if (error) {
-      return NextResponse.json(
-        { ok: false, error: `ack failed: ${error.message}` },
-        { status: 500 },
-      );
+      return sanitizedError(error, {
+        status: 500,
+        scope: "cloud-sync/chat",
+        publicMessage: "ack_failed",
+      });
     }
     delivered = (data || []).length;
   }
 
-  // Chiusura del rendezvous: il gemello di `sync_completed_at` per la chat.
-  // Timbro lato server come fa /api/team-state per `chat_requested_at` — i
-  // due valori si confrontano fra loro, e l'orologio del box non deve poter
-  // dichiarare "consegnato" un istante precedente alla richiesta.
-  const { error: bellError } = await admin
-    .from("team_state")
-    .upsert(
-      { user_id: userId, chat_delivered_at: new Date().toISOString() },
-      { onConflict: "user_id" },
-    );
-  if (bellError) {
+  const closeRendezvous = body.close_rendezvous === true;
+  if (!closeRendezvous) {
+    return NextResponse.json({ ok: true, delivered, closed: false });
+  }
+
+  const expected = body.expected_requested_at;
+  const expectedMs = typeof expected === "string" ? Date.parse(expected) : NaN;
+  if (typeof expected !== "string" || !Number.isFinite(expectedMs)) {
     return NextResponse.json(
-      { ok: false, error: `rendezvous failed: ${bellError.message}` },
-      { status: 500 },
+      {
+        ok: false,
+        delivered,
+        closed: false,
+        error: "invalid_chat_rendezvous",
+      },
+      { status: 400 },
     );
   }
 
-  return NextResponse.json({ ok: true, delivered });
+  // ACK delle righe e chiusura sono volutamente separati: se una richiesta B
+  // arriva dopo il pull A, gli ID davvero consegnati da A restano marcati ma
+  // il CAS non puo' timbrare B come gia' consegnata.
+  const deliveredAt = new Date(
+    Math.max(Date.now(), expectedMs + 1),
+  ).toISOString();
+  const { data: closed, error: bellError } = await admin
+    .from("team_state")
+    .update({ chat_delivered_at: deliveredAt })
+    .eq("user_id", userId)
+    .eq("chat_requested_at", expected)
+    .or(`chat_delivered_at.is.null,chat_delivered_at.lt.${expected}`)
+    .select("chat_requested_at,chat_delivered_at")
+    .maybeSingle();
+  if (bellError) {
+    return sanitizedError(bellError, {
+      status: 500,
+      scope: "cloud-sync/chat-rendezvous",
+      publicMessage: "rendezvous_failed",
+    });
+  }
+  if (!closed) {
+    return NextResponse.json(
+      { ok: false, delivered, closed: false, reason: "superseded" },
+      { status: 409 },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    delivered,
+    closed: true,
+    chat_delivered_at: closed.chat_delivered_at,
+  });
 }

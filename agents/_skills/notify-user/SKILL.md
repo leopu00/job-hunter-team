@@ -38,8 +38,8 @@ jht-notify-user --agent capitano "Trovate 10 offerte pronte sopra 75/100. Top: A
 # Digest with explicit kind (rendered with a header on the dashboard)
 jht-notify-user --agent mentor --kind digest "Settimana 19: 18 offerte analizzate, 4 candidate, gap principale: ruoli senior in EU remote."
 
-# Question — dashboard shows it with a reply box
-jht-notify-user --agent assistente --kind question "Vuoi che procedo con apply per Acme Senior FE?"
+# Question — only to clarify an application the user already requested
+jht-notify-user --agent assistente --kind question "For the application you already requested for Acme Senior FE, which CV version do you prefer?"
 
 # Linked to a position (renders with the position card on the dashboard)
 jht-notify-user --agent capitano --position-id 42 "CV pronto per posizione 42. Critic verdict: PASS."

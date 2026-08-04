@@ -199,6 +199,9 @@ func setup(def: Dictionary, p_nav: NavGrid) -> void:
 	speech.position = SPEECH_BUBBLE_POS
 	speech.z_index = 3
 	add_child(speech)
+	# Il layout può spostare una vignetta per evitare teste e altri messaggi:
+	# il nome dentro il riquadro mantiene inequivocabile chi sta parlando.
+	speech.set_speaker_label(display_name)
 
 	state_tag = AgentStateTag.new()
 	state_tag.position = STATE_TAG_POS
@@ -564,9 +567,20 @@ func is_dissolving() -> bool:
 ## True se il punto (click) cade sul corpo dell'agente.
 func hit_by(point: Vector2) -> bool:
 	# generoso di proposito (feedback test finale: il click sull'agente
-	# "non fa nulla"): a zoom out il bersaglio su schermo è piccolo
-	return point.distance_to(global_position + Vector2(0, -44)) < 68 \
-			or point.distance_to(global_position) < 36
+	# "non fa nulla"): a zoom out il bersaglio su schermo è piccolo. Quando
+	# la persona seduta vive nel composito della scrivania, anche il bersaglio
+	# segue quello stesso scarto visivo: il punto logico resta sotto il mobile.
+	var body_center := global_position + Vector2(0, -44)
+	if _desk_pose_active:
+		body_center += _composite_overhead_delta()
+	if point.distance_to(body_center) < 68 \
+			or point.distance_to(global_position) < 36:
+		return true
+	# Il diamante invita esplicitamente al click durante il tour: il suo glow
+	# visibile (30 px) deve essere un target reale, non decorazione sospesa ben
+	# oltre il cerchio del corpo.
+	return quest_marker != null and quest_marker.visible \
+			and point.distance_to(quest_marker.global_position) < 34
 
 func _physics_process(delta: float) -> void:
 	if _dissolving:

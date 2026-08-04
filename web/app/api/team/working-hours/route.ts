@@ -20,6 +20,7 @@ import { z } from "zod";
 import { JHT_CONFIG_PATH, JHT_HOME } from "@/lib/jht-paths";
 import { requireAuth, isLocalRequest, requireLocalWrite } from "@/lib/auth";
 import { WorkingHoursSchema } from "../../../../../shared/config/schema";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +118,7 @@ export async function PUT(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON body invalido" }, { status: 400 });
+    return invalidJsonBody();
   }
   const parsed = PutBodySchema.safeParse(body);
   if (!parsed.success) {

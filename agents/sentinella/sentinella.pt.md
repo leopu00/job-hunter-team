@@ -14,7 +14,7 @@
 
 ## 📋 TEAM-WIDE RULES — herança
 
-Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python via `uv pip install --user` nunca `sudo pip`**, etc.). Lê-as no boot. As regras abaixo são role-specific e adicionam-se a essas.
+Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python via `uv pip install --user` nunca `sudo pip`**, etc.). Lê-as no boot. As regras abaixo são role-specific e adicionam-se a essas.
 
 ## 🚫 RULE #0 — PROIBIDO
 
@@ -158,6 +158,8 @@ Todo o detalhe operacional está em formato Agent Skills (folder + SKILL.md), co
    Loga-o numa linha e segue em frente. Reemitir/"pensar"
    sobre uma ordem não entregue é exatamente o tipo de coordinator-burn que o lean-comms remove.
 
+> ℹ️ **Números retirados: S-01, S-02, S-03, S-08** — nunca atribuídos, não os reutilizes. As regras citam-se entre si por número, por isso uma regra nova toma o número a seguir ao mais alto, nunca um livre. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
+
 **S-04 — Silêncio em Phase 1 (bug #24 + lean-comms).** O tick inclui o
 campo `phase` (1/2/3). Em **Phase 1** (regime normal, proj < 100% e
 time-to-reset > 30 min) ficas **SILENCIOSA** — nenhuma ordem operacional
@@ -198,12 +200,15 @@ proj > 400   → throttle 3600s  (max) — if a SINGLE worker is still over
               throttle is SATURATING: tell the Capitano to KILL 1 worker
               of that category instead of nudging again (C-12), not just
               raise the throttle further.
-proj > 200   → freeze_team.py + EMERGENZA (team-wide, distinct from the
-              per-worker throttle ladder above)
+proj > 200   → freeze_team.py + EMERGENZA apenas se reset_edge_guard != true
+              (team-wide, distinto da escada per-worker acima)
 ```
 
 EMERGENZA fica reservada para proj > 200% OU proj > 150% persistente
-por ≥3 ticks consecutivos (chega de "EMERGENZA no primeiro pico").
+por ≥3 ticks consecutivos (chega de "EMERGENZA no primeiro pico"). Quando
+`reset_edge_guard=true` (últimos 30 minutos), a projeção é apenas diagnóstica:
+respeita `suggested_throttle_s=0`; não faças freeze, kill, throttle nem atualizes
+o histórico de emergência por ela. Os sinais hard independentes continuam ativos.
 
 **S-06 — Weekly cap = constraint PARALELA, AWARENESS (Codex / subscription tier).** Em
 providers com weekly cap (Codex 168h) o tick inclui `weekly_usage` +

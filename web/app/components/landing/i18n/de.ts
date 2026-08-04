@@ -3,7 +3,7 @@
 export const de: Record<string, string> = {
   // Chiavi aggiunte (allineamento i18n)
   home_intro:
-    "Job Hunter Team ist ein Team autonomer KI-Agenten, die ununterbrochen für dich nach Arbeit suchen. Jeder Agent ist ein Spezialist: Einer spürt die Stellen auf, einer analysiert sie im Detail und einer vergibt jeder eine Bewertung, je nachdem, wie nah sie an dem ist, was dir wirklich wichtig ist. Auf Wunsch erstellen sie auch den Lebenslauf für deine Bewerbung. Und wenn die versendeten Bewerbungen nicht ausreichen, um Arbeit zu finden, steht dir ein eigener Agent zur Seite: Er hilft dir, dich auf dem Arbeitsmarkt zu orientieren und dich der gewünschten Rolle zu nähern. Du gibst die Richtung vor und behältst das letzte Wort; den Rest übernimmt das Team, privat, auf deiner eigenen Maschine.",
+    "Job Hunter Team ist ein Team autonomer KI-Agenten, die ununterbrochen für dich nach Arbeit suchen. Jeder Agent ist ein Spezialist: Einer spürt die Stellen auf, einer analysiert sie im Detail und einer vergibt jeder eine Bewertung, je nachdem, wie nah sie an dem ist, was dir wirklich wichtig ist. Auf Wunsch erstellen sie auch den Lebenslauf für deine Bewerbung. Ein eigener Agent hilft dir zudem, dich auf dem Arbeitsmarkt zu orientieren und dich der gewünschten Rolle zu nähern. Den Arbeitsmarkt zu beobachten ist eine vollständige Nutzung des Produkts. Du gibst die Richtung vor und behältst das letzte Wort; den Rest übernimmt das Team, privat, auf deiner eigenen Maschine.",
   theme_system: "System",
   theme_dark: "Nacht",
   theme_light: "Tag",
@@ -21,6 +21,7 @@ export const de: Record<string, string> = {
   nav_github: "GitHub",
   nav_download: "Installieren",
   nav_project: "Projekt",
+  nav_tutorials: "Anleitungen",
   nav_pricing: "Preise",
   nav_login: "Anmelden",
 
@@ -39,12 +40,17 @@ export const de: Record<string, string> = {
   footer_product: "Produkt",
   footer_stats: "Projekt",
   footer_resources: "Ressourcen",
+  footer_tutorials: "Anleitungen",
   footer_contacts: "Kontakt",
   nav_contact: "Kontakt",
   footer_bug: "Fehler melden",
   footer_privacy: "Datenschutz",
   footer_terms: "Nutzungsbedingungen",
   footer_copyright: "Open Source unter MIT-Lizenz",
+  tutorials_title: "Anleitungen",
+  tutorial_game_title: "Spiel",
+  tutorial_web_title: "Web",
+  trailer_title: "Trailer",
 
   // Download page
   dl_desc:
@@ -85,8 +91,6 @@ export const de: Record<string, string> = {
   footer_links_aria: "Fußzeilen-Links",
 
   // LandingHome: hero alt + Abschnitte
-  home_hero_alt:
-    "Comic-Illustration: ein Team von KI-Agenten — alle mit derselben schwarzen Sonnenbrille — sitzt an einem langen Konferenztisch in einem eleganten Hochhausbüro, während ein stehender Agent Diagramme an einer Tafel präsentiert.",
   home_team_alt:
     "Drei Team-Agenten in voller Größe: der Scout mit einer Lupe, der Analyst im Laborkittel, der Schreiber mit einer Federkielfeder — alle mit Sonnenbrille.",
   home_setup_alt:

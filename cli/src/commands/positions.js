@@ -14,15 +14,19 @@
 
 import { Command } from 'commander';
 import { spawnSync } from 'node:child_process';
-import { containerRunning, execInContainer, CONTAINER_NAME } from '../utils/container-proxy.js';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { containerRunning, execArgvInContainer, CONTAINER_NAME } from '../utils/container-proxy.js';
 import { JHT_DB_PATH } from '../jht-paths.js';
+import { c } from './_colors.js';
 
-const c = {
-  green:  (s) => `\x1b[32m${s}\x1b[0m`,
-  red:    (s) => `\x1b[31m${s}\x1b[0m`,
-  yellow: (s) => `\x1b[33m${s}\x1b[0m`,
-  dim:    (s) => `\x1b[2m${s}\x1b[0m`,
-};
+// Le skill si risolvono dal percorso di QUESTO modulo, mai dalla cwd: il CLI
+// e' installato via symlink in $JHT_BIN_DIR, quindi la cwd dell'utente e'
+// arbitraria e un path relativo faceva fallire ogni comando fuori dal repo con
+// un errore di Python. `fileURLToPath(import.meta.url)` risolve al file reale,
+// non al link.
+const SKILLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../shared/skills');
 
 /**
  * Esegue una skill Python di shared/skills (container se attivo, host altrimenti).
@@ -33,21 +37,37 @@ const c = {
  */
 export function runSkill(skill, args) {
   if (containerRunning()) {
-    // Escape a apici singoli: gli argomenti includono testo libero scritto
+    // Argomenti separati, senza shell: includono testo libero scritto
     // dall'utente (note di esclusione, corpo di una direttiva, risposta a un
-    // ticket), quindi un apice o un `$` non deve poter uscire dalla stringa.
-    const escaped = args.map((a) => `'${String(a).replace(/'/g, "'\\''")}'`).join(' ');
-    const r = execInContainer(`python3 /app/shared/skills/${skill} ${escaped}`, {
+    // ticket), e per un apice o un `$` non esiste più una stringa da cui
+    // uscire.
+    const r = execArgvInContainer(['python3', `/app/shared/skills/${skill}`, ...args.map(String)], {
       timeoutMs: 30_000,
     });
     process.stdout.write(r.stdout);
     if (r.stderr) process.stderr.write(r.stderr);
     return r.code ?? 1;
   }
-  const r = spawnSync('python3', [`shared/skills/${skill}`, ...args], {
+  // Fuori dal container la skill va cercata sul disco: se non c'è, il fallimento
+  // deve essere un messaggio del prodotto — chi legge `python3: can't open file`
+  // non ha modo di capire che gli manca il codice del team, non Python.
+  const skillPath = join(SKILLS_DIR, skill);
+  if (!existsSync(skillPath)) {
+    console.error(c.red(`✗ skill non trovata: ${skillPath}`));
+    console.error(c.dim(
+      `  Serve il container ${CONTAINER_NAME} attivo (jht team start) oppure una copia`,
+    ));
+    console.error(c.dim('  completa del repo: questo comando gira sulle skill in shared/skills/.'));
+    return 2;
+  }
+  const r = spawnSync('python3', [skillPath, ...args], {
     stdio: 'inherit',
     env: { ...process.env, JHT_DB: JHT_DB_PATH },
   });
+  if (r.error) {
+    console.error(c.red(`✗ impossibile eseguire python3: ${r.error.message}`));
+    return 2;
+  }
   return r.status ?? 1;
 }
 
@@ -78,25 +98,26 @@ function listAction(options, command) {
   if (o.source) args.push('--source', o.source);
   if (o.json) args.push('--json');
   const code = runDbQuery(args);
-  if (code !== 0) process.exit(code);
+  if (code !== 0) process.exitCode = code;
 }
 
 function showAction(id, options, command) {
   if (!id) {
     console.error(c.red('Uso: jht positions show <id|legacy_id>'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const args = ['position', String(id)];
   if (opts(options, command).json) args.push('--json');
   const code = runDbQuery(args);
-  if (code !== 0) process.exit(code);
+  if (code !== 0) process.exitCode = code;
 }
 
 function dashboardAction(options, command) {
   const args = ['dashboard'];
   if (opts(options, command).json) args.push('--json');
   const code = runDbQuery(args);
-  if (code !== 0) process.exit(code);
+  if (code !== 0) process.exitCode = code;
 }
 
 // ── Verbi di DECISIONE ────────────────────────────────────────────────
@@ -110,21 +131,28 @@ function dashboardAction(options, command) {
 // il passaggio degli argomenti. Ogni verbo stampa la riga JSON della skill ed
 // eredita il suo exit code (0 ok / 1 rifiutato), così è verificabile in uno
 // script senza leggere il testo.
+//
+// L'exit code si posa su `process.exitCode`, non su `process.exit()`: quando il
+// container è attivo `runSkill` consegna l'output della skill con
+// `process.stdout.write`, e su una pipe quella scrittura è asincrona. Un
+// `process.exit()` sulla riga dopo tronca la riga JSON che il chiamante sta
+// leggendo — cioè proprio il contratto che questi verbi promettono agli script.
+// Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
 
 function excludeAction(id, options) {
   const args = ['exclude', String(id), '--reason', options.reason];
   if (options.note) args.push('--note', options.note);
-  process.exit(runSkill('user_exclude.py', args));
+  process.exitCode = runSkill('user_exclude.py', args);
 }
 
 function restoreAction(id) {
-  process.exit(runSkill('user_exclude.py', ['restore', String(id)]));
+  process.exitCode = runSkill('user_exclude.py', ['restore', String(id)]);
 }
 
 function requestCvAction(id, options) {
-  process.exit(runSkill('write_request.py', [
+  process.exitCode = runSkill('write_request.py', [
     String(id), '--mode', options.off ? 'off' : 'on',
-  ]));
+  ]);
 }
 
 export function registerPositionsCommand(program) {

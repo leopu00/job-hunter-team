@@ -19,56 +19,41 @@
 #   4. se NO → retry (fino a 3 volte; la TUI potrebbe stare bootando,
 #              avere un modal aperto, o aver perso focus)
 #   5. se SI → send Enter      submit del prompt
-#   6. capture-pane            VERIFICA che il composer si sia svuotato. Un
-#                              Enter "a freddo" puo' non essere processato: in
-#                              quel caso il testo resta appeso nel prompt.
+#   6. capture-pane            VERIFICA che il submit sia avvenuto: il testo
+#                              deve essere sparito dal composer, oppure il pane
+#                              deve essere passato in stato occupato. Se e'
+#                              ancora li', l'Enter e' stato ingoiato: si rimanda
+#                              (escalation), e se non parte comunque si esce con
+#                              5 — MAI 0. Vedi "vivo ma muto" qui sotto.
 #
-# ── Il submit va VERIFICATO, non dato per riuscito (2026-07-29) ─────────
-# Fino a oggi il passo 5 usciva 0 subito dopo `send-keys Enter`, senza
-# rileggere il pane: riportava consegna riuscita mentre il messaggio era
-# ancora nel composer. E' il guasto peggiore possibile su questo canale,
-# perche' un pane con del testo non inviato risulta OCCUPATO a chiunque
-# altro: da li' ogni messaggio successivo fallisce e l'agente ammutolisce
-# per sempre — un Enter perso diventa un deadlock permanente, cioe'
-# esattamente il sintomo "exit 4" che questo strumento esiste per evitare.
-# Osservato il 2026-07-29: un coordinatore perso per dieci ore di finestra
-# aperta al 19% di weekly, poi tre worker bloccati insieme con i messaggi
-# del coordinatore ancora nei loro prompt.
-#
-# Il rinforzo al submit c'era gia', ma era dietro `if provider = kimi`. Il
-# guasto NON e' specifico di Kimi: e' stato riprodotto ripetutamente su un
-# box Claude. Ora la verifica e il rinforzo valgono per OGNI provider.
-#
-# La sequenza di recupero e' quella verificata sul campo: `Space` e POI
-# `Enter` — un carattere sveglia la TUI Ink, l'Enter successivo viene
-# processato. E' BOUNDED: al massimo tre tentativi di submit in tutto, mai
-# un ciclo. Se dopo l'ultimo il testo e' ancora li', si esce 5 (onesto) e
-# si annota la riga in logs/pending-input.jsonl, cosi' la fase di sblocco
-# del Dottore (skill `agent-unblock`) la trova invece di doverla indovinare.
-#
-# Fail-open per costruzione: la verifica puo' solo AGGIUNGERE tentativi. Se
-# sbaglia in un senso mandiamo uno Space+Enter di troppo (un turno quasi
-# vuoto); se sbaglia nell'altro ci comportiamo esattamente come prima. In
-# nessun caso rifiuta di consegnare un messaggio: su questo canale passa
-# tutto il traffico fra agenti, e una regressione qui zittisce il team.
+# ⚠️ "VIVO MA MUTO" (delia 28-30/07, 4 occorrenze in 3 giorni, Capitano incluso).
+# Fino al 30/07 lo step 6 non esisteva: bastava vedere il testo nel composer per
+# mandare Enter e dichiarare successo (exit 0). Ma esiste uno stato in cui la TUI
+# ACCETTA il testo e IGNORA l'Enter — osservato quando un messaggio arriva mentre
+# l'agente sta chiudendo un turno lungo: l'input successivo non viene mai
+# committato. Risultato: pane vivo, riga appesa nel prompt, agente fermo per ore,
+# e un chiamante convinto di aver consegnato. La consegna non e' "aver scritto":
+# e' "aver visto partire il turno".
 #
 # Uso:
 #   jht-tmux-send SESSION "[@capitano -> @scout-1] [MSG] ..."
 #
 # Exit:
-#   0 → messaggio consegnato e submit VERIFICATO
+#   0 → messaggio consegnato e submittato (submit VERIFICATO)
 #   1 → argomenti mancanti
 #   2 → sessione inesistente
 #   3 → testo mai apparso nel pane E pane NON occupato → TUI irricettiva
 #       (probabile bash nudo post-crash / modal bloccato): unico segnale "morto".
 #   4 → TUI occupata (turno in corso) oltre il budget d'attesa → agente VIVO:
 #       messaggio NON consegnato in sincrono, il chiamante deve RIPROVARE piu'
-#       tardi, MAI spawnare un rimpiazzo. "Busy != morto" (vedi
-#       docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
-#   5 → testo DIGITATO ma submit NON confermato dopo tutti i tentativi: la TUI
-#       e' probabilmente congelata. Il messaggio e' nel composer del
-#       destinatario, che ora appare occupato a tutti: e' un caso da Dottore
-#       (kill + recreate), non da retry del chiamante.
+#       tardi, MAI spawnare un rimpiazzo. "Busy != morto": confonderli e' la
+#       causa radice dell'overspawn del 07/06 (6→16 agenti in 3 giorni,
+#       weekly Codex al 100%, halt forzato di ~3,5 giorni).
+#   5 → testo ACCETTATO nel composer ma submit mai avvenuto dopo N Enter →
+#       agente VIVO ma incastrato ("vivo ma muto"). Come rc=4 il chiamante deve
+#       RIPROVARE, MAI spawnare un rimpiazzo: il pane non e' morto, ha solo una
+#       riga appesa nel prompt. Distinto da 3 apposta — rc=3 e' l'unico che
+#       autorizza l'escalation-per-morte (pacing-bridge.py:1493).
 
 set -euo pipefail
 
@@ -155,22 +140,79 @@ with open(os.path.join(log_dir, "messages.jsonl"), "a") as f:
 PYEOF
 fi
 
-# Signature per la verify: primi 30 char del messaggio. Substring perche'
-# le TUI wrappano righe lunghe e il messaggio nel pane puo' essere spezzato
-# su piu' righe, rendendo un match full-string impossibile.
-signature=$(printf '%s' "$message" | head -c 30)
+# Signature per la verify: testa E coda del messaggio. La testa basta per i
+# messaggi corti, ma un prompt lungo puo' occupare piu' dell'altezza del pane:
+# mentre Ink lo rende, i primi caratteri scorrono fuori da capture-pane e il
+# sender conclude a torto che il testo non sia mai apparso. La coda resta
+# invece accanto al cursore ed e' quindi la prova piu' stabile.
+signature_head=$(printf '%s' "$message" | head -c 30)
+signature_tail=$(printf '%s' "$message" | tail -c 30)
 
 # Busy-detection: codex / claude / kimi mostrano "esc to interrupt" mentre
 # l'agente e' a meta' turno. In quello stato il composer NON eco-a il testo
 # digitato → la signature non comparirebbe mai e concluderemmo a torto che la
 # TUI e' irricettiva (morta). Un pane occupato e' un agente VIVO: aspettiamo
 # che torni idle prima di typeare, MAI typeare dentro un turno in corso.
-# Causa radice dell'overspawn 07/06 (docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
+# Causa radice dell'overspawn del 07/06: 6→16 agenti in 3 giorni, weekly Codex
+# al 100%, halt forzato di ~3,5 giorni.
+#
+# ⚠️ FALSO-OCCUPATO (andris 30/07, seconda volta in un giorno). Fino al 30/07
+# questo match era una substring su TUTTO il pane, prosa del transcript inclusa.
+# Il Capitano ha scritto nella propria risposta:
+#     All three workers are idle at the prompt (no spinner, no "esc to
+#     interrupt") — halted as expected.
+# e da quel momento OGNI jht-tmux-send verso di lui ha visto il pane occupato,
+# atteso 90s e rinunciato con exit 4: 16 tick PACE-GUARD non consegnati, 10 di
+# fila. Si e' auto-zittito citando la stringa magica. Un agente puo' e deve
+# poter parlare del proprio stato senza diventare irraggiungibile.
+#
+# Ora si distingue la RIGA DI STATO dalla prosa con tre criteri, tarati su righe
+# vere raccolte dalla flotta:
+#   ◦ Working (16s • esc to interrupt)                       → STATO   (leone)
+#   ● All three workers running (esc to interrupt). Recording…→ prosa (ashley)
+#   All three are now running (esc to interrupt confirmed…).  → prosa (ashley)
+#   …then confirm esc to interrupt before calling it fixed.   → prosa (delia)
+# 1. solo le ultime righe del pane: l'indicatore vive sopra al composer, il
+#    transcript scorre in alto;
+# 2. dopo la frase la riga deve finire quasi subito (una riga di stato chiude
+#    con ")" o con un token tipo "· ctrl+t to show todos", non con un discorso);
+# 3. niente virgolette prima della frase: se e' citata, e' prosa.
+# Nel dubbio si risponde "non occupato": l'errore innocuo e' typeare in un pane
+# libero, non restare muti per ore.
+busy_scan_lines="${JHT_TMUX_BUSY_SCAN_LINES:-10}"
+
 _pane_busy() {
-  case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
-    *"esc to interrupt"*|*"to interrupt"*) return 0 ;;
-    *) return 1 ;;
-  esac
+  local line lower before after rest
+  while IFS= read -r line; do
+    lower=$(printf '%s' "$line" | tr 'A-Z' 'a-z')
+    case "$lower" in
+      *"esc to interrupt"*) ;;
+      *) continue ;;
+    esac
+    before="${lower%%esc to interrupt*}"
+    after="${lower#*esc to interrupt}"
+    # (3) citata → prosa
+    case "$before" in
+      *\"|*\'|*“|*«) continue ;;
+    esac
+    # (2) la frase e' seguita da un discorso → prosa. Una riga di stato dopo la
+    # frase o CHIUDE subito — ")" e spazi — o continua con un separatore e un
+    # altro token di stato ("· ctrl+t to show todos)"). Se invece riprende con
+    # una parola ("(esc to interrupt confirmed on each)") e' una frase.
+    if [ "${#after}" -gt 40 ]; then
+      continue
+    fi
+    rest=$(printf '%s' "$after" | sed 's/[) ]*$//; s/^ *//')
+    case "$rest" in
+      "") ;;
+      "·"*|"•"*|"|"*|","*|"-"*) ;;
+      *) continue ;;
+    esac
+    return 0
+  done <<EOF
+$(printf '%s\n' "$1" | tail -n "$busy_scan_lines")
+EOF
+  return 1
 }
 
 # Quanto attendere che un turno in corso finisca prima di rinunciare (exit 4,
@@ -179,52 +221,51 @@ _pane_busy() {
 # mittente (Capitano) all'infinito. Override via env JHT_TMUX_BUSY_WAIT.
 busy_budget="${JHT_TMUX_BUSY_WAIT:-90}"
 
-# Signature CORTA per il check del composer: la riga del prompt puo' wrappare e
-# quella lunga 30 non ci starebbe. 14 char bastano a distinguere il nostro testo
-# da un placeholder ("Try ...", "? for shortcuts") e non ci sono altri testi
-# nostri nel composer.
-short_sig=$(printf '%s' "$message" | head -c 14)
-
-# _composer_holds <pane> <sig> — 0 se la RIGA DI PROMPT contiene ancora la
-# signature, cioe' il testo NON e' stato submittato.
+# Riga corrente del composer: l'ULTIMA che inizia col marker di input della TUI
+# ("❯" su Claude Code/Codex/Kimi, ">" su build piu' vecchie, "▌" sul cursore a
+# blocco). Deve essere l'ultima e non la prima: dopo un submit il messaggio
+# resta visibile NEL TRANSCRIPT sopra al composer, quindi cercare la signature
+# in tutto il pane direbbe "non submittato" anche quando il turno e' partito
+# regolarmente.
 #
-# Guarda solo l'ULTIMA riga di prompt del pane (`>` / `▌` / `❯`, eventualmente
-# dentro il bordo del box). E' la distinzione che rende la verifica possibile:
-# dopo un submit riuscito il testo c'e' ANCORA nel pane, ma nel transcript,
-# mentre il composer torna vuoto. Cercare la signature in tutto il pane direbbe
-# sempre "c'e'" e non distinguerebbe nulla.
-#
-# In caso di dubbio (nessuna riga di prompt trovata, awk assente) ritorna 1 =
-# "submittato": fail-open, mai un tentativo in piu' a vuoto.
-_composer_holds() {
-  printf '%s\n' "$1" | awk -v sig="$2" '
-    { line[NR] = $0 }
-    END {
-      start = NR - 14; if (start < 1) start = 1
-      for (i = NR; i >= start; i--) {
-        l = line[i]
-        if (l ~ /^[[:space:]]*[^[:alnum:][:space:]]?[[:space:]]*[>▌❯]/) {
-          exit (index(l, sig) > 0) ? 0 : 1
-        }
-      }
-      exit 1
-    }' 2>/dev/null
+# Il marker puo' essere preceduto dal BORDO del box che alcune TUI disegnano
+# ("│ > ..."): senza tollerarlo la riga non viene trovata, `_composer_line`
+# torna vuota, `_submitted` non vede la probe e risponde "submittato" — cioe'
+# proprio il falso positivo che questo controllo esiste per impedire. Il
+# carattere di bordo si accetta come singolo non-alfanumerico opzionale.
+# (Recuperato dalla versione dev7 di questa stessa verifica, che nasceva dallo
+# stesso guasto e copriva questi due casi in piu'.)
+_composer_line() {
+  printf '%s\n' "$1" \
+    | grep -E '^[[:space:]]*[^[:alnum:][:space:]]?[[:space:]]*(❯|>|▌)' \
+    | tail -1 || true
 }
 
-# _submit_confirmed <sig> — 0 se il messaggio e' partito.
-# Due prove indipendenti, entrambe positive: (a) la TUI ha iniziato un turno
-# ("esc to interrupt") → per forza ha ricevuto il prompt; (b) il composer non
-# contiene piu' la nostra signature.
-_submit_confirmed() {
-  local pane
-  pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
-  _pane_busy "$pane" && return 0
-  _composer_holds "$pane" "$1" && return 1
-  return 0
+# Il submit e' avvenuto se il turno e' partito (pane occupato) OPPURE il testo
+# non e' piu' nel composer (consumato dall'invio). Conservativo: nel dubbio
+# risponde "non submittato" e il chiamante ritenta, che e' l'errore innocuo.
+_submitted() {
+  if _pane_busy "$1"; then
+    return 0
+  fi
+  local line
+  line=$(_composer_line "$1")
+  case "$line" in
+    *"$submit_probe"*) return 1 ;;
+    *) return 0 ;;
+  esac
 }
 
-# Il testo e' rimasto appeso: annotalo dove il Dottore lo cerca, cosi' la fase
-# di sblocco sa gia' quale pane e' ostaggio e di quale messaggio.
+# Il testo e' rimasto appeso nel composer: annotalo dove il Dottore lo cerca,
+# cosi' la fase di sblocco (skill `agent-unblock`) sa gia' QUALE pane e'
+# ostaggio e di QUALE messaggio, invece di doverlo dedurre dal pane.
+# Recuperato dalla versione dev7 di questa correzione: senza, un exit 5 lascia
+# il Dottore a indovinare, ed e' l'unica traccia che resta di un messaggio che
+# non e' mai partito.
+#
+# Best-effort per costruzione (`|| true`, python3 opzionale): questo canale
+# porta tutto il traffico fra agenti, e un logger che fallisce non deve MAI
+# impedire una consegna.
 _record_stuck() {
   command -v python3 >/dev/null 2>&1 || return 0
   python3 - "$session" "$message" <<'PYEOF' 2>/dev/null || true
@@ -241,6 +282,9 @@ with open(os.path.join(d, "pending-input.jsonl"), "a") as f:
     }, ensure_ascii=False) + "\n")
 PYEOF
 }
+
+# Quanti Enter mandare prima di arrendersi e dichiarare "vivo ma muto" (exit 5).
+submit_tries="${JHT_TMUX_SUBMIT_TRIES:-3}"
 
 attempts=3
 for try in $(seq 1 "$attempts"); do
@@ -267,61 +311,68 @@ for try in $(seq 1 "$attempts"); do
   tmux send-keys -t "$session" -l "$message"
   sleep 1
   pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+  # Che cosa cercare nel composer per sapere se il testo e' ancora li'. Il
+  # match diretto e' la signature; ma la TUI puo' aver COLLASSATO un paste
+  # multi-riga in un placeholder — Claude Code lo chiama "[Pasted text +N
+  # lines]", OpenAI Codex "[Pasted Content N chars]" — e in quel caso la
+  # signature non comparirebbe mai (senza questi rami l'Enter non verrebbe
+  # inviato e il messaggio resterebbe appeso nel composer, con l'agente che non
+  # parte mai — onboarding Codex rotto, Leone 24/07). La probe deve essere
+  # QUELLO CHE SI VEDE, altrimenti lo step 6 crede sempre di aver submittato.
+  submit_probe=""
   case "$pane" in
-    *"$signature"*|*"Pasted text"*|*"pasted text"*|*"Pasted Content"*|*"pasted content"*)
-      # Testo visibile nel prompt (match diretto del signature) OPPURE la TUI
-      # ha COLLASSATO un paste multi-riga in un placeholder: Claude Code lo
-      # chiama "[Pasted text +N lines]", OpenAI Codex "[Pasted Content N chars]"
-      # (il signature non comparirebbe mai → senza questi rami l'Enter non
-      # verrebbe inviato e il messaggio resterebbe appeso nel composer, con
-      # l'agente che non parte mai — onboarding Codex rotto, Leone 24/07). In
-      # tutti i casi il testo è nel buffer di input → submit.
+    *"$signature_tail"*)  submit_probe="$signature_tail" ;;
+    *"$signature_head"*)  submit_probe="$signature_head" ;;
+    *"Pasted text"*)      submit_probe="Pasted text" ;;
+    *"pasted text"*)      submit_probe="pasted text" ;;
+    *"Pasted Content"*)   submit_probe="Pasted Content" ;;
+    *"pasted content"*)   submit_probe="pasted content" ;;
+  esac
+
+  if [ -n "$submit_probe" ]; then
+    # Il testo è nel buffer di input → submit, POI verifica. Un Enter ingoiato
+    # non lascia traccia: l'unica prova che il turno è partito è rileggere il
+    # pane. Escalation: fino a submit_tries Enter, poi exit 5 (vivo ma muto).
+    for s_try in $(seq 1 "$submit_tries"); do
       sleep 0.3
+      # `Space` PRIMA di `Enter`, dal secondo tentativo in poi: una TUI Ink
+      # rimasta indietro ignora un Enter "a freddo": non ha nulla da
+      # committare finche' un carattere qualunque non la riporta a disegnare
+      # il composer. Sequenza verificata sul campo (dev7, 29/07) e coperta da
+      # test_throttle_engine::test_5b — senza, la sveglia di un prompt con
+      # testo pendente non parte MAI e l'agente resta muto.
+      #
+      # Solo dai ritentativi: al primo giro il testo e' appena stato digitato,
+      # la TUI e' sveglia per definizione, e uno Space in piu' finirebbe in
+      # coda al messaggio.
+      if [ "$s_try" -gt 1 ]; then
+        tmux send-keys -t "$session" Space
+        sleep 0.1
+      fi
       tmux send-keys -t "$session" Enter
       # Kimi: con solo Enter il messaggio puo' restare accodato in pending
       # input fino a fine batch di tool calls; Ctrl-S forza il submit
       # immediato del prompt. Innocuo se la TUI ha gia' processato Enter.
-      # Resta specifico di Kimi: C-s su un pane NON in raw mode e' XOFF e
-      # congelerebbe l'output — il rinforzo universale e' Space+Enter, sotto.
       if [ "$provider" = "kimi" ]; then
         sleep 0.2
         tmux send-keys -t "$session" C-s
       fi
-
-      # ── Verifica del submit (tentativo 1/3) ────────────────────────────
-      sleep 0.6
-      if _submit_confirmed "$short_sig"; then
-        echo "jht-tmux-send: ${#message} chars to $session (try $try)"
+      # Il render Ink dopo un submit non e' istantaneo: leggere troppo presto
+      # produce un falso "non submittato" e un Enter di troppo (che sul prompt
+      # ormai vuoto e' innocuo, ma allunga inutilmente).
+      sleep 1.2
+      pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+      if _submitted "$pane"; then
+        echo "jht-tmux-send: ${#message} chars to $session (try $try, submit $s_try)"
         exit 0
       fi
-
-      # Enter "a freddo" non processato: sveglia la TUI con un carattere e
-      # ri-submitta. Sequenza verificata sul campo il 2026-07-29. (2/3)
-      tmux send-keys -t "$session" Space
-      sleep 0.3
-      tmux send-keys -t "$session" Enter
-      sleep 0.8
-      if _submit_confirmed "$short_sig"; then
-        echo "jht-tmux-send: ${#message} chars to $session (try $try, submit via Space+Enter)"
-        exit 0
-      fi
-
-      # Ultimo tentativo (3/3), poi si smette: mai un ciclo di ritentativi su
-      # una TUI congelata — e' il modo in cui si brucia budget senza accorgersene.
-      tmux send-keys -t "$session" Space
-      sleep 0.4
-      tmux send-keys -t "$session" Enter
-      sleep 1
-      if _submit_confirmed "$short_sig"; then
-        echo "jht-tmux-send: ${#message} chars to $session (try $try, submit al 3° tentativo)"
-        exit 0
-      fi
-
-      _record_stuck
-      echo "jht-tmux-send: $session ha ricevuto il testo ma il submit NON e' confermato dopo 3 tentativi (Enter, Space+Enter ×2) — TUI probabilmente congelata. Il messaggio e' appeso nel suo composer: serve il Dottore (kill+recreate), NON ritentare." >&2
-      exit 5
-      ;;
-  esac
+    done
+    # Testo accettato, Enter ignorati: e' lo stato "vivo ma muto". NON e' rc=3
+    # (quello autorizza il respawn) e non e' rc=0: il chiamante deve ritentare.
+    _record_stuck
+    echo "jht-tmux-send: $session ha accettato il testo ma NON lo ha submittato dopo ${submit_tries} Enter — riga appesa nel composer, agente VIVO ma muto: riprova, NON respawnare" >&2
+    exit 5
+  fi
   # Testo perso. Casi: (a) il typing ha fatto partire un turno → il busy-check
   # in cima alla prossima iterazione lo cattura e aspetta; (b) la TUI e' in boot
   # o ha un modal aperto che ha mangiato i keystroke. Pausa e ritenta.

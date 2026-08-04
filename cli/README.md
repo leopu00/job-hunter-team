@@ -27,8 +27,14 @@ wizard/         interactive setup wizard
 ```bash
 npm start            # from cli/  →  runs bin/jht.js
 jht team start       # once installed on PATH
-jht --help           # list all commands
+jht --help           # short "essential" help (5 commands)
+jht help             # list all commands
 ```
+
+`jht`, `jht --help` and `jht -h` deliberately print a shortened help so a fresh
+install isn't buried under 40+ subcommands; `program.js` swaps
+`helpInformation` for the `ESSENTIAL_HELP` constant. The full list stays one
+keystroke away as `jht help`.
 
 ## See also
 

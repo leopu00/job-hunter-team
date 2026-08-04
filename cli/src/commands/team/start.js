@@ -1,15 +1,17 @@
 // Comando team start
 import { execSync, spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { existsSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, readFileSync, unlinkSync } from 'node:fs';
 import {
   AGENTS, DEFAULT_TEAM, c,
   tmuxAvailable, claudeAvailable, isSessionActive,
   sessionName, parseAgentArg, resolveConfig, getAgentDir, usingContainer,
   JHT_HOME, JHT_USER_DIR, JHT_DB_PATH, JHT_CONFIG_PATH,
 } from './agents.js';
-import { execInContainer } from '../../utils/container-proxy.js';
+import { execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 
+// Serve solo al path host legacy (tmux fuori dal container): dentro al
+// container gli argomenti passano separati, senza shell di mezzo.
 function shellEscape(value) {
   return String(value).replace(/'/g, "'\\''");
 }
@@ -103,6 +105,24 @@ async function startActionContainer(agentArg, options = {}) {
   let errored = 0;
 
   if (useBootstrap) {
+    // Un secondo click su "Avvia team" mentre il core e' gia' operativo non
+    // deve rifare quattro sync cloud, riavviare i daemon bridge e ripetere gli
+    // stagger. Oltre a 30-40 secondi di attesa, quel lavoro interrompeva
+    // processi sani proprio mentre l'utente cercava soltanto conferma. I
+    // watchdog del container sorvegliano separatamente bridge e worker: con i
+    // quattro agenti core vivi, Start e' quindi un no-op idempotente.
+    const coreSessions = ['ASSISTENTE', 'SENTINELLA', 'MENTOR', 'CAPITANO'];
+    if (coreSessions.every((session) => isSessionActive(session))) {
+      for (const session of coreSessions) {
+        console.log(`  ${c.yellow('⏭')} ${session} — gia attivo`);
+      }
+      console.log('');
+      console.log(`Risultato: ${c.green('0 avviati')}, ${c.yellow('4 gia attivi')}`);
+      console.log(c.dim('  Team gia operativo: nessun bridge o sync riavviato.'));
+      console.log('');
+      return;
+    }
+
     // Pull desired-state cloud → SQLite locale PRIMA dello spawn agenti:
     // recupera write_requested cliccato via web mentre container era
     // offline. Senza questo step, il Capitano non vede mai i flag toggle-on
@@ -154,8 +174,12 @@ async function startActionContainer(agentArg, options = {}) {
       console.log(c.dim(`  ℹ pull profilo non applicato: ${lastLine}`));
     }
 
+    // Il delay di ogni voce serve a far stabilizzare la voce precedente. In
+    // un retry idempotente, se la precedente era già attiva, ripetere tutti i
+    // 41 secondi di attesa non protegge nulla e fa sembrare morto il click.
+    let previousStarted = false;
     for (const item of bootstrap) {
-      if (item.preDelayMs && item.preDelayMs > 0) {
+      if (previousStarted && item.preDelayMs && item.preDelayMs > 0) {
         console.log(c.dim(`  ⏳ Attendo ${Math.round(item.preDelayMs / 1000)}s prima di ${item.session}...`));
         await sleep(item.preDelayMs);
       }
@@ -163,6 +187,7 @@ async function startActionContainer(agentArg, options = {}) {
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
       else errored++;
+      previousStarted = result === 'started';
     }
   } else {
     const parsed = parseAgentArg(agentArg);
@@ -188,8 +213,14 @@ async function startActionContainer(agentArg, options = {}) {
   // il poller (cli/src/lib/team-commands-poller.js) usa l'exit code per
   // marcare team_commands.status='error' invece di 'done' silent. Skipped
   // (= già attivo) conta come success per l'utente.
+  //
+  // `process.exitCode` e non `process.exit()`: il poller lancia `jht team start`
+  // come processo figlio e ne legge lo stdout oltre al codice, quindi troncare
+  // l'output con un'uscita immediata gli toglierebbe proprio le righe d'errore
+  // che registra. Il codice osservato non cambia: questa è l'ultima istruzione
+  // della funzione. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
   if (started === 0 && skipped === 0) {
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -206,18 +237,14 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
   const agent = AGENTS.find((a) => a.role === role);
   const useInstance = agent?.multi && instance;
   const scriptArgs = useInstance ? [role, instance] : [role];
-  const quoted = scriptArgs.map((a) => `'${shellEscape(a)}'`).join(' ');
 
-  const envParts = [];
-  if (mode === 'fast') envParts.push("JHT_MODE='fast'");
-  if (env) {
-    for (const [k, v] of Object.entries(env)) {
-      envParts.push(`${k}='${shellEscape(v)}'`);
-    }
-  }
-  const prefix = envParts.length ? envParts.join(' ') + ' ' : '';
-  const cmd = `${prefix}bash /app/.launcher/start-agent.sh ${quoted}`;
-  const r = execInContainer(cmd);
+  // Argomenti ed env passati separati (docker exec -e / spawn env): niente
+  // stringa di shell da quotare a mano, quindi niente quarta variante di
+  // escaping da tenere allineata alle altre tre.
+  const childEnv = { ...(mode === 'fast' ? { JHT_MODE: 'fast' } : {}), ...(env || {}) };
+  const r = execScriptInContainer('/app/.launcher/start-agent.sh', scriptArgs, {
+    env: Object.keys(childEnv).length ? childEnv : null,
+  });
   if (r.code === 0) {
     console.log(`  ${c.green('✓')} ${sName} avviato`);
     return 'started';
@@ -228,6 +255,18 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
 }
 
 export async function startAction(agentArg, options) {
+  // Uno STOP d'emergenza/desired-state e il primo setup lasciano questo gate
+  // per impedire ai watchdog di riaccendere il team. Un successivo Start
+  // ESPLICITO dell'utente sul cockpit/CLI è la via di recupero; lo start di un
+  // singolo agente (per esempio l'Assistente del profilo) non lo rimuove, così
+  // un processo interno non può annullare lo stop globale.
+  if (!agentArg) {
+    const haltedFlag = join(JHT_HOME, '.team-halted.flag');
+    if (existsSync(haltedFlag)) {
+      try { unlinkSync(haltedFlag); } catch { /* start mostrerà l'eventuale errore reale */ }
+    }
+  }
+
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
   // jht — coerente col boot del bridge Sentinella e con le dipendenze CLI
   // installate nell'immagine. (Era la stessa logica della route web
@@ -238,11 +277,13 @@ export async function startAction(agentArg, options) {
 
   if (!tmuxAvailable()) {
     console.error(c.red('Errore: tmux non trovato. Installa con: brew install tmux'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   if (!claudeAvailable()) {
     console.error(c.red('Errore: Claude CLI non trovato.'));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const { repoRoot } = resolveConfig();

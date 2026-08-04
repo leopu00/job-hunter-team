@@ -12,6 +12,9 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 | [📦 CLI-INSTALL](CLI-INSTALL.md) | CLI users — deep dive on the `install.sh` one-liner |
 | [⌨️ CLI-REFERENCE](CLI-REFERENCE.md) | CLI users — full `jht` command reference |
 | [🤖 AI-AGENT-INTEGRATION](AI-AGENT-INTEGRATION.md) | AI assistants / devs driving JHT programmatically |
+| [🔌 ADDING-A-PROVIDER](ADDING-A-PROVIDER.md) | Contributors — ADR gate, runtime seams, evidence and anti-drift checks |
+| [🏠 LOCAL-SCORER](LOCAL-SCORER.md) | Operators evaluating the experimental one-role local-model spike |
+| [📦 M4-EVIDENCE-BUNDLES](M4-EVIDENCE-BUNDLES.md) | Operators — validate and package scrubbed entry-tier evidence without turning fixtures into live claims |
 
 ## 📧 Email sourcing (recommended)
 
@@ -23,14 +26,14 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 
 | Guide | For whom |
 |---|---|
-| [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Non-tech — native office VPS setup (Path 2) |
-| [☁️ VPS-SETUP](VPS-SETUP.md) | Technical — manual Hetzner setup via SSH |
+| [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Native-office users — guided setup for an existing VPS |
+| [☁️ VPS-SETUP](VPS-SETUP.md) | CLI users — manual setup for an existing Linux VPS |
 
-## 🧪 Beta & feedback
+## 🧪 Testing & feedback
 
 | Guide | For whom |
 |---|---|
-| [🧪 BETA](BETA.md) | Beta testers — the program, what we ask, how to apply |
+| [🧪 BETA](BETA.md) | Users and operators — report issues safely and publish reproducible run evidence |
 | [💬 FEEDBACK-TICKETING](FEEDBACK-TICKETING.md) | Operators — feedback/bug ticketing setup |
 
 ---

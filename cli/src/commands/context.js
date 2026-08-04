@@ -2,16 +2,11 @@ import { readFile, readdir, access, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { JHT_HOME } from '../jht-paths.js';
+import { GREEN, YELLOW, DIM, BOLD, RESET } from './_colors.js';
 
 const JHT_DIR     = JHT_HOME;
 const CONTEXT_DIR = join(JHT_DIR, 'context');
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
-
-const GREEN  = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const DIM    = '\x1b[90m';
-const BOLD   = '\x1b[1m';
-const RESET  = '\x1b[0m';
 
 async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
@@ -127,6 +122,6 @@ async function contextClear() {
 export function registerContextCommand(program) {
   program
     .command('context [action]')
-    .description('Context engine — stato, sorgenti, pulizia cache (azioni: status, sources, clear)')
+    .description('[non implementato] Context engine — nessun consumatore: le sorgenti non alimentano gli agenti (azioni: status, sources, clear)')
     .action(handleContext);
 }

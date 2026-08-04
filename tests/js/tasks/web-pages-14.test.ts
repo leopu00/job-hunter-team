@@ -14,6 +14,10 @@ function readSrc(rel: string) {
   return [raw, singleQuoted, squashed].join("\n/* normalized */\n");
 }
 function readCli(rel: string) { return fs.readFileSync(path.join(CLI, rel), "utf-8"); }
+/** Sorgente non normalizzato: serve a chi fa parsing, non `toContain`. */
+function readWebRaw(rel: string) {
+  return fs.readFileSync(path.join(WEB, rel), "utf-8").replace(/\r\n/g, "\n");
+}
 
 /* ── SecretRef (shared/config) — test funzionali ── */
 describe("SecretRef", () => {
@@ -102,7 +106,6 @@ describe("FloatingChat", () => {
   // Le stringhe tradotte non stanno più nel componente ma nel dizionario
   // accanto: qui si verifica che il componente CHIEDA quelle voci, non che
   // le contenga: il testo italiano è materia del dizionario.
-  const dict = readSrc("app/components/FloatingChat.i18n.ts");
   it("export default FloatingChat + Message/Suggestion types + chat-slide-up", () => {
     expect(src).toMatch(/export default function FloatingChat/);
     expect(src).toContain("type Message"); expect(src).toContain("type Suggestion");
@@ -115,9 +118,66 @@ describe("FloatingChat", () => {
     expect(src).toContain("'Enter'");
     expect(src).toContain('tr("open_assistant")');
   });
-  it("il dizionario traduce le voci che il componente chiede", () => {
-    expect(dict).toContain("Sto pensando");
-    expect(dict).toContain("Apri AI Assistant");
+  it("il dizionario traduce OGNI voce che il componente chiede, in ogni lingua", () => {
+    // Prima qui si cercavano due stringhe italiane ("Sto pensando", "Apri AI
+    // Assistant") dentro il dizionario: potevano stare sotto qualunque
+    // chiave, e il legame col componente non era verificato. Il contratto
+    // vero è fra tre file — le lingue di i18n/config.ts, le chiavi che
+    // FloatingChat.tsx chiede con tr(), le voci che il dizionario offre — ed
+    // è quello che si controlla qui.
+    const component = readWebRaw("app/components/FloatingChat.tsx");
+    const dictRaw = readWebRaw("app/components/FloatingChat.i18n.ts");
+    const cfg = readWebRaw("i18n/config.ts").replace(/"/g, "'");
+
+    const locales = Array.from(
+      cfg.match(/export const locales:[^=]*=\s*\[([^\]]*)\]/)![1].matchAll(/'([^']+)'/g),
+    ).map((m) => m[1]);
+    expect(locales.length).toBeGreaterThanOrEqual(7);
+
+    const asked = [
+      ...new Set(Array.from(component.matchAll(/\btr\(\s*"([^"]+)"\s*\)/g)).map((m) => m[1])),
+    ];
+    expect(asked.length).toBeGreaterThan(0);
+
+    const entries = new Map(
+      Array.from(dictRaw.matchAll(/^ {2}(\w+):\s*\{([^}]*)\}/gm)).map((m) => [
+        m[1],
+        Array.from(m[2].matchAll(/(\w+):/g)).map((k) => k[1]),
+      ]),
+    );
+
+    for (const key of asked) {
+      expect(entries.has(key)).toBe(true);
+      for (const loc of locales) expect(entries.get(key)).toContain(loc);
+    }
+  });
+  it("il layout non importa più il componente", () => {
+    // La feature è ferma, non rimossa: chi la rimonta deve accendere anche
+    // il flag lato server, altrimenti la chat torna visibile e ogni
+    // messaggio prende un 404. Le due cose vanno riattivate insieme.
+    expect(readSrc("app/layout.tsx")).not.toMatch(/dynamic\([^)]*FloatingChat/);
+  });
+});
+
+/* ── /api/ai-assistant — gate di spesa ── */
+describe("api/ai-assistant flag", () => {
+  // Il gate vive in una route mai importata dai test: typecheck e build non
+  // possono accorgersi se sparisce, quindi lo si asserisce sul sorgente.
+  const src = readSrc("app/api/ai-assistant/route.ts");
+  it("la POST è dietro JHT_AI_ASSISTANT_ENABLED, spento di default", () => {
+    expect(src).toContain("JHT_AI_ASSISTANT_ENABLED");
+    // Spento di default = si accende SOLO con un valore esplicito.
+    expect(src).toMatch(/isAssistantEnabled[^}]*===\s*['"]1['"]/);
+  });
+  it("il gate precede chiave, rate limit e fetch upstream, e risponde 404", () => {
+    const body = src.slice(src.indexOf("export async function POST"));
+    const gate = body.indexOf("if (!isAssistantEnabled())");
+    expect(gate).toBeGreaterThanOrEqual(0);
+    expect(gate).toBeLessThan(body.indexOf("requireAuth()"));
+    expect(gate).toBeLessThan(body.indexOf("checkRateLimit"));
+    expect(gate).toBeLessThan(body.indexOf("getAssistantConfig()"));
+    expect(gate).toBeLessThan(body.indexOf("fetch(OPENAI_RESPONSES_URL"));
+    expect(body.slice(gate, gate + 300)).toContain("status: 404");
   });
 });
 

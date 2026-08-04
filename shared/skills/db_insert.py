@@ -15,16 +15,44 @@ Salary (V2 — dichiarato vs stimato):
 
 import argparse
 import re
+import sqlite3
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, resolve_company_id
 from profile_gate import check_minimum_viable_profile
+import maintenance_log
+
+# Campi di uno score che, cambiando, dicono che la rivalutazione è avvenuta.
+# `scored_by` e i timestamp restano fuori: cambiano anche quando il giudizio
+# è identico, e includerli farebbe passare per `updated` ogni ricopiatura.
+SCORE_TRACKED_FIELDS = (
+    "total_score", "stack_match", "remote_fit", "salary_fit",
+    "experience_fit", "strategic_fit", "breakdown", "notes",
+)
+
+
+def _snapshot_score(conn, position_id):
+    """Score corrente della posizione. `{}` se non è mai stata valutata."""
+    row = conn.execute(
+        f"SELECT {', '.join(SCORE_TRACKED_FIELDS)} FROM scores "
+        "WHERE position_id = ?", (position_id,)
+    ).fetchone()
+    if row is None:
+        return {}
+    if hasattr(row, "keys"):
+        return {f: row[f] for f in SCORE_TRACKED_FIELDS}
+    return dict(zip(SCORE_TRACKED_FIELDS, row))
 
 
 def extract_linkedin_job_id(url):
-    """Estrae l'ID numerico da URL LinkedIn (es. linkedin.com/jobs/view/4381470286)."""
+    """Estrae l'ID numerico da URL LinkedIn (es. linkedin.com/jobs/view/4381470286).
+
+    L'id sta nel PATH. Un `currentJobId=` nella query string non e' l'id di
+    questo annuncio: e' l'annuncio che l'utente stava guardando quando ha
+    aperto il link, e la regex non lo guarda apposta.
+    """
     if not url:
         return None
     match = re.search(r'linkedin\.com/jobs/view/(\d+)', url)
@@ -137,11 +165,14 @@ def _log_dedup_skip(level, existing_id, skipped_url, company, title):
 
 
 def check_duplicate(conn, url, company, title, location=None):
-    """Dedup gerarchica a 3 livelli (bug #25 / SC-05).
+    """Dedup gerarchica a 4 livelli, 0-3 (bug #25 / SC-05).
 
     Ritorna (existing_row, match_type) — sys.exit gestito dal caller.
     Manteniamo `LinkedIn job ID` come Livello 0 (era già attivo prima
-    del fix): è la regola più affidabile quando l'URL è LinkedIn-shaped.
+    del fix): è la regola più affidabile quando l'URL è LinkedIn-shaped,
+    perché lo stesso annuncio circola con URL diversi. Il match è ancorato
+    al segmento `/jobs/view/<id>` e riconfermato sull'id estratto dal path
+    del candidato: dedup sì, sottostringa no.
 
     Livello 1 — URL esatto.
     Livello 2 — Azienda + titolo identici + location uguale (o entrambe NULL/'').
@@ -155,15 +186,34 @@ def check_duplicate(conn, url, company, title, location=None):
     spreco di token Scout (la verifica + dedup ripartirebbero da zero).
     """
     # Livello 0 (storico) — LinkedIn job ID
+    #
+    # Il LIKE e' un PREFILTRO, non il verdetto. Un `LIKE '%<id>%'` non sa dove
+    # l'id finisce: cercando 4381470286 pescava la riga il cui id e'
+    # 43814702861, e una posizione NUOVA veniva scartata come doppione — con
+    # il log a dire che era un doppione. Latente finche' gli id LinkedIn hanno
+    # 10 cifre, sistematico all'undicesima, immediato se un URL salvato porta
+    # un altro `currentJobId=` in query string (l'id lo leggiamo dal path, il
+    # LIKE scandiva tutta la stringa).
+    #
+    # Ancoriamo su due lati: il prefiltro chiede il segmento `/jobs/view/<id>`
+    # (nessun URL da cui `extract_linkedin_job_id` ritorni <id> puo' non
+    # contenerlo, quindi non perdiamo candidati), e ogni candidato viene poi
+    # CONFERMATO riestraendo l'id dal suo path con la stessa funzione. Il
+    # match vale solo se i due id sono lo stesso id — che e' la definizione
+    # del livello 0. `fetchall` e non `fetchone`: il duplicato vero puo'
+    # arrivare dopo un candidato che il prefiltro ha preso di striscio.
     linkedin_id = extract_linkedin_job_id(url)
     if linkedin_id:
-        existing = conn.execute(
-            "SELECT id, title, company FROM positions WHERE url LIKE ?",
-            (f'%{linkedin_id}%',)
-        ).fetchone()
-        if existing:
-            _log_dedup_skip(0, existing['id'], url, company, title)
-            return existing, f"LinkedIn job ID {linkedin_id}"
+        # `linkedin_id` e' \d+ e il prefisso e' letterale: nessun carattere
+        # speciale di LIKE (% _) puo' finire nel pattern.
+        candidates_l0 = conn.execute(
+            "SELECT id, title, company, url FROM positions WHERE url LIKE ?",
+            (f'%/jobs/view/{linkedin_id}%',)
+        ).fetchall()
+        for cand in candidates_l0:
+            if extract_linkedin_job_id(cand['url']) == linkedin_id:
+                _log_dedup_skip(0, cand['id'], url, company, title)
+                return cand, f"LinkedIn job ID {linkedin_id}"
 
     # Livello 1 — URL esatto
     if url:
@@ -208,53 +258,100 @@ def check_duplicate(conn, url, company, title, location=None):
     return None, None
 
 
+def _rollback_quietly(conn):
+    """ROLLBACK che non copre l'errore vero se la transazione è già chiusa."""
+    try:
+        conn.execute("ROLLBACK")
+    except sqlite3.Error:
+        pass
+
+
 def insert_position(args):
     conn = get_db()
     ensure_schema(conn)
 
-    # Check duplicati PRIMA dell'inserimento (bug #25 SC-05: 3 livelli)
-    existing, match_type = check_duplicate(
-        conn, args.url, args.company, args.title, getattr(args, 'location', None),
-    )
-    if existing:
-        print(f"⚠️  DUPLICATO ({match_type}): '{args.company} — {args.title}' già presente come #{existing['id']} ({existing['company']} — {existing['title']}). INSERT annullato.")
+    # Dedup e INSERT sono UNA transazione, non due momenti scollegati.
+    #
+    # Il check-then-insert nudo lascia una finestra fra il SELECT e l'INSERT:
+    # due Scout sulla stessa fonte guardano entrambi un DB in cui la posizione
+    # non c'è ancora, e la scrivono tutti e due. Oggi non capita perché C-21
+    # divide i territori, ma è esattamente la configurazione che
+    # [SOURCE-YIELD-MEMORY] vuole valutare (due Scout insieme su LinkedIn):
+    # il vincolo va messo prima che quella configurazione arrivi.
+    #
+    # `BEGIN IMMEDIATE` prende il lock di scrittura SUBITO, non al primo
+    # INSERT: il secondo processo si mette in coda (busy timeout 10s, vedi
+    # get_db) e quando entra il suo SELECT vede già la riga dell'altro, quindi
+    # riporta un duplicato invece di crearne uno. `isolation_level = None`
+    # toglie di mezzo la gestione implicita di sqlite3 e ci lascia il
+    # controllo esplicito di BEGIN/COMMIT/ROLLBACK.
+    conn.isolation_level = None
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        # Check duplicati PRIMA dell'inserimento (bug #25 SC-05: 4 livelli)
+        existing, match_type = check_duplicate(
+            conn, args.url, args.company, args.title, getattr(args, 'location', None),
+        )
+        if existing:
+            _rollback_quietly(conn)
+            print(f"⚠️  DUPLICATO ({match_type}): '{args.company} — {args.title}' già presente come #{existing['id']} ({existing['company']} — {existing['title']}). INSERT annullato.")
+            conn.close()
+            sys.exit(1)
+
+        # Auto-resolve company_id
+        company_id = resolve_company_id(conn, args.company)
+
+        cur = conn.execute("""
+            INSERT INTO positions (title, company, company_id, location,
+                                   remote_type,
+                                   salary_declared_min, salary_declared_max, salary_declared_currency,
+                                   salary_estimated_min, salary_estimated_max, salary_estimated_currency,
+                                   salary_estimated_source,
+                                   url, source, jd_text, requirements,
+                                   found_by, deadline, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (args.title, args.company, company_id, args.location,
+              args.remote_type,
+              args.salary_declared_min, args.salary_declared_max, args.salary_declared_currency or 'EUR',
+              args.salary_estimated_min, args.salary_estimated_max, args.salary_estimated_currency or 'EUR',
+              args.salary_estimated_source,
+              args.url, args.source, args.jd_text,
+              args.requirements, args.found_by, args.deadline, args.notes))
+
+        # Bug #14: log la transizione iniziale (None → 'new') con by_agent =
+        # JHT_AGENT_NAME (es. scout-1). Senza questa entry il funnel parte
+        # da "scored" come stato visibile più antico — pessimo per metriche
+        # di throughput a livello pipeline.
+        position_id = cur.lastrowid
+        actor = os.environ.get('JHT_AGENT_NAME') or args.found_by or 'unknown'
+        conn.execute(
+            "INSERT INTO position_state_transitions "
+            "(position_id, from_state, to_state, by_agent, notes) "
+            "VALUES (?, NULL, 'new', ?, ?)",
+            (position_id, actor, 'initial INSERT'),
+        )
+        conn.execute("COMMIT")
+    except SystemExit:
+        raise
+    except sqlite3.IntegrityError as exc:
+        _rollback_quietly(conn)
+        # L'indice unico su `positions.url` è l'ultima parola sulla race, non
+        # la prima: con BEGIN IMMEDIATE non dovrebbe mai scattare da questo
+        # percorso. Se scatta, qualcuno ha scritto lo stesso URL fuori dal
+        # wrapper — trattiamolo come il duplicato che è, non come un crash.
+        # Gli altri IntegrityError (i CHECK di lunghezza su title/company/
+        # location, mig 015) devono invece restare visibili: sono bug di
+        # parsing dello Scout e vanno letti nel suo turno.
+        if 'UNIQUE' not in str(exc).upper():
+            conn.close()
+            raise
+        print(f"⚠️  DUPLICATO (URL già presente, vincolo UNIQUE): '{args.company} — {args.title}' — {args.url}. INSERT annullato.")
         conn.close()
         sys.exit(1)
+    except BaseException:
+        _rollback_quietly(conn)
+        raise
 
-    # Auto-resolve company_id
-    company_id = resolve_company_id(conn, args.company)
-
-    cur = conn.execute("""
-        INSERT INTO positions (title, company, company_id, location,
-                               remote_type,
-                               salary_declared_min, salary_declared_max, salary_declared_currency,
-                               salary_estimated_min, salary_estimated_max, salary_estimated_currency,
-                               salary_estimated_source,
-                               url, source, jd_text, requirements,
-                               found_by, deadline, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (args.title, args.company, company_id, args.location,
-          args.remote_type,
-          args.salary_declared_min, args.salary_declared_max, args.salary_declared_currency or 'EUR',
-          args.salary_estimated_min, args.salary_estimated_max, args.salary_estimated_currency or 'EUR',
-          args.salary_estimated_source,
-          args.url, args.source, args.jd_text,
-          args.requirements, args.found_by, args.deadline, args.notes))
-
-    # Bug #14: log la transizione iniziale (None → 'new') con by_agent =
-    # JHT_AGENT_NAME (es. scout-1). Senza questa entry il funnel parte
-    # da "scored" come stato visibile più antico — pessimo per metriche
-    # di throughput a livello pipeline.
-    position_id = cur.lastrowid
-    actor = os.environ.get('JHT_AGENT_NAME') or args.found_by or 'unknown'
-    conn.execute(
-        "INSERT INTO position_state_transitions "
-        "(position_id, from_state, to_state, by_agent, notes) "
-        "VALUES (?, NULL, 'new', ?, ?)",
-        (position_id, actor, 'initial INSERT'),
-    )
-
-    conn.commit()
     cid_info = f" (company_id={company_id})" if company_id else " (company_id=NULL — azienda non in DB)"
     print(f"Posizione inserita con ID: {position_id}{cid_info}")
     conn.close()
@@ -307,6 +404,16 @@ def insert_score(args):
 
     conn = get_db()
     ensure_schema(conn)
+
+    # `INSERT OR REPLACE` sovrascrive in silenzio: senza fotografare il
+    # punteggio precedente, un re-score che lascia il totale identico è
+    # indistinguibile da un re-score mai eseguito. È lo stesso difetto dei
+    # campi di manutenzione, sulla tabella `scores`.
+    # `getattr`: insert_score è chiamata anche con Namespace costruiti a mano
+    # (test, dashboard), che non conoscono i flag di evidenza.
+    action = getattr(args, 'action', None)
+    previous = _snapshot_score(conn, args.position_id) if action else {}
+
     cur = conn.execute("""
         INSERT OR REPLACE INTO scores (position_id, total_score, stack_match, remote_fit,
                                         salary_fit, experience_fit, strategic_fit,
@@ -315,21 +422,50 @@ def insert_score(args):
     """, (args.position_id, args.total, args.stack_match, args.remote_fit,
           args.salary_fit, args.experience_fit, args.strategic_fit,
           args.breakdown, args.notes, args.scored_by))
+
+    if action:
+        current = _snapshot_score(conn, args.position_id)
+        diffs = [(f, previous.get(f), current.get(f))
+                 for f in SCORE_TRACKED_FIELDS
+                 if str(previous.get(f)) != str(current.get(f))]
+        evidence = maintenance_log.evidence_from_args(args)
+        try:
+            maintenance_log.record_diffs(
+                conn, "position", args.position_id, action, diffs,
+                outcome=getattr(args, 'outcome', None), evidence=evidence,
+                duration_ms=getattr(args, 'duration_ms', None))
+        except maintenance_log.MaintenanceError as e:
+            conn.rollback()
+            print(f"⚠️  SCORE ANNULLATO: {e}")
+            conn.close()
+            sys.exit(1)
+
     conn.commit()
-    print(f"Score inserito per posizione {args.position_id}: {args.total}/100")
+    if action and previous and not diffs:
+        # Detto a voce: un re-score che non muove nulla è un'informazione,
+        # non un errore — ma va vista, non sepolta in un contatore.
+        print(f"Score invariato per posizione {args.position_id}: "
+              f"{args.total}/100 (nessun campo cambiato)")
+    else:
+        print(f"Score inserito per posizione {args.position_id}: {args.total}/100")
     conn.close()
 
 
 def insert_application(args):
     conn = get_db()
     ensure_schema(conn)
+    written_by = (
+        args.written_by
+        or os.environ.get('JHT_AGENT_NAME')
+        or os.environ.get('JHT_AGENT_ID', '')
+    ).strip() or None
     cur = conn.execute("""
         INSERT OR REPLACE INTO applications (position_id, cv_path, cl_path,
                                               cv_pdf_path, cl_pdf_path,
                                               written_by, written_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (args.position_id, args.cv_path, args.cl_path,
-          args.cv_pdf_path, args.cl_pdf_path, args.written_by,
+          args.cv_pdf_path, args.cl_pdf_path, written_by,
           args.written_at))
     conn.commit()
     print(f"Application inserita per posizione {args.position_id}")
@@ -390,16 +526,19 @@ def main():
     s = sub.add_parser('score')
     s.add_argument('--position-id', type=int, required=True)
     s.add_argument('--total', type=int, required=True)
-    s.add_argument('--stack-match', type=int)
-    s.add_argument('--remote-fit', type=int)
-    s.add_argument('--salary-fit', type=int)
-    s.add_argument('--experience-fit', type=int)
-    s.add_argument('--strategic-fit', type=int)
+    s.add_argument('--stack-match', type=int, help='Componente stack, range 0-40')
+    s.add_argument('--remote-fit', type=int, help='Componente remote/location, range 0-25')
+    s.add_argument('--salary-fit', type=int, help='Componente stipendio, range 0-20')
+    s.add_argument('--experience-fit', type=int, help='Componente seniority, range 0-10')
+    s.add_argument('--strategic-fit', type=int, help='Componente strategico, range 0-15')
     s.add_argument('--breakdown')
     s.add_argument('--pros')
     s.add_argument('--cons')
     s.add_argument('--notes')
     s.add_argument('--scored-by')
+    # Re-score tracciabile: --action rescore registra il diff col punteggio
+    # precedente, così un re-score che non muove nulla si vede.
+    maintenance_log.add_cli_args(s)
 
     # application
     a = sub.add_parser('application')

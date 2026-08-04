@@ -1,0 +1,393 @@
+============================================================
+  QA ONBOARDING REPORT — Job Hunter Team
+  Eseguito da: qa-test (JHT-QA)
+  Data: 2026-03-14
+  Worktree: main
+============================================================
+
+SOMMARIO ESECUTIVO
+------------------
+Testati 8 step del Quick Start documentato nel README.
+Trovati: 3 BUG bloccanti, 3 issue UX, 2 anomalie di runtime.
+Lo step più critico per un nuovo utente: candidate_profile.example.yml mancante.
+
+============================================================
+STEP 1 — .env.example
+============================================================
+STATO: OK ✅
+
+Comando: cp .env.example .env
+
+Verifica:
+  - File esiste: SI
+  - Dimensione: 46 righe, 25 righe di commento
+  - ANTHROPIC_API_KEY documentata: SI
+  - TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID: SI (opzionali)
+  - JH_PERSONAL_EMAIL / JH_PERSONAL_PASSWORD: SI (opzionali)
+  - DATABASE_URL (PostgreSQL): SI, commentata
+  - GOOGLE_SHEETS_ID, JH_DRIVE_FOLDER_ID: SI (opzionali)
+
+Output .env.example: Ben strutturato, sezioni chiare (REQUIRED / OPTIONAL).
+Nessun errore.
+
+Suggerimento UX:
+  - Aggiungere esempio concreto per ANTHROPIC_API_KEY (es. "your-anthropic-key")
+    per aiutare l'utente a capire il formato atteso.
+
+
+============================================================
+STEP 2 — candidate_profile.example.yml
+============================================================
+STATO: FAIL ❌ — BUG BLOCCANTE
+
+Comando documentato nel README:
+  cp candidate_profile.example.yml candidate_profile.yml
+
+Output:
+  cp: candidate_profile.example.yml: No such file or directory
+
+BUG-001 [BLOCCANTE] — candidate_profile.example.yml mancante
+  Il README istruisce l'utente a copiare il file example, ma
+  `candidate_profile.example.yml` non esiste nel repo.
+  Esiste solo `candidate_profile.yml` (già compilato con dati reali).
+
+  Note aggiuntive:
+  - Il file `candidate_profile.yml` contiene il commento:
+    "QUESTO FILE NON VA MAI COMMITTATO (.gitignore lo esclude)"
+    MA il file è effettivamente committato nel repo (committer: leopu00).
+    Questo espone dati privati dell'utente nel repository pubblico.
+
+Impatto: Un nuovo utente non riesce a configurare il suo profilo candidato.
+         Deve inventarsi la struttura YAML a mano.
+
+Soluzione suggerita:
+  1. Creare `candidate_profile.example.yml` con valori placeholder (es. "Your Name")
+  2. Aggiungere `candidate_profile.yml` al .gitignore (già presente nella versione
+     corrente del .gitignore dopo commit ba0b27c)
+  3. Verificare che `candidate_profile.yml` (con dati reali) NON sia in git
+
+
+============================================================
+STEP 3 — python3 shared/skills/db_init.py
+============================================================
+STATO: OK ✅
+
+Comando: python3 shared/skills/db_init.py
+
+Output:
+  Database inizializzato: .../main/shared/data/jobs.db
+    applications: 0 righe
+    companies: 0 righe
+    position_highlights: 0 righe
+    positions: 0 righe
+    scores: 0 righe
+    sqlite_sequence: 0 righe
+
+Exit code: 0
+
+Verifica:
+  - Tutte le 5 tabelle principali create correttamente
+  - Schema completo: companies, positions, position_highlights, scores, applications
+  - Path DB corretto: shared/data/jobs.db (relativo alla root)
+  - WAL mode abilitato, foreign keys ON
+
+Suggerimento UX:
+  - Lo script è idempotente (CREATE TABLE IF NOT EXISTS): ottimo.
+  - Aggiungere messaggio se il DB esiste già per rassicurare l'utente.
+
+
+============================================================
+STEP 4a — db_query.py dashboard
+============================================================
+STATO: OK ✅
+
+Comando: python3 shared/skills/db_query.py dashboard
+
+Output (con DB di test):
+  JOB HUNTER — DASHBOARD (Schema V2)
+  Posizioni totali: 1
+       checked: 1
+  TOP 10 per score:
+     75/100  QA Test Corp  QA Test Position  [checked]
+  Company ID: 0/1 posizioni collegate (0%)
+
+Exit code: 0
+
+Suggerimento UX:
+  - "Company ID: 0/1 posizioni collegate (0%)" non è chiaro per un nuovo utente.
+    Spiegare cosa significa (link posizione → azienda nella tabella companies).
+
+
+============================================================
+STEP 4b — db_query.py stats
+============================================================
+STATO: PARZIALE ⚠️
+
+Comando: python3 shared/skills/db_query.py stats
+
+Output:
+  positions: 1 | companies: 0 | scores: 1 | applications: 0 | schema: V0
+
+Exit code: 0
+
+BUG-002 [MINORE] — Schema version errata
+  Il report stats mostra "schema: V0" ma la documentazione (db-schema.md) indica
+  che lo schema corrente è V2 (user_version = 2).
+  La funzione `ensure_schema` in _db.py non imposta `PRAGMA user_version = 2`.
+
+  La colonna `interview_round` è documentata in db-schema.md e supportata da
+  db_update.py (--interview-round), ma NON è presente nello schema in _db.py.
+  Se un utente prova a settare interview_round su un DB fresco, otterrà un errore.
+
+Soluzione suggerita:
+  - Aggiungere `PRAGMA user_version = 2;` alla fine di ensure_schema()
+  - Aggiungere colonna `interview_round INTEGER DEFAULT NULL` alla tabella applications
+
+
+============================================================
+STEP 4c — db_query.py positions
+============================================================
+STATO: OK ✅
+
+Comando: python3 shared/skills/db_query.py positions
+
+Output (esempio):
+  ID Score  Stato    Azienda        Titolo            Remote       Fonte
+  1    75   checked  QA Test Corp   QA Test Position  full_remote  test
+
+Exit code: 0. Formato tabellare leggibile.
+
+
+============================================================
+STEP 4d — db_query.py position <id>
+============================================================
+STATO: OK ✅
+
+Comando: python3 shared/skills/db_query.py position 1
+
+Output: Dettaglio completo con score breakdown, application status.
+Exit code: 0.
+
+
+============================================================
+STEP 4e — db_query.py next-for-scorer
+============================================================
+STATO: OK ✅
+
+Comando: python3 shared/skills/db_query.py next-for-scorer
+
+Output: "Posizioni checked senza score: nessuna." (su DB vuoto)
+       oppure lista delle posizioni eligible.
+Exit code: 0.
+
+
+============================================================
+STEP 4f — db_query.py next-for-scrittore
+============================================================
+STATO: OK ✅
+
+Comando: python3 shared/skills/db_query.py next-for-scrittore
+
+Output: Lista posizioni scored >= 50 senza application.
+Exit code: 0.
+
+
+============================================================
+STEP 4g — db_query.py next-for-critico
+============================================================
+STATO: OK ✅
+
+Comando: python3 shared/skills/db_query.py next-for-critico
+
+Output: "Application in review senza verdict: nessuna."
+Exit code: 0.
+
+
+============================================================
+STEP 5 — db_insert.py position (QA Test)
+============================================================
+STATO: OK ✅ (con anomalia documentata)
+
+Comando:
+  python3 shared/skills/db_insert.py position \
+    --title 'QA Test Position' --company 'QA Test Corp' \
+    --location 'Remote EU' --remote-type full_remote \
+    --url 'https://qa-test.example.com/job/1' \
+    --source test --found-by qa-test \
+    --jd-text 'Test JD for QA validation. Requirements: Python, testing.' \
+    --requirements 'Python, pytest'
+
+Output: "Posizione inserita con ID: 1 (company_id=NULL — azienda non in DB)"
+Exit code: 0.
+
+Note:
+  - Il messaggio "(company_id=NULL — azienda non in DB)" è chiaro e utile.
+  - Il check duplicati funziona correttamente.
+  - Inserimento committed correttamente nel DB.
+
+ANOMALIA-001 [INDAGINE] — DB inconsistency durante test
+  Durante la prima sessione di test, il DB aveva 3 posizioni pre-esistenti
+  (probabilmente da sessioni precedenti di agenti attivi). Dopo l'inserimento
+  della posizione QA (ID=4), i dati sono spariti dalla sessione successiva.
+  Il DB si trovava in uno stato inconsistente, probabilmente per un'operazione
+  concorrente di altro agente o per un backup/ripristino automatico.
+  Alla seconda sessione di test (DB azzerato), l'insert funziona correttamente.
+
+  Suggerimento: Considerare lock o versioning del DB per evitare data loss
+  in ambienti multi-agente.
+
+
+============================================================
+STEP 6 — db_update.py position --status checked
+============================================================
+STATO: PARZIALE ⚠️
+
+Comando: python3 shared/skills/db_update.py position 1 --status checked
+
+Output: "Posizione 1 aggiornata: status = ?"
+Exit code: 0.
+
+BUG-003 [MINORE] — Messaggio di conferma mostra placeholder SQL
+  Il messaggio di output mostra "status = ?" invece del valore effettivo
+  ("status = checked"). Questo confonde l'utente che non sa se l'update
+  è riuscito o se c'è stato un errore.
+
+  Causa: db_update.py costruisce la lista `updates` con frammenti SQL
+  (es. "status = ?") e la stampa direttamente invece del valore.
+
+  Soluzione suggerita:
+    Modificare la logica di output per mostrare il valore reale:
+    es. "Posizione 1 aggiornata: status=checked, notes=..."
+
+Verifica aggiornamento:
+  python3 shared/skills/db_query.py position 1
+  → Stato: checked  ✅ (il valore è correttamente aggiornato nel DB)
+
+
+============================================================
+STEP 7 — db_insert.py score
+============================================================
+STATO: OK ✅ (con nota su prima run fallita)
+
+Comando:
+  python3 shared/skills/db_insert.py score \
+    --position-id 1 --total 75 --stack-match 30 \
+    --remote-fit 20 --salary-fit 15 \
+    --experience-fit 5 --strategic-fit 5 \
+    --scored-by qa-test
+
+Output: "Score inserito per posizione 1: 75/100"
+Exit code: 0.
+
+PRIMA RUN (posizione ID=4, DB inconsistente):
+  Errore: sqlite3.IntegrityError: FOREIGN KEY constraint failed
+  Causa: la posizione 4 non esisteva più nel DB (vedi ANOMALIA-001)
+  Questo era anche il bug riportato in commit ba0b27c (rimosso pros/cons)
+  ma l'errore FK si manifesta quando la posizione non esiste.
+
+  Note: db_insert.py score usa INSERT OR REPLACE, quindi se il position_id
+  esiste già uno score, lo sovrascrive (comportamento documentato).
+
+
+============================================================
+STEP 8 — Verifica DB finale
+============================================================
+STATO: OK ✅
+
+python3 shared/skills/db_query.py position 1
+
+Output:
+  POSIZIONE #1: QA Test Position
+  Azienda: QA Test Corp (company_id=NULL)
+  Location: Remote EU
+  Remote: full_remote
+  URL: https://qa-test.example.com/job/1
+  Fonte: test
+  Stato: checked
+  Trovata da: qa-test
+  --- SCORE: 75/100 ---
+  Stack: 30/40 | Remote: 20/25 | Stipendio: 15/20
+  Esperienza: 5 | Strategico: 5/15
+
+Tutte le operazioni riflesse correttamente nel DB. ✅
+
+
+============================================================
+RIEPILOGO BUG E ISSUE
+============================================================
+
+BUG BLOCCANTI (new user can't proceed):
+  [BUG-001] candidate_profile.example.yml non esiste → STEP 2 FAIL
+            Il README istruisce una `cp` di un file che non c'è.
+            Fix: creare il file con valori placeholder.
+
+ANOMALIE RUNTIME:
+  [ANOMALIA-001] DB inconsistency tra sessioni (probabilmente concorrenza
+            multi-agente). Il DB aveva 3 posizioni, poi è diventato vuoto.
+            Fix: documentare che il DB può cambiare tra sessioni in ambiente
+            multi-agente. Aggiungere backup automatico prima di operazioni bulk.
+
+ISSUE MINORI (non bloccanti):
+  [BUG-002] `db_query.py stats` mostra "schema: V0" invece di "V2".
+            ensure_schema() non imposta PRAGMA user_version = 2.
+            Colonna interview_round mancante dallo schema _db.py.
+
+  [BUG-003] `db_update.py` mostra placeholder SQL "status = ?" nel
+            messaggio di conferma invece del valore effettivo.
+
+  [BUG-004] candidate_profile.yml è committato nel repo nonostante il
+            commento interno dica "NON VA MAI COMMITTATO". Espone dati privati.
+
+SUGGERIMENTI UX:
+  1. README Step 3: aggiornare "cp candidate_profile.example.yml ..."
+     con nota alternativa se il file non esiste.
+  2. db_update.py: mostrare valore effettivo nel messaggio di conferma.
+  3. db_query.py dashboard: spiegare "Company ID: X/Y collegate".
+  4. db_init.py: aggiungere messaggio se DB già inizializzato.
+  5. .env.example: aggiungere formato esempio per ANTHROPIC_API_KEY.
+  6. db-schema.md: sincronizzare interview_round con _db.py schema.
+
+============================================================
+CHECKLIST COMANDI CLI TESTATI
+============================================================
+
+  [OK]  python3 shared/skills/db_init.py
+  [OK]  python3 shared/skills/db_query.py dashboard
+  [OK]  python3 shared/skills/db_query.py stats
+  [OK]  python3 shared/skills/db_query.py positions
+  [OK]  python3 shared/skills/db_query.py position 1
+  [OK]  python3 shared/skills/db_query.py next-for-scorer
+  [OK]  python3 shared/skills/db_query.py next-for-scrittore
+  [OK]  python3 shared/skills/db_query.py next-for-critico
+  [OK]  python3 shared/skills/db_insert.py position (con argomenti QA)
+  [WARN] python3 shared/skills/db_update.py position 1 --status checked
+         (funziona ma messaggio confuso)
+  [OK]  python3 shared/skills/db_insert.py score (con argomenti QA)
+  [OK]  Verifica DB finale
+
+============================================================
+Fine report — 2026-03-14 — JHT-QA
+============================================================
+
+============================================================
+AGGIORNAMENTO POST-MERGE (2026-03-14)
+============================================================
+
+Dopo merge da main in qa worktree, trovate le seguenti correzioni già applicate:
+
+[FIXATO] BUG-001 — candidate_profile.example.yml
+  Il file ora esiste come `candidate_profile.yml.example` (naming corretto).
+  Il README è stato aggiornato: "cp candidate_profile.yml.example candidate_profile.yml"
+  Aggiunti anche: docs/quickstart.md, setup.sh per una migliore UX onboarding.
+
+[FIXATO] db_insert.py score — colonne pros/cons
+  Il commit ba0b27c ha rimosso i campi `pros` e `cons` dall'INSERT statement.
+  Il test di regressione `test_score_no_pros_cons_columns` e 
+  `test_insert_score_succeeds` confermano il fix.
+
+ISSUES ANCORA APERTE (da fixare):
+  [BUG-002] db_update.py messaggio "status = ?" — APERTO
+  [BUG-003] db_query.py stats "schema: V0" — APERTO
+  [BUG-004] interview_round mancante da _db.py schema — APERTO
+
+============================================================

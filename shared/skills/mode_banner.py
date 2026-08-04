@@ -1,0 +1,913 @@
+#!/usr/bin/env python3
+"""
+mode_banner.py — la MODALITÀ CORRENTE composta DA DISCO, per essere iniettata.
+
+## Perché esiste ([MODE-INJECTION-HOURLY-PROMPT], decisione utente 2026-07-30)
+
+L'11/07/2026 l'utente ha messo un team in manutenzione (`stop_search: true`).
+L'ordine è stato scritto in `profile/capitano-maintenance.json` e recepito: il
+12/07 il diario del Capitano registra uno spawn Scout **soppresso** citandolo.
+Il 13/07, dopo un refresh di contesto, l'ordine è sparito dalla memoria
+operativa — e per **18 giorni** il team ha lavorato in modalità normale (183
+posizioni sorgente, weekly bruciato al 100% due volte) finché l'utente non l'ha
+riemesso a mano il 29/07.
+
+Le tre difese esistenti hanno ceduto tutte per lo stesso motivo: **dipendono da
+qualcuno che si ricordi di LEGGERE.** C-18 («rileggi il file a ogni apertura di
+finestra») è un obbligo di prompt, e si affida alla stessa memoria che il
+refresh cancella. La bacheca `team_directives` è la fonte di verità che C-18
+indica, ma nessun processo la popola. Il `[RESUME]` del Dottore la porterebbe
+avanti, ma il Dottore è un agente e il suo round può saltare.
+
+Questo modulo ribalta la direzione: **compone l'ordine, e chi lo consegna è un
+processo deterministico.** Non aggiunge una fonte di verità — legge quelle che
+già esistono, ogni volta che gli si chiede, senza cache:
+
+  1. `$JHT_HOME/profile/capitano-maintenance.json`  → modalità e `orders`
+  2. `team_directives` con `status='active'` (jobs.db, SOLA LETTURA) → gli
+     ordini permanenti dell'utente
+  3. i flag operativi già noti al sistema → `.team-halted.flag`,
+     `.team-standby.flag`, `daily-halt.flag`, `.weekly-halt.flag`,
+     `.burn-intent.flag`
+
+## Chi la inietta
+
+  • `.launcher/heartbeat-bridge.py` — in coda al battito orario al Capitano.
+    Un processo Python: non dimentica, non salta i giri, non costa un turno di
+    modello in più (il messaggio parte comunque).
+  • la skill `session-refresh` (Dottore) — in coda al `[RESUME]` del Capitano,
+    letta da disco e non dal contesto che sta buttando. Doppio canale: il
+    bridge copre il TEMPO, il resume copre l'ISTANTE del refresh.
+
+I **worker non la ricevono**: la modalità la applica il Capitano assegnando le
+code, e un worker che riparte guarda la coda che gli è stata assegnata.
+
+## Due regole che non si negoziano
+
+**Mai vuota.** `banner()` ritorna sempre una sezione, anche a modalità di
+default (`MODE: search`). L'assenza della sezione deve poter significare solo
+«bridge rotto» — mai «modalità di default», altrimenti si ricrea l'ambiguità
+silenzio=default che è la causa dell'incidente.
+
+**Chiude dichiarando chi vince.** L'ultima riga dice che in caso di contrasto
+vince il file. Non è decorazione: dopo un refresh il Capitano ha un contesto
+pulito che *contraddice* l'ordine, e deve sapere quale dei due è autorevole.
+
+Corollario: un `capitano-maintenance.json` presente ma **illeggibile** non
+diventa `search`. Si dichiara `MODE: sconosciuto` e si tratta come un ordine
+attivo — la direzione sicura è far leggere il file a un umano, non dedurre che
+non ci fosse nessun ordine.
+
+## Le modalità (contratto 2026-08-03)
+
+`"mode"` è un enum chiuso: `search` (default, assenza del file), `harvest`,
+`care` (ex `maintenance`), `calibration`, `saving`. Ogni modalità dichiara
+QUATTRO cose — code attive, cosa è sospeso, priorità di budget, condizione di
+uscita — e il banner le trasmette TUTTE, non solo il nome: il manuale completo
+è la skill `team-modes` (agents/_skills/), referenziata dal file identità del
+Capitano. La condizione di uscita è la novità che chiude il buco storico
+(nessuna modalità finiva da sola): dove è misurabile si valuta in SOLA LETTURA
+sul DB e il banner dichiara «LAVORO ESAURITO»; dove non lo è, degrada in un
+esplicito «non valutabile» — mai in un falso finito. Il banner non cambia MAI
+modalità: la scelta resta dell'utente, il banner rompe solo il silenzio.
+
+Uso:
+  python3 mode_banner.py line          # una riga (per tmux: mai newline)
+  python3 mode_banner.py show          # multi-riga, leggibile
+  python3 mode_banner.py json          # i fatti grezzi
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+import sqlite3
+import sys
+import urllib.parse
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+# ── L'enum chiuso delle modalità (contratto 2026-08-03) ───────────────────
+# Cinque valori nel file, chiave `"mode"`. L'assenza del file È `search`; i
+# valori legacy (`normal`, `maintenance`) vengono canonicalizzati ma restano
+# visibili nel banner — il file su una VPS in produzione li porta ancora.
+MODE_SEARCH = "search"
+MODE_HARVEST = "harvest"
+MODE_CARE = "care"
+MODE_CALIBRATION = "calibration"
+MODE_SAVING = "saving"
+MODES = (MODE_SEARCH, MODE_HARVEST, MODE_CARE, MODE_CALIBRATION, MODE_SAVING)
+# Alias storici: `normal` era il "nessun file", `maintenance` è la cura di
+# C-18 prima della rinomina 2026-07-30. Stessa modalità, nome canonico nuovo.
+MODE_NORMAL = "normal"
+MODE_MAINTENANCE = "maintenance"
+LEGACY_MODES = {MODE_NORMAL: MODE_SEARCH, MODE_MAINTENANCE: MODE_CARE}
+MODE_UNKNOWN = "sconosciuto"
+
+MODE_LABELS = {
+    MODE_SEARCH: "ricerca",
+    MODE_HARVEST: "raccolto",
+    MODE_CARE: "cura",
+    MODE_CALIBRATION: "calibrazione",
+    MODE_SAVING: "risparmio",
+}
+
+# Le QUATTRO dichiarazioni di ogni modalità (code attive / sospeso / budget /
+# uscita) in forma compatta: è la specifica che il battito orario trasmette.
+# Il testo lungo — cosa assegnare, cosa spawnare, come si compone con C-25 —
+# vive nella skill `team-modes`; qui deve stare in un messaggio DIGITATO.
+MODE_SPECS = {
+    MODE_SEARCH: {
+        "code": "pipeline piena: scout → analisi → score "
+                "(Scrittore/Critico on-demand, C-10)",
+        "sospeso": "niente — C-05/C-05c (anti-idle sourcing) attive",
+        "budget": "sourcing prima, poi analisi/score verso posizioni CON "
+                  "punteggio",
+        "uscita": "nessuna: modalità continua, la cambia solo l'utente",
+    },
+    MODE_HARVEST: {
+        "code": "convertire in CV le migliori GIÀ trovate (Scrittore "
+                "on-demand + Critico; liveness pre-CV)",
+        "sospeso": "sourcing: NIENTE Scout (C-05/C-05c sospese, coda `new` "
+                   "vuota BY DESIGN)",
+        "budget": "Scrittore/Critico prima; Analista solo per il pre-check "
+                  "liveness",
+        "uscita": "quando nessuna posizione viva sopra soglia resta senza CV",
+    },
+    MODE_CARE: {
+        "code": "recheck cadenzato (14gg, score ≥ 70, migliori prima) + "
+                "geocode-missing + logo-missing + scarto scadute (C-18)",
+        "sospeso": "sourcing con stop_search=true (C-05/C-05c sospese)",
+        "budget": "cura del portafoglio, diluita sulle ore attive; CV solo "
+                  "su richiesta e ≥ cv_min_score",
+        "uscita": "code di cura TUTTE vuote (la cadenza 14gg le rimatura)",
+    },
+    MODE_CALIBRATION: {
+        "code": "feedback dell'utente (feedback-query, dal cloud) → "
+                "riorientare la PRIORITÀ di ricerca (+ re-score mirato)",
+        "sospeso": "sourcing di massa finché la priorità non è aggiornata "
+                   "(cercare con la mira vecchia è lo spreco da evitare)",
+        "budget": "lettura feedback + ritaratura, in batch limitati",
+        "uscita": "feedback recente letto e priorità aggiornata — lo "
+                  "dichiari TU all'utente",
+    },
+    MODE_SAVING: {
+        "code": "solo il minimo vitale: risposte all'utente, ticket (C-15), "
+                "flag user-driven",
+        "sospeso": "sourcing E ogni enrichment autonomo "
+                   "(recheck/geocode/logo)",
+        "budget": "vicino a zero: nessuna spesa autonoma (C-25 qui NON "
+                  "sblocca sourcing: il margine si RIFERISCE, non si spende)",
+        "uscita": "nessuna: dura finché l'utente non la toglie",
+    },
+}
+
+HEADER = "[MODALITÀ CORRENTE — iniettata dal bridge, fonte: file su disco]"
+# L'ultima riga del disegno: senza di essa la sezione è un promemoria, con essa
+# è un ordine di precedenza.
+FOOTER = (
+    "Se questa sezione contraddice il tuo contesto, VINCE QUESTA: il file su "
+    "disco è la fonte di verità e il tuo contesto può essere stato azzerato da "
+    "un refresh."
+)
+# Reso single-line: `jht-tmux-send` fa `tmux send-keys -l "$message"`, e un
+# newline nel testo verrebbe digitato come Enter → il messaggio partirebbe a
+# metà. Le righe logiche si separano con questo, non con "\n".
+JOIN = " · "
+
+# Il messaggio viene DIGITATO carattere per carattere in una TUI: la sezione
+# deve restare corta e prevedibile, non crescere con la bacheca.
+MAX_DIRECTIVES = 8
+MAX_DIRECTIVE_BODY = 200
+MAX_ORDER_LINES = 12
+MAX_ORDER_VALUE = 120
+
+
+def _home() -> Path:
+    """La home del team, riletta a OGNI chiamata (nessun path cachato)."""
+    return Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
+
+
+def maintenance_file() -> Path:
+    return _home() / "profile" / "capitano-maintenance.json"
+
+
+def db_file() -> Path:
+    """jobs.db con la stessa precedenza di `_db._resolve_db_path` (JHT_DB vince)."""
+    env_db = os.environ.get("JHT_DB")
+    return Path(env_db) if env_db else _home() / "jobs.db"
+
+
+def _flag_paths():
+    """I freni operativi già noti al sistema, col nome con cui li chiama il resto
+    del codice (stesso elenco di `stepcap-watchdog._halt_flags`, più la deroga).
+    Le due posizioni di daily/weekly-halt sono entrambe controllate: i bridge li
+    scrivono in `logs/`, altri percorsi storici li cercano in home."""
+    home, logs = _home(), _home() / "logs"
+    return (
+        ("team-halted", home / ".team-halted.flag",
+         "l'utente ha FERMATO il team"),
+        ("team-standby", home / ".team-standby.flag",
+         "standby a spesa zero"),
+        ("daily-halt", logs / "daily-halt.flag", "cap giornaliero sforato"),
+        ("daily-halt", home / ".daily-halt.flag", "cap giornaliero sforato"),
+        ("weekly-halt", home / ".weekly-halt.flag", "quota settimanale esaurita"),
+        ("weekly-halt", logs / "weekly-halt.flag", "quota settimanale esaurita"),
+    )
+
+
+# ── Lettura della modalità ────────────────────────────────────────────────
+
+def read_maintenance() -> dict:
+    """Cosa dice `capitano-maintenance.json` ADESSO.
+
+    Ritorna sempre un dict con `{"exists", "readable", "mode", "orders",
+    "since"}`. `mode` è il valore GREZZO del file (assenza = `search`, il
+    default del contratto); la canonicalizzazione degli alias legacy la fa
+    `snapshot()`. Un file presente ma rotto NON diventa `search`: `readable`
+    è False e il chiamante lo dichiara `sconosciuto`.
+    """
+    path = maintenance_file()
+    out = {"exists": False, "readable": False, "mode": MODE_SEARCH,
+           "orders": {}, "since": None, "path": str(path)}
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return out
+    out["exists"] = True
+    # `since` dall'mtime: il file non porta un timestamp, e il disco lo sa.
+    try:
+        out["since"] = datetime.fromtimestamp(
+            path.stat().st_mtime, tz=timezone.utc
+        ).strftime("%Y-%m-%d %H:%M UTC")
+    except OSError:
+        pass
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return out
+    if not isinstance(data, dict):
+        return out
+    out["readable"] = True
+    mode = data.get("mode")
+    out["mode"] = mode.strip() if isinstance(mode, str) and mode.strip() else MODE_SEARCH
+    orders = data.get("orders")
+    out["orders"] = orders if isinstance(orders, dict) else {}
+    return out
+
+
+# ── Lettura della bacheca (sola lettura, mai crea il DB) ──────────────────
+
+def read_directives(limit: int = MAX_DIRECTIVES) -> dict:
+    """Le direttive ATTIVE dalla bacheca `team_directives`.
+
+    Apre sqlite in `mode=ro`: un bridge non deve poter creare un jobs.db né
+    scriverci. Ritorna `{"readable", "rows", "total"}` — DB assente o tabella
+    non ancora migrata NON è «nessuna direttiva» ma «non leggibile», perché
+    dire "nessuna" quando non si è potuto guardare è la bugia che questo
+    modulo esiste per non raccontare.
+    """
+    path = db_file()
+    out = {"readable": False, "rows": [], "total": 0}
+    if not path.exists():
+        return out
+    uri = "file:%s?mode=ro" % urllib.parse.quote(str(path))
+    try:
+        conn = sqlite3.connect(uri, uri=True, timeout=2)
+    except sqlite3.Error:
+        return out
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, body, kind FROM team_directives WHERE status = 'active' "
+            "ORDER BY sort_order ASC, created_at ASC"
+        ).fetchall()
+    except sqlite3.Error:
+        return out
+    finally:
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+    out["readable"] = True
+    out["total"] = len(rows)
+    for r in rows[:max(0, limit)]:
+        body = str(r["body"] or "").strip().replace("\n", " ")
+        if len(body) > MAX_DIRECTIVE_BODY:
+            body = body[:MAX_DIRECTIVE_BODY - 1].rstrip() + "…"
+        out["rows"].append({"id": r["id"], "kind": r["kind"], "body": body})
+    return out
+
+
+# ── Lettura dei freni ─────────────────────────────────────────────────────
+
+_SIBLINGS: dict = {}
+
+
+def _sibling(name: str):
+    """Import per path di una skill sorella (container prima, repo fallback).
+
+    Si cacha il MODULO (l'exec costa), mai lo stato: i path del modulo caricato
+    vengono ri-puntati a `_home()` a ogni chiamata, così una lettura non può
+    finire sulla home di un'altra installazione né restare congelata su quella
+    risolta al primo import.
+    """
+    if name in _SIBLINGS:
+        return _SIBLINGS[name]
+    mod = None
+    for cand in (Path("/app/shared/skills") / f"{name}.py",
+                 Path(__file__).resolve().parent / f"{name}.py"):
+        try:
+            if not cand.exists():
+                continue
+            spec = importlib.util.spec_from_file_location(name, cand)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            break
+        except (OSError, ImportError, AttributeError, SyntaxError, ValueError):
+            mod = None
+            continue
+    _SIBLINGS[name] = mod
+    return mod
+
+
+def _burn_intent() -> Optional[dict]:
+    """Stato della deroga di spesa, o None se non determinabile.
+
+    La logica di scadenza resta UNA sola (`burn_intent.status`): qui si sposta
+    solo il path del flag sulla home corrente.
+    """
+    mod = _sibling("burn_intent")
+    if mod is None:
+        return None
+    try:
+        mod.INTENT_FLAG = _home() / ".burn-intent.flag"
+        st = mod.status()
+        return st if isinstance(st, dict) else None
+    except Exception:      # noqa: BLE001 — un promemoria non abbatte un bridge
+        return None
+
+
+def read_flags() -> list:
+    """I freni/deroghe attivi ADESSO, come `[{"name", "why"}]`.
+
+    Non è una policy: è contesto. Il Capitano che legge «daily-halt attivo» sa
+    perché il team è fermo senza doverlo dedurre da quello che non succede.
+    """
+    seen, out = set(), []
+    for name, path, why in _flag_paths():
+        if name in seen:
+            continue
+        try:
+            if path.exists():
+                seen.add(name)
+                out.append({"name": name, "why": why})
+        except OSError:
+            continue
+    bi = _burn_intent()
+    if bi and bi.get("active"):
+        out.append({
+            "name": "burn-intent",
+            "why": "deroga di spesa dell'utente, scade fra %s min"
+                   % bi.get("remaining_min"),
+        })
+    return out
+
+
+# ── Condizione di uscita (sola lettura, mai crea né scrive) ───────────────
+# La dichiarazione (4) di ogni modalità: quando il suo lavoro è ESAURITO.
+# È il pezzo che storicamente non esisteva — nessuna modalità finiva da sola,
+# ed è così che un team è restato 18 giorni in manutenzione senza che nessuno
+# se ne accorgesse. Il banner non cambia mai modalità (la scelta è
+# dell'utente): DICE quando il lavoro è finito, e il Capitano lo riferisce.
+#
+# Regola di degradazione: un conteggio non ottenibile è "non valutabile",
+# MAI un falso «finito» — stessa etica di `read_directives` («dire "nessuna"
+# quando non si è potuto guardare è la bugia che questo modulo esiste per non
+# raccontare»). I conteggi sono STIME RO su SQL proprio: la verità operativa
+# restano le code di `db_query.py` (che applicano la policy in codice); qui
+# la policy si rilegge dal JSON con gli stessi default documentati.
+
+EXIT_DONE = "done"
+EXIT_PENDING = "pending"
+EXIT_CONTINUOUS = "continuous"
+EXIT_UNAVAILABLE = "unavailable"
+
+# Soglia CV di default in harvest quando `orders.cv_min_score` manca: la leva
+# storica del raccolto (score ≥ 75). In cura il default resta 90 (C-18), ma
+# lì la soglia governa la scrittura, non l'uscita.
+HARVEST_DEFAULT_CV_MIN_SCORE = 75
+# Default documentati di enrichment-policy.json (DEFAULT_POLICY in
+# enrichment_policy.py): qui si rileggono dal JSON senza importare il modulo.
+CARE_RECHECK_DEFAULT_MIN_SCORE = 70
+CARE_RECHECK_DEFAULT_OLDER_THAN_DAYS = 14
+
+
+def _db_ro_conn():
+    """Connessione sqlite in sola lettura a jobs.db, o None. Come
+    `read_directives`: un banner non deve poter creare un DB né scriverci."""
+    path = db_file()
+    try:
+        if not path.exists():
+            return None
+    except OSError:
+        return None
+    uri = "file:%s?mode=ro" % urllib.parse.quote(str(path))
+    try:
+        return sqlite3.connect(uri, uri=True, timeout=2)
+    except sqlite3.Error:
+        return None
+
+
+def _count(conn, sql: str, params=()) -> Optional[int]:
+    """COUNT scalare, o None su qualunque errore (schema vecchio compreso)."""
+    try:
+        row = conn.execute(sql, params).fetchone()
+        return int(row[0]) if row else None
+    except (sqlite3.Error, TypeError, ValueError):
+        return None
+
+
+def _enrichment_policy() -> dict:
+    """`profile/enrichment-policy.json` letto direttamente, con i default di
+    `enrichment_policy.DEFAULT_POLICY`. File assente o rotto = default (tutte
+    le code attive): è lo stesso comportamento di `load_policy()`."""
+    out = {
+        "economy": False,
+        "logo": {"enabled": True, "min_score": None},
+        "geocode_missing": {"enabled": True, "min_score": None,
+                            "non_remote_only": True},
+        "recheck_weekly": {"enabled": True,
+                           "min_score": CARE_RECHECK_DEFAULT_MIN_SCORE,
+                           "older_than_days":
+                               CARE_RECHECK_DEFAULT_OLDER_THAN_DAYS},
+    }
+    try:
+        data = json.loads((_home() / "profile" / "enrichment-policy.json")
+                          .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return out
+    if not isinstance(data, dict):
+        return out
+    if isinstance(data.get("economy"), bool):
+        out["economy"] = data["economy"]
+    for kind in ("logo", "geocode_missing", "recheck_weekly"):
+        sub = data.get(kind)
+        if not isinstance(sub, dict):
+            continue
+        for key, val in sub.items():
+            if key in out[kind]:
+                out[kind][key] = val
+    return out
+
+
+def _care_queue_counts(conn) -> dict:
+    """Stima RO delle quattro code della cura. Valori: int, la stringa
+    "off" (spenta da policy — per l'uscita conta come esaurita, stato
+    voluto), oppure None (non contabile)."""
+    pol = _enrichment_policy()
+    economy = bool(pol.get("economy"))
+    out = {}
+
+    rw = pol["recheck_weekly"]
+    if economy or not rw.get("enabled", True):
+        out["recheck"] = "off"
+    else:
+        try:
+            ms = int(rw.get("min_score") or CARE_RECHECK_DEFAULT_MIN_SCORE)
+            days = int(rw.get("older_than_days")
+                       or CARE_RECHECK_DEFAULT_OLDER_THAN_DAYS)
+        except (TypeError, ValueError):
+            ms = CARE_RECHECK_DEFAULT_MIN_SCORE
+            days = CARE_RECHECK_DEFAULT_OLDER_THAN_DAYS
+        out["recheck"] = _count(conn, """
+            SELECT COUNT(*)
+            FROM positions p
+            JOIN (SELECT position_id, MAX(total_score) AS ts
+                  FROM scores GROUP BY position_id) s ON s.position_id = p.id
+            WHERE p.status != 'excluded'
+              AND s.ts >= ?
+              AND (p.last_checked IS NULL
+                   OR p.last_checked < datetime('now', ?))
+        """, (ms, f"-{days} days"))
+
+    gm = pol["geocode_missing"]
+    if economy or not gm.get("enabled", True):
+        out["geocode"] = "off"
+    else:
+        gate, params = "", []
+        if gm.get("min_score") is not None:
+            gate += (" AND EXISTS (SELECT 1 FROM scores sg"
+                     " WHERE sg.position_id = p.id AND sg.total_score >= ?)")
+            params.append(gm["min_score"])
+        if gm.get("non_remote_only", True):
+            gate += " AND LOWER(COALESCE(p.work_mode, '')) != 'remote'"
+        out["geocode"] = _count(conn, f"""
+            SELECT COUNT(*)
+            FROM positions p
+            WHERE p.status != 'excluded'
+              AND (p.office_lat IS NULL
+                   OR p.office_geocoded IS NULL OR p.office_geocoded = 0)
+              {gate}
+        """, tuple(params))
+
+    lg = pol["logo"]
+    if economy or not lg.get("enabled", True):
+        out["logo"] = "off"
+    else:
+        gate, params = "", []
+        if lg.get("min_score") is not None:
+            gate += ("""
+              AND EXISTS (SELECT 1 FROM positions p2
+                          JOIN scores s2 ON s2.position_id = p2.id
+                          WHERE p2.company_id = c.id
+                            AND p2.status != 'excluded'
+                            AND s2.total_score >= ?)""")
+            params.append(lg["min_score"])
+        out["logo"] = _count(conn, f"""
+            SELECT COUNT(DISTINCT c.id)
+            FROM companies c
+            JOIN positions p ON p.company_id = c.id AND p.status != 'excluded'
+            WHERE (c.logo_fetched IS NULL OR c.logo_fetched = 0)
+              {gate}
+        """, tuple(params))
+
+    # Le scadute non passano dalla policy: sono l'ordine
+    # `discard_expired_rotating`, sempre parte della cura.
+    out["scadute"] = _count(conn, """
+        SELECT COUNT(*)
+        FROM positions p
+        WHERE p.status != 'excluded'
+          AND p.expires_at IS NOT NULL
+          AND p.expires_at < datetime('now')
+    """)
+    return out
+
+
+def exit_status(mode: str, orders: Optional[dict] = None) -> dict:
+    """La condizione di uscita della modalità, valutata ADESSO.
+
+    Ritorna `{"kind", "detail"}` con kind ∈ {done, pending, continuous,
+    unavailable}. `done` viene dichiarato SOLO su un conteggio riuscito e
+    a zero: qualunque guasto degrada a `unavailable`, mai a un falso finito.
+    """
+    orders = orders or {}
+
+    if mode == MODE_SEARCH:
+        return {"kind": EXIT_CONTINUOUS,
+                "detail": "modalità continua, non finisce da sola — il "
+                          "surplus lo governa C-25"}
+    if mode == MODE_SAVING:
+        return {"kind": EXIT_CONTINUOUS,
+                "detail": "dura finché l'utente non la toglie; se avanza "
+                          "budget RIFERISCILO (C-25), non spenderlo"}
+    if mode == MODE_CALIBRATION:
+        return {"kind": EXIT_UNAVAILABLE,
+                "detail": "non valutabile da qui (il feedback vive sul "
+                          "cloud): dichiari TU la chiusura quando il "
+                          "feedback recente è letto e la priorità "
+                          "aggiornata (`feedback-query`)"}
+
+    if mode == MODE_HARVEST:
+        conn = _db_ro_conn()
+        if conn is None:
+            return {"kind": EXIT_UNAVAILABLE,
+                    "detail": "jobs.db non leggibile — NON dedurre che il "
+                              "raccolto sia finito: verifica con db_query"}
+        thr = orders.get("cv_min_score")
+        if not isinstance(thr, (int, float)) or isinstance(thr, bool):
+            thr = HARVEST_DEFAULT_CV_MIN_SCORE
+        try:
+            # Gli stessi predicati di `next-for-harvest` in db_query.py — la
+            # coda è la fonte di verità e la stima deve contare le SUE righe,
+            # non un soprainsieme. Senza `status='scored'` finivano nel conto
+            # anche le `ready` (122 su una VPS reale) e le posizioni chiuse o
+            # scadute: il banner non avrebbe mai dichiarato un falso «finito»
+            # — sovrastimare è conservativo — ma il numero mostrato al
+            # Capitano era di un'altra coda. Se quei predicati cambiano di là,
+            # vanno cambiati qui: la duplicazione è voluta (il banner non
+            # importa db_query) ma non è libera.
+            n = _count(conn, """
+                SELECT COUNT(*)
+                FROM positions p
+                JOIN (SELECT position_id, MAX(total_score) AS ts
+                      FROM scores GROUP BY position_id) s
+                  ON s.position_id = p.id
+                LEFT JOIN applications a ON a.position_id = p.id
+                WHERE a.id IS NULL
+                  AND p.status = 'scored'
+                  AND s.ts >= ?
+                  AND COALESCE(p.is_open, 1) != 0
+                  AND (p.expires_at IS NULL OR p.expires_at >= date('now'))
+            """, (thr,))
+        finally:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+        if n is None:
+            return {"kind": EXIT_UNAVAILABLE,
+                    "detail": "conteggio non riuscito (schema?) — NON "
+                              "dedurre che il raccolto sia finito"}
+        if n == 0:
+            return {"kind": EXIT_DONE,
+                    "detail": "0 posizioni vive con score ≥ %s senza CV: "
+                              "RACCOLTO FINITO" % int(thr)}
+        return {"kind": EXIT_PENDING,
+                "detail": "restano %d posizioni vive con score ≥ %s senza "
+                          "CV (stima RO)" % (n, int(thr))}
+
+    if mode == MODE_CARE:
+        conn = _db_ro_conn()
+        if conn is None:
+            return {"kind": EXIT_UNAVAILABLE,
+                    "detail": "jobs.db non leggibile — NON dedurre che le "
+                              "code di cura siano vuote: verifica con "
+                              "db_query"}
+        try:
+            counts = _care_queue_counts(conn)
+        finally:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+        broken = sorted(k for k, v in counts.items() if v is None)
+        if broken:
+            return {"kind": EXIT_UNAVAILABLE,
+                    "detail": "code non contabili (%s) — NON dedurre che "
+                              "siano vuote: verifica con db_query"
+                              % ", ".join(broken)}
+        shown = ", ".join(
+            "%s=%s" % (k, "OFF da policy" if v == "off" else v)
+            for k, v in counts.items())
+        exhausted = all(v == "off" or v == 0 for v in counts.values())
+        if exhausted:
+            return {"kind": EXIT_DONE,
+                    "detail": "code di cura esaurite (%s): CURA COMPLETA "
+                              "per ora (la cadenza 14gg le rimatura)" % shown}
+        return {"kind": EXIT_PENDING,
+                "detail": "lavoro residuo (stima RO): %s" % shown}
+
+    # Modalità fuori enum o illeggibile: nessuna valutazione possibile.
+    return {"kind": EXIT_UNAVAILABLE,
+            "detail": "modalità non valutabile: apri il file e la skill "
+                      "`team-modes`"}
+
+
+# ── Composizione ──────────────────────────────────────────────────────────
+
+def _fmt_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        text = ", ".join(str(v) for v in value)
+    elif isinstance(value, dict):
+        text = json.dumps(value, ensure_ascii=False)
+    else:
+        text = str(value)
+    text = " ".join(text.split())
+    if len(text) > MAX_ORDER_VALUE:
+        text = text[:MAX_ORDER_VALUE - 1].rstrip() + "…"
+    return text
+
+
+def _order_line(key: str, value) -> str:
+    """Una riga per ordine. Le chiavi note di C-18 portano la loro conseguenza;
+    le altre si rendono in modo generico — il file lo scrivono anche a mano
+    (`search_priority`, priorità, esclusioni), e una chiave che non conosciamo
+    resta un ordine dell'utente da riferire, non da nascondere."""
+    v = _fmt_value(value)
+    if key == "stop_search":
+        return ("stop_search: true — NIENTE Scout, nessuna offerta nuova: la "
+                "coda `new` resta vuota BY DESIGN (C-05/C-05c sospese)"
+                if value is True else
+                f"stop_search: {v} — sourcing consentito SOLO col budget che "
+                f"avanza, la manutenzione resta la priorità")
+    if key == "discard_expired_rotating":
+        return ("discard_expired_rotating: true — a rotazione ri-verifica le "
+                "scadute ed escludile (recheck-liveness → [SCADUTO])"
+                if value is True else
+                f"discard_expired_rotating: {v} — non escludere per scadenza "
+                f"senza un ordine")
+    if key == "cv_min_score":
+        return f"cv_min_score: {v} — scrivi un CV solo per posizioni con score ≥ {v}"
+    if key == "pre_check_liveness_for_cv":
+        return ("pre_check_liveness_for_cv: true — prima di un CV verifica che "
+                "l'offerta sia ancora viva"
+                if value is True else
+                f"pre_check_liveness_for_cv: {v}")
+    return f"{key}: {v}"
+
+
+def snapshot(now: Optional[datetime] = None) -> dict:
+    """I fatti, letti da disco adesso. `now` è accettato per simmetria con le
+    altre skill (e per i test) ma la modalità non scade col tempo."""
+    m = read_maintenance()
+    d = read_directives()
+    if m["exists"] and not m["readable"]:
+        mode, mode_raw = MODE_UNKNOWN, None
+    else:
+        # Canonicalizza gli alias legacy (`normal`→search, `maintenance`→care)
+        # tenendo il valore GREZZO: il banner lo mostra, così un file di
+        # produzione con `maintenance` resta riconoscibile.
+        mode_raw = m["mode"] if m["exists"] else None
+        mode = LEGACY_MODES.get(m["mode"], m["mode"])
+    return {
+        "mode": mode,
+        "mode_raw": mode_raw,
+        "exit": exit_status(mode, m["orders"]),
+        "since": m["since"],
+        "maintenance_exists": m["exists"],
+        "maintenance_readable": m["readable"],
+        "orders": m["orders"],
+        "directives": d["rows"],
+        "directives_total": d["total"],
+        "directives_readable": d["readable"],
+        "flags": read_flags(),
+        "read_at": (now or datetime.now(timezone.utc)).isoformat(
+            timespec="seconds"),
+    }
+
+
+def has_standing_orders(snap: Optional[dict] = None) -> bool:
+    """True se c'è un ordine dell'utente IN VIGORE da riferire.
+
+    Cioè: modalità diversa da `search` (il default), un file presente con
+    `orders` (anche a modalità search: sono comunque ordini scritti), un file
+    illeggibile che va guardato, oppure almeno una direttiva in bacheca. I
+    freni NON contano: sono stato dell'automazione, non un ordine, e chi li
+    scrive silenzia già i bridge da sé.
+    """
+    s = snap if snap is not None else snapshot()
+    if s["mode"] != MODE_SEARCH:
+        return True
+    if s["maintenance_exists"] and s.get("orders"):
+        return True
+    return bool(s["directives"]) or s["directives_total"] > 0
+
+
+def sourcing_stopped(snap: Optional[dict] = None) -> bool:
+    """True quando il file su disco VIETA il sourcing nuovo.
+
+    Serve a chi consegna ORDINI deterministici: `heartbeat-bridge.py` ordina lo
+    spawn di uno Scout quando nessuno è attivo (C-05), ma in manutenzione una
+    coda `new` vuota è lo stato *voluto* e C-18 sospende esattamente quella
+    regola. Senza questo, il bridge contraddirebbe nello stesso messaggio la
+    sezione che gli sta in coda.
+
+    Default `stop_search=True` a modalità dichiarata ma senza `orders`: è lo
+    stesso default con cui il file viene letto dalla Console del Coordinatore
+    (`vps_backend.gd`), e la direzione sicura è non ordinare spesa nuova.
+    Vale per TUTTE le modalità tranne `search` (l'unica il cui senso è il
+    sourcing): harvest/care/calibration/saving lo spengono per contratto, e
+    un valore fuori enum è un ordine che non capiamo — non si ordina spesa
+    al buio. Un file illeggibile conta come vieto: potrebbe dirlo, e non lo
+    sappiamo.
+    """
+    s = snap if snap is not None else snapshot()
+    if s["mode"] == MODE_UNKNOWN:
+        return True
+    if s["mode"] == MODE_SEARCH:
+        return bool((s.get("orders") or {}).get("stop_search", False))
+    return bool((s.get("orders") or {}).get("stop_search", True))
+
+
+def _lines(snap: dict) -> list:
+    out = [HEADER]
+    mode = snap["mode"]
+    raw = snap.get("mode_raw")
+    since = f" (dal {snap['since']})" if snap["since"] else ""
+    legacy = (f' [nel file: "{raw}", valore legacy]'
+              if raw and raw != mode else "")
+
+    if mode == MODE_UNKNOWN:
+        out.append(
+            "MODE: sconosciuto — `profile/capitano-maintenance.json` esiste ma "
+            "NON è leggibile%s: trattalo come un ORDINE ATTIVO e apri il file "
+            "prima di decidere qualunque cosa sul sourcing."
+            % (f" (scritto {snap['since']})" if snap["since"] else ""))
+    elif mode == MODE_SEARCH and not snap["maintenance_exists"]:
+        out.append(
+            "MODE: search (ricerca) — nessun "
+            "`profile/capitano-maintenance.json`: è il default.")
+    elif mode in MODE_LABELS:
+        head = f"MODE: {mode} ({MODE_LABELS[mode]}){legacy}{since}"
+        if snap.get("orders"):
+            head += " — ordini da `profile/capitano-maintenance.json`:"
+        out.append(head)
+    else:
+        # Valore fuori enum: resta un ordine dell'utente da riferire, non da
+        # normalizzare via — ma senza scheda non si ordina nulla al buio.
+        out.append(
+            "MODE: %s%s — valore FUORI dall'enum "
+            "(search|harvest|care|calibration|saving): trattalo come ORDINE "
+            "ATTIVO (sourcing fermo) e apri il file prima di decidere."
+            % (mode, since))
+
+    orders = snap.get("orders") or {}
+    if orders:
+        # Le chiavi note di C-18 in ordine fisso, poi le altre in ordine
+        # alfabetico: la sezione deve leggersi uguale a ogni battito.
+        known = ("stop_search", "discard_expired_rotating", "cv_min_score",
+                 "pre_check_liveness_for_cv")
+        keys = [k for k in known if k in orders]
+        keys += sorted(k for k in orders if k not in known)
+        for k in keys[:MAX_ORDER_LINES]:
+            out.append("- " + _order_line(k, orders[k]))
+        if len(keys) > MAX_ORDER_LINES:
+            out.append("- (+%d ordini nel file — leggilo)"
+                       % (len(keys) - MAX_ORDER_LINES))
+    elif mode not in (MODE_SEARCH, MODE_UNKNOWN):
+        out.append("- (nessun `orders` nel file: modalità dichiarata senza "
+                   "dettagli → `stop_search` vale TRUE per default, come lo "
+                   "legge la Console del Coordinatore. Apri il file.)")
+
+    # La SPECIFICA della modalità (le 4 dichiarazioni), non solo il nome: è
+    # il requisito del contratto modalità 2026-08-03 — il Capitano che riceve
+    # il battito deve sapere COSA implica, non solo come si chiama.
+    spec = MODE_SPECS.get(mode)
+    if spec:
+        out.append("- CODE ATTIVE: " + spec["code"])
+        out.append("- SOSPESO: " + spec["sospeso"])
+        out.append("- BUDGET: " + spec["budget"])
+        ex = snap.get("exit") or {}
+        kind, detail = ex.get("kind"), ex.get("detail", "")
+        if kind == EXIT_DONE:
+            out.append("- USCITA: LAVORO ESAURITO — %s. Non cambiare "
+                       "modalità da solo: SEGNALALO all'utente (il silenzio "
+                       "non è ammesso; sul surplus vale C-25)." % detail)
+        elif kind == EXIT_PENDING:
+            out.append("- USCITA: %s. ADESSO: %s."
+                       % (spec["uscita"], detail))
+        elif kind == EXIT_CONTINUOUS:
+            out.append("- USCITA: %s." % detail)
+        else:
+            out.append("- USCITA: %s. ADESSO: NON VALUTABILE — %s."
+                       % (spec["uscita"], detail))
+    if mode != MODE_SEARCH or snap["maintenance_exists"]:
+        out.append("Non ricordi cosa implica? Leggi la skill `team-modes` "
+                   "PRIMA di decidere.")
+
+    if not snap["directives_readable"]:
+        out.append("DIRETTIVE ATTIVE: non leggibili (bacheca `team_directives` "
+                   "non raggiungibile) — NON dedurre che non ce ne siano")
+    elif not snap["directives"]:
+        out.append("DIRETTIVE ATTIVE: nessuna")
+    else:
+        shown = "; ".join("#%s [%s] %s" % (d["id"], d["kind"], d["body"])
+                          for d in snap["directives"])
+        extra = snap["directives_total"] - len(snap["directives"])
+        out.append("DIRETTIVE ATTIVE (%d): %s%s"
+                   % (snap["directives_total"], shown,
+                      f"; (+{extra} in bacheca)" if extra > 0 else ""))
+
+    flags = snap.get("flags") or []
+    if flags:
+        out.append("FRENI ATTIVI: "
+                   + "; ".join("%s (%s)" % (f["name"], f["why"]) for f in flags))
+
+    out.append(FOOTER)
+    return out
+
+
+def banner(now: Optional[datetime] = None, multiline: bool = False,
+           snap: Optional[dict] = None) -> str:
+    """La sezione `[MODALITÀ CORRENTE]`. **Mai** vuota, in nessun caso."""
+    s = snap if snap is not None else snapshot(now)
+    lines = _lines(s)
+    if multiline:
+        return "\n".join(lines)
+    # Su una riga il rientro non ha senso: il separatore fa già il lavoro del
+    # trattino, e "· - stop_search" si legge peggio di "· stop_search".
+    return JOIN.join(l[2:] if l.startswith("- ") else l for l in lines)
+
+
+def line(now: Optional[datetime] = None) -> str:
+    """La sezione in UNA riga, pronta per `jht-tmux-send`."""
+    return banner(now, multiline=False)
+
+
+def main(argv: list) -> int:
+    ap = argparse.ArgumentParser(
+        prog="mode_banner",
+        description="Modalità corrente del team, letta da disco (mai da cache)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("line", help="una riga (per tmux)")
+    sub.add_parser("show", help="multi-riga leggibile")
+    sub.add_parser("json", help="i fatti grezzi")
+    args = ap.parse_args(argv)
+
+    snap = snapshot()
+    if args.cmd == "json":
+        print(json.dumps(snap, ensure_ascii=False))
+    elif args.cmd == "show":
+        print(banner(multiline=True, snap=snap))
+    else:
+        print(banner(multiline=False, snap=snap))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

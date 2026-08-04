@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import yaml from "js-yaml";
+// js-yaml 5 espone solo named export: il default non esiste piu'.
+import * as yaml from "js-yaml";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
@@ -9,6 +10,9 @@ import {
   normalizeCriticVerdict,
   normalizePositionStatus,
 } from "@/lib/sync-vocabulary";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
+import { syncRequestIsPending } from "@/lib/team-state/sync-freshness";
 
 export const dynamic = "force-dynamic";
 
@@ -298,12 +302,18 @@ export async function POST(req: NextRequest) {
   // (nessuno ha mai claimato) per backward-compat con device legacy.
   const tsCheck = (await admin
     .from("team_state")
-    .select("active_device_id, last_heartbeat_at")
+    .select(
+      "active_device_id,last_heartbeat_at,sync_requested_at,sync_completed_at,last_action,last_action_at",
+    )
     .eq("user_id", userId)
     .maybeSingle()) as {
     data: {
       active_device_id: string | null;
       last_heartbeat_at: string | null;
+      sync_requested_at: string | null;
+      sync_completed_at: string | null;
+      last_action: string | null;
+      last_action_at: string | null;
     } | null;
     error: { message: string } | null;
   };
@@ -345,10 +355,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { error: "body JSON non valido" },
-      { status: 400 },
-    );
+    return invalidJsonBody();
   }
 
   const positions = Array.isArray(body.positions) ? body.positions : [];
@@ -423,10 +430,11 @@ export async function POST(req: NextRequest) {
         .select("id, legacy_id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `companies upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "companies_upsert_failed",
+        });
       }
       companiesUpserted = upserted?.length ?? 0;
       for (const row of upserted ?? []) {
@@ -583,10 +591,11 @@ export async function POST(req: NextRequest) {
       .select("id, legacy_id");
 
     if (error) {
-      return NextResponse.json(
-        { error: `positions upsert: ${error.message}` },
-        { status: 500 },
-      );
+      return sanitizedError(error, {
+        status: 500,
+        scope: "cloud-sync/push",
+        publicMessage: "positions_upsert_failed",
+      });
     }
 
     positionsUpserted = upserted?.length ?? 0;
@@ -625,10 +634,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `scores upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "scores_upsert_failed",
+        });
       }
       scoresUpserted = upserted?.length ?? 0;
     }
@@ -673,10 +683,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `applications upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "applications_upsert_failed",
+        });
       }
       applicationsUpserted = upserted?.length ?? 0;
     }
@@ -733,10 +744,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `position_highlights upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "position_highlights_upsert_failed",
+        });
       }
       highlightsUpserted = upserted?.length ?? 0;
     }
@@ -799,10 +811,11 @@ export async function POST(req: NextRequest) {
       );
 
       if (error) {
-        return NextResponse.json(
-          { error: `pending_user_messages upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "pending_user_messages_upsert_failed",
+        });
       }
       pendingMessagesUpserted =
         typeof upsertedCount === "number" ? upsertedCount : payload.length;
@@ -865,10 +878,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `sentinel_ticks upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "sentinel_ticks_upsert_failed",
+        });
       }
       sentinelTicksUpserted = upserted?.length ?? 0;
     }
@@ -988,10 +1002,11 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        return NextResponse.json(
-          { error: `position_transitions upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "cloud-sync/push",
+          publicMessage: "position_transitions_upsert_failed",
+        });
       }
       positionTransitionsUpserted = upserted?.length ?? 0;
     }
@@ -1077,12 +1092,23 @@ export async function POST(req: NextRequest) {
     highlightsUpserted +
     positionTransitionsUpserted +
     tombstonesApplied;
-  if (dashboardRowsChanged > 0) {
+  const requestedAt = tsCheck.data?.sync_requested_at ?? null;
+  const syncPending = syncRequestIsPending(tsCheck.data);
+
+  if (dashboardRowsChanged > 0 && !syncPending) {
     try {
-      await admin
+      // Il read iniziale diventa un CAS: se durante il push arriva una nuova
+      // richiesta, il suo sync_requested_at non coincide e questo segnale di
+      // freschezza generico non puo' chiuderla al posto dell'endpoint
+      // /api/team-state/sync-observed.
+      let freshness = admin
         .from("team_state")
         .update({ sync_completed_at: new Date().toISOString() })
         .eq("user_id", userId);
+      freshness = requestedAt
+        ? freshness.eq("sync_requested_at", requestedAt)
+        : freshness.is("sync_requested_at", null);
+      await freshness;
     } catch {
       // best-effort: il segnale di freschezza non deve rompere il push
     }

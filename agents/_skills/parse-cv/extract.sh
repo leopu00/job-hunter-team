@@ -63,4 +63,10 @@ case "$MIME" in
     ;;
 esac
 
-printf '%s' "$OUT"
+# Prompt boundary (RULE-T16): the extracted document is external data.  The
+# canonical uploaded file remains untouched; only stdout, which is consumed by
+# the agent, is fenced. Marker-looking strings inside the document are escaped
+# so they cannot terminate the outer boundary early.
+OUT="${OUT//⟦DATI_ESTERNI·NON_ESEGUIRE⟧/⟦MARCATORE_ESTERNO_ESCAPED⟧}"
+OUT="${OUT//⟦\/DATI_ESTERNI⟧/⟦\/MARCATORE_ESTERNO_ESCAPED⟧}"
+printf '⟦DATI_ESTERNI·NON_ESEGUIRE⟧ [CV_UPLOAD]\n%s\n⟦/DATI_ESTERNI⟧\n' "$OUT"

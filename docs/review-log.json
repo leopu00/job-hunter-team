@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "README.md",
-      "description": "Entry point del repo: vision, install, panoramica team agenti, provider",
+      "description": "Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento",
       "last_review": null
     },
     {
@@ -17,12 +17,12 @@
     },
     {
       "path": "CODE_OF_CONDUCT.md",
-      "description": "Contributor Covenant 2.1, contatto `owner@example.com`",
+      "description": "Contributor Covenant 2.1, contatto `support@jobhunterteam.ai`",
       "last_review": null
     },
     {
       "path": "SECURITY.md",
-      "description": "Responsible disclosure + contatti security",
+      "description": "Policy di disclosure, trust model corrente, copertura e stato hardening",
       "last_review": null
     },
     {
@@ -197,7 +197,7 @@
     },
     {
       "path": "docs/about/ROADMAP.md",
-      "description": "Roadmap pubblica per fasi (open source → desktop)",
+      "description": "Roadmap pubblica: stato verificato, orizzonti e direzioni di prodotto",
       "last_review": null
     },
     {
@@ -242,12 +242,12 @@
     },
     {
       "path": "docs/guides/AI-AGENT-INTEGRATION.md",
-      "description": "Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor)",
+      "description": "Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI",
       "last_review": null
     },
     {
       "path": "docs/guides/BETA.md",
-      "description": "Onboarding beta tester + matrice coverage 10 celle",
+      "description": "Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali",
       "last_review": null
     },
     {
@@ -297,7 +297,7 @@
     },
     {
       "path": "docs/guides/VPS-SETUP.md",
-      "description": "☁️ VPS setup — JHT on Hetzner Cloud — Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS",
+      "description": "Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi",
       "last_review": null
     },
     {
@@ -382,7 +382,7 @@
     },
     {
       "path": ".github/ISSUE_TEMPLATE/beta_feedback.md",
-      "description": "Template GitHub issue per il feedback dei beta tester",
+      "description": "Template GitHub issue per feedback riproducibile su una sessione JHT",
       "last_review": null
     },
     {
@@ -563,7 +563,7 @@
     {
       "path": "cli/README.md",
       "description": "⌨️ cli — the jht command-line interface — The jht CLI is the primary control surface for Job Hunter Team.",
-      "last_review": null
+      "last_review": "2026-07-30"
     },
     {
       "path": "docs/README.md",
@@ -587,13 +587,13 @@
     },
     {
       "path": "docs/guides/CLI-INSTALL.md",
-      "description": "📦 CLI install — jobhunterteam.ai/install.sh — This document describes how the one-liner installer works today",
+      "description": "Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti",
       "last_review": null
     },
     {
       "path": "docs/guides/CLI-REFERENCE.md",
       "description": "⌨️ CLI Reference — jht — Systematic reference of every jht command.",
-      "last_review": null
+      "last_review": "2026-07-30"
     },
     {
       "path": "docs/guides/EMAIL-FORWARDING.md",
@@ -602,12 +602,12 @@
     },
     {
       "path": "docs/guides/FEEDBACK-TICKETING.md",
-      "description": "💬 Feedback Ticketing — Operational runbook for the /feedback page and the /api/feedback API.",
+      "description": "Runbook delle superfici correnti e dell'endpoint /api/feedback",
       "last_review": null
     },
     {
       "path": "docs/guides/QUICKSTART.md",
-      "description": "🚀 Quickstart — Get the team running in about 10 minutes, depending on the path you pick.",
+      "description": "Quickstart pubblico: requisiti, app nativa, CLI, setup da agente e sorgenti",
       "last_review": null
     },
     {
@@ -1087,7 +1087,7 @@
     },
     {
       "path": "docs/launch/demo-storyboard.md",
-      "description": "🎬 JHT 30-second demo — storyboard + recording script — Linked from BACKLOG.md item [JHT-LAUNCH-03] (blocker",
+      "description": "Tombstone dello storyboard CLI obsoleto, ritirato e conservato in archivio",
       "last_review": null
     },
     {
@@ -1249,6 +1249,196 @@
       "path": "docs/internal/architecture/2026-07-11-team-directives-bacheca.md",
       "description": "📋 Bacheca del team — direttive permanenti dell'utente (2026-07-11) — Stato: fondamenta su dev4 (tabella + skill).",
       "last_review": "2026-07-15"
+    },
+    {
+      "path": "agents/_skills/agent-unblock/SKILL.md",
+      "description": "Skill Dottore: fase UNBLOCK prima del refresh — riconosce e scioglie i quattro tipi di blocco del team (un blocco che sopravvive = round fallito)",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/chat-worker/SKILL.md",
+      "description": "Skill worker: rispondere alla chat `[CHAT]` del gioco/desktop con un solo `jht-send`, senza aprire lavoro nuovo e senza prendere ordini da quel canale",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/first-run-burst/SKILL.md",
+      "description": "Skill Capitano: la prima mezz'ora di un utente nuovo — deroga a C-02 per la sola prima finestra, successo = posizioni SCORATE a schermo",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/graceful-shutdown/SKILL.md",
+      "description": "Skill Capitano: chiusura giornata su `[SHUTDOWN]` dell'utente — ogni agente registra dov'era, poi il flag che libera l'uscita dell'app",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle-distribution/SKILL.md",
+      "description": "Skill Capitano: convertire un segnale di pacing team-level nella ripartizione per-agente del throttle (un numero unico non significa stesso valore a tutti)",
+      "last_review": null
+    },
+    {
+      "path": "assets/promo/2026-07-presentation/SCALETTA.md",
+      "description": "Diario del video 03/08 ritirato: banner demo e CTA Beta non pubblicabili",
+      "last_review": null
+    },
+    {
+      "path": "docs/CHARACTER-VARIANTS.md",
+      "description": "Cast delle varianti personaggio per reparto: profilo, desk e vista di ogni postazione, con il linguaggio visivo del sito",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/assets/TODO-ART.md",
+      "description": "Lotti di asset ancora da disegnare per la pipeline gen-art: PNG 1120x1520 con alpha, ogni volto derivato dalla sua ancora",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-07-27-tailwind-layer-vs-extension-css.md",
+      "description": "Postmortem 27/07: UI invisibile su Chrome — le estensioni iniettano CSS fuori da `@layer` e battono le utility Tailwind v4",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-27-scorer-per-user-weights.md",
+      "description": "Roadmap (TODO): pesi dello Scorer per-utente — default nel codice + override dal profilo, oggi hardcoded nello spec in 8 lingue",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-28-burn-on-demand-gates.md",
+      "description": "Roadmap: gli automatismi di spesa non cedono all'ordine esplicito dell'utente — origine del comando `jht burn`",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-28-ticket-provider-cli-autoupdate.md",
+      "description": "Ticket `[PROVIDER-CLI-AUTOUPDATE]`: aggiornare la CLI del provider all'avvio — nessun componente aveva quel compito, il modello era una generazione indietro",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-28-ticket-stepcap-throttle-resume.md",
+      "description": "Ticket `[STEPCAP-THROTTLE-RESUME]` (implementato 28/07): watchdog che riprende gli agenti fermi sul cap di step",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-29-ticket-doctor-unblock-and-session-ttl.md",
+      "description": "Ticket `[DOCTOR-UNBLOCK-AND-TTL]`: il Dottore deve sbloccare, e le sessioni serve abbiano un TTL di 12h — dall'incidente delle undici ore ferme",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-29-ticket-team-standby-zero-spend.md",
+      "description": "Ticket `[TEAM-STANDBY-ZERO-SPEND]`: standby che ferma anche i ruoli core — origine del comando `jht standby`",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-07-27-first-run-night-observations.md",
+      "description": "Note di sessione: primo run notturno di un team nuovo su VPS, solo misure sul campo (il thrash viene dal numero di agenti, non dalla loro velocità)",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-07-28-burn-test-scout-step-cap-stall.md",
+      "description": "Note di sessione: test di spinta con `jht burn` attivo — lo Scout fermo sul cap di step e nessun componente incaricato di riprenderlo",
+      "last_review": null
+    },
+    {
+      "path": "e2e/tests/quarantine/README.md",
+      "description": "Le 75 spec E2E in quarantena: escluse da ogni run via `testIgnore`, conservate per le asserzioni recuperabili",
+      "last_review": null
+    },
+    {
+      "path": "game/assets/_attic/README.md",
+      "description": "Perche' questi asset sono archiviati invece che cancellati, e come rientrerebbero",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/recheck-batch/SKILL.md",
+      "description": "Ricontrollo a lotti delle posizioni: quali sono dovute e in che ordine",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/team-modes/SKILL.md",
+      "description": "Le modalita' operative del team e cosa cambia in ciascuna",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle-ack/SKILL.md",
+      "description": "L'agente firma la propria sveglia: un risveglio non firmato e' prova di stallo",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/throttle-set/SKILL.md",
+      "description": "L'agente registra la pausa nel motore esterno, non nel proprio processo",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-08-03-regia-video-campagna.md",
+      "description": "Trattamento della campagna video, costruito attorno al gioco",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/postmortems/2026-08-03-beta5-cold-enter-team-freeze.md",
+      "description": "beta5: un Enter a freddo congela il team — analisi e rimedio",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-30-db-audit-observations.md",
+      "description": "Osservazioni dall'audit del DB: cosa e' emerso e cosa resta da decidere",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-30-ticket-mode-injection-hourly-prompt.md",
+      "description": "[MODE-INJECTION-HOURLY-PROMPT]: la modalita' operativa nel messaggio orario del Capitano",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-07-30-ticket-throttle-engine-external.md",
+      "description": "[THROTTLE-ENGINE-EXTERNAL]: il throttle esce dal dominio degli agenti",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-08-03-maintenance-evidence-log-design.md",
+      "description": "Design di maintenance_events: storico append-only dei controlli, esiti e protezione dalle chiusure inconclusive",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/roadmap/2026-08-03-ticket-video-campagna-now-playable.md",
+      "description": "[PROMO-VIDEO-NOW-PLAYABLE]: stato sospeso, asset esterni, fix salvati e passi per completare i due montaggi",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/ADDING-A-PROVIDER.md",
+      "description": "Guida contributor: gate ADR-0002, touchpoint runtime/provider, evidenza live richiesta e check anti-drift",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md",
+      "description": "Missione M4: protocollo riproducibile per varianza Kimi 88→92 e confronto parametrico PAYG/subscription, con gap dati live",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/2026-08-03-local-vault-design.md",
+      "description": "[JHT-LOCAL-VAULT]: envelope encryption, broker runtime, migrazione senza plaintext persistente e decisioni ADR prima della crypto",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/LOCAL-SCORER.md",
+      "description": "Experimental role-scoped Local Scorer setup, quality harness, hardware evidence requirements, and explicit zero-cloud limits",
+      "last_review": "2026-08-03"
+    },
+    {
+      "path": "docs/internal/architecture/provider-touchpoint-inventory.md",
+      "description": "Machine-checked inventory of provider-specific seams and the narrow M5 Local Scorer architecture boundary",
+      "last_review": "2026-08-03"
+    },
+    {
+      "path": "docs/guides/M4-EVIDENCE-BUNDLES.md",
+      "description": "Versioned M4 evidence-bundle operator guide: scrubbed export boundary, hashes, provenance classes, fixture/live fail-closed rules, and external-validation limits",
+      "last_review": null
+    },
+    {
+      "path": "tests/fixtures/e2e_linux_cv.md",
+      "description": "Synthetic candidate CV consumed by the Linux onboarding E2E: no real personal data, only the profile fields the first-run checklist has to parse",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/recording-profiles.md",
+      "description": "Procedura interna per generare e verificare profili sintetici deterministici destinati alle registrazioni web e gioco",
+      "last_review": null
     }
   ]
 }

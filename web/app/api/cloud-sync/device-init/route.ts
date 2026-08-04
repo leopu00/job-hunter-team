@@ -8,6 +8,7 @@ import {
   PAIRING_POLL_INTERVAL_SEC,
 } from "@/lib/cloud-sync/pairing";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,10 @@ export async function POST(req: NextRequest) {
     if (error) {
       // 23505 = unique_violation (Postgres). Riprovo con nuovi codici.
       if (error.code === "23505") continue;
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return sanitizedError(error, {
+        status: 500,
+        scope: "cloud-sync/device-init",
+      });
     }
     inserted = data;
   }

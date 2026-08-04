@@ -4,6 +4,17 @@ extends Node
 
 signal status_changed(status: Dictionary)
 signal action_changed(action: String, running: bool, message: String, ok: bool)
+## Fase dell'azione lunga in corso ("engine" → "image" → "container", "team").
+## L'attivazione è un processo a più fasi dietro UN pulsante: senza questo
+## segnale la UI sa solo che "qualcosa gira", non a che punto è — e l'utente
+## non sa se aspettare o ripremere (feedback 30/07).
+signal phase_changed(action: String, phase: String)
+## Avanzamento STRUTTURATO del pull dell'immagine (byte scaricati/totali per
+## livello, dallo stream di `docker compose pull`). Il messaggio testuale di
+## action_changed non basta a una barra: serve il numero, non la frase.
+## fraction è -1.0 finché docker non ha dichiarato nessuna dimensione — la UI
+## in quel caso NON deve inventare una percentuale.
+signal pull_progress(info: Dictionary)
 ## La UI del gioco ospita il processo in una console modale. Il servizio non
 ## deve mai aprire Terminal.app/cmd/xterm fuori dall'applicazione.
 signal terminal_requested(context: String, spec: Dictionary)
@@ -54,7 +65,34 @@ var status := {
 
 var _probe_running := false
 var _action_running := false
+## Nome dell'azione in corso ("" quando il servizio è fermo) e sua fase
+## corrente: sono lo stato che i pannelli leggono per disegnare i pulsanti
+## nel modo giusto (disabilitato + etichetta di avanzamento) invece di
+## lasciarli premibili e muti mentre il worker lavora.
+var current_action := ""
+var action_phase := ""
+## Quando sono partite l'azione e la fase corrente (Time.get_ticks_msec) e
+## l'ultimo avanzamento pull ricevuto: un pannello ricostruito a metà pull
+## riparte da qui invece che da una barra vuota.
+var action_started_ms := 0
+var phase_started_ms := 0
+var last_pull := {}
+## Ultimo responso atomico di `jht upgrade --json`. Resta separato dallo
+## stato Docker: il wrapper host ha gia' ricreato e verificato il container,
+## quindi il gioco deve soltanto mostrarne l'esito, mai dedurre un deploy.
+var last_upgrade := {}
+## Cache soltanto di sessione del controllo esplicito aggiornamenti. Non entra
+## in `status`: un check non cambia il runtime e non deve fingersi un probe
+## del container. La sidebar la usa per il badge, mai per avviare un polling.
+var last_upgrade_check := {}
 var _timer: Timer
+
+
+## L'azione lunga è in corso: i pulsanti che avviano azioni devono dirlo
+## (il guard su _action_running scarta il click, ma senza feedback l'utente
+## non può saperlo).
+func busy() -> bool:
+	return _action_running
 
 
 func _ready() -> void:
@@ -250,6 +288,15 @@ func _self_test_vps_setup() -> void:
 	_finalize(gated)
 	if not bool(gated.get("ready", false)):
 		failures.append("setup completo non riconosciuto come pronto")
+	if _tmux_has_operational_team("ASSISTENTE\nDOTTORE\nMANTENITORE\n"):
+		failures.append("sessione tecnica scambiata per team operativo")
+	if not _tmux_has_operational_team("ASSISTENTE\nCAPITANO\n"):
+		failures.append("Capitano attivo non riconosciuto come team operativo")
+	if _agents_have_operational_team([{"role": "assistente", "active": true}]):
+		failures.append("Assistente remoto scambiato per team operativo")
+	if not _agents_have_operational_team([
+			{"role": "coordinatore", "active": true}]):
+		failures.append("Coordinatore remoto non riconosciuto come team operativo")
 
 	# ── La cartella dati è del team: nessuno la tocca alle spalle ────────
 	# Tre bug diversi in una giornata (config non scrivibile, runtime non
@@ -355,7 +402,7 @@ func _apply_probe(next: Dictionary) -> void:
 		next["container_exists"] = true
 		next["container_running"] = true
 		next["container_state"] = "running · VPS"
-		next["team_running"] = not BackendBus.agents.is_empty()
+		next["team_running"] = _agents_have_operational_team(BackendBus.agents)
 		var remote_provider := _ui_provider_id(str(
 				BackendBus.live_settings.get("active_provider", "")))
 		if remote_provider != "":
@@ -454,6 +501,51 @@ static func _run(path: String, args: PackedStringArray) -> Dictionary:
 	return {"code": code, "out": "\n".join(PackedStringArray(output)).strip_edges()}
 
 
+## Cerca `exe` fra le cartelle del PATH, come farebbe la shell. Ritorna il
+## percorso pieno, o "" se non c'è.
+##
+## Perché guardare il filesystem: su POSIX OS.execute passa dalla shell, e per
+## un comando inesistente la shell esce 127 — MAI il -1 che il probe assumeva
+## (misurato su macOS, Godot 4.7: code=127, stderr "sh: docker: command not
+## found"). Ma 127 da solo non basta a dichiarare "assente": è lo stesso numero
+## che restituirebbe un docker PRESENTE che esce 127, e il testo d'errore della
+## shell cambia con la shell e col locale — non è un contratto. L'esistenza del
+## file nel PATH invece distingue i due casi senza interpretare né numeri né
+## messaggi: è il criterio meno ambiguo che Godot mette a disposizione.
+static func _which(exe: String) -> String:
+	var windows := OS.get_name() == "Windows"
+	# Su Windows il comando è un file con estensione (docker.exe); .cmd/.bat
+	# coprono gli shim. Su POSIX il nome è nudo.
+	var names := PackedStringArray([exe + ".exe", exe + ".cmd", exe + ".bat"]) \
+			if windows else PackedStringArray([exe])
+	for dir in OS.get_environment("PATH").split(";" if windows else ":", false):
+		for name in names:
+			var candidate := String(dir).path_join(String(name))
+			if not FileAccess.file_exists(candidate):
+				continue
+			# Su POSIX un file nel PATH senza bit di esecuzione non è un
+			# comando: la shell risponderebbe "permission denied" (126).
+			if windows or (FileAccess.get_unix_permissions(candidate)
+					& (FileAccess.UNIX_EXECUTE_OWNER | FileAccess.UNIX_EXECUTE_GROUP
+					| FileAccess.UNIX_EXECUTE_OTHER)) != 0:
+				return candidate
+	return ""
+
+
+## L'eseguibile esiste su questa macchina? Due prove, in quest'ordine:
+## 1) il file nel PATH (_which) — prova diretta, indipendente dai codici;
+## 2) in subordine, la prova comportamentale: `probe_code` è l'esito di un
+##    lancio vero. 0 o un codice "suo" dicono che QUALCOSA ha risposto anche
+##    se il PATH scan lo mancasse (shim esotici) — è la rete che impedisce a
+##    questo cambio di regredire il ramo Windows, dove -1 = lancio fallito
+##    funzionava già. Restano esclusi i due codici che la shell POSIX usa per
+##    conto proprio: 127 (comando non trovato) e 126 (trovato ma non
+##    eseguibile) — con un binario davvero presente li scavalca la prova 1.
+static func _exec_present(exe: String, probe_code: int) -> bool:
+	return _which(exe) != "" \
+			or (probe_code != -1 and probe_code != 126 and probe_code != 127)
+
+
 static func runtime_image() -> String:
 	var custom := OS.get_environment("JHT_IMAGE").strip_edges()
 	return custom if custom != "" else DEFAULT_RUNTIME_IMAGE
@@ -478,9 +570,16 @@ static func _probe_host(home: String) -> Dictionary:
 		"team_running": false,
 		"image_id": "", "container_image_id": "", "runtime_stale": false,
 	}
+	# Presenza e stato del motore sono DUE domande, e le risponde chi le sa:
+	# la presenza il filesystem (_exec_present), lo stato del daemon il codice
+	# d'uscita di `docker version` (0 = attivo, altro = installato ma spento).
+	# Il vecchio `code != -1` valeva solo su Windows: su POSIX un docker
+	# assente esce 127 via shell, mai -1, quindi docker_available restava true
+	# e INSTALLA DOCKER — l'unica strada per chi arriva senza motore — non
+	# compariva mai su macOS e Linux.
 	var version := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Client.Version}}|{{.Server.Version}}"] ))
-	d["docker_available"] = version["code"] != -1
+	d["docker_available"] = _exec_present("docker", int(version["code"]))
 	d["docker_running"] = version["code"] == 0
 	if d["docker_running"]:
 		var inspect := _run("docker", PackedStringArray(["inspect", "jht",
@@ -507,7 +606,8 @@ static func _probe_host(home: String) -> Dictionary:
 		if d["container_running"]:
 			var tmux := _run("docker", PackedStringArray(["exec", "jht", "tmux",
 					"list-sessions", "-F", "#{session_name}"] ))
-			d["team_running"] = tmux["code"] == 0 and str(tmux["out"]) != ""
+			d["team_running"] = tmux["code"] == 0 \
+					and _tmux_has_operational_team(str(tmux["out"]))
 	var config := _read_json(home.path_join("jht.config.json"))
 	d["hours_ready"] = _has_working_hours(config)
 	var active := _ui_provider_id(str(config.get("active_provider", "")))
@@ -519,6 +619,30 @@ static func _probe_host(home: String) -> Dictionary:
 		d["active_plan"] = _declared_plan(config, active)
 		d["plan_ready"] = str(d["active_plan"]) != ""
 	return d
+
+
+## L'Assistente e' autorizzato a vivere durante l'onboarding del profilo; anche
+## Dottore/Mantenitore sono sessioni tecniche, non il team operativo richiesto
+## dall'utente. Il Capitano nasce soltanto dal vero `team start` e ne e' quindi
+## il marker minimo affidabile. "Qualunque tmux" faceva apparire TEAM ATTIVO e
+## disabilitava il pulsante mentre il setup era ancora 1/4.
+static func _tmux_has_operational_team(raw: String) -> bool:
+	for session in raw.split("\n", false):
+		if str(session).strip_edges() == "CAPITANO":
+			return true
+	return false
+
+
+static func _agents_have_operational_team(agents: Array) -> bool:
+	for value in agents:
+		if not (value is Dictionary):
+			continue
+		var agent := value as Dictionary
+		var role := str(agent.get("role", "")).strip_edges().to_lower()
+		if role in ["capitano", "coordinatore"] \
+				and bool(agent.get("active", true)):
+			return true
+	return false
 
 
 ## Quale abbonamento ha l'utente. Il provider da solo non basta: un piano da
@@ -596,33 +720,7 @@ static func auth_match(provider: String, _home: String = "") -> String:
 ## SSH del passo 01. E quello che non si riesce a leggere di là resta IGNOTO:
 ## mai verde, e mai sostituito col valore di questo disco — un ripiego
 ## silenzioso qui non peggiora l'informazione, la falsifica.
-const CHECKLIST_PY := """
-import json, os
-AUTH = %s
-HOME = '/jht_home'
-try:
-    c = json.load(open(HOME + '/jht.config.json'))
-except Exception:
-    c = None
-out = {'config_read': isinstance(c, dict)}
-if not isinstance(c, dict):
-    c = {}
-out['active_provider'] = str(c.get('active_provider') or '')
-declared = c.get('providers') if isinstance(c.get('providers'), dict) else {}
-out['providers'] = dict((k, {'plan': str((v or {}).get('plan') or '')})
-                        for k, v in declared.items() if isinstance(v, dict))
-team = c.get('team') if isinstance(c.get('team'), dict) else {}
-out['team'] = {'working_hours': team.get('working_hours') or {}}
-auth = {}
-for name, paths in AUTH.items():
-    for rel in paths:
-        full = HOME + '/' + rel
-        if os.path.isfile(full) and os.path.getsize(full) > 0:
-            auth[name] = rel
-            break
-out['auth'] = auth
-print(json.dumps(out))
-"""
+static var CHECKLIST_PY := VpsBackend.payload("checklist.py")
 
 
 ## Una sola andata e ritorno per i tre passi. Il profilo usa lo STESSO script
@@ -841,6 +939,7 @@ static func _do_stop_container(vps: Dictionary) -> Dictionary:
 ## visibile (il pull dell'immagine GHCR è lungo: l'utente deve vederlo).
 func _do_start_container() -> Dictionary:
 	Log.call_deferred("info", "setup", "attiva container: probe del daemon Docker")
+	_set_phase("engine")
 	var daemon := _run("docker", PackedStringArray(["version", "--format",
 			"{{.Server.Version}}"] ))
 	if daemon["code"] != 0:
@@ -877,6 +976,7 @@ func _do_start_container() -> Dictionary:
 		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
 	_ensure_host_dirs()
 	Log.call_deferred("info", "setup", "attivazione: pull + compose up da " + compose)
+	_set_phase("image")
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
 			"Controllo aggiornamenti del team…")
 	if not bool(pull["ok"]):
@@ -884,45 +984,210 @@ func _do_start_container() -> Dictionary:
 				"pull immagine fallito, proseguo con la copia locale: "
 				+ str(pull.get("tail", "")).right(200))
 		_progress("container", "Aggiornamento non riuscito: uso l'immagine già scaricata…")
+	_set_phase("container")
 	return _compose_up_with_progress(compose)
 
 
-## Aggiornamento esplicito del runtime: scarica l'immagine più recente e
-## ricrea il container solo se serve (compose lo fa da sé quando l'immagine
-## referenziata cambia). Il bind-mount ~/.jht resta intatto: nessun dato perso.
+## Aggiornamento esplicito del runtime. Il deploy e' posseduto dal wrapper
+## host: journal, lock, pull, rollback e verifica devono avere UNA sola
+## implementazione, quindi questa UI non invoca mai docker/compose direttamente.
 func update_runtime() -> void:
 	if _action_running:
 		return
-	_start_action("container", _do_update_runtime)
+	_start_action("upgrade", _do_update_runtime.bind(_vps_config()),
+			UIStrings.t("setup.upgrade_running"))
 
 
-func _do_update_runtime() -> Dictionary:
-	var daemon := _run("docker", PackedStringArray(["version", "--format",
-			"{{.Server.Version}}"] ))
-	if daemon["code"] != 0:
-		return {"ok": false, "message": "Docker non risponde: avvia prima il runtime."}
-	var compose := _ensure_compose_file()
-	if compose == "":
-		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
-	_ensure_host_dirs()
-	var before := _local_image_id()
-	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
-			"Cerco una versione più recente del team…")
-	if not bool(pull["ok"]):
-		return {"ok": false, "message": "Aggiornamento non riuscito: " \
-				+ str(pull.get("tail", "")).strip_edges().right(200)}
-	var after := _local_image_id()
-	var recreated := _compose_up_with_progress(compose)
-	if not bool(recreated["ok"]):
-		return recreated
-	return {"ok": true, "message": "Runtime aggiornato: il team gira sulla versione più recente." \
-			if after != before else "Runtime già aggiornato: nessuna versione più recente."}
+static func _do_update_runtime(vps: Dictionary) -> Dictionary:
+	return _run_vps_upgrade(vps) if not vps.is_empty() else _run_local_upgrade()
 
 
-static func _local_image_id() -> String:
-	var found := _run("docker", PackedStringArray(["image", "inspect",
-			runtime_image(), "--format", "{{.Id}}"] ))
-	return str(found["out"]).strip_edges() if found["code"] == 0 else ""
+## Il badge Docker viene aggiornato SOLO da un gesto esplicito dell'utente.
+## Questo comando chiede al wrapper host una fotografia della candidate image:
+## non promuove, non riavvia e non interroga Docker direttamente.
+func check_runtime_update() -> void:
+	if _action_running:
+		return
+	_start_action("upgrade-check", _do_check_runtime_update.bind(_vps_config()),
+			UIStrings.t("setup.runtime_check_running"))
+
+
+static func _do_check_runtime_update(vps: Dictionary) -> Dictionary:
+	return _run_vps_upgrade_check(vps) if not vps.is_empty() else _run_local_upgrade_check()
+
+
+## Stato piccolo e serializzabile per il badge della sidebar. `changed` e' il
+## SOLO segnale di update disponibile: restartRequired appartiene all'apply e
+## puo' essere valorizzato anche da un check senza che ci sia una promozione.
+func runtime_update_check_state() -> String:
+	if _action_running and current_action == "upgrade-check":
+		return "checking"
+	if last_upgrade_check.is_empty():
+		return "unknown"
+	if not bool(last_upgrade_check.get("ok", false)):
+		return "error"
+	return "available" if bool(last_upgrade_check.get("changed", false)) else "current"
+
+
+## Il protocollo di upgrade e' volutamente stretto: stdout e' una sola riga
+## JSON finale. Qualunque log extra o risultato incoerente resta un errore
+## sicuro, anziche' trasformare diagnostica non strutturata in uno stato UI.
+static func parse_upgrade_result(stdout: String, exit_code: int) -> Dictionary:
+	var frame := stdout.replace("\r\n", "\n")
+	if frame.ends_with("\n"):
+		frame = frame.left(-1)
+	if frame == "" or frame.contains("\n") or frame != frame.strip_edges():
+		return _upgrade_protocol_failure()
+	var parsed: Variant = JSON.parse_string(frame)
+	if not (parsed is Dictionary) or not _upgrade_result_shape_valid(parsed):
+		return _upgrade_protocol_failure()
+	var result: Dictionary = parsed.duplicate(true)
+	if (exit_code == 0) != bool(result["ok"]):
+		return _upgrade_protocol_failure()
+	return result
+
+
+static func _upgrade_result_shape_valid(result: Dictionary) -> bool:
+	for key in ["ok", "changed", "restartRequired", "rolledBack"]:
+		if not result.has(key) or not (result[key] is bool):
+			return false
+	for key in ["phase", "message"]:
+		if not result.has(key) or not (result[key] is String):
+			return false
+	if not str(result["phase"]) in ["preflight", "pull", "activate", "verify",
+			"commit", "complete", "recovery", "unexpected", "check"]:
+		return false
+	for key in ["previous", "current"]:
+		if not result.has(key) or not (result[key] is Dictionary):
+			return false
+		var version: Variant = result[key].get("version")
+		var image: Variant = result[key].get("image")
+		if not (version is String) or not (image is String):
+			return false
+	return true
+
+
+static func _upgrade_protocol_failure() -> Dictionary:
+	return {"ok": false, "changed": false, "phase": "unexpected",
+			"previous": {"version": "", "image": ""},
+			"current": {"version": "", "image": ""},
+			"restartRequired": false, "message": "", "rolledBack": false,
+			"protocol_error": true}
+
+
+static func _host_jht_path() -> String:
+	var found := _which("jht")
+	if found != "":
+		return found
+	var home := OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" \
+			else OS.get_environment("HOME")
+	var candidates := PackedStringArray()
+	if OS.get_name() == "Windows":
+		candidates = PackedStringArray([home.path_join(".local/bin/jht.cmd"),
+				home.path_join(".local/bin/jht.ps1")])
+	else:
+		candidates = PackedStringArray([home.path_join(".local/bin/jht"), "/usr/local/bin/jht"])
+	for candidate in candidates:
+		if FileAccess.file_exists(candidate):
+			return candidate
+	return ""
+
+
+static func _run_local_upgrade() -> Dictionary:
+	var jht := _host_jht_path()
+	if jht == "":
+		return _upgrade_protocol_failure()
+	if OS.get_name() == "Windows" and (jht.to_lower().ends_with(".cmd") \
+			or jht.to_lower().ends_with(".bat")):
+		return _run_upgrade_json("cmd.exe", PackedStringArray(["/d", "/s", "/c",
+				_local_quote(jht) + " upgrade --json"]))
+	if OS.get_name() == "Windows" and jht.to_lower().ends_with(".ps1"):
+		var powershell := _which("pwsh")
+		if powershell == "":
+			powershell = _which("powershell")
+		return _run_upgrade_json(powershell, PackedStringArray(["-NoProfile",
+				"-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", jht,
+				"upgrade", "--json"]))
+	return _run_upgrade_json(jht, PackedStringArray(["upgrade", "--json"]))
+
+
+static func _run_local_upgrade_check() -> Dictionary:
+	var jht := _host_jht_path()
+	if jht == "":
+		return _upgrade_protocol_failure()
+	if OS.get_name() == "Windows" and (jht.to_lower().ends_with(".cmd") \
+			or jht.to_lower().ends_with(".bat")):
+		return _run_upgrade_json("cmd.exe", PackedStringArray(["/d", "/s", "/c",
+				_local_quote(jht) + " upgrade --check --json"]))
+	if OS.get_name() == "Windows" and jht.to_lower().ends_with(".ps1"):
+		var powershell := _which("pwsh")
+		if powershell == "":
+			powershell = _which("powershell")
+		return _run_upgrade_json(powershell, PackedStringArray(["-NoProfile",
+				"-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", jht,
+				"upgrade", "--check", "--json"]))
+	return _run_upgrade_json(jht, PackedStringArray(["upgrade", "--check", "--json"]))
+
+
+static func _vps_upgrade_command() -> String:
+	return "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
+			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
+			+ "[ -x \"$JHT_BIN\" ] || exit 127; exec \"$JHT_BIN\" upgrade --json"
+
+
+static func _run_vps_upgrade(vps: Dictionary) -> Dictionary:
+	return _run_upgrade_json("ssh", _ssh_args(vps, _vps_upgrade_command()))
+
+
+static func _vps_upgrade_check_command() -> String:
+	return "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
+			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
+			+ "[ -x \"$JHT_BIN\" ] || exit 127; exec \"$JHT_BIN\" upgrade --check --json"
+
+
+static func _run_vps_upgrade_check(vps: Dictionary) -> Dictionary:
+	return _run_upgrade_json("ssh", _ssh_args(vps, _vps_upgrade_check_command()))
+
+
+## A differenza di _run, conserva stdout e stderr separati: stderr e' solo
+## diagnostica del wrapper/SSH e non puo' contaminare il singolo frame JSON.
+## Il worker drena sempre entrambi i pipe per non bloccare un upgrade lungo.
+static func _run_upgrade_json(path: String, args: PackedStringArray) -> Dictionary:
+	if path == "":
+		return _upgrade_protocol_failure()
+	var process := OS.execute_with_pipe(path, args, false)
+	if process.is_empty():
+		return _upgrade_protocol_failure()
+	var stdio: FileAccess = process["stdio"]
+	var stderr: FileAccess = process["stderr"]
+	var stdout := PackedByteArray()
+	var stdout_overflow := false
+	var pid := int(process["pid"])
+	while OS.is_process_running(pid):
+		var out_chunk: PackedByteArray = stdio.get_buffer(65536)
+		if out_chunk.size() > 0:
+			if stdout.size() + out_chunk.size() > 32768:
+				stdout_overflow = true
+			else:
+				stdout.append_array(out_chunk)
+		# stderr e' intenzionalmente scartato: il contratto lascia li' i log.
+		stderr.get_buffer(65536)
+		OS.delay_msec(20)
+	# Drain finale: l'ultimo frame puo' arrivare dopo l'exit del processo.
+	for _attempt in 3:
+		var out_chunk: PackedByteArray = stdio.get_buffer(65536)
+		if out_chunk.size() > 0:
+			if stdout.size() + out_chunk.size() > 32768:
+				stdout_overflow = true
+			else:
+				stdout.append_array(out_chunk)
+		stderr.get_buffer(65536)
+		OS.delay_msec(20)
+	stdio.close()
+	stderr.close()
+	return _upgrade_protocol_failure() if stdout_overflow \
+			else parse_upgrade_result(stdout.get_string_from_utf8(),
+					OS.get_process_exit_code(pid))
 
 
 ## Dove vive il file compose. NON in `~/.jht`: quella cartella diventa del
@@ -952,56 +1217,7 @@ static func _find_compose_file() -> String:
 
 ## Il compose di produzione è image-only (GHCR): basta scriverlo su disco,
 ## niente payload da spedire. Copia funzionale di /docker-compose.yml.
-const RUNTIME_COMPOSE := """# Job Hunter Team — runtime container (scritto dal gioco)
-# Copia funzionale di docker-compose.yml del repo (image-only, GHCR).
-services:
-  jht:
-    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}
-    container_name: jht
-    command: ["pid1"]
-    environment:
-      - HOME=/jht_home
-      - JHT_HOME=/jht_home
-      - JHT_USER_DIR=/jht_user
-      - JHT_HOST_TYPE=${JHT_HOST_TYPE:-}
-      - JHT_LANG=${JHT_LANG:-en}
-      - JHT_USER_TZ=${JHT_USER_TZ:-UTC}
-      - IS_CONTAINER=1
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
-      - NEXT_PUBLIC_JHT_DEPLOY=${NEXT_PUBLIC_JHT_DEPLOY:-local}
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
-      - TURBOPACK_WATCH_POLL=true
-      # CLI dei provider FUORI dal bind-mount: su Windows ~/.jht e' C:\
-      # vista da WSL2 e scriverci costa ~158x (misurato: 200 file piccoli
-      # = 11.209 ms contro 71 ms sul disco del container). npm e uv ne
-      # creano decine di migliaia, ed e' il motivo per cui installare un
-      # provider su Windows richiedeva un'attesa interminabile mentre su
-      # Linux bastava mezzo minuto.
-      - NPM_CONFIG_PREFIX=/opt/jht-deps/npm-global
-      - NPM_CONFIG_CACHE=/opt/jht-deps/npm-cache
-      - UV_TOOL_DIR=/opt/jht-deps/uv-tools
-      - UV_TOOL_BIN_DIR=/opt/jht-deps/bin
-      - UV_CACHE_DIR=/opt/jht-deps/uv-cache
-      - PATH=/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/jht_home/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
-    volumes:
-      - ${HOME}/.jht:/jht_home
-      - ${HOME}/Documents/Job Hunter Team:/jht_user
-      # Volume Docker: sul disco della VM, non sul mount dell'host.
-      - jht-deps:/opt/jht-deps
-    # Nessuna porta esposta: la dashboard browser su localhost e' stata
-    # ritirata — l'interazione locale passa dal gioco (docker exec).
-    stdin_open: true
-    tty: true
-    restart: unless-stopped
-
-volumes:
-  jht-deps:
-"""
+static var RUNTIME_COMPOSE := VpsBackend.payload("runtime_compose.yml")
 
 
 static func _ensure_compose_file() -> String:
@@ -1049,11 +1265,18 @@ func _compose_up_with_progress(compose: String) -> Dictionary:
 
 
 ## Esegue un sottocomando compose in background riportando il progresso del
-## pull nel pannello. L'esito non guarda l'exit code (leggerlo dopo il reap
-## logga falsi errori su macOS): chi chiama verifica lo stato reale — il
-## container per `up`, l'id dell'immagine per `pull` — e qui si segnala solo
-## se il processo è partito e se lo stream contiene errori. Gira nel worker
-## dell'azione: i delay non toccano il main thread.
+## pull nel pannello. Prova PRIMA `--progress json` — flag GLOBALE di compose,
+## va prima del sottocomando — perché è l'unica modalità che dichiara i byte
+## totali per livello: su pipe non-TTY la modalità plain stampa SOLO i byte
+## scaricati («<id> Downloading 12.5MB», misurato su Docker 29.6.1/compose
+## v5.3.0: zero righe col totale su 6599), quindi lì una percentuale non
+## esiste. Le versioni di compose senza il flag muoiono subito con "unknown
+## flag": si rilancia in modalità testo, che resta il ripiego.
+## L'esito non guarda l'exit code (leggerlo dopo il reap logga falsi errori
+## su macOS): chi chiama verifica lo stato reale — il container per `up`,
+## l'id dell'immagine per `pull` — e qui si segnala solo se il processo è
+## partito e se lo stream contiene errori. Gira nel worker dell'azione: i
+## delay non toccano il main thread.
 func _compose_stream(compose: String, args: PackedStringArray,
 		lead: String) -> Dictionary:
 	if OS.get_name() == "Windows" and OS.get_environment("HOME") == "":
@@ -1061,23 +1284,40 @@ func _compose_stream(compose: String, args: PackedStringArray,
 		# figli ereditano l'ambiente del gioco.
 		OS.set_environment("HOME", OS.get_environment("USERPROFILE"))
 	_progress("container", lead)
-	# Niente --progress: su pipe (non-TTY) compose è già in modalità plain e
-	# il flag non esiste nelle versioni meno recenti.
-	var argv := PackedStringArray(["compose", "-f", compose])
+	var argv := PackedStringArray(["compose", "--progress", "json", "-f", compose])
 	argv.append_array(args)
+	var streamed := _stream_compose(argv, true)
+	if bool(streamed.get("unknown_flag", false)):
+		Log.call_deferred("info", "setup",
+				"compose senza --progress json: ripiego sul parser testuale")
+		argv = PackedStringArray(["compose", "-f", compose])
+		argv.append_array(args)
+		streamed = _stream_compose(argv, false)
+	return streamed
+
+
+## Spawn e lettura dei pipe di UN processo compose; json_mode sceglie il
+## parser delle righe, tutto il resto (drain finale, timeout, tick UI) è
+## identico nelle due modalità.
+func _stream_compose(argv: PackedStringArray, json_mode: bool) -> Dictionary:
 	var process := OS.execute_with_pipe("docker", argv, false)
 	if process.is_empty():
 		return {"ok": false, "spawned": false, "tail": "docker compose non eseguibile"}
 	var stdio: FileAccess = process["stdio"]
 	var stderr: FileAccess = process["stderr"]
 	var pid := int(process["pid"])
-	var sizes := RegEx.new()
-	sizes.compile("([0-9.]+)\\s*([kKmMgG]?i?B)/([0-9.]+)\\s*([kKmMgG]?i?B)")
 	var pending := ""
 	var tail := ""            # ultime righe complete, per il messaggio d'errore
 	var layers := {}          # id livello → ultima riga di stato vista
+	# id livello → {got, total} in MB, SOLO byte di download. I byte di
+	# "Extracting" sono DECOMPRESSI: sommarli ai conteggi di download
+	# gonfierebbe la barra. Vedi _parse_json_pull_line/_parse_text_pull_line.
+	var layer_bytes := {}
 	var last_output_ms := Time.get_ticks_msec()
-	var last_ui_ms := 0
+	# "Mai emesso": il primo avanzamento parte col primo dato utile, non
+	# dopo il primo intervallo (ticks_msec riparte da zero a ogni avvio: 0
+	# qui NON significa "tanto tempo fa").
+	var last_ui_ms := -100000
 	while true:
 		var got_data := false
 		for pipe: FileAccess in [stdio, stderr]:
@@ -1098,9 +1338,10 @@ func _compose_stream(compose: String, args: PackedStringArray,
 				tail += line + "\n"
 				if tail.length() > 1200:
 					tail = tail.right(1200)
-				var parts: PackedStringArray = line.split(" ", false, 1)
-				if parts.size() == 2 and parts[0].is_valid_hex_number():
-					layers[parts[0]] = parts[1]
+				if json_mode:
+					_parse_json_pull_line(line, layers, layer_bytes)
+				else:
+					_parse_text_pull_line(line, layers, layer_bytes)
 		else:
 			if not OS.is_process_running(pid):
 				# Drain finale: il processo può uscire con dati ancora in coda
@@ -1126,7 +1367,19 @@ func _compose_stream(compose: String, args: PackedStringArray,
 			OS.delay_msec(80)
 		if Time.get_ticks_msec() - last_ui_ms > 1500 and not layers.is_empty():
 			last_ui_ms = Time.get_ticks_msec()
-			_progress("container", _pull_progress_text(layers, sizes))
+			_progress("container", _pull_progress_text(layers, layer_bytes))
+			call_deferred("_apply_pull_progress",
+					_pull_progress_info(layers, layer_bytes))
+	# L'ultimo stato VERO arriva sempre alla barra: senza questa emissione lo
+	# stato finale (tipicamente il 100%) resterebbe indietro di un tick.
+	if not layers.is_empty():
+		call_deferred("_apply_pull_progress",
+				_pull_progress_info(layers, layer_bytes))
+	# `--progress json` sconosciuto: i compose meno recenti muoiono subito con
+	# "unknown flag: --progress" (verificato su compose reale). Non è un
+	# errore del pull: è il segnale di rilanciare in modalità testo.
+	if json_mode and tail.to_lower().contains("unknown flag"):
+		return {"ok": false, "spawned": true, "unknown_flag": true, "tail": tail}
 	return {"ok": not _stream_failed(tail), "spawned": true, "tail": tail}
 
 
@@ -1141,25 +1394,122 @@ static func _stream_failed(tail: String) -> bool:
 	return false
 
 
-## Riassunto leggibile del pull: parti completate e byte scaricati/totali
-## quando docker li espone nelle righe di stato.
-static func _pull_progress_text(layers: Dictionary, sizes: RegEx) -> String:
+## Le dimensioni nelle righe di stato testuali: "12.3MB/456.7MB" (docker meno
+## recenti, col totale) oppure "12.3MB" da solo (docker moderni su pipe
+## non-TTY, che il totale non lo stampano MAI).
+static var SIZES_PAIR_RE := RegEx.create_from_string(
+		"([0-9.]+)\\s*([kKmMgG]?i?B)/([0-9.]+)\\s*([kKmMgG]?i?B)")
+static var SIZE_RE := RegEx.create_from_string("([0-9.]+)\\s*([kKmMgG]?i?B)")
+
+
+## Una riga di `docker compose --progress json`: un evento JSON per riga, coi
+## byte VERI in `current`/`total`. Le righe senza `parent_id` sono l'immagine
+## intera ("Pulling"/"Pulled"), non un livello. Stesse cautele del testo: i
+## byte di "Extracting" sono DECOMPRESSI e non entrano nei conteggi di
+## download; a "Download complete"/"Extracting"/"Pull complete" il livello si
+## blocca sul suo totale.
+static func _parse_json_pull_line(line: String, layers: Dictionary,
+		layer_bytes: Dictionary) -> void:
+	if not line.begins_with("{"):
+		return
+	var parsed: Variant = JSON.parse_string(line)
+	if not (parsed is Dictionary):
+		return
+	var evt: Dictionary = parsed
+	var id := str(evt.get("id", ""))
+	if id == "" or not evt.has("parent_id"):
+		return
+	var text := str(evt.get("text", ""))
+	layers[id] = (text + " " + str(evt.get("details", ""))).strip_edges()
+	var lower := text.to_lower()
+	if lower == "downloading":
+		var total := float(evt.get("total", 0))
+		if total > 0.0:
+			layer_bytes[id] = {"got": float(evt.get("current", 0)) / 1048576.0,
+					"total": total / 1048576.0}
+	elif layer_bytes.has(id) and (lower.contains("complete")
+			or lower.begins_with("extracting") or lower.begins_with("verifying")):
+		layer_bytes[id]["got"] = layer_bytes[id]["total"]
+
+
+## Una riga di stato in modalità testo: "<id> <stato> [dimensioni]". Sui
+## docker moderni le righe "Downloading" NON portano mai il totale (misurato:
+## 0 su 6599 in un pull reale su pipe non-TTY): si tiene comunque il conteggio
+## dei byte scaricati (total=0), così la UI può dire "X MB scaricati a Y MB/s"
+## invece di restare muta — percentuale ed ETA restano onestamente assenti.
+## Il formato "x/y" dei docker meno recenti resta riconosciuto.
+static func _parse_text_pull_line(line: String, layers: Dictionary,
+		layer_bytes: Dictionary) -> void:
+	var parts: PackedStringArray = line.split(" ", false, 1)
+	if parts.size() != 2 or not parts[0].is_valid_hex_number():
+		return
+	layers[parts[0]] = parts[1]
+	var status := parts[1].to_lower()
+	if status.begins_with("downloading"):
+		var pair := SIZES_PAIR_RE.search(parts[1])
+		if pair != null:
+			layer_bytes[parts[0]] = {
+				"got": _to_mb(pair.get_string(1), pair.get_string(2)),
+				"total": _to_mb(pair.get_string(3), pair.get_string(4)),
+			}
+			return
+		var single := SIZE_RE.search(parts[1])
+		if single != null:
+			var entry: Dictionary = layer_bytes.get(parts[0],
+					{"got": 0.0, "total": 0.0})
+			entry["got"] = _to_mb(single.get_string(1), single.get_string(2))
+			layer_bytes[parts[0]] = entry
+	elif layer_bytes.has(parts[0]) and (status.contains("complete")
+			or status.begins_with("extracting")
+			or status.begins_with("verifying")):
+		# Download del livello finito: col totale noto ci si blocca lì; senza
+		# totale si tiene l'ultimo conteggio visto ("Download complete 0B"
+		# azzererebbe byte realmente scaricati).
+		if float(layer_bytes[parts[0]]["total"]) > 0.0:
+			layer_bytes[parts[0]]["got"] = layer_bytes[parts[0]]["total"]
+
+
+## Riassunto leggibile del pull: parti completate e byte scaricati (col
+## totale accanto solo quando i livelli l'hanno davvero dichiarato).
+static func _pull_progress_text(layers: Dictionary, layer_bytes: Dictionary) -> String:
 	var done := 0
-	var got_bytes := 0.0
-	var total_bytes := 0.0
 	for id in layers:
 		var status := str(layers[id]).to_lower()
-		if status.contains("complete") or status.contains("already exists") \
-				or status.contains("exists"):
+		if status.contains("complete") or status.contains("exists"):
 			done += 1
-		var found := sizes.search(str(layers[id]))
-		if found != null:
-			got_bytes += _to_mb(found.get_string(1), found.get_string(2))
-			total_bytes += _to_mb(found.get_string(3), found.get_string(4))
+	var info := _pull_progress_info(layers, layer_bytes)
 	var text := "Scarico l'immagine del team: %d/%d parti" % [done, layers.size()]
-	if total_bytes > 0.0:
-		text += " · %.0f/%.0f MB" % [got_bytes, total_bytes]
+	if float(info["fraction"]) >= 0.0:
+		text += " · %.0f/%.0f MB" % [float(info["got_mb"]), float(info["total_mb"])]
+	elif float(info["got_mb"]) > 0.0:
+		text += " · %.0f MB scaricati" % float(info["got_mb"])
 	return text + "…"
+
+
+## Il dato VERO su cui poggia la barra: byte di download acquisiti/totali dei
+## livelli. La percentuale esiste SOLO se OGNI livello tracciato ha dichiarato
+## il suo totale (modalità JSON, o i vecchi docker col formato "x/y"): con un
+## totale parziale sarebbe gonfiata, e senza totali (docker moderni in
+## modalità testo) fraction resta -1.0 — la UI mostra i byte scaricati e il
+## rate misurato, non una percentuale inventata. Il totale può CRESCERE
+## mentre docker scopre le dimensioni degli altri livelli: è il dato reale,
+## non un difetto da mascherare.
+static func _pull_progress_info(layers: Dictionary, layer_bytes: Dictionary) -> Dictionary:
+	var got := 0.0
+	var total := 0.0
+	var total_known := not layer_bytes.is_empty()
+	for id in layer_bytes:
+		got += float(layer_bytes[id]["got"])
+		var layer_total := float(layer_bytes[id]["total"])
+		total += layer_total
+		if layer_total <= 0.0:
+			total_known = false
+	return {
+		"got_mb": got, "total_mb": total,
+		"fraction": clampf(got / total, 0.0, 1.0) \
+				if total_known and total > 0.0 else -1.0,
+		"layers": layers.size(),
+	}
 
 
 static func _to_mb(value: String, unit: String) -> float:
@@ -1185,7 +1535,12 @@ static func _launch_docker_runtime() -> Dictionary:
 			OS.create_process(DOCKER_DESKTOP_WIN, PackedStringArray())
 			return {"ok": true, "message": "Docker Desktop avviato: attendo il motore…"}
 		"macOS":
-			if _run("colima", PackedStringArray(["version"] ))["code"] != -1:
+			# Stesso criterio del probe: su POSIX un comando assente esce 127,
+			# mai -1 — col vecchio confronto questo ramo partiva anche senza
+			# colima, dichiarava "Colima avviato" a vuoto e non ripiegava mai
+			# su Docker Desktop.
+			if _exec_present("colima",
+					int(_run("colima", PackedStringArray(["version"]))["code"])):
 				OS.create_process("colima", PackedStringArray(["start"]))
 				return {"ok": true, "message": "Colima avviato: attendo il motore…"}
 			if DirAccess.dir_exists_absolute("/Applications/Docker.app"):
@@ -1278,6 +1633,35 @@ static func _provider_tui_login(provider: String) -> String:
 const PTY_ROWS := 40
 const PTY_COLS := 120
 
+## Il pipe interattivo di Godot viene raccolto quando arriva EOF: a quel punto
+## su macOS chiedere l'exit code al PID produce il falso errore "not a child".
+## Il guscio scrive quindi l'esito come OSC (invisibile nel renderer terminale)
+## prima di uscire; EmbeddedTerminal lo legge dai byte grezzi e può distinguere
+## davvero successo e fallimento.
+static func _with_exit_report(command: String, token: String) -> String:
+	# Il comando gira in una subshell: anche un suo `exit N` non può saltare il
+	# report del wrapper esterno. fd3 è il canale di controllo verso Godot e
+	# viene chiuso nel figlio: il comando ospitato non può falsificarlo.
+	return ("( exec 3>&-; %s\n); _jht_exit=$?; " \
+			+ "printf '\\033]1337;JHTExit=%s:%%s\\007' \"$_jht_exit\" >&3; " \
+			+ "exit \"$_jht_exit\"") % [command, token]
+
+
+## Windows non espone l'exit code del processo raccolto da Godot. PowerShell è
+## il wrapper ESTERNO: il comando cmd viaggia in UTF-8 base64, così nessun
+## parser prima del cmd interno consuma `!`, percento o virgolette. Dopo cmd,
+## $LASTEXITCODE è l'unica fonte dell'esito; PowerShell scrive l'OSC e termina
+## con lo stesso codice.
+static func _with_windows_exit_report(command: String, token: String) -> String:
+	var encoded := Marshalls.utf8_to_base64(command)
+	return ("$jht_command = [Text.Encoding]::UTF8.GetString(" \
+			+ "[Convert]::FromBase64String('%s')); " \
+			+ "$jht_hosted = '( ' + $jht_command + ' ) 1>&2'; " \
+			+ "& $env:COMSPEC /d /s /c $jht_hosted; " \
+			+ "$jht_exit = [int]$LASTEXITCODE; " \
+			+ "[Console]::Out.Write([char]27 + ']1337;JHTExit=%s:' " \
+			+ "+ $jht_exit + [char]7); exit $jht_exit") % [encoded, token]
+
 
 ## Senza `stty` la pty aperta da `script` nasce 0×0 — misurato sia su macOS
 ## sia su Ubuntu 24.04, e `docker exec -it` propaga quello 0×0 dentro al
@@ -1294,23 +1678,30 @@ static func _with_pty_size(command: String) -> String:
 static func embedded_terminal_spec(title: String, hint: String, command: String) -> Dictionary:
 	var path := "/bin/sh"
 	var args := PackedStringArray()
+	var exit_report_token := Crypto.new().generate_random_bytes(16).hex_encode()
 	match OS.get_name():
 		"macOS":
-			args = PackedStringArray(["-lc", "script -q /dev/null /bin/sh -lc " \
-					+ _shell_quote(_with_pty_size(command)) + " 1>&2"])
+			args = PackedStringArray(["-lc", "3>&1 script -q /dev/null /bin/sh -lc " \
+					+ _shell_quote(_with_pty_size(
+							_with_exit_report(command, exit_report_token))) + " 1>&2"])
 		"Windows":
-			path = "cmd.exe"
+			path = "powershell.exe"
 			# ConPTY non è ancora esposto da Godot: il device flow Codex resta
 			# pienamente interattivo; Claude/Kimi ricevono comunque stdin.
-			args = PackedStringArray(["/d", "/s", "/c", command + " 1>&2"])
+			args = PackedStringArray(["-NoProfile", "-NonInteractive", "-Command",
+					_with_windows_exit_report(command, exit_report_token)])
 		_:
-			args = PackedStringArray(["-lc", "script -qefc " \
-					+ _shell_quote(_with_pty_size(command)) + " /dev/null 1>&2"])
+			args = PackedStringArray(["-lc", "3>&1 script -qefc " \
+					+ _shell_quote(_with_pty_size(
+							_with_exit_report(command, exit_report_token))) \
+					+ " /dev/null 1>&2"])
 	return {
 		"path": path,
 		"args": args,
 		"title": title,
 		"hint": hint,
+		"reports_exit": true,
+		"exit_report_token": exit_report_token,
 	}
 
 
@@ -1383,23 +1774,43 @@ func open_runtime_install() -> void:
 	if OS.get_name() == "Windows":
 		# Niente bash su Windows: winget se c'è (gestisce lui il prompt UAC),
 		# altrimenti la pagina ufficiale di download nel browser.
-		var command := "where winget >nul 2>&1 && " \
-				+ "(winget install -e --id Docker.DockerDesktop " \
-				+ "--accept-package-agreements --accept-source-agreements) || " \
+		# `if` separa davvero assenza e fallimento: un errore di winget non deve
+		# cadere nel fallback browser e trasformarsi in un falso exit 0.
+		var command := "where winget >nul 2>&1 & if errorlevel 1 " \
 				+ "(echo winget non disponibile: apro la pagina di download di Docker Desktop... " \
-				+ "& start https://www.docker.com/products/docker-desktop/)"
+				+ "& start \"\" https://www.docker.com/products/docker-desktop/) else " \
+				+ "(winget install -e --id Docker.DockerDesktop " \
+				+ "--accept-package-agreements --accept-source-agreements)"
 		terminal_requested.emit("runtime-install", embedded_terminal_spec(
 				"Installazione Docker Desktop",
 				"Conferma l'autorizzazione di Windows se appare. Al termine avvia Docker Desktop " \
 				+ "una prima volta (accetta i termini), poi torna qui e premi ATTIVA CONTAINER.",
 				command))
 		return
-	var command := "curl -fsSL https://jobhunterteam.ai/install.sh | " \
-			+ "JHT_SKIP_ONBOARD=1 bash"
+	var command := _posix_runtime_install_command()
 	terminal_requested.emit("runtime-install", embedded_terminal_spec(
 			"Installazione runtime JHT",
-			"L'installazione resta dentro il gioco. Potrebbe chiedere la password amministratore del computer.",
+			"L'installazione resta dentro il gioco. Se richiesta, inserisci qui la password amministratore del computer.",
 			command))
+
+
+## Scaricare prima su file lascia stdin collegato alla PTY incorporata. Con il
+## vecchio `curl | bash`, Homebrew vedeva invece una pipe, passava da solo in
+## modalità non interattiva e sudo non poteva chiedere la password. Il PATH
+## esplicito copre inoltre le app macOS lanciate da Finder, che non ereditano
+## /opt/homebrew/bin pur avendo già Homebrew installato.
+static func _posix_runtime_install_command() -> String:
+	return "export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; " \
+			+ "jht_installer=\"$(mktemp \"${TMPDIR:-/tmp}/jht-install.XXXXXX\")\" && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 129' HUP && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 130' INT && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 143' TERM && " \
+			+ "curl -fsSL https://jobhunterteam.ai/install.sh -o \"$jht_installer\" && " \
+			+ "JHT_SKIP_ONBOARD=1 /bin/bash \"$jht_installer\"; " \
+			+ "_jht_install_code=$?; " \
+			+ "trap - HUP INT TERM; " \
+			+ "[ -z \"${jht_installer:-}\" ] || rm -f \"$jht_installer\"; " \
+			+ "(exit \"$_jht_install_code\")"
 
 
 static func default_vps_key_path() -> String:
@@ -1988,10 +2399,18 @@ func _prepare_local_migration_target() -> Dictionary:
 	_ensure_host_dirs()
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
 			"Preparo l'immagine del team sul computer…")
-	if not bool(pull.get("ok", false)) and _local_image_id() == "":
+	if not bool(pull.get("ok", false)) and _local_runtime_image_id() == "":
 		return {"ok": false, "message": "Immagine runtime non disponibile: " \
 				+ str(pull.get("tail", "")).right(220)}
 	return {"ok": true}
+
+
+## La migrazione verifica se il pull ha almeno lasciato un'immagine locale
+## utilizzabile. Non e' il percorso di upgrade: quello passa solo dal wrapper.
+static func _local_runtime_image_id() -> String:
+	var found := _run("docker", PackedStringArray(["image", "inspect",
+			runtime_image(), "--format", "{{.Id}}"] ))
+	return str(found["out"]).strip_edges() if found["code"] == 0 else ""
 
 
 func _apply_archive_to_local(archive: String, stamp: String,
@@ -2399,68 +2818,10 @@ func delete_telegram_bot(role: String) -> void:
 	_start_action("telegram", _do_delete_telegram_bot.bind(role, _vps_config()))
 
 
-const TELEGRAM_SAVE_PY := """
-import json, os, sys, urllib.parse, urllib.request
-p = json.load(sys.stdin)
-role, token, chat_id = p['role'], p['token'], str(p.get('chat_id') or '')
-def call(method, query=''):
-    url = 'https://api.telegram.org/bot' + urllib.parse.quote(token, safe=':') + '/' + method + query
-    with urllib.request.urlopen(url, timeout=12) as response:
-        return json.loads(response.read().decode('utf-8'))
-try:
-    me = call('getMe')
-    if not me.get('ok'):
-        raise RuntimeError(me.get('description') or 'getMe failed')
-    if not chat_id:
-        updates = call('getUpdates', '?timeout=2&limit=20')
-        for update in reversed(updates.get('result') or []):
-            message = update.get('message') or update.get('edited_message') or {}
-            chat = message.get('chat') or {}
-            if chat.get('id') is not None:
-                chat_id = str(chat['id'])
-                break
-    if not chat_id:
-        raise RuntimeError('Apri il bot, premi Start e riprova: chat non ancora rilevata')
-    path = '/jht_home/jht.config.json'
-    try:
-        config = json.load(open(path))
-    except Exception:
-        config = {}
-    channels = config.setdefault('channels', {})
-    telegram = channels.setdefault('telegram', {})
-    bots = telegram.setdefault('bots', {})
-    bots[role] = {'bot_token': token, 'chat_id': chat_id}
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    temp = path + '.game-tmp'
-    with open(temp, 'w') as output:
-        json.dump(config, output, ensure_ascii=False, indent=2)
-        output.write('\\n')
-    os.replace(temp, path)
-    print(json.dumps({'ok': True, 'username': me['result'].get('username', ''),
-                      'chat_id': chat_id}), file=sys.stderr)
-except Exception as exc:
-    print(json.dumps({'ok': False, 'error': str(exc)}), file=sys.stderr)
-    raise SystemExit(2)
-"""
+static var TELEGRAM_SAVE_PY := VpsBackend.payload("telegram_save.py")
 
 
-const TELEGRAM_DELETE_PY := """
-import json, os, sys
-role = json.load(sys.stdin)['role']
-path = '/jht_home/jht.config.json'
-try:
-    config = json.load(open(path))
-except Exception:
-    config = {}
-bots = (((config.get('channels') or {}).get('telegram') or {}).get('bots') or {})
-bots.pop(role, None)
-temp = path + '.game-tmp'
-with open(temp, 'w') as output:
-    json.dump(config, output, ensure_ascii=False, indent=2)
-    output.write('\\n')
-os.replace(temp, path)
-print(json.dumps({'ok': True}), file=sys.stderr)
-"""
+static var TELEGRAM_DELETE_PY := VpsBackend.payload("telegram_delete.py")
 
 
 static func _do_save_telegram_bot(role: String, token: String, chat_id: String,
@@ -2724,6 +3085,7 @@ func control_agent(role: String, restart: bool) -> void:
 
 
 func _do_start_team(vps: Dictionary) -> Dictionary:
+	_set_phase("team")
 	var res := _run_ssh(vps, "docker exec jht node /app/cli/bin/jht.js team start") \
 			if not vps.is_empty() else _run("docker", PackedStringArray([
 					"exec", "jht", "node", "/app/cli/bin/jht.js", "team", "start"] ))
@@ -2763,11 +3125,40 @@ static func _run_cli(vps: Dictionary, args: PackedStringArray) -> Dictionary:
 	return _run_ssh(vps, command)
 
 
-func _start_action(action: String, callable: Callable) -> void:
+func _start_action(action: String, callable: Callable,
+		start_message := "operazione in corso…") -> void:
 	_action_running = true
+	current_action = action
+	action_phase = ""
+	action_started_ms = Time.get_ticks_msec()
+	phase_started_ms = action_started_ms
+	last_pull = {}
 	Log.info("setup", "azione avviata: " + action)
-	action_changed.emit(action, true, "operazione in corso…", true)
+	action_changed.emit(action, true, start_message, true)
 	WorkerThreadPool.add_task(_run_action.bind(action, callable))
+
+
+## Fase corrente dell'azione, annunciata DAL worker: sicura da chiamare da un
+## thread (l'emit avviene deferred sul main). La fase resta valida finché
+## l'azione non ne dichiara un'altra o non termina.
+func _set_phase(phase: String) -> void:
+	call_deferred("_apply_phase", phase)
+
+
+func _apply_phase(phase: String) -> void:
+	action_phase = phase
+	phase_started_ms = Time.get_ticks_msec()
+	# Fase nuova, contatore nuovo: i byte del pull non descrivono la fase
+	# successiva e una barra piena ereditata mentirebbe.
+	last_pull = {}
+	phase_changed.emit(current_action, phase)
+
+
+## Avanzamento pull ricevuto dal worker (deferred): memorizzato per i pannelli
+## ricostruiti a metà azione, poi annunciato a chi ascolta.
+func _apply_pull_progress(info: Dictionary) -> void:
+	last_pull = info
+	pull_progress.emit(info)
 
 
 func _run_action(action: String, callable: Callable) -> void:
@@ -2777,6 +3168,15 @@ func _run_action(action: String, callable: Callable) -> void:
 
 func _finish_action(action: String, result: Dictionary) -> void:
 	_action_running = false
+	current_action = ""
+	action_phase = ""
+	last_pull = {}
+	if action == "upgrade":
+		last_upgrade = result.duplicate(true)
+		result["message"] = _upgrade_ui_message(result)
+	elif action == "upgrade-check":
+		last_upgrade_check = result.duplicate(true)
+		result["message"] = _upgrade_check_ui_message(result)
 	Log.info("setup", "azione %s → %s: %s" % [action,
 			"ok" if bool(result.get("ok", false)) else "FALLITA",
 			str(result.get("message", ""))])
@@ -2790,6 +3190,43 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	elif bool(result.get("ok", false)) and bool(result.get("activate_local", false)):
 		BackendBus.switch_to_local_backend()
 	refresh()
+
+
+## Solo qui, sul main thread, il responso strutturato diventa testo UI. Il
+## backend ha gia' svolto restart/verify: restartRequired e' informazione per
+## l'utente, non un ordine al gioco di eseguire un secondo riavvio.
+func _upgrade_ui_message(result: Dictionary) -> String:
+	if bool(result.get("protocol_error", false)):
+		return UIStrings.t("setup.upgrade_protocol_error")
+	var lines := PackedStringArray()
+	var phase := str(result.get("phase", ""))
+	if phase != "":
+		lines.append(UIStrings.t("setup.upgrade_phase") % phase)
+	var message := str(result.get("message", "")).strip_edges()
+	if message != "":
+		lines.append(message)
+	var current: Dictionary = result.get("current", {})
+	var version := str(current.get("version", "")).strip_edges()
+	if version != "":
+		lines.append(UIStrings.t("setup.upgrade_current") % version)
+	if bool(result.get("rolledBack", false)):
+		lines.append(UIStrings.t("setup.upgrade_rolled_back"))
+	if bool(result.get("restartRequired", false)):
+		lines.append(UIStrings.t("setup.upgrade_restart_required"))
+	return "\n".join(lines) if not lines.is_empty() \
+			else UIStrings.t("setup.upgrade_protocol_error")
+
+
+## Il check mostra solo il suo esito sicuro e non espone `current.image`: per
+## contratto quello puo' essere la candidate scaricata, non la versione attiva.
+func _upgrade_check_ui_message(result: Dictionary) -> String:
+	if bool(result.get("protocol_error", false)):
+		return UIStrings.t("setup.runtime_check_error")
+	if not bool(result.get("ok", false)):
+		var failure := str(result.get("message", "")).strip_edges()
+		return failure if failure != "" else UIStrings.t("setup.runtime_check_error")
+	return UIStrings.t("setup.runtime_check_available") \
+			if bool(result.get("changed", false)) else UIStrings.t("setup.runtime_check_current")
 
 
 ## Comandi di spegnimento da eseguire quando l'utente chiude il gioco.
@@ -2859,22 +3296,49 @@ static func graceful_shutdown_ready() -> bool:
 
 
 ## Esegue lo spegnimento. Bloccante: la chiama un thread, non il main loop.
+##
+## `OS.execute` qui non va usato: se Docker Desktop smette di rispondere il
+## worker non torna più e game.gd, che deve attenderlo prima di smontare gli
+## autoload, resta per sempre sul velo di chiusura. Tre budget da 5 secondi
+## tengono l'intera sequenza sotto la rete di sicurezza dei 20 secondi.
+const SHUTDOWN_COMMAND_TIMEOUT_MS := 5000
+
+
+static func _run_shutdown_command(argv: PackedStringArray) -> Dictionary:
+	var pid := OS.create_process("docker", argv, false)
+	if pid <= 0:
+		return {"code": -1, "timeout": false}
+	var started := Time.get_ticks_msec()
+	while OS.is_process_running(pid):
+		if Time.get_ticks_msec() - started >= SHUTDOWN_COMMAND_TIMEOUT_MS:
+			OS.kill(pid)
+			return {"code": -1, "timeout": true}
+		OS.delay_msec(20)
+	return {"code": OS.get_process_exit_code(pid), "timeout": false}
+
+
 func shutdown_team() -> void:
 	for argv: PackedStringArray in shutdown_commands(_vps_config()):
-		var res := _run("docker", argv)
-		Log.call_deferred("info", "setup", "spegnimento: docker %s → %d"
-				% [" ".join(argv), res["code"]])
+		var res := _run_shutdown_command(argv)
+		var suffix := " (timeout %ds)" % (SHUTDOWN_COMMAND_TIMEOUT_MS / 1000) \
+				if bool(res.get("timeout", false)) else ""
+		Log.call_deferred("info", "setup", "spegnimento: docker %s → %d%s"
+				% [" ".join(argv), res["code"], suffix])
 
 
 func _vps_config() -> Dictionary:
-	return BackendBus.load_vps_config() if BackendBus.is_live() else {}
+	return BackendBus.load_vps_config() if BackendBus.is_remote() else {}
 
 
 static func _run_ssh(vps: Dictionary, command: String) -> Dictionary:
+	return _run("ssh", _ssh_args(vps, command))
+
+
+static func _ssh_args(vps: Dictionary, command: String) -> PackedStringArray:
 	var key := VpsBackend.expand_user_path(str(vps.get("key_path", "")))
 	var known := VpsBackend.known_hosts_path(str(vps.get("ip", "")))
 	var target := _ssh_target(vps)
-	return _run("ssh", PackedStringArray(["-i", key, "-o", "BatchMode=yes",
+	return PackedStringArray(["-i", key, "-o", "BatchMode=yes",
 			"-o", "IdentitiesOnly=yes", "-o", "ConnectTimeout=8",
 			"-o", "StrictHostKeyChecking=yes",
-			"-o", "UserKnownHostsFile=" + known, target, command]))
+			"-o", "UserKnownHostsFile=" + known, target, command])

@@ -15,7 +15,13 @@ var _buttons := {}  # id sezione → Button
 var _icons := {}  # id sezione → SidebarIcon (segue il colore del testo)
 var _open := false
 var _setup_cta: Button
+var _setup_cta_icon: SidebarIcon
 var _tab: Button
+## Controllo Docker compatto nell'header: mantiene la sidebar a quattordici
+## righe anche a 1280×720, ma porta lo stato runtime nel primo punto visibile.
+var _docker_button: Button
+var _docker_icon: SidebarIcon
+var _docker_badge: Label
 
 func _init() -> void:
 	layer = 20
@@ -33,13 +39,37 @@ func _ready() -> void:
 	# completi e porta alla checklist senza nascondere il mondo di gioco.
 	_setup_cta = Button.new()
 	_setup_cta.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_setup_cta.position = Vector2(-190, 18)
+	# Il badge di verità (SIMULAZIONE / DATI REALI) occupa la prima riga in
+	# alto al centro. A y=18 questo CTA lo copriva perfettamente: l'utente
+	# vedeva KPI demo e agenti "AL LAVORO" senza l'unica etichetta che diceva
+	# che non erano dati reali. La checklist vive nella seconda riga.
+	_setup_cta.position = Vector2(-190, 58)
 	_setup_cta.custom_minimum_size = Vector2(380, 44)
 	_setup_cta.add_theme_font_size_override("font_size", 14)
 	_setup_cta.add_theme_color_override("font_color", Palette.YELLOW)
 	_setup_cta.pressed.connect(_open_activation)
+	# Il fulmine è l'icona vettoriale della sidebar, non il glifo ⚡: i
+	# pittogrammi dipendono dai font di sistema (regola: niente emoji nella
+	# UI di prodotto). Figlio ancorato a sinistra, testo allineato dopo.
+	_setup_cta.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		# Dal tema condiviso, non dal Button (fuori dall'albero risolverebbe
+		# il tema di default): stesso stile, solo il margine per l'icona.
+		var sb: StyleBox = TerminalTheme.get_theme() \
+				.get_stylebox(state, "Button").duplicate()
+		sb.content_margin_left = 44
+		_setup_cta.add_theme_stylebox_override(state, sb)
+	_setup_cta_icon = SidebarIcon.new("bolt", Palette.YELLOW)
+	_setup_cta_icon.anchor_top = 0.5
+	_setup_cta_icon.anchor_bottom = 0.5
+	_setup_cta_icon.offset_left = 16
+	_setup_cta_icon.offset_right = 34
+	_setup_cta_icon.offset_top = -9
+	_setup_cta_icon.offset_bottom = 9
+	_setup_cta.add_child(_setup_cta_icon)
 	root.add_child(_setup_cta)
 	SetupService.status_changed.connect(_on_setup_status)
+	SetupService.action_changed.connect(_on_setup_action)
 	ScriptedOnboarding.action_requested.connect(_on_guided_action)
 	_on_setup_status(SetupService.status)
 
@@ -75,7 +105,10 @@ func _ready() -> void:
 	_tab.add_theme_stylebox_override("normal", tab_style)
 	_tab.add_theme_stylebox_override("hover", tab_hover)
 	_tab.add_theme_stylebox_override("pressed", tab_hover.duplicate())
-	_tab.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Il menu e' raggiungibile con Tab anche quando il mouse non e' disponibile.
+	# Non cancellare il focus: senza bordo il cursore da tastiera esiste, ma
+	# l'utente non puo' sapere dove si trova.
+	_tab.add_theme_stylebox_override("focus", tab_hover.duplicate())
 	_tab.position = Vector2(10, 150)
 	_tab.pressed.connect(toggle)
 	root.add_child(_tab)
@@ -93,6 +126,36 @@ func _ready() -> void:
 	brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var brand_row := HBoxContainer.new()
 	brand_row.add_child(brand)
+	# Docker e' una destinazione diretta, non una quindicesima riga da far
+	# finire sotto lo scroll su schermi bassi. Il check resta invece un pulsante
+	# esplicito del pannello Docker: questo click naviga e non avvia rete.
+	_docker_button = Button.new()
+	_docker_button.flat = true
+	_docker_button.tooltip_text = UIStrings.t("side.docker")
+	_docker_button.custom_minimum_size = Vector2(26, 26)
+	_docker_button.pressed.connect(func() -> void: _select("docker"))
+	_docker_icon = SidebarIcon.new("container", Palette.DIM)
+	_docker_icon.set_anchors_preset(Control.PRESET_CENTER)
+	_docker_icon.offset_left = -9
+	_docker_icon.offset_right = 9
+	_docker_icon.offset_top = -9
+	_docker_icon.offset_bottom = 9
+	_docker_button.add_child(_docker_icon)
+	_docker_badge = Label.new()
+	_docker_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_docker_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_docker_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_docker_badge.add_theme_font_size_override("font_size", 11)
+	_docker_badge.anchor_left = 1.0
+	_docker_badge.anchor_top = 0.0
+	_docker_badge.anchor_right = 1.0
+	_docker_badge.anchor_bottom = 0.0
+	_docker_badge.offset_left = -8
+	_docker_badge.offset_top = -4
+	_docker_badge.offset_right = 4
+	_docker_badge.offset_bottom = 8
+	_docker_button.add_child(_docker_badge)
+	brand_row.add_child(_docker_button)
 	# Uscita a portata di mouse SEMPRE: la voce in fondo a Impostazioni finisce
 	# sotto lo scroll su schermi bassi, e in fullscreen su Wayland non esiste
 	# nemmeno la X della finestra.
@@ -126,6 +189,7 @@ func _ready() -> void:
 	brand_pad.add_theme_constant_override("margin_right", 10)
 	brand_pad.add_child(brand_row)
 	box.add_child(brand_pad)
+	_refresh_docker_button(SetupService.status)
 
 	# TEST-AUTO: JHT_SIDEBAR=1 apre il cassetto al boot (per gli screenshot);
 	# JHT_SECTION=<id> apre anche il pannello di quella sezione. Un solo
@@ -200,7 +264,9 @@ func _nav_button(item: Dictionary) -> Control:
 	btn.add_theme_stylebox_override("normal", _row_style(Palette.ROW, 0.0, false))
 	btn.add_theme_stylebox_override("hover", _row_style(Palette.ROW, 0.85, true))
 	btn.add_theme_stylebox_override("pressed", _row_style(Palette.DEEP, 1.0, true))
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Stesso segnale verde dell'hover: Tab deve essere un percorso visibile,
+	# non soltanto tecnicamente funzionante.
+	btn.add_theme_stylebox_override("focus", _row_style(Palette.ROW, 0.85, true))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.pressed.connect(func() -> void: _select(item["id"]))
 	btn.set_meta("label", SidebarDefs.nav_label(item))
@@ -294,15 +360,72 @@ func _open_activation() -> void:
 
 
 func _on_setup_status(status: Dictionary) -> void:
-	if not is_instance_valid(_setup_cta):
-		return
 	var ready := bool(status.get("ready", false))
 	var running := bool(status.get("team_running", false))
-	_setup_cta.visible = not (ready and running)
-	_setup_cta.text = "⚡  " + (UIStrings.t("setup.ready_to_start") if ready \
-			else UIStrings.t("setup.cta") % int(status.get("completed", 0)))
-	_setup_cta.add_theme_color_override("font_color",
-			Palette.GREEN if ready else Palette.YELLOW)
+	if is_instance_valid(_setup_cta):
+		_setup_cta.visible = not (ready and running)
+		_setup_cta.text = UIStrings.t("setup.ready_to_start") if ready \
+				else UIStrings.t("setup.cta") % int(status.get("completed", 0))
+		_setup_cta.add_theme_color_override("font_color",
+				Palette.GREEN if ready else Palette.YELLOW)
+	if is_instance_valid(_setup_cta_icon):
+		_setup_cta_icon.color = Palette.GREEN if ready else Palette.YELLOW
+	_refresh_docker_button(status)
+
+
+func _on_setup_action(action: String, _running: bool, _message: String, _ok: bool) -> void:
+	if action == "upgrade-check":
+		_refresh_docker_button(SetupService.status)
+
+
+## La salute runtime e la disponibilita' update sono due assi diversi: il
+## badge e' giallo soltanto dopo un check esplicito con changed=true. Un check
+## fallito non si trasforma mai in una falsa segnalazione di aggiornamento.
+static func docker_sidebar_state(status: Dictionary, check_state: String) -> Dictionary:
+	var runtime := "active"
+	if not bool(status.get("docker_available", false)) and not bool(status.get("remote", false)):
+		runtime = "unreachable"
+	elif not bool(status.get("docker_running", false)) and not bool(status.get("remote", false)):
+		runtime = "unreachable"
+	elif not bool(status.get("container_running", false)):
+		runtime = "stopped"
+	var badge := check_state if check_state in ["checking", "available", "error"] else ""
+	return {"runtime": runtime, "badge": badge}
+
+
+func _refresh_docker_button(status: Dictionary) -> void:
+	if not is_instance_valid(_docker_button) or not is_instance_valid(_docker_icon):
+		return
+	var check_state := SetupService.runtime_update_check_state()
+	var view := docker_sidebar_state(status, check_state)
+	var runtime := str(view["runtime"])
+	var status_key := "setup.docker_ready"
+	var tint := Palette.GREEN
+	if runtime == "unreachable":
+		status_key = "setup.docker_missing"
+		tint = Palette.RED
+	elif runtime == "stopped":
+		status_key = "setup.container_todo"
+		tint = Palette.YELLOW
+	_docker_icon.color = tint
+	var check_key := "setup.runtime_check_current"
+	if check_state == "checking":
+		check_key = "setup.runtime_check_busy"
+	elif check_state == "available":
+		check_key = "setup.runtime_check_available"
+	elif check_state == "error":
+		check_key = "setup.runtime_check_error"
+	elif check_state == "unknown":
+		check_key = "setup.runtime_check_unknown"
+	_docker_button.tooltip_text = UIStrings.t("side.docker") + " · " \
+			+ UIStrings.t(status_key) + " · " + UIStrings.t(check_key)
+	if not is_instance_valid(_docker_badge):
+		return
+	var badge := str(view["badge"])
+	_docker_badge.visible = badge != ""
+	_docker_badge.text = "◌" if badge == "checking" else ("!" if badge == "error" else "●")
+	_docker_badge.add_theme_color_override("font_color",
+			Palette.YELLOW if badge in ["checking", "available"] else Palette.RED)
 
 
 func _on_guided_action(action: String, payload: Dictionary) -> void:

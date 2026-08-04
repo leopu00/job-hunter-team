@@ -34,6 +34,7 @@ extends SceneTree
 
 const GAME_GD := "res://scripts/game.gd"
 const DIALOG_GD := "res://scripts/ui/shutdown_dialog.gd"
+const SETUP_GD := "res://scripts/setup/setup_service.gd"
 ## L'attesa del thread: senza questa chiamata torna l'abort del 26/07.
 const AWAIT_CALL := "WorkerThreadPool.wait_for_task_completion(_shutdown_task)"
 
@@ -58,6 +59,7 @@ func _run() -> void:
 	_check_duration()
 	_check_greeting_formats()
 	_check_shutdown_still_awaited()
+	_check_shutdown_is_bounded()
 
 	if _fails.is_empty():
 		print("HEADLESS-EXIT-TEST PASS")
@@ -269,3 +271,30 @@ func _check_shutdown_still_awaited() -> void:
 			src.contains("if stop_team and setup != null"),
 			"in game.gd shutdown_team() non è più sotto stop_team: o si spegne "
 			+ "sempre, o non si spegne mai")
+
+
+## Il join del worker evita il crash, ma è sicuro soltanto se il worker ha un
+## limite proprio. `OS.execute` non può essere cancellato: sul ThinkPad un
+## client Docker bloccato ha superato anche la rete di sicurezza dei 20 s.
+func _check_shutdown_is_bounded() -> void:
+	var src := FileAccess.get_file_as_string(SETUP_GD)
+	_check("setup_service.gd leggibile", src != "", "file vuoto o assente")
+	if src == "":
+		return
+	var start := src.find("static func _run_shutdown_command")
+	var end := src.find("func shutdown_team", start)
+	var runner := src.substr(start, end - start) if start >= 0 and end > start else ""
+	_check("runner di uscita dedicato", runner != "", "funzione assente")
+	for seam in ["OS.create_process", "OS.is_process_running", "OS.kill(pid)",
+			"SHUTDOWN_COMMAND_TIMEOUT_MS"]:
+		_check("uscita interrompibile: " + seam, runner.contains(seam),
+				"manca il seam nel runner")
+	var shutdown_start := src.find("func shutdown_team")
+	var vps_start := src.find("func _vps_config", shutdown_start)
+	var shutdown := src.substr(shutdown_start, vps_start - shutdown_start) \
+			if shutdown_start >= 0 and vps_start > shutdown_start else ""
+	_check("shutdown non usa OS.execute", not shutdown.contains('_run("docker"'),
+			"un comando di uscita può ancora bloccare il worker senza limite")
+	_check("locale distinto dalla VPS",
+			src.contains("BackendBus.is_remote() else {}"),
+			"is_live() include anche LocalBackend e può saltare lo stop locale")

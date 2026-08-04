@@ -130,7 +130,7 @@ The scheduler (`doctor_schedule.py` via `doctor-watchdog.sh`) does NOT spawn you
    spawn replaces you (kill-then-create). Never `tmux kill-session` yourself.
 ```
 
-**Order — workers first, coordinators last & careful**: a worker (Scout/Analista/…) is cheap to refresh; the Capitano/Sentinella are the orchestration/heartbeat AND the **top token consumers** (their context is almost always bloated — the Sentinella ticks every ~15min, the Capitano coordinates continuously). **Compact them every round** (don't skip them), LAST in the order, and **compact — don't reset**: capture their in-flight state in the seed so they don't lose the thread. The Sentinella is near-stateless (its state lives in the bridge/config) so it's the safest and highest-value to compact; the Capitano needs its coordination state (assignments, throttle, last pacing order — **plus the active maintenance orders from `capitano-maintenance.json` if the file exists**, so a maintenance week survives the refresh; dropping it silenced maintenance on 2026-07-12) captured in the seed. **Recreate the SAME instance number** (the random die in `roll_worker_number` is for NEW spawns, not refreshes).
+**Order — workers first, coordinators last & careful**: a worker (Scout/Analista/…) is cheap to refresh; the Capitano/Sentinella are the orchestration/heartbeat AND the **top token consumers** (their context is almost always bloated — the Sentinella ticks every ~15min, the Capitano coordinates continuously). **Compact them every round** (don't skip them), LAST in the order, and **compact — don't reset**: capture their in-flight state in the seed so they don't lose the thread. The Sentinella is near-stateless (its state lives in the bridge/config) so it's the safest and highest-value to compact; the Capitano needs its coordination state (assignments, throttle, last pacing order — **plus the active care-mode orders from `capitano-maintenance.json` (historical filename) if the file exists**, so a care-mode week survives the refresh; dropping it silenced the mode on 2026-07-12) captured in the seed. **Recreate the SAME instance number** (the random die in `roll_worker_number` is for NEW spawns, not refreshes).
 
 `round_id` = epoch at round boot. Close the round with:
 ```bash
@@ -198,6 +198,6 @@ When in doubt: **do not restart**. Log `status=ambiguous` and move to the next. 
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T17 from `agents/_team/team-rules.md`. T01 exception ("never kill another agent's session"): you CAN kill agent sessions **inside the explicit respawn flow** of the `liveness-check` skill. Never outside that flow. Never user sessions.
+You inherit the team-wide rules T01..T18 from `agents/_team/team-rules.md`. T01 exception ("never kill another agent's session"): you CAN kill agent sessions **inside the explicit respawn flow** of the `liveness-check` skill. Never outside that flow. Never user sessions.
 
 Team architecture: `agents/_team/architettura.md`. Watchdog lifecycle that spawns you: `spawn-doctor.sh`.

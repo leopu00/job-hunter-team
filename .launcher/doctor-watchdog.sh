@@ -43,19 +43,82 @@ WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
 # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): un Dottore/Mantenitore
 # spawnato in standby è un turno LLM speso mentre il team è fermo di proposito.
 TEAM_STANDBY_FLAG="$JHT_HOME/.team-standby.flag"
+STANDBY_PY="${JHT_STANDBY_PY:-/app/shared/skills/standby.py}"
+[ -f "$STANDBY_PY" ] || STANDBY_PY="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/shared/skills/standby.py"
+
+# Standby ATTIVO adesso? Stesso predicato unico degli altri respawner
+# ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS]): un flag SCADUTO non è più standby,
+# e continuare a gatarci sopra terrebbe Dottore e Mantenitore spenti per
+# sempre se chi doveva rimuoverlo è morto. Fail-CLOSED: qualunque esito non
+# riconosciuto (python assente, modulo rotto) ricade sul solo
+# `[ -e "$TEAM_STANDBY_FLAG" ]`, mai su «non in standby».
+standby_active() {
+  [ -e "$TEAM_STANDBY_FLAG" ] || return 1
+  local state
+  state="$(JHT_HOME="$JHT_HOME" python3 "$STANDBY_PY" active 2>/dev/null)"
+  case "$state" in
+    active)              return 0 ;;
+    expired|invalid|off) return 1 ;;
+    *)                   return 0 ;;   # fallback: il flag c'è → standby
+  esac
+}
+
+# Stesso gate di agent-watchdog.sh: Doctor e Mantenitore usano il provider LLM
+# e non devono partire durante il wizard, quando active_provider può essere già
+# scritto ma il login OAuth non è ancora terminato. Senza questo controllo lo
+# spawner ricade sul default Claude e produce sessioni fallite e log fuorvianti
+# durante una prima installazione pulita.
+config_ready() {
+  python3 - "$JHT_HOME/jht.config.json" "$JHT_HOME" 2>/dev/null <<'PYEOF'
+import json, os, sys
+cfg_path, jht_home = sys.argv[1], sys.argv[2]
+try:
+  data = json.load(open(cfg_path))
+except Exception:
+  sys.exit(1)
+provider = (data.get('active_provider') or '').strip().lower()
+markers = {
+  'kimi':      f'{jht_home}/.kimi/credentials/kimi-code.json',
+  'claude':    f'{jht_home}/.claude/.credentials.json',
+  'anthropic': f'{jht_home}/.claude/.credentials.json',
+  'codex':     f'{jht_home}/.codex/auth.json',
+  'openai':    f'{jht_home}/.codex/auth.json',
+}
+marker = markers.get(provider, '')
+sys.exit(0 if provider and marker and os.path.exists(marker) else 1)
+PYEOF
+}
+
 halt_log_tick=0
 offhours_log_tick=0
+config_log_tick=0
 
 log "watchdog starting · Dottore 2×/finestra (+30min, metà) + Mantenitore 1x/giorno · poll=${POLL_SEC}s · sched=$SCHED"
 
 last_fallback=0
 while true; do
+  # Il wizard salva il provider prima che il browser completi OAuth. Fino alla
+  # comparsa del marker credenziali non consumare turni LLM e non tentare il
+  # fallback storico a Claude. Il loop resta vivo e ricontrolla normalmente.
+  if ! config_ready; then
+    if [ $((config_log_tick % 8)) -eq 0 ]; then
+      log "provider non ancora autenticato — scheduling dottore/mantenitore sospeso"
+    fi
+    config_log_tick=$((config_log_tick + 1))
+    sleep "$POLL_SEC"
+    continue
+  fi
+  if [ "$config_log_tick" -gt 0 ]; then
+    log "provider autenticato — attivo scheduling dottore/mantenitore"
+    config_log_tick=0
+  fi
+
   # Team-halted gate: se l'utente ha cliccato Stop, weekly-halt è attivo o il
   # team è in standby a spesa zero, NON spawnare dottore/mantenitore.
-  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || [ -e "$TEAM_STANDBY_FLAG" ]; then
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || standby_active; then
     if [ $((halt_log_tick % 8)) -eq 0 ]; then
-      if [ -e "$TEAM_STANDBY_FLAG" ]; then
-        log "standby flag presente — spawn dottore/mantenitore disabilitato"
+      if standby_active; then
+        log "standby ATTIVO — spawn dottore/mantenitore disabilitato"
       else
         log "halt flag presente — spawn dottore disabilitato"
       fi

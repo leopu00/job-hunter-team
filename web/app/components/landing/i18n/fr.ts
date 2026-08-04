@@ -3,7 +3,7 @@
 export const fr: Record<string, string> = {
   // Chiavi aggiunte (allineamento i18n)
   home_intro:
-    "Job Hunter Team est une équipe d'agents IA autonomes qui cherchent un emploi pour vous, sans relâche. Chaque agent est un spécialiste : l'un repère les offres, un autre les analyse en détail et un autre attribue à chacune une note, selon sa proximité avec ce qui compte vraiment pour vous. Sur votre demande, ils préparent aussi le CV pour votre candidature. Et quand les candidatures envoyées ne suffisent pas à trouver un emploi, un agent dédié vous accompagne : il vous aide à vous orienter sur le marché du travail et à vous rapprocher du poste que vous désirez. C'est vous qui donnez la direction et gardez le dernier mot ; le reste, l'équipe s'en charge, en privé, sur votre propre machine.",
+    "Job Hunter Team est une équipe d'agents IA autonomes qui cherchent un emploi pour vous, sans relâche. Chaque agent est un spécialiste : l'un repère les offres, un autre les analyse en détail et un autre attribue à chacune une note, selon sa proximité avec ce qui compte vraiment pour vous. Sur votre demande, ils préparent aussi le CV pour votre candidature. Un agent dédié vous aide aussi à vous orienter sur le marché du travail et à vous rapprocher du poste que vous désirez. Observer le marché est un usage complet du produit. C'est vous qui donnez la direction et gardez le dernier mot ; le reste, l'équipe s'en charge, en privé, sur votre propre machine.",
   theme_system: "système",
   theme_dark: "nuit",
   theme_light: "jour",
@@ -21,6 +21,7 @@ export const fr: Record<string, string> = {
   nav_github: "GitHub",
   nav_download: "Installer",
   nav_project: "Projet",
+  nav_tutorials: "Tutoriels",
   nav_pricing: "Tarifs",
   nav_login: "Se connecter",
 
@@ -40,12 +41,17 @@ export const fr: Record<string, string> = {
   footer_product: "Produit",
   footer_stats: "Projet",
   footer_resources: "Ressources",
+  footer_tutorials: "Tutoriels",
   footer_contacts: "Contacts",
   nav_contact: "Contact",
   footer_bug: "Signaler un bug",
   footer_privacy: "Politique de confidentialité",
   footer_terms: "Conditions d'utilisation",
   footer_copyright: "Open Source sous licence MIT",
+  tutorials_title: "Tutoriels",
+  tutorial_game_title: "Jeu",
+  tutorial_web_title: "Web",
+  trailer_title: "Bande-annonce",
 
   // Download page
   dl_desc:
@@ -86,8 +92,6 @@ export const fr: Record<string, string> = {
   footer_links_aria: "Liens du pied de page",
 
   // LandingHome: hero alt + sections
-  home_hero_alt:
-    "Illustration de style BD : une équipe d'agents IA — tous portant les mêmes lunettes de soleil noires — assis autour d'une longue table de réunion dans un élégant bureau de gratte-ciel, tandis qu'un agent debout présente des graphiques sur un tableau.",
   home_team_alt:
     "Trois agents de l'équipe en pied : le Scout avec une loupe, l'Analyste en blouse de laboratoire, le Rédacteur avec une plume d'oie — tous portant des lunettes de soleil.",
   home_setup_alt:

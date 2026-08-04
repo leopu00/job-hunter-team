@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Database from "better-sqlite3";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
 import { getLocalDbPath, localDbExists } from "@/lib/cloud-sync/local";
 import { writeSyncState } from "@/lib/cloud-sync/state";
 import {
@@ -8,6 +9,7 @@ import {
   normalizeCriticVerdict,
   normalizePositionStatus,
 } from "@/lib/sync-vocabulary";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -164,6 +166,8 @@ function readTable<T>(
 }
 
 export async function POST() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   if (!(await localDbExists())) {
     return NextResponse.json(
       {
@@ -204,12 +208,11 @@ export async function POST() {
       APPLICATIONS_COLUMNS,
     );
   } catch (err) {
-    return NextResponse.json(
-      {
-        error: `Errore lettura SQLite: ${err instanceof Error ? err.message : String(err)}`,
-      },
-      { status: 500 },
-    );
+    return sanitizedError(err, {
+      status: 500,
+      scope: "local/sync",
+      publicMessage: "sqlite_read_failed",
+    });
   } finally {
     db?.close();
   }
@@ -274,10 +277,11 @@ export async function POST() {
       .select("id, legacy_id");
 
     if (error) {
-      return NextResponse.json(
-        { error: `positions upsert: ${error.message}` },
-        { status: 500 },
-      );
+      return sanitizedError(error, {
+        status: 500,
+        scope: "local/sync",
+        publicMessage: "positions_upsert_failed",
+      });
     }
     positionsUpserted = upserted?.length ?? 0;
     for (const row of upserted ?? []) {
@@ -314,10 +318,11 @@ export async function POST() {
         .upsert(payload, { onConflict: "position_id" })
         .select("id");
       if (error) {
-        return NextResponse.json(
-          { error: `scores upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "local/sync",
+          publicMessage: "scores_upsert_failed",
+        });
       }
       scoresUpserted = upserted?.length ?? 0;
     }
@@ -361,10 +366,11 @@ export async function POST() {
         .upsert(payload, { onConflict: "position_id" })
         .select("id");
       if (error) {
-        return NextResponse.json(
-          { error: `applications upsert: ${error.message}` },
-          { status: 500 },
-        );
+        return sanitizedError(error, {
+          status: 500,
+          scope: "local/sync",
+          publicMessage: "applications_upsert_failed",
+        });
       }
       applicationsUpserted = upserted?.length ?? 0;
     }

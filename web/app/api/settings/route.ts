@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireLocalWrite } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from "@/lib/jht-paths";
+import { ACTIVE_PROVIDERS } from "@/lib/providers";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_PATH = JHT_CONFIG_PATH;
-const PROVIDERS = ["anthropic", "claude", "openai", "kimi", "kimi"] as const;
+const PROVIDERS = ACTIVE_PROVIDERS;
 
 function sanitize(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
@@ -28,6 +31,8 @@ function maskKeys(config: Record<string, unknown>): Record<string, unknown> {
 }
 
 export async function GET() {
+  const denied = await requireAuth();
+  if (denied) return denied;
   if (!fs.existsSync(CONFIG_PATH)) {
     return NextResponse.json({ exists: false, config: null });
   }
@@ -43,13 +48,15 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const ro = await requireLocalWrite();
   if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   let existing: Record<string, unknown> = {};
@@ -84,21 +91,24 @@ export async function PATCH(req: NextRequest) {
     );
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "errore" },
-      { status: 500 },
-    );
+    return sanitizedError(err, {
+      status: 500,
+      scope: "settings",
+      publicMessage: "config_write_failed",
+    });
   }
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   const ro = await requireLocalWrite();
   if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   // Danger zone actions
@@ -120,10 +130,11 @@ export async function POST(req: NextRequest) {
       );
       return NextResponse.json({ ok: true });
     } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "errore reset" },
-        { status: 500 },
-      );
+      return sanitizedError(err, {
+        status: 500,
+        scope: "settings",
+        publicMessage: "config_reset_failed",
+      });
     }
   }
   if (body._action === "clear_cache") {
@@ -134,10 +145,11 @@ export async function POST(req: NextRequest) {
       fs.mkdirSync(cacheDir, { recursive: true });
       return NextResponse.json({ ok: true });
     } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "errore cache" },
-        { status: 500 },
-      );
+      return sanitizedError(err, {
+        status: 500,
+        scope: "settings",
+        publicMessage: "cache_clear_failed",
+      });
     }
   }
 
@@ -222,9 +234,10 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "errore scrittura" },
-      { status: 500 },
-    );
+    return sanitizedError(err, {
+      status: 500,
+      scope: "settings",
+      publicMessage: "config_write_failed",
+    });
   }
 }

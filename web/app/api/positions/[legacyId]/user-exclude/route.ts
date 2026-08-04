@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { requireAuth } from "@/lib/auth";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
@@ -172,11 +173,10 @@ async function applyCloud(
     .eq("legacy_id", legacyId)
     .maybeSingle();
   if (error) {
-    return {
-      ok: false,
-      status: 500,
-      body: { error: `Supabase query failed: ${error.message}` },
-    };
+    // Helper che ritorna un BODY, non una NextResponse: `sanitizedError` non
+    // è applicabile, quindi ne replichiamo il contratto a mano.
+    console.error(`[positions/user-exclude] 500 ${error.message}`);
+    return { ok: false, status: 500, body: { error: "query_failed" } };
   }
   if (!row) {
     return {
@@ -388,7 +388,11 @@ export async function POST(
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const { legacyId } = await params;
-  return (await demoNoop(legacyId)) ?? handle(req, legacyId, "exclude");
+  const demo = await demoNoop(legacyId);
+  if (demo) return demo;
+  const denied = await requireAuth();
+  if (denied) return denied;
+  return handle(req, legacyId, "exclude");
 }
 
 export async function DELETE(
@@ -396,5 +400,9 @@ export async function DELETE(
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const { legacyId } = await params;
-  return (await demoNoop(legacyId)) ?? handle(req, legacyId, "unexclude");
+  const demo = await demoNoop(legacyId);
+  if (demo) return demo;
+  const denied = await requireAuth();
+  if (denied) return denied;
+  return handle(req, legacyId, "unexclude");
 }

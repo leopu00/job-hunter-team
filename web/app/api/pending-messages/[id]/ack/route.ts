@@ -4,6 +4,7 @@ import { isSupabaseConfigured, workspaceHasDb } from "@/lib/workspace";
 import { getWorkspacePath } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { ackPendingMessageLocal } from "@/lib/local-queries";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,10 @@ export async function POST(
     .select("id");
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return sanitizedError(error, {
+      status: 500,
+      scope: "pending-messages/[id]/ack",
+    });
   }
   return NextResponse.json({ ok: true, changed: (data?.length ?? 0) > 0 });
 }

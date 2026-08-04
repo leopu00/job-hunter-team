@@ -195,7 +195,7 @@ function formatMonthly(
 // architettura i18n). La testata di questa tabella era hardcoded in italiano.
 
 export default async function PositionsPage({ searchParams }: PageProps) {
-  const locale = getServerLocale();
+  const locale = await getServerLocale();
   const tr = makeT(T, locale);
   const params = await searchParams;
 

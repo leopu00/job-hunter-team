@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
 import { getServerLocale } from "@/lib/server-locale";
 
-// /team è la pagina ATTIVITÀ del team (dev2 2026-07-03): i metadata descrivono
-// chi ha lavorato, quanto e quando — non più la gestione/controllo del team.
+// /team è la vista mobile-friendly di STATO + ATTIVITÀ. Resta read-only salvo
+// la capacità stop-only d'emergenza documentata nell'interaction-plane.
 const META: Record<string, { title: string; description: string }> = {
   it: {
     title: "Team — Job Hunter",
     description:
-      "L'attività del tuo team di agenti AI: chi ha lavorato, quanto e quando — grafici, dettaglio per agente e log completo delle azioni",
+      "Stato e attività del tuo team di agenti AI, ottimizzati anche per telefono — con stop d'emergenza protetto",
   },
   en: {
     title: "Team — Job Hunter",
     description:
-      "Your AI agent team's activity: who worked, how much and when — charts, per-agent breakdown and full action log",
+      "Your AI agent team's status and activity, mobile friendly — with a protected emergency stop",
   },
   hu: {
     title: "Csapat — Job Hunter",
@@ -42,7 +42,7 @@ const META: Record<string, { title: string; description: string }> = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  const m = META[getServerLocale()] ?? META.en;
+  const m = META[await getServerLocale()] ?? META.en;
   return { title: m.title, description: m.description };
 }
 

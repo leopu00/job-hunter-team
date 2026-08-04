@@ -8,6 +8,7 @@ import {
   type CronSchedule,
 } from "@/lib/cron-store";
 import { requireAuth, requireLocalWrite } from "@/lib/auth";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -104,7 +105,7 @@ export async function PATCH(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "body non valido" }, { status: 400 });
+    return invalidJsonBody();
   }
 
   const id = typeof body.id === "string" ? body.id.trim() : "";

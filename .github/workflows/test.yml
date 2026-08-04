@@ -8,6 +8,11 @@ on:
     branches:
       - master
   workflow_dispatch:
+  # Solo per il job `smoke` (vedi in fondo): i test che interrogano la
+  # produzione non appartengono al gate della PR, ma la copertura non si
+  # butta — si sposta dove ha senso, cioè dopo il deploy.
+  schedule:
+    - cron: "17 6 * * *"
 
 jobs:
   # Suite vitest completa — l'UNICO posto in cui gira. Fino al 2026-07-26 il
@@ -20,6 +25,9 @@ jobs:
   vitest:
     name: vitest — tests/js
     runs-on: ubuntu-latest
+    # Il cron esiste solo per `smoke`: le suite del codice non hanno motivo di
+    # rigirare a vuoto ogni notte sullo stesso commit.
+    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -74,11 +82,12 @@ jobs:
   pytest:
     name: pytest — agents, skills, sync
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: "pip"
@@ -118,8 +127,15 @@ jobs:
           pip install pytest
           pip install -r requirements.txt
 
+      # `-m "not production"`: 38 dei 806 test (tests/test_vercel_pages.py e
+      # tests/test_missing_pages.py) fanno HTTP su https://jobhunterteam.ai e
+      # asseriscono per lo più `status != 404`. Non testano il codice della PR:
+      # diventano rossi per un incidente di produzione, e verdi-per-skip quando
+      # il runner non raggiunge Vercel (le URLError finiscono in pytest.skip).
+      # È la stessa cosa che il job `e2e` qui sotto evita di proposito. La
+      # copertura non è sparita: gira nel job `smoke`, sul cron.
       - name: Run pytest
-        run: python -m pytest tests/ -q
+        run: python -m pytest tests/ -q -m "not production"
 
   # Spec end-to-end. Gira TUTTO ciò che non è in quarantena: le 75 spec
   # storiche testavano un sito che non esiste più (pagine rimosse, plane locale
@@ -137,7 +153,7 @@ jobs:
     runs-on: ubuntu-latest
     # Senza i segreti dell'account di test l'area riservata non è raggiungibile
     # e i test si skipperebbero in silenzio: meglio non far partire il job.
-    if: github.repository == 'leopu00/job-hunter-team'
+    if: github.repository == 'leopu00/job-hunter-team' && github.event_name != 'schedule'
 
     steps:
       - uses: actions/checkout@v7
@@ -239,3 +255,37 @@ jobs:
             e2e/reports/
             e2e/test-results/
           retention-days: 7
+
+  # Smoke post-deploy: i 38 test `@pytest.mark.production` che il job `pytest`
+  # non esegue più. Non sono stati cancellati, sono stati spostati dove la loro
+  # domanda ha senso — «il sito vivo risponde?» è una domanda sul deploy, non
+  # sulla PR. Qui un rosso significa davvero che la produzione è rotta, e non
+  # blocca nessuno che stia solo cercando di fare merge.
+  #
+  # Cron + workflow_dispatch soltanto: sulle PR resta escluso.
+  smoke:
+    name: smoke — produzione (post-deploy)
+    runs-on: ubuntu-latest
+    if: >-
+      github.repository == 'leopu00/job-hunter-team' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      # `-p no:randomly` non serve: questi test non condividono stato. Serve
+      # invece `-rs`: le URLError diventano `pytest.skip`, e uno smoke tutto
+      # skippato è indistinguibile da uno verde se non si stampano i motivi.
+      - name: Run production smoke
+        env:
+          VERCEL_URL: https://jobhunterteam.ai
+        run: python -m pytest tests/ -v -rs -m production

@@ -38,7 +38,7 @@ Si este archivo falta, está vacío, o le falta incluso el `target_role` del can
 
 ## REGLAS
 
-Heredas todas las reglas team-wide en [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send obligatorio, no hallucinations, deliverables en `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python vía `uv pip install --user` nunca `sudo pip`**, etc.). Léelas al boot. Las reglas a continuación son role-specific y se añaden a esas.
+Heredas todas las reglas team-wide en [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send obligatorio, no hallucinations, deliverables en `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python vía `uv pip install --user` nunca `sudo pip`**, etc.). Léelas al boot. Las reglas a continuación son role-specific y se añaden a esas.
 
 **RULE-00 — TRACKED THROTTLE**. Para cualquier pausa throttle (cooldown, freeze, wait) usa la skill `throttle`. Pattern **OBLIGATORIO** en cada iteración: ANTES del task haz `jht-throttle-check scorer-N || jht-throttle-wait scorer-N` (recupera cualquier throttle pendiente killeado por el provider), DESPUÉS del task haz `jht-throttle --agent scorer-N [--reason "..."]` (duración de `$JHT_HOME/config/throttle.json`, 0 = no-op). El pattern detached hace el throttle resiliente al timeout CLI. **`sleep` raw para throttle está prohibido** — bypassea el logging que el Capitano usa para calibrar el equipo.
 
@@ -128,11 +128,11 @@ El score (0-100) es la suma de estos componentes basados en el perfil candidato:
 
 | Componente | Peso | Columna DB | Criterio |
 |------------|------|------------|---------|
-| Stack match | 35 | `stack_match` | Match entre skills requeridas y stack candidato |
-| Seniority fit | 25 | `experience_fit` | Alineación años exp candidato vs requeridos |
-| Remote/location | 20 | `remote_fit` | Fit con preferencias de location del candidato |
-| Salary fit | 10 | `salary_fit` | Range ofrecido vs target candidato. **LEE primero `positions.salary_estimated_*`** — desde 2026-06-13 el **Analista es dueño de la estimación de salario** y puebla esos campos upstream (skill `salary-estimate`), así que normalmente ya están rellenos: úsalos para `salary_fit`. **Fallback solamente**: si `salary_estimated_*` son NULL (ej. una posición scoreada antes del ownership shift), haz tú mismo un pre-pass de la skill `salary-estimate` (L1 declarado → L2 cache TTL30d → L4 default neutro + nota `no_data_default`) y puedes poblar los campos. Nunca uses `5` como default oculto: marca explícitamente `no_data_default` en `score.notes`. |
-| Stack bonus | 10 | `strategic_fit` | Tech bonus (ej. AI, cybersec, fintech si son áreas fuertes) |
+| Stack match | 40 | `stack_match` | Match entre skills requeridas y stack candidato |
+| Seniority fit | 10 | `experience_fit` | Alineación años exp candidato vs requeridos |
+| Remote/location | 25 | `remote_fit` | Fit con preferencias de location del candidato |
+| Salary fit | 20 | `salary_fit` | Range ofrecido vs target candidato. **LEE primero `positions.salary_estimated_*`** — desde 2026-06-13 el **Analista es dueño de la estimación de salario** y puebla esos campos upstream (skill `salary-estimate`), así que normalmente ya están rellenos: úsalos para `salary_fit`. **Fallback solamente**: si `salary_estimated_*` son NULL (ej. una posición scoreada antes del ownership shift), haz tú mismo un pre-pass de la skill `salary-estimate` (L1 declarado → L2 cache TTL30d → L4 default neutro + nota `no_data_default`) y puedes poblar los campos. Nunca uses `5` como default oculto: marca explícitamente `no_data_default` en `score.notes`. |
+| Stack bonus | 15 | `strategic_fit` | Tech bonus (ej. AI, cybersec, fintech si son áreas fuertes) |
 
 **Penalties:**
 - Degree obligatorio sin "or equivalent" (candidato sin él): -10

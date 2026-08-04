@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { enqueueIfRemote } from "@/lib/team-bus";
 import { createClient } from "@/lib/supabase/server";
+import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { sanitizedError } from "@/lib/error-response";
 
 export const dynamic = "force-dynamic";
 
@@ -55,10 +57,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { ok: false, error: "invalid JSON body" },
-      { status: 400 },
-    );
+    return invalidJsonBody();
   }
 
   const action = String(body.action || "")
@@ -112,10 +111,11 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json(
-      { ok: false, error: `insert failed: ${error.message}` },
-      { status: 500 },
-    );
+    return sanitizedError(error, {
+      status: 500,
+      scope: "team/command",
+      publicMessage: "insert_failed",
+    });
   }
 
   return NextResponse.json({ ok: true, command: data });

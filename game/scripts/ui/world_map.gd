@@ -152,8 +152,11 @@ func _active_filter_count() -> int:
 
 func _update_filter_btn() -> void:
 	var n := _active_filter_count()
-	_filter_btn.text = "⚙ %s" % UIStrings.t("map.filters") if n == 0 \
-			else "⚙ %s · %d" % [UIStrings.t("map.filters"), n]
+	# Solo testo: il ⚙ era un pittogramma dipendente dai font di sistema
+	# (regola: niente emoji nella UI di prodotto). Il conteggio dei filtri
+	# attivi dice già tutto quel che serve.
+	_filter_btn.text = UIStrings.t("map.filters") if n == 0 \
+			else "%s · %d" % [UIStrings.t("map.filters"), n]
 	_filter_btn.add_theme_color_override("font_color",
 			Palette.GREEN if n > 0 else Palette.BASE)
 

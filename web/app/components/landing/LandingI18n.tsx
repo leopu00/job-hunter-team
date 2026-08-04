@@ -64,6 +64,7 @@ const translations = {
     hu: "Studies",
   },
   nav_project: { it: "Il progetto", en: "Project", hu: "Projekt" },
+  nav_tutorials: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
   nav_login: { it: "Accedi", en: "Sign in", hu: "Bejelentkezés" },
 
   // Hero
@@ -74,9 +75,9 @@ const translations = {
     hu: "Autonóm AI-ügynökök csapata az álláskeresésedhez.",
   },
   home_intro: {
-    it: "Job Hunter Team è una squadra di agenti AI autonomi che cercano lavoro per te, di continuo. Ogni agente è uno specialista: c'è chi individua le offerte, chi le analizza nel dettaglio e chi assegna a ciascuna un punteggio, in base a quanto è vicina a ciò che conta davvero per te. Su tua richiesta preparano anche il CV per candidarti. E quando le candidature inviate non bastano a trovare lavoro, un agente dedicato ti affianca: ti aiuta a orientarti nel mercato del lavoro e ad avvicinarti al ruolo che desideri. La direzione la dai tu e l'ultima parola resta sempre tua; il resto lo porta avanti il team, in privato, sulla tua macchina.",
-    en: "Job Hunter Team is a team of autonomous AI agents that hunt for jobs for you, around the clock. Each agent is a specialist: one finds the openings, one analyzes them in detail, and one gives each a score based on how close it is to what truly matters to you. On request, they also prepare your CV so you can apply. And when the applications you've sent aren't enough to land a job, a dedicated agent steps in alongside you: it helps you get your bearings in the job market and move closer to the role you want. You set the direction and the final word is always yours; the rest is carried forward by the team, privately, on your own machine.",
-    hu: "A Job Hunter Team autonóm AI-ügynökök csapata, amely folyamatosan állást keres neked. Minden ügynök szakember: az egyik megtalálja az ajánlatokat, egy másik részletesen elemzi őket, egy pedig pontszámot ad mindegyiknek aszerint, mennyire áll közel ahhoz, ami igazán számít neked. Kérésedre az önéletrajzot is elkészítik a jelentkezéshez. És amikor az elküldött jelentkezések nem elegendők az álláshoz, egy dedikált ügynök áll melléd: segít eligazodni a munkaerőpiacon, és közelebb kerülni az áhított szerephez. Az irányt te adod meg, és a végső szó mindig a tiéd; a többit a csapat viszi tovább, privát módon, a saját gépeden.",
+    it: "Job Hunter Team è una squadra di agenti AI autonomi che cercano lavoro per te, di continuo. Ogni agente è uno specialista: c'è chi individua le offerte, chi le analizza nel dettaglio e chi assegna a ciascuna un punteggio, in base a quanto è vicina a ciò che conta davvero per te. Su tua richiesta preparano anche il CV per candidarti. Un agente dedicato ti aiuta inoltre a orientarti nel mercato del lavoro e ad avvicinarti al ruolo che desideri. Osservare il mercato è un uso completo del prodotto. La direzione la dai tu e l'ultima parola resta sempre tua; il resto lo porta avanti il team, in privato, sulla tua macchina.",
+    en: "Job Hunter Team is a team of autonomous AI agents that hunt for jobs for you, around the clock. Each agent is a specialist: one finds the openings, one analyzes them in detail, and one gives each a score based on how close it is to what truly matters to you. On request, they also prepare your CV so you can apply. A dedicated agent can also help you get your bearings in the job market and move closer to the role you want. Observing the market is a complete use of the product. You set the direction and the final word is always yours; the rest is carried forward by the team, privately, on your own machine.",
+    hu: "A Job Hunter Team autonóm AI-ügynökök csapata, amely folyamatosan állást keres neked. Minden ügynök szakember: az egyik megtalálja az ajánlatokat, egy másik részletesen elemzi őket, egy pedig pontszámot ad mindegyiknek aszerint, mennyire áll közel ahhoz, ami igazán számít neked. Kérésedre az önéletrajzot is elkészítik a jelentkezéshez. Egy dedikált ügynök a munkaerőpiacon való tájékozódásban és a kívánt szerep felé vezető úton is segít. A piac megfigyelése a termék teljes értékű használata. Az irányt te adod meg, és a végső szó mindig a tiéd; a többit a csapat viszi tovább, privát módon, a saját gépeden.",
   },
 
   // CTA
@@ -105,6 +106,7 @@ const translations = {
   footer_product: { it: "Prodotto", en: "Product", hu: "Termék" },
   footer_stats: { it: "Progetto", en: "Project", hu: "Projekt" },
   footer_resources: { it: "Risorse", en: "Resources", hu: "Források" },
+  footer_tutorials: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
   footer_contacts: { it: "Contatti", en: "Contacts", hu: "Kapcsolat" },
   nav_contact: {
     it: "Contatti",
@@ -131,6 +133,10 @@ const translations = {
     en: "Open Source under MIT License",
     hu: "Nyílt forráskód MIT licenc alatt",
   },
+  tutorials_title: { it: "Tutorial", en: "Tutorials", hu: "Oktatóanyagok" },
+  tutorial_game_title: { it: "Gioco", en: "Game", hu: "Játék" },
+  tutorial_web_title: { it: "Web", en: "Web", hu: "Web" },
+  trailer_title: { it: "Trailer", en: "Trailer", hu: "Előzetes" },
   theme_system: { it: "sistema", en: "system", hu: "rendszer" },
   theme_dark: { it: "notte", en: "night", hu: "éjszaka" },
   theme_light: { it: "giorno", en: "day", hu: "nappal" },
@@ -254,12 +260,8 @@ const translations = {
     hu: "Lábléc hivatkozások",
   },
 
-  // ─── LandingHome: hero alt + sezioni ──────────────────────────────
-  home_hero_alt: {
-    it: "Illustrazione a fumetto: un team di agenti AI — tutti con gli stessi occhiali da sole neri — seduto attorno a un lungo tavolo da riunione in un elegante ufficio in grattacielo, mentre un agente in piedi presenta dei grafici su una lavagna.",
-    en: "Comic-style illustration: a team of AI agents — all wearing the same black sunglasses — seated around a long boardroom table in an elegant high-rise office, while one standing agent presents charts on a whiteboard.",
-    hu: "Képregény stílusú illusztráció: AI ügynökök csapata — mind ugyanazt a fekete napszemüveget viselve — egy hosszú tárgyalóasztal körül ül egy elegáns felhőkarcoló irodában, miközben egy álló ügynök diagramokat mutat be egy táblán.",
-  },
+  // ─── LandingHome: sezioni ─────────────────────────────────────────
+  // (l'alt dell'hero ora vive in LandingGlobe.i18n.ts col globo)
   home_team_alt: {
     it: "Tre agenti del team a figura intera: lo Scout con la lente, l'Analista in camice, lo Scrittore con la penna d'oca — tutti con gli occhiali da sole.",
     en: "Three full-body team agents: the Scout with a magnifying glass, the Analyst in a lab coat, the Writer with a quill pen — all wearing sunglasses.",

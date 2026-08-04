@@ -9,14 +9,33 @@ Commands
 --------
   sync (default)   Scan repo, reconcile JSON (add new files, drop deleted),
                    regenerate MD with fresh git update dates + review flags.
+  check            Read-only. Exit 1 if the index has drifted from the repo.
+                   Writes nothing — in particular it never touches
+                   `last_review`. Meant for CI (see .github/workflows/lint.yml).
   mark <path>      Set last_review = today for <path>, then sync.
   bootstrap        One-shot: parse current MD, seed JSON with descriptions
                    and last_review values found there.
+
+Why `check` ignores two of the five columns
+-------------------------------------------
+`🔄 Update` and `❗ Rivedi` are derived from `git log -1 --format=%cs`, i.e.
+from the date of the last commit that touched the file. Neither the author
+nor CI can commit a correct value for them: at the moment you generate the
+table, the commit that is about to change the file does not exist yet, so
+every `.md` you are committing still carries its *previous* update date.
+The file is stale the instant it lands.
+
+Comparing those two columns would therefore fail on every PR that touches
+any `.md` — a gate that is red for a reason nobody can fix is a gate that
+gets switched off. `check` compares only what a human controls: the set of
+files, and the columns that come from the JSON (description, last_review).
+The git dates drift silently and the next `sync` fixes them for free.
 """
 
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import subprocess
@@ -37,6 +56,13 @@ EXCLUDE_DIR_PARTS = {
     "__pycache__", ".pytest_cache",
     # Storia congelata: si conserva, non si rilegge.
     "_archive", "archive",
+    # Payload vendorizzato dell'app Electron, eliminata il 2026-07-19: sono
+    # copie di file i cui originali (`agents/alfa/`, `shared/docs/`) non
+    # esistono più. Indicizzarle chiederebbe di rileggere periodicamente
+    # documentazione che descrive un'applicazione che non spediamo, e ogni
+    # riga sarebbe un invito a "aggiornarla" — cioè a curare un fossile.
+    # Se un giorno la cartella esce dal repo, questa riga cade da sé.
+    "app-payload",
 }
 
 # Le traduzioni dei prompt/skill (`<nome>.<locale>.md`) NON entrano nel
@@ -91,9 +117,28 @@ def md_link(path: str) -> str:
 
 
 def scan_repo() -> list[str]:
+    """Return Markdown files that belong to the repository.
+
+    Git is the source of truth here: ignored or otherwise untracked notes can
+    live beside a worktree, but must never leak into the committed review log.
+    Filtering out missing paths also preserves the old behaviour for tracked
+    files deleted from the working tree.
+    """
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.md"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        check=True,
+    ).stdout.split("\0")
+
     paths: list[str] = []
-    for p in REPO_ROOT.rglob("*.md"):
-        rel = p.relative_to(REPO_ROOT)
+    for path in tracked:
+        if not path:
+            continue
+        rel = Path(path)
+        if not (REPO_ROOT / rel).is_file():
+            continue
         if any(part in EXCLUDE_DIR_PARTS for part in rel.parts):
             continue
         if rel.name == "REVIEW-LOG.md":
@@ -250,9 +295,19 @@ FOOTER = """
 - `sync` aggiorna automaticamente `🔄 Update` (da `git log`) e `❗ Rivedi`, e aggiunge file nuovi (descrizione vuota).
 - `mark <path>` setta `last_review` a oggi nel JSON e rigenera l'MD.
 """
+# NOTA: HEADER e FOOTER finiscono dentro il file generato, e `check` li
+# confronta. Toccarli richiede un `sync` + commit di docs/REVIEW-LOG.md nello
+# stesso changeset, altrimenti il gate CI diventa rosso. `check` è
+# documentato nel docstring del modulo e in .github/workflows/lint.yml.
 
 
-def render_md(data: dict) -> str:
+def render_md(data: dict, *, git_dates: bool = True) -> str:
+    """Render the MD table.
+
+    `git_dates=False` skips the `git log` lookups and emits a placeholder in
+    the two derived columns. Used by `check`, which strips those columns
+    before comparing anyway — see the module docstring.
+    """
     by_section: dict[str, list[dict]] = {sid: [] for sid, _ in SECTIONS}
     for entry in data["files"]:
         sid = classify(entry["path"])
@@ -271,8 +326,11 @@ def render_md(data: dict) -> str:
             link = md_link(entry["path"])
             desc = (entry.get("description") or "").strip() or "_(da compilare nel JSON)_"
             last_review = entry.get("last_review") or "—"
-            last_update = git_last_update(entry["path"]) or "—"
-            flag = needs_review(entry.get("last_review"), git_last_update(entry["path"]))
+            if git_dates:
+                last_update = git_last_update(entry["path"]) or "—"
+                flag = needs_review(entry.get("last_review"), git_last_update(entry["path"]))
+            else:
+                last_update = flag = "—"
             parts.append(f"| [{entry['path']}]({link}) | {desc} | {last_review} | {last_update} | {flag} |")
         parts.append("")
 
@@ -295,6 +353,85 @@ def cmd_sync(_args: argparse.Namespace) -> int:
     data = reconcile(data)
     save_json(data)
     write_md(data)
+    return 0
+
+
+def _strip_git_columns(line: str) -> str:
+    """Drop the last two cells (`🔄 Update`, `❗ Rivedi`) from a data row."""
+    if not line.startswith("| ["):
+        return line
+    return "|".join(line.split("|")[:-3])
+
+
+def _comparable(md: str) -> list[str]:
+    return [_strip_git_columns(l) for l in md.splitlines()]
+
+
+def cmd_check(_args: argparse.Namespace) -> int:
+    """Read-only drift gate. Never writes, never marks anything as reviewed."""
+    failures: list[str] = []
+
+    data = load_json()
+    if not data["files"]:
+        print(f"[check] ✗ {JSON_PATH.relative_to(REPO_ROOT)} is missing or empty.")
+        print("        Run: python scripts/review-log.py sync")
+        return 1
+
+    on_disk = set(scan_repo())
+    in_json = {e["path"] for e in data["files"]}
+
+    missing = sorted(on_disk - in_json)
+    stale = sorted(in_json - on_disk)
+
+    if missing:
+        failures.append(f"{len(missing)} markdown file(s) in the repo are absent from the index")
+        for path in missing:
+            print(f"[check] ✗ not indexed: {path}")
+    if stale:
+        failures.append(f"{len(stale)} indexed entr(y/ies) no longer exist on disk")
+        for path in stale:
+            print(f"[check] ✗ indexed but gone: {path}")
+
+    if not MD_PATH.exists():
+        failures.append(f"{MD_PATH.relative_to(REPO_ROOT)} does not exist")
+        print(f"[check] ✗ missing generated file: {MD_PATH.relative_to(REPO_ROOT)}")
+    else:
+        expected = _comparable(render_md(data, git_dates=False))
+        actual = _comparable(MD_PATH.read_text(encoding="utf-8"))
+        if expected != actual:
+            failures.append(
+                f"{MD_PATH.relative_to(REPO_ROOT)} does not match "
+                f"{JSON_PATH.relative_to(REPO_ROOT)} (ignoring the git-derived columns)"
+            )
+            print(f"[check] ✗ {MD_PATH.relative_to(REPO_ROOT)} is out of date w.r.t. the JSON.")
+            for line in difflib.unified_diff(
+                actual, expected,
+                fromfile=f"{MD_PATH.name} (committed)",
+                tofile=f"{MD_PATH.name} (from JSON)",
+                lineterm="", n=0,
+            ):
+                print(f"        {line}")
+
+    # Not a failure: an empty description is a gap in the content, not drift,
+    # and `sync` cannot fill it. Surfacing it keeps the index from quietly
+    # degrading into a list of paths.
+    blank = [e["path"] for e in data["files"] if not (e.get("description") or "").strip()]
+    if blank:
+        print(f"[check] ⚠ {len(blank)} entr(y/ies) still have an empty description:")
+        for path in blank:
+            print(f"        - {path}")
+
+    if failures:
+        print()
+        for f in failures:
+            print(f"[check] FAIL: {f}")
+        print()
+        print("        Fix: python scripts/review-log.py sync")
+        print("        then commit docs/review-log.json and docs/REVIEW-LOG.md.")
+        print("        Fill in the description of any newly added file in the JSON.")
+        return 1
+
+    print(f"[check] ✓ index in sync ({len(data['files'])} entries).")
     return 0
 
 
@@ -334,6 +471,8 @@ def main() -> int:
 
     sub.add_parser("sync", help="reconcile JSON with disk + regenerate MD")
 
+    sub.add_parser("check", help="read-only: exit 1 if the index has drifted (CI gate)")
+
     p_mark = sub.add_parser("mark", help="set last_review=today for a file")
     p_mark.add_argument("path", help="repo-relative path (e.g. docs/about/STORY.md)")
 
@@ -343,6 +482,7 @@ def main() -> int:
     cmd = args.cmd or "sync"
 
     if cmd == "sync":      return cmd_sync(args)
+    if cmd == "check":     return cmd_check(args)
     if cmd == "mark":      return cmd_mark(args)
     if cmd == "bootstrap": return cmd_bootstrap(args)
     parser.print_help()

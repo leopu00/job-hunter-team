@@ -18,12 +18,19 @@ entrambi i controlli. Vedi `docs/internal/roadmap/2026-07-28-ticket-stepcap-thro
 Ciclo (default 60s), per ogni sessione WORKER (i core NON si nudgeano in
 automatico — il Capitano non è un worker):
 
-  1. RILEVAZIONE — `tmux capture-pane -p -t <SESSIONE>`, ultime 40 righe.
-     **Doppia condizione, non opzionale**: il marcatore deve comparire nelle
-     ultime righe NON VUOTE *e* l'hash del pane deve essere IDENTICO al giro
-     precedente. Il marcatore resta nello scrollback anche dopo la ripresa:
-     trovarlo non basta, e senza il secondo controllo questo watchdog diventa
-     un generatore di nudge a raffica su un agente che sta lavorando.
+  1. RILEVAZIONE — `tmux capture-pane -p -t <SESSIONE>`, ultime 40 righe. Due
+     strade, entrambe ancorate all'hash del pane IDENTICO al giro precedente:
+     (a) col marcatore nelle ultime righe NON VUOTE → stallo subito. Il
+         marcatore resta nello scrollback anche dopo la ripresa: trovarlo non
+         basta, e senza il controllo sull'hash questo watchdog diventa un
+         generatore di nudge a raffica su un agente che sta lavorando.
+     (b) SENZA marcatore, se il pane non si muove per `IDLE_STALL_ROUNDS` giri
+         → stallo lo stesso. Aggiunta il 2026-07-30, dopo che quattro VPS
+         riportavano `stalled: 0` in contemporanea con worker fermi da ore:
+         i marcatori esistono solo per Kimi, quindi la strada (a) da sola
+         rendeva il watchdog inerte su tutto il resto della flotta. Gli stalli
+         che ci hanno morso — turno abortito su 429, riga appesa nel composer,
+         attesa di una sveglia soppressa — non stampano nulla.
   2. THROTTLE — si scrive `$JHT_HOME/state/throttle-<agent>.json` nello stesso
      formato di `agents/_tools/jht-throttle`, con durata presa dalla
      `THROTTLE_LADDER` di `shared/skills/throttle-config.py` partendo dal rung
@@ -32,6 +39,17 @@ automatico — il Capitano non è un worker):
      subito lo rimanda nello stesso loop.
   3. RIPRESA — alla scadenza, messaggio via BUFFER tmux (mai `send-keys` col
      testo inline: il quoting salta al primo apice).
+
+## Il secondo segnale: un ack che non arriva (2026-07-30)
+
+Il ciclo sopra guarda il PANE, e il pane non sa dire se un agente è inattivo o
+bloccato. Il motore dei throttle (`shared/skills/throttle_engine.py`) produce un
+segnale che invece lo sa: manda la sveglia, mette il flag su `NOTIFIED`, e
+aspetta che sia **l'agente** a flipparlo su `ACTIVE` con `throttle-ack`. Un flag
+fermo su `NOTIFIED` oltre la soglia non è «forse idle»: la sveglia è partita e
+non ha risposto. Questo watchdog legge quella lista (`notified_without_ack()`) e
+la porta al Capitano — è il segnale che gli mancava per distinguere `idle` da
+`bloccato`, il buco che tutti i watchdog attuali condividono.
 
 Backoff sugli stalli consecutivi (il contatore si azzera solo quando l'agente
 PRODUCE una riga nuova a suo nome, non quando riparte — ripartire e rifermarsi
@@ -101,8 +119,22 @@ ESCALATE_COOLDOWN_SEC = float(os.environ.get("JHT_STEPCAP_ESCALATE_COOLDOWN", "3
 # tardi. 15 min tiene il log leggibile durante un halt lungo e resta una prova
 # periodica che il watchdog è vivo e sta aspettando, non che si è dimenticato.
 GATE_RETRY_SEC = float(os.environ.get("JHT_STEPCAP_GATE_RETRY", "900"))
+# Soglia dell'ack mancato. Default: quella del motore dei throttle, così esiste
+# UN numero e non due che divergono. L'env serve ai test e alla diagnosi.
+NOTIFIED_ACK_MAX_SEC = os.environ.get("JHT_STEPCAP_ACK_MAX")
+# Un agente fermo su NOTIFIED resta fermo: senza cooldown il Capitano riceve lo
+# stesso avviso a ogni giro (60s) finché qualcuno non interviene.
+ACK_ESCALATE_COOLDOWN_SEC = float(os.environ.get("JHT_STEPCAP_ACK_COOLDOWN", "3600"))
 CAPTAIN_SESSION = os.environ.get("JHT_STEPCAP_CAPTAIN", "CAPITANO")
 TMUX_BUFFER = "jht-stepcap"
+# Giri consecutivi di pane IMMOBILE che valgono uno stallo anche SENZA
+# marcatore. Un turno in corso non è immobile — il timer del render cambia a
+# ogni secondo, quindi l'hash cambia; immobile vuol dire che non sta uscendo
+# nulla. A INTERVAL_SEC=60 il default sono 15 minuti di nulla, abbastanza da
+# non confondere una pausa con uno stallo. Serve perché lo stallo che ci ha
+# morso non porta marcatori: turno abortito su 429, riga appesa nel composer,
+# agente in attesa di una sveglia soppressa. Nessuno di questi stampa niente.
+IDLE_STALL_ROUNDS = int(os.environ.get("JHT_STEPCAP_IDLE_ROUNDS", "15"))
 
 # ── Marcatori per PROVIDER ────────────────────────────────────────────────
 # Il testo cambia da CLI a CLI: cablarne uno solo rende il watchdog inutile al
@@ -111,6 +143,15 @@ TMUX_BUFFER = "jht-stepcap"
 # testo non è ancora stato osservato, e si riempiono man mano.
 STEP_CAP_MARKERS = {
     "kimi": ("Max number of steps reached",),
+    # Vuote NON per dimenticanza: Claude e Codex non stampano un marcatore di
+    # step-cap noto. Finché la rilevazione dipendeva SOLO da questa tabella,
+    # però, il watchdog era inerte su tutte le VPS che non girano su Kimi:
+    # `find_marker` tornava sempre None, il blocco (d) usciva subito e
+    # l'heartbeat riportava `stalled: 0` per sempre. Misurato il 2026-07-30 su
+    # 4 VPS contemporaneamente — con worker fermi da 7h, agenti morti su un 429
+    # e pane con la riga appesa nel composer, tutti classificati `phase: idle`.
+    # Da lì la rilevazione senza marcatore qui sotto (IDLE_STALL_ROUNDS): non
+    # servono i marcatori per accorgersi che un pane non si muove.
     "claude": (),
     "codex": (),
 }
@@ -185,6 +226,10 @@ def _load_shared(name: str, filename: str):
 
 def _throttle_config():
     return _load_shared("throttle_config", "throttle-config.py")
+
+
+def _throttle_engine():
+    return _load_shared("throttle_engine", "throttle_engine.py")
 
 
 def ladder() -> list:
@@ -415,6 +460,7 @@ def _new_entry(created=None) -> dict:
         "produced": None,       # produzione all'ultimo stallo (baseline)
         "resume_hash": None,
         "last_escalate_ts": None,
+        "immobile": 0,          # giri consecutivi di pane fermo senza marcatore
     }
 
 
@@ -466,16 +512,37 @@ def clear_throttle(agent: str) -> None:
         pass
 
 
+def _standby_active(home: Path) -> bool:
+    """Standby ATTIVO adesso, secondo l'UNICO predicato del team
+    ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS], `shared/skills/standby.py`).
+
+    Il flag porta la sua condizione di uscita: uno SCADUTO non è più standby e
+    non deve tenere fermi gli agenti sul cap all'infinito. `home` è esplicito
+    perché qui la home si risolve a ogni chiamata (`_home()`), mentre in
+    standby.py è una costante di modulo risolta all'import.
+
+    Fail-CLOSED: modulo non caricabile → il vecchio `.exists()`. Riprendere gli
+    agenti a spesa zero per un import rotto sarebbe peggio del bug.
+    """
+    mod = _load_shared("standby", "standby.py")
+    if mod is None or not hasattr(mod, "is_active"):
+        return (home / ".team-standby.flag").exists()
+    try:
+        return bool(mod.is_active(home=home))
+    except Exception as exc:  # noqa: BLE001
+        _log("standby predicato fallito (%s) — fallback su .exists()" % exc)
+        return (home / ".team-standby.flag").exists()
+
+
 # ── Gate di sicurezza ─────────────────────────────────────────────────────
 def _halt_flags():
     home, logs = _home(), _logs_dir()
     return (
         ("team-halted", home / ".team-halted.flag"),
-        # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): in standby anche
-        # questo watchdog tace — niente nudge, niente kick-off. La sveglia è
-        # del sentinel-bridge; alla rimozione del flag il retry (GATE_RETRY_SEC)
-        # riprende gli agenti ancora fermi sul cap.
-        ("team-standby", home / ".team-standby.flag"),
+        # Lo standby NON è in questa lista: non si valuta sull'esistenza del
+        # file ma col predicato `_standby_active()` — un flag SCADUTO non è più
+        # standby, e continuare a leggerlo come tale terrebbe gli agenti fermi
+        # sul cap all'infinito. Vedi resume_gate().
         # daily-halt lo scrivono i tre bridge in logs/; la variante in home
         # è controllata comunque, così un cambio di posizione non ci acceca.
         ("daily-halt", logs / "daily-halt.flag"),
@@ -492,6 +559,12 @@ def resume_gate(now: float, live_workers: int = 0):
     nessuna deroga, nemmeno con `.burn-intent.flag` attivo — la deroga
     dell'utente riguarda gli automatismi di SPESA, e un halt resta un halt.
     """
+    # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): in standby questo
+    # watchdog tace — niente nudge, niente kick-off. La sveglia è del
+    # sentinel-bridge; quando lo standby non è più ATTIVO (flag rimosso O
+    # scaduto) il retry (GATE_RETRY_SEC) riprende gli agenti fermi sul cap.
+    if _standby_active(_home()):
+        return "team-standby"
     for name, path in _halt_flags():
         try:
             if path.exists():
@@ -572,7 +645,7 @@ def _handle_agent(session, agent, entry, now, live_workers):
             emit("resume_failed", agent=agent, ts=now, session=session,
                  consecutive=entry.get("consecutive"))
         entry.update(phase="idle", hash=current, resume_hash=None,
-                     stall_hash=None)
+                     stall_hash=None, immobile=0)
         return
 
     # (b) Throttle in corso.
@@ -585,7 +658,8 @@ def _handle_agent(session, agent, entry, now, live_workers):
             emit("recovered", agent=agent, ts=now, session=session,
                  consecutive=entry.get("consecutive"))
             clear_throttle(agent)
-            entry.update(phase="idle", hash=current, until=None, stall_hash=None)
+            entry.update(phase="idle", hash=current, until=None, stall_hash=None,
+                         immobile=0)
             return
         gate = resume_gate(now, live_workers)
         if gate:
@@ -604,7 +678,8 @@ def _handle_agent(session, agent, entry, now, live_workers):
         else:
             emit("resume_send_failed", agent=agent, ts=now, session=session,
                  consecutive=entry.get("consecutive"))
-            entry.update(phase="idle", hash=None, until=None, stall_hash=None)
+            entry.update(phase="idle", hash=None, until=None, stall_hash=None,
+                         immobile=0)
         return
 
     # (c) Escalation in corso: non si tocca più finché il pane non cambia.
@@ -612,14 +687,32 @@ def _handle_agent(session, agent, entry, now, live_workers):
         if current != entry.get("stall_hash"):
             emit("recovered", agent=agent, ts=now, session=session,
                  consecutive=entry.get("consecutive"))
-            entry.update(phase="idle", hash=current, stall_hash=None)
+            entry.update(phase="idle", hash=current, stall_hash=None, immobile=0)
         return
 
-    # (d) RILEVAZIONE — doppia condizione: marcatore in coda E pane immobile.
+    # (d) RILEVAZIONE. Due strade verso lo stesso verdetto:
+    #     - marcatore in coda E pane immobile → stallo subito (via storica);
+    #     - nessun marcatore ma pane immobile da IDLE_STALL_ROUNDS giri →
+    #       stallo lo stesso. Senza questa seconda strada il watchdog vede
+    #       solo gli stalli che si annunciano da soli, cioè quasi nessuno.
     previous = entry.get("hash")
     entry["hash"] = current
-    if not marker or previous is None or previous != current:
+    if previous is None or previous != current:
+        entry["immobile"] = 0
         return
+    if marker:
+        entry["immobile"] = 0
+    else:
+        rounds = int(entry.get("immobile") or 0) + 1
+        entry["immobile"] = rounds
+        if rounds < IDLE_STALL_ROUNDS:
+            return
+        # Fermo DEVE essere fermo: durante un halt o fuori finestra l'immobilità
+        # è il comportamento giusto. Si continua a contare (così alla riapertura
+        # il verdetto è immediato) ma non si chiama stallo ciò che è un ordine.
+        if resume_gate(now, live_workers):
+            return
+        marker = f"nessun marcatore: pane immobile da {rounds} giri"
 
     produced = produced_count(agent)
     baseline = entry.get("produced")
@@ -667,6 +760,62 @@ def _handle_agent(session, agent, entry, now, live_workers):
             % (agent, consecutive, max(1, seconds // 60)))
 
 
+def check_missing_acks(state: dict, now: float) -> list:
+    """Agenti che hanno ricevuto la sveglia e non hanno firmato: ESCALATION.
+
+    È l'altro segnale di questo watchdog, e l'unico DETERMINISTICO. Il ciclo del
+    cap di step guarda il pane e deve indovinare; qui non si indovina: il motore
+    dei throttle ha mandato la sveglia, ha scritto `NOTIFIED` con l'ora, e ha
+    lasciato l'ack all'agente. Se il flag è ancora lì dopo N minuti l'agente non
+    è inattivo — non ha risposto a una richiesta che gli è arrivata.
+
+    Nessun nudge: questo watchdog non sa cosa ha bloccato l'agente e riprovare a
+    scrivergli è ciò che ha già fallito. Si porta la prova al Capitano, che
+    decide (`/clear` o respawn).
+    """
+    mod = _throttle_engine()
+    if mod is None:
+        return []
+    try:
+        limit = float(NOTIFIED_ACK_MAX_SEC) if NOTIFIED_ACK_MAX_SEC \
+            else float(mod.NOTIFIED_ACK_MAX_SEC)
+        stuck = mod.notified_without_ack(now=now, max_sec=limit)
+    except Exception as exc:  # noqa: BLE001 — il segnale nuovo non abbatte il giro
+        _log("lettura dei flag di throttle fallita: %s" % exc)
+        return []
+    if not stuck:
+        # Nessuno fermo: si buttano i cooldown, così un agente che si ribloccasse
+        # domani viene segnalato subito e non dopo un'ora di silenzio.
+        state.pop("ack_escalations", None)
+        return []
+
+    sent = state.setdefault("ack_escalations", {})
+    if not isinstance(sent, dict):
+        sent = {}
+        state["ack_escalations"] = sent
+    for row in stuck:
+        agent = row["agent"]
+        emit("notified_no_ack", agent=agent, ts=now, session=row.get("session"),
+             waiting_sec=row.get("waiting_sec"), threshold_sec=int(limit))
+        last = sent.get(agent) or 0
+        if now - float(last) < ACK_ESCALATE_COOLDOWN_SEC:
+            continue
+        sent[agent] = now
+        notify_captain(
+            "[DA @SISTEMA A @CAPITANO] %s ha ricevuto la sveglia dal motore dei "
+            "throttle %d min fa e non ha ancora firmato l'ack (flag fermo su "
+            "NOTIFIED). Non è «forse idle»: la sveglia è arrivata e non ha "
+            "risposto, quindi è bloccato. Non gli scrivo altro — decidi tu "
+            "(`/clear` o respawn). Prova: state/throttle-flags.json, storico "
+            "logs/throttle-engine.jsonl."
+            % (agent, max(1, int(row.get("waiting_sec", 0) // 60))))
+    # Un agente che ha firmato non deve portarsi dietro il suo cooldown.
+    live = {row["agent"] for row in stuck}
+    for gone in [a for a in sent if a not in live]:
+        sent.pop(gone, None)
+    return stuck
+
+
 def tick(now=None) -> dict:
     """Un giro completo. Ritorna lo stato aggiornato (comodo per i test)."""
     now = time.time() if now is None else float(now)
@@ -694,12 +843,21 @@ def tick(now=None) -> dict:
     for gone in [a for a in agents if a not in seen]:
         agents.pop(gone, None)
 
+    # Ack mancati: fuori dal ciclo per sessione, perché il segnale non viene dal
+    # pane e vale anche per un agente che il pane mostrerebbe perfettamente sano.
+    try:
+        missing_acks = check_missing_acks(state, now)
+    except Exception as exc:  # noqa: BLE001
+        _log("controllo degli ack fallito: %s" % exc)
+        missing_acks = []
+
     last_hb = state.get("last_heartbeat")
     if last_hb is None or (now - float(last_hb)) >= HEARTBEAT_SEC:
         state["last_heartbeat"] = now
         stalled = sum(1 for e in agents.values()
                       if e.get("phase") in ("throttled", "escalated"))
-        emit("heartbeat", ts=now, watched=live_workers, stalled=stalled)
+        emit("heartbeat", ts=now, watched=live_workers, stalled=stalled,
+             no_ack=len(missing_acks) or None)
 
     write_state(state)
     return state

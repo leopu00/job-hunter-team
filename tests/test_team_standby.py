@@ -490,8 +490,9 @@ def test_agent_watchdog_keeps_bridge_supervision_during_standby():
     respawna/refresha AGENTI ma continua a sorvegliare i BRIDGE — un bridge
     morto e non rispawnato sarebbe uno standby eterno."""
     src = _src(LAUNCHER_DIR / "agent-watchdog.sh")
-    m = re.search(
-        r'if \[ -e "\$TEAM_STANDBY_FLAG" \]; then(.*?)\n    continue', src, re.S)
+    # Il gate NON è più `[ -e <flag> ]` ma il predicato unico `standby_active`
+    # ([STANDBY-EXPIRY-IGNORED-BY-RESPAWNERS]): un flag scaduto non è standby.
+    m = re.search(r'if standby_active; then(.*?)\n    continue', src, re.S)
     assert m, "gate standby assente dal loop dell'agent-watchdog"
     branch = m.group(1)
     assert "maybe_respawn_bridges" in branch, "la sveglia resta senza respawn"
@@ -505,6 +506,27 @@ def test_doctor_watchdog_gates_on_standby():
     src = _src(LAUNCHER_DIR / "doctor-watchdog.sh")
     assert 'TEAM_STANDBY_FLAG="$JHT_HOME/.team-standby.flag"' in src
     assert '[ -e "$TEAM_STANDBY_FLAG" ]' in src
+
+
+def test_doctor_watchdog_waits_for_provider_credentials_before_spawning():
+    """Una prima installazione salva active_provider prima di completare OAuth:
+    Doctor/Mantenitore devono restare sospesi come gli agenti user-facing."""
+    src = _src(LAUNCHER_DIR / "doctor-watchdog.sh")
+    loop = src.index("while true; do")
+    gate = src.index("if ! config_ready; then", loop)
+    maint_spawn = src.index('mout=$(bash "$MAINT_SPAWNER"', loop)
+    doctor_spawn = src.index('out=$(bash "$SPAWNER"', loop)
+    assert gate < maint_spawn
+    assert gate < doctor_spawn
+    for provider, marker in (
+        ("kimi", ".kimi/credentials/kimi-code.json"),
+        ("claude", ".claude/.credentials.json"),
+        ("anthropic", ".claude/.credentials.json"),
+        ("codex", ".codex/auth.json"),
+        ("openai", ".codex/auth.json"),
+    ):
+        assert repr(provider) in src
+        assert marker in src
 
 
 # ── CLI: jht standby on|off|status (forma di burn.js) ────────────────────

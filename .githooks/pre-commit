@@ -24,9 +24,24 @@ if git diff --cached --name-only | grep -qx "$HOOK_PATH"; then
     fi
 fi
 
-# ── CLAUDE.md PROTECTION ─────────────────────────────────────
-if git diff --cached --name-only | grep -qiE '(^|/)CLAUDE\.md$'; then
-    echo -e "${RED}BLOCCATO: CLAUDE.md non deve essere committato.${NC}"
+# ── FILE D'IDENTITA' AGENTE (CLAUDE.md / AGENTS.md) ──────────
+# Sono artefatti di RUNTIME, scritti nella workdir dell'agente dagli spawner:
+# .launcher/start-agent.sh (JHT) e e2e-agents/spawn-e2e-agent.sh (collaudatori
+# E2E). Il template nel repo e' la fonte di verita': la copia si rigenera a ogni
+# spawn, quindi committarla congela un prompt che il template ha gia' superato.
+# Convenzione provider: Claude Code legge CLAUDE.md, Codex e Kimi AGENTS.md —
+# vanno bloccati entrambi, in qualunque directory.
+# --diff-filter=ACM: una eventuale RIMOZIONE resta permessa, cosi' un file
+# entrato per errore in passato puo' essere ripulito.
+IDENTITY_FILES=$(git diff --cached --name-only --diff-filter=ACM \
+    | grep -iE '(^|/)(CLAUDE|AGENTS)\.md$' || true)
+if [ -n "$IDENTITY_FILES" ]; then
+    echo -e "${RED}BLOCCATO: file d'identita' agente, non committabili:${NC}"
+    echo "$IDENTITY_FILES" | sed 's/^/  /'
+    echo ""
+    echo -e "${YELLOW}Sono generati a runtime. Correggi il TEMPLATE, non la copia:${NC}"
+    echo -e "${YELLOW}  agents/<ruolo>/<ruolo>.md            (agenti JHT)${NC}"
+    echo -e "${YELLOW}  e2e-agents/templates/<ruolo>/...     (collaudatori E2E)${NC}"
     exit 1
 fi
 
@@ -37,13 +52,13 @@ fi
 # repo lo stesso giorno di questo hook (2026-04-27) e da allora nessuno poteva
 # più aggiornarla — l'hook bloccava proprio il file che detect-secrets è fatto
 # per rigenerare. Una baseline che non si può aggiornare invecchia e basta.
-ALLOWED_EXTENSIONS="ts|tsx|gd|uid|tscn|tres|godot|cfg|ttf|import|js|jsx|json|geojson|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|txt|example|gitkeep|gitignore|dockerignore|vercelignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist|list|jpg|jpeg|nsi|baseline"
+ALLOWED_EXTENSIONS="ts|tsx|gd|uid|tscn|tres|godot|cfg|ttf|import|js|jsx|json|geojson|css|scss|md|py|sh|sql|yml|yaml|toml|lock|svg|png|txt|example|gitkeep|gitignore|gitattributes|gdignore|dockerignore|vercelignore|mjs|cjs|html|bat|ps1|icns|ico|rs|plist|list|jpg|jpeg|nsi|baseline"
 
 BLOCKED_FILES=""
 while IFS= read -r file; do
     # Permetti file senza estensione noti + file in .githooks/
     basename=$(basename "$file")
-    if [[ "$basename" == "LICENSE" || "$basename" == "CODEOWNERS" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" || "$basename" == "jht-send" || "$basename" == "jht-tmux-send" || "$basename" == "jht-telegram-send" || "$basename" == "jht-throttle" || "$basename" == "jht-throttle-check" || "$basename" == "jht-throttle-wait" || "$basename" == "token-rate-now" || "$basename" == "jht-notify-user" || "$basename" == "jht-check-user-replies" || "$basename" == "jht-install" ]]; then
+    if [[ "$basename" == "LICENSE" || "$basename" == "CODEOWNERS" || "$basename" == "Makefile" || "$basename" == "Procfile" || "$basename" == "Dockerfile" || "$basename" == "jht-send" || "$basename" == "jht-tmux-send" || "$basename" == "jht-telegram-send" || "$basename" == "jht-throttle" || "$basename" == "jht-throttle-check" || "$basename" == "jht-throttle-wait" || "$basename" == "throttle" || "$basename" == "throttle-ack" || "$basename" == "throttle-set" || "$basename" == "token-rate-now" || "$basename" == "jht-notify-user" || "$basename" == "jht-check-user-replies" || "$basename" == "jht-install" ]]; then
         continue
     fi
     if [[ "$file" == .githooks/* ]]; then
@@ -85,6 +100,58 @@ done < <(git diff --cached --name-only --diff-filter=ACM)
 if [ -n "$SENSITIVE_FILES" ]; then
     echo -e "${RED}BLOCCATO: file con nome che sembra un documento personale:${NC}"
     echo -e "$SENSITIVE_FILES"
+    exit 1
+fi
+
+# ── DATI PRIVATI DI PERSONE E MACCHINE ───────────────────────
+# Il repo e' PUBBLICO e la storia di git e' per sempre: un IP di VPS o la mail
+# di un beta tester, una volta committati, non si cancellano — si revocano.
+# E' l'errore piu' frequente di chi lavora senza istruzioni, quindi qui c'e' una
+# rete meccanica oltre alla regola scritta nelle identita' degli agenti.
+#
+# Verificato il 2026-08-04: nel repo tracciato non esiste alcun IP pubblico e le
+# uniche mail sono @jobhunterteam.ai piu' gli esempi delle skill (nome.jht@...),
+# tutti in whitelist. Il controllo quindi non blocca nulla di preesistente.
+PRIVATE_HITS=""
+
+# IPv4 pubblici. Esclusi: loopback, RFC1918, link-local, multicast/broadcast e
+# i range di documentazione (192.0.2 / 198.51.100 / 203.0.113).
+# Prima degli allowlist accetta solo IPv4 canonici: i path SVG contengono spesso
+# sequenze decimali come `1.067.133.167` o ottetti >255, che non sono indirizzi.
+IP_FOUND=$(git diff --cached -U0 --diff-filter=ACM 2>/dev/null \
+    | grep -E "^\+" \
+    | grep -vE 'Chrome/[0-9]+(\.[0-9]+){3}|<path[[:space:]][^>]*d=' \
+    | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' \
+    | awk -F. '{ valid=1; for (i=1; i<=4; i++) if ($i !~ /^(0|[1-9][0-9]*)$/ || $i > 255) valid=0; if (valid) print }' \
+    | grep -vE '^(127\.|0\.|10\.|192\.168\.|169\.254\.|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|255\.|22[4-9]\.|23[0-9]\.|172\.(1[6-9]|2[0-9]|3[01])\.)' \
+    | sort -u | head -3 || true)
+if [ -n "$IP_FOUND" ]; then
+    PRIVATE_HITS="$PRIVATE_HITS\n  IP pubblico: $(echo "$IP_FOUND" | tr '\n' ' ')"
+fi
+
+# Email reali. Whitelist: domini del progetto, esempi, pacchetti npm scoped e i
+# segnaposto usati nelle skill (nome.jht@, your_name@, ...).
+# Il local-part deve iniziare con un carattere alfanumerico: così un decoratore
+# aggiunto nel diff (`+@pytest.fixture`) non viene interpretato come una mail.
+MAIL_FOUND=$(git diff --cached -U0 --diff-filter=ACM 2>/dev/null \
+    | grep -E "^\+" \
+    | grep -oE '[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' \
+    | grep -vE '@(jobhunterteam\.ai|example\.(com|org|net)|[a-z-]+\.invalid|users\.noreply\.github\.com|anthropic\.com)$' \
+    | grep -vE '^(nome|name|nombre|nom|user|utente|tuo|your|your_name|email)[._-]?[a-z]*@' \
+    | grep -vE '^((deinname|nev|oteunome|tunombre|tuonome|votrenom|yourname)\.jht@gmail\.com|nev@gmx\.com|(jobalerts-noreply|jobs-listings)@linkedin\.com)$' \
+    | grep -vE '@(types|supabase|vercel|next|radix-ui|testing-library|eslint|babel|playwright|tailwindcss)/' \
+    | sort -u | head -3 || true)
+if [ -n "$MAIL_FOUND" ]; then
+    PRIVATE_HITS="$PRIVATE_HITS\n  email: $(echo "$MAIL_FOUND" | tr '\n' ' ')"
+fi
+
+if [ -n "$PRIVATE_HITS" ]; then
+    echo -e "${RED}BLOCCATO: possibili dati privati nel commit.${NC}"
+    echo -e "$PRIVATE_HITS"
+    echo ""
+    echo -e "${YELLOW}Il repo e' pubblico e la storia di git e' per sempre: IP di VPS,${NC}"
+    echo -e "${YELLOW}email, indirizzi e dati di beta tester non entrano in un commit.${NC}"
+    echo -e "${YELLOW}Se e' un esempio, usa 192.0.2.x (documentazione) o example.com.${NC}"
     exit 1
 fi
 
