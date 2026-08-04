@@ -7,6 +7,18 @@ func _init() -> void:
 	_run.call_deferred()
 
 
+func _pid_exists(pid: int, is_windows: bool) -> bool:
+	if pid <= 0:
+		return false
+	if is_windows:
+		return OS.execute("powershell.exe", PackedStringArray([
+				"-NoProfile", "-NonInteractive", "-Command",
+				("if (Get-Process -Id %d -ErrorAction SilentlyContinue) { exit 0 } " \
+						+ "else { exit 1 }") % pid])) == 0
+	return OS.execute("/bin/sh", PackedStringArray([
+			"-c", "kill -0 %d 2>/dev/null" % pid])) == 0
+
+
 func _run() -> void:
 	var command := "printf 'Apri https://example.com/device\\nCodice: TEST-123\\n' 1>&2; " \
 			+ "IFS= read -r answer; printf 'ricevuto:%s\\n' \"$answer\" 1>&2"
@@ -158,11 +170,42 @@ func _run() -> void:
 	ok = ok and missing._finished
 	ok = ok and missing_status == UIStrings.t("term.status_cmd_failed") % -1
 	ok = ok and missing._done.text == UIStrings.t("term.close_retry")
+	missing._process_started()
+	ok = ok and missing._status.text == missing_status
 	missing.close()
+	# Chiusura manuale durante un comando quiet: `_closing` ferma i reader, ma
+	# non è una prova che il processo sia già uscito. Il PID deve essere ucciso
+	# e non può essere saltato da un falso `_process_exited` del reader stderr.
+	var close_spec := {
+		"path": "powershell.exe" if is_windows else "/bin/sleep",
+		"args": PackedStringArray(["-NoProfile", "-NonInteractive", "-Command",
+				"Start-Sleep -Seconds 30"]) if is_windows \
+				else PackedStringArray(["30"]),
+		"title": "Close self-test",
+		"hint": "test",
+	}
+	var close_terminal := EmbeddedTerminal.new("test", close_spec)
+	root.add_child(close_terminal)
+	for _i in 40:
+		if close_terminal._pid > 0:
+			break
+		await create_timer(0.025).timeout
+	var close_pid := close_terminal._pid
+	close_terminal.close()
+	var close_killed := false
+	for _i in 40:
+		if close_pid > 0 and not _pid_exists(close_pid, is_windows):
+			close_killed = true
+			break
+		await create_timer(0.025).timeout
+	if close_pid > 0 and not close_killed:
+		OS.kill(close_pid)
+	ok = ok and close_killed
 	print("EMBEDDED-TERMINAL-TEST ", "PASS" if ok else "FAIL",
 			" pid=", pid, " output=", visible, " auto_auth_close=", ok,
 			" failure_status=", failure_status,
 			" missing_status=", missing_status,
+			" close_killed=", close_killed,
 			" process_exited=", failure_process_exited,
 			" captured_exit=", failure_captured_exit)
 	quit(0 if ok else 1)
