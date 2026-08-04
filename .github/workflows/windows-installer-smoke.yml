@@ -44,25 +44,21 @@ jobs:
           include-templates: true
 
       - name: Export portable Windows application
-        shell: pwsh
+        # `setup-godot` exposes `godot` as a Bash shim on Windows. Invoking it
+        # from PowerShell does not reliably populate `$LASTEXITCODE` (the first
+        # live run returned an empty value after a successful executable
+        # lookup), so use the same shell and project-relative export contract
+        # already proven by game.yml/release.yml.
+        shell: bash
+        working-directory: game
         run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force game/builds/windows | Out-Null
-          & godot --headless --path game --import
-          if ($LASTEXITCODE -ne 0) {
-            throw "Godot import failed with $LASTEXITCODE"
-          }
-          & godot `
-            --headless `
-            --path game `
-            --export-release 'Windows Desktop' `
+          set -euo pipefail
+          mkdir -p builds/windows
+          godot --headless --path . --import
+          godot --headless --path . \
+            --export-release 'Windows Desktop' \
             builds/windows/job-hunter-team.exe
-          if ($LASTEXITCODE -ne 0) {
-            throw "Godot export failed with $LASTEXITCODE"
-          }
-          if (-not (Test-Path game/builds/windows/job-hunter-team.exe -PathType Leaf)) {
-            throw 'Portable Windows export missing'
-          }
+          test -s builds/windows/job-hunter-team.exe
 
       # Questo job collauda il candidato ma non lo carica come artifact e non
       # modifica release.yml: pubblicare installer + portable resta una scelta
