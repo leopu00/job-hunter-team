@@ -178,6 +178,14 @@ export default function LandingNav() {
             {t("nav_project")}
           </Link>
           <Link
+            href="/tutorials"
+            aria-current={currentPage("/tutorials")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/tutorials")}
+          >
+            {t("nav_tutorials")}
+          </Link>
+          <Link
             href="/case-studies"
             aria-current={currentPage("/case-studies")}
             className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
@@ -339,6 +347,15 @@ export default function LandingNav() {
             style={navLinkStyle("/project")}
           >
             {t("nav_project")}
+          </Link>
+          <Link
+            href="/tutorials"
+            aria-current={currentPage("/tutorials")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/tutorials")}
+          >
+            {t("nav_tutorials")}
           </Link>
           <Link
             href="/case-studies"
