@@ -25,18 +25,15 @@ Setup, usage and operations (see the [index](guides/README.md)). All in English,
 - 🚀 **Start:** `QUICKSTART` · `CLI-INSTALL` · `CLI-REFERENCE` · `AI-AGENT-INTEGRATION`
 - 📦 **Evidence:** `M4-EVIDENCE-BUNDLES` · `ADDING-A-PROVIDER` · `LOCAL-SCORER`
 - ☁️ **VPS:** `VPS-SETUP-WIZARD` · `VPS-SETUP`
-- 🧪 **Beta:** `BETA` · `FEEDBACK-TICKETING` · `EMAIL-FORWARDING`
+- 🧪 **Testing & feedback:** `BETA` · `FEEDBACK-TICKETING` · `EMAIL-FORWARDING`
 
 ## 🏛️ [`adr/`](adr/) — architecture decision records
 The binding choices and their rationale.
 `0001` Colima · `0002` 3 agent CLIs · `0003` single-writer · `0004` no-API-keys · `0005` provider-risk · `0006` user-choice container runtime *(supersedes 0001)*
 
 ## 🔒 [`security/`](security/) — security
-Pre-launch review, threat model, checklist, comparisons.
+Historical security audit, current threat model, checklist and comparisons.
 `01`→`06` + `README`
-
-## 🚀 [`launch/`](launch/) — launch materials
-`demo-storyboard` (drafts of public posts — Show HN etc. — live outside the repo)
 
 ## 📊 [`sessions/`](sessions/) — real-run logs
 One folder per agent run (Codex/Kimi/long-session) with a README + data dumps.
@@ -45,6 +42,10 @@ One folder per agent run (Codex/Kimi/long-session) with a README + data dumps.
 Living architecture notes, postmortems, experiments, roadmap, ops. See
 [`internal/README.md`](internal/README.md) for the per-category index:
 `architecture/` · `postmortems/` · `experiments/` · `roadmap/` · `ops/` · `prototypes/` · `_archive/`
+
+## 🗄️ [`archive/`](archive/) — retired material
+Historical onboarding, feature and release-planning documents. These are not
+current instructions and are retained only for traceability.
 
 ---
 

@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "README.md",
-      "description": "Entry point del repo: vision, install, panoramica team agenti, provider",
+      "description": "Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento",
       "last_review": null
     },
     {
@@ -22,7 +22,7 @@
     },
     {
       "path": "SECURITY.md",
-      "description": "Responsible disclosure + contatti security",
+      "description": "Policy di disclosure, trust model corrente, copertura e stato hardening",
       "last_review": null
     },
     {
@@ -197,7 +197,7 @@
     },
     {
       "path": "docs/about/ROADMAP.md",
-      "description": "Roadmap pubblica per fasi (open source → desktop)",
+      "description": "Roadmap pubblica: stato verificato, orizzonti e direzioni di prodotto",
       "last_review": null
     },
     {
@@ -242,12 +242,12 @@
     },
     {
       "path": "docs/guides/AI-AGENT-INTEGRATION.md",
-      "description": "Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor)",
+      "description": "Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI",
       "last_review": null
     },
     {
       "path": "docs/guides/BETA.md",
-      "description": "Onboarding beta tester + matrice coverage 10 celle",
+      "description": "Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali",
       "last_review": null
     },
     {
@@ -297,7 +297,7 @@
     },
     {
       "path": "docs/guides/VPS-SETUP.md",
-      "description": "☁️ VPS setup — JHT on Hetzner Cloud — Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS",
+      "description": "Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi",
       "last_review": null
     },
     {
@@ -382,7 +382,7 @@
     },
     {
       "path": ".github/ISSUE_TEMPLATE/beta_feedback.md",
-      "description": "Template GitHub issue per il feedback dei beta tester",
+      "description": "Template GitHub issue per feedback riproducibile su una sessione JHT",
       "last_review": null
     },
     {
@@ -587,7 +587,7 @@
     },
     {
       "path": "docs/guides/CLI-INSTALL.md",
-      "description": "📦 CLI install — jobhunterteam.ai/install.sh — This document describes how the one-liner installer works today",
+      "description": "Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti",
       "last_review": null
     },
     {
@@ -602,12 +602,12 @@
     },
     {
       "path": "docs/guides/FEEDBACK-TICKETING.md",
-      "description": "💬 Feedback Ticketing — Operational runbook for the /feedback page and the /api/feedback API.",
+      "description": "Runbook delle superfici correnti e dell'endpoint /api/feedback",
       "last_review": null
     },
     {
       "path": "docs/guides/QUICKSTART.md",
-      "description": "🚀 Quickstart — Get the team running in about 10 minutes, depending on the path you pick.",
+      "description": "Quickstart pubblico: requisiti, app nativa, CLI, setup da agente e sorgenti",
       "last_review": null
     },
     {
@@ -1087,7 +1087,7 @@
     },
     {
       "path": "docs/launch/demo-storyboard.md",
-      "description": "🎬 JHT 30-second demo — storyboard + recording script — Linked from BACKLOG.md item [JHT-LAUNCH-03] (blocker",
+      "description": "Tombstone dello storyboard CLI obsoleto, ritirato e conservato in archivio",
       "last_review": null
     },
     {
@@ -1277,7 +1277,7 @@
     },
     {
       "path": "assets/promo/2026-07-presentation/SCALETTA.md",
-      "description": "Scaletta del video di presentazione (60,5 s, 1280x720, muto) generato da make_presentation.py",
+      "description": "Diario del video 03/08 ritirato: banner demo e CTA Beta non pubblicabili",
       "last_review": null
     },
     {

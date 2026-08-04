@@ -15,7 +15,9 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 
 ## 🧪 Test results so far
 
-> ⚠️ Numbers below come from real-world usage by the project author over several weeks, **not from a controlled test matrix**. A formal `provider × tier × persona × job-category` matrix is in the pre-launch backlog.
+> ⚠️ Numbers below come from real-world usage over several weeks, **not from a
+> controlled test matrix**. They must not be read as universal provider
+> benchmarks; broader matrix coverage remains future evidence work.
 
 ### 🟣 Claude Max x20 — production-ready
 

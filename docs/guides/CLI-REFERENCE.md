@@ -15,7 +15,8 @@ relevant commands inline.
 ## Two layers
 
 JHT exposes the `jht` command on the host. The host wrapper
-(`scripts/jht-wrapper.sh`, ~165 LOC) handles **lifecycle / TTY-bound**
+([`scripts/jht-wrapper.sh`](../../scripts/jht-wrapper.sh)) handles
+**lifecycle / TTY-bound**
 commands directly; everything else is forwarded to the Node CLI **inside
 the long-running `jht` container** via `docker exec`. The split is
 deliberate — see [`docs/internal/ops/vps.md`](../internal/ops/vps.md):
@@ -37,7 +38,7 @@ can use them simultaneously — that's the design:
 
 | Surface          | Role                                   | Talks to the container via                |
 |------------------|----------------------------------------|-------------------------------------------|
-| Desktop launcher | Provisioning + lifecycle UI            | local Docker / SSH + `docker exec`        |
+| Native office    | Provisioning + lifecycle UI            | local Docker / SSH + `docker exec`        |
 | **CLI (`jht`)**  | Dev + AI agents + power user           | host wrapper → `docker exec`              |
 | Web dashboard    | User interaction (positions, team)     | Supabase realtime + sync API              |
 | Telegram         | Mobile chat with the agents            | bridge process inside the container       |
@@ -82,22 +83,11 @@ via wipe + re-pair, not concurrent runs.
 | `jht doctor`                     | Node  | Surfaces Docker, Node, auth, DB checks. **Must** exit 0 before declaring setup done.    |
 | `jht health`                     | Node  | Granular service health (Supabase pairing, provider creds, bridge).                     |
 
-**Key `jht setup` flags** (for `--non-interactive` mode):
-
-```
---provider <name>             claude | openai | kimi  (default: claude)
---auth-method <method>        api_key | subscription  (default: api_key)
---api-key <key>               plaintext key
---secret-mode <mode>          plaintext | env | file  (default: plaintext)
---secret-env <name>           env var name when secret-mode=env
---secret-file <path>          file path when secret-mode=file
---subscription-email <email>  required when auth-method=subscription
---subscription-token <token>  optional; OAuth CLI usually handles this
---model <model>               override default model
---skip-health                 skip the post-config health check
---reset                       wipe existing config and start over
---non-interactive             no prompts; every required value must be a flag
-```
+The supported public onboarding path is the interactive, subscription-only
+wizard followed by `jht oauth-login` in a second terminal. The CLI still
+exposes legacy non-interactive and secret-bearing setup flags for controlled
+development environments; they are not a public install path and must never
+be copied with credential values into shell history, issues or logs.
 
 ## Providers
 
@@ -175,7 +165,7 @@ jht standby on --wake-on-weekly --reason "weekly at 96%, wait for the reset"
 ## Cloud sync
 
 Supabase-backed sync of `positions`, `scores`, `applications`. See also
-[`VPS-SETUP.md`](VPS-SETUP.md) §9 for pairing flows.
+[`VPS-SETUP.md`](VPS-SETUP.md) for the pairing flow.
 
 All 19 subcommands, grouped by what you'd reach for them.
 
@@ -185,7 +175,6 @@ All 19 subcommands, grouped by what you'd reach for them.
 |-------------------------------|-------|-----------------------------------------------------------------------|
 | `jht cloud login [flags]`     | Node  | Browser device-flow pairing. Saves `~/.jht/cloud.json` (mode 0600).   |
 | `jht cloud pair [flags]`      | Node  | Non-interactive pairing from a `.pairing-token` (used by pid1 on first VPS boot, and by `install.sh --pairing-token`). |
-| `jht cloud enable --token <t>` | Node  | Alternative pairing — paste a `jht_sync_…` token manually.            |
 | `jht cloud status`            | Node  | Show sync state + last push timestamp.                                |
 | `jht cloud preflight`         | Node  | Is there already an active team for this user? Exit **0** = free, **2** = taken. Run before provisioning a second machine — one team per user is a hard invariant. |
 | `jht cloud disable`           | Node  | Stop sync, revoke this device token on the server, then remove it locally. |
@@ -253,9 +242,9 @@ concentrates the same budget into fewer hours rather than saving it.
 
 | Command                              | Layer | What it does                                                |
 |--------------------------------------|-------|-------------------------------------------------------------|
-| `jht status`                         | Both  | Wrapper: container name/state/image. Forwarded inside, also lists agent processes. |
+| `jht status`                         | Host  | Container name, state, start time and image. Use `jht team status` or `jht agents` for agent processes. |
 | `jht agents`                         | Node  | Detailed agent process list with PIDs and tmux sessions.    |
-| `jht logs [flags]`                   | Both  | Wrapper streams `docker logs`. Inside Node, `--agent <name>` filters per-agent. |
+| `jht logs [flags]`                   | Host  | Streams `docker logs`; accepts Docker log flags such as `-f` and `--tail N`. |
 | `jht sentinella status`              | Node  | Sentinella module summary (last tick, throttle level).      |
 | `jht sentinella tail [-n N] [-f]`    | Node  | Last N ticks (default 20); `-f/--follow` streams new ones.  |
 | `jht sentinella graph [-n N]`        | Node  | ASCII sparkline of usage over the last N ticks (default 40). |
@@ -404,8 +393,8 @@ doesn't mistake them for working features; treat them as placeholders.
 ## Common workflows
 
 ```bash
-# Fresh setup (Local or VPS — same command)
-jht up && jht setup
+# Fresh setup (the wrapper starts the container automatically)
+jht setup
 
 # Reload after editing jht.config.json
 jht team stop --all && jht team start

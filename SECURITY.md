@@ -26,7 +26,13 @@ Reports without a reproducible PoC, or that don't demonstrate a **trust-boundary
 
 ## Trust model (one paragraph)
 
-JHT assumes **one user per machine**. Anyone with physical/SSH access to the host, or who can write to `~/.jht/` and `~/Documents/Job Hunter Team/`, or who is authenticated on the local dashboard, is a **trusted operator** with full capability. Everything else — websites in the user's browser, content fetched from the web, AI model output, other users on the same LAN — is **untrusted** and must not reach operator capability.
+JHT assumes **one user per machine**. Anyone with physical or SSH access to
+the host, or who can write to `~/.jht/` and
+`~/Documents/Job Hunter Team/`, is a **trusted operator** with full capability.
+Everything else — websites in the user's browser, content fetched from the
+web, AI model output and other users on the same network — is **untrusted**
+and must not reach operator capability. The shipped container exposes no local
+HTTP port; the browser dashboard is the authenticated cloud surface.
 
 If you want to use JHT with multiple people, give each person a separate machine, VM, or OS user. The container is **not** a security boundary between users.
 
@@ -35,7 +41,7 @@ If you want to use JHT with multiple people, give each person a separate machine
 The following are treated as security bugs:
 
 - **Auth bypass** on sensitive routes without physical/SSH control of the host
-- **CSRF / DNS rebinding** triggering side-effects on `localhost:3000`
+- **CSRF / DNS rebinding** triggering side effects on a supported HTTP surface
 - **Command injection** from untrusted input (file content, API body, env config)
 - **Path traversal** outside expected directories
 - **SSRF** toward `127.0.0.1`, cloud metadata endpoints, or RFC1918 from untrusted URLs
@@ -55,7 +61,9 @@ The following are **not security bugs** in JHT:
 - Prompt injection without boundary bypass ("I made the agent say profanities").
 - Skills shipped in the repo (`agents/_skills/`, `agents/*/_skills/`) doing privileged things — they are part of the trusted compute base.
 - CVEs in upstream dependencies not exploitable through JHT specifically — report upstream.
-- Setups exposing `localhost:3000` to the internet without Supabase auth — not supported. Bug only if the recommended loopback-only setup is bypassable.
+- A contributor exposing the development-only web server to the internet
+  without its normal authentication boundary. The released product does not
+  ship a local web server.
 
 ## What we deliberately don't offer
 
@@ -65,18 +73,29 @@ To set expectations honestly:
 - **No enterprise SLA** — use at your own risk.
 - **No 100% prompt-injection-proof guarantee** — active research area.
 - **No container-escape guarantee** — Docker/OS responsibility.
-- **No signed binary releases** — code signing is deferred by choice during beta; open source + building from source is the trust signal.
+- **Platform signing is not uniform** — macOS releases are signed, notarized
+  and stapled; Windows and Linux artifacts are currently unsigned. Verify that
+  downloads come from this repository's GitHub Releases page.
 
 ## Hardening status
 
-The repository has been through a pre-launch hardening sprint: 31 of 34 hardening tasks closed (from 27 findings), security score moved from 30% to 74% versus the OpenClaw baseline. Tooling in place: `gitleaks`, `detect-secrets`, `actionlint`, `zizmor`, `npm audit --production`, `pip-audit`, Dependabot (npm + Docker).
+The repository has been through a dedicated hardening sprint: 31 of 34
+hardening tasks closed (from 27 findings), and the comparison score moved from
+30% to 74% versus the OpenClaw baseline. Tooling in place includes `gitleaks`,
+`detect-secrets`, `actionlint`, `zizmor`, `npm audit --production`, `pip-audit`
+and Dependabot (npm + Docker).
 
-**Git history sanitization** — before the first public release (2026-07-03) the git history was rewritten with `git filter-repo`: application dossiers, employer names, e-mail addresses, VPS IPs and other personal data from the beta runs were purged or pseudonymized; beta testers are referenced by pseudonym. If you spot a `chore(pii)` commit in the log, that's the tip-level removal — the historical blobs behind it were purged in the same sweep.
+**Git history sanitization** — before the repository was published in July
+2026, its history was rewritten with `git filter-repo`: application dossiers,
+employer names, email addresses, machine addresses and other personal data
+from test runs were purged or pseudonymized. If you spot a `chore(pii)` commit
+in the log, that is the tip-level removal; the historical blobs behind it were
+purged in the same sweep.
 
 Full audit trail and remaining gaps: [`docs/security/`](docs/security/).
 
 ## Versioning
 
 **Policy version:** 1.0
-**Last updated:** 2026-05-31
-**Next review:** at the first public release.
+**Last updated:** 2026-08-04
+**Next review:** at the next regular release or after a material trust-boundary change.
