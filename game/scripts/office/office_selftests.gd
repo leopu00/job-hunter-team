@@ -1427,7 +1427,10 @@ func _positions_panel_selftest() -> void:
 	var ok := _ui_has_text(panel, "1–50 di 126") \
 			and _ui_has_text(panel, "PAGINA 1 / 3") \
 			and _ui_find_button(panel, "FILTRI (0)") != null \
-			and _ui_count_class(panel, "MenuButton") == 0
+			and _ui_count_class(panel, "MenuButton") == 0 \
+			and _ui_count_meta(panel, "position_row") == 50 \
+			and _ui_count_meta(panel, "position_status") == 50 \
+			and _ui_count_position_buttons(panel) == 50
 	var next := _ui_find_button(panel, "SUCCESSIVA ▶")
 	ok = ok and next != null
 	if next:
@@ -1443,7 +1446,9 @@ func _positions_panel_selftest() -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 		ok = ok and _ui_has_text(panel, "1–25 di 126") \
-				and _ui_has_text(panel, "PAGINA 1 / 6")
+				and _ui_has_text(panel, "PAGINA 1 / 6") \
+				and _ui_count_meta(panel, "position_row") == 25 \
+				and _ui_count_position_buttons(panel) == 25
 	var filters := _ui_find_button(panel, "FILTRI (0)")
 	ok = ok and filters != null
 	if filters:
@@ -1451,7 +1456,28 @@ func _positions_panel_selftest() -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 		ok = ok and _ui_count_class(panel, "MenuButton") == 4
+	# Audit manuale della toolbar espansa: lo shot autonomo chiuderà la run.
+	if OS.get_environment("JHT_POSITIONS_FILTER_PREVIEW") == "1" \
+			and OS.get_environment("JHT_SHOT") != "":
+		print("POSITIONS-PANEL-TEST ", "PASS" if ok else "FAIL")
+		return
+	# Il contratto visuale non finisce alla lista: il dettaglio deve aprirsi
+	# dalla card e conservare card/badge gerarchici, non tornare al foglio
+	# piatto che rendeva indistinguibili identità, score e azioni.
+	var first_position := _ui_find_position_button(panel, 1)
+	ok = ok and first_position != null
+	if first_position:
+		first_position.pressed.emit()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		ok = ok and _ui_has_text(panel, "Ruolo 001") \
+				and _ui_count_meta(panel, "position_card") >= 5 \
+				and _ui_count_meta(panel, "position_badge") >= 2
 	print("POSITIONS-PANEL-TEST ", "PASS" if ok else "FAIL")
+	# Come gli altri audit visuali: con JHT_SHOT lascia la scena viva fino
+	# allo scatto autonomo, così lo stesso scenario copre anche i frame.
+	if OS.get_environment("JHT_SHOT") != "":
+		return
 	get_tree().quit(0 if ok else 1)
 
 ## Test/preview deterministico della mappa: 14 offerte coincidenti a Stoccolma
@@ -1781,6 +1807,12 @@ func _ui_count_position_buttons(node: Node) -> int:
 	var count := 1 if node is Button and node.has_meta("position_id") else 0
 	for child in node.get_children():
 		count += _ui_count_position_buttons(child)
+	return count
+
+func _ui_count_meta(node: Node, key: String) -> int:
+	var count := 1 if node.has_meta(key) else 0
+	for child in node.get_children():
+		count += _ui_count_meta(child, key)
 	return count
 
 func _ui_find_position_button(node: Node, position_id: int) -> Button:
