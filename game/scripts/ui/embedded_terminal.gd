@@ -8,6 +8,7 @@ signal closed
 
 const MAX_RAW_CHARS := 100000
 const MAX_VISIBLE_CHARS := 50000
+const EXIT_REPORT_PATTERN := "\u001b\\]1337;JHTExit=([0-9]+)\u0007"
 
 
 ## Modello di schermo minimale (griglia + scrollback) per i TUI raw-mode.
@@ -213,6 +214,7 @@ var _auth_was_ready := false
 var _auth_autoclose_started := false
 var _screen := TermScreen.new()
 var _undecoded := PackedByteArray()
+var _result_note := ""
 ## Mouse premuto dentro l'output: selezione in corso, testo congelato.
 var _dragging_selection := false
 
@@ -252,6 +254,14 @@ func _process(_delta: float) -> void:
 	_raw_bytes.append_array(chunk)
 	if _raw_bytes.size() > MAX_RAW_CHARS:
 		_raw_bytes = _raw_bytes.slice(_raw_bytes.size() - MAX_RAW_CHARS)
+	# Su macOS `script` può tenere il pipe formalmente aperto per qualche
+	# istante dopo la fine del figlio. Il report OSC è già la prova completa
+	# dell'esito: applicarlo appena arriva evita una console ferma su
+	# "INTERATTIVA" mentre l'installazione è in realtà fallita.
+	if bool(spec.get("reports_exit", false)) and not _finished:
+		var reported := _exit_code_from_raw(_raw_bytes.get_string_from_utf8())
+		if reported >= 0:
+			_process_finished(reported)
 	# Feed incrementale al modello di schermo. Un codepoint UTF-8 può
 	# arrivare spezzato in più letture: gli eventuali byte di coda incompleti
 	# restano in _undecoded fino al prossimo giro (decodificarli subito
@@ -264,6 +274,8 @@ func _process(_delta: float) -> void:
 	var visible := _screen.text()
 	if visible.length() > MAX_VISIBLE_CHARS:
 		visible = UIStrings.t("term.truncated") + "\n" + visible.right(MAX_VISIBLE_CHARS)
+	if _result_note != "":
+		visible += "\n\n" + _result_note
 	# Il testo NON si tocca mentre l'utente sta selezionando: né durante il
 	# trascinamento (mouse premuto), né dopo, finché tiene la selezione. Tutto
 	# ciò che arriva resta nel modello di schermo e compare appena molla.
@@ -295,6 +307,8 @@ func _flush_pending_output() -> void:
 	if _selection_locked() or not is_instance_valid(_output):
 		return
 	_output.text = _screen.text()
+	if _result_note != "":
+		_output.text += "\n\n" + _result_note
 	_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
 
 
@@ -466,7 +480,8 @@ func _build_ui() -> void:
 	_done = Button.new()
 	_done.text = UIStrings.t("term.done_login") if _is_login_flow() \
 			else UIStrings.t("term.done_plain")
-	_done.add_theme_color_override("font_color", Palette.GREEN)
+	_done.add_theme_color_override("font_color",
+			Palette.GREEN if _is_login_flow() else Palette.BRIGHT)
 	_done.pressed.connect(_complete)
 	col.add_child(_done)
 
@@ -522,15 +537,62 @@ func _process_failed(message: String) -> void:
 	_status.text = UIStrings.t("term.status_error")
 	_status.add_theme_color_override("font_color", Palette.RED)
 	_output.text = message
+	if not _is_login_flow():
+		_done.text = UIStrings.t("term.close_retry")
+		_done.add_theme_color_override("font_color", Palette.YELLOW)
+		_result_note = UIStrings.t("term.runtime_install_failed") \
+				if provider == "runtime-install" \
+				else UIStrings.t("term.command_failed")
+		_output.text += "\n\n" + _result_note
 
 
 func _process_finished(code: int) -> void:
+	if _finished:
+		return
+	if bool(spec.get("reports_exit", false)):
+		# Il marker OSC è invisibile a TermScreen ma resta nei byte grezzi. Se
+		# manca, il protocollo stesso è fallito: non promuoviamo mai un esito
+		# sconosciuto a successo.
+		code = _captured_exit_code()
 	_finished = true
-	_status.text = (UIStrings.t("term.status_login_done") if _is_login_flow() \
-			else UIStrings.t("term.status_cmd_done")) if code == 0 \
-			else UIStrings.t("term.status_closed") % code
-	_status.add_theme_color_override("font_color", Palette.GREEN if code == 0 else Palette.YELLOW)
+	if code == 0:
+		_status.text = UIStrings.t("term.status_login_done") if _is_login_flow() \
+				else UIStrings.t("term.status_cmd_done")
+		_status.add_theme_color_override("font_color", Palette.GREEN)
+		if not _is_login_flow():
+			_done.text = UIStrings.t("term.done_success")
+			_done.add_theme_color_override("font_color", Palette.GREEN)
+	else:
+		_status.text = UIStrings.t("term.status_cmd_failed") % code
+		_status.add_theme_color_override("font_color", Palette.RED)
+		if not _is_login_flow():
+			_done.text = UIStrings.t("term.close_retry")
+			_done.add_theme_color_override("font_color", Palette.YELLOW)
+			_result_note = UIStrings.t("term.runtime_install_failed") \
+					if provider == "runtime-install" \
+					else UIStrings.t("term.command_failed")
+			_output.text += "\n\n" + _result_note
 	_refresh_setup()
+
+
+## Ultimo report vince: un comando ospitato potrebbe stampare byte simili per
+## conto proprio, ma solo il wrapper ne emette uno come ultima sequenza OSC.
+static func _exit_code_from_raw(raw: String) -> int:
+	var regex := RegEx.new()
+	if regex.compile(EXIT_REPORT_PATTERN) != OK:
+		return -1
+	var matches := regex.search_all(raw)
+	if matches.is_empty():
+		return -1
+	return int(matches[-1].get_string(1))
+
+
+func _captured_exit_code() -> int:
+	var all_bytes := _raw_bytes.duplicate()
+	_mutex.lock()
+	all_bytes.append_array(_pending_bytes)
+	_mutex.unlock()
+	return _exit_code_from_raw(all_bytes.get_string_from_utf8())
 
 
 func _submit_line(text: String) -> void:
