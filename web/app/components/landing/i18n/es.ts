@@ -55,7 +55,7 @@ export const es: Record<string, string> = {
 
   // Download page
   dl_desc:
-    "El panel de JHT se inicia desde la terminal, mediante la configuración con CLI y TUI. El runtime se ejecuta en tu ordenador y tus datos permanecen bajo tu control.",
+    "Descarga la app de escritorio para configurar y seguir tu equipo. La CLI sigue disponible si prefieres la terminal.",
   dl_back: "← Atrás",
   dl_title_1: "Configura tu equipo",
   dl_title_2: "en tu PC",

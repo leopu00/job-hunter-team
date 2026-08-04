@@ -55,7 +55,7 @@ export const fr: Record<string, string> = {
 
   // Download page
   dl_desc:
-    "Le tableau de bord de JHT se lance depuis le terminal, via la configuration CLI et TUI. Le runtime tourne sur votre ordinateur et vos données restent sous votre contrôle.",
+    "Téléchargez l'app de bureau pour configurer et suivre votre équipe. La CLI reste disponible si vous préférez le terminal.",
   dl_back: "← Retour",
   dl_title_1: "Configurez votre équipe",
   dl_title_2: "sur votre PC",
