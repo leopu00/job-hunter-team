@@ -33,11 +33,11 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
          🖥️ Local PC      🏠 Dedicated PC    ☁️ Self-hosted VPS
 ```
 
-**Two interaction planes** (decision 2026-06-15): the **data plane** is one-way and read-only everywhere — container → Supabase → the public web dashboard (positions, scores, map, case studies; usable from a phone or a work PC). The **interaction plane** — chat, files, start/restart, config — lives in the native Godot office, connected directly to a local team or over SSH to a VPS. Telegram is the optional async channel. The sole cloud safety exception is an authenticated, rate-limited, stop-only emergency action on mobile; it cannot run arbitrary commands or start the team. Full rationale: [`docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`](../internal/architecture/2026-06-15-interaction-planes-redesign-design.md).
+**Two interaction planes** (decision 2026-06-15): the **data plane** mirrors container data through Supabase to the authenticated web dashboard (positions, scores, map and case studies; usable from a phone or a work PC). It is read-heavy, with narrow authenticated write-back lanes for web chat (`pending-messages`), persistent team directives and per-position CV write requests. Mobile also exposes an authenticated, rate-limited, stop-only emergency action. These routes mutate only their own user-scoped records or requests: they do not expose a shell, arbitrary commands, team start/restart or general configuration. The broader **interaction plane** — files, lifecycle and configuration — lives in the native Godot office, connected directly to a local team or over SSH to a VPS. Telegram is the optional async channel. Full rationale: [`docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`](../internal/architecture/2026-06-15-interaction-planes-redesign-design.md).
 
 **Guiding principles** — the constraints every roadmap item respects:
 
-- **Local-first, privacy-first.** Credentials, CVs and the SQLite source-of-truth never leave the user's machine; the cloud mirror is opt-in and read-only. Web read-only is a *security* stance, not a UX shortcut.
+- **Local-first, privacy-first.** Credentials, CVs and the SQLite source-of-truth never leave the user's machine; the cloud mirror is opt-in and read-mostly. Its authenticated writes are limited to user-owned chat messages, team directives, CV write requests and the emergency stop — not generic control of the host or team runtime.
 - **Subscriptions, not API keys.** A parallel agent team burns pay-per-use credits in hours; subscription tokens cost ~5× less ([ADR-0004](../adr/0004-subscription-only-no-api-keys.md)). Pay-per-use returns only as a Sentinel-enforced €-budget (mission M8).
 - **Quality over volume.** No auto-apply spam: the Critic gate rewrites until submissions pass a rubric, and the human clicks send.
 - **Honest status.** Verbal states, measured numbers, and published case studies — nothing on this page should fail a fact-check against the code.
@@ -46,7 +46,7 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 
 | Component | Technology | Rationale |
 |---|---|---|
-| Native desktop app | **Godot 4.7** | Game-like office, onboarding, lifecycle and interaction cockpit; the web dashboard stays view-only |
+| Native desktop app | **Godot 4.7** | Game-like office, onboarding, lifecycle and interaction cockpit; the web dashboard keeps only bounded authenticated write-back actions |
 | Web dashboard | **Next.js 16 on Vercel** | CI/CD pipeline live |
 | Container runtime | **Docker + Docker Compose** | Isolation, reproducibility |
 | Structured data (cloud, opt-in) | **Supabase** | PostgreSQL + Google/GitHub auth |
@@ -60,7 +60,7 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 
 | Theme | State | What's open |
 |---|---|---|
-| 🔨 **Web platform** (read-only cloud dashboard) | **Shipped, hardening** | Live on [jobhunterteam.ai](https://jobhunterteam.ai) on real data and event-driven through Supabase Realtime. A new user without a team gets the `/welcome` wizard and an interactive simulation. Open work is tracked in GitHub Issues, not in the testing guide. |
+| 🔨 **Web platform** (read-mostly cloud dashboard) | **Shipped, hardening** | Live on [jobhunterteam.ai](https://jobhunterteam.ai) on real data and event-driven through Supabase Realtime. Authenticated users can send and reply to chat messages, maintain team directives, request a CV for a scored position and issue the stop-only emergency action; shell access, team start/restart and general configuration are not exposed. A new user without a team gets the `/welcome` wizard and an interactive simulation. Open work is tracked in GitHub Issues, not in the testing guide. |
 | 🖥️ **Native office** (Godot, all-in-one) | **Published build, release hardening** | Office, onboarding, embedded provider console, local/VPS lifecycle, profile, email, Telegram, cloud sync, job data, map, agents and observability are native. Electron and the local web dashboard are gone: the browser is cloud-only. macOS releases are signed and notarized; Windows and Linux artifacts are unsigned. Open: Windows signing, installer and auto-update polish. |
 | ☁️ **VPS provisioning** (bring-up via SSH) | **Shipped** | The native office brings a team up on any VPS (SSH key + IP, provider install, embedded login console, Telegram setup). Multi-cloud adapters deliberately not pursued — see the scope note below. |
 | 📡 **Budget monitoring** (Bridge + Sentinel) | **Proven at month scale on Codex** | Weekly-aware pacing closed 4 straight weekly cycles at 99–100% with zero overshoot ([case study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Open: Kimi projection precision (±10–15% → tier stays **beta**, two multi-week teams in observation), €20 entry tiers not viable yet (→ mission M4). |

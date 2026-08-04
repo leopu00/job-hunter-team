@@ -107,8 +107,9 @@ The release contains `job-hunter-team.exe` for Windows,
 `job-hunter-team.zip` for macOS, and
 `job-hunter-team-linux-x64.tar.gz` for Linux. The macOS build is signed and
 notarized; Windows and Linux builds are currently unsigned. Open the office and
-select **Activate team**: the checklist covers the container, provider login,
-and profile before it starts the agents.
+select **Activate team**: the checklist requires all four gates — team runtime,
+provider login with a plan selected, candidate profile and working hours —
+before it starts the agents.
 
 **CLI:** inspect first, then run (macOS / Linux / WSL2). The installer is
 [versioned in this repo](scripts/install.sh) and previews every action:

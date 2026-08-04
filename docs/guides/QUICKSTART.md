@@ -54,11 +54,12 @@ Download the current release from
 | macOS | `job-hunter-team.zip` | Unzip and open the app. The release is signed and notarized by Apple. |
 | Linux x64 | `job-hunter-team-linux-x64.tar.gz` | Extract it, then run `./job-hunter-team.x86_64`. The archive preserves the executable bit. |
 
-The office is visible immediately. Select **Activate team** and complete the
-three required gates: container, provider login in the embedded console, and
-candidate profile. The office can launch the runtime installer; Windows users
-must complete Docker Desktop's consent and first-run flow. Optional email,
-Telegram, account sync and VPS setup live under **Settings**.
+The office is visible immediately. Select **Activate team** and complete all
+four required gates: a local container or connected VPS runtime, provider login
+in the embedded console with a plan selected, candidate profile, and working
+hours. The office can launch the runtime installer; Windows users must complete
+Docker Desktop's consent and first-run flow. Optional email, Telegram, account
+sync and VPS setup live under **Settings**.
 
 > The office is the interaction cockpit. The web dashboard reflects synced
 > data; the CLI remains available for automation and recovery.
@@ -215,13 +216,14 @@ If you chose the native app:
    are authored in the app and require neither an LLM nor network access. Use
    the suggested replies to prepare your profile, choose local/VPS runtime and
    provider, and set search preferences.
-3. **Complete the native checklist.** Start the container, authorize Codex,
-   Claude or Kimi in the embedded console, and fill the Profile page. Provider
-   links may open in your browser, but codes and terminal interaction remain
-   wrapped inside the office.
-4. **Activate the team.** Once runtime, provider and profile are ready, the
-   Coordinator starts the agents. Free-text chat then becomes available next
-   to the authored replies.
+3. **Complete the native checklist.** Bring up the local container or connect a
+   VPS, authorize Codex, Claude or Kimi in the embedded console and select its
+   plan, fill the Profile page, and configure working hours. Provider links may
+   open in your browser, but codes and terminal interaction remain wrapped
+   inside the office.
+4. **Activate the team.** Once all four gates — runtime, provider login and
+   plan, profile, and working hours — are ready, the Coordinator starts the
+   agents. Free-text chat then becomes available next to the authored replies.
 5. **Review the output.** CVs marked "Ready to submit" land in
    `~/Documents/Job Hunter Team/cv/`; reviews, attachments and final packets
    use sibling folders. You decide what to send.
