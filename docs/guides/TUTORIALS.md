@@ -83,7 +83,7 @@ the final choice and for any application.
 
 ### Prefer to watch instead?
 
-Watch the game tutorial video.
+When the video is available, you can watch it as an alternative.
 
 ## Web
 
@@ -152,4 +152,4 @@ yours.
 
 ### Prefer to watch instead?
 
-Watch the web tutorial video.
+When the video is available, you can watch it as an alternative.
