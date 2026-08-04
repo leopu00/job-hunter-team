@@ -7,11 +7,14 @@ export const ALLOWED_RECORDING_ROUTES = new Set(["/dashboard", "/messages"]);
  * fallire chiunque provi a passare origin, schema, query, hash o varianti.
  */
 export function recordingTarget(
-  route = process.env.JHT_RECORDING_ROUTE ?? DEFAULT_RECORDING_ROUTE,
+  route = process.env.JHT_RECORDING_PATH ?? DEFAULT_RECORDING_ROUTE,
 ) {
+  if (process.env.JHT_RECORDING_ROUTE !== undefined) {
+    throw new Error("JHT_RECORDING_ROUTE non e' supportata; usa JHT_RECORDING_PATH");
+  }
   if (!ALLOWED_RECORDING_ROUTES.has(route)) {
     throw new Error(
-      "JHT_RECORDING_ROUTE deve essere esattamente /dashboard o /messages",
+      "JHT_RECORDING_PATH deve essere esattamente /dashboard o /messages",
     );
   }
   return `${LOCAL_RECORDING_ORIGIN}${route}`;
