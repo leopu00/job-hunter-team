@@ -110,6 +110,8 @@ def test_runtime_upgrade_uses_only_the_host_json_contract():
     assert '"upgrade", _do_update_runtime.bind(_vps_config())' in upgrade
     assert 'PackedStringArray(["upgrade", "--json"])' in upgrade
     assert 'exec \\\"$JHT_BIN\\\" upgrade --json' in upgrade
+    assert 'JHT_BIN=\\\"$HOME/.local/bin/jht\\\"' in upgrade
+    assert '[ -x \\\"$JHT_BIN\\\" ] || exit 127' in upgrade
     assert "docker exec" not in upgrade
     assert "_compose_stream" not in upgrade
     assert "_compose_up_with_progress" not in upgrade
@@ -119,6 +121,7 @@ def test_runtime_upgrade_uses_only_the_host_json_contract():
     assert "static func parse_upgrade_result(stdout: String, exit_code: int)" in upgrade
     assert 'frame.contains("\\n")' in upgrade
     assert "(exit_code == 0) != bool(result[\"ok\"])" in upgrade
+    assert '"unexpected", "check"]' in upgrade
     assert "var stderr: FileAccess = process[\"stderr\"]" in upgrade
     assert "stderr e' intenzionalmente scartato" in upgrade
 

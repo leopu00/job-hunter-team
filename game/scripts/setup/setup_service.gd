@@ -1024,7 +1024,7 @@ static func _upgrade_result_shape_valid(result: Dictionary) -> bool:
 		if not result.has(key) or not (result[key] is String):
 			return false
 	if not str(result["phase"]) in ["preflight", "pull", "activate", "verify",
-			"commit", "complete", "recovery", "unexpected"]:
+			"commit", "complete", "recovery", "unexpected", "check"]:
 		return false
 	for key in ["previous", "current"]:
 		if not result.has(key) or not (result[key] is Dictionary):
@@ -1082,7 +1082,8 @@ static func _run_local_upgrade() -> Dictionary:
 
 static func _vps_upgrade_command() -> String:
 	return "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
-			+ "[ -n \"$JHT_BIN\" ] || exit 127; exec \"$JHT_BIN\" upgrade --json"
+			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
+			+ "[ -x \"$JHT_BIN\" ] || exit 127; exec \"$JHT_BIN\" upgrade --json"
 
 
 static func _run_vps_upgrade(vps: Dictionary) -> Dictionary:
