@@ -78,7 +78,8 @@ export function useChatLaneLive(): ChatLane | null {
         };
         if (cancelled) return;
         const jwt = data.session?.access_token;
-        if (jwt && supabase.realtime?.setAuth) supabase.realtime.setAuth(jwt);
+        if (jwt && supabase.realtime?.setAuth)
+          await supabase.realtime.setAuth(jwt);
         // subscribe() (e il costruttore WebSocket) possono LANCIARE
         // SINCRONO — Safari su http://localhost: "The operation is
         // insecure". Senza Realtime la chat degrada al catch-up, non si

@@ -12,6 +12,7 @@ import {
 } from "@/lib/sync-vocabulary";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
+import { syncRequestIsPending } from "@/lib/team-state/sync-freshness";
 
 export const dynamic = "force-dynamic";
 
@@ -301,12 +302,18 @@ export async function POST(req: NextRequest) {
   // (nessuno ha mai claimato) per backward-compat con device legacy.
   const tsCheck = (await admin
     .from("team_state")
-    .select("active_device_id, last_heartbeat_at")
+    .select(
+      "active_device_id,last_heartbeat_at,sync_requested_at,sync_completed_at,last_action,last_action_at",
+    )
     .eq("user_id", userId)
     .maybeSingle()) as {
     data: {
       active_device_id: string | null;
       last_heartbeat_at: string | null;
+      sync_requested_at: string | null;
+      sync_completed_at: string | null;
+      last_action: string | null;
+      last_action_at: string | null;
     } | null;
     error: { message: string } | null;
   };
@@ -1085,12 +1092,23 @@ export async function POST(req: NextRequest) {
     highlightsUpserted +
     positionTransitionsUpserted +
     tombstonesApplied;
-  if (dashboardRowsChanged > 0) {
+  const requestedAt = tsCheck.data?.sync_requested_at ?? null;
+  const syncPending = syncRequestIsPending(tsCheck.data);
+
+  if (dashboardRowsChanged > 0 && !syncPending) {
     try {
-      await admin
+      // Il read iniziale diventa un CAS: se durante il push arriva una nuova
+      // richiesta, il suo sync_requested_at non coincide e questo segnale di
+      // freschezza generico non puo' chiuderla al posto dell'endpoint
+      // /api/team-state/sync-observed.
+      let freshness = admin
         .from("team_state")
         .update({ sync_completed_at: new Date().toISOString() })
         .eq("user_id", userId);
+      freshness = requestedAt
+        ? freshness.eq("sync_requested_at", requestedAt)
+        : freshness.is("sync_requested_at", null);
+      await freshness;
     } catch {
       // best-effort: il segnale di freschezza non deve rompere il push
     }
