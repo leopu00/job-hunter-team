@@ -234,7 +234,13 @@ upgrade_verify_running() {
   local tries=20
   while [ "$tries" -gt 0 ]; do
     if container_up && [ -n "$(upgrade_version)" ]; then
-      return 0
+      # Un PID 1 che muore appena dopo il primo exec e' un deploy rotto anche
+      # se `--version` e' riuscito una volta. Richiediamo due osservazioni
+      # separate prima di dichiarare sano il candidato.
+      sleep 1
+      if container_up && [ -n "$(upgrade_version)" ]; then
+        return 0
+      fi
     fi
     tries=$((tries - 1))
     sleep 0.5
