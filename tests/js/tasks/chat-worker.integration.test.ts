@@ -67,10 +67,15 @@ describe("handleChatSync — worker completo", () => {
           created_at: "2026-08-04T10:00:00Z",
         }];
       },
-      async acknowledgeDelivery(ids: string[], options: { closeRendezvous: boolean }) {
+      async acknowledgeDelivery(
+        ids: string[],
+        options: { closeRendezvous: boolean; expectedRequestedAt: string },
+      ) {
         expect(ids).toEqual(["00000000-0000-4000-8000-000000000001"]);
         expect(options.closeRendezvous).toBe(true);
+        expect(options.expectedRequestedAt).toBe("2026-08-04T10:00:00Z");
         acks += 1;
+        return { closed: true, superseded: false };
       },
     };
     const sendFn = async () => {
@@ -242,6 +247,7 @@ describe("handleChatSync — worker completo", () => {
       async acknowledgeDelivery(ids: string[], options: { closeRendezvous: boolean }) {
         ids.forEach((id) => ackedIds.add(id));
         acks.push({ ids: [...ids], close: options.closeRendezvous });
+        return { closed: options.closeRendezvous, superseded: false };
       },
     };
     const run = () => handleChatSync({
@@ -267,5 +273,46 @@ describe("handleChatSync — worker completo", () => {
     expect(second).toMatchObject({ delivered: 2, acked: true });
     expect(acks[1]).toEqual({ ids: rows.slice(5).map((row) => row.id), close: true });
     expect({ sends, acked: ackedIds.size }).toEqual({ sends: 7, acked: 7 });
+  });
+
+  it("preserva gli ACK di A senza chiudere una richiesta chat B", async () => {
+    const requestA = "2026-08-04T10:00:00Z";
+    const requestB = "2026-08-04T10:00:01Z";
+    const rowId = "00000000-0000-4000-8000-000000000099";
+    const acknowledged: string[] = [];
+    let currentRequest = requestA;
+    const channel = {
+      async readUndeliveredUserChat() {
+        return [{
+          id: rowId,
+          legacy_id: -1785837600000,
+          agent: "capitano",
+          body: "messaggio A",
+          created_at: requestA,
+        }];
+      },
+      async acknowledgeDelivery(
+        ids: string[],
+        options: { closeRendezvous: boolean; expectedRequestedAt: string },
+      ) {
+        acknowledged.push(...ids);
+        currentRequest = requestB;
+        expect(options).toEqual({ closeRendezvous: true, expectedRequestedAt: requestA });
+        return { closed: false, superseded: true };
+      },
+    };
+    const result = await handleChatSync({
+      silent: true,
+      config: CONFIG,
+      dbPath,
+      jhtHome: home,
+      reader: null,
+      channel,
+      state: { chat_requested_at: requestA, chat_delivered_at: null },
+      sendFn: async () => ({ ok: true, code: 0, error: "" }),
+    });
+    expect(result).toMatchObject({ status: "delivery_pending", delivered: 1, acked: false });
+    expect(acknowledged).toEqual([rowId]);
+    expect(currentRequest).toBe(requestB);
   });
 });

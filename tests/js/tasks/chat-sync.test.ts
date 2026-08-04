@@ -683,6 +683,35 @@ describe("canale della chat senza lettore diretto", () => {
     expect(chatChannelFor(BOX_CONFIG, reader as any)?.kind).toBe("direct");
   });
 
+  it("anche il canale diretto chiude via CAS e preserva gli ID se A e' superseded", async () => {
+    const marked: string[][] = [];
+    let blindPatches = 0;
+    let body: Record<string, unknown> | undefined;
+    const reader = {
+      readUndeliveredUserChat: async () => [],
+      markUserChatDelivered: async (ids: string[]) => { marked.push(ids); },
+      patchTeamState: async () => { blindPatches += 1; },
+    };
+    const channel = chatChannelFor(BOX_CONFIG, reader as any, {
+      fetchFn: async (_url: string, init?: Record<string, any>) => {
+        body = JSON.parse(init?.body || "{}");
+        return { ok: false, status: 409 } as Response;
+      },
+    });
+    const result = await channel!.acknowledgeDelivery(["00000000-0000-4000-8000-000000000001"], {
+      closeRendezvous: true,
+      expectedRequestedAt: "2026-08-04T10:00:00Z",
+    });
+    expect(marked).toEqual([["00000000-0000-4000-8000-000000000001"]]);
+    expect(blindPatches).toBe(0);
+    expect(body).toEqual({
+      delivered_ids: [],
+      close_rendezvous: true,
+      expected_requested_at: "2026-08-04T10:00:00Z",
+    });
+    expect(result).toEqual({ closed: false, superseded: true });
+  });
+
   it("senza token non c'è cloud da cui ritirare nulla", () => {
     expect(chatChannelFor({ base_url: "https://jobhunterteam.ai" }, null)).toBeNull();
   });
@@ -733,6 +762,7 @@ describe("canale della chat senza lettore diretto", () => {
     expect(post?.body).toEqual({
       delivered_ids: ["11111111-1111-4111-8111-111111111111"],
       close_rendezvous: true,
+      expected_requested_at: null,
     });
   });
 

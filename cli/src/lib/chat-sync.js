@@ -424,19 +424,29 @@ const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
  * funzionava perché passa dal token del box su Vercel — che è esattamente il
  * canale che questo ramo riusa.
  */
-export function directChatChannel(reader) {
-  const acknowledgeDelivery = async (ids = [], { closeRendezvous = false } = {}) => {
+export function directChatChannel(reader, config, options = {}) {
+  // Gli ACK riga restano sulla via diretta economica. La chiusura usa invece
+  // l'unico proprietario del CAS (la route HTTP), così A non può chiudere B.
+  const closeChannel = vercelChatChannel(config, options);
+  const acknowledgeDelivery = async (
+    ids = [],
+    { closeRendezvous = false, expectedRequestedAt = null } = {},
+  ) => {
     if (ids.length > 0) await reader.markUserChatDelivered(ids);
     if (closeRendezvous) {
-      await reader.patchTeamState({ chat_delivered_at: new Date().toISOString() });
+      return closeChannel.acknowledgeDelivery([], {
+        closeRendezvous: true,
+        expectedRequestedAt,
+      });
     }
+    return { closed: false, superseded: false };
   };
   return {
     kind: 'direct',
     readUndeliveredUserChat: (opts) => reader.readUndeliveredUserChat(opts),
     acknowledgeDelivery,
-    async closeRendezvous(ids = []) {
-      return acknowledgeDelivery(ids, { closeRendezvous: true });
+    async closeRendezvous(ids = [], expectedRequestedAt = null) {
+      return acknowledgeDelivery(ids, { closeRendezvous: true, expectedRequestedAt });
     },
   };
 }
@@ -470,7 +480,10 @@ export function vercelChatChannel(
     Authorization: `Bearer ${config?.token}`,
     'Content-Type': 'application/json',
   };
-  const acknowledgeDelivery = async (ids = [], { closeRendezvous = false } = {}) => {
+  const acknowledgeDelivery = async (
+    ids = [],
+    { closeRendezvous = false, expectedRequestedAt = null } = {},
+  ) => {
     const res = await fetchFn(url, {
       method: 'POST',
       headers,
@@ -478,9 +491,12 @@ export function vercelChatChannel(
       body: JSON.stringify({
         delivered_ids: ids,
         close_rendezvous: closeRendezvous,
+        expected_requested_at: expectedRequestedAt,
       }),
     });
+    if (res.status === 409) return { closed: false, superseded: true };
     if (!res.ok) throw new Error(`POST /api/cloud-sync/chat: HTTP ${res.status}`);
+    return { closed: closeRendezvous, superseded: false };
   };
   return {
     kind: 'vercel',
@@ -494,8 +510,8 @@ export function vercelChatChannel(
       return Array.isArray(body?.messages) ? body.messages : [];
     },
     acknowledgeDelivery,
-    async closeRendezvous(ids = []) {
-      return acknowledgeDelivery(ids, { closeRendezvous: true });
+    async closeRendezvous(ids = [], expectedRequestedAt = null) {
+      return acknowledgeDelivery(ids, { closeRendezvous: true, expectedRequestedAt });
     },
   };
 }
@@ -506,8 +522,8 @@ export function vercelChatChannel(
  * nessun cloud da cui ritirare niente.
  */
 export function chatChannelFor(config, reader, options = {}) {
-  if (reader) return directChatChannel(reader);
   if (!config?.token) return null;
+  if (reader) return directChatChannel(reader, config, options);
   return vercelChatChannel(config, options);
 }
 
