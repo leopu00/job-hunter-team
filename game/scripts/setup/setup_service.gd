@@ -280,6 +280,15 @@ func _self_test_vps_setup() -> void:
 	_finalize(gated)
 	if not bool(gated.get("ready", false)):
 		failures.append("setup completo non riconosciuto come pronto")
+	if _tmux_has_operational_team("ASSISTENTE\nDOTTORE\nMANTENITORE\n"):
+		failures.append("sessione tecnica scambiata per team operativo")
+	if not _tmux_has_operational_team("ASSISTENTE\nCAPITANO\n"):
+		failures.append("Capitano attivo non riconosciuto come team operativo")
+	if _agents_have_operational_team([{"role": "assistente", "active": true}]):
+		failures.append("Assistente remoto scambiato per team operativo")
+	if not _agents_have_operational_team([
+			{"role": "coordinatore", "active": true}]):
+		failures.append("Coordinatore remoto non riconosciuto come team operativo")
 
 	# ── La cartella dati è del team: nessuno la tocca alle spalle ────────
 	# Tre bug diversi in una giornata (config non scrivibile, runtime non
@@ -385,7 +394,7 @@ func _apply_probe(next: Dictionary) -> void:
 		next["container_exists"] = true
 		next["container_running"] = true
 		next["container_state"] = "running · VPS"
-		next["team_running"] = not BackendBus.agents.is_empty()
+		next["team_running"] = _agents_have_operational_team(BackendBus.agents)
 		var remote_provider := _ui_provider_id(str(
 				BackendBus.live_settings.get("active_provider", "")))
 		if remote_provider != "":
@@ -589,7 +598,8 @@ static func _probe_host(home: String) -> Dictionary:
 		if d["container_running"]:
 			var tmux := _run("docker", PackedStringArray(["exec", "jht", "tmux",
 					"list-sessions", "-F", "#{session_name}"] ))
-			d["team_running"] = tmux["code"] == 0 and str(tmux["out"]) != ""
+			d["team_running"] = tmux["code"] == 0 \
+					and _tmux_has_operational_team(str(tmux["out"]))
 	var config := _read_json(home.path_join("jht.config.json"))
 	d["hours_ready"] = _has_working_hours(config)
 	var active := _ui_provider_id(str(config.get("active_provider", "")))
@@ -601,6 +611,30 @@ static func _probe_host(home: String) -> Dictionary:
 		d["active_plan"] = _declared_plan(config, active)
 		d["plan_ready"] = str(d["active_plan"]) != ""
 	return d
+
+
+## L'Assistente e' autorizzato a vivere durante l'onboarding del profilo; anche
+## Dottore/Mantenitore sono sessioni tecniche, non il team operativo richiesto
+## dall'utente. Il Capitano nasce soltanto dal vero `team start` e ne e' quindi
+## il marker minimo affidabile. "Qualunque tmux" faceva apparire TEAM ATTIVO e
+## disabilitava il pulsante mentre il setup era ancora 1/4.
+static func _tmux_has_operational_team(raw: String) -> bool:
+	for session in raw.split("\n", false):
+		if str(session).strip_edges() == "CAPITANO":
+			return true
+	return false
+
+
+static func _agents_have_operational_team(agents: Array) -> bool:
+	for value in agents:
+		if not (value is Dictionary):
+			continue
+		var agent := value as Dictionary
+		var role := str(agent.get("role", "")).strip_edges().to_lower()
+		if role in ["capitano", "coordinatore"] \
+				and bool(agent.get("active", true)):
+			return true
+	return false
 
 
 ## Quale abbonamento ha l'utente. Il provider da solo non basta: un piano da
@@ -966,19 +1000,46 @@ func _do_update_runtime() -> Dictionary:
 		return {"ok": false, "message": "Impossibile preparare il runtime in ~/.jht/runtime"}
 	_ensure_host_dirs()
 	var before := _local_image_id()
+	var used_before := _run("docker", PackedStringArray(["inspect", "jht",
+			"--format", "{{.Image}}"] ))
+	var container_before := str(used_before.get("out", "")).strip_edges() \
+			if used_before.get("code", -1) == 0 else ""
 	_set_phase("image")
 	var pull := _compose_stream(compose, PackedStringArray(["pull", "jht"]),
 			"Cerco una versione più recente del team…")
 	if not bool(pull["ok"]):
-		return {"ok": false, "message": "Aggiornamento non riuscito: " \
-				+ str(pull.get("tail", "")).strip_edges().right(200)}
+		# Un'immagine può essere già arrivata da un installer, da un archivio
+		# offline o da una build di collaudo. In quel caso lo stato mostra
+		# correttamente "aggiornamento pronto", ma rendere il pull obbligatorio
+		# impediva proprio la ricreazione che il pulsante promette. Se l'immagine
+		# locale esiste continuiamo con compose up; senza alcuna copia locale,
+		# invece, il pull resta giustamente fatale.
+		if not _runtime_pull_can_fallback(before):
+			return {"ok": false, "message": "Aggiornamento non riuscito: " \
+					+ str(pull.get("tail", "")).strip_edges().right(200)}
+		Log.call_deferred("warn", "setup",
+				"pull runtime non disponibile: uso l'immagine locale già pronta")
+		_progress("container", "Download non disponibile: applico l'immagine locale già pronta…")
 	var after := _local_image_id()
 	_set_phase("container")
 	var recreated := _compose_up_with_progress(compose)
 	if not bool(recreated["ok"]):
 		return recreated
-	return {"ok": true, "message": "Runtime aggiornato: il team gira sulla versione più recente." \
-			if after != before else "Runtime già aggiornato: nessuna versione più recente."}
+	return {"ok": true, "message": _runtime_update_result_message(
+			before, after, container_before)}
+
+
+static func _runtime_pull_can_fallback(local_image_id: String) -> bool:
+	return local_image_id.strip_edges() != ""
+
+
+static func _runtime_update_result_message(before: String, after: String,
+		container_before: String) -> String:
+	var recreated_stale := after != "" and container_before != "" \
+			and after != container_before
+	return "Runtime aggiornato: il team gira sulla versione più recente." \
+			if after != before or recreated_stale \
+			else "Runtime già aggiornato: nessuna versione più recente."
 
 
 static func _local_image_id() -> String:

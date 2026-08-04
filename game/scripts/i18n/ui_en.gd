@@ -474,6 +474,7 @@ const S := {
 	"hours.windows": "WINDOWS (days · from → to)",
 	"hours.add": "+ ADD WINDOW",
 	"hours.estimate": "≈ %.0f active hours/week → est. ~%.1f new positions/day · budget rescaled to %d%% of current",
+	"hours.estimate_first": "≈ %.0f active hours/week · forecast and budget will be available after the first week",
 	"hours.invalid": "✘ invalid window: days mon…sun and times HH:MM",
 	"hours.save": "▶ SAVE HOURS",
 	"hours.saved": "✓ hours saved — team pacing adapts from the next tick",
