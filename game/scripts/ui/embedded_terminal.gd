@@ -194,6 +194,7 @@ class TermScreen:
 var provider := ""
 var spec: Dictionary = {}
 var _thread: Thread
+var _report_thread: Thread
 var _stdio: FileAccess
 var _stderr: FileAccess
 var _pid := -1
@@ -202,7 +203,6 @@ var _finished := false
 var _process_exited := false
 var _pending_bytes := PackedByteArray()
 var _raw_bytes := PackedByteArray()
-var _pending_report_bytes := PackedByteArray()
 var _report_bytes := PackedByteArray()
 var _last_url := ""
 var _output: RichTextLabel
@@ -247,25 +247,12 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	if _pending_bytes.is_empty() and _pending_report_bytes.is_empty():
+	if _pending_bytes.is_empty():
 		return
 	_mutex.lock()
 	var chunk := _pending_bytes
 	_pending_bytes = PackedByteArray()
-	var report_chunk := _pending_report_bytes
-	_pending_report_bytes = PackedByteArray()
 	_mutex.unlock()
-	_report_bytes.append_array(report_chunk)
-	# stdout è un canale di controllo separato: i wrapper POSIX chiudono fd3
-	# nel figlio e Windows redirige l'intero gruppo ospitato su stderr. Un marker
-	# completo qui può quindi provenire soltanto dal wrapper dopo il comando.
-	if bool(spec.get("reports_exit", false)) and not _finished:
-		var reported := _exit_code_from_raw(_report_bytes.get_string_from_utf8(),
-				str(spec.get("exit_report_token", "")))
-		if reported >= 0:
-			_process_finished(reported)
-	if chunk.is_empty():
-		return
 	_raw_bytes.append_array(chunk)
 	if _raw_bytes.size() > MAX_RAW_CHARS:
 		_raw_bytes = _raw_bytes.slice(_raw_bytes.size() - MAX_RAW_CHARS)
@@ -504,24 +491,20 @@ func _run_process() -> void:
 	_stderr = process["stderr"]
 	_pid = int(process["pid"])
 	_mutex.unlock()
+	if bool(spec.get("reports_exit", false)):
+		# stdout è un canale di controllo separato: un reader indipendente evita
+		# che l'EOF di stderr tronchi un report più lungo dell'output ospitato.
+		_report_thread = Thread.new()
+		_report_thread.start(_run_report_reader)
 	call_deferred("_process_started")
 	# FileAccess sui pipe non espone i byte disponibili. Una lettura per byte
 	# consegna immediatamente anche prompt corti in attesa di input; la UI li
 	# aggrega una volta per frame evitando migliaia di redraw.
 	while not _closing and is_instance_valid(_stderr) and not _stderr.eof_reached():
-		var read_any := false
 		var one := _stderr.get_buffer(1)
 		if not one.is_empty() and not (_stderr.eof_reached() and one[0] == 0):
 			call_deferred("_queue_byte", one[0])
-			read_any = true
-		# `stdio` è duplex: main thread scrive lo stdin, questo reader consuma
-		# soltanto stdout, riservato dal wrapper al report di controllo.
-		if is_instance_valid(_stdio):
-			var report_one := _stdio.get_buffer(1)
-			if not report_one.is_empty():
-				call_deferred("_queue_report_byte", report_one[0])
-				read_any = true
-		if not read_any:
+		else:
 			OS.delay_msec(2)
 	# EOF è già la conferma affidabile che il pipe figlio è terminato. Chiamare
 	# is_process_running/get_process_exit_code dopo che Godot lo ha raccolto
@@ -529,7 +512,29 @@ func _run_process() -> void:
 	_mutex.lock()
 	_process_exited = true
 	_mutex.unlock()
-	call_deferred("_process_finished", -1 if _closing else 0)
+	if not bool(spec.get("reports_exit", false)):
+		call_deferred("_process_finished", -1 if _closing else 0)
+
+
+func _run_report_reader() -> void:
+	# `stdio` è duplex: il main thread continua a scrivere lo stdin, mentre
+	# questo reader consuma soltanto stdout. Il comando ospitato non eredita il
+	# canale (fd3 chiuso su POSIX, gruppo rediretto su Windows), quindi il primo
+	# marker completo è necessariamente il report finale del wrapper.
+	var report := PackedByteArray()
+	var expected_token := str(spec.get("exit_report_token", ""))
+	while not _closing and is_instance_valid(_stdio) and not _stdio.eof_reached():
+		var one := _stdio.get_buffer(1)
+		if one.is_empty() or (_stdio.eof_reached() and one[0] == 0):
+			OS.delay_msec(2)
+			continue
+		report.append(one[0])
+		var code := _exit_code_from_raw(report.get_string_from_utf8(), expected_token)
+		if code >= 0:
+			call_deferred("_report_finished", report, code)
+			return
+	if not _closing:
+		call_deferred("_report_finished", report, -1)
 
 
 func _process_started() -> void:
@@ -546,12 +551,13 @@ func _queue_byte(byte: int) -> void:
 	_mutex.unlock()
 
 
-func _queue_report_byte(byte: int) -> void:
-	if _closing:
+func _report_finished(report: PackedByteArray, code: int) -> void:
+	if _closing or _finished:
 		return
 	_mutex.lock()
-	_pending_report_bytes.append(byte)
+	_report_bytes.append_array(report)
 	_mutex.unlock()
+	_process_finished(code)
 
 
 func _process_failed(message: String) -> void:
@@ -615,9 +621,8 @@ static func _exit_code_from_raw(raw: String, expected_token: String) -> int:
 
 
 func _captured_exit_code() -> int:
-	var all_bytes := _report_bytes.duplicate()
 	_mutex.lock()
-	all_bytes.append_array(_pending_report_bytes)
+	var all_bytes := _report_bytes.duplicate()
 	_mutex.unlock()
 	return _exit_code_from_raw(all_bytes.get_string_from_utf8(),
 			str(spec.get("exit_report_token", "")))
@@ -739,6 +744,8 @@ func _exit_tree() -> void:
 	_mutex.unlock()
 	if _thread != null and _thread.is_started():
 		_thread.wait_to_finish()
+	if _report_thread != null and _report_thread.is_started():
+		_report_thread.wait_to_finish()
 
 
 ## Ultimo URL nel flusso, ricomposto quando il wrap della pty (o il box del

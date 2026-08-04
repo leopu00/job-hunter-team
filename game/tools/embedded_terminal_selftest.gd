@@ -104,7 +104,7 @@ func _run() -> void:
 	ok = ok and windows_wrapper.contains("[Console]::Out.Write")
 	ok = ok and not windows_wrapper.contains("!errorlevel!")
 	var failure_command := "cmd.exe /d /c exit 23" if is_windows \
-			else "printf 'simulated installer error\\n' >&2; exit 23"
+			else "exit 23"
 	var failure := EmbeddedTerminal.new("runtime-install",
 			setup_script.embedded_terminal_spec("Runtime self-test", "test",
 					failure_command))
