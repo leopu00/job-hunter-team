@@ -106,7 +106,7 @@ già a posto da ~3 settimane).
 
 ### 🔍 Il problema (osservato dal vivo)
 
-Run live (VPS nuova `ubuntu-4gb-fsn1-b3` / `203.0.113.40`, account `beta-user@example.com`,
+Run live (VPS nuova `host.invalid` / `203.0.113.40`, account `beta-user@example.com`,
 provider Kimi): dopo ~18h dal boot il team aveva consumato il **28% del weekly** pur essendo
 trascorso solo il **~10.8% del ciclo** (front-load del boot). Eppure la Sentinella si dichiarava
 **"weekly ALLINEATO 1.07×"** e `weekly_binding=false`.
