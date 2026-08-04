@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Pre-push hook — Job Hunter Team
+#
+# Rete di sicurezza per i file d'identita' agente (CLAUDE.md / AGENTS.md).
+# Il pre-commit li blocca gia', ma `git commit --no-verify` lo aggira: senza
+# questo secondo livello il divieto sarebbe solo una convenzione. Qui si guarda
+# a cosa sta per raggiungere il remote, quindi intercetta anche i commit nati
+# con --no-verify, un cherry-pick o un merge da un ramo non protetto.
+#
+# stdin: <local ref> <local sha> <remote ref> <remote sha>, una riga per ref.
+
+set -euo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+ZERO="0000000000000000000000000000000000000000"
+OFFENDING=""
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    # Cancellazione di un ref: niente contenuto da ispezionare.
+    [ "$local_sha" = "$ZERO" ] && continue
+
+    if [ "$remote_sha" = "$ZERO" ]; then
+        # Ref nuovo sul remote: sono nuovi solo i commit che nessun altro ref
+        # remoto raggiunge gia'. Senza `--not --remotes` un branch appena creato
+        # farebbe rileggere l'intera storia del repo a ogni push.
+        commits=$(git rev-list "$local_sha" --not --remotes || true)
+    else
+        commits=$(git rev-list "${remote_sha}..${local_sha}" || true)
+    fi
+
+    [ -z "$commits" ] && continue
+
+    while IFS= read -r commit; do
+        [ -z "$commit" ] && continue
+        hits=$(git diff-tree --no-commit-id --name-only -r --diff-filter=ACM "$commit" \
+               | grep -iE '(^|/)(CLAUDE|AGENTS)\.md$' || true)
+        if [ -n "$hits" ]; then
+            while IFS= read -r f; do
+                OFFENDING="$OFFENDING\n  ${commit:0:9}  $f"
+            done <<< "$hits"
+        fi
+    done <<< "$commits"
+done
+
+if [ -n "$OFFENDING" ]; then
+    echo -e "${RED}PUSH BLOCCATO: file d'identita' agente presenti nei commit.${NC}"
+    echo -e "$OFFENDING"
+    echo ""
+    echo -e "${YELLOW}Sono artefatti di runtime: il template nel repo e' la fonte di verita'.${NC}"
+    echo -e "${YELLOW}Per toglierli dalla storia che stai pubblicando:${NC}"
+    echo -e "${YELLOW}  git rm --cached <file> && git commit --amend    (ultimo commit)${NC}"
+    echo -e "${YELLOW}  git rebase -i <base>                            (commit piu' vecchi)${NC}"
+    exit 1
+fi
+
+exit 0
