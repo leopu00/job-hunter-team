@@ -18,6 +18,8 @@ const PUBLIC_PAGES = [
   })),
   { path: "/agents", priority: 0.7, changeFrequency: "monthly" as const },
   { path: "/project", priority: 0.7, changeFrequency: "weekly" as const },
+  { path: "/tutorials", priority: 0.6, changeFrequency: "weekly" as const },
+  { path: "/trailer", priority: 0.5, changeFrequency: "weekly" as const },
   { path: "/docs", priority: 0.6, changeFrequency: "weekly" as const },
   ...DOC_HREFS.map((path) => ({
     path,
