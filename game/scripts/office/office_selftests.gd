@@ -1333,11 +1333,11 @@ func _guided_onboarding_selftest() -> void:
 			and ScriptedOnboarding.llm_context().get("schema_version", 0) == 2,
 			"contesto LLM onboarding incompleto")
 	ScriptedOnboarding.remember_profile_fields({"name": "Ada Test",
-			"email": "ada@example.test", "languages": "Italiano, English"})
+			"email": "ada@example.com", "languages": "Italiano, English"})
 	ScriptedOnboarding.record_dialogue_choice("tour_scout", "n2",
 			"Posso indicare aziende o tipi di lavoro preferiti?", "sources")
 	check.call(ScriptedOnboarding.llm_context_text().contains("Ada Test") \
-			and ScriptedOnboarding.profile_draft().get("email", "") == "ada@example.test" \
+			and ScriptedOnboarding.profile_draft().get("email", "") == "ada@example.com" \
 			and ScriptedOnboarding.llm_context_text().contains("lavoro preferiti"),
 			"dati del profilo nativo non sincronizzati nel contesto LLM")
 

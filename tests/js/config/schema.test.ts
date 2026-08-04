@@ -20,7 +20,7 @@ describe("SubscriptionSchema", () => {
 
   it("accetta session_token opzionale", () => {
     const r = SubscriptionSchema.safeParse({
-      email: "a@b.com",
+      email: "a@example.com",
       session_token: "tok",
     });
     expect(r.success).toBe(true);

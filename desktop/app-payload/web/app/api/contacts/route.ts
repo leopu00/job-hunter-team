@@ -29,11 +29,11 @@ function save(data: Contact[]): void {
 function generateSample(): Contact[] {
   const now = Date.now(); const day = 86400000;
   return [
-    { id: 'ct-001', name: 'Marco Rossi', company: 'TechCorp', role: 'Engineering Manager', email: 'marco@techcorp.it', linkedin: '', notes: 'Incontrato a conferenza React. Interessato al mio profilo.', lastContact: now - 3 * day, createdAt: now - 30 * day },
-    { id: 'ct-002', name: 'Laura Bianchi', company: 'ScaleUp', role: 'CTO', email: 'laura@scaleup.io', linkedin: '', notes: 'Referral da amico comune. Colloquio in corso.', lastContact: now - day, createdAt: now - 15 * day },
-    { id: 'ct-003', name: 'Andrea Verdi', company: 'DataFlow', role: 'HR Lead', email: 'andrea@dataflow.com', linkedin: '', notes: 'Primo contatto via LinkedIn.', lastContact: now - 7 * day, createdAt: now - 20 * day },
-    { id: 'ct-004', name: 'Sara Neri', company: 'FinTech Co', role: 'Tech Recruiter', email: 'sara@fintech.co', linkedin: '', notes: 'Mi ha contattata per posizione Backend Lead.', lastContact: now - 2 * day, createdAt: now - 10 * day },
-    { id: 'ct-005', name: 'Luca Gialli', company: 'StartupXYZ', role: 'Co-founder', email: 'luca@startupxyz.com', linkedin: '', notes: 'Offerta ricevuta. Ottimo rapporto.', lastContact: now - 5 * day, createdAt: now - 60 * day },
+    { id: 'ct-001', name: 'Marco Rossi', company: 'TechCorp', role: 'Engineering Manager', email: 'marco@example.com', linkedin: '', notes: 'Incontrato a conferenza React. Interessato al mio profilo.', lastContact: now - 3 * day, createdAt: now - 30 * day },
+    { id: 'ct-002', name: 'Laura Bianchi', company: 'ScaleUp', role: 'CTO', email: 'laura@example.com', linkedin: '', notes: 'Referral da amico comune. Colloquio in corso.', lastContact: now - day, createdAt: now - 15 * day },
+    { id: 'ct-003', name: 'Andrea Verdi', company: 'DataFlow', role: 'HR Lead', email: 'andrea@example.com', linkedin: '', notes: 'Primo contatto via LinkedIn.', lastContact: now - 7 * day, createdAt: now - 20 * day },
+    { id: 'ct-004', name: 'Sara Neri', company: 'FinTech Co', role: 'Tech Recruiter', email: 'sara@example.com', linkedin: '', notes: 'Mi ha contattata per posizione Backend Lead.', lastContact: now - 2 * day, createdAt: now - 10 * day },
+    { id: 'ct-005', name: 'Luca Gialli', company: 'StartupXYZ', role: 'Co-founder', email: 'luca@example.com', linkedin: '', notes: 'Offerta ricevuta. Ottimo rapporto.', lastContact: now - 5 * day, createdAt: now - 60 * day },
   ];
 }
 
