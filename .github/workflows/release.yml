@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Verify tag matches package.json versions
         run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
 
@@ -52,13 +52,13 @@ jobs:
       HAS_MAC_SIGNING: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.MACOS_CERTIFICATE_PWD != '' && secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
-      - uses: chickensoft-games/setup-godot@v2.4.1
+      - uses: chickensoft-games/setup-godot@f166999204a4f2722c6fe042fbaa3b3ea0d9c789 # v2.4.1
         with:
           version: 4.7.0
           use-dotnet: false
@@ -71,7 +71,7 @@ jobs:
           echo "::error::Configure MACOS_CERTIFICATE, MACOS_CERTIFICATE_PWD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID."
           exit 1
 
-      - uses: apple-actions/import-codesign-certs@v7.0.0
+      - uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
         if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING == 'true'
         with:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
@@ -330,7 +330,7 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --source-root .
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact_name }}
           path: |
@@ -347,11 +347,11 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
@@ -368,7 +368,7 @@ jobs:
           fi
           echo "tag_sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -431,7 +431,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Download desktop app artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: app-*-release
           path: release-assets
@@ -453,7 +453,7 @@ jobs:
             --provenance release-assets/RELEASE-PROVENANCE.json
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: "Job Hunter Team ${{ github.ref_name }}"
           # La nota Windows sta QUI perche' questa e' l'unica pagina da cui si
