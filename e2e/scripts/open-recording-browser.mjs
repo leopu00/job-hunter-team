@@ -90,6 +90,15 @@ async function main() {
     await context.addInitScript(() => {
       localStorage.setItem("jht-theme", "light");
       localStorage.setItem("jht-tour-done", "1");
+
+      // Il server recording usa Next in development per restare sullo SHA
+      // congelato. La sua chrome diagnostica non appartiene al prodotto e
+      // non deve entrare nel raw: la nascondiamo prima che Next la monti.
+      const style = document.createElement("style");
+      style.dataset.jhtRecordingChrome = "hidden";
+      style.textContent =
+        "nextjs-portal,[data-nextjs-toast],[data-nextjs-dev-tools-button],[data-next-badge-root]{display:none!important}";
+      document.documentElement.append(style);
     });
 
     const page = await context.newPage();
