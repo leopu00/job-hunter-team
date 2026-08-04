@@ -1638,9 +1638,11 @@ func open_runtime_install() -> void:
 static func _posix_runtime_install_command() -> String:
 	return "export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; " \
 			+ "jht_installer=\"$(mktemp \"${TMPDIR:-/tmp}/jht-install.XXXXXX\")\" && " \
+			+ "trap 'rm -f \"$jht_installer\"; exit 130' HUP INT TERM && " \
 			+ "curl -fsSL https://jobhunterteam.ai/install.sh -o \"$jht_installer\" && " \
 			+ "JHT_SKIP_ONBOARD=1 /bin/bash \"$jht_installer\"; " \
 			+ "_jht_install_code=$?; " \
+			+ "trap - HUP INT TERM; " \
 			+ "[ -z \"${jht_installer:-}\" ] || rm -f \"$jht_installer\"; " \
 			+ "(exit \"$_jht_install_code\")"
 

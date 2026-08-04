@@ -53,6 +53,8 @@ def test_runtime_installer_keeps_tty_and_reports_command_failure():
     # non-interactive e sudo non poteva chiedere la password nella console.
     assert "jobhunterteam.ai/install.sh |" not in runtime_command
     assert r'install.sh -o \"$jht_installer\"' in runtime_command
+    assert r'''trap 'rm -f \"$jht_installer\"; exit 130' HUP INT TERM''' in runtime_command
+    assert '"trap - HUP INT TERM; "' in runtime_command
     assert "JHTExit=" in setup
 
     # EOF non equivale a successo: il codice riportato dal wrapper determina
