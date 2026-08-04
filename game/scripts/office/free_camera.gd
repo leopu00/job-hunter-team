@@ -21,6 +21,7 @@ var _zoom_min := 0.5
 
 var _dragging := false
 var _drag_travel := 0.0
+var _press_world_position := Vector2.ZERO
 
 func _ready() -> void:
 	var world := FurnitureDefs.WORLD
@@ -113,13 +114,16 @@ func _unhandled_input(event: InputEvent) -> void:
 					_zoom_at_mouse(1.0 / ZOOM_STEP)
 			MOUSE_BUTTON_LEFT:
 				if event.pressed:
+					# Campiona PRIMA di fermare la regia: il tween/smoothing può
+					# cambiare la trasformata canvas già fra press e release.
+					_press_world_position = _event_world_position(event)
 					_stop_focus()
 					_dragging = true
 					_drag_travel = 0.0
 				elif _dragging:
 					_dragging = false
 					if _drag_travel < DRAG_CLICK_TOLERANCE:
-						clicked.emit(get_global_mouse_position())
+						clicked.emit(_press_world_position)
 	elif event is InputEventMouseMotion and _dragging:
 		_drag_travel += event.relative.length()
 		if _drag_travel >= DRAG_CLICK_TOLERANCE:
@@ -139,6 +143,19 @@ func _unhandled_input(event: InputEvent) -> void:
 				_zoom_at(ZOOM_STEP, get_screen_center_position())
 			KEY_MINUS, KEY_KP_SUBTRACT:
 				_zoom_at(1.0 / ZOOM_STEP, get_screen_center_position())
+
+## Converte subito la posizione consegnata insieme all'evento, cioè lo stesso
+## pixel che l'utente ha premuto. Rileggerla al rilascio usa la trasformata
+## corrente della Camera2D: durante la regia tweenata/smussata può non essere
+## più quella con cui il personaggio è stato disegnato e il click visibile
+## sull'Assistente finisce nel reparto Scorer retrostante.
+func _event_world_position(event: InputEventMouse) -> Vector2:
+	var world := get_viewport().get_canvas_transform().affine_inverse() * event.position
+	if OS.get_environment("JHT_INPUT_DIAGNOSTIC") == "1":
+		Log.info("input", "click screen=%v world=%v cursor_world=%v camera=%v shown=%v zoom=%v" % [
+				event.position, world, get_global_mouse_position(), position,
+				get_screen_center_position(), zoom])
+	return world
 
 ## Le gesture del trackpad possono arrivare a _unhandled_input anche se il
 ## puntatore è sopra un Control. Gli overlay si registrano nel gruppo per

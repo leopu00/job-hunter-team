@@ -948,11 +948,49 @@ func _tour_selftest() -> void:
 				found = child
 		return found
 	if guide:
-		office._start_talk(guide)
+		# Riproduce ONB-001 attraverso lo stesso dispatcher del click reale.
+		# L'Assistente seduta vive nel composito della reception: volto e
+		# diamante non coincidono col vecchio cerchio attorno ai piedi.
+		var seated_face := guide.global_position + Vector2(0, -118)
+		var marker_center := guide.quest_marker.global_position \
+				if guide.quest_marker != null else Vector2.INF
+		check.call(guide.hit_by(seated_face),
+				"il volto visibile dell'Assistente non e' cliccabile")
+		check.call(guide.quest_marker != null and guide.quest_marker.visible \
+				and guide.hit_by(marker_center),
+				"il diamante visibile dell'Assistente non e' cliccabile")
+		var camera_hint: Control = office.find_child("CameraHint", true, false) as Control
+		check.call(camera_hint != null \
+				and camera_hint.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+				"l'hint della camera intercetta il click sulla reception")
+		# Attraversa anche FreeCamera: la vecchia implementazione rileggeva il
+		# cursore globale invece del pixel dell'evento e questo self-test falliva
+		# senza spostare davvero il mouse della macchina che esegue Godot.
+		var marker_screen: Vector2 = \
+				office.get_viewport().get_canvas_transform() * marker_center
+		var press := InputEventMouseButton.new()
+		press.button_index = MOUSE_BUTTON_LEFT
+		press.position = marker_screen
+		press.pressed = true
+		var release := InputEventMouseButton.new()
+		release.button_index = MOUSE_BUTTON_LEFT
+		release.position = marker_screen
+		release.pressed = false
+		office._camera._unhandled_input(press)
+		# Riproduce la deriva fra i due eventi: la camera guidata può essere
+		# ancora in movimento quando l'utente preme. Il target deve restare
+		# quello campionato dal frame visibile al press.
+		var camera_position: Vector2 = office._camera.position
+		office._camera.position += Vector2(0, -300)
+		office._camera.reset_smoothing()
+		await get_tree().process_frame
+		office._camera._unhandled_input(release)
+		office._camera.position = camera_position
+		office._camera.reset_smoothing()
 		await get_tree().process_frame
 		var welcome: DialogueUI = find_dialogue.call()
 		check.call(welcome != null and welcome._tree.has("ready"),
-				"il primo dialogo non usa tour_benvenuto")
+				"un click sul diamante non apre tour_benvenuto")
 		if welcome:
 			welcome._close()
 	# da qui la catena è automatica (in test-mode senza camminate): a ogni
@@ -1047,15 +1085,44 @@ func _tour_selftest() -> void:
 	markers = count_markers.call()
 	check.call(markers[1].size() == 8 and not markers[1].has("assistente"),
 			"marker giro libero errati: " + JSON.stringify(markers[1].keys()))
-	for stop in ["critico", "scout", "dottore", "mentor", "scorer", "analista",
-			"scrittore"]:
-		TourGuide.notify_talked(str(stop))
-	check.call(not TourGuide.in_launch_phase(),
-			"fase di lancio raggiunta col Coordinatore mancante")
+	# ONB-002 usa soltanto i click nel mondo: attraversiamo i marker in ordine
+	# sparso e chiudiamo ogni presentazione, senza pilotare direttamente lo
+	# stato. Ogni chiusura deve consumare una sola tappa e liberare la seguente.
+	var free_order := ["critico", "scout", "dottore", "mentor", "scorer",
+			"analista", "scrittore", "coordinatore"]
+	for stop in free_order:
+		var host: AgentNPC = office._tour_host_npc(str(stop))
+		var pending_before := TourGuide.pending_stops().size()
+		check.call(host != null and host.quest_marker != null \
+				and host.quest_marker.visible,
+				"marker/host assente nel giro libero: " + str(stop))
+		if host == null or host.quest_marker == null:
+			continue
+		var free_marker := host.quest_marker.global_position
+		check.call(host.hit_by(free_marker),
+				"marker non cliccabile nel giro libero: " + str(stop))
+		office._on_world_click(free_marker)
+		await get_tree().process_frame
+		var free_ui: DialogueUI = find_dialogue.call()
+		var expected_tree := str(TourGuide.scene_for(str(stop)).get("tree", ""))
+		check.call(free_ui != null and free_ui._tree_id == expected_tree,
+				"click libero non apre la presentazione di " + str(stop))
+		check.call(office._dept_panel == null,
+				"click libero cade sul pannello reparto per " + str(stop))
+		if free_ui:
+			free_ui._close()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		check.call(not TourGuide.stop_open(str(stop)) \
+				and TourGuide.pending_stops().size() == pending_before - 1,
+				"tappa libera non consumata una sola volta: " + str(stop))
+		if stop != "coordinatore":
+			check.call(not TourGuide.in_launch_phase(),
+					"fase di lancio anticipata dopo " + str(stop))
+	check.call(TourGuide.in_launch_phase(),
+			"giro libero non arriva al lancio dopo il Coordinatore")
 	check.call(TourGuide.depts_visited() == 5,
 			"conteggio reparti errato in giro libero")
-	TourGuide.notify_talked("coordinatore")
-	check.call(TourGuide.in_launch_phase(), "giro libero non arriva al lancio")
 
 	# ── Teaser post-tour: team spento → l'agente invita al setup ──────
 	TourGuide.finish()
