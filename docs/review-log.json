@@ -1429,6 +1429,11 @@
       "path": "docs/guides/M4-EVIDENCE-BUNDLES.md",
       "description": "Versioned M4 evidence-bundle operator guide: scrubbed export boundary, hashes, provenance classes, fixture/live fail-closed rules, and external-validation limits",
       "last_review": null
+    },
+    {
+      "path": "tests/fixtures/e2e_linux_cv.md",
+      "description": "Synthetic candidate CV consumed by the Linux onboarding E2E: no real personal data, only the profile fields the first-run checklist has to parse",
+      "last_review": null
     }
   ]
 }
