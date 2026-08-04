@@ -1434,6 +1434,11 @@
       "path": "tests/fixtures/e2e_linux_cv.md",
       "description": "Synthetic candidate CV consumed by the Linux onboarding E2E: no real personal data, only the profile fields the first-run checklist has to parse",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/recording-profiles.md",
+      "description": "Procedura interna per generare e verificare profili sintetici deterministici destinati alle registrazioni web e gioco",
+      "last_review": null
     }
   ]
 }
