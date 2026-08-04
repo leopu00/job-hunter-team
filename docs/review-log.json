@@ -1012,7 +1012,7 @@
     },
     {
       "path": "docs/internal/postmortems/2026-07-01-betaD-daily-hardstop-validated.md",
-      "description": "Daily hard-stop ( 2) — validato end-to-end sul team di betaD (beta-3) — Data: 2026-07-01 · VPS: beta-3 ubuntu-4gb-fsn1-b3 (203.0.113.40, betaD — luxury",
+      "description": "Daily hard-stop ( 2) — validato end-to-end sul team di betaD (beta-3) — Data: 2026-07-01 · VPS: beta-3 host.invalid (203.0.113.40, betaD — luxury",
       "last_review": null
     },
     {
