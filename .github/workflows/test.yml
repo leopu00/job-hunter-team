@@ -234,11 +234,38 @@ jobs:
           chmod 600 .auth-credentials
           node scripts/refresh-auth-state.mjs
 
+          # Il token nasce durante il job, quindi GitHub non può conoscerlo
+          # come secret statico. Registriamo come mask sia il cookie completo
+          # sia i token contenuti nel payload: se Playwright stampa il call log
+          # di una richiesta fallita, gli header restano comunque redatti.
+          node <<'NODE'
+          const { readFileSync } = require("node:fs");
+          const state = JSON.parse(readFileSync("auth-state.json", "utf8"));
+          for (const cookie of state.cookies ?? []) {
+            if (cookie.value) console.log(`::add-mask::${cookie.value}`);
+            if (!cookie.value?.startsWith("base64-")) continue;
+            try {
+              const session = JSON.parse(
+                Buffer.from(cookie.value.slice("base64-".length), "base64").toString("utf8"),
+              );
+              for (const key of ["access_token", "refresh_token"]) {
+                if (session[key]) console.log(`::add-mask::${session[key]}`);
+              }
+            } catch {
+              // Il cookie completo è già mascherato; un formato futuro non
+              // deve trasformare il masking difensivo in un nuovo gate rosso.
+            }
+          }
+          NODE
+
       - name: Run e2e specs
         working-directory: e2e
         env:
           BASE_URL: http://localhost:3011
-        run: npx playwright test --reporter=list
+        # Gli spec 80/81 mutano la stessa sessione demo. Due worker possono
+        # sovrapporre POST/DELETE e bloccare le route server-rendered fino al
+        # timeout; un worker rende deterministico il gate autenticato.
+        run: npx playwright test --reporter=list --workers=1
 
       # Le credenziali non devono sopravvivere al job nemmeno in un artifact.
       - name: Wipe the session
