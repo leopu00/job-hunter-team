@@ -55,6 +55,11 @@ The fixed anchor in `web/lib/recording-profile.ts` makes two resets identical:
 IDs, timestamps, scores, pipeline distribution and profile content do not
 drift between takes.
 
+Transient `checked` and `writing` rows are materialized in the stable state
+that the production boot recovery would choose (`new` and `scored`). All
+`write_requested` flags are off. This keeps the visible pipeline varied while
+making the first `pid1` boot a no-op instead of rewriting stale synthetic rows.
+
 ## Local artifacts (never commit)
 
 The command uses the platform's XDG roots:
