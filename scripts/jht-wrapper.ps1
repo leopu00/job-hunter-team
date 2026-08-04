@@ -181,7 +181,10 @@ function Get-UpgradeVersion {
 
 function Test-UpgradeRunning {
   for ($i = 0; $i -lt 20; $i++) {
-    if ((Test-ContainerUp) -and (Get-UpgradeVersion)) { return $true }
+    if ((Test-ContainerUp) -and (Get-UpgradeVersion)) {
+      Start-Sleep -Seconds 1
+      if ((Test-ContainerUp) -and (Get-UpgradeVersion)) { return $true }
+    }
     Start-Sleep -Milliseconds 500
   }
   return $false
