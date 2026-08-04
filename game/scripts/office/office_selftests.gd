@@ -1451,6 +1451,17 @@ func _guided_onboarding_selftest() -> void:
 	check.call(not bool(upgrade_rollback.get("ok", true))
 			and bool(upgrade_rollback.get("rolledBack", false)),
 			"il rollback host-side non viene dichiarato alla UI")
+	var upgrade_check := SetupService.parse_upgrade_result(JSON.stringify({
+		"ok": true, "changed": true, "phase": "check",
+		"previous": {"version": "1.0.0", "image": "sha256:old"},
+		"current": {"version": "1.0.0", "image": "sha256:candidate"},
+		"restartRequired": false, "message": "Controllo completato",
+		"rolledBack": false,
+	}), 0)
+	check.call(bool(upgrade_check.get("ok", false))
+			and bool(upgrade_check.get("changed", false))
+			and not bool(upgrade_check.get("restartRequired", true)),
+			"il check host-side valido non espone la disponibilita di update")
 	var upgrade_bad_frame := SetupService.parse_upgrade_result(
 			JSON.stringify(upgrade_ok) + "\nlog diagnostico", 0)
 	check.call(bool(upgrade_bad_frame.get("protocol_error", false)),
