@@ -120,7 +120,9 @@ export default function PositionsFilterSidebar({
   onCollapse?: () => void;
 }) {
   const router = useRouter();
-  const sp = useSearchParams();
+  const sp = useSearchParams() ?? new URLSearchParams();
+  // Nelle build con i tipi di compatibilità di Next il router può non essere
+  // ancora pronto. Un URL vuoto conserva la semantica dei filtri non impostati.
   const locale = useLocale();
   const tr = makeT(T, locale);
   const [facets, setFacets] = useState<Facet[]>([]);
