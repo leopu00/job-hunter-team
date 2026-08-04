@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   acknowledgeSync,
+  observedSyncOutcome,
   pushRendezvousOutcome,
   syncRendezvousPending,
   timeoutFailure,
@@ -37,6 +38,10 @@ describe("rendezvous Sync now — stato terminale veritiero", () => {
       url: "https://example.invalid/api/team-state",
       token: "token-di-test",
       completedAt: "2026-08-04T10:00:02Z",
+      observed: {
+        last_action: "sync:completed",
+        last_action_at: "2026-08-04T10:00:02Z",
+      },
       signal,
       fetchFn: async (_url: string, init?: Record<string, any>) => {
         seenInit = init;
@@ -49,7 +54,11 @@ describe("rendezvous Sync now — stato terminale veritiero", () => {
       via: "http",
     });
     expect(seenInit?.signal).toBe(signal);
-    expect(JSON.parse(seenInit?.body)).toEqual({ sync_completed_at: "2026-08-04T10:00:02Z" });
+    expect(JSON.parse(seenInit?.body)).toEqual({
+      last_action: "sync:completed",
+      last_action_at: "2026-08-04T10:00:02Z",
+      sync_completed_at: "2026-08-04T10:00:02Z",
+    });
 
     const rejected = await acknowledgeSync({
       reader: null,
@@ -59,6 +68,19 @@ describe("rendezvous Sync now — stato terminale veritiero", () => {
       fetchFn: async () => ({ ok: false, status: 503 }) as Response,
     });
     expect(rejected).toEqual({ status: "ack_failed", httpStatus: 503, retryable: true });
+  });
+
+  it("pubblica un esito correlato anche con clock VPS indietro", () => {
+    const observed = observedSyncOutcome(
+      "timeout",
+      "2026-08-04T10:00:00.500Z",
+      Date.parse("2026-08-04T09:59:00Z"),
+    );
+    expect(observed).toEqual({
+      last_action: "sync:timeout",
+      last_action_at: "2026-08-04T10:00:00.501Z",
+    });
+    expect(observedSyncOutcome("stato-sconosciuto", "2026-08-04T10:00:00Z")).toBeNull();
   });
 
   it("distingue timeout da failure senza esporre il messaggio originale", async () => {
