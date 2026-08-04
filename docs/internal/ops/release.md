@@ -1,6 +1,13 @@
 # 🚢 Release
 
-Cutting a release means pushing a `vX.Y.Z` tag that points at the **`production` HEAD**. CI then runs [`.github/workflows/release.yml`](../../../.github/workflows/release.yml): it verifies the tag against every version field, builds the **native Godot desktop application** on three runners, signs and notarizes the macOS build, builds the web app as a regression gate, and publishes a GitHub Release with the three artifacts attached.
+Cutting a release means pushing a `vX.Y.Z` tag that points at the **`production` HEAD**. CI then runs [`.github/workflows/release.yml`](../../../.github/workflows/release.yml): it verifies the tag against every version field, builds the **native Godot desktop application** on three runners, signs and notarizes the macOS build, builds the web app as a regression gate, and creates a **draft** GitHub Release with the three artifacts attached. The release becomes public only after the downloaded draft passes the independent audit below.
+
+Every platform runner also records the exact tag commit, byte size and SHA-256
+of its final asset **after** signing and packaging. The release job recomputes
+those hashes after downloading the artifacts and refuses publication unless
+all three sidecars name the same tag commit. The published release includes
+`SHA256SUMS` and `RELEASE-PROVENANCE.json`; checksums prepared before the tag
+are never reused because signing changes the final bytes.
 
 > 🖥️ **The desktop application is the Godot office in [`game/`](../../../game/).** The Electron launcher (`desktop/`) was removed with the native migration on 2026-07-19 — nothing in the release pipeline uses electron-builder any more. If a doc still mentions `desktop/package.json`, it predates that change.
 
@@ -13,11 +20,11 @@ against the application metadata below, every distributed package manifest and
 lockfile, the NSIS fallback, the embedded payload displays, and every
 production container reference. All of them must be bumped together:
 
-| Where | Field | Format for tag `v0.2.1` |
-|---|---|---|
-| `package.json` (repo root) | `version` | `0.2.1` |
-| `game/project.godot` | `config/version` | `0.2.1` |
-| `game/export_presets.cfg` (macOS preset) | `application/short_version`, `application/version` | `0.2.1` |
+| Where                                      | Field                                                     | Format for tag `v0.2.1`                  |
+| ------------------------------------------ | --------------------------------------------------------- | ---------------------------------------- |
+| `package.json` (repo root)                 | `version`                                                 | `0.2.1`                                  |
+| `game/project.godot`                       | `config/version`                                          | `0.2.1`                                  |
+| `game/export_presets.cfg` (macOS preset)   | `application/short_version`, `application/version`        | `0.2.1`                                  |
 | `game/export_presets.cfg` (Windows preset) | `application/file_version`, `application/product_version` | `0.2.1.0` — **numeric, four components** |
 
 The Windows fields take the tag version with `.0` appended (`X.Y.Z` → `X.Y.Z.0`); a prerelease suffix is stripped first (`v0.3.0-rc1` → `0.3.0.0`).
@@ -85,17 +92,39 @@ git push origin v0.2.1
 - exports the release preset;
 - **macOS only**: signs with the Developer ID identity, submits to `notarytool --wait`, staples the ticket and asserts `spctl --assess`. The five Apple secrets are **mandatory** — the job fails fast with an explicit error when they are missing (see the playbook in [`MAINTAINERS.md`](MAINTAINERS.md#-macos-code-signing--notarization));
 - smoke-tests the exported binary (`--headless --quit-after 3` with `JHT_NOVPS=1`), so a build that cannot even boot never reaches a release;
+- records a provenance sidecar for the final asset, tied to the resolved tag
+  commit and its SHA-256;
 - uploads the artifact.
 
-**3 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the three artifacts and publishes the GitHub Release. A tag containing `-` (e.g. `v0.3.0-rc1`) is published as a **prerelease**.
+**3 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the three artifacts, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and then creates the GitHub Release as a **draft**. A tag containing `-` (e.g. `v0.3.0-rc1`) is marked as a **prerelease** when published.
+
+**4 · independent draft audit and publication** — download the assets back from
+GitHub, verify the exact public bytes and only then publish:
+
+```bash
+TAG=vX.Y.Z
+AUDIT_DIR="$(mktemp -d)"
+gh release download "$TAG" --dir "$AUDIT_DIR"
+python scripts/release_artifacts.py audit \
+  --directory "$AUDIT_DIR" \
+  --tag "$TAG" \
+  --commit "$(git rev-list -n 1 "$TAG")" \
+  --repository leopu00/job-hunter-team
+gh release edit "$TAG" --draft=false --latest
+```
+
+The audit requires the downloaded asset set to match provenance exactly and
+recomputes every size and SHA-256. If it fails, leave the release in draft and
+fix forward; never publish or replace one file by hand.
 
 ### Artifacts
 
-| Platform | Preset | Asset |
-|---|---|---|
-| Windows x64 | `Windows Desktop` | `job-hunter-team.exe` (bare Godot executable) |
-| macOS Universal 2 | `macOS` | `job-hunter-team.zip` (signed, notarized, stapled) |
-| Linux x64 | `Linux` | `job-hunter-team-linux-x64.tar.gz` |
+| Platform          | Preset            | Asset                                                                     |
+| ----------------- | ----------------- | ------------------------------------------------------------------------- |
+| Windows x64       | `Windows Desktop` | `job-hunter-team.exe` (bare Godot executable)                             |
+| macOS Universal 2 | `macOS`           | `job-hunter-team.zip` (signed, notarized, stapled)                        |
+| Linux x64         | `Linux`           | `job-hunter-team-linux-x64.tar.gz`                                        |
+| All assets        | —                 | `SHA256SUMS` + `RELEASE-PROVENANCE.json` (tag commit, byte size, SHA-256) |
 
 Asset names do **not** carry the version — the GitHub Release tag is the version. There is no separate Windows ARM64 installer any more (the Electron pipeline produced one; the Godot export targets x64, which runs under Windows-on-ARM emulation).
 
