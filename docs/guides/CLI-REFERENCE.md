@@ -15,7 +15,7 @@ relevant commands inline.
 ## Two layers
 
 JHT exposes the `jht` command on the host. The host wrapper
-(`scripts/jht-wrapper.sh`, ~165 LOC) handles **lifecycle / TTY-bound**
+(`scripts/jht-wrapper.sh`) handles **lifecycle / TTY-bound**
 commands directly; everything else is forwarded to the Node CLI **inside
 the long-running `jht` container** via `docker exec`. The split is
 deliberate — see [`docs/internal/ops/vps.md`](../internal/ops/vps.md):
@@ -69,7 +69,7 @@ via wipe + re-pair, not concurrent runs.
 | `jht down` (alias `stop-container`) | Host  | `docker compose down`. Preserves volumes/bind mounts.                 |
 | `jht restart`                       | Host  | `docker compose restart jht`. Same image, fresh PID 1.                |
 | `jht recreate`                      | Host  | `docker compose down && up -d`. Use after image rebuild.              |
-| `jht upgrade`                       | Host  | `docker compose pull && up -d`. Picks up new image tag.               |
+| `jht upgrade [--check] [--json]`    | Host  | Transactional runtime update: stages compose+wrapper, pulls/recreates the candidate, verifies its CLI, then commits it. Failed/interrupted runs roll back to the last verified image. `--json` emits one final result for the desktop UI. |
 | `jht shell`                         | Host  | `docker exec -it jht bash`. Drop into the container for debugging.    |
 | `jht logs [docker-flags]`           | Host  | `docker logs <flags> jht`. Pass `-f` for follow, `--tail N` etc.      |
 
@@ -353,7 +353,7 @@ line, so a script can check the outcome without reading prose.
 | Command                              | Layer | What it does                                                  |
 |--------------------------------------|-------|---------------------------------------------------------------|
 | `jht dashboard`                      | Node  | **Deprecated** (2026-07-23): the local web dashboard was retired — interaction lives in the desktop app; browser is cloud-only (`jobhunterteam.ai`). Prints a pointer and exits. |
-| `jht upgrade [-c|-a]`                | Both  | Wrapper: refresh image. Node: `-c` check, `-a` apply self-update. |
+| `jht upgrade`                        | Host  | Update the Docker runtime from the host. A direct invocation inside the container refuses safely and points to the host command. |
 
 ## Cron tasks
 
