@@ -1,7 +1,7 @@
 # 🔥 Indagine consumo budget — VPS betaD (Kimi) — 2026-06-28
 
 > **Tipo:** osservazione + finding per il codice (nessun intervento a runtime — regola "sola lettura sulle simulazioni").
-> **VPS:** `ubuntu-4gb-fsn1-b3` (Hetzner fsn1, `203.0.113.40`), creata 2026-06-27 15:27 UTC. Container `jht:latest`, provider **Kimi K2.7**.
+> **VPS:** `host.invalid` (Hetzner fsn1, `203.0.113.40`), creata 2026-06-27 15:27 UTC. Container `jht:latest`, provider **Kimi K2.7**.
 > **Utente:** betaD — profilo luxury hospitality (hostess/reception/guest relations 5★, cabin crew), base Roma, cittadina venezuelana, multilingue (ES madre, IT C2, EN C1, FR C1).
 > **Trigger:** in <24h il team aveva bruciato ~39% del budget settimanale; sospetto su un consumatore "fantasma" chiamato `resume` nel bridge di pacing.
 
