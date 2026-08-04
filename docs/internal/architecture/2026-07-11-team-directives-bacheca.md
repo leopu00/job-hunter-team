@@ -11,7 +11,7 @@ l'utente non le cambia**. Oggi non c'è un posto durevole per tenerli:
 - il **captain-diary** è per-giorno e serve alle lezioni di pacing, non a una policy
   permanente.
 
-Osservato dal vivo su andris (2026-07-11): dato l'ordine "modalità mantenimento",
+Osservato dal vivo su P03 (2026-07-11): dato l'ordine "modalità mantenimento",
 al primo refresh il Capitano lo avrebbe perso. Tampone: scritto nel captain-diary.
 Soluzione vera: la **bacheca**.
 
