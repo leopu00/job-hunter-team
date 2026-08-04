@@ -3,6 +3,40 @@ import { expect, test } from "@playwright/test";
 const MEDIA_REQUEST = /\.(?:m3u8|mp4|vtt|webm)(?:[?#]|$)/i;
 
 test.describe("shell pubblico tutorial e trailer", () => {
+  test("la home monta il teaser dopo il globo, come link senza player", async ({
+    page,
+  }) => {
+    const mediaRequests: string[] = [];
+    page.on("request", (request) => {
+      if (MEDIA_REQUEST.test(request.url())) mediaRequests.push(request.url());
+    });
+
+    const response = await page.goto("/", { waitUntil: "domcontentloaded" });
+    expect(response?.status(), "home non risponde").toBe(200);
+
+    const teaser = page.locator("[data-trailer-teaser]");
+    await expect(teaser).toBeVisible();
+    await expect(teaser.locator('a[href="/trailer"]')).toBeVisible();
+    expect(await teaser.locator("video").count()).toBe(0);
+    expect(mediaRequests, "home ha richiesto media prima di un click").toEqual(
+      [],
+    );
+
+    expect(
+      await page.evaluate(() => {
+        const globe = document.querySelector("[data-landing-globe]");
+        const trailer = document.querySelector("[data-trailer-teaser]");
+        return Boolean(
+          globe &&
+          trailer &&
+          globe.compareDocumentPosition(trailer) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        );
+      }),
+      "teaser non e' montato sotto il globo",
+    ).toBe(true);
+  });
+
   test("/tutorials espone entrambe le ancore senza scaricare media", async ({
     page,
   }) => {
@@ -48,10 +82,9 @@ test.describe("shell pubblico tutorial e trailer", () => {
     );
   });
 
-  test("le card restano responsive sul viewport stretto", async (
-    { browser },
-    testInfo,
-  ) => {
+  test("le card restano responsive sul viewport stretto", async ({
+    browser,
+  }, testInfo) => {
     const context = await browser.newContext({
       baseURL: testInfo.project.use.baseURL,
       viewport: { width: 375, height: 812 },

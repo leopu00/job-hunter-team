@@ -11,7 +11,11 @@ export default function TrailerTeaser() {
   const { t } = useLandingI18n();
 
   return (
-    <section aria-label={t("trailer_title")} className="mt-12 w-full px-6">
+    <section
+      aria-label={t("trailer_title")}
+      data-trailer-teaser
+      className="mt-12 w-full px-6"
+    >
       <Link
         href="/trailer"
         className="mx-auto block max-w-4xl overflow-hidden border border-[var(--color-border)] no-underline transition-colors hover:border-[var(--color-green)]"
