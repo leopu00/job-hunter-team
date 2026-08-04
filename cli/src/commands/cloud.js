@@ -8,6 +8,12 @@ import { SupabaseAuthError } from '../lib/supabase-direct.js';
 import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
 import {
+  acknowledgeSync,
+  pushRendezvousOutcome,
+  syncRendezvousPending,
+  timeoutFailure,
+} from '../lib/sync-rendezvous.js';
+import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
   BOOTSTRAP_STATE_FILE, FIRST_RUN_STATE_FILE,
@@ -1243,16 +1249,23 @@ async function handlePush(options) {
 
   async function postBatch(payload) {
     try {
-      const r = await fetch(pushUrl, { method: 'POST', headers: authHeaders, body: JSON.stringify(payload) });
+      const r = await fetch(pushUrl, {
+        method: 'POST',
+        headers: authHeaders,
+        signal: options.signal,
+        body: JSON.stringify(payload),
+      });
       const b = await r.json().catch(() => ({}));
       return { status: r.status, ok: r.ok, body: b };
     } catch (err) {
-      return { status: 0, ok: false, body: { error: err.message }, network: true };
+      const name = String(err?.name || '').toLowerCase();
+      const timedOut = name.includes('timeout') || err?.name === 'AbortError';
+      return { status: 0, ok: false, body: {}, network: true, timedOut };
     }
   }
 
   const outcome = {
-    aborted: false, authFailed: false, skipped: 0, requests: 0,
+    aborted: false, authFailed: false, timedOut: false, skipped: 0, requests: 0,
     up: { positions: 0, scores: 0, applications: 0, companies: 0,
           position_highlights: 0, pending_user_messages: 0, tombstones: 0,
           position_transitions: 0 },
@@ -1308,6 +1321,7 @@ async function handlePush(options) {
         }
         // 409 not_active_device o 5xx/altro: non recuperabile in questo giro.
         outcome.aborted = true;
+        if (res.timedOut) outcome.timedOut = true;
         if (res.status === 409 && res.body.error === 'not_active_device') {
           console.error(pc.red(`Push rifiutato (HTTP 409 not_active_device): un altro device ha il claim (active_device_id=${res.body.active_device_id ?? 'unknown'}).`));
           console.error(pc.dim('  Per riprendere il controllo: jht cloud claim --force'));
@@ -1396,7 +1410,11 @@ async function handlePush(options) {
     outcome.requests += 1;
     if (r.ok) addUp(r.body);
     else if (r.status === 401 || r.status === 403) { outcome.aborted = true; outcome.authFailed = true; }
-    else { outcome.aborted = true; console.error(pc.red(`Push profile fallito (HTTP ${r.status}): ${r.body.error || ''}`)); }
+    else {
+      outcome.aborted = true;
+      if (r.timedOut) outcome.timedOut = true;
+      console.error(pc.red(`Push profile fallito (HTTP ${r.status})`));
+    }
   }
 
   // ── Report + cursore ────────────────────────────────────────────────────
@@ -1406,7 +1424,12 @@ async function handlePush(options) {
     // tick. Nessuna riga persa. Segnaliamo il fallimento al chiamante.
     console.error(pc.yellow(`Push interrotto dopo ${outcome.requests} richieste — cursore invariato, ritento al prossimo tick.`));
     process.exitCode = 1;
-    return { ok: false, authFailed: outcome.authFailed, skipped: outcome.skipped };
+    return {
+      ok: false,
+      authFailed: outcome.authFailed,
+      skipped: outcome.skipped,
+      timedOut: outcome.timedOut === true,
+    };
   }
 
   console.log(pc.green(`✓ Push completato in ${outcome.requests} richieste`));
@@ -2523,30 +2546,47 @@ async function readRendezvousState(config, { silent = true } = {}) {
   }
 }
 
-async function handleSyncRendezvous(options = {}) {
+export async function handleSyncRendezvous(options = {}) {
   const silent = options.silent === true;
   const config = options.config || (await loadCloudConfig());
-  if (!config || !config.enabled) return;
+  if (!config || !config.enabled) return { status: 'disabled' };
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const reader = getDirectReader(config);
+  const reader = options.reader !== undefined ? options.reader : getDirectReader(config);
+  const fetchFn = options.fetchFn || fetch;
+  const pushFn = options.pushFn || handlePush;
 
   const state = options.state !== undefined
     ? options.state
     : await readRendezvousState(config, { silent });
-  if (!state) return;
+  if (!state) return { status: 'state_unavailable' };
 
   const reqAt = state.sync_requested_at || null;
   const doneAt = state.sync_completed_at || null;
-  // Timestamp ISO (UTC, suffisso Z dal cloud) → confronto lessicografico =
-  // cronologico. Pending se richiesto e non ancora completato dopo la richiesta.
-  const pending = reqAt && (!doneAt || reqAt > doneAt);
-  if (!pending) return;
+  // Non confrontare le stringhe: PostgREST può rendere lo stesso fuso come
+  // `Z` o `+00:00`, che hanno ordinamento lessicografico diverso.
+  const pending = syncRendezvousPending(reqAt, doneAt);
+  if (!pending) return { status: 'idle' };
+
+  // Deadline dell'intera operazione on-demand. Lo stesso signal attraversa
+  // tutti i chunk del push: molti timeout per-chunk consecutivi non possono
+  // trasformare un click in un'attesa senza limite.
+  const timeoutMs = Math.max(
+    1_000,
+    Number(options.timeoutMs ?? process.env.JHT_SYNC_REQUEST_TIMEOUT_MS ?? 120_000) || 120_000,
+  );
+  const signal = options.signal || AbortSignal.timeout(timeoutMs);
 
   // Push fresco ORA (resta su Vercel in Fase 1). Isolato dal counter del daemon.
   const prev = process.exitCode;
   process.exitCode = 0;
-  const pushResult = await handlePush({});
-  process.exitCode = prev;
+  let pushResult;
+  try {
+    pushResult = await pushFn({ signal });
+  } catch (error) {
+    pushResult = { ok: false, timedOut: timeoutFailure(error), skipped: 0 };
+  } finally {
+    process.exitCode = prev;
+  }
 
   // Ack `sync_completed_at` SOLO su successo PIENO. Prima l'ack veniva scritto
   // sempre → il web segnava "sincronizzato" anche quando il push falliva (o
@@ -2559,41 +2599,35 @@ async function handleSyncRendezvous(options = {}) {
   //     (che con safeCursor NON sono state superate dal cursore). Le righe
   //     scartate sono già loggate in rosso da handlePush e intercettate dal
   //     canary sync_health (Mantenitore) → segnale distinto senza nuovo stato.
-  const pushOk = !!pushResult && pushResult.ok === true && (pushResult.skipped || 0) === 0;
-  if (!pushOk) {
+  const pushOutcome = pushRendezvousOutcome(pushResult);
+  if (pushOutcome.status !== 'ready_to_ack') {
     if (!silent) {
       const why = pushResult && (pushResult.skipped || 0) > 0
         ? `${pushResult.skipped} righe scartate`
         : 'push non riuscito';
       console.error(pc.yellow(`  sync-rendezvous: ack NON scritto (${why}) — il web resta "non sincronizzato", ritento al prossimo tick.`));
     }
-    return;
+    return pushOutcome;
   }
 
   // Ack `sync_completed_at`: diretto se disponibile, altrimenti PATCH Vercel.
   const nowIso = new Date().toISOString();
-  if (reader) {
-    try {
-      await reader.patchTeamState({ sync_completed_at: nowIso });
-      if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack (direct)'));
-      return;
-    } catch (err) {
-      if (!silent) console.error(pc.yellow(`  sync-rendezvous ack (direct) warn: ${err.message} — fallback Vercel`));
+  const ack = await acknowledgeSync({
+    reader,
+    fetchFn,
+    url: `${baseUrl}/api/team-state`,
+    token: config.token,
+    completedAt: nowIso,
+    signal,
+  });
+  if (!silent) {
+    if (ack.status === 'completed') {
+      console.log(pc.green(`✓ Sync now servito: push fresco + ack (${ack.via})`));
+    } else {
+      console.error(pc.yellow(`  sync-rendezvous: ${ack.status}; ack non confermato`));
     }
   }
-  try {
-    await fetch(`${baseUrl}/api/team-state`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ sync_completed_at: nowIso }),
-    });
-    if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack'));
-  } catch (err) {
-    if (!silent) console.error(pc.yellow(`  sync-rendezvous ack warn: ${err.message}`));
-  }
+  return ack;
 }
 
 /**
@@ -2624,12 +2658,13 @@ async function handleSyncRendezvous(options = {}) {
  * sicurezza: è la strada normale del fleet, dove `JHT_SUPABASE_DIRECT` è
  * spento — vedi `chatChannelFor` in chat-sync.js.
  */
-async function handleChatSync(options = {}) {
+export async function handleChatSync(options = {}) {
   const silent = options.silent === true;
   const config = options.config || (await loadCloudConfig());
-  if (!config || !config.enabled) return;
-  const dbPath = process.env.JHT_DB || JHT_DB_PATH;
-  if (!existsSync(dbPath)) return;
+  if (!config || !config.enabled) return { status: 'disabled' };
+  const dbPath = options.dbPath || process.env.JHT_DB || JHT_DB_PATH;
+  const jhtHome = options.jhtHome || JHT_HOME;
+  if (!existsSync(dbPath)) return { status: 'db_missing' };
 
   const chat = await import('../lib/chat-sync.js');
   const log = (level, msg) => {
@@ -2649,7 +2684,7 @@ async function handleChatSync(options = {}) {
     ({ DatabaseSync } = await import('node:sqlite'));
   } catch (err) {
     log('error', `chat-sync: node:sqlite non disponibile: ${err.message}`);
-    return;
+    return { status: 'sqlite_unavailable' };
   }
 
   let db;
@@ -2663,13 +2698,13 @@ async function handleChatSync(options = {}) {
     // ferma la chat per intero, ed è esattamente ciò che deve farsi vedere
     // anche dal daemon.
     log('error', `chat-sync: DB non apribile: ${err.message}`);
-    return;
+    return { status: 'db_unavailable' };
   }
   // Le colonne arrivano da _db.py alla prima apertura di un agente: un
   // container non ancora ri-deployato non deve far esplodere il daemon.
   if (!sqliteHasColumn(db, 'pending_user_messages', 'author')) {
     db.close();
-    return;
+    return { status: 'schema_outdated' };
   }
 
   // Il canale col cloud: Supabase diretto se il flag opt-in è acceso,
@@ -2677,8 +2712,10 @@ async function handleChatSync(options = {}) {
   // resta preferito perché costa meno; quello Vercel è l'unico che esiste
   // sul fleet, dove `JHT_SUPABASE_DIRECT` è spento — vedi il perché disteso
   // in chat-sync.js, sopra `directChatChannel`.
-  const reader = getDirectReader(config);
-  const channel = chat.chatChannelFor(config, reader);
+  const reader = options.reader !== undefined ? options.reader : getDirectReader(config);
+  const channel = options.channel !== undefined
+    ? options.channel
+    : chat.chatChannelFor(config, reader);
   let importedIds = [];
   // Motivo della lettura fallita, se fallita: serve alla diagnosi in fondo
   // (il log qui sotto è gated da `silent`, quindi nel daemon non si vede).
@@ -2693,24 +2730,24 @@ async function handleChatSync(options = {}) {
     if (pending && channel) {
       try {
         const cloudRows = await channel.readUndeliveredUserChat({ limit: 50 });
-        importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome: JHT_HOME });
+        importedIds = chat.importCloudUserTurns(db, cloudRows, { jhtHome });
       } catch (err) {
-        readError = err.message;
-        log('warn', `chat-sync: lettura turni utente fallita: ${err.message}`);
+        readError = chat.cloudRequestFailure(err);
+        log('warn', `chat-sync: lettura turni utente fallita (${readError})`);
       }
     }
 
     // ── 2/3. Mirror bidirezionale col file che legge il gioco ──────────
-    const cursorFile = join(JHT_HOME, '.chat-mirror-cursor.json');
+    const cursorFile = join(jhtHome, '.chat-mirror-cursor.json');
     const cursor = await chat.loadChatCursor(cursorFile);
-    const ingested = chat.ingestChatJsonl(db, { jhtHome: JHT_HOME, cursor });
+    const ingested = chat.ingestChatJsonl(db, { jhtHome, cursor });
     if (JSON.stringify(ingested.cursor) !== JSON.stringify(cursor)) {
       await chat.saveChatCursor(cursorFile, ingested.cursor);
     }
-    const mirrored = chat.mirrorDbTurnsToJsonl(db, { jhtHome: JHT_HOME });
+    const mirrored = chat.mirrorDbTurnsToJsonl(db, { jhtHome });
 
     // ── 4. Consegna al pane ────────────────────────────────────────────
-    const sent = await chat.deliverPendingUserTurns(db, { log });
+    const sent = await chat.deliverPendingUserTurns(db, { log, sendFn: options.sendFn });
 
     // ── 5. Push dei turni nuovi verso il cloud ─────────────────────────
     const toPush = chat.takeChatRowsToPush(db, { limit: 100 });
@@ -2718,7 +2755,8 @@ async function handleChatSync(options = {}) {
     if (toPush.length > 0) {
       const userId = config.user_id || null;
       const rows = toPush.map((r) => chat.toCloudRow(r, userId));
-      const okIds = await pushChatRows(config, rows, toPush.map((r) => r.id), log);
+      const pushRowsFn = options.pushRowsFn || pushChatRows;
+      const okIds = await pushRowsFn(config, rows, toPush.map((r) => r.id), log);
       chat.markChatRowsPushed(db, okIds);
       pushed = okIds.length;
     }
@@ -2726,11 +2764,15 @@ async function handleChatSync(options = {}) {
     // ── Chiusura del rendezvous ────────────────────────────────────────
     // Solo se abbiamo davvero consegnato tutto quello che era in coda: con
     // un pane occupato il flag resta aperto e il giro dopo ritenta.
-    if (pending && channel && sent.failed === 0) {
+    let acked = false;
+    let ackFailed = false;
+    if (pending && channel && sent.failed === 0 && !readError) {
       try {
         await channel.closeRendezvous(importedIds);
+        acked = true;
       } catch (err) {
-        log('warn', `chat-sync: ack consegna fallito: ${err.message}`);
+        ackFailed = true;
+        log('warn', `chat-sync: ack consegna fallito (${chat.cloudRequestFailure(err)})`);
       }
     }
 
@@ -2764,8 +2806,24 @@ async function handleChatSync(options = {}) {
         )
       );
     }
+    return {
+      status: readError
+        ? readError
+        : sent.failed > 0
+          ? 'delivery_pending'
+          : ackFailed
+            ? 'ack_failed'
+            : 'completed',
+      pending: !!pending,
+      imported: importedIds.length,
+      delivered: sent.delivered,
+      failed: sent.failed,
+      pushed,
+      acked,
+    };
   } catch (err) {
-    if (!silent) console.error(pc.yellow(`  chat-sync error: ${err.message}`));
+    log('error', `chat-sync: giro fallito (${String(err?.code || err?.name || 'processing_error')})`);
+    return { status: 'processing_error' };
   } finally {
     try { db.close(); } catch { /* già chiuso */ }
   }

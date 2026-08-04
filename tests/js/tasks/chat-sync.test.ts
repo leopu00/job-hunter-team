@@ -32,6 +32,7 @@ import {
   chatFileFor,
   chatPending,
   chatTsOf,
+  cloudRequestFailure,
   deliverPendingUserTurns,
   diagnoseChatLane,
   fileChanged,
@@ -762,6 +763,27 @@ describe("canale della chat senza lettore diretto", () => {
     await expect(channel!.closeRendezvous(["x"])).rejects.toThrow(/500/);
   });
 
+  it("GET e ACK hanno una deadline e gli errori restano sanitizzati", async () => {
+    const signals: AbortSignal[] = [];
+    const channel = chatChannelFor(BOX_CONFIG, null, {
+      timeoutMs: 10_000,
+      fetchFn: async (_url: string, init?: Record<string, any>) => {
+        signals.push(init?.signal);
+        return init?.method === "POST"
+          ? ({ ok: true, status: 200 } as Response)
+          : ({ ok: true, status: 200, json: async () => ({ messages: [] }) } as any);
+      },
+    });
+    await channel!.readUndeliveredUserChat();
+    await channel!.closeRendezvous([]);
+    expect(signals).toHaveLength(2);
+    expect(signals.every((signal) => signal instanceof AbortSignal)).toBe(true);
+
+    const timeout = Object.assign(new Error("host-riservato"), { name: "TimeoutError" });
+    expect(cloudRequestFailure(timeout)).toBe("timeout");
+    expect(cloudRequestFailure(new Error("url-riservato"))).toBe("request_failed");
+  });
+
   it("la corsia in cloud.js non è più gatata sul lettore diretto", () => {
     // Il difetto era una sola condizione: `if (pending && reader)`. Questo
     // controllo è sul SORGENTE perché typecheck e lint non lo vedrebbero.
@@ -773,6 +795,23 @@ describe("canale della chat senza lettore diretto", () => {
     expect(src).toContain("chat.chatChannelFor(config, reader)");
     // La guardia che tiene a zero le chiamate a chat ferma.
     expect(src).toContain("if (pending && channel)");
+  });
+
+  it("il worker importa node:sqlite prima di aprire il DB", () => {
+    // Regressione del guasto live: `new DatabaseSync` senza import cadeva nel
+    // catch silenzioso del daemon e la corsia non girava mai.
+    const src = readFileSync(
+      join(__dirname, "../../../cli/src/commands/cloud.js"),
+      "utf-8",
+    );
+    const start = src.indexOf("export async function handleChatSync");
+    const end = src.indexOf("let chatLaneAlert", start);
+    const worker = src.slice(start, end);
+    const importAt = worker.indexOf("await import('node:sqlite')");
+    const openAt = worker.indexOf("new DatabaseSync(dbPath");
+    expect(importAt).toBeGreaterThan(0);
+    expect(openAt).toBeGreaterThan(importAt);
+    expect(worker).toContain("log('error', `chat-sync: giro fallito");
   });
 
   it("la chat resta nel giro veloce del daemon (~5s), non in quello pesante", () => {
