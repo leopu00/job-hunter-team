@@ -1505,18 +1505,19 @@ static func _with_exit_report(command: String, token: String) -> String:
 			+ "exit \"$_jht_exit\"") % [command, token]
 
 
-## Windows non espone l'exit code del processo raccolto da Godot. Delayed
-## expansion non può restare attiva sul comando ospitato: cambierebbe i path e
-## gli argomenti contenenti `!`. Il caret conserva i percento alla prima
-## espansione di `cmd /c`, così `call` legge ERRORLEVEL solo dopo il comando.
-## PowerShell scrive l'OSC e termina con lo stesso codice catturato.
+## Windows non espone l'exit code del processo raccolto da Godot. PowerShell è
+## il wrapper ESTERNO: il comando cmd viaggia in UTF-8 base64, così nessun
+## parser prima del cmd interno consuma `!`, percento o virgolette. Dopo cmd,
+## $LASTEXITCODE è l'unica fonte dell'esito; PowerShell scrive l'OSC e termina
+## con lo stesso codice.
 static func _with_windows_exit_report(command: String, token: String) -> String:
-	return ("( %s ) 1>&2 & call set JHT_EXIT_CODE=^%%errorlevel^%% & " \
-			+ "powershell.exe -NoProfile -NonInteractive -Command " \
-			+ "\"[Console]::Out.Write([char]27 + ']1337;JHTExit=%s:' " \
-			+ "+ $env:JHT_EXIT_CODE + [char]7); " \
-			+ "exit [int]$env:JHT_EXIT_CODE\"") \
-			% [command, token]
+	var encoded := Marshalls.utf8_to_base64(command)
+	return ("$jht_command = [Text.Encoding]::UTF8.GetString(" \
+			+ "[Convert]::FromBase64String('%s')); " \
+			+ "& $env:COMSPEC /d /s /c $jht_command 1>&2; " \
+			+ "$jht_exit = [int]$LASTEXITCODE; " \
+			+ "[Console]::Out.Write([char]27 + ']1337;JHTExit=%s:' " \
+			+ "+ $jht_exit + [char]7); exit $jht_exit") % [encoded, token]
 
 
 ## Senza `stty` la pty aperta da `script` nasce 0×0 — misurato sia su macOS
@@ -1541,10 +1542,10 @@ static func embedded_terminal_spec(title: String, hint: String, command: String)
 					+ _shell_quote(_with_pty_size(
 							_with_exit_report(command, exit_report_token))) + " 1>&2"])
 		"Windows":
-			path = "cmd.exe"
+			path = "powershell.exe"
 			# ConPTY non è ancora esposto da Godot: il device flow Codex resta
 			# pienamente interattivo; Claude/Kimi ricevono comunque stdin.
-			args = PackedStringArray(["/d", "/s", "/c",
+			args = PackedStringArray(["-NoProfile", "-NonInteractive", "-Command",
 					_with_windows_exit_report(command, exit_report_token)])
 		_:
 			args = PackedStringArray(["-lc", "3>&1 script -qefc " \
