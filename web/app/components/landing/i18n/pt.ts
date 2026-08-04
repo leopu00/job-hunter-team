@@ -55,7 +55,7 @@ export const pt: Record<string, string> = {
 
   // Download page
   dl_desc:
-    "O painel do JHT é iniciado a partir do terminal, através da configuração com CLI e TUI. O runtime corre no teu computador e os teus dados permanecem sob o teu controlo.",
+    "Descarrega a app de ambiente de trabalho para configurar e acompanhar a tua equipa. A CLI continua disponível se preferires o terminal.",
   dl_back: "← Voltar",
   dl_title_1: "Configura a tua equipa",
   dl_title_2: "no teu PC",

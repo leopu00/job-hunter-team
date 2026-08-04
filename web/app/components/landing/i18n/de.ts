@@ -54,7 +54,7 @@ export const de: Record<string, string> = {
 
   // Download page
   dl_desc:
-    "Das JHT-Dashboard wird über das Terminal gestartet, mit dem CLI- und TUI-Setup. Die Runtime läuft auf deinem Computer und deine Daten bleiben unter deiner Kontrolle.",
+    "Lade die Desktop-App herunter, um dein Team einzurichten und zu verfolgen. Die CLI bleibt verfügbar, wenn du das Terminal bevorzugst.",
   dl_back: "← Zurück",
   dl_title_1: "Richte dein Team ein",
   dl_title_2: "auf deinem PC",

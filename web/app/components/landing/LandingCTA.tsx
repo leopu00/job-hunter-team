@@ -56,7 +56,7 @@ export default function LandingCTA() {
         {t("cta_title_1")} {t("cta_title_2")}
       </h2>
       <Link
-        href="/download"
+        href="/run"
         className="inline-block px-8 py-3.5 rounded text-[13px] font-bold tracking-wider no-underline transition-all"
         style={{
           background: "var(--color-green)",
@@ -106,8 +106,11 @@ export function LandingFooter() {
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">
               {t("footer_product")}
             </h4>
+            <Link href="/run" className={linkClass}>
+              {t("nav_run")}
+            </Link>
             <Link href="/download" className={linkClass}>
-              Download
+              {t("nav_download")}
             </Link>
             <Link href="/project" className={linkClass}>
               {t("footer_stats")}
