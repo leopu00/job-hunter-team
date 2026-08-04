@@ -3495,7 +3495,8 @@ func _build_pos_detail() -> void:
 		if p.get("critic_notes"):
 			critic_box.add_child(_pos_paragraph(str(p["critic_notes"])))
 	else:
-		critic_box.add_child(TerminalTheme.label(UIStrings.t("pos.critic_none"), 14, Palette.DIM))
+		critic_box.add_child(TerminalTheme.label(UIStrings.t("pos.critic_none"),
+				14, Palette.MUTED))
 
 	# ── punti chiave ──
 	var highlights: Array = p.get("highlights", [])
@@ -3531,7 +3532,7 @@ func _build_pos_detail() -> void:
 	var actions_box := _pos_card_box(box, Color.TRANSPARENT,
 			Palette.CARD, 18, 9)
 	actions_box.add_child(TerminalTheme.label(UIStrings.t("pos.actions").to_upper(), 13,
-			Palette.MUTED, "bold"))
+			Palette.BASE, "bold"))
 	for act in [["pos.act_write", "write_requested"],
 			["pos.act_geocode", "geocode_requested"],
 			["pos.act_recheck", "recheck_requested"]]:
@@ -3544,17 +3545,18 @@ func _build_pos_detail() -> void:
 		arow.add_child(al)
 		arow.add_child(TerminalTheme.label(
 				UIStrings.t("pos.act_requested") if requested else UIStrings.t("pos.act_not_requested"),
-				13, Palette.YELLOW if requested else Palette.DIM, "medium"))
-	actions_box.add_child(TerminalTheme.label(UIStrings.t("pos.act_note"), 12, Palette.DIM))
+				13, Palette.YELLOW if requested else Palette.MUTED, "medium"))
+	actions_box.add_child(TerminalTheme.label(UIStrings.t("pos.act_note"), 12, Palette.MUTED))
 
 	# ── ticket col team ──
 	var tickets_box := _pos_card_box(box, Color.TRANSPARENT,
 			Palette.CARD, 18, 9)
 	tickets_box.add_child(TerminalTheme.label(UIStrings.t("pos.tickets").to_upper(), 13,
-			Palette.MUTED, "bold"))
+			Palette.BASE, "bold"))
 	var tickets: Array = p.get("tickets", [])
 	if tickets.is_empty():
-		tickets_box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_none"), 13, Palette.DIM))
+		tickets_box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_none"),
+				13, Palette.MUTED))
 	for t in tickets:
 		var trow := HBoxContainer.new()
 		trow.add_theme_constant_override("separation", 12)
@@ -3572,7 +3574,7 @@ func _build_pos_detail() -> void:
 func _build_ticket_form(box: VBoxContainer, pid: int) -> void:
 	if not BackendBus.is_live():
 		box.add_child(TerminalTheme.label(UIStrings.t("pos.ticket_need_vps"),
-				12, Palette.DIM))
+				12, Palette.MUTED))
 		return
 	if not BackendBus.ticket_created.is_connected(_on_ticket_created):
 		BackendBus.ticket_created.connect(_on_ticket_created)
