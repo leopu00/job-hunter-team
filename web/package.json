@@ -10,7 +10,8 @@
     "build": "next build",
     "analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "recording-profile": "tsx scripts/recording-profile.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
@@ -36,6 +37,7 @@
     "eslint": "^9",
     "eslint-config-next": "^16.2.10",
     "tailwindcss": "^4.3.2",
+    "tsx": "^4.20.6",
     "typescript": "^6.0.3"
   },
   "overrides": {
