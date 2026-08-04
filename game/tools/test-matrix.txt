@@ -132,6 +132,7 @@ gfx_profile|run|gate|any|JHT_SCENE=office JHT_GFX_TEST=1|-|GFX-PROFILE-TEST PASS
 world_text|run|gate|any|JHT_SCENE=office JHT_WORLD_TEXT_TEST=1|-|WORLD-TEXT-TEST PASS
 graphics_panel|run|gate|any|JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1|-|GRAPHICS-PANEL-TEST PASS
 setup_busy|run|gate|any|JHT_SCENE=office JHT_SETUP_BUSY_TEST=1|-|SETUP-BUSY-TEST PASS
+bubble_layout|run|gate|any|JHT_SCENE=office JHT_BUBBLE_LAYOUT_TEST=1|-|BUBBLE-LAYOUT-TEST PASS
 
 # ------------------------------------------------------------------- watch
 # I 15 che nessuna CI ha mai eseguito. Non sono dimenticati: sono in

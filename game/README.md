@@ -58,12 +58,19 @@ itself up by exactly the inverse of the render scale, so it keeps the same amoun
 of physical pixels it had at full resolution (`WORLD-TEXT-TEST` measures it).
 Interface text never goes through the reduced stage at all.
 
+Concurrent speech is packed at 10 Hz around every visible head and the active
+camera bounds. Nearby messages use one horizontal lane per side and then higher
+rows, so boxes neither overlap nor cover faces. Every bubble includes the
+speaker name; this keeps attribution explicit when a box moves away from its
+natural anchor. `JHT_BUBBLE_LAYOUT_TEST=1` stages three long simultaneous
+messages and asserts separation, head clearance, camera bounds and labels.
+
 Test hooks, all headless: `JHT_PIXEL=<scale|divisor>` forces a render scale,
 `JHT_LOW_GFX=1` forces the reduced profile, `JHT_CENSUS=1` attributes draw calls
 branch by branch, and `JHT_GFX_TEST` / `JHT_WORLD_TEXT_TEST` /
-`JHT_GRAPHICS_PANEL_TEST` run the three self-tests. A profile forced through the
-environment also freezes the watcher: otherwise every benchmark converges on the
-same step the calibration picked.
+`JHT_GRAPHICS_PANEL_TEST` / `JHT_BUBBLE_LAYOUT_TEST` run the visual self-tests.
+A profile forced through the environment also freezes the watcher: otherwise
+every benchmark converges on the same step the calibration picked.
 
 ## Native exports
 
