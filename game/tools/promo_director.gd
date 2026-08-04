@@ -36,6 +36,9 @@ extends Node
 ##                         ritira dalla vaschetta e consegna allo scaffale.
 ##   JHT_PROMO=dusk-night  Scena 7b — notte fonda (JHT_HOUR=2), una sola
 ##                         scrivania nella pozza della lampada.
+##   JHT_PROMO=agent-review  Un ciak QA/B-roll per il ruolo indicato da
+##                         JHT_PROMO_AGENT: seduta, alzata, quattro direzioni,
+##                         ritiro documento, lavoro reale e ritorno a sedere.
 ## I viaggi fisici riusano le tappe VERE della pipeline (stampante,
 ## pile_take/pile_drop, scaffale output) ma con PAUSE FISSE: il ciak deve
 ## essere ripetibile, non un lancio di dadi. Il HUD «JHT TEAM» (numeri
@@ -222,10 +225,41 @@ const NIGHT_ZOOM_FROM := 3.37
 const NIGHT_ZOOM_TO := 3.50
 const NIGHT_SECONDS := 9.0
 
+## Quadrato di calibrazione nel corridoio libero fra Direzione e Scorer.
+## Le quattro tratte sono intenzionalmente ortogonali: ogni ciak rende
+## osservabili up/right/down/left senza sostituire il pathfinding vero.
+const REVIEW_LOOP := [
+	Vector2(1450.0, 780.0),
+	Vector2(1450.0, 650.0),
+	Vector2(1700.0, 650.0),
+	Vector2(1700.0, 780.0),
+	Vector2(1450.0, 780.0),
+]
+const REVIEW_ZOOM := 3.25
+const REVIEW_HANDLE_SECONDS := 2.0
+const REVIEW_TURN_HOLD := 0.45
+const REVIEW_PICKUP_HOLD := 1.0
+const REVIEW_WORK_HOLD := 2.6
+const REVIEW_FINAL_HOLD := 2.0
+
+## I core non appartengono alla catena delle pile, ma il loro lavoro ha
+## comunque una meta reale della ronda dichiarata in CharacterDefs.
+const REVIEW_CORE_WORK := {
+	"coordinatore": Vector2(1110.0, 778.0),
+	"sentinella": Vector2(2690.0, 790.0),
+	"assistente": Vector2(1790.0, 1390.0),
+	"dottore": Vector2(1790.0, 1390.0),
+	"mantenitore": Vector2(590.0, 1090.0),
+	"mentor": Vector2(2920.0, 1320.0),
+}
+
 var _office: Node
 var _track_cam: Camera2D
 var _track_target: Node2D
 var _track_offset := Vector2.ZERO
+var _review_role := ""
+var _review_frame_zero := 0
+var _review_shutter: CanvasLayer
 ## Inseguimento morbido: a 30 fps un lerp 0.08 tiene il soggetto centrato
 ## senza scatti quando cambia direzione (carrellata, non ping-pong).
 const TRACK_LERP := 0.08
@@ -233,7 +267,14 @@ const TRACK_LERP := 0.08
 
 func _ready() -> void:
 	_office = get_parent()
-	match OS.get_environment("JHT_PROMO"):
+	var mode := OS.get_environment("JHT_PROMO")
+	# Movie Maker registra dal bootstrap. Sul profilo live teniamo chiusa una
+	# semplice tendina nera finche' il data-plane non e' pronto: nel raw non
+	# entra mai un frame intermedio col warning, che resta comunque intatto e
+	# scompare da solo soltanto quando i dati sono davvero live.
+	if mode == "agent-review" and OS.get_environment("JHT_PROMO_REQUIRE_LIVE") == "1":
+		_review_install_shutter()
+	match mode:
 		"office":
 			_office_clip.call_deferred()
 		"dept":
@@ -250,6 +291,8 @@ func _ready() -> void:
 			_tailor_88_clip.call_deferred()
 		"dusk-night":
 			_dusk_night_clip.call_deferred()
+		"agent-review":
+			_agent_review_clip.call_deferred()
 
 
 func _process(_delta: float) -> void:
@@ -557,6 +600,252 @@ func _dusk_night_clip() -> void:
 	_pulse_at(5.5, scout)
 
 
+## Ciak uniforme per la recensione degli undici fogli personaggio. Tutte le
+## tappe usano AgentNPC._leg_to + NavGrid: il filmato controlla il gioco vero,
+## non un'animazione dimostrativa separata.
+func _agent_review_clip() -> void:
+	await get_tree().process_frame
+	if not await _review_wait_for_live_profile():
+		return
+	_dress_promo_set()
+	_review_role = OS.get_environment("JHT_PROMO_AGENT").strip_edges()
+	# Il prodotto espone CAPITANO all'utente; nella scena lo slug storico e'
+	# coordinatore. Accettiamo entrambi, ma il sidecar usa il nome pubblico.
+	if _review_role == "capitano":
+		_review_role = "coordinatore"
+	if not CharacterDefs.AGENTS.has(_review_role):
+		push_error("promo agent-review: ruolo sconosciuto '%s'" % _review_role)
+		get_tree().quit(2)
+		return
+	var agent := _review_subject(_review_role)
+	if agent == null:
+		push_error("promo agent-review: agente assente '%s'" % _review_role)
+		get_tree().quit(3)
+		return
+	for other in _office.agents:
+		other._state_timer = 100000.0
+		other._pause = 100000.0 if other != agent else other._pause
+	await _wait_desk_stable(agent)
+	_track_target = agent
+	_track_offset = Vector2(0.0, -38.0)
+	_track_cam = _mount_camera(agent.global_position + _track_offset, REVIEW_ZOOM)
+	if not await _review_wait_for_trigger():
+		return
+	if _review_shutter:
+		_review_shutter.queue_free()
+		_review_shutter = null
+		await get_tree().process_frame
+		await get_tree().process_frame
+	_review_frame_zero = Engine.get_process_frames()
+	_review_marker("initial_sit")
+	await get_tree().create_timer(REVIEW_HANDLE_SECONDS).timeout
+
+	var pickup := _review_pickup(agent)
+	var work_target: Vector2 = agent._spot if agent.dept != "" \
+			else REVIEW_CORE_WORK.get(agent.slug, agent._spot)
+	var legs: Array = []
+	var directions_qa := OS.get_environment("JHT_PROMO_DIRECTIONS") == "1"
+	print("PROMO-SCENE\t%s\t%s\t%s" % [
+			OS.get_environment("JHT_PROMO_SCENE_ID"), _review_role_label(),
+			"directions-qa" if directions_qa else "organic-workcycle"])
+	if directions_qa:
+		for point in REVIEW_LOOP:
+			legs.append(agent._leg_to(point, "walk", REVIEW_TURN_HOLD, "idle"))
+	var take: Dictionary = agent._leg_to(pickup, "walk", REVIEW_PICKUP_HOLD, "idle")
+	if pickup == DepartmentDefs.POIS["printer"]["spot"]:
+		take["fx_printer"] = true
+	elif agent.dept != "" and DepartmentDefs.FETCH_FROM.has(agent.dept):
+		take["pile_take"] = DepartmentDefs.FETCH_FROM[agent.dept]
+	legs.append(take)
+	var work: Dictionary = agent._leg_to(work_target, "carry", REVIEW_WORK_HOLD, "work")
+	if agent.dept != "":
+		work["desk_work"] = true
+	legs.append(work)
+	_review_append_delivery(agent, legs)
+	legs.append(agent._leg_to(agent._spot, "walk", 0.0, "work"))
+	_force_legs(agent, legs)
+
+	while is_instance_valid(agent) and agent._desk_pose_active:
+		await get_tree().process_frame
+	_review_marker("rise")
+	if directions_qa:
+		while is_instance_valid(agent) \
+				and agent.global_position.distance_to(REVIEW_LOOP[0]) > 18.0:
+			await get_tree().process_frame
+		await _review_mark_directions(agent)
+	while is_instance_valid(agent) and not _review_at_pickup(agent, pickup):
+		await get_tree().process_frame
+	_review_marker("document_pickup")
+	while is_instance_valid(agent) and not _review_at_work(agent, work_target):
+		await get_tree().process_frame
+	_review_marker("work")
+	while is_instance_valid(agent) and not _review_is_returning(agent):
+		await get_tree().process_frame
+	_review_marker("return")
+	while is_instance_valid(agent) and (agent._forced_trip or not agent._desk_pose_active):
+		await get_tree().process_frame
+	_review_marker("sit")
+	await get_tree().create_timer(REVIEW_FINAL_HOLD).timeout
+	_review_marker("end")
+	print("PROMO-AGENT-REVIEW PASS %s" % _review_role_label())
+	get_tree().quit()
+
+
+## In release footage the office may be visible only after a real recording
+## profile is connected and has replaced every demo position. The normal
+## product warning remains untouched while the connection is incomplete.
+func _review_wait_for_live_profile() -> bool:
+	if OS.get_environment("JHT_PROMO_REQUIRE_LIVE") != "1":
+		return true
+	var deadline := Time.get_ticks_msec() + 90000
+	while Time.get_ticks_msec() < deadline:
+		if BackendBus.is_live() and not BackendBus.positions_are_demo \
+				and not BackendBus.positions.is_empty():
+			await get_tree().process_frame
+			await get_tree().process_frame
+			return true
+		await get_tree().create_timer(0.1).timeout
+	push_error("promo agent-review: profilo live non pronto entro 90 secondi")
+	get_tree().quit(4)
+	return false
+
+
+func _review_install_shutter() -> void:
+	_review_shutter = CanvasLayer.new()
+	_review_shutter.layer = 10000
+	var black := ColorRect.new()
+	black.color = Color.BLACK
+	black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	black.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_review_shutter.add_child(black)
+	_office.add_child(_review_shutter)
+
+
+## Il profilo REL-004 puo' tenere spenti i processi LLM per non consumare
+## provider durante le riprese. In quel caso il data-plane resta davvero
+## locale/live (jobs.db e posizioni), mentre il soggetto visuale approvato e'
+## quello dello showroom. Usiamo prima un processo reale del ruolo quando
+## esiste; altrimenti riusiamo il relativo asset sintetico, dichiarandolo nel
+## sidecar stdout. Movimento, navigazione e interazioni restano gli stessi
+## componenti runtime di AgentNPC.
+func _review_subject(role: String) -> AgentNPC:
+	for candidate in _office.agents:
+		if candidate.slug == role and not candidate.uid.is_empty() \
+				and not candidate.is_dissolving():
+			print("PROMO-SUBJECT\t%s\tlive-roster" % _review_role_label())
+			return candidate
+	for candidate in _office.agents:
+		if candidate.slug == role and not candidate.is_dissolving():
+			print("PROMO-SUBJECT\t%s\tsynthetic-profile" % _review_role_label())
+			return candidate
+	for def in CharacterDefs.spawn_list():
+		if str(def.get("slug", "")) != role or not bool(def.get("lead", false)):
+			continue
+		var subject := AgentNPC.new()
+		_office.world.add_child(subject)
+		subject.setup(def, _office.nav)
+		subject.set_backend_status("working")
+		_office.agents.append(subject)
+		print("PROMO-SUBJECT\t%s\tsynthetic-profile" % _review_role_label())
+		return subject
+	return null
+
+
+## La cattura esterna parte soltanto quando il frame e' gia' live e pulito.
+## Il file READY non contiene dati: sincronizza recorder e regia. Se non e'
+## richiesto un trigger, i selftest e i ciak Movie Maker storici partono subito.
+func _review_wait_for_trigger() -> bool:
+	var ready_path := OS.get_environment("JHT_PROMO_READY_FILE")
+	var trigger_path := OS.get_environment("JHT_PROMO_TRIGGER_FILE")
+	if ready_path != "":
+		var ready := FileAccess.open(ready_path, FileAccess.WRITE)
+		if ready == null:
+			push_error("promo agent-review: impossibile scrivere READY")
+			get_tree().quit(5)
+			return false
+		ready.store_string("READY\n")
+		ready.close()
+	if trigger_path == "":
+		return true
+	var deadline := Time.get_ticks_msec() + 90000
+	while Time.get_ticks_msec() < deadline:
+		if FileAccess.file_exists(trigger_path):
+			return true
+		await get_tree().create_timer(0.05).timeout
+	push_error("promo agent-review: trigger cattura assente dopo 90 secondi")
+	get_tree().quit(6)
+	return false
+
+
+func _review_pickup(agent: AgentNPC) -> Vector2:
+	if agent.slug == "mentor":
+		return Vector2(2550.0, 1260.0)  # il volume preso dalla libreria
+	if agent.dept != "" and DepartmentDefs.FETCH_FROM.has(agent.dept):
+		return DepartmentDefs.handoff_spot(DepartmentDefs.FETCH_FROM[agent.dept], true)
+	return DepartmentDefs.POIS["printer"]["spot"]
+
+
+func _review_at_pickup(agent: AgentNPC, target: Vector2) -> bool:
+	# L'effetto (stampante/pile_take) viene applicato in _arrive_at_leg, subito
+	# prima della pausa. Solo la vicinanza geometrica segnerebbe il marker uno
+	# o due frame prima che il documento sia davvero stato ritirato.
+	return agent.global_position.distance_to(target) < 22.0 and agent._pause > 0.0
+
+
+func _review_append_delivery(agent: AgentNPC, legs: Array) -> void:
+	if agent.dept == "":
+		return
+	if agent.dept == "critici":
+		legs.append(agent._leg_to(OutputShelf.RECT.get_center() + Vector2(0.0, 46.0),
+				"carry", 0.8, "idle"))
+		return
+	var drop: Dictionary = agent._leg_to(DepartmentDefs.handoff_spot(agent.dept),
+			"carry", 0.8, "idle")
+	drop["pile_drop"] = agent.dept
+	legs.append(drop)
+
+
+func _review_mark_directions(agent: AgentNPC) -> void:
+	var seen := {}
+	while is_instance_valid(agent) and seen.size() < 4:
+		var direction := ""
+		match str(agent.rig.facing):
+			"up": direction = "up"
+			"down": direction = "down"
+			"side": direction = "left" if bool(agent.rig.flipped) else "right"
+		if direction != "" and not seen.has(direction):
+			seen[direction] = true
+			_review_marker(direction)
+		await get_tree().process_frame
+
+
+func _review_at_work(agent: AgentNPC, target: Vector2) -> bool:
+	if agent.dept != "":
+		return agent._desk_pose_active
+	return agent.global_position.distance_to(target) < 22.0 \
+			and str(agent.rig.mode) == "work"
+
+
+func _review_is_returning(agent: AgentNPC) -> bool:
+	if agent.state != AgentNPC.S.TRIP or agent._leg.is_empty():
+		return false
+	# Per i ruoli di reparto anche la tappa di lavoro punta alla scrivania, ma
+	# vi arriva in modalita' carry. Il ritorno finale e' la tratta walk: senza
+	# questa distinzione i marker work/return cadrebbero nello stesso frame.
+	return str(agent._leg.get("mode", "")) == "walk" \
+			and (agent._leg.get("target", Vector2.INF) as Vector2).distance_to(agent._spot) < 2.0
+
+
+func _review_marker(event: String) -> void:
+	var frame := Engine.get_process_frames() - _review_frame_zero
+	print("PROMO-MARKER\t%s\t%s\t%d\t%.3f" % [
+			_review_role_label(), event, frame, float(frame) / 30.0])
+
+
+func _review_role_label() -> String:
+	return "capitano" if _review_role == "coordinatore" else _review_role
+
+
 ## ── Attrezzeria dei clip nuovi ───────────────────────────────────────
 
 ## Vestizione comune: insegne inglesi, targhe di stato spente e HUD
@@ -570,9 +859,25 @@ func _dress_promo_set() -> void:
 	_silence_state_tags()
 	if "_team_hud" in _office and is_instance_valid(_office._team_hud):
 		_office._team_hud.queue_free()
+	# Pulizia alla fonte richiesta dal gate trailer: nessun crop o bonifica in
+	# post. Il ciak mostra solo mondo e meccaniche, senza marker showroom.
+	for child in _office.get_children():
+		if child is GameSidebar:
+			child.queue_free()
+		if child is CanvasLayer:
+			for root in child.get_children():
+				if root is Control:
+					for overlay in root.get_children():
+						if overlay is TeamHud or overlay is BudgetNotice \
+								or overlay is HeadlessNotice \
+								or overlay is UpdateNotice:
+							overlay.queue_free()
 	for agent in _office.agents:
 		agent._chatter = []
 		agent._bubble_timer = 100000.0
+		if agent.quest_marker:
+			agent.quest_marker.queue_free()
+			agent.quest_marker = null
 	# La targa della mensola output («CV PRONTI») non è localizzata: per il
 	# ciak inglese la si copre con una targa gemella in inglese, contatore
 	# vero incluso — il Critico della Scena 4 consegna proprio lì.
