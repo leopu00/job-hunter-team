@@ -22,6 +22,37 @@ import { demoCompanyFor } from "@/lib/demo/seeds/companies";
 export const RECORDING_PROFILE_ALIASES = [...DEMO_PERSONA_KEYS] as const;
 export type RecordingProfileAlias = (typeof RECORDING_PROFILE_ALIASES)[number];
 
+/** Guardia fail-closed prima di qualunque reset distruttivo sul cloud. */
+export function isRecordingAccountMetadata(
+  metadata: unknown,
+  alias: RecordingProfileAlias,
+): boolean {
+  if (!metadata || typeof metadata !== "object") return false;
+  const values = metadata as Record<string, unknown>;
+  return values.purpose === "recording-profile" && values.alias === alias;
+}
+
+/** Redige i valori che un errore di filesystem/API non deve mai loggare. */
+export function redactRecordingError(
+  value: unknown,
+  privateRoots: readonly string[] = [],
+): string {
+  let text = String(value);
+  for (const root of [...privateRoots].filter(Boolean).sort((a, b) => b.length - a.length)) {
+    text = text.split(root).join("<private-root>");
+  }
+  return text
+    .replace(/https?:\/\/\S+/gi, "<url>")
+    .replace(/[\w.+-]+@[\w.-]+/g, "<email>")
+    .replace(
+      /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi,
+      "<id>",
+    )
+    .replace(/\b[A-Za-z0-9_-]{40,}\b/g, "<secret>")
+    .replace(/(?:\/[A-Za-z0-9._~-]+){2,}/g, "<path>")
+    .replace(/\b[A-Za-z]:\\(?:[^\\\s]+\\)+[^\\\s]*/g, "<path>");
+}
+
 // Data fissa: un reset fatto domani ricostruisce lo stesso identico scenario.
 // I seed esprimono gli eventi come "N ore fa" rispetto a questa ancora.
 export const RECORDING_ANCHOR = "2026-08-04T12:00:00.000Z";
@@ -136,6 +167,7 @@ export function buildRecordingProfileDataset(
     const positionId = recordingUuid(alias, `position:${p.legacy_id}`);
     const companyId = recordingUuid(alias, `company:${p.company}`);
     if (!companyMap.has(p.company)) {
+      const companyAt = p.last_checked ?? p.found_at ?? anchor;
       const dossier = demoCompanyFor({
         persona: alias,
         name: p.company,
@@ -149,8 +181,13 @@ export function buildRecordingProfileDataset(
         id: companyId,
         // Nessun link riservato/documentale compare nella UI di ripresa.
         website: null,
+        created_at: companyAt,
+        updated_at: companyAt,
       });
     }
+
+    const positionCreatedAt = p.found_at ?? anchor;
+    const positionUpdatedAt = p.last_action_at ?? p.last_checked ?? positionCreatedAt;
 
     positions.push({
       id: positionId,
@@ -195,6 +232,8 @@ export function buildRecordingProfileDataset(
       is_remote: p.remote_type === "full_remote",
       is_open: p.is_open,
       deleted_at: null,
+      created_at: positionCreatedAt,
+      updated_at: positionUpdatedAt,
     });
 
     if (p.demo_score_row) {
@@ -203,6 +242,8 @@ export function buildRecordingProfileDataset(
         id: recordingUuid(alias, `score:${p.legacy_id}`),
         position_id: positionId,
         deleted_at: null,
+        created_at: p.demo_score_row.scored_at ?? positionUpdatedAt,
+        updated_at: p.demo_score_row.scored_at ?? positionUpdatedAt,
       });
     }
     for (let i = 0; i < p.demo_highlights.length; i++) {
@@ -213,6 +254,8 @@ export function buildRecordingProfileDataset(
         type: h.type,
         text: h.text,
         deleted_at: null,
+        created_at: positionUpdatedAt,
+        updated_at: positionUpdatedAt,
       });
     }
     if (p.critic_score != null) {
@@ -241,6 +284,8 @@ export function buildRecordingProfileDataset(
         applied,
         interview_round: null,
         deleted_at: null,
+        created_at: p.last_action_at ?? positionUpdatedAt,
+        updated_at: p.last_action_at ?? positionUpdatedAt,
       });
     }
   }
@@ -281,6 +326,7 @@ export function buildRecordingProfileDataset(
         delivered_at: createdAt,
         acknowledged_at: createdAt,
         created_at: createdAt,
+        updated_at: createdAt,
       };
     });
   });
