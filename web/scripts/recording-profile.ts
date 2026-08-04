@@ -37,7 +37,7 @@ const READY_CONTENT = "ready\n";
 const HOST_ENV_CONTENT = "JHT_HOST_TYPE=local\n";
 const PREFERENCES_CONTENT =
   JSON.stringify(
-    { theme: "dark", language: "en", ui_state: { tour_done: true } },
+    { theme: "light", language: "en", ui_state: { tour_done: true } },
     null,
     2,
   ) + "\n";
@@ -204,9 +204,25 @@ function recordingComposeOverride(profilePath: string): string {
     {
       services: {
         jht: {
+          environment: {
+            JHT_HOST_TYPE: "local",
+            // Le riprese usano soltanto il dataset gia materializzato. Non
+            // ereditare pairing cloud, provider o credenziali dalla shell.
+            ANTHROPIC_API_KEY: "",
+            OPENAI_API_KEY: "",
+            MOONSHOT_API_KEY: "",
+            NEXT_PUBLIC_SUPABASE_URL: "",
+            NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
+          },
           volumes: [
             { type: "bind", source: profilePath, target: "/jht_home" },
+            {
+              type: "bind",
+              source: path.join(profilePath, "user"),
+              target: "/jht_user",
+            },
           ],
+          restart: "no",
         },
       },
     },
@@ -245,6 +261,18 @@ function materializeLocal(dataset: RecordingProfileDataset): void {
   const previous = `${finalRoot}.previous`;
   fs.rmSync(stage, { recursive: true, force: true });
   fs.mkdirSync(path.join(stage, "profile"), { recursive: true, mode: 0o700 });
+  for (const directory of [
+    "applications",
+    "allegati",
+    "critiche",
+    "cv",
+    "output",
+  ]) {
+    fs.mkdirSync(path.join(stage, "user", directory), {
+      recursive: true,
+      mode: 0o700,
+    });
+  }
 
   execFileSync("python3", [path.join(REPO, "shared/skills/db_init.py")], {
     env: { ...process.env, JHT_HOME: stage },
@@ -594,7 +622,13 @@ function writeStorageState(alias: RecordingProfileAlias, session: Session): void
   const origins = ["https://jobhunterteam.ai", "http://localhost:3008"].map(
     (origin) => ({
       origin,
-      localStorage: [{ name: "jht-tour-done", value: "1" }],
+      localStorage: [
+        { name: "jht-tour-done", value: "1" },
+        // ThemeProvider risolve il tema dal browser, non dal file preferenze
+        // cloud. Fissarlo nello storage state evita che il sistema operativo
+        // della macchina di ripresa trasformi lo stesso profilo in dark.
+        { name: "jht-theme", value: "light" },
+      ],
     }),
   );
   atomicPrivateWrite(
@@ -650,6 +684,105 @@ function verifyLocal(dataset: RecordingProfileDataset): void {
     ) {
       throw new Error(`${dataset.alias}: thread locale ${agent} mancante o alterato`);
     }
+  }
+  for (const directory of [
+    "applications",
+    "allegati",
+    "critiche",
+    "cv",
+    "output",
+  ]) {
+    if (
+      !fs
+        .statSync(path.join(root, "user", directory), { throwIfNoEntry: false })
+        ?.isDirectory()
+    ) {
+      throw new Error(`${dataset.alias}: directory utente sintetica mancante`);
+    }
+  }
+  for (const forbidden of ["cloud.json", ".pairing-token"]) {
+    if (fs.existsSync(path.join(root, forbidden))) {
+      throw new Error(`${dataset.alias}: pairing cloud presente nel profilo locale`);
+    }
+  }
+  verifyResolvedCompose(root);
+}
+
+function recordingBaseCompose(): string {
+  const explicit = process.env.JHT_RECORDING_BASE_COMPOSE;
+  if (explicit) return path.resolve(explicit);
+  const installed = path.join(os.homedir(), ".jht", "runtime", "docker-compose.yml");
+  return fs.existsSync(installed) ? installed : path.join(REPO, "docker-compose.yml");
+}
+
+function verifyResolvedCompose(root: string): void {
+  const override = path.join(root, "compose.recording.yml");
+  let resolved: string;
+  try {
+    resolved = execFileSync(
+      "docker",
+      [
+        "compose",
+        "-p",
+        "rel004",
+        "-f",
+        recordingBaseCompose(),
+        "-f",
+        override,
+        "config",
+        "--format",
+        "json",
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+  } catch {
+    throw new Error("docker compose config non disponibile o non valido");
+  }
+  const config = JSON.parse(resolved) as {
+    services?: {
+      jht?: {
+        container_name?: string;
+        environment?: Record<string, string | null>;
+        restart?: string;
+        volumes?: Array<{ source?: string; target?: string; type?: string }>;
+      };
+    };
+  };
+  const service = config.services?.jht;
+  const volumeByTarget = new Map(
+    service?.volumes?.map((volume) => [volume.target, volume]) ?? [],
+  );
+  const expectedSources = new Map([
+    ["/jht_home", root],
+    ["/jht_user", path.join(root, "user")],
+  ]);
+  const mountsAreIsolated = [...expectedSources].every(([target, expected]) => {
+    const volume = volumeByTarget.get(target);
+    if (volume?.type !== "bind" || path.resolve(volume.source ?? "") !== expected) {
+      return false;
+    }
+    const relative = path.relative(root, path.resolve(volume.source ?? ""));
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  });
+  const environment = service?.environment ?? {};
+  const isolatedEnvironment = [
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "MOONSHOT_API_KEY",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  ].every((name) => environment[name] === "");
+  if (
+    !mountsAreIsolated ||
+    // LocalBackend indirizza oggi il container fisso `jht`. Il project name
+    // isola volume/rete Compose; un container reale omonimo fa fallire `up`
+    // per collisione invece di essere riutilizzato.
+    service?.container_name !== "jht" ||
+    service?.restart !== "no" ||
+    environment.JHT_HOST_TYPE !== "local" ||
+    !isolatedEnvironment
+  ) {
+    throw new Error("compose risolto non isola il profilo riprese");
   }
 }
 
@@ -750,23 +883,39 @@ async function verifyCloud(
     fs.readFileSync(path.join(profileRoot(dataset.alias), "auth-state.json"), "utf8"),
   ) as {
     cookies?: Array<{ name: string }>;
-    origins?: Array<{ localStorage?: Array<{ name: string; value: string }> }>;
+    origins?: Array<{
+      origin?: string;
+      localStorage?: Array<{ name: string; value: string }>;
+    }>;
   };
   const cookies = state.cookies ?? [];
   const hasAuth = cookies.some(
     (cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"),
   );
-  const tourDone = state.origins?.some((origin) =>
-    origin.localStorage?.some(
-      (entry) => entry.name === "jht-tour-done" && entry.value === "1",
-    ),
-  );
+  const expectedOrigins = [
+    "https://jobhunterteam.ai",
+    "http://localhost:3008",
+  ];
+  const browserStateReady = expectedOrigins.every((expectedOrigin) => {
+    const origin = state.origins?.find(
+      (candidate) => candidate.origin === expectedOrigin,
+    );
+    const stored = new Map(
+      origin?.localStorage?.map((entry) => [entry.name, entry.value]) ?? [],
+    );
+    return (
+      stored.get("jht-tour-done") === "1" &&
+      stored.get("jht-theme") === "light"
+    );
+  });
   if (
     !hasAuth ||
-    !tourDone ||
+    !browserStateReady ||
     cookies.some((cookie) => cookie.name === "jht_demo_persona")
   ) {
-    throw new Error(`${dataset.alias}: auth-state incompleto o con cookie demo`);
+    throw new Error(
+      `${dataset.alias}: auth-state incompleto, tema non light o cookie demo presente`,
+    );
   }
 }
 
@@ -792,7 +941,11 @@ async function main() {
         `${dataset.scores.length} score, ${dataset.applications.length} candidature`,
     );
   }
-  console.log(localOnly ? "Profili locali pronti." : "Profili web + gioco pronti; auth-state locale, cookie demo assente.");
+  console.log(
+    localOnly
+      ? "Profili locali pronti; tema light."
+      : "Profili web + gioco pronti; auth-state locale, tema light, cookie demo assente.",
+  );
 }
 
 main().catch((error: unknown) => {
