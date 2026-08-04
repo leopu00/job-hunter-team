@@ -13,11 +13,7 @@ const TERMINAL_STATUSES = new Set([
   "ack_failed",
 ] as const);
 
-type TerminalStatus =
-  | "completed"
-  | "timeout"
-  | "push_failed"
-  | "ack_failed";
+type TerminalStatus = "completed" | "timeout" | "push_failed" | "ack_failed";
 
 /**
  * Chiude un rendezvous Sync now soltanto se il device sta ancora servendo la
@@ -29,11 +25,7 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { userId, tokenId, admin } = auth.data;
 
-  const limit = await checkCloudSyncRateLimit(
-    "sync-observed",
-    tokenId,
-    60,
-  );
+  const limit = await checkCloudSyncRateLimit("sync-observed", tokenId, 60);
   if (!limit.allowed) {
     return NextResponse.json(
       { applied: false, error: "rate_limited" },
@@ -68,7 +60,9 @@ export async function POST(req: NextRequest) {
 
   // Anche fra edge instance con lieve clock skew, l'esito deve essere
   // strettamente successivo alla richiesta server che sta chiudendo.
-  const observedAt = new Date(Math.max(Date.now(), expectedMs + 1)).toISOString();
+  const observedAt = new Date(
+    Math.max(Date.now(), expectedMs + 1),
+  ).toISOString();
   const update: Record<string, string> = {
     last_action: `sync:${status}`,
     last_action_at: observedAt,

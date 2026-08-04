@@ -192,7 +192,6 @@ export async function PATCH(req: NextRequest) {
         { status: 409 },
       );
     }
-
   }
 
   const { data, error } = await supabase

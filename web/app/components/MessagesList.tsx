@@ -389,9 +389,7 @@ export default function MessagesList({ initialMessages }: Props) {
     setMessages((ms) => [optimistic, ...ms]);
     try {
       const result = await postChat(agent, text);
-      setMessages((ms) =>
-        withConfirmedTurn(ms, optimistic.id, result.message),
-      );
+      setMessages((ms) => withConfirmedTurn(ms, optimistic.id, result.message));
       if (!result.signalled && !(await retryChatSignal())) {
         setError(tr("delivery_signal_failed"));
       }
