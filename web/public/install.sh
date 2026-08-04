@@ -243,6 +243,19 @@ detect_system() {
 
 # ── Docker runtime install ────────────────────────────────────────────────
 install_brew_if_missing() {
+  # Finder-launched macOS apps inherit a minimal PATH. Homebrew can therefore
+  # already exist in its standard prefix while `command -v brew` says it does
+  # not; attempting a second install then falls into sudo/TTY prompts for no
+  # reason. Load the existing installation before deciding it is absent.
+  local brew_bin
+  if ! command -v brew &>/dev/null; then
+    for brew_bin in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+      if [ -x "$brew_bin" ]; then
+        eval "$("$brew_bin" shellenv)"
+        break
+      fi
+    done
+  fi
   if command -v brew &>/dev/null; then return 0; fi
   info "Homebrew not found. Installing..."
   if [ "$DRY_RUN" -eq 1 ]; then

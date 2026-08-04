@@ -8,6 +8,7 @@ signal closed
 
 const MAX_RAW_CHARS := 100000
 const MAX_VISIBLE_CHARS := 50000
+const EXIT_REPORT_PATTERN := "\u001b\\]1337;JHTExit=([0-9a-f]+):([0-9]+)\u0007"
 
 
 ## Modello di schermo minimale (griglia + scrollback) per i TUI raw-mode.
@@ -193,14 +194,20 @@ class TermScreen:
 var provider := ""
 var spec: Dictionary = {}
 var _thread: Thread
+var _report_thread: Thread
 var _stdio: FileAccess
 var _stderr: FileAccess
 var _pid := -1
 var _closing := false
 var _finished := false
 var _process_exited := false
+## La terminazione ha un solo proprietario. Serve soprattutto nel bordo in cui
+## `close()` precede la pubblicazione del PID: chi pubblica il PID vede
+## `_closing` sotto lo stesso mutex e prende in carico il kill.
+var _kill_requested := false
 var _pending_bytes := PackedByteArray()
 var _raw_bytes := PackedByteArray()
+var _report_bytes := PackedByteArray()
 var _last_url := ""
 var _output: RichTextLabel
 var _status: Label
@@ -209,10 +216,15 @@ var _open_url: Button
 var _copy_url: Button
 var _done: Button
 var _mutex := Mutex.new()
+## `stdio` è duplex e viene usato dal report reader e dal main thread. Le pipe
+## sono non bloccanti, quindi questo mutex serializza ogni accesso senza mai
+## trattenere il lock in attesa di output del figlio.
+var _stdio_mutex := Mutex.new()
 var _auth_was_ready := false
 var _auth_autoclose_started := false
 var _screen := TermScreen.new()
 var _undecoded := PackedByteArray()
+var _result_note := ""
 ## Mouse premuto dentro l'output: selezione in corso, testo congelato.
 var _dragging_selection := false
 
@@ -264,6 +276,8 @@ func _process(_delta: float) -> void:
 	var visible := _screen.text()
 	if visible.length() > MAX_VISIBLE_CHARS:
 		visible = UIStrings.t("term.truncated") + "\n" + visible.right(MAX_VISIBLE_CHARS)
+	if _result_note != "":
+		visible += "\n\n" + _result_note
 	# Il testo NON si tocca mentre l'utente sta selezionando: né durante il
 	# trascinamento (mouse premuto), né dopo, finché tiene la selezione. Tutto
 	# ciò che arriva resta nel modello di schermo e compare appena molla.
@@ -295,6 +309,8 @@ func _flush_pending_output() -> void:
 	if _selection_locked() or not is_instance_valid(_output):
 		return
 	_output.text = _screen.text()
+	if _result_note != "":
+		_output.text += "\n\n" + _result_note
 	_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
 
 
@@ -466,14 +482,19 @@ func _build_ui() -> void:
 	_done = Button.new()
 	_done.text = UIStrings.t("term.done_login") if _is_login_flow() \
 			else UIStrings.t("term.done_plain")
-	_done.add_theme_color_override("font_color", Palette.GREEN)
+	_done.add_theme_color_override("font_color",
+			Palette.GREEN if _is_login_flow() else Palette.BRIGHT)
 	_done.pressed.connect(_complete)
 	col.add_child(_done)
 
 
+func _spawn_process() -> Dictionary:
+	return OS.execute_with_pipe(str(spec.get("path", "")),
+			PackedStringArray(spec.get("args", PackedStringArray())), false)
+
+
 func _run_process() -> void:
-	var process := OS.execute_with_pipe(str(spec.get("path", "")),
-			PackedStringArray(spec.get("args", PackedStringArray())), true)
+	var process := _spawn_process()
 	if process.is_empty():
 		call_deferred("_process_failed", UIStrings.t("term.err_start"))
 		return
@@ -481,29 +502,82 @@ func _run_process() -> void:
 	_stdio = process["stdio"]
 	_stderr = process["stderr"]
 	_pid = int(process["pid"])
+	# Handshake close/spawn: o `close()` trova il PID già pubblicato e ne prende
+	# ownership, oppure questa pubblicazione trova `_closing` e lo termina qui.
+	# Non esiste più una finestra in cui entrambi vedono "nessun PID da uccidere".
+	var kill_after_spawn := -1
+	if _closing and not _process_exited and not _kill_requested:
+		_kill_requested = true
+		kill_after_spawn = _pid
 	_mutex.unlock()
+	if kill_after_spawn > 0:
+		OS.kill(kill_after_spawn)
+		return
+	if bool(spec.get("reports_exit", false)):
+		# stdout è un canale di controllo separato: un reader indipendente evita
+		# che l'EOF di stderr tronchi un report più lungo dell'output ospitato.
+		_report_thread = Thread.new()
+		_report_thread.start(_run_report_reader)
 	call_deferred("_process_started")
 	# FileAccess sui pipe non espone i byte disponibili. Una lettura per byte
 	# consegna immediatamente anche prompt corti in attesa di input; la UI li
 	# aggrega una volta per frame evitando migliaia di redraw.
-	while not _closing and is_instance_valid(_stderr) and not _stderr.eof_reached():
+	var observed_exit := false
+	while not _closing and is_instance_valid(_stderr):
 		var one := _stderr.get_buffer(1)
+		if not one.is_empty():
+			call_deferred("_queue_byte", one[0])
+			continue
+		# FileAccess*Pipe.eof_reached() resta sempre false. Sui pipe non
+		# bloccanti una lettura vuota significa invece "nessun dato ORA": la
+		# vita del processo distingue l'attesa dall'EOF senza troncare output.
+		if _pid > 0 and not OS.is_process_running(_pid):
+			observed_exit = true
+			break
+		OS.delay_msec(2)
+	if observed_exit:
+		_mutex.lock()
+		_process_exited = true
+		_mutex.unlock()
+		if not bool(spec.get("reports_exit", false)) and not _closing:
+			call_deferred("_process_finished", 0)
+
+
+func _run_report_reader() -> void:
+	# `stdio` è duplex: il main thread continua a scrivere lo stdin, mentre
+	# questo reader consuma soltanto stdout. Il comando ospitato non eredita il
+	# canale (fd3 chiuso su POSIX, gruppo rediretto su Windows), quindi il primo
+	# marker completo è necessariamente il report finale del wrapper.
+	var report := PackedByteArray()
+	var expected_token := str(spec.get("exit_report_token", ""))
+	while not _closing:
+		_stdio_mutex.lock()
+		var pipe_valid := is_instance_valid(_stdio)
+		var one := _stdio.get_buffer(1) if pipe_valid \
+				else PackedByteArray()
+		_stdio_mutex.unlock()
 		if one.is_empty():
+			_mutex.lock()
+			var process_exited := _process_exited
+			_mutex.unlock()
+			if not pipe_valid or process_exited:
+				break
 			OS.delay_msec(2)
 			continue
-		if _stderr.eof_reached() and one[0] == 0:
-			break
-		call_deferred("_queue_byte", one[0])
-	# EOF è già la conferma affidabile che il pipe figlio è terminato. Chiamare
-	# is_process_running/get_process_exit_code dopo che Godot lo ha raccolto
-	# genera un falso errore "PID is not a child" su macOS.
-	_mutex.lock()
-	_process_exited = true
-	_mutex.unlock()
-	call_deferred("_process_finished", -1 if _closing else 0)
+		report.append(one[0])
+		var code := _exit_code_from_raw(report.get_string_from_utf8(), expected_token)
+		if code >= 0:
+			call_deferred("_report_finished", report, code)
+			return
+	if not _closing:
+		call_deferred("_report_finished", report, -1)
 
 
 func _process_started() -> void:
+	# Un comando istantaneo può consegnare il report dal reader prima che questo
+	# deferred venga eseguito. Non riscrivere mai un esito finale in INTERATTIVO.
+	if _closing or _finished:
+		return
 	_status.text = UIStrings.t("term.status_interactive")
 	_status.add_theme_color_override("font_color", Palette.GREEN)
 	_input.grab_focus()
@@ -517,20 +591,81 @@ func _queue_byte(byte: int) -> void:
 	_mutex.unlock()
 
 
+func _report_finished(report: PackedByteArray, code: int) -> void:
+	if _closing or _finished:
+		return
+	_mutex.lock()
+	_report_bytes.append_array(report)
+	_mutex.unlock()
+	_process_finished(code)
+
+
 func _process_failed(message: String) -> void:
 	_finished = true
 	_status.text = UIStrings.t("term.status_error")
 	_status.add_theme_color_override("font_color", Palette.RED)
 	_output.text = message
+	if not _is_login_flow():
+		_done.text = UIStrings.t("term.close_retry")
+		_done.add_theme_color_override("font_color", Palette.YELLOW)
+		_result_note = UIStrings.t("term.runtime_install_failed") \
+				if provider == "runtime-install" \
+				else UIStrings.t("term.command_failed")
+		_output.text += "\n\n" + _result_note
 
 
 func _process_finished(code: int) -> void:
+	if _finished:
+		return
+	if bool(spec.get("reports_exit", false)):
+		# Il marker OSC è invisibile a TermScreen ma resta nei byte grezzi. Se
+		# manca, il protocollo stesso è fallito: non promuoviamo mai un esito
+		# sconosciuto a successo.
+		code = _captured_exit_code()
 	_finished = true
-	_status.text = (UIStrings.t("term.status_login_done") if _is_login_flow() \
-			else UIStrings.t("term.status_cmd_done")) if code == 0 \
-			else UIStrings.t("term.status_closed") % code
-	_status.add_theme_color_override("font_color", Palette.GREEN if code == 0 else Palette.YELLOW)
+	if code == 0:
+		_status.text = UIStrings.t("term.status_login_done") if _is_login_flow() \
+				else UIStrings.t("term.status_cmd_done")
+		_status.add_theme_color_override("font_color", Palette.GREEN)
+		if not _is_login_flow():
+			_done.text = UIStrings.t("term.done_success")
+			_done.add_theme_color_override("font_color", Palette.GREEN)
+	else:
+		_status.text = UIStrings.t("term.status_cmd_failed") % code
+		_status.add_theme_color_override("font_color", Palette.RED)
+		if not _is_login_flow():
+			_done.text = UIStrings.t("term.close_retry")
+			_done.add_theme_color_override("font_color", Palette.YELLOW)
+			_result_note = UIStrings.t("term.runtime_install_failed") \
+					if provider == "runtime-install" \
+					else UIStrings.t("term.command_failed")
+			_output.text += "\n\n" + _result_note
 	_refresh_setup()
+
+
+## Il token casuale lega il report a questa singola console: output ospitato che
+## contiene un OSC JHTExit proprio non può finalizzare prematuramente il comando.
+## Fra più report validi dello stesso wrapper vince comunque l'ultimo.
+static func _exit_code_from_raw(raw: String, expected_token: String) -> int:
+	if expected_token == "":
+		return -1
+	var regex := RegEx.new()
+	if regex.compile(EXIT_REPORT_PATTERN) != OK:
+		return -1
+	var matches := regex.search_all(raw)
+	var result := -1
+	for found in matches:
+		if found.get_string(1) == expected_token:
+			result = int(found.get_string(2))
+	return result
+
+
+func _captured_exit_code() -> int:
+	_mutex.lock()
+	var all_bytes := _report_bytes.duplicate()
+	_mutex.unlock()
+	return _exit_code_from_raw(all_bytes.get_string_from_utf8(),
+			str(spec.get("exit_report_token", "")))
 
 
 func _submit_line(text: String) -> void:
@@ -542,11 +677,11 @@ func _submit_line(text: String) -> void:
 
 
 func _send(data: String) -> void:
-	_mutex.lock()
+	_stdio_mutex.lock()
 	if is_instance_valid(_stdio) and not _finished:
 		_stdio.store_buffer(data.to_utf8_buffer())
 		_stdio.flush()
-	_mutex.unlock()
+	_stdio_mutex.unlock()
 	_input.grab_focus()
 
 
@@ -623,32 +758,43 @@ func _refresh_setup() -> void:
 		setup.call("refresh")
 
 
+func _claim_process_for_close() -> int:
+	var pid_to_kill := -1
+	_mutex.lock()
+	_closing = true
+	if _pid > 0 and not _process_exited and not _kill_requested:
+		_kill_requested = true
+		pid_to_kill = _pid
+	_mutex.unlock()
+	return pid_to_kill
+
+
 func close() -> void:
 	if _closing:
 		return
-	_closing = true
-	_mutex.lock()
+	var pid_to_kill := _claim_process_for_close()
+	_stdio_mutex.lock()
 	if is_instance_valid(_stdio):
 		_stdio.store_8(3)
 		_stdio.flush()
-	if _pid > 0 and not _process_exited:
-		OS.kill(_pid)
-	_mutex.unlock()
+	_stdio_mutex.unlock()
+	if pid_to_kill > 0:
+		OS.kill(pid_to_kill)
 	closed.emit()
 	queue_free()
 
 
 func _exit_tree() -> void:
-	_closing = true
 	# Anche chi smonta la console con queue_free (es. una console che ne
 	# sostituisce un'altra) non deve lasciare orfano il processo figlio:
 	# il 22/07 un compose doppio è sopravvissuto proprio così.
-	_mutex.lock()
-	if _pid > 0 and not _process_exited:
-		OS.kill(_pid)
-	_mutex.unlock()
+	var pid_to_kill := _claim_process_for_close()
+	if pid_to_kill > 0:
+		OS.kill(pid_to_kill)
 	if _thread != null and _thread.is_started():
 		_thread.wait_to_finish()
+	if _report_thread != null and _report_thread.is_started():
+		_report_thread.wait_to_finish()
 
 
 ## Ultimo URL nel flusso, ricomposto quando il wrap della pty (o il box del
