@@ -112,6 +112,11 @@ def test_runtime_upgrade_uses_only_the_host_json_contract():
     assert 'exec \\\"$JHT_BIN\\\" upgrade --json' in upgrade
     assert 'JHT_BIN=\\\"$HOME/.local/bin/jht\\\"' in upgrade
     assert '[ -x \\\"$JHT_BIN\\\" ] || exit 127' in upgrade
+    assert '"upgrade-check", _do_check_runtime_update.bind(_vps_config())' in upgrade
+    assert 'PackedStringArray(["upgrade", "--check", "--json"])' in upgrade
+    assert 'exec \\\"$JHT_BIN\\\" upgrade --check --json' in upgrade
+    assert 'func runtime_update_check_state() -> String:' in upgrade
+    assert 'return "available" if bool(last_upgrade_check.get("changed", false)) else "current"' in upgrade
     assert "docker exec" not in upgrade
     assert "_compose_stream" not in upgrade
     assert "_compose_up_with_progress" not in upgrade
@@ -126,8 +131,20 @@ def test_runtime_upgrade_uses_only_the_host_json_contract():
     assert "stderr e' intenzionalmente scartato" in upgrade
 
     assert '"upgrade"' in panel[panel.index("const SETUP_ACTIONS") : panel.index("const SETUP_SECTIONS")]
+    assert '"upgrade-check"' in panel[panel.index("const SETUP_ACTIONS") : panel.index("const SETUP_SECTIONS")]
     assert "setup.runtime_update_busy" in panel
     assert "setup.busy_upgrade" in panel
+    assert "SetupService.check_runtime_update" in panel
+    assert "setup.runtime_check" in panel
+
+    # L'icona diretta e' sola navigazione: nessun check ad ogni apertura,
+    # nessun polling e nessun uso di restartRequired come badge update.
+    sidebar = _src("game/scripts/ui/game_sidebar.gd")
+    assert '_docker_button.pressed.connect(func() -> void: _select("docker"))' in sidebar
+    assert "static func docker_sidebar_state" in sidebar
+    assert "SetupService.runtime_update_check_state()" in sidebar
+    assert "check_runtime_update" not in sidebar
+    assert "restartRequired" not in sidebar
 
 
 def test_runtime_installer_cleans_download_when_interrupted(tmp_path):

@@ -1411,6 +1411,7 @@ func _guided_onboarding_selftest() -> void:
 	# aggiornamento, altrimenti l'utente resta su un'immagine vecchia senza
 	# nemmeno saperlo (il gioco si aggiorna con l'installer, il container no).
 	SetupService.status["docker_running"] = true
+	SetupService.status["docker_available"] = true
 	SetupService.status["container_exists"] = true
 	SetupService.status["runtime_stale"] = true
 	var docker_panel := SectionPanel.new("docker", 24.0)
@@ -1428,6 +1429,8 @@ func _guided_onboarding_selftest() -> void:
 			"il pannello Docker non segnala il runtime da aggiornare")
 	check.call(docker_buttons.contains(UIStrings.t("setup.runtime_update")),
 			"il pannello Docker non offre l'aggiornamento del runtime")
+	check.call(docker_buttons.contains(UIStrings.t("setup.runtime_check")),
+			"il pannello Docker non offre il controllo esplicito aggiornamenti")
 	# Il gioco non ricostruisce piu' pull/compose: il wrapper host e' l'unico
 	# proprietario del deploy. stdout deve quindi essere UNA riga JSON finale;
 	# l'exit code e il campo ok devono concordare prima che la UI dica successo.
@@ -1462,6 +1465,43 @@ func _guided_onboarding_selftest() -> void:
 			and bool(upgrade_check.get("changed", false))
 			and not bool(upgrade_check.get("restartRequired", true)),
 			"il check host-side valido non espone la disponibilita di update")
+	# Il badge Docker usa changed e basta: restartRequired non descrive una
+	# promotion in un check e non deve mai accendere un falso update.
+	var check_cache := SetupService.last_upgrade_check.duplicate(true)
+	SetupService.last_upgrade_check = upgrade_check.duplicate(true)
+	check.call(SetupService.runtime_update_check_state() == "available",
+			"changed=true non accende il badge update della sidebar")
+	var restart_only := upgrade_check.duplicate(true)
+	restart_only["changed"] = false
+	restart_only["restartRequired"] = true
+	SetupService.last_upgrade_check = restart_only
+	check.call(SetupService.runtime_update_check_state() == "current",
+			"restartRequired senza changed accende il badge update")
+	var check_error := upgrade_check.duplicate(true)
+	check_error["ok"] = false
+	check_error["changed"] = false
+	SetupService.last_upgrade_check = check_error
+	check.call(SetupService.runtime_update_check_state() == "error",
+			"un check fallito non resta distinguibile dalla sidebar")
+	SetupService.last_upgrade_check = check_cache
+	var docker_active := GameSidebar.docker_sidebar_state({
+		"docker_available": true, "docker_running": true,
+		"container_running": true,
+	}, "available")
+	var docker_stopped := GameSidebar.docker_sidebar_state({
+		"docker_available": true, "docker_running": true,
+		"container_running": false,
+	}, "current")
+	var docker_unreachable := GameSidebar.docker_sidebar_state({
+		"docker_available": false, "docker_running": false,
+		"container_running": false,
+	}, "error")
+	check.call(str(docker_active.get("runtime", "")) == "active"
+			and str(docker_active.get("badge", "")) == "available"
+			and str(docker_stopped.get("runtime", "")) == "stopped"
+			and str(docker_unreachable.get("runtime", "")) == "unreachable"
+			and str(docker_unreachable.get("badge", "")) == "error",
+			"gli stati Docker header non distinguono attivo, spento e non raggiungibile")
 	var upgrade_bad_frame := SetupService.parse_upgrade_result(
 			JSON.stringify(upgrade_ok) + "\nlog diagnostico", 0)
 	check.call(bool(upgrade_bad_frame.get("protocol_error", false)),

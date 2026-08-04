@@ -81,6 +81,10 @@ var last_pull := {}
 ## stato Docker: il wrapper host ha gia' ricreato e verificato il container,
 ## quindi il gioco deve soltanto mostrarne l'esito, mai dedurre un deploy.
 var last_upgrade := {}
+## Cache soltanto di sessione del controllo esplicito aggiornamenti. Non entra
+## in `status`: un check non cambia il runtime e non deve fingersi un probe
+## del container. La sidebar la usa per il badge, mai per avviare un polling.
+var last_upgrade_check := {}
 var _timer: Timer
 
 
@@ -998,6 +1002,33 @@ static func _do_update_runtime(vps: Dictionary) -> Dictionary:
 	return _run_vps_upgrade(vps) if not vps.is_empty() else _run_local_upgrade()
 
 
+## Il badge Docker viene aggiornato SOLO da un gesto esplicito dell'utente.
+## Questo comando chiede al wrapper host una fotografia della candidate image:
+## non promuove, non riavvia e non interroga Docker direttamente.
+func check_runtime_update() -> void:
+	if _action_running:
+		return
+	_start_action("upgrade-check", _do_check_runtime_update.bind(_vps_config()),
+			UIStrings.t("setup.runtime_check_running"))
+
+
+static func _do_check_runtime_update(vps: Dictionary) -> Dictionary:
+	return _run_vps_upgrade_check(vps) if not vps.is_empty() else _run_local_upgrade_check()
+
+
+## Stato piccolo e serializzabile per il badge della sidebar. `changed` e' il
+## SOLO segnale di update disponibile: restartRequired appartiene all'apply e
+## puo' essere valorizzato anche da un check senza che ci sia una promozione.
+func runtime_update_check_state() -> String:
+	if _action_running and current_action == "upgrade-check":
+		return "checking"
+	if last_upgrade_check.is_empty():
+		return "unknown"
+	if not bool(last_upgrade_check.get("ok", false)):
+		return "error"
+	return "available" if bool(last_upgrade_check.get("changed", false)) else "current"
+
+
 ## Il protocollo di upgrade e' volutamente stretto: stdout e' una sola riga
 ## JSON finale. Qualunque log extra o risultato incoerente resta un errore
 ## sicuro, anziche' trasformare diagnostica non strutturata in uno stato UI.
@@ -1080,6 +1111,24 @@ static func _run_local_upgrade() -> Dictionary:
 	return _run_upgrade_json(jht, PackedStringArray(["upgrade", "--json"]))
 
 
+static func _run_local_upgrade_check() -> Dictionary:
+	var jht := _host_jht_path()
+	if jht == "":
+		return _upgrade_protocol_failure()
+	if OS.get_name() == "Windows" and (jht.to_lower().ends_with(".cmd") \
+			or jht.to_lower().ends_with(".bat")):
+		return _run_upgrade_json("cmd.exe", PackedStringArray(["/d", "/s", "/c",
+				_local_quote(jht) + " upgrade --check --json"]))
+	if OS.get_name() == "Windows" and jht.to_lower().ends_with(".ps1"):
+		var powershell := _which("pwsh")
+		if powershell == "":
+			powershell = _which("powershell")
+		return _run_upgrade_json(powershell, PackedStringArray(["-NoProfile",
+				"-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", jht,
+				"upgrade", "--check", "--json"]))
+	return _run_upgrade_json(jht, PackedStringArray(["upgrade", "--check", "--json"]))
+
+
 static func _vps_upgrade_command() -> String:
 	return "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
 			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
@@ -1088,6 +1137,16 @@ static func _vps_upgrade_command() -> String:
 
 static func _run_vps_upgrade(vps: Dictionary) -> Dictionary:
 	return _run_upgrade_json("ssh", _ssh_args(vps, _vps_upgrade_command()))
+
+
+static func _vps_upgrade_check_command() -> String:
+	return "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
+			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
+			+ "[ -x \"$JHT_BIN\" ] || exit 127; exec \"$JHT_BIN\" upgrade --check --json"
+
+
+static func _run_vps_upgrade_check(vps: Dictionary) -> Dictionary:
+	return _run_upgrade_json("ssh", _ssh_args(vps, _vps_upgrade_check_command()))
 
 
 ## A differenza di _run, conserva stdout e stderr separati: stderr e' solo
@@ -3115,6 +3174,9 @@ func _finish_action(action: String, result: Dictionary) -> void:
 	if action == "upgrade":
 		last_upgrade = result.duplicate(true)
 		result["message"] = _upgrade_ui_message(result)
+	elif action == "upgrade-check":
+		last_upgrade_check = result.duplicate(true)
+		result["message"] = _upgrade_check_ui_message(result)
 	Log.info("setup", "azione %s → %s: %s" % [action,
 			"ok" if bool(result.get("ok", false)) else "FALLITA",
 			str(result.get("message", ""))])
@@ -3153,6 +3215,18 @@ func _upgrade_ui_message(result: Dictionary) -> String:
 		lines.append(UIStrings.t("setup.upgrade_restart_required"))
 	return "\n".join(lines) if not lines.is_empty() \
 			else UIStrings.t("setup.upgrade_protocol_error")
+
+
+## Il check mostra solo il suo esito sicuro e non espone `current.image`: per
+## contratto quello puo' essere la candidate scaricata, non la versione attiva.
+func _upgrade_check_ui_message(result: Dictionary) -> String:
+	if bool(result.get("protocol_error", false)):
+		return UIStrings.t("setup.runtime_check_error")
+	if not bool(result.get("ok", false)):
+		var failure := str(result.get("message", "")).strip_edges()
+		return failure if failure != "" else UIStrings.t("setup.runtime_check_error")
+	return UIStrings.t("setup.runtime_check_available") \
+			if bool(result.get("changed", false)) else UIStrings.t("setup.runtime_check_current")
 
 
 ## Comandi di spegnimento da eseguire quando l'utente chiude il gioco.
