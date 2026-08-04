@@ -315,4 +315,40 @@ describe("handleChatSync — worker completo", () => {
     expect(acknowledged).toEqual([rowId]);
     expect(currentRequest).toBe(requestB);
   });
+
+  it("non ACKa né chiude una riga destinata a un agente senza pane supportato", async () => {
+    let acknowledgements = 0;
+    const channel = {
+      async readUndeliveredUserChat() {
+        return [{
+          id: "00000000-0000-4000-8000-000000000098",
+          legacy_id: -1785837600000,
+          agent: "agente-sconosciuto",
+          body: "messaggio non instradabile",
+          created_at: "2026-08-04T10:00:00Z",
+        }];
+      },
+      async acknowledgeDelivery() {
+        acknowledgements += 1;
+        return { closed: true, superseded: false };
+      },
+    };
+    const result = await handleChatSync({
+      silent: true,
+      config: CONFIG,
+      dbPath,
+      jhtHome: home,
+      reader: null,
+      channel,
+      state: { chat_requested_at: "2026-08-04T10:00:00Z", chat_delivered_at: null },
+      sendFn: async () => ({ ok: true, code: 0, error: "" }),
+    });
+    expect(result).toMatchObject({
+      status: "delivery_pending",
+      imported: 0,
+      delivered: 0,
+      acked: false,
+    });
+    expect(acknowledgements).toBe(0);
+  });
 });

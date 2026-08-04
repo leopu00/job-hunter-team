@@ -586,8 +586,8 @@ export function chatTsOf(row) {
  * quella nativa a legacy_id negativo) e ripusharla creerebbe un doppione
  * con un legacy_id diverso.
  *
- * @returns id delle righe CLOUD importate (anche quelle già presenti: sono
- *          da marcare consegnate comunque, o resterebbero in coda per sempre)
+ * @returns id delle righe CLOUD importate (anche quelle già presenti). Una
+ *          destinazione senza pane supportato non è importata né ACKata.
  */
 export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS } = {}) {
   const insert = db.prepare(
@@ -605,9 +605,9 @@ export function importCloudUserTurns(db, rows, { jhtHome, agents = CHAT_AGENTS }
     const body = typeof row.body === 'string' ? row.body : '';
     if (!body.trim()) continue;
     // Fuori dalle tre figure con cui si chatta dal web: non c'è un pane a
-    // cui consegnarlo. Si marca comunque, altrimenti resta in coda a vita.
+    // cui consegnarlo. Non fingere una consegna: la corsia resta aperta e il
+    // dato anomalo è correggibile lato server senza perdere il turno.
     if (!agents.includes(agent)) {
-      imported.push(row.id);
       continue;
     }
     const ts = chatTsOf(row);
@@ -653,7 +653,7 @@ export function deliveredCloudUserTurnIds(db, rows, { agents = CHAT_AGENTS } = {
   for (const row of Array.isArray(rows) ? rows : []) {
     if (row?.id == null || typeof row.body !== 'string' || !row.body.trim()) continue;
     const agent = String(row.agent || '').toLowerCase();
-    if (!agents.includes(agent) || delivered.get(agent, chatTsOf(row))?.hit === 1) {
+    if (agents.includes(agent) && delivered.get(agent, chatTsOf(row))?.hit === 1) {
       ids.push(row.id);
     }
   }
