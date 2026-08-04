@@ -28,14 +28,29 @@ func start(_config: Dictionary) -> void:
 ## partire, ma se per mezzo minuto non arriva un byte non arriverà più.
 const STALL_MS := 30000
 
-## Indice dello script di uno `sh -lc <script>` / `sh -c <script>`, -1 se
-## l'argv non ha quella forma (docker inspect, docker start…: comandi corti
-## che il pipe regge senza problemi).
+## Indice dello script di uno `sh -lc <script>` / `sh -c <script>` o di un
+## `python3 -c <script>`, -1 per gli altri comandi corti. I due casi vanno
+## poi rediretti con sintassi DIVERSA: anteporre `exec >...` al codice Python
+## lo rende invalido e faceva sparire soltanto gli snapshot posizioni.
 static func _script_arg_index(argv: PackedStringArray) -> int:
 	for i in argv.size() - 1:
-		if argv[i] == "-lc" or argv[i] == "-c":
+		if i == 0 or (argv[i] != "-lc" and argv[i] != "-c"):
+			continue
+		var runner := str(argv[i - 1]).get_file()
+		if runner in ["sh", "bash"] or runner.begins_with("python"):
 			return i + 1
 	return -1
+
+
+static func _redirected_script(argv: PackedStringArray, script_at: int,
+		name: String) -> String:
+	var runner := str(argv[script_at - 2]).get_file() if script_at >= 2 else ""
+	if runner.begins_with("python"):
+		# La redirezione vive nel processo Python: niente shell host/container e
+		# stdout UTF-8 identico su macOS, Linux e Windows.
+		return ("import sys;_jht_out=open('/jht_home/%s','w',encoding='utf-8');" \
+				+ "sys.stdout=_jht_out;sys.stderr=_jht_out;%s") % [name, argv[script_at]]
+	return "exec >/jht_home/%s 2>&1; %s" % [name, argv[script_at]]
 
 
 static var _exec_seq := 0
@@ -61,7 +76,7 @@ func _run_via_file(argv: PackedStringArray, script_at: int,
 	var name := ".jht-exec-%d.out" % _exec_seq
 	var host_path := _local_jht_home().path_join(name)
 	var patched := argv.duplicate()
-	patched[script_at] = "exec >/jht_home/%s 2>&1; %s" % [name, argv[script_at]]
+	patched[script_at] = _redirected_script(argv, script_at, name)
 	var pid := OS.create_process("docker", patched, false)
 	if pid <= 0:
 		return {"code": -1, "out": "processo docker non avviabile"}
