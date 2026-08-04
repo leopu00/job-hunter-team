@@ -52,6 +52,8 @@ const FLAG_HOOKS := {
 	"JHT_BACKEND_SWITCH_TEST": "_backend_switch_selftest",
 	"JHT_SETUP_BUSY_TEST": "_setup_busy_selftest",
 	"JHT_BUBBLE_LAYOUT_TEST": "_bubble_layout_selftest",
+	"JHT_SIM_BADGE_TEST": "_sim_badge_selftest",
+	"JHT_LIVE_PROFILE_TEST": "_live_profile_selftest",
 }
 
 ## Ganci con argomento: scattano quando la variabile non è vuota, e il valore
@@ -109,6 +111,97 @@ func _ready() -> void:
 		var value := OS.get_environment(env_name)
 		if value != "":
 			Callable(self, VALUE_HOOKS[env_name]).call_deferred(value)
+
+
+func _sim_badge_selftest() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var ok := true
+	var cases := [
+		[false, false, true],
+		[false, true, true],
+		[true, true, true],
+		[true, false, false],
+	]
+	for case in cases:
+		ok = ok and SimBadge.warning_needed(bool(case[0]), bool(case[1])) \
+				== bool(case[2])
+	var badges: Array[Node] = office.find_children("*", "SimBadge", true, false)
+	if badges.size() == 1:
+		var badge := badges[0] as SimBadge
+		ok = ok and badge.visible
+		badge._apply_state(true, false)
+		ok = ok and not badge.visible
+		badge._apply_state(true, true)
+		ok = ok and badge.visible
+		badge._refresh()
+	else:
+		ok = false
+	print("SIM-BADGE-TEST %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Gate sanificato del profilo riprese: non presume che "connesso" basti,
+## ma aspetta anche uno snapshot non-demo e verifica il frame realmente
+## visibile. Non stampa contenuti o righe del profilo.
+func _live_profile_selftest() -> void:
+	var deadline := Time.get_ticks_msec() + 45000
+	while Time.get_ticks_msec() < deadline:
+		if BackendBus.is_live() and not BackendBus.positions_are_demo \
+				and not BackendBus.positions.is_empty():
+			break
+		await get_tree().create_timer(0.1).timeout
+	# Il nodo ufficio puo' essere gia' pronto mentre il loader globale copre
+	# ancora tutto il viewport. Un PNG nero con "CARICAMENTO" passerebbe il
+	# gate badge senza aver mai verificato il frame che finira' nel raw.
+	var frame_deadline := Time.get_ticks_msec() + 10000
+	while Time.get_ticks_msec() < frame_deadline \
+			and _visible_ui_has_any_text(get_tree().root, ["CARICAMENTO", "LOADING"]):
+		await get_tree().create_timer(0.1).timeout
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var badges: Array[Node] = office.find_children("*", "SimBadge", true, false)
+	var badge_hidden := badges.size() == 1 and not (badges[0] as SimBadge).visible
+	var forbidden_visible := _visible_ui_has_any_text(get_tree().root,
+			["SIMULATION", "SIMULAZIONE", "DEMO MODE"])
+	var loading_visible := _visible_ui_has_any_text(get_tree().root,
+			["CARICAMENTO", "LOADING"])
+	var frame_ok := true
+	var frame_path := OS.get_environment("JHT_LIVE_PROFILE_FRAME")
+	if frame_path != "":
+		var image := get_viewport().get_texture().get_image()
+		frame_ok = image.save_png(frame_path) == OK and FileAccess.file_exists(frame_path)
+	var ok := BackendBus.state == BackendBus.CONNECTED and BackendBus.is_live() \
+			and not BackendBus.positions_are_demo and not BackendBus.positions.is_empty() \
+			and badge_hidden and not forbidden_visible and not loading_visible and frame_ok
+	print(("LIVE-PROFILE-TEST %s connected=%s positions_live=%s badge_hidden=%s " \
+			+ "forbidden_visible=%s loading_visible=%s frame=%s") % [
+			"PASS" if ok else "FAIL", BackendBus.state == BackendBus.CONNECTED,
+			not BackendBus.positions_are_demo and not BackendBus.positions.is_empty(),
+			badge_hidden, forbidden_visible, loading_visible, frame_ok])
+	get_tree().quit(0 if ok else 1)
+
+
+func _visible_ui_has_any_text(node: Node, tokens: Array) -> bool:
+	if node is CanvasItem and not (node as CanvasItem).is_visible_in_tree():
+		return false
+	var text := ""
+	if node is Label:
+		text = (node as Label).text
+	elif node is Button:
+		text = (node as Button).text
+	elif node is RichTextLabel:
+		text = (node as RichTextLabel).text
+	elif node is LineEdit:
+		text = (node as LineEdit).text
+	var upper := text.to_upper()
+	for token in tokens:
+		if str(token) in upper:
+			return true
+	for child in node.get_children():
+		if _visible_ui_has_any_text(child, tokens):
+			return true
+	return false
 
 
 ## Ganci che hanno bisogno del roster vero: `sync_agents` li richiama a ogni

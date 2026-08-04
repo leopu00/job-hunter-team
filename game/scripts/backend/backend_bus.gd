@@ -171,6 +171,16 @@ func _ready() -> void:
 		_self_test_chat_notifications.call_deferred()
 	if OS.get_environment("JHT_NOVPS") == "1":
 		return
+	# Gate riprese/test locale: non leggere vps.cfg e non tentare mai la rete.
+	# Il profilo REL-004 deve collegarsi esclusivamente al container sintetico
+	# gia' approvato; una configurazione VPS dell'utente non puo' vincere per
+	# precedenza e trasformare un self-test locale in un accesso remoto.
+	if OS.get_environment("JHT_LOCAL_ONLY") == "1":
+		if _local_container_running():
+			set_backend(LocalBackend.new())
+		else:
+			publish_state(ERROR, "container locale non disponibile")
+		return
 	var cfg := load_vps_config()
 	if OS.get_environment("JHT_VPS_IP") != "":
 		cfg = {
@@ -209,6 +219,11 @@ func _self_test_vps_contract() -> void:
 		"ts": "2026-07-13T03:00:00Z", "from": "sentinella-worker",
 		"to": "scout-2", "body": "[@sentinella-worker -> @scout-2] [INFO] controllo completato",
 	})
+	var python_argv := PackedStringArray(
+			["exec", "jht", "python3", "-c", "print('ok')", "/jht_home/jobs.db"])
+	var python_at := LocalBackend._script_arg_index(python_argv)
+	var shell_argv := PackedStringArray(["exec", "jht", "sh", "-lc", "printf ok"])
+	var shell_at := LocalBackend._script_arg_index(shell_argv)
 	var ok: bool = uids == ["sentinella", "sentinella-worker", "scout-2", "critico-s1"] \
 			and roles == ["sentinella", "sentinella", "scout", "critico"] \
 			and msg.get("from") == "sentinella-worker" \
@@ -231,6 +246,15 @@ func _self_test_vps_contract() -> void:
 					"docker inspect jht --format '{{.State.Status}}'") \
 			== PackedStringArray(["inspect", "jht", "--format", "{{.State.Status}}"]) \
 			and LocalBackend._docker_argv("python3 -").is_empty()
+	# Il trasporto file distingue Python dalla shell. Prima anteponeva `exec
+	# >...` anche a `python3 -c`, quindi handshake e roster erano live ma la
+	# query jobs.db moriva con SyntaxError e le posizioni restavano demo.
+	ok = ok and python_at == 4 \
+			and LocalBackend._redirected_script(python_argv, python_at, "probe.out") \
+					.begins_with("import sys;") \
+			and shell_at == 4 \
+			and LocalBackend._redirected_script(shell_argv, shell_at, "probe.out") \
+					.begins_with("exec >/jht_home/")
 	print("VPS-CONTRACT-TEST ", "PASS " if ok else "FAIL ",
 			JSON.stringify({"uids": uids, "roles": roles, "msg": msg}))
 
