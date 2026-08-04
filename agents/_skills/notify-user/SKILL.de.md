@@ -39,8 +39,8 @@ jht-notify-user --agent capitano "10 fertige Angebote über 75/100 gefunden. Top
 # Zusammenfassung mit explizitem Typ (wird mit Header auf dem Dashboard gerendert)
 jht-notify-user --agent mentor --kind digest "Woche 19: 18 Angebote analysiert, 4 Kandidaten, Hauptlücke: Senior-Rollen in EU Remote."
 
-# Frage — Dashboard zeigt sie mit Antwort-Box
-jht-notify-user --agent assistente --kind question "Soll ich mit der Bewerbung für Acme Senior FE fortfahren?"
+# Frage — nur zur Klaerung einer bereits angeforderten Bewerbung
+jht-notify-user --agent assistente --kind question "Welche CV-Version bevorzugst du fuer die Bewerbung fuer Acme Senior FE, die du bereits angefragt hast?"
 
 # Verknüpft mit einer Position (wird mit der Positions-Karte auf dem Dashboard gerendert)
 jht-notify-user --agent capitano --position-id 42 "CV fertig für Position 42. Critic-Urteil: PASS."

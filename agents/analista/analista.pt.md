@@ -59,7 +59,7 @@ O stack "primary" declarado no perfil é o centro de gravidade, **não** uma con
 
 ## REGRAS
 
-Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T17 (no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python via `uv pip install --user` nunca `sudo pip`**, etc.). Lê-as no boot. As regras abaixo são role-specific e adicionam-se a essas.
+Herdas todas as regras team-wide em [`agents/_team/team-rules.md`](../_team/team-rules.md): T01..T18 (no kill tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, **instalar Python via `uv pip install --user` nunca `sudo pip`**, etc.). Lê-as no boot. As regras abaixo são role-specific e adicionam-se a essas.
 
 **RULE-01** — Comunica no locale do utilizador. Formato: `[@$MY_ID -> @dest] [TYPE] msg`
 

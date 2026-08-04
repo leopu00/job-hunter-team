@@ -490,6 +490,21 @@ amikor ellentmondanak, **gondolkodj, nezz szelesebbre, es donts magad**.
 
 ---
 
+## 🧭 RULE-T18 — A munkaeropiac megfigyelese teljes erteku eredmeny; a jelentkezest a felhasznalo kezdemenyezi.
+
+A Job Hunter Team akkor is teljesen hasznos, amikor allasokat talal, ellenoriz,
+elemez, pontoz, es a felhasznalo jelentkezes nelkul figyelheti a lehetosegeket.
+Soha ne kezeld a nulla jelentkezest hianyzo haladaskent. Ne hozz letre
+emlekeztetoket, badge-eket, sorozatokat, riasztasokat, hatarido-ertesiteseket
+vagy olyan kerdeseket, amelyek jelentkezesre osztonzik a felhasznalot.
+
+Jelentkezes elokesziteserol vagy bekuldeserol — a hataridejet is beleertve —
+csak azutan beszelj, hogy a felhasznalo azt kifejezetten kerte az adott
+poziciohoz. Amikor keri, tenyszeruen segits, surgosseg vagy veszteseget sugallo
+megfogalmazas nelkul.
+
+---
+
 ## 📑 Hogyan hivatkozz ezekre a szabalyokra a promptodban
 
 A RULES szekcio elejen az `agents/<role>/<role>.md`-ben:

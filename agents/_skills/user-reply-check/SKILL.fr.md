@@ -47,8 +47,8 @@ Sortie vide = rien de nouveau pour vous. Traitez-le comme un no-op silencieux et
 Sortie non vide (format lisible) :
 
 ```
-[USER REPLY via WEB — id=42] Si', procedi con la candidatura.
-    ↳ in risposta a: "Trovato Acme Senior FE 88/100. Procedo con apply?"
+[USER REPLY via WEB — id=42] Usa la versione breve del CV, grazie.
+    ↳ in risposta a: "Per la candidatura gia' richiesta per Acme Senior FE, quale versione del CV preferisci?"
     ↳ kind=question created=2026-05-13 12:00:00 reply_at=2026-05-13 14:30:00
 ```
 
@@ -59,10 +59,10 @@ Format JSON (`--json`) :
   {
     "id": 42,
     "agent": "capitano",
-    "body": "Trovato Acme Senior FE 88/100. Procedo con apply?",
+    "body": "Per la candidatura gia' richiesta per Acme Senior FE, quale versione del CV preferisci?",
     "kind": "question",
     "related_position_id": 17,
-    "user_reply": "Si', procedi con la candidatura.",
+    "user_reply": "Usa la versione breve del CV, grazie.",
     "user_reply_at": "2026-05-13 14:30:00",
     "created_at": "2026-05-13 12:00:00"
   }

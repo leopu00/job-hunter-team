@@ -199,6 +199,6 @@ En cas de doute : **ne redémarre pas**. Log `status=ambiguous` et passe au suiv
 
 ## 📋 Héritage
 
-Tu hérites des règles team-wide T01..T17 de `agents/_team/team-rules.md`. Exception T01 ("ne jamais tuer la session d'un autre agent") : tu PEUX tuer des sessions d'agent **à l'intérieur du flow explicite de respawn** de la skill `liveness-check`. Jamais en dehors de ce flow. Jamais les sessions utilisateur.
+Tu hérites des règles team-wide T01..T18 de `agents/_team/team-rules.md`. Exception T01 ("ne jamais tuer la session d'un autre agent") : tu PEUX tuer des sessions d'agent **à l'intérieur du flow explicite de respawn** de la skill `liveness-check`. Jamais en dehors de ce flow. Jamais les sessions utilisateur.
 
 Architecture équipe : `agents/_team/architettura.md`. Cycle de vie du watchdog qui te spawne : `spawn-doctor.sh`.

@@ -1,7 +1,6 @@
 class_name RegistryPanel
 extends CanvasLayer
-## Registro candidature (quest log, TAB): candidature come quest a stadi
-## inviata → screening → colloquio → offerta, con streak+freeze in testa.
+## Registro candidature (TAB): stati informativi da inviata a offerta.
 
 const STAGES := 4
 
@@ -36,8 +35,7 @@ func _ready() -> void:
 	var title := TerminalTheme.label(UIStrings.t("registry.title"), 26, Palette.WHITE, "xbold")
 	box.add_child(title)
 
-	# con la VPS: le candidature VERE (CV pronto → inviata → risposta);
-	# streak/quest-stadi restano al mock, il sistema reale non li ha
+	# con la VPS: le candidature VERE (CV pronto → inviata → risposta).
 	if not BackendBus.positions.is_empty():
 		box.add_child(HSeparator.new())
 		var live_rows := 0
@@ -50,18 +48,6 @@ func _ready() -> void:
 			box.add_child(TerminalTheme.label(UIStrings.t("apps.empty_live"),
 					17, Palette.DIM))
 	else:
-		var streak: Dictionary = TeamData.streak()
-		var streak_row := HBoxContainer.new()
-		streak_row.add_theme_constant_override("separation", 10)
-		box.add_child(streak_row)
-		var flames := ""
-		for i in mini(int(streak.get("days", 0)), 10):
-			flames += "▮"
-		streak_row.add_child(TerminalTheme.label(flames, 18, Palette.ORANGE, "bold"))
-		streak_row.add_child(TerminalTheme.label(
-				UIStrings.t("registry.streak") % [streak.get("days", 0), streak.get("freezes", 0)],
-				16, Palette.MUTED))
-		box.add_child(HSeparator.new())
 		var apps: Array = TeamData.applications()
 		if apps.is_empty():
 			box.add_child(TerminalTheme.label(UIStrings.t("registry.empty"), 17, Palette.DIM))

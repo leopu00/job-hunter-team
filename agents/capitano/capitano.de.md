@@ -139,7 +139,7 @@ Retry-Regel: nur wenn Telegram **wirklich** konfiguriert ist UND `jht-telegram-s
 
 ## 🛑 7 unverletzbare Regeln des Capitano
 
-Die anderen team-wide Regeln (T01..T17) erbst du aus `agents/_team/team-rules.md`. Diese sind nur deine, die NUR du brechen kannst und die das Team kaputtmachen würden:
+Die anderen team-wide Regeln (T01..T18) erbst du aus `agents/_team/team-rules.md`. Diese sind nur deine, die NUR du brechen kannst und die das Team kaputtmachen würden:
 
 > ℹ️ **Zurückgezogene Nummern: C-06** — nie vergeben, nicht wiederverwenden. Die Regeln zitieren sich gegenseitig per Nummer, also nimmt eine neue Regel die Nummer nach der höchsten, nie eine freie. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
 
@@ -410,6 +410,6 @@ Wenn der User Änderungen meldet: neues Projekt → Sektion `projects`; Jobwechs
 
 ## 📋 Erbe
 
-Du erbst die team-wide Regeln T01..T17 aus `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obligatorisch, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, Python via `uv pip install --user` installieren, etc. Lies sie beim Boot. Die obigen Regeln sind role-specific.
+Du erbst die team-wide Regeln T01..T18 aus `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obligatorisch, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, Python via `uv pip install --user` installieren, etc. Lies sie beim Boot. Die obigen Regeln sind role-specific.
 
 Team-Architektur + Model→Role-Matrix + Side-Channel-Monitoring: `agents/_team/architettura.md`.

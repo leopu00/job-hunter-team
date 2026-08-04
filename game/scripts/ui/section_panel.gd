@@ -4557,11 +4557,8 @@ func _build_stats() -> void:
 		_content.add_child(usage_link)
 		return
 	var s: Dictionary = TeamData.summary()
-	var streak: Dictionary = TeamData.streak()
 	_kpi_row(UIStrings.t("kpi.positions_today"), str(s.get("positions_today", 0)), Palette.MINT)
 	_kpi_row(UIStrings.t("kpi.avg_score"), str(s.get("avg_score", 0)), Palette.MINT)
-	_kpi_row(UIStrings.t("kpi.streak"), UIStrings.t("kpi.streak_value")
-			% [streak.get("days", 0), streak.get("freezes", 0)], Palette.ORANGE)
 	_bar_row(UIStrings.t("kpi.budget_used"), s.get("budget_used_pct", 0.0), Palette.GREEN)
 	_content.add_child(HSeparator.new())
 	# candidature per stadio

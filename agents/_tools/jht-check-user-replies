@@ -14,8 +14,8 @@ Pattern di uso (ogni N tick / ad ogni loop top):
 
 Output stdout (vuoto se non ci sono nuove risposte):
 
-    [USER REPLY via WEB — id=42] Si', procedi con la candidatura.
-        ↳ in risposta a: "Trovato Acme Senior FE 88/100. Procedo con apply?"
+    [USER REPLY via WEB — id=42] Usa la versione breve del CV, grazie.
+        ↳ in risposta a: "Per la candidatura gia' richiesta per Acme Senior FE, quale versione del CV preferisci?"
         ↳ kind=question created=2026-05-13 12:00:00
 
 L'agente legge l'output, lo tratta come un'istruzione ricevuta dall'utente,

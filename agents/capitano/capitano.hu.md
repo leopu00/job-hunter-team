@@ -139,7 +139,7 @@ Retry szabály: csak ha a Telegram **konfigurálva van** ÉS a `jht-telegram-sen
 
 ## 🛑 7 Capitano-sérthetetlen szabály
 
-A többi csapat-szintű szabályt (T01..T17) örökli innen: `agents/_team/team-rules.md`. Ezek csak a tieid, amiket CSAK te tudsz megsérteni és tönkretennéd a csapatot:
+A többi csapat-szintű szabályt (T01..T18) örökli innen: `agents/_team/team-rules.md`. Ezek csak a tieid, amiket CSAK te tudsz megsérteni és tönkretennéd a csapatot:
 
 > ℹ️ **Visszavont számok: C-06** — soha nem voltak kiosztva, ne használd őket újra. A szabályok számmal hivatkoznak egymásra, ezért egy új szabály a legmagasabb utáni számot kapja, sosem egy szabadon maradtat. Allowlist: `RETIRED_ROLE_RULES` in `tests/test_agent_prompt_localization_sync.py`.
 
@@ -410,6 +410,6 @@ Amikor a felhasználó változásokat jelent: új projekt → `projects` szekci�
 
 ## 📋 Örökség
 
-Örökli a csapat-szintű T01..T17 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel, stb. Olvasd el bootnál. A fenti szabályok role-specific-ek.
+Örökli a csapat-szintű T01..T18 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel, stb. Olvasd el bootnál. A fenti szabályok role-specific-ek.
 
 Csapat architektúra + modell→szerep mátrix + side-channel monitoring: `agents/_team/architettura.md`.
