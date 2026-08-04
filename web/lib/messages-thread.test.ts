@@ -12,9 +12,11 @@
  * vera, che è dove si annidano i doppioni (l'evento Realtime può arrivare
  * PRIMA della risposta HTTP alla POST).
  */
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   optimisticUserTurn,
+  postChat,
+  retryChatSignal,
   withAgentAcked,
   withConfirmedTurn,
   withReply,
@@ -38,6 +40,42 @@ const msg = (over: Partial<PendingMessage> = {}): PendingMessage => ({
   agent_seen_reply_at: null,
   created_at: "2026-07-29T10:00:00.000Z",
   ...over,
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("campanello immediato della chat", () => {
+  it("espone il failure del segnale senza perdere la riga gia' salvata", async () => {
+    const saved = msg({ id: "fixture-chat", author: "user" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ message: saved, signalled: false }),
+      }),
+    );
+
+    await expect(postChat("capitano", "fixture")).resolves.toEqual({
+      message: saved,
+      signalled: false,
+    });
+  });
+
+  it("ritenta solo il rendezvous, con una richiesta bounded", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(retryChatSignal()).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/team-state");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "PATCH" });
+    expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toHaveProperty(
+      "chat_requested_at",
+    );
+  });
 });
 
 describe("turno ottimistico dell'utente", () => {
