@@ -133,6 +133,8 @@ world_text|run|gate|any|JHT_SCENE=office JHT_WORLD_TEXT_TEST=1|-|WORLD-TEXT-TEST
 graphics_panel|run|gate|any|JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1|-|GRAPHICS-PANEL-TEST PASS
 setup_busy|run|gate|any|JHT_SCENE=office JHT_SETUP_BUSY_TEST=1|-|SETUP-BUSY-TEST PASS
 bubble_layout|run|gate|any|JHT_SCENE=office JHT_BUBBLE_LAYOUT_TEST=1|-|BUBBLE-LAYOUT-TEST PASS
+sim_badge|run|gate|any|JHT_SCENE=office JHT_SIM_BADGE_TEST=1|-|SIM-BADGE-TEST PASS
+promo_agent_review|run|gate|any|JHT_SCENE=office JHT_PROMO=agent-review JHT_PROMO_AGENT=scout JHT_PROMO_DIRECTIONS=1|--fixed-fps 30 --quit-after 1200|PROMO-AGENT-REVIEW PASS scout
 
 # ------------------------------------------------------------------- watch
 # I 15 che nessuna CI ha mai eseguito. Non sono dimenticati: sono in
