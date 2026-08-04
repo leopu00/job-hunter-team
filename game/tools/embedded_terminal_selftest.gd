@@ -152,8 +152,17 @@ func _run() -> void:
 			"Runtime self-test", "test", spoof_command)
 	var failure_token := str(failure_spec.get("exit_report_token", ""))
 	var failure_args := PackedStringArray(failure_spec.get("args", PackedStringArray()))
-	for i in failure_args.size():
-		failure_args[i] = failure_args[i].replace(TOKEN_PLACEHOLDER, failure_token)
+	if is_windows:
+		# Il comando Windows viene codificato Base64 dentro lo spec: sostituire
+		# il placeholder negli argv gia' costruiti non lo raggiungeva mai e il
+		# figlio emetteva il token letterale. Rigenera il solo -Command dopo
+		# aver assegnato il token reale, senza cambiare il wrapper di produzione.
+		failure_args = PackedStringArray(["-NoProfile", "-NonInteractive", "-Command",
+				setup_script._with_windows_exit_report(
+						spoof_command.replace(TOKEN_PLACEHOLDER, failure_token), failure_token)])
+	else:
+		for i in failure_args.size():
+			failure_args[i] = failure_args[i].replace(TOKEN_PLACEHOLDER, failure_token)
 	failure_spec["args"] = failure_args
 	var failure := EmbeddedTerminal.new("runtime-install", failure_spec)
 	root.add_child(failure)
