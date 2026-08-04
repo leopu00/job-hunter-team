@@ -73,7 +73,9 @@ def test_runtime_installer_keeps_tty_and_reports_command_failure():
     assert '"-NoProfile", "-NonInteractive", "-Command"' in setup
     assert "Marshalls.utf8_to_base64(command)" in windows_wrapper
     assert "[Convert]::FromBase64String" in windows_wrapper
-    assert "& $env:COMSPEC /d /s /c $jht_command 1>&2" in windows_wrapper
+    assert "$jht_hosted = '( ' + $jht_command + ' ) 1>&2'" in windows_wrapper
+    assert "& $env:COMSPEC /d /s /c $jht_hosted" in windows_wrapper
+    assert "$jht_command 1>&2" not in windows_wrapper
     assert "$jht_exit = [int]$LASTEXITCODE" in windows_wrapper
     assert "call set" not in windows_wrapper
     assert "errorlevel" not in windows_wrapper

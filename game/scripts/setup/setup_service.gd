@@ -1514,7 +1514,8 @@ static func _with_windows_exit_report(command: String, token: String) -> String:
 	var encoded := Marshalls.utf8_to_base64(command)
 	return ("$jht_command = [Text.Encoding]::UTF8.GetString(" \
 			+ "[Convert]::FromBase64String('%s')); " \
-			+ "& $env:COMSPEC /d /s /c $jht_command 1>&2; " \
+			+ "$jht_hosted = '( ' + $jht_command + ' ) 1>&2'; " \
+			+ "& $env:COMSPEC /d /s /c $jht_hosted; " \
 			+ "$jht_exit = [int]$LASTEXITCODE; " \
 			+ "[Console]::Out.Write([char]27 + ']1337;JHTExit=%s:' " \
 			+ "+ $jht_exit + [char]7); exit $jht_exit") % [encoded, token]
