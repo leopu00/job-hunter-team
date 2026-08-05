@@ -50,6 +50,34 @@ USAGE
   exit 2
 }
 
+normalize_path() {
+  # Keep this lexical normalization alongside `cd -P` below.  It lets the
+  # test-only gate reject spellings such as /proc/../proc even on hosts where
+  # procfs is unavailable, while `cd -P` catches symlinks on the recording
+  # host.
+  local input="$1" component
+  local -a input_parts=() normalized_parts=()
+
+  if [[ "$input" != /* ]]; then
+    input="$(pwd -P)/$input"
+  fi
+  IFS='/' read -r -a input_parts <<< "$input"
+  for component in "${input_parts[@]}"; do
+    case "$component" in
+      ''|.) ;;
+      ..)
+        if [ "${#normalized_parts[@]}" -gt 0 ]; then
+          normalized_parts=("${normalized_parts[@]:0:${#normalized_parts[@]} - 1}")
+        fi
+        ;;
+      *) normalized_parts+=("$component") ;;
+    esac
+  done
+
+  local IFS='/'
+  printf '/%s' "${normalized_parts[*]}"
+}
+
 session=""
 source_pid=""
 proc_root="/proc"
@@ -110,8 +138,18 @@ if [ -n "$session" ]; then
   command -v systemctl >/dev/null 2>&1 || die 'systemctl is required for --session'
   source_unit="rel004-${session}-pipewire.service"
   source_pid="$(systemctl --user show --property=MainPID --value "$source_unit")"
-elif [ "$proc_root" = "/proc" ]; then
-  die '--source-pid is only available with a test proc root'
+else
+  # Compare both normalized and physical directories: `/proc/`,
+  # `/proc/../proc`, and a symlink into `/proc` are still the live process
+  # table and must never make the test-only PID escape hatch usable.
+  normalized_proc_root="$(normalize_path "$proc_root")"
+  [ "$normalized_proc_root" != "/proc" ] \
+    || die '--source-pid is only available with a test proc root'
+  canonical_proc_root="$(cd -P -- "$proc_root" 2>/dev/null && pwd -P)" \
+    || die 'test proc root is unavailable'
+  [ "$canonical_proc_root" != "/proc" ] \
+    || die '--source-pid is only available with a test proc root'
+  proc_root="$canonical_proc_root"
 fi
 case "$source_pid" in
   ''|0|*[!0-9]*) die 'portrait source has no live MainPID' ;;
