@@ -1,11 +1,11 @@
 # 🚢 Release
 
-Cutting a release means pushing a `vX.Y.Z` tag that points at the **`production` HEAD**. CI then runs [`.github/workflows/release.yml`](../../../.github/workflows/release.yml): it verifies the tag against every version field, builds the **native Godot desktop application** on three runners, signs and notarizes the macOS build, builds the web app as a regression gate, and creates a **draft** GitHub Release with the three artifacts attached. The release becomes public only after the downloaded draft passes the independent audit below.
+Cutting a release means pushing a `vX.Y.Z` tag that points at the **`production` HEAD**. CI then runs [`.github/workflows/release.yml`](../../../.github/workflows/release.yml): it verifies the tag against every version field, builds the **native Godot desktop application** on three runners, signs and notarizes the macOS build, builds the web app as a regression gate, and creates a **draft** GitHub Release with the four platform artifacts attached. The release becomes public only after the downloaded draft passes the independent audit below.
 
 Every platform runner also records the exact tag commit, byte size and SHA-256
 of its final asset **after** signing and packaging. The release job recomputes
 those hashes after downloading the artifacts and refuses publication unless
-all three sidecars name the same tag commit. The published release includes
+all four sidecars name the same tag commit. The published release includes
 `SHA256SUMS` and `RELEASE-PROVENANCE.json`; checksums prepared before the tag
 are never reused because signing changes the final bytes.
 
@@ -96,7 +96,7 @@ git push origin v0.2.1
   commit and its SHA-256;
 - uploads the artifact.
 
-**3 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the three artifacts, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and then creates the GitHub Release as a **draft**. A tag containing `-` (e.g. `v0.3.0-rc1`) is marked as a **prerelease** when published.
+**3 · `release`** — re-checks that the tag is `origin/production` HEAD, builds the web app (`npm ci` in `web/` **and** `shared/`, because the web build imports `shared/config/schema.ts` which needs `zod`), extracts the release notes from `CHANGELOG.md`, downloads the four platform artifacts, verifies their provenance and hashes, generates `SHA256SUMS` plus `RELEASE-PROVENANCE.json`, and then creates the GitHub Release as a **draft**. A tag containing `-` (e.g. `v0.3.0-rc1`) is marked as a **prerelease** when published.
 
 **4 · independent draft audit and publication** — download the assets back from
 GitHub, verify the exact public bytes and only then publish:
@@ -119,21 +119,25 @@ fix forward; never publish or replace one file by hand.
 
 ### Artifacts
 
-| Platform          | Preset            | Asset                                                                     |
-| ----------------- | ----------------- | ------------------------------------------------------------------------- |
-| Windows x64       | `Windows Desktop` | `job-hunter-team.exe` (bare Godot executable)                             |
-| macOS Universal 2 | `macOS`           | `job-hunter-team.zip` (signed, notarized, stapled)                        |
-| Linux x64         | `Linux`           | `job-hunter-team-linux-x64.tar.gz`                                        |
-| All assets        | —                 | `SHA256SUMS` + `RELEASE-PROVENANCE.json` (tag commit, byte size, SHA-256) |
+| Platform          | Preset            | Asset                                                                                                             |
+| ----------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Windows x64       | `Windows Desktop` | `job-hunter-team-windows-x64-setup.exe` (primary per-user installer) + `job-hunter-team-windows-x64-portable.exe` |
+| macOS Universal 2 | `macOS`           | `job-hunter-team.zip` (signed, notarized, stapled)                                                                |
+| Linux x64         | `Linux`           | `job-hunter-team-linux-x64.tar.gz`                                                                                |
+| All assets        | —                 | `SHA256SUMS` + `RELEASE-PROVENANCE.json` (tag commit, byte size, SHA-256)                                         |
 
 Asset names do **not** carry the version — the GitHub Release tag is the version. There is no separate Windows ARM64 installer any more (the Electron pipeline produced one; the Godot export targets x64, which runs under Windows-on-ARM emulation).
 
-`game/installer/windows.nsi` is a dormant/manual packaging fallback. Its
-metadata is version-gated so a manual build cannot claim `0.0.0`, but the
-release workflow does not invoke `makensis` and does not publish an NSIS setup
-artifact.
+The Windows runner exports the portable Godot executable, builds and
+smoke-tests the per-user NSIS package, then publishes the installer as the
+primary asset and the renamed portable executable as a secondary option. Both
+are covered by the same tag-bound provenance and checksum gate.
 
-> The public `/download` page does not resolve GitHub assets: it hands out the CLI one-liner (`curl -fsSL https://jobhunterteam.ai/install.sh | bash`) and points at `/run`. Release artifacts are for people who download from the GitHub Releases page.
+> The public `/download` page offers both install modes: the terminal path uses
+> `curl -fsSL https://jobhunterteam.ai/install.sh | bash`, while the desktop
+> path links to the stable asset names on the latest GitHub Release. Windows
+> presents the NSIS installer first and labels the portable executable as the
+> alternative.
 
 ---
 

@@ -9,14 +9,54 @@ an optional alternative, not a requirement.
 The game tutorial helps you explore the native office, understand how work
 moves through the team, and inspect a result before you decide what to do.
 
-### Before you begin
+### Plan the setup
 
-Use the native desktop app. To follow every live step, complete **Activate
-team** first: the runtime must be running, a provider authenticated, your
-profile complete, and working hours set. The office remains explorable before
-activation, but live replies and positions need the active team. See
-[Quickstart](QUICKSTART.md#-first-run-in-the-native-office) if you still need
-to activate it.
+This path starts at the website download and ends when the team is active; it
+does not assume that the desktop app or Docker is already configured. Allow
+time before you start. In an observed Linux + Docker end-to-end run, the time
+from double-clicking the downloaded app to completing onboarding and reaching
+the Docker setup panel was **32 minutes 58 seconds**. That observed run then
+reached a provider-authorization block at **54 minutes 40 seconds**
+(`T0 + 54:40`). Hardware, download speed, and Docker setup change the result,
+but this is not a five-minute task.
+
+### Set up the team
+
+1. **Download the native desktop app.** Go to
+   [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
+   is already selected: click macOS, Windows, or Linux once to start the
+   current release download for that platform.
+2. **Open the download for your system.** On Windows, run
+   `job-hunter-team.exe`; on macOS, unzip `job-hunter-team.zip` and open the
+   app; on Linux, extract `job-hunter-team-linux-x64.tar.gz`, verify that
+   `job-hunter-team.x86_64` is allowed to run, and enable its executable
+   permission before running it if needed. Windows and Linux can display a
+   platform warning: continue only when the download came from the official
+   site or its linked release.
+3. **Enter the office.** On first launch, choose and confirm the interface
+   language before the title screen: confirming a choice is required, English
+   is preselected, and the app saves it for later openings. Then add your name
+   if you want and enter the office. It is explorable before setup: its preview
+   conversations and example positions do not start a live team or use a
+   provider.
+4. **Open the setup checklist.** Select **Activate team**. Choose a local
+   runtime or connect a VPS. A local runtime needs Docker; on Windows, Docker
+   Desktop may need its own consent and first-run flow.
+5. **Connect a provider.** In the Coordinator setup, select a supported
+   subscription provider and plan, then complete its authorization in the
+   embedded terminal. An authorization link can open in your browser, while
+   codes and choices stay in the office terminal.
+6. **Complete the profile.** Fill in the native profile. The ready gate needs
+   your name, email, target role, location, experience, seniority, at least
+   two skills, and at least one language.
+7. **Set working hours.** Choose when the team may work. The checklist stays
+   incomplete until the runtime, provider, profile, and working-hours gates
+   are all ready.
+8. **Activate the team.** Return to **Activate team** and complete the four
+   gates. The Coordinator then starts the agents; live replies and positions
+   become available in the office.
+
+### Explore a running team
 
 ### 1. Meet the office
 

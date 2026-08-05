@@ -19,6 +19,7 @@ function TutorialSlot({ id }: { id: TutorialId }) {
   const title =
     id === "game" ? t("tutorial_game_title") : t("tutorial_web_title");
   const guide = TUTORIAL_GUIDES[lang][id];
+  const WalkthroughStepHeading = guide.exploreHeading ? "h4" : "h3";
 
   return (
     <section
@@ -45,7 +46,46 @@ function TutorialSlot({ id }: { id: TutorialId }) {
         </p>
       </div>
 
-      <ol className="mt-8 max-w-3xl space-y-7">
+      {guide.setupSteps && guide.setupHeading && (
+        <section className="mt-10 max-w-3xl" aria-label={guide.setupHeading}>
+          <h3 className="text-xl font-bold tracking-tight text-[var(--color-white)]">
+            {guide.setupHeading}
+          </h3>
+          <ol className="mt-6 space-y-7">
+            {guide.setupSteps.map((step, index) => (
+              <li
+                key={step.title}
+                className="grid grid-cols-[auto_1fr] gap-x-4"
+              >
+                <span
+                  aria-hidden
+                  className="mt-0.5 flex size-7 items-center justify-center rounded-full border border-[var(--color-border)] text-sm font-bold text-[var(--color-green)]"
+                >
+                  {index + 1}
+                </span>
+                <div>
+                  <h4 className="text-lg font-bold tracking-tight text-[var(--color-white)]">
+                    {step.title}
+                  </h4>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--color-bright)]">
+                    {step.body}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {guide.exploreHeading && (
+        <h3 className="mt-12 text-xl font-bold tracking-tight text-[var(--color-white)]">
+          {guide.exploreHeading}
+        </h3>
+      )}
+
+      <ol
+        className={`${guide.exploreHeading ? "mt-6" : "mt-8"} max-w-3xl space-y-7`}
+      >
         {guide.steps.map((step, index) => (
           <li key={step.title} className="grid grid-cols-[auto_1fr] gap-x-4">
             <span
@@ -55,9 +95,9 @@ function TutorialSlot({ id }: { id: TutorialId }) {
               {index + 1}
             </span>
             <div>
-              <h3 className="text-lg font-bold tracking-tight text-[var(--color-white)]">
+              <WalkthroughStepHeading className="text-lg font-bold tracking-tight text-[var(--color-white)]">
                 {step.title}
-              </h3>
+              </WalkthroughStepHeading>
               <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--color-bright)]">
                 {step.body}
               </p>

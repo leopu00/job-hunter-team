@@ -13,11 +13,11 @@ JHT runs ~**400M tokens/month** (many agents working in parallel, around the clo
 
 You need an active subscription to **one** of:
 
-| | Provider | Plan | Cost/mo | Status |
-|---|---|---|---|---|
-| 🟠 | **Claude** | Max x20 | ~€200 | ✅ Production-ready, best precision |
-| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Proven — 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
-| 🌙 | **Kimi** | Pro | ~€40 | 🧪 Beta — mass-market tier (75h + 10-day runs; multi-week observation ongoing) |
+|     | Provider   | Plan       | Cost/mo | Status                                                                                    |
+| --- | ---------- | ---------- | ------- | ----------------------------------------------------------------------------------------- |
+| 🟠  | **Claude** | Max x20    | ~€200   | ✅ Production-ready, best precision                                                       |
+| 🔵  | **Codex**  | Plus / Pro | ~€100   | ✅ Proven — 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
+| 🌙  | **Kimi**   | Pro        | ~€40    | 🧪 Beta — mass-market tier (75h + 10-day runs; multi-week observation ongoing)            |
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
 
@@ -32,12 +32,12 @@ native office guides that runtime setup before activation.
 
 Pick the path that fits how you work:
 
-| | Path | Best for |
-|---|---|---|
-| 🖥️ | [Native app](#%EF%B8%8F-path-1-native-app) | The complete visual office |
-| 📦 | [CLI installer](#-path-2-cli-installer) | Terminal, automation, remote administration |
-| 🦞 | [AI agent drives JHT](#-path-3-let-your-ai-agent-do-it) | You already use Claude Code / OpenClaw / Codex / Cursor |
-| 🛠️ | [From source](#%EF%B8%8F-path-4-from-source-contributors) | Contributors |
+|     | Path                                                      | Best for                                                |
+| --- | --------------------------------------------------------- | ------------------------------------------------------- |
+| 🖥️  | [Native app](#%EF%B8%8F-path-1-native-app)                | The complete visual office                              |
+| 📦  | [CLI installer](#-path-2-cli-installer)                   | Terminal, automation, remote administration             |
+| 🦞  | [AI agent drives JHT](#-path-3-let-your-ai-agent-do-it)   | You already use Claude Code / OpenClaw / Codex / Cursor |
+| 🛠️  | [From source](#%EF%B8%8F-path-4-from-source-contributors) | Contributors                                            |
 
 ---
 
@@ -48,11 +48,11 @@ The desktop application is the game-like Godot office. It exposes onboarding, pr
 Download the current release from
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest):
 
-| System | Release asset | First launch |
-|---|---|---|
-| Windows x64 | `job-hunter-team.exe` | Run the executable. It is unsigned, so Windows may show **Windows protected your PC**; use **More info → Run anyway** only if the file came from this repository's release page. |
-| macOS | `job-hunter-team.zip` | Unzip and open the app. The release is signed and notarized by Apple. |
-| Linux x64 | `job-hunter-team-linux-x64.tar.gz` | Extract it, then run `./job-hunter-team.x86_64`. The archive preserves the executable bit. |
+| System      | Release asset                           | First launch                                                                                                                                                                                                                                                            |
+| ----------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Windows x64 | `job-hunter-team-windows-x64-setup.exe` | Run the per-user installer. The optional standalone build is `job-hunter-team-windows-x64-portable.exe`. Both are unsigned, so Windows may show **Windows protected your PC**; use **More info → Run anyway** only for files from this release that match `SHA256SUMS`. |
+| macOS       | `job-hunter-team.zip`                   | Unzip and open the app. The release is signed and notarized by Apple.                                                                                                                                                                                                   |
+| Linux x64   | `job-hunter-team-linux-x64.tar.gz`      | Extract it, then run `./job-hunter-team.x86_64`. The archive preserves the executable bit.                                                                                                                                                                              |
 
 The office is visible immediately. Select **Activate team** and complete all
 four required gates: a local container or connected VPS runtime, provider login
@@ -132,10 +132,10 @@ The container runs `restart: unless-stopped`, so it survives host reboots. To st
 
 You'll end up with two folders:
 
-| Folder | Purpose | Who touches it |
-|---|---|---|
-| `~/.jht/` | Config, `jobs.db`, agents, credentials, sessions | Agents and CLI only |
-| `~/Documents/Job Hunter Team/` | Generated CVs, reviews, attachments and final packets | You + the agents |
+| Folder                         | Purpose                                               | Who touches it      |
+| ------------------------------ | ----------------------------------------------------- | ------------------- |
+| `~/.jht/`                      | Config, `jobs.db`, agents, credentials, sessions      | Agents and CLI only |
+| `~/Documents/Job Hunter Team/` | Generated CVs, reviews, attachments and final packets | You + the agents    |
 
 > 💡 Expert mode: `bash install.sh --no-docker`. This removes the
 > container boundary and requires Node 22+, tmux, git and the provider CLI on
@@ -148,8 +148,8 @@ You'll end up with two folders:
 If you already use a personal AI assistant (Claude Code, OpenClaw, Codex,
 Cursor), tell it:
 
-> *"Set up Job Hunter Team for me. I have a [Claude Max x20 / Kimi Pro /
-> Codex Pro] subscription. Walk me through what you need."*
+> _"Set up Job Hunter Team for me. I have a [Claude Max x20 / Kimi Pro /
+> Codex Pro] subscription. Walk me through what you need."_
 
 The `jht` CLI is designed for this use. Follow
 [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) for the exact runbook and
@@ -240,20 +240,20 @@ Telegram and VPS paths are optional and documented separately.
 
 ## 🤖 The team (fixed core + dynamic worker pool)
 
-| | Agent | Role |
-|---|---|---|
-| 👨‍✈️ | **Captain** | Coordinates the pipeline, anti-collision |
-| 💂 | **Sentinel** | Event-driven watcher, intervenes on the Captain when usage drifts |
-| 🕵️ | **Scout** | Searches EU and remote job boards |
-| 👨‍🔬 | **Analyst** | Verifies job descriptions, companies, culture |
-| 👨‍💻 | **Scorer** | Assigns 0–100 score against your profile |
-| 👨‍🏫 | **Writer** | Generates CVs and cover letters tailored to each position |
-| 👨‍⚖️ | **Critic** | 3-round blind review before submission |
-| 👩‍💼 | **Assistant** | Platform copilot — helps you navigate every interface |
-| 🧙‍♂️ | **Mentor** | Career coach — analyzes goals/gaps/market signals |
-| 🩺 | **Dottore** *(one-shot)* | Agent-health — restarts stuck agents with fresh context |
-| 👷‍♂️ | **Mantenitore** *(one-shot)* | Infra-health — container, deps, disk, mission-critical tools |
-| 📡 | **Bridge** *(infrastructure, not LLM)* | Polls provider usage on a fixed clock, notifies the Sentinel |
+|     | Agent                                  | Role                                                              |
+| --- | -------------------------------------- | ----------------------------------------------------------------- |
+| 👨‍✈️  | **Captain**                            | Coordinates the pipeline, anti-collision                          |
+| 💂  | **Sentinel**                           | Event-driven watcher, intervenes on the Captain when usage drifts |
+| 🕵️  | **Scout**                              | Searches EU and remote job boards                                 |
+| 👨‍🔬  | **Analyst**                            | Verifies job descriptions, companies, culture                     |
+| 👨‍💻  | **Scorer**                             | Assigns 0–100 score against your profile                          |
+| 👨‍🏫  | **Writer**                             | Generates CVs and cover letters tailored to each position         |
+| 👨‍⚖️  | **Critic**                             | 3-round blind review before submission                            |
+| 👩‍💼  | **Assistant**                          | Platform copilot — helps you navigate every interface             |
+| 🧙‍♂️  | **Mentor**                             | Career coach — analyzes goals/gaps/market signals                 |
+| 🩺  | **Dottore** _(one-shot)_               | Agent-health — restarts stuck agents with fresh context           |
+| 👷‍♂️  | **Mantenitore** _(one-shot)_           | Infra-health — container, deps, disk, mission-critical tools      |
+| 📡  | **Bridge** _(infrastructure, not LLM)_ | Polls provider usage on a fixed clock, notifies the Sentinel      |
 
 For the full architecture diagram → see the README.
 

@@ -42,10 +42,11 @@ type InstallMode = "terminal" | "desktop";
 
 const RELEASE_BASE =
   "https://github.com/leopu00/job-hunter-team/releases/latest/download";
+const WINDOWS_PORTABLE_ASSET = "job-hunter-team-windows-x64-portable.exe";
 
 const DESKTOP_ASSET: Record<PlatformId, string> = {
   mac: "job-hunter-team.zip",
-  windows: "job-hunter-team.exe",
+  windows: "job-hunter-team-windows-x64-setup.exe",
   linux: "job-hunter-team-linux-x64.tar.gz",
 };
 
@@ -271,6 +272,15 @@ function DownloadContent() {
                   </a>
                 ))}
               </div>
+              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4 text-center">
+                {t("dl_windows_portable_label")}{" "}
+                <a
+                  href={`${RELEASE_BASE}/${WINDOWS_PORTABLE_ASSET}`}
+                  className="font-semibold text-[var(--color-green)] underline underline-offset-2"
+                >
+                  {t("dl_windows_portable_link")}
+                </a>
+              </p>
               {/* Windows e Linux non sono firmati: l'avviso del sistema va
                   detto prima, così non sembra che il file sia guasto. */}
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4">

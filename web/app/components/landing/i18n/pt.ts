@@ -65,6 +65,8 @@ export const pt: Record<string, string> = {
   dl_desktop_beta_desc:
     "A app de ambiente de trabalho é o escritório onde vês a equipa trabalhar. Está em beta: usamo-la todos os dias, mas muda com frequência. Se preferires um caminho mais assente, a CLI continua disponível.",
   dl_desktop_beta_badge: "Beta",
+  dl_windows_portable_label: "Windows: o instalador é a opção recomendada.",
+  dl_windows_portable_link: "Descarrega antes a versão portátil",
   dl_desktop_unsigned_note:
     "No macOS a app está assinada e notarizada: abre com duplo clique. No Windows não está assinada, por isso o SmartScreen mostra «O Windows protegeu o seu PC»: clica em «Mais informações» e depois «Executar mesmo assim». No Linux, extrai o arquivo e torna-o executável.",
   dl_help_text: "Não sabes onde instalá-lo?",
