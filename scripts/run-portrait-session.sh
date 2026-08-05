@@ -143,12 +143,14 @@ else
   # `/proc/../proc`, and a symlink into `/proc` are still the live process
   # table and must never make the test-only PID escape hatch usable.
   normalized_proc_root="$(normalize_path "$proc_root")"
-  [ "$normalized_proc_root" != "/proc" ] \
-    || die '--source-pid is only available with a test proc root'
+  case "$normalized_proc_root" in
+    /proc|/proc/*) die '--source-pid is only available with a test proc root' ;;
+  esac
   canonical_proc_root="$(cd -P -- "$proc_root" 2>/dev/null && pwd -P)" \
     || die 'test proc root is unavailable'
-  [ "$canonical_proc_root" != "/proc" ] \
-    || die '--source-pid is only available with a test proc root'
+  case "$canonical_proc_root" in
+    /proc|/proc/*) die '--source-pid is only available with a test proc root' ;;
+  esac
   proc_root="$canonical_proc_root"
 fi
 case "$source_pid" in
