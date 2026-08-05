@@ -63,6 +63,10 @@ var _row := 0
 var _frames := 2
 var _fps := 2.0
 var _base_fps := 2.0
+## Ultima velocita' fisica ricevuta da AgentNPC. La tratteniamo anche mentre
+## il facing cambia: _apply_track puo' cosi' scegliere subito il cel della
+## fase corrente, senza un frame transitorio letto alla vecchia cadenza 10.
+var _walk_speed := WALK_REFERENCE_SPEED
 var _t := 0.0
 ## Cache di visual_top_y per (texture, frame): get_image() è un readback
 ## GPU→CPU con scan dei pixel — a regime NON deve mai ripetersi.
@@ -109,7 +113,12 @@ func set_motion(p_facing: String, p_flipped: bool, p_mode: String) -> void:
 func set_walk_speed(world_speed: float) -> void:
 	if mode not in ["walk", "carry"]:
 		return
-	_fps = walk_fps_for_speed(_base_fps, world_speed)
+	_walk_speed = maxf(0.0, world_speed)
+	_fps = walk_fps_for_speed(_base_fps, _walk_speed)
+	# Il cambio di velocita' puo' attraversare una soglia di fase: aggiorna
+	# subito il cel, non al _process successivo, perche' Movie Maker puo'
+	# disegnare proprio fra un cambio facing e il frame seguente.
+	_update_frame()
 	set_process(true)
 
 static func walk_fps_for_speed(base_fps: float, world_speed: float) -> float:
@@ -168,7 +177,7 @@ func _apply_track() -> void:
 	_row = track[0]
 	_frames = track[1]
 	_base_fps = track[2]
-	_fps = _base_fps
+	_fps = walk_fps_for_speed(_base_fps, _walk_speed) if mode in ["walk", "carry"] else _base_fps
 	scale.x = -RIG_SCALE if (facing == "side" and flipped) else RIG_SCALE
 	_update_frame()
 	# Tracce a frame fisso (still/sit_idle) senza bob: il rig dorme del tutto.

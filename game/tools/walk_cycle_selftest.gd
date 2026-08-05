@@ -34,8 +34,22 @@ func _run() -> void:
 	rig.set_walk_speed(150.0)
 	_check("il rig applica la cadenza alla tratta", is_equal_approx(rig._fps, 20.0))
 	rig._t = 0.21
+	rig._update_frame()
 	rig.set_motion("up", false, "walk")
 	_check("cambiare direzione non riavvia il passo", is_equal_approx(rig._t, 0.21))
+	_check("a 20 fps il cambio direzione conserva la posa F04",
+			rig._sprite.frame == 4 * 6 + 4, str(rig._sprite.frame))
+	_check("a 20 fps il cambio direzione conserva la cadenza", is_equal_approx(rig._fps, 20.0))
+	rig.set_walk_speed(185.0)
+	rig._t = 0.21
+	rig._update_frame()
+	rig.set_motion("side", true, "walk")
+	_check("a 24 fps flip e cambio direzione conservano la posa F05",
+			rig._sprite.frame == 5 * 6 + 5, str(rig._sprite.frame))
+	_check("a 24 fps flip e cambio direzione conservano la cadenza", is_equal_approx(rig._fps, 24.0))
+	rig.set_motion("side", true, "carry")
+	_check("walk a carry conserva fase e cadenza", rig._sprite.frame == 11 * 6 + 5 \
+			and is_equal_approx(rig._fps, 24.0), str(rig._sprite.frame))
 	rig.free()
 
 	var agent_source := FileAccess.get_file_as_string("res://scripts/characters/agent_npc.gd")
@@ -49,6 +63,6 @@ func _run() -> void:
 		quit(1)
 
 
-func _check(what: String, ok: bool) -> void:
+func _check(what: String, ok: bool, detail := "") -> void:
 	if not ok:
-		_fails.append(what)
+		_fails.append(what + ("" if detail == "" else " — " + detail))
