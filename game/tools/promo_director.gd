@@ -856,13 +856,6 @@ func _review_role_label() -> String:
 ## vignette scaccerebbero quelle di regia. Parlano solo le battute dirette.
 func _dress_promo_set() -> void:
 	_dress_set_english()
-	_silence_state_tags()
-	for agent in _office.agents:
-		agent._chatter = []
-		agent._bubble_timer = 100000.0
-		if agent.quest_marker:
-			agent.quest_marker.queue_free()
-			agent.quest_marker = null
 	# La targa della mensola output («CV PRONTI») non è localizzata: per il
 	# ciak inglese la si copre con una targa gemella in inglese, contatore
 	# vero incluso — il Critico della Scena 4 consegna proprio lì.
@@ -939,6 +932,7 @@ func _silence_state_tags() -> void:
 func _dress_set_english() -> void:
 	_hide_simulation_badge()
 	_hide_promo_hud()
+	_prepare_promo_agents()
 	var stage: Node = _office._stage
 	for child in stage.get_children():
 		if child is DepartmentDressing:
@@ -988,6 +982,18 @@ func _hide_promo_hud() -> void:
 								or overlay is HeadlessNotice \
 								or overlay is UpdateNotice:
 							overlay.queue_free()
+
+
+## Nessuna targhetta showroom o battuta ambientale può entrare in un frame
+## promo. Tenerlo qui rende identici i clip storici e quelli aggiunti dopo.
+func _prepare_promo_agents() -> void:
+	_silence_state_tags()
+	for agent in _office.agents:
+		agent._chatter = []
+		agent._bubble_timer = 100000.0
+		if agent.quest_marker:
+			agent.quest_marker.queue_free()
+			agent.quest_marker = null
 
 
 ## Targa inglese sopra lo scaffale output: copre la targa «CV PRONTI»

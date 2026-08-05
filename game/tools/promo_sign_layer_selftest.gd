@@ -31,8 +31,11 @@ func _run() -> void:
 			and director_source.contains("func _hide_promo_hud") \
 			and director_source.contains("if child is GameSidebar") \
 			and director_source.contains("overlay is TeamHud") \
+			and director_source.contains("func _prepare_promo_agents") \
+			and director_source.contains("agent.quest_marker.queue_free()") \
 			and director_source.contains("_hide_simulation_badge()") \
-			and director_source.contains("_hide_promo_hud()"))
+			and director_source.contains("_hide_promo_hud()") \
+			and director_source.contains("_prepare_promo_agents()"))
 	world.free()
 	signs.free()
 	if _fails.is_empty():
