@@ -266,6 +266,8 @@ static func graphics_choice() -> String:
 ## dentro il mondo si ingrandisce per compensare (WorldText).
 ## Precedenza: JHT_PIXEL (test) → scelta dell'utente → ultima calibrazione.
 static func render_scale() -> float:
+	if TutorialHarness.enabled():
+		return 1.0
 	var forced := OS.get_environment("JHT_PIXEL").strip_edges()
 	if forced.is_valid_float():
 		return _as_scale(forced.to_float())
@@ -304,6 +306,12 @@ static func set_render_scale(value: float) -> void:
 ## Il profilo scelto la prima volta vale anche ai riavvii successivi: senza
 ## memoria l'utente si rivedrebbe i primi 15 secondi di lag ogni volta.
 func load_gfx_profile() -> void:
+	# Il harness è ripetibile: non eredita né modifica preferenze grafiche
+	# della macchina che lo sta eseguendo.
+	if TutorialHarness.enabled():
+		_applied_scale = 1.0
+		_gfx_done = true
+		return
 	# La scala di partenza è quella che la scena applicherà davvero (scelta
 	# dell'utente, o l'ultima misurata): tenerne conto qui è ciò che permette
 	# alla sorveglianza di sapere da dove si sta muovendo. Senza, si crede a
@@ -536,6 +544,7 @@ func goto_wizard() -> void:
 
 func goto_office() -> void:
 	Log.info("scene", "→ OFFICE")
+	TutorialHarness.mark("OFFICE_LOAD_START")
 	state = State.OFFICE
 	_change_scene_with_veil(SCENE_OFFICE)
 

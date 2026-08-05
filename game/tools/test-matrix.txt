@@ -76,6 +76,9 @@ upgrade_bootstrap|script|gate|any|-|tools/upgrade_bootstrap_selftest.gd|UPGRADE-
 # La veste inglese delle riprese sostituisce un Node2D: deve conservare il
 # layer di fondale, altrimenti COMPATIBILITY passa davanti alla testa agente.
 promo_sign_layer|script|gate|any|-|tools/promo_sign_layer_selftest.gd|PROMO-SIGN-LAYER-TEST PASS
+# V3: le tre take approvate devono partire su una route reale, superare le
+# durate minime e montare la stessa superficie promo pulita (nessun HUD/UI).
+promo_v3_regia|script|gate|any|-|tools/promo_v3_selftest.gd|PROMO-V3-REGIA-TEST PASS
 # La fascia frontale delle scrivanie non puo' restare un overlay assoluto:
 # altrimenti un agente in cammino viene coperto anche quando il suo piede lo
 # y-sorta davanti al desk. Deve attivarsi soltanto per un rig seduto dinamico.
@@ -97,6 +100,13 @@ language_picker|script|gate|any|-|tools/language_picker_selftest.gd|LANGUAGE-PIC
 # La componente da sola non basta: entra dalla vera main scene e prova che il
 # picker preceda la title, mostri inglese e costruisca la title dopo la scelta.
 language_picker_title|run|gate|any|JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1|-|LANGUAGE-PICKER-TITLE-TEST PASS
+# Percorso P09 reale e cliccabile: non salta il picker con JHT_LANG, isola
+# user://, conferma English, salva un nome sintetico ed entra nell'Office
+# offline con Assistant disponibile e viewport nativo 16:9.
+tutorial_16_9|run|gate|any|JHT_TUTORIAL_HARNESS=1 JHT_TUTORIAL_RESET=1 JHT_TUTORIAL_HARNESS_TEST=1|-|TUTORIAL-16-9-HARNESS-TEST PASS
+# Secondo processo: l'inglese deve saltare il picker grazie al ConfigFile
+# isolato del harness, non a JHT_LANG; chiude poi solo i file sintetici.
+tutorial_16_9_persistence|python|gate|any|-|tools/tutorial_16_9_selftest.py|-
 # Conferma una lingua non-default nel picker, chiude Godot e riapre un processo
 # senza override: legge il ConfigFile, salta il picker e ricostruisce la title.
 language_persistence|python|gate|any|-|tools/language_persistence_selftest.py|LANGUAGE-PERSISTENCE-TEST PASS
