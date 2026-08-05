@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 import pytest
 
 from scripts.vertical_motion import (
@@ -13,7 +16,35 @@ from scripts.vertical_motion import (
     png_pan_zoom_filter,
     sprite_overlay_filter,
     validate_collage_inputs,
+    verify_designer_release,
 )
+
+
+def _designer_release(tmp_path, *, asset: str = "pipeline-rail-state-03", revision: str = "r02"):
+    root = tmp_path / "motion-assets" / "releases" / "designer" / "central-6p00-10p90"
+    root.mkdir(parents=True)
+    png_name = f"{asset}-{revision}.png"
+    png = root / png_name
+    png.write_bytes(b"test release PNG bytes")
+    png_sha256 = hashlib.sha256(png.read_bytes()).hexdigest()
+    manifest = root / f"{asset}-{revision}.manifest.json"
+    manifest.write_text(json.dumps({
+        "schema": "jht-motion-asset-v1",
+        "asset": asset,
+        "revision": revision,
+        "status": "immutable-release",
+        "files": {"png": {"path": png_name, "sha256": png_sha256}},
+        "canvas": {"width": 1080, "height": 1920, "color_space": "sRGB"},
+        "alpha_mode": "straight-unpremultiplied",
+        "anchor": {"x": 0, "y": 0},
+        "pivot": {"x": 0.0, "y": 0.0},
+        "z_index": 10,
+        "timing": {"global_start": 6.0, "global_end": 7.64},
+    }), encoding="utf-8")
+    (root / f"{asset}-{revision}.sha256").write_text(
+        f"{png_sha256}  {png_name}\n", encoding="utf-8"
+    )
+    return manifest, png
 
 
 def test_png_pan_zoom_is_a_per_frame_portrait_motion_filter() -> None:
@@ -68,3 +99,71 @@ def test_v020_collage_accepts_only_permitted_motion_inputs(paths: list[str]) -> 
 def test_v020_collage_rejects_banned_legacy_inputs(path: str) -> None:
     with pytest.raises(VerticalMotionError, match="forbidden collage input"):
         validate_collage_inputs([path])
+
+
+def test_designer_release_requires_immutable_manifest_and_both_png_hashes(tmp_path) -> None:
+    manifest, png = _designer_release(tmp_path)
+
+    release = verify_designer_release(
+        manifest,
+        asset="pipeline-rail-state-03",
+        revision="r02",
+        z_index=10,
+        start=6.0,
+        end=7.64,
+    )
+
+    assert release.png == png.resolve()
+    assert release.start == 6.0
+    assert release.end == 7.64
+    assert release.z_index == 10
+
+
+def test_designer_release_rejects_a_replaced_png_even_with_the_same_filename(tmp_path) -> None:
+    manifest, png = _designer_release(tmp_path)
+    png.write_bytes(b"overwritten after review")
+
+    with pytest.raises(VerticalMotionError, match="manifest SHA-256"):
+        verify_designer_release(
+            manifest,
+            asset="pipeline-rail-state-03",
+            revision="r02",
+            z_index=10,
+            start=6.0,
+            end=7.64,
+        )
+
+
+def test_designer_release_rejects_a_sidecar_that_disagrees_with_the_manifest(tmp_path) -> None:
+    manifest, _ = _designer_release(tmp_path)
+    sidecar = manifest.with_name("pipeline-rail-state-03-r02.sha256")
+    sidecar.write_text(
+        f"{'0' * 64}  pipeline-rail-state-03-r02.png\n", encoding="utf-8"
+    )
+
+    with pytest.raises(VerticalMotionError, match="SHA-256 sidecar"):
+        verify_designer_release(
+            manifest,
+            asset="pipeline-rail-state-03",
+            revision="r02",
+            z_index=10,
+            start=6.0,
+            end=7.64,
+        )
+
+
+def test_designer_release_rejects_an_incoming_asset_even_when_its_hash_is_valid(tmp_path) -> None:
+    manifest, _ = _designer_release(tmp_path)
+    incoming = tmp_path / "motion-assets" / "incoming" / "designer" / "rail.manifest.json"
+    incoming.parent.mkdir(parents=True)
+    incoming.write_text(manifest.read_text(encoding="utf-8"), encoding="utf-8")
+
+    with pytest.raises(VerticalMotionError, match="motion-assets/releases/designer"):
+        verify_designer_release(
+            incoming,
+            asset="pipeline-rail-state-03",
+            revision="r02",
+            z_index=10,
+            start=6.0,
+            end=7.64,
+        )

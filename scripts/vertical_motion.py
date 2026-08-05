@@ -10,8 +10,11 @@ duplicating the error-prone expression maths.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import math
 from dataclasses import dataclass
+from pathlib import Path
 
 
 CANVAS_WIDTH = 1080
@@ -25,10 +28,24 @@ SOURCE_HEIGHT = 900
 FORBIDDEN_COLLAGE_INPUTS = (
     "g16", "g17", "motion-02", "motion-03", "characters/", "designer/lot-01", "web/"
 )
+IMMUTABLE_RELEASE_PATH = ("motion-assets", "releases", "designer")
 
 
 class VerticalMotionError(ValueError):
     """The requested animation would violate the portrait-render contract."""
+
+
+@dataclass(frozen=True)
+class ImmutableDesignerRelease:
+    """Verified identity and placement contract for a Designer overlay."""
+
+    asset: str
+    revision: str
+    png: Path
+    png_sha256: str
+    start: float
+    end: float
+    z_index: int
 
 
 @dataclass(frozen=True)
@@ -116,6 +133,101 @@ def validate_collage_inputs(paths: list[str]) -> None:
         normalized = path.replace("\\", "/").lower()
         if any(token in normalized for token in FORBIDDEN_COLLAGE_INPUTS):
             raise VerticalMotionError(f"forbidden collage input: {path}")
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _release_root_is_immutable(path: Path) -> bool:
+    parts = path.resolve().parts
+    width = len(IMMUTABLE_RELEASE_PATH)
+    return any(parts[index:index + width] == IMMUTABLE_RELEASE_PATH
+               for index in range(len(parts) - width + 1))
+
+
+def verify_designer_release(
+    manifest_path: str | Path,
+    *,
+    asset: str,
+    revision: str,
+    z_index: int,
+    start: float,
+    end: float,
+) -> ImmutableDesignerRelease:
+    """Return a Designer release only after its immutable render contract passes.
+
+    The renderer accepts a component solely from the versioned ``releases``
+    tree.  It checks both the manifest-declared PNG hash and the independently
+    delivered SHA-256 sidecar before a compositing command is built.  This
+    prevents an ``incoming`` replacement or an overwritten revision from
+    silently changing a cut that was already reviewed.
+    """
+    manifest_file = Path(manifest_path).resolve()
+    if not manifest_file.is_file():
+        raise VerticalMotionError(f"missing release manifest: {manifest_file}")
+    if not _release_root_is_immutable(manifest_file):
+        raise VerticalMotionError(f"release must be under motion-assets/releases/designer: {manifest_file}")
+
+    try:
+        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise VerticalMotionError(f"invalid release manifest: {manifest_file}") from error
+
+    if manifest.get("schema") != "jht-motion-asset-v1" or manifest.get("status") != "immutable-release":
+        raise VerticalMotionError("release manifest is not immutable jht-motion-asset-v1")
+    if manifest.get("asset") != asset or manifest.get("revision") != revision:
+        raise VerticalMotionError("release asset or revision does not match the requested overlay")
+    if manifest.get("canvas") != {"width": CANVAS_WIDTH, "height": CANVAS_HEIGHT, "color_space": "sRGB"}:
+        raise VerticalMotionError("release canvas must be 1080x1920 sRGB")
+    if manifest.get("alpha_mode") != "straight-unpremultiplied":
+        raise VerticalMotionError("release alpha must be straight-unpremultiplied")
+    if manifest.get("anchor") != {"x": 0, "y": 0} or manifest.get("pivot") != {"x": 0.0, "y": 0.0}:
+        raise VerticalMotionError("release anchor and pivot must be 0,0")
+    if manifest.get("z_index") != z_index:
+        raise VerticalMotionError(f"release z-index must be {z_index}")
+
+    timing = manifest.get("timing")
+    if not isinstance(timing, dict) or timing.get("global_start") != start or timing.get("global_end") != end:
+        raise VerticalMotionError(f"release timing must be {start:.2f}-{end:.2f}")
+
+    png = manifest.get("files", {}).get("png", {})
+    png_name = png.get("path") if isinstance(png, dict) else None
+    expected_sha = png.get("sha256") if isinstance(png, dict) else None
+    expected_name = f"{asset}-{revision}.png"
+    if png_name != expected_name or not isinstance(expected_sha, str) or len(expected_sha) != 64:
+        raise VerticalMotionError("release PNG identity is malformed")
+    png_file = (manifest_file.parent / png_name).resolve()
+    if png_file.parent != manifest_file.parent or not png_file.is_file():
+        raise VerticalMotionError("release PNG is missing or outside its manifest directory")
+    actual_sha = _sha256(png_file)
+    if actual_sha != expected_sha:
+        raise VerticalMotionError("release PNG does not match its manifest SHA-256")
+
+    sidecar = manifest_file.with_name(f"{asset}-{revision}.sha256")
+    if not sidecar.is_file():
+        raise VerticalMotionError("release SHA-256 sidecar is missing")
+    sidecar_entries = {
+        line.split(maxsplit=1)[1]: line.split(maxsplit=1)[0]
+        for line in sidecar.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#") and len(line.split(maxsplit=1)) == 2
+    }
+    if sidecar_entries.get(expected_name) != actual_sha:
+        raise VerticalMotionError("release PNG does not match its SHA-256 sidecar")
+
+    return ImmutableDesignerRelease(
+        asset=asset,
+        revision=revision,
+        png=png_file,
+        png_sha256=actual_sha,
+        start=start,
+        end=end,
+        z_index=z_index,
+    )
 
 
 def main() -> None:
