@@ -276,6 +276,24 @@ a.contrib-title:hover {
   }
 }
 
+/* Il fallback di route di Next viene montato anche per navigazioni che si
+   risolvono in pochi frame. Tenerlo invisibile per 220ms evita che il suo
+   template lampeggi; se il caricamento continua, diventa il feedback visivo
+   del primo caricamento lento. Il passo istantaneo non introduce movimento. */
+@keyframes public-loading-reveal {
+  from {
+    visibility: hidden;
+  }
+  to {
+    visibility: visible;
+  }
+}
+
+.public-loading-shell {
+  visibility: hidden;
+  animation: public-loading-reveal 1ms steps(1, end) 220ms forwards;
+}
+
 /* Lo shrink del <main> quando l'assistente fluttuante e` aperto e` gestito
    via inline style direttamente dal componente ProfileAssistantFab — usare
    CSS qui creava conflitti di specificity con `mx-auto` e simili utility. */
