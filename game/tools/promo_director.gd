@@ -57,6 +57,9 @@ extends Node
 ##   JHT_PROMO=v6-dev-work           take V6 portrait: 1 s di maniglia, 6 s
 ##                                   di lavoro vivo con raccordo verso destra,
 ##                                   1 s di maniglia finale.
+##   JHT_PROMO=v6-office-life        take portrait di vita d'ufficio reale:
+##                                   Scout dalla scrivania alla stampante e
+##                                   ritorno seduto, senza coreografia.
 ## I viaggi fisici riusano le tappe VERE della pipeline (stampante,
 ## pile_take/pile_drop, scaffale output) ma con PAUSE FISSE: il ciak deve
 ## essere ripetibile, non un lancio di dadi. Il HUD «JHT TEAM» (numeri
@@ -297,6 +300,13 @@ const V5_REVEAL_DESTINATIONS := {
 const V6_HANDLE_SECONDS := 1.0
 const V6_REVEAL_PROGRAM_SECONDS := 10.0
 const V6_WORK_PROGRAM_SECONDS := 6.0
+const V6_LIFE_AGENT := "scout-5"
+const V6_LIFE_PICKUP_HOLD := 0.35
+const V6_LIFE_PLAYBACK_RATE := 1.2
+const V6_LIFE_MIN_PROGRAM_SECONDS := 3.0
+const V6_LIFE_MAX_PROGRAM_SECONDS := 5.0
+const V6_LIFE_CAMERA_OFFSET := Vector2(0.0, -40.0)
+const V6_LIFE_ZOOM := 3.2
 const V6_REVEAL_CLOSE_CAMERA := Vector2(1570.0, 760.0)
 const V6_REVEAL_CLOSE_ZOOM := 1.65
 const V6_REVEAL_WIDE_CAMERA := Vector2(1650.0, 1020.0)
@@ -369,7 +379,7 @@ func _ready() -> void:
 	_office = get_parent()
 	var mode := OS.get_environment("JHT_PROMO")
 	_v3_active = mode in ["team-welcome", "assistant-intro", "assistant-walk-right",
-			"v5-reveal", "v6-dev-reveal", "v6-dev-work"]
+			"v5-reveal", "v6-dev-reveal", "v6-dev-work", "v6-office-life"]
 	# Movie Maker registra dal bootstrap. Sul profilo live teniamo chiusa una
 	# semplice tendina nera finche' il data-plane non e' pronto: nel raw non
 	# entra mai un frame intermedio col warning, che resta comunque intatto e
@@ -407,6 +417,8 @@ func _ready() -> void:
 			_v6_dev_reveal_clip.call_deferred()
 		"v6-dev-work":
 			_v6_dev_work_clip.call_deferred()
+		"v6-office-life":
+			_v6_office_life_clip.call_deferred()
 
 
 func _process(_delta: float) -> void:
@@ -931,6 +943,53 @@ func _v6_dev_work_clip() -> void:
 	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
 	_v6_marker("v6-dev-work", "handle_out")
 	_v6_pass_and_quit("v6-dev-work", cam)
+
+
+## Un solo comportamento di prodotto, senza staging teatrale: lo Scout più
+## vicino alla stampante lascia la sua scrivania vera, stampa, torna portando
+## il foglio e riattiva la posa desk. Sono gli stessi flag di `open-day` e
+## della routine NPC; il ciak cambia solo soggetto e framing portrait.
+func _v6_office_life_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var scout: AgentNPC = _find(V6_LIFE_AGENT)
+	if scout == null:
+		push_error("promo V6 office-life: %s assente" % V6_LIFE_AGENT)
+		get_tree().quit(21)
+		return
+	await _wait_desk_stable(scout)
+	_track_target = scout
+	_track_offset = V6_LIFE_CAMERA_OFFSET
+	_track_cam = _mount_camera(scout.global_position + _track_offset, V6_LIFE_ZOOM)
+	_v6_marker("v6-office-life", "handle_in")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v6-office-life", "program_start")
+	var program_start_frame := Engine.get_process_frames()
+	var print_leg: Dictionary = scout._leg_to(
+			DepartmentDefs.POIS["printer"]["spot"], "walk",
+			V6_LIFE_PICKUP_HOLD, "idle")
+	print_leg["fx_printer"] = true
+	var return_leg: Dictionary = scout._leg_to(scout._spot, "carry", 0.0, "work")
+	return_leg["desk_work"] = true
+	Engine.time_scale = V6_LIFE_PLAYBACK_RATE
+	_force_legs(scout, [print_leg, return_leg])
+	while is_instance_valid(scout) and scout._desk_pose_active:
+		await get_tree().process_frame
+	while is_instance_valid(scout) and (scout._forced_trip or not scout._desk_pose_active):
+		await get_tree().process_frame
+	Engine.time_scale = 1.0
+	var program_seconds := float(Engine.get_process_frames() - program_start_frame) / 30.0
+	print("PROMO-V6-LIFE-DURATION\t%.3f" % program_seconds)
+	_v6_marker("v6-office-life", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v6-office-life", "handle_out")
+	if program_seconds < V6_LIFE_MIN_PROGRAM_SECONDS \
+			or program_seconds > V6_LIFE_MAX_PROGRAM_SECONDS:
+		push_error("promo V6 office-life: programma %.3fs fuori 3-5s" % program_seconds)
+		get_tree().quit(22)
+		return
+	_v6_pass_and_quit("v6-office-life", _track_cam)
 
 
 ## Blocca i viaggi casuali: la vita sullo sfondo e' data da pulsazioni di
