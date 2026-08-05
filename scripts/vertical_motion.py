@@ -10,9 +10,12 @@ duplicating the error-prone expression maths.
 from __future__ import annotations
 
 import argparse
+import binascii
 import hashlib
 import json
 import math
+import struct
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +31,7 @@ SOURCE_HEIGHT = 900
 FORBIDDEN_COLLAGE_INPUTS = (
     "g16", "g17", "motion-02", "motion-03", "characters/", "designer/lot-01", "web/"
 )
+PROMOTED_COLLAGE_INPUTS = frozenset({"incoming/game/motion-01-open-day-v1.mp4"})
 IMMUTABLE_RELEASE_PATH = ("motion-assets", "releases", "designer")
 
 
@@ -128,11 +132,70 @@ def sprite_overlay_filter(plan: SpriteMotion) -> str:
 
 
 def validate_collage_inputs(paths: list[str]) -> None:
-    """Fail closed when a v0.2 collage accidentally reintroduces banned media."""
+    """Fail closed unless every collage input is an explicitly promoted identity."""
     for path in paths:
         normalized = path.replace("\\", "/").lower()
         if any(token in normalized for token in FORBIDDEN_COLLAGE_INPUTS):
             raise VerticalMotionError(f"forbidden collage input: {path}")
+        if normalized not in PROMOTED_COLLAGE_INPUTS and not any(
+            normalized.endswith(f"/{allowed}") for allowed in PROMOTED_COLLAGE_INPUTS
+        ):
+            raise VerticalMotionError(f"unapproved collage input: {path}")
+
+
+def _decode_png_dimensions(path: Path) -> tuple[int, int]:
+    """Decode PNG framing and compressed scanlines without trusting extension.
+
+    The renderer only needs identity/dimensions here, but a signature check is
+    insufficient: a corrupt or non-PNG fixture must never pass a release gate.
+    """
+    data = path.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise VerticalMotionError("release PNG is not a valid PNG")
+    offset = 8
+    width = height = None
+    bit_depth = color_type = interlace = None
+    idat = bytearray()
+    saw_iend = False
+    while offset < len(data):
+        if offset + 12 > len(data):
+            raise VerticalMotionError("release PNG is truncated")
+        length = struct.unpack(">I", data[offset:offset + 4])[0]
+        kind = data[offset + 4:offset + 8]
+        end = offset + 12 + length
+        if end > len(data):
+            raise VerticalMotionError("release PNG chunk is truncated")
+        payload = data[offset + 8:offset + 8 + length]
+        crc = struct.unpack(">I", data[offset + 8 + length:end])[0]
+        if (binascii.crc32(kind + payload) & 0xFFFFFFFF) != crc:
+            raise VerticalMotionError("release PNG has an invalid chunk CRC")
+        if kind == b"IHDR":
+            if length != 13 or width is not None:
+                raise VerticalMotionError("release PNG has an invalid IHDR")
+            width, height, bit_depth, color_type, compression, filtering, interlace = struct.unpack(
+                ">IIBBBBB", payload
+            )
+            if not width or not height or compression != 0 or filtering != 0 or interlace != 0:
+                raise VerticalMotionError("release PNG uses unsupported framing")
+        elif kind == b"IDAT":
+            idat.extend(payload)
+        elif kind == b"IEND":
+            saw_iend = True
+            break
+        offset = end
+    if width is None or not saw_iend or not idat:
+        raise VerticalMotionError("release PNG is missing IHDR/IDAT/IEND")
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(color_type)
+    if channels is None or bit_depth not in (1, 2, 4, 8, 16):
+        raise VerticalMotionError("release PNG color format is unsupported")
+    row_bytes = (width * channels * bit_depth + 7) // 8
+    try:
+        decoded = zlib.decompress(bytes(idat))
+    except zlib.error as error:
+        raise VerticalMotionError("release PNG IDAT does not decode") from error
+    if len(decoded) != (row_bytes + 1) * height:
+        raise VerticalMotionError("release PNG decoded scanlines have the wrong size")
+    return width, height
 
 
 def _sha256(path: Path) -> str:
@@ -209,6 +272,12 @@ def verify_designer_release(
     actual_sha = _sha256(png_file)
     if actual_sha != expected_sha:
         raise VerticalMotionError("release PNG does not match its manifest SHA-256")
+    actual_dimensions = _decode_png_dimensions(png_file)
+    if actual_dimensions != (canvas_width, canvas_height):
+        raise VerticalMotionError(
+            f"release PNG dimensions must be {canvas_width}x{canvas_height}, got "
+            f"{actual_dimensions[0]}x{actual_dimensions[1]}"
+        )
 
     sidecar = manifest_file.with_name(f"{asset}-{revision}.sha256")
     if not sidecar.is_file():
