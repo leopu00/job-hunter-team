@@ -64,6 +64,23 @@ test.describe("shell pubblico tutorial e trailer", () => {
     await expect(
       page.locator("#game").getByText("Meet the office"),
     ).toBeVisible();
+    const tutorialScreenshots = page.locator(
+      "#game [data-tutorial-step-image]",
+    );
+    await expect(tutorialScreenshots).toHaveCount(2);
+    await expect(
+      tutorialScreenshots
+        .first()
+        .getByRole("img", { name: "Overview of the native office" }),
+    ).toHaveAttribute("src", /office-overview\.png/);
+    await expect(
+      tutorialScreenshots
+        .nth(1)
+        .getByRole("img", { name: "A department work area" }),
+    ).toHaveAttribute("src", /departments\.png/);
+    await expect(tutorialScreenshots.first()).toContainText(
+      "The native office is the workspace",
+    );
     await expect(
       page.locator("#web").getByText("Start from the dashboard"),
     ).toBeVisible();

@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { LandingFooter } from "../components/landing/LandingCTA";
 import {
   LandingI18nProvider,
@@ -70,6 +72,21 @@ function TutorialSlot({ id }: { id: TutorialId }) {
                   <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--color-bright)]">
                     {step.body}
                   </p>
+                  {step.image && (
+                    <figure className="mt-5 max-w-3xl" data-tutorial-step-image>
+                      <Image
+                        src={step.image.src}
+                        alt={step.image.alt}
+                        width={step.image.width}
+                        height={step.image.height}
+                        sizes="(min-width: 1024px) 768px, calc(100vw - 3rem)"
+                        className="h-auto w-full rounded-md border border-[var(--color-border)]"
+                      />
+                      <figcaption className="mt-2 text-sm leading-relaxed text-[var(--color-bright)]">
+                        {step.image.caption}
+                      </figcaption>
+                    </figure>
+                  )}
                 </div>
               </li>
             ))}
@@ -101,6 +118,21 @@ function TutorialSlot({ id }: { id: TutorialId }) {
               <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--color-bright)]">
                 {step.body}
               </p>
+              {step.image && (
+                <figure className="mt-5 max-w-3xl" data-tutorial-step-image>
+                  <Image
+                    src={step.image.src}
+                    alt={step.image.alt}
+                    width={step.image.width}
+                    height={step.image.height}
+                    sizes="(min-width: 1024px) 768px, calc(100vw - 3rem)"
+                    className="h-auto w-full rounded-md border border-[var(--color-border)]"
+                  />
+                  <figcaption className="mt-2 text-sm leading-relaxed text-[var(--color-bright)]">
+                    {step.image.caption}
+                  </figcaption>
+                </figure>
+              )}
             </div>
           </li>
         ))}

@@ -1454,6 +1454,11 @@
       "path": "promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md",
       "description": "Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale",
       "last_review": null
+    },
+    {
+      "path": "docs/about/TUTORIAL-GAME-SCREENSHOTS.md",
+      "description": "Provenance, privacy attestation, and hashes for the public game tutorial screenshots",
+      "last_review": null
     }
   ]
 }

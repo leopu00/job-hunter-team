@@ -186,6 +186,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/about/MONITORING.md](./about/MONITORING.md) | Stack monitoring V5 (Bridge + Sentinella event-driven) | — | 2026-08-04 | ✅ |
 | [docs/about/RESULTS.md](./about/RESULTS.md) | Risultati reali utenti beta (matrice persona × provider) | — | 2026-07-03 | ✅ |
 | [docs/about/README.md](./about/README.md) | 🎯 docs/about — what JHT is, and whether it works — Public-facing documentation for anyone evaluating Job Hunter Team. | — | 2026-06-13 | ✅ |
+| [docs/about/TUTORIAL-GAME-SCREENSHOTS.md](./about/TUTORIAL-GAME-SCREENSHOTS.md) | Provenance, privacy attestation, and hashes for the public game tutorial screenshots | — | — | ✅ |
 
 
 ## 📜 docs/adr (Architecture Decision Records)
