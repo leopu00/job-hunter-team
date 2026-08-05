@@ -186,7 +186,8 @@ func _test_v3_director_contract() -> void:
 			and source.contains("if dressing is DepartmentDressing")
 			and source.contains("agent.aura.visible = false"),
 			"V5 reveal muove Camera2D e AgentNPC reali, non una panoramica statica")
-	for mode in ["v6-dev-reveal", "v6-dev-work", "v6-office-life"]:
+	for mode in ["v6-dev-reveal", "v6-dev-work", "v6-office-life", "v8-map",
+			"v8-office-handoff"]:
 		_check(source.contains('"%s":' % mode), "mode promo %s registrato" % mode)
 	_check(source.contains("V6_HANDLE_SECONDS := 1.0")
 			and source.contains("V6_REVEAL_PROGRAM_SECONDS := 10.0")
@@ -216,6 +217,28 @@ func _test_v3_director_contract() -> void:
 			and source.contains("V6_LIFE_MIN_PROGRAM_SECONDS := 3.0")
 			and source.contains("V6_LIFE_MAX_PROGRAM_SECONDS := 5.0"),
 			"V6 office-life inquadra il ciclo reale stampante e fallisce fuori 3-5 s")
+	_check(source.contains("func _v8_map_clip")
+			and source.contains("var world := WorldMap.new()")
+			and source.contains("OsmMap.lonlat_to_norm")
+			and source.contains("V8_MAP_PROGRAM_SECONDS := 8.0")
+			and source.contains("BackendBus.positions_are_demo = false")
+			and source.contains('world.find_children("*", "MapGlobe"'),
+			"V8 MAP usa la WorldMap flat reale, senza badge demo o globo inventato")
+	_check(source.contains("flat.center = center")
+			and source.contains("flat.zoom_f = zoom")
+			and source.contains("V8_MAP_SWEEPS := 3.0")
+			and source.contains("V8_MAP_ZOOM_FROM := 4.8")
+			and source.contains("V8_MAP_ZOOM_TO := 5.8"),
+			"V8 MAP mantiene pan e zoom in moto lungo tutto il take")
+	_check(source.contains('V8_OFFICE_AGENT := "scrittore-2"')
+			and source.contains("func _v8_office_handoff_clip")
+			and source.contains('drop["pile_drop"] = writer.dept')
+			and source.contains('writer._leg_to(writer._spot, "walk", 0.0, "work")')
+			and source.contains("sheet.reparent(_office.world, true)")
+			and source.contains("pile.visible = false")
+			and source.contains("V8_OFFICE_MIN_PROGRAM_SECONDS := 4.0")
+			and source.contains("V8_OFFICE_MAX_PROGRAM_SECONDS := 8.5"),
+			"V8 OFFICE riusa il ciclo reale di consegna Scrittore e fallisce fuori 4-7 s")
 
 
 func _check(ok: bool, what: String, detail := "") -> void:
