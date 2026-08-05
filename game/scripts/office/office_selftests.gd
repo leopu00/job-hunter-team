@@ -1942,6 +1942,8 @@ func _feedback_panel_selftest() -> void:
 	panel._fb_form["happened"] = "la finestra resta ferma su collegamento"
 	panel._refresh_feedback_send()
 	gate_ok = gate_ok and send != null and not send.disabled
+	var no_contact_control: bool = not _ui_has_text(panel,
+			UIStrings.t("feedback.q_contact"))
 
 	# La raccolta gira su un thread (docker, file): si attende l'esito.
 	var collected := false
@@ -1980,24 +1982,61 @@ func _feedback_panel_selftest() -> void:
 	# Tornando indietro il racconto è ancora lì: farlo riscrivere sarebbe il
 	# modo più rapido per non ricevere più segnalazioni.
 	var persist_ok := str(panel._fb_form["happened"]).contains("collegamento")
+	# Quattro invarianti del contratto privacy: il recapito non esce mai dal
+	# desktop, i racconti hanno la stessa redazione dei log, l'anteprima è il
+	# documento che verrà spedito e il contatore include anche ciò che l'utente
+	# ha scritto, non solo gli allegati tecnici.
+	var fake_token := "ghp" + "_ABCdefGHIjklMNOpqrSTUvwxYZ0123456789"
+	var private_form := {
+		"doing": "CV in /Users/mariorossi/CV_Mario_Rossi.pdf",
+		"happened": "scrivi a user@example.com con token=" + fake_token,
+		"expected": "nessun contatto o segreto deve lasciare il computer",
+		"contact": "user@example.com", # client vecchio: deve essere ignorato
+	}
+	var private_bundle := {"redaction": {}, "logs": {}}
+	var payload := FeedbackService._payload(private_form, private_bundle,
+			"diagnostica senza dati personali")
+	var payload_redaction: Dictionary = payload.get("redaction", {})
+	var no_contact := not payload.has("contact") \
+			and not JSON.stringify(payload).contains("user@example.com")
+	var redacted_story := not JSON.stringify(payload).contains(fake_token) \
+			and not JSON.stringify(payload).contains("mariorossi") \
+			and int(payload.get("redaction", {}).size()) >= 3
+	var exact_preview := FeedbackService._to_markdown(payload)
+	var preview_matches_payload := exact_preview.contains("[email]") \
+			and exact_preview.contains("[document].pdf") \
+			and exact_preview.contains("Dati rimossi prima dell'invio") \
+			and not exact_preview.contains("user@example.com") \
+			and not exact_preview.contains(fake_token)
+	var counts_include_story: bool = int(payload_redaction.get("email", 0)) > 0 \
+			and not payload_redaction.is_empty()
 	# JHT_FEEDBACK_SEND_TEST=1 spinge la segnalazione fino in fondo, contro
 	# l'endpoint indicato da JHT_FEEDBACK_URL. Fuori da questo flag il test
 	# resta offline: in CI non si esce sulla rete.
 	var send_ok := true
 	if OS.get_environment("JHT_FEEDBACK_SEND_TEST") == "1":
-		panel._fb_form["contact"] = "tester@example.org"
 		panel._submit_feedback()
 		var result: Array = await FeedbackService.submit_changed
 		while bool(result[0]):  # running
 			result = await FeedbackService.submit_changed
 		send_ok = bool(result[1]) and str(result[3]) == "#4242" \
 				and FeedbackService.last_saved_path != ""
+		# Il test dimostra la copia locale, ma non lascia una falsa segnalazione
+		# nella cartella reale dell'utente che ha lanciato la suite.
+		if FeedbackService.last_saved_path != "":
+			DirAccess.remove_absolute(FeedbackService.last_saved_path)
+			FeedbackService.last_saved_path = ""
 		if not send_ok:
 			print("FEEDBACK-PANEL-TEST send esito=", result)
-	var ok := gate_ok and collected and preview_ok and persist_ok and send_ok
+	var ok: bool = gate_ok and no_contact_control and collected and preview_ok and persist_ok and no_contact \
+			and redacted_story and preview_matches_payload and counts_include_story and send_ok
 	if not ok:
 		print("FEEDBACK-PANEL-TEST details gate=", gate_ok, " collected=", collected,
-				" preview=", preview_ok, " persist=", persist_ok)
+				" preview=", preview_ok, " persist=", persist_ok,
+				" no_contact_control=", no_contact_control,
+				" no_contact=", no_contact, " redacted_story=", redacted_story,
+				" preview_matches_payload=", preview_matches_payload,
+				" counts_include_story=", counts_include_story)
 	print("FEEDBACK-PANEL-TEST ", "PASS" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
 
