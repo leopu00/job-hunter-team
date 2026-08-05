@@ -14,6 +14,7 @@ var _language_test_choice := ""
 func _ready() -> void:
 	theme = TerminalTheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	var persistence_test := OS.get_environment("JHT_LANGUAGE_PERSIST_TEST")
 	# Su una macchina appena installata non mostriamo neppure la title screen
 	# prima di sapere in quale lingua costruirla. Il fallback è inglese, mai il
 	# locale del sistema o l'italiano storico.
@@ -21,8 +22,12 @@ func _ready() -> void:
 		_show_language_picker()
 		if OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1":
 			_language_picker_selftest.call_deferred()
+		elif persistence_test == "write":
+			_language_persistence_write_selftest.call_deferred()
 		return
 	_build_title()
+	if persistence_test == "verify":
+		_language_persistence_verify_selftest.call_deferred()
 
 
 func _show_language_picker() -> void:
@@ -62,6 +67,35 @@ func _language_picker_selftest() -> void:
 	ok = ok and _language_test_choice == "de" \
 			and UIStrings.lang == "de" and is_instance_valid(_blink)
 	print("LANGUAGE-PICKER-TITLE-TEST %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Fase 1 dell'oracolo: il click attraversa il vero picker e deve arrivare
+## su disco. La fase verify gira in un altro processo Godot.
+func _language_persistence_write_selftest() -> void:
+	await get_tree().process_frame
+	var ok := is_instance_valid(_language_picker) \
+			and UIStrings.lang == UIStrings.DEFAULT_LANG
+	if is_instance_valid(_language_picker):
+		_language_picker.choose_language("de")
+		_language_picker.confirm()
+	await get_tree().process_frame
+	ok = ok and not is_instance_valid(_language_picker) \
+			and UIStrings.lang == "de" and UIStrings.saved_language() == "de" \
+			and is_instance_valid(_blink)
+	print("LANGUAGE-PERSISTENCE-WRITE %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Fase 2 dell'oracolo: nessun override e un processo nuovo devono leggere la
+## preferenza, saltare il picker e costruire subito la title tradotta.
+func _language_persistence_verify_selftest() -> void:
+	await get_tree().process_frame
+	var ok := not is_instance_valid(_language_picker) \
+			and UIStrings.lang == "de" and is_instance_valid(_blink) \
+			and _blink.text == "▶ EINGABE DRÜCKEN"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(UIStrings.language_config_path()))
+	print("LANGUAGE-PERSISTENCE-VERIFY %s" % ("PASS" if ok else "FAIL"))
 	get_tree().quit(0 if ok else 1)
 
 
