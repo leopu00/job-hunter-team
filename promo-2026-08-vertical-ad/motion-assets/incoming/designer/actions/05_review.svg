@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Review action card</title>
+  <desc id="desc">Linear balance scale icon for the Critic action in the Job Hunter Team motion collage.</desc>
+  <rect x="9" y="9" width="494" height="494" rx="24" fill="#F6F7F4" stroke="#111116" stroke-width="2"/>
+  <rect x="38" y="42" width="54" height="6" rx="3" fill="#00E87A"/>
+  <text x="112" y="57" fill="#111116" font-family="JetBrains Mono" font-size="24" font-weight="800" letter-spacing="1.2">05 / CRITIC</text>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M256 112V332M166 352H346M138 164H374" stroke="#111116" stroke-width="2"/>
+    <circle cx="256" cy="164" r="16" stroke="#00E87A" stroke-width="2"/>
+    <path d="M166 164V238M346 164V238" stroke="#111116" stroke-width="2"/>
+    <path d="M112 238H220C220 282 196 304 166 304C136 304 112 282 112 238Z" stroke="#00E87A" stroke-width="2"/>
+    <path d="M292 238H400C400 282 376 304 346 304C316 304 292 282 292 238Z" stroke="#111116" stroke-width="2"/>
+    <path d="M222 352C222 332 237 316 256 316C275 316 290 332 290 352" stroke="#111116" stroke-width="2"/>
+  </g>
+  <text x="38" y="438" fill="#111116" font-family="JetBrains Mono" font-size="72" font-weight="800" letter-spacing="1">REVIEW</text>
+  <text x="40" y="476" fill="#6D706B" font-family="JetBrains Mono" font-size="24" font-weight="600" letter-spacing="1.2">ASSESS / REFINE</text>
+</svg>
