@@ -54,6 +54,10 @@ var _sprite: Sprite2D
 var _base_tex: Texture2D
 var _seated_tex: Texture2D
 var _occupied_material: ShaderMaterial
+## La fascia frontale e' un secondo pass soltanto per le rare postazioni
+## dinamiche senza composito seduto. Non puo' vivere sempre sopra il World:
+## in quel caso taglia anche la testa di chi passa davanti alla scrivania.
+var _front_occluder: Sprite2D
 
 func has_seated_art() -> bool:
 	return _seated_tex != null
@@ -65,6 +69,23 @@ func set_occupied(on: bool) -> void:
 			_occupied_material.set_shader_parameter("occupied", on)
 		else:
 			_sprite.texture = _seated_tex if on else _base_tex
+
+
+## Il ritaglio davanti al desk non e' un layer della stanza: serve solo al
+## rig dinamico seduto alla SUA postazione. I compositi seated includono gia'
+## corpo e arredo, quindi la maschera resta spenta; un agente in cammino non
+## puo' mai finirci sotto per errore di z-order.
+func set_front_occlusion(active: bool) -> void:
+	if _front_occluder:
+		_front_occluder.visible = active
+
+
+func has_front_occlusion() -> bool:
+	return _front_occluder != null
+
+
+func front_occlusion_visible() -> bool:
+	return _front_occluder != null and _front_occluder.visible
 
 ## Lampo di lavoro (react_to_work): quando l'agente è dipinto nella
 ## texture del desk il rig è nascosto — il segnale del lavoro reale
@@ -241,6 +262,9 @@ func _add_front_occluder(source: Sprite2D, tex: Texture2D, cut: float) -> void:
 	# nel contenitore y-sortato, non soltanto gli altri child del mobile.
 	overlay.z_as_relative = false
 	overlay.z_index = 100
+	# Fino a quando AgentNPC non conferma una posa seduta DINAMICA, questa
+	# maschera non deve partecipare al compositing del mondo y-sortato.
+	overlay.visible = false
 	var shader := Shader.new()
 	shader.code = """
 shader_type canvas_item;
@@ -258,6 +282,7 @@ void fragment() {
 	var layer := get_parent()
 	layer.add_child(overlay)
 	overlay.global_position = source.global_position
+	_front_occluder = overlay
 
 func _draw() -> void:
 	var kind: String = item["kind"]
