@@ -305,7 +305,10 @@ describe("modulo di contatto del sito", () => {
 
 describe("oggetto scritto da chi invia", () => {
   it("vince sul troncamento automatico del messaggio", () => {
-    const r = parseReport({ ...VALID, subject: "Non parte il team su Windows" })!;
+    const r = parseReport({
+      ...VALID,
+      subject: "Non parte il team su Windows",
+    })!;
     expect(emailSubject(r, "JHT-1")).toBe(
       "[JHT-1] Non parte il team su Windows",
     );
