@@ -158,8 +158,31 @@ def test_wrapper_allows_only_the_two_headless_session_names(tmp_path):
 
 
 def test_live_source_pid_is_unavailable_outside_a_fake_proc_tree():
+    for live_proc_root in ("/proc", "/proc/", "/proc/../proc", "//proc"):
+        result = subprocess.run(
+            [
+                "bash", str(WRAPPER), "--source-pid", "4242",
+                "--proc-root", live_proc_root, "--", "true",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 2
+        assert "only available with a test proc root" in result.stderr
+
+
+def test_live_proc_symlink_cannot_enable_the_test_only_pid_escape_hatch(tmp_path):
+    if not Path("/proc").is_dir():
+        return
+    proc_link = tmp_path / "proc-link"
+    proc_link.symlink_to("/proc", target_is_directory=True)
     result = subprocess.run(
-        ["bash", str(WRAPPER), "--source-pid", "4242", "--", "true"],
+        [
+            "bash", str(WRAPPER), "--source-pid", "4242",
+            "--proc-root", str(proc_link), "--", "true",
+        ],
         capture_output=True,
         text=True,
         check=False,
