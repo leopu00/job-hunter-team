@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" role="img" aria-labelledby="title desc">
+  <title id="title">Job Hunter Team vertical end-card preview</title>
+  <desc id="desc">A 1080 by 1920 preview of the vertical end-card with all production copy inside the declared safe area.</desc>
+  <rect width="1080" height="1920" fill="#111116"/>
+  <rect x="108" y="488" width="98" height="8" rx="4" fill="#00E87A"/>
+  <text x="108" y="612" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="96" font-weight="800" letter-spacing="-5">JOB HUNTER TEAM</text>
+  <text x="108" y="742" fill="#B8B8D0" font-family="JetBrains Mono, monospace" font-size="47" font-weight="600" letter-spacing="-2.3">Your job hunt, now playable.</text>
+  <rect x="108" y="810" width="864" height="2" fill="#00E87A"/>
+  <text x="108" y="884" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="58" font-weight="800" letter-spacing="-2.5">jobhunterteam.ai</text>
+  <rect x="108" y="976" width="118" height="56" rx="28" fill="none" stroke="#00E87A" stroke-width="2"/>
+  <text x="133" y="1012" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="24" font-weight="700">Free</text>
+  <circle cx="253" cy="1004" r="3" fill="#00E87A"/>
+  <rect x="276" y="976" width="214" height="56" rx="28" fill="none" stroke="#565666" stroke-width="2"/>
+  <text x="303" y="1012" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="24" font-weight="700">Open source</text>
+  <circle cx="517" cy="1004" r="3" fill="#00E87A"/>
+  <rect x="540" y="976" width="116" height="56" rx="28" fill="none" stroke="#565666" stroke-width="2"/>
+  <text x="567" y="1012" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="24" font-weight="700">Beta</text>
+  <text x="540" y="83" text-anchor="middle" fill="#F6F7F4" fill-opacity="0.88" font-family="JetBrains Mono, monospace" font-size="25" font-weight="800" letter-spacing="0.1">PREVIEW - NOT FINAL FOOTAGE</text>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="864" height="286" viewBox="0 0 864 286" role="img" aria-labelledby="title desc">
+  <title id="title">Job Hunter Team availability chips</title>
+  <desc id="desc">The end-card availability statement, prepared as an isolated alpha layer for the vertical motion collage.</desc>
+  <rect x="0" y="0" width="226" height="82" rx="41" fill="none" stroke="#00E87A" stroke-width="2"/>
+  <text x="33" y="58" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="58" font-weight="700" letter-spacing="-3">Free</text>
+  <rect x="0" y="102" width="490" height="82" rx="41" fill="none" stroke="#565666" stroke-width="2"/>
+  <text x="33" y="160" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="58" font-weight="700" letter-spacing="-3">Open source</text>
+  <rect x="0" y="204" width="226" height="82" rx="41" fill="none" stroke="#565666" stroke-width="2"/>
+  <text x="33" y="262" fill="#F6F7F4" font-family="JetBrains Mono, monospace" font-size="58" font-weight="700" letter-spacing="-3">Beta</text>
+</svg>
