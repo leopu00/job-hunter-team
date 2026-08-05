@@ -151,11 +151,15 @@ test.describe("rendezvous web-VPS", () => {
     await page.goto("/messages", { waitUntil: "domcontentloaded" });
     const composer = page.locator("textarea").last();
     await expect(composer).toBeVisible();
-    await composer.fill(fixtureBody);
-    // L'abilitazione deriva dallo state React, quindi e' un segnale stabile
-    // che il composer non e' soltanto HTML SSR ancora privo di handler.
     const send = page.getByRole("button", { name: /Invia|Send/ }).last();
-    await expect(send).toBeEnabled({ timeout: 15_000 });
+    // Sotto carico l'HTML SSR puo' essere visibile prima dell'idratazione:
+    // un fill troppo precoce viene correttamente riallineato allo state React
+    // vuoto. Ritenta l'azione finche' quello stesso state abilita il bottone,
+    // provando che il composer ha davvero agganciato i suoi handler.
+    await expect(async () => {
+      await composer.fill(fixtureBody);
+      await expect(send).toBeEnabled({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
     await send.click();
 
     await expect.poll(() => inserts).toBe(1);
