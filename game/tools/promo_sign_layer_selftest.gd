@@ -19,11 +19,17 @@ func _run() -> void:
 	var signs: Node2D = load("res://tools/promo_dept_signs.gd").new()
 	var world := Node2D.new()
 	world.y_sort_enabled = true
+	# PromoDeptSigns deve chiamare il _init del fondale: lì si caricano i due
+	# font delle targhe. Un _init locale aveva lasciato il layer corretto ma i
+	# titoli inglesi senza font nel render vero.
 	_check("la targa inglese usa il layer fondale del reparto",
 			signs.z_index == -2, str(signs.z_index))
 	_check("la targa inglese resta sotto il mondo degli agenti",
 			signs.z_index < world.z_index,
 			"signs=%d world=%d" % [signs.z_index, world.z_index])
+	var signs_source := FileAccess.get_file_as_string("res://tools/promo_dept_signs.gd")
+	_check("la targa inglese inizializza i font del fondale",
+			signs_source.contains("func _init()") and signs_source.contains("super()"))
 	var director_source := FileAccess.get_file_as_string("res://tools/promo_director.gd")
 	_check("il set promo rimuove badge e HUD soltanto dalla sua scenografia",
 			director_source.contains("func _hide_simulation_badge") \
