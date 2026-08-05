@@ -227,6 +227,8 @@ const CHOICE_AUTO := "auto"
 
 signal graphics_choice_changed(mode: String)
 
+var _language_settings_test_started := false
+
 
 ## Scala a cui il mondo si sta disegnando in questo momento (1.0 = nativo). In
 ## automatico cambia mentre si gioca: il pannello Grafica la mostra perché è il
@@ -635,6 +637,45 @@ func set_ui_theme(requested: String) -> void:
 	RenderingServer.set_default_clear_color(Palette.VOID)
 	Log.info("ui", "tema interfaccia → %s" % requested)
 	_reload_ui_theme.call_deferred()
+
+
+func set_ui_language(requested: String) -> void:
+	if not UIStrings.set_lang(requested):
+		return
+	# Tutti gli override testuali nascono insieme ai Control. Ricostruire la
+	# scena evita una UI a metà lingua e mantiene vivi autoload, backend e stato.
+	_reload_ui_language.call_deferred()
+
+
+## Chiamato dall'autotest dell'ufficio. Il flag resta sull'autoload mentre la
+## scena viene ricostruita, quindi il test non si riavvia in un loop.
+func language_settings_selftest() -> void:
+	if _language_settings_test_started:
+		return
+	_language_settings_test_started = true
+	set_ui_language("de")
+
+
+func _reload_ui_language() -> void:
+	if not get_tree().current_scene:
+		return
+	var err := get_tree().reload_current_scene()
+	if err != OK:
+		Log.warn("ui", "reload lingua fallito: %s" % error_string(err))
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var sidebars := get_tree().get_nodes_in_group("game_sidebar")
+	if not sidebars.is_empty():
+		sidebars[0].open_section("language")
+	if OS.get_environment("JHT_LANGUAGE_SETTINGS_TEST") == "1":
+		await get_tree().process_frame
+		var ok := UIStrings.lang == "de" \
+			and get_tree().current_scene != null \
+			and get_tree().current_scene.scene_file_path == SCENE_OFFICE \
+			and not sidebars.is_empty()
+		print("LANGUAGE-SETTINGS-TEST %s" % ("PASS" if ok else "FAIL"))
+		get_tree().quit(0 if ok else 1)
 
 
 func _reload_ui_theme() -> void:

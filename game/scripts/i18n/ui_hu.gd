@@ -1,6 +1,10 @@
 extends RefCounted
 ## Traduzioni HU — stesse chiavi di UIStrings.S (fallback: italiano).
 const S := {
+	"language_picker.eyebrow": "ELSŐ INDÍTÁS",
+	"language_picker.title": "Válassz nyelvet",
+	"language_picker.subtitle": "Bármikor módosíthatod a Beállításokban.",
+	"language_picker.continue": "FOLYTATÁS: %s",
 	"title.wordmark": "JOB HUNTER TEAM",
 	"title.name_title": "Mutatkozzunk be",
 	"title.name_sub": "Hogy hívnak? A csapat a neveden fog szólítani.",
