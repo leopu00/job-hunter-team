@@ -87,5 +87,5 @@ func _draw() -> void:
 			Palette.GREEN if _highlighted else Color(Palette.GREEN, 0.7), false,
 			2.0 if _highlighted else 1.2)
 	draw_string(ThemeDB.fallback_font, Vector2(-45, -half.y - 14),
-			"CV PRONTI  %d" % _real, HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
+			"CV READY  %d" % _real, HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
 			Palette.GREEN)

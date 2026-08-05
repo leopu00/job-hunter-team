@@ -51,7 +51,8 @@ func _draw() -> void:
 	# con la baseline e appoggia già il mobile al pavimento. La vecchia ombra,
 	# molto staccata, lo faceva sembrare sospeso in mezzo al corridoio.
 	if _font:
-		var text := "%s  →  %s" % [dept.to_upper(), destination.to_upper()]
+		var source := DepartmentDefs.display_name(dept).to_upper()
+		var text := "%s  →  %s" % [source, destination.to_upper()]
 		var w := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
 		draw_rect(Rect2(Vector2(-w / 2.0 - 5, 8), Vector2(w + 10, 16)),
 				Color(0.04, 0.04, 0.06, 0.94))
