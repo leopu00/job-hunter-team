@@ -75,6 +75,14 @@ html[data-theme="light"] {
   --color-purple: #7330a6;
 }
 
+/* Il fallback LCP del globo è un solo elemento e una sola immagine. In light
+   mode ne invertiamo la luminosità preservando le tinte (il secondo filtro
+   riporta il verde dal complementare al verde): il data-theme viene applicato
+   nel <head>, quindi non esiste un frame iniziale dark. */
+html[data-theme="light"] .jht-globe-still {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 /* ── Base ────────────────────────────────────────────────────────── */
 *,
 *::before,
@@ -274,24 +282,6 @@ a.contrib-title:hover {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Il fallback di route di Next viene montato anche per navigazioni che si
-   risolvono in pochi frame. Tenerlo invisibile per 220ms evita che il suo
-   template lampeggi; se il caricamento continua, diventa il feedback visivo
-   del primo caricamento lento. Il passo istantaneo non introduce movimento. */
-@keyframes public-loading-reveal {
-  from {
-    visibility: hidden;
-  }
-  to {
-    visibility: visible;
-  }
-}
-
-.public-loading-shell {
-  visibility: hidden;
-  animation: public-loading-reveal 1ms steps(1, end) 220ms forwards;
 }
 
 /* Lo shrink del <main> quando l'assistente fluttuante e` aperto e` gestito

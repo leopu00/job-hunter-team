@@ -41,20 +41,19 @@ const CITY_ZOOM = 10.6;
 // concatenati (≈3°/s).
 const ROTATE_STEP_DEG = 18;
 const ROTATE_STEP_MS = 6000;
-// Attesa prima del primo volo: breve. Chi apre la home deve vedere il
-// primo movimento interessante entro pochi secondi, non una sfera che
-// gira piano per 7" (l'intro serve solo a far assestare tile e fade).
-const ROTATE_BEFORE_FLY_MS = 3500;
+// L'intro resta abbastanza a lungo da far leggere il globo intero e da
+// lasciare assestare tile e fade prima del primo zoom.
+const ROTATE_BEFORE_FLY_MS = 5500;
 // Il tour è un viaggio per continenti: salti brevi fra città dello
 // stesso continente, transizione più ampia (flyTo con curva più alta:
 // si allontana fino a mostrare lo spostamento sul globo, poi
 // riatterra) quando si cambia continente.
-const HOP_FLY_MS = 2800;
-const CONTINENT_FLY_MS = 6200;
-// Primo volo assoluto: più corto di un cambio continente — l'utente è
-// appena arrivato, meglio scendere presto sulla prima capitale.
-const FIRST_FLY_MS = 4500;
-const DWELL_MS = 6500;
+const HOP_FLY_MS = 6500;
+const CONTINENT_FLY_MS = 11000;
+// Anche il primo volo deve mostrare chiaramente zoom-out, viaggio e
+// zoom-in: una discesa rapida sembra un cambio scena e non un globo.
+const FIRST_FLY_MS = 9000;
+const DWELL_MS = 8000;
 
 type AutopilotHandle = {
   suspend: () => void;
@@ -79,6 +78,10 @@ function startAutopilot(
   let suspended = false;
   let phase: "rotate" | "travel" | "dwell" = "rotate";
   let idx = 0;
+  // Invalida i callback moveend/idle di un volo interrotto da suspend o
+  // dispose. MapLibre emette moveend anche quando map.stop() tronca una
+  // camera animation: senza token una vecchia tappa potrebbe riapparire.
+  let travelSeq = 0;
   let timer: number | null = null;
 
   const clearTimer = () => {
@@ -113,7 +116,6 @@ function startAutopilot(
 
   const flyToNext = () => {
     if (disposed || suspended) return;
-    phase = "travel";
     opts.onStopChange(null);
     const stop = tour[idx % tour.length];
     const prev = tour[(idx + tour.length - 1) % tour.length];
@@ -126,6 +128,39 @@ function startAutopilot(
     const duration =
       idx === 0 ? FIRST_FLY_MS : crossing ? CONTINENT_FLY_MS : HOP_FLY_MS;
     idx += 1;
+
+    // Ferma l'eventuale passo di rotazione PRIMA di entrare in travel:
+    // il moveend generato da stop non deve essere scambiato per la fine
+    // del nuovo volo.
+    phase = "dwell";
+    map.stop();
+    phase = "travel";
+    travelSeq += 1;
+    const seq = travelSeq;
+
+    const onTravelEnd = () => {
+      if (disposed || suspended || phase !== "travel" || seq !== travelSeq)
+        return;
+
+      const settleAtStop = () => {
+        if (
+          disposed ||
+          suspended ||
+          phase !== "travel" ||
+          seq !== travelSeq
+        )
+          return;
+        phase = "dwell";
+        opts.onStopChange(stop);
+        schedule(flyToNext, DWELL_MS);
+      };
+
+      // Anche quando style e source risultano loaded, il frame finale può
+      // avere tile/render ancora da stabilizzare. La card e il countdown
+      // partono quindi sempre dal primo idle successivo al moveend.
+      map.once("idle", settleAtStop);
+    };
+
     map.flyTo({
       center: [stop.lon, stop.lat],
       zoom: CITY_ZOOM,
@@ -133,12 +168,10 @@ function startAutopilot(
       curve: crossing ? 1.55 : 1.42,
       essential: true,
     });
-    schedule(() => {
-      if (disposed || suspended) return;
-      phase = "dwell";
-      opts.onStopChange(stop);
-      schedule(flyToNext, DWELL_MS);
-    }, duration + 300);
+    // flyTo() chiama stop() internamente e può emettere il moveend della
+    // camera precedente in modo sincrono. Registrarsi DOPO il ritorno evita
+    // di scambiarlo per il moveend del volo appena avviato.
+    map.once("moveend", onTravelEnd);
   };
 
   const begin = () => {
@@ -153,6 +186,7 @@ function startAutopilot(
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    travelSeq += 1;
     clearTimer();
     try {
       map.off("moveend", onMoveEnd);
@@ -171,6 +205,7 @@ function startAutopilot(
     suspend: () => {
       if (disposed || suspended) return;
       suspended = true;
+      travelSeq += 1;
       clearTimer();
       opts.onStopChange(null);
       try {
@@ -349,6 +384,9 @@ export default function LandingGlobe() {
           // due globi e due serie di etichette. L'immagine esiste fino al
           // primo idle del canvas, poi viene rimossa nello stesso render che
           // rende visibile la scena live.
+          // Il tema viene scritto su <html> dallo script pre-paint del
+          // layout. Il filtro light è quindi applicato a QUESTO STESSO
+          // elemento prima del primo frame, senza montare un secondo still.
           className="jht-globe-still absolute inset-0 w-full h-full object-cover"
         />
       )}

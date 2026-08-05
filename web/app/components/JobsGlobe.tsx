@@ -314,6 +314,19 @@ const STYLE_DARK =
 const STYLE_LIGHT =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
+// Il layout applica data-theme con uno script sincrono nel <head>, prima del
+// primo paint. È una sorgente più precoce del context React (che si riallinea
+// in useEffect): usarla al boot evita anche una singola richiesta dark quando
+// la pagina è già stata dipinta light.
+function paintedTheme(fallback: "dark" | "light"): "dark" | "light" {
+  if (typeof document === "undefined") return fallback;
+  return document.documentElement.getAttribute("data-theme") === "light"
+    ? "light"
+    : document.documentElement.getAttribute("data-theme") === "dark"
+      ? "dark"
+      : fallback;
+}
+
 export type PositionCoord = {
   id: string;
   title: string;
@@ -792,9 +805,11 @@ export default function JobsGlobe({
 
     const boot = profileRef.current;
     const isShowcase = showcaseRef.current != null;
+    const bootTheme = paintedTheme(themeRef.current);
+    themeRef.current = bootTheme;
     const map = new maplibregl.Map({
       container,
-      style: themeRef.current === "light" ? STYLE_LIGHT : STYLE_DARK,
+      style: bootTheme === "light" ? STYLE_LIGHT : STYLE_DARK,
       center: [10, 45], // centrato su Europa
       zoom: 1.8,
       attributionControl: { compact: true },
@@ -1221,13 +1236,14 @@ export default function JobsGlobe({
 
   // Reagisci al cambio theme JHT (dark/light/system): switch del basemap.
   useEffect(() => {
-    themeRef.current = resolvedTheme;
+    const nextTheme = paintedTheme(resolvedTheme);
+    themeRef.current = nextTheme;
     const map = mapRef.current;
     if (!map) return;
     // style.load handler riapplichera' projection + tint + layer pin
     // perche' map.on('style.load', ...) e' persistent fra setStyle.
     layersReadyRef.current = false;
-    map.setStyle(resolvedTheme === "light" ? STYLE_LIGHT : STYLE_DARK);
+    map.setStyle(nextTheme === "light" ? STYLE_LIGHT : STYLE_DARK);
   }, [resolvedTheme]);
 
   function syncData(map: MaplibreMap) {

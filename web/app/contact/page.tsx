@@ -364,7 +364,6 @@ function ContactContent() {
       style={{
         position: "relative",
         zIndex: 1,
-        animation: "fade-in 0.35s ease both",
       }}
     >
       <LandingNav />
