@@ -145,6 +145,30 @@ def test_wrapper_refuses_to_start_when_a_required_portrait_selector_is_missing(t
     assert not marker.exists()
 
 
+def test_wrapper_allows_only_the_two_headless_session_names(tmp_path):
+    result = subprocess.run(
+        ["bash", str(WRAPPER), "--session", "physical", "--", "true"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "session must be landscape or vertical" in result.stderr
+
+
+def test_live_source_pid_is_unavailable_outside_a_fake_proc_tree():
+    result = subprocess.run(
+        ["bash", str(WRAPPER), "--source-pid", "4242", "--", "true"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "only available with a test proc root" in result.stderr
+
+
 def test_browser_mode_discovers_but_never_rewrites_the_existing_launcher(tmp_path):
     source_pid, proc_root = _write_fake_proc(tmp_path, ROUTE_ENV)
     bin_dir = _fake_pw_cli(tmp_path)

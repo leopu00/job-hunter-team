@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Run a recorder (or its browser launcher) against the isolated portrait
-# session, never the caller's desktop PipeWire graph.
+# Run a recorder (or its browser launcher) against an isolated landscape or
+# vertical session, never the caller's desktop PipeWire graph.
 #
 # The source process is already owned by the portrait systemd unit.  Reading
 # its /proc environment keeps the session route dynamic: a host rebuild can
@@ -9,9 +9,9 @@
 # printed or persisted here.
 #
 # Examples (run on the ThinkPad, never from the physical desktop session):
-#   scripts/run-portrait-session.sh --source-unit rel004-vertical-pipewire.service -- \
+#   scripts/run-portrait-session.sh --session vertical -- \
 #     python3 "$HOME/.cache/jht-e2e/setup_timing.py" ... mutter-node-live ...
-#   scripts/run-portrait-session.sh --source-unit rel004-vertical-pipewire.service \
+#   scripts/run-portrait-session.sh --session vertical \
 #     --browser-entrypoint -- --format portrait
 #
 # `--browser-entrypoint` only discovers and executes the existing temporary
@@ -37,18 +37,20 @@ die() {
 usage() {
   cat >&2 <<'USAGE'
 Usage:
-  run-portrait-session.sh --source-unit UNIT [--launcher-root DIR] -- COMMAND [ARG...]
-  run-portrait-session.sh --source-pid PID [--proc-root DIR] -- COMMAND [ARG...]
-  run-portrait-session.sh (--source-unit UNIT | --source-pid PID) --browser-entrypoint [-- browser args]
+  run-portrait-session.sh --session (landscape|vertical) [--launcher-root DIR] -- COMMAND [ARG...]
+  run-portrait-session.sh --session (landscape|vertical) --browser-entrypoint [-- browser args]
 
-The helper reads only the portrait process routing environment and verifies its
+Test-only:
+  run-portrait-session.sh --source-pid PID --proc-root FAKE_PROC -- COMMAND [ARG...]
+
+The helper reads only the isolated session routing environment and verifies its
 PipeWire graph before execing the command.  It does not deploy or edit a unit,
 browser launcher, or recorder.
 USAGE
   exit 2
 }
 
-source_unit=""
+session=""
 source_pid=""
 proc_root="/proc"
 launcher_root="$DEFAULT_LAUNCHER_ROOT"
@@ -56,9 +58,9 @@ browser_entrypoint=false
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --source-unit)
+    --session)
       [ "$#" -ge 2 ] || usage
-      source_unit="$2"
+      session="$2"
       shift 2
       ;;
     --source-pid)
@@ -93,16 +95,23 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ -n "$source_unit" ] && [ -n "$source_pid" ]; then
-  die 'choose exactly one of --source-unit or --source-pid'
+if [ -n "$session" ] && [ -n "$source_pid" ]; then
+  die 'choose exactly one of --session or the test-only --source-pid'
 fi
-if [ -z "$source_unit" ] && [ -z "$source_pid" ]; then
-  die 'a portrait source unit or PID is required'
+if [ -z "$session" ] && [ -z "$source_pid" ]; then
+  die 'an isolated portrait session is required'
 fi
 
-if [ -n "$source_unit" ]; then
-  command -v systemctl >/dev/null 2>&1 || die 'systemctl is required for --source-unit'
+if [ -n "$session" ]; then
+  case "$session" in
+    landscape|vertical) ;;
+    *) die 'session must be landscape or vertical' ;;
+  esac
+  command -v systemctl >/dev/null 2>&1 || die 'systemctl is required for --session'
+  source_unit="rel004-${session}-pipewire.service"
   source_pid="$(systemctl --user show --property=MainPID --value "$source_unit")"
+elif [ "$proc_root" = "/proc" ]; then
+  die '--source-pid is only available with a test proc root'
 fi
 case "$source_pid" in
   ''|0|*[!0-9]*) die 'portrait source has no live MainPID' ;;
