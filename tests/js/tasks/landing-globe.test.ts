@@ -18,6 +18,10 @@ const jobsGlobeSource = fs.readFileSync(
   path.resolve(__dirname, "../../../web/app/components/JobsGlobe.tsx"),
   "utf8",
 );
+const globalCssSource = fs.readFileSync(
+  path.resolve(__dirname, "../../../web/app/globals.css"),
+  "utf8",
+);
 
 describe("globo della home pubblica", () => {
   it("rappresenta una sola ricerca per città e conserva pin distinti", () => {
@@ -75,6 +79,41 @@ describe("globo della home pubblica", () => {
     expect(landingGlobeSource).toContain("{!liveReady && (");
     expect(landingGlobeSource).toContain('liveReady ? "visible" : "invisible"');
     expect(landingGlobeSource).not.toContain("transition-opacity");
+  });
+
+  it("usa un solo fallback e lo rende light dal tema pre-paint", () => {
+    expect(landingGlobeSource.match(/className="jht-globe-still/g)).toHaveLength(
+      1,
+    );
+    expect(globalCssSource).toContain(
+      'html[data-theme="light"] .jht-globe-still',
+    );
+    expect(globalCssSource).toContain("invert(1) hue-rotate(180deg)");
+    expect(jobsGlobeSource).toContain(
+      'document.documentElement.getAttribute("data-theme")',
+    );
+    expect(jobsGlobeSource).toContain(
+      'style: bootTheme === "light" ? STYLE_LIGHT : STYLE_DARK',
+    );
+  });
+
+  it("rallenta zoom e viaggi e aspetta il caricamento a ogni arrivo", () => {
+    expect(landingGlobeSource).toContain("const HOP_FLY_MS = 6500");
+    expect(landingGlobeSource).toContain("const CONTINENT_FLY_MS = 11000");
+    expect(landingGlobeSource).toContain("const FIRST_FLY_MS = 9000");
+    const flyTo = landingGlobeSource.indexOf("map.flyTo({");
+    const travelEnd = landingGlobeSource.indexOf(
+      'map.once("moveend", onTravelEnd)',
+    );
+    expect(flyTo).toBeGreaterThan(-1);
+    expect(travelEnd).toBeGreaterThan(flyTo);
+    expect(landingGlobeSource).toContain('map.once("idle", settleAtStop)');
+    const arrivalGate = landingGlobeSource.slice(
+      landingGlobeSource.indexOf("const onTravelEnd"),
+      flyTo,
+    );
+    expect(arrivalGate).not.toContain("map.loaded()");
+    expect(landingGlobeSource).not.toContain("duration + 300");
   });
 
   it("consegna l'autopilota solo dopo il primo idle successivo ai pin", () => {

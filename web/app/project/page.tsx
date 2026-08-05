@@ -481,10 +481,7 @@ function ProjectContent() {
   return (
     <>
       <LandingNav />
-      <main
-        className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto"
-        style={{ animation: "fade-in 0.4s ease both" }}
-      >
+      <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto">
         {/* Hero */}
         <div className="text-center mb-8">
           <h1 className="text-3xl md:text-5xl font-bold text-[var(--color-white)] tracking-tight leading-[1.05] mb-4">
