@@ -60,19 +60,14 @@ function Hero() {
           orizzontale) e il body è zoomato (--zoom), che falserebbe il
           calcolo. Il raccordo con la pagina lo fanno le sfumature
           interne a LandingGlobe. */}
-      <div
-        data-landing-globe
-        className="w-full mt-12"
-      >
+      <div data-landing-globe className="w-full mt-12">
         <LandingGlobe />
       </div>
 
       <TrailerTeaser />
 
       {/* Paragrafo introduttivo — descrive la piattaforma, sotto l'hero. */}
-      <p
-        className="mt-10 max-w-2xl mx-auto px-6 text-[14px] md:text-[16px] text-[var(--color-bright)] leading-relaxed"
-      >
+      <p className="mt-10 max-w-2xl mx-auto px-6 text-[14px] md:text-[16px] text-[var(--color-bright)] leading-relaxed">
         {t("home_intro")}
       </p>
     </section>
