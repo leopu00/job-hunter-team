@@ -4075,12 +4075,13 @@ func _build_team() -> void:
 		row.add_theme_constant_override("separation", 12)
 		_content.add_child(row)
 		row.add_child(TerminalTheme.label("▮", 16, dept["color"], "bold"))
-		var name_lbl := TerminalTheme.label(dept["name"], 17, Palette.BRIGHT, "medium")
+		var name_lbl := TerminalTheme.label(DepartmentDefs.display_name(dept_id),
+				17, Palette.BRIGHT, "medium")
 		name_lbl.custom_minimum_size = Vector2(160, 0)
 		row.add_child(name_lbl)
 		row.add_child(TerminalTheme.label(UIStrings.t("team.desks") % [occupied,
 				(dept["desks"] as Array).size()], 15, Palette.MUTED))
-		var tag := TerminalTheme.label(dept["tagline"], 14, Palette.DIM)
+		var tag := TerminalTheme.label(DepartmentDefs.display_tagline(dept_id), 14, Palette.DIM)
 		tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(tag)

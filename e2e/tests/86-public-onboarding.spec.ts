@@ -1,5 +1,20 @@
 import { expect, test } from "@playwright/test";
 
+test("la nav inglese usa Download e porta a /download", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  const navigation = page.getByRole("navigation", {
+    name: "Main navigation",
+  });
+  const download = navigation.getByRole("link", {
+    name: "Download",
+    exact: true,
+  });
+  await expect(download).toHaveAttribute("href", "/download");
+  await download.click();
+  await expect(page).toHaveURL(/\/download$/);
+});
+
 test("la home accompagna da Come si avvia al download Desktop-first", async ({
   page,
 }) => {

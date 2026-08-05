@@ -39,35 +39,35 @@ func get_team_summary() -> Dictionary:
 	}
 
 func get_positions_today() -> Array:
-	return POSITIONS
+	return _localized_positions()
 
 func get_agent_status() -> Dictionary:
 	return {
-		"coordinatore": {"status": "attivo", "detail": "pacing regolare, weekly al 64%"},
-		"scout": {"status": "in scansione", "detail": "3 board visitate nell'ultima ora"},
-		"analista": {"status": "al lavoro", "detail": "2 posizioni in verifica"},
-		"scorer": {"status": "in valutazione", "detail": "coda: 1 posizione"},
-		"mentor": {"status": "disponibile", "detail": "pronto a consigliarti"},
-		"assistente": {"status": "disponibile", "detail": "onboarding completato"},
+		"coordinatore": {"status": _t("dept.mock.status.coordinatore.status", "attivo"), "detail": _t("dept.mock.status.coordinatore.detail", "pacing regolare, weekly al 64%")},
+		"scout": {"status": _t("dept.mock.status.scout.status", "in scansione"), "detail": _t("dept.mock.status.scout.detail", "3 board visitate nell'ultima ora")},
+		"analista": {"status": _t("dept.mock.status.analista.status", "al lavoro"), "detail": _t("dept.mock.status.analista.detail", "2 posizioni in verifica")},
+		"scorer": {"status": _t("dept.mock.status.scorer.status", "in valutazione"), "detail": _t("dept.mock.status.scorer.detail", "coda: 1 posizione")},
+		"mentor": {"status": _t("dept.mock.status.mentor.status", "disponibile"), "detail": _t("dept.mock.status.mentor.detail", "pronto a consigliarti")},
+		"assistente": {"status": _t("dept.mock.status.assistente.status", "disponibile"), "detail": _t("dept.mock.status.assistente.detail", "onboarding completato")},
 	}
 
 func get_score_explanation() -> Dictionary:
 	return {
-		"title": POSITIONS[0]["title"],
+		"title": _localized_positions()[0]["title"],
 		"company": POSITIONS[0]["company"],
 		"score": POSITIONS[0]["score"],
 		# Motivazioni CONCRETE e quotidiane (feedback Leone 21/07): meno
 		# percentuali astratte, più vita reale.
 		"reasons": [
-			"l'annuncio ricalca due esperienze già nel tuo CV",
-			"la sede è in centro, vicino a una delle tue città prioritarie",
-			"stipendio sopra la soglia che hai indicato",
-			"-8 punti: chiedono disponibilità anche nel weekend",
+			_t("dept.mock.reason.1", "l'annuncio ricalca due esperienze già nel tuo CV"),
+			_t("dept.mock.reason.2", "la sede è in centro, vicino a una delle tue città prioritarie"),
+			_t("dept.mock.reason.3", "stipendio sopra la soglia che hai indicato"),
+			_t("dept.mock.reason.4", "-8 punti: chiedono disponibilità anche nel weekend"),
 		],
 	}
 
 func get_mentor_tip() -> String:
-	return "Nei colloqui, racconta i risultati con i numeri: non «ho migliorato le cose», ma «ho ridotto i tempi di attesa del 40%»."
+	return _t("dept.mock.mentor_tip", "Nei colloqui, racconta i risultati con i numeri: non «ho migliorato le cose», ma «ho ridotto i tempi di attesa del 40%».")
 
 const APPLICATIONS := [
 	{"title": "Responsabile Punto Vendita", "company": "Vetriera Retail", "score": 84, "stage": 3},
@@ -147,10 +147,37 @@ const CHAT := [
 ]
 
 func get_notifications() -> Array:
-	return NOTIFICATIONS
+	return _localized_rows(NOTIFICATIONS, "notification")
 
 func get_chat() -> Array:
-	return CHAT
+	return _localized_rows(CHAT, "chat")
+
+
+func _localized_positions() -> Array:
+	var out: Array = []
+	for i in POSITIONS.size():
+		var source: Dictionary = POSITIONS[i]
+		var row := source.duplicate()
+		var n := i + 1
+		row["title"] = _t("dept.mock.position.%d.title" % n, str(source["title"]))
+		row["location"] = _t("dept.mock.position.%d.location" % n, str(source["location"]))
+		row["note"] = _t("dept.mock.position.%d.note" % n, str(source["note"]))
+		out.append(row)
+	return out
+
+
+func _localized_rows(source: Array, kind: String) -> Array:
+	var out: Array = []
+	for i in source.size():
+		var row: Dictionary = source[i].duplicate()
+		row["text"] = _t("dept.mock.%s.%d" % [kind, i + 1], str(row["text"]))
+		out.append(row)
+	return out
+
+
+func _t(key: String, fallback: String) -> String:
+	var translated := UIStrings.t(key)
+	return fallback if translated == key else translated
 
 const SETTINGS := {
 	"profile": [

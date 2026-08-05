@@ -91,16 +91,16 @@ func _label() -> String:
 		return _message
 	match _status:
 		"working":
-			return "AL LAVORO"
+			return UIStrings.t("dept.agent_status.working")
 		"throttled":
 			var total := int(ceil(_seconds))
-			return "THROTTLE  %d:%02d" % [total / 60, total % 60]
+			return "THROTTLED  %d:%02d" % [total / 60, total % 60]
 		"paused":
-			return "IN PAUSA"
+			return UIStrings.t("dept.agent_status.paused")
 		"resting":
-			return "RIPOSO"
+			return UIStrings.t("dept.agent_status.resting")
 		_:
-			return "IN ATTESA"
+			return UIStrings.t("dept.agent_status.waiting")
 
 func _color() -> Color:
 	if _message_seconds > 0.0 and not _message.is_empty():

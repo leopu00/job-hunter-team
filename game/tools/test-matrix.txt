@@ -166,6 +166,9 @@ guided|run|gate|any|JHT_SCENE=office JHT_GUIDED_TEST=1|-|GUIDED-ONBOARDING-TEST 
 # rileggere indietro non venga interrotto dal messaggio successivo.
 comic_chat|run|gate|any|JHT_SCENE=office JHT_COMIC_CHAT_TEST=1|-|COMIC-CHAT-TEST PASS
 gfx_profile|run|gate|any|JHT_SCENE=office JHT_GFX_TEST=1|-|GFX-PROFILE-TEST PASS
+# Il frame iniziale della FreeCamera deve comprendere le 36 postazioni: il
+# bordo sud del primo panorama non puo' tagliare piedi o teste del roster.
+agent_frame|run|gate|any|JHT_SCENE=office JHT_ALL_SEATED_PREVIEW=1 JHT_AGENT_FRAME_TEST=1|-|AGENT-FRAME-TEST PASS
 world_text|run|gate|any|JHT_SCENE=office JHT_WORLD_TEXT_TEST=1|-|WORLD-TEXT-TEST PASS
 graphics_panel|run|gate|any|JHT_SCENE=office JHT_GRAPHICS_PANEL_TEST=1|-|GRAPHICS-PANEL-TEST PASS
 setup_busy|run|gate|any|JHT_SCENE=office JHT_SETUP_BUSY_TEST=1|-|SETUP-BUSY-TEST PASS

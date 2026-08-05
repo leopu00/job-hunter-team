@@ -18,6 +18,7 @@ import {
 } from './setup-helpers.js';
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
+import { t } from './i18n.js';
 
 /**
  * Crea un prompter finto per passare a runHealthCheck (serve solo progress).
@@ -104,7 +105,7 @@ export async function runNonInteractiveSetup(opts) {
   if (!opts.skipHealth && authMethod === 'api_key') {
     const prompter = silentPrompter();
     const ok = await runHealthCheck(prompter, selectedProvider, apiKeySecret);
-    if (!ok) console.log(pc.yellow('  Health check fallito — la config viene salvata comunque.'));
+    if (!ok) console.log(pc.yellow(`  ${t('wizard.checks.health.failed_save_anyway')}`));
   }
 
   // --- Assembla e salva config ---

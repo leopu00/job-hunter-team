@@ -1,0 +1,35 @@
+{
+  "schema": "jht-motion-asset-v1",
+  "asset": "control-reply",
+  "revision": "r01",
+  "status": "immutable-release",
+  "promotion": {
+    "source_path": "motion-assets/incoming/designer/control/04_reply",
+    "source_commit": "b5bd4f8d3",
+    "copy_policy": "byte-identical",
+    "compositing_policy": "replace-not-stack"
+  },
+  "files": {
+    "svg": {
+      "path": "control-reply-r01.svg",
+      "source_sha256": "095bdc1671c7b401280aab7cb0034106d4f5d1a5d2b3bc1c124a5f9173244b96",
+      "sha256": "095bdc1671c7b401280aab7cb0034106d4f5d1a5d2b3bc1c124a5f9173244b96"
+    },
+    "png": {
+      "path": "control-reply-r01.png",
+      "source_sha256": "7141a52c6090c2c8c66ff36d51f71189012191ad325305c0301748c4d7daf1c3",
+      "sha256": "7141a52c6090c2c8c66ff36d51f71189012191ad325305c0301748c4d7daf1c3"
+    }
+  },
+  "canvas": {"width": 920, "height": 360, "color_space": "sRGB"},
+  "alpha_mode": "straight-unpremultiplied",
+  "anchor": {"x": 0, "y": 0},
+  "pivot": {"x": 0.0, "y": 0.0},
+  "z_index": 30,
+  "safe_area": {"coordinate_space": "composition", "x": [108, 972], "y": [220, 1580]},
+  "timing": {"global_start": 14.1, "global_end": 15.8, "enter_frames": 5, "exit_frames": 5, "hold": 1.37},
+  "easing": {"in": "easeOutCubic", "out": "easeInQuad"},
+  "exit_policy": "cut to external end-card at 15.80; no CTA content embedded",
+  "watermark_policy": "excluded",
+  "editorial_source": {"scaletta_commit": "1999890b4756"}
+}

@@ -555,7 +555,7 @@ func _self_test_chat_notifications() -> void:
 	var suppressed := tag.debug_suppressed() and not tag.visible
 	tag.set_suppressed(false)
 	tag._process(0.2)
-	var restored := tag.debug_label() == "IN ATTESA"
+	var restored := tag.debug_label() == UIStrings.t("dept.agent_status.waiting")
 	var ok := filtered and canonical and selective and message_label \
 			and suppressed and restored
 	print("CHAT-NOTIFICATION-TEST ", "PASS" if ok else "FAIL", " ",

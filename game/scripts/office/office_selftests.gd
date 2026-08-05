@@ -34,6 +34,7 @@ const FLAG_HOOKS := {
 	"JHT_GRAPHICS_PANEL_TEST": "_graphics_panel_selftest",
 	"JHT_LANGUAGE_SETTINGS_TEST": "_language_settings_selftest",
 	"JHT_CAMERA_LOCK_TEST": "_camera_lock_selftest",
+	"JHT_AGENT_FRAME_TEST": "_agent_frame_selftest",
 	"JHT_POSITIONS_PANEL_TEST": "_positions_panel_selftest",
 	"JHT_MAP_PANEL_TEST": "_map_panel_selftest",
 	"JHT_USAGE_PANEL_TEST": "_usage_panel_selftest",
@@ -883,6 +884,50 @@ func _camera_lock_selftest() -> void:
 			and office._camera.zoom.is_equal_approx(before_zoom)
 	print("CAMERA-OVERLAY-LOCK-TEST ", "PASS" if ok else "FAIL")
 	blocker.queue_free()
+	get_tree().quit(0 if ok else 1)
+
+
+## Regressione G-03: il primo frame della FreeCamera deve contenere teste e
+## piedi del roster completo. Si esegue con JHT_ALL_SEATED_PREVIEW=1 per
+## montare tutte le 36 postazioni reali, senza una regia/crop da screenshot.
+func _agent_frame_selftest() -> void:
+	await get_tree().process_frame
+	var camera: FreeCamera = office._camera
+	var half_view: Vector2 = office.get_viewport_rect().size / (2.0 * camera.zoom.x)
+	var frame := Rect2(camera.position - half_view, half_view * 2.0)
+	var safe_frame := frame.grow(-12.0)
+	var failures: Array[String] = []
+	if not camera.position.is_equal_approx(FurnitureDefs.FLOOR.get_center()):
+		failures.append("camera non centrata sul pavimento operativo")
+	if safe_frame.position.y > FurnitureDefs.FLOOR.position.y \
+			or safe_frame.end.y < FurnitureDefs.FLOOR.end.y:
+		failures.append("il pavimento operativo esce verticalmente dal frame iniziale")
+	var expected_roster := CharacterDefs.spawn_list().size()
+	if office.agents.size() != expected_roster:
+		failures.append("roster %d invece di %d" % [office.agents.size(), expected_roster])
+	for agent: AgentNPC in office.agents:
+		var head_y := agent.global_position.y - 165.0
+		if agent.rig != null and agent.rig.visible and agent.rig.has_method("visual_top_y"):
+			head_y = agent.global_position.y + float(agent.rig.visual_top_y())
+		if not safe_frame.has_point(Vector2(agent.global_position.x, head_y)) \
+				or not safe_frame.has_point(agent.global_position):
+			failures.append(str(agent.slug))
+	var state_tag := AgentStateTag.new()
+	var labels := {
+		"idle": UIStrings.t("dept.agent_status.waiting"),
+		"working": UIStrings.t("dept.agent_status.working"),
+		"throttled": "THROTTLED  3:00",
+		"paused": UIStrings.t("dept.agent_status.paused"),
+		"resting": UIStrings.t("dept.agent_status.resting"),
+	}
+	for status: String in labels:
+		state_tag.set_state(status, 180.0)
+		if state_tag.debug_label() != labels[status]:
+			failures.append("targa stato " + status)
+	var ok := failures.is_empty()
+	print("AGENT-FRAME-TEST %s %s" % ["PASS" if ok else "FAIL",
+			JSON.stringify({"frame": frame, "agents": office.agents.size(),
+			"failures": failures})])
 	get_tree().quit(0 if ok else 1)
 
 
