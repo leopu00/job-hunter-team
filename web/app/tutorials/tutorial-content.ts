@@ -2,9 +2,23 @@ import type { Lang } from "../components/landing/LandingI18n";
 
 export type TutorialId = "game" | "web";
 
+type TutorialStepImage = {
+  src: string;
+  width: number;
+  height: number;
+  alt: string;
+  caption: string;
+};
+
+const GAME_SCREENSHOT_DIMENSIONS = {
+  width: 1600,
+  height: 900,
+} as const;
+
 type TutorialStep = {
   title: string;
   body: string;
+  image?: TutorialStepImage;
 };
 
 export type TutorialGuide = {
@@ -341,10 +355,24 @@ export const TUTORIAL_GUIDES: Record<
         {
           title: "Meet the office",
           body: "Open the native office and select any colleague. Their card shows a name, current status, and responsibility. You have completed this step when you can open a card and return to the office without losing your place.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/office-overview.png",
+            alt: "Overview of the native office, with the visible team areas.",
+            caption:
+              "The native office is the workspace you can explore between tasks.",
+          },
         },
         {
           title: "Know who does what",
           body: "The office and conversations use these plural department names: coordinators keep priorities moving; support advisers help with the product and your profile; career advisers help with direction; researchers find opportunities; analysts verify them; match assessors explain fit; application writers prepare requested documents; and reviewers check that work before it reaches you. These names are the stable map from a visible department to its responsibility.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/departments.png",
+            alt: "A department work area in the native office, with colleagues at desks.",
+            caption:
+              "Department names and their places in the office connect each visible area to a responsibility.",
+          },
         },
         {
           title: "Ask the researchers",
@@ -425,10 +453,24 @@ export const TUTORIAL_GUIDES: Record<
         {
           title: "Conosci l'ufficio",
           body: "Apri l'ufficio nativo e seleziona un collega. La sua scheda mostra nome, stato corrente e responsabilità. Hai completato il passo quando riesci ad aprire una scheda e a tornare all'ufficio senza perdere il punto in cui eri.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/office-overview.png",
+            alt: "Panoramica dell'ufficio nativo, con le aree del team visibili.",
+            caption:
+              "L'ufficio nativo è lo spazio di lavoro che puoi esplorare tra un'attività e l'altra.",
+          },
         },
         {
           title: "Capisci chi fa cosa",
           body: "I nomi dei reparti, sempre al plurale, che vedi in ufficio e nelle conversazioni sono: coordinatori per le priorità; consulenti di supporto per prodotto e profilo; consulenti di carriera per la direzione; ricercatori per le opportunità; analisti per la verifica; valutatori della compatibilità per spiegare l'affinità; redattori delle candidature per i documenti richiesti; revisori per controllarli prima che arrivino a te. Questi nomi sono la mappa stabile tra reparto visibile e responsabilità.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/departments.png",
+            alt: "Un'area di reparto nell'ufficio nativo, con colleghi alle scrivanie.",
+            caption:
+              "Nomi e collocazione dei reparti collegano ogni area visibile a una responsabilità.",
+          },
         },
         {
           title: "Chiedi ai ricercatori",
@@ -509,10 +551,24 @@ export const TUTORIAL_GUIDES: Record<
         {
           title: "Conoce la oficina",
           body: "Abre la oficina nativa y selecciona a cualquier colega. Su tarjeta muestra un nombre, el estado actual y su responsabilidad. Has completado este paso cuando puedes abrir una tarjeta y volver a la oficina sin perder tu lugar.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/office-overview.png",
+            alt: "Vista general de la oficina nativa, con las áreas visibles del equipo.",
+            caption:
+              "La oficina nativa es el espacio de trabajo que puedes explorar entre tareas.",
+          },
         },
         {
           title: "Entiende quién hace qué",
           body: "Los nombres de los departamentos, siempre en plural, que ves en la oficina y las conversaciones son: coordinadores para prioridades; asesores de asistencia para producto y perfil; asesores profesionales para dirección; investigadores para oportunidades; analistas para verificación; evaluadores de compatibilidad para explicar el encaje; redactores de candidaturas para los documentos solicitados; revisores para comprobarlos antes de que lleguen a ti. Estos nombres son el mapa estable entre un departamento visible y su responsabilidad.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/departments.png",
+            alt: "Un área de departamento en la oficina nativa, con colegas en los escritorios.",
+            caption:
+              "Los nombres y las ubicaciones de los departamentos conectan cada área visible con una responsabilidad.",
+          },
         },
         {
           title: "Pregunta a los investigadores",
@@ -593,10 +649,24 @@ export const TUTORIAL_GUIDES: Record<
         {
           title: "Découvrez le bureau",
           body: "Ouvrez le bureau natif et sélectionnez n'importe quel collègue. Sa fiche affiche un nom, son état actuel et sa responsabilité. Cette étape est terminée lorsque vous pouvez ouvrir une fiche puis revenir au bureau sans perdre votre place.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/office-overview.png",
+            alt: "Vue d’ensemble du bureau natif, avec les espaces visibles de l’équipe.",
+            caption:
+              "Le bureau natif est l’espace de travail que vous pouvez explorer entre les tâches.",
+          },
         },
         {
           title: "Comprenez qui fait quoi",
           body: "Les noms de départements, toujours au pluriel, que vous voyez dans le bureau et les conversations sont : coordinateurs pour les priorités ; conseillers d'assistance pour le produit et votre profil ; conseillers de carrière pour la direction ; chercheurs pour les opportunités ; analystes pour la vérification ; évaluateurs de compatibilité pour expliquer l'adéquation ; rédacteurs de candidatures pour les documents demandés ; réviseurs pour les contrôler avant qu'ils ne vous arrivent. Ces noms sont la carte stable entre un département visible et sa responsabilité.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/departments.png",
+            alt: "Un espace de département dans le bureau natif, avec des collègues à leur bureau.",
+            caption:
+              "Les noms et emplacements des départements relient chaque espace visible à une responsabilité.",
+          },
         },
         {
           title: "Demandez aux chercheurs",
@@ -677,10 +747,24 @@ export const TUTORIAL_GUIDES: Record<
         {
           title: "Lerne das Büro kennen",
           body: "Öffne das native Büro und wähle einen beliebigen Kollegen aus. Seine Karte zeigt einen Namen, den aktuellen Status und die Aufgabe. Dieser Schritt ist abgeschlossen, wenn du eine Karte öffnen und zum Büro zurückkehren kannst, ohne deinen Platz zu verlieren.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/office-overview.png",
+            alt: "Übersicht des nativen Büros mit den sichtbaren Teambereichen.",
+            caption:
+              "Das native Büro ist der Arbeitsbereich, den du zwischen Aufgaben erkunden kannst.",
+          },
         },
         {
           title: "Verstehe, wer was macht",
           body: "Die Abteilungsnamen, die du im Büro und in Gesprächen siehst, stehen immer im Plural: Koordinatoren für Prioritäten; Support-Berater für Produkt und Profil; Karriereberater für Orientierung; Rechercheure für Chancen; Analysten für die Prüfung; Passungsbewerter für die Erklärung der Passung; Bewerbungsautoren für angeforderte Unterlagen; Prüfer für die Kontrolle, bevor sie dich erreichen. Diese Namen sind die stabile Zuordnung zwischen sichtbarer Abteilung und Verantwortung.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/departments.png",
+            alt: "Ein Abteilungsbereich im nativen Büro mit Kollegen an ihren Schreibtischen.",
+            caption:
+              "Namen und Standorte der Abteilungen verbinden jeden sichtbaren Bereich mit einer Verantwortung.",
+          },
         },
         {
           title: "Frage die Rechercheure",
@@ -761,10 +845,24 @@ export const TUTORIAL_GUIDES: Record<
         {
           title: "Conhece o escritório",
           body: "Abre o escritório nativo e seleciona qualquer colega. O cartão mostra um nome, o estado atual e a responsabilidade. Este passo está concluído quando consegues abrir um cartão e voltar ao escritório sem perderes o ponto onde estavas.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/office-overview.png",
+            alt: "Vista geral do escritório nativo, com as áreas visíveis da equipa.",
+            caption:
+              "O escritório nativo é o espaço de trabalho que podes explorar entre tarefas.",
+          },
         },
         {
           title: "Percebe quem faz o quê",
           body: "Os nomes dos departamentos que vês no escritório e nas conversas estão sempre no plural: coordenadores para prioridades; consultores de apoio para produto e perfil; consultores de carreira para direção; investigadores para oportunidades; analistas para verificação; avaliadores de compatibilidade para explicar a adequação; redatores de candidaturas para documentos solicitados; revisores para os conferir antes de chegarem até ti. Estes nomes são o mapa estável entre um departamento visível e a sua responsabilidade.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/departments.png",
+            alt: "Uma área de departamento no escritório nativo, com colegas nas secretárias.",
+            caption:
+              "Os nomes e as localizações dos departamentos ligam cada área visível a uma responsabilidade.",
+          },
         },
         {
           title: "Pergunta aos investigadores",
@@ -845,10 +943,24 @@ export const TUTORIAL_GUIDES: Record<
         {
           title: "Ismerd meg az irodát",
           body: "Nyisd meg a natív irodát, és válassz ki bármelyik kollégát. A kártyája megmutatja a nevét, aktuális állapotát és feladatát. A lépést akkor teljesítetted, amikor meg tudsz nyitni egy kártyát, majd anélkül térsz vissza az irodába, hogy elveszítenéd, hol tartottál.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/office-overview.png",
+            alt: "A natív iroda áttekintése a csapat látható területeivel.",
+            caption:
+              "A natív iroda az a munkatér, amelyet feladatok között felfedezhetsz.",
+          },
         },
         {
           title: "Értsd meg, ki mit csinál",
           body: "Az irodában és a beszélgetésekben látható részlegnevek mindig többes számban vannak: koordinátorok a prioritásokért; támogatási tanácsadók a termékért és a profilodért; karrier-tanácsadók az irányért; kutatók a lehetőségekért; elemzők az ellenőrzésért; illeszkedés-értékelők az egyezés magyarázatáért; pályázatírók a kért dokumentumokért; ellenőrök azok átnézéséért, mielőtt hozzád érnek. Ezek a nevek jelentik a stabil térképet a látható részleg és felelőssége között.",
+          image: {
+            ...GAME_SCREENSHOT_DIMENSIONS,
+            src: "/tutorials/game/departments.png",
+            alt: "A natív iroda egy részlegének munkaterülete, kollégákkal az íróasztaloknál.",
+            caption:
+              "A részlegnevek és elhelyezkedésük minden látható területet felelősséghez kötnek.",
+          },
         },
         {
           title: "Kérdezd meg a kutatókat",
