@@ -143,12 +143,7 @@ function startAutopilot(
         return;
 
       const settleAtStop = () => {
-        if (
-          disposed ||
-          suspended ||
-          phase !== "travel" ||
-          seq !== travelSeq
-        )
+        if (disposed || suspended || phase !== "travel" || seq !== travelSeq)
           return;
         phase = "dwell";
         opts.onStopChange(stop);
