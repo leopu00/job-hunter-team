@@ -105,16 +105,23 @@ def test_runtime_upgrade_uses_only_the_host_json_contract():
         setup.index("func update_runtime()") : setup.index("## Dove vive il file compose")
     ]
 
-    # Il gioco e' solo il client del deploy transazionale: non puo' avere un
-    # secondo percorso compose/docker exec che salti journal e rollback.
+    # Il gioco e' solo il client del deploy transazionale. Prima di invocare
+    # qualunque host, scarica e valida il wrapper production: un v0.3.3 non
+    # supporta il contratto JSON e un check diretto muterebbe il deploy.
     assert '"upgrade", _do_update_runtime.bind(_vps_config())' in upgrade
-    assert 'PackedStringArray(["upgrade", "--json"])' in upgrade
-    assert 'exec \\\"$JHT_BIN\\\" upgrade --json' in upgrade
+    assert "return _run_local_bootstrap_upgrade(jht, false)" in upgrade
+    assert "return _run_local_bootstrap_upgrade(jht, true)" in upgrade
+    assert "_posix_upgrade_bootstrap_with_target(" in upgrade
+    assert "UPGRADE_BOOTSTRAP_PROTOCOL" in upgrade
+    assert 'grep -Eq ' in upgrade
     assert 'JHT_BIN=\\\"$HOME/.local/bin/jht\\\"' in upgrade
     assert '[ -x \\\"$JHT_BIN\\\" ] || exit 127' in upgrade
+    assert 'JHT_WRAPPER_PATH=\\\"$JHT_BIN\\\"' in upgrade
     assert '"upgrade-check", _do_check_runtime_update.bind(_vps_config())' in upgrade
-    assert 'PackedStringArray(["upgrade", "--check", "--json"])' in upgrade
-    assert 'exec \\\"$JHT_BIN\\\" upgrade --check --json' in upgrade
+    assert 'PackedStringArray(["upgrade", "--json"])' not in upgrade
+    assert 'PackedStringArray(["upgrade", "--check", "--json"])' not in upgrade
+    assert 'exec \\\"$JHT_BIN\\\" upgrade --json' not in upgrade
+    assert 'exec \\\"$JHT_BIN\\\" upgrade --check --json' not in upgrade
     assert 'func runtime_update_check_state() -> String:' in upgrade
     assert 'return "available" if bool(last_upgrade_check.get("changed", false)) else "current"' in upgrade
     assert "docker exec" not in upgrade
