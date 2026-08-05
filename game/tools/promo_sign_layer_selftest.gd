@@ -25,10 +25,14 @@ func _run() -> void:
 			signs.z_index < world.z_index,
 			"signs=%d world=%d" % [signs.z_index, world.z_index])
 	var director_source := FileAccess.get_file_as_string("res://tools/promo_director.gd")
-	_check("il set promo rimuove il badge demo soltanto dalla sua scenografia",
+	_check("il set promo rimuove badge e HUD soltanto dalla sua scenografia",
 			director_source.contains("func _hide_simulation_badge") \
 			and director_source.contains("find_children(\"*\", \"SimBadge\", true, false)") \
-			and director_source.contains("_hide_simulation_badge()"))
+			and director_source.contains("func _hide_promo_hud") \
+			and director_source.contains("if child is GameSidebar") \
+			and director_source.contains("overlay is TeamHud") \
+			and director_source.contains("_hide_simulation_badge()") \
+			and director_source.contains("_hide_promo_hud()"))
 	world.free()
 	signs.free()
 	if _fails.is_empty():
