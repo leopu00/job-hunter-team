@@ -9,10 +9,19 @@ const LANGS := {
 	"de": "Deutsch", "fr": "Français", "pt": "Português",
 }
 const LANG_CFG := "user://lang.cfg"
+## Lingua mostrata prima che esista una preferenza esplicita dell'utente.
+## Non leggiamo il locale del sistema: il video/tutorial e la UI devono partire
+## dalla stessa lingua prevedibile su ogni installazione nuova.
+const DEFAULT_LANG := "en"
 
-static var lang := "it"
+static var lang := DEFAULT_LANG
 
 static func _static_init() -> void:
+	# Il selftest della title deve simulare una macchina senza file user://,
+	# senza leggere o sovrascrivere la preferenza reale dello sviluppatore.
+	if OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1":
+		lang = DEFAULT_LANG
+		return
 	# TEST-AUTO: JHT_LANG forza la lingua per gli shot
 	var forced := OS.get_environment("JHT_LANG")
 	if LANGS.has(forced):
@@ -20,17 +29,36 @@ static func _static_init() -> void:
 		return
 	var cfg := ConfigFile.new()
 	if cfg.load(LANG_CFG) == OK:
-		var saved := str(cfg.get_value("ui", "lang", "it"))
+		var saved := str(cfg.get_value("ui", "lang", DEFAULT_LANG))
 		if LANGS.has(saved):
 			lang = saved
 
-static func set_lang(l: String) -> void:
+## Il primo avvio ha una schermata dedicata; un override valido serve soltanto
+## ai test e agli screenshot, che devono poter atterrare direttamente nella
+## scena richiesta senza scrivere preferenze dell'utente.
+static func language_choice_required(has_saved_preference: bool,
+		forced_language := "") -> bool:
+	return not has_saved_preference and not LANGS.has(forced_language)
+
+static func needs_initial_language_choice() -> bool:
+	if OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1":
+		return true
+	var cfg := ConfigFile.new()
+	var has_saved_preference := cfg.load(LANG_CFG) == OK \
+			and LANGS.has(str(cfg.get_value("ui", "lang", "")))
+	return language_choice_required(has_saved_preference, OS.get_environment("JHT_LANG"))
+
+static func set_lang(l: String, persist := true) -> bool:
 	if not LANGS.has(l):
-		return
+		return false
 	lang = l
+	if not persist or OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1" \
+			or OS.get_environment("JHT_LANGUAGE_SETTINGS_TEST") == "1":
+		return true
 	var cfg := ConfigFile.new()
 	cfg.set_value("ui", "lang", l)
 	cfg.save(LANG_CFG)
+	return true
 
 static func t(key: String) -> String:
 	if lang != "it":
@@ -56,6 +84,10 @@ static func _translations() -> Dictionary:
 
 const S := {
 	# ── Title screen ──────────────────────────────────────────────
+	"language_picker.eyebrow": "PRIMO AVVIO",
+	"language_picker.title": "Scegli la lingua",
+	"language_picker.subtitle": "Potrai cambiarla in qualunque momento da Impostazioni.",
+	"language_picker.continue": "CONTINUA IN %s",
 	"title.wordmark": "JOB HUNTER TEAM",
 	"title.name_title": "Presentiamoci",
 	"title.name_sub": "Come ti chiami? Il team ti chiamerà per nome.",

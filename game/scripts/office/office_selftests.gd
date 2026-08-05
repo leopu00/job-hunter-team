@@ -32,6 +32,7 @@ const FLAG_HOOKS := {
 	"JHT_WIZARD_JUMP_TEST": "_wizard_jump_selftest",
 	"JHT_WORLD_TEXT_TEST": "_world_text_selftest",
 	"JHT_GRAPHICS_PANEL_TEST": "_graphics_panel_selftest",
+	"JHT_LANGUAGE_SETTINGS_TEST": "_language_settings_selftest",
 	"JHT_CAMERA_LOCK_TEST": "_camera_lock_selftest",
 	"JHT_POSITIONS_PANEL_TEST": "_positions_panel_selftest",
 	"JHT_MAP_PANEL_TEST": "_map_panel_selftest",
@@ -111,6 +112,13 @@ func _ready() -> void:
 		var value := OS.get_environment(env_name)
 		if value != "":
 			Callable(self, VALUE_HOOKS[env_name]).call_deferred(value)
+
+
+## Il cambio da Impostazioni deve ricostruire l'ufficio: tutte le superfici
+## create al bootstrap (HUD, sidebar, popup) devono rileggere la nuova lingua.
+func _language_settings_selftest() -> void:
+	await get_tree().process_frame
+	Game.language_settings_selftest()
 
 
 func _sim_badge_selftest() -> void:
