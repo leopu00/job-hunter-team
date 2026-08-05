@@ -6,6 +6,7 @@
  */
 import { execSync } from 'node:child_process';
 import { resolveSecret } from './secret-ref.js';
+import { t, tf } from './i18n.js';
 
 const MIN_NODE_VERSION = 18;
 
@@ -15,34 +16,34 @@ const MIN_NODE_VERSION = 18;
  * @returns {Promise<boolean>} true se OK
  */
 export async function checkPrerequisites(prompter) {
-  const progress = prompter.progress('Verifica prerequisiti...');
+  const progress = prompter.progress(t('wizard.checks.prerequisites.checking'));
   const issues = [];
 
   // Node version
   const nodeVersion = process.versions.node;
   const major = parseInt(nodeVersion.split('.')[0], 10);
   if (major < MIN_NODE_VERSION) {
-    issues.push(`Node.js ${nodeVersion} — richiesto >= ${MIN_NODE_VERSION}`);
+    issues.push(tf('wizard.checks.prerequisites.node_required', nodeVersion, MIN_NODE_VERSION));
   }
 
   // npm disponibile
   try {
     execSync('npm --version', { encoding: 'utf-8', timeout: 5000 });
   } catch {
-    issues.push('npm non trovato nel PATH');
+    issues.push(t('wizard.checks.prerequisites.npm_missing'));
   }
 
   if (issues.length > 0) {
-    progress.stop('Problemi trovati');
-    await prompter.note(issues.join('\n'), 'Prerequisiti mancanti');
+    progress.stop(t('wizard.checks.prerequisites.problems_found'));
+    await prompter.note(issues.join('\n'), t('wizard.checks.prerequisites.missing_title'));
     const cont = await prompter.confirm({
-      message: 'Continuare comunque?',
+      message: t('wizard.checks.prerequisites.continue_anyway'),
       initialValue: false,
     });
     return cont;
   }
 
-  progress.stop(`Node ${nodeVersion}, npm OK`);
+  progress.stop(tf('wizard.checks.prerequisites.ready', nodeVersion));
   return true;
 }
 
@@ -54,11 +55,11 @@ export async function checkPrerequisites(prompter) {
  * @returns {Promise<boolean>}
  */
 export async function runHealthCheck(prompter, provider, apiKeySecret) {
-  const progress = prompter.progress('Verifica API key...');
+  const progress = prompter.progress(t('wizard.checks.health.checking'));
   const key = typeof apiKeySecret === 'string' ? apiKeySecret : resolveSecret(apiKeySecret);
 
   if (!key) {
-    progress.stop('API key vuota — skip health check');
+    progress.stop(t('wizard.checks.health.empty_key'));
     return false;
   }
 
@@ -79,11 +80,11 @@ export async function runHealthCheck(prompter, provider, apiKeySecret) {
         signal: AbortSignal.timeout(15000),
       });
       if (res.ok || res.status === 200) {
-        progress.stop('API key valida — connessione OK');
+        progress.stop(t('wizard.checks.health.valid'));
         return true;
       }
       const body = await res.text().catch(() => '');
-      progress.stop(`API errore ${res.status}: ${body.slice(0, 80)}`);
+      progress.stop(tf('wizard.checks.health.api_error_body', res.status, body.slice(0, 80)));
       return false;
     }
 
@@ -93,18 +94,18 @@ export async function runHealthCheck(prompter, provider, apiKeySecret) {
         signal: AbortSignal.timeout(10000),
       });
       if (res.ok) {
-        progress.stop('API key valida — connessione OK');
+        progress.stop(t('wizard.checks.health.valid'));
         return true;
       }
-      progress.stop(`API errore ${res.status}`);
+      progress.stop(tf('wizard.checks.health.api_error', res.status));
       return false;
     }
 
     // Provider senza health check
-    progress.stop('Health check non disponibile per questo provider');
+    progress.stop(t('wizard.checks.health.unavailable'));
     return true;
   } catch (err) {
-    progress.stop(`Errore connessione: ${err.message?.slice(0, 60) ?? 'timeout'}`);
+    progress.stop(tf('wizard.checks.health.connection_error', err.message?.slice(0, 60) ?? 'timeout'));
     return false;
   }
 }

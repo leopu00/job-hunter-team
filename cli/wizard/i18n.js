@@ -77,7 +77,7 @@ function loadCatalog(lang) {
 // carry JHT_LANG=it; keep that choice for later copy, but source the approved
 // T0-T1 onboarding keys from the English catalog.
 function phase1English(key) {
-  return /^(host_setup\.|welcome\.|wizard\.welcome_subtitle$|wizard\.aborted_prereqs$|wizard\.cloud\.|wizard\.step\.|wizard\.profile\.intro$|wizard\.provider\.|wizard\.oauth\.|wizard\.team\.(starting|start_failed)$|wizard\.cli\.|wizard\.(outro_done|outro_aborted|start\.ready|start\.done)$)/.test(key);
+  return /^(host_setup\.|welcome\.|wizard\.welcome_subtitle$|wizard\.aborted_prereqs$|wizard\.checks\.|wizard\.cloud\.|wizard\.step\.|wizard\.profile\.intro$|wizard\.provider\.|wizard\.oauth\.|wizard\.team\.(starting|start_failed)$|wizard\.cli\.|wizard\.(outro_done|outro_aborted|start\.ready|start\.done)$)/.test(key);
 }
 
 /**
