@@ -110,9 +110,9 @@ test.describe("shell pubblico tutorial e trailer", () => {
     const musicCredit = page.locator('section[aria-label="Music credit"]');
     await expect(musicCredit).toBeVisible();
     expect(await musicCredit.locator(":scope > p").allTextContents()).toEqual([
-      "Music credit",
       "Covert Affair Kevin MacLeod (incompetech.com)",
-      "Licensed under Creative Commons: By Attribution 4.0 — https://creativecommons.org/licenses/by/4.0/",
+      "Licensed under Creative Commons: By Attribution 4.0",
+      "https://creativecommons.org/licenses/by/4.0/",
       "Edited for timing and mixed with a CC0 cymbal-roll intro.",
     ]);
     await expect(
