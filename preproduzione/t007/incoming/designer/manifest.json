@@ -1,0 +1,129 @@
+{
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "format": "16:9 full-frame timing card"
+  },
+  "font": {
+    "family": "JetBrains Mono",
+    "files": {
+      "Regular": "game/assets/fonts/JetBrainsMono-Regular.ttf",
+      "Medium": "game/assets/fonts/JetBrainsMono-Medium.ttf",
+      "Bold": "game/assets/fonts/JetBrainsMono-Bold.ttf",
+      "ExtraBold": "game/assets/fonts/JetBrainsMono-ExtraBold.ttf"
+    }
+  },
+  "colors": {
+    "void": "#060608",
+    "deep": "#0C0C10",
+    "card": "#16161D",
+    "border": "#2E2E3D",
+    "white": "#F0F0FA",
+    "base": "#B8B8D0",
+    "muted": "#7A7A96",
+    "green": "#00E87A"
+  },
+  "copy_source": "HQ-TUTORIAL preproduzione/t007/T-007-TIMING-CARDS.md",
+  "timeline_change_requested": false,
+  "editable_tokens": [
+    "{{DATE}}",
+    "{{DOWNLOAD_REAL}}",
+    "{{DOWNLOAD_SPEED}}×",
+    "{{EXTRACTION_REAL}}",
+    "{{EXTRACTION_SPEED}}×",
+    "{{IMAGE_PULL_REAL}}",
+    "{{IMAGE_PULL_SPEED}}×",
+    "{{OFFICE_LOAD_REAL}}",
+    "{{OFFICE_LOAD_SPEED}}×",
+    "{{PIPELINE_REAL}}",
+    "{{PIPELINE_WAIT_SPEED}}×",
+    "{{PROFILE_REAL}}",
+    "{{PROVIDER_AUTH_REAL}}",
+    "{{PROVIDER_WAIT_SPEED}}×",
+    "{{REPLY_REAL}}",
+    "{{REPLY_WAIT_SPEED}}×",
+    "{{SITE_TO_T5_REAL}}",
+    "{{SPEED}}×",
+    "{{T0_T1_REAL}}",
+    "{{T2_T3_REAL}}",
+    "{{TEAM_BOOTSTRAP_REAL}}",
+    "{{TEAM_BOOTSTRAP_SPEED}}×",
+    "{{TOUR_REAL}}"
+  ],
+  "editing": "Edit text nodes marked data-editable=true in the SVG. Populate only from the promoted T-007 sidecar/raw.",
+  "historical_rule": "Any historic measurement card keeps OBSERVED LINUX REHEARSAL prominent. Never use 54:40 as SITE_TO_T5_REAL.",
+  "cards": [
+    {
+      "name": "TC-00-opening-context",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-00-editable-speed-template",
+      "status": "rendered"
+    },
+    {
+      "name": "TC-04-total-real-setup-time",
+      "status": "rendered"
+    },
+    {
+      "name": "TC-01-first-complete-window",
+      "status": "rendered"
+    },
+    {
+      "name": "TC-02-onboarding-complete",
+      "status": "rendered"
+    },
+    {
+      "name": "TC-03-provider-boundary",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-01-download",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-02-extraction",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-03-first-window",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-04-office-load",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-05-guided-preview",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-06-runtime-download",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-07-runtime-ready",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-08-provider-authorization",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-09-profile",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-10-team-startup",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-11-first-reply",
+      "status": "rendered"
+    },
+    {
+      "name": "TS-12-five-stage-pipeline",
+      "status": "rendered"
+    }
+  ]
+}
