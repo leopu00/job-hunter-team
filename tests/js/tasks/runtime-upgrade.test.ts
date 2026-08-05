@@ -170,6 +170,24 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(sb.journal()).toBe(false);
   });
 
+  it("--check --json da un runtime vecchio trova l'immagine nuova senza modificare il deploy", () => {
+    const sb = makeSandbox();
+    const result = run(sb, {}, ["upgrade", "--check", "--json"]);
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      changed: true,
+      phase: "check",
+      previous: { version: "0.3.3", image: "sha256:old" },
+      current: { version: "0.3.3", image: "sha256:new" },
+      restartRequired: true,
+    });
+    expect(sb.state()).toBe("sha256:old");
+    expect(sb.compose()).toContain("example/old");
+    expect(sb.journal()).toBe(false);
+  });
+
   it("al run seguente sana un journal lasciato da un processo ucciso prima di un nuovo check", () => {
     const sb = makeSandbox();
     const rollback = path.join(sb.runtime, ".upgrade-rollback-interrupted");
