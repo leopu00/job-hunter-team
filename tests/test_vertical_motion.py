@@ -20,7 +20,8 @@ from scripts.vertical_motion import (
 )
 
 
-def _designer_release(tmp_path, *, asset: str = "pipeline-rail-state-03", revision: str = "r02"):
+def _designer_release(tmp_path, *, asset: str = "pipeline-rail-state-03", revision: str = "r02",
+                      canvas_width: int = 1080, canvas_height: int = 1920):
     root = tmp_path / "motion-assets" / "releases" / "designer" / "central-6p00-10p90"
     root.mkdir(parents=True)
     png_name = f"{asset}-{revision}.png"
@@ -34,7 +35,7 @@ def _designer_release(tmp_path, *, asset: str = "pipeline-rail-state-03", revisi
         "revision": revision,
         "status": "immutable-release",
         "files": {"png": {"path": png_name, "sha256": png_sha256}},
-        "canvas": {"width": 1080, "height": 1920, "color_space": "sRGB"},
+        "canvas": {"width": canvas_width, "height": canvas_height, "color_space": "sRGB"},
         "alpha_mode": "straight-unpremultiplied",
         "anchor": {"x": 0, "y": 0},
         "pivot": {"x": 0.0, "y": 0.0},
@@ -117,6 +118,24 @@ def test_designer_release_requires_immutable_manifest_and_both_png_hashes(tmp_pa
     assert release.start == 6.0
     assert release.end == 7.64
     assert release.z_index == 10
+
+
+def test_designer_release_accepts_a_verified_natural_canvas_layer(tmp_path) -> None:
+    manifest, _ = _designer_release(tmp_path, asset="control-input-empty", revision="r01",
+                                    canvas_width=920, canvas_height=300)
+
+    release = verify_designer_release(
+        manifest,
+        asset="control-input-empty",
+        revision="r01",
+        z_index=10,
+        start=6.0,
+        end=7.64,
+        canvas_width=920,
+        canvas_height=300,
+    )
+
+    assert release.asset == "control-input-empty"
 
 
 def test_designer_release_rejects_a_replaced_png_even_with_the_same_filename(tmp_path) -> None:

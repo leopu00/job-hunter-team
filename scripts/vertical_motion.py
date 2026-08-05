@@ -158,6 +158,8 @@ def verify_designer_release(
     z_index: int,
     start: float,
     end: float,
+    canvas_width: int = CANVAS_WIDTH,
+    canvas_height: int = CANVAS_HEIGHT,
 ) -> ImmutableDesignerRelease:
     """Return a Designer release only after its immutable render contract passes.
 
@@ -182,8 +184,8 @@ def verify_designer_release(
         raise VerticalMotionError("release manifest is not immutable jht-motion-asset-v1")
     if manifest.get("asset") != asset or manifest.get("revision") != revision:
         raise VerticalMotionError("release asset or revision does not match the requested overlay")
-    if manifest.get("canvas") != {"width": CANVAS_WIDTH, "height": CANVAS_HEIGHT, "color_space": "sRGB"}:
-        raise VerticalMotionError("release canvas must be 1080x1920 sRGB")
+    if manifest.get("canvas") != {"width": canvas_width, "height": canvas_height, "color_space": "sRGB"}:
+        raise VerticalMotionError(f"release canvas must be {canvas_width}x{canvas_height} sRGB")
     if manifest.get("alpha_mode") != "straight-unpremultiplied":
         raise VerticalMotionError("release alpha must be straight-unpremultiplied")
     if manifest.get("anchor") != {"x": 0, "y": 0} or manifest.get("pivot") != {"x": 0.0, "y": 0.0}:
