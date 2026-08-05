@@ -1,0 +1,38 @@
+{
+  "schema": "jht-motion-asset-v1",
+  "asset": "pipeline-rail-state-04",
+  "revision": "r01",
+  "status": "immutable-release",
+  "files": {
+    "svg": {
+      "path": "pipeline-rail-state-04-r01.svg",
+      "sha256": "243788814e1b6401c455bfc0ea6c62791154d7ea05ab7335292fb264726e427d"
+    },
+    "png": {
+      "path": "pipeline-rail-state-04-r01.png",
+      "sha256": "4ab29dcd61740fe549a8b78d7fbd7ed945d785cd8dba3be0d219d1256a5db079"
+    }
+  },
+  "canvas": {"width": 1080, "height": 1920, "color_space": "sRGB"},
+  "alpha_mode": "straight-unpremultiplied",
+  "anchor": {"x": 0, "y": 0},
+  "pivot": {"x": 0.0, "y": 0.0},
+  "z_index": 10,
+  "safe_area": {"x": [108, 972], "y": [220, 1580]},
+  "timing": {
+    "global_start": 7.64,
+    "global_end": 9.27,
+    "enter_frames": 5,
+    "exit_frames": 5,
+    "hold": 0.83
+  },
+  "easing": {"in": "easeOutCubic", "out": "easeInQuad"},
+  "watermark_policy": "excluded",
+  "active_node": 4,
+  "node_count": 5,
+  "content_policy": "rail only; no text, numbers, icons, cards, panels, characters, CTA or watermark",
+  "editorial_source": {
+    "scaletta_commit": "1999890b4756",
+    "reference_cut_sha256_prefix": "ee8649536788"
+  }
+}
