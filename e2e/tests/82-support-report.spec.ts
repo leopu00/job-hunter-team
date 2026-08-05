@@ -7,9 +7,10 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
  * superfici web: la pagina pubblica `/contact` e il dialogo dell'area
  * riservata. Entrambe parlano con `POST /api/feedback`.
  *
- * Qui si verifica il percorso *nel browser* — che i campi ci siano, che la
- * validazione fermi gli invii inutili, che la conferma compaia. La logica di
- * validazione e resa lato server è coperta senza browser da:
+ * Qui si verifica il percorso *nel browser* — che basti il racconto, che
+ * l'anteprima espliciti i metadati, che la validazione fermi gli invii inutili
+ * e che ticket o errore di rete dicano la verità. La logica di validazione e
+ * resa lato server è coperta senza browser da:
  *
  *   tests/js/validators/feedback-report.test.ts
  *   tests/js/validators/redact.test.ts
@@ -42,9 +43,11 @@ async function sondaCanale(page: Page) {
   if (statoCanale) return statoCanale;
   const res = await page.request.post("/api/feedback", {
     data: {
-      client: "e2e-probe",
+      client: "web-contact",
+      kind: "bug",
       happened: "sonda e2e: verifica che il canale sia configurato",
-      contact: "e2e@example.org",
+      platform: "web",
+      locale: "it",
       website: "https://esca.example", // honeypot: accettato e non consegnato
     },
     failOnStatusCode: false,
@@ -92,18 +95,18 @@ async function invioPossibileOrSkip(page: Page) {
  * Con `domcontentloaded` i campi esistono ma sono ancora HTML statico: quello
  * che ci scrivi viene buttato via appena l'hydration installa lo stato React,
  * e il test fallisce mostrando un modulo vuoto. La prova che l'hydration è
- * finita è che un pulsante *reagisca*: le categorie sono governate da stato
- * React, quindi `aria-pressed` cambia solo dopo.
+ * finita è che un campo *reagisca*: il textarea è governato da stato React,
+ * quindi il suo valore cambia solo dopo.
  *
  * Chiude anche il banner dei cookie, che altrimenti copre il pulsante di invio.
  */
 async function apriModulo(page: Page) {
   await page.goto("/contact", { waitUntil: "domcontentloaded" });
-  const categorie = page.locator("fieldset button[aria-pressed]");
-  await categorie.first().waitFor();
-  const seconda = categorie.nth(1);
-  await seconda.click();
-  await expect(seconda).toHaveAttribute("aria-pressed", "true");
+  const messaggio = page.locator("#c-msg");
+  await messaggio.waitFor();
+  await messaggio.fill("Verifica che il modulo sia pronto dopo l'hydration.");
+  await expect(messaggio).toHaveValue(/Verifica che il modulo/);
+  await messaggio.fill("");
 
   const cookie = page.getByRole("button", { name: /accept|accetta/i });
   if (await cookie.count()) await cookie.first().click();
@@ -200,14 +203,16 @@ async function apriDialogo(page: Page, da = "/dashboard") {
 }
 
 test.describe("pagina pubblica /contact", () => {
-  test("il modulo ha i campi che servono", async ({ page }) => {
+  test("il modulo chiede solo il problema e mostra i dati inviati", async ({
+    page,
+  }) => {
     await page.goto("/contact", { waitUntil: "domcontentloaded" });
-    await expect(page.locator("#c-nome")).toBeVisible();
-    await expect(page.locator("#c-email")).toBeVisible();
-    await expect(page.locator("#c-oggetto")).toBeVisible();
     await expect(page.locator("#c-msg")).toBeVisible();
-    // Le quattro categorie: senza, la casella non si smista a colpo d'occhio.
-    await expect(page.getByRole("button", { pressed: true })).toHaveCount(1);
+    await expect(page.locator("#c-nome, #c-email, #c-oggetto")).toHaveCount(0);
+    await expect(
+      page.getByText(/dati inviati|data being sent|datos enviados/i),
+    ).toBeVisible();
+    await expect(page.getByText(/CV|résumé|Lebenslauf/i).first()).toBeVisible();
   });
 
   test("gli indirizzi sono cliccabili, per chi preferisce il suo client", async ({
@@ -236,27 +241,10 @@ test.describe("pagina pubblica /contact", () => {
     ).toHaveCount(1);
   });
 
-  test("email non valida: si ferma prima di partire", async ({ page }) => {
-    await apriModulo(page);
-    await page.locator("#c-email").fill("non-una-mail");
-    await page.locator("#c-oggetto").fill("Prova di validazione");
-    await page.locator("#c-msg").fill("Messaggio abbastanza lungo da passare.");
-    await page
-      .getByRole("button", { name: /invia|send|enviar|envoyer|senden|küldés/i })
-      .click();
-    // L'errore deve parlare dell'EMAIL: asserire solo "il modulo è ancora lì"
-    // passerebbe anche se il campo fosse rimasto vuoto per un problema di
-    // hydration, cioè per il motivo sbagliato.
-    await expect(page.getByText(/email|correo|e-mail/i).last()).toBeVisible();
-    await expect(page.locator("#c-msg")).toBeVisible();
-  });
-
   test("messaggio troppo corto: si ferma prima di partire", async ({
     page,
   }) => {
     await apriModulo(page);
-    await page.locator("#c-email").fill("utente@example.org");
-    await page.locator("#c-oggetto").fill("Oggetto valido");
     await page.locator("#c-msg").fill("corto");
     await page
       .getByRole("button", { name: /invia|send|enviar|envoyer|senden|küldés/i })
@@ -267,17 +255,63 @@ test.describe("pagina pubblica /contact", () => {
     await expect(page.locator("#c-msg")).toBeVisible();
   });
 
+  test("offline: chiarisce che non ha inviato nulla", async ({ page }) => {
+    await apriModulo(page);
+    await page.route("**/api/feedback", (route) =>
+      route.abort("internetdisconnected"),
+    );
+    await page
+      .locator("#c-msg")
+      .fill("Segnalazione di prova per il comportamento senza connessione.");
+    await page
+      .getByRole("button", { name: /invia|send|enviar|envoyer|senden|küldés/i })
+      .click();
+    await expect(page.locator("form").getByRole("alert")).toHaveText(
+      /offline|connessione|connection|niente|nothing|nada|rien/i,
+    );
+  });
+
+  test("invia solo il contesto dichiarato e conferma con il ticket", async ({
+    page,
+  }) => {
+    await apriModulo(page);
+    let payload: Record<string, unknown> | null = null;
+    await page.route("**/api/feedback", async (route) => {
+      payload = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, ticket: "JHT-E2E" }),
+      });
+    });
+    await page
+      .locator("#c-msg")
+      .fill("Segnalazione di prova per verificare il payload anonimo.");
+    const stato = await inviaEStato(page);
+    expect(stato).toBe(200);
+    expect(payload).toMatchObject({
+      client: "web-contact",
+      kind: "bug",
+      happened: "Segnalazione di prova per verificare il payload anonimo.",
+      doing: "Public web report: /contact",
+      platform: "web",
+    });
+    expect(payload).not.toHaveProperty("contact");
+    expect(payload).not.toHaveProperty("email");
+    expect(payload).not.toHaveProperty("name");
+    await expect(page.getByText("JHT-E2E")).toBeVisible();
+  });
+
   test("invio completo: la conferma sostituisce il modulo", async ({
     page,
   }) => {
     await invioPossibileOrSkip(page);
     await apriModulo(page);
-    await page.locator("#c-nome").fill("Utente E2E");
-    await page.locator("#c-email").fill("e2e@example.org");
-    await page.locator("#c-oggetto").fill("[e2e] invio dal modulo pubblico");
     await page
       .locator("#c-msg")
-      .fill("Messaggio di prova generato dalla suite end-to-end. Ignorare.");
+      .fill(
+        "[e2e] Messaggio di prova generato dalla suite end-to-end. Ignorare.",
+      );
     const stato = await inviaEStato(page);
     test.skip(stato === 429, "rate limit orario esaurito (5/ora per IP)");
     // 503 = nessuna destinazione configurata: la route lo restituisce quando
@@ -301,12 +335,18 @@ test.describe("dialogo dell'area riservata", () => {
     await sessioneOrSkip(page);
   });
 
-  test("si apre dal menu utente e sa già chi sei", async ({ page }) => {
+  test("si apre dal menu utente e chiede solo il problema", async ({
+    page,
+  }) => {
     const dialogo = await apriDialogo(page);
-    // Niente campo email: chi scrive è autenticato, l'indirizzo lo sappiamo.
+    // L'identità dell'account non è contesto tecnico; il ticket può usare il
+    // racconto senza prendere un recapito o richiedere un oggetto.
     await expect(dialogo.locator('input[type="email"]')).toHaveCount(0);
-    await expect(dialogo.locator("#s-oggetto")).toBeVisible();
+    await expect(dialogo.locator("#s-oggetto")).toHaveCount(0);
     await expect(dialogo.locator("#s-msg")).toBeVisible();
+    await expect(
+      dialogo.getByText(/dati inviati|data being sent|datos enviados/i),
+    ).toBeVisible();
   });
 
   test("mostra la pagina che allega, invece di allegarla di nascosto", async ({
@@ -318,6 +358,22 @@ test.describe("dialogo dell'area riservata", () => {
     await expect(dialogo.getByText("/positions")).toBeVisible();
   });
 
+  test("offline: chiarisce che non ha inviato nulla", async ({ page }) => {
+    const dialogo = await apriDialogo(page);
+    await page.route("**/api/feedback", (route) =>
+      route.abort("internetdisconnected"),
+    );
+    await dialogo
+      .locator("#s-msg")
+      .fill("Segnalazione di prova per il comportamento senza connessione.");
+    await dialogo
+      .getByRole("button", { name: /invia|send|enviar|envoyer|senden|küldés/i })
+      .click();
+    await expect(dialogo.getByRole("alert")).toHaveText(
+      /offline|connessione|connection|niente|nothing|nada|rien/i,
+    );
+  });
+
   test("si chiude con Escape", async ({ page }) => {
     const dialogo = await apriDialogo(page);
     await page.keyboard.press("Escape");
@@ -327,10 +383,11 @@ test.describe("dialogo dell'area riservata", () => {
   test("invio completo: conferma dentro il dialogo", async ({ page }) => {
     await invioPossibileOrSkip(page);
     const dialogo = await apriDialogo(page);
-    await dialogo.locator("#s-oggetto").fill("[e2e] invio dalla dashboard");
     await dialogo
       .locator("#s-msg")
-      .fill("Segnalazione di prova generata dalla suite end-to-end. Ignorare.");
+      .fill(
+        "[e2e] Segnalazione di prova generata dalla suite end-to-end. Ignorare.",
+      );
     const stato = await inviaEStato(page, dialogo);
     test.skip(stato === 429, "rate limit orario esaurito (5/ora per IP)");
     test.skip(
