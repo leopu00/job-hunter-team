@@ -95,6 +95,26 @@ const savedLanguageChoiceByLanguage = {
   hu: "az alkalmazás a következő megnyitásokhoz elmenti",
 } satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
 
+const preselectedEnglishByLanguage = {
+  it: "English è preselezionato",
+  en: "English is preselected",
+  es: "English está preseleccionado",
+  fr: "English est présélectionné",
+  de: "English ist vorausgewählt",
+  pt: "English vem pré-selecionado",
+  hu: "English van előre kijelölve",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
+const titleAfterLanguageChoiceByLanguage = {
+  it: "schermata iniziale",
+  en: "title screen",
+  es: "pantalla inicial",
+  fr: "écran de départ",
+  de: "Startbildschirm",
+  pt: "ecrã inicial",
+  hu: "kezdőképernyő",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
 const nameAfterLanguageChoiceByLanguage = {
   it: "Poi inserisci il nome",
   en: "Then add your name",
@@ -103,6 +123,76 @@ const nameAfterLanguageChoiceByLanguage = {
   de: "Gib danach deinen Namen",
   pt: "Depois acrescenta o teu nome",
   hu: "Ezután add meg a nevedet",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
+const officeAfterNameByLanguage = {
+  it: "entra nell'ufficio",
+  en: "enter the office",
+  es: "entra en la oficina",
+  fr: "entrez dans le bureau",
+  de: "betritt das Büro",
+  pt: "entra no escritório",
+  hu: "lépj be az irodába",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
+const desktopPreselectedByLanguage = {
+  it: "Desktop è già selezionato",
+  en: "Desktop is already selected",
+  es: "Desktop ya está seleccionado",
+  fr: "Desktop est déjà sélectionné",
+  de: "Desktop ist bereits ausgewählt",
+  pt: "Desktop já está selecionado",
+  hu: "Desktop már ki van jelölve",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
+const platformClickStartsDownloadByLanguage = {
+  it: "clicca una volta macOS, Windows o Linux",
+  en: "click macOS, Windows, or Linux once",
+  es: "haz clic una vez en macOS, Windows o Linux",
+  fr: "cliquez une fois sur macOS, Windows ou Linux",
+  de: "Klicke einmal auf macOS, Windows oder Linux",
+  pt: "clica uma vez em macOS, Windows ou Linux",
+  hu: "kattints egyszer a macOS, Windows vagy Linux lehetőségre",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
+const outdatedDesktopChoiceByLanguage = {
+  it: "scegli Desktop",
+  en: "choose Desktop",
+  es: "elige Desktop",
+  fr: "choisissez Desktop",
+  de: "wähle Desktop",
+  pt: "escolhe Desktop",
+  hu: "válaszd a Desktop",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
+const linuxExtractionByLanguage = {
+  it: "estrai job-hunter-team-linux-x64.tar.gz",
+  en: "extract job-hunter-team-linux-x64.tar.gz",
+  es: "extrae job-hunter-team-linux-x64.tar.gz",
+  fr: "extrayez job-hunter-team-linux-x64.tar.gz",
+  de: "entpacke unter Linux job-hunter-team-linux-x64.tar.gz",
+  pt: "extrai job-hunter-team-linux-x64.tar.gz",
+  hu: "csomagold ki a job-hunter-team-linux-x64.tar.gz",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
+const executablePermissionByLanguage = {
+  it: "abilita il permesso di esecuzione",
+  en: "enable its executable permission",
+  es: "activa su permiso de ejecución",
+  fr: "activez son autorisation d'exécution",
+  de: "aktiviere bei Bedarf seine Ausführungsberechtigung",
+  pt: "ativa a respetiva permissão de execução",
+  hu: "engedélyezd a futtatási jogosultságát",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
+const executableRunAfterPermissionByLanguage = {
+  it: "prima di avviarlo",
+  en: "before running it",
+  es: "antes de ejecutarlo",
+  fr: "avant de le lancer",
+  de: "bevor du es ausführst",
+  pt: "antes de o executar",
+  hu: "mielőtt futtatnád",
 } satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
 
 describe("cataloghi dei tutorial pubblici", () => {
@@ -146,18 +236,52 @@ describe("cataloghi dei tutorial pubblici", () => {
       expect(game.preferVideo).toBeTruthy();
       expect(game.videoAvailable).toBeTruthy();
 
+      const download = game.setupSteps[0]?.body ?? "";
+      expect(download).toContain(desktopPreselectedByLanguage[language]);
+      expect(download).toContain(
+        platformClickStartsDownloadByLanguage[language],
+      );
+      expect(download).not.toContain(outdatedDesktopChoiceByLanguage[language]);
+
+      const openDownload = game.setupSteps[1]?.body ?? "";
+      expect(openDownload).toContain(linuxExtractionByLanguage[language]);
+      expect(openDownload).toContain(executablePermissionByLanguage[language]);
+      expect(openDownload).toContain(
+        executableRunAfterPermissionByLanguage[language],
+      );
+      expect(
+        openDownload.indexOf(linuxExtractionByLanguage[language]),
+      ).toBeLessThan(
+        openDownload.indexOf(executablePermissionByLanguage[language]),
+      );
+      expect(
+        openDownload.indexOf(executablePermissionByLanguage[language]),
+      ).toBeLessThan(
+        openDownload.indexOf(executableRunAfterPermissionByLanguage[language]),
+      );
+
       const enterOffice = game.setupSteps[2]?.body;
       expect(enterOffice).toContain(
         firstLaunchLanguageChoiceByLanguage[language],
       );
       expect(enterOffice).toContain(requiredLanguageChoiceByLanguage[language]);
-      expect(enterOffice).toContain("English");
+      expect(enterOffice).toContain(preselectedEnglishByLanguage[language]);
       expect(enterOffice).toContain(savedLanguageChoiceByLanguage[language]);
       const enterOfficeText = enterOffice ?? "";
       expect(
         enterOfficeText.indexOf(firstLaunchLanguageChoiceByLanguage[language]),
       ).toBeLessThan(
+        enterOfficeText.indexOf(titleAfterLanguageChoiceByLanguage[language]),
+      );
+      expect(
+        enterOfficeText.indexOf(titleAfterLanguageChoiceByLanguage[language]),
+      ).toBeLessThan(
         enterOfficeText.indexOf(nameAfterLanguageChoiceByLanguage[language]),
+      );
+      expect(
+        enterOfficeText.indexOf(nameAfterLanguageChoiceByLanguage[language]),
+      ).toBeLessThan(
+        enterOfficeText.indexOf(officeAfterNameByLanguage[language]),
       );
 
       expect(web.intro).toBeTruthy();

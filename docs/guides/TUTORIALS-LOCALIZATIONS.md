@@ -28,15 +28,16 @@ variare il risultato, ma non è un'operazione da cinque minuti.
 #### Configura il team
 
 1. **Scarica l'app desktop nativa.** Vai su
-   [jobhunterteam.ai/download](https://jobhunterteam.ai/download), scegli
-   **Desktop**, poi macOS, Windows o Linux. La pagina punta sempre alla release
-   corrente per quella piattaforma.
+   [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
+   è già selezionato: clicca una volta macOS, Windows o Linux per avviare il
+   download della release corrente per quella piattaforma.
 2. **Apri il download per il tuo sistema.** Su Windows avvia
    `job-hunter-team.exe`; su macOS estrai `job-hunter-team.zip` e apri l'app;
-   su Linux estrai `job-hunter-team-linux-x64.tar.gz` e avvia
-   `job-hunter-team.x86_64`. Windows e Linux possono mostrare un avviso:
-   prosegui solo se il download viene dal sito ufficiale o dalla release
-   collegata.
+   su Linux estrai `job-hunter-team-linux-x64.tar.gz`, verifica che
+   `job-hunter-team.x86_64` sia autorizzato all'esecuzione e, se necessario,
+   abilita il permesso di esecuzione prima di avviarlo. Windows e Linux possono
+   mostrare un avviso: prosegui solo se il download viene dal sito ufficiale o
+   dalla release collegata.
 3. **Entra nell'ufficio.** Al primo avvio, scegli e conferma la lingua
    dell'interfaccia prima della schermata iniziale: devi confermare la scelta,
    English è preselezionato e l'app la salva per le aperture successive. Poi
@@ -202,14 +203,16 @@ no es una tarea de cinco minutos.
 #### Configura el equipo
 
 1. **Descarga la aplicación de escritorio nativa.** Ve a
-   [jobhunterteam.ai/download](https://jobhunterteam.ai/download), elige
-   **Desktop** y luego macOS, Windows o Linux. La página siempre enlaza la
-   versión actual para esa plataforma.
+   [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
+   ya está seleccionado: haz clic una vez en macOS, Windows o Linux para iniciar
+   la descarga de la versión actual para esa plataforma.
 2. **Abre la descarga para tu sistema.** En Windows ejecuta
    `job-hunter-team.exe`; en macOS descomprime `job-hunter-team.zip` y abre la
-   aplicación; en Linux extrae `job-hunter-team-linux-x64.tar.gz` y ejecuta
-   `job-hunter-team.x86_64`. Windows y Linux pueden mostrar un aviso: continúa
-   solo si descargaste desde el sitio oficial o desde la versión enlazada.
+   aplicación; en Linux extrae `job-hunter-team-linux-x64.tar.gz`, comprueba
+   que `job-hunter-team.x86_64` tenga permiso para ejecutarse y, si hace falta,
+   activa su permiso de ejecución antes de ejecutarlo. Windows y Linux pueden
+   mostrar un aviso: continúa solo si descargaste desde el sitio oficial o
+   desde la versión enlazada.
 3. **Entra en la oficina.** En el primer inicio, elige y confirma el idioma de
    la interfaz antes de la pantalla inicial: debes confirmar la elección,
    English está preseleccionado y la aplicación la guarda para las siguientes
@@ -379,16 +382,17 @@ Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.
 #### Configurez l'équipe
 
 1. **Téléchargez l'application de bureau native.** Allez sur
-   [jobhunterteam.ai/download](https://jobhunterteam.ai/download), choisissez
-   **Desktop**, puis macOS, Windows ou Linux. La page renvoie toujours vers la
-   version actuelle pour cette plateforme.
+   [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
+   est déjà sélectionné : cliquez une fois sur macOS, Windows ou Linux pour
+   lancer le téléchargement de la version actuelle pour cette plateforme.
 2. **Ouvrez le téléchargement pour votre système.** Sous Windows, lancez
    `job-hunter-team.exe` ; sous macOS, décompressez `job-hunter-team.zip` et
    ouvrez l'application ; sous Linux, extrayez
-   `job-hunter-team-linux-x64.tar.gz` puis lancez
-   `job-hunter-team.x86_64`. Windows et Linux peuvent afficher un avertissement
-   : continuez uniquement si le téléchargement vient du site officiel ou de la
-   version liée.
+   `job-hunter-team-linux-x64.tar.gz`, vérifiez que
+   `job-hunter-team.x86_64` est autorisé à s'exécuter et, si nécessaire,
+   activez son autorisation d'exécution avant de le lancer. Windows et Linux
+   peuvent afficher un avertissement : continuez uniquement si le téléchargement
+   vient du site officiel ou de la version liée.
 3. **Entrez dans le bureau.** Lors du premier lancement, choisissez et
    confirmez la langue de l'interface avant l'écran de départ : vous devez
    confirmer ce choix, English est présélectionné et l'application le mémorise
@@ -564,15 +568,16 @@ Fünf-Minuten-Aufgabe.
 #### Richte das Team ein
 
 1. **Lade die native Desktop-App herunter.** Gehe zu
-   [jobhunterteam.ai/download](https://jobhunterteam.ai/download), wähle
-   **Desktop** und dann macOS, Windows oder Linux. Die Seite verweist stets auf
-   die aktuelle Version für diese Plattform.
+   [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
+   ist bereits ausgewählt: Klicke einmal auf macOS, Windows oder Linux, um den
+   Download der aktuellen Version für diese Plattform zu starten.
 2. **Öffne den Download für dein System.** Starte unter Windows
    `job-hunter-team.exe`; entpacke unter macOS `job-hunter-team.zip` und öffne
-   die App; entpacke unter Linux `job-hunter-team-linux-x64.tar.gz` und starte
-   `job-hunter-team.x86_64`. Windows und Linux können eine Warnung anzeigen:
-   fahre nur fort, wenn der Download von der offiziellen Website oder der
-   verlinkten Version stammt.
+   die App; entpacke unter Linux `job-hunter-team-linux-x64.tar.gz`, prüfe, ob
+   `job-hunter-team.x86_64` ausgeführt werden darf, und aktiviere bei Bedarf
+   seine Ausführungsberechtigung, bevor du es ausführst. Windows und Linux
+   können eine Warnung anzeigen: fahre nur fort, wenn der Download von der
+   offiziellen Website oder der verlinkten Version stammt.
 3. **Betritt das Büro.** Wähle und bestätige beim ersten Start vor dem
    Startbildschirm die Oberflächensprache: Du musst die Auswahl bestätigen,
    English ist vorausgewählt und die App speichert sie für spätere Starts. Gib
@@ -749,14 +754,16 @@ de cinco minutos.
 #### Configura a equipa
 
 1. **Descarrega a aplicação de ambiente de trabalho nativa.** Vai a
-   [jobhunterteam.ai/download](https://jobhunterteam.ai/download), escolhe
-   **Desktop** e depois macOS, Windows ou Linux. A página aponta sempre para a
-   versão atual dessa plataforma.
+   [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
+   já está selecionado: clica uma vez em macOS, Windows ou Linux para iniciar
+   a transferência da versão atual para essa plataforma.
 2. **Abre o download para o teu sistema.** No Windows executa
    `job-hunter-team.exe`; no macOS descomprime `job-hunter-team.zip` e abre a
-   aplicação; no Linux extrai `job-hunter-team-linux-x64.tar.gz` e executa
-   `job-hunter-team.x86_64`. Windows e Linux podem mostrar um aviso: avança
-   apenas se o download vier do site oficial ou da versão ligada.
+   aplicação; no Linux extrai `job-hunter-team-linux-x64.tar.gz`, confirma que
+   `job-hunter-team.x86_64` tem permissão para executar e, se necessário,
+   ativa a respetiva permissão de execução antes de o executar. Windows e Linux
+   podem mostrar um aviso: avança apenas se o download vier do site oficial ou
+   da versão ligada.
 3. **Entra no escritório.** No primeiro arranque, escolhe e confirma o idioma
    da interface antes do ecrã inicial: tens de confirmar a escolha, English
    vem pré-selecionado e a aplicação guarda-a para aberturas posteriores.
@@ -925,16 +932,17 @@ eredményt, de ez nem ötperces feladat.
 #### Állítsd be a csapatot
 
 1. **Töltsd le a natív asztali alkalmazást.** Nyisd meg a
-   [jobhunterteam.ai/download](https://jobhunterteam.ai/download) oldalt,
-   válaszd a **Desktop**, majd a macOS, Windows vagy Linux lehetőséget. Az oldal
-   mindig az adott platform aktuális kiadására mutat.
+   [jobhunterteam.ai/download](https://jobhunterteam.ai/download) oldalt. A
+   **Desktop** már ki van jelölve: kattints egyszer a macOS, Windows vagy Linux
+   lehetőségre az adott platform aktuális kiadásának letöltéséhez.
 2. **Nyisd meg a rendszeredhez való letöltést.** Windowson futtasd a
    `job-hunter-team.exe` fájlt; macOS-en csomagold ki a
    `job-hunter-team.zip` fájlt és nyisd meg az alkalmazást; Linuxon csomagold
-   ki a `job-hunter-team-linux-x64.tar.gz` fájlt, majd indítsd el a
-   `job-hunter-team.x86_64` fájlt. Windows és Linux figyelmeztetést jeleníthet
-   meg: csak akkor folytasd, ha a letöltés a hivatalos oldalról vagy a hivatkozott
-   kiadásból származik.
+   ki a `job-hunter-team-linux-x64.tar.gz` fájlt, ellenőrizd, hogy a
+   `job-hunter-team.x86_64` fájl futtatható-e, és ha kell, engedélyezd a
+   futtatási jogosultságát, mielőtt futtatnád. Windows és Linux figyelmeztetést
+   jeleníthet meg: csak akkor folytasd, ha a letöltés a hivatalos oldalról vagy
+   a hivatkozott kiadásból származik.
 3. **Lépj be az irodába.** Első indításkor a kezdőképernyő előtt válaszd ki és
    erősítsd meg a felület nyelvét: meg kell erősítened a választást, az English
    van előre kijelölve, és az alkalmazás a következő megnyitásokhoz elmenti.

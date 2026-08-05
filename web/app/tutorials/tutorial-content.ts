@@ -47,11 +47,11 @@ const GAME_SETUP = {
     setupSteps: [
       {
         title: "Download the native desktop app",
-        body: "Open the Download page at jobhunterteam.ai/download, choose Desktop, then select macOS, Windows, or Linux. It always links to the current release for that platform.",
+        body: "Open the Download page at jobhunterteam.ai/download. Desktop is already selected: click macOS, Windows, or Linux once to start the current release download for that platform.",
       },
       {
         title: "Open the download",
-        body: "On Windows run job-hunter-team.exe; on macOS unzip job-hunter-team.zip and open the app; on Linux extract job-hunter-team-linux-x64.tar.gz and run job-hunter-team.x86_64. Continue through a Windows or Linux warning only when the download came from the official site or its linked release.",
+        body: "On Windows run job-hunter-team.exe; on macOS unzip job-hunter-team.zip and open the app; on Linux extract job-hunter-team-linux-x64.tar.gz, verify that job-hunter-team.x86_64 is allowed to run, and enable its executable permission before running it if needed. Continue through a Windows or Linux warning only when the download came from the official site or its linked release.",
       },
       {
         title: "Enter the office",
@@ -88,11 +88,11 @@ const GAME_SETUP = {
     setupSteps: [
       {
         title: "Scarica l'app desktop nativa",
-        body: "Vai su jobhunterteam.ai/download, scegli Desktop, poi macOS, Windows o Linux. La pagina punta sempre alla release corrente per quella piattaforma.",
+        body: "Vai su jobhunterteam.ai/download. Desktop è già selezionato: clicca una volta macOS, Windows o Linux per avviare il download della release corrente per quella piattaforma.",
       },
       {
         title: "Apri il download",
-        body: "Su Windows avvia job-hunter-team.exe; su macOS estrai job-hunter-team.zip e apri l'app; su Linux estrai job-hunter-team-linux-x64.tar.gz e avvia job-hunter-team.x86_64. Prosegui oltre un avviso di Windows o Linux solo se il download viene dal sito ufficiale o dalla release collegata.",
+        body: "Su Windows avvia job-hunter-team.exe; su macOS estrai job-hunter-team.zip e apri l'app; su Linux estrai job-hunter-team-linux-x64.tar.gz, verifica che job-hunter-team.x86_64 sia autorizzato all'esecuzione e, se necessario, abilita il permesso di esecuzione prima di avviarlo. Prosegui oltre un avviso di Windows o Linux solo se il download viene dal sito ufficiale o dalla release collegata.",
       },
       {
         title: "Entra nell'ufficio",
@@ -129,11 +129,11 @@ const GAME_SETUP = {
     setupSteps: [
       {
         title: "Descarga la aplicación de escritorio nativa",
-        body: "Ve a jobhunterteam.ai/download, elige Desktop y luego macOS, Windows o Linux. La página siempre enlaza la versión actual para esa plataforma.",
+        body: "Ve a jobhunterteam.ai/download. Desktop ya está seleccionado: haz clic una vez en macOS, Windows o Linux para iniciar la descarga de la versión actual para esa plataforma.",
       },
       {
         title: "Abre la descarga",
-        body: "En Windows ejecuta job-hunter-team.exe; en macOS descomprime job-hunter-team.zip y abre la aplicación; en Linux extrae job-hunter-team-linux-x64.tar.gz y ejecuta job-hunter-team.x86_64. Continúa tras un aviso de Windows o Linux solo si descargaste desde el sitio oficial o la versión enlazada.",
+        body: "En Windows ejecuta job-hunter-team.exe; en macOS descomprime job-hunter-team.zip y abre la aplicación; en Linux extrae job-hunter-team-linux-x64.tar.gz, comprueba que job-hunter-team.x86_64 tenga permiso para ejecutarse y, si hace falta, activa su permiso de ejecución antes de ejecutarlo. Continúa tras un aviso de Windows o Linux solo si descargaste desde el sitio oficial o la versión enlazada.",
       },
       {
         title: "Entra en la oficina",
@@ -170,11 +170,11 @@ const GAME_SETUP = {
     setupSteps: [
       {
         title: "Téléchargez l'application de bureau native",
-        body: "Allez sur jobhunterteam.ai/download, choisissez Desktop, puis macOS, Windows ou Linux. La page renvoie toujours vers la version actuelle pour cette plateforme.",
+        body: "Allez sur jobhunterteam.ai/download. Desktop est déjà sélectionné : cliquez une fois sur macOS, Windows ou Linux pour lancer le téléchargement de la version actuelle pour cette plateforme.",
       },
       {
         title: "Ouvrez le téléchargement",
-        body: "Sous Windows, lancez job-hunter-team.exe ; sous macOS, décompressez job-hunter-team.zip et ouvrez l'application ; sous Linux, extrayez job-hunter-team-linux-x64.tar.gz puis lancez job-hunter-team.x86_64. Continuez après un avertissement Windows ou Linux uniquement si le téléchargement vient du site officiel ou de la version liée.",
+        body: "Sous Windows, lancez job-hunter-team.exe ; sous macOS, décompressez job-hunter-team.zip et ouvrez l'application ; sous Linux, extrayez job-hunter-team-linux-x64.tar.gz, vérifiez que job-hunter-team.x86_64 est autorisé à s'exécuter et, si nécessaire, activez son autorisation d'exécution avant de le lancer. Continuez après un avertissement Windows ou Linux uniquement si le téléchargement vient du site officiel ou de la version liée.",
       },
       {
         title: "Entrez dans le bureau",
@@ -211,11 +211,11 @@ const GAME_SETUP = {
     setupSteps: [
       {
         title: "Lade die native Desktop-App herunter",
-        body: "Gehe zu jobhunterteam.ai/download, wähle Desktop und dann macOS, Windows oder Linux. Die Seite verweist stets auf die aktuelle Version für diese Plattform.",
+        body: "Gehe zu jobhunterteam.ai/download. Desktop ist bereits ausgewählt: Klicke einmal auf macOS, Windows oder Linux, um den Download der aktuellen Version für diese Plattform zu starten.",
       },
       {
         title: "Öffne den Download",
-        body: "Starte unter Windows job-hunter-team.exe; entpacke unter macOS job-hunter-team.zip und öffne die App; entpacke unter Linux job-hunter-team-linux-x64.tar.gz und starte job-hunter-team.x86_64. Fahre nach einer Windows- oder Linux-Warnung nur fort, wenn der Download von der offiziellen Website oder der verlinkten Version stammt.",
+        body: "Starte unter Windows job-hunter-team.exe; entpacke unter macOS job-hunter-team.zip und öffne die App; entpacke unter Linux job-hunter-team-linux-x64.tar.gz, prüfe, ob job-hunter-team.x86_64 ausgeführt werden darf, und aktiviere bei Bedarf seine Ausführungsberechtigung, bevor du es ausführst. Fahre nach einer Windows- oder Linux-Warnung nur fort, wenn der Download von der offiziellen Website oder der verlinkten Version stammt.",
       },
       {
         title: "Betritt das Büro",
@@ -252,11 +252,11 @@ const GAME_SETUP = {
     setupSteps: [
       {
         title: "Descarrega a aplicação de ambiente de trabalho nativa",
-        body: "Vai a jobhunterteam.ai/download, escolhe Desktop e depois macOS, Windows ou Linux. A página aponta sempre para a versão atual dessa plataforma.",
+        body: "Vai a jobhunterteam.ai/download. Desktop já está selecionado: clica uma vez em macOS, Windows ou Linux para iniciar a transferência da versão atual para essa plataforma.",
       },
       {
         title: "Abre o download",
-        body: "No Windows executa job-hunter-team.exe; no macOS descomprime job-hunter-team.zip e abre a aplicação; no Linux extrai job-hunter-team-linux-x64.tar.gz e executa job-hunter-team.x86_64. Avança após um aviso de Windows ou Linux apenas se o download vier do site oficial ou da versão ligada.",
+        body: "No Windows executa job-hunter-team.exe; no macOS descomprime job-hunter-team.zip e abre a aplicação; no Linux extrai job-hunter-team-linux-x64.tar.gz, confirma que job-hunter-team.x86_64 tem permissão para executar e, se necessário, ativa a respetiva permissão de execução antes de o executar. Avança após um aviso de Windows ou Linux apenas se o download vier do site oficial ou da versão ligada.",
       },
       {
         title: "Entra no escritório",
@@ -293,11 +293,11 @@ const GAME_SETUP = {
     setupSteps: [
       {
         title: "Töltsd le a natív asztali alkalmazást",
-        body: "Nyisd meg a jobhunterteam.ai/download oldalt, válaszd a Desktop, majd a macOS, Windows vagy Linux lehetőséget. Az oldal mindig az adott platform aktuális kiadására mutat.",
+        body: "Nyisd meg a jobhunterteam.ai/download oldalt. A Desktop már ki van jelölve: kattints egyszer a macOS, Windows vagy Linux lehetőségre az adott platform aktuális kiadásának letöltéséhez.",
       },
       {
         title: "Nyisd meg a letöltést",
-        body: "Windowson futtasd a job-hunter-team.exe fájlt; macOS-en csomagold ki a job-hunter-team.zip fájlt és nyisd meg az alkalmazást; Linuxon csomagold ki a job-hunter-team-linux-x64.tar.gz fájlt, majd indítsd el a job-hunter-team.x86_64 fájlt. Windows- vagy Linux-figyelmeztetés után csak akkor folytasd, ha a letöltés a hivatalos oldalról vagy a hivatkozott kiadásból származik.",
+        body: "Windowson futtasd a job-hunter-team.exe fájlt; macOS-en csomagold ki a job-hunter-team.zip fájlt és nyisd meg az alkalmazást; Linuxon csomagold ki a job-hunter-team-linux-x64.tar.gz fájlt, ellenőrizd, hogy a job-hunter-team.x86_64 fájl futtatható-e, és ha kell, engedélyezd a futtatási jogosultságát, mielőtt futtatnád. Windows- vagy Linux-figyelmeztetés után csak akkor folytasd, ha a letöltés a hivatalos oldalról vagy a hivatkozott kiadásból származik.",
       },
       {
         title: "Lépj be az irodába",
