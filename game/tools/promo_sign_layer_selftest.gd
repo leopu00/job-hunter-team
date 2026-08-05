@@ -1,7 +1,9 @@
 extends SceneTree
 ## La veste inglese del set promo sostituisce DepartmentDressing con un nodo
 ## nuovo. Il nodo deve restare sotto il World y-sortato: una targa sopra un
-## agente in cammino gli taglia visivamente la testa nel raw.
+## agente in cammino gli taglia visivamente la testa nel raw. Lo stesso set
+## sintetico deve togliere il badge demo, che resta invece obbligatorio nella
+## UI normale.
 ##
 ## Esecuzione:
 ##   godot --headless --path game --script res://tools/promo_sign_layer_selftest.gd
@@ -22,6 +24,11 @@ func _run() -> void:
 	_check("la targa inglese resta sotto il mondo degli agenti",
 			signs.z_index < world.z_index,
 			"signs=%d world=%d" % [signs.z_index, world.z_index])
+	var director_source := FileAccess.get_file_as_string("res://tools/promo_director.gd")
+	_check("il set promo rimuove il badge demo soltanto dalla sua scenografia",
+			director_source.contains("func _hide_simulation_badge") \
+			and director_source.contains("find_children(\"*\", \"SimBadge\", true, false)") \
+			and director_source.contains("_hide_simulation_badge()"))
 	world.free()
 	signs.free()
 	if _fails.is_empty():
