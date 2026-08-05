@@ -24,7 +24,6 @@ import tempfile
 import unicodedata
 from typing import Any, Iterable
 
-
 G16_DYNAMIC_SSIM_MIN = 0.9955
 PSNR_MIN_DB = 46.5
 OCR_RECALL_MIN = 1.0
@@ -151,7 +150,7 @@ def video_stream(probe_data: dict[str, Any]) -> dict[str, Any]:
 
 
 def timeline_metrics(
-    frames_probe: dict[str, Any]
+    frames_probe: dict[str, Any],
 ) -> tuple[list[float], float, int, int]:
     raw_frames = frames_probe.get("frames")
     if not isinstance(raw_frames, list) or not raw_frames:

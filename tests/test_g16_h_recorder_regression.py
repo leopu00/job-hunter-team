@@ -13,7 +13,6 @@ import sys
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HARNESS = REPO_ROOT / "scripts" / "g16-h-recorder-regression.py"
 WRAPPER = REPO_ROOT / "scripts" / "run-g16-h-recorder-regression.sh"
