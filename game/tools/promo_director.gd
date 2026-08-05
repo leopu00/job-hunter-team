@@ -952,6 +952,7 @@ func _silence_state_tags() -> void:
 ## reparto, insegne di passaggio) e spegne il CTA del setup: il ciak mostra
 ## un ufficio già configurato. Tutto avviene solo su questa run.
 func _dress_set_english() -> void:
+	_hide_simulation_badge()
 	var stage: Node = _office._stage
 	for child in stage.get_children():
 		if child is DepartmentDressing:
@@ -973,6 +974,15 @@ func _dress_set_english() -> void:
 			# asincrono e _on_setup_status lo riaccenderebbe a metà ripresa
 			# (il guard is_instance_valid lì dentro copre il nodo rimosso).
 			child._setup_cta.queue_free()
+
+
+## Il badge è obbligatorio nel prodotto quando i dati sono demo. Il set promo
+## è invece una scenografia sintetica dichiarata dal suo manifest: lasciarlo
+## nel frame lo farebbe sembrare un dato di prodotto, non un asset animatic.
+## Non tocca mai la normale UI, perché questa funzione esiste solo per JHT_PROMO.
+func _hide_simulation_badge() -> void:
+	for badge in _office.find_children("*", "SimBadge", true, false):
+		badge.queue_free()
 
 
 ## Targa inglese sopra lo scaffale output: copre la targa «CV PRONTI»
