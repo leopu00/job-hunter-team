@@ -53,7 +53,13 @@ test.describe("shell pubblico tutorial e trailer", () => {
     await expect(page.locator("#game")).toBeVisible();
     await expect(page.locator("#web")).toBeVisible();
     await expect(
-      page.locator("#game").getByText("Before you begin"),
+      page.locator("#game").getByText("Plan the setup"),
+    ).toBeVisible();
+    await expect(
+      page.locator("#game").getByText("Set up the team"),
+    ).toBeVisible();
+    await expect(
+      page.locator("#game").getByText("Download the native desktop app"),
     ).toBeVisible();
     await expect(
       page.locator("#game").getByText("Meet the office"),
