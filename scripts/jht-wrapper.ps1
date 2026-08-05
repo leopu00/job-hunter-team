@@ -30,6 +30,11 @@
 
 $ErrorActionPreference = 'Stop'
 
+# Capacita' letta dal client desktop prima di invocare `upgrade --check --json`.
+# I wrapper storici non la espongono e richiedono il bootstrap temporaneo del
+# wrapper production con WrapperPath ancorato al comando host originale.
+$JHT_UPGRADE_PROTOCOL = 1
+
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
 $RuntimeDir  = if ($env:JHT_RUNTIME_DIR)    { $env:JHT_RUNTIME_DIR }    else { Join-Path $env:USERPROFILE '.jht\runtime' }
 $ComposeFile = if ($env:JHT_COMPOSE_FILE)   { $env:JHT_COMPOSE_FILE }   else { Join-Path $RuntimeDir 'docker-compose.yml' }
