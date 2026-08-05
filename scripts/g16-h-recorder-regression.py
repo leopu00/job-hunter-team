@@ -396,6 +396,15 @@ def mapping(value: Any, label: str) -> dict[str, Any]:
     return value
 
 
+def nonnegative_integer(value: Any) -> int:
+    """Use malformed diagnostic values as a failed check, never a traceback."""
+    return (
+        value
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        else 0
+    )
+
+
 def sidecar_contract(
     sidecar: dict[str, Any], video: Path, reference: Path
 ) -> dict[str, Any]:
@@ -417,16 +426,25 @@ def sidecar_contract(
         source = seams.get("pipewiresrc")
         fixed_i420 = seams.get("videorate")
         if isinstance(source, dict):
-            source_buffers = max(source_buffers, int(source.get("buffers") or 0))
+            source_buffers = max(
+                source_buffers, nonnegative_integer(source.get("buffers"))
+            )
             source_changes = max(
-                source_changes, int(source.get("content_changes") or 0)
+                source_changes, nonnegative_integer(source.get("content_changes"))
             )
         if isinstance(fixed_i420, dict):
             fixed_i420_buffers = max(
-                fixed_i420_buffers, int(fixed_i420.get("buffers") or 0)
+                fixed_i420_buffers, nonnegative_integer(fixed_i420.get("buffers"))
             )
 
     expected_reference_bytes = WIDTH * HEIGHT * 3 // 2
+    portal_stream = recorder.get("portal_stream")
+    portal_properties = (
+        portal_stream.get("properties") if isinstance(portal_stream, dict) else None
+    )
+    portal_node_id = (
+        portal_stream.get("node_id") if isinstance(portal_stream, dict) else None
+    )
     return {
         "geometry": sidecar.get("width") == WIDTH
         and sidecar.get("height") == HEIGHT
@@ -447,6 +465,16 @@ def sidecar_contract(
         and recorder.get("min_keyframe_distance") == MAX_GOP_FRAMES
         and recorder.get("scene_cut") == 0
         and recorder.get("container") == "Matroska",
+        "portal_provenance": recorder.get("implementation")
+        == "xdg-desktop-portal window + PipeWire/GStreamer"
+        and "provider" not in recorder
+        and "mutter_stream" not in recorder
+        and isinstance(portal_node_id, int)
+        and not isinstance(portal_node_id, bool)
+        and portal_node_id > 0
+        and isinstance(portal_properties, dict)
+        and portal_properties.get("source_type") == 2
+        and portal_properties.get("size") == [WIDTH, HEIGHT],
         "reference": reference_data.get("format") == "I420"
         and reference_data.get("width") == WIDTH
         and reference_data.get("height") == HEIGHT
@@ -593,6 +621,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         manifest_checks = manifest_contract(manifest)
         add_check(checks, "sidecar_geometry", bool(sidecar_checks["geometry"]))
         add_check(checks, "portal_window_surface", bool(sidecar_checks["recorder"]))
+        add_check(
+            checks, "portal_provenance", bool(sidecar_checks["portal_provenance"])
+        )
         add_check(checks, "pre_x264_i420_reference", bool(sidecar_checks["reference"]))
         add_check(
             checks,
