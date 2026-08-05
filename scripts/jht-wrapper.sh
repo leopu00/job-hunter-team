@@ -25,6 +25,12 @@
 
 set -euo pipefail
 
+# Capacita' letta dal client desktop prima di fidarsi del contratto
+# `upgrade --check --json`. I wrapper storici che non la espongono possono
+# trattare quei flag come un apply: il client deve allora avviare una copia
+# temporanea del wrapper production, con JHT_WRAPPER_PATH ancorato all'host.
+JHT_UPGRADE_PROTOCOL=1
+
 CONTAINER="${JHT_CONTAINER_NAME:-jht}"
 RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
 COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
