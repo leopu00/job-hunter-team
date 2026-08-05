@@ -5,6 +5,8 @@ export const ALLOWED_RECORDING_ROUTES = new Set([
   "/dashboard",
   "/messages",
   SYNTHETIC_POSITION_RECORDING_ROUTE,
+  "/swipe",
+  "/team",
 ]);
 export const SYNTHETIC_POSITION_SEEN_URL =
   "http://localhost:3008/api/positions/seen";
