@@ -325,6 +325,15 @@ func _ready() -> void:
 		SetupService.status_changed.connect(_on_setup_status_changed)
 		_on_setup_status_changed(SetupService.status)
 
+	if TutorialHarness.enabled():
+		var guide := _tour_guide_npc()
+		TutorialHarness.mark("OFFICE_LOAD_END", {
+			"assistant_clickable": guide != null and guide.visible,
+			"roster": "showroom_inactive" if BackendBus.agents.is_empty() else "backend",
+		})
+		if TutorialHarness.auto_test():
+			_tutorial_harness_finish_test.call_deferred()
+
 	# ── Modalità test/preview ────────────────────────────────────────────
 	# I selftest e i ganci JHT_* vivono in un nodo a parte, che nasce solo se
 	# almeno una di quelle variabili è valorizzata: in una build normale il
@@ -339,6 +348,40 @@ func _ready() -> void:
 	# e chat con testi inventati in inglese, per --write-movie. Nessun dato reale.
 	if OS.get_environment("JHT_PROMO") != "":
 		add_child(load("res://tools/promo_director.gd").new())
+
+
+func _tutorial_harness_finish_test() -> void:
+	await get_tree().process_frame
+	var guide := _tour_guide_npc()
+	# Attraversa lo stesso dispatch della FreeCamera: non basta che il nodo
+	# esista, il primo click dell'utente deve aprire davvero il benvenuto.
+	if guide != null:
+		_on_world_click(guide.global_position + Vector2(0, -20))
+	await get_tree().process_frame
+	var assistant_clickable := Game.dialogue_active
+	var all_inactive := BackendBus.agents.is_empty()
+	for agent in agents:
+		all_inactive = all_inactive and agent.uid == "" and agent.backend_status == "idle"
+	# Headless crea un framebuffer quadrato anche quando il progetto è 16:9;
+	# il take GUI usa invece queste dimensioni native dichiarate dal progetto.
+	var configured_size := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width", 0)),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height", 0)))
+	var ratio_ok := configured_size.y > 0.0 \
+			and absf(configured_size.x / configured_size.y - 16.0 / 9.0) < 0.01
+	var markers_ok := TutorialHarness.saw("LANGUAGE_DEFAULT_VISIBLE") \
+			and TutorialHarness.saw("LANGUAGE_CONFIRMED") \
+			and TutorialHarness.saw("NAME_SAVED") \
+			and TutorialHarness.saw("OFFICE_LOAD_START") \
+			and TutorialHarness.saw("OFFICE_LOAD_END")
+	var ok: bool = guide != null and guide.visible and assistant_clickable \
+			and all_inactive and ratio_ok and markers_ok
+	if not ok:
+		print("TUTORIAL-16-9-HARNESS-STATE guide=%s click=%s inactive=%s ratio=%s configured=%s markers=%s" % [
+			guide != null and guide.visible, assistant_clickable, all_inactive, ratio_ok,
+			configured_size, markers_ok])
+	print("TUTORIAL-16-9-HARNESS-TEST %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
 
 func _on_chat_message(msg: Dictionary) -> void:
 	deliver_chat(msg.get("from", ""), msg.get("to", "all"), msg.get("text", ""))
@@ -1339,8 +1382,11 @@ func _spawn_showroom() -> void:
 		_refresh_tour_markers()
 
 func _on_setup_status_changed(status: Dictionary) -> void:
-	var authenticated := bool(status.get("provider_authenticated", false))
-	var team_running := bool(status.get("team_running", false))
+	# Il take tutorial non può ereditare l'autenticazione o un container della
+	# macchina ospite: lo showroom resta esplicitamente inattivo e cliccabile.
+	var harness_offline := TutorialHarness.enabled()
+	var authenticated := false if harness_offline else bool(status.get("provider_authenticated", false))
+	var team_running := false if harness_offline else bool(status.get("team_running", false))
 	for agent in agents:
 		if agent.uid == "":
 			# Gli NPC senza uid sono guide di showroom, non processi LLM. Prima

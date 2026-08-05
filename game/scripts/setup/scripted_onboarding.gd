@@ -32,6 +32,9 @@ var _provider_test_override := -1
 
 
 func _ready() -> void:
+	TutorialHarness.reset_file_if_requested(_state_path())
+	TutorialHarness.reset_file_if_requested(context_json_path())
+	TutorialHarness.reset_file_if_requested(context_markdown_path())
 	_load_state()
 	for agent in AGENTS:
 		_ensure_started(agent)
@@ -39,8 +42,9 @@ func _ready() -> void:
 	# innescati dagli eventi: chi arriva con provider o container già pronti
 	# (reinstallazione, Claude Code installato prima del gioco) li trova
 	# marcati come fatti invece di restare bloccato su un passo impossibile.
-	SetupService.status_changed.connect(_reconcile_with_status)
-	_reconcile_with_status(SetupService.status)
+	if not TutorialHarness.enabled():
+		SetupService.status_changed.connect(_reconcile_with_status)
+		_reconcile_with_status(SetupService.status)
 
 
 ## Allinea il passo corrente ai prerequisiti già soddisfatti. Idempotente:
@@ -128,6 +132,7 @@ func set_player_name(first: String, last: String) -> void:
 	_draft["first_name"] = clean_first
 	_draft["name"] = (clean_first + " " + clean_last).strip_edges()
 	_save_state()
+	TutorialHarness.mark("NAME_SAVED", {"synthetic": true})
 
 
 func player_first_name() -> String:
@@ -161,11 +166,13 @@ func answers() -> Array:
 
 
 func context_json_path() -> String:
-	return ProjectSettings.globalize_path(CONTEXT_JSON_PATH)
+	var path := TutorialHarness.CONTEXT_JSON if TutorialHarness.enabled() else CONTEXT_JSON_PATH
+	return ProjectSettings.globalize_path(path)
 
 
 func context_markdown_path() -> String:
-	return ProjectSettings.globalize_path(CONTEXT_MARKDOWN_PATH)
+	var path := TutorialHarness.CONTEXT_MARKDOWN if TutorialHarness.enabled() else CONTEXT_MARKDOWN_PATH
+	return ProjectSettings.globalize_path(path)
 
 
 func llm_context() -> Dictionary:
@@ -245,6 +252,8 @@ func live_text_available(value: String) -> bool:
 
 
 func provider_authenticated() -> bool:
+	if TutorialHarness.enabled():
+		return false
 	if _provider_test_override >= 0:
 		return _provider_test_override == 1
 	return bool(SetupService.status.get("provider_authenticated", false))
@@ -956,32 +965,34 @@ func _save_state() -> void:
 	cfg.set_value("guided", "completed", JSON.stringify(_completed))
 	cfg.set_value("guided", "reconciled", JSON.stringify(_reconciled))
 	cfg.set_value("guided", "provider", _provider_choice)
-	var err := cfg.save(SAVE_PATH)
+	var err := cfg.save(_state_path())
 	if err != OK:
 		push_warning("Impossibile salvare onboarding: %s" % error_string(err))
 	_export_context()
 
 
 func _export_context() -> void:
-	var json_file := FileAccess.open(CONTEXT_JSON_PATH, FileAccess.WRITE)
+	var json_path := TutorialHarness.CONTEXT_JSON if TutorialHarness.enabled() else CONTEXT_JSON_PATH
+	var markdown_path := TutorialHarness.CONTEXT_MARKDOWN if TutorialHarness.enabled() else CONTEXT_MARKDOWN_PATH
+	var json_file := FileAccess.open(json_path, FileAccess.WRITE)
 	if json_file:
 		json_file.store_string(JSON.stringify(llm_context(), "  "))
 		json_file.close()
 	else:
-		push_warning("Impossibile esportare " + CONTEXT_JSON_PATH)
-	var md_file := FileAccess.open(CONTEXT_MARKDOWN_PATH, FileAccess.WRITE)
+		push_warning("Impossibile esportare " + json_path)
+	var md_file := FileAccess.open(markdown_path, FileAccess.WRITE)
 	if md_file:
 		md_file.store_string(llm_context_text() + "\n")
 		md_file.close()
 	else:
-		push_warning("Impossibile esportare " + CONTEXT_MARKDOWN_PATH)
+		push_warning("Impossibile esportare " + markdown_path)
 
 
 func _load_state() -> void:
 	if OS.get_environment("JHT_GUIDED_TEST") == "1":
 		return
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
+	if cfg.load(_state_path()) != OK:
 		return
 	_steps = _json_dict(str(cfg.get_value("guided", "steps", "{}")), _steps)
 	_history = _json_dict(str(cfg.get_value("guided", "history", "{}")), {})
@@ -992,6 +1003,10 @@ func _load_state() -> void:
 	_completed = _json_dict(str(cfg.get_value("guided", "completed", "{}")), {})
 	_reconciled = _json_dict(str(cfg.get_value("guided", "reconciled", "{}")), {})
 	_provider_choice = str(cfg.get_value("guided", "provider", ""))
+
+
+func _state_path() -> String:
+	return TutorialHarness.ONBOARDING_CFG if TutorialHarness.enabled() else SAVE_PATH
 
 
 static func _json_dict(raw: String, fallback: Dictionary) -> Dictionary:
