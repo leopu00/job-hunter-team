@@ -114,6 +114,10 @@ func _test_v3_director_contract() -> void:
 			and source.contains("_hide_simulation_badge()")
 			and source.contains("_silence_state_tags()"),
 			"le clip V3 riusano la superficie product-only")
+	_check(source.contains("func _v3_silence_quest_markers()")
+			and source.contains("agent.set_story_marker(false)")
+			and source.contains("if _v3_active:"),
+			"i marker onboarding non rientrano nei frame V3")
 	_check(source.contains("_track_target = assistant")
 			and source.contains("V3_ASSISTANT_WALK_CAMERA_OFFSET")
 			and source.contains("_mount_camera(assistant.global_position + _track_offset"),

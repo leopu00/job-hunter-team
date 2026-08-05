@@ -309,6 +309,7 @@ var _track_offset := Vector2.ZERO
 var _review_role := ""
 var _review_frame_zero := 0
 var _review_shutter: CanvasLayer
+var _v3_active := false
 ## Inseguimento morbido: a 30 fps un lerp 0.08 tiene il soggetto centrato
 ## senza scatti quando cambia direzione (carrellata, non ping-pong).
 const TRACK_LERP := 0.08
@@ -317,6 +318,7 @@ const TRACK_LERP := 0.08
 func _ready() -> void:
 	_office = get_parent()
 	var mode := OS.get_environment("JHT_PROMO")
+	_v3_active = mode in ["team-welcome", "assistant-intro", "assistant-walk-right"]
 	# Movie Maker registra dal bootstrap. Sul profilo live teniamo chiusa una
 	# semplice tendina nera finche' il data-plane non e' pronto: nel raw non
 	# entra mai un frame intermedio col warning, che resta comunque intatto e
@@ -351,6 +353,12 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	if _v3_active:
+		# SetupService puo' pubblicare il suo primo stato dopo _dress_promo_set:
+		# l'handler normale riaccende allora i diamanti del tour showroom. Nel
+		# V3 non sono UI del prodotto da comporre, quindi li si spegne a ogni
+		# frame della sola regia e non nella scena Office generale.
+		_v3_silence_quest_markers()
 	if _track_cam and is_instance_valid(_track_target):
 		var goal: Vector2 = _track_target.global_position + _track_offset
 		_track_cam.position = _track_cam.position.lerp(goal, TRACK_LERP)
@@ -740,9 +748,16 @@ func _assistant_walk_right_clip() -> void:
 ## in momenti non deterministici. Rimuove anche tutti gli overlay promo.
 func _v3_prepare_office() -> void:
 	_dress_promo_set()
+	_v3_silence_quest_markers()
 	for agent in _office.agents:
 		agent._state_timer = 100000.0
 		agent._bubble_timer = 100000.0
+
+
+func _v3_silence_quest_markers() -> void:
+	for agent in _office.agents:
+		if agent.quest_marker != null:
+			agent.set_story_marker(false)
 
 
 ## La preparazione avviene prima del marker start. L'agente resta un vero
