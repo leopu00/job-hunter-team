@@ -50,6 +50,15 @@ func _run() -> void:
 	rig.set_motion("side", true, "carry")
 	_check("walk a carry conserva fase e cadenza", rig._sprite.frame == 11 * 6 + 5 \
 			and is_equal_approx(rig._fps, 24.0), str(rig._sprite.frame))
+	rig.set_motion("side", true, "walk")
+	rig._t = 5.1 / 24.0
+	rig._update_frame()
+	_check("a 24 fps il ciclo arriva a F05", rig._sprite.frame == 5 * 6 + 5,
+			str(rig._sprite.frame))
+	rig._t = 6.1 / 24.0
+	rig._update_frame()
+	_check("la chiusura F05 a F00 non salta pose", rig._sprite.frame == 5 * 6,
+			str(rig._sprite.frame))
 	rig.free()
 
 	var agent_source := FileAccess.get_file_as_string("res://scripts/characters/agent_npc.gd")
