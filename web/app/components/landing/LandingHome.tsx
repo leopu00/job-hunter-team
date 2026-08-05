@@ -34,10 +34,7 @@ function Hero() {
     // della finestra, quindi il padding orizzontale sta sui soli blocchi
     // di testo (titolo e paragrafo introduttivo).
     <section className="flex flex-col items-center pt-28 pb-12 text-center">
-      <div
-        className="w-full max-w-4xl mx-auto px-6"
-        style={{ animation: "fade-in 0.6s ease both" }}
-      >
+      <div className="w-full max-w-4xl mx-auto px-6">
         <h1 className="w-full text-3xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-[var(--color-white)] leading-[1.1] mb-6">
           Job Hunter <span className="text-[var(--color-green)]">Team</span>
         </h1>
@@ -63,21 +60,14 @@ function Hero() {
           orizzontale) e il body è zoomato (--zoom), che falserebbe il
           calcolo. Il raccordo con la pagina lo fanno le sfumature
           interne a LandingGlobe. */}
-      <div
-        data-landing-globe
-        className="w-full mt-12"
-        style={{ animation: "fade-in 0.8s ease 0.15s both" }}
-      >
+      <div data-landing-globe className="w-full mt-12">
         <LandingGlobe />
       </div>
 
       <TrailerTeaser />
 
       {/* Paragrafo introduttivo — descrive la piattaforma, sotto l'hero. */}
-      <p
-        className="mt-10 max-w-2xl mx-auto px-6 text-[14px] md:text-[16px] text-[var(--color-bright)] leading-relaxed"
-        style={{ animation: "fade-in 0.8s ease 0.3s both" }}
-      >
+      <p className="mt-10 max-w-2xl mx-auto px-6 text-[14px] md:text-[16px] text-[var(--color-bright)] leading-relaxed">
         {t("home_intro")}
       </p>
     </section>
