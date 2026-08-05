@@ -115,6 +115,26 @@ const titleAfterLanguageChoiceByLanguage = {
   hu: "kezdőképernyő",
 } satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
 
+const languageChoiceBeforeTitleByLanguage = {
+  it: "prima della schermata iniziale",
+  en: "before the title screen",
+  es: "antes de la pantalla inicial",
+  fr: "avant l'écran de départ",
+  de: "vor dem Startbildschirm",
+  pt: "antes do ecrã inicial",
+  hu: "a kezdőképernyő előtt",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
+const languageChoiceAfterTitleByLanguage = {
+  it: "dopo la schermata iniziale",
+  en: "after the title screen",
+  es: "después de la pantalla inicial",
+  fr: "après l'écran de départ",
+  de: "nach dem Startbildschirm",
+  pt: "depois do ecrã inicial",
+  hu: "a kezdőképernyő után",
+} satisfies Record<(typeof SUPPORTED_LANGS)[number], string>;
+
 const nameAfterLanguageChoiceByLanguage = {
   it: "Poi inserisci il nome",
   en: "Then add your name",
@@ -267,6 +287,12 @@ describe("cataloghi dei tutorial pubblici", () => {
       expect(enterOffice).toContain(requiredLanguageChoiceByLanguage[language]);
       expect(enterOffice).toContain(preselectedEnglishByLanguage[language]);
       expect(enterOffice).toContain(savedLanguageChoiceByLanguage[language]);
+      expect(enterOffice).toContain(
+        languageChoiceBeforeTitleByLanguage[language],
+      );
+      expect(enterOffice).not.toContain(
+        languageChoiceAfterTitleByLanguage[language],
+      );
       const enterOfficeText = enterOffice ?? "";
       expect(
         enterOfficeText.indexOf(firstLaunchLanguageChoiceByLanguage[language]),
