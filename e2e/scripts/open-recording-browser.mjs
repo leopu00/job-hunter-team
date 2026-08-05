@@ -18,6 +18,7 @@ import {
   ALLOWED_RECORDING_ROUTES,
   createGetOnlyRequestPolicy,
   recordingTarget,
+  SYNTHETIC_POSITION_RECORDING_ROUTE,
 } from "./recording-browser-policy.mjs";
 
 const ALIASES = new Set(["software", "marketing", "finance", "design"]);
@@ -75,7 +76,10 @@ async function main() {
       storageState,
       viewport: null,
     });
-    const getOnly = createGetOnlyRequestPolicy(console.error);
+    const getOnly = createGetOnlyRequestPolicy(
+      console.error,
+      new URL(target).pathname,
+    );
     await context.route("**/*", getOnly.handle);
 
     // Il context non riusa un profilo nativo. La rimozione e' locale alla sua
@@ -99,6 +103,14 @@ async function main() {
     await page.waitForFunction(
       () => document.documentElement.getAttribute("data-theme") === "light",
     );
+    if (new URL(target).pathname === SYNTHETIC_POSITION_RECORDING_ROUTE) {
+      await Promise.race([getOnly.allowedSeenPost, getOnly.violation]);
+      if (getOnly.seenPostCount !== 1) {
+        throw new Error(
+          "marker seen sintetico non osservato esattamente una volta",
+        );
+      }
+    }
 
     console.log(
       `✓ Recording browser pronto: Chromium kiosk su ${new URL(target).pathname} in tema light. Ctrl+C per chiudere.`,
