@@ -34,6 +34,9 @@ const V5_STEPS := [
 const V5_CLOSE_CAMERA := Vector2(1570.0, 760.0)
 const V5_CLOSE_ZOOM := 1.65
 const V5_AGENT_SIDE_CLEARANCE := 110.0
+const V6_REVEAL_EXIT := Vector2(2300.0, 780.0)
+const V6_WORK_ENTRY := Vector2(1250.0, 780.0)
+const V6_WORK_EXIT := Vector2(2400.0, 780.0)
 
 var _fails: Array[String] = []
 
@@ -104,6 +107,16 @@ func _test_real_routes() -> void:
 			_check(x >= V5_AGENT_SIDE_CLEARANCE and x <= 1080.0 - V5_AGENT_SIDE_CLEARANCE,
 					"V5 reveal mantiene intera la silhouette sul lato",
 					"x=%.1f point=%s" % [x, point])
+	_check_route(nav, Vector2(1450.0, 650.0), Vector2(1450.0, 780.0),
+			"V6 reveal avvicina lo Scout su NavGrid")
+	_check_route(nav, Vector2(1450.0, 780.0), V6_REVEAL_EXIT,
+			"V6 reveal porta lo Scout fuori a destra")
+	_check(V6_REVEAL_EXIT.x > 1650.0 + 1080.0 / (2.0 * 1.2),
+			"V6 reveal completa davvero l'uscita dal portrait")
+	_check_route(nav, V6_WORK_ENTRY, V6_WORK_EXIT,
+			"V6 work continua il raccordo verso destra su NavGrid")
+	_check(V6_WORK_EXIT.x > 1830.0 + 1080.0 / (2.0 * 1.2),
+			"V6 work porta il raccordo oltre il bordo destro")
 
 
 func _check_route(nav, from: Vector2, to: Vector2, label: String) -> void:
@@ -173,6 +186,28 @@ func _test_v3_director_contract() -> void:
 			and source.contains("if dressing is DepartmentDressing")
 			and source.contains("agent.aura.visible = false"),
 			"V5 reveal muove Camera2D e AgentNPC reali, non una panoramica statica")
+	for mode in ["v6-dev-reveal", "v6-dev-work"]:
+		_check(source.contains('"%s":' % mode), "mode promo %s registrato" % mode)
+	_check(source.contains("V6_HANDLE_SECONDS := 1.0")
+			and source.contains("V6_REVEAL_PROGRAM_SECONDS := 10.0")
+			and source.contains("V6_WORK_PROGRAM_SECONDS := 6.0"),
+			"V6 rispetta programma e maniglie richiesti da VIDEO")
+	_check(source.contains("func _v6_dev_reveal_clip")
+			and source.contains("func _v6_dev_work_clip")
+			and source.contains("func _v6_pass_and_quit"),
+			"V6 ha due regie distinte e un gate fail-closed")
+	_check(source.contains("Vector2i(1080, 1920)")
+			and source.contains('UIStrings.lang != "en"'),
+			"V6 rifiuta viewport non portrait o lingua non inglese")
+	_check(source.contains("V6_REVEAL_EXIT")
+			and source.contains("V6_WORK_ENTRY")
+			and source.contains("V6_WORK_EXIT")
+			and source.contains('"carry"'),
+			"V6 conserva il match-on-action verso destra")
+	_check(source.contains("V6_WORK_ZOOM := 1.85")
+			and source.contains("V6_WORK_ZOOM_TO := 2.15")
+			and source.contains('not OS.get_environment("JHT_PROMO").begins_with("v6-")'),
+			"V6 WORK stringe sugli agenti e non crea il badge CV READY")
 
 
 func _check(ok: bool, what: String, detail := "") -> void:
