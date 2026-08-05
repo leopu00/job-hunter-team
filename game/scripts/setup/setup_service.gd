@@ -51,6 +51,12 @@ const AUTH_PATHS := {
 ## Immagine di runtime. Il compose usa la stessa variabile: chi vuole provare
 ## un tag diverso esporta JHT_IMAGE e l'app resta coerente con il container.
 const DEFAULT_RUNTIME_IMAGE := "ghcr.io/leopu00/jht:0.3.4"
+## Un host 0.3.3 interpreta anche `upgrade --check --json` come pull + up.
+## Perciò l'app non invoca mai direttamente il wrapper trovato sull'host: prima
+## avvia una copia temporanea del dispatcher production che conosce il
+## protocollo JSON e gli indica il wrapper reale da aggiornare atomically.
+const UPGRADE_BOOTSTRAP_RAW_BASE := "https://raw.githubusercontent.com/leopu00/job-hunter-team/production"
+const UPGRADE_BOOTSTRAP_PROTOCOL := "1"
 
 var status := {
 	"docker_available": false, "docker_running": false,
@@ -1097,42 +1103,119 @@ static func _run_local_upgrade() -> Dictionary:
 	var jht := _host_jht_path()
 	if jht == "":
 		return _upgrade_protocol_failure()
-	if OS.get_name() == "Windows" and (jht.to_lower().ends_with(".cmd") \
-			or jht.to_lower().ends_with(".bat")):
-		return _run_upgrade_json("cmd.exe", PackedStringArray(["/d", "/s", "/c",
-				_local_quote(jht) + " upgrade --json"]))
-	if OS.get_name() == "Windows" and jht.to_lower().ends_with(".ps1"):
-		var powershell := _which("pwsh")
-		if powershell == "":
-			powershell = _which("powershell")
-		return _run_upgrade_json(powershell, PackedStringArray(["-NoProfile",
-				"-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", jht,
-				"upgrade", "--json"]))
-	return _run_upgrade_json(jht, PackedStringArray(["upgrade", "--json"]))
+	return _run_local_bootstrap_upgrade(jht, false)
 
 
 static func _run_local_upgrade_check() -> Dictionary:
 	var jht := _host_jht_path()
 	if jht == "":
 		return _upgrade_protocol_failure()
-	if OS.get_name() == "Windows" and (jht.to_lower().ends_with(".cmd") \
-			or jht.to_lower().ends_with(".bat")):
-		return _run_upgrade_json("cmd.exe", PackedStringArray(["/d", "/s", "/c",
-				_local_quote(jht) + " upgrade --check --json"]))
-	if OS.get_name() == "Windows" and jht.to_lower().ends_with(".ps1"):
-		var powershell := _which("pwsh")
-		if powershell == "":
-			powershell = _which("powershell")
-		return _run_upgrade_json(powershell, PackedStringArray(["-NoProfile",
-				"-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", jht,
-				"upgrade", "--check", "--json"]))
-	return _run_upgrade_json(jht, PackedStringArray(["upgrade", "--check", "--json"]))
+	return _run_local_bootstrap_upgrade(jht, true)
+
+
+## 0.3.3 non ha un controllo versione sicuro: il suo dispatcher ignora le
+## opzioni e promuove subito il runtime. Il bootstrap è quindi anche il primo
+## byte che eseguiamo, sia per check sia per apply. `JHT_WRAPPER_PATH` resta
+## l'originale: il wrapper production aggiorna proprio quello (e compose), non
+## la copia in /tmp. `JHT_RAW_BASE` fissato evita un vecchio override di shell
+## verso un branch inatteso durante un'azione di release.
+static func _run_local_bootstrap_upgrade(jht: String, check_only: bool) -> Dictionary:
+	if OS.get_name() == "Windows":
+		return _run_windows_bootstrap_upgrade(jht, check_only)
+	var bash := _which("bash")
+	if bash == "":
+		return _upgrade_protocol_failure()
+	return _run_upgrade_json(bash, PackedStringArray(["-c",
+			_posix_upgrade_bootstrap_command(jht, check_only)]))
+
+
+static func _upgrade_arguments(check_only: bool) -> String:
+	return "upgrade --check --json" if check_only else "upgrade --json"
+
+
+## Il comando non ha output proprio: curl e la validazione sono silenziosi e
+## solo il wrapper production stampa l'unico frame JSON che parse_upgrade_result
+## accetta. Il trap rimuove il bootstrap anche quando la validazione o il
+## wrapper falliscono.
+static func _posix_upgrade_bootstrap_command(wrapper_path: String,
+		check_only: bool) -> String:
+	return _posix_upgrade_bootstrap_with_target(
+				"JHT_WRAPPER_PATH=" + _shell_quote(wrapper_path), check_only)
+
+
+static func _posix_upgrade_bootstrap_with_target(wrapper_target: String,
+		check_only: bool) -> String:
+	var wrapper_url := UPGRADE_BOOTSTRAP_RAW_BASE + "/scripts/jht-wrapper.sh"
+	return "set -e; JHT_BOOTSTRAP=\"$(mktemp \"${TMPDIR:-/tmp}/jht-wrapper.XXXXXX\")\"; " \
+			+ "cleanup() { rm -f \"$JHT_BOOTSTRAP\"; }; trap cleanup EXIT HUP INT TERM; " \
+			+ "curl -fsSL " + _shell_quote(wrapper_url) + " -o \"$JHT_BOOTSTRAP\"; " \
+			+ "bash -n \"$JHT_BOOTSTRAP\"; " \
+			+ "grep -Eq " + _shell_quote("^[[:space:]]*JHT_UPGRADE_PROTOCOL=" \
+					+ UPGRADE_BOOTSTRAP_PROTOCOL + "([[:space:]]|$)") \
+			+ " \"$JHT_BOOTSTRAP\"; " \
+			+ "JHT_RAW_BASE=" + _shell_quote(UPGRADE_BOOTSTRAP_RAW_BASE) + " " \
+			+ wrapper_target + " bash \"$JHT_BOOTSTRAP\" " + _upgrade_arguments(check_only)
+
+
+## L'installer Windows espone jht.cmd come shim, ma il file che il wrapper
+## production deve sostituire è sempre il vicino jht.ps1. Un .cmd senza quel
+## target non è un'installazione riconoscibile: falliamo chiusi invece di
+## invocare un vecchio dispatcher che potrebbe promuovere durante il check.
+static func _windows_wrapper_target(jht: String) -> String:
+	var lower := jht.to_lower()
+	if lower.ends_with(".cmd") or lower.ends_with(".bat"):
+		return jht.get_base_dir().path_join("jht.ps1")
+	return jht if lower.ends_with(".ps1") else ""
+
+
+static func _run_windows_bootstrap_upgrade(jht: String, check_only: bool) -> Dictionary:
+	var wrapper_path := _windows_wrapper_target(jht)
+	if wrapper_path == "" or not FileAccess.file_exists(wrapper_path):
+		return _upgrade_protocol_failure()
+	var powershell := _which("pwsh")
+	if powershell == "":
+		powershell = _which("powershell")
+	if powershell == "":
+		return _upgrade_protocol_failure()
+	return _run_upgrade_json(powershell, PackedStringArray(["-NoProfile",
+			"-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
+			_windows_upgrade_bootstrap_command(wrapper_path, check_only)]))
+
+
+static func _powershell_quote(value: String) -> String:
+	return "'" + value.replace("'", "''") + "'"
+
+
+## Il dispatcher PowerShell termina il proprio processo con `exit`: lo
+## eseguiamo quindi in un processo figlio, catturiamo esattamente stdout/stderr
+## e soltanto dopo rimuoviamo la copia temporanea. Così il JSON non viene
+## contaminato né il bootstrap resta in %TEMP%.
+static func _windows_upgrade_bootstrap_command(wrapper_path: String,
+		check_only: bool) -> String:
+	var wrapper_url := UPGRADE_BOOTSTRAP_RAW_BASE + "/scripts/jht-wrapper.ps1"
+	var target := _powershell_quote(wrapper_path)
+	var raw_base := _powershell_quote(UPGRADE_BOOTSTRAP_RAW_BASE)
+	var url := _powershell_quote(wrapper_url)
+	return "$ErrorActionPreference='Stop'; $code=1; " \
+			+ "$base=Join-Path ([IO.Path]::GetTempPath()) ('jht-upgrade-'+[guid]::NewGuid().ToString('N')); " \
+			+ "$tmp=$base+'.ps1'; $out=$base+'.out'; $err=$base+'.err'; " \
+			+ "try { Invoke-WebRequest -UseBasicParsing -Uri " + url + " -OutFile $tmp; " \
+			+ "[scriptblock]::Create((Get-Content -LiteralPath $tmp -Raw)) | Out-Null; " \
+			+ "if (-not (Select-String -Path $tmp -Pattern '^\\s*\\$JHT_UPGRADE_PROTOCOL\\s*=\\s*" \
+			+ UPGRADE_BOOTSTRAP_PROTOCOL + "\\s*$' -Quiet)) { throw 'Wrapper upgrade senza protocollo atomico' }; " \
+			+ "$env:JHT_RAW_BASE=" + raw_base + "; " \
+			+ "$env:JHT_WRAPPER_PATH=" + target + "; " \
+			+ "$engine=Join-Path $PSHOME 'pwsh.exe'; " \
+			+ "if (-not (Test-Path -LiteralPath $engine)) { $engine=Join-Path $PSHOME 'powershell.exe' }; " \
+			+ "& $engine -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tmp " \
+			+ _upgrade_arguments(check_only) + " 1>$out 2>$err; $code=$LASTEXITCODE; " \
+			+ "if (Test-Path -LiteralPath $out) { [Console]::Out.Write([IO.File]::ReadAllText($out)) }; " \
+			+ "if (Test-Path -LiteralPath $err) { [Console]::Error.Write([IO.File]::ReadAllText($err)) }; " \
+			+ "} finally { Remove-Item -LiteralPath $tmp,$out,$err -Force -ErrorAction SilentlyContinue }; exit $code"
 
 
 static func _vps_upgrade_command() -> String:
-	return "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
-			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
-			+ "[ -x \"$JHT_BIN\" ] || exit 127; exec \"$JHT_BIN\" upgrade --json"
+	return _vps_upgrade_bootstrap_command(false)
 
 
 static func _run_vps_upgrade(vps: Dictionary) -> Dictionary:
@@ -1140,9 +1223,15 @@ static func _run_vps_upgrade(vps: Dictionary) -> Dictionary:
 
 
 static func _vps_upgrade_check_command() -> String:
+	return _vps_upgrade_bootstrap_command(true)
+
+
+static func _vps_upgrade_bootstrap_command(check_only: bool) -> String:
 	return "JHT_BIN=\"$(command -v jht 2>/dev/null || true)\"; " \
 			+ "[ -n \"$JHT_BIN\" ] || JHT_BIN=\"$HOME/.local/bin/jht\"; " \
-			+ "[ -x \"$JHT_BIN\" ] || exit 127; exec \"$JHT_BIN\" upgrade --check --json"
+			+ "[ -x \"$JHT_BIN\" ] || exit 127; " \
+			+ _posix_upgrade_bootstrap_with_target("JHT_WRAPPER_PATH=\"$JHT_BIN\"",
+					check_only)
 
 
 static func _run_vps_upgrade_check(vps: Dictionary) -> Dictionary:
