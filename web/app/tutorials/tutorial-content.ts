@@ -42,7 +42,7 @@ const GAME_SETUP = {
   en: {
     beforeYouBeginLabel: "Plan the setup",
     beforeYouBegin:
-      "This path starts at the website download and ends when the team is active; it does not assume that the desktop app or Docker is already configured. In an observed Linux + Docker end-to-end run, the time from double-clicking the downloaded app to the first onboarding panel was 32 minutes 58 seconds. The full route had already exceeded 54 minutes before provider login. Hardware, download speed, and Docker setup change the result, but this is not a five-minute task.",
+      "This path starts at the website download and ends when the team is active; it does not assume that the desktop app or Docker is already configured. In an observed Linux + Docker end-to-end run, the time from double-clicking the downloaded app to completing onboarding and reaching the Docker setup panel was 32 minutes 58 seconds. That observed run then reached a provider-authorization block at 54 minutes 40 seconds (T0 + 54:40). Hardware, download speed, and Docker setup change the result, but this is not a five-minute task.",
     setupHeading: "Set up the team",
     setupSteps: [
       {
@@ -55,7 +55,7 @@ const GAME_SETUP = {
       },
       {
         title: "Enter the office",
-        body: "From the title screen, add your name if you want and enter the office. It is explorable before setup: preview conversations and example positions do not start a live team or use a provider.",
+        body: "On first launch, choose and confirm the interface language before the title screen: confirming a choice is required, English is preselected, and the app saves it for later openings. Then add your name if you want and enter the office. It is explorable before setup: preview conversations and example positions do not start a live team or use a provider.",
       },
       {
         title: "Open the setup checklist",
@@ -83,7 +83,7 @@ const GAME_SETUP = {
   it: {
     beforeYouBeginLabel: "Pianifica il setup",
     beforeYouBegin:
-      "Questo percorso parte dal download sul sito e termina con il team attivo: non presuppone che l'app desktop o Docker siano già configurati. In una prova end-to-end Linux + Docker misurata, dal doppio clic sull'app scaricata al primo pannello di onboarding sono trascorsi 32 minuti e 58 secondi. Il percorso completo aveva già superato 54 minuti prima dell'accesso al provider. Hardware, velocità di download e Docker fanno variare il risultato, ma non è un'operazione da cinque minuti.",
+      "Questo percorso parte dal download sul sito e termina con il team attivo: non presuppone che l'app desktop o Docker siano già configurati. In una prova end-to-end Linux + Docker misurata, dal doppio clic sull'app scaricata al completamento dell'onboarding e al pannello Docker post-onboarding sono trascorsi 32 minuti e 58 secondi. La prova misurata ha poi raggiunto un blocco durante l'autorizzazione del provider a 54 minuti e 40 secondi (T0 + 54:40). Hardware, velocità di download e Docker fanno variare il risultato, ma non è un'operazione da cinque minuti.",
     setupHeading: "Configura il team",
     setupSteps: [
       {
@@ -96,7 +96,7 @@ const GAME_SETUP = {
       },
       {
         title: "Entra nell'ufficio",
-        body: "Dalla schermata iniziale inserisci il nome se vuoi ed entra nell'ufficio. Puoi esplorarlo prima del setup: conversazioni e posizioni di esempio non avviano un team dal vivo né usano un provider.",
+        body: "Al primo avvio, scegli e conferma la lingua dell'interfaccia prima della schermata iniziale: devi confermare la scelta, English è preselezionato e l'app la salva per le aperture successive. Poi inserisci il nome se vuoi ed entra nell'ufficio. Puoi esplorarlo prima del setup: conversazioni e posizioni di esempio non avviano un team dal vivo né usano un provider.",
       },
       {
         title: "Apri la checklist",
@@ -124,7 +124,7 @@ const GAME_SETUP = {
   es: {
     beforeYouBeginLabel: "Planifica la configuración",
     beforeYouBegin:
-      "Este recorrido comienza con la descarga del sitio y termina con el equipo activo; no presupone que la aplicación de escritorio ni Docker estén configurados. En una ejecución end-to-end medida con Linux + Docker, desde el doble clic en la aplicación descargada hasta el primer panel de onboarding transcurrieron 32 minutos y 58 segundos. El recorrido completo ya había superado 54 minutos antes del inicio de sesión con el proveedor. El hardware, la descarga y Docker cambian el resultado, pero no es una tarea de cinco minutos.",
+      "Este recorrido comienza con la descarga del sitio y termina con el equipo activo; no presupone que la aplicación de escritorio ni Docker estén configurados. En una ejecución end-to-end medida con Linux + Docker, desde el doble clic en la aplicación descargada hasta completar el onboarding y llegar al panel de configuración de Docker transcurrieron 32 minutos y 58 segundos. La ejecución medida llegó después a un bloqueo de autorización del proveedor a los 54 minutos y 40 segundos (T0 + 54:40). El hardware, la descarga y Docker cambian el resultado, pero no es una tarea de cinco minutos.",
     setupHeading: "Configura el equipo",
     setupSteps: [
       {
@@ -137,7 +137,7 @@ const GAME_SETUP = {
       },
       {
         title: "Entra en la oficina",
-        body: "Desde la pantalla inicial añade tu nombre si quieres y entra en la oficina. Puedes explorarla antes de configurarla: las conversaciones y posiciones de ejemplo no inician un equipo real ni usan un proveedor.",
+        body: "En el primer inicio, elige y confirma el idioma de la interfaz antes de la pantalla inicial: debes confirmar la elección, English está preseleccionado y la aplicación la guarda para las siguientes aperturas. Después añade tu nombre si quieres y entra en la oficina. Puedes explorarla antes de configurarla: las conversaciones y posiciones de ejemplo no inician un equipo real ni usan un proveedor.",
       },
       {
         title: "Abre la lista de configuración",
@@ -165,7 +165,7 @@ const GAME_SETUP = {
   fr: {
     beforeYouBeginLabel: "Planifiez la configuration",
     beforeYouBegin:
-      "Ce parcours commence par le téléchargement sur le site et se termine avec l'équipe active : il ne suppose pas que l'application de bureau ou Docker sont déjà configurés. Lors d'un parcours end-to-end Linux + Docker mesuré, 32 minutes et 58 secondes se sont écoulées entre le double-clic sur l'application téléchargée et le premier panneau d'onboarding. Le parcours complet avait déjà dépassé 54 minutes avant la connexion au fournisseur. Le matériel, le téléchargement et Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.",
+      "Ce parcours commence par le téléchargement sur le site et se termine avec l'équipe active : il ne suppose pas que l'application de bureau ou Docker sont déjà configurés. Lors d'un parcours end-to-end Linux + Docker mesuré, 32 minutes et 58 secondes se sont écoulées entre le double-clic sur l'application téléchargée, la fin de l'onboarding et l'arrivée au panneau de configuration Docker. Ce parcours mesuré a ensuite atteint un blocage d'autorisation du fournisseur à 54 minutes et 40 secondes (T0 + 54:40). Le matériel, le téléchargement et Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.",
     setupHeading: "Configurez l'équipe",
     setupSteps: [
       {
@@ -178,7 +178,7 @@ const GAME_SETUP = {
       },
       {
         title: "Entrez dans le bureau",
-        body: "Depuis l'écran de départ, ajoutez votre nom si vous le souhaitez puis entrez dans le bureau. Vous pouvez l'explorer avant la configuration : les conversations et positions d'exemple ne lancent pas une équipe en direct et n'utilisent pas de fournisseur.",
+        body: "Lors du premier lancement, choisissez et confirmez la langue de l'interface avant l'écran de départ : vous devez confirmer ce choix, English est présélectionné et l'application le mémorise pour les ouvertures suivantes. Ajoutez ensuite votre nom si vous le souhaitez puis entrez dans le bureau. Vous pouvez l'explorer avant la configuration : les conversations et positions d'exemple ne lancent pas une équipe en direct et n'utilisent pas de fournisseur.",
       },
       {
         title: "Ouvrez la liste de configuration",
@@ -206,7 +206,7 @@ const GAME_SETUP = {
   de: {
     beforeYouBeginLabel: "Plane die Einrichtung",
     beforeYouBegin:
-      "Dieser Weg beginnt mit dem Download auf der Website und endet mit dem aktiven Team; er setzt weder eine eingerichtete Desktop-App noch Docker voraus. In einem gemessenen Linux- und Docker-End-to-End-Lauf lagen zwischen dem Doppelklick auf die heruntergeladene App und dem ersten Onboarding-Panel 32 Minuten und 58 Sekunden. Der vollständige Weg hatte vor der Provider-Anmeldung bereits 54 Minuten überschritten. Hardware, Download und Docker verändern das Ergebnis, aber dies ist keine Fünf-Minuten-Aufgabe.",
+      "Dieser Weg beginnt mit dem Download auf der Website und endet mit dem aktiven Team; er setzt weder eine eingerichtete Desktop-App noch Docker voraus. In einem gemessenen Linux- und Docker-End-to-End-Lauf lagen zwischen dem Doppelklick auf die heruntergeladene App, dem Abschluss des Onboardings und dem Erreichen des Docker-Einrichtungspanels 32 Minuten und 58 Sekunden. Der gemessene Lauf erreichte dann nach 54 Minuten und 40 Sekunden (T0 + 54:40) eine Blockierung bei der Provider-Autorisierung. Hardware, Download und Docker verändern das Ergebnis, aber dies ist keine Fünf-Minuten-Aufgabe.",
     setupHeading: "Richte das Team ein",
     setupSteps: [
       {
@@ -219,7 +219,7 @@ const GAME_SETUP = {
       },
       {
         title: "Betritt das Büro",
-        body: "Gib auf dem Startbildschirm deinen Namen ein, wenn du möchtest, und betritt das Büro. Du kannst es vor der Einrichtung erkunden: Beispielgespräche und -positionen starten kein Live-Team und nutzen keinen Provider.",
+        body: "Wähle und bestätige beim ersten Start vor dem Startbildschirm die Oberflächensprache: Du musst die Auswahl bestätigen, English ist vorausgewählt und die App speichert sie für spätere Starts. Gib danach deinen Namen ein, wenn du möchtest, und betritt das Büro. Du kannst es vor der Einrichtung erkunden: Beispielgespräche und -positionen starten kein Live-Team und nutzen keinen Provider.",
       },
       {
         title: "Öffne die Einrichtungs-Checkliste",
@@ -247,7 +247,7 @@ const GAME_SETUP = {
   pt: {
     beforeYouBeginLabel: "Planeia a configuração",
     beforeYouBegin:
-      "Este percurso começa no download do site e termina com a equipa ativa; não pressupõe que a aplicação de ambiente de trabalho ou o Docker já estejam configurados. Numa execução end-to-end medida em Linux + Docker, passaram 32 minutos e 58 segundos entre o duplo clique na aplicação descarregada e o primeiro painel de onboarding. O percurso completo já tinha ultrapassado 54 minutos antes do início de sessão no fornecedor. O hardware, o download e o Docker alteram o resultado, mas esta não é uma tarefa de cinco minutos.",
+      "Este percurso começa no download do site e termina com a equipa ativa; não pressupõe que a aplicação de ambiente de trabalho ou o Docker já estejam configurados. Numa execução end-to-end medida em Linux + Docker, passaram 32 minutos e 58 segundos entre o duplo clique na aplicação descarregada, a conclusão do onboarding e a chegada ao painel de configuração do Docker. A execução medida chegou depois a um bloqueio da autorização do fornecedor aos 54 minutos e 40 segundos (T0 + 54:40). O hardware, o download e o Docker alteram o resultado, mas esta não é uma tarefa de cinco minutos.",
     setupHeading: "Configura a equipa",
     setupSteps: [
       {
@@ -260,7 +260,7 @@ const GAME_SETUP = {
       },
       {
         title: "Entra no escritório",
-        body: "No ecrã inicial, acrescenta o teu nome se quiseres e entra no escritório. Podes explorá-lo antes da configuração: as conversas e posições de exemplo não iniciam uma equipa real nem usam um fornecedor.",
+        body: "No primeiro arranque, escolhe e confirma o idioma da interface antes do ecrã inicial: tens de confirmar a escolha, English vem pré-selecionado e a aplicação guarda-a para aberturas posteriores. Depois acrescenta o teu nome se quiseres e entra no escritório. Podes explorá-lo antes da configuração: as conversas e posições de exemplo não iniciam uma equipa real nem usam um fornecedor.",
       },
       {
         title: "Abre a lista de configuração",
@@ -288,7 +288,7 @@ const GAME_SETUP = {
   hu: {
     beforeYouBeginLabel: "Tervezd meg a beállítást",
     beforeYouBegin:
-      "Ez az útvonal a webhelyről való letöltéssel kezdődik, és az aktív csapatnál ér véget; nem feltételezi, hogy az asztali alkalmazás vagy a Docker már be van állítva. Egy mért Linux + Docker end-to-end futásban a letöltött alkalmazásra kattintástól az első onboarding panelig 32 perc 58 másodperc telt el. A teljes útvonal a szolgáltatói bejelentkezés előtt már meghaladta az 54 percet. A hardver, a letöltés és a Docker módosítja az eredményt, de ez nem ötperces feladat.",
+      "Ez az útvonal a webhelyről való letöltéssel kezdődik, és az aktív csapatnál ér véget; nem feltételezi, hogy az asztali alkalmazás vagy a Docker már be van állítva. Egy mért Linux + Docker end-to-end futásban a letöltött alkalmazásra kattintástól az onboarding befejezéséig és a Docker beállítási panel eléréséig 32 perc 58 másodperc telt el. A mért futás ezután a szolgáltatói engedélyezésnél 54 perc 40 másodpercnél (T0 + 54:40) blokkolódott. A hardver, a letöltés és a Docker módosítja az eredményt, de ez nem ötperces feladat.",
     setupHeading: "Állítsd be a csapatot",
     setupSteps: [
       {
@@ -301,7 +301,7 @@ const GAME_SETUP = {
       },
       {
         title: "Lépj be az irodába",
-        body: "A kezdőképernyőn add meg a nevedet, ha szeretnéd, majd lépj be az irodába. A beállítás előtt is felfedezheted: a példa beszélgetések és pozíciók nem indítanak élő csapatot és nem használnak szolgáltatót.",
+        body: "Első indításkor a kezdőképernyő előtt válaszd ki és erősítsd meg a felület nyelvét: meg kell erősítened a választást, az English van előre kijelölve, és az alkalmazás a következő megnyitásokhoz elmenti. Ezután add meg a nevedet, ha szeretnéd, majd lépj be az irodába. A beállítás előtt is felfedezheted: a példa beszélgetések és pozíciók nem indítanak élő csapatot és nem használnak szolgáltatót.",
       },
       {
         title: "Nyisd meg a beállítási ellenőrzőlistát",
