@@ -1,6 +1,10 @@
 extends RefCounted
 ## Traduzioni EN — stesse chiavi di UIStrings.S (fallback: italiano).
 const S := {
+	"language_picker.eyebrow": "FIRST START",
+	"language_picker.title": "Choose your language",
+	"language_picker.subtitle": "You can change it at any time in Settings.",
+	"language_picker.continue": "CONTINUE IN %s",
 	"title.wordmark": "JOB HUNTER TEAM",
 	"title.name_title": "Introductions first",
 	"title.name_sub": "What is your name? The team will use it.",

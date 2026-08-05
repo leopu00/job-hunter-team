@@ -3,14 +3,132 @@ extends Control
 
 ## Key art pittorica (gen-art); se assente, griglia terminale.
 const KEY_ART := "res://assets/gen-art/environment/title_screen.png"
+const LanguagePicker := preload("res://scripts/ui/language_picker.gd")
 
 var _blink: Label
 var _time := 0.0
 var _leaving := false
+var _language_picker: Control
+var _language_test_choice := ""
 
 func _ready() -> void:
 	theme = TerminalTheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	var persistence_test := OS.get_environment("JHT_LANGUAGE_PERSIST_TEST")
+	if persistence_test == "cleanup":
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(UIStrings.language_config_path()))
+		print("LANGUAGE-PERSISTENCE-CLEANUP PASS")
+		get_tree().quit()
+		return
+	# Su una macchina appena installata non mostriamo neppure la title screen
+	# prima di sapere in quale lingua costruirla. Il fallback è inglese, mai il
+	# locale del sistema o l'italiano storico.
+	if UIStrings.needs_initial_language_choice():
+		_show_language_picker()
+		if OS.get_environment("JHT_LANGUAGE_PICKER_TEST") == "1":
+			_language_picker_selftest.call_deferred()
+		elif persistence_test == "write":
+			_language_persistence_write_selftest.call_deferred()
+		elif persistence_test == "save_failure":
+			_language_persistence_save_failure_selftest.call_deferred()
+		return
+	_build_title()
+	if persistence_test == "verify":
+		_language_persistence_verify_selftest.call_deferred()
+
+
+func _show_language_picker() -> void:
+	_language_picker = LanguagePicker.new()
+	_language_picker.language_confirmed.connect(_on_language_confirmed)
+	add_child(_language_picker)
+
+
+func _on_language_confirmed(language: String) -> void:
+	if not UIStrings.set_lang(language):
+		return
+	# Il click/INVIO che conferma il picker non deve proseguire nello stesso
+	# frame fino alla title appena costruita.
+	get_viewport().set_input_as_handled()
+	Sfx.play_confirm()
+	if is_instance_valid(_language_picker):
+		_language_picker.queue_free()
+	_language_picker = null
+	_build_title()
+
+
+## Verifica la scena vera in uno user:// isolato: prima viene il picker in
+## inglese, poi una scelta costruisce DAVVERO la title nella lingua richiesta.
+func _language_picker_selftest() -> void:
+	await get_tree().process_frame
+	var ok: bool = is_instance_valid(_language_picker) \
+			and not is_instance_valid(_blink) \
+			and UIStrings.lang == UIStrings.DEFAULT_LANG \
+			and UIStrings.t("language_picker.title") == "Choose your language" \
+			and _language_picker.supported_language_count() == UIStrings.LANGS.size()
+	if is_instance_valid(_language_picker):
+		_language_picker.language_confirmed.connect(func(language: String) -> void:
+			_language_test_choice = language)
+		_language_picker.choose_language("de")
+		_language_picker.confirm()
+	await get_tree().process_frame
+	ok = ok and _language_test_choice == "de" \
+			and UIStrings.lang == "de" and is_instance_valid(_blink)
+	print("LANGUAGE-PICKER-TITLE-TEST %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Fase 1 dell'oracolo: il click attraversa il vero picker e deve arrivare
+## su disco. La fase verify gira in un altro processo Godot.
+func _language_persistence_write_selftest() -> void:
+	await get_tree().process_frame
+	var ok := is_instance_valid(_language_picker) \
+			and UIStrings.lang == UIStrings.DEFAULT_LANG
+	if is_instance_valid(_language_picker):
+		_language_picker.choose_language("de")
+		_language_picker.confirm()
+	await get_tree().process_frame
+	ok = ok and not is_instance_valid(_language_picker) \
+			and UIStrings.lang == "de" and UIStrings.saved_language() == "de" \
+			and is_instance_valid(_blink)
+	print("LANGUAGE-PERSISTENCE-WRITE %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Fase 2 dell'oracolo: nessun override e un processo nuovo devono leggere la
+## preferenza, saltare il picker e costruire subito la title tradotta.
+func _language_persistence_verify_selftest() -> void:
+	await get_tree().process_frame
+	var ok := not is_instance_valid(_language_picker) \
+			and UIStrings.lang == "de" and is_instance_valid(_blink) \
+			and _blink.text == "▶ EINGABE DRÜCKEN"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(UIStrings.language_config_path()))
+	print("LANGUAGE-PERSISTENCE-VERIFY %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Un disco non scrivibile non è una scelta utente riuscita: il picker deve
+## restare in primo piano e non costruire la title nella lingua non salvata.
+func _language_persistence_save_failure_selftest() -> void:
+	await get_tree().process_frame
+	var config_path := ProjectSettings.globalize_path(UIStrings.language_config_path())
+	DirAccess.remove_absolute(config_path)
+	DirAccess.remove_absolute(config_path.get_base_dir())
+	var ok := is_instance_valid(_language_picker) \
+			and UIStrings.lang == UIStrings.DEFAULT_LANG
+	if is_instance_valid(_language_picker):
+		_language_picker.choose_language("de")
+		_language_picker.confirm()
+	await get_tree().process_frame
+	ok = ok and is_instance_valid(_language_picker) \
+			and UIStrings.lang == UIStrings.DEFAULT_LANG \
+			and not is_instance_valid(_blink)
+	DirAccess.remove_absolute(config_path)
+	DirAccess.remove_absolute(config_path.get_base_dir())
+	print("LANGUAGE-PERSISTENCE-SAVE-FAILURE %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+func _build_title() -> void:
 
 	# exists() è true anche col solo .import: carichiamo e verifichiamo il null,
 	# così senza il binario dipinto parte il fallback a griglia (non uno schermo vuoto).
@@ -85,12 +203,18 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	if not is_instance_valid(_blink):
+		return
 	# Pulse via alpha, MAI via visible: il toggle di visibilità dentro il
 	# VBoxContainer collassa il label e il container ricentra tutto (il
 	# "titolo che oscilla" visto da Leone).
 	_blink.modulate.a = 0.35 + 0.65 * maxf(0.0, sin(_time * 2.6))
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Il picker cattura sia mouse sia focus tastiera: nessun INVIO/click può
+	# lasciarlo e far entrare nell'ufficio prima della scelta.
+	if is_instance_valid(_language_picker):
+		return
 	# INVIO oppure click/tap: su desktop il mouse è il gesto naturale e
 	# "PREMI INVIO" da solo lasciava utenti fermi al titolo.
 	var clicked := false

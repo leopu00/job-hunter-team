@@ -2471,9 +2471,9 @@ func _wrapped_label(text: String, size: int, color: Color) -> Label:
 func _graphics_key(mode: String) -> String:
 	return mode if Game.CHOICES.has(mode) else "auto"
 
-## Impostazioni → Lingua: le 7 lingue del web. Il cambio si applica
-## subito a ciò che viene (ri)costruito; la scena intorno si aggiorna
-## man mano che i pannelli si riaprono.
+## Impostazioni → Lingua: le 7 lingue del web. Il cambio ricostruisce la
+## scena corrente, così HUD, sidebar, pannelli e popup non restano metà
+## nella vecchia lingua.
 func _build_language() -> void:
 	_content.add_child(TerminalTheme.label(UIStrings.t("lang.intro"), 14, Palette.MUTED))
 	for l in UIStrings.LANGS:
@@ -2488,8 +2488,7 @@ func _build_language() -> void:
 		btn.add_theme_color_override("font_hover_color", Palette.MINT)
 		var code := str(l)
 		btn.pressed.connect(func() -> void:
-			UIStrings.set_lang(code)
-			_build())
+			Game.set_ui_language(code))
 		_content.add_child(btn)
 	if UIStrings.lang != "it":
 		_content.add_child(_wrapped_label(
