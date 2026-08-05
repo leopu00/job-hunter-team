@@ -802,12 +802,13 @@ func _update_line(state: Dictionary) -> String:
 
 ## I campi sopravvivono al passaggio all'anteprima e ritorno: farglieli
 ## riscrivere sarebbe il modo più veloce per non ricevere più segnalazioni.
-var _fb_form := {"doing": "", "happened": "", "expected": "", "contact": ""}
+var _fb_form := {"doing": "", "happened": "", "expected": ""}
 var _fb_include_logs := true
 var _fb_include_container := true
 var _fb_status: Label
 var _fb_redaction: Label
 var _fb_send: Button
+var _fb_preview_body: TextEdit
 
 const FB_FIELDS := [
 	["doing", "feedback.q_doing", "feedback.ph_doing", 60],
@@ -844,22 +845,9 @@ func _build_feedback() -> void:
 		edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		edit.text_changed.connect(func() -> void:
 			_fb_form[key] = edit.text
-			_refresh_feedback_send())
+			_refresh_feedback_send()
+			_refresh_feedback_redaction())
 		list.add_child(edit)
-
-	list.add_child(TerminalTheme.label(
-			UIStrings.t("feedback.q_contact"), 13, Palette.MUTED, "medium"))
-	var contact := LineEdit.new()
-	contact.text = str(_fb_form["contact"])
-	contact.placeholder_text = UIStrings.t("feedback.ph_contact")
-	contact.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	contact.text_changed.connect(func(value: String) -> void:
-		_fb_form["contact"] = value)
-	list.add_child(contact)
-	var contact_hint := TerminalTheme.label(
-			UIStrings.t("feedback.contact_hint"), 12, Palette.DIM)
-	contact_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	list.add_child(contact_hint)
 
 	list.add_child(HSeparator.new())
 	var attach := HBoxContainer.new()
@@ -920,7 +908,8 @@ func _build_feedback_preview() -> void:
 	_content.add_child(HSeparator.new())
 	var body := TextEdit.new()
 	body.editable = false
-	body.text = FeedbackService.preview_markdown if FeedbackService.preview_markdown != "" \
+	_fb_preview_body = body
+	body.text = FeedbackService.preview_report(_fb_form) if FeedbackService.preview_is_ready() \
 			else UIStrings.t("feedback.collecting")
 	body.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -966,7 +955,7 @@ func _refresh_feedback_send() -> void:
 func _refresh_feedback_redaction() -> void:
 	if not is_instance_valid(_fb_redaction):
 		return
-	var counts: Dictionary = FeedbackService.preview_counts
+	var counts: Dictionary = FeedbackService.preview_redaction_counts(_fb_form)
 	var total := 0
 	for key in counts:
 		total += int(counts[key])
@@ -979,12 +968,13 @@ func _submit_feedback() -> void:
 
 
 func _on_feedback_preview(running: bool, _markdown: String, _counts: Dictionary) -> void:
-	if section != "feedback" or not is_instance_valid(_fb_redaction):
-		return
-	if running:
-		_fb_redaction.text = UIStrings.t("feedback.collecting")
-		return
-	_refresh_feedback_redaction()
+	if section == "feedback" and is_instance_valid(_fb_redaction):
+		if running:
+			_fb_redaction.text = UIStrings.t("feedback.collecting")
+		else:
+			_refresh_feedback_redaction()
+	if section == "preview" and is_instance_valid(_fb_preview_body) and not running:
+		_fb_preview_body.text = FeedbackService.preview_report(_fb_form)
 
 
 func _on_feedback_submit(running: bool, ok: bool, message: String, ticket: String) -> void:

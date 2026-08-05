@@ -317,6 +317,11 @@ export default function LandingGlobe() {
         : [],
     [stop],
   );
+  // Il passaggio dev'essere atomico: sfumare due rappresentazioni dello
+  // stesso globo significa mostrarle entrambe per alcuni frame (con pin e
+  // label doppi). `began` arriva solo dopo il primo idle del canvas, quindi
+  // qui è sicuro sostituire l'immagine invece di sovrapporla.
+  const liveReady = mode === "live" && began;
 
   return (
     <div
@@ -332,27 +337,26 @@ export default function LandingGlobe() {
     >
       {/* Base statica: LCP della pagina, ripiego per macchine deboli e
           descrizione accessibile dell'intera vetrina. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/landing-globe-still.jpg"
-        alt={tr("globe_alt")}
-        width={1672}
-        height={941}
-        fetchPriority="high"
-        // Il canvas MapLibre non è opaco fuori dalla sua sfera. Lasciare
-        // sotto il fallback una volta pronto farebbe quindi apparire due
-        // globi di scala diversa, soprattutto sulle viewport molto larghe.
-        // Lo sfumiamo via solo quando JobsGlobe ha finito il primo idle e
-        // l'autopilota può davvero iniziare; fino ad allora resta l'LCP.
-        className={`jht-globe-still absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
-          mode === "live" && began ? "opacity-0" : "opacity-100"
-        }`}
-      />
+      {!liveReady && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src="/landing-globe-still.jpg"
+          alt={tr("globe_alt")}
+          width={1672}
+          height={941}
+          fetchPriority="high"
+          // Non è una dissolvenza: su un canvas non opaco farebbe convivere
+          // due globi e due serie di etichette. L'immagine esiste fino al
+          // primo idle del canvas, poi viene rimossa nello stesso render che
+          // rende visibile la scena live.
+          className="jht-globe-still absolute inset-0 w-full h-full object-cover"
+        />
+      )}
 
       {/* Credito basemap per l'immagine statica (obbligo licenza
           CARTO/OSM: il render vivo ha il suo controllo attribution,
           l'immagine ferma deve portarselo scritto accanto). */}
-      {mode !== "live" && (
+      {!liveReady && (
         <div
           className="jht-globe-static-credit absolute bottom-2 right-2 z-10 pointer-events-none rounded-sm px-1.5 py-1 text-[10px] leading-tight"
           style={{
@@ -371,9 +375,10 @@ export default function LandingGlobe() {
       {mode === "live" && (
         <div
           aria-hidden
-          className={`absolute inset-0 transition-opacity duration-700 ${
-            began ? "opacity-100" : "opacity-0"
-          }`}
+          // Il canvas deve montare per arrivare al suo primo idle, ma non
+          // deve disegnare sotto al fallback durante l'attesa: altrimenti un
+          // cambiamento di opacità o compositing può riesporre due globi.
+          className={`absolute inset-0 ${liveReady ? "visible" : "invisible"}`}
         >
           <JobsGlobeLazy fullscreen showcase={showcase} />
         </div>
