@@ -9,9 +9,9 @@
 # printed or persisted here.
 #
 # Examples (run on the ThinkPad, never from the physical desktop session):
-#   scripts/run-portrait-session.sh --source-unit rel004-vertical-game.service -- \
+#   scripts/run-portrait-session.sh --source-unit rel004-vertical-pipewire.service -- \
 #     python3 "$HOME/.cache/jht-e2e/setup_timing.py" ... mutter-node-live ...
-#   scripts/run-portrait-session.sh --source-unit rel004-vertical-game.service \
+#   scripts/run-portrait-session.sh --source-unit rel004-vertical-pipewire.service \
 #     --browser-entrypoint -- --format portrait
 #
 # `--browser-entrypoint` only discovers and executes the existing temporary
