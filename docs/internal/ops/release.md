@@ -119,21 +119,25 @@ fix forward; never publish or replace one file by hand.
 
 ### Artifacts
 
-| Platform          | Preset            | Asset                                                                     |
-| ----------------- | ----------------- | ------------------------------------------------------------------------- |
-| Windows x64       | `Windows Desktop` | `job-hunter-team.exe` (bare Godot executable)                             |
-| macOS Universal 2 | `macOS`           | `job-hunter-team.zip` (signed, notarized, stapled)                        |
-| Linux x64         | `Linux`           | `job-hunter-team-linux-x64.tar.gz`                                        |
-| All assets        | —                 | `SHA256SUMS` + `RELEASE-PROVENANCE.json` (tag commit, byte size, SHA-256) |
+| Platform          | Preset            | Asset                                                                                                             |
+| ----------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Windows x64       | `Windows Desktop` | `job-hunter-team-windows-x64-setup.exe` (primary per-user installer) + `job-hunter-team-windows-x64-portable.exe` |
+| macOS Universal 2 | `macOS`           | `job-hunter-team.zip` (signed, notarized, stapled)                                                                |
+| Linux x64         | `Linux`           | `job-hunter-team-linux-x64.tar.gz`                                                                                |
+| All assets        | —                 | `SHA256SUMS` + `RELEASE-PROVENANCE.json` (tag commit, byte size, SHA-256)                                         |
 
 Asset names do **not** carry the version — the GitHub Release tag is the version. There is no separate Windows ARM64 installer any more (the Electron pipeline produced one; the Godot export targets x64, which runs under Windows-on-ARM emulation).
 
-`game/installer/windows.nsi` is a dormant/manual packaging fallback. Its
-metadata is version-gated so a manual build cannot claim `0.0.0`, but the
-release workflow does not invoke `makensis` and does not publish an NSIS setup
-artifact.
+The Windows runner exports the portable Godot executable, builds and
+smoke-tests the per-user NSIS package, then publishes the installer as the
+primary asset and the renamed portable executable as a secondary option. Both
+are covered by the same tag-bound provenance and checksum gate.
 
-> The public `/download` page does not resolve GitHub assets: it hands out the CLI one-liner (`curl -fsSL https://jobhunterteam.ai/install.sh | bash`) and points at `/run`. Release artifacts are for people who download from the GitHub Releases page.
+> The public `/download` page offers both install modes: the terminal path uses
+> `curl -fsSL https://jobhunterteam.ai/install.sh | bash`, while the desktop
+> path links to the stable asset names on the latest GitHub Release. Windows
+> presents the NSIS installer first and labels the portable executable as the
+> alternative.
 
 ---
 

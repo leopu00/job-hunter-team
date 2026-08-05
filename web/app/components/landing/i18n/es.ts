@@ -65,6 +65,8 @@ export const es: Record<string, string> = {
   dl_desktop_beta_desc:
     "La app de escritorio es la oficina donde ves trabajar al equipo. Está en beta: la usamos a diario, pero cambia a menudo. Si prefieres un camino más asentado, la CLI sigue ahí.",
   dl_desktop_beta_badge: "Beta",
+  dl_windows_portable_label: "Windows: el instalador es la opción recomendada.",
+  dl_windows_portable_link: "Descarga en su lugar la versión portátil",
   dl_desktop_unsigned_note:
     "En macOS la app está firmada y notarizada: se abre con doble clic. En Windows no está firmada, así que SmartScreen muestra «Windows protegió su PC»: pulsa «Más información» y luego «Ejecutar de todas formas». En Linux, extrae el archivo y hazlo ejecutable.",
   dl_help_text: "¿No sabes dónde instalarlo?",
