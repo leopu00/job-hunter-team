@@ -11,6 +11,7 @@ function readWebFile(relativePath: string) {
 
 const ctaSource = readWebFile("app/components/landing/LandingCTA.tsx");
 const navSource = readWebFile("app/components/landing/LandingNav.tsx");
+const landingI18nSource = readWebFile("app/components/landing/LandingI18n.tsx");
 const downloadSource = readWebFile("app/download/DownloadClient.tsx");
 const runSource = readWebFile("app/run/page.tsx");
 
@@ -26,7 +27,7 @@ describe("percorso pubblico di onboarding", () => {
     expect(cta).not.toContain('href="/download"');
   });
 
-  it("espone Come si avvia prima di Installa nella navigazione desktop e mobile", () => {
+  it("espone Come si avvia prima del download nella navigazione desktop e mobile", () => {
     const desktop = navSource.slice(
       navSource.indexOf('className="hidden md:flex items-center gap-6"'),
       navSource.indexOf('<div className="flex items-center gap-2 sm:gap-3">'),
@@ -48,6 +49,10 @@ describe("percorso pubblico di onboarding", () => {
       expect(run).toBeGreaterThan(home);
       expect(download).toBeGreaterThan(run);
     }
+
+    expect(landingI18nSource).toContain(
+      'nav_download: { it: "Installa", en: "Download", hu: "Telepítés" }',
+    );
   });
 
   it("apre Downloads sul Desktop e non presenta più l'app come in arrivo", () => {
