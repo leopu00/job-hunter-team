@@ -185,7 +185,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     // passargli --check: sul legacy quel flag era ignorato e mutava il deploy.
     expect(readFileSync(WRAPPER, "utf8")).toContain("JHT_UPGRADE_PROTOCOL=1");
     expect(readFileSync(POWERSHELL_WRAPPER, "utf8")).toContain(
-      "$JHT_UPGRADE_PROTOCOL = 1",
+      "$JHT_UPGRADE_PROTOCOL = '1'",
     );
     const legacy = historicV033Wrapper();
     expect(legacy).not.toContain("JHT_UPGRADE_PROTOCOL=1");
