@@ -22,7 +22,7 @@ LOG="$JHT_HOME/logs/welcome-send.log"
 mkdir -p "$(dirname "$LOG")" "$PROFILE_DIR"
 
 # i18n: carica catalogo locales (en/it/hu) — usa $JHT_LANG da host.env
-# Fallback a IT hardcoded se i18n.sh non disponibile (build legacy).
+# English fallback if i18n.sh is unavailable (legacy build).
 if [ -f /app/shared/i18n.sh ]; then
   # shellcheck disable=SC1091
   source /app/shared/i18n.sh
@@ -53,32 +53,32 @@ send_one() {
 
 # ── Copy welcome per i 3 ruoli ──────────────────────────────────────
 # Stringhe da shared/locales/<JHT_LANG>.json. Se il catalogo non c'è
-# (build legacy senza i18n.sh), fallback a IT hardcoded.
+# (legacy build without i18n.sh), English fallback.
 if declare -F t >/dev/null 2>&1; then
   ASSISTENTE_MSG="$(t welcome.assistente)"
   CAPITANO_MSG="$(t welcome.capitano)"
   MENTOR_MSG="$(t welcome.mentor)"
 else
-  log "WARN: shared/i18n.sh non disponibile, fallback messaggi IT hardcoded"
-  ASSISTENTE_MSG="Ciao! 👋
+  log "WARN: shared/i18n.sh unavailable, using hardcoded English welcome messages"
+  ASSISTENTE_MSG="Hi! 👋
 
-Sono l'Assistente di Job Hunter Team — il tuo punto di contatto con il team AI che ti cercherà lavoro.
+I'm the Job Hunter Team Assistant — your point of contact with the AI team that's about to start looking for jobs for you.
 
-Per partire ho bisogno di conoscerti. Mandami qui su Telegram il tuo CV (PDF, DOC, anche una foto del cartaceo va benissimo), oppure raccontami in due righe cosa cerchi — ruolo, settore, città. Da lì costruisco il profilo e il resto del team si mette al lavoro per te.
+To get going I need to know you. Send me here on Telegram your CV (PDF, DOC, even a photo of the paper version works), or just tell me in a couple of lines what you're looking for — role, sector, city. From that I build the profile and the rest of the team gets to work for you.
 
-Anche un draft o degli appunti grezzi vanno benissimo, non serve niente di pronto. 📄 Parto da quello che hai."
+A draft or rough notes are perfectly fine, no need to have anything polished. 📄 I start from what you have."
 
-  CAPITANO_MSG="Sono il Capitano. 👨‍✈️
+  CAPITANO_MSG="I'm the Captain. 👨‍✈️
 
-Coordino il team che si occuperà di te: c'è chi cerca posizioni, chi le analizza, chi calcola il match col tuo profilo, chi scrive il CV su misura, chi fa la review finale prima di candidarti.
+I coordinate the team that will work on your search: someone hunts positions, someone analyzes them, someone calculates the match against your profile, someone writes the CV tailored to each one, someone does the final review before applying.
 
-Per ora resto in silenzio. Appena il tuo profilo è pronto accendo il motore, e da lì ti scrivo quando ho qualcosa di concreto: un lotto di posizioni interessanti, una candidatura pronta da rivedere insieme, oppure un blocco che vale la pena segnalarti. A presto. 🎯"
+For now I'll stay silent. As soon as your profile is ready I'll fire up the engine, and from there I'll write to you when I have something concrete: a batch of interesting positions, an application ready to review together, or a blocker worth flagging. Talk soon. 🎯"
 
-  MENTOR_MSG="Sono il Mentor. 🧙‍♂️
+  MENTOR_MSG="I'm the Mentor. 🧙‍♂️
 
-Mi occupo del quadro generale della tua ricerca: una volta a settimana ti porto una lettura dei numeri — pattern emersi, segnali di mercato, scelte di carriera che vale la pena considerare. Voce misurata, ti scrivo solo quando c'è qualcosa che merita davvero la tua attenzione.
+I take care of the big picture of your search: once a week I'll bring you a reading of the numbers — patterns that emerged, market signals, career choices worth considering. Measured voice, I'll only write when there's something that really deserves your attention.
 
-Per ora resto in ascolto. Quando avrò dati abbastanza per dirti qualcosa di utile, ti scrivo. 📊"
+For now I'm listening. When I have enough data to tell you something useful, I'll write. 📊"
 fi
 
 log "welcome-send start"
