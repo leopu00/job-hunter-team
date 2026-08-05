@@ -9,6 +9,7 @@ import pc from 'picocolors';
 import { createClackPrompter } from './clack-prompter.js';
 import { WizardCancelledError } from './prompts.js';
 import { runSetupWizard } from './setup.js';
+import { t } from './i18n.js';
 
 /**
  * Ripristina il terminale al suo stato normale.
@@ -32,7 +33,7 @@ process.on('SIGINT', () => {
   sigintHandled = true;
   restoreTerminal();
   process.stdout.write('\n');
-  cancel(pc.red('Setup interrotto.'));
+  cancel(pc.red(t('wizard.cli.interrupted')));
   process.exit(0);
 });
 
@@ -57,7 +58,7 @@ async function main() {
     if (err instanceof WizardCancelledError) {
       process.exit(0);
     }
-    console.error(pc.red('Errore imprevisto:'), err.message);
+    console.error(pc.red(t('wizard.cli.unexpected_error')), err.message);
     process.exit(1);
   }
 }

@@ -73,6 +73,13 @@ function loadCatalog(lang) {
   return merged;
 }
 
+// Phase 1 of the launch tutorial is English-only. Existing hosts may still
+// carry JHT_LANG=it; keep that choice for later copy, but source the approved
+// T0-T1 onboarding keys from the English catalog.
+function phase1English(key) {
+  return /^(host_setup\.|welcome\.|wizard\.welcome_subtitle$|wizard\.aborted_prereqs$|wizard\.checks\.|wizard\.cloud\.|wizard\.step\.|wizard\.profile\.intro$|wizard\.provider\.|wizard\.oauth\.|wizard\.team\.(starting|start_failed)$|wizard\.cli\.|wizard\.(outro_done|outro_aborted|start\.ready|start\.done)$)/.test(key);
+}
+
 /**
  * Lookup a translated string by key. Falls back to en, then to the key itself.
  * @param {string} key — e.g. 'wizard.welcome_title'
@@ -80,7 +87,7 @@ function loadCatalog(lang) {
  */
 export function t(key) {
   const lang = resolveLang();
-  const cat = loadCatalog(lang);
+  const cat = phase1English(key) ? loadCatalog('en') : loadCatalog(lang);
   const v = cat[key];
   if (typeof v === 'string') return v;
   return key;

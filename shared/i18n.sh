@@ -34,6 +34,21 @@ _i18n_resolve_lang() {
   printf 'en'
 }
 
+# The launch tutorial is English-only during phase 1. Keep the locale
+# selector and all later product copy untouched, but read the approved T0-T1
+# onboarding keys from the English catalog even when an existing host.env is
+# still set to Italian.
+_i18n_phase1_english() {
+  case "$1" in
+    host_setup.*|welcome.*|wizard.welcome_subtitle|wizard.aborted_prereqs|\
+    wizard.checks.*|wizard.cloud.*|wizard.step.*|wizard.profile.intro|wizard.provider.*|wizard.cli.*|\
+    wizard.oauth.*|wizard.team.starting|wizard.team.start_failed|\
+    wizard.outro_done|wizard.outro_aborted|wizard.start.ready|wizard.start.done)
+      return 0 ;;
+  esac
+  return 1
+}
+
 # Lookup a string from the catalog. Falls back to en if missing.
 # Args: $1 = key (e.g. "welcome.capitano")
 t() {
@@ -43,6 +58,10 @@ t() {
   local catalog="$_I18N_DIR/$lang.json"
   local fallback="$_I18N_DIR/en.json"
   local value
+
+  if _i18n_phase1_english "$key"; then
+    catalog="$fallback"
+  fi
 
   if [ -f "$catalog" ]; then
     value="$(jq -r --arg k "$key" '.[$k] // empty' "$catalog" 2>/dev/null)"
