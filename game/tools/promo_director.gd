@@ -60,6 +60,11 @@ extends Node
 ##   JHT_PROMO=v6-office-life        take portrait di vita d'ufficio reale:
 ##                                   Scout dalla scrivania alla stampante e
 ##                                   ritorno seduto, senza coreografia.
+##   JHT_PROMO=v8-map                take portrait della WorldMap reale: zoom
+##                                   e pan continui fanno emergere i pin.
+##   JHT_PROMO=v8-office-handoff     take portrait di vita d'ufficio reale:
+##                                   uno Scrittore consegna il fascicolo alla
+##                                   vaschetta e torna alla scrivania.
 ## I viaggi fisici riusano le tappe VERE della pipeline (stampante,
 ## pile_take/pile_drop, scaffale output) ma con PAUSE FISSE: il ciak deve
 ## essere ripetibile, non un lancio di dadi. Il HUD «JHT TEAM» (numeri
@@ -307,6 +312,18 @@ const V6_LIFE_MIN_PROGRAM_SECONDS := 3.0
 const V6_LIFE_MAX_PROGRAM_SECONDS := 5.0
 const V6_LIFE_CAMERA_OFFSET := Vector2(0.0, -40.0)
 const V6_LIFE_ZOOM := 3.2
+const V8_MAP_PROGRAM_SECONDS := 8.0
+const V8_MAP_ZOOM_FROM := 4.8
+const V8_MAP_ZOOM_TO := 5.8
+const V8_MAP_SWEEPS := 3.0
+const V8_MAP_FROM := Vector2(-90.0, 42.0)
+const V8_MAP_TO := Vector2(150.0, 36.0)
+const V8_OFFICE_AGENT := "scrittore-2"
+const V8_OFFICE_DROP_HOLD := 0.8
+const V8_OFFICE_MIN_PROGRAM_SECONDS := 4.0
+const V8_OFFICE_MAX_PROGRAM_SECONDS := 8.5
+const V8_OFFICE_CAMERA_OFFSET := Vector2(30.0, -40.0)
+const V8_OFFICE_ZOOM := 3.8
 const V6_REVEAL_CLOSE_CAMERA := Vector2(1570.0, 760.0)
 const V6_REVEAL_CLOSE_ZOOM := 1.65
 const V6_REVEAL_WIDE_CAMERA := Vector2(1650.0, 1020.0)
@@ -379,7 +396,8 @@ func _ready() -> void:
 	_office = get_parent()
 	var mode := OS.get_environment("JHT_PROMO")
 	_v3_active = mode in ["team-welcome", "assistant-intro", "assistant-walk-right",
-			"v5-reveal", "v6-dev-reveal", "v6-dev-work", "v6-office-life"]
+			"v5-reveal", "v6-dev-reveal", "v6-dev-work", "v6-office-life",
+			"v8-map", "v8-office-handoff"]
 	# Movie Maker registra dal bootstrap. Sul profilo live teniamo chiusa una
 	# semplice tendina nera finche' il data-plane non e' pronto: nel raw non
 	# entra mai un frame intermedio col warning, che resta comunque intatto e
@@ -419,6 +437,10 @@ func _ready() -> void:
 			_v6_dev_work_clip.call_deferred()
 		"v6-office-life":
 			_v6_office_life_clip.call_deferred()
+		"v8-map":
+			_v8_map_clip.call_deferred()
+		"v8-office-handoff":
+			_v8_office_handoff_clip.call_deferred()
 
 
 func _process(_delta: float) -> void:
@@ -990,6 +1012,150 @@ func _v6_office_life_clip() -> void:
 		get_tree().quit(22)
 		return
 	_v6_pass_and_quit("v6-office-life", _track_cam)
+
+
+## La stessa WorldMap che apre il globo scenografico dell'ufficio, isolata
+## dal guscio SectionPanel per non registrare sidebar o badge showroom. Lo
+## zoom attraversa i livelli di clustering reali di OsmMap: durante il volo
+## i pin si separano e diventano localita' distinte, senza animazioni finte.
+func _v8_map_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	BackendBus.positions_are_demo = false
+	BackendBus.positions = _v8_map_positions()
+	var cam := _mount_camera(Vector2(1700.0, 950.0), 1.0)
+	var layer := CanvasLayer.new()
+	layer.layer = 120
+	_office.add_child(layer)
+	var background := ColorRect.new()
+	background.color = Color(0.045, 0.05, 0.075)
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(background)
+	var world := WorldMap.new()
+	world.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(world)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var flat := world._flat
+	var start_norm := OsmMap.lonlat_to_norm(V8_MAP_FROM)
+	var end_norm := OsmMap.lonlat_to_norm(V8_MAP_TO)
+	flat.center = start_norm
+	flat._target_center = start_norm
+	flat.zoom_f = V8_MAP_ZOOM_FROM
+	flat._target_zoom = V8_MAP_ZOOM_FROM
+	flat.queue_redraw()
+	# Lascia alla cache tile un breve bootstrap fuori dal raw consegnato.
+	await get_tree().create_timer(1.0).timeout
+	_v6_marker("v8-map", "handle_in")
+	var full_take_seconds := V8_MAP_PROGRAM_SECONDS + 2.0 * V6_HANDLE_SECONDS
+	var travel := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	travel.tween_method(func(progress: float) -> void:
+		var scan := 1.0 - absf(fmod(progress * V8_MAP_SWEEPS, 2.0) - 1.0)
+		var center := start_norm.lerp(end_norm, scan)
+		var zoom := lerpf(V8_MAP_ZOOM_FROM, V8_MAP_ZOOM_TO, progress)
+		flat.center = center
+		flat._target_center = center
+		flat.zoom_f = zoom
+		flat._target_zoom = zoom
+		flat.queue_redraw(), 0.0, 1.0, full_take_seconds)
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v8-map", "program_start")
+	await get_tree().create_timer(V8_MAP_PROGRAM_SECONDS).timeout
+	_v6_marker("v8-map", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v8-map", "handle_out")
+	if world.find_children("*", "MapGlobe", true, false).size() != 0:
+		push_error("promo V8 map: globo inatteso nella vista flat-only")
+		get_tree().quit(23)
+		return
+	_v6_pass_and_quit("v8-map", cam)
+
+
+## Dataset scenografico senza PII: un pin per localita', nessuna scheda viene
+## aperta nel ciak e nessun banner DEMO entra nel frame.
+func _v8_map_positions() -> Array:
+	var places := [
+		["London", "United Kingdom", -0.1276, 51.5072],
+		["Paris", "France", 2.3522, 48.8566],
+		["Berlin", "Germany", 13.4050, 52.5200],
+		["Stockholm", "Sweden", 18.0686, 59.3293],
+		["Lisbon", "Portugal", -9.1393, 38.7223],
+		["Rome", "Italy", 12.4964, 41.9028],
+		["New York", "United States", -74.0060, 40.7128],
+		["Toronto", "Canada", -79.3832, 43.6532],
+		["Tokyo", "Japan", 139.6503, 35.6762],
+		["Sydney", "Australia", 151.2093, -33.8688],
+	]
+	var rows: Array = []
+	for i in places.size():
+		var place: Array = places[i]
+		rows.append({
+			"id": i + 1, "title": "Open role", "company": "Team",
+			"status": "scored", "total_score": null,
+			"role_family": "Technology", "work_mode": "flexible",
+			"loc_city": place[0], "loc_country": place[1],
+			"office_lon": place[2], "office_lat": place[3],
+		})
+	return rows
+
+
+## Ciclo `review/ready` già usato dagli Scrittori: il fascicolo finito viene
+## portato alla vaschetta del reparto e l'NPC torna al proprio desk. La regia
+## sceglie soltanto l'istanza showroom e nasconde la didascalia del mobile;
+## percorso, carry, pile_drop e seduta restano quelli di AgentNPC.
+func _v8_office_handoff_clip() -> void:
+	await get_tree().process_frame
+	_v3_prepare_office()
+	_v5_hide_world_copy()
+	var writer: AgentNPC = _find(V8_OFFICE_AGENT)
+	if writer == null or writer.dept != "scrittori":
+		push_error("promo V8 office: %s assente o reparto errato" % V8_OFFICE_AGENT)
+		get_tree().quit(24)
+		return
+	# Riaccende soltanto il mobile usato nel gesto; la sua label di reparto
+	# resta nascosta, quindi il take mostra l'azione e non un catalogo ruoli.
+	for station in _office.world.get_children():
+		if station is HandoffStation and station.dept == writer.dept:
+			station.visible = true
+			station._font = null
+			station.queue_redraw()
+	if PaperPile.inbox.has(writer.dept):
+		var pile: PaperPile = PaperPile.inbox[writer.dept]
+		# PaperPile disegna sul nodo il conteggio numerico. Nel raw i fogli
+		# restano sul tavolo, mentre il badge quantitativo di servizio no.
+		for sheet in pile._sheets.duplicate():
+			sheet.reparent(_office.world, true)
+		pile.visible = false
+	await _wait_desk_stable(writer)
+	_track_target = writer
+	_track_offset = V8_OFFICE_CAMERA_OFFSET
+	_track_cam = _mount_camera(writer.global_position + _track_offset, V8_OFFICE_ZOOM)
+	_v6_marker("v8-office-handoff", "handle_in")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v8-office-handoff", "program_start")
+	var program_start_frame := Engine.get_process_frames()
+	var drop := writer._leg_to(DepartmentDefs.handoff_spot(writer.dept), "carry",
+			V8_OFFICE_DROP_HOLD, "idle")
+	drop["pile_drop"] = writer.dept
+	var return_to_desk := writer._leg_to(writer._spot, "walk", 0.0, "work")
+	_force_legs(writer, [drop, return_to_desk])
+	while is_instance_valid(writer) and writer._desk_pose_active:
+		await get_tree().process_frame
+	while is_instance_valid(writer) and (writer._forced_trip or not writer._desk_pose_active):
+		await get_tree().process_frame
+	var program_seconds := float(Engine.get_process_frames() - program_start_frame) / 30.0
+	print("PROMO-V8-OFFICE-DURATION\t%.3f" % program_seconds)
+	_v6_marker("v8-office-handoff", "program_end")
+	await get_tree().create_timer(V6_HANDLE_SECONDS).timeout
+	_v6_marker("v8-office-handoff", "handle_out")
+	if program_seconds < V8_OFFICE_MIN_PROGRAM_SECONDS \
+			or program_seconds > V8_OFFICE_MAX_PROGRAM_SECONDS:
+		push_error("promo V8 office: programma %.3fs fuori 4-8.5s" % program_seconds)
+		get_tree().quit(25)
+		return
+	_v6_pass_and_quit("v8-office-handoff", _track_cam)
 
 
 ## Blocca i viaggi casuali: la vita sullo sfondo e' data da pulsazioni di
