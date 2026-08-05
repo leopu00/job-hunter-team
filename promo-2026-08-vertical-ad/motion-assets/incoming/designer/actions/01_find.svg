@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Find action card</title>
+  <desc id="desc">Linear search icon and label for the Scout action in the Job Hunter Team motion collage.</desc>
+  <rect x="9" y="9" width="494" height="494" rx="24" fill="#F6F7F4" stroke="#111116" stroke-width="2"/>
+  <rect x="38" y="42" width="54" height="6" rx="3" fill="#00E87A"/>
+  <text x="112" y="57" fill="#111116" font-family="JetBrains Mono" font-size="24" font-weight="800" letter-spacing="1.2">01 / SCOUT</text>
+  <g fill="none" stroke="#111116" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="224" cy="222" r="98"/>
+    <circle cx="224" cy="222" r="70" stroke="#00E87A"/>
+    <path d="M294 292L382 380"/>
+    <path d="M316 314L294 336"/>
+    <path d="M182 222H266M224 180V264" opacity="0.34"/>
+  </g>
+  <text x="38" y="438" fill="#111116" font-family="JetBrains Mono" font-size="72" font-weight="800" letter-spacing="1">FIND</text>
+  <text x="40" y="476" fill="#6D706B" font-family="JetBrains Mono" font-size="24" font-weight="600" letter-spacing="1.2">SEARCH / DISCOVER</text>
+</svg>

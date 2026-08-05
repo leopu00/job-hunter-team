@@ -1,0 +1,45 @@
+{
+  "lot": "02-collage-control-actions",
+  "status": "video-pass",
+  "purpose": "Separate motion-collage layers for the 9:16 vertical ad; these are not gameplay mockups.",
+  "style": {
+    "background": "#F6F7F4",
+    "ink": "#111116",
+    "accent": "#00E87A",
+    "font_family": "JetBrains Mono",
+    "display_text_min_px": 58,
+    "icon_stroke_px": 2
+  },
+  "control": {
+    "review": "VIDEO PASS",
+    "timeline_seconds": [10.9, 15.8],
+    "assets": [
+      {"id": "input-empty", "svg": "control/01_input_empty.svg", "png": "control/01_input_empty.png", "size": [920, 300]},
+      {"id": "prompt-typed", "svg": "control/02_prompt_typed.svg", "png": "control/02_prompt_typed.png", "size": [920, 300]},
+      {"id": "send-waiting", "svg": "control/03_send_waiting.svg", "png": "control/03_send_waiting.png", "size": [920, 520]},
+      {"id": "reply", "svg": "control/04_reply.svg", "png": "control/04_reply.png", "size": [920, 360]}
+    ],
+    "preview_glob": "control/preview/*_1080x1920.png"
+  },
+  "actions": {
+    "review": "VIDEO PASS",
+    "motion": "Pop/parallax over 4-6 frames; one isolated layer per action.",
+    "assets": [
+      {"id": "find", "role": "SCOUT", "svg": "actions/01_find.svg", "png": "actions/01_find.png", "size": [512, 512]},
+      {"id": "check", "role": "ANALYST", "svg": "actions/02_check.svg", "png": "actions/02_check.png", "size": [512, 512]},
+      {"id": "score", "role": "SCORER", "svg": "actions/03_score.svg", "png": "actions/03_score.png", "size": [512, 512]},
+      {"id": "tailor", "role": "WRITER", "svg": "actions/04_tailor.svg", "png": "actions/04_tailor.png", "size": [512, 512]},
+      {"id": "review", "role": "CRITIC", "svg": "actions/05_review.svg", "png": "actions/05_review.png", "size": [512, 512]}
+    ],
+    "preview_glob": "actions/preview/*_1080x1920.png"
+  },
+  "preview": {
+    "size": [1080, 1920],
+    "safe_area": {"x": [108, 972], "y": [220, 1580]},
+    "watermark": "PREVIEW — NOT FINAL FOOTAGE"
+  },
+  "exclusions": {
+    "sprite_batch_01_commit": "a44adbee7",
+    "sprite_status": "NO-GO; owned by HQ-DESIGNER-2 and excluded from this lot"
+  }
+}
