@@ -68,6 +68,11 @@ describe("globo della home pubblica", () => {
     expect(T).not.toHaveProperty("demo_badge");
   });
 
+  it("nasconde il fallback solo quando il globo vivo è pronto", () => {
+    expect(landingGlobeSource).toContain('mode === "live" && began');
+    expect(landingGlobeSource).toContain('"opacity-0" : "opacity-100"');
+  });
+
   it("consegna l'autopilota solo dopo il primo idle successivo ai pin", () => {
     const sourceUpdate = jobsGlobeSource.indexOf(
       'src.setData({ type: "FeatureCollection", features });',

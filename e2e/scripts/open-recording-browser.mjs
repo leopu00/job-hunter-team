@@ -4,19 +4,28 @@
  * storage state Playwright in un profilo del browser nativo.
  *
  * Uso dalla root del repository:
- *   JHT_RECORDING_PROFILE=software BASE_URL=http://localhost:3008 npm --prefix e2e run recording-browser
+ *   JHT_RECORDING_PROFILE=software JHT_RECORDING_PATH=/messages npm --prefix e2e run recording-browser
  *
  * Non esegue login, reset, POST o DELETE. Il contesto e' effimero: applica il
  * solo storage state privato al Chromium lanciato da Playwright e lo elimina
  * alla chiusura della finestra.
  */
 import fs from "node:fs";
+import { chromium } from "@playwright/test";
 import os from "node:os";
 import path from "node:path";
-import { chromium } from "@playwright/test";
+import {
+  ALLOWED_RECORDING_ROUTES,
+  createGetOnlyRequestPolicy,
+  recordingTarget,
+  SYNTHETIC_POSITION_RECORDING_ROUTE,
+} from "./recording-browser-policy.mjs";
+import {
+  assertPortraitGeometry,
+  recordingFormatFromEnvironment,
+} from "./recording-browser-format.mjs";
 
 const ALIASES = new Set(["software", "marketing", "finance", "design"]);
-const LOCAL_RECORDING_ORIGIN = "http://localhost:3008";
 
 function fail(message) {
   console.error(`\n✗ ${message}\n`);
@@ -35,21 +44,15 @@ function recordingStatePath(alias) {
   );
 }
 
-function localRecordingDashboard() {
-  const baseURL = process.env.BASE_URL || LOCAL_RECORDING_ORIGIN;
-  let url;
-  try {
-    url = new URL(baseURL);
-  } catch {
-    throw new Error("invalid base URL");
-  }
-  if (url.origin !== LOCAL_RECORDING_ORIGIN) {
-    throw new Error("unexpected recording origin");
-  }
-  return new URL("/dashboard", url).toString();
-}
-
 async function main() {
+  let format;
+  try {
+    format = recordingFormatFromEnvironment();
+  } catch (error) {
+    fail(error.message);
+    return;
+  }
+
   const alias = process.env.JHT_RECORDING_PROFILE;
   if (!alias || !ALIASES.has(alias)) {
     fail(
@@ -65,24 +68,50 @@ async function main() {
     return;
   }
 
-  let dashboard;
+  let target;
   try {
-    dashboard = localRecordingDashboard();
+    target = recordingTarget();
   } catch {
-    fail("BASE_URL deve essere esattamente http://localhost:3008");
+    fail(
+      `JHT_RECORDING_PATH deve essere una delle route esatte: ${[...ALLOWED_RECORDING_ROUTES].join(", ")}`,
+    );
     return;
   }
 
   let browser;
   try {
-    browser = await chromium.launch({
-      headless: false,
-      args: ["--kiosk"],
-    });
-    const context = await browser.newContext({
-      storageState,
-      viewport: null,
-    });
+    browser = await chromium.launch(
+      format === "portrait"
+        ? {
+            headless: false,
+            args: [
+              "--kiosk",
+              "--ozone-platform=wayland",
+              "--force-device-scale-factor=2",
+            ],
+          }
+        : {
+            headless: false,
+            args: ["--kiosk"],
+          },
+    );
+    const context = await browser.newContext(
+      format === "portrait"
+        ? {
+            storageState,
+            viewport: { width: 540, height: 960 },
+            deviceScaleFactor: 2,
+          }
+        : {
+            storageState,
+            viewport: null,
+          },
+    );
+    const getOnly = createGetOnlyRequestPolicy(
+      console.error,
+      new URL(target).pathname,
+    );
+    await context.route("**/*", getOnly.handle);
 
     // Il context non riusa un profilo nativo. La rimozione e' locale alla sua
     // cookie jar e precede ogni navigazione: nessuna chiamata HTTP di pulizia.
@@ -90,38 +119,45 @@ async function main() {
     await context.addInitScript(() => {
       localStorage.setItem("jht-theme", "light");
       localStorage.setItem("jht-tour-done", "1");
-
-      // Il server recording usa Next in development per restare sullo SHA
-      // congelato. La sua chrome diagnostica non appartiene al prodotto e
-      // non deve entrare nel raw: la nascondiamo prima che Next la monti.
-      const style = document.createElement("style");
-      style.dataset.jhtRecordingChrome = "hidden";
-      style.textContent =
-        "nextjs-portal,[data-nextjs-toast],[data-nextjs-dev-tools-button],[data-next-badge-root]{display:none!important}";
-      document.documentElement.append(style);
     });
 
     const page = await context.newPage();
-    const response = await page.goto(dashboard, {
+    if (format === "portrait") await assertPortraitGeometry(page);
+    const response = await page.goto(target, {
       waitUntil: "domcontentloaded",
     });
     if (response?.status() !== 200) {
       throw new Error("dashboard unavailable");
     }
+    if (page.url() !== target) {
+      throw new Error("recording route redirected");
+    }
+    if (format === "portrait") await assertPortraitGeometry(page);
     await page.waitForFunction(
       () => document.documentElement.getAttribute("data-theme") === "light",
     );
+    if (new URL(target).pathname === SYNTHETIC_POSITION_RECORDING_ROUTE) {
+      await Promise.race([getOnly.allowedSeenPost, getOnly.violation]);
+      if (getOnly.seenPostCount !== 1) {
+        throw new Error(
+          "marker seen sintetico non osservato esattamente una volta",
+        );
+      }
+    }
 
     console.log(
-      "✓ Recording browser pronto: Chromium kiosk su /dashboard in tema light. Ctrl+C per chiudere.",
+      `✓ Recording browser pronto: Chromium kiosk su ${new URL(target).pathname} in tema light. Ctrl+C per chiudere.`,
     );
 
-    await new Promise((resolve) => {
-      const done = () => resolve();
-      process.once("SIGINT", done);
-      process.once("SIGTERM", done);
-      browser.once("disconnected", done);
-    });
+    await Promise.race([
+      new Promise((resolve) => {
+        const done = () => resolve();
+        process.once("SIGINT", done);
+        process.once("SIGTERM", done);
+        browser.once("disconnected", done);
+      }),
+      getOnly.violation,
+    ]);
   } finally {
     if (browser?.isConnected()) await browser.close();
   }
