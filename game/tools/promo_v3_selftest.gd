@@ -186,7 +186,7 @@ func _test_v3_director_contract() -> void:
 			and source.contains("if dressing is DepartmentDressing")
 			and source.contains("agent.aura.visible = false"),
 			"V5 reveal muove Camera2D e AgentNPC reali, non una panoramica statica")
-	for mode in ["v6-dev-reveal", "v6-dev-work"]:
+	for mode in ["v6-dev-reveal", "v6-dev-work", "v6-office-life"]:
 		_check(source.contains('"%s":' % mode), "mode promo %s registrato" % mode)
 	_check(source.contains("V6_HANDLE_SECONDS := 1.0")
 			and source.contains("V6_REVEAL_PROGRAM_SECONDS := 10.0")
@@ -208,6 +208,14 @@ func _test_v3_director_contract() -> void:
 			and source.contains("V6_WORK_ZOOM_TO := 2.15")
 			and source.contains('not OS.get_environment("JHT_PROMO").begins_with("v6-")'),
 			"V6 WORK stringe sugli agenti e non crea il badge CV READY")
+	_check(source.contains('V6_LIFE_AGENT := "scout-5"')
+			and source.contains("func _v6_office_life_clip")
+			and source.contains('print_leg["fx_printer"] = true')
+			and source.contains('return_leg["desk_work"] = true')
+			and source.contains("V6_LIFE_PLAYBACK_RATE := 1.2")
+			and source.contains("V6_LIFE_MIN_PROGRAM_SECONDS := 3.0")
+			and source.contains("V6_LIFE_MAX_PROGRAM_SECONDS := 5.0"),
+			"V6 office-life inquadra il ciclo reale stampante e fallisce fuori 3-5 s")
 
 
 func _check(ok: bool, what: String, detail := "") -> void:
