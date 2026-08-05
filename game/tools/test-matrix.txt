@@ -80,6 +80,10 @@ promo_sign_layer|script|gate|any|-|tools/promo_sign_layer_selftest.gd|PROMO-SIGN
 # altrimenti un agente in cammino viene coperto anche quando il suo piede lo
 # y-sorta davanti al desk. Deve attivarsi soltanto per un rig seduto dinamico.
 furniture_occlusion|script|gate|any|-|tools/furniture_occlusion_selftest.gd|FURNITURE-OCCLUSION-TEST PASS
+# Il corpo non puo' attraversare il pavimento piu' veloce dei sei cel: la
+# cadenza del rig segue la velocita' del percorso e ogni tratta apre sul
+# contatto, senza ridisegnare o riordinare i fogli dell'operatore.
+walk_cycle|script|gate|any|-|tools/walk_cycle_selftest.gd|WALK-CYCLE-TEST PASS
 # /bin/sh: apre la shell senza il ramo Windows che ha embedded_terminal.
 terminal_selection|script|gate|posix|-|tools/terminal_selection_selftest.gd|-
 # Il guard delle 7 lingue. UIStrings.t() fa fallback SILENZIOSO sull'italiano e
