@@ -41,7 +41,11 @@ def test_live_empty_database_never_falls_back_to_mock_kpis():
 
 def test_showroom_agents_wait_until_operational_team_exists():
     office = _src("game/scripts/office/office.gd")
-    assert 'var team_running := bool(status.get("team_running", false))' in office
+    assert "var harness_offline := TutorialHarness.enabled()" in office
+    assert (
+        'var team_running := false if harness_offline else bool(status.get("team_running", false))'
+        in office
+    )
     assert 'agent.set_backend_status("working" if team_running else "idle")' in office
 
 
