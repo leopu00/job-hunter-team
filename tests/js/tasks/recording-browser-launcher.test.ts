@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  assertPortraitGeometry,
+  PORTRAIT_RECORDING_GEOMETRY,
+  recordingFormatFromEnvironment,
+} from "../../../e2e/scripts/recording-browser-format.mjs";
+import {
   ALLOWED_RECORDING_ROUTES,
   createGetOnlyRequestPolicy,
   recordingTarget,
@@ -69,6 +74,115 @@ describe("launcher Playwright per riprese web", () => {
     expect(launcher).not.toContain("launchPersistentContext");
   });
 
+  it("lascia il landscape storico byte-identico quando FORMAT e' assente", () => {
+    expect(recordingFormatFromEnvironment({})).toBe("landscape");
+    expect(launcher).toContain('args: ["--kiosk"]');
+    expect(launcher).toContain("storageState,\n            viewport: null,");
+  });
+
+  it("abilita portrait solo con la sessione Wayland verticale esatta", () => {
+    expect(
+      recordingFormatFromEnvironment({
+        JHT_RECORDING_FORMAT: "portrait",
+        WAYLAND_DISPLAY: "rel004-vertical",
+        XDG_RUNTIME_DIR: "/tmp/rel004-headless-runtime",
+      }),
+    ).toBe("portrait");
+    expect(launcher).toContain('"--ozone-platform=wayland"');
+    expect(launcher).toContain('"--force-device-scale-factor=2"');
+    expect(launcher).toContain("viewport: { width: 540, height: 960 }");
+    expect(launcher).toContain("deviceScaleFactor: 2");
+  });
+
+  it.each(["", "landscape", "9x16", "Portrait", "PORTRAIT"])(
+    "rifiuta FORMAT non ammesso prima di Chromium: %s",
+    (format) => {
+      expect(() =>
+        recordingFormatFromEnvironment({ JHT_RECORDING_FORMAT: format }),
+      ).toThrow("JHT_RECORDING_FORMAT ammette solo portrait");
+    },
+  );
+
+  it.each([
+    "JHT_RECORDING_WIDTH",
+    "JHT_RECORDING_HEIGHT",
+    "JHT_RECORDING_DPR",
+    "JHT_RECORDING_VIEWPORT",
+    "JHT_RECORDING_WINDOW_SIZE",
+    "JHT_RECORDING_DEVICE_SCALE_FACTOR",
+  ])("rifiuta namespace geometrico %s prima di Chromium", (name) => {
+    expect(() =>
+      recordingFormatFromEnvironment({ [name]: "arbitrary" }),
+    ).toThrow("non accetta dimensioni configurabili");
+  });
+
+  it.each([
+    ["WAYLAND_DISPLAY", "wayland-0", "rel004-vertical"],
+    ["XDG_RUNTIME_DIR", "/tmp/other-runtime", "/tmp/rel004-headless-runtime"],
+  ])("rifiuta portrait senza %s esatto", (name, value, expected) => {
+    expect(() =>
+      recordingFormatFromEnvironment({
+        JHT_RECORDING_FORMAT: "portrait",
+        WAYLAND_DISPLAY: "rel004-vertical",
+        XDG_RUNTIME_DIR: "/tmp/rel004-headless-runtime",
+        [name]: value,
+      }),
+    ).toThrow(expected);
+  });
+
+  it("asserisce la geometria portrait nativa richiesta", async () => {
+    const expected = PORTRAIT_RECORDING_GEOMETRY;
+    const page = {
+      evaluate: async () => ({
+        innerWidth: expected.width,
+        innerHeight: expected.height,
+        screenWidth: expected.width,
+        screenHeight: expected.height,
+        devicePixelRatio: expected.deviceScaleFactor,
+        mobileBreakpoint: true,
+        physicalWidth: expected.physicalWidth,
+        physicalHeight: expected.physicalHeight,
+      }),
+    };
+
+    await expect(assertPortraitGeometry(page)).resolves.toBeUndefined();
+  });
+
+  it.each([
+    ["width", { innerWidth: 539 }, "innerWidth=539"],
+    ["height", { innerHeight: 959 }, "innerHeight=959"],
+    ["DPR", { devicePixelRatio: 1 }, "devicePixelRatio=1"],
+    ["screen width", { screenWidth: 539 }, "screen.width=539"],
+    ["screen height", { screenHeight: 959 }, "screen.height=959"],
+    [
+      "mobile breakpoint",
+      { mobileBreakpoint: false },
+      "matchMedia(max-width: 767px)=false",
+    ],
+    ["backing width", { physicalWidth: 1078 }, "innerWidth * DPR=1078"],
+    ["backing height", { physicalHeight: 1918 }, "innerHeight * DPR=1918"],
+  ])(
+    "rifiuta geometria portrait con %s errato",
+    async (_name, changed, message) => {
+      const expected = PORTRAIT_RECORDING_GEOMETRY;
+      const page = {
+        evaluate: async () => ({
+          innerWidth: expected.width,
+          innerHeight: expected.height,
+          screenWidth: expected.width,
+          screenHeight: expected.height,
+          devicePixelRatio: expected.deviceScaleFactor,
+          mobileBreakpoint: true,
+          physicalWidth: expected.physicalWidth,
+          physicalHeight: expected.physicalHeight,
+          ...changed,
+        }),
+      };
+
+      await expect(assertPortraitGeometry(page)).rejects.toThrow(message);
+    },
+  );
+
   it("prepara il frame prima della navigazione senza mutare il server", () => {
     const setup = launcher.slice(
       launcher.indexOf("await context.clearCookies"),
@@ -90,8 +204,30 @@ describe("launcher Playwright per riprese web", () => {
     expect(launcher.indexOf("target = recordingTarget()")).toBeLessThan(
       launcher.indexOf("browser = await chromium.launch"),
     );
+    expect(launcher.indexOf("recordingFormatFromEnvironment()")).toBeLessThan(
+      launcher.indexOf("browser = await chromium.launch"),
+    );
     expect(launcher).not.toMatch(
       /\b(?:fetch|request\.(?:post|put|patch|delete))\b/,
+    );
+  });
+
+  it("asserisce portrait prima e dopo l'unico goto, prima del gate light", () => {
+    const pre = launcher.indexOf("await assertPortraitGeometry(page)");
+    const goto = launcher.indexOf("page.goto(");
+    const post = launcher.indexOf(
+      "await assertPortraitGeometry(page)",
+      pre + 1,
+    );
+    const light = launcher.indexOf("await page.waitForFunction");
+
+    expect(pre).toBeGreaterThan(-1);
+    expect(pre).toBeLessThan(goto);
+    expect(launcher.match(/page\.goto\(/g)).toHaveLength(1);
+    expect(post).toBeGreaterThan(goto);
+    expect(post).toBeLessThan(light);
+    expect(launcher).not.toMatch(
+      /(?:setViewportSize|--window-size|screenshot.*scale|createElement\("style")/,
     );
   });
 
