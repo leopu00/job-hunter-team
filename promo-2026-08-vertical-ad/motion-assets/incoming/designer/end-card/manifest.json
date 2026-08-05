@@ -1,0 +1,30 @@
+{
+  "batch": "end-card-v0.2",
+  "status": "ready-for-compositing",
+  "canvas": { "width": 1080, "height": 1920, "alpha": true, "fps_reference": 30 },
+  "safe_area": { "x_min": 108, "x_max": 972, "y_min": 220, "y_max": 1580 },
+  "palette": { "matte": "#111116", "ink": "#F6F7F4", "base": "#B8B8D0", "accent": "#00E87A" },
+  "font": { "family": "JetBrains Mono", "weights": ["600", "700", "800"] },
+  "components": [
+    { "file": "01_title", "anchor": [108, 488], "copy": "JOB HUNTER TEAM" },
+    { "file": "02_tagline", "anchor": [108, 684], "copy": "Your job hunt, now playable." },
+    { "file": "03_url", "anchor": [108, 810], "copy": "jobhunterteam.ai" },
+    { "file": "04_chips", "anchor": [108, 972], "copy": "Free · Open source · Beta" },
+    { "file": "05_preview_watermark", "anchor": [285, 58], "copy": "PREVIEW - NOT FINAL FOOTAGE", "preview_only": true, "reference": "r3 persistent watermark: top-center x=540 y=58; no box or border; #F6F7F4 at 88% alpha" }
+  ],
+  "motion_contract": {
+    "crossfade_to_matte": { "start_seconds": 15.8, "frames": 8 },
+    "entries": [
+      { "component": "01_title", "start_frame": 8, "duration_frames": 5 },
+      { "component": "02_tagline", "start_frame": 13, "duration_frames": 4 },
+      { "component": "03_url", "start_frame": 18, "duration_frames": 5 },
+      { "component": "04_chips", "start_frame": 22, "duration_frames": 4 }
+    ],
+    "entry_easing": "opacity 0→100%, translate-y +18→0px, easeOutCubic",
+    "entry_timing_note": "Start frames are relative to the 15.800-second crossfade start. The final chips entry completes at frame 26 (16.667 s), before the 16.700-second readability hold.",
+    "hold": { "from_seconds": 16.7, "until_seconds": 19.4 },
+    "fade_to_black": { "start_seconds": 19.4, "end_seconds": 20.0 },
+    "prohibited": ["bounce", "glitch", "screenshot", "sprite", "per-letter kinetic animation"]
+  },
+  "preview": "99_preview_1080x1920.svg includes the mandatory watermark; do not composite 05_preview_watermark into the release master."
+}
