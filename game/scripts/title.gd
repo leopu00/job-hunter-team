@@ -15,6 +15,11 @@ func _ready() -> void:
 	theme = TerminalTheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var persistence_test := OS.get_environment("JHT_LANGUAGE_PERSIST_TEST")
+	if persistence_test == "cleanup":
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(UIStrings.language_config_path()))
+		print("LANGUAGE-PERSISTENCE-CLEANUP PASS")
+		get_tree().quit()
+		return
 	# Su una macchina appena installata non mostriamo neppure la title screen
 	# prima di sapere in quale lingua costruirla. Il fallback è inglese, mai il
 	# locale del sistema o l'italiano storico.
@@ -24,6 +29,8 @@ func _ready() -> void:
 			_language_picker_selftest.call_deferred()
 		elif persistence_test == "write":
 			_language_persistence_write_selftest.call_deferred()
+		elif persistence_test == "save_failure":
+			_language_persistence_save_failure_selftest.call_deferred()
 		return
 	_build_title()
 	if persistence_test == "verify":
@@ -96,6 +103,28 @@ func _language_persistence_verify_selftest() -> void:
 			and _blink.text == "▶ EINGABE DRÜCKEN"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(UIStrings.language_config_path()))
 	print("LANGUAGE-PERSISTENCE-VERIFY %s" % ("PASS" if ok else "FAIL"))
+	get_tree().quit(0 if ok else 1)
+
+
+## Un disco non scrivibile non è una scelta utente riuscita: il picker deve
+## restare in primo piano e non costruire la title nella lingua non salvata.
+func _language_persistence_save_failure_selftest() -> void:
+	await get_tree().process_frame
+	var config_path := ProjectSettings.globalize_path(UIStrings.language_config_path())
+	DirAccess.remove_absolute(config_path)
+	DirAccess.remove_absolute(config_path.get_base_dir())
+	var ok := is_instance_valid(_language_picker) \
+			and UIStrings.lang == UIStrings.DEFAULT_LANG
+	if is_instance_valid(_language_picker):
+		_language_picker.choose_language("de")
+		_language_picker.confirm()
+	await get_tree().process_frame
+	ok = ok and is_instance_valid(_language_picker) \
+			and UIStrings.lang == UIStrings.DEFAULT_LANG \
+			and not is_instance_valid(_blink)
+	DirAccess.remove_absolute(config_path)
+	DirAccess.remove_absolute(config_path.get_base_dir())
+	print("LANGUAGE-PERSISTENCE-SAVE-FAILURE %s" % ("PASS" if ok else "FAIL"))
 	get_tree().quit(0 if ok else 1)
 
 
