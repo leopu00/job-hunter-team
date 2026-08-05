@@ -21,7 +21,8 @@ func _init() -> void:
 func _draw() -> void:
 	for dept_id in DepartmentDefs.DEPT_ORDER:
 		var dept: Dictionary = DepartmentDefs.DEPARTMENTS[dept_id]
-		_draw_zone(dept_id, dept["zone"], dept["color"], dept["name"], dept["tagline"])
+		_draw_zone(dept_id, dept["zone"], dept["color"],
+				DepartmentDefs.display_name(dept_id), DepartmentDefs.display_tagline(dept_id))
 
 func _draw_zone(dept_id: String, zone: Rect2, col: Color, dname: String, tagline: String) -> void:
 	# tinta a pavimento: tre passate che rientrano, il bordo sfuma morbido
