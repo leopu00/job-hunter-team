@@ -15,6 +15,10 @@ const TEAM_STEPS := [
 	[Vector2(1570.0, 650.0), Vector2(1570.0, 780.0)],
 	[Vector2(1690.0, 650.0), Vector2(1690.0, 780.0)],
 ]
+const TEAM_CAMERA := Vector2(1570.0, 650.0)
+const TEAM_ZOOM := 1.82
+const TEAM_VISIBLE_TOP := 780.0 - 180.0
+const TEAM_VISIBLE_FEET := 780.0
 const INTRO_STEP := [Vector2(1790.0, 1390.0), Vector2(1790.0, 1450.0)]
 const WALK_FROM := Vector2(1260.0, 780.0)
 const WALK_TO := Vector2(2600.0, 780.0)
@@ -66,6 +70,14 @@ func _test_real_routes() -> void:
 		if route[i].x + 0.1 < route[i - 1].x:
 			never_turns_left = false
 	_check(never_turns_left, "assistant-walk-right non inverte la marcia")
+	# La prima ripresa V3 teneva il centro a y=960: i piedi dei tre agenti
+	# erano nel quadro ma le teste cadevano sopra il bordo. Protegge il framing
+	# col box conservativo di 180 px sopra il piede (piu' alto dei fogli reali).
+	var top_screen := _screen_y(TEAM_VISIBLE_TOP, TEAM_CAMERA.y, TEAM_ZOOM)
+	var feet_screen := _screen_y(TEAM_VISIBLE_FEET, TEAM_CAMERA.y, TEAM_ZOOM)
+	_check(top_screen >= 40.0 and feet_screen <= 1040.0,
+			"team-welcome mantiene il cast intero nel frame 16:9",
+			"top=%.1f feet=%.1f" % [top_screen, feet_screen])
 
 
 func _check_route(nav, from: Vector2, to: Vector2, label: String) -> void:
@@ -81,6 +93,10 @@ func _route_distance(route: PackedVector2Array) -> float:
 	return total
 
 
+func _screen_y(world_y: float, camera_y: float, zoom: float) -> float:
+	return 540.0 + (world_y - camera_y) * zoom
+
+
 func _test_v3_director_contract() -> void:
 	var source := FileAccess.get_file_as_string("res://tools/promo_director.gd")
 	for mode in ["team-welcome", "assistant-intro", "assistant-walk-right"]:
@@ -91,6 +107,8 @@ func _test_v3_director_contract() -> void:
 			and source.contains("V3_ASSISTANT_INTRO_SECONDS := 7.2")
 			and source.contains("V3_ASSISTANT_WALK_SECONDS := 8.6"),
 			"tutte le durate superano il minimo V3")
+	_check(source.contains("V3_TEAM_CAMERA := Vector2(1570.0, 650.0)"),
+			"team-welcome usa il framing post-occlusione")
 	_check(source.contains("_dress_promo_set()")
 			and source.contains("_hide_promo_hud()")
 			and source.contains("_hide_simulation_badge()")

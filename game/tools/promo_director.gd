@@ -269,7 +269,10 @@ const V3_TEAM_STARTS := {
 	"assistente": Vector2(1690.0, 650.0),
 }
 const V3_TEAM_STEP := Vector2(0.0, 130.0)
-const V3_TEAM_CAMERA := Vector2(1570.0, 960.0)
+## Il cast cammina a y=650→780: tenere la camera a 960 lo spingeva contro il
+## bordo alto del frame 16:9 e decapitava i tre volti. A y=650 l'intera figura
+## resta nel terzo centrale, con scrivanie vive dietro e aria sopra la testa.
+const V3_TEAM_CAMERA := Vector2(1570.0, 650.0)
 const V3_TEAM_ZOOM := 1.82
 
 ## La reception e' dietro al quadro: l'Assistente viene preparata nella porta
