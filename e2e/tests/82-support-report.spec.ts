@@ -284,7 +284,9 @@ test.describe("pagina pubblica /contact", () => {
     );
     await page
       .locator("#c-msg")
-      .fill("Segnalazione di prova per un canale temporaneamente indisponibile.");
+      .fill(
+        "Segnalazione di prova per un canale temporaneamente indisponibile.",
+      );
     await page
       .getByRole("button", { name: /invia|send|enviar|envoyer|senden|küldés/i })
       .click();

@@ -32,10 +32,7 @@ describe("fallback della home pubblica", () => {
   });
 
   it("non mostra il template nelle transizioni rapide e non oscura la pagina", () => {
-    const styles = readFileSync(
-      path.join(REPO, "web/app/globals.css"),
-      "utf8",
-    );
+    const styles = readFileSync(path.join(REPO, "web/app/globals.css"), "utf8");
     const mainHtml = renderToStaticMarkup(
       createElement(MainContent, { children: "Contenuto" }),
     );
