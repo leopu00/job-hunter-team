@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" role="img" aria-labelledby="title desc">
+  <title id="title">Pipeline rail state three</title>
+  <desc id="desc">Transparent five-node motion rail with the third node active.</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M250 1270H290M430 1270H470" stroke="#00E87A" stroke-width="4"/>
+    <path d="M610 1270H650M790 1270H830" stroke="#111116" stroke-opacity="0.48" stroke-width="2"/>
+
+    <rect x="110" y="1238" width="140" height="64" rx="18" stroke="#111116" stroke-opacity="0.72" stroke-width="2"/>
+    <rect x="290" y="1238" width="140" height="64" rx="18" stroke="#111116" stroke-opacity="0.72" stroke-width="2"/>
+    <rect x="470" y="1238" width="140" height="64" rx="18" stroke="#00E87A" stroke-width="2"/>
+    <rect x="650" y="1238" width="140" height="64" rx="18" stroke="#111116" stroke-opacity="0.48" stroke-width="2"/>
+    <rect x="830" y="1238" width="140" height="64" rx="18" stroke="#111116" stroke-opacity="0.48" stroke-width="2"/>
+
+    <path d="M144 1270H216M324 1270H396" stroke="#00E87A" stroke-opacity="0.72" stroke-width="2"/>
+    <path d="M504 1270H576" stroke="#00E87A" stroke-width="6"/>
+    <path d="M684 1270H756M864 1270H936" stroke="#111116" stroke-opacity="0.34" stroke-width="2"/>
+
+    <path d="M110 1338H540" stroke="#00E87A" stroke-width="4"/>
+    <path d="M540 1338H970" stroke="#111116" stroke-opacity="0.58" stroke-width="2"/>
+  </g>
+</svg>

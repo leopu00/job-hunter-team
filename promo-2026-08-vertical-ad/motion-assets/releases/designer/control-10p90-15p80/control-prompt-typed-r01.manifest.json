@@ -1,0 +1,35 @@
+{
+  "schema": "jht-motion-asset-v1",
+  "asset": "control-prompt-typed",
+  "revision": "r01",
+  "status": "immutable-release",
+  "promotion": {
+    "source_path": "motion-assets/incoming/designer/control/02_prompt_typed",
+    "source_commit": "b5bd4f8d3",
+    "copy_policy": "byte-identical",
+    "compositing_policy": "replace-not-stack"
+  },
+  "files": {
+    "svg": {
+      "path": "control-prompt-typed-r01.svg",
+      "source_sha256": "f65567d43f78cf4e604590c6552d3b66ccb513fc466933ebfbca71d8b2ebee7b",
+      "sha256": "f65567d43f78cf4e604590c6552d3b66ccb513fc466933ebfbca71d8b2ebee7b"
+    },
+    "png": {
+      "path": "control-prompt-typed-r01.png",
+      "source_sha256": "04de9b44c44ac44a48d5b917df73dd393bbdbccd037d8ab3e948b6b4b0378ae6",
+      "sha256": "04de9b44c44ac44a48d5b917df73dd393bbdbccd037d8ab3e948b6b4b0378ae6"
+    }
+  },
+  "canvas": {"width": 920, "height": 300, "color_space": "sRGB"},
+  "alpha_mode": "straight-unpremultiplied",
+  "anchor": {"x": 0, "y": 0},
+  "pivot": {"x": 0.0, "y": 0.0},
+  "z_index": 30,
+  "safe_area": {"coordinate_space": "composition", "x": [108, 972], "y": [220, 1580]},
+  "timing": {"global_start": 11.5, "global_end": 12.45, "enter_frames": 5, "exit_frames": 5, "hold": 0.62},
+  "easing": {"in": "easeOutCubic", "out": "easeInQuad"},
+  "transition_policy": "crossfade-reveal; never per-letter typewriter",
+  "watermark_policy": "excluded",
+  "editorial_source": {"scaletta_commit": "1999890b4756"}
+}
